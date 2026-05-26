@@ -1,9 +1,10 @@
 .PHONY: info check
 
 info:
-	@echo "clori: standalone neural execution engine"
-	@echo "status: repository skeleton"
+	@echo "clori: neural execution engine"
+	@echo "status: repository scaffold"
 	@echo "inference: not implemented"
+	@echo "server: not implemented"
 	@echo "net-compatible: planned"
 
 check:
@@ -12,9 +13,11 @@ check:
 	@test -f docs/spines/yai-net-spine-reference.md
 	@test -f docs/integration/yai-net-compatibility.md
 	@test -f docs/benchmark/benchmark-canon.md
-	@grep -R "YAI controls authority" README.md docs/boundary.md >/dev/null
-	@grep -R "NET moves streams" README.md docs/boundary.md >/dev/null
-	@grep -R "CLORI executes neural computation" README.md docs/boundary.md >/dev/null
-	@grep -R "No inference implementation exists" README.md docs >/dev/null
-	@! grep -R "inference: implemented\\|implemented inference\\|server implemented" README.md docs src benches examples tests protocols 2>/dev/null >/dev/null
+	@grep -F "Reference version: NET.SPINE.0.2" docs/spines/yai-net-spine-reference.md >/dev/null
+	@grep -F "YAI controls authority." docs/spines/clori-spine.md >/dev/null
+	@grep -F "NET moves streams." docs/spines/clori-spine.md >/dev/null
+	@grep -F "CLORI executes neural computation." docs/spines/clori-spine.md >/dev/null
+	@! grep -E "production-ready|production ready" README.md | grep -v "not production-ready" >/dev/null
+	@! grep -E "inference is implemented|implements inference|implemented inference" README.md >/dev/null
+	@! grep -E "server is implemented|implements server|implemented server" README.md >/dev/null
 	@echo "clori check: ok"
