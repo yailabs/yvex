@@ -1,11 +1,14 @@
 # Architecture
 
-CLORI is a standalone Neural Execution Engine scaffold.
+CLORI is a standalone Neural Execution Engine. It is separate from YAI because
+neural execution and YAI authority are different responsibilities.
 
-The first repository posture reserves space for artifact inspection, model
-descriptors, tensor tables, quant profiles, memory estimates, backend
-boundaries, metrics, receipts and benchmarks.
+CLORI may still become NET-compatible later: YAI controls authority, NET moves
+streams, and CLORI executes neural computation.
 
-Inference is not implemented.
-Server behavior is not implemented.
-NET compatibility is planned, not implemented.
+Runtime control and measurement matter because model execution needs visible
+artifact metadata, descriptors, tensor layout, memory pressure, KV behavior,
+decode surfaces, metrics and receipts.
+
+Small local models are the first practical target. They are not an architectural
+limit.

@@ -1,8 +1,8 @@
 # YAI NET Spine Reference
 
 Source repository: yai
-Source path: docs/spines/net-spine.md
-Reference version: NET.SPINE.0.2
+Source path: work/spines/net-spine.md
+Reference version: NET.SPINE.0.3
 Authority: YAI repository
 Mode: copied compatibility reference
 
@@ -14,9 +14,9 @@ When this reference diverges from YAI, YAI wins.
 
 # NET Spine
 
-Reference version: NET.SPINE.0.2
+Reference version: NET.SPINE.0.3
 Authority: YAI repository
-Status: Root component scaffold started
+Status: Integrated module topology realigned
 
 NET is the root-level runtime communication substrate inside YAI.
 
@@ -40,14 +40,23 @@ Copied references are not authoritative.
 NET is the YAI-side runtime communication substrate that may consume, honor or
 adapt those contracts.
 
+The source path for external references is `work/spines/net-spine.md`.
+
 ## Deliveries
 
 ### NET.SPINE.0 - Root Component Scaffold + Boundary Guard
 
-Create the root `net/` component layout, public vocabulary headers,
-README-only source roots, component docs, Makefile targets and boundary guard.
-Add YAI-side docs that point to NET without expanding the main YAI spine.
-No discovery, transport, routing, server or CLORI support is implemented.
+Create the first root `net/` component scaffold, public vocabulary headers and
+boundary guard. This wave established NET as a root runtime substrate, but its
+initial layout was still repository-shaped and is corrected by NET.SPINE.0R.
+
+### NET.SPINE.0R - Integrated Module Topology Realignment
+
+Move NET from repository-shaped scaffold to integrated YAI module topology.
+Move public NET headers to `include/yai/net`, flatten `net/src` into
+`net/<area>`, remove `net/docs` and repo-shaped placeholder folders, move NET
+planning/docs into `work/`, preserve root `net/` as runtime module and preserve
+CLORI as an external repository.
 
 ### NET.SPINE.1 - Canonical Terms + File/Header Discipline
 
@@ -208,10 +217,40 @@ eligibility while NET owns stream movement.
 ### NET.SPINE.28 - External Reference Copy Sync Contract
 
 Add sync contract and guard instructions for external repositories that copy
-`docs/spines/net-spine.md`, including CLORI's non-authoritative compatibility
+`work/spines/net-spine.md`, including CLORI's non-authoritative compatibility
 reference.
 
 ### NET.SPINE.29 - NET v0 Freeze
 
 Freeze NET v0 layout, headers, docs, guard coverage, fixture schema posture and
 integration boundaries before runtime transport work expands beyond skeletons.
+
+## External Reference Copy
+
+External repositories should copy:
+
+```text
+work/spines/net-spine.md
+```
+
+into:
+
+```text
+<clori-docs>/spines/yai-net-spine-reference.md
+```
+
+with this header:
+
+```text
+# YAI NET Spine Reference
+
+Source repository: yai
+Source path: work/spines/net-spine.md
+Reference version: NET.SPINE.0.3
+Authority: YAI repository
+Mode: copied compatibility reference
+
+This file is copied into CLORI to keep CLORI aligned with YAI NET contracts.
+This file is not authoritative.
+When this reference diverges from YAI, YAI wins.
+```

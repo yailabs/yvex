@@ -4,14 +4,27 @@ Reference version: CLORI.SPINE.0.1
 Authority: CLORI repository
 Status: External repository scaffold
 
-CLORI is a standalone Neural Execution Engine.
+CLORI is a standalone Neural Execution Engine for local AI models and runtime control.
 
 CLORI can be used independently.
-CLORI may later run as a NET-compatible external node for YAI.
+CLORI may later run as a NET-compatible external node.
 
 YAI controls authority.
 NET moves streams.
 CLORI executes neural computation.
+
+CLORI owns:
+- model artifact inspection
+- model descriptors
+- tensor layout
+- quant profile
+- architecture and family profiles
+- backend abstraction
+- memory and KV accounting
+- decoding surface
+- runtime metrics
+- benchmark receipts
+- standalone CLI/server surfaces when implemented
 
 CLORI does not own:
 - YAI case authority
@@ -29,85 +42,80 @@ CLORI does not own:
 
 ### CLORI.SPINE.0 - Repository Foundation + NET Reference Sync
 
-Create the external repository scaffold, minimal docs, Makefile checks and
-copied non-authoritative YAI NET spine reference.
+Create the repository scaffold, minimal validation and copied NET reference.
 
 ### CLORI.SPINE.1 - Public README + Project Rhythm
 
-Shape the public README and contribution posture without claiming implemented
-inference, server behavior or benchmark results.
+Shape the public README without fake maturity or benchmark claims.
 
 ### CLORI.SPINE.2 - Terminology + Boundary Discipline
 
-Stabilize CLORI vocabulary and guard the YAI/NET/CLORI authority split.
+Stabilize vocabulary and ownership boundaries.
 
 ### CLORI.SPINE.3 - Artifact Format Skeleton
 
-Add artifact format docs and placeholder tests for model package inspection.
+Create artifact format scaffolding.
 
 ### CLORI.SPINE.4 - GGUF Inspect Skeleton
 
-Create the GGUF inspection skeleton without claiming broad model support.
+Reserve GGUF inspection structure without claiming support.
 
 ### CLORI.SPINE.5 - Model Descriptor Skeleton
 
-Add normalized model descriptor types, fixtures and validation notes.
+Create model descriptor scaffolding.
 
 ### CLORI.SPINE.6 - Tensor Table Skeleton
 
-Create tensor table skeletons for name, shape, dtype, quant, offset and bytes.
+Create tensor table scaffolding.
 
 ### CLORI.SPINE.7 - Quant Profile Skeleton
 
-Add quant profile vocabulary and fixture examples.
+Create quant profile scaffolding.
 
 ### CLORI.SPINE.8 - Memory Estimate Skeleton
 
-Create weight, KV, activation, scratch and reserve estimate scaffolding.
+Create memory estimate scaffolding.
 
 ### CLORI.SPINE.9 - Architecture Registry Skeleton
 
-Add architecture registry skeleton for future model family mapping.
+Create architecture registry scaffolding.
 
 ### CLORI.SPINE.10 - Family Profile Registry Skeleton
 
-Create family profile registry skeleton without turning profiles into chat
-authority.
+Create family profile registry scaffolding.
 
 ### CLORI.SPINE.11 - Backend API Skeleton
 
-Add backend API boundary and stub posture without implementing execution.
+Create backend API scaffolding.
 
 ### CLORI.SPINE.12 - Metrics + Receipt Skeleton
 
-Create metrics and receipt vocabulary for future inspection and benchmark
-evidence.
+Create metrics and receipt scaffolding.
 
 ### CLORI.SPINE.13 - Benchmark Harness Skeleton
 
-Add benchmark harness structure without benchmark claims.
+Create benchmark harness scaffolding without benchmark claims.
 
 ### CLORI.SPINE.14 - CLI Skeleton
 
-Reserve standalone CLI shape without fake command behavior.
+Reserve CLI boundaries without behavior.
 
 ### CLORI.SPINE.15 - Server Boundary Skeleton
 
-Reserve server boundary docs without implementing serving.
+Reserve server boundaries without implementation.
 
 ### CLORI.SPINE.16 - NET-Compatible Node Boundary
 
-Create NET-compatible node boundary docs and fixtures without implementing NET
-integration.
+Reserve NET-compatible external node boundaries.
 
 ### CLORI.SPINE.17 - YAI Receipt Compatibility Boundary
 
-Describe receipt compatibility with YAI authority and import posture.
+Reserve YAI receipt compatibility boundaries.
 
 ### CLORI.SPINE.18 - Local Model Library Boundary
 
-Reserve local model library boundary without claiming model management support.
+Reserve local model library boundaries.
 
 ### CLORI.SPINE.19 - CLORI v0 Scaffold Freeze
 
-Freeze the initial repository scaffold before implementation expands.
+Freeze the v0 repository scaffold.

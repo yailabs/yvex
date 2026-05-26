@@ -1,13 +1,13 @@
 # YAI NET Compatibility
 
-CLORI may later become a NET-compatible external node for YAI.
+Compatibility is planned, not implemented.
 
-The authoritative NET spine lives in the YAI repository at
-`docs/spines/net-spine.md`. CLORI keeps a copied compatibility reference at
-`docs/spines/yai-net-spine-reference.md`.
+The copied source reference is `docs/spines/yai-net-spine-reference.md`.
+The authoritative source is YAI `work/spines/net-spine.md`.
+
+CLORI must not implement NET authority. CLORI may expose capabilities later as
+a NET-compatible external node.
 
 YAI controls authority.
 NET moves streams.
 CLORI executes neural computation.
-
-NET compatibility is planned, not implemented in this scaffold.

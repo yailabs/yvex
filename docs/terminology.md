@@ -1,14 +1,12 @@
 # Terminology
 
-- Artifact: model file or package CLORI may inspect in a future wave.
+- Artifact: model file or package CLORI may inspect.
 - Descriptor: normalized model metadata.
 - Tensor table: tensor inventory and layout.
-- Quant profile: quantization vocabulary and memory impact surface.
-- Backend: execution boundary, not implemented in this scaffold.
-- Metric: future runtime measurement evidence.
-- Receipt: future structured evidence of CLORI activity.
-- NET-compatible node: future CLORI posture for YAI invocation through NET.
-
-YAI controls authority.
-NET moves streams.
-CLORI executes neural computation.
+- Quant profile: quantization posture and memory impact.
+- Backend: execution adapter boundary.
+- KV cache: decode-time cache state and accounting surface.
+- Decode: output generation surface.
+- Metric: measured runtime evidence.
+- Receipt: structured evidence emitted by CLORI activity.
+- Benchmark run: reproducible measurement over model, workload and environment.

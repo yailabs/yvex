@@ -1,7 +1,4 @@
 # Serving
 
-CLORI may later expose a standalone server, an OpenAI-compatible adapter, a
-CLORI-native API and a NET-compatible node adapter.
-
-Serving is planned only. No server or inference implementation exists in this
-bootstrap delivery.
+Serving is planned, not implemented. This scaffold does not provide an
+OpenAI-compatible API or any server.
