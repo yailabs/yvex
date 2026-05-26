@@ -9,6 +9,10 @@ info:
 
 check:
 	@test -f README.md
+	@test -f docs/README.md
+	@test -f docs/architecture.md
+	@test -f docs/boundary.md
+	@test -f docs/terminology.md
 	@test -f docs/spines/clori-spine.md
 	@test -f docs/spines/yai-net-spine-reference.md
 	@test -f docs/integration/yai-net-compatibility.md
@@ -19,5 +23,6 @@ check:
 	@grep -F "NET moves streams." docs/spines/clori-spine.md >/dev/null
 	@grep -F "CLORI executes neural computation." docs/spines/clori-spine.md >/dev/null
 	@! grep -E "production-ready" README.md | grep -v "not production-ready" >/dev/null
-	@! grep -E "fastest|benchmark result|implemented inference|implemented server|working inference|working server" README.md | grep -v "No benchmark results exist yet" | grep -v "no benchmark results" | grep -v "working inference engine" | grep -v "working server" >/dev/null
+	@! grep -Ei "fastest|implemented inference|implemented server|supports CUDA|supports Metal|supports MLX|supports llama\\.cpp|OpenAI-compatible server|transparent" README.md >/dev/null
+	@! grep -Ei "benchmark results" README.md | grep -vi "no benchmark results" >/dev/null
 	@echo "clori check: ok"

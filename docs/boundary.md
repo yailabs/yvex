@@ -1,17 +1,34 @@
 # Boundary
 
-CLORI owns neural execution concerns: artifacts, descriptors, tensor layout,
-quant profiles, backend abstraction, memory/KV accounting, decode surfaces,
-runtime metrics and benchmark receipts.
+CLORI owns:
 
-CLORI does not own YAI authority. It does not own YAI case authority, policy,
-memory, graph, facts, journal or action approval.
+- artifact inspection
+- model descriptors
+- tensor layout
+- quant profile
+- backend abstraction
+- memory/KV accounting
+- decode surface
+- metrics
+- receipts
+- benchmark evidence when implemented
 
-CLORI does not own NET discovery, NET routing or NET trust authority.
+CLORI does not own:
 
-CLORI may emit receipts when implemented, but YAI decides whether and how to
-import them.
+- YAI authority
+- YAI policy
+- YAI memory
+- YAI graph
+- YAI facts
+- YAI journal
+- YAI action approval
+- NET discovery
+- NET routing
+- NET trust authority
 
 YAI controls authority.
 NET moves streams.
 CLORI executes neural computation.
+
+CLORI may emit execution receipts. External systems decide how those receipts
+are imported or trusted.

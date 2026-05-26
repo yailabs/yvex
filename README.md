@@ -4,28 +4,38 @@ CLORI is a Neural Execution Engine for local AI models and runtime control.
 
 ## Status
 
-CLORI is early and not production-ready. This repository is a scaffold: it does
-not implement inference, serving, NET compatibility or benchmark execution yet.
-No benchmark results exist yet.
+CLORI is early and not production-ready. The repository currently contains the
+public project posture, initial documentation, validation checks and compatibility
+references needed before runtime code is added.
+
+It does not implement inference yet. It does not implement serving yet. It has
+no benchmark results yet.
 
 ## Why This Exists
 
-Local model work needs inspectable runtime boundaries: artifacts, descriptors,
-tensor layout, quantization posture, memory pressure, KV cache behavior,
-decoding surfaces, metrics and receipts. CLORI exists to make those foundations
-explicit before implementation grows around them.
+Local model work often collapses many different concerns into one opaque
+runtime: file inspection, model metadata, tensor layout, quantization, memory
+pressure, KV cache behavior, prefill and decode timing, streaming, metrics and
+reports.
+
+CLORI exists to make those runtime boundaries explicit. The project starts with
+local model artifact and runtime inspection because that is the shortest path to
+useful evidence, but the architecture is not limited to small models or one
+family of workloads.
 
 ## What CLORI Is
 
 CLORI is a standalone Neural Execution Engine. Its first practical target is
-local model artifact/runtime inspection and model execution foundations. The
-architecture must not be limited to small models.
+local model artifact/runtime inspection and model execution foundations: turning
+model files into descriptors, tensor maps, runtime plans, backend boundaries,
+decode surfaces, metrics and receipts.
 
-CLORI is not YAI. CLORI may later become a NET-compatible external node.
+CLORI can be used independently by local model users. It is not YAI, and its
+public identity does not depend on YAI. It may later become a NET-compatible
+external node, but that compatibility is planned rather than implemented.
 
-YAI controls authority.
-NET moves streams.
-CLORI executes neural computation.
+Larger models and additional neural workloads are design targets. They are not
+current implementation claims.
 
 ## What CLORI Is Not
 
@@ -44,11 +54,24 @@ YAI integration support.
 
 ## Operational Model
 
-Planned flow:
+CLORI is organized around a simple execution evidence chain:
 
 ```text
-artifact -> descriptor -> tensor table -> memory/KV accounting -> backend boundary -> decode surface -> metrics -> receipt -> benchmark report
+artifact -> descriptor -> tensor map -> runtime plan -> backend -> decode -> metrics -> receipt
 ```
+
+The chain is intentionally narrow at the start. Each stage should become
+measurable before it becomes clever.
+
+## Design Constraints
+
+CLORI should expose runtime behavior without pretending that inspection is the
+same as execution. Documentation, descriptors, metrics and receipts must remain
+separate from generated benchmark evidence.
+
+The engine should be useful for small local models first, while keeping its
+architecture open to larger models, embeddings, rerankers, classifiers and other
+future neural workloads.
 
 ## Current Validation
 
@@ -73,6 +96,13 @@ examples/   example placeholder
 - [Architecture](docs/architecture.md)
 - [Boundary](docs/boundary.md)
 - [Terminology](docs/terminology.md)
+- [Model runtime](docs/model-runtime.md)
+- [Metrics](docs/metrics.md)
+- [Artifact format](docs/artifact-format.md)
+- [Model descriptor](docs/model-descriptor.md)
+- [Backend API](docs/backend-api.md)
+- [Serving boundary](docs/serving.md)
+- [Observability](docs/observability.md)
 - [CLORI spine](docs/spines/clori-spine.md)
 - [YAI NET reference](docs/spines/yai-net-spine-reference.md)
 - [YAI NET compatibility](docs/integration/yai-net-compatibility.md)
