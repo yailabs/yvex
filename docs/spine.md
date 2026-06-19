@@ -3005,28 +3005,15 @@ P0.3  Documentation and validation cutover plan
 P0.4  Workspace / local namespace cutover
 P0.5  Focused docs extraction
 P0.6  Legacy surface purge
-P0.7  A0 readiness check
-P0.8  Runtime filesystem design
-P0.9  CLI runtime design
-P0.10 Model ladder design
-P0.11 CUDA-first backend strategy
-P0.12 Logging/tracing/metrics design
-P0.13 Remote/public repository rename decision
-P0.14 TUI exclusion guardrail
+P0.7  Remote / origin cutover
+P0.8  Runtime / system design
 ```
 
 Code-first foundation:
 
 ```text
 A0    C codebase skeleton
-A0.1  include/yvex root
-A0.2  status/error/log APIs
-A0.3  libyvex.a
-A0.4  yvex CLI info command
-A0.5  C test runner
-A0.6  Makefile check
-A0.7  version surface
-A0.8  source hygiene checks
+A0.1  Core skeleton maturity / file header discipline / CLI command contract
 ```
 
 Runtime and model tracks:
@@ -3220,6 +3207,9 @@ src/core/log.c
 cli/yvex_cli.c
 tests/test_status.c
 tests/test_error.c
+tests/test_version.c
+tests/test_log.c
+tests/test_cli.sh
 ```
 
 Commands:
@@ -3227,14 +3217,15 @@ Commands:
 ```sh
 make clean
 make check
-./yvex info
+make smoke
+./build/bin/yvex info
 ```
 
 Expected:
 
 ```text
 libyvex.a builds
-./yvex builds
+build/bin/yvex builds
 tests run
 no fake inference claims
 no TUI code
@@ -3265,7 +3256,7 @@ Every support claim has a command.
 
 ## 28. Immediate Next Milestone
 
-Next milestone after A0:
+Next milestone after A0.1:
 
 ```text
 B0 - Runtime Filesystem
@@ -3301,6 +3292,7 @@ Completed transition:
 ```text
 P0.8 - Runtime / System Design
 A0 - Code-first C skeleton
+A0.1 - Core skeleton maturity / file header discipline / CLI command contract
 ```
 
 Short target definition:

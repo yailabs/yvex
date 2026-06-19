@@ -28,19 +28,16 @@ exact A0 runtime system design before any runtime code appears.
 
 ```text
 A0    C codebase skeleton
-A0.1  include/yvex root
-A0.2  status/error/log APIs
-A0.3  libyvex.a
-A0.4  yvex CLI info command
-A0.5  C test runner
-A0.6  Makefile check
-A0.7  version surface
-A0.8  source hygiene checks
+A0.1  Core skeleton maturity / file header discipline / CLI command contract
 ```
 
 A0 is the first runtime-code milestone. It follows
 `docs/runtime-system-design.md` and creates headers, core status/error/log
 implementation, a static library, a minimal CLI, and tests.
+
+A0.1 hardens that skeleton before B0: every source-like file gets an explicit
+file header, the CLI uses command metadata, Makefile exposes core and CLI smoke
+targets, and `docs/source-style.md` defines the source discipline.
 
 ## Runtime Tracks
 

@@ -1,3 +1,33 @@
+/*
+ * YVEX - Status codes
+ *
+ * File: include/yvex/status.h
+ * Layer: public core API
+ *
+ * Purpose:
+ *   Defines the stable status-code vocabulary used by the core library, CLI,
+ *   and tests. These values are intentionally small and explicit.
+ *
+ * Owns:
+ *   - yvex_status
+ *   - yvex_status_name
+ *   - yvex_status_is_ok
+ *   - yvex_status_is_error
+ *
+ * Does not own:
+ *   - formatted error messages
+ *   - logging sinks
+ *   - runtime failure recovery
+ *
+ * Used by:
+ *   - error.h
+ *   - CLI command dispatch
+ *   - core tests
+ *
+ * Validation:
+ *   - make test-core
+ *   - build/tests/test_status
+ */
 #ifndef YVEX_STATUS_H
 #define YVEX_STATUS_H
 
@@ -27,4 +57,4 @@ int yvex_status_is_error(yvex_status status);
 }
 #endif
 
-#endif
+#endif /* YVEX_STATUS_H */

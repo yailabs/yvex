@@ -1,4 +1,30 @@
-.PHONY: info lib cli test check check-docs check-guardrails clean
+# YVEX - Build and validation entrypoint
+#
+# File: Makefile
+# Layer: build system
+#
+# Purpose:
+#   Builds the initial YVEX C core library, CLI bootstrap, and tests.
+#   Also runs documentation and guardrail validation.
+#
+# Primary commands:
+#   make info
+#   make lib
+#   make cli
+#   make test
+#   make test-core
+#   make test-cli
+#   make smoke
+#   make check
+#   make clean
+#
+# Non-goals:
+#   - no CUDA build in A0/A0.1
+#   - no model downloads
+#   - no server
+#   - no TUI
+
+.PHONY: info lib cli test test-core test-cli smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -33,15 +59,16 @@ TEST_SRCS := \
 TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 
 CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/roadmap.md docs/validation.md \
-	docs/api.md docs/runtime-filesystem.md docs/cli-runtime.md docs/cli-layout.md \
-	docs/logging-tracing.md docs/metrics.md docs/model-ladder.md docs/cuda-first.md \
-	docs/backend-contract.md docs/yai-provider-boundary.md docs/failure-taxonomy.md \
-	docs/delivery-box-template.md docs/runtime-system-design.md
+	docs/api.md docs/runtime-filesystem.md docs/runtime-system-design.md docs/source-style.md \
+	docs/cli-runtime.md docs/cli-layout.md docs/logging-tracing.md docs/metrics.md \
+	docs/model-ladder.md docs/cuda-first.md docs/backend-contract.md \
+	docs/yai-provider-boundary.md docs/failure-taxonomy.md docs/delivery-box-template.md
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: A0 core/CLI skeleton"
+	@echo "status: A0.1 core/CLI skeleton"
 	@echo "interface: CLI-only"
+	@echo "library: libyvex.a"
 	@echo "inference: not implemented"
 	@echo "gguf: not implemented"
 	@echo "cuda: not implemented"
@@ -51,13 +78,20 @@ lib: $(LIBYVEX)
 
 cli: $(YVEX_BIN)
 
-test: $(TEST_BINS)
+test-core: $(TEST_BINS)
 	@for test_bin in $(TEST_BINS); do \
 		echo "$$test_bin"; \
 		"$$test_bin"; \
 	done
 
-check: check-docs check-guardrails lib cli test
+test-cli: $(YVEX_BIN) tests/test_cli.sh
+	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli.sh
+
+test: test-core test-cli
+
+smoke: test-cli
+
+check: check-docs check-guardrails lib cli test smoke
 	@echo "yvex check: ok"
 
 $(LIBYVEX): $(CORE_OBJS)
@@ -86,6 +120,7 @@ check-docs:
 	@test -f docs/api.md
 	@test -f docs/runtime-filesystem.md
 	@test -f docs/runtime-system-design.md
+	@test -f docs/source-style.md
 	@test -f docs/cli-runtime.md
 	@test -f docs/cli-layout.md
 	@test -f docs/logging-tracing.md
@@ -104,6 +139,7 @@ check-docs:
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Runtime Filesystem" docs/runtime-filesystem.md >/dev/null
 	@grep -F "YVEX Runtime System Design" docs/runtime-system-design.md >/dev/null
+	@grep -F "YVEX Source Style" docs/source-style.md >/dev/null
 	@grep -F "YVEX CLI Runtime" docs/cli-runtime.md >/dev/null
 	@grep -F "YVEX CLI Layout" docs/cli-layout.md >/dev/null
 	@grep -F "YVEX Logging and Tracing" docs/logging-tracing.md >/dev/null

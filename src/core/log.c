@@ -1,3 +1,26 @@
+/*
+ * YVEX - Log name helpers
+ *
+ * File: src/core/log.c
+ * Layer: core implementation
+ *
+ * Purpose:
+ *   Implements string helpers for the narrow A0.1 logging vocabulary. This is
+ *   not a logging sink and does not emit logs.
+ *
+ * Implements:
+ *   - yvex_log_level_name
+ *   - yvex_log_domain_name
+ *
+ * Invariants:
+ *   - unknown levels and domains return "unknown"
+ *   - helpers allocate no memory
+ *   - helpers require no runtime initialization
+ *
+ * Commands:
+ *   - make test-core
+ *   - build/tests/test_log
+ */
 #include <yvex/log.h>
 
 const char *yvex_log_level_name(yvex_log_level level)

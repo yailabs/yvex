@@ -15,15 +15,15 @@ provider boundary.
 
 ## Status
 
-This repository is in the A0 core/CLI skeleton phase.
+This repository is in the A0.1 core skeleton maturity phase.
 
 Current state:
 
 ```text
 canonical spine: docs/spine.md
-runtime code: A0 core skeleton implemented
+runtime code: A0.1 core skeleton implemented
 public headers: version/status/error/log implemented
-CLI binary: build/bin/yvex implemented for info/help/version
+CLI binary: build/bin/yvex implemented for info/help/commands/version
 GGUF parser: not implemented
 tokenizer: not implemented
 CUDA backend: not implemented
@@ -50,7 +50,8 @@ make check
 ```
 
 At this phase, validation checks the canonical documentation posture and
-guardrails, builds libyvex.a, builds the A0 CLI, and runs the A0 C tests.
+guardrails, builds libyvex.a, builds the A0.1 CLI, runs C tests, and runs CLI
+smoke tests.
 
 ## License
 

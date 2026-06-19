@@ -1,3 +1,28 @@
+/*
+ * YVEX - Version implementation
+ *
+ * File: src/core/version.c
+ * Layer: core implementation
+ *
+ * Purpose:
+ *   Implements the fixed A0.1 version surface. These helpers return static
+ *   compile-time values and do not read files, environment, or runtime state.
+ *
+ * Implements:
+ *   - yvex_version_string
+ *   - yvex_version_major
+ *   - yvex_version_minor
+ *   - yvex_version_patch
+ *
+ * Invariants:
+ *   - helpers allocate no memory
+ *   - helpers cannot fail
+ *   - helpers are safe before runtime initialization
+ *
+ * Commands:
+ *   - make test-core
+ *   - build/tests/test_version
+ */
 #include <yvex/version.h>
 
 const char *yvex_version_string(void)

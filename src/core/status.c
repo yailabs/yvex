@@ -1,3 +1,27 @@
+/*
+ * YVEX - Status code helpers
+ *
+ * File: src/core/status.c
+ * Layer: core implementation
+ *
+ * Purpose:
+ *   Implements deterministic status name and predicate helpers for the A0.1
+ *   public status vocabulary.
+ *
+ * Implements:
+ *   - yvex_status_name
+ *   - yvex_status_is_ok
+ *   - yvex_status_is_error
+ *
+ * Invariants:
+ *   - every known A0.1 status has a stable string name
+ *   - unknown status values return YVEX_STATUS_UNKNOWN
+ *   - helpers allocate no memory and do not log
+ *
+ * Commands:
+ *   - make test-core
+ *   - build/tests/test_status
+ */
 #include <yvex/status.h>
 
 const char *yvex_status_name(yvex_status status)

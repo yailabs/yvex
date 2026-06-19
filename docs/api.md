@@ -34,9 +34,9 @@ yvex_server
 
 ## Status and Error
 
-A0 implements only the core version/status/error/log header surface. Future API
-families in this document remain design contracts until their headers and tests
-exist.
+A0.1 implements only the core version/status/error/log header surface. Future
+API families in this document remain design contracts until their headers and
+tests exist.
 
 ```c
 typedef enum {

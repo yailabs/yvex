@@ -19,6 +19,8 @@ focused docs are reconciled.
 P0.8 does not write runtime C code. It defines the precise code boundary A0
 will create.
 
+Source/file discipline for A0.1 and later lives in `docs/source-style.md`.
+
 ## 1. Runtime Product Model
 
 A0 products:
@@ -960,7 +962,7 @@ make check result
 git diff --check result
 no forbidden terminal UI path result
 old naming scan result
-next milestone: A0, not another invented P0 readiness pass
+A0 handoff result
 ```
 
 ## 22. Completion Criteria

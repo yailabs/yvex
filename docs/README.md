@@ -12,6 +12,8 @@ Canonical current documents:
   validation posture.
 - [Runtime system design](runtime-system-design.md): P0.8 bridge from the
   documentation spine to the exact A0 C runtime skeleton.
+- [Source style](source-style.md): file-header discipline, command metadata,
+  public header style, and source validation rules.
 
 Focused technical documents:
 

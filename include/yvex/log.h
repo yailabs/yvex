@@ -1,3 +1,34 @@
+/*
+ * YVEX - Log names
+ *
+ * File: include/yvex/log.h
+ * Layer: public core API
+ *
+ * Purpose:
+ *   Defines the narrow A0.1 logging level/domain vocabulary and string helpers.
+ *   This is a naming surface only; no logging sink is implemented here.
+ *
+ * Owns:
+ *   - yvex_log_level
+ *   - yvex_log_domain
+ *   - yvex_log_level_name
+ *   - yvex_log_domain_name
+ *
+ * Does not own:
+ *   - log sinks
+ *   - trace events
+ *   - runtime configuration
+ *   - future module-specific log domains
+ *
+ * Used by:
+ *   - libyvex core
+ *   - yvex CLI
+ *   - tests
+ *
+ * Validation:
+ *   - make test-core
+ *   - build/tests/test_log
+ */
 #ifndef YVEX_LOG_H
 #define YVEX_LOG_H
 
@@ -25,4 +56,4 @@ const char *yvex_log_domain_name(yvex_log_domain domain);
 }
 #endif
 
-#endif
+#endif /* YVEX_LOG_H */

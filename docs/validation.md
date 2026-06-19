@@ -5,15 +5,17 @@ pre-implementation cutover. The full technical contract lives in `docs/spine.md`
 
 ## Current Phase
 
-A0 implements the first C build surface: core public headers, core status/error
-/log/version implementation, `libyvex.a`, the `yvex` CLI bootstrap, and small C
-unit tests.
+A0.1 hardens the first C build surface: core public headers, core status/error
+/log/version implementation, `libyvex.a`, command-table CLI bootstrap, small C
+unit tests, and CLI smoke tests.
 
 Current commands:
 
 ```sh
 make info
 make check
+make smoke
+make test-cli
 ```
 
 ## Baseline Rule
@@ -39,7 +41,9 @@ docs/spine.md declares CLI-only policy
 README.md uses YVEX public identity
 libyvex.a builds
 build/bin/yvex builds
-A0 unit tests build and pass
+A0.1 unit tests build and pass
+CLI smoke tests pass
+source-style.md exists and defines file header discipline
 old scaffold authority phrases are absent from current public docs
 old scaffold directories are absent
 forbidden TUI implementation paths are absent
@@ -53,13 +57,14 @@ recreated by validation.
 
 ## Current Code-First Checks
 
-A0 includes:
+A0.1 includes:
 
 ```text
 C compilation
 static library build
 CLI build
 unit tests
+CLI command smoke tests
 source hygiene checks
 range-check tests
 error/status tests
