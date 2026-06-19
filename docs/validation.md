@@ -5,8 +5,9 @@ pre-implementation cutover. The full technical contract lives in `docs/spine.md`
 
 ## Current Phase
 
-P0.3 validates documentation authority and guardrails. It does not compile C
-runtime code because A0 has not created runtime code yet.
+P0.8 defines the runtime system design that A0 must implement. Current
+validation still checks documentation authority and guardrails; it does not
+compile C runtime code because A0 has not created runtime code yet.
 
 Current commands:
 
@@ -43,8 +44,9 @@ forbidden terminal UI dependencies are absent from current public docs/build fil
 README.md does not claim implemented inference/server/CUDA support
 ```
 
-P0.6 removed the old scaffold files from the active repository surface. The
-codename archive note is intentionally kept.
+P0.6 removed the old scaffold files from the active repository surface. P0.7
+cut over the remote identity to YVEX. Deleted historical files are not
+recreated by validation.
 
 ## Future Code-First Checks
 

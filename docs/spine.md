@@ -4,7 +4,6 @@ Date: 2026-06-19
 Status: canonical pre-implementation spine
 Project name: YVEX
 Expansion: YAI Vector Execution
-Former codename: CLORI
 Implementation language: C
 Primary platform: Linux + CUDA + NVIDIA DGX Spark / GB10
 Secondary future platforms: CPU reference, Apple Metal, AMD/ROCm
@@ -16,11 +15,10 @@ Agent system: outside YVEX, inside YAI
 Initial implementation mode: code-first, no fake support, no fake inference, no fake provider claims
 
 This document is the canonical implementation spine for the repository operated
-locally as `yvex`. The public technical project is YVEX. The repository was
-formerly named `clori`; CLORI is historical only.
+locally as `yvex`. The public technical project is YVEX.
 
-This spine replaces the previous public framing under the old codename, the old
-external-node center of gravity, and the docs-only validation posture.
+This spine replaces the previous public framing, the old external-node center
+of gravity, and the docs-only validation posture.
 
 ## 0. Authority
 
@@ -91,6 +89,7 @@ docs/metrics.md
 docs/model-ladder.md
 docs/roadmap.md
 docs/runtime-filesystem.md
+docs/runtime-system-design.md
 docs/spine.md
 docs/validation.md
 docs/yai-provider-boundary.md
@@ -3266,24 +3265,26 @@ Every support claim has a command.
 
 ## 28. Immediate Next Milestone
 
-Next milestone after the legacy surface purge:
+Next milestone after the remote/origin cutover:
 
 ```text
-P0.7 - A0 Readiness Check
+P0.8 - Runtime / System Design
 ```
 
-P0.7 must:
+P0.8 must:
 
 ```text
-confirm docs authority is coherent
-confirm the old scaffold surface is absent
-confirm Makefile guardrails are current
-confirm A0 file list is stable
+create docs/runtime-system-design.md
+define the exact A0 runtime skeleton
+define A0 header layering and core module dependencies
+define A0 product outputs and Makefile target semantics
+define A0 CLI bootstrap behavior
+define A0 test harness expectations
+define future module attachment order
 confirm no runtime code exists yet
-confirm no forbidden interface surface exists
 ```
 
-P0.7 must not:
+P0.8 must not:
 
 ```text
 implement inference
@@ -3294,7 +3295,14 @@ introduce TUI
 introduce terminal UI dependencies
 introduce dashboard or panel implementation
 introduce fake provider support
-delete historical codename material
+create runtime headers or C files
+create CLI binaries
+```
+
+After P0.8, the next milestone is:
+
+```text
+A0 - Code-first C skeleton
 ```
 
 Short target definition:

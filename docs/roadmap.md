@@ -12,14 +12,8 @@ P0.3  Documentation and validation cutover plan
 P0.4  Workspace / local namespace cutover
 P0.5  Focused docs extraction
 P0.6  Legacy surface purge
-P0.7  A0 readiness check
-P0.8  Runtime filesystem design
-P0.9  CLI runtime design
-P0.10 Model ladder design
-P0.11 CUDA-first backend strategy
-P0.12 Logging/tracing/metrics design
-P0.13 Remote/public repository rename decision
-P0.14 CLI-only / no-TUI guardrail
+P0.7  Remote / origin cutover
+P0.8  Runtime / system design
 ```
 
 P0 keeps runtime code out of the repository until the public identity,
@@ -27,7 +21,8 @@ documentation authority, validation posture, and implementation contract are
 stable.
 
 P0.5 extracts focused documents from the spine. P0.6 purges the old scaffold
-surface. P0.7 checks A0 readiness before any runtime code appears.
+surface. P0.7 cuts over the remote/origin identity to YVEX. P0.8 defines the
+exact A0 runtime system design before any runtime code appears.
 
 ## A - Code-First Foundation
 
@@ -43,7 +38,8 @@ A0.7  version surface
 A0.8  source hygiene checks
 ```
 
-A0 is the first runtime-code milestone. It creates headers, core status/error/log
+A0 is the first runtime-code milestone. It follows
+`docs/runtime-system-design.md` and creates headers, core status/error/log
 implementation, a static library, a minimal CLI, and tests.
 
 ## Runtime Tracks

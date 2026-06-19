@@ -4,7 +4,7 @@ CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/roadmap.md docs/validati
 	docs/api.md docs/runtime-filesystem.md docs/cli-runtime.md docs/cli-layout.md \
 	docs/logging-tracing.md docs/metrics.md docs/model-ladder.md docs/cuda-first.md \
 	docs/backend-contract.md docs/yai-provider-boundary.md docs/failure-taxonomy.md \
-	docs/delivery-box-template.md
+	docs/delivery-box-template.md docs/runtime-system-design.md
 
 info:
 	@echo "yvex: C local inference engine"
@@ -26,6 +26,7 @@ check-docs:
 	@test -f docs/validation.md
 	@test -f docs/api.md
 	@test -f docs/runtime-filesystem.md
+	@test -f docs/runtime-system-design.md
 	@test -f docs/cli-runtime.md
 	@test -f docs/cli-layout.md
 	@test -f docs/logging-tracing.md
@@ -43,6 +44,7 @@ check-docs:
 	@grep -F "YVEX Validation" docs/validation.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Runtime Filesystem" docs/runtime-filesystem.md >/dev/null
+	@grep -F "YVEX Runtime System Design" docs/runtime-system-design.md >/dev/null
 	@grep -F "YVEX CLI Runtime" docs/cli-runtime.md >/dev/null
 	@grep -F "YVEX CLI Layout" docs/cli-layout.md >/dev/null
 	@grep -F "YVEX Logging and Tracing" docs/logging-tracing.md >/dev/null
@@ -66,7 +68,7 @@ check-guardrails:
 	@! find . -path './.git' -prune -o \( -path './tui' -o -path './src/tui' -o -path './include/yvex/tui.h' -o -path './docs/tui.md' -o -path './docs/tui-*.md' \) -print | grep .
 	@! find . -path './.git' -prune -o -name 'panel_*.c' -print | grep .
 	@! grep -I -n -E '#include[ <"]n[c]urses|l[n]curses|N[C]URSES' $(CURRENT_DOCS) >/dev/null
-	@! grep -RIn -E "N[E]T\\.SPINE|N[E]T moves streams|C[L]ORI executes neural computation|c[l]ori_|libc[l]ori|c[l]orid|include/c[l]ori|~/\\.config/c[l]ori" --exclude-dir=.git . >/dev/null
+	@! grep -RIn -E "N[E]T\\.SPINE|N[E]T moves streams|C[L]ORI|c[l]ori-codename|docs/arc[h]ive|c[l]ori_|libc[l]ori|c[l]orid|include/c[l]ori|~/\\.config/c[l]ori" --exclude-dir=.git . >/dev/null
 	@! grep -Ei "production-ready|implemented inference|implemented server|supports CUDA|supports Metal|supports MLX|supports llama\\.cpp|OpenAI-compatible server" README.md >/dev/null
 	@! grep -Ei "benchmark results" README.md | grep -vi "benchmark results: none" >/dev/null
 

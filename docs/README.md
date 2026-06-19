@@ -10,6 +10,8 @@ Canonical current documents:
   and model-support tracks.
 - [Validation](validation.md): current guardrails and future code-first
   validation posture.
+- [Runtime system design](runtime-system-design.md): P0.8 bridge from the
+  documentation spine to the exact A0 C runtime skeleton.
 
 Focused technical documents:
 
