@@ -1,18 +1,43 @@
-# CLORI Docs
+# YVEX Docs
 
-This directory is the compact documentation portal for CLORI.
+This directory is the documentation root for YVEX.
 
-- [Architecture](architecture.md): engine shape and runtime evidence pipeline.
-- [Boundary](boundary.md): what CLORI owns and what it deliberately leaves out.
-- [Terminology](terminology.md): seed vocabulary for future implementation work.
-- [Model runtime](model-runtime.md): runtime control surface notes.
-- [Metrics](metrics.md): measurement vocabulary.
-- [Artifact format](artifact-format.md): model artifact inspection boundary.
-- [Model descriptor](model-descriptor.md): normalized descriptor boundary.
-- [Backend API](backend-api.md): backend abstraction posture.
-- [Serving](serving.md): serving boundary, not an implementation claim.
-- [Observability](observability.md): future runtime evidence surfaces.
-- [Benchmark canon](benchmark/benchmark-canon.md): rules for future benchmark evidence.
-- [YAI NET compatibility](integration/yai-net-compatibility.md): planned external-node compatibility.
-- [CLORI spine](spines/clori-spine.md): project delivery track.
-- [YAI NET reference](spines/yai-net-spine-reference.md): copied non-authoritative compatibility reference.
+Canonical current documents:
+
+- [Implementation spine](spine.md): project authority, technical contract,
+  roadmap, CLI-only doctrine, YAI boundary, validation matrix.
+- [Roadmap](roadmap.md): reset, documentation, implementation, runtime, backend,
+  and model-support tracks.
+- [Validation](validation.md): current guardrails and future code-first
+  validation posture.
+- [CLORI codename note](archive/clori-codename.md): historical codename record.
+
+Focused technical documents:
+
+- [API](api.md): public C API rules, object families, status/error shape, and
+  major runtime APIs.
+- [Runtime filesystem](runtime-filesystem.md): config/cache/state paths, run
+  directories, artifacts, receipt rule, and config precedence.
+- [CLI runtime](cli-runtime.md): CLI-only doctrine, commands, REPL, exit codes,
+  stdout/stderr, TTY behavior, and JSON/JSONL versioning.
+- [CLI layout](cli-layout.md): rich output sections, chat layout, status lines,
+  and JSON/JSONL envelopes.
+- [Logging and tracing](logging-tracing.md): log domains, trace flags, trace
+  event shape, and profile shape.
+- [Metrics](metrics.md): load, tensor, memory, prefill, decode, sampling, KV,
+  MoE, and server metrics.
+- [Backend contract](backend-contract.md): backend kinds, device tensor
+  ownership, sync policy, CPU reference, capability matrix, and parity.
+- [CUDA-first](cuda-first.md): DGX Spark target, CUDA commands, stream policy,
+  cuBLAS ownership, error mapping, and implementation phases.
+- [Model ladder](model-ladder.md): M0-M6 progression, support statuses, and
+  model page template.
+- [YAI provider boundary](yai-provider-boundary.md): YAI/YVEX ownership split,
+  provider flow, and receipt import rule.
+- [Failure taxonomy](failure-taxonomy.md): failure classes, error shape, parser
+  failures, and backend failures.
+- [Delivery box template](delivery-box-template.md): standard wave template.
+
+Legacy CLORI/NET scaffold documents still exist during the cutover window. They
+are non-authoritative where they conflict with `docs/spine.md` and will be
+archived in a dedicated legacy archive pass.
