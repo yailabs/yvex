@@ -1,4 +1,36 @@
-.PHONY: info check check-docs check-guardrails clean
+.PHONY: info lib cli test check check-docs check-guardrails clean
+
+CC ?= cc
+AR ?= ar
+
+CPPFLAGS ?= -Iinclude
+CFLAGS ?= -std=c11 -Wall -Wextra -pedantic
+LDFLAGS ?=
+
+BUILD_DIR := build
+OBJ_DIR := $(BUILD_DIR)/obj
+LIB_DIR := $(BUILD_DIR)/lib
+BIN_DIR := $(BUILD_DIR)/bin
+TEST_DIR := $(BUILD_DIR)/tests
+
+LIBYVEX := $(LIB_DIR)/libyvex.a
+YVEX_BIN := $(BIN_DIR)/yvex
+
+CORE_SRCS := \
+	src/core/version.c \
+	src/core/status.c \
+	src/core/error.c \
+	src/core/log.c
+
+CORE_OBJS := $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
+
+TEST_SRCS := \
+	tests/test_status.c \
+	tests/test_error.c \
+	tests/test_version.c \
+	tests/test_log.c
+
+TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 
 CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/roadmap.md docs/validation.md \
 	docs/api.md docs/runtime-filesystem.md docs/cli-runtime.md docs/cli-layout.md \
@@ -8,14 +40,41 @@ CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/roadmap.md docs/validati
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: pre-implementation spine"
+	@echo "status: A0 core/CLI skeleton"
 	@echo "interface: CLI-only"
 	@echo "inference: not implemented"
+	@echo "gguf: not implemented"
 	@echo "cuda: not implemented"
 	@echo "server: not implemented"
 
-check: check-docs check-guardrails
+lib: $(LIBYVEX)
+
+cli: $(YVEX_BIN)
+
+test: $(TEST_BINS)
+	@for test_bin in $(TEST_BINS); do \
+		echo "$$test_bin"; \
+		"$$test_bin"; \
+	done
+
+check: check-docs check-guardrails lib cli test
 	@echo "yvex check: ok"
+
+$(LIBYVEX): $(CORE_OBJS)
+	@mkdir -p $(@D)
+	$(AR) rcs $@ $^
+
+$(OBJ_DIR)/%.o: src/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(YVEX_BIN): cli/yvex_cli.c $(LIBYVEX)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) -o $@
+
+$(TEST_DIR)/%: tests/%.c $(LIBYVEX) tests/test.h
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) -o $@
 
 check-docs:
 	@test -f README.md
@@ -65,12 +124,29 @@ check-guardrails:
 	@test ! -d protocols
 	@test ! -e src/README.md
 	@test ! -e tests/README.md
+	@test ! -e include/yvex/tui.h
+	@test ! -e include/yvex/gguf.h
+	@test ! -e include/yvex/model.h
+	@test ! -e include/yvex/backend.h
+	@test ! -e include/yvex/session.h
+	@test ! -e include/yvex/server.h
+	@test ! -d src/tui
+	@test ! -d src/artifact
+	@test ! -d src/formats
+	@test ! -d src/model
+	@test ! -d src/tokenizer
+	@test ! -d src/graph
+	@test ! -d src/backend
+	@test ! -d src/session
+	@test ! -d src/server
+	@test ! -d backends
+	@test ! -d fixtures
 	@! find . -path './.git' -prune -o \( -path './tui' -o -path './src/tui' -o -path './include/yvex/tui.h' -o -path './docs/tui.md' -o -path './docs/tui-*.md' \) -print | grep .
 	@! find . -path './.git' -prune -o -name 'panel_*.c' -print | grep .
 	@! grep -I -n -E '#include[ <"]n[c]urses|l[n]curses|N[C]URSES' $(CURRENT_DOCS) >/dev/null
-	@! grep -RIn -E "N[E]T\\.SPINE|N[E]T moves streams|C[L]ORI|c[l]ori-codename|docs/arc[h]ive|c[l]ori_|libc[l]ori|c[l]orid|include/c[l]ori|~/\\.config/c[l]ori" --exclude-dir=.git . >/dev/null
+	@! grep -RIn -E "N[E]T\\.SPINE|N[E]T moves streams|C[L]ORI|c[l]ori-codename|docs/arc[h]ive|c[l]ori_|libc[l]ori|c[l]orid|include/c[l]ori|~/\\.config/c[l]ori|github\\.com/yailabs/c[l]ori|yailabs/c[l]ori" --exclude-dir=.git --exclude-dir=build . >/dev/null
 	@! grep -Ei "production-ready|implemented inference|implemented server|supports CUDA|supports Metal|supports MLX|supports llama\\.cpp|OpenAI-compatible server" README.md >/dev/null
 	@! grep -Ei "benchmark results" README.md | grep -vi "benchmark results: none" >/dev/null
 
 clean:
-	@rm -f yvex yvexd yvex_bench libyvex.a
+	@rm -rf $(BUILD_DIR)

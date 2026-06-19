@@ -3265,26 +3265,23 @@ Every support claim has a command.
 
 ## 28. Immediate Next Milestone
 
-Next milestone after the remote/origin cutover:
+Next milestone after A0:
 
 ```text
-P0.8 - Runtime / System Design
+B0 - Runtime Filesystem
 ```
 
-P0.8 must:
+B0 must:
 
 ```text
-create docs/runtime-system-design.md
-define the exact A0 runtime skeleton
-define A0 header layering and core module dependencies
-define A0 product outputs and Makefile target semantics
-define A0 CLI bootstrap behavior
-define A0 test harness expectations
-define future module attachment order
-confirm no runtime code exists yet
+add XDG path resolution
+add run directory creation
+add cache/state/config directory helpers
+add run.json writer skeleton
+keep baseline validation independent of CUDA, network, model downloads, and YAI checkout
 ```
 
-P0.8 must not:
+B0 must not:
 
 ```text
 implement inference
@@ -3295,13 +3292,14 @@ introduce TUI
 introduce terminal UI dependencies
 introduce dashboard or panel implementation
 introduce fake provider support
-create runtime headers or C files
-create CLI binaries
+introduce server/provider implementation
+introduce CUDA implementation
 ```
 
-After P0.8, the next milestone is:
+Completed transition:
 
 ```text
+P0.8 - Runtime / System Design
 A0 - Code-first C skeleton
 ```
 

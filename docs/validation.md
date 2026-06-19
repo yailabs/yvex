@@ -5,9 +5,9 @@ pre-implementation cutover. The full technical contract lives in `docs/spine.md`
 
 ## Current Phase
 
-P0.8 defines the runtime system design that A0 must implement. Current
-validation still checks documentation authority and guardrails; it does not
-compile C runtime code because A0 has not created runtime code yet.
+A0 implements the first C build surface: core public headers, core status/error
+/log/version implementation, `libyvex.a`, the `yvex` CLI bootstrap, and small C
+unit tests.
 
 Current commands:
 
@@ -37,6 +37,9 @@ canonical docs exist
 docs/spine.md declares YVEX Implementation Spine
 docs/spine.md declares CLI-only policy
 README.md uses YVEX public identity
+libyvex.a builds
+build/bin/yvex builds
+A0 unit tests build and pass
 old scaffold authority phrases are absent from current public docs
 old scaffold directories are absent
 forbidden TUI implementation paths are absent
@@ -48,9 +51,9 @@ P0.6 removed the old scaffold files from the active repository surface. P0.7
 cut over the remote identity to YVEX. Deleted historical files are not
 recreated by validation.
 
-## Future Code-First Checks
+## Current Code-First Checks
 
-A0 and later must add:
+A0 includes:
 
 ```text
 C compilation

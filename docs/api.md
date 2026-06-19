@@ -34,6 +34,10 @@ yvex_server
 
 ## Status and Error
 
+A0 implements only the core version/status/error/log header surface. Future API
+families in this document remain design contracts until their headers and tests
+exist.
+
 ```c
 typedef enum {
     YVEX_OK = 0,
@@ -59,9 +63,22 @@ typedef struct {
 Required functions:
 
 ```c
+const char *yvex_version_string(void);
+int yvex_version_major(void);
+int yvex_version_minor(void);
+int yvex_version_patch(void);
+
 void yvex_error_clear(yvex_error *err);
-void yvex_error_set(yvex_error *err, yvex_status code, const char *where, const char *fmt, ...);
+void yvex_error_set(yvex_error *err, yvex_status code, const char *where, const char *message);
+void yvex_error_setf(yvex_error *err, yvex_status code, const char *where, const char *fmt, ...);
+int yvex_error_is_set(const yvex_error *err);
+
 const char *yvex_status_name(yvex_status status);
+int yvex_status_is_ok(yvex_status status);
+int yvex_status_is_error(yvex_status status);
+
+const char *yvex_log_level_name(yvex_log_level level);
+const char *yvex_log_domain_name(yvex_log_domain domain);
 ```
 
 ## Artifact and GGUF
