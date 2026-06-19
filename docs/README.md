@@ -10,7 +10,6 @@ Canonical current documents:
   and model-support tracks.
 - [Validation](validation.md): current guardrails and future code-first
   validation posture.
-- [CLORI codename note](archive/clori-codename.md): historical codename record.
 
 Focused technical documents:
 
@@ -38,5 +37,4 @@ Focused technical documents:
   failures, and backend failures.
 - [Delivery box template](delivery-box-template.md): standard wave template.
 
-P0.6 removed the old scaffold surface. The codename note is the only historical
-codename document kept in the active docs tree.
+P0.6 removed the old scaffold surface from the active docs tree.

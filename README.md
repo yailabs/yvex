@@ -41,7 +41,6 @@ limitation.
 - [Roadmap](docs/roadmap.md)
 - [Validation](docs/validation.md)
 - [Docs index](docs/README.md)
-- [CLORI codename note](docs/archive/clori-codename.md)
 
 ## Validation
 

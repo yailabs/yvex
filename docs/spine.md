@@ -17,8 +17,7 @@ Initial implementation mode: code-first, no fake support, no fake inference, no 
 
 This document is the canonical implementation spine for the repository operated
 locally as `yvex`. The public technical project is YVEX. The repository was
-formerly named `clori`; CLORI remains only as historical codename and
-dedication.
+formerly named `clori`; CLORI is historical only.
 
 This spine replaces the previous public framing under the old codename, the old
 external-node center of gravity, and the docs-only validation posture.
@@ -68,7 +67,7 @@ Git state at intake:
 ```text
 branch: main
 commit: 9ff28e1
-remote: https://github.com/yailabs/clori.git (temporary; remote rename deferred)
+remote: https://github.com/yailabs/yvex.git
 ```
 
 Current active surface after P0.6:
@@ -81,7 +80,6 @@ NOTICE.md
 README.md
 docs/README.md
 docs/api.md
-docs/archive/clori-codename.md
 docs/backend-contract.md
 docs/cli-layout.md
 docs/cli-runtime.md
@@ -148,12 +146,7 @@ hard guardrail that one is not introduced.
 
 ## 2. Legacy Surface Purge
 
-P0.6 removed the old scaffold surface from the active repository. The only
-remaining codename material is:
-
-```text
-docs/archive/clori-codename.md
-```
+P0.6 removed the old scaffold surface from the active repository.
 
 Active repository surface keeps:
 
@@ -168,13 +161,6 @@ docs/spine.md
 docs/roadmap.md
 docs/validation.md
 focused YVEX docs under docs/
-```
-
-Historical codename note:
-
-```text
-CLORI was the original codename of this project and is kept as a private dedication.
-The public technical runtime name is YVEX - YAI Vector Execution.
 ```
 
 Removed surfaces:
@@ -654,7 +640,6 @@ Required docs:
 ```text
 docs/spine.md
 docs/roadmap.md
-docs/architecture.md
 docs/api.md
 docs/runtime-filesystem.md
 docs/cli-runtime.md
@@ -668,7 +653,6 @@ docs/yai-provider-boundary.md
 docs/validation.md
 docs/failure-taxonomy.md
 docs/delivery-box-template.md
-docs/archive/clori-codename.md
 ```
 
 Forbidden layout:

@@ -36,7 +36,6 @@ check-docs:
 	@test -f docs/yai-provider-boundary.md
 	@test -f docs/failure-taxonomy.md
 	@test -f docs/delivery-box-template.md
-	@test -f docs/archive/clori-codename.md
 	@grep -F "YVEX Implementation Spine" docs/spine.md >/dev/null
 	@grep -F "YVEX is CLI-only" docs/spine.md >/dev/null
 	@grep -F "YVEX is a C local inference engine" README.md >/dev/null
