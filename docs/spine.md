@@ -20,8 +20,8 @@ locally as `yvex`. The public technical project is YVEX. The repository was
 formerly named `clori`; CLORI remains only as historical codename and
 dedication.
 
-This spine replaces the previous public framing under the old codename, the
-NET-external-node center of gravity, and the docs-only validation posture.
+This spine replaces the previous public framing under the old codename, the old
+external-node center of gravity, and the docs-only validation posture.
 
 ## 0. Authority
 
@@ -52,10 +52,10 @@ roadmap taxonomy
 delivery-box execution method
 ```
 
-Any older document that conflicts with this file is legacy material until it is
-rewritten, archived, or deleted.
+Any older document that conflicts with this file is non-authoritative. P0.6
+removed the old scaffold surface from the active repository.
 
-## 1. Current Repository Audit
+## 1. Current Repository State
 
 Repository root:
 
@@ -69,10 +69,9 @@ Git state at intake:
 branch: main
 commit: 9ff28e1
 remote: https://github.com/yailabs/clori.git (temporary; remote rename deferred)
-working tree: clean
 ```
 
-Current tracked tree:
+Current active surface after P0.6:
 
 ```text
 .gitignore
@@ -80,42 +79,36 @@ LICENSE
 Makefile
 NOTICE.md
 README.md
-benches/README.md
 docs/README.md
-docs/architecture.md
-docs/artifact-format.md
-docs/backend-api.md
-docs/benchmark/README.md
-docs/benchmark/benchmark-canon.md
-docs/boundary.md
-docs/integration/README.md
-docs/integration/yai-net-compatibility.md
-docs/integration/yai-receipt-boundary.md
+docs/api.md
+docs/archive/clori-codename.md
+docs/backend-contract.md
+docs/cli-layout.md
+docs/cli-runtime.md
+docs/cuda-first.md
+docs/delivery-box-template.md
+docs/failure-taxonomy.md
+docs/logging-tracing.md
 docs/metrics.md
-docs/model-descriptor.md
-docs/model-runtime.md
-docs/observability.md
-docs/serving.md
-docs/spines/README.md
-docs/spines/clori-spine.md
-docs/spines/yai-net-spine-reference.md
-docs/terminology.md
-examples/README.md
-protocols/README.md
-src/README.md
-tests/README.md
+docs/model-ladder.md
+docs/roadmap.md
+docs/runtime-filesystem.md
+docs/spine.md
+docs/validation.md
+docs/yai-provider-boundary.md
 ```
 
 Current Makefile behavior:
 
 ```text
 make info
-  prints CLORI scaffold status
+  prints YVEX pre-implementation status
 
 make check
-  checks that selected docs exist
-  greps for old NET/CLORI boundary phrases
-  rejects some fake maturity claims in README.md
+  checks active YVEX docs exist
+  checks old scaffold surfaces are absent
+  checks no forbidden terminal UI implementation paths exist
+  rejects fake maturity claims in README.md
   does not compile C
   does not build a library
   does not build a CLI
@@ -138,7 +131,7 @@ no fixtures
 no benchmark harness
 ```
 
-Current TUI state:
+Current terminal-interface guardrail state:
 
 ```text
 no tui/ directory found
@@ -153,147 +146,53 @@ no alternate-screen references found
 The reset does not need to unwind an existing TUI. It must instead install a
 hard guardrail that one is not introduced.
 
-## 2. Demolition Map
+## 2. Legacy Surface Purge
 
-### 2.1 Keep
-
-Keep:
-
-```text
-LICENSE
-.gitignore
-```
-
-Keep with edits:
-
-```text
-NOTICE.md
-```
-
-Keep as concepts, not as current text:
-
-```text
-artifact
-descriptor
-tensor table
-dtype/qtype profile
-architecture profile
-backend boundary
-memory/KV accounting
-prefill
-decode
-token stream
-metrics
-execution receipt
-YAI owns authority
-runtime emits evidence
-external systems decide import/trust
-```
-
-Preserve CLORI only here:
+P0.6 removed the old scaffold surface from the active repository. The only
+remaining codename material is:
 
 ```text
 docs/archive/clori-codename.md
 ```
 
-Required archive note:
+Active repository surface keeps:
+
+```text
+LICENSE
+.gitignore
+README.md
+NOTICE.md
+Makefile
+docs/README.md
+docs/spine.md
+docs/roadmap.md
+docs/validation.md
+focused YVEX docs under docs/
+```
+
+Historical codename note:
 
 ```text
 CLORI was the original codename of this project and is kept as a private dedication.
 The public technical runtime name is YVEX - YAI Vector Execution.
 ```
 
-### 2.2 Rewrite
-
-Rewrite completely:
+Removed surfaces:
 
 ```text
-README.md
-Makefile
-NOTICE.md
-docs/README.md
-docs/architecture.md
-docs/boundary.md
-docs/terminology.md
-docs/artifact-format.md
-docs/model-descriptor.md
-docs/backend-api.md
-docs/model-runtime.md
-docs/metrics.md
-docs/observability.md
-docs/serving.md
+old spine/reference docs
+old integration docs
+old benchmark docs
+old single-topic scaffold docs replaced by focused YVEX docs
+placeholder benchmark/example/protocol folders
+README-only source/test placeholders
 ```
 
-Rewrite topics:
+Purge guardrails:
 
 ```text
-public identity: old codename framing -> YVEX
-namespace: legacy codename prefix -> yvex_*
-binary: legacy CLI name -> yvex
-library: legacy static library name -> libyvex.a
-daemon: legacy daemon name -> yvexd
-headers: legacy include root -> include/yvex
-runtime dirs: legacy XDG runtime dirs -> YVEX XDG runtime dirs
-validation: docs grep -> build + tests + hygiene
-YAI relation: NET external-node framing -> provider/runtime boundary
-interface doctrine: terminal scaffold -> CLI-only runtime doctrine
-support posture: planned claims -> command-proven support levels
-benchmark posture: future benchmark docs -> reproducible run artifacts
-```
-
-### 2.3 Archive
-
-Move to `docs/archive/` before deletion decisions:
-
-```text
-docs/spines/clori-spine.md
-docs/spines/yai-net-spine-reference.md
-docs/spines/README.md
-docs/integration/README.md
-docs/integration/yai-net-compatibility.md
-docs/integration/yai-receipt-boundary.md
-docs/benchmark/README.md
-docs/benchmark/benchmark-canon.md
-```
-
-Archive rationale:
-
-```text
-old public name under the codename
-old codename-as-public-project frame
-old NET-external-node center
-old docs-first scaffold
-old grep-only validation notes
-premature benchmark scaffold
-historical YAI receipt compatibility language
-```
-
-### 2.4 Delete
-
-Delete or replace with real source/test directories:
-
-```text
-src/README.md
-tests/README.md
-protocols/README.md
-benches/README.md
-examples/README.md
-```
-
-Delete from validation:
-
-```text
-grep dependency on "Reference version: NET.SPINE.0.3"
-grep dependency on "Source path: work/spines/net-spine.md"
-grep dependency on "YAI controls authority."
-grep dependency on "NET moves streams."
-grep dependency on "CLORI executes neural computation."
-README-only fake-claim checks as primary validation
-```
-
-Delete or forbid if introduced:
-
-```text
+old scaffold directories must not return
+old README-only source/test placeholders must not return
 tui/
 src/tui/
 include/yvex/tui.h
@@ -3122,7 +3021,7 @@ P0.2  Spine technical densification pass
 P0.3  Documentation and validation cutover plan
 P0.4  Workspace / local namespace cutover
 P0.5  Focused docs extraction
-P0.6  Legacy docs archive pass
+P0.6  Legacy surface purge
 P0.7  A0 readiness check
 P0.8  Runtime filesystem design
 P0.9  CLI runtime design
@@ -3383,26 +3282,24 @@ Every support claim has a command.
 
 ## 28. Immediate Next Milestone
 
-Next milestone after focused docs extraction:
+Next milestone after the legacy surface purge:
 
 ```text
-P0.6 - Legacy Docs Archive Pass
+P0.7 - A0 Readiness Check
 ```
 
-P0.6 must:
+P0.7 must:
 
 ```text
-move or rewrite old CLORI/NET scaffold docs according to the demolition map
-archive docs/spines/
-archive docs/integration/
-archive docs/benchmark/
-preserve docs/archive/clori-codename.md
-keep current YVEX docs authoritative
-keep runtime code out until A0
-preserve make check
+confirm docs authority is coherent
+confirm the old scaffold surface is absent
+confirm Makefile guardrails are current
+confirm A0 file list is stable
+confirm no runtime code exists yet
+confirm no forbidden interface surface exists
 ```
 
-P0.6 must not:
+P0.7 must not:
 
 ```text
 implement inference
@@ -3414,24 +3311,6 @@ introduce terminal UI dependencies
 introduce dashboard or panel implementation
 introduce fake provider support
 delete historical codename material
-```
-
-After P0.6:
-
-```text
-P0.7 - A0 Readiness Check
-```
-
-P0.7 must:
-
-```text
-confirm docs authority is coherent
-confirm legacy docs are archived or clearly non-authoritative
-confirm Makefile guardrails are current
-confirm A0 file list is stable
-confirm no runtime code exists yet
-confirm no forbidden interface surface exists
-keep runtime code out until A0
 ```
 
 Short target definition:

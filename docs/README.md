@@ -38,6 +38,5 @@ Focused technical documents:
   failures, and backend failures.
 - [Delivery box template](delivery-box-template.md): standard wave template.
 
-Legacy CLORI/NET scaffold documents still exist during the cutover window. They
-are non-authoritative where they conflict with `docs/spine.md` and will be
-archived in a dedicated legacy archive pass.
+P0.6 removed the old scaffold surface. The codename note is the only historical
+codename document kept in the active docs tree.

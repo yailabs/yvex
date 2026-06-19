@@ -11,7 +11,7 @@ P0.2  Spine technical densification pass
 P0.3  Documentation and validation cutover plan
 P0.4  Workspace / local namespace cutover
 P0.5  Focused docs extraction
-P0.6  Legacy docs archive pass
+P0.6  Legacy surface purge
 P0.7  A0 readiness check
 P0.8  Runtime filesystem design
 P0.9  CLI runtime design
@@ -26,8 +26,8 @@ P0 keeps runtime code out of the repository until the public identity,
 documentation authority, validation posture, and implementation contract are
 stable.
 
-P0.5 extracts focused documents from the spine. P0.6 handles legacy CLORI/NET
-archive moves. P0.7 checks A0 readiness before any runtime code appears.
+P0.5 extracts focused documents from the spine. P0.6 purges the old scaffold
+surface. P0.7 checks A0 readiness before any runtime code appears.
 
 ## A - Code-First Foundation
 

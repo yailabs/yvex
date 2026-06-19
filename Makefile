@@ -56,12 +56,18 @@ check-docs:
 	@grep -F "YVEX Delivery Box Template" docs/delivery-box-template.md >/dev/null
 
 check-guardrails:
+	@test ! -d docs/spines
+	@test ! -d docs/integration
+	@test ! -d docs/benchmark
+	@test ! -d benches
+	@test ! -d examples
+	@test ! -d protocols
+	@test ! -e src/README.md
+	@test ! -e tests/README.md
 	@! find . -path './.git' -prune -o \( -path './tui' -o -path './src/tui' -o -path './include/yvex/tui.h' -o -path './docs/tui.md' -o -path './docs/tui-*.md' \) -print | grep .
 	@! find . -path './.git' -prune -o -name 'panel_*.c' -print | grep .
 	@! grep -I -n -E '#include[ <"]n[c]urses|l[n]curses|N[C]URSES' $(CURRENT_DOCS) >/dev/null
-	@! grep -F "NET moves streams." $(CURRENT_DOCS) >/dev/null
-	@! grep -F "CLORI executes neural computation." $(CURRENT_DOCS) >/dev/null
-	@! grep -F "Reference version: NET.SPINE.0.3" $(CURRENT_DOCS) >/dev/null
+	@! grep -RIn -E "N[E]T\\.SPINE|N[E]T moves streams|C[L]ORI executes neural computation|c[l]ori_|libc[l]ori|c[l]orid|include/c[l]ori|~/\\.config/c[l]ori" --exclude-dir=.git . >/dev/null
 	@! grep -Ei "production-ready|implemented inference|implemented server|supports CUDA|supports Metal|supports MLX|supports llama\\.cpp|OpenAI-compatible server" README.md >/dev/null
 	@! grep -Ei "benchmark results" README.md | grep -vi "benchmark results: none" >/dev/null
 

@@ -36,14 +36,15 @@ canonical docs exist
 docs/spine.md declares YVEX Implementation Spine
 docs/spine.md declares CLI-only policy
 README.md uses YVEX public identity
-legacy NET/CLORI authority phrases are absent from current public docs
+old scaffold authority phrases are absent from current public docs
+old scaffold directories are absent
 forbidden TUI implementation paths are absent
 forbidden terminal UI dependencies are absent from current public docs/build files
 README.md does not claim implemented inference/server/CUDA support
 ```
 
-Legacy CLORI/NET scaffold files still exist during the cutover window. They are
-not authoritative and will be handled by a dedicated archive pass.
+P0.6 removed the old scaffold files from the active repository surface. The
+codename archive note is intentionally kept.
 
 ## Future Code-First Checks
 
