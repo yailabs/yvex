@@ -1,41 +1,58 @@
 # YVEX CLI Runtime
 
-This document extracts the CLI runtime contract from `docs/spine.md`. The spine
-remains authoritative.
+This document owns CLI behavior. YVEX is CLI-only.
 
-## Doctrine
+## Current Implemented Commands
 
-YVEX is CLI-only.
-
-Allowed terminal surfaces:
+The A0.1 binary implements exactly:
 
 ```text
-plain CLI output
-rich CLI output
-interactive REPL
-streamed token output
-inline status lines
-structured JSON output
-structured JSONL streaming
-logs on stderr
-run artifacts on filesystem
-```
-
-Forbidden:
-
-```text
-TUI
-terminal dashboard implementation
-terminal grid UI
-GUI
---tui
---dashboard
-```
-
-## Commands
-
-```sh
+yvex
+yvex --help
+yvex --version
+yvex commands
+yvex help
+yvex help <implemented-command>
 yvex info
+yvex version
+```
+
+Current commands must stay backed by the command table in `cli/yvex_cli.c`.
+
+## Current `yvex info`
+
+`yvex info` must report the current implementation honestly:
+
+```text
+name: YVEX
+version: 0.1.0
+language: C
+interface: CLI-only
+status: A0.1 core/CLI skeleton
+library: libyvex.a
+inference: not implemented
+gguf: not implemented
+cuda: not implemented
+server: not implemented
+```
+
+It must not include a TUI line.
+
+## Command Table Policy
+
+```text
+implemented commands are declared in one command table
+unknown commands exit 2
+help for unknown topics exits 2
+future runtime commands are not listed as implemented
+future runtime commands may be documented as future only
+```
+
+## Future Commands
+
+Future command names are not support claims:
+
+```text
 yvex inspect model.gguf
 yvex metadata model.gguf
 yvex tensors model.gguf
@@ -44,16 +61,14 @@ yvex graph model.gguf
 yvex tokenize model.gguf --text "hello"
 yvex detokenize model.gguf --ids 1,2,3
 yvex prompt model.gguf --system "..." --user "..."
-yvex experts model.gguf
-yvex moe-plan model.gguf --backend cuda
 yvex run --model model.gguf --backend cuda -p "Explain mmap in C" -n 128
 yvex chat --model model.gguf --backend cuda
 yvex bench --model model.gguf --backend cuda --prompt prompts/code.txt --tokens 256
 yvex cuda-info
 ```
 
-Commands are support claims only after source implementation, tests, manual
-proof, and documented limitations exist.
+Each future command needs source implementation, tests, manual proof, failure
+behavior, and documented limitations before appearing in `yvex commands`.
 
 ## stdout/stderr
 
@@ -68,6 +83,14 @@ stderr:
   warnings
   timing
 ```
+
+Default/plain mode must allow:
+
+```sh
+yvex run ... > output.txt
+```
+
+without status or progress corrupting `output.txt`.
 
 ## Exit Codes
 
@@ -84,16 +107,9 @@ stderr:
 9   internal invariant/state error
 ```
 
-## Argument Grammar
+A0.1 currently exercises `0` and `2`.
 
-```text
-yvex <command> [positional...] [options...]
-```
-
-Unknown options, missing option values, and ambiguous positional arguments exit
-with code 2.
-
-## TTY and Pipe Safety
+## TTY And Pipe Safety
 
 ```text
 color auto-enables only when output target is a TTY
@@ -101,17 +117,40 @@ status line auto-enables only on TTY stderr
 JSON and JSONL modes never emit color
 generated text or machine-readable data stays on stdout
 progress/logs stay on stderr
+status line uses carriage return only on TTY or explicit always mode
+final status line is followed by newline before exit
 ```
 
-Default/plain mode must allow:
+## Layout Examples
 
-```sh
-yvex run ... > output.txt
+Future rich run layout:
+
+```text
+YVEX 0.1.0 | backend: cuda | device: NVIDIA GB10 | model: qwen
+
+LOAD
+  file        models/qwen.gguf
+  format      GGUF v3
+  tensors     812
+
+MEMORY PLAN
+  weights     mmap
+  kv cache    planned
+  scratch     planned
+
+ASSISTANT
+  ...
 ```
 
-without status/progress corrupting `output.txt`.
+Future status line:
 
-## JSON and JSONL Versions
+```text
+[decode] 87 tok | 18.7 tok/s | last 52ms | ctx 1192/32768
+```
+
+These are future layouts, not current command output.
+
+## JSON And JSONL Future Policy
 
 JSON envelope:
 
@@ -128,51 +167,24 @@ JSON envelope:
 JSONL event envelope:
 
 ```json
-{
-  "schema": "yvex.event.v1",
-  "event": "token",
-  "run_id": "run_...",
-  "ts_ns": 0,
-  "data": {}
-}
+{"schema":"yvex.event.v1","event":"token","run_id":"run_...","ts_ns":0,"data":{}}
 ```
 
-## Interactive Chat
+JSONL output must remain one valid JSON object per line. JSON and JSONL modes
+must never mix logs or progress into stdout.
 
-Initial REPL dependency:
+## No TUI
+
+Forbidden:
 
 ```text
-linenoise
+TUI
+terminal dashboard implementation
+terminal grid UI
+GUI
+--tui
+--dashboard
+panel implementation
+alternate-screen interface
+ncurses dependency
 ```
-
-Slash commands:
-
-```text
-/help
-/model
-/backend
-/ctx N
-/tokens N
-/temp F
-/top-k N
-/top-p F
-/min-p F
-/seed N
-/greedy
-/stats
-/memory
-/tensors
-/graph
-/trace on
-/trace off
-/profile
-/dump-tokens
-/dump-logprobs N
-/save-run
-/reset
-/rewind N
-/read FILE
-/quit
-```
-
-Cancellation and rollback behavior are defined in `docs/spine.md`.

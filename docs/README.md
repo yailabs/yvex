@@ -1,44 +1,31 @@
 # YVEX Docs
 
-This directory is the documentation root for YVEX.
+This directory is intentionally small. YVEX keeps a few dense canonical
+documents instead of one Markdown file per idea.
 
-Canonical current documents:
+Canonical documents:
 
-- [Implementation spine](spine.md): project authority, technical contract,
-  roadmap, CLI-only doctrine, YAI boundary, validation matrix.
-- [Roadmap](roadmap.md): reset, documentation, implementation, runtime, backend,
-  and model-support tracks.
-- [Validation](validation.md): current guardrails and future code-first
-  validation posture.
-- [Runtime system design](runtime-system-design.md): P0.8 bridge from the
-  documentation spine to the exact A0 C runtime skeleton.
-- [Source style](source-style.md): file-header discipline, command metadata,
-  public header style, and source validation rules.
+- [Implementation spine](spine.md): technical authority for identity, scope,
+  runtime architecture, YVEX/YAI boundary, model ladder, failure taxonomy,
+  validation philosophy, guardrails, and future tracks.
+- [Roadmap](roadmap.md): working progress document, milestone state, delivery
+  sequence, gates, decisions, and code-quality review.
+- [API](api.md): current public C API and future API contracts that are
+  documentation only until headers, implementation, and tests exist.
+- [Backend contract](backend-contract.md): CPU reference, backend ABI,
+  device-tensor rules, CUDA/DGX Spark track, parity, and capability matrix.
+- [Runtime filesystem](runtime-filesystem.md): future B0 filesystem contract,
+  path precedence, run directories, locks, and cache policy.
+- [CLI runtime](cli-runtime.md): implemented CLI behavior, command table
+  discipline, exit codes, stdout/stderr, TTY behavior, and future JSON/JSONL
+  contracts.
 
-Focused technical documents:
+Documentation rule:
 
-- [API](api.md): public C API rules, object families, status/error shape, and
-  major runtime APIs.
-- [Runtime filesystem](runtime-filesystem.md): config/cache/state paths, run
-  directories, artifacts, receipt rule, and config precedence.
-- [CLI runtime](cli-runtime.md): CLI-only doctrine, commands, REPL, exit codes,
-  stdout/stderr, TTY behavior, and JSON/JSONL versioning.
-- [CLI layout](cli-layout.md): rich output sections, chat layout, status lines,
-  and JSON/JSONL envelopes.
-- [Logging and tracing](logging-tracing.md): log domains, trace flags, trace
-  event shape, and profile shape.
-- [Metrics](metrics.md): load, tensor, memory, prefill, decode, sampling, KV,
-  MoE, and server metrics.
-- [Backend contract](backend-contract.md): backend kinds, device tensor
-  ownership, sync policy, CPU reference, capability matrix, and parity.
-- [CUDA-first](cuda-first.md): DGX Spark target, CUDA commands, stream policy,
-  cuBLAS ownership, error mapping, and implementation phases.
-- [Model ladder](model-ladder.md): M0-M6 progression, support statuses, and
-  model page template.
-- [YAI provider boundary](yai-provider-boundary.md): YAI/YVEX ownership split,
-  provider flow, and receipt import rule.
-- [Failure taxonomy](failure-taxonomy.md): failure classes, error shape, parser
-  failures, and backend failures.
-- [Delivery box template](delivery-box-template.md): standard wave template.
-
-P0.6 removed the old scaffold surface from the active docs tree.
+```text
+few Markdown files
+dense canonical content
+roadmap owns progress
+spine owns technical doctrine
+no new planning note for every micro-concept
+```

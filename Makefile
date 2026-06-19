@@ -58,11 +58,8 @@ TEST_SRCS := \
 
 TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 
-CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/roadmap.md docs/validation.md \
-	docs/api.md docs/runtime-filesystem.md docs/runtime-system-design.md docs/source-style.md \
-	docs/cli-runtime.md docs/cli-layout.md docs/logging-tracing.md docs/metrics.md \
-	docs/model-ladder.md docs/cuda-first.md docs/backend-contract.md \
-	docs/yai-provider-boundary.md docs/failure-taxonomy.md docs/delivery-box-template.md
+CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md docs/roadmap.md \
+	docs/api.md docs/backend-contract.md docs/runtime-filesystem.md docs/cli-runtime.md
 
 info:
 	@echo "yvex: C local inference engine"
@@ -116,40 +113,29 @@ check-docs:
 	@test -f docs/README.md
 	@test -f docs/spine.md
 	@test -f docs/roadmap.md
-	@test -f docs/validation.md
 	@test -f docs/api.md
-	@test -f docs/runtime-filesystem.md
-	@test -f docs/runtime-system-design.md
-	@test -f docs/source-style.md
-	@test -f docs/cli-runtime.md
-	@test -f docs/cli-layout.md
-	@test -f docs/logging-tracing.md
-	@test -f docs/metrics.md
-	@test -f docs/model-ladder.md
-	@test -f docs/cuda-first.md
 	@test -f docs/backend-contract.md
-	@test -f docs/yai-provider-boundary.md
-	@test -f docs/failure-taxonomy.md
-	@test -f docs/delivery-box-template.md
+	@test -f docs/runtime-filesystem.md
+	@test -f docs/cli-runtime.md
+	@! find docs -maxdepth 1 -type f -name '*.md' \
+		! -name README.md \
+		! -name spine.md \
+		! -name roadmap.md \
+		! -name api.md \
+		! -name backend-contract.md \
+		! -name runtime-filesystem.md \
+		! -name cli-runtime.md \
+		-print | grep .
 	@grep -F "YVEX Implementation Spine" docs/spine.md >/dev/null
 	@grep -F "YVEX is CLI-only" docs/spine.md >/dev/null
 	@grep -F "YVEX is a C local inference engine" README.md >/dev/null
 	@grep -F "YVEX Roadmap" docs/roadmap.md >/dev/null
-	@grep -F "YVEX Validation" docs/validation.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
-	@grep -F "YVEX Runtime Filesystem" docs/runtime-filesystem.md >/dev/null
-	@grep -F "YVEX Runtime System Design" docs/runtime-system-design.md >/dev/null
-	@grep -F "YVEX Source Style" docs/source-style.md >/dev/null
-	@grep -F "YVEX CLI Runtime" docs/cli-runtime.md >/dev/null
-	@grep -F "YVEX CLI Layout" docs/cli-layout.md >/dev/null
-	@grep -F "YVEX Logging and Tracing" docs/logging-tracing.md >/dev/null
-	@grep -F "YVEX Metrics" docs/metrics.md >/dev/null
-	@grep -F "YVEX Model Ladder" docs/model-ladder.md >/dev/null
-	@grep -F "YVEX CUDA-First Strategy" docs/cuda-first.md >/dev/null
 	@grep -F "YVEX Backend Contract" docs/backend-contract.md >/dev/null
-	@grep -F "YVEX / YAI Provider Boundary" docs/yai-provider-boundary.md >/dev/null
-	@grep -F "YVEX Failure Taxonomy" docs/failure-taxonomy.md >/dev/null
-	@grep -F "YVEX Delivery Box Template" docs/delivery-box-template.md >/dev/null
+	@grep -F "YVEX Runtime Filesystem" docs/runtime-filesystem.md >/dev/null
+	@grep -F "YVEX CLI Runtime" docs/cli-runtime.md >/dev/null
+	@grep -F "Current A0.1 Code Review" docs/roadmap.md >/dev/null
+	@grep -F "CUDA / DGX Spark Track" docs/backend-contract.md >/dev/null
 
 check-guardrails:
 	@test ! -d docs/spines

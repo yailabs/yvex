@@ -5,8 +5,8 @@
  * Layer: public core API
  *
  * Purpose:
- *   Exposes the stable A0.1 version constants and no-allocation version helper
- *   functions used by the core library, CLI, and tests.
+ *   Exposes core version constants and no-allocation version helper functions
+ *   used by the core library, CLI, and tests.
  *
  * Owns:
  *   - YVEX_VERSION_MAJOR

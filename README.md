@@ -15,7 +15,8 @@ provider boundary.
 
 ## Status
 
-This repository is in the A0.1 core skeleton maturity phase.
+This repository is in the A0.2 documentation consolidation and code-quality
+gate phase.
 
 Current state:
 
@@ -37,10 +38,13 @@ limitation.
 
 ## Documentation
 
+- [Docs index](docs/README.md)
 - [Implementation spine](docs/spine.md)
 - [Roadmap](docs/roadmap.md)
-- [Validation](docs/validation.md)
-- [Docs index](docs/README.md)
+- [API](docs/api.md)
+- [Backend contract](docs/backend-contract.md)
+- [Runtime filesystem](docs/runtime-filesystem.md)
+- [CLI runtime](docs/cli-runtime.md)
 
 ## Validation
 
@@ -49,9 +53,9 @@ make info
 make check
 ```
 
-At this phase, validation checks the canonical documentation posture and
-guardrails, builds libyvex.a, builds the A0.1 CLI, runs C tests, and runs CLI
-smoke tests.
+At this phase, validation checks the reduced documentation posture and
+guardrails, builds libyvex.a, builds the CLI, runs C tests, and runs CLI smoke
+tests.
 
 ## License
 

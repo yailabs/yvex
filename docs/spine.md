@@ -68,7 +68,7 @@ commit: 9ff28e1
 remote: https://github.com/yailabs/yvex.git
 ```
 
-Current active surface after P0.6:
+Current active surface after A0.2:
 
 ```text
 .gitignore
@@ -79,51 +79,57 @@ README.md
 docs/README.md
 docs/api.md
 docs/backend-contract.md
-docs/cli-layout.md
 docs/cli-runtime.md
-docs/cuda-first.md
-docs/delivery-box-template.md
-docs/failure-taxonomy.md
-docs/logging-tracing.md
-docs/metrics.md
-docs/model-ladder.md
 docs/roadmap.md
 docs/runtime-filesystem.md
-docs/runtime-system-design.md
 docs/spine.md
-docs/validation.md
-docs/yai-provider-boundary.md
+include/yvex/yvex.h
+include/yvex/version.h
+include/yvex/status.h
+include/yvex/error.h
+include/yvex/log.h
+src/core/version.c
+src/core/status.c
+src/core/error.c
+src/core/log.c
+cli/yvex_cli.c
+tests/test_status.c
+tests/test_error.c
+tests/test_version.c
+tests/test_log.c
+tests/test_cli.sh
 ```
 
 Current Makefile behavior:
 
 ```text
 make info
-  prints YVEX pre-implementation status
+  prints YVEX A0.1 core/CLI status
 
 make check
-  checks active YVEX docs exist
+  checks the reduced canonical docs exist
   checks old scaffold surfaces are absent
   checks no forbidden terminal UI implementation paths exist
   rejects fake maturity claims in README.md
-  does not compile C
-  does not build a library
-  does not build a CLI
-  does not run unit tests
+  builds libyvex.a
+  builds build/bin/yvex
+  runs core tests
+  runs CLI smoke tests
 ```
 
 Current implementation state:
 
 ```text
-no C source implementation
-no public headers
-no libyvex.a
-no yvex CLI
+public core headers implemented: version/status/error/log
+core implementation exists: version/status/error/log
+libyvex.a builds
+build/bin/yvex builds
+implemented CLI commands: info/help/commands/version
 no yvexd server
 no GGUF parser
 no tokenizer
 no backend implementation
-no unit tests
+unit tests exist for status/error/version/log
 no fixtures
 no benchmark harness
 ```
@@ -158,8 +164,11 @@ Makefile
 docs/README.md
 docs/spine.md
 docs/roadmap.md
-docs/validation.md
-focused YVEX docs under docs/
+docs/api.md
+docs/backend-contract.md
+docs/runtime-filesystem.md
+docs/cli-runtime.md
+initial C core headers, source, CLI, and tests
 ```
 
 Removed surfaces:
@@ -168,16 +177,16 @@ Removed surfaces:
 old spine/reference docs
 old integration docs
 old benchmark docs
-old single-topic scaffold docs replaced by focused YVEX docs
-placeholder benchmark/example/protocol folders
-README-only source/test placeholders
+old single-topic scaffold docs replaced by canonical YVEX docs
+benchmark/example/protocol folders with no implementation role
+README-only source/test stubs
 ```
 
 Purge guardrails:
 
 ```text
 old scaffold directories must not return
-old README-only source/test placeholders must not return
+old README-only source/test stubs must not return
 tui/
 src/tui/
 include/yvex/tui.h
@@ -226,7 +235,7 @@ session lifecycle
      multi-session and invalidation rules
 
 sampler
-  -> RNG placeholder, seed semantics, top-k/top-p ordering,
+  -> RNG contract, seed semantics, top-k/top-p ordering,
      NaN/Inf policy, logprobs and stop-token handling
 
 CLI contract
@@ -637,21 +646,13 @@ yvex/
 Required docs:
 
 ```text
+docs/README.md
 docs/spine.md
 docs/roadmap.md
 docs/api.md
+docs/backend-contract.md
 docs/runtime-filesystem.md
 docs/cli-runtime.md
-docs/cli-layout.md
-docs/logging-tracing.md
-docs/metrics.md
-docs/model-ladder.md
-docs/cuda-first.md
-docs/backend-contract.md
-docs/yai-provider-boundary.md
-docs/validation.md
-docs/failure-taxonomy.md
-docs/delivery-box-template.md
 ```
 
 Forbidden layout:
@@ -669,7 +670,6 @@ CLI-specific terminal docs are:
 
 ```text
 docs/cli-runtime.md
-docs/cli-layout.md
 ```
 
 ## 9. Build System
@@ -746,6 +746,51 @@ unit tests
 source hygiene checks
 no fake support claims
 no TUI path or dependency
+```
+
+## 9.5 Source and Code Quality Discipline
+
+A0.2 folds source discipline rules into this spine. Keep the rules compact and
+enforced by code review, tests, and `make check`.
+
+Public headers:
+
+```text
+declare only implemented functions
+avoid future object families until implementation exists
+include no backend-native types in generic headers
+include no YAI governance types
+state ownership and non-goals in file comments
+```
+
+Core C:
+
+```text
+prefer fixed-size caller-owned objects for A0.1 helpers
+use size_t for buffer capacities and byte counts
+avoid heap allocation unless ownership is explicit
+avoid hidden environment reads in core helpers
+return deterministic names for known enums
+handle unknown enum values deliberately
+```
+
+CLI:
+
+```text
+implemented commands live in a command table
+unknown commands exit 2
+future runtime commands are documented as future, not listed as implemented
+stdout is for generated or machine-readable output
+stderr is for logs, progress, warnings, and timing
+```
+
+Tests:
+
+```text
+core helpers require unit tests
+CLI behavior requires smoke tests
+unknown/unsupported behavior must be tested or documented
+new support claims require tests and a manual proof command
 ```
 
 ## 10. Public API Rules
@@ -1956,7 +2001,7 @@ resident_device
   tensor bytes copied into device memory
 
 streamed
-  tensor bytes loaded on demand; initial policy placeholder only
+  tensor bytes loaded on demand; initial policy marker only
 ```
 
 Pinned host memory policy:
@@ -1998,7 +2043,7 @@ large long-lived allocations happen before scratch allocations
 future compaction is backend-specific and not assumed
 ```
 
-Offload policy placeholder:
+Offload policy marker:
 
 ```text
 offload is a planning result, not a hidden runtime trick
@@ -3014,6 +3059,7 @@ Code-first foundation:
 ```text
 A0    C codebase skeleton
 A0.1  Core skeleton maturity / file header discipline / CLI command contract
+A0.2  Documentation consolidation / roadmap refoundation / code quality gate
 ```
 
 Runtime and model tracks:
@@ -3034,7 +3080,7 @@ M0-M8 model support ladder
 ```
 
 No TUI delivery exists.
-No TUI placeholder exists.
+No TUI implementation track exists.
 
 ## 24. Delivery Box Standard
 
@@ -3230,7 +3276,7 @@ tests run
 no fake inference claims
 no TUI code
 no TUI docs
-no TUI placeholders
+no TUI stubs
 ```
 
 ## 27. Engineering Principles
@@ -3256,7 +3302,7 @@ Every support claim has a command.
 
 ## 28. Immediate Next Milestone
 
-Next milestone after A0.1:
+Next milestone after A0.2:
 
 ```text
 B0 - Runtime Filesystem
@@ -3293,6 +3339,7 @@ Completed transition:
 P0.8 - Runtime / System Design
 A0 - Code-first C skeleton
 A0.1 - Core skeleton maturity / file header discipline / CLI command contract
+A0.2 - Documentation consolidation / roadmap refoundation / code quality gate
 ```
 
 Short target definition:

@@ -29,11 +29,12 @@
 #include <yvex/error.h>
 
 #include <stdarg.h>
+#include <stddef.h>
 #include <stdio.h>
 
 static const char yvex_empty_string[] = "";
 
-static void yvex_copy_text(char *dst, unsigned long cap, const char *src)
+static void yvex_copy_text(char *dst, size_t cap, const char *src)
 {
     if (!dst || cap == 0) {
         return;

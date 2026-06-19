@@ -1,42 +1,59 @@
 # YVEX API
 
-This document extracts the public C API contract from `docs/spine.md`. The spine
-remains authoritative.
+This document owns public C API contracts. `docs/spine.md` remains the broader
+technical authority.
 
-## Rules
-
-```text
-opaque objects for runtime ownership
-plain structs for config/options/data
-every public object has create/open and free/close
-every non-trivial function accepts yvex_error *err
-no hidden YAI dependency
-no CUDA types in generic headers
-no model-family-specific types in generic headers
-no fake success
-no parser reads unchecked byte ranges
-no backend-specific state leaks into core APIs
-no TUI-specific types
-```
-
-## Object Families
+## API Claim Rule
 
 ```text
-yvex_artifact
-yvex_gguf
-yvex_model
-yvex_engine
-yvex_backend
-yvex_session
-yvex_chat
-yvex_server
+headers expose only implemented functions
+future API families may be documented here but are not support claims
+no CUDA/native backend type appears in generic public headers
+no YAI case/control type appears in YVEX headers
+no model-family-specific public type appears before implementation
+every non-trivial function reports precise status/error behavior
 ```
 
-## Status and Error
+## Current Implemented API
 
-A0.1 implements only the core version/status/error/log header surface. Future
-API families in this document remain design contracts until their headers and
-tests exist.
+A0.1 implements only the core version/status/error/log surface.
+
+Current public headers:
+
+```text
+include/yvex/yvex.h
+include/yvex/version.h
+include/yvex/status.h
+include/yvex/error.h
+include/yvex/log.h
+```
+
+Current aggregate:
+
+```c
+#include <yvex/error.h>
+#include <yvex/log.h>
+#include <yvex/status.h>
+#include <yvex/version.h>
+```
+
+## Version
+
+```c
+#define YVEX_VERSION_MAJOR 0
+#define YVEX_VERSION_MINOR 1
+#define YVEX_VERSION_PATCH 0
+
+const char *yvex_version_string(void);
+int yvex_version_major(void);
+int yvex_version_minor(void);
+int yvex_version_patch(void);
+```
+
+The version helpers allocate no memory, read no environment variables, and do
+not inspect build metadata.
+
+## Status
 
 ```c
 typedef enum {
@@ -53,148 +70,98 @@ typedef enum {
     YVEX_ERR_INVALID_ARG = -10
 } yvex_status;
 
-typedef struct {
-    yvex_status code;
-    char where[96];
-    char message[256];
-} yvex_error;
+const char *yvex_status_name(yvex_status status);
+int yvex_status_is_ok(yvex_status status);
+int yvex_status_is_error(yvex_status status);
 ```
 
-Required functions:
+`yvex_status_is_error(status)` intentionally treats every non-`YVEX_OK` value
+as an error, including unknown positive values. Unknown names return
+`YVEX_STATUS_UNKNOWN`.
+
+## Error
 
 ```c
-const char *yvex_version_string(void);
-int yvex_version_major(void);
-int yvex_version_minor(void);
-int yvex_version_patch(void);
+#define YVEX_ERROR_WHERE_CAP 96
+#define YVEX_ERROR_MESSAGE_CAP 256
+
+typedef struct {
+    yvex_status code;
+    char where[YVEX_ERROR_WHERE_CAP];
+    char message[YVEX_ERROR_MESSAGE_CAP];
+} yvex_error;
 
 void yvex_error_clear(yvex_error *err);
 void yvex_error_set(yvex_error *err, yvex_status code, const char *where, const char *message);
 void yvex_error_setf(yvex_error *err, yvex_status code, const char *where, const char *fmt, ...);
 int yvex_error_is_set(const yvex_error *err);
+yvex_status yvex_error_code(const yvex_error *err);
+const char *yvex_error_where(const yvex_error *err);
+const char *yvex_error_message(const yvex_error *err);
+```
 
-const char *yvex_status_name(yvex_status status);
-int yvex_status_is_ok(yvex_status status);
-int yvex_status_is_error(yvex_status status);
+Error objects are caller-owned, fixed-size, null-terminated, and do not allocate.
+
+## Log Names
+
+```c
+typedef enum {
+    YVEX_LOG_ERROR,
+    YVEX_LOG_WARN,
+    YVEX_LOG_INFO,
+    YVEX_LOG_DEBUG,
+    YVEX_LOG_TRACE
+} yvex_log_level;
+
+typedef enum {
+    YVEX_LOG_CORE,
+    YVEX_LOG_CLI
+} yvex_log_domain;
 
 const char *yvex_log_level_name(yvex_log_level level);
 const char *yvex_log_domain_name(yvex_log_domain domain);
 ```
 
-## Artifact and GGUF
+This is a name-mapping surface only. A logging sink, trace stream, metrics API,
+and runtime configuration are future work.
 
-```c
-typedef struct yvex_artifact yvex_artifact;
-typedef struct yvex_gguf yvex_gguf;
-typedef struct yvex_gguf_value yvex_gguf_value;
+## Future API Families
 
-typedef struct {
-    const char *path;
-    int mmap_enabled;
-    int readonly;
-} yvex_artifact_options;
+The families below are design contracts, not implemented APIs:
 
-int yvex_artifact_open(yvex_artifact **out, const yvex_artifact_options *opt, yvex_error *err);
-void yvex_artifact_close(yvex_artifact *artifact);
-
-int yvex_gguf_open(yvex_gguf **out, const yvex_artifact *artifact, yvex_error *err);
-void yvex_gguf_close(yvex_gguf *gguf);
+```text
+artifact/GGUF
+model/architecture
+tokenizer/prompt
+graph/planner
+memory plan
+backend/device tensor
+KV cache
+session
+sampler
+events/trace/metrics/profile
+runtime filesystem
+server/provider
 ```
 
-Iteration:
+Future headers may be added only when the corresponding implementation, tests,
+failure behavior, and documentation are delivered in the same wave.
+
+## Future Runtime Filesystem API
+
+B0 may introduce path/config/run-directory APIs. Until B0 lands, the following
+shape is documentation only:
 
 ```c
-uint64_t yvex_gguf_metadata_count(const yvex_gguf *gguf);
-const char *yvex_gguf_metadata_key(const yvex_gguf *gguf, uint64_t index);
-const yvex_gguf_value *yvex_gguf_metadata_value(const yvex_gguf *gguf, uint64_t index);
-const yvex_gguf_value *yvex_gguf_metadata_find(const yvex_gguf *gguf, const char *key);
-
-uint64_t yvex_gguf_tensor_count(const yvex_gguf *gguf);
-const yvex_tensor_info *yvex_gguf_tensor_at(const yvex_gguf *gguf, uint64_t index);
-const yvex_tensor_info *yvex_gguf_tensor_find(const yvex_gguf *gguf, const char *name);
+typedef struct yvex_run_dir yvex_run_dir;
 ```
 
-## Model, Engine, Session
+## Future Artifact and GGUF API
 
-```c
-typedef struct yvex_model yvex_model;
-typedef struct yvex_engine yvex_engine;
-typedef struct yvex_session yvex_session;
+C0 may introduce artifact and GGUF parser objects. Generic parser APIs must use
+checked byte ranges, explicit status codes, and precise parser failure messages.
 
-int yvex_model_open(yvex_model **out, const yvex_model_options *opt, yvex_error *err);
-void yvex_model_close(yvex_model *model);
+## Future Backend API
 
-int yvex_engine_open(yvex_engine **out, const yvex_engine_options *opt, yvex_error *err);
-void yvex_engine_close(yvex_engine *engine);
-
-int yvex_session_prefill(yvex_session *session, const yvex_tokens *tokens, yvex_error *err);
-int yvex_session_eval(yvex_session *session, int token, yvex_error *err);
-int yvex_session_decode_next(yvex_session *session, const yvex_sampling_options *opt, int *out_token, yvex_error *err);
-int yvex_session_rewind(yvex_session *session, uint32_t pos, yvex_error *err);
-```
-
-Session state transitions and ownership are defined in `docs/spine.md` and are
-not optional.
-
-## Backend
-
-```c
-typedef enum {
-    YVEX_BACKEND_CPU = 0,
-    YVEX_BACKEND_CUDA = 1,
-    YVEX_BACKEND_METAL = 2,
-    YVEX_BACKEND_ROCM = 3
-} yvex_backend_kind;
-
-typedef struct yvex_backend yvex_backend;
-typedef struct yvex_device_tensor yvex_device_tensor;
-
-int yvex_backend_open(yvex_backend **out, const yvex_backend_options *opt, yvex_error *err);
-void yvex_backend_close(yvex_backend *backend);
-int yvex_backend_alloc(yvex_backend *backend, yvex_device_tensor **out, uint64_t bytes, yvex_error *err);
-void yvex_backend_tensor_free(yvex_backend *backend, yvex_device_tensor *tensor);
-int yvex_backend_sync(yvex_backend *backend, yvex_error *err);
-```
-
-Generic headers must not expose CUDA or other backend-specific native types.
-
-## Tokenizer, Prompt, Sampler
-
-```c
-typedef struct {
-    int *ids;
-    uint32_t len;
-    uint32_t cap;
-} yvex_tokens;
-
-int yvex_tokenize(const yvex_model *model, const char *text, yvex_tokens *out, yvex_error *err);
-int yvex_detokenize(const yvex_model *model, const int *ids, uint32_t n, char **out, yvex_error *err);
-void yvex_tokens_free(yvex_tokens *tokens);
-
-int yvex_sample_logits(const float *logits, uint32_t vocab, const yvex_sampling_options *opt, int *out_token, yvex_error *err);
-```
-
-Sampler behavior must be deterministic for identical logits, options, seed, and
-implementation version.
-
-## Event API
-
-The event stream is the common surface for CLI streaming, JSONL, tracing, and
-future server streaming.
-
-```c
-typedef enum {
-    YVEX_EVENT_LOAD_START,
-    YVEX_EVENT_LOAD_DONE,
-    YVEX_EVENT_PREFILL_START,
-    YVEX_EVENT_PREFILL_PROGRESS,
-    YVEX_EVENT_PREFILL_DONE,
-    YVEX_EVENT_DECODE_START,
-    YVEX_EVENT_TOKEN,
-    YVEX_EVENT_DECODE_DONE,
-    YVEX_EVENT_ERROR,
-    YVEX_EVENT_STATS
-} yvex_event_kind;
-```
-
-Event schemas are versioned in CLI/JSONL output.
+Backend APIs belong to `docs/backend-contract.md`. Generic backend headers must
+not expose CUDA, Metal, ROCm, or provider-specific native handles.

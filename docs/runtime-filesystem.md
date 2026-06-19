@@ -1,7 +1,17 @@
 # YVEX Runtime Filesystem
 
-This document extracts the runtime filesystem contract from `docs/spine.md`.
-The spine remains authoritative.
+This document owns the future B0 filesystem contract. No runtime filesystem
+implementation exists before B0.
+
+## Status
+
+```text
+path resolution: not implemented
+project-local .yvex: not implemented
+run directory creation: not implemented
+lock/cache policy: not implemented
+runtime filesystem public API: not implemented
+```
 
 ## Environment Variables
 
@@ -18,7 +28,7 @@ YVEX_RUN_DIR
 Configuration resolves in this order:
 
 ```text
-command line option
+CLI option
 environment variable
 project-local .yvex/config.toml
 user config ~/.config/yvex/config.toml
@@ -64,10 +74,10 @@ artifacts, model loading, cache, or state.
   chat_history
 ```
 
-Project-local mode is enabled by explicit command option or by setting
+Project-local mode is enabled only by explicit command option or by setting
 `YVEX_RUN_DIR=.yvex/runs`.
 
-## Run Directory
+## Run Directory Plan
 
 Serious runs may emit:
 
@@ -95,28 +105,23 @@ runs/YYYY-MM-DD/run_YYYYMMDD_HHMMSS_shortid/
   stdout.log
 ```
 
+## Lock And Cache Policy
+
+```text
+cache files are derived, not authoritative
+partial cache writes use temp-and-rename
+locks are scoped to cache/run directory mutation
+stale locks must be reported with path and owner data when available
+cache invalidation must name the version/key that changed
+```
+
 ## Receipt Rule
 
 `receipt.json` is execution-local evidence. It is not a YAI case record until
-YAI imports it.
+YAI imports it through its own authority path.
 
-## Filesystem API
+## B0 Acceptance
 
-```c
-typedef struct yvex_run_dir yvex_run_dir;
-
-typedef struct {
-    const char *base_dir;
-    const char *command_line;
-    int create;
-} yvex_run_dir_options;
-
-int yvex_run_dir_open(yvex_run_dir **out, const yvex_run_dir_options *opt, yvex_error *err);
-const char *yvex_run_dir_path(const yvex_run_dir *dir);
-int yvex_run_dir_write_text(yvex_run_dir *dir, const char *name, const char *data, yvex_error *err);
-int yvex_run_dir_append_jsonl(yvex_run_dir *dir, const char *name, const char *line, yvex_error *err);
-void yvex_run_dir_close(yvex_run_dir *dir);
-```
-
-Path APIs must avoid hidden global state except explicitly controlled config and
-logging state.
+B0 must add tests for path precedence, project-local mode, run-directory
+creation, and failure behavior. It must not implement inference, GGUF parsing,
+tokenization, CUDA, server/provider behavior, or TUI behavior.
