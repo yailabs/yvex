@@ -16,6 +16,7 @@
  *   - yvex help [command]
  *   - yvex version
  *   - yvex paths
+ *   - yvex inspect <path>
  *   - yvex --help
  *   - yvex --version
  *
@@ -47,6 +48,7 @@ typedef struct {
 static int command_commands(int argc, char **argv);
 static int command_help(int argc, char **argv);
 static int command_info(int argc, char **argv);
+static int command_inspect(int argc, char **argv);
 static int command_paths(int argc, char **argv);
 static int command_version(int argc, char **argv);
 
@@ -71,6 +73,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex info",
         "Prints the implemented B0 core/CLI/filesystem status.",
         command_info,
+    },
+    {
+        "inspect",
+        "Inspect a model artifact header.",
+        "yvex inspect <path>",
+        "Opens a file, probes for GGUF, and prints GGUF header fields when available. C0 is header-only; metadata, tensors, tokenizer, and model loading are not implemented.",
+        command_inspect,
     },
     {
         "paths",
@@ -180,14 +189,75 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: B0 runtime filesystem skeleton\n");
+    printf("status: C0 artifact/GGUF header skeleton\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
+    printf("artifact: open/read implemented\n");
     printf("inference: not implemented\n");
-    printf("gguf: not implemented\n");
+    printf("gguf: header/probe only\n");
     printf("cuda: not implemented\n");
     printf("server: not implemented\n");
     return 0;
+}
+
+static int command_inspect(int argc, char **argv)
+{
+    yvex_artifact_options options;
+    yvex_artifact *artifact = NULL;
+    yvex_gguf_probe probe;
+    yvex_error err;
+    int rc;
+
+    yvex_error_clear(&err);
+
+    if (argc != 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        if (argc == 3) {
+            print_command_help(stdout, find_command("inspect"));
+            return 0;
+        }
+        fprintf(stderr, "yvex: inspect requires exactly one path\n");
+        fprintf(stderr, "usage: yvex inspect <path>\n");
+        return 2;
+    }
+
+    memset(&options, 0, sizeof(options));
+    options.path = argv[2];
+    options.readonly = 1;
+    options.map = 1;
+
+    rc = yvex_artifact_open(&artifact, &options, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, 1);
+    }
+
+    rc = yvex_gguf_probe_file(artifact, &probe, &err);
+    if (rc == YVEX_OK && probe.is_gguf) {
+        printf("format: gguf\n");
+        printf("version: %u\n", probe.header.version);
+        printf("metadata_count: %llu\n", probe.header.metadata_count);
+        printf("tensor_count: %llu\n", probe.header.tensor_count);
+        printf("status: header-only\n");
+        yvex_artifact_close(artifact);
+        return 0;
+    }
+
+    if (rc == YVEX_OK && !probe.is_gguf) {
+        printf("format: unknown\n");
+        printf("status: unsupported\n");
+        yvex_artifact_close(artifact);
+        return 5;
+    }
+
+    if (rc == YVEX_ERR_UNSUPPORTED) {
+        printf("format: gguf\n");
+        printf("status: unsupported\n");
+        fprintf(stderr, "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
+        yvex_artifact_close(artifact);
+        return 5;
+    }
+
+    yvex_artifact_close(artifact);
+    return print_yvex_error(&err, 1);
 }
 
 static int command_paths(int argc, char **argv)

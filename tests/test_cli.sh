@@ -16,6 +16,7 @@
 #   - yvex --version
 #   - yvex version
 #   - yvex info
+#   - yvex inspect
 #   - yvex paths
 #   - yvex commands
 #   - yvex help info
@@ -70,21 +71,43 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: B0 runtime filesystem skeleton"
+contains "$OUT_DIR/info.out" "status: C0 artifact/GGUF header skeleton"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
-contains "$OUT_DIR/info.out" "gguf: not implemented"
+contains "$OUT_DIR/info.out" "artifact: open/read implemented"
+contains "$OUT_DIR/info.out" "gguf: header/probe only"
 
 run_ok commands "$YVEX_BIN" commands
 contains "$OUT_DIR/commands.out" "Implemented commands:"
 contains "$OUT_DIR/commands.out" "  commands"
 contains "$OUT_DIR/commands.out" "  help"
 contains "$OUT_DIR/commands.out" "  info"
+contains "$OUT_DIR/commands.out" "  inspect"
 contains "$OUT_DIR/commands.out" "  paths"
 contains "$OUT_DIR/commands.out" "  version"
 
 run_ok help_info "$YVEX_BIN" help info
 contains "$OUT_DIR/help_info.out" "usage: yvex info"
+
+run_ok help_inspect "$YVEX_BIN" help inspect
+contains "$OUT_DIR/help_inspect.out" "usage: yvex inspect <path>"
+
+run_ok inspect_valid "$YVEX_BIN" inspect tests/fixtures/gguf/valid-minimal.gguf
+contains "$OUT_DIR/inspect_valid.out" "format: gguf"
+contains "$OUT_DIR/inspect_valid.out" "version: 3"
+contains "$OUT_DIR/inspect_valid.out" "metadata_count: 0"
+contains "$OUT_DIR/inspect_valid.out" "tensor_count: 0"
+contains "$OUT_DIR/inspect_valid.out" "status: header-only"
+
+set +e
+"$YVEX_BIN" inspect tests/fixtures/gguf/bad-magic.gguf >"$OUT_DIR/inspect_bad_magic.out" 2>"$OUT_DIR/inspect_bad_magic.err"
+rc=$?
+set -e
+if [ "$rc" -ne 5 ]; then
+    fail "bad magic inspect exit code was $rc, expected 5"
+fi
+contains "$OUT_DIR/inspect_bad_magic.out" "format: unknown"
+contains "$OUT_DIR/inspect_bad_magic.out" "status: unsupported"
 
 run_ok help_paths "$YVEX_BIN" help paths
 contains "$OUT_DIR/help_paths.out" "usage: yvex paths"

@@ -9,7 +9,7 @@
  *   It includes only real headers with backing implementation and tests.
  *
  * Owns:
- *   - public aggregation of version/status/error/log/fs
+ *   - public aggregation of version/status/error/log/fs/artifact/gguf
  *
  * Does not own:
  *   - future artifact/model/backend/session APIs
@@ -28,8 +28,10 @@
 #ifndef YVEX_H
 #define YVEX_H
 
+#include <yvex/artifact.h>
 #include <yvex/error.h>
 #include <yvex/fs.h>
+#include <yvex/gguf.h>
 #include <yvex/log.h>
 #include <yvex/status.h>
 #include <yvex/version.h>

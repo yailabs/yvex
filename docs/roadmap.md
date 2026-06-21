@@ -7,12 +7,12 @@ acceptance gates, decisions, and handoff to the next implementation wave.
 ## Current Repo Status
 
 ```text
-phase: B0 runtime filesystem
+phase: C0 artifact and GGUF parser base
 head at A0.1 intake: 164ec95
 interface: CLI-only
-implemented runtime: core version/status/error/log, runtime filesystem paths/run directories, CLI bootstrap
-not implemented: inference, GGUF parser, tokenizer, backend, CUDA, session, server, TUI
-next milestone after B0: C0 artifact and GGUF parser
+implemented runtime: core version/status/error/log, runtime filesystem paths/run directories, artifact byte views, GGUF header/probe, CLI bootstrap
+not implemented: GGUF metadata, tensor directory, tokenizer, backend, CUDA, session, server, inference, TUI
+next milestone after C0: C1 GGUF metadata and tensor directory
 ```
 
 Current build surface:
@@ -24,18 +24,25 @@ include/yvex/status.h
 include/yvex/error.h
 include/yvex/log.h
 include/yvex/fs.h
+include/yvex/artifact.h
+include/yvex/gguf.h
 src/core/version.c
 src/core/status.c
 src/core/error.c
 src/core/log.c
 src/fs/paths.c
 src/fs/run_dir.c
+src/artifact/artifact.c
+src/artifact/range.c
+src/formats/gguf.c
 cli/yvex_cli.c
 tests/test_status.c
 tests/test_error.c
 tests/test_version.c
 tests/test_log.c
 tests/test_fs.c
+tests/test_artifact.c
+tests/test_gguf.c
 tests/test_cli.sh
 ```
 
@@ -62,14 +69,16 @@ docs/cli-runtime.md
 | A0 | complete | 2620c59 | Added core C skeleton and CLI bootstrap. |
 | A0.1 | complete | 164ec95 | Hardened core skeleton style and CLI command contract. |
 | A0.2 | complete | 7e5879c | Consolidated docs, refounded roadmap, and ran code-quality gate. |
-| B0 | complete | pending | Added runtime filesystem paths, project-local mode, run-directory skeleton, CLI proof, and tests. |
+| B0 | complete | 8e7d6c8 | Added runtime filesystem paths, project-local mode, run-directory skeleton, CLI proof, and tests. |
+| C0 | complete | current commit | Added artifact byte view, range checks, GGUF header/probe parser, inspect command, fixtures, and tests. |
 
 ## Exact Delivery Sequence
 
 ```text
 A0.2  Documentation consolidation / roadmap refoundation / code quality gate
 B0    Runtime filesystem
-C0    Artifact and GGUF parser
+C0    Artifact and GGUF parser base
+C1    GGUF metadata and tensor directory
 D0    Tensor and model layer
 E0    Tokenizer and prompt rendering
 F0    Graph and planner
@@ -166,7 +175,7 @@ no YAI checkout requirement
 ## C0 Pass/Fail Criteria
 
 C0 may start only after B0 validation passes. C0 must add artifact and GGUF
-parsing without claiming model execution.
+header/probe parsing without claiming model execution.
 
 Required C0 outputs:
 
@@ -176,9 +185,28 @@ bounded byte cursor or equivalent checked read path
 GGUF header parsing
 malformed header fixtures
 inspect command only when backed by parser code
+metadata and tensor directory explicitly deferred
 no tokenizer claim
 no CUDA claim
 no model execution claim
+```
+
+## C1 Pass/Fail Criteria
+
+C1 may start only after C0 validation passes. C1 must extend GGUF parsing into
+metadata and tensor directory handling without claiming model execution.
+
+Required C1 outputs:
+
+```text
+metadata key/value table for supported scalar/string/array cases
+tensor directory parser
+alignment and tensor offset checks
+malformed metadata/tensor fixtures
+inspect metadata/tensors output if backed by parser code
+no tokenizer claim
+no backend claim
+no inference claim
 ```
 
 ## Do Not Proceed Gates
@@ -206,6 +234,18 @@ filesystem APIs are absent from docs/api.md
 runtime-filesystem.md claims config parsing or artifact writing is implemented
 ```
 
+Stop before C1 if any of these are true:
+
+```text
+make check fails
+make smoke fails
+build/tests/test_artifact fails
+build/tests/test_gguf fails
+yvex inspect valid-minimal.gguf does not report status: header-only
+bad GGUF magic crashes or reports model loading behavior
+docs/api.md omits artifact or GGUF header/probe APIs
+```
+
 ## Decision Log
 
 | Date | Decision |
@@ -216,6 +256,7 @@ runtime-filesystem.md claims config parsing or artifact writing is implemented
 | 2026-06-19 | `docs/spine.md` is the technical authority and this roadmap is the working progress document. |
 | 2026-06-19 | Future APIs stay in documentation until headers, implementation, tests, and CLI-visible behavior exist. |
 | 2026-06-21 | B0 adds only filesystem paths and run-directory creation; config parsing and run artifact writing stay deferred. |
+| 2026-06-21 | C0 adds only artifact bytes and GGUF header/probe; metadata, tensor directory, tokenizer, and model loading stay deferred. |
 
 ## Delivery Format
 

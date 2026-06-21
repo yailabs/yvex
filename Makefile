@@ -48,7 +48,10 @@ CORE_SRCS := \
 	src/core/error.c \
 	src/core/log.c \
 	src/fs/paths.c \
-	src/fs/run_dir.c
+	src/fs/run_dir.c \
+	src/artifact/artifact.c \
+	src/artifact/range.c \
+	src/formats/gguf.c
 
 CORE_OBJS := $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 
@@ -57,7 +60,9 @@ TEST_SRCS := \
 	tests/test_error.c \
 	tests/test_version.c \
 	tests/test_log.c \
-	tests/test_fs.c
+	tests/test_fs.c \
+	tests/test_artifact.c \
+	tests/test_gguf.c
 
 TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 
@@ -66,12 +71,13 @@ CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md docs/roadmap.md
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: B0 runtime filesystem skeleton"
+	@echo "status: C0 artifact/GGUF header skeleton"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"
+	@echo "artifact: open/read implemented"
+	@echo "gguf: header/probe only"
 	@echo "inference: not implemented"
-	@echo "gguf: not implemented"
 	@echo "cuda: not implemented"
 	@echo "server: not implemented"
 
@@ -151,14 +157,11 @@ check-guardrails:
 	@test ! -e src/README.md
 	@test ! -e tests/README.md
 	@test ! -e include/yvex/tui.h
-	@test ! -e include/yvex/gguf.h
 	@test ! -e include/yvex/model.h
 	@test ! -e include/yvex/backend.h
 	@test ! -e include/yvex/session.h
 	@test ! -e include/yvex/server.h
 	@test ! -d src/tui
-	@test ! -d src/artifact
-	@test ! -d src/formats
 	@test ! -d src/model
 	@test ! -d src/tokenizer
 	@test ! -d src/graph

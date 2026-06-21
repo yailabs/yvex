@@ -16,8 +16,9 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-B0 implements the core version/status/error/log surface plus the runtime
-filesystem path and run-directory skeleton.
+C0 implements the core version/status/error/log surface, runtime filesystem
+paths/run directories, artifact byte views, range checks, and GGUF
+header/probe parsing.
 
 Current public headers:
 
@@ -28,6 +29,8 @@ include/yvex/status.h
 include/yvex/error.h
 include/yvex/log.h
 include/yvex/fs.h
+include/yvex/artifact.h
+include/yvex/gguf.h
 ```
 
 Current aggregate:
@@ -35,6 +38,8 @@ Current aggregate:
 ```c
 #include <yvex/error.h>
 #include <yvex/fs.h>
+#include <yvex/artifact.h>
+#include <yvex/gguf.h>
 #include <yvex/log.h>
 #include <yvex/status.h>
 #include <yvex/version.h>
@@ -168,12 +173,73 @@ Default path resolution requires `HOME`; project-local path construction uses
 the explicit project root argument. Run directory creation creates directories
 only and does not write run artifacts.
 
+## Artifact
+
+```c
+#define YVEX_ARTIFACT_PATH_CAP 4096
+
+typedef struct yvex_artifact yvex_artifact;
+
+typedef struct {
+    const char *path;
+    int readonly;
+    int map;
+} yvex_artifact_options;
+
+int yvex_artifact_open(yvex_artifact **out, const yvex_artifact_options *options, yvex_error *err);
+void yvex_artifact_close(yvex_artifact *artifact);
+
+const char *yvex_artifact_path(const yvex_artifact *artifact);
+unsigned long long yvex_artifact_size(const yvex_artifact *artifact);
+const unsigned char *yvex_artifact_data(const yvex_artifact *artifact);
+
+int yvex_range_check(unsigned long long file_size,
+                     unsigned long long offset,
+                     unsigned long long len,
+                     yvex_error *err);
+```
+
+The `map` option is accepted as a future policy flag, but C0 uses an owned
+read buffer and makes no mmap support claim. The data pointer remains valid
+until `yvex_artifact_close`.
+
+## GGUF Header Probe
+
+```c
+#define YVEX_GGUF_MAGIC 0x46554747u
+
+typedef struct {
+    unsigned int version;
+    unsigned long long metadata_count;
+    unsigned long long tensor_count;
+} yvex_gguf_header;
+
+typedef struct {
+    int is_gguf;
+    yvex_gguf_header header;
+} yvex_gguf_probe;
+
+int yvex_gguf_probe_file(const yvex_artifact *artifact, yvex_gguf_probe *out, yvex_error *err);
+int yvex_gguf_read_header(const yvex_artifact *artifact, yvex_gguf_header *out, yvex_error *err);
+```
+
+C0 reads only:
+
+```text
+magic          uint32 little-endian
+version        uint32 little-endian
+tensor_count   uint64 little-endian
+metadata_count uint64 little-endian
+```
+
+GGUF metadata entries, tensor directory parsing, qtype mapping, tokenizer
+loading, and model descriptors are not implemented.
+
 ## Future API Families
 
 The families below are design contracts, not implemented APIs:
 
 ```text
-artifact/GGUF
 model/architecture
 tokenizer/prompt
 graph/planner
@@ -189,10 +255,11 @@ server/provider
 Future headers may be added only when the corresponding implementation, tests,
 failure behavior, and documentation are delivered in the same wave.
 
-## Future Artifact and GGUF API
+## Future GGUF Extensions
 
-C0 may introduce artifact and GGUF parser objects. Generic parser APIs must use
-checked byte ranges, explicit status codes, and precise parser failure messages.
+Future GGUF parser work may add metadata and tensor directory APIs. Generic
+parser APIs must use checked byte ranges, explicit status codes, and precise
+parser failure messages.
 
 ## Future Backend API
 

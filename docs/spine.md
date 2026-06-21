@@ -68,7 +68,7 @@ commit: 9ff28e1
 remote: https://github.com/yailabs/yvex.git
 ```
 
-Current active surface after A0.2:
+Current active surface after C0:
 
 ```text
 .gitignore
@@ -89,26 +89,34 @@ include/yvex/status.h
 include/yvex/error.h
 include/yvex/log.h
 include/yvex/fs.h
+include/yvex/artifact.h
+include/yvex/gguf.h
 src/core/version.c
 src/core/status.c
 src/core/error.c
 src/core/log.c
 src/fs/paths.c
 src/fs/run_dir.c
+src/artifact/artifact.c
+src/artifact/range.c
+src/formats/gguf.c
 cli/yvex_cli.c
 tests/test_status.c
 tests/test_error.c
 tests/test_version.c
 tests/test_log.c
 tests/test_fs.c
+tests/test_artifact.c
+tests/test_gguf.c
 tests/test_cli.sh
+tests/fixtures/gguf/
 ```
 
 Current Makefile behavior:
 
 ```text
 make info
-  prints YVEX A0.1 core/CLI status
+  prints YVEX C0 core/filesystem/artifact status
 
 make check
   checks the reduced canonical docs exist
@@ -117,7 +125,7 @@ make check
   rejects fake maturity claims in README.md
   builds libyvex.a
   builds build/bin/yvex
-  runs core and filesystem tests
+  runs core, filesystem, artifact, and GGUF header/probe tests
   runs CLI smoke tests
 ```
 
@@ -126,17 +134,21 @@ Current implementation state:
 ```text
 public core headers implemented: version/status/error/log
 runtime filesystem header implemented: fs
+artifact header implemented: artifact
+GGUF header/probe header implemented: gguf
 core implementation exists: version/status/error/log
 filesystem implementation exists: paths/run_dir
+artifact implementation exists: artifact/range
+GGUF implementation exists: header/probe
 libyvex.a builds
 build/bin/yvex builds
-implemented CLI commands: info/help/commands/version/paths
+implemented CLI commands: info/help/commands/version/paths/inspect
 no yvexd server
-no GGUF parser
+no GGUF metadata or tensor directory parser
 no tokenizer
 no backend implementation
-unit tests exist for status/error/version/log/fs
-no fixtures
+unit tests exist for status/error/version/log/fs/artifact/gguf
+tiny GGUF header fixtures exist
 no benchmark harness
 ```
 
@@ -3308,27 +3320,27 @@ Every support claim has a command.
 
 ## 28. Immediate Next Milestone
 
-Next milestone after A0.2:
+Next milestone after C0:
 
 ```text
-B0 - Runtime Filesystem
+C1 - GGUF metadata and tensor directory
 ```
 
-B0 must:
+C1 must:
 
 ```text
-add XDG path resolution
-add run directory creation
-add cache/state/config directory helpers
-add run.json writer skeleton
+parse supported GGUF metadata records
+parse GGUF tensor directory records
+validate tensor offsets and alignment
+add malformed metadata and tensor fixtures
 keep baseline validation independent of CUDA, network, model downloads, and YAI checkout
 ```
 
-B0 must not:
+C1 must not:
 
 ```text
 implement inference
-declare GGUF behavior
+declare model loading behavior
 declare CUDA behavior
 declare OpenAI-compatible provider behavior
 introduce TUI
@@ -3346,6 +3358,8 @@ P0.8 - Runtime / System Design
 A0 - Code-first C skeleton
 A0.1 - Core skeleton maturity / file header discipline / CLI command contract
 A0.2 - Documentation consolidation / roadmap refoundation / code quality gate
+B0 - Runtime filesystem
+C0 - Artifact and GGUF parser base
 ```
 
 Short target definition:

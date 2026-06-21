@@ -4,7 +4,7 @@ This document owns CLI behavior. YVEX is CLI-only.
 
 ## Current Implemented Commands
 
-The B0 binary implements exactly:
+The C0 binary implements exactly:
 
 ```text
 yvex
@@ -14,6 +14,7 @@ yvex commands
 yvex help
 yvex help <implemented-command>
 yvex info
+yvex inspect <path>
 yvex paths
 yvex paths --project DIR
 yvex paths --run
@@ -32,11 +33,12 @@ name: YVEX
 version: 0.1.0
 language: C
 interface: CLI-only
-status: B0 runtime filesystem skeleton
+status: C0 artifact/GGUF header skeleton
 library: libyvex.a
 filesystem: implemented
+artifact: open/read implemented
 inference: not implemented
-gguf: not implemented
+gguf: header/probe only
 cuda: not implemented
 server: not implemented
 ```
@@ -78,12 +80,36 @@ project: DIR/.yvex
 `yvex paths --run` prepares run-directory paths without creating them.
 `yvex paths --run --create` creates the run root and run directory.
 
+## Current `yvex inspect`
+
+`yvex inspect <path>` opens a file, probes for GGUF, and prints the fixed GGUF
+header when available.
+
+Valid minimal GGUF header output:
+
+```text
+format: gguf
+version: 3
+metadata_count: 0
+tensor_count: 0
+status: header-only
+```
+
+Unknown format output:
+
+```text
+format: unknown
+status: unsupported
+```
+
+`inspect` does not parse metadata, tensor directories, tokenizers, model
+descriptors, or inference state.
+
 ## Future Commands
 
 Future command names are not support claims:
 
 ```text
-yvex inspect model.gguf
 yvex metadata model.gguf
 yvex tensors model.gguf
 yvex plan model.gguf --backend cuda --ctx 32768
@@ -137,7 +163,7 @@ without status or progress corrupting `output.txt`.
 9   internal invariant/state error
 ```
 
-B0 currently exercises `0`, `2`, and filesystem/path errors mapped to `3`.
+C0 currently exercises `0`, `2`, and `5`; artifact IO failures map to `1`.
 
 ## TTY And Pipe Safety
 
