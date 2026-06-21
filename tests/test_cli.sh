@@ -6,8 +6,8 @@
 # Layer: test
 #
 # Purpose:
-#   Proves that the A0.1 CLI command table exposes only implemented commands
-#   and returns stable exit codes for common bootstrap behavior.
+#   Proves that the CLI command table exposes only implemented commands and
+#   returns stable exit codes for common bootstrap and B0 filesystem behavior.
 #
 # Covers:
 #   - yvex
@@ -16,6 +16,7 @@
 #   - yvex --version
 #   - yvex version
 #   - yvex info
+#   - yvex paths
 #   - yvex commands
 #   - yvex help info
 #   - yvex unknown
@@ -69,8 +70,9 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: A0.1 core/CLI skeleton"
+contains "$OUT_DIR/info.out" "status: B0 runtime filesystem skeleton"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
+contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "gguf: not implemented"
 
 run_ok commands "$YVEX_BIN" commands
@@ -78,10 +80,35 @@ contains "$OUT_DIR/commands.out" "Implemented commands:"
 contains "$OUT_DIR/commands.out" "  commands"
 contains "$OUT_DIR/commands.out" "  help"
 contains "$OUT_DIR/commands.out" "  info"
+contains "$OUT_DIR/commands.out" "  paths"
 contains "$OUT_DIR/commands.out" "  version"
 
 run_ok help_info "$YVEX_BIN" help info
 contains "$OUT_DIR/help_info.out" "usage: yvex info"
+
+run_ok help_paths "$YVEX_BIN" help paths
+contains "$OUT_DIR/help_paths.out" "usage: yvex paths"
+
+run_ok paths "$YVEX_BIN" paths
+contains "$OUT_DIR/paths.out" "config:"
+contains "$OUT_DIR/paths.out" "cache:"
+contains "$OUT_DIR/paths.out" "state:"
+contains "$OUT_DIR/paths.out" "data:"
+contains "$OUT_DIR/paths.out" "project:"
+
+run_ok paths_project "$YVEX_BIN" paths --project .
+contains "$OUT_DIR/paths_project.out" "project: ./.yvex"
+
+run_ok paths_run "$YVEX_BIN" paths --run
+contains "$OUT_DIR/paths_run.out" "run_id: run_"
+contains "$OUT_DIR/paths_run.out" "command:"
+
+(
+    export YVEX_RUN_DIR="$OUT_DIR/runs"
+    run_ok paths_run_create "$YVEX_BIN" paths --run --create
+)
+contains "$OUT_DIR/paths_run_create.out" "root: $OUT_DIR/runs/run_"
+test -d "$OUT_DIR/runs" || fail "paths --run --create did not create run root"
 
 set +e
 "$YVEX_BIN" unknown >"$OUT_DIR/unknown.out" 2>"$OUT_DIR/unknown.err"

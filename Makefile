@@ -4,8 +4,8 @@
 # Layer: build system
 #
 # Purpose:
-#   Builds the initial YVEX C core library, CLI bootstrap, and tests.
-#   Also runs documentation and guardrail validation.
+#   Builds the YVEX C core library, B0 filesystem layer, CLI bootstrap, and
+#   tests. Also runs documentation and guardrail validation.
 #
 # Primary commands:
 #   make info
@@ -19,7 +19,7 @@
 #   make clean
 #
 # Non-goals:
-#   - no CUDA build in A0/A0.1
+#   - no CUDA build in B0
 #   - no model downloads
 #   - no server
 #   - no TUI
@@ -46,7 +46,9 @@ CORE_SRCS := \
 	src/core/version.c \
 	src/core/status.c \
 	src/core/error.c \
-	src/core/log.c
+	src/core/log.c \
+	src/fs/paths.c \
+	src/fs/run_dir.c
 
 CORE_OBJS := $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 
@@ -54,7 +56,8 @@ TEST_SRCS := \
 	tests/test_status.c \
 	tests/test_error.c \
 	tests/test_version.c \
-	tests/test_log.c
+	tests/test_log.c \
+	tests/test_fs.c
 
 TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 
@@ -63,9 +66,10 @@ CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md docs/roadmap.md
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: A0.1 core/CLI skeleton"
+	@echo "status: B0 runtime filesystem skeleton"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
+	@echo "filesystem: implemented"
 	@echo "inference: not implemented"
 	@echo "gguf: not implemented"
 	@echo "cuda: not implemented"
@@ -167,7 +171,7 @@ check-guardrails:
 	@! find . -path './.git' -prune -o -name 'panel_*.c' -print | grep .
 	@! grep -I -n -E '#include[ <"]n[c]urses|l[n]curses|N[C]URSES' $(CURRENT_DOCS) >/dev/null
 	@! grep -RIn -E "N[E]T\\.SPINE|N[E]T moves streams|C[L]ORI|c[l]ori-codename|docs/arc[h]ive|c[l]ori_|libc[l]ori|c[l]orid|include/c[l]ori|~/\\.config/c[l]ori|github\\.com/yailabs/c[l]ori|yailabs/c[l]ori" --exclude-dir=.git --exclude-dir=build . >/dev/null
-	@! grep -Ei "production-ready|implemented inference|implemented server|supports CUDA|supports Metal|supports MLX|supports llama\\.cpp|OpenAI-compatible server" README.md >/dev/null
+	@! grep -Ei "production-read[y]|implemented infer[e]nce|implemented ser[v]er|supports C[U]DA|supports M[e]tal|supports M[L]X|supports llama\\.cpp|OpenAI-compatible ser[v]er" README.md >/dev/null
 	@! grep -Ei "benchmark results" README.md | grep -vi "benchmark results: none" >/dev/null
 
 clean:

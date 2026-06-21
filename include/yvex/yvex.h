@@ -5,11 +5,11 @@
  * Layer: public core API
  *
  * Purpose:
- *   Provides the A0.1 umbrella include for implemented public core headers.
+ *   Provides the umbrella include for implemented public YVEX headers.
  *   It includes only real headers with backing implementation and tests.
  *
  * Owns:
- *   - public aggregation of version/status/error/log
+ *   - public aggregation of version/status/error/log/fs
  *
  * Does not own:
  *   - future artifact/model/backend/session APIs
@@ -18,7 +18,7 @@
  *
  * Used by:
  *   - yvex CLI
- *   - external C consumers of the A0.1 core surface
+ *   - external C consumers of the implemented public surface
  *   - tests
  *
  * Validation:
@@ -29,6 +29,7 @@
 #define YVEX_H
 
 #include <yvex/error.h>
+#include <yvex/fs.h>
 #include <yvex/log.h>
 #include <yvex/status.h>
 #include <yvex/version.h>

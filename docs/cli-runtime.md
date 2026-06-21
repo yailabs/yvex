@@ -4,7 +4,7 @@ This document owns CLI behavior. YVEX is CLI-only.
 
 ## Current Implemented Commands
 
-The A0.1 binary implements exactly:
+The B0 binary implements exactly:
 
 ```text
 yvex
@@ -14,6 +14,10 @@ yvex commands
 yvex help
 yvex help <implemented-command>
 yvex info
+yvex paths
+yvex paths --project DIR
+yvex paths --run
+yvex paths --run --create
 yvex version
 ```
 
@@ -28,8 +32,9 @@ name: YVEX
 version: 0.1.0
 language: C
 interface: CLI-only
-status: A0.1 core/CLI skeleton
+status: B0 runtime filesystem skeleton
 library: libyvex.a
+filesystem: implemented
 inference: not implemented
 gguf: not implemented
 cuda: not implemented
@@ -47,6 +52,31 @@ help for unknown topics exits 2
 future runtime commands are not listed as implemented
 future runtime commands may be documented as future only
 ```
+
+## Current `yvex paths`
+
+`yvex paths` prints resolved runtime directories:
+
+```text
+config: /home/user/.config/yvex
+cache: /home/user/.cache/yvex
+state: /home/user/.local/state/yvex
+data: /home/user/.local/share/yvex
+project:
+```
+
+`yvex paths --project DIR` switches to explicit project-local mode:
+
+```text
+config: DIR/.yvex
+cache: DIR/.yvex/cache
+state: DIR/.yvex/state
+data: DIR/.yvex/data
+project: DIR/.yvex
+```
+
+`yvex paths --run` prepares run-directory paths without creating them.
+`yvex paths --run --create` creates the run root and run directory.
 
 ## Future Commands
 
@@ -107,7 +137,7 @@ without status or progress corrupting `output.txt`.
 9   internal invariant/state error
 ```
 
-A0.1 currently exercises `0` and `2`.
+B0 currently exercises `0`, `2`, and filesystem/path errors mapped to `3`.
 
 ## TTY And Pipe Safety
 

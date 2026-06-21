@@ -16,7 +16,8 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-A0.1 implements only the core version/status/error/log surface.
+B0 implements the core version/status/error/log surface plus the runtime
+filesystem path and run-directory skeleton.
 
 Current public headers:
 
@@ -26,12 +27,14 @@ include/yvex/version.h
 include/yvex/status.h
 include/yvex/error.h
 include/yvex/log.h
+include/yvex/fs.h
 ```
 
 Current aggregate:
 
 ```c
 #include <yvex/error.h>
+#include <yvex/fs.h>
 #include <yvex/log.h>
 #include <yvex/status.h>
 #include <yvex/version.h>
@@ -125,6 +128,46 @@ const char *yvex_log_domain_name(yvex_log_domain domain);
 This is a name-mapping surface only. A logging sink, trace stream, metrics API,
 and runtime configuration are future work.
 
+## Runtime Filesystem
+
+```c
+#define YVEX_PATH_CAP 4096
+#define YVEX_RUN_ID_CAP 64
+
+typedef struct {
+    char config_dir[YVEX_PATH_CAP];
+    char cache_dir[YVEX_PATH_CAP];
+    char state_dir[YVEX_PATH_CAP];
+    char data_dir[YVEX_PATH_CAP];
+    char project_dir[YVEX_PATH_CAP];
+} yvex_paths;
+
+typedef struct {
+    char run_id[YVEX_RUN_ID_CAP];
+    char root[YVEX_PATH_CAP];
+    char command_path[YVEX_PATH_CAP];
+    char stdout_path[YVEX_PATH_CAP];
+    char stderr_path[YVEX_PATH_CAP];
+    char metrics_path[YVEX_PATH_CAP];
+    char trace_path[YVEX_PATH_CAP];
+    char receipt_path[YVEX_PATH_CAP];
+} yvex_run_dir;
+
+int yvex_paths_default(yvex_paths *out, yvex_error *err);
+int yvex_paths_project(yvex_paths *out, const char *project_root, yvex_error *err);
+int yvex_paths_print(const yvex_paths *paths, FILE *fp, yvex_error *err);
+
+int yvex_run_id_make(char *out, unsigned long cap, yvex_error *err);
+int yvex_run_dir_prepare(yvex_run_dir *out, const yvex_paths *paths, const char *run_id, yvex_error *err);
+int yvex_run_dir_create(const yvex_run_dir *run, yvex_error *err);
+int yvex_run_dir_print(const yvex_run_dir *run, FILE *fp, yvex_error *err);
+```
+
+Filesystem APIs allocate no heap memory and use fixed caller-owned buffers.
+Default path resolution requires `HOME`; project-local path construction uses
+the explicit project root argument. Run directory creation creates directories
+only and does not write run artifacts.
+
 ## Future API Families
 
 The families below are design contracts, not implemented APIs:
@@ -140,21 +183,11 @@ KV cache
 session
 sampler
 events/trace/metrics/profile
-runtime filesystem
 server/provider
 ```
 
 Future headers may be added only when the corresponding implementation, tests,
 failure behavior, and documentation are delivered in the same wave.
-
-## Future Runtime Filesystem API
-
-B0 may introduce path/config/run-directory APIs. Until B0 lands, the following
-shape is documentation only:
-
-```c
-typedef struct yvex_run_dir yvex_run_dir;
-```
 
 ## Future Artifact and GGUF API
 

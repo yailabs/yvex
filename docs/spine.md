@@ -88,15 +88,19 @@ include/yvex/version.h
 include/yvex/status.h
 include/yvex/error.h
 include/yvex/log.h
+include/yvex/fs.h
 src/core/version.c
 src/core/status.c
 src/core/error.c
 src/core/log.c
+src/fs/paths.c
+src/fs/run_dir.c
 cli/yvex_cli.c
 tests/test_status.c
 tests/test_error.c
 tests/test_version.c
 tests/test_log.c
+tests/test_fs.c
 tests/test_cli.sh
 ```
 
@@ -113,7 +117,7 @@ make check
   rejects fake maturity claims in README.md
   builds libyvex.a
   builds build/bin/yvex
-  runs core tests
+  runs core and filesystem tests
   runs CLI smoke tests
 ```
 
@@ -121,15 +125,17 @@ Current implementation state:
 
 ```text
 public core headers implemented: version/status/error/log
+runtime filesystem header implemented: fs
 core implementation exists: version/status/error/log
+filesystem implementation exists: paths/run_dir
 libyvex.a builds
 build/bin/yvex builds
-implemented CLI commands: info/help/commands/version
+implemented CLI commands: info/help/commands/version/paths
 no yvexd server
 no GGUF parser
 no tokenizer
 no backend implementation
-unit tests exist for status/error/version/log
+unit tests exist for status/error/version/log/fs
 no fixtures
 no benchmark harness
 ```
@@ -3322,9 +3328,9 @@ B0 must not:
 
 ```text
 implement inference
-claim GGUF support
-claim CUDA support
-claim OpenAI-compatible server support
+declare GGUF behavior
+declare CUDA behavior
+declare OpenAI-compatible provider behavior
 introduce TUI
 introduce terminal UI dependencies
 introduce dashboard or panel implementation

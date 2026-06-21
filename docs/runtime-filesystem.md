@@ -1,31 +1,66 @@
 # YVEX Runtime Filesystem
 
-This document owns the future B0 filesystem contract. No runtime filesystem
-implementation exists before B0.
+This document owns the B0 filesystem contract. `docs/spine.md` remains the
+technical authority; this file narrows the implemented path and run-directory
+surface.
 
 ## Status
 
 ```text
-path resolution: not implemented
-project-local .yvex: not implemented
-run directory creation: not implemented
-lock/cache policy: not implemented
-runtime filesystem public API: not implemented
+path resolution: implemented in B0
+project-local .yvex paths: implemented in B0
+run directory path preparation: implemented in B0
+run directory creation: implemented in B0
+config parser: not implemented
+run artifact writer: not implemented
+lock/cache policy: documented, not implemented
+```
+
+Implemented files:
+
+```text
+include/yvex/fs.h
+src/fs/paths.c
+src/fs/run_dir.c
+tests/test_fs.c
+```
+
+Implemented CLI proof:
+
+```sh
+yvex paths
+yvex paths --project .
+yvex paths --run
+yvex paths --run --create
 ```
 
 ## Environment Variables
 
+B0 reads these environment variables:
+
 ```text
-YVEX_HOME
 YVEX_CONFIG_DIR
 YVEX_CACHE_DIR
 YVEX_STATE_DIR
+YVEX_DATA_DIR
 YVEX_RUN_DIR
 ```
 
-## Configuration Precedence
+`YVEX_RUN_DIR` affects run-directory preparation only. It is not stored inside
+`yvex_paths`.
 
-Configuration resolves in this order:
+## Practical B0 Precedence
+
+B0 implements the practical path precedence available before config parsing:
+
+```text
+explicit function argument
+environment variable
+project-local path when requested
+user default
+```
+
+Future full configuration precedence remains:
 
 ```text
 CLI option
@@ -35,77 +70,86 @@ user config ~/.config/yvex/config.toml
 built-in default
 ```
 
-Commands must report the resolved value source when a path affects run
-artifacts, model loading, cache, or state.
+B0 does not parse TOML and does not read `.yvex/config.toml`.
 
 ## Default Directories
 
+`yvex_paths_default` requires `HOME`. If `HOME` is missing, it returns
+`YVEX_ERR_STATE` and does not guess a temporary directory.
+
+Default paths:
+
 ```text
-~/.config/yvex/
-  config.toml
-  models.toml
-  backends.toml
-
-~/.cache/yvex/
-  tokenizer/
-  tensor-plans/
-  graph-plans/
-  compiled-kernels/
-  downloads/
-
-~/.local/state/yvex/
-  runs/
-  servers/
-  locks/
-  chat_history
-
-~/.local/share/yvex/
-  models/
-  fixtures/
+config: $HOME/.config/yvex
+cache:  $HOME/.cache/yvex
+state:  $HOME/.local/state/yvex
+data:   $HOME/.local/share/yvex
 ```
+
+Each value may be overridden by its matching `YVEX_*_DIR` environment variable.
+Path truncation returns `YVEX_ERR_BOUNDS`.
 
 ## Project-Local Mode
 
+`yvex_paths_project(out, project_root, err)` constructs:
+
 ```text
-.yvex/
-  config.toml
-  cache/
-  runs/
-  chat_history
+project: <project_root>/.yvex
+config:  <project_root>/.yvex
+cache:   <project_root>/.yvex/cache
+state:   <project_root>/.yvex/state
+data:    <project_root>/.yvex/data
 ```
 
-Project-local mode is enabled only by explicit command option or by setting
-`YVEX_RUN_DIR=.yvex/runs`.
+Project-local mode is explicit. B0 does not auto-detect the current repository
+root and does not parse project config.
 
-## Run Directory Plan
+## Run Directory Skeleton
 
-Serious runs may emit:
+Run IDs use:
 
 ```text
-runs/YYYY-MM-DD/run_YYYYMMDD_HHMMSS_shortid/
+run_YYYYMMDD_HHMMSS_pid
+```
+
+`yvex_run_dir_prepare` chooses the run root in this order:
+
+```text
+YVEX_RUN_DIR
+<project_dir>/runs when project_dir is set
+<state_dir>/runs
+```
+
+Prepared run path shape:
+
+```text
+<run-root>/<run_id>/
   command.txt
-  env.txt
-  run.json
-  model.json
-  backend.json
-  memory-plan.json
-  graph-plan.txt
-  graph-plan.json
-  prompt.rendered.txt
-  prompt.tokens.jsonl
-  output.txt
-  decode.tokens.jsonl
-  logits/
-  logprobs.jsonl
+  stdout.log
+  stderr.log
   metrics.json
-  profile.json
   trace.jsonl
   receipt.json
-  stderr.log
-  stdout.log
 ```
 
+B0 creates the run root and run directory only. It does not write those files.
+
+## Failure Behavior
+
+```text
+missing HOME for default paths -> YVEX_ERR_STATE
+path truncation -> YVEX_ERR_BOUNDS
+null required argument -> YVEX_ERR_INVALID_ARG
+mkdir/stat failure -> YVEX_ERR_IO
+existing non-directory collision -> YVEX_ERR_IO
+```
+
+Existing directories are tolerated. Existing files at required directory paths
+are rejected.
+
 ## Lock And Cache Policy
+
+Future cache and lock implementation must follow:
 
 ```text
 cache files are derived, not authoritative
@@ -120,8 +164,18 @@ cache invalidation must name the version/key that changed
 `receipt.json` is execution-local evidence. It is not a YAI case record until
 YAI imports it through its own authority path.
 
-## B0 Acceptance
+## B0 Validation
 
-B0 must add tests for path precedence, project-local mode, run-directory
-creation, and failure behavior. It must not implement inference, GGUF parsing,
-tokenization, CUDA, server/provider behavior, or TUI behavior.
+```sh
+make clean
+make check
+make smoke
+build/tests/test_fs
+./build/bin/yvex paths
+./build/bin/yvex paths --project .
+./build/bin/yvex paths --run
+YVEX_RUN_DIR=build/tests/manual-runs ./build/bin/yvex paths --run --create
+```
+
+B0 does not implement inference, GGUF parsing, tokenization, CUDA,
+server/provider behavior, or TUI behavior.

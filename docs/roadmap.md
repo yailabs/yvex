@@ -7,12 +7,12 @@ acceptance gates, decisions, and handoff to the next implementation wave.
 ## Current Repo Status
 
 ```text
-phase: A0.2 documentation consolidation and code-quality gate
+phase: B0 runtime filesystem
 head at A0.1 intake: 164ec95
 interface: CLI-only
-implemented runtime: core version/status/error/log plus CLI bootstrap
+implemented runtime: core version/status/error/log, runtime filesystem paths/run directories, CLI bootstrap
 not implemented: inference, GGUF parser, tokenizer, backend, CUDA, session, server, TUI
-next milestone after A0.2: B0 runtime filesystem
+next milestone after B0: C0 artifact and GGUF parser
 ```
 
 Current build surface:
@@ -23,15 +23,19 @@ include/yvex/version.h
 include/yvex/status.h
 include/yvex/error.h
 include/yvex/log.h
+include/yvex/fs.h
 src/core/version.c
 src/core/status.c
 src/core/error.c
 src/core/log.c
+src/fs/paths.c
+src/fs/run_dir.c
 cli/yvex_cli.c
 tests/test_status.c
 tests/test_error.c
 tests/test_version.c
 tests/test_log.c
+tests/test_fs.c
 tests/test_cli.sh
 ```
 
@@ -57,7 +61,8 @@ docs/cli-runtime.md
 | P0.8 | complete | bbef021 | Defined runtime system design for A0. |
 | A0 | complete | 2620c59 | Added core C skeleton and CLI bootstrap. |
 | A0.1 | complete | 164ec95 | Hardened core skeleton style and CLI command contract. |
-| A0.2 | active | pending | Consolidate docs, refound roadmap, and run code-quality gate. |
+| A0.2 | complete | 7e5879c | Consolidated docs, refounded roadmap, and ran code-quality gate. |
+| B0 | complete | pending | Added runtime filesystem paths, project-local mode, run-directory skeleton, CLI proof, and tests. |
 
 ## Exact Delivery Sequence
 
@@ -140,20 +145,40 @@ no provider/server work before the runtime foundation exists
 
 ## B0 Pass/Fail Criteria
 
-B0 may start only after A0.2 passes. B0 passes only if it adds runtime
-filesystem behavior without crossing into model execution.
+B0 passes only if it adds runtime filesystem behavior without crossing into
+model execution.
 
 Required B0 outputs:
 
 ```text
 XDG config/cache/state resolution
 project-local .yvex resolution
-CLI > env > project config > user config > default precedence
+explicit argument > env > project-local > user default precedence
 run directory creation
-lock/cache policy documented and tested
+lock/cache policy documented
+filesystem tests
+CLI paths smoke tests
 no model downloads
 no CUDA requirement
 no YAI checkout requirement
+```
+
+## C0 Pass/Fail Criteria
+
+C0 may start only after B0 validation passes. C0 must add artifact and GGUF
+parsing without claiming model execution.
+
+Required C0 outputs:
+
+```text
+artifact open/stat path
+bounded byte cursor or equivalent checked read path
+GGUF header parsing
+malformed header fixtures
+inspect command only when backed by parser code
+no tokenizer claim
+no CUDA claim
+no model execution claim
 ```
 
 ## Do Not Proceed Gates
@@ -170,6 +195,17 @@ README.md claims inference, CUDA, server, or model support
 TUI files, options, dependencies, panels, or dashboards appear
 ```
 
+Stop before C0 if any of these are true:
+
+```text
+make check fails
+make smoke fails
+build/tests/test_fs fails
+yvex paths --run --create cannot create a controlled run directory
+filesystem APIs are absent from docs/api.md
+runtime-filesystem.md claims config parsing or artifact writing is implemented
+```
+
 ## Decision Log
 
 | Date | Decision |
@@ -179,6 +215,7 @@ TUI files, options, dependencies, panels, or dashboards appear
 | 2026-06-19 | B0 is deferred until A0.2 reduces documentation sprawl. |
 | 2026-06-19 | `docs/spine.md` is the technical authority and this roadmap is the working progress document. |
 | 2026-06-19 | Future APIs stay in documentation until headers, implementation, tests, and CLI-visible behavior exist. |
+| 2026-06-21 | B0 adds only filesystem paths and run-directory creation; config parsing and run artifact writing stay deferred. |
 
 ## Delivery Format
 
