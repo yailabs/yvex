@@ -18,11 +18,9 @@
 #   make check
 #   make clean
 #
-# Non-goals:
-#   - no CUDA build in B0
-#   - no model downloads
-#   - no server
-#   - no TUI
+# Interface policy:
+#   - YVEX is CLI-only.
+#   - build/bin/yvex is the current user-facing executable surface.
 
 .PHONY: info lib cli test test-core test-cli smoke check check-docs check-guardrails clean
 
@@ -66,7 +64,7 @@ TEST_SRCS := \
 
 TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 
-CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md docs/roadmap.md \
+CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md \
 	docs/api.md docs/backend-contract.md docs/runtime-filesystem.md docs/cli-runtime.md
 
 info:
@@ -122,7 +120,6 @@ check-docs:
 	@test -f NOTICE.md
 	@test -f docs/README.md
 	@test -f docs/spine.md
-	@test -f docs/roadmap.md
 	@test -f docs/api.md
 	@test -f docs/backend-contract.md
 	@test -f docs/runtime-filesystem.md
@@ -130,7 +127,6 @@ check-docs:
 	@! find docs -maxdepth 1 -type f -name '*.md' \
 		! -name README.md \
 		! -name spine.md \
-		! -name roadmap.md \
 		! -name api.md \
 		! -name backend-contract.md \
 		! -name runtime-filesystem.md \
@@ -139,12 +135,12 @@ check-docs:
 	@grep -F "YVEX Implementation Spine" docs/spine.md >/dev/null
 	@grep -F "YVEX is CLI-only" docs/spine.md >/dev/null
 	@grep -F "YVEX is a C local inference engine" README.md >/dev/null
-	@grep -F "YVEX Roadmap" docs/roadmap.md >/dev/null
+	@grep -F "Completed Milestones" docs/spine.md >/dev/null
+	@grep -F "C1 - GGUF metadata and tensor directory" docs/spine.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Backend Contract" docs/backend-contract.md >/dev/null
 	@grep -F "YVEX Runtime Filesystem" docs/runtime-filesystem.md >/dev/null
 	@grep -F "YVEX CLI Runtime" docs/cli-runtime.md >/dev/null
-	@grep -F "Current A0.1 Code Review" docs/roadmap.md >/dev/null
 	@grep -F "CUDA / DGX Spark Track" docs/backend-contract.md >/dev/null
 
 check-guardrails:
@@ -156,12 +152,10 @@ check-guardrails:
 	@test ! -d protocols
 	@test ! -e src/README.md
 	@test ! -e tests/README.md
-	@test ! -e include/yvex/tui.h
 	@test ! -e include/yvex/model.h
 	@test ! -e include/yvex/backend.h
 	@test ! -e include/yvex/session.h
 	@test ! -e include/yvex/server.h
-	@test ! -d src/tui
 	@test ! -d src/model
 	@test ! -d src/tokenizer
 	@test ! -d src/graph
@@ -170,9 +164,11 @@ check-guardrails:
 	@test ! -d src/server
 	@test ! -d backends
 	@test ! -d fixtures
-	@! find . -path './.git' -prune -o \( -path './tui' -o -path './src/tui' -o -path './include/yvex/tui.h' -o -path './docs/tui.md' -o -path './docs/tui-*.md' \) -print | grep .
-	@! find . -path './.git' -prune -o -name 'panel_*.c' -print | grep .
-	@! grep -I -n -E '#include[ <"]n[c]urses|l[n]curses|N[C]URSES' $(CURRENT_DOCS) >/dev/null
+	@test -d cli
+	@test -f cli/yvex_cli.c
+	@test ! -d ui
+	@test ! -d app
+	@test ! -d desktop
 	@! grep -RIn -E "N[E]T\\.SPINE|N[E]T moves streams|C[L]ORI|c[l]ori-codename|docs/arc[h]ive|c[l]ori_|libc[l]ori|c[l]orid|include/c[l]ori|~/\\.config/c[l]ori|github\\.com/yailabs/c[l]ori|yailabs/c[l]ori" --exclude-dir=.git --exclude-dir=build . >/dev/null
 	@! grep -Ei "production-read[y]|implemented infer[e]nce|implemented ser[v]er|supports C[U]DA|supports M[e]tal|supports M[L]X|supports llama\\.cpp|OpenAI-compatible ser[v]er" README.md >/dev/null
 	@! grep -Ei "benchmark results" README.md | grep -vi "benchmark results: none" >/dev/null

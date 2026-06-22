@@ -178,4 +178,4 @@ YVEX_RUN_DIR=build/tests/manual-runs ./build/bin/yvex paths --run --create
 ```
 
 B0 does not implement inference, GGUF parsing, tokenization, CUDA,
-server/provider behavior, or TUI behavior.
+server/provider behavior, or additional interface surfaces.

@@ -9,7 +9,7 @@ Primary platform: Linux + CUDA + NVIDIA DGX Spark / GB10
 Secondary future platforms: CPU reference, Apple Metal, AMD/ROCm
 Primary role: local inference engine / local provider runtime
 User-facing interface policy: CLI-only
-Terminal policy: rich CLI, REPL, streaming, status lines, JSON/JSONL; no TUI
+Terminal policy: CLI-only; plain/rich output, REPL, streaming, status lines, JSON/JSONL
 Boundary relation: YVEX executes models; YAI controls operational use of model output
 Agent system: outside YVEX, inside YAI
 Initial implementation mode: code-first, no fake support, no fake inference, no fake provider claims
@@ -80,7 +80,6 @@ docs/README.md
 docs/api.md
 docs/backend-contract.md
 docs/cli-runtime.md
-docs/roadmap.md
 docs/runtime-filesystem.md
 docs/spine.md
 include/yvex/yvex.h
@@ -121,7 +120,7 @@ make info
 make check
   checks the reduced canonical docs exist
   checks old scaffold surfaces are absent
-  checks no forbidden terminal UI implementation paths exist
+  checks the interface policy remains CLI-only
   rejects fake maturity claims in README.md
   builds libyvex.a
   builds build/bin/yvex
@@ -152,20 +151,169 @@ tiny GGUF header fixtures exist
 no benchmark harness
 ```
 
-Current terminal-interface guardrail state:
+Current interface policy state:
 
 ```text
-no tui/ directory found
-no include/yvex/tui.h found
-no src/tui/ found
-no ncurses references found
-no dashboard references found
-no panel references found
-no alternate-screen references found
+YVEX is CLI-only.
+The only user-facing executable surface in the current repository is build/bin/yvex.
+New interface surfaces require an explicit roadmap decision before implementation.
 ```
 
-The reset does not need to unwind an existing TUI. It must instead install a
-hard guardrail that one is not introduced.
+Interface policy:
+
+```text
+YVEX is CLI-only.
+The only user-facing executable surface in the current repository is build/bin/yvex.
+New interface surfaces require an explicit roadmap decision before implementation.
+```
+
+## Progress and Delivery State
+
+This section replaces the former standalone roadmap. The spine owns both the
+technical authority and the current delivery state.
+
+### Current Repo Status
+
+```text
+phase: DOC-GATE.1 roadmap merged into spine
+interface: CLI-only
+implemented runtime: core version/status/error/log, runtime filesystem paths/run directories, artifact byte views, GGUF header/probe, CLI bootstrap
+not implemented: GGUF metadata, tensor directory, tokenizer, backend, CUDA, session, server, inference
+next authorized milestone: C1 - GGUF metadata and tensor directory
+```
+
+Current build surface:
+
+```text
+include/yvex/yvex.h
+include/yvex/version.h
+include/yvex/status.h
+include/yvex/error.h
+include/yvex/log.h
+include/yvex/fs.h
+include/yvex/artifact.h
+include/yvex/gguf.h
+src/core/version.c
+src/core/status.c
+src/core/error.c
+src/core/log.c
+src/fs/paths.c
+src/fs/run_dir.c
+src/artifact/artifact.c
+src/artifact/range.c
+src/formats/gguf.c
+cli/yvex_cli.c
+tests/test_status.c
+tests/test_error.c
+tests/test_version.c
+tests/test_log.c
+tests/test_fs.c
+tests/test_artifact.c
+tests/test_gguf.c
+tests/test_cli.sh
+tests/fixtures/gguf/
+```
+
+Current documentation surface:
+
+```text
+docs/README.md
+docs/spine.md
+docs/api.md
+docs/backend-contract.md
+docs/runtime-filesystem.md
+docs/cli-runtime.md
+```
+
+### Completed Milestones
+
+| ID | Status | Commit | Result |
+|---|---|---|---|
+| P0 | complete | b7c3dcf | Established YVEX pre-implementation spine. |
+| P0.6 | complete | f2e4890 | Purged legacy scaffold surface. |
+| P0.7 | complete | 70e8837 | Cut over remote identity to YVEX. |
+| P0.8 | complete | bbef021 | Defined runtime system design for A0. |
+| A0 | complete | 2620c59 | Added core C skeleton and CLI bootstrap. |
+| A0.1 | complete | 164ec95 | Hardened core skeleton style and CLI command contract. |
+| A0.2 | complete | 7e5879c | Consolidated docs, refounded roadmap, and ran code-quality gate. |
+| B0 | complete | 8e7d6c8 | Added runtime filesystem paths, project-local mode, run-directory skeleton, CLI proof, and tests. |
+| C0 | complete | 2818b6a | Added artifact byte view, range checks, GGUF header/probe parser, inspect command, fixtures, and tests. |
+
+### Exact Delivery Sequence
+
+```text
+A0.2  Documentation consolidation / roadmap refoundation / code quality gate
+B0    Runtime filesystem
+C0    Artifact and GGUF parser base
+C1    GGUF metadata and tensor directory
+D0    Tensor and model layer
+E0    Tokenizer and prompt rendering
+F0    Graph and planner
+G0    CPU reference backend
+H0    Engine and session runtime
+I0    CLI run/chat runtime
+J0    Metrics and tracing
+K0    yvexd server/provider
+L0    CUDA/DGX Spark backend
+M0-M8 model support ladder
+```
+
+No milestone may be renamed, split, reordered, or renumbered without updating
+this spine in the same change.
+
+### Acceptance Gates
+
+C1 may start only after C0 validation passes. C1 must extend GGUF parsing into
+metadata and tensor directory handling without claiming model execution.
+
+Required C1 outputs:
+
+```text
+metadata key/value table for supported scalar/string/array cases
+tensor directory parser
+alignment and tensor offset checks
+malformed metadata/tensor fixtures
+inspect metadata/tensors output if backed by parser code
+no tokenizer claim
+no backend claim
+no inference claim
+```
+
+### Do-Not-Proceed Gates
+
+Stop before C1 if any of these are true:
+
+```text
+make check fails
+make smoke fails
+build/tests/test_artifact fails
+build/tests/test_gguf fails
+yvex inspect valid-minimal.gguf does not report status: header-only
+bad GGUF magic crashes or reports model loading behavior
+docs/api.md omits artifact or GGUF header/probe APIs
+```
+
+### Decision Log
+
+| Date | Decision |
+|---|---|
+| 2026-06-19 | YVEX is CLI-only. |
+| 2026-06-19 | A0.1 code is accepted as a small honest core base. |
+| 2026-06-19 | B0 was deferred until A0.2 reduced documentation sprawl. |
+| 2026-06-19 | `docs/spine.md` is the technical authority and progress document. |
+| 2026-06-19 | Future APIs stay in documentation until headers, implementation, tests, and CLI-visible behavior exist. |
+| 2026-06-21 | B0 adds only filesystem paths and run-directory creation; config parsing and run artifact writing stay deferred. |
+| 2026-06-21 | C0 adds only artifact bytes and GGUF header/probe; metadata, tensor directory, tokenizer, and model loading stay deferred. |
+| 2026-06-22 | DOC-GATE.1 merges roadmap state into the spine and keeps interface policy positive: CLI-only. |
+
+### Next Authorized Milestone
+
+```text
+C1 - GGUF metadata and tensor directory
+```
+
+Do not split, rename, or implement C1 in a documentation gate.
+
 
 ## 2. Legacy Surface Purge
 
@@ -181,7 +329,6 @@ NOTICE.md
 Makefile
 docs/README.md
 docs/spine.md
-docs/roadmap.md
 docs/api.md
 docs/backend-contract.md
 docs/runtime-filesystem.md
@@ -205,17 +352,8 @@ Purge guardrails:
 ```text
 old scaffold directories must not return
 old README-only source/test stubs must not return
-tui/
-src/tui/
-include/yvex/tui.h
-docs/tui.md
-docs/tui-*.md
-docs/terminal-layout.md when it implies TUI
-panel_*.c
-dashboard mode
-ncurses dependency
-alternate-screen terminal UI
-persistent terminal panels
+interface policy remains CLI-only
+new user-facing executable surfaces require an explicit roadmap decision
 ```
 
 ### 2.5 P0.2 Technical Weak-Area Map
@@ -262,7 +400,7 @@ CLI contract
 
 validation matrix
   -> unit tests, golden fixtures, malformed fixtures, future fuzzing,
-     sanitizers, no-TUI guard, fake-claim scan, manual proof commands
+     sanitizers, no-CLI-only interface guard, fake-claim scan, manual proof commands
 ```
 
 ## 3. Identity
@@ -501,15 +639,15 @@ JSONL events
 Forbidden:
 
 ```text
-TUI
-terminal dashboard
-ncurses
+CLI-only interface
+terminal alternate interface
+terminal dependency
 alternate screen
-persistent terminal panels
+persistent terminal alternate interfaces
 terminal grid UI
 GUI
---tui
---dashboard
+--cli-only-interface
+--alternate interface
 ```
 
 The CLI is not a thin afterthought. It is the proof surface for implementation.
@@ -666,7 +804,6 @@ Required docs:
 ```text
 docs/README.md
 docs/spine.md
-docs/roadmap.md
 docs/api.md
 docs/backend-contract.md
 docs/runtime-filesystem.md
@@ -676,12 +813,12 @@ docs/cli-runtime.md
 Forbidden layout:
 
 ```text
-tui/
-src/tui/
-include/yvex/tui.h
-docs/tui.md
-docs/tui-*.md
-docs/terminal-layout.md when terminal-layout means TUI
+cli-only-interface/
+src/cli-only-interface/
+include/yvex/cli-only-interface.h
+docs/cli-only-interface.md
+docs/cli-only-interface-*.md
+docs/terminal-layout.md when terminal-layout means CLI-only interface
 ```
 
 CLI-specific terminal docs are:
@@ -763,7 +900,7 @@ CLI build
 unit tests
 source hygiene checks
 no fake support claims
-no TUI path or dependency
+no CLI-only interface path or dependency
 ```
 
 ## 9.5 Source and Code Quality Discipline
@@ -826,8 +963,8 @@ No model-family-specific types in generic headers.
 No fake success.
 No parser reads unchecked byte ranges.
 No backend-specific state leaks into core APIs.
-No TUI-specific types.
-No terminal dashboard API.
+No CLI-only interface-specific types.
+No terminal alternate interface API.
 ```
 
 Core object families:
@@ -2604,8 +2741,8 @@ Flags:
 Forbidden flags:
 
 ```text
---tui
---dashboard
+--cli-only-interface
+--alternate interface
 ```
 
 stdout/stderr rule:
@@ -3097,8 +3234,8 @@ L0 CUDA/DGX Spark backend
 M0-M8 model support ladder
 ```
 
-No TUI delivery exists.
-No TUI implementation track exists.
+YVEX has one interface policy: CLI-only.
+New interface surfaces require an explicit roadmap decision.
 
 ## 24. Delivery Box Standard
 
@@ -3132,7 +3269,7 @@ Title: linenoise REPL skeleton
 Goal: Create interactive yvex chat input loop without model execution.
 Context: CLI runtime must be ready before inference so streaming layout is not retrofitted later.
 Scope: cli/command_chat.c, src/chat/chat.c, src/terminal/status_line.c.
-Non-goals: no tokenizer, no inference, no server, no TUI.
+Non-goals: no tokenizer, no inference, no server, no additional interface surface.
 CLI commands: yvex chat --mock
 Tests: test terminal command parser
 Manual proof: yvex chat opens prompt, /help works, /quit exits.
@@ -3182,7 +3319,7 @@ malformed parser fixtures
   unsupported qtype
 
 source hygiene
-  no forbidden interface paths
+  no unapproved interface paths
   no fake support claims
   no direct parser struct casts over mapped bytes
   no unchecked range reads
@@ -3209,10 +3346,10 @@ long-running decode soak tests
 server streaming conformance tests
 ```
 
-No-TUI guard:
+CLI-only interface policy:
 
 ```text
-check repository paths for forbidden interface directories/files
+check repository paths for unapproved interface directories/files
 check source for forbidden dependency names
 check CLI help for forbidden modes
 check docs for accidental product promises outside CLI-only policy
@@ -3292,9 +3429,9 @@ libyvex.a builds
 build/bin/yvex builds
 tests run
 no fake inference claims
-no TUI code
-no TUI docs
-no TUI stubs
+CLI-only code surface
+CLI-only docs surface
+CLI-only validation surface
 ```
 
 ## 27. Engineering Principles
@@ -3305,7 +3442,7 @@ Visibility before optimization.
 CPU reference before CUDA-only correctness claims.
 CUDA/DGX Spark first for serious acceleration.
 CLI UX is part of the engine, not an afterthought.
-No TUI.
+YVEX is CLI-only.
 No agents inside YVEX.
 No YAI governance inside YVEX.
 No fake provider support.
@@ -3318,7 +3455,7 @@ Every CUDA op has CPU parity before trust.
 Every support claim has a command.
 ```
 
-## 28. Immediate Next Milestone
+## 28. Next Authorized Milestone
 
 Next milestone after C0:
 
@@ -3336,19 +3473,12 @@ add malformed metadata and tensor fixtures
 keep baseline validation independent of CUDA, network, model downloads, and YAI checkout
 ```
 
-C1 must not:
+Interface policy:
 
 ```text
-implement inference
-declare model loading behavior
-declare CUDA behavior
-declare OpenAI-compatible provider behavior
-introduce TUI
-introduce terminal UI dependencies
-introduce dashboard or panel implementation
-introduce fake provider support
-introduce server/provider implementation
-introduce CUDA implementation
+YVEX is CLI-only.
+The only user-facing executable surface in the current repository is build/bin/yvex.
+New interface surfaces require an explicit roadmap decision before implementation.
 ```
 
 Completed transition:
@@ -3373,4 +3503,4 @@ tokens, metrics and traces. It does not own YAI case/control/governance. YAI
 consumes YVEX as a local provider boundary.
 ```
 
-YVEX is CLI-only in this spine. It does not implement a TUI.
+YVEX is CLI-only in this spine.

@@ -43,7 +43,7 @@ cuda: not implemented
 server: not implemented
 ```
 
-It must not include a TUI line.
+It reports only implemented surfaces.
 
 ## Command Table Policy
 
@@ -229,18 +229,10 @@ JSONL event envelope:
 JSONL output must remain one valid JSON object per line. JSON and JSONL modes
 must never mix logs or progress into stdout.
 
-## No TUI
-
-Forbidden:
+## Interface Policy
 
 ```text
-TUI
-terminal dashboard implementation
-terminal grid UI
-GUI
---tui
---dashboard
-panel implementation
-alternate-screen interface
-ncurses dependency
+YVEX is CLI-only.
+The only user-facing executable surface in the current repository is build/bin/yvex.
+New interface surfaces require an explicit roadmap decision before implementation.
 ```

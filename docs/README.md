@@ -6,10 +6,9 @@ documents instead of one Markdown file per idea.
 Canonical documents:
 
 - [Implementation spine](spine.md): technical authority for identity, scope,
-  runtime architecture, YVEX/YAI boundary, model ladder, failure taxonomy,
-  validation philosophy, guardrails, and future tracks.
-- [Roadmap](roadmap.md): working progress document, milestone state, delivery
-  sequence, gates, decisions, and code-quality review.
+  current implementation state, delivery sequence, acceptance gates,
+  decisions, runtime architecture, YVEX/YAI boundary, model ladder, failure
+  taxonomy, validation philosophy, and future tracks.
 - [API](api.md): current public C API and future API contracts that are
   documentation only until headers, implementation, and tests exist.
 - [Backend contract](backend-contract.md): CPU reference, backend ABI,
@@ -25,7 +24,6 @@ Documentation rule:
 ```text
 few Markdown files
 dense canonical content
-roadmap owns progress
-spine owns technical doctrine
+spine owns progress and technical doctrine
 no new planning note for every micro-concept
 ```

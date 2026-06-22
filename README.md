@@ -6,26 +6,26 @@ YVEX owns model execution: artifact loading, format parsing, tensor tables,
 tokenization, prompt rendering, graph planning, backend execution, KV cache,
 prefill/decode, logits, sampling, token streaming, metrics and traces.
 
-YVEX is CLI-only in this repository phase. The terminal surface is plain/rich
-CLI output, REPL, streaming tokens, status lines, JSON/JSONL, logs on stderr,
-and run artifacts on disk. It does not implement a TUI.
+YVEX is CLI-only. The current user-facing executable surface is
+`build/bin/yvex`: plain/rich CLI output, REPL-ready command semantics,
+streaming-friendly stdout/stderr discipline, JSON/JSONL planning, logs on
+stderr, and run artifacts on disk.
 
 YVEX does not own YAI case/control/governance. YAI consumes YVEX as a local
 provider boundary.
 
 ## Status
 
-This repository is in the A0.2 documentation consolidation and code-quality
-gate phase.
+This repository has completed C0, the artifact and GGUF header/probe base.
 
 Current state:
 
 ```text
 canonical spine: docs/spine.md
-runtime code: A0.1 core skeleton implemented
-public headers: version/status/error/log implemented
-CLI binary: build/bin/yvex implemented for info/help/commands/version
-GGUF parser: not implemented
+runtime code: C0 core/filesystem/artifact skeleton implemented
+public headers: version/status/error/log/fs/artifact/gguf implemented
+CLI binary: build/bin/yvex implemented for info/help/commands/version/paths/inspect
+GGUF parser: header/probe only
 tokenizer: not implemented
 CUDA backend: not implemented
 server: not implemented
@@ -40,7 +40,6 @@ limitation.
 
 - [Docs index](docs/README.md)
 - [Implementation spine](docs/spine.md)
-- [Roadmap](docs/roadmap.md)
 - [API](docs/api.md)
 - [Backend contract](docs/backend-contract.md)
 - [Runtime filesystem](docs/runtime-filesystem.md)
