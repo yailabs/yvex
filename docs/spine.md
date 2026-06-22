@@ -139,6 +139,30 @@ The only user-facing executable surface in the current repository is build/bin/y
 New interface surfaces require an explicit spine decision before implementation.
 ```
 
+Implemented public surfaces:
+
+```text
+core version/status/error/log
+filesystem paths/run directories
+artifact byte view
+GGUF header/probe
+```
+
+Planned public surfaces:
+
+```text
+GGUF full metadata/tensor object
+dtype/qtype/tensor table
+model descriptor
+tokenizer/prompt
+graph/planner
+backend
+session
+chat/run
+metrics/tracing
+server/provider
+```
+
 ## 2. Implementation Rules
 
 Rules:
@@ -157,18 +181,20 @@ Every C module keeps ownership, dependency, and validation comments current.
 Every wave updates the delivery state before handoff.
 ```
 
+### Current Command Surface
+
 Current implemented commands:
 
 ```text
-info
-help
 commands
-version
-paths
+help
+info
 inspect
+paths
+version
 ```
 
-Future commands appear only under the wave that implements them.
+Future commands are listed only under the delivery that implements them.
 
 ## 3. Linear Delivery Spine
 
@@ -1785,6 +1811,58 @@ make smoke
 git diff --check
 ```
 
+### Validation Matrix
+
+Required validation layers:
+
+```text
+unit tests:
+  status/error/log
+  filesystem paths
+  artifact/range checks
+  GGUF header/probe
+  future dtype byte formulas
+  future tensor role classifier
+
+golden fixtures:
+  GGUF header fixture
+  malformed GGUF fixture
+  future tokenizer text -> ids
+  future ids -> text/bytes
+  future chat render -> prompt
+  future graph dump
+  future memory-plan JSON
+  future CLI JSON/JSONL envelopes
+
+malformed parser fixtures:
+  short file
+  bad magic
+  unsupported version
+  truncated metadata
+  string out of bounds
+  array overflow
+  tensor shape overflow
+  tensor offset out of bounds
+  misaligned tensor data
+  unsupported qtype
+
+future validation layers:
+  parser fuzzing
+  address sanitizer
+  undefined behavior sanitizer
+  thread sanitizer where useful
+  CUDA memcheck/sanitizer where available
+  CPU/CUDA parity fixtures
+  long-running decode soak tests
+  server streaming conformance tests
+
+manual proof commands:
+  make clean
+  make check
+  make smoke
+  git diff --check
+```
+
 Documentation-only gates must additionally prove:
 
 ```text
@@ -1830,7 +1908,7 @@ and a command-visible proof exists.
 Current handoff:
 
 ```text
-from: DOC-GATE.2
+from: DOC-GATE.2R
 to: C1 - GGUF metadata and tensor directory
 authorized work: metadata parser, tensor directory parser, fixtures, CLI metadata/tensors commands
 blocked work: D0 and later until C1 acceptance passes
