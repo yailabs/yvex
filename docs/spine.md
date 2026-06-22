@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after L0
+after M0
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-M0-M8 - Model support ladder
+M1 - Tiny real GGUF materialization
 ```
 
 Implemented surface:
@@ -311,6 +311,7 @@ graph
 help
 info
 inspect
+materialize
 metadata
 paths
 plan
@@ -345,7 +346,8 @@ Future commands are listed only under the delivery that implements them.
 | J0 | complete | Metrics and tracing |
 | K0 | complete | yvexd server/provider |
 | L0 | complete | CUDA/DGX Spark backend |
-| M0-M8 | next | Model support ladder |
+| M0 | complete | Fixture weight materialization |
+| M1-M8 | next | Model support ladder |
 
 ### P0 - Repository reset and technical spine
 
@@ -1741,7 +1743,8 @@ future model work must state the exact support level and proof command.
 | I0 | 425fab3 | Added accepted-only run/chat runtime shell, slash commands, JSON run output, piped chat tests, and CLI smoke coverage. |
 | J0 | 5986659 | Added runtime metrics collector, trace JSONL writer, profile JSON writer, run artifacts, run/chat instrumentation, and tests. |
 | K0 | 6a8e17b | Added yvexd server shell, HTTP status router, health/metrics/model catalog endpoints, unsupported generation endpoint response, and tests. |
-| L0 | current commit | Added CUDA backend attachment, device probe, tensor allocation/read/write/copy, F32 embed op, CPU/CUDA parity proof, cuda-info CLI, and CUDA targets/tests. |
+| L0 | afc8536 | Added CUDA backend attachment, device probe, tensor allocation/read/write/copy, F32 embed op, CPU/CUDA parity proof, cuda-info CLI, and CUDA targets/tests. |
+| M0 | current commit | Added fixture weight materialization into backend tensors, CPU/CUDA materialization proof, materialized weight table API, materialize CLI, and tests. |
 
 Current implemented CLI command set:
 
@@ -1757,6 +1760,7 @@ graph
 help
 info
 inspect
+materialize
 metadata
 paths
 prompt
@@ -1789,15 +1793,15 @@ git diff --check
 Next authorized milestone:
 
 ```text
-M0-M8 - Model support ladder
+M1 - Tiny real GGUF materialization
 ```
 
-M0-M8 starts only after L0 validation passes and the L0 commit is recorded.
+M1 starts only after M0 validation passes and the M0 commit is recorded.
 
 The first model support subdelivery is:
 
 ```text
-M0 - fixture model path
+M1 - tiny real GGUF materialization
 ```
 
 M0-M8 must produce:
@@ -1815,12 +1819,13 @@ broad inference claim
 model support claim without command proof
 ```
 
-Required M0 entry proof:
+Required M1 entry proof:
 
 ```text
 make clean
 make check
 make smoke
+make check-cuda where CUDA is available
 no broad inference claim
 ```
 

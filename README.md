@@ -16,19 +16,21 @@ provider boundary.
 
 ## Status
 
-This repository has completed L0, the first CUDA backend attachment.
+This repository has completed M0, fixture weight materialization into backend
+tensors.
 
 Current state:
 
 ```text
 canonical spine: docs/spine.md
-runtime code: core/filesystem/artifact/GGUF/model/tokenizer/graph/backend/session shell implemented
+runtime code: core/filesystem/artifact/GGUF/model/tokenizer/graph/backend/weights/session shell implemented
 public headers: implemented headers are aggregated by include/yvex/yvex.h
 CLI binary: build/bin/yvex accepted-only runtime shell and cuda-info implemented
 server binary: build/bin/yvexd status shell implemented
 GGUF parser: metadata and tensor directory implemented
 tokenizer: fixture encode/decode implemented
 CUDA backend: tensor allocation/read/write/copy and F32 embed parity implemented when driver/device are available
+weights: fixture tensor bytes materialized into CPU/CUDA backend tensors
 server generation: not implemented
 benchmark results: none
 ```
@@ -45,6 +47,7 @@ limitation.
 - [Backend contract](docs/backend-contract.md)
 - [Runtime filesystem](docs/runtime-filesystem.md)
 - [CLI runtime](docs/cli-runtime.md)
+- [CLI commands](docs/cli-commands.md)
 
 ## Validation
 

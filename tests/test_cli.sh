@@ -19,6 +19,7 @@
 #   - yvex version
 #   - yvex info
 #   - yvex inspect
+#   - yvex materialize
 #   - yvex metadata
 #   - yvex paths
 #   - yvex prompt
@@ -85,7 +86,7 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: L0 CUDA backend attachment"
+contains "$OUT_DIR/info.out" "status: M0 fixture weight materialization"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "artifact: open/read implemented"
@@ -97,6 +98,7 @@ contains "$OUT_DIR/info.out" "graph: partial planning implemented"
 contains "$OUT_DIR/info.out" "planner: estimate-only implemented"
 contains "$OUT_DIR/info.out" "backend: CPU reference implemented"
 contains "$OUT_DIR/info.out" "backend_cuda: tensor movement and F32 embed implemented when CUDA is available"
+contains "$OUT_DIR/info.out" "weights: fixture materialization implemented"
 contains "$OUT_DIR/info.out" "engine: runtime object skeleton implemented"
 contains "$OUT_DIR/info.out" "session: lifecycle skeleton implemented"
 contains "$OUT_DIR/info.out" "run: accepted-only runtime shell implemented"
@@ -126,6 +128,7 @@ contains "$OUT_DIR/commands.out" "  graph"
 contains "$OUT_DIR/commands.out" "  help"
 contains "$OUT_DIR/commands.out" "  info"
 contains "$OUT_DIR/commands.out" "  inspect"
+contains "$OUT_DIR/commands.out" "  materialize"
 contains "$OUT_DIR/commands.out" "  metadata"
 contains "$OUT_DIR/commands.out" "  paths"
 contains "$OUT_DIR/commands.out" "  plan"
@@ -151,6 +154,9 @@ contains "$OUT_DIR/help_chat.out" "usage: yvex chat --model FILE"
 
 run_ok help_inspect "$YVEX_BIN" help inspect
 contains "$OUT_DIR/help_inspect.out" "usage: yvex inspect <path>"
+
+run_ok help_materialize "$YVEX_BIN" help materialize
+contains "$OUT_DIR/help_materialize.out" "usage: yvex materialize --model FILE"
 
 run_ok help_metadata "$YVEX_BIN" help metadata
 contains "$OUT_DIR/help_metadata.out" "usage: yvex metadata <path>"
@@ -217,6 +223,12 @@ contains "$OUT_DIR/tensors.out" "format: gguf"
 contains "$OUT_DIR/tensors.out" "tensor_count: 1"
 contains "$OUT_DIR/tensors.out" "alignment: 32"
 contains "$OUT_DIR/tensors.out" "0 token_embd.weight role=token_embedding rank=2 dims=[4,8] dtype=F32 bytes=128 offset=0 absolute="
+
+run_ok materialize "$YVEX_BIN" materialize --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
+contains "$OUT_DIR/materialize.out" "materialization status: materialized"
+contains "$OUT_DIR/materialize.out" "bytes_materialized: 128"
+contains "$OUT_DIR/materialize.out" "execution_ready: false"
+contains "$OUT_DIR/materialize.out" "status: weights-materialized"
 
 run_ok tokenizer "$YVEX_BIN" tokenizer tests/fixtures/gguf/valid-tokenizer-simple.gguf
 contains "$OUT_DIR/tokenizer.out" "tokenizer_model: yvex-fixture-simple"

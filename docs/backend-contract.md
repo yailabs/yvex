@@ -8,6 +8,7 @@ as of G0; CUDA attachment exists as of L0.
 ```text
 CPU backend: implemented in G0
 CUDA backend: tensor allocation/read/write/copy and F32 embed parity implemented in L0 when driver/device are available
+Weight materialization: fixture tensor bytes copied into CPU/CUDA backend tensors in M0
 Metal backend: not implemented
 ROCm backend: not implemented
 backend public headers: implemented in include/yvex/backend.h
@@ -228,3 +229,36 @@ failure reports max absolute and relative difference
 
 Every CUDA op requires a CPU reference, fixed fixture, tolerance, test command,
 timing, and memory measurement before it is trusted.
+
+## Weight Materialization Contract
+
+M0 introduces backend residency for parsed GGUF tensor bytes.
+
+Implemented:
+
+```text
+artifact tensor byte range check
+backend tensor allocation from YVEX tensor table rows
+full-buffer tensor write
+materialized weight table ownership
+CPU fixture materialization
+CUDA fixture materialization under check-cuda
+backend allocation cleanup on weight table close
+```
+
+Rules:
+
+```text
+storage_bytes comes from the dtype registry
+absolute_offset comes from the parsed GGUF tensor directory
+artifact range must be valid before backend write
+weight table owns backend tensors
+backend must outlive the weight table
+closing the weight table frees backend allocations
+materialization does not imply graph execution
+execution_ready remains false
+```
+
+M0 does not materialize external large models, implement model support levels,
+execute graph ops, allocate KV cache, compute logits, sample tokens, or claim
+inference.

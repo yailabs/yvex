@@ -4,7 +4,7 @@ This document owns CLI behavior. YVEX is CLI-only.
 
 ## Current Implemented Commands
 
-The L0 command-line surfaces implement exactly:
+The M0 command-line surfaces implement exactly:
 
 ```text
 yvex
@@ -21,6 +21,7 @@ yvex help
 yvex help <implemented-command>
 yvex info
 yvex inspect <path>
+yvex materialize --model FILE --backend cpu|cuda
 yvex metadata <path>
 yvex paths
 yvex paths --project DIR
@@ -50,7 +51,7 @@ name: YVEX
 version: 0.1.0
 language: C
 interface: CLI-only
-status: L0 CUDA backend attachment
+status: M0 fixture weight materialization
 library: libyvex.a
 filesystem: implemented
 artifact: open/read implemented
@@ -62,6 +63,7 @@ graph: partial planning implemented
 planner: estimate-only implemented
 backend: CPU reference implemented
 backend_cuda: tensor movement and F32 embed implemented when CUDA is available
+weights: fixture materialization implemented
 engine: runtime object skeleton implemented
 session: lifecycle skeleton implemented
 run: accepted-only runtime shell implemented
@@ -189,6 +191,34 @@ alignment: 32
 
 This is descriptor/table data for inspection. It is not backend support, model
 loading, or inference state.
+
+## Current `yvex materialize`
+
+`yvex materialize --model FILE --backend cpu|cuda` copies GGUF tensor bytes into
+backend-owned tensors and reports a materialized weight table summary.
+
+Fixture CPU output:
+
+```text
+materialization status: materialized
+model: yvex-tokenizer-test
+backend: cpu
+tensors_total: 1
+tensors_materialized: 1
+tensors_failed: 0
+bytes_total: 128
+bytes_materialized: 128
+backend_allocated_bytes: 128
+execution_ready: false
+reason: graph partial; materialized weights do not imply executable inference
+status: weights-materialized
+```
+
+CUDA output has the same shape when a CUDA driver/device is available. If CUDA
+is unavailable, the command reports `status: weights-unsupported` and exits 5.
+
+M0 materialization does not execute prefill, decode, sampling, graph execution,
+or model generation.
 
 ## Current `yvex tokenizer`
 

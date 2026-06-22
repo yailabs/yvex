@@ -85,6 +85,7 @@ static int command_graph(int argc, char **argv);
 static int command_help(int argc, char **argv);
 static int command_info(int argc, char **argv);
 static int command_inspect(int argc, char **argv);
+static int command_materialize(int argc, char **argv);
 static int command_metadata(int argc, char **argv);
 static int command_paths(int argc, char **argv);
 static int command_plan(int argc, char **argv);
@@ -166,6 +167,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex inspect <path>",
         "Opens a file, parses the GGUF directory, builds a YVEX tensor table and descriptor, and prints a descriptor-only summary. Tokenizers, backends, and model execution are not implemented.",
         command_inspect,
+    },
+    {
+        "materialize",
+        "Materialize fixture weights into backend tensors.",
+        "yvex materialize --model FILE --backend cpu|cuda [--require-all] [--allow-unsupported-dtype]",
+        "Copies GGUF tensor bytes into backend-owned tensors and reports residency. This does not execute prefill, decode, sampling, generation, or inference.",
+        command_materialize,
     },
     {
         "metadata",
@@ -967,7 +975,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: L0 CUDA backend attachment\n");
+    printf("status: M0 fixture weight materialization\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -979,6 +987,7 @@ static int command_info(int argc, char **argv)
     printf("planner: estimate-only implemented\n");
     printf("backend: CPU reference implemented\n");
     printf("backend_cuda: tensor movement and F32 embed implemented when CUDA is available\n");
+    printf("weights: fixture materialization implemented\n");
     printf("engine: runtime object skeleton implemented\n");
     printf("session: lifecycle skeleton implemented\n");
     printf("run: accepted-only runtime shell implemented\n");
@@ -1127,6 +1136,140 @@ static int command_metadata(int argc, char **argv)
 
     yvex_gguf_close(gguf);
     yvex_artifact_close(artifact);
+    return 0;
+}
+
+static int command_materialize(int argc, char **argv)
+{
+    yvex_cli_tokenizer_context ctx;
+    yvex_backend *backend = NULL;
+    yvex_weight_table *weights = NULL;
+    yvex_backend_options backend_options;
+    yvex_materialize_options materialize_options;
+    yvex_materialize_summary summary;
+    yvex_error err;
+    const char *model_path = NULL;
+    const char *backend_name = NULL;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&backend_options, 0, sizeof(backend_options));
+    memset(&materialize_options, 0, sizeof(materialize_options));
+
+    if (argc == 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        print_command_help(stdout, find_command("materialize"));
+        return 0;
+    }
+
+    for (i = 2; i < argc; ++i) {
+        if (strcmp(argv[i], "--model") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --model requires a file\n");
+                return 2;
+            }
+            model_path = argv[++i];
+        } else if (strcmp(argv[i], "--backend") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --backend requires cpu or cuda\n");
+                return 2;
+            }
+            backend_name = argv[++i];
+        } else if (strcmp(argv[i], "--require-all") == 0) {
+            materialize_options.require_all_tensors = 1;
+        } else if (strcmp(argv[i], "--allow-unsupported-dtype") == 0) {
+            materialize_options.allow_unsupported_dtype = 1;
+        } else {
+            fprintf(stderr, "yvex: unknown materialize option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help materialize' for usage.\n");
+            return 2;
+        }
+    }
+
+    if (!model_path || !backend_name) {
+        fprintf(stderr, "yvex: materialize requires --model FILE and --backend cpu|cuda\n");
+        fprintf(stderr, "usage: yvex materialize --model FILE --backend cpu|cuda [--require-all] [--allow-unsupported-dtype]\n");
+        return 2;
+    }
+
+    if (strcmp(backend_name, "cpu") == 0) {
+        backend_options.kind = YVEX_BACKEND_KIND_CPU;
+    } else if (strcmp(backend_name, "cuda") == 0) {
+        backend_options.kind = YVEX_BACKEND_KIND_CUDA;
+    } else {
+        fprintf(stderr, "yvex: unknown backend kind: %s\n", backend_name);
+        return 2;
+    }
+
+    rc = open_model_context(model_path, &ctx, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_backend_open(&backend, &backend_options, &err);
+    if (rc == YVEX_ERR_UNSUPPORTED) {
+        printf("materialization status: unsupported\n");
+        printf("backend: %s\n", backend_name);
+        printf("reason: %s\n", yvex_error_message(&err));
+        printf("status: weights-unsupported\n");
+        close_model_context(&ctx);
+        return 5;
+    }
+    if (rc != YVEX_OK) {
+        close_model_context(&ctx);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    materialize_options.backend_name = backend_name;
+    rc = yvex_weight_table_materialize(&weights,
+                                       ctx.artifact,
+                                       ctx.gguf,
+                                       ctx.table,
+                                       backend,
+                                       &materialize_options,
+                                       &err);
+    if (rc == YVEX_ERR_UNSUPPORTED) {
+        printf("materialization status: unsupported\n");
+        printf("backend: %s\n", backend_name);
+        printf("reason: %s\n", yvex_error_message(&err));
+        printf("status: weights-unsupported\n");
+        yvex_backend_close(backend);
+        close_model_context(&ctx);
+        return 5;
+    }
+    if (rc != YVEX_OK) {
+        yvex_backend_close(backend);
+        close_model_context(&ctx);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_weight_table_get_summary(weights, &summary, &err);
+    if (rc != YVEX_OK) {
+        yvex_weight_table_close(weights);
+        yvex_backend_close(backend);
+        close_model_context(&ctx);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    printf("materialization status: %s\n", yvex_weight_status_name(summary.status));
+    printf("model: %s\n", yvex_model_name(ctx.model)[0] ? yvex_model_name(ctx.model) : "unknown");
+    printf("backend: %s\n", backend_name);
+    printf("tensors_total: %llu\n", summary.tensors_total);
+    printf("tensors_materialized: %llu\n", summary.tensors_materialized);
+    printf("tensors_failed: %llu\n", summary.tensors_failed);
+    printf("bytes_total: %llu\n", summary.bytes_total);
+    printf("bytes_materialized: %llu\n", summary.bytes_materialized);
+    printf("backend_allocated_bytes: %llu\n", summary.backend_allocated_bytes);
+    printf("execution_ready: false\n");
+    printf("reason: graph partial; materialized weights do not imply executable inference\n");
+    printf("status: %s\n", summary.status == YVEX_WEIGHT_STATUS_MATERIALIZED
+           ? "weights-materialized"
+           : "weights-partial");
+
+    yvex_weight_table_close(weights);
+    yvex_backend_close(backend);
+    close_model_context(&ctx);
     return 0;
 }
 

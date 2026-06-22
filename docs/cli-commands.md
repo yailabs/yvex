@@ -9,7 +9,7 @@ a command, option, exit status, or visible runtime posture.
 ## Current Milestone
 
 ```text
-L0 - CUDA backend attachment and parity probe
+M0 - fixture weight materialization
 ```
 
 ## Binaries
@@ -39,6 +39,9 @@ CUDA in L0 means device probe, memory/tensor movement, and F32 embed parity. It
 does not mean CUDA matmul, attention, session execution, generation, or model
 support.
 
+M0 adds fixture weight materialization into CPU/CUDA backend tensors. It does
+not add model execution or inference.
+
 ## `yvex` Commands
 
 | Command | Usage | Status |
@@ -53,6 +56,7 @@ support.
 | `help` | `yvex help [COMMAND]` | implemented |
 | `info` | `yvex info` | implemented; honest support posture |
 | `inspect` | `yvex inspect PATH` | implemented; descriptor-only GGUF/model summary |
+| `materialize` | `yvex materialize --model FILE --backend cpu\|cuda` | implemented; fixture weights copied into backend tensors |
 | `metadata` | `yvex metadata PATH` | implemented; GGUF metadata dump |
 | `paths` | `yvex paths [--project DIR] [--run] [--create]` | implemented |
 | `plan` | `yvex plan PATH [--backend cpu\|cuda] [--seq N] [--ctx N]` | implemented; plan-only |
@@ -106,6 +110,7 @@ Useful proof sequence:
 
 ```sh
 yvex inspect "$FIX"
+yvex materialize --model "$FIX" --backend cpu
 yvex metadata "$FIX"
 yvex tensors "$FIX"
 yvex tokenizer "$FIX"
@@ -124,6 +129,7 @@ CUDA proof, only when available:
 yvex cuda-info
 yvex backend cuda
 yvex plan "$FIX" --backend cuda
+yvex materialize --model "$FIX" --backend cuda
 ```
 
 Server shell proof:
@@ -136,7 +142,7 @@ yvexd --host 127.0.0.1 --port 18080 --model "$FIX" --backend cpu --one-request
 
 ```text
 no model support claim
-no full weight materialization
+no large/real model materialization
 no prefill/decode execution
 no sampler
 no generated assistant text

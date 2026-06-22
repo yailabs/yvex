@@ -16,18 +16,19 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-L0 implements the core version/status/error/log surface, runtime filesystem
+M0 implements the core version/status/error/log surface, runtime filesystem
 paths/run directories, artifact byte views, range checks, GGUF header/probe,
 metadata, raw tensor directory parsing, dtype/qtype storage accounting, YVEX
 tensor table rows, a descriptor-only model summary, tokenizer metadata/vocab
 tables, fixture tokenizer encode/decode, default prompt rendering, graph
 planning artifacts, shape helpers, estimate-only memory plans, plan objects,
 backend ABI wrappers, the CPU reference backend, CUDA tensor movement/F32 embed
-parity path when a CUDA driver/device is available, engine/session runtime
-objects, KV/logits availability skeletons, CLI run/chat runtime shells, and
-runtime metrics/trace/profile writers for implemented accepted-token paths. It
-also implements the `yvexd` server shell API for health, metrics, and model
-catalog status endpoints.
+parity path when a CUDA driver/device is available, fixture weight
+materialization into backend tensors, engine/session runtime objects, KV/logits
+availability skeletons, CLI run/chat runtime shells, and runtime
+metrics/trace/profile writers for implemented accepted-token paths. It also
+implements the `yvexd` server shell API for health, metrics, and model catalog
+status endpoints.
 
 Current public headers:
 
@@ -50,6 +51,7 @@ include/yvex/graph.h
 include/yvex/memory_plan.h
 include/yvex/planner.h
 include/yvex/backend.h
+include/yvex/weights.h
 include/yvex/engine.h
 include/yvex/session.h
 include/yvex/kv.h
@@ -77,6 +79,7 @@ Current aggregate:
 #include <yvex/memory_plan.h>
 #include <yvex/planner.h>
 #include <yvex/backend.h>
+#include <yvex/weights.h>
 #include <yvex/engine.h>
 #include <yvex/session.h>
 #include <yvex/kv.h>
@@ -797,6 +800,42 @@ execution, or inference.
 
 CUDA does not implement matmul, RMSNorm, attention, KV cache on GPU, sampler,
 prefill/decode, or generated output in L0.
+
+## Weight Materialization
+
+`include/yvex/weights.h` owns the M0 fixture weight materialization surface.
+It copies tensor bytes from an already-open GGUF artifact into backend-owned
+device tensors and exposes an inspectable weight table.
+
+```c
+typedef struct yvex_weight_table yvex_weight_table;
+typedef struct yvex_materialized_weight yvex_materialized_weight;
+
+int yvex_weight_table_materialize(yvex_weight_table **out,
+                                  const yvex_artifact *artifact,
+                                  const yvex_gguf *gguf,
+                                  const yvex_tensor_table *tensors,
+                                  yvex_backend *backend,
+                                  const yvex_materialize_options *options,
+                                  yvex_error *err);
+
+void yvex_weight_table_close(yvex_weight_table *weights);
+
+int yvex_weight_table_get_summary(const yvex_weight_table *weights,
+                                  yvex_materialize_summary *out,
+                                  yvex_error *err);
+```
+
+The weight table owns backend tensors and frees them on close. The backend must
+outlive the weight table. Materialization uses `absolute_offset` and
+`storage_bytes` from the YVEX tensor table, checks the artifact byte range, then
+performs a full-buffer backend write.
+
+M0 proves CPU materialization in the baseline and CUDA materialization under
+`make check-cuda` when a CUDA driver/device is available.
+
+M0 does not implement graph execution, model support, prefill/decode, sampler,
+logits computation, generated output, or `execution_ready: true`.
 
 ## Engine
 

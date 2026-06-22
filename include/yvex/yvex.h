@@ -52,5 +52,6 @@
 #include <yvex/tokenizer.h>
 #include <yvex/trace.h>
 #include <yvex/version.h>
+#include <yvex/weights.h>
 
 #endif /* YVEX_H */

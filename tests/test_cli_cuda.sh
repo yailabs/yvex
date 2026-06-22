@@ -56,6 +56,18 @@ contains "$OUT_DIR/plan_cuda_ready.out" "op_embed: yes"
 contains "$OUT_DIR/plan_cuda_ready.out" "execution_ready: false"
 contains "$OUT_DIR/plan_cuda_ready.out" "status: plan-only"
 
+"$YVEX_BIN" materialize --model "$FIXTURE" --backend cuda >"$OUT_DIR/materialize_cuda_ready.out" 2>"$OUT_DIR/materialize_cuda_ready.err"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    fail "materialize cuda exit code was $rc"
+fi
+contains "$OUT_DIR/materialize_cuda_ready.out" "materialization status: materialized"
+contains "$OUT_DIR/materialize_cuda_ready.out" "backend: cuda"
+contains "$OUT_DIR/materialize_cuda_ready.out" "tensors_materialized: 1"
+contains "$OUT_DIR/materialize_cuda_ready.out" "bytes_materialized: 128"
+contains "$OUT_DIR/materialize_cuda_ready.out" "execution_ready: false"
+contains "$OUT_DIR/materialize_cuda_ready.out" "status: weights-materialized"
+
 "$YVEX_BIN" help cuda-info >"$OUT_DIR/help_cuda_info.out" 2>"$OUT_DIR/help_cuda_info.err"
 rc=$?
 if [ "$rc" -ne 0 ]; then

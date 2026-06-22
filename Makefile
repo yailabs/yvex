@@ -67,6 +67,9 @@ CORE_SRCS := \
 	src/model/role.c \
 	src/model/tensor_table.c \
 	src/model/descriptor.c \
+	src/model/weights.c \
+	src/model/materialize.c \
+	src/model/materialize_report.c \
 	src/tokenizer/tokenizer.c \
 	src/tokenizer/vocab.c \
 	src/tokenizer/special.c \
@@ -130,6 +133,8 @@ TEST_SRCS := \
 	tests/test_dtype.c \
 	tests/test_tensor_table.c \
 	tests/test_model_descriptor.c \
+	tests/test_weights.c \
+	tests/test_materialize_cpu.c \
 	tests/test_tokenizer.c \
 	tests/test_prompt.c \
 	tests/test_shape.c \
@@ -158,7 +163,8 @@ CUDA_TEST_SRCS := \
 	tests/test_cuda_info.c \
 	tests/test_cuda_tensor.c \
 	tests/test_cuda_ops.c \
-	tests/test_cuda_parity.c
+	tests/test_cuda_parity.c \
+	tests/test_materialize_cuda.c
 
 CUDA_TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(CUDA_TEST_SRCS))
 
@@ -168,7 +174,7 @@ CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md \
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: K0 yvexd server shell"
+	@echo "status: M0 fixture weight materialization"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"
@@ -181,6 +187,7 @@ info:
 	@echo "planner: estimate-only implemented"
 	@echo "backend: CPU reference implemented"
 	@echo "backend_cuda: L0 dynamic driver attachment implemented"
+	@echo "weights: fixture materialization implemented"
 	@echo "engine: runtime object skeleton implemented"
 	@echo "session: lifecycle skeleton implemented"
 	@echo "run: accepted-only runtime shell implemented"
@@ -233,12 +240,13 @@ test-core: $(TEST_BINS)
 		"$$test_bin"; \
 	done
 
-test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh tests/test_cli_server.sh
+test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh tests/test_cli_server.sh tests/test_cli_materialize.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_run.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_chat.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_metrics.sh
 	YVEXD_BIN=$(YVEXD_BIN) sh tests/test_cli_server.sh
+	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_materialize.sh
 
 test: test-core test-cli
 
