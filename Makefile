@@ -116,6 +116,11 @@ CORE_SRCS := \
 	src/tools/gguf_template_validate.c \
 	src/tools/native_weights.c \
 	src/tools/native_weight_report.c \
+	src/tools/quant_policy.c \
+	src/tools/quant_policy_from_template.c \
+	src/tools/quant_policy_json.c \
+	src/tools/quant_policy_report.c \
+	src/tools/quant_policy_validate.c \
 	src/tools/safetensors.c \
 	src/tools/safetensors_json.c \
 	src/tools/source_manifest.c \
@@ -171,6 +176,7 @@ TEST_SRCS := \
 	tests/test_http.c \
 	tests/test_server.c \
 	tests/test_weight_mapping.c \
+	tests/test_quant_policy.c \
 	tests/test_gguf_template.c \
 	tests/test_deepseek_adapter.c \
 	tests/test_safetensors_header.c \
@@ -220,6 +226,7 @@ info:
 	@echo "native_weights: safetensors header inventory implemented"
 	@echo "gguf_template: contract validator implemented"
 	@echo "weight_mapping: tensor adapter contract implemented"
+	@echo "quant_policy: manifest validator implemented"
 	@echo "server_binary: yvexd shell implemented"
 	@echo "server_endpoints: health/metrics/models status implemented"
 	@echo "server_generation: not implemented"
@@ -264,7 +271,7 @@ test-core: $(TEST_BINS)
 		"$$test_bin"; \
 	done
 
-test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh tests/test_cli_server.sh tests/test_cli_materialize.sh tests/test_cli_source_manifest.sh tests/test_cli_native_weights.sh tests/test_cli_gguf_template.sh tests/test_cli_tensor_map.sh
+test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh tests/test_cli_server.sh tests/test_cli_materialize.sh tests/test_cli_source_manifest.sh tests/test_cli_native_weights.sh tests/test_cli_gguf_template.sh tests/test_cli_tensor_map.sh tests/test_cli_quant_policy.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_run.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_chat.sh
@@ -275,6 +282,7 @@ test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_native_weights.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_gguf_template.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_tensor_map.sh
+	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_quant_policy.sh
 
 test: test-core test-cli
 

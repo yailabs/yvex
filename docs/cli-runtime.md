@@ -33,6 +33,9 @@ yvex paths --run
 yvex paths --run --create
 yvex plan <path>
 yvex prompt <path> --user TEXT
+yvex quant-policy inspect --policy FILE
+yvex quant-policy validate --policy FILE [--template FILE]
+yvex quant-policy derive --template FILE --arch NAME --out FILE
 yvex run --model FILE --backend cpu|cuda --prompt TEXT
 yvex session <path> --backend cpu|cuda
 yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE
@@ -82,6 +85,7 @@ source_manifest: provenance JSON writer implemented
 native_weights: safetensors header inventory implemented
 gguf_template: contract validator implemented
 weight_mapping: tensor adapter contract implemented
+quant_policy: manifest validator implemented
 server_binary: yvexd shell implemented
 server_endpoints: health/metrics/models status implemented
 server_generation: not implemented
@@ -281,6 +285,38 @@ transform=transpose
 
 The transpose is a compatibility report only. OWI.4 does not transpose payload
 bytes or produce a GGUF.
+
+## Current `yvex quant-policy`
+
+`yvex quant-policy` handles declarative qtype policy manifests. It can inspect a
+policy, validate it, or derive a policy from a GGUF template tensor table. It
+does not quantize payloads, emit GGUF, run imatrix calibration, materialize
+weights, or infer.
+
+Commands:
+
+```text
+yvex quant-policy inspect --policy FILE
+yvex quant-policy validate --policy FILE [--template FILE]
+yvex quant-policy derive --template FILE --arch NAME --out FILE
+```
+
+DeepSeek DS4-template proof shape:
+
+```sh
+./build/bin/yvex quant-policy derive \
+  --template "$DS_TEMPLATE" \
+  --arch deepseek4 \
+  --out "$HOME/lab/manifests/deepseek/deepseek-v4-flash-quant-policy.json"
+
+./build/bin/yvex quant-policy validate \
+  --policy "$HOME/lab/manifests/deepseek/deepseek-v4-flash-quant-policy.json" \
+  --template "$DS_TEMPLATE"
+```
+
+Validation may be partial when a qtype is storage-known but compute-unsupported,
+when storage accounting is not implemented for a qtype, or when
+`requires_imatrix` is declared before OWI.6.
 
 ## Current `yvex inspect`
 

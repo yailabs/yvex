@@ -9,7 +9,7 @@ a command, option, exit status, or visible runtime posture.
 ## Current Milestone
 
 ```text
-OWI.4 - tensor mapping adapter contract
+OWI.5 - quantization policy manifest
 ```
 
 ## Binaries
@@ -37,6 +37,7 @@ source_manifest: provenance JSON writer implemented
 native_weights: safetensors header inventory implemented
 gguf_template: contract validator implemented
 weight_mapping: tensor adapter contract implemented
+quant_policy: manifest validator implemented
 ```
 
 CUDA in L0 means device probe, memory/tensor movement, and F32 embed parity. It
@@ -46,8 +47,8 @@ support.
 M0 adds fixture weight materialization into CPU/CUDA backend tensors. OWI.1
 adds source-manifest provenance for external official-weight source trees. OWI.4
 adds tensor mapping from native names to canonical roles and GGUF/template target
-names. These do not add conversion, GGUF emission, model execution, or
-inference.
+names. OWI.5 adds declarative quantization policy manifests. These do not add
+conversion, quantization execution, GGUF emission, model execution, or inference.
 
 ## `yvex` Commands
 
@@ -70,6 +71,7 @@ inference.
 | `paths` | `yvex paths [--project DIR] [--run] [--create]` | implemented |
 | `plan` | `yvex plan PATH [--backend cpu\|cuda] [--seq N] [--ctx N]` | implemented; plan-only |
 | `prompt` | `yvex prompt PATH --user TEXT [--system TEXT] [--assistant TEXT] [--tokens]` | implemented |
+| `quant-policy` | `yvex quant-policy inspect\|validate --policy FILE` | implemented; declarative qtype policy manifest |
 | `run` | `yvex run --model FILE --backend cpu\|cuda --prompt TEXT` | implemented; accepted-only |
 | `session` | `yvex session PATH --backend cpu\|cuda [--text TEXT] [--accept-tokens]` | implemented; diagnostics/token acceptance |
 | `source-manifest` | `yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE` | implemented; source provenance JSON writer |

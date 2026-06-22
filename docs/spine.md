@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after OWI.4
+after OWI.5
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-OWI.5 - Quantization policy manifest
+OWI.6 - Calibration and imatrix contract
 ```
 
 Implemented surface:
@@ -204,9 +204,17 @@ Weight mapping adapter contract:
   src/tools/weight_mapping_report.c
   src/tools/adapters/deepseek_adapter.c
 
+Quantization policy manifest:
+  include/yvex/quant_policy.h
+  src/tools/quant_policy.c
+  src/tools/quant_policy_json.c
+  src/tools/quant_policy_validate.c
+  src/tools/quant_policy_from_template.c
+  src/tools/quant_policy_report.c
+
 CLI:
   cli/yvex_cli.c
-  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat, source-manifest, native-weights, gguf-template, tensor-map
+  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat, source-manifest, native-weights, gguf-template, tensor-map, quant-policy
   implemented binaries: yvex, yvexd
 
 Tests:
@@ -242,6 +250,7 @@ Tests:
   tests/test_http.c
   tests/test_server.c
   tests/test_weight_mapping.c
+  tests/test_quant_policy.c
   tests/test_gguf_template.c
   tests/test_deepseek_adapter.c
   tests/test_safetensors_header.c
@@ -251,6 +260,7 @@ Tests:
   tests/test_cli_native_weights.sh
   tests/test_cli_source_manifest.sh
   tests/test_cli_tensor_map.sh
+  tests/test_cli_quant_policy.sh
   tests/test_cuda_info.c
   tests/test_cuda_tensor.c
   tests/test_cuda_ops.c
@@ -589,8 +599,8 @@ Future commands are listed only under the delivery that implements them.
 | OWI.2 | complete | Safetensors/native weight inventory reader |
 | OWI.3 | complete | GGUF template contract and validator |
 | OWI.4 | complete | Tensor mapping and architecture adapter contract |
-| OWI.5 | next | Quantization policy manifest |
-| OWI.6 | planned | Calibration and imatrix contract |
+| OWI.5 | complete | Quantization policy manifest |
+| OWI.6 | next | Calibration and imatrix contract |
 | OWI.7 | planned | First YVEX-owned GGUF emission from controlled source |
 | OWI.8 | planned | DeepSeek V4 Flash conversion bridge |
 | M1 | paused | DeepSeek GGUF materialization from provenance-controlled source |
@@ -2577,7 +2587,7 @@ OWI.5 can assign quantization policies by tensor role/class
 Status:
 
 ```text
-planned
+complete
 ```
 
 Owns:
@@ -2606,7 +2616,12 @@ Expected files:
 ```text
 include/yvex/quant_policy.h
 src/tools/quant_policy.c
+src/tools/quant_policy_json.c
+src/tools/quant_policy_validate.c
+src/tools/quant_policy_from_template.c
+src/tools/quant_policy_report.c
 tests/test_quant_policy.c
+tests/test_cli_quant_policy.sh
 ```
 
 Policy concepts:
@@ -2630,6 +2645,9 @@ separates storage materialization support from compute support
 rejects unknown qtypes
 records why a tensor is Q8_0/Q4_K/Q2_K/IQ2_XXS/etc.
 does not claim quantized inference
+derives a policy manifest from GGUF template tensor qtype distribution
+validates storage support separately from compute support
+exposes yvex quant-policy inspect/validate/derive
 ```
 
 Handoff:
@@ -2888,13 +2906,13 @@ git diff --check
 Next authorized milestone:
 
 ```text
-OWI.5 - Quantization policy manifest
+OWI.6 - Calibration and imatrix contract
 ```
 
 Current active milestone:
 
 ```text
-OWI.5 - Quantization policy manifest
+OWI.6 - Calibration and imatrix contract
 ```
 
 Paused milestone:
@@ -2903,11 +2921,11 @@ Paused milestone:
 M1 - DeepSeek GGUF materialization from provenance-controlled source
 ```
 
-M1 remains paused after OWI.4. The official source/provenance contract, native
-inventory, GGUF template contract, and tensor mapping adapter now exist; the
-quantization policy and generated/staged
-GGUF path still need the OWI ladder before DeepSeek materialization can be a
-real model-support step.
+M1 remains paused after OWI.5. The official source/provenance contract, native
+inventory, GGUF template contract, tensor mapping adapter, and quantization
+policy manifest now exist; calibration/imatrix and generated/staged GGUF path
+still need the OWI ladder before DeepSeek materialization can be a real
+model-support step.
 
 Model support waves must produce:
 

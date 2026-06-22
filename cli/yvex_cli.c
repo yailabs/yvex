@@ -92,6 +92,7 @@ static int command_native_weights(int argc, char **argv);
 static int command_paths(int argc, char **argv);
 static int command_plan(int argc, char **argv);
 static int command_prompt(int argc, char **argv);
+static int command_quant_policy(int argc, char **argv);
 static int command_run(int argc, char **argv);
 static int command_session(int argc, char **argv);
 static int command_source_manifest(int argc, char **argv);
@@ -227,6 +228,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex prompt <path> [--system TEXT] --user TEXT [--assistant TEXT] [--tokens]",
         "Renders the YVEX default prompt format. Arbitrary Jinja chat templates are not executed in E0.",
         command_prompt,
+    },
+    {
+        "quant-policy",
+        "Inspect, validate, or derive a quantization policy manifest.",
+        "yvex quant-policy inspect|validate --policy FILE [--template FILE] | yvex quant-policy derive --template FILE --arch NAME --out FILE",
+        "Handles declarative qtype policy manifests. It does not quantize tensors, emit GGUF, materialize weights, calibrate imatrix data, or infer.",
+        command_quant_policy,
     },
     {
         "run",
@@ -1226,6 +1234,7 @@ static int command_info(int argc, char **argv)
     printf("native_weights: safetensors header inventory implemented\n");
     printf("gguf_template: contract validator implemented\n");
     printf("weight_mapping: tensor adapter contract implemented\n");
+    printf("quant_policy: manifest validator implemented\n");
     printf("server_binary: yvexd shell implemented\n");
     printf("server_endpoints: health/metrics/models status implemented\n");
     printf("server_generation: not implemented\n");
@@ -1773,6 +1782,147 @@ static int command_tensor_map(int argc, char **argv)
     printf("status: tensor-map\n");
     yvex_weight_mapping_table_close(table);
     return 0;
+}
+
+static void print_quant_policy_rules(const yvex_quant_policy *policy)
+{
+    unsigned long long i;
+
+    for (i = 0; i < yvex_quant_policy_rule_count(policy); ++i) {
+        const yvex_quant_policy_rule *rule = yvex_quant_policy_rule_at(policy, i);
+        if (!rule) continue;
+        printf("%llu selector=%s:%s qtype=%s storage_supported=%s compute_supported=%s requires_imatrix=%s\n",
+               i,
+               yvex_quant_selector_kind_name(rule->selector_kind),
+               rule->selector,
+               yvex_quant_qtype_name(rule->qtype),
+               rule->storage_supported ? "yes" : "no",
+               rule->compute_supported ? "yes" : "no",
+               rule->requires_imatrix ? "yes" : "no");
+    }
+}
+
+static int parse_quant_policy_common(int argc, char **argv, int start,
+                                     const char **policy_path,
+                                     const char **template_path,
+                                     const char **arch,
+                                     const char **out_path)
+{
+    int i = start;
+
+    while (i < argc) {
+        if (i + 1 >= argc) {
+            fprintf(stderr, "yvex: quant-policy option requires a value: %s\n", argv[i]);
+            return 2;
+        }
+        if (strcmp(argv[i], "--policy") == 0) {
+            *policy_path = argv[i + 1];
+        } else if (strcmp(argv[i], "--template") == 0) {
+            *template_path = argv[i + 1];
+        } else if (strcmp(argv[i], "--arch") == 0) {
+            *arch = argv[i + 1];
+        } else if (strcmp(argv[i], "--out") == 0) {
+            *out_path = argv[i + 1];
+        } else {
+            fprintf(stderr, "yvex: unknown quant-policy option: %s\n", argv[i]);
+            return 2;
+        }
+        i += 2;
+    }
+    return 0;
+}
+
+static int command_quant_policy(int argc, char **argv)
+{
+    const char *policy_path = NULL;
+    const char *template_path = NULL;
+    const char *arch = NULL;
+    const char *out_path = NULL;
+    yvex_quant_policy *policy = NULL;
+    yvex_quant_policy_summary summary;
+    yvex_error err;
+    int rc;
+
+    yvex_error_clear(&err);
+    if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        print_command_help(stdout, find_command("quant-policy"));
+        return 0;
+    }
+    if (argc < 3) {
+        fprintf(stderr, "yvex: quant-policy requires inspect, validate, or derive\n");
+        return 2;
+    }
+    rc = parse_quant_policy_common(argc, argv, 3, &policy_path, &template_path, &arch, &out_path);
+    if (rc != 0) return rc;
+
+    if (strcmp(argv[2], "derive") == 0) {
+        if (!template_path || !arch || !out_path) {
+            fprintf(stderr, "yvex: quant-policy derive requires --template FILE --arch NAME --out FILE\n");
+            return 2;
+        }
+        rc = yvex_quant_policy_create_from_template(&policy, template_path, arch, &err);
+        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        rc = yvex_quant_policy_write_json(out_path, policy, &err);
+        if (rc != YVEX_OK) {
+            yvex_quant_policy_close(policy);
+            return print_yvex_error(&err, exit_for_status(rc));
+        }
+        rc = yvex_quant_policy_get_summary(policy, &summary, &err);
+        if (rc != YVEX_OK) {
+            yvex_quant_policy_close(policy);
+            return print_yvex_error(&err, exit_for_status(rc));
+        }
+        printf("quant policy: derived\n");
+        printf("architecture: %s\n", summary.architecture);
+        printf("template: %s\n", template_path);
+        printf("rules: %llu\n", summary.rule_count);
+        printf("requires_imatrix: %llu\n", summary.requires_imatrix_count);
+        printf("out: %s\n", out_path);
+        printf("status: quant-policy-written\n");
+        yvex_quant_policy_close(policy);
+        return 0;
+    }
+
+    if (strcmp(argv[2], "inspect") == 0 || strcmp(argv[2], "validate") == 0) {
+        if (!policy_path) {
+            fprintf(stderr, "yvex: quant-policy %s requires --policy FILE\n", argv[2]);
+            return 2;
+        }
+        rc = yvex_quant_policy_open(&policy, policy_path, &err);
+        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        if (strcmp(argv[2], "validate") == 0) {
+            rc = yvex_quant_policy_validate(policy, template_path, &err);
+            if (rc != YVEX_OK) {
+                yvex_quant_policy_close(policy);
+                return print_yvex_error(&err, exit_for_status(rc));
+            }
+        }
+        rc = yvex_quant_policy_get_summary(policy, &summary, &err);
+        if (rc != YVEX_OK) {
+            yvex_quant_policy_close(policy);
+            return print_yvex_error(&err, exit_for_status(rc));
+        }
+        printf("quant policy: %s\n", argv[2]);
+        printf("policy: %s\n", policy_path);
+        if (template_path) printf("template: %s\n", template_path);
+        printf("name: %s\n", summary.name);
+        printf("architecture: %s\n", summary.architecture);
+        printf("rules: %llu\n", summary.rule_count);
+        printf("issues: %llu\n", summary.issue_count);
+        printf("requires_imatrix: %llu\n", summary.requires_imatrix_count);
+        printf("storage_supported: %llu\n", summary.storage_supported_count);
+        printf("compute_supported: %llu\n", summary.compute_supported_count);
+        printf("\n");
+        if (strcmp(argv[2], "inspect") == 0) {
+            print_quant_policy_rules(policy);
+        }
+        printf("status: %s\n", yvex_quant_policy_status_name(summary.status));
+        yvex_quant_policy_close(policy);
+        return 0;
+    }
+
+    fprintf(stderr, "yvex: unknown quant-policy subcommand: %s\n", argv[2]);
+    return 2;
 }
 
 static int command_paths(int argc, char **argv)

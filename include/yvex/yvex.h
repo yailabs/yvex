@@ -47,6 +47,7 @@
 #include <yvex/planner.h>
 #include <yvex/profile.h>
 #include <yvex/prompt.h>
+#include <yvex/quant_policy.h>
 #include <yvex/server.h>
 #include <yvex/session.h>
 #include <yvex/source_manifest.h>

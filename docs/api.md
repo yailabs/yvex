@@ -16,7 +16,8 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-OWI.4 implements a tensor mapping adapter contract, OWI.3 implements a GGUF
+OWI.5 implements a quantization policy manifest, OWI.4 implements a tensor
+mapping adapter contract, OWI.3 implements a GGUF
 template contract validator, OWI.2 implements a
 safetensors/native-weight inventory surface, and OWI.1
 implements a source-manifest provenance surface in addition to the M0 runtime
@@ -51,6 +52,7 @@ include/yvex/tensor.h
 include/yvex/model.h
 include/yvex/native_weights.h
 include/yvex/weight_mapping.h
+include/yvex/quant_policy.h
 include/yvex/tokenizer.h
 include/yvex/prompt.h
 include/yvex/op.h
@@ -83,6 +85,7 @@ Current aggregate:
 #include <yvex/model.h>
 #include <yvex/native_weights.h>
 #include <yvex/weight_mapping.h>
+#include <yvex/quant_policy.h>
 #include <yvex/tokenizer.h>
 #include <yvex/prompt.h>
 #include <yvex/op.h>
@@ -472,6 +475,58 @@ compatibility checks. It does not load safetensors payloads, transpose bytes,
 quantize, emit GGUF, materialize, or execute a model. DeepSeek `embed.weight`
 maps contractually to `token_embedding -> token_embd.weight`; template shape
 compatibility may report `requires_transpose` without moving bytes.
+
+## Quantization Policy
+
+OWI.5 adds a declarative quantization policy API. A policy records intended
+storage qtypes by tensor role, tensor name, tensor pattern, layer range, expert
+group, or default selector. It is a manifest/validation surface only: no tensor
+payloads are quantized, no GGUF is emitted, no calibration runs, and no compute
+support is implied.
+
+```c
+typedef struct yvex_quant_policy yvex_quant_policy;
+
+typedef enum {
+    YVEX_QUANT_QTYPE_UNKNOWN = 0,
+    YVEX_QUANT_QTYPE_F32,
+    YVEX_QUANT_QTYPE_F16,
+    YVEX_QUANT_QTYPE_BF16,
+    YVEX_QUANT_QTYPE_Q8_0,
+    YVEX_QUANT_QTYPE_Q4_0,
+    YVEX_QUANT_QTYPE_Q4_K,
+    YVEX_QUANT_QTYPE_Q5_K,
+    YVEX_QUANT_QTYPE_Q6_K,
+    YVEX_QUANT_QTYPE_Q2_K,
+    YVEX_QUANT_QTYPE_IQ2_XXS,
+    YVEX_QUANT_QTYPE_IQ2_XS,
+    YVEX_QUANT_QTYPE_IQ3_XXS,
+    YVEX_QUANT_QTYPE_IQ4_NL,
+    YVEX_QUANT_QTYPE_OTHER
+} yvex_quant_qtype;
+```
+
+```c
+int yvex_quant_policy_open(yvex_quant_policy **out, const char *path, yvex_error *err);
+void yvex_quant_policy_close(yvex_quant_policy *policy);
+int yvex_quant_policy_write_json(const char *out_path,
+                                 const yvex_quant_policy *policy,
+                                 yvex_error *err);
+int yvex_quant_policy_create_from_template(yvex_quant_policy **out,
+                                           const char *template_path,
+                                           const char *architecture,
+                                           yvex_error *err);
+int yvex_quant_policy_validate(yvex_quant_policy *policy,
+                               const char *template_path,
+                               yvex_error *err);
+```
+
+Policy validation separates `storage_supported` from `compute_supported`.
+Storage support is tied to the existing D0 dtype/qtype storage accounting
+registry. Compute support remains false for quantized qtypes until a backend
+actually implements execution over those qtypes. `requires_imatrix` is recorded
+as manifest intent and remains a partial validation issue until OWI.6 formalizes
+calibration/imatrix artifacts.
 
 Default path resolution requires `HOME`; project-local path construction uses
 the explicit project root argument. Run directory creation creates directories
