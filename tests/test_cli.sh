@@ -85,7 +85,7 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: J0 runtime metrics and tracing"
+contains "$OUT_DIR/info.out" "status: K0 yvexd server shell"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "artifact: open/read implemented"
@@ -104,9 +104,13 @@ contains "$OUT_DIR/info.out" "metrics: runtime collector implemented"
 contains "$OUT_DIR/info.out" "trace: JSONL writer implemented"
 contains "$OUT_DIR/info.out" "profile: JSON writer implemented"
 contains "$OUT_DIR/info.out" "run_artifacts: metrics/trace/profile files implemented"
+contains "$OUT_DIR/info.out" "server_binary: yvexd shell implemented"
+contains "$OUT_DIR/info.out" "server_endpoints: health/metrics/models status implemented"
+contains "$OUT_DIR/info.out" "server_generation: not implemented"
 contains "$OUT_DIR/info.out" "kv: unavailable skeleton implemented"
 contains "$OUT_DIR/info.out" "logits: unavailable skeleton implemented"
 contains "$OUT_DIR/info.out" "generation: unsupported"
+contains "$OUT_DIR/info.out" "server: yvexd status shell implemented"
 
 run_ok commands "$YVEX_BIN" commands
 contains "$OUT_DIR/commands.out" "Implemented commands:"

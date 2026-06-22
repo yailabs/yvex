@@ -12,6 +12,7 @@
 #   make info
 #   make lib
 #   make cli
+#   make server
 #   make test
 #   make test-core
 #   make test-cli
@@ -23,7 +24,7 @@
 #   - YVEX is CLI-only.
 #   - build/bin/yvex is the current user-facing executable surface.
 
-.PHONY: info lib cli test test-core test-cli smoke check check-docs check-guardrails clean
+.PHONY: info lib cli server test test-core test-cli smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -40,6 +41,7 @@ TEST_DIR := $(BUILD_DIR)/tests
 
 LIBYVEX := $(LIB_DIR)/libyvex.a
 YVEX_BIN := $(BIN_DIR)/yvex
+YVEXD_BIN := $(BIN_DIR)/yvexd
 
 CORE_SRCS := \
 	src/core/version.c \
@@ -89,7 +91,12 @@ CORE_SRCS := \
 	src/metrics/profile.c \
 	src/metrics/run_artifacts.c \
 	src/metrics/time.c \
-	src/metrics/json_writer.c
+	src/metrics/json_writer.c \
+	src/server/server.c \
+	src/server/http.c \
+	src/server/router.c \
+	src/server/handlers.c \
+	src/server/server_metrics.c
 
 CORE_OBJS := $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 
@@ -122,7 +129,9 @@ TEST_SRCS := \
 	tests/test_metrics.c \
 	tests/test_trace.c \
 	tests/test_profile.c \
-	tests/test_run_artifacts.c
+	tests/test_run_artifacts.c \
+	tests/test_http.c \
+	tests/test_server.c
 
 TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 
@@ -131,7 +140,7 @@ CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md \
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: J0 runtime metrics and tracing"
+	@echo "status: K0 yvexd server shell"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"
@@ -151,16 +160,21 @@ info:
 	@echo "trace: JSONL writer implemented"
 	@echo "profile: JSON writer implemented"
 	@echo "run_artifacts: metrics/trace/profile files implemented"
+	@echo "server_binary: yvexd shell implemented"
+	@echo "server_endpoints: health/metrics/models status implemented"
+	@echo "server_generation: not implemented"
 	@echo "kv: unavailable skeleton implemented"
 	@echo "logits: unavailable skeleton implemented"
 	@echo "generation: unsupported"
 	@echo "inference: not implemented"
 	@echo "cuda: not implemented"
-	@echo "server: not implemented"
+	@echo "server: yvexd status shell implemented"
 
 lib: $(LIBYVEX)
 
 cli: $(YVEX_BIN)
+
+server: $(YVEXD_BIN)
 
 test-core: $(TEST_BINS)
 	@for test_bin in $(TEST_BINS); do \
@@ -168,17 +182,18 @@ test-core: $(TEST_BINS)
 		"$$test_bin"; \
 	done
 
-test-cli: $(YVEX_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh
+test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh tests/test_cli_server.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_run.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_chat.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_metrics.sh
+	YVEXD_BIN=$(YVEXD_BIN) sh tests/test_cli_server.sh
 
 test: test-core test-cli
 
 smoke: test-cli
 
-check: check-docs check-guardrails lib cli test smoke
+check: check-docs check-guardrails lib cli server test smoke
 	@echo "yvex check: ok"
 
 $(LIBYVEX): $(CORE_OBJS)
@@ -190,6 +205,10 @@ $(OBJ_DIR)/%.o: src/%.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 $(YVEX_BIN): cli/yvex_cli.c $(LIBYVEX)
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) -o $@
+
+$(YVEXD_BIN): server/yvexd.c $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) -o $@
 
@@ -227,6 +246,8 @@ check-docs:
 	@grep -F "H0 - Engine and session runtime" docs/spine.md >/dev/null
 	@grep -F "I0 - CLI run/chat runtime" docs/spine.md >/dev/null
 	@grep -F "J0 - Metrics and tracing" docs/spine.md >/dev/null
+	@grep -F "K0 - yvexd server/provider" docs/spine.md >/dev/null
+	@grep -F "L0 - CUDA/DGX Spark backend" docs/spine.md >/dev/null
 	@grep -F "Implemented by:" docs/spine.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Backend Contract" docs/backend-contract.md >/dev/null
@@ -243,10 +264,10 @@ check-guardrails:
 	@test ! -d protocols
 	@test ! -e src/README.md
 	@test ! -e tests/README.md
-	@test ! -e include/yvex/server.h
 	@test ! -e include/yvex/sampler.h
-	@test ! -d src/server
 	@test ! -d backends/cuda
+	@test -f include/yvex/server.h
+	@test -d src/server
 	@test ! -d fixtures
 	@test -d cli
 	@test -f cli/yvex_cli.c
@@ -254,7 +275,7 @@ check-guardrails:
 	@test ! -d app
 	@test ! -d desktop
 	@! grep -RIn -E "N[E]T\\.SPINE|N[E]T moves streams|C[L]ORI|c[l]ori-codename|docs/arc[h]ive|c[l]ori_|libc[l]ori|c[l]orid|include/c[l]ori|~/\\.config/c[l]ori|github\\.com/yailabs/c[l]ori|yailabs/c[l]ori" --exclude-dir=.git --exclude-dir=build . >/dev/null
-	@! grep -Ei "production-read[y]|implemented infer[e]nce|implemented ser[v]er|supports C[U]DA|supports M[e]tal|supports M[L]X|supports llama\\.cpp|OpenAI-compatible ser[v]er" README.md >/dev/null
+	@! grep -Ei "production-read[y]|implemented infer[e]nce|implemented ser[v]er|supports C[U]DA|supports M[e]tal|supports M[L]X|supports llama\\.cpp|O[p]enAI-compatible ser[v]er" README.md >/dev/null
 	@! grep -Ei "benchmark results" README.md | grep -vi "benchmark results: none" >/dev/null
 
 clean:

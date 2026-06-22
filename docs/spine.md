@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after J0
+after K0
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-K0 - yvexd server/provider
+L0 - CUDA/DGX Spark backend
 ```
 
 Implemented surface:
@@ -163,9 +163,19 @@ Metrics / tracing:
   src/metrics/time.c
   src/metrics/json_writer.c
 
+Server shell:
+  include/yvex/server.h
+  src/server/server.c
+  src/server/http.c
+  src/server/router.c
+  src/server/handlers.c
+  src/server/server_metrics.c
+  server/yvexd.c
+
 CLI:
   cli/yvex_cli.c
   implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, engine, session, run, chat
+  implemented binaries: yvex, yvexd
 
 Tests:
   tests/test_status.c
@@ -197,19 +207,23 @@ Tests:
   tests/test_trace.c
   tests/test_profile.c
   tests/test_run_artifacts.c
+  tests/test_http.c
+  tests/test_server.c
   tests/test_cli_run.sh
   tests/test_cli_chat.sh
   tests/test_cli_metrics.sh
+  tests/test_cli_server.sh
   tests/test_cli.sh
 ```
 
 Not implemented:
 
 ```text
-server/provider
 CUDA
 model support ladder execution
 inference
+generation endpoints
+compatibility claims
 ```
 
 Interface policy:
@@ -251,7 +265,7 @@ Planned public surfaces:
 session
 chat/run
 metrics/tracing
-server/provider
+server shell
 ```
 
 ## 2. Implementation Rules
@@ -316,8 +330,8 @@ Future commands are listed only under the delivery that implements them.
 | H0 | complete | Engine and session runtime |
 | I0 | complete | CLI run/chat runtime |
 | J0 | complete | Metrics and tracing |
-| K0 | next | yvexd server/provider |
-| L0 | planned | CUDA/DGX Spark backend |
+| K0 | complete | yvexd server/provider |
+| L0 | next | CUDA/DGX Spark backend |
 | M0-M8 | planned | Model support ladder |
 
 ### P0 - Repository reset and technical spine
@@ -1321,7 +1335,7 @@ Does not own:
 server process
 new backend kernels
 CUDA
-provider compatibility
+compatibility claims
 real generation
 ```
 
@@ -1452,7 +1466,7 @@ no decode/generation metrics are emitted
 Handoff:
 
 ```text
-K0 receives observability primitives for server/provider behavior.
+K0 receives observability primitives for server shell behavior.
 L0 receives measurement hooks for backend parity and timing.
 ```
 
@@ -1461,7 +1475,7 @@ L0 receives measurement hooks for backend parity and timing.
 Status:
 
 ```text
-planned
+complete
 ```
 
 Owns:
@@ -1472,7 +1486,8 @@ HTTP server skeleton
 health endpoint
 metrics endpoint
 local provider boundary
-future OpenAI-compatible subset only when implemented
+model catalog status shell
+unsupported generation endpoint response
 ```
 
 Does not own:
@@ -1480,8 +1495,10 @@ Does not own:
 ```text
 YAI governance
 YAI case state
-provider compatibility claims without tests
 new model execution behavior
+completion/chat completion behavior
+streamed generated output
+compatibility claims
 ```
 
 Creates / modifies:
@@ -1490,9 +1507,12 @@ Creates / modifies:
 include/yvex/server.h
 src/server/
 server/yvexd.c
-tests/test_server.c or shell smoke
+tests/test_http.c
+tests/test_server.c
+tests/test_cli_server.sh
 Makefile
 docs/api.md
+docs/cli-runtime.md
 docs/spine.md
 ```
 
@@ -1500,7 +1520,12 @@ CLI surface:
 
 ```text
 yvexd --help
-yvexd health or HTTP /health
+yvexd --version
+yvexd --host 127.0.0.1 --port PORT --one-request
+HTTP /health
+HTTP /metrics
+HTTP /v1/models
+HTTP /v1/completions returns 501 unsupported
 ```
 
 Tests:
@@ -1508,22 +1533,26 @@ Tests:
 ```text
 server help tests
 health endpoint tests
-metrics endpoint tests when implemented
-stream conformance tests when implemented
+metrics endpoint tests
+model catalog endpoint tests
+unsupported generation endpoint tests
+localhost one-request smoke tests
 ```
 
 Acceptance:
 
 ```text
 health endpoint is tested
-model endpoints are claimed only after implementation
-provider compatibility is tested before being claimed
+metrics endpoint is tested
+model catalog status endpoint is tested
+generation endpoint returns unsupported status
+no generation or compatibility claim exists
 ```
 
 Handoff:
 
 ```text
-YAI may consume YVEX as a local provider boundary only after command-visible behavior exists.
+L0 receives server-observable status and metrics shell, but no generation provider path.
 ```
 
 ### L0 - CUDA/DGX Spark backend
@@ -1551,7 +1580,7 @@ Does not own:
 ```text
 CUDA support claims before tests
 model support ladder execution by itself
-server/provider behavior
+server shell behavior
 ```
 
 Creates / modifies:
@@ -1683,7 +1712,8 @@ future model work must state the exact support level and proof command.
 | G0 | 8d60c2b | Added backend ABI, CPU reference backend, CPU tensor allocation/read/write/copy, capability reporting, embed op proof, backend CLI, and tests. |
 | H0 | e009e08 | Added engine/session runtime objects, KV/logits availability skeletons, session state machine, token acceptance diagnostics, engine/session CLI, and tests. |
 | I0 | 425fab3 | Added accepted-only run/chat runtime shell, slash commands, JSON run output, piped chat tests, and CLI smoke coverage. |
-| J0 | current commit | Added runtime metrics collector, trace JSONL writer, profile JSON writer, run artifacts, run/chat instrumentation, and tests. |
+| J0 | 5986659 | Added runtime metrics collector, trace JSONL writer, profile JSON writer, run artifacts, run/chat instrumentation, and tests. |
+| K0 | current commit | Added yvexd server shell, HTTP status router, health/metrics/model catalog endpoints, unsupported generation endpoint response, and tests. |
 
 Current implemented CLI command set:
 
@@ -1709,6 +1739,13 @@ tensors
 version
 ```
 
+Current implemented binary set:
+
+```text
+yvex
+yvexd
+```
+
 Current validation baseline:
 
 ```text
@@ -1723,36 +1760,34 @@ git diff --check
 Next authorized milestone:
 
 ```text
-K0 - yvexd server/provider
+L0 - CUDA/DGX Spark backend
 ```
 
-K0 starts only after J0 validation passes and the J0 commit is recorded.
+L0 starts only after K0 validation passes and the K0 commit is recorded.
 
-K0 must produce:
+L0 must produce:
 
 ```text
-yvexd process skeleton
-provider/server boundary
-health endpoint
-metrics endpoint over J0 observability primitives
+CUDA backend attachment
+device memory status
+explicit CUDA build/test path
+first CPU/CUDA parity proof
 ```
 
-K0 must not produce:
+L0 must not produce:
 
 ```text
-CUDA backend
 broad inference claim
-OpenAI-compatible model endpoint claim before implementation
+model support ladder claim without command proof
 ```
 
-Required K0 proof:
+Required L0 proof:
 
 ```text
 make clean
 make check
 make smoke
-server/provider smoke proof
-no CUDA claim
+CUDA-specific proof if the toolchain is present
 no broad inference claim
 ```
 
@@ -1764,7 +1799,7 @@ The planned delivery catalogue is linear:
 H0 consumes G0/F0/E0 and creates engine/session runtime.
 I0 consumes H0 and creates user-facing run/chat commands.
 J0 consumes H0/I0 and creates metrics/tracing.
-K0 consumes H0/I0/J0 and creates yvexd provider surface.
+K0 consumes H0/I0/J0 and creates the yvexd server shell.
 L0 consumes G0/J0 and creates CUDA/DGX Spark backend path.
 M0-M8 consume the implemented runtime/backends and assign model support levels.
 ```
@@ -1935,7 +1970,7 @@ Implemented by:
 
 ```text
 P0: boundary definition
-K0: local provider surface when implemented
+K0: local server shell when implemented
 M0-M8: model support evidence consumed by YAI only after command proof
 ```
 
@@ -2078,8 +2113,8 @@ and a command-visible proof exists.
 Current handoff:
 
 ```text
-from: J0 - Metrics and tracing
-to: K0 - yvexd server/provider
-authorized work: yvexd process skeleton, health/metrics endpoints, and provider boundary
-blocked work: L0 and later until K0 acceptance passes
+from: K0 - yvexd server/provider
+to: L0 - CUDA/DGX Spark backend
+authorized work: CUDA backend attachment, device memory status, explicit build/test path, and first parity proof
+blocked work: M0-M8 model support ladder until backend/session execution proof exists
 ```

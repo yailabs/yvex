@@ -16,19 +16,20 @@ provider boundary.
 
 ## Status
 
-This repository has completed C0, the artifact and GGUF header/probe base.
+This repository has completed K0, the yvexd server shell.
 
 Current state:
 
 ```text
 canonical spine: docs/spine.md
-runtime code: C0 core/filesystem/artifact skeleton implemented
-public headers: version/status/error/log/fs/artifact/gguf implemented
-CLI binary: build/bin/yvex implemented for info/help/commands/version/paths/inspect
-GGUF parser: header/probe only
-tokenizer: not implemented
+runtime code: core/filesystem/artifact/GGUF/model/tokenizer/graph/backend/session shell implemented
+public headers: implemented headers are aggregated by include/yvex/yvex.h
+CLI binary: build/bin/yvex accepted-only runtime shell implemented
+server binary: build/bin/yvexd status shell implemented
+GGUF parser: metadata and tensor directory implemented
+tokenizer: fixture encode/decode implemented
 CUDA backend: not implemented
-server: not implemented
+server generation: not implemented
 benchmark results: none
 ```
 

@@ -884,7 +884,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: J0 runtime metrics and tracing\n");
+    printf("status: K0 yvexd server shell\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -903,13 +903,16 @@ static int command_info(int argc, char **argv)
     printf("trace: JSONL writer implemented\n");
     printf("profile: JSON writer implemented\n");
     printf("run_artifacts: metrics/trace/profile files implemented\n");
+    printf("server_binary: yvexd shell implemented\n");
+    printf("server_endpoints: health/metrics/models status implemented\n");
+    printf("server_generation: not implemented\n");
     printf("kv: unavailable skeleton implemented\n");
     printf("logits: unavailable skeleton implemented\n");
     printf("generation: unsupported\n");
     printf("backend_cuda: not implemented\n");
     printf("inference: not implemented\n");
     printf("cuda: not implemented\n");
-    printf("server: not implemented\n");
+    printf("server: yvexd status shell implemented\n");
     return 0;
 }
 

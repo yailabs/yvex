@@ -4,7 +4,7 @@ This document owns CLI behavior. YVEX is CLI-only.
 
 ## Current Implemented Commands
 
-The J0 binary implements exactly:
+The K0 command-line surfaces implement exactly:
 
 ```text
 yvex
@@ -33,6 +33,9 @@ yvex tokenizer <path>
 yvex tokenize <path> --text TEXT
 yvex tensors <path>
 yvex version
+yvexd --help
+yvexd --version
+yvexd --host HOST --port PORT [--model FILE] [--backend cpu|cuda] [--one-request]
 ```
 
 Current commands must stay backed by the command table in `cli/yvex_cli.c`.
@@ -46,7 +49,7 @@ name: YVEX
 version: 0.1.0
 language: C
 interface: CLI-only
-status: J0 runtime metrics and tracing
+status: K0 yvexd server shell
 library: libyvex.a
 filesystem: implemented
 artifact: open/read implemented
@@ -65,13 +68,16 @@ metrics: runtime collector implemented
 trace: JSONL writer implemented
 profile: JSON writer implemented
 run_artifacts: metrics/trace/profile files implemented
+server_binary: yvexd shell implemented
+server_endpoints: health/metrics/models status implemented
+server_generation: not implemented
 kv: unavailable skeleton implemented
 logits: unavailable skeleton implemented
 generation: unsupported
 backend_cuda: not implemented
 inference: not implemented
 cuda: not implemented
-server: not implemented
+server: yvexd status shell implemented
 ```
 
 It reports only implemented surfaces.
@@ -544,6 +550,39 @@ Implemented slash commands:
 /quit
 ```
 
+## Current `yvexd`
+
+`yvexd` is the K0 server shell. It opens a local HTTP listener and serves
+status endpoints only.
+
+```sh
+yvexd --host 127.0.0.1 --port 8080
+yvexd --host 127.0.0.1 --port 8080 --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
+yvexd --host 127.0.0.1 --port 8080 --one-request
+```
+
+Implemented endpoints:
+
+```text
+GET /health
+GET /metrics
+GET /v1/models
+GET /
+```
+
+Generation endpoint requests return HTTP 501 with a `yvex.error.v1` JSON body.
+
+The server shell reports:
+
+```text
+generation_available: false
+engine_status: partial or not_loaded
+backend_status: ready or not_loaded
+```
+
+K0 does not implement completion generation, chat-generation endpoint behavior,
+streamed generated output, auth, TLS, or multi-client session pooling.
+
 ## Current Runtime Metrics And Trace Files
 
 J0 records only implemented runtime-shell work:
@@ -684,6 +723,7 @@ must never mix logs or progress into stdout.
 
 ```text
 YVEX is CLI-only.
-The only user-facing executable surface in the current repository is build/bin/yvex.
+The user-facing executable surfaces in the current repository are build/bin/yvex
+and build/bin/yvexd.
 New interface surfaces require an explicit roadmap decision before implementation.
 ```

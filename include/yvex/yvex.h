@@ -45,6 +45,7 @@
 #include <yvex/planner.h>
 #include <yvex/profile.h>
 #include <yvex/prompt.h>
+#include <yvex/server.h>
 #include <yvex/session.h>
 #include <yvex/status.h>
 #include <yvex/tensor.h>

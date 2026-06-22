@@ -16,7 +16,7 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-J0 implements the core version/status/error/log surface, runtime filesystem
+K0 implements the core version/status/error/log surface, runtime filesystem
 paths/run directories, artifact byte views, range checks, GGUF header/probe,
 metadata, raw tensor directory parsing, dtype/qtype storage accounting, YVEX
 tensor table rows, a descriptor-only model summary, tokenizer metadata/vocab
@@ -25,6 +25,8 @@ planning artifacts, shape helpers, estimate-only memory plans, plan objects,
 backend ABI wrappers, the CPU reference backend, engine/session runtime
 objects, KV/logits availability skeletons, CLI run/chat runtime shells, and
 runtime metrics/trace/profile writers for implemented accepted-token paths.
+It also implements the `yvexd` server shell API for health, metrics, and model
+catalog status endpoints.
 
 Current public headers:
 
@@ -54,6 +56,7 @@ include/yvex/logits.h
 include/yvex/metrics.h
 include/yvex/trace.h
 include/yvex/profile.h
+include/yvex/server.h
 ```
 
 Current aggregate:
@@ -80,6 +83,7 @@ Current aggregate:
 #include <yvex/metrics.h>
 #include <yvex/trace.h>
 #include <yvex/profile.h>
+#include <yvex/server.h>
 #include <yvex/log.h>
 #include <yvex/status.h>
 #include <yvex/version.h>
@@ -920,8 +924,47 @@ decode tokens/sec
 TTFT
 generated token counters
 CUDA timing
-server/provider metrics
+server status metrics
 inference benchmarks
+```
+
+## Server Shell API
+
+K0 adds `include/yvex/server.h` and the `yvexd` binary.
+
+Implemented:
+
+```text
+yvex_server
+yvex_server_options
+yvex_server_summary
+yvex_server_create
+yvex_server_serve
+yvex_server_stop
+yvex_server_close
+```
+
+Implemented HTTP status endpoints:
+
+```text
+GET /health
+GET /metrics
+GET /v1/models
+GET /
+```
+
+Generation endpoint requests return an unsupported JSON error in K0.
+
+The K0 server shell does not implement:
+
+```text
+model generation
+prefill/decode execution
+streamed generated output
+authentication
+TLS
+multi-client session pool
+compatibility claim
 ```
 
 ## Future API Families
@@ -930,7 +973,6 @@ The families below are design contracts, not implemented APIs:
 
 ```text
 sampler
-server/provider
 ```
 
 Future headers may be added only when the corresponding implementation, tests,
