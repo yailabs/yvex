@@ -16,14 +16,14 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-H0 implements the core version/status/error/log surface, runtime filesystem
+I0 implements the core version/status/error/log surface, runtime filesystem
 paths/run directories, artifact byte views, range checks, GGUF header/probe,
 metadata, raw tensor directory parsing, dtype/qtype storage accounting, YVEX
 tensor table rows, a descriptor-only model summary, tokenizer metadata/vocab
 tables, fixture tokenizer encode/decode, default prompt rendering, graph
 planning artifacts, shape helpers, estimate-only memory plans, plan objects,
 backend ABI wrappers, the CPU reference backend, engine/session runtime
-objects, and KV/logits availability skeletons.
+objects, KV/logits availability skeletons, and CLI run/chat runtime shells.
 
 Current public headers:
 
@@ -855,6 +855,34 @@ int yvex_logits_get_summary(const yvex_logits *logits,
 
 These objects are state and sizing skeletons only. They do not allocate backend
 KV tensors, compute logits, expose a sampler, or imply generation support.
+
+## CLI Runtime Shell
+
+I0 adds `yvex run` and `yvex chat` as CLI runtime surfaces over the existing
+engine/session APIs. I0 adds no new public C API. The chat runtime helpers under
+`src/chat/` are private implementation code used by the CLI and tests.
+
+The I0 runtime shell can:
+
+```text
+open engine/backend/session
+tokenize fixture prompt text
+accept prompt tokens into the session
+report accepted-only status
+render JSON result envelopes for yvex run
+handle chat slash commands
+```
+
+The I0 runtime shell cannot:
+
+```text
+execute prefill
+execute decode
+compute logits
+sample tokens
+generate assistant text
+claim inference readiness
+```
 
 ## Future API Families
 

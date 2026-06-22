@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after H0
+after I0
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-I0 - CLI run/chat runtime
+J0 - Metrics and tracing
 ```
 
 Implemented surface:
@@ -145,9 +145,16 @@ Engine / session runtime:
   src/session/logits.c
   src/session/runtime_diagnostics.c
 
+CLI runtime shell:
+  src/chat/chat.c
+  src/chat/repl.c
+  src/chat/slash.c
+  src/chat/run_command.c
+  src/chat/status_line.c
+
 CLI:
   cli/yvex_cli.c
-  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, engine, session
+  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, engine, session, run, chat
 
 Tests:
   tests/test_status.c
@@ -173,13 +180,16 @@ Tests:
   tests/test_kv.c
   tests/test_logits.c
   tests/test_runtime_diagnostics.c
+  tests/test_chat_runtime.c
+  tests/test_slash_commands.c
+  tests/test_cli_run.sh
+  tests/test_cli_chat.sh
   tests/test_cli.sh
 ```
 
 Not implemented:
 
 ```text
-CLI run/chat
 metrics/tracing implementation
 server/provider
 CUDA
@@ -289,8 +299,8 @@ Future commands are listed only under the delivery that implements them.
 | F0 | complete | Graph and planner |
 | G0 | complete | CPU reference backend |
 | H0 | complete | Engine and session runtime |
-| I0 | next | CLI run/chat runtime |
-| J0 | planned | Metrics and tracing |
+| I0 | complete | CLI run/chat runtime |
+| J0 | next | Metrics and tracing |
 | K0 | planned | yvexd server/provider |
 | L0 | planned | CUDA/DGX Spark backend |
 | M0-M8 | planned | Model support ladder |
@@ -1274,7 +1284,7 @@ J0 receives runtime events for observability.
 Status:
 
 ```text
-next
+complete
 ```
 
 Owns:
@@ -1287,7 +1297,7 @@ slash commands
 token event rendering
 stdout/stderr discipline for generation
 status lines
-JSON/JSONL event stream if implemented
+JSON run result envelope
 ```
 
 Does not own:
@@ -1297,14 +1307,16 @@ server process
 new backend kernels
 CUDA
 provider compatibility
+real generation
 ```
 
 Creates / modifies:
 
 ```text
 src/chat/
-src/terminal/
 cli/yvex_cli.c
+tests/test_chat_runtime.c
+tests/test_slash_commands.c
 tests/test_cli_run.sh
 tests/test_cli_chat.sh
 Makefile
@@ -1323,9 +1335,9 @@ Tests:
 
 ```text
 run command smoke tests
-chat command parser tests
+chat REPL parser tests
 non-interactive output separation tests
-stream event tests if implemented
+slash command tests
 ```
 
 Acceptance:
@@ -1333,7 +1345,7 @@ Acceptance:
 ```text
 command proof exists
 non-TTY behavior is tested
-generated output separation is tested
+no fake generated output is emitted
 unsupported backend claims are absent
 ```
 
@@ -1349,7 +1361,7 @@ K0 receives a runtime path that can be served later.
 Status:
 
 ```text
-planned
+next
 ```
 
 Owns:
@@ -1642,13 +1654,15 @@ future model work must state the exact support level and proof command.
 | E0 | 64be1b1 | Added tokenizer metadata/vocab table, fixture encode/decode, prompt rendering, CLI proof, fixtures, and tests. |
 | F0 | 5234420 | Added graph values/ops, shape inference, missing-role diagnostics, estimate-only memory plans, graph/plan CLI proof, and tests. |
 | G0 | 8d60c2b | Added backend ABI, CPU reference backend, CPU tensor allocation/read/write/copy, capability reporting, embed op proof, backend CLI, and tests. |
-| H0 | current commit | Added engine/session runtime objects, KV/logits availability skeletons, session state machine, token acceptance diagnostics, engine/session CLI, and tests. |
+| H0 | e009e08 | Added engine/session runtime objects, KV/logits availability skeletons, session state machine, token acceptance diagnostics, engine/session CLI, and tests. |
+| I0 | current commit | Added accepted-only run/chat runtime shell, slash commands, JSON run output, piped chat tests, and CLI smoke coverage. |
 
 Current implemented CLI command set:
 
 ```text
 commands
 backend
+chat
 engine
 session
 detokenize
@@ -1660,6 +1674,7 @@ metadata
 paths
 prompt
 plan
+run
 tokenize
 tokenizer
 tensors
@@ -1680,22 +1695,22 @@ git diff --check
 Next authorized milestone:
 
 ```text
-I0 - CLI run/chat runtime
+J0 - Metrics and tracing
 ```
 
-I0 starts only after H0 validation passes and the H0 commit is recorded.
+J0 starts only after I0 validation passes and the I0 commit is recorded.
 
-I0 must produce:
+J0 must produce:
 
 ```text
-runtime CLI command surface over H0 sessions
-bounded run/chat command behavior
-clear unsupported decode/generation paths where execution is incomplete
-non-TTY output discipline
-CLI lifecycle tests
+metrics collector
+trace JSONL
+profile report
+run metrics files
+latency/token counters
 ```
 
-I0 must not produce:
+J0 must not produce:
 
 ```text
 server/provider behavior
@@ -1703,13 +1718,13 @@ CUDA backend
 broad inference claim
 ```
 
-Required I0 proof:
+Required J0 proof:
 
 ```text
 make clean
 make check
 make smoke
-future run/chat lifecycle proof commands
+future metrics/trace output proof commands
 no CUDA claim
 no broad inference claim
 ```
@@ -2036,8 +2051,8 @@ and a command-visible proof exists.
 Current handoff:
 
 ```text
-from: H0 - Engine and session runtime
-to: I0 - CLI run/chat runtime
-authorized work: bounded CLI run/chat lifecycle over H0 sessions
-blocked work: J0 and later until I0 acceptance passes
+from: I0 - CLI run/chat runtime
+to: J0 - Metrics and tracing
+authorized work: metrics collector, trace JSONL, profile report, and run metrics files
+blocked work: K0 and later until J0 acceptance passes
 ```

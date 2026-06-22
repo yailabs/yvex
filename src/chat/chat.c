@@ -1,0 +1,208 @@
+/*
+ * YVEX - Chat runtime shell
+ *
+ * File: src/chat/chat.c
+ * Layer: CLI runtime implementation
+ *
+ * Purpose:
+ *   Opens the I0 runtime shell over H0 engine/session objects and accepts
+ *   prompt text into the session. This module never executes decode or
+ *   generates model output.
+ *
+ * Implements:
+ *   - yvex_chat_runtime_open
+ *   - yvex_chat_runtime_close
+ *   - yvex_chat_runtime_accept_user_text
+ *   - yvex_chat_runtime_reset
+ *
+ * Invariants:
+ *   - runtime owns engine/backend/session and closes in reverse order
+ *   - prompt acceptance advances session position only through H0 API
+ *   - generation remains unsupported in I0
+ *
+ * Commands:
+ *   - make test-core
+ *   - build/tests/test_chat_runtime
+ */
+#include "chat_internal.h"
+
+#include <stdlib.h>
+#include <string.h>
+
+static char *chat_strdup(const char *text)
+{
+    char *copy;
+    size_t len;
+
+    if (!text) {
+        text = "";
+    }
+    len = strlen(text);
+    copy = (char *)malloc(len + 1u);
+    if (!copy) {
+        return NULL;
+    }
+    memcpy(copy, text, len + 1u);
+    return copy;
+}
+
+static void copy_text(char *dst, unsigned long cap, const char *src)
+{
+    if (!dst || cap == 0) {
+        return;
+    }
+    snprintf(dst, (size_t)cap, "%s", src ? src : "");
+}
+
+static int open_backend(yvex_backend **out, const char *backend_name, yvex_error *err)
+{
+    yvex_backend_options options;
+
+    if (!backend_name || strcmp(backend_name, "cpu") == 0) {
+        return yvex_backend_open_cpu(out, err);
+    }
+    if (strcmp(backend_name, "cuda") == 0) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_chat_backend",
+                       "backend cuda is unsupported in I0; planned for L0");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+
+    memset(&options, 0, sizeof(options));
+    yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "yvex_chat_backend",
+                    "unknown backend: %s", backend_name);
+    return YVEX_ERR_INVALID_ARG;
+}
+
+int yvex_chat_runtime_open(yvex_chat_runtime *runtime,
+                           const char *model_path,
+                           const char *backend_name,
+                           unsigned long long context_length,
+                           yvex_error *err)
+{
+    yvex_session_options session_options;
+    int rc;
+
+    if (!runtime || !model_path || !backend_name) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_chat_runtime_open",
+                       "runtime, model_path, and backend_name are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    memset(runtime, 0, sizeof(*runtime));
+    runtime->model_path = chat_strdup(model_path);
+    runtime->backend_name = chat_strdup(backend_name);
+    if (!runtime->model_path || !runtime->backend_name) {
+        yvex_chat_runtime_close(runtime);
+        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_chat_runtime_open",
+                       "failed to copy runtime labels");
+        return YVEX_ERR_NOMEM;
+    }
+
+    rc = yvex_engine_open_path(&runtime->engine, model_path, err);
+    if (rc == YVEX_OK) {
+        rc = open_backend(&runtime->backend, backend_name, err);
+    }
+    if (rc == YVEX_OK) {
+        memset(&session_options, 0, sizeof(session_options));
+        session_options.context_length = context_length;
+        session_options.allow_partial_graph = 1;
+        rc = yvex_session_create(&runtime->session, runtime->engine, runtime->backend,
+                                 &session_options, err);
+    }
+    if (rc != YVEX_OK) {
+        yvex_chat_runtime_close(runtime);
+        return rc;
+    }
+
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+void yvex_chat_runtime_close(yvex_chat_runtime *runtime)
+{
+    if (!runtime) {
+        return;
+    }
+    yvex_session_close(runtime->session);
+    yvex_backend_close(runtime->backend);
+    yvex_engine_close(runtime->engine);
+    free(runtime->model_path);
+    free(runtime->backend_name);
+    memset(runtime, 0, sizeof(*runtime));
+}
+
+int yvex_chat_runtime_accept_user_text(yvex_chat_runtime *runtime,
+                                       const char *system_text,
+                                       const char *user_text,
+                                       yvex_chat_accept_result *out,
+                                       yvex_error *err)
+{
+    yvex_tokens tokens;
+    yvex_session_summary summary;
+    yvex_engine_summary engine_summary;
+    int rc;
+
+    if (!runtime || !runtime->session || !user_text || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_chat_runtime_accept_user_text",
+                       "runtime, user_text, and out are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    memset(out, 0, sizeof(*out));
+    memset(&tokens, 0, sizeof(tokens));
+
+    (void)system_text;
+    rc = yvex_tokenize_text(yvex_engine_tokenizer(runtime->engine), user_text, &tokens, err);
+    if (rc == YVEX_OK) {
+        rc = yvex_session_accept_tokens(runtime->session, &tokens, err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_session_get_summary(runtime->session, &summary, err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_engine_get_summary(runtime->engine, &engine_summary, err);
+    }
+    if (rc != YVEX_OK) {
+        yvex_tokens_free(&tokens);
+        return rc;
+    }
+
+    copy_text(out->model_name, sizeof(out->model_name), engine_summary.model_name);
+    copy_text(out->backend_name, sizeof(out->backend_name), summary.backend_kind);
+    copy_text(out->session_state, sizeof(out->session_state),
+              yvex_session_state_name(summary.state));
+    out->prompt_tokens = tokens.len;
+    out->accepted_tokens = summary.accepted_tokens;
+    out->position = summary.position;
+    out->execution_ready = 0;
+    copy_text(out->generation, sizeof(out->generation), "unsupported");
+    copy_text(out->reason, sizeof(out->reason), "decode runtime is not implemented in I0");
+    runtime->accepted_turns += 1;
+
+    yvex_tokens_free(&tokens);
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_chat_runtime_reset(yvex_chat_runtime *runtime, yvex_error *err)
+{
+    if (!runtime || !runtime->session) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_chat_runtime_reset",
+                       "runtime session is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    runtime->accepted_turns = 0;
+    return yvex_session_reset(runtime->session, err);
+}
+
+int yvex_chat_runtime_get_summary(const yvex_chat_runtime *runtime,
+                                  yvex_session_summary *out,
+                                  yvex_error *err)
+{
+    if (!runtime || !runtime->session) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_chat_runtime_get_summary",
+                       "runtime session is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    return yvex_session_get_summary(runtime->session, out, err);
+}

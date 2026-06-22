@@ -9,7 +9,7 @@
 #   Proves that the CLI command table exposes only implemented commands and
 #   returns stable exit codes for common bootstrap, filesystem, artifact, GGUF
 #   directory, tensor table, descriptor, tokenizer, prompt, graph, plan,
-#   backend, engine, and session behavior.
+#   backend, engine, session, run, and chat behavior.
 #
 # Covers:
 #   - yvex
@@ -30,6 +30,8 @@
 #   - yvex detokenize
 #   - yvex engine
 #   - yvex session
+#   - yvex run
+#   - yvex chat
 #   - yvex commands
 #   - yvex help info
 #   - yvex unknown
@@ -83,7 +85,7 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: H0 engine and session runtime skeleton"
+contains "$OUT_DIR/info.out" "status: I0 CLI run/chat runtime shell"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "artifact: open/read implemented"
@@ -96,12 +98,16 @@ contains "$OUT_DIR/info.out" "planner: estimate-only implemented"
 contains "$OUT_DIR/info.out" "backend: CPU reference implemented"
 contains "$OUT_DIR/info.out" "engine: runtime object skeleton implemented"
 contains "$OUT_DIR/info.out" "session: lifecycle skeleton implemented"
+contains "$OUT_DIR/info.out" "run: accepted-only runtime shell implemented"
+contains "$OUT_DIR/info.out" "chat: accepted-only REPL shell implemented"
 contains "$OUT_DIR/info.out" "kv: unavailable skeleton implemented"
 contains "$OUT_DIR/info.out" "logits: unavailable skeleton implemented"
+contains "$OUT_DIR/info.out" "generation: unsupported in I0"
 
 run_ok commands "$YVEX_BIN" commands
 contains "$OUT_DIR/commands.out" "Implemented commands:"
 contains "$OUT_DIR/commands.out" "  backend"
+contains "$OUT_DIR/commands.out" "  chat"
 contains "$OUT_DIR/commands.out" "  commands"
 contains "$OUT_DIR/commands.out" "  detokenize"
 contains "$OUT_DIR/commands.out" "  engine"
@@ -113,6 +119,7 @@ contains "$OUT_DIR/commands.out" "  metadata"
 contains "$OUT_DIR/commands.out" "  paths"
 contains "$OUT_DIR/commands.out" "  plan"
 contains "$OUT_DIR/commands.out" "  prompt"
+contains "$OUT_DIR/commands.out" "  run"
 contains "$OUT_DIR/commands.out" "  session"
 contains "$OUT_DIR/commands.out" "  tokenize"
 contains "$OUT_DIR/commands.out" "  tokenizer"
@@ -124,6 +131,9 @@ contains "$OUT_DIR/help_info.out" "usage: yvex info"
 
 run_ok help_backend "$YVEX_BIN" help backend
 contains "$OUT_DIR/help_backend.out" "usage: yvex backend cpu|cuda"
+
+run_ok help_chat "$YVEX_BIN" help chat
+contains "$OUT_DIR/help_chat.out" "usage: yvex chat --model FILE"
 
 run_ok help_inspect "$YVEX_BIN" help inspect
 contains "$OUT_DIR/help_inspect.out" "usage: yvex inspect <path>"
@@ -154,6 +164,9 @@ contains "$OUT_DIR/help_plan.out" "usage: yvex plan <path>"
 
 run_ok help_prompt "$YVEX_BIN" help prompt
 contains "$OUT_DIR/help_prompt.out" "usage: yvex prompt <path>"
+
+run_ok help_run "$YVEX_BIN" help run
+contains "$OUT_DIR/help_run.out" "usage: yvex run --model FILE"
 
 run_ok help_session "$YVEX_BIN" help session
 contains "$OUT_DIR/help_session.out" "usage: yvex session <path>"

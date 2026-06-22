@@ -78,7 +78,12 @@ CORE_SRCS := \
 	src/session/state.c \
 	src/session/kv.c \
 	src/session/logits.c \
-	src/session/runtime_diagnostics.c
+	src/session/runtime_diagnostics.c \
+	src/chat/chat.c \
+	src/chat/repl.c \
+	src/chat/slash.c \
+	src/chat/run_command.c \
+	src/chat/status_line.c
 
 CORE_OBJS := $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 
@@ -105,7 +110,9 @@ TEST_SRCS := \
 	tests/test_session.c \
 	tests/test_kv.c \
 	tests/test_logits.c \
-	tests/test_runtime_diagnostics.c
+	tests/test_runtime_diagnostics.c \
+	tests/test_chat_runtime.c \
+	tests/test_slash_commands.c
 
 TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 
@@ -114,7 +121,7 @@ CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md \
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: H0 engine and session runtime skeleton"
+	@echo "status: I0 CLI run/chat runtime shell"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"
@@ -128,8 +135,11 @@ info:
 	@echo "backend: CPU reference implemented"
 	@echo "engine: runtime object skeleton implemented"
 	@echo "session: lifecycle skeleton implemented"
+	@echo "run: accepted-only runtime shell implemented"
+	@echo "chat: accepted-only REPL shell implemented"
 	@echo "kv: unavailable skeleton implemented"
 	@echo "logits: unavailable skeleton implemented"
+	@echo "generation: unsupported in I0"
 	@echo "inference: not implemented"
 	@echo "cuda: not implemented"
 	@echo "server: not implemented"
@@ -144,8 +154,10 @@ test-core: $(TEST_BINS)
 		"$$test_bin"; \
 	done
 
-test-cli: $(YVEX_BIN) tests/test_cli.sh
+test-cli: $(YVEX_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli.sh
+	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_run.sh
+	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_chat.sh
 
 test: test-core test-cli
 

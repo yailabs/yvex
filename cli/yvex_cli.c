@@ -28,6 +28,8 @@
  *   - yvex graph <path>
  *   - yvex prompt <path> --user TEXT
  *   - yvex plan <path>
+ *   - yvex run --model <path> --backend cpu --prompt TEXT
+ *   - yvex chat --model <path> --backend cpu
  *   - yvex session <path> --backend cpu
  *   - yvex --help
  *   - yvex --version
@@ -50,6 +52,9 @@
 
 #include <yvex/yvex.h>
 
+#include "../src/chat/chat_internal.h"
+#include "../src/chat/slash_internal.h"
+
 typedef int (*yvex_cli_handler)(int argc, char **argv);
 
 typedef struct {
@@ -69,6 +74,7 @@ typedef struct {
 } yvex_cli_tokenizer_context;
 
 static int command_backend(int argc, char **argv);
+static int command_chat(int argc, char **argv);
 static int command_commands(int argc, char **argv);
 static int command_detokenize(int argc, char **argv);
 static int command_engine(int argc, char **argv);
@@ -80,6 +86,7 @@ static int command_metadata(int argc, char **argv);
 static int command_paths(int argc, char **argv);
 static int command_plan(int argc, char **argv);
 static int command_prompt(int argc, char **argv);
+static int command_run(int argc, char **argv);
 static int command_session(int argc, char **argv);
 static int command_tokenize(int argc, char **argv);
 static int command_tokenizer(int argc, char **argv);
@@ -93,6 +100,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex backend cpu|cuda",
         "Reports backend status and capabilities. G0 implements CPU tensor allocation/read/write/embed; CUDA remains unsupported until L0.",
         command_backend,
+    },
+    {
+        "chat",
+        "Start the I0 diagnostic chat shell.",
+        "yvex chat --model FILE --backend cpu|cuda [--ctx N]",
+        "Opens engine/backend/session and accepts user prompt tokens in a REPL. Generation is unsupported in I0.",
+        command_chat,
     },
     {
         "commands",
@@ -170,6 +184,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex prompt <path> [--system TEXT] --user TEXT [--assistant TEXT] [--tokens]",
         "Renders the YVEX default prompt format. Arbitrary Jinja chat templates are not executed in E0.",
         command_prompt,
+    },
+    {
+        "run",
+        "Accept one prompt through the I0 runtime shell.",
+        "yvex run --model FILE --backend cpu|cuda --prompt TEXT [--system TEXT] [--output plain|json]",
+        "Opens engine/backend/session, tokenizes the prompt, accepts tokens, and reports accepted-only runtime diagnostics. It does not generate output.",
+        command_run,
     },
     {
         "session",
@@ -862,7 +883,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: H0 engine and session runtime skeleton\n");
+    printf("status: I0 CLI run/chat runtime shell\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -875,8 +896,11 @@ static int command_info(int argc, char **argv)
     printf("backend: CPU reference implemented\n");
     printf("engine: runtime object skeleton implemented\n");
     printf("session: lifecycle skeleton implemented\n");
+    printf("run: accepted-only runtime shell implemented\n");
+    printf("chat: accepted-only REPL shell implemented\n");
     printf("kv: unavailable skeleton implemented\n");
     printf("logits: unavailable skeleton implemented\n");
+    printf("generation: unsupported in I0\n");
     printf("backend_cuda: not implemented\n");
     printf("inference: not implemented\n");
     printf("cuda: not implemented\n");
@@ -1306,6 +1330,147 @@ static int command_prompt(int argc, char **argv)
     return 0;
 }
 
+static void trim_line(char *line)
+{
+    size_t len;
+
+    if (!line) {
+        return;
+    }
+    len = strlen(line);
+    while (len > 0 && (line[len - 1u] == '\n' || line[len - 1u] == '\r')) {
+        line[len - 1u] = '\0';
+        len -= 1u;
+    }
+}
+
+static int command_run(int argc, char **argv)
+{
+    yvex_chat_runtime runtime;
+    yvex_chat_accept_result result;
+    yvex_error err;
+    const char *model_path = NULL;
+    const char *backend_name = NULL;
+    const char *prompt_text = NULL;
+    const char *system_text = NULL;
+    const char *output = "plain";
+    const char *status_line = "off";
+    unsigned long long context_length = 0;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&runtime, 0, sizeof(runtime));
+
+    if (argc == 2 || (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0))) {
+        print_command_help(stdout, find_command("run"));
+        return argc >= 3 ? 0 : 2;
+    }
+
+    for (i = 2; i < argc; ++i) {
+        if (strcmp(argv[i], "--model") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --model requires a value\n");
+                return 2;
+            }
+            model_path = argv[++i];
+        } else if (strcmp(argv[i], "--backend") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --backend requires a value\n");
+                return 2;
+            }
+            backend_name = argv[++i];
+        } else if (strcmp(argv[i], "--prompt") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --prompt requires a value\n");
+                return 2;
+            }
+            prompt_text = argv[++i];
+        } else if (strcmp(argv[i], "--system") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --system requires a value\n");
+                return 2;
+            }
+            system_text = argv[++i];
+        } else if (strcmp(argv[i], "--ctx") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &context_length)) {
+                fprintf(stderr, "yvex: --ctx requires a positive integer\n");
+                return 2;
+            }
+            i += 1;
+        } else if (strcmp(argv[i], "--output") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --output requires plain or json\n");
+                return 2;
+            }
+            output = argv[++i];
+            if (strcmp(output, "plain") != 0 && strcmp(output, "json") != 0) {
+                fprintf(stderr, "yvex: --output must be plain or json\n");
+                return 2;
+            }
+        } else if (strcmp(argv[i], "--status-line") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --status-line requires auto, off, or always\n");
+                return 2;
+            }
+            status_line = argv[++i];
+            if (strcmp(status_line, "auto") != 0 && strcmp(status_line, "off") != 0 &&
+                strcmp(status_line, "always") != 0) {
+                fprintf(stderr, "yvex: --status-line requires auto, off, or always\n");
+                return 2;
+            }
+        } else {
+            fprintf(stderr, "yvex: unknown run option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help run' for usage.\n");
+            return 2;
+        }
+    }
+
+    if (!model_path) {
+        fprintf(stderr, "yvex: --model is required for yvex run in I0\n");
+        return 2;
+    }
+    if (!backend_name) {
+        fprintf(stderr, "yvex: --backend is required for yvex run in I0\n");
+        return 2;
+    }
+    if (!prompt_text) {
+        fprintf(stderr, "yvex: --prompt is required for yvex run in I0\n");
+        return 2;
+    }
+
+    rc = yvex_chat_runtime_open(&runtime, model_path, backend_name, context_length, &err);
+    if (rc == YVEX_ERR_UNSUPPORTED && strcmp(backend_name, "cuda") == 0) {
+        printf("run status: backend-unsupported\n");
+        printf("backend: cuda\n");
+        printf("execution_ready: false\n");
+        printf("reason: CUDA backend is planned for L0\n");
+        return 5;
+    }
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_chat_runtime_accept_user_text(&runtime, system_text, prompt_text, &result, &err);
+    if (rc != YVEX_OK) {
+        yvex_chat_runtime_close(&runtime);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    if (strcmp(status_line, "always") == 0) {
+        (void)yvex_status_line_print(stderr, "accept", result.prompt_tokens, result.position);
+    }
+
+    if (strcmp(output, "json") == 0) {
+        (void)yvex_run_command_json(stdout, &result);
+    } else {
+        (void)yvex_run_command_plain(stdout, &result);
+    }
+
+    yvex_chat_runtime_close(&runtime);
+    return 0;
+}
+
 static int command_session(int argc, char **argv)
 {
     yvex_engine *engine = NULL;
@@ -1444,6 +1609,216 @@ static int command_session(int argc, char **argv)
     yvex_session_close(session);
     yvex_backend_close(backend);
     yvex_engine_close(engine);
+    return 0;
+}
+
+static void print_chat_slash_help(FILE *fp)
+{
+    fprintf(fp, "commands:\n");
+    fprintf(fp, "  /help\n");
+    fprintf(fp, "  /status\n");
+    fprintf(fp, "  /model\n");
+    fprintf(fp, "  /backend\n");
+    fprintf(fp, "  /tokens\n");
+    fprintf(fp, "  /reset\n");
+    fprintf(fp, "  /quit\n");
+}
+
+static void print_chat_model(FILE *fp, const yvex_chat_runtime *runtime)
+{
+    yvex_engine_summary summary;
+    yvex_error err;
+
+    yvex_error_clear(&err);
+    if (yvex_engine_get_summary(runtime->engine, &summary, &err) == YVEX_OK) {
+        fprintf(fp, "model: %s\n", summary.model_name);
+        fprintf(fp, "architecture: %s\n", summary.architecture);
+        fprintf(fp, "tokenizer: %s\n", summary.tokenizer_model);
+    }
+}
+
+static void print_chat_backend(FILE *fp, const yvex_chat_runtime *runtime)
+{
+    fprintf(fp, "backend: %s\n", yvex_backend_kind_name(yvex_backend_kind_of(runtime->backend)));
+    fprintf(fp, "status: %s\n", yvex_backend_status_name(yvex_backend_status_of(runtime->backend)));
+    fprintf(fp, "capabilities:\n");
+    fprintf(fp, "  tensor_alloc: %s\n",
+            yvex_backend_supports(runtime->backend, YVEX_BACKEND_CAP_TENSOR_ALLOC) ? "yes" : "no");
+    fprintf(fp, "  tensor_read_write: %s\n",
+            yvex_backend_supports(runtime->backend, YVEX_BACKEND_CAP_TENSOR_READ_WRITE) ? "yes" : "no");
+    fprintf(fp, "  op_embed: %s\n",
+            yvex_backend_supports(runtime->backend, YVEX_BACKEND_CAP_OP_EMBED) ? "yes" : "no");
+}
+
+static void print_chat_tokens(FILE *fp, const yvex_chat_runtime *runtime)
+{
+    yvex_session_summary summary;
+    yvex_error err;
+
+    yvex_error_clear(&err);
+    if (yvex_chat_runtime_get_summary(runtime, &summary, &err) == YVEX_OK) {
+        fprintf(fp, "accepted_tokens: %llu\n", summary.accepted_tokens);
+        fprintf(fp, "position: %llu\n", summary.position);
+    }
+}
+
+static int handle_chat_slash(yvex_chat_runtime *runtime,
+                             yvex_slash_command command,
+                             const char *line,
+                             int *done,
+                             yvex_error *err)
+{
+    int rc;
+
+    switch (command) {
+    case YVEX_SLASH_HELP:
+        print_chat_slash_help(stdout);
+        return YVEX_OK;
+    case YVEX_SLASH_STATUS:
+        return yvex_chat_runtime_print_status(stdout, runtime, err);
+    case YVEX_SLASH_MODEL:
+        print_chat_model(stdout, runtime);
+        return YVEX_OK;
+    case YVEX_SLASH_BACKEND:
+        print_chat_backend(stdout, runtime);
+        return YVEX_OK;
+    case YVEX_SLASH_TOKENS:
+        print_chat_tokens(stdout, runtime);
+        return YVEX_OK;
+    case YVEX_SLASH_RESET:
+        rc = yvex_chat_runtime_reset(runtime, err);
+        if (rc != YVEX_OK) {
+            return rc;
+        }
+        printf("session reset\n");
+        printf("position: 0\n");
+        return YVEX_OK;
+    case YVEX_SLASH_QUIT:
+        printf("bye\n");
+        *done = 1;
+        return YVEX_OK;
+    case YVEX_SLASH_UNKNOWN:
+        printf("unknown slash command: %s\n", line ? line : "");
+        printf("type /help\n");
+        return YVEX_OK;
+    case YVEX_SLASH_NOT_COMMAND:
+        break;
+    }
+    return YVEX_OK;
+}
+
+static int command_chat(int argc, char **argv)
+{
+    yvex_chat_runtime runtime;
+    yvex_engine_summary engine_summary;
+    yvex_session_summary session_summary;
+    yvex_error err;
+    const char *model_path = NULL;
+    const char *backend_name = NULL;
+    unsigned long long context_length = 0;
+    char line[4096];
+    int done = 0;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&runtime, 0, sizeof(runtime));
+
+    if (argc == 2 || (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0))) {
+        print_command_help(stdout, find_command("chat"));
+        return argc >= 3 ? 0 : 2;
+    }
+
+    for (i = 2; i < argc; ++i) {
+        if (strcmp(argv[i], "--model") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --model requires a value\n");
+                return 2;
+            }
+            model_path = argv[++i];
+        } else if (strcmp(argv[i], "--backend") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --backend requires a value\n");
+                return 2;
+            }
+            backend_name = argv[++i];
+        } else if (strcmp(argv[i], "--ctx") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &context_length)) {
+                fprintf(stderr, "yvex: --ctx requires a positive integer\n");
+                return 2;
+            }
+            i += 1;
+        } else {
+            fprintf(stderr, "yvex: unknown chat option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help chat' for usage.\n");
+            return 2;
+        }
+    }
+
+    if (!model_path) {
+        fprintf(stderr, "yvex: --model is required for yvex chat in I0\n");
+        return 2;
+    }
+    if (!backend_name) {
+        fprintf(stderr, "yvex: --backend is required for yvex chat in I0\n");
+        return 2;
+    }
+
+    rc = yvex_chat_runtime_open(&runtime, model_path, backend_name, context_length, &err);
+    if (rc == YVEX_ERR_UNSUPPORTED && strcmp(backend_name, "cuda") == 0) {
+        printf("backend: cuda\n");
+        printf("backend_status: unsupported\n");
+        printf("reason: CUDA backend is planned for L0\n");
+        printf("status: chat-backend-unsupported\n");
+        return 5;
+    }
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    (void)yvex_engine_get_summary(runtime.engine, &engine_summary, &err);
+    (void)yvex_chat_runtime_get_summary(&runtime, &session_summary, &err);
+    printf("YVEX chat runtime\n");
+    printf("model: %s\n", engine_summary.model_name);
+    printf("backend: %s\n", backend_name);
+    printf("session_state: %s\n", yvex_session_state_name(session_summary.state));
+    printf("generation: unsupported in I0\n");
+    printf("type /help for commands\n");
+
+    while (!done) {
+        printf("yvex> ");
+        fflush(stdout);
+        if (!fgets(line, sizeof(line), stdin)) {
+            break;
+        }
+        trim_line(line);
+        if (line[0] == '\0') {
+            continue;
+        }
+
+        if (line[0] == '/') {
+            rc = handle_chat_slash(&runtime, yvex_slash_parse(line), line, &done, &err);
+            if (rc != YVEX_OK) {
+                yvex_chat_runtime_close(&runtime);
+                return print_yvex_error(&err, exit_for_status(rc));
+            }
+            continue;
+        }
+
+        {
+            yvex_chat_accept_result result;
+            rc = yvex_chat_runtime_accept_user_text(&runtime, NULL, line, &result, &err);
+            if (rc != YVEX_OK) {
+                yvex_chat_runtime_close(&runtime);
+                return print_yvex_error(&err, exit_for_status(rc));
+            }
+            printf("accepted tokens: %llu\n", result.prompt_tokens);
+            printf("position: %llu\n", result.position);
+            printf("assistant: [generation unsupported in I0]\n");
+        }
+    }
+
+    yvex_chat_runtime_close(&runtime);
     return 0;
 }
 

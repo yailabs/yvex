@@ -4,7 +4,7 @@ This document owns CLI behavior. YVEX is CLI-only.
 
 ## Current Implemented Commands
 
-The H0 binary implements exactly:
+The I0 binary implements exactly:
 
 ```text
 yvex
@@ -12,6 +12,7 @@ yvex --help
 yvex --version
 yvex backend cpu|cuda
 yvex commands
+yvex chat --model FILE --backend cpu|cuda
 yvex detokenize <path> --ids IDS
 yvex engine <path>
 yvex graph <path>
@@ -26,6 +27,7 @@ yvex paths --run
 yvex paths --run --create
 yvex plan <path>
 yvex prompt <path> --user TEXT
+yvex run --model FILE --backend cpu|cuda --prompt TEXT
 yvex session <path> --backend cpu
 yvex tokenizer <path>
 yvex tokenize <path> --text TEXT
@@ -44,7 +46,7 @@ name: YVEX
 version: 0.1.0
 language: C
 interface: CLI-only
-status: H0 engine and session runtime skeleton
+status: I0 CLI run/chat runtime shell
 library: libyvex.a
 filesystem: implemented
 artifact: open/read implemented
@@ -57,8 +59,11 @@ planner: estimate-only implemented
 backend: CPU reference implemented
 engine: runtime object skeleton implemented
 session: lifecycle skeleton implemented
+run: accepted-only runtime shell implemented
+chat: accepted-only REPL shell implemented
 kv: unavailable skeleton implemented
 logits: unavailable skeleton implemented
+generation: unsupported in I0
 backend_cuda: not implemented
 inference: not implemented
 cuda: not implemented
@@ -429,13 +434,93 @@ reason: CUDA backend is planned for L0
 status: session-backend-unsupported
 ```
 
+## Current `yvex run`
+
+`yvex run --model FILE --backend cpu --prompt TEXT` opens the engine/backend/
+session path, tokenizes the prompt text, accepts those tokens into the session,
+and prints an accepted-only runtime result. It does not execute prefill, decode,
+sampling, logits, or generation.
+
+Plain output:
+
+```text
+run status: accepted-only
+model: yvex-tokenizer-test
+backend: cpu
+session_state: partial
+prompt_tokens: 3
+accepted_tokens: 3
+position: 3
+execution_ready: false
+generation: unsupported
+reason: decode runtime is not implemented in I0
+```
+
+JSON output is available through `--output json`:
+
+```json
+{
+  "schema": "yvex.cli.result.v1",
+  "command": "run",
+  "status": "accepted-only",
+  "data": {
+    "model": "yvex-tokenizer-test",
+    "backend": "cpu",
+    "session_state": "partial",
+    "prompt_tokens": 3,
+    "accepted_tokens": 3,
+    "position": 3,
+    "execution_ready": false,
+    "generation": "unsupported",
+    "reason": "decode runtime is not implemented in I0"
+  },
+  "error": null
+}
+```
+
+`--backend cuda` reports unsupported status and exits 5.
+
+## Current `yvex chat`
+
+`yvex chat --model FILE --backend cpu` starts a line-oriented REPL over the H0
+engine/session path. It accepts user text as prompt tokens and prints an
+explicit unsupported assistant placeholder.
+
+Piped input is deterministic:
+
+```sh
+printf "/status\nhello world\n/tokens\n/reset\n/quit\n" | \
+  yvex chat --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
+```
+
+Output includes:
+
+```text
+YVEX chat runtime
+session_state: partial
+accepted tokens: 3
+position: 3
+assistant: [generation unsupported in I0]
+bye
+```
+
+Implemented slash commands:
+
+```text
+/help
+/status
+/model
+/backend
+/tokens
+/reset
+/quit
+```
+
 ## Future Commands
 
 Future command names are not support claims:
 
 ```text
-yvex run --model model.gguf --backend cuda -p "Explain mmap in C" -n 128
-yvex chat --model model.gguf --backend cuda
 yvex bench --model model.gguf --backend cuda --prompt prompts/code.txt --tokens 256
 yvex cuda-info
 ```
@@ -447,7 +532,7 @@ behavior, and documented limitations before appearing in `yvex commands`.
 
 ```text
 stdout:
-  generated text or machine-readable response
+  runtime result, JSON envelope, or interactive chat output
 
 stderr:
   status
