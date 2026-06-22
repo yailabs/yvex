@@ -87,6 +87,7 @@ static int command_info(int argc, char **argv);
 static int command_inspect(int argc, char **argv);
 static int command_materialize(int argc, char **argv);
 static int command_metadata(int argc, char **argv);
+static int command_native_weights(int argc, char **argv);
 static int command_paths(int argc, char **argv);
 static int command_plan(int argc, char **argv);
 static int command_prompt(int argc, char **argv);
@@ -182,6 +183,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex metadata <path>",
         "Opens a GGUF file and prints parsed metadata key/value summaries. Arrays are summarized; tokenizers and model loading are not implemented.",
         command_metadata,
+    },
+    {
+        "native-weights",
+        "Inventory safetensors native weights.",
+        "yvex native-weights --source DIR [--limit N] [--tensor NAME] [--json]",
+        "Reads safetensors headers under a local source directory and reports tensor metadata. It does not read tensor payloads, convert, quantize, emit GGUF, materialize, or infer.",
+        command_native_weights,
     },
     {
         "paths",
@@ -480,6 +488,20 @@ static void print_tensor_dims(const unsigned long long *dims, unsigned int rank)
             printf(",");
         }
         printf("%llu", dims[d]);
+    }
+    printf("]");
+}
+
+static void print_native_dims(const unsigned long long *dims, unsigned int rank)
+{
+    unsigned int i;
+
+    printf("[");
+    for (i = 0; i < rank; ++i) {
+        if (i > 0) {
+            printf(",");
+        }
+        printf("%llu", dims[i]);
     }
     printf("]");
 }
@@ -1307,6 +1329,124 @@ static int command_materialize(int argc, char **argv)
     yvex_weight_table_close(weights);
     yvex_backend_close(backend);
     close_model_context(&ctx);
+    return 0;
+}
+
+static int command_native_weights(int argc, char **argv)
+{
+    yvex_native_weight_options options;
+    yvex_native_weight_table *table = NULL;
+    yvex_native_weight_summary summary;
+    yvex_error err;
+    const char *tensor_name = NULL;
+    unsigned long long limit = 20;
+    int json = 0;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&options, 0, sizeof(options));
+    options.recursive = 1;
+
+    if (argc == 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        print_command_help(stdout, find_command("native-weights"));
+        return 0;
+    }
+
+    i = 2;
+    while (i < argc) {
+        if (strcmp(argv[i], "--json") == 0) {
+            json = 1;
+            i++;
+            continue;
+        }
+        if (i + 1 >= argc) {
+            fprintf(stderr, "yvex: native-weights option requires a value: %s\n", argv[i]);
+            return 2;
+        }
+        if (strcmp(argv[i], "--source") == 0) {
+            options.source_dir = argv[i + 1];
+        } else if (strcmp(argv[i], "--limit") == 0) {
+            char *end = NULL;
+            limit = strtoull(argv[i + 1], &end, 10);
+            if (!end || *end != '\0') {
+                fprintf(stderr, "yvex: invalid native-weights limit: %s\n", argv[i + 1]);
+                return 2;
+            }
+        } else if (strcmp(argv[i], "--tensor") == 0) {
+            tensor_name = argv[i + 1];
+        } else {
+            fprintf(stderr, "yvex: unknown native-weights option: %s\n", argv[i]);
+            return 2;
+        }
+        i += 2;
+    }
+
+    if (!options.source_dir) {
+        fprintf(stderr, "yvex: native-weights requires --source DIR\n");
+        return 2;
+    }
+
+    rc = yvex_native_weight_table_open(&table, &options, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    rc = yvex_native_weight_table_summary(table, &summary, &err);
+    if (rc != YVEX_OK) {
+        yvex_native_weight_table_close(table);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    if (json) {
+        printf("{\n");
+        printf("  \"schema\": \"yvex.native_weights.v1\",\n");
+        printf("  \"source\": \"%s\",\n", options.source_dir);
+        printf("  \"summary\": {\n");
+        printf("    \"shard_count\": %llu,\n", summary.shard_count);
+        printf("    \"tensor_count\": %llu,\n", summary.tensor_count);
+        printf("    \"total_tensor_bytes\": %llu,\n", summary.total_tensor_bytes);
+        printf("    \"unknown_dtype_count\": %llu,\n", summary.unknown_dtype_count);
+        printf("    \"malformed_shard_count\": %llu\n", summary.malformed_shard_count);
+        printf("  }\n");
+        printf("}\n");
+        yvex_native_weight_table_close(table);
+        return 0;
+    }
+
+    printf("native weights: safetensors\n");
+    printf("source: %s\n", options.source_dir);
+    printf("shards: %llu\n", summary.shard_count);
+    printf("tensors: %llu\n", summary.tensor_count);
+    printf("total_tensor_bytes: %llu\n", summary.total_tensor_bytes);
+    printf("unknown_dtype_count: %llu\n", summary.unknown_dtype_count);
+    printf("malformed_shard_count: %llu\n", summary.malformed_shard_count);
+    printf("\n");
+
+    if (tensor_name) {
+        const yvex_native_weight_info *row = yvex_native_weight_table_find(table, tensor_name);
+        if (!row) {
+            yvex_native_weight_table_close(table);
+            fprintf(stderr, "yvex: native tensor not found: %s\n", tensor_name);
+            return 4;
+        }
+        printf("0 %s shard=%s dtype=%s rank=%u shape=",
+               row->name, row->shard_path, yvex_native_dtype_name(row->dtype), row->rank);
+        print_native_dims(row->dims, row->rank);
+        printf(" bytes=%llu offsets=[%llu,%llu]\n", row->data_bytes, row->data_start, row->data_end);
+    } else {
+        unsigned long long count = yvex_native_weight_table_count(table);
+        unsigned long long n = limit < count ? limit : count;
+        unsigned long long idx;
+        for (idx = 0; idx < n; ++idx) {
+            const yvex_native_weight_info *row = yvex_native_weight_table_at(table, idx);
+            printf("%llu %s shard=%s dtype=%s rank=%u shape=",
+                   idx, row->name, row->shard_path, yvex_native_dtype_name(row->dtype), row->rank);
+            print_native_dims(row->dims, row->rank);
+            printf(" bytes=%llu offsets=[%llu,%llu]\n", row->data_bytes, row->data_start, row->data_end);
+        }
+    }
+    printf("status: %s\n", summary.shard_count == 0 ? "native-weights-empty" : "native-weights");
+    yvex_native_weight_table_close(table);
     return 0;
 }
 

@@ -145,8 +145,9 @@ download logs: ~/lab/artifacts/download-logs
 source manifests: ~/lab/manifests/deepseek
 ```
 
-These paths may be scanned read-only by `yvex source-manifest create`. GGUF,
-safetensors, bin, and downloaded model files must remain outside git.
+These paths may be scanned read-only by `yvex source-manifest create` and
+`yvex native-weights --source`. GGUF, safetensors, bin, and downloaded model
+files must remain outside git.
 
 ## Failure Behavior
 

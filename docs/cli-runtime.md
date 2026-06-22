@@ -23,6 +23,7 @@ yvex info
 yvex inspect <path>
 yvex materialize --model FILE --backend cpu|cuda
 yvex metadata <path>
+yvex native-weights --source DIR [--limit N] [--tensor NAME] [--json]
 yvex paths
 yvex paths --project DIR
 yvex paths --run
@@ -74,6 +75,7 @@ trace: JSONL writer implemented
 profile: JSON writer implemented
 run_artifacts: metrics/trace/profile files implemented
 source_manifest: provenance JSON writer implemented
+native_weights: safetensors header inventory implemented
 server_binary: yvexd shell implemented
 server_endpoints: health/metrics/models status implemented
 server_generation: not implemented
@@ -173,6 +175,49 @@ mkdir -p "$HOME/lab/manifests/deepseek"
 
 Real source manifests and model files live outside the repository unless a
 future spine decision explicitly changes that policy.
+
+## Current `yvex native-weights`
+
+`yvex native-weights --source DIR` inventories safetensors headers under a local
+source tree. It reads metadata only: tensor names, shard paths, dtypes, shapes,
+payload offsets, and byte sizes. It does not read tensor payloads, convert,
+quantize, emit GGUF, materialize, or infer.
+
+Options:
+
+```text
+--source DIR
+--limit N
+--tensor NAME
+--json
+```
+
+Output with no completed safetensors yet:
+
+```text
+native weights: safetensors
+source: /home/dgmothx/lab/models/hf/deepseek/DeepSeek-V4-Flash
+shards: 0
+tensors: 0
+total_tensor_bytes: 0
+unknown_dtype_count: 0
+malformed_shard_count: 0
+
+status: native-weights-empty
+```
+
+`native-weights-empty` is valid while a Hugging Face download is still in
+progress and no final `.safetensors` shard has been renamed into place. Once
+shards exist, the same command reports tensor rows and exits with
+`status: native-weights`.
+
+DeepSeek in-progress proof command:
+
+```sh
+./build/bin/yvex native-weights \
+  --source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" \
+  --limit 40
+```
 
 ## Current `yvex inspect`
 

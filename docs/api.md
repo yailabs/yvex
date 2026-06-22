@@ -16,8 +16,9 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-OWI.1 implements a source-manifest provenance surface in addition to the M0
-runtime APIs. M0 implements the core version/status/error/log surface, runtime filesystem
+OWI.2 implements a safetensors/native-weight inventory surface and OWI.1
+implements a source-manifest provenance surface in addition to the M0 runtime
+APIs. M0 implements the core version/status/error/log surface, runtime filesystem
 paths/run directories, artifact byte views, range checks, GGUF header/probe,
 metadata, raw tensor directory parsing, dtype/qtype storage accounting, YVEX
 tensor table rows, a descriptor-only model summary, tokenizer metadata/vocab
@@ -45,6 +46,7 @@ include/yvex/gguf.h
 include/yvex/dtype.h
 include/yvex/tensor.h
 include/yvex/model.h
+include/yvex/native_weights.h
 include/yvex/tokenizer.h
 include/yvex/prompt.h
 include/yvex/op.h
@@ -74,6 +76,7 @@ Current aggregate:
 #include <yvex/dtype.h>
 #include <yvex/tensor.h>
 #include <yvex/model.h>
+#include <yvex/native_weights.h>
 #include <yvex/tokenizer.h>
 #include <yvex/prompt.h>
 #include <yvex/op.h>
@@ -289,6 +292,85 @@ relative file paths when the writer includes files, and classifies files as
 `metadata`, `tokenizer`, `safetensors`, `readme`, `license`, `config`, or
 `other`. SHA256 is intentionally emitted as `null` in OWI.1; full checksums over
 huge model files are not performed by default.
+
+## Native Weights
+
+OWI.2 adds a metadata-only safetensors inventory API. It reads the 8-byte
+little-endian safetensors header length and the JSON header, then records tensor
+names, shard paths, dtypes, shapes, and payload offsets. It does not read tensor
+payload bytes, dequantize, quantize, emit GGUF, materialize, or infer.
+
+```c
+#define YVEX_NATIVE_WEIGHT_MAX_DIMS 8
+
+typedef struct yvex_native_weight_table yvex_native_weight_table;
+
+typedef enum {
+    YVEX_NATIVE_DTYPE_UNKNOWN = 0,
+    YVEX_NATIVE_DTYPE_F64,
+    YVEX_NATIVE_DTYPE_F32,
+    YVEX_NATIVE_DTYPE_F16,
+    YVEX_NATIVE_DTYPE_BF16,
+    YVEX_NATIVE_DTYPE_I64,
+    YVEX_NATIVE_DTYPE_I32,
+    YVEX_NATIVE_DTYPE_I16,
+    YVEX_NATIVE_DTYPE_I8,
+    YVEX_NATIVE_DTYPE_U8,
+    YVEX_NATIVE_DTYPE_BOOL,
+    YVEX_NATIVE_DTYPE_F8_E4M3,
+    YVEX_NATIVE_DTYPE_F8_E5M2,
+    YVEX_NATIVE_DTYPE_FP4,
+    YVEX_NATIVE_DTYPE_OTHER
+} yvex_native_dtype;
+```
+
+```c
+typedef struct {
+    const char *name;
+    const char *shard_path;
+    yvex_native_dtype dtype;
+    const char *dtype_name;
+    unsigned int rank;
+    unsigned long long dims[YVEX_NATIVE_WEIGHT_MAX_DIMS];
+    unsigned long long data_start;
+    unsigned long long data_end;
+    unsigned long long data_bytes;
+} yvex_native_weight_info;
+
+typedef struct {
+    unsigned long long shard_count;
+    unsigned long long tensor_count;
+    unsigned long long total_tensor_bytes;
+    unsigned long long unknown_dtype_count;
+    unsigned long long malformed_shard_count;
+} yvex_native_weight_summary;
+
+typedef struct {
+    const char *source_dir;
+    int recursive;
+    int include_metadata;
+} yvex_native_weight_options;
+```
+
+```c
+int yvex_native_weight_table_open(yvex_native_weight_table **out,
+                                  const yvex_native_weight_options *options,
+                                  yvex_error *err);
+void yvex_native_weight_table_close(yvex_native_weight_table *table);
+unsigned long long yvex_native_weight_table_count(const yvex_native_weight_table *table);
+const yvex_native_weight_info *yvex_native_weight_table_at(const yvex_native_weight_table *table,
+                                                           unsigned long long index);
+const yvex_native_weight_info *yvex_native_weight_table_find(const yvex_native_weight_table *table,
+                                                             const char *name);
+int yvex_native_weight_table_summary(const yvex_native_weight_table *table,
+                                     yvex_native_weight_summary *out,
+                                     yvex_error *err);
+const char *yvex_native_dtype_name(yvex_native_dtype dtype);
+```
+
+The table owns copied tensor names and shard paths. Duplicate tensor names
+across shards are rejected. A source directory with no `.safetensors` files is a
+valid empty inventory.
 Default path resolution requires `HOME`; project-local path construction uses
 the explicit project root argument. Run directory creation creates directories
 only and does not write run artifacts.

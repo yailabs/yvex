@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after OWI.1
+after OWI.2
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-OWI.2 - Safetensors/native weight inventory reader
+OWI.3 - GGUF template contract and validator
 ```
 
 Implemented surface:
@@ -184,9 +184,16 @@ Open-weight source manifest:
   src/tools/source_manifest_json.c
   src/tools/source_manifest_scan.c
 
+Native weight inventory:
+  include/yvex/native_weights.h
+  src/tools/native_weights.c
+  src/tools/safetensors.c
+  src/tools/safetensors_json.c
+  src/tools/native_weight_report.c
+
 CLI:
   cli/yvex_cli.c
-  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat, source-manifest
+  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat, source-manifest, native-weights
   implemented binaries: yvex, yvexd
 
 Tests:
@@ -221,7 +228,10 @@ Tests:
   tests/test_run_artifacts.c
   tests/test_http.c
   tests/test_server.c
+  tests/test_safetensors_header.c
+  tests/test_native_weights.c
   tests/test_source_manifest.c
+  tests/test_cli_native_weights.sh
   tests/test_cli_source_manifest.sh
   tests/test_cuda_info.c
   tests/test_cuda_tensor.c
@@ -524,6 +534,7 @@ prompt
 run
 session
 source-manifest
+native-weights
 tensors
 tokenize
 tokenizer
@@ -556,8 +567,8 @@ Future commands are listed only under the delivery that implements them.
 | QA.BENCH.0 | complete | QA and benchmark spine |
 | OWI.0 | complete | DS4 inventory and open-weight pipeline spine |
 | OWI.1 | complete | Source manifest and model provenance contract |
-| OWI.2 | next | Safetensors/native weight inventory reader |
-| OWI.3 | planned | GGUF template contract and validator |
+| OWI.2 | complete | Safetensors/native weight inventory reader |
+| OWI.3 | next | GGUF template contract and validator |
 | OWI.4 | planned | Tensor mapping and architecture adapter contract |
 | OWI.5 | planned | Quantization policy manifest |
 | OWI.6 | planned | Calibration and imatrix contract |
@@ -2351,7 +2362,7 @@ OWI.2 can inventory native weight files using this provenance record
 Status:
 
 ```text
-next
+complete
 ```
 
 Owns:
@@ -2364,6 +2375,9 @@ tensor name/shape/dtype/byte-size inventory
 shard-to-tensor mapping
 native model storage summary
 read-only source validation
+safetensors header length parsing
+targeted safetensors JSON parsing
+native-weights CLI inventory command
 ```
 
 Does not own:
@@ -2383,8 +2397,13 @@ Expected files:
 ```text
 include/yvex/native_weights.h
 src/tools/native_weights.c
-src/tools/safetensors_inventory.c
-tests/test_native_weight_inventory.c
+src/tools/safetensors.c
+src/tools/safetensors_json.c
+src/tools/native_weight_report.c
+src/tools/native_weights_internal.h
+tests/test_safetensors_header.c
+tests/test_native_weights.c
+tests/test_cli_native_weights.sh
 ```
 
 Acceptance:
@@ -2396,6 +2415,7 @@ can report total native tensor count and known bytes
 can fail cleanly on missing/incomplete shards
 does not load full model into memory
 does not require inference
+native-weights-empty is valid when no completed safetensors files exist yet
 ```
 
 Handoff:
@@ -2409,7 +2429,7 @@ OWI.3 can compare native inventory against GGUF template requirements
 Status:
 
 ```text
-planned
+next
 ```
 
 Owns:
@@ -2837,13 +2857,13 @@ git diff --check
 Next authorized milestone:
 
 ```text
-OWI.2 - Safetensors/native weight inventory reader
+OWI.3 - GGUF template contract and validator
 ```
 
 Current active milestone:
 
 ```text
-OWI.2 - Safetensors/native weight inventory reader
+OWI.3 - GGUF template contract and validator
 ```
 
 Paused milestone:

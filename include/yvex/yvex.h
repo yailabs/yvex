@@ -41,6 +41,7 @@
 #include <yvex/memory_plan.h>
 #include <yvex/metrics.h>
 #include <yvex/model.h>
+#include <yvex/native_weights.h>
 #include <yvex/op.h>
 #include <yvex/planner.h>
 #include <yvex/profile.h>

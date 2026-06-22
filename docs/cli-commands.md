@@ -34,6 +34,7 @@ inference: not implemented
 execution_ready: false
 server_generation: not implemented
 source_manifest: provenance JSON writer implemented
+native_weights: safetensors header inventory implemented
 ```
 
 CUDA in L0 means device probe, memory/tensor movement, and F32 embed parity. It
@@ -60,6 +61,7 @@ do not add model execution or inference.
 | `inspect` | `yvex inspect PATH` | implemented; descriptor-only GGUF/model summary |
 | `materialize` | `yvex materialize --model FILE --backend cpu\|cuda` | implemented; fixture weights copied into backend tensors |
 | `metadata` | `yvex metadata PATH` | implemented; GGUF metadata dump |
+| `native-weights` | `yvex native-weights --source DIR [--limit N] [--tensor NAME] [--json]` | implemented; safetensors header inventory |
 | `paths` | `yvex paths [--project DIR] [--run] [--create]` | implemented |
 | `plan` | `yvex plan PATH [--backend cpu\|cuda] [--seq N] [--ctx N]` | implemented; plan-only |
 | `prompt` | `yvex prompt PATH --user TEXT [--system TEXT] [--assistant TEXT] [--tokens]` | implemented |

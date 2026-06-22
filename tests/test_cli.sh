@@ -21,6 +21,7 @@
 #   - yvex inspect
 #   - yvex materialize
 #   - yvex metadata
+#   - yvex native-weights
 #   - yvex paths
 #   - yvex prompt
 #   - yvex graph
@@ -132,6 +133,7 @@ contains "$OUT_DIR/commands.out" "  info"
 contains "$OUT_DIR/commands.out" "  inspect"
 contains "$OUT_DIR/commands.out" "  materialize"
 contains "$OUT_DIR/commands.out" "  metadata"
+contains "$OUT_DIR/commands.out" "  native-weights"
 contains "$OUT_DIR/commands.out" "  paths"
 contains "$OUT_DIR/commands.out" "  plan"
 contains "$OUT_DIR/commands.out" "  prompt"
@@ -163,6 +165,9 @@ contains "$OUT_DIR/help_materialize.out" "usage: yvex materialize --model FILE"
 
 run_ok help_metadata "$YVEX_BIN" help metadata
 contains "$OUT_DIR/help_metadata.out" "usage: yvex metadata <path>"
+
+run_ok help_native_weights "$YVEX_BIN" help native-weights
+contains "$OUT_DIR/help_native_weights.out" "usage: yvex native-weights --source DIR"
 
 run_ok help_tensors "$YVEX_BIN" help tensors
 contains "$OUT_DIR/help_tensors.out" "usage: yvex tensors <path>"
