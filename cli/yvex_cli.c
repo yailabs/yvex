@@ -5,10 +5,10 @@
  * Layer: CLI
  *
  * Purpose:
- *   Implements the command table and CLI proof surface for implemented core
- *   filesystem, artifact, and GGUF directory behavior. The CLI reports what
- *   exists and does not expose future runtime commands before their modules
- *   exist.
+ *   Implements the command table and CLI proof surface for implemented core,
+ *   filesystem, artifact, GGUF directory, tensor table, and descriptor
+ *   behavior. The CLI reports what exists and does not expose future runtime
+ *   commands before their modules exist.
  *
  * Implements:
  *   - yvex
@@ -76,14 +76,14 @@ static const yvex_cli_command yvex_commands[] = {
         "info",
         "Show current YVEX build and implementation status.",
         "yvex info",
-        "Prints the implemented core/filesystem/artifact/GGUF directory status.",
+        "Prints the implemented core/filesystem/artifact/GGUF/tensor descriptor status.",
         command_info,
     },
     {
         "inspect",
-        "Inspect a GGUF artifact directory.",
+        "Inspect a GGUF artifact descriptor.",
         "yvex inspect <path>",
-        "Opens a file, parses the GGUF header, metadata table, and tensor directory, and prints a directory-only summary. Tokenizers, model descriptors, and model loading are not implemented.",
+        "Opens a file, parses the GGUF directory, builds a YVEX tensor table and descriptor, and prints a descriptor-only summary. Tokenizers, backends, and model execution are not implemented.",
         command_inspect,
     },
     {
@@ -102,9 +102,9 @@ static const yvex_cli_command yvex_commands[] = {
     },
     {
         "tensors",
-        "Print parsed GGUF tensor directory records.",
+        "Print YVEX tensor table rows.",
         "yvex tensors <path>",
-        "Opens a GGUF file and prints raw tensor directory records. Dtype/qtype registry, tensor table, backend support, and model loading are not implemented.",
+        "Opens a GGUF file and prints YVEX tensor table rows with role, dtype, and known storage bytes. Backend support and model execution are not implemented.",
         command_tensors,
     },
     {
@@ -271,6 +271,20 @@ static int open_artifact_for_gguf(const char *path, yvex_artifact **artifact, yv
     return yvex_artifact_open(artifact, &options, err);
 }
 
+static void print_tensor_dims(const unsigned long long *dims, unsigned int rank)
+{
+    unsigned int d;
+
+    printf("[");
+    for (d = 0; d < rank; ++d) {
+        if (d > 0) {
+            printf(",");
+        }
+        printf("%llu", dims[d]);
+    }
+    printf("]");
+}
+
 static int command_commands(int argc, char **argv)
 {
     unsigned long i;
@@ -313,12 +327,13 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: C1 GGUF metadata/tensor directory parser\n");
+    printf("status: D0 tensor/model descriptor layer\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
-    printf("inference: not implemented\n");
     printf("gguf: metadata/tensor directory parsing implemented\n");
+    printf("model: descriptor-only implemented\n");
+    printf("inference: not implemented\n");
     printf("cuda: not implemented\n");
     printf("server: not implemented\n");
     return 0;
@@ -328,6 +343,8 @@ static int command_inspect(int argc, char **argv)
 {
     yvex_artifact *artifact = NULL;
     yvex_gguf *gguf = NULL;
+    yvex_tensor_table *tensors = NULL;
+    yvex_model_descriptor *model = NULL;
     yvex_gguf_probe probe;
     const yvex_gguf_header *header;
     yvex_error err;
@@ -369,6 +386,12 @@ static int command_inspect(int argc, char **argv)
 
     rc = yvex_gguf_open(&gguf, artifact, &err);
     if (rc == YVEX_OK) {
+        rc = yvex_tensor_table_from_gguf(&tensors, gguf, &err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_model_descriptor_from_gguf(&model, gguf, tensors, &err);
+    }
+    if (rc == YVEX_OK) {
         header = yvex_gguf_header_view(gguf);
         printf("format: gguf\n");
         printf("version: %u\n", header->version);
@@ -376,12 +399,22 @@ static int command_inspect(int argc, char **argv)
         printf("tensor_count: %llu\n", header->tensor_count);
         printf("tensor_data_offset: %llu\n", yvex_gguf_tensor_data_offset(gguf));
         printf("alignment: %u\n", yvex_gguf_alignment(gguf));
-        printf("status: directory-only\n");
+        printf("architecture: %s\n", yvex_arch_name(yvex_model_arch(model)));
+        printf("model_name: %s\n", yvex_model_name(model));
+        printf("known_tensor_bytes: %llu\n", yvex_model_total_storage_bytes(model));
+        printf("unsupported_tensor_accounting: %llu\n",
+               yvex_model_unsupported_tensor_accounting_count(model));
+        printf("status: descriptor-only\n");
+        yvex_model_descriptor_close(model);
+        yvex_tensor_table_close(tensors);
         yvex_gguf_close(gguf);
         yvex_artifact_close(artifact);
         return 0;
     }
 
+    yvex_model_descriptor_close(model);
+    yvex_tensor_table_close(tensors);
+    yvex_gguf_close(gguf);
     yvex_artifact_close(artifact);
     return print_yvex_error(&err, exit_for_status(rc));
 }
@@ -512,6 +545,7 @@ static int command_tensors(int argc, char **argv)
 {
     yvex_artifact *artifact = NULL;
     yvex_gguf *gguf = NULL;
+    yvex_tensor_table *table = NULL;
     const yvex_gguf_header *header;
     yvex_error err;
     unsigned long long i;
@@ -535,7 +569,12 @@ static int command_tensors(int argc, char **argv)
     }
 
     rc = yvex_gguf_open(&gguf, artifact, &err);
+    if (rc == YVEX_OK) {
+        rc = yvex_tensor_table_from_gguf(&table, gguf, &err);
+    }
     if (rc != YVEX_OK) {
+        yvex_tensor_table_close(table);
+        yvex_gguf_close(gguf);
         yvex_artifact_close(artifact);
         return print_yvex_error(&err, exit_for_status(rc));
     }
@@ -548,22 +587,22 @@ static int command_tensors(int argc, char **argv)
     printf("alignment: %u\n", yvex_gguf_alignment(gguf));
     printf("\n");
 
-    for (i = 0; i < yvex_gguf_tensor_count(gguf); ++i) {
-        unsigned int d;
-        const yvex_gguf_tensor_info *tensor = yvex_gguf_tensor_at(gguf, i);
-        printf("%llu %s rank=%u dims=[", i, tensor->name, tensor->rank);
-        for (d = 0; d < tensor->rank; ++d) {
-            if (d > 0) {
-                printf(",");
-            }
-            printf("%llu", tensor->dims[d]);
-        }
-        printf("] type=%s offset=%llu absolute=%llu\n",
-               tensor->ggml_type_name,
+    for (i = 0; i < yvex_tensor_table_count(table); ++i) {
+        const yvex_tensor_info *tensor = yvex_tensor_table_at(table, i);
+        printf("%llu %s role=%s rank=%u dims=",
+               i,
+               tensor->name,
+               yvex_tensor_role_name(tensor->role),
+               tensor->rank);
+        print_tensor_dims(tensor->dims, tensor->rank);
+        printf(" dtype=%s bytes=%llu offset=%llu absolute=%llu\n",
+               yvex_dtype_name(tensor->dtype),
+               tensor->storage_bytes,
                tensor->relative_offset,
                tensor->absolute_offset);
     }
 
+    yvex_tensor_table_close(table);
     yvex_gguf_close(gguf);
     yvex_artifact_close(artifact);
     return 0;

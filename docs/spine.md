@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after C1
+after D0
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-D0 - Tensor and model layer
+E0 - Tokenizer and prompt rendering
 ```
 
 Implemented surface:
@@ -93,6 +93,15 @@ Artifact / GGUF directory:
   src/artifact/range.c
   src/formats/gguf.c
 
+Tensor / model descriptor:
+  include/yvex/dtype.h
+  include/yvex/tensor.h
+  include/yvex/model.h
+  src/model/dtype.c
+  src/model/role.c
+  src/model/tensor_table.c
+  src/model/descriptor.c
+
 CLI:
   cli/yvex_cli.c
   implemented commands: info, help, commands, version, paths, inspect, metadata, tensors
@@ -105,15 +114,15 @@ Tests:
   tests/test_fs.c
   tests/test_artifact.c
   tests/test_gguf.c
+  tests/test_dtype.c
+  tests/test_tensor_table.c
+  tests/test_model_descriptor.c
   tests/test_cli.sh
 ```
 
 Not implemented:
 
 ```text
-dtype/qtype registry
-tensor table
-model descriptor
 tokenizer
 prompt rendering
 graph planner
@@ -145,13 +154,14 @@ filesystem paths/run directories
 artifact byte view
 GGUF header/probe
 GGUF metadata/tensor directory
+dtype/qtype registry
+tensor table
+model descriptor
 ```
 
 Planned public surfaces:
 
 ```text
-dtype/qtype/tensor table
-model descriptor
 tokenizer/prompt
 graph/planner
 backend
@@ -207,8 +217,8 @@ Future commands are listed only under the delivery that implements them.
 | B0 | complete | Runtime filesystem |
 | C0 | complete | Artifact and GGUF parser base |
 | C1 | complete | GGUF metadata and tensor directory |
-| D0 | next | Tensor and model layer |
-| E0 | planned | Tokenizer and prompt rendering |
+| D0 | complete | Tensor and model layer |
+| E0 | next | Tokenizer and prompt rendering |
 | F0 | planned | Graph and planner |
 | G0 | planned | CPU reference backend |
 | H0 | planned | Engine and session runtime |
@@ -770,7 +780,7 @@ D0 builds dtype/qtype registry, tensor table, and model descriptor on top of C1.
 Status:
 
 ```text
-next
+complete
 ```
 
 Owns:
@@ -801,20 +811,24 @@ include/yvex/dtype.h
 include/yvex/tensor.h
 include/yvex/model.h
 src/model/dtype.c
+src/model/role.c
 src/model/tensor_table.c
 src/model/descriptor.c
 tests/test_dtype.c
 tests/test_tensor_table.c
+tests/test_model_descriptor.c
 cli/yvex_cli.c
 Makefile
 docs/api.md
+docs/cli-runtime.md
 docs/spine.md
 ```
 
 CLI surface:
 
 ```text
-yvex inspect may improve model/tensor summary only after implemented
+yvex inspect reports descriptor-only summary
+yvex tensors reports role/dtype/known byte accounting
 ```
 
 Tests:
@@ -833,6 +847,8 @@ Acceptance:
 byte-size formulas are tested
 unsupported qtypes fail explicitly
 tensor role classifier is tested
+model descriptor is tested
+inspect reports status: descriptor-only
 no backend claim
 no inference claim
 ```
@@ -1510,7 +1526,8 @@ future model work must state the exact support level and proof command.
 | A0.2 | 7e5879c | Consolidated docs and ran code-quality gate. |
 | B0 | 8e7d6c8 | Added runtime filesystem paths and run directory skeleton. |
 | C0 | 2818b6a | Added artifact layer and GGUF header probe. |
-| C1 | current commit | Parsed GGUF metadata and tensor directory, added metadata/tensors CLI, fixtures, and tests. |
+| C1 | 0de97e4 | Parsed GGUF metadata and tensor directory, added metadata/tensors CLI, fixtures, and tests. |
+| D0 | current commit | Added dtype/qtype registry, tensor table, role classifier, descriptor-only model summary, CLI output, and tests. |
 
 Current implemented CLI command set:
 
@@ -1539,26 +1556,26 @@ git diff --check
 Next authorized milestone:
 
 ```text
-D0 - Tensor and model layer
+E0 - Tokenizer and prompt rendering
 ```
 
-D0 starts only after C1 validation passes and the C1 commit is recorded.
+E0 starts only after D0 validation passes and the D0 commit is recorded.
 
-D0 must produce:
+E0 must produce:
 
 ```text
-YVEX dtype/qtype registry
-tensor byte-size formulas
-tensor info table
-tensor role classifier
-architecture profile skeleton
-model descriptor skeleton
+tokenizer metadata extraction
+tokenizer kind detection
+special token registry
+tokenization API
+detokenization API
+prompt rendering
+chat template rendering subset
 ```
 
-D0 must not produce:
+E0 must not produce:
 
 ```text
-tokenizer
 backend
 session runtime
 generation command
@@ -1567,16 +1584,17 @@ CUDA backend
 inference claim
 ```
 
-Required D0 proof:
+Required E0 proof:
 
 ```text
 make clean
 make check
 make smoke
-build/tests/test_dtype
-build/tests/test_tensor_table
-build/bin/yvex inspect <valid fixture>
-unsupported qtypes fail clearly
+future build/tests/test_tokenizer
+future yvex tokenize <valid fixture>
+future yvex detokenize <ids>
+future yvex prompt <valid fixture>
+no model execution claim
 ```
 
 ## 6. Planned Delivery Catalogue
@@ -1584,7 +1602,6 @@ unsupported qtypes fail clearly
 The planned delivery catalogue is linear:
 
 ```text
-D0 consumes C1 and creates tensor/model layer.
 E0 consumes D0 and creates tokenizer/prompt rendering.
 F0 consumes D0/E0 and creates graph/planner.
 G0 consumes F0 and creates CPU reference backend.
@@ -1602,7 +1619,6 @@ not authorized.
 Do-not-proceed gates:
 
 ```text
-Do not start E0 until D0 model descriptor surfaces exist.
 Do not start F0 until D0 tensor/model shapes are available.
 Do not start G0 until F0 graph/planner contracts exist.
 Do not start H0 until at least one backend ABI path exists.
@@ -1907,8 +1923,8 @@ and a command-visible proof exists.
 Current handoff:
 
 ```text
-from: C1 - GGUF metadata and tensor directory
-to: D0 - Tensor and model layer
-authorized work: dtype/qtype registry, tensor table, tensor role classifier, model descriptor skeleton
-blocked work: E0 and later until D0 acceptance passes
+from: D0 - Tensor and model layer
+to: E0 - Tokenizer and prompt rendering
+authorized work: tokenizer metadata extraction, tokenization API, detokenization API, prompt rendering
+blocked work: F0 and later until E0 acceptance passes
 ```

@@ -4,8 +4,8 @@
 # Layer: build system
 #
 # Purpose:
-#   Builds the YVEX C core library, B0 filesystem layer, CLI bootstrap, and
-#   tests. Also runs documentation and guardrail validation.
+#   Builds the YVEX C core library, filesystem/artifact/GGUF/model layers,
+#   CLI bootstrap, and tests. Also runs documentation and guardrail validation.
 #
 # Primary commands:
 #   make info
@@ -49,7 +49,11 @@ CORE_SRCS := \
 	src/fs/run_dir.c \
 	src/artifact/artifact.c \
 	src/artifact/range.c \
-	src/formats/gguf.c
+	src/formats/gguf.c \
+	src/model/dtype.c \
+	src/model/role.c \
+	src/model/tensor_table.c \
+	src/model/descriptor.c
 
 CORE_OBJS := $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 
@@ -60,7 +64,10 @@ TEST_SRCS := \
 	tests/test_log.c \
 	tests/test_fs.c \
 	tests/test_artifact.c \
-	tests/test_gguf.c
+	tests/test_gguf.c \
+	tests/test_dtype.c \
+	tests/test_tensor_table.c \
+	tests/test_model_descriptor.c
 
 TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 
@@ -69,12 +76,13 @@ CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md \
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: C1 GGUF metadata/tensor directory parser"
+	@echo "status: D0 tensor/model descriptor layer"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"
 	@echo "artifact: open/read implemented"
 	@echo "gguf: metadata/tensor directory parsing implemented"
+	@echo "model: descriptor-only implemented"
 	@echo "inference: not implemented"
 	@echo "cuda: not implemented"
 	@echo "server: not implemented"
@@ -138,6 +146,7 @@ check-docs:
 	@grep -F "Completed Milestones" docs/spine.md >/dev/null
 	@grep -F "C1 - GGUF metadata and tensor directory" docs/spine.md >/dev/null
 	@grep -F "### C1 - GGUF metadata and tensor directory" docs/spine.md >/dev/null
+	@grep -F "D0 - Tensor and model layer" docs/spine.md >/dev/null
 	@grep -F "Implemented by:" docs/spine.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Backend Contract" docs/backend-contract.md >/dev/null
@@ -154,11 +163,10 @@ check-guardrails:
 	@test ! -d protocols
 	@test ! -e src/README.md
 	@test ! -e tests/README.md
-	@test ! -e include/yvex/model.h
+	@test ! -e include/yvex/tokenizer.h
 	@test ! -e include/yvex/backend.h
 	@test ! -e include/yvex/session.h
 	@test ! -e include/yvex/server.h
-	@test ! -d src/model
 	@test ! -d src/tokenizer
 	@test ! -d src/graph
 	@test ! -d src/backend

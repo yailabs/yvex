@@ -7,8 +7,8 @@
 #
 # Purpose:
 #   Proves that the CLI command table exposes only implemented commands and
-#   returns stable exit codes for common bootstrap, filesystem, artifact, and
-#   GGUF directory behavior.
+#   returns stable exit codes for common bootstrap, filesystem, artifact, GGUF
+#   directory, tensor table, and descriptor behavior.
 #
 # Covers:
 #   - yvex
@@ -74,11 +74,12 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: C1 GGUF metadata/tensor directory parser"
+contains "$OUT_DIR/info.out" "status: D0 tensor/model descriptor layer"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "artifact: open/read implemented"
 contains "$OUT_DIR/info.out" "gguf: metadata/tensor directory parsing implemented"
+contains "$OUT_DIR/info.out" "model: descriptor-only implemented"
 
 run_ok commands "$YVEX_BIN" commands
 contains "$OUT_DIR/commands.out" "Implemented commands:"
@@ -108,13 +109,18 @@ contains "$OUT_DIR/inspect_valid.out" "format: gguf"
 contains "$OUT_DIR/inspect_valid.out" "version: 3"
 contains "$OUT_DIR/inspect_valid.out" "metadata_count: 0"
 contains "$OUT_DIR/inspect_valid.out" "tensor_count: 0"
-contains "$OUT_DIR/inspect_valid.out" "status: directory-only"
+contains "$OUT_DIR/inspect_valid.out" "architecture: unknown"
+contains "$OUT_DIR/inspect_valid.out" "status: descriptor-only"
 
 run_ok inspect_directory "$YVEX_BIN" inspect tests/fixtures/gguf/valid-metadata-tensors.gguf
 contains "$OUT_DIR/inspect_directory.out" "metadata_count: 5"
 contains "$OUT_DIR/inspect_directory.out" "tensor_count: 1"
 contains "$OUT_DIR/inspect_directory.out" "alignment: 32"
-contains "$OUT_DIR/inspect_directory.out" "status: directory-only"
+contains "$OUT_DIR/inspect_directory.out" "architecture: llama"
+contains "$OUT_DIR/inspect_directory.out" "model_name: yvex-test"
+contains "$OUT_DIR/inspect_directory.out" "known_tensor_bytes: 128"
+contains "$OUT_DIR/inspect_directory.out" "unsupported_tensor_accounting: 0"
+contains "$OUT_DIR/inspect_directory.out" "status: descriptor-only"
 
 run_ok metadata "$YVEX_BIN" metadata tests/fixtures/gguf/valid-metadata-tensors.gguf
 contains "$OUT_DIR/metadata.out" "format: gguf"
@@ -129,7 +135,7 @@ run_ok tensors "$YVEX_BIN" tensors tests/fixtures/gguf/valid-metadata-tensors.gg
 contains "$OUT_DIR/tensors.out" "format: gguf"
 contains "$OUT_DIR/tensors.out" "tensor_count: 1"
 contains "$OUT_DIR/tensors.out" "alignment: 32"
-contains "$OUT_DIR/tensors.out" "0 token_embd.weight rank=2 dims=[4,8] type=F32 offset=0 absolute="
+contains "$OUT_DIR/tensors.out" "0 token_embd.weight role=token_embedding rank=2 dims=[4,8] dtype=F32 bytes=128 offset=0 absolute="
 
 set +e
 "$YVEX_BIN" inspect tests/fixtures/gguf/bad-magic.gguf >"$OUT_DIR/inspect_bad_magic.out" 2>"$OUT_DIR/inspect_bad_magic.err"

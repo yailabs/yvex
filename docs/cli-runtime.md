@@ -4,7 +4,7 @@ This document owns CLI behavior. YVEX is CLI-only.
 
 ## Current Implemented Commands
 
-The C1 binary implements exactly:
+The D0 binary implements exactly:
 
 ```text
 yvex
@@ -35,12 +35,13 @@ name: YVEX
 version: 0.1.0
 language: C
 interface: CLI-only
-status: C1 GGUF metadata/tensor directory parser
+status: D0 tensor/model descriptor layer
 library: libyvex.a
 filesystem: implemented
 artifact: open/read implemented
-inference: not implemented
 gguf: metadata/tensor directory parsing implemented
+model: descriptor-only implemented
+inference: not implemented
 cuda: not implemented
 server: not implemented
 ```
@@ -84,8 +85,9 @@ project: DIR/.yvex
 
 ## Current `yvex inspect`
 
-`yvex inspect <path>` opens a file, parses the GGUF header, metadata table, and
-raw tensor directory, then prints a directory-only summary.
+`yvex inspect <path>` opens a file, parses the GGUF header, metadata table and
+raw tensor directory, builds a YVEX tensor table and model descriptor, then
+prints a descriptor-only summary.
 
 Valid GGUF directory output:
 
@@ -96,7 +98,11 @@ metadata_count: 5
 tensor_count: 1
 tensor_data_offset: 288
 alignment: 32
-status: directory-only
+architecture: llama
+model_name: yvex-test
+known_tensor_bytes: 128
+unsupported_tensor_accounting: 0
+status: descriptor-only
 ```
 
 Unknown format output:
@@ -106,8 +112,7 @@ format: unknown
 status: unsupported
 ```
 
-`inspect` does not load a model descriptor, tokenizer, backend, session, or
-inference state.
+`inspect` does not load tokenizer, backend, session, or inference state.
 
 ## Current `yvex metadata`
 
@@ -132,7 +137,8 @@ dumped fully.
 
 ## Current `yvex tensors`
 
-`yvex tensors <path>` prints raw GGUF tensor directory records.
+`yvex tensors <path>` prints YVEX tensor table rows derived from GGUF tensor
+directory records.
 
 Output shape:
 
@@ -143,11 +149,11 @@ tensor_count: 1
 tensor_data_offset: 288
 alignment: 32
 
-0 token_embd.weight rank=2 dims=[4,8] type=F32 offset=0 absolute=288
+0 token_embd.weight role=token_embedding rank=2 dims=[4,8] dtype=F32 bytes=128 offset=0 absolute=288
 ```
 
-This is raw GGUF directory data. It is not a tensor table, dtype/qtype support
-claim, backend support claim, or model loading claim.
+This is descriptor/table data for inspection. It is not backend support, model
+loading, or inference state.
 
 ## Future Commands
 

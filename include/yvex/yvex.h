@@ -9,12 +9,11 @@
  *   It includes only real headers with backing implementation and tests.
  *
  * Owns:
- *   - public aggregation of version/status/error/log/fs/artifact/gguf
+ *   - public aggregation of implemented YVEX headers
  *
  * Does not own:
- *   - future artifact/model/backend/session APIs
+ *   - future tokenizer/backend/session APIs
  *   - implementation details
- *   - terminal UI types
  *
  * Used by:
  *   - yvex CLI
@@ -29,11 +28,14 @@
 #define YVEX_H
 
 #include <yvex/artifact.h>
+#include <yvex/dtype.h>
 #include <yvex/error.h>
 #include <yvex/fs.h>
 #include <yvex/gguf.h>
 #include <yvex/log.h>
+#include <yvex/model.h>
 #include <yvex/status.h>
+#include <yvex/tensor.h>
 #include <yvex/version.h>
 
 #endif /* YVEX_H */

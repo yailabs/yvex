@@ -16,9 +16,10 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-C1 implements the core version/status/error/log surface, runtime filesystem
-paths/run directories, artifact byte views, range checks, and GGUF
-header/probe, metadata, and raw tensor directory parsing.
+D0 implements the core version/status/error/log surface, runtime filesystem
+paths/run directories, artifact byte views, range checks, GGUF header/probe,
+metadata, raw tensor directory parsing, dtype/qtype storage accounting, YVEX
+tensor table rows, and a descriptor-only model summary.
 
 Current public headers:
 
@@ -31,6 +32,9 @@ include/yvex/log.h
 include/yvex/fs.h
 include/yvex/artifact.h
 include/yvex/gguf.h
+include/yvex/dtype.h
+include/yvex/tensor.h
+include/yvex/model.h
 ```
 
 Current aggregate:
@@ -40,6 +44,9 @@ Current aggregate:
 #include <yvex/fs.h>
 #include <yvex/artifact.h>
 #include <yvex/gguf.h>
+#include <yvex/dtype.h>
+#include <yvex/tensor.h>
+#include <yvex/model.h>
 #include <yvex/log.h>
 #include <yvex/status.h>
 #include <yvex/version.h>
@@ -335,15 +342,110 @@ relative tensor offset must satisfy alignment
 absolute tensor offset is checked against file bounds
 ```
 
-C1 does not implement a YVEX tensor table, dtype/qtype byte-size registry,
-model descriptor, tokenizer, backend, or inference path.
+## Dtype / Qtype Registry
+
+`include/yvex/dtype.h` owns the YVEX dtype/qtype vocabulary and storage
+accounting formulas. It does not imply CPU, CUDA, or backend execution support.
+
+```c
+typedef enum {
+    YVEX_DTYPE_UNKNOWN = 0,
+    YVEX_DTYPE_F32,
+    YVEX_DTYPE_F16,
+    YVEX_DTYPE_BF16,
+    YVEX_DTYPE_F64,
+    YVEX_DTYPE_I8,
+    YVEX_DTYPE_I16,
+    YVEX_DTYPE_I32,
+    YVEX_DTYPE_I64,
+    YVEX_DTYPE_Q4_0,
+    YVEX_DTYPE_Q8_0,
+    /* full header also declares additional QK, IQ, TQ, and MXFP4 qtypes */
+} yvex_dtype;
+
+typedef struct {
+    yvex_dtype dtype;
+    const char *name;
+    unsigned int ggml_type;
+    unsigned int block_elems;
+    unsigned int block_bytes;
+    unsigned int scalar_bytes;
+    int is_quantized;
+    int is_supported_for_storage_accounting;
+} yvex_dtype_info;
+
+const yvex_dtype_info *yvex_dtype_get_info(yvex_dtype dtype);
+const yvex_dtype_info *yvex_dtype_from_ggml_type(unsigned int ggml_type);
+const char *yvex_dtype_name(yvex_dtype dtype);
+int yvex_dtype_storage_bytes(yvex_dtype dtype,
+                             unsigned long long element_count,
+                             unsigned long long *out,
+                             yvex_error *err);
+```
+
+D0 storage formulas cover dense numeric types plus `Q4_0` and `Q8_0`.
+Other mapped qtypes may be recognized by name but return
+`YVEX_ERR_UNSUPPORTED` for byte accounting until their formulas are delivered.
+
+## Tensor Table
+
+`include/yvex/tensor.h` builds YVEX-owned tensor table rows from C1 raw GGUF
+tensor directory records.
+
+```c
+typedef struct yvex_tensor_table yvex_tensor_table;
+
+int yvex_tensor_table_from_gguf(yvex_tensor_table **out,
+                                const yvex_gguf *gguf,
+                                yvex_error *err);
+void yvex_tensor_table_close(yvex_tensor_table *table);
+
+unsigned long long yvex_tensor_table_count(const yvex_tensor_table *table);
+const yvex_tensor_info *yvex_tensor_table_at(const yvex_tensor_table *table,
+                                             unsigned long long index);
+const yvex_tensor_info *yvex_tensor_table_find(const yvex_tensor_table *table,
+                                               const char *name);
+const char *yvex_tensor_role_name(yvex_tensor_role role);
+```
+
+Tensor table rows preserve GGUF dimension order, copy tensor names, compute
+element counts with overflow checks, map raw GGML types into YVEX dtypes, and
+classify tensor roles by known LLM naming patterns. This is still inspection
+and planning data, not backend allocation.
+
+## Model Descriptor
+
+`include/yvex/model.h` provides a descriptor-only model summary from parsed GGUF
+metadata and a YVEX tensor table.
+
+```c
+typedef struct yvex_model_descriptor yvex_model_descriptor;
+
+int yvex_model_descriptor_from_gguf(yvex_model_descriptor **out,
+                                    const yvex_gguf *gguf,
+                                    const yvex_tensor_table *tensors,
+                                    yvex_error *err);
+void yvex_model_descriptor_close(yvex_model_descriptor *model);
+
+yvex_arch yvex_model_arch(const yvex_model_descriptor *model);
+const char *yvex_arch_name(yvex_arch arch);
+const char *yvex_model_name(const yvex_model_descriptor *model);
+unsigned long long yvex_model_context_length(const yvex_model_descriptor *model);
+unsigned long long yvex_model_tensor_count(const yvex_model_descriptor *model);
+unsigned long long yvex_model_total_storage_bytes(const yvex_model_descriptor *model);
+unsigned long long yvex_model_unsupported_tensor_accounting_count(const yvex_model_descriptor *model);
+```
+
+The descriptor reports architecture, optional model name, context length, tensor
+count, known storage bytes, unsupported tensor accounting count, and role
+counts. It is not a loaded model and does not own tokenizer, graph, backend,
+session, or inference behavior.
 
 ## Future API Families
 
 The families below are design contracts, not implemented APIs:
 
 ```text
-model/architecture
 tokenizer/prompt
 graph/planner
 memory plan
