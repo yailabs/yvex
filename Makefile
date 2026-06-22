@@ -69,12 +69,12 @@ CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md \
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: C0 artifact/GGUF header skeleton"
+	@echo "status: C1 GGUF metadata/tensor directory parser"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"
 	@echo "artifact: open/read implemented"
-	@echo "gguf: header/probe only"
+	@echo "gguf: metadata/tensor directory parsing implemented"
 	@echo "inference: not implemented"
 	@echo "cuda: not implemented"
 	@echo "server: not implemented"

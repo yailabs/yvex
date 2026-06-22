@@ -53,19 +53,19 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after C0
+after C1
 ```
 
 Current implementation commit:
 
 ```text
-2818b6a
+current commit
 ```
 
 Next authorized milestone:
 
 ```text
-C1 - GGUF metadata and tensor directory
+D0 - Tensor and model layer
 ```
 
 Implemented surface:
@@ -86,7 +86,7 @@ Runtime filesystem:
   src/fs/paths.c
   src/fs/run_dir.c
 
-Artifact / GGUF header:
+Artifact / GGUF directory:
   include/yvex/artifact.h
   include/yvex/gguf.h
   src/artifact/artifact.c
@@ -95,7 +95,7 @@ Artifact / GGUF header:
 
 CLI:
   cli/yvex_cli.c
-  implemented commands: info, help, commands, version, paths, inspect
+  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors
 
 Tests:
   tests/test_status.c
@@ -111,8 +111,6 @@ Tests:
 Not implemented:
 
 ```text
-GGUF metadata
-GGUF tensor directory
 dtype/qtype registry
 tensor table
 model descriptor
@@ -146,12 +144,12 @@ core version/status/error/log
 filesystem paths/run directories
 artifact byte view
 GGUF header/probe
+GGUF metadata/tensor directory
 ```
 
 Planned public surfaces:
 
 ```text
-GGUF full metadata/tensor object
 dtype/qtype/tensor table
 model descriptor
 tokenizer/prompt
@@ -190,7 +188,9 @@ commands
 help
 info
 inspect
+metadata
 paths
+tensors
 version
 ```
 
@@ -206,8 +206,8 @@ Future commands are listed only under the delivery that implements them.
 | A0.2 | complete | Documentation consolidation and code-quality gate |
 | B0 | complete | Runtime filesystem |
 | C0 | complete | Artifact and GGUF parser base |
-| C1 | next | GGUF metadata and tensor directory |
-| D0 | planned | Tensor and model layer |
+| C1 | complete | GGUF metadata and tensor directory |
+| D0 | next | Tensor and model layer |
 | E0 | planned | Tokenizer and prompt rendering |
 | F0 | planned | Graph and planner |
 | G0 | planned | CPU reference backend |
@@ -677,7 +677,7 @@ C1 receives artifact byte views, checked range helpers, and GGUF header parsing.
 Status:
 
 ```text
-next
+complete
 ```
 
 Owns:
@@ -770,7 +770,7 @@ D0 builds dtype/qtype registry, tensor table, and model descriptor on top of C1.
 Status:
 
 ```text
-planned
+next
 ```
 
 Owns:
@@ -1510,6 +1510,7 @@ future model work must state the exact support level and proof command.
 | A0.2 | 7e5879c | Consolidated docs and ran code-quality gate. |
 | B0 | 8e7d6c8 | Added runtime filesystem paths and run directory skeleton. |
 | C0 | 2818b6a | Added artifact layer and GGUF header probe. |
+| C1 | current commit | Parsed GGUF metadata and tensor directory, added metadata/tensors CLI, fixtures, and tests. |
 
 Current implemented CLI command set:
 
@@ -1518,7 +1519,9 @@ commands
 help
 info
 inspect
+metadata
 paths
+tensors
 version
 ```
 
@@ -1536,29 +1539,25 @@ git diff --check
 Next authorized milestone:
 
 ```text
-C1 - GGUF metadata and tensor directory
+D0 - Tensor and model layer
 ```
 
-C1 is not split. C1 is not renamed. C1 starts only after this spine gate is
-committed and validation passes.
+D0 starts only after C1 validation passes and the C1 commit is recorded.
 
-C1 must produce:
+D0 must produce:
 
 ```text
-metadata parser
-metadata iteration/lookups
-tensor directory parser
-tensor iteration/lookups
-metadata CLI command
-tensors CLI command
-malformed fixture coverage
-clear errors for unsupported metadata/tensor cases
+YVEX dtype/qtype registry
+tensor byte-size formulas
+tensor info table
+tensor role classifier
+architecture profile skeleton
+model descriptor skeleton
 ```
 
-C1 must not produce:
+D0 must not produce:
 
 ```text
-model descriptor
 tokenizer
 backend
 session runtime
@@ -1568,16 +1567,16 @@ CUDA backend
 inference claim
 ```
 
-Required C1 proof:
+Required D0 proof:
 
 ```text
 make clean
 make check
 make smoke
-build/tests/test_gguf
-build/bin/yvex metadata <valid fixture>
-build/bin/yvex tensors <valid fixture>
-malformed fixture commands fail with precise errors
+build/tests/test_dtype
+build/tests/test_tensor_table
+build/bin/yvex inspect <valid fixture>
+unsupported qtypes fail clearly
 ```
 
 ## 6. Planned Delivery Catalogue
@@ -1603,7 +1602,6 @@ not authorized.
 Do-not-proceed gates:
 
 ```text
-Do not start D0 until C1 metadata and tensor directory tests pass.
 Do not start E0 until D0 model descriptor surfaces exist.
 Do not start F0 until D0 tensor/model shapes are available.
 Do not start G0 until F0 graph/planner contracts exist.
@@ -1787,7 +1785,8 @@ Implemented by:
 A0/A0.1: build and unit-test baseline
 B0: filesystem tests and CLI proof
 C0: artifact/GGUF header fixtures and inspect proof
-C1 onward: each parser/runtime claim adds fixtures and commands
+C1: metadata/tensor directory fixtures and metadata/tensors command proof
+D0 onward: each parser/runtime claim adds fixtures and commands
 ```
 
 Rules:
@@ -1908,8 +1907,8 @@ and a command-visible proof exists.
 Current handoff:
 
 ```text
-from: DOC-GATE.2R
-to: C1 - GGUF metadata and tensor directory
-authorized work: metadata parser, tensor directory parser, fixtures, CLI metadata/tensors commands
-blocked work: D0 and later until C1 acceptance passes
+from: C1 - GGUF metadata and tensor directory
+to: D0 - Tensor and model layer
+authorized work: dtype/qtype registry, tensor table, tensor role classifier, model descriptor skeleton
+blocked work: E0 and later until D0 acceptance passes
 ```

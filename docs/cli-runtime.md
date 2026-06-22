@@ -4,7 +4,7 @@ This document owns CLI behavior. YVEX is CLI-only.
 
 ## Current Implemented Commands
 
-The C0 binary implements exactly:
+The C1 binary implements exactly:
 
 ```text
 yvex
@@ -15,10 +15,12 @@ yvex help
 yvex help <implemented-command>
 yvex info
 yvex inspect <path>
+yvex metadata <path>
 yvex paths
 yvex paths --project DIR
 yvex paths --run
 yvex paths --run --create
+yvex tensors <path>
 yvex version
 ```
 
@@ -33,12 +35,12 @@ name: YVEX
 version: 0.1.0
 language: C
 interface: CLI-only
-status: C0 artifact/GGUF header skeleton
+status: C1 GGUF metadata/tensor directory parser
 library: libyvex.a
 filesystem: implemented
 artifact: open/read implemented
 inference: not implemented
-gguf: header/probe only
+gguf: metadata/tensor directory parsing implemented
 cuda: not implemented
 server: not implemented
 ```
@@ -82,17 +84,19 @@ project: DIR/.yvex
 
 ## Current `yvex inspect`
 
-`yvex inspect <path>` opens a file, probes for GGUF, and prints the fixed GGUF
-header when available.
+`yvex inspect <path>` opens a file, parses the GGUF header, metadata table, and
+raw tensor directory, then prints a directory-only summary.
 
-Valid minimal GGUF header output:
+Valid GGUF directory output:
 
 ```text
 format: gguf
 version: 3
-metadata_count: 0
-tensor_count: 0
-status: header-only
+metadata_count: 5
+tensor_count: 1
+tensor_data_offset: 288
+alignment: 32
+status: directory-only
 ```
 
 Unknown format output:
@@ -102,16 +106,54 @@ format: unknown
 status: unsupported
 ```
 
-`inspect` does not parse metadata, tensor directories, tokenizers, model
-descriptors, or inference state.
+`inspect` does not load a model descriptor, tokenizer, backend, session, or
+inference state.
+
+## Current `yvex metadata`
+
+`yvex metadata <path>` prints parsed GGUF metadata entries.
+
+Output shape:
+
+```text
+format: gguf
+version: 3
+metadata_count: 5
+
+general.architecture = "llama"
+general.name = "yvex-test"
+llama.context_length = 4096
+general.file_type = 0
+general.alignment = 32
+```
+
+Strings are quoted. Arrays are summarized as `array<type>[count]` rather than
+dumped fully.
+
+## Current `yvex tensors`
+
+`yvex tensors <path>` prints raw GGUF tensor directory records.
+
+Output shape:
+
+```text
+format: gguf
+version: 3
+tensor_count: 1
+tensor_data_offset: 288
+alignment: 32
+
+0 token_embd.weight rank=2 dims=[4,8] type=F32 offset=0 absolute=288
+```
+
+This is raw GGUF directory data. It is not a tensor table, dtype/qtype support
+claim, backend support claim, or model loading claim.
 
 ## Future Commands
 
 Future command names are not support claims:
 
 ```text
-yvex metadata model.gguf
-yvex tensors model.gguf
 yvex plan model.gguf --backend cuda --ctx 32768
 yvex graph model.gguf
 yvex tokenize model.gguf --text "hello"
@@ -163,7 +205,7 @@ without status or progress corrupting `output.txt`.
 9   internal invariant/state error
 ```
 
-C0 currently exercises `0`, `2`, and `5`; artifact IO failures map to `1`.
+C1 currently exercises `0`, `2`, `4`, and `5`; artifact IO failures map to `3`.
 
 ## TTY And Pipe Safety
 

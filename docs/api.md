@@ -16,9 +16,9 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-C0 implements the core version/status/error/log surface, runtime filesystem
+C1 implements the core version/status/error/log surface, runtime filesystem
 paths/run directories, artifact byte views, range checks, and GGUF
-header/probe parsing.
+header/probe, metadata, and raw tensor directory parsing.
 
 Current public headers:
 
@@ -199,14 +199,15 @@ int yvex_range_check(unsigned long long file_size,
                      yvex_error *err);
 ```
 
-The `map` option is accepted as a future policy flag, but C0 uses an owned
+The `map` option is accepted as a future policy flag, but YVEX currently uses an owned
 read buffer and makes no mmap support claim. The data pointer remains valid
 until `yvex_artifact_close`.
 
-## GGUF Header Probe
+## GGUF Directory Parser
 
 ```c
 #define YVEX_GGUF_MAGIC 0x46554747u
+#define YVEX_GGUF_MAX_DIMS 4u
 
 typedef struct {
     unsigned int version;
@@ -219,21 +220,123 @@ typedef struct {
     yvex_gguf_header header;
 } yvex_gguf_probe;
 
+typedef struct yvex_gguf yvex_gguf;
+typedef struct yvex_gguf_value yvex_gguf_value;
+
+typedef enum {
+    YVEX_GGUF_VALUE_UINT8 = 0,
+    YVEX_GGUF_VALUE_INT8 = 1,
+    YVEX_GGUF_VALUE_UINT16 = 2,
+    YVEX_GGUF_VALUE_INT16 = 3,
+    YVEX_GGUF_VALUE_UINT32 = 4,
+    YVEX_GGUF_VALUE_INT32 = 5,
+    YVEX_GGUF_VALUE_FLOAT32 = 6,
+    YVEX_GGUF_VALUE_BOOL = 7,
+    YVEX_GGUF_VALUE_STRING = 8,
+    YVEX_GGUF_VALUE_ARRAY = 9,
+    YVEX_GGUF_VALUE_UINT64 = 10,
+    YVEX_GGUF_VALUE_INT64 = 11,
+    YVEX_GGUF_VALUE_FLOAT64 = 12
+} yvex_gguf_value_type;
+
+typedef struct {
+    yvex_gguf_value_type element_type;
+    unsigned long long count;
+} yvex_gguf_array_info;
+
+typedef struct {
+    const char *name;
+    unsigned int rank;
+    unsigned long long dims[YVEX_GGUF_MAX_DIMS];
+    unsigned int ggml_type;
+    const char *ggml_type_name;
+    unsigned long long relative_offset;
+    unsigned long long absolute_offset;
+} yvex_gguf_tensor_info;
+
 int yvex_gguf_probe_file(const yvex_artifact *artifact, yvex_gguf_probe *out, yvex_error *err);
 int yvex_gguf_read_header(const yvex_artifact *artifact, yvex_gguf_header *out, yvex_error *err);
+
+int yvex_gguf_open(yvex_gguf **out, const yvex_artifact *artifact, yvex_error *err);
+void yvex_gguf_close(yvex_gguf *gguf);
+
+const yvex_gguf_header *yvex_gguf_header_view(const yvex_gguf *gguf);
+const char *yvex_gguf_value_type_name(yvex_gguf_value_type type);
 ```
 
-C0 reads only:
+C1 parses:
 
 ```text
 magic          uint32 little-endian
 version        uint32 little-endian
 tensor_count   uint64 little-endian
 metadata_count uint64 little-endian
+metadata key/value table
+raw tensor directory
+tensor data base offset
+alignment
 ```
 
-GGUF metadata entries, tensor directory parsing, qtype mapping, tokenizer
-loading, and model descriptors are not implemented.
+The parsed `yvex_gguf` object is opaque. The caller owns the artifact and must
+keep it alive for the parser object lifetime. C1 copies metadata keys, string
+values, and tensor names so public views remain stable until `yvex_gguf_close`.
+
+### GGUF Metadata
+
+```c
+unsigned long long yvex_gguf_metadata_count(const yvex_gguf *gguf);
+const char *yvex_gguf_metadata_key(const yvex_gguf *gguf, unsigned long long index);
+const yvex_gguf_value *yvex_gguf_metadata_value(const yvex_gguf *gguf, unsigned long long index);
+const yvex_gguf_value *yvex_gguf_metadata_find(const yvex_gguf *gguf, const char *key);
+
+yvex_gguf_value_type yvex_gguf_value_type_of(const yvex_gguf_value *value);
+int yvex_gguf_value_as_u64(const yvex_gguf_value *value, unsigned long long *out);
+int yvex_gguf_value_as_i64(const yvex_gguf_value *value, long long *out);
+int yvex_gguf_value_as_f64(const yvex_gguf_value *value, double *out);
+int yvex_gguf_value_as_bool(const yvex_gguf_value *value, int *out);
+int yvex_gguf_value_as_string(const yvex_gguf_value *value, const char **data, unsigned long long *len);
+int yvex_gguf_value_array_info(const yvex_gguf_value *value, yvex_gguf_array_info *out);
+```
+
+Metadata behavior:
+
+```text
+out-of-range metadata index returns NULL
+missing metadata key returns NULL
+duplicate keys are allowed; find returns the first occurrence
+metadata keys are copied as null-terminated strings
+empty keys fail parse
+string values are copied and length-preserving
+arrays are parsed and exposed as element type/count summaries
+nested arrays are rejected in C1 with YVEX_ERR_UNSUPPORTED
+```
+
+### GGUF Tensor Directory
+
+```c
+unsigned long long yvex_gguf_tensor_count(const yvex_gguf *gguf);
+const yvex_gguf_tensor_info *yvex_gguf_tensor_at(const yvex_gguf *gguf, unsigned long long index);
+const yvex_gguf_tensor_info *yvex_gguf_tensor_find(const yvex_gguf *gguf, const char *name);
+unsigned long long yvex_gguf_tensor_data_offset(const yvex_gguf *gguf);
+unsigned int yvex_gguf_alignment(const yvex_gguf *gguf);
+```
+
+Tensor directory behavior:
+
+```text
+raw GGUF tensor records only
+out-of-range tensor index returns NULL
+missing tensor name returns NULL
+tensor names are copied as null-terminated strings
+rank must be 1..YVEX_GGUF_MAX_DIMS
+dimensions must be non-zero
+dimension product overflow fails parse
+relative tensor offset must satisfy alignment
+absolute tensor offset is checked against file bounds
+```
+
+C1 does not implement a YVEX tensor table, dtype/qtype byte-size registry,
+model descriptor, tokenizer, backend, or inference path.
 
 ## Future API Families
 
@@ -254,12 +357,6 @@ server/provider
 
 Future headers may be added only when the corresponding implementation, tests,
 failure behavior, and documentation are delivered in the same wave.
-
-## Future GGUF Extensions
-
-Future GGUF parser work may add metadata and tensor directory APIs. Generic
-parser APIs must use checked byte ranges, explicit status codes, and precise
-parser failure messages.
 
 ## Future Backend API
 

@@ -6,8 +6,9 @@
  *
  * Purpose:
  *   Implements the command table and CLI proof surface for implemented core
- *   and B0 filesystem behavior. The CLI reports what exists and does not expose future
- *   runtime commands before their modules exist.
+ *   filesystem, artifact, and GGUF directory behavior. The CLI reports what
+ *   exists and does not expose future runtime commands before their modules
+ *   exist.
  *
  * Implements:
  *   - yvex
@@ -17,6 +18,8 @@
  *   - yvex version
  *   - yvex paths
  *   - yvex inspect <path>
+ *   - yvex metadata <path>
+ *   - yvex tensors <path>
  *   - yvex --help
  *   - yvex --version
  *
@@ -49,7 +52,9 @@ static int command_commands(int argc, char **argv);
 static int command_help(int argc, char **argv);
 static int command_info(int argc, char **argv);
 static int command_inspect(int argc, char **argv);
+static int command_metadata(int argc, char **argv);
 static int command_paths(int argc, char **argv);
+static int command_tensors(int argc, char **argv);
 static int command_version(int argc, char **argv);
 
 static const yvex_cli_command yvex_commands[] = {
@@ -71,15 +76,22 @@ static const yvex_cli_command yvex_commands[] = {
         "info",
         "Show current YVEX build and implementation status.",
         "yvex info",
-        "Prints the implemented B0 core/CLI/filesystem status.",
+        "Prints the implemented core/filesystem/artifact/GGUF directory status.",
         command_info,
     },
     {
         "inspect",
-        "Inspect a model artifact header.",
+        "Inspect a GGUF artifact directory.",
         "yvex inspect <path>",
-        "Opens a file, probes for GGUF, and prints GGUF header fields when available. C0 is header-only; metadata, tensors, tokenizer, and model loading are not implemented.",
+        "Opens a file, parses the GGUF header, metadata table, and tensor directory, and prints a directory-only summary. Tokenizers, model descriptors, and model loading are not implemented.",
         command_inspect,
+    },
+    {
+        "metadata",
+        "Print parsed GGUF metadata entries.",
+        "yvex metadata <path>",
+        "Opens a GGUF file and prints parsed metadata key/value summaries. Arrays are summarized; tokenizers and model loading are not implemented.",
+        command_metadata,
     },
     {
         "paths",
@@ -87,6 +99,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex paths [--project DIR] [--run] [--create]",
         "Prints resolved config/cache/state/data paths. With --run it prints a prepared run directory. With --create it creates that run directory.",
         command_paths,
+    },
+    {
+        "tensors",
+        "Print parsed GGUF tensor directory records.",
+        "yvex tensors <path>",
+        "Opens a GGUF file and prints raw tensor directory records. Dtype/qtype registry, tensor table, backend support, and model loading are not implemented.",
+        command_tensors,
     },
     {
         "version",
@@ -147,6 +166,111 @@ static int print_yvex_error(const yvex_error *err, int exit_code)
     return exit_code;
 }
 
+static int exit_for_status(int status)
+{
+    switch (status) {
+    case YVEX_ERR_INVALID_ARG:
+        return 2;
+    case YVEX_ERR_IO:
+        return 3;
+    case YVEX_ERR_FORMAT:
+    case YVEX_ERR_BOUNDS:
+        return 4;
+    case YVEX_ERR_UNSUPPORTED:
+        return 5;
+    default:
+        return 1;
+    }
+}
+
+static void print_quoted_bytes(const char *data, unsigned long long len)
+{
+    unsigned long long i;
+
+    putchar('"');
+    for (i = 0; i < len; ++i) {
+        unsigned char ch = (unsigned char)data[i];
+        if (ch == '"' || ch == '\\') {
+            putchar('\\');
+            putchar((int)ch);
+        } else if (ch == '\n') {
+            printf("\\n");
+        } else if (ch == '\r') {
+            printf("\\r");
+        } else if (ch == '\t') {
+            printf("\\t");
+        } else if (ch < 32 || ch > 126) {
+            printf("\\x%02x", (unsigned int)ch);
+        } else {
+            putchar((int)ch);
+        }
+    }
+    putchar('"');
+}
+
+static void print_metadata_value(const yvex_gguf_value *value)
+{
+    unsigned long long u64;
+    long long i64;
+    double f64;
+    int bool_value;
+    const char *string_data;
+    unsigned long long string_len;
+    yvex_gguf_array_info array;
+
+    switch (yvex_gguf_value_type_of(value)) {
+    case YVEX_GGUF_VALUE_UINT8:
+    case YVEX_GGUF_VALUE_UINT16:
+    case YVEX_GGUF_VALUE_UINT32:
+    case YVEX_GGUF_VALUE_UINT64:
+        if (yvex_gguf_value_as_u64(value, &u64) == YVEX_OK) {
+            printf("%llu", u64);
+        }
+        break;
+    case YVEX_GGUF_VALUE_INT8:
+    case YVEX_GGUF_VALUE_INT16:
+    case YVEX_GGUF_VALUE_INT32:
+    case YVEX_GGUF_VALUE_INT64:
+        if (yvex_gguf_value_as_i64(value, &i64) == YVEX_OK) {
+            printf("%lld", i64);
+        }
+        break;
+    case YVEX_GGUF_VALUE_FLOAT32:
+    case YVEX_GGUF_VALUE_FLOAT64:
+        if (yvex_gguf_value_as_f64(value, &f64) == YVEX_OK) {
+            printf("%g", f64);
+        }
+        break;
+    case YVEX_GGUF_VALUE_BOOL:
+        if (yvex_gguf_value_as_bool(value, &bool_value) == YVEX_OK) {
+            printf("%s", bool_value ? "true" : "false");
+        }
+        break;
+    case YVEX_GGUF_VALUE_STRING:
+        if (yvex_gguf_value_as_string(value, &string_data, &string_len) == YVEX_OK) {
+            print_quoted_bytes(string_data, string_len);
+        }
+        break;
+    case YVEX_GGUF_VALUE_ARRAY:
+        if (yvex_gguf_value_array_info(value, &array) == YVEX_OK) {
+            printf("array<%s>[%llu]", yvex_gguf_value_type_name(array.element_type), array.count);
+        }
+        break;
+    }
+}
+
+static int open_artifact_for_gguf(const char *path, yvex_artifact **artifact, yvex_error *err)
+{
+    yvex_artifact_options options;
+
+    memset(&options, 0, sizeof(options));
+    options.path = path;
+    options.readonly = 1;
+    options.map = 1;
+
+    return yvex_artifact_open(artifact, &options, err);
+}
+
 static int command_commands(int argc, char **argv)
 {
     unsigned long i;
@@ -189,12 +313,12 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: C0 artifact/GGUF header skeleton\n");
+    printf("status: C1 GGUF metadata/tensor directory parser\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
     printf("inference: not implemented\n");
-    printf("gguf: header/probe only\n");
+    printf("gguf: metadata/tensor directory parsing implemented\n");
     printf("cuda: not implemented\n");
     printf("server: not implemented\n");
     return 0;
@@ -202,9 +326,10 @@ static int command_info(int argc, char **argv)
 
 static int command_inspect(int argc, char **argv)
 {
-    yvex_artifact_options options;
     yvex_artifact *artifact = NULL;
+    yvex_gguf *gguf = NULL;
     yvex_gguf_probe probe;
+    const yvex_gguf_header *header;
     yvex_error err;
     int rc;
 
@@ -220,27 +345,12 @@ static int command_inspect(int argc, char **argv)
         return 2;
     }
 
-    memset(&options, 0, sizeof(options));
-    options.path = argv[2];
-    options.readonly = 1;
-    options.map = 1;
-
-    rc = yvex_artifact_open(&artifact, &options, &err);
+    rc = open_artifact_for_gguf(argv[2], &artifact, &err);
     if (rc != YVEX_OK) {
-        return print_yvex_error(&err, 1);
+        return print_yvex_error(&err, exit_for_status(rc));
     }
 
     rc = yvex_gguf_probe_file(artifact, &probe, &err);
-    if (rc == YVEX_OK && probe.is_gguf) {
-        printf("format: gguf\n");
-        printf("version: %u\n", probe.header.version);
-        printf("metadata_count: %llu\n", probe.header.metadata_count);
-        printf("tensor_count: %llu\n", probe.header.tensor_count);
-        printf("status: header-only\n");
-        yvex_artifact_close(artifact);
-        return 0;
-    }
-
     if (rc == YVEX_OK && !probe.is_gguf) {
         printf("format: unknown\n");
         printf("status: unsupported\n");
@@ -248,16 +358,83 @@ static int command_inspect(int argc, char **argv)
         return 5;
     }
 
-    if (rc == YVEX_ERR_UNSUPPORTED) {
-        printf("format: gguf\n");
-        printf("status: unsupported\n");
-        fprintf(stderr, "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
+    if (rc != YVEX_OK) {
+        if (rc == YVEX_ERR_UNSUPPORTED) {
+            printf("format: gguf\n");
+            printf("status: unsupported\n");
+        }
         yvex_artifact_close(artifact);
-        return 5;
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_gguf_open(&gguf, artifact, &err);
+    if (rc == YVEX_OK) {
+        header = yvex_gguf_header_view(gguf);
+        printf("format: gguf\n");
+        printf("version: %u\n", header->version);
+        printf("metadata_count: %llu\n", header->metadata_count);
+        printf("tensor_count: %llu\n", header->tensor_count);
+        printf("tensor_data_offset: %llu\n", yvex_gguf_tensor_data_offset(gguf));
+        printf("alignment: %u\n", yvex_gguf_alignment(gguf));
+        printf("status: directory-only\n");
+        yvex_gguf_close(gguf);
+        yvex_artifact_close(artifact);
+        return 0;
     }
 
     yvex_artifact_close(artifact);
-    return print_yvex_error(&err, 1);
+    return print_yvex_error(&err, exit_for_status(rc));
+}
+
+static int command_metadata(int argc, char **argv)
+{
+    yvex_artifact *artifact = NULL;
+    yvex_gguf *gguf = NULL;
+    const yvex_gguf_header *header;
+    yvex_error err;
+    unsigned long long i;
+    int rc;
+
+    yvex_error_clear(&err);
+
+    if (argc != 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        if (argc == 3) {
+            print_command_help(stdout, find_command("metadata"));
+            return 0;
+        }
+        fprintf(stderr, "yvex: metadata requires exactly one path\n");
+        fprintf(stderr, "usage: yvex metadata <path>\n");
+        return 2;
+    }
+
+    rc = open_artifact_for_gguf(argv[2], &artifact, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_gguf_open(&gguf, artifact, &err);
+    if (rc != YVEX_OK) {
+        yvex_artifact_close(artifact);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    header = yvex_gguf_header_view(gguf);
+    printf("format: gguf\n");
+    printf("version: %u\n", header->version);
+    printf("metadata_count: %llu\n", yvex_gguf_metadata_count(gguf));
+    printf("\n");
+
+    for (i = 0; i < yvex_gguf_metadata_count(gguf); ++i) {
+        const char *key = yvex_gguf_metadata_key(gguf, i);
+        const yvex_gguf_value *value = yvex_gguf_metadata_value(gguf, i);
+        printf("%s = ", key ? key : "");
+        print_metadata_value(value);
+        printf("\n");
+    }
+
+    yvex_gguf_close(gguf);
+    yvex_artifact_close(artifact);
+    return 0;
 }
 
 static int command_paths(int argc, char **argv)
@@ -328,6 +505,67 @@ static int command_paths(int argc, char **argv)
     if (rc != YVEX_OK) {
         return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
     }
+    return 0;
+}
+
+static int command_tensors(int argc, char **argv)
+{
+    yvex_artifact *artifact = NULL;
+    yvex_gguf *gguf = NULL;
+    const yvex_gguf_header *header;
+    yvex_error err;
+    unsigned long long i;
+    int rc;
+
+    yvex_error_clear(&err);
+
+    if (argc != 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        if (argc == 3) {
+            print_command_help(stdout, find_command("tensors"));
+            return 0;
+        }
+        fprintf(stderr, "yvex: tensors requires exactly one path\n");
+        fprintf(stderr, "usage: yvex tensors <path>\n");
+        return 2;
+    }
+
+    rc = open_artifact_for_gguf(argv[2], &artifact, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_gguf_open(&gguf, artifact, &err);
+    if (rc != YVEX_OK) {
+        yvex_artifact_close(artifact);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    header = yvex_gguf_header_view(gguf);
+    printf("format: gguf\n");
+    printf("version: %u\n", header->version);
+    printf("tensor_count: %llu\n", yvex_gguf_tensor_count(gguf));
+    printf("tensor_data_offset: %llu\n", yvex_gguf_tensor_data_offset(gguf));
+    printf("alignment: %u\n", yvex_gguf_alignment(gguf));
+    printf("\n");
+
+    for (i = 0; i < yvex_gguf_tensor_count(gguf); ++i) {
+        unsigned int d;
+        const yvex_gguf_tensor_info *tensor = yvex_gguf_tensor_at(gguf, i);
+        printf("%llu %s rank=%u dims=[", i, tensor->name, tensor->rank);
+        for (d = 0; d < tensor->rank; ++d) {
+            if (d > 0) {
+                printf(",");
+            }
+            printf("%llu", tensor->dims[d]);
+        }
+        printf("] type=%s offset=%llu absolute=%llu\n",
+               tensor->ggml_type_name,
+               tensor->relative_offset,
+               tensor->absolute_offset);
+    }
+
+    yvex_gguf_close(gguf);
+    yvex_artifact_close(artifact);
     return 0;
 }
 

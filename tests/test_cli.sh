@@ -7,7 +7,8 @@
 #
 # Purpose:
 #   Proves that the CLI command table exposes only implemented commands and
-#   returns stable exit codes for common bootstrap and B0 filesystem behavior.
+#   returns stable exit codes for common bootstrap, filesystem, artifact, and
+#   GGUF directory behavior.
 #
 # Covers:
 #   - yvex
@@ -17,7 +18,9 @@
 #   - yvex version
 #   - yvex info
 #   - yvex inspect
+#   - yvex metadata
 #   - yvex paths
+#   - yvex tensors
 #   - yvex commands
 #   - yvex help info
 #   - yvex unknown
@@ -71,11 +74,11 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: C0 artifact/GGUF header skeleton"
+contains "$OUT_DIR/info.out" "status: C1 GGUF metadata/tensor directory parser"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "artifact: open/read implemented"
-contains "$OUT_DIR/info.out" "gguf: header/probe only"
+contains "$OUT_DIR/info.out" "gguf: metadata/tensor directory parsing implemented"
 
 run_ok commands "$YVEX_BIN" commands
 contains "$OUT_DIR/commands.out" "Implemented commands:"
@@ -83,7 +86,9 @@ contains "$OUT_DIR/commands.out" "  commands"
 contains "$OUT_DIR/commands.out" "  help"
 contains "$OUT_DIR/commands.out" "  info"
 contains "$OUT_DIR/commands.out" "  inspect"
+contains "$OUT_DIR/commands.out" "  metadata"
 contains "$OUT_DIR/commands.out" "  paths"
+contains "$OUT_DIR/commands.out" "  tensors"
 contains "$OUT_DIR/commands.out" "  version"
 
 run_ok help_info "$YVEX_BIN" help info
@@ -92,12 +97,39 @@ contains "$OUT_DIR/help_info.out" "usage: yvex info"
 run_ok help_inspect "$YVEX_BIN" help inspect
 contains "$OUT_DIR/help_inspect.out" "usage: yvex inspect <path>"
 
+run_ok help_metadata "$YVEX_BIN" help metadata
+contains "$OUT_DIR/help_metadata.out" "usage: yvex metadata <path>"
+
+run_ok help_tensors "$YVEX_BIN" help tensors
+contains "$OUT_DIR/help_tensors.out" "usage: yvex tensors <path>"
+
 run_ok inspect_valid "$YVEX_BIN" inspect tests/fixtures/gguf/valid-minimal.gguf
 contains "$OUT_DIR/inspect_valid.out" "format: gguf"
 contains "$OUT_DIR/inspect_valid.out" "version: 3"
 contains "$OUT_DIR/inspect_valid.out" "metadata_count: 0"
 contains "$OUT_DIR/inspect_valid.out" "tensor_count: 0"
-contains "$OUT_DIR/inspect_valid.out" "status: header-only"
+contains "$OUT_DIR/inspect_valid.out" "status: directory-only"
+
+run_ok inspect_directory "$YVEX_BIN" inspect tests/fixtures/gguf/valid-metadata-tensors.gguf
+contains "$OUT_DIR/inspect_directory.out" "metadata_count: 5"
+contains "$OUT_DIR/inspect_directory.out" "tensor_count: 1"
+contains "$OUT_DIR/inspect_directory.out" "alignment: 32"
+contains "$OUT_DIR/inspect_directory.out" "status: directory-only"
+
+run_ok metadata "$YVEX_BIN" metadata tests/fixtures/gguf/valid-metadata-tensors.gguf
+contains "$OUT_DIR/metadata.out" "format: gguf"
+contains "$OUT_DIR/metadata.out" "metadata_count: 5"
+contains "$OUT_DIR/metadata.out" "general.architecture = \"llama\""
+contains "$OUT_DIR/metadata.out" "general.name = \"yvex-test\""
+contains "$OUT_DIR/metadata.out" "llama.context_length = 4096"
+contains "$OUT_DIR/metadata.out" "general.file_type = 0"
+contains "$OUT_DIR/metadata.out" "general.alignment = 32"
+
+run_ok tensors "$YVEX_BIN" tensors tests/fixtures/gguf/valid-metadata-tensors.gguf
+contains "$OUT_DIR/tensors.out" "format: gguf"
+contains "$OUT_DIR/tensors.out" "tensor_count: 1"
+contains "$OUT_DIR/tensors.out" "alignment: 32"
+contains "$OUT_DIR/tensors.out" "0 token_embd.weight rank=2 dims=[4,8] type=F32 offset=0 absolute="
 
 set +e
 "$YVEX_BIN" inspect tests/fixtures/gguf/bad-magic.gguf >"$OUT_DIR/inspect_bad_magic.out" 2>"$OUT_DIR/inspect_bad_magic.err"
