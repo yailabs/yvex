@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-OWI.0 - Open Weight Intake / GGUF Toolchain Spine
+OWI.0 - DS4 inventory and open-weight pipeline spine
 ```
 
 Implemented surface:
@@ -447,17 +447,17 @@ DeepSeek-specific conversion code belongs in an adapter/tool, not generic runtim
 Generic intake must apply to open-weight families through adapters.
 ```
 
-Future OWI ladder:
+Open Weight Intake / GGUF Toolchain ladder:
 
 ```text
-OWI.0 - DS4 inventory and open-weight pipeline spine
+OWI.0 - DS4 Inventory and Open-Weight Pipeline Spine
 OWI.1 - Source manifest and model provenance contract
 OWI.2 - Safetensors/native weight inventory reader
 OWI.3 - GGUF template contract and validator
 OWI.4 - Tensor mapping/architecture adapter contract
 OWI.5 - Quantization policy manifest
 OWI.6 - Calibration/imatrix contract
-OWI.7 - First YVEX-owned GGUF emission for fixture/native tiny source
+OWI.7 - First YVEX-owned GGUF emission from controlled source
 OWI.8 - DeepSeek V4 Flash conversion bridge
 ```
 
@@ -527,9 +527,23 @@ Future commands are listed only under the delivery that implements them.
 | L0 | complete | CUDA/DGX Spark backend |
 | M0 | complete | Fixture weight materialization |
 | QA.BENCH.0 | complete | QA and benchmark spine |
-| OWI.0 | next | Open Weight Intake / GGUF Toolchain Spine |
-| OWI.1-OWI.8 | planned | Open weight intake and GGUF toolchain ladder |
-| M1-M8 | paused | Model support ladder pending OWI provenance/toolchain path |
+| OWI.0 | next | DS4 inventory and open-weight pipeline spine |
+| OWI.1 | planned | Source manifest and model provenance contract |
+| OWI.2 | planned | Safetensors/native weight inventory reader |
+| OWI.3 | planned | GGUF template contract and validator |
+| OWI.4 | planned | Tensor mapping and architecture adapter contract |
+| OWI.5 | planned | Quantization policy manifest |
+| OWI.6 | planned | Calibration and imatrix contract |
+| OWI.7 | planned | First YVEX-owned GGUF emission from controlled source |
+| OWI.8 | planned | DeepSeek V4 Flash conversion bridge |
+| M1 | paused | DeepSeek GGUF materialization from provenance-controlled source |
+| M2 | paused | Real-model materialization hardening |
+| M3 | paused | Materialized-weight engine attachment |
+| M4 | paused | First executable fixture graph path |
+| M5 | paused | First real-model partial graph execution |
+| M6 | paused | Prefill runtime foundation |
+| M7 | paused | Decode and logits runtime foundation |
+| M8 | paused | First constrained generation path |
 
 ### P0 - Repository reset and technical spine
 
@@ -1833,72 +1847,294 @@ normal make check remains CPU-safe
 Handoff:
 
 ```text
-M0-M8 may use CUDA only for support levels backed by command proof.
+Model support waves may use CUDA only for support levels backed by command proof.
 ```
 
-### M0-M8 - Model support ladder
+### Model Support Ladder
+
+The M ladder remains paused until OWI.0 and OWI.1 establish the
+open-weight provenance/toolchain path.
+
+Rules:
+
+```text
+Each model support wave has its own ownership, non-goals, and gate.
+No M wave may use an arbitrary prebuilt GGUF as source of truth.
+Every support level requires command proof.
+Large-model feasibility is reported as feasibility until execution is proven.
+No broad model support claim is valid without generated/staged artifact provenance.
+```
+
+### M1 - DeepSeek GGUF Materialization From Provenance-Controlled Source
 
 Status:
 
 ```text
-planned
+paused
 ```
 
 Owns:
 
 ```text
-fixture models
-small GGUF model support path
-medium coder/instruct model inspection
-MoE inspection
-DeepSeek/Qwen/Kimi/GLM/Llama/Gemma/Phi watch and support states
-DGX Spark feasibility matrix
-model support freeze
+first DeepSeek materialization attempt from a provenance-controlled source
+external model file path
+CUDA direct materialization
+failure diagnostics for OOM, split, unsupported dtype, and parser failures
+no model files committed
 ```
 
 Does not own:
 
 ```text
-support claims without command proof
-execution claims beyond implemented runtime/backend paths
-remote model download assumptions inside baseline validation
-```
-
-Creates / modifies:
-
-```text
-tests/fixtures/models/ when small fixtures are introduced
-docs/spine.md
-docs/backend-contract.md when backend feasibility changes
-CLI smoke tests for each support level
-```
-
-CLI surface:
-
-```text
-commands depend on the implemented support level
-```
-
-Tests:
-
-```text
-fixture model tests
-small real model inspection/tokenization tests when available
-generation tests only after backend/session support exists
+conversion itself if OWI still owns conversion
+inference
+graph execution
+prefill/decode
+sampler
+server completions
 ```
 
 Acceptance:
 
 ```text
-each support level has command proof
-large-model feasibility is reported as feasibility until execution is proven
-no broad model support claim
+yvex materialize --model "$DEEPSEEK_GGUF" --backend cuda
+result is either weights-materialized or clean weights-failed
+failure reason is specific
+execution_ready remains false
+no inference claim
 ```
 
-Handoff:
+### M2 - Real-Model Materialization Hardening
+
+Status:
 
 ```text
-future model work must state the exact support level and proof command.
+paused
+```
+
+Owns:
+
+```text
+materialization failure cleanup
+memory pressure behavior
+unsupported dtype behavior
+split GGUF policy
+partial/full materialization reporting
+external model regression scripts
+```
+
+Does not own:
+
+```text
+graph execution
+inference
+sampler
+benchmark claims
+```
+
+Acceptance:
+
+```text
+materialization can fail without leaking allocations
+summary/partial/failed statuses are reliable
+CUDA memory before/after is sane
+unsupported storage accounting is explicit
+```
+
+### M3 - Materialized-Weight Engine Attachment
+
+Status:
+
+```text
+paused
+```
+
+Owns:
+
+```text
+attaching materialized weights to yvex_engine
+engine summary includes weight residency
+session can see materialized weight status
+no graph execution yet unless explicitly scoped
+```
+
+Does not own:
+
+```text
+prefill/decode
+sampler
+generation
+```
+
+Acceptance:
+
+```text
+engine can report descriptor plus materialized weight table
+CPU/CUDA residency is visible
+execution_ready remains false unless graph requirements are met later
+```
+
+### M4 - First Executable Fixture Graph Path
+
+Status:
+
+```text
+paused
+```
+
+Owns:
+
+```text
+executing the existing fixture graph path over materialized weights
+embed op through backend
+activation output validation
+CPU/CUDA parity for fixture graph
+```
+
+Does not own:
+
+```text
+real model execution
+logits
+sampler
+decode loop
+```
+
+Acceptance:
+
+```text
+fixture graph produces expected hidden activation
+CPU/CUDA parity passes
+still no generated text
+```
+
+### M5 - First Real-Model Partial Graph Execution
+
+Status:
+
+```text
+paused
+```
+
+Owns:
+
+```text
+first partial execution path on a real model component
+selected supported op subset
+explicit missing-op diagnostics
+```
+
+Does not own:
+
+```text
+full model run
+decode
+generation
+```
+
+Acceptance:
+
+```text
+selected real-model tensors can feed supported backend ops
+unsupported graph segments are reported cleanly
+```
+
+### M6 - Prefill Runtime Foundation
+
+Status:
+
+```text
+paused
+```
+
+Owns:
+
+```text
+prefill state machine
+prompt token ingestion into executable runtime
+KV allocation policy if required
+logits precondition path
+```
+
+Does not own:
+
+```text
+sampler
+open-ended generation
+benchmark claims
+```
+
+Acceptance:
+
+```text
+prefill either executes a valid supported graph path or fails with precise missing op/runtime reason
+no fake completion
+```
+
+### M7 - Decode and Logits Runtime Foundation
+
+Status:
+
+```text
+paused
+```
+
+Owns:
+
+```text
+decode step structure
+logits buffer lifecycle
+next-token precondition
+backend op readiness checks
+```
+
+Does not own:
+
+```text
+sampling policy
+chat UX completion
+benchmark claims
+```
+
+Acceptance:
+
+```text
+decode step is structurally implemented only where backend graph support exists
+logits status is real
+failure is explicit otherwise
+```
+
+### M8 - First Constrained Generation Path
+
+Status:
+
+```text
+paused
+```
+
+Owns:
+
+```text
+first real generated-token path
+minimal sampler
+constrained prompt fixture
+strict output/provenance reporting
+```
+
+Does not own:
+
+```text
+broad model support
+benchmark marketing
+OpenAI compatibility claim
+```
+
+Acceptance:
+
+```text
+one supported model/path can generate under strict constraints
+output is marked experimental
+benchmark gates remain separate under QA policy
 ```
 
 ### QA.BENCH.0 - QA and benchmark spine
@@ -1946,7 +2182,7 @@ no new docs sprawl
 no benchmark claims before inference exists
 ```
 
-### OWI.0 - Open Weight Intake / GGUF Toolchain Spine
+### OWI.0 - DS4 Inventory and Open-Weight Pipeline Spine
 
 Status:
 
@@ -1957,13 +2193,14 @@ next
 Owns:
 
 ```text
-DS4 GGUF toolchain read-only inventory
+read-only DS4 inspection
+DS4 GGUF toolchain inventory
 DeepSeek quantizer structure analysis
-template GGUF role extraction
-imatrix/calibration role extraction
+GGUF template role summary
+imatrix/calibration role summary
 generic open-weight pipeline
 runtime/toolchain boundary
-future OWI ladder
+OWI ladder insertion into the spine
 M1 pause/resume rule
 ```
 
@@ -1991,14 +2228,22 @@ docs/spine.md
 Acceptance:
 
 ```text
-official open weights are named as source of truth
-GGUF is framed as generated/validated operational container
-OWI ladder is defined before M1 resumes
-runtime core and open-weight tools are separated
+DS4 paths inspected read-only
+docs/spine.md updated with OWI pipeline
+OWI.1 through OWI.8 expanded as explicit future waves
+M1 marked paused pending OWI path
+no new docs files unless explicitly approved
 no model files are committed
+validation passes
 ```
 
-### OWI.1-OWI.8 - Open weight intake and GGUF toolchain ladder
+Handoff:
+
+```text
+next wave is OWI.1 - Source manifest and model provenance contract
+```
+
+### OWI.1 - Source Manifest and Model Provenance Contract
 
 Status:
 
@@ -2009,29 +2254,477 @@ planned
 Owns:
 
 ```text
-source manifest and model provenance contract
-safetensors/native weight inventory reader
-GGUF template contract and validator
-tensor mapping and architecture adapter contract
-quantization policy manifest
-calibration/imatrix contract
-first YVEX-owned GGUF emission for fixture/native tiny source
-DeepSeek V4 Flash conversion bridge
+official model source manifest schema
+Hugging Face repo identity
+model revision / commit hash
+license reference
+expected file list
+local provider-node path
+download command record
+dry-run/download log references
+optional checksum manifest
+source/provenance status vocabulary
 ```
 
 Does not own:
 
 ```text
-runtime execution
-provider compatibility claims
-inference benchmarks
-DeepSeek support claim before generated/staged GGUF validation and materialization proof
+safetensors parsing
+quantization
+GGUF emission
+materialization
+model inference
+modifying official weights
+committing model files
+```
+
+Expected files:
+
+```text
+include/yvex/source_manifest.h optional only if public API is needed
+src/tools/source_manifest.c optional, tool-side only
+tools/weights/source_manifest.c preferred if tool plane exists
+tests/test_source_manifest.c
+```
+
+Expected CLI/tool surface, if implemented:
+
+```text
+yvex source-manifest --hf deepseek-ai/DeepSeek-V4-Flash --local ~/lab/models/hf/deepseek/DeepSeek-V4-Flash
+```
+
+Acceptance:
+
+```text
+source manifest can describe an official model source
+local path is outside repo
+model weights are not committed
+manifest distinguishes official source from generated GGUF
+manifest can record download command/log path
+validation passes without requiring the full model download in baseline
 ```
 
 Handoff:
 
 ```text
-M1 resumes only after the toolchain/provenance path is clear enough to avoid random prebuilt GGUF dependency.
+OWI.2 can inventory native weight files using this provenance record
+```
+
+### OWI.2 - Safetensors / Native Weight Inventory Reader
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+native weight file inventory
+safetensors shard discovery
+tensor metadata reading
+tensor name/shape/dtype/byte-size inventory
+shard-to-tensor mapping
+native model storage summary
+read-only source validation
+```
+
+Does not own:
+
+```text
+converting tensors
+quantization
+GGUF writing
+tokenizer conversion
+model execution
+graph execution
+full tensor payload loading unless needed for metadata proof
+```
+
+Expected files:
+
+```text
+include/yvex/native_weights.h
+src/tools/native_weights.c
+src/tools/safetensors_inventory.c
+tests/test_native_weight_inventory.c
+```
+
+Acceptance:
+
+```text
+can list safetensors shards for a local model path
+can read tensor names/shapes/dtypes from safetensors metadata
+can report total native tensor count and known bytes
+can fail cleanly on missing/incomplete shards
+does not load full model into memory
+does not require inference
+```
+
+Handoff:
+
+```text
+OWI.3 can compare native inventory against GGUF template requirements
+```
+
+### OWI.3 - GGUF Template Contract and Validator
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+GGUF template concept
+template metadata validation
+tokenizer metadata validation
+architecture key validation
+tensor order/shape contract
+template/native inventory compatibility checks
+template provenance record
+```
+
+Does not own:
+
+```text
+quantization
+emitting final GGUF
+safetensors payload conversion
+model execution
+tokenizer implementation beyond metadata validation
+```
+
+Expected files:
+
+```text
+include/yvex/gguf_template.h
+src/tools/gguf_template.c
+tests/test_gguf_template.c
+```
+
+Expected CLI/tool surface:
+
+```text
+yvex gguf-template inspect --template FILE
+yvex gguf-template validate --template FILE --source-manifest FILE
+```
+
+Acceptance:
+
+```text
+can inspect a template GGUF
+can report required metadata/tokenizer/tensor-order fields
+can compare template tensor expectations with native inventory
+fails clearly when template and native weights disagree
+does not claim final GGUF generation
+```
+
+Handoff:
+
+```text
+OWI.4 can define architecture-specific tensor mapping rules
+```
+
+### OWI.4 - Tensor Mapping and Architecture Adapter Contract
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+native tensor name mapping
+architecture adapter boundary
+DeepSeek adapter contract
+generic adapter interface for llama/qwen/deepseek/gemma/phi/kimi/glm
+native tensor role classification
+GGUF tensor name target mapping
+MoE/expert tensor grouping rules
+```
+
+Does not own:
+
+```text
+quantization
+tensor payload conversion
+GGUF emission
+inference
+backend execution
+```
+
+Expected files:
+
+```text
+include/yvex/weight_mapping.h
+src/tools/weight_mapping.c
+src/tools/adapters/deepseek_adapter.c
+tests/test_weight_mapping.c
+tests/test_deepseek_adapter_contract.c
+```
+
+Acceptance:
+
+```text
+can map known native tensor names to YVEX/GGUF roles
+can classify DeepSeek MoE/expert tensors structurally
+can report unmapped tensors
+can fail cleanly on unknown architecture
+mapping is metadata/contract only, not execution
+```
+
+Handoff:
+
+```text
+OWI.5 can assign quantization policies by tensor role/class
+```
+
+### OWI.5 - Quantization Policy Manifest
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+quantization policy schema
+qtype selection by tensor role/class/layer/expert
+policy validation
+supported/unsupported qtype declaration
+storage-accounting compatibility
+compute-support separation
+```
+
+Does not own:
+
+```text
+implementing quantization kernels
+running calibration
+emitting GGUF
+CUDA execution
+inference benchmarks
+```
+
+Expected files:
+
+```text
+include/yvex/quant_policy.h
+src/tools/quant_policy.c
+tests/test_quant_policy.c
+```
+
+Policy concepts:
+
+```text
+embedding tensors
+attention projection tensors
+MLP tensors
+MoE router tensors
+MoE expert tensors
+output/norm tensors
+small sensitive tensors
+```
+
+Acceptance:
+
+```text
+can parse/validate a quantization policy
+can report qtypes per tensor class
+separates storage materialization support from compute support
+rejects unknown qtypes
+records why a tensor is Q8_0/Q4_K/Q2_K/IQ2_XXS/etc.
+does not claim quantized inference
+```
+
+Handoff:
+
+```text
+OWI.6 can attach calibration/imatrix data to the policy
+```
+
+### OWI.6 - Calibration and Imatrix Contract
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+calibration dataset reference contract
+imatrix file role
+imatrix provenance
+tensor/column/expert importance mapping contract
+validation that a quantization policy expects/uses imatrix
+DS4 imatrix concept mapping into YVEX vocabulary
+```
+
+Does not own:
+
+```text
+generating imatrix unless explicitly scoped
+running model inference for calibration
+quantization kernels
+GGUF emission
+benchmark claims
+```
+
+Expected files:
+
+```text
+include/yvex/imatrix.h
+src/tools/imatrix.c
+tests/test_imatrix_contract.c
+```
+
+Acceptance:
+
+```text
+can describe an imatrix artifact
+can associate imatrix with model/source manifest
+can validate presence/shape/metadata if format is known
+can declare imatrix missing/unsupported cleanly
+does not require calibration run in baseline
+```
+
+Handoff:
+
+```text
+OWI.7 can use source/template/mapping/policy/imatrix contracts to emit a controlled GGUF
+```
+
+### OWI.7 - First YVEX-Owned GGUF Emission From Controlled Source
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+first YVEX-owned GGUF emission path
+controlled source input
+metadata writing
+tensor directory writing
+alignment/payload writing
+generated GGUF validation through existing C1/D0/M0 stack
+fixture/native-small source only
+```
+
+Does not own:
+
+```text
+DeepSeek full conversion yet
+huge model conversion
+full quantization suite
+imatrix generation
+inference
+server generation
+```
+
+Expected files:
+
+```text
+tools/gguf_emit/
+src/tools/gguf_emit.c
+tests/test_gguf_emit.c
+tests/test_gguf_emit_roundtrip.c
+```
+
+Acceptance:
+
+```text
+emits a GGUF from a controlled tiny/native source
+generated GGUF passes yvex inspect
+generated GGUF passes yvex metadata
+generated GGUF passes yvex tensors
+generated GGUF passes yvex materialize --backend cpu
+generated GGUF passes yvex materialize --backend cuda when available
+output GGUF is test fixture sized only
+no large model committed
+```
+
+Handoff:
+
+```text
+OWI.8 can adapt the emission/conversion bridge to DeepSeek V4 Flash
+```
+
+### OWI.8 - DeepSeek V4 Flash Conversion Bridge
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+DeepSeek-specific open-weight conversion bridge
+official DeepSeek HF source manifest usage
+native safetensors inventory usage
+DeepSeek architecture adapter usage
+DS4-informed template/quantization/imatrix bridge
+YVEX-owned or YVEX-wrapped GGUF generation path
+generated DeepSeek GGUF validation path
+```
+
+Does not own:
+
+```text
+arbitrary model-family support
+generic inference
+server completions
+benchmark claims
+copying DS4 code blindly
+committing DeepSeek weights/GGUF
+OpenAI compatibility
+```
+
+Expected behavior:
+
+```text
+official DeepSeek weights
+-> YVEX source manifest
+-> native inventory
+-> DeepSeek adapter mapping
+-> template/metadata contract
+-> quantization policy
+-> optional imatrix
+-> GGUF emission/conversion
+-> GGUF validation
+-> YVEX materialization
+```
+
+Acceptance:
+
+```text
+DeepSeek conversion bridge has explicit provenance
+generated/staged GGUF is validated by YVEX
+materialization works or fails cleanly with specific reason
+no inference claim
+no generated output claim
+no model files committed
+```
+
+Handoff:
+
+```text
+M1 resumes using provenance-controlled DeepSeek GGUF/materialization path
 ```
 
 ## 4. Completed Deliveries
@@ -2108,26 +2801,26 @@ git diff --check
 Next authorized milestone:
 
 ```text
-OWI.0 - Open Weight Intake / GGUF Toolchain Spine
+OWI.0 - DS4 inventory and open-weight pipeline spine
 ```
 
 Current active milestone:
 
 ```text
-OWI.0 - Open Weight Intake / GGUF Toolchain Spine
+OWI.0 - DS4 inventory and open-weight pipeline spine
 ```
 
 Paused milestone:
 
 ```text
-M1 - DeepSeek generated/staged GGUF materialization
+M1 - DeepSeek GGUF materialization from provenance-controlled source
 ```
 
 M1 is paused pending OWI.0/OWI.1. It resumes only after the official
 open-weight source, provenance contract, and generated/staged GGUF path are
 clear enough to avoid treating a random prebuilt GGUF as the source of truth.
 
-M0-M8 must produce:
+Model support waves must produce:
 
 ```text
 model support levels backed by command proof
@@ -2135,7 +2828,7 @@ fixture-first inspection/tokenization/execution steps
 explicit support/unsupported state per model family
 ```
 
-M0-M8 must not produce:
+Model support waves must not produce:
 
 ```text
 broad inference claim
@@ -2192,7 +2885,7 @@ I0 consumes H0 and creates user-facing run/chat commands.
 J0 consumes H0/I0 and creates metrics/tracing.
 K0 consumes H0/I0/J0 and creates the yvexd server shell.
 L0 consumes G0/J0 and creates CUDA/DGX Spark backend path.
-M0-M8 consume the implemented runtime/backends and assign model support levels.
+M0 and later explicit M waves consume the implemented runtime/backends and assign model support levels.
 ```
 
 Each planned wave is defined in Section 3. A wave that is not defined there is
@@ -2258,7 +2951,7 @@ Implemented by:
 ```text
 E0: tokenizer and prompt rendering
 I0: CLI run/chat usage
-M0-M8: model-specific support levels
+M waves: model-specific support levels
 ```
 
 Rules:
@@ -2362,7 +3055,7 @@ Implemented by:
 ```text
 P0: boundary definition
 K0: local server shell when implemented
-M0-M8: model support evidence consumed by YAI only after command proof
+M waves: model support evidence consumed by YAI only after command proof
 ```
 
 Rules:
@@ -2505,7 +3198,7 @@ Current handoff:
 
 ```text
 from: L0 - CUDA/DGX Spark backend
-to: M0-M8 - Model support ladder
+to: M0 - Fixture weight materialization, then explicit paused M waves
 authorized work: fixture-first model support ladder with command proof
 blocked work: broad model support, inference, and generation claims without actual execution proof
 ```
