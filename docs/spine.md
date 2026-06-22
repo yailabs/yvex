@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after QA.BENCH.0
+after OWI.0
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-OWI.0 - DS4 inventory and open-weight pipeline spine
+OWI.1 - Source manifest and model provenance contract
 ```
 
 Implemented surface:
@@ -427,6 +427,15 @@ Open Weight Intake pipeline:
     only later, after graph executor, prefill, decode, sampler, and logits validity exist
 ```
 
+Current DeepSeek V4 Flash intake paths:
+
+```text
+official HF source: deepseek-ai/DeepSeek-V4-Flash
+local native weights path: ~/lab/models/hf/deepseek/DeepSeek-V4-Flash
+download logs path: ~/lab/artifacts/download-logs
+repository policy: these paths stay outside git
+```
+
 Toolchain boundary:
 
 ```text
@@ -527,8 +536,8 @@ Future commands are listed only under the delivery that implements them.
 | L0 | complete | CUDA/DGX Spark backend |
 | M0 | complete | Fixture weight materialization |
 | QA.BENCH.0 | complete | QA and benchmark spine |
-| OWI.0 | next | DS4 inventory and open-weight pipeline spine |
-| OWI.1 | planned | Source manifest and model provenance contract |
+| OWI.0 | complete | DS4 inventory and open-weight pipeline spine |
+| OWI.1 | next | Source manifest and model provenance contract |
 | OWI.2 | planned | Safetensors/native weight inventory reader |
 | OWI.3 | planned | GGUF template contract and validator |
 | OWI.4 | planned | Tensor mapping and architecture adapter contract |
@@ -2187,7 +2196,7 @@ no benchmark claims before inference exists
 Status:
 
 ```text
-next
+complete
 ```
 
 Owns:
@@ -2248,7 +2257,7 @@ next wave is OWI.1 - Source manifest and model provenance contract
 Status:
 
 ```text
-planned
+next
 ```
 
 Owns:
@@ -2801,13 +2810,13 @@ git diff --check
 Next authorized milestone:
 
 ```text
-OWI.0 - DS4 inventory and open-weight pipeline spine
+OWI.1 - Source manifest and model provenance contract
 ```
 
 Current active milestone:
 
 ```text
-OWI.0 - DS4 inventory and open-weight pipeline spine
+OWI.1 - Source manifest and model provenance contract
 ```
 
 Paused milestone:
