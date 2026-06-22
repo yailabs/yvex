@@ -17,6 +17,9 @@ yvex chat --model FILE --backend cpu|cuda
 yvex detokenize <path> --ids IDS
 yvex engine <path>
 yvex graph <path>
+yvex gguf-template inspect --template FILE
+yvex gguf-template validate --template FILE
+yvex gguf-template compare --template FILE --native-source DIR
 yvex help
 yvex help <implemented-command>
 yvex info
@@ -76,6 +79,7 @@ profile: JSON writer implemented
 run_artifacts: metrics/trace/profile files implemented
 source_manifest: provenance JSON writer implemented
 native_weights: safetensors header inventory implemented
+gguf_template: contract validator implemented
 server_binary: yvexd shell implemented
 server_endpoints: health/metrics/models status implemented
 server_generation: not implemented
@@ -218,6 +222,25 @@ DeepSeek in-progress proof command:
   --source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" \
   --limit 40
 ```
+
+## Current `yvex gguf-template`
+
+`yvex gguf-template` validates a GGUF template as a structural contract for
+future conversion/emission. It does not emit GGUF, quantize, materialize, or
+infer.
+
+Commands:
+
+```text
+yvex gguf-template inspect --template FILE
+yvex gguf-template validate --template FILE
+yvex gguf-template compare --template FILE --native-source DIR
+```
+
+`compare` uses OWI.2 native inventory and performs exact-name comparison only.
+Architecture-specific tensor-name mapping belongs to OWI.4, so mismatches are
+reported as partial rather than treated as DeepSeek support failure unless
+`--require-all-template-tensors-in-native` is passed.
 
 ## Current `yvex inspect`
 

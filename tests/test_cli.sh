@@ -25,6 +25,7 @@
 #   - yvex paths
 #   - yvex prompt
 #   - yvex graph
+#   - yvex gguf-template
 #   - yvex plan
 #   - yvex tokenize
 #   - yvex tokenizer
@@ -110,6 +111,8 @@ contains "$OUT_DIR/info.out" "trace: JSONL writer implemented"
 contains "$OUT_DIR/info.out" "profile: JSON writer implemented"
 contains "$OUT_DIR/info.out" "run_artifacts: metrics/trace/profile files implemented"
 contains "$OUT_DIR/info.out" "source_manifest: provenance JSON writer implemented"
+contains "$OUT_DIR/info.out" "native_weights: safetensors header inventory implemented"
+contains "$OUT_DIR/info.out" "gguf_template: contract validator implemented"
 contains "$OUT_DIR/info.out" "server_binary: yvexd shell implemented"
 contains "$OUT_DIR/info.out" "server_endpoints: health/metrics/models status implemented"
 contains "$OUT_DIR/info.out" "server_generation: not implemented"
@@ -128,6 +131,7 @@ contains "$OUT_DIR/commands.out" "  cuda-info"
 contains "$OUT_DIR/commands.out" "  detokenize"
 contains "$OUT_DIR/commands.out" "  engine"
 contains "$OUT_DIR/commands.out" "  graph"
+contains "$OUT_DIR/commands.out" "  gguf-template"
 contains "$OUT_DIR/commands.out" "  help"
 contains "$OUT_DIR/commands.out" "  info"
 contains "$OUT_DIR/commands.out" "  inspect"
@@ -186,6 +190,9 @@ contains "$OUT_DIR/help_engine.out" "usage: yvex engine <path>"
 
 run_ok help_graph "$YVEX_BIN" help graph
 contains "$OUT_DIR/help_graph.out" "usage: yvex graph <path>"
+
+run_ok help_gguf_template "$YVEX_BIN" help gguf-template
+contains "$OUT_DIR/help_gguf_template.out" "usage: yvex gguf-template"
 
 run_ok help_plan "$YVEX_BIN" help plan
 contains "$OUT_DIR/help_plan.out" "usage: yvex plan <path>"

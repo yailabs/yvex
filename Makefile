@@ -110,6 +110,10 @@ CORE_SRCS := \
 	src/server/router.c \
 	src/server/handlers.c \
 	src/server/server_metrics.c \
+	src/tools/gguf_template.c \
+	src/tools/gguf_template_compare.c \
+	src/tools/gguf_template_report.c \
+	src/tools/gguf_template_validate.c \
 	src/tools/native_weights.c \
 	src/tools/native_weight_report.c \
 	src/tools/safetensors.c \
@@ -163,6 +167,7 @@ TEST_SRCS := \
 	tests/test_run_artifacts.c \
 	tests/test_http.c \
 	tests/test_server.c \
+	tests/test_gguf_template.c \
 	tests/test_safetensors_header.c \
 	tests/test_native_weights.c \
 	tests/test_source_manifest.c
@@ -250,7 +255,7 @@ test-core: $(TEST_BINS)
 		"$$test_bin"; \
 	done
 
-test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh tests/test_cli_server.sh tests/test_cli_materialize.sh tests/test_cli_source_manifest.sh tests/test_cli_native_weights.sh
+test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh tests/test_cli_server.sh tests/test_cli_materialize.sh tests/test_cli_source_manifest.sh tests/test_cli_native_weights.sh tests/test_cli_gguf_template.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_run.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_chat.sh
@@ -259,6 +264,7 @@ test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_materialize.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_source_manifest.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_native_weights.sh
+	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_gguf_template.sh
 
 test: test-core test-cli
 

@@ -35,6 +35,7 @@ execution_ready: false
 server_generation: not implemented
 source_manifest: provenance JSON writer implemented
 native_weights: safetensors header inventory implemented
+gguf_template: contract validator implemented
 ```
 
 CUDA in L0 means device probe, memory/tensor movement, and F32 embed parity. It
@@ -56,6 +57,7 @@ do not add model execution or inference.
 | `detokenize` | `yvex detokenize PATH --ids IDS` | implemented for fixture tokenizer path |
 | `engine` | `yvex engine PATH` | implemented; descriptor/runtime diagnostics |
 | `graph` | `yvex graph PATH [--seq N] [--ctx N]` | implemented; inspect-only graph |
+| `gguf-template` | `yvex gguf-template inspect\|validate --template FILE` | implemented; template contract validation |
 | `help` | `yvex help [COMMAND]` | implemented |
 | `info` | `yvex info` | implemented; honest support posture |
 | `inspect` | `yvex inspect PATH` | implemented; descriptor-only GGUF/model summary |

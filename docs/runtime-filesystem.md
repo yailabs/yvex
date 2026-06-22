@@ -149,6 +149,12 @@ These paths may be scanned read-only by `yvex source-manifest create` and
 `yvex native-weights --source`. GGUF, safetensors, bin, and downloaded model
 files must remain outside git.
 
+GGUF template files are external artifacts unless they are tiny test fixtures
+already tracked under `tests/fixtures/gguf`. DS4 template GGUFs, when present,
+are read-only references for `yvex gguf-template`; generated future YVEX GGUFs
+stay outside the repository unless a later wave explicitly scopes a fixture-size
+artifact.
+
 ## Failure Behavior
 
 ```text

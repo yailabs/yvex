@@ -16,7 +16,8 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-OWI.2 implements a safetensors/native-weight inventory surface and OWI.1
+OWI.3 implements a GGUF template contract validator, OWI.2 implements a
+safetensors/native-weight inventory surface, and OWI.1
 implements a source-manifest provenance surface in addition to the M0 runtime
 APIs. M0 implements the core version/status/error/log surface, runtime filesystem
 paths/run directories, artifact byte views, range checks, GGUF header/probe,
@@ -43,6 +44,7 @@ include/yvex/log.h
 include/yvex/fs.h
 include/yvex/artifact.h
 include/yvex/gguf.h
+include/yvex/gguf_template.h
 include/yvex/dtype.h
 include/yvex/tensor.h
 include/yvex/model.h
@@ -73,6 +75,7 @@ Current aggregate:
 #include <yvex/fs.h>
 #include <yvex/artifact.h>
 #include <yvex/gguf.h>
+#include <yvex/gguf_template.h>
 #include <yvex/dtype.h>
 #include <yvex/tensor.h>
 #include <yvex/model.h>
@@ -371,6 +374,62 @@ const char *yvex_native_dtype_name(yvex_native_dtype dtype);
 The table owns copied tensor names and shard paths. Duplicate tensor names
 across shards are rejected. A source directory with no `.safetensors` files is a
 valid empty inventory.
+
+## GGUF Template
+
+OWI.3 adds a GGUF template contract validator. A template is a structural
+contract for conversion/emission: metadata keys, architecture identity,
+tokenizer metadata, tensor names, tensor order, logical shapes, qtypes, and
+alignment. It is not the official source of truth, an executable model, a final
+quantized model, or a generated YVEX artifact.
+
+```c
+typedef struct yvex_gguf_template yvex_gguf_template;
+
+typedef enum {
+    YVEX_GGUF_TEMPLATE_STATUS_UNKNOWN = 0,
+    YVEX_GGUF_TEMPLATE_STATUS_VALID,
+    YVEX_GGUF_TEMPLATE_STATUS_PARTIAL,
+    YVEX_GGUF_TEMPLATE_STATUS_INVALID
+} yvex_gguf_template_status;
+```
+
+```c
+typedef enum {
+    YVEX_GGUF_TEMPLATE_ISSUE_NONE = 0,
+    YVEX_GGUF_TEMPLATE_ISSUE_MISSING_ARCHITECTURE,
+    YVEX_GGUF_TEMPLATE_ISSUE_MISSING_MODEL_NAME,
+    YVEX_GGUF_TEMPLATE_ISSUE_MISSING_TOKENIZER,
+    YVEX_GGUF_TEMPLATE_ISSUE_EMPTY_TENSOR_DIRECTORY,
+    YVEX_GGUF_TEMPLATE_ISSUE_UNKNOWN_TENSOR_ROLE,
+    YVEX_GGUF_TEMPLATE_ISSUE_NATIVE_MISSING_TENSOR,
+    YVEX_GGUF_TEMPLATE_ISSUE_NATIVE_SHAPE_MISMATCH,
+    YVEX_GGUF_TEMPLATE_ISSUE_UNSUPPORTED_DTYPE,
+    YVEX_GGUF_TEMPLATE_ISSUE_FORMAT
+} yvex_gguf_template_issue_kind;
+```
+
+```c
+int yvex_gguf_template_open(yvex_gguf_template **out,
+                            const yvex_gguf_template_options *options,
+                            yvex_error *err);
+void yvex_gguf_template_close(yvex_gguf_template *tmpl);
+int yvex_gguf_template_get_summary(const yvex_gguf_template *tmpl,
+                                   yvex_gguf_template_summary *out,
+                                   yvex_error *err);
+unsigned long long yvex_gguf_template_issue_count(const yvex_gguf_template *tmpl);
+const yvex_gguf_template_issue *yvex_gguf_template_issue_at(const yvex_gguf_template *tmpl,
+                                                            unsigned long long index);
+const char *yvex_gguf_template_status_name(yvex_gguf_template_status status);
+const char *yvex_gguf_template_issue_kind_name(yvex_gguf_template_issue_kind kind);
+```
+
+Template validation opens GGUF metadata and tensor directories through the C1/D0
+stack, builds a descriptor, checks tokenizer metadata, classifies tensor roles,
+and can compare exact template tensor names against an OWI.2 native inventory.
+It does not load tensor payloads, mutate templates, emit GGUF, quantize, or
+materialize.
+
 Default path resolution requires `HOME`; project-local path construction uses
 the explicit project root argument. Run directory creation creates directories
 only and does not write run artifacts.

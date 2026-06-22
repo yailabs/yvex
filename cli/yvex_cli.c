@@ -82,6 +82,7 @@ static int command_cuda_info(int argc, char **argv);
 static int command_detokenize(int argc, char **argv);
 static int command_engine(int argc, char **argv);
 static int command_graph(int argc, char **argv);
+static int command_gguf_template(int argc, char **argv);
 static int command_help(int argc, char **argv);
 static int command_info(int argc, char **argv);
 static int command_inspect(int argc, char **argv);
@@ -148,6 +149,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex graph <path> [--seq N] [--ctx N]",
         "Opens a GGUF descriptor, builds a deterministic graph planning artifact, and prints values, planned ops, and missing-role diagnostics. It does not execute the graph.",
         command_graph,
+    },
+    {
+        "gguf-template",
+        "Inspect or validate a GGUF conversion template.",
+        "yvex gguf-template inspect|validate --template FILE | yvex gguf-template compare --template FILE --native-source DIR",
+        "Validates GGUF metadata, tokenizer metadata, tensor directory, tensor roles, and optional exact-name native inventory comparison. It does not emit GGUF, quantize, materialize, or infer.",
+        command_gguf_template,
     },
     {
         "help",
@@ -1004,6 +1012,158 @@ static int command_engine(int argc, char **argv)
     return 0;
 }
 
+static int cli_parse_gguf_template_options(int argc, char **argv, int start,
+                                           const char **template_path,
+                                           const char **native_source,
+                                           int *require_all)
+{
+    int i = start;
+
+    *template_path = NULL;
+    *native_source = NULL;
+    *require_all = 0;
+    while (i < argc) {
+        if (strcmp(argv[i], "--require-all-template-tensors-in-native") == 0) {
+            *require_all = 1;
+            i++;
+            continue;
+        }
+        if (i + 1 >= argc) {
+            fprintf(stderr, "yvex: gguf-template option requires a value: %s\n", argv[i]);
+            return 2;
+        }
+        if (strcmp(argv[i], "--template") == 0) {
+            *template_path = argv[i + 1];
+        } else if (strcmp(argv[i], "--native-source") == 0) {
+            *native_source = argv[i + 1];
+        } else {
+            fprintf(stderr, "yvex: unknown gguf-template option: %s\n", argv[i]);
+            return 2;
+        }
+        i += 2;
+    }
+    return 0;
+}
+
+static void cli_print_template_issues(const yvex_gguf_template *tmpl)
+{
+    unsigned long long i;
+    unsigned long long count = yvex_gguf_template_issue_count(tmpl);
+
+    for (i = 0; i < count; ++i) {
+        const yvex_gguf_template_issue *issue = yvex_gguf_template_issue_at(tmpl, i);
+        if (!issue) {
+            continue;
+        }
+        if (issue->tensor_name && issue->tensor_name[0] != '\0') {
+            printf("issue %llu %s tensor=\"%s\" message=\"%s\"\n",
+                   i,
+                   yvex_gguf_template_issue_kind_name(issue->kind),
+                   issue->tensor_name,
+                   issue->message ? issue->message : "");
+        } else {
+            printf("issue %llu %s message=\"%s\"\n",
+                   i,
+                   yvex_gguf_template_issue_kind_name(issue->kind),
+                   issue->message ? issue->message : "");
+        }
+    }
+}
+
+static int command_gguf_template(int argc, char **argv)
+{
+    yvex_gguf_template_options options;
+    yvex_gguf_template *tmpl = NULL;
+    yvex_gguf_template_summary summary;
+    yvex_error err;
+    const char *template_path;
+    const char *native_source;
+    int require_all;
+    int rc;
+
+    yvex_error_clear(&err);
+    if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        print_command_help(stdout, find_command("gguf-template"));
+        return 0;
+    }
+    if (argc < 3) {
+        fprintf(stderr, "yvex: gguf-template requires inspect, validate, or compare\n");
+        fprintf(stderr, "usage: yvex gguf-template inspect|validate --template FILE\n");
+        return 2;
+    }
+    if (strcmp(argv[2], "inspect") != 0 && strcmp(argv[2], "validate") != 0 &&
+        strcmp(argv[2], "compare") != 0) {
+        fprintf(stderr, "yvex: unknown gguf-template subcommand: %s\n", argv[2]);
+        return 2;
+    }
+    rc = cli_parse_gguf_template_options(argc, argv, 3, &template_path, &native_source, &require_all);
+    if (rc != 0) {
+        return rc;
+    }
+    if (!template_path) {
+        fprintf(stderr, "yvex: gguf-template requires --template FILE\n");
+        return 2;
+    }
+    if (strcmp(argv[2], "compare") == 0 && !native_source) {
+        fprintf(stderr, "yvex: gguf-template compare requires --native-source DIR\n");
+        return 2;
+    }
+
+    memset(&options, 0, sizeof(options));
+    options.template_path = template_path;
+    options.native_source_dir = native_source;
+    options.compare_native = strcmp(argv[2], "compare") == 0;
+    options.require_all_template_tensors_in_native = require_all;
+
+    rc = yvex_gguf_template_open(&tmpl, &options, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    rc = yvex_gguf_template_get_summary(tmpl, &summary, &err);
+    if (rc != YVEX_OK) {
+        yvex_gguf_template_close(tmpl);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    if (strcmp(argv[2], "compare") == 0) {
+        printf("gguf template: compare\n");
+        printf("template: %s\n", template_path);
+        printf("native_source: %s\n", native_source);
+        printf("template_tensors: %llu\n", summary.tensor_count);
+        printf("native_tensors: %llu\n", summary.native_tensor_count);
+        printf("matched_exact: %llu\n", summary.matched_exact);
+        printf("missing_in_native: %llu\n", summary.missing_in_native);
+        printf("shape_mismatch: %llu\n", summary.shape_mismatch);
+        printf("status: template-compare-%s\n",
+               summary.status == YVEX_GGUF_TEMPLATE_STATUS_VALID ? "valid" :
+               summary.status == YVEX_GGUF_TEMPLATE_STATUS_INVALID ? "invalid" : "partial");
+        if (summary.missing_in_native > 0 || summary.shape_mismatch > 0) {
+            printf("reason: architecture adapter mapping requires OWI.4\n");
+        }
+        cli_print_template_issues(tmpl);
+    } else if (strcmp(argv[2], "validate") == 0) {
+        printf("gguf template: validate\n");
+        printf("template: %s\n", template_path);
+        printf("status: %s\n", yvex_gguf_template_status_name(summary.status));
+        printf("issues: %llu\n", summary.issue_count);
+        cli_print_template_issues(tmpl);
+    } else {
+        printf("gguf template: inspect\n");
+        printf("template: %s\n", template_path);
+        printf("architecture: %s\n", summary.architecture ? summary.architecture : "");
+        printf("model_name: %s\n", summary.model_name ? summary.model_name : "");
+        printf("metadata_count: %llu\n", summary.metadata_count);
+        printf("tensor_count: %llu\n", summary.tensor_count);
+        printf("has_tokenizer: %s\n", summary.has_tokenizer ? "yes" : "no");
+        printf("known_roles: %llu\n", summary.known_role_count);
+        printf("unknown_roles: %llu\n", summary.unknown_role_count);
+        printf("status: %s\n", yvex_gguf_template_status_name(summary.status));
+    }
+
+    yvex_gguf_template_close(tmpl);
+    return 0;
+}
+
 static int command_help(int argc, char **argv)
 {
     const yvex_cli_command *command;
@@ -1055,6 +1215,8 @@ static int command_info(int argc, char **argv)
     printf("profile: JSON writer implemented\n");
     printf("run_artifacts: metrics/trace/profile files implemented\n");
     printf("source_manifest: provenance JSON writer implemented\n");
+    printf("native_weights: safetensors header inventory implemented\n");
+    printf("gguf_template: contract validator implemented\n");
     printf("server_binary: yvexd shell implemented\n");
     printf("server_endpoints: health/metrics/models status implemented\n");
     printf("server_generation: not implemented\n");

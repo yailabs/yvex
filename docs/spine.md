@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after OWI.2
+after OWI.3
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-OWI.3 - GGUF template contract and validator
+OWI.4 - Tensor mapping and architecture adapter contract
 ```
 
 Implemented surface:
@@ -191,9 +191,16 @@ Native weight inventory:
   src/tools/safetensors_json.c
   src/tools/native_weight_report.c
 
+GGUF template validator:
+  include/yvex/gguf_template.h
+  src/tools/gguf_template.c
+  src/tools/gguf_template_validate.c
+  src/tools/gguf_template_compare.c
+  src/tools/gguf_template_report.c
+
 CLI:
   cli/yvex_cli.c
-  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat, source-manifest, native-weights
+  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat, source-manifest, native-weights, gguf-template
   implemented binaries: yvex, yvexd
 
 Tests:
@@ -228,9 +235,11 @@ Tests:
   tests/test_run_artifacts.c
   tests/test_http.c
   tests/test_server.c
+  tests/test_gguf_template.c
   tests/test_safetensors_header.c
   tests/test_native_weights.c
   tests/test_source_manifest.c
+  tests/test_cli_gguf_template.sh
   tests/test_cli_native_weights.sh
   tests/test_cli_source_manifest.sh
   tests/test_cuda_info.c
@@ -523,18 +532,19 @@ cuda-info
 detokenize
 engine
 graph
+gguf-template
 help
 info
 inspect
 materialize
 metadata
+native-weights
 paths
 plan
 prompt
 run
 session
 source-manifest
-native-weights
 tensors
 tokenize
 tokenizer
@@ -568,8 +578,8 @@ Future commands are listed only under the delivery that implements them.
 | OWI.0 | complete | DS4 inventory and open-weight pipeline spine |
 | OWI.1 | complete | Source manifest and model provenance contract |
 | OWI.2 | complete | Safetensors/native weight inventory reader |
-| OWI.3 | next | GGUF template contract and validator |
-| OWI.4 | planned | Tensor mapping and architecture adapter contract |
+| OWI.3 | complete | GGUF template contract and validator |
+| OWI.4 | next | Tensor mapping and architecture adapter contract |
 | OWI.5 | planned | Quantization policy manifest |
 | OWI.6 | planned | Calibration and imatrix contract |
 | OWI.7 | planned | First YVEX-owned GGUF emission from controlled source |
@@ -2429,7 +2439,7 @@ OWI.3 can compare native inventory against GGUF template requirements
 Status:
 
 ```text
-next
+complete
 ```
 
 Owns:
@@ -2442,6 +2452,8 @@ architecture key validation
 tensor order/shape contract
 template/native inventory compatibility checks
 template provenance record
+template status and issue vocabulary
+gguf-template CLI inspect, validate, and compare
 ```
 
 Does not own:
@@ -2459,14 +2471,20 @@ Expected files:
 ```text
 include/yvex/gguf_template.h
 src/tools/gguf_template.c
+src/tools/gguf_template_validate.c
+src/tools/gguf_template_compare.c
+src/tools/gguf_template_report.c
+src/tools/gguf_template_internal.h
 tests/test_gguf_template.c
+tests/test_cli_gguf_template.sh
 ```
 
-Expected CLI/tool surface:
+Implemented CLI/tool surface:
 
 ```text
 yvex gguf-template inspect --template FILE
-yvex gguf-template validate --template FILE --source-manifest FILE
+yvex gguf-template validate --template FILE
+yvex gguf-template compare --template FILE --native-source DIR
 ```
 
 Acceptance:
@@ -2477,6 +2495,7 @@ can report required metadata/tokenizer/tensor-order fields
 can compare template tensor expectations with native inventory
 fails clearly when template and native weights disagree
 does not claim final GGUF generation
+exact-name native comparison only; architecture mapping belongs to OWI.4
 ```
 
 Handoff:
@@ -2490,7 +2509,7 @@ OWI.4 can define architecture-specific tensor mapping rules
 Status:
 
 ```text
-planned
+next
 ```
 
 Owns:
@@ -2857,13 +2876,13 @@ git diff --check
 Next authorized milestone:
 
 ```text
-OWI.3 - GGUF template contract and validator
+OWI.4 - Tensor mapping and architecture adapter contract
 ```
 
 Current active milestone:
 
 ```text
-OWI.3 - GGUF template contract and validator
+OWI.4 - Tensor mapping and architecture adapter contract
 ```
 
 Paused milestone:
