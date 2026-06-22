@@ -61,8 +61,15 @@ static int test_open_and_unsupported(void)
     memset(&options, 0, sizeof(options));
     options.kind = YVEX_BACKEND_KIND_CUDA;
     rc = yvex_backend_open(&backend, &options, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_ERR_UNSUPPORTED, "cuda unsupported in G0");
-    YVEX_TEST_ASSERT(backend == NULL, "unsupported backend remains null");
+    YVEX_TEST_ASSERT(rc == YVEX_OK || rc == YVEX_ERR_UNSUPPORTED,
+                     "cuda opens or reports unsupported cleanly");
+    if (rc == YVEX_OK) {
+        YVEX_TEST_ASSERT(yvex_backend_kind_of(backend) == YVEX_BACKEND_KIND_CUDA, "cuda kind");
+        YVEX_TEST_ASSERT(yvex_backend_status_of(backend) == YVEX_BACKEND_STATUS_READY, "cuda ready");
+        yvex_backend_close(backend);
+    } else {
+        YVEX_TEST_ASSERT(backend == NULL, "unsupported backend remains null");
+    }
     return 0;
 }
 

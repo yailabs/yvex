@@ -19,7 +19,6 @@
  * Does not own:
  *   - sessions
  *   - sampler/logits/KV runtime
- *   - CUDA execution
  *   - inference
  *
  * Used by:
@@ -78,6 +77,19 @@ typedef struct {
     unsigned long long bytes;
 } yvex_backend_tensor_desc;
 
+typedef struct {
+    yvex_backend_kind kind;
+    const char *name;
+    int device_index;
+    int compute_capability_major;
+    int compute_capability_minor;
+    unsigned long long global_memory_bytes;
+    unsigned long long free_memory_bytes;
+    unsigned long long total_memory_bytes;
+    int unified_addressing;
+    int managed_memory;
+} yvex_backend_device_info;
+
 typedef enum {
     YVEX_BACKEND_CAP_TENSOR_ALLOC = 0,
     YVEX_BACKEND_CAP_TENSOR_READ_WRITE,
@@ -91,6 +103,7 @@ int yvex_backend_open(yvex_backend **out,
                       const yvex_backend_options *options,
                       yvex_error *err);
 int yvex_backend_open_cpu(yvex_backend **out, yvex_error *err);
+int yvex_backend_cuda_available(void);
 void yvex_backend_close(yvex_backend *backend);
 
 yvex_backend_kind yvex_backend_kind_of(const yvex_backend *backend);
@@ -101,6 +114,9 @@ const char *yvex_backend_status_name(yvex_backend_status status);
 int yvex_backend_get_memory_stats(const yvex_backend *backend,
                                   yvex_backend_memory_stats *out,
                                   yvex_error *err);
+int yvex_backend_get_device_info(const yvex_backend *backend,
+                                 yvex_backend_device_info *out,
+                                 yvex_error *err);
 
 int yvex_backend_tensor_alloc(yvex_backend *backend,
                               const yvex_backend_tensor_desc *desc,

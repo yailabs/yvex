@@ -11,7 +11,7 @@
  * Covers:
  *   - yvex_engine_diagnostic_reason
  *   - yvex_session_diagnostic_reason
- *   - backend unsupported status through public backend API
+ *   - CUDA ready/unavailable status through public backend API
  *
  * Commands:
  *   - make test-core
@@ -62,8 +62,15 @@ int main(void)
 
     cuda_options.kind = YVEX_BACKEND_KIND_CUDA;
     rc = yvex_backend_open(&cuda, &cuda_options, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_ERR_UNSUPPORTED, "cuda unsupported visible");
-    YVEX_TEST_ASSERT(cuda == NULL, "cuda backend not allocated");
+    YVEX_TEST_ASSERT(rc == YVEX_OK || rc == YVEX_ERR_UNSUPPORTED,
+                     "cuda status visible");
+    if (rc == YVEX_OK) {
+        YVEX_TEST_ASSERT(yvex_backend_status_of(cuda) == YVEX_BACKEND_STATUS_READY,
+                         "cuda backend ready visible");
+        yvex_backend_close(cuda);
+    } else {
+        YVEX_TEST_ASSERT(cuda == NULL, "cuda backend not allocated when unsupported");
+    }
 
     yvex_session_close(session);
     yvex_backend_close(backend);

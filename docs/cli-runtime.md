@@ -4,7 +4,7 @@ This document owns CLI behavior. YVEX is CLI-only.
 
 ## Current Implemented Commands
 
-The K0 command-line surfaces implement exactly:
+The L0 command-line surfaces implement exactly:
 
 ```text
 yvex
@@ -12,6 +12,7 @@ yvex --help
 yvex --version
 yvex backend cpu|cuda
 yvex commands
+yvex cuda-info
 yvex chat --model FILE --backend cpu|cuda
 yvex detokenize <path> --ids IDS
 yvex engine <path>
@@ -28,7 +29,7 @@ yvex paths --run --create
 yvex plan <path>
 yvex prompt <path> --user TEXT
 yvex run --model FILE --backend cpu|cuda --prompt TEXT
-yvex session <path> --backend cpu
+yvex session <path> --backend cpu|cuda
 yvex tokenizer <path>
 yvex tokenize <path> --text TEXT
 yvex tensors <path>
@@ -49,7 +50,7 @@ name: YVEX
 version: 0.1.0
 language: C
 interface: CLI-only
-status: K0 yvexd server shell
+status: L0 CUDA backend attachment
 library: libyvex.a
 filesystem: implemented
 artifact: open/read implemented
@@ -60,6 +61,7 @@ prompt: default renderer implemented
 graph: partial planning implemented
 planner: estimate-only implemented
 backend: CPU reference implemented
+backend_cuda: tensor movement and F32 embed implemented when CUDA is available
 engine: runtime object skeleton implemented
 session: lifecycle skeleton implemented
 run: accepted-only runtime shell implemented
@@ -74,9 +76,8 @@ server_generation: not implemented
 kv: unavailable skeleton implemented
 logits: unavailable skeleton implemented
 generation: unsupported
-backend_cuda: not implemented
 inference: not implemented
-cuda: not implemented
+cuda: available when local driver/device probe succeeds
 server: yvexd status shell implemented
 ```
 
@@ -304,8 +305,8 @@ Options:
 
 ## Current `yvex plan`
 
-`yvex plan <path>` builds a graph and estimate-only memory plan. In G0 the CPU
-backend ABI is available for tensor allocation/read/write/embed, but plan output
+`yvex plan <path>` builds a graph and estimate-only memory plan. CPU and CUDA
+backend capability labels are probed through the backend ABI, but plan output
 still remains non-executable.
 
 Output shape:
@@ -340,13 +341,13 @@ reason: graph partial; missing output_norm, output_head; backend lacks full grap
 status: plan-only
 ```
 
-`--backend cuda` is accepted only to report unsupported status:
+`--backend cuda` reports `available` when the local CUDA driver/device opens,
+otherwise `unavailable`. In both cases the plan is not executable:
 
 ```text
 backend: cuda
-backend_status: unsupported
+backend_status: available|unavailable
 execution_ready: false
-reason: CUDA backend not implemented in G0
 status: plan-only
 ```
 
@@ -372,13 +373,63 @@ capabilities:
 status: backend-ready
 ```
 
-`yvex backend cuda` reports the unsupported path and exits 5:
+`yvex backend cuda` opens the CUDA backend when the local driver/device is
+available. It reports tensor movement and F32 embed capability only:
+
+```text
+backend: cuda
+status: ready
+device: 0
+name: <device name>
+compute_capability: <major>.<minor>
+capabilities:
+  tensor_alloc: yes
+  tensor_read_write: yes
+  op_embed: yes
+  op_matmul: no
+  op_rms_norm: no
+  op_attention: no
+status: backend-ready
+```
+
+If CUDA is unavailable, it exits 5:
 
 ```text
 backend: cuda
 status: unsupported
-reason: CUDA backend is planned for L0
+reason: <driver/device reason>
 status: backend-unsupported
+```
+
+## Current `yvex cuda-info`
+
+`yvex cuda-info` probes CUDA through the L0 dynamic CUDA Driver API path. It
+does not report matmul, attention, session execution, or inference support.
+
+Available shape:
+
+```text
+cuda: available
+device_count: >=1
+
+device 0:
+  name: <device name>
+  compute_capability: <major>.<minor>
+  global_memory_bytes: <n>
+  free_memory_bytes: <n>
+  total_memory_bytes: <n>
+  unified_addressing: yes|no
+  managed_memory: yes|no
+
+status: cuda-info
+```
+
+Unavailable shape:
+
+```text
+cuda: unavailable
+reason: <driver/device reason>
+status: cuda-unavailable
 ```
 
 ## Current `yvex engine`
@@ -435,12 +486,13 @@ execution_ready: false
 status: session-token-accepted
 ```
 
-`--backend cuda` reports the unsupported future backend path and exits 5:
+`--backend cuda` creates a diagnostic session when CUDA is available; otherwise
+it reports the unsupported backend path and exits 5:
 
 ```text
 backend: cuda
 backend_status: unsupported
-reason: CUDA backend is planned for L0
+reason: <driver/device reason>
 status: session-backend-unsupported
 ```
 
@@ -502,7 +554,8 @@ JSON output is available through `--output json`:
 }
 ```
 
-`--backend cuda` reports unsupported status and exits 5.
+`--backend cuda` follows the same accepted-only runtime path when CUDA is
+available. If CUDA is unavailable, it reports backend-unsupported and exits 5.
 
 ## Current `yvex chat`
 

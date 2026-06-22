@@ -75,6 +75,19 @@ static int cpu_memory_stats(const yvex_backend *backend,
     return YVEX_OK;
 }
 
+static int cpu_device_info(const yvex_backend *backend,
+                           yvex_backend_device_info *out,
+                           yvex_error *err)
+{
+    if (!backend || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "cpu.device_info", "backend and out are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    *out = backend->device_info;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 static int cpu_sync(yvex_backend *backend, yvex_error *err)
 {
     if (!backend) {
@@ -106,6 +119,7 @@ static int cpu_supports(const yvex_backend *backend, yvex_backend_capability cap
 static const yvex_backend_vtable cpu_vtable = {
     cpu_close,
     cpu_memory_stats,
+    cpu_device_info,
     yvex_cpu_tensor_alloc,
     yvex_cpu_tensor_free,
     yvex_cpu_tensor_write,
@@ -138,6 +152,9 @@ int yvex_backend_open_cpu_impl(yvex_backend **out,
     backend->status = YVEX_BACKEND_STATUS_READY;
     backend->vtable = &cpu_vtable;
     backend->stats.memory_limit_bytes = memory_limit_bytes;
+    backend->device_info.kind = YVEX_BACKEND_KIND_CPU;
+    backend->device_info.name = "cpu";
+    backend->device_info.device_index = 0;
     backend->tensor_id_next = 1;
 
     *out = backend;

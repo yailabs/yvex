@@ -31,6 +31,9 @@ typedef struct yvex_backend_vtable {
     int (*memory_stats)(const yvex_backend *backend,
                         yvex_backend_memory_stats *out,
                         yvex_error *err);
+    int (*device_info)(const yvex_backend *backend,
+                       yvex_backend_device_info *out,
+                       yvex_error *err);
     int (*tensor_alloc)(yvex_backend *backend,
                         const yvex_backend_tensor_desc *desc,
                         yvex_device_tensor **out,
@@ -65,6 +68,9 @@ struct yvex_backend {
     yvex_backend_status status;
     const yvex_backend_vtable *vtable;
     yvex_backend_memory_stats stats;
+    yvex_backend_device_info device_info;
+    char device_name_storage[128];
+    void *impl;
     unsigned long long tensor_id_next;
 };
 
@@ -90,5 +96,9 @@ int yvex_backend_tensor_owner_is(const yvex_backend *backend,
 int yvex_backend_open_cpu_impl(yvex_backend **out,
                                unsigned long long memory_limit_bytes,
                                yvex_error *err);
+int yvex_backend_open_cuda_impl(yvex_backend **out,
+                                const char *device,
+                                unsigned long long memory_limit_bytes,
+                                yvex_error *err);
 
 #endif /* YVEX_BACKEND_INTERNAL_H */

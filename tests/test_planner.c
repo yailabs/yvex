@@ -6,7 +6,7 @@
  *
  * Purpose:
  *   Proves that planner objects own a graph and memory plan while reporting
- *   G0 CPU backend availability and unsupported CUDA status.
+ *   CPU backend availability and CUDA availability/unavailability.
  *
  * Covers:
  *   - yvex_plan_create
@@ -138,12 +138,12 @@ static int test_plan_cuda_label_and_dump(void)
     YVEX_TEST_ASSERT(rc == YVEX_OK, "plan dump succeeds");
     YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_dump.out", "backend: cuda"),
                      "plan dump backend");
-    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_dump.out", "backend_status: unsupported"),
-                     "plan dump cuda unsupported");
-    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_dump.out", "CUDA backend not implemented in G0"),
-                     "plan dump cuda reason");
+    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_dump.out", "backend_status:"),
+                     "plan dump cuda status");
     YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_dump.out", "execution_ready: false"),
                      "plan dump execution false");
+    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_dump.out", "status: plan-only"),
+                     "plan dump plan-only");
 
     yvex_plan_close(plan);
     close_fixture(&fixture);

@@ -16,7 +16,7 @@ provider boundary.
 
 ## Status
 
-This repository has completed K0, the yvexd server shell.
+This repository has completed L0, the first CUDA backend attachment.
 
 Current state:
 
@@ -24,11 +24,11 @@ Current state:
 canonical spine: docs/spine.md
 runtime code: core/filesystem/artifact/GGUF/model/tokenizer/graph/backend/session shell implemented
 public headers: implemented headers are aggregated by include/yvex/yvex.h
-CLI binary: build/bin/yvex accepted-only runtime shell implemented
+CLI binary: build/bin/yvex accepted-only runtime shell and cuda-info implemented
 server binary: build/bin/yvexd status shell implemented
 GGUF parser: metadata and tensor directory implemented
 tokenizer: fixture encode/decode implemented
-CUDA backend: not implemented
+CUDA backend: tensor allocation/read/write/copy and F32 embed parity implemented when driver/device are available
 server generation: not implemented
 benchmark results: none
 ```
@@ -51,6 +51,7 @@ limitation.
 ```sh
 make info
 make check
+make check-cuda   # only on CUDA-capable hosts
 ```
 
 At this phase, validation checks the reduced documentation posture and

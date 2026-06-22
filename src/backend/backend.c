@@ -102,9 +102,13 @@ int yvex_backend_open(yvex_backend **out,
     if (kind == YVEX_BACKEND_KIND_CPU) {
         return yvex_backend_open_cpu_impl(out, memory_limit_bytes, err);
     }
+    if (kind == YVEX_BACKEND_KIND_CUDA) {
+        return yvex_backend_open_cuda_impl(out, options ? options->device : NULL,
+                                           memory_limit_bytes, err);
+    }
 
     yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_open",
-                    "backend %s is not implemented in G0; planned for a later backend wave",
+                    "backend %s is not implemented",
                     yvex_backend_kind_name(kind));
     return YVEX_ERR_UNSUPPORTED;
 }
@@ -116,6 +120,21 @@ int yvex_backend_open_cpu(yvex_backend **out, yvex_error *err)
     memset(&options, 0, sizeof(options));
     options.kind = YVEX_BACKEND_KIND_CPU;
     return yvex_backend_open(out, &options, err);
+}
+
+int yvex_backend_cuda_available(void)
+{
+    yvex_backend *backend = NULL;
+    yvex_backend_options options;
+    yvex_error err;
+    int rc;
+
+    memset(&options, 0, sizeof(options));
+    options.kind = YVEX_BACKEND_KIND_CUDA;
+    yvex_error_clear(&err);
+    rc = yvex_backend_open(&backend, &options, &err);
+    yvex_backend_close(backend);
+    return rc == YVEX_OK;
 }
 
 void yvex_backend_close(yvex_backend *backend)
@@ -157,6 +176,23 @@ int yvex_backend_get_memory_stats(const yvex_backend *backend,
         return YVEX_ERR_UNSUPPORTED;
     }
     return backend->vtable->memory_stats(backend, out, err);
+}
+
+int yvex_backend_get_device_info(const yvex_backend *backend,
+                                 yvex_backend_device_info *out,
+                                 yvex_error *err)
+{
+    if (!backend || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_get_device_info",
+                       "backend and out are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (!backend->vtable || !backend->vtable->device_info) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_get_device_info",
+                       "backend does not provide device info");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    return backend->vtable->device_info(backend, out, err);
 }
 
 int yvex_backend_tensor_alloc(yvex_backend *backend,

@@ -77,13 +77,17 @@ set +e
 "$YVEX_BIN" run --model "$FIXTURE" --backend cuda --prompt "hello world" >"$OUT_DIR/run_cuda.out" 2>"$OUT_DIR/run_cuda.err"
 rc=$?
 set -e
-if [ "$rc" -ne 5 ]; then
-    fail "run cuda exit code was $rc, expected 5"
-fi
-contains "$OUT_DIR/run_cuda.out" "run status: backend-unsupported"
 contains "$OUT_DIR/run_cuda.out" "backend: cuda"
-contains "$OUT_DIR/run_cuda.out" "execution_ready: false"
-contains "$OUT_DIR/run_cuda.out" "reason: CUDA backend is planned for L0"
+if [ "$rc" -eq 0 ]; then
+    contains "$OUT_DIR/run_cuda.out" "run status: accepted-only"
+    contains "$OUT_DIR/run_cuda.out" "execution_ready: false"
+    contains "$OUT_DIR/run_cuda.out" "generation: unsupported"
+elif [ "$rc" -eq 5 ]; then
+    contains "$OUT_DIR/run_cuda.out" "run status: backend-unsupported"
+    contains "$OUT_DIR/run_cuda.out" "execution_ready: false"
+else
+    fail "run cuda exit code was $rc"
+fi
 
 run_ok help_run "$YVEX_BIN" help run
 contains "$OUT_DIR/help_run.out" "usage: yvex run --model FILE"

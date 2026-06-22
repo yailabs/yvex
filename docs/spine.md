@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after K0
+after L0
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-L0 - CUDA/DGX Spark backend
+M0-M8 - Model support ladder
 ```
 
 Implemented surface:
@@ -132,6 +132,12 @@ Backend:
   src/backend/cpu_backend.c
   src/backend/cpu_tensor.c
   src/backend/cpu_ops.c
+  backends/cuda/cuda_backend.c
+  backends/cuda/cuda_tensor.c
+  backends/cuda/cuda_ops.c
+  backends/cuda/cuda_info.c
+  backends/cuda/cuda_errors.c
+  backends/cuda/cuda_internal.h
 
 Engine / session runtime:
   include/yvex/engine.h
@@ -174,7 +180,7 @@ Server shell:
 
 CLI:
   cli/yvex_cli.c
-  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, engine, session, run, chat
+  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat
   implemented binaries: yvex, yvexd
 
 Tests:
@@ -209,17 +215,21 @@ Tests:
   tests/test_run_artifacts.c
   tests/test_http.c
   tests/test_server.c
+  tests/test_cuda_info.c
+  tests/test_cuda_tensor.c
+  tests/test_cuda_ops.c
+  tests/test_cuda_parity.c
   tests/test_cli_run.sh
   tests/test_cli_chat.sh
   tests/test_cli_metrics.sh
   tests/test_cli_server.sh
+  tests/test_cli_cuda.sh
   tests/test_cli.sh
 ```
 
 Not implemented:
 
 ```text
-CUDA
 model support ladder execution
 inference
 generation endpoints
@@ -230,7 +240,7 @@ Interface policy:
 
 ```text
 YVEX is CLI-only.
-The only user-facing executable surface in the current repository is build/bin/yvex.
+The user-facing executable surfaces in the current repository are build/bin/yvex and build/bin/yvexd.
 New interface surfaces require an explicit spine decision before implementation.
 ```
 
@@ -293,6 +303,8 @@ Current implemented commands:
 ```text
 commands
 backend
+chat
+cuda-info
 detokenize
 engine
 graph
@@ -303,6 +315,7 @@ metadata
 paths
 plan
 prompt
+run
 session
 tensors
 tokenize
@@ -331,8 +344,8 @@ Future commands are listed only under the delivery that implements them.
 | I0 | complete | CLI run/chat runtime |
 | J0 | complete | Metrics and tracing |
 | K0 | complete | yvexd server/provider |
-| L0 | next | CUDA/DGX Spark backend |
-| M0-M8 | planned | Model support ladder |
+| L0 | complete | CUDA/DGX Spark backend |
+| M0-M8 | next | Model support ladder |
 
 ### P0 - Repository reset and technical spine
 
@@ -1560,7 +1573,7 @@ L0 receives server-observable status and metrics shell, but no generation provid
 Status:
 
 ```text
-planned
+complete
 ```
 
 Owns:
@@ -1570,9 +1583,10 @@ CUDA backend attachment
 cuda-info command
 device memory stats
 CUDA tensor allocation
+CUDA tensor read/write/copy
 CPU/CUDA parity fixtures
-first CUDA kernels as scoped subdeliveries
-DGX Spark build target when toolchain support is proven
+first CUDA scoped op: F32 embedding lookup
+explicit CUDA build/test targets
 ```
 
 Does not own:
@@ -1581,13 +1595,23 @@ Does not own:
 CUDA support claims before tests
 model support ladder execution by itself
 server shell behavior
+CUDA matmul
+CUDA RMSNorm
+CUDA attention
+GPU KV cache runtime
+sampler
+inference
 ```
 
 Creates / modifies:
 
 ```text
 backends/cuda/
-tests/test_cuda_*.c or cuda smoke scripts
+tests/test_cuda_info.c
+tests/test_cuda_tensor.c
+tests/test_cuda_ops.c
+tests/test_cuda_parity.c
+tests/test_cli_cuda.sh
 Makefile
 cli/yvex_cli.c
 docs/backend-contract.md
@@ -1598,7 +1622,8 @@ CLI surface:
 
 ```text
 yvex cuda-info
-backend cuda option only after tests prove it
+yvex backend cuda
+yvex plan <file> --backend cuda
 ```
 
 Tests:
@@ -1608,6 +1633,7 @@ cuda-info smoke tests
 device memory stat tests
 CPU/CUDA parity fixtures for each implemented op
 CUDA failure mapping tests where practical
+CLI CUDA smoke test
 ```
 
 Acceptance:
@@ -1617,6 +1643,7 @@ CUDA build target is explicit
 first implemented CUDA op has CPU parity
 device memory failures are explicit
 no broad CUDA backend claim
+normal make check remains CPU-safe
 ```
 
 Handoff:
@@ -1713,7 +1740,8 @@ future model work must state the exact support level and proof command.
 | H0 | e009e08 | Added engine/session runtime objects, KV/logits availability skeletons, session state machine, token acceptance diagnostics, engine/session CLI, and tests. |
 | I0 | 425fab3 | Added accepted-only run/chat runtime shell, slash commands, JSON run output, piped chat tests, and CLI smoke coverage. |
 | J0 | 5986659 | Added runtime metrics collector, trace JSONL writer, profile JSON writer, run artifacts, run/chat instrumentation, and tests. |
-| K0 | current commit | Added yvexd server shell, HTTP status router, health/metrics/model catalog endpoints, unsupported generation endpoint response, and tests. |
+| K0 | 6a8e17b | Added yvexd server shell, HTTP status router, health/metrics/model catalog endpoints, unsupported generation endpoint response, and tests. |
+| L0 | current commit | Added CUDA backend attachment, device probe, tensor allocation/read/write/copy, F32 embed op, CPU/CUDA parity proof, cuda-info CLI, and CUDA targets/tests. |
 
 Current implemented CLI command set:
 
@@ -1721,6 +1749,7 @@ Current implemented CLI command set:
 commands
 backend
 chat
+cuda-info
 engine
 session
 detokenize
@@ -1760,34 +1789,38 @@ git diff --check
 Next authorized milestone:
 
 ```text
-L0 - CUDA/DGX Spark backend
+M0-M8 - Model support ladder
 ```
 
-L0 starts only after K0 validation passes and the K0 commit is recorded.
+M0-M8 starts only after L0 validation passes and the L0 commit is recorded.
 
-L0 must produce:
+The first model support subdelivery is:
 
 ```text
-CUDA backend attachment
-device memory status
-explicit CUDA build/test path
-first CPU/CUDA parity proof
+M0 - fixture model path
 ```
 
-L0 must not produce:
+M0-M8 must produce:
+
+```text
+model support levels backed by command proof
+fixture-first inspection/tokenization/execution steps
+explicit support/unsupported state per model family
+```
+
+M0-M8 must not produce:
 
 ```text
 broad inference claim
-model support ladder claim without command proof
+model support claim without command proof
 ```
 
-Required L0 proof:
+Required M0 entry proof:
 
 ```text
 make clean
 make check
 make smoke
-CUDA-specific proof if the toolchain is present
 no broad inference claim
 ```
 
@@ -2113,8 +2146,8 @@ and a command-visible proof exists.
 Current handoff:
 
 ```text
-from: K0 - yvexd server/provider
-to: L0 - CUDA/DGX Spark backend
-authorized work: CUDA backend attachment, device memory status, explicit build/test path, and first parity proof
-blocked work: M0-M8 model support ladder until backend/session execution proof exists
+from: L0 - CUDA/DGX Spark backend
+to: M0-M8 - Model support ladder
+authorized work: fixture-first model support ladder with command proof
+blocked work: broad model support, inference, and generation claims without actual execution proof
 ```

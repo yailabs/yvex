@@ -19,8 +19,8 @@
  * Invariants:
  *   - plan owns graph and memory plan
  *   - cpu is available when the CPU backend ABI opens
- *   - cuda is reported unsupported until L0
- *   - execution_ready remains false in G0
+ *   - cuda is probed through L0 backend attachment
+ *   - execution_ready remains false
  *
  * Commands:
  *   - make test-core
@@ -39,10 +39,20 @@ static int backend_allowed(const char *name)
 static int fill_backend_status(yvex_plan *plan, const char *backend_name, yvex_error *err)
 {
     yvex_backend *backend = NULL;
+    yvex_backend_options backend_options;
     int rc;
 
-    if (strcmp(backend_name, "cpu") == 0) {
-        rc = yvex_backend_open_cpu(&backend, err);
+    if (strcmp(backend_name, "cpu") == 0 || strcmp(backend_name, "cuda") == 0) {
+        memset(&backend_options, 0, sizeof(backend_options));
+        backend_options.kind = strcmp(backend_name, "cuda") == 0
+                                   ? YVEX_BACKEND_KIND_CUDA
+                                   : YVEX_BACKEND_KIND_CPU;
+        rc = yvex_backend_open(&backend, &backend_options, err);
+        if (rc == YVEX_ERR_UNSUPPORTED && strcmp(backend_name, "cuda") == 0) {
+            plan->backend_status = yvex_graph_strdup("unavailable");
+            yvex_error_clear(err);
+            return plan->backend_status ? YVEX_OK : YVEX_ERR_NOMEM;
+        }
         if (rc != YVEX_OK) {
             return rc;
         }
@@ -54,8 +64,6 @@ static int fill_backend_status(yvex_plan *plan, const char *backend_name, yvex_e
         plan->backend_op_rms_norm = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_RMS_NORM);
         plan->backend_op_attention = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ATTENTION);
         yvex_backend_close(backend);
-    } else if (strcmp(backend_name, "cuda") == 0) {
-        plan->backend_status = yvex_graph_strdup("unsupported");
     } else {
         plan->backend_status = yvex_graph_strdup("not-selected");
     }
@@ -198,8 +206,8 @@ int yvex_plan_dump(const yvex_plan *plan, FILE *fp, yvex_error *err)
     }
     fprintf(fp, "\n");
     fprintf(fp, "execution_ready: false\n");
-    if (plan->backend_status && strcmp(plan->backend_status, "unsupported") == 0) {
-        fprintf(fp, "reason: CUDA backend not implemented in G0\n");
+    if (plan->backend_status && strcmp(plan->backend_status, "unavailable") == 0) {
+        fprintf(fp, "reason: CUDA runtime/device not available\n");
     } else if (plan->graph->status == YVEX_GRAPH_STATUS_PARTIAL) {
         fprintf(fp, "reason: graph partial; missing output_norm, output_head; backend lacks full graph ops\n");
     } else if (plan->graph->status == YVEX_GRAPH_STATUS_BUILT) {

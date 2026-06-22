@@ -6,8 +6,8 @@
  *
  * Purpose:
  *   Proves the I0 runtime shell can open engine/backend/session objects,
- *   accept fixture prompt text into the session, reset state, and report CUDA
- *   unsupported without claiming generation.
+ *   accept fixture prompt text into the session, reset state, and handle CUDA
+ *   ready/unavailable paths without claiming generation.
  *
  * Covers:
  *   - yvex_chat_runtime_open
@@ -68,7 +68,16 @@ static int test_runtime_errors(void)
 
     rc = yvex_chat_runtime_open(&runtime, "tests/fixtures/gguf/valid-tokenizer-simple.gguf",
                                 "cuda", 0, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_ERR_UNSUPPORTED, "cuda unsupported");
+    YVEX_TEST_ASSERT(rc == YVEX_OK || rc == YVEX_ERR_UNSUPPORTED,
+                     "cuda runtime opens or reports unsupported");
+    if (rc == YVEX_OK) {
+        yvex_session_summary summary;
+
+        rc = yvex_chat_runtime_get_summary(&runtime, &summary, &err);
+        YVEX_TEST_ASSERT(rc == YVEX_OK, "cuda runtime summary");
+        YVEX_TEST_ASSERT(summary.execution_ready == 0, "cuda runtime execution false");
+        yvex_chat_runtime_close(&runtime);
+    }
 
     rc = yvex_chat_runtime_open(&runtime, NULL, "cpu", 0, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_INVALID_ARG, "missing model path fails");

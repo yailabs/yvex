@@ -13,6 +13,10 @@
 #   make lib
 #   make cli
 #   make server
+#   make cuda-info
+#   make cuda
+#   make test-cuda
+#   make check-cuda
 #   make test
 #   make test-core
 #   make test-cli
@@ -24,14 +28,20 @@
 #   - YVEX is CLI-only.
 #   - build/bin/yvex is the current user-facing executable surface.
 
-.PHONY: info lib cli server test test-core test-cli smoke check check-docs check-guardrails clean
+.PHONY: info lib cli server cuda-info cuda test-cuda smoke-cuda check-cuda test test-core test-cli smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
+NVCC ?= nvcc
+CUDA_HOME ?= /usr/local/cuda
+CUDA_CFLAGS ?=
+CUDA_LDFLAGS ?=
+YVEX_CUDA_ARCH ?= auto
 
 CPPFLAGS ?= -Iinclude
 CFLAGS ?= -std=c11 -Wall -Wextra -pedantic
 LDFLAGS ?=
+LDLIBS ?= -ldl
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -98,7 +108,16 @@ CORE_SRCS := \
 	src/server/handlers.c \
 	src/server/server_metrics.c
 
+CUDA_SRCS := \
+	backends/cuda/cuda_backend.c \
+	backends/cuda/cuda_tensor.c \
+	backends/cuda/cuda_ops.c \
+	backends/cuda/cuda_info.c \
+	backends/cuda/cuda_errors.c
+
 CORE_OBJS := $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
+CUDA_OBJS := $(patsubst backends/%.c,$(OBJ_DIR)/backends/%.o,$(CUDA_SRCS))
+CORE_OBJS += $(CUDA_OBJS)
 
 TEST_SRCS := \
 	tests/test_status.c \
@@ -135,6 +154,14 @@ TEST_SRCS := \
 
 TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 
+CUDA_TEST_SRCS := \
+	tests/test_cuda_info.c \
+	tests/test_cuda_tensor.c \
+	tests/test_cuda_ops.c \
+	tests/test_cuda_parity.c
+
+CUDA_TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(CUDA_TEST_SRCS))
+
 CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md \
 	docs/api.md docs/backend-contract.md docs/runtime-filesystem.md docs/cli-runtime.md
 
@@ -152,6 +179,7 @@ info:
 	@echo "graph: partial planning implemented"
 	@echo "planner: estimate-only implemented"
 	@echo "backend: CPU reference implemented"
+	@echo "backend_cuda: L0 dynamic driver attachment implemented"
 	@echo "engine: runtime object skeleton implemented"
 	@echo "session: lifecycle skeleton implemented"
 	@echo "run: accepted-only runtime shell implemented"
@@ -167,7 +195,7 @@ info:
 	@echo "logits: unavailable skeleton implemented"
 	@echo "generation: unsupported"
 	@echo "inference: not implemented"
-	@echo "cuda: not implemented"
+	@echo "cuda: tensor movement and F32 embed parity implemented when driver/device are available"
 	@echo "server: yvexd status shell implemented"
 
 lib: $(LIBYVEX)
@@ -176,8 +204,30 @@ cli: $(YVEX_BIN)
 
 server: $(YVEXD_BIN)
 
+cuda-info: $(YVEX_BIN)
+	@echo "nvcc: $$(command -v $(NVCC) >/dev/null 2>&1 && command -v $(NVCC) || echo unavailable)"
+	@echo "CUDA_HOME: $(CUDA_HOME)"
+	@echo "YVEX_CUDA_ARCH: $(YVEX_CUDA_ARCH)"
+	$(YVEX_BIN) cuda-info
+
+cuda: lib cli server $(CUDA_TEST_BINS)
+	@echo "yvex cuda build: dynamic CUDA Driver API path"
+
+test-cuda: cuda
+	$(YVEX_BIN) cuda-info >/dev/null
+	@set -e; for test_bin in $(CUDA_TEST_BINS); do \
+		echo "$$test_bin"; \
+		"$$test_bin"; \
+	done
+
+smoke-cuda: cuda
+	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_cuda.sh
+
+check-cuda: cuda-info test-cuda smoke-cuda
+	@echo "yvex check-cuda: ok"
+
 test-core: $(TEST_BINS)
-	@for test_bin in $(TEST_BINS); do \
+	@set -e; for test_bin in $(TEST_BINS); do \
 		echo "$$test_bin"; \
 		"$$test_bin"; \
 	done
@@ -204,17 +254,21 @@ $(OBJ_DIR)/%.o: src/%.c
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
+$(OBJ_DIR)/backends/%.o: backends/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
 $(YVEX_BIN): cli/yvex_cli.c $(LIBYVEX)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
 $(YVEXD_BIN): server/yvexd.c $(LIBYVEX)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
 $(TEST_DIR)/%: tests/%.c $(LIBYVEX) tests/test.h
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
 check-docs:
 	@test -f README.md
@@ -265,7 +319,7 @@ check-guardrails:
 	@test ! -e src/README.md
 	@test ! -e tests/README.md
 	@test ! -e include/yvex/sampler.h
-	@test ! -d backends/cuda
+	@test -d backends/cuda
 	@test -f include/yvex/server.h
 	@test -d src/server
 	@test ! -d fixtures

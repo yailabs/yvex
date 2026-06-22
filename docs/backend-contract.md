@@ -1,13 +1,13 @@
 # YVEX Backend Contract
 
 This document owns backend architecture. CPU reference backend behavior exists
-as of G0; accelerated backends remain planned.
+as of G0; CUDA attachment exists as of L0.
 
 ## Status
 
 ```text
 CPU backend: implemented in G0
-CUDA backend: not implemented
+CUDA backend: tensor allocation/read/write/copy and F32 embed parity implemented in L0 when driver/device are available
 Metal backend: not implemented
 ROCm backend: not implemented
 backend public headers: implemented in include/yvex/backend.h
@@ -18,7 +18,7 @@ behavior, documented limitations, and a clear unsupported path.
 
 ## Backend Kinds
 
-Planned backend kinds:
+Backend kinds:
 
 ```text
 cpu
@@ -55,9 +55,9 @@ error mapping
 
 The core runtime calls an opaque backend vtable. Backend-specific native handles
 stay inside backend implementation files. G0 implements the ABI with a CPU
-reference backend.
+reference backend. L0 attaches CUDA through the same ABI.
 
-Implemented G0 operations:
+Implemented generic operations:
 
 ```text
 open
@@ -71,6 +71,7 @@ sync
 capabilities
 memory_stats
 op_embed
+device_info
 ```
 
 Generic public headers must not expose CUDA, Metal, ROCm, or provider-native
@@ -128,33 +129,46 @@ inference
 
 ## CUDA / DGX Spark Track
 
-Primary CUDA target:
+L0 CUDA status:
 
 ```text
-NVIDIA DGX Spark
-GB10
-sm_121 when supported by the toolchain
-CUDA
-128 GB memory class
+driver/device probe: implemented through CUDA Driver API
+cuda-info command: implemented
+tensor allocation/free: implemented
+host-to-device write: implemented
+device-to-host read: implemented
+device-to-device copy: implemented
+sync: implemented
+F32 embed op: implemented
+CPU/CUDA parity: implemented for F32 embed
 ```
 
-Future CUDA commands:
+Primary future CUDA target remains:
+
+```text
+NVIDIA DGX Spark / GB10
+architecture selected by toolchain/probe, not hardcoded in docs
+```
+
+Implemented CUDA commands:
 
 ```text
 yvex cuda-info
-yvex run --model model.gguf --backend cuda ...
-yvex bench --model model.gguf --backend cuda ...
+yvex backend cuda
+yvex plan <file> --backend cuda
 ```
 
-Future CUDA build targets:
+Implemented CUDA build targets:
 
 ```text
+make cuda-info
 make cuda
-make cuda-spark
-make cuda-debug
+make test-cuda
+make smoke-cuda
+make check-cuda
 ```
 
-These targets must not be added as support claims before backend code exists.
+Normal `make check` is CPU-safe and does not require CUDA hardware.
 
 CUDA stream policy:
 
@@ -168,9 +182,8 @@ all stream creation/destruction is owned by backend_cuda
 cuBLAS ownership:
 
 ```text
-backend_cuda owns cublasHandle_t
-handle lifetime equals yvex_backend
-handle is bound to backend execution stream
+not implemented in L0
+future backend_cuda owns cublasHandle_t only when matmul work begins
 cuda-info reports cuBLAS availability only after implementation
 planner records cuBLAS vs custom kernel per matmul op
 ```
@@ -178,21 +191,20 @@ planner records cuBLAS vs custom kernel per matmul op
 CUDA error mapping:
 
 ```text
-cudaErrorMemoryAllocation -> YVEX_ERR_BACKEND with memory context
-cudaErrorInvalidValue -> YVEX_ERR_INVALID_ARG or YVEX_ERR_BACKEND
-cudaErrorNotSupported -> YVEX_ERR_UNSUPPORTED
-cudaErrorLaunchFailure -> YVEX_ERR_BACKEND with kernel name
-cudaErrorIllegalAddress -> YVEX_ERR_BACKEND with sync boundary and kernel name
-unknown CUDA error -> YVEX_ERR_BACKEND with numeric code and cudaGetErrorString
+CUDA out-of-memory -> YVEX_ERR_NOMEM
+CUDA invalid value -> YVEX_ERR_INVALID_ARG or YVEX_ERR_BACKEND by call site
+CUDA no device / not supported -> YVEX_ERR_UNSUPPORTED
+CUDA launch/sync/runtime failure -> YVEX_ERR_BACKEND
+unknown CUDA error -> YVEX_ERR_BACKEND with numeric code and error string
 ```
 
 ## Capability Matrix
 
 ```text
 op                | cpu     | cuda    | notes
-tensor_alloc      | yes     | planned | CPU roundtrip tests exist
-tensor_copy       | yes     | planned | CPU copy tests exist
-op_embed          | yes     | planned | F32 fixture op exists
+tensor_alloc      | yes     | yes     | CPU and CUDA tests exist
+tensor_copy       | yes     | yes     | CPU and CUDA copy tests exist
+op_embed          | yes     | yes     | F32 CPU/CUDA parity exists
 rms_norm          | planned | planned | CPU reference first
 matmul_f16        | planned | planned | CUDA may use cuBLAS
 matmul_q8_0       | planned | planned | dequant path required

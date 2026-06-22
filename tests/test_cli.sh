@@ -85,7 +85,7 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: K0 yvexd server shell"
+contains "$OUT_DIR/info.out" "status: L0 CUDA backend attachment"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "artifact: open/read implemented"
@@ -96,6 +96,7 @@ contains "$OUT_DIR/info.out" "prompt: default renderer implemented"
 contains "$OUT_DIR/info.out" "graph: partial planning implemented"
 contains "$OUT_DIR/info.out" "planner: estimate-only implemented"
 contains "$OUT_DIR/info.out" "backend: CPU reference implemented"
+contains "$OUT_DIR/info.out" "backend_cuda: tensor movement and F32 embed implemented when CUDA is available"
 contains "$OUT_DIR/info.out" "engine: runtime object skeleton implemented"
 contains "$OUT_DIR/info.out" "session: lifecycle skeleton implemented"
 contains "$OUT_DIR/info.out" "run: accepted-only runtime shell implemented"
@@ -110,6 +111,7 @@ contains "$OUT_DIR/info.out" "server_generation: not implemented"
 contains "$OUT_DIR/info.out" "kv: unavailable skeleton implemented"
 contains "$OUT_DIR/info.out" "logits: unavailable skeleton implemented"
 contains "$OUT_DIR/info.out" "generation: unsupported"
+contains "$OUT_DIR/info.out" "cuda: available when local driver/device probe succeeds"
 contains "$OUT_DIR/info.out" "server: yvexd status shell implemented"
 
 run_ok commands "$YVEX_BIN" commands
@@ -117,6 +119,7 @@ contains "$OUT_DIR/commands.out" "Implemented commands:"
 contains "$OUT_DIR/commands.out" "  backend"
 contains "$OUT_DIR/commands.out" "  chat"
 contains "$OUT_DIR/commands.out" "  commands"
+contains "$OUT_DIR/commands.out" "  cuda-info"
 contains "$OUT_DIR/commands.out" "  detokenize"
 contains "$OUT_DIR/commands.out" "  engine"
 contains "$OUT_DIR/commands.out" "  graph"
@@ -139,6 +142,9 @@ contains "$OUT_DIR/help_info.out" "usage: yvex info"
 
 run_ok help_backend "$YVEX_BIN" help backend
 contains "$OUT_DIR/help_backend.out" "usage: yvex backend cpu|cuda"
+
+run_ok help_cuda_info "$YVEX_BIN" help cuda-info
+contains "$OUT_DIR/help_cuda_info.out" "usage: yvex cuda-info"
 
 run_ok help_chat "$YVEX_BIN" help chat
 contains "$OUT_DIR/help_chat.out" "usage: yvex chat --model FILE"
@@ -267,9 +273,9 @@ contains "$OUT_DIR/plan_cpu.out" "status: plan-only"
 
 run_ok plan_cuda "$YVEX_BIN" plan tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cuda
 contains "$OUT_DIR/plan_cuda.out" "backend: cuda"
-contains "$OUT_DIR/plan_cuda.out" "backend_status: unsupported"
+contains "$OUT_DIR/plan_cuda.out" "backend_status:"
 contains "$OUT_DIR/plan_cuda.out" "execution_ready: false"
-contains "$OUT_DIR/plan_cuda.out" "CUDA backend not implemented in G0"
+contains "$OUT_DIR/plan_cuda.out" "status: plan-only"
 
 run_ok backend_cpu "$YVEX_BIN" backend cpu
 contains "$OUT_DIR/backend_cpu.out" "backend: cpu"
@@ -285,13 +291,19 @@ set +e
 "$YVEX_BIN" backend cuda >"$OUT_DIR/backend_cuda.out" 2>"$OUT_DIR/backend_cuda.err"
 rc=$?
 set -e
-if [ "$rc" -ne 5 ]; then
-    fail "backend cuda exit code was $rc, expected 5"
-fi
 contains "$OUT_DIR/backend_cuda.out" "backend: cuda"
-contains "$OUT_DIR/backend_cuda.out" "status: unsupported"
-contains "$OUT_DIR/backend_cuda.out" "reason: CUDA backend is planned for L0"
-contains "$OUT_DIR/backend_cuda.out" "status: backend-unsupported"
+if [ "$rc" -eq 0 ]; then
+    contains "$OUT_DIR/backend_cuda.out" "status: ready"
+    contains "$OUT_DIR/backend_cuda.out" "tensor_alloc: yes"
+    contains "$OUT_DIR/backend_cuda.out" "tensor_read_write: yes"
+    contains "$OUT_DIR/backend_cuda.out" "op_embed: yes"
+    contains "$OUT_DIR/backend_cuda.out" "status: backend-ready"
+elif [ "$rc" -eq 5 ]; then
+    contains "$OUT_DIR/backend_cuda.out" "status: unsupported"
+    contains "$OUT_DIR/backend_cuda.out" "status: backend-unsupported"
+else
+    fail "backend cuda exit code was $rc"
+fi
 
 run_ok engine "$YVEX_BIN" engine tests/fixtures/gguf/valid-tokenizer-simple.gguf
 contains "$OUT_DIR/engine.out" "engine status: partial"
@@ -331,13 +343,17 @@ set +e
 "$YVEX_BIN" session tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cuda >"$OUT_DIR/session_cuda.out" 2>"$OUT_DIR/session_cuda.err"
 rc=$?
 set -e
-if [ "$rc" -ne 5 ]; then
-    fail "session cuda exit code was $rc, expected 5"
-fi
 contains "$OUT_DIR/session_cuda.out" "backend: cuda"
-contains "$OUT_DIR/session_cuda.out" "backend_status: unsupported"
-contains "$OUT_DIR/session_cuda.out" "reason: CUDA backend is planned for L0"
-contains "$OUT_DIR/session_cuda.out" "status: session-backend-unsupported"
+if [ "$rc" -eq 0 ]; then
+    contains "$OUT_DIR/session_cuda.out" "backend_status: ready"
+    contains "$OUT_DIR/session_cuda.out" "execution_ready: false"
+    contains "$OUT_DIR/session_cuda.out" "status: session-created"
+elif [ "$rc" -eq 5 ]; then
+    contains "$OUT_DIR/session_cuda.out" "backend_status: unsupported"
+    contains "$OUT_DIR/session_cuda.out" "status: session-backend-unsupported"
+else
+    fail "session cuda exit code was $rc"
+fi
 
 set +e
 "$YVEX_BIN" inspect tests/fixtures/gguf/bad-magic.gguf >"$OUT_DIR/inspect_bad_magic.out" 2>"$OUT_DIR/inspect_bad_magic.err"

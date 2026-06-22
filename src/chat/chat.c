@@ -62,9 +62,9 @@ static int open_backend(yvex_backend **out, const char *backend_name, yvex_error
         return yvex_backend_open_cpu(out, err);
     }
     if (strcmp(backend_name, "cuda") == 0) {
-        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_chat_backend",
-                       "backend cuda is unsupported in I0; planned for L0");
-        return YVEX_ERR_UNSUPPORTED;
+        memset(&options, 0, sizeof(options));
+        options.kind = YVEX_BACKEND_KIND_CUDA;
+        return yvex_backend_open(out, &options, err);
     }
 
     memset(&options, 0, sizeof(options));
