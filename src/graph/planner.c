@@ -5,9 +5,9 @@
  * Layer: graph implementation
  *
  * Purpose:
- *   Combines an F0 graph and estimate-only memory plan into a high-level
- *   planning object. Backend names are labels only; no backend allocation,
- *   capability probing, or execution dispatch happens here.
+ *   Combines a graph and estimate-only memory plan into a high-level planning
+ *   object. In G0, CPU backend availability/capabilities are probed through
+ *   the backend ABI, while execution remains disabled.
  *
  * Implements:
  *   - yvex_plan_create
@@ -18,8 +18,9 @@
  *
  * Invariants:
  *   - plan owns graph and memory plan
- *   - cuda is accepted only as planned-not-implemented metadata
- *   - execution_ready remains false in F0
+ *   - cpu is available when the CPU backend ABI opens
+ *   - cuda is reported unsupported until L0
+ *   - execution_ready remains false in G0
  *
  * Commands:
  *   - make test-core
@@ -33,6 +34,37 @@
 static int backend_allowed(const char *name)
 {
     return strcmp(name, "cpu") == 0 || strcmp(name, "none") == 0 || strcmp(name, "cuda") == 0;
+}
+
+static int fill_backend_status(yvex_plan *plan, const char *backend_name, yvex_error *err)
+{
+    yvex_backend *backend = NULL;
+    int rc;
+
+    if (strcmp(backend_name, "cpu") == 0) {
+        rc = yvex_backend_open_cpu(&backend, err);
+        if (rc != YVEX_OK) {
+            return rc;
+        }
+        plan->backend_status = yvex_graph_strdup("available");
+        plan->backend_tensor_alloc = yvex_backend_supports(backend, YVEX_BACKEND_CAP_TENSOR_ALLOC);
+        plan->backend_tensor_read_write = yvex_backend_supports(backend, YVEX_BACKEND_CAP_TENSOR_READ_WRITE);
+        plan->backend_op_embed = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_EMBED);
+        plan->backend_op_matmul = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MATMUL);
+        plan->backend_op_rms_norm = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_RMS_NORM);
+        plan->backend_op_attention = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ATTENTION);
+        yvex_backend_close(backend);
+    } else if (strcmp(backend_name, "cuda") == 0) {
+        plan->backend_status = yvex_graph_strdup("unsupported");
+    } else {
+        plan->backend_status = yvex_graph_strdup("not-selected");
+    }
+
+    if (!plan->backend_status) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_plan_create", "failed to copy backend status");
+        return YVEX_ERR_NOMEM;
+    }
+    return YVEX_OK;
 }
 
 int yvex_plan_create(yvex_plan **out,
@@ -88,13 +120,15 @@ int yvex_plan_create(yvex_plan **out,
         return YVEX_ERR_NOMEM;
     }
     plan->backend_name = yvex_graph_strdup(backend_name);
-    plan->backend_status = yvex_graph_strdup(strcmp(backend_name, "cuda") == 0
-                                                 ? "planned-not-implemented"
-                                                 : "label-only");
-    if (!plan->backend_name || !plan->backend_status) {
+    if (!plan->backend_name) {
         yvex_plan_close(plan);
-        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_plan_create", "failed to copy backend labels");
+        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_plan_create", "failed to copy backend label");
         return YVEX_ERR_NOMEM;
+    }
+    rc = fill_backend_status(plan, backend_name, err);
+    if (rc != YVEX_OK) {
+        yvex_plan_close(plan);
+        return rc;
     }
 
     rc = yvex_graph_build_for_model(&plan->graph, model, tensors, &graph_options, err);
@@ -142,8 +176,15 @@ int yvex_plan_dump(const yvex_plan *plan, FILE *fp, yvex_error *err)
 
     fprintf(fp, "plan status: %s\n", yvex_memory_plan_status_name(yvex_memory_plan_status_of(plan->memory)));
     fprintf(fp, "backend: %s\n", plan->backend_name ? plan->backend_name : "");
-    if (plan->backend_status && strcmp(plan->backend_status, "planned-not-implemented") == 0) {
-        fprintf(fp, "backend_status: %s\n", plan->backend_status);
+    fprintf(fp, "backend_status: %s\n", plan->backend_status ? plan->backend_status : "unknown");
+    if (plan->backend_status && strcmp(plan->backend_status, "available") == 0) {
+        fprintf(fp, "backend_capabilities:\n");
+        fprintf(fp, "  tensor_alloc: %s\n", plan->backend_tensor_alloc ? "yes" : "no");
+        fprintf(fp, "  tensor_read_write: %s\n", plan->backend_tensor_read_write ? "yes" : "no");
+        fprintf(fp, "  op_embed: %s\n", plan->backend_op_embed ? "yes" : "no");
+        fprintf(fp, "  op_matmul: %s\n", plan->backend_op_matmul ? "yes" : "no");
+        fprintf(fp, "  op_rms_norm: %s\n", plan->backend_op_rms_norm ? "yes" : "no");
+        fprintf(fp, "  op_attention: %s\n", plan->backend_op_attention ? "yes" : "no");
     }
     fprintf(fp, "architecture: %s\n", plan->graph->architecture ? plan->graph->architecture : "unknown");
     fprintf(fp, "model_name: %s\n", plan->graph->model_name ? plan->graph->model_name : "");
@@ -157,12 +198,14 @@ int yvex_plan_dump(const yvex_plan *plan, FILE *fp, yvex_error *err)
     }
     fprintf(fp, "\n");
     fprintf(fp, "execution_ready: false\n");
-    if (plan->graph->status == YVEX_GRAPH_STATUS_PARTIAL) {
-        fprintf(fp, "reason: graph partial; backend execution not implemented\n");
+    if (plan->backend_status && strcmp(plan->backend_status, "unsupported") == 0) {
+        fprintf(fp, "reason: CUDA backend not implemented in G0\n");
+    } else if (plan->graph->status == YVEX_GRAPH_STATUS_PARTIAL) {
+        fprintf(fp, "reason: graph partial; missing output_norm, output_head; backend lacks full graph ops\n");
     } else if (plan->graph->status == YVEX_GRAPH_STATUS_BUILT) {
-        fprintf(fp, "reason: backend execution not implemented\n");
+        fprintf(fp, "reason: session execution not implemented\n");
     } else {
-        fprintf(fp, "reason: graph unsupported; backend execution not implemented\n");
+        fprintf(fp, "reason: graph unsupported; backend lacks full graph ops\n");
     }
     fprintf(fp, "status: plan-only\n");
 

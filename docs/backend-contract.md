@@ -1,16 +1,16 @@
 # YVEX Backend Contract
 
-This document owns backend architecture. It is a plan until backend code,
-tests, and CLI-visible behavior exist.
+This document owns backend architecture. CPU reference backend behavior exists
+as of G0; accelerated backends remain planned.
 
 ## Status
 
 ```text
-CPU backend: not implemented
+CPU backend: implemented in G0
 CUDA backend: not implemented
 Metal backend: not implemented
 ROCm backend: not implemented
-backend public headers: not implemented
+backend public headers: implemented in include/yvex/backend.h
 ```
 
 No backend support claim exists without implementation, tests, command-visible
@@ -51,12 +51,13 @@ trace hooks
 error mapping
 ```
 
-## Backend ABI Plan
+## Backend ABI
 
 The core runtime calls an opaque backend vtable. Backend-specific native handles
-stay inside backend implementation files.
+stay inside backend implementation files. G0 implements the ABI with a CPU
+reference backend.
 
-Planned operations:
+Implemented G0 operations:
 
 ```text
 open
@@ -65,10 +66,11 @@ alloc
 free
 write
 read
-dispatch
+copy
 sync
 capabilities
 memory_stats
+op_embed
 ```
 
 Generic public headers must not expose CUDA, Metal, ROCm, or provider-native
@@ -97,21 +99,32 @@ freed
 
 ## CPU Reference Backend
 
-CPU reference exists for correctness and fixtures:
+CPU reference exists for correctness and fixtures. G0 implements:
 
 ```text
 tensor allocation
 tensor read/write
-vector ops
-rmsnorm reference
-matmul baseline
-sampler reference
-tiny graph execution
-one-token fixture inference
+tensor copy
+memory stats
+capability reporting
+F32 embedding lookup
+sync no-op
 ```
 
 CPU reference does not need to be fast. It must be deterministic, inspectable,
 and useful for CUDA parity.
+
+G0 does not implement:
+
+```text
+matmul
+rms norm
+attention
+sampler
+graph execution
+session runtime
+inference
+```
 
 ## CUDA / DGX Spark Track
 
@@ -177,8 +190,9 @@ unknown CUDA error -> YVEX_ERR_BACKEND with numeric code and cudaGetErrorString
 
 ```text
 op                | cpu     | cuda    | notes
-tensor_alloc      | planned | planned | roundtrip fixture required
-tensor_copy       | planned | planned | host/device copy fixture
+tensor_alloc      | yes     | planned | CPU roundtrip tests exist
+tensor_copy       | yes     | planned | CPU copy tests exist
+op_embed          | yes     | planned | F32 fixture op exists
 rms_norm          | planned | planned | CPU reference first
 matmul_f16        | planned | planned | CUDA may use cuBLAS
 matmul_q8_0       | planned | planned | dequant path required

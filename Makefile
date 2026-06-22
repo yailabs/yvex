@@ -5,8 +5,8 @@
 #
 # Purpose:
 #   Builds the YVEX C core library, filesystem/artifact/GGUF/model/tokenizer/
-#   graph planning layers, CLI bootstrap, and tests. Also runs documentation
-#   and guardrail validation.
+#   graph planning/backend layers, CLI bootstrap, and tests. Also runs
+#   documentation and guardrail validation.
 #
 # Primary commands:
 #   make info
@@ -68,7 +68,11 @@ CORE_SRCS := \
 	src/graph/shape.c \
 	src/graph/dump.c \
 	src/graph/planner.c \
-	src/graph/memory_plan.c
+	src/graph/memory_plan.c \
+	src/backend/backend.c \
+	src/backend/cpu_backend.c \
+	src/backend/cpu_tensor.c \
+	src/backend/cpu_ops.c
 
 CORE_OBJS := $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 
@@ -88,7 +92,9 @@ TEST_SRCS := \
 	tests/test_shape.c \
 	tests/test_graph.c \
 	tests/test_memory_plan.c \
-	tests/test_planner.c
+	tests/test_planner.c \
+	tests/test_backend_cpu.c \
+	tests/test_backend_ops.c
 
 TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 
@@ -97,7 +103,7 @@ CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md \
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: F0 graph and planning substrate"
+	@echo "status: G0 CPU reference backend ABI"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"
@@ -108,6 +114,7 @@ info:
 	@echo "prompt: default renderer implemented"
 	@echo "graph: partial planning implemented"
 	@echo "planner: estimate-only implemented"
+	@echo "backend: CPU reference implemented"
 	@echo "inference: not implemented"
 	@echo "cuda: not implemented"
 	@echo "server: not implemented"
@@ -191,13 +198,14 @@ check-guardrails:
 	@test ! -d protocols
 	@test ! -e src/README.md
 	@test ! -e tests/README.md
-	@test ! -e include/yvex/backend.h
 	@test ! -e include/yvex/session.h
 	@test ! -e include/yvex/server.h
-	@test ! -d src/backend
+	@test ! -e include/yvex/kv.h
+	@test ! -e include/yvex/logits.h
+	@test ! -e include/yvex/sampler.h
 	@test ! -d src/session
 	@test ! -d src/server
-	@test ! -d backends
+	@test ! -d backends/cuda
 	@test ! -d fixtures
 	@test -d cli
 	@test -f cli/yvex_cli.c

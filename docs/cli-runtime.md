@@ -4,12 +4,13 @@ This document owns CLI behavior. YVEX is CLI-only.
 
 ## Current Implemented Commands
 
-The F0 binary implements exactly:
+The G0 binary implements exactly:
 
 ```text
 yvex
 yvex --help
 yvex --version
+yvex backend cpu|cuda
 yvex commands
 yvex detokenize <path> --ids IDS
 yvex graph <path>
@@ -41,7 +42,7 @@ name: YVEX
 version: 0.1.0
 language: C
 interface: CLI-only
-status: F0 graph and planning substrate
+status: G0 CPU reference backend ABI
 library: libyvex.a
 filesystem: implemented
 artifact: open/read implemented
@@ -51,6 +52,8 @@ tokenizer: fixture encode/decode implemented
 prompt: default renderer implemented
 graph: partial planning implemented
 planner: estimate-only implemented
+backend: CPU reference implemented
+backend_cuda: not implemented
 inference: not implemented
 cuda: not implemented
 server: not implemented
@@ -280,14 +283,23 @@ Options:
 
 ## Current `yvex plan`
 
-`yvex plan <path>` builds a graph and estimate-only memory plan. Backend names
-are labels in F0 and do not allocate or execute backend state.
+`yvex plan <path>` builds a graph and estimate-only memory plan. In G0 the CPU
+backend ABI is available for tensor allocation/read/write/embed, but plan output
+still remains non-executable.
 
 Output shape:
 
 ```text
 plan status: partial
 backend: cpu
+backend_status: available
+backend_capabilities:
+  tensor_alloc: yes
+  tensor_read_write: yes
+  op_embed: yes
+  op_matmul: no
+  op_rms_norm: no
+  op_attention: no
 architecture: llama
 model_name: yvex-tokenizer-test
 graph_status: partial
@@ -303,17 +315,49 @@ memory:
   total_known_bytes: 144
 
 execution_ready: false
-reason: graph partial; backend execution not implemented
+reason: graph partial; missing output_norm, output_head; backend lacks full graph ops
 status: plan-only
 ```
 
-`--backend cuda` is accepted only as a planning label:
+`--backend cuda` is accepted only to report unsupported status:
 
 ```text
 backend: cuda
-backend_status: planned-not-implemented
+backend_status: unsupported
 execution_ready: false
+reason: CUDA backend not implemented in G0
 status: plan-only
+```
+
+## Current `yvex backend`
+
+`yvex backend cpu` opens the CPU reference backend and reports memory stats and
+capabilities:
+
+```text
+backend: cpu
+status: ready
+memory:
+  allocated_bytes: 0
+  allocation_count: 0
+  peak_allocated_bytes: 0
+capabilities:
+  tensor_alloc: yes
+  tensor_read_write: yes
+  op_embed: yes
+  op_matmul: no
+  op_rms_norm: no
+  op_attention: no
+status: backend-ready
+```
+
+`yvex backend cuda` reports the unsupported path and exits 5:
+
+```text
+backend: cuda
+status: unsupported
+reason: CUDA backend is planned for L0
+status: backend-unsupported
 ```
 
 ## Future Commands

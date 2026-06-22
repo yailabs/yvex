@@ -57,6 +57,12 @@ struct yvex_memory_plan {
 struct yvex_plan {
     char *backend_name;
     char *backend_status;
+    int backend_tensor_alloc;
+    int backend_tensor_read_write;
+    int backend_op_embed;
+    int backend_op_matmul;
+    int backend_op_rms_norm;
+    int backend_op_attention;
     yvex_graph *graph;
     yvex_memory_plan *memory;
 };

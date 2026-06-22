@@ -12,6 +12,7 @@
  *
  * Implements:
  *   - yvex
+ *   - yvex backend cpu
  *   - yvex info
  *   - yvex commands
  *   - yvex help [command]
@@ -65,6 +66,7 @@ typedef struct {
     yvex_tokenizer *tokenizer;
 } yvex_cli_tokenizer_context;
 
+static int command_backend(int argc, char **argv);
 static int command_commands(int argc, char **argv);
 static int command_detokenize(int argc, char **argv);
 static int command_graph(int argc, char **argv);
@@ -81,6 +83,13 @@ static int command_tensors(int argc, char **argv);
 static int command_version(int argc, char **argv);
 
 static const yvex_cli_command yvex_commands[] = {
+    {
+        "backend",
+        "Inspect an implemented backend.",
+        "yvex backend cpu|cuda",
+        "Reports backend status and capabilities. G0 implements CPU tensor allocation/read/write/embed; CUDA remains unsupported until L0.",
+        command_backend,
+    },
     {
         "commands",
         "List implemented CLI commands.",
@@ -141,7 +150,7 @@ static const yvex_cli_command yvex_commands[] = {
         "plan",
         "Build and dump an estimate-only execution plan.",
         "yvex plan <path> [--backend cpu|cuda] [--seq N] [--ctx N]",
-        "Builds a graph and memory estimate. Backend names are labels only in F0; no backend allocation or execution occurs.",
+        "Builds a graph and memory estimate. G0 reports CPU backend availability and CUDA unsupported status; execution remains disabled.",
         command_plan,
     },
     {
@@ -434,6 +443,85 @@ static int print_special_id_line(const char *name, int (*fn)(const yvex_tokenize
     return YVEX_OK;
 }
 
+static void print_backend_capability(const yvex_backend *backend, yvex_backend_capability capability)
+{
+    printf("  %s: %s\n",
+           yvex_backend_capability_name(capability),
+           yvex_backend_supports(backend, capability) ? "yes" : "no");
+}
+
+static int command_backend(int argc, char **argv)
+{
+    yvex_backend *backend = NULL;
+    yvex_backend_options options;
+    yvex_backend_memory_stats stats;
+    yvex_error err;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&options, 0, sizeof(options));
+
+    if (argc != 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        if (argc == 3) {
+            print_command_help(stdout, find_command("backend"));
+            return 0;
+        }
+        fprintf(stderr, "yvex: backend requires cpu or cuda\n");
+        fprintf(stderr, "usage: yvex backend cpu|cuda\n");
+        return 2;
+    }
+
+    if (strcmp(argv[2], "cpu") == 0) {
+        options.kind = YVEX_BACKEND_KIND_CPU;
+    } else if (strcmp(argv[2], "cuda") == 0) {
+        options.kind = YVEX_BACKEND_KIND_CUDA;
+    } else {
+        fprintf(stderr, "yvex: unknown backend kind: %s\n", argv[2]);
+        fprintf(stderr, "Try 'yvex help backend' for usage.\n");
+        return 2;
+    }
+
+    rc = yvex_backend_open(&backend, &options, &err);
+    if (rc == YVEX_ERR_UNSUPPORTED) {
+        printf("backend: %s\n", argv[2]);
+        printf("status: unsupported\n");
+        if (options.kind == YVEX_BACKEND_KIND_CUDA) {
+            printf("reason: CUDA backend is planned for L0\n");
+        } else {
+            printf("reason: %s\n", yvex_error_message(&err));
+        }
+        printf("status: backend-unsupported\n");
+        return 5;
+    }
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_backend_get_memory_stats(backend, &stats, &err);
+    if (rc != YVEX_OK) {
+        yvex_backend_close(backend);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    printf("backend: %s\n", yvex_backend_kind_name(yvex_backend_kind_of(backend)));
+    printf("status: %s\n", yvex_backend_status_name(yvex_backend_status_of(backend)));
+    printf("memory:\n");
+    printf("  allocated_bytes: %llu\n", stats.allocated_bytes);
+    printf("  allocation_count: %llu\n", stats.allocation_count);
+    printf("  peak_allocated_bytes: %llu\n", stats.peak_allocated_bytes);
+    printf("capabilities:\n");
+    print_backend_capability(backend, YVEX_BACKEND_CAP_TENSOR_ALLOC);
+    print_backend_capability(backend, YVEX_BACKEND_CAP_TENSOR_READ_WRITE);
+    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_EMBED);
+    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_MATMUL);
+    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_RMS_NORM);
+    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_ATTENTION);
+    printf("status: backend-ready\n");
+
+    yvex_backend_close(backend);
+    return 0;
+}
+
 static int command_commands(int argc, char **argv)
 {
     unsigned long i;
@@ -709,7 +797,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: F0 graph and planning substrate\n");
+    printf("status: G0 CPU reference backend ABI\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -719,6 +807,8 @@ static int command_info(int argc, char **argv)
     printf("prompt: default renderer implemented\n");
     printf("graph: partial planning implemented\n");
     printf("planner: estimate-only implemented\n");
+    printf("backend: CPU reference implemented\n");
+    printf("backend_cuda: not implemented\n");
     printf("inference: not implemented\n");
     printf("cuda: not implemented\n");
     printf("server: not implemented\n");

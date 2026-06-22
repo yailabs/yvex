@@ -28,6 +28,7 @@
 #define YVEX_H
 
 #include <yvex/artifact.h>
+#include <yvex/backend.h>
 #include <yvex/dtype.h>
 #include <yvex/error.h>
 #include <yvex/fs.h>

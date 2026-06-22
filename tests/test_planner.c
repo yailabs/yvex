@@ -5,8 +5,8 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that F0 planner objects own a graph and memory plan while treating
- *   backend names as planning labels only.
+ *   Proves that planner objects own a graph and memory plan while reporting
+ *   G0 CPU backend availability and unsupported CUDA status.
  *
  * Covers:
  *   - yvex_plan_create
@@ -138,10 +138,46 @@ static int test_plan_cuda_label_and_dump(void)
     YVEX_TEST_ASSERT(rc == YVEX_OK, "plan dump succeeds");
     YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_dump.out", "backend: cuda"),
                      "plan dump backend");
-    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_dump.out", "backend_status: planned-not-implemented"),
-                     "plan dump cuda status");
+    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_dump.out", "backend_status: unsupported"),
+                     "plan dump cuda unsupported");
+    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_dump.out", "CUDA backend not implemented in G0"),
+                     "plan dump cuda reason");
     YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_dump.out", "execution_ready: false"),
                      "plan dump execution false");
+
+    yvex_plan_close(plan);
+    close_fixture(&fixture);
+    return 0;
+}
+
+static int test_plan_cpu_dump_reports_backend_available(void)
+{
+    planner_fixture fixture;
+    yvex_plan *plan = NULL;
+    yvex_plan_options options;
+    yvex_error err;
+    FILE *fp;
+    int rc;
+
+    memset(&options, 0, sizeof(options));
+    options.backend_name = "cpu";
+
+    YVEX_TEST_ASSERT(open_fixture(&fixture) == 0, "open planner fixture cpu dump");
+    rc = yvex_plan_create(&plan, fixture.model, fixture.table, &options, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "cpu plan builds for dump");
+
+    fp = fopen("build/tests/test_plan_cpu_dump.out", "wb");
+    YVEX_TEST_ASSERT(fp != NULL, "open cpu plan dump");
+    rc = yvex_plan_dump(plan, fp, &err);
+    fclose(fp);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "cpu plan dump succeeds");
+    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_cpu_dump.out", "backend_status: available"),
+                     "cpu backend available");
+    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_cpu_dump.out", "op_embed: yes"),
+                     "cpu op embed capability");
+    YVEX_TEST_ASSERT(file_contains("build/tests/test_plan_cpu_dump.out",
+                                   "graph partial; missing output_norm, output_head; backend lacks full graph ops"),
+                     "cpu plan reason");
 
     yvex_plan_close(plan);
     close_fixture(&fixture);
@@ -171,6 +207,7 @@ static int test_unknown_backend_rejected(void)
 int main(void)
 {
     if (test_plan_cpu() != 0) return 1;
+    if (test_plan_cpu_dump_reports_backend_available() != 0) return 1;
     if (test_plan_cuda_label_and_dump() != 0) return 1;
     if (test_unknown_backend_rejected() != 0) return 1;
     return 0;

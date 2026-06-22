@@ -8,8 +8,8 @@
 # Purpose:
 #   Proves that the CLI command table exposes only implemented commands and
 #   returns stable exit codes for common bootstrap, filesystem, artifact, GGUF
-#   directory, tensor table, descriptor, tokenizer, prompt, graph, and plan
-#   behavior.
+#   directory, tensor table, descriptor, tokenizer, prompt, graph, plan, and
+#   backend behavior.
 #
 # Covers:
 #   - yvex
@@ -81,7 +81,7 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: F0 graph and planning substrate"
+contains "$OUT_DIR/info.out" "status: G0 CPU reference backend ABI"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "artifact: open/read implemented"
@@ -91,9 +91,11 @@ contains "$OUT_DIR/info.out" "tokenizer: fixture encode/decode implemented"
 contains "$OUT_DIR/info.out" "prompt: default renderer implemented"
 contains "$OUT_DIR/info.out" "graph: partial planning implemented"
 contains "$OUT_DIR/info.out" "planner: estimate-only implemented"
+contains "$OUT_DIR/info.out" "backend: CPU reference implemented"
 
 run_ok commands "$YVEX_BIN" commands
 contains "$OUT_DIR/commands.out" "Implemented commands:"
+contains "$OUT_DIR/commands.out" "  backend"
 contains "$OUT_DIR/commands.out" "  commands"
 contains "$OUT_DIR/commands.out" "  detokenize"
 contains "$OUT_DIR/commands.out" "  graph"
@@ -111,6 +113,9 @@ contains "$OUT_DIR/commands.out" "  version"
 
 run_ok help_info "$YVEX_BIN" help info
 contains "$OUT_DIR/help_info.out" "usage: yvex info"
+
+run_ok help_backend "$YVEX_BIN" help backend
+contains "$OUT_DIR/help_backend.out" "usage: yvex backend cpu|cuda"
 
 run_ok help_inspect "$YVEX_BIN" help inspect
 contains "$OUT_DIR/help_inspect.out" "usage: yvex inspect <path>"
@@ -215,15 +220,43 @@ contains "$OUT_DIR/graph.out" "status: graph-partial"
 run_ok plan_cpu "$YVEX_BIN" plan tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
 contains "$OUT_DIR/plan_cpu.out" "plan status: partial"
 contains "$OUT_DIR/plan_cpu.out" "backend: cpu"
+contains "$OUT_DIR/plan_cpu.out" "backend_status: available"
+contains "$OUT_DIR/plan_cpu.out" "tensor_alloc: yes"
+contains "$OUT_DIR/plan_cpu.out" "op_embed: yes"
+contains "$OUT_DIR/plan_cpu.out" "op_matmul: no"
 contains "$OUT_DIR/plan_cpu.out" "model_tensor_bytes_known: 128"
 contains "$OUT_DIR/plan_cpu.out" "activation_peak_bytes: 16"
 contains "$OUT_DIR/plan_cpu.out" "execution_ready: false"
+contains "$OUT_DIR/plan_cpu.out" "graph partial; missing output_norm, output_head; backend lacks full graph ops"
 contains "$OUT_DIR/plan_cpu.out" "status: plan-only"
 
 run_ok plan_cuda "$YVEX_BIN" plan tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cuda
 contains "$OUT_DIR/plan_cuda.out" "backend: cuda"
-contains "$OUT_DIR/plan_cuda.out" "backend_status: planned-not-implemented"
+contains "$OUT_DIR/plan_cuda.out" "backend_status: unsupported"
 contains "$OUT_DIR/plan_cuda.out" "execution_ready: false"
+contains "$OUT_DIR/plan_cuda.out" "CUDA backend not implemented in G0"
+
+run_ok backend_cpu "$YVEX_BIN" backend cpu
+contains "$OUT_DIR/backend_cpu.out" "backend: cpu"
+contains "$OUT_DIR/backend_cpu.out" "status: ready"
+contains "$OUT_DIR/backend_cpu.out" "allocated_bytes: 0"
+contains "$OUT_DIR/backend_cpu.out" "tensor_alloc: yes"
+contains "$OUT_DIR/backend_cpu.out" "tensor_read_write: yes"
+contains "$OUT_DIR/backend_cpu.out" "op_embed: yes"
+contains "$OUT_DIR/backend_cpu.out" "op_matmul: no"
+contains "$OUT_DIR/backend_cpu.out" "status: backend-ready"
+
+set +e
+"$YVEX_BIN" backend cuda >"$OUT_DIR/backend_cuda.out" 2>"$OUT_DIR/backend_cuda.err"
+rc=$?
+set -e
+if [ "$rc" -ne 5 ]; then
+    fail "backend cuda exit code was $rc, expected 5"
+fi
+contains "$OUT_DIR/backend_cuda.out" "backend: cuda"
+contains "$OUT_DIR/backend_cuda.out" "status: unsupported"
+contains "$OUT_DIR/backend_cuda.out" "reason: CUDA backend is planned for L0"
+contains "$OUT_DIR/backend_cuda.out" "status: backend-unsupported"
 
 set +e
 "$YVEX_BIN" inspect tests/fixtures/gguf/bad-magic.gguf >"$OUT_DIR/inspect_bad_magic.out" 2>"$OUT_DIR/inspect_bad_magic.err"
@@ -279,3 +312,4 @@ fi
 contains "$OUT_DIR/help_unknown.err" "yvex: unknown help topic: unknown"
 
 printf 'cli smoke: ok\n'
+#   - yvex backend

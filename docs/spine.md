@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after F0
+after G0
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-G0 - CPU reference backend
+H0 - Engine and session runtime
 ```
 
 Implemented surface:
@@ -126,9 +126,16 @@ Graph / planner:
   src/graph/planner.c
   src/graph/memory_plan.c
 
+Backend:
+  include/yvex/backend.h
+  src/backend/backend.c
+  src/backend/cpu_backend.c
+  src/backend/cpu_tensor.c
+  src/backend/cpu_ops.c
+
 CLI:
   cli/yvex_cli.c
-  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan
+  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend
 
 Tests:
   tests/test_status.c
@@ -147,14 +154,14 @@ Tests:
   tests/test_graph.c
   tests/test_memory_plan.c
   tests/test_planner.c
+  tests/test_backend_cpu.c
+  tests/test_backend_ops.c
   tests/test_cli.sh
 ```
 
 Not implemented:
 
 ```text
-backend ABI implementation
-CPU reference backend
 session runtime
 CLI run/chat
 metrics/tracing implementation
@@ -191,12 +198,15 @@ shape inference helpers
 missing-role diagnostics
 estimate-only memory plan
 plan object with backend labels
+backend ABI
+CPU reference backend
+CPU tensor allocation/read/write/copy
+CPU F32 embed op
 ```
 
 Planned public surfaces:
 
 ```text
-backend
 session
 chat/run
 metrics/tracing
@@ -227,6 +237,7 @@ Current implemented commands:
 
 ```text
 commands
+backend
 detokenize
 graph
 help
@@ -258,8 +269,8 @@ Future commands are listed only under the delivery that implements them.
 | D0 | complete | Tensor and model layer |
 | E0 | complete | Tokenizer and prompt rendering |
 | F0 | complete | Graph and planner |
-| G0 | next | CPU reference backend |
-| H0 | planned | Engine and session runtime |
+| G0 | complete | CPU reference backend |
+| H0 | next | Engine and session runtime |
 | I0 | planned | CLI run/chat runtime |
 | J0 | planned | Metrics and tracing |
 | K0 | planned | yvexd server/provider |
@@ -1079,7 +1090,7 @@ G0 receives graph IR and planner output for CPU reference backend work.
 Status:
 
 ```text
-planned
+complete
 ```
 
 Owns:
@@ -1090,6 +1101,8 @@ CPU tensor allocation
 CPU tensor read/write
 CPU reference kernels for minimal graph path
 parity basis for future CUDA
+backend capability reporting
+minimal F32 embed op
 ```
 
 Does not own:
@@ -1107,6 +1120,7 @@ Creates / modifies:
 include/yvex/backend.h
 src/backend/
 tests/test_backend_cpu.c
+tests/test_backend_ops.c
 cli/yvex_cli.c
 Makefile
 docs/api.md
@@ -1117,8 +1131,9 @@ docs/spine.md
 CLI surface:
 
 ```text
-yvex plan may report CPU backend capability after implemented
-fixture-only execution command only if explicitly scoped
+yvex backend cpu
+yvex backend cuda
+yvex plan reports CPU backend availability
 ```
 
 Tests:
@@ -1127,7 +1142,8 @@ Tests:
 CPU backend allocation tests
 CPU copy/read/write tests
 minimal CPU op tests
-fixture graph execution tests if scoped
+planner backend status tests
+CLI backend smoke tests
 ```
 
 Acceptance:
@@ -1137,6 +1153,7 @@ CPU backend tests pass
 backend failures return yvex_error
 no CUDA claim
 no broad inference claim
+execution_ready remains false
 ```
 
 Handoff:
@@ -1589,20 +1606,22 @@ future model work must state the exact support level and proof command.
 | C1 | 0de97e4 | Parsed GGUF metadata and tensor directory, added metadata/tensors CLI, fixtures, and tests. |
 | D0 | dd2eb59 | Added dtype/qtype registry, tensor table, role classifier, descriptor-only model summary, CLI output, and tests. |
 | E0 | 64be1b1 | Added tokenizer metadata/vocab table, fixture encode/decode, prompt rendering, CLI proof, fixtures, and tests. |
-| F0 | current commit | Added graph values/ops, shape inference, missing-role diagnostics, estimate-only memory plans, graph/plan CLI proof, and tests. |
+| F0 | 5234420 | Added graph values/ops, shape inference, missing-role diagnostics, estimate-only memory plans, graph/plan CLI proof, and tests. |
+| G0 | current commit | Added backend ABI, CPU reference backend, CPU tensor allocation/read/write/copy, capability reporting, embed op proof, backend CLI, and tests. |
 
 Current implemented CLI command set:
 
 ```text
 commands
+backend
 detokenize
+graph
 help
 info
 inspect
 metadata
 paths
 prompt
-graph
 plan
 tokenize
 tokenizer
@@ -1624,40 +1643,39 @@ git diff --check
 Next authorized milestone:
 
 ```text
-G0 - CPU reference backend
+H0 - Engine and session runtime
 ```
 
-G0 starts only after F0 validation passes and the F0 commit is recorded.
+H0 starts only after G0 validation passes and the G0 commit is recorded.
 
-G0 must produce:
+H0 must produce:
 
 ```text
-backend ABI first implementation
-CPU tensor allocation
-CPU tensor read/write
-CPU reference kernels for the minimal planned graph path
-CPU backend command-visible proof
+engine object lifecycle
+session object lifecycle
+KV/logits ownership skeleton
+prefill/decode API skeleton over implemented backend behavior
+session state machine tests
 ```
 
-G0 must not produce:
+H0 must not produce:
 
 ```text
-session runtime
 generation command
 server/provider behavior
 CUDA backend
 broad inference claim
 ```
 
-Required G0 proof:
+Required H0 proof:
 
 ```text
 make clean
 make check
 make smoke
-future build/tests/test_backend_cpu
-future yvex plan <valid fixture> --backend cpu
-future minimal CPU backend proof command
+future build/tests/test_session
+future session lifecycle proof command if scoped
+no run/chat command
 no CUDA claim
 no broad inference claim
 ```
@@ -1667,7 +1685,6 @@ no broad inference claim
 The planned delivery catalogue is linear:
 
 ```text
-G0 consumes F0 and creates CPU reference backend.
 H0 consumes G0/F0/E0 and creates engine/session runtime.
 I0 consumes H0 and creates user-facing run/chat commands.
 J0 consumes H0/I0 and creates metrics/tracing.
@@ -1682,7 +1699,6 @@ not authorized.
 Do-not-proceed gates:
 
 ```text
-Do not start G0 until F0 graph/planner contracts exist.
 Do not start H0 until at least one backend ABI path exists.
 Do not start I0 until session lifecycle is implemented and tested.
 Do not start K0 until runtime events and session behavior are stable enough to serve.
@@ -1821,6 +1837,7 @@ C0: inspect command
 C1: metadata and tensors commands
 E0: tokenize, detokenize, prompt commands
 F0: graph and plan commands
+G0: backend command and CPU backend status in plan
 I0: run and chat commands
 L0: cuda-info command
 ```
@@ -1985,8 +2002,8 @@ and a command-visible proof exists.
 Current handoff:
 
 ```text
-from: F0 - Graph and planner
-to: G0 - CPU reference backend
-authorized work: backend ABI first implementation, CPU tensor allocation, CPU reference kernels for the minimal planned graph path
-blocked work: H0 and later until G0 acceptance passes
+from: G0 - CPU reference backend
+to: H0 - Engine and session runtime
+authorized work: engine/session lifecycle, KV/logits ownership skeleton, prefill/decode API skeleton over implemented backend behavior
+blocked work: I0 and later until H0 acceptance passes
 ```

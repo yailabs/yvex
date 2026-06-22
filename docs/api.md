@@ -16,12 +16,13 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-F0 implements the core version/status/error/log surface, runtime filesystem
+G0 implements the core version/status/error/log surface, runtime filesystem
 paths/run directories, artifact byte views, range checks, GGUF header/probe,
 metadata, raw tensor directory parsing, dtype/qtype storage accounting, YVEX
 tensor table rows, a descriptor-only model summary, tokenizer metadata/vocab
 tables, fixture tokenizer encode/decode, default prompt rendering, graph
-planning artifacts, shape helpers, estimate-only memory plans, and plan objects.
+planning artifacts, shape helpers, estimate-only memory plans, plan objects,
+backend ABI wrappers, and the CPU reference backend.
 
 Current public headers:
 
@@ -43,6 +44,7 @@ include/yvex/op.h
 include/yvex/graph.h
 include/yvex/memory_plan.h
 include/yvex/planner.h
+include/yvex/backend.h
 ```
 
 Current aggregate:
@@ -61,6 +63,7 @@ Current aggregate:
 #include <yvex/graph.h>
 #include <yvex/memory_plan.h>
 #include <yvex/planner.h>
+#include <yvex/backend.h>
 #include <yvex/log.h>
 #include <yvex/status.h>
 #include <yvex/version.h>
@@ -640,8 +643,9 @@ keeps the requested `yvex_memory_plan_summary` name.
 
 ## Planner
 
-`include/yvex/planner.h` combines a graph and memory plan. Backend names are F0
-labels only.
+`include/yvex/planner.h` combines a graph and memory plan. In G0, CPU backend
+availability and capabilities are reported through the backend ABI, while CUDA
+remains unsupported and execution remains disabled.
 
 ```c
 typedef struct yvex_plan yvex_plan;
@@ -662,15 +666,106 @@ const yvex_graph *yvex_plan_graph(const yvex_plan *plan);
 const yvex_memory_plan *yvex_plan_memory(const yvex_plan *plan);
 ```
 
-`cpu`, `none`, and `cuda` are accepted labels. `cuda` reports
-`planned-not-implemented`; no CUDA runtime is touched.
+`cpu`, `none`, and `cuda` are accepted plan labels. `cpu` reports
+`backend_status: available`; `cuda` reports `backend_status: unsupported`.
+No plan can report `execution_ready: true` in G0.
+
+## Backend
+
+`include/yvex/backend.h` owns the G0 backend ABI and CPU reference backend.
+Backend and device tensor handles are opaque.
+
+```c
+typedef struct yvex_backend yvex_backend;
+typedef struct yvex_device_tensor yvex_device_tensor;
+
+int yvex_backend_open(yvex_backend **out,
+                      const yvex_backend_options *options,
+                      yvex_error *err);
+int yvex_backend_open_cpu(yvex_backend **out, yvex_error *err);
+void yvex_backend_close(yvex_backend *backend);
+```
+
+The CPU backend is ready in G0. CUDA, Metal, and ROCm return
+`YVEX_ERR_UNSUPPORTED`.
+
+Memory stats use `yvex_backend_get_memory_stats`; the accessor is named this way
+because `yvex_backend_memory_stats` is the public struct typedef.
+
+```c
+int yvex_backend_get_memory_stats(const yvex_backend *backend,
+                                  yvex_backend_memory_stats *out,
+                                  yvex_error *err);
+```
+
+Tensor allocation/read/write/copy:
+
+```c
+int yvex_backend_tensor_alloc(yvex_backend *backend,
+                              const yvex_backend_tensor_desc *desc,
+                              yvex_device_tensor **out,
+                              yvex_error *err);
+void yvex_backend_tensor_free(yvex_backend *backend,
+                              yvex_device_tensor *tensor);
+
+int yvex_backend_tensor_write(yvex_backend *backend,
+                              yvex_device_tensor *tensor,
+                              const void *src,
+                              unsigned long long len,
+                              yvex_error *err);
+int yvex_backend_tensor_read(yvex_backend *backend,
+                             const yvex_device_tensor *tensor,
+                             void *dst,
+                             unsigned long long len,
+                             yvex_error *err);
+int yvex_backend_tensor_copy(yvex_backend *backend,
+                             yvex_device_tensor *dst,
+                             const yvex_device_tensor *src,
+                             yvex_error *err);
+```
+
+G0 tensor operations are full-buffer only. CPU allocation is zero-initialized
+and tracked by allocated bytes, allocation count, and peak allocated bytes.
+
+Capabilities:
+
+```c
+int yvex_backend_supports(const yvex_backend *backend,
+                          yvex_backend_capability capability);
+const char *yvex_backend_capability_name(yvex_backend_capability capability);
+```
+
+G0 CPU capabilities:
+
+```text
+tensor_alloc: yes
+tensor_read_write: yes
+op_embed: yes
+op_matmul: no
+op_rms_norm: no
+op_attention: no
+```
+
+Minimal CPU op:
+
+```c
+int yvex_backend_op_embed(yvex_backend *backend,
+                          const yvex_device_tensor *embedding,
+                          const unsigned int *token_ids,
+                          unsigned long long token_count,
+                          yvex_device_tensor *out,
+                          yvex_error *err);
+```
+
+G0 supports only F32 embedding tensors. Embedding dims are `[hidden_size,
+vocab_size]`; output dims are `[token_count, hidden_size]`. This is an op proof,
+not model execution or inference.
 
 ## Future API Families
 
 The families below are design contracts, not implemented APIs:
 
 ```text
-backend/device tensor
 KV cache
 session
 sampler
