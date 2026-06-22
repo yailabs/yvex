@@ -12,7 +12,7 @@
  *   - public aggregation of implemented YVEX headers
  *
  * Does not own:
- *   - future tokenizer/backend/session APIs
+ *   - future backend/session APIs
  *   - implementation details
  *
  * Used by:
@@ -34,8 +34,10 @@
 #include <yvex/gguf.h>
 #include <yvex/log.h>
 #include <yvex/model.h>
+#include <yvex/prompt.h>
 #include <yvex/status.h>
 #include <yvex/tensor.h>
+#include <yvex/tokenizer.h>
 #include <yvex/version.h>
 
 #endif /* YVEX_H */

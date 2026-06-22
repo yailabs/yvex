@@ -20,6 +20,10 @@
  *   - yvex inspect <path>
  *   - yvex metadata <path>
  *   - yvex tensors <path>
+ *   - yvex tokenizer <path>
+ *   - yvex tokenize <path> --text TEXT
+ *   - yvex detokenize <path> --ids IDS
+ *   - yvex prompt <path> --user TEXT
  *   - yvex --help
  *   - yvex --version
  *
@@ -34,6 +38,8 @@
  *   - build/bin/yvex info
  */
 #include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <yvex/yvex.h>
@@ -48,12 +54,24 @@ typedef struct {
     yvex_cli_handler handler;
 } yvex_cli_command;
 
+typedef struct {
+    yvex_artifact *artifact;
+    yvex_gguf *gguf;
+    yvex_tensor_table *table;
+    yvex_model_descriptor *model;
+    yvex_tokenizer *tokenizer;
+} yvex_cli_tokenizer_context;
+
 static int command_commands(int argc, char **argv);
+static int command_detokenize(int argc, char **argv);
 static int command_help(int argc, char **argv);
 static int command_info(int argc, char **argv);
 static int command_inspect(int argc, char **argv);
 static int command_metadata(int argc, char **argv);
 static int command_paths(int argc, char **argv);
+static int command_prompt(int argc, char **argv);
+static int command_tokenize(int argc, char **argv);
+static int command_tokenizer(int argc, char **argv);
 static int command_tensors(int argc, char **argv);
 static int command_version(int argc, char **argv);
 
@@ -64,6 +82,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex commands",
         "Prints the command names implemented by this binary.",
         command_commands,
+    },
+    {
+        "detokenize",
+        "Decode token IDs with an implemented tokenizer.",
+        "yvex detokenize <path> --ids IDS",
+        "Opens a GGUF tokenizer descriptor and decodes comma-separated token IDs. E0 executes only the yvex-fixture-simple tokenizer.",
+        command_detokenize,
     },
     {
         "help",
@@ -99,6 +124,27 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex paths [--project DIR] [--run] [--create]",
         "Prints resolved config/cache/state/data paths. With --run it prints a prepared run directory. With --create it creates that run directory.",
         command_paths,
+    },
+    {
+        "prompt",
+        "Render a bounded prompt from explicit messages.",
+        "yvex prompt <path> [--system TEXT] --user TEXT [--assistant TEXT] [--tokens]",
+        "Renders the YVEX default prompt format. Arbitrary Jinja chat templates are not executed in E0.",
+        command_prompt,
+    },
+    {
+        "tokenize",
+        "Encode text with an implemented tokenizer.",
+        "yvex tokenize <path> --text TEXT",
+        "Opens a GGUF tokenizer descriptor and tokenizes text. E0 executes only the yvex-fixture-simple tokenizer.",
+        command_tokenize,
+    },
+    {
+        "tokenizer",
+        "Inspect GGUF tokenizer metadata.",
+        "yvex tokenizer <path>",
+        "Prints tokenizer kind, support level, vocabulary size, special token IDs, and chat template presence.",
+        command_tokenizer,
     },
     {
         "tensors",
@@ -271,6 +317,43 @@ static int open_artifact_for_gguf(const char *path, yvex_artifact **artifact, yv
     return yvex_artifact_open(artifact, &options, err);
 }
 
+static void close_tokenizer_context(yvex_cli_tokenizer_context *ctx)
+{
+    if (!ctx) {
+        return;
+    }
+    yvex_tokenizer_close(ctx->tokenizer);
+    yvex_model_descriptor_close(ctx->model);
+    yvex_tensor_table_close(ctx->table);
+    yvex_gguf_close(ctx->gguf);
+    yvex_artifact_close(ctx->artifact);
+    memset(ctx, 0, sizeof(*ctx));
+}
+
+static int open_tokenizer_context(const char *path, yvex_cli_tokenizer_context *ctx, yvex_error *err)
+{
+    int rc;
+
+    memset(ctx, 0, sizeof(*ctx));
+    rc = open_artifact_for_gguf(path, &ctx->artifact, err);
+    if (rc == YVEX_OK) {
+        rc = yvex_gguf_open(&ctx->gguf, ctx->artifact, err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_tensor_table_from_gguf(&ctx->table, ctx->gguf, err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_model_descriptor_from_gguf(&ctx->model, ctx->gguf, ctx->table, err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_tokenizer_from_gguf(&ctx->tokenizer, ctx->gguf, ctx->model, err);
+    }
+    if (rc != YVEX_OK) {
+        close_tokenizer_context(ctx);
+    }
+    return rc;
+}
+
 static void print_tensor_dims(const unsigned long long *dims, unsigned int rank)
 {
     unsigned int d;
@@ -285,6 +368,30 @@ static void print_tensor_dims(const unsigned long long *dims, unsigned int rank)
     printf("]");
 }
 
+static void print_token_ids(const yvex_tokens *tokens)
+{
+    unsigned long long i;
+
+    printf("ids:");
+    for (i = 0; i < tokens->len; ++i) {
+        printf(" %u", tokens->ids[i]);
+    }
+    printf("\n");
+}
+
+static int print_special_id_line(const char *name, int (*fn)(const yvex_tokenizer *, unsigned int *), const yvex_tokenizer *tokenizer)
+{
+    unsigned int id;
+    int rc = fn(tokenizer, &id);
+
+    if (rc == YVEX_OK) {
+        printf("%s: %u\n", name, id);
+    } else {
+        printf("%s: absent\n", name);
+    }
+    return YVEX_OK;
+}
+
 static int command_commands(int argc, char **argv)
 {
     unsigned long i;
@@ -295,6 +402,222 @@ static int command_commands(int argc, char **argv)
     for (i = 0; i < yvex_command_count; ++i) {
         printf("  %s\n", yvex_commands[i].name);
     }
+    return 0;
+}
+
+static int command_tokenizer(int argc, char **argv)
+{
+    yvex_cli_tokenizer_context ctx;
+    yvex_error err;
+    const char *chat_template;
+    unsigned long long chat_template_len;
+    int rc;
+
+    yvex_error_clear(&err);
+
+    if (argc != 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        if (argc == 3) {
+            print_command_help(stdout, find_command("tokenizer"));
+            return 0;
+        }
+        fprintf(stderr, "yvex: tokenizer requires exactly one path\n");
+        fprintf(stderr, "usage: yvex tokenizer <path>\n");
+        return 2;
+    }
+
+    rc = open_tokenizer_context(argv[2], &ctx, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    printf("format: gguf\n");
+    printf("architecture: %s\n", yvex_arch_name(yvex_model_arch(ctx.model)));
+    printf("model_name: %s\n", yvex_model_name(ctx.model));
+    printf("tokenizer_model: %s\n", yvex_tokenizer_kind_name(yvex_tokenizer_kind_of(ctx.tokenizer)));
+    printf("support: %s\n", yvex_tokenizer_support_name(yvex_tokenizer_support_of(ctx.tokenizer)));
+    printf("vocab_size: %llu\n", yvex_tokenizer_vocab_size(ctx.tokenizer));
+    (void)print_special_id_line("bos_token_id", yvex_tokenizer_bos_id, ctx.tokenizer);
+    (void)print_special_id_line("eos_token_id", yvex_tokenizer_eos_id, ctx.tokenizer);
+    (void)print_special_id_line("unk_token_id", yvex_tokenizer_unk_id, ctx.tokenizer);
+    if (yvex_tokenizer_chat_template(ctx.tokenizer, &chat_template, &chat_template_len) == YVEX_OK) {
+        (void)chat_template;
+        printf("chat_template: present-unsupported\n");
+    } else {
+        printf("chat_template: absent\n");
+    }
+    printf("status: tokenizer-descriptor\n");
+
+    close_tokenizer_context(&ctx);
+    return 0;
+}
+
+static int command_tokenize(int argc, char **argv)
+{
+    yvex_cli_tokenizer_context ctx;
+    yvex_tokens tokens;
+    yvex_error err;
+    const char *text = NULL;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+
+    if (argc < 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        print_command_help(stdout, find_command("tokenize"));
+        return argc >= 3 ? 0 : 2;
+    }
+
+    for (i = 3; i < argc; ++i) {
+        if (strcmp(argv[i], "--text") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --text requires a value\n");
+                return 2;
+            }
+            text = argv[++i];
+        } else if (strcmp(argv[i], "--pieces") == 0 || strcmp(argv[i], "--no-bos") == 0 || strcmp(argv[i], "--eos") == 0) {
+            /* Accepted for E0 CLI shape; fixture tokenization has no implicit BOS/EOS. */
+        } else {
+            fprintf(stderr, "yvex: unknown tokenize option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help tokenize' for usage.\n");
+            return 2;
+        }
+    }
+    if (!text) {
+        fprintf(stderr, "yvex: tokenize requires --text\n");
+        return 2;
+    }
+
+    rc = open_tokenizer_context(argv[2], &ctx, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_tokenize_text(ctx.tokenizer, text, &tokens, &err);
+    if (rc != YVEX_OK) {
+        close_tokenizer_context(&ctx);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    printf("tokens: %llu\n", tokens.len);
+    print_token_ids(&tokens);
+    printf("pieces:\n");
+    for (i = 0; (unsigned long long)i < tokens.len; ++i) {
+        const yvex_token_info *token = yvex_tokenizer_token_at(ctx.tokenizer, tokens.ids[i]);
+        printf("  %u ", tokens.ids[i]);
+        print_quoted_bytes(token ? token->text : "", token ? token->text_len : 0);
+        printf("\n");
+    }
+    printf("status: tokenized\n");
+
+    yvex_tokens_free(&tokens);
+    close_tokenizer_context(&ctx);
+    return 0;
+}
+
+static int parse_id_list(const char *text, unsigned int **out_ids, unsigned long long *out_len)
+{
+    unsigned int *ids = NULL;
+    unsigned long long len = 0;
+    unsigned long long cap = 0;
+    const char *p = text;
+
+    *out_ids = NULL;
+    *out_len = 0;
+
+    while (*p) {
+        char *end = NULL;
+        unsigned long value;
+        unsigned int *next;
+
+        value = strtoul(p, &end, 10);
+        if (end == p || value > 0xfffffffful) {
+            free(ids);
+            return 0;
+        }
+        if (len == cap) {
+            unsigned long long next_cap = cap == 0 ? 8 : cap * 2u;
+            if (next_cap > (unsigned long long)(SIZE_MAX / sizeof(*ids))) {
+                free(ids);
+                return 0;
+            }
+            next = (unsigned int *)realloc(ids, (size_t)next_cap * sizeof(*ids));
+            if (!next) {
+                free(ids);
+                return 0;
+            }
+            ids = next;
+            cap = next_cap;
+        }
+        ids[len++] = (unsigned int)value;
+        if (*end == ',') {
+            p = end + 1;
+        } else if (*end == '\0') {
+            p = end;
+        } else {
+            free(ids);
+            return 0;
+        }
+    }
+
+    *out_ids = ids;
+    *out_len = len;
+    return len > 0;
+}
+
+static int command_detokenize(int argc, char **argv)
+{
+    yvex_cli_tokenizer_context ctx;
+    yvex_error err;
+    const char *ids_text = NULL;
+    unsigned int *ids = NULL;
+    unsigned long long ids_len = 0;
+    char out[4096];
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+
+    if (argc < 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        print_command_help(stdout, find_command("detokenize"));
+        return argc >= 3 ? 0 : 2;
+    }
+
+    for (i = 3; i < argc; ++i) {
+        if (strcmp(argv[i], "--ids") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --ids requires a value\n");
+                return 2;
+            }
+            ids_text = argv[++i];
+        } else {
+            fprintf(stderr, "yvex: unknown detokenize option: %s\n", argv[i]);
+            return 2;
+        }
+    }
+    if (!ids_text || !parse_id_list(ids_text, &ids, &ids_len)) {
+        fprintf(stderr, "yvex: detokenize requires comma-separated --ids\n");
+        return 2;
+    }
+
+    rc = open_tokenizer_context(argv[2], &ctx, &err);
+    if (rc != YVEX_OK) {
+        free(ids);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_detokenize_ids(ctx.tokenizer, ids, ids_len, out, sizeof(out), &err);
+    free(ids);
+    if (rc != YVEX_OK) {
+        close_tokenizer_context(&ctx);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    printf("text: ");
+    print_quoted_bytes(out, (unsigned long long)strlen(out));
+    printf("\n");
+    printf("status: detokenized\n");
+
+    close_tokenizer_context(&ctx);
     return 0;
 }
 
@@ -327,12 +650,14 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: D0 tensor/model descriptor layer\n");
+    printf("status: E0 tokenizer and prompt rendering layer\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
     printf("gguf: metadata/tensor directory parsing implemented\n");
     printf("model: descriptor-only implemented\n");
+    printf("tokenizer: fixture encode/decode implemented\n");
+    printf("prompt: default renderer implemented\n");
     printf("inference: not implemented\n");
     printf("cuda: not implemented\n");
     printf("server: not implemented\n");
@@ -538,6 +863,106 @@ static int command_paths(int argc, char **argv)
     if (rc != YVEX_OK) {
         return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
     }
+    return 0;
+}
+
+static int command_prompt(int argc, char **argv)
+{
+    yvex_cli_tokenizer_context ctx;
+    yvex_prompt_message messages[16];
+    unsigned long long message_count = 0;
+    yvex_prompt_options options;
+    yvex_rendered_prompt rendered;
+    yvex_tokens tokens;
+    yvex_error err;
+    const char *chat_template = NULL;
+    unsigned long long chat_template_len = 0;
+    int want_tokens = 0;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&rendered, 0, sizeof(rendered));
+    options.add_bos = 0;
+    options.add_eos = 0;
+    options.add_generation_prompt = 1;
+
+    if (argc < 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        print_command_help(stdout, find_command("prompt"));
+        return argc >= 3 ? 0 : 2;
+    }
+
+    for (i = 3; i < argc; ++i) {
+        yvex_prompt_role role;
+        if (strcmp(argv[i], "--system") == 0) {
+            role = YVEX_PROMPT_ROLE_SYSTEM;
+        } else if (strcmp(argv[i], "--user") == 0) {
+            role = YVEX_PROMPT_ROLE_USER;
+        } else if (strcmp(argv[i], "--assistant") == 0) {
+            role = YVEX_PROMPT_ROLE_ASSISTANT;
+        } else if (strcmp(argv[i], "--no-generation-prompt") == 0) {
+            options.add_generation_prompt = 0;
+            continue;
+        } else if (strcmp(argv[i], "--tokens") == 0) {
+            want_tokens = 1;
+            continue;
+        } else {
+            fprintf(stderr, "yvex: unknown prompt option: %s\n", argv[i]);
+            return 2;
+        }
+
+        if (i + 1 >= argc) {
+            fprintf(stderr, "yvex: prompt option %s requires text\n", argv[i]);
+            return 2;
+        }
+        if (message_count >= sizeof(messages) / sizeof(messages[0])) {
+            fprintf(stderr, "yvex: too many prompt messages\n");
+            return 2;
+        }
+        messages[message_count].role = role;
+        messages[message_count].content = argv[++i];
+        message_count += 1;
+    }
+
+    if (message_count == 0) {
+        fprintf(stderr, "yvex: prompt requires at least one message\n");
+        return 2;
+    }
+
+    rc = open_tokenizer_context(argv[2], &ctx, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_prompt_render(&rendered, ctx.tokenizer, messages, message_count, &options, &err);
+    if (rc != YVEX_OK) {
+        close_tokenizer_context(&ctx);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    printf("template: yvex-default\n");
+    printf("chat_template_metadata: %s\n",
+           yvex_tokenizer_chat_template(ctx.tokenizer, &chat_template, &chat_template_len) == YVEX_OK
+               ? "present-unsupported"
+               : "absent");
+    printf("rendered_bytes: %llu\n", rendered.len);
+    printf("rendered:\n%s", rendered.text);
+
+    if (want_tokens) {
+        rc = yvex_tokenize_text(ctx.tokenizer, rendered.text, &tokens, &err);
+        if (rc != YVEX_OK) {
+            yvex_rendered_prompt_free(&rendered);
+            close_tokenizer_context(&ctx);
+            return print_yvex_error(&err, exit_for_status(rc));
+        }
+        printf("tokens: %llu\n", tokens.len);
+        print_token_ids(&tokens);
+        yvex_tokens_free(&tokens);
+    }
+    printf("status: rendered\n");
+
+    yvex_rendered_prompt_free(&rendered);
+    close_tokenizer_context(&ctx);
     return 0;
 }
 

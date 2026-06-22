@@ -58,7 +58,10 @@ struct yvex_gguf_value {
             char *data;
             unsigned long long len;
         } string;
-        yvex_gguf_array_info array;
+        struct {
+            yvex_gguf_array_info info;
+            yvex_gguf_value *items;
+        } array;
     } as;
 };
 
@@ -144,15 +147,6 @@ static int cursor_read_u64le(yvex_byte_cursor *cur, unsigned long long *out, yve
            ((unsigned long long)p[6] << 48) |
            ((unsigned long long)p[7] << 56);
     cur->offset += 8;
-    return YVEX_OK;
-}
-
-static int cursor_skip(yvex_byte_cursor *cur, unsigned long long len, yvex_error *err, const char *where, const char *field)
-{
-    if (cursor_require(cur, len, err, where, field) != YVEX_OK) {
-        return YVEX_ERR_BOUNDS;
-    }
-    cur->offset += len;
     return YVEX_OK;
 }
 
@@ -293,6 +287,8 @@ static int validate_value_type(unsigned int raw, yvex_gguf_value_type *out, yvex
 
 static void gguf_value_clear(yvex_gguf_value *value)
 {
+    unsigned long long i;
+
     if (!value) {
         return;
     }
@@ -300,65 +296,17 @@ static void gguf_value_clear(yvex_gguf_value *value)
         free(value->as.string.data);
         value->as.string.data = NULL;
         value->as.string.len = 0;
+    } else if (value->type == YVEX_GGUF_VALUE_ARRAY) {
+        if (value->as.array.items) {
+            for (i = 0; i < value->as.array.info.count; ++i) {
+                gguf_value_clear(&value->as.array.items[i]);
+            }
+            free(value->as.array.items);
+        }
+        value->as.array.items = NULL;
+        value->as.array.info.count = 0;
     }
     memset(value, 0, sizeof(*value));
-}
-
-static int skip_value_payload(yvex_byte_cursor *cur, yvex_gguf_value_type type, yvex_error *err)
-{
-    unsigned long long len;
-    unsigned int raw_type;
-    yvex_gguf_value_type element_type;
-    unsigned long long i;
-    int rc;
-
-    switch (type) {
-    case YVEX_GGUF_VALUE_UINT8:
-    case YVEX_GGUF_VALUE_INT8:
-    case YVEX_GGUF_VALUE_BOOL:
-        return cursor_skip(cur, 1, err, "gguf.metadata.array", "array element");
-    case YVEX_GGUF_VALUE_UINT16:
-    case YVEX_GGUF_VALUE_INT16:
-        return cursor_skip(cur, 2, err, "gguf.metadata.array", "array element");
-    case YVEX_GGUF_VALUE_UINT32:
-    case YVEX_GGUF_VALUE_INT32:
-    case YVEX_GGUF_VALUE_FLOAT32:
-        return cursor_skip(cur, 4, err, "gguf.metadata.array", "array element");
-    case YVEX_GGUF_VALUE_UINT64:
-    case YVEX_GGUF_VALUE_INT64:
-    case YVEX_GGUF_VALUE_FLOAT64:
-        return cursor_skip(cur, 8, err, "gguf.metadata.array", "array element");
-    case YVEX_GGUF_VALUE_STRING:
-        rc = cursor_read_u64le(cur, &len, err, "gguf.metadata.array", "string length");
-        if (rc != YVEX_OK) {
-            return rc;
-        }
-        return cursor_skip(cur, len, err, "gguf.metadata.array", "string bytes");
-    case YVEX_GGUF_VALUE_ARRAY:
-        rc = cursor_read_u32le(cur, &raw_type, err, "gguf.metadata.array", "nested array type");
-        if (rc != YVEX_OK) {
-            return rc;
-        }
-        rc = validate_value_type(raw_type, &element_type, err, "gguf.metadata.array");
-        if (rc != YVEX_OK) {
-            return rc;
-        }
-        (void)element_type;
-        rc = cursor_read_u64le(cur, &len, err, "gguf.metadata.array", "nested array length");
-        if (rc != YVEX_OK) {
-            return rc;
-        }
-        for (i = 0; i < len; ++i) {
-            rc = skip_value_payload(cur, element_type, err);
-            if (rc != YVEX_OK) {
-                return rc;
-            }
-        }
-        return YVEX_OK;
-    }
-
-    yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "gguf.metadata.array", "unsupported array element type");
-    return YVEX_ERR_UNSUPPORTED;
 }
 
 static int parse_value(yvex_byte_cursor *cur, yvex_gguf_value_type type, yvex_gguf_value *out, yvex_error *err)
@@ -434,18 +382,31 @@ static int parse_value(yvex_byte_cursor *cur, yvex_gguf_value_type type, yvex_gg
             return rc;
         }
         if (element_type == YVEX_GGUF_VALUE_ARRAY) {
-            yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "gguf.metadata.array", "nested arrays are not implemented in C1");
+            yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "gguf.metadata.array", "nested arrays are not implemented");
             return YVEX_ERR_UNSUPPORTED;
         }
         rc = cursor_read_u64le(cur, &u64, err, "gguf.metadata.array", "array count");
         if (rc != YVEX_OK) {
             return rc;
         }
-        out->as.array.element_type = element_type;
-        out->as.array.count = u64;
-        for (i = 0; i < u64; ++i) {
-            rc = skip_value_payload(cur, element_type, err);
+        out->as.array.info.element_type = element_type;
+        out->as.array.info.count = u64;
+        if (u64 > 0) {
+            rc = checked_count_alloc(u64, sizeof(*out->as.array.items), err,
+                                     "gguf.metadata.array", "array item");
             if (rc != YVEX_OK) {
+                return rc;
+            }
+            out->as.array.items = (yvex_gguf_value *)calloc((size_t)u64, sizeof(*out->as.array.items));
+            if (!out->as.array.items) {
+                yvex_error_set(err, YVEX_ERR_NOMEM, "gguf.metadata.array", "failed to allocate array items");
+                return YVEX_ERR_NOMEM;
+            }
+        }
+        for (i = 0; i < u64; ++i) {
+            rc = parse_value(cur, element_type, &out->as.array.items[i], err);
+            if (rc != YVEX_OK) {
+                gguf_value_clear(out);
                 return rc;
             }
         }
@@ -1016,8 +977,16 @@ int yvex_gguf_value_array_info(const yvex_gguf_value *value, yvex_gguf_array_inf
     if (!value || !out || value->type != YVEX_GGUF_VALUE_ARRAY) {
         return YVEX_ERR_INVALID_ARG;
     }
-    *out = value->as.array;
+    *out = value->as.array.info;
     return YVEX_OK;
+}
+
+const yvex_gguf_value *yvex_gguf_value_array_at(const yvex_gguf_value *value, unsigned long long index)
+{
+    if (!value || value->type != YVEX_GGUF_VALUE_ARRAY || index >= value->as.array.info.count) {
+        return NULL;
+    }
+    return &value->as.array.items[index];
 }
 
 unsigned long long yvex_gguf_tensor_count(const yvex_gguf *gguf)

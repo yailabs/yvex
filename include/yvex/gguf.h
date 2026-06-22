@@ -7,7 +7,7 @@
  * Purpose:
  *   Defines the implemented GGUF probe, header, metadata, and raw tensor
  *   directory API. This surface parses GGUF directory structure only; model
- *   descriptors, tensor tables, tokenizers, and execution remain future work.
+ *   descriptors, tensor tables, tokenizers, and execution are built above it.
  *
  * Owns:
  *   - YVEX_GGUF_MAGIC
@@ -121,6 +121,7 @@ int yvex_gguf_value_as_f64(const yvex_gguf_value *value, double *out);
 int yvex_gguf_value_as_bool(const yvex_gguf_value *value, int *out);
 int yvex_gguf_value_as_string(const yvex_gguf_value *value, const char **data, unsigned long long *len);
 int yvex_gguf_value_array_info(const yvex_gguf_value *value, yvex_gguf_array_info *out);
+const yvex_gguf_value *yvex_gguf_value_array_at(const yvex_gguf_value *value, unsigned long long index);
 
 unsigned long long yvex_gguf_tensor_count(const yvex_gguf *gguf);
 const yvex_gguf_tensor_info *yvex_gguf_tensor_at(const yvex_gguf *gguf, unsigned long long index);

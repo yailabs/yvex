@@ -16,10 +16,11 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-D0 implements the core version/status/error/log surface, runtime filesystem
+E0 implements the core version/status/error/log surface, runtime filesystem
 paths/run directories, artifact byte views, range checks, GGUF header/probe,
 metadata, raw tensor directory parsing, dtype/qtype storage accounting, YVEX
-tensor table rows, and a descriptor-only model summary.
+tensor table rows, a descriptor-only model summary, tokenizer metadata/vocab
+tables, fixture tokenizer encode/decode, and default prompt rendering.
 
 Current public headers:
 
@@ -35,6 +36,8 @@ include/yvex/gguf.h
 include/yvex/dtype.h
 include/yvex/tensor.h
 include/yvex/model.h
+include/yvex/tokenizer.h
+include/yvex/prompt.h
 ```
 
 Current aggregate:
@@ -47,6 +50,8 @@ Current aggregate:
 #include <yvex/dtype.h>
 #include <yvex/tensor.h>
 #include <yvex/model.h>
+#include <yvex/tokenizer.h>
+#include <yvex/prompt.h>
 #include <yvex/log.h>
 #include <yvex/status.h>
 #include <yvex/version.h>
@@ -441,12 +446,107 @@ count, known storage bytes, unsupported tensor accounting count, and role
 counts. It is not a loaded model and does not own tokenizer, graph, backend,
 session, or inference behavior.
 
+## Tokenizer
+
+`include/yvex/tokenizer.h` owns tokenizer metadata, vocabulary rows, special
+token IDs, and fixture encode/decode. E0 does not execute generic Llama
+SentencePiece, GPT-2 BPE, or HuggingFace tokenizer JSON.
+
+```c
+typedef struct yvex_tokenizer yvex_tokenizer;
+
+int yvex_tokenizer_from_gguf(yvex_tokenizer **out,
+                             const yvex_gguf *gguf,
+                             const yvex_model_descriptor *model,
+                             yvex_error *err);
+void yvex_tokenizer_close(yvex_tokenizer *tokenizer);
+
+yvex_tokenizer_kind yvex_tokenizer_kind_of(const yvex_tokenizer *tokenizer);
+yvex_tokenizer_support yvex_tokenizer_support_of(const yvex_tokenizer *tokenizer);
+const char *yvex_tokenizer_kind_name(yvex_tokenizer_kind kind);
+const char *yvex_tokenizer_support_name(yvex_tokenizer_support support);
+
+unsigned long long yvex_tokenizer_vocab_size(const yvex_tokenizer *tokenizer);
+const yvex_token_info *yvex_tokenizer_token_at(const yvex_tokenizer *tokenizer,
+                                               unsigned long long id);
+```
+
+Special token helpers return `YVEX_OK` when the ID is present and
+`YVEX_ERR_UNSUPPORTED` when absent:
+
+```c
+int yvex_tokenizer_bos_id(const yvex_tokenizer *tokenizer, unsigned int *out);
+int yvex_tokenizer_eos_id(const yvex_tokenizer *tokenizer, unsigned int *out);
+int yvex_tokenizer_unk_id(const yvex_tokenizer *tokenizer, unsigned int *out);
+int yvex_tokenizer_pad_id(const yvex_tokenizer *tokenizer, unsigned int *out);
+int yvex_tokenizer_sep_id(const yvex_tokenizer *tokenizer, unsigned int *out);
+```
+
+Encode/decode is implemented only for `YVEX_TOKENIZER_KIND_FIXTURE_SIMPLE`:
+
+```c
+int yvex_tokenize_text(const yvex_tokenizer *tokenizer,
+                       const char *text,
+                       yvex_tokens *out,
+                       yvex_error *err);
+
+int yvex_detokenize_ids(const yvex_tokenizer *tokenizer,
+                        const unsigned int *ids,
+                        unsigned long long len,
+                        char *out,
+                        unsigned long long cap,
+                        yvex_error *err);
+
+void yvex_tokens_clear(yvex_tokens *tokens);
+void yvex_tokens_free(yvex_tokens *tokens);
+```
+
+Support posture:
+
+```text
+yvex-fixture-simple: fixture encode/decode implemented
+llama/gpt2/replit/rwkv: vocabulary visible, encode/decode unsupported
+huggingface json: metadata visible, execution unsupported
+unknown tokenizer: unsupported
+```
+
+## Prompt Rendering
+
+`include/yvex/prompt.h` owns a deterministic E0 prompt renderer for explicit
+role messages. It does not execute arbitrary Jinja chat templates.
+
+```c
+typedef enum {
+    YVEX_PROMPT_ROLE_SYSTEM = 0,
+    YVEX_PROMPT_ROLE_USER,
+    YVEX_PROMPT_ROLE_ASSISTANT,
+    YVEX_PROMPT_ROLE_TOOL
+} yvex_prompt_role;
+
+typedef struct {
+    yvex_prompt_role role;
+    const char *content;
+} yvex_prompt_message;
+
+int yvex_prompt_render(yvex_rendered_prompt *out,
+                       const yvex_tokenizer *tokenizer,
+                       const yvex_prompt_message *messages,
+                       unsigned long long message_count,
+                       const yvex_prompt_options *options,
+                       yvex_error *err);
+
+void yvex_rendered_prompt_free(yvex_rendered_prompt *prompt);
+```
+
+The E0 renderer emits the YVEX default role-tag format and can append an
+assistant generation prompt. It allocates the rendered prompt and callers free
+it with `yvex_rendered_prompt_free`.
+
 ## Future API Families
 
 The families below are design contracts, not implemented APIs:
 
 ```text
-tokenizer/prompt
 graph/planner
 memory plan
 backend/device tensor

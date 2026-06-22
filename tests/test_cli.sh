@@ -8,7 +8,7 @@
 # Purpose:
 #   Proves that the CLI command table exposes only implemented commands and
 #   returns stable exit codes for common bootstrap, filesystem, artifact, GGUF
-#   directory, tensor table, and descriptor behavior.
+#   directory, tensor table, descriptor, tokenizer, and prompt behavior.
 #
 # Covers:
 #   - yvex
@@ -20,7 +20,11 @@
 #   - yvex inspect
 #   - yvex metadata
 #   - yvex paths
+#   - yvex prompt
+#   - yvex tokenize
+#   - yvex tokenizer
 #   - yvex tensors
+#   - yvex detokenize
 #   - yvex commands
 #   - yvex help info
 #   - yvex unknown
@@ -74,21 +78,27 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: D0 tensor/model descriptor layer"
+contains "$OUT_DIR/info.out" "status: E0 tokenizer and prompt rendering layer"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "artifact: open/read implemented"
 contains "$OUT_DIR/info.out" "gguf: metadata/tensor directory parsing implemented"
 contains "$OUT_DIR/info.out" "model: descriptor-only implemented"
+contains "$OUT_DIR/info.out" "tokenizer: fixture encode/decode implemented"
+contains "$OUT_DIR/info.out" "prompt: default renderer implemented"
 
 run_ok commands "$YVEX_BIN" commands
 contains "$OUT_DIR/commands.out" "Implemented commands:"
 contains "$OUT_DIR/commands.out" "  commands"
+contains "$OUT_DIR/commands.out" "  detokenize"
 contains "$OUT_DIR/commands.out" "  help"
 contains "$OUT_DIR/commands.out" "  info"
 contains "$OUT_DIR/commands.out" "  inspect"
 contains "$OUT_DIR/commands.out" "  metadata"
 contains "$OUT_DIR/commands.out" "  paths"
+contains "$OUT_DIR/commands.out" "  prompt"
+contains "$OUT_DIR/commands.out" "  tokenize"
+contains "$OUT_DIR/commands.out" "  tokenizer"
 contains "$OUT_DIR/commands.out" "  tensors"
 contains "$OUT_DIR/commands.out" "  version"
 
@@ -103,6 +113,18 @@ contains "$OUT_DIR/help_metadata.out" "usage: yvex metadata <path>"
 
 run_ok help_tensors "$YVEX_BIN" help tensors
 contains "$OUT_DIR/help_tensors.out" "usage: yvex tensors <path>"
+
+run_ok help_tokenizer "$YVEX_BIN" help tokenizer
+contains "$OUT_DIR/help_tokenizer.out" "usage: yvex tokenizer <path>"
+
+run_ok help_tokenize "$YVEX_BIN" help tokenize
+contains "$OUT_DIR/help_tokenize.out" "usage: yvex tokenize <path> --text TEXT"
+
+run_ok help_detokenize "$YVEX_BIN" help detokenize
+contains "$OUT_DIR/help_detokenize.out" "usage: yvex detokenize <path> --ids IDS"
+
+run_ok help_prompt "$YVEX_BIN" help prompt
+contains "$OUT_DIR/help_prompt.out" "usage: yvex prompt <path>"
 
 run_ok inspect_valid "$YVEX_BIN" inspect tests/fixtures/gguf/valid-minimal.gguf
 contains "$OUT_DIR/inspect_valid.out" "format: gguf"
@@ -136,6 +158,38 @@ contains "$OUT_DIR/tensors.out" "format: gguf"
 contains "$OUT_DIR/tensors.out" "tensor_count: 1"
 contains "$OUT_DIR/tensors.out" "alignment: 32"
 contains "$OUT_DIR/tensors.out" "0 token_embd.weight role=token_embedding rank=2 dims=[4,8] dtype=F32 bytes=128 offset=0 absolute="
+
+run_ok tokenizer "$YVEX_BIN" tokenizer tests/fixtures/gguf/valid-tokenizer-simple.gguf
+contains "$OUT_DIR/tokenizer.out" "tokenizer_model: yvex-fixture-simple"
+contains "$OUT_DIR/tokenizer.out" "support: fixture-encode-decode"
+contains "$OUT_DIR/tokenizer.out" "vocab_size: 8"
+contains "$OUT_DIR/tokenizer.out" "bos_token_id: 1"
+contains "$OUT_DIR/tokenizer.out" "eos_token_id: 2"
+contains "$OUT_DIR/tokenizer.out" "unk_token_id: 0"
+contains "$OUT_DIR/tokenizer.out" "status: tokenizer-descriptor"
+
+run_ok tokenize "$YVEX_BIN" tokenize tests/fixtures/gguf/valid-tokenizer-simple.gguf --text "hello world"
+contains "$OUT_DIR/tokenize.out" "tokens: 3"
+contains "$OUT_DIR/tokenize.out" "ids: 3 4 5"
+contains "$OUT_DIR/tokenize.out" "  3 \"hello\""
+contains "$OUT_DIR/tokenize.out" "status: tokenized"
+
+run_ok detokenize "$YVEX_BIN" detokenize tests/fixtures/gguf/valid-tokenizer-simple.gguf --ids 3,4,5
+contains "$OUT_DIR/detokenize.out" "text: \"hello world\""
+contains "$OUT_DIR/detokenize.out" "status: detokenized"
+
+run_ok prompt "$YVEX_BIN" prompt tests/fixtures/gguf/valid-tokenizer-simple.gguf --system "You are helpful" --user "hello world"
+contains "$OUT_DIR/prompt.out" "template: yvex-default"
+contains "$OUT_DIR/prompt.out" "chat_template_metadata: absent"
+contains "$OUT_DIR/prompt.out" "<system>"
+contains "$OUT_DIR/prompt.out" "You are helpful"
+contains "$OUT_DIR/prompt.out" "<assistant>"
+contains "$OUT_DIR/prompt.out" "status: rendered"
+
+run_ok prompt_tokens "$YVEX_BIN" prompt tests/fixtures/gguf/valid-tokenizer-simple.gguf --user "hello world" --tokens
+contains "$OUT_DIR/prompt_tokens.out" "tokens:"
+contains "$OUT_DIR/prompt_tokens.out" "ids:"
+contains "$OUT_DIR/prompt_tokens.out" "status: rendered"
 
 set +e
 "$YVEX_BIN" inspect tests/fixtures/gguf/bad-magic.gguf >"$OUT_DIR/inspect_bad_magic.out" 2>"$OUT_DIR/inspect_bad_magic.err"

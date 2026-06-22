@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after D0
+after E0
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-E0 - Tokenizer and prompt rendering
+F0 - Graph and planner
 ```
 
 Implemented surface:
@@ -102,9 +102,19 @@ Tensor / model descriptor:
   src/model/tensor_table.c
   src/model/descriptor.c
 
+Tokenizer / prompt rendering:
+  include/yvex/tokenizer.h
+  include/yvex/prompt.h
+  src/tokenizer/tokenizer.c
+  src/tokenizer/vocab.c
+  src/tokenizer/special.c
+  src/tokenizer/encode.c
+  src/tokenizer/decode.c
+  src/tokenizer/prompt.c
+
 CLI:
   cli/yvex_cli.c
-  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors
+  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt
 
 Tests:
   tests/test_status.c
@@ -117,14 +127,14 @@ Tests:
   tests/test_dtype.c
   tests/test_tensor_table.c
   tests/test_model_descriptor.c
+  tests/test_tokenizer.c
+  tests/test_prompt.c
   tests/test_cli.sh
 ```
 
 Not implemented:
 
 ```text
-tokenizer
-prompt rendering
 graph planner
 memory planner implementation
 backend ABI implementation
@@ -157,12 +167,14 @@ GGUF metadata/tensor directory
 dtype/qtype registry
 tensor table
 model descriptor
+tokenizer metadata/vocab table
+fixture tokenizer encode/decode
+prompt renderer
 ```
 
 Planned public surfaces:
 
 ```text
-tokenizer/prompt
 graph/planner
 backend
 session
@@ -218,8 +230,8 @@ Future commands are listed only under the delivery that implements them.
 | C0 | complete | Artifact and GGUF parser base |
 | C1 | complete | GGUF metadata and tensor directory |
 | D0 | complete | Tensor and model layer |
-| E0 | next | Tokenizer and prompt rendering |
-| F0 | planned | Graph and planner |
+| E0 | complete | Tokenizer and prompt rendering |
+| F0 | next | Graph and planner |
 | G0 | planned | CPU reference backend |
 | H0 | planned | Engine and session runtime |
 | I0 | planned | CLI run/chat runtime |
@@ -865,7 +877,7 @@ F0 receives tensor/model shape data later for graph planning.
 Status:
 
 ```text
-planned
+complete
 ```
 
 Owns:
@@ -895,9 +907,20 @@ Creates / modifies:
 ```text
 include/yvex/tokenizer.h
 include/yvex/prompt.h
-src/tokenizer/
+src/tokenizer/tokenizer.c
+src/tokenizer/vocab.c
+src/tokenizer/special.c
+src/tokenizer/encode.c
+src/tokenizer/decode.c
+src/tokenizer/prompt.c
 tests/test_tokenizer.c
-tests/fixtures/tokenizer/
+tests/test_prompt.c
+tests/fixtures/gguf/valid-tokenizer-simple.gguf
+tests/fixtures/gguf/tokenizer-missing-tokens.gguf
+tests/fixtures/gguf/tokenizer-bad-token-type-len.gguf
+tests/fixtures/gguf/tokenizer-bad-score-len.gguf
+tests/fixtures/gguf/tokenizer-bad-special-id.gguf
+tests/fixtures/gguf/tokenizer-unsupported-model.gguf
 cli/yvex_cli.c
 Makefile
 docs/api.md
@@ -908,6 +931,7 @@ docs/spine.md
 CLI surface:
 
 ```text
+yvex tokenizer
 yvex tokenize
 yvex detokenize
 yvex prompt
@@ -921,6 +945,7 @@ detokenize golden tests
 special token tests
 prompt render tests
 chat template subset tests
+CLI smoke for tokenizer/tokenize/detokenize/prompt
 ```
 
 Acceptance:
@@ -928,7 +953,8 @@ Acceptance:
 ```text
 golden tokenization tests pass
 prompt render tests pass
-unsupported template constructs fail clearly
+unsupported real tokenizer algorithms fail clearly
+HuggingFace tokenizer JSON execution is not claimed
 no model execution claim
 ```
 
@@ -1527,17 +1553,22 @@ future model work must state the exact support level and proof command.
 | B0 | 8e7d6c8 | Added runtime filesystem paths and run directory skeleton. |
 | C0 | 2818b6a | Added artifact layer and GGUF header probe. |
 | C1 | 0de97e4 | Parsed GGUF metadata and tensor directory, added metadata/tensors CLI, fixtures, and tests. |
-| D0 | current commit | Added dtype/qtype registry, tensor table, role classifier, descriptor-only model summary, CLI output, and tests. |
+| D0 | dd2eb59 | Added dtype/qtype registry, tensor table, role classifier, descriptor-only model summary, CLI output, and tests. |
+| E0 | current commit | Added tokenizer metadata/vocab table, fixture encode/decode, prompt rendering, CLI proof, fixtures, and tests. |
 
 Current implemented CLI command set:
 
 ```text
 commands
+detokenize
 help
 info
 inspect
 metadata
 paths
+prompt
+tokenize
+tokenizer
 tensors
 version
 ```
@@ -1556,24 +1587,24 @@ git diff --check
 Next authorized milestone:
 
 ```text
-E0 - Tokenizer and prompt rendering
+F0 - Graph and planner
 ```
 
-E0 starts only after D0 validation passes and the D0 commit is recorded.
+F0 starts only after E0 validation passes and the E0 commit is recorded.
 
-E0 must produce:
+F0 must produce:
 
 ```text
-tokenizer metadata extraction
-tokenizer kind detection
-special token registry
-tokenization API
-detokenization API
-prompt rendering
-chat template rendering subset
+graph IR
+op definitions
+shape inference
+tensor lifetime classes
+memory planner skeleton
+backend capability matching as plan data
+graph and plan dumps
 ```
 
-E0 must not produce:
+F0 must not produce:
 
 ```text
 backend
@@ -1584,17 +1615,17 @@ CUDA backend
 inference claim
 ```
 
-Required E0 proof:
+Required F0 proof:
 
 ```text
 make clean
 make check
 make smoke
-future build/tests/test_tokenizer
-future yvex tokenize <valid fixture>
-future yvex detokenize <ids>
-future yvex prompt <valid fixture>
-no model execution claim
+future build/tests/test_graph
+future build/tests/test_memory_plan
+future yvex graph <valid fixture>
+future yvex plan <valid fixture>
+no backend execution claim
 ```
 
 ## 6. Planned Delivery Catalogue
@@ -1602,7 +1633,6 @@ no model execution claim
 The planned delivery catalogue is linear:
 
 ```text
-E0 consumes D0 and creates tokenizer/prompt rendering.
 F0 consumes D0/E0 and creates graph/planner.
 G0 consumes F0 and creates CPU reference backend.
 H0 consumes G0/F0/E0 and creates engine/session runtime.
@@ -1923,8 +1953,8 @@ and a command-visible proof exists.
 Current handoff:
 
 ```text
-from: D0 - Tensor and model layer
-to: E0 - Tokenizer and prompt rendering
-authorized work: tokenizer metadata extraction, tokenization API, detokenization API, prompt rendering
-blocked work: F0 and later until E0 acceptance passes
+from: E0 - Tokenizer and prompt rendering
+to: F0 - Graph and planner
+authorized work: graph IR, op definitions, shape inference, tensor lifetime classes, memory planner skeleton
+blocked work: G0 and later until F0 acceptance passes
 ```

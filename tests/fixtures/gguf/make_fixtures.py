@@ -137,6 +137,47 @@ def valid_metadata() -> list[bytes]:
     ]
 
 
+def tokenizer_metadata(
+    model: str = "yvex-fixture-simple",
+    include_tokens: bool = True,
+    scores: list[float] | None = None,
+    token_types: list[int] | None = None,
+    special_id: int | None = None,
+) -> list[bytes]:
+    tokens = ["<unk>", "<bos>", "<eos>", "hello", " ", "world", "Write", " C"]
+    if scores is None:
+        scores = [0.0] * len(tokens)
+    if token_types is None:
+        token_types = [2, 3, 3, 1, 1, 1, 1, 1]
+
+    metadata = [
+        kv("general.architecture", STRING, "llama"),
+        kv("general.name", STRING, "yvex-tokenizer-test"),
+        kv("llama.context_length", UINT32, 4096),
+        kv("general.file_type", UINT32, 0),
+        kv("general.alignment", UINT32, 32),
+        kv("tokenizer.ggml.model", STRING, model),
+    ]
+    if include_tokens:
+        metadata.append(kv_array("tokenizer.ggml.tokens", STRING, tokens))
+    metadata.append(kv_array("tokenizer.ggml.scores", FLOAT32, scores))
+    metadata.append(kv_array("tokenizer.ggml.token_type", INT32, token_types))
+    metadata.extend([
+        kv("tokenizer.ggml.bos_token_id", UINT32, 1),
+        kv("tokenizer.ggml.eos_token_id", UINT32, 2),
+        kv("tokenizer.ggml.unknown_token_id", UINT32, 0 if special_id is None else special_id),
+    ])
+    return metadata
+
+
+def tiny_tensor_file(metadata: list[bytes]) -> bytes:
+    return file_bytes(
+        metadata,
+        [tensor_info("token_embd.weight", [4, 8], GGML_TYPE_F32, 0)],
+        b"\x00" * (4 * 8 * 4),
+    )
+
+
 def main() -> None:
     write(
         "valid-metadata-tensors.gguf",
@@ -203,6 +244,13 @@ def main() -> None:
         "tensor-offset-out-of-bounds.gguf",
         file_bytes(metadata, [tensor_info("token_embd.weight", [4, 8], GGML_TYPE_F32, 1024)], b"\x00" * 128),
     )
+
+    write("valid-tokenizer-simple.gguf", tiny_tensor_file(tokenizer_metadata()))
+    write("tokenizer-missing-tokens.gguf", tiny_tensor_file(tokenizer_metadata(include_tokens=False)))
+    write("tokenizer-bad-token-type-len.gguf", tiny_tensor_file(tokenizer_metadata(token_types=[2, 3])))
+    write("tokenizer-bad-score-len.gguf", tiny_tensor_file(tokenizer_metadata(scores=[0.0, 0.0])))
+    write("tokenizer-bad-special-id.gguf", tiny_tensor_file(tokenizer_metadata(special_id=99)))
+    write("tokenizer-unsupported-model.gguf", tiny_tensor_file(tokenizer_metadata(model="mystery-tokenizer")))
 
 
 if __name__ == "__main__":

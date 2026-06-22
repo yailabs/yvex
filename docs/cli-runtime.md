@@ -4,7 +4,7 @@ This document owns CLI behavior. YVEX is CLI-only.
 
 ## Current Implemented Commands
 
-The D0 binary implements exactly:
+The E0 binary implements exactly:
 
 ```text
 yvex
@@ -20,6 +20,10 @@ yvex paths
 yvex paths --project DIR
 yvex paths --run
 yvex paths --run --create
+yvex tokenizer <path>
+yvex tokenize <path> --text TEXT
+yvex detokenize <path> --ids IDS
+yvex prompt <path> --user TEXT
 yvex tensors <path>
 yvex version
 ```
@@ -35,12 +39,14 @@ name: YVEX
 version: 0.1.0
 language: C
 interface: CLI-only
-status: D0 tensor/model descriptor layer
+status: E0 tokenizer and prompt rendering layer
 library: libyvex.a
 filesystem: implemented
 artifact: open/read implemented
 gguf: metadata/tensor directory parsing implemented
 model: descriptor-only implemented
+tokenizer: fixture encode/decode implemented
+prompt: default renderer implemented
 inference: not implemented
 cuda: not implemented
 server: not implemented
@@ -155,6 +161,86 @@ alignment: 32
 This is descriptor/table data for inspection. It is not backend support, model
 loading, or inference state.
 
+## Current `yvex tokenizer`
+
+`yvex tokenizer <path>` prints tokenizer metadata, vocabulary size, special
+token IDs, and E0 support posture.
+
+Output shape:
+
+```text
+format: gguf
+architecture: llama
+model_name: yvex-tokenizer-test
+tokenizer_model: yvex-fixture-simple
+support: fixture-encode-decode
+vocab_size: 8
+bos_token_id: 1
+eos_token_id: 2
+unk_token_id: 0
+chat_template: absent
+status: tokenizer-descriptor
+```
+
+Real Llama/GPT2/Replit/RWKV tokenizer algorithms are not executed in E0. Their
+metadata and vocab can be inspected when present, but encode/decode returns an
+explicit unsupported error unless the algorithm is implemented in a future wave.
+
+## Current `yvex tokenize`
+
+`yvex tokenize <path> --text TEXT` encodes text only when the tokenizer support
+level is `fixture-encode-decode`.
+
+Output shape:
+
+```text
+tokens: 3
+ids: 3 4 5
+pieces:
+  3 "hello"
+  4 " "
+  5 "world"
+status: tokenized
+```
+
+## Current `yvex detokenize`
+
+`yvex detokenize <path> --ids 3,4,5` decodes comma-separated token IDs through
+the fixture tokenizer.
+
+Output shape:
+
+```text
+text: "hello world"
+status: detokenized
+```
+
+## Current `yvex prompt`
+
+`yvex prompt <path> --system TEXT --user TEXT` renders explicit role messages
+through the YVEX default prompt format. Arbitrary Jinja chat templates are not
+executed in E0.
+
+Output shape:
+
+```text
+template: yvex-default
+chat_template_metadata: absent
+rendered_bytes: <n>
+rendered:
+<system>
+You are helpful
+</system>
+<user>
+hello world
+</user>
+<assistant>
+status: rendered
+```
+
+With `--tokens`, the rendered prompt is tokenized if the tokenizer support level
+is `fixture-encode-decode`.
+
 ## Future Commands
 
 Future command names are not support claims:
@@ -162,9 +248,6 @@ Future command names are not support claims:
 ```text
 yvex plan model.gguf --backend cuda --ctx 32768
 yvex graph model.gguf
-yvex tokenize model.gguf --text "hello"
-yvex detokenize model.gguf --ids 1,2,3
-yvex prompt model.gguf --system "..." --user "..."
 yvex run --model model.gguf --backend cuda -p "Explain mmap in C" -n 128
 yvex chat --model model.gguf --backend cuda
 yvex bench --model model.gguf --backend cuda --prompt prompts/code.txt --tokens 256
