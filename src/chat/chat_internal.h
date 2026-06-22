@@ -34,6 +34,8 @@ typedef struct {
     yvex_engine *engine;
     yvex_backend *backend;
     yvex_session *session;
+    yvex_metrics *metrics;
+    yvex_trace *trace;
     char *model_path;
     char *backend_name;
     unsigned long long accepted_turns;
@@ -49,6 +51,11 @@ typedef struct {
     int execution_ready;
     char generation[32];
     char reason[160];
+    char run_id[YVEX_RUN_ID_CAP];
+    char run_dir[YVEX_PATH_CAP];
+    char metrics_out[YVEX_PATH_CAP];
+    char trace_out[YVEX_PATH_CAP];
+    char profile_out[YVEX_PATH_CAP];
 } yvex_chat_accept_result;
 
 int yvex_chat_runtime_open(yvex_chat_runtime *runtime,
@@ -67,6 +74,9 @@ int yvex_chat_runtime_reset(yvex_chat_runtime *runtime, yvex_error *err);
 int yvex_chat_runtime_get_summary(const yvex_chat_runtime *runtime,
                                   yvex_session_summary *out,
                                   yvex_error *err);
+void yvex_chat_runtime_set_observers(yvex_chat_runtime *runtime,
+                                     yvex_metrics *metrics,
+                                     yvex_trace *trace);
 int yvex_chat_runtime_print_status(FILE *fp,
                                    const yvex_chat_runtime *runtime,
                                    yvex_error *err);

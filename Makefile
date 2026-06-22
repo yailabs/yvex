@@ -83,7 +83,13 @@ CORE_SRCS := \
 	src/chat/repl.c \
 	src/chat/slash.c \
 	src/chat/run_command.c \
-	src/chat/status_line.c
+	src/chat/status_line.c \
+	src/metrics/metrics.c \
+	src/metrics/trace.c \
+	src/metrics/profile.c \
+	src/metrics/run_artifacts.c \
+	src/metrics/time.c \
+	src/metrics/json_writer.c
 
 CORE_OBJS := $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 
@@ -112,7 +118,11 @@ TEST_SRCS := \
 	tests/test_logits.c \
 	tests/test_runtime_diagnostics.c \
 	tests/test_chat_runtime.c \
-	tests/test_slash_commands.c
+	tests/test_slash_commands.c \
+	tests/test_metrics.c \
+	tests/test_trace.c \
+	tests/test_profile.c \
+	tests/test_run_artifacts.c
 
 TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 
@@ -121,7 +131,7 @@ CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md \
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: I0 CLI run/chat runtime shell"
+	@echo "status: J0 runtime metrics and tracing"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"
@@ -137,9 +147,13 @@ info:
 	@echo "session: lifecycle skeleton implemented"
 	@echo "run: accepted-only runtime shell implemented"
 	@echo "chat: accepted-only REPL shell implemented"
+	@echo "metrics: runtime collector implemented"
+	@echo "trace: JSONL writer implemented"
+	@echo "profile: JSON writer implemented"
+	@echo "run_artifacts: metrics/trace/profile files implemented"
 	@echo "kv: unavailable skeleton implemented"
 	@echo "logits: unavailable skeleton implemented"
-	@echo "generation: unsupported in I0"
+	@echo "generation: unsupported"
 	@echo "inference: not implemented"
 	@echo "cuda: not implemented"
 	@echo "server: not implemented"
@@ -154,10 +168,11 @@ test-core: $(TEST_BINS)
 		"$$test_bin"; \
 	done
 
-test-cli: $(YVEX_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh
+test-cli: $(YVEX_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_run.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_chat.sh
+	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_metrics.sh
 
 test: test-core test-cli
 
@@ -211,6 +226,7 @@ check-docs:
 	@grep -F "G0 - CPU reference backend" docs/spine.md >/dev/null
 	@grep -F "H0 - Engine and session runtime" docs/spine.md >/dev/null
 	@grep -F "I0 - CLI run/chat runtime" docs/spine.md >/dev/null
+	@grep -F "J0 - Metrics and tracing" docs/spine.md >/dev/null
 	@grep -F "Implemented by:" docs/spine.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Backend Contract" docs/backend-contract.md >/dev/null

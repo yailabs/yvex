@@ -4,7 +4,7 @@ This document owns CLI behavior. YVEX is CLI-only.
 
 ## Current Implemented Commands
 
-The I0 binary implements exactly:
+The J0 binary implements exactly:
 
 ```text
 yvex
@@ -46,7 +46,7 @@ name: YVEX
 version: 0.1.0
 language: C
 interface: CLI-only
-status: I0 CLI run/chat runtime shell
+status: J0 runtime metrics and tracing
 library: libyvex.a
 filesystem: implemented
 artifact: open/read implemented
@@ -61,9 +61,13 @@ engine: runtime object skeleton implemented
 session: lifecycle skeleton implemented
 run: accepted-only runtime shell implemented
 chat: accepted-only REPL shell implemented
+metrics: runtime collector implemented
+trace: JSONL writer implemented
+profile: JSON writer implemented
+run_artifacts: metrics/trace/profile files implemented
 kv: unavailable skeleton implemented
 logits: unavailable skeleton implemented
-generation: unsupported in I0
+generation: unsupported
 backend_cuda: not implemented
 inference: not implemented
 cuda: not implemented
@@ -441,6 +445,16 @@ session path, tokenizes the prompt text, accepts those tokens into the session,
 and prints an accepted-only runtime result. It does not execute prefill, decode,
 sampling, logits, or generation.
 
+J0 observability flags:
+
+```text
+--metrics-out FILE
+--trace-out FILE
+--profile-out FILE
+--save-run
+--run-dir DIR
+```
+
 Plain output:
 
 ```text
@@ -472,7 +486,11 @@ JSON output is available through `--output json`:
     "position": 3,
     "execution_ready": false,
     "generation": "unsupported",
-    "reason": "decode runtime is not implemented in I0"
+    "reason": "decode runtime is not implemented in I0",
+    "metrics": {
+      "prompt_tokens": 3,
+      "accepted_tokens": 3
+    }
   },
   "error": null
 }
@@ -485,6 +503,16 @@ JSON output is available through `--output json`:
 `yvex chat --model FILE --backend cpu` starts a line-oriented REPL over the H0
 engine/session path. It accepts user text as prompt tokens and prints an
 explicit unsupported assistant placeholder.
+
+J0 supports these artifact flags for chat as well:
+
+```text
+--metrics-out FILE
+--trace-out FILE
+--profile-out FILE
+--save-run
+--run-dir DIR
+```
 
 Piped input is deterministic:
 
@@ -515,6 +543,27 @@ Implemented slash commands:
 /reset
 /quit
 ```
+
+## Current Runtime Metrics And Trace Files
+
+J0 records only implemented runtime-shell work:
+
+```text
+engine open
+tokenize
+accept tokens
+chat turns
+runtime total
+known tensor bytes
+unsupported tensor accounting count
+```
+
+Metrics JSON uses schema `yvex.metrics.v1`.
+Trace JSONL uses schema `yvex.trace.v1`.
+Profile JSON uses schema `yvex.profile.v1`.
+
+J0 does not emit decode throughput, TTFT, generated-token counters, CUDA timing,
+server metrics, or inference benchmark claims.
 
 ## Future Commands
 

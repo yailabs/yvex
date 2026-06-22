@@ -65,6 +65,21 @@ int yvex_run_command_plain(FILE *fp, const yvex_chat_accept_result *result)
     fprintf(fp, "execution_ready: false\n");
     fprintf(fp, "generation: %s\n", result->generation);
     fprintf(fp, "reason: %s\n", result->reason);
+    if (result->run_id[0] != '\0') {
+        fprintf(fp, "run_id: %s\n", result->run_id);
+    }
+    if (result->run_dir[0] != '\0') {
+        fprintf(fp, "run_dir: %s\n", result->run_dir);
+    }
+    if (result->metrics_out[0] != '\0') {
+        fprintf(fp, "metrics_out: %s\n", result->metrics_out);
+    }
+    if (result->trace_out[0] != '\0') {
+        fprintf(fp, "trace_out: %s\n", result->trace_out);
+    }
+    if (result->profile_out[0] != '\0') {
+        fprintf(fp, "profile_out: %s\n", result->profile_out);
+    }
     return YVEX_OK;
 }
 
@@ -97,6 +112,32 @@ int yvex_run_command_json(FILE *fp, const yvex_chat_accept_result *result)
     fprintf(fp, ",\n");
     fprintf(fp, "    \"reason\": ");
     json_print_escaped(fp, result->reason);
+    fprintf(fp, ",\n");
+    fprintf(fp, "    \"metrics\": {\n");
+    fprintf(fp, "      \"prompt_tokens\": %llu,\n", result->prompt_tokens);
+    fprintf(fp, "      \"accepted_tokens\": %llu\n", result->accepted_tokens);
+    fprintf(fp, "    }");
+    if (result->metrics_out[0] != '\0' || result->trace_out[0] != '\0' ||
+        result->profile_out[0] != '\0' || result->run_dir[0] != '\0') {
+        fprintf(fp, ",\n");
+        fprintf(fp, "    \"artifacts\": {\n");
+        fprintf(fp, "      \"run_id\": ");
+        json_print_escaped(fp, result->run_id);
+        fprintf(fp, ",\n");
+        fprintf(fp, "      \"run_dir\": ");
+        json_print_escaped(fp, result->run_dir);
+        fprintf(fp, ",\n");
+        fprintf(fp, "      \"metrics_out\": ");
+        json_print_escaped(fp, result->metrics_out);
+        fprintf(fp, ",\n");
+        fprintf(fp, "      \"trace_out\": ");
+        json_print_escaped(fp, result->trace_out);
+        fprintf(fp, ",\n");
+        fprintf(fp, "      \"profile_out\": ");
+        json_print_escaped(fp, result->profile_out);
+        fprintf(fp, "\n");
+        fprintf(fp, "    }");
+    }
     fprintf(fp, "\n");
     fprintf(fp, "  },\n");
     fprintf(fp, "  \"error\": null\n");

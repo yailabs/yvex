@@ -73,6 +73,49 @@ static int open_backend(yvex_backend **out, const char *backend_name, yvex_error
     return YVEX_ERR_INVALID_ARG;
 }
 
+static int runtime_phase_begin(yvex_chat_runtime *runtime,
+                               yvex_metric_phase phase,
+                               unsigned long long *token,
+                               yvex_error *err)
+{
+    if (!token) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "runtime_phase_begin", "token is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    *token = 0;
+    if (runtime && runtime->trace) {
+        (void)yvex_trace_emit(runtime->trace, YVEX_TRACE_EVENT_PHASE_START,
+                              yvex_metric_phase_name(phase), "started", "", err);
+    }
+    if (runtime && runtime->metrics) {
+        return yvex_metrics_phase_begin(runtime->metrics, phase, token, err);
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+static int runtime_phase_end(yvex_chat_runtime *runtime,
+                             yvex_metric_phase phase,
+                             unsigned long long token,
+                             int phase_status,
+                             yvex_error *err)
+{
+    int rc = YVEX_OK;
+    yvex_error trace_err;
+
+    if (runtime && runtime->metrics && token != 0) {
+        rc = yvex_metrics_phase_end(runtime->metrics, phase, token, err);
+    }
+    if (runtime && runtime->trace) {
+        yvex_error_clear(&trace_err);
+        (void)yvex_trace_emit(runtime->trace, YVEX_TRACE_EVENT_PHASE_END,
+                              yvex_metric_phase_name(phase),
+                              phase_status == YVEX_OK ? "ok" : "failed",
+                              "", &trace_err);
+    }
+    return rc;
+}
+
 int yvex_chat_runtime_open(yvex_chat_runtime *runtime,
                            const char *model_path,
                            const char *backend_name,
@@ -131,6 +174,17 @@ void yvex_chat_runtime_close(yvex_chat_runtime *runtime)
     memset(runtime, 0, sizeof(*runtime));
 }
 
+void yvex_chat_runtime_set_observers(yvex_chat_runtime *runtime,
+                                     yvex_metrics *metrics,
+                                     yvex_trace *trace)
+{
+    if (!runtime) {
+        return;
+    }
+    runtime->metrics = metrics;
+    runtime->trace = trace;
+}
+
 int yvex_chat_runtime_accept_user_text(yvex_chat_runtime *runtime,
                                        const char *system_text,
                                        const char *user_text,
@@ -140,7 +194,9 @@ int yvex_chat_runtime_accept_user_text(yvex_chat_runtime *runtime,
     yvex_tokens tokens;
     yvex_session_summary summary;
     yvex_engine_summary engine_summary;
+    unsigned long long phase_token = 0;
     int rc;
+    int phase_rc;
 
     if (!runtime || !runtime->session || !user_text || !out) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_chat_runtime_accept_user_text",
@@ -152,9 +208,24 @@ int yvex_chat_runtime_accept_user_text(yvex_chat_runtime *runtime,
     memset(&tokens, 0, sizeof(tokens));
 
     (void)system_text;
+    rc = runtime_phase_begin(runtime, YVEX_METRIC_PHASE_TOKENIZE, &phase_token, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
     rc = yvex_tokenize_text(yvex_engine_tokenizer(runtime->engine), user_text, &tokens, err);
+    phase_rc = runtime_phase_end(runtime, YVEX_METRIC_PHASE_TOKENIZE, phase_token, rc, err);
+    if (rc == YVEX_OK && phase_rc != YVEX_OK) {
+        rc = phase_rc;
+    }
+    if (rc == YVEX_OK) {
+        rc = runtime_phase_begin(runtime, YVEX_METRIC_PHASE_ACCEPT_TOKENS, &phase_token, err);
+    }
     if (rc == YVEX_OK) {
         rc = yvex_session_accept_tokens(runtime->session, &tokens, err);
+        phase_rc = runtime_phase_end(runtime, YVEX_METRIC_PHASE_ACCEPT_TOKENS, phase_token, rc, err);
+        if (rc == YVEX_OK && phase_rc != YVEX_OK) {
+            rc = phase_rc;
+        }
     }
     if (rc == YVEX_OK) {
         rc = yvex_session_get_summary(runtime->session, &summary, err);
@@ -178,6 +249,21 @@ int yvex_chat_runtime_accept_user_text(yvex_chat_runtime *runtime,
     copy_text(out->generation, sizeof(out->generation), "unsupported");
     copy_text(out->reason, sizeof(out->reason), "decode runtime is not implemented in I0");
     runtime->accepted_turns += 1;
+
+    if (runtime->metrics) {
+        rc = yvex_metrics_add_prompt_tokens(runtime->metrics, tokens.len, err);
+        if (rc == YVEX_OK) {
+            rc = yvex_metrics_add_accepted_tokens(runtime->metrics, tokens.len, err);
+        }
+        if (rc != YVEX_OK) {
+            yvex_tokens_free(&tokens);
+            return rc;
+        }
+    }
+    if (runtime->trace) {
+        (void)yvex_trace_emit(runtime->trace, YVEX_TRACE_EVENT_ACCEPT_TOKENS,
+                              "accept_tokens", "ok", "prompt tokens accepted", err);
+    }
 
     yvex_tokens_free(&tokens);
     yvex_error_clear(err);

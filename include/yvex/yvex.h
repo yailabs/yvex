@@ -39,14 +39,17 @@
 #include <yvex/logits.h>
 #include <yvex/log.h>
 #include <yvex/memory_plan.h>
+#include <yvex/metrics.h>
 #include <yvex/model.h>
 #include <yvex/op.h>
 #include <yvex/planner.h>
+#include <yvex/profile.h>
 #include <yvex/prompt.h>
 #include <yvex/session.h>
 #include <yvex/status.h>
 #include <yvex/tensor.h>
 #include <yvex/tokenizer.h>
+#include <yvex/trace.h>
 #include <yvex/version.h>
 
 #endif /* YVEX_H */

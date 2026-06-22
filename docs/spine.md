@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after I0
+after J0
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-J0 - Metrics and tracing
+K0 - yvexd server/provider
 ```
 
 Implemented surface:
@@ -152,6 +152,17 @@ CLI runtime shell:
   src/chat/run_command.c
   src/chat/status_line.c
 
+Metrics / tracing:
+  include/yvex/metrics.h
+  include/yvex/trace.h
+  include/yvex/profile.h
+  src/metrics/metrics.c
+  src/metrics/trace.c
+  src/metrics/profile.c
+  src/metrics/run_artifacts.c
+  src/metrics/time.c
+  src/metrics/json_writer.c
+
 CLI:
   cli/yvex_cli.c
   implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, engine, session, run, chat
@@ -182,15 +193,19 @@ Tests:
   tests/test_runtime_diagnostics.c
   tests/test_chat_runtime.c
   tests/test_slash_commands.c
+  tests/test_metrics.c
+  tests/test_trace.c
+  tests/test_profile.c
+  tests/test_run_artifacts.c
   tests/test_cli_run.sh
   tests/test_cli_chat.sh
+  tests/test_cli_metrics.sh
   tests/test_cli.sh
 ```
 
 Not implemented:
 
 ```text
-metrics/tracing implementation
 server/provider
 CUDA
 model support ladder execution
@@ -300,8 +315,8 @@ Future commands are listed only under the delivery that implements them.
 | G0 | complete | CPU reference backend |
 | H0 | complete | Engine and session runtime |
 | I0 | complete | CLI run/chat runtime |
-| J0 | next | Metrics and tracing |
-| K0 | planned | yvexd server/provider |
+| J0 | complete | Metrics and tracing |
+| K0 | next | yvexd server/provider |
 | L0 | planned | CUDA/DGX Spark backend |
 | M0-M8 | planned | Model support ladder |
 
@@ -1361,7 +1376,7 @@ K0 receives a runtime path that can be served later.
 Status:
 
 ```text
-next
+complete
 ```
 
 Owns:
@@ -1371,14 +1386,18 @@ metrics collector
 trace JSONL
 profile report
 run metrics files
-latency counters
-token counters
+phase timing counters for implemented runtime phases
+accepted-token counters
 ```
 
 Does not own:
 
 ```text
 benchmark result claims
+decode throughput
+TTFT
+generated-token counters
+CUDA timing
 server implementation
 new backend behavior
 ```
@@ -1388,21 +1407,27 @@ Creates / modifies:
 ```text
 include/yvex/metrics.h
 include/yvex/trace.h
+include/yvex/profile.h
 src/metrics/
 tests/test_metrics.c
 tests/test_trace.c
+tests/test_profile.c
+tests/test_run_artifacts.c
 cli/yvex_cli.c
 Makefile
 docs/api.md
+docs/cli-runtime.md
 docs/spine.md
 ```
 
 CLI surface:
 
 ```text
---trace
 --metrics-out
+--trace-out
 --profile-out
+--save-run
+--run-dir
 ```
 
 Tests:
@@ -1412,6 +1437,7 @@ metrics JSON tests
 trace JSONL tests
 profile output tests
 run artifact path tests
+run/chat CLI artifact smoke tests
 ```
 
 Acceptance:
@@ -1420,6 +1446,7 @@ Acceptance:
 JSON/JSONL output is valid
 metrics are present for implemented runtime paths
 no benchmark claim exists without reproducible artifacts
+no decode/generation metrics are emitted
 ```
 
 Handoff:
@@ -1655,7 +1682,8 @@ future model work must state the exact support level and proof command.
 | F0 | 5234420 | Added graph values/ops, shape inference, missing-role diagnostics, estimate-only memory plans, graph/plan CLI proof, and tests. |
 | G0 | 8d60c2b | Added backend ABI, CPU reference backend, CPU tensor allocation/read/write/copy, capability reporting, embed op proof, backend CLI, and tests. |
 | H0 | e009e08 | Added engine/session runtime objects, KV/logits availability skeletons, session state machine, token acceptance diagnostics, engine/session CLI, and tests. |
-| I0 | current commit | Added accepted-only run/chat runtime shell, slash commands, JSON run output, piped chat tests, and CLI smoke coverage. |
+| I0 | 425fab3 | Added accepted-only run/chat runtime shell, slash commands, JSON run output, piped chat tests, and CLI smoke coverage. |
+| J0 | current commit | Added runtime metrics collector, trace JSONL writer, profile JSON writer, run artifacts, run/chat instrumentation, and tests. |
 
 Current implemented CLI command set:
 
@@ -1695,36 +1723,35 @@ git diff --check
 Next authorized milestone:
 
 ```text
-J0 - Metrics and tracing
+K0 - yvexd server/provider
 ```
 
-J0 starts only after I0 validation passes and the I0 commit is recorded.
+K0 starts only after J0 validation passes and the J0 commit is recorded.
 
-J0 must produce:
+K0 must produce:
 
 ```text
-metrics collector
-trace JSONL
-profile report
-run metrics files
-latency/token counters
+yvexd process skeleton
+provider/server boundary
+health endpoint
+metrics endpoint over J0 observability primitives
 ```
 
-J0 must not produce:
+K0 must not produce:
 
 ```text
-server/provider behavior
 CUDA backend
 broad inference claim
+OpenAI-compatible model endpoint claim before implementation
 ```
 
-Required J0 proof:
+Required K0 proof:
 
 ```text
 make clean
 make check
 make smoke
-future metrics/trace output proof commands
+server/provider smoke proof
 no CUDA claim
 no broad inference claim
 ```
@@ -2051,8 +2078,8 @@ and a command-visible proof exists.
 Current handoff:
 
 ```text
-from: I0 - CLI run/chat runtime
-to: J0 - Metrics and tracing
-authorized work: metrics collector, trace JSONL, profile report, and run metrics files
-blocked work: K0 and later until J0 acceptance passes
+from: J0 - Metrics and tracing
+to: K0 - yvexd server/provider
+authorized work: yvexd process skeleton, health/metrics endpoints, and provider boundary
+blocked work: L0 and later until K0 acceptance passes
 ```

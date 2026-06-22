@@ -54,6 +54,7 @@
 
 #include "../src/chat/chat_internal.h"
 #include "../src/chat/slash_internal.h"
+#include "../src/metrics/metrics_internal.h"
 
 typedef int (*yvex_cli_handler)(int argc, char **argv);
 
@@ -104,8 +105,8 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "chat",
         "Start the I0 diagnostic chat shell.",
-        "yvex chat --model FILE --backend cpu|cuda [--ctx N]",
-        "Opens engine/backend/session and accepts user prompt tokens in a REPL. Generation is unsupported in I0.",
+        "yvex chat --model FILE --backend cpu|cuda [--ctx N] [--metrics-out FILE] [--trace-out FILE] [--profile-out FILE] [--save-run] [--run-dir DIR]",
+        "Opens engine/backend/session and accepts user prompt tokens in a REPL. Optional J0 artifacts record implemented runtime phases only.",
         command_chat,
     },
     {
@@ -188,8 +189,8 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "run",
         "Accept one prompt through the I0 runtime shell.",
-        "yvex run --model FILE --backend cpu|cuda --prompt TEXT [--system TEXT] [--output plain|json]",
-        "Opens engine/backend/session, tokenizes the prompt, accepts tokens, and reports accepted-only runtime diagnostics. It does not generate output.",
+        "yvex run --model FILE --backend cpu|cuda --prompt TEXT [--system TEXT] [--output plain|json] [--metrics-out FILE] [--trace-out FILE] [--profile-out FILE] [--save-run] [--run-dir DIR]",
+        "Opens engine/backend/session, tokenizes the prompt, accepts tokens, and reports accepted-only runtime diagnostics. Optional J0 artifacts record implemented runtime phases only.",
         command_run,
     },
     {
@@ -883,7 +884,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: I0 CLI run/chat runtime shell\n");
+    printf("status: J0 runtime metrics and tracing\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -898,9 +899,13 @@ static int command_info(int argc, char **argv)
     printf("session: lifecycle skeleton implemented\n");
     printf("run: accepted-only runtime shell implemented\n");
     printf("chat: accepted-only REPL shell implemented\n");
+    printf("metrics: runtime collector implemented\n");
+    printf("trace: JSONL writer implemented\n");
+    printf("profile: JSON writer implemented\n");
+    printf("run_artifacts: metrics/trace/profile files implemented\n");
     printf("kv: unavailable skeleton implemented\n");
     printf("logits: unavailable skeleton implemented\n");
-    printf("generation: unsupported in I0\n");
+    printf("generation: unsupported\n");
     printf("backend_cuda: not implemented\n");
     printf("inference: not implemented\n");
     printf("cuda: not implemented\n");
@@ -1344,10 +1349,95 @@ static void trim_line(char *line)
     }
 }
 
+static void cli_copy_text(char *dst, size_t cap, const char *src)
+{
+    if (!dst || cap == 0) {
+        return;
+    }
+    snprintf(dst, cap, "%s", src ? src : "");
+    dst[cap - 1u] = '\0';
+}
+
+static void cli_set_result_artifacts(yvex_chat_accept_result *result,
+                                     const yvex_run_artifacts *artifacts)
+{
+    if (!result || !artifacts) {
+        return;
+    }
+    cli_copy_text(result->run_id, sizeof(result->run_id), artifacts->run_id);
+    cli_copy_text(result->run_dir, sizeof(result->run_dir), artifacts->run_dir);
+    if (artifacts->has_metrics) {
+        cli_copy_text(result->metrics_out, sizeof(result->metrics_out), artifacts->metrics_path);
+    }
+    if (artifacts->has_trace) {
+        cli_copy_text(result->trace_out, sizeof(result->trace_out), artifacts->trace_path);
+    }
+    if (artifacts->has_profile) {
+        cli_copy_text(result->profile_out, sizeof(result->profile_out), artifacts->profile_path);
+    }
+}
+
+static int cli_write_observability_files(const char *command_name,
+                                         const char *model_name,
+                                         const char *backend_name,
+                                         const char *status,
+                                         const yvex_run_artifacts *artifacts,
+                                         const yvex_metrics *metrics,
+                                         int argc,
+                                         char **argv,
+                                         yvex_error *err)
+{
+    yvex_profile_summary profile;
+    yvex_metric_counters counters;
+    int rc;
+
+    if (!artifacts || !metrics) {
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+
+    rc = yvex_run_artifacts_write_command(artifacts, argc, argv, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (artifacts->has_metrics) {
+        rc = yvex_metrics_write_json(artifacts->metrics_path, metrics, err);
+        if (rc != YVEX_OK) {
+            return rc;
+        }
+    }
+    if (artifacts->has_profile) {
+        rc = yvex_metrics_get_counters(metrics, &counters, err);
+        if (rc != YVEX_OK) {
+            return rc;
+        }
+        memset(&profile, 0, sizeof(profile));
+        profile.run_id = artifacts->run_id;
+        profile.command = command_name;
+        profile.model_name = model_name;
+        profile.backend_name = backend_name;
+        profile.status = status;
+        profile.execution_ready = 0;
+        profile.counters = counters;
+        rc = yvex_profile_write_json(artifacts->profile_path, &profile, metrics, err);
+        if (rc != YVEX_OK) {
+            return rc;
+        }
+    }
+
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 static int command_run(int argc, char **argv)
 {
     yvex_chat_runtime runtime;
     yvex_chat_accept_result result;
+    yvex_engine_summary engine_summary;
+    yvex_metrics *metrics = NULL;
+    yvex_trace *trace = NULL;
+    yvex_trace_options trace_options;
+    yvex_run_artifacts artifacts;
     yvex_error err;
     const char *model_path = NULL;
     const char *backend_name = NULL;
@@ -1355,12 +1445,21 @@ static int command_run(int argc, char **argv)
     const char *system_text = NULL;
     const char *output = "plain";
     const char *status_line = "off";
+    const char *metrics_out = NULL;
+    const char *trace_out = NULL;
+    const char *profile_out = NULL;
+    const char *run_dir = NULL;
     unsigned long long context_length = 0;
+    unsigned long long phase_token = 0;
+    unsigned long long total_token = 0;
+    int save_run = 0;
     int i;
     int rc;
+    int final_rc = 0;
 
     yvex_error_clear(&err);
     memset(&runtime, 0, sizeof(runtime));
+    memset(&artifacts, 0, sizeof(artifacts));
 
     if (argc == 2 || (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0))) {
         print_command_help(stdout, find_command("run"));
@@ -1419,6 +1518,32 @@ static int command_run(int argc, char **argv)
                 fprintf(stderr, "yvex: --status-line requires auto, off, or always\n");
                 return 2;
             }
+        } else if (strcmp(argv[i], "--metrics-out") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --metrics-out requires a value\n");
+                return 2;
+            }
+            metrics_out = argv[++i];
+        } else if (strcmp(argv[i], "--trace-out") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --trace-out requires a value\n");
+                return 2;
+            }
+            trace_out = argv[++i];
+        } else if (strcmp(argv[i], "--profile-out") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --profile-out requires a value\n");
+                return 2;
+            }
+            profile_out = argv[++i];
+        } else if (strcmp(argv[i], "--save-run") == 0) {
+            save_run = 1;
+        } else if (strcmp(argv[i], "--run-dir") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --run-dir requires a value\n");
+                return 2;
+            }
+            run_dir = argv[++i];
         } else {
             fprintf(stderr, "yvex: unknown run option: %s\n", argv[i]);
             fprintf(stderr, "Try 'yvex help run' for usage.\n");
@@ -1439,23 +1564,66 @@ static int command_run(int argc, char **argv)
         return 2;
     }
 
+    rc = yvex_metrics_create(&metrics, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    rc = yvex_run_artifacts_prepare(&artifacts, save_run, run_dir, metrics_out, trace_out,
+                                    profile_out, &err);
+    if (rc != YVEX_OK) {
+        yvex_metrics_close(metrics);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    memset(&trace_options, 0, sizeof(trace_options));
+    trace_options.path = artifacts.has_trace ? artifacts.trace_path : NULL;
+    trace_options.run_id = artifacts.run_id;
+    trace_options.enabled = artifacts.has_trace;
+    rc = yvex_trace_open(&trace, &trace_options, &err);
+    if (rc != YVEX_OK) {
+        yvex_metrics_close(metrics);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    (void)yvex_trace_emit(trace, YVEX_TRACE_EVENT_RUN_START, "run", "started", "", &err);
+    (void)yvex_metrics_phase_begin(metrics, YVEX_METRIC_PHASE_TOTAL, &total_token, &err);
+    (void)yvex_metrics_phase_begin(metrics, YVEX_METRIC_PHASE_ENGINE_OPEN, &phase_token, &err);
     rc = yvex_chat_runtime_open(&runtime, model_path, backend_name, context_length, &err);
+    (void)yvex_metrics_phase_end(metrics, YVEX_METRIC_PHASE_ENGINE_OPEN, phase_token, &err);
     if (rc == YVEX_ERR_UNSUPPORTED && strcmp(backend_name, "cuda") == 0) {
         printf("run status: backend-unsupported\n");
         printf("backend: cuda\n");
         printf("execution_ready: false\n");
         printf("reason: CUDA backend is planned for L0\n");
+        (void)yvex_trace_emit(trace, YVEX_TRACE_EVENT_RUN_END, "run", "backend-unsupported",
+                              "CUDA backend is planned for L0", &err);
+        yvex_trace_close(trace);
+        yvex_metrics_close(metrics);
         return 5;
     }
     if (rc != YVEX_OK) {
+        yvex_trace_close(trace);
+        yvex_metrics_close(metrics);
         return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    yvex_chat_runtime_set_observers(&runtime, metrics, trace);
+    if (yvex_engine_get_summary(runtime.engine, &engine_summary, &err) == YVEX_OK) {
+        (void)yvex_metrics_set_model_bytes(metrics, engine_summary.known_tensor_bytes,
+                                           engine_summary.unsupported_tensor_accounting, &err);
     }
 
     rc = yvex_chat_runtime_accept_user_text(&runtime, system_text, prompt_text, &result, &err);
     if (rc != YVEX_OK) {
         yvex_chat_runtime_close(&runtime);
+        yvex_trace_close(trace);
+        yvex_metrics_close(metrics);
         return print_yvex_error(&err, exit_for_status(rc));
     }
+
+    (void)yvex_metrics_phase_end(metrics, YVEX_METRIC_PHASE_TOTAL, total_token, &err);
+    (void)yvex_trace_emit(trace, YVEX_TRACE_EVENT_RUN_END, "run", "accepted-only",
+                          "decode runtime is not implemented in I0", &err);
+    cli_set_result_artifacts(&result, &artifacts);
 
     if (strcmp(status_line, "always") == 0) {
         (void)yvex_status_line_print(stderr, "accept", result.prompt_tokens, result.position);
@@ -1467,7 +1635,18 @@ static int command_run(int argc, char **argv)
         (void)yvex_run_command_plain(stdout, &result);
     }
 
+    yvex_trace_close(trace);
+    rc = cli_write_observability_files("run", result.model_name, result.backend_name,
+                                       "accepted-only", &artifacts, metrics, argc, argv, &err);
+    if (rc != YVEX_OK) {
+        final_rc = print_yvex_error(&err, exit_for_status(rc));
+    }
+
     yvex_chat_runtime_close(&runtime);
+    yvex_metrics_close(metrics);
+    if (final_rc != 0) {
+        return final_rc;
+    }
     return 0;
 }
 
@@ -1712,17 +1891,30 @@ static int command_chat(int argc, char **argv)
     yvex_chat_runtime runtime;
     yvex_engine_summary engine_summary;
     yvex_session_summary session_summary;
+    yvex_metrics *metrics = NULL;
+    yvex_trace *trace = NULL;
+    yvex_trace_options trace_options;
+    yvex_run_artifacts artifacts;
     yvex_error err;
     const char *model_path = NULL;
     const char *backend_name = NULL;
+    const char *metrics_out = NULL;
+    const char *trace_out = NULL;
+    const char *profile_out = NULL;
+    const char *run_dir = NULL;
     unsigned long long context_length = 0;
+    unsigned long long phase_token = 0;
+    unsigned long long total_token = 0;
     char line[4096];
+    int save_run = 0;
     int done = 0;
     int i;
     int rc;
+    int final_rc = 0;
 
     yvex_error_clear(&err);
     memset(&runtime, 0, sizeof(runtime));
+    memset(&artifacts, 0, sizeof(artifacts));
 
     if (argc == 2 || (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0))) {
         print_command_help(stdout, find_command("chat"));
@@ -1748,6 +1940,32 @@ static int command_chat(int argc, char **argv)
                 return 2;
             }
             i += 1;
+        } else if (strcmp(argv[i], "--metrics-out") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --metrics-out requires a value\n");
+                return 2;
+            }
+            metrics_out = argv[++i];
+        } else if (strcmp(argv[i], "--trace-out") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --trace-out requires a value\n");
+                return 2;
+            }
+            trace_out = argv[++i];
+        } else if (strcmp(argv[i], "--profile-out") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --profile-out requires a value\n");
+                return 2;
+            }
+            profile_out = argv[++i];
+        } else if (strcmp(argv[i], "--save-run") == 0) {
+            save_run = 1;
+        } else if (strcmp(argv[i], "--run-dir") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --run-dir requires a value\n");
+                return 2;
+            }
+            run_dir = argv[++i];
         } else {
             fprintf(stderr, "yvex: unknown chat option: %s\n", argv[i]);
             fprintf(stderr, "Try 'yvex help chat' for usage.\n");
@@ -1764,19 +1982,52 @@ static int command_chat(int argc, char **argv)
         return 2;
     }
 
+    rc = yvex_metrics_create(&metrics, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    rc = yvex_run_artifacts_prepare(&artifacts, save_run, run_dir, metrics_out, trace_out,
+                                    profile_out, &err);
+    if (rc != YVEX_OK) {
+        yvex_metrics_close(metrics);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    memset(&trace_options, 0, sizeof(trace_options));
+    trace_options.path = artifacts.has_trace ? artifacts.trace_path : NULL;
+    trace_options.run_id = artifacts.run_id;
+    trace_options.enabled = artifacts.has_trace;
+    rc = yvex_trace_open(&trace, &trace_options, &err);
+    if (rc != YVEX_OK) {
+        yvex_metrics_close(metrics);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    (void)yvex_trace_emit(trace, YVEX_TRACE_EVENT_RUN_START, "chat", "started", "", &err);
+    (void)yvex_metrics_phase_begin(metrics, YVEX_METRIC_PHASE_TOTAL, &total_token, &err);
+    (void)yvex_metrics_phase_begin(metrics, YVEX_METRIC_PHASE_ENGINE_OPEN, &phase_token, &err);
     rc = yvex_chat_runtime_open(&runtime, model_path, backend_name, context_length, &err);
+    (void)yvex_metrics_phase_end(metrics, YVEX_METRIC_PHASE_ENGINE_OPEN, phase_token, &err);
     if (rc == YVEX_ERR_UNSUPPORTED && strcmp(backend_name, "cuda") == 0) {
         printf("backend: cuda\n");
         printf("backend_status: unsupported\n");
         printf("reason: CUDA backend is planned for L0\n");
         printf("status: chat-backend-unsupported\n");
+        (void)yvex_trace_emit(trace, YVEX_TRACE_EVENT_RUN_END, "chat", "backend-unsupported",
+                              "CUDA backend is planned for L0", &err);
+        yvex_trace_close(trace);
+        yvex_metrics_close(metrics);
         return 5;
     }
     if (rc != YVEX_OK) {
+        yvex_trace_close(trace);
+        yvex_metrics_close(metrics);
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
+    yvex_chat_runtime_set_observers(&runtime, metrics, trace);
     (void)yvex_engine_get_summary(runtime.engine, &engine_summary, &err);
+    (void)yvex_metrics_set_model_bytes(metrics, engine_summary.known_tensor_bytes,
+                                       engine_summary.unsupported_tensor_accounting, &err);
     (void)yvex_chat_runtime_get_summary(&runtime, &session_summary, &err);
     printf("YVEX chat runtime\n");
     printf("model: %s\n", engine_summary.model_name);
@@ -1807,18 +2058,45 @@ static int command_chat(int argc, char **argv)
 
         {
             yvex_chat_accept_result result;
-            rc = yvex_chat_runtime_accept_user_text(&runtime, NULL, line, &result, &err);
+            rc = yvex_metrics_phase_begin(metrics, YVEX_METRIC_PHASE_CHAT_TURN, &phase_token, &err);
             if (rc != YVEX_OK) {
                 yvex_chat_runtime_close(&runtime);
+                yvex_trace_close(trace);
+                yvex_metrics_close(metrics);
                 return print_yvex_error(&err, exit_for_status(rc));
             }
+            rc = yvex_chat_runtime_accept_user_text(&runtime, NULL, line, &result, &err);
+            (void)yvex_metrics_phase_end(metrics, YVEX_METRIC_PHASE_CHAT_TURN, phase_token, &err);
+            if (rc != YVEX_OK) {
+                yvex_chat_runtime_close(&runtime);
+                yvex_trace_close(trace);
+                yvex_metrics_close(metrics);
+                return print_yvex_error(&err, exit_for_status(rc));
+            }
+            (void)yvex_metrics_add_chat_turn(metrics, &err);
+            (void)yvex_trace_emit(trace, YVEX_TRACE_EVENT_CHAT_TURN, "chat_turn", "accepted",
+                                  "user prompt accepted", &err);
             printf("accepted tokens: %llu\n", result.prompt_tokens);
             printf("position: %llu\n", result.position);
             printf("assistant: [generation unsupported in I0]\n");
         }
     }
 
+    (void)yvex_metrics_phase_end(metrics, YVEX_METRIC_PHASE_TOTAL, total_token, &err);
+    (void)yvex_trace_emit(trace, YVEX_TRACE_EVENT_RUN_END, "chat", "accepted-only",
+                          "chat runtime exited without generation", &err);
+    yvex_trace_close(trace);
+    rc = cli_write_observability_files("chat", engine_summary.model_name, backend_name,
+                                       "accepted-only", &artifacts, metrics, argc, argv, &err);
+    if (rc != YVEX_OK) {
+        final_rc = print_yvex_error(&err, exit_for_status(rc));
+    }
+
     yvex_chat_runtime_close(&runtime);
+    yvex_metrics_close(metrics);
+    if (final_rc != 0) {
+        return final_rc;
+    }
     return 0;
 }
 

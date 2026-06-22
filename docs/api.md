@@ -16,14 +16,15 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-I0 implements the core version/status/error/log surface, runtime filesystem
+J0 implements the core version/status/error/log surface, runtime filesystem
 paths/run directories, artifact byte views, range checks, GGUF header/probe,
 metadata, raw tensor directory parsing, dtype/qtype storage accounting, YVEX
 tensor table rows, a descriptor-only model summary, tokenizer metadata/vocab
 tables, fixture tokenizer encode/decode, default prompt rendering, graph
 planning artifacts, shape helpers, estimate-only memory plans, plan objects,
 backend ABI wrappers, the CPU reference backend, engine/session runtime
-objects, KV/logits availability skeletons, and CLI run/chat runtime shells.
+objects, KV/logits availability skeletons, CLI run/chat runtime shells, and
+runtime metrics/trace/profile writers for implemented accepted-token paths.
 
 Current public headers:
 
@@ -50,6 +51,9 @@ include/yvex/engine.h
 include/yvex/session.h
 include/yvex/kv.h
 include/yvex/logits.h
+include/yvex/metrics.h
+include/yvex/trace.h
+include/yvex/profile.h
 ```
 
 Current aggregate:
@@ -73,6 +77,9 @@ Current aggregate:
 #include <yvex/session.h>
 #include <yvex/kv.h>
 #include <yvex/logits.h>
+#include <yvex/metrics.h>
+#include <yvex/trace.h>
+#include <yvex/profile.h>
 #include <yvex/log.h>
 #include <yvex/status.h>
 #include <yvex/version.h>
@@ -163,8 +170,9 @@ const char *yvex_log_level_name(yvex_log_level level);
 const char *yvex_log_domain_name(yvex_log_domain domain);
 ```
 
-This is a name-mapping surface only. A logging sink, trace stream, metrics API,
-and runtime configuration are future work.
+This is a name-mapping surface only. A logging sink and runtime configuration
+are future work. J0 metrics and trace APIs are separate runtime observability
+surfaces.
 
 ## Runtime Filesystem
 
@@ -677,7 +685,7 @@ const yvex_memory_plan *yvex_plan_memory(const yvex_plan *plan);
 
 `cpu`, `none`, and `cuda` are accepted plan labels. `cpu` reports
 `backend_status: available`; `cuda` reports `backend_status: unsupported`.
-No plan can report `execution_ready: true` in G0.
+No plan can report execution readiness as true in G0.
 
 ## Backend
 
@@ -884,13 +892,44 @@ generate assistant text
 claim inference readiness
 ```
 
+## Metrics, Trace, And Profile API
+
+J0 adds public observability APIs for work YVEX can actually perform.
+
+Implemented:
+
+```text
+yvex_metrics
+  phase timing for engine/session/runtime-shell phases
+  prompt_tokens, accepted_tokens, rejected_tokens, chat_turns
+  known_tensor_bytes and unsupported_tensor_accounting counters
+
+yvex_trace
+  JSONL event writer
+  run_start/run_end, phase_start/phase_end, tokenize, accept_tokens, chat_turn
+
+yvex_profile
+  metrics.json writer
+  profile.json writer
+```
+
+The J0 API does not expose or claim:
+
+```text
+decode tokens/sec
+TTFT
+generated token counters
+CUDA timing
+server/provider metrics
+inference benchmarks
+```
+
 ## Future API Families
 
 The families below are design contracts, not implemented APIs:
 
 ```text
 sampler
-events/trace/metrics/profile
 server/provider
 ```
 
