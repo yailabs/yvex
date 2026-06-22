@@ -163,7 +163,8 @@ CUDA_TEST_SRCS := \
 CUDA_TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(CUDA_TEST_SRCS))
 
 CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md \
-	docs/api.md docs/backend-contract.md docs/runtime-filesystem.md docs/cli-runtime.md
+	docs/api.md docs/backend-contract.md docs/runtime-filesystem.md \
+	docs/cli-runtime.md docs/cli-commands.md
 
 info:
 	@echo "yvex: C local inference engine"
@@ -279,6 +280,7 @@ check-docs:
 	@test -f docs/backend-contract.md
 	@test -f docs/runtime-filesystem.md
 	@test -f docs/cli-runtime.md
+	@test -f docs/cli-commands.md
 	@! find docs -maxdepth 1 -type f -name '*.md' \
 		! -name README.md \
 		! -name spine.md \
@@ -286,6 +288,7 @@ check-docs:
 		! -name backend-contract.md \
 		! -name runtime-filesystem.md \
 		! -name cli-runtime.md \
+		! -name cli-commands.md \
 		-print | grep .
 	@grep -F "YVEX Implementation Spine" docs/spine.md >/dev/null
 	@grep -F "YVEX is CLI-only" docs/spine.md >/dev/null
@@ -307,6 +310,7 @@ check-docs:
 	@grep -F "YVEX Backend Contract" docs/backend-contract.md >/dev/null
 	@grep -F "YVEX Runtime Filesystem" docs/runtime-filesystem.md >/dev/null
 	@grep -F "YVEX CLI Runtime" docs/cli-runtime.md >/dev/null
+	@grep -F "YVEX CLI Command Index" docs/cli-commands.md >/dev/null
 	@grep -F "CUDA / DGX Spark Track" docs/backend-contract.md >/dev/null
 
 check-guardrails:

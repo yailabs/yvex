@@ -18,6 +18,8 @@ Canonical documents:
 - [CLI runtime](cli-runtime.md): implemented CLI behavior, command table
   discipline, exit codes, stdout/stderr, TTY behavior, and future JSON/JSONL
   contracts.
+- [CLI command index](cli-commands.md): quick current map of implemented
+  `yvex` and `yvexd` commands, support posture, and visible non-goals.
 
 Documentation rule:
 
