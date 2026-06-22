@@ -23,7 +23,9 @@
  *   - yvex tokenizer <path>
  *   - yvex tokenize <path> --text TEXT
  *   - yvex detokenize <path> --ids IDS
+ *   - yvex graph <path>
  *   - yvex prompt <path> --user TEXT
+ *   - yvex plan <path>
  *   - yvex --help
  *   - yvex --version
  *
@@ -37,6 +39,7 @@
  *   - make smoke
  *   - build/bin/yvex info
  */
+#include <errno.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -64,11 +67,13 @@ typedef struct {
 
 static int command_commands(int argc, char **argv);
 static int command_detokenize(int argc, char **argv);
+static int command_graph(int argc, char **argv);
 static int command_help(int argc, char **argv);
 static int command_info(int argc, char **argv);
 static int command_inspect(int argc, char **argv);
 static int command_metadata(int argc, char **argv);
 static int command_paths(int argc, char **argv);
+static int command_plan(int argc, char **argv);
 static int command_prompt(int argc, char **argv);
 static int command_tokenize(int argc, char **argv);
 static int command_tokenizer(int argc, char **argv);
@@ -89,6 +94,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex detokenize <path> --ids IDS",
         "Opens a GGUF tokenizer descriptor and decodes comma-separated token IDs. E0 executes only the yvex-fixture-simple tokenizer.",
         command_detokenize,
+    },
+    {
+        "graph",
+        "Build and dump the F0 graph planning substrate.",
+        "yvex graph <path> [--seq N] [--ctx N]",
+        "Opens a GGUF descriptor, builds a deterministic graph planning artifact, and prints values, planned ops, and missing-role diagnostics. It does not execute the graph.",
+        command_graph,
     },
     {
         "help",
@@ -124,6 +136,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex paths [--project DIR] [--run] [--create]",
         "Prints resolved config/cache/state/data paths. With --run it prints a prepared run directory. With --create it creates that run directory.",
         command_paths,
+    },
+    {
+        "plan",
+        "Build and dump an estimate-only execution plan.",
+        "yvex plan <path> [--backend cpu|cuda] [--seq N] [--ctx N]",
+        "Builds a graph and memory estimate. Backend names are labels only in F0; no backend allocation or execution occurs.",
+        command_plan,
     },
     {
         "prompt",
@@ -323,6 +342,7 @@ static void close_tokenizer_context(yvex_cli_tokenizer_context *ctx)
         return;
     }
     yvex_tokenizer_close(ctx->tokenizer);
+    ctx->tokenizer = NULL;
     yvex_model_descriptor_close(ctx->model);
     yvex_tensor_table_close(ctx->table);
     yvex_gguf_close(ctx->gguf);
@@ -330,7 +350,19 @@ static void close_tokenizer_context(yvex_cli_tokenizer_context *ctx)
     memset(ctx, 0, sizeof(*ctx));
 }
 
-static int open_tokenizer_context(const char *path, yvex_cli_tokenizer_context *ctx, yvex_error *err)
+static void close_model_context(yvex_cli_tokenizer_context *ctx)
+{
+    if (!ctx) {
+        return;
+    }
+    yvex_model_descriptor_close(ctx->model);
+    yvex_tensor_table_close(ctx->table);
+    yvex_gguf_close(ctx->gguf);
+    yvex_artifact_close(ctx->artifact);
+    memset(ctx, 0, sizeof(*ctx));
+}
+
+static int open_model_context(const char *path, yvex_cli_tokenizer_context *ctx, yvex_error *err)
 {
     int rc;
 
@@ -345,6 +377,16 @@ static int open_tokenizer_context(const char *path, yvex_cli_tokenizer_context *
     if (rc == YVEX_OK) {
         rc = yvex_model_descriptor_from_gguf(&ctx->model, ctx->gguf, ctx->table, err);
     }
+    if (rc != YVEX_OK) {
+        close_model_context(ctx);
+    }
+    return rc;
+}
+
+static int open_tokenizer_context(const char *path, yvex_cli_tokenizer_context *ctx, yvex_error *err)
+{
+    int rc = open_model_context(path, ctx, err);
+
     if (rc == YVEX_OK) {
         rc = yvex_tokenizer_from_gguf(&ctx->tokenizer, ctx->gguf, ctx->model, err);
     }
@@ -564,6 +606,23 @@ static int parse_id_list(const char *text, unsigned int **out_ids, unsigned long
     return len > 0;
 }
 
+static int parse_positive_ull(const char *text, unsigned long long *out)
+{
+    char *end = NULL;
+    unsigned long long value;
+
+    if (!text || !out) {
+        return 0;
+    }
+    errno = 0;
+    value = strtoull(text, &end, 10);
+    if (errno != 0 || end == text || *end != '\0' || value == 0) {
+        return 0;
+    }
+    *out = value;
+    return 1;
+}
+
 static int command_detokenize(int argc, char **argv)
 {
     yvex_cli_tokenizer_context ctx;
@@ -650,7 +709,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: E0 tokenizer and prompt rendering layer\n");
+    printf("status: F0 graph and planning substrate\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -658,6 +717,8 @@ static int command_info(int argc, char **argv)
     printf("model: descriptor-only implemented\n");
     printf("tokenizer: fixture encode/decode implemented\n");
     printf("prompt: default renderer implemented\n");
+    printf("graph: partial planning implemented\n");
+    printf("planner: estimate-only implemented\n");
     printf("inference: not implemented\n");
     printf("cuda: not implemented\n");
     printf("server: not implemented\n");
@@ -862,6 +923,126 @@ static int command_paths(int argc, char **argv)
     rc = yvex_run_dir_print(&run, stdout, &err);
     if (rc != YVEX_OK) {
         return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+    }
+    return 0;
+}
+
+static int command_graph(int argc, char **argv)
+{
+    yvex_cli_tokenizer_context ctx;
+    yvex_graph *graph = NULL;
+    yvex_graph_build_options options;
+    yvex_error err;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&options, 0, sizeof(options));
+    options.sequence_length = 1;
+    options.include_prefill_path = 1;
+
+    if (argc < 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        print_command_help(stdout, find_command("graph"));
+        return argc >= 3 ? 0 : 2;
+    }
+
+    for (i = 3; i < argc; ++i) {
+        if (strcmp(argv[i], "--seq") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &options.sequence_length)) {
+                fprintf(stderr, "yvex: --seq requires a positive integer\n");
+                return 2;
+            }
+            i += 1;
+        } else if (strcmp(argv[i], "--ctx") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &options.context_length)) {
+                fprintf(stderr, "yvex: --ctx requires a positive integer\n");
+                return 2;
+            }
+            i += 1;
+        } else {
+            fprintf(stderr, "yvex: unknown graph option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help graph' for usage.\n");
+            return 2;
+        }
+    }
+
+    rc = open_model_context(argv[2], &ctx, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_graph_build_for_model(&graph, ctx.model, ctx.table, &options, &err);
+    if (rc == YVEX_OK) {
+        rc = yvex_graph_dump(graph, stdout, &err);
+    }
+
+    yvex_graph_close(graph);
+    close_model_context(&ctx);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    return 0;
+}
+
+static int command_plan(int argc, char **argv)
+{
+    yvex_cli_tokenizer_context ctx;
+    yvex_plan *plan = NULL;
+    yvex_plan_options options;
+    yvex_error err;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&options, 0, sizeof(options));
+    options.sequence_length = 1;
+    options.backend_name = "cpu";
+
+    if (argc < 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        print_command_help(stdout, find_command("plan"));
+        return argc >= 3 ? 0 : 2;
+    }
+
+    for (i = 3; i < argc; ++i) {
+        if (strcmp(argv[i], "--seq") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &options.sequence_length)) {
+                fprintf(stderr, "yvex: --seq requires a positive integer\n");
+                return 2;
+            }
+            i += 1;
+        } else if (strcmp(argv[i], "--ctx") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &options.context_length)) {
+                fprintf(stderr, "yvex: --ctx requires a positive integer\n");
+                return 2;
+            }
+            i += 1;
+        } else if (strcmp(argv[i], "--backend") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --backend requires a value\n");
+                return 2;
+            }
+            options.backend_name = argv[++i];
+        } else {
+            fprintf(stderr, "yvex: unknown plan option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help plan' for usage.\n");
+            return 2;
+        }
+    }
+
+    rc = open_model_context(argv[2], &ctx, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_plan_create(&plan, ctx.model, ctx.table, &options, &err);
+    if (rc == YVEX_OK) {
+        rc = yvex_plan_dump(plan, stdout, &err);
+    }
+
+    yvex_plan_close(plan);
+    close_model_context(&ctx);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
     }
     return 0;
 }

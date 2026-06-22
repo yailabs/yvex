@@ -16,11 +16,12 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-E0 implements the core version/status/error/log surface, runtime filesystem
+F0 implements the core version/status/error/log surface, runtime filesystem
 paths/run directories, artifact byte views, range checks, GGUF header/probe,
 metadata, raw tensor directory parsing, dtype/qtype storage accounting, YVEX
 tensor table rows, a descriptor-only model summary, tokenizer metadata/vocab
-tables, fixture tokenizer encode/decode, and default prompt rendering.
+tables, fixture tokenizer encode/decode, default prompt rendering, graph
+planning artifacts, shape helpers, estimate-only memory plans, and plan objects.
 
 Current public headers:
 
@@ -38,6 +39,10 @@ include/yvex/tensor.h
 include/yvex/model.h
 include/yvex/tokenizer.h
 include/yvex/prompt.h
+include/yvex/op.h
+include/yvex/graph.h
+include/yvex/memory_plan.h
+include/yvex/planner.h
 ```
 
 Current aggregate:
@@ -52,6 +57,10 @@ Current aggregate:
 #include <yvex/model.h>
 #include <yvex/tokenizer.h>
 #include <yvex/prompt.h>
+#include <yvex/op.h>
+#include <yvex/graph.h>
+#include <yvex/memory_plan.h>
+#include <yvex/planner.h>
 #include <yvex/log.h>
 #include <yvex/status.h>
 #include <yvex/version.h>
@@ -542,13 +551,125 @@ The E0 renderer emits the YVEX default role-tag format and can append an
 assistant generation prompt. It allocates the rendered prompt and callers free
 it with `yvex_rendered_prompt_free`.
 
+## Graph and Ops
+
+`include/yvex/graph.h` and `include/yvex/op.h` own the F0 graph planning
+surface. Graphs are deterministic planning artifacts; they do not execute ops
+or bind backend function pointers.
+
+```c
+typedef struct yvex_graph yvex_graph;
+
+typedef struct {
+    unsigned long long sequence_length;
+    unsigned long long context_length;
+    int include_decode_step;
+    int include_prefill_path;
+} yvex_graph_build_options;
+
+int yvex_graph_build_for_model(yvex_graph **out,
+                                const yvex_model_descriptor *model,
+                                const yvex_tensor_table *tensors,
+                                const yvex_graph_build_options *options,
+                                yvex_error *err);
+void yvex_graph_close(yvex_graph *graph);
+```
+
+Inspection APIs expose graph status, value count, op count, missing required
+roles, value rows and op rows:
+
+```c
+yvex_graph_status yvex_graph_status_of(const yvex_graph *graph);
+unsigned long long yvex_graph_value_count(const yvex_graph *graph);
+unsigned long long yvex_graph_op_count(const yvex_graph *graph);
+unsigned long long yvex_graph_missing_required_count(const yvex_graph *graph);
+const yvex_graph_value_info *yvex_graph_value_at(const yvex_graph *graph,
+                                                 unsigned long long index);
+const yvex_graph_op_info *yvex_graph_op_at(const yvex_graph *graph,
+                                           unsigned long long index);
+```
+
+F0 builds a partial fixture graph when token embedding exists but output norm
+and output head are missing. Missing roles are diagnostics, not crashes.
+
+## Shape Helpers
+
+F0 exposes small checked shape helpers used by graph and memory planning tests:
+
+```c
+int yvex_shape_product(const unsigned long long *dims,
+                       unsigned int rank,
+                       unsigned long long *out,
+                       yvex_error *err);
+int yvex_shape_equal(const unsigned long long *a,
+                     unsigned int a_rank,
+                     const unsigned long long *b,
+                     unsigned int b_rank);
+int yvex_shape_copy(unsigned long long *dst,
+                    unsigned int dst_cap,
+                    const unsigned long long *src,
+                    unsigned int src_rank,
+                    yvex_error *err);
+```
+
+Ranks are bounded by `YVEX_GRAPH_MAX_DIMS`; zero dimensions and overflow fail
+explicitly.
+
+## Memory Plan
+
+`include/yvex/memory_plan.h` owns estimate-only memory summaries. It performs no
+allocation and no backend query.
+
+```c
+typedef struct yvex_memory_plan yvex_memory_plan;
+
+int yvex_memory_plan_from_graph(yvex_memory_plan **out,
+                                const yvex_graph *graph,
+                                const yvex_tensor_table *tensors,
+                                yvex_error *err);
+void yvex_memory_plan_close(yvex_memory_plan *plan);
+
+int yvex_memory_plan_get_summary(const yvex_memory_plan *plan,
+                                 yvex_memory_plan_summary *out,
+                                 yvex_error *err);
+```
+
+The accessor is named `yvex_memory_plan_get_summary` because C typedef names and
+function names share the ordinary identifier namespace; the public summary type
+keeps the requested `yvex_memory_plan_summary` name.
+
+## Planner
+
+`include/yvex/planner.h` combines a graph and memory plan. Backend names are F0
+labels only.
+
+```c
+typedef struct yvex_plan yvex_plan;
+
+typedef struct {
+    unsigned long long sequence_length;
+    unsigned long long context_length;
+    const char *backend_name;
+} yvex_plan_options;
+
+int yvex_plan_create(yvex_plan **out,
+                     const yvex_model_descriptor *model,
+                     const yvex_tensor_table *tensors,
+                     const yvex_plan_options *options,
+                     yvex_error *err);
+void yvex_plan_close(yvex_plan *plan);
+const yvex_graph *yvex_plan_graph(const yvex_plan *plan);
+const yvex_memory_plan *yvex_plan_memory(const yvex_plan *plan);
+```
+
+`cpu`, `none`, and `cuda` are accepted labels. `cuda` reports
+`planned-not-implemented`; no CUDA runtime is touched.
+
 ## Future API Families
 
 The families below are design contracts, not implemented APIs:
 
 ```text
-graph/planner
-memory plan
 backend/device tensor
 KV cache
 session

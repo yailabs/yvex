@@ -8,7 +8,8 @@
 # Purpose:
 #   Proves that the CLI command table exposes only implemented commands and
 #   returns stable exit codes for common bootstrap, filesystem, artifact, GGUF
-#   directory, tensor table, descriptor, tokenizer, and prompt behavior.
+#   directory, tensor table, descriptor, tokenizer, prompt, graph, and plan
+#   behavior.
 #
 # Covers:
 #   - yvex
@@ -21,6 +22,8 @@
 #   - yvex metadata
 #   - yvex paths
 #   - yvex prompt
+#   - yvex graph
+#   - yvex plan
 #   - yvex tokenize
 #   - yvex tokenizer
 #   - yvex tensors
@@ -78,7 +81,7 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: E0 tokenizer and prompt rendering layer"
+contains "$OUT_DIR/info.out" "status: F0 graph and planning substrate"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "artifact: open/read implemented"
@@ -86,16 +89,20 @@ contains "$OUT_DIR/info.out" "gguf: metadata/tensor directory parsing implemente
 contains "$OUT_DIR/info.out" "model: descriptor-only implemented"
 contains "$OUT_DIR/info.out" "tokenizer: fixture encode/decode implemented"
 contains "$OUT_DIR/info.out" "prompt: default renderer implemented"
+contains "$OUT_DIR/info.out" "graph: partial planning implemented"
+contains "$OUT_DIR/info.out" "planner: estimate-only implemented"
 
 run_ok commands "$YVEX_BIN" commands
 contains "$OUT_DIR/commands.out" "Implemented commands:"
 contains "$OUT_DIR/commands.out" "  commands"
 contains "$OUT_DIR/commands.out" "  detokenize"
+contains "$OUT_DIR/commands.out" "  graph"
 contains "$OUT_DIR/commands.out" "  help"
 contains "$OUT_DIR/commands.out" "  info"
 contains "$OUT_DIR/commands.out" "  inspect"
 contains "$OUT_DIR/commands.out" "  metadata"
 contains "$OUT_DIR/commands.out" "  paths"
+contains "$OUT_DIR/commands.out" "  plan"
 contains "$OUT_DIR/commands.out" "  prompt"
 contains "$OUT_DIR/commands.out" "  tokenize"
 contains "$OUT_DIR/commands.out" "  tokenizer"
@@ -122,6 +129,12 @@ contains "$OUT_DIR/help_tokenize.out" "usage: yvex tokenize <path> --text TEXT"
 
 run_ok help_detokenize "$YVEX_BIN" help detokenize
 contains "$OUT_DIR/help_detokenize.out" "usage: yvex detokenize <path> --ids IDS"
+
+run_ok help_graph "$YVEX_BIN" help graph
+contains "$OUT_DIR/help_graph.out" "usage: yvex graph <path>"
+
+run_ok help_plan "$YVEX_BIN" help plan
+contains "$OUT_DIR/help_plan.out" "usage: yvex plan <path>"
 
 run_ok help_prompt "$YVEX_BIN" help prompt
 contains "$OUT_DIR/help_prompt.out" "usage: yvex prompt <path>"
@@ -190,6 +203,27 @@ run_ok prompt_tokens "$YVEX_BIN" prompt tests/fixtures/gguf/valid-tokenizer-simp
 contains "$OUT_DIR/prompt_tokens.out" "tokens:"
 contains "$OUT_DIR/prompt_tokens.out" "ids:"
 contains "$OUT_DIR/prompt_tokens.out" "status: rendered"
+
+run_ok graph "$YVEX_BIN" graph tests/fixtures/gguf/valid-tokenizer-simple.gguf
+contains "$OUT_DIR/graph.out" "graph status: partial"
+contains "$OUT_DIR/graph.out" "model_name: yvex-tokenizer-test"
+contains "$OUT_DIR/graph.out" "value 2 hidden kind=activation shape=[1,4] dtype=F32 residency=host"
+contains "$OUT_DIR/graph.out" "op 0 embed status=planned inputs=[0,1] outputs=[2]"
+contains "$OUT_DIR/graph.out" "missing output_norm reason=\"required for final normalization\""
+contains "$OUT_DIR/graph.out" "status: graph-partial"
+
+run_ok plan_cpu "$YVEX_BIN" plan tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
+contains "$OUT_DIR/plan_cpu.out" "plan status: partial"
+contains "$OUT_DIR/plan_cpu.out" "backend: cpu"
+contains "$OUT_DIR/plan_cpu.out" "model_tensor_bytes_known: 128"
+contains "$OUT_DIR/plan_cpu.out" "activation_peak_bytes: 16"
+contains "$OUT_DIR/plan_cpu.out" "execution_ready: false"
+contains "$OUT_DIR/plan_cpu.out" "status: plan-only"
+
+run_ok plan_cuda "$YVEX_BIN" plan tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cuda
+contains "$OUT_DIR/plan_cuda.out" "backend: cuda"
+contains "$OUT_DIR/plan_cuda.out" "backend_status: planned-not-implemented"
+contains "$OUT_DIR/plan_cuda.out" "execution_ready: false"
 
 set +e
 "$YVEX_BIN" inspect tests/fixtures/gguf/bad-magic.gguf >"$OUT_DIR/inspect_bad_magic.out" 2>"$OUT_DIR/inspect_bad_magic.err"

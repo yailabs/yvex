@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after E0
+after F0
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-F0 - Graph and planner
+G0 - CPU reference backend
 ```
 
 Implemented surface:
@@ -112,9 +112,23 @@ Tokenizer / prompt rendering:
   src/tokenizer/decode.c
   src/tokenizer/prompt.c
 
+Graph / planner:
+  include/yvex/graph.h
+  include/yvex/op.h
+  include/yvex/planner.h
+  include/yvex/memory_plan.h
+  src/graph/graph.c
+  src/graph/value.c
+  src/graph/op.c
+  src/graph/builder.c
+  src/graph/shape.c
+  src/graph/dump.c
+  src/graph/planner.c
+  src/graph/memory_plan.c
+
 CLI:
   cli/yvex_cli.c
-  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt
+  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan
 
 Tests:
   tests/test_status.c
@@ -129,14 +143,16 @@ Tests:
   tests/test_model_descriptor.c
   tests/test_tokenizer.c
   tests/test_prompt.c
+  tests/test_shape.c
+  tests/test_graph.c
+  tests/test_memory_plan.c
+  tests/test_planner.c
   tests/test_cli.sh
 ```
 
 Not implemented:
 
 ```text
-graph planner
-memory planner implementation
 backend ABI implementation
 CPU reference backend
 session runtime
@@ -170,12 +186,16 @@ model descriptor
 tokenizer metadata/vocab table
 fixture tokenizer encode/decode
 prompt renderer
+graph values/ops
+shape inference helpers
+missing-role diagnostics
+estimate-only memory plan
+plan object with backend labels
 ```
 
 Planned public surfaces:
 
 ```text
-graph/planner
 backend
 session
 chat/run
@@ -207,12 +227,18 @@ Current implemented commands:
 
 ```text
 commands
+detokenize
+graph
 help
 info
 inspect
 metadata
 paths
+plan
+prompt
 tensors
+tokenize
+tokenizer
 version
 ```
 
@@ -231,8 +257,8 @@ Future commands are listed only under the delivery that implements them.
 | C1 | complete | GGUF metadata and tensor directory |
 | D0 | complete | Tensor and model layer |
 | E0 | complete | Tokenizer and prompt rendering |
-| F0 | next | Graph and planner |
-| G0 | planned | CPU reference backend |
+| F0 | complete | Graph and planner |
+| G0 | next | CPU reference backend |
 | H0 | planned | Engine and session runtime |
 | I0 | planned | CLI run/chat runtime |
 | J0 | planned | Metrics and tracing |
@@ -969,7 +995,7 @@ F0 receives tokenizer/prompt shape inputs for graph and planning work.
 Status:
 
 ```text
-planned
+complete
 ```
 
 Owns:
@@ -982,6 +1008,8 @@ tensor lifetime classes
 memory planner skeleton
 backend capability matching as plan data
 graph and plan dumps
+missing-role diagnostics
+estimate-only memory summary
 ```
 
 Does not own:
@@ -1002,10 +1030,13 @@ include/yvex/planner.h
 include/yvex/memory_plan.h
 src/graph/
 tests/test_graph.c
+tests/test_shape.c
 tests/test_memory_plan.c
+tests/test_planner.c
 cli/yvex_cli.c
 Makefile
 docs/api.md
+docs/cli-runtime.md
 docs/spine.md
 ```
 
@@ -1022,7 +1053,9 @@ Tests:
 graph dump tests
 shape inference tests
 memory plan tests
+planner tests
 unsupported op reporting tests
+CLI smoke for graph and plan
 ```
 
 Acceptance:
@@ -1031,6 +1064,7 @@ Acceptance:
 graph dumps are deterministic
 memory plans are deterministic
 unsupported operations are reported precisely
+execution_ready remains false
 no execution claim
 ```
 
@@ -1554,7 +1588,8 @@ future model work must state the exact support level and proof command.
 | C0 | 2818b6a | Added artifact layer and GGUF header probe. |
 | C1 | 0de97e4 | Parsed GGUF metadata and tensor directory, added metadata/tensors CLI, fixtures, and tests. |
 | D0 | dd2eb59 | Added dtype/qtype registry, tensor table, role classifier, descriptor-only model summary, CLI output, and tests. |
-| E0 | current commit | Added tokenizer metadata/vocab table, fixture encode/decode, prompt rendering, CLI proof, fixtures, and tests. |
+| E0 | 64be1b1 | Added tokenizer metadata/vocab table, fixture encode/decode, prompt rendering, CLI proof, fixtures, and tests. |
+| F0 | current commit | Added graph values/ops, shape inference, missing-role diagnostics, estimate-only memory plans, graph/plan CLI proof, and tests. |
 
 Current implemented CLI command set:
 
@@ -1567,6 +1602,8 @@ inspect
 metadata
 paths
 prompt
+graph
+plan
 tokenize
 tokenizer
 tensors
@@ -1587,45 +1624,42 @@ git diff --check
 Next authorized milestone:
 
 ```text
-F0 - Graph and planner
+G0 - CPU reference backend
 ```
 
-F0 starts only after E0 validation passes and the E0 commit is recorded.
+G0 starts only after F0 validation passes and the F0 commit is recorded.
 
-F0 must produce:
+G0 must produce:
 
 ```text
-graph IR
-op definitions
-shape inference
-tensor lifetime classes
-memory planner skeleton
-backend capability matching as plan data
-graph and plan dumps
+backend ABI first implementation
+CPU tensor allocation
+CPU tensor read/write
+CPU reference kernels for the minimal planned graph path
+CPU backend command-visible proof
 ```
 
-F0 must not produce:
+G0 must not produce:
 
 ```text
-backend
 session runtime
 generation command
 server/provider behavior
 CUDA backend
-inference claim
+broad inference claim
 ```
 
-Required F0 proof:
+Required G0 proof:
 
 ```text
 make clean
 make check
 make smoke
-future build/tests/test_graph
-future build/tests/test_memory_plan
-future yvex graph <valid fixture>
-future yvex plan <valid fixture>
-no backend execution claim
+future build/tests/test_backend_cpu
+future yvex plan <valid fixture> --backend cpu
+future minimal CPU backend proof command
+no CUDA claim
+no broad inference claim
 ```
 
 ## 6. Planned Delivery Catalogue
@@ -1633,7 +1667,6 @@ no backend execution claim
 The planned delivery catalogue is linear:
 
 ```text
-F0 consumes D0/E0 and creates graph/planner.
 G0 consumes F0 and creates CPU reference backend.
 H0 consumes G0/F0/E0 and creates engine/session runtime.
 I0 consumes H0 and creates user-facing run/chat commands.
@@ -1649,7 +1682,6 @@ not authorized.
 Do-not-proceed gates:
 
 ```text
-Do not start F0 until D0 tensor/model shapes are available.
 Do not start G0 until F0 graph/planner contracts exist.
 Do not start H0 until at least one backend ABI path exists.
 Do not start I0 until session lifecycle is implemented and tested.
@@ -1953,8 +1985,8 @@ and a command-visible proof exists.
 Current handoff:
 
 ```text
-from: E0 - Tokenizer and prompt rendering
-to: F0 - Graph and planner
-authorized work: graph IR, op definitions, shape inference, tensor lifetime classes, memory planner skeleton
-blocked work: G0 and later until F0 acceptance passes
+from: F0 - Graph and planner
+to: G0 - CPU reference backend
+authorized work: backend ABI first implementation, CPU tensor allocation, CPU reference kernels for the minimal planned graph path
+blocked work: H0 and later until G0 acceptance passes
 ```

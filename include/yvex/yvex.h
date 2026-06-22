@@ -32,8 +32,12 @@
 #include <yvex/error.h>
 #include <yvex/fs.h>
 #include <yvex/gguf.h>
+#include <yvex/graph.h>
 #include <yvex/log.h>
+#include <yvex/memory_plan.h>
 #include <yvex/model.h>
+#include <yvex/op.h>
+#include <yvex/planner.h>
 #include <yvex/prompt.h>
 #include <yvex/status.h>
 #include <yvex/tensor.h>

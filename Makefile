@@ -4,9 +4,9 @@
 # Layer: build system
 #
 # Purpose:
-#   Builds the YVEX C core library, filesystem/artifact/GGUF/model/tokenizer
-#   layers, CLI bootstrap, and tests. Also runs documentation and guardrail
-#   validation.
+#   Builds the YVEX C core library, filesystem/artifact/GGUF/model/tokenizer/
+#   graph planning layers, CLI bootstrap, and tests. Also runs documentation
+#   and guardrail validation.
 #
 # Primary commands:
 #   make info
@@ -60,7 +60,15 @@ CORE_SRCS := \
 	src/tokenizer/special.c \
 	src/tokenizer/encode.c \
 	src/tokenizer/decode.c \
-	src/tokenizer/prompt.c
+	src/tokenizer/prompt.c \
+	src/graph/graph.c \
+	src/graph/value.c \
+	src/graph/op.c \
+	src/graph/builder.c \
+	src/graph/shape.c \
+	src/graph/dump.c \
+	src/graph/planner.c \
+	src/graph/memory_plan.c
 
 CORE_OBJS := $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 
@@ -76,7 +84,11 @@ TEST_SRCS := \
 	tests/test_tensor_table.c \
 	tests/test_model_descriptor.c \
 	tests/test_tokenizer.c \
-	tests/test_prompt.c
+	tests/test_prompt.c \
+	tests/test_shape.c \
+	tests/test_graph.c \
+	tests/test_memory_plan.c \
+	tests/test_planner.c
 
 TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 
@@ -85,7 +97,7 @@ CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md \
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: E0 tokenizer and prompt rendering layer"
+	@echo "status: F0 graph and planning substrate"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"
@@ -94,6 +106,8 @@ info:
 	@echo "model: descriptor-only implemented"
 	@echo "tokenizer: fixture encode/decode implemented"
 	@echo "prompt: default renderer implemented"
+	@echo "graph: partial planning implemented"
+	@echo "planner: estimate-only implemented"
 	@echo "inference: not implemented"
 	@echo "cuda: not implemented"
 	@echo "server: not implemented"
@@ -160,6 +174,7 @@ check-docs:
 	@grep -F "D0 - Tensor and model layer" docs/spine.md >/dev/null
 	@grep -F "E0 - Tokenizer and prompt rendering" docs/spine.md >/dev/null
 	@grep -F "F0 - Graph and planner" docs/spine.md >/dev/null
+	@grep -F "G0 - CPU reference backend" docs/spine.md >/dev/null
 	@grep -F "Implemented by:" docs/spine.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Backend Contract" docs/backend-contract.md >/dev/null
@@ -176,11 +191,9 @@ check-guardrails:
 	@test ! -d protocols
 	@test ! -e src/README.md
 	@test ! -e tests/README.md
-	@test ! -e include/yvex/graph.h
 	@test ! -e include/yvex/backend.h
 	@test ! -e include/yvex/session.h
 	@test ! -e include/yvex/server.h
-	@test ! -d src/graph
 	@test ! -d src/backend
 	@test ! -d src/session
 	@test ! -d src/server

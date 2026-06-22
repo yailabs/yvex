@@ -4,13 +4,15 @@ This document owns CLI behavior. YVEX is CLI-only.
 
 ## Current Implemented Commands
 
-The E0 binary implements exactly:
+The F0 binary implements exactly:
 
 ```text
 yvex
 yvex --help
 yvex --version
 yvex commands
+yvex detokenize <path> --ids IDS
+yvex graph <path>
 yvex help
 yvex help <implemented-command>
 yvex info
@@ -20,10 +22,10 @@ yvex paths
 yvex paths --project DIR
 yvex paths --run
 yvex paths --run --create
+yvex plan <path>
+yvex prompt <path> --user TEXT
 yvex tokenizer <path>
 yvex tokenize <path> --text TEXT
-yvex detokenize <path> --ids IDS
-yvex prompt <path> --user TEXT
 yvex tensors <path>
 yvex version
 ```
@@ -39,7 +41,7 @@ name: YVEX
 version: 0.1.0
 language: C
 interface: CLI-only
-status: E0 tokenizer and prompt rendering layer
+status: F0 graph and planning substrate
 library: libyvex.a
 filesystem: implemented
 artifact: open/read implemented
@@ -47,6 +49,8 @@ gguf: metadata/tensor directory parsing implemented
 model: descriptor-only implemented
 tokenizer: fixture encode/decode implemented
 prompt: default renderer implemented
+graph: partial planning implemented
+planner: estimate-only implemented
 inference: not implemented
 cuda: not implemented
 server: not implemented
@@ -241,13 +245,82 @@ status: rendered
 With `--tokens`, the rendered prompt is tokenized if the tokenizer support level
 is `fixture-encode-decode`.
 
+## Current `yvex graph`
+
+`yvex graph <path>` opens a GGUF artifact, builds the tensor table and model
+descriptor, then emits the F0 graph planning artifact. It does not execute ops.
+
+Output shape for the current fixture:
+
+```text
+graph status: partial
+architecture: llama
+model_name: yvex-tokenizer-test
+values: 3
+ops: 1
+missing_required: 2
+
+value 0 token_ids kind=token_ids shape=[1] dtype=I32 residency=host
+value 1 token_embd.weight kind=weight shape=[4,8] dtype=F32 residency=host source=token_embd.weight
+value 2 hidden kind=activation shape=[1,4] dtype=F32 residency=host
+
+op 0 embed status=planned inputs=[0,1] outputs=[2]
+
+missing output_norm reason="required for final normalization"
+missing output_head reason="required for logits"
+status: graph-partial
+```
+
+Options:
+
+```text
+--seq N
+--ctx N
+```
+
+## Current `yvex plan`
+
+`yvex plan <path>` builds a graph and estimate-only memory plan. Backend names
+are labels in F0 and do not allocate or execute backend state.
+
+Output shape:
+
+```text
+plan status: partial
+backend: cpu
+architecture: llama
+model_name: yvex-tokenizer-test
+graph_status: partial
+ops: 1
+missing_required: 2
+
+memory:
+  model_tensor_bytes_known: 128
+  model_tensor_bytes_unknown_count: 0
+  activation_peak_bytes: 16
+  kv_cache_bytes: 0
+  scratch_peak_bytes: 0
+  total_known_bytes: 144
+
+execution_ready: false
+reason: graph partial; backend execution not implemented
+status: plan-only
+```
+
+`--backend cuda` is accepted only as a planning label:
+
+```text
+backend: cuda
+backend_status: planned-not-implemented
+execution_ready: false
+status: plan-only
+```
+
 ## Future Commands
 
 Future command names are not support claims:
 
 ```text
-yvex plan model.gguf --backend cuda --ctx 32768
-yvex graph model.gguf
 yvex run --model model.gguf --backend cuda -p "Explain mmap in C" -n 128
 yvex chat --model model.gguf --backend cuda
 yvex bench --model model.gguf --backend cuda --prompt prompts/code.txt --tokens 256
