@@ -9,7 +9,7 @@ a command, option, exit status, or visible runtime posture.
 ## Current Milestone
 
 ```text
-OWI.5 - quantization policy manifest
+OWI.6 - calibration and imatrix contract
 ```
 
 ## Binaries
@@ -38,6 +38,7 @@ native_weights: safetensors header inventory implemented
 gguf_template: contract validator implemented
 weight_mapping: tensor adapter contract implemented
 quant_policy: manifest validator implemented
+imatrix: calibration artifact manifest implemented
 ```
 
 CUDA in L0 means device probe, memory/tensor movement, and F32 embed parity. It
@@ -47,8 +48,10 @@ support.
 M0 adds fixture weight materialization into CPU/CUDA backend tensors. OWI.1
 adds source-manifest provenance for external official-weight source trees. OWI.4
 adds tensor mapping from native names to canonical roles and GGUF/template target
-names. OWI.5 adds declarative quantization policy manifests. These do not add
-conversion, quantization execution, GGUF emission, model execution, or inference.
+names. OWI.5 adds declarative quantization policy manifests. OWI.6 adds
+calibration/imatrix provenance manifests and policy compatibility checks. These
+do not add conversion, imatrix generation, calibration execution, quantization
+execution, GGUF emission, model execution, or inference.
 
 ## `yvex` Commands
 
@@ -63,6 +66,7 @@ conversion, quantization execution, GGUF emission, model execution, or inference
 | `graph` | `yvex graph PATH [--seq N] [--ctx N]` | implemented; inspect-only graph |
 | `gguf-template` | `yvex gguf-template inspect\|validate --template FILE` | implemented; template contract validation |
 | `help` | `yvex help [COMMAND]` | implemented |
+| `imatrix` | `yvex imatrix create\|inspect\|validate` | implemented; calibration/imatrix manifest provenance |
 | `info` | `yvex info` | implemented; honest support posture |
 | `inspect` | `yvex inspect PATH` | implemented; descriptor-only GGUF/model summary |
 | `materialize` | `yvex materialize --model FILE --backend cpu\|cuda` | implemented; fixture weights copied into backend tensors |

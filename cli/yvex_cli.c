@@ -84,6 +84,7 @@ static int command_engine(int argc, char **argv);
 static int command_graph(int argc, char **argv);
 static int command_gguf_template(int argc, char **argv);
 static int command_help(int argc, char **argv);
+static int command_imatrix(int argc, char **argv);
 static int command_info(int argc, char **argv);
 static int command_inspect(int argc, char **argv);
 static int command_materialize(int argc, char **argv);
@@ -165,6 +166,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex help [command]",
         "Prints top-level help or detailed help for one implemented command.",
         command_help,
+    },
+    {
+        "imatrix",
+        "Create, inspect, or validate an imatrix manifest.",
+        "yvex imatrix create --name NAME --arch NAME --imatrix FILE --format FORMAT --status STATUS --out FILE | yvex imatrix inspect|validate --manifest FILE",
+        "Handles calibration/imatrix provenance manifests. It does not generate imatrix data, run calibration, quantize, emit GGUF, materialize, or infer.",
+        command_imatrix,
     },
     {
         "info",
@@ -1200,6 +1208,167 @@ static int command_help(int argc, char **argv)
     return 0;
 }
 
+static int parse_imatrix_create_options(int argc, char **argv,
+                                        yvex_imatrix_manifest_options *options,
+                                        const char **out_path)
+{
+    int i = 3;
+
+    while (i < argc) {
+        if (i + 1 >= argc) {
+            fprintf(stderr, "yvex: imatrix option requires a value: %s\n", argv[i]);
+            return 2;
+        }
+        if (strcmp(argv[i], "--name") == 0) options->name = argv[i + 1];
+        else if (strcmp(argv[i], "--arch") == 0) options->architecture = argv[i + 1];
+        else if (strcmp(argv[i], "--source-manifest") == 0) options->source_manifest_path = argv[i + 1];
+        else if (strcmp(argv[i], "--quant-policy") == 0) options->quant_policy_path = argv[i + 1];
+        else if (strcmp(argv[i], "--imatrix") == 0) options->imatrix_path = argv[i + 1];
+        else if (strcmp(argv[i], "--format") == 0) options->format = yvex_imatrix_format_from_name(argv[i + 1]);
+        else if (strcmp(argv[i], "--status") == 0) options->status = yvex_imatrix_status_from_name(argv[i + 1]);
+        else if (strcmp(argv[i], "--dataset") == 0) options->calibration_dataset = argv[i + 1];
+        else if (strcmp(argv[i], "--command") == 0) options->calibration_command = argv[i + 1];
+        else if (strcmp(argv[i], "--producer") == 0) options->producer = argv[i + 1];
+        else if (strcmp(argv[i], "--out") == 0) *out_path = argv[i + 1];
+        else {
+            fprintf(stderr, "yvex: unknown imatrix option: %s\n", argv[i]);
+            return 2;
+        }
+        i += 2;
+    }
+    return 0;
+}
+
+static int parse_imatrix_manifest_option(int argc, char **argv, const char **manifest_path)
+{
+    int i = 3;
+
+    while (i < argc) {
+        if (i + 1 >= argc) {
+            fprintf(stderr, "yvex: imatrix option requires a value: %s\n", argv[i]);
+            return 2;
+        }
+        if (strcmp(argv[i], "--manifest") == 0) {
+            *manifest_path = argv[i + 1];
+        } else {
+            fprintf(stderr, "yvex: unknown imatrix option: %s\n", argv[i]);
+            return 2;
+        }
+        i += 2;
+    }
+    return 0;
+}
+
+static void print_imatrix_summary(const char *mode,
+                                  const char *manifest_path,
+                                  const yvex_imatrix_summary *summary)
+{
+    printf("imatrix: %s\n", mode);
+    if (manifest_path) printf("manifest: %s\n", manifest_path);
+    printf("name: %s\n", summary->name ? summary->name : "");
+    printf("architecture: %s\n", summary->architecture ? summary->architecture : "");
+    printf("format: %s\n", yvex_imatrix_format_name(summary->format));
+    printf("status: %s\n", yvex_imatrix_status_name(summary->status));
+    printf("file_exists: %s\n", summary->file_exists ? "yes" : "no");
+    printf("source_manifest: %s\n", summary->source_manifest_path ? summary->source_manifest_path : "");
+    printf("quant_policy: %s\n", summary->quant_policy_path ? summary->quant_policy_path : "");
+    printf("imatrix: %s\n", summary->imatrix_path ? summary->imatrix_path : "");
+}
+
+static int command_imatrix(int argc, char **argv)
+{
+    yvex_error err;
+    yvex_imatrix_manifest *manifest = NULL;
+    yvex_imatrix_summary summary;
+    int rc;
+
+    yvex_error_clear(&err);
+    if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        print_command_help(stdout, find_command("imatrix"));
+        return 0;
+    }
+    if (argc < 3) {
+        fprintf(stderr, "yvex: imatrix requires create, inspect, or validate\n");
+        return 2;
+    }
+
+    if (strcmp(argv[2], "create") == 0) {
+        yvex_imatrix_manifest_options options;
+        const char *out_path = NULL;
+
+        memset(&options, 0, sizeof(options));
+        rc = parse_imatrix_create_options(argc, argv, &options, &out_path);
+        if (rc != 0) return rc;
+        if (!options.name || !options.architecture || !options.imatrix_path || !out_path ||
+            options.format == YVEX_IMATRIX_FORMAT_UNKNOWN ||
+            options.status == YVEX_IMATRIX_STATUS_UNKNOWN) {
+            fprintf(stderr, "yvex: imatrix create requires --name --arch --imatrix --format --status --out\n");
+            return 2;
+        }
+        rc = yvex_imatrix_manifest_create(&manifest, &options, &err);
+        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        rc = yvex_imatrix_manifest_validate(manifest, &err);
+        if (rc == YVEX_OK) rc = yvex_imatrix_manifest_write_json(out_path, manifest, &err);
+        if (rc == YVEX_OK) rc = yvex_imatrix_manifest_get_summary(manifest, &summary, &err);
+        if (rc != YVEX_OK) {
+            yvex_imatrix_manifest_close(manifest);
+            return print_yvex_error(&err, exit_for_status(rc));
+        }
+        printf("imatrix manifest: written\n");
+        printf("name: %s\n", summary.name);
+        printf("architecture: %s\n", summary.architecture);
+        printf("format: %s\n", yvex_imatrix_format_name(summary.format));
+        printf("status: %s\n", yvex_imatrix_status_name(summary.status));
+        printf("file_exists: %s\n", summary.file_exists ? "yes" : "no");
+        printf("out: %s\n", out_path);
+        printf("status: imatrix-manifest-written\n");
+        yvex_imatrix_manifest_close(manifest);
+        return 0;
+    }
+
+    if (strcmp(argv[2], "inspect") == 0 || strcmp(argv[2], "validate") == 0) {
+        const char *manifest_path = NULL;
+
+        rc = parse_imatrix_manifest_option(argc, argv, &manifest_path);
+        if (rc != 0) return rc;
+        if (!manifest_path) {
+            fprintf(stderr, "yvex: imatrix %s requires --manifest FILE\n", argv[2]);
+            return 2;
+        }
+        rc = yvex_imatrix_manifest_open(&manifest, manifest_path, &err);
+        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        if (strcmp(argv[2], "validate") == 0) {
+            rc = yvex_imatrix_manifest_validate(manifest, &err);
+            if (rc != YVEX_OK) {
+                yvex_imatrix_manifest_close(manifest);
+                return print_yvex_error(&err, exit_for_status(rc));
+            }
+        }
+        rc = yvex_imatrix_manifest_get_summary(manifest, &summary, &err);
+        if (rc != YVEX_OK) {
+            yvex_imatrix_manifest_close(manifest);
+            return print_yvex_error(&err, exit_for_status(rc));
+        }
+        print_imatrix_summary(argv[2], manifest_path, &summary);
+        if (strcmp(argv[2], "validate") == 0) {
+            printf("issues: %llu\n", summary.issue_count);
+            printf("requires_imatrix_rules: %llu\n", summary.requires_imatrix_rule_count);
+            printf("covered_rules: %llu\n", summary.covered_rule_count);
+            printf("uncovered_rules: %llu\n", summary.uncovered_rule_count);
+            printf("status: imatrix-%s\n",
+                   summary.issue_count == 0 ? "valid" :
+                   (summary.file_exists ? "partial" : "invalid"));
+        } else {
+            printf("status: imatrix-manifest\n");
+        }
+        yvex_imatrix_manifest_close(manifest);
+        return 0;
+    }
+
+    fprintf(stderr, "yvex: unknown imatrix subcommand: %s\n", argv[2]);
+    return 2;
+}
+
 static int command_info(int argc, char **argv)
 {
     (void)argc;
@@ -1235,6 +1404,7 @@ static int command_info(int argc, char **argv)
     printf("gguf_template: contract validator implemented\n");
     printf("weight_mapping: tensor adapter contract implemented\n");
     printf("quant_policy: manifest validator implemented\n");
+    printf("imatrix: calibration artifact manifest implemented\n");
     printf("server_binary: yvexd shell implemented\n");
     printf("server_endpoints: health/metrics/models status implemented\n");
     printf("server_generation: not implemented\n");

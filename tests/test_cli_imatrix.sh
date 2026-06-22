@@ -1,0 +1,61 @@
+#!/bin/sh
+#
+# YVEX - Imatrix CLI smoke test
+#
+# File: tests/test_cli_imatrix.sh
+# Layer: test
+
+set -eu
+
+YVEX_BIN=${YVEX_BIN:-build/bin/yvex}
+OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/imatrix-cli}
+
+fail() {
+    printf 'FAIL: %s\n' "$1" >&2
+    exit 1
+}
+
+rm -rf "$OUT_DIR"
+mkdir -p "$OUT_DIR"
+
+printf 'fake-imatrix' > "$OUT_DIR/fake.dat"
+
+cat > "$OUT_DIR/policy.json" <<'JSON'
+{
+  "schema": "yvex.quant_policy.v1",
+  "name": "test-policy",
+  "architecture": "deepseek4",
+  "rules": [
+    {"selector_kind": "pattern", "selector": "blk.*.ffn.experts.*", "qtype": "Q2_K", "requires_imatrix": true}
+  ]
+}
+JSON
+
+"$YVEX_BIN" imatrix create \
+  --name test-imatrix \
+  --arch deepseek4 \
+  --quant-policy "$OUT_DIR/policy.json" \
+  --imatrix "$OUT_DIR/fake.dat" \
+  --format ds4_routed_moe_dat \
+  --status present \
+  --dataset test-dataset \
+  --producer test \
+  --out "$OUT_DIR/imatrix.json" > "$OUT_DIR/create.out" 2> "$OUT_DIR/create.err" || fail "create failed"
+
+test -f "$OUT_DIR/imatrix.json" || fail "manifest missing"
+grep 'imatrix manifest: written' "$OUT_DIR/create.out" >/dev/null || fail "missing create heading"
+grep 'file_exists: yes' "$OUT_DIR/create.out" >/dev/null || fail "missing file_exists"
+grep 'status: imatrix-manifest-written' "$OUT_DIR/create.out" >/dev/null || fail "missing create status"
+
+"$YVEX_BIN" imatrix inspect --manifest "$OUT_DIR/imatrix.json" > "$OUT_DIR/inspect.out" 2> "$OUT_DIR/inspect.err" || fail "inspect failed"
+grep 'imatrix: inspect' "$OUT_DIR/inspect.out" >/dev/null || fail "missing inspect heading"
+grep 'status: imatrix-manifest' "$OUT_DIR/inspect.out" >/dev/null || fail "missing inspect status"
+
+"$YVEX_BIN" imatrix validate --manifest "$OUT_DIR/imatrix.json" > "$OUT_DIR/validate.out" 2> "$OUT_DIR/validate.err" || fail "validate failed"
+grep 'imatrix: validate' "$OUT_DIR/validate.out" >/dev/null || fail "missing validate heading"
+grep 'requires_imatrix_rules: 1' "$OUT_DIR/validate.out" >/dev/null || fail "missing requires count"
+grep 'covered_rules: 1' "$OUT_DIR/validate.out" >/dev/null || fail "missing covered count"
+grep 'status: imatrix-valid' "$OUT_DIR/validate.out" >/dev/null || fail "missing validate status"
+
+"$YVEX_BIN" help imatrix > "$OUT_DIR/help.out" 2> "$OUT_DIR/help.err" || fail "help failed"
+grep 'usage: yvex imatrix' "$OUT_DIR/help.out" >/dev/null || fail "missing help"

@@ -22,6 +22,9 @@ yvex gguf-template validate --template FILE
 yvex gguf-template compare --template FILE --native-source DIR
 yvex help
 yvex help <implemented-command>
+yvex imatrix create --name NAME --arch NAME --imatrix FILE --format FORMAT --status STATUS --out FILE
+yvex imatrix inspect --manifest FILE
+yvex imatrix validate --manifest FILE
 yvex info
 yvex inspect <path>
 yvex materialize --model FILE --backend cpu|cuda
@@ -314,9 +317,40 @@ DeepSeek DS4-template proof shape:
   --template "$DS_TEMPLATE"
 ```
 
-Validation may be partial when a qtype is storage-known but compute-unsupported,
-when storage accounting is not implemented for a qtype, or when
-`requires_imatrix` is declared before OWI.6.
+Validation may be partial when a qtype is storage-known but compute-unsupported
+or when storage accounting is not implemented for a qtype.
+
+## Current `yvex imatrix`
+
+`yvex imatrix` creates, inspects, and validates imatrix provenance manifests. A
+manifest links an external calibration artifact to optional source-manifest and
+quant-policy paths. It checks file presence and counts policy rules that declare
+`requires_imatrix=true`. It does not generate imatrix data, run calibration,
+quantize payloads, emit GGUF, materialize weights, or infer.
+
+Commands:
+
+```text
+yvex imatrix create --name NAME --arch NAME --imatrix FILE --format FORMAT --status STATUS --out FILE
+yvex imatrix inspect --manifest FILE
+yvex imatrix validate --manifest FILE
+```
+
+DeepSeek DS4 external-artifact proof shape:
+
+```sh
+./build/bin/yvex imatrix create \
+  --name deepseek-v4-flash-ds4-routed-moe-imatrix \
+  --arch deepseek4 \
+  --source-manifest "$HOME/lab/manifests/deepseek/deepseek-v4-flash-source-manifest.json" \
+  --quant-policy "$HOME/lab/manifests/deepseek/deepseek-v4-flash-quant-policy.json" \
+  --imatrix "/home/dgmothx/lab/src/ds4/gguf/DeepSeek-V4-Flash-chat-v2-routed-moe-ds4.dat" \
+  --format ds4_routed_moe_dat \
+  --status present \
+  --dataset "ds4 calibration dataset" \
+  --producer ds4 \
+  --out "$HOME/lab/manifests/deepseek/deepseek-v4-flash-imatrix-manifest.json"
+```
 
 ## Current `yvex inspect`
 

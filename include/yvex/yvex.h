@@ -36,6 +36,7 @@
 #include <yvex/gguf.h>
 #include <yvex/gguf_template.h>
 #include <yvex/graph.h>
+#include <yvex/imatrix.h>
 #include <yvex/kv.h>
 #include <yvex/logits.h>
 #include <yvex/log.h>

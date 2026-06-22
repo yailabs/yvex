@@ -53,6 +53,7 @@ include/yvex/model.h
 include/yvex/native_weights.h
 include/yvex/weight_mapping.h
 include/yvex/quant_policy.h
+include/yvex/imatrix.h
 include/yvex/tokenizer.h
 include/yvex/prompt.h
 include/yvex/op.h
@@ -86,6 +87,7 @@ Current aggregate:
 #include <yvex/native_weights.h>
 #include <yvex/weight_mapping.h>
 #include <yvex/quant_policy.h>
+#include <yvex/imatrix.h>
 #include <yvex/tokenizer.h>
 #include <yvex/prompt.h>
 #include <yvex/op.h>
@@ -525,8 +527,53 @@ Policy validation separates `storage_supported` from `compute_supported`.
 Storage support is tied to the existing D0 dtype/qtype storage accounting
 registry. Compute support remains false for quantized qtypes until a backend
 actually implements execution over those qtypes. `requires_imatrix` is recorded
-as manifest intent and remains a partial validation issue until OWI.6 formalizes
-calibration/imatrix artifacts.
+as manifest intent and can be checked against an OWI.6 imatrix manifest.
+
+## Imatrix Manifest
+
+`include/yvex/imatrix.h` declares the calibration/imatrix provenance contract.
+It represents external calibration artifacts and validates their relationship
+to source manifests and quantization policies. The API does not generate
+imatrix data, run calibration datasets, quantize payloads, emit GGUF,
+materialize weights, or participate in runtime inference.
+
+```c
+typedef enum {
+    YVEX_IMATRIX_STATUS_UNKNOWN = 0,
+    YVEX_IMATRIX_STATUS_DECLARED,
+    YVEX_IMATRIX_STATUS_PRESENT,
+    YVEX_IMATRIX_STATUS_MISSING,
+    YVEX_IMATRIX_STATUS_INVALID,
+    YVEX_IMATRIX_STATUS_UNSUPPORTED_FORMAT
+} yvex_imatrix_status;
+
+typedef enum {
+    YVEX_IMATRIX_FORMAT_UNKNOWN = 0,
+    YVEX_IMATRIX_FORMAT_LLAMA_CPP_DAT,
+    YVEX_IMATRIX_FORMAT_DS4_ROUTED_MOE_DAT,
+    YVEX_IMATRIX_FORMAT_JSON_MANIFEST,
+    YVEX_IMATRIX_FORMAT_OTHER
+} yvex_imatrix_format;
+```
+
+```c
+int yvex_imatrix_manifest_create(yvex_imatrix_manifest **out,
+                                 const yvex_imatrix_manifest_options *options,
+                                 yvex_error *err);
+int yvex_imatrix_manifest_open(yvex_imatrix_manifest **out,
+                               const char *path,
+                               yvex_error *err);
+int yvex_imatrix_manifest_write_json(const char *out_path,
+                                     const yvex_imatrix_manifest *manifest,
+                                     yvex_error *err);
+int yvex_imatrix_manifest_validate(const yvex_imatrix_manifest *manifest,
+                                   yvex_error *err);
+```
+
+Validation checks external file presence and, when a quantization policy path is
+recorded, counts policy rules that declare `requires_imatrix=true`. Global or
+routed-MoE coverage can satisfy those rules at contract level. Tensor-level
+coverage and actual calibration data interpretation remain future work.
 
 Default path resolution requires `HOME`; project-local path construction uses
 the explicit project root argument. Run directory creation creates directories

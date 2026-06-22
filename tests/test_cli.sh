@@ -28,6 +28,7 @@
 #   - yvex gguf-template
 #   - yvex tensor-map
 #   - yvex quant-policy
+#   - yvex imatrix
 #   - yvex plan
 #   - yvex tokenize
 #   - yvex tokenizer
@@ -117,6 +118,7 @@ contains "$OUT_DIR/info.out" "native_weights: safetensors header inventory imple
 contains "$OUT_DIR/info.out" "gguf_template: contract validator implemented"
 contains "$OUT_DIR/info.out" "weight_mapping: tensor adapter contract implemented"
 contains "$OUT_DIR/info.out" "quant_policy: manifest validator implemented"
+contains "$OUT_DIR/info.out" "imatrix: calibration artifact manifest implemented"
 contains "$OUT_DIR/info.out" "server_binary: yvexd shell implemented"
 contains "$OUT_DIR/info.out" "server_endpoints: health/metrics/models status implemented"
 contains "$OUT_DIR/info.out" "server_generation: not implemented"
@@ -137,6 +139,7 @@ contains "$OUT_DIR/commands.out" "  engine"
 contains "$OUT_DIR/commands.out" "  graph"
 contains "$OUT_DIR/commands.out" "  gguf-template"
 contains "$OUT_DIR/commands.out" "  help"
+contains "$OUT_DIR/commands.out" "  imatrix"
 contains "$OUT_DIR/commands.out" "  info"
 contains "$OUT_DIR/commands.out" "  inspect"
 contains "$OUT_DIR/commands.out" "  materialize"
@@ -205,6 +208,9 @@ contains "$OUT_DIR/help_tensor_map.out" "usage: yvex tensor-map"
 
 run_ok help_quant_policy "$YVEX_BIN" help quant-policy
 contains "$OUT_DIR/help_quant_policy.out" "usage: yvex quant-policy"
+
+run_ok help_imatrix "$YVEX_BIN" help imatrix
+contains "$OUT_DIR/help_imatrix.out" "usage: yvex imatrix"
 
 run_ok help_plan "$YVEX_BIN" help plan
 contains "$OUT_DIR/help_plan.out" "usage: yvex plan <path>"
