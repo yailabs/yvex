@@ -31,6 +31,7 @@ yvex plan <path>
 yvex prompt <path> --user TEXT
 yvex run --model FILE --backend cpu|cuda --prompt TEXT
 yvex session <path> --backend cpu|cuda
+yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE
 yvex tokenizer <path>
 yvex tokenize <path> --text TEXT
 yvex tensors <path>
@@ -72,6 +73,7 @@ metrics: runtime collector implemented
 trace: JSONL writer implemented
 profile: JSON writer implemented
 run_artifacts: metrics/trace/profile files implemented
+source_manifest: provenance JSON writer implemented
 server_binary: yvexd shell implemented
 server_endpoints: health/metrics/models status implemented
 server_generation: not implemented
@@ -119,6 +121,58 @@ project: DIR/.yvex
 
 `yvex paths --run` prepares run-directory paths without creating them.
 `yvex paths --run --create` creates the run root and run directory.
+
+## Current `yvex source-manifest`
+
+`yvex source-manifest create` writes an OWI.1 source provenance JSON manifest
+for a local official-weight source tree. It scans file paths, byte sizes, and
+coarse file kinds only. It does not download, parse safetensors, quantize, emit
+GGUF, materialize, or infer.
+
+Required options:
+
+```text
+--hf-repo REPO
+--revision REV
+--local-path DIR
+--status unknown|in-progress|incomplete|complete|failed
+--out FILE
+```
+
+Optional provenance options:
+
+```text
+--license TEXT
+--model-card URL
+--node NAME
+--dry-run-log FILE
+--download-log FILE
+--pid-file FILE
+--download-command TEXT
+```
+
+DeepSeek in-progress manifest command shape:
+
+```sh
+mkdir -p "$HOME/lab/manifests/deepseek"
+
+./build/bin/yvex source-manifest create \
+  --hf-repo deepseek-ai/DeepSeek-V4-Flash \
+  --revision main \
+  --license MIT \
+  --model-card https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash \
+  --local-path "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" \
+  --node spark \
+  --status in-progress \
+  --dry-run-log "$HOME/lab/artifacts/download-logs/deepseek-v4-flash-dry-run.txt" \
+  --download-log "$HOME/lab/artifacts/download-logs/deepseek-v4-flash-download.log" \
+  --pid-file "$HOME/lab/artifacts/download-logs/deepseek-v4-flash-download.pid" \
+  --download-command "hf download deepseek-ai/DeepSeek-V4-Flash ..." \
+  --out "$HOME/lab/manifests/deepseek/deepseek-v4-flash-source-manifest.json"
+```
+
+Real source manifests and model files live outside the repository unless a
+future spine decision explicitly changes that policy.
 
 ## Current `yvex inspect`
 

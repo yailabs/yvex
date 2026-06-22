@@ -134,6 +134,20 @@ Prepared run path shape:
 
 B0 creates the run root and run directory only. It does not write those files.
 
+## Provider-Node Open-Weight Paths
+
+OWI.1 records external source paths but does not move model files into the
+repository. Current DeepSeek provider-node paths are:
+
+```text
+native weights: ~/lab/models/hf/deepseek/DeepSeek-V4-Flash
+download logs: ~/lab/artifacts/download-logs
+source manifests: ~/lab/manifests/deepseek
+```
+
+These paths may be scanned read-only by `yvex source-manifest create`. GGUF,
+safetensors, bin, and downloaded model files must remain outside git.
+
 ## Failure Behavior
 
 ```text

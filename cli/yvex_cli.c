@@ -92,6 +92,7 @@ static int command_plan(int argc, char **argv);
 static int command_prompt(int argc, char **argv);
 static int command_run(int argc, char **argv);
 static int command_session(int argc, char **argv);
+static int command_source_manifest(int argc, char **argv);
 static int command_tokenize(int argc, char **argv);
 static int command_tokenizer(int argc, char **argv);
 static int command_tensors(int argc, char **argv);
@@ -216,6 +217,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex session <path> [--backend cpu|cuda] [--ctx N] [--text TEXT] [--accept-tokens]",
         "Creates a lifecycle-only session over an engine and backend. It may accept tokens for diagnostics, but it does not run prefill, decode, or generation.",
         command_session,
+    },
+    {
+        "source-manifest",
+        "Create an OWI source provenance manifest.",
+        "yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE [--license TEXT] [--model-card URL] [--node NAME] [--dry-run-log FILE] [--download-log FILE] [--pid-file FILE] [--download-command TEXT]",
+        "Scans a local official-weight source directory and writes provenance JSON. It does not download, parse safetensors, quantize, emit GGUF, materialize, or infer.",
+        command_source_manifest,
     },
     {
         "tokenize",
@@ -510,6 +518,34 @@ static void print_backend_capability(const yvex_backend *backend, yvex_backend_c
 static const char *yes_no(int value)
 {
     return value ? "yes" : "no";
+}
+
+static int parse_source_status(const char *text, yvex_source_status *out)
+{
+    if (!text || !out) {
+        return 0;
+    }
+    if (strcmp(text, "unknown") == 0) {
+        *out = YVEX_SOURCE_STATUS_UNKNOWN;
+        return 1;
+    }
+    if (strcmp(text, "in-progress") == 0) {
+        *out = YVEX_SOURCE_STATUS_IN_PROGRESS;
+        return 1;
+    }
+    if (strcmp(text, "incomplete") == 0) {
+        *out = YVEX_SOURCE_STATUS_INCOMPLETE;
+        return 1;
+    }
+    if (strcmp(text, "complete") == 0) {
+        *out = YVEX_SOURCE_STATUS_COMPLETE;
+        return 1;
+    }
+    if (strcmp(text, "failed") == 0) {
+        *out = YVEX_SOURCE_STATUS_FAILED;
+        return 1;
+    }
+    return 0;
 }
 
 static int command_backend(int argc, char **argv)
@@ -996,6 +1032,7 @@ static int command_info(int argc, char **argv)
     printf("trace: JSONL writer implemented\n");
     printf("profile: JSON writer implemented\n");
     printf("run_artifacts: metrics/trace/profile files implemented\n");
+    printf("source_manifest: provenance JSON writer implemented\n");
     printf("server_binary: yvexd shell implemented\n");
     printf("server_endpoints: health/metrics/models status implemented\n");
     printf("server_generation: not implemented\n");
@@ -2329,6 +2366,109 @@ static int command_chat(int argc, char **argv)
     if (final_rc != 0) {
         return final_rc;
     }
+    return 0;
+}
+
+static int command_source_manifest(int argc, char **argv)
+{
+    yvex_source_manifest_options options;
+    yvex_source_manifest_summary summary;
+    yvex_error err;
+    const char *out_path = NULL;
+    int i;
+    int rc;
+
+    if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        print_command_help(stdout, find_command("source-manifest"));
+        return 0;
+    }
+
+    if (argc < 3) {
+        fprintf(stderr, "yvex: source-manifest requires a subcommand\n");
+        fprintf(stderr, "usage: yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE\n");
+        return 2;
+    }
+
+    if (strcmp(argv[2], "inspect") == 0) {
+        fprintf(stderr, "yvex: source-manifest inspect is not implemented in OWI.1\n");
+        return 5;
+    }
+    if (strcmp(argv[2], "create") != 0) {
+        fprintf(stderr, "yvex: unknown source-manifest subcommand: %s\n", argv[2]);
+        return 2;
+    }
+
+    memset(&options, 0, sizeof(options));
+    memset(&summary, 0, sizeof(summary));
+    yvex_error_clear(&err);
+    options.status = YVEX_SOURCE_STATUS_UNKNOWN;
+    options.include_files = 1;
+
+    i = 3;
+    while (i < argc) {
+        const char *name = argv[i];
+        const char *value;
+
+        if (i + 1 >= argc) {
+            fprintf(stderr, "yvex: option requires a value: %s\n", name);
+            return 2;
+        }
+        value = argv[i + 1];
+
+        if (strcmp(name, "--hf-repo") == 0) {
+            options.repo = value;
+        } else if (strcmp(name, "--revision") == 0) {
+            options.revision = value;
+        } else if (strcmp(name, "--license") == 0) {
+            options.license = value;
+        } else if (strcmp(name, "--model-card") == 0) {
+            options.model_card = value;
+        } else if (strcmp(name, "--local-path") == 0) {
+            options.local_path = value;
+        } else if (strcmp(name, "--node") == 0) {
+            options.node_name = value;
+        } else if (strcmp(name, "--status") == 0) {
+            if (!parse_source_status(value, &options.status)) {
+                fprintf(stderr, "yvex: unknown source status: %s\n", value);
+                return 2;
+            }
+        } else if (strcmp(name, "--dry-run-log") == 0) {
+            options.dry_run_log = value;
+        } else if (strcmp(name, "--download-log") == 0) {
+            options.download_log = value;
+        } else if (strcmp(name, "--pid-file") == 0) {
+            options.pid_file = value;
+        } else if (strcmp(name, "--download-command") == 0) {
+            options.download_command = value;
+        } else if (strcmp(name, "--out") == 0) {
+            out_path = value;
+        } else {
+            fprintf(stderr, "yvex: unknown source-manifest option: %s\n", name);
+            return 2;
+        }
+        i += 2;
+    }
+
+    if (!options.repo || !options.revision || !options.local_path || !out_path) {
+        fprintf(stderr, "yvex: --hf-repo, --revision, --local-path, and --out are required\n");
+        return 2;
+    }
+
+    rc = yvex_source_manifest_write_json(out_path, &options, &summary, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    printf("source manifest: written\n");
+    printf("repo: %s\n", options.repo);
+    printf("revision: %s\n", options.revision);
+    printf("local_path: %s\n", options.local_path);
+    printf("status: %s\n", yvex_source_status_name(options.status));
+    printf("files: %llu\n", summary.file_count);
+    printf("safetensors: %llu\n", summary.safetensors_count);
+    printf("total_size_bytes: %llu\n", summary.total_size_bytes);
+    printf("out: %s\n", out_path);
+    printf("status: source-manifest-written\n");
     return 0;
 }
 

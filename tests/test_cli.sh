@@ -31,6 +31,7 @@
 #   - yvex detokenize
 #   - yvex engine
 #   - yvex session
+#   - yvex source-manifest
 #   - yvex run
 #   - yvex chat
 #   - yvex commands
@@ -107,6 +108,7 @@ contains "$OUT_DIR/info.out" "metrics: runtime collector implemented"
 contains "$OUT_DIR/info.out" "trace: JSONL writer implemented"
 contains "$OUT_DIR/info.out" "profile: JSON writer implemented"
 contains "$OUT_DIR/info.out" "run_artifacts: metrics/trace/profile files implemented"
+contains "$OUT_DIR/info.out" "source_manifest: provenance JSON writer implemented"
 contains "$OUT_DIR/info.out" "server_binary: yvexd shell implemented"
 contains "$OUT_DIR/info.out" "server_endpoints: health/metrics/models status implemented"
 contains "$OUT_DIR/info.out" "server_generation: not implemented"
@@ -135,6 +137,7 @@ contains "$OUT_DIR/commands.out" "  plan"
 contains "$OUT_DIR/commands.out" "  prompt"
 contains "$OUT_DIR/commands.out" "  run"
 contains "$OUT_DIR/commands.out" "  session"
+contains "$OUT_DIR/commands.out" "  source-manifest"
 contains "$OUT_DIR/commands.out" "  tokenize"
 contains "$OUT_DIR/commands.out" "  tokenizer"
 contains "$OUT_DIR/commands.out" "  tensors"
@@ -190,6 +193,9 @@ contains "$OUT_DIR/help_run.out" "usage: yvex run --model FILE"
 
 run_ok help_session "$YVEX_BIN" help session
 contains "$OUT_DIR/help_session.out" "usage: yvex session <path>"
+
+run_ok help_source_manifest "$YVEX_BIN" help source-manifest
+contains "$OUT_DIR/help_source_manifest.out" "usage: yvex source-manifest create"
 
 run_ok inspect_valid "$YVEX_BIN" inspect tests/fixtures/gguf/valid-minimal.gguf
 contains "$OUT_DIR/inspect_valid.out" "format: gguf"

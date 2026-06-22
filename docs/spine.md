@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after OWI.0
+after OWI.1
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-OWI.1 - Source manifest and model provenance contract
+OWI.2 - Safetensors/native weight inventory reader
 ```
 
 Implemented surface:
@@ -178,9 +178,15 @@ Server shell:
   src/server/server_metrics.c
   server/yvexd.c
 
+Open-weight source manifest:
+  include/yvex/source_manifest.h
+  src/tools/source_manifest.c
+  src/tools/source_manifest_json.c
+  src/tools/source_manifest_scan.c
+
 CLI:
   cli/yvex_cli.c
-  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat
+  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat, source-manifest
   implemented binaries: yvex, yvexd
 
 Tests:
@@ -215,6 +221,8 @@ Tests:
   tests/test_run_artifacts.c
   tests/test_http.c
   tests/test_server.c
+  tests/test_source_manifest.c
+  tests/test_cli_source_manifest.sh
   tests/test_cuda_info.c
   tests/test_cuda_tensor.c
   tests/test_cuda_ops.c
@@ -394,7 +402,7 @@ Open Weight Intake pipeline:
 
 ```text
 1. Source manifest:
-   Hugging Face repo, revision, files, license, expected checksums
+   Hugging Face repo, revision, files, license, local path, download command, log paths, status
 
 2. Native weight inventory:
    safetensors shards, tensor names, shapes, dtypes, byte sizes
@@ -433,7 +441,16 @@ Current DeepSeek V4 Flash intake paths:
 official HF source: deepseek-ai/DeepSeek-V4-Flash
 local native weights path: ~/lab/models/hf/deepseek/DeepSeek-V4-Flash
 download logs path: ~/lab/artifacts/download-logs
+source manifest path: ~/lab/manifests/deepseek
 repository policy: these paths stay outside git
+```
+
+Source-of-truth rule:
+
+```text
+DeepSeek V4 Flash starts from official HF weights and a recorded conversion or
+quantization recipe. A GGUF is an emitted and validated artifact, not the source
+of truth.
 ```
 
 Toolchain boundary:
@@ -506,6 +523,7 @@ plan
 prompt
 run
 session
+source-manifest
 tensors
 tokenize
 tokenizer
@@ -537,8 +555,8 @@ Future commands are listed only under the delivery that implements them.
 | M0 | complete | Fixture weight materialization |
 | QA.BENCH.0 | complete | QA and benchmark spine |
 | OWI.0 | complete | DS4 inventory and open-weight pipeline spine |
-| OWI.1 | next | Source manifest and model provenance contract |
-| OWI.2 | planned | Safetensors/native weight inventory reader |
+| OWI.1 | complete | Source manifest and model provenance contract |
+| OWI.2 | next | Safetensors/native weight inventory reader |
 | OWI.3 | planned | GGUF template contract and validator |
 | OWI.4 | planned | Tensor mapping and architecture adapter contract |
 | OWI.5 | planned | Quantization policy manifest |
@@ -1861,8 +1879,8 @@ Model support waves may use CUDA only for support levels backed by command proof
 
 ### Model Support Ladder
 
-The M ladder remains paused until OWI.0 and OWI.1 establish the
-open-weight provenance/toolchain path.
+The M ladder remains paused while the OWI ladder establishes the open-weight
+provenance/toolchain path.
 
 Rules:
 
@@ -2249,7 +2267,7 @@ validation passes
 Handoff:
 
 ```text
-next wave is OWI.1 - Source manifest and model provenance contract
+next wave is OWI.1 - Source manifest and model provenance contract (complete)
 ```
 
 ### OWI.1 - Source Manifest and Model Provenance Contract
@@ -2257,7 +2275,7 @@ next wave is OWI.1 - Source manifest and model provenance contract
 Status:
 
 ```text
-next
+complete
 ```
 
 Owns:
@@ -2273,6 +2291,9 @@ download command record
 dry-run/download log references
 optional checksum manifest
 source/provenance status vocabulary
+local source directory scan
+local file manifest writer
+CLI source-manifest create command
 ```
 
 Does not own:
@@ -2290,16 +2311,19 @@ committing model files
 Expected files:
 
 ```text
-include/yvex/source_manifest.h optional only if public API is needed
-src/tools/source_manifest.c optional, tool-side only
-tools/weights/source_manifest.c preferred if tool plane exists
+include/yvex/source_manifest.h
+src/tools/source_manifest.c
+src/tools/source_manifest_json.c
+src/tools/source_manifest_scan.c
+src/tools/source_manifest_internal.h
 tests/test_source_manifest.c
+tests/test_cli_source_manifest.sh
 ```
 
-Expected CLI/tool surface, if implemented:
+Implemented CLI/tool surface:
 
 ```text
-yvex source-manifest --hf deepseek-ai/DeepSeek-V4-Flash --local ~/lab/models/hf/deepseek/DeepSeek-V4-Flash
+yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE
 ```
 
 Acceptance:
@@ -2310,6 +2334,9 @@ local path is outside repo
 model weights are not committed
 manifest distinguishes official source from generated GGUF
 manifest can record download command/log path
+manifest can record in-progress downloads
+manifest lists relative local file paths when requested
+baseline tests use fake local source trees only
 validation passes without requiring the full model download in baseline
 ```
 
@@ -2324,7 +2351,7 @@ OWI.2 can inventory native weight files using this provenance record
 Status:
 
 ```text
-planned
+next
 ```
 
 Owns:
@@ -2810,13 +2837,13 @@ git diff --check
 Next authorized milestone:
 
 ```text
-OWI.1 - Source manifest and model provenance contract
+OWI.2 - Safetensors/native weight inventory reader
 ```
 
 Current active milestone:
 
 ```text
-OWI.1 - Source manifest and model provenance contract
+OWI.2 - Safetensors/native weight inventory reader
 ```
 
 Paused milestone:
@@ -2825,9 +2852,10 @@ Paused milestone:
 M1 - DeepSeek GGUF materialization from provenance-controlled source
 ```
 
-M1 is paused pending OWI.0/OWI.1. It resumes only after the official
-open-weight source, provenance contract, and generated/staged GGUF path are
-clear enough to avoid treating a random prebuilt GGUF as the source of truth.
+M1 remains paused after OWI.1. The official source/provenance contract now
+exists; the native inventory, mapping, quantization policy, and generated/staged
+GGUF path still need the OWI ladder before DeepSeek materialization can be a
+real model-support step.
 
 Model support waves must produce:
 

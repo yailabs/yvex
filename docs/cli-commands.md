@@ -33,14 +33,16 @@ generation: unsupported
 inference: not implemented
 execution_ready: false
 server_generation: not implemented
+source_manifest: provenance JSON writer implemented
 ```
 
 CUDA in L0 means device probe, memory/tensor movement, and F32 embed parity. It
 does not mean CUDA matmul, attention, session execution, generation, or model
 support.
 
-M0 adds fixture weight materialization into CPU/CUDA backend tensors. It does
-not add model execution or inference.
+M0 adds fixture weight materialization into CPU/CUDA backend tensors. OWI.1
+adds source-manifest provenance for external official-weight source trees. These
+do not add model execution or inference.
 
 ## `yvex` Commands
 
@@ -63,6 +65,7 @@ not add model execution or inference.
 | `prompt` | `yvex prompt PATH --user TEXT [--system TEXT] [--assistant TEXT] [--tokens]` | implemented |
 | `run` | `yvex run --model FILE --backend cpu\|cuda --prompt TEXT` | implemented; accepted-only |
 | `session` | `yvex session PATH --backend cpu\|cuda [--text TEXT] [--accept-tokens]` | implemented; diagnostics/token acceptance |
+| `source-manifest` | `yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE` | implemented; source provenance JSON writer |
 | `tokenize` | `yvex tokenize PATH --text TEXT` | implemented for fixture tokenizer path |
 | `tokenizer` | `yvex tokenizer PATH` | implemented; tokenizer metadata/support posture |
 | `tensors` | `yvex tensors PATH` | implemented; tensor table dump |

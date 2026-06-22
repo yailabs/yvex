@@ -16,7 +16,8 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-M0 implements the core version/status/error/log surface, runtime filesystem
+OWI.1 implements a source-manifest provenance surface in addition to the M0
+runtime APIs. M0 implements the core version/status/error/log surface, runtime filesystem
 paths/run directories, artifact byte views, range checks, GGUF header/probe,
 metadata, raw tensor directory parsing, dtype/qtype storage accounting, YVEX
 tensor table rows, a descriptor-only model summary, tokenizer metadata/vocab
@@ -60,6 +61,7 @@ include/yvex/metrics.h
 include/yvex/trace.h
 include/yvex/profile.h
 include/yvex/server.h
+include/yvex/source_manifest.h
 ```
 
 Current aggregate:
@@ -88,6 +90,7 @@ Current aggregate:
 #include <yvex/trace.h>
 #include <yvex/profile.h>
 #include <yvex/server.h>
+#include <yvex/source_manifest.h>
 #include <yvex/log.h>
 #include <yvex/status.h>
 #include <yvex/version.h>
@@ -218,6 +221,74 @@ int yvex_run_dir_print(const yvex_run_dir *run, FILE *fp, yvex_error *err);
 ```
 
 Filesystem APIs allocate no heap memory and use fixed caller-owned buffers.
+
+## Source Manifest
+
+OWI.1 adds a tool-plane provenance API for official open-weight intake. It
+records where model weights come from and which files are present locally. It
+does not download weights, parse safetensors payloads, quantize, emit GGUF, or
+materialize models.
+
+```c
+typedef enum {
+    YVEX_SOURCE_STATUS_UNKNOWN = 0,
+    YVEX_SOURCE_STATUS_IN_PROGRESS,
+    YVEX_SOURCE_STATUS_INCOMPLETE,
+    YVEX_SOURCE_STATUS_COMPLETE,
+    YVEX_SOURCE_STATUS_FAILED
+} yvex_source_status;
+
+typedef struct {
+    const char *repo;
+    const char *revision;
+    const char *license;
+    const char *model_card;
+    const char *local_path;
+    const char *node_name;
+    const char *dry_run_log;
+    const char *download_log;
+    const char *pid_file;
+    const char *download_command;
+    yvex_source_status status;
+    int include_files;
+} yvex_source_manifest_options;
+
+typedef struct {
+    unsigned long long file_count;
+    unsigned long long safetensors_count;
+    unsigned long long total_size_bytes;
+    int has_config;
+    int has_tokenizer;
+    int has_safetensors;
+} yvex_source_manifest_summary;
+
+const char *yvex_source_status_name(yvex_source_status status);
+
+int yvex_source_manifest_write_json(const char *out_path,
+                                    const yvex_source_manifest_options *options,
+                                    yvex_source_manifest_summary *summary_out,
+                                    yvex_error *err);
+
+int yvex_source_manifest_scan_local(const char *local_path,
+                                    yvex_source_manifest_summary *out,
+                                    yvex_error *err);
+```
+
+Status vocabulary:
+
+```text
+unknown
+in-progress
+incomplete
+complete
+failed
+```
+
+The scanner recurses under `local_path`, skips directories and symlinks, records
+relative file paths when the writer includes files, and classifies files as
+`metadata`, `tokenizer`, `safetensors`, `readme`, `license`, `config`, or
+`other`. SHA256 is intentionally emitted as `null` in OWI.1; full checksums over
+huge model files are not performed by default.
 Default path resolution requires `HOME`; project-local path construction uses
 the explicit project root argument. Run directory creation creates directories
 only and does not write run artifacts.
