@@ -296,6 +296,94 @@ Every C module keeps ownership, dependency, and validation comments current.
 Every wave updates the delivery state before handoff.
 ```
 
+### QA / Bench / Test Spine
+
+YVEX QA is staged by implemented capability. A validation level may only claim
+the behavior it can observe directly in code, command output, and saved
+artifacts.
+
+QA levels:
+
+```text
+QA Level 0 - Build and unit correctness:
+  make check
+  C unit tests
+  parser, dtype, tensor, materialization invariants
+
+QA Level 1 - CLI smoke correctness:
+  make smoke
+  yvex inspect, metadata, tensors, tokenizer, plan, backend, run, chat, materialize
+
+QA Level 2 - CUDA provider-node correctness:
+  make check-cuda
+  cuda-info
+  backend cuda availability
+  CUDA tensor movement
+  CPU/CUDA parity
+
+QA Level 3 - External model materialization:
+  explicit external model environment variables
+  DeepSeek materialization commands
+  no model files committed
+  materialized, skipped, or failed status captured
+  failure reason captured with a specific unsupported dtype, tensor, allocation, or parser cause
+
+QA Level 4 - Provider shell correctness:
+  yvexd health, metrics, and models endpoints
+  generation_available false until inference exists
+  unsupported generation responses remain explicit
+
+QA Level 5 - Inference benchmarks:
+  forbidden until prefill, decode, sampler, and logits validity exist
+```
+
+Allowed benchmark and QA measurements now:
+
+```text
+parse time
+tensor directory scan time
+materialization time
+bytes materialized
+backend allocated bytes
+CUDA memory before and after
+trace JSONL
+profile JSON
+clean failure reason
+provider health and status fields
+```
+
+Forbidden benchmark and QA claims now:
+
+```text
+tokens/sec generation
+TTFT
+decode TPS
+completion latency
+model quality scores
+OpenAI compatibility benchmarks
+DeepSeek support beyond parser/materialization evidence
+```
+
+Provider-node validation rules:
+
+```text
+Provider-node tests must name the node class, backend, model path source, and command.
+CUDA provider-node tests must include cuda-info or equivalent device proof.
+External model tests must keep model paths outside the repository.
+External model tests must not add GGUF, safetensors, bin, or generated model artifacts to git.
+Failure-case captures are valid QA artifacts when the failure reason is specific and reproducible.
+```
+
+Benchmark policy:
+
+```text
+Benchmarks are not inference benchmarks before inference exists.
+Materialization metrics measure loading, parsing, transfer, allocation, and failure handling only.
+Quality benchmarks require valid logits and a fixed prompt/continuation set.
+Throughput benchmarks require implemented prefill/decode and reproducible prompt files.
+Claims must cite the command, node/backend, model path class, and saved trace/profile/report.
+```
+
 ### Current Command Surface
 
 Current implemented commands:
@@ -1827,6 +1915,33 @@ make check
 make smoke
 make check-cuda where CUDA is available
 no broad inference claim
+```
+
+M ladder QA gates:
+
+```text
+M1 DeepSeek direct materialization gate:
+  Spark node only for DeepSeek-scale CUDA proof
+  DEEPSEEK_GGUF is an external path
+  inspect passes or fails diagnostically
+  cuda materialize direct command produces weights-materialized or weights-failed
+  failure reason is specific
+  no model file is committed
+  execution_ready remains false
+
+M2 materialization hardening gate:
+  selected/full materialization policy
+  memory cleanup proof
+  unsupported dtype accounting proof
+  split GGUF policy proof
+
+Future executable-wave benchmark gate:
+  prefill implemented
+  decode implemented
+  sampler implemented
+  logits valid
+  reproducible prompt set
+  trace/profile/report artifacts saved
 ```
 
 ## 6. Planned Delivery Catalogue
