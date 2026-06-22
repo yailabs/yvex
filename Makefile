@@ -120,7 +120,10 @@ CORE_SRCS := \
 	src/tools/safetensors_json.c \
 	src/tools/source_manifest.c \
 	src/tools/source_manifest_json.c \
-	src/tools/source_manifest_scan.c
+	src/tools/source_manifest_scan.c \
+	src/tools/weight_mapping.c \
+	src/tools/weight_mapping_report.c \
+	src/tools/adapters/deepseek_adapter.c
 
 CUDA_SRCS := \
 	backends/cuda/cuda_backend.c \
@@ -167,7 +170,9 @@ TEST_SRCS := \
 	tests/test_run_artifacts.c \
 	tests/test_http.c \
 	tests/test_server.c \
+	tests/test_weight_mapping.c \
 	tests/test_gguf_template.c \
+	tests/test_deepseek_adapter.c \
 	tests/test_safetensors_header.c \
 	tests/test_native_weights.c \
 	tests/test_source_manifest.c
@@ -211,6 +216,10 @@ info:
 	@echo "trace: JSONL writer implemented"
 	@echo "profile: JSON writer implemented"
 	@echo "run_artifacts: metrics/trace/profile files implemented"
+	@echo "source_manifest: provenance JSON writer implemented"
+	@echo "native_weights: safetensors header inventory implemented"
+	@echo "gguf_template: contract validator implemented"
+	@echo "weight_mapping: tensor adapter contract implemented"
 	@echo "server_binary: yvexd shell implemented"
 	@echo "server_endpoints: health/metrics/models status implemented"
 	@echo "server_generation: not implemented"
@@ -255,7 +264,7 @@ test-core: $(TEST_BINS)
 		"$$test_bin"; \
 	done
 
-test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh tests/test_cli_server.sh tests/test_cli_materialize.sh tests/test_cli_source_manifest.sh tests/test_cli_native_weights.sh tests/test_cli_gguf_template.sh
+test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh tests/test_cli_server.sh tests/test_cli_materialize.sh tests/test_cli_source_manifest.sh tests/test_cli_native_weights.sh tests/test_cli_gguf_template.sh tests/test_cli_tensor_map.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_run.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_chat.sh
@@ -265,6 +274,7 @@ test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_source_manifest.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_native_weights.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_gguf_template.sh
+	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_tensor_map.sh
 
 test: test-core test-cli
 

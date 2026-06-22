@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after OWI.3
+after OWI.4
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-OWI.4 - Tensor mapping and architecture adapter contract
+OWI.5 - Quantization policy manifest
 ```
 
 Implemented surface:
@@ -198,9 +198,15 @@ GGUF template validator:
   src/tools/gguf_template_compare.c
   src/tools/gguf_template_report.c
 
+Weight mapping adapter contract:
+  include/yvex/weight_mapping.h
+  src/tools/weight_mapping.c
+  src/tools/weight_mapping_report.c
+  src/tools/adapters/deepseek_adapter.c
+
 CLI:
   cli/yvex_cli.c
-  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat, source-manifest, native-weights, gguf-template
+  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat, source-manifest, native-weights, gguf-template, tensor-map
   implemented binaries: yvex, yvexd
 
 Tests:
@@ -235,13 +241,16 @@ Tests:
   tests/test_run_artifacts.c
   tests/test_http.c
   tests/test_server.c
+  tests/test_weight_mapping.c
   tests/test_gguf_template.c
+  tests/test_deepseek_adapter.c
   tests/test_safetensors_header.c
   tests/test_native_weights.c
   tests/test_source_manifest.c
   tests/test_cli_gguf_template.sh
   tests/test_cli_native_weights.sh
   tests/test_cli_source_manifest.sh
+  tests/test_cli_tensor_map.sh
   tests/test_cuda_info.c
   tests/test_cuda_tensor.c
   tests/test_cuda_ops.c
@@ -579,8 +588,8 @@ Future commands are listed only under the delivery that implements them.
 | OWI.1 | complete | Source manifest and model provenance contract |
 | OWI.2 | complete | Safetensors/native weight inventory reader |
 | OWI.3 | complete | GGUF template contract and validator |
-| OWI.4 | next | Tensor mapping and architecture adapter contract |
-| OWI.5 | planned | Quantization policy manifest |
+| OWI.4 | complete | Tensor mapping and architecture adapter contract |
+| OWI.5 | next | Quantization policy manifest |
 | OWI.6 | planned | Calibration and imatrix contract |
 | OWI.7 | planned | First YVEX-owned GGUF emission from controlled source |
 | OWI.8 | planned | DeepSeek V4 Flash conversion bridge |
@@ -2509,7 +2518,7 @@ OWI.4 can define architecture-specific tensor mapping rules
 Status:
 
 ```text
-next
+complete
 ```
 
 Owns:
@@ -2539,9 +2548,11 @@ Expected files:
 ```text
 include/yvex/weight_mapping.h
 src/tools/weight_mapping.c
+src/tools/weight_mapping_report.c
 src/tools/adapters/deepseek_adapter.c
 tests/test_weight_mapping.c
-tests/test_deepseek_adapter_contract.c
+tests/test_deepseek_adapter.c
+tests/test_cli_tensor_map.sh
 ```
 
 Acceptance:
@@ -2552,6 +2563,7 @@ can classify DeepSeek MoE/expert tensors structurally
 can report unmapped tensors
 can fail cleanly on unknown architecture
 mapping is metadata/contract only, not execution
+DeepSeek embed.weight maps to token_embedding -> token_embd.weight with transpose shape compatibility
 ```
 
 Handoff:
@@ -2876,13 +2888,13 @@ git diff --check
 Next authorized milestone:
 
 ```text
-OWI.4 - Tensor mapping and architecture adapter contract
+OWI.5 - Quantization policy manifest
 ```
 
 Current active milestone:
 
 ```text
-OWI.4 - Tensor mapping and architecture adapter contract
+OWI.5 - Quantization policy manifest
 ```
 
 Paused milestone:
@@ -2891,8 +2903,9 @@ Paused milestone:
 M1 - DeepSeek GGUF materialization from provenance-controlled source
 ```
 
-M1 remains paused after OWI.1. The official source/provenance contract now
-exists; the native inventory, mapping, quantization policy, and generated/staged
+M1 remains paused after OWI.4. The official source/provenance contract, native
+inventory, GGUF template contract, and tensor mapping adapter now exist; the
+quantization policy and generated/staged
 GGUF path still need the OWI ladder before DeepSeek materialization can be a
 real model-support step.
 

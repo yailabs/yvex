@@ -9,7 +9,7 @@ a command, option, exit status, or visible runtime posture.
 ## Current Milestone
 
 ```text
-M0 - fixture weight materialization
+OWI.4 - tensor mapping adapter contract
 ```
 
 ## Binaries
@@ -36,6 +36,7 @@ server_generation: not implemented
 source_manifest: provenance JSON writer implemented
 native_weights: safetensors header inventory implemented
 gguf_template: contract validator implemented
+weight_mapping: tensor adapter contract implemented
 ```
 
 CUDA in L0 means device probe, memory/tensor movement, and F32 embed parity. It
@@ -43,8 +44,10 @@ does not mean CUDA matmul, attention, session execution, generation, or model
 support.
 
 M0 adds fixture weight materialization into CPU/CUDA backend tensors. OWI.1
-adds source-manifest provenance for external official-weight source trees. These
-do not add model execution or inference.
+adds source-manifest provenance for external official-weight source trees. OWI.4
+adds tensor mapping from native names to canonical roles and GGUF/template target
+names. These do not add conversion, GGUF emission, model execution, or
+inference.
 
 ## `yvex` Commands
 
@@ -70,6 +73,7 @@ do not add model execution or inference.
 | `run` | `yvex run --model FILE --backend cpu\|cuda --prompt TEXT` | implemented; accepted-only |
 | `session` | `yvex session PATH --backend cpu\|cuda [--text TEXT] [--accept-tokens]` | implemented; diagnostics/token acceptance |
 | `source-manifest` | `yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE` | implemented; source provenance JSON writer |
+| `tensor-map` | `yvex tensor-map --arch NAME --native-source DIR [--template FILE] [--tensor NAME] [--limit N] [--json]` | implemented; native tensor to role/template mapping |
 | `tokenize` | `yvex tokenize PATH --text TEXT` | implemented for fixture tokenizer path |
 | `tokenizer` | `yvex tokenizer PATH` | implemented; tokenizer metadata/support posture |
 | `tensors` | `yvex tensors PATH` | implemented; tensor table dump |

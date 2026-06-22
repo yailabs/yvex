@@ -95,6 +95,7 @@ static int command_prompt(int argc, char **argv);
 static int command_run(int argc, char **argv);
 static int command_session(int argc, char **argv);
 static int command_source_manifest(int argc, char **argv);
+static int command_tensor_map(int argc, char **argv);
 static int command_tokenize(int argc, char **argv);
 static int command_tokenizer(int argc, char **argv);
 static int command_tensors(int argc, char **argv);
@@ -205,6 +206,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex paths [--project DIR] [--run] [--create]",
         "Prints resolved config/cache/state/data paths. With --run it prints a prepared run directory. With --create it creates that run directory.",
         command_paths,
+    },
+    {
+        "tensor-map",
+        "Map native tensors to GGUF/template roles.",
+        "yvex tensor-map --arch NAME --native-source DIR [--template FILE] [--tensor NAME] [--limit N] [--json]",
+        "Maps native safetensors tensor names to canonical YVEX roles and proposed GGUF/template tensor names. It reads metadata only and does not convert, quantize, emit GGUF, materialize, or infer.",
+        command_tensor_map,
     },
     {
         "plan",
@@ -1217,6 +1225,7 @@ static int command_info(int argc, char **argv)
     printf("source_manifest: provenance JSON writer implemented\n");
     printf("native_weights: safetensors header inventory implemented\n");
     printf("gguf_template: contract validator implemented\n");
+    printf("weight_mapping: tensor adapter contract implemented\n");
     printf("server_binary: yvexd shell implemented\n");
     printf("server_endpoints: health/metrics/models status implemented\n");
     printf("server_generation: not implemented\n");
@@ -1609,6 +1618,160 @@ static int command_native_weights(int argc, char **argv)
     }
     printf("status: %s\n", summary.shard_count == 0 ? "native-weights-empty" : "native-weights");
     yvex_native_weight_table_close(table);
+    return 0;
+}
+
+static int command_tensor_map(int argc, char **argv)
+{
+    yvex_weight_mapping_options options;
+    yvex_weight_mapping_table *table = NULL;
+    yvex_error err;
+    const char *tensor_name = NULL;
+    unsigned long long limit = 20;
+    unsigned long long mapped = 0;
+    unsigned long long unmapped = 0;
+    unsigned long long shape_mismatch = 0;
+    int json = 0;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&options, 0, sizeof(options));
+
+    if (argc == 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        print_command_help(stdout, find_command("tensor-map"));
+        return 0;
+    }
+
+    i = 2;
+    while (i < argc) {
+        if (strcmp(argv[i], "--json") == 0) {
+            json = 1;
+            i++;
+            continue;
+        }
+        if (strcmp(argv[i], "--require-all-native-mapped") == 0) {
+            options.require_all_native_mapped = 1;
+            i++;
+            continue;
+        }
+        if (strcmp(argv[i], "--require-all-template-matched") == 0) {
+            options.require_all_template_matched = 1;
+            i++;
+            continue;
+        }
+        if (i + 1 >= argc) {
+            fprintf(stderr, "yvex: tensor-map option requires a value: %s\n", argv[i]);
+            return 2;
+        }
+        if (strcmp(argv[i], "--arch") == 0) {
+            options.architecture = argv[i + 1];
+        } else if (strcmp(argv[i], "--native-source") == 0) {
+            options.native_source_dir = argv[i + 1];
+        } else if (strcmp(argv[i], "--template") == 0) {
+            options.template_path = argv[i + 1];
+            options.compare_template = 1;
+        } else if (strcmp(argv[i], "--tensor") == 0) {
+            tensor_name = argv[i + 1];
+        } else if (strcmp(argv[i], "--limit") == 0) {
+            char *end = NULL;
+            limit = strtoull(argv[i + 1], &end, 10);
+            if (!end || *end != '\0') {
+                fprintf(stderr, "yvex: invalid tensor-map limit: %s\n", argv[i + 1]);
+                return 2;
+            }
+        } else {
+            fprintf(stderr, "yvex: unknown tensor-map option: %s\n", argv[i]);
+            return 2;
+        }
+        i += 2;
+    }
+
+    if (!options.architecture || !options.native_source_dir) {
+        fprintf(stderr, "yvex: tensor-map requires --arch NAME and --native-source DIR\n");
+        return 2;
+    }
+
+    rc = yvex_weight_mapping_table_build(&table, &options, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    for (i = 0; (unsigned long long)i < yvex_weight_mapping_table_count(table); ++i) {
+        const yvex_weight_mapping_info *row = yvex_weight_mapping_table_at(table, (unsigned long long)i);
+        if (!row) continue;
+        if (row->status == YVEX_WEIGHT_MAPPING_STATUS_MAPPED) mapped++;
+        else if (row->status == YVEX_WEIGHT_MAPPING_STATUS_SHAPE_MISMATCH) shape_mismatch++;
+        else unmapped++;
+    }
+
+    if (json) {
+        printf("{\n");
+        printf("  \"schema\": \"yvex.tensor_map.v1\",\n");
+        printf("  \"architecture\": \"%s\",\n", options.architecture);
+        printf("  \"native_source\": \"%s\",\n", options.native_source_dir);
+        printf("  \"native_tensors\": %llu,\n", yvex_weight_mapping_table_count(table));
+        printf("  \"mapped\": %llu,\n", mapped);
+        printf("  \"unmapped\": %llu,\n", unmapped);
+        printf("  \"shape_mismatch\": %llu\n", shape_mismatch);
+        printf("}\n");
+        yvex_weight_mapping_table_close(table);
+        return 0;
+    }
+
+    printf("tensor map: %s\n", options.architecture);
+    printf("native_source: %s\n", options.native_source_dir);
+    if (options.template_path) {
+        printf("template: %s\n", options.template_path);
+    }
+    printf("native_tensors: %llu\n", yvex_weight_mapping_table_count(table));
+    printf("mapped: %llu\n", mapped);
+    printf("unmapped: %llu\n", unmapped);
+    printf("shape_mismatch: %llu\n", shape_mismatch);
+    printf("\n");
+
+    if (tensor_name) {
+        const yvex_weight_mapping_info *row = yvex_weight_mapping_table_find_native(table, tensor_name);
+        if (!row) {
+            yvex_weight_mapping_table_close(table);
+            fprintf(stderr, "yvex: native tensor not found: %s\n", tensor_name);
+            return 4;
+        }
+        printf("0 native=%s role=%s target=%s status=%s native_shape=",
+               row->native_name, yvex_tensor_role_name(row->role), row->target_name,
+               yvex_weight_mapping_status_name(row->status));
+        print_native_dims(row->native_dims, row->native_rank);
+        printf(" target_shape=");
+        if (row->target_rank > 0) print_native_dims(row->target_dims, row->target_rank);
+        else printf("unknown");
+        printf(" transform=%s", row->requires_transpose ? "transpose" : "none");
+        if (row->issue != YVEX_WEIGHT_MAPPING_ISSUE_NONE) {
+            printf(" issue=%s", yvex_weight_mapping_issue_kind_name(row->issue));
+        }
+        printf("\n");
+    } else {
+        unsigned long long count = yvex_weight_mapping_table_count(table);
+        unsigned long long n = limit < count ? limit : count;
+        unsigned long long idx;
+
+        for (idx = 0; idx < n; ++idx) {
+            const yvex_weight_mapping_info *row = yvex_weight_mapping_table_at(table, idx);
+            printf("%llu native=%s role=%s target=%s status=%s native_shape=",
+                   idx, row->native_name, yvex_tensor_role_name(row->role), row->target_name,
+                   yvex_weight_mapping_status_name(row->status));
+            print_native_dims(row->native_dims, row->native_rank);
+            printf(" target_shape=");
+            if (row->target_rank > 0) print_native_dims(row->target_dims, row->target_rank);
+            else printf("unknown");
+            printf(" transform=%s", row->requires_transpose ? "transpose" : "none");
+            if (row->issue != YVEX_WEIGHT_MAPPING_ISSUE_NONE) {
+                printf(" issue=%s", yvex_weight_mapping_issue_kind_name(row->issue));
+            }
+            printf("\n");
+        }
+    }
+    printf("status: tensor-map\n");
+    yvex_weight_mapping_table_close(table);
     return 0;
 }
 

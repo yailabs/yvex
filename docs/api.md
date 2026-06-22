@@ -16,7 +16,8 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-OWI.3 implements a GGUF template contract validator, OWI.2 implements a
+OWI.4 implements a tensor mapping adapter contract, OWI.3 implements a GGUF
+template contract validator, OWI.2 implements a
 safetensors/native-weight inventory surface, and OWI.1
 implements a source-manifest provenance surface in addition to the M0 runtime
 APIs. M0 implements the core version/status/error/log surface, runtime filesystem
@@ -49,6 +50,7 @@ include/yvex/dtype.h
 include/yvex/tensor.h
 include/yvex/model.h
 include/yvex/native_weights.h
+include/yvex/weight_mapping.h
 include/yvex/tokenizer.h
 include/yvex/prompt.h
 include/yvex/op.h
@@ -80,6 +82,7 @@ Current aggregate:
 #include <yvex/tensor.h>
 #include <yvex/model.h>
 #include <yvex/native_weights.h>
+#include <yvex/weight_mapping.h>
 #include <yvex/tokenizer.h>
 #include <yvex/prompt.h>
 #include <yvex/op.h>
@@ -429,6 +432,46 @@ stack, builds a descriptor, checks tokenizer metadata, classifies tensor roles,
 and can compare exact template tensor names against an OWI.2 native inventory.
 It does not load tensor payloads, mutate templates, emit GGUF, quantize, or
 materialize.
+
+## Weight Mapping
+
+OWI.4 adds a contract-level tensor mapping API. It maps native tensor names from
+official weight layouts to canonical YVEX roles and proposed GGUF/template
+target names through architecture adapters. The DeepSeek adapter currently
+classifies known HF-style and DS4/GGUF-style tensor families, including token
+embeddings, attention projections, FFN tensors, MoE routers, and MoE experts.
+
+```c
+typedef struct yvex_weight_mapping_table yvex_weight_mapping_table;
+
+typedef enum {
+    YVEX_WEIGHT_MAPPING_STATUS_UNKNOWN = 0,
+    YVEX_WEIGHT_MAPPING_STATUS_MAPPED,
+    YVEX_WEIGHT_MAPPING_STATUS_UNMAPPED,
+    YVEX_WEIGHT_MAPPING_STATUS_AMBIGUOUS,
+    YVEX_WEIGHT_MAPPING_STATUS_SHAPE_MISMATCH,
+    YVEX_WEIGHT_MAPPING_STATUS_UNSUPPORTED_ARCH
+} yvex_weight_mapping_status;
+```
+
+```c
+int yvex_weight_mapping_table_build(yvex_weight_mapping_table **out,
+                                    const yvex_weight_mapping_options *options,
+                                    yvex_error *err);
+void yvex_weight_mapping_table_close(yvex_weight_mapping_table *table);
+unsigned long long yvex_weight_mapping_table_count(const yvex_weight_mapping_table *table);
+const yvex_weight_mapping_info *yvex_weight_mapping_table_at(const yvex_weight_mapping_table *table,
+                                                             unsigned long long index);
+const yvex_weight_mapping_info *yvex_weight_mapping_table_find_native(const yvex_weight_mapping_table *table,
+                                                                      const char *native_name);
+```
+
+The table owns copied row strings, reads native inventory through OWI.2, and may
+read a GGUF template tensor table through C1/D0 for target-name and shape
+compatibility checks. It does not load safetensors payloads, transpose bytes,
+quantize, emit GGUF, materialize, or execute a model. DeepSeek `embed.weight`
+maps contractually to `token_embedding -> token_embd.weight`; template shape
+compatibility may report `requires_transpose` without moving bytes.
 
 Default path resolution requires `HOME`; project-local path construction uses
 the explicit project root argument. Run directory creation creates directories

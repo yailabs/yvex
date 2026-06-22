@@ -26,6 +26,7 @@
 #   - yvex prompt
 #   - yvex graph
 #   - yvex gguf-template
+#   - yvex tensor-map
 #   - yvex plan
 #   - yvex tokenize
 #   - yvex tokenizer
@@ -113,6 +114,7 @@ contains "$OUT_DIR/info.out" "run_artifacts: metrics/trace/profile files impleme
 contains "$OUT_DIR/info.out" "source_manifest: provenance JSON writer implemented"
 contains "$OUT_DIR/info.out" "native_weights: safetensors header inventory implemented"
 contains "$OUT_DIR/info.out" "gguf_template: contract validator implemented"
+contains "$OUT_DIR/info.out" "weight_mapping: tensor adapter contract implemented"
 contains "$OUT_DIR/info.out" "server_binary: yvexd shell implemented"
 contains "$OUT_DIR/info.out" "server_endpoints: health/metrics/models status implemented"
 contains "$OUT_DIR/info.out" "server_generation: not implemented"
@@ -144,6 +146,7 @@ contains "$OUT_DIR/commands.out" "  prompt"
 contains "$OUT_DIR/commands.out" "  run"
 contains "$OUT_DIR/commands.out" "  session"
 contains "$OUT_DIR/commands.out" "  source-manifest"
+contains "$OUT_DIR/commands.out" "  tensor-map"
 contains "$OUT_DIR/commands.out" "  tokenize"
 contains "$OUT_DIR/commands.out" "  tokenizer"
 contains "$OUT_DIR/commands.out" "  tensors"
@@ -193,6 +196,9 @@ contains "$OUT_DIR/help_graph.out" "usage: yvex graph <path>"
 
 run_ok help_gguf_template "$YVEX_BIN" help gguf-template
 contains "$OUT_DIR/help_gguf_template.out" "usage: yvex gguf-template"
+
+run_ok help_tensor_map "$YVEX_BIN" help tensor-map
+contains "$OUT_DIR/help_tensor_map.out" "usage: yvex tensor-map"
 
 run_ok help_plan "$YVEX_BIN" help plan
 contains "$OUT_DIR/help_plan.out" "usage: yvex plan <path>"

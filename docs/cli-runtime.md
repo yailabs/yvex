@@ -36,6 +36,7 @@ yvex prompt <path> --user TEXT
 yvex run --model FILE --backend cpu|cuda --prompt TEXT
 yvex session <path> --backend cpu|cuda
 yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE
+yvex tensor-map --arch NAME --native-source DIR [--template FILE] [--tensor NAME] [--limit N] [--json]
 yvex tokenizer <path>
 yvex tokenize <path> --text TEXT
 yvex tensors <path>
@@ -80,6 +81,7 @@ run_artifacts: metrics/trace/profile files implemented
 source_manifest: provenance JSON writer implemented
 native_weights: safetensors header inventory implemented
 gguf_template: contract validator implemented
+weight_mapping: tensor adapter contract implemented
 server_binary: yvexd shell implemented
 server_endpoints: health/metrics/models status implemented
 server_generation: not implemented
@@ -241,6 +243,44 @@ yvex gguf-template compare --template FILE --native-source DIR
 Architecture-specific tensor-name mapping belongs to OWI.4, so mismatches are
 reported as partial rather than treated as DeepSeek support failure unless
 `--require-all-template-tensors-in-native` is passed.
+
+## Current `yvex tensor-map`
+
+`yvex tensor-map` maps native safetensors tensor names to canonical YVEX roles
+and proposed GGUF/template tensor names through an architecture adapter. It reads
+metadata only. It does not load payload bytes, convert tensors, quantize, emit
+GGUF, materialize weights, or infer.
+
+Command shape:
+
+```text
+yvex tensor-map --arch deepseek4 --native-source DIR [--template FILE] [--tensor NAME] [--limit N] [--json]
+```
+
+DeepSeek provider-node proof shape:
+
+```sh
+./build/bin/yvex tensor-map \
+  --arch deepseek4 \
+  --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" \
+  --template "/home/dgmothx/lab/src/ds4/gguf/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix.gguf" \
+  --tensor embed.weight
+```
+
+Expected contract-level result:
+
+```text
+native=embed.weight
+role=token_embedding
+target=token_embd.weight
+status=mapped
+native_shape=[129280,4096]
+target_shape=[4096,129280]
+transform=transpose
+```
+
+The transpose is a compatibility report only. OWI.4 does not transpose payload
+bytes or produce a GGUF.
 
 ## Current `yvex inspect`
 
