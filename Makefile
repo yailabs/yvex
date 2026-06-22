@@ -137,6 +137,8 @@ check-docs:
 	@grep -F "YVEX is a C local inference engine" README.md >/dev/null
 	@grep -F "Completed Milestones" docs/spine.md >/dev/null
 	@grep -F "C1 - GGUF metadata and tensor directory" docs/spine.md >/dev/null
+	@grep -F "### C1 - GGUF metadata and tensor directory" docs/spine.md >/dev/null
+	@grep -F "Implemented by:" docs/spine.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Backend Contract" docs/backend-contract.md >/dev/null
 	@grep -F "YVEX Runtime Filesystem" docs/runtime-filesystem.md >/dev/null

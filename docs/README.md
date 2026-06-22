@@ -5,10 +5,10 @@ documents instead of one Markdown file per idea.
 
 Canonical documents:
 
-- [Implementation spine](spine.md): technical authority for identity, scope,
-  current implementation state, delivery sequence, acceptance gates,
-  decisions, runtime architecture, YVEX/YAI boundary, model ladder, failure
-  taxonomy, validation philosophy, and future tracks.
+- [Implementation spine](spine.md): the single canonical implementation spine
+  and progress document. It owns current state, delivery sequence, acceptance
+  gates, decisions, runtime architecture, YVEX/YAI boundary, validation
+  philosophy, and future tracks.
 - [API](api.md): current public C API and future API contracts that are
   documentation only until headers, implementation, and tests exist.
 - [Backend contract](backend-contract.md): CPU reference, backend ABI,
