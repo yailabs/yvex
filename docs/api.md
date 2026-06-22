@@ -8,7 +8,7 @@ technical authority.
 ```text
 headers expose only implemented functions
 future API families may be documented here but are not support claims
-no CUDA/native backend type appears in generic public headers
+no native CUDA/Metal/ROCm handles appear in public headers
 no YAI case/control type appears in YVEX headers
 no model-family-specific public type appears before implementation
 every non-trivial function reports precise status/error behavior
@@ -16,13 +16,14 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-G0 implements the core version/status/error/log surface, runtime filesystem
+H0 implements the core version/status/error/log surface, runtime filesystem
 paths/run directories, artifact byte views, range checks, GGUF header/probe,
 metadata, raw tensor directory parsing, dtype/qtype storage accounting, YVEX
 tensor table rows, a descriptor-only model summary, tokenizer metadata/vocab
 tables, fixture tokenizer encode/decode, default prompt rendering, graph
 planning artifacts, shape helpers, estimate-only memory plans, plan objects,
-backend ABI wrappers, and the CPU reference backend.
+backend ABI wrappers, the CPU reference backend, engine/session runtime
+objects, and KV/logits availability skeletons.
 
 Current public headers:
 
@@ -45,6 +46,10 @@ include/yvex/graph.h
 include/yvex/memory_plan.h
 include/yvex/planner.h
 include/yvex/backend.h
+include/yvex/engine.h
+include/yvex/session.h
+include/yvex/kv.h
+include/yvex/logits.h
 ```
 
 Current aggregate:
@@ -64,6 +69,10 @@ Current aggregate:
 #include <yvex/memory_plan.h>
 #include <yvex/planner.h>
 #include <yvex/backend.h>
+#include <yvex/engine.h>
+#include <yvex/session.h>
+#include <yvex/kv.h>
+#include <yvex/logits.h>
 #include <yvex/log.h>
 #include <yvex/status.h>
 #include <yvex/version.h>
@@ -761,13 +770,97 @@ G0 supports only F32 embedding tensors. Embedding dims are `[hidden_size,
 vocab_size]`; output dims are `[token_count, hidden_size]`. This is an op proof,
 not model execution or inference.
 
+## Engine
+
+`include/yvex/engine.h` owns the H0 engine runtime object. An engine opens an
+artifact, parses GGUF, builds a tensor table, builds a model descriptor, builds
+a tokenizer when available, and may build the default graph. It does not own a
+backend or session and does not execute.
+
+```c
+typedef struct yvex_engine yvex_engine;
+
+int yvex_engine_open(yvex_engine **out,
+                     const yvex_engine_options *options,
+                     yvex_error *err);
+int yvex_engine_open_path(yvex_engine **out,
+                          const char *model_path,
+                          yvex_error *err);
+void yvex_engine_close(yvex_engine *engine);
+
+int yvex_engine_get_summary(const yvex_engine *engine,
+                            yvex_engine_summary *out,
+                            yvex_error *err);
+const char *yvex_engine_diagnostic_reason(const yvex_engine *engine);
+```
+
+The current fixture engine reports `partial` because the graph is missing
+`output_norm` and `output_head`. `partial` is inspectable runtime state, not an
+execution claim.
+
+## Session
+
+`include/yvex/session.h` owns the H0 lifecycle-only session object. A session
+borrows an engine and backend, tracks state, exposes summaries, can accept
+already-tokenized input into the session position, and reports unsupported
+prefill/decode paths clearly.
+
+```c
+typedef struct yvex_session yvex_session;
+
+int yvex_session_create(yvex_session **out,
+                        const yvex_engine *engine,
+                        yvex_backend *backend,
+                        const yvex_session_options *options,
+                        yvex_error *err);
+void yvex_session_close(yvex_session *session);
+
+int yvex_session_accept_tokens(yvex_session *session,
+                               const yvex_tokens *tokens,
+                               yvex_error *err);
+int yvex_session_prefill(yvex_session *session,
+                         const yvex_tokens *tokens,
+                         yvex_error *err);
+int yvex_session_decode_next(yvex_session *session,
+                             unsigned int *out_token,
+                             yvex_error *err);
+```
+
+In H0, `accept_tokens` updates counters and position when the context bound
+allows it. `prefill` and `decode_next` return `YVEX_ERR_UNSUPPORTED`; no logits
+are computed and no tokens are generated.
+
+## KV And Logits Skeletons
+
+`include/yvex/kv.h` and `include/yvex/logits.h` expose runtime availability
+summaries. The current fixture lacks the attention/output-head facts needed to
+size real KV/logits buffers, so both report `unavailable` and zero bytes.
+
+```c
+int yvex_kv_cache_create(yvex_kv_cache **out,
+                         const yvex_model_descriptor *model,
+                         unsigned long long context_length,
+                         yvex_error *err);
+int yvex_kv_cache_get_summary(const yvex_kv_cache *kv,
+                              yvex_kv_summary *out,
+                              yvex_error *err);
+
+int yvex_logits_create(yvex_logits **out,
+                       const yvex_model_descriptor *model,
+                       yvex_error *err);
+int yvex_logits_get_summary(const yvex_logits *logits,
+                            yvex_logits_summary *out,
+                            yvex_error *err);
+```
+
+These objects are state and sizing skeletons only. They do not allocate backend
+KV tensors, compute logits, expose a sampler, or imply generation support.
+
 ## Future API Families
 
 The families below are design contracts, not implemented APIs:
 
 ```text
-KV cache
-session
 sampler
 events/trace/metrics/profile
 server/provider

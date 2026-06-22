@@ -7,8 +7,8 @@
  * Purpose:
  *   Implements the command table and CLI proof surface for implemented core,
  *   filesystem, artifact, GGUF directory, tensor table, and descriptor
- *   behavior. The CLI reports what exists and does not expose future runtime
- *   commands before their modules exist.
+ *   behavior, and H0 engine/session diagnostics. The CLI reports what exists
+ *   and does not expose future generation commands before their modules exist.
  *
  * Implements:
  *   - yvex
@@ -24,9 +24,11 @@
  *   - yvex tokenizer <path>
  *   - yvex tokenize <path> --text TEXT
  *   - yvex detokenize <path> --ids IDS
+ *   - yvex engine <path>
  *   - yvex graph <path>
  *   - yvex prompt <path> --user TEXT
  *   - yvex plan <path>
+ *   - yvex session <path> --backend cpu
  *   - yvex --help
  *   - yvex --version
  *
@@ -69,6 +71,7 @@ typedef struct {
 static int command_backend(int argc, char **argv);
 static int command_commands(int argc, char **argv);
 static int command_detokenize(int argc, char **argv);
+static int command_engine(int argc, char **argv);
 static int command_graph(int argc, char **argv);
 static int command_help(int argc, char **argv);
 static int command_info(int argc, char **argv);
@@ -77,6 +80,7 @@ static int command_metadata(int argc, char **argv);
 static int command_paths(int argc, char **argv);
 static int command_plan(int argc, char **argv);
 static int command_prompt(int argc, char **argv);
+static int command_session(int argc, char **argv);
 static int command_tokenize(int argc, char **argv);
 static int command_tokenizer(int argc, char **argv);
 static int command_tensors(int argc, char **argv);
@@ -103,6 +107,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex detokenize <path> --ids IDS",
         "Opens a GGUF tokenizer descriptor and decodes comma-separated token IDs. E0 executes only the yvex-fixture-simple tokenizer.",
         command_detokenize,
+    },
+    {
+        "engine",
+        "Open an H0 engine descriptor.",
+        "yvex engine <path>",
+        "Opens the descriptor/tokenizer/graph stack and reports engine diagnostics. It does not execute prefill, decode, run, or chat.",
+        command_engine,
     },
     {
         "graph",
@@ -159,6 +170,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex prompt <path> [--system TEXT] --user TEXT [--assistant TEXT] [--tokens]",
         "Renders the YVEX default prompt format. Arbitrary Jinja chat templates are not executed in E0.",
         command_prompt,
+    },
+    {
+        "session",
+        "Create an H0 diagnostic session.",
+        "yvex session <path> [--backend cpu|cuda] [--ctx N] [--text TEXT] [--accept-tokens]",
+        "Creates a lifecycle-only session over an engine and backend. It may accept tokens for diagnostics, but it does not run prefill, decode, or generation.",
+        command_session,
     },
     {
         "tokenize",
@@ -768,6 +786,53 @@ static int command_detokenize(int argc, char **argv)
     return 0;
 }
 
+static int command_engine(int argc, char **argv)
+{
+    yvex_engine *engine = NULL;
+    yvex_engine_summary summary;
+    yvex_error err;
+    int rc;
+
+    yvex_error_clear(&err);
+
+    if (argc != 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        if (argc == 3) {
+            print_command_help(stdout, find_command("engine"));
+            return 0;
+        }
+        fprintf(stderr, "yvex: engine requires exactly one path\n");
+        fprintf(stderr, "usage: yvex engine <path>\n");
+        return 2;
+    }
+
+    rc = yvex_engine_open_path(&engine, argv[2], &err);
+    if (rc == YVEX_OK) {
+        rc = yvex_engine_get_summary(engine, &summary, &err);
+    }
+    if (rc != YVEX_OK) {
+        yvex_engine_close(engine);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    printf("engine status: %s\n", yvex_engine_status_name(summary.status));
+    printf("format: gguf\n");
+    printf("architecture: %s\n", summary.architecture);
+    printf("model_name: %s\n", summary.model_name);
+    printf("metadata_count: %llu\n", summary.metadata_count);
+    printf("tensor_count: %llu\n", summary.tensor_count);
+    printf("known_tensor_bytes: %llu\n", summary.known_tensor_bytes);
+    printf("unsupported_tensor_accounting: %llu\n", summary.unsupported_tensor_accounting);
+    printf("tokenizer_model: %s\n", summary.tokenizer_model);
+    printf("tokenizer_support: %s\n", summary.tokenizer_support);
+    printf("graph_status: %s\n", summary.graph_status);
+    printf("execution_ready: false\n");
+    printf("reason: %s\n", yvex_engine_diagnostic_reason(engine));
+    printf("status: engine-descriptor\n");
+
+    yvex_engine_close(engine);
+    return 0;
+}
+
 static int command_help(int argc, char **argv)
 {
     const yvex_cli_command *command;
@@ -797,7 +862,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: G0 CPU reference backend ABI\n");
+    printf("status: H0 engine and session runtime skeleton\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -808,6 +873,10 @@ static int command_info(int argc, char **argv)
     printf("graph: partial planning implemented\n");
     printf("planner: estimate-only implemented\n");
     printf("backend: CPU reference implemented\n");
+    printf("engine: runtime object skeleton implemented\n");
+    printf("session: lifecycle skeleton implemented\n");
+    printf("kv: unavailable skeleton implemented\n");
+    printf("logits: unavailable skeleton implemented\n");
     printf("backend_cuda: not implemented\n");
     printf("inference: not implemented\n");
     printf("cuda: not implemented\n");
@@ -1234,6 +1303,147 @@ static int command_prompt(int argc, char **argv)
 
     yvex_rendered_prompt_free(&rendered);
     close_tokenizer_context(&ctx);
+    return 0;
+}
+
+static int command_session(int argc, char **argv)
+{
+    yvex_engine *engine = NULL;
+    yvex_backend *backend = NULL;
+    yvex_session *session = NULL;
+    yvex_session_options session_options;
+    yvex_session_summary summary;
+    yvex_backend_options backend_options;
+    yvex_tokens tokens;
+    yvex_error err;
+    const char *backend_name = "cpu";
+    const char *text = NULL;
+    int accept_tokens = 0;
+    int tokenized = 0;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&session_options, 0, sizeof(session_options));
+    memset(&backend_options, 0, sizeof(backend_options));
+    memset(&tokens, 0, sizeof(tokens));
+    session_options.allow_partial_graph = 1;
+
+    if (argc < 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        print_command_help(stdout, find_command("session"));
+        return argc >= 3 ? 0 : 2;
+    }
+
+    for (i = 3; i < argc; ++i) {
+        if (strcmp(argv[i], "--backend") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --backend requires a value\n");
+                return 2;
+            }
+            backend_name = argv[++i];
+        } else if (strcmp(argv[i], "--ctx") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &session_options.context_length)) {
+                fprintf(stderr, "yvex: --ctx requires a positive integer\n");
+                return 2;
+            }
+            i += 1;
+        } else if (strcmp(argv[i], "--text") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --text requires a value\n");
+                return 2;
+            }
+            text = argv[++i];
+        } else if (strcmp(argv[i], "--accept-tokens") == 0) {
+            accept_tokens = 1;
+        } else {
+            fprintf(stderr, "yvex: unknown session option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help session' for usage.\n");
+            return 2;
+        }
+    }
+
+    if (strcmp(backend_name, "cuda") == 0) {
+        printf("backend: cuda\n");
+        printf("backend_status: unsupported\n");
+        printf("reason: CUDA backend is planned for L0\n");
+        printf("status: session-backend-unsupported\n");
+        return 5;
+    }
+    if (strcmp(backend_name, "cpu") != 0) {
+        fprintf(stderr, "yvex: unknown backend kind: %s\n", backend_name);
+        return 2;
+    }
+
+    rc = yvex_engine_open_path(&engine, argv[2], &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    backend_options.kind = YVEX_BACKEND_KIND_CPU;
+    rc = yvex_backend_open(&backend, &backend_options, &err);
+    if (rc != YVEX_OK) {
+        yvex_engine_close(engine);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_session_create(&session, engine, backend, &session_options, &err);
+    if (rc != YVEX_OK) {
+        yvex_backend_close(backend);
+        yvex_engine_close(engine);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    if (text) {
+        rc = yvex_tokenize_text(yvex_engine_tokenizer(engine), text, &tokens, &err);
+        if (rc != YVEX_OK) {
+            yvex_session_close(session);
+            yvex_backend_close(backend);
+            yvex_engine_close(engine);
+            return print_yvex_error(&err, exit_for_status(rc));
+        }
+        tokenized = 1;
+        if (accept_tokens) {
+            rc = yvex_session_accept_tokens(session, &tokens, &err);
+            if (rc != YVEX_OK) {
+                yvex_tokens_free(&tokens);
+                yvex_session_close(session);
+                yvex_backend_close(backend);
+                yvex_engine_close(engine);
+                return print_yvex_error(&err, exit_for_status(rc));
+            }
+        }
+    }
+
+    rc = yvex_session_get_summary(session, &summary, &err);
+    if (rc != YVEX_OK) {
+        yvex_tokens_free(&tokens);
+        yvex_session_close(session);
+        yvex_backend_close(backend);
+        yvex_engine_close(engine);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    printf("engine_status: %s\n", summary.engine_status);
+    printf("backend: %s\n", summary.backend_kind);
+    printf("backend_status: %s\n", summary.backend_status);
+    printf("session_state: %s\n", yvex_session_state_name(summary.state));
+    printf("context_length: %llu\n", summary.context_length);
+    printf("position: %llu\n", summary.position);
+    printf("accepted_tokens: %llu\n", summary.accepted_tokens);
+    printf("kv_status: %s\n", summary.kv_status);
+    printf("kv_bytes: %llu\n", summary.kv_bytes);
+    printf("logits_status: %s\n", summary.logits_status);
+    printf("execution_ready: false\n");
+    printf("reason: %s\n", yvex_session_diagnostic_reason(session));
+    if (tokenized) {
+        printf("tokens: %llu\n", tokens.len);
+    }
+    printf("status: %s\n", accept_tokens ? "session-token-accepted" : "session-created");
+
+    yvex_tokens_free(&tokens);
+    yvex_session_close(session);
+    yvex_backend_close(backend);
+    yvex_engine_close(engine);
     return 0;
 }
 

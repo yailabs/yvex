@@ -4,7 +4,7 @@ This document owns CLI behavior. YVEX is CLI-only.
 
 ## Current Implemented Commands
 
-The G0 binary implements exactly:
+The H0 binary implements exactly:
 
 ```text
 yvex
@@ -13,6 +13,7 @@ yvex --version
 yvex backend cpu|cuda
 yvex commands
 yvex detokenize <path> --ids IDS
+yvex engine <path>
 yvex graph <path>
 yvex help
 yvex help <implemented-command>
@@ -25,6 +26,7 @@ yvex paths --run
 yvex paths --run --create
 yvex plan <path>
 yvex prompt <path> --user TEXT
+yvex session <path> --backend cpu
 yvex tokenizer <path>
 yvex tokenize <path> --text TEXT
 yvex tensors <path>
@@ -42,7 +44,7 @@ name: YVEX
 version: 0.1.0
 language: C
 interface: CLI-only
-status: G0 CPU reference backend ABI
+status: H0 engine and session runtime skeleton
 library: libyvex.a
 filesystem: implemented
 artifact: open/read implemented
@@ -53,6 +55,10 @@ prompt: default renderer implemented
 graph: partial planning implemented
 planner: estimate-only implemented
 backend: CPU reference implemented
+engine: runtime object skeleton implemented
+session: lifecycle skeleton implemented
+kv: unavailable skeleton implemented
+logits: unavailable skeleton implemented
 backend_cuda: not implemented
 inference: not implemented
 cuda: not implemented
@@ -358,6 +364,69 @@ backend: cuda
 status: unsupported
 reason: CUDA backend is planned for L0
 status: backend-unsupported
+```
+
+## Current `yvex engine`
+
+`yvex engine <path>` opens the H0 engine stack and prints a descriptor/runtime
+summary. It does not run prefill, decode, chat, or generation.
+
+```text
+engine status: partial
+format: gguf
+architecture: llama
+model_name: yvex-tokenizer-test
+metadata_count: <n>
+tensor_count: 1
+known_tensor_bytes: 128
+unsupported_tensor_accounting: 0
+tokenizer_model: yvex-fixture-simple
+tokenizer_support: fixture-encode-decode
+graph_status: partial
+execution_ready: false
+reason: graph partial; missing output_norm, output_head
+status: engine-descriptor
+```
+
+## Current `yvex session`
+
+`yvex session <path> --backend cpu` creates a lifecycle-only session over an
+engine and CPU backend. It is a runtime object proof, not a generation command.
+
+```text
+engine_status: partial
+backend: cpu
+backend_status: ready
+session_state: partial
+context_length: 4096
+position: 0
+accepted_tokens: 0
+kv_status: unavailable
+kv_bytes: 0
+logits_status: unavailable
+execution_ready: false
+reason: graph partial; missing output_norm, output_head
+status: session-created
+```
+
+`--text TEXT --accept-tokens` tokenizes fixture text and advances the session
+position only through explicit token acceptance:
+
+```text
+tokens: 3
+accepted_tokens: 3
+position: 3
+execution_ready: false
+status: session-token-accepted
+```
+
+`--backend cuda` reports the unsupported future backend path and exits 5:
+
+```text
+backend: cuda
+backend_status: unsupported
+reason: CUDA backend is planned for L0
+status: session-backend-unsupported
 ```
 
 ## Future Commands

@@ -8,8 +8,8 @@
 # Purpose:
 #   Proves that the CLI command table exposes only implemented commands and
 #   returns stable exit codes for common bootstrap, filesystem, artifact, GGUF
-#   directory, tensor table, descriptor, tokenizer, prompt, graph, plan, and
-#   backend behavior.
+#   directory, tensor table, descriptor, tokenizer, prompt, graph, plan,
+#   backend, engine, and session behavior.
 #
 # Covers:
 #   - yvex
@@ -28,6 +28,8 @@
 #   - yvex tokenizer
 #   - yvex tensors
 #   - yvex detokenize
+#   - yvex engine
+#   - yvex session
 #   - yvex commands
 #   - yvex help info
 #   - yvex unknown
@@ -81,7 +83,7 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: G0 CPU reference backend ABI"
+contains "$OUT_DIR/info.out" "status: H0 engine and session runtime skeleton"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "artifact: open/read implemented"
@@ -92,12 +94,17 @@ contains "$OUT_DIR/info.out" "prompt: default renderer implemented"
 contains "$OUT_DIR/info.out" "graph: partial planning implemented"
 contains "$OUT_DIR/info.out" "planner: estimate-only implemented"
 contains "$OUT_DIR/info.out" "backend: CPU reference implemented"
+contains "$OUT_DIR/info.out" "engine: runtime object skeleton implemented"
+contains "$OUT_DIR/info.out" "session: lifecycle skeleton implemented"
+contains "$OUT_DIR/info.out" "kv: unavailable skeleton implemented"
+contains "$OUT_DIR/info.out" "logits: unavailable skeleton implemented"
 
 run_ok commands "$YVEX_BIN" commands
 contains "$OUT_DIR/commands.out" "Implemented commands:"
 contains "$OUT_DIR/commands.out" "  backend"
 contains "$OUT_DIR/commands.out" "  commands"
 contains "$OUT_DIR/commands.out" "  detokenize"
+contains "$OUT_DIR/commands.out" "  engine"
 contains "$OUT_DIR/commands.out" "  graph"
 contains "$OUT_DIR/commands.out" "  help"
 contains "$OUT_DIR/commands.out" "  info"
@@ -106,6 +113,7 @@ contains "$OUT_DIR/commands.out" "  metadata"
 contains "$OUT_DIR/commands.out" "  paths"
 contains "$OUT_DIR/commands.out" "  plan"
 contains "$OUT_DIR/commands.out" "  prompt"
+contains "$OUT_DIR/commands.out" "  session"
 contains "$OUT_DIR/commands.out" "  tokenize"
 contains "$OUT_DIR/commands.out" "  tokenizer"
 contains "$OUT_DIR/commands.out" "  tensors"
@@ -135,6 +143,9 @@ contains "$OUT_DIR/help_tokenize.out" "usage: yvex tokenize <path> --text TEXT"
 run_ok help_detokenize "$YVEX_BIN" help detokenize
 contains "$OUT_DIR/help_detokenize.out" "usage: yvex detokenize <path> --ids IDS"
 
+run_ok help_engine "$YVEX_BIN" help engine
+contains "$OUT_DIR/help_engine.out" "usage: yvex engine <path>"
+
 run_ok help_graph "$YVEX_BIN" help graph
 contains "$OUT_DIR/help_graph.out" "usage: yvex graph <path>"
 
@@ -143,6 +154,9 @@ contains "$OUT_DIR/help_plan.out" "usage: yvex plan <path>"
 
 run_ok help_prompt "$YVEX_BIN" help prompt
 contains "$OUT_DIR/help_prompt.out" "usage: yvex prompt <path>"
+
+run_ok help_session "$YVEX_BIN" help session
+contains "$OUT_DIR/help_session.out" "usage: yvex session <path>"
 
 run_ok inspect_valid "$YVEX_BIN" inspect tests/fixtures/gguf/valid-minimal.gguf
 contains "$OUT_DIR/inspect_valid.out" "format: gguf"
@@ -257,6 +271,52 @@ contains "$OUT_DIR/backend_cuda.out" "backend: cuda"
 contains "$OUT_DIR/backend_cuda.out" "status: unsupported"
 contains "$OUT_DIR/backend_cuda.out" "reason: CUDA backend is planned for L0"
 contains "$OUT_DIR/backend_cuda.out" "status: backend-unsupported"
+
+run_ok engine "$YVEX_BIN" engine tests/fixtures/gguf/valid-tokenizer-simple.gguf
+contains "$OUT_DIR/engine.out" "engine status: partial"
+contains "$OUT_DIR/engine.out" "architecture: llama"
+contains "$OUT_DIR/engine.out" "model_name: yvex-tokenizer-test"
+contains "$OUT_DIR/engine.out" "known_tensor_bytes: 128"
+contains "$OUT_DIR/engine.out" "tokenizer_model: yvex-fixture-simple"
+contains "$OUT_DIR/engine.out" "tokenizer_support: fixture-encode-decode"
+contains "$OUT_DIR/engine.out" "graph_status: partial"
+contains "$OUT_DIR/engine.out" "execution_ready: false"
+contains "$OUT_DIR/engine.out" "reason: graph partial; missing output_norm, output_head"
+contains "$OUT_DIR/engine.out" "status: engine-descriptor"
+
+run_ok session_cpu "$YVEX_BIN" session tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
+contains "$OUT_DIR/session_cpu.out" "engine_status: partial"
+contains "$OUT_DIR/session_cpu.out" "backend: cpu"
+contains "$OUT_DIR/session_cpu.out" "backend_status: ready"
+contains "$OUT_DIR/session_cpu.out" "session_state: partial"
+contains "$OUT_DIR/session_cpu.out" "context_length: 4096"
+contains "$OUT_DIR/session_cpu.out" "position: 0"
+contains "$OUT_DIR/session_cpu.out" "accepted_tokens: 0"
+contains "$OUT_DIR/session_cpu.out" "kv_status: unavailable"
+contains "$OUT_DIR/session_cpu.out" "kv_bytes: 0"
+contains "$OUT_DIR/session_cpu.out" "logits_status: unavailable"
+contains "$OUT_DIR/session_cpu.out" "execution_ready: false"
+contains "$OUT_DIR/session_cpu.out" "reason: graph partial; missing output_norm, output_head"
+contains "$OUT_DIR/session_cpu.out" "status: session-created"
+
+run_ok session_accept "$YVEX_BIN" session tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --text "hello world" --accept-tokens
+contains "$OUT_DIR/session_accept.out" "tokens: 3"
+contains "$OUT_DIR/session_accept.out" "accepted_tokens: 3"
+contains "$OUT_DIR/session_accept.out" "position: 3"
+contains "$OUT_DIR/session_accept.out" "execution_ready: false"
+contains "$OUT_DIR/session_accept.out" "status: session-token-accepted"
+
+set +e
+"$YVEX_BIN" session tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cuda >"$OUT_DIR/session_cuda.out" 2>"$OUT_DIR/session_cuda.err"
+rc=$?
+set -e
+if [ "$rc" -ne 5 ]; then
+    fail "session cuda exit code was $rc, expected 5"
+fi
+contains "$OUT_DIR/session_cuda.out" "backend: cuda"
+contains "$OUT_DIR/session_cuda.out" "backend_status: unsupported"
+contains "$OUT_DIR/session_cuda.out" "reason: CUDA backend is planned for L0"
+contains "$OUT_DIR/session_cuda.out" "status: session-backend-unsupported"
 
 set +e
 "$YVEX_BIN" inspect tests/fixtures/gguf/bad-magic.gguf >"$OUT_DIR/inspect_bad_magic.out" 2>"$OUT_DIR/inspect_bad_magic.err"

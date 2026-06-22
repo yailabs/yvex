@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after G0
+after H0
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-H0 - Engine and session runtime
+I0 - CLI run/chat runtime
 ```
 
 Implemented surface:
@@ -133,9 +133,21 @@ Backend:
   src/backend/cpu_tensor.c
   src/backend/cpu_ops.c
 
+Engine / session runtime:
+  include/yvex/engine.h
+  include/yvex/session.h
+  include/yvex/kv.h
+  include/yvex/logits.h
+  src/session/engine.c
+  src/session/session.c
+  src/session/state.c
+  src/session/kv.c
+  src/session/logits.c
+  src/session/runtime_diagnostics.c
+
 CLI:
   cli/yvex_cli.c
-  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend
+  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, engine, session
 
 Tests:
   tests/test_status.c
@@ -156,13 +168,17 @@ Tests:
   tests/test_planner.c
   tests/test_backend_cpu.c
   tests/test_backend_ops.c
+  tests/test_engine.c
+  tests/test_session.c
+  tests/test_kv.c
+  tests/test_logits.c
+  tests/test_runtime_diagnostics.c
   tests/test_cli.sh
 ```
 
 Not implemented:
 
 ```text
-session runtime
 CLI run/chat
 metrics/tracing implementation
 server/provider
@@ -239,6 +255,7 @@ Current implemented commands:
 commands
 backend
 detokenize
+engine
 graph
 help
 info
@@ -247,6 +264,7 @@ metadata
 paths
 plan
 prompt
+session
 tensors
 tokenize
 tokenizer
@@ -270,8 +288,8 @@ Future commands are listed only under the delivery that implements them.
 | E0 | complete | Tokenizer and prompt rendering |
 | F0 | complete | Graph and planner |
 | G0 | complete | CPU reference backend |
-| H0 | next | Engine and session runtime |
-| I0 | planned | CLI run/chat runtime |
+| H0 | complete | Engine and session runtime |
+| I0 | next | CLI run/chat runtime |
 | J0 | planned | Metrics and tracing |
 | K0 | planned | yvexd server/provider |
 | L0 | planned | CUDA/DGX Spark backend |
@@ -1168,7 +1186,7 @@ L0 later uses CPU behavior as parity reference.
 Status:
 
 ```text
-planned
+complete
 ```
 
 Owns:
@@ -1179,7 +1197,9 @@ yvex_session
 session state machine
 KV cache skeleton
 logits buffer ownership
-prefill/decode API skeleton over implemented backend behavior
+unsupported prefill/decode API skeleton over implemented backend behavior
+runtime diagnostics
+engine/session CLI proof
 ```
 
 Does not own:
@@ -1189,26 +1209,36 @@ full chat UX
 server process
 CUDA backend
 benchmark claims
+run/chat generation
 ```
 
 Creates / modifies:
 
 ```text
 include/yvex/session.h
+include/yvex/engine.h
 include/yvex/kv.h
 include/yvex/logits.h
 src/session/
+tests/test_engine.c
 tests/test_session.c
+tests/test_kv.c
+tests/test_logits.c
+tests/test_runtime_diagnostics.c
 cli/yvex_cli.c
 Makefile
 docs/api.md
+docs/cli-runtime.md
 docs/spine.md
 ```
 
 CLI surface:
 
 ```text
-no chat command until I0 unless a fixture-only eval command is explicitly scoped
+yvex engine <file>
+yvex session <file> --backend cpu
+yvex session <file> --backend cpu --text TEXT --accept-tokens
+yvex session <file> --backend cuda reports unsupported
 ```
 
 Tests:
@@ -1217,7 +1247,9 @@ Tests:
 session lifecycle tests
 state transition tests
 KV ownership tests
-rewind and invalidation tests when implemented
+logits availability tests
+runtime diagnostics tests
+CLI engine/session smoke tests
 ```
 
 Acceptance:
@@ -1225,6 +1257,8 @@ Acceptance:
 ```text
 session lifecycle is tested
 state failures are explicit
+KV/logits unavailable status is explicit
+engine/session commands are command-visible
 no broad inference claim
 ```
 
@@ -1240,7 +1274,7 @@ J0 receives runtime events for observability.
 Status:
 
 ```text
-planned
+next
 ```
 
 Owns:
@@ -1607,13 +1641,16 @@ future model work must state the exact support level and proof command.
 | D0 | dd2eb59 | Added dtype/qtype registry, tensor table, role classifier, descriptor-only model summary, CLI output, and tests. |
 | E0 | 64be1b1 | Added tokenizer metadata/vocab table, fixture encode/decode, prompt rendering, CLI proof, fixtures, and tests. |
 | F0 | 5234420 | Added graph values/ops, shape inference, missing-role diagnostics, estimate-only memory plans, graph/plan CLI proof, and tests. |
-| G0 | current commit | Added backend ABI, CPU reference backend, CPU tensor allocation/read/write/copy, capability reporting, embed op proof, backend CLI, and tests. |
+| G0 | 8d60c2b | Added backend ABI, CPU reference backend, CPU tensor allocation/read/write/copy, capability reporting, embed op proof, backend CLI, and tests. |
+| H0 | current commit | Added engine/session runtime objects, KV/logits availability skeletons, session state machine, token acceptance diagnostics, engine/session CLI, and tests. |
 
 Current implemented CLI command set:
 
 ```text
 commands
 backend
+engine
+session
 detokenize
 graph
 help
@@ -1643,39 +1680,36 @@ git diff --check
 Next authorized milestone:
 
 ```text
-H0 - Engine and session runtime
+I0 - CLI run/chat runtime
 ```
 
-H0 starts only after G0 validation passes and the G0 commit is recorded.
+I0 starts only after H0 validation passes and the H0 commit is recorded.
 
-H0 must produce:
+I0 must produce:
 
 ```text
-engine object lifecycle
-session object lifecycle
-KV/logits ownership skeleton
-prefill/decode API skeleton over implemented backend behavior
-session state machine tests
+runtime CLI command surface over H0 sessions
+bounded run/chat command behavior
+clear unsupported decode/generation paths where execution is incomplete
+non-TTY output discipline
+CLI lifecycle tests
 ```
 
-H0 must not produce:
+I0 must not produce:
 
 ```text
-generation command
 server/provider behavior
 CUDA backend
 broad inference claim
 ```
 
-Required H0 proof:
+Required I0 proof:
 
 ```text
 make clean
 make check
 make smoke
-future build/tests/test_session
-future session lifecycle proof command if scoped
-no run/chat command
+future run/chat lifecycle proof commands
 no CUDA claim
 no broad inference claim
 ```
@@ -2002,8 +2036,8 @@ and a command-visible proof exists.
 Current handoff:
 
 ```text
-from: G0 - CPU reference backend
-to: H0 - Engine and session runtime
-authorized work: engine/session lifecycle, KV/logits ownership skeleton, prefill/decode API skeleton over implemented backend behavior
-blocked work: I0 and later until H0 acceptance passes
+from: H0 - Engine and session runtime
+to: I0 - CLI run/chat runtime
+authorized work: bounded CLI run/chat lifecycle over H0 sessions
+blocked work: J0 and later until I0 acceptance passes
 ```

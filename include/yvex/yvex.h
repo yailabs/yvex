@@ -12,8 +12,8 @@
  *   - public aggregation of implemented YVEX headers
  *
  * Does not own:
- *   - future backend/session APIs
  *   - implementation details
+ *   - future sampler/server APIs
  *
  * Used by:
  *   - yvex CLI
@@ -30,16 +30,20 @@
 #include <yvex/artifact.h>
 #include <yvex/backend.h>
 #include <yvex/dtype.h>
+#include <yvex/engine.h>
 #include <yvex/error.h>
 #include <yvex/fs.h>
 #include <yvex/gguf.h>
 #include <yvex/graph.h>
+#include <yvex/kv.h>
+#include <yvex/logits.h>
 #include <yvex/log.h>
 #include <yvex/memory_plan.h>
 #include <yvex/model.h>
 #include <yvex/op.h>
 #include <yvex/planner.h>
 #include <yvex/prompt.h>
+#include <yvex/session.h>
 #include <yvex/status.h>
 #include <yvex/tensor.h>
 #include <yvex/tokenizer.h>

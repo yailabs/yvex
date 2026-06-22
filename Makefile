@@ -5,7 +5,7 @@
 #
 # Purpose:
 #   Builds the YVEX C core library, filesystem/artifact/GGUF/model/tokenizer/
-#   graph planning/backend layers, CLI bootstrap, and tests. Also runs
+#   graph planning/backend/session layers, CLI bootstrap, and tests. Also runs
 #   documentation and guardrail validation.
 #
 # Primary commands:
@@ -72,7 +72,13 @@ CORE_SRCS := \
 	src/backend/backend.c \
 	src/backend/cpu_backend.c \
 	src/backend/cpu_tensor.c \
-	src/backend/cpu_ops.c
+	src/backend/cpu_ops.c \
+	src/session/engine.c \
+	src/session/session.c \
+	src/session/state.c \
+	src/session/kv.c \
+	src/session/logits.c \
+	src/session/runtime_diagnostics.c
 
 CORE_OBJS := $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 
@@ -94,7 +100,12 @@ TEST_SRCS := \
 	tests/test_memory_plan.c \
 	tests/test_planner.c \
 	tests/test_backend_cpu.c \
-	tests/test_backend_ops.c
+	tests/test_backend_ops.c \
+	tests/test_engine.c \
+	tests/test_session.c \
+	tests/test_kv.c \
+	tests/test_logits.c \
+	tests/test_runtime_diagnostics.c
 
 TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
 
@@ -103,7 +114,7 @@ CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md \
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: G0 CPU reference backend ABI"
+	@echo "status: H0 engine and session runtime skeleton"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"
@@ -115,6 +126,10 @@ info:
 	@echo "graph: partial planning implemented"
 	@echo "planner: estimate-only implemented"
 	@echo "backend: CPU reference implemented"
+	@echo "engine: runtime object skeleton implemented"
+	@echo "session: lifecycle skeleton implemented"
+	@echo "kv: unavailable skeleton implemented"
+	@echo "logits: unavailable skeleton implemented"
 	@echo "inference: not implemented"
 	@echo "cuda: not implemented"
 	@echo "server: not implemented"
@@ -182,6 +197,8 @@ check-docs:
 	@grep -F "E0 - Tokenizer and prompt rendering" docs/spine.md >/dev/null
 	@grep -F "F0 - Graph and planner" docs/spine.md >/dev/null
 	@grep -F "G0 - CPU reference backend" docs/spine.md >/dev/null
+	@grep -F "H0 - Engine and session runtime" docs/spine.md >/dev/null
+	@grep -F "I0 - CLI run/chat runtime" docs/spine.md >/dev/null
 	@grep -F "Implemented by:" docs/spine.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Backend Contract" docs/backend-contract.md >/dev/null
@@ -198,12 +215,8 @@ check-guardrails:
 	@test ! -d protocols
 	@test ! -e src/README.md
 	@test ! -e tests/README.md
-	@test ! -e include/yvex/session.h
 	@test ! -e include/yvex/server.h
-	@test ! -e include/yvex/kv.h
-	@test ! -e include/yvex/logits.h
 	@test ! -e include/yvex/sampler.h
-	@test ! -d src/session
 	@test ! -d src/server
 	@test ! -d backends/cuda
 	@test ! -d fixtures
