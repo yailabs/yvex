@@ -652,8 +652,13 @@ Future commands are listed only under the delivery that implements them.
 | OWI.7 | complete | First YVEX-owned GGUF emission from controlled source |
 | OWI.8 | complete | Open Weight Conversion Bridge, Qwen-first / DeepSeek-ready |
 | OWI.9 | complete | DeepSeek V4 Flash GGUF Quantization and Emission Bridge |
+| RUNTIME.KV.0 | complete | KV cache residency and benchmark policy |
+| RUNTIME.KV.1 | planned | Static KV size estimator |
+| RUNTIME.KV.2 | planned | CUDA KV allocation proof |
+| RUNTIME.KV.3 | planned | GPU paged KV allocator skeleton |
+| RUNTIME.KV.4 | planned | Host RAM spill and NVMe cold-cache experiments |
+| RUNTIME.KV.5 | planned | KV quantization policy |
 | M1 | next | Real model conversion/materialization gate |
-| RUNTIME.KV.0 | planned | KV cache residency and benchmark policy |
 | M2 | paused | Real-model materialization hardening |
 | M3 | paused | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
@@ -1969,8 +1974,9 @@ Model support waves may use CUDA only for support levels backed by command proof
 
 ### Model Support Ladder
 
-The M ladder resumes after OWI and RUNTIME.KV.0 establish the open-weight
-provenance/toolchain path and runtime KV policy.
+The M ladder resumes after OWI.9 establishes the open-weight
+provenance/toolchain path. The RUNTIME.KV map is explicit, but implementation
+waves remain planned until a later runtime gate authorizes them.
 
 Rules:
 
@@ -2942,6 +2948,371 @@ clear generated-artifact path, whether the external GGUF exists or is blocked
 by missing imatrix/output diagnostics.
 ```
 
+### RUNTIME.KV.0 - KV Cache Residency and Benchmark Policy
+
+Status:
+
+```text
+complete
+```
+
+Owns:
+
+```text
+KV cache sizing formula
+KV residency tiers
+hot/cold KV vocabulary
+future KV status vocabulary
+benchmark policy for KV work
+future KV experiment ladder
+M6/M7 dependency notes
+```
+
+Does not own:
+
+```text
+KV cache implementation
+CUDA KV allocation
+PagedAttention or vAttention
+CPU/RAM spill implementation
+NVMe offload implementation
+KV quantization
+attention kernels
+prefill
+decode
+logits
+sampler
+inference benchmark claims
+new public C API
+```
+
+Docs-only statement:
+
+```text
+RUNTIME.KV.0 is a spine policy wave. It defines runtime KV vocabulary and
+benchmark guardrails but does not allocate, page, spill, quantize, or execute KV.
+```
+
+CLI surface:
+
+```text
+none
+```
+
+Acceptance:
+
+```text
+KV cache remains unavailable in runtime output
+future KV waves are explicit in the delivery map
+no allocation or decode claim exists
+```
+
+Handoff:
+
+```text
+RUNTIME.KV.1 can add a static estimator without changing runtime residency.
+```
+
+### RUNTIME.KV.1 - Static KV Size Estimator
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+static KV memory estimator
+model metadata to KV sizing inputs
+context length and batch/session count inputs
+GQA/MQA-aware kv_head_count accounting
+dtype/bytes-per-element policy
+CLI estimator proof
+```
+
+Does not own:
+
+```text
+KV allocation
+CUDA memory allocation
+attention kernels
+prefill
+decode
+runtime cache residency
+performance claims
+```
+
+Expected future files:
+
+```text
+include/yvex/kv_estimator.h
+src/session/kv_estimator.c
+tests/test_kv_estimator.c
+```
+
+Future CLI surface:
+
+```text
+yvex kv estimate --model FILE --context N --batch N --dtype f16
+```
+
+Acceptance:
+
+```text
+estimates KV bytes deterministically
+reports required fields and unknown fields
+no allocation occurs
+no decode benchmark claim
+no inference claim
+```
+
+Handoff:
+
+```text
+RUNTIME.KV.2 can use estimator output to allocate CUDA KV buffers.
+```
+
+### RUNTIME.KV.2 - CUDA KV Allocation Proof
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+CUDA KV buffer allocation proof
+allocation/free lifecycle
+CUDA memory before/after reporting
+allocator failure diagnostics
+CPU-safe fallback behavior
+```
+
+Does not own:
+
+```text
+attention kernels
+PagedAttention
+decode
+prefill
+KV paging
+host spill
+inference
+```
+
+Expected future files:
+
+```text
+src/session/kv_alloc.c
+tests/test_kv_alloc.c
+tests/test_cuda_kv_alloc.c
+```
+
+Future CLI surface:
+
+```text
+yvex kv allocate --backend cuda --layers N --context N --kv-heads N --head-dim N --dtype f16
+```
+
+Acceptance:
+
+```text
+CUDA KV allocation succeeds or fails cleanly
+no memory leak after free
+memory before/after is reported
+no decode claim
+no inference claim
+```
+
+Handoff:
+
+```text
+RUNTIME.KV.3 can introduce paged/block allocation.
+```
+
+### RUNTIME.KV.3 - GPU Paged KV Allocator Skeleton
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+GPU KV page/block table
+fixed-size block allocation
+free-list accounting
+sequence-to-block mapping
+fragmentation reporting
+allocator simulation and optional CUDA allocation proof
+```
+
+Does not own:
+
+```text
+attention kernel integration
+PagedAttention performance claim
+vAttention performance claim
+host spill
+NVMe offload
+decode benchmark
+```
+
+Expected future files:
+
+```text
+include/yvex/kv_paged.h
+src/session/kv_paged.c
+tests/test_kv_paged.c
+```
+
+Future CLI surface:
+
+```text
+yvex kv pages --simulate --context N --block-size N --sequences N
+```
+
+Acceptance:
+
+```text
+page table is deterministic
+fragmentation report is deterministic
+no attention execution
+no performance claim
+```
+
+Handoff:
+
+```text
+M6/M7 can later decide whether paged KV becomes the active runtime path.
+```
+
+### RUNTIME.KV.4 - Host RAM Spill and NVMe Cold-Cache Experiments
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+host RAM spill experiment contract
+pinned host memory copy measurement
+NVMe cold-cache experiment contract
+sequential/random read-write measurements
+no-hot-decode policy enforcement
+```
+
+Does not own:
+
+```text
+enabling RAM spill by default
+enabling NVMe decode
+claiming SSD decode viability
+attention kernels
+prefill/decode
+inference
+```
+
+Expected future files:
+
+```text
+src/session/kv_spill.c
+tests/test_kv_spill.c
+tests/test_kv_cold_cache.c
+```
+
+Future CLI surface:
+
+```text
+yvex kv spill-test --bytes N --backend cuda
+yvex kv cold-cache-test --path PATH --bytes N
+```
+
+Acceptance:
+
+```text
+reports copy/read/write measurements as experiments only
+does not claim decode performance
+does not enable hot SSD KV
+output clearly says experimental
+```
+
+Handoff:
+
+```text
+future runtime work may use results to decide if spill tiers are worth implementing.
+```
+
+### RUNTIME.KV.5 - KV Quantization Policy
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+KV dtype/quantization policy
+K/V precision vocabulary
+possible asymmetric K/V policy
+quality-risk notes
+relationship to model qtype policy
+future calibration dependency
+```
+
+Does not own:
+
+```text
+implementing KIVI-like quantization
+changing model weight quantization
+attention kernel support
+decode
+inference quality claims
+benchmark claims
+```
+
+Expected future files:
+
+```text
+include/yvex/kv_quant_policy.h
+src/session/kv_quant_policy.c
+tests/test_kv_quant_policy.c
+```
+
+Future CLI surface:
+
+```text
+yvex kv policy inspect
+yvex kv policy estimate
+```
+
+Acceptance:
+
+```text
+policy can describe KV precision choices
+separates storage/residency/compute support
+no quality claim without evaluation
+no decode benchmark claim
+```
+
+Handoff:
+
+```text
+future decode/runtime waves may consume KV quantization policy only after
+attention kernels exist.
+```
+
 ## 4. Completed Deliveries
 
 ### Completed Milestones
@@ -3034,10 +3405,15 @@ Current active milestone:
 M1 - Real model conversion/materialization gate
 ```
 
-Planned later milestone:
+Planned runtime KV map:
 
 ```text
-RUNTIME.KV.0 - KV cache residency and benchmark policy
+RUNTIME.KV.0 complete
+RUNTIME.KV.1 planned
+RUNTIME.KV.2 planned
+RUNTIME.KV.3 planned
+RUNTIME.KV.4 planned
+RUNTIME.KV.5 planned
 ```
 
 M1 resumes after OWI.9. The official source/provenance contract, native
@@ -3045,6 +3421,9 @@ inventory, GGUF template contract, tensor mapping adapter, quantization policy
 manifest, imatrix manifest contract, controlled GGUF emission proof, qtype
 support matrix, selected-tensor conversion bridge, and DeepSeek quantization job
 bridge now exist.
+
+RUNTIME.KV implementation waves remain planned. They are not active while M1
+starts the real model conversion/materialization gate.
 
 Model support waves must produce:
 
