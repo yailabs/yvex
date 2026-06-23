@@ -249,6 +249,29 @@ The current DeepSeek-only live materialization target is:
 ~/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
 ```
 
+## Planned Local Model Registry
+
+Model artifacts stay outside the repository.
+
+Recommended model roots:
+
+```text
+~/lab/models/gguf/
+~/lab/models/hf/
+```
+
+Planned local registry locations:
+
+```text
+.yvex/models.local.json
+~/.local/share/yvex/models.json
+```
+
+Registry files are machine-local and must not be committed.
+
+The repository may include examples, but not the user's machine-specific
+registry.
+
 ## GGUF Artifact Naming Contract
 
 Generated real-model GGUF artifacts outside the repository use:

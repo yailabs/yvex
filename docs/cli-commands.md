@@ -31,6 +31,31 @@ policy, see:
 docs/cli-interface-spine.md
 ```
 
+## Model Selection Direction
+
+Current commands still accept explicit model paths.
+
+Future model selection will support local model aliases through the planned
+`yvex models` command group. See:
+
+```text
+docs/cli-interface-spine.md
+```
+
+Current canonical DeepSeek artifact:
+
+```text
+/home/dgmothx/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+```
+
+Future alias:
+
+```text
+deepseek4-v4-flash-selected-embed
+```
+
+`yvex models` is planned, not implemented.
+
 Use repository-local launchers:
 
 ```sh

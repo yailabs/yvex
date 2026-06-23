@@ -101,6 +101,387 @@ yvex>
 ./yvexd --host 127.0.0.1 --port 18080 --model FILE --backend cuda
 ```
 
+## Model Selection Doctrine
+
+YVEX must support three ways to identify a model artifact:
+
+```text
+1. absolute or relative path
+2. local model alias
+3. current selected model in the repository/user runtime state
+```
+
+Path examples:
+
+```sh
+./yvex inspect /absolute/path/model.gguf
+./yvex inspect ./relative/model.gguf
+```
+
+Alias examples:
+
+```sh
+./yvex inspect --model deepseek4-v4-flash-selected-embed
+./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
+./yvexd --model deepseek4-v4-flash-selected-embed --backend cuda
+```
+
+Current selected model examples:
+
+```sh
+./yvex models use deepseek4-v4-flash-selected-embed
+./yvex
+```
+
+Inside REPL:
+
+```text
+yvex> /model
+deepseek4-v4-flash-selected-embed
+
+yvex> /use deepseek4-v4-flash-selected-embed
+model selected
+```
+
+Model selection is persistent local operator state. It is not committed to git.
+
+## Local Model Registry
+
+YVEX model artifacts live outside the repository.
+
+Recommended external roots:
+
+```text
+~/lab/models/gguf/
+~/lab/models/hf/
+```
+
+YVEX may keep a local registry under repository/user runtime state.
+
+Preferred local registry path:
+
+```text
+.yvex/models.local.json
+```
+
+or, if user-level state is preferred:
+
+```text
+~/.local/share/yvex/models.json
+```
+
+Policy:
+
+```text
+models.local.json is machine-local
+models.local.json is not committed
+absolute paths are allowed in local registry
+tracked docs may show examples but must not require the user's exact machine path
+```
+
+The registry maps aliases to artifacts:
+
+```json
+{
+  "schema": "yvex.models.local.v1",
+  "selected": "deepseek4-v4-flash-selected-embed",
+  "models": [
+    {
+      "alias": "deepseek4-v4-flash-selected-embed",
+      "family": "deepseek4",
+      "model": "v4-flash",
+      "scope": "selected",
+      "artifact_class": "embed",
+      "qprofile": "F16",
+      "calibration": "noimatrix",
+      "producer": "yvex",
+      "schema_version": "v1",
+      "path": "/home/dgmothx/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf",
+      "sha256": "5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab",
+      "support_level": "selected-tensor-materialized",
+      "execution_ready": false
+    }
+  ]
+}
+```
+
+Decision for now:
+
+```text
+CLI.MODELS.0 documents the registry.
+CLI.MODELS.1 will implement it.
+```
+
+## Model Alias Rules
+
+Aliases must be stable, lowercase, and human-readable.
+
+Alias grammar:
+
+```text
+<family>-<model>-<scope>-<artifact-class>
+```
+
+Examples:
+
+```text
+deepseek4-v4-flash-selected-embed
+qwen3-8b-selected-embed
+```
+
+Aliases must not include:
+
+```text
+absolute paths
+spaces
+latest
+final
+new
+test
+```
+
+The artifact filename remains more precise:
+
+```text
+deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+```
+
+The alias is shorter:
+
+```text
+deepseek4-v4-flash-selected-embed
+```
+
+The registry holds the exact path, hash, support level, and artifact metadata.
+
+## Model Discovery Rules
+
+Future command:
+
+```sh
+./yvex models scan
+```
+
+Expected scan roots:
+
+```text
+1. --root DIR if provided
+2. YVEX_MODELS_DIR if set
+3. .yvex/models/ if present
+4. ~/lab/models/gguf/ if present
+5. ~/.local/share/yvex/models/ if present
+```
+
+Scanning must look for:
+
+```text
+*.gguf
+```
+
+For each GGUF:
+
+```text
+parse filename if it follows YVEX artifact naming grammar
+run lightweight inspect
+extract tensor_count, architecture/model if available
+compute sha256 only if explicitly requested or during registration
+```
+
+Scanning must not:
+
+```text
+materialize automatically
+execute model
+generate text
+modify files
+```
+
+## Future `yvex models` Command
+
+Planned command group:
+
+```text
+yvex models scan
+yvex models list
+yvex models add
+yvex models remove
+yvex models use
+yvex models current
+yvex models inspect
+```
+
+### `models scan`
+
+```sh
+./yvex models scan --root ~/lab/models/gguf
+```
+
+Finds candidate GGUF files.
+
+### `models add`
+
+```sh
+./yvex models add \
+  --alias deepseek4-v4-flash-selected-embed \
+  --path ~/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+```
+
+Adds a model to local registry.
+
+### `models list`
+
+```sh
+./yvex models list
+```
+
+Expected:
+
+```text
+* deepseek4-v4-flash-selected-embed
+  family: deepseek4
+  scope: selected
+  qprofile: F16
+  support: selected-tensor-materialized
+  execution_ready: false
+  path: /home/.../deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+```
+
+### `models use`
+
+```sh
+./yvex models use deepseek4-v4-flash-selected-embed
+```
+
+Sets the current selected model for the local user/repo.
+
+### `models current`
+
+```sh
+./yvex models current
+```
+
+Prints selected model state.
+
+### `models inspect`
+
+```sh
+./yvex models inspect deepseek4-v4-flash-selected-embed
+```
+
+Runs inspect through alias resolution.
+
+## Model Resolution Rules
+
+Any command that accepts `--model` should eventually resolve:
+
+```text
+--model /path/to/file.gguf
+--model relative/path.gguf
+--model alias
+```
+
+Resolution order:
+
+```text
+1. existing path
+2. registered alias
+3. error with suggestions
+```
+
+If no model is passed:
+
+```text
+one-shot command:
+  fail with clear message unless command supports current model
+
+interactive REPL:
+  use current selected model if available
+  otherwise start with model: none and prompt user to select
+```
+
+Error example:
+
+```text
+model not found: deepseek
+available models:
+  deepseek4-v4-flash-selected-embed
+hint:
+  ./yvex models list
+```
+
+## REPL Model Selection
+
+The REPL should not ask for a model on every prompt.
+
+Startup:
+
+```text
+YVEX - YAI Vector Execution
+model: deepseek4-v4-flash-selected-embed
+backend: cuda
+execution_ready: false
+
+yvex:cuda>
+```
+
+If no model selected:
+
+```text
+YVEX - YAI Vector Execution
+model: none
+backend: none
+execution_ready: false
+
+No model selected.
+Use /models to list available models or /use <alias>.
+
+yvex>
+```
+
+Slash commands:
+
+```text
+/models
+/model
+/use <alias>
+/inspect
+/tensors
+/materialize
+/model-gate
+/materialize-gate
+```
+
+Rules:
+
+```text
+model is session state inside REPL
+model can be changed explicitly with /use
+plain text input never changes model
+server connection never silently changes local selected model
+```
+
+## Server Model Selection
+
+`yvexd` should accept either path or alias:
+
+```sh
+./yvexd --model deepseek4-v4-flash-selected-embed --backend cuda
+./yvexd --model /absolute/path/model.gguf --backend cuda
+```
+
+If alias is used, yvexd resolves it through the same local model registry.
+
+If model is missing:
+
+```text
+server start fails
+no background daemon remains running
+error includes available model aliases when possible
+```
+
+`yvexd` must not automatically pick an arbitrary model unless explicitly
+configured.
+
 ## 5. Command Role Taxonomy
 
 ### Primary future interactive command
@@ -263,7 +644,9 @@ Minimum future slash commands:
 ```text
 /help
 /status
+/models
 /model
+/use <alias>
 /load <gguf>
 /backend <cpu|cuda>
 /inspect
@@ -417,6 +800,11 @@ until those are implemented and proven.
 ## 17. Future Implementation Ladder
 
 ```text
+CLI.MODELS.0 - Local model registry and selection spine
+CLI.MODELS.1 - Local model registry implementation
+CLI.MODELS.2 - Model alias resolution for one-shot commands
+CLI.MODELS.3 - Model selection in canonical REPL
+CLI.MODELS.4 - Model alias resolution in yvexd
 CLI.CONSOLE.0 - Canonical REPL layout and command taxonomy
 CLI.CONSOLE.1 - Line editor internal adapter and stdio fallback
 CLI.CONSOLE.2 - Slash command registry cleanup
@@ -425,13 +813,14 @@ CLI.CONSOLE.4 - Server-connected console mode
 CLI.CONSOLE.5 - True generation console after prefill/decode/sampler
 ```
 
-Only `CLI.CONSOLE.0` is documentation/design. Later waves implement behavior.
+`CLI.MODELS.0` and `CLI.CONSOLE.0` are documentation/design. Later waves
+implement behavior.
 
 ## 18. Relationship To M Ladder
 
 M2/M3/M4 focus on materialization and runtime attachment.
-CLI.CONSOLE waves must not imply runtime support that M waves have not
-implemented.
+CLI.MODELS and CLI.CONSOLE waves must not imply runtime support that M waves
+have not implemented.
 
 REPL may expose runtime state, but must not create fake runtime state.
 
@@ -444,5 +833,19 @@ prompt/run/chat ambiguity is resolved at design level
 line editor boundary is explicit
 no code behavior changes
 no new dependency
+no inference claim
+```
+
+## 20. Acceptance For CLI.MODELS.0
+
+```text
+local model registry doctrine exists
+model alias grammar exists
+model discovery rules exist
+model resolution rules exist
+REPL model selection behavior is designed
+yvexd alias behavior is designed
+no code behavior changes
+no registry files committed
 no inference claim
 ```

@@ -37,6 +37,11 @@ one-shot diagnostics/tools
 `run` is accepted-only diagnostics until inference exists.
 `chat` is the current diagnostic REPL and the future canonical console.
 
+Future model selection will use a local model registry and aliases. Current
+commands still require explicit paths unless a command already documents
+otherwise. The planned `yvex models` group is documented in
+`docs/cli-interface-spine.md`; it is not implemented yet.
+
 See `docs/cli-interface-spine.md`.
 
 ## Current Implemented Commands

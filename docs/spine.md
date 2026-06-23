@@ -62,7 +62,7 @@ docs/cli-runtime.md owns detailed command behavior.
 Current phase:
 
 ```text
-after CLI.CONSOLE.0
+after CLI.MODELS.0
 ```
 
 Current implementation commit:
@@ -675,6 +675,11 @@ Future commands are listed only under the delivery that implements them.
 | CLI.PACKAGE.0 | complete | Repository root launcher and CLI packaging baseline |
 | REPO.OPERATING.0 | complete | Agent operating handbook and model artifact cards |
 | CLI.CONSOLE.0 | complete | Canonical REPL layout and line editing boundary |
+| CLI.MODELS.0 | complete | Local model registry and selection spine |
+| CLI.MODELS.1 | planned | Local model registry implementation |
+| CLI.MODELS.2 | planned | Model alias resolution for one-shot commands |
+| CLI.MODELS.3 | planned | Model selection in canonical REPL |
+| CLI.MODELS.4 | planned | Model alias resolution in yvexd |
 | M3 | next | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
 | M5 | paused | First real-model partial graph execution |
@@ -2286,6 +2291,183 @@ one-shot diagnostics are separated from REPL
 yvexd remains daemon/provider
 line editor remains CLI-layer only
 no code behavior changes
+```
+
+### CLI.MODELS.0 - Local Model Registry and Selection Spine
+
+Status:
+
+```text
+complete
+```
+
+Owns:
+
+```text
+local model registry doctrine
+model alias grammar
+model discovery rules
+model resolution rules
+REPL model selection design
+yvexd model alias design
+```
+
+Does not own:
+
+```text
+implementation
+new CLI commands
+model scanning code
+registry persistence
+runtime behavior
+inference
+```
+
+Acceptance:
+
+```text
+CLI interface spine defines model registry
+model alias grammar exists
+REPL model selection is clear
+yvexd alias resolution is designed
+no code behavior changes
+```
+
+### CLI.MODELS.1 - Local Model Registry Implementation
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+local registry file read/write
+models add/list/remove/current/use commands
+machine-local registry path handling
+registry validation and error reporting
+```
+
+Does not own:
+
+```text
+inference
+materialization changes
+server daemon behavior
+automatic model execution
+```
+
+Acceptance:
+
+```text
+local registry can be created and inspected
+aliases map to paths and metadata
+registry files remain untracked
+no model execution claim
+```
+
+### CLI.MODELS.2 - Model Alias Resolution for One-Shot Commands
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+--model PATH or --model ALIAS resolution
+clear errors for missing aliases
+suggestions from registry
+one-shot command integration where scoped
+```
+
+Does not own:
+
+```text
+REPL model state
+yvexd alias resolution
+inference
+generation
+```
+
+Acceptance:
+
+```text
+one-shot commands can resolve registered aliases
+path behavior remains supported
+missing alias errors are precise
+```
+
+### CLI.MODELS.3 - Model Selection in Canonical REPL
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+REPL current model state
+/models
+/model
+/use <alias>
+startup state display
+```
+
+Does not own:
+
+```text
+line editor implementation
+decode
+generation
+server alias resolution
+```
+
+Acceptance:
+
+```text
+REPL can show and change selected model
+plain text input does not silently change model
+execution_ready remains truthful
+```
+
+### CLI.MODELS.4 - Model Alias Resolution in yvexd
+
+Status:
+
+```text
+planned
+```
+
+Owns:
+
+```text
+yvexd --model ALIAS resolution
+server startup failure diagnostics for missing aliases
+shared registry resolution with CLI
+```
+
+Does not own:
+
+```text
+background daemon lifecycle
+server generation
+OpenAI-compatible generation
+inference
+```
+
+Acceptance:
+
+```text
+yvexd accepts path or alias
+missing aliases fail before daemon start
+available aliases are reported when possible
 ```
 
 ### M3 - Materialized-Weight Engine Attachment

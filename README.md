@@ -42,6 +42,20 @@ The canonical CLI layout and REPL design live in:
 docs/cli-interface-spine.md
 ```
 
+## Model Selection
+
+Current commands accept explicit model paths.
+
+The active DeepSeek selected artifact is documented in
+[MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md). A local model registry and alias
+system is planned so users can select models by alias instead of absolute path.
+
+Example future alias:
+
+```text
+deepseek4-v4-flash-selected-embed
+```
+
 ## Quick Operator Files
 
 - [AGENTS.md](AGENTS.md) - operating contract for humans and coding agents.
