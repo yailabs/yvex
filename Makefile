@@ -26,9 +26,10 @@
 #
 # Interface policy:
 #   - YVEX is CLI-only.
-#   - build/bin/yvex is the current user-facing executable surface.
+#   - ./yvex and ./yvexd are repository-local launchers.
+#   - build/bin/yvex and build/bin/yvexd remain compiled products.
 
-.PHONY: info lib cli server cuda-info cuda test-cuda smoke-cuda check-cuda test test-core test-cli smoke check check-docs check-guardrails clean
+.PHONY: info lib cli server cuda-info cuda test-cuda smoke-cuda check-cuda test test-core test-cli check-launchers smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -334,7 +335,12 @@ test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests
 
 test: test-core test-cli
 
-smoke: test-cli
+check-launchers: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli_root_launchers.sh
+	@test -x yvex
+	@test -x yvexd
+	YVEX_BIN=$(YVEX_BIN) YVEXD_BIN=$(YVEXD_BIN) sh tests/test_cli_root_launchers.sh
+
+smoke: test-cli check-launchers
 
 check: check-docs check-guardrails lib cli server test smoke
 	@echo "yvex check: ok"

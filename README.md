@@ -6,8 +6,9 @@ YVEX owns model execution: artifact loading, format parsing, tensor tables,
 tokenization, prompt rendering, graph planning, backend execution, KV cache,
 prefill/decode, logits, sampling, token streaming, metrics and traces.
 
-YVEX is CLI-only. The current user-facing executable surface is
-`build/bin/yvex`: plain/rich CLI output, REPL-ready command semantics,
+YVEX is CLI-only. The repository-local developer entrypoints are `./yvex` and
+`./yvexd`, thin launchers that dispatch to compiled binaries under
+`build/bin/`: plain/rich CLI output, REPL-ready command semantics,
 streaming-friendly stdout/stderr discipline, JSON/JSONL planning, logs on
 stderr, and run artifacts on disk.
 
@@ -27,6 +28,7 @@ runtime code: core/filesystem/artifact/GGUF/model/tokenizer/graph/backend/weight
 public headers: implemented headers are aggregated by include/yvex/yvex.h
 CLI binary: build/bin/yvex accepted-only runtime shell and cuda-info implemented
 server binary: build/bin/yvexd status shell implemented
+repo launchers: ./yvex and ./yvexd dispatch to build/bin/
 GGUF parser: metadata and tensor directory implemented
 tokenizer: fixture encode/decode implemented
 CUDA backend: tensor allocation/read/write/copy and F32 embed parity implemented when driver/device are available
@@ -56,6 +58,26 @@ make info
 make check
 make check-cuda   # only on CUDA-capable hosts
 ```
+
+## Quick Start
+
+```sh
+make
+./yvex commands
+./yvex info
+./yvex inspect tests/fixtures/gguf/valid-tokenizer-simple.gguf
+```
+
+Optional local-user command links:
+
+```sh
+mkdir -p ~/.local/bin
+ln -sf "$PWD/yvex" ~/.local/bin/yvex
+ln -sf "$PWD/yvexd" ~/.local/bin/yvexd
+```
+
+`./yvex` is the repository-local developer entrypoint. `yvex` is the optional
+global/local-user command when the launcher is linked into `PATH`.
 
 At this phase, validation checks the reduced documentation posture and
 guardrails, builds libyvex.a, builds the CLI, runs C tests, and runs CLI smoke

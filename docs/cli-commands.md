@@ -9,22 +9,42 @@ a command, option, exit status, or visible runtime posture.
 ## Current Milestone
 
 ```text
-OWI.9 - DeepSeek quantization job bridge
+CLI.PACKAGE.0 - Repository root launcher and CLI packaging baseline
 ```
 
 ## Binaries
+
+Repository-local launchers:
+
+```text
+./yvex
+./yvexd
+```
+
+Compiled binaries:
 
 ```text
 build/bin/yvex
 build/bin/yvexd
 ```
 
+Global/local-user commands after symlink or install:
+
+```text
+yvex
+yvexd
+```
+
 Installed local user links, when desired:
 
 ```sh
-ln -sf "$PWD/build/bin/yvex" ~/.local/bin/yvex
-ln -sf "$PWD/build/bin/yvexd" ~/.local/bin/yvexd
+mkdir -p ~/.local/bin
+ln -sf "$PWD/yvex" ~/.local/bin/yvex
+ln -sf "$PWD/yvexd" ~/.local/bin/yvexd
 ```
+
+Direct links to `build/bin/yvex` and `build/bin/yvexd` are lower-level. Linking
+the root launchers preserves the clearer missing-build error.
 
 ## Global Posture
 
@@ -137,26 +157,26 @@ FIX=tests/fixtures/gguf/valid-tokenizer-simple.gguf
 Useful proof sequence:
 
 ```sh
-yvex inspect "$FIX"
-yvex materialize --model "$FIX" --backend cpu
-yvex materialize-gate check --model "$FIX" --label fixture --family llama \
+./yvex inspect "$FIX"
+./yvex materialize --model "$FIX" --backend cpu
+./yvex materialize-gate check --model "$FIX" --label fixture --family llama \
   --scope selected-tensor --expect-tensor token_embd.weight --expect-rank 2 \
   --expect-dims 4,8 --expect-dtype F32 --expect-bytes 128 \
   --backend cpu --require-cpu --repeat 2 --check-cleanup
-yvex model-gate check --model "$FIX" --label fixture --family llama \
+./yvex model-gate check --model "$FIX" --label fixture --family llama \
   --expect-tensor token_embd.weight --expect-rank 2 --expect-dims 4,8 \
   --expect-dtype F32 --expect-bytes 128 --backend cpu --require-cpu
-yvex metadata "$FIX"
-yvex tensors "$FIX"
-yvex tokenizer "$FIX"
-yvex tokenize "$FIX" --text "hello world"
-yvex graph "$FIX"
-yvex plan "$FIX" --backend cpu
-yvex backend cpu
-yvex engine "$FIX"
-yvex session "$FIX" --backend cpu --text "hello world" --accept-tokens
-yvex run --model "$FIX" --backend cpu --prompt "hello world"
-yvex gguf-emit controlled --out build/tests/gguf-emit/yvex-owned.gguf --overwrite
+./yvex metadata "$FIX"
+./yvex tensors "$FIX"
+./yvex tokenizer "$FIX"
+./yvex tokenize "$FIX" --text "hello world"
+./yvex graph "$FIX"
+./yvex plan "$FIX" --backend cpu
+./yvex backend cpu
+./yvex engine "$FIX"
+./yvex session "$FIX" --backend cpu --text "hello world" --accept-tokens
+./yvex run --model "$FIX" --backend cpu --prompt "hello world"
+./yvex gguf-emit controlled --out build/tests/gguf-emit/yvex-owned.gguf --overwrite
 ```
 
 Generated real-model GGUF paths used with `convert emit` and `model-gate` must
@@ -166,16 +186,16 @@ follow the canonical artifact naming grammar documented in
 CUDA proof, only when available:
 
 ```sh
-yvex cuda-info
-yvex backend cuda
-yvex plan "$FIX" --backend cuda
-yvex materialize --model "$FIX" --backend cuda
+./yvex cuda-info
+./yvex backend cuda
+./yvex plan "$FIX" --backend cuda
+./yvex materialize --model "$FIX" --backend cuda
 ```
 
 Server shell proof:
 
 ```sh
-yvexd --host 127.0.0.1 --port 18080 --model "$FIX" --backend cpu --one-request
+./yvexd --host 127.0.0.1 --port 18080 --model "$FIX" --backend cpu --one-request
 ```
 
 ## Non-Goals Visible From CLI

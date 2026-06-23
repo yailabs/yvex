@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after M2
+after CLI.PACKAGE.0
 ```
 
 Current implementation commit:
@@ -663,6 +663,7 @@ Future commands are listed only under the delivery that implements them.
 | M1 | complete | Real model conversion/materialization gate |
 | ARTIFACT.NAMING.0 | complete | GGUF artifact naming contract and existing artifact rename |
 | M2 | complete | DeepSeek real-model materialization hardening |
+| CLI.PACKAGE.0 | complete | Repository root launcher and CLI packaging baseline |
 | M3 | next | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
 | M5 | paused | First real-model partial graph execution |
@@ -2144,12 +2145,50 @@ CUDA memory before/after is sane
 unsupported storage accounting is explicit
 ```
 
+### CLI.PACKAGE.0 - Repository Root Launcher and CLI Packaging Baseline
+
+Status:
+
+```text
+complete
+```
+
+Owns:
+
+```text
+root ./yvex launcher
+root ./yvexd launcher
+launcher smoke tests
+repo-local vs global CLI documentation
+packaging baseline posture
+```
+
+Does not own:
+
+```text
+compiled binary relocation
+system packages
+runtime behavior
+model support
+inference
+```
+
+Acceptance:
+
+```text
+./yvex commands works after build
+./yvexd --help works after build
+missing build output exits 127 with clear message
+docs prefer ./yvex for repo-local examples
+build/bin remains the compiled output
+```
+
 ### M3 - Materialized-Weight Engine Attachment
 
 Status:
 
 ```text
-paused
+next
 ```
 
 Owns:
@@ -3548,13 +3587,13 @@ git diff --check
 Next authorized milestone:
 
 ```text
-M2 - Real-model materialization hardening
+M3 - Materialized-weight engine attachment
 ```
 
 Current active milestone:
 
 ```text
-M2 - Real-model materialization hardening
+M3 - Materialized-weight engine attachment
 ```
 
 Planned runtime KV map:

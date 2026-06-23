@@ -220,6 +220,23 @@ Model-gate fixture outputs created by tests are disposable and live under:
 build/tests/model-gate-cli
 ```
 
+Repository launchers:
+
+```text
+./yvex
+./yvexd
+```
+
+Build products:
+
+```text
+build/bin/yvex
+build/bin/yvexd
+```
+
+The root launchers are source-controlled wrappers and are not generated files.
+The build directory remains disposable.
+
 M2 materialization-gate reports live outside the repository under:
 
 ```text
@@ -317,10 +334,10 @@ make clean
 make check
 make smoke
 build/tests/test_fs
-./build/bin/yvex paths
-./build/bin/yvex paths --project .
-./build/bin/yvex paths --run
-YVEX_RUN_DIR=build/tests/manual-runs ./build/bin/yvex paths --run --create
+./yvex paths
+./yvex paths --project .
+./yvex paths --run
+YVEX_RUN_DIR=build/tests/manual-runs ./yvex paths --run --create
 ```
 
 B0 does not implement inference, GGUF parsing, tokenization, CUDA,
