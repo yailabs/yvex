@@ -202,6 +202,24 @@ External quantization logs live outside the repository under:
 `tests/test_cli_quant_job.sh` creates disposable fake job files under
 `build/tests/quant-job-cli`.
 
+M1 model-gate reports live outside the repository under:
+
+```text
+~/lab/artifacts/model-gates/
+```
+
+Generated GGUF artifacts validated by M1 live outside the repository under:
+
+```text
+~/lab/models/gguf/<family>/
+```
+
+Model-gate fixture outputs created by tests are disposable and live under:
+
+```text
+build/tests/model-gate-cli
+```
+
 ## Failure Behavior
 
 ```text

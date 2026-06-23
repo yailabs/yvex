@@ -267,3 +267,23 @@ execution_ready remains false
 M0 does not materialize external large models, implement model support levels,
 execute graph ops, allocate KV cache, compute logits, sample tokens, or claim
 inference.
+
+## M1 Model Gate Contract
+
+M1 adds a formal materialization gate for produced GGUF artifacts. A gate pass
+means the artifact identity, expected tensor specification, and requested
+backend materialization checks passed.
+
+Rules:
+
+```text
+selected tensor materialization is not full model support
+materialization pass is not compute support
+CPU/CUDA residency is a gate result, not inference readiness
+support_level must not exceed the proof actually produced
+execution_ready remains false
+```
+
+M1 classifies the Qwen and DeepSeek selected embedding GGUFs as
+`selected-tensor-materialized`. It does not attach an engine, execute a graph,
+run prefill/decode, compute logits, sample, or benchmark.

@@ -1167,3 +1167,54 @@ yvex quant-job create \
 `running`, `failed`, and `skipped` jobs. A `succeeded` job must have an output
 GGUF at the recorded path.
 ```
+
+## Model Gate CLI
+
+M1 adds:
+
+```sh
+yvex model-gate check
+```
+
+The command validates a produced GGUF artifact through file identity, expected
+tensor specification, and requested CPU/CUDA materialization. It reports a
+support level and keeps `execution_ready: false`.
+
+Fixture example:
+
+```sh
+yvex model-gate check \
+  --model build/tests/model-gate-cli/selected.gguf \
+  --label fixture-selected \
+  --family llama \
+  --expect-tensor token_embd.weight \
+  --expect-rank 2 \
+  --expect-dims 4,8 \
+  --expect-dtype F32 \
+  --expect-bytes 128 \
+  --backend cpu \
+  --require-cpu \
+  --report-out build/tests/model-gate-cli/report.txt
+```
+
+Real selected artifact examples use generated files outside the repository:
+
+```sh
+yvex model-gate check \
+  --model "$HOME/lab/models/gguf/qwen/qwen3-8b-embed-yvex.gguf" \
+  --label qwen3-8b-selected-embedding \
+  --family qwen3 \
+  --sha256 7a07929f6b357d293011a8224d9fa5bc4a7eb37daed1ca1cd5dfc9278b987cb9 \
+  --expect-tensor token_embd.weight \
+  --expect-rank 2 \
+  --expect-dims 4096,151936 \
+  --expect-dtype F16 \
+  --expect-bytes 1244659712 \
+  --backend cpu \
+  --backend cuda \
+  --require-cpu \
+  --require-cuda
+```
+
+`model-gate` does not claim full-model support, graph execution, prefill,
+decode, generation, or inference.

@@ -1546,6 +1546,53 @@ no benchmark claim
 no execution_ready true
 ```
 
+## Model Gate API
+
+M1 adds `include/yvex/model_gate.h`.
+
+Implemented:
+
+```text
+yvex_model_support_level
+yvex_model_gate_status
+yvex_model_gate_backend_status
+yvex_model_gate_expected_tensor
+yvex_model_gate_options
+yvex_model_gate_summary
+yvex_model_gate_check
+yvex_model_gate_status_name
+yvex_model_support_level_name
+yvex_model_gate_backend_status_name
+```
+
+Scope:
+
+```text
+file size and optional SHA-256 identity validation
+GGUF parser and tensor-table validation
+expected tensor name/rank/dims/dtype/bytes validation
+CPU materialization gate
+CUDA materialization gate when requested and available
+selected-tensor-materialized support classification
+external report evidence
+```
+
+Support-level vocabulary separates descriptor-only artifacts, selected tensor
+materialization, full weight materialization, graph execution, prefill, decode,
+and generation. M1 only uses `selected-tensor-materialized` for the produced
+Qwen and DeepSeek selected GGUF artifacts.
+
+Non-goals:
+
+```text
+no full Qwen support claim
+no full DeepSeek support claim
+no graph execution
+no prefill/decode
+no inference
+no execution_ready true
+```
+
 ## Future Backend API
 
 Backend APIs belong to `docs/backend-contract.md`. Generic backend headers must

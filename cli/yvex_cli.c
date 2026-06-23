@@ -91,6 +91,7 @@ static int command_info(int argc, char **argv);
 static int command_inspect(int argc, char **argv);
 static int command_materialize(int argc, char **argv);
 static int command_metadata(int argc, char **argv);
+static int command_model_gate(int argc, char **argv);
 static int command_native_weights(int argc, char **argv);
 static int command_paths(int argc, char **argv);
 static int command_plan(int argc, char **argv);
@@ -219,6 +220,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex metadata <path>",
         "Opens a GGUF file and prints parsed metadata key/value summaries. Arrays are summarized; tokenizers and model loading are not implemented.",
         command_metadata,
+    },
+    {
+        "model-gate",
+        "Validate a produced GGUF artifact materialization gate.",
+        "yvex model-gate check --model FILE --label LABEL --family FAMILY --expect-tensor NAME --expect-rank N --expect-dims D0,D1[,D2,D3] --expect-dtype DTYPE --expect-bytes BYTES [--sha256 HASH] [--backend cpu] [--backend cuda] [--require-cpu] [--require-cuda] [--report-out FILE]",
+        "Checks file identity, expected tensor specs, and requested CPU/CUDA materialization. It classifies selected-tensor materialization only and does not claim full-model support, graph execution, prefill, decode, generation, or inference.",
+        command_model_gate,
     },
     {
         "native-weights",
@@ -961,6 +969,32 @@ static int parse_positive_ull(const char *text, unsigned long long *out)
         return 0;
     }
     *out = value;
+    return 1;
+}
+
+static int parse_dims_csv(const char *text,
+                          unsigned int rank,
+                          unsigned long long dims[4])
+{
+    const char *p = text;
+    char *end = NULL;
+    unsigned int i;
+
+    if (!text || !dims || rank == 0 || rank > 4u) return 0;
+    for (i = 0; i < 4u; ++i) dims[i] = 0;
+    for (i = 0; i < rank; ++i) {
+        unsigned long long value;
+        errno = 0;
+        value = strtoull(p, &end, 10);
+        if (errno != 0 || end == p || value == 0) return 0;
+        dims[i] = value;
+        if (i + 1u < rank) {
+            if (*end != ',') return 0;
+            p = end + 1;
+        } else if (*end != '\0') {
+            return 0;
+        }
+    }
     return 1;
 }
 
@@ -1934,6 +1968,162 @@ static int command_materialize(int argc, char **argv)
     yvex_backend_close(backend);
     close_model_context(&ctx);
     return 0;
+}
+
+static void print_model_gate_report(FILE *fp,
+                                    const yvex_model_gate_options *options,
+                                    const yvex_model_gate_summary *summary,
+                                    const char *reason)
+{
+    fprintf(fp, "model gate: check\n");
+    fprintf(fp, "label: %s\n", summary->model_label ? summary->model_label : "");
+    fprintf(fp, "family: %s\n", summary->family ? summary->family : "");
+    fprintf(fp, "model: %s\n", summary->model_path ? summary->model_path : "");
+    fprintf(fp, "file_bytes: %llu\n", summary->file_bytes);
+    fprintf(fp, "tensor_count: %llu\n", summary->tensor_count);
+    fprintf(fp, "expected_tensor_matches: %llu\n", summary->expected_tensor_matches);
+    fprintf(fp, "expected_tensor_mismatches: %llu\n", summary->expected_tensor_mismatches);
+    fprintf(fp, "cpu: %s\n", yvex_model_gate_backend_status_name(summary->cpu_status));
+    fprintf(fp, "cuda: %s\n", yvex_model_gate_backend_status_name(summary->cuda_status));
+    fprintf(fp, "support_level: %s\n", yvex_model_support_level_name(summary->support_level));
+    fprintf(fp, "execution_ready: false\n");
+    if (options && options->expected_tensor_count == 1 && options->expected_tensors) {
+        const yvex_model_gate_expected_tensor *t = &options->expected_tensors[0];
+        fprintf(fp, "expected_tensor: %s\n", t->name ? t->name : "");
+        fprintf(fp, "expected_rank: %u\n", t->rank);
+        fprintf(fp, "expected_dims:");
+        if (t->rank > 0) fprintf(fp, " %llu", t->dims[0]);
+        if (t->rank > 1) fprintf(fp, ",%llu", t->dims[1]);
+        if (t->rank > 2) fprintf(fp, ",%llu", t->dims[2]);
+        if (t->rank > 3) fprintf(fp, ",%llu", t->dims[3]);
+        fprintf(fp, "\n");
+        fprintf(fp, "expected_dtype: %s\n", t->dtype ? t->dtype : "");
+        fprintf(fp, "expected_bytes: %llu\n", t->bytes);
+    }
+    fprintf(fp, "reason: %s\n", reason && reason[0] ? reason : "selected tensor materialization gate");
+    fprintf(fp, "status: %s\n", yvex_model_gate_status_name(summary->status));
+}
+
+static int command_model_gate(int argc, char **argv)
+{
+    yvex_model_gate_options options;
+    yvex_model_gate_expected_tensor expected;
+    yvex_model_gate_summary summary;
+    yvex_error err;
+    const char *report_out = NULL;
+    unsigned long long value;
+    int have_tensor = 0;
+    int have_rank = 0;
+    int have_dims = 0;
+    int have_dtype = 0;
+    int have_bytes = 0;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&options, 0, sizeof(options));
+    memset(&expected, 0, sizeof(expected));
+    memset(&summary, 0, sizeof(summary));
+
+    if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        print_command_help(stdout, find_command("model-gate"));
+        return 0;
+    }
+    if (argc < 3 || strcmp(argv[2], "check") != 0) {
+        fprintf(stderr, "yvex: model-gate requires subcommand check\n");
+        return 2;
+    }
+
+    for (i = 3; i < argc; ++i) {
+        if (strcmp(argv[i], "--require-cpu") == 0) {
+            options.require_cpu = 1;
+            options.check_cpu = 1;
+            continue;
+        }
+        if (strcmp(argv[i], "--require-cuda") == 0) {
+            options.require_cuda = 1;
+            options.check_cuda = 1;
+            continue;
+        }
+        if (i + 1 >= argc) {
+            fprintf(stderr, "yvex: model-gate option requires a value: %s\n", argv[i]);
+            return 2;
+        }
+        if (strcmp(argv[i], "--model") == 0) {
+            options.model_path = argv[++i];
+        } else if (strcmp(argv[i], "--label") == 0) {
+            options.model_label = argv[++i];
+        } else if (strcmp(argv[i], "--family") == 0) {
+            options.family = argv[++i];
+        } else if (strcmp(argv[i], "--sha256") == 0) {
+            options.artifact_sha256 = argv[++i];
+        } else if (strcmp(argv[i], "--expect-tensor") == 0) {
+            expected.name = argv[++i];
+            have_tensor = 1;
+        } else if (strcmp(argv[i], "--expect-rank") == 0) {
+            if (!parse_positive_ull(argv[++i], &value) || value > 4ull) {
+                fprintf(stderr, "yvex: invalid --expect-rank\n");
+                return 2;
+            }
+            expected.rank = (unsigned int)value;
+            have_rank = 1;
+        } else if (strcmp(argv[i], "--expect-dims") == 0) {
+            const char *dims_text = argv[++i];
+            if (!have_rank || !parse_dims_csv(dims_text, expected.rank, expected.dims)) {
+                fprintf(stderr, "yvex: invalid --expect-dims; pass --expect-rank before --expect-dims\n");
+                return 2;
+            }
+            have_dims = 1;
+        } else if (strcmp(argv[i], "--expect-dtype") == 0) {
+            expected.dtype = argv[++i];
+            have_dtype = 1;
+        } else if (strcmp(argv[i], "--expect-bytes") == 0) {
+            if (!parse_positive_ull(argv[++i], &expected.bytes)) {
+                fprintf(stderr, "yvex: invalid --expect-bytes\n");
+                return 2;
+            }
+            have_bytes = 1;
+        } else if (strcmp(argv[i], "--backend") == 0) {
+            const char *backend = argv[++i];
+            if (strcmp(backend, "cpu") == 0) {
+                options.check_cpu = 1;
+            } else if (strcmp(backend, "cuda") == 0) {
+                options.check_cuda = 1;
+            } else {
+                fprintf(stderr, "yvex: model-gate backend must be cpu or cuda\n");
+                return 2;
+            }
+        } else if (strcmp(argv[i], "--report-out") == 0) {
+            report_out = argv[++i];
+        } else {
+            fprintf(stderr, "yvex: unknown model-gate option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help model-gate' for usage.\n");
+            return 2;
+        }
+    }
+
+    if (!options.model_path || !options.model_label || !options.family ||
+        !have_tensor || !have_rank || !have_dims || !have_dtype || !have_bytes) {
+        fprintf(stderr, "yvex: model-gate check requires --model --label --family and one complete --expect-* tensor spec\n");
+        return 2;
+    }
+
+    options.expected_tensors = &expected;
+    options.expected_tensor_count = 1;
+    rc = yvex_model_gate_check(&options, &summary, &err);
+    print_model_gate_report(stdout, &options, &summary,
+                            rc == YVEX_OK ? NULL : yvex_error_message(&err));
+    if (report_out) {
+        FILE *fp = fopen(report_out, "wb");
+        if (!fp) {
+            fprintf(stderr, "yvex: cannot write report: %s\n", report_out);
+            return 1;
+        }
+        print_model_gate_report(fp, &options, &summary,
+                                rc == YVEX_OK ? NULL : yvex_error_message(&err));
+        fclose(fp);
+    }
+    return rc == YVEX_OK ? 0 : exit_for_status(rc);
 }
 
 static int command_native_weights(int argc, char **argv)

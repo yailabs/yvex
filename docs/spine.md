@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after OWI.FINAL.0
+after M1
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-M1 - Real model conversion/materialization gate
+M2 - Real-model materialization hardening
 ```
 
 Implemented surface:
@@ -660,8 +660,8 @@ Future commands are listed only under the delivery that implements them.
 | RUNTIME.KV.3 | planned | GPU paged KV allocator skeleton |
 | RUNTIME.KV.4 | planned | Host RAM spill and NVMe cold-cache experiments |
 | RUNTIME.KV.5 | planned | KV quantization policy |
-| M1 | next | Real model conversion/materialization gate |
-| M2 | paused | Real-model materialization hardening |
+| M1 | complete | Real model conversion/materialization gate |
+| M2 | next | Real-model materialization hardening |
 | M3 | paused | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
 | M5 | paused | First real-model partial graph execution |
@@ -1995,24 +1995,28 @@ No broad model support claim is valid without generated/staged artifact provenan
 Status:
 
 ```text
-next
+complete
 ```
 
 Owns:
 
 ```text
-Qwen selected/full materialization gate
-DeepSeek conversion plan validation
+Qwen selected materialization gate
+DeepSeek selected materialization gate
 provenance-controlled generated artifact paths
 CPU and CUDA materialization proof where available
-failure diagnostics for OOM, split, unsupported dtype, and parser failures
+file identity and hash validation
+expected tensor specification validation
+model support-level classification
 no model files committed
 ```
 
 Does not own:
 
 ```text
-conversion itself if OWI still owns conversion
+full Qwen model conversion
+full DeepSeek model conversion
+full-model support claim
 inference
 graph execution
 prefill/decode
@@ -2023,11 +2027,22 @@ server completions
 Acceptance:
 
 ```text
-yvex materialize --model "$DEEPSEEK_GGUF" --backend cuda
-result is either weights-materialized or clean weights-failed
-failure reason is specific
+Qwen selected GGUF passes model-gate check
+DeepSeek selected GGUF passes model-gate check
+CPU and CUDA materialization pass for both selected artifacts
+support_level is selected-tensor-materialized
 execution_ready remains false
 no inference claim
+```
+
+Truth statement:
+
+```text
+M1 proves selected real-model materialization only.
+M1 does not prove full-model support.
+M1 does not prove graph execution.
+M1 does not prove prefill or decode.
+M1 does not prove inference.
 ```
 
 ### M2 - Real-Model Materialization Hardening
@@ -3471,13 +3486,13 @@ git diff --check
 Next authorized milestone:
 
 ```text
-M1 - Real model conversion/materialization gate
+M2 - Real-model materialization hardening
 ```
 
 Current active milestone:
 
 ```text
-M1 - Real model conversion/materialization gate
+M2 - Real-model materialization hardening
 ```
 
 Planned runtime KV map:

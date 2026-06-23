@@ -139,6 +139,9 @@ Useful proof sequence:
 ```sh
 yvex inspect "$FIX"
 yvex materialize --model "$FIX" --backend cpu
+yvex model-gate check --model "$FIX" --label fixture --family llama \
+  --expect-tensor token_embd.weight --expect-rank 2 --expect-dims 4,8 \
+  --expect-dtype F32 --expect-bytes 128 --backend cpu --require-cpu
 yvex metadata "$FIX"
 yvex tensors "$FIX"
 yvex tokenizer "$FIX"
@@ -172,6 +175,7 @@ yvexd --host 127.0.0.1 --port 18080 --model "$FIX" --backend cpu --one-request
 ```text
 no model support claim
 no large/real model materialization
+no selected-tensor materialization upgraded to full-model support
 no prefill/decode execution
 no sampler
 no generated assistant text
