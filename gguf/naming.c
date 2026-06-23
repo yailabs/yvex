@@ -7,7 +7,7 @@
  */
 
 
-/* ===== yvex_artifact_naming.c ===== */
+/* ===== gguf/naming.c ===== */
 
 #include <stdio.h>
 #include <string.h>

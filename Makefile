@@ -57,7 +57,7 @@ YVEXD_BIN := ./yvexd
 CORE_SRCS := \
 	yvex_core.c \
 	yvex_artifact.c \
-	yvex_artifact_naming.c \
+	gguf/naming.c \
 	gguf/gguf.c \
 	gguf/tools.c \
 	yvex_model.c \
@@ -69,8 +69,8 @@ CORE_SRCS := \
 	yvex_chat.c \
 	yvex_server.c \
 	yvex_model_tools.c \
-	yvex_conversion.c \
-	yvex_quant.c \
+	gguf/conversion.c \
+	gguf/quant.c \
 	yvex_source.c
 
 CUDA_SRCS := \

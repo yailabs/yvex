@@ -13,11 +13,13 @@ test -f yvex_cli.c
 test -f yvexd.c
 test -f yvex_core.c
 test -f yvex_model_tools.c
-test -f yvex_quant.c
 test -f yvex_source.c
 test -f cuda/cuda_backend.c
 test -f gguf/gguf.c
+test -f gguf/naming.c
 test -f gguf/tools.c
+test -f gguf/conversion.c
+test -f gguf/quant.c
 test -f models/deepseek.h
 test -f models/qwen.h
 
