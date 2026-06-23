@@ -17,6 +17,11 @@ backend public headers: implemented in include/yvex/backend.h
 No backend support claim exists without implementation, tests, command-visible
 behavior, documented limitations, and a clear unsupported path.
 
+Conversion qtype support is not backend compute support. `yvex qtype-support`
+may report a qtype as policy/storage/emit supported while compute remains `no`
+or partial. Backend capability claims require backend tests and command proof;
+conversion emit alone does not make a tensor executable.
+
 ## Backend Kinds
 
 Backend kinds:

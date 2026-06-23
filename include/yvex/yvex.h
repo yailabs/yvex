@@ -29,6 +29,7 @@
 
 #include <yvex/artifact.h>
 #include <yvex/backend.h>
+#include <yvex/conversion.h>
 #include <yvex/dtype.h>
 #include <yvex/engine.h>
 #include <yvex/error.h>
@@ -50,6 +51,7 @@
 #include <yvex/profile.h>
 #include <yvex/prompt.h>
 #include <yvex/quant_policy.h>
+#include <yvex/qtype_support.h>
 #include <yvex/server.h>
 #include <yvex/session.h>
 #include <yvex/source_manifest.h>

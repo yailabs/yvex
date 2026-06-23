@@ -14,6 +14,8 @@ yvex backend cpu|cuda
 yvex commands
 yvex cuda-info
 yvex chat --model FILE --backend cpu|cuda
+yvex convert plan --arch ARCH --native-source DIR --out-plan FILE
+yvex convert emit --arch ARCH --native-source DIR --tensor NAME --target-qtype QTYPE --out FILE
 yvex detokenize <path> --ids IDS
 yvex engine <path>
 yvex graph <path>
@@ -40,6 +42,7 @@ yvex prompt <path> --user TEXT
 yvex quant-policy inspect --policy FILE
 yvex quant-policy validate --policy FILE [--template FILE]
 yvex quant-policy derive --template FILE --arch NAME --out FILE
+yvex qtype-support
 yvex run --model FILE --backend cpu|cuda --prompt TEXT
 yvex session <path> --backend cpu|cuda
 yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE
@@ -70,6 +73,8 @@ filesystem: implemented
 artifact: open/read implemented
 gguf: metadata/tensor directory parsing implemented
 gguf_emit: controlled GGUF writer implemented
+conversion: open-weight selected tensor bridge implemented
+qtype_support: conversion support matrix implemented
 model: descriptor-only implemented
 tokenizer: fixture encode/decode implemented
 prompt: default renderer implemented
@@ -291,6 +296,46 @@ tensor_payload_bytes: 128
 alignment: 32
 roundtrip_validated: yes
 status: gguf-written
+```
+
+## Current `yvex qtype-support`
+
+`yvex qtype-support` prints the conversion support matrix. Policy/storage,
+GGUF emission, quantization/cast, and backend compute are separate fields.
+
+```sh
+./build/bin/yvex qtype-support
+```
+
+## Current `yvex convert`
+
+`yvex convert plan` builds a JSON conversion plan from a native safetensors
+source and architecture adapter. `yvex convert emit` emits one selected tensor
+to a YVEX-owned GGUF and validates it through parser/materialization. It does
+not claim full-model conversion, inference, generation, or `execution_ready`.
+
+Qwen selected tensor example:
+
+```sh
+./build/bin/yvex convert emit \
+  --arch qwen3 \
+  --native-source "$HOME/lab/models/hf/qwen/Qwen3-8B" \
+  --tensor model.embed_tokens.weight \
+  --target-qtype F16 \
+  --out "$HOME/lab/models/gguf/qwen/qwen3-8b-embed-yvex.gguf" \
+  --overwrite
+```
+
+DeepSeek plan example:
+
+```sh
+./build/bin/yvex convert plan \
+  --arch deepseek4 \
+  --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" \
+  --template "/home/dgmothx/lab/src/ds4/gguf/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix.gguf" \
+  --quant-policy "$HOME/lab/manifests/deepseek/deepseek-v4-flash-quant-policy.json" \
+  --imatrix-manifest "$HOME/lab/manifests/deepseek/deepseek-v4-flash-imatrix-manifest.json" \
+  --out-plan "$HOME/lab/manifests/deepseek/deepseek-v4-flash-conversion-plan.json"
 ```
 
 ## Current `yvex tensor-map`

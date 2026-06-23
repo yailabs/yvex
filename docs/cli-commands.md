@@ -9,7 +9,7 @@ a command, option, exit status, or visible runtime posture.
 ## Current Milestone
 
 ```text
-OWI.7 - controlled GGUF emission
+OWI.8 - open-weight conversion bridge
 ```
 
 ## Binaries
@@ -37,6 +37,8 @@ source_manifest: provenance JSON writer implemented
 native_weights: safetensors header inventory implemented
 gguf_template: contract validator implemented
 gguf_emit: controlled GGUF writer implemented
+conversion: open-weight selected tensor bridge implemented
+qtype_support: conversion support matrix implemented
 weight_mapping: tensor adapter contract implemented
 quant_policy: manifest validator implemented
 imatrix: calibration artifact manifest implemented
@@ -51,9 +53,10 @@ adds source-manifest provenance for external official-weight source trees. OWI.4
 adds tensor mapping from native names to canonical roles and GGUF/template target
 names. OWI.5 adds declarative quantization policy manifests. OWI.6 adds
 calibration/imatrix provenance manifests and policy compatibility checks. OWI.7
-adds controlled GGUF emission for one tiny F32 tensor. These do not add
-DeepSeek conversion, imatrix generation, calibration execution, quantization
-execution, model execution, or inference.
+adds controlled GGUF emission for one tiny F32 tensor. OWI.8 adds conversion
+plan and selected-tensor GGUF emit from safetensors. These do not add full
+DeepSeek conversion, imatrix generation, calibration execution, model execution,
+or inference.
 
 ## `yvex` Commands
 
@@ -62,6 +65,7 @@ execution, model execution, or inference.
 | `backend` | `yvex backend cpu\|cuda` | implemented; backend status, memory, capabilities |
 | `chat` | `yvex chat --model FILE --backend cpu\|cuda` | implemented; accepted-only runtime shell |
 | `commands` | `yvex commands` | implemented; command table dump |
+| `convert` | `yvex convert plan\|emit` | implemented; conversion plan and selected tensor GGUF emit |
 | `cuda-info` | `yvex cuda-info` | implemented; CUDA probe, exit 5 when unavailable |
 | `detokenize` | `yvex detokenize PATH --ids IDS` | implemented for fixture tokenizer path |
 | `engine` | `yvex engine PATH` | implemented; descriptor/runtime diagnostics |
@@ -79,6 +83,7 @@ execution, model execution, or inference.
 | `plan` | `yvex plan PATH [--backend cpu\|cuda] [--seq N] [--ctx N]` | implemented; plan-only |
 | `prompt` | `yvex prompt PATH --user TEXT [--system TEXT] [--assistant TEXT] [--tokens]` | implemented |
 | `quant-policy` | `yvex quant-policy inspect\|validate --policy FILE` | implemented; declarative qtype policy manifest |
+| `qtype-support` | `yvex qtype-support` | implemented; conversion qtype support matrix |
 | `run` | `yvex run --model FILE --backend cpu\|cuda --prompt TEXT` | implemented; accepted-only |
 | `session` | `yvex session PATH --backend cpu\|cuda [--text TEXT] [--accept-tokens]` | implemented; diagnostics/token acceptance |
 | `source-manifest` | `yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE` | implemented; source provenance JSON writer |

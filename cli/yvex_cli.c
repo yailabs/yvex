@@ -78,6 +78,7 @@ typedef struct {
 static int command_backend(int argc, char **argv);
 static int command_chat(int argc, char **argv);
 static int command_commands(int argc, char **argv);
+static int command_convert(int argc, char **argv);
 static int command_cuda_info(int argc, char **argv);
 static int command_detokenize(int argc, char **argv);
 static int command_engine(int argc, char **argv);
@@ -95,6 +96,7 @@ static int command_paths(int argc, char **argv);
 static int command_plan(int argc, char **argv);
 static int command_prompt(int argc, char **argv);
 static int command_quant_policy(int argc, char **argv);
+static int command_qtype_support(int argc, char **argv);
 static int command_run(int argc, char **argv);
 static int command_session(int argc, char **argv);
 static int command_source_manifest(int argc, char **argv);
@@ -125,6 +127,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex commands",
         "Prints the command names implemented by this binary.",
         command_commands,
+    },
+    {
+        "convert",
+        "Plan or emit selected open-weight GGUF conversions.",
+        "yvex convert plan --arch ARCH --native-source DIR --out-plan FILE | yvex convert emit --arch ARCH --native-source DIR --tensor NAME --target-qtype QTYPE --out FILE [--overwrite]",
+        "Builds conversion plans and emits selected tensor GGUF artifacts from official safetensors sources. It does not infer, execute a full model, or claim generation support.",
+        command_convert,
     },
     {
         "cuda-info",
@@ -251,6 +260,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex quant-policy inspect|validate --policy FILE [--template FILE] | yvex quant-policy derive --template FILE --arch NAME --out FILE",
         "Handles declarative qtype policy manifests. It does not quantize tensors, emit GGUF, materialize weights, calibrate imatrix data, or infer.",
         command_quant_policy,
+    },
+    {
+        "qtype-support",
+        "Print conversion qtype support matrix.",
+        "yvex qtype-support",
+        "Reports policy/storage/emit/quantize/compute support separately. Compute support is not implied by conversion support.",
+        command_qtype_support,
     },
     {
         "run",
@@ -1278,6 +1294,142 @@ static int command_gguf_emit(int argc, char **argv)
     return 0;
 }
 
+static int command_qtype_support(int argc, char **argv)
+{
+    unsigned long long i;
+
+    if (argc == 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        print_command_help(stdout, find_command("qtype-support"));
+        return 0;
+    }
+    if (argc != 2) {
+        fprintf(stderr, "yvex: qtype-support takes no arguments\n");
+        return 2;
+    }
+    printf("qtype support:\n");
+    for (i = 0; i < yvex_qtype_support_count(); ++i) {
+        const yvex_qtype_support_info *row = yvex_qtype_support_at(i);
+        printf("  %s policy=%s storage=%s emit=%s quantize=%s compute=%s notes=%s\n",
+               row->qtype,
+               row->policy_supported ? "yes" : "no",
+               row->storage_supported ? "yes" : "no",
+               row->emit_supported ? "yes" : "no",
+               strcmp(row->qtype, "F32") == 0 ? "n/a" : (row->quantize_supported ? "yes" : "no"),
+               row->compute_supported ? "partial" : "no",
+               row->notes ? row->notes : "");
+    }
+    printf("status: qtype-support\n");
+    return 0;
+}
+
+static int command_convert(int argc, char **argv)
+{
+    yvex_conversion_options options;
+    yvex_conversion_summary summary;
+    yvex_error err;
+    const char *out_plan = NULL;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&options, 0, sizeof(options));
+    memset(&summary, 0, sizeof(summary));
+
+    if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        print_command_help(stdout, find_command("convert"));
+        return 0;
+    }
+    if (argc < 3 || (strcmp(argv[2], "plan") != 0 && strcmp(argv[2], "emit") != 0)) {
+        fprintf(stderr, "yvex: convert requires plan or emit\n");
+        return 2;
+    }
+
+    for (i = 3; i < argc; ++i) {
+        if (strcmp(argv[i], "--overwrite") == 0) {
+            options.overwrite = 1;
+            continue;
+        }
+        if (strcmp(argv[i], "--allow-unsupported-qtype") == 0) {
+            options.allow_unsupported_qtype = 1;
+            continue;
+        }
+        if (strcmp(argv[i], "--require-all") == 0) {
+            options.require_all = 1;
+            continue;
+        }
+        if (i + 1 >= argc) {
+            fprintf(stderr, "yvex: convert option requires a value: %s\n", argv[i]);
+            return 2;
+        }
+        if (strcmp(argv[i], "--arch") == 0) options.architecture = argv[++i];
+        else if (strcmp(argv[i], "--source-manifest") == 0) options.source_manifest_path = argv[++i];
+        else if (strcmp(argv[i], "--native-source") == 0) options.native_source_dir = argv[++i];
+        else if (strcmp(argv[i], "--template") == 0) options.template_path = argv[++i];
+        else if (strcmp(argv[i], "--quant-policy") == 0) options.quant_policy_path = argv[++i];
+        else if (strcmp(argv[i], "--imatrix-manifest") == 0) options.imatrix_manifest_path = argv[++i];
+        else if (strcmp(argv[i], "--out") == 0) options.out_path = argv[++i];
+        else if (strcmp(argv[i], "--out-plan") == 0) out_plan = argv[++i];
+        else if (strcmp(argv[i], "--tensor") == 0) options.tensor_name = argv[++i];
+        else if (strcmp(argv[i], "--target-qtype") == 0) options.target_qtype = argv[++i];
+        else if (strcmp(argv[i], "--limit") == 0) {
+            char *end = NULL;
+            options.limit_tensors = strtoull(argv[++i], &end, 10);
+            if (!end || *end != '\0') {
+                fprintf(stderr, "yvex: invalid convert limit\n");
+                return 2;
+            }
+        } else {
+            fprintf(stderr, "yvex: unknown convert option: %s\n", argv[i]);
+            return 2;
+        }
+    }
+
+    if (strcmp(argv[2], "plan") == 0) {
+        if (!options.architecture || !options.native_source_dir || !out_plan) {
+            fprintf(stderr, "yvex: convert plan requires --arch --native-source --out-plan\n");
+            return 2;
+        }
+        rc = yvex_conversion_plan_write_json(&options, out_plan, &summary, &err);
+        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        printf("conversion plan: written\n");
+        printf("architecture: %s\n", options.architecture);
+        printf("native_tensors: %llu\n", summary.native_tensor_count);
+        printf("planned_tensors: %llu\n", summary.planned_tensor_count);
+        printf("unmapped_tensors: %llu\n", summary.unmapped_tensor_count);
+        printf("unsupported_qtypes: %llu\n", summary.unsupported_qtype_count);
+        printf("out: %s\n", out_plan);
+        printf("status: conversion-plan-written\n");
+        return 0;
+    }
+
+    if (!options.architecture || !options.native_source_dir || !options.tensor_name ||
+        !options.target_qtype || !options.out_path) {
+        fprintf(stderr, "yvex: convert emit requires --arch --native-source --tensor --target-qtype --out\n");
+        return 2;
+    }
+    rc = yvex_conversion_emit_gguf(&options, &summary, &err);
+    if (rc != YVEX_OK) {
+        printf("conversion emit: gguf\n");
+        printf("architecture: %s\n", options.architecture);
+        printf("source_tensor: %s\n", options.tensor_name);
+        printf("target_qtype: %s\n", options.target_qtype);
+        printf("status: conversion-failed\n");
+        fprintf(stderr, "reason: %s\n", yvex_error_message(&err));
+        return exit_for_status(rc);
+    }
+    printf("conversion emit: gguf\n");
+    printf("architecture: %s\n", options.architecture);
+    printf("source_tensor: %s\n", options.tensor_name);
+    printf("target_qtype: %s\n", options.target_qtype);
+    printf("out: %s\n", options.out_path);
+    printf("bytes_read: %llu\n", summary.bytes_read);
+    printf("bytes_written: %llu\n", summary.bytes_written);
+    printf("roundtrip_validated: %s\n", summary.roundtrip_validated ? "yes" : "no");
+    printf("execution_ready: false\n");
+    printf("status: conversion-gguf-written\n");
+    return 0;
+}
+
 static int command_help(int argc, char **argv)
 {
     const yvex_cli_command *command;
@@ -1493,6 +1645,8 @@ static int command_info(int argc, char **argv)
     printf("native_weights: safetensors header inventory implemented\n");
     printf("gguf_template: contract validator implemented\n");
     printf("gguf_emit: controlled GGUF writer implemented\n");
+    printf("conversion: open-weight selected tensor bridge implemented\n");
+    printf("qtype_support: conversion support matrix implemented\n");
     printf("weight_mapping: tensor adapter contract implemented\n");
     printf("quant_policy: manifest validator implemented\n");
     printf("imatrix: calibration artifact manifest implemented\n");

@@ -6,6 +6,7 @@
  */
 #include "weight_mapping_internal.h"
 #include "adapters/deepseek_adapter.h"
+#include "adapters/qwen_adapter.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -27,7 +28,9 @@ static int wm_supported_arch(const char *architecture)
 {
     return architecture &&
            (strcmp(architecture, "deepseek4") == 0 ||
-            strcmp(architecture, "deepseek") == 0);
+            strcmp(architecture, "deepseek") == 0 ||
+            strcmp(architecture, "qwen3") == 0 ||
+            strcmp(architecture, "qwen") == 0);
 }
 
 const char *yvex_weight_mapping_status_name(yvex_weight_mapping_status status)
@@ -198,8 +201,14 @@ static int wm_map_native_row(yvex_weight_mapping_table *table,
     int requires_transpose = 0;
     int mapped;
 
-    mapped = yvex_deepseek_adapter_map_name(native->name, target_candidate, sizeof(target_candidate),
+    if (strcmp(options->architecture, "qwen3") == 0 ||
+        strcmp(options->architecture, "qwen") == 0) {
+        mapped = yvex_qwen_adapter_map_name(native->name, target_candidate, sizeof(target_candidate),
                                             &role, &issue);
+    } else {
+        mapped = yvex_deepseek_adapter_map_name(native->name, target_candidate, sizeof(target_candidate),
+                                                &role, &issue);
+    }
     if (!mapped) {
         return yvex_weight_mapping_table_add(table, native, options->architecture, "unknown",
                                              YVEX_TENSOR_ROLE_UNKNOWN,

@@ -18,6 +18,8 @@
 #   - yvex --version
 #   - yvex version
 #   - yvex info
+#   - yvex convert
+#   - yvex qtype-support
 #   - yvex inspect
 #   - yvex materialize
 #   - yvex metadata
@@ -118,6 +120,8 @@ contains "$OUT_DIR/info.out" "source_manifest: provenance JSON writer implemente
 contains "$OUT_DIR/info.out" "native_weights: safetensors header inventory implemented"
 contains "$OUT_DIR/info.out" "gguf_template: contract validator implemented"
 contains "$OUT_DIR/info.out" "gguf_emit: controlled GGUF writer implemented"
+contains "$OUT_DIR/info.out" "conversion: open-weight selected tensor bridge implemented"
+contains "$OUT_DIR/info.out" "qtype_support: conversion support matrix implemented"
 contains "$OUT_DIR/info.out" "weight_mapping: tensor adapter contract implemented"
 contains "$OUT_DIR/info.out" "quant_policy: manifest validator implemented"
 contains "$OUT_DIR/info.out" "imatrix: calibration artifact manifest implemented"
@@ -135,6 +139,7 @@ contains "$OUT_DIR/commands.out" "Implemented commands:"
 contains "$OUT_DIR/commands.out" "  backend"
 contains "$OUT_DIR/commands.out" "  chat"
 contains "$OUT_DIR/commands.out" "  commands"
+contains "$OUT_DIR/commands.out" "  convert"
 contains "$OUT_DIR/commands.out" "  cuda-info"
 contains "$OUT_DIR/commands.out" "  detokenize"
 contains "$OUT_DIR/commands.out" "  engine"
@@ -152,6 +157,7 @@ contains "$OUT_DIR/commands.out" "  paths"
 contains "$OUT_DIR/commands.out" "  plan"
 contains "$OUT_DIR/commands.out" "  prompt"
 contains "$OUT_DIR/commands.out" "  quant-policy"
+contains "$OUT_DIR/commands.out" "  qtype-support"
 contains "$OUT_DIR/commands.out" "  run"
 contains "$OUT_DIR/commands.out" "  session"
 contains "$OUT_DIR/commands.out" "  source-manifest"
@@ -166,6 +172,12 @@ contains "$OUT_DIR/help_info.out" "usage: yvex info"
 
 run_ok help_backend "$YVEX_BIN" help backend
 contains "$OUT_DIR/help_backend.out" "usage: yvex backend cpu|cuda"
+
+run_ok help_convert "$YVEX_BIN" help convert
+contains "$OUT_DIR/help_convert.out" "usage: yvex convert"
+
+run_ok help_qtype_support "$YVEX_BIN" help qtype-support
+contains "$OUT_DIR/help_qtype_support.out" "usage: yvex qtype-support"
 
 run_ok help_cuda_info "$YVEX_BIN" help cuda-info
 contains "$OUT_DIR/help_cuda_info.out" "usage: yvex cuda-info"

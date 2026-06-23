@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after OWI.7
+after OWI.8
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-OWI.8 - DeepSeek V4 Flash conversion bridge
+M1 - Qwen3-8B selected-tensor GGUF materialization and DeepSeek conversion plan validation
 ```
 
 Implemented surface:
@@ -206,11 +206,24 @@ Controlled GGUF emitter:
   src/tools/gguf_emit_report.c
   src/tools/gguf_emit_internal.h
 
+Open-weight conversion bridge:
+  include/yvex/conversion.h
+  include/yvex/qtype_support.h
+  src/tools/conversion.c
+  src/tools/conversion_plan.c
+  src/tools/conversion_emit.c
+  src/tools/conversion_payload.c
+  src/tools/conversion_report.c
+  src/tools/qtype_support.c
+  src/tools/adapters/qwen_adapter.c
+  src/tools/quantizers/q8_0_quant.c
+
 Weight mapping adapter contract:
   include/yvex/weight_mapping.h
   src/tools/weight_mapping.c
   src/tools/weight_mapping_report.c
   src/tools/adapters/deepseek_adapter.c
+  src/tools/adapters/qwen_adapter.c
 
 Quantization policy manifest:
   include/yvex/quant_policy.h
@@ -229,7 +242,7 @@ Calibration / imatrix manifest:
 
 CLI:
   cli/yvex_cli.c
-  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat, source-manifest, native-weights, gguf-template, gguf-emit, tensor-map, quant-policy, imatrix
+  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat, source-manifest, native-weights, gguf-template, gguf-emit, tensor-map, qtype-support, convert, quant-policy, imatrix
   implemented binaries: yvex, yvexd
 
 Tests:
@@ -265,6 +278,10 @@ Tests:
   tests/test_http.c
   tests/test_server.c
   tests/test_weight_mapping.c
+  tests/test_qtype_support.c
+  tests/test_qwen_adapter.c
+  tests/test_conversion_plan.c
+  tests/test_conversion_payload.c
   tests/test_quant_policy.c
   tests/test_imatrix.c
   tests/test_gguf_emit.c
@@ -278,6 +295,7 @@ Tests:
   tests/test_cli_native_weights.sh
   tests/test_cli_source_manifest.sh
   tests/test_cli_tensor_map.sh
+  tests/test_cli_convert.sh
   tests/test_cli_quant_policy.sh
   tests/test_cli_imatrix.sh
   tests/test_cuda_info.c
@@ -621,8 +639,8 @@ Future commands are listed only under the delivery that implements them.
 | OWI.5 | complete | Quantization policy manifest |
 | OWI.6 | complete | Calibration and imatrix contract |
 | OWI.7 | complete | First YVEX-owned GGUF emission from controlled source |
-| OWI.8 | next | DeepSeek V4 Flash conversion bridge |
-| M1 | paused | DeepSeek GGUF materialization from provenance-controlled source |
+| OWI.8 | complete | Open Weight Conversion Bridge, Qwen-first / DeepSeek-ready |
+| M1 | next | Qwen3-8B selected-tensor GGUF materialization and DeepSeek conversion plan validation |
 | M2 | paused | Real-model materialization hardening |
 | M3 | paused | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
@@ -2795,48 +2813,49 @@ no large model committed
 Handoff:
 
 ```text
-OWI.8 can adapt the emission/conversion bridge to DeepSeek V4 Flash
+OWI.8 adapts the emission/conversion bridge to Qwen-first and DeepSeek-ready open weights
 ```
 
-### OWI.8 - DeepSeek V4 Flash Conversion Bridge
+### OWI.8 - Open Weight Conversion Bridge, Qwen-First / DeepSeek-Ready
 
 Status:
 
 ```text
-planned
+complete
 ```
 
 Owns:
 
 ```text
-DeepSeek-specific open-weight conversion bridge
-official DeepSeek HF source manifest usage
+open-weight conversion bridge
+Qwen3 selected tensor conversion path
+DeepSeek conversion plan path
+official HF source manifest usage
 native safetensors inventory usage
-DeepSeek architecture adapter usage
+architecture adapter usage
 DS4-informed template/quantization/imatrix bridge
-YVEX-owned or YVEX-wrapped GGUF generation path
-generated DeepSeek GGUF validation path
+YVEX-owned selected tensor GGUF generation path
+qtype support matrix
 ```
 
 Does not own:
 
 ```text
-arbitrary model-family support
 generic inference
 server completions
 benchmark claims
 copying DS4 code blindly
-committing DeepSeek weights/GGUF
+committing external weights/GGUF
 OpenAI compatibility
 ```
 
 Expected behavior:
 
 ```text
-official DeepSeek weights
+official HF weights
 -> YVEX source manifest
 -> native inventory
--> DeepSeek adapter mapping
+-> architecture adapter mapping
 -> template/metadata contract
 -> quantization policy
 -> optional imatrix
@@ -2848,8 +2867,8 @@ official DeepSeek weights
 Acceptance:
 
 ```text
-DeepSeek conversion bridge has explicit provenance
-generated/staged GGUF is validated by YVEX
+conversion bridge has explicit provenance
+selected-tensor generated GGUF is validated by YVEX
 materialization works or fails cleanly with specific reason
 no inference claim
 no generated output claim
@@ -2937,26 +2956,25 @@ git diff --check
 Next authorized milestone:
 
 ```text
-OWI.8 - DeepSeek V4 Flash conversion bridge
+M1 - Qwen3-8B selected-tensor GGUF materialization and DeepSeek conversion plan validation
 ```
 
 Current active milestone:
 
 ```text
-OWI.8 - DeepSeek V4 Flash conversion bridge
+M1 - Qwen3-8B selected-tensor GGUF materialization and DeepSeek conversion plan validation
 ```
 
 Paused milestone:
 
 ```text
-M1 - DeepSeek GGUF materialization from provenance-controlled source
+M1 - Qwen3-8B selected-tensor GGUF materialization and DeepSeek conversion plan validation
 ```
 
-M1 remains paused after OWI.7. The official source/provenance contract, native
+M1 resumes after OWI.8. The official source/provenance contract, native
 inventory, GGUF template contract, tensor mapping adapter, quantization policy
-manifest, imatrix manifest contract, and controlled GGUF emission proof now
-exist; the DeepSeek conversion bridge still needs OWI.8 before DeepSeek materialization can be a real
-model-support step.
+manifest, imatrix manifest contract, controlled GGUF emission proof, qtype
+support matrix, and selected-tensor conversion bridge now exist.
 
 Model support waves must produce:
 

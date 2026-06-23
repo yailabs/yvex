@@ -16,6 +16,7 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
+OWI.8 implements the open-weight conversion bridge and qtype support matrix,
 OWI.7 implements controlled GGUF emission, OWI.5 implements a quantization policy manifest, OWI.4 implements a tensor
 mapping adapter contract, OWI.3 implements a GGUF
 template contract validator, OWI.2 implements a
@@ -39,6 +40,7 @@ Current public headers:
 
 ```text
 include/yvex/yvex.h
+include/yvex/conversion.h
 include/yvex/version.h
 include/yvex/status.h
 include/yvex/error.h
@@ -54,6 +56,7 @@ include/yvex/model.h
 include/yvex/native_weights.h
 include/yvex/weight_mapping.h
 include/yvex/quant_policy.h
+include/yvex/qtype_support.h
 include/yvex/imatrix.h
 include/yvex/tokenizer.h
 include/yvex/prompt.h
@@ -78,6 +81,7 @@ Current aggregate:
 
 ```c
 #include <yvex/error.h>
+#include <yvex/conversion.h>
 #include <yvex/fs.h>
 #include <yvex/artifact.h>
 #include <yvex/gguf.h>
@@ -89,6 +93,7 @@ Current aggregate:
 #include <yvex/native_weights.h>
 #include <yvex/weight_mapping.h>
 #include <yvex/quant_policy.h>
+#include <yvex/qtype_support.h>
 #include <yvex/imatrix.h>
 #include <yvex/tokenizer.h>
 #include <yvex/prompt.h>
@@ -500,6 +505,56 @@ existing GGUF parser, tensor table, descriptor, and CPU materialization path.
 Non-goals: no DeepSeek conversion, no safetensors large-payload conversion, no
 FP8/FP4 dequantization, no Q2_K/IQ2_XXS/Q4_K emission, no imatrix generation, no
 model inference, and no `execution_ready=true` claim.
+
+## Qtype Support
+
+OWI.8 adds a tool-plane qtype support matrix. It separates policy vocabulary,
+storage accounting, GGUF emission, quantization/cast availability, and backend
+compute support.
+
+```c
+typedef struct {
+    const char *qtype;
+    int policy_supported;
+    int storage_supported;
+    int emit_supported;
+    int quantize_supported;
+    int compute_supported;
+    const char *notes;
+} yvex_qtype_support_info;
+
+const yvex_qtype_support_info *yvex_qtype_support_by_name(const char *qtype);
+unsigned long long yvex_qtype_support_count(void);
+const yvex_qtype_support_info *yvex_qtype_support_at(unsigned long long index);
+```
+
+F32/F16/BF16 selected-tensor GGUF emission is supported. Q8_0, Q2_K, Q4_K, and
+IQ2_XXS are policy/storage vocabulary where applicable, but unsupported emit or
+quantize paths fail explicitly unless implemented later. Compute support remains
+separate from conversion support.
+
+## Conversion Bridge
+
+OWI.8 adds a tool-side conversion bridge from official safetensors sources to
+YVEX-owned selected-tensor GGUF artifacts. It builds conversion plans, reads
+selected safetensors payload bytes, maps tensor names through architecture
+adapters, casts supported scalar dtypes, writes a GGUF, and validates through
+YVEX inspect/tensors/materialize surfaces. It does not infer or claim full model
+support.
+
+```c
+int yvex_conversion_plan_write_json(const yvex_conversion_options *options,
+                                    const char *plan_out_path,
+                                    yvex_conversion_summary *summary_out,
+                                    yvex_error *err);
+
+int yvex_conversion_emit_gguf(const yvex_conversion_options *options,
+                              yvex_conversion_summary *summary_out,
+                              yvex_error *err);
+```
+
+The first live target is Qwen3-style safetensors. DeepSeek is plan-ready through
+the same bridge, but OWI.8 does not claim full DeepSeek conversion.
 
 ## Weight Mapping
 
