@@ -19,7 +19,7 @@
  * Expected:
  *   - exits 0 on success
  */
-#include "../src/chat/slash_internal.h"
+#include "yvex_chat_slash_internal.h"
 #include "test.h"
 
 int main(void)

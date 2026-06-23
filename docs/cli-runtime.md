@@ -107,7 +107,7 @@ yvexd --version
 yvexd --host HOST --port PORT [--model FILE] [--backend cpu|cuda] [--one-request]
 ```
 
-Current commands must stay backed by the command table in `cli/yvex_cli.c`.
+Current commands must stay backed by the command table in `yvex_cli.c`.
 
 ## Model Reference Resolver
 

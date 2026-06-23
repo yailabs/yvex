@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "test.h"
-#include "../src/tools/adapters/qwen_adapter.h"
+#include "yvex_qwen_adapter.h"
 
 static int maps(const char *name, yvex_tensor_role role, const char *target)
 {

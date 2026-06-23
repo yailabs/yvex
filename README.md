@@ -107,6 +107,12 @@ OpenAI-compatible generation
 inference benchmarks
 ```
 
+## Source Layout
+
+YVEX uses a root-first C source layout. Implementation files live at repository
+root with `yvex_` prefixes, public headers live under `include/yvex/`, CUDA
+backend code lives under `backends/cuda/`, and tests live under `tests/`.
+
 Current state:
 
 ```text

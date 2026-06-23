@@ -11,7 +11,7 @@
 #ifndef YVEX_CUDA_INTERNAL_H
 #define YVEX_CUDA_INTERNAL_H
 
-#include "../../src/backend/backend_internal.h"
+#include "yvex_backend_internal.h"
 
 #include <stddef.h>
 

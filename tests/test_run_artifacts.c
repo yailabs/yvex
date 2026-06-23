@@ -13,7 +13,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "../src/metrics/metrics_internal.h"
+#include "yvex_metrics_internal.h"
 #include "test.h"
 
 static int exists_file(const char *path)

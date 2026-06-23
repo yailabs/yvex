@@ -23,7 +23,7 @@
  */
 #include <string.h>
 
-#include "../src/chat/chat_internal.h"
+#include "yvex_chat_internal.h"
 #include "test.h"
 
 static int test_runtime_accept_and_reset(void)

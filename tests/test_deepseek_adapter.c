@@ -6,7 +6,7 @@
  */
 #include <string.h>
 
-#include "../src/tools/adapters/deepseek_adapter.h"
+#include "yvex_deepseek_adapter.h"
 
 #include "test.h"
 

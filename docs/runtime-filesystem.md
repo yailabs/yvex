@@ -20,8 +20,8 @@ Implemented files:
 
 ```text
 include/yvex/fs.h
-src/fs/paths.c
-src/fs/run_dir.c
+yvex_paths.c
+yvex_run_dir.c
 tests/test_fs.c
 ```
 
@@ -230,6 +230,17 @@ build/bin/yvexd
 The compiled binaries are generated build products and are not tracked source
 files.
 The build directory remains disposable.
+
+Source layout:
+
+```text
+repository root: yvex_*.c, yvex_*_internal.h, yvex_cli.c, yvexd.c
+include/yvex/: public C API headers
+backends/cuda/: CUDA backend implementation
+docs/: documentation
+tests/: validation
+build/: generated output
+```
 
 Materialization gate reports live outside the repository under:
 

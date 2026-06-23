@@ -10,7 +10,7 @@
  */
 #include <string.h>
 
-#include "../src/server/http_internal.h"
+#include "yvex_server_http_internal.h"
 #include "test.h"
 
 static int test_parse_request(void)

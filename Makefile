@@ -28,7 +28,7 @@
 #   - YVEX is CLI-only.
 #   - build/bin/yvex and build/bin/yvexd are repository-local compiled products.
 
-.PHONY: info lib cli server cuda-info cuda test-cuda smoke-cuda check-cuda test test-core test-cli smoke check check-docs check-guardrails clean
+.PHONY: info lib cli server cuda-info cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-layout smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -38,7 +38,7 @@ CUDA_CFLAGS ?=
 CUDA_LDFLAGS ?=
 YVEX_CUDA_ARCH ?= auto
 
-CPPFLAGS ?= -Iinclude
+CPPFLAGS ?= -Iinclude -I.
 CFLAGS ?= -std=c11 -Wall -Wextra -pedantic
 LDFLAGS ?=
 LDLIBS ?= -ldl
@@ -54,114 +54,114 @@ YVEX_BIN := $(BIN_DIR)/yvex
 YVEXD_BIN := $(BIN_DIR)/yvexd
 
 CORE_SRCS := \
-	src/core/version.c \
-	src/core/status.c \
-	src/core/error.c \
-	src/core/log.c \
-	src/fs/paths.c \
-	src/fs/run_dir.c \
-	src/artifact/artifact.c \
-	src/artifact/range.c \
-	src/formats/gguf.c \
-	src/model/dtype.c \
-	src/model/role.c \
-	src/model/tensor_table.c \
-	src/model/descriptor.c \
-	src/model/weights.c \
-	src/model/materialize.c \
-	src/model/materialize_report.c \
-	src/tokenizer/tokenizer.c \
-	src/tokenizer/vocab.c \
-	src/tokenizer/special.c \
-	src/tokenizer/encode.c \
-	src/tokenizer/decode.c \
-	src/tokenizer/prompt.c \
-	src/graph/graph.c \
-	src/graph/value.c \
-	src/graph/op.c \
-	src/graph/builder.c \
-	src/graph/shape.c \
-	src/graph/dump.c \
-	src/graph/planner.c \
-	src/graph/memory_plan.c \
-	src/backend/backend.c \
-	src/backend/cpu_backend.c \
-	src/backend/cpu_tensor.c \
-	src/backend/cpu_ops.c \
-	src/session/engine.c \
-	src/session/session.c \
-	src/session/state.c \
-	src/session/kv.c \
-	src/session/logits.c \
-	src/session/runtime_diagnostics.c \
-	src/chat/chat.c \
-	src/chat/repl.c \
-	src/chat/slash.c \
-	src/chat/run_command.c \
-	src/chat/status_line.c \
-	src/metrics/metrics.c \
-	src/metrics/trace.c \
-	src/metrics/profile.c \
-	src/metrics/run_artifacts.c \
-	src/metrics/time.c \
-	src/metrics/json_writer.c \
-	src/server/server.c \
-	src/server/http.c \
-	src/server/router.c \
-	src/server/handlers.c \
-	src/server/server_metrics.c \
-	src/tools/artifact_naming.c \
-	src/tools/artifact_naming_report.c \
-	src/tools/conversion.c \
-	src/tools/conversion_plan.c \
-	src/tools/conversion_emit.c \
-	src/tools/conversion_payload.c \
-	src/tools/conversion_report.c \
-	src/tools/gguf_emit.c \
-	src/tools/gguf_emit_metadata.c \
-	src/tools/gguf_emit_tensor.c \
-	src/tools/gguf_emit_report.c \
-	src/tools/gguf_template.c \
-	src/tools/gguf_template_compare.c \
-	src/tools/gguf_template_report.c \
-	src/tools/gguf_template_validate.c \
-	src/tools/imatrix.c \
-	src/tools/imatrix_json.c \
-	src/tools/imatrix_report.c \
-	src/tools/imatrix_validate.c \
-	src/tools/materialize_gate.c \
-	src/tools/materialize_gate_json.c \
-	src/tools/materialize_gate_report.c \
-	src/tools/model_gate.c \
-	src/tools/model_gate_json.c \
-	src/tools/model_gate_report.c \
-	src/tools/model_ref.c \
-	src/tools/model_ref_report.c \
-	src/tools/model_registry.c \
-	src/tools/model_registry_json.c \
-	src/tools/model_registry_scan.c \
-	src/tools/model_registry_report.c \
-	src/tools/native_weights.c \
-	src/tools/native_weight_report.c \
-	src/tools/quant_job.c \
-	src/tools/quant_job_json.c \
-	src/tools/quant_job_report.c \
-	src/tools/quant_policy.c \
-	src/tools/quant_policy_from_template.c \
-	src/tools/quant_policy_json.c \
-	src/tools/quant_policy_report.c \
-	src/tools/quant_policy_validate.c \
-	src/tools/safetensors.c \
-	src/tools/safetensors_json.c \
-	src/tools/source_manifest.c \
-	src/tools/source_manifest_json.c \
-	src/tools/source_manifest_scan.c \
-	src/tools/weight_mapping.c \
-	src/tools/weight_mapping_report.c \
-	src/tools/qtype_support.c \
-	src/tools/adapters/deepseek_adapter.c \
-	src/tools/adapters/qwen_adapter.c \
-	src/tools/quantizers/q8_0_quant.c
+	yvex_version.c \
+	yvex_status.c \
+	yvex_error.c \
+	yvex_log.c \
+	yvex_paths.c \
+	yvex_run_dir.c \
+	yvex_artifact.c \
+	yvex_artifact_range.c \
+	yvex_gguf.c \
+	yvex_dtype.c \
+	yvex_tensor_role.c \
+	yvex_tensor_table.c \
+	yvex_model_descriptor.c \
+	yvex_weights.c \
+	yvex_materialize.c \
+	yvex_materialize_report.c \
+	yvex_tokenizer.c \
+	yvex_tokenizer_vocab.c \
+	yvex_tokenizer_special.c \
+	yvex_tokenizer_encode.c \
+	yvex_tokenizer_decode.c \
+	yvex_prompt.c \
+	yvex_graph.c \
+	yvex_value.c \
+	yvex_op.c \
+	yvex_graph_builder.c \
+	yvex_shape.c \
+	yvex_graph_dump.c \
+	yvex_planner.c \
+	yvex_memory_plan.c \
+	yvex_backend.c \
+	yvex_cpu_backend.c \
+	yvex_cpu_tensor.c \
+	yvex_cpu_ops.c \
+	yvex_engine.c \
+	yvex_session.c \
+	yvex_session_state.c \
+	yvex_kv.c \
+	yvex_logits.c \
+	yvex_runtime_diagnostics.c \
+	yvex_chat.c \
+	yvex_chat_repl.c \
+	yvex_chat_slash.c \
+	yvex_chat_run_command.c \
+	yvex_chat_status_line.c \
+	yvex_metrics.c \
+	yvex_trace.c \
+	yvex_profile.c \
+	yvex_run_artifacts.c \
+	yvex_time.c \
+	yvex_json_writer.c \
+	yvex_server.c \
+	yvex_server_http.c \
+	yvex_server_router.c \
+	yvex_server_handlers.c \
+	yvex_server_metrics.c \
+	yvex_artifact_naming.c \
+	yvex_artifact_naming_report.c \
+	yvex_conversion.c \
+	yvex_conversion_plan.c \
+	yvex_conversion_emit.c \
+	yvex_conversion_payload.c \
+	yvex_conversion_report.c \
+	yvex_gguf_emit.c \
+	yvex_gguf_emit_metadata.c \
+	yvex_gguf_emit_tensor.c \
+	yvex_gguf_emit_report.c \
+	yvex_gguf_template.c \
+	yvex_gguf_template_compare.c \
+	yvex_gguf_template_report.c \
+	yvex_gguf_template_validate.c \
+	yvex_imatrix.c \
+	yvex_imatrix_json.c \
+	yvex_imatrix_report.c \
+	yvex_imatrix_validate.c \
+	yvex_materialize_gate.c \
+	yvex_materialize_gate_json.c \
+	yvex_materialize_gate_report.c \
+	yvex_model_gate.c \
+	yvex_model_gate_json.c \
+	yvex_model_gate_report.c \
+	yvex_model_ref.c \
+	yvex_model_ref_report.c \
+	yvex_model_registry.c \
+	yvex_model_registry_json.c \
+	yvex_model_registry_scan.c \
+	yvex_model_registry_report.c \
+	yvex_native_weights.c \
+	yvex_native_weight_report.c \
+	yvex_quant_job.c \
+	yvex_quant_job_json.c \
+	yvex_quant_job_report.c \
+	yvex_quant_policy.c \
+	yvex_quant_policy_from_template.c \
+	yvex_quant_policy_json.c \
+	yvex_quant_policy_report.c \
+	yvex_quant_policy_validate.c \
+	yvex_safetensors.c \
+	yvex_safetensors_json.c \
+	yvex_source_manifest.c \
+	yvex_source_manifest_json.c \
+	yvex_source_manifest_scan.c \
+	yvex_weight_mapping.c \
+	yvex_weight_mapping_report.c \
+	yvex_qtype_support.c \
+	yvex_deepseek_adapter.c \
+	yvex_qwen_adapter.c \
+	yvex_quant_q8_0.c
 
 CUDA_SRCS := \
 	backends/cuda/cuda_backend.c \
@@ -170,7 +170,7 @@ CUDA_SRCS := \
 	backends/cuda/cuda_info.c \
 	backends/cuda/cuda_errors.c
 
-CORE_OBJS := $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
+CORE_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 CUDA_OBJS := $(patsubst backends/%.c,$(OBJ_DIR)/backends/%.o,$(CUDA_SRCS))
 CORE_OBJS += $(CUDA_OBJS)
 
@@ -346,16 +346,19 @@ test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests
 
 test: test-core test-cli
 
+test-layout: tests/test_source_layout.sh
+	sh tests/test_source_layout.sh
+
 smoke: test-cli
 
-check: check-docs check-guardrails lib cli server test smoke
+check: check-docs check-guardrails lib cli server test test-layout smoke
 	@echo "yvex check: ok"
 
 $(LIBYVEX): $(CORE_OBJS)
 	@mkdir -p $(@D)
 	$(AR) rcs $@ $^
 
-$(OBJ_DIR)/%.o: src/%.c
+$(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
@@ -363,11 +366,11 @@ $(OBJ_DIR)/backends/%.o: backends/%.c
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-$(YVEX_BIN): cli/yvex_cli.c $(LIBYVEX)
+$(YVEX_BIN): yvex_cli.c $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
-$(YVEXD_BIN): server/yvexd.c $(LIBYVEX)
+$(YVEXD_BIN): yvexd.c $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
@@ -425,15 +428,17 @@ check-guardrails:
 	@test ! -d benches
 	@test ! -d examples
 	@test ! -d protocols
-	@test ! -e src/README.md
+	@test ! -d src
+	@test ! -d cli
+	@test ! -d server
 	@test ! -e tests/README.md
 	@test ! -e include/yvex/sampler.h
 	@test -d backends/cuda
 	@test -f include/yvex/server.h
-	@test -d src/server
 	@test ! -d fixtures
-	@test -d cli
-	@test -f cli/yvex_cli.c
+	@test -f yvex_cli.c
+	@test -f yvexd.c
+	@test -f yvex_server.c
 	@test ! -d ui
 	@test ! -d app
 	@test ! -d desktop

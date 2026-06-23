@@ -108,7 +108,7 @@ Only the spine may contain the internal delivery map.
 Current phase:
 
 ```text
-after CLI.PACKAGE.1
+after REPO.LAYOUT.1
 ```
 
 Current implementation commit:
@@ -131,62 +131,62 @@ Core:
   include/yvex/status.h
   include/yvex/error.h
   include/yvex/log.h
-  src/core/version.c
-  src/core/status.c
-  src/core/error.c
-  src/core/log.c
+  yvex_version.c
+  yvex_status.c
+  yvex_error.c
+  yvex_log.c
 
 Runtime filesystem:
   include/yvex/fs.h
-  src/fs/paths.c
-  src/fs/run_dir.c
+  yvex_paths.c
+  yvex_run_dir.c
 
 Artifact / GGUF directory:
   include/yvex/artifact.h
   include/yvex/gguf.h
-  src/artifact/artifact.c
-  src/artifact/range.c
-  src/formats/gguf.c
+  yvex_artifact.c
+  yvex_artifact_range.c
+  yvex_gguf.c
 
 Tensor / model descriptor:
   include/yvex/dtype.h
   include/yvex/tensor.h
   include/yvex/model.h
-  src/model/dtype.c
-  src/model/role.c
-  src/model/tensor_table.c
-  src/model/descriptor.c
+  yvex_dtype.c
+  yvex_tensor_role.c
+  yvex_tensor_table.c
+  yvex_model_descriptor.c
 
 Tokenizer / prompt rendering:
   include/yvex/tokenizer.h
   include/yvex/prompt.h
-  src/tokenizer/tokenizer.c
-  src/tokenizer/vocab.c
-  src/tokenizer/special.c
-  src/tokenizer/encode.c
-  src/tokenizer/decode.c
-  src/tokenizer/prompt.c
+  yvex_tokenizer.c
+  yvex_tokenizer_vocab.c
+  yvex_tokenizer_special.c
+  yvex_tokenizer_encode.c
+  yvex_tokenizer_decode.c
+  yvex_prompt.c
 
 Graph / planner:
   include/yvex/graph.h
   include/yvex/op.h
   include/yvex/planner.h
   include/yvex/memory_plan.h
-  src/graph/graph.c
-  src/graph/value.c
-  src/graph/op.c
-  src/graph/builder.c
-  src/graph/shape.c
-  src/graph/dump.c
-  src/graph/planner.c
-  src/graph/memory_plan.c
+  yvex_graph.c
+  yvex_value.c
+  yvex_op.c
+  yvex_graph_builder.c
+  yvex_shape.c
+  yvex_graph_dump.c
+  yvex_planner.c
+  yvex_memory_plan.c
 
 Backend:
   include/yvex/backend.h
-  src/backend/backend.c
-  src/backend/cpu_backend.c
-  src/backend/cpu_tensor.c
-  src/backend/cpu_ops.c
+  yvex_backend.c
+  yvex_cpu_backend.c
+  yvex_cpu_tensor.c
+  yvex_cpu_ops.c
   backends/cuda/cuda_backend.c
   backends/cuda/cuda_tensor.c
   backends/cuda/cuda_ops.c
@@ -199,119 +199,119 @@ Engine / session runtime:
   include/yvex/session.h
   include/yvex/kv.h
   include/yvex/logits.h
-  src/session/engine.c
-  src/session/session.c
-  src/session/state.c
-  src/session/kv.c
-  src/session/logits.c
-  src/session/runtime_diagnostics.c
+  yvex_engine.c
+  yvex_session.c
+  yvex_session_state.c
+  yvex_kv.c
+  yvex_logits.c
+  yvex_runtime_diagnostics.c
 
 CLI runtime shell:
-  src/chat/chat.c
-  src/chat/repl.c
-  src/chat/slash.c
-  src/chat/run_command.c
-  src/chat/status_line.c
+  yvex_chat.c
+  yvex_chat_repl.c
+  yvex_chat_slash.c
+  yvex_chat_run_command.c
+  yvex_chat_status_line.c
 
 Metrics / tracing:
   include/yvex/metrics.h
   include/yvex/trace.h
   include/yvex/profile.h
-  src/metrics/metrics.c
-  src/metrics/trace.c
-  src/metrics/profile.c
-  src/metrics/run_artifacts.c
-  src/metrics/time.c
-  src/metrics/json_writer.c
+  yvex_metrics.c
+  yvex_trace.c
+  yvex_profile.c
+  yvex_run_artifacts.c
+  yvex_time.c
+  yvex_json_writer.c
 
 Server shell:
   include/yvex/server.h
-  src/server/server.c
-  src/server/http.c
-  src/server/router.c
-  src/server/handlers.c
-  src/server/server_metrics.c
-  server/yvexd.c
+  yvex_server.c
+  yvex_server_http.c
+  yvex_server_router.c
+  yvex_server_handlers.c
+  yvex_server_metrics.c
+  yvexd.c
 
 Open-weight source manifest:
   include/yvex/source_manifest.h
-  src/tools/source_manifest.c
-  src/tools/source_manifest_json.c
-  src/tools/source_manifest_scan.c
+  yvex_source_manifest.c
+  yvex_source_manifest_json.c
+  yvex_source_manifest_scan.c
 
 Native weight inventory:
   include/yvex/native_weights.h
-  src/tools/native_weights.c
-  src/tools/safetensors.c
-  src/tools/safetensors_json.c
-  src/tools/native_weight_report.c
+  yvex_native_weights.c
+  yvex_safetensors.c
+  yvex_safetensors_json.c
+  yvex_native_weight_report.c
 
 GGUF template validator:
   include/yvex/gguf_template.h
-  src/tools/gguf_template.c
-  src/tools/gguf_template_validate.c
-  src/tools/gguf_template_compare.c
-  src/tools/gguf_template_report.c
+  yvex_gguf_template.c
+  yvex_gguf_template_validate.c
+  yvex_gguf_template_compare.c
+  yvex_gguf_template_report.c
 
 Controlled GGUF emitter:
   include/yvex/gguf_emit.h
-  src/tools/gguf_emit.c
-  src/tools/gguf_emit_metadata.c
-  src/tools/gguf_emit_tensor.c
-  src/tools/gguf_emit_report.c
-  src/tools/gguf_emit_internal.h
+  yvex_gguf_emit.c
+  yvex_gguf_emit_metadata.c
+  yvex_gguf_emit_tensor.c
+  yvex_gguf_emit_report.c
+  src/tools/yvex_gguf_emit_internal.h
 
 Open-weight conversion bridge:
   include/yvex/conversion.h
   include/yvex/qtype_support.h
-  src/tools/conversion.c
-  src/tools/conversion_plan.c
-  src/tools/conversion_emit.c
-  src/tools/conversion_payload.c
-  src/tools/conversion_report.c
-  src/tools/qtype_support.c
-  src/tools/adapters/qwen_adapter.c
-  src/tools/quantizers/q8_0_quant.c
+  yvex_conversion.c
+  yvex_conversion_plan.c
+  yvex_conversion_emit.c
+  yvex_conversion_payload.c
+  yvex_conversion_report.c
+  yvex_qtype_support.c
+  yvex_qwen_adapter.c
+  yvex_quant_q8_0.c
 
 External quantization job bridge:
   include/yvex/quant_job.h
-  src/tools/quant_job.c
-  src/tools/quant_job_json.c
-  src/tools/quant_job_report.c
-  src/tools/quant_job_internal.h
+  yvex_quant_job.c
+  yvex_quant_job_json.c
+  yvex_quant_job_report.c
+  src/tools/yvex_quant_job_internal.h
 
 Local model registry:
   include/yvex/model_registry.h
-  src/tools/model_registry.c
-  src/tools/model_registry_json.c
-  src/tools/model_registry_scan.c
-  src/tools/model_registry_report.c
-  src/tools/model_registry_internal.h
+  yvex_model_registry.c
+  yvex_model_registry_json.c
+  yvex_model_registry_scan.c
+  yvex_model_registry_report.c
+  src/tools/yvex_model_registry_internal.h
 
 Weight mapping adapter contract:
   include/yvex/weight_mapping.h
-  src/tools/weight_mapping.c
-  src/tools/weight_mapping_report.c
-  src/tools/adapters/deepseek_adapter.c
-  src/tools/adapters/qwen_adapter.c
+  yvex_weight_mapping.c
+  yvex_weight_mapping_report.c
+  yvex_deepseek_adapter.c
+  yvex_qwen_adapter.c
 
 Quantization policy manifest:
   include/yvex/quant_policy.h
-  src/tools/quant_policy.c
-  src/tools/quant_policy_json.c
-  src/tools/quant_policy_validate.c
-  src/tools/quant_policy_from_template.c
-  src/tools/quant_policy_report.c
+  yvex_quant_policy.c
+  yvex_quant_policy_json.c
+  yvex_quant_policy_validate.c
+  yvex_quant_policy_from_template.c
+  yvex_quant_policy_report.c
 
 Calibration / imatrix manifest:
   include/yvex/imatrix.h
-  src/tools/imatrix.c
-  src/tools/imatrix_json.c
-  src/tools/imatrix_validate.c
-  src/tools/imatrix_report.c
+  yvex_imatrix.c
+  yvex_imatrix_json.c
+  yvex_imatrix_validate.c
+  yvex_imatrix_report.c
 
 CLI:
-  cli/yvex_cli.c
+  yvex_cli.c
   implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat, source-manifest, native-weights, gguf-template, gguf-emit, tensor-map, qtype-support, convert, quant-job, quant-policy, imatrix
   implemented binaries: yvex, yvexd
 
@@ -736,6 +736,7 @@ Future commands are listed only under the delivery that implements them.
 | CLI.MODELS.2 | complete | Model alias resolution for one-shot commands |
 | DOCS.PUBLIC.0 | complete | Public documentation boundary cleanup |
 | CLI.PACKAGE.1 | complete | Minimal compiled-binary CLI packaging baseline |
+| REPO.LAYOUT.1 | complete | Root-first C source layout collapse |
 | CLI.MODELS.3 | next | Model selection in canonical REPL |
 | CLI.MODELS.4 | planned | Model alias resolution in yvexd |
 | M3 | paused | Materialized-weight engine attachment |
@@ -853,11 +854,11 @@ include/yvex/version.h
 include/yvex/status.h
 include/yvex/error.h
 include/yvex/log.h
-src/core/version.c
-src/core/status.c
-src/core/error.c
-src/core/log.c
-cli/yvex_cli.c
+yvex_version.c
+yvex_status.c
+yvex_error.c
+yvex_log.c
+yvex_cli.c
 tests/test_status.c
 tests/test_error.c
 tests/test_version.c
@@ -934,7 +935,7 @@ Creates / modifies:
 Makefile
 include/yvex/*.h
 src/core/*.c
-cli/yvex_cli.c
+yvex_cli.c
 tests/*.c
 tests/test_cli.sh
 ```
@@ -1069,10 +1070,10 @@ Creates / modifies:
 
 ```text
 include/yvex/fs.h
-src/fs/paths.c
-src/fs/run_dir.c
+yvex_paths.c
+yvex_run_dir.c
 tests/test_fs.c
-cli/yvex_cli.c
+yvex_cli.c
 Makefile
 docs/api.md
 docs/runtime-filesystem.md
@@ -1149,16 +1150,16 @@ Creates / modifies:
 ```text
 include/yvex/artifact.h
 include/yvex/gguf.h
-src/artifact/artifact.c
-src/artifact/range.c
-src/formats/gguf.c
+yvex_artifact.c
+yvex_artifact_range.c
+yvex_gguf.c
 tests/test_artifact.c
 tests/test_gguf.c
 tests/fixtures/gguf/valid-minimal.gguf
 tests/fixtures/gguf/bad-magic.gguf
 tests/fixtures/gguf/short-header.gguf
 tests/fixtures/gguf/unsupported-version.gguf
-cli/yvex_cli.c
+yvex_cli.c
 Makefile
 docs/api.md
 docs/cli-runtime.md
@@ -1239,10 +1240,10 @@ Creates / modifies:
 
 ```text
 include/yvex/gguf.h
-src/formats/gguf.c
+yvex_gguf.c
 tests/test_gguf.c
 tests/fixtures/gguf/
-cli/yvex_cli.c
+yvex_cli.c
 Makefile
 docs/api.md
 docs/cli-runtime.md
@@ -1327,14 +1328,14 @@ Creates / modifies:
 include/yvex/dtype.h
 include/yvex/tensor.h
 include/yvex/model.h
-src/model/dtype.c
-src/model/role.c
-src/model/tensor_table.c
-src/model/descriptor.c
+yvex_dtype.c
+yvex_tensor_role.c
+yvex_tensor_table.c
+yvex_model_descriptor.c
 tests/test_dtype.c
 tests/test_tensor_table.c
 tests/test_model_descriptor.c
-cli/yvex_cli.c
+yvex_cli.c
 Makefile
 docs/api.md
 docs/cli-runtime.md
@@ -1412,12 +1413,12 @@ Creates / modifies:
 ```text
 include/yvex/tokenizer.h
 include/yvex/prompt.h
-src/tokenizer/tokenizer.c
-src/tokenizer/vocab.c
-src/tokenizer/special.c
-src/tokenizer/encode.c
-src/tokenizer/decode.c
-src/tokenizer/prompt.c
+yvex_tokenizer.c
+yvex_tokenizer_vocab.c
+yvex_tokenizer_special.c
+yvex_tokenizer_encode.c
+yvex_tokenizer_decode.c
+yvex_prompt.c
 tests/test_tokenizer.c
 tests/test_prompt.c
 tests/fixtures/gguf/valid-tokenizer-simple.gguf
@@ -1426,7 +1427,7 @@ tests/fixtures/gguf/tokenizer-bad-token-type-len.gguf
 tests/fixtures/gguf/tokenizer-bad-score-len.gguf
 tests/fixtures/gguf/tokenizer-bad-special-id.gguf
 tests/fixtures/gguf/tokenizer-unsupported-arch.gguf
-cli/yvex_cli.c
+yvex_cli.c
 Makefile
 docs/api.md
 docs/cli-runtime.md
@@ -1512,7 +1513,7 @@ tests/test_graph.c
 tests/test_shape.c
 tests/test_memory_plan.c
 tests/test_planner.c
-cli/yvex_cli.c
+yvex_cli.c
 Makefile
 docs/api.md
 docs/cli-runtime.md
@@ -1589,7 +1590,7 @@ include/yvex/backend.h
 src/backend/
 tests/test_backend_cpu.c
 tests/test_backend_ops.c
-cli/yvex_cli.c
+yvex_cli.c
 Makefile
 docs/api.md
 docs/backend-contract.md
@@ -1675,7 +1676,7 @@ tests/test_session.c
 tests/test_kv.c
 tests/test_logits.c
 tests/test_runtime_diagnostics.c
-cli/yvex_cli.c
+yvex_cli.c
 Makefile
 docs/api.md
 docs/cli-runtime.md
@@ -1754,7 +1755,7 @@ Creates / modifies:
 
 ```text
 src/chat/
-cli/yvex_cli.c
+yvex_cli.c
 tests/test_chat_runtime.c
 tests/test_slash_commands.c
 tests/test_cli_run.sh
@@ -1838,7 +1839,7 @@ tests/test_metrics.c
 tests/test_trace.c
 tests/test_profile.c
 tests/test_run_artifacts.c
-cli/yvex_cli.c
+yvex_cli.c
 Makefile
 docs/api.md
 docs/cli-runtime.md
@@ -1917,7 +1918,7 @@ Creates / modifies:
 ```text
 include/yvex/server.h
 src/server/
-server/yvexd.c
+yvexd.c
 tests/test_http.c
 tests/test_server.c
 tests/test_cli_server.sh
@@ -2011,7 +2012,7 @@ tests/test_cuda_ops.c
 tests/test_cuda_parity.c
 tests/test_cli_cuda.sh
 Makefile
-cli/yvex_cli.c
+yvex_cli.c
 docs/backend-contract.md
 docs/spine.md
 ```
@@ -2289,6 +2290,93 @@ make smoke does not require root launchers
 docs use build/bin/yvex for repo-local examples
 ```
 
+### REPO.LAYOUT.1 - Root-First C Source Layout Collapse
+
+Status:
+
+```text
+complete
+```
+
+Owns:
+
+```text
+root-first source layout
+removal of src/
+removal of cli/
+removal of server/
+root yvex_*.c implementation names
+root yvex_*_internal.h implementation headers
+Makefile source path update
+source layout guard
+```
+
+Does not own:
+
+```text
+public API semantic changes
+CUDA backend flattening
+CLI behavior changes
+server behavior changes
+model registry behavior changes
+REPL behavior changes
+inference
+```
+
+Repository layout doctrine:
+
+```text
+YVEX uses a root-first C source layout.
+
+Root contains:
+  primary executable entrypoints
+  implementation C files
+  internal implementation headers
+  project metadata
+
+Public API headers remain under:
+  include/yvex/
+
+Backend-specific CUDA implementation remains under:
+  backends/cuda/
+
+Tests remain under:
+  tests/
+
+Docs remain under:
+  docs/
+
+Generated build output remains under:
+  build/
+```
+
+Directory rule:
+
+```text
+A directory must represent a real boundary:
+  public API
+  backend-specific code
+  documentation
+  tests
+  generated build output
+  external/non-C assets when added
+
+A directory must not exist only to hide one or two C files.
+```
+
+Acceptance:
+
+```text
+src/ removed
+cli/ removed
+server/ removed
+all implementation C files live at root except backends/cuda
+public headers remain include/yvex
+tests pass
+CLI/server behavior unchanged
+public docs boundary remains clean
+```
+
 ### REPO.OPERATING.0 - Agent Operating Handbook and Model Artifact Cards
 
 Status:
@@ -2435,10 +2523,10 @@ Owns:
 
 ```text
 include/yvex/model_registry.h
-src/tools/model_registry.c
-src/tools/model_registry_json.c
-src/tools/model_registry_scan.c
-src/tools/model_registry_report.c
+yvex_model_registry.c
+yvex_model_registry_json.c
+yvex_model_registry_scan.c
+yvex_model_registry_report.c
 tests/test_model_registry.c
 tests/test_cli_models.sh
 local registry file read/write
@@ -2489,9 +2577,9 @@ Owns:
 
 ```text
 include/yvex/model_ref.h
-src/tools/model_ref.c
-src/tools/model_ref_report.c
-src/tools/model_ref_internal.h
+yvex_model_ref.c
+yvex_model_ref_report.c
+src/tools/yvex_model_ref_internal.h
 tests/test_model_ref.c
 tests/test_cli_model_aliases.sh
 --model PATH or --model ALIAS resolution
@@ -2973,10 +3061,10 @@ Expected files:
 
 ```text
 include/yvex/source_manifest.h
-src/tools/source_manifest.c
-src/tools/source_manifest_json.c
-src/tools/source_manifest_scan.c
-src/tools/source_manifest_internal.h
+yvex_source_manifest.c
+yvex_source_manifest_json.c
+yvex_source_manifest_scan.c
+src/tools/yvex_source_manifest_internal.h
 tests/test_source_manifest.c
 tests/test_cli_source_manifest.sh
 ```
@@ -3046,11 +3134,11 @@ Expected files:
 
 ```text
 include/yvex/native_weights.h
-src/tools/native_weights.c
-src/tools/safetensors.c
-src/tools/safetensors_json.c
-src/tools/native_weight_report.c
-src/tools/native_weights_internal.h
+yvex_native_weights.c
+yvex_safetensors.c
+yvex_safetensors_json.c
+yvex_native_weight_report.c
+src/tools/yvex_native_weights_internal.h
 tests/test_safetensors_header.c
 tests/test_native_weights.c
 tests/test_cli_native_weights.sh
@@ -3110,11 +3198,11 @@ Expected files:
 
 ```text
 include/yvex/gguf_template.h
-src/tools/gguf_template.c
-src/tools/gguf_template_validate.c
-src/tools/gguf_template_compare.c
-src/tools/gguf_template_report.c
-src/tools/gguf_template_internal.h
+yvex_gguf_template.c
+yvex_gguf_template_validate.c
+yvex_gguf_template_compare.c
+yvex_gguf_template_report.c
+src/tools/yvex_gguf_template_internal.h
 tests/test_gguf_template.c
 tests/test_cli_gguf_template.sh
 ```
@@ -3178,9 +3266,9 @@ Expected files:
 
 ```text
 include/yvex/weight_mapping.h
-src/tools/weight_mapping.c
-src/tools/weight_mapping_report.c
-src/tools/adapters/deepseek_adapter.c
+yvex_weight_mapping.c
+yvex_weight_mapping_report.c
+yvex_deepseek_adapter.c
 tests/test_weight_mapping.c
 tests/test_deepseek_adapter.c
 tests/test_cli_tensor_map.sh
@@ -3236,11 +3324,11 @@ Expected files:
 
 ```text
 include/yvex/quant_policy.h
-src/tools/quant_policy.c
-src/tools/quant_policy_json.c
-src/tools/quant_policy_validate.c
-src/tools/quant_policy_from_template.c
-src/tools/quant_policy_report.c
+yvex_quant_policy.c
+yvex_quant_policy_json.c
+yvex_quant_policy_validate.c
+yvex_quant_policy_from_template.c
+yvex_quant_policy_report.c
 tests/test_quant_policy.c
 tests/test_cli_quant_policy.sh
 ```
@@ -3310,10 +3398,10 @@ Expected files:
 
 ```text
 include/yvex/imatrix.h
-src/tools/imatrix.c
-src/tools/imatrix_json.c
-src/tools/imatrix_validate.c
-src/tools/imatrix_report.c
+yvex_imatrix.c
+yvex_imatrix_json.c
+yvex_imatrix_validate.c
+yvex_imatrix_report.c
 tests/test_imatrix.c
 tests/test_cli_imatrix.sh
 ```
@@ -3372,11 +3460,11 @@ Expected files:
 
 ```text
 include/yvex/gguf_emit.h
-src/tools/gguf_emit.c
-src/tools/gguf_emit_metadata.c
-src/tools/gguf_emit_tensor.c
-src/tools/gguf_emit_report.c
-src/tools/gguf_emit_internal.h
+yvex_gguf_emit.c
+yvex_gguf_emit_metadata.c
+yvex_gguf_emit_tensor.c
+yvex_gguf_emit_report.c
+src/tools/yvex_gguf_emit_internal.h
 tests/test_gguf_emit.c
 tests/test_cli_gguf_emit.sh
 ```

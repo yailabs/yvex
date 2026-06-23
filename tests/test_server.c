@@ -10,7 +10,7 @@
  */
 #include <string.h>
 
-#include "../src/server/server_internal.h"
+#include "yvex_server_internal.h"
 #include "test.h"
 
 static int test_server_summary(void)

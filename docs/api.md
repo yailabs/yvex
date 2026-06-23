@@ -1414,9 +1414,10 @@ KV tensors, compute logits, expose a sampler, or imply generation support.
 
 ## CLI Runtime Shell
 
-diagnostic runtime adds `yvex run` and `yvex chat` as CLI runtime surfaces over the existing
-engine/session APIs. diagnostic runtime adds no new public C API. The chat runtime helpers under
-`src/chat/` are private implementation code used by the CLI and tests.
+diagnostic runtime adds `yvex run` and `yvex chat` as CLI runtime surfaces over
+the existing engine/session APIs. diagnostic runtime adds no new public C API.
+The chat runtime helpers are private implementation code used by the CLI and
+tests.
 
 The diagnostic runtime runtime shell can:
 
