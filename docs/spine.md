@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after M1
+after ARTIFACT.NAMING.0
 ```
 
 Current implementation commit:
@@ -661,6 +661,7 @@ Future commands are listed only under the delivery that implements them.
 | RUNTIME.KV.4 | planned | Host RAM spill and NVMe cold-cache experiments |
 | RUNTIME.KV.5 | planned | KV quantization policy |
 | M1 | complete | Real model conversion/materialization gate |
+| ARTIFACT.NAMING.0 | complete | GGUF artifact naming contract and existing artifact rename |
 | M2 | next | Real-model materialization hardening |
 | M3 | paused | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
@@ -1349,7 +1350,7 @@ tests/fixtures/gguf/tokenizer-missing-tokens.gguf
 tests/fixtures/gguf/tokenizer-bad-token-type-len.gguf
 tests/fixtures/gguf/tokenizer-bad-score-len.gguf
 tests/fixtures/gguf/tokenizer-bad-special-id.gguf
-tests/fixtures/gguf/tokenizer-unsupported-model.gguf
+tests/fixtures/gguf/tokenizer-unsupported-arch.gguf
 cli/yvex_cli.c
 Makefile
 docs/api.md
@@ -2043,6 +2044,45 @@ M1 does not prove full-model support.
 M1 does not prove graph execution.
 M1 does not prove prefill or decode.
 M1 does not prove inference.
+```
+
+### ARTIFACT.NAMING.0 - GGUF Artifact Naming Contract and Existing Artifact Rename
+
+Status:
+
+```text
+complete
+```
+
+Owns:
+
+```text
+canonical generated GGUF artifact filename grammar
+Qwen selected artifact rename
+DeepSeek selected artifact rename
+artifact naming helper API
+external rename validation reports
+M1 gate rerun on renamed paths
+```
+
+Rules:
+
+```text
+Generated real-model GGUF names must encode family, model, scope, artifact
+class, qprofile, calibration, producer, and schema. Filename is a compact
+identity. External reports and manifests carry full details.
+```
+
+Does not own:
+
+```text
+new conversion
+new quantization
+full-model GGUF emission
+runtime KV
+graph execution
+prefill/decode
+inference
 ```
 
 ### M2 - Real-Model Materialization Hardening

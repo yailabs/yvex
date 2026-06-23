@@ -58,13 +58,13 @@ grep 'status: conversion-plan-written' "$OUT_DIR/plan.out" >/dev/null || fail "m
   --native-source "$NATIVE" \
   --tensor model.embed_tokens.weight \
   --target-qtype F32 \
-  --out "$OUT_DIR/qwen-embed.gguf" \
+  --out "$OUT_DIR/qwen3-8b-selected-embed-F32-noimatrix-yvex-v1.gguf" \
   --overwrite > "$OUT_DIR/emit.out" 2> "$OUT_DIR/emit.err" || fail "emit failed"
 grep 'status: conversion-gguf-written' "$OUT_DIR/emit.out" >/dev/null || fail "missing emit status"
 
-"$YVEX_BIN" inspect "$OUT_DIR/qwen-embed.gguf" > "$OUT_DIR/inspect.out" 2> "$OUT_DIR/inspect.err" || fail "inspect failed"
+"$YVEX_BIN" inspect "$OUT_DIR/qwen3-8b-selected-embed-F32-noimatrix-yvex-v1.gguf" > "$OUT_DIR/inspect.out" 2> "$OUT_DIR/inspect.err" || fail "inspect failed"
 grep 'status: descriptor-only' "$OUT_DIR/inspect.out" >/dev/null || fail "missing inspect status"
-"$YVEX_BIN" materialize --model "$OUT_DIR/qwen-embed.gguf" --backend cpu > "$OUT_DIR/materialize.out" 2> "$OUT_DIR/materialize.err" || fail "materialize failed"
+"$YVEX_BIN" materialize --model "$OUT_DIR/qwen3-8b-selected-embed-F32-noimatrix-yvex-v1.gguf" --backend cpu > "$OUT_DIR/materialize.out" 2> "$OUT_DIR/materialize.err" || fail "materialize failed"
 grep 'status: weights-materialized' "$OUT_DIR/materialize.out" >/dev/null || fail "missing materialize status"
 "$YVEX_BIN" help convert > "$OUT_DIR/help.out" 2> "$OUT_DIR/help.err" || fail "help failed"
 grep 'usage: yvex convert' "$OUT_DIR/help.out" >/dev/null || fail "missing help"

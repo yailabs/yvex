@@ -155,6 +155,10 @@ yvex run --model "$FIX" --backend cpu --prompt "hello world"
 yvex gguf-emit controlled --out build/tests/gguf-emit/yvex-owned.gguf --overwrite
 ```
 
+Generated real-model GGUF paths used with `convert emit` and `model-gate` must
+follow the canonical artifact naming grammar documented in
+`docs/runtime-filesystem.md`.
+
 CUDA proof, only when available:
 
 ```sh

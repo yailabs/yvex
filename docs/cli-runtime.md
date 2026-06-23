@@ -322,7 +322,7 @@ Qwen selected tensor example:
   --native-source "$HOME/lab/models/hf/qwen/Qwen3-8B" \
   --tensor model.embed_tokens.weight \
   --target-qtype F16 \
-  --out "$HOME/lab/models/gguf/qwen/qwen3-8b-embed-yvex.gguf" \
+  --out "$HOME/lab/models/gguf/qwen/qwen3-8b-selected-embed-F16-noimatrix-yvex-v1.gguf" \
   --overwrite
 ```
 
@@ -1011,7 +1011,7 @@ server metrics, or inference benchmark claims.
 Future command names are not support claims:
 
 ```text
-yvex bench --model model.gguf --backend cuda --prompt prompts/code.txt --tokens 256
+yvex bench --model qwen3-8b-full-model-F16-noimatrix-yvex-v1.gguf --backend cuda --prompt prompts/code.txt --tokens 256
 yvex cuda-info
 ```
 
@@ -1201,7 +1201,7 @@ Real selected artifact examples use generated files outside the repository:
 
 ```sh
 yvex model-gate check \
-  --model "$HOME/lab/models/gguf/qwen/qwen3-8b-embed-yvex.gguf" \
+  --model "$HOME/lab/models/gguf/qwen/qwen3-8b-selected-embed-F16-noimatrix-yvex-v1.gguf" \
   --label qwen3-8b-selected-embedding \
   --family qwen3 \
   --sha256 7a07929f6b357d293011a8224d9fa5bc4a7eb37daed1ca1cd5dfc9278b987cb9 \
@@ -1218,3 +1218,21 @@ yvex model-gate check \
 
 `model-gate` does not claim full-model support, graph execution, prefill,
 decode, generation, or inference.
+
+## GGUF Artifact Naming
+
+`convert emit` keeps `--out` explicit. Operators should use canonical artifact
+names:
+
+```text
+<family>-<model>-<scope>-<artifact-class>-<qprofile>-<calibration>-<producer>-<schema>.gguf
+```
+
+Current selected artifact paths:
+
+```text
+$HOME/lab/models/gguf/qwen/qwen3-8b-selected-embed-F16-noimatrix-yvex-v1.gguf
+$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+```
+
+Poor generic names are not canonical evidence for generated real-model GGUFs.

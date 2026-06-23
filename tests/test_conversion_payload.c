@@ -50,7 +50,7 @@ int main(void)
     options.native_source_dir = "build/tests/conversion-payload";
     options.tensor_name = "model.embed_tokens.weight";
     options.target_qtype = "F32";
-    options.out_path = "build/tests/conversion-payload/qwen-embed.gguf";
+    options.out_path = "build/tests/conversion-payload/qwen3-8b-selected-embed-F32-noimatrix-yvex-v1.gguf";
     options.overwrite = 1;
     yvex_error_clear(&err);
     rc = yvex_conversion_emit_gguf(&options, &summary, &err);

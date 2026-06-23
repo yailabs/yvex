@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <yvex/artifact_naming.h>
 #include <yvex/qtype_support.h>
 
 const char *yvex_conversion_status_name(yvex_conversion_status status)
@@ -58,6 +59,31 @@ const char *yvex_conversion_default_qtype_for_role(yvex_tensor_role role)
     default:
         return "Q8_0";
     }
+}
+
+int yvex_conversion_suggest_artifact_name(char *out,
+                                          unsigned long long out_size,
+                                          const char *family,
+                                          const char *model,
+                                          const char *scope,
+                                          const char *artifact_class,
+                                          const char *qprofile,
+                                          const char *calibration,
+                                          const char *producer,
+                                          const char *schema,
+                                          yvex_error *err)
+{
+    return yvex_artifact_name_suggest(out,
+                                      (size_t)out_size,
+                                      family,
+                                      model,
+                                      scope,
+                                      artifact_class,
+                                      qprofile,
+                                      calibration,
+                                      producer,
+                                      schema,
+                                      err);
 }
 
 static int qtype_to_ggml(const char *qtype, unsigned int *ggml, unsigned int *scalar)

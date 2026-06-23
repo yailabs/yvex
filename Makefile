@@ -110,6 +110,8 @@ CORE_SRCS := \
 	src/server/router.c \
 	src/server/handlers.c \
 	src/server/server_metrics.c \
+	src/tools/artifact_naming.c \
+	src/tools/artifact_naming_report.c \
 	src/tools/conversion.c \
 	src/tools/conversion_plan.c \
 	src/tools/conversion_emit.c \
@@ -197,6 +199,7 @@ TEST_SRCS := \
 	tests/test_run_artifacts.c \
 	tests/test_http.c \
 	tests/test_server.c \
+	tests/test_artifact_naming.c \
 	tests/test_weight_mapping.c \
 	tests/test_qtype_support.c \
 	tests/test_qwen_adapter.c \

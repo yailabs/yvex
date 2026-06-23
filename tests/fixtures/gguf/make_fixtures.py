@@ -250,7 +250,7 @@ def main() -> None:
     write("tokenizer-bad-token-type-len.gguf", tiny_tensor_file(tokenizer_metadata(token_types=[2, 3])))
     write("tokenizer-bad-score-len.gguf", tiny_tensor_file(tokenizer_metadata(scores=[0.0, 0.0])))
     write("tokenizer-bad-special-id.gguf", tiny_tensor_file(tokenizer_metadata(special_id=99)))
-    write("tokenizer-unsupported-model.gguf", tiny_tensor_file(tokenizer_metadata(model="mystery-tokenizer")))
+    write("tokenizer-unsupported-arch.gguf", tiny_tensor_file(tokenizer_metadata(model="mystery-tokenizer")))
 
 
 if __name__ == "__main__":

@@ -215,7 +215,7 @@ static int test_malformed_and_unsupported(void)
                                              YVEX_ERR_BOUNDS) == 0,
                      "bad special id fails");
 
-    YVEX_TEST_ASSERT(stack_open_tokenizer("tests/fixtures/gguf/tokenizer-unsupported-model.gguf", &stack) == 0,
+    YVEX_TEST_ASSERT(stack_open_tokenizer("tests/fixtures/gguf/tokenizer-unsupported-arch.gguf", &stack) == 0,
                      "open unsupported tokenizer model");
     YVEX_TEST_ASSERT(yvex_tokenizer_kind_of(stack.tokenizer) == YVEX_TOKENIZER_KIND_UNKNOWN,
                      "unsupported kind unknown");

@@ -1593,6 +1593,40 @@ no inference
 no execution_ready true
 ```
 
+## Artifact Naming API
+
+ARTIFACT.NAMING.0 adds `include/yvex/artifact_naming.h`.
+
+Implemented:
+
+```text
+yvex_artifact_name_suggest
+yvex_conversion_suggest_artifact_name
+```
+
+Canonical generated GGUF artifact format:
+
+```text
+<family>-<model>-<scope>-<artifact-class>-<qprofile>-<calibration>-<producer>-<schema>.gguf
+```
+
+Current selected artifact examples:
+
+```text
+qwen3-8b-selected-embed-F16-noimatrix-yvex-v1.gguf
+deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+```
+
+Rules:
+
+```text
+producer must be yvex
+schema is v1 for current artifacts
+spaces are rejected
+ambiguous tokens such as test/final/new/fixed/latest are rejected
+selected artifacts must not be named as full-model artifacts
+```
+
 ## Future Backend API
 
 Backend APIs belong to `docs/backend-contract.md`. Generic backend headers must

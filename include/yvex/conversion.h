@@ -78,6 +78,18 @@ int yvex_conversion_emit_gguf(const yvex_conversion_options *options,
                               yvex_conversion_summary *summary_out,
                               yvex_error *err);
 
+int yvex_conversion_suggest_artifact_name(char *out,
+                                          unsigned long long out_size,
+                                          const char *family,
+                                          const char *model,
+                                          const char *scope,
+                                          const char *artifact_class,
+                                          const char *qprofile,
+                                          const char *calibration,
+                                          const char *producer,
+                                          const char *schema,
+                                          yvex_error *err);
+
 const char *yvex_conversion_status_name(yvex_conversion_status status);
 const char *yvex_convert_tensor_status_name(yvex_convert_tensor_status status);
 const char *yvex_convert_transform_kind_name(yvex_convert_transform_kind transform);

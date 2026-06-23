@@ -134,7 +134,7 @@ static const yvex_cli_command yvex_commands[] = {
         "convert",
         "Plan or emit selected open-weight GGUF conversions.",
         "yvex convert plan --arch ARCH --native-source DIR --out-plan FILE | yvex convert emit --arch ARCH --native-source DIR --tensor NAME --target-qtype QTYPE --out FILE [--overwrite]",
-        "Builds conversion plans and emits selected tensor GGUF artifacts from official safetensors sources. It does not infer, execute a full model, or claim generation support.",
+        "Builds conversion plans and emits selected tensor GGUF artifacts from official safetensors sources. Output files should use the canonical GGUF artifact naming grammar. It does not infer, execute a full model, or claim generation support.",
         command_convert,
     },
     {

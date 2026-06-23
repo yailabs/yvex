@@ -220,6 +220,54 @@ Model-gate fixture outputs created by tests are disposable and live under:
 build/tests/model-gate-cli
 ```
 
+## GGUF Artifact Naming Contract
+
+Generated real-model GGUF artifacts outside the repository use:
+
+```text
+<family>-<model>-<scope>-<artifact-class>-<qprofile>-<calibration>-<producer>-<schema>.gguf
+```
+
+Fields:
+
+```text
+family: qwen3, deepseek4, llama, gemma, phi, kimi, glm
+model: 8b, v4-flash, v4-pro, etc.
+scope: selected, partial, full
+artifact-class: embed, layer<N>, attn<N>, mlp<N>, router, experts, blocks<A>-<B>, model
+qprofile: F32, F16, BF16, Q8, Q4K, Q2K, IQ2XXS, mixed, mixed-q8, mixed-q2k-iq2xxs
+calibration: noimatrix, imatrix, calib-<name>
+producer: yvex
+schema: v1, v2
+```
+
+Rules:
+
+```text
+filename must not contain spaces
+filename must not contain ambiguous words such as test, final, new, fixed, latest
+filename must not imply full model when the artifact is selected tensor only
+filename must not imply imatrix when no imatrix/calibration was used
+filename must not imply quantization support that YVEX did not perform
+```
+
+Current selected artifact names:
+
+```text
+qwen3-8b-selected-embed-F16-noimatrix-yvex-v1.gguf
+deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+```
+
+Future full-artifact examples:
+
+```text
+qwen3-8b-full-model-F16-noimatrix-yvex-v1.gguf
+qwen3-8b-full-model-Q8-noimatrix-yvex-v1.gguf
+deepseek4-v4-flash-full-model-mixed-q2k-iq2xxs-imatrix-yvex-v1.gguf
+```
+
+Generic or time-relative names are forbidden for real generated artifacts.
+
 ## Failure Behavior
 
 ```text

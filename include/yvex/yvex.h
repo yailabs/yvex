@@ -28,6 +28,7 @@
 #define YVEX_H
 
 #include <yvex/artifact.h>
+#include <yvex/artifact_naming.h>
 #include <yvex/backend.h>
 #include <yvex/conversion.h>
 #include <yvex/dtype.h>
