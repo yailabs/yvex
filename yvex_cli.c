@@ -12,6 +12,7 @@
 #include <string.h>
 #include <yvex/yvex.h>
 #include "yvex_console_private.h"
+#include "yvex_run_private.h"
 
 
 

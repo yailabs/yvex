@@ -104,6 +104,7 @@ execution_ready: true
 | CUDA.SURFACE.0 | complete | CUDA kernel translation unit |
 | REPO.SURFACE.1 | complete | Natural C surface and code style refoundation |
 | CODE.NATURAL.0 | complete | Natural translation unit rewrite |
+| CODE.NATURAL.1 | complete | Final translation unit hygiene pass |
 | TEST.SURFACE.0 | next | Test vectors and runner consolidation |
 | CLI.MODELS.3 | planned | Model selection in canonical REPL |
 | CLI.MODELS.4 | planned | Model alias resolution in yvexd |
@@ -174,7 +175,9 @@ family mapping consolidated into gguf/
 test vector surface established
 natural C source style pass complete
 natural translation unit rewrite complete
+final translation unit hygiene complete
 private headers scoped by backend, console, and server
+run artifact helpers split from console private boundary
 public documentation boundary complete
 minimal docs surface complete
 ```

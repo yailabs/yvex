@@ -16,29 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct yvex_materialized_weight {
-    char *name;
-    yvex_dtype dtype;
-    yvex_tensor_role role;
-    unsigned long long bytes;
-    yvex_weight_residency residency;
-    yvex_device_tensor *device_tensor;
-};
-
-struct yvex_weight_table {
-    yvex_backend *backend;
-    char *backend_name;
-    yvex_materialized_weight *items;
-    unsigned long long count;
-    yvex_materialize_summary summary;
-};
-
-char *yvex_weight_strdup(const char *text);
-void yvex_materialized_weight_clear(yvex_weight_table *table,
-                                    yvex_materialized_weight *weight);
-
-
-
+/* Dtype registry */
 
 static const yvex_dtype_info dtype_table[] = {
     {YVEX_DTYPE_UNKNOWN, "UNKNOWN",  UINT_MAX, 0,   0,   0, 0, 0},
@@ -163,6 +141,8 @@ int yvex_dtype_storage_bytes(yvex_dtype dtype,
 }
 
 
+
+/* Model descriptors */
 
 struct yvex_model_descriptor {
     yvex_arch arch;
@@ -346,6 +326,8 @@ unsigned long long yvex_model_role_count(const yvex_model_descriptor *model, yve
 
 
 
+/* Tensor roles */
+
 const char *yvex_tensor_role_name(yvex_tensor_role role)
 {
     switch (role) {
@@ -476,6 +458,8 @@ yvex_tensor_role yvex_tensor_role_classify(const char *architecture,
 }
 
 
+
+/* Tensor table */
 
 struct yvex_tensor_table {
     yvex_tensor_info *items;
@@ -658,7 +642,26 @@ const yvex_tensor_info *yvex_tensor_table_find(const yvex_tensor_table *table,
 
 
 
-char *yvex_weight_strdup(const char *text)
+/* Materialized weights */
+
+struct yvex_materialized_weight {
+    char *name;
+    yvex_dtype dtype;
+    yvex_tensor_role role;
+    unsigned long long bytes;
+    yvex_weight_residency residency;
+    yvex_device_tensor *device_tensor;
+};
+
+struct yvex_weight_table {
+    yvex_backend *backend;
+    char *backend_name;
+    yvex_materialized_weight *items;
+    unsigned long long count;
+    yvex_materialize_summary summary;
+};
+
+static char *yvex_weight_strdup(const char *text)
 {
     size_t len;
     char *copy;
@@ -675,8 +678,8 @@ char *yvex_weight_strdup(const char *text)
     return copy;
 }
 
-void yvex_materialized_weight_clear(yvex_weight_table *table,
-                                    yvex_materialized_weight *weight)
+static void yvex_materialized_weight_clear(yvex_weight_table *table,
+                                           yvex_materialized_weight *weight)
 {
     if (!weight) {
         return;

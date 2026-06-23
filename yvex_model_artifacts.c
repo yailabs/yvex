@@ -23,6 +23,8 @@
 #include <unistd.h>
 
 
+/* Private registry types */
+
 typedef struct {
     char *alias;
     char *family;
@@ -46,46 +48,31 @@ struct yvex_model_registry {
     unsigned long long cap;
 };
 
-char *yvex_model_registry_strdup(const char *s);
-void yvex_model_registry_owned_entry_clear(yvex_model_registry_owned_entry *entry);
-void yvex_model_registry_entry_view(const yvex_model_registry_owned_entry *owned,
-                                    yvex_model_registry_entry *view);
-int yvex_model_registry_copy_entry(yvex_model_registry_owned_entry *dst,
-                                   const yvex_model_registry_entry *src,
-                                   yvex_error *err);
+/* Private helper declarations */
 
-int yvex_model_registry_parse_json_file(const char *path,
-                                        yvex_model_registry *registry,
-                                        yvex_error *err);
-
-int yvex_model_registry_write_json_file(const yvex_model_registry *registry,
-                                        const char *path,
-                                        yvex_error *err);
-
-int yvex_model_registry_mkdir_parent(const char *path,
-                                     yvex_error *err);
-
-void yvex_model_registry_print_entry(const yvex_model_registry_entry *entry,
-                                     int selected);
-
-void yvex_model_registry_print_scan_entry(const yvex_model_registry_entry *entry);
-
-
-
-char *yvex_model_ref_strdup(const char *s);
-int yvex_model_ref_copy_from_entry(yvex_model_ref *out,
-                                   const char *input,
-                                   const yvex_model_registry_entry *entry,
-                                   yvex_error *err);
-
-
-
-int yvex_model_gate_sha256_hex(const unsigned char *data,
-                               unsigned long long len,
-                               char out_hex[65]);
-
-
-
+static char *yvex_model_registry_strdup(const char *s);
+static void yvex_model_registry_owned_entry_clear(yvex_model_registry_owned_entry *entry);
+static void yvex_model_registry_entry_view(const yvex_model_registry_owned_entry *owned,
+                                           yvex_model_registry_entry *view);
+static int yvex_model_registry_copy_entry(yvex_model_registry_owned_entry *dst,
+                                          const yvex_model_registry_entry *src,
+                                          yvex_error *err);
+static int yvex_model_registry_parse_json_file(const char *path,
+                                               yvex_model_registry *registry,
+                                               yvex_error *err);
+static int yvex_model_registry_write_json_file(const yvex_model_registry *registry,
+                                               const char *path,
+                                               yvex_error *err);
+static int yvex_model_registry_mkdir_parent(const char *path,
+                                            yvex_error *err);
+static char *yvex_model_ref_strdup(const char *s);
+static int yvex_model_ref_copy_from_entry(yvex_model_ref *out,
+                                          const char *input,
+                                          const yvex_model_registry_entry *entry,
+                                          yvex_error *err);
+static int yvex_model_gate_sha256_hex(const unsigned char *data,
+                                      unsigned long long len,
+                                      char out_hex[65]);
 
 
 static int yvex_model_gate_dtype_matches(const char *expected, yvex_dtype actual)
@@ -513,7 +500,7 @@ static void sha256_final(yvex_sha256_ctx *ctx, unsigned char out[32])
     }
 }
 
-int yvex_model_gate_sha256_hex(const unsigned char *data,
+static int yvex_model_gate_sha256_hex(const unsigned char *data,
                                unsigned long long len,
                                char out_hex[65])
 {
@@ -962,7 +949,7 @@ int yvex_materialize_gate_report_translation_unit_anchor(void)
 
 
 
-char *yvex_model_ref_strdup(const char *s)
+static char *yvex_model_ref_strdup(const char *s)
 {
     size_t len;
     char *out;
@@ -1017,7 +1004,7 @@ static int is_path_like_reference(const char *input)
     return 0;
 }
 
-int yvex_model_ref_copy_from_entry(yvex_model_ref *out,
+static int yvex_model_ref_copy_from_entry(yvex_model_ref *out,
                                    const char *input,
                                    const yvex_model_registry_entry *entry,
                                    yvex_error *err)
@@ -1182,7 +1169,7 @@ const char *yvex_model_ref_status_name(yvex_model_ref_status status)
 
 
 
-char *yvex_model_registry_strdup(const char *s)
+static char *yvex_model_registry_strdup(const char *s)
 {
     size_t len;
     char *out;
@@ -1195,7 +1182,7 @@ char *yvex_model_registry_strdup(const char *s)
     return out;
 }
 
-void yvex_model_registry_owned_entry_clear(yvex_model_registry_owned_entry *entry)
+static void yvex_model_registry_owned_entry_clear(yvex_model_registry_owned_entry *entry)
 {
     if (!entry) return;
     free(entry->alias);
@@ -1213,7 +1200,7 @@ void yvex_model_registry_owned_entry_clear(yvex_model_registry_owned_entry *entr
     memset(entry, 0, sizeof(*entry));
 }
 
-void yvex_model_registry_entry_view(const yvex_model_registry_owned_entry *owned,
+static void yvex_model_registry_entry_view(const yvex_model_registry_owned_entry *owned,
                                     yvex_model_registry_entry *view)
 {
     memset(view, 0, sizeof(*view));
@@ -1233,7 +1220,7 @@ void yvex_model_registry_entry_view(const yvex_model_registry_owned_entry *owned
     view->execution_ready = owned->execution_ready;
 }
 
-int yvex_model_registry_copy_entry(yvex_model_registry_owned_entry *dst,
+static int yvex_model_registry_copy_entry(yvex_model_registry_owned_entry *dst,
                                    const yvex_model_registry_entry *src,
                                    yvex_error *err)
 {
@@ -1808,7 +1795,7 @@ static const char *find_matching_object_end(const char *start)
     return NULL;
 }
 
-int yvex_model_registry_parse_json_file(const char *path,
+static int yvex_model_registry_parse_json_file(const char *path,
                                         yvex_model_registry *registry,
                                         yvex_error *err)
 {
@@ -1952,7 +1939,7 @@ static void write_field(FILE *fp, const char *indent, const char *key, const cha
     fprintf(fp, "%s\n", comma ? "," : "");
 }
 
-int yvex_model_registry_mkdir_parent(const char *path, yvex_error *err)
+static int yvex_model_registry_mkdir_parent(const char *path, yvex_error *err)
 {
     char buf[4096];
     char *slash;
@@ -1984,7 +1971,7 @@ int yvex_model_registry_mkdir_parent(const char *path, yvex_error *err)
     return YVEX_OK;
 }
 
-int yvex_model_registry_write_json_file(const yvex_model_registry *registry,
+static int yvex_model_registry_write_json_file(const yvex_model_registry *registry,
                                         const char *path,
                                         yvex_error *err)
 {
@@ -2045,39 +2032,6 @@ int yvex_model_registry_write_json_file(const yvex_model_registry *registry,
         return YVEX_ERR_IO;
     }
     return YVEX_OK;
-}
-
-
-
-void yvex_model_registry_print_entry(const yvex_model_registry_entry *entry,
-                                     int selected)
-{
-    if (!entry) return;
-    printf("%c %s\n", selected ? '*' : '-', entry->alias ? entry->alias : "");
-    printf("  family: %s\n", entry->family ? entry->family : "");
-    printf("  model: %s\n", entry->model ? entry->model : "");
-    printf("  scope: %s\n", entry->scope ? entry->scope : "");
-    printf("  artifact_class: %s\n", entry->artifact_class ? entry->artifact_class : "");
-    printf("  qprofile: %s\n", entry->qprofile ? entry->qprofile : "");
-    printf("  calibration: %s\n", entry->calibration ? entry->calibration : "");
-    printf("  producer: %s\n", entry->producer ? entry->producer : "");
-    printf("  schema_version: %s\n", entry->schema_version ? entry->schema_version : "");
-    printf("  support_level: %s\n", entry->support_level ? entry->support_level : "");
-    printf("  execution_ready: %s\n", entry->execution_ready ? "true" : "false");
-    printf("  path: %s\n", entry->path ? entry->path : "");
-}
-
-void yvex_model_registry_print_scan_entry(const yvex_model_registry_entry *entry)
-{
-    if (!entry) return;
-    printf("candidate: %s\n", entry->alias ? entry->alias : "");
-    printf("path: %s\n", entry->path ? entry->path : "");
-    printf("family: %s\n", entry->family ? entry->family : "");
-    printf("model: %s\n", entry->model ? entry->model : "");
-    printf("scope: %s\n", entry->scope ? entry->scope : "");
-    printf("artifact_class: %s\n", entry->artifact_class ? entry->artifact_class : "");
-    printf("qprofile: %s\n", entry->qprofile ? entry->qprofile : "");
-    printf("calibration: %s\n", entry->calibration ? entry->calibration : "");
 }
 
 

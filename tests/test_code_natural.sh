@@ -1,6 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
+impl_files="$(git ls-files '*.c' '*.cu' | grep -v '^tests/' | grep -v '^build/' || true)"
+
 git grep -n \
   -e 'compressed implementation unit' \
   -e 'inlined yvex_' \
@@ -12,7 +14,7 @@ git grep -n \
     exit 1
   } || true
 
-git grep -n '^#ifndef .*_H$' -- '*.c' 'cuda/*.c' 'cuda/*.cu' 'gguf/*.c' && {
+git grep -n '^#ifndef .*_H$' -- $impl_files && {
     echo "header guard found inside C implementation"
     exit 1
   } || true
@@ -67,7 +69,7 @@ END {
     exit bad ? 1 : 0
 }
 ' \
-  *.c cuda/*.c cuda/*.cu gguf/*.c
+  $impl_files
 
 test ! -f yvex_internal.h
 

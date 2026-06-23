@@ -9,7 +9,7 @@
 #include <yvex/profile.h>
 #include <yvex/trace.h>
 
-#include "yvex_console_private.h"
+#include "yvex_run_private.h"
 
 #include <errno.h>
 #include <limits.h>
