@@ -30,7 +30,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-layout smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-layout test-docs-surface smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -149,9 +149,8 @@ CUDA_TEST_SRCS := \
 
 CUDA_TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(CUDA_TEST_SRCS))
 
-CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md \
-	docs/api.md docs/backend-contract.md docs/runtime-filesystem.md \
-	docs/cli-runtime.md docs/cli-commands.md
+CURRENT_DOCS := README.md AGENTS.md MODEL_ARTIFACTS.md NOTICE.md \
+	docs/api.md docs/contract.md docs/spine.md
 
 info:
 	@echo "yvex: C local inference engine"
@@ -261,9 +260,12 @@ test: test-core test-cli
 test-layout: tests/test_source_layout.sh
 	sh tests/test_source_layout.sh
 
+test-docs-surface: tests/test_docs_surface.sh
+	sh tests/test_docs_surface.sh
+
 smoke: test-cli
 
-check: check-docs check-guardrails lib cli server test test-layout smoke
+check: check-docs check-guardrails lib cli server test test-layout test-docs-surface smoke
 	@echo "yvex check: ok"
 
 $(LIBYVEX): $(CORE_OBJS)
@@ -293,50 +295,35 @@ $(TEST_DIR)/%: tests/%.c $(LIBYVEX) tests/test.h
 check-docs:
 	@test -f README.md
 	@test -f NOTICE.md
-	@test -f docs/README.md
+	@test -f AGENTS.md
+	@test -f MODEL_ARTIFACTS.md
 	@test -f docs/spine.md
 	@test -f docs/api.md
-	@test -f docs/backend-contract.md
-	@test -f docs/runtime-filesystem.md
-	@test -f docs/cli-interface-spine.md
-	@test -f docs/cli-runtime.md
-	@test -f docs/cli-commands.md
+	@test -f docs/contract.md
 	@! find docs -maxdepth 1 -type f -name '*.md' \
-		! -name README.md \
 		! -name spine.md \
 		! -name api.md \
-		! -name backend-contract.md \
-		! -name runtime-filesystem.md \
-		! -name cli-interface-spine.md \
-		! -name cli-runtime.md \
-		! -name cli-commands.md \
+		! -name contract.md \
 		-print | grep .
-	@grep -F "YVEX Implementation Spine" docs/spine.md >/dev/null
-	@grep -F "YVEX is CLI-only" docs/spine.md >/dev/null
-	@grep -F "YVEX is a C local inference engine" README.md >/dev/null
-	@grep -F "Completed Milestones" docs/spine.md >/dev/null
-	@grep -F "GGUF metadata and tensor directory" docs/spine.md >/dev/null
-	@grep -F "Tensor and model layer" docs/spine.md >/dev/null
-	@grep -F "Tokenizer and prompt rendering" docs/spine.md >/dev/null
-	@grep -F "Graph and planner" docs/spine.md >/dev/null
-	@grep -F "CPU reference backend" docs/spine.md >/dev/null
-	@grep -F "Engine and session runtime" docs/spine.md >/dev/null
-	@grep -F "CLI run/chat runtime" docs/spine.md >/dev/null
-	@grep -F "Metrics and tracing" docs/spine.md >/dev/null
-	@grep -F "yvexd server/provider" docs/spine.md >/dev/null
-	@grep -F "CUDA/DGX Spark backend" docs/spine.md >/dev/null
-	@grep -F "Implemented by:" docs/spine.md >/dev/null
+	@test "$$(find docs -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')" = "3"
+	@grep -F "YVEX Inner Delivery Spine" docs/spine.md >/dev/null
+	@grep -F "internal roadmap" docs/spine.md >/dev/null
+	@grep -F "YVEX is a C local runtime" README.md >/dev/null
+	@grep -F "Model selection in canonical REPL" docs/spine.md >/dev/null
+	@grep -F "docs/api.md, docs/contract.md, docs/spine.md" docs/spine.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
-	@grep -F "YVEX Backend Contract" docs/backend-contract.md >/dev/null
-	@grep -F "YVEX Runtime Filesystem" docs/runtime-filesystem.md >/dev/null
-	@grep -F "YVEX CLI Runtime" docs/cli-runtime.md >/dev/null
-	@grep -F "YVEX CLI Command Index" docs/cli-commands.md >/dev/null
-	@grep -F "CUDA / DGX Spark Track" docs/backend-contract.md >/dev/null
+	@grep -F "YVEX Runtime Contract" docs/contract.md >/dev/null
 
 check-guardrails:
 	@test ! -d docs/spines
 	@test ! -d docs/integration
 	@test ! -d docs/benchmark
+	@test ! -e docs/README.md
+	@test ! -e docs/backend-contract.md
+	@test ! -e docs/cli-commands.md
+	@test ! -e docs/cli-interface-spine.md
+	@test ! -e docs/cli-runtime.md
+	@test ! -e docs/runtime-filesystem.md
 	@test ! -d benches
 	@test ! -d examples
 	@test ! -d protocols

@@ -1,101 +1,50 @@
 # YVEX
 
-YVEX is a C local inference engine for open-weight models.
+YVEX is a C local runtime for open-weight model artifacts. It owns local
+artifact loading, GGUF parsing, tensor inspection, backend materialization, and
+runtime diagnostics.
 
-YVEX owns model execution: artifact loading, format parsing, tensor tables,
-tokenization, prompt rendering, graph planning, backend execution, KV cache,
-prefill/decode, logits, sampling, token streaming, metrics and traces.
-
-YVEX is CLI-only. `make` builds the repository-local developer entrypoints
-directly at `./yvex` and `./yvexd`: plain/rich CLI output, REPL-ready command
-semantics, streaming-friendly stdout/stderr discipline, JSON/JSONL planning,
-logs on stderr, and run artifacts on disk.
-
-YVEX does not own YAI case/control/governance. YAI consumes YVEX as a local
-provider boundary.
-
-## Operator Entry Points
-
-Repository-local:
+YVEX is CLI-first. `make` builds the repository-local binaries directly:
 
 ```sh
-./yvex
-./yvexd
+make
+./yvex version
+./yvex commands
 ```
 
-`./yvex` is the operator/developer CLI.
-`./yvexd` is the server/provider shell.
+`./yvex` is the operator/developer CLI. `./yvexd` is the server/provider daemon.
 
-## CLI Interface
+## Local Models
 
-YVEX exposes:
-
-```text
-./yvex   interactive CLI / one-shot diagnostics
-./yvexd  server/provider daemon
-```
-
-The canonical CLI layout and REPL design live in:
-
-```text
-docs/cli-interface-spine.md
-```
-
-## Model Selection
-
-Current one-shot model commands accept explicit model paths or registered model
-aliases.
-
-The active DeepSeek selected artifact is documented in
-[MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md). A local model registry is implemented
-through `./yvex models` so users can register and select models by alias instead
-of remembering absolute paths. Alias-or-path resolution is implemented for
-one-shot model commands such as `inspect`, `tensors`, `metadata`,
-`materialize`, `model-gate`, and `materialize-gate`.
-
-Example alias:
-
-```text
-deepseek4-v4-flash-selected-embed
-```
-
-Typical registry flow:
+Model artifacts live outside the repository. The local registry lets operators
+use aliases instead of long paths.
 
 ```sh
 ./yvex models add --path "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
 ./yvex models list
 ./yvex models use deepseek4-v4-flash-selected-embed
-./yvex models current
 ./yvex inspect deepseek4-v4-flash-selected-embed
 ./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
 ```
 
-## Quick Operator Files
+The current external artifact cards live in [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md).
 
-- [AGENTS.md](AGENTS.md) - operating contract for humans and coding agents.
-- [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md) - current external model artifact
-  cards and support posture.
-- [docs/spine.md](docs/spine.md) - internal delivery map.
+## Runtime Posture
 
-The current active live target is DeepSeek V4 Flash selected embedding GGUF.
-See [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md).
-
-## Status
-
-YVEX currently supports:
+Implemented now:
 
 ```text
 GGUF inspection
 metadata and tensor table parsing
 selected-tensor GGUF emission
 selected-tensor materialization on CPU/CUDA
-local model artifact registry
+local model registry
 model alias resolution for one-shot commands
 model gate and materialization gate diagnostics
 server/provider status shell
 ```
 
-YVEX does not yet support:
+Not implemented yet:
 
 ```text
 full-model execution
@@ -109,76 +58,45 @@ inference benchmarks
 
 ## Source Layout
 
-YVEX uses a compact root-first C source layout. Implementation files live at
-repository root as compressed conceptual `yvex_*.c` modules, public headers live
-under `include/yvex/`, CUDA backend code lives under `backends/cuda/`, and tests
-live under `tests/`.
-
-Current state:
-
 ```text
-canonical spine: docs/spine.md
-runtime code: core/filesystem/artifact/GGUF/model/tokenizer/graph/backend/weights/session shell implemented
-public headers: implemented headers are aggregated by include/yvex/yvex.h
-CLI binary: ./yvex accepted-only runtime shell and cuda-info implemented
-server binary: ./yvexd status shell implemented
-repo binaries: ./yvex and ./yvexd
-GGUF parser: metadata and tensor directory implemented
-tokenizer: fixture encode/decode implemented
-CUDA backend: tensor allocation/read/write/copy and F32 embed parity implemented when driver/device are available
-weights: fixture tensor bytes materialized into CPU/CUDA backend tensors
-server generation: not implemented
-benchmark results: none
+yvex_cli.c          CLI entrypoint
+yvexd.c             daemon entrypoint
+yvex_*.c            compact implementation modules
+include/yvex/       public C headers
+backends/cuda/      CUDA backend boundary
+tests/              C and CLI tests
+docs/               api, contract, internal spine
 ```
 
-No support claim exists without source implementation, CLI-visible behavior,
-tests, manual proof command, clear failure behavior, and a documented
-limitation.
+Generated local state is ignored:
+
+```text
+build/
+.yvex/
+./yvex
+./yvexd
+```
 
 ## Documentation
 
-- [Agent operating contract](AGENTS.md)
-- [Model artifact cards](MODEL_ARTIFACTS.md)
-- [Docs index](docs/README.md)
-- [Implementation spine](docs/spine.md)
-- [API](docs/api.md)
-- [Backend contract](docs/backend-contract.md)
-- [Runtime filesystem](docs/runtime-filesystem.md)
-- [CLI interface spine](docs/cli-interface-spine.md)
-- [CLI runtime](docs/cli-runtime.md)
-- [CLI commands](docs/cli-commands.md)
+```text
+AGENTS.md            operating rules for humans and coding agents
+MODEL_ARTIFACTS.md   external artifact cards
+docs/api.md          public C API surface
+docs/contract.md     runtime/backend/filesystem/CLI contract
+docs/spine.md        internal delivery roadmap
+```
 
 ## Validation
 
 ```sh
-make info
 make check
-make check-cuda   # only on CUDA-capable hosts
+make smoke
+make check-cuda
 ```
 
-## Quick Start
-
-```sh
-make
-./yvex commands
-./yvex info
-./yvex inspect tests/fixtures/gguf/valid-tokenizer-simple.gguf
-```
-
-Optional local-user command links:
-
-```sh
-mkdir -p ~/.local/bin
-ln -sf "$PWD/./yvex" ~/.local/bin/yvex
-ln -sf "$PWD/./yvexd" ~/.local/bin/yvexd
-```
-
-`./yvex` is the repository-local developer entrypoint. `yvex` is the optional
-global/local-user command when the compiled binary is linked into `PATH`.
-
-At this phase, validation checks the reduced documentation posture and
-guardrails, builds libyvex.a, builds the CLI, runs C tests, and runs CLI smoke
-tests.
+`make check-cuda` requires a CUDA-capable host. No support claim exists without
+source implementation, tests, command-visible proof, and documented limits.
 
 ## License
 
