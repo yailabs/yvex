@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after OWI.8
+after RUNTIME.KV.0
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-M1 - Qwen3-8B selected-tensor GGUF materialization and DeepSeek conversion plan validation
+M1 - Real model conversion/materialization gate
 ```
 
 Implemented surface:
@@ -640,7 +640,8 @@ Future commands are listed only under the delivery that implements them.
 | OWI.6 | complete | Calibration and imatrix contract |
 | OWI.7 | complete | First YVEX-owned GGUF emission from controlled source |
 | OWI.8 | complete | Open Weight Conversion Bridge, Qwen-first / DeepSeek-ready |
-| M1 | next | Qwen3-8B selected-tensor GGUF materialization and DeepSeek conversion plan validation |
+| RUNTIME.KV.0 | complete | KV cache residency and benchmark policy |
+| M1 | next | Real model conversion/materialization gate |
 | M2 | paused | Real-model materialization hardening |
 | M3 | paused | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
@@ -1956,8 +1957,8 @@ Model support waves may use CUDA only for support levels backed by command proof
 
 ### Model Support Ladder
 
-The M ladder remains paused while the OWI ladder establishes the open-weight
-provenance/toolchain path.
+The M ladder resumes after OWI and RUNTIME.KV.0 establish the open-weight
+provenance/toolchain path and runtime KV policy.
 
 Rules:
 
@@ -1969,20 +1970,21 @@ Large-model feasibility is reported as feasibility until execution is proven.
 No broad model support claim is valid without generated/staged artifact provenance.
 ```
 
-### M1 - DeepSeek GGUF Materialization From Provenance-Controlled Source
+### M1 - Real Model Conversion/Materialization Gate
 
 Status:
 
 ```text
-paused
+next
 ```
 
 Owns:
 
 ```text
-first DeepSeek materialization attempt from a provenance-controlled source
-external model file path
-CUDA direct materialization
+Qwen selected/full materialization gate
+DeepSeek conversion plan validation
+provenance-controlled generated artifact paths
+CPU and CUDA materialization proof where available
 failure diagnostics for OOM, split, unsupported dtype, and parser failures
 no model files committed
 ```
@@ -2160,6 +2162,14 @@ KV allocation policy if required
 logits precondition path
 ```
 
+Depends on:
+
+```text
+RUNTIME.KV.0 KV residency policy
+future RUNTIME.KV.1 static KV estimator
+future RUNTIME.KV.2 CUDA KV allocation proof if CUDA prefill is targeted
+```
+
 Does not own:
 
 ```text
@@ -2190,6 +2200,15 @@ decode step structure
 logits buffer lifecycle
 next-token precondition
 backend op readiness checks
+```
+
+Depends on:
+
+```text
+real KV allocation
+real KV residency status
+logits buffer lifecycle
+backend attention readiness
 ```
 
 Does not own:
@@ -2881,6 +2900,51 @@ Handoff:
 M1 resumes using provenance-controlled DeepSeek GGUF/materialization path
 ```
 
+### RUNTIME.KV.0 - KV Cache Residency and Benchmark Policy
+
+Status:
+
+```text
+complete
+```
+
+Owns:
+
+```text
+KV cache sizing formula
+KV residency tiers
+hot/cold KV vocabulary
+future KV status vocabulary
+benchmark policy for KV work
+allowed and forbidden KV measurements
+future KV experiment ladder
+M6/M7 dependency notes
+```
+
+Does not own:
+
+```text
+KV cache implementation
+CUDA KV allocation
+PagedAttention or vAttention
+CPU/RAM spill implementation
+NVMe offload implementation
+KV quantization
+attention kernels
+prefill
+decode
+logits
+sampler
+inference benchmark claims
+new public C API
+```
+
+Handoff:
+
+```text
+M1 resumes after OWI completion and KV residency policy stabilization
+```
+
 ## 4. Completed Deliveries
 
 ### Completed Milestones
@@ -2907,6 +2971,7 @@ M1 resumes using provenance-controlled DeepSeek GGUF/materialization path
 | K0 | 6a8e17b | Added yvexd server shell, HTTP status router, health/metrics/model catalog endpoints, unsupported generation endpoint response, and tests. |
 | L0 | afc8536 | Added CUDA backend attachment, device probe, tensor allocation/read/write/copy, F32 embed op, CPU/CUDA parity proof, cuda-info CLI, and CUDA targets/tests. |
 | M0 | current commit | Added fixture weight materialization into backend tensors, CPU/CUDA materialization proof, materialized weight table API, materialize CLI, and tests. |
+| RUNTIME.KV.0 | current commit | Added KV cache residency, sizing, benchmark policy, future status vocabulary, and M6/M7 dependency doctrine. |
 
 Current implemented CLI command set:
 
@@ -2956,25 +3021,26 @@ git diff --check
 Next authorized milestone:
 
 ```text
-M1 - Qwen3-8B selected-tensor GGUF materialization and DeepSeek conversion plan validation
+M1 - Real model conversion/materialization gate
 ```
 
 Current active milestone:
 
 ```text
-M1 - Qwen3-8B selected-tensor GGUF materialization and DeepSeek conversion plan validation
+M1 - Real model conversion/materialization gate
 ```
 
-Paused milestone:
+Previous runtime policy milestone:
 
 ```text
-M1 - Qwen3-8B selected-tensor GGUF materialization and DeepSeek conversion plan validation
+RUNTIME.KV.0 - KV cache residency and benchmark policy
 ```
 
-M1 resumes after OWI.8. The official source/provenance contract, native
+M1 resumes after RUNTIME.KV.0. The official source/provenance contract, native
 inventory, GGUF template contract, tensor mapping adapter, quantization policy
 manifest, imatrix manifest contract, controlled GGUF emission proof, qtype
-support matrix, and selected-tensor conversion bridge now exist.
+support matrix, selected-tensor conversion bridge, and KV residency policy now
+exist.
 
 Model support waves must produce:
 
@@ -3175,6 +3241,167 @@ Tokenization and prompt failures do not mutate session state.
 Backend failures invalidate only the affected in-flight outputs unless documented.
 Run artifacts are execution-local evidence.
 ```
+
+### KV Cache Residency Doctrine
+
+Implemented by:
+
+```text
+H0: KV unavailable skeleton
+RUNTIME.KV.0: KV residency and benchmark policy
+future RUNTIME.KV.1+: estimator, allocation, paging, spill, and quantization experiments
+M6: prefill runtime uses real KV allocation policy
+M7: decode/logits runtime depends on real KV residency
+```
+
+Rules:
+
+```text
+KV cache is session state.
+KV cache is not model weight storage.
+KV cache is not an Open Weight Intake artifact.
+Hot decode KV targets GPU memory first.
+GPU-paged/block KV is the first scalable future direction.
+Host RAM spill is a fallback tier, not the default interactive path.
+NVMe/SSD is cold/offline/persistence tier unless proven otherwise.
+CPU/GPU hardware caches such as L2/shared/registers are kernel staging, not session residency.
+KV benchmark claims are forbidden before real prefill/decode exist.
+```
+
+KV cache size estimate:
+
+```text
+bytes =
+  2
+  * layer_count
+  * sequence_length
+  * kv_head_count
+  * head_dim
+  * bytes_per_element
+  * active_sequence_count
+```
+
+Where:
+
+```text
+2 = K and V
+layer_count = transformer layers with attention KV
+sequence_length = current or maximum retained context
+kv_head_count = number of K/V heads, affected by MQA/GQA
+head_dim = per-head dimension
+bytes_per_element = F16/BF16/FP8/quantized bytes
+active_sequence_count = batch or concurrent sessions
+```
+
+Notes:
+
+```text
+KV cache grows linearly with context length.
+KV cache grows linearly with active sessions.
+GQA/MQA reduce kv_head_count.
+KV memory competes with model weights for accelerator memory.
+Long context can become KV-bound even if model weights fit.
+```
+
+KV residency tiers:
+
+```text
+Tier 0 - GPU hot KV:
+  Active decode KV blocks live in GPU memory.
+  This is the default target for interactive serving.
+
+Tier 1 - GPU paged/block KV:
+  KV is managed in pages/blocks on GPU.
+  Future PagedAttention-style or equivalent allocator.
+  Used to reduce fragmentation and support dynamic sequence growth.
+
+Tier 2 - Host RAM spill:
+  Cold or overflow KV blocks may live in pinned host memory.
+  Expected latency and bandwidth penalty.
+  Only valid after explicit benchmark proof.
+
+Tier 3 - NVMe cold KV:
+  Persistent/cold/offline cache only.
+  Not a hot interactive decode tier unless explicitly proven.
+  Used for future experiments, checkpointing, or offline workloads.
+
+Kernel-local staging:
+  Registers/shared memory/L2 are execution staging areas used by attention kernels.
+  They are not persistent KV session residency.
+```
+
+Future KV status vocabulary:
+
+```text
+kv_status:
+  unavailable
+  planned
+  allocated
+  gpu_hot
+  gpu_paged
+  host_spill
+  nvme_cold
+  quantized
+  failed
+```
+
+Current active status:
+
+```text
+kv_status: unavailable
+```
+
+No CLI output may claim future statuses until implementation exists.
+
+Allowed KV measurements now:
+
+```text
+static KV size estimates
+VRAM free/total snapshot
+model weight bytes
+planned context length
+theoretical KV bytes
+allocator simulation
+no decode timing
+```
+
+Allowed only after real prefill/decode:
+
+```text
+prefill KV allocation time
+decode token latency
+KV read bandwidth pressure
+KV page allocation overhead
+KV spill hit/miss rate
+KV quantization quality impact
+```
+
+Forbidden now:
+
+```text
+decode TPS
+TTFT
+tokens/sec generation
+KV cache speedup claim
+SSD decode viability claim
+RAM offload viability claim
+PagedAttention performance claim
+vAttention performance claim
+```
+
+Future KV ladder:
+
+```text
+RUNTIME.KV.0 - KV cache residency and benchmark policy
+RUNTIME.KV.1 - Static KV size estimator
+RUNTIME.KV.2 - CUDA KV allocation proof
+RUNTIME.KV.3 - GPU paged KV allocator skeleton
+RUNTIME.KV.4 - Host RAM spill and NVMe cold-cache experiments
+RUNTIME.KV.5 - KV quantization policy
+```
+
+These future KV implementation waves are planned runtime dependencies, not the
+next authorized milestone.
 
 ### CLI Doctrine
 
