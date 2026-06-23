@@ -136,6 +136,10 @@ CORE_SRCS := \
 	src/tools/model_gate.c \
 	src/tools/model_gate_json.c \
 	src/tools/model_gate_report.c \
+	src/tools/model_registry.c \
+	src/tools/model_registry_json.c \
+	src/tools/model_registry_scan.c \
+	src/tools/model_registry_report.c \
 	src/tools/native_weights.c \
 	src/tools/native_weight_report.c \
 	src/tools/quant_job.c \
@@ -216,6 +220,7 @@ TEST_SRCS := \
 	tests/test_gguf_template.c \
 	tests/test_materialize_gate.c \
 	tests/test_model_gate.c \
+	tests/test_model_registry.c \
 	tests/test_deepseek_adapter.c \
 	tests/test_safetensors_header.c \
 	tests/test_native_weights.c \
@@ -265,6 +270,7 @@ info:
 	@echo "gguf_template: contract validator implemented"
 	@echo "gguf_emit: controlled GGUF writer implemented"
 	@echo "conversion: open-weight selected tensor bridge implemented"
+	@echo "model_registry: local model alias registry implemented"
 	@echo "quant_job: external quantization job manifest implemented"
 	@echo "qtype_support: conversion support matrix implemented"
 	@echo "weight_mapping: tensor adapter contract implemented"
@@ -314,7 +320,7 @@ test-core: $(TEST_BINS)
 		"$$test_bin"; \
 	done
 
-test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh tests/test_cli_server.sh tests/test_cli_materialize.sh tests/test_cli_materialize_gate.sh tests/test_cli_source_manifest.sh tests/test_cli_native_weights.sh tests/test_cli_gguf_template.sh tests/test_cli_gguf_emit.sh tests/test_cli_tensor_map.sh tests/test_cli_convert.sh tests/test_cli_model_gate.sh tests/test_cli_quant_job.sh tests/test_cli_quant_policy.sh tests/test_cli_imatrix.sh
+test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh tests/test_cli_server.sh tests/test_cli_materialize.sh tests/test_cli_materialize_gate.sh tests/test_cli_source_manifest.sh tests/test_cli_native_weights.sh tests/test_cli_gguf_template.sh tests/test_cli_gguf_emit.sh tests/test_cli_tensor_map.sh tests/test_cli_convert.sh tests/test_cli_model_gate.sh tests/test_cli_models.sh tests/test_cli_quant_job.sh tests/test_cli_quant_policy.sh tests/test_cli_imatrix.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_run.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_chat.sh
@@ -329,6 +335,7 @@ test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_tensor_map.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_convert.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_model_gate.sh
+	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_models.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_quant_job.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_quant_policy.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_imatrix.sh

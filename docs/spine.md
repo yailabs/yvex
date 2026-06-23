@@ -62,7 +62,7 @@ docs/cli-runtime.md owns detailed command behavior.
 Current phase:
 
 ```text
-after CLI.MODELS.0
+after CLI.MODELS.1
 ```
 
 Current implementation commit:
@@ -74,7 +74,7 @@ current commit
 Next authorized milestone:
 
 ```text
-M3 - Materialized-weight engine attachment
+CLI.MODELS.2 - Model alias resolution for one-shot commands
 ```
 
 Implemented surface:
@@ -234,6 +234,14 @@ External quantization job bridge:
   src/tools/quant_job_report.c
   src/tools/quant_job_internal.h
 
+Local model registry:
+  include/yvex/model_registry.h
+  src/tools/model_registry.c
+  src/tools/model_registry_json.c
+  src/tools/model_registry_scan.c
+  src/tools/model_registry_report.c
+  src/tools/model_registry_internal.h
+
 Weight mapping adapter contract:
   include/yvex/weight_mapping.h
   src/tools/weight_mapping.c
@@ -299,6 +307,7 @@ Tests:
   tests/test_conversion_plan.c
   tests/test_conversion_payload.c
   tests/test_quant_job.c
+  tests/test_model_registry.c
   tests/test_quant_policy.c
   tests/test_imatrix.c
   tests/test_gguf_emit.c
@@ -314,6 +323,7 @@ Tests:
   tests/test_cli_tensor_map.sh
   tests/test_cli_convert.sh
   tests/test_cli_quant_job.sh
+  tests/test_cli_models.sh
   tests/test_cli_quant_policy.sh
   tests/test_cli_imatrix.sh
   tests/test_cuda_info.c
@@ -676,11 +686,11 @@ Future commands are listed only under the delivery that implements them.
 | REPO.OPERATING.0 | complete | Agent operating handbook and model artifact cards |
 | CLI.CONSOLE.0 | complete | Canonical REPL layout and line editing boundary |
 | CLI.MODELS.0 | complete | Local model registry and selection spine |
-| CLI.MODELS.1 | planned | Local model registry implementation |
-| CLI.MODELS.2 | planned | Model alias resolution for one-shot commands |
+| CLI.MODELS.1 | complete | Local model registry implementation |
+| CLI.MODELS.2 | next | Model alias resolution for one-shot commands |
 | CLI.MODELS.3 | planned | Model selection in canonical REPL |
 | CLI.MODELS.4 | planned | Model alias resolution in yvexd |
-| M3 | next | Materialized-weight engine attachment |
+| M3 | paused | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
 | M5 | paused | First real-model partial graph execution |
 | M6 | paused | Prefill runtime foundation |
@@ -2338,21 +2348,34 @@ no code behavior changes
 Status:
 
 ```text
-planned
+complete
 ```
 
 Owns:
 
 ```text
+include/yvex/model_registry.h
+src/tools/model_registry.c
+src/tools/model_registry_json.c
+src/tools/model_registry_scan.c
+src/tools/model_registry_report.c
+tests/test_model_registry.c
+tests/test_cli_models.sh
 local registry file read/write
-models add/list/remove/current/use commands
+models scan/add/list/remove/current/use/inspect commands
 machine-local registry path handling
+YVEX_MODELS_REGISTRY override
+canonical artifact filename metadata derivation
+alias validation
 registry validation and error reporting
 ```
 
 Does not own:
 
 ```text
+using aliases in inspect/materialize/model-gate/materialize-gate
+using aliases in yvexd
+REPL model selection
 inference
 materialization changes
 server daemon behavior
@@ -2362,9 +2385,15 @@ automatic model execution
 Acceptance:
 
 ```text
-local registry can be created and inspected
-aliases map to paths and metadata
-registry files remain untracked
+models command exists
+registry persists locally as JSON
+DeepSeek selected artifact can be added by path
+DeepSeek alias can be selected
+models current shows selected alias
+models inspect works through alias
+registry files remain untracked under .yvex/
+one-shot commands are not changed yet
+yvexd alias resolution is not changed yet
 no model execution claim
 ```
 
@@ -2373,7 +2402,7 @@ no model execution claim
 Status:
 
 ```text
-planned
+next
 ```
 
 Owns:
@@ -2475,7 +2504,7 @@ available aliases are reported when possible
 Status:
 
 ```text
-next
+paused
 ```
 
 Owns:
@@ -3874,13 +3903,13 @@ git diff --check
 Next authorized milestone:
 
 ```text
-M3 - Materialized-weight engine attachment
+CLI.MODELS.2 - Model alias resolution for one-shot commands
 ```
 
 Current active milestone:
 
 ```text
-M3 - Materialized-weight engine attachment
+CLI.MODELS.2 - Model alias resolution for one-shot commands
 ```
 
 Planned runtime KV map:

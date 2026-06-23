@@ -205,11 +205,14 @@ The registry maps aliases to artifacts:
 }
 ```
 
-Decision for now:
+Current implementation:
 
 ```text
-CLI.MODELS.0 documents the registry.
-CLI.MODELS.1 will implement it.
+CLI.MODELS.0 documented the registry.
+CLI.MODELS.1 implements the local registry and `yvex models` command group.
+CLI.MODELS.1 default path is `.yvex/models.local.json`.
+CLI.MODELS.1 supports `--registry FILE` and `YVEX_MODELS_REGISTRY`.
+CLI.MODELS.2 will wire aliases into one-shot commands.
 ```
 
 ## Model Alias Rules
@@ -256,7 +259,7 @@ The registry holds the exact path, hash, support level, and artifact metadata.
 
 ## Model Discovery Rules
 
-Future command:
+Implemented command:
 
 ```sh
 ./yvex models scan
@@ -296,9 +299,9 @@ generate text
 modify files
 ```
 
-## Future `yvex models` Command
+## `yvex models` Command
 
-Planned command group:
+Implemented command group:
 
 ```text
 yvex models scan
@@ -813,8 +816,9 @@ CLI.CONSOLE.4 - Server-connected console mode
 CLI.CONSOLE.5 - True generation console after prefill/decode/sampler
 ```
 
-`CLI.MODELS.0` and `CLI.CONSOLE.0` are documentation/design. Later waves
-implement behavior.
+`CLI.MODELS.0` and `CLI.CONSOLE.0` are documentation/design. CLI.MODELS.1
+implements registry behavior. Later CLI.MODELS and CLI.CONSOLE waves extend
+alias resolution and interactive behavior.
 
 ## 18. Relationship To M Ladder
 
@@ -847,5 +851,21 @@ REPL model selection behavior is designed
 yvexd alias behavior is designed
 no code behavior changes
 no registry files committed
+no inference claim
+```
+
+## 21. Acceptance For CLI.MODELS.1
+
+```text
+yvex models command group exists
+models scan lists canonical GGUF candidates
+models add writes local registry entries
+models list prints registry entries
+models use selects an alias
+models current prints selected alias or none
+models inspect resolves alias and runs lightweight GGUF inspect
+models remove deletes an alias and clears selected state when needed
+.yvex/models.local.json remains local and untracked
+one-shot command alias resolution remains future CLI.MODELS.2 work
 no inference claim
 ```

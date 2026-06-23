@@ -44,16 +44,27 @@ docs/cli-interface-spine.md
 
 ## Model Selection
 
-Current commands accept explicit model paths.
+Current one-shot model commands accept explicit model paths.
 
 The active DeepSeek selected artifact is documented in
-[MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md). A local model registry and alias
-system is planned so users can select models by alias instead of absolute path.
+[MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md). A local model registry is implemented
+through `./yvex models` so users can register and select models by alias instead
+of remembering absolute paths. Using those aliases directly in every one-shot
+command is planned next.
 
-Example future alias:
+Example alias:
 
 ```text
 deepseek4-v4-flash-selected-embed
+```
+
+Typical registry flow:
+
+```sh
+./yvex models add --path "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
+./yvex models list
+./yvex models use deepseek4-v4-flash-selected-embed
+./yvex models current
 ```
 
 ## Quick Operator Files

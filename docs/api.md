@@ -1672,6 +1672,61 @@ Qwen remains historical OWI/M1 evidence only.
 execution_ready remains false.
 ```
 
+## Model Registry API
+
+CLI.MODELS.1 adds `include/yvex/model_registry.h`.
+
+Implemented:
+
+```text
+yvex_model_registry
+yvex_model_registry_entry
+yvex_model_registry_options
+yvex_model_registry_open
+yvex_model_registry_close
+yvex_model_registry_count
+yvex_model_registry_at
+yvex_model_registry_find
+yvex_model_registry_selected
+yvex_model_registry_add
+yvex_model_registry_remove
+yvex_model_registry_select
+yvex_model_registry_save
+yvex_model_alias_validate
+yvex_model_registry_entry_derive_from_path
+yvex_model_registry_scan_root
+yvex_model_registry_scan_free
+yvex_model_registry_default_path
+```
+
+Scope:
+
+```text
+machine-local model registry JSON
+alias validation
+canonical artifact filename metadata derivation
+registry read/write
+registry scan helper for canonical GGUF artifact names
+selected alias state
+```
+
+Alias grammar:
+
+```text
+<family>-<model>-<scope>-<artifact-class>
+```
+
+Example:
+
+```text
+deepseek4-v4-flash-selected-embed
+```
+
+Registry files are local operator state. They may contain absolute model
+artifact paths and must not be committed. CLI.MODELS.1 does not make aliases
+work in `inspect`, `materialize`, `model-gate`, `materialize-gate`, or `yvexd`;
+that remains CLI.MODELS.2 and CLI.MODELS.4 work.
+
 ## Future Backend API
 
 Backend APIs belong to `docs/backend-contract.md`. Generic backend headers must

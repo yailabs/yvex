@@ -25,6 +25,7 @@
 #   - yvex materialize-gate
 #   - yvex metadata
 #   - yvex model-gate
+#   - yvex models
 #   - yvex native-weights
 #   - yvex paths
 #   - yvex prompt
@@ -124,6 +125,7 @@ contains "$OUT_DIR/info.out" "native_weights: safetensors header inventory imple
 contains "$OUT_DIR/info.out" "gguf_template: contract validator implemented"
 contains "$OUT_DIR/info.out" "gguf_emit: controlled GGUF writer implemented"
 contains "$OUT_DIR/info.out" "conversion: open-weight selected tensor bridge implemented"
+contains "$OUT_DIR/info.out" "model_registry: local model alias registry implemented"
 contains "$OUT_DIR/info.out" "quant_job: external quantization job manifest implemented"
 contains "$OUT_DIR/info.out" "qtype_support: conversion support matrix implemented"
 contains "$OUT_DIR/info.out" "weight_mapping: tensor adapter contract implemented"
@@ -158,6 +160,7 @@ contains "$OUT_DIR/commands.out" "  materialize"
 contains "$OUT_DIR/commands.out" "  materialize-gate"
 contains "$OUT_DIR/commands.out" "  metadata"
 contains "$OUT_DIR/commands.out" "  model-gate"
+contains "$OUT_DIR/commands.out" "  models"
 contains "$OUT_DIR/commands.out" "  native-weights"
 contains "$OUT_DIR/commands.out" "  paths"
 contains "$OUT_DIR/commands.out" "  plan"
@@ -206,6 +209,9 @@ contains "$OUT_DIR/help_metadata.out" "usage: yvex metadata <path>"
 
 run_ok help_model_gate "$YVEX_BIN" help model-gate
 contains "$OUT_DIR/help_model_gate.out" "usage: yvex model-gate check"
+
+run_ok help_models "$YVEX_BIN" help models
+contains "$OUT_DIR/help_models.out" "usage: yvex models"
 
 run_ok help_native_weights "$YVEX_BIN" help native-weights
 contains "$OUT_DIR/help_native_weights.out" "usage: yvex native-weights --source DIR"

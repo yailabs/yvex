@@ -9,7 +9,7 @@ a command, option, exit status, or visible runtime posture.
 ## Current Milestone
 
 ```text
-CLI.CONSOLE.0 - Canonical REPL layout and line editing boundary
+CLI.MODELS.1 - Local model registry implementation
 ```
 
 ## Operator References
@@ -33,10 +33,10 @@ docs/cli-interface-spine.md
 
 ## Model Selection Direction
 
-Current commands still accept explicit model paths.
+Current one-shot model commands still accept explicit model paths.
 
-Future model selection will support local model aliases through the planned
-`yvex models` command group. See:
+Local model registry management is implemented through `yvex models`. Alias
+resolution for other one-shot commands remains future CLI.MODELS.2 work. See:
 
 ```text
 docs/cli-interface-spine.md
@@ -48,13 +48,11 @@ Current canonical DeepSeek artifact:
 /home/dgmothx/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
 ```
 
-Future alias:
+Current alias:
 
 ```text
 deepseek4-v4-flash-selected-embed
 ```
-
-`yvex models` is planned, not implemented.
 
 Use repository-local launchers:
 
@@ -109,6 +107,7 @@ native_weights: safetensors header inventory implemented
 gguf_template: contract validator implemented
 gguf_emit: controlled GGUF writer implemented
 conversion: open-weight selected tensor bridge implemented
+model_registry: local model alias registry implemented
 quant_job: external quantization job manifest implemented
 qtype_support: conversion support matrix implemented
 weight_mapping: tensor adapter contract implemented
@@ -151,6 +150,7 @@ execution, model execution, or inference.
 | `inspect` | `yvex inspect PATH` | implemented; descriptor-only GGUF/model summary |
 | `materialize` | `yvex materialize --model FILE --backend cpu\|cuda` | implemented; fixture weights copied into backend tensors |
 | `metadata` | `yvex metadata PATH` | implemented; GGUF metadata dump |
+| `models` | `yvex models scan\|add\|list\|use\|current\|inspect\|remove` | implemented; local model registry management |
 | `native-weights` | `yvex native-weights --source DIR [--limit N] [--tensor NAME] [--json]` | implemented; safetensors header inventory |
 | `paths` | `yvex paths [--project DIR] [--run] [--create]` | implemented |
 | `plan` | `yvex plan PATH [--backend cpu\|cuda] [--seq N] [--ctx N]` | implemented; plan-only |

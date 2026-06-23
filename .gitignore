@@ -3,6 +3,7 @@
 *.tmp
 target/
 build/
+.yvex/
 dist/
 node_modules/
 .env

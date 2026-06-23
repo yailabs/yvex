@@ -37,10 +37,11 @@ one-shot diagnostics/tools
 `run` is accepted-only diagnostics until inference exists.
 `chat` is the current diagnostic REPL and the future canonical console.
 
-Future model selection will use a local model registry and aliases. Current
-commands still require explicit paths unless a command already documents
-otherwise. The planned `yvex models` group is documented in
-`docs/cli-interface-spine.md`; it is not implemented yet.
+Model selection uses a local model registry through `yvex models`. Current
+one-shot commands still require explicit paths unless a command already
+documents otherwise; cross-command alias resolution belongs to CLI.MODELS.2.
+The implemented `yvex models` group is documented in
+`docs/cli-interface-spine.md`.
 
 See `docs/cli-interface-spine.md`.
 
@@ -74,6 +75,13 @@ yvex info
 yvex inspect <path>
 yvex materialize --model FILE --backend cpu|cuda
 yvex metadata <path>
+yvex models scan --root DIR [--registry FILE]
+yvex models add --path FILE [--alias ALIAS] [--registry FILE]
+yvex models list [--registry FILE]
+yvex models use ALIAS [--registry FILE]
+yvex models current [--registry FILE]
+yvex models inspect ALIAS [--registry FILE]
+yvex models remove ALIAS [--registry FILE]
 yvex native-weights --source DIR [--limit N] [--tensor NAME] [--json]
 yvex paths
 yvex paths --project DIR
@@ -116,6 +124,7 @@ artifact: open/read implemented
 gguf: metadata/tensor directory parsing implemented
 gguf_emit: controlled GGUF writer implemented
 conversion: open-weight selected tensor bridge implemented
+model_registry: local model alias registry implemented
 qtype_support: conversion support matrix implemented
 model: descriptor-only implemented
 tokenizer: fixture encode/decode implemented
