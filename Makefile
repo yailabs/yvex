@@ -30,15 +30,16 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-layout test-docs-surface smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-layout test-docs-surface smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
 NVCC ?= nvcc
 CUDA_HOME ?= /usr/local/cuda
-CUDA_CFLAGS ?=
+NVCCFLAGS ?=
 CUDA_LDFLAGS ?=
 YVEX_CUDA_ARCH ?= auto
+NVCC_AVAILABLE := $(shell command -v $(NVCC) >/dev/null 2>&1 && echo yes || echo no)
 
 CPPFLAGS ?= -D_POSIX_C_SOURCE=200809L -Iinclude -I.
 CFLAGS ?= -std=c11 -Wall -Wextra -pedantic
@@ -80,9 +81,22 @@ CUDA_SRCS := \
 	cuda/cuda_info.c \
 	cuda/cuda_errors.c
 
+CUDA_CU_SRCS := \
+	cuda/cuda_kernels.cu
+
+CUDA_ARCH_FLAG := $(if $(filter auto,$(YVEX_CUDA_ARCH)),,-arch=$(YVEX_CUDA_ARCH))
+CUDA_PTX := $(patsubst %.cu,$(OBJ_DIR)/%.ptx,$(CUDA_CU_SRCS))
+CUDA_PTX_C := $(OBJ_DIR)/cuda/cuda_kernels_ptx.c
+CUDA_PTX_OBJ := $(OBJ_DIR)/cuda/cuda_kernels_ptx.o
+
 CORE_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 CUDA_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CUDA_SRCS))
 CORE_OBJS += $(CUDA_OBJS)
+
+ifeq ($(NVCC_AVAILABLE),yes)
+CPPFLAGS += -DYVEX_HAVE_CUDA_KERNEL_PTX=1
+CORE_OBJS += $(CUDA_PTX_OBJ)
+endif
 
 TEST_SRCS := \
 	tests/test_status.c \
@@ -195,7 +209,7 @@ info:
 	@echo "logits: unavailable skeleton implemented"
 	@echo "generation: unsupported"
 	@echo "inference: not implemented"
-	@echo "cuda: tensor movement and F32 embed parity implemented when driver/device are available"
+	@echo "cuda: tensor movement and F32 embed kernel parity implemented when driver/device are available"
 	@echo "server: yvexd status shell implemented"
 
 all: lib cli server
@@ -212,8 +226,11 @@ cuda-info: $(YVEX_BIN)
 	@echo "YVEX_CUDA_ARCH: $(YVEX_CUDA_ARCH)"
 	$(YVEX_BIN) cuda-info
 
-cuda: lib cli server $(CUDA_TEST_BINS)
-	@echo "yvex cuda build: dynamic CUDA Driver API path"
+cuda-kernels: $(CUDA_PTX_OBJ)
+	@echo "yvex cuda kernels: built from $(CUDA_CU_SRCS)"
+
+cuda: cuda-kernels lib cli server $(CUDA_TEST_BINS)
+	@echo "yvex cuda build: dynamic CUDA Driver API path plus CUDA kernel PTX"
 
 test-cuda: cuda
 	$(YVEX_BIN) cuda-info >/dev/null
@@ -273,6 +290,23 @@ $(LIBYVEX): $(CORE_OBJS)
 	$(AR) rcs $@ $^
 
 $(OBJ_DIR)/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/%.ptx: %.cu
+	@mkdir -p $(@D)
+	$(NVCC) $(NVCCFLAGS) $(CUDA_ARCH_FLAG) -ptx $< -o $@
+
+$(CUDA_PTX_C): $(CUDA_PTX) cuda/cuda_kernels.h
+	@mkdir -p $(@D)
+	@{ \
+		printf '#include "cuda/cuda_kernels.h"\n'; \
+		printf 'const char yvex_cuda_kernels_ptx[] =\n'; \
+		sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/' $(CUDA_PTX); \
+		printf ';\n'; \
+	} > $@
+
+$(CUDA_PTX_OBJ): $(CUDA_PTX_C)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 

@@ -38,14 +38,16 @@ under `models/`. Tests use small fixtures and stable vectors under `tests/`.
 ```text
 CPU reference backend is the correctness baseline
 CUDA implementation lives under cuda/
+CUDA host bridge code stays in .c files
+CUDA device kernels live in .cu files
 CUDA availability is optional for baseline validation
 backend failures return structured errors
 materialization does not imply graph execution
 ```
 
 CUDA support currently covers device probing, tensor allocation, tensor
-movement, and a parity subset. It does not imply matmul, attention, full model
-execution, generation, or benchmark support.
+movement, and a kernel-backed parity subset. It does not imply matmul,
+attention, full model execution, generation, or benchmark support.
 
 ## 5. Server Contract
 

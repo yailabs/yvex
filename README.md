@@ -62,7 +62,7 @@ inference benchmarks
 yvex_cli.c          CLI entrypoint
 yvexd.c             daemon entrypoint
 yvex_*.c            compact implementation modules
-cuda/               CUDA implementation
+cuda/               CUDA runtime bridge and kernels
 gguf/               GGUF parser and artifact tooling
 models/             model-family adapters
 include/yvex/       public C headers

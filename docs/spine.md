@@ -19,7 +19,7 @@ text.
 root-first C source layout
 native root binaries: ./yvex and ./yvexd
 public headers: include/yvex/
-CUDA implementation: cuda/
+CUDA implementation: cuda/ with C host bridge and CUDA kernel unit
 GGUF domain: gguf/
 model-family adapters: models/
 docs: docs/api.md, docs/contract.md, docs/spine.md
@@ -40,7 +40,7 @@ tokenizer fixture path
 prompt rendering diagnostics
 graph/planner substrate
 CPU backend
-CUDA tensor movement/parity subset
+CUDA tensor movement/kernel parity subset
 selected-tensor GGUF emission
 selected-tensor materialization
 local model registry
@@ -102,6 +102,7 @@ execution_ready: true
 | REPO.LAYOUT.2 | complete | Root source compression and native root binaries |
 | DOCS.MIN.0 | complete | Minimal documentation surface |
 | REPO.SURFACE.0 | complete | CUDA, GGUF, model family, and test surface refoundation |
+| CUDA.SURFACE.0 | complete | CUDA kernel translation unit |
 | CLI.MODELS.3 | next | Model selection in canonical REPL |
 | CLI.MODELS.4 | planned | Model alias resolution in yvexd |
 | M3 | paused | Materialized-weight engine attachment |
@@ -165,6 +166,7 @@ root-first source layout complete
 root source compression complete
 native root binaries complete
 CUDA surface promoted to cuda/
+first CUDA kernel translation unit complete
 GGUF parser/tooling extracted to gguf/
 model-family adapter surface extracted to models/
 test vector surface established

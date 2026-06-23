@@ -15,6 +15,13 @@ test -f yvex_core.c
 test -f yvex_model_tools.c
 test -f yvex_source.c
 test -f cuda/cuda_backend.c
+test -f cuda/cuda_errors.c
+test -f cuda/cuda_info.c
+test -f cuda/cuda_internal.h
+test -f cuda/cuda_kernels.cu
+test -f cuda/cuda_kernels.h
+test -f cuda/cuda_ops.c
+test -f cuda/cuda_tensor.c
 test -f gguf/gguf.c
 test -f gguf/naming.c
 test -f gguf/tools.c

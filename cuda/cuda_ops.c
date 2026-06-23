@@ -13,7 +13,10 @@
 #include <limits.h>
 #include <stdint.h>
 
-static const char yvex_embed_ptx[] =
+#ifdef YVEX_HAVE_CUDA_KERNEL_PTX
+#include "cuda_kernels.h"
+#else
+static const char yvex_cuda_kernels_ptx[] =
 ".version 6.4\n"
 ".target sm_30\n"
 ".address_size 64\n"
@@ -68,6 +71,7 @@ static const char yvex_embed_ptx[] =
 "DONE:\n"
 "    ret;\n"
 "}\n";
+#endif
 
 static int tensor_is_f32_bytes(const yvex_device_tensor *tensor,
                                unsigned long long elements)
@@ -84,7 +88,8 @@ static int ensure_embed_kernel(yvex_cuda_backend_state *state, yvex_error *err)
         return YVEX_OK;
     }
     rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuModuleLoadData(&state->module, yvex_embed_ptx),
+                          state->driver.cuModuleLoadData(&state->module,
+                                                         yvex_cuda_kernels_ptx),
                           "cuda.embed.load_module", err);
     if (rc != YVEX_OK) {
         return rc;
