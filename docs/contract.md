@@ -31,7 +31,8 @@ Local registry files are machine-local and may contain absolute paths. They must
 not be committed.
 
 GGUF parser, artifact tooling, and model-family tensor mapping live under
-`gguf/`. Tests use small fixtures and stable vectors under `tests/`.
+`gguf/`. Tests use compact C/CLI runners, small fixtures, and stable vectors
+under `tests/`.
 
 ## 4. Backend Contract
 
@@ -123,6 +124,7 @@ Documentation and artifact guardrails:
 
 ```sh
 sh tests/test_docs_surface.sh
+sh tests/test_surface.sh
 git ls-files '*.safetensors' '*.bin' '*.dat'
 git ls-files '*.gguf'
 ```

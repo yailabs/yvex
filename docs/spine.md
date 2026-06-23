@@ -105,8 +105,8 @@ execution_ready: true
 | REPO.SURFACE.1 | complete | Natural C surface and code style refoundation |
 | CODE.NATURAL.0 | complete | Natural translation unit rewrite |
 | CODE.NATURAL.1 | complete | Final translation unit hygiene pass |
-| TEST.SURFACE.0 | next | Test vectors and runner consolidation |
-| CLI.MODELS.3 | planned | Model selection in canonical REPL |
+| TEST.SURFACE.0 | complete | Test vectors and runner consolidation |
+| CLI.MODELS.3 | next | Model selection in canonical REPL |
 | CLI.MODELS.4 | planned | Model alias resolution in yvexd |
 | M3 | paused | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
@@ -157,7 +157,7 @@ implementation not active
 root binaries complete
 model registry complete
 one-shot alias resolution complete
-REPL selected model planned after test surface cleanup
+REPL selected model next
 yvexd alias resolution later
 line editing later
 ```
@@ -173,6 +173,7 @@ first CUDA kernel translation unit complete
 GGUF parser/tooling extracted to gguf/
 family mapping consolidated into gguf/
 test vector surface established
+test runners consolidated
 natural C source style pass complete
 natural translation unit rewrite complete
 final translation unit hygiene complete
@@ -185,7 +186,7 @@ minimal docs surface complete
 ## 6. Active Next
 
 ```text
-TEST.SURFACE.0 - Test vectors and runner consolidation
+CLI.MODELS.3 - Model selection in canonical REPL
 ```
 
 ## 7. Validation Gate
@@ -197,6 +198,7 @@ make smoke
 make check-cuda
 git diff --check
 sh tests/test_docs_surface.sh
+sh tests/test_surface.sh
 ```
 
 Additional guardrails:

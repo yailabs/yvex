@@ -24,7 +24,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-layout test-code-natural test-docs-surface smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-layout test-code-natural test-docs-surface test-surface smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -39,6 +39,7 @@ CPPFLAGS ?= -D_POSIX_C_SOURCE=200809L -Iinclude -I.
 CFLAGS ?= -std=c11 -Wall -Wextra -pedantic
 LDFLAGS ?=
 LDLIBS ?= -ldl
+TEST_CPPFLAGS := $(CPPFLAGS) -Itests
 
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
@@ -93,70 +94,16 @@ CPPFLAGS += -DYVEX_HAVE_CUDA_KERNEL_PTX=1
 CORE_OBJS += $(CUDA_PTX_OBJ)
 endif
 
-TEST_SRCS := \
-	tests/test_status.c \
-	tests/test_error.c \
-	tests/test_version.c \
-	tests/test_log.c \
-	tests/test_fs.c \
-	tests/test_artifact.c \
-	tests/test_gguf.c \
-	tests/test_dtype.c \
-	tests/test_tensor_table.c \
-	tests/test_model_descriptor.c \
-	tests/test_weights.c \
-	tests/test_materialize_cpu.c \
-	tests/test_tokenizer.c \
-	tests/test_prompt.c \
-	tests/test_shape.c \
-	tests/test_graph.c \
-	tests/test_memory_plan.c \
-	tests/test_planner.c \
-	tests/test_backend_cpu.c \
-	tests/test_backend_ops.c \
-	tests/test_engine.c \
-	tests/test_session.c \
-	tests/test_kv.c \
-	tests/test_logits.c \
-	tests/test_runtime_diagnostics.c \
-	tests/test_chat_runtime.c \
-	tests/test_slash_commands.c \
-	tests/test_metrics.c \
-	tests/test_trace.c \
-	tests/test_profile.c \
-	tests/test_run_artifacts.c \
-	tests/test_http.c \
-	tests/test_server.c \
-	tests/test_artifact_naming.c \
-	tests/test_weight_mapping.c \
-	tests/test_qtype_support.c \
-	tests/test_qwen_adapter.c \
-	tests/test_conversion_plan.c \
-	tests/test_conversion_payload.c \
-	tests/test_quant_job.c \
-	tests/test_quant_policy.c \
-	tests/test_imatrix.c \
-	tests/test_gguf_emit.c \
-	tests/test_gguf_template.c \
-	tests/test_materialize_gate.c \
-	tests/test_model_gate.c \
-	tests/test_model_ref.c \
-	tests/test_model_registry.c \
-	tests/test_deepseek_adapter.c \
-	tests/test_safetensors_header.c \
-	tests/test_native_weights.c \
-	tests/test_source_manifest.c
+TEST_RUNNER := $(TEST_DIR)/test
+CUDA_TEST_RUNNER := $(TEST_DIR)/test_cuda
 
-TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(TEST_SRCS))
+TEST_UNIT_SRCS := $(sort $(wildcard tests/unit/*.c))
+TEST_UNIT_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(TEST_UNIT_SRCS))
 
-CUDA_TEST_SRCS := \
-	tests/test_cuda_info.c \
-	tests/test_cuda_tensor.c \
-	tests/test_cuda_ops.c \
-	tests/test_cuda_parity.c \
-	tests/test_materialize_cuda.c
+CUDA_TEST_UNIT_SRCS := $(sort $(wildcard tests/unit/cuda/*.c))
+CUDA_TEST_UNIT_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CUDA_TEST_UNIT_SRCS))
 
-CUDA_TEST_BINS := $(patsubst tests/%.c,$(TEST_DIR)/%,$(CUDA_TEST_SRCS))
+CLI_TEST := tests/cli.sh
 
 CURRENT_DOCS := README.md AGENTS.md MODEL_ARTIFACTS.md NOTICE.md \
 	docs/api.md docs/contract.md docs/spine.md
@@ -224,48 +171,24 @@ cuda-info: $(YVEX_BIN)
 cuda-kernels: $(CUDA_PTX_OBJ)
 	@echo "yvex cuda kernels: built from $(CUDA_CU_SRCS)"
 
-cuda: cuda-kernels lib cli server $(CUDA_TEST_BINS)
+cuda: cuda-kernels lib cli server $(CUDA_TEST_RUNNER)
 	@echo "yvex cuda build: dynamic CUDA Driver API path plus CUDA kernel PTX"
 
 test-cuda: cuda
 	$(YVEX_BIN) cuda-info >/dev/null
-	@set -e; for test_bin in $(CUDA_TEST_BINS); do \
-		echo "$$test_bin"; \
-		"$$test_bin"; \
-	done
+	$(CUDA_TEST_RUNNER)
 
 smoke-cuda: cuda
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_cuda.sh
+	YVEX_BIN=$(YVEX_BIN) YVEXD_BIN=$(YVEXD_BIN) sh $(CLI_TEST) --cuda
 
 check-cuda: cuda-info test-cuda smoke-cuda
 	@echo "yvex check-cuda: ok"
 
-test-core: $(TEST_BINS)
-	@set -e; for test_bin in $(TEST_BINS); do \
-		echo "$$test_bin"; \
-		"$$test_bin"; \
-	done
+test-core: $(TEST_RUNNER)
+	$(TEST_RUNNER)
 
-test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh tests/test_cli_server.sh tests/test_cli_materialize.sh tests/test_cli_materialize_gate.sh tests/test_cli_source_manifest.sh tests/test_cli_native_weights.sh tests/test_cli_gguf_template.sh tests/test_cli_gguf_emit.sh tests/test_cli_tensor_map.sh tests/test_cli_convert.sh tests/test_cli_model_gate.sh tests/test_cli_models.sh tests/test_cli_model_aliases.sh tests/test_cli_quant_job.sh tests/test_cli_quant_policy.sh tests/test_cli_imatrix.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_run.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_chat.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_metrics.sh
-	YVEXD_BIN=$(YVEXD_BIN) sh tests/test_cli_server.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_materialize.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_materialize_gate.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_source_manifest.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_native_weights.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_gguf_template.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_gguf_emit.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_tensor_map.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_convert.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_model_gate.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_models.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_model_aliases.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_quant_job.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_quant_policy.sh
-	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_imatrix.sh
+test-cli: $(YVEX_BIN) $(YVEXD_BIN) $(CLI_TEST)
+	YVEX_BIN=$(YVEX_BIN) YVEXD_BIN=$(YVEXD_BIN) sh $(CLI_TEST)
 
 test: test-core test-cli
 
@@ -278,9 +201,12 @@ test-code-natural: tests/test_code_natural.sh
 test-docs-surface: tests/test_docs_surface.sh
 	sh tests/test_docs_surface.sh
 
+test-surface: tests/test_surface.sh
+	sh tests/test_surface.sh
+
 smoke: test-cli
 
-check: check-docs check-guardrails lib cli server test test-layout test-code-natural test-docs-surface smoke
+check: check-docs check-guardrails lib cli server test test-layout test-code-natural test-docs-surface test-surface smoke
 	@echo "yvex check: ok"
 
 $(LIBYVEX): $(CORE_OBJS)
@@ -290,6 +216,14 @@ $(LIBYVEX): $(CORE_OBJS)
 $(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/tests/unit/%.o: tests/unit/%.c tests/test.h
+	@mkdir -p $(@D)
+	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/tests/unit/cuda/%.o: tests/unit/cuda/%.c tests/test.h
+	@mkdir -p $(@D)
+	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/%.ptx: %.cu
 	@mkdir -p $(@D)
@@ -316,9 +250,13 @@ $(YVEXD_BIN): yvexd.c $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
-$(TEST_DIR)/%: tests/%.c $(LIBYVEX) tests/test.h
+$(TEST_RUNNER): tests/test.c $(TEST_UNIT_OBJS) $(LIBYVEX) tests/test.h
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) tests/test.c $(TEST_UNIT_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
+$(CUDA_TEST_RUNNER): tests/test_cuda.c $(CUDA_TEST_UNIT_OBJS) $(LIBYVEX) tests/test.h
+	@mkdir -p $(@D)
+	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) tests/test_cuda.c $(CUDA_TEST_UNIT_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
 check-docs:
 	@test -f README.md
@@ -366,6 +304,12 @@ check-guardrails:
 	@test ! -d models
 	@test -f gguf/families.h
 	@test -d tests/vectors
+	@test -f tests/vectors/manifest.json
+	@test -f tests/test.c
+	@test -f tests/test_cuda.c
+	@test -f tests/cli.sh
+	@test "$$(find tests -maxdepth 1 -type f \( -name 'test.c' -o -name 'test_*.c' \) | wc -l | tr -d ' ')" -le "2"
+	@test "$$(find tests -maxdepth 1 -type f -name 'test_cli*.sh' | wc -l | tr -d ' ')" = "0"
 	@test -f include/yvex/server.h
 	@test ! -d fixtures
 	@test -f yvex_cli.c

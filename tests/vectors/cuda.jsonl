@@ -1,0 +1,1 @@
+{"id":"cuda.embed.f32.small","tokens":[0,2,1],"embedding_dim":4,"vocab_size":3,"expected_max_abs_diff":0}

@@ -1,0 +1,2 @@
+{"id":"gguf.valid-minimal","fixture":"tests/fixtures/gguf/valid-minimal.gguf","format":"gguf","version":3}
+{"id":"gguf.valid-metadata-tensors","fixture":"tests/fixtures/gguf/valid-metadata-tensors.gguf","format":"gguf","tensor_count":2}

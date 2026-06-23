@@ -1,0 +1,19 @@
+{
+  "schema": "yvex-test-vectors-v1",
+  "purpose": "stable tiny vectors for parser, tokenizer, CUDA parity, and runtime checks",
+  "large_artifacts_allowed": false,
+  "entries": [
+    {
+      "id": "tokenizer.simple.hello",
+      "file": "tokenizer.jsonl"
+    },
+    {
+      "id": "gguf.valid-minimal",
+      "file": "gguf.jsonl"
+    },
+    {
+      "id": "cuda.embed.f32.small",
+      "file": "cuda.jsonl"
+    }
+  ]
+}

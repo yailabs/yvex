@@ -66,7 +66,7 @@ cuda/               CUDA runtime bridge and kernels
 gguf/               GGUF parser and artifact tooling
 gguf/families.h     model-family tensor mapping for conversion
 include/yvex/       public C headers
-tests/              tests, fixtures, and vectors
+tests/              compact runners, fixtures, and vectors
 docs/               api, contract, internal spine
 ```
 
@@ -96,6 +96,10 @@ make check
 make smoke
 make check-cuda
 ```
+
+Baseline C tests run through `tests/test.c`, CUDA tests through
+`tests/test_cuda.c`, and CLI smoke coverage through `tests/cli.sh`. Stable tiny
+vectors live under `tests/vectors/`.
 
 `make check-cuda` requires a CUDA-capable host. No support claim exists without
 source implementation, tests, command-visible proof, and documented limits.
