@@ -165,6 +165,214 @@ POST /v1/responses
 5  unsupported feature or unavailable backend/runtime
 ```
 
+## Canonical Repository-Local Walkthrough
+
+This is the operator path when YVEX is not installed globally. Run it from the
+repository root and use `./yvex` / `./yvexd`; do not assume `yvex` is on
+`PATH`.
+
+### 1. Build and Validate
+
+```sh
+cd ~/lab/yvex
+
+make clean
+make
+make check
+make smoke
+make check-cuda
+```
+
+### 2. Check Local Entrypoints
+
+```sh
+./yvex version
+./yvex commands
+./yvex info
+./yvexd --help
+```
+
+### 3. Set the Active DeepSeek Artifact
+
+```sh
+export DS_GGUF="$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
+
+test -f "$DS_GGUF"
+sha256sum "$DS_GGUF"
+```
+
+Expected SHA256:
+
+```text
+5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab
+```
+
+### 4. Parse and Inspect DeepSeek
+
+```sh
+./yvex inspect "$DS_GGUF"
+./yvex metadata "$DS_GGUF"
+./yvex tensors "$DS_GGUF"
+```
+
+Expected posture:
+
+```text
+format: gguf
+version: 3
+tensor_count: 1
+tensor: token_embd.weight
+dims: [4096,129280]
+dtype: F16
+status: descriptor-only
+```
+
+### 5. Materialize DeepSeek Selected Tensor
+
+```sh
+./yvex materialize --model "$DS_GGUF" --backend cpu
+./yvex materialize --model "$DS_GGUF" --backend cuda
+```
+
+Expected posture:
+
+```text
+status: weights-materialized
+execution_ready: false
+```
+
+Materialized weights do not imply executable inference.
+
+### 6. Run the Formal Model Gate
+
+```sh
+./yvex model-gate check \
+  --model "$DS_GGUF" \
+  --label deepseek-v4-flash-selected-embedding \
+  --family deepseek4 \
+  --sha256 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab \
+  --expect-tensor token_embd.weight \
+  --expect-rank 2 \
+  --expect-dims 4096,129280 \
+  --expect-dtype F16 \
+  --expect-bytes 1059061760 \
+  --backend cpu \
+  --backend cuda \
+  --require-cpu \
+  --require-cuda
+```
+
+Expected posture:
+
+```text
+status: model-gate-pass
+support_level: selected-tensor-materialized
+execution_ready: false
+```
+
+### 7. Run the Repeatable Materialization Gate
+
+```sh
+./yvex materialize-gate check \
+  --model "$DS_GGUF" \
+  --label deepseek-v4-flash-selected-embedding \
+  --family deepseek4 \
+  --sha256 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab \
+  --scope selected-tensor \
+  --expect-tensor token_embd.weight \
+  --expect-rank 2 \
+  --expect-dims 4096,129280 \
+  --expect-dtype F16 \
+  --expect-bytes 1059061760 \
+  --backend cpu \
+  --backend cuda \
+  --require-cpu \
+  --require-cuda \
+  --repeat 3 \
+  --check-cleanup
+```
+
+Expected posture:
+
+```text
+status: materialize-gate-pass
+scope: selected-tensor
+execution_ready: false
+```
+
+### 8. Prompt and Accepted-Only Runtime Diagnostics
+
+The DeepSeek selected artifact is a selected tensor GGUF, not a complete
+tokenizer/model runtime. Use the tokenizer fixture for prompt, run, and chat
+diagnostics until the spine authorizes real model execution.
+
+```sh
+export FIX=tests/fixtures/gguf/valid-tokenizer-simple.gguf
+
+./yvex tokenizer "$FIX"
+./yvex tokenize "$FIX" --text "hello world"
+./yvex prompt "$FIX" \
+  --system "You are a test runtime." \
+  --user "hello world"
+```
+
+Run accepted-only diagnostics:
+
+```sh
+./yvex run \
+  --model "$FIX" \
+  --backend cpu \
+  --prompt "hello world"
+```
+
+Expected posture:
+
+```text
+run status: accepted-only
+execution_ready: false
+generation: unsupported
+```
+
+Interactive diagnostic shell:
+
+```sh
+./yvex chat \
+  --model "$FIX" \
+  --backend cpu
+```
+
+Useful REPL commands:
+
+```text
+/status
+/help
+/exit
+```
+
+`chat` accepts and diagnoses prompt tokens. It does not decode or generate
+assistant text.
+
+### 9. Server Shell Without Generation
+
+```sh
+./yvexd \
+  --host 127.0.0.1 \
+  --port 18080 \
+  --model "$DS_GGUF" \
+  --backend cuda \
+  --one-request
+```
+
+From another terminal while the server is running:
+
+```sh
+curl -s http://127.0.0.1:18080/health
+curl -s http://127.0.0.1:18080/metrics
+curl -s http://127.0.0.1:18080/v1/models
+```
+
+Generation endpoints remain intentionally unsupported.
+
 ## Current Proof Fixture
 
 ```sh
