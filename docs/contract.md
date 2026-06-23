@@ -30,11 +30,14 @@ tests/fixtures may contain tiny fixtures only
 Local registry files are machine-local and may contain absolute paths. They must
 not be committed.
 
+GGUF parser and artifact tooling live under `gguf/`. Model-family adapters live
+under `models/`. Tests use small fixtures and stable vectors under `tests/`.
+
 ## 4. Backend Contract
 
 ```text
 CPU reference backend is the correctness baseline
-CUDA backend lives under backends/cuda/
+CUDA implementation lives under cuda/
 CUDA availability is optional for baseline validation
 backend failures return structured errors
 materialization does not imply graph execution

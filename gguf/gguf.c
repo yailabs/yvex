@@ -1,7 +1,7 @@
 /*
  * YVEX - GGUF parser
  *
- * File: yvex_gguf.c
+ * File: gguf/gguf.c
  * Layer: format implementation
  *
  * Purpose:

@@ -1,7 +1,7 @@
 /*
  * YVEX - CUDA error mapping
  *
- * File: backends/cuda/cuda_errors.c
+ * File: cuda/cuda_errors.c
  * Layer: CUDA backend implementation
  *
  * Purpose:

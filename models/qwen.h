@@ -1,8 +1,8 @@
 /*
  * YVEX - Qwen weight mapping adapter
  */
-#ifndef YVEX_QWEN_ADAPTER_H
-#define YVEX_QWEN_ADAPTER_H
+#ifndef YVEX_MODELS_QWEN_H
+#define YVEX_MODELS_QWEN_H
 
 #include <stddef.h>
 
@@ -14,4 +14,4 @@ int yvex_qwen_adapter_map_name(const char *native_name,
                                yvex_tensor_role *role,
                                yvex_weight_mapping_issue_kind *issue);
 
-#endif /* YVEX_QWEN_ADAPTER_H */
+#endif /* YVEX_MODELS_QWEN_H */

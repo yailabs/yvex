@@ -19,7 +19,9 @@ text.
 root-first C source layout
 native root binaries: ./yvex and ./yvexd
 public headers: include/yvex/
-CUDA backend: backends/cuda/
+CUDA implementation: cuda/
+GGUF domain: gguf/
+model-family adapters: models/
 docs: docs/api.md, docs/contract.md, docs/spine.md
 tests: tests/
 generated output: build/
@@ -99,6 +101,7 @@ execution_ready: true
 | REPO.LAYOUT.1 | complete | Root-first C source layout collapse |
 | REPO.LAYOUT.2 | complete | Root source compression and native root binaries |
 | DOCS.MIN.0 | complete | Minimal documentation surface |
+| REPO.SURFACE.0 | complete | CUDA, GGUF, model family, and test surface refoundation |
 | CLI.MODELS.3 | next | Model selection in canonical REPL |
 | CLI.MODELS.4 | planned | Model alias resolution in yvexd |
 | M3 | paused | Materialized-weight engine attachment |
@@ -161,6 +164,10 @@ line editing later
 root-first source layout complete
 root source compression complete
 native root binaries complete
+CUDA surface promoted to cuda/
+GGUF parser/tooling extracted to gguf/
+model-family adapter surface extracted to models/
+test vector surface established
 public documentation boundary complete
 minimal docs surface complete
 ```

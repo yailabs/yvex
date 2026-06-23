@@ -1,7 +1,7 @@
 /*
  * YVEX - CUDA driver probing
  *
- * File: backends/cuda/cuda_info.c
+ * File: cuda/cuda_info.c
  * Layer: CUDA backend implementation
  *
  * Purpose:

@@ -115,8 +115,8 @@ int yvex_conversion_report_plan_json(FILE *fp,
 
 /* ===== yvex_conversion.c ===== */
 
-#include "yvex_deepseek_adapter.h"
-#include "yvex_qwen_adapter.h"
+#include "models/deepseek.h"
+#include "models/qwen.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -891,8 +891,8 @@ int yvex_conversion_report_plan_json(FILE *fp,
 
 /* ===== yvex_weight_mapping.c ===== */
 
-#include "yvex_deepseek_adapter.h"
-#include "yvex_qwen_adapter.h"
+#include "models/deepseek.h"
+#include "models/qwen.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -1270,9 +1270,9 @@ void yvex_weight_mapping_print_shape(const unsigned long long *dims, unsigned in
     printf("]");
 }
 
-/* ===== yvex_deepseek_adapter.c ===== */
+/* ===== models/deepseek adapter implementation ===== */
 
-#include "yvex_deepseek_adapter.h"
+#include "models/deepseek.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -1608,9 +1608,9 @@ int yvex_deepseek_adapter_map_name(const char *native_name,
     return 0;
 }
 
-/* ===== yvex_qwen_adapter.c ===== */
+/* ===== models/qwen adapter implementation ===== */
 
-#include "yvex_qwen_adapter.h"
+#include "models/qwen.h"
 
 #include <stdio.h>
 #include <string.h>

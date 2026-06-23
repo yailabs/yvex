@@ -1,7 +1,7 @@
 /*
  * YVEX - CUDA reference ops
  *
- * File: backends/cuda/cuda_ops.c
+ * File: cuda/cuda_ops.c
  * Layer: CUDA backend implementation
  *
  * Purpose:

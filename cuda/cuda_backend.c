@@ -1,7 +1,7 @@
 /*
  * YVEX - CUDA backend object
  *
- * File: backends/cuda/cuda_backend.c
+ * File: cuda/cuda_backend.c
  * Layer: CUDA backend implementation
  *
  * Purpose:

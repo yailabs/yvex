@@ -58,8 +58,8 @@ CORE_SRCS := \
 	yvex_core.c \
 	yvex_artifact.c \
 	yvex_artifact_naming.c \
-	yvex_gguf.c \
-	yvex_gguf_tools.c \
+	gguf/gguf.c \
+	gguf/tools.c \
 	yvex_model.c \
 	yvex_backend.c \
 	yvex_graph.c \
@@ -74,14 +74,14 @@ CORE_SRCS := \
 	yvex_source.c
 
 CUDA_SRCS := \
-	backends/cuda/cuda_backend.c \
-	backends/cuda/cuda_tensor.c \
-	backends/cuda/cuda_ops.c \
-	backends/cuda/cuda_info.c \
-	backends/cuda/cuda_errors.c
+	cuda/cuda_backend.c \
+	cuda/cuda_tensor.c \
+	cuda/cuda_ops.c \
+	cuda/cuda_info.c \
+	cuda/cuda_errors.c
 
 CORE_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
-CUDA_OBJS := $(patsubst backends/%.c,$(OBJ_DIR)/backends/%.o,$(CUDA_SRCS))
+CUDA_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CUDA_SRCS))
 CORE_OBJS += $(CUDA_OBJS)
 
 TEST_SRCS := \
@@ -276,10 +276,6 @@ $(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/backends/%.o: backends/%.c
-	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-
 $(YVEX_BIN): yvex_cli.c $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
@@ -332,7 +328,11 @@ check-guardrails:
 	@test ! -d server
 	@test ! -e tests/README.md
 	@test ! -e include/yvex/sampler.h
-	@test -d backends/cuda
+	@test ! -d backends
+	@test -d cuda
+	@test -d gguf
+	@test -d models
+	@test -d tests/vectors
 	@test -f include/yvex/server.h
 	@test ! -d fixtures
 	@test -f yvex_cli.c

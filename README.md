@@ -62,9 +62,11 @@ inference benchmarks
 yvex_cli.c          CLI entrypoint
 yvexd.c             daemon entrypoint
 yvex_*.c            compact implementation modules
+cuda/               CUDA implementation
+gguf/               GGUF parser and artifact tooling
+models/             model-family adapters
 include/yvex/       public C headers
-backends/cuda/      CUDA backend boundary
-tests/              C and CLI tests
+tests/              tests, fixtures, and vectors
 docs/               api, contract, internal spine
 ```
 

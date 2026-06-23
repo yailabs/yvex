@@ -1,7 +1,7 @@
 /*
  * YVEX - CUDA backend tensors
  *
- * File: backends/cuda/cuda_tensor.c
+ * File: cuda/cuda_tensor.c
  * Layer: CUDA backend implementation
  *
  * Purpose:

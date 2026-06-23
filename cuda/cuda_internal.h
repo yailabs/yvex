@@ -1,7 +1,7 @@
 /*
  * YVEX - CUDA backend internals
  *
- * File: backends/cuda/cuda_internal.h
+ * File: cuda/cuda_internal.h
  * Layer: CUDA backend implementation
  *
  * Purpose:

@@ -6,7 +6,7 @@
  */
 #include <string.h>
 
-#include "yvex_deepseek_adapter.h"
+#include "models/deepseek.h"
 
 #include "test.h"
 
