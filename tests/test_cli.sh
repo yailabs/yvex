@@ -26,6 +26,7 @@
 #   - yvex prompt
 #   - yvex graph
 #   - yvex gguf-template
+#   - yvex gguf-emit
 #   - yvex tensor-map
 #   - yvex quant-policy
 #   - yvex imatrix
@@ -116,6 +117,7 @@ contains "$OUT_DIR/info.out" "run_artifacts: metrics/trace/profile files impleme
 contains "$OUT_DIR/info.out" "source_manifest: provenance JSON writer implemented"
 contains "$OUT_DIR/info.out" "native_weights: safetensors header inventory implemented"
 contains "$OUT_DIR/info.out" "gguf_template: contract validator implemented"
+contains "$OUT_DIR/info.out" "gguf_emit: controlled GGUF writer implemented"
 contains "$OUT_DIR/info.out" "weight_mapping: tensor adapter contract implemented"
 contains "$OUT_DIR/info.out" "quant_policy: manifest validator implemented"
 contains "$OUT_DIR/info.out" "imatrix: calibration artifact manifest implemented"
@@ -137,6 +139,7 @@ contains "$OUT_DIR/commands.out" "  cuda-info"
 contains "$OUT_DIR/commands.out" "  detokenize"
 contains "$OUT_DIR/commands.out" "  engine"
 contains "$OUT_DIR/commands.out" "  graph"
+contains "$OUT_DIR/commands.out" "  gguf-emit"
 contains "$OUT_DIR/commands.out" "  gguf-template"
 contains "$OUT_DIR/commands.out" "  help"
 contains "$OUT_DIR/commands.out" "  imatrix"
@@ -202,6 +205,9 @@ contains "$OUT_DIR/help_graph.out" "usage: yvex graph <path>"
 
 run_ok help_gguf_template "$YVEX_BIN" help gguf-template
 contains "$OUT_DIR/help_gguf_template.out" "usage: yvex gguf-template"
+
+run_ok help_gguf_emit "$YVEX_BIN" help gguf-emit
+contains "$OUT_DIR/help_gguf_emit.out" "usage: yvex gguf-emit"
 
 run_ok help_tensor_map "$YVEX_BIN" help tensor-map
 contains "$OUT_DIR/help_tensor_map.out" "usage: yvex tensor-map"

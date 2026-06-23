@@ -9,7 +9,7 @@ a command, option, exit status, or visible runtime posture.
 ## Current Milestone
 
 ```text
-OWI.6 - calibration and imatrix contract
+OWI.7 - controlled GGUF emission
 ```
 
 ## Binaries
@@ -36,6 +36,7 @@ server_generation: not implemented
 source_manifest: provenance JSON writer implemented
 native_weights: safetensors header inventory implemented
 gguf_template: contract validator implemented
+gguf_emit: controlled GGUF writer implemented
 weight_mapping: tensor adapter contract implemented
 quant_policy: manifest validator implemented
 imatrix: calibration artifact manifest implemented
@@ -49,9 +50,10 @@ M0 adds fixture weight materialization into CPU/CUDA backend tensors. OWI.1
 adds source-manifest provenance for external official-weight source trees. OWI.4
 adds tensor mapping from native names to canonical roles and GGUF/template target
 names. OWI.5 adds declarative quantization policy manifests. OWI.6 adds
-calibration/imatrix provenance manifests and policy compatibility checks. These
-do not add conversion, imatrix generation, calibration execution, quantization
-execution, GGUF emission, model execution, or inference.
+calibration/imatrix provenance manifests and policy compatibility checks. OWI.7
+adds controlled GGUF emission for one tiny F32 tensor. These do not add
+DeepSeek conversion, imatrix generation, calibration execution, quantization
+execution, model execution, or inference.
 
 ## `yvex` Commands
 
@@ -64,6 +66,7 @@ execution, GGUF emission, model execution, or inference.
 | `detokenize` | `yvex detokenize PATH --ids IDS` | implemented for fixture tokenizer path |
 | `engine` | `yvex engine PATH` | implemented; descriptor/runtime diagnostics |
 | `graph` | `yvex graph PATH [--seq N] [--ctx N]` | implemented; inspect-only graph |
+| `gguf-emit` | `yvex gguf-emit controlled --out FILE` | implemented; controlled one-tensor GGUF emission |
 | `gguf-template` | `yvex gguf-template inspect\|validate --template FILE` | implemented; template contract validation |
 | `help` | `yvex help [COMMAND]` | implemented |
 | `imatrix` | `yvex imatrix create\|inspect\|validate` | implemented; calibration/imatrix manifest provenance |
@@ -138,6 +141,7 @@ yvex backend cpu
 yvex engine "$FIX"
 yvex session "$FIX" --backend cpu --text "hello world" --accept-tokens
 yvex run --model "$FIX" --backend cpu --prompt "hello world"
+yvex gguf-emit controlled --out build/tests/gguf-emit/yvex-owned.gguf --overwrite
 ```
 
 CUDA proof, only when available:

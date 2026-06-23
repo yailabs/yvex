@@ -17,6 +17,7 @@ yvex chat --model FILE --backend cpu|cuda
 yvex detokenize <path> --ids IDS
 yvex engine <path>
 yvex graph <path>
+yvex gguf-emit controlled --out FILE [--template FILE] [--model-name NAME] [--arch ARCH] [--overwrite]
 yvex gguf-template inspect --template FILE
 yvex gguf-template validate --template FILE
 yvex gguf-template compare --template FILE --native-source DIR
@@ -68,6 +69,7 @@ library: libyvex.a
 filesystem: implemented
 artifact: open/read implemented
 gguf: metadata/tensor directory parsing implemented
+gguf_emit: controlled GGUF writer implemented
 model: descriptor-only implemented
 tokenizer: fixture encode/decode implemented
 prompt: default renderer implemented
@@ -250,6 +252,46 @@ yvex gguf-template compare --template FILE --native-source DIR
 Architecture-specific tensor-name mapping belongs to OWI.4, so mismatches are
 reported as partial rather than treated as DeepSeek support failure unless
 `--require-all-template-tensors-in-native` is passed.
+
+## Current `yvex gguf-emit`
+
+`yvex gguf-emit controlled` writes the first YVEX-owned GGUF artifact from a
+controlled source: native `embed.weight`, target `token_embd.weight`, F32,
+dimensions `[4,8]`, 128 payload bytes, alignment 32, and controlled tokenizer
+metadata. It validates the emitted file through the existing parser and CPU
+materialization path. It does not convert DeepSeek, quantize, generate imatrix
+data, infer, or emit a generic model.
+
+Command:
+
+```sh
+./build/bin/yvex gguf-emit controlled \
+  --out build/tests/gguf-emit/yvex-owned.gguf \
+  --model-name yvex-owned-gguf-test \
+  --arch llama \
+  --overwrite
+```
+
+Roundtrip proof:
+
+```sh
+./build/bin/yvex inspect build/tests/gguf-emit/yvex-owned.gguf
+./build/bin/yvex metadata build/tests/gguf-emit/yvex-owned.gguf
+./build/bin/yvex tensors build/tests/gguf-emit/yvex-owned.gguf
+./build/bin/yvex materialize --model build/tests/gguf-emit/yvex-owned.gguf --backend cpu
+```
+
+Expected summary:
+
+```text
+gguf emit: controlled
+metadata_count: 12
+tensor_count: 1
+tensor_payload_bytes: 128
+alignment: 32
+roundtrip_validated: yes
+status: gguf-written
+```
 
 ## Current `yvex tensor-map`
 

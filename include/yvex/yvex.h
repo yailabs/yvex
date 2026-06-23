@@ -34,6 +34,7 @@
 #include <yvex/error.h>
 #include <yvex/fs.h>
 #include <yvex/gguf.h>
+#include <yvex/gguf_emit.h>
 #include <yvex/gguf_template.h>
 #include <yvex/graph.h>
 #include <yvex/imatrix.h>

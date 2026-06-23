@@ -82,6 +82,7 @@ static int command_cuda_info(int argc, char **argv);
 static int command_detokenize(int argc, char **argv);
 static int command_engine(int argc, char **argv);
 static int command_graph(int argc, char **argv);
+static int command_gguf_emit(int argc, char **argv);
 static int command_gguf_template(int argc, char **argv);
 static int command_help(int argc, char **argv);
 static int command_imatrix(int argc, char **argv);
@@ -159,6 +160,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex gguf-template inspect|validate --template FILE | yvex gguf-template compare --template FILE --native-source DIR",
         "Validates GGUF metadata, tokenizer metadata, tensor directory, tensor roles, and optional exact-name native inventory comparison. It does not emit GGUF, quantize, materialize, or infer.",
         command_gguf_template,
+    },
+    {
+        "gguf-emit",
+        "Emit a controlled YVEX-owned GGUF.",
+        "yvex gguf-emit controlled --out FILE [--template FILE] [--model-name NAME] [--arch ARCH] [--overwrite]",
+        "Writes one controlled F32 tensor and controlled tokenizer metadata, then validates the emitted GGUF through YVEX parse and CPU materialization. It does not convert DeepSeek, quantize, infer, or emit a generic model.",
+        command_gguf_emit,
     },
     {
         "help",
@@ -1188,6 +1196,88 @@ static int command_gguf_template(int argc, char **argv)
     return 0;
 }
 
+static int command_gguf_emit(int argc, char **argv)
+{
+    yvex_gguf_emit_options options;
+    yvex_gguf_emit_summary summary;
+    yvex_error err;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&options, 0, sizeof(options));
+    memset(&summary, 0, sizeof(summary));
+
+    if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        print_command_help(stdout, find_command("gguf-emit"));
+        return 0;
+    }
+    if (argc < 3 || strcmp(argv[2], "controlled") != 0) {
+        fprintf(stderr, "yvex: gguf-emit requires subcommand controlled\n");
+        fprintf(stderr, "usage: yvex gguf-emit controlled --out FILE [--template FILE] [--model-name NAME] [--arch ARCH] [--overwrite]\n");
+        return 2;
+    }
+
+    options.tensor_name = "embed.weight";
+    options.target_name = "token_embd.weight";
+    options.model_name = "yvex-owned-gguf-test";
+    options.architecture = "llama";
+    options.transpose_2d = 1;
+
+    for (i = 3; i < argc; ++i) {
+        if (strcmp(argv[i], "--overwrite") == 0) {
+            options.overwrite = 1;
+            continue;
+        }
+        if (i + 1 >= argc) {
+            fprintf(stderr, "yvex: gguf-emit option requires a value: %s\n", argv[i]);
+            return 2;
+        }
+        if (strcmp(argv[i], "--out") == 0) {
+            options.out_path = argv[++i];
+        } else if (strcmp(argv[i], "--template") == 0) {
+            options.template_path = argv[++i];
+        } else if (strcmp(argv[i], "--native-source") == 0) {
+            options.native_source_dir = argv[++i];
+        } else if (strcmp(argv[i], "--tensor-name") == 0) {
+            options.tensor_name = argv[++i];
+        } else if (strcmp(argv[i], "--target-name") == 0) {
+            options.target_name = argv[++i];
+        } else if (strcmp(argv[i], "--model-name") == 0) {
+            options.model_name = argv[++i];
+        } else if (strcmp(argv[i], "--arch") == 0) {
+            options.architecture = argv[++i];
+        } else {
+            fprintf(stderr, "yvex: unknown gguf-emit option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help gguf-emit' for usage.\n");
+            return 2;
+        }
+    }
+
+    if (!options.out_path) {
+        fprintf(stderr, "yvex: gguf-emit controlled requires --out FILE\n");
+        fprintf(stderr, "usage: yvex gguf-emit controlled --out FILE [--template FILE] [--model-name NAME] [--arch ARCH] [--overwrite]\n");
+        return 2;
+    }
+
+    rc = yvex_gguf_emit_controlled(&options, &summary, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    printf("gguf emit: controlled\n");
+    printf("out: %s\n", summary.out_path ? summary.out_path : "");
+    printf("architecture: %s\n", summary.architecture ? summary.architecture : "");
+    printf("model_name: %s\n", summary.model_name ? summary.model_name : "");
+    printf("metadata_count: %llu\n", summary.metadata_count);
+    printf("tensor_count: %llu\n", summary.tensor_count);
+    printf("tensor_payload_bytes: %llu\n", summary.tensor_payload_bytes);
+    printf("alignment: %llu\n", summary.alignment);
+    printf("roundtrip_validated: %s\n", summary.roundtrip_validated ? "yes" : "no");
+    printf("status: %s\n", yvex_gguf_emit_status_name(summary.status));
+    return 0;
+}
+
 static int command_help(int argc, char **argv)
 {
     const yvex_cli_command *command;
@@ -1402,6 +1492,7 @@ static int command_info(int argc, char **argv)
     printf("source_manifest: provenance JSON writer implemented\n");
     printf("native_weights: safetensors header inventory implemented\n");
     printf("gguf_template: contract validator implemented\n");
+    printf("gguf_emit: controlled GGUF writer implemented\n");
     printf("weight_mapping: tensor adapter contract implemented\n");
     printf("quant_policy: manifest validator implemented\n");
     printf("imatrix: calibration artifact manifest implemented\n");

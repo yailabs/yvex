@@ -16,7 +16,7 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-OWI.5 implements a quantization policy manifest, OWI.4 implements a tensor
+OWI.7 implements controlled GGUF emission, OWI.5 implements a quantization policy manifest, OWI.4 implements a tensor
 mapping adapter contract, OWI.3 implements a GGUF
 template contract validator, OWI.2 implements a
 safetensors/native-weight inventory surface, and OWI.1
@@ -46,6 +46,7 @@ include/yvex/log.h
 include/yvex/fs.h
 include/yvex/artifact.h
 include/yvex/gguf.h
+include/yvex/gguf_emit.h
 include/yvex/gguf_template.h
 include/yvex/dtype.h
 include/yvex/tensor.h
@@ -80,6 +81,7 @@ Current aggregate:
 #include <yvex/fs.h>
 #include <yvex/artifact.h>
 #include <yvex/gguf.h>
+#include <yvex/gguf_emit.h>
 #include <yvex/gguf_template.h>
 #include <yvex/dtype.h>
 #include <yvex/tensor.h>
@@ -437,6 +439,67 @@ stack, builds a descriptor, checks tokenizer metadata, classifies tensor roles,
 and can compare exact template tensor names against an OWI.2 native inventory.
 It does not load tensor payloads, mutate templates, emit GGUF, quantize, or
 materialize.
+
+## GGUF Emit
+
+OWI.7 adds the first YVEX-owned GGUF emission API. It is intentionally scoped to
+one controlled F32 tensor and controlled metadata so the project can prove GGUF
+writing, alignment, parser roundtrip, and weight materialization before any
+DeepSeek conversion bridge exists.
+
+```c
+typedef struct yvex_gguf_emit_plan yvex_gguf_emit_plan;
+
+typedef enum {
+    YVEX_GGUF_EMIT_STATUS_UNKNOWN = 0,
+    YVEX_GGUF_EMIT_STATUS_PLANNED,
+    YVEX_GGUF_EMIT_STATUS_WRITTEN,
+    YVEX_GGUF_EMIT_STATUS_FAILED
+} yvex_gguf_emit_status;
+
+typedef struct {
+    const char *out_path;
+    const char *template_path;
+    const char *native_source_dir;
+    const char *tensor_name;
+    const char *target_name;
+    const char *model_name;
+    const char *architecture;
+    int transpose_2d;
+    int overwrite;
+} yvex_gguf_emit_options;
+
+typedef struct {
+    yvex_gguf_emit_status status;
+    const char *out_path;
+    const char *template_path;
+    const char *model_name;
+    const char *architecture;
+    unsigned long long metadata_count;
+    unsigned long long tensor_count;
+    unsigned long long bytes_written;
+    unsigned long long tensor_payload_bytes;
+    unsigned long long alignment;
+    int roundtrip_validated;
+} yvex_gguf_emit_summary;
+
+int yvex_gguf_emit_controlled(const yvex_gguf_emit_options *options,
+                              yvex_gguf_emit_summary *summary_out,
+                              yvex_error *err);
+
+const char *yvex_gguf_emit_status_name(yvex_gguf_emit_status status);
+```
+
+The controlled emission writes GGUF v3, string/uint32/int32/float32 metadata
+values, array<string>, array<float32>, and array<int32> metadata, one tensor
+directory row, and one aligned F32 payload. It emits native `embed.weight` as
+GGUF `token_embd.weight` with dimensions `[4,8]` and 128 payload bytes. The API
+refuses overwrite unless `overwrite` is set, then validates the file through the
+existing GGUF parser, tensor table, descriptor, and CPU materialization path.
+
+Non-goals: no DeepSeek conversion, no safetensors large-payload conversion, no
+FP8/FP4 dequantization, no Q2_K/IQ2_XXS/Q4_K emission, no imatrix generation, no
+model inference, and no `execution_ready=true` claim.
 
 ## Weight Mapping
 
