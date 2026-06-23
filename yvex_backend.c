@@ -1,15 +1,4 @@
-/*
- * YVEX - compressed implementation unit
- *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
- */
-
-
-/* ===== yvex_backend.c ===== */
-
-#include "yvex_backend_internal.h"
+#include "yvex_internal.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -341,9 +330,7 @@ int yvex_backend_op_embed(yvex_backend *backend,
     return backend->vtable->op_embed(backend, embedding, token_ids, token_count, out, err);
 }
 
-/* ===== yvex_cpu_backend.c ===== */
-
-#include "yvex_backend_internal.h"
+#include "yvex_internal.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -484,9 +471,7 @@ int yvex_backend_open_cpu_impl(yvex_backend **out,
     return YVEX_OK;
 }
 
-/* ===== yvex_cpu_ops.c ===== */
-
-#include "yvex_backend_internal.h"
+#include "yvex_internal.h"
 
 #include <limits.h>
 #include <stdint.h>
@@ -577,9 +562,7 @@ int yvex_cpu_op_embed(yvex_backend *backend,
     return YVEX_OK;
 }
 
-/* ===== yvex_cpu_tensor.c ===== */
-
-#include "yvex_backend_internal.h"
+#include "yvex_internal.h"
 
 #include <limits.h>
 #include <stdint.h>

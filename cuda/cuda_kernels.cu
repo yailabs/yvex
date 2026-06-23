@@ -1,8 +1,6 @@
 /*
  * YVEX - CUDA device kernels
  *
- * File: cuda/cuda_kernels.cu
- * Layer: CUDA backend implementation
  *
  * Purpose:
  *   Owns CUDA device code. Host-side backend validation and Driver API launch

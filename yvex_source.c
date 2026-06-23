@@ -1,18 +1,11 @@
-/* ===== inlined yvex_source_manifest_internal.h ===== */
-
 /*
  * YVEX - Source manifest internals
  *
- * File: yvex_source_manifest_internal.h
- * Layer: tool-plane implementation
  *
  * Purpose:
  *   Shares the small internal file-list representation used by the open-weight intake
  *   source scanner and JSON writer. This is not part of the public API.
  */
-#ifndef YVEX_SOURCE_MANIFEST_INTERNAL_H
-#define YVEX_SOURCE_MANIFEST_INTERNAL_H
-
 #include <stddef.h>
 
 #include <yvex/source_manifest.h>
@@ -43,21 +36,11 @@ int yvex_source_manifest_write_json_file(const char *out_path,
                                          const yvex_source_manifest_file_list *files,
                                          yvex_error *err);
 
-#endif /* YVEX_SOURCE_MANIFEST_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/* ===== inlined yvex_native_weights_internal.h ===== */
 
 /*
  * YVEX - Native weight internals
  *
- * File: yvex_native_weights_internal.h
- * Layer: tool-plane implementation
  */
-#ifndef YVEX_NATIVE_WEIGHTS_INTERNAL_H
-#define YVEX_NATIVE_WEIGHTS_INTERNAL_H
-
 #include <stddef.h>
 
 #include <yvex/native_weights.h>
@@ -94,20 +77,6 @@ int yvex_native_weight_report_json(const char *source,
                                    const yvex_native_weight_table *table,
                                    yvex_error *err);
 
-#endif /* YVEX_NATIVE_WEIGHTS_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/*
- * YVEX - compressed implementation unit
- *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
- */
-
-
-/* ===== yvex_source_manifest.c ===== */
 
 #include <yvex/source_manifest.h>
 
@@ -177,8 +146,6 @@ int yvex_source_manifest_write_json(const char *out_path,
     yvex_source_manifest_file_list_free(&files);
     return rc;
 }
-
-/* ===== yvex_source_manifest_json.c ===== */
 
 
 #include <errno.h>
@@ -305,8 +272,6 @@ int yvex_source_manifest_write_json_file(const char *out_path,
     }
     return YVEX_OK;
 }
-
-/* ===== yvex_source_manifest_scan.c ===== */
 
 #define _XOPEN_SOURCE 700
 
@@ -601,8 +566,6 @@ int yvex_source_manifest_scan_files(const char *local_path,
     }
     return rc;
 }
-
-/* ===== yvex_native_weights.c ===== */
 
 #define _XOPEN_SOURCE 700
 
@@ -927,8 +890,6 @@ int yvex_native_weight_table_summary(const yvex_native_weight_table *table,
     return YVEX_OK;
 }
 
-/* ===== yvex_native_weight_report.c ===== */
-
 
 #include <stdio.h>
 
@@ -954,8 +915,6 @@ int yvex_native_weight_report_json(const char *source,
     printf("}\n");
     return YVEX_OK;
 }
-
-/* ===== yvex_safetensors.c ===== */
 
 
 #include <stdint.h>
@@ -1040,8 +999,6 @@ int yvex_safetensors_read_header_file(const char *abs_path,
     free(json);
     return rc;
 }
-
-/* ===== yvex_safetensors_json.c ===== */
 
 
 #include <ctype.h>

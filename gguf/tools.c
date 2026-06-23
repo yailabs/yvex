@@ -1,14 +1,7 @@
-/* ===== inlined yvex_gguf_template_internal.h ===== */
-
 /*
  * YVEX - GGUF template internals
  *
- * File: yvex_gguf_template_internal.h
- * Layer: tool-plane implementation
  */
-#ifndef YVEX_GGUF_TEMPLATE_INTERNAL_H
-#define YVEX_GGUF_TEMPLATE_INTERNAL_H
-
 #include <yvex/artifact.h>
 #include <yvex/gguf.h>
 #include <yvex/gguf_template.h>
@@ -54,18 +47,10 @@ void yvex_gguf_template_print_summary(const yvex_gguf_template *tmpl,
                                       const char *mode,
                                       const char *template_path);
 
-#endif /* YVEX_GGUF_TEMPLATE_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/* ===== inlined yvex_gguf_emit_internal.h ===== */
 
 /*
  * YVEX - GGUF emitter internals
  */
-#ifndef YVEX_GGUF_EMIT_INTERNAL_H
-#define YVEX_GGUF_EMIT_INTERNAL_H
-
 #include <stdio.h>
 
 #include <yvex/gguf_emit.h>
@@ -106,21 +91,6 @@ int yvex_gguf_emit_write_i32(FILE *fp, int value, yvex_error *err, const char *f
 int yvex_gguf_emit_write_f32(FILE *fp, float value, yvex_error *err, const char *field);
 int yvex_gguf_emit_write_string(FILE *fp, const char *value, yvex_error *err, const char *field);
 int yvex_gguf_emit_pad_to_alignment(FILE *fp, unsigned long long alignment, yvex_error *err);
-
-#endif /* YVEX_GGUF_EMIT_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/*
- * YVEX - compressed implementation unit
- *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
- */
-
-
-/* ===== yvex_gguf_emit.c ===== */
 
 
 #include <errno.h>
@@ -298,8 +268,6 @@ int yvex_gguf_emit_controlled(const yvex_gguf_emit_options *options,
     return YVEX_OK;
 }
 
-/* ===== yvex_gguf_emit_metadata.c ===== */
-
 
 #include <stdint.h>
 #include <string.h>
@@ -444,8 +412,6 @@ int yvex_gguf_emit_write_metadata(FILE *fp,
     return YVEX_OK;
 }
 
-/* ===== yvex_gguf_emit_report.c ===== */
-
 
 #include <stdio.h>
 
@@ -477,8 +443,6 @@ int yvex_gguf_emit_print_summary(const yvex_gguf_emit_summary *summary)
     printf("status: %s\n", yvex_gguf_emit_status_name(summary->status));
     return YVEX_OK;
 }
-
-/* ===== yvex_gguf_emit_tensor.c ===== */
 
 
 #include <string.h>
@@ -555,8 +519,6 @@ int yvex_gguf_emit_write_tensor_payload(FILE *fp,
 
     return YVEX_OK;
 }
-
-/* ===== yvex_gguf_template.c ===== */
 
 
 #include <stdlib.h>
@@ -739,8 +701,6 @@ const yvex_gguf_template_issue *yvex_gguf_template_issue_at(const yvex_gguf_temp
     return &tmpl->issues[index];
 }
 
-/* ===== yvex_gguf_template_compare.c ===== */
-
 
 #include <stdio.h>
 
@@ -825,8 +785,6 @@ int yvex_gguf_template_compare_native(yvex_gguf_template *tmpl,
     return YVEX_OK;
 }
 
-/* ===== yvex_gguf_template_report.c ===== */
-
 
 #include <stdio.h>
 
@@ -852,8 +810,6 @@ void yvex_gguf_template_print_summary(const yvex_gguf_template *tmpl,
     printf("unknown_roles: %llu\n", summary.unknown_role_count);
     printf("status: %s\n", yvex_gguf_template_status_name(summary.status));
 }
-
-/* ===== yvex_gguf_template_validate.c ===== */
 
 
 #include <stdlib.h>

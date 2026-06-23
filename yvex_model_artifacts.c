@@ -1,14 +1,9 @@
-/* ===== inlined yvex_model_registry_internal.h ===== */
-
 /*
- * YVEX - Local model registry internals
+ * yvex_model_artifacts.c - Local model references, registry, and gates.
  *
- * File: yvex_model_registry_internal.h
- * Layer: tool-plane implementation
+ * This file owns operator-facing model artifact checks and registry helpers.
+ * It does not implement model execution.
  */
-#ifndef YVEX_MODEL_REGISTRY_INTERNAL_H
-#define YVEX_MODEL_REGISTRY_INTERNAL_H
-
 #include <stddef.h>
 
 #include <yvex/model_registry.h>
@@ -60,17 +55,6 @@ void yvex_model_registry_print_entry(const yvex_model_registry_entry *entry,
 
 void yvex_model_registry_print_scan_entry(const yvex_model_registry_entry *entry);
 
-#endif /* YVEX_MODEL_REGISTRY_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/* ===== inlined yvex_model_ref_internal.h ===== */
-
-/*
- * YVEX - Model reference resolver internals
- */
-#ifndef YVEX_MODEL_REF_INTERNAL_H
-#define YVEX_MODEL_REF_INTERNAL_H
 
 #include <yvex/model_ref.h>
 #include <yvex/model_registry.h>
@@ -81,17 +65,6 @@ int yvex_model_ref_copy_from_entry(yvex_model_ref *out,
                                    const yvex_model_registry_entry *entry,
                                    yvex_error *err);
 
-#endif /* YVEX_MODEL_REF_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/* ===== inlined yvex_model_gate_internal.h ===== */
-
-/*
- * YVEX - Model gate internals
- */
-#ifndef YVEX_MODEL_GATE_INTERNAL_H
-#define YVEX_MODEL_GATE_INTERNAL_H
 
 #include <yvex/yvex.h>
 
@@ -99,34 +72,8 @@ int yvex_model_gate_sha256_hex(const unsigned char *data,
                                unsigned long long len,
                                char out_hex[65]);
 
-#endif /* YVEX_MODEL_GATE_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/* ===== inlined yvex_materialize_gate_internal.h ===== */
-
-/*
- * YVEX - Materialize gate internals
- */
-#ifndef YVEX_MATERIALIZE_GATE_INTERNAL_H
-#define YVEX_MATERIALIZE_GATE_INTERNAL_H
 
 #include <yvex/yvex.h>
-
-#endif /* YVEX_MATERIALIZE_GATE_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/*
- * YVEX - compressed implementation unit
- *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
- */
-
-
-/* ===== yvex_model_gate.c ===== */
 
 
 #include <stdio.h>
@@ -424,15 +371,11 @@ const char *yvex_model_gate_backend_status_name(yvex_model_gate_backend_status s
     }
 }
 
-/* ===== yvex_model_gate_json.c ===== */
-
 
 int yvex_model_gate_json_translation_unit_anchor(void)
 {
     return 0;
 }
-
-/* ===== yvex_model_gate_report.c ===== */
 
 
 #include <stdint.h>
@@ -583,8 +526,6 @@ int yvex_model_gate_sha256_hex(const unsigned char *data,
     out_hex[64] = '\0';
     return YVEX_OK;
 }
-
-/* ===== yvex_materialize_gate.c ===== */
 
 
 #include <stdio.h>
@@ -1002,23 +943,17 @@ const char *yvex_materialize_failure_class_name(yvex_materialize_failure_class f
     }
 }
 
-/* ===== yvex_materialize_gate_json.c ===== */
-
 
 int yvex_materialize_gate_json_translation_unit_anchor(void)
 {
     return 0;
 }
 
-/* ===== yvex_materialize_gate_report.c ===== */
-
 
 int yvex_materialize_gate_report_translation_unit_anchor(void)
 {
     return 0;
 }
-
-/* ===== yvex_model_ref.c ===== */
 
 
 #include <stdio.h>
@@ -1211,8 +1146,6 @@ int yvex_model_ref_resolve(yvex_model_ref *out,
     return rc;
 }
 
-/* ===== yvex_model_ref_report.c ===== */
-
 
 const char *yvex_model_ref_kind_name(yvex_model_ref_kind kind)
 {
@@ -1245,8 +1178,6 @@ const char *yvex_model_ref_status_name(yvex_model_ref_status status)
         return "unknown";
     }
 }
-
-/* ===== yvex_model_registry.c ===== */
 
 
 #include <ctype.h>
@@ -1746,8 +1677,6 @@ int yvex_model_registry_entry_derive_from_path(yvex_model_registry_entry *entry,
     return YVEX_OK;
 }
 
-/* ===== yvex_model_registry_json.c ===== */
-
 
 #include <errno.h>
 #include <stdio.h>
@@ -2129,8 +2058,6 @@ int yvex_model_registry_write_json_file(const yvex_model_registry *registry,
     return YVEX_OK;
 }
 
-/* ===== yvex_model_registry_report.c ===== */
-
 
 #include <stdio.h>
 
@@ -2164,8 +2091,6 @@ void yvex_model_registry_print_scan_entry(const yvex_model_registry_entry *entry
     printf("qprofile: %s\n", entry->qprofile ? entry->qprofile : "");
     printf("calibration: %s\n", entry->calibration ? entry->calibration : "");
 }
-
-/* ===== yvex_model_registry_scan.c ===== */
 
 
 #include <dirent.h>

@@ -1,14 +1,3 @@
-/*
- * YVEX - compressed implementation unit
- *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
- */
-
-
-/* ===== gguf/naming.c ===== */
-
 #include <stdio.h>
 #include <string.h>
 
@@ -116,8 +105,6 @@ int yvex_artifact_name_suggest(char *out,
     }
     return YVEX_OK;
 }
-
-/* ===== yvex_artifact_naming_report.c ===== */
 
 #include <yvex/artifact_naming.h>
 

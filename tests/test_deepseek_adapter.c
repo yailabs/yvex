@@ -1,12 +1,10 @@
 /*
  * YVEX - DeepSeek adapter tests
  *
- * File: tests/test_deepseek_adapter.c
- * Layer: test
  */
 #include <string.h>
 
-#include "models/deepseek.h"
+#include "gguf/families.h"
 
 #include "test.h"
 

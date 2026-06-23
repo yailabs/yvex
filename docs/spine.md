@@ -20,8 +20,7 @@ root-first C source layout
 native root binaries: ./yvex and ./yvexd
 public headers: include/yvex/
 CUDA implementation: cuda/ with C host bridge and CUDA kernel unit
-GGUF domain: gguf/
-model-family adapters: models/
+GGUF domain and family mapping: gguf/
 docs: docs/api.md, docs/contract.md, docs/spine.md
 tests: tests/
 generated output: build/
@@ -103,7 +102,9 @@ execution_ready: true
 | DOCS.MIN.0 | complete | Minimal documentation surface |
 | REPO.SURFACE.0 | complete | CUDA, GGUF, model family, and test surface refoundation |
 | CUDA.SURFACE.0 | complete | CUDA kernel translation unit |
-| CLI.MODELS.3 | next | Model selection in canonical REPL |
+| REPO.SURFACE.1 | complete | Natural C surface and code style refoundation |
+| TEST.SURFACE.0 | next | Test vectors and runner consolidation |
+| CLI.MODELS.3 | planned | Model selection in canonical REPL |
 | CLI.MODELS.4 | planned | Model alias resolution in yvexd |
 | M3 | paused | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
@@ -154,7 +155,7 @@ implementation not active
 root binaries complete
 model registry complete
 one-shot alias resolution complete
-REPL selected model next
+REPL selected model planned after test surface cleanup
 yvexd alias resolution later
 line editing later
 ```
@@ -168,8 +169,10 @@ native root binaries complete
 CUDA surface promoted to cuda/
 first CUDA kernel translation unit complete
 GGUF parser/tooling extracted to gguf/
-model-family adapter surface extracted to models/
+family mapping consolidated into gguf/
 test vector surface established
+natural C source style pass complete
+single root internal header complete
 public documentation boundary complete
 minimal docs surface complete
 ```
@@ -177,7 +180,7 @@ minimal docs surface complete
 ## 6. Active Next
 
 ```text
-CLI.MODELS.3 - Model selection in canonical REPL
+TEST.SURFACE.0 - Test vectors and runner consolidation
 ```
 
 ## 7. Validation Gate

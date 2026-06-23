@@ -1,8 +1,6 @@
 /*
  * YVEX - yvexd server binary
  *
- * File: yvexd.c
- * Layer: server CLI
  *
  * Purpose:
  *   Provides the server shell standalone yvexd process. It serves local health, metrics,

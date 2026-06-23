@@ -1,8 +1,6 @@
 /*
  * YVEX - server tests
  *
- * File: tests/test_server.c
- * Layer: test
  *
  * Purpose:
  *   Proves the server shell server shell creates summaries and routes health, metrics,
@@ -10,7 +8,7 @@
  */
 #include <string.h>
 
-#include "yvex_server_internal.h"
+#include "yvex_internal.h"
 #include "test.h"
 
 static int test_server_summary(void)

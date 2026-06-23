@@ -1,11 +1,9 @@
 /*
  * YVEX - chat runtime tests
  *
- * File: tests/test_chat_runtime.c
- * Layer: test
  *
  * Purpose:
- *   Proves the diagnostic runtime runtime shell can open engine/backend/session objects,
+ *   Proves the diagnostic runtime shell can open engine/backend/session objects,
  *   accept fixture prompt text into the session, reset state, and handle CUDA
  *   ready/unavailable paths without claiming generation.
  *
@@ -23,7 +21,7 @@
  */
 #include <string.h>
 
-#include "yvex_chat_internal.h"
+#include "yvex_internal.h"
 #include "test.h"
 
 static int test_runtime_accept_and_reset(void)

@@ -1,17 +1,12 @@
 /*
- * YVEX - CUDA backend internals
+ * cuda/cuda_internal.h - CUDA Driver API bridge declarations.
  *
- * File: cuda/cuda_internal.h
- * Layer: CUDA backend implementation
- *
- * Purpose:
- *   Defines the tiny CUDA Driver API bridge used by CUDA backend. The public YVEX API
- *   remains plain C and never exposes CUDA native types.
+ * The public YVEX API remains plain C and never exposes CUDA native types.
  */
 #ifndef YVEX_CUDA_INTERNAL_H
 #define YVEX_CUDA_INTERNAL_H
 
-#include "yvex_backend_internal.h"
+#include "yvex_internal.h"
 
 #include <stddef.h>
 

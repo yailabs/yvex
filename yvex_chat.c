@@ -1,15 +1,4 @@
-/*
- * YVEX - compressed implementation unit
- *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
- */
-
-
-/* ===== yvex_chat.c ===== */
-
-#include "yvex_chat_internal.h"
+#include "yvex_internal.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -278,9 +267,7 @@ int yvex_chat_runtime_get_summary(const yvex_chat_runtime *runtime,
     return yvex_session_get_summary(runtime->session, out, err);
 }
 
-/* ===== yvex_chat_repl.c ===== */
-
-#include "yvex_chat_internal.h"
+#include "yvex_internal.h"
 
 int yvex_chat_runtime_print_status(FILE *fp,
                                    const yvex_chat_runtime *runtime,
@@ -305,9 +292,7 @@ int yvex_chat_runtime_print_status(FILE *fp,
     return YVEX_OK;
 }
 
-/* ===== yvex_chat_run_command.c ===== */
-
-#include "yvex_chat_internal.h"
+#include "yvex_internal.h"
 
 #include <string.h>
 
@@ -432,9 +417,7 @@ int yvex_run_command_json(FILE *fp, const yvex_chat_accept_result *result)
     return YVEX_OK;
 }
 
-/* ===== yvex_chat_slash.c ===== */
-
-#include "yvex_chat_slash_internal.h"
+#include "yvex_internal.h"
 
 #include <string.h>
 
@@ -478,9 +461,7 @@ const char *yvex_slash_command_name(yvex_slash_command command)
     return "unknown";
 }
 
-/* ===== yvex_chat_status_line.c ===== */
-
-#include "yvex_chat_internal.h"
+#include "yvex_internal.h"
 
 int yvex_status_line_print(FILE *fp,
                            const char *phase,

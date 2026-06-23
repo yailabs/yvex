@@ -1,14 +1,7 @@
-/* ===== inlined yvex_weight_mapping_internal.h ===== */
-
 /*
  * YVEX - Weight mapping internals
  *
- * File: yvex_weight_mapping_internal.h
- * Layer: tool-plane implementation
  */
-#ifndef YVEX_WEIGHT_MAPPING_INTERNAL_H
-#define YVEX_WEIGHT_MAPPING_INTERNAL_H
-
 #include <yvex/artifact.h>
 #include <yvex/gguf.h>
 #include <yvex/native_weights.h>
@@ -38,18 +31,10 @@ int yvex_weight_mapping_table_add(yvex_weight_mapping_table *table,
 
 void yvex_weight_mapping_print_shape(const unsigned long long *dims, unsigned int rank);
 
-#endif /* YVEX_WEIGHT_MAPPING_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/* ===== inlined yvex_conversion_internal.h ===== */
 
 /*
  * YVEX - Conversion bridge internals
  */
-#ifndef YVEX_CONVERSION_INTERNAL_H
-#define YVEX_CONVERSION_INTERNAL_H
-
 #include <stdio.h>
 
 #include <yvex/conversion.h>
@@ -100,23 +85,8 @@ int yvex_conversion_report_plan_json(FILE *fp,
                                      unsigned long long plan_count,
                                      yvex_error *err);
 
-#endif /* YVEX_CONVERSION_INTERNAL_H */
 
-/* ===== implementation ===== */
-
-/*
- * YVEX - compressed implementation unit
- *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
- */
-
-
-/* ===== gguf/conversion.c ===== */
-
-#include "models/deepseek.h"
-#include "models/qwen.h"
+#include "gguf/families.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -272,8 +242,6 @@ int yvex_conversion_map_tensor(const char *arch,
     return YVEX_OK;
 }
 
-/* ===== yvex_conversion_emit.c ===== */
-
 
 #include <stdlib.h>
 #include <string.h>
@@ -352,8 +320,6 @@ int yvex_conversion_emit_gguf(const yvex_conversion_options *options,
     summary_out->emitted_tensor_count = 1;
     return YVEX_OK;
 }
-
-/* ===== yvex_conversion_payload.c ===== */
 
 
 #include <errno.h>
@@ -564,8 +530,6 @@ int yvex_conversion_convert_payload(const unsigned char *src,
     return YVEX_OK;
 }
 
-/* ===== yvex_conversion_plan.c ===== */
-
 
 #include <errno.h>
 #include <stdio.h>
@@ -645,8 +609,6 @@ int yvex_conversion_plan_write_json(const yvex_conversion_options *options,
         : YVEX_CONVERSION_STATUS_PLANNED;
     return YVEX_OK;
 }
-
-/* ===== yvex_conversion_report.c ===== */
 
 
 #include <errno.h>
@@ -889,10 +851,7 @@ int yvex_conversion_report_plan_json(FILE *fp,
     return ferror(fp) ? YVEX_ERR_IO : YVEX_OK;
 }
 
-/* ===== yvex_weight_mapping.c ===== */
-
-#include "models/deepseek.h"
-#include "models/qwen.h"
+#include "gguf/families.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -1249,8 +1208,6 @@ const yvex_weight_mapping_info *yvex_weight_mapping_table_find_native(const yvex
     return NULL;
 }
 
-/* ===== yvex_weight_mapping_report.c ===== */
-
 
 #include <stdio.h>
 
@@ -1270,9 +1227,7 @@ void yvex_weight_mapping_print_shape(const unsigned long long *dims, unsigned in
     printf("]");
 }
 
-/* ===== models/deepseek adapter implementation ===== */
-
-#include "models/deepseek.h"
+#include "gguf/families.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -1608,9 +1563,7 @@ int yvex_deepseek_adapter_map_name(const char *native_name,
     return 0;
 }
 
-/* ===== models/qwen adapter implementation ===== */
-
-#include "models/qwen.h"
+#include "gguf/families.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -1712,8 +1665,6 @@ int yvex_qwen_adapter_map_name(const char *native_name,
     if (issue) *issue = YVEX_WEIGHT_MAPPING_ISSUE_UNKNOWN_NATIVE_NAME;
     return 0;
 }
-
-/* ===== yvex_qtype_support.c ===== */
 
 #include <string.h>
 

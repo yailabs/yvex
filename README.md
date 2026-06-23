@@ -64,7 +64,7 @@ yvexd.c             daemon entrypoint
 yvex_*.c            compact implementation modules
 cuda/               CUDA runtime bridge and kernels
 gguf/               GGUF parser and artifact tooling
-models/             model-family adapters
+gguf/families.h     model-family tensor mapping for conversion
 include/yvex/       public C headers
 tests/              tests, fixtures, and vectors
 docs/               api, contract, internal spine

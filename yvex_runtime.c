@@ -1,13 +1,9 @@
-/* ===== inlined yvex_session_internal.h ===== */
-
 /*
  * YVEX - Session internals
  *
- * File: yvex_session_internal.h
- * Layer: session implementation
  *
  * Purpose:
- *   Shares private engine/session layer engine/session/KV/logits structures across runtime
+ *   Shares private engine, session, KV, and logits structures across runtime
  *   implementation files. Public consumers see only opaque handles.
  *
  * Owns:
@@ -25,9 +21,6 @@
  *   - build/tests/test_engine
  *   - build/tests/test_session
  */
-#ifndef YVEX_SESSION_INTERNAL_H
-#define YVEX_SESSION_INTERNAL_H
-
 #include <stddef.h>
 
 #include <yvex/yvex.h>
@@ -73,21 +66,6 @@ struct yvex_session {
 char *yvex_runtime_strdup(const char *text);
 void yvex_runtime_set_graph_reason(char *out, size_t cap, const yvex_graph *graph);
 void yvex_runtime_set_text_reason(char *out, size_t cap, const char *text);
-
-#endif /* YVEX_SESSION_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/*
- * YVEX - compressed implementation unit
- *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
- */
-
-
-/* ===== yvex_engine.c ===== */
 
 
 #include <stdlib.h>
@@ -310,8 +288,6 @@ const char *yvex_engine_diagnostic_reason(const yvex_engine *engine)
     return engine ? engine->reason : "";
 }
 
-/* ===== yvex_kv.c ===== */
-
 
 #include <stdlib.h>
 #include <string.h>
@@ -388,8 +364,6 @@ int yvex_kv_cache_get_summary(const yvex_kv_cache *kv,
     return YVEX_OK;
 }
 
-/* ===== yvex_logits.c ===== */
-
 
 #include <stdlib.h>
 #include <string.h>
@@ -458,8 +432,6 @@ int yvex_logits_get_summary(const yvex_logits *logits,
     yvex_error_clear(err);
     return YVEX_OK;
 }
-
-/* ===== yvex_runtime_diagnostics.c ===== */
 
 
 #include <stdio.h>
@@ -548,8 +520,6 @@ void yvex_runtime_set_graph_reason(char *out, size_t cap, const yvex_graph *grap
         snprintf(out, cap, "graph status: %s", yvex_graph_status_name(yvex_graph_status_of(graph)));
     }
 }
-
-/* ===== yvex_session.c ===== */
 
 
 #include <stdlib.h>
@@ -823,8 +793,6 @@ int yvex_session_reset(yvex_session *session,
     yvex_error_clear(err);
     return YVEX_OK;
 }
-
-/* ===== yvex_session_state.c ===== */
 
 
 const char *yvex_session_state_name(yvex_session_state state)

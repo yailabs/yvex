@@ -1,13 +1,11 @@
 /*
  * YVEX - CLI bootstrap
  *
- * File: yvex_cli.c
- * Layer: CLI
  *
  * Purpose:
  *   Implements the command table and CLI proof surface for implemented core,
- *   filesystem, artifact, GGUF directory, tensor table, and descriptor
- *   behavior, and engine/session layer engine/session diagnostics. The CLI reports what exists
+ *   filesystem, artifact, GGUF directory, tensor table, descriptor, and
+ *   runtime diagnostics. The CLI reports what exists
  *   and does not expose future generation commands before their modules exist.
  *
  * Implements:
@@ -53,9 +51,7 @@
 
 #include <yvex/yvex.h>
 
-#include "yvex_chat_internal.h"
-#include "yvex_chat_slash_internal.h"
-#include "yvex_metrics_internal.h"
+#include "yvex_internal.h"
 
 typedef int (*yvex_cli_handler)(int argc, char **argv);
 
@@ -120,9 +116,9 @@ static const yvex_cli_command yvex_commands[] = {
     },
     {
         "chat",
-        "Start the diagnostic runtime diagnostic chat shell.",
+        "Start the diagnostic console.",
         "yvex chat --model FILE --backend cpu|cuda [--ctx N] [--metrics-out FILE] [--trace-out FILE] [--profile-out FILE] [--save-run] [--run-dir DIR]",
-        "Opens engine/backend/session and accepts user prompt tokens in a REPL. Optional observability layer artifacts record implemented runtime phases only.",
+        "Opens engine/backend/session state and accepts user text without generating output. Optional artifacts record implemented runtime phases only.",
         command_chat,
     },
     {
@@ -150,19 +146,19 @@ static const yvex_cli_command yvex_commands[] = {
         "detokenize",
         "Decode token IDs with an implemented tokenizer.",
         "yvex detokenize <path> --ids IDS",
-        "Opens a GGUF tokenizer descriptor and decodes comma-separated token IDs. tokenizer layer executes only the yvex-fixture-simple tokenizer.",
+        "Opens a GGUF tokenizer descriptor and decodes comma-separated token IDs. Only the fixture tokenizer path is implemented.",
         command_detokenize,
     },
     {
         "engine",
-        "Open an engine/session layer engine descriptor.",
+        "Open an engine descriptor.",
         "yvex engine <path>",
-        "Opens the descriptor/tokenizer/graph stack and reports engine diagnostics. It does not execute prefill, decode, run, or chat.",
+        "Opens the descriptor/tokenizer/graph stack and reports engine diagnostics. It does not execute prefill, decode, or generation.",
         command_engine,
     },
     {
         "graph",
-        "Build and dump the graph planner graph planning substrate.",
+        "Build a graph planning view.",
         "yvex graph <path> [--seq N] [--ctx N]",
         "Opens a GGUF descriptor, builds a deterministic graph planning artifact, and prints values, planned ops, and missing-role diagnostics. It does not execute the graph.",
         command_graph,
@@ -302,9 +298,9 @@ static const yvex_cli_command yvex_commands[] = {
     },
     {
         "run",
-        "Accept one prompt through the diagnostic runtime runtime shell.",
+        "Accept one prompt through the diagnostic runtime path.",
         "yvex run --model FILE --backend cpu|cuda --prompt TEXT [--system TEXT] [--output plain|json] [--metrics-out FILE] [--trace-out FILE] [--profile-out FILE] [--save-run] [--run-dir DIR]",
-        "Opens engine/backend/session, tokenizes the prompt, accepts tokens, and reports accepted-only runtime diagnostics. Optional observability layer artifacts record implemented runtime phases only.",
+        "Opens engine/backend/session state, tokenizes the prompt, accepts tokens, and reports accepted-only diagnostics.",
         command_run,
     },
     {
@@ -325,7 +321,7 @@ static const yvex_cli_command yvex_commands[] = {
         "tokenize",
         "Encode text with an implemented tokenizer.",
         "yvex tokenize <path> --text TEXT",
-        "Opens a GGUF tokenizer descriptor and tokenizes text. tokenizer layer executes only the yvex-fixture-simple tokenizer.",
+        "Opens a GGUF tokenizer descriptor and tokenizes text. Only the fixture tokenizer path is implemented.",
         command_tokenize,
     },
     {

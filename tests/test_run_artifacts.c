@@ -1,8 +1,6 @@
 /*
  * YVEX - run artifact tests
  *
- * File: tests/test_run_artifacts.c
- * Layer: test
  *
  * Purpose:
  *   Proves observability layer run artifact preparation creates deterministic metrics, trace,
@@ -13,7 +11,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "yvex_metrics_internal.h"
+#include "yvex_internal.h"
 #include "test.h"
 
 static int exists_file(const char *path)

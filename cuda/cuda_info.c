@@ -1,8 +1,6 @@
 /*
  * YVEX - CUDA driver probing
  *
- * File: cuda/cuda_info.c
- * Layer: CUDA backend implementation
  *
  * Purpose:
  *   Loads the CUDA Driver API dynamically and exposes helper routines used by

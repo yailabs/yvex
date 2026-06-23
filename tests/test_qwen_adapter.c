@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "test.h"
-#include "models/qwen.h"
+#include "gguf/families.h"
 
 static int maps(const char *name, yvex_tensor_role role, const char *target)
 {

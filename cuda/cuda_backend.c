@@ -1,8 +1,6 @@
 /*
  * YVEX - CUDA backend object
  *
- * File: cuda/cuda_backend.c
- * Layer: CUDA backend implementation
  *
  * Purpose:
  *   Attaches CUDA to the existing backend ABI. CUDA backend exposes CUDA device probing,

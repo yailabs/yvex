@@ -1,15 +1,4 @@
-/*
- * YVEX - compressed implementation unit
- *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
- */
-
-
-/* ===== yvex_json_writer.c ===== */
-
-#include "yvex_metrics_internal.h"
+#include "yvex_internal.h"
 
 int yvex_json_write_string(FILE *fp, const char *text)
 {
@@ -42,11 +31,9 @@ int yvex_json_write_string(FILE *fp, const char *text)
     return YVEX_OK;
 }
 
-/* ===== yvex_metrics.c ===== */
-
 #include <yvex/metrics.h>
 
-#include "yvex_metrics_internal.h"
+#include "yvex_internal.h"
 
 #include <limits.h>
 #include <stdlib.h>
@@ -321,11 +308,9 @@ int yvex_metrics_get_phase(const yvex_metrics *metrics,
     return YVEX_OK;
 }
 
-/* ===== yvex_profile.c ===== */
-
 #include <yvex/profile.h>
 
-#include "yvex_metrics_internal.h"
+#include "yvex_internal.h"
 
 #include <stdio.h>
 
@@ -462,11 +447,9 @@ int yvex_profile_write_json(const char *path,
     return YVEX_OK;
 }
 
-/* ===== yvex_run_artifacts.c ===== */
-
 #define _POSIX_C_SOURCE 200809L
 
-#include "yvex_metrics_internal.h"
+#include "yvex_internal.h"
 
 #include <errno.h>
 #include <stdarg.h>
@@ -690,11 +673,9 @@ int yvex_run_artifacts_write_command(const yvex_run_artifacts *artifacts,
     return YVEX_OK;
 }
 
-/* ===== yvex_time.c ===== */
-
 #define _POSIX_C_SOURCE 200809L
 
-#include "yvex_metrics_internal.h"
+#include "yvex_internal.h"
 
 #include <time.h>
 
@@ -709,11 +690,9 @@ unsigned long long yvex_time_monotonic_ns(void)
     return ((unsigned long long)ts.tv_sec * 1000000000ull) + (unsigned long long)ts.tv_nsec;
 }
 
-/* ===== yvex_trace.c ===== */
-
 #include <yvex/trace.h>
 
-#include "yvex_metrics_internal.h"
+#include "yvex_internal.h"
 
 #include <stdlib.h>
 #include <string.h>

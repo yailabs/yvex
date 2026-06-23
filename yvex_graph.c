@@ -1,10 +1,6 @@
-/* ===== inlined yvex_graph_internal.h ===== */
-
 /*
  * YVEX - Graph internals
  *
- * File: yvex_graph_internal.h
- * Layer: graph implementation
  *
  * Purpose:
  *   Shares private graph, memory plan, and planner structures across the graph planner
@@ -23,9 +19,6 @@
  *   - make test-core
  *   - build/tests/test_graph
  */
-#ifndef YVEX_GRAPH_INTERNAL_H
-#define YVEX_GRAPH_INTERNAL_H
-
 #include <yvex/yvex.h>
 
 typedef struct {
@@ -101,21 +94,6 @@ int yvex_graph_add_missing(yvex_graph *graph,
 
 const yvex_graph_op_edges *yvex_graph_op_edges_at(const yvex_graph *graph,
                                                   unsigned long long index);
-
-#endif /* YVEX_GRAPH_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/*
- * YVEX - compressed implementation unit
- *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
- */
-
-
-/* ===== yvex_graph.c ===== */
 
 
 #include <stdlib.h>
@@ -203,8 +181,6 @@ const yvex_graph_missing_required *yvex_graph_missing_required_at(const yvex_gra
     }
     return &graph->missing[index];
 }
-
-/* ===== yvex_graph_builder.c ===== */
 
 
 #include <stdlib.h>
@@ -394,8 +370,6 @@ int yvex_graph_build_for_model(yvex_graph **out,
     return YVEX_OK;
 }
 
-/* ===== yvex_graph_dump.c ===== */
-
 
 static void dump_shape(FILE *fp, const unsigned long long *dims, unsigned int rank)
 {
@@ -495,8 +469,6 @@ int yvex_graph_dump(const yvex_graph *graph, FILE *fp, yvex_error *err)
     yvex_error_clear(err);
     return YVEX_OK;
 }
-
-/* ===== yvex_memory_plan.c ===== */
 
 
 #include <limits.h>
@@ -710,8 +682,6 @@ int yvex_memory_plan_dump(const yvex_memory_plan *plan,
     return YVEX_OK;
 }
 
-/* ===== yvex_op.c ===== */
-
 #include <yvex/op.h>
 
 const char *yvex_op_kind_name(yvex_op_kind kind)
@@ -768,8 +738,6 @@ const char *yvex_residency_name(yvex_residency residency)
     }
     return "unknown";
 }
-
-/* ===== yvex_planner.c ===== */
 
 
 #include <stdlib.h>
@@ -965,8 +933,6 @@ int yvex_plan_dump(const yvex_plan *plan, FILE *fp, yvex_error *err)
     return YVEX_OK;
 }
 
-/* ===== yvex_shape.c ===== */
-
 #include <yvex/graph.h>
 
 #include <limits.h>
@@ -1054,8 +1020,6 @@ int yvex_shape_copy(unsigned long long *dst,
     yvex_error_clear(err);
     return YVEX_OK;
 }
-
-/* ===== yvex_value.c ===== */
 
 
 #include <stdint.h>

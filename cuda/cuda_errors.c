@@ -1,8 +1,6 @@
 /*
  * YVEX - CUDA error mapping
  *
- * File: cuda/cuda_errors.c
- * Layer: CUDA backend implementation
  *
  * Purpose:
  *   Maps CUDA Driver API status codes into YVEX status/error objects. This file

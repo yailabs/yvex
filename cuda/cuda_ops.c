@@ -1,8 +1,6 @@
 /*
  * YVEX - CUDA reference ops
  *
- * File: cuda/cuda_ops.c
- * Layer: CUDA backend implementation
  *
  * Purpose:
  *   Implements the first scoped CUDA op in CUDA backend: an F32 embedding lookup that
@@ -16,6 +14,12 @@
 #ifdef YVEX_HAVE_CUDA_KERNEL_PTX
 #include "cuda_kernels.h"
 #else
+/*
+ * Fallback embedded PTX.
+ *
+ * The canonical kernel source is cuda_kernels.cu. This fallback keeps the
+ * baseline build usable on hosts without nvcc.
+ */
 static const char yvex_cuda_kernels_ptx[] =
 ".version 6.4\n"
 ".target sm_30\n"

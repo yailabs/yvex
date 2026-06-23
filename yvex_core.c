@@ -1,13 +1,8 @@
 /*
- * YVEX - compressed implementation unit
+ * yvex_core.c - Errors, status names, logging, and version reporting.
  *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
+ * This file owns the small core utilities used by every other YVEX module.
  */
-
-
-/* ===== yvex_error.c ===== */
 
 #include <yvex/error.h>
 
@@ -111,8 +106,6 @@ const char *yvex_error_message(const yvex_error *err)
     return err->message;
 }
 
-/* ===== yvex_log.c ===== */
-
 #include <yvex/log.h>
 
 const char *yvex_log_level_name(yvex_log_level level)
@@ -144,8 +137,6 @@ const char *yvex_log_domain_name(yvex_log_domain domain)
         return "unknown";
     }
 }
-
-/* ===== yvex_status.c ===== */
 
 #include <yvex/status.h>
 
@@ -188,8 +179,6 @@ int yvex_status_is_error(yvex_status status)
 {
     return status != YVEX_OK;
 }
-
-/* ===== yvex_version.c ===== */
 
 #include <yvex/version.h>
 

@@ -1,8 +1,6 @@
 /*
  * YVEX - HTTP tests
  *
- * File: tests/test_http.c
- * Layer: test
  *
  * Purpose:
  *   Proves the server shell HTTP parser and response builder handle the small yvexd
@@ -10,7 +8,7 @@
  */
 #include <string.h>
 
-#include "yvex_server_http_internal.h"
+#include "yvex_internal.h"
 #include "test.h"
 
 static int test_parse_request(void)

@@ -1,12 +1,6 @@
 # YVEX - Build and validation entrypoint
 #
-# File: Makefile
-# Layer: build system
-#
-# Purpose:
-#   Builds the YVEX C core library, filesystem/artifact/GGUF/model/tokenizer/
-#   graph planning/backend/session layers, CLI bootstrap, and tests. Also runs
-#   documentation and guardrail validation.
+# Builds the YVEX C library, root binaries, CUDA kernel unit, and tests.
 #
 # Primary commands:
 #   make info
@@ -69,7 +63,7 @@ CORE_SRCS := \
 	yvex_tokenizer.c \
 	yvex_chat.c \
 	yvex_server.c \
-	yvex_model_tools.c \
+	yvex_model_artifacts.c \
 	gguf/conversion.c \
 	gguf/quant.c \
 	yvex_source.c
@@ -365,7 +359,8 @@ check-guardrails:
 	@test ! -d backends
 	@test -d cuda
 	@test -d gguf
-	@test -d models
+	@test ! -d models
+	@test -f gguf/families.h
 	@test -d tests/vectors
 	@test -f include/yvex/server.h
 	@test ! -d fixtures

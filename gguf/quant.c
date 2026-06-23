@@ -1,30 +1,15 @@
-/* ===== inlined yvex_quant_internal.h ===== */
-
 /*
  * YVEX - Quantizer internals
  */
-#ifndef YVEX_QUANT_INTERNAL_H
-#define YVEX_QUANT_INTERNAL_H
-
 #include <stddef.h>
 
 int yvex_quant_q8_0_available(void);
 
-#endif /* YVEX_QUANT_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/* ===== inlined yvex_quant_policy_internal.h ===== */
 
 /*
  * YVEX - Quant policy internals
  *
- * File: yvex_quant_policy_internal.h
- * Layer: tool-plane implementation
  */
-#ifndef YVEX_QUANT_POLICY_INTERNAL_H
-#define YVEX_QUANT_POLICY_INTERNAL_H
-
 #include <yvex/artifact.h>
 #include <yvex/dtype.h>
 #include <yvex/gguf.h>
@@ -74,21 +59,11 @@ yvex_dtype yvex_quant_qtype_to_dtype(yvex_quant_qtype qtype);
 int yvex_quant_qtype_storage_supported(yvex_quant_qtype qtype);
 int yvex_quant_qtype_compute_supported(yvex_quant_qtype qtype);
 
-#endif /* YVEX_QUANT_POLICY_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/* ===== inlined yvex_quant_job_internal.h ===== */
 
 /*
  * YVEX - Quant job internals
  *
- * File: yvex_quant_job_internal.h
- * Layer: tool-plane implementation
  */
-#ifndef YVEX_QUANT_JOB_INTERNAL_H
-#define YVEX_QUANT_JOB_INTERNAL_H
-
 #include <yvex/quant_job.h>
 
 typedef struct {
@@ -122,21 +97,11 @@ int yvex_quant_job_write_json_file(const char *out_path,
 void yvex_quant_job_summarize(const yvex_quant_job_doc *doc,
                               yvex_quant_job_summary *summary);
 
-#endif /* YVEX_QUANT_JOB_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/* ===== inlined yvex_imatrix_internal.h ===== */
 
 /*
  * YVEX - Imatrix manifest internals
  *
- * File: yvex_imatrix_internal.h
- * Layer: tool-plane implementation
  */
-#ifndef YVEX_IMATRIX_INTERNAL_H
-#define YVEX_IMATRIX_INTERNAL_H
-
 #include <yvex/imatrix.h>
 #include <yvex/quant_policy.h>
 
@@ -185,21 +150,6 @@ void yvex_imatrix_manifest_refresh_summary(const yvex_imatrix_manifest *manifest
 yvex_imatrix_status yvex_imatrix_status_from_name(const char *name);
 yvex_imatrix_format yvex_imatrix_format_from_name(const char *name);
 yvex_imatrix_coverage_kind yvex_imatrix_coverage_kind_from_name(const char *name);
-
-#endif /* YVEX_IMATRIX_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/*
- * YVEX - compressed implementation unit
- *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
- */
-
-
-/* ===== yvex_imatrix.c ===== */
 
 
 #include <stdlib.h>
@@ -467,8 +417,6 @@ void yvex_imatrix_manifest_refresh_summary(const yvex_imatrix_manifest *manifest
         summary->status = YVEX_IMATRIX_STATUS_UNSUPPORTED_FORMAT;
     }
 }
-
-/* ===== yvex_imatrix_json.c ===== */
 
 
 #include <ctype.h>
@@ -989,11 +937,7 @@ int yvex_imatrix_manifest_write_json_file(const char *out_path,
     return YVEX_OK;
 }
 
-/* ===== yvex_imatrix_report.c ===== */
 
-
-
-/* ===== yvex_imatrix_validate.c ===== */
 
 
 #include <unistd.h>
@@ -1052,8 +996,6 @@ int yvex_imatrix_manifest_validate(const yvex_imatrix_manifest *manifest,
     }
     return YVEX_OK;
 }
-
-/* ===== yvex_quant_job.c ===== */
 
 
 #include <stdlib.h>
@@ -1265,8 +1207,6 @@ int yvex_quant_job_validate(const char *manifest_path,
     return YVEX_OK;
 }
 
-/* ===== yvex_quant_job_json.c ===== */
-
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1472,11 +1412,7 @@ int yvex_quant_job_write_json_file(const char *out_path,
     return YVEX_OK;
 }
 
-/* ===== yvex_quant_job_report.c ===== */
 
-
-
-/* ===== yvex_quant_policy.c ===== */
 
 
 #include <stdlib.h>
@@ -1765,8 +1701,6 @@ const yvex_quant_policy_rule *yvex_quant_policy_rule_at(const yvex_quant_policy 
     return &policy->rules[index];
 }
 
-/* ===== yvex_quant_policy_from_template.c ===== */
-
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1881,8 +1815,6 @@ done:
     yvex_artifact_close(artifact);
     return rc;
 }
-
-/* ===== yvex_quant_policy_json.c ===== */
 
 
 #include <ctype.h>
@@ -2406,8 +2338,6 @@ int yvex_quant_policy_write_json_file(const char *out_path,
     return YVEX_OK;
 }
 
-/* ===== yvex_quant_policy_report.c ===== */
-
 
 #include <stdio.h>
 
@@ -2433,8 +2363,6 @@ void yvex_quant_policy_print_summary(const yvex_quant_policy *policy,
     printf("compute_supported: %llu\n", summary.compute_supported_count);
     printf("status: %s\n", yvex_quant_policy_status_name(summary.status));
 }
-
-/* ===== yvex_quant_policy_validate.c ===== */
 
 
 #include <stdlib.h>
@@ -2603,8 +2531,6 @@ int yvex_quant_policy_validate(yvex_quant_policy *policy,
     qp_set_summary(policy, template_issues, policy->rule_count == 0);
     return YVEX_OK;
 }
-
-/* ===== yvex_quant_q8_0.c ===== */
 
 
 int yvex_quant_q8_0_available(void)

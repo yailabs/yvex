@@ -1,11 +1,9 @@
-/* ===== inlined yvex_weights_internal.h ===== */
-
 /*
- * YVEX - Materialized weight internals
+ * yvex_model.c - Dtypes, tensor metadata, descriptors, and weights.
+ *
+ * This file owns model-side structures built after GGUF parsing and before
+ * runtime execution. It does not execute graph operations.
  */
-#ifndef YVEX_WEIGHTS_INTERNAL_H
-#define YVEX_WEIGHTS_INTERNAL_H
-
 #include <yvex/weights.h>
 
 struct yvex_materialized_weight {
@@ -29,20 +27,6 @@ char *yvex_weight_strdup(const char *text);
 void yvex_materialized_weight_clear(yvex_weight_table *table,
                                     yvex_materialized_weight *weight);
 
-#endif /* YVEX_WEIGHTS_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/*
- * YVEX - compressed implementation unit
- *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
- */
-
-
-/* ===== yvex_dtype.c ===== */
 
 #include <yvex/dtype.h>
 
@@ -171,8 +155,6 @@ int yvex_dtype_storage_bytes(yvex_dtype dtype,
     yvex_error_clear(err);
     return YVEX_OK;
 }
-
-/* ===== yvex_model_descriptor.c ===== */
 
 #include <yvex/model.h>
 
@@ -360,8 +342,6 @@ unsigned long long yvex_model_role_count(const yvex_model_descriptor *model, yve
     return model->role_counts[role];
 }
 
-/* ===== yvex_tensor_role.c ===== */
-
 #include <yvex/tensor.h>
 
 #include <string.h>
@@ -494,8 +474,6 @@ yvex_tensor_role yvex_tensor_role_classify(const char *architecture,
 
     return YVEX_TENSOR_ROLE_UNKNOWN;
 }
-
-/* ===== yvex_tensor_table.c ===== */
 
 #include <yvex/tensor.h>
 
@@ -683,8 +661,6 @@ const yvex_tensor_info *yvex_tensor_table_find(const yvex_tensor_table *table,
     return NULL;
 }
 
-/* ===== yvex_weights.c ===== */
-
 
 #include <stdlib.h>
 #include <string.h>
@@ -815,8 +791,6 @@ const yvex_device_tensor *yvex_weight_device_tensor(const yvex_materialized_weig
 {
     return weight ? weight->device_tensor : NULL;
 }
-
-/* ===== yvex_materialize.c ===== */
 
 
 #include <stdlib.h>
@@ -1045,8 +1019,6 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
     yvex_error_clear(err);
     return YVEX_OK;
 }
-
-/* ===== yvex_materialize_report.c ===== */
 
 
 #include <string.h>

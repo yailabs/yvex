@@ -1,10 +1,6 @@
-/* ===== inlined yvex_tokenizer_internal.h ===== */
-
 /*
  * YVEX - tokenizer internal state
  *
- * File: yvex_tokenizer_internal.h
- * Layer: tokenizer implementation
  *
  * Purpose:
  *   Shares the private tokenizer object layout across tokenizer layer tokenizer modules.
@@ -14,9 +10,6 @@
  *   - make test-core
  *   - build/tests/test_tokenizer
  */
-#ifndef YVEX_TOKENIZER_INTERNAL_H
-#define YVEX_TOKENIZER_INTERNAL_H
-
 #include <yvex/tokenizer.h>
 
 typedef struct {
@@ -44,21 +37,6 @@ int yvex_tokenizer_load_vocab(yvex_tokenizer *tokenizer, const yvex_gguf *gguf, 
 void yvex_tokenizer_free_vocab(yvex_tokenizer *tokenizer);
 int yvex_tokenizer_load_specials(yvex_tokenizer *tokenizer, const yvex_gguf *gguf, yvex_error *err);
 void yvex_tokenizer_free_metadata(yvex_tokenizer *tokenizer);
-
-#endif /* YVEX_TOKENIZER_INTERNAL_H */
-
-/* ===== implementation ===== */
-
-/*
- * YVEX - compressed implementation unit
- *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
- */
-
-
-/* ===== yvex_tokenizer.c ===== */
 
 
 #include <stdint.h>
@@ -256,8 +234,6 @@ void yvex_tokenizer_free_metadata(yvex_tokenizer *tokenizer)
     tokenizer->chat_template_len = 0;
 }
 
-/* ===== yvex_tokenizer_decode.c ===== */
-
 
 #include <stdlib.h>
 #include <string.h>
@@ -326,8 +302,6 @@ int yvex_detokenize_ids(const yvex_tokenizer *tokenizer,
     yvex_error_clear(err);
     return YVEX_OK;
 }
-
-/* ===== yvex_tokenizer_encode.c ===== */
 
 
 #include <limits.h>
@@ -448,8 +422,6 @@ int yvex_tokenize_text(const yvex_tokenizer *tokenizer,
     return YVEX_OK;
 }
 
-/* ===== yvex_tokenizer_special.c ===== */
-
 
 static int load_special(const yvex_gguf *gguf,
                         const char *key,
@@ -537,8 +509,6 @@ int yvex_tokenizer_sep_id(const yvex_tokenizer *tokenizer, unsigned int *out)
 {
     return special_id_get(tokenizer, tokenizer ? &tokenizer->sep : 0, out);
 }
-
-/* ===== yvex_tokenizer_vocab.c ===== */
 
 
 #include <stdint.h>
@@ -728,8 +698,6 @@ const yvex_token_info *yvex_tokenizer_token_at(const yvex_tokenizer *tokenizer,
     }
     return &tokenizer->tokens[id];
 }
-
-/* ===== yvex_prompt.c ===== */
 
 #include <yvex/prompt.h>
 

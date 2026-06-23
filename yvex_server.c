@@ -1,17 +1,6 @@
-/*
- * YVEX - compressed implementation unit
- *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
- */
-
-
-/* ===== yvex_server.c ===== */
-
 #define _POSIX_C_SOURCE 200809L
 
-#include "yvex_server_internal.h"
+#include "yvex_internal.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -330,9 +319,7 @@ int yvex_server_get_summary(const yvex_server *server,
     return YVEX_OK;
 }
 
-/* ===== yvex_server_handlers.c ===== */
-
-#include "yvex_server_internal.h"
+#include "yvex_internal.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -460,9 +447,7 @@ int yvex_server_handle_unsupported_generation(yvex_http_response *response,
                          err);
 }
 
-/* ===== yvex_server_http.c ===== */
-
-#include "yvex_server_http_internal.h"
+#include "yvex_internal.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -554,9 +539,7 @@ int yvex_http_response_format(char *out,
     return YVEX_OK;
 }
 
-/* ===== yvex_server_metrics.c ===== */
-
-#include "yvex_server_internal.h"
+#include "yvex_internal.h"
 
 void yvex_server_record_response(yvex_server *server, int status_code)
 {
@@ -569,9 +552,7 @@ void yvex_server_record_response(yvex_server *server, int status_code)
     }
 }
 
-/* ===== yvex_server_router.c ===== */
-
-#include "yvex_server_internal.h"
+#include "yvex_internal.h"
 
 #include <stdio.h>
 #include <string.h>

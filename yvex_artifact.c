@@ -1,14 +1,3 @@
-/*
- * YVEX - compressed implementation unit
- *
- * This file groups related implementation sections that used to live in
- * smaller root source fragments. Public API declarations remain under
- * include/yvex/.
- */
-
-
-/* ===== yvex_artifact.c ===== */
-
 #include <yvex/artifact.h>
 
 #include <errno.h>
@@ -168,8 +157,6 @@ const unsigned char *yvex_artifact_data(const yvex_artifact *artifact)
     return artifact->data;
 }
 
-/* ===== yvex_artifact_range.c ===== */
-
 #include <yvex/artifact.h>
 
 int yvex_range_check(unsigned long long file_size,
@@ -193,8 +180,6 @@ int yvex_range_check(unsigned long long file_size,
     yvex_error_clear(err);
     return YVEX_OK;
 }
-
-/* ===== yvex_paths.c ===== */
 
 #include <yvex/fs.h>
 
@@ -344,8 +329,6 @@ int yvex_paths_print(const yvex_paths *paths, FILE *fp, yvex_error *err)
     yvex_error_clear(err);
     return YVEX_OK;
 }
-
-/* ===== yvex_run_dir.c ===== */
 
 #define _POSIX_C_SOURCE 200809L
 

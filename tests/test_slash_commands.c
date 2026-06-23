@@ -1,8 +1,6 @@
 /*
  * YVEX - slash command tests
  *
- * File: tests/test_slash_commands.c
- * Layer: test
  *
  * Purpose:
  *   Proves the diagnostic runtime slash-command parser recognizes required chat commands and
@@ -19,7 +17,7 @@
  * Expected:
  *   - exits 0 on success
  */
-#include "yvex_chat_slash_internal.h"
+#include "yvex_internal.h"
 #include "test.h"
 
 int main(void)

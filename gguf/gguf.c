@@ -1,8 +1,6 @@
 /*
  * YVEX - GGUF parser
  *
- * File: gguf/gguf.c
- * Layer: format implementation
  *
  * Purpose:
  *   Implements GGUF magic probing, fixed header parsing, metadata parsing,

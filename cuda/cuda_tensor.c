@@ -1,8 +1,6 @@
 /*
  * YVEX - CUDA backend tensors
  *
- * File: cuda/cuda_tensor.c
- * Layer: CUDA backend implementation
  *
  * Purpose:
  *   Implements CUDA backend CUDA tensor allocation, free, host/device read/write, and

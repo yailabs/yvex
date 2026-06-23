@@ -30,8 +30,8 @@ tests/fixtures may contain tiny fixtures only
 Local registry files are machine-local and may contain absolute paths. They must
 not be committed.
 
-GGUF parser and artifact tooling live under `gguf/`. Model-family adapters live
-under `models/`. Tests use small fixtures and stable vectors under `tests/`.
+GGUF parser, artifact tooling, and model-family tensor mapping live under
+`gguf/`. Tests use small fixtures and stable vectors under `tests/`.
 
 ## 4. Backend Contract
 
