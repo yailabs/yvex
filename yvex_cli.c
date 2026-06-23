@@ -1,57 +1,19 @@
 /*
- * YVEX - CLI bootstrap
+ * yvex_cli.c - Command table and operator CLI.
  *
- *
- * Purpose:
- *   Implements the command table and CLI proof surface for implemented core,
- *   filesystem, artifact, GGUF directory, tensor table, descriptor, and
- *   runtime diagnostics. The CLI reports what exists
- *   and does not expose future generation commands before their modules exist.
- *
- * Implements:
- *   - yvex
- *   - yvex backend cpu
- *   - yvex cuda-info
- *   - yvex info
- *   - yvex commands
- *   - yvex help [command]
- *   - yvex version
- *   - yvex paths
- *   - yvex inspect <path>
- *   - yvex metadata <path>
- *   - yvex tensors <path>
- *   - yvex tokenizer <path>
- *   - yvex tokenize <path> --text TEXT
- *   - yvex detokenize <path> --ids IDS
- *   - yvex engine <path>
- *   - yvex graph <path>
- *   - yvex prompt <path> --user TEXT
- *   - yvex plan <path>
- *   - yvex run --model <path> --backend cpu --prompt TEXT
- *   - yvex chat --model <path> --backend cpu
- *   - yvex session <path> --backend cpu
- *   - yvex --help
- *   - yvex --version
- *
- * Invariants:
- *   - unknown commands exit 2
- *   - implemented commands are declared in one command table
- *   - future runtime commands are not listed as implemented
- *
- * Commands:
- *   - make test-cli
- *   - make smoke
- *   - ./yvex info
+ * This file owns parsing and dispatch for repository-local operator commands.
+ * Runtime work is delegated to the library modules behind each command.
  */
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include <yvex/yvex.h>
+#include "yvex_console_private.h"
 
-#include "yvex_internal.h"
+
 
 typedef int (*yvex_cli_handler)(int argc, char **argv);
 

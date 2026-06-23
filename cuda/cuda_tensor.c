@@ -1,16 +1,15 @@
 /*
- * YVEX - CUDA backend tensors
+ * cuda/cuda_tensor.c - CUDA backend tensor storage.
  *
- *
- * Purpose:
- *   Implements CUDA backend CUDA tensor allocation, free, host/device read/write, and
- *   device-to-device copy through the CUDA Driver API.
+ * This file owns CUDA tensor allocation, host/device transfer, and device copy
+ * through the CUDA Driver API.
  */
-#include "cuda_internal.h"
 
+#include "cuda_internal.h"
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
+
 
 static int cuda_memory_can_add(const yvex_backend *backend,
                                unsigned long long bytes,

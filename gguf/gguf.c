@@ -1,37 +1,16 @@
 /*
- * YVEX - GGUF parser
+ * gguf/gguf.c - GGUF parser.
  *
- *
- * Purpose:
- *   Implements GGUF magic probing, fixed header parsing, metadata parsing,
- *   and raw tensor directory parsing through checked little-endian cursor
- *   reads. This module does not create model descriptors, tensor tables, or
- *   execution-ready state.
- *
- * Implements:
- *   - yvex_gguf_probe_file
- *   - yvex_gguf_read_header
- *   - yvex_gguf_open
- *   - yvex_gguf_close
- *   - metadata accessors
- *   - tensor directory accessors
- *
- * Invariants:
- *   - parser never casts mapped bytes to structs
- *   - cursor advances only after successful reads
- *   - caller-owned artifacts are never closed by this module
- *   - partially parsed state is freed on failure
- *
- * Commands:
- *   - make test-core
- *   - build/tests/test_gguf
+ * This file owns GGUF magic probing, metadata parsing, and tensor-directory
+ * parsing. It does not create execution-ready model state.
  */
-#include <yvex/gguf.h>
 
+#include <yvex/gguf.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
 
 #define YVEX_GGUF_HEADER_BYTES 24u
 #define YVEX_GGUF_SUPPORTED_VERSION 3u

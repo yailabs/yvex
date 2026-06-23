@@ -1,14 +1,22 @@
 /*
- * YVEX - Source manifest internals
+ * yvex_source.c - Source manifests, native inventory, and safetensors headers.
  *
- *
- * Purpose:
- *   Shares the small internal file-list representation used by the open-weight intake
- *   source scanner and JSON writer. This is not part of the public API.
+ * This file owns source-file manifests and lightweight native-weight metadata.
+ * It does not commit or materialize external model artifacts.
  */
-#include <stddef.h>
 
+#include <stddef.h>
 #include <yvex/source_manifest.h>
+#include <yvex/native_weights.h>
+#include <string.h>
+#include <errno.h>
+#include <stdio.h>
+#include <ctype.h>
+#include <dirent.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <stdint.h>
+
 
 typedef struct {
     char *path;
@@ -37,13 +45,8 @@ int yvex_source_manifest_write_json_file(const char *out_path,
                                          yvex_error *err);
 
 
-/*
- * YVEX - Native weight internals
- *
- */
-#include <stddef.h>
+/* Native weights */
 
-#include <yvex/native_weights.h>
 
 struct yvex_native_weight_table {
     yvex_native_weight_info *items;
@@ -78,9 +81,7 @@ int yvex_native_weight_report_json(const char *source,
                                    yvex_error *err);
 
 
-#include <yvex/source_manifest.h>
 
-#include <string.h>
 
 
 const char *yvex_source_status_name(yvex_source_status status)
@@ -148,9 +149,6 @@ int yvex_source_manifest_write_json(const char *out_path,
 }
 
 
-#include <errno.h>
-#include <stdio.h>
-#include <string.h>
 
 static void yvex_sm_json_string(FILE *fp, const char *s)
 {
@@ -276,12 +274,6 @@ int yvex_source_manifest_write_json_file(const char *out_path,
 #define _XOPEN_SOURCE 700
 
 
-#include <ctype.h>
-#include <dirent.h>
-#include <errno.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
 
 static char *yvex_sm_strdup(const char *s)
 {
@@ -570,10 +562,6 @@ int yvex_source_manifest_scan_files(const char *local_path,
 #define _XOPEN_SOURCE 700
 
 
-#include <dirent.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
 
 static char *nw_strdup(const char *s)
 {
@@ -891,7 +879,6 @@ int yvex_native_weight_table_summary(const yvex_native_weight_table *table,
 }
 
 
-#include <stdio.h>
 
 int yvex_native_weight_report_json(const char *source,
                                    const yvex_native_weight_table *table,
@@ -917,10 +904,6 @@ int yvex_native_weight_report_json(const char *source,
 }
 
 
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/stat.h>
 
 static unsigned long long st_le64(const unsigned char b[8])
 {
@@ -1001,9 +984,6 @@ int yvex_safetensors_read_header_file(const char *abs_path,
 }
 
 
-#include <ctype.h>
-#include <stdlib.h>
-#include <string.h>
 
 typedef struct {
     const char *p;

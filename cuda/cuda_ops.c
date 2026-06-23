@@ -1,18 +1,17 @@
 /*
- * YVEX - CUDA reference ops
+ * cuda/cuda_ops.c - CUDA host launch wrappers for backend ops.
  *
- *
- * Purpose:
- *   Implements the first scoped CUDA op in CUDA backend: an F32 embedding lookup that
- *   matches the backend layer CPU reference behavior for parity tests.
+ * This file validates backend tensors and launches CUDA kernels. It does not
+ * expose CUDA syntax to the plain C runtime.
  */
-#include "cuda_internal.h"
 
+#include "cuda_internal.h"
 #include <limits.h>
 #include <stdint.h>
+#include "cuda_kernels.h"
+
 
 #ifdef YVEX_HAVE_CUDA_KERNEL_PTX
-#include "cuda_kernels.h"
 #else
 /*
  * Fallback embedded PTX.

@@ -1,29 +1,16 @@
 /*
- * YVEX - Session internals
+ * yvex_runtime.c - Engine, session, KV, and logits shells.
  *
- *
- * Purpose:
- *   Shares private engine, session, KV, and logits structures across runtime
- *   implementation files. Public consumers see only opaque handles.
- *
- * Owns:
- *   - concrete yvex_engine storage
- *   - concrete yvex_session storage
- *   - concrete KV/logits skeleton storage
- *
- * Does not own:
- *   - public API declarations
- *   - backend implementation
- *   - generation/runtime execution
- *
- * Commands:
- *   - make test-core
- *   - build/tests/test_engine
- *   - build/tests/test_session
+ * This file owns descriptor-only runtime state. It does not implement prefill,
+ * decode, sampling, or generation.
  */
-#include <stddef.h>
 
+#include <stddef.h>
 #include <yvex/yvex.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
 
 #define YVEX_RUNTIME_REASON_CAP 256u
 
@@ -68,8 +55,6 @@ void yvex_runtime_set_graph_reason(char *out, size_t cap, const yvex_graph *grap
 void yvex_runtime_set_text_reason(char *out, size_t cap, const char *text);
 
 
-#include <stdlib.h>
-#include <string.h>
 
 static void set_engine_status_from_graph(yvex_engine *engine)
 {
@@ -289,8 +274,6 @@ const char *yvex_engine_diagnostic_reason(const yvex_engine *engine)
 }
 
 
-#include <stdlib.h>
-#include <string.h>
 
 int yvex_kv_cache_create(yvex_kv_cache **out,
                          const yvex_model_descriptor *model,
@@ -365,8 +348,6 @@ int yvex_kv_cache_get_summary(const yvex_kv_cache *kv,
 }
 
 
-#include <stdlib.h>
-#include <string.h>
 
 int yvex_logits_create(yvex_logits **out,
                        const yvex_model_descriptor *model,
@@ -434,9 +415,6 @@ int yvex_logits_get_summary(const yvex_logits *logits,
 }
 
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 char *yvex_runtime_strdup(const char *text)
 {
@@ -522,8 +500,6 @@ void yvex_runtime_set_graph_reason(char *out, size_t cap, const yvex_graph *grap
 }
 
 
-#include <stdlib.h>
-#include <string.h>
 
 static void set_session_reason_from_graph(yvex_session *session)
 {

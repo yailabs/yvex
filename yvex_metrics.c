@@ -1,4 +1,25 @@
-#include "yvex_internal.h"
+/*
+ * yvex_metrics.c - Metrics, traces, profiles, and run artifacts.
+ *
+ * This file owns runtime measurements and local run artifact helpers used by
+ * diagnostic CLI commands.
+ */
+
+#include <yvex/metrics.h>
+#include <yvex/profile.h>
+#include <yvex/trace.h>
+
+#include "yvex_console_private.h"
+
+#include <errno.h>
+#include <limits.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <time.h>
 
 int yvex_json_write_string(FILE *fp, const char *text)
 {
@@ -31,13 +52,8 @@ int yvex_json_write_string(FILE *fp, const char *text)
     return YVEX_OK;
 }
 
-#include <yvex/metrics.h>
 
-#include "yvex_internal.h"
 
-#include <limits.h>
-#include <stdlib.h>
-#include <string.h>
 
 #define YVEX_METRIC_PHASE_COUNT ((unsigned long)YVEX_METRIC_PHASE_TOTAL + 1ul)
 
@@ -308,11 +324,8 @@ int yvex_metrics_get_phase(const yvex_metrics *metrics,
     return YVEX_OK;
 }
 
-#include <yvex/profile.h>
 
-#include "yvex_internal.h"
 
-#include <stdio.h>
 
 static int open_output(FILE **out, const char *path, yvex_error *err, const char *where)
 {
@@ -449,13 +462,7 @@ int yvex_profile_write_json(const char *path,
 
 #define _POSIX_C_SOURCE 200809L
 
-#include "yvex_internal.h"
 
-#include <errno.h>
-#include <stdarg.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 
 static int path_format(char *dst, size_t cap, yvex_error *err, const char *where, const char *fmt, ...)
 {
@@ -675,9 +682,7 @@ int yvex_run_artifacts_write_command(const yvex_run_artifacts *artifacts,
 
 #define _POSIX_C_SOURCE 200809L
 
-#include "yvex_internal.h"
 
-#include <time.h>
 
 unsigned long long yvex_time_monotonic_ns(void)
 {
@@ -690,12 +695,8 @@ unsigned long long yvex_time_monotonic_ns(void)
     return ((unsigned long long)ts.tv_sec * 1000000000ull) + (unsigned long long)ts.tv_nsec;
 }
 
-#include <yvex/trace.h>
 
-#include "yvex_internal.h"
 
-#include <stdlib.h>
-#include <string.h>
 
 struct yvex_trace {
     FILE *fp;

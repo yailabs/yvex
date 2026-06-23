@@ -1,16 +1,15 @@
 /*
- * YVEX - CUDA driver probing
+ * cuda/cuda_info.c - CUDA driver probing.
  *
- *
- * Purpose:
- *   Loads the CUDA Driver API dynamically and exposes helper routines used by
- *   the CUDA backend backend and CLI probing paths.
+ * This file loads the CUDA Driver API dynamically and reports device
+ * capability state for backend and CLI probes.
  */
-#include "cuda_internal.h"
 
+#include "cuda_internal.h"
 #include <dlfcn.h>
 #include <stdio.h>
 #include <string.h>
+
 
 static int load_symbol(void *library, void **slot, const char *name, yvex_error *err)
 {

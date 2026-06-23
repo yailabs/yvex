@@ -103,6 +103,7 @@ execution_ready: true
 | REPO.SURFACE.0 | complete | CUDA, GGUF, model family, and test surface refoundation |
 | CUDA.SURFACE.0 | complete | CUDA kernel translation unit |
 | REPO.SURFACE.1 | complete | Natural C surface and code style refoundation |
+| CODE.NATURAL.0 | complete | Natural translation unit rewrite |
 | TEST.SURFACE.0 | next | Test vectors and runner consolidation |
 | CLI.MODELS.3 | planned | Model selection in canonical REPL |
 | CLI.MODELS.4 | planned | Model alias resolution in yvexd |
@@ -172,7 +173,8 @@ GGUF parser/tooling extracted to gguf/
 family mapping consolidated into gguf/
 test vector surface established
 natural C source style pass complete
-single root internal header complete
+natural translation unit rewrite complete
+private headers scoped by backend, console, and server
 public documentation boundary complete
 minimal docs surface complete
 ```

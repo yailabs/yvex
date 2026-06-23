@@ -1,6 +1,11 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include "yvex_internal.h"
+/*
+ * yvex_server.c - Provider daemon HTTP status shell.
+ *
+ * This file owns server state, HTTP parsing, routing, handlers, and response
+ * formatting. Generation endpoints remain unsupported.
+ */
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -11,6 +16,8 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#include "yvex_server_private.h"
 
 static void copy_label(char *dst, size_t cap, const char *src)
 {
@@ -319,10 +326,7 @@ int yvex_server_get_summary(const yvex_server *server,
     return YVEX_OK;
 }
 
-#include "yvex_internal.h"
 
-#include <stdio.h>
-#include <string.h>
 
 static int response_body(yvex_http_response *response,
                          int status_code,
@@ -447,10 +451,7 @@ int yvex_server_handle_unsupported_generation(yvex_http_response *response,
                          err);
 }
 
-#include "yvex_internal.h"
 
-#include <stdio.h>
-#include <string.h>
 
 const char *yvex_http_status_reason(int status_code)
 {
@@ -539,7 +540,6 @@ int yvex_http_response_format(char *out,
     return YVEX_OK;
 }
 
-#include "yvex_internal.h"
 
 void yvex_server_record_response(yvex_server *server, int status_code)
 {
@@ -552,10 +552,7 @@ void yvex_server_record_response(yvex_server *server, int status_code)
     }
 }
 
-#include "yvex_internal.h"
 
-#include <stdio.h>
-#include <string.h>
 
 int yvex_server_route(yvex_server *server,
                       const yvex_http_request *request,

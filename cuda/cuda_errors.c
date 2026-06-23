@@ -1,14 +1,13 @@
 /*
- * YVEX - CUDA error mapping
+ * cuda/cuda_errors.c - CUDA driver error mapping.
  *
- *
- * Purpose:
- *   Maps CUDA Driver API status codes into YVEX status/error objects. This file
- *   does not include CUDA headers and keeps CUDA native details private.
+ * This file maps CUDA Driver API status codes into YVEX errors without
+ * exposing CUDA headers outside the CUDA boundary.
  */
-#include "cuda_internal.h"
 
+#include "cuda_internal.h"
 #include <stdio.h>
+
 
 int yvex_cuda_status(const yvex_cuda_driver *driver,
                      CUresult code,

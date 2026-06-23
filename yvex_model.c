@@ -4,7 +4,17 @@
  * This file owns model-side structures built after GGUF parsing and before
  * runtime execution. It does not execute graph operations.
  */
+
+#include <yvex/dtype.h>
+#include <yvex/model.h>
+#include <yvex/tensor.h>
 #include <yvex/weights.h>
+
+#include <limits.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 
 struct yvex_materialized_weight {
     char *name;
@@ -28,11 +38,7 @@ void yvex_materialized_weight_clear(yvex_weight_table *table,
                                     yvex_materialized_weight *weight);
 
 
-#include <yvex/dtype.h>
 
-#include <limits.h>
-#include <stddef.h>
-#include <stdint.h>
 
 static const yvex_dtype_info dtype_table[] = {
     {YVEX_DTYPE_UNKNOWN, "UNKNOWN",  UINT_MAX, 0,   0,   0, 0, 0},
@@ -156,11 +162,7 @@ int yvex_dtype_storage_bytes(yvex_dtype dtype,
     return YVEX_OK;
 }
 
-#include <yvex/model.h>
 
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
 
 struct yvex_model_descriptor {
     yvex_arch arch;
@@ -342,9 +344,7 @@ unsigned long long yvex_model_role_count(const yvex_model_descriptor *model, yve
     return model->role_counts[role];
 }
 
-#include <yvex/tensor.h>
 
-#include <string.h>
 
 const char *yvex_tensor_role_name(yvex_tensor_role role)
 {
@@ -475,12 +475,7 @@ yvex_tensor_role yvex_tensor_role_classify(const char *architecture,
     return YVEX_TENSOR_ROLE_UNKNOWN;
 }
 
-#include <yvex/tensor.h>
 
-#include <limits.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
 
 struct yvex_tensor_table {
     yvex_tensor_info *items;
@@ -662,8 +657,6 @@ const yvex_tensor_info *yvex_tensor_table_find(const yvex_tensor_table *table,
 }
 
 
-#include <stdlib.h>
-#include <string.h>
 
 char *yvex_weight_strdup(const char *text)
 {
@@ -793,8 +786,6 @@ const yvex_device_tensor *yvex_weight_device_tensor(const yvex_materialized_weig
 }
 
 
-#include <stdlib.h>
-#include <string.h>
 
 static yvex_weight_residency residency_from_backend(const yvex_backend *backend)
 {
@@ -1021,7 +1012,6 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
 }
 
 
-#include <string.h>
 
 int yvex_weight_table_get_summary(const yvex_weight_table *weights,
                                   yvex_materialize_summary *out,

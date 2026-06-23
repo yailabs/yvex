@@ -1,4 +1,11 @@
-#include "yvex_internal.h"
+/*
+ * yvex_chat.c - Diagnostic chat runtime and console commands.
+ *
+ * This file owns accepted-only prompt handling, slash commands, status output,
+ * and diagnostic console behavior. It does not implement generation.
+ */
+
+#include "yvex_console_private.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -267,7 +274,6 @@ int yvex_chat_runtime_get_summary(const yvex_chat_runtime *runtime,
     return yvex_session_get_summary(runtime->session, out, err);
 }
 
-#include "yvex_internal.h"
 
 int yvex_chat_runtime_print_status(FILE *fp,
                                    const yvex_chat_runtime *runtime,
@@ -292,9 +298,7 @@ int yvex_chat_runtime_print_status(FILE *fp,
     return YVEX_OK;
 }
 
-#include "yvex_internal.h"
 
-#include <string.h>
 
 static void json_print_escaped(FILE *fp, const char *text)
 {
@@ -417,9 +421,7 @@ int yvex_run_command_json(FILE *fp, const yvex_chat_accept_result *result)
     return YVEX_OK;
 }
 
-#include "yvex_internal.h"
 
-#include <string.h>
 
 static int slash_eq(const char *line, const char *command)
 {
@@ -461,7 +463,6 @@ const char *yvex_slash_command_name(yvex_slash_command command)
     return "unknown";
 }
 
-#include "yvex_internal.h"
 
 int yvex_status_line_print(FILE *fp,
                            const char *phase,

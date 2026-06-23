@@ -6,7 +6,7 @@
 #ifndef YVEX_CUDA_INTERNAL_H
 #define YVEX_CUDA_INTERNAL_H
 
-#include "yvex_internal.h"
+#include "yvex_backend_private.h"
 
 #include <stddef.h>
 

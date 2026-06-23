@@ -5,10 +5,14 @@
  */
 
 #include <yvex/error.h>
-
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <yvex/log.h>
+#include <yvex/status.h>
+#include <yvex/version.h>
+
+
 
 static const char yvex_empty_string[] = "";
 
@@ -106,7 +110,6 @@ const char *yvex_error_message(const yvex_error *err)
     return err->message;
 }
 
-#include <yvex/log.h>
 
 const char *yvex_log_level_name(yvex_log_level level)
 {
@@ -138,7 +141,6 @@ const char *yvex_log_domain_name(yvex_log_domain domain)
     }
 }
 
-#include <yvex/status.h>
 
 const char *yvex_status_name(yvex_status status)
 {
@@ -180,7 +182,6 @@ int yvex_status_is_error(yvex_status status)
     return status != YVEX_OK;
 }
 
-#include <yvex/version.h>
 
 const char *yvex_version_string(void)
 {

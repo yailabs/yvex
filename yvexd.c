@@ -1,16 +1,15 @@
 /*
- * YVEX - yvexd server binary
+ * yvexd.c - Server/provider daemon entrypoint.
  *
- *
- * Purpose:
- *   Provides the server shell standalone yvexd process. It serves local health, metrics,
- *   and model-catalog status endpoints. It does not generate model output.
+ * This file owns argument parsing and process entry for the local provider
+ * shell. Server behavior lives in yvex_server.c.
  */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include <yvex/yvex.h>
+
 
 static void print_help(FILE *fp)
 {

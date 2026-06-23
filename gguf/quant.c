@@ -1,20 +1,30 @@
 /*
- * YVEX - Quantizer internals
+ * gguf/quant.c - Quantization manifests and calibration metadata.
+ *
+ * This file owns quantization policy, quant job, imatrix manifest handling,
+ * and the small built-in quantizer support matrix.
  */
+
+#include <yvex/artifact.h>
+#include <yvex/dtype.h>
+#include <yvex/gguf.h>
+#include <yvex/imatrix.h>
+#include <yvex/quant_job.h>
+#include <yvex/quant_policy.h>
+#include <yvex/tensor.h>
+
+#include <ctype.h>
+#include <errno.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 int yvex_quant_q8_0_available(void);
 
 
-/*
- * YVEX - Quant policy internals
- *
- */
-#include <yvex/artifact.h>
-#include <yvex/dtype.h>
-#include <yvex/gguf.h>
-#include <yvex/quant_policy.h>
-#include <yvex/tensor.h>
+/* Quant policy */
 
 struct yvex_quant_policy {
     char *name;
@@ -60,11 +70,7 @@ int yvex_quant_qtype_storage_supported(yvex_quant_qtype qtype);
 int yvex_quant_qtype_compute_supported(yvex_quant_qtype qtype);
 
 
-/*
- * YVEX - Quant job internals
- *
- */
-#include <yvex/quant_job.h>
+/* Quant jobs */
 
 typedef struct {
     char *name;
@@ -98,12 +104,7 @@ void yvex_quant_job_summarize(const yvex_quant_job_doc *doc,
                               yvex_quant_job_summary *summary);
 
 
-/*
- * YVEX - Imatrix manifest internals
- *
- */
-#include <yvex/imatrix.h>
-#include <yvex/quant_policy.h>
+/* Imatrix manifests */
 
 typedef struct {
     yvex_imatrix_coverage_kind kind;
@@ -152,9 +153,6 @@ yvex_imatrix_format yvex_imatrix_format_from_name(const char *name);
 yvex_imatrix_coverage_kind yvex_imatrix_coverage_kind_from_name(const char *name);
 
 
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
 char *yvex_imatrix_strdup(const char *s)
 {
@@ -419,10 +417,6 @@ void yvex_imatrix_manifest_refresh_summary(const yvex_imatrix_manifest *manifest
 }
 
 
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 typedef struct {
     const char *p;
@@ -940,7 +934,6 @@ int yvex_imatrix_manifest_write_json_file(const char *out_path,
 
 
 
-#include <unistd.h>
 
 int yvex_imatrix_manifest_validate(const yvex_imatrix_manifest *manifest,
                                    yvex_error *err)
@@ -998,9 +991,6 @@ int yvex_imatrix_manifest_validate(const yvex_imatrix_manifest *manifest,
 }
 
 
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
 static yvex_quant_job_doc qj_last_summary_doc;
 
@@ -1208,9 +1198,6 @@ int yvex_quant_job_validate(const char *manifest_path,
 }
 
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 static int qj_read_file(const char *path, char **out, yvex_error *err)
 {
@@ -1415,8 +1402,6 @@ int yvex_quant_job_write_json_file(const char *out_path,
 
 
 
-#include <stdlib.h>
-#include <string.h>
 
 char *yvex_quant_policy_strdup(const char *s)
 {
@@ -1702,9 +1687,6 @@ const yvex_quant_policy_rule *yvex_quant_policy_rule_at(const yvex_quant_policy 
 }
 
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 static yvex_quant_qtype yvex_quant_policy_template_qtype_from_dtype(yvex_dtype dtype)
 {
@@ -1817,11 +1799,6 @@ done:
 }
 
 
-#include <ctype.h>
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 typedef struct {
     const char *p;
@@ -2339,7 +2316,6 @@ int yvex_quant_policy_write_json_file(const char *out_path,
 }
 
 
-#include <stdio.h>
 
 void yvex_quant_policy_print_summary(const yvex_quant_policy *policy,
                                      const char *mode,
@@ -2365,8 +2341,6 @@ void yvex_quant_policy_print_summary(const yvex_quant_policy *policy,
 }
 
 
-#include <stdlib.h>
-#include <string.h>
 
 static yvex_quant_qtype yvex_quant_policy_validate_qtype_from_dtype(yvex_dtype dtype)
 {

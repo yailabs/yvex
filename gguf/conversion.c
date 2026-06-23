@@ -1,12 +1,29 @@
 /*
- * YVEX - Weight mapping internals
+ * gguf/conversion.c - GGUF conversion, mapping, family dispatch, and qtypes.
  *
+ * This file owns selected tensor conversion plans and GGUF-facing family
+ * mapping. It does not implement model execution.
  */
+
+#include "gguf/families.h"
+
 #include <yvex/artifact.h>
+#include <yvex/artifact_naming.h>
+#include <yvex/backend.h>
+#include <yvex/conversion.h>
 #include <yvex/gguf.h>
 #include <yvex/native_weights.h>
+#include <yvex/qtype_support.h>
 #include <yvex/tensor.h>
 #include <yvex/weight_mapping.h>
+#include <yvex/weights.h>
+
+#include <errno.h>
+#include <limits.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 struct yvex_weight_mapping_table {
     yvex_native_weight_table *native;
@@ -32,14 +49,8 @@ int yvex_weight_mapping_table_add(yvex_weight_mapping_table *table,
 void yvex_weight_mapping_print_shape(const unsigned long long *dims, unsigned int rank);
 
 
-/*
- * YVEX - Conversion bridge internals
- */
-#include <stdio.h>
+/* Conversion planning */
 
-#include <yvex/conversion.h>
-#include <yvex/native_weights.h>
-#include <yvex/tensor.h>
 
 typedef struct {
     char native_name[256];
@@ -86,13 +97,8 @@ int yvex_conversion_report_plan_json(FILE *fp,
                                      yvex_error *err);
 
 
-#include "gguf/families.h"
 
-#include <stdio.h>
-#include <string.h>
 
-#include <yvex/artifact_naming.h>
-#include <yvex/qtype_support.h>
 
 const char *yvex_conversion_status_name(yvex_conversion_status status)
 {
@@ -243,8 +249,6 @@ int yvex_conversion_map_tensor(const char *arch,
 }
 
 
-#include <stdlib.h>
-#include <string.h>
 
 int yvex_conversion_emit_gguf(const yvex_conversion_options *options,
                               yvex_conversion_summary *summary_out,
@@ -322,12 +326,6 @@ int yvex_conversion_emit_gguf(const yvex_conversion_options *options,
 }
 
 
-#include <errno.h>
-#include <limits.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 static unsigned int read_u16le(const unsigned char *p)
 {
@@ -531,10 +529,6 @@ int yvex_conversion_convert_payload(const unsigned char *src,
 }
 
 
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 int yvex_conversion_plan_write_json(const yvex_conversion_options *options,
                                     const char *plan_out_path,
@@ -611,15 +605,7 @@ int yvex_conversion_plan_write_json(const yvex_conversion_options *options,
 }
 
 
-#include <errno.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
 
-#include <yvex/artifact.h>
-#include <yvex/backend.h>
-#include <yvex/gguf.h>
-#include <yvex/weights.h>
 
 #define CV_ALIGN 32ull
 
@@ -851,10 +837,7 @@ int yvex_conversion_report_plan_json(FILE *fp,
     return ferror(fp) ? YVEX_ERR_IO : YVEX_OK;
 }
 
-#include "gguf/families.h"
 
-#include <stdlib.h>
-#include <string.h>
 
 static char *wm_strdup(const char *s)
 {
@@ -1209,7 +1192,6 @@ const yvex_weight_mapping_info *yvex_weight_mapping_table_find_native(const yvex
 }
 
 
-#include <stdio.h>
 
 void yvex_weight_mapping_print_shape(const unsigned long long *dims, unsigned int rank)
 {
@@ -1227,10 +1209,7 @@ void yvex_weight_mapping_print_shape(const unsigned long long *dims, unsigned in
     printf("]");
 }
 
-#include "gguf/families.h"
 
-#include <stdio.h>
-#include <string.h>
 
 static int ds_set(char *target, size_t target_cap,
                   yvex_tensor_role *role,
@@ -1563,10 +1542,7 @@ int yvex_deepseek_adapter_map_name(const char *native_name,
     return 0;
 }
 
-#include "gguf/families.h"
 
-#include <stdio.h>
-#include <string.h>
 
 static int ends_with(const char *text, const char *suffix)
 {
@@ -1666,9 +1642,7 @@ int yvex_qwen_adapter_map_name(const char *native_name,
     return 0;
 }
 
-#include <string.h>
 
-#include <yvex/qtype_support.h>
 
 static const yvex_qtype_support_info qtype_rows[] = {
     {"F32",      1, 1, 1, 0, 1, "scalar emit supported; CPU/CUDA materialization only"},

@@ -12,6 +12,7 @@ test -x ./yvexd
 test -f yvex_cli.c
 test -f yvexd.c
 test -f yvex_core.c
+test -f yvex_fs.c
 test -f yvex_model_artifacts.c
 test -f yvex_source.c
 test -f cuda/cuda_backend.c

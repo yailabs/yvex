@@ -1,10 +1,8 @@
 /*
- * YVEX - CUDA device kernels
+ * cuda/cuda_kernels.cu - CUDA device kernels.
  *
- *
- * Purpose:
- *   Owns CUDA device code. Host-side backend validation and Driver API launch
- *   remain in cuda_ops.c so the public YVEX surface stays plain C.
+ * This file owns CUDA device code. Host-side validation and Driver API launch
+ * remain in cuda_ops.c.
  */
 
 extern "C" __global__ void yvex_embed_f32(const float *embedding,

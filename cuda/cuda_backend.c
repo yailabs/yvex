@@ -1,17 +1,15 @@
 /*
- * YVEX - CUDA backend object
+ * cuda/cuda_backend.c - CUDA backend object lifecycle.
  *
- *
- * Purpose:
- *   Attaches CUDA to the existing backend ABI. CUDA backend exposes CUDA device probing,
- *   memory stats, tensor movement, and one parity op without claiming full graph
- *   execution or inference.
+ * This file attaches CUDA to the backend ABI. Device kernels remain in
+ * cuda_kernels.cu.
  */
-#include "cuda_internal.h"
 
+#include "cuda_internal.h"
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+
 
 static int parse_device_index(const char *text, int *out, yvex_error *err)
 {

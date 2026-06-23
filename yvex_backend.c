@@ -1,5 +1,14 @@
-#include "yvex_internal.h"
+/*
+ * yvex_backend.c - Backend dispatch and CPU backend implementation.
+ *
+ * This file owns the backend vtable boundary and CPU tensor behavior. CUDA
+ * implementation details live under cuda/.
+ */
 
+#include "yvex_backend_private.h"
+
+#include <limits.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -330,10 +339,7 @@ int yvex_backend_op_embed(yvex_backend *backend,
     return backend->vtable->op_embed(backend, embedding, token_ids, token_count, out, err);
 }
 
-#include "yvex_internal.h"
 
-#include <stdlib.h>
-#include <string.h>
 
 int yvex_cpu_tensor_alloc(yvex_backend *backend,
                           const yvex_backend_tensor_desc *desc,
@@ -471,11 +477,7 @@ int yvex_backend_open_cpu_impl(yvex_backend **out,
     return YVEX_OK;
 }
 
-#include "yvex_internal.h"
 
-#include <limits.h>
-#include <stdint.h>
-#include <string.h>
 
 static int tensor_is_f32_bytes(const yvex_device_tensor *tensor,
                                unsigned long long elements)
@@ -562,12 +564,7 @@ int yvex_cpu_op_embed(yvex_backend *backend,
     return YVEX_OK;
 }
 
-#include "yvex_internal.h"
 
-#include <limits.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
 
 int yvex_backend_desc_is_valid(const yvex_backend_tensor_desc *desc, yvex_error *err)
 {

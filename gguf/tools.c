@@ -1,14 +1,24 @@
 /*
- * YVEX - GGUF template internals
+ * gguf/tools.c - GGUF template validation and controlled emission.
  *
+ * This file owns GGUF template comparison and selected-tensor GGUF writing.
  */
+
 #include <yvex/artifact.h>
 #include <yvex/gguf.h>
+#include <yvex/gguf_emit.h>
 #include <yvex/gguf_template.h>
 #include <yvex/model.h>
 #include <yvex/native_weights.h>
 #include <yvex/tensor.h>
 #include <yvex/tokenizer.h>
+#include <yvex/yvex.h>
+
+#include <errno.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 struct yvex_gguf_template {
     yvex_artifact *artifact;
@@ -48,12 +58,8 @@ void yvex_gguf_template_print_summary(const yvex_gguf_template *tmpl,
                                       const char *template_path);
 
 
-/*
- * YVEX - GGUF emitter internals
- */
-#include <stdio.h>
+/* Controlled GGUF emission */
 
-#include <yvex/gguf_emit.h>
 
 #define YVEX_GGUF_EMIT_ALIGNMENT 32ull
 #define YVEX_GGUF_EMIT_METADATA_COUNT 12ull
@@ -93,11 +99,7 @@ int yvex_gguf_emit_write_string(FILE *fp, const char *value, yvex_error *err, co
 int yvex_gguf_emit_pad_to_alignment(FILE *fp, unsigned long long alignment, yvex_error *err);
 
 
-#include <errno.h>
-#include <stdio.h>
-#include <string.h>
 
-#include <yvex/yvex.h>
 
 static int path_exists(const char *path)
 {
@@ -269,8 +271,6 @@ int yvex_gguf_emit_controlled(const yvex_gguf_emit_options *options,
 }
 
 
-#include <stdint.h>
-#include <string.h>
 
 #define GGUF_VALUE_UINT32 4u
 #define GGUF_VALUE_INT32 5u
@@ -413,7 +413,6 @@ int yvex_gguf_emit_write_metadata(FILE *fp,
 }
 
 
-#include <stdio.h>
 
 const char *yvex_gguf_emit_status_name(yvex_gguf_emit_status status)
 {
@@ -445,7 +444,6 @@ int yvex_gguf_emit_print_summary(const yvex_gguf_emit_summary *summary)
 }
 
 
-#include <string.h>
 
 int yvex_gguf_emit_pad_to_alignment(FILE *fp, unsigned long long alignment, yvex_error *err)
 {
@@ -521,8 +519,6 @@ int yvex_gguf_emit_write_tensor_payload(FILE *fp,
 }
 
 
-#include <stdlib.h>
-#include <string.h>
 
 static char *gt_strdup(const char *s)
 {
@@ -702,7 +698,6 @@ const yvex_gguf_template_issue *yvex_gguf_template_issue_at(const yvex_gguf_temp
 }
 
 
-#include <stdio.h>
 
 static int gt_same_shape(const yvex_tensor_info *tensor, const yvex_native_weight_info *native)
 {
@@ -786,7 +781,6 @@ int yvex_gguf_template_compare_native(yvex_gguf_template *tmpl,
 }
 
 
-#include <stdio.h>
 
 void yvex_gguf_template_print_summary(const yvex_gguf_template *tmpl,
                                       const char *mode,
@@ -812,8 +806,6 @@ void yvex_gguf_template_print_summary(const yvex_gguf_template *tmpl,
 }
 
 
-#include <stdlib.h>
-#include <string.h>
 
 static char *gt_copy_string_value(const yvex_gguf *gguf, const char *key)
 {

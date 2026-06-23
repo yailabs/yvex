@@ -1,16 +1,16 @@
 /*
- * YVEX - tokenizer internal state
+ * yvex_tokenizer.c - Fixture tokenizer metadata and prompt rendering.
  *
- *
- * Purpose:
- *   Shares the private tokenizer object layout across tokenizer layer tokenizer modules.
- *   This header is internal to the tokenizer implementation and is not installed as public API.
- *
- * Commands:
- *   - make test-core
- *   - build/tests/test_tokenizer
+ * This file owns deterministic tokenizer fixtures and prompt-template
+ * rendering. It does not implement model generation.
  */
+
 #include <yvex/tokenizer.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+#include <yvex/prompt.h>
 
 typedef struct {
     int present;
@@ -39,9 +39,6 @@ int yvex_tokenizer_load_specials(yvex_tokenizer *tokenizer, const yvex_gguf *ggu
 void yvex_tokenizer_free_metadata(yvex_tokenizer *tokenizer);
 
 
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
 
 static char *copy_string_value(const yvex_gguf_value *value, unsigned long long *out_len)
 {
@@ -235,8 +232,6 @@ void yvex_tokenizer_free_metadata(yvex_tokenizer *tokenizer)
 }
 
 
-#include <stdlib.h>
-#include <string.h>
 
 void yvex_tokens_free(yvex_tokens *tokens)
 {
@@ -304,10 +299,6 @@ int yvex_detokenize_ids(const yvex_tokenizer *tokenizer,
 }
 
 
-#include <limits.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
 
 void yvex_tokens_clear(yvex_tokens *tokens)
 {
@@ -511,9 +502,6 @@ int yvex_tokenizer_sep_id(const yvex_tokenizer *tokenizer, unsigned int *out)
 }
 
 
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
 
 static int read_array_info(const yvex_gguf_value *value,
                            yvex_gguf_value_type expected,
@@ -699,12 +687,7 @@ const yvex_token_info *yvex_tokenizer_token_at(const yvex_tokenizer *tokenizer,
     return &tokenizer->tokens[id];
 }
 
-#include <yvex/prompt.h>
 
-#include <limits.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
 
 typedef struct {
     char *data;

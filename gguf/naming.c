@@ -1,7 +1,13 @@
-#include <stdio.h>
-#include <string.h>
+/*
+ * gguf/naming.c - YVEX artifact naming helpers.
+ *
+ * This file owns deterministic artifact filename construction and validation.
+ */
 
 #include <yvex/artifact_naming.h>
+
+#include <stdio.h>
+#include <string.h>
 
 static int is_empty(const char *s)
 {
@@ -106,7 +112,6 @@ int yvex_artifact_name_suggest(char *out,
     return YVEX_OK;
 }
 
-#include <yvex/artifact_naming.h>
 
 int yvex_artifact_naming_report_translation_unit_anchor(void)
 {

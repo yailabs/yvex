@@ -4,9 +4,24 @@
  * This file owns operator-facing model artifact checks and registry helpers.
  * It does not implement model execution.
  */
-#include <stddef.h>
 
+#include <yvex/materialize_gate.h>
+#include <yvex/model_gate.h>
+#include <yvex/model_ref.h>
 #include <yvex/model_registry.h>
+#include <yvex/yvex.h>
+
+#include <ctype.h>
+#include <dirent.h>
+#include <errno.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 
 typedef struct {
     char *alias;
@@ -56,8 +71,6 @@ void yvex_model_registry_print_entry(const yvex_model_registry_entry *entry,
 void yvex_model_registry_print_scan_entry(const yvex_model_registry_entry *entry);
 
 
-#include <yvex/model_ref.h>
-#include <yvex/model_registry.h>
 
 char *yvex_model_ref_strdup(const char *s);
 int yvex_model_ref_copy_from_entry(yvex_model_ref *out,
@@ -66,18 +79,14 @@ int yvex_model_ref_copy_from_entry(yvex_model_ref *out,
                                    yvex_error *err);
 
 
-#include <yvex/yvex.h>
 
 int yvex_model_gate_sha256_hex(const unsigned char *data,
                                unsigned long long len,
                                char out_hex[65]);
 
 
-#include <yvex/yvex.h>
 
 
-#include <stdio.h>
-#include <string.h>
 
 static int yvex_model_gate_dtype_matches(const char *expected, yvex_dtype actual)
 {
@@ -378,8 +387,6 @@ int yvex_model_gate_json_translation_unit_anchor(void)
 }
 
 
-#include <stdint.h>
-#include <string.h>
 
 typedef struct {
     uint32_t h[8];
@@ -528,8 +535,6 @@ int yvex_model_gate_sha256_hex(const unsigned char *data,
 }
 
 
-#include <stdio.h>
-#include <string.h>
 
 static int path_exists(const char *path)
 {
@@ -956,10 +961,6 @@ int yvex_materialize_gate_report_translation_unit_anchor(void)
 }
 
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
 char *yvex_model_ref_strdup(const char *s)
 {
@@ -1180,12 +1181,6 @@ const char *yvex_model_ref_status_name(yvex_model_ref_status status)
 }
 
 
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 char *yvex_model_registry_strdup(const char *s)
 {
@@ -1678,12 +1673,6 @@ int yvex_model_registry_entry_derive_from_path(yvex_model_registry_entry *entry,
 }
 
 
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 static int read_file(const char *path, char **out, yvex_error *err)
 {
@@ -2059,7 +2048,6 @@ int yvex_model_registry_write_json_file(const yvex_model_registry *registry,
 }
 
 
-#include <stdio.h>
 
 void yvex_model_registry_print_entry(const yvex_model_registry_entry *entry,
                                      int selected)
@@ -2093,11 +2081,6 @@ void yvex_model_registry_print_scan_entry(const yvex_model_registry_entry *entry
 }
 
 
-#include <dirent.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
 
 static int append_scan_entry(yvex_model_registry_entry **entries,
                              unsigned long long *count,

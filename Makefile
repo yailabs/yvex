@@ -24,7 +24,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-layout test-docs-surface smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-layout test-code-natural test-docs-surface smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -52,6 +52,7 @@ YVEXD_BIN := ./yvexd
 CORE_SRCS := \
 	yvex_core.c \
 	yvex_artifact.c \
+	yvex_fs.c \
 	gguf/naming.c \
 	gguf/gguf.c \
 	gguf/tools.c \
@@ -271,12 +272,15 @@ test: test-core test-cli
 test-layout: tests/test_source_layout.sh
 	sh tests/test_source_layout.sh
 
+test-code-natural: tests/test_code_natural.sh
+	sh tests/test_code_natural.sh
+
 test-docs-surface: tests/test_docs_surface.sh
 	sh tests/test_docs_surface.sh
 
 smoke: test-cli
 
-check: check-docs check-guardrails lib cli server test test-layout test-docs-surface smoke
+check: check-docs check-guardrails lib cli server test test-layout test-code-natural test-docs-surface smoke
 	@echo "yvex check: ok"
 
 $(LIBYVEX): $(CORE_OBJS)

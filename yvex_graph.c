@@ -1,25 +1,17 @@
 /*
- * YVEX - Graph internals
+ * yvex_graph.c - Graph values, shapes, memory plans, and planner output.
  *
- *
- * Purpose:
- *   Shares private graph, memory plan, and planner structures across the graph planner
- *   implementation files. Public consumers see only opaque handles.
- *
- * Owns:
- *   - concrete yvex_graph storage
- *   - concrete yvex_memory_plan storage
- *   - concrete yvex_plan storage
- *
- * Does not own:
- *   - public API declarations
- *   - backend/session execution
- *
- * Commands:
- *   - make test-core
- *   - build/tests/test_graph
+ * This file owns graph construction and planning data structures. It does not
+ * execute graph operations.
  */
+
 #include <yvex/yvex.h>
+#include <stdlib.h>
+#include <limits.h>
+#include <yvex/op.h>
+#include <string.h>
+#include <yvex/graph.h>
+#include <stdint.h>
 
 typedef struct {
     unsigned int input_ids[4];
@@ -96,7 +88,6 @@ const yvex_graph_op_edges *yvex_graph_op_edges_at(const yvex_graph *graph,
                                                   unsigned long long index);
 
 
-#include <stdlib.h>
 
 void yvex_graph_close(yvex_graph *graph)
 {
@@ -183,7 +174,6 @@ const yvex_graph_missing_required *yvex_graph_missing_required_at(const yvex_gra
 }
 
 
-#include <stdlib.h>
 
 static const yvex_tensor_info *find_role(const yvex_tensor_table *table, yvex_tensor_role role)
 {
@@ -471,8 +461,6 @@ int yvex_graph_dump(const yvex_graph *graph, FILE *fp, yvex_error *err)
 }
 
 
-#include <limits.h>
-#include <stdlib.h>
 
 static int add_checked(unsigned long long a,
                        unsigned long long b,
@@ -682,7 +670,6 @@ int yvex_memory_plan_dump(const yvex_memory_plan *plan,
     return YVEX_OK;
 }
 
-#include <yvex/op.h>
 
 const char *yvex_op_kind_name(yvex_op_kind kind)
 {
@@ -740,8 +727,6 @@ const char *yvex_residency_name(yvex_residency residency)
 }
 
 
-#include <stdlib.h>
-#include <string.h>
 
 static int backend_allowed(const char *name)
 {
@@ -933,9 +918,7 @@ int yvex_plan_dump(const yvex_plan *plan, FILE *fp, yvex_error *err)
     return YVEX_OK;
 }
 
-#include <yvex/graph.h>
 
-#include <limits.h>
 
 int yvex_shape_product(const unsigned long long *dims,
                        unsigned int rank,
@@ -1022,9 +1005,6 @@ int yvex_shape_copy(unsigned long long *dst,
 }
 
 
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
 
 char *yvex_graph_strdup(const char *text)
 {

@@ -17,7 +17,7 @@
  * Expected:
  *   - exits 0 on success
  */
-#include "yvex_internal.h"
+#include "yvex_console_private.h"
 #include "test.h"
 
 int main(void)

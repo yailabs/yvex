@@ -11,7 +11,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "yvex_internal.h"
+#include "yvex_console_private.h"
 #include "test.h"
 
 static int exists_file(const char *path)
