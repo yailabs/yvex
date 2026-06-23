@@ -125,6 +125,7 @@ contains "$OUT_DIR/info.out" "native_weights: safetensors header inventory imple
 contains "$OUT_DIR/info.out" "gguf_template: contract validator implemented"
 contains "$OUT_DIR/info.out" "gguf_emit: controlled GGUF writer implemented"
 contains "$OUT_DIR/info.out" "conversion: open-weight selected tensor bridge implemented"
+contains "$OUT_DIR/info.out" "model_ref: alias-or-path resolver implemented"
 contains "$OUT_DIR/info.out" "model_registry: local model alias registry implemented"
 contains "$OUT_DIR/info.out" "quant_job: external quantization job manifest implemented"
 contains "$OUT_DIR/info.out" "qtype_support: conversion support matrix implemented"

@@ -37,11 +37,11 @@ one-shot diagnostics/tools
 `run` is accepted-only diagnostics until inference exists.
 `chat` is the current diagnostic REPL and the future canonical console.
 
-Model selection uses a local model registry through `yvex models`. Current
-one-shot commands still require explicit paths unless a command already
-documents otherwise; cross-command alias resolution belongs to CLI.MODELS.2.
-The implemented `yvex models` group is documented in
-`docs/cli-interface-spine.md`.
+Model selection uses a local model registry through `yvex models`. One-shot
+model commands now accept either an existing filesystem path or a registered
+model alias. REPL selected-model behavior and `yvexd --model ALIAS` remain
+future work. The implemented `yvex models` group and model-reference rules are
+documented in `docs/cli-interface-spine.md`.
 
 See `docs/cli-interface-spine.md`.
 
@@ -59,9 +59,9 @@ yvex cuda-info
 yvex chat --model FILE --backend cpu|cuda
 yvex convert plan --arch ARCH --native-source DIR --out-plan FILE
 yvex convert emit --arch ARCH --native-source DIR --tensor NAME --target-qtype QTYPE --out FILE
-yvex detokenize <path> --ids IDS
-yvex engine <path>
-yvex graph <path>
+yvex detokenize <path-or-alias> --ids IDS
+yvex engine <path-or-alias>
+yvex graph <path-or-alias>
 yvex gguf-emit controlled --out FILE [--template FILE] [--model-name NAME] [--arch ARCH] [--overwrite]
 yvex gguf-template inspect --template FILE
 yvex gguf-template validate --template FILE
@@ -72,9 +72,11 @@ yvex imatrix create --name NAME --arch NAME --imatrix FILE --format FORMAT --sta
 yvex imatrix inspect --manifest FILE
 yvex imatrix validate --manifest FILE
 yvex info
-yvex inspect <path>
-yvex materialize --model FILE --backend cpu|cuda
-yvex metadata <path>
+yvex inspect <path-or-alias>
+yvex materialize --model PATH_OR_ALIAS --backend cpu|cuda
+yvex materialize-gate check --model PATH_OR_ALIAS ...
+yvex metadata <path-or-alias>
+yvex model-gate check --model PATH_OR_ALIAS ...
 yvex models scan --root DIR [--registry FILE]
 yvex models add --path FILE [--alias ALIAS] [--registry FILE]
 yvex models list [--registry FILE]
@@ -87,19 +89,19 @@ yvex paths
 yvex paths --project DIR
 yvex paths --run
 yvex paths --run --create
-yvex plan <path>
-yvex prompt <path> --user TEXT
+yvex plan <path-or-alias>
+yvex prompt <path-or-alias> --user TEXT
 yvex quant-policy inspect --policy FILE
 yvex quant-policy validate --policy FILE [--template FILE]
 yvex quant-policy derive --template FILE --arch NAME --out FILE
 yvex qtype-support
-yvex run --model FILE --backend cpu|cuda --prompt TEXT
-yvex session <path> --backend cpu|cuda
+yvex run --model PATH_OR_ALIAS --backend cpu|cuda --prompt TEXT
+yvex session <path-or-alias> --backend cpu|cuda
 yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE
 yvex tensor-map --arch NAME --native-source DIR [--template FILE] [--tensor NAME] [--limit N] [--json]
-yvex tokenizer <path>
-yvex tokenize <path> --text TEXT
-yvex tensors <path>
+yvex tokenizer <path-or-alias>
+yvex tokenize <path-or-alias> --text TEXT
+yvex tensors <path-or-alias>
 yvex version
 yvexd --help
 yvexd --version
@@ -107,6 +109,40 @@ yvexd --host HOST --port PORT [--model FILE] [--backend cpu|cuda] [--one-request
 ```
 
 Current commands must stay backed by the command table in `cli/yvex_cli.c`.
+
+## Model Reference Resolver
+
+CLI.MODELS.2 adds alias-or-path resolution for one-shot model commands.
+
+Resolution order:
+
+```text
+1. existing filesystem path
+2. registered alias in the local model registry
+3. precise diagnostic with `models list` hint
+```
+
+Aliases now work in:
+
+```text
+inspect
+metadata
+tensors
+tokenizer
+tokenize
+detokenize
+prompt
+graph
+plan
+engine
+session
+run --model
+materialize --model
+model-gate check --model
+materialize-gate check --model
+```
+
+Aliases are not wired into `chat`/future REPL startup or `yvexd` yet.
 
 ## Current `yvex info`
 
@@ -125,6 +161,7 @@ gguf: metadata/tensor directory parsing implemented
 gguf_emit: controlled GGUF writer implemented
 conversion: open-weight selected tensor bridge implemented
 model_registry: local model alias registry implemented
+model_ref: alias-or-path resolver implemented
 qtype_support: conversion support matrix implemented
 model: descriptor-only implemented
 tokenizer: fixture encode/decode implemented

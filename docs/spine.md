@@ -62,7 +62,7 @@ docs/cli-runtime.md owns detailed command behavior.
 Current phase:
 
 ```text
-after CLI.MODELS.1
+after CLI.MODELS.2
 ```
 
 Current implementation commit:
@@ -74,7 +74,7 @@ current commit
 Next authorized milestone:
 
 ```text
-CLI.MODELS.2 - Model alias resolution for one-shot commands
+CLI.MODELS.3 - Model selection in canonical REPL
 ```
 
 Implemented surface:
@@ -687,8 +687,8 @@ Future commands are listed only under the delivery that implements them.
 | CLI.CONSOLE.0 | complete | Canonical REPL layout and line editing boundary |
 | CLI.MODELS.0 | complete | Local model registry and selection spine |
 | CLI.MODELS.1 | complete | Local model registry implementation |
-| CLI.MODELS.2 | next | Model alias resolution for one-shot commands |
-| CLI.MODELS.3 | planned | Model selection in canonical REPL |
+| CLI.MODELS.2 | complete | Model alias resolution for one-shot commands |
+| CLI.MODELS.3 | next | Model selection in canonical REPL |
 | CLI.MODELS.4 | planned | Model alias resolution in yvexd |
 | M3 | paused | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
@@ -2392,8 +2392,8 @@ DeepSeek alias can be selected
 models current shows selected alias
 models inspect works through alias
 registry files remain untracked under .yvex/
-one-shot commands are not changed yet
-yvexd alias resolution is not changed yet
+CLI.MODELS.1 did not itself change one-shot command resolution
+yvexd alias resolution remained unchanged
 no model execution claim
 ```
 
@@ -2402,13 +2402,20 @@ no model execution claim
 Status:
 
 ```text
-next
+complete
 ```
 
 Owns:
 
 ```text
+include/yvex/model_ref.h
+src/tools/model_ref.c
+src/tools/model_ref_report.c
+src/tools/model_ref_internal.h
+tests/test_model_ref.c
+tests/test_cli_model_aliases.sh
 --model PATH or --model ALIAS resolution
+PATH_OR_ALIAS positional model command resolution
 clear errors for missing aliases
 suggestions from registry
 one-shot command integration where scoped
@@ -2429,6 +2436,8 @@ Acceptance:
 one-shot commands can resolve registered aliases
 path behavior remains supported
 missing alias errors are precise
+chat / REPL startup remains unchanged
+yvexd alias resolution remains unchanged
 ```
 
 ### CLI.MODELS.3 - Model Selection in Canonical REPL
@@ -2436,7 +2445,7 @@ missing alias errors are precise
 Status:
 
 ```text
-planned
+next
 ```
 
 Owns:
@@ -3903,13 +3912,13 @@ git diff --check
 Next authorized milestone:
 
 ```text
-CLI.MODELS.2 - Model alias resolution for one-shot commands
+CLI.MODELS.3 - Model selection in canonical REPL
 ```
 
 Current active milestone:
 
 ```text
-CLI.MODELS.2 - Model alias resolution for one-shot commands
+CLI.MODELS.3 - Model selection in canonical REPL
 ```
 
 Planned runtime KV map:

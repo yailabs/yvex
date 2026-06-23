@@ -212,7 +212,7 @@ CLI.MODELS.0 documented the registry.
 CLI.MODELS.1 implements the local registry and `yvex models` command group.
 CLI.MODELS.1 default path is `.yvex/models.local.json`.
 CLI.MODELS.1 supports `--registry FILE` and `YVEX_MODELS_REGISTRY`.
-CLI.MODELS.2 will wire aliases into one-shot commands.
+CLI.MODELS.2 wires aliases into one-shot model commands.
 ```
 
 ## Model Alias Rules
@@ -375,7 +375,7 @@ Runs inspect through alias resolution.
 
 ## Model Resolution Rules
 
-Any command that accepts `--model` should eventually resolve:
+One-shot model commands resolve:
 
 ```text
 --model /path/to/file.gguf
@@ -389,6 +389,34 @@ Resolution order:
 1. existing path
 2. registered alias
 3. error with suggestions
+```
+
+Implemented in CLI.MODELS.2:
+
+```text
+inspect
+metadata
+tensors
+tokenizer
+tokenize
+detokenize
+prompt
+graph
+plan
+engine
+session
+run --model
+materialize --model
+model-gate check --model
+materialize-gate check --model
+```
+
+Not implemented yet:
+
+```text
+chat / future REPL startup
+yvexd --model
+implicit current selected model for one-shot commands
 ```
 
 If no model is passed:
@@ -817,8 +845,9 @@ CLI.CONSOLE.5 - True generation console after prefill/decode/sampler
 ```
 
 `CLI.MODELS.0` and `CLI.CONSOLE.0` are documentation/design. CLI.MODELS.1
-implements registry behavior. Later CLI.MODELS and CLI.CONSOLE waves extend
-alias resolution and interactive behavior.
+implements registry behavior. CLI.MODELS.2 implements one-shot alias
+resolution. Later CLI.MODELS and CLI.CONSOLE waves extend interactive and
+server behavior.
 
 ## 18. Relationship To M Ladder
 
@@ -866,6 +895,18 @@ models current prints selected alias or none
 models inspect resolves alias and runs lightweight GGUF inspect
 models remove deletes an alias and clears selected state when needed
 .yvex/models.local.json remains local and untracked
-one-shot command alias resolution remains future CLI.MODELS.2 work
+no inference claim
+```
+
+## 22. Acceptance For CLI.MODELS.2
+
+```text
+model reference resolver API exists
+one-shot model commands accept path or alias
+missing alias diagnostics point to models list
+alias path missing diagnostics are precise
+path behavior remains supported
+chat / REPL startup is unchanged
+yvexd alias resolution remains future CLI.MODELS.4 work
 no inference claim
 ```

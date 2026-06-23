@@ -9,7 +9,7 @@ a command, option, exit status, or visible runtime posture.
 ## Current Milestone
 
 ```text
-CLI.MODELS.1 - Local model registry implementation
+CLI.MODELS.2 - Model alias resolution for one-shot commands
 ```
 
 ## Operator References
@@ -33,10 +33,12 @@ docs/cli-interface-spine.md
 
 ## Model Selection Direction
 
-Current one-shot model commands still accept explicit model paths.
+Current one-shot model commands accept explicit model paths or registered model
+aliases.
 
-Local model registry management is implemented through `yvex models`. Alias
-resolution for other one-shot commands remains future CLI.MODELS.2 work. See:
+Local model registry management is implemented through `yvex models`.
+CLI.MODELS.2 wires aliases into one-shot model commands. REPL selection and
+`yvexd --model ALIAS` remain future work. See:
 
 ```text
 docs/cli-interface-spine.md
@@ -108,6 +110,7 @@ gguf_template: contract validator implemented
 gguf_emit: controlled GGUF writer implemented
 conversion: open-weight selected tensor bridge implemented
 model_registry: local model alias registry implemented
+model_ref: alias-or-path resolver implemented
 quant_job: external quantization job manifest implemented
 qtype_support: conversion support matrix implemented
 weight_mapping: tensor adapter contract implemented
@@ -135,36 +138,38 @@ execution, model execution, or inference.
 | Command | Usage | Status |
 | --- | --- | --- |
 | `backend` | `yvex backend cpu\|cuda` | implemented; backend status, memory, capabilities |
-| `chat` | `yvex chat --model FILE --backend cpu\|cuda` | implemented; current diagnostic REPL, target canonical interactive console |
+| `chat` | `yvex chat --model FILE --backend cpu\|cuda` | implemented; current diagnostic REPL, target canonical interactive console; aliases not wired here yet |
 | `commands` | `yvex commands` | implemented; command table dump |
 | `convert` | `yvex convert plan\|emit` | implemented; conversion plan and selected tensor GGUF emit |
 | `cuda-info` | `yvex cuda-info` | implemented; CUDA probe, exit 5 when unavailable |
-| `detokenize` | `yvex detokenize PATH --ids IDS` | implemented for fixture tokenizer path |
-| `engine` | `yvex engine PATH` | implemented; descriptor/runtime diagnostics |
-| `graph` | `yvex graph PATH [--seq N] [--ctx N]` | implemented; inspect-only graph |
+| `detokenize` | `yvex detokenize PATH_OR_ALIAS --ids IDS` | implemented for fixture tokenizer path |
+| `engine` | `yvex engine PATH_OR_ALIAS` | implemented; descriptor/runtime diagnostics |
+| `graph` | `yvex graph PATH_OR_ALIAS [--seq N] [--ctx N]` | implemented; inspect-only graph |
 | `gguf-emit` | `yvex gguf-emit controlled --out FILE` | implemented; controlled one-tensor GGUF emission |
 | `gguf-template` | `yvex gguf-template inspect\|validate --template FILE` | implemented; template contract validation |
 | `help` | `yvex help [COMMAND]` | implemented |
 | `imatrix` | `yvex imatrix create\|inspect\|validate` | implemented; calibration/imatrix manifest provenance |
 | `info` | `yvex info` | implemented; honest support posture |
-| `inspect` | `yvex inspect PATH` | implemented; descriptor-only GGUF/model summary |
-| `materialize` | `yvex materialize --model FILE --backend cpu\|cuda` | implemented; fixture weights copied into backend tensors |
-| `metadata` | `yvex metadata PATH` | implemented; GGUF metadata dump |
+| `inspect` | `yvex inspect PATH_OR_ALIAS` | implemented; descriptor-only GGUF/model summary |
+| `materialize` | `yvex materialize --model PATH_OR_ALIAS --backend cpu\|cuda` | implemented; fixture weights copied into backend tensors |
+| `materialize-gate` | `yvex materialize-gate check --model PATH_OR_ALIAS ...` | implemented; repeatable materialization gate and failure classes |
+| `metadata` | `yvex metadata PATH_OR_ALIAS` | implemented; GGUF metadata dump |
+| `model-gate` | `yvex model-gate check --model PATH_OR_ALIAS ...` | implemented; selected/full support-level gate |
 | `models` | `yvex models scan\|add\|list\|use\|current\|inspect\|remove` | implemented; local model registry management |
 | `native-weights` | `yvex native-weights --source DIR [--limit N] [--tensor NAME] [--json]` | implemented; safetensors header inventory |
 | `paths` | `yvex paths [--project DIR] [--run] [--create]` | implemented |
-| `plan` | `yvex plan PATH [--backend cpu\|cuda] [--seq N] [--ctx N]` | implemented; plan-only |
-| `prompt` | `yvex prompt PATH --user TEXT [--system TEXT] [--assistant TEXT] [--tokens]` | implemented; diagnostic renderer, not model generation |
+| `plan` | `yvex plan PATH_OR_ALIAS [--backend cpu\|cuda] [--seq N] [--ctx N]` | implemented; plan-only |
+| `prompt` | `yvex prompt PATH_OR_ALIAS --user TEXT [--system TEXT] [--assistant TEXT] [--tokens]` | implemented; diagnostic renderer, not model generation |
 | `quant-job` | `yvex quant-job create\|inspect\|validate` | implemented; external quantization job provenance |
 | `quant-policy` | `yvex quant-policy inspect\|validate --policy FILE` | implemented; declarative qtype policy manifest |
 | `qtype-support` | `yvex qtype-support` | implemented; conversion qtype support matrix |
-| `run` | `yvex run --model FILE --backend cpu\|cuda --prompt TEXT` | implemented; accepted-only diagnostic runtime path until inference exists |
-| `session` | `yvex session PATH --backend cpu\|cuda [--text TEXT] [--accept-tokens]` | implemented; diagnostics/token acceptance |
+| `run` | `yvex run --model PATH_OR_ALIAS --backend cpu\|cuda --prompt TEXT` | implemented; accepted-only diagnostic runtime path until inference exists |
+| `session` | `yvex session PATH_OR_ALIAS --backend cpu\|cuda [--text TEXT] [--accept-tokens]` | implemented; diagnostics/token acceptance |
 | `source-manifest` | `yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE` | implemented; source provenance JSON writer |
 | `tensor-map` | `yvex tensor-map --arch NAME --native-source DIR [--template FILE] [--tensor NAME] [--limit N] [--json]` | implemented; native tensor to role/template mapping |
-| `tokenize` | `yvex tokenize PATH --text TEXT` | implemented for fixture tokenizer path |
-| `tokenizer` | `yvex tokenizer PATH` | implemented; tokenizer metadata/support posture |
-| `tensors` | `yvex tensors PATH` | implemented; tensor table dump |
+| `tokenize` | `yvex tokenize PATH_OR_ALIAS --text TEXT` | implemented for fixture tokenizer path |
+| `tokenizer` | `yvex tokenizer PATH_OR_ALIAS` | implemented; tokenizer metadata/support posture |
+| `tensors` | `yvex tensors PATH_OR_ALIAS` | implemented; tensor table dump |
 | `version` | `yvex version` | implemented |
 
 ## `yvexd` Commands
@@ -232,9 +237,18 @@ make check-cuda
 
 ```sh
 export DS_GGUF="$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
+export DS_ALIAS="deepseek4-v4-flash-selected-embed"
 
 test -f "$DS_GGUF"
 sha256sum "$DS_GGUF"
+
+./yvex models add \
+  --path "$DS_GGUF" \
+  --sha256 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab \
+  --support-level selected-tensor-materialized
+
+./yvex models use "$DS_ALIAS"
+./yvex models current
 ```
 
 Expected SHA256:
@@ -246,9 +260,9 @@ Expected SHA256:
 ### 4. Parse and Inspect DeepSeek
 
 ```sh
-./yvex inspect "$DS_GGUF"
-./yvex metadata "$DS_GGUF"
-./yvex tensors "$DS_GGUF"
+./yvex inspect "$DS_ALIAS"
+./yvex metadata "$DS_ALIAS"
+./yvex tensors "$DS_ALIAS"
 ```
 
 Expected posture:
@@ -266,8 +280,8 @@ status: descriptor-only
 ### 5. Materialize DeepSeek Selected Tensor
 
 ```sh
-./yvex materialize --model "$DS_GGUF" --backend cpu
-./yvex materialize --model "$DS_GGUF" --backend cuda
+./yvex materialize --model "$DS_ALIAS" --backend cpu
+./yvex materialize --model "$DS_ALIAS" --backend cuda
 ```
 
 Expected posture:
@@ -283,7 +297,7 @@ Materialized weights do not imply executable inference.
 
 ```sh
 ./yvex model-gate check \
-  --model "$DS_GGUF" \
+  --model "$DS_ALIAS" \
   --label deepseek-v4-flash-selected-embedding \
   --family deepseek4 \
   --sha256 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab \
@@ -310,7 +324,7 @@ execution_ready: false
 
 ```sh
 ./yvex materialize-gate check \
-  --model "$DS_GGUF" \
+  --model "$DS_ALIAS" \
   --label deepseek-v4-flash-selected-embedding \
   --family deepseek4 \
   --sha256 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab \

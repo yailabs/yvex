@@ -1723,9 +1723,49 @@ deepseek4-v4-flash-selected-embed
 ```
 
 Registry files are local operator state. They may contain absolute model
-artifact paths and must not be committed. CLI.MODELS.1 does not make aliases
-work in `inspect`, `materialize`, `model-gate`, `materialize-gate`, or `yvexd`;
-that remains CLI.MODELS.2 and CLI.MODELS.4 work.
+artifact paths and must not be committed.
+
+## Model Reference API
+
+CLI.MODELS.2 adds `include/yvex/model_ref.h`.
+
+Implemented:
+
+```text
+yvex_model_ref_kind
+yvex_model_ref_status
+yvex_model_ref_options
+yvex_model_ref
+yvex_model_ref_resolve
+yvex_model_ref_clear
+yvex_model_ref_kind_name
+yvex_model_ref_status_name
+```
+
+The resolver accepts an existing path or a registered alias and returns a
+concrete model artifact path for one-shot commands.
+
+Resolution order:
+
+```text
+1. existing absolute or relative path
+2. registered local model alias
+3. not-found or alias-path-missing diagnostic
+```
+
+Status vocabulary:
+
+```text
+resolved
+not-found
+alias-path-missing
+registry-unavailable
+invalid
+```
+
+CLI.MODELS.2 wires aliases into one-shot model commands. It does not wire
+aliases into `yvexd`, and it does not make the current selected model implicit
+inside the REPL.
 
 ## Future Backend API
 

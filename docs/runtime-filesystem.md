@@ -275,6 +275,11 @@ YVEX_MODELS_REGISTRY=/path/to/models.local.json
 Registry files are machine-local and must not be committed. The repository
 ignores `.yvex/`.
 
+One-shot model commands use this registry for alias-or-path resolution. Command
+groups that mutate the registry, such as `yvex models`, may take `--registry
+FILE`; other one-shot commands use the default path or the
+`YVEX_MODELS_REGISTRY` override.
+
 The repository may include examples, but not the user's machine-specific
 registry.
 

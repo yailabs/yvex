@@ -241,7 +241,7 @@ static const yvex_cli_command yvex_commands[] = {
         "models",
         "Manage the local model alias registry.",
         "yvex models scan --root DIR [--registry FILE] | yvex models add --path FILE [--alias ALIAS] [--registry FILE] | yvex models list [--registry FILE] | yvex models use ALIAS [--registry FILE] | yvex models current [--registry FILE] | yvex models inspect ALIAS [--registry FILE] | yvex models remove ALIAS [--registry FILE]",
-        "Discovers, registers, lists, selects, inspects, and removes local model artifacts by alias. Registry entries are machine-local and do not change one-shot command alias resolution yet.",
+        "Discovers, registers, lists, selects, inspects, and removes local model artifacts by alias. Registry entries are machine-local; one-shot model commands resolve aliases through the model reference layer.",
         command_models,
     },
     {
@@ -497,13 +497,23 @@ static void print_metadata_value(const yvex_gguf_value *value)
 static int open_artifact_for_gguf(const char *path, yvex_artifact **artifact, yvex_error *err)
 {
     yvex_artifact_options options;
+    yvex_model_ref ref;
+    int rc;
 
     memset(&options, 0, sizeof(options));
-    options.path = path;
+    memset(&ref, 0, sizeof(ref));
+
+    rc = yvex_model_ref_resolve(&ref, path, NULL, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    options.path = ref.path;
     options.readonly = 1;
     options.map = 1;
 
-    return yvex_artifact_open(artifact, &options, err);
+    rc = yvex_artifact_open(artifact, &options, err);
+    yvex_model_ref_clear(&ref);
+    return rc;
 }
 
 static void close_tokenizer_context(yvex_cli_tokenizer_context *ctx)
@@ -1074,11 +1084,13 @@ static int command_detokenize(int argc, char **argv)
 static int command_engine(int argc, char **argv)
 {
     yvex_engine *engine = NULL;
+    yvex_model_ref model_ref;
     yvex_engine_summary summary;
     yvex_error err;
     int rc;
 
     yvex_error_clear(&err);
+    memset(&model_ref, 0, sizeof(model_ref));
 
     if (argc != 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
         if (argc == 3) {
@@ -1090,12 +1102,18 @@ static int command_engine(int argc, char **argv)
         return 2;
     }
 
-    rc = yvex_engine_open_path(&engine, argv[2], &err);
+    rc = yvex_model_ref_resolve(&model_ref, argv[2], NULL, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_engine_open_path(&engine, model_ref.path, &err);
     if (rc == YVEX_OK) {
         rc = yvex_engine_get_summary(engine, &summary, &err);
     }
     if (rc != YVEX_OK) {
         yvex_engine_close(engine);
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
@@ -1115,6 +1133,7 @@ static int command_engine(int argc, char **argv)
     printf("status: engine-descriptor\n");
 
     yvex_engine_close(engine);
+    yvex_model_ref_clear(&model_ref);
     return 0;
 }
 
@@ -1704,6 +1723,7 @@ static int command_info(int argc, char **argv)
     printf("gguf_template: contract validator implemented\n");
     printf("gguf_emit: controlled GGUF writer implemented\n");
     printf("conversion: open-weight selected tensor bridge implemented\n");
+    printf("model_ref: alias-or-path resolver implemented\n");
     printf("model_registry: local model alias registry implemented\n");
     printf("quant_job: external quantization job manifest implemented\n");
     printf("qtype_support: conversion support matrix implemented\n");
@@ -2041,6 +2061,7 @@ static int command_materialize_gate(int argc, char **argv)
     yvex_materialize_gate_options options;
     yvex_materialize_expected_tensor expected;
     yvex_materialize_gate_summary summary;
+    yvex_model_ref model_ref;
     yvex_error err;
     const char *report_out = NULL;
     unsigned long long value;
@@ -2056,6 +2077,7 @@ static int command_materialize_gate(int argc, char **argv)
     memset(&options, 0, sizeof(options));
     memset(&expected, 0, sizeof(expected));
     memset(&summary, 0, sizeof(summary));
+    memset(&model_ref, 0, sizeof(model_ref));
 
     if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
         print_command_help(stdout, find_command("materialize-gate"));
@@ -2169,6 +2191,12 @@ static int command_materialize_gate(int argc, char **argv)
     }
     if (options.repeat_count == 0) options.repeat_count = 1;
 
+    rc = yvex_model_ref_resolve(&model_ref, options.model_path, NULL, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    options.model_path = model_ref.path;
+
     rc = yvex_materialize_gate_check(&options, &summary, &err);
     print_materialize_gate_report(stdout, &options, &summary,
                                   rc == YVEX_OK ? NULL : yvex_error_message(&err));
@@ -2176,12 +2204,14 @@ static int command_materialize_gate(int argc, char **argv)
         FILE *fp = fopen(report_out, "wb");
         if (!fp) {
             fprintf(stderr, "yvex: cannot write report: %s\n", report_out);
+            yvex_model_ref_clear(&model_ref);
             return 1;
         }
         print_materialize_gate_report(fp, &options, &summary,
                                       rc == YVEX_OK ? NULL : yvex_error_message(&err));
         fclose(fp);
     }
+    yvex_model_ref_clear(&model_ref);
     return rc == YVEX_OK ? 0 : exit_for_status(rc);
 }
 
@@ -2224,6 +2254,7 @@ static int command_model_gate(int argc, char **argv)
     yvex_model_gate_options options;
     yvex_model_gate_expected_tensor expected;
     yvex_model_gate_summary summary;
+    yvex_model_ref model_ref;
     yvex_error err;
     const char *report_out = NULL;
     unsigned long long value;
@@ -2239,6 +2270,7 @@ static int command_model_gate(int argc, char **argv)
     memset(&options, 0, sizeof(options));
     memset(&expected, 0, sizeof(expected));
     memset(&summary, 0, sizeof(summary));
+    memset(&model_ref, 0, sizeof(model_ref));
 
     if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
         print_command_help(stdout, find_command("model-gate"));
@@ -2325,6 +2357,12 @@ static int command_model_gate(int argc, char **argv)
 
     options.expected_tensors = &expected;
     options.expected_tensor_count = 1;
+    rc = yvex_model_ref_resolve(&model_ref, options.model_path, NULL, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    options.model_path = model_ref.path;
+
     rc = yvex_model_gate_check(&options, &summary, &err);
     print_model_gate_report(stdout, &options, &summary,
                             rc == YVEX_OK ? NULL : yvex_error_message(&err));
@@ -2332,12 +2370,14 @@ static int command_model_gate(int argc, char **argv)
         FILE *fp = fopen(report_out, "wb");
         if (!fp) {
             fprintf(stderr, "yvex: cannot write report: %s\n", report_out);
+            yvex_model_ref_clear(&model_ref);
             return 1;
         }
         print_model_gate_report(fp, &options, &summary,
                                 rc == YVEX_OK ? NULL : yvex_error_message(&err));
         fclose(fp);
     }
+    yvex_model_ref_clear(&model_ref);
     return rc == YVEX_OK ? 0 : exit_for_status(rc);
 }
 
@@ -3703,6 +3743,7 @@ static int command_run(int argc, char **argv)
     yvex_chat_runtime runtime;
     yvex_chat_accept_result result;
     yvex_engine_summary engine_summary;
+    yvex_model_ref model_ref;
     yvex_metrics *metrics = NULL;
     yvex_trace *trace = NULL;
     yvex_trace_options trace_options;
@@ -3729,6 +3770,7 @@ static int command_run(int argc, char **argv)
     yvex_error_clear(&err);
     memset(&runtime, 0, sizeof(runtime));
     memset(&artifacts, 0, sizeof(artifacts));
+    memset(&model_ref, 0, sizeof(model_ref));
 
     if (argc == 2 || (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0))) {
         print_command_help(stdout, find_command("run"));
@@ -3833,14 +3875,22 @@ static int command_run(int argc, char **argv)
         return 2;
     }
 
+    rc = yvex_model_ref_resolve(&model_ref, model_path, NULL, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    model_path = model_ref.path;
+
     rc = yvex_metrics_create(&metrics, &err);
     if (rc != YVEX_OK) {
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
     rc = yvex_run_artifacts_prepare(&artifacts, save_run, run_dir, metrics_out, trace_out,
                                     profile_out, &err);
     if (rc != YVEX_OK) {
         yvex_metrics_close(metrics);
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
     memset(&trace_options, 0, sizeof(trace_options));
@@ -3850,6 +3900,7 @@ static int command_run(int argc, char **argv)
     rc = yvex_trace_open(&trace, &trace_options, &err);
     if (rc != YVEX_OK) {
         yvex_metrics_close(metrics);
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
@@ -3867,11 +3918,13 @@ static int command_run(int argc, char **argv)
                               yvex_error_message(&err), &err);
         yvex_trace_close(trace);
         yvex_metrics_close(metrics);
+        yvex_model_ref_clear(&model_ref);
         return 5;
     }
     if (rc != YVEX_OK) {
         yvex_trace_close(trace);
         yvex_metrics_close(metrics);
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
@@ -3886,6 +3939,7 @@ static int command_run(int argc, char **argv)
         yvex_chat_runtime_close(&runtime);
         yvex_trace_close(trace);
         yvex_metrics_close(metrics);
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
@@ -3913,6 +3967,7 @@ static int command_run(int argc, char **argv)
 
     yvex_chat_runtime_close(&runtime);
     yvex_metrics_close(metrics);
+    yvex_model_ref_clear(&model_ref);
     if (final_rc != 0) {
         return final_rc;
     }
@@ -3924,6 +3979,7 @@ static int command_session(int argc, char **argv)
     yvex_engine *engine = NULL;
     yvex_backend *backend = NULL;
     yvex_session *session = NULL;
+    yvex_model_ref model_ref;
     yvex_session_options session_options;
     yvex_session_summary summary;
     yvex_backend_options backend_options;
@@ -3940,6 +3996,7 @@ static int command_session(int argc, char **argv)
     memset(&session_options, 0, sizeof(session_options));
     memset(&backend_options, 0, sizeof(backend_options));
     memset(&tokens, 0, sizeof(tokens));
+    memset(&model_ref, 0, sizeof(model_ref));
     session_options.allow_partial_graph = 1;
 
     if (argc < 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
@@ -3980,8 +4037,14 @@ static int command_session(int argc, char **argv)
         return 2;
     }
 
-    rc = yvex_engine_open_path(&engine, argv[2], &err);
+    rc = yvex_model_ref_resolve(&model_ref, argv[2], NULL, &err);
     if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_engine_open_path(&engine, model_ref.path, &err);
+    if (rc != YVEX_OK) {
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
@@ -3995,10 +4058,12 @@ static int command_session(int argc, char **argv)
         printf("backend_status: unsupported\n");
         printf("reason: %s\n", yvex_error_message(&err));
         printf("status: session-backend-unsupported\n");
+        yvex_model_ref_clear(&model_ref);
         return 5;
     }
     if (rc != YVEX_OK) {
         yvex_engine_close(engine);
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
@@ -4006,6 +4071,7 @@ static int command_session(int argc, char **argv)
     if (rc != YVEX_OK) {
         yvex_backend_close(backend);
         yvex_engine_close(engine);
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
@@ -4015,6 +4081,7 @@ static int command_session(int argc, char **argv)
             yvex_session_close(session);
             yvex_backend_close(backend);
             yvex_engine_close(engine);
+            yvex_model_ref_clear(&model_ref);
             return print_yvex_error(&err, exit_for_status(rc));
         }
         tokenized = 1;
@@ -4025,6 +4092,7 @@ static int command_session(int argc, char **argv)
                 yvex_session_close(session);
                 yvex_backend_close(backend);
                 yvex_engine_close(engine);
+                yvex_model_ref_clear(&model_ref);
                 return print_yvex_error(&err, exit_for_status(rc));
             }
         }
@@ -4036,6 +4104,7 @@ static int command_session(int argc, char **argv)
         yvex_session_close(session);
         yvex_backend_close(backend);
         yvex_engine_close(engine);
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
@@ -4060,6 +4129,7 @@ static int command_session(int argc, char **argv)
     yvex_session_close(session);
     yvex_backend_close(backend);
     yvex_engine_close(engine);
+    yvex_model_ref_clear(&model_ref);
     return 0;
 }
 

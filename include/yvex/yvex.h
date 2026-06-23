@@ -47,6 +47,7 @@
 #include <yvex/memory_plan.h>
 #include <yvex/metrics.h>
 #include <yvex/model_gate.h>
+#include <yvex/model_ref.h>
 #include <yvex/model_registry.h>
 #include <yvex/model.h>
 #include <yvex/native_weights.h>

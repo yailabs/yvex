@@ -44,13 +44,15 @@ docs/cli-interface-spine.md
 
 ## Model Selection
 
-Current one-shot model commands accept explicit model paths.
+Current one-shot model commands accept explicit model paths or registered model
+aliases.
 
 The active DeepSeek selected artifact is documented in
 [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md). A local model registry is implemented
 through `./yvex models` so users can register and select models by alias instead
-of remembering absolute paths. Using those aliases directly in every one-shot
-command is planned next.
+of remembering absolute paths. Alias-or-path resolution is implemented for
+one-shot model commands such as `inspect`, `tensors`, `metadata`,
+`materialize`, `model-gate`, and `materialize-gate`.
 
 Example alias:
 
@@ -65,6 +67,8 @@ Typical registry flow:
 ./yvex models list
 ./yvex models use deepseek4-v4-flash-selected-embed
 ./yvex models current
+./yvex inspect deepseek4-v4-flash-selected-embed
+./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
 ```
 
 ## Quick Operator Files
