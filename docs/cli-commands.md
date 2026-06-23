@@ -9,7 +9,7 @@ a command, option, exit status, or visible runtime posture.
 ## Current Milestone
 
 ```text
-OWI.8 - open-weight conversion bridge
+OWI.9 - DeepSeek quantization job bridge
 ```
 
 ## Binaries
@@ -38,6 +38,7 @@ native_weights: safetensors header inventory implemented
 gguf_template: contract validator implemented
 gguf_emit: controlled GGUF writer implemented
 conversion: open-weight selected tensor bridge implemented
+quant_job: external quantization job manifest implemented
 qtype_support: conversion support matrix implemented
 weight_mapping: tensor adapter contract implemented
 quant_policy: manifest validator implemented
@@ -54,9 +55,10 @@ adds tensor mapping from native names to canonical roles and GGUF/template targe
 names. OWI.5 adds declarative quantization policy manifests. OWI.6 adds
 calibration/imatrix provenance manifests and policy compatibility checks. OWI.7
 adds controlled GGUF emission for one tiny F32 tensor. OWI.8 adds conversion
-plan and selected-tensor GGUF emit from safetensors. These do not add full
-DeepSeek conversion, imatrix generation, calibration execution, model execution,
-or inference.
+plan and selected-tensor GGUF emit from safetensors. OWI.9 adds an external
+quantization job manifest and DS4 bridge provenance surface. These do not add
+native YVEX quantization suite support, imatrix generation, calibration
+execution, model execution, or inference.
 
 ## `yvex` Commands
 
@@ -82,6 +84,7 @@ or inference.
 | `paths` | `yvex paths [--project DIR] [--run] [--create]` | implemented |
 | `plan` | `yvex plan PATH [--backend cpu\|cuda] [--seq N] [--ctx N]` | implemented; plan-only |
 | `prompt` | `yvex prompt PATH --user TEXT [--system TEXT] [--assistant TEXT] [--tokens]` | implemented |
+| `quant-job` | `yvex quant-job create\|inspect\|validate` | implemented; external quantization job provenance |
 | `quant-policy` | `yvex quant-policy inspect\|validate --policy FILE` | implemented; declarative qtype policy manifest |
 | `qtype-support` | `yvex qtype-support` | implemented; conversion qtype support matrix |
 | `run` | `yvex run --model FILE --backend cpu\|cuda --prompt TEXT` | implemented; accepted-only |

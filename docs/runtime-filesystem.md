@@ -181,6 +181,27 @@ files, are referenced read-only and must not be copied into the repository.
 Tiny fake `.dat` fixtures created by `tests/test_cli_imatrix.sh` live under
 `build/tests` and are disposable.
 
+OWI.9 quantization job manifests live outside the repository under:
+
+```text
+~/lab/manifests/deepseek/
+```
+
+DeepSeek generated or staged GGUF outputs live outside the repository under:
+
+```text
+~/lab/models/gguf/deepseek/
+```
+
+External quantization logs live outside the repository under:
+
+```text
+~/lab/artifacts/quant-logs/
+```
+
+`tests/test_cli_quant_job.sh` creates disposable fake job files under
+`build/tests/quant-job-cli`.
+
 ## Failure Behavior
 
 ```text

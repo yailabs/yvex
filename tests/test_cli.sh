@@ -30,6 +30,7 @@
 #   - yvex gguf-template
 #   - yvex gguf-emit
 #   - yvex tensor-map
+#   - yvex quant-job
 #   - yvex quant-policy
 #   - yvex imatrix
 #   - yvex plan
@@ -121,6 +122,7 @@ contains "$OUT_DIR/info.out" "native_weights: safetensors header inventory imple
 contains "$OUT_DIR/info.out" "gguf_template: contract validator implemented"
 contains "$OUT_DIR/info.out" "gguf_emit: controlled GGUF writer implemented"
 contains "$OUT_DIR/info.out" "conversion: open-weight selected tensor bridge implemented"
+contains "$OUT_DIR/info.out" "quant_job: external quantization job manifest implemented"
 contains "$OUT_DIR/info.out" "qtype_support: conversion support matrix implemented"
 contains "$OUT_DIR/info.out" "weight_mapping: tensor adapter contract implemented"
 contains "$OUT_DIR/info.out" "quant_policy: manifest validator implemented"
@@ -156,6 +158,7 @@ contains "$OUT_DIR/commands.out" "  native-weights"
 contains "$OUT_DIR/commands.out" "  paths"
 contains "$OUT_DIR/commands.out" "  plan"
 contains "$OUT_DIR/commands.out" "  prompt"
+contains "$OUT_DIR/commands.out" "  quant-job"
 contains "$OUT_DIR/commands.out" "  quant-policy"
 contains "$OUT_DIR/commands.out" "  qtype-support"
 contains "$OUT_DIR/commands.out" "  run"
@@ -223,6 +226,9 @@ contains "$OUT_DIR/help_gguf_emit.out" "usage: yvex gguf-emit"
 
 run_ok help_tensor_map "$YVEX_BIN" help tensor-map
 contains "$OUT_DIR/help_tensor_map.out" "usage: yvex tensor-map"
+
+run_ok help_quant_job "$YVEX_BIN" help quant-job
+contains "$OUT_DIR/help_quant_job.out" "usage: yvex quant-job"
 
 run_ok help_quant_policy "$YVEX_BIN" help quant-policy
 contains "$OUT_DIR/help_quant_policy.out" "usage: yvex quant-policy"

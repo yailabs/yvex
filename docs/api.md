@@ -1508,6 +1508,44 @@ sampler
 Future headers may be added only when the corresponding implementation, tests,
 failure behavior, and documentation are delivered in the same wave.
 
+## Quant Job API
+
+OWI.9 adds `include/yvex/quant_job.h`.
+
+Implemented:
+
+```text
+yvex_quant_job_status
+yvex_quant_job_tool
+yvex_quant_job_options
+yvex_quant_job_summary
+yvex_quant_job_write_json
+yvex_quant_job_validate
+yvex_quant_job_status_name
+yvex_quant_job_tool_name
+```
+
+Scope:
+
+```text
+external quantization job manifest
+DS4-informed command provenance
+tool/source/template/imatrix/output existence summary
+output GGUF required only when status is succeeded
+generated artifact paths stay outside the repository
+```
+
+Non-goals:
+
+```text
+no native YVEX quantization suite
+no arbitrary shell execution by default
+no DeepSeek inference
+no prefill/decode
+no benchmark claim
+no execution_ready true
+```
+
 ## Future Backend API
 
 Backend APIs belong to `docs/backend-contract.md`. Generic backend headers must

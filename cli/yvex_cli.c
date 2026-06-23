@@ -95,6 +95,7 @@ static int command_native_weights(int argc, char **argv);
 static int command_paths(int argc, char **argv);
 static int command_plan(int argc, char **argv);
 static int command_prompt(int argc, char **argv);
+static int command_quant_job(int argc, char **argv);
 static int command_quant_policy(int argc, char **argv);
 static int command_qtype_support(int argc, char **argv);
 static int command_run(int argc, char **argv);
@@ -253,6 +254,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex prompt <path> [--system TEXT] --user TEXT [--assistant TEXT] [--tokens]",
         "Renders the YVEX default prompt format. Arbitrary Jinja chat templates are not executed in E0.",
         command_prompt,
+    },
+    {
+        "quant-job",
+        "Create, inspect, or validate an external quantization job manifest.",
+        "yvex quant-job create --name NAME --arch ARCH --tool TOOL --tool-path FILE --native-source DIR --template FILE --out-gguf FILE --log FILE --status STATUS --command TEXT --out FILE | yvex quant-job inspect|validate --manifest FILE",
+        "Records DS4-informed or external quantization command provenance. It does not run arbitrary shell commands, implement quantizers, infer, or claim model execution.",
+        command_quant_job,
     },
     {
         "quant-policy",
@@ -1646,6 +1654,7 @@ static int command_info(int argc, char **argv)
     printf("gguf_template: contract validator implemented\n");
     printf("gguf_emit: controlled GGUF writer implemented\n");
     printf("conversion: open-weight selected tensor bridge implemented\n");
+    printf("quant_job: external quantization job manifest implemented\n");
     printf("qtype_support: conversion support matrix implemented\n");
     printf("weight_mapping: tensor adapter contract implemented\n");
     printf("quant_policy: manifest validator implemented\n");
@@ -2338,6 +2347,151 @@ static int command_quant_policy(int argc, char **argv)
 
     fprintf(stderr, "yvex: unknown quant-policy subcommand: %s\n", argv[2]);
     return 2;
+}
+
+static int parse_quant_job_create_options(int argc, char **argv,
+                                          yvex_quant_job_options *options,
+                                          const char **out_path)
+{
+    int i;
+
+    memset(options, 0, sizeof(*options));
+    *out_path = NULL;
+    for (i = 3; i < argc; ++i) {
+        if (i + 1 >= argc) {
+            fprintf(stderr, "yvex: quant-job option requires a value: %s\n", argv[i]);
+            return 2;
+        }
+        if (strcmp(argv[i], "--name") == 0) options->name = argv[++i];
+        else if (strcmp(argv[i], "--arch") == 0) options->architecture = argv[++i];
+        else if (strcmp(argv[i], "--tool") == 0) options->tool = yvex_quant_job_tool_from_name(argv[++i]);
+        else if (strcmp(argv[i], "--tool-path") == 0) options->tool_path = argv[++i];
+        else if (strcmp(argv[i], "--source-manifest") == 0) options->source_manifest_path = argv[++i];
+        else if (strcmp(argv[i], "--native-source") == 0) options->native_source_dir = argv[++i];
+        else if (strcmp(argv[i], "--template") == 0) options->template_path = argv[++i];
+        else if (strcmp(argv[i], "--quant-policy") == 0) options->quant_policy_path = argv[++i];
+        else if (strcmp(argv[i], "--imatrix-manifest") == 0) options->imatrix_manifest_path = argv[++i];
+        else if (strcmp(argv[i], "--imatrix") == 0) options->imatrix_path = argv[++i];
+        else if (strcmp(argv[i], "--out-gguf") == 0) options->out_gguf_path = argv[++i];
+        else if (strcmp(argv[i], "--log") == 0) options->log_path = argv[++i];
+        else if (strcmp(argv[i], "--status") == 0) options->status = yvex_quant_job_status_from_name(argv[++i]);
+        else if (strcmp(argv[i], "--command") == 0) options->command = argv[++i];
+        else if (strcmp(argv[i], "--out") == 0) *out_path = argv[++i];
+        else {
+            fprintf(stderr, "yvex: unknown quant-job option: %s\n", argv[i]);
+            return 2;
+        }
+    }
+    return 0;
+}
+
+static int parse_quant_job_manifest_option(int argc, char **argv, const char **manifest_path)
+{
+    int i;
+
+    *manifest_path = NULL;
+    for (i = 3; i < argc; ++i) {
+        if (i + 1 >= argc) {
+            fprintf(stderr, "yvex: quant-job option requires a value: %s\n", argv[i]);
+            return 2;
+        }
+        if (strcmp(argv[i], "--manifest") == 0) *manifest_path = argv[++i];
+        else {
+            fprintf(stderr, "yvex: unknown quant-job option: %s\n", argv[i]);
+            return 2;
+        }
+    }
+    return 0;
+}
+
+static void print_quant_job_summary(const char *mode,
+                                    const char *path,
+                                    const yvex_quant_job_summary *summary)
+{
+    printf("quant job: %s\n", mode);
+    if (path) printf("manifest: %s\n", path);
+    printf("name: %s\n", summary->name ? summary->name : "");
+    printf("architecture: %s\n", summary->architecture ? summary->architecture : "");
+    printf("tool: %s\n", yvex_quant_job_tool_name(summary->tool));
+    printf("tool_path: %s\n", summary->tool_path ? summary->tool_path : "");
+    printf("native_source: %s\n", summary->native_source_dir ? summary->native_source_dir : "");
+    printf("template: %s\n", summary->template_path ? summary->template_path : "");
+    printf("out_gguf: %s\n", summary->out_gguf_path ? summary->out_gguf_path : "");
+    printf("log: %s\n", summary->log_path ? summary->log_path : "");
+    printf("tool_exists: %s\n", summary->tool_exists ? "yes" : "no");
+    printf("source_exists: %s\n", summary->source_exists ? "yes" : "no");
+    printf("template_exists: %s\n", summary->template_exists ? "yes" : "no");
+    printf("imatrix_exists: %s\n", summary->imatrix_exists ? "yes" : "no");
+    printf("output_exists: %s\n", summary->output_exists ? "yes" : "no");
+    printf("status: %s\n", yvex_quant_job_status_name(summary->status));
+}
+
+static int command_quant_job(int argc, char **argv)
+{
+    yvex_quant_job_summary summary;
+    yvex_error err;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&summary, 0, sizeof(summary));
+
+    if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        print_command_help(stdout, find_command("quant-job"));
+        return 0;
+    }
+    if (argc < 3 || (strcmp(argv[2], "create") != 0 &&
+                     strcmp(argv[2], "inspect") != 0 &&
+                     strcmp(argv[2], "validate") != 0)) {
+        fprintf(stderr, "yvex: quant-job requires create, inspect, or validate\n");
+        return 2;
+    }
+
+    if (strcmp(argv[2], "create") == 0) {
+        yvex_quant_job_options options;
+        const char *out_path = NULL;
+
+        rc = parse_quant_job_create_options(argc, argv, &options, &out_path);
+        if (rc != 0) return rc;
+        if (!options.name || !options.architecture || !options.tool_path ||
+            !options.native_source_dir || !options.template_path ||
+            !options.out_gguf_path || !options.log_path || !options.command ||
+            !out_path || options.tool == YVEX_QUANT_JOB_TOOL_UNKNOWN ||
+            options.status == YVEX_QUANT_JOB_STATUS_UNKNOWN) {
+            fprintf(stderr, "yvex: quant-job create requires --name --arch --tool --tool-path --native-source --template --out-gguf --log --status --command --out\n");
+            return 2;
+        }
+        rc = yvex_quant_job_write_json(out_path, &options, &summary, &err);
+        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        printf("quant job: written\n");
+        printf("name: %s\n", summary.name);
+        printf("architecture: %s\n", summary.architecture);
+        printf("tool: %s\n", yvex_quant_job_tool_name(summary.tool));
+        printf("tool_exists: %s\n", summary.tool_exists ? "yes" : "no");
+        printf("source_exists: %s\n", summary.source_exists ? "yes" : "no");
+        printf("template_exists: %s\n", summary.template_exists ? "yes" : "no");
+        printf("imatrix_exists: %s\n", summary.imatrix_exists ? "yes" : "no");
+        printf("output_exists: %s\n", summary.output_exists ? "yes" : "no");
+        printf("status: %s\n", yvex_quant_job_status_name(summary.status));
+        printf("out: %s\n", out_path);
+        printf("status: quant-job-written\n");
+        return 0;
+    }
+
+    {
+        const char *manifest_path = NULL;
+
+        rc = parse_quant_job_manifest_option(argc, argv, &manifest_path);
+        if (rc != 0) return rc;
+        if (!manifest_path) {
+            fprintf(stderr, "yvex: quant-job %s requires --manifest FILE\n", argv[2]);
+            return 2;
+        }
+        rc = yvex_quant_job_validate(manifest_path, &summary, &err);
+        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        print_quant_job_summary(argv[2], manifest_path, &summary);
+        printf("status: quant-job-%s\n", strcmp(argv[2], "validate") == 0 ? "valid" : "manifest");
+        return 0;
+    }
 }
 
 static int command_paths(int argc, char **argv)

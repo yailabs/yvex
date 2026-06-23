@@ -50,6 +50,7 @@
 #include <yvex/planner.h>
 #include <yvex/profile.h>
 #include <yvex/prompt.h>
+#include <yvex/quant_job.h>
 #include <yvex/quant_policy.h>
 #include <yvex/qtype_support.h>
 #include <yvex/server.h>

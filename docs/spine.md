@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after RUNTIME.KV.0
+after OWI.9
 ```
 
 Current implementation commit:
@@ -218,6 +218,13 @@ Open-weight conversion bridge:
   src/tools/adapters/qwen_adapter.c
   src/tools/quantizers/q8_0_quant.c
 
+External quantization job bridge:
+  include/yvex/quant_job.h
+  src/tools/quant_job.c
+  src/tools/quant_job_json.c
+  src/tools/quant_job_report.c
+  src/tools/quant_job_internal.h
+
 Weight mapping adapter contract:
   include/yvex/weight_mapping.h
   src/tools/weight_mapping.c
@@ -242,7 +249,7 @@ Calibration / imatrix manifest:
 
 CLI:
   cli/yvex_cli.c
-  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat, source-manifest, native-weights, gguf-template, gguf-emit, tensor-map, qtype-support, convert, quant-policy, imatrix
+  implemented commands: info, help, commands, version, paths, inspect, metadata, tensors, tokenizer, tokenize, detokenize, prompt, graph, plan, backend, cuda-info, engine, session, run, chat, source-manifest, native-weights, gguf-template, gguf-emit, tensor-map, qtype-support, convert, quant-job, quant-policy, imatrix
   implemented binaries: yvex, yvexd
 
 Tests:
@@ -282,6 +289,7 @@ Tests:
   tests/test_qwen_adapter.c
   tests/test_conversion_plan.c
   tests/test_conversion_payload.c
+  tests/test_quant_job.c
   tests/test_quant_policy.c
   tests/test_imatrix.c
   tests/test_gguf_emit.c
@@ -296,6 +304,7 @@ Tests:
   tests/test_cli_source_manifest.sh
   tests/test_cli_tensor_map.sh
   tests/test_cli_convert.sh
+  tests/test_cli_quant_job.sh
   tests/test_cli_quant_policy.sh
   tests/test_cli_imatrix.sh
   tests/test_cuda_info.c
@@ -559,15 +568,16 @@ OWI.4 - Tensor mapping/architecture adapter contract
 OWI.5 - Quantization policy manifest
 OWI.6 - Calibration/imatrix contract
 OWI.7 - First YVEX-owned GGUF emission from controlled source
-OWI.8 - DeepSeek V4 Flash conversion bridge
+OWI.8 - Open Weight Conversion Bridge, Qwen-first / DeepSeek-ready
+OWI.9 - DeepSeek V4 Flash GGUF Quantization and Emission Bridge
 ```
 
 OWI non-goals until their named wave:
 
 ```text
-running DeepSeek quantization
+running arbitrary external quantization by default
 downloading model weights
-generating a DeepSeek GGUF
+claiming generated DeepSeek GGUF without command proof
 materializing DeepSeek
 copying DS4 code into YVEX
 implementing safetensors parsing
@@ -598,6 +608,7 @@ native-weights
 paths
 plan
 prompt
+quant-job
 run
 session
 source-manifest
@@ -640,8 +651,9 @@ Future commands are listed only under the delivery that implements them.
 | OWI.6 | complete | Calibration and imatrix contract |
 | OWI.7 | complete | First YVEX-owned GGUF emission from controlled source |
 | OWI.8 | complete | Open Weight Conversion Bridge, Qwen-first / DeepSeek-ready |
-| RUNTIME.KV.0 | complete | KV cache residency and benchmark policy |
+| OWI.9 | complete | DeepSeek V4 Flash GGUF Quantization and Emission Bridge |
 | M1 | next | Real model conversion/materialization gate |
+| RUNTIME.KV.0 | planned | KV cache residency and benchmark policy |
 | M2 | paused | Real-model materialization hardening |
 | M3 | paused | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
@@ -2162,14 +2174,6 @@ KV allocation policy if required
 logits precondition path
 ```
 
-Depends on:
-
-```text
-RUNTIME.KV.0 KV residency policy
-future RUNTIME.KV.1 static KV estimator
-future RUNTIME.KV.2 CUDA KV allocation proof if CUDA prefill is targeted
-```
-
 Does not own:
 
 ```text
@@ -2200,15 +2204,6 @@ decode step structure
 logits buffer lifecycle
 next-token precondition
 backend op readiness checks
-```
-
-Depends on:
-
-```text
-real KV allocation
-real KV residency status
-logits buffer lifecycle
-backend attention readiness
 ```
 
 Does not own:
@@ -2897,10 +2892,10 @@ no model files committed
 Handoff:
 
 ```text
-M1 resumes using provenance-controlled DeepSeek GGUF/materialization path
+OWI.9 closes Open Weight Intake with DeepSeek GGUF production/staging provenance
 ```
 
-### RUNTIME.KV.0 - KV Cache Residency and Benchmark Policy
+### OWI.9 - DeepSeek V4 Flash GGUF Quantization and Emission Bridge
 
 Status:
 
@@ -2911,38 +2906,40 @@ complete
 Owns:
 
 ```text
-KV cache sizing formula
-KV residency tiers
-hot/cold KV vocabulary
-future KV status vocabulary
-benchmark policy for KV work
-allowed and forbidden KV measurements
-future KV experiment ladder
-M6/M7 dependency notes
+DeepSeek external quantization job manifest
+DS4 deepseek4-quantize discovery and local build proof
+DeepSeek GGUF output path convention
+quantization command provenance
+template path provenance
+imatrix path/status provenance
+YVEX quant-job create/inspect/validate CLI
+clean missing-output handling for non-succeeded jobs
+clean missing-imatrix reporting
 ```
 
 Does not own:
 
 ```text
-KV cache implementation
-CUDA KV allocation
-PagedAttention or vAttention
-CPU/RAM spill implementation
-NVMe offload implementation
-KV quantization
-attention kernels
-prefill
-decode
-logits
+native YVEX Q2_K/IQ2_XXS quantization suite
+replacing DS4 quantizer
+copying DS4 code into YVEX runtime
+DeepSeek inference
+prefill/decode
 sampler
-inference benchmark claims
-new public C API
+KV cache implementation
+server completions
+benchmark claims
+committing generated DeepSeek GGUF
+committing DeepSeek safetensors
+committing imatrix .dat files
 ```
 
 Handoff:
 
 ```text
-M1 resumes after OWI completion and KV residency policy stabilization
+M1 resumes with a provenance-controlled DeepSeek quantization job bridge and
+clear generated-artifact path, whether the external GGUF exists or is blocked
+by missing imatrix/output diagnostics.
 ```
 
 ## 4. Completed Deliveries
@@ -2971,7 +2968,7 @@ M1 resumes after OWI completion and KV residency policy stabilization
 | K0 | 6a8e17b | Added yvexd server shell, HTTP status router, health/metrics/model catalog endpoints, unsupported generation endpoint response, and tests. |
 | L0 | afc8536 | Added CUDA backend attachment, device probe, tensor allocation/read/write/copy, F32 embed op, CPU/CUDA parity proof, cuda-info CLI, and CUDA targets/tests. |
 | M0 | current commit | Added fixture weight materialization into backend tensors, CPU/CUDA materialization proof, materialized weight table API, materialize CLI, and tests. |
-| RUNTIME.KV.0 | current commit | Added KV cache residency, sizing, benchmark policy, future status vocabulary, and M6/M7 dependency doctrine. |
+| OWI.9 | current commit | Added external DeepSeek quantization job bridge, DS4 tool discovery/build proof, command provenance, and quant-job CLI/tests. |
 
 Current implemented CLI command set:
 
@@ -2988,12 +2985,19 @@ gguf-emit
 help
 info
 inspect
+imatrix
 materialize
 metadata
+native-weights
 paths
 prompt
 plan
+quant-job
+quant-policy
+qtype-support
 run
+source-manifest
+tensor-map
 tokenize
 tokenizer
 tensors
@@ -3030,17 +3034,17 @@ Current active milestone:
 M1 - Real model conversion/materialization gate
 ```
 
-Previous runtime policy milestone:
+Planned later milestone:
 
 ```text
 RUNTIME.KV.0 - KV cache residency and benchmark policy
 ```
 
-M1 resumes after RUNTIME.KV.0. The official source/provenance contract, native
+M1 resumes after OWI.9. The official source/provenance contract, native
 inventory, GGUF template contract, tensor mapping adapter, quantization policy
 manifest, imatrix manifest contract, controlled GGUF emission proof, qtype
-support matrix, selected-tensor conversion bridge, and KV residency policy now
-exist.
+support matrix, selected-tensor conversion bridge, and DeepSeek quantization job
+bridge now exist.
 
 Model support waves must produce:
 
@@ -3241,167 +3245,6 @@ Tokenization and prompt failures do not mutate session state.
 Backend failures invalidate only the affected in-flight outputs unless documented.
 Run artifacts are execution-local evidence.
 ```
-
-### KV Cache Residency Doctrine
-
-Implemented by:
-
-```text
-H0: KV unavailable skeleton
-RUNTIME.KV.0: KV residency and benchmark policy
-future RUNTIME.KV.1+: estimator, allocation, paging, spill, and quantization experiments
-M6: prefill runtime uses real KV allocation policy
-M7: decode/logits runtime depends on real KV residency
-```
-
-Rules:
-
-```text
-KV cache is session state.
-KV cache is not model weight storage.
-KV cache is not an Open Weight Intake artifact.
-Hot decode KV targets GPU memory first.
-GPU-paged/block KV is the first scalable future direction.
-Host RAM spill is a fallback tier, not the default interactive path.
-NVMe/SSD is cold/offline/persistence tier unless proven otherwise.
-CPU/GPU hardware caches such as L2/shared/registers are kernel staging, not session residency.
-KV benchmark claims are forbidden before real prefill/decode exist.
-```
-
-KV cache size estimate:
-
-```text
-bytes =
-  2
-  * layer_count
-  * sequence_length
-  * kv_head_count
-  * head_dim
-  * bytes_per_element
-  * active_sequence_count
-```
-
-Where:
-
-```text
-2 = K and V
-layer_count = transformer layers with attention KV
-sequence_length = current or maximum retained context
-kv_head_count = number of K/V heads, affected by MQA/GQA
-head_dim = per-head dimension
-bytes_per_element = F16/BF16/FP8/quantized bytes
-active_sequence_count = batch or concurrent sessions
-```
-
-Notes:
-
-```text
-KV cache grows linearly with context length.
-KV cache grows linearly with active sessions.
-GQA/MQA reduce kv_head_count.
-KV memory competes with model weights for accelerator memory.
-Long context can become KV-bound even if model weights fit.
-```
-
-KV residency tiers:
-
-```text
-Tier 0 - GPU hot KV:
-  Active decode KV blocks live in GPU memory.
-  This is the default target for interactive serving.
-
-Tier 1 - GPU paged/block KV:
-  KV is managed in pages/blocks on GPU.
-  Future PagedAttention-style or equivalent allocator.
-  Used to reduce fragmentation and support dynamic sequence growth.
-
-Tier 2 - Host RAM spill:
-  Cold or overflow KV blocks may live in pinned host memory.
-  Expected latency and bandwidth penalty.
-  Only valid after explicit benchmark proof.
-
-Tier 3 - NVMe cold KV:
-  Persistent/cold/offline cache only.
-  Not a hot interactive decode tier unless explicitly proven.
-  Used for future experiments, checkpointing, or offline workloads.
-
-Kernel-local staging:
-  Registers/shared memory/L2 are execution staging areas used by attention kernels.
-  They are not persistent KV session residency.
-```
-
-Future KV status vocabulary:
-
-```text
-kv_status:
-  unavailable
-  planned
-  allocated
-  gpu_hot
-  gpu_paged
-  host_spill
-  nvme_cold
-  quantized
-  failed
-```
-
-Current active status:
-
-```text
-kv_status: unavailable
-```
-
-No CLI output may claim future statuses until implementation exists.
-
-Allowed KV measurements now:
-
-```text
-static KV size estimates
-VRAM free/total snapshot
-model weight bytes
-planned context length
-theoretical KV bytes
-allocator simulation
-no decode timing
-```
-
-Allowed only after real prefill/decode:
-
-```text
-prefill KV allocation time
-decode token latency
-KV read bandwidth pressure
-KV page allocation overhead
-KV spill hit/miss rate
-KV quantization quality impact
-```
-
-Forbidden now:
-
-```text
-decode TPS
-TTFT
-tokens/sec generation
-KV cache speedup claim
-SSD decode viability claim
-RAM offload viability claim
-PagedAttention performance claim
-vAttention performance claim
-```
-
-Future KV ladder:
-
-```text
-RUNTIME.KV.0 - KV cache residency and benchmark policy
-RUNTIME.KV.1 - Static KV size estimator
-RUNTIME.KV.2 - CUDA KV allocation proof
-RUNTIME.KV.3 - GPU paged KV allocator skeleton
-RUNTIME.KV.4 - Host RAM spill and NVMe cold-cache experiments
-RUNTIME.KV.5 - KV quantization policy
-```
-
-These future KV implementation waves are planned runtime dependencies, not the
-next authorized milestone.
 
 ### CLI Doctrine
 

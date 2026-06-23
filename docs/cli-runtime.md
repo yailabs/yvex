@@ -1128,4 +1128,42 @@ YVEX is CLI-only.
 The user-facing executable surfaces in the current repository are build/bin/yvex
 and build/bin/yvexd.
 New interface surfaces require an explicit roadmap decision before implementation.
+
+## Quant Job CLI
+
+OWI.9 adds:
+
+```sh
+yvex quant-job create
+yvex quant-job inspect
+yvex quant-job validate
+```
+
+The command records and validates an external quantization job manifest. It does
+not run the external command by default.
+
+DeepSeek DS4 bridge example:
+
+```sh
+yvex quant-job create \
+  --name deepseek-v4-flash-ds4-iq2xxs \
+  --arch deepseek4 \
+  --tool ds4_deepseek4_quantize \
+  --tool-path /home/dgmothx/lab/src/ds4/gguf-tools/deepseek4-quantize \
+  --source-manifest "$HOME/lab/manifests/deepseek/deepseek-v4-flash-source-manifest.json" \
+  --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" \
+  --template /home/dgmothx/lab/src/ds4/gguf/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix.gguf \
+  --quant-policy "$HOME/lab/manifests/deepseek/deepseek-v4-flash-quant-policy.json" \
+  --imatrix-manifest "$HOME/lab/manifests/deepseek/deepseek-v4-flash-imatrix-manifest.json" \
+  --imatrix /home/dgmothx/lab/src/ds4/gguf/DeepSeek-V4-Flash-chat-v2-routed-moe-ds4.dat \
+  --out-gguf "$HOME/lab/models/gguf/deepseek/deepseek-v4-flash-yvex-ds4.gguf" \
+  --log "$HOME/lab/artifacts/quant-logs/deepseek-v4-flash-ds4-quantize.log" \
+  --status ready \
+  --command "deepseek4-quantize --hf ... --template ... --out ... --imatrix ..." \
+  --out "$HOME/lab/manifests/deepseek/deepseek-v4-flash-quant-job.json"
+```
+
+`quant-job validate` allows missing output GGUF for `declared`, `ready`,
+`running`, `failed`, and `skipped` jobs. A `succeeded` job must have an output
+GGUF at the recorded path.
 ```
