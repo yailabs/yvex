@@ -43,7 +43,7 @@
  * Commands:
  *   - make test-cli
  *   - make smoke
- *   - build/bin/yvex info
+ *   - ./yvex info
  */
 #include <errno.h>
 #include <stdio.h>

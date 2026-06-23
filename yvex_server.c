@@ -1,13 +1,14 @@
 /*
- * YVEX - Server lifecycle
+ * YVEX - compressed implementation unit
  *
- * File: yvex_server.c
- * Layer: server implementation
- *
- * Purpose:
- *   Implements the server shell yvexd server shell lifecycle and a tiny local HTTP
- *   listener for health, metrics, and model-catalog status endpoints.
+ * This file groups related implementation sections that used to live in
+ * smaller root source fragments. Public API declarations remain under
+ * include/yvex/.
  */
+
+
+/* ===== yvex_server.c ===== */
+
 #define _POSIX_C_SOURCE 200809L
 
 #include "yvex_server_internal.h"
@@ -327,4 +328,300 @@ int yvex_server_get_summary(const yvex_server *server,
     out->generation_available = 0;
     yvex_error_clear(err);
     return YVEX_OK;
+}
+
+/* ===== yvex_server_handlers.c ===== */
+
+#include "yvex_server_internal.h"
+
+#include <stdio.h>
+#include <string.h>
+
+static int response_body(yvex_http_response *response,
+                         int status_code,
+                         const char *body,
+                         yvex_error *err)
+{
+    int n;
+
+    if (!response || !body) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_server_response",
+                       "response and body are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(response, 0, sizeof(*response));
+    response->status_code = status_code;
+    response->reason = yvex_http_status_reason(status_code);
+    n = snprintf(response->body, sizeof(response->body), "%s", body);
+    if (n < 0 || (size_t)n >= sizeof(response->body)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_server_response",
+                       "response body exceeds capacity");
+        return YVEX_ERR_BOUNDS;
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_server_handle_health(const yvex_server *server,
+                              yvex_http_response *response,
+                              yvex_error *err)
+{
+    char body[YVEX_HTTP_BODY_CAP];
+    const char *engine_status = server && server->engine ? server->engine_status : "not_loaded";
+    const char *backend_status = server && server->backend ? server->backend_status : "not_loaded";
+
+    snprintf(body, sizeof(body),
+             "{\n"
+             "  \"schema\": \"yvex.health.v1\",\n"
+             "  \"status\": \"ok\",\n"
+             "  \"server\": \"yvexd\",\n"
+             "  \"generation_available\": false,\n"
+             "  \"engine_status\": \"%s\",\n"
+             "  \"backend_status\": \"%s\"\n"
+             "}\n",
+             engine_status, backend_status);
+    return response_body(response, 200, body, err);
+}
+
+int yvex_server_handle_metrics(const yvex_server *server,
+                               yvex_http_response *response,
+                               yvex_error *err)
+{
+    char body[YVEX_HTTP_BODY_CAP];
+    const char *engine_status = server && server->engine ? server->engine_status : "not_loaded";
+    const char *backend_status = server && server->backend ? server->backend_status : "not_loaded";
+    unsigned long long request_count = server ? server->request_count + 1u : 0;
+    unsigned long long error_count = server ? server->error_count : 0;
+
+    snprintf(body, sizeof(body),
+             "{\n"
+             "  \"schema\": \"yvex.server_metrics.v1\",\n"
+             "  \"request_count\": %llu,\n"
+             "  \"error_count\": %llu,\n"
+             "  \"generation_available\": false,\n"
+             "  \"engine_status\": \"%s\",\n"
+             "  \"backend_status\": \"%s\"\n"
+             "}\n",
+             request_count, error_count, engine_status, backend_status);
+    return response_body(response, 200, body, err);
+}
+
+int yvex_server_handle_models(const yvex_server *server,
+                              yvex_http_response *response,
+                              yvex_error *err)
+{
+    char body[YVEX_HTTP_BODY_CAP];
+
+    if (!server || !server->engine) {
+        snprintf(body, sizeof(body),
+                 "{\n"
+                 "  \"schema\": \"yvex.models.v1\",\n"
+                 "  \"object\": \"list\",\n"
+                 "  \"generation_available\": false,\n"
+                 "  \"data\": []\n"
+                 "}\n");
+        return response_body(response, 200, body, err);
+    }
+
+    snprintf(body, sizeof(body),
+             "{\n"
+             "  \"schema\": \"yvex.models.v1\",\n"
+             "  \"object\": \"list\",\n"
+             "  \"generation_available\": false,\n"
+             "  \"data\": [\n"
+             "    {\n"
+             "      \"id\": \"%s\",\n"
+             "      \"object\": \"model\",\n"
+             "      \"status\": \"descriptor-only\",\n"
+             "      \"architecture\": \"%s\",\n"
+             "      \"backend\": \"%s\",\n"
+             "      \"inference\": \"not_implemented\"\n"
+             "    }\n"
+             "  ]\n"
+             "}\n",
+             server->model_name[0] ? server->model_name : "unknown",
+             server->architecture[0] ? server->architecture : "unknown",
+             server->backend_name[0] ? server->backend_name : "cpu");
+    return response_body(response, 200, body, err);
+}
+
+int yvex_server_handle_unsupported_generation(yvex_http_response *response,
+                                              yvex_error *err)
+{
+    return response_body(response, 501,
+                         "{\n"
+                         "  \"schema\": \"yvex.error.v1\",\n"
+                         "  \"status\": \"unsupported\",\n"
+                         "  \"error\": {\n"
+                         "    \"code\": \"YVEX_ERR_UNSUPPORTED\",\n"
+                         "    \"message\": \"generation endpoints are not implemented in server shell\"\n"
+                         "  }\n"
+                         "}\n",
+                         err);
+}
+
+/* ===== yvex_server_http.c ===== */
+
+#include "yvex_server_http_internal.h"
+
+#include <stdio.h>
+#include <string.h>
+
+const char *yvex_http_status_reason(int status_code)
+{
+    switch (status_code) {
+    case 200: return "OK";
+    case 400: return "Bad Request";
+    case 404: return "Not Found";
+    case 405: return "Method Not Allowed";
+    case 501: return "Not Implemented";
+    default: return "Internal Server Error";
+    }
+}
+
+int yvex_http_parse_request(const char *request,
+                            yvex_http_request *out,
+                            yvex_error *err)
+{
+    char version[16];
+    int n;
+
+    if (!request || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_http_parse_request",
+                       "request and out are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(out, 0, sizeof(*out));
+
+    if (!strchr(request, '\n')) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_http_parse_request",
+                       "request line is too long or incomplete");
+        return YVEX_ERR_BOUNDS;
+    }
+
+    n = sscanf(request, "%7s %255s %15s", out->method, out->path, version);
+    if (n != 3) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_http_parse_request",
+                       "invalid HTTP request line");
+        return YVEX_ERR_FORMAT;
+    }
+    if (strncmp(version, "HTTP/", 5) != 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_http_parse_request",
+                       "invalid HTTP version");
+        return YVEX_ERR_FORMAT;
+    }
+
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_http_response_format(char *out,
+                              size_t cap,
+                              const yvex_http_response *response,
+                              yvex_error *err)
+{
+    const char *reason;
+    size_t body_len;
+    int n;
+
+    if (!out || cap == 0 || !response) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_http_response_format",
+                       "out and response are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    reason = response->reason ? response->reason : yvex_http_status_reason(response->status_code);
+    body_len = strlen(response->body);
+    n = snprintf(out, cap,
+                 "HTTP/1.1 %d %s\r\n"
+                 "Content-Type: application/json\r\n"
+                 "Content-Length: %lu\r\n"
+                 "Connection: close\r\n"
+                 "\r\n"
+                 "%s",
+                 response->status_code,
+                 reason,
+                 (unsigned long)body_len,
+                 response->body);
+    if (n < 0 || (size_t)n >= cap) {
+        out[cap - 1u] = '\0';
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_http_response_format",
+                       "HTTP response exceeds buffer capacity");
+        return YVEX_ERR_BOUNDS;
+    }
+
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+/* ===== yvex_server_metrics.c ===== */
+
+#include "yvex_server_internal.h"
+
+void yvex_server_record_response(yvex_server *server, int status_code)
+{
+    if (!server) {
+        return;
+    }
+    server->request_count += 1u;
+    if (status_code >= 400) {
+        server->error_count += 1u;
+    }
+}
+
+/* ===== yvex_server_router.c ===== */
+
+#include "yvex_server_internal.h"
+
+#include <stdio.h>
+#include <string.h>
+
+int yvex_server_route(yvex_server *server,
+                      const yvex_http_request *request,
+                      yvex_http_response *response,
+                      yvex_error *err)
+{
+    int rc;
+
+    if (!server || !request || !response) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_server_route",
+                       "server, request, and response are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    if (strcmp(request->path, "/v1/completions") == 0 ||
+        strcmp(request->path, "/v1/chat/completions") == 0 ||
+        strcmp(request->path, "/v1/responses") == 0) {
+        return yvex_server_handle_unsupported_generation(response, err);
+    }
+
+    if (strcmp(request->method, "GET") != 0) {
+        response->status_code = 405;
+        response->reason = yvex_http_status_reason(405);
+        snprintf(response->body, sizeof(response->body),
+                 "{\n"
+                 "  \"schema\": \"yvex.error.v1\",\n"
+                 "  \"status\": \"method_not_allowed\"\n"
+                 "}\n");
+        return YVEX_OK;
+    }
+
+    if (strcmp(request->path, "/") == 0 || strcmp(request->path, "/health") == 0) {
+        rc = yvex_server_handle_health(server, response, err);
+    } else if (strcmp(request->path, "/metrics") == 0) {
+        rc = yvex_server_handle_metrics(server, response, err);
+    } else if (strcmp(request->path, "/v1/models") == 0) {
+        rc = yvex_server_handle_models(server, response, err);
+    } else {
+        response->status_code = 404;
+        response->reason = yvex_http_status_reason(404);
+        snprintf(response->body, sizeof(response->body),
+                 "{\n"
+                 "  \"schema\": \"yvex.error.v1\",\n"
+                 "  \"status\": \"not_found\"\n"
+                 "}\n");
+        rc = YVEX_OK;
+    }
+
+    return rc;
 }

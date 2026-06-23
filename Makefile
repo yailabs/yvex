@@ -26,9 +26,11 @@
 #
 # Interface policy:
 #   - YVEX is CLI-only.
-#   - build/bin/yvex and build/bin/yvexd are repository-local compiled products.
+#   - ./yvex and ./yvexd are repository-local compiled products.
 
-.PHONY: info lib cli server cuda-info cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-layout smoke check check-docs check-guardrails clean
+.DEFAULT_GOAL := all
+
+.PHONY: all info lib cli server cuda-info cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-layout smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -38,7 +40,7 @@ CUDA_CFLAGS ?=
 CUDA_LDFLAGS ?=
 YVEX_CUDA_ARCH ?= auto
 
-CPPFLAGS ?= -Iinclude -I.
+CPPFLAGS ?= -D_POSIX_C_SOURCE=200809L -Iinclude -I.
 CFLAGS ?= -std=c11 -Wall -Wextra -pedantic
 LDFLAGS ?=
 LDLIBS ?= -ldl
@@ -46,122 +48,30 @@ LDLIBS ?= -ldl
 BUILD_DIR := build
 OBJ_DIR := $(BUILD_DIR)/obj
 LIB_DIR := $(BUILD_DIR)/lib
-BIN_DIR := $(BUILD_DIR)/bin
 TEST_DIR := $(BUILD_DIR)/tests
 
 LIBYVEX := $(LIB_DIR)/libyvex.a
-YVEX_BIN := $(BIN_DIR)/yvex
-YVEXD_BIN := $(BIN_DIR)/yvexd
+YVEX_BIN := ./yvex
+YVEXD_BIN := ./yvexd
 
 CORE_SRCS := \
-	yvex_version.c \
-	yvex_status.c \
-	yvex_error.c \
-	yvex_log.c \
-	yvex_paths.c \
-	yvex_run_dir.c \
+	yvex_core.c \
 	yvex_artifact.c \
-	yvex_artifact_range.c \
-	yvex_gguf.c \
-	yvex_dtype.c \
-	yvex_tensor_role.c \
-	yvex_tensor_table.c \
-	yvex_model_descriptor.c \
-	yvex_weights.c \
-	yvex_materialize.c \
-	yvex_materialize_report.c \
-	yvex_tokenizer.c \
-	yvex_tokenizer_vocab.c \
-	yvex_tokenizer_special.c \
-	yvex_tokenizer_encode.c \
-	yvex_tokenizer_decode.c \
-	yvex_prompt.c \
-	yvex_graph.c \
-	yvex_value.c \
-	yvex_op.c \
-	yvex_graph_builder.c \
-	yvex_shape.c \
-	yvex_graph_dump.c \
-	yvex_planner.c \
-	yvex_memory_plan.c \
-	yvex_backend.c \
-	yvex_cpu_backend.c \
-	yvex_cpu_tensor.c \
-	yvex_cpu_ops.c \
-	yvex_engine.c \
-	yvex_session.c \
-	yvex_session_state.c \
-	yvex_kv.c \
-	yvex_logits.c \
-	yvex_runtime_diagnostics.c \
-	yvex_chat.c \
-	yvex_chat_repl.c \
-	yvex_chat_slash.c \
-	yvex_chat_run_command.c \
-	yvex_chat_status_line.c \
-	yvex_metrics.c \
-	yvex_trace.c \
-	yvex_profile.c \
-	yvex_run_artifacts.c \
-	yvex_time.c \
-	yvex_json_writer.c \
-	yvex_server.c \
-	yvex_server_http.c \
-	yvex_server_router.c \
-	yvex_server_handlers.c \
-	yvex_server_metrics.c \
 	yvex_artifact_naming.c \
-	yvex_artifact_naming_report.c \
+	yvex_gguf.c \
+	yvex_gguf_tools.c \
+	yvex_model.c \
+	yvex_backend.c \
+	yvex_graph.c \
+	yvex_metrics.c \
+	yvex_runtime.c \
+	yvex_tokenizer.c \
+	yvex_chat.c \
+	yvex_server.c \
+	yvex_model_tools.c \
 	yvex_conversion.c \
-	yvex_conversion_plan.c \
-	yvex_conversion_emit.c \
-	yvex_conversion_payload.c \
-	yvex_conversion_report.c \
-	yvex_gguf_emit.c \
-	yvex_gguf_emit_metadata.c \
-	yvex_gguf_emit_tensor.c \
-	yvex_gguf_emit_report.c \
-	yvex_gguf_template.c \
-	yvex_gguf_template_compare.c \
-	yvex_gguf_template_report.c \
-	yvex_gguf_template_validate.c \
-	yvex_imatrix.c \
-	yvex_imatrix_json.c \
-	yvex_imatrix_report.c \
-	yvex_imatrix_validate.c \
-	yvex_materialize_gate.c \
-	yvex_materialize_gate_json.c \
-	yvex_materialize_gate_report.c \
-	yvex_model_gate.c \
-	yvex_model_gate_json.c \
-	yvex_model_gate_report.c \
-	yvex_model_ref.c \
-	yvex_model_ref_report.c \
-	yvex_model_registry.c \
-	yvex_model_registry_json.c \
-	yvex_model_registry_scan.c \
-	yvex_model_registry_report.c \
-	yvex_native_weights.c \
-	yvex_native_weight_report.c \
-	yvex_quant_job.c \
-	yvex_quant_job_json.c \
-	yvex_quant_job_report.c \
-	yvex_quant_policy.c \
-	yvex_quant_policy_from_template.c \
-	yvex_quant_policy_json.c \
-	yvex_quant_policy_report.c \
-	yvex_quant_policy_validate.c \
-	yvex_safetensors.c \
-	yvex_safetensors_json.c \
-	yvex_source_manifest.c \
-	yvex_source_manifest_json.c \
-	yvex_source_manifest_scan.c \
-	yvex_weight_mapping.c \
-	yvex_weight_mapping_report.c \
-	yvex_qtype_support.c \
-	yvex_deepseek_adapter.c \
-	yvex_qwen_adapter.c \
-	yvex_quant_q8_0.c
+	yvex_quant.c \
+	yvex_source.c
 
 CUDA_SRCS := \
 	backends/cuda/cuda_backend.c \
@@ -288,6 +198,8 @@ info:
 	@echo "inference: not implemented"
 	@echo "cuda: tensor movement and F32 embed parity implemented when driver/device are available"
 	@echo "server: yvexd status shell implemented"
+
+all: lib cli server
 
 lib: $(LIBYVEX)
 
@@ -447,4 +359,4 @@ check-guardrails:
 	@! grep -Ei "benchmark results" README.md | grep -vi "benchmark results: none" >/dev/null
 
 clean:
-	@rm -rf $(BUILD_DIR)
+	@rm -rf $(BUILD_DIR) ./yvex ./yvexd ./*.o

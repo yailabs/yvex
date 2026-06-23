@@ -4,7 +4,7 @@
 
 set -eu
 
-YVEX_BIN=${YVEX_BIN:-build/bin/yvex}
+YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/convert-cli}
 NATIVE="$OUT_DIR/native"
 

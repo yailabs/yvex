@@ -1,29 +1,14 @@
 /*
- * YVEX - Chat runtime shell
+ * YVEX - compressed implementation unit
  *
- * File: yvex_chat.c
- * Layer: CLI runtime implementation
- *
- * Purpose:
- *   Opens the diagnostic runtime runtime shell over engine/session layer engine/session objects and accepts
- *   prompt text into the session. This module never executes decode or
- *   generates model output.
- *
- * Implements:
- *   - yvex_chat_runtime_open
- *   - yvex_chat_runtime_close
- *   - yvex_chat_runtime_accept_user_text
- *   - yvex_chat_runtime_reset
- *
- * Invariants:
- *   - runtime owns engine/backend/session and closes in reverse order
- *   - prompt acceptance advances session position only through engine/session layer API
- *   - generation remains unsupported in diagnostic runtime
- *
- * Commands:
- *   - make test-core
- *   - build/tests/test_chat_runtime
+ * This file groups related implementation sections that used to live in
+ * smaller root source fragments. Public API declarations remain under
+ * include/yvex/.
  */
+
+
+/* ===== yvex_chat.c ===== */
+
 #include "yvex_chat_internal.h"
 
 #include <stdlib.h>
@@ -291,4 +276,220 @@ int yvex_chat_runtime_get_summary(const yvex_chat_runtime *runtime,
         return YVEX_ERR_INVALID_ARG;
     }
     return yvex_session_get_summary(runtime->session, out, err);
+}
+
+/* ===== yvex_chat_repl.c ===== */
+
+#include "yvex_chat_internal.h"
+
+int yvex_chat_runtime_print_status(FILE *fp,
+                                   const yvex_chat_runtime *runtime,
+                                   yvex_error *err)
+{
+    yvex_session_summary summary;
+    int rc;
+
+    if (!fp || !runtime) {
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = yvex_chat_runtime_get_summary(runtime, &summary, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    fprintf(fp, "session_state: %s\n", yvex_session_state_name(summary.state));
+    fprintf(fp, "position: %llu\n", summary.position);
+    fprintf(fp, "accepted_tokens: %llu\n", summary.accepted_tokens);
+    fprintf(fp, "execution_ready: false\n");
+    fprintf(fp, "generation: unsupported\n");
+    return YVEX_OK;
+}
+
+/* ===== yvex_chat_run_command.c ===== */
+
+#include "yvex_chat_internal.h"
+
+#include <string.h>
+
+static void json_print_escaped(FILE *fp, const char *text)
+{
+    const unsigned char *p = (const unsigned char *)(text ? text : "");
+
+    fputc('"', fp);
+    while (*p) {
+        if (*p == '"' || *p == '\\') {
+            fputc('\\', fp);
+            fputc((int)*p, fp);
+        } else if (*p == '\n') {
+            fputs("\\n", fp);
+        } else if (*p == '\r') {
+            fputs("\\r", fp);
+        } else if (*p == '\t') {
+            fputs("\\t", fp);
+        } else if (*p < 32u) {
+            fprintf(fp, "\\u%04x", (unsigned int)*p);
+        } else {
+            fputc((int)*p, fp);
+        }
+        ++p;
+    }
+    fputc('"', fp);
+}
+
+int yvex_run_command_plain(FILE *fp, const yvex_chat_accept_result *result)
+{
+    if (!fp || !result) {
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    fprintf(fp, "run status: accepted-only\n");
+    fprintf(fp, "model: %s\n", result->model_name);
+    fprintf(fp, "backend: %s\n", result->backend_name);
+    fprintf(fp, "session_state: %s\n", result->session_state);
+    fprintf(fp, "prompt_tokens: %llu\n", result->prompt_tokens);
+    fprintf(fp, "accepted_tokens: %llu\n", result->accepted_tokens);
+    fprintf(fp, "position: %llu\n", result->position);
+    fprintf(fp, "execution_ready: false\n");
+    fprintf(fp, "generation: %s\n", result->generation);
+    fprintf(fp, "reason: %s\n", result->reason);
+    if (result->run_id[0] != '\0') {
+        fprintf(fp, "run_id: %s\n", result->run_id);
+    }
+    if (result->run_dir[0] != '\0') {
+        fprintf(fp, "run_dir: %s\n", result->run_dir);
+    }
+    if (result->metrics_out[0] != '\0') {
+        fprintf(fp, "metrics_out: %s\n", result->metrics_out);
+    }
+    if (result->trace_out[0] != '\0') {
+        fprintf(fp, "trace_out: %s\n", result->trace_out);
+    }
+    if (result->profile_out[0] != '\0') {
+        fprintf(fp, "profile_out: %s\n", result->profile_out);
+    }
+    return YVEX_OK;
+}
+
+int yvex_run_command_json(FILE *fp, const yvex_chat_accept_result *result)
+{
+    if (!fp || !result) {
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    fprintf(fp, "{\n");
+    fprintf(fp, "  \"schema\": \"yvex.cli.result.v1\",\n");
+    fprintf(fp, "  \"command\": \"run\",\n");
+    fprintf(fp, "  \"status\": \"accepted-only\",\n");
+    fprintf(fp, "  \"data\": {\n");
+    fprintf(fp, "    \"model\": ");
+    json_print_escaped(fp, result->model_name);
+    fprintf(fp, ",\n");
+    fprintf(fp, "    \"backend\": ");
+    json_print_escaped(fp, result->backend_name);
+    fprintf(fp, ",\n");
+    fprintf(fp, "    \"session_state\": ");
+    json_print_escaped(fp, result->session_state);
+    fprintf(fp, ",\n");
+    fprintf(fp, "    \"prompt_tokens\": %llu,\n", result->prompt_tokens);
+    fprintf(fp, "    \"accepted_tokens\": %llu,\n", result->accepted_tokens);
+    fprintf(fp, "    \"position\": %llu,\n", result->position);
+    fprintf(fp, "    \"execution_ready\": false,\n");
+    fprintf(fp, "    \"generation\": ");
+    json_print_escaped(fp, result->generation);
+    fprintf(fp, ",\n");
+    fprintf(fp, "    \"reason\": ");
+    json_print_escaped(fp, result->reason);
+    fprintf(fp, ",\n");
+    fprintf(fp, "    \"metrics\": {\n");
+    fprintf(fp, "      \"prompt_tokens\": %llu,\n", result->prompt_tokens);
+    fprintf(fp, "      \"accepted_tokens\": %llu\n", result->accepted_tokens);
+    fprintf(fp, "    }");
+    if (result->metrics_out[0] != '\0' || result->trace_out[0] != '\0' ||
+        result->profile_out[0] != '\0' || result->run_dir[0] != '\0') {
+        fprintf(fp, ",\n");
+        fprintf(fp, "    \"artifacts\": {\n");
+        fprintf(fp, "      \"run_id\": ");
+        json_print_escaped(fp, result->run_id);
+        fprintf(fp, ",\n");
+        fprintf(fp, "      \"run_dir\": ");
+        json_print_escaped(fp, result->run_dir);
+        fprintf(fp, ",\n");
+        fprintf(fp, "      \"metrics_out\": ");
+        json_print_escaped(fp, result->metrics_out);
+        fprintf(fp, ",\n");
+        fprintf(fp, "      \"trace_out\": ");
+        json_print_escaped(fp, result->trace_out);
+        fprintf(fp, ",\n");
+        fprintf(fp, "      \"profile_out\": ");
+        json_print_escaped(fp, result->profile_out);
+        fprintf(fp, "\n");
+        fprintf(fp, "    }");
+    }
+    fprintf(fp, "\n");
+    fprintf(fp, "  },\n");
+    fprintf(fp, "  \"error\": null\n");
+    fprintf(fp, "}\n");
+    return YVEX_OK;
+}
+
+/* ===== yvex_chat_slash.c ===== */
+
+#include "yvex_chat_slash_internal.h"
+
+#include <string.h>
+
+static int slash_eq(const char *line, const char *command)
+{
+    size_t len = strlen(command);
+
+    return strncmp(line, command, len) == 0 &&
+           (line[len] == '\0' || line[len] == '\n' || line[len] == '\r' ||
+            line[len] == ' ' || line[len] == '\t');
+}
+
+yvex_slash_command yvex_slash_parse(const char *line)
+{
+    if (!line || line[0] != '/') {
+        return YVEX_SLASH_NOT_COMMAND;
+    }
+    if (slash_eq(line, "/help")) return YVEX_SLASH_HELP;
+    if (slash_eq(line, "/status")) return YVEX_SLASH_STATUS;
+    if (slash_eq(line, "/model")) return YVEX_SLASH_MODEL;
+    if (slash_eq(line, "/backend")) return YVEX_SLASH_BACKEND;
+    if (slash_eq(line, "/tokens")) return YVEX_SLASH_TOKENS;
+    if (slash_eq(line, "/reset")) return YVEX_SLASH_RESET;
+    if (slash_eq(line, "/quit")) return YVEX_SLASH_QUIT;
+    return YVEX_SLASH_UNKNOWN;
+}
+
+const char *yvex_slash_command_name(yvex_slash_command command)
+{
+    switch (command) {
+    case YVEX_SLASH_NOT_COMMAND: return "not-command";
+    case YVEX_SLASH_HELP: return "help";
+    case YVEX_SLASH_STATUS: return "status";
+    case YVEX_SLASH_MODEL: return "model";
+    case YVEX_SLASH_BACKEND: return "backend";
+    case YVEX_SLASH_TOKENS: return "tokens";
+    case YVEX_SLASH_RESET: return "reset";
+    case YVEX_SLASH_QUIT: return "quit";
+    case YVEX_SLASH_UNKNOWN: return "unknown";
+    }
+    return "unknown";
+}
+
+/* ===== yvex_chat_status_line.c ===== */
+
+#include "yvex_chat_internal.h"
+
+int yvex_status_line_print(FILE *fp,
+                           const char *phase,
+                           unsigned long long tokens,
+                           unsigned long long position)
+{
+    if (!fp || !phase) {
+        return YVEX_ERR_INVALID_ARG;
+    }
+    fprintf(fp, "[%s] tokens=%llu position=%llu\n", phase, tokens, position);
+    return YVEX_OK;
 }

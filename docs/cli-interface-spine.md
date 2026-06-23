@@ -15,9 +15,9 @@ It is not the server API reference.
 It owns the interface shape:
 
 ```text
-build/bin/yvex
-build/bin/yvex <command>
-build/bin/yvexd
+./yvex
+./yvex <command>
+./yvexd
 ```
 
 ## 2. Interface Principle
@@ -36,8 +36,8 @@ YVEX must have at most two human-facing CLI modes:
 Repository-local:
 
 ```sh
-build/bin/yvex
-build/bin/yvexd
+./yvex
+./yvexd
 ```
 
 Global, if installed or linked:
@@ -50,15 +50,15 @@ yvexd
 Compiled binaries:
 
 ```text
-build/bin/yvex
-build/bin/yvexd
+./yvex
+./yvexd
 ```
 
 Human entrypoints should be:
 
 ```text
-build/bin/yvex   -> interactive or one-shot CLI
-build/bin/yvexd  -> daemon/provider shell
+./yvex   -> interactive or one-shot CLI
+./yvexd  -> daemon/provider shell
 ```
 
 ## 4. Target CLI Shape
@@ -68,7 +68,7 @@ build/bin/yvexd  -> daemon/provider shell
 Eventually:
 
 ```sh
-build/bin/yvex
+./yvex
 ```
 
 opens:
@@ -88,17 +88,17 @@ yvex>
 ### One-shot diagnostics
 
 ```sh
-build/bin/yvex inspect FILE
-build/bin/yvex tensors FILE
-build/bin/yvex materialize --model FILE --backend cuda
-build/bin/yvex model-gate check ...
-build/bin/yvex materialize-gate check ...
+./yvex inspect FILE
+./yvex tensors FILE
+./yvex materialize --model FILE --backend cuda
+./yvex model-gate check ...
+./yvex materialize-gate check ...
 ```
 
 ### Server/provider
 
 ```sh
-build/bin/yvexd --host 127.0.0.1 --port 18080 --model FILE --backend cuda
+./yvexd --host 127.0.0.1 --port 18080 --model FILE --backend cuda
 ```
 
 ## Model Selection Doctrine
@@ -114,23 +114,23 @@ YVEX must support three ways to identify a model artifact:
 Path examples:
 
 ```sh
-build/bin/yvex inspect /absolute/path/model.gguf
-build/bin/yvex inspect ./relative/model.gguf
+./yvex inspect /absolute/path/model.gguf
+./yvex inspect ./relative/model.gguf
 ```
 
 Alias examples:
 
 ```sh
-build/bin/yvex inspect --model deepseek4-v4-flash-selected-embed
-build/bin/yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
-build/bin/yvexd --model deepseek4-v4-flash-selected-embed --backend cuda
+./yvex inspect --model deepseek4-v4-flash-selected-embed
+./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
+./yvexd --model deepseek4-v4-flash-selected-embed --backend cuda
 ```
 
 Current selected model examples:
 
 ```sh
-build/bin/yvex models use deepseek4-v4-flash-selected-embed
-build/bin/yvex
+./yvex models use deepseek4-v4-flash-selected-embed
+./yvex
 ```
 
 Inside REPL:
@@ -262,7 +262,7 @@ The registry holds the exact path, hash, support level, and artifact metadata.
 Implemented command:
 
 ```sh
-build/bin/yvex models scan
+./yvex models scan
 ```
 
 Expected scan roots:
@@ -316,7 +316,7 @@ yvex models inspect
 ### `models scan`
 
 ```sh
-build/bin/yvex models scan --root ~/lab/models/gguf
+./yvex models scan --root ~/lab/models/gguf
 ```
 
 Finds candidate GGUF files.
@@ -324,7 +324,7 @@ Finds candidate GGUF files.
 ### `models add`
 
 ```sh
-build/bin/yvex models add \
+./yvex models add \
   --alias deepseek4-v4-flash-selected-embed \
   --path ~/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
 ```
@@ -334,7 +334,7 @@ Adds a model to local registry.
 ### `models list`
 
 ```sh
-build/bin/yvex models list
+./yvex models list
 ```
 
 Expected:
@@ -352,7 +352,7 @@ Expected:
 ### `models use`
 
 ```sh
-build/bin/yvex models use deepseek4-v4-flash-selected-embed
+./yvex models use deepseek4-v4-flash-selected-embed
 ```
 
 Sets the current selected model for the local user/repo.
@@ -360,7 +360,7 @@ Sets the current selected model for the local user/repo.
 ### `models current`
 
 ```sh
-build/bin/yvex models current
+./yvex models current
 ```
 
 Prints selected model state.
@@ -368,7 +368,7 @@ Prints selected model state.
 ### `models inspect`
 
 ```sh
-build/bin/yvex models inspect deepseek4-v4-flash-selected-embed
+./yvex models inspect deepseek4-v4-flash-selected-embed
 ```
 
 Runs inspect through alias resolution.
@@ -437,7 +437,7 @@ model not found: deepseek
 available models:
   deepseek4-v4-flash-selected-embed
 hint:
-  build/bin/yvex models list
+  ./yvex models list
 ```
 
 ## REPL Model Selection
@@ -496,8 +496,8 @@ server connection never silently changes local selected model
 `yvexd` should accept either path or alias:
 
 ```sh
-build/bin/yvexd --model deepseek4-v4-flash-selected-embed --backend cuda
-build/bin/yvexd --model /absolute/path/model.gguf --backend cuda
+./yvexd --model deepseek4-v4-flash-selected-embed --backend cuda
+./yvexd --model /absolute/path/model.gguf --backend cuda
 ```
 
 If alias is used, yvexd resolves it through the same local model registry.
@@ -518,13 +518,13 @@ configured.
 ### Primary future interactive command
 
 ```text
-yvex console / yvex chat / build/bin/yvex with no args
+yvex console / yvex chat / ./yvex with no args
 ```
 
 Final decision target:
 
 ```text
-build/bin/yvex with no args opens the canonical REPL.
+./yvex with no args opens the canonical REPL.
 ```
 
 ### One-shot diagnostics

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-YVEX_BIN="${YVEX_BIN:-./build/bin/yvex}"
+YVEX_BIN="${YVEX_BIN:-./yvex}"
 OUT_DIR="build/tests/materialize-gate-cli"
 mkdir -p "$OUT_DIR"
 

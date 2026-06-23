@@ -20,8 +20,7 @@ Implemented files:
 
 ```text
 include/yvex/fs.h
-yvex_paths.c
-yvex_run_dir.c
+yvex_artifact.c
 tests/test_fs.c
 ```
 
@@ -223,8 +222,8 @@ build/tests/model-gate-cli
 Repository-local binaries:
 
 ```text
-build/bin/yvex
-build/bin/yvexd
+./yvex
+./yvexd
 ```
 
 The compiled binaries are generated build products and are not tracked source
@@ -373,10 +372,10 @@ make clean
 make check
 make smoke
 build/tests/test_fs
-build/bin/yvex paths
-build/bin/yvex paths --project .
-build/bin/yvex paths --run
-YVEX_RUN_DIR=build/tests/manual-runs build/bin/yvex paths --run --create
+./yvex paths
+./yvex paths --project .
+./yvex paths --run
+YVEX_RUN_DIR=build/tests/manual-runs ./yvex paths --run --create
 ```
 
 runtime filesystem does not implement inference, GGUF parsing, tokenization, CUDA,

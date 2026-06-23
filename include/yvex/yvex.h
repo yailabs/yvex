@@ -22,7 +22,7 @@
  *
  * Validation:
  *   - make check
- *   - build/bin/yvex info
+ *   - ./yvex info
  */
 #ifndef YVEX_H
 #define YVEX_H

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -u
 
-YVEX_BIN=${YVEX_BIN:-./build/bin/yvex}
+YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${OUT_DIR:-build/tests}
 FIXTURE=tests/fixtures/gguf/valid-tokenizer-simple.gguf
 

@@ -3,6 +3,9 @@
 *.tmp
 target/
 build/
+/yvex
+/yvexd
+/*.o
 .yvex/
 dist/
 node_modules/

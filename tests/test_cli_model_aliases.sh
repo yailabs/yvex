@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-YVEX_BIN="${YVEX_BIN:-./build/bin/yvex}"
+YVEX_BIN="${YVEX_BIN:-./yvex}"
 ROOT="build/tests/model-aliases"
 REG="$ROOT/models.local.json"
 MODEL="$ROOT/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"

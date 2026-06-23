@@ -11,7 +11,7 @@
 
 set -eu
 
-YVEXD_BIN=${YVEXD_BIN:-build/bin/yvexd}
+YVEXD_BIN=${YVEXD_BIN:-./yvexd}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/cli-server}
 FIXTURE=tests/fixtures/gguf/valid-tokenizer-simple.gguf
 

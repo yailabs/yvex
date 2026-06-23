@@ -142,16 +142,16 @@ cd ~/lab/yvex
 
 export DS_GGUF="$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
 
-build/bin/yvex inspect "$DS_GGUF"
-build/bin/yvex tensors "$DS_GGUF"
-build/bin/yvex materialize --model "$DS_GGUF" --backend cpu
-build/bin/yvex materialize --model "$DS_GGUF" --backend cuda
+./yvex inspect "$DS_GGUF"
+./yvex tensors "$DS_GGUF"
+./yvex materialize --model "$DS_GGUF" --backend cpu
+./yvex materialize --model "$DS_GGUF" --backend cuda
 ```
 
 Model gate:
 
 ```sh
-build/bin/yvex model-gate check \
+./yvex model-gate check \
   --model "$DS_GGUF" \
   --label deepseek-v4-flash-selected-embedding \
   --family deepseek4 \

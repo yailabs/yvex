@@ -108,7 +108,7 @@ Only the spine may contain the internal delivery map.
 Current phase:
 
 ```text
-after REPO.LAYOUT.1
+after REPO.LAYOUT.2
 ```
 
 Current implementation commit:
@@ -131,41 +131,28 @@ Core:
   include/yvex/status.h
   include/yvex/error.h
   include/yvex/log.h
-  yvex_version.c
-  yvex_status.c
-  yvex_error.c
-  yvex_log.c
+  yvex_core.c
 
 Runtime filesystem:
   include/yvex/fs.h
-  yvex_paths.c
-  yvex_run_dir.c
+  yvex_artifact.c
 
 Artifact / GGUF directory:
   include/yvex/artifact.h
   include/yvex/gguf.h
   yvex_artifact.c
-  yvex_artifact_range.c
   yvex_gguf.c
 
 Tensor / model descriptor:
   include/yvex/dtype.h
   include/yvex/tensor.h
   include/yvex/model.h
-  yvex_dtype.c
-  yvex_tensor_role.c
-  yvex_tensor_table.c
-  yvex_model_descriptor.c
+  yvex_model.c
 
 Tokenizer / prompt rendering:
   include/yvex/tokenizer.h
   include/yvex/prompt.h
   yvex_tokenizer.c
-  yvex_tokenizer_vocab.c
-  yvex_tokenizer_special.c
-  yvex_tokenizer_encode.c
-  yvex_tokenizer_decode.c
-  yvex_prompt.c
 
 Graph / planner:
   include/yvex/graph.h
@@ -173,20 +160,10 @@ Graph / planner:
   include/yvex/planner.h
   include/yvex/memory_plan.h
   yvex_graph.c
-  yvex_value.c
-  yvex_op.c
-  yvex_graph_builder.c
-  yvex_shape.c
-  yvex_graph_dump.c
-  yvex_planner.c
-  yvex_memory_plan.c
 
 Backend:
   include/yvex/backend.h
   yvex_backend.c
-  yvex_cpu_backend.c
-  yvex_cpu_tensor.c
-  yvex_cpu_ops.c
   backends/cuda/cuda_backend.c
   backends/cuda/cuda_tensor.c
   backends/cuda/cuda_ops.c
@@ -199,116 +176,62 @@ Engine / session runtime:
   include/yvex/session.h
   include/yvex/kv.h
   include/yvex/logits.h
-  yvex_engine.c
-  yvex_session.c
-  yvex_session_state.c
-  yvex_kv.c
-  yvex_logits.c
-  yvex_runtime_diagnostics.c
+  yvex_runtime.c
 
 CLI runtime shell:
   yvex_chat.c
-  yvex_chat_repl.c
-  yvex_chat_slash.c
-  yvex_chat_run_command.c
-  yvex_chat_status_line.c
 
 Metrics / tracing:
   include/yvex/metrics.h
   include/yvex/trace.h
   include/yvex/profile.h
   yvex_metrics.c
-  yvex_trace.c
-  yvex_profile.c
-  yvex_run_artifacts.c
-  yvex_time.c
-  yvex_json_writer.c
 
 Server shell:
   include/yvex/server.h
   yvex_server.c
-  yvex_server_http.c
-  yvex_server_router.c
-  yvex_server_handlers.c
-  yvex_server_metrics.c
   yvexd.c
 
 Open-weight source manifest:
   include/yvex/source_manifest.h
-  yvex_source_manifest.c
-  yvex_source_manifest_json.c
-  yvex_source_manifest_scan.c
+  yvex_source.c
 
 Native weight inventory:
   include/yvex/native_weights.h
-  yvex_native_weights.c
-  yvex_safetensors.c
-  yvex_safetensors_json.c
-  yvex_native_weight_report.c
+  yvex_source.c
 
 GGUF template validator:
   include/yvex/gguf_template.h
-  yvex_gguf_template.c
-  yvex_gguf_template_validate.c
-  yvex_gguf_template_compare.c
-  yvex_gguf_template_report.c
+  yvex_gguf_tools.c
 
 Controlled GGUF emitter:
   include/yvex/gguf_emit.h
-  yvex_gguf_emit.c
-  yvex_gguf_emit_metadata.c
-  yvex_gguf_emit_tensor.c
-  yvex_gguf_emit_report.c
-  src/tools/yvex_gguf_emit_internal.h
+  yvex_gguf_tools.c
 
 Open-weight conversion bridge:
   include/yvex/conversion.h
   include/yvex/qtype_support.h
   yvex_conversion.c
-  yvex_conversion_plan.c
-  yvex_conversion_emit.c
-  yvex_conversion_payload.c
-  yvex_conversion_report.c
-  yvex_qtype_support.c
-  yvex_qwen_adapter.c
-  yvex_quant_q8_0.c
 
 External quantization job bridge:
   include/yvex/quant_job.h
-  yvex_quant_job.c
-  yvex_quant_job_json.c
-  yvex_quant_job_report.c
-  src/tools/yvex_quant_job_internal.h
+  yvex_quant.c
 
 Local model registry:
   include/yvex/model_registry.h
-  yvex_model_registry.c
-  yvex_model_registry_json.c
-  yvex_model_registry_scan.c
-  yvex_model_registry_report.c
-  src/tools/yvex_model_registry_internal.h
+  yvex_model_tools.c
 
 Weight mapping adapter contract:
   include/yvex/weight_mapping.h
-  yvex_weight_mapping.c
-  yvex_weight_mapping_report.c
-  yvex_deepseek_adapter.c
-  yvex_qwen_adapter.c
+  yvex_conversion.c
 
 Quantization policy manifest:
   include/yvex/quant_policy.h
-  yvex_quant_policy.c
-  yvex_quant_policy_json.c
-  yvex_quant_policy_validate.c
-  yvex_quant_policy_from_template.c
-  yvex_quant_policy_report.c
+  yvex_quant.c
 
 Calibration / imatrix manifest:
   include/yvex/imatrix.h
-  yvex_imatrix.c
-  yvex_imatrix_json.c
-  yvex_imatrix_validate.c
-  yvex_imatrix_report.c
+  yvex_quant.c
 
 CLI:
   yvex_cli.c
@@ -397,7 +320,7 @@ Interface policy:
 
 ```text
 YVEX is CLI-only.
-The user-facing executable surfaces in the current repository are build/bin/yvex and build/bin/yvexd.
+The user-facing executable surfaces in the current repository are ./yvex and ./yvexd.
 New interface surfaces require an explicit spine decision before implementation.
 ```
 
@@ -737,6 +660,7 @@ Future commands are listed only under the delivery that implements them.
 | DOCS.PUBLIC.0 | complete | Public documentation boundary cleanup |
 | CLI.PACKAGE.1 | complete | Minimal compiled-binary CLI packaging baseline |
 | REPO.LAYOUT.1 | complete | Root-first C source layout collapse |
+| REPO.LAYOUT.2 | complete | Root source compression and native root binaries |
 | CLI.MODELS.3 | next | Model selection in canonical REPL |
 | CLI.MODELS.4 | planned | Model alias resolution in yvexd |
 | M3 | paused | Materialized-weight engine attachment |
@@ -889,7 +813,7 @@ Acceptance:
 
 ```text
 libyvex.a builds
-build/bin/yvex builds
+./yvex builds
 core tests pass
 headers expose only implemented APIs
 ```
@@ -2283,11 +2207,11 @@ system packages
 Acceptance:
 
 ```text
-build/bin/yvex commands works after build
-build/bin/yvexd --help works after build
+./yvex commands works after build
+./yvexd --help works after build
 no tracked root yvex/yvexd scripts
 make smoke does not require root launchers
-docs use build/bin/yvex for repo-local examples
+docs use ./yvex for repo-local examples
 ```
 
 ### REPO.LAYOUT.1 - Root-First C Source Layout Collapse
@@ -2362,6 +2286,60 @@ A directory must represent a real boundary:
   external/non-C assets when added
 
 A directory must not exist only to hide one or two C files.
+```
+
+### REPO.LAYOUT.2 - Root Source Compression and Native Root Binaries
+
+Status:
+
+```text
+complete
+```
+
+Owns:
+
+```text
+compressed root implementation modules
+native root ./yvex and ./yvexd build outputs
+removal of repository-root wrapper scripts
+Makefile binary output update
+test command path update
+public command example cleanup
+root source count guard
+```
+
+Does not own:
+
+```text
+public API semantic changes
+CLI behavior changes
+server behavior changes
+model registry behavior changes
+REPL behavior changes
+line editing
+inference
+```
+
+Binary policy:
+
+```text
+make builds:
+  ./yvex
+  ./yvexd
+
+These are real compiled binaries and are ignored by git.
+build/ remains for objects, libraries, test output, and generated build state.
+```
+
+Source compression doctrine:
+
+```text
+The root exposes conceptual C modules, not every private helper layer.
+Small json/report/validate/scan helpers belong inside the owning module unless
+they represent a real boundary.
+
+Expected root implementation count:
+  <= 30 yvex*.c files
 ```
 
 Acceptance:
@@ -2464,7 +2442,7 @@ Acceptance:
 
 ```text
 CLI interface spine exists
-build/bin/yvex interactive target is documented
+./yvex interactive target is documented
 one-shot diagnostics are separated from REPL
 yvexd remains daemon/provider
 line editor remains CLI-layer only

@@ -11,7 +11,7 @@
 
 set -eu
 
-YVEX_BIN=${YVEX_BIN:-build/bin/yvex}
+YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/source-manifest-cli}
 MODEL_DIR="$OUT_DIR/model"
 MANIFEST="$OUT_DIR/manifest.json"
