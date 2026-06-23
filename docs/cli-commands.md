@@ -9,7 +9,24 @@ a command, option, exit status, or visible runtime posture.
 ## Current Milestone
 
 ```text
-CLI.PACKAGE.0 - Repository root launcher and CLI packaging baseline
+REPO.OPERATING.0 - Agent operating handbook and model artifact cards
+```
+
+## Operator References
+
+Read:
+
+```text
+AGENTS.md
+MODEL_ARTIFACTS.md
+docs/spine.md
+```
+
+Use repository-local launchers:
+
+```sh
+./yvex
+./yvexd
 ```
 
 ## Binaries

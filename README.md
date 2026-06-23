@@ -15,10 +15,33 @@ stderr, and run artifacts on disk.
 YVEX does not own YAI case/control/governance. YAI consumes YVEX as a local
 provider boundary.
 
+## Operator Entry Points
+
+Repository-local:
+
+```sh
+./yvex
+./yvexd
+```
+
+`./yvex` is the operator/developer CLI.
+`./yvexd` is the server/provider shell.
+
+## Quick Operator Files
+
+- [AGENTS.md](AGENTS.md) - operating contract for humans and coding agents.
+- [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md) - current external model artifact
+  cards and support posture.
+- [docs/spine.md](docs/spine.md) - canonical delivery spine and next authorized
+  milestone.
+
+The current active live target is DeepSeek V4 Flash selected embedding GGUF.
+See [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md).
+
 ## Status
 
-This repository has completed M0, fixture weight materialization into backend
-tensors.
+This repository has completed OWI closeout, M1 model gates, M2 DeepSeek
+materialization hardening, artifact naming, and repository launcher packaging.
 
 Current state:
 
@@ -43,6 +66,8 @@ limitation.
 
 ## Documentation
 
+- [Agent operating contract](AGENTS.md)
+- [Model artifact cards](MODEL_ARTIFACTS.md)
 - [Docs index](docs/README.md)
 - [Implementation spine](docs/spine.md)
 - [API](docs/api.md)

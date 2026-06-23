@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after CLI.PACKAGE.0
+after REPO.OPERATING.0
 ```
 
 Current implementation commit:
@@ -664,6 +664,7 @@ Future commands are listed only under the delivery that implements them.
 | ARTIFACT.NAMING.0 | complete | GGUF artifact naming contract and existing artifact rename |
 | M2 | complete | DeepSeek real-model materialization hardening |
 | CLI.PACKAGE.0 | complete | Repository root launcher and CLI packaging baseline |
+| REPO.OPERATING.0 | complete | Agent operating handbook and model artifact cards |
 | M3 | next | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
 | M5 | paused | First real-model partial graph execution |
@@ -2181,6 +2182,49 @@ Acceptance:
 missing build output exits 127 with clear message
 docs prefer ./yvex for repo-local examples
 build/bin remains the compiled output
+```
+
+### REPO.OPERATING.0 - Agent Operating Handbook and Model Artifact Cards
+
+Status:
+
+```text
+complete
+```
+
+Owns:
+
+```text
+AGENTS.md
+MODEL_ARTIFACTS.md
+repository operating contract
+model artifact cards
+active DeepSeek target declaration
+Qwen historical-only declaration
+support level posture
+validation command map
+```
+
+Does not own:
+
+```text
+runtime behavior
+conversion behavior
+materialization behavior
+server lifecycle behavior
+inference
+```
+
+Acceptance:
+
+```text
+AGENTS.md exists
+MODEL_ARTIFACTS.md exists
+DeepSeek active target is explicit
+Qwen historical-only status is explicit
+support levels are accurate
+no forbidden external reference/toolchain names
+no full model or inference claim
 ```
 
 ### M3 - Materialized-Weight Engine Attachment
