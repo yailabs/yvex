@@ -5,7 +5,7 @@
  * Layer: server implementation
  *
  * Purpose:
- *   Updates the small K0 yvexd request/error counters exposed by /metrics.
+ *   Updates the small server shell yvexd request/error counters exposed by /metrics.
  */
 #include "server_internal.h"
 

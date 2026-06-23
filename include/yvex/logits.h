@@ -5,8 +5,8 @@
  * Layer: public runtime API
  *
  * Purpose:
- *   Defines the H0 logits buffer skeleton. The object reports whether a logits
- *   buffer can be sized from the current descriptor; H0 does not compute logits
+ *   Defines the engine/session layer logits buffer skeleton. The object reports whether a logits
+ *   buffer can be sized from the current descriptor; engine/session layer does not compute logits
  *   or expose a sampler.
  *
  * Owns:
@@ -20,7 +20,7 @@
  *
  * Used by:
  *   - yvex_session
- *   - H0 tests
+ *   - engine/session layer tests
  *
  * Validation:
  *   - make test-core

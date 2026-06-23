@@ -6,7 +6,7 @@
  *
  * Purpose:
  *   Loads the CUDA Driver API dynamically and exposes helper routines used by
- *   the L0 backend and CLI probing paths.
+ *   the CUDA backend backend and CLI probing paths.
  */
 #include "cuda_internal.h"
 

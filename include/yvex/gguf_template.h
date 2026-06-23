@@ -5,7 +5,7 @@
  * Layer: public tool-plane API
  *
  * Purpose:
- *   Declares the OWI.3 GGUF template validator surface. A template is a
+ *   Declares the open-weight intake GGUF template validator surface. A template is a
  *   structural contract for conversion/emission, not a source of truth,
  *   executable model, or generated YVEX artifact.
  */

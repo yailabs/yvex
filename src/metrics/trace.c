@@ -5,7 +5,7 @@
  * Layer: runtime observability implementation
  *
  * Purpose:
- *   Writes J0 trace events as one JSON object per line for implemented
+ *   Writes observability layer trace events as one JSON object per line for implemented
  *   runtime shell paths.
  */
 #include <yvex/trace.h>

@@ -5,7 +5,7 @@
  * Layer: session implementation
  *
  * Purpose:
- *   Implements the H0 KV cache summary object. The current descriptor fixture
+ *   Implements the engine/session layer KV cache summary object. The current descriptor fixture
  *   does not carry enough attention metadata, so the cache reports
  *   unavailable and allocates no backend memory.
  *
@@ -15,7 +15,7 @@
  *   - KV status/summary accessors
  *
  * Invariants:
- *   - H0 does not allocate KV tensors
+ *   - engine/session layer does not allocate KV tensors
  *   - unavailable KV has zero bytes
  *
  * Commands:

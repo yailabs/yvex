@@ -163,16 +163,16 @@ static int test_valid_metadata_and_tensors(void)
     yvex_error err;
     int rc;
 
-    YVEX_TEST_ASSERT(open_fixture("tests/fixtures/gguf/valid-metadata-tensors.gguf", &artifact) == 0, "open C1 valid fixture");
+    YVEX_TEST_ASSERT(open_fixture("tests/fixtures/gguf/valid-metadata-tensors.gguf", &artifact) == 0, "open GGUF parser valid fixture");
 
     rc = yvex_gguf_open(&gguf, artifact, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "C1 valid fixture parses");
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "GGUF parser valid fixture parses");
 
     header = yvex_gguf_header_view(gguf);
     YVEX_TEST_ASSERT(header != NULL, "header view exists");
-    YVEX_TEST_ASSERT(header->version == 3, "C1 version");
-    YVEX_TEST_ASSERT(yvex_gguf_metadata_count(gguf) == 5, "C1 metadata count");
-    YVEX_TEST_ASSERT(yvex_gguf_tensor_count(gguf) == 1, "C1 tensor count");
+    YVEX_TEST_ASSERT(header->version == 3, "GGUF parser version");
+    YVEX_TEST_ASSERT(yvex_gguf_metadata_count(gguf) == 5, "GGUF parser metadata count");
+    YVEX_TEST_ASSERT(yvex_gguf_tensor_count(gguf) == 1, "GGUF parser tensor count");
     YVEX_TEST_ASSERT(yvex_gguf_alignment(gguf) == 32, "alignment is 32");
     YVEX_TEST_ASSERT((yvex_gguf_tensor_data_offset(gguf) % 32) == 0, "tensor data offset aligned");
 

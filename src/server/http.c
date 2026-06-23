@@ -5,7 +5,7 @@
  * Layer: server implementation
  *
  * Purpose:
- *   Implements the small HTTP/1.1 subset needed by K0 yvexd endpoints.
+ *   Implements the small HTTP/1.1 subset needed by server shell yvexd endpoints.
  */
 #include "http_internal.h"
 

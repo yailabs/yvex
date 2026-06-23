@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Provides tiny assertion helpers for A0.1 C tests. This is intentionally
+ *   Provides tiny assertion helpers for core C tests. This is intentionally
  *   small and dependency-free.
  *
  * Covers:

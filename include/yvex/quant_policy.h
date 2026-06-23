@@ -5,7 +5,7 @@
  * Layer: public tool-plane API
  *
  * Purpose:
- *   Declares the OWI.5 declarative quantization policy surface. Policies
+ *   Declares the open-weight intake declarative quantization policy surface. Policies
  *   describe intended storage qtypes for tensor roles/names/patterns; they do
  *   not quantize, emit GGUF, materialize, or imply execution support.
  */

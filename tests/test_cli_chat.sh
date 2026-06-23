@@ -6,7 +6,7 @@
 # Layer: test
 #
 # Purpose:
-#   Proves that yvex chat is an I0 REPL shell that accepts user prompt tokens,
+#   Proves that yvex chat is an diagnostic runtime REPL shell that accepts user prompt tokens,
 #   handles slash commands, and reports generation unsupported.
 #
 # Covers:
@@ -47,7 +47,7 @@ contains "$OUT_DIR/chat_pipe.out" "YVEX chat runtime"
 contains "$OUT_DIR/chat_pipe.out" "session_state: partial"
 contains "$OUT_DIR/chat_pipe.out" "accepted tokens: 3"
 contains "$OUT_DIR/chat_pipe.out" "position: 3"
-contains "$OUT_DIR/chat_pipe.out" "assistant: [generation unsupported in I0]"
+contains "$OUT_DIR/chat_pipe.out" "assistant: [generation unsupported in diagnostic runtime]"
 contains "$OUT_DIR/chat_pipe.out" "accepted_tokens: 3"
 contains "$OUT_DIR/chat_pipe.out" "session reset"
 contains "$OUT_DIR/chat_pipe.out" "bye"

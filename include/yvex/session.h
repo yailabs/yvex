@@ -5,9 +5,9 @@
  * Layer: public runtime API
  *
  * Purpose:
- *   Defines the H0 session object and state machine. Sessions bind an engine
+ *   Defines the engine/session layer session object and state machine. Sessions bind an engine
  *   to a backend and expose lifecycle/token-acceptance diagnostics; they do
- *   not execute prefill, decode, sampling, or generation in H0.
+ *   not execute prefill, decode, sampling, or generation in engine/session layer.
  *
  * Owns:
  *   - yvex_session
@@ -23,7 +23,7 @@
  *
  * Used by:
  *   - yvex session
- *   - H0 runtime tests
+ *   - engine/session layer runtime tests
  *
  * Validation:
  *   - make test-core

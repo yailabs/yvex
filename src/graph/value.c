@@ -5,7 +5,7 @@
  * Layer: graph implementation
  *
  * Purpose:
- *   Provides private allocation helpers for F0 graph values, operations, and
+ *   Provides private allocation helpers for graph planner graph values, operations, and
  *   missing-role diagnostics. The graph owns copied names and diagnostic
  *   strings so dumps remain valid after descriptor inputs are released.
  *

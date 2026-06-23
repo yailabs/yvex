@@ -5,7 +5,7 @@
  * Layer: session implementation
  *
  * Purpose:
- *   Binds an H0 engine to a backend and exposes a stateful session object with
+ *   Binds an engine/session layer engine to a backend and exposes a stateful session object with
  *   token acceptance, cancellation/reset behavior, KV/logits summaries, and
  *   explicit unsupported prefill/decode paths.
  *
@@ -18,7 +18,7 @@
  * Invariants:
  *   - session borrows engine and backend
  *   - graph partial sessions remain non-executable
- *   - H0 never advances execution through prefill/decode
+ *   - engine/session layer never advances execution through prefill/decode
  *
  * Commands:
  *   - make test-core
@@ -63,7 +63,7 @@ int yvex_session_create(yvex_session **out,
         return YVEX_ERR_INVALID_ARG;
     }
     if (yvex_backend_status_of(backend) != YVEX_BACKEND_STATUS_READY) {
-        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_session_create", "backend is not ready for H0 sessions");
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_session_create", "backend is not ready for engine/session layer sessions");
         return YVEX_ERR_UNSUPPORTED;
     }
 
@@ -97,7 +97,7 @@ int yvex_session_create(yvex_session **out,
     if (session->graph_partial && !allow_partial) {
         yvex_session_close(session);
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_session_create",
-                       "graph is partial; allow_partial_graph is required in H0");
+                       "graph is partial; allow_partial_graph is required in engine/session layer");
         return YVEX_ERR_UNSUPPORTED;
     }
 
@@ -232,14 +232,14 @@ int yvex_session_prefill(yvex_session *session,
         session->state = YVEX_SESSION_STATE_PARTIAL;
         set_session_reason_from_graph(session);
         yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_session_prefill",
-                        "prefill is not executable in H0 because %s", session->reason);
+                        "prefill is not executable in engine/session layer because %s", session->reason);
         return YVEX_ERR_UNSUPPORTED;
     }
 
     yvex_runtime_set_text_reason(session->reason, sizeof(session->reason),
-                                 "prefill runtime not implemented in H0");
+                                 "prefill runtime not implemented in engine/session layer");
     yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_session_prefill",
-                   "prefill runtime is not implemented in H0");
+                   "prefill runtime is not implemented in engine/session layer");
     return YVEX_ERR_UNSUPPORTED;
 }
 
@@ -254,9 +254,9 @@ int yvex_session_decode_next(yvex_session *session,
     }
     *out_token = 0;
     yvex_runtime_set_text_reason(session->reason, sizeof(session->reason),
-                                 "decode runtime not implemented in H0");
+                                 "decode runtime not implemented in engine/session layer");
     yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_session_decode_next",
-                   "decode runtime is not implemented in H0");
+                   "decode runtime is not implemented in engine/session layer");
     return YVEX_ERR_UNSUPPORTED;
 }
 

@@ -5,7 +5,7 @@
  * Layer: public runtime API
  *
  * Purpose:
- *   Defines the implemented B0 path-resolution and run-directory skeleton
+ *   Defines the implemented runtime filesystem path-resolution and run-directory skeleton
  *   surface. This module constructs config/cache/state/data paths and run
  *   directory paths without parsing config files or writing run artifacts.
  *

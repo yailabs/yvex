@@ -1,7 +1,7 @@
 /*
  * YVEX - Materialize gate JSON translation unit
  *
- * JSON output is reserved for a later report-format wave. M2 owns the stable
+ * JSON output is reserved for a later report-format change. materialization gate owns the stable
  * text report and failure vocabulary.
  */
 #include "materialize_gate_internal.h"

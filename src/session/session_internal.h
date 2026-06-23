@@ -5,7 +5,7 @@
  * Layer: session implementation
  *
  * Purpose:
- *   Shares private H0 engine/session/KV/logits structures across runtime
+ *   Shares private engine/session layer engine/session/KV/logits structures across runtime
  *   implementation files. Public consumers see only opaque handles.
  *
  * Owns:

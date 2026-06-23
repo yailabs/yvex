@@ -5,7 +5,7 @@
  * Layer: server CLI
  *
  * Purpose:
- *   Provides the K0 standalone yvexd process. It serves local health, metrics,
+ *   Provides the server shell standalone yvexd process. It serves local health, metrics,
  *   and model-catalog status endpoints. It does not generate model output.
  */
 #include <stdio.h>
@@ -18,8 +18,8 @@ static void print_help(FILE *fp)
 {
     fprintf(fp, "usage: yvexd [--host HOST] [--port PORT] [--model FILE] [--backend cpu|cuda] [--one-request]\n");
     fprintf(fp, "\n");
-    fprintf(fp, "Starts the K0 local server shell. Endpoints: /health, /metrics, /v1/models.\n");
-    fprintf(fp, "Generation endpoints are not implemented in K0.\n");
+    fprintf(fp, "Starts the server shell local server shell. Endpoints: /health, /metrics, /v1/models.\n");
+    fprintf(fp, "Generation endpoints are not implemented in server shell.\n");
 }
 
 static int parse_port(const char *text, unsigned int *out)

@@ -5,7 +5,7 @@
  * Layer: graph implementation
  *
  * Purpose:
- *   Implements lifecycle and inspection helpers for F0 graph objects. Graphs
+ *   Implements lifecycle and inspection helpers for graph planner graph objects. Graphs
  *   are owned planning artifacts built by builder.c and never execute ops.
  *
  * Implements:

@@ -1,16 +1,16 @@
 # YVEX Runtime Filesystem
 
-This document owns the B0 filesystem contract. `docs/spine.md` remains the
+This document owns the runtime filesystem filesystem contract. `docs/spine.md` remains the
 technical authority; this file narrows the implemented path and run-directory
 surface.
 
 ## Status
 
 ```text
-path resolution: implemented in B0
-project-local .yvex paths: implemented in B0
-run directory path preparation: implemented in B0
-run directory creation: implemented in B0
+path resolution: implemented in runtime filesystem
+project-local .yvex paths: implemented in runtime filesystem
+run directory path preparation: implemented in runtime filesystem
+run directory creation: implemented in runtime filesystem
 config parser: not implemented
 run artifact writer: not implemented
 lock/cache policy: documented, not implemented
@@ -36,7 +36,7 @@ yvex paths --run --create
 
 ## Environment Variables
 
-B0 reads these environment variables:
+runtime filesystem reads these environment variables:
 
 ```text
 YVEX_CONFIG_DIR
@@ -49,9 +49,9 @@ YVEX_RUN_DIR
 `YVEX_RUN_DIR` affects run-directory preparation only. It is not stored inside
 `yvex_paths`.
 
-## Practical B0 Precedence
+## Practical runtime filesystem Precedence
 
-B0 implements the practical path precedence available before config parsing:
+runtime filesystem implements the practical path precedence available before config parsing:
 
 ```text
 explicit function argument
@@ -70,7 +70,7 @@ user config ~/.config/yvex/config.toml
 built-in default
 ```
 
-B0 does not parse TOML and does not read `.yvex/config.toml`.
+runtime filesystem does not parse TOML and does not read `.yvex/config.toml`.
 
 ## Default Directories
 
@@ -101,7 +101,7 @@ state:   <project_root>/.yvex/state
 data:    <project_root>/.yvex/data
 ```
 
-Project-local mode is explicit. B0 does not auto-detect the current repository
+Project-local mode is explicit. runtime filesystem does not auto-detect the current repository
 root and does not parse project config.
 
 ## Run Directory Skeleton
@@ -132,11 +132,11 @@ Prepared run path shape:
   receipt.json
 ```
 
-B0 creates the run root and run directory only. It does not write those files.
+runtime filesystem creates the run root and run directory only. It does not write those files.
 
 ## Provider-Node Open-Weight Paths
 
-OWI.1 records external source paths but does not move model files into the
+open-weight intake records external source paths but does not move model files into the
 repository. Current DeepSeek provider-node paths are:
 
 ```text
@@ -158,14 +158,14 @@ GGUF template files are external artifacts unless they are tiny test fixtures
 already tracked under `tests/fixtures/gguf`. External reference template GGUFs,
 when present, are read-only references for `yvex gguf-template` and `yvex tensor-map
 --template`; generated future YVEX GGUFs stay outside the repository unless a
-later wave explicitly scopes a fixture-size artifact.
+later change explicitly scopes a fixture-size artifact.
 
-OWI.7 controlled GGUF tests generate disposable artifacts under
+open-weight intake controlled GGUF tests generate disposable artifacts under
 `build/tests/gguf-emit`. Real generated model artifacts must live outside the
 repository, for example under `~/lab/models/gguf/...`, unless a future spine
 change explicitly scopes a tiny fixture.
 
-OWI.8 conversion plans for live sources live under `~/lab/manifests/qwen` or
+open-weight intake conversion plans for live sources live under `~/lab/manifests/qwen` or
 `~/lab/manifests/deepseek`. Live generated selected-tensor GGUF artifacts live
 outside the repository under paths such as `~/lab/models/gguf/qwen/...` and
 `~/lab/models/gguf/deepseek/...`. Test conversion artifacts live under
@@ -181,7 +181,7 @@ files, are referenced read-only and must not be copied into the repository.
 Tiny fake `.dat` fixtures created by `tests/test_cli_imatrix.sh` live under
 `build/tests` and are disposable.
 
-OWI.9 quantization job manifests live outside the repository under:
+open-weight intake quantization job manifests live outside the repository under:
 
 ```text
 ~/lab/manifests/deepseek/
@@ -202,13 +202,13 @@ External quantization logs live outside the repository under:
 `tests/test_cli_quant_job.sh` creates disposable fake job files under
 `build/tests/quant-job-cli`.
 
-M1 model-gate reports live outside the repository under:
+model gate model-gate reports live outside the repository under:
 
 ```text
 ~/lab/artifacts/model-gates/
 ```
 
-Generated GGUF artifacts validated by M1 live outside the repository under:
+Generated GGUF artifacts validated by model gate live outside the repository under:
 
 ```text
 ~/lab/models/gguf/<family>/
@@ -237,7 +237,7 @@ build/bin/yvexd
 The root launchers are source-controlled wrappers and are not generated files.
 The build directory remains disposable.
 
-M2 materialization-gate reports live outside the repository under:
+materialization gate materialization-gate reports live outside the repository under:
 
 ```text
 ~/lab/artifacts/materialization-gates/m2/
@@ -361,7 +361,7 @@ cache invalidation must name the version/key that changed
 `receipt.json` is execution-local evidence. It is not a YAI case record until
 YAI imports it through its own authority path.
 
-## B0 Validation
+## runtime filesystem Validation
 
 ```sh
 make clean
@@ -374,5 +374,5 @@ build/tests/test_fs
 YVEX_RUN_DIR=build/tests/manual-runs ./yvex paths --run --create
 ```
 
-B0 does not implement inference, GGUF parsing, tokenization, CUDA,
+runtime filesystem does not implement inference, GGUF parsing, tokenization, CUDA,
 server/provider behavior, or additional interface surfaces.

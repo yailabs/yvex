@@ -5,7 +5,7 @@
  * Layer: CLI runtime implementation
  *
  * Purpose:
- *   Classifies I0 chat slash commands. Unknown slash commands remain handled
+ *   Classifies diagnostic runtime chat slash commands. Unknown slash commands remain handled
  *   runtime input and never terminate the process by themselves.
  *
  * Implements:

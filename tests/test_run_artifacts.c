@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves J0 run artifact preparation creates deterministic metrics, trace,
+ *   Proves observability layer run artifact preparation creates deterministic metrics, trace,
  *   profile, and command paths under explicit test directories.
  */
 #include <stdio.h>

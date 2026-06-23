@@ -5,8 +5,8 @@
  * Layer: artifact implementation
  *
  * Purpose:
- *   Implements read-only artifact opening for C0. The `map` option is accepted
- *   as a future policy flag, but C0 uses an owned in-memory read buffer and
+ *   Implements read-only artifact opening for artifact layer. The `map` option is accepted
+ *   as a future policy flag, but artifact layer uses an owned in-memory read buffer and
  *   makes no mmap support claim.
  *
  * Implements:

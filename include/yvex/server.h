@@ -5,7 +5,7 @@
  * Layer: public server API
  *
  * Purpose:
- *   Defines the K0 yvexd server shell API. The server exposes local
+ *   Defines the server shell yvexd server shell API. The server exposes local
  *   health, metrics, and model-catalog status endpoints. It does not implement
  *   generation, streamed output, sampler behavior, or compatibility claims.
  *

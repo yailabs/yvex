@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that F0 memory plans are estimate-only summaries derived from
+ *   Proves that graph planner memory plans are estimate-only summaries derived from
  *   descriptor facts and graph shapes, without allocating backend memory.
  *
  * Covers:

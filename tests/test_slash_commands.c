@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves the I0 slash-command parser recognizes required chat commands and
+ *   Proves the diagnostic runtime slash-command parser recognizes required chat commands and
  *   leaves normal text alone.
  *
  * Covers:

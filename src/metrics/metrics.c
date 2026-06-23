@@ -5,7 +5,7 @@
  * Layer: runtime observability implementation
  *
  * Purpose:
- *   Implements J0 phase timing and accepted-token counters for runtime shell
+ *   Implements observability layer phase timing and accepted-token counters for runtime shell
  *   paths that exist today. This module does not compute inference throughput.
  */
 #include <yvex/metrics.h>

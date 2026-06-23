@@ -6,7 +6,7 @@
  *
  * Purpose:
  *   Defines the first YVEX backend abstraction and CPU reference backend
- *   surface. G0 proves backend lifecycle, tensor allocation/read/write/copy,
+ *   surface. backend layer proves backend lifecycle, tensor allocation/read/write/copy,
  *   memory stats, capability reporting, and a minimal embed op.
  *
  * Owns:

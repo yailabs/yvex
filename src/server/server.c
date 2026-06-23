@@ -5,7 +5,7 @@
  * Layer: server implementation
  *
  * Purpose:
- *   Implements the K0 yvexd server shell lifecycle and a tiny local HTTP
+ *   Implements the server shell yvexd server shell lifecycle and a tiny local HTTP
  *   listener for health, metrics, and model-catalog status endpoints.
  */
 #define _POSIX_C_SOURCE 200809L
@@ -50,7 +50,7 @@ static int load_server_runtime(yvex_server *server, yvex_error *err)
     }
     if (strcmp(server->backend_name, "cpu") != 0) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_server_create",
-                       "server model backend is unsupported in K0");
+                       "server model backend is unsupported in server shell");
         return YVEX_ERR_UNSUPPORTED;
     }
 
@@ -238,7 +238,7 @@ int yvex_server_serve(yvex_server *server,
         close_listen_fd(server);
         server->status = YVEX_SERVER_STATUS_FAILED;
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_server_serve",
-                       "host must be an IPv4 address in K0");
+                       "host must be an IPv4 address in server shell");
         return YVEX_ERR_INVALID_ARG;
     }
     if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {

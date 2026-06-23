@@ -5,7 +5,7 @@
  * Layer: public prompt API
  *
  * Purpose:
- *   Defines bounded message and prompt rendering helpers for E0. The renderer
+ *   Defines bounded message and prompt rendering helpers for tokenizer layer. The renderer
  *   uses a deterministic YVEX default format and does not execute arbitrary
  *   Jinja templates.
  *

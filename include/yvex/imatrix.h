@@ -5,7 +5,7 @@
  * Layer: public tool-plane API
  *
  * Purpose:
- *   Declares the OWI.6 imatrix provenance and compatibility surface. Imatrix
+ *   Declares the open-weight intake imatrix provenance and compatibility surface. Imatrix
  *   manifests link external calibration artifacts to source manifests and
  *   quantization policies. They do not generate calibration data, quantize,
  *   emit GGUF, materialize weights, or participate in runtime inference.

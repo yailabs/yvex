@@ -5,7 +5,7 @@
  * Layer: CLI runtime implementation
  *
  * Purpose:
- *   Defines the private slash-command parser used by the I0 chat shell.
+ *   Defines the private slash-command parser used by the diagnostic runtime chat shell.
  *   Slash commands inspect/reset the runtime shell; ordinary text is not
  *   treated as a command.
  *

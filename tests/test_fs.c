@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves B0 runtime filesystem path resolution, project-local paths, run ID
+ *   Proves runtime filesystem runtime filesystem path resolution, project-local paths, run ID
  *   creation, run-directory preparation, and directory creation behavior.
  *
  * Covers:

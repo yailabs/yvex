@@ -5,7 +5,7 @@
  * Layer: public tool/support API
  *
  * Purpose:
- *   Declares the machine-local model registry used by CLI.MODELS.1. The
+ *   Declares the machine-local model registry used by model selection work. The
  *   registry maps short aliases to external GGUF artifact paths and metadata.
  *   It does not execute, materialize, infer, or change one-shot command model
  *   resolution yet.

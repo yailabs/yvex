@@ -6,7 +6,7 @@
  *
  * Purpose:
  *   Combines a graph and estimate-only memory plan into a high-level planning
- *   object. In G0, CPU backend availability/capabilities are probed through
+ *   object. In backend layer, CPU backend availability/capabilities are probed through
  *   the backend ABI, while execution remains disabled.
  *
  * Implements:
@@ -19,7 +19,7 @@
  * Invariants:
  *   - plan owns graph and memory plan
  *   - cpu is available when the CPU backend ABI opens
- *   - cuda is probed through L0 backend attachment
+ *   - cuda is probed through CUDA backend backend attachment
  *   - execution_ready remains false
  *
  * Commands:
@@ -118,7 +118,7 @@ int yvex_plan_create(yvex_plan **out,
 
     if (!backend_allowed(backend_name)) {
         yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_plan_create",
-                        "backend label unsupported in F0: %s", backend_name);
+                        "backend label unsupported in graph planner: %s", backend_name);
         return YVEX_ERR_UNSUPPORTED;
     }
 

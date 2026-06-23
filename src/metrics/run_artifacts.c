@@ -5,7 +5,7 @@
  * Layer: runtime observability implementation
  *
  * Purpose:
- *   Prepares J0 metrics/trace/profile artifact paths for run/chat commands.
+ *   Prepares observability layer metrics/trace/profile artifact paths for run/chat commands.
  *   It creates run directories when requested and writes command.txt only.
  */
 #define _POSIX_C_SOURCE 200809L

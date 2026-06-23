@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that A0.1 log level and domain names are stable and that unknown
+ *   Proves that core log level and domain names are stable and that unknown
  *   values use the fallback string.
  *
  * Covers:

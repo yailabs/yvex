@@ -5,7 +5,7 @@
  * Layer: tokenizer implementation
  *
  * Purpose:
- *   Builds and owns tokenizer metadata state from GGUF metadata. E0 supports
+ *   Builds and owns tokenizer metadata state from GGUF metadata. tokenizer layer supports
  *   vocabulary extraction for supported metadata and encode/decode only for
  *   the controlled yvex-fixture-simple tokenizer kind.
  *
@@ -16,7 +16,7 @@
  *
  * Invariants:
  *   - no external tokenizer dependency is used
- *   - real Llama/GPT2 tokenizers are metadata/vocab-only in E0
+ *   - real Llama/GPT2 tokenizers are metadata/vocab-only in tokenizer layer
  *   - tokenizer state owns copied vocabulary strings
  *
  * Commands:

@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Verifies OWI.1 source provenance scanning and manifest writing over a tiny
+ *   Verifies open-weight intake source provenance scanning and manifest writing over a tiny
  *   fake source tree. No external model files are required or committed.
  */
 #include "test.h"

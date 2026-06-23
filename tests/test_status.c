@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that every A0.1 status code maps to a stable string and that
+ *   Proves that every core status code maps to a stable string and that
  *   status predicates behave deterministically.
  *
  * Covers:

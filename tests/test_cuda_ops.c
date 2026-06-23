@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that L0 CUDA supports the same minimal F32 embedding op as the G0
+ *   Proves that CUDA backend CUDA supports the same minimal F32 embedding op as the backend layer
  *   CPU reference backend. Returns 77 when CUDA is unavailable.
  */
 #include <stdio.h>

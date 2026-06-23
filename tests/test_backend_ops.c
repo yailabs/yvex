@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that G0 CPU backend capabilities are explicit and that the minimal
+ *   Proves that backend layer CPU backend capabilities are explicit and that the minimal
  *   F32 embedding reference op works over backend tensors.
  *
  * Covers:

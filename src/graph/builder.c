@@ -6,7 +6,7 @@
  *
  * Purpose:
  *   Builds the first deterministic YVEX planning graph from a model
- *   descriptor and tensor table. F0 emits inspectable values, planned ops and
+ *   descriptor and tensor table. graph planner emits inspectable values, planned ops and
  *   missing-role diagnostics, but it does not execute computation.
  *
  * Implements:

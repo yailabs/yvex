@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves C0 artifact opening and range checking against tiny checked-in
+ *   Proves artifact layer artifact opening and range checking against tiny checked-in
  *   fixtures. No model downloads or real model files are required.
  *
  * Covers:

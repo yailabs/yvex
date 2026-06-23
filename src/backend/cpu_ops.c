@@ -5,7 +5,7 @@
  * Layer: backend implementation
  *
  * Purpose:
- *   Implements the first CPU reference op over backend tensors. G0 supports a
+ *   Implements the first CPU reference op over backend tensors. backend layer supports a
  *   minimal F32 embedding lookup to prove backend ABI dispatch beyond raw
  *   allocation/read/write.
  *
@@ -13,7 +13,7 @@
  *   - yvex_cpu_op_embed
  *
  * Invariants:
- *   - only F32 embedding tensors are supported in G0
+ *   - only F32 embedding tensors are supported in backend layer
  *   - embedding dims use [hidden_size, vocab_size]
  *   - output dims use [token_count, hidden_size]
  *
@@ -56,7 +56,7 @@ int yvex_cpu_op_embed(yvex_backend *backend,
     }
     if (embedding->dtype != YVEX_DTYPE_F32 || out->dtype != YVEX_DTYPE_F32) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_embed",
-                       "G0 CPU embed supports F32 tensors only");
+                       "backend layer CPU embed supports F32 tensors only");
         return YVEX_ERR_UNSUPPORTED;
     }
     if (embedding->rank != 2) {

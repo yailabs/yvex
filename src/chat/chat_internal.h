@@ -5,13 +5,13 @@
  * Layer: CLI runtime implementation
  *
  * Purpose:
- *   Defines the private I0 runtime shell object used by yvex run/chat. The
+ *   Defines the private diagnostic runtime runtime shell object used by yvex run/chat. The
  *   shell opens engine/backend/session objects, accepts prompt tokens, and
  *   reports diagnostics without executing decode or generation.
  *
  * Owns:
  *   - yvex_chat_runtime
- *   - I0 run/chat result summaries
+ *   - diagnostic runtime run/chat result summaries
  *   - status-line helper declarations
  *
  * Does not own:

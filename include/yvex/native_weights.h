@@ -5,7 +5,7 @@
  * Layer: public tool-plane API
  *
  * Purpose:
- *   Declares the OWI.2 metadata-only native weight inventory surface for
+ *   Declares the open-weight intake metadata-only native weight inventory surface for
  *   Hugging Face safetensors source trees.
  *
  * Does not own:

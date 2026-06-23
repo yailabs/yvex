@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that H0 engine/session diagnostics expose the partial graph reason
+ *   Proves that engine/session layer engine/session diagnostics expose the partial graph reason
  *   and keep execution readiness false.
  *
  * Covers:

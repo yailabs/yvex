@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that G0 opens the CPU reference backend and supports tensor
+ *   Proves that backend layer opens the CPU reference backend and supports tensor
  *   allocation, memory stats, read/write, copy, sync, and memory-limit errors.
  *
  * Covers:

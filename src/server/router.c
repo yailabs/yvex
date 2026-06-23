@@ -5,7 +5,7 @@
  * Layer: server implementation
  *
  * Purpose:
- *   Routes the small K0 HTTP surface to status handlers.
+ *   Routes the small server shell HTTP surface to status handlers.
  */
 #include "server_internal.h"
 

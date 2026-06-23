@@ -5,7 +5,7 @@
  * Layer: public model/backend bridge API
  *
  * Purpose:
- *   Defines the first weight materialization surface. M0 copies tensor bytes
+ *   Defines the first weight materialization surface. fixture materialization copies tensor bytes
  *   from a parsed GGUF artifact into backend-owned tensors and exposes an
  *   inspectable materialized weight table.
  *

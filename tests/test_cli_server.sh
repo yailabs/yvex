@@ -6,7 +6,7 @@
 # Layer: test
 #
 # Purpose:
-#   Proves the K0 yvexd binary serves status endpoints on localhost in
+#   Proves the server shell yvexd binary serves status endpoints on localhost in
 #   one-request mode without generation claims.
 
 set -eu
@@ -106,6 +106,6 @@ serve_one 18183 unsupported
 http_request 18183 POST /v1/completions "$OUT_DIR/unsupported.http"
 wait "$server_pid" || fail "unsupported server failed"
 contains "$OUT_DIR/unsupported.http" "HTTP/1.1 501 Not Implemented"
-contains "$OUT_DIR/unsupported.http" "generation endpoints are not implemented in K0"
+contains "$OUT_DIR/unsupported.http" "generation endpoints are not implemented in server shell"
 
 printf 'cli server smoke: ok\n'

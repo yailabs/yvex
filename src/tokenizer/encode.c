@@ -7,7 +7,7 @@
  * Purpose:
  *   Implements deterministic greedy longest-prefix tokenization for the
  *   controlled yvex-fixture-simple tokenizer. Other tokenizer kinds return
- *   explicit unsupported status in E0.
+ *   explicit unsupported status in tokenizer layer.
  *
  * Implements:
  *   - yvex_tokenize_text
@@ -102,7 +102,7 @@ int yvex_tokenize_text(const yvex_tokenizer *tokenizer,
 
     if (tokenizer->support != YVEX_TOKENIZER_SUPPORT_FIXTURE_ENCODE_DECODE) {
         yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_tokenize_text",
-                        "tokenizer kind %s is not executable in E0",
+                        "tokenizer kind %s is not executable in tokenizer layer",
                         yvex_tokenizer_kind_name(tokenizer->kind));
         return YVEX_ERR_UNSUPPORTED;
     }

@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves the K0 HTTP parser and response builder handle the small yvexd
+ *   Proves the server shell HTTP parser and response builder handle the small yvexd
  *   status endpoint surface.
  */
 #include <string.h>

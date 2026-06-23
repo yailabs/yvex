@@ -5,7 +5,7 @@
  * Layer: tool-plane implementation
  *
  * Purpose:
- *   Recursively scans an official-weight source directory for OWI.1 provenance
+ *   Recursively scans an official-weight source directory for open-weight intake provenance
  *   summaries. It records file paths, sizes, and coarse file kinds only; it
  *   does not parse or checksum tensor payloads.
  */

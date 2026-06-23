@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that the L0 CUDA device probe opens a real CUDA backend when the
+ *   Proves that the CUDA backend CUDA device probe opens a real CUDA backend when the
  *   local driver/device is available. Returns 77 when CUDA is unavailable.
  */
 #include <stdio.h>

@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that the A0.1 version API returns stable compile-time values
+ *   Proves that the core version API returns stable compile-time values
  *   without runtime setup.
  *
  * Covers:

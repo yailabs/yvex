@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves the K0 server shell creates summaries and routes health, metrics,
+ *   Proves the server shell server shell creates summaries and routes health, metrics,
  *   model catalog, and unsupported generation endpoints without execution.
  */
 #include <string.h>
@@ -87,7 +87,7 @@ static int test_routes(void)
     rc = yvex_server_route(server, &request, &response, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "unsupported generation route");
     YVEX_TEST_ASSERT(response.status_code == 501, "unsupported status");
-    YVEX_TEST_ASSERT(strstr(response.body, "generation endpoints are not implemented in K0") != NULL,
+    YVEX_TEST_ASSERT(strstr(response.body, "generation endpoints are not implemented in server shell") != NULL,
                      "unsupported message");
 
     yvex_server_close(server);

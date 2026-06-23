@@ -5,7 +5,7 @@
  * Layer: graph implementation
  *
  * Purpose:
- *   Shares private graph, memory plan, and planner structures across the F0
+ *   Shares private graph, memory plan, and planner structures across the graph planner
  *   implementation files. Public consumers see only opaque handles.
  *
  * Owns:

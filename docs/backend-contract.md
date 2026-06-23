@@ -1,14 +1,14 @@
 # YVEX Backend Contract
 
 This document owns backend architecture. CPU reference backend behavior exists
-as of G0; CUDA attachment exists as of L0.
+with CUDA support through the same opaque backend ABI.
 
-## Status
+## Capability Posture
 
 ```text
-CPU backend: implemented in G0
-CUDA backend: tensor allocation/read/write/copy and F32 embed parity implemented in L0 when driver/device are available
-Weight materialization: fixture tensor bytes copied into CPU/CUDA backend tensors in M0
+CPU backend: implemented
+CUDA backend: tensor allocation/read/write/copy and F32 embed parity implemented when driver/device are available
+Weight materialization: selected or fixture tensor bytes copied into CPU/CUDA backend tensors
 Metal backend: not implemented
 ROCm backend: not implemented
 backend public headers: implemented in include/yvex/backend.h
@@ -60,8 +60,8 @@ error mapping
 ## Backend ABI
 
 The core runtime calls an opaque backend vtable. Backend-specific native handles
-stay inside backend implementation files. G0 implements the ABI with a CPU
-reference backend. L0 attaches CUDA through the same ABI.
+stay inside backend implementation files. The backend layer implements the ABI
+with a CPU reference backend, and CUDA attaches through the same ABI.
 
 Implemented generic operations:
 
@@ -106,7 +106,7 @@ freed
 
 ## CPU Reference Backend
 
-CPU reference exists for correctness and fixtures. G0 implements:
+CPU reference exists for correctness and fixtures. It implements:
 
 ```text
 tensor allocation
@@ -121,7 +121,7 @@ sync no-op
 CPU reference does not need to be fast. It must be deterministic, inspectable,
 and useful for CUDA parity.
 
-G0 does not implement:
+The CPU reference backend does not implement:
 
 ```text
 matmul
@@ -135,7 +135,7 @@ inference
 
 ## CUDA / DGX Spark Track
 
-L0 CUDA status:
+CUDA backend status:
 
 ```text
 driver/device probe: implemented through CUDA Driver API
@@ -188,7 +188,7 @@ all stream creation/destruction is owned by backend_cuda
 cuBLAS ownership:
 
 ```text
-not implemented in L0
+not implemented in CUDA backend
 future backend_cuda owns cublasHandle_t only when matmul work begins
 cuda-info reports cuBLAS availability only after implementation
 planner records cuBLAS vs custom kernel per matmul op
@@ -206,20 +206,19 @@ unknown CUDA error -> YVEX_ERR_BACKEND with numeric code and error string
 
 ## Capability Matrix
 
-```text
-op                | cpu     | cuda    | notes
-tensor_alloc      | yes     | yes     | CPU and CUDA tests exist
-tensor_copy       | yes     | yes     | CPU and CUDA copy tests exist
-op_embed          | yes     | yes     | F32 CPU/CUDA parity exists
-rms_norm          | planned | planned | CPU reference first
-matmul_f16        | planned | planned | CUDA may use cuBLAS
-matmul_q8_0       | planned | planned | dequant path required
-matmul_q4_k       | planned | planned | qtype fixture required
-attention_prefill | planned | planned | tiny fixture first
-attention_decode  | planned | planned | KV fixture first
-sampler           | planned | planned | deterministic parity
-moe_router        | later   | later   | MoE fixture required
-```
+| op | cpu | cuda | notes |
+| --- | --- | --- | --- |
+| tensor_alloc | yes | yes | CPU and CUDA tests exist |
+| tensor_copy | yes | yes | CPU and CUDA copy tests exist |
+| op_embed | yes | yes | F32 CPU/CUDA parity exists |
+| rms_norm | no | no | not implemented |
+| matmul_f16 | no | no | not implemented |
+| matmul_q8_0 | no | no | not implemented |
+| matmul_q4_k | no | no | not implemented |
+| attention_prefill | no | no | not implemented |
+| attention_decode | no | no | not implemented |
+| sampler | no | no | not implemented |
+| moe_router | no | no | not implemented |
 
 ## CPU/CUDA Parity Rules
 
@@ -237,7 +236,7 @@ timing, and memory measurement before it is trusted.
 
 ## Weight Materialization Contract
 
-M0 introduces backend residency for parsed GGUF tensor bytes.
+Materialization introduces backend residency for parsed GGUF tensor bytes.
 
 Implemented:
 
@@ -264,13 +263,13 @@ materialization does not imply graph execution
 execution_ready remains false
 ```
 
-M0 does not materialize external large models, implement model support levels,
+Materialization does not materialize external large models, implement model support levels,
 execute graph ops, allocate KV cache, compute logits, sample tokens, or claim
 inference.
 
-## M1 Model Gate Contract
+## Model Gate Contract
 
-M1 adds a formal materialization gate for produced GGUF artifacts. A gate pass
+The model gate validates produced GGUF artifacts. A gate pass
 means the artifact identity, expected tensor specification, and requested
 backend materialization checks passed.
 
@@ -284,13 +283,13 @@ support_level must not exceed the proof actually produced
 execution_ready remains false
 ```
 
-M1 classifies the Qwen and DeepSeek selected embedding GGUFs as
+The model gate classifies the Qwen and DeepSeek selected embedding GGUFs as
 `selected-tensor-materialized`. It does not attach an engine, execute a graph,
 run prefill/decode, compute logits, sample, or benchmark.
 
-## M2 Materialize Gate Contract
+## Materialize Gate Contract
 
-M2 hardens materialization around the DeepSeek selected GGUF. It repeats
+The materialization gate hardens materialization around the DeepSeek selected GGUF. It repeats
 materialization, closes the weight table after each iteration, and verifies
 backend allocation cleanup through public backend memory stats when available.
 
@@ -305,6 +304,6 @@ materialization pass does not imply compute support
 execution_ready remains false
 ```
 
-M2 does not alter backend allocation behavior, attach weights to an engine,
+The materialization gate does not alter backend allocation behavior, attach weights to an engine,
 execute graph ops, allocate KV cache, compute logits, sample tokens, or claim
 inference.

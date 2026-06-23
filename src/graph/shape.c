@@ -5,7 +5,7 @@
  * Layer: graph implementation
  *
  * Purpose:
- *   Implements small checked shape helpers for F0 graph planning. These
+ *   Implements small checked shape helpers for graph planner graph planning. These
  *   helpers validate ranks, reject zero dimensions, and detect product
  *   overflow before memory estimates use shape products.
  *

@@ -5,7 +5,7 @@
  * Layer: CLI runtime implementation
  *
  * Purpose:
- *   Provides small output helpers for the I0 chat shell. Line reading remains
+ *   Provides small output helpers for the diagnostic runtime chat shell. Line reading remains
  *   in the CLI command so stdin/stdout behavior stays explicit.
  *
  * Implements:

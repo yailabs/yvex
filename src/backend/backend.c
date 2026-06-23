@@ -16,7 +16,7 @@
  *   - public vtable dispatch wrappers
  *
  * Invariants:
- *   - non-CPU backends are unsupported in G0
+ *   - non-CPU backends are unsupported in backend layer
  *   - public wrappers validate arguments before dispatch
  *   - library code does not print
  *

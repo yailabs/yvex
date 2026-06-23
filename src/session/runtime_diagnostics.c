@@ -5,7 +5,7 @@
  * Layer: session implementation
  *
  * Purpose:
- *   Builds compact diagnostic reason strings for H0 engine/session summaries.
+ *   Builds compact diagnostic reason strings for engine/session layer engine/session summaries.
  *   Diagnostics describe why a runtime object is inspectable but not
  *   execution-ready.
  *
@@ -16,7 +16,7 @@
  *
  * Invariants:
  *   - diagnostics do not print from library code
- *   - execution readiness remains false in H0
+ *   - execution readiness remains false in engine/session layer
  *
  * Commands:
  *   - make test-core
@@ -105,7 +105,7 @@ void yvex_runtime_set_graph_reason(char *out, size_t cap, const yvex_graph *grap
             snprintf(out, cap, "graph unsupported");
         }
     } else if (yvex_graph_status_of(graph) == YVEX_GRAPH_STATUS_BUILT) {
-        snprintf(out, cap, "decode runtime not implemented in H0");
+        snprintf(out, cap, "decode runtime not implemented in engine/session layer");
     } else {
         snprintf(out, cap, "graph status: %s", yvex_graph_status_name(yvex_graph_status_of(graph)));
     }

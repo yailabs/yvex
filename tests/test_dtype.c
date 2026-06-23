@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves D0 dtype/qtype name mapping, GGML raw type mapping, and storage
+ *   Proves model layer dtype/qtype name mapping, GGML raw type mapping, and storage
  *   byte formulas for the storage-accounting subset.
  *
  * Covers:

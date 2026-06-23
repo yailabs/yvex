@@ -5,9 +5,9 @@
  * Layer: public runtime API
  *
  * Purpose:
- *   Defines the H0 KV cache planning skeleton. The object reports whether KV
+ *   Defines the engine/session layer KV cache planning skeleton. The object reports whether KV
  *   cache sizing is available from the current descriptor; it does not allocate
- *   backend tensors or store attention state in H0.
+ *   backend tensors or store attention state in engine/session layer.
  *
  * Owns:
  *   - yvex_kv_cache
@@ -20,7 +20,7 @@
  *
  * Used by:
  *   - yvex_session
- *   - H0 tests
+ *   - engine/session layer tests
  *
  * Validation:
  *   - make test-core

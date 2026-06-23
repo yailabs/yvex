@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves J0 metrics/profile JSON writers persist accepted-token counters
+ *   Proves observability layer metrics/profile JSON writers persist accepted-token counters
  *   and omit fake decode/generation benchmark fields.
  */
 #include <stdio.h>

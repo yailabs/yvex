@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that D0 builds an owned YVEX tensor table from the C1 GGUF tensor
+ *   Proves that model layer builds an owned YVEX tensor table from the GGUF parser GGUF tensor
  *   directory without claiming model execution.
  *
  * Covers:

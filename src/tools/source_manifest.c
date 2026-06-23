@@ -5,7 +5,7 @@
  * Layer: tool-plane implementation
  *
  * Purpose:
- *   Implements the OWI.1 public source manifest entrypoints. The implementation
+ *   Implements the open-weight intake public source manifest entrypoints. The implementation
  *   scans local source trees read-only and writes provenance JSON without
  *   retaining heap state after return.
  */

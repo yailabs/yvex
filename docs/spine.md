@@ -57,12 +57,58 @@ docs/cli-commands.md owns the command index.
 docs/cli-runtime.md owns detailed command behavior.
 ```
 
+### Public Documentation Boundary Doctrine
+
+`docs/spine.md` is the only tracked documentation file allowed to contain
+internal delivery-map identifiers, milestone IDs, delivery status tables, and
+handoff sequencing.
+
+Public-facing files must not expose internal implementation-map nomenclature.
+
+Internal delivery language includes:
+
+```text
+P0/A0/B0/C0/C1/D0/... milestone IDs
+OWI.* milestone IDs
+M* milestone IDs
+CLI.* milestone IDs
+RUNTIME.* milestone IDs
+REPO.* milestone IDs
+ARTIFACT.* milestone IDs
+QA.BENCH.* milestone IDs
+planned/paused/next/complete delivery status rows
+"wave" as implementation-delivery unit
+"handoff" as delivery handoff language
+"next authorized milestone"
+"current milestone"
+"linear delivery spine"
+```
+
+Public-facing files should describe capabilities instead:
+
+```text
+what the tool does
+what command to run
+what is supported
+what is unsupported
+what artifacts exist
+what safety/claim boundaries exist
+```
+
+Allowed exception:
+
+```text
+docs/spine.md
+```
+
+Only the spine may contain the internal delivery map.
+
 ## 1. Current State
 
 Current phase:
 
 ```text
-after CLI.MODELS.2
+after DOCS.PUBLIC.0
 ```
 
 Current implementation commit:
@@ -688,6 +734,7 @@ Future commands are listed only under the delivery that implements them.
 | CLI.MODELS.0 | complete | Local model registry and selection spine |
 | CLI.MODELS.1 | complete | Local model registry implementation |
 | CLI.MODELS.2 | complete | Model alias resolution for one-shot commands |
+| DOCS.PUBLIC.0 | complete | Public documentation boundary cleanup |
 | CLI.MODELS.3 | next | Model selection in canonical REPL |
 | CLI.MODELS.4 | planned | Model alias resolution in yvexd |
 | M3 | paused | Materialized-weight engine attachment |
@@ -2438,6 +2485,47 @@ path behavior remains supported
 missing alias errors are precise
 chat / REPL startup remains unchanged
 yvexd alias resolution remains unchanged
+```
+
+### DOCS.PUBLIC.0 - Public Documentation Boundary Cleanup
+
+Status:
+
+```text
+complete
+```
+
+Owns:
+
+```text
+public documentation boundary doctrine
+README public capability cleanup
+AGENTS operating-language cleanup
+MODEL_ARTIFACTS artifact-card cleanup
+CLI/API/backend/runtime documentation cleanup
+source/help-string delivery ID cleanup
+public boundary validation
+```
+
+Does not own:
+
+```text
+implementation behavior changes
+CLI behavior changes
+command renames
+public C API changes
+rewriting git history
+```
+
+Acceptance:
+
+```text
+internal delivery IDs appear only in docs/spine.md
+public docs describe capabilities, commands, artifacts, support posture, and limitations
+README does not read like a delivery diary
+AGENTS and MODEL_ARTIFACTS avoid specific milestone IDs
+CLI docs do not expose current milestone rows
+validation passes
 ```
 
 ### CLI.MODELS.3 - Model Selection in Canonical REPL

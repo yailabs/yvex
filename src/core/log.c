@@ -5,7 +5,7 @@
  * Layer: core implementation
  *
  * Purpose:
- *   Implements string helpers for the narrow A0.1 logging vocabulary. This is
+ *   Implements string helpers for the narrow core logging vocabulary. This is
  *   not a logging sink and does not emit logs.
  *
  * Implements:

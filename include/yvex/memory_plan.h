@@ -5,7 +5,7 @@
  * Layer: public planning API
  *
  * Purpose:
- *   Defines an estimate-only memory plan built from F0 graph and tensor-table
+ *   Defines an estimate-only memory plan built from graph planner graph and tensor-table
  *   facts. The plan does not allocate memory or query a backend.
  *
  * Owns:

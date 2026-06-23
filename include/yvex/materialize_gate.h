@@ -5,7 +5,7 @@
  * Layer: public tool/support API
  *
  * Purpose:
- *   Defines the M2 repeatable materialization gate for produced GGUF artifacts.
+ *   Defines the materialization gate repeatable materialization gate for produced GGUF artifacts.
  *   The gate validates identity, tensor specs, backend materialization,
  *   cleanup, and failure classes. It does not imply execution readiness.
  */

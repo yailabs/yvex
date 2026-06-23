@@ -5,7 +5,7 @@
  * Layer: tokenizer implementation
  *
  * Purpose:
- *   Shares the private tokenizer object layout across E0 tokenizer modules.
+ *   Shares the private tokenizer object layout across tokenizer layer tokenizer modules.
  *   This header is internal to src/tokenizer and is not installed as public API.
  *
  * Commands:

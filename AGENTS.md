@@ -74,9 +74,9 @@ benchmark claims
 
 ## 3. Active Target Policy
 
-DeepSeek V4 Flash is the active live model target from M2 onward.
+DeepSeek V4 Flash is the active live model target.
 
-Qwen3-8B is historical OWI/M1 evidence only. Do not add new Qwen live gates,
+Qwen3-8B is historical validation evidence only. Do not add new Qwen live gates,
 Qwen runtime targets, or Qwen-first milestones unless `docs/spine.md` explicitly
 re-authorizes Qwen.
 
@@ -106,7 +106,7 @@ Generated model artifacts live outside the repository.
 
 ## 5. Repository Reading Order
 
-Before implementing a wave, read in this order:
+Before implementing project work, read in this order:
 
 ```text
 1. docs/spine.md
@@ -236,7 +236,7 @@ only after installing/linking the root launchers into PATH.
 
 ## 9. Validation Contract
 
-Baseline validation for implementation waves:
+Baseline validation for implementation changes:
 
 ```sh
 make clean
@@ -287,12 +287,11 @@ git grep -n -i \
 
 Positive matches must be absent. Negative/non-goal references are allowed.
 
-## 10. Wave Handoff Requirements
+## 10. Completion Report Requirements
 
-Every completed wave report must include:
+Every completed implementation report must include:
 
 ```text
-wave id
 commit hash
 files created
 files modified
@@ -305,7 +304,7 @@ validation result
 artifact guardrail result
 forbidden reference scan result
 non-goals preserved
-next authorized milestone
+next internal delivery target from docs/spine.md
 ```
 
 ## 11. Live DeepSeek Commands
@@ -389,6 +388,6 @@ Agents must:
 
 ## 14. Current Next Work
 
-The next authorized milestone is defined only by `docs/spine.md`.
+The next implementation sequence is defined only by `docs/spine.md`.
 
 Do not infer next work from chat memory, filenames, or old reports.

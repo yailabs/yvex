@@ -98,7 +98,7 @@ int yvex_gguf_template_validate(yvex_gguf_template *tmpl,
         if (tensor->role == YVEX_TENSOR_ROLE_UNKNOWN) {
             tmpl->summary.unknown_role_count++;
             rc = yvex_gguf_template_add_issue(tmpl, YVEX_GGUF_TEMPLATE_ISSUE_UNKNOWN_TENSOR_ROLE,
-                                              tensor->name, "tensor role is unknown before OWI.4 mapping", err);
+                                              tensor->name, "tensor role is unknown before open-weight intake mapping", err);
             if (rc != YVEX_OK) return rc;
             partial = 1;
         } else {

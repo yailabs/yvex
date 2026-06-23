@@ -76,16 +76,37 @@ Typical registry flow:
 - [AGENTS.md](AGENTS.md) - operating contract for humans and coding agents.
 - [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md) - current external model artifact
   cards and support posture.
-- [docs/spine.md](docs/spine.md) - canonical delivery spine and next authorized
-  milestone.
+- [docs/spine.md](docs/spine.md) - internal delivery map.
 
 The current active live target is DeepSeek V4 Flash selected embedding GGUF.
 See [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md).
 
 ## Status
 
-This repository has completed OWI closeout, M1 model gates, M2 DeepSeek
-materialization hardening, artifact naming, and repository launcher packaging.
+YVEX currently supports:
+
+```text
+GGUF inspection
+metadata and tensor table parsing
+selected-tensor GGUF emission
+selected-tensor materialization on CPU/CUDA
+local model artifact registry
+model alias resolution for one-shot commands
+model gate and materialization gate diagnostics
+server/provider status shell
+```
+
+YVEX does not yet support:
+
+```text
+full-model execution
+prefill
+decode
+sampling
+generation
+OpenAI-compatible generation
+inference benchmarks
+```
 
 Current state:
 

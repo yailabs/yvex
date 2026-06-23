@@ -5,8 +5,8 @@
  * Layer: public planning API
  *
  * Purpose:
- *   Defines the F0 high-level plan object that owns a graph and memory plan.
- *   Backend names are labels only in F0 and do not activate execution.
+ *   Defines the graph planner high-level plan object that owns a graph and memory plan.
+ *   Backend names are labels only in graph planner and do not activate execution.
  *
  * Owns:
  *   - yvex_plan

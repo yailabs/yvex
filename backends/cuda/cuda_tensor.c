@@ -5,7 +5,7 @@
  * Layer: CUDA backend implementation
  *
  * Purpose:
- *   Implements L0 CUDA tensor allocation, free, host/device read/write, and
+ *   Implements CUDA backend CUDA tensor allocation, free, host/device read/write, and
  *   device-to-device copy through the CUDA Driver API.
  */
 #include "cuda_internal.h"

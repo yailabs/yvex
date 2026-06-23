@@ -5,7 +5,7 @@
  * Layer: public runtime observability API
  *
  * Purpose:
- *   Defines the J0 JSONL trace writer for implemented runtime shell events.
+ *   Defines the observability layer JSONL trace writer for implemented runtime shell events.
  *   Trace events report runtime lifecycle and accepted-token phases only; they
  *   do not claim inference, decode, sampling, or CUDA execution.
  *

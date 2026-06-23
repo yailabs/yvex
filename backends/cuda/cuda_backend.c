@@ -5,7 +5,7 @@
  * Layer: CUDA backend implementation
  *
  * Purpose:
- *   Attaches CUDA to the existing backend ABI. L0 exposes CUDA device probing,
+ *   Attaches CUDA to the existing backend ABI. CUDA backend exposes CUDA device probing,
  *   memory stats, tensor movement, and one parity op without claiming full graph
  *   execution or inference.
  */

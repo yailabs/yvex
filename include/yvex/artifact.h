@@ -5,7 +5,7 @@
  * Layer: public artifact API
  *
  * Purpose:
- *   Defines the implemented C0 artifact byte-view API. Artifacts are opened
+ *   Defines the implemented artifact layer artifact byte-view API. Artifacts are opened
  *   read-only, loaded into an owned byte buffer, and exposed through bounded
  *   size/data accessors for format parsers.
  *

@@ -5,7 +5,7 @@
  * Layer: CLI runtime implementation
  *
  * Purpose:
- *   Opens the I0 runtime shell over H0 engine/session objects and accepts
+ *   Opens the diagnostic runtime runtime shell over engine/session layer engine/session objects and accepts
  *   prompt text into the session. This module never executes decode or
  *   generates model output.
  *
@@ -17,8 +17,8 @@
  *
  * Invariants:
  *   - runtime owns engine/backend/session and closes in reverse order
- *   - prompt acceptance advances session position only through H0 API
- *   - generation remains unsupported in I0
+ *   - prompt acceptance advances session position only through engine/session layer API
+ *   - generation remains unsupported in diagnostic runtime
  *
  * Commands:
  *   - make test-core
@@ -247,7 +247,7 @@ int yvex_chat_runtime_accept_user_text(yvex_chat_runtime *runtime,
     out->position = summary.position;
     out->execution_ready = 0;
     copy_text(out->generation, sizeof(out->generation), "unsupported");
-    copy_text(out->reason, sizeof(out->reason), "decode runtime is not implemented in I0");
+    copy_text(out->reason, sizeof(out->reason), "decode runtime is not implemented in diagnostic runtime");
     runtime->accepted_turns += 1;
 
     if (runtime->metrics) {

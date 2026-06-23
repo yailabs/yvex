@@ -5,7 +5,7 @@
  * Layer: public runtime API
  *
  * Purpose:
- *   Defines the H0 engine object that assembles artifact, GGUF, tensor table,
+ *   Defines the engine/session layer engine object that assembles artifact, GGUF, tensor table,
  *   model descriptor, tokenizer, and optional graph planning state. The
  *   engine is inspectable runtime structure; it does not execute inference.
  *
@@ -23,7 +23,7 @@
  * Used by:
  *   - yvex engine
  *   - yvex session
- *   - H0 runtime tests
+ *   - engine/session layer runtime tests
  *
  * Validation:
  *   - make test-core

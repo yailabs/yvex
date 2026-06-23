@@ -6,7 +6,7 @@
  *
  * Purpose:
  *   Opens a GGUF artifact and assembles the descriptor/tokenizer/graph stack
- *   into an inspectable H0 engine object. The engine does not own a backend
+ *   into an inspectable engine/session layer engine object. The engine does not own a backend
  *   and does not execute a model.
  *
  * Implements:
@@ -34,7 +34,7 @@ static void set_engine_status_from_graph(yvex_engine *engine)
     if (!engine->graph) {
         engine->status = YVEX_ENGINE_STATUS_LOADED;
         yvex_runtime_set_text_reason(engine->reason, sizeof(engine->reason),
-                                     "graph not requested; execution not implemented in H0");
+                                     "graph not requested; execution not implemented in engine/session layer");
         return;
     }
 

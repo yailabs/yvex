@@ -5,7 +5,7 @@
  * Layer: public tool/support API
  *
  * Purpose:
- *   Defines the M1 model-gate surface for validating YVEX-produced GGUF
+ *   Defines the model gate model-gate surface for validating YVEX-produced GGUF
  *   artifacts by identity, tensor specification, and CPU/CUDA materialization.
  *
  * Does not own:

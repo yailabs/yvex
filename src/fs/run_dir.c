@@ -5,7 +5,7 @@
  * Layer: runtime filesystem implementation
  *
  * Purpose:
- *   Implements B0 run ID creation, run-directory path preparation, and
+ *   Implements runtime filesystem run ID creation, run-directory path preparation, and
  *   recursive directory creation. This module creates directories only; it
  *   does not write model, metrics, trace, receipt, or command artifacts.
  *

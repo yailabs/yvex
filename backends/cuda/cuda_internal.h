@@ -5,7 +5,7 @@
  * Layer: CUDA backend implementation
  *
  * Purpose:
- *   Defines the tiny CUDA Driver API bridge used by L0. The public YVEX API
+ *   Defines the tiny CUDA Driver API bridge used by CUDA backend. The public YVEX API
  *   remains plain C and never exposes CUDA native types.
  */
 #ifndef YVEX_CUDA_INTERNAL_H

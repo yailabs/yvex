@@ -53,9 +53,9 @@ real graph execution: no
 
 ## 4. Active Target
 
-DeepSeek V4 Flash is the active live target from M2 onward.
+DeepSeek V4 Flash is the active live target.
 
-Qwen3-8B is retained as historical OWI/M1 evidence only.
+Qwen3-8B is retained as historical validation evidence only.
 
 ## 5. Artifact Naming Grammar
 
@@ -169,7 +169,7 @@ Model gate:
 
 ## 8. Qwen3-8B - Historical Artifact Card
 
-Qwen3-8B remains historical OWI/M1 evidence only.
+Qwen3-8B remains historical validation evidence only.
 
 ### Identity
 

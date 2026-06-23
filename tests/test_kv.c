@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that the H0 KV cache object reports unavailable state without
+ *   Proves that the engine/session layer KV cache object reports unavailable state without
  *   allocating backend memory when descriptor attention metadata is absent.
  *
  * Covers:

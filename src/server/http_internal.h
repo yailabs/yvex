@@ -5,7 +5,7 @@
  * Layer: server implementation
  *
  * Purpose:
- *   Defines the tiny K0 HTTP parser/response builder used by yvexd. The
+ *   Defines the tiny server shell HTTP parser/response builder used by yvexd. The
  *   parser intentionally supports only short request lines and status endpoints.
  */
 #ifndef YVEX_HTTP_INTERNAL_H

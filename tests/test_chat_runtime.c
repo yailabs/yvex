@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves the I0 runtime shell can open engine/backend/session objects,
+ *   Proves the diagnostic runtime runtime shell can open engine/backend/session objects,
  *   accept fixture prompt text into the session, reset state, and handle CUDA
  *   ready/unavailable paths without claiming generation.
  *
@@ -47,7 +47,7 @@ static int test_runtime_accept_and_reset(void)
     YVEX_TEST_ASSERT(result.accepted_tokens == result.prompt_tokens, "accepted tokens match prompt");
     YVEX_TEST_ASSERT(result.position == result.prompt_tokens, "position matches prompt");
     YVEX_TEST_ASSERT_STREQ(result.generation, "unsupported", "generation unsupported");
-    YVEX_TEST_ASSERT(strstr(result.reason, "I0") != NULL, "reason mentions I0");
+    YVEX_TEST_ASSERT(strstr(result.reason, "diagnostic runtime") != NULL, "reason mentions diagnostic runtime");
 
     rc = yvex_chat_runtime_reset(&runtime, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "runtime reset");

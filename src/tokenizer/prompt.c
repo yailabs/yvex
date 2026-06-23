@@ -5,7 +5,7 @@
  * Layer: tokenizer implementation
  *
  * Purpose:
- *   Implements the bounded E0 default prompt renderer for explicit role
+ *   Implements the bounded tokenizer layer default prompt renderer for explicit role
  *   messages. This module does not execute arbitrary Jinja chat templates.
  *
  * Implements:

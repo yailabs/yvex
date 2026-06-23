@@ -7,7 +7,7 @@
  * Purpose:
  *   Implements the command table and CLI proof surface for implemented core,
  *   filesystem, artifact, GGUF directory, tensor table, and descriptor
- *   behavior, and H0 engine/session diagnostics. The CLI reports what exists
+ *   behavior, and engine/session layer engine/session diagnostics. The CLI reports what exists
  *   and does not expose future generation commands before their modules exist.
  *
  * Implements:
@@ -120,9 +120,9 @@ static const yvex_cli_command yvex_commands[] = {
     },
     {
         "chat",
-        "Start the I0 diagnostic chat shell.",
+        "Start the diagnostic runtime diagnostic chat shell.",
         "yvex chat --model FILE --backend cpu|cuda [--ctx N] [--metrics-out FILE] [--trace-out FILE] [--profile-out FILE] [--save-run] [--run-dir DIR]",
-        "Opens engine/backend/session and accepts user prompt tokens in a REPL. Optional J0 artifacts record implemented runtime phases only.",
+        "Opens engine/backend/session and accepts user prompt tokens in a REPL. Optional observability layer artifacts record implemented runtime phases only.",
         command_chat,
     },
     {
@@ -150,19 +150,19 @@ static const yvex_cli_command yvex_commands[] = {
         "detokenize",
         "Decode token IDs with an implemented tokenizer.",
         "yvex detokenize <path> --ids IDS",
-        "Opens a GGUF tokenizer descriptor and decodes comma-separated token IDs. E0 executes only the yvex-fixture-simple tokenizer.",
+        "Opens a GGUF tokenizer descriptor and decodes comma-separated token IDs. tokenizer layer executes only the yvex-fixture-simple tokenizer.",
         command_detokenize,
     },
     {
         "engine",
-        "Open an H0 engine descriptor.",
+        "Open an engine/session layer engine descriptor.",
         "yvex engine <path>",
         "Opens the descriptor/tokenizer/graph stack and reports engine diagnostics. It does not execute prefill, decode, run, or chat.",
         command_engine,
     },
     {
         "graph",
-        "Build and dump the F0 graph planning substrate.",
+        "Build and dump the graph planner graph planning substrate.",
         "yvex graph <path> [--seq N] [--ctx N]",
         "Opens a GGUF descriptor, builds a deterministic graph planning artifact, and prints values, planned ops, and missing-role diagnostics. It does not execute the graph.",
         command_graph,
@@ -219,8 +219,8 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "materialize-gate",
         "Run a repeatable materialization hardening gate.",
-        "yvex materialize-gate check --model FILE --label LABEL --family FAMILY --scope selected-tensor --expect-tensor NAME --expect-rank N --expect-dims D0,D1[,D2,D3] --expect-dtype DTYPE --expect-bytes BYTES [--sha256 HASH] [--backend cpu] [--backend cuda] [--require-cpu] [--require-cuda] [--repeat N] [--check-cleanup] [--report-out FILE]",
-        "Validates file identity, tensor specs, repeated CPU/CUDA materialization, cleanup, and failure classes. M2 uses DeepSeek as the only live target and does not claim execution or inference.",
+        "yvex materialize-gate check --model FILE --label LABEL --family FAMILY --scope selected-tensor --expect-tensor NAME --expect-rank N --expect-dims model layer,D1[,D2,D3] --expect-dtype DTYPE --expect-bytes BYTES [--sha256 HASH] [--backend cpu] [--backend cuda] [--require-cpu] [--require-cuda] [--repeat N] [--check-cleanup] [--report-out FILE]",
+        "Validates file identity, tensor specs, repeated CPU/CUDA materialization, cleanup, and failure classes. materialization gate uses DeepSeek as the only live target and does not claim execution or inference.",
         command_materialize_gate,
     },
     {
@@ -233,7 +233,7 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "model-gate",
         "Validate a produced GGUF artifact materialization gate.",
-        "yvex model-gate check --model FILE --label LABEL --family FAMILY --expect-tensor NAME --expect-rank N --expect-dims D0,D1[,D2,D3] --expect-dtype DTYPE --expect-bytes BYTES [--sha256 HASH] [--backend cpu] [--backend cuda] [--require-cpu] [--require-cuda] [--report-out FILE]",
+        "yvex model-gate check --model FILE --label LABEL --family FAMILY --expect-tensor NAME --expect-rank N --expect-dims model layer,D1[,D2,D3] --expect-dtype DTYPE --expect-bytes BYTES [--sha256 HASH] [--backend cpu] [--backend cuda] [--require-cpu] [--require-cuda] [--report-out FILE]",
         "Checks file identity, expected tensor specs, and requested CPU/CUDA materialization. It classifies selected-tensor materialization only and does not claim full-model support, graph execution, prefill, decode, generation, or inference.",
         command_model_gate,
     },
@@ -276,7 +276,7 @@ static const yvex_cli_command yvex_commands[] = {
         "prompt",
         "Render a bounded prompt from explicit messages.",
         "yvex prompt <path> [--system TEXT] --user TEXT [--assistant TEXT] [--tokens]",
-        "Renders the YVEX default prompt format. Arbitrary Jinja chat templates are not executed in E0.",
+        "Renders the YVEX default prompt format. Arbitrary Jinja chat templates are not executed in tokenizer layer.",
         command_prompt,
     },
     {
@@ -302,21 +302,21 @@ static const yvex_cli_command yvex_commands[] = {
     },
     {
         "run",
-        "Accept one prompt through the I0 runtime shell.",
+        "Accept one prompt through the diagnostic runtime runtime shell.",
         "yvex run --model FILE --backend cpu|cuda --prompt TEXT [--system TEXT] [--output plain|json] [--metrics-out FILE] [--trace-out FILE] [--profile-out FILE] [--save-run] [--run-dir DIR]",
-        "Opens engine/backend/session, tokenizes the prompt, accepts tokens, and reports accepted-only runtime diagnostics. Optional J0 artifacts record implemented runtime phases only.",
+        "Opens engine/backend/session, tokenizes the prompt, accepts tokens, and reports accepted-only runtime diagnostics. Optional observability layer artifacts record implemented runtime phases only.",
         command_run,
     },
     {
         "session",
-        "Create an H0 diagnostic session.",
+        "Create an engine/session layer diagnostic session.",
         "yvex session <path> [--backend cpu|cuda] [--ctx N] [--text TEXT] [--accept-tokens]",
         "Creates a lifecycle-only session over an engine and backend. It may accept tokens for diagnostics, but it does not run prefill, decode, or generation.",
         command_session,
     },
     {
         "source-manifest",
-        "Create an OWI source provenance manifest.",
+        "Create an open-weight source provenance manifest.",
         "yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE [--license TEXT] [--model-card URL] [--node NAME] [--dry-run-log FILE] [--download-log FILE] [--pid-file FILE] [--download-command TEXT]",
         "Scans a local official-weight source directory and writes provenance JSON. It does not download, parse safetensors, quantize, emit GGUF, materialize, or infer.",
         command_source_manifest,
@@ -325,7 +325,7 @@ static const yvex_cli_command yvex_commands[] = {
         "tokenize",
         "Encode text with an implemented tokenizer.",
         "yvex tokenize <path> --text TEXT",
-        "Opens a GGUF tokenizer descriptor and tokenizes text. E0 executes only the yvex-fixture-simple tokenizer.",
+        "Opens a GGUF tokenizer descriptor and tokenizes text. tokenizer layer executes only the yvex-fixture-simple tokenizer.",
         command_tokenize,
     },
     {
@@ -892,7 +892,7 @@ static int command_tokenize(int argc, char **argv)
             }
             text = argv[++i];
         } else if (strcmp(argv[i], "--pieces") == 0 || strcmp(argv[i], "--no-bos") == 0 || strcmp(argv[i], "--eos") == 0) {
-            /* Accepted for E0 CLI shape; fixture tokenization has no implicit BOS/EOS. */
+            /* Accepted for tokenizer layer CLI shape; fixture tokenization has no implicit BOS/EOS. */
         } else {
             fprintf(stderr, "yvex: unknown tokenize option: %s\n", argv[i]);
             fprintf(stderr, "Try 'yvex help tokenize' for usage.\n");
@@ -1263,7 +1263,7 @@ static int command_gguf_template(int argc, char **argv)
                summary.status == YVEX_GGUF_TEMPLATE_STATUS_VALID ? "valid" :
                summary.status == YVEX_GGUF_TEMPLATE_STATUS_INVALID ? "invalid" : "partial");
         if (summary.missing_in_native > 0 || summary.shape_mismatch > 0) {
-            printf("reason: architecture adapter mapping requires OWI.4\n");
+            printf("reason: architecture adapter mapping requires open-weight intake\n");
         }
         cli_print_template_issues(tmpl);
     } else if (strcmp(argv[2], "validate") == 0) {
@@ -1697,7 +1697,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: M0 fixture weight materialization\n");
+    printf("status: fixture materialization fixture weight materialization\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -2515,7 +2515,7 @@ static int command_models_scan(int argc, char **argv)
             }
             registry_path = argv[++i];
         } else if (strcmp(argv[i], "--json") == 0) {
-            /* Reserved for CLI.MODELS.1 compatibility; text output remains canonical. */
+            /* Reserved for model selection work compatibility; text output remains canonical. */
         } else {
             fprintf(stderr, "yvex: unknown models scan option: %s\n", argv[i]);
             return 2;
@@ -3863,15 +3863,15 @@ static int command_run(int argc, char **argv)
     }
 
     if (!model_path) {
-        fprintf(stderr, "yvex: --model is required for yvex run in I0\n");
+        fprintf(stderr, "yvex: --model is required for yvex run in diagnostic runtime\n");
         return 2;
     }
     if (!backend_name) {
-        fprintf(stderr, "yvex: --backend is required for yvex run in I0\n");
+        fprintf(stderr, "yvex: --backend is required for yvex run in diagnostic runtime\n");
         return 2;
     }
     if (!prompt_text) {
-        fprintf(stderr, "yvex: --prompt is required for yvex run in I0\n");
+        fprintf(stderr, "yvex: --prompt is required for yvex run in diagnostic runtime\n");
         return 2;
     }
 
@@ -3945,7 +3945,7 @@ static int command_run(int argc, char **argv)
 
     (void)yvex_metrics_phase_end(metrics, YVEX_METRIC_PHASE_TOTAL, total_token, &err);
     (void)yvex_trace_emit(trace, YVEX_TRACE_EVENT_RUN_END, "run", "accepted-only",
-                          "decode runtime is not implemented in I0", &err);
+                          "decode runtime is not implemented in diagnostic runtime", &err);
     cli_set_result_artifacts(&result, &artifacts);
 
     if (strcmp(status_line, "always") == 0) {
@@ -4316,11 +4316,11 @@ static int command_chat(int argc, char **argv)
     }
 
     if (!model_path) {
-        fprintf(stderr, "yvex: --model is required for yvex chat in I0\n");
+        fprintf(stderr, "yvex: --model is required for yvex chat in diagnostic runtime\n");
         return 2;
     }
     if (!backend_name) {
-        fprintf(stderr, "yvex: --backend is required for yvex chat in I0\n");
+        fprintf(stderr, "yvex: --backend is required for yvex chat in diagnostic runtime\n");
         return 2;
     }
 
@@ -4375,7 +4375,7 @@ static int command_chat(int argc, char **argv)
     printf("model: %s\n", engine_summary.model_name);
     printf("backend: %s\n", backend_name);
     printf("session_state: %s\n", yvex_session_state_name(session_summary.state));
-    printf("generation: unsupported in I0\n");
+    printf("generation: unsupported in diagnostic runtime\n");
     printf("type /help for commands\n");
 
     while (!done) {
@@ -4420,7 +4420,7 @@ static int command_chat(int argc, char **argv)
                                   "user prompt accepted", &err);
             printf("accepted tokens: %llu\n", result.prompt_tokens);
             printf("position: %llu\n", result.position);
-            printf("assistant: [generation unsupported in I0]\n");
+            printf("assistant: [generation unsupported in diagnostic runtime]\n");
         }
     }
 
@@ -4463,7 +4463,7 @@ static int command_source_manifest(int argc, char **argv)
     }
 
     if (strcmp(argv[2], "inspect") == 0) {
-        fprintf(stderr, "yvex: source-manifest inspect is not implemented in OWI.1\n");
+        fprintf(stderr, "yvex: source-manifest inspect is not implemented in open-weight intake\n");
         return 5;
     }
     if (strcmp(argv[2], "create") != 0) {

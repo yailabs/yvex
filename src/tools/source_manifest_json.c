@@ -5,7 +5,7 @@
  * Layer: tool-plane implementation
  *
  * Purpose:
- *   Emits the OWI.1 source manifest JSON contract. The writer records
+ *   Emits the open-weight intake source manifest JSON contract. The writer records
  *   provenance and local file summaries only; it does not hash, parse, or copy
  *   model bytes.
  */

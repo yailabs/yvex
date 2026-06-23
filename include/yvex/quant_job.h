@@ -5,7 +5,7 @@
  * Layer: public tool-plane API
  *
  * Purpose:
- *   Declares the OWI.9 external quantization job manifest surface. Quant jobs
+ *   Declares the open-weight intake external quantization job manifest surface. Quant jobs
  *   record provenance for external quantization commands.
  *   They do not run arbitrary shell commands, implement quantizers, infer, or
  *   claim runtime execution support.

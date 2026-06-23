@@ -5,7 +5,7 @@
  * Layer: public runtime observability API
  *
  * Purpose:
- *   Defines JSON writers for J0 metrics and profile summaries. These files
+ *   Defines JSON writers for observability layer metrics and profile summaries. These files
  *   summarize implemented runtime-shell work only and do not contain decode
  *   throughput, generated-token, or inference benchmark claims.
  *

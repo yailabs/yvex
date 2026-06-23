@@ -5,7 +5,7 @@
  * Layer: runtime observability implementation
  *
  * Purpose:
- *   Provides monotonic nanosecond timestamps for J0 metrics and trace events.
+ *   Provides monotonic nanosecond timestamps for observability layer metrics and trace events.
  */
 #define _POSIX_C_SOURCE 200809L
 

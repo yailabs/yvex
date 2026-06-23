@@ -5,7 +5,7 @@
  * Layer: backend implementation
  *
  * Purpose:
- *   Opens the G0 CPU reference backend and provides lifecycle, memory stats,
+ *   Opens the backend layer CPU reference backend and provides lifecycle, memory stats,
  *   sync, and capability entries for the internal backend vtable.
  *
  * Implements:

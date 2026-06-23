@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that F0 shape helpers reject invalid ranks/dimensions and compute
+ *   Proves that graph planner shape helpers reject invalid ranks/dimensions and compute
  *   deterministic products used by graph and memory-plan estimates.
  *
  * Covers:

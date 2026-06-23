@@ -246,7 +246,7 @@ CURRENT_DOCS := README.md NOTICE.md docs/README.md docs/spine.md \
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: M0 fixture weight materialization"
+	@echo "status: fixture materialization fixture weight materialization"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"
@@ -258,7 +258,7 @@ info:
 	@echo "graph: partial planning implemented"
 	@echo "planner: estimate-only implemented"
 	@echo "backend: CPU reference implemented"
-	@echo "backend_cuda: L0 dynamic driver attachment implemented"
+	@echo "backend_cuda: CUDA backend dynamic driver attachment implemented"
 	@echo "weights: fixture materialization implemented"
 	@echo "engine: runtime object skeleton implemented"
 	@echo "session: lifecycle skeleton implemented"
@@ -406,17 +406,16 @@ check-docs:
 	@grep -F "YVEX is CLI-only" docs/spine.md >/dev/null
 	@grep -F "YVEX is a C local inference engine" README.md >/dev/null
 	@grep -F "Completed Milestones" docs/spine.md >/dev/null
-	@grep -F "C1 - GGUF metadata and tensor directory" docs/spine.md >/dev/null
-	@grep -F "### C1 - GGUF metadata and tensor directory" docs/spine.md >/dev/null
-	@grep -F "D0 - Tensor and model layer" docs/spine.md >/dev/null
-	@grep -F "E0 - Tokenizer and prompt rendering" docs/spine.md >/dev/null
-	@grep -F "F0 - Graph and planner" docs/spine.md >/dev/null
-	@grep -F "G0 - CPU reference backend" docs/spine.md >/dev/null
-	@grep -F "H0 - Engine and session runtime" docs/spine.md >/dev/null
-	@grep -F "I0 - CLI run/chat runtime" docs/spine.md >/dev/null
-	@grep -F "J0 - Metrics and tracing" docs/spine.md >/dev/null
-	@grep -F "K0 - yvexd server/provider" docs/spine.md >/dev/null
-	@grep -F "L0 - CUDA/DGX Spark backend" docs/spine.md >/dev/null
+	@grep -F "GGUF metadata and tensor directory" docs/spine.md >/dev/null
+	@grep -F "Tensor and model layer" docs/spine.md >/dev/null
+	@grep -F "Tokenizer and prompt rendering" docs/spine.md >/dev/null
+	@grep -F "Graph and planner" docs/spine.md >/dev/null
+	@grep -F "CPU reference backend" docs/spine.md >/dev/null
+	@grep -F "Engine and session runtime" docs/spine.md >/dev/null
+	@grep -F "CLI run/chat runtime" docs/spine.md >/dev/null
+	@grep -F "Metrics and tracing" docs/spine.md >/dev/null
+	@grep -F "yvexd server/provider" docs/spine.md >/dev/null
+	@grep -F "CUDA/DGX Spark backend" docs/spine.md >/dev/null
 	@grep -F "Implemented by:" docs/spine.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Backend Contract" docs/backend-contract.md >/dev/null

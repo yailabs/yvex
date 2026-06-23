@@ -47,7 +47,7 @@ See `docs/cli-interface-spine.md`.
 
 ## Current Implemented Commands
 
-The M0 command-line surfaces implement exactly:
+The fixture materialization command-line surfaces implement exactly:
 
 ```text
 yvex
@@ -112,7 +112,7 @@ Current commands must stay backed by the command table in `cli/yvex_cli.c`.
 
 ## Model Reference Resolver
 
-CLI.MODELS.2 adds alias-or-path resolution for one-shot model commands.
+model selection work adds alias-or-path resolution for one-shot model commands.
 
 Resolution order:
 
@@ -153,7 +153,7 @@ name: YVEX
 version: 0.1.0
 language: C
 interface: CLI-only
-status: M0 fixture weight materialization
+status: fixture materialization fixture weight materialization
 library: libyvex.a
 filesystem: implemented
 artifact: open/read implemented
@@ -234,7 +234,7 @@ project: DIR/.yvex
 
 ## Current `yvex source-manifest`
 
-`yvex source-manifest create` writes an OWI.1 source provenance JSON manifest
+`yvex source-manifest create` writes an open-weight intake source provenance JSON manifest
 for a local official-weight source tree. It scans file paths, byte sizes, and
 coarse file kinds only. It does not download, parse safetensors, quantize, emit
 GGUF, materialize, or infer.
@@ -341,8 +341,8 @@ yvex gguf-template validate --template FILE
 yvex gguf-template compare --template FILE --native-source DIR
 ```
 
-`compare` uses OWI.2 native inventory and performs exact-name comparison only.
-Architecture-specific tensor-name mapping belongs to OWI.4, so mismatches are
+`compare` uses open-weight intake native inventory and performs exact-name comparison only.
+Architecture-specific tensor-name mapping belongs to open-weight intake, so mismatches are
 reported as partial rather than treated as DeepSeek support failure unless
 `--require-all-template-tensors-in-native` is passed.
 
@@ -461,7 +461,7 @@ target_shape=[4096,129280]
 transform=transpose
 ```
 
-The transpose is a compatibility report only. OWI.4 does not transpose payload
+The transpose is a compatibility report only. open-weight intake does not transpose payload
 bytes or produce a GGUF.
 
 ## Current `yvex quant-policy`
@@ -624,13 +624,13 @@ status: weights-materialized
 CUDA output has the same shape when a CUDA driver/device is available. If CUDA
 is unavailable, the command reports `status: weights-unsupported` and exits 5.
 
-M0 materialization does not execute prefill, decode, sampling, graph execution,
+fixture materialization materialization does not execute prefill, decode, sampling, graph execution,
 or model generation.
 
 ## Current `yvex tokenizer`
 
 `yvex tokenizer <path>` prints tokenizer metadata, vocabulary size, special
-token IDs, and E0 support posture.
+token IDs, and tokenizer layer support posture.
 
 Output shape:
 
@@ -648,9 +648,9 @@ chat_template: absent
 status: tokenizer-descriptor
 ```
 
-Real Llama/GPT2/Replit/RWKV tokenizer algorithms are not executed in E0. Their
+Real Llama/GPT2/Replit/RWKV tokenizer algorithms are not executed in tokenizer layer. Their
 metadata and vocab can be inspected when present, but encode/decode returns an
-explicit unsupported error unless the algorithm is implemented in a future wave.
+explicit unsupported error unless the algorithm is implemented in a future change.
 
 ## Current `yvex tokenize`
 
@@ -685,7 +685,7 @@ status: detokenized
 
 `yvex prompt <path> --system TEXT --user TEXT` renders explicit role messages
 through the YVEX default prompt format. Arbitrary Jinja chat templates are not
-executed in E0.
+executed in tokenizer layer.
 
 Output shape:
 
@@ -710,7 +710,7 @@ is `fixture-encode-decode`.
 ## Current `yvex graph`
 
 `yvex graph <path>` opens a GGUF artifact, builds the tensor table and model
-descriptor, then emits the F0 graph planning artifact. It does not execute ops.
+descriptor, then emits the graph planner graph planning artifact. It does not execute ops.
 
 Output shape for the current fixture:
 
@@ -840,7 +840,7 @@ status: backend-unsupported
 
 ## Current `yvex cuda-info`
 
-`yvex cuda-info` probes CUDA through the L0 dynamic CUDA Driver API path. It
+`yvex cuda-info` probes CUDA through the CUDA backend dynamic CUDA Driver API path. It
 does not report matmul, attention, session execution, or inference support.
 
 Available shape:
@@ -871,7 +871,7 @@ status: cuda-unavailable
 
 ## Current `yvex engine`
 
-`yvex engine <path>` opens the H0 engine stack and prints a descriptor/runtime
+`yvex engine <path>` opens the engine/session layer engine stack and prints a descriptor/runtime
 summary. It does not run prefill, decode, chat, or generation.
 
 ```text
@@ -940,7 +940,7 @@ session path, tokenizes the prompt text, accepts those tokens into the session,
 and prints an accepted-only runtime result. It does not execute prefill, decode,
 sampling, logits, or generation.
 
-J0 observability flags:
+observability layer observability flags:
 
 ```text
 --metrics-out FILE
@@ -962,7 +962,7 @@ accepted_tokens: 3
 position: 3
 execution_ready: false
 generation: unsupported
-reason: decode runtime is not implemented in I0
+reason: decode runtime is not implemented in diagnostic runtime
 ```
 
 JSON output is available through `--output json`:
@@ -981,7 +981,7 @@ JSON output is available through `--output json`:
     "position": 3,
     "execution_ready": false,
     "generation": "unsupported",
-    "reason": "decode runtime is not implemented in I0",
+    "reason": "decode runtime is not implemented in diagnostic runtime",
     "metrics": {
       "prompt_tokens": 3,
       "accepted_tokens": 3
@@ -996,11 +996,11 @@ available. If CUDA is unavailable, it reports backend-unsupported and exits 5.
 
 ## Current `yvex chat`
 
-`yvex chat --model FILE --backend cpu` starts a line-oriented REPL over the H0
+`yvex chat --model FILE --backend cpu` starts a line-oriented REPL over the engine/session layer
 engine/session path. It accepts user text as prompt tokens and prints an
 explicit unsupported assistant placeholder.
 
-J0 supports these artifact flags for chat as well:
+observability layer supports these artifact flags for chat as well:
 
 ```text
 --metrics-out FILE
@@ -1024,7 +1024,7 @@ YVEX chat runtime
 session_state: partial
 accepted tokens: 3
 position: 3
-assistant: [generation unsupported in I0]
+assistant: [generation unsupported in diagnostic runtime]
 bye
 ```
 
@@ -1042,7 +1042,7 @@ Implemented slash commands:
 
 ## Current `yvexd`
 
-`yvexd` is the K0 server shell. It opens a local HTTP listener and serves
+`yvexd` is the server shell server shell. It opens a local HTTP listener and serves
 status endpoints only.
 
 ```sh
@@ -1070,12 +1070,12 @@ engine_status: partial or not_loaded
 backend_status: ready or not_loaded
 ```
 
-K0 does not implement completion generation, chat-generation endpoint behavior,
+server shell does not implement completion generation, chat-generation endpoint behavior,
 streamed generated output, auth, TLS, or multi-client session pooling.
 
 ## Current Runtime Metrics And Trace Files
 
-J0 records only implemented runtime-shell work:
+observability layer records only implemented runtime-shell work:
 
 ```text
 engine open
@@ -1091,7 +1091,7 @@ Metrics JSON uses schema `yvex.metrics.v1`.
 Trace JSONL uses schema `yvex.trace.v1`.
 Profile JSON uses schema `yvex.profile.v1`.
 
-J0 does not emit decode throughput, TTFT, generated-token counters, CUDA timing,
+observability layer does not emit decode throughput, TTFT, generated-token counters, CUDA timing,
 server metrics, or inference benchmark claims.
 
 ## Future Commands
@@ -1143,7 +1143,7 @@ without status or progress corrupting `output.txt`.
 9   internal invariant/state error
 ```
 
-C1 currently exercises `0`, `2`, `4`, and `5`; artifact IO failures map to `3`.
+GGUF parser currently exercises `0`, `2`, `4`, and `5`; artifact IO failures map to `3`.
 
 ## TTY And Pipe Safety
 
@@ -1219,7 +1219,7 @@ New interface surfaces require an explicit roadmap decision before implementatio
 
 ## Quant Job CLI
 
-OWI.9 adds:
+open-weight intake adds:
 
 ```sh
 yvex quant-job create
@@ -1258,7 +1258,7 @@ GGUF at the recorded path.
 
 ## Model Gate CLI
 
-M1 adds:
+model gate adds:
 
 ```sh
 yvex model-gate check
@@ -1327,13 +1327,13 @@ Poor generic names are not canonical evidence for generated real-model GGUFs.
 
 ## Materialize Gate CLI
 
-M2 adds:
+materialization gate adds:
 
 ```sh
 yvex materialize-gate check
 ```
 
-DeepSeek is the only live external target for M2 and following model-support
+DeepSeek is the only live external target for materialization gate and following model-support
 work. Fixture tests may use tiny generated GGUFs for deterministic failure
 cases.
 

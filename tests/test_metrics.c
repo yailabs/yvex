@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves the J0 metrics collector records implemented runtime shell phases
+ *   Proves the observability layer metrics collector records implemented runtime shell phases
  *   and counters without generated-token performance claims.
  */
 #include <string.h>

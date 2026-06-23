@@ -2,7 +2,7 @@
  * YVEX - Model gate JSON translation unit
  *
  * JSON report emission is intentionally deferred until the text gate contract
- * is stable. This file keeps the M1 tool-plane layout explicit.
+ * is stable. This file keeps the model gate tool-plane layout explicit.
  */
 #include "model_gate_internal.h"
 

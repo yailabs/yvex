@@ -5,7 +5,7 @@
  * Layer: public tool-plane API
  *
  * Purpose:
- *   Declares the OWI.1 source provenance contract for official open-weight
+ *   Declares the open-weight intake source provenance contract for official open-weight
  *   intake. The API records source identity, provider-node paths, download
  *   proof paths, and local file presence without parsing tensor payloads.
  *

@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that the H0 logits object reports unavailable state when the
+ *   Proves that the engine/session layer logits object reports unavailable state when the
  *   descriptor lacks a reliable output head/runtime logits binding.
  *
  * Covers:

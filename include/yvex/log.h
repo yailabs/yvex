@@ -5,7 +5,7 @@
  * Layer: public core API
  *
  * Purpose:
- *   Defines the narrow A0.1 logging level/domain vocabulary and string helpers.
+ *   Defines the narrow core logging level/domain vocabulary and string helpers.
  *   This is a naming surface only; no logging sink is implemented here.
  *
  * Owns:

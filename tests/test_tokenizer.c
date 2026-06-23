@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves E0 tokenizer metadata extraction, vocabulary records, special-token
+ *   Proves tokenizer layer tokenizer metadata extraction, vocabulary records, special-token
  *   IDs, fixture encode/decode, malformed tokenizer metadata handling, and
  *   unsupported tokenizer behavior.
  *

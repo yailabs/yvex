@@ -5,7 +5,7 @@
  * Layer: public graph API
  *
  * Purpose:
- *   Defines the opaque graph object and graph inspection APIs for F0. Graphs
+ *   Defines the opaque graph object and graph inspection APIs for graph planner. Graphs
  *   are deterministic planning artifacts; they do not execute computation.
  *
  * Owns:

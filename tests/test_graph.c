@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that F0 builds a deterministic partial graph from the current
+ *   Proves that graph planner builds a deterministic partial graph from the current
  *   descriptor fixture and reports missing required tensor roles.
  *
  * Covers:

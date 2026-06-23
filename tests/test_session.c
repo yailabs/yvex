@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that H0 sessions bind an engine to the CPU backend, expose partial
+ *   Proves that engine/session layer sessions bind an engine to the CPU backend, expose partial
  *   lifecycle state, accept bounded tokens, and fail prefill/decode honestly.
  *
  * Covers:

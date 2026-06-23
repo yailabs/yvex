@@ -17,7 +17,7 @@
  *   - yvex_cpu_tensor_copy
  *
  * Invariants:
- *   - full-buffer read/write only in G0
+ *   - full-buffer read/write only in backend layer
  *   - allocation stats update on success only
  *   - tensor ownership is checked before mutation
  *

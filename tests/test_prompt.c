@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves the E0 default prompt renderer for explicit role messages and its
+ *   Proves the tokenizer layer default prompt renderer for explicit role messages and its
  *   interaction with the fixture tokenizer.
  *
  * Covers:

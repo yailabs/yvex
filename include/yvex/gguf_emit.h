@@ -5,7 +5,7 @@
  * Layer: public tool API
  *
  * Purpose:
- *   Defines the first intentionally small GGUF emission surface. OWI.7 emits
+ *   Defines the first intentionally small GGUF emission surface. open-weight intake emits
  *   one controlled F32 tensor with controlled metadata and validates it through
  *   the existing YVEX parser and materialization stack.
  *

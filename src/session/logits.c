@@ -5,7 +5,7 @@
  * Layer: session implementation
  *
  * Purpose:
- *   Implements the H0 logits summary object. H0 reports logits unavailable
+ *   Implements the engine/session layer logits summary object. engine/session layer reports logits unavailable
  *   when the descriptor lacks a reliable output head/vocabulary runtime
  *   binding and never computes logits.
  *
@@ -15,7 +15,7 @@
  *   - logits status/summary accessors
  *
  * Invariants:
- *   - H0 does not compute logits
+ *   - engine/session layer does not compute logits
  *   - unavailable logits have zero bytes
  *
  * Commands:

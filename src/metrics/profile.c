@@ -5,7 +5,7 @@
  * Layer: runtime observability implementation
  *
  * Purpose:
- *   Writes J0 metrics and profile JSON files for implemented runtime shell
+ *   Writes observability layer metrics and profile JSON files for implemented runtime shell
  *   paths. The output intentionally omits generated-token and decode metrics.
  */
 #include <yvex/profile.h>

@@ -9,7 +9,7 @@ static const yvex_qtype_support_info qtype_rows[] = {
     {"F32",      1, 1, 1, 0, 1, "scalar emit supported; CPU/CUDA materialization only"},
     {"F16",      1, 1, 1, 1, 0, "scalar emit and cast supported; no compute claim"},
     {"BF16",     1, 1, 1, 1, 0, "scalar emit and cast supported; no compute claim"},
-    {"Q8_0",     1, 1, 0, 0, 0, "storage known; quantizer/emitter not enabled in OWI.8"},
+    {"Q8_0",     1, 1, 0, 0, 0, "storage known; quantizer/emitter not enabled in open-weight intake"},
     {"Q4_K",     1, 0, 0, 0, 0, "policy vocabulary only; no emitter"},
     {"Q2_K",     1, 0, 0, 0, 0, "policy vocabulary only; no emitter"},
     {"IQ2_XXS",  1, 0, 0, 0, 0, "policy vocabulary only; no emitter"},

@@ -5,7 +5,7 @@
  * Layer: public tool-plane API
  *
  * Purpose:
- *   Declares the OWI.4 contract-level tensor mapping surface. It maps native
+ *   Declares the open-weight intake contract-level tensor mapping surface. It maps native
  *   open-weight tensor names to canonical YVEX roles and proposed GGUF/template
  *   tensor targets without reading payload bytes or emitting GGUF.
  */

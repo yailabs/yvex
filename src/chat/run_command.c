@@ -5,7 +5,7 @@
  * Layer: CLI runtime implementation
  *
  * Purpose:
- *   Formats I0 accepted-only run results in plain text or JSON. The result
+ *   Formats diagnostic runtime accepted-only run results in plain text or JSON. The result
  *   envelope states that generation is unsupported.
  *
  * Implements:

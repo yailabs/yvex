@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves the J0 trace writer emits JSONL event records with schema, event,
+ *   Proves the observability layer trace writer emits JSONL event records with schema, event,
  *   and incrementing sequence fields.
  */
 #include <stdio.h>

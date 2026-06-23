@@ -5,7 +5,7 @@
  * Layer: tool-plane implementation
  *
  * Purpose:
- *   Shares the small internal file-list representation used by the OWI.1
+ *   Shares the small internal file-list representation used by the open-weight intake
  *   source scanner and JSON writer. This is not part of the public API.
  */
 #ifndef YVEX_SOURCE_MANIFEST_INTERNAL_H

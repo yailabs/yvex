@@ -5,7 +5,7 @@
  * Layer: runtime filesystem implementation
  *
  * Purpose:
- *   Implements B0 path construction for user-default and project-local
+ *   Implements runtime filesystem path construction for user-default and project-local
  *   runtime filesystem locations. This module reads environment overrides
  *   and builds bounded, null-terminated paths.
  *

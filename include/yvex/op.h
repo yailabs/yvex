@@ -5,7 +5,7 @@
  * Layer: public graph API
  *
  * Purpose:
- *   Defines inspectable graph value and operation records for F0 planning.
+ *   Defines inspectable graph value and operation records for graph planner planning.
  *   These records describe planned computation only; they do not execute
  *   kernels or bind backend function pointers.
  *

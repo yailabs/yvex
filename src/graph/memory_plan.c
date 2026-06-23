@@ -5,7 +5,7 @@
  * Layer: graph implementation
  *
  * Purpose:
- *   Builds estimate-only memory summaries from F0 graphs and tensor tables.
+ *   Builds estimate-only memory summaries from graph planner graphs and tensor tables.
  *   This module performs arithmetic over descriptor facts only; it does not
  *   allocate backend buffers or query devices.
  *

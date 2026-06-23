@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that the H0 engine opens the full descriptor/tokenizer/graph stack
+ *   Proves that the engine/session layer engine opens the full descriptor/tokenizer/graph stack
  *   and reports an inspectable partial runtime descriptor.
  *
  * Covers:

@@ -5,7 +5,7 @@
  * Layer: core implementation
  *
  * Purpose:
- *   Implements the fixed A0.1 version surface. These helpers return static
+ *   Implements the fixed core version surface. These helpers return static
  *   compile-time values and do not read files, environment, or runtime state.
  *
  * Implements:

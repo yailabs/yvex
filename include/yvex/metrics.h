@@ -5,7 +5,7 @@
  * Layer: public runtime observability API
  *
  * Purpose:
- *   Defines the J0 metrics collector for implemented runtime shell phases and
+ *   Defines the observability layer metrics collector for implemented runtime shell phases and
  *   accepted-token counters. Metrics describe what exists today; they do not
  *   report decode, sampling, inference, or backend kernel throughput.
  *

@@ -6,7 +6,7 @@
 # Layer: test
 #
 # Purpose:
-#   Proves the OWI.1 source-manifest create command over a tiny fake local
+#   Proves the open-weight intake source-manifest create command over a tiny fake local
 #   source tree. The script does not download or commit model files.
 
 set -eu

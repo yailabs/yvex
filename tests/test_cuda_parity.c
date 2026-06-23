@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Compares the L0 CUDA F32 embedding op against the G0 CPU reference op.
+ *   Compares the CUDA backend CUDA F32 embedding op against the backend layer CPU reference op.
  *   Returns 77 when CUDA is unavailable.
  */
 #include <stdio.h>

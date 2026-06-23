@@ -5,7 +5,7 @@
  * Layer: test
  *
  * Purpose:
- *   Proves that D0 builds descriptor-only model summaries from parsed GGUF
+ *   Proves that model layer builds descriptor-only model summaries from parsed GGUF
  *   metadata and tensor tables without creating executable model state.
  *
  * Covers:

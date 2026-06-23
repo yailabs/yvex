@@ -6,7 +6,7 @@
 # Layer: test
 #
 # Purpose:
-#   Proves J0 run/chat metrics, trace, and profile artifacts are written for
+#   Proves observability layer run/chat metrics, trace, and profile artifacts are written for
 #   implemented accepted-token runtime paths only.
 
 set -eu

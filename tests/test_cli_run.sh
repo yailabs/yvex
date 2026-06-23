@@ -6,7 +6,7 @@
 # Layer: test
 #
 # Purpose:
-#   Proves that yvex run is an I0 accepted-only runtime shell: it opens the
+#   Proves that yvex run is an diagnostic runtime accepted-only runtime shell: it opens the
 #   engine/backend/session path, accepts prompt tokens, and reports generation
 #   unsupported without emitting fake model output.
 #
@@ -59,7 +59,7 @@ contains "$OUT_DIR/run_plain.out" "accepted_tokens: 3"
 contains "$OUT_DIR/run_plain.out" "position: 3"
 contains "$OUT_DIR/run_plain.out" "execution_ready: false"
 contains "$OUT_DIR/run_plain.out" "generation: unsupported"
-contains "$OUT_DIR/run_plain.out" "reason: decode runtime is not implemented in I0"
+contains "$OUT_DIR/run_plain.out" "reason: decode runtime is not implemented in diagnostic runtime"
 
 run_ok run_system "$YVEX_BIN" run --model "$FIXTURE" --backend cpu --system "You are helpful" --prompt "hello world"
 contains "$OUT_DIR/run_system.out" "run status: accepted-only"

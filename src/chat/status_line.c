@@ -5,7 +5,7 @@
  * Layer: CLI runtime implementation
  *
  * Purpose:
- *   Provides the I0 plain status-line skeleton. It writes one deterministic
+ *   Provides the diagnostic runtime plain status-line skeleton. It writes one deterministic
  *   line and does not implement a terminal UI or persistent renderer.
  *
  * Implements:

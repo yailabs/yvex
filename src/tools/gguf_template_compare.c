@@ -58,7 +58,7 @@ int yvex_gguf_template_compare_native(yvex_gguf_template *tmpl,
         if (!native) {
             tmpl->missing_in_native++;
             rc = yvex_gguf_template_add_issue(tmpl, YVEX_GGUF_TEMPLATE_ISSUE_NATIVE_MISSING_TENSOR,
-                                              tensor->name, "template tensor missing in native inventory; OWI.4 mapping may be required", err);
+                                              tensor->name, "template tensor missing in native inventory; open-weight intake mapping may be required", err);
             if (rc != YVEX_OK) return rc;
             continue;
         }

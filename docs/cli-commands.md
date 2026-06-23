@@ -3,14 +3,8 @@
 This is the quick command map for the current YVEX command-line surface.
 
 `docs/cli-runtime.md` owns detailed CLI behavior. This file is intentionally
-short: update it when a milestone adds, removes, renames, or materially changes
+short: update it when a release adds, removes, renames, or materially changes
 a command, option, exit status, or visible runtime posture.
-
-## Current Milestone
-
-```text
-CLI.MODELS.2 - Model alias resolution for one-shot commands
-```
 
 ## Operator References
 
@@ -37,8 +31,8 @@ Current one-shot model commands accept explicit model paths or registered model
 aliases.
 
 Local model registry management is implemented through `yvex models`.
-CLI.MODELS.2 wires aliases into one-shot model commands. REPL selection and
-`yvexd --model ALIAS` remain future work. See:
+One-shot model commands resolve registered aliases. REPL selection and
+`yvexd --model ALIAS` are not implemented yet. See:
 
 ```text
 docs/cli-interface-spine.md
@@ -118,20 +112,19 @@ quant_policy: manifest validator implemented
 imatrix: calibration artifact manifest implemented
 ```
 
-CUDA in L0 means device probe, memory/tensor movement, and F32 embed parity. It
+CUDA currently means device probe, memory/tensor movement, and F32 embed parity. It
 does not mean CUDA matmul, attention, session execution, generation, or model
 support.
 
-M0 adds fixture weight materialization into CPU/CUDA backend tensors. OWI.1
-adds source-manifest provenance for external official-weight source trees. OWI.4
-adds tensor mapping from native names to canonical roles and GGUF/template target
-names. OWI.5 adds declarative quantization policy manifests. OWI.6 adds
-calibration/imatrix provenance manifests and policy compatibility checks. OWI.7
-adds controlled GGUF emission for one tiny F32 tensor. OWI.8 adds conversion
-plan and selected-tensor GGUF emit from safetensors. OWI.9 adds a generic
-external quantization job manifest and provenance surface. These do not add
-native YVEX quantization suite support, imatrix generation, calibration
-execution, model execution, or inference.
+Materialization currently means selected or fixture tensor bytes can be copied
+into CPU/CUDA backend tensors. It does not mean full model execution.
+
+Open-weight tooling currently covers source provenance manifests, safetensors
+header inventory, GGUF template validation, tensor mapping, quantization policy
+manifests, calibration/imatrix provenance manifests, controlled GGUF emission,
+selected-tensor conversion, qtype support reporting, and generic external job
+manifests. These do not add native YVEX quantization suite support, imatrix
+generation, calibration execution, model execution, or inference.
 
 ## `yvex` Commands
 

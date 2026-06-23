@@ -5,7 +5,7 @@
  * Layer: graph implementation
  *
  * Purpose:
- *   Emits deterministic text dumps for F0 graph planning artifacts. Dumps are
+ *   Emits deterministic text dumps for graph planner graph planning artifacts. Dumps are
  *   CLI proof surfaces and test fixtures; they do not describe executable
  *   backend state.
  *

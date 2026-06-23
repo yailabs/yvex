@@ -5,7 +5,7 @@
  * Layer: runtime observability implementation
  *
  * Purpose:
- *   Shares small JSON, time, and run-artifact helpers between J0 metrics
+ *   Shares small JSON, time, and run-artifact helpers between observability layer metrics
  *   modules, CLI runtime code, and focused tests.
  */
 #ifndef YVEX_METRICS_INTERNAL_H

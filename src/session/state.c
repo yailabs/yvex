@@ -5,7 +5,7 @@
  * Layer: session implementation
  *
  * Purpose:
- *   Provides stable string names for the H0 session state machine.
+ *   Provides stable string names for the engine/session layer session state machine.
  *
  * Implements:
  *   - yvex_session_state_name

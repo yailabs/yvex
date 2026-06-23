@@ -57,7 +57,7 @@ int yvex_detokenize_ids(const yvex_tokenizer *tokenizer,
 
     if (tokenizer->support != YVEX_TOKENIZER_SUPPORT_FIXTURE_ENCODE_DECODE) {
         yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_detokenize_ids",
-                        "tokenizer kind %s is not executable in E0",
+                        "tokenizer kind %s is not executable in tokenizer layer",
                         yvex_tokenizer_kind_name(tokenizer->kind));
         return YVEX_ERR_UNSUPPORTED;
     }

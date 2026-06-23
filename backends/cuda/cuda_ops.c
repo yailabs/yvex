@@ -5,8 +5,8 @@
  * Layer: CUDA backend implementation
  *
  * Purpose:
- *   Implements the first scoped CUDA op in L0: an F32 embedding lookup that
- *   matches the G0 CPU reference behavior for parity tests.
+ *   Implements the first scoped CUDA op in CUDA backend: an F32 embedding lookup that
+ *   matches the backend layer CPU reference behavior for parity tests.
  */
 #include "cuda_internal.h"
 
@@ -137,7 +137,7 @@ int yvex_cuda_op_embed(yvex_backend *backend,
     }
     if (embedding->dtype != YVEX_DTYPE_F32 || out->dtype != YVEX_DTYPE_F32) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_embed",
-                       "L0 CUDA embed supports F32 tensors only");
+                       "CUDA backend CUDA embed supports F32 tensors only");
         return YVEX_ERR_UNSUPPORTED;
     }
     if (embedding->rank != 2) {

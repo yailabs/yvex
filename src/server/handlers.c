@@ -5,7 +5,7 @@
  * Layer: server implementation
  *
  * Purpose:
- *   Builds K0 yvexd JSON responses for health, metrics, model catalog shell,
+ *   Builds server shell yvexd JSON responses for health, metrics, model catalog shell,
  *   and unsupported generation routes.
  */
 #include "server_internal.h"
@@ -130,7 +130,7 @@ int yvex_server_handle_unsupported_generation(yvex_http_response *response,
                          "  \"status\": \"unsupported\",\n"
                          "  \"error\": {\n"
                          "    \"code\": \"YVEX_ERR_UNSUPPORTED\",\n"
-                         "    \"message\": \"generation endpoints are not implemented in K0\"\n"
+                         "    \"message\": \"generation endpoints are not implemented in server shell\"\n"
                          "  }\n"
                          "}\n",
                          err);

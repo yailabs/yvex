@@ -16,25 +16,39 @@ every non-trivial function reports precise status/error behavior
 
 ## Current Implemented API
 
-OWI.8 implements the open-weight conversion bridge and qtype support matrix,
-OWI.7 implements controlled GGUF emission, OWI.5 implements a quantization policy manifest, OWI.4 implements a tensor
-mapping adapter contract, OWI.3 implements a GGUF
-template contract validator, OWI.2 implements a
-safetensors/native-weight inventory surface, and OWI.1
-implements a source-manifest provenance surface in addition to the M0 runtime
-APIs. M0 implements the core version/status/error/log surface, runtime filesystem
-paths/run directories, artifact byte views, range checks, GGUF header/probe,
-metadata, raw tensor directory parsing, dtype/qtype storage accounting, YVEX
-tensor table rows, a descriptor-only model summary, tokenizer metadata/vocab
-tables, fixture tokenizer encode/decode, default prompt rendering, graph
-planning artifacts, shape helpers, estimate-only memory plans, plan objects,
-backend ABI wrappers, the CPU reference backend, CUDA tensor movement/F32 embed
-parity path when a CUDA driver/device is available, fixture weight
-materialization into backend tensors, engine/session runtime objects, KV/logits
-availability skeletons, CLI run/chat runtime shells, and runtime
-metrics/trace/profile writers for implemented accepted-token paths. It also
-implements the `yvexd` server shell API for health, metrics, and model catalog
-status endpoints.
+YVEX currently exposes public C APIs for:
+
+```text
+core version/status/error/log helpers
+runtime filesystem paths and run directories
+artifact byte views and range checks
+GGUF header, metadata, and tensor directory parsing
+dtype/qtype storage accounting
+owned tensor table rows and descriptor-only model summaries
+tokenizer metadata/vocabulary records and fixture encode/decode
+default prompt rendering
+graph planning artifacts, shape helpers, estimate-only memory plans, and plan objects
+backend ABI wrappers, CPU reference backend, and CUDA tensor movement/F32 embed parity
+fixture and selected-tensor weight materialization into backend tensors
+engine/session runtime objects
+KV/logits availability summaries
+CLI run/chat diagnostic runtime helpers
+runtime metrics/trace/profile writers for implemented accepted-token paths
+server shell health, metrics, and model catalog status endpoints
+source provenance manifests
+safetensors/native-weight header inventory
+GGUF template validation
+tensor mapping adapters
+quantization policy manifests
+calibration/imatrix provenance manifests
+controlled GGUF emission
+selected-tensor conversion
+qtype support reporting
+generic quantization/conversion job manifests
+artifact naming helpers
+model registry and model reference resolution
+model gate and materialization gate checks
+```
 
 Current public headers:
 
@@ -203,7 +217,7 @@ const char *yvex_log_domain_name(yvex_log_domain domain);
 ```
 
 This is a name-mapping surface only. A logging sink and runtime configuration
-are future work. J0 metrics and trace APIs are separate runtime observability
+are future work. observability layer metrics and trace APIs are separate runtime observability
 surfaces.
 
 ## Runtime Filesystem
@@ -245,7 +259,7 @@ Filesystem APIs allocate no heap memory and use fixed caller-owned buffers.
 
 ## Source Manifest
 
-OWI.1 adds a tool-plane provenance API for official open-weight intake. It
+open-weight intake adds a tool-plane provenance API for official open-weight intake. It
 records where model weights come from and which files are present locally. It
 does not download weights, parse safetensors payloads, quantize, emit GGUF, or
 materialize models.
@@ -308,12 +322,12 @@ failed
 The scanner recurses under `local_path`, skips directories and symlinks, records
 relative file paths when the writer includes files, and classifies files as
 `metadata`, `tokenizer`, `safetensors`, `readme`, `license`, `config`, or
-`other`. SHA256 is intentionally emitted as `null` in OWI.1; full checksums over
+`other`. SHA256 is intentionally emitted as `null` in open-weight intake; full checksums over
 huge model files are not performed by default.
 
 ## Native Weights
 
-OWI.2 adds a metadata-only safetensors inventory API. It reads the 8-byte
+open-weight intake adds a metadata-only safetensors inventory API. It reads the 8-byte
 little-endian safetensors header length and the JSON header, then records tensor
 names, shard paths, dtypes, shapes, and payload offsets. It does not read tensor
 payload bytes, dequantize, quantize, emit GGUF, materialize, or infer.
@@ -392,7 +406,7 @@ valid empty inventory.
 
 ## GGUF Template
 
-OWI.3 adds a GGUF template contract validator. A template is a structural
+open-weight intake adds a GGUF template contract validator. A template is a structural
 contract for conversion/emission: metadata keys, architecture identity,
 tokenizer metadata, tensor names, tensor order, logical shapes, qtypes, and
 alignment. It is not the official source of truth, an executable model, a final
@@ -439,15 +453,15 @@ const char *yvex_gguf_template_status_name(yvex_gguf_template_status status);
 const char *yvex_gguf_template_issue_kind_name(yvex_gguf_template_issue_kind kind);
 ```
 
-Template validation opens GGUF metadata and tensor directories through the C1/D0
+Template validation opens GGUF metadata and tensor directories through the GGUF parser/model layer
 stack, builds a descriptor, checks tokenizer metadata, classifies tensor roles,
-and can compare exact template tensor names against an OWI.2 native inventory.
+and can compare exact template tensor names against an open-weight intake native inventory.
 It does not load tensor payloads, mutate templates, emit GGUF, quantize, or
 materialize.
 
 ## GGUF Emit
 
-OWI.7 adds the first YVEX-owned GGUF emission API. It is intentionally scoped to
+open-weight intake adds the first YVEX-owned GGUF emission API. It is intentionally scoped to
 one controlled F32 tensor and controlled metadata so the project can prove GGUF
 writing, alignment, parser roundtrip, and weight materialization before any
 DeepSeek conversion bridge exists.
@@ -508,7 +522,7 @@ model inference, and no `execution_ready=true` claim.
 
 ## Qtype Support
 
-OWI.8 adds a tool-plane qtype support matrix. It separates policy vocabulary,
+open-weight intake adds a tool-plane qtype support matrix. It separates policy vocabulary,
 storage accounting, GGUF emission, quantization/cast availability, and backend
 compute support.
 
@@ -535,7 +549,7 @@ separate from conversion support.
 
 ## Conversion Bridge
 
-OWI.8 adds a tool-side conversion bridge from official safetensors sources to
+open-weight intake adds a tool-side conversion bridge from official safetensors sources to
 YVEX-owned selected-tensor GGUF artifacts. It builds conversion plans, reads
 selected safetensors payload bytes, maps tensor names through architecture
 adapters, casts supported scalar dtypes, writes a GGUF, and validates through
@@ -554,11 +568,11 @@ int yvex_conversion_emit_gguf(const yvex_conversion_options *options,
 ```
 
 The first live target is Qwen3-style safetensors. DeepSeek is plan-ready through
-the same bridge, but OWI.8 does not claim full DeepSeek conversion.
+the same bridge, but open-weight intake does not claim full DeepSeek conversion.
 
 ## Weight Mapping
 
-OWI.4 adds a contract-level tensor mapping API. It maps native tensor names from
+open-weight intake adds a contract-level tensor mapping API. It maps native tensor names from
 official weight layouts to canonical YVEX roles and proposed GGUF/template
 target names through architecture adapters. The DeepSeek adapter currently
 classifies known HF-style and GGUF-style tensor families, including token
@@ -589,8 +603,8 @@ const yvex_weight_mapping_info *yvex_weight_mapping_table_find_native(const yvex
                                                                       const char *native_name);
 ```
 
-The table owns copied row strings, reads native inventory through OWI.2, and may
-read a GGUF template tensor table through C1/D0 for target-name and shape
+The table owns copied row strings, reads native inventory through open-weight intake, and may
+read a GGUF template tensor table through GGUF parser/model layer for target-name and shape
 compatibility checks. It does not load safetensors payloads, transpose bytes,
 quantize, emit GGUF, materialize, or execute a model. DeepSeek `embed.weight`
 maps contractually to `token_embedding -> token_embd.weight`; template shape
@@ -598,7 +612,7 @@ compatibility may report `requires_transpose` without moving bytes.
 
 ## Quantization Policy
 
-OWI.5 adds a declarative quantization policy API. A policy records intended
+open-weight intake adds a declarative quantization policy API. A policy records intended
 storage qtypes by tensor role, tensor name, tensor pattern, layer range, expert
 group, or default selector. It is a manifest/validation surface only: no tensor
 payloads are quantized, no GGUF is emitted, no calibration runs, and no compute
@@ -642,10 +656,10 @@ int yvex_quant_policy_validate(yvex_quant_policy *policy,
 ```
 
 Policy validation separates `storage_supported` from `compute_supported`.
-Storage support is tied to the existing D0 dtype/qtype storage accounting
+Storage support is tied to the existing model layer dtype/qtype storage accounting
 registry. Compute support remains false for quantized qtypes until a backend
 actually implements execution over those qtypes. `requires_imatrix` is recorded
-as manifest intent and can be checked against an OWI.6 imatrix manifest.
+as manifest intent and can be checked against an open-weight intake imatrix manifest.
 
 ## Imatrix Manifest
 
@@ -788,7 +802,7 @@ const yvex_gguf_header *yvex_gguf_header_view(const yvex_gguf *gguf);
 const char *yvex_gguf_value_type_name(yvex_gguf_value_type type);
 ```
 
-C1 parses:
+GGUF parser parses:
 
 ```text
 magic          uint32 little-endian
@@ -802,7 +816,7 @@ alignment
 ```
 
 The parsed `yvex_gguf` object is opaque. The caller owns the artifact and must
-keep it alive for the parser object lifetime. C1 copies metadata keys, string
+keep it alive for the parser object lifetime. GGUF parser copies metadata keys, string
 values, and tensor names so public views remain stable until `yvex_gguf_close`.
 
 ### GGUF Metadata
@@ -832,7 +846,7 @@ metadata keys are copied as null-terminated strings
 empty keys fail parse
 string values are copied and length-preserving
 arrays are parsed and exposed as element type/count summaries
-nested arrays are rejected in C1 with YVEX_ERR_UNSUPPORTED
+nested arrays are rejected in GGUF parser with YVEX_ERR_UNSUPPORTED
 ```
 
 ### GGUF Tensor Directory
@@ -900,13 +914,13 @@ int yvex_dtype_storage_bytes(yvex_dtype dtype,
                              yvex_error *err);
 ```
 
-D0 storage formulas cover dense numeric types plus `Q4_0` and `Q8_0`.
+model layer storage formulas cover dense numeric types plus `Q4_0` and `Q8_0`.
 Other mapped qtypes may be recognized by name but return
 `YVEX_ERR_UNSUPPORTED` for byte accounting until their formulas are delivered.
 
 ## Tensor Table
 
-`include/yvex/tensor.h` builds YVEX-owned tensor table rows from C1 raw GGUF
+`include/yvex/tensor.h` builds YVEX-owned tensor table rows from GGUF parser raw GGUF
 tensor directory records.
 
 ```c
@@ -961,7 +975,7 @@ session, or inference behavior.
 ## Tokenizer
 
 `include/yvex/tokenizer.h` owns tokenizer metadata, vocabulary rows, special
-token IDs, and fixture encode/decode. E0 does not execute generic Llama
+token IDs, and fixture encode/decode. tokenizer layer does not execute generic Llama
 SentencePiece, GPT-2 BPE, or HuggingFace tokenizer JSON.
 
 ```c
@@ -1024,7 +1038,7 @@ unknown tokenizer: unsupported
 
 ## Prompt Rendering
 
-`include/yvex/prompt.h` owns a deterministic E0 prompt renderer for explicit
+`include/yvex/prompt.h` owns a deterministic tokenizer layer prompt renderer for explicit
 role messages. It does not execute arbitrary Jinja chat templates.
 
 ```c
@@ -1050,13 +1064,13 @@ int yvex_prompt_render(yvex_rendered_prompt *out,
 void yvex_rendered_prompt_free(yvex_rendered_prompt *prompt);
 ```
 
-The E0 renderer emits the YVEX default role-tag format and can append an
+The tokenizer layer renderer emits the YVEX default role-tag format and can append an
 assistant generation prompt. It allocates the rendered prompt and callers free
 it with `yvex_rendered_prompt_free`.
 
 ## Graph and Ops
 
-`include/yvex/graph.h` and `include/yvex/op.h` own the F0 graph planning
+`include/yvex/graph.h` and `include/yvex/op.h` own the graph planner graph planning
 surface. Graphs are deterministic planning artifacts; they do not execute ops
 or bind backend function pointers.
 
@@ -1092,12 +1106,12 @@ const yvex_graph_op_info *yvex_graph_op_at(const yvex_graph *graph,
                                            unsigned long long index);
 ```
 
-F0 builds a partial fixture graph when token embedding exists but output norm
+graph planner builds a partial fixture graph when token embedding exists but output norm
 and output head are missing. Missing roles are diagnostics, not crashes.
 
 ## Shape Helpers
 
-F0 exposes small checked shape helpers used by graph and memory planning tests:
+graph planner exposes small checked shape helpers used by graph and memory planning tests:
 
 ```c
 int yvex_shape_product(const unsigned long long *dims,
@@ -1169,11 +1183,11 @@ const yvex_memory_plan *yvex_plan_memory(const yvex_plan *plan);
 `cpu`, `none`, and `cuda` are accepted plan labels. `cpu` reports
 `backend_status: available`; `cuda` reports `backend_status: available` when the
 local CUDA driver/device opens, otherwise `backend_status: unavailable`. No plan
-can report execution readiness as true in L0.
+can report execution readiness as true in CUDA backend.
 
 ## Backend
 
-`include/yvex/backend.h` owns the backend ABI, CPU reference backend, and L0 CUDA
+`include/yvex/backend.h` owns the backend ABI, CPU reference backend, and CUDA backend CUDA
 attachment. Backend and device tensor handles are opaque.
 
 ```c
@@ -1234,7 +1248,7 @@ int yvex_backend_tensor_copy(yvex_backend *backend,
                              yvex_error *err);
 ```
 
-Tensor operations are full-buffer only in L0. CPU and CUDA allocation are
+Tensor operations are full-buffer only in CUDA backend. CPU and CUDA allocation are
 zero-initialized and tracked by allocated bytes, allocation count, and peak
 allocated bytes.
 
@@ -1246,7 +1260,7 @@ int yvex_backend_supports(const yvex_backend *backend,
 const char *yvex_backend_capability_name(yvex_backend_capability capability);
 ```
 
-CPU and CUDA L0 capabilities:
+CPU and CUDA CUDA backend capabilities:
 
 ```text
 tensor_alloc: yes
@@ -1268,17 +1282,17 @@ int yvex_backend_op_embed(yvex_backend *backend,
                           yvex_error *err);
 ```
 
-L0 supports only F32 embedding tensors for the CPU reference and CUDA parity op.
+CUDA backend supports only F32 embedding tensors for the CPU reference and CUDA parity op.
 Embedding dims are `[hidden_size, vocab_size]`; output dims are
 `[token_count, hidden_size]`. This is an op proof, not graph execution, model
 execution, or inference.
 
 CUDA does not implement matmul, RMSNorm, attention, KV cache on GPU, sampler,
-prefill/decode, or generated output in L0.
+prefill/decode, or generated output in CUDA backend.
 
 ## Weight Materialization
 
-`include/yvex/weights.h` owns the M0 fixture weight materialization surface.
+`include/yvex/weights.h` owns the fixture materialization fixture weight materialization surface.
 It copies tensor bytes from an already-open GGUF artifact into backend-owned
 device tensors and exposes an inspectable weight table.
 
@@ -1306,15 +1320,15 @@ outlive the weight table. Materialization uses `absolute_offset` and
 `storage_bytes` from the YVEX tensor table, checks the artifact byte range, then
 performs a full-buffer backend write.
 
-M0 proves CPU materialization in the baseline and CUDA materialization under
+fixture materialization proves CPU materialization in the baseline and CUDA materialization under
 `make check-cuda` when a CUDA driver/device is available.
 
-M0 does not implement graph execution, model support, prefill/decode, sampler,
+fixture materialization does not implement graph execution, model support, prefill/decode, sampler,
 logits computation, generated output, or `execution_ready: true`.
 
 ## Engine
 
-`include/yvex/engine.h` owns the H0 engine runtime object. An engine opens an
+`include/yvex/engine.h` owns the engine/session layer engine runtime object. An engine opens an
 artifact, parses GGUF, builds a tensor table, builds a model descriptor, builds
 a tokenizer when available, and may build the default graph. It does not own a
 backend or session and does not execute.
@@ -1342,7 +1356,7 @@ execution claim.
 
 ## Session
 
-`include/yvex/session.h` owns the H0 lifecycle-only session object. A session
+`include/yvex/session.h` owns the engine/session layer lifecycle-only session object. A session
 borrows an engine and backend, tracks state, exposes summaries, can accept
 already-tokenized input into the session position, and reports unsupported
 prefill/decode paths clearly.
@@ -1368,7 +1382,7 @@ int yvex_session_decode_next(yvex_session *session,
                              yvex_error *err);
 ```
 
-In H0, `accept_tokens` updates counters and position when the context bound
+In engine/session layer, `accept_tokens` updates counters and position when the context bound
 allows it. `prefill` and `decode_next` return `YVEX_ERR_UNSUPPORTED`; no logits
 are computed and no tokens are generated.
 
@@ -1400,11 +1414,11 @@ KV tensors, compute logits, expose a sampler, or imply generation support.
 
 ## CLI Runtime Shell
 
-I0 adds `yvex run` and `yvex chat` as CLI runtime surfaces over the existing
-engine/session APIs. I0 adds no new public C API. The chat runtime helpers under
+diagnostic runtime adds `yvex run` and `yvex chat` as CLI runtime surfaces over the existing
+engine/session APIs. diagnostic runtime adds no new public C API. The chat runtime helpers under
 `src/chat/` are private implementation code used by the CLI and tests.
 
-The I0 runtime shell can:
+The diagnostic runtime runtime shell can:
 
 ```text
 open engine/backend/session
@@ -1415,7 +1429,7 @@ render JSON result envelopes for yvex run
 handle chat slash commands
 ```
 
-The I0 runtime shell cannot:
+The diagnostic runtime runtime shell cannot:
 
 ```text
 execute prefill
@@ -1428,7 +1442,7 @@ claim inference readiness
 
 ## Metrics, Trace, And Profile API
 
-J0 adds public observability APIs for work YVEX can actually perform.
+observability layer adds public observability APIs for work YVEX can actually perform.
 
 Implemented:
 
@@ -1447,7 +1461,7 @@ yvex_profile
   profile.json writer
 ```
 
-The J0 API does not expose or claim:
+The observability layer API does not expose or claim:
 
 ```text
 decode tokens/sec
@@ -1460,7 +1474,7 @@ inference benchmarks
 
 ## Server Shell API
 
-K0 adds `include/yvex/server.h` and the `yvexd` binary.
+server shell adds `include/yvex/server.h` and the `yvexd` binary.
 
 Implemented:
 
@@ -1483,9 +1497,9 @@ GET /v1/models
 GET /
 ```
 
-Generation endpoint requests return an unsupported JSON error in K0.
+Generation endpoint requests return an unsupported JSON error in server shell.
 
-The K0 server shell does not implement:
+The server shell server shell does not implement:
 
 ```text
 model generation
@@ -1506,11 +1520,11 @@ sampler
 ```
 
 Future headers may be added only when the corresponding implementation, tests,
-failure behavior, and documentation are delivered in the same wave.
+failure behavior, and documentation are delivered in the same change.
 
 ## Quant Job API
 
-OWI.9 adds `include/yvex/quant_job.h`.
+`include/yvex/quant_job.h` declares the generic external job manifest API.
 
 Implemented:
 
@@ -1548,7 +1562,7 @@ no execution_ready true
 
 ## Model Gate API
 
-M1 adds `include/yvex/model_gate.h`.
+`include/yvex/model_gate.h` declares the model gate API.
 
 Implemented:
 
@@ -1579,7 +1593,7 @@ external report evidence
 
 Support-level vocabulary separates descriptor-only artifacts, selected tensor
 materialization, full weight materialization, graph execution, prefill, decode,
-and generation. M1 only uses `selected-tensor-materialized` for the produced
+and generation. The model gate uses `selected-tensor-materialized` for the produced
 Qwen and DeepSeek selected GGUF artifacts.
 
 Non-goals:
@@ -1595,7 +1609,7 @@ no execution_ready true
 
 ## Artifact Naming API
 
-ARTIFACT.NAMING.0 adds `include/yvex/artifact_naming.h`.
+`include/yvex/artifact_naming.h` declares artifact naming helpers.
 
 Implemented:
 
@@ -1629,7 +1643,7 @@ selected artifacts must not be named as full-model artifacts
 
 ## Materialize Gate API
 
-M2 adds `include/yvex/materialize_gate.h`.
+`include/yvex/materialize_gate.h` declares the materialization gate API.
 
 Implemented:
 
@@ -1664,17 +1678,17 @@ Failure classes include missing file, hash mismatch, GGUF parse failure, tensor
 spec mismatch, unsupported dtype/qtype, backend unavailable, backend allocation
 or copy failure, OOM, and unknown failure.
 
-M2 live target policy:
+Live target policy:
 
 ```text
 DeepSeek V4 Flash selected GGUF is the only live external target.
-Qwen remains historical OWI/M1 evidence only.
+Qwen remains historical validation evidence only.
 execution_ready remains false.
 ```
 
 ## Model Registry API
 
-CLI.MODELS.1 adds `include/yvex/model_registry.h`.
+`include/yvex/model_registry.h` declares the local model registry API.
 
 Implemented:
 
@@ -1727,7 +1741,7 @@ artifact paths and must not be committed.
 
 ## Model Reference API
 
-CLI.MODELS.2 adds `include/yvex/model_ref.h`.
+`include/yvex/model_ref.h` declares the model reference resolver API.
 
 Implemented:
 
@@ -1763,7 +1777,7 @@ registry-unavailable
 invalid
 ```
 
-CLI.MODELS.2 wires aliases into one-shot model commands. It does not wire
+The model reference resolver wires aliases into one-shot model commands. It does not wire
 aliases into `yvexd`, and it does not make the current selected model implicit
 inside the REPL.
 

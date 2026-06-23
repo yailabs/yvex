@@ -1,7 +1,7 @@
 # YVEX CLI Interface Spine
 
 Date: 2026-06-23
-Status: canonical focused interface spine
+Document state: canonical focused interface spine
 Scope: CLI layout, REPL behavior, one-shot diagnostics, server/operator UX
 
 ## 1. Purpose
@@ -208,11 +208,11 @@ The registry maps aliases to artifacts:
 Current implementation:
 
 ```text
-CLI.MODELS.0 documented the registry.
-CLI.MODELS.1 implements the local registry and `yvex models` command group.
-CLI.MODELS.1 default path is `.yvex/models.local.json`.
-CLI.MODELS.1 supports `--registry FILE` and `YVEX_MODELS_REGISTRY`.
-CLI.MODELS.2 wires aliases into one-shot model commands.
+the local registry is documented
+the local registry and `yvex models` command group are implemented
+the default registry path is `.yvex/models.local.json`
+the registry supports `--registry FILE` and `YVEX_MODELS_REGISTRY`
+one-shot model commands resolve registered aliases
 ```
 
 ## Model Alias Rules
@@ -391,7 +391,7 @@ Resolution order:
 3. error with suggestions
 ```
 
-Implemented in CLI.MODELS.2:
+Implemented for one-shot model commands:
 
 ```text
 inspect
@@ -828,36 +828,29 @@ execution_ready: true
 
 until those are implemented and proven.
 
-## 17. Future Implementation Ladder
+## 17. Planned Interface Work
 
 ```text
-CLI.MODELS.0 - Local model registry and selection spine
-CLI.MODELS.1 - Local model registry implementation
-CLI.MODELS.2 - Model alias resolution for one-shot commands
-CLI.MODELS.3 - Model selection in canonical REPL
-CLI.MODELS.4 - Model alias resolution in yvexd
-CLI.CONSOLE.0 - Canonical REPL layout and command taxonomy
-CLI.CONSOLE.1 - Line editor internal adapter and stdio fallback
-CLI.CONSOLE.2 - Slash command registry cleanup
-CLI.CONSOLE.3 - Stateful console session over local artifact
-CLI.CONSOLE.4 - Server-connected console mode
-CLI.CONSOLE.5 - True generation console after prefill/decode/sampler
+selected model in the REPL
+server alias resolution
+line editor adapter and stdio fallback
+slash command registry cleanup
+stateful console session over a local artifact
+server-connected console mode
+true generation console after prefill/decode/sampler
 ```
 
-`CLI.MODELS.0` and `CLI.CONSOLE.0` are documentation/design. CLI.MODELS.1
-implements registry behavior. CLI.MODELS.2 implements one-shot alias
-resolution. Later CLI.MODELS and CLI.CONSOLE waves extend interactive and
-server behavior.
+The local model registry and one-shot alias resolution are implemented.
+Interactive model selection and server alias resolution are not implemented yet.
 
-## 18. Relationship To M Ladder
+## 18. Relationship To Runtime Work
 
-M2/M3/M4 focus on materialization and runtime attachment.
-CLI.MODELS and CLI.CONSOLE waves must not imply runtime support that M waves
-have not implemented.
+Materialization and engine attachment work focus on runtime state. Interface
+work must not imply runtime support that has not been implemented.
 
 REPL may expose runtime state, but must not create fake runtime state.
 
-## 19. Acceptance For CLI.CONSOLE.0
+## 19. Interface Acceptance
 
 ```text
 docs/cli-interface-spine.md exists
@@ -869,7 +862,7 @@ no new dependency
 no inference claim
 ```
 
-## 20. Acceptance For CLI.MODELS.0
+## 20. Model Selection Design Acceptance
 
 ```text
 local model registry doctrine exists
@@ -883,7 +876,7 @@ no registry files committed
 no inference claim
 ```
 
-## 21. Acceptance For CLI.MODELS.1
+## 21. Model Registry Acceptance
 
 ```text
 yvex models command group exists
@@ -898,7 +891,7 @@ models remove deletes an alias and clears selected state when needed
 no inference claim
 ```
 
-## 22. Acceptance For CLI.MODELS.2
+## 22. One-Shot Alias Acceptance
 
 ```text
 model reference resolver API exists
@@ -907,6 +900,6 @@ missing alias diagnostics point to models list
 alias path missing diagnostics are precise
 path behavior remains supported
 chat / REPL startup is unchanged
-yvexd alias resolution remains future CLI.MODELS.4 work
+yvexd alias resolution is not implemented yet
 no inference claim
 ```
