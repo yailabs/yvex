@@ -220,24 +220,18 @@ Model-gate fixture outputs created by tests are disposable and live under:
 build/tests/model-gate-cli
 ```
 
-Repository launchers:
-
-```text
-./yvex
-./yvexd
-```
-
-Build products:
+Repository-local binaries:
 
 ```text
 build/bin/yvex
 build/bin/yvexd
 ```
 
-The root launchers are source-controlled wrappers and are not generated files.
+The compiled binaries are generated build products and are not tracked source
+files.
 The build directory remains disposable.
 
-materialization gate materialization-gate reports live outside the repository under:
+Materialization gate reports live outside the repository under:
 
 ```text
 ~/lab/artifacts/materialization-gates/m2/
@@ -368,10 +362,10 @@ make clean
 make check
 make smoke
 build/tests/test_fs
-./yvex paths
-./yvex paths --project .
-./yvex paths --run
-YVEX_RUN_DIR=build/tests/manual-runs ./yvex paths --run --create
+build/bin/yvex paths
+build/bin/yvex paths --project .
+build/bin/yvex paths --run
+YVEX_RUN_DIR=build/tests/manual-runs build/bin/yvex paths --run --create
 ```
 
 runtime filesystem does not implement inference, GGUF parsing, tokenization, CUDA,

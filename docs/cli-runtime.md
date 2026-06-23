@@ -2,25 +2,24 @@
 
 This document owns CLI behavior. YVEX is CLI-only.
 
-## Repository-Local Launcher
+## Repository-Local Binaries
 
 From the repository root, use:
-
-```text
-./yvex
-./yvexd
-```
-
-The launchers dispatch to:
 
 ```text
 build/bin/yvex
 build/bin/yvexd
 ```
 
-If the binaries are missing, the launchers ask the user to run `make` or
-`make check` and exit `127`. `build/bin/yvex` and `build/bin/yvexd` remain the
-compiled products; root launchers are source-controlled wrappers.
+The compiled binaries are:
+
+```text
+build/bin/yvex
+build/bin/yvexd
+```
+
+If the binaries are missing, run `make` or `make check`. `build/bin/yvex` and
+`build/bin/yvexd` are generated build products, not tracked source files.
 
 ## CLI Interface Posture
 
@@ -266,7 +265,7 @@ DeepSeek in-progress manifest command shape:
 ```sh
 mkdir -p "$HOME/lab/manifests/deepseek"
 
-./yvex source-manifest create \
+build/bin/yvex source-manifest create \
   --hf-repo deepseek-ai/DeepSeek-V4-Flash \
   --revision main \
   --license MIT \
@@ -322,7 +321,7 @@ shards exist, the same command reports tensor rows and exits with
 DeepSeek in-progress proof command:
 
 ```sh
-./yvex native-weights \
+build/bin/yvex native-weights \
   --source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" \
   --limit 40
 ```
@@ -358,7 +357,7 @@ data, infer, or emit a generic model.
 Command:
 
 ```sh
-./yvex gguf-emit controlled \
+build/bin/yvex gguf-emit controlled \
   --out build/tests/gguf-emit/yvex-owned.gguf \
   --model-name yvex-owned-gguf-test \
   --arch llama \
@@ -368,10 +367,10 @@ Command:
 Roundtrip proof:
 
 ```sh
-./yvex inspect build/tests/gguf-emit/yvex-owned.gguf
-./yvex metadata build/tests/gguf-emit/yvex-owned.gguf
-./yvex tensors build/tests/gguf-emit/yvex-owned.gguf
-./yvex materialize --model build/tests/gguf-emit/yvex-owned.gguf --backend cpu
+build/bin/yvex inspect build/tests/gguf-emit/yvex-owned.gguf
+build/bin/yvex metadata build/tests/gguf-emit/yvex-owned.gguf
+build/bin/yvex tensors build/tests/gguf-emit/yvex-owned.gguf
+build/bin/yvex materialize --model build/tests/gguf-emit/yvex-owned.gguf --backend cpu
 ```
 
 Expected summary:
@@ -392,7 +391,7 @@ status: gguf-written
 GGUF emission, quantization/cast, and backend compute are separate fields.
 
 ```sh
-./yvex qtype-support
+build/bin/yvex qtype-support
 ```
 
 ## Current `yvex convert`
@@ -405,7 +404,7 @@ not claim full-model conversion, inference, generation, or `execution_ready`.
 Qwen selected tensor example:
 
 ```sh
-./yvex convert emit \
+build/bin/yvex convert emit \
   --arch qwen3 \
   --native-source "$HOME/lab/models/hf/qwen/Qwen3-8B" \
   --tensor model.embed_tokens.weight \
@@ -417,7 +416,7 @@ Qwen selected tensor example:
 DeepSeek plan example:
 
 ```sh
-./yvex convert plan \
+build/bin/yvex convert plan \
   --arch deepseek4 \
   --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" \
   --template "$HOME/lab/artifacts/reference-layouts/deepseek-v4-flash-template.gguf" \
@@ -442,7 +441,7 @@ yvex tensor-map --arch deepseek4 --native-source DIR [--template FILE] [--tensor
 DeepSeek provider-node proof shape:
 
 ```sh
-./yvex tensor-map \
+build/bin/yvex tensor-map \
   --arch deepseek4 \
   --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" \
   --template "$HOME/lab/artifacts/reference-layouts/deepseek-v4-flash-template.gguf" \
@@ -482,12 +481,12 @@ yvex quant-policy derive --template FILE --arch NAME --out FILE
 DeepSeek reference-template proof shape:
 
 ```sh
-./yvex quant-policy derive \
+build/bin/yvex quant-policy derive \
   --template "$DS_TEMPLATE" \
   --arch deepseek4 \
   --out "$HOME/lab/manifests/deepseek/deepseek-v4-flash-quant-policy.json"
 
-./yvex quant-policy validate \
+build/bin/yvex quant-policy validate \
   --policy "$HOME/lab/manifests/deepseek/deepseek-v4-flash-quant-policy.json" \
   --template "$DS_TEMPLATE"
 ```
@@ -514,7 +513,7 @@ yvex imatrix validate --manifest FILE
 DeepSeek external imatrix artifact proof shape:
 
 ```sh
-./yvex imatrix create \
+build/bin/yvex imatrix create \
   --name deepseek-v4-flash-routed-moe-imatrix \
   --arch deepseek4 \
   --source-manifest "$HOME/lab/manifests/deepseek/deepseek-v4-flash-source-manifest.json" \
@@ -1213,8 +1212,8 @@ must never mix logs or progress into stdout.
 
 ```text
 YVEX is CLI-only.
-The repository-local user-facing executable surfaces are `./yvex` and
-`./yvexd`. They dispatch to compiled products under `build/bin/`.
+The repository-local user-facing executable surfaces are `build/bin/yvex` and
+`build/bin/yvexd`. They are generated compiled products under `build/bin/`.
 New interface surfaces require an explicit roadmap decision before implementation.
 
 ## Quant Job CLI

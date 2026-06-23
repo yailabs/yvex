@@ -6,11 +6,10 @@ YVEX owns model execution: artifact loading, format parsing, tensor tables,
 tokenization, prompt rendering, graph planning, backend execution, KV cache,
 prefill/decode, logits, sampling, token streaming, metrics and traces.
 
-YVEX is CLI-only. The repository-local developer entrypoints are `./yvex` and
-`./yvexd`, thin launchers that dispatch to compiled binaries under
-`build/bin/`: plain/rich CLI output, REPL-ready command semantics,
-streaming-friendly stdout/stderr discipline, JSON/JSONL planning, logs on
-stderr, and run artifacts on disk.
+YVEX is CLI-only. The repository-local developer entrypoints are the compiled
+command binaries under `build/bin/`: plain/rich CLI output, REPL-ready command
+semantics, streaming-friendly stdout/stderr discipline, JSON/JSONL planning,
+logs on stderr, and run artifacts on disk.
 
 YVEX does not own YAI case/control/governance. YAI consumes YVEX as a local
 provider boundary.
@@ -20,20 +19,20 @@ provider boundary.
 Repository-local:
 
 ```sh
-./yvex
-./yvexd
+build/bin/yvex
+build/bin/yvexd
 ```
 
-`./yvex` is the operator/developer CLI.
-`./yvexd` is the server/provider shell.
+`build/bin/yvex` is the operator/developer CLI.
+`build/bin/yvexd` is the server/provider shell.
 
 ## CLI Interface
 
 YVEX exposes:
 
 ```text
-./yvex   interactive CLI / one-shot diagnostics
-./yvexd  server/provider daemon
+build/bin/yvex   interactive CLI / one-shot diagnostics
+build/bin/yvexd  server/provider daemon
 ```
 
 The canonical CLI layout and REPL design live in:
@@ -49,7 +48,7 @@ aliases.
 
 The active DeepSeek selected artifact is documented in
 [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md). A local model registry is implemented
-through `./yvex models` so users can register and select models by alias instead
+through `build/bin/yvex models` so users can register and select models by alias instead
 of remembering absolute paths. Alias-or-path resolution is implemented for
 one-shot model commands such as `inspect`, `tensors`, `metadata`,
 `materialize`, `model-gate`, and `materialize-gate`.
@@ -63,12 +62,12 @@ deepseek4-v4-flash-selected-embed
 Typical registry flow:
 
 ```sh
-./yvex models add --path "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
-./yvex models list
-./yvex models use deepseek4-v4-flash-selected-embed
-./yvex models current
-./yvex inspect deepseek4-v4-flash-selected-embed
-./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
+build/bin/yvex models add --path "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
+build/bin/yvex models list
+build/bin/yvex models use deepseek4-v4-flash-selected-embed
+build/bin/yvex models current
+build/bin/yvex inspect deepseek4-v4-flash-selected-embed
+build/bin/yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
 ```
 
 ## Quick Operator Files
@@ -116,7 +115,7 @@ runtime code: core/filesystem/artifact/GGUF/model/tokenizer/graph/backend/weight
 public headers: implemented headers are aggregated by include/yvex/yvex.h
 CLI binary: build/bin/yvex accepted-only runtime shell and cuda-info implemented
 server binary: build/bin/yvexd status shell implemented
-repo launchers: ./yvex and ./yvexd dispatch to build/bin/
+repo binaries: build/bin/yvex and build/bin/yvexd
 GGUF parser: metadata and tensor directory implemented
 tokenizer: fixture encode/decode implemented
 CUDA backend: tensor allocation/read/write/copy and F32 embed parity implemented when driver/device are available
@@ -154,21 +153,21 @@ make check-cuda   # only on CUDA-capable hosts
 
 ```sh
 make
-./yvex commands
-./yvex info
-./yvex inspect tests/fixtures/gguf/valid-tokenizer-simple.gguf
+build/bin/yvex commands
+build/bin/yvex info
+build/bin/yvex inspect tests/fixtures/gguf/valid-tokenizer-simple.gguf
 ```
 
 Optional local-user command links:
 
 ```sh
 mkdir -p ~/.local/bin
-ln -sf "$PWD/yvex" ~/.local/bin/yvex
-ln -sf "$PWD/yvexd" ~/.local/bin/yvexd
+ln -sf "$PWD/build/bin/yvex" ~/.local/bin/yvex
+ln -sf "$PWD/build/bin/yvexd" ~/.local/bin/yvexd
 ```
 
-`./yvex` is the repository-local developer entrypoint. `yvex` is the optional
-global/local-user command when the launcher is linked into `PATH`.
+`build/bin/yvex` is the repository-local developer entrypoint. `yvex` is the optional
+global/local-user command when the compiled binary is linked into `PATH`.
 
 At this phase, validation checks the reduced documentation posture and
 guardrails, builds libyvex.a, builds the CLI, runs C tests, and runs CLI smoke

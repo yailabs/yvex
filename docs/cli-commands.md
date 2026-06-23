@@ -50,20 +50,20 @@ Current alias:
 deepseek4-v4-flash-selected-embed
 ```
 
-Use repository-local launchers:
+Use repository-local compiled binaries:
 
 ```sh
-./yvex
-./yvexd
+build/bin/yvex
+build/bin/yvexd
 ```
 
 ## Binaries
 
-Repository-local launchers:
+Repository-local binaries:
 
 ```text
-./yvex
-./yvexd
+build/bin/yvex
+build/bin/yvexd
 ```
 
 Compiled binaries:
@@ -84,12 +84,12 @@ Installed local user links, when desired:
 
 ```sh
 mkdir -p ~/.local/bin
-ln -sf "$PWD/yvex" ~/.local/bin/yvex
-ln -sf "$PWD/yvexd" ~/.local/bin/yvexd
+ln -sf "$PWD/build/bin/yvex" ~/.local/bin/yvex
+ln -sf "$PWD/build/bin/yvexd" ~/.local/bin/yvexd
 ```
 
-Direct links to `build/bin/yvex` and `build/bin/yvexd` are lower-level. Linking
-the root launchers preserves the clearer missing-build error.
+Global commands are optional symlinks to compiled build products. Rebuilding
+updates the target binaries in place.
 
 ## Global Posture
 
@@ -202,7 +202,7 @@ POST /v1/responses
 ## Canonical Repository-Local Walkthrough
 
 This is the operator path when YVEX is not installed globally. Run it from the
-repository root and use `./yvex` / `./yvexd`; do not assume `yvex` is on
+repository root and use `build/bin/yvex` / `build/bin/yvexd`; do not assume `yvex` is on
 `PATH`.
 
 ### 1. Build and Validate
@@ -220,10 +220,10 @@ make check-cuda
 ### 2. Check Local Entrypoints
 
 ```sh
-./yvex version
-./yvex commands
-./yvex info
-./yvexd --help
+build/bin/yvex version
+build/bin/yvex commands
+build/bin/yvex info
+build/bin/yvexd --help
 ```
 
 ### 3. Set the Active DeepSeek Artifact
@@ -235,13 +235,13 @@ export DS_ALIAS="deepseek4-v4-flash-selected-embed"
 test -f "$DS_GGUF"
 sha256sum "$DS_GGUF"
 
-./yvex models add \
+build/bin/yvex models add \
   --path "$DS_GGUF" \
   --sha256 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab \
   --support-level selected-tensor-materialized
 
-./yvex models use "$DS_ALIAS"
-./yvex models current
+build/bin/yvex models use "$DS_ALIAS"
+build/bin/yvex models current
 ```
 
 Expected SHA256:
@@ -253,9 +253,9 @@ Expected SHA256:
 ### 4. Parse and Inspect DeepSeek
 
 ```sh
-./yvex inspect "$DS_ALIAS"
-./yvex metadata "$DS_ALIAS"
-./yvex tensors "$DS_ALIAS"
+build/bin/yvex inspect "$DS_ALIAS"
+build/bin/yvex metadata "$DS_ALIAS"
+build/bin/yvex tensors "$DS_ALIAS"
 ```
 
 Expected posture:
@@ -273,8 +273,8 @@ status: descriptor-only
 ### 5. Materialize DeepSeek Selected Tensor
 
 ```sh
-./yvex materialize --model "$DS_ALIAS" --backend cpu
-./yvex materialize --model "$DS_ALIAS" --backend cuda
+build/bin/yvex materialize --model "$DS_ALIAS" --backend cpu
+build/bin/yvex materialize --model "$DS_ALIAS" --backend cuda
 ```
 
 Expected posture:
@@ -289,7 +289,7 @@ Materialized weights do not imply executable inference.
 ### 6. Run the Formal Model Gate
 
 ```sh
-./yvex model-gate check \
+build/bin/yvex model-gate check \
   --model "$DS_ALIAS" \
   --label deepseek-v4-flash-selected-embedding \
   --family deepseek4 \
@@ -316,7 +316,7 @@ execution_ready: false
 ### 7. Run the Repeatable Materialization Gate
 
 ```sh
-./yvex materialize-gate check \
+build/bin/yvex materialize-gate check \
   --model "$DS_ALIAS" \
   --label deepseek-v4-flash-selected-embedding \
   --family deepseek4 \
@@ -352,9 +352,9 @@ diagnostics until the spine authorizes real model execution.
 ```sh
 export FIX=tests/fixtures/gguf/valid-tokenizer-simple.gguf
 
-./yvex tokenizer "$FIX"
-./yvex tokenize "$FIX" --text "hello world"
-./yvex prompt "$FIX" \
+build/bin/yvex tokenizer "$FIX"
+build/bin/yvex tokenize "$FIX" --text "hello world"
+build/bin/yvex prompt "$FIX" \
   --system "You are a test runtime." \
   --user "hello world"
 ```
@@ -362,7 +362,7 @@ export FIX=tests/fixtures/gguf/valid-tokenizer-simple.gguf
 Run accepted-only diagnostics:
 
 ```sh
-./yvex run \
+build/bin/yvex run \
   --model "$FIX" \
   --backend cpu \
   --prompt "hello world"
@@ -379,7 +379,7 @@ generation: unsupported
 Interactive diagnostic shell:
 
 ```sh
-./yvex chat \
+build/bin/yvex chat \
   --model "$FIX" \
   --backend cpu
 ```
@@ -398,7 +398,7 @@ assistant text.
 ### 9. Server Shell Without Generation
 
 ```sh
-./yvexd \
+build/bin/yvexd \
   --host 127.0.0.1 \
   --port 18080 \
   --model "$DS_GGUF" \
@@ -425,26 +425,26 @@ FIX=tests/fixtures/gguf/valid-tokenizer-simple.gguf
 Useful proof sequence:
 
 ```sh
-./yvex inspect "$FIX"
-./yvex materialize --model "$FIX" --backend cpu
-./yvex materialize-gate check --model "$FIX" --label fixture --family llama \
+build/bin/yvex inspect "$FIX"
+build/bin/yvex materialize --model "$FIX" --backend cpu
+build/bin/yvex materialize-gate check --model "$FIX" --label fixture --family llama \
   --scope selected-tensor --expect-tensor token_embd.weight --expect-rank 2 \
   --expect-dims 4,8 --expect-dtype F32 --expect-bytes 128 \
   --backend cpu --require-cpu --repeat 2 --check-cleanup
-./yvex model-gate check --model "$FIX" --label fixture --family llama \
+build/bin/yvex model-gate check --model "$FIX" --label fixture --family llama \
   --expect-tensor token_embd.weight --expect-rank 2 --expect-dims 4,8 \
   --expect-dtype F32 --expect-bytes 128 --backend cpu --require-cpu
-./yvex metadata "$FIX"
-./yvex tensors "$FIX"
-./yvex tokenizer "$FIX"
-./yvex tokenize "$FIX" --text "hello world"
-./yvex graph "$FIX"
-./yvex plan "$FIX" --backend cpu
-./yvex backend cpu
-./yvex engine "$FIX"
-./yvex session "$FIX" --backend cpu --text "hello world" --accept-tokens
-./yvex run --model "$FIX" --backend cpu --prompt "hello world"
-./yvex gguf-emit controlled --out build/tests/gguf-emit/yvex-owned.gguf --overwrite
+build/bin/yvex metadata "$FIX"
+build/bin/yvex tensors "$FIX"
+build/bin/yvex tokenizer "$FIX"
+build/bin/yvex tokenize "$FIX" --text "hello world"
+build/bin/yvex graph "$FIX"
+build/bin/yvex plan "$FIX" --backend cpu
+build/bin/yvex backend cpu
+build/bin/yvex engine "$FIX"
+build/bin/yvex session "$FIX" --backend cpu --text "hello world" --accept-tokens
+build/bin/yvex run --model "$FIX" --backend cpu --prompt "hello world"
+build/bin/yvex gguf-emit controlled --out build/tests/gguf-emit/yvex-owned.gguf --overwrite
 ```
 
 Generated real-model GGUF paths used with `convert emit` and `model-gate` must
@@ -454,16 +454,16 @@ follow the canonical artifact naming grammar documented in
 CUDA proof, only when available:
 
 ```sh
-./yvex cuda-info
-./yvex backend cuda
-./yvex plan "$FIX" --backend cuda
-./yvex materialize --model "$FIX" --backend cuda
+build/bin/yvex cuda-info
+build/bin/yvex backend cuda
+build/bin/yvex plan "$FIX" --backend cuda
+build/bin/yvex materialize --model "$FIX" --backend cuda
 ```
 
 Server shell proof:
 
 ```sh
-./yvexd --host 127.0.0.1 --port 18080 --model "$FIX" --backend cpu --one-request
+build/bin/yvexd --host 127.0.0.1 --port 18080 --model "$FIX" --backend cpu --one-request
 ```
 
 ## Non-Goals Visible From CLI

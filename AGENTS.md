@@ -13,8 +13,8 @@ YVEX is CLI-first.
 Repository-local entrypoints:
 
 ```sh
-./yvex
-./yvexd
+build/bin/yvex
+build/bin/yvexd
 ```
 
 Compiled binaries:
@@ -24,8 +24,8 @@ build/bin/yvex
 build/bin/yvexd
 ```
 
-`./yvex` is the operator/developer CLI.
-`./yvexd` is the server/provider daemon shell.
+`build/bin/yvex` is the operator/developer CLI.
+`build/bin/yvexd` is the server/provider daemon shell.
 
 ## 2. Current Runtime Posture
 
@@ -210,19 +210,19 @@ Qwen3-8B: selected-tensor-materialized, historical only
 Repository-local commands should use:
 
 ```sh
-./yvex
-./yvexd
+build/bin/yvex
+build/bin/yvexd
 ```
 
 Examples:
 
 ```sh
-./yvex commands
-./yvex inspect FILE
-./yvex tensors FILE
-./yvex materialize --model FILE --backend cuda
-./yvex model-gate check ...
-./yvexd --help
+build/bin/yvex commands
+build/bin/yvex inspect FILE
+build/bin/yvex tensors FILE
+build/bin/yvex materialize --model FILE --backend cuda
+build/bin/yvex model-gate check ...
+build/bin/yvexd --help
 ```
 
 Global commands may use:
@@ -232,7 +232,7 @@ yvex
 yvexd
 ```
 
-only after installing/linking the root launchers into PATH.
+only after installing/linking the compiled binaries into PATH.
 
 ## 9. Validation Contract
 
@@ -318,21 +318,21 @@ export DS_GGUF="$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed
 Inspect:
 
 ```sh
-./yvex inspect "$DS_GGUF"
-./yvex tensors "$DS_GGUF"
+build/bin/yvex inspect "$DS_GGUF"
+build/bin/yvex tensors "$DS_GGUF"
 ```
 
 Materialize:
 
 ```sh
-./yvex materialize --model "$DS_GGUF" --backend cpu
-./yvex materialize --model "$DS_GGUF" --backend cuda
+build/bin/yvex materialize --model "$DS_GGUF" --backend cpu
+build/bin/yvex materialize --model "$DS_GGUF" --backend cuda
 ```
 
 Model gate:
 
 ```sh
-./yvex model-gate check \
+build/bin/yvex model-gate check \
   --model "$DS_GGUF" \
   --label deepseek-v4-flash-selected-embedding \
   --family deepseek4 \
@@ -350,7 +350,7 @@ Model gate:
 
 ## 12. Server / Provider Shell
 
-`./yvexd` is the server/provider daemon shell.
+`build/bin/yvexd` is the server/provider daemon shell.
 
 Current implemented server endpoints:
 
@@ -365,7 +365,7 @@ Generation endpoints are intentionally unsupported.
 Typical foreground server:
 
 ```sh
-./yvexd --host 127.0.0.1 --port 18080 --model "$DS_GGUF" --backend cuda
+build/bin/yvexd --host 127.0.0.1 --port 18080 --model "$DS_GGUF" --backend cuda
 ```
 
 When server lifecycle/logging support exists, prefer documented `--log-file`,
@@ -378,7 +378,7 @@ Agents must:
 1. Follow `docs/spine.md`.
 2. Keep DeepSeek as active live target unless spine changes.
 3. Treat Qwen as historical evidence only unless spine changes.
-4. Use `./yvex` and `./yvexd` in repo-local docs/examples.
+4. Use `build/bin/yvex` and `build/bin/yvexd` in repo-local docs/examples.
 5. Add command-visible proof for command-visible behavior.
 6. Keep generated artifacts outside repo.
 7. Preserve `execution_ready: false` until real execution exists.

@@ -108,7 +108,7 @@ Only the spine may contain the internal delivery map.
 Current phase:
 
 ```text
-after DOCS.PUBLIC.0
+after CLI.PACKAGE.1
 ```
 
 Current implementation commit:
@@ -728,13 +728,14 @@ Future commands are listed only under the delivery that implements them.
 | M1 | complete | Real model conversion/materialization gate |
 | ARTIFACT.NAMING.0 | complete | GGUF artifact naming contract and existing artifact rename |
 | M2 | complete | DeepSeek real-model materialization hardening |
-| CLI.PACKAGE.0 | complete | Repository root launcher and CLI packaging baseline |
+| CLI.PACKAGE.0 | complete | Repository compiled binary and CLI packaging baseline |
 | REPO.OPERATING.0 | complete | Agent operating handbook and model artifact cards |
 | CLI.CONSOLE.0 | complete | Canonical REPL layout and line editing boundary |
 | CLI.MODELS.0 | complete | Local model registry and selection spine |
 | CLI.MODELS.1 | complete | Local model registry implementation |
 | CLI.MODELS.2 | complete | Model alias resolution for one-shot commands |
 | DOCS.PUBLIC.0 | complete | Public documentation boundary cleanup |
+| CLI.PACKAGE.1 | complete | Minimal compiled-binary CLI packaging baseline |
 | CLI.MODELS.3 | next | Model selection in canonical REPL |
 | CLI.MODELS.4 | planned | Model alias resolution in yvexd |
 | M3 | paused | Materialized-weight engine attachment |
@@ -749,7 +750,7 @@ Future commands are listed only under the delivery that implements them.
 Status:
 
 ```text
-complete
+superseded by CLI.PACKAGE.1
 ```
 
 Owns:
@@ -2229,9 +2230,7 @@ complete
 Owns:
 
 ```text
-root ./yvex launcher
-root ./yvexd launcher
-launcher smoke tests
+historical repository-root launcher baseline
 repo-local vs global CLI documentation
 packaging baseline posture
 ```
@@ -2249,11 +2248,45 @@ inference
 Acceptance:
 
 ```text
-./yvex commands works after build
-./yvexd --help works after build
-missing build output exits 127 with clear message
-docs prefer ./yvex for repo-local examples
-build/bin remains the compiled output
+superseded by minimal compiled-binary packaging
+```
+
+### CLI.PACKAGE.1 - Minimal Compiled-Binary CLI Packaging Baseline
+
+Status:
+
+```text
+complete
+```
+
+Owns:
+
+```text
+removal of tracked root yvex launcher
+removal of tracked root yvexd launcher
+removal of root-launcher smoke test
+repository-local compiled binary documentation
+optional global symlink documentation to build/bin products
+```
+
+Does not own:
+
+```text
+runtime behavior
+model support
+inference
+compiled binary relocation
+system packages
+```
+
+Acceptance:
+
+```text
+build/bin/yvex commands works after build
+build/bin/yvexd --help works after build
+no tracked root yvex/yvexd scripts
+make smoke does not require root launchers
+docs use build/bin/yvex for repo-local examples
 ```
 
 ### REPO.OPERATING.0 - Agent Operating Handbook and Model Artifact Cards
@@ -2343,7 +2376,7 @@ Acceptance:
 
 ```text
 CLI interface spine exists
-./yvex interactive target is documented
+build/bin/yvex interactive target is documented
 one-shot diagnostics are separated from REPL
 yvexd remains daemon/provider
 line editor remains CLI-layer only

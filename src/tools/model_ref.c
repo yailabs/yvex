@@ -158,7 +158,7 @@ int yvex_model_ref_resolve(yvex_model_ref *out,
         out->status = YVEX_MODEL_REF_STATUS_REGISTRY_UNAVAILABLE;
         out->kind = YVEX_MODEL_REF_UNKNOWN;
         yvex_error_setf(err, YVEX_ERR_IO, "model_ref",
-                        "model registry unavailable for reference: %s; hint: run './yvex models list' or pass an existing path",
+                        "model registry unavailable for reference: %s; hint: run 'build/bin/yvex models list' or pass an existing path",
                         input);
         return YVEX_ERR_IO;
     }
@@ -166,7 +166,7 @@ int yvex_model_ref_resolve(yvex_model_ref *out,
     entry = yvex_model_registry_find(registry, input);
     if (!entry) {
         snprintf(message, sizeof(message),
-                 "model reference not found: %s; hint: run './yvex models list'; available models:",
+                 "model reference not found: %s; hint: run 'build/bin/yvex models list'; available models:",
                  input);
         append_available_aliases(message, sizeof(message), registry);
         out->status = YVEX_MODEL_REF_STATUS_NOT_FOUND;
@@ -182,7 +182,7 @@ int yvex_model_ref_resolve(yvex_model_ref *out,
         out->alias = yvex_model_ref_strdup(entry->alias);
         out->path = yvex_model_ref_strdup(entry->path);
         yvex_error_setf(err, YVEX_ERR_IO, "model_ref",
-                        "model alias exists but path is missing: alias=%s path=%s; hint: update or remove the registry entry with './yvex models remove %s'",
+                        "model alias exists but path is missing: alias=%s path=%s; hint: update or remove the registry entry with 'build/bin/yvex models remove %s'",
                         entry->alias, entry->path, entry->alias);
         yvex_model_registry_close(registry);
         return YVEX_ERR_IO;
