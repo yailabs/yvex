@@ -377,6 +377,7 @@ check-docs:
 	@test -f docs/api.md
 	@test -f docs/backend-contract.md
 	@test -f docs/runtime-filesystem.md
+	@test -f docs/cli-interface-spine.md
 	@test -f docs/cli-runtime.md
 	@test -f docs/cli-commands.md
 	@! find docs -maxdepth 1 -type f -name '*.md' \
@@ -385,6 +386,7 @@ check-docs:
 		! -name api.md \
 		! -name backend-contract.md \
 		! -name runtime-filesystem.md \
+		! -name cli-interface-spine.md \
 		! -name cli-runtime.md \
 		! -name cli-commands.md \
 		-print | grep .

@@ -22,6 +22,23 @@ If the binaries are missing, the launchers ask the user to run `make` or
 `make check` and exit `127`. `build/bin/yvex` and `build/bin/yvexd` remain the
 compiled products; root launchers are source-controlled wrappers.
 
+## CLI Interface Posture
+
+YVEX has two human-facing CLI modes:
+
+```text
+interactive REPL
+one-shot diagnostics/tools
+```
+
+`yvexd` is the daemon/provider shell.
+
+`prompt` renders prompt/template diagnostics.
+`run` is accepted-only diagnostics until inference exists.
+`chat` is the current diagnostic REPL and the future canonical console.
+
+See `docs/cli-interface-spine.md`.
+
 ## Current Implemented Commands
 
 The M0 command-line surfaces implement exactly:

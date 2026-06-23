@@ -27,6 +27,21 @@ Repository-local:
 `./yvex` is the operator/developer CLI.
 `./yvexd` is the server/provider shell.
 
+## CLI Interface
+
+YVEX exposes:
+
+```text
+./yvex   interactive CLI / one-shot diagnostics
+./yvexd  server/provider daemon
+```
+
+The canonical CLI layout and REPL design live in:
+
+```text
+docs/cli-interface-spine.md
+```
+
 ## Quick Operator Files
 
 - [AGENTS.md](AGENTS.md) - operating contract for humans and coding agents.
@@ -73,6 +88,7 @@ limitation.
 - [API](docs/api.md)
 - [Backend contract](docs/backend-contract.md)
 - [Runtime filesystem](docs/runtime-filesystem.md)
+- [CLI interface spine](docs/cli-interface-spine.md)
 - [CLI runtime](docs/cli-runtime.md)
 - [CLI commands](docs/cli-commands.md)
 

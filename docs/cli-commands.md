@@ -9,7 +9,7 @@ a command, option, exit status, or visible runtime posture.
 ## Current Milestone
 
 ```text
-REPO.OPERATING.0 - Agent operating handbook and model artifact cards
+CLI.CONSOLE.0 - Canonical REPL layout and line editing boundary
 ```
 
 ## Operator References
@@ -20,6 +20,15 @@ Read:
 AGENTS.md
 MODEL_ARTIFACTS.md
 docs/spine.md
+```
+
+## Interface Spine
+
+For CLI layout, REPL design, prompt/run/chat role boundaries, and line-editing
+policy, see:
+
+```text
+docs/cli-interface-spine.md
 ```
 
 Use repository-local launchers:
@@ -102,7 +111,7 @@ execution, model execution, or inference.
 | Command | Usage | Status |
 | --- | --- | --- |
 | `backend` | `yvex backend cpu\|cuda` | implemented; backend status, memory, capabilities |
-| `chat` | `yvex chat --model FILE --backend cpu\|cuda` | implemented; accepted-only runtime shell |
+| `chat` | `yvex chat --model FILE --backend cpu\|cuda` | implemented; current diagnostic REPL, target canonical interactive console |
 | `commands` | `yvex commands` | implemented; command table dump |
 | `convert` | `yvex convert plan\|emit` | implemented; conversion plan and selected tensor GGUF emit |
 | `cuda-info` | `yvex cuda-info` | implemented; CUDA probe, exit 5 when unavailable |
@@ -120,11 +129,11 @@ execution, model execution, or inference.
 | `native-weights` | `yvex native-weights --source DIR [--limit N] [--tensor NAME] [--json]` | implemented; safetensors header inventory |
 | `paths` | `yvex paths [--project DIR] [--run] [--create]` | implemented |
 | `plan` | `yvex plan PATH [--backend cpu\|cuda] [--seq N] [--ctx N]` | implemented; plan-only |
-| `prompt` | `yvex prompt PATH --user TEXT [--system TEXT] [--assistant TEXT] [--tokens]` | implemented |
+| `prompt` | `yvex prompt PATH --user TEXT [--system TEXT] [--assistant TEXT] [--tokens]` | implemented; diagnostic renderer, not model generation |
 | `quant-job` | `yvex quant-job create\|inspect\|validate` | implemented; external quantization job provenance |
 | `quant-policy` | `yvex quant-policy inspect\|validate --policy FILE` | implemented; declarative qtype policy manifest |
 | `qtype-support` | `yvex qtype-support` | implemented; conversion qtype support matrix |
-| `run` | `yvex run --model FILE --backend cpu\|cuda --prompt TEXT` | implemented; accepted-only |
+| `run` | `yvex run --model FILE --backend cpu\|cuda --prompt TEXT` | implemented; accepted-only diagnostic runtime path until inference exists |
 | `session` | `yvex session PATH --backend cpu\|cuda [--text TEXT] [--accept-tokens]` | implemented; diagnostics/token acceptance |
 | `source-manifest` | `yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE` | implemented; source provenance JSON writer |
 | `tensor-map` | `yvex tensor-map --arch NAME --native-source DIR [--template FILE] [--tensor NAME] [--limit N] [--json]` | implemented; native tensor to role/template mapping |
@@ -134,6 +143,8 @@ execution, model execution, or inference.
 | `version` | `yvex version` | implemented |
 
 ## `yvexd` Commands
+
+`yvexd` is the provider/server daemon, not the interactive REPL.
 
 ```sh
 yvexd --help

@@ -42,18 +42,27 @@ Focused documents may narrow a technical area:
 docs/api.md
 docs/backend-contract.md
 docs/runtime-filesystem.md
+docs/cli-interface-spine.md
 docs/cli-runtime.md
 ```
 
 If a focused document conflicts with this spine, this spine wins until the
 focused document is reconciled.
 
+Focused CLI ownership:
+
+```text
+docs/cli-interface-spine.md owns CLI layout and interface doctrine.
+docs/cli-commands.md owns the command index.
+docs/cli-runtime.md owns detailed command behavior.
+```
+
 ## 1. Current State
 
 Current phase:
 
 ```text
-after REPO.OPERATING.0
+after CLI.CONSOLE.0
 ```
 
 Current implementation commit:
@@ -665,6 +674,7 @@ Future commands are listed only under the delivery that implements them.
 | M2 | complete | DeepSeek real-model materialization hardening |
 | CLI.PACKAGE.0 | complete | Repository root launcher and CLI packaging baseline |
 | REPO.OPERATING.0 | complete | Agent operating handbook and model artifact cards |
+| CLI.CONSOLE.0 | complete | Canonical REPL layout and line editing boundary |
 | M3 | next | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
 | M5 | paused | First real-model partial graph execution |
@@ -2225,6 +2235,57 @@ Qwen historical-only status is explicit
 support levels are accurate
 no forbidden external reference/toolchain names
 no full model or inference claim
+```
+
+### CLI.CONSOLE.0 - Canonical REPL Layout and Line Editing Boundary
+
+Status:
+
+```text
+complete
+```
+
+Owns:
+
+```text
+CLI interface spine
+REPL vs one-shot diagnostic distinction
+prompt/run/chat role clarification
+line editing boundary
+future console implementation ladder
+```
+
+Does not own:
+
+```text
+code behavior change
+REPL implementation
+line editor dependency
+inference
+runtime execution
+```
+
+Creates / modifies:
+
+```text
+docs/cli-interface-spine.md
+docs/spine.md
+docs/cli-commands.md
+docs/cli-runtime.md
+docs/README.md
+README.md
+Makefile docs allowlist
+```
+
+Acceptance:
+
+```text
+CLI interface spine exists
+./yvex interactive target is documented
+one-shot diagnostics are separated from REPL
+yvexd remains daemon/provider
+line editor remains CLI-layer only
+no code behavior changes
 ```
 
 ### M3 - Materialized-Weight Engine Attachment

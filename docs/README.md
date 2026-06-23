@@ -15,6 +15,9 @@ Canonical documents:
   device-tensor rules, CUDA/DGX Spark track, parity, and capability matrix.
 - [Runtime filesystem](runtime-filesystem.md): future B0 filesystem contract,
   path precedence, run directories, locks, and cache policy.
+- [CLI interface spine](cli-interface-spine.md): canonical CLI layout,
+  REPL/one-shot/server role boundaries, prompt/run/chat posture, line-editing
+  boundary, and future console ladder.
 - [CLI runtime](cli-runtime.md): implemented CLI behavior, command table
   discipline, exit codes, stdout/stderr, TTY behavior, and future JSON/JSONL
   contracts.
