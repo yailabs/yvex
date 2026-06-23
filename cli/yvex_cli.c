@@ -259,7 +259,7 @@ static const yvex_cli_command yvex_commands[] = {
         "quant-job",
         "Create, inspect, or validate an external quantization job manifest.",
         "yvex quant-job create --name NAME --arch ARCH --tool TOOL --tool-path FILE --native-source DIR --template FILE --out-gguf FILE --log FILE --status STATUS --command TEXT --out FILE | yvex quant-job inspect|validate --manifest FILE",
-        "Records DS4-informed or external quantization command provenance. It does not run arbitrary shell commands, implement quantizers, infer, or claim model execution.",
+        "Records a quantization/conversion job manifest. It does not run arbitrary external tools, make external tools part of the YVEX production path, infer, or claim model execution.",
         command_quant_job,
     },
     {
@@ -2455,8 +2455,7 @@ static int command_quant_job(int argc, char **argv)
         if (!options.name || !options.architecture || !options.tool_path ||
             !options.native_source_dir || !options.template_path ||
             !options.out_gguf_path || !options.log_path || !options.command ||
-            !out_path || options.tool == YVEX_QUANT_JOB_TOOL_UNKNOWN ||
-            options.status == YVEX_QUANT_JOB_STATUS_UNKNOWN) {
+            !out_path || options.status == YVEX_QUANT_JOB_STATUS_UNKNOWN) {
             fprintf(stderr, "yvex: quant-job create requires --name --arch --tool --tool-path --native-source --template --out-gguf --log --status --command --out\n");
             return 2;
         }

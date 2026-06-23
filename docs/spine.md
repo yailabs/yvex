@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after OWI.9
+after OWI.FINAL.0
 ```
 
 Current implementation commit:
@@ -560,7 +560,7 @@ Generic intake must apply to open-weight families through adapters.
 Open Weight Intake / GGUF Toolchain ladder:
 
 ```text
-OWI.0 - DS4 Inventory and Open-Weight Pipeline Spine
+OWI.0 - External Layout Inventory and Open-Weight Pipeline Spine
 OWI.1 - Source manifest and model provenance contract
 OWI.2 - Safetensors/native weight inventory reader
 OWI.3 - GGUF template contract and validator
@@ -570,6 +570,7 @@ OWI.6 - Calibration/imatrix contract
 OWI.7 - First YVEX-owned GGUF emission from controlled source
 OWI.8 - Open Weight Conversion Bridge, Qwen-first / DeepSeek-ready
 OWI.9 - DeepSeek V4 Flash GGUF Quantization and Emission Bridge
+OWI.FINAL.0 - Full reference purge, official OWI validation, and GGUF closeout gate
 ```
 
 OWI non-goals until their named wave:
@@ -579,7 +580,7 @@ running arbitrary external quantization by default
 downloading model weights
 claiming generated DeepSeek GGUF without command proof
 materializing DeepSeek
-copying DS4 code into YVEX
+copying external code into YVEX
 implementing safetensors parsing
 implementing quantization kernels
 claiming inference
@@ -642,7 +643,7 @@ Future commands are listed only under the delivery that implements them.
 | L0 | complete | CUDA/DGX Spark backend |
 | M0 | complete | Fixture weight materialization |
 | QA.BENCH.0 | complete | QA and benchmark spine |
-| OWI.0 | complete | DS4 inventory and open-weight pipeline spine |
+| OWI.0 | complete | external layout inventory and open-weight pipeline spine |
 | OWI.1 | complete | Source manifest and model provenance contract |
 | OWI.2 | complete | Safetensors/native weight inventory reader |
 | OWI.3 | complete | GGUF template contract and validator |
@@ -652,6 +653,7 @@ Future commands are listed only under the delivery that implements them.
 | OWI.7 | complete | First YVEX-owned GGUF emission from controlled source |
 | OWI.8 | complete | Open Weight Conversion Bridge, Qwen-first / DeepSeek-ready |
 | OWI.9 | complete | DeepSeek V4 Flash GGUF Quantization and Emission Bridge |
+| OWI.FINAL.0 | complete | Full reference purge, official OWI validation, and GGUF closeout gate |
 | RUNTIME.KV.0 | complete | KV cache residency and benchmark policy |
 | RUNTIME.KV.1 | planned | Static KV size estimator |
 | RUNTIME.KV.2 | planned | CUDA KV allocation proof |
@@ -2272,7 +2274,7 @@ complete
 Owns:
 
 ```text
-DS4 QA/bench/test read-only inventory
+external QA/bench/test read-only inventory
 YVEX QA level taxonomy
 allowed materialization/provider measurements
 forbidden inference benchmark claims
@@ -2284,7 +2286,7 @@ M ladder QA gates
 Does not own:
 
 ```text
-running DS4 benchmarks
+running external benchmarks
 adding YVEX benchmark code
 claiming inference performance
 claiming model quality
@@ -2306,7 +2308,7 @@ no new docs sprawl
 no benchmark claims before inference exists
 ```
 
-### OWI.0 - DS4 Inventory and Open-Weight Pipeline Spine
+### OWI.0 - External Layout Inventory and Open-Weight Pipeline Spine
 
 Status:
 
@@ -2317,8 +2319,8 @@ complete
 Owns:
 
 ```text
-read-only DS4 inspection
-DS4 GGUF toolchain inventory
+read-only external layout inspection
+external GGUF layout inventory
 DeepSeek quantizer structure analysis
 GGUF template role summary
 imatrix/calibration role summary
@@ -2335,8 +2337,8 @@ running DeepSeek quantization
 downloading model weights
 generating a DeepSeek GGUF
 materializing DeepSeek
-modifying DS4
-copying DS4 source into YVEX
+modifying external reference repositories
+copying external source into YVEX
 implementing safetensors parser
 implementing quantization kernels
 inference
@@ -2352,7 +2354,7 @@ docs/spine.md
 Acceptance:
 
 ```text
-DS4 paths inspected read-only
+external layout paths inspected read-only
 docs/spine.md updated with OWI pipeline
 OWI.1 through OWI.8 expanded as explicit future waves
 M1 marked paused pending OWI path
@@ -2729,7 +2731,7 @@ imatrix file role
 imatrix provenance
 tensor/column/expert importance mapping contract
 validation that a quantization policy expects/uses imatrix
-DS4 imatrix concept mapping into YVEX vocabulary
+imatrix concept mapping into YVEX vocabulary
 ```
 
 Does not own:
@@ -2764,7 +2766,7 @@ can declare imatrix missing/unsupported cleanly
 does not require calibration run in baseline
 exposes yvex imatrix create/inspect/validate
 checks policy rules that declare requires_imatrix=true
-references external DS4 .dat artifacts without copying them
+references external .dat artifacts without copying them
 ```
 
 Handoff:
@@ -2853,7 +2855,7 @@ DeepSeek conversion plan path
 official HF source manifest usage
 native safetensors inventory usage
 architecture adapter usage
-DS4-informed template/quantization/imatrix bridge
+reference-layout template/quantization/imatrix bridge
 YVEX-owned selected tensor GGUF generation path
 qtype support matrix
 ```
@@ -2864,7 +2866,7 @@ Does not own:
 generic inference
 server completions
 benchmark claims
-copying DS4 code blindly
+copying external code blindly
 committing external weights/GGUF
 OpenAI compatibility
 ```
@@ -2913,7 +2915,7 @@ Owns:
 
 ```text
 DeepSeek external quantization job manifest
-DS4 deepseek4-quantize discovery and local build proof
+generic external quantization job discovery proof
 DeepSeek GGUF output path convention
 quantization command provenance
 template path provenance
@@ -2927,8 +2929,8 @@ Does not own:
 
 ```text
 native YVEX Q2_K/IQ2_XXS quantization suite
-replacing DS4 quantizer
-copying DS4 code into YVEX runtime
+replacing an external quantizer
+copying external code into YVEX runtime
 DeepSeek inference
 prefill/decode
 sampler
@@ -2946,6 +2948,78 @@ Handoff:
 M1 resumes with a provenance-controlled DeepSeek quantization job bridge and
 clear generated-artifact path, whether the external GGUF exists or is blocked
 by missing imatrix/output diagnostics.
+```
+
+### OWI.FINAL.0 - Full Reference Purge, Official OWI Validation, and GGUF Closeout Gate
+
+Status:
+
+```text
+complete
+```
+
+Owns:
+
+```text
+full tracked-file forbidden-reference purge
+generic quant-job provenance contract
+official OWI command surface proof
+Qwen produced GGUF validation
+DeepSeek selected GGUF validation or precise unsupported reason
+full DeepSeek GGUF status declaration
+external OWI closeout report
+GO/NO-GO M1 gate
+```
+
+Does not own:
+
+```text
+native full DeepSeek Q2_K quantization
+native full DeepSeek IQ2_XXS quantization
+native full DeepSeek Q4_K quantization
+native imatrix generation
+external tool execution
+runtime KV implementation
+prefill
+decode
+sampler
+inference
+server completions
+benchmark claims
+committing generated model artifacts
+```
+
+Reference-layout boundary:
+
+```text
+YVEX may consult external reference layouts, tensor order, metadata structure,
+qtype distributions, and calibration concepts while designing its own
+open-weight toolchain.
+
+YVEX must not depend on external repository binaries, external quantizer
+binaries, or external toolchains as the canonical production path.
+
+YVEX-owned artifacts are produced by YVEX commands and validated by YVEX
+commands. External artifacts may be compared for research/debugging only.
+```
+
+OWI final status rule:
+
+```text
+OWI is closed only when:
+  tracked reference/toolchain names are purged
+  YVEX command surface is verified
+  at least one YVEX-produced real-model GGUF artifact is inspected
+  Qwen selected tensor GGUF is materialized on CPU and CUDA
+  DeepSeek selected tensor GGUF is either produced and checked or cleanly reported unsupported
+  full DeepSeek GGUF status is explicit
+  generated artifacts remain outside repo
+```
+
+Handoff:
+
+```text
+M1 can begin from the official OWI closeout report and generated-artifact gates.
 ```
 
 ### RUNTIME.KV.0 - KV Cache Residency and Benchmark Policy
@@ -3339,7 +3413,8 @@ attention kernels exist.
 | K0 | 6a8e17b | Added yvexd server shell, HTTP status router, health/metrics/model catalog endpoints, unsupported generation endpoint response, and tests. |
 | L0 | afc8536 | Added CUDA backend attachment, device probe, tensor allocation/read/write/copy, F32 embed op, CPU/CUDA parity proof, cuda-info CLI, and CUDA targets/tests. |
 | M0 | current commit | Added fixture weight materialization into backend tensors, CPU/CUDA materialization proof, materialized weight table API, materialize CLI, and tests. |
-| OWI.9 | current commit | Added external DeepSeek quantization job bridge, DS4 tool discovery/build proof, command provenance, and quant-job CLI/tests. |
+| OWI.9 | current commit | Added external DeepSeek quantization job bridge, generic external tool discovery proof, command provenance, and quant-job CLI/tests. |
+| OWI.FINAL.0 | current commit | Purged tracked external reference dependency names, validated OWI command surface and YVEX-produced GGUF artifacts, and wrote external closeout report. |
 
 Current implemented CLI command set:
 

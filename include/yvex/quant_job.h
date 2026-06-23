@@ -6,7 +6,7 @@
  *
  * Purpose:
  *   Declares the OWI.9 external quantization job manifest surface. Quant jobs
- *   record provenance for DS4-informed or other external quantization commands.
+ *   record provenance for external quantization commands.
  *   They do not run arbitrary shell commands, implement quantizers, infer, or
  *   claim runtime execution support.
  */
@@ -31,7 +31,6 @@ typedef enum {
 
 typedef enum {
     YVEX_QUANT_JOB_TOOL_UNKNOWN = 0,
-    YVEX_QUANT_JOB_TOOL_DS4_DEEPSEEK4_QUANTIZE,
     YVEX_QUANT_JOB_TOOL_YVEX_INTERNAL,
     YVEX_QUANT_JOB_TOOL_EXTERNAL
 } yvex_quant_job_tool;

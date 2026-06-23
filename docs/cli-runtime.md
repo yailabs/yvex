@@ -332,7 +332,7 @@ DeepSeek plan example:
 ./build/bin/yvex convert plan \
   --arch deepseek4 \
   --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" \
-  --template "/home/dgmothx/lab/src/ds4/gguf/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix.gguf" \
+  --template "$HOME/lab/artifacts/reference-layouts/deepseek-v4-flash-template.gguf" \
   --quant-policy "$HOME/lab/manifests/deepseek/deepseek-v4-flash-quant-policy.json" \
   --imatrix-manifest "$HOME/lab/manifests/deepseek/deepseek-v4-flash-imatrix-manifest.json" \
   --out-plan "$HOME/lab/manifests/deepseek/deepseek-v4-flash-conversion-plan.json"
@@ -357,7 +357,7 @@ DeepSeek provider-node proof shape:
 ./build/bin/yvex tensor-map \
   --arch deepseek4 \
   --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" \
-  --template "/home/dgmothx/lab/src/ds4/gguf/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix.gguf" \
+  --template "$HOME/lab/artifacts/reference-layouts/deepseek-v4-flash-template.gguf" \
   --tensor embed.weight
 ```
 
@@ -391,7 +391,7 @@ yvex quant-policy validate --policy FILE [--template FILE]
 yvex quant-policy derive --template FILE --arch NAME --out FILE
 ```
 
-DeepSeek DS4-template proof shape:
+DeepSeek reference-template proof shape:
 
 ```sh
 ./build/bin/yvex quant-policy derive \
@@ -423,19 +423,19 @@ yvex imatrix inspect --manifest FILE
 yvex imatrix validate --manifest FILE
 ```
 
-DeepSeek DS4 external-artifact proof shape:
+DeepSeek external imatrix artifact proof shape:
 
 ```sh
 ./build/bin/yvex imatrix create \
-  --name deepseek-v4-flash-ds4-routed-moe-imatrix \
+  --name deepseek-v4-flash-routed-moe-imatrix \
   --arch deepseek4 \
   --source-manifest "$HOME/lab/manifests/deepseek/deepseek-v4-flash-source-manifest.json" \
   --quant-policy "$HOME/lab/manifests/deepseek/deepseek-v4-flash-quant-policy.json" \
-  --imatrix "/home/dgmothx/lab/src/ds4/gguf/DeepSeek-V4-Flash-chat-v2-routed-moe-ds4.dat" \
-  --format ds4_routed_moe_dat \
+  --imatrix "$HOME/lab/artifacts/reference-layouts/deepseek-v4-flash-routed-moe.dat" \
+  --format routed_moe_dat \
   --status present \
-  --dataset "ds4 calibration dataset" \
-  --producer ds4 \
+  --dataset "external calibration dataset" \
+  --producer external \
   --out "$HOME/lab/manifests/deepseek/deepseek-v4-flash-imatrix-manifest.json"
 ```
 
@@ -1142,24 +1142,24 @@ yvex quant-job validate
 The command records and validates an external quantization job manifest. It does
 not run the external command by default.
 
-DeepSeek DS4 bridge example:
+Generic external quantization job example:
 
 ```sh
 yvex quant-job create \
-  --name deepseek-v4-flash-ds4-iq2xxs \
+  --name deepseek-v4-flash-external-job \
   --arch deepseek4 \
-  --tool ds4_deepseek4_quantize \
-  --tool-path /home/dgmothx/lab/src/ds4/gguf-tools/deepseek4-quantize \
+  --tool external \
+  --tool-path "$HOME/lab/tools/external-quantizer" \
   --source-manifest "$HOME/lab/manifests/deepseek/deepseek-v4-flash-source-manifest.json" \
   --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" \
-  --template /home/dgmothx/lab/src/ds4/gguf/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix.gguf \
+  --template "$HOME/lab/artifacts/reference-layouts/deepseek-v4-flash-template.gguf" \
   --quant-policy "$HOME/lab/manifests/deepseek/deepseek-v4-flash-quant-policy.json" \
   --imatrix-manifest "$HOME/lab/manifests/deepseek/deepseek-v4-flash-imatrix-manifest.json" \
-  --imatrix /home/dgmothx/lab/src/ds4/gguf/DeepSeek-V4-Flash-chat-v2-routed-moe-ds4.dat \
-  --out-gguf "$HOME/lab/models/gguf/deepseek/deepseek-v4-flash-yvex-ds4.gguf" \
-  --log "$HOME/lab/artifacts/quant-logs/deepseek-v4-flash-ds4-quantize.log" \
+  --imatrix "$HOME/lab/artifacts/reference-layouts/deepseek-v4-flash-routed-moe.dat" \
+  --out-gguf "$HOME/lab/models/gguf/deepseek/deepseek-v4-flash-yvex-external.gguf" \
+  --log "$HOME/lab/artifacts/quant-logs/deepseek-v4-flash-external.log" \
   --status ready \
-  --command "deepseek4-quantize --hf ... --template ... --out ... --imatrix ..." \
+  --command "opaque external command recorded for provenance only" \
   --out "$HOME/lab/manifests/deepseek/deepseek-v4-flash-quant-job.json"
 ```
 

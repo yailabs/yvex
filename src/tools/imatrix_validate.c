@@ -33,7 +33,7 @@ int yvex_imatrix_manifest_validate(const yvex_imatrix_manifest *manifest,
             summary->requires_imatrix_rule_count = policy_summary.requires_imatrix_count;
             if (policy_summary.requires_imatrix_count > 0) {
                 if (summary->file_exists &&
-                    (manifest->format == YVEX_IMATRIX_FORMAT_DS4_ROUTED_MOE_DAT ||
+                    (manifest->format == YVEX_IMATRIX_FORMAT_ROUTED_MOE_DAT ||
                      manifest->format == YVEX_IMATRIX_FORMAT_LLAMA_CPP_DAT ||
                      manifest->format == YVEX_IMATRIX_FORMAT_JSON_MANIFEST ||
                      manifest->format == YVEX_IMATRIX_FORMAT_OTHER)) {

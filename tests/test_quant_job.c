@@ -23,9 +23,11 @@ static int write_file(const char *path, const char *text)
 static int test_names(void)
 {
     YVEX_TEST_ASSERT_STREQ(yvex_quant_job_status_name(YVEX_QUANT_JOB_STATUS_READY), "ready", "status name");
-    YVEX_TEST_ASSERT_STREQ(yvex_quant_job_tool_name(YVEX_QUANT_JOB_TOOL_DS4_DEEPSEEK4_QUANTIZE), "ds4_deepseek4_quantize", "tool name");
+    YVEX_TEST_ASSERT_STREQ(yvex_quant_job_tool_name(YVEX_QUANT_JOB_TOOL_EXTERNAL), "external", "tool name");
     YVEX_TEST_ASSERT(yvex_quant_job_status_from_name("succeeded") == YVEX_QUANT_JOB_STATUS_SUCCEEDED, "status parse");
     YVEX_TEST_ASSERT(yvex_quant_job_tool_from_name("external") == YVEX_QUANT_JOB_TOOL_EXTERNAL, "tool parse");
+    YVEX_TEST_ASSERT(yvex_quant_job_tool_from_name("yvex-internal") == YVEX_QUANT_JOB_TOOL_YVEX_INTERNAL, "internal tool parse");
+    YVEX_TEST_ASSERT(yvex_quant_job_tool_from_name("unknown") == YVEX_QUANT_JOB_TOOL_UNKNOWN, "unknown tool parse");
     YVEX_TEST_ASSERT(yvex_quant_job_tool_from_name("missing") == YVEX_QUANT_JOB_TOOL_UNKNOWN, "unknown tool");
     return 0;
 }

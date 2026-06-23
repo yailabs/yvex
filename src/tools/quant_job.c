@@ -80,8 +80,7 @@ const char *yvex_quant_job_tool_name(yvex_quant_job_tool tool)
 {
     switch (tool) {
     case YVEX_QUANT_JOB_TOOL_UNKNOWN: return "unknown";
-    case YVEX_QUANT_JOB_TOOL_DS4_DEEPSEEK4_QUANTIZE: return "ds4_deepseek4_quantize";
-    case YVEX_QUANT_JOB_TOOL_YVEX_INTERNAL: return "yvex_internal";
+    case YVEX_QUANT_JOB_TOOL_YVEX_INTERNAL: return "yvex-internal";
     case YVEX_QUANT_JOB_TOOL_EXTERNAL: return "external";
     }
     return "unknown";
@@ -90,8 +89,8 @@ const char *yvex_quant_job_tool_name(yvex_quant_job_tool tool)
 yvex_quant_job_tool yvex_quant_job_tool_from_name(const char *name)
 {
     if (!name) return YVEX_QUANT_JOB_TOOL_UNKNOWN;
-    if (strcmp(name, "ds4_deepseek4_quantize") == 0) return YVEX_QUANT_JOB_TOOL_DS4_DEEPSEEK4_QUANTIZE;
-    if (strcmp(name, "yvex_internal") == 0) return YVEX_QUANT_JOB_TOOL_YVEX_INTERNAL;
+    if (strcmp(name, "unknown") == 0) return YVEX_QUANT_JOB_TOOL_UNKNOWN;
+    if (strcmp(name, "yvex-internal") == 0) return YVEX_QUANT_JOB_TOOL_YVEX_INTERNAL;
     if (strcmp(name, "external") == 0) return YVEX_QUANT_JOB_TOOL_EXTERNAL;
     return YVEX_QUANT_JOB_TOOL_UNKNOWN;
 }
@@ -129,9 +128,8 @@ static int qj_options_to_doc(const yvex_quant_job_options *options,
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "quant_job", "name, architecture, tool path, native source, template, output GGUF, log, and command are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (options->tool == YVEX_QUANT_JOB_TOOL_UNKNOWN ||
-        options->status == YVEX_QUANT_JOB_STATUS_UNKNOWN) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "quant_job", "known tool and status are required");
+    if (options->status == YVEX_QUANT_JOB_STATUS_UNKNOWN) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "quant_job", "known status is required");
         return YVEX_ERR_INVALID_ARG;
     }
     doc->name = yvex_quant_job_strdup(options->name);
@@ -202,7 +200,7 @@ int yvex_quant_job_validate(const char *manifest_path,
     yvex_quant_job_summarize(&doc, &summary);
     *summary_out = summary;
     if (!summary.name || !summary.name[0] || !summary.architecture || !summary.architecture[0] ||
-        doc.tool == YVEX_QUANT_JOB_TOOL_UNKNOWN || doc.status == YVEX_QUANT_JOB_STATUS_UNKNOWN) {
+        doc.status == YVEX_QUANT_JOB_STATUS_UNKNOWN) {
         yvex_quant_job_doc_clear(&doc);
         yvex_error_set(err, YVEX_ERR_FORMAT, "quant_job_validate", "manifest is missing required identity fields");
         return YVEX_ERR_FORMAT;

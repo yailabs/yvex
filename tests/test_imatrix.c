@@ -39,11 +39,11 @@ static int write_file(const char *path, const char *text)
 static int test_names(void)
 {
     YVEX_TEST_ASSERT_STREQ(yvex_imatrix_status_name(YVEX_IMATRIX_STATUS_PRESENT), "present", "status name");
-    YVEX_TEST_ASSERT_STREQ(yvex_imatrix_format_name(YVEX_IMATRIX_FORMAT_DS4_ROUTED_MOE_DAT), "ds4_routed_moe_dat", "format name");
+    YVEX_TEST_ASSERT_STREQ(yvex_imatrix_format_name(YVEX_IMATRIX_FORMAT_ROUTED_MOE_DAT), "routed_moe_dat", "format name");
     YVEX_TEST_ASSERT_STREQ(yvex_imatrix_coverage_kind_name(YVEX_IMATRIX_COVERAGE_ROUTED_MOE), "routed_moe", "coverage name");
     YVEX_TEST_ASSERT_STREQ(yvex_imatrix_issue_kind_name(YVEX_IMATRIX_ISSUE_FILE_MISSING), "file_missing", "issue name");
     YVEX_TEST_ASSERT(yvex_imatrix_status_from_name("present") == YVEX_IMATRIX_STATUS_PRESENT, "status parse");
-    YVEX_TEST_ASSERT(yvex_imatrix_format_from_name("ds4_routed_moe_dat") == YVEX_IMATRIX_FORMAT_DS4_ROUTED_MOE_DAT, "format parse");
+    YVEX_TEST_ASSERT(yvex_imatrix_format_from_name("routed_moe_dat") == YVEX_IMATRIX_FORMAT_ROUTED_MOE_DAT, "format parse");
     return 0;
 }
 
@@ -73,7 +73,7 @@ static int test_create_write_open_present(void)
     options.imatrix_path = dat_path;
     options.calibration_dataset = "test-dataset";
     options.producer = "test";
-    options.format = YVEX_IMATRIX_FORMAT_DS4_ROUTED_MOE_DAT;
+    options.format = YVEX_IMATRIX_FORMAT_ROUTED_MOE_DAT;
     options.status = YVEX_IMATRIX_STATUS_PRESENT;
 
     yvex_error_clear(&err);
@@ -109,7 +109,7 @@ static int test_missing_file(void)
     options.name = "missing-imatrix";
     options.architecture = "deepseek4";
     options.imatrix_path = "build/tests/imatrix/missing.dat";
-    options.format = YVEX_IMATRIX_FORMAT_DS4_ROUTED_MOE_DAT;
+    options.format = YVEX_IMATRIX_FORMAT_ROUTED_MOE_DAT;
     options.status = YVEX_IMATRIX_STATUS_PRESENT;
 
     yvex_error_clear(&err);

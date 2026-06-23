@@ -55,8 +55,8 @@ adds tensor mapping from native names to canonical roles and GGUF/template targe
 names. OWI.5 adds declarative quantization policy manifests. OWI.6 adds
 calibration/imatrix provenance manifests and policy compatibility checks. OWI.7
 adds controlled GGUF emission for one tiny F32 tensor. OWI.8 adds conversion
-plan and selected-tensor GGUF emit from safetensors. OWI.9 adds an external
-quantization job manifest and DS4 bridge provenance surface. These do not add
+plan and selected-tensor GGUF emit from safetensors. OWI.9 adds a generic
+external quantization job manifest and provenance surface. These do not add
 native YVEX quantization suite support, imatrix generation, calibration
 execution, model execution, or inference.
 

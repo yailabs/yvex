@@ -36,7 +36,7 @@ JSON
   --arch deepseek4 \
   --quant-policy "$OUT_DIR/policy.json" \
   --imatrix "$OUT_DIR/fake.dat" \
-  --format ds4_routed_moe_dat \
+  --format routed_moe_dat \
   --status present \
   --dataset test-dataset \
   --producer test \

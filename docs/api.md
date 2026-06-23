@@ -561,7 +561,7 @@ the same bridge, but OWI.8 does not claim full DeepSeek conversion.
 OWI.4 adds a contract-level tensor mapping API. It maps native tensor names from
 official weight layouts to canonical YVEX roles and proposed GGUF/template
 target names through architecture adapters. The DeepSeek adapter currently
-classifies known HF-style and DS4/GGUF-style tensor families, including token
+classifies known HF-style and GGUF-style tensor families, including token
 embeddings, attention projections, FFN tensors, MoE routers, and MoE experts.
 
 ```c
@@ -668,7 +668,7 @@ typedef enum {
 typedef enum {
     YVEX_IMATRIX_FORMAT_UNKNOWN = 0,
     YVEX_IMATRIX_FORMAT_LLAMA_CPP_DAT,
-    YVEX_IMATRIX_FORMAT_DS4_ROUTED_MOE_DAT,
+    YVEX_IMATRIX_FORMAT_ROUTED_MOE_DAT,
     YVEX_IMATRIX_FORMAT_JSON_MANIFEST,
     YVEX_IMATRIX_FORMAT_OTHER
 } yvex_imatrix_format;
@@ -1529,7 +1529,7 @@ Scope:
 
 ```text
 external quantization job manifest
-DS4-informed command provenance
+generic external command provenance
 tool/source/template/imatrix/output existence summary
 output GGUF required only when status is succeeded
 generated artifact paths stay outside the repository

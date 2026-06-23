@@ -52,7 +52,7 @@ const char *yvex_imatrix_format_name(yvex_imatrix_format format)
     switch (format) {
     case YVEX_IMATRIX_FORMAT_UNKNOWN: return "unknown";
     case YVEX_IMATRIX_FORMAT_LLAMA_CPP_DAT: return "llama_cpp_dat";
-    case YVEX_IMATRIX_FORMAT_DS4_ROUTED_MOE_DAT: return "ds4_routed_moe_dat";
+    case YVEX_IMATRIX_FORMAT_ROUTED_MOE_DAT: return "routed_moe_dat";
     case YVEX_IMATRIX_FORMAT_JSON_MANIFEST: return "json_manifest";
     case YVEX_IMATRIX_FORMAT_OTHER: return "other";
     }
@@ -63,7 +63,7 @@ yvex_imatrix_format yvex_imatrix_format_from_name(const char *name)
 {
     if (!name) return YVEX_IMATRIX_FORMAT_UNKNOWN;
     if (strcmp(name, "llama_cpp_dat") == 0) return YVEX_IMATRIX_FORMAT_LLAMA_CPP_DAT;
-    if (strcmp(name, "ds4_routed_moe_dat") == 0) return YVEX_IMATRIX_FORMAT_DS4_ROUTED_MOE_DAT;
+    if (strcmp(name, "routed_moe_dat") == 0) return YVEX_IMATRIX_FORMAT_ROUTED_MOE_DAT;
     if (strcmp(name, "json_manifest") == 0) return YVEX_IMATRIX_FORMAT_JSON_MANIFEST;
     if (strcmp(name, "other") == 0) return YVEX_IMATRIX_FORMAT_OTHER;
     return YVEX_IMATRIX_FORMAT_UNKNOWN;
