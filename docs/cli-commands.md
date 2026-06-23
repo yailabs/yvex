@@ -139,6 +139,10 @@ Useful proof sequence:
 ```sh
 yvex inspect "$FIX"
 yvex materialize --model "$FIX" --backend cpu
+yvex materialize-gate check --model "$FIX" --label fixture --family llama \
+  --scope selected-tensor --expect-tensor token_embd.weight --expect-rank 2 \
+  --expect-dims 4,8 --expect-dtype F32 --expect-bytes 128 \
+  --backend cpu --require-cpu --repeat 2 --check-cleanup
 yvex model-gate check --model "$FIX" --label fixture --family llama \
   --expect-tensor token_embd.weight --expect-rank 2 --expect-dims 4,8 \
   --expect-dtype F32 --expect-bytes 128 --backend cpu --require-cpu

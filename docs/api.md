@@ -1627,6 +1627,51 @@ ambiguous tokens such as test/final/new/fixed/latest are rejected
 selected artifacts must not be named as full-model artifacts
 ```
 
+## Materialize Gate API
+
+M2 adds `include/yvex/materialize_gate.h`.
+
+Implemented:
+
+```text
+yvex_materialize_gate_status
+yvex_materialize_scope
+yvex_materialize_backend_status
+yvex_materialize_failure_class
+yvex_materialize_expected_tensor
+yvex_materialize_gate_options
+yvex_materialize_gate_summary
+yvex_materialize_gate_check
+yvex_materialize_gate_status_name
+yvex_materialize_scope_name
+yvex_materialize_backend_status_name
+yvex_materialize_failure_class_name
+```
+
+Scope:
+
+```text
+file existence and optional SHA-256 validation
+GGUF parse and tensor table validation
+expected tensor specification validation
+repeat CPU/CUDA materialization
+cleanup verification through backend memory stats when available
+failure class reporting
+selected/partial/full materialization scope vocabulary
+```
+
+Failure classes include missing file, hash mismatch, GGUF parse failure, tensor
+spec mismatch, unsupported dtype/qtype, backend unavailable, backend allocation
+or copy failure, OOM, and unknown failure.
+
+M2 live target policy:
+
+```text
+DeepSeek V4 Flash selected GGUF is the only live external target.
+Qwen remains historical OWI/M1 evidence only.
+execution_ready remains false.
+```
+
 ## Future Backend API
 
 Backend APIs belong to `docs/backend-contract.md`. Generic backend headers must

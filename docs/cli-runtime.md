@@ -1236,3 +1236,44 @@ $HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-y
 ```
 
 Poor generic names are not canonical evidence for generated real-model GGUFs.
+
+## Materialize Gate CLI
+
+M2 adds:
+
+```sh
+yvex materialize-gate check
+```
+
+DeepSeek is the only live external target for M2 and following model-support
+work. Fixture tests may use tiny generated GGUFs for deterministic failure
+cases.
+
+DeepSeek selected gate:
+
+```sh
+yvex materialize-gate check \
+  --model "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf" \
+  --label deepseek-v4-flash-selected-embedding \
+  --family deepseek4 \
+  --sha256 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab \
+  --scope selected-tensor \
+  --expect-tensor token_embd.weight \
+  --expect-rank 2 \
+  --expect-dims 4096,129280 \
+  --expect-dtype F16 \
+  --expect-bytes 1059061760 \
+  --backend cpu \
+  --backend cuda \
+  --require-cpu \
+  --require-cuda \
+  --repeat 3 \
+  --check-cleanup
+```
+
+Failure proofs should use the same command surface with intentional hash,
+tensor spec, or missing-file errors. The output includes `failure_class` so
+automation can distinguish blocked input from backend/materialization failure.
+
+`materialize-gate` does not attach an engine, execute a graph, run prefill or
+decode, sample, benchmark, or claim inference.

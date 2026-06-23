@@ -220,6 +220,18 @@ Model-gate fixture outputs created by tests are disposable and live under:
 build/tests/model-gate-cli
 ```
 
+M2 materialization-gate reports live outside the repository under:
+
+```text
+~/lab/artifacts/materialization-gates/m2/
+```
+
+The current DeepSeek-only live materialization target is:
+
+```text
+~/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+```
+
 ## GGUF Artifact Naming Contract
 
 Generated real-model GGUF artifacts outside the repository use:

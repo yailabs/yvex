@@ -129,6 +129,9 @@ CORE_SRCS := \
 	src/tools/imatrix_json.c \
 	src/tools/imatrix_report.c \
 	src/tools/imatrix_validate.c \
+	src/tools/materialize_gate.c \
+	src/tools/materialize_gate_json.c \
+	src/tools/materialize_gate_report.c \
 	src/tools/model_gate.c \
 	src/tools/model_gate_json.c \
 	src/tools/model_gate_report.c \
@@ -210,6 +213,7 @@ TEST_SRCS := \
 	tests/test_imatrix.c \
 	tests/test_gguf_emit.c \
 	tests/test_gguf_template.c \
+	tests/test_materialize_gate.c \
 	tests/test_model_gate.c \
 	tests/test_deepseek_adapter.c \
 	tests/test_safetensors_header.c \
@@ -309,13 +313,14 @@ test-core: $(TEST_BINS)
 		"$$test_bin"; \
 	done
 
-test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh tests/test_cli_server.sh tests/test_cli_materialize.sh tests/test_cli_source_manifest.sh tests/test_cli_native_weights.sh tests/test_cli_gguf_template.sh tests/test_cli_gguf_emit.sh tests/test_cli_tensor_map.sh tests/test_cli_convert.sh tests/test_cli_model_gate.sh tests/test_cli_quant_job.sh tests/test_cli_quant_policy.sh tests/test_cli_imatrix.sh
+test-cli: $(YVEX_BIN) $(YVEXD_BIN) tests/test_cli.sh tests/test_cli_run.sh tests/test_cli_chat.sh tests/test_cli_metrics.sh tests/test_cli_server.sh tests/test_cli_materialize.sh tests/test_cli_materialize_gate.sh tests/test_cli_source_manifest.sh tests/test_cli_native_weights.sh tests/test_cli_gguf_template.sh tests/test_cli_gguf_emit.sh tests/test_cli_tensor_map.sh tests/test_cli_convert.sh tests/test_cli_model_gate.sh tests/test_cli_quant_job.sh tests/test_cli_quant_policy.sh tests/test_cli_imatrix.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_run.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_chat.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_metrics.sh
 	YVEXD_BIN=$(YVEXD_BIN) sh tests/test_cli_server.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_materialize.sh
+	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_materialize_gate.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_source_manifest.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_native_weights.sh
 	YVEX_BIN=$(YVEX_BIN) sh tests/test_cli_gguf_template.sh

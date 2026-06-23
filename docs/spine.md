@@ -53,7 +53,7 @@ focused document is reconciled.
 Current phase:
 
 ```text
-after ARTIFACT.NAMING.0
+after M2
 ```
 
 Current implementation commit:
@@ -65,7 +65,7 @@ current commit
 Next authorized milestone:
 
 ```text
-M2 - Real-model materialization hardening
+M3 - Materialized-weight engine attachment
 ```
 
 Implemented surface:
@@ -662,8 +662,8 @@ Future commands are listed only under the delivery that implements them.
 | RUNTIME.KV.5 | planned | KV quantization policy |
 | M1 | complete | Real model conversion/materialization gate |
 | ARTIFACT.NAMING.0 | complete | GGUF artifact naming contract and existing artifact rename |
-| M2 | next | Real-model materialization hardening |
-| M3 | paused | Materialized-weight engine attachment |
+| M2 | complete | DeepSeek real-model materialization hardening |
+| M3 | next | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
 | M5 | paused | First real-model partial graph execution |
 | M6 | paused | Prefill runtime foundation |
@@ -2090,7 +2090,7 @@ inference
 Status:
 
 ```text
-paused
+complete
 ```
 
 Owns:
@@ -2102,6 +2102,28 @@ unsupported dtype behavior
 split GGUF policy
 partial/full materialization reporting
 external model regression scripts
+```
+
+M2 live target policy:
+
+```text
+DeepSeek V4 Flash selected GGUF is the only live external model target.
+Qwen artifacts remain historical OWI/M1 evidence only.
+M2 may use tiny fixtures for deterministic failure tests, but no Qwen live
+gate is required or desired.
+```
+
+M2 proof:
+
+```text
+DeepSeek selected embedding materialize-gate passed
+scope: selected-tensor
+repeat_count: 3
+cpu: pass
+cuda: pass
+cleanup_verified: yes
+failure_class: none
+execution_ready: false
 ```
 
 Does not own:

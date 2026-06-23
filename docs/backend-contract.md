@@ -287,3 +287,24 @@ execution_ready remains false
 M1 classifies the Qwen and DeepSeek selected embedding GGUFs as
 `selected-tensor-materialized`. It does not attach an engine, execute a graph,
 run prefill/decode, compute logits, sample, or benchmark.
+
+## M2 Materialize Gate Contract
+
+M2 hardens materialization around the DeepSeek selected GGUF. It repeats
+materialization, closes the weight table after each iteration, and verifies
+backend allocation cleanup through public backend memory stats when available.
+
+Rules:
+
+```text
+weight table close must release all owned backend tensors
+backend allocated bytes should return to the pre-materialization baseline
+required backend unavailable is blocked, not pass
+hash/spec/parse failures are classified before backend materialization
+materialization pass does not imply compute support
+execution_ready remains false
+```
+
+M2 does not alter backend allocation behavior, attach weights to an engine,
+execute graph ops, allocate KV cache, compute logits, sample tokens, or claim
+inference.

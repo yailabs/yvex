@@ -43,6 +43,7 @@
 #include <yvex/kv.h>
 #include <yvex/logits.h>
 #include <yvex/log.h>
+#include <yvex/materialize_gate.h>
 #include <yvex/memory_plan.h>
 #include <yvex/metrics.h>
 #include <yvex/model_gate.h>

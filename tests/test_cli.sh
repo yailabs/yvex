@@ -22,6 +22,7 @@
 #   - yvex qtype-support
 #   - yvex inspect
 #   - yvex materialize
+#   - yvex materialize-gate
 #   - yvex metadata
 #   - yvex model-gate
 #   - yvex native-weights
@@ -154,6 +155,7 @@ contains "$OUT_DIR/commands.out" "  imatrix"
 contains "$OUT_DIR/commands.out" "  info"
 contains "$OUT_DIR/commands.out" "  inspect"
 contains "$OUT_DIR/commands.out" "  materialize"
+contains "$OUT_DIR/commands.out" "  materialize-gate"
 contains "$OUT_DIR/commands.out" "  metadata"
 contains "$OUT_DIR/commands.out" "  model-gate"
 contains "$OUT_DIR/commands.out" "  native-weights"
@@ -195,6 +197,9 @@ contains "$OUT_DIR/help_inspect.out" "usage: yvex inspect <path>"
 
 run_ok help_materialize "$YVEX_BIN" help materialize
 contains "$OUT_DIR/help_materialize.out" "usage: yvex materialize --model FILE"
+
+run_ok help_materialize_gate "$YVEX_BIN" help materialize-gate
+contains "$OUT_DIR/help_materialize_gate.out" "usage: yvex materialize-gate check"
 
 run_ok help_metadata "$YVEX_BIN" help metadata
 contains "$OUT_DIR/help_metadata.out" "usage: yvex metadata <path>"
