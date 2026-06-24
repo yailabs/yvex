@@ -56,6 +56,9 @@ external reports
 ```
 
 External model artifacts are documented in `MODEL_ARTIFACTS.md`.
+Do not publish personal absolute artifact paths in docs. Public docs may
+describe local artifacts as operator-local and external to the repository, but
+must not expose developer workstation paths.
 
 ## Commands
 

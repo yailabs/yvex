@@ -3,6 +3,10 @@
 Model artifacts are external operator assets. They are not committed to this
 repository.
 
+Artifact paths are intentionally described as operator-local. The repository
+records artifact identity, tensor facts, validation posture, and support
+boundary, but not a developer workstation filesystem path.
+
 ## Policy
 
 ```text
@@ -21,7 +25,7 @@ prefill, decode, and generation are not implemented.
 DeepSeek V4 Flash selected embedding GGUF:
 
 ```text
-path: /home/dgmothx/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+local_path: operator-local, outside repository
 sha256: 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab
 file_bytes: 1059062080
 format: GGUF v3
@@ -50,7 +54,7 @@ Proof:
 Qwen3-8B selected embedding GGUF:
 
 ```text
-path: /home/dgmothx/lab/models/gguf/qwen/qwen3-8b-selected-embed-F16-noimatrix-yvex-v1.gguf
+local_path: operator-local, outside repository
 sha256: 7a07929f6b357d293011a8224d9fa5bc4a7eb37daed1ca1cd5dfc9278b987cb9
 file_bytes: 1244660000
 format: GGUF v3
