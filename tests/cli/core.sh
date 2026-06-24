@@ -194,7 +194,7 @@ run_ok help_cuda_info "$YVEX_BIN" help cuda-info
 contains "$OUT_DIR/help_cuda_info.out" "usage: yvex cuda-info"
 
 run_ok help_chat "$YVEX_BIN" help chat
-contains "$OUT_DIR/help_chat.out" "usage: yvex chat --model FILE"
+contains "$OUT_DIR/help_chat.out" "usage: yvex chat [--model FILE_OR_ALIAS]"
 
 run_ok help_inspect "$YVEX_BIN" help inspect
 contains "$OUT_DIR/help_inspect.out" "usage: yvex inspect <path>"

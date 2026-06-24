@@ -55,6 +55,7 @@ model-gate pass for active selected artifact with CPU/CUDA required
 materialize-gate pass for active selected artifact with repeat and cleanup
 local model registry
 model alias resolution for one-shot commands
+canonical REPL selected-model state
 qtype support separated by policy/storage/emit/quantize/compute
 quant-policy fixture validation
 quant-job fixture validation
@@ -81,7 +82,6 @@ Unsupported / not advanced:
 full model execution
 full DeepSeek materialization
 full GGUF conversion
-canonical REPL selected-model state
 yvexd model alias resolution
 engine ownership of materialized selected weights
 fixture graph execution
@@ -144,8 +144,8 @@ execution_ready: true
 | CODE.NATURAL.1 | complete | Final translation unit hygiene pass |
 | TEST.SURFACE.0 | complete | Test vectors and runner consolidation |
 | SPINE.REBASE.1 | complete | Execution-chain audit and M3-M8 technical rebase |
-| CLI.MODELS.3 | next | Model selection in canonical REPL |
-| CLI.MODELS.4 | planned | Model alias resolution in yvexd |
+| CLI.MODELS.3 | complete | Model selection in canonical REPL |
+| CLI.MODELS.4 | next | Model alias resolution in yvexd |
 | M3 | paused | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
 | M5 | paused | First real-model partial graph execution |
@@ -209,11 +209,11 @@ KV ownership is not a generation claim
 root binaries complete
 model registry complete
 one-shot alias resolution complete
-REPL selected-model state not implemented
-chat still requires explicit --model
+REPL selected-model state complete
+chat can use current selected registry alias when --model is omitted
+explicit --model remains supported
 yvexd alias resolution not implemented
-CLI.MODELS.3 remains next
-CLI.MODELS.4 remains planned
+CLI.MODELS.4 remains next
 line editing later
 ```
 
@@ -300,12 +300,12 @@ trace/profile output, and explicit generation support boundary.
 ## 7. Active Next
 
 ```text
-CLI.MODELS.3 - Model selection in canonical REPL
+CLI.MODELS.4 - Model alias resolution in yvexd
 ```
 
-`SPINE.REBASE.1` has completed the audit/rebase checkpoint. The next
-implementation work remains `CLI.MODELS.3`; do not begin `CLI.MODELS.4` or
-M3-M8 work until the REPL selected-model state is implemented and validated.
+`CLI.MODELS.3` completed the REPL selected-model state. The next implementation
+work is `CLI.MODELS.4`; do not begin M3-M8 work until daemon alias resolution is
+implemented and validated or the spine explicitly changes.
 
 ## 8. Validation Gate
 

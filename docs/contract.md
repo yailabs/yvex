@@ -14,8 +14,9 @@ make builds ./yvex and ./yvexd
 ./yvex help and ./yvex commands are the command source of truth
 ```
 
-One-shot commands may accept registered model aliases where model artifact
-selection is supported. The daemon does not yet resolve aliases.
+Model-reference commands may accept registered model aliases where model
+artifact selection is supported. `chat` uses the current selected registry model
+when `--model` is omitted. The daemon does not yet resolve aliases.
 
 ## 3. Filesystem Contract
 
@@ -84,7 +85,7 @@ aliases resolve to external artifact paths
 model artifacts stay external
 ```
 
-Resolution order for one-shot model references:
+Resolution order for explicit model references:
 
 ```text
 existing filesystem path
@@ -93,6 +94,9 @@ clear not-found error with list hint
 ```
 
 No command may silently select an arbitrary model.
+When `chat` is invoked without `--model`, it may use only the current selected
+registry alias. If no model is selected, it must fail with a clear operator
+hint.
 
 ## 8. Output Contract
 

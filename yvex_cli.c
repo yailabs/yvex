@@ -80,8 +80,8 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "chat",
         "Start the diagnostic console.",
-        "yvex chat --model FILE --backend cpu|cuda [--ctx N] [--metrics-out FILE] [--trace-out FILE] [--profile-out FILE] [--save-run] [--run-dir DIR]",
-        "Opens engine/backend/session state and accepts user text without generating output. Optional artifacts record implemented runtime phases only.",
+        "yvex chat [--model FILE_OR_ALIAS] --backend cpu|cuda [--ctx N] [--metrics-out FILE] [--trace-out FILE] [--profile-out FILE] [--save-run] [--run-dir DIR]",
+        "Opens engine/backend/session state and accepts user text without generating output. If --model is omitted, chat uses the current model selected with yvex models use ALIAS.",
         command_chat,
     },
     {
@@ -4187,11 +4187,59 @@ static int handle_chat_slash(yvex_chat_runtime *runtime,
     return YVEX_OK;
 }
 
+static int resolve_chat_model_ref(yvex_model_ref *out,
+                                  const char *explicit_model,
+                                  yvex_error *err)
+{
+    yvex_model_registry *registry = NULL;
+    const yvex_model_registry_entry *selected;
+    char alias[256];
+    int n;
+    int rc;
+
+    if (!out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "chat", "model reference output is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    if (explicit_model && explicit_model[0]) {
+        return yvex_model_ref_resolve(out, explicit_model, NULL, err);
+    }
+
+    rc = models_registry_open(&registry, NULL, 0, err);
+    if (rc != YVEX_OK) {
+        if (rc == YVEX_ERR_IO) {
+            yvex_error_set(err, YVEX_ERR_INVALID_ARG, "chat",
+                           "no model selected; pass --model FILE_OR_ALIAS or run './yvex models use ALIAS'");
+            return YVEX_ERR_INVALID_ARG;
+        }
+        return rc;
+    }
+
+    selected = yvex_model_registry_selected(registry);
+    if (!selected || !selected->alias || !selected->alias[0]) {
+        yvex_model_registry_close(registry);
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "chat",
+                       "no model selected; pass --model FILE_OR_ALIAS or run './yvex models use ALIAS'");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    n = snprintf(alias, sizeof(alias), "%s", selected->alias);
+    yvex_model_registry_close(registry);
+    if (n < 0 || (size_t)n >= sizeof(alias)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "chat", "selected model alias is too long");
+        return YVEX_ERR_BOUNDS;
+    }
+
+    return yvex_model_ref_resolve(out, alias, NULL, err);
+}
+
 static int command_chat(int argc, char **argv)
 {
     yvex_chat_runtime runtime;
     yvex_engine_summary engine_summary;
     yvex_session_summary session_summary;
+    yvex_model_ref model_ref;
     yvex_metrics *metrics = NULL;
     yvex_trace *trace = NULL;
     yvex_trace_options trace_options;
@@ -4216,6 +4264,7 @@ static int command_chat(int argc, char **argv)
     yvex_error_clear(&err);
     memset(&runtime, 0, sizeof(runtime));
     memset(&artifacts, 0, sizeof(artifacts));
+    memset(&model_ref, 0, sizeof(model_ref));
 
     if (argc == 2 || (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0))) {
         print_command_help(stdout, find_command("chat"));
@@ -4274,23 +4323,27 @@ static int command_chat(int argc, char **argv)
         }
     }
 
-    if (!model_path) {
-        fprintf(stderr, "yvex: --model is required for yvex chat in diagnostic runtime\n");
-        return 2;
-    }
     if (!backend_name) {
         fprintf(stderr, "yvex: --backend is required for yvex chat in diagnostic runtime\n");
         return 2;
     }
 
+    rc = resolve_chat_model_ref(&model_ref, model_path, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    model_path = model_ref.path;
+
     rc = yvex_metrics_create(&metrics, &err);
     if (rc != YVEX_OK) {
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
     rc = yvex_run_artifacts_prepare(&artifacts, save_run, run_dir, metrics_out, trace_out,
                                     profile_out, &err);
     if (rc != YVEX_OK) {
         yvex_metrics_close(metrics);
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
     memset(&trace_options, 0, sizeof(trace_options));
@@ -4300,6 +4353,7 @@ static int command_chat(int argc, char **argv)
     rc = yvex_trace_open(&trace, &trace_options, &err);
     if (rc != YVEX_OK) {
         yvex_metrics_close(metrics);
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
@@ -4317,11 +4371,13 @@ static int command_chat(int argc, char **argv)
                               yvex_error_message(&err), &err);
         yvex_trace_close(trace);
         yvex_metrics_close(metrics);
+        yvex_model_ref_clear(&model_ref);
         return 5;
     }
     if (rc != YVEX_OK) {
         yvex_trace_close(trace);
         yvex_metrics_close(metrics);
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
@@ -4352,6 +4408,9 @@ static int command_chat(int argc, char **argv)
             rc = handle_chat_slash(&runtime, yvex_slash_parse(line), line, &done, &err);
             if (rc != YVEX_OK) {
                 yvex_chat_runtime_close(&runtime);
+                yvex_trace_close(trace);
+                yvex_metrics_close(metrics);
+                yvex_model_ref_clear(&model_ref);
                 return print_yvex_error(&err, exit_for_status(rc));
             }
             continue;
@@ -4364,6 +4423,7 @@ static int command_chat(int argc, char **argv)
                 yvex_chat_runtime_close(&runtime);
                 yvex_trace_close(trace);
                 yvex_metrics_close(metrics);
+                yvex_model_ref_clear(&model_ref);
                 return print_yvex_error(&err, exit_for_status(rc));
             }
             rc = yvex_chat_runtime_accept_user_text(&runtime, NULL, line, &result, &err);
@@ -4372,6 +4432,7 @@ static int command_chat(int argc, char **argv)
                 yvex_chat_runtime_close(&runtime);
                 yvex_trace_close(trace);
                 yvex_metrics_close(metrics);
+                yvex_model_ref_clear(&model_ref);
                 return print_yvex_error(&err, exit_for_status(rc));
             }
             (void)yvex_metrics_add_chat_turn(metrics, &err);
@@ -4395,6 +4456,7 @@ static int command_chat(int argc, char **argv)
 
     yvex_chat_runtime_close(&runtime);
     yvex_metrics_close(metrics);
+    yvex_model_ref_clear(&model_ref);
     if (final_rc != 0) {
         return final_rc;
     }
