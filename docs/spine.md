@@ -62,6 +62,7 @@ quant-policy fixture validation
 quant-job fixture validation
 imatrix fixture validation
 server/provider status shell
+canonical operator runbook
 ```
 
 Current live target:
@@ -95,6 +96,7 @@ OpenAI-compatible generation
 Anthropic-compatible generation
 inference benchmarks
 benchmark performance
+evaluation suite
 execution_ready: true
 ```
 
@@ -116,13 +118,18 @@ execution_ready: true
 | J0 | complete | Metrics, traces, and run artifacts |
 | K0 | complete | Server/provider status shell |
 | L0 | complete | CUDA backend probe and tensor movement |
+| OWI.0 | complete | Open weight intake and GGUF toolchain spine |
+| OWI.1 | complete | Source manifest provenance contract |
+| OWI.2 | complete | Safetensors native weight inventory |
+| OWI.3 | complete | GGUF template contract validator |
+| OWI.4 | complete | Tensor mapping adapter contract |
+| OWI.5 | complete | Quantization policy manifest |
+| OWI.6 | complete | Calibration imatrix contract |
+| OWI.7 | complete | Controlled GGUF emission roundtrip |
+| OWI.8 | complete | Open weight conversion bridge |
+| OWI.9 | complete | DeepSeek quantization job bridge |
 | OWI.FINAL.0 | complete | Open-weight intake closeout |
 | RUNTIME.KV.0 | complete | KV cache policy |
-| RUNTIME.KV.1 | planned | Static KV size estimator |
-| RUNTIME.KV.2 | planned | CUDA KV allocation proof |
-| RUNTIME.KV.3 | planned | GPU paged KV allocator skeleton |
-| RUNTIME.KV.4 | planned | Host RAM spill and cold-cache experiments |
-| RUNTIME.KV.5 | planned | KV quantization policy |
 | M1 | complete | Real model conversion/materialization gate |
 | ARTIFACT.NAMING.0 | complete | GGUF artifact naming contract |
 | M2 | complete | DeepSeek materialization hardening |
@@ -147,13 +154,23 @@ execution_ready: true
 | CLI.MODELS.3 | complete | Model selection in canonical REPL |
 | CLI.MODELS.4 | complete | Model alias resolution in yvexd |
 | DOCS.OPERATOR.RUNBOOK.0 | complete | Canonical operator runbook |
-| SPINE.REBASE.2 | next | Runtime track rebase before M3 |
-| M3 | paused | Materialized-weight engine attachment |
+| SPINE.REBASE.2 | complete | Runtime track rebase before M3 |
+| M3 | next | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
 | M5 | paused | First real-model partial graph execution |
 | M6 | paused | Prefill runtime foundation |
 | M7 | paused | Decode and logits runtime foundation |
 | M8 | paused | First constrained generation path |
+| EVAL.FIXTURE.0 | planned | Fixture graph correctness vectors |
+| EVAL.PARTIAL.0 | planned | Real partial graph regression vectors |
+| EVAL.LOGITS.0 | planned | Deterministic logits regression |
+| EVAL.GEN.0 | planned | Constrained generation smoke/eval |
+| BENCH.RUNTIME.0 | planned | Runtime benchmark harness |
+| RUNTIME.KV.1 | planned | Static KV size estimator |
+| RUNTIME.KV.2 | planned | CUDA KV allocation proof |
+| RUNTIME.KV.3 | planned | GPU paged KV allocator skeleton |
+| RUNTIME.KV.4 | planned | Host RAM spill and cold-cache experiments |
+| RUNTIME.KV.5 | planned | KV quantization policy |
 
 ## 5. Tracks
 
@@ -170,14 +187,19 @@ prefill/decode/logits/sampling/generation not implemented
 ### Open Weight Intake
 
 ```text
-source manifest complete
-native safetensors inventory complete
-GGUF template validation complete
-family tensor mapping complete
-qtype policy complete
-quant-job and imatrix manifest surfaces complete
-controlled GGUF emission complete
-selected GGUF emission complete
+OWI.0 open weight intake and GGUF toolchain spine complete
+OWI.1 source manifest provenance complete
+OWI.2 native safetensors inventory complete
+OWI.3 GGUF template validation complete
+OWI.4 family tensor mapping complete
+OWI.5 qtype support and quant policy complete
+OWI.6 imatrix manifest surface complete
+OWI.7 controlled GGUF emission complete
+OWI.8 selected conversion and GGUF emission bridge complete
+OWI.9 quant-job bridge complete
+ARTIFACT.NAMING.0 artifact naming contract complete
+OWI.FINAL.0 reference purge and intake closeout complete
+materialization gate alignment complete through selected artifact audit
 DeepSeek selected embedding materialization proven
 native full-model quantization not implemented
 full-model GGUF conversion not implemented
@@ -199,9 +221,14 @@ execution_ready remains false
 ### Runtime KV Cache
 
 ```text
-policy complete
-estimator/allocation/paged/spill/quantization planned
-implementation not active
+RUNTIME.KV.0 policy complete
+minimal KV shape/allocation boundary may be pulled into M6 for prefill state
+advanced static estimator planned after M8 unless explicitly pulled forward
+advanced CUDA KV allocation proof planned after M8
+GPU paged KV allocator skeleton planned after M8
+host RAM spill and cold-cache experiments planned after M8
+KV quantization policy planned after M8
+KV runtime, paged KV, host spill, and KV quantization are not implemented
 KV ownership is not a generation claim
 ```
 
@@ -217,6 +244,20 @@ explicit --model remains supported
 yvexd explicit --model alias resolution complete
 daemon current-selected model behavior not implemented
 line editing later
+```
+
+### Benchmarking / Evaluation
+
+```text
+EVAL.FIXTURE.0 planned after M4 fixture graph execution
+EVAL.PARTIAL.0 planned after M5 real partial graph execution
+EVAL.LOGITS.0 planned after M7 logits-producing runtime boundary
+EVAL.GEN.0 planned after M8 constrained generation path
+BENCH.RUNTIME.0 planned after an implemented runtime path is stable enough to measure
+no benchmark scores before benchmark implementation
+no token/sec tables before real runtime path
+no official capability claims before evaluation suite exists
+evaluation follows implemented runtime boundaries, not roadmap intent
 ```
 
 ### Repository Layout / Docs
@@ -243,6 +284,16 @@ operator runbook complete
 minimal docs surface complete
 ```
 
+Documentation roles:
+
+```text
+README.md: public technical thesis and project overview
+docs/api.md: public C API surface, headers, ownership, error/capability map
+docs/contract.md: runtime/CLI/filesystem/backend/server behavior contract
+docs/operator-runbook.md: command-first operator workflow
+docs/spine.md: internal delivery map
+```
+
 ## 6. Runtime Ladder Dependencies
 
 ```text
@@ -264,6 +315,18 @@ scheduled computation before prefill. M6 owns prompt-token to KV/logit-producing
 boundaries. M7 produces logits before any sampling boundary exists. M8 is the
 first place where constrained generation can be discussed as an implemented
 runtime path.
+
+Evaluation and benchmarking follow the same order. Fixture correctness vectors
+belong after M4. Real partial graph regression belongs after M5. Logits
+regression belongs after M7. Generation smoke/eval belongs after M8. Runtime
+benchmarking belongs after there is an implemented runtime path stable enough
+to measure.
+
+KV work is split by dependency. M6 may need a minimal KV shape/allocation
+boundary to define prefill state, but static estimators, CUDA KV allocation
+proofs, paged KV, host spill/cold-cache behavior, and KV quantization policy are
+advanced capacity work after M8 unless this spine explicitly pulls a minimal
+subset forward.
 
 The staged ladder is:
 
@@ -303,13 +366,14 @@ trace/profile output, and explicit generation support boundary.
 ## 7. Active Next
 
 ```text
-SPINE.REBASE.2 - Runtime track rebase before M3
+M3 - Materialized-weight engine attachment
 ```
 
-`DOCS.OPERATOR.RUNBOOK.0` completed the command-first operator workflow. The
-next work is `SPINE.REBASE.2`, which must reorder OWI history, Runtime KV,
-Benchmark/Eval, and the M3-M8 ladder before implementation resumes. Do not begin
-M3-M8 work until that rebase is complete or the spine explicitly changes.
+`SPINE.REBASE.2` completed the runtime track rebase after the operator runbook.
+The next implementation work is M3: attach selected materialized weights to
+engine/session ownership without claiming graph execution. Do not begin M4-M8,
+advanced Runtime KV work, Benchmark/Eval work, or generation-facing work until
+the relevant earlier runtime state exists in code and tests.
 
 ## 8. Validation Gate
 
@@ -364,11 +428,15 @@ public path leak guardrail
 - No internal delivery IDs outside `docs/spine.md`.
 - No inference or generation claim until implemented.
 - No benchmark claim without benchmark implementation and proof.
+- No Benchmark/Eval status promotion without implemented vectors, harnesses, or
+  command proof at the matching runtime boundary.
 - No status promotion without command proof from the validation/audit gate.
 - No M3-M8 completion status until the relevant runtime state exists in code and
   tests.
 - Do not collapse materialization, engine ownership, graph execution, prefill,
   decode, logits, sampling, and generation into one wave.
+- Do not claim advanced Runtime KV capacity work until the relevant allocator,
+  estimator, spill, or quantization behavior exists in code and tests.
 - No docs sprawl beyond `docs/api.md`, `docs/contract.md`,
   `docs/operator-runbook.md`, and `docs/spine.md`.
 - Keep DeepSeek as the active live model target unless this spine changes.
