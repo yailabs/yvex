@@ -26,8 +26,8 @@ commands cover inspection, registry lookup, backend probing, graph planning,
 tokenizer and prompt diagnostics, source provenance, native weight inventory,
 tensor mapping, selected GGUF emission, qtype policy, quantization job
 metadata, imatrix manifests, materialization gates, and daemon status. Those
-surfaces are not a chat product; they are the scaffolding that prevents a later
-runtime from confusing parse success, tensor residency, and execution.
+commands give the future execution path named, testable edges before it is
+asked to behave like a chat system.
 
 ## Execution boundary
 
@@ -81,22 +81,24 @@ CUDA: pass
 execution_ready: false
 ```
 
-The selected DeepSeek artifact is useful because it is both partial and heavy.
-It is only one tensor, but it is not toy data: `token_embd.weight` at
-`[4096,129280]` in `F16` is about one billion tensor bytes. That size is large
-enough to exercise long local artifact names, checksum identity, GGUF v3 tensor
-directory layout, shape and dtype preservation, byte accounting, CPU/CUDA
-allocation, backend cleanup, and repeatable gate reporting.
+The selected DeepSeek artifact is deliberately narrow in model scope and still
+heavy enough to stress the runtime. It is only one tensor, but it is not toy
+data: `token_embd.weight` at `[4096,129280]` in `F16` is about one billion
+tensor bytes. That size is large enough to exercise long local artifact names,
+checksum identity, GGUF v3 tensor directory layout, shape and dtype
+preservation, byte accounting, CPU/CUDA allocation, backend cleanup, and
+repeatable gate reporting.
 
 The result is a hard residency checkpoint, not a model run. YVEX can carry this
 one real model tensor from operator-local artifact identity through GGUF parse,
 descriptor rows, selected materialization, and backend residency. The
 transformer graph remains absent. That partial state is the point: it makes the
-lower runtime real before the project tries to make the whole model speak.
+lower runtime real before the same machinery is extended toward a full
+transformer path.
 
-The short commands below are enough for the top-level README. Longer
-materialization gate invocations belong in focused runbooks or gate docs, not
-in the project landing page.
+For normal inspection, the top-level path stays short: inspect the artifact,
+inspect the tensor table, then materialize the selected tensor on the requested
+backend.
 
 ```sh
 ./yvex inspect deepseek4-v4-flash-selected-embed
@@ -236,19 +238,17 @@ make check-cuda
 
 ## Runtime and provider boundary
 
-The runtime-facing commands exist to keep engine and session boundaries visible
-while execution is still being built. `engine` opens descriptor/tokenizer/graph
-diagnostics. `session` creates lifecycle state over an engine and backend.
-`run` accepts one prompt through the diagnostic path and reports accepted-only
-state. `chat` is the console surface and future REPL direction. Those commands
-are useful because they expose runtime edges without pretending to produce
-model text.
+The runtime-facing commands expose engine and session state while execution is
+still being built. `engine` opens descriptor/tokenizer/graph diagnostics.
+`session` creates lifecycle state over an engine and backend. `run` accepts one
+prompt through the diagnostic path and reports accepted-only state. `chat` is
+the console surface and future REPL direction. Those commands are useful
+because they expose runtime edges without pretending to produce model text.
 
 `./yvexd` plays the same role at the provider boundary. It keeps a daemon shape
 available for health, metrics, and model listing while generation remains
-behind the execution boundary. The implemented status endpoints are useful
-process surfaces; generation belongs behind them only after scheduled graph
-runtime exists.
+outside the daemon until an executable graph exists behind it. The implemented
+status endpoints are useful process surfaces, not generation endpoints.
 
 ```sh
 ./yvexd --host 127.0.0.1 --port 8080 --backend cpu
