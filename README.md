@@ -2,62 +2,56 @@
 
 YVEX is a native C runtime and toolchain for local open-weight model artifacts.
 It sits below chat interfaces, provider APIs, and sampling, at the layer where
-an external model file becomes inspected structure, tensor metadata, runtime
-descriptors, backend allocations, and repeatable evidence.
+a model file becomes inspected structure, tensor metadata, runtime descriptors,
+backend allocations, and repeatable evidence.
 
-The current repository is the lower runtime path that has to exist before
-generation is meaningful. It opens real artifacts, reads GGUF metadata and
-tensor directories, preserves tensor names and shapes in YVEX descriptors,
-emits and materializes selected tensors, moves those tensors through CPU and
-CUDA residency paths, and records the result through gates. That makes artifact
-and backend state concrete without pretending the transformer graph already
-runs.
+The project is concerned with the part of local inference that usually
+disappears behind a single word like "loaded". In YVEX, a loaded file, a parsed
+GGUF, a descriptor, a resident tensor, a live backend, and an executable graph
+are different runtime states. The distinction matters because failures hide in
+the gaps: tensor names that parse but map to the wrong role, qtypes that are
+recognizable as storage but have no compute path, CUDA allocations that prove
+memory ownership but not scheduled work, provider endpoints that exist before
+the engine behind them can produce logits.
 
-The discipline is simple: loaded file, runtime descriptor, resident tensor,
-live backend, and executable model are separate states. A local runtime that
-blurs those states tends to fail late, usually at the worst boundary: an offset
-that was trusted too early, a qtype that storage recognized but compute cannot
-run, a CUDA allocation that never became scheduled work, or a provider endpoint
-that outpaced the engine behind it.
+The current repository is therefore lower runtime infrastructure. It opens real
+artifacts, reads GGUF metadata and tensor directories, preserves tensor names
+and shapes in YVEX descriptors, emits and materializes selected tensors, moves
+those tensors through CPU and CUDA residency paths, and records the result
+through gates. That is enough to make artifact and backend state concrete
+without pretending the transformer graph already runs.
+
+This is also why the CLI is deliberately broad before generation exists. The
+commands cover inspection, registry lookup, backend probing, graph planning,
+tokenizer and prompt diagnostics, source provenance, native weight inventory,
+tensor mapping, selected GGUF emission, qtype policy, quantization job
+metadata, imatrix manifests, materialization gates, and daemon status. Those
+surfaces are not a chat product; they are the scaffolding that prevents a later
+runtime from confusing parse success, tensor residency, and execution.
 
 ## Execution boundary
 
-YVEX stages model state deliberately. Parsing gives it the artifact's declared
-structure: metadata, tensor names, shapes, dtypes, byte offsets, and tokenizer
-facts where present. Descriptor construction turns those facts into a runtime
-view. Selected materialization moves chosen bytes into CPU or CUDA-owned
-storage. Execution begins later, when scheduled ops, relevant weights, scratch,
-KV, logits, decode, and sampling form one path.
+Parsing gives YVEX the artifact's declared structure: GGUF header, metadata,
+tensor names, shapes, dtypes, byte offsets, and tokenizer facts where present.
+Descriptor construction is the next boundary; it turns file facts into a
+runtime view that later commands can reason about. Selected materialization
+crosses a different line: the runtime is no longer only describing tensor
+bytes, it is moving a chosen tensor into CPU or CUDA-owned storage and forcing
+allocation, transfer, cleanup, and error reporting to become explicit.
 
-| Stage | What YVEX knows | What it still does not imply |
-| --- | --- | --- |
-| Artifact parsed | GGUF header, metadata, tensor directory, offsets, tokenizer facts where present | Model execution |
-| Descriptor built | Runtime view over tensor names, shapes, dtypes, roles, and metadata | Backend residency |
-| Selected materialized | Chosen tensor bytes copied into CPU/CUDA-owned storage | Full weight residency |
-| Backend resident | Allocation, transfer, cleanup, and failure reporting crossed the backend boundary | Scheduled transformer graph |
-| Executable graph | Scheduled ops, relevant weights, scratch, KV, logits, decode, sampling | Future state; not current |
+Backend residency is still not graph execution. A tensor resident on CUDA has
+crossed a memory boundary, not a transformer boundary. The missing line is
+scheduled work: embedding, normalization, RoPE, attention, routed experts,
+logits, KV ownership, decode, and sampling under one runtime path. Until those
+pieces exist together, `execution_ready: false` is the honest state.
 
-The main binary follows the same boundary. `inspect`, `metadata`, and `tensors`
-read artifact structure. `models` resolves local aliases. `backend` and
-`cuda-info` expose the machine. `graph` and `plan` build planning artifacts.
-`engine`, `session`, `run`, and `chat` are diagnostic boundaries for runtime
-state, token acceptance, traces, metrics, and profile artifacts.
-
-## Current runtime evidence
-
-The command surface is best read as evidence of runtime edges crossed, not as a
-promise that the whole model is executable.
-
-| Area | Current evidence | Boundary |
-| --- | --- | --- |
-| GGUF/artifact | Artifact loading, metadata parsing, tensor directory, descriptor construction | Valid file structure is not execution |
-| Selected tensors | Controlled/selected GGUF emission and selected materialization | Selected tensor is not full model residency |
-| CPU backend | Reference materialization, cleanup, diagnostics | Not a production inference path |
-| CUDA backend | Device probe, memory accounting, allocation, transfer, device copy, narrow kernel parity where implemented | Not a CUDA transformer backend |
-| Registry | Local aliases for external model paths | Alias is not runtime state |
-| Intake tooling | Source manifest, native safetensors inventory, tensor mapping, template checks | Lineage, not full conversion |
-| Quantization | qtype support matrix, quant policy, quant job, imatrix metadata | Storage/policy/provenance are not compute |
-| Provider daemon | Health, metrics, model listing | Not generation serving |
+The binary exposes that state model instead of hiding it. `inspect`,
+`metadata`, and `tensors` read artifact structure. `models` gives local names
+to external files. `backend` and `cuda-info` report machine facts. `graph` and
+`plan` build deterministic planning views. `engine`, `session`, `run`, and
+`chat` open diagnostic runtime boundaries for descriptors, backend/session
+state, token acceptance, traces, metrics, and profiles. They are useful while
+the runtime is being built; they are not generation workflows.
 
 ```sh
 make
@@ -68,32 +62,41 @@ make
 
 ## Live artifact: DeepSeek selected embedding
 
-The live target is a selected DeepSeek V4 Flash embedding GGUF documented as an
-external operator artifact in [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md). Public
-documentation records identity and tensor facts without publishing a developer
+The live external pressure target is a selected DeepSeek V4 Flash embedding
+GGUF documented in [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md). The public docs
+record artifact identity and tensor facts without publishing a developer
 workstation path.
 
-| Field | Value |
-| --- | --- |
-| Alias | `deepseek4-v4-flash-selected-embed` |
-| Artifact location | operator-local, outside repository |
-| SHA-256 | `5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab` |
-| Format | GGUF v3 |
-| Tensor | `token_embd.weight` |
-| Shape | `[4096,129280]` |
-| Dtype | F16 |
-| Tensor bytes | `1059061760` |
-| CPU materialization | pass |
-| CUDA materialization | pass |
-| Execution ready | false |
+```text
+alias: deepseek4-v4-flash-selected-embed
+local_path: operator-local, outside repository
+sha256: 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab
+format: GGUF v3
+tensor: token_embd.weight
+dims: [4096,129280]
+dtype: F16
+tensor_bytes: 1059061760
+CPU: pass
+CUDA: pass
+execution_ready: false
+```
 
 The selected DeepSeek artifact is useful because it is both partial and heavy.
-`token_embd.weight` at `[4096,129280]` in `F16` is about one billion tensor
-bytes. It gives YVEX one real model tensor to track through artifact identity,
-GGUF v3 layout, descriptor rows, CPU/CUDA allocation, cleanup, and gate
-reporting. The result is a hard residency checkpoint on the path toward a model
-run: selected embedding resident, transformer graph absent,
-`execution_ready: false`.
+It is only one tensor, but it is not toy data: `token_embd.weight` at
+`[4096,129280]` in `F16` is about one billion tensor bytes. That size is large
+enough to exercise long local artifact names, checksum identity, GGUF v3 tensor
+directory layout, shape and dtype preservation, byte accounting, CPU/CUDA
+allocation, backend cleanup, and repeatable gate reporting.
+
+The result is a hard residency checkpoint, not a model run. YVEX can carry this
+one real model tensor from operator-local artifact identity through GGUF parse,
+descriptor rows, selected materialization, and backend residency. The
+transformer graph remains absent. That partial state is the point: it makes the
+lower runtime real before the project tries to make the whole model speak.
+
+The short commands below are enough for the top-level README. Longer
+materialization gate invocations belong in focused runbooks or gate docs, not
+in the project landing page.
 
 ```sh
 ./yvex inspect deepseek4-v4-flash-selected-embed
@@ -103,22 +106,24 @@ run: selected embedding resident, transformer graph absent,
 
 ## Artifact workflow
 
-Real model files are machine-local assets. The public repository describes
-artifact identity, tensor shape, dtype, checksum, validation posture, and
-runtime boundary; it does not publish operator filesystem topology.
+The repository should be able to travel without the operator's model
+directory. Real GGUFs, native safetensors, generated quantization outputs,
+local registries, logs, reports, and build artifacts stay on the machine that
+owns them. The repo keeps source, public headers, docs, tiny fixtures, tests,
+and contracts. That separation is not just cleanliness; it prevents a public
+runtime project from becoming a dump of local state.
 
-| Class | Location |
-| --- | --- |
-| Source code, public headers, docs, tiny fixtures | Repository |
-| Real GGUF model artifacts | Operator-local storage |
-| Native safetensors / raw weights | Operator-local storage |
-| Generated GGUFs and quantization outputs | Operator-local storage |
-| `.yvex/models.local.json` | Local state |
-| Build output, reports, logs | Local/generated state |
+The local registry exists because real artifact paths are long and
+machine-specific. `.yvex/models.local.json` is ignored local state, and
+`YVEX_MODELS_REGISTRY` can point commands at another local registry when a
+machine needs it. An alias removes path friction, but it does not move the
+artifact to a new runtime state. The command that uses the alias still has to
+parse, inspect, materialize, or gate the artifact at the requested boundary.
 
-The local registry removes path friction without changing runtime status. An
-alias is a local name for a local file; the command that uses it still has to
-parse, describe, materialize, and check the artifact at the requested stage.
+Tiny GGUF fixtures are different from real model artifacts. Fixtures belong in
+tests because they validate parser edges, malformed headers, offset handling,
+tokenizer metadata, tensor ranks, and layout failures without claiming to be
+model inventory. Real model artifacts are external operator assets.
 
 ```sh
 ./yvex models add --path /path/to/model.gguf --alias local-model
@@ -129,11 +134,20 @@ parse, describe, materialize, and check the artifact at the requested stage.
 
 ## GGUF intake and tensor mapping
 
-GGUF is the artifact envelope, not the execution engine. YVEX reads the
-envelope first: metadata, tensor directory, names, shapes, dtypes, offsets, and
-tokenizer metadata where present. Those facts feed descriptors, mapping,
-selected emission, and materialization. Execution starts later, when descriptors
-connect to scheduled ops and backend kernels.
+GGUF is the artifact envelope, not the execution engine. Reading it gives YVEX
+metadata, tensor directory rows, names, shapes, dtypes, offsets, and tokenizer
+metadata where present. Those facts feed descriptors, family mapping, selected
+emission, and materialization. They do not become a runnable transformer until
+they are connected to scheduled ops, backend kernels, scratch, KV, logits,
+decode, and sampling.
+
+YVEX keeps source provenance next to GGUF work because a local runtime needs
+more than the final container. The source manifest records where official
+weights came from. Native safetensors inventory gives a payload-free view of
+source tensors. Tensor mapping is where family-native names become YVEX roles
+and proposed GGUF names. Template validation catches structural expectations
+before conversion. Selected conversion keeps the scope narrow: one explicit
+family, source, tensor, qtype, and output artifact.
 
 ```text
 official/open weights
@@ -145,12 +159,9 @@ official/open weights
   -> future graph execution
 ```
 
-The open-weight tooling exists because a native runtime needs provenance and
-layout before generated text. `source-manifest` records where official weights
-came from. `native-weights` inventories safetensors headers. `tensor-map`
-connects family-native names to YVEX roles and GGUF names. `convert plan` and
-`convert emit` keep selected conversion explicit: source, family, tensor,
-qtype, and output artifact.
+The command shape follows that lineage. The examples below are deliberately
+about inventory, mapping, planning, and selected emission; they are not a
+full-model conversion recipe.
 
 ```sh
 ./yvex source-manifest create \
@@ -168,20 +179,24 @@ qtype, and output artifact.
 
 ## Quantization and qtype boundaries
 
-Quantization is not one bit in YVEX. A qtype may be recognized in artifact
-storage, allowed by policy, emitted by a selected conversion path, documented by
-an external quantization job or imatrix record, or computed by a backend kernel.
-Those are different facts, and mixing them too early admits artifacts the
-machine cannot execute.
+Quantization in YVEX is a set of separate runtime facts, not a single
+"supported" bit. A qtype can be recognized as artifact storage while no backend
+kernel computes with it. A policy can allow or reject a qtype for an artifact
+shape. A selected emission path can write a requested qtype. An external
+quantization job or imatrix manifest can record how an artifact was produced.
+Those states are useful only if they stay separate.
 
-| Level | Meaning |
-| --- | --- |
-| Storage | A qtype can be recognized in artifact metadata/tensor storage |
-| Policy | A qtype is allowed or rejected by declared artifact policy |
-| Emission | A selected conversion path can write the requested qtype |
-| Provenance | An external quantization job or imatrix record documents how the artifact was produced |
-| Compute | Backend kernels can execute with that qtype |
-| Model execution | The whole graph runs correctly with that qtype mix |
+This split is practical, not academic. Local model support often breaks when
+storage, conversion, calibration, and compute are treated as the same word.
+YVEX keeps `qtype-support`, `quant-policy`, `quant-job`, and `imatrix` as
+different surfaces so an operator can see whether they are looking at storage
+metadata, declared policy, external provenance, calibration evidence, or actual
+backend compute coverage.
+
+The current tools make provenance and policy explicit before kernels and graph
+execution rely on them. They do not turn external quantization tools into
+hidden runtime behavior, and they do not imply that every artifact described by
+a manifest can be executed by YVEX.
 
 ```sh
 ./yvex qtype-support
@@ -193,21 +208,25 @@ machine cannot execute.
 ## Backends and machine pressure
 
 The runtime is constrained by the machine before it is constrained by the
-README. Tensor bytes have to land somewhere, qtypes have to mean different
-things in storage and compute, CUDA allocations have to fail cleanly, and future
-KV/scratch budgets have to be sized before prefill and decode become real.
+README. Tensor bytes have to land somewhere. CUDA allocations have to fail
+cleanly. qtypes have to mean different things in storage and compute. Future
+KV and scratch budgets have to be sized before prefill and decode become
+meaningful. The selected DeepSeek embedding target makes the first part of
+that pressure concrete without pretending the rest of the graph exists.
 
-| Backend | Role today | Current boundary |
-| --- | --- | --- |
-| CPU | Reference path for parser output, selected materialization, cleanup, diagnostics | Not a production inference backend |
-| CUDA | Accelerated residency path: probe, memory accounting, allocation, transfer, device copy, narrow kernel parity where implemented | Not a full transformer backend |
-| Future graph work | Embedding, normalization, RoPE, attention, MoE routing, quantized matmul, logits, KV, prefill, decode, sampling | Not implemented |
+The CPU backend is the reference lane. It gives the project a stable place to
+validate parser output, selected materialization, cleanup, and error reporting
+before accelerated behavior enters the picture. The CUDA lane is real but
+narrow: device discovery, memory accounting, allocation, transfer, device copy,
+and limited kernel parity where implemented. That is backend work, not yet a
+CUDA transformer backend.
 
-The missing work is concrete, not aspirational. A DeepSeek-class graph has to
-place weights, schedule ops, size scratch, own KV, execute attention and routed
-experts, produce logits, decode, and sample. The selected embedding artifact
-makes the first part measurable before the project tries to make the whole
-model speak.
+A DeepSeek-class graph has to do much more than place an embedding tensor. It
+has to place weights, schedule ops, size scratch, own KV, execute attention and
+routed experts, handle quantized matmul, produce logits, decode, and sample.
+The current CUDA boundary is valuable because it forces memory ownership and
+failure behavior to be precise before those larger kernels and scheduler
+decisions arrive.
 
 ```sh
 ./yvex cuda-info
@@ -215,35 +234,37 @@ model speak.
 make check-cuda
 ```
 
-## Provider boundary
+## Runtime and provider boundary
 
-`./yvexd` keeps the local provider boundary present while graph execution is
-still absent. It should expose health, metrics, and model listing without
-pretending to be a generation server.
+The runtime-facing commands exist to keep engine and session boundaries visible
+while execution is still being built. `engine` opens descriptor/tokenizer/graph
+diagnostics. `session` creates lifecycle state over an engine and backend.
+`run` accepts one prompt through the diagnostic path and reports accepted-only
+state. `chat` is the console surface and future REPL direction. Those commands
+are useful because they expose runtime edges without pretending to produce
+model text.
 
-| Endpoint | Current meaning |
-| --- | --- |
-| `GET /health` | daemon/process health |
-| `GET /metrics` | status/metrics surface |
-| `GET /v1/models` | provider-shell model listing |
+`./yvexd` plays the same role at the provider boundary. It keeps a daemon shape
+available for health, metrics, and model listing while generation remains
+behind the execution boundary. The implemented status endpoints are useful
+process surfaces; generation belongs behind them only after scheduled graph
+runtime exists.
 
 ```sh
 ./yvexd --host 127.0.0.1 --port 8080 --backend cpu
 ```
 
+The current status endpoints are `GET /health`, `GET /metrics`, and
+`GET /v1/models`. They should be read as provider-shell structure, not as model
+serving.
+
 ## Validation
 
-Validation is part of the artifact boundary. Tests and guardrails keep public
-claims tied to command behavior, repository layout, and tracked files.
-
-| Gate | Purpose |
-| --- | --- |
-| `git diff --check` | whitespace / patch hygiene |
-| `make check` | baseline C test surface |
-| `make smoke` | CLI/daemon smoke path |
-| `tests/test_docs_surface.sh` | public documentation boundary |
-| `tests/test_surface.sh` | repository surface guardrail |
-| `make check-cuda` | CUDA-capable host validation |
+Validation ties README claims to command behavior. `make check` runs the
+baseline C test surface, smoke tests exercise the CLI and daemon paths, docs
+surface tests protect the public documentation boundary, and repository surface
+guards keep the minimal layout from drifting. CUDA validation is explicit
+because it depends on a CUDA-capable host.
 
 ```sh
 git diff --check
@@ -259,7 +280,7 @@ CUDA-capable hosts:
 make check-cuda
 ```
 
-Artifact guardrails:
+Artifact guardrails keep model weights and generated artifacts out of git:
 
 ```sh
 git ls-files '*.safetensors' '*.bin' '*.dat'
