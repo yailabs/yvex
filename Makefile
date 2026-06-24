@@ -106,7 +106,7 @@ CUDA_TEST_UNIT_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CUDA_TEST_UNIT_SRCS))
 CLI_TEST := tests/cli.sh
 
 CURRENT_DOCS := README.md AGENTS.md MODEL_ARTIFACTS.md NOTICE.md \
-	docs/api.md docs/contract.md docs/spine.md
+	docs/api.md docs/contract.md docs/operator-runbook.md docs/spine.md
 
 info:
 	@echo "yvex: C local inference engine"
@@ -266,19 +266,22 @@ check-docs:
 	@test -f docs/spine.md
 	@test -f docs/api.md
 	@test -f docs/contract.md
+	@test -f docs/operator-runbook.md
 	@! find docs -maxdepth 1 -type f -name '*.md' \
 		! -name spine.md \
 		! -name api.md \
 		! -name contract.md \
+		! -name operator-runbook.md \
 		-print | grep .
-	@test "$$(find docs -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')" = "3"
+	@test "$$(find docs -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')" = "4"
 	@grep -F "YVEX Inner Delivery Spine" docs/spine.md >/dev/null
 	@grep -F "internal roadmap" docs/spine.md >/dev/null
 	@grep -F "YVEX is a native C runtime and toolchain" README.md >/dev/null
 	@grep -F "Model selection in canonical REPL" docs/spine.md >/dev/null
-	@grep -F "docs/api.md, docs/contract.md, docs/spine.md" docs/spine.md >/dev/null
+	@grep -F "docs/api.md, docs/contract.md, docs/operator-runbook.md, docs/spine.md" docs/spine.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Runtime Contract" docs/contract.md >/dev/null
+	@grep -F "YVEX Operator Runbook" docs/operator-runbook.md >/dev/null
 
 check-guardrails:
 	@test ! -d docs/spines

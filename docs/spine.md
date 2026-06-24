@@ -26,7 +26,7 @@ native root binaries: ./yvex and ./yvexd
 public headers: include/yvex/
 CUDA implementation: cuda/ with C host bridge and CUDA kernel unit
 GGUF domain and family mapping: gguf/
-docs: docs/api.md, docs/contract.md, docs/spine.md
+docs: docs/api.md, docs/contract.md, docs/operator-runbook.md, docs/spine.md
 public README: prose-first runtime boundary, public-safe artifact wording
 artifact docs: operator-local paths only, no personal absolute paths
 tests: compact runners, fixtures, and vectors
@@ -146,7 +146,9 @@ execution_ready: true
 | SPINE.REBASE.1 | complete | Execution-chain audit and M3-M8 technical rebase |
 | CLI.MODELS.3 | complete | Model selection in canonical REPL |
 | CLI.MODELS.4 | complete | Model alias resolution in yvexd |
-| M3 | next | Materialized-weight engine attachment |
+| DOCS.OPERATOR.RUNBOOK.0 | complete | Canonical operator runbook |
+| SPINE.REBASE.2 | next | Runtime track rebase before M3 |
+| M3 | paused | Materialized-weight engine attachment |
 | M4 | paused | First executable fixture graph path |
 | M5 | paused | First real-model partial graph execution |
 | M6 | paused | Prefill runtime foundation |
@@ -237,6 +239,7 @@ run artifact helpers split from console private boundary
 public documentation boundary complete
 public artifact path hygiene complete
 README prose-first public boundary complete
+operator runbook complete
 minimal docs surface complete
 ```
 
@@ -300,13 +303,13 @@ trace/profile output, and explicit generation support boundary.
 ## 7. Active Next
 
 ```text
-M3 - Materialized-weight engine attachment
+SPINE.REBASE.2 - Runtime track rebase before M3
 ```
 
-`CLI.MODELS.4` completed explicit daemon alias resolution for `--model
-FILE_OR_ALIAS`. The next implementation work is M3. Do not begin M4-M8 work
-until materialized-weight engine/session ownership is implemented and validated
-or the spine explicitly changes.
+`DOCS.OPERATOR.RUNBOOK.0` completed the command-first operator workflow. The
+next work is `SPINE.REBASE.2`, which must reorder OWI history, Runtime KV,
+Benchmark/Eval, and the M3-M8 ladder before implementation resumes. Do not begin
+M3-M8 work until that rebase is complete or the spine explicitly changes.
 
 ## 8. Validation Gate
 
@@ -366,7 +369,7 @@ public path leak guardrail
   tests.
 - Do not collapse materialization, engine ownership, graph execution, prefill,
   decode, logits, sampling, and generation into one wave.
-- No docs sprawl beyond `docs/api.md`, `docs/contract.md`, and
-  `docs/spine.md`.
+- No docs sprawl beyond `docs/api.md`, `docs/contract.md`,
+  `docs/operator-runbook.md`, and `docs/spine.md`.
 - Keep DeepSeek as the active live model target unless this spine changes.
 - Keep Qwen as historical validation evidence unless this spine changes.

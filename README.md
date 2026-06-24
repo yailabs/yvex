@@ -301,7 +301,7 @@ cuda/               CUDA host bridge and kernel unit
 gguf/               GGUF parser, conversion, family mapping, quant policy
 include/yvex/       public C API
 tests/              compact runners, fixtures, and vectors
-docs/               API, contract, internal spine
+docs/               API, contract, operator runbook, internal spine
 ```
 
 ## Documentation
@@ -309,7 +309,8 @@ docs/               API, contract, internal spine
 `AGENTS.md` defines operating rules for humans and coding agents.
 `MODEL_ARTIFACTS.md` is the external artifact card. `docs/api.md` describes the
 public C API, `docs/contract.md` defines runtime/backend/filesystem/CLI
-contracts, and the internal roadmap stays in `docs/spine.md`.
+contracts, `docs/operator-runbook.md` is the command-first operator workflow,
+and the internal roadmap stays in `docs/spine.md`.
 
 ## License
 
