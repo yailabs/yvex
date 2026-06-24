@@ -1,64 +1,24 @@
 # YVEX
 
 YVEX is a native C runtime and toolchain for local open-weight model artifacts.
+Its current work is the path from artifact bytes to runtime execution, with each
+intermediate state made visible rather than folded into a vague support claim.
 
-The repository is organized around a strict execution boundary: a model file can
-be parsed without being runnable, a tensor can be materialized without being
-part of an executable graph, and a backend can own memory without proving
-prefill, decode, or generation. YVEX keeps those states separate in source,
-tests, commands, artifact cards, and failure reports.
+A GGUF file can parse while the model is still not executable. A selected tensor
+can materialize while the full weight set is still absent. A backend can own
+memory while no scheduled graph has run. YVEX treats those as different states:
+parsed artifact, materialized tensor, backend residency, and executable graph.
+The repository, CLI, tests, and artifact cards all preserve that separation.
 
-The current code proves artifact loading, GGUF parsing, tensor inspection,
+Today YVEX proves artifact loading, GGUF parsing, tensor-table construction,
 descriptor construction, selected-tensor GGUF emission, selected-tensor
-materialization, CPU/CUDA backend residency diagnostics, local model registry
-resolution, runtime/session diagnostics, and a provider status shell. It does
-not yet execute a full model.
+materialization, CPU/CUDA residency diagnostics, local model registry
+resolution, runtime/session diagnostics, and a provider status shell. Full
+model inference remains beyond the current frontier.
 
-## What YVEX Owns
+## What The Binary Proves Today
 
-YVEX owns the local path from model artifact bytes to runtime diagnostics:
-
-```text
-external model artifact
-GGUF parser
-metadata and tensor directory
-YVEX tensor table
-model descriptor
-backend tensor allocation
-selected weight materialization
-graph and memory-plan substrate
-engine/session diagnostics
-operator-visible gate reports
-```
-
-Every layer must report what it has actually proven. Parser success does not
-prove model support. Materialized weights do not prove inference. CUDA
-residency does not prove graph execution. `./yvexd` is a provider/status shell
-until generation exists.
-
-Current unsupported runtime areas:
-
-```text
-full-model execution
-prefill
-decode
-sampling
-generation
-KV execution
-paged KV
-host spill
-distributed inference
-generation-compatible provider APIs
-token latency or throughput benchmarks
-```
-
-`execution_ready` remains `false` until YVEX has a real executable graph path.
-
-## Current Proof Surface
-
-The proof surface is command-visible. The CLI can inspect artifacts, resolve
-local aliases, probe backends, materialize selected weights, and run diagnostic
-runtime shells without claiming generation.
+The proof surface starts with the repository-local binary and its tests:
 
 ```sh
 make
@@ -67,107 +27,32 @@ make
 ./yvex info
 ```
 
-The command table is the most direct description of the implemented surface:
+`./yvex` exposes inspection commands such as `inspect`, `metadata`, and
+`tensors`; registry commands under `models`; backend checks through `backend`
+and `cuda-info`; and graph/planning diagnostics through `graph` and `plan`.
+Tokenizer and prompt work is visible through `tokenizer`, `tokenize`,
+`detokenize`, and `prompt`. Runtime diagnostics are deliberately bounded:
+`engine`, `session`, `run`, and `chat` can open implemented runtime state and
+report accepted tokens or diagnostic artifacts, but they do not fabricate model
+output.
 
-```text
-inspection:
-  inspect
-  metadata
-  tensors
-
-local model registry:
-  models
-
-backend and machine boundary:
-  backend
-  cuda-info
-
-graph and planning:
-  graph
-  plan
-
-tokenizer and prompt diagnostics:
-  tokenizer
-  tokenize
-  detokenize
-  prompt
-
-runtime diagnostics:
-  engine
-  session
-  run
-  chat
-
-open-weight and GGUF tooling:
-  source-manifest
-  native-weights
-  tensor-map
-  gguf-template
-  gguf-emit
-  convert
-
-quantization policy and provenance:
-  qtype-support
-  quant-policy
-  quant-job
-  imatrix
-
-materialization gates:
-  model-gate
-  materialize-gate
-
-server/provider:
-  yvexd
-```
-
-Use `./yvex help <command>` for command-specific syntax. Planned runtime areas
-are not hidden behind command names; unsupported paths report unsupported.
-
-## Artifact Path
-
-Model artifacts live outside the repository. YVEX keeps generated model files,
-local registries, logs, and reports out of git.
-
-```text
-external model roots: operator-owned
-local registry:       .yvex/models.local.json
-build output:         build/
-tracked fixtures:     tiny GGUF parser fixtures only
-```
-
-The local registry maps short aliases to machine-local artifact paths:
-
-```sh
-./yvex models add --path /path/to/model.gguf --alias local-model
-./yvex models list
-./yvex models use local-model
-```
-
-One-shot commands resolve either a filesystem path or a registered alias:
-
-```sh
-./yvex inspect local-model
-./yvex metadata local-model
-./yvex tensors local-model
-./yvex materialize --model local-model --backend cuda
-```
-
-Alias resolution is an operator convenience. It does not change the support
-level of the referenced artifact.
+The open-weight toolchain is also command-visible. `source-manifest`,
+`native-weights`, `tensor-map`, `gguf-template`, `gguf-emit`, and `convert`
+cover provenance, native inventory, tensor mapping, template validation,
+controlled GGUF emission, and selected conversion. `qtype-support`,
+`quant-policy`, `quant-job`, and `imatrix` keep storage, conversion,
+quantization policy, job provenance, and calibration metadata explicit. The
+gate commands, `model-gate` and `materialize-gate`, turn those facts into
+repeatable pass/fail reports instead of relying on README claims.
 
 ## DeepSeek Selected-Tensor Target
 
-The active live artifact is a selected DeepSeek V4 Flash embedding GGUF
-documented in [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md):
+The active live target is a selected DeepSeek V4 Flash embedding GGUF tracked
+as an external operator artifact in [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md):
 
 ```text
 alias: deepseek4-v4-flash-selected-embed
-path: /home/dgmothx/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
-sha256: 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab
-format: GGUF v3
-tensor_count: 1
 tensor: token_embd.weight
-rank: 2
 dims: [4096,129280]
 dtype: F16
 tensor_bytes: 1059061760
@@ -176,12 +61,11 @@ CUDA: pass
 execution_ready: false
 ```
 
-This artifact proves that YVEX can identify an external GGUF, parse its tensor
-table, verify the selected tensor shape and dtype, copy the selected tensor into
-CPU/CUDA backend residency, and report the result through gates.
-
-It does not prove full model materialization, graph execution, prefill, decode,
-sampling, or generation.
+A single selected F16 embedding tensor is already a real large-model pressure
+point. This target proves external artifact identity, GGUF parsing,
+tensor-table correctness, selected tensor shape/dtype validation, selected
+materialization, CPU/CUDA backend residency, and gate reporting. It does not
+prove full model materialization or graph execution.
 
 Useful proof commands:
 
@@ -189,78 +73,36 @@ Useful proof commands:
 ./yvex inspect deepseek4-v4-flash-selected-embed
 ./yvex tensors deepseek4-v4-flash-selected-embed
 ./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
-
-./yvex model-gate check \
-  --model deepseek4-v4-flash-selected-embed \
-  --label deepseek-v4-flash-selected-embedding \
-  --family deepseek4 \
-  --expect-tensor token_embd.weight \
-  --expect-rank 2 \
-  --expect-dims 4096,129280 \
-  --expect-dtype F16 \
-  --expect-bytes 1059061760 \
-  --backend cpu \
-  --backend cuda \
-  --require-cpu \
-  --require-cuda
 ```
 
-## Backend And Machine Boundary
+## Artifact And Registry Workflow
 
-Local runtime work is bounded by machine facts, not just file format support.
-YVEX keeps these concerns explicit:
+Model artifacts stay outside git. The repository may contain tiny GGUF parser
+fixtures, but generated model artifacts, safetensors, raw binary weights,
+calibration data, local registries, reports, logs, and build output are local
+operator state.
 
-```text
-model weight residency
-tensor mapping from native names to runtime roles
-qtype storage versus compute support
-CUDA allocation, movement, and kernel availability
-CPU reference behavior
-graph scratch requirements
-KV cache size and placement
-future prefill/decode memory pressure
-```
-
-The CPU backend is the reference path. It is used for deterministic
-materialization, tensor movement, capability reporting, and comparison against
-accelerated paths.
-
-The CUDA path is implemented under `cuda/`. Host bridge code stays in `.c`
-files; device code lives in `cuda/cuda_kernels.cu`. Current CUDA proof covers
-device probing, memory stats, tensor allocation, host/device transfer, device
-copy, and an F32 embedding kernel parity path. It does not cover matmul,
-attention, RMSNorm, RoPE, MoE, KV execution, or full model execution.
+The local registry makes machine-local paths usable without turning an alias
+into a support claim:
 
 ```sh
-./yvex cuda-info
-./yvex backend cuda
-make check-cuda
+./yvex models add --path /path/to/model.gguf --alias local-model
+./yvex models list
+./yvex models use local-model
+./yvex inspect local-model
 ```
 
-DeepSeek-class artifacts create immediate pressure on memory residency and KV
-planning. A single selected F16 embedding tensor already carries more than one
-billion bytes. Full execution will require weight placement, scratch planning,
-KV sizing, backend compute kernels, and explicit failure classes before any
-generation claim is valid.
+Aliases resolve to artifact paths for one-shot commands where model references
+are supported. They do not upgrade descriptor-only or selected-tensor evidence
+into executable runtime support.
 
-## GGUF, Mapping, And Quantization Policy
+## GGUF And Open-Weight Tooling
 
-YVEX treats GGUF as an artifact format with inspectable structure. Parsing a
-GGUF creates metadata and tensor-directory facts; it does not create executable
-model state.
+YVEX treats GGUF as an inspectable artifact format. Parsing a GGUF gives
+metadata, tensor names, shapes, dtypes, offsets, and descriptor input. It does
+not automatically create executable model state.
 
-```sh
-./yvex inspect model.gguf
-./yvex metadata model.gguf
-./yvex tensors model.gguf
-```
-
-The GGUF tooling lives under `gguf/` and includes parser, artifact naming,
-controlled emission, template validation, selected conversion, family tensor
-mapping, qtype support, quantization policy manifests, quantization job
-manifests, and imatrix provenance manifests.
-
-Open-weight intake starts from source inventory:
+The intake path starts with provenance and native inventory:
 
 ```sh
 ./yvex source-manifest create \
@@ -274,7 +116,9 @@ Open-weight intake starts from source inventory:
 ./yvex tensor-map --arch deepseek4 --native-source /path/to/native/source
 ```
 
-Selected conversion paths are explicit:
+Selected conversion remains explicit. Planning and emission name the family,
+source, tensor, qtype, and output artifact instead of implying full-model
+conversion:
 
 ```sh
 ./yvex convert plan \
@@ -291,8 +135,10 @@ Selected conversion paths are explicit:
   --overwrite
 ```
 
-Conversion support, storage support, quantization support, and compute support
-are separate:
+The quantization surface is intentionally split. `qtype-support` reports
+storage/conversion/compute distinctions; `quant-policy` validates declarative
+policy; `quant-job` records external job provenance; and `imatrix` records
+calibration metadata.
 
 ```sh
 ./yvex qtype-support
@@ -301,11 +147,35 @@ are separate:
 ./yvex imatrix inspect --manifest imatrix.json
 ```
 
-YVEX does not collapse those states into a single support label.
+## Backends And Machine Pressure
 
-## Runtime Frontier
+The CPU backend is the reference and diagnostic path. It gives YVEX a stable
+baseline for materialization, tensor movement, capability reporting, and
+comparison against accelerated behavior.
 
-Runtime diagnostics exist now:
+CUDA is the accelerated direction. CUDA code lives under `cuda/`; host bridge
+code stays in C files, and device code lives in `cuda/cuda_kernels.cu`. Current
+CUDA proof covers device probing, memory stats, allocation, transfer, device
+copy, and a narrow F32 embedding-kernel parity path where implemented. It does
+not cover matmul, attention, RMSNorm, RoPE, MoE routing, KV execution, or full
+graph execution.
+
+DeepSeek-class artifacts force the runtime to deal with weight residency,
+host/device transfer, qtype storage versus compute support, graph scratch, KV
+size, and future prefill/decode pressure. The selected DeepSeek embedding
+target is intentionally small in model scope but large in memory reality:
+placing even that tensor correctly matters before the runtime can claim a
+larger execution path.
+
+```sh
+./yvex cuda-info
+./yvex backend cuda
+make check-cuda
+```
+
+## Where Execution Begins
+
+The current runtime commands are diagnostic surfaces:
 
 ```sh
 ./yvex engine model.gguf
@@ -314,18 +184,18 @@ Runtime diagnostics exist now:
 ./yvex chat --model model.gguf --backend cpu
 ```
 
-These commands open descriptors, backend state, sessions, prompt/token
-acceptance, metrics, traces, and profile artifacts where implemented. `run` is
-accepted-only diagnostics. `chat` is a diagnostic console and future canonical
-REPL. Plain text input must not produce fabricated assistant text.
+They can open descriptors, sessions, backend state, token acceptance, metrics,
+traces, and profile artifacts where those pieces exist. `run` is an
+accepted-only path. `chat` is the diagnostic console and future canonical REPL.
+Plain text input must not produce generated assistant text until inference
+exists.
 
-The frontier begins where planned graph execution would need real model weights,
-scheduled ops, scratch, KV, prefill, logits, decode, and sampling. Until that
-path exists, `execution_ready: false` is the correct state.
+`execution_ready` remains `false` until scheduled graph ops, real weights,
+scratch, KV, prefill, logits, decode, and sampling form an executable path.
 
-## Server Provider Shell
+## Provider Shell
 
-`./yvexd` is the local provider/status daemon:
+`./yvexd` is currently a provider/status daemon:
 
 ```sh
 ./yvexd --host 127.0.0.1 --port 8080 --backend cpu
@@ -339,18 +209,19 @@ GET /metrics
 GET /v1/models
 ```
 
-The daemon can expose status and provider-shell structure. It has no
-generation-server behavior; daemon-side model alias resolution remains future
-work.
+It has no generation-server behavior, and daemon-side model alias resolution
+remains future work.
 
 ## Validation
 
 Baseline validation:
 
 ```sh
+git diff --check
 make check
 make smoke
-git diff --check
+sh tests/test_docs_surface.sh
+sh tests/test_surface.sh
 ```
 
 CUDA-capable hosts:
@@ -368,13 +239,9 @@ YVEX_BIN=./yvex YVEXD_BIN=./yvexd sh tests/cli.sh
 YVEX_BIN=./yvex YVEXD_BIN=./yvexd sh tests/cli.sh --cuda
 ```
 
-Repository guardrails:
+Artifact guardrails:
 
 ```sh
-sh tests/test_source_layout.sh
-sh tests/test_code_natural.sh
-sh tests/test_docs_surface.sh
-sh tests/test_surface.sh
 git ls-files '*.safetensors' '*.bin' '*.dat'
 git ls-files '*.gguf'
 ```
