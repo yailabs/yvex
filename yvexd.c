@@ -13,9 +13,10 @@
 
 static void print_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvexd [--host HOST] [--port PORT] [--model FILE] [--backend cpu|cuda] [--one-request]\n");
+    fprintf(fp, "usage: yvexd [--host HOST] [--port PORT] [--model FILE_OR_ALIAS] [--backend cpu|cuda] [--one-request]\n");
     fprintf(fp, "\n");
-    fprintf(fp, "Starts the server shell local server shell. Endpoints: /health, /metrics, /v1/models.\n");
+    fprintf(fp, "Starts the local server shell. Endpoints: /health, /metrics, /v1/models.\n");
+    fprintf(fp, "--model accepts an existing GGUF path or a registered local alias.\n");
     fprintf(fp, "Generation endpoints are not implemented in server shell.\n");
 }
 
@@ -46,11 +47,13 @@ int main(int argc, char **argv)
     yvex_server *server = NULL;
     yvex_server_options options;
     yvex_server_summary summary;
+    yvex_model_ref model_ref;
     yvex_error err;
     int i;
     int rc;
 
     memset(&options, 0, sizeof(options));
+    memset(&model_ref, 0, sizeof(model_ref));
     options.host = "127.0.0.1";
     options.port = 8080;
     options.backend_name = "cpu";
@@ -97,8 +100,17 @@ int main(int argc, char **argv)
         }
     }
 
+    if (options.model_path) {
+        rc = yvex_model_ref_resolve(&model_ref, options.model_path, NULL, &err);
+        if (rc != YVEX_OK) {
+            return print_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 5);
+        }
+        options.model_path = model_ref.path;
+    }
+
     rc = yvex_server_create(&server, &options, &err);
     if (rc != YVEX_OK) {
+        yvex_model_ref_clear(&model_ref);
         return print_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 5);
     }
 
@@ -109,6 +121,7 @@ int main(int argc, char **argv)
 
     rc = yvex_server_serve(server, &err);
     yvex_server_close(server);
+    yvex_model_ref_clear(&model_ref);
     if (rc != YVEX_OK) {
         return print_error(&err, 1);
     }

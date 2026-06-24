@@ -16,7 +16,8 @@ make builds ./yvex and ./yvexd
 
 Model-reference commands may accept registered model aliases where model
 artifact selection is supported. `chat` uses the current selected registry model
-when `--model` is omitted. The daemon does not yet resolve aliases.
+when `--model` is omitted. `yvexd --model FILE_OR_ALIAS` resolves explicit
+filesystem paths and registered aliases.
 
 ## 3. Filesystem Contract
 
