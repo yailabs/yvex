@@ -85,6 +85,11 @@ author identity, malware absence, cryptographic provenance, or safe execution of
 untrusted code. It prevents runtime paths from trusting structurally inconsistent
 artifacts.
 
+YVEX maintains a tiny `GGUF` corruption fixture suite for repository
+validation. The suite proves that parser, integrity, materialization, and graph
+entry paths reject invalid artifacts before trusting tensor payloads. It is not
+fuzzing and does not claim complete malicious-input coverage.
+
 ### Artifact identity baseline
 
 YVEX records local file identity for registered model aliases using file size

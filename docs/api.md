@@ -140,3 +140,6 @@ local identity/digest status for path checks, and a bounded copied issue list.
 The integrity API checks structural `GGUF` bounds, tensor range math, selected
 embedding readiness, and optional expected/registered SHA-256 matching; it is
 not a supply-chain security, malware, sandboxing, or remote provenance API.
+The repository test suite includes tiny corrupt `GGUF` fixtures that exercise
+the bounded issue list and parser-to-integrity error mapping; that corpus is
+structural regression coverage, not fuzzing.

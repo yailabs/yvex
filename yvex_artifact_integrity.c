@@ -240,9 +240,14 @@ static void map_parse_error_to_report(const yvex_error *source,
         code = "bad-magic";
     } else if (strstr(message, "unsupported GGUF version")) {
         code = "unsupported-version";
+    } else if (strstr(message, "string out of bounds")) {
+        code = "malformed-string";
+    } else if (strstr(message, "tensor name out of bounds")) {
+        code = "tensor-directory-parse-failed";
     } else if (strstr(message, "metadata")) {
         code = "metadata-parse-failed";
-    } else if (strstr(message, "empty tensor name")) {
+    } else if (strstr(message, "empty tensor name") ||
+               strstr(message, "tensor name is empty")) {
         code = "empty-tensor-name";
     } else if (strstr(message, "tensor rank")) {
         code = "rank-out-of-range";

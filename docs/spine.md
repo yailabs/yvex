@@ -130,7 +130,8 @@ artifact integrity validator baseline
 GGUF structural corruption detection
 tensor range and checked byte-count validation
 required selected embedding readiness check
-corrupt artifact fixture tests
+GGUF structural corruption fixture suite
+table-driven corrupt fixture refusal harness for integrity/inspect/tensors/materialize/graph
 file identity digest enforcement
 registered alias digest verification
 baseline registry alias digest drift detection
@@ -161,7 +162,6 @@ Unsupported / not advanced:
 full model execution
 full DeepSeek materialization
 full GGUF conversion
-artifact corruption fixture suite
 materialization integrity gate
 graph execution corruption guard
 operator integrity report
@@ -249,8 +249,8 @@ unbounded spreadsheet.
 | SPINE.REBASE.4 | complete | Artifact integrity and measurement target rebase |
 | ARTIFACT.INTEGRITY.0 | complete | Artifact integrity threat model and validator baseline |
 | ARTIFACT.INTEGRITY.1 | complete | File identity and digest enforcement |
-| ARTIFACT.INTEGRITY.2 | next | GGUF structural corruption fixture suite |
-| ARTIFACT.INTEGRITY.3 | planned | Tensor directory offset and byte-range validation |
+| ARTIFACT.INTEGRITY.2 | complete | GGUF structural corruption fixture suite |
+| ARTIFACT.INTEGRITY.3 | next | Tensor directory offset and byte-range validation |
 | ARTIFACT.INTEGRITY.4 | planned | Shape, rank, dtype, and byte-count overflow hardening |
 | ARTIFACT.INTEGRITY.5 | planned | Registry alias metadata drift diagnostics |
 | ARTIFACT.INTEGRITY.6 | planned | Materialization integrity gate |
@@ -498,8 +498,8 @@ mapped and the baseline validator exists.
 | --- | --- | --- |
 | ARTIFACT.INTEGRITY.0 | complete | Artifact integrity threat model and validator baseline |
 | ARTIFACT.INTEGRITY.1 | complete | File identity and digest enforcement |
-| ARTIFACT.INTEGRITY.2 | next | GGUF structural corruption fixture suite |
-| ARTIFACT.INTEGRITY.3 | planned | Tensor directory offset and byte-range validation |
+| ARTIFACT.INTEGRITY.2 | complete | GGUF structural corruption fixture suite |
+| ARTIFACT.INTEGRITY.3 | next | Tensor directory offset and byte-range validation |
 | ARTIFACT.INTEGRITY.4 | planned | Shape, rank, dtype, and byte-count overflow hardening |
 | ARTIFACT.INTEGRITY.5 | planned | Registry alias metadata drift diagnostics |
 | ARTIFACT.INTEGRITY.6 | planned | Materialization integrity gate |
@@ -527,10 +527,16 @@ or execute graph segments fail before backend allocation or graph execution when
 the current bytes no longer match the recorded digest. This is local identity
 evidence only, not supply-chain security or remote provenance.
 
-ARTIFACT.INTEGRITY.2 creates a GGUF structural corruption fixture suite: bad
-magic, unsupported version, truncated header, truncated metadata, truncated
-tensor directory, invalid counts, malformed string fields, and duplicate tensor
-names. These must fail cleanly through inspect, tensors, and materialize paths.
+ARTIFACT.INTEGRITY.2 created a GGUF structural corruption fixture suite and
+table-driven refusal harness. The suite covers bad magic, unsupported version,
+truncated header, truncated metadata, truncated tensor directory, invalid
+counts, malformed string fields, duplicate and empty tensor names, invalid
+rank, zero dimensions, dimension overflow, unknown dtype, tensor offset/range
+failures, misalignment, and missing selected embedding readiness. The harness
+proves clean rejection across integrity, inspect, tensors, materialize, and
+graph partial surfaces, while preserving the distinction between structurally
+corrupt artifacts and structurally valid artifacts that are not ready for
+selected embedding execution.
 
 ARTIFACT.INTEGRITY.3 hardens tensor directory offsets and byte ranges. It must
 validate tensor offset within file, tensor byte range within file, no overflow
@@ -913,12 +919,13 @@ No diagram may imply support that the code does not implement.
 ## 8. Active Next
 
 ```text
-ARTIFACT.INTEGRITY.2 - GGUF structural corruption fixture suite
+ARTIFACT.INTEGRITY.3 - Tensor directory offset and byte-range validation
 ```
 
-Next implementation: ARTIFACT.INTEGRITY.2. It must expand the tiny corrupt GGUF
-fixture corpus across structural parser failures without mixing in digest or
-registry drift work that is already covered by ARTIFACT.INTEGRITY.1.
+Next implementation: ARTIFACT.INTEGRITY.3. It must deepen tensor directory
+offset and byte-range validation using the corruption fixture suite added in
+ARTIFACT.INTEGRITY.2, without mixing in digest or registry drift work that is
+already covered by ARTIFACT.INTEGRITY.1.
 
 Next runtime expansion after integrity baseline:
 

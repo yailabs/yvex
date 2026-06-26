@@ -148,6 +148,12 @@ byte-count failures, duplicate tensor names, and selected embedding readiness
 when requested. It is not a supply-chain security audit and does not prove model
 quality, author identity, malware absence, or provenance.
 
+The repository also runs tiny corrupt `GGUF` fixture tests against integrity,
+inspect, tensors, materialization, and graph-entry refusal paths. Those fixtures
+are repository validation assets, not operator model assets. Operators should
+run `integrity check` and `models verify` on their own artifacts; they only need
+the corrupt fixture suite when debugging YVEX itself.
+
 For selected embedding readiness, include the partial-token boundary:
 
 ```sh

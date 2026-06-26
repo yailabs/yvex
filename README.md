@@ -396,6 +396,9 @@ YVEX includes a baseline artifact integrity check for `GGUF` structural bounds,
 tensor ranges, checked byte math, and selected embedding readiness. It is not a
 supply-chain security guarantee.
 
+The repository also includes tiny corrupt `GGUF` fixture coverage for structural
+refusal paths. Those files are test assets, not model artifacts.
+
 Registered model aliases also record local file identity so YVEX can detect
 when an operator-local artifact changes after registration. Digest checks are
 local identity evidence, not supply-chain security or remote provenance.
