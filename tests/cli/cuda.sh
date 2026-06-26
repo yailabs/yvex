@@ -4,6 +4,7 @@ set -u
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-${OUT_DIR:-build/tests/cli/cuda}}
 FIXTURE=tests/fixtures/gguf/valid-tokenizer-simple.gguf
+CONTROLLED="$OUT_DIR/cuda-controlled.gguf"
 
 mkdir -p "$OUT_DIR"
 
@@ -90,6 +91,25 @@ contains "$OUT_DIR/session_cuda_ready.out" "weights_attached: true"
 contains "$OUT_DIR/session_cuda_ready.out" "weights_backend: cuda"
 contains "$OUT_DIR/session_cuda_ready.out" "weight_tensor_count: 1"
 contains "$OUT_DIR/session_cuda_ready.out" "execution_ready: false"
+
+"$YVEX_BIN" gguf-emit controlled \
+  --out "$CONTROLLED" \
+  --model-name cuda-fixture-graph \
+  --arch deepseek \
+  --overwrite >"$OUT_DIR/emit_controlled.out" 2>"$OUT_DIR/emit_controlled.err"
+
+"$YVEX_BIN" graph --model "$CONTROLLED" --backend cuda --execute-fixture --fixture-token 0 \
+  >"$OUT_DIR/fixture_graph_cuda.out" 2>"$OUT_DIR/fixture_graph_cuda.err"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    fail "fixture graph cuda exit code was $rc"
+fi
+contains "$OUT_DIR/fixture_graph_cuda.out" "fixture_graph_executed: true"
+contains "$OUT_DIR/fixture_graph_cuda.out" "fixture_backend: cuda"
+contains "$OUT_DIR/fixture_graph_cuda.out" "fixture_output_values: 0,4,8,12"
+contains "$OUT_DIR/fixture_graph_cuda.out" "execution_ready: false"
+contains "$OUT_DIR/fixture_graph_cuda.out" "graph_execution_ready: false"
+contains "$OUT_DIR/fixture_graph_cuda.out" "status: fixture-graph-executed"
 
 "$YVEX_BIN" help cuda-info >"$OUT_DIR/help_cuda_info.out" 2>"$OUT_DIR/help_cuda_info.err"
 rc=$?

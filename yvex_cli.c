@@ -121,9 +121,9 @@ static const yvex_cli_command yvex_commands[] = {
     },
     {
         "graph",
-        "Build a graph planning view.",
-        "yvex graph <path> [--seq N] [--ctx N]",
-        "Opens a GGUF descriptor, builds a deterministic graph planning artifact, and prints values, planned ops, and missing-role diagnostics. It does not execute the graph.",
+        "Build or execute a controlled graph fixture.",
+        "yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--fixture-token N]",
+        "Opens a GGUF descriptor and prints graph planning diagnostics. With --execute-fixture, it attaches selected weights and executes the deterministic fixture embed node only; it does not execute a model graph or generate text.",
         command_graph,
     },
     {
@@ -957,6 +957,23 @@ static int parse_positive_ull(const char *text, unsigned long long *out)
     return 1;
 }
 
+static int parse_uint_allow_zero(const char *text, unsigned int *out)
+{
+    char *end = NULL;
+    unsigned long long value;
+
+    if (!text || !out) {
+        return 0;
+    }
+    errno = 0;
+    value = strtoull(text, &end, 10);
+    if (errno != 0 || end == text || *end != '\0' || value > 0xffffffffull) {
+        return 0;
+    }
+    *out = (unsigned int)value;
+    return 1;
+}
+
 static int parse_dims_csv(const char *text,
                           unsigned int rank,
                           unsigned long long dims[4])
@@ -1746,7 +1763,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: selected tensor materialization and engine weight attachment\n");
+    printf("status: selected tensor materialization, engine weight attachment, and fixture graph execution\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -1754,7 +1771,7 @@ static int command_info(int argc, char **argv)
     printf("model: descriptor-only implemented\n");
     printf("tokenizer: fixture encode/decode implemented\n");
     printf("prompt: default renderer implemented\n");
-    printf("graph: partial planning implemented\n");
+    printf("graph: partial planning and deterministic fixture execution implemented\n");
     printf("planner: estimate-only implemented\n");
     printf("backend: CPU reference implemented\n");
     printf("backend_cuda: tensor movement and F32 embed implemented when CUDA is available\n");
@@ -3478,12 +3495,24 @@ static int command_graph(int argc, char **argv)
     yvex_cli_tokenizer_context ctx;
     yvex_graph *graph = NULL;
     yvex_graph_build_options options;
+    yvex_engine_options engine_options;
+    yvex_fixture_graph_options fixture_options;
+    yvex_fixture_graph_result fixture_result;
+    yvex_model_ref model_ref;
+    yvex_engine *engine = NULL;
     yvex_error err;
+    const char *model_arg = NULL;
+    const char *backend_name = "cpu";
+    int execute_fixture = 0;
     int i;
     int rc;
 
     yvex_error_clear(&err);
     memset(&options, 0, sizeof(options));
+    memset(&engine_options, 0, sizeof(engine_options));
+    memset(&fixture_options, 0, sizeof(fixture_options));
+    memset(&fixture_result, 0, sizeof(fixture_result));
+    memset(&model_ref, 0, sizeof(model_ref));
     options.sequence_length = 1;
     options.include_prefill_path = 1;
 
@@ -3492,8 +3521,14 @@ static int command_graph(int argc, char **argv)
         return argc >= 3 ? 0 : 2;
     }
 
-    for (i = 3; i < argc; ++i) {
-        if (strcmp(argv[i], "--seq") == 0) {
+    for (i = 2; i < argc; ++i) {
+        if (strcmp(argv[i], "--model") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --model requires FILE_OR_ALIAS\n");
+                return 2;
+            }
+            model_arg = argv[++i];
+        } else if (strcmp(argv[i], "--seq") == 0) {
             if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &options.sequence_length)) {
                 fprintf(stderr, "yvex: --seq requires a positive integer\n");
                 return 2;
@@ -3505,6 +3540,22 @@ static int command_graph(int argc, char **argv)
                 return 2;
             }
             i += 1;
+        } else if (strcmp(argv[i], "--backend") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --backend requires cpu|cuda\n");
+                return 2;
+            }
+            backend_name = argv[++i];
+        } else if (strcmp(argv[i], "--execute-fixture") == 0) {
+            execute_fixture = 1;
+        } else if (strcmp(argv[i], "--fixture-token") == 0) {
+            if (i + 1 >= argc || !parse_uint_allow_zero(argv[i + 1], &fixture_options.token_id)) {
+                fprintf(stderr, "yvex: --fixture-token requires a non-negative integer\n");
+                return 2;
+            }
+            i += 1;
+        } else if (!model_arg) {
+            model_arg = argv[i];
         } else {
             fprintf(stderr, "yvex: unknown graph option: %s\n", argv[i]);
             fprintf(stderr, "Try 'yvex help graph' for usage.\n");
@@ -3512,7 +3563,72 @@ static int command_graph(int argc, char **argv)
         }
     }
 
-    rc = open_model_context(argv[2], &ctx, &err);
+    if (!model_arg) {
+        fprintf(stderr, "yvex: graph requires FILE_OR_ALIAS\n");
+        fprintf(stderr, "usage: yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--fixture-token N]\n");
+        return 2;
+    }
+    if (strcmp(backend_name, "cpu") != 0 && strcmp(backend_name, "cuda") != 0) {
+        fprintf(stderr, "yvex: unknown backend kind: %s\n", backend_name);
+        return 2;
+    }
+
+    if (execute_fixture) {
+        rc = yvex_model_ref_resolve(&model_ref, model_arg, NULL, &err);
+        if (rc != YVEX_OK) {
+            return print_yvex_error(&err, exit_for_status(rc));
+        }
+
+        engine_options.model_path = model_ref.path;
+        engine_options.load_tokenizer = 0;
+        engine_options.build_descriptor = 1;
+        engine_options.build_default_graph = 1;
+        engine_options.attach_weights = 1;
+        engine_options.backend_name = backend_name;
+        engine_options.require_all_weights = 1;
+
+        rc = yvex_engine_open(&engine, &engine_options, &err);
+        if (rc == YVEX_ERR_UNSUPPORTED && strcmp(backend_name, "cuda") == 0) {
+            printf("fixture_backend: cuda\n");
+            printf("fixture_backend_status: unsupported\n");
+            printf("reason: %s\n", yvex_error_message(&err));
+            printf("status: fixture-graph-backend-unsupported\n");
+            yvex_model_ref_clear(&model_ref);
+            return 5;
+        }
+        if (rc == YVEX_OK) {
+            rc = yvex_engine_execute_fixture_graph(engine, &fixture_options, &fixture_result, &err);
+        }
+        if (rc != YVEX_OK) {
+            yvex_engine_close(engine);
+            yvex_model_ref_clear(&model_ref);
+            return print_yvex_error(&err, exit_for_status(rc));
+        }
+
+        printf("fixture_graph_executed: true\n");
+        printf("fixture_backend: %s\n", fixture_result.backend_name);
+        printf("fixture_op: %s\n", fixture_result.op_name);
+        printf("fixture_weight: %s\n", fixture_result.weight_name);
+        printf("fixture_token_id: %u\n", fixture_result.token_id);
+        printf("fixture_node_count: %llu\n", fixture_result.node_count);
+        printf("fixture_output_count: %llu\n", fixture_result.output_count);
+        printf("fixture_output_bytes: %llu\n", fixture_result.output_bytes);
+        printf("fixture_output_checksum: %llu\n", fixture_result.output_checksum);
+        printf("fixture_output_values:");
+        for (i = 0; (unsigned long long)i < fixture_result.output_value_count; ++i) {
+            printf("%s%.9g", i == 0 ? " " : ",", (double)fixture_result.output_values[i]);
+        }
+        printf("\n");
+        printf("execution_ready: false\n");
+        printf("graph_execution_ready: false\n");
+        printf("status: fixture-graph-executed\n");
+
+        yvex_engine_close(engine);
+        yvex_model_ref_clear(&model_ref);
+        return 0;
+    }
+
+    rc = open_model_context(model_arg, &ctx, &err);
     if (rc != YVEX_OK) {
         return print_yvex_error(&err, exit_for_status(rc));
     }

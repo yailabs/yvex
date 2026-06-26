@@ -58,6 +58,12 @@ engine lifecycle; they do not imply graph execution, prefill, decode, logits,
 sampling, generation, or inference readiness. Sessions may report the engine's
 attachment summary, but they do not own or free engine-attached weights.
 
+Fixture graph execution is available for deterministic controlled graph paths.
+It proves planned embed-node ordering, backend dispatch, output allocation,
+readback, and comparison-friendly output values. It does not imply real-model
+graph execution, prefill, decode, logits, sampling, generation, or inference
+readiness.
+
 ## 5. Server Contract
 
 `./yvexd` exposes a provider/status shell:

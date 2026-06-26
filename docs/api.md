@@ -91,6 +91,7 @@ model artifacts remain outside the repository
 | CUDA tensor movement/parity subset | implemented when CUDA is available |
 | Selected tensor materialization | implemented |
 | Engine-owned selected weight attachment | implemented |
+| Deterministic fixture graph execution | implemented for controlled fixtures |
 | Local model registry | implemented |
 | Alias-or-path model resolver | implemented for one-shot commands |
 | Model gate | implemented |

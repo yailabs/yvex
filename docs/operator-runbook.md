@@ -158,7 +158,65 @@ graph_execution_ready: false
 The engine owns the attached backend tensors. The session observes that state;
 it does not own or execute the weights.
 
-## 6. Run yvexd with the DeepSeek alias
+## 6. Execute a deterministic fixture graph
+
+M4 fixture execution uses a tiny controlled GGUF so output can be checked
+exactly. The example keeps the file under the operator-owned DeepSeek GGUF
+directory and marks the fixture architecture as `deepseek`, but it is still a
+controlled F32 fixture, not the large selected F16 DeepSeek artifact.
+
+```sh
+./yvex gguf-emit controlled \
+  --out ../models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
+  --model-name yvex-m4-deepseek-fixture \
+  --arch deepseek \
+  --overwrite
+
+./yvex graph \
+  --model ../models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
+  --backend cpu \
+  --execute-fixture \
+  --fixture-token 0
+
+./yvex graph \
+  --model ../models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
+  --backend cpu \
+  --execute-fixture \
+  --fixture-token 1
+```
+
+Expected outcome:
+
+```text
+fixture_graph_executed: true
+fixture_backend: cpu
+fixture_op: embed
+fixture_weight: token_embd.weight
+fixture_output_values: 0,4,8,12
+execution_ready: false
+graph_execution_ready: false
+status: fixture-graph-executed
+```
+
+Token `1` should produce `fixture_output_values: 16,20,24,28`. That proves the
+fixture graph reads attached tensor bytes, dispatches the embed node through the
+backend, and writes a real output buffer. It does not execute a real DeepSeek
+model graph, produce logits, or generate text.
+
+CUDA-capable hosts can run the same fixture graph on CUDA:
+
+```sh
+./yvex graph \
+  --model ../models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
+  --backend cuda \
+  --execute-fixture \
+  --fixture-token 0
+```
+
+Expected outcome: the CUDA output values match the CPU fixture output. This is
+fixture graph parity only; it is not a CUDA transformer backend.
+
+## 7. Run yvexd with the DeepSeek alias
 
 `yvexd` is a provider/status shell. It accepts a direct path or registered alias
 for `--model`, then serves status endpoints. In one-request mode it exits after
@@ -205,7 +263,7 @@ GET /metrics
 GET /v1/models
 ```
 
-## 7. Run model and materialization gates
+## 8. Run model and materialization gates
 
 Use gates for repeatable selected-artifact checks. These commands encode
 expected file identity and tensor facts.
@@ -252,7 +310,7 @@ expected file identity and tensor facts.
 Expected outcome: gate status is pass when the selected artifact and CUDA host
 are available. The result remains selected-tensor materialization only.
 
-## 8. Use chat / REPL diagnostics only with tokenizer-bearing artifacts
+## 9. Use chat / REPL diagnostics only with tokenizer-bearing artifacts
 
 The selected DeepSeek embedding artifact does not include the tokenizer metadata
 needed by `chat`. Use `chat` with a tokenizer-bearing fixture or future
@@ -267,24 +325,6 @@ Expected outcome: the console opens against the explicit tokenizer fixture and
 exits on `/quit`. Plain user text produces the diagnostic unsupported-generation
 placeholder; it is not inference. Do not use the selected DeepSeek embedding
 artifact as a chat model.
-
-## 9. Optional controlled GGUF sanity check
-
-Use the controlled GGUF path only when you want a repository-local sanity check
-that does not require external model weights. This is not the DeepSeek pipeline,
-and it intentionally reports `architecture: llama`.
-
-```sh
-./yvex gguf-emit controlled --out ../models/gguf/deepseek/controlled-yvex-fixture.gguf --overwrite
-./yvex inspect ../models/gguf/deepseek/controlled-yvex-fixture.gguf
-./yvex metadata ../models/gguf/deepseek/controlled-yvex-fixture.gguf
-./yvex tensors ../models/gguf/deepseek/controlled-yvex-fixture.gguf
-./yvex materialize --model ../models/gguf/deepseek/controlled-yvex-fixture.gguf --backend cpu
-```
-
-Expected outcome: `status: weights-materialized` and `execution_ready: false`.
-This proves controlled emission, parsing, tensor table inspection, and selected
-materialization, not full model execution.
 
 ## 10. Quantization / imatrix / provenance commands
 

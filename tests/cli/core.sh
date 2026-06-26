@@ -99,7 +99,7 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: selected tensor materialization and engine weight attachment"
+contains "$OUT_DIR/info.out" "status: selected tensor materialization, engine weight attachment, and fixture graph execution"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "artifact: open/read implemented"
@@ -107,7 +107,7 @@ contains "$OUT_DIR/info.out" "gguf: metadata/tensor directory parsing implemente
 contains "$OUT_DIR/info.out" "model: descriptor-only implemented"
 contains "$OUT_DIR/info.out" "tokenizer: fixture encode/decode implemented"
 contains "$OUT_DIR/info.out" "prompt: default renderer implemented"
-contains "$OUT_DIR/info.out" "graph: partial planning implemented"
+contains "$OUT_DIR/info.out" "graph: partial planning and deterministic fixture execution implemented"
 contains "$OUT_DIR/info.out" "planner: estimate-only implemented"
 contains "$OUT_DIR/info.out" "backend: CPU reference implemented"
 contains "$OUT_DIR/info.out" "backend_cuda: tensor movement and F32 embed implemented when CUDA is available"
@@ -234,7 +234,7 @@ run_ok help_engine "$YVEX_BIN" help engine
 contains "$OUT_DIR/help_engine.out" "usage: yvex engine [--model] FILE_OR_ALIAS [--backend cpu|cuda]"
 
 run_ok help_graph "$YVEX_BIN" help graph
-contains "$OUT_DIR/help_graph.out" "usage: yvex graph <path>"
+contains "$OUT_DIR/help_graph.out" "usage: yvex graph [--model] FILE_OR_ALIAS"
 
 run_ok help_gguf_template "$YVEX_BIN" help gguf-template
 contains "$OUT_DIR/help_gguf_template.out" "usage: yvex gguf-template"

@@ -1,6 +1,6 @@
 # YVEX Inner Delivery Spine
 
-Date: 2026-06-24
+Date: 2026-06-26
 Status: internal roadmap
 Project: YVEX
 Language: C
@@ -65,6 +65,7 @@ server/provider status shell
 canonical operator runbook
 engine-owned selected materialized weight attachment
 session visibility into engine-attached weight state
+deterministic fixture graph execution over controlled weights
 ```
 
 Current live target:
@@ -86,7 +87,6 @@ Unsupported / not advanced:
 full model execution
 full DeepSeek materialization
 full GGUF conversion
-fixture graph execution
 real-model partial graph execution
 prefill
 decode
@@ -157,8 +157,8 @@ execution_ready: true
 | DOCS.OPERATOR.RUNBOOK.0 | complete | Canonical operator runbook |
 | SPINE.REBASE.2 | complete | Runtime track rebase before M3 |
 | M3 | complete | Materialized-weight engine attachment |
-| M4 | next | First executable fixture graph path |
-| M5 | paused | First real-model partial graph execution |
+| M4 | complete | First executable fixture graph path |
+| M5 | next | First real-model partial graph execution |
 | M6 | paused | Prefill runtime foundation |
 | M7 | paused | Decode and logits runtime foundation |
 | M8 | paused | First constrained generation path |
@@ -182,7 +182,8 @@ parser/model/tokenizer/graph/backend/session shell implemented
 materialization produces backend-resident tensors
 engine owns attached selected materialized weights
 session can observe engine weight attachment state
-real graph execution not implemented
+deterministic fixture graph execution complete
+real-model graph execution not implemented
 prefill/decode/logits/sampling/generation not implemented
 ```
 
@@ -216,7 +217,8 @@ DeepSeek selected embedding is the active live target
 model-gate and materialize-gate pass on CPU/CUDA
 full model materialization not reached
 engine attachment complete
-fixture graph execution not reached
+fixture graph execution complete
+real-model partial graph execution not reached
 execution/prefill/decode/generation not reached
 execution_ready remains false
 ```
@@ -369,14 +371,15 @@ trace/profile output, and explicit generation support boundary.
 ## 7. Active Next
 
 ```text
-M4 - First executable fixture graph path
+M5 - First real-model partial graph execution
 ```
 
-M3 completed engine-owned selected weight attachment without graph execution.
-The next implementation work is M4: execute a deterministic tiny fixture graph
-over controlled weights. Do not begin M5-M8, advanced Runtime KV work,
-Benchmark/Eval work, or generation-facing work until the relevant earlier
-runtime state exists in code and tests.
+M4 completed deterministic fixture graph execution over controlled weights.
+The next implementation work is M5: execute a constrained real-model partial
+graph segment without generation, prefill, decode, logits, or benchmark claims.
+Do not begin M6-M8, advanced Runtime KV work, Benchmark/Eval work, or
+generation-facing work until the relevant earlier runtime state exists in code
+and tests.
 
 ## 8. Validation Gate
 
@@ -400,6 +403,8 @@ Execution-chain audit set:
 ./yvex tensors /tmp/yvex-controlled.gguf
 ./yvex materialize --model /tmp/yvex-controlled.gguf --backend cpu
 ./yvex materialize --model /tmp/yvex-controlled.gguf --backend cuda
+./yvex graph --model /tmp/yvex-controlled.gguf --backend cpu --execute-fixture --fixture-token 0
+./yvex graph --model /tmp/yvex-controlled.gguf --backend cuda --execute-fixture --fixture-token 0
 ./yvex inspect deepseek4-v4-flash-selected-embed
 ./yvex tensors deepseek4-v4-flash-selected-embed
 ./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
