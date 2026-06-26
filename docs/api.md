@@ -18,7 +18,8 @@ core:
   version.h status.h error.h log.h
 
 artifact and GGUF:
-  artifact.h artifact_naming.h gguf.h gguf_emit.h gguf_template.h
+  artifact.h artifact_integrity.h artifact_naming.h gguf.h gguf_emit.h
+  gguf_template.h
 
 model and tensors:
   dtype.h tensor.h model.h weights.h
@@ -93,6 +94,7 @@ model artifacts remain outside the repository
 | Engine-owned selected weight attachment | implemented |
 | Deterministic fixture graph execution | implemented for controlled fixtures |
 | Real selected embedding partial graph | implemented for `F16` `token_embd.weight` |
+| Artifact integrity baseline | implemented for `GGUF` structural/range checks |
 | Local model registry | implemented |
 | Alias-or-path model resolver | implemented for one-shot commands |
 | Model gate | implemented |
@@ -121,3 +123,11 @@ expose backend pointers, does not transfer ownership to sessions, and keeps
 `execution_ready` and broad graph readiness false. The implemented partial graph
 boundary is the selected token-embedding segment only; it is not prefill, decode,
 logits, sampling, generation, or full model execution.
+
+`yvex_artifact_integrity_check_path` opens a local artifact path and returns a
+caller-owned `yvex_artifact_integrity_report`. `yvex_artifact_integrity_validate`
+borrows an already opened artifact, parsed `GGUF`, and tensor table; it does not
+take ownership of those objects. The report contains copied summary fields and a
+bounded copied issue list. The integrity API checks structural `GGUF` bounds,
+tensor range math, and selected embedding readiness; it is not a supply-chain
+security, digest enforcement, registry drift, or provenance API.

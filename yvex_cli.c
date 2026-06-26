@@ -48,6 +48,7 @@ static int command_help(int argc, char **argv);
 static int command_imatrix(int argc, char **argv);
 static int command_info(int argc, char **argv);
 static int command_inspect(int argc, char **argv);
+static int command_integrity(int argc, char **argv);
 static int command_materialize(int argc, char **argv);
 static int command_materialize_gate(int argc, char **argv);
 static int command_metadata(int argc, char **argv);
@@ -167,6 +168,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex inspect FILE_OR_ALIAS",
         "Opens a file, parses the GGUF directory, builds a YVEX tensor table and descriptor, and prints a descriptor-only summary. Inspect does not materialize weights or execute a graph.",
         command_inspect,
+    },
+    {
+        "integrity",
+        "Check baseline GGUF artifact integrity.",
+        "yvex integrity check --model FILE_OR_ALIAS [--require-token-embedding] [--partial-token N]",
+        "Validates GGUF structural bounds, tensor byte ranges, checked dtype/shape accounting, and optional selected embedding readiness. It is not a supply-chain security audit.",
+        command_integrity,
     },
     {
         "materialize",
@@ -360,6 +368,46 @@ static int print_yvex_error(const yvex_error *err, int exit_code)
     return exit_code;
 }
 
+static void print_integrity_report(const yvex_artifact_integrity_report *report,
+                                   const char *model_label)
+{
+    unsigned int i;
+
+    printf("artifact_integrity: check\n");
+    printf("model: %s\n", model_label ? model_label : report->path);
+    printf("format: %s\n", report->format[0] ? report->format : "unknown");
+    if (report->version) {
+        printf("version: %u\n", report->version);
+    }
+    printf("file_size: %llu\n", report->file_size);
+    if (report->architecture[0]) {
+        printf("architecture: %s\n", report->architecture);
+    }
+    printf("tensor_count: %llu\n", report->tensor_count);
+    printf("known_tensor_bytes: %llu\n", report->known_tensor_bytes);
+    printf("integrity_status: %s\n", report->passed ? "pass" : "fail");
+    printf("integrity_errors: %u\n", report->error_count);
+    printf("integrity_warnings: %u\n", report->warning_count);
+
+    for (i = 0; i < report->issue_count; ++i) {
+        const yvex_integrity_issue *issue = yvex_artifact_integrity_issue_at(report, i);
+        const char *prefix;
+
+        if (!issue) {
+            continue;
+        }
+        prefix = issue->severity == YVEX_INTEGRITY_SEVERITY_WARNING ? "warning" : "error";
+        printf("%s_%u_code: %s\n", prefix, i, issue->code);
+        if (issue->tensor[0]) {
+            printf("%s_%u_tensor: %s\n", prefix, i, issue->tensor);
+        }
+        printf("%s_%u_reason: %s\n", prefix, i, issue->reason);
+    }
+
+    printf("status: %s\n", report->passed ? "artifact-integrity-pass"
+                                          : "artifact-integrity-fail");
+}
+
 static int exit_for_status(int status)
 {
     switch (status) {
@@ -503,9 +551,13 @@ static void close_model_context(yvex_cli_tokenizer_context *ctx)
 
 static int open_model_context(const char *path, yvex_cli_tokenizer_context *ctx, yvex_error *err)
 {
+    yvex_artifact_integrity_options integrity_options;
+    yvex_artifact_integrity_report integrity_report;
     int rc;
 
     memset(ctx, 0, sizeof(*ctx));
+    memset(&integrity_options, 0, sizeof(integrity_options));
+    memset(&integrity_report, 0, sizeof(integrity_report));
     rc = open_artifact_for_gguf(path, &ctx->artifact, err);
     if (rc == YVEX_OK) {
         rc = yvex_gguf_open(&ctx->gguf, ctx->artifact, err);
@@ -515,6 +567,14 @@ static int open_model_context(const char *path, yvex_cli_tokenizer_context *ctx,
     }
     if (rc == YVEX_OK) {
         rc = yvex_model_descriptor_from_gguf(&ctx->model, ctx->gguf, ctx->table, err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_artifact_integrity_validate(ctx->artifact,
+                                              ctx->gguf,
+                                              ctx->table,
+                                              &integrity_options,
+                                              &integrity_report,
+                                              err);
     }
     if (rc != YVEX_OK) {
         close_model_context(ctx);
@@ -972,6 +1032,73 @@ static int parse_uint_allow_zero(const char *text, unsigned int *out)
     }
     *out = (unsigned int)value;
     return 1;
+}
+
+static int command_integrity(int argc, char **argv)
+{
+    yvex_artifact_integrity_options options;
+    yvex_artifact_integrity_report report;
+    yvex_model_ref ref;
+    yvex_error err;
+    const char *model_arg = NULL;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&options, 0, sizeof(options));
+    memset(&report, 0, sizeof(report));
+    memset(&ref, 0, sizeof(ref));
+
+    if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        print_command_help(stdout, find_command("integrity"));
+        return 0;
+    }
+    if (argc < 3 || strcmp(argv[2], "check") != 0) {
+        fprintf(stderr, "yvex: integrity requires check\n");
+        fprintf(stderr, "usage: yvex integrity check --model FILE_OR_ALIAS [--require-token-embedding] [--partial-token N]\n");
+        return 2;
+    }
+
+    for (i = 3; i < argc; ++i) {
+        if (strcmp(argv[i], "--model") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --model requires FILE_OR_ALIAS\n");
+                return 2;
+            }
+            model_arg = argv[++i];
+        } else if (strcmp(argv[i], "--require-token-embedding") == 0) {
+            options.require_token_embedding = 1;
+        } else if (strcmp(argv[i], "--partial-token") == 0) {
+            if (i + 1 >= argc || !parse_uint_allow_zero(argv[i + 1], &options.token_id)) {
+                fprintf(stderr, "yvex: --partial-token requires a non-negative integer\n");
+                return 2;
+            }
+            options.require_token_embedding = 1;
+            i += 1;
+        } else {
+            fprintf(stderr, "yvex: unknown integrity option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help integrity' for usage.\n");
+            return 2;
+        }
+    }
+
+    if (!model_arg) {
+        fprintf(stderr, "yvex: integrity check requires --model FILE_OR_ALIAS\n");
+        return 2;
+    }
+
+    rc = yvex_model_ref_resolve(&ref, model_arg, NULL, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_artifact_integrity_check_path(ref.path, &options, &report, &err);
+    print_integrity_report(&report, ref.path);
+    yvex_model_ref_clear(&ref);
+    if (rc != YVEX_OK) {
+        return exit_for_status(rc);
+    }
+    return 0;
 }
 
 static int parse_dims_csv(const char *text,
@@ -1818,10 +1945,14 @@ static int command_inspect(int argc, char **argv)
     yvex_model_descriptor *model = NULL;
     yvex_gguf_probe probe;
     const yvex_gguf_header *header;
+    yvex_artifact_integrity_options integrity_options;
+    yvex_artifact_integrity_report integrity_report;
     yvex_error err;
     int rc;
 
     yvex_error_clear(&err);
+    memset(&integrity_options, 0, sizeof(integrity_options));
+    memset(&integrity_report, 0, sizeof(integrity_report));
 
     if (argc != 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
         if (argc == 3) {
@@ -1861,6 +1992,14 @@ static int command_inspect(int argc, char **argv)
     }
     if (rc == YVEX_OK) {
         rc = yvex_model_descriptor_from_gguf(&model, gguf, tensors, &err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_artifact_integrity_validate(artifact,
+                                              gguf,
+                                              tensors,
+                                              &integrity_options,
+                                              &integrity_report,
+                                              &err);
     }
     if (rc == YVEX_OK) {
         header = yvex_gguf_header_view(gguf);
@@ -4851,11 +4990,15 @@ static int command_tensors(int argc, char **argv)
     yvex_gguf *gguf = NULL;
     yvex_tensor_table *table = NULL;
     const yvex_gguf_header *header;
+    yvex_artifact_integrity_options integrity_options;
+    yvex_artifact_integrity_report integrity_report;
     yvex_error err;
     unsigned long long i;
     int rc;
 
     yvex_error_clear(&err);
+    memset(&integrity_options, 0, sizeof(integrity_options));
+    memset(&integrity_report, 0, sizeof(integrity_report));
 
     if (argc != 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
         if (argc == 3) {
@@ -4875,6 +5018,14 @@ static int command_tensors(int argc, char **argv)
     rc = yvex_gguf_open(&gguf, artifact, &err);
     if (rc == YVEX_OK) {
         rc = yvex_tensor_table_from_gguf(&table, gguf, &err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_artifact_integrity_validate(artifact,
+                                              gguf,
+                                              table,
+                                              &integrity_options,
+                                              &integrity_report,
+                                              &err);
     }
     if (rc != YVEX_OK) {
         yvex_tensor_table_close(table);

@@ -72,6 +72,19 @@ proves real selected tensor participation in scheduled graph work. It does not
 imply prompt prefill, KV runtime, decode, logits, sampling, generation, server
 generation, benchmark readiness, or full model execution.
 
+### Artifact integrity baseline
+
+YVEX validates baseline `GGUF` structural integrity before artifact paths that
+read tensor payloads. The baseline validator checks file size, `GGUF`
+parseability, tensor directory consistency, tensor name uniqueness, supported
+rank/dims/dtype, checked byte-count math, tensor offset/range bounds, and
+required tensor readiness for selected embedding partial graph execution.
+
+This is not a supply-chain security guarantee. It does not prove model quality,
+author identity, malware absence, cryptographic provenance, or safe execution of
+untrusted code. It prevents runtime paths from trusting structurally inconsistent
+artifacts.
+
 ## 5. Server Contract
 
 `./yvexd` exposes a provider/status shell:

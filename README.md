@@ -392,6 +392,10 @@ public runtime project from becoming a dump of local state.
 | `.yvex/models.local.json` | local ignored state |
 | Build output, reports, logs | local/generated state |
 
+YVEX includes a baseline artifact integrity check for `GGUF` structural bounds,
+tensor ranges, checked byte math, and selected embedding readiness. It is not a
+supply-chain security guarantee.
+
 The local registry exists because real artifact paths are long and
 machine-specific. `.yvex/models.local.json` is ignored local state, and
 `YVEX_MODELS_REGISTRY` can point commands at another local registry when a

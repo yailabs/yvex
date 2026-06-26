@@ -126,6 +126,11 @@ real selected embedding partial graph execution
 real token_embd.weight F16 participation in scheduled graph work
 CPU real partial graph execution
 CUDA real partial graph parity when CUDA is available
+artifact integrity validator baseline
+GGUF structural corruption detection
+tensor range and checked byte-count validation
+required selected embedding readiness check
+corrupt artifact fixture tests
 ```
 
 Current live target:
@@ -153,11 +158,11 @@ full model execution
 full DeepSeek materialization
 full GGUF conversion
 artifact corruption fixture suite
-artifact integrity validator
 registry alias identity drift detection
 materialization integrity gate
 graph execution corruption guard
 operator integrity report
+full supply-chain security
 prompt-backed runtime prefill
 minimal KV runtime
 decode
@@ -239,8 +244,8 @@ unbounded spreadsheet.
 | SPINE.REBASE.3 | complete | End-to-end runtime and operator roadmap |
 | M5 | complete | First real-model partial graph execution |
 | SPINE.REBASE.4 | complete | Artifact integrity and measurement target rebase |
-| ARTIFACT.INTEGRITY.0 | next | Artifact integrity threat model and validator baseline |
-| ARTIFACT.INTEGRITY.1 | planned | File identity and digest enforcement |
+| ARTIFACT.INTEGRITY.0 | complete | Artifact integrity threat model and validator baseline |
+| ARTIFACT.INTEGRITY.1 | next | File identity and digest enforcement |
 | ARTIFACT.INTEGRITY.2 | planned | GGUF structural corruption fixture suite |
 | ARTIFACT.INTEGRITY.3 | planned | Tensor directory offset and byte-range validation |
 | ARTIFACT.INTEGRITY.4 | planned | Shape, rank, dtype, and byte-count overflow hardening |
@@ -488,8 +493,8 @@ mapped and the baseline validator exists.
 
 | ID | Status | Title |
 | --- | --- | --- |
-| ARTIFACT.INTEGRITY.0 | next | Artifact integrity threat model and validator baseline |
-| ARTIFACT.INTEGRITY.1 | planned | File identity and digest enforcement |
+| ARTIFACT.INTEGRITY.0 | complete | Artifact integrity threat model and validator baseline |
+| ARTIFACT.INTEGRITY.1 | next | File identity and digest enforcement |
 | ARTIFACT.INTEGRITY.2 | planned | GGUF structural corruption fixture suite |
 | ARTIFACT.INTEGRITY.3 | planned | Tensor directory offset and byte-range validation |
 | ARTIFACT.INTEGRITY.4 | planned | Shape, rank, dtype, and byte-count overflow hardening |
@@ -500,14 +505,15 @@ mapped and the baseline validator exists.
 | ARTIFACT.INTEGRITY.9 | planned | Operator integrity report and doctor integration |
 | ARTIFACT.INTEGRITY.FINAL.0 | planned | Artifact integrity closeout before graph expansion |
 
-ARTIFACT.INTEGRITY.0 defines the artifact integrity threat model and validator
-baseline. It must identify what YVEX rejects before materialization or graph
-execution: truncated files, bad magic/version, inconsistent metadata count,
-invalid tensor count, duplicate tensor names, missing required tensors,
-unsupported dtype, rank/dim overflow, invalid tensor offsets, tensor byte ranges
-outside file bounds, and stale alias identity. Completion requires
-command-visible validator output, tiny corrupt fixtures, and docs describing
-what is checked and what is not.
+ARTIFACT.INTEGRITY.0 defined the artifact integrity threat model and validator
+baseline. YVEX now rejects baseline structural corruption before
+materialization or graph execution: truncated files, bad magic/version,
+duplicate tensor names, missing required selected embedding tensors, unsupported
+dtype accounting, rank/dim overflow, invalid tensor offsets, and tensor byte
+ranges outside file bounds. The validator has command-visible output, tiny
+corrupt fixture coverage, selected embedding readiness checks, and docs
+describing what is checked and what is not. Digest enforcement and stale alias
+identity remain ARTIFACT.INTEGRITY.1.
 
 ARTIFACT.INTEGRITY.1 enforces file identity and digest expectations across
 registry, model-gate, and selected-artifact paths. It should detect when an
@@ -899,12 +905,12 @@ No diagram may imply support that the code does not implement.
 ## 8. Active Next
 
 ```text
-ARTIFACT.INTEGRITY.0 - Artifact integrity threat model and validator baseline
+ARTIFACT.INTEGRITY.1 - File identity and digest enforcement
 ```
 
-Next implementation: ARTIFACT.INTEGRITY.0. It must define and prove the baseline
-validator and corruption threat model before runtime graph work trusts broader
-real tensor participation.
+Next implementation: ARTIFACT.INTEGRITY.1. It must enforce file identity and
+digest expectations across registry, model-gate, and selected-artifact paths
+without implying full supply-chain security.
 
 Next runtime expansion after integrity baseline:
 
@@ -949,18 +955,20 @@ Execution-chain audit set:
 ./yvex qtype-support
 ```
 
-Future artifact integrity audit set:
+Baseline artifact integrity audit set:
 
 ```sh
+./yvex integrity check --model <valid-fixture>
+./yvex integrity check --model <corrupt-fixture>
 ./yvex inspect <corrupt-fixture>
 ./yvex tensors <corrupt-fixture>
 ./yvex materialize --model <corrupt-fixture> --backend cpu
 ./yvex graph --model <corrupt-fixture> --backend cpu --execute-partial --partial-token 0
-./yvex model-gate check <expected identity mismatch case>
 ```
 
-The commands above are planned for ARTIFACT.INTEGRITY.* once corrupt fixtures
-and validator surfaces exist. They are not current validation requirements.
+The integrity command, corrupt fixture refusals, materialize refusal, and graph
+refusal are current ARTIFACT.INTEGRITY.0 validation requirements. Future digest
+and alias identity checks remain under ARTIFACT.INTEGRITY.1 and later.
 
 When the operator-local selected artifact and CUDA host are available,
 `model-gate` and `materialize-gate` must run against the active selected artifact

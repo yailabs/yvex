@@ -171,6 +171,8 @@ int yvex_engine_open(yvex_engine **out,
 {
     yvex_engine *engine;
     yvex_artifact_options artifact_options;
+    yvex_artifact_integrity_options integrity_options;
+    yvex_artifact_integrity_report integrity_report;
     yvex_graph_build_options graph_options;
     int rc;
     int load_tokenizer;
@@ -201,6 +203,8 @@ int yvex_engine_open(yvex_engine **out,
     }
 
     memset(&artifact_options, 0, sizeof(artifact_options));
+    memset(&integrity_options, 0, sizeof(integrity_options));
+    memset(&integrity_report, 0, sizeof(integrity_report));
     artifact_options.path = options->model_path;
     artifact_options.readonly = 1;
     artifact_options.map = 1;
@@ -214,6 +218,14 @@ int yvex_engine_open(yvex_engine **out,
     }
     if (rc == YVEX_OK) {
         rc = yvex_model_descriptor_from_gguf(&engine->model, engine->gguf, engine->tensors, err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_artifact_integrity_validate(engine->artifact,
+                                              engine->gguf,
+                                              engine->tensors,
+                                              &integrity_options,
+                                              &integrity_report,
+                                              err);
     }
 
     load_tokenizer = options->load_tokenizer != 0;
