@@ -57,6 +57,11 @@ DEEPSEEK_GGUF="${DEEPSEEK_GGUF:-$YVEX_ARTIFACT_DIR/deepseek4-v4-flash-selected-e
 CONTROLLED_GGUF="$YVEX_ARTIFACT_DIR/controlled-yvex-fixture.gguf"
 
 mkdir -p "$YVEX_ARTIFACT_DIR" "$YVEX_REPORT_DIR"
+
+printf 'operator_dir: %s\n' "$YVEX_OPERATOR_DIR"
+printf 'artifact_dir: %s\n' "$YVEX_ARTIFACT_DIR"
+printf 'report_dir: %s\n' "$YVEX_REPORT_DIR"
+printf 'selected_gguf: %s\n' "$DEEPSEEK_GGUF"
 ```
 
 Do not export `YVEX_MODELS_REGISTRY` for the normal operator path unless you
@@ -82,6 +87,10 @@ instead of creating temporary copies.
 : "${YVEX_NATIVE_SOURCE:?set YVEX_NATIVE_SOURCE to the local DeepSeek native source directory}"
 : "${YVEX_SOURCE_REPO:?set YVEX_SOURCE_REPO to the upstream source repo id}"
 : "${YVEX_SOURCE_REVISION:?set YVEX_SOURCE_REVISION to the upstream source revision}"
+
+printf 'native_source: %s\n' "$YVEX_NATIVE_SOURCE"
+printf 'source_repo: %s\n' "$YVEX_SOURCE_REPO"
+printf 'source_revision: %s\n' "$YVEX_SOURCE_REVISION"
 
 ./yvex source-manifest create \
   --hf-repo "$YVEX_SOURCE_REPO" \
