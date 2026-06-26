@@ -88,6 +88,25 @@ Expected outcome: `status: weights-materialized` and `execution_ready: false`.
 This proves controlled emission, parsing, tensor table inspection, and selected
 materialization, not full model execution.
 
+Attach the same selected materialized weights to the engine lifecycle:
+
+```sh
+./yvex engine --model "$tmpdir/controlled.gguf" --backend cpu
+./yvex session "$tmpdir/controlled.gguf" --backend cpu
+```
+
+CUDA, when available:
+
+```sh
+./yvex engine --model "$tmpdir/controlled.gguf" --backend cuda
+./yvex session "$tmpdir/controlled.gguf" --backend cuda
+```
+
+Expected outcome: `weights_attached: true`, `weight_tensor_count: 1`,
+`weights_backend: cpu` or `cuda`, and `graph_execution_ready: false`. The
+engine owns the attached backend tensors. The session observes that state; it
+does not own or execute the weights.
+
 ## 6. Register a local model artifact
 
 The local model registry maps an alias to an external GGUF path. With the
@@ -181,6 +200,10 @@ it is registered locally, inspect it by alias.
 ./yvex tensors deepseek4-v4-flash-selected-embed
 ./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cpu
 ./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
+./yvex engine --model deepseek4-v4-flash-selected-embed --backend cpu
+./yvex engine --model deepseek4-v4-flash-selected-embed --backend cuda
+./yvex session deepseek4-v4-flash-selected-embed --backend cpu
+./yvex session deepseek4-v4-flash-selected-embed --backend cuda
 ```
 
 Expected facts:
@@ -190,7 +213,9 @@ tensor: token_embd.weight
 dims: [4096,129280]
 dtype: F16
 tensor_bytes: 1059061760
+weights_attached: true
 execution_ready: false
+graph_execution_ready: false
 ```
 
 If the artifact is absent on this host, register the operator-local copy:
@@ -367,5 +392,5 @@ sampling, generation, provider-compatible generation, full DeepSeek support,
 full GGUF conversion, KV execution, SSD streaming, distributed inference, or
 benchmark performance.
 
-`execution_ready` remains false until scheduled graph operations, real weights,
-scratch, KV, logits, decode, and sampling form an implemented path.
+`execution_ready` remains false until scheduled graph operations, required graph
+weights, scratch, KV, logits, decode, and sampling form an implemented path.

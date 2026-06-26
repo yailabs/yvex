@@ -116,6 +116,9 @@ fixtures only.
 - Keep generated artifacts outside git.
 - Keep public docs free of internal delivery IDs.
 - Keep `execution_ready: false` until real execution exists.
+- After every implementation step that changes operator-visible commands,
+  workflows, diagnostics, validation, or runtime boundaries, update
+  `docs/operator-runbook.md` in the same wave.
 - Prefer precise failure classes over vague errors.
 - Do not add docs sprawl; keep canonical docs in `docs/api.md`,
-  `docs/contract.md`, and `docs/spine.md`.
+  `docs/contract.md`, `docs/operator-runbook.md`, and `docs/spine.md`.
