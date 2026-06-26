@@ -121,54 +121,128 @@ decode, logits, sampling, or generation.
 
 ## What runs today
 
-The executable path today is a controlled fixture graph. The fixture exists
-because the first executor path needs exact expected output. It uses controlled
-`F32` embedding weights, a fixture token, one embed-node execution path, backend
-dispatch, output allocation and readback, stable values, and `CPU`/`CUDA` parity
-when `CUDA` is available.
+The current runtime has two different proof paths, and they should not be
+confused.
+
+The normal operator path works with the selected DeepSeek embedding artifact.
+It proves that YVEX can carry one real model tensor from operator-local artifact
+identity through `GGUF` parsing, descriptor construction, selected
+materialization, backend residency, and engine-owned attachment. That path is
+the one used by the model registry, `materialize`, `engine`, `session`, daemon
+status, and the selected-artifact gates.
+
+The controlled fixture path is different. It uses a tiny controlled `F32`
+`GGUF` so graph execution can be checked exactly. That path proves the executor
+can read attached tensor data, dispatch an embed node through the selected
+backend, write an output buffer, and report stable values and checksums. It is
+real graph execution for a controlled fixture, not real-model inference.
+
+### Canonical selected-artifact path
+
+The canonical selected-artifact flow is documented in
+[docs/operator-runbook.md](docs/operator-runbook.md). The short version is:
 
 ```sh
-tmpdir="$(mktemp -d)"
-./yvex gguf-emit controlled --out "$tmpdir/controlled.gguf" --arch deepseek --overwrite
-./yvex graph --model "$tmpdir/controlled.gguf" --backend cpu --execute-fixture --fixture-token 0
-./yvex graph --model "$tmpdir/controlled.gguf" --backend cuda --execute-fixture --fixture-token 0
+make
+./yvex models add \
+  --path /path/to/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf \
+  --alias deepseek4-v4-flash-selected-embed \
+  --support-level selected-tensor-materialized
+
+./yvex models use deepseek4-v4-flash-selected-embed
+./yvex models current
+./yvex inspect deepseek4-v4-flash-selected-embed
+./yvex tensors deepseek4-v4-flash-selected-embed
 ```
 
-The `--backend cuda` line is for `CUDA`-capable hosts. On machines without `CUDA`,
-the CPU fixture path is still the baseline proof.
+Materialization and engine/session attachment then prove backend residency and
+runtime ownership:
 
-Expected fields include:
+```sh
+./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cpu
+./yvex engine --model deepseek4-v4-flash-selected-embed --backend cpu
+./yvex session deepseek4-v4-flash-selected-embed --backend cpu
+```
+
+`CUDA`-capable hosts can run the same boundary on `CUDA`:
+
+```sh
+./yvex cuda-info
+./yvex backend cuda
+./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
+./yvex engine --model deepseek4-v4-flash-selected-embed --backend cuda
+./yvex session deepseek4-v4-flash-selected-embed --backend cuda
+```
+
+Expected status remains explicit:
+
+```text
+weights_attached: true
+weights_backend: cpu or cuda
+weight_tensor_count: 1
+weight_total_bytes: 1059061760
+execution_ready: false
+graph_execution_ready: false
+```
+
+The engine owns the attached backend tensors. The session observes that state;
+it does not own the weights and does not execute a transformer graph.
+
+### Deterministic fixture graph proof
+
+The fixture graph is the current graph-execution proof. It is intentionally
+small and deterministic. The operator runbook keeps the controlled fixture
+under an operator-owned `GGUF` directory, not in a temporary path, because it is
+useful to keep the proof artifact named and repeatable.
+
+```sh
+./yvex gguf-emit controlled \
+  --out /path/to/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
+  --model-name yvex-m4-deepseek-fixture \
+  --arch deepseek \
+  --overwrite
+
+./yvex graph \
+  --model /path/to/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
+  --backend cpu \
+  --execute-fixture \
+  --fixture-token 0
+```
+
+For token `0`, the current controlled fixture reports:
 
 ```text
 fixture_graph_executed: true
 fixture_backend: cpu
 fixture_op: embed
 fixture_weight: token_embd.weight
-fixture_output_checksum: 10881421815077182739
+fixture_output_values: 0,4,8,12
 execution_ready: false
 graph_execution_ready: false
 status: fixture-graph-executed
 ```
 
-For the controlled fixture currently emitted by `gguf-emit controlled`, these
-output values are stable:
+Token `1` should produce:
 
-| Fixture token | Expected output values | Meaning |
-| --- | --- | --- |
-| `0` | `0,4,8,12` | first controlled embedding row |
-| `1` | `16,20,24,28` | second controlled embedding row |
+```text
+fixture_output_values: 16,20,24,28
+```
 
-This is real graph execution for a controlled fixture. It proves that the
-executor path can move from attached weights to backend dispatch and output
-comparison. It does not prove that a real DeepSeek layer, attention block,
-routed expert, KV path, logits head, or decoder loop exists.
+`CUDA`-capable hosts can run the same fixture proof with `--backend cuda`; the
+`CUDA` output values should match the `CPU` fixture output. This is fixture
+graph parity only. It is not a `CUDA` transformer backend.
+
+| Path | Artifact | What it proves | What it does not prove |
+| --- | --- | --- | --- |
+| Selected-artifact path | DeepSeek selected `F16` embedding | real artifact identity, selected materialization, backend residency, engine attachment | graph execution or inference |
+| Controlled fixture path | DeepSeek-arch `F32` fixture `GGUF` | deterministic graph execution, backend dispatch, output readback | real-model partial graph or logits |
 
 ## Live artifacts and fixtures
 
-YVEX currently uses two different kinds of artifacts. The large selected
-DeepSeek embedding is the live pressure artifact. The controlled `F32` `GGUF` is
-the deterministic execution fixture. They serve different purposes and should
-not be confused.
+YVEX currently uses two different kinds of artifacts. The selected `F16`
+DeepSeek embedding is the canonical pressure artifact. The controlled `F32`
+`GGUF` is the deterministic execution proof artifact. They serve different
+purposes and should not be confused.
 
 ### Live pressure artifact
 
@@ -219,8 +293,8 @@ before real-model partial execution begins.
 
 | Artifact | Role | Current state |
 | --- | --- | --- |
-| DeepSeek selected `F16` embedding | large pressure tensor | inspect/materialize/attach pass; not used by the controlled `F32` fixture executor |
-| Controlled DeepSeek-arch `F32` fixture | deterministic graph execution fixture | `CPU`/`CUDA` fixture graph pass |
+| DeepSeek selected `F16` embedding | canonical pressure artifact | inspect/materialize/attach pass; used by registry, engine/session, daemon status, and gates |
+| Controlled DeepSeek-arch `F32` fixture | deterministic graph proof artifact | `CPU`/`CUDA` fixture graph pass; not a real model graph |
 
 ## Artifact workflow
 
@@ -396,12 +470,16 @@ make check-cuda
 
 ## Operator path
 
-Normal usage should start with short commands. Long gate invocations and exact
-selected-artifact checks live in [docs/operator-runbook.md](docs/operator-runbook.md).
+The README keeps the normal path short. The operator runbook contains the full
+command-first sequence, including selected `GGUF` emission, alias registration,
+materialization, engine/session attachment, fixture graph execution, daemon
+status, gates, chat diagnostics, quantization/provenance commands, validation,
+artifact hygiene, and debugging.
 
 | Path | Reader | Where to go |
 | --- | --- | --- |
-| Normal operator path | build, register, inspect, run fixture/status commands | this README |
+| Normal selected-artifact path | build, register, inspect, materialize, attach | this README and [docs/operator-runbook.md](docs/operator-runbook.md) |
+| Deterministic fixture proof | controlled `F32` graph execution | this README and [docs/operator-runbook.md](docs/operator-runbook.md) |
 | Full gates and selected-artifact checks | exact validation and repeatable proof | [docs/operator-runbook.md](docs/operator-runbook.md) |
 | API/ownership extension | C API and lifecycle rules | [docs/api.md](docs/api.md) |
 | Behavior contract | CLI/filesystem/backend/server guarantees | [docs/contract.md](docs/contract.md) |
@@ -409,24 +487,8 @@ selected-artifact checks live in [docs/operator-runbook.md](docs/operator-runboo
 ```sh
 make
 ./yvex commands
-./yvex models add --path /path/to/model.gguf --alias local-model
-./yvex models use local-model
-./yvex inspect local-model
-./yvex tensors local-model
-```
-
-Controlled execution path:
-
-```sh
-tmpdir="$(mktemp -d)"
-./yvex gguf-emit controlled --out "$tmpdir/controlled.gguf" --arch deepseek --overwrite
-./yvex graph --model "$tmpdir/controlled.gguf" --backend cpu --execute-fixture --fixture-token 0
-```
-
-Daemon status path:
-
-```sh
-./yvexd --model local-model --backend cpu --host 127.0.0.1 --port 8080
+./yvex models current
+./yvex inspect deepseek4-v4-flash-selected-embed
 ```
 
 The normal path should become shorter over time. Future operator-facing
@@ -440,7 +502,8 @@ way to operate the runtime.
 YVEX does not publish token/sec or model-quality numbers yet. That is
 deliberate: without prefill, decode, logits, and generation, such numbers would
 be fictional. The current measurable boundary is fixture graph correctness.
-The next measurable boundary is real-model partial graph regression.
+The controlled fixture output is a correctness proof, not a performance
+benchmark. The next measurable boundary is real-model partial graph regression.
 
 | Measurement | Current YVEX status | First valid point |
 | --- | --- | --- |
@@ -472,15 +535,19 @@ Capability and regression posture:
 | Capability eval | inspect generation quality on curated tasks | future only |
 
 Fixture eval is not model quality eval. Logits regression is not generation
-quality. Token/sec tables need model artifact, backend, qtype, context length,
-machine, command, and reproducibility notes. Until those pieces exist, the
-honest result is no published benchmark number.
+quality. The runbook's materialization and gate commands can produce repeatable
+selected-artifact reports, but they are not throughput benchmarks. Token/sec
+tables need model artifact, backend, qtype, context length, machine, command,
+and reproducibility notes. Until those pieces exist, the honest result is no
+published benchmark number.
 
 ## Runtime roadmap
 
 The next step is not "inference" in one jump. It is real-model partial graph
 execution: one constrained segment of a real model graph participating in
 scheduled runtime computation with memory planning and backend dispatch.
+That stage should be the first point where the selected-artifact path and the
+graph-execution path begin to converge.
 
 | Runtime stage | Public meaning | Status |
 | --- | --- | --- |
@@ -504,8 +571,9 @@ published before prefill and decode exist.
 
 ## Provider boundary
 
-`./yvexd` is a provider/status shell. It accepts a model path or registered
-alias for status reporting, but it does not serve generation.
+`./yvexd` is a provider/status shell. It accepts a direct path or registered
+alias for `--model`, serves status endpoints, and reports generation as
+unavailable. It is not a generation server.
 
 | Endpoint / behavior | Current state |
 | --- | --- |
@@ -519,6 +587,12 @@ alias for status reporting, but it does not serve generation.
 
 ```sh
 ./yvexd --host 127.0.0.1 --port 8080 --backend cpu
+```
+
+Expected model status includes:
+
+```text
+generation_available: false
 ```
 
 The daemon exists so the provider boundary can be wired early without faking
