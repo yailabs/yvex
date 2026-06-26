@@ -82,7 +82,7 @@ GGUF directory.
 ./yvex convert emit \
   --arch deepseek4 \
   --native-source ../models/hf/deepseek/DeepSeek-V4-Flash \
-  --tensor model.embed_tokens.weight \
+  --tensor embed.weight \
   --target-qtype F16 \
   --out ../models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf \
   --overwrite
