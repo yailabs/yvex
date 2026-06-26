@@ -6,16 +6,15 @@ selected GGUF emission, registry aliases, backend materialization, engine
 attachment, daemon status, and gates. It does not describe inference or
 generation because those paths are not implemented.
 
-The default examples assume this repository sits next to an operator-owned
-`../models/` directory:
+The default examples use an operator-owned model root outside this repository:
 
 ```text
-../models/hf/deepseek/DeepSeek-V4-Flash
-../models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+/path/to/models/hf/deepseek/DeepSeek-V4-Flash
+/path/to/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
 ```
 
-That layout is a convenience, not a project rule. If your weights or GGUFs live
-elsewhere, replace the path arguments passed to `--native-source`, `--out`,
+That layout is a placeholder, not a project rule. If your weights or GGUFs live
+elsewhere, use those operator-local paths in `--native-source`, `--out`,
 `--path`, and `--report-out`. Keep real model artifacts outside this repository.
 
 ## 1. Build the repository
@@ -61,34 +60,34 @@ GGUF directory.
 ./yvex source-manifest create \
   --hf-repo OWNER/MODEL \
   --revision REVISION \
-  --local-path ../models/hf/deepseek/DeepSeek-V4-Flash \
+  --local-path /path/to/models/hf/deepseek/DeepSeek-V4-Flash \
   --status in-progress \
-  --out ../models/gguf/deepseek/deepseek-source-manifest.json
+  --out /path/to/models/gguf/deepseek/deepseek-source-manifest.json
 
 ./yvex native-weights \
-  --source ../models/hf/deepseek/DeepSeek-V4-Flash \
+  --source /path/to/models/hf/deepseek/DeepSeek-V4-Flash \
   --limit 20
 
 ./yvex tensor-map \
   --arch deepseek4 \
-  --native-source ../models/hf/deepseek/DeepSeek-V4-Flash \
+  --native-source /path/to/models/hf/deepseek/DeepSeek-V4-Flash \
   --limit 20
 
 ./yvex convert plan \
   --arch deepseek4 \
-  --native-source ../models/hf/deepseek/DeepSeek-V4-Flash \
-  --out-plan ../models/gguf/deepseek/deepseek-selected-plan.json
+  --native-source /path/to/models/hf/deepseek/DeepSeek-V4-Flash \
+  --out-plan /path/to/models/gguf/deepseek/deepseek-selected-plan.json
 
 ./yvex convert emit \
   --arch deepseek4 \
-  --native-source ../models/hf/deepseek/DeepSeek-V4-Flash \
+  --native-source /path/to/models/hf/deepseek/DeepSeek-V4-Flash \
   --tensor embed.weight \
   --target-qtype F16 \
-  --out ../models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf \
+  --out /path/to/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf \
   --overwrite
 
-./yvex inspect ../models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
-./yvex tensors ../models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+./yvex inspect /path/to/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+./yvex tensors /path/to/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
 ```
 
 Expected outcome: `inspect` reports `architecture: deepseek`, and `tensors`
@@ -104,7 +103,7 @@ Register the selected GGUF using the canonical alias.
 
 ```sh
 ./yvex models add \
-  --path ../models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf \
+  --path /path/to/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf \
   --alias deepseek4-v4-flash-selected-embed \
   --support-level selected-tensor-materialized
 
@@ -167,19 +166,19 @@ controlled F32 fixture, not the large selected F16 DeepSeek artifact.
 
 ```sh
 ./yvex gguf-emit controlled \
-  --out ../models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
+  --out /path/to/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
   --model-name yvex-m4-deepseek-fixture \
   --arch deepseek \
   --overwrite
 
 ./yvex graph \
-  --model ../models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
+  --model /path/to/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
   --backend cpu \
   --execute-fixture \
   --fixture-token 0
 
 ./yvex graph \
-  --model ../models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
+  --model /path/to/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
   --backend cpu \
   --execute-fixture \
   --fixture-token 1
@@ -207,7 +206,7 @@ CUDA-capable hosts can run the same fixture graph on CUDA:
 
 ```sh
 ./yvex graph \
-  --model ../models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
+  --model /path/to/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
   --backend cuda \
   --execute-fixture \
   --fixture-token 0
@@ -226,7 +225,7 @@ Direct path:
 
 ```sh
 ./yvexd \
-  --model ../models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf \
+  --model /path/to/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf \
   --backend cpu \
   --host 127.0.0.1 \
   --port 18080 \
@@ -283,7 +282,7 @@ expected file identity and tensor facts.
   --backend cuda \
   --require-cpu \
   --require-cuda \
-  --report-out ../models/gguf/deepseek/deepseek-model-gate.txt
+  --report-out /path/to/models/gguf/deepseek/deepseek-model-gate.txt
 ```
 
 ```sh
@@ -304,7 +303,7 @@ expected file identity and tensor facts.
   --require-cuda \
   --repeat 3 \
   --check-cleanup \
-  --report-out ../models/gguf/deepseek/deepseek-materialize-gate.txt
+  --report-out /path/to/models/gguf/deepseek/deepseek-materialize-gate.txt
 ```
 
 Expected outcome: gate status is pass when the selected artifact and CUDA host
