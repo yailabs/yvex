@@ -118,7 +118,7 @@ server/provider status shell
 canonical operator runbook
 engine-owned selected materialized weight attachment
 session visibility into engine-attached weight state
-deterministic fixture graph execution over controlled weights
+deterministic fixture graph execution over controlled F32 weights
 fixture embed-node backend dispatch
 CPU fixture graph execution
 CUDA fixture graph parity when CUDA is available
@@ -137,6 +137,11 @@ CUDA materialization: pass
 execution_ready: false
 ```
 
+DeepSeek selected embedding remains the active pressure artifact. The active
+target can change if another large open-weight artifact becomes a better fit for
+the hardware profile, model-family work, or research path, but that requires an
+explicit spine change.
+
 Unsupported / not advanced:
 
 ```text
@@ -144,8 +149,8 @@ real-model partial graph execution
 full model execution
 full DeepSeek materialization
 full GGUF conversion
-prefill
-KV-backed prefill
+prompt-backed runtime prefill
+minimal KV runtime
 decode
 logits-producing runtime path
 sampling
@@ -224,18 +229,18 @@ unbounded spreadsheet.
 | M4 | complete | First executable fixture graph path |
 | SPINE.REBASE.3 | complete | End-to-end runtime and operator roadmap |
 | M5 | next | First real-model partial graph execution |
-| M6 | paused | Real-model graph segment expansion |
-| M7 | paused | Prompt/token input boundary |
-| M8 | paused | Prefill state foundation |
-| M9 | paused | Minimal KV ownership and append/read boundary |
-| M10 | paused | Decode step over existing runtime state |
-| M11 | paused | Logits production boundary |
-| M12 | paused | Deterministic logits regression |
-| M13 | paused | Sampling boundary |
-| M14 | paused | First constrained generation loop |
-| M15 | paused | Interactive CLI generation path |
-| M16 | paused | Provider/server generation boundary |
-| M17 | paused | Trace/profile hardening for generation |
+| M6 | planned | Real-model graph segment expansion |
+| M7 | planned | Prompt/token input boundary |
+| M8 | planned | Prefill state foundation |
+| M9 | planned | Minimal KV ownership and append/read boundary |
+| M10 | planned | Decode step over existing runtime state |
+| M11 | planned | Logits production boundary |
+| M12 | planned | Deterministic logits regression |
+| M13 | planned | Sampling boundary |
+| M14 | planned | First constrained generation loop |
+| M15 | planned | Interactive CLI generation path |
+| M16 | planned | Provider/server generation boundary |
+| M17 | planned | Trace/profile hardening for generation |
 | MODEL.LIFECYCLE.* | planned | Concise model preparation and checking |
 | CLI.UX.* | planned | Operator command simplification and terminal UX |
 | SERVER.* | planned | Runtime-backed provider work after runtime generation |
@@ -285,7 +290,7 @@ descriptor, tensor table, backend tensor storage, engine state, and session
 lifecycle.
 
 M4 — complete — First executable fixture graph path
-Execute a deterministic tiny fixture graph over controlled weights. Proves
+Execute a deterministic tiny fixture graph over controlled F32 weights. Proves
 planned embed-node ordering, backend dispatch, output allocation/readback,
 independent expected-output comparison, CPU execution, CUDA parity, and failure
 reporting on small non-model fixtures.
@@ -297,55 +302,70 @@ Completion requires command/API proof, CPU test, CUDA path or explicit CUDA
 boundary, independent expected/regression check, memory-plan evidence, backend
 dispatch, and cleanup/failure tests.
 
-M6 — paused — Real-model graph segment expansion
+M6 — planned — Real-model graph segment expansion
 Expand from one partial segment to a larger scheduled segment with multiple real
-ops and explicit memory plan. Still no prefill, logits, sampling, generation, or
-benchmark claim.
+ops, intermediate scratch/output buffers, and explicit memory plan. Failure
+reports must name the failing op, tensor, backend, or runtime stage. Still no
+prefill, logits, sampling, generation, or benchmark claim.
 
-M7 — paused — Prompt/token input boundary
+M7 — planned — Prompt/token input boundary
 Connect tokenizer/prompt diagnostics to runtime input tensors, sequence
-positions, and session-owned input state without claiming prefill completion.
+positions, model context, and session-owned input state. Prompt input may reach
+the scheduled graph boundary, but this is not prefill completion unless M8 is
+also complete.
 
-M8 — paused — Prefill state foundation
+M8 — planned — Prefill state foundation
 Run prompt-token input through scheduled graph work to produce prefill state
-boundaries. If KV or logits are not complete, the output must say so.
+boundaries. Graph scratch and intermediate state must be owned and cleaned up.
+If KV or logits are not complete, the output must say so.
 
-M9 — paused — Minimal KV ownership and append/read boundary
+M9 — planned — Minimal KV ownership and append/read boundary
 Introduce minimal session-owned KV shape, allocation, append/read, and lifecycle
-needed for prefill/decode. This is separate from advanced paged, spilled, or
-quantized KV.
+needed for prefill/decode. KV state must be inspectable or summarizable, and
+cleanup plus context-overflow failure paths must be tested. This is separate
+from advanced paged, spilled, or quantized KV.
 
-M10 — paused — Decode step over existing runtime state
-Execute one decode step over existing runtime/KV state. No sampling and no
+M10 — planned — Decode step over existing runtime state
+Execute one decode step over existing runtime/KV state. The next-token
+computation must advance runtime state by one position. No sampling and no
 interactive generation claim.
 
-M11 — paused — Logits production boundary
+M11 — planned — Logits production boundary
 Produce logits through an implemented runtime path and expose deterministic
-diagnostics. Logits are not sampling and not generation quality.
+diagnostics. Logits buffer ownership, dtype, and backend tolerance rules must be
+explicit. Logits are not sampling and not generation quality.
 
-M12 — paused — Deterministic logits regression
+M12 — planned — Deterministic logits regression
 Add stable vector tests for logits, including tolerance, dtype/qtype boundaries,
-and backend parity where available.
+backend parity where available, and model/artifact identity for each regression
+vector.
 
-M13 — paused — Sampling boundary
-Implement sampling as a separate boundary over logits. Sampling is not model
-execution and must preserve deterministic diagnostics where configured.
+M13 — planned — Sampling boundary
+Implement sampling as a separate boundary over logits. Greedy and at least one
+stochastic mode need explicit behavior. Seed/reproducibility rules and
+invalid-parameter failures must be tested. Sampling is not model execution.
 
-M14 — paused — First constrained generation loop
-Bounded token loop with stop conditions, token accounting, traces, and explicit
-unsupported edge cases.
+M14 — planned — First constrained generation loop
+Bounded loop: decode -> logits -> sample -> append token. Stop conditions,
+token accounting, traces, and unsupported edge cases must be explicit.
 
-M15 — paused — Interactive CLI generation path
+M15 — planned — Interactive CLI generation path
 Expose generation through CLI/REPL only after constrained generation is real.
-Line editing, slash commands, and display polish come after the runtime path.
+The normal operator command must be simple, debug flags must remain available,
+and fake assistant text must not appear outside the real generation path. Line
+editing, slash commands, and display polish come after the runtime path.
 
-M16 — paused — Provider/server generation boundary
+M16 — planned — Provider/server generation boundary
 Expose generation through daemon/server only after CLI/runtime generation is
-real. Provider compatibility is a later contract, not a status-shell property.
+real. Server state must be runtime-backed, request/response failure modes must
+be tested, and streaming or compatibility APIs are not claimed unless
+implemented. Provider compatibility is a later contract, not a status-shell
+property.
 
-M17 — paused — Trace/profile hardening for generation
+M17 — planned — Trace/profile hardening for generation
 Make generation observable and debuggable through traces, profiles, metrics,
-runtime summaries, and failure reports.
+runtime summaries, and failure reports. Errors should identify the artifact,
+backend, graph, KV, sampling, or server boundary that failed.
 ```
 
 ## 7. Tracks
@@ -384,6 +404,7 @@ registry add/use
 materialization
 engine attachment
 fixture graph execution
+real graph execution
 ```
 
 Planned intake/operator work:
@@ -472,7 +493,7 @@ operator paths need a concise lifecycle layer above them.
 | --- | --- | --- |
 | MODEL.LIFECYCLE.0 | planned | Unified model status and readiness report |
 | MODEL.LIFECYCLE.1 | planned | Model prepare preset over materialization and gates |
-| MODEL.LIFECYCLE.2 | planned | Model check preset for artifact, registry, backend, and qtype state |
+| MODEL.LIFECYCLE.2 | planned | Model check preset for artifact, registry, backend, qtype, and CUDA state |
 | MODEL.LIFECYCLE.3 | planned | Model doctor flow for common operator failures |
 | MODEL.LIFECYCLE.4 | planned | Model-class profile for large local artifacts |
 | MODEL.LIFECYCLE.5 | planned | Artifact cache and report hygiene |
@@ -509,6 +530,7 @@ Planned UX work:
 | CLI.UX.5 | planned | REPL slash-command cleanup and discoverability |
 | CLI.UX.6 | planned | Doctor command for environment, registry, backend, CUDA, and artifacts |
 | CLI.UX.7 | planned | Operator profiles for workstation and future larger hardware |
+| CLI.UX.8 | planned | One-line command recipes for normal paths |
 
 Principles:
 
@@ -597,6 +619,8 @@ no quality claim before evaluation vectors exist
 evaluation must use the same runtime path users run
 fixture eval is not model quality eval
 logits regression is not generation quality
+speed numbers without model artifact, backend, quant, context, machine, command,
+and reproducibility note are invalid
 do not create a fake DS4Bench equivalent
 ```
 
@@ -629,10 +653,14 @@ spine with tests.
 | LAYOUT.SERVER.0 | planned | Server/runtime boundary cleanup |
 | LAYOUT.TEST.0 | planned | Test fixture/eval/bench directory separation |
 | LAYOUT.DOCS.0 | planned | Public/internal docs boundary after spine retirement |
+| LAYOUT.BUILD.0 | planned | Build targets by backend and hardware profile |
 
 The internal spine may eventually leave the public repository. If that happens,
 public docs must preserve the implemented contract, runbook, API surface, and
-capability boundaries without exposing delivery IDs.
+capability boundaries without exposing delivery IDs. Source layout should follow
+runtime ownership boundaries: CLI must not own backend/runtime logic, server code
+must not duplicate CLI runtime wiring, and tests should separate parser fixtures,
+runtime fixtures, evaluation vectors, and benchmarks.
 
 ### Docs / Operator Surface
 
@@ -644,6 +672,7 @@ capability boundaries without exposing delivery IDs.
 | DOCS.RUNBOOK.3 | planned | Debug and failure-mode cookbook |
 | DOCS.CONTRACT.1 | planned | Update runtime contract after real partial graph execution |
 | DOCS.API.1 | planned | Update public API map after inference pipeline boundaries mature |
+| DOCS.PUBLIC.1 | planned | Public documentation without internal delivery IDs |
 
 Public docs stay role-specific:
 
@@ -748,9 +777,19 @@ public path leak guardrail
 - No M-series completion status until the relevant runtime state exists in code
   and tests.
 - No scaffold milestone completion.
+- No commit subject should use the internal delivery ID as the primary story.
+- No long-flag operator flow may remain the only normal path once concise
+  presets exist.
 - Do not collapse materialization, engine ownership, graph execution, prompt
   input, prefill, KV, decode, logits, sampling, generation, CLI generation, and
   server generation into one wave.
+- No CLI or server generation surface before the lower runtime generation loop
+  exists.
+- No provider compatibility claim before server generation exists and is tested.
+- No benchmark number without model artifact, backend, quant, context, machine,
+  command, and reproducibility note.
+- No model-family support claim without artifact, mapping, runtime path, and
+  tests.
 - Do not claim advanced Runtime KV capacity work until the relevant allocator,
   estimator, spill, or quantization behavior exists in code and tests.
 - No docs sprawl beyond `docs/api.md`, `docs/contract.md`,
