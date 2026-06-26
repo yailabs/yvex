@@ -152,6 +152,12 @@ Unsupported / not advanced:
 full model execution
 full DeepSeek materialization
 full GGUF conversion
+artifact corruption fixture suite
+artifact integrity validator
+registry alias identity drift detection
+materialization integrity gate
+graph execution corruption guard
+operator integrity report
 prompt-backed runtime prefill
 minimal KV runtime
 decode
@@ -232,7 +238,19 @@ unbounded spreadsheet.
 | M4 | complete | First executable fixture graph path |
 | SPINE.REBASE.3 | complete | End-to-end runtime and operator roadmap |
 | M5 | complete | First real-model partial graph execution |
-| M6 | next | Real-model graph segment expansion |
+| SPINE.REBASE.4 | complete | Artifact integrity and measurement target rebase |
+| ARTIFACT.INTEGRITY.0 | next | Artifact integrity threat model and validator baseline |
+| ARTIFACT.INTEGRITY.1 | planned | File identity and digest enforcement |
+| ARTIFACT.INTEGRITY.2 | planned | GGUF structural corruption fixture suite |
+| ARTIFACT.INTEGRITY.3 | planned | Tensor directory offset and byte-range validation |
+| ARTIFACT.INTEGRITY.4 | planned | Shape, rank, dtype, and byte-count overflow hardening |
+| ARTIFACT.INTEGRITY.5 | planned | Registry alias identity drift detection |
+| ARTIFACT.INTEGRITY.6 | planned | Materialization integrity gate |
+| ARTIFACT.INTEGRITY.7 | planned | Graph execution integrity guard |
+| ARTIFACT.INTEGRITY.8 | planned | Corrupt artifact regression harness |
+| ARTIFACT.INTEGRITY.9 | planned | Operator integrity report and doctor integration |
+| ARTIFACT.INTEGRITY.FINAL.0 | planned | Artifact integrity closeout before graph expansion |
+| M6 | planned | Real-model graph segment expansion |
 | M7 | planned | Prompt/token input boundary |
 | M8 | planned | Prefill state foundation |
 | M9 | planned | Minimal KV ownership and append/read boundary |
@@ -258,11 +276,13 @@ unbounded spreadsheet.
 ## 6. Runtime Ladder Dependencies
 
 ```text
-selected artifact proof
+source/native artifact evidence
+  -> selected artifact identity
+  -> artifact integrity and corruption safety
   -> materialized backend tensor
   -> engine/session ownership
   -> fixture graph execution
-  -> real-model partial graph execution
+  -> real selected embedding partial graph execution
   -> larger real-model graph segments
   -> prompt/token input boundary
   -> prefill state
@@ -282,6 +302,11 @@ not decode. Decode is not logits regression. Logits are not sampling. Sampling
 is not generation UX. Interactive CLI generation is not server/provider
 generation. Provider compatibility is not basic provider status. Benchmarking is
 not correctness.
+
+Artifact integrity is not optional once scheduled graph work reads real tensor
+ranges. M5 proved real selected tensor participation. ARTIFACT.INTEGRITY.0 now
+hardens the artifact assumptions before M6 expands tensor participation beyond
+the selected embedding segment.
 
 ### Inference Runtime Pipeline
 
@@ -306,7 +331,7 @@ reference comparison, CPU execution, CUDA parity where available, command proof,
 and cleanup/failure tests. No prompt prefill, KV runtime, decode, logits,
 sampling, generation, or benchmark claim.
 
-M6 — next — Real-model graph segment expansion
+M6 — planned — Real-model graph segment expansion
 Expand from one partial segment to a larger scheduled segment with multiple real
 ops, intermediate scratch/output buffers, and explicit memory plan. Failure
 reports must name the failing op, tensor, backend, or runtime stage. Still no
@@ -392,6 +417,13 @@ It must not become a vague inference milestone. Completion requires multiple rea
 ops, backend dispatch, explicit intermediate/output memory planning,
 output/regression proof, and cleanup/failure tests.
 
+M5 now reads a real selected F16 tensor slice for scheduled partial graph work.
+That makes artifact integrity a runtime prerequisite before M6 expands graph
+coverage. M6 should not broaden real tensor participation until artifact
+identity, tensor range validation, shape/dtype math, and corruption failure
+paths are mapped into the spine and at least the baseline validator is
+implemented.
+
 ### Open Weight Intake / Model Family Flow
 
 Implemented sequence:
@@ -433,6 +465,98 @@ a registered artifact is not execution readiness
 DeepSeek selected embedding remains the active live pressure artifact
 another large open-weight artifact may become active only through explicit spine change
 ```
+
+### Artifact Integrity / Corruption Safety
+
+Artifact integrity is the safety layer between open-weight intake and runtime
+execution. It is not a general security product and it is not a replacement for
+cryptographic supply-chain policy. It is the native runtime guarantee that an
+artifact can be parsed, identified, bounded, materialized, and read for graph
+execution without trusting inconsistent metadata, invalid ranges, overflowing
+shape math, stale aliases, or corrupted tensor payload boundaries.
+
+After M5, this track becomes urgent. YVEX now executes a selected embedding
+segment over real F16 token_embd.weight. Before M6 expands real graph execution,
+the runtime needs a corruption and identity-hardening path that exercises the
+same parser, registry, materializer, engine attachment, and graph execution
+boundaries.
+
+Open Weight Intake creates and describes artifacts. Artifact Integrity proves
+that artifacts remain structurally safe and identity-stable. Runtime graph
+expansion should trust broader tensor participation only after that bridge is
+mapped and the baseline validator exists.
+
+| ID | Status | Title |
+| --- | --- | --- |
+| ARTIFACT.INTEGRITY.0 | next | Artifact integrity threat model and validator baseline |
+| ARTIFACT.INTEGRITY.1 | planned | File identity and digest enforcement |
+| ARTIFACT.INTEGRITY.2 | planned | GGUF structural corruption fixture suite |
+| ARTIFACT.INTEGRITY.3 | planned | Tensor directory offset and byte-range validation |
+| ARTIFACT.INTEGRITY.4 | planned | Shape, rank, dtype, and byte-count overflow hardening |
+| ARTIFACT.INTEGRITY.5 | planned | Registry alias identity drift detection |
+| ARTIFACT.INTEGRITY.6 | planned | Materialization integrity gate |
+| ARTIFACT.INTEGRITY.7 | planned | Graph execution integrity guard |
+| ARTIFACT.INTEGRITY.8 | planned | Corrupt artifact regression harness |
+| ARTIFACT.INTEGRITY.9 | planned | Operator integrity report and doctor integration |
+| ARTIFACT.INTEGRITY.FINAL.0 | planned | Artifact integrity closeout before graph expansion |
+
+ARTIFACT.INTEGRITY.0 defines the artifact integrity threat model and validator
+baseline. It must identify what YVEX rejects before materialization or graph
+execution: truncated files, bad magic/version, inconsistent metadata count,
+invalid tensor count, duplicate tensor names, missing required tensors,
+unsupported dtype, rank/dim overflow, invalid tensor offsets, tensor byte ranges
+outside file bounds, and stale alias identity. Completion requires
+command-visible validator output, tiny corrupt fixtures, and docs describing
+what is checked and what is not.
+
+ARTIFACT.INTEGRITY.1 enforces file identity and digest expectations across
+registry, model-gate, and selected-artifact paths. It should detect when an
+alias points to a path whose content no longer matches recorded digest or
+expected artifact identity.
+
+ARTIFACT.INTEGRITY.2 creates a GGUF structural corruption fixture suite: bad
+magic, unsupported version, truncated header, truncated metadata, truncated
+tensor directory, invalid counts, malformed string fields, and duplicate tensor
+names. These must fail cleanly through inspect, tensors, and materialize paths.
+
+ARTIFACT.INTEGRITY.3 hardens tensor directory offsets and byte ranges. It must
+validate tensor offset within file, tensor byte range within file, no overflow
+in offset plus bytes, and no read outside declared artifact bounds before
+materialization or graph execution.
+
+ARTIFACT.INTEGRITY.4 hardens shape, rank, dtype, and byte-count math. It must
+validate rank limits, zero dims, huge dims, dtype byte size, element count
+overflow, output allocation bounds, and incompatible dtype for partial graph
+execution.
+
+ARTIFACT.INTEGRITY.5 detects registry alias identity drift. If a registered
+alias points to a file that changed digest, shape, dtype, tensor identity, or
+support level since registration or gate proof, the operator should get a clear
+warning or failure depending on command mode.
+
+ARTIFACT.INTEGRITY.6 adds a materialization integrity gate. It should prove that
+corrupt or inconsistent artifacts fail before backend allocation when possible,
+and fail with cleanup when allocation or transfer has already begun.
+
+ARTIFACT.INTEGRITY.7 guards graph execution. Fixture graph and real partial
+graph execution must not read missing tensors, out-of-range token slices,
+invalid dtype ranges, corrupted tensor payloads, or shape-incompatible data.
+Error output must identify the artifact, tensor, or range reason.
+
+ARTIFACT.INTEGRITY.8 adds a corrupt artifact regression harness. It should run a
+compact corpus of intentional corruptions across inspect, tensors,
+materialize, engine/session, and graph execution surfaces.
+
+ARTIFACT.INTEGRITY.9 exposes an operator integrity report and future doctor
+integration. The report should summarize file identity, digest, architecture,
+required tensors, tensor range checks, dtype/shape checks, registry drift, and
+command-specific readiness.
+
+ARTIFACT.INTEGRITY.FINAL.0 closes the artifact integrity module before larger
+real-model graph expansion. Closeout requires validator coverage, corrupt
+fixture coverage, registry drift coverage, materialization guard coverage,
+graph execution guard coverage, operator report docs, and no unsupported
+integrity claims.
 
 ### Model Support Ladder
 
@@ -634,6 +758,42 @@ do not create a fake DS4Bench equivalent
 Future tool names may be `yvex eval` and `yvex bench`, but they are planned
 only.
 
+#### Measurement Targets / Performance Posture
+
+Performance is a first-class project target, but speed numbers are not valid
+until the relevant runtime path exists. YVEX should plan prefill and generation
+measurements now, while refusing to publish token/sec numbers before prefill,
+decode, logits, sampling, and generation are implemented.
+
+| Measurement target | Runtime prerequisite | Metric shape | Status |
+| --- | --- | --- | --- |
+| Fixture graph correctness | M4 | output values/checksum | available |
+| Selected embedding partial graph correctness | M5 | output checksum/sample/max diff | available |
+| Real segment regression | M6 | output checksum/vector diff | planned |
+| Prefill speed | M8/M9 | prompt tokens/sec, memory, scratch, KV state | planned |
+| Decode speed | M10/M11 | generated step/sec or token/sec after logits path | planned |
+| Generation speed | M14 | tokens/sec, latency, stop reason, context length | planned |
+| Provider latency | M16 | request latency, streaming latency, queue behavior | planned |
+
+| Prompt class | Size | Why it matters | Valid after |
+| --- | --- | --- | --- |
+| short | `<512` tokens | interactive baseline | prefill/decode |
+| medium | `~10k` tokens | practical coding/document context | prefill/decode |
+| long | `32k+` tokens | long-context runtime pressure | prefill/KV/decode |
+| very long | `100k+` tokens | future large-context target | KV capacity + generation |
+
+| Machine profile | Role | Status |
+| --- | --- | --- |
+| CPU correctness host | reference/debug | current correctness baseline |
+| Local CUDA workstation | primary acceleration development target | current CUDA path |
+| DGX Spark / GB10 | future CUDA profile | planned, no support claim |
+| Large-memory CUDA host | future larger artifact/runtime target | planned |
+
+These tables define measurement shape, not performance claims. Target token/sec
+values, quality scores, or comparative hardware statements are invalid until the
+matching runtime path, command, artifact identity, and reproducibility note
+exist.
+
 ### Backend / Hardware Profiles
 
 | ID | Status | Title |
@@ -677,9 +837,12 @@ runtime fixtures, evaluation vectors, and benchmarks.
 | DOCS.RUNBOOK.1 | planned | Generic model-class operator flow |
 | DOCS.RUNBOOK.2 | planned | Reduced-flag normal path and preset workflow |
 | DOCS.RUNBOOK.3 | planned | Debug and failure-mode cookbook |
+| DOCS.RUNBOOK.4 | planned | Verticalized operator runbook |
 | DOCS.CONTRACT.1 | planned | Update runtime contract after real partial graph execution |
 | DOCS.API.1 | planned | Update public API map after inference pipeline boundaries mature |
 | DOCS.PUBLIC.1 | planned | Public documentation without internal delivery IDs |
+| DOCS.README.TARGETS.0 | planned | README measurement target table after benchmark harness |
+| DOCS.DIAGRAMS.* | planned | Runtime and measurement diagrams |
 
 Public docs stay role-specific:
 
@@ -711,7 +874,39 @@ large-model path:
   hardware/backend check -> memory report -> prepare/check -> runtime
 ```
 
+The operator runbook should be verticalized into normal path,
+selected-artifact build/refresh, deterministic fixture proof, real partial graph
+proof, debug/gates, daemon/status, chat diagnostics, quant/provenance,
+validation/hygiene, and failure checklist.
+
+### Documentation Diagrams / Visual Roadmap
+
+| ID | Status | Title |
+| --- | --- | --- |
+| DOCS.DIAGRAMS.0 | planned | Artifact-to-runtime boundary diagram |
+| DOCS.DIAGRAMS.1 | planned | Operator path diagram |
+| DOCS.DIAGRAMS.2 | planned | Runtime ladder diagram |
+| DOCS.DIAGRAMS.3 | planned | Integrity and corruption-failure diagram |
+| DOCS.DIAGRAMS.4 | planned | Eval/bench measurement map |
+| DOCS.DIAGRAMS.5 | planned | Backend and hardware target matrix |
+| DOCS.DIAGRAMS.6 | planned | README visual integration |
+
+Diagrams should not be decorative. Each diagram must explain a boundary that the
+runtime enforces: artifact identity, materialization, engine ownership, graph
+execution, integrity failures, eval/bench measurement points, or operator flow.
+No diagram may imply support that the code does not implement.
+
 ## 8. Active Next
+
+```text
+ARTIFACT.INTEGRITY.0 - Artifact integrity threat model and validator baseline
+```
+
+Next implementation: ARTIFACT.INTEGRITY.0. It must define and prove the baseline
+validator and corruption threat model before runtime graph work trusts broader
+real tensor participation.
+
+Next runtime expansion after integrity baseline:
 
 ```text
 M6 - Real-model graph segment expansion
@@ -753,6 +948,19 @@ Execution-chain audit set:
 ./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
 ./yvex qtype-support
 ```
+
+Future artifact integrity audit set:
+
+```sh
+./yvex inspect <corrupt-fixture>
+./yvex tensors <corrupt-fixture>
+./yvex materialize --model <corrupt-fixture> --backend cpu
+./yvex graph --model <corrupt-fixture> --backend cpu --execute-partial --partial-token 0
+./yvex model-gate check <expected identity mismatch case>
+```
+
+The commands above are planned for ARTIFACT.INTEGRITY.* once corrupt fixtures
+and validator surfaces exist. They are not current validation requirements.
 
 When the operator-local selected artifact and CUDA host are available,
 `model-gate` and `materialize-gate` must run against the active selected artifact
@@ -798,6 +1006,15 @@ public path leak guardrail
   command, and reproducibility note.
 - No model-family support claim without artifact, mapping, runtime path, and
   tests.
+- No graph execution path may trust tensor offset, byte range, shape, dtype, or
+  element count without validation.
+- No artifact identity claim without digest or equivalent gate evidence.
+- No registry alias should be treated as stable identity if the underlying file
+  changed.
+- No corruption fixture may be committed if it is a real model artifact; corrupt
+  fixtures must be tiny.
+- No integrity report may imply supply-chain security beyond the checks actually
+  implemented.
 - Do not claim advanced Runtime KV capacity work until the relevant allocator,
   estimator, spill, or quantization behavior exists in code and tests.
 - No docs sprawl beyond `docs/api.md`, `docs/contract.md`,
