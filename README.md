@@ -2,9 +2,17 @@
 
 YVEX is a native C runtime and toolchain for local open-weight model artifacts.
 It works below chat interfaces, provider APIs, and sampling, at the layer where
-a model file stops being a blob on disk and starts becoming runtime-owned
-structure: parsed metadata, tensor roles, backend allocations, engine/session
-state, and scheduled graph work.
+a model file stops being a blob on disk and starts becoming accountable runtime
+state: parsed metadata, tensor roles, backend allocations, engine/session
+ownership, and scheduled graph work.
+
+The project exists because the open-weight stack often hides too much behind a
+few convenient words: loaded, supported, compatible, running. In practice,
+those words cover many different states. A `GGUF` can parse while its tensors
+map to the wrong runtime roles. A tensor can be resident on `CUDA` without any
+transformer work being scheduled. A daemon can expose provider-shaped endpoints
+before the engine behind it can produce logits. YVEX makes those boundaries
+explicit before claiming the next one.
 
 The current code does not run a full model. It does, however, cross more than
 the old parse-and-materialize boundary. YVEX can inspect `GGUF` artifacts,
@@ -15,31 +23,25 @@ partial graph segment. Prefill, decode, logits, sampling, generation, and
 provider generation are not implemented.
 
 That boundary is deliberate. YVEX is being built from the lower runtime upward,
-because local inference becomes unreliable when artifact loading, tensor
-mapping, backend residency, graph execution, `KV` state, and provider APIs are
-treated as one vague operation.
+so that later inference work has something concrete to stand on: artifact
+identity, tensor identity, backend residency, runtime ownership, executable
+graph proof, and only then real model execution.
 
 ## What YVEX is
 
-YVEX focuses on the native path that most local-model tools compress
-into words like "loaded" or "supported." In this project, a loaded file, a
-parsed `GGUF`, a descriptor, a resident tensor, an engine-owned weight table, and
-an executable graph are different runtime states. The distinction matters
-because every one of those states can succeed while the next one still fails.
+YVEX focuses on the native path that most local-model tools compress into words
+like `loaded` or `supported`. In this project, a file path, a parsed `GGUF`, a
+descriptor, a resident tensor, an engine-owned weight table, and an executable
+graph are separate runtime states. Each state must be visible enough to test,
+fail, and explain.
 
-A tensor can be present in a `GGUF` file and still map to the wrong role. A qtype
-can be recognized as storage while no backend kernel can compute with it. A
-`CUDA` allocation can prove that bytes reached device memory without proving that
-any scheduled transformer work happened. A daemon can expose provider-shaped
-endpoints before the engine behind it can produce logits. YVEX exists to make
-those lines visible and testable.
-
-This is not a generic model-serving product today. It is the runtime layer that
-must become true before a model-serving surface can be honest: files must open,
-tensor rows must map to roles, selected bytes must land in owned backend
-storage, engine and session lifetimes must release resources correctly, and
-graph execution must produce checkable outputs before text generation is
-exposed.
+That separation is the project's core. YVEX is not a generic model-serving
+product today, and it is not trying to make an incomplete runtime look like a
+chat system. It is the lower layer that must become true before a model-serving
+surface can be honest: files must open, tensor rows must map to roles, selected
+bytes must land in owned backend storage, engine and session lifetimes must
+release resources correctly, and graph execution must produce checkable outputs
+before text generation is exposed.
 
 The public command surface is broad because the runtime is being built one
 boundary at a time. `inspect`, `metadata`, and `tensors` read artifact
@@ -63,12 +65,43 @@ materialization, then backend residency, then engine ownership, then controlled
 graph execution. Each step has to leave behind evidence: command output, tests,
 cleanup behavior, and an honest unsupported boundary.
 
+That is the gap YVEX is trying to occupy. There are many projects that can
+expose a prompt box, call a backend, or wrap a provider-shaped API. YVEX is
+aimed lower: the transition from artifact bytes to runtime facts, and from
+runtime facts to scheduled work. It should be possible to ask where a model
+failed and get a narrower answer than "loading failed" or "inference failed."
+
 That approach is not meant to be academic. It is what lets the runtime grow
 without lying to itself. A selected embedding tensor materialized on `CUDA` is
 valuable, but it is not a transformer. A deterministic fixture graph is
 valuable, but it is not real-model inference. The next step, real-model partial
 graph execution, will still not be generation. The goal is to earn each word
 before using it.
+
+## Project posture
+
+YVEX is intentionally narrow at each step and broad in the path it is preparing.
+The current implementation is not a complete inference engine, but it is not a
+throwaway inspector either. It is building the sequence of runtime states that a
+local inference engine has to own if it wants to be debuggable: artifact
+identity, tensor identity, backend residency, engine ownership, graph execution,
+prefill, `KV`, decode, logits, sampling, and provider serving.
+
+The project will remain opportunistic about model families. DeepSeek V4 Flash is
+the current pressure target because it is large enough to force real artifact
+and backend behavior now. A future model can replace that target if it better
+fits the hardware profile or research path, but model-family support must be
+earned through source provenance, tensor mapping, runtime execution, and tests.
+
+## What YVEX is not
+
+| YVEX is not | Why |
+| --- | --- |
+| a generic `GGUF` runner | arbitrary `GGUF` execution is not implemented |
+| a chat UI | `chat` is diagnostic until real generation exists |
+| a provider-compatible generation server | `yvexd` is currently a status shell |
+| a benchmark leaderboard | no token/sec or model-quality numbers are published before prefill/decode/generation exist |
+| a model artifact repository | real weights and generated `GGUF`s stay operator-local |
 
 ## Current state
 
@@ -83,12 +116,12 @@ before using it.
 | Prefill, decode, logits | planned | future runtime stages | not implemented |
 | Generation and server generation | unsupported | no text generation path exists | provider endpoints are status-only |
 
-The important new line is fixture graph execution. YVEX now has a real,
-deterministic graph path for a controlled fixture: an embed node reads attached
-weights, dispatches through the selected backend, writes an output buffer, and
-reports stable output values and checksums. That is a runtime step, not a
-marketing claim. It proves that the executor can move from engine-owned weights
-to backend-dispatched work. It does not prove that a real model graph can run.
+The important new line is fixture graph execution. YVEX now has a deterministic
+graph path for a controlled fixture: an embed node reads attached weights,
+dispatches through the selected backend, writes an output buffer, and reports
+stable output values. That is the first implemented step where the runtime moves
+from owned tensor state to scheduled work. It is still deliberately not a real
+model graph.
 
 ## Execution boundary
 
@@ -119,10 +152,17 @@ computation with real attached tensors, memory planning, backend dispatch,
 regression output, cleanup, and failure tests. It still will not be prefill,
 decode, logits, sampling, or generation.
 
+This is the reason the project is useful before full inference exists: it gives
+each future inference stage a concrete predecessor instead of a vague promise.
+
 ## What runs today
 
 The current runtime has two different proof paths, and they should not be
 confused.
+
+The two paths are complementary: the selected-artifact path proves that YVEX can
+carry real model bytes through ownership boundaries; the controlled fixture path
+proves that YVEX can execute a small graph exactly.
 
 The normal operator path works with the selected DeepSeek embedding artifact.
 It proves that YVEX can carry one real model tensor from operator-local artifact
@@ -497,6 +537,14 @@ and reports behind concise presets. The low-level commands will remain useful
 for CI, debugging, and exact reproducibility, but they should not be the only
 way to operate the runtime.
 
+The command surface is still low-level because the project is exposing the
+boundaries it has implemented. A later CLI simplification pass should wrap
+common flows into shorter presets, but the explicit commands remain useful
+because they show exactly which runtime boundary is being exercised. Planned CLI
+work should keep those explicit surfaces while adding shorter operator presets
+for common flows such as model status, model prepare, model check, backend
+doctor, and runtime proof commands.
+
 ## Evaluation and benchmarking posture
 
 YVEX does not publish token/sec or model-quality numbers yet. That is
@@ -540,6 +588,13 @@ selected-artifact reports, but they are not throughput benchmarks. Token/sec
 tables need model artifact, backend, qtype, context length, machine, command,
 and reproducibility notes. Until those pieces exist, the honest result is no
 published benchmark number.
+
+The measurement rule is simple: YVEX should only measure a boundary it actually
+owns. Fixture outputs are valid today because fixture execution exists. Real
+partial graph vectors become valid after real partial graph execution.
+Token/sec numbers become valid only after prefill and decode exist. Capability
+evaluation becomes meaningful only when the same generation path used by
+operators exists.
 
 ## Runtime roadmap
 
