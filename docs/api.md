@@ -18,8 +18,8 @@ core:
   version.h status.h error.h log.h
 
 artifact and GGUF:
-  artifact.h artifact_integrity.h artifact_naming.h gguf.h gguf_emit.h
-  gguf_template.h
+  artifact.h artifact_identity.h artifact_integrity.h artifact_naming.h
+  gguf.h gguf_emit.h gguf_template.h
 
 model and tensors:
   dtype.h tensor.h model.h weights.h
@@ -95,6 +95,7 @@ model artifacts remain outside the repository
 | Deterministic fixture graph execution | implemented for controlled fixtures |
 | Real selected embedding partial graph | implemented for `F16` `token_embd.weight` |
 | Artifact integrity baseline | implemented for `GGUF` structural/range checks |
+| Local artifact identity | implemented with file size and SHA-256 digest |
 | Local model registry | implemented |
 | Alias-or-path model resolver | implemented for one-shot commands |
 | Model gate | implemented |
@@ -124,10 +125,18 @@ expose backend pointers, does not transfer ownership to sessions, and keeps
 boundary is the selected token-embedding segment only; it is not prefill, decode,
 logits, sampling, generation, or full model execution.
 
+`yvex_artifact_identity_read` and `yvex_artifact_compute_sha256` provide local
+file identity evidence: current byte size plus lowercase SHA-256 digest. The
+hashing path streams the file and does not read large model artifacts into
+memory. A digest match proves only that the bytes match a recorded or expected
+local value; it does not prove author identity, remote provenance, malware
+absence, or supply-chain trust.
+
 `yvex_artifact_integrity_check_path` opens a local artifact path and returns a
 caller-owned `yvex_artifact_integrity_report`. `yvex_artifact_integrity_validate`
 borrows an already opened artifact, parsed `GGUF`, and tensor table; it does not
-take ownership of those objects. The report contains copied summary fields and a
-bounded copied issue list. The integrity API checks structural `GGUF` bounds,
-tensor range math, and selected embedding readiness; it is not a supply-chain
-security, digest enforcement, registry drift, or provenance API.
+take ownership of those objects. The report contains copied summary fields,
+local identity/digest status for path checks, and a bounded copied issue list.
+The integrity API checks structural `GGUF` bounds, tensor range math, selected
+embedding readiness, and optional expected/registered SHA-256 matching; it is
+not a supply-chain security, malware, sandboxing, or remote provenance API.

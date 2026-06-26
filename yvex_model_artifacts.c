@@ -14,6 +14,7 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
+#include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -37,6 +38,15 @@ typedef struct {
     char *schema_version;
     char *path;
     char *sha256;
+    unsigned long long file_size;
+    char *format;
+    char *architecture;
+    unsigned long long tensor_count;
+    unsigned long long known_tensor_bytes;
+    char *primary_tensor_name;
+    char *primary_tensor_dtype;
+    char *primary_tensor_dims;
+    unsigned long long primary_tensor_bytes;
     char *support_level;
     int execution_ready;
 } yvex_model_registry_owned_entry;
@@ -70,11 +80,6 @@ static int yvex_model_ref_copy_from_entry(yvex_model_ref *out,
                                           const char *input,
                                           const yvex_model_registry_entry *entry,
                                           yvex_error *err);
-static int yvex_model_gate_sha256_hex(const unsigned char *data,
-                                      unsigned long long len,
-                                      char out_hex[65]);
-
-
 static int yvex_model_gate_dtype_matches(const char *expected, yvex_dtype actual)
 {
     const char *actual_name = yvex_dtype_name(actual);
@@ -199,6 +204,12 @@ int yvex_model_gate_check(const yvex_model_gate_options *options,
     summary.model_path = options->model_path;
     summary.model_label = options->model_label;
     summary.family = options->family;
+    summary.expected_sha256 = options->artifact_sha256 && options->artifact_sha256[0]
+        ? options->artifact_sha256 : "";
+    summary.digest_status = options->artifact_sha256 && options->artifact_sha256[0]
+        ? "unchecked" : "unrequested";
+    summary.identity_status = options->artifact_sha256 && options->artifact_sha256[0]
+        ? "unchecked" : "unrequested";
     summary.cpu_status = YVEX_MODEL_GATE_BACKEND_NOT_TESTED;
     summary.cuda_status = YVEX_MODEL_GATE_BACKEND_NOT_TESTED;
     summary.execution_ready = 0;
@@ -216,11 +227,16 @@ int yvex_model_gate_check(const yvex_model_gate_options *options,
     summary.file_bytes = yvex_artifact_size(artifact);
 
     if (options->artifact_sha256 && options->artifact_sha256[0]) {
-        rc = yvex_model_gate_sha256_hex(yvex_artifact_data(artifact),
-                                        yvex_artifact_size(artifact),
-                                        actual_sha256);
+        rc = yvex_artifact_sha256_hex_bytes(yvex_artifact_data(artifact),
+                                            yvex_artifact_size(artifact),
+                                            actual_sha256,
+                                            err);
+        snprintf(summary.actual_sha256, sizeof(summary.actual_sha256), "%s",
+                 rc == YVEX_OK ? actual_sha256 : "");
         if (rc != YVEX_OK) {
             summary.status = YVEX_MODEL_GATE_FAIL;
+            summary.digest_status = "fail";
+            summary.identity_status = "fail";
             *summary_out = summary;
             yvex_artifact_close(artifact);
             yvex_error_set(err, rc, "yvex_model_gate_check", "sha256 calculation failed");
@@ -228,6 +244,8 @@ int yvex_model_gate_check(const yvex_model_gate_options *options,
         }
         if (strcmp(actual_sha256, options->artifact_sha256) != 0) {
             summary.status = YVEX_MODEL_GATE_BLOCKED;
+            summary.digest_status = "fail";
+            summary.identity_status = "fail";
             *summary_out = summary;
             yvex_artifact_close(artifact);
             yvex_error_setf(err, YVEX_ERR_STATE, "yvex_model_gate_check",
@@ -235,6 +253,8 @@ int yvex_model_gate_check(const yvex_model_gate_options *options,
                             options->artifact_sha256, actual_sha256);
             return YVEX_ERR_STATE;
         }
+        summary.digest_status = "pass";
+        summary.identity_status = "pass";
     }
 
     rc = yvex_gguf_open(&gguf, artifact, err);
@@ -371,154 +391,6 @@ const char *yvex_model_gate_backend_status_name(yvex_model_gate_backend_status s
 int yvex_model_gate_json_translation_unit_anchor(void)
 {
     return 0;
-}
-
-
-
-typedef struct {
-    uint32_t h[8];
-    uint64_t len;
-    unsigned char block[64];
-    unsigned int used;
-} yvex_sha256_ctx;
-
-static uint32_t rotr32(uint32_t v, unsigned int n)
-{
-    return (v >> n) | (v << (32u - n));
-}
-
-static void sha256_init(yvex_sha256_ctx *ctx)
-{
-    ctx->h[0] = 0x6a09e667u;
-    ctx->h[1] = 0xbb67ae85u;
-    ctx->h[2] = 0x3c6ef372u;
-    ctx->h[3] = 0xa54ff53au;
-    ctx->h[4] = 0x510e527fu;
-    ctx->h[5] = 0x9b05688cu;
-    ctx->h[6] = 0x1f83d9abu;
-    ctx->h[7] = 0x5be0cd19u;
-    ctx->len = 0;
-    ctx->used = 0;
-}
-
-static void sha256_transform(yvex_sha256_ctx *ctx, const unsigned char block[64])
-{
-    static const uint32_t k[64] = {
-        0x428a2f98u, 0x71374491u, 0xb5c0fbcfu, 0xe9b5dba5u,
-        0x3956c25bu, 0x59f111f1u, 0x923f82a4u, 0xab1c5ed5u,
-        0xd807aa98u, 0x12835b01u, 0x243185beu, 0x550c7dc3u,
-        0x72be5d74u, 0x80deb1feu, 0x9bdc06a7u, 0xc19bf174u,
-        0xe49b69c1u, 0xefbe4786u, 0x0fc19dc6u, 0x240ca1ccu,
-        0x2de92c6fu, 0x4a7484aau, 0x5cb0a9dcu, 0x76f988dau,
-        0x983e5152u, 0xa831c66du, 0xb00327c8u, 0xbf597fc7u,
-        0xc6e00bf3u, 0xd5a79147u, 0x06ca6351u, 0x14292967u,
-        0x27b70a85u, 0x2e1b2138u, 0x4d2c6dfcu, 0x53380d13u,
-        0x650a7354u, 0x766a0abbu, 0x81c2c92eu, 0x92722c85u,
-        0xa2bfe8a1u, 0xa81a664bu, 0xc24b8b70u, 0xc76c51a3u,
-        0xd192e819u, 0xd6990624u, 0xf40e3585u, 0x106aa070u,
-        0x19a4c116u, 0x1e376c08u, 0x2748774cu, 0x34b0bcb5u,
-        0x391c0cb3u, 0x4ed8aa4au, 0x5b9cca4fu, 0x682e6ff3u,
-        0x748f82eeu, 0x78a5636fu, 0x84c87814u, 0x8cc70208u,
-        0x90befffau, 0xa4506cebu, 0xbef9a3f7u, 0xc67178f2u
-    };
-    uint32_t w[64];
-    uint32_t a, b, c, d, e, f, g, h;
-    unsigned int i;
-
-    for (i = 0; i < 16u; ++i) {
-        w[i] = ((uint32_t)block[i * 4u] << 24) |
-               ((uint32_t)block[i * 4u + 1u] << 16) |
-               ((uint32_t)block[i * 4u + 2u] << 8) |
-               ((uint32_t)block[i * 4u + 3u]);
-    }
-    for (i = 16u; i < 64u; ++i) {
-        uint32_t s0 = rotr32(w[i - 15u], 7u) ^ rotr32(w[i - 15u], 18u) ^ (w[i - 15u] >> 3);
-        uint32_t s1 = rotr32(w[i - 2u], 17u) ^ rotr32(w[i - 2u], 19u) ^ (w[i - 2u] >> 10);
-        w[i] = w[i - 16u] + s0 + w[i - 7u] + s1;
-    }
-
-    a = ctx->h[0]; b = ctx->h[1]; c = ctx->h[2]; d = ctx->h[3];
-    e = ctx->h[4]; f = ctx->h[5]; g = ctx->h[6]; h = ctx->h[7];
-    for (i = 0; i < 64u; ++i) {
-        uint32_t s1 = rotr32(e, 6u) ^ rotr32(e, 11u) ^ rotr32(e, 25u);
-        uint32_t ch = (e & f) ^ ((~e) & g);
-        uint32_t temp1 = h + s1 + ch + k[i] + w[i];
-        uint32_t s0 = rotr32(a, 2u) ^ rotr32(a, 13u) ^ rotr32(a, 22u);
-        uint32_t maj = (a & b) ^ (a & c) ^ (b & c);
-        uint32_t temp2 = s0 + maj;
-        h = g;
-        g = f;
-        f = e;
-        e = d + temp1;
-        d = c;
-        c = b;
-        b = a;
-        a = temp1 + temp2;
-    }
-    ctx->h[0] += a; ctx->h[1] += b; ctx->h[2] += c; ctx->h[3] += d;
-    ctx->h[4] += e; ctx->h[5] += f; ctx->h[6] += g; ctx->h[7] += h;
-}
-
-static void sha256_update(yvex_sha256_ctx *ctx, const unsigned char *data, unsigned long long len)
-{
-    while (len > 0) {
-        unsigned int take = 64u - ctx->used;
-        if ((unsigned long long)take > len) take = (unsigned int)len;
-        memcpy(ctx->block + ctx->used, data, take);
-        ctx->used += take;
-        data += take;
-        len -= take;
-        ctx->len += take;
-        if (ctx->used == 64u) {
-            sha256_transform(ctx, ctx->block);
-            ctx->used = 0;
-        }
-    }
-}
-
-static void sha256_final(yvex_sha256_ctx *ctx, unsigned char out[32])
-{
-    uint64_t bit_len = ctx->len * 8ull;
-    unsigned int i;
-
-    ctx->block[ctx->used++] = 0x80u;
-    if (ctx->used > 56u) {
-        while (ctx->used < 64u) ctx->block[ctx->used++] = 0u;
-        sha256_transform(ctx, ctx->block);
-        ctx->used = 0;
-    }
-    while (ctx->used < 56u) ctx->block[ctx->used++] = 0u;
-    for (i = 0; i < 8u; ++i) {
-        ctx->block[63u - i] = (unsigned char)((bit_len >> (i * 8u)) & 0xffu);
-    }
-    sha256_transform(ctx, ctx->block);
-    for (i = 0; i < 8u; ++i) {
-        out[i * 4u] = (unsigned char)((ctx->h[i] >> 24) & 0xffu);
-        out[i * 4u + 1u] = (unsigned char)((ctx->h[i] >> 16) & 0xffu);
-        out[i * 4u + 2u] = (unsigned char)((ctx->h[i] >> 8) & 0xffu);
-        out[i * 4u + 3u] = (unsigned char)(ctx->h[i] & 0xffu);
-    }
-}
-
-static int yvex_model_gate_sha256_hex(const unsigned char *data,
-                               unsigned long long len,
-                               char out_hex[65])
-{
-    static const char hex[] = "0123456789abcdef";
-    yvex_sha256_ctx ctx;
-    unsigned char digest[32];
-    unsigned int i;
-
-    if (!data || !out_hex) return YVEX_ERR_INVALID_ARG;
-    sha256_init(&ctx);
-    sha256_update(&ctx, data, len);
-    sha256_final(&ctx, digest);
-    for (i = 0; i < 32u; ++i) {
-        out_hex[i * 2u] = hex[(digest[i] >> 4) & 0x0fu];
-        out_hex[i * 2u + 1u] = hex[digest[i] & 0x0fu];
-    }
-    out_hex[64] = '\0';
-    return YVEX_OK;
 }
 
 
@@ -719,6 +591,9 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
     summary.label = options->label;
     summary.family = options->family;
     summary.model_path = options->model_path;
+    summary.expected_sha256 = options->sha256 && options->sha256[0] ? options->sha256 : "";
+    summary.digest_status = options->sha256 && options->sha256[0] ? "unchecked" : "unrequested";
+    summary.identity_status = options->sha256 && options->sha256[0] ? "unchecked" : "unrequested";
     summary.cpu_status = YVEX_MATERIALIZE_BACKEND_NOT_TESTED;
     summary.cuda_status = YVEX_MATERIALIZE_BACKEND_NOT_TESTED;
     summary.repeat_count = options->repeat_count ? options->repeat_count : 1u;
@@ -747,12 +622,17 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
     summary.file_bytes = yvex_artifact_size(artifact);
 
     if (options->sha256 && options->sha256[0]) {
-        rc = yvex_model_gate_sha256_hex(yvex_artifact_data(artifact),
-                                        yvex_artifact_size(artifact),
-                                        actual_sha);
+        rc = yvex_artifact_sha256_hex_bytes(yvex_artifact_data(artifact),
+                                            yvex_artifact_size(artifact),
+                                            actual_sha,
+                                            err);
+        snprintf(summary.actual_sha256, sizeof(summary.actual_sha256), "%s",
+                 rc == YVEX_OK ? actual_sha : "");
         if (rc != YVEX_OK || strcmp(actual_sha, options->sha256) != 0) {
             summary.status = YVEX_MATERIALIZE_GATE_BLOCKED;
             summary.failure_class = YVEX_MATERIALIZE_FAILURE_HASH_MISMATCH;
+            summary.digest_status = "fail";
+            summary.identity_status = "fail";
             *summary_out = summary;
             yvex_artifact_close(artifact);
             yvex_error_setf(err, YVEX_ERR_STATE, "yvex_materialize_gate_check",
@@ -760,6 +640,8 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
                             options->sha256, rc == YVEX_OK ? actual_sha : "unavailable");
             return YVEX_ERR_STATE;
         }
+        summary.digest_status = "pass";
+        summary.identity_status = "pass";
     }
 
     rc = yvex_gguf_open(&gguf, artifact, err);
@@ -969,6 +851,7 @@ void yvex_model_ref_clear(yvex_model_ref *ref)
     free((char *)ref->path);
     free((char *)ref->alias);
     free((char *)ref->family);
+    free((char *)ref->sha256);
     free((char *)ref->support_level);
     memset(ref, 0, sizeof(*ref));
 }
@@ -980,11 +863,13 @@ static int set_path_ref(yvex_model_ref *out, const char *input, yvex_error *err)
     out->path = yvex_model_ref_strdup(input);
     out->alias = yvex_model_ref_strdup("");
     out->family = yvex_model_ref_strdup("");
+    out->sha256 = yvex_model_ref_strdup("");
     out->support_level = yvex_model_ref_strdup("");
     out->status = YVEX_MODEL_REF_STATUS_RESOLVED;
     out->kind = YVEX_MODEL_REF_PATH;
     out->execution_ready = 0;
-    if (!out->input || !out->path || !out->alias || !out->family || !out->support_level) {
+    if (!out->input || !out->path || !out->alias || !out->family ||
+        !out->sha256 || !out->support_level) {
         yvex_model_ref_clear(out);
         yvex_error_set(err, YVEX_ERR_NOMEM, "model_ref", "path reference allocation failed");
         return YVEX_ERR_NOMEM;
@@ -1018,11 +903,14 @@ static int yvex_model_ref_copy_from_entry(yvex_model_ref *out,
     out->path = yvex_model_ref_strdup(entry->path);
     out->alias = yvex_model_ref_strdup(entry->alias);
     out->family = yvex_model_ref_strdup(entry->family);
+    out->sha256 = yvex_model_ref_strdup(entry->sha256);
+    out->registered_file_size = entry->file_size;
     out->support_level = yvex_model_ref_strdup(entry->support_level);
     out->status = YVEX_MODEL_REF_STATUS_RESOLVED;
     out->kind = YVEX_MODEL_REF_ALIAS;
     out->execution_ready = entry->execution_ready;
-    if (!out->input || !out->path || !out->alias || !out->family || !out->support_level) {
+    if (!out->input || !out->path || !out->alias || !out->family ||
+        !out->sha256 || !out->support_level) {
         yvex_model_ref_clear(out);
         yvex_error_set(err, YVEX_ERR_NOMEM, "model_ref", "alias reference allocation failed");
         return YVEX_ERR_NOMEM;
@@ -1204,6 +1092,11 @@ static void yvex_model_registry_owned_entry_clear(yvex_model_registry_owned_entr
     free(entry->schema_version);
     free(entry->path);
     free(entry->sha256);
+    free(entry->format);
+    free(entry->architecture);
+    free(entry->primary_tensor_name);
+    free(entry->primary_tensor_dtype);
+    free(entry->primary_tensor_dims);
     free(entry->support_level);
     memset(entry, 0, sizeof(*entry));
 }
@@ -1224,6 +1117,15 @@ static void yvex_model_registry_entry_view(const yvex_model_registry_owned_entry
     view->schema_version = owned->schema_version;
     view->path = owned->path;
     view->sha256 = owned->sha256;
+    view->file_size = owned->file_size;
+    view->format = owned->format;
+    view->architecture = owned->architecture;
+    view->tensor_count = owned->tensor_count;
+    view->known_tensor_bytes = owned->known_tensor_bytes;
+    view->primary_tensor_name = owned->primary_tensor_name;
+    view->primary_tensor_dtype = owned->primary_tensor_dtype;
+    view->primary_tensor_dims = owned->primary_tensor_dims;
+    view->primary_tensor_bytes = owned->primary_tensor_bytes;
     view->support_level = owned->support_level;
     view->execution_ready = owned->execution_ready;
 }
@@ -1248,12 +1150,23 @@ static int yvex_model_registry_copy_entry(yvex_model_registry_owned_entry *dst,
     dst->schema_version = yvex_model_registry_strdup(src->schema_version);
     dst->path = yvex_model_registry_strdup(src->path);
     dst->sha256 = yvex_model_registry_strdup(src->sha256);
+    dst->file_size = src->file_size;
+    dst->format = yvex_model_registry_strdup(src->format);
+    dst->architecture = yvex_model_registry_strdup(src->architecture);
+    dst->tensor_count = src->tensor_count;
+    dst->known_tensor_bytes = src->known_tensor_bytes;
+    dst->primary_tensor_name = yvex_model_registry_strdup(src->primary_tensor_name);
+    dst->primary_tensor_dtype = yvex_model_registry_strdup(src->primary_tensor_dtype);
+    dst->primary_tensor_dims = yvex_model_registry_strdup(src->primary_tensor_dims);
+    dst->primary_tensor_bytes = src->primary_tensor_bytes;
     dst->support_level = yvex_model_registry_strdup(src->support_level);
     dst->execution_ready = src->execution_ready;
     if (!dst->alias || !dst->family || !dst->model || !dst->scope ||
         !dst->artifact_class || !dst->qprofile || !dst->calibration ||
         !dst->producer || !dst->schema_version || !dst->path ||
-        !dst->sha256 || !dst->support_level) {
+        !dst->sha256 || !dst->format || !dst->architecture ||
+        !dst->primary_tensor_name || !dst->primary_tensor_dtype ||
+        !dst->primary_tensor_dims || !dst->support_level) {
         yvex_model_registry_owned_entry_clear(dst);
         yvex_error_set(err, YVEX_ERR_NOMEM, "model_registry", "entry allocation failed");
         return YVEX_ERR_NOMEM;
@@ -1663,6 +1576,15 @@ int yvex_model_registry_entry_derive_from_path(yvex_model_registry_entry *entry,
     entry->schema_version = schema;
     entry->path = path_copy;
     entry->sha256 = "";
+    entry->file_size = 0ull;
+    entry->format = "";
+    entry->architecture = "";
+    entry->tensor_count = 0ull;
+    entry->known_tensor_bytes = 0ull;
+    entry->primary_tensor_name = "";
+    entry->primary_tensor_dtype = "";
+    entry->primary_tensor_dims = "";
+    entry->primary_tensor_bytes = 0ull;
     entry->support_level = "";
     entry->execution_ready = 0;
     return YVEX_OK;
@@ -1762,6 +1684,32 @@ static int extract_bool_in(const char *start, const char *end, const char *key)
     return strncmp(s, "true", 4) == 0 ? 1 : 0;
 }
 
+static unsigned long long extract_ull_in(const char *start, const char *end, const char *key)
+{
+    char needle[128];
+    const char *p;
+    const char *colon;
+    const char *s;
+    unsigned long long value = 0ull;
+
+    snprintf(needle, sizeof(needle), "\"%s\"", key);
+    p = strstr(start, needle);
+    if (!p || (end && p >= end)) return 0ull;
+    colon = strchr(p, ':');
+    if (!colon || (end && colon >= end)) return 0ull;
+    s = colon + 1;
+    while ((!end || s < end) && (*s == ' ' || *s == '\n' || *s == '\r' || *s == '\t')) s++;
+    while ((!end || s < end) && *s >= '0' && *s <= '9') {
+        unsigned int digit = (unsigned int)(*s - '0');
+        if (value > (ULLONG_MAX - (unsigned long long)digit) / 10ull) {
+            return 0ull;
+        }
+        value = value * 10ull + (unsigned long long)digit;
+        s++;
+    }
+    return value;
+}
+
 static void free_entry_view_strings(yvex_model_registry_entry *view)
 {
     if (!view) return;
@@ -1776,6 +1724,11 @@ static void free_entry_view_strings(yvex_model_registry_entry *view)
     free((char *)view->schema_version);
     free((char *)view->path);
     free((char *)view->sha256);
+    free((char *)view->format);
+    free((char *)view->architecture);
+    free((char *)view->primary_tensor_name);
+    free((char *)view->primary_tensor_dtype);
+    free((char *)view->primary_tensor_dims);
     free((char *)view->support_level);
     memset(view, 0, sizeof(*view));
 }
@@ -1874,12 +1827,23 @@ static int yvex_model_registry_parse_json_file(const char *path,
         view.schema_version = extract_string_in(obj_start, obj_end, "schema_version");
         view.path = extract_string_in(obj_start, obj_end, "path");
         view.sha256 = extract_string_in(obj_start, obj_end, "sha256");
+        view.file_size = extract_ull_in(obj_start, obj_end, "file_size");
+        view.format = extract_string_in(obj_start, obj_end, "format");
+        view.architecture = extract_string_in(obj_start, obj_end, "architecture");
+        view.tensor_count = extract_ull_in(obj_start, obj_end, "tensor_count");
+        view.known_tensor_bytes = extract_ull_in(obj_start, obj_end, "known_tensor_bytes");
+        view.primary_tensor_name = extract_string_in(obj_start, obj_end, "primary_tensor_name");
+        view.primary_tensor_dtype = extract_string_in(obj_start, obj_end, "primary_tensor_dtype");
+        view.primary_tensor_dims = extract_string_in(obj_start, obj_end, "primary_tensor_dims");
+        view.primary_tensor_bytes = extract_ull_in(obj_start, obj_end, "primary_tensor_bytes");
         view.support_level = extract_string_in(obj_start, obj_end, "support_level");
         view.execution_ready = extract_bool_in(obj_start, obj_end, "execution_ready");
         if (!view.alias || !view.family || !view.model || !view.scope ||
             !view.artifact_class || !view.qprofile || !view.calibration ||
             !view.producer || !view.schema_version || !view.path ||
-            !view.sha256 || !view.support_level) {
+            !view.sha256 || !view.format || !view.architecture ||
+            !view.primary_tensor_name || !view.primary_tensor_dtype ||
+            !view.primary_tensor_dims || !view.support_level) {
             free_entry_view_strings(&view);
             free(json);
             yvex_error_set(err, YVEX_ERR_FORMAT, "model_registry_json", "model entry has malformed string field");
@@ -1946,6 +1910,16 @@ static void write_field(FILE *fp, const char *indent, const char *key, const cha
     fprintf(fp, "\"%s\": ", key);
     write_escaped(fp, value);
     fprintf(fp, "%s\n", comma ? "," : "");
+}
+
+static void write_u64_field(FILE *fp,
+                            const char *indent,
+                            const char *key,
+                            unsigned long long value,
+                            int comma)
+{
+    fputs(indent, fp);
+    fprintf(fp, "\"%s\": %llu%s\n", key, value, comma ? "," : "");
 }
 
 static int yvex_model_registry_mkdir_parent(const char *path, yvex_error *err)
@@ -2024,6 +1998,15 @@ static int yvex_model_registry_write_json_file(const yvex_model_registry *regist
         write_field(fp, "      ", "schema_version", e->schema_version, 1);
         write_field(fp, "      ", "path", e->path, 1);
         write_field(fp, "      ", "sha256", e->sha256, 1);
+        write_u64_field(fp, "      ", "file_size", e->file_size, 1);
+        write_field(fp, "      ", "format", e->format, 1);
+        write_field(fp, "      ", "architecture", e->architecture, 1);
+        write_u64_field(fp, "      ", "tensor_count", e->tensor_count, 1);
+        write_u64_field(fp, "      ", "known_tensor_bytes", e->known_tensor_bytes, 1);
+        write_field(fp, "      ", "primary_tensor_name", e->primary_tensor_name, 1);
+        write_field(fp, "      ", "primary_tensor_dtype", e->primary_tensor_dtype, 1);
+        write_field(fp, "      ", "primary_tensor_dims", e->primary_tensor_dims, 1);
+        write_u64_field(fp, "      ", "primary_tensor_bytes", e->primary_tensor_bytes, 1);
         write_field(fp, "      ", "support_level", e->support_level, 1);
         fprintf(fp, "      \"execution_ready\": %s\n", e->execution_ready ? "true" : "false");
         fprintf(fp, "    }%s\n", (i + 1u < registry->count) ? "," : "");
@@ -2082,6 +2065,15 @@ static int append_scan_entry(yvex_model_registry_entry **entries,
     (*entries)[*count].schema_version = owned.schema_version;
     (*entries)[*count].path = owned.path;
     (*entries)[*count].sha256 = owned.sha256;
+    (*entries)[*count].file_size = owned.file_size;
+    (*entries)[*count].format = owned.format;
+    (*entries)[*count].architecture = owned.architecture;
+    (*entries)[*count].tensor_count = owned.tensor_count;
+    (*entries)[*count].known_tensor_bytes = owned.known_tensor_bytes;
+    (*entries)[*count].primary_tensor_name = owned.primary_tensor_name;
+    (*entries)[*count].primary_tensor_dtype = owned.primary_tensor_dtype;
+    (*entries)[*count].primary_tensor_dims = owned.primary_tensor_dims;
+    (*entries)[*count].primary_tensor_bytes = owned.primary_tensor_bytes;
     (*entries)[*count].support_level = owned.support_level;
     (*entries)[*count].execution_ready = owned.execution_ready;
     (*count)++;
@@ -2180,6 +2172,11 @@ void yvex_model_registry_scan_free(yvex_model_registry_entry *entries,
         free((char *)entries[i].schema_version);
         free((char *)entries[i].path);
         free((char *)entries[i].sha256);
+        free((char *)entries[i].format);
+        free((char *)entries[i].architecture);
+        free((char *)entries[i].primary_tensor_name);
+        free((char *)entries[i].primary_tensor_dtype);
+        free((char *)entries[i].primary_tensor_dims);
         free((char *)entries[i].support_level);
     }
     free(entries);

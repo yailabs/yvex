@@ -76,6 +76,10 @@ typedef struct {
     const char *model_path;
     const char *model_label;
     const char *family;
+    const char *expected_sha256;
+    char actual_sha256[65];
+    const char *digest_status;
+    const char *identity_status;
     unsigned long long file_bytes;
     unsigned long long tensor_count;
     unsigned long long expected_tensor_matches;

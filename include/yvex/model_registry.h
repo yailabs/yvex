@@ -33,6 +33,15 @@ typedef struct {
     const char *schema_version;
     const char *path;
     const char *sha256;
+    unsigned long long file_size;
+    const char *format;
+    const char *architecture;
+    unsigned long long tensor_count;
+    unsigned long long known_tensor_bytes;
+    const char *primary_tensor_name;
+    const char *primary_tensor_dtype;
+    const char *primary_tensor_dims;
+    unsigned long long primary_tensor_bytes;
     const char *support_level;
     int execution_ready;
 } yvex_model_registry_entry;

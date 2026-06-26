@@ -7,6 +7,7 @@
  */
 
 #include <yvex/artifact_integrity.h>
+#include <yvex/artifact_identity.h>
 #include <yvex/dtype.h>
 #include <yvex/model.h>
 
@@ -28,6 +29,66 @@ static void integrity_copy(char *dst, unsigned int cap, const char *src)
     n = snprintf(dst, (size_t)cap, "%s", src);
     if (n < 0 || (unsigned int)n >= cap) {
         dst[cap - 1u] = '\0';
+    }
+}
+
+static int add_error(yvex_artifact_integrity_report *report,
+                     const char *code,
+                     const char *tensor,
+                     const char *reason);
+
+static void apply_identity_digest(const yvex_artifact_file_identity *identity,
+                                  const yvex_artifact_integrity_options *options,
+                                  yvex_artifact_integrity_report *report)
+{
+    const char *expected = NULL;
+    const char *registered = NULL;
+
+    if (!identity || !report) {
+        return;
+    }
+
+    report->identity_checked = 1;
+    report->file_size = identity->file_size;
+    integrity_copy(report->sha256, YVEX_INTEGRITY_SHA256_CAP, identity->sha256);
+    integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP, "unregistered");
+
+    if (options) {
+        expected = options->expect_sha256;
+        registered = options->registered_sha256;
+    }
+    if (registered && registered[0]) {
+        integrity_copy(report->registered_sha256, YVEX_INTEGRITY_SHA256_CAP, registered);
+    }
+
+    if (expected && expected[0]) {
+        integrity_copy(report->expected_sha256, YVEX_INTEGRITY_SHA256_CAP, expected);
+        if (!yvex_sha256_hex_is_valid(expected)) {
+            integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP, "fail");
+            (void)add_error(report, "digest-invalid", "",
+                            "expected SHA-256 must be 64 lowercase or uppercase hex characters");
+        } else if (strcmp(identity->sha256, expected) == 0) {
+            integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP, "pass");
+        } else {
+            integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP, "fail");
+            (void)add_error(report, "digest-mismatch", "",
+                            "expected SHA-256 does not match current artifact bytes");
+        }
+        return;
+    }
+
+    if (registered && registered[0]) {
+        if (!yvex_sha256_hex_is_valid(registered)) {
+            integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP, "missing");
+            (void)add_error(report, "digest-missing", "",
+                            "registered alias lacks valid SHA-256 identity");
+        } else if (strcmp(identity->sha256, registered) == 0) {
+            integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP, "pass");
+        } else {
+            integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP, "fail");
+            (void)add_error(report, "digest-mismatch", "",
+                            "registered SHA-256 does not match current artifact bytes");
+        }
     }
 }
 
@@ -369,6 +430,7 @@ int yvex_artifact_integrity_check_path(const char *path,
                                        yvex_error *err)
 {
     yvex_artifact_options artifact_options;
+    yvex_artifact_file_identity identity;
     yvex_artifact *artifact = NULL;
     yvex_gguf *gguf = NULL;
     yvex_tensor_table *tensors = NULL;
@@ -381,11 +443,19 @@ int yvex_artifact_integrity_check_path(const char *path,
     report->checked = 1;
     integrity_copy(report->path, YVEX_ARTIFACT_PATH_CAP, path);
     integrity_copy(report->format, YVEX_INTEGRITY_FORMAT_CAP, "unknown");
+    integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP, "unknown");
 
     if (!path || path[0] == '\0') {
         (void)add_error(report, "file-open-failed", "", "model path is required");
         set_integrity_error(err, report);
         return YVEX_ERR_INVALID_ARG;
+    }
+
+    rc = yvex_artifact_identity_read(path, &identity, err);
+    if (rc != YVEX_OK) {
+        (void)add_error(report, "file-open-failed", "", yvex_error_message(err));
+        set_integrity_error(err, report);
+        return rc;
     }
 
     artifact_options.path = path;
@@ -394,6 +464,7 @@ int yvex_artifact_integrity_check_path(const char *path,
     rc = yvex_artifact_open(&artifact, &artifact_options, err);
     if (rc != YVEX_OK) {
         map_parse_error_to_report(err, report);
+        apply_identity_digest(&identity, options, report);
         set_integrity_error(err, report);
         return rc;
     }
@@ -408,6 +479,7 @@ int yvex_artifact_integrity_check_path(const char *path,
             set_basic_report(artifact, gguf, tensors, report);
         }
         map_parse_error_to_report(err, report);
+        apply_identity_digest(&identity, options, report);
         yvex_tensor_table_close(tensors);
         yvex_gguf_close(gguf);
         yvex_artifact_close(artifact);
@@ -416,10 +488,17 @@ int yvex_artifact_integrity_check_path(const char *path,
     }
 
     rc = yvex_artifact_integrity_validate(artifact, gguf, tensors, options, report, err);
+    apply_identity_digest(&identity, options, report);
+    report->passed = report->error_count == 0u ? 1 : 0;
     yvex_tensor_table_close(tensors);
     yvex_gguf_close(gguf);
     yvex_artifact_close(artifact);
-    return rc;
+    if (!report->passed) {
+        set_integrity_error(err, report);
+        return rc != YVEX_OK ? rc : YVEX_ERR_FORMAT;
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
 }
 
 const yvex_integrity_issue *yvex_artifact_integrity_issue_at(

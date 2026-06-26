@@ -34,6 +34,8 @@ extern "C" {
 #define YVEX_INTEGRITY_FORMAT_CAP 16u
 #define YVEX_INTEGRITY_ARCH_CAP 64u
 #define YVEX_INTEGRITY_MAX_ISSUES 32u
+#define YVEX_INTEGRITY_SHA256_CAP 65u
+#define YVEX_INTEGRITY_DIGEST_STATUS_CAP 24u
 
 typedef enum {
     YVEX_INTEGRITY_SEVERITY_ERROR = 0,
@@ -50,6 +52,8 @@ typedef struct {
 typedef struct {
     int require_token_embedding;
     unsigned int token_id;
+    const char *expect_sha256;
+    const char *registered_sha256;
 } yvex_artifact_integrity_options;
 
 typedef struct {
@@ -60,6 +64,11 @@ typedef struct {
     unsigned long long file_size;
     unsigned int version;
     char architecture[YVEX_INTEGRITY_ARCH_CAP];
+    int identity_checked;
+    char sha256[YVEX_INTEGRITY_SHA256_CAP];
+    char registered_sha256[YVEX_INTEGRITY_SHA256_CAP];
+    char expected_sha256[YVEX_INTEGRITY_SHA256_CAP];
+    char digest_status[YVEX_INTEGRITY_DIGEST_STATUS_CAP];
     unsigned long long tensor_count;
     unsigned long long known_tensor_bytes;
     unsigned int error_count;

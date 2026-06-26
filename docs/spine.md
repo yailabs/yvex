@@ -131,6 +131,10 @@ GGUF structural corruption detection
 tensor range and checked byte-count validation
 required selected embedding readiness check
 corrupt artifact fixture tests
+file identity digest enforcement
+registered alias digest verification
+baseline registry alias digest drift detection
+model-gate/materialize-gate digest enforcement
 ```
 
 Current live target:
@@ -158,7 +162,6 @@ full model execution
 full DeepSeek materialization
 full GGUF conversion
 artifact corruption fixture suite
-registry alias identity drift detection
 materialization integrity gate
 graph execution corruption guard
 operator integrity report
@@ -245,11 +248,11 @@ unbounded spreadsheet.
 | M5 | complete | First real-model partial graph execution |
 | SPINE.REBASE.4 | complete | Artifact integrity and measurement target rebase |
 | ARTIFACT.INTEGRITY.0 | complete | Artifact integrity threat model and validator baseline |
-| ARTIFACT.INTEGRITY.1 | next | File identity and digest enforcement |
-| ARTIFACT.INTEGRITY.2 | planned | GGUF structural corruption fixture suite |
+| ARTIFACT.INTEGRITY.1 | complete | File identity and digest enforcement |
+| ARTIFACT.INTEGRITY.2 | next | GGUF structural corruption fixture suite |
 | ARTIFACT.INTEGRITY.3 | planned | Tensor directory offset and byte-range validation |
 | ARTIFACT.INTEGRITY.4 | planned | Shape, rank, dtype, and byte-count overflow hardening |
-| ARTIFACT.INTEGRITY.5 | planned | Registry alias identity drift detection |
+| ARTIFACT.INTEGRITY.5 | planned | Registry alias metadata drift diagnostics |
 | ARTIFACT.INTEGRITY.6 | planned | Materialization integrity gate |
 | ARTIFACT.INTEGRITY.7 | planned | Graph execution integrity guard |
 | ARTIFACT.INTEGRITY.8 | planned | Corrupt artifact regression harness |
@@ -494,11 +497,11 @@ mapped and the baseline validator exists.
 | ID | Status | Title |
 | --- | --- | --- |
 | ARTIFACT.INTEGRITY.0 | complete | Artifact integrity threat model and validator baseline |
-| ARTIFACT.INTEGRITY.1 | next | File identity and digest enforcement |
-| ARTIFACT.INTEGRITY.2 | planned | GGUF structural corruption fixture suite |
+| ARTIFACT.INTEGRITY.1 | complete | File identity and digest enforcement |
+| ARTIFACT.INTEGRITY.2 | next | GGUF structural corruption fixture suite |
 | ARTIFACT.INTEGRITY.3 | planned | Tensor directory offset and byte-range validation |
 | ARTIFACT.INTEGRITY.4 | planned | Shape, rank, dtype, and byte-count overflow hardening |
-| ARTIFACT.INTEGRITY.5 | planned | Registry alias identity drift detection |
+| ARTIFACT.INTEGRITY.5 | planned | Registry alias metadata drift diagnostics |
 | ARTIFACT.INTEGRITY.6 | planned | Materialization integrity gate |
 | ARTIFACT.INTEGRITY.7 | planned | Graph execution integrity guard |
 | ARTIFACT.INTEGRITY.8 | planned | Corrupt artifact regression harness |
@@ -512,13 +515,17 @@ duplicate tensor names, missing required selected embedding tensors, unsupported
 dtype accounting, rank/dim overflow, invalid tensor offsets, and tensor byte
 ranges outside file bounds. The validator has command-visible output, tiny
 corrupt fixture coverage, selected embedding readiness checks, and docs
-describing what is checked and what is not. Digest enforcement and stale alias
-identity remain ARTIFACT.INTEGRITY.1.
+describing what is checked and what is not.
 
-ARTIFACT.INTEGRITY.1 enforces file identity and digest expectations across
-registry, model-gate, and selected-artifact paths. It should detect when an
-alias points to a path whose content no longer matches recorded digest or
-expected artifact identity.
+ARTIFACT.INTEGRITY.1 enforces local file identity and digest expectations across
+the model registry, integrity command, model-gate, materialize-gate, and
+selected-artifact execution paths. `models add` records file size, SHA-256,
+GGUF summary, tensor count, and primary tensor summary. `models verify`,
+`integrity check --expect-sha256`, and the gates report expected/current digest
+status. Registered alias paths that materialize, attach engine/session weights,
+or execute graph segments fail before backend allocation or graph execution when
+the current bytes no longer match the recorded digest. This is local identity
+evidence only, not supply-chain security or remote provenance.
 
 ARTIFACT.INTEGRITY.2 creates a GGUF structural corruption fixture suite: bad
 magic, unsupported version, truncated header, truncated metadata, truncated
@@ -535,10 +542,11 @@ validate rank limits, zero dims, huge dims, dtype byte size, element count
 overflow, output allocation bounds, and incompatible dtype for partial graph
 execution.
 
-ARTIFACT.INTEGRITY.5 detects registry alias identity drift. If a registered
-alias points to a file that changed digest, shape, dtype, tensor identity, or
-support level since registration or gate proof, the operator should get a clear
-warning or failure depending on command mode.
+ARTIFACT.INTEGRITY.5 adds higher-level registry metadata drift diagnostics after
+the digest baseline. It should compare recorded support level, expected primary
+tensor summary, shape/dtype, and command readiness against current artifact
+facts and present operator-facing warnings or failures depending on command
+mode.
 
 ARTIFACT.INTEGRITY.6 adds a materialization integrity gate. It should prove that
 corrupt or inconsistent artifacts fail before backend allocation when possible,
@@ -905,12 +913,12 @@ No diagram may imply support that the code does not implement.
 ## 8. Active Next
 
 ```text
-ARTIFACT.INTEGRITY.1 - File identity and digest enforcement
+ARTIFACT.INTEGRITY.2 - GGUF structural corruption fixture suite
 ```
 
-Next implementation: ARTIFACT.INTEGRITY.1. It must enforce file identity and
-digest expectations across registry, model-gate, and selected-artifact paths
-without implying full supply-chain security.
+Next implementation: ARTIFACT.INTEGRITY.2. It must expand the tiny corrupt GGUF
+fixture corpus across structural parser failures without mixing in digest or
+registry drift work that is already covered by ARTIFACT.INTEGRITY.1.
 
 Next runtime expansion after integrity baseline:
 
@@ -967,8 +975,11 @@ Baseline artifact integrity audit set:
 ```
 
 The integrity command, corrupt fixture refusals, materialize refusal, and graph
-refusal are current ARTIFACT.INTEGRITY.0 validation requirements. Future digest
-and alias identity checks remain under ARTIFACT.INTEGRITY.1 and later.
+refusal are current ARTIFACT.INTEGRITY.0 validation requirements. Digest and
+alias identity checks are current ARTIFACT.INTEGRITY.1 validation requirements:
+`models add`, `models verify`, `integrity check --expect-sha256`,
+model/materialize gate digest mismatch, and stale-alias refusal before
+materialization or graph execution.
 
 When the operator-local selected artifact and CUDA host are available,
 `model-gate` and `materialize-gate` must run against the active selected artifact

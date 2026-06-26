@@ -27,6 +27,7 @@ run_section chat tests/cli/chat.sh
 run_section metrics tests/cli/metrics.sh
 run_section server tests/cli/server.sh
 run_section artifact-integrity tests/cli/artifact_integrity.sh
+run_section artifact-identity tests/cli/artifact_identity.sh
 run_section materialize tests/cli/materialize.sh
 run_section materialize-gate tests/cli/materialize_gate.sh
 run_section fixture-graph tests/cli/fixture_graph.sh

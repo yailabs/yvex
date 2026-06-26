@@ -85,6 +85,20 @@ author identity, malware absence, cryptographic provenance, or safe execution of
 untrusted code. It prevents runtime paths from trusting structurally inconsistent
 artifacts.
 
+### Artifact identity baseline
+
+YVEX records local file identity for registered model aliases using file size
+and SHA-256 digest. Registry identity is local operator evidence, not
+supply-chain trust. A digest match proves that the current bytes match the bytes
+recorded or expected by YVEX; it does not prove who created the artifact,
+whether the artifact is safe, or whether the model is correct.
+
+Safety-critical alias paths verify registered identity before reading tensor
+payloads for materialization, engine/session attachment, gate checks, or graph
+execution. If a registered alias lacks digest identity or the current file
+digest no longer matches the registry, the command must fail before backend
+allocation or graph execution.
+
 ## 5. Server Contract
 
 `./yvexd` exposes a provider/status shell:

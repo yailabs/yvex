@@ -69,6 +69,7 @@ static int command_tokenize(int argc, char **argv);
 static int command_tokenizer(int argc, char **argv);
 static int command_tensors(int argc, char **argv);
 static int command_version(int argc, char **argv);
+static int enforce_registered_identity_cli(const yvex_model_ref *ref, const char *surface);
 
 static const yvex_cli_command yvex_commands[] = {
     {
@@ -172,8 +173,8 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "integrity",
         "Check baseline GGUF artifact integrity.",
-        "yvex integrity check --model FILE_OR_ALIAS [--require-token-embedding] [--partial-token N]",
-        "Validates GGUF structural bounds, tensor byte ranges, checked dtype/shape accounting, and optional selected embedding readiness. It is not a supply-chain security audit.",
+        "yvex integrity check --model FILE_OR_ALIAS [--expect-sha256 HASH] [--require-token-embedding] [--partial-token N]",
+        "Validates GGUF structural bounds, tensor byte ranges, local file identity digest, checked dtype/shape accounting, and optional selected embedding readiness. It is not a supply-chain security audit.",
         command_integrity,
     },
     {
@@ -207,8 +208,8 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "models",
         "Manage the local model alias registry.",
-        "yvex models scan --root DIR [--registry FILE] | yvex models add --path FILE [--alias ALIAS] [--support-level LEVEL] [--registry FILE] | yvex models list [--registry FILE] | yvex models use ALIAS [--registry FILE] | yvex models current [--registry FILE] | yvex models inspect ALIAS [--registry FILE] | yvex models remove ALIAS [--registry FILE]",
-        "Discovers, registers, lists, selects, inspects, and removes local model artifacts by alias. Aliases use canonical artifact names such as deepseek4-v4-flash-selected-embed; simple labels such as controlled are rejected.",
+        "yvex models scan --root DIR [--registry FILE] | yvex models add --path FILE [--alias ALIAS] [--support-level LEVEL] [--registry FILE] | yvex models list [--registry FILE] | yvex models use ALIAS [--registry FILE] | yvex models current [--registry FILE] | yvex models verify ALIAS [--registry FILE] | yvex models inspect ALIAS [--registry FILE] | yvex models remove ALIAS [--registry FILE]",
+        "Discovers, registers, verifies, lists, selects, inspects, and removes local model artifacts by alias. Aliases use canonical artifact names such as deepseek4-v4-flash-selected-embed; simple labels such as controlled are rejected.",
         command_models,
     },
     {
@@ -385,6 +386,14 @@ static void print_integrity_report(const yvex_artifact_integrity_report *report,
     }
     printf("tensor_count: %llu\n", report->tensor_count);
     printf("known_tensor_bytes: %llu\n", report->known_tensor_bytes);
+    printf("identity_checked: %s\n", report->identity_checked ? "true" : "false");
+    printf("sha256: %s\n", report->sha256[0] ? report->sha256 : "unavailable");
+    printf("registered_sha256: %s\n", report->registered_sha256[0] ? report->registered_sha256 : "absent");
+    if (report->expected_sha256[0]) {
+        printf("expected_sha256: %s\n", report->expected_sha256);
+        printf("actual_sha256: %s\n", report->sha256[0] ? report->sha256 : "unavailable");
+    }
+    printf("digest_status: %s\n", report->digest_status[0] ? report->digest_status : "unknown");
     printf("integrity_status: %s\n", report->passed ? "pass" : "fail");
     printf("integrity_errors: %u\n", report->error_count);
     printf("integrity_warnings: %u\n", report->warning_count);
@@ -1055,7 +1064,7 @@ static int command_integrity(int argc, char **argv)
     }
     if (argc < 3 || strcmp(argv[2], "check") != 0) {
         fprintf(stderr, "yvex: integrity requires check\n");
-        fprintf(stderr, "usage: yvex integrity check --model FILE_OR_ALIAS [--require-token-embedding] [--partial-token N]\n");
+        fprintf(stderr, "usage: yvex integrity check --model FILE_OR_ALIAS [--expect-sha256 HASH] [--require-token-embedding] [--partial-token N]\n");
         return 2;
     }
 
@@ -1066,6 +1075,12 @@ static int command_integrity(int argc, char **argv)
                 return 2;
             }
             model_arg = argv[++i];
+        } else if (strcmp(argv[i], "--expect-sha256") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --expect-sha256 requires HASH\n");
+                return 2;
+            }
+            options.expect_sha256 = argv[++i];
         } else if (strcmp(argv[i], "--require-token-embedding") == 0) {
             options.require_token_embedding = 1;
         } else if (strcmp(argv[i], "--partial-token") == 0) {
@@ -1090,6 +1105,9 @@ static int command_integrity(int argc, char **argv)
     rc = yvex_model_ref_resolve(&ref, model_arg, NULL, &err);
     if (rc != YVEX_OK) {
         return print_yvex_error(&err, exit_for_status(rc));
+    }
+    if (ref.kind == YVEX_MODEL_REF_ALIAS && ref.sha256 && ref.sha256[0]) {
+        options.registered_sha256 = ref.sha256;
     }
 
     rc = yvex_artifact_integrity_check_path(ref.path, &options, &report, &err);
@@ -1248,6 +1266,13 @@ static int command_engine(int argc, char **argv)
     rc = yvex_model_ref_resolve(&model_ref, model_arg, NULL, &err);
     if (rc != YVEX_OK) {
         return print_yvex_error(&err, exit_for_status(rc));
+    }
+    if (backend_name) {
+        rc = enforce_registered_identity_cli(&model_ref, "engine");
+        if (rc != YVEX_OK) {
+            yvex_model_ref_clear(&model_ref);
+            return exit_for_status(rc);
+        }
     }
 
     options.model_path = model_ref.path;
@@ -2080,6 +2105,65 @@ static int command_metadata(int argc, char **argv)
     return 0;
 }
 
+static int enforce_registered_identity_cli(const yvex_model_ref *ref, const char *surface)
+{
+    yvex_artifact_file_identity identity;
+    yvex_error err;
+    const char *identity_status = "pass";
+    const char *digest_status = "pass";
+    const char *reason = "current file identity matches registered alias";
+    int pass = 1;
+    int rc;
+
+    if (!ref || ref->kind != YVEX_MODEL_REF_ALIAS) {
+        return YVEX_OK;
+    }
+
+    yvex_error_clear(&err);
+    memset(&identity, 0, sizeof(identity));
+    rc = yvex_artifact_identity_read(ref->path, &identity, &err);
+    if (rc != YVEX_OK) {
+        identity_status = "fail";
+        digest_status = "fail";
+        reason = yvex_error_message(&err);
+        pass = 0;
+    } else if (!ref->sha256 || !ref->sha256[0] || !yvex_sha256_hex_is_valid(ref->sha256)) {
+        identity_status = "missing";
+        digest_status = "missing";
+        reason = "registered alias lacks digest identity; re-add model";
+        pass = 0;
+        rc = YVEX_ERR_STATE;
+    } else if (strcmp(ref->sha256, identity.sha256) != 0 ||
+               (ref->registered_file_size != 0ull &&
+                ref->registered_file_size != identity.file_size)) {
+        identity_status = "fail";
+        digest_status = "fail";
+        reason = "digest mismatch for registered alias";
+        pass = 0;
+        rc = YVEX_ERR_STATE;
+    } else {
+        rc = YVEX_OK;
+    }
+
+    if (!pass) {
+        printf("artifact_identity: check\n");
+        printf("surface: %s\n", surface ? surface : "unknown");
+        printf("alias: %s\n", ref->alias ? ref->alias : "");
+        printf("path: %s\n", ref->path ? ref->path : "");
+        printf("registered_sha256: %s\n", ref->sha256 && ref->sha256[0] ? ref->sha256 : "absent");
+        printf("current_sha256: %s\n", identity.sha256[0] ? identity.sha256 : "unavailable");
+        printf("registered_file_size: %llu\n", ref->registered_file_size);
+        printf("current_file_size: %llu\n", identity.file_size);
+        printf("digest_status: %s\n", digest_status);
+        printf("identity_status: %s\n", identity_status);
+        printf("reason: %s\n", reason);
+        printf("status: %s\n", strcmp(identity_status, "missing") == 0
+               ? "models-identity-missing"
+               : "models-identity-fail");
+    }
+    return rc;
+}
+
 static int command_materialize(int argc, char **argv)
 {
     yvex_cli_tokenizer_context ctx;
@@ -2088,6 +2172,7 @@ static int command_materialize(int argc, char **argv)
     yvex_backend_options backend_options;
     yvex_materialize_options materialize_options;
     yvex_materialize_summary summary;
+    yvex_model_ref model_ref;
     yvex_error err;
     const char *model_path = NULL;
     const char *backend_name = NULL;
@@ -2098,6 +2183,7 @@ static int command_materialize(int argc, char **argv)
     memset(&ctx, 0, sizeof(ctx));
     memset(&backend_options, 0, sizeof(backend_options));
     memset(&materialize_options, 0, sizeof(materialize_options));
+    memset(&model_ref, 0, sizeof(model_ref));
 
     if (argc == 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
         print_command_help(stdout, find_command("materialize"));
@@ -2143,8 +2229,19 @@ static int command_materialize(int argc, char **argv)
         return 2;
     }
 
-    rc = open_model_context(model_path, &ctx, &err);
+    rc = yvex_model_ref_resolve(&model_ref, model_path, NULL, &err);
     if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    rc = enforce_registered_identity_cli(&model_ref, "materialize");
+    if (rc != YVEX_OK) {
+        yvex_model_ref_clear(&model_ref);
+        return exit_for_status(rc);
+    }
+
+    rc = open_model_context(model_ref.path, &ctx, &err);
+    if (rc != YVEX_OK) {
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
@@ -2155,10 +2252,12 @@ static int command_materialize(int argc, char **argv)
         printf("reason: %s\n", yvex_error_message(&err));
         printf("status: weights-unsupported\n");
         close_model_context(&ctx);
+        yvex_model_ref_clear(&model_ref);
         return 5;
     }
     if (rc != YVEX_OK) {
         close_model_context(&ctx);
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
@@ -2177,11 +2276,13 @@ static int command_materialize(int argc, char **argv)
         printf("status: weights-unsupported\n");
         yvex_backend_close(backend);
         close_model_context(&ctx);
+        yvex_model_ref_clear(&model_ref);
         return 5;
     }
     if (rc != YVEX_OK) {
         yvex_backend_close(backend);
         close_model_context(&ctx);
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
@@ -2190,6 +2291,7 @@ static int command_materialize(int argc, char **argv)
         yvex_weight_table_close(weights);
         yvex_backend_close(backend);
         close_model_context(&ctx);
+        yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
@@ -2211,6 +2313,7 @@ static int command_materialize(int argc, char **argv)
     yvex_weight_table_close(weights);
     yvex_backend_close(backend);
     close_model_context(&ctx);
+    yvex_model_ref_clear(&model_ref);
     return 0;
 }
 
@@ -2233,6 +2336,10 @@ static void print_materialize_gate_report(FILE *fp,
     fprintf(fp, "family: %s\n", summary->family ? summary->family : "");
     fprintf(fp, "scope: %s\n", yvex_materialize_scope_name(summary->scope));
     fprintf(fp, "model: %s\n", summary->model_path ? summary->model_path : "");
+    fprintf(fp, "expected_sha256: %s\n", summary->expected_sha256 ? summary->expected_sha256 : "");
+    fprintf(fp, "actual_sha256: %s\n", summary->actual_sha256);
+    fprintf(fp, "digest_status: %s\n", summary->digest_status ? summary->digest_status : "unrequested");
+    fprintf(fp, "identity_status: %s\n", summary->identity_status ? summary->identity_status : "unrequested");
     fprintf(fp, "file_bytes: %llu\n", summary->file_bytes);
     fprintf(fp, "tensor_count: %llu\n", summary->tensor_count);
     fprintf(fp, "expected_tensor_matches: %llu\n", summary->expected_tensor_matches);
@@ -2402,7 +2509,17 @@ static int command_materialize_gate(int argc, char **argv)
     if (rc != YVEX_OK) {
         return print_yvex_error(&err, exit_for_status(rc));
     }
+    rc = enforce_registered_identity_cli(&model_ref, "materialize-gate");
+    if (rc != YVEX_OK) {
+        yvex_model_ref_clear(&model_ref);
+        return exit_for_status(rc);
+    }
     options.model_path = model_ref.path;
+    if ((!options.sha256 || !options.sha256[0]) &&
+        model_ref.kind == YVEX_MODEL_REF_ALIAS &&
+        model_ref.sha256 && model_ref.sha256[0]) {
+        options.sha256 = model_ref.sha256;
+    }
 
     rc = yvex_materialize_gate_check(&options, &summary, &err);
     print_materialize_gate_report(stdout, &options, &summary,
@@ -2431,6 +2548,10 @@ static void print_model_gate_report(FILE *fp,
     fprintf(fp, "label: %s\n", summary->model_label ? summary->model_label : "");
     fprintf(fp, "family: %s\n", summary->family ? summary->family : "");
     fprintf(fp, "model: %s\n", summary->model_path ? summary->model_path : "");
+    fprintf(fp, "expected_sha256: %s\n", summary->expected_sha256 ? summary->expected_sha256 : "");
+    fprintf(fp, "actual_sha256: %s\n", summary->actual_sha256);
+    fprintf(fp, "digest_status: %s\n", summary->digest_status ? summary->digest_status : "unrequested");
+    fprintf(fp, "identity_status: %s\n", summary->identity_status ? summary->identity_status : "unrequested");
     fprintf(fp, "file_bytes: %llu\n", summary->file_bytes);
     fprintf(fp, "tensor_count: %llu\n", summary->tensor_count);
     fprintf(fp, "expected_tensor_matches: %llu\n", summary->expected_tensor_matches);
@@ -2568,7 +2689,17 @@ static int command_model_gate(int argc, char **argv)
     if (rc != YVEX_OK) {
         return print_yvex_error(&err, exit_for_status(rc));
     }
+    rc = enforce_registered_identity_cli(&model_ref, "model-gate");
+    if (rc != YVEX_OK) {
+        yvex_model_ref_clear(&model_ref);
+        return exit_for_status(rc);
+    }
     options.model_path = model_ref.path;
+    if ((!options.artifact_sha256 || !options.artifact_sha256[0]) &&
+        model_ref.kind == YVEX_MODEL_REF_ALIAS &&
+        model_ref.sha256 && model_ref.sha256[0]) {
+        options.artifact_sha256 = model_ref.sha256;
+    }
 
     rc = yvex_model_gate_check(&options, &summary, &err);
     print_model_gate_report(stdout, &options, &summary,
@@ -2631,6 +2762,12 @@ static void print_model_registry_entry_cli(const yvex_model_registry_entry *entr
     printf("  support_level: %s\n", entry->support_level ? entry->support_level : "");
     printf("  execution_ready: %s\n", entry->execution_ready ? "true" : "false");
     printf("  path: %s\n", entry->path ? entry->path : "");
+    printf("  registered_file_size: %llu\n", entry->file_size);
+    printf("  registered_sha256: %s\n", entry->sha256 && entry->sha256[0] ? entry->sha256 : "absent");
+    printf("  registered_format: %s\n", entry->format ? entry->format : "");
+    printf("  registered_architecture: %s\n", entry->architecture ? entry->architecture : "");
+    printf("  registered_tensor_count: %llu\n", entry->tensor_count);
+    printf("  registered_known_tensor_bytes: %llu\n", entry->known_tensor_bytes);
 }
 
 static void print_model_registry_scan_entry_cli(const yvex_model_registry_entry *entry)
@@ -2644,6 +2781,114 @@ static void print_model_registry_scan_entry_cli(const yvex_model_registry_entry 
     printf("artifact_class: %s\n", entry->artifact_class ? entry->artifact_class : "");
     printf("qprofile: %s\n", entry->qprofile ? entry->qprofile : "");
     printf("calibration: %s\n", entry->calibration ? entry->calibration : "");
+}
+
+static void dims_to_text(const unsigned long long *dims,
+                         unsigned int rank,
+                         char *out,
+                         size_t out_cap)
+{
+    unsigned int i;
+    size_t used = 0u;
+
+    if (!out || out_cap == 0u) {
+        return;
+    }
+    out[0] = '\0';
+    if (used + 1u < out_cap) {
+        out[used++] = '[';
+        out[used] = '\0';
+    }
+    for (i = 0; i < rank && used < out_cap; ++i) {
+        int n = snprintf(out + used,
+                         used < out_cap ? out_cap - used : 0u,
+                         "%s%llu",
+                         i == 0 ? "" : ",",
+                         dims[i]);
+        if (n < 0 || (size_t)n >= (used < out_cap ? out_cap - used : 0u)) {
+            out[out_cap - 1u] = '\0';
+            return;
+        }
+        used += (size_t)n;
+    }
+    if (used + 1u < out_cap) {
+        out[used++] = ']';
+        out[used] = '\0';
+    }
+}
+
+static int populate_registry_identity(yvex_model_registry_entry *entry,
+                                      char sha256[YVEX_SHA256_HEX_CAP],
+                                      char format[16],
+                                      char architecture[64],
+                                      char primary_name[128],
+                                      char primary_dtype[32],
+                                      char primary_dims[128],
+                                      yvex_error *err)
+{
+    yvex_artifact_file_identity identity;
+    yvex_cli_tokenizer_context ctx;
+    const yvex_tensor_info *primary = NULL;
+    unsigned long long known_bytes = 0ull;
+    unsigned long long i;
+    int rc;
+
+    if (!entry || !entry->path) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "models_add_identity",
+                       "registry entry and path are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    memset(&ctx, 0, sizeof(ctx));
+    rc = yvex_artifact_identity_read(entry->path, &identity, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = open_model_context(entry->path, &ctx, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    snprintf(sha256, YVEX_SHA256_HEX_CAP, "%s", identity.sha256);
+    snprintf(format, 16u, "gguf");
+    snprintf(architecture, 64u, "%s", yvex_arch_name(yvex_model_arch(ctx.model)));
+
+    for (i = 0; i < yvex_tensor_table_count(ctx.table); ++i) {
+        const yvex_tensor_info *tensor = yvex_tensor_table_at(ctx.table, i);
+        if (!tensor) {
+            continue;
+        }
+        known_bytes += tensor->storage_bytes;
+        if (!primary && strcmp(tensor->name, "token_embd.weight") == 0) {
+            primary = tensor;
+        }
+    }
+    if (!primary && yvex_tensor_table_count(ctx.table) > 0ull) {
+        primary = yvex_tensor_table_at(ctx.table, 0);
+    }
+
+    primary_name[0] = '\0';
+    primary_dtype[0] = '\0';
+    primary_dims[0] = '\0';
+    if (primary) {
+        snprintf(primary_name, 128u, "%s", primary->name ? primary->name : "");
+        snprintf(primary_dtype, 32u, "%s", yvex_dtype_name(primary->dtype));
+        dims_to_text(primary->dims, primary->rank, primary_dims, 128u);
+        entry->primary_tensor_bytes = primary->storage_bytes;
+    }
+
+    entry->sha256 = sha256;
+    entry->file_size = identity.file_size;
+    entry->format = format;
+    entry->architecture = architecture;
+    entry->tensor_count = yvex_tensor_table_count(ctx.table);
+    entry->known_tensor_bytes = known_bytes;
+    entry->primary_tensor_name = primary_name;
+    entry->primary_tensor_dtype = primary_dtype;
+    entry->primary_tensor_dims = primary_dims;
+
+    close_model_context(&ctx);
+    return YVEX_OK;
 }
 
 static int parse_models_registry_option(int argc, char **argv, int start, const char **registry_path)
@@ -2754,12 +2999,24 @@ static int command_models_add(int argc, char **argv)
     yvex_model_registry_entry derived;
     yvex_model_registry_entry entry;
     yvex_error err;
+    char registered_sha256[YVEX_SHA256_HEX_CAP];
+    char registered_format[16];
+    char registered_architecture[64];
+    char primary_tensor_name[128];
+    char primary_tensor_dtype[32];
+    char primary_tensor_dims[128];
     int have_derived = 0;
     int rc;
 
     yvex_error_clear(&err);
     memset(&derived, 0, sizeof(derived));
     memset(&entry, 0, sizeof(entry));
+    memset(registered_sha256, 0, sizeof(registered_sha256));
+    memset(registered_format, 0, sizeof(registered_format));
+    memset(registered_architecture, 0, sizeof(registered_architecture));
+    memset(primary_tensor_name, 0, sizeof(primary_tensor_name));
+    memset(primary_tensor_dtype, 0, sizeof(primary_tensor_dtype));
+    memset(primary_tensor_dims, 0, sizeof(primary_tensor_dims));
     rc = parse_models_add_options(argc, argv, &cli_options);
     if (rc != 0) return rc;
     if (!cli_options.path) {
@@ -2785,9 +3042,37 @@ static int command_models_add(int argc, char **argv)
     entry.producer = have_derived ? derived.producer : "yvex";
     entry.schema_version = have_derived ? derived.schema_version : "v1";
     entry.path = cli_options.path;
-    entry.sha256 = cli_options.sha256 ? cli_options.sha256 : "";
+    entry.sha256 = "";
+    entry.file_size = 0ull;
+    entry.format = "";
+    entry.architecture = "";
+    entry.tensor_count = 0ull;
+    entry.known_tensor_bytes = 0ull;
+    entry.primary_tensor_name = "";
+    entry.primary_tensor_dtype = "";
+    entry.primary_tensor_dims = "";
+    entry.primary_tensor_bytes = 0ull;
     entry.support_level = cli_options.support_level ? cli_options.support_level : "";
     entry.execution_ready = 0;
+
+    rc = populate_registry_identity(&entry,
+                                    registered_sha256,
+                                    registered_format,
+                                    registered_architecture,
+                                    primary_tensor_name,
+                                    primary_tensor_dtype,
+                                    primary_tensor_dims,
+                                    &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    if (cli_options.sha256 && cli_options.sha256[0] &&
+        strcmp(cli_options.sha256, registered_sha256) != 0) {
+        yvex_error_setf(&err, YVEX_ERR_STATE, "models_add_identity",
+                        "sha256 mismatch: expected %s got %s",
+                        cli_options.sha256, registered_sha256);
+        return print_yvex_error(&err, exit_for_status(YVEX_ERR_STATE));
+    }
 
     rc = models_registry_open(&registry, cli_options.registry_path, 1, &err);
     if (rc == YVEX_OK) rc = yvex_model_registry_add(registry, &entry, &err);
@@ -2799,6 +3084,13 @@ static int command_models_add(int argc, char **argv)
     printf("models: add\n");
     printf("alias: %s\n", entry.alias);
     printf("path: %s\n", entry.path);
+    printf("registered_file_size: %llu\n", entry.file_size);
+    printf("registered_sha256: %s\n", entry.sha256);
+    printf("registered_format: %s\n", entry.format);
+    printf("registered_architecture: %s\n", entry.architecture);
+    printf("registered_tensor_count: %llu\n", entry.tensor_count);
+    printf("registered_known_tensor_bytes: %llu\n", entry.known_tensor_bytes);
+    printf("identity_status: recorded\n");
     printf("status: models-added\n");
     yvex_model_registry_close(registry);
     return 0;
@@ -2886,6 +3178,12 @@ static int command_models_current(int argc, char **argv)
     if (selected) {
         printf("selected: %s\n", selected->alias);
         printf("path: %s\n", selected->path);
+        printf("registered_file_size: %llu\n", selected->file_size);
+        printf("registered_sha256: %s\n", selected->sha256 && selected->sha256[0] ? selected->sha256 : "absent");
+        printf("registered_format: %s\n", selected->format ? selected->format : "");
+        printf("registered_architecture: %s\n", selected->architecture ? selected->architecture : "");
+        printf("registered_tensor_count: %llu\n", selected->tensor_count);
+        printf("registered_known_tensor_bytes: %llu\n", selected->known_tensor_bytes);
         printf("execution_ready: %s\n", selected->execution_ready ? "true" : "false");
         printf("status: models-current\n");
     } else {
@@ -2894,6 +3192,77 @@ static int command_models_current(int argc, char **argv)
     }
     yvex_model_registry_close(registry);
     return 0;
+}
+
+static int command_models_verify(int argc, char **argv)
+{
+    yvex_model_registry *registry = NULL;
+    yvex_artifact_file_identity identity;
+    yvex_error err;
+    const char *registry_path = NULL;
+    const yvex_model_registry_entry *entry;
+    const char *alias;
+    const char *identity_status = "unknown";
+    const char *digest_status = "unknown";
+    const char *reason = "";
+    int pass = 0;
+    int rc;
+
+    if (argc < 4) {
+        fprintf(stderr, "yvex: models verify requires ALIAS\n");
+        return 2;
+    }
+    alias = argv[3];
+    rc = parse_models_registry_option(argc, argv, 4, &registry_path);
+    if (rc != 0) return rc;
+    yvex_error_clear(&err);
+    rc = models_registry_open(&registry, registry_path, 1, &err);
+    if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+    entry = yvex_model_registry_find(registry, alias);
+    if (!entry) {
+        yvex_model_registry_close(registry);
+        fprintf(stderr, "yvex: model alias not found: %s\n", alias);
+        return 2;
+    }
+
+    memset(&identity, 0, sizeof(identity));
+    rc = yvex_artifact_identity_read(entry->path, &identity, &err);
+    if (rc != YVEX_OK) {
+        identity_status = "fail";
+        digest_status = "fail";
+        reason = yvex_error_message(&err);
+    } else if (!entry->sha256 || !entry->sha256[0] ||
+               !yvex_sha256_hex_is_valid(entry->sha256)) {
+        identity_status = "missing";
+        digest_status = "missing";
+        reason = "registered alias lacks digest identity; re-add model";
+    } else if (strcmp(entry->sha256, identity.sha256) != 0 ||
+               (entry->file_size != 0ull && entry->file_size != identity.file_size)) {
+        identity_status = "fail";
+        digest_status = "fail";
+        reason = "digest mismatch for registered alias";
+    } else {
+        identity_status = "pass";
+        digest_status = "pass";
+        reason = "current file identity matches registered alias";
+        pass = 1;
+    }
+
+    printf("models: verify\n");
+    printf("alias: %s\n", entry->alias);
+    printf("path: %s\n", entry->path);
+    printf("registered_sha256: %s\n", entry->sha256 && entry->sha256[0] ? entry->sha256 : "absent");
+    printf("current_sha256: %s\n", identity.sha256[0] ? identity.sha256 : "unavailable");
+    printf("registered_file_size: %llu\n", entry->file_size);
+    printf("current_file_size: %llu\n", identity.file_size);
+    printf("digest_status: %s\n", digest_status);
+    printf("identity_status: %s\n", identity_status);
+    printf("reason: %s\n", reason);
+    printf("status: %s\n", pass ? "models-identity-pass" :
+           (strcmp(identity_status, "missing") == 0 ? "models-identity-missing"
+                                                     : "models-identity-fail"));
+    yvex_model_registry_close(registry);
+    return pass ? 0 : exit_for_status(YVEX_ERR_STATE);
 }
 
 static int command_models_remove(int argc, char **argv)
@@ -2963,6 +3332,16 @@ static int command_models_inspect(int argc, char **argv)
     printf("qprofile: %s\n", entry->qprofile);
     printf("calibration: %s\n", entry->calibration);
     printf("support_level: %s\n", entry->support_level);
+    printf("registered_file_size: %llu\n", entry->file_size);
+    printf("registered_sha256: %s\n", entry->sha256 && entry->sha256[0] ? entry->sha256 : "absent");
+    printf("registered_format: %s\n", entry->format ? entry->format : "");
+    printf("registered_architecture: %s\n", entry->architecture ? entry->architecture : "");
+    printf("registered_tensor_count: %llu\n", entry->tensor_count);
+    printf("registered_known_tensor_bytes: %llu\n", entry->known_tensor_bytes);
+    printf("primary_tensor_name: %s\n", entry->primary_tensor_name ? entry->primary_tensor_name : "");
+    printf("primary_tensor_dtype: %s\n", entry->primary_tensor_dtype ? entry->primary_tensor_dtype : "");
+    printf("primary_tensor_dims: %s\n", entry->primary_tensor_dims ? entry->primary_tensor_dims : "");
+    printf("primary_tensor_bytes: %llu\n", entry->primary_tensor_bytes);
     printf("execution_ready: %s\n", entry->execution_ready ? "true" : "false");
     rc = open_model_context(entry->path, &ctx, &err);
     if (rc == YVEX_OK) {
@@ -2989,7 +3368,7 @@ static int command_models(int argc, char **argv)
         return 0;
     }
     if (argc < 3) {
-        fprintf(stderr, "yvex: models requires scan, add, list, use, current, inspect, or remove\n");
+        fprintf(stderr, "yvex: models requires scan, add, list, use, current, verify, inspect, or remove\n");
         return 2;
     }
     if (strcmp(argv[2], "scan") == 0) return command_models_scan(argc, argv);
@@ -2997,6 +3376,7 @@ static int command_models(int argc, char **argv)
     if (strcmp(argv[2], "list") == 0) return command_models_list(argc, argv);
     if (strcmp(argv[2], "use") == 0) return command_models_use(argc, argv);
     if (strcmp(argv[2], "current") == 0) return command_models_current(argc, argv);
+    if (strcmp(argv[2], "verify") == 0) return command_models_verify(argc, argv);
     if (strcmp(argv[2], "inspect") == 0) return command_models_inspect(argc, argv);
     if (strcmp(argv[2], "remove") == 0) return command_models_remove(argc, argv);
     fprintf(stderr, "yvex: unknown models subcommand: %s\n", argv[2]);
@@ -3736,6 +4116,11 @@ static int command_graph(int argc, char **argv)
         if (rc != YVEX_OK) {
             return print_yvex_error(&err, exit_for_status(rc));
         }
+        rc = enforce_registered_identity_cli(&model_ref, execute_fixture ? "graph-fixture" : "graph-partial");
+        if (rc != YVEX_OK) {
+            yvex_model_ref_clear(&model_ref);
+            return exit_for_status(rc);
+        }
 
         engine_options.model_path = model_ref.path;
         engine_options.load_tokenizer = 0;
@@ -4396,6 +4781,11 @@ static int command_session(int argc, char **argv)
     rc = yvex_model_ref_resolve(&model_ref, argv[2], NULL, &err);
     if (rc != YVEX_OK) {
         return print_yvex_error(&err, exit_for_status(rc));
+    }
+    rc = enforce_registered_identity_cli(&model_ref, "session");
+    if (rc != YVEX_OK) {
+        yvex_model_ref_clear(&model_ref);
+        return exit_for_status(rc);
     }
 
     engine_options.model_path = model_ref.path;

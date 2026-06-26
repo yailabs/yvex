@@ -53,6 +53,7 @@ YVEXD_BIN := ./yvexd
 CORE_SRCS := \
 	yvex_core.c \
 	yvex_artifact.c \
+	yvex_artifact_identity.c \
 	yvex_artifact_integrity.c \
 	yvex_fs.c \
 	gguf/naming.c \

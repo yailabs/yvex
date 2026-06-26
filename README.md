@@ -396,6 +396,10 @@ YVEX includes a baseline artifact integrity check for `GGUF` structural bounds,
 tensor ranges, checked byte math, and selected embedding readiness. It is not a
 supply-chain security guarantee.
 
+Registered model aliases also record local file identity so YVEX can detect
+when an operator-local artifact changes after registration. Digest checks are
+local identity evidence, not supply-chain security or remote provenance.
+
 The local registry exists because real artifact paths are long and
 machine-specific. `.yvex/models.local.json` is ignored local state, and
 `YVEX_MODELS_REGISTRY` can point commands at another local registry when a

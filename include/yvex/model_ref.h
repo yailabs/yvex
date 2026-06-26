@@ -44,6 +44,8 @@ typedef struct {
     const char *path;
     const char *alias;
     const char *family;
+    const char *sha256;
+    unsigned long long registered_file_size;
     const char *support_level;
     int execution_ready;
 } yvex_model_ref;
