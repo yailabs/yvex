@@ -21,15 +21,15 @@ treated as one vague operation.
 
 ## What YVEX is
 
-YVEX is concerned with the native path that most local-model tools compress
+YVEX focuses on the native path that most local-model tools compress
 into words like "loaded" or "supported." In this project, a loaded file, a
 parsed `GGUF`, a descriptor, a resident tensor, an engine-owned weight table, and
 an executable graph are different runtime states. The distinction matters
 because every one of those states can succeed while the next one still fails.
 
-A tensor can be present in a GGUF file and still map to the wrong role. A qtype
+A tensor can be present in a `GGUF` file and still map to the wrong role. A qtype
 can be recognized as storage while no backend kernel can compute with it. A
-CUDA allocation can prove that bytes reached device memory without proving that
+`CUDA` allocation can prove that bytes reached device memory without proving that
 any scheduled transformer work happened. A daemon can expose provider-shaped
 endpoints before the engine behind it can produce logits. YVEX exists to make
 those lines visible and testable.
@@ -64,7 +64,7 @@ graph execution. Each step has to leave behind evidence: command output, tests,
 cleanup behavior, and an honest unsupported boundary.
 
 That approach is not meant to be academic. It is what lets the runtime grow
-without lying to itself. A selected embedding tensor materialized on CUDA is
+without lying to itself. A selected embedding tensor materialized on `CUDA` is
 valuable, but it is not a transformer. A deterministic fixture graph is
 valuable, but it is not real-model inference. The next step, real-model partial
 graph execution, will still not be generation. The goal is to earn each word
@@ -76,9 +76,9 @@ before using it.
 | --- | --- | --- | --- |
 | GGUF parse | implemented | metadata and tensor directory can be read | model execution |
 | Descriptor and tensor roles | implemented | artifact facts become runtime descriptors | backend residency |
-| Selected materialization | implemented | selected tensor bytes move into CPU/CUDA storage | full model loading |
+| Selected materialization | implemented | selected tensor bytes move into `CPU`/`CUDA` storage | full model loading |
 | Engine weight attachment | implemented | selected materialized weights are engine-owned state | graph execution |
-| Fixture graph execution | implemented for controlled F32 fixtures | one deterministic graph path runs through backend dispatch | real-model inference |
+| Fixture graph execution | implemented for controlled `F32` fixtures | one deterministic graph path runs through backend dispatch | real-model inference |
 | Real-model partial graph | next | first real tensor graph segment | not implemented yet |
 | Prefill, decode, logits | planned | future runtime stages | not implemented |
 | Generation and server generation | unsupported | no text generation path exists | provider endpoints are status-only |
@@ -97,10 +97,10 @@ tensor names, shapes, dtypes, byte offsets, and tokenizer facts where present.
 Descriptor construction is the next boundary; it turns file facts into a
 runtime view that later commands can reason about. Selected materialization
 crosses a different line: the runtime is no longer only describing tensor
-bytes, it is moving a chosen tensor into CPU or CUDA-owned storage and forcing
+bytes, it is moving a chosen tensor into `CPU` or `CUDA`-owned storage and forcing
 allocation, transfer, cleanup, and error reporting to become explicit.
 
-Backend residency is still not graph execution. A tensor resident on CUDA has
+Backend residency is still not graph execution. A tensor resident on `CUDA` has
 crossed a memory boundary, not a transformer boundary. The runtime also has to
 know who owns the weights, who can borrow them, and which cleanup path releases
 them. YVEX can now attach selected materialized weights to engine-owned runtime
@@ -123,9 +123,9 @@ decode, logits, sampling, or generation.
 
 The executable path today is a controlled fixture graph. The fixture exists
 because the first executor path needs exact expected output. It uses controlled
-F32 embedding weights, a fixture token, one embed-node execution path, backend
-dispatch, output allocation and readback, stable values, and CPU/CUDA parity
-when CUDA is available.
+`F32` embedding weights, a fixture token, one embed-node execution path, backend
+dispatch, output allocation and readback, stable values, and `CPU`/`CUDA` parity
+when `CUDA` is available.
 
 ```sh
 tmpdir="$(mktemp -d)"
@@ -134,7 +134,7 @@ tmpdir="$(mktemp -d)"
 ./yvex graph --model "$tmpdir/controlled.gguf" --backend cuda --execute-fixture --fixture-token 0
 ```
 
-The `--backend cuda` line is for CUDA-capable hosts. On machines without CUDA,
+The `--backend cuda` line is for `CUDA`-capable hosts. On machines without `CUDA`,
 the CPU fixture path is still the baseline proof.
 
 Expected fields include:
@@ -166,7 +166,7 @@ routed expert, KV path, logits head, or decoder loop exists.
 ## Live artifacts and fixtures
 
 YVEX currently uses two different kinds of artifacts. The large selected
-DeepSeek embedding is the live pressure artifact. The controlled F32 GGUF is
+DeepSeek embedding is the live pressure artifact. The controlled `F32` `GGUF` is
 the deterministic execution fixture. They serve different purposes and should
 not be confused.
 
@@ -192,13 +192,14 @@ execution_ready: false
 ```
 
 The selected DeepSeek embedding is not "supported DeepSeek." It is the current
-pressure artifact: one very large real tensor that forces artifact identity,
-shape, dtype, byte accounting, CPU/CUDA residency, engine attachment, and
-cleanup to be real before a full graph exists. One tensor is enough to make
-memory ownership and backend failure behavior concrete. It is not enough to
-claim a model run.
+pressure artifact: one very large real tensor artifact that forces artifact
+identity, shape, dtype, byte accounting, `CPU`/`CUDA` residency, engine
+attachment, and cleanup to be real before a full graph exists. One tensor is
+enough to make memory ownership and backend failure behavior concrete. It is
+not enough to claim a model run.
 
-The selected DeepSeek artifact is useful because it is both partial and heavy.
+The selected DeepSeek artifact is useful precisely because it is both partial
+and heavy.
 `token_embd.weight` at `[4096,129280]` in `F16` is about one billion tensor
 bytes. That size is large enough to exercise long local artifact names,
 checksum identity, `GGUF` v3 tensor directory layout, shape and dtype
@@ -212,19 +213,19 @@ source provenance, tensor mapping, artifact identity, runtime work, and tests.
 
 ### Controlled fixture artifact
 
-The controlled F32 fixture is the execution artifact for the current graph
+The controlled `F32` fixture is the execution artifact for the current graph
 path. It is small by design. It exists so the executor can be checked exactly
 before real-model partial execution begins.
 
 | Artifact | Role | Current state |
 | --- | --- | --- |
-| DeepSeek selected F16 embedding | large pressure tensor | inspect/materialize/attach pass; fixture graph unsupported because it is selected F16 pressure data |
-| Controlled DeepSeek-arch F32 fixture | deterministic graph execution fixture | CPU/CUDA fixture graph pass |
+| DeepSeek selected `F16` embedding | large pressure tensor | inspect/materialize/attach pass; not used by the controlled `F32` fixture executor |
+| Controlled DeepSeek-arch `F32` fixture | deterministic graph execution fixture | `CPU`/`CUDA` fixture graph pass |
 
 ## Artifact workflow
 
 The repository should be able to travel without the operator's model
-directory. Real GGUFs, native safetensors, generated quantization outputs,
+directory. Real `GGUF`s, native safetensors, generated quantization outputs,
 local registries, logs, reports, and build artifacts stay on the machine that
 owns them. The repository keeps source, public headers, docs, tiny fixtures,
 tests, and contracts. That separation is not just cleanliness; it prevents a
@@ -358,18 +359,18 @@ a manifest can be executed by YVEX.
 ## Backends and machine pressure
 
 The runtime is constrained by the machine before it is constrained by the
-README. Tensor bytes have to land somewhere. CUDA allocations have to fail
+README. Tensor bytes have to land somewhere. `CUDA` allocations have to fail
 cleanly. qtypes have to mean different things in storage and compute. Future
-KV and scratch budgets have to be sized before prefill and decode become
+`KV` and scratch budgets have to be sized before prefill and decode become
 meaningful. The selected DeepSeek embedding target makes the first part of
 that pressure concrete without pretending the rest of the graph exists.
 
-The CPU backend is the reference lane. It gives the project a stable place to
+The `CPU` backend is the reference lane. It gives the project a stable place to
 validate parser output, selected materialization, engine attachment, fixture
 graph execution, cleanup, and error reporting before accelerated behavior
-enters the picture. The CUDA lane is real but narrow: device discovery, memory
+enters the picture. The `CUDA` lane is real but narrow: device discovery, memory
 accounting, allocation, transfer, device copy, selected materialization, engine
-attachment, and controlled F32 fixture parity where implemented. That is
+attachment, and controlled `F32` fixture parity where implemented. That is
 backend work, not yet a CUDA transformer backend.
 
 | Backend / platform | Current role | Current boundary |
@@ -551,7 +552,7 @@ make check-cuda
 
 `make check-cuda` requires a CUDA-capable host.
 
-Artifact guardrails keep model weights and generated artifacts out of git:
+The artifact guardrails keep model weights and generated artifacts out of git:
 
 ```sh
 git ls-files '*.safetensors' '*.bin' '*.dat'
@@ -559,8 +560,8 @@ git ls-files '*.gguf'
 ```
 
 The expected state is no committed real model weights, no generated model
-GGUFs, no local registries, no reports/logs/build outputs, and no benchmark
-artifacts. Tracked GGUF files are tiny parser fixtures under `tests/`.
+`GGUF`s, no local registries, no reports/logs/build outputs, and no benchmark
+artifacts. Tracked `GGUF` files are tiny parser fixtures under `tests/`.
 
 ## Source layout
 
