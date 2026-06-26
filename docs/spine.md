@@ -13,12 +13,55 @@ Interface: CLI
 delivery IDs, delivery status rows, handoff language, or implementation diary
 text.
 
-Status changes in this file require code, tests, command proof, and explicit
-limits. The spine must not convert parser success, tensor residency, engine
-ownership, graph execution, prefill, decode, logits, sampling, or generation
-into one vague inference milestone.
+Status changes in this file require code, tests, command proof, failure-path
+coverage, cleanup/lifecycle behavior, and explicit limits. The spine must not
+convert parser success, tensor residency, engine ownership, fixture graph
+execution, real graph execution, prefill, KV, decode, logits, sampling, or
+generation into one vague inference milestone.
 
-## 2. Current Repository State
+Git history should tell the technical story in natural subjects. Internal spine
+IDs may appear here and in final reports, but commit subjects should describe
+behavior such as `runtime: execute deterministic fixture graphs`, not milestone
+labels or scaffold names.
+
+## 2. Implementation Doctrine
+
+No scaffold milestone is complete. A file, API shape, command option, placeholder
+executor, future hook, or empty provider stub is not an implementation boundary
+unless the same wave also provides real behavior that depends on it.
+
+A completion decision needs all of the following:
+
+```text
+implemented behavior
+command-visible or API-visible proof
+tests
+error paths
+cleanup/lifecycle behavior
+explicit boundary documentation
+no unsupported capability claim
+```
+
+Future work must keep operator paths separate from debug and CI paths. Normal
+operator commands should be short, discoverable, and preset-driven where
+possible. Long flags belong to diagnostics, gates, provenance, and exact CI
+checks. Help should show the short path first and advanced flags later.
+
+DeepSeek selected embedding is the current live pressure artifact. It is large
+enough to force real parser, layout, backend, transfer, cleanup, and failure
+boundaries. It is not the whole system. Runtime code should remain
+model-family-aware, with family mapping and runtime adapters made explicit
+rather than hidden behind generic support claims.
+
+`materialize` is a low-level residency verb. It copies selected tensor bytes
+from parsed artifact storage into backend-owned runtime storage and proves byte
+accounting, transfer, cleanup, and error behavior. It is not model preparation,
+graph execution, inference, or generation. Future operator-facing preparation
+commands should wrap registry checks, artifact checks, backend checks,
+materialization, gates, qtype policy, and report generation behind concise
+presets.
+
+## 3. Current Repository State
 
 ```text
 root-first C source layout
@@ -34,7 +77,17 @@ generated output: build/
 local operator state: .yvex/
 ```
 
-## 3. Current Capability
+Documentation roles:
+
+```text
+README.md: public technical thesis and project overview
+docs/api.md: public C API surface, headers, ownership, error/capability map
+docs/contract.md: runtime/CLI/filesystem/backend/server behavior contract
+docs/operator-runbook.md: command-first operator workflow
+docs/spine.md: internal delivery map
+```
+
+## 4. Current Capability
 
 Implemented and audited:
 
@@ -66,6 +119,9 @@ canonical operator runbook
 engine-owned selected materialized weight attachment
 session visibility into engine-attached weight state
 deterministic fixture graph execution over controlled weights
+fixture embed-node backend dispatch
+CPU fixture graph execution
+CUDA fixture graph parity when CUDA is available
 ```
 
 Current live target:
@@ -84,24 +140,32 @@ execution_ready: false
 Unsupported / not advanced:
 
 ```text
+real-model partial graph execution
 full model execution
 full DeepSeek materialization
 full GGUF conversion
-real-model partial graph execution
 prefill
+KV-backed prefill
 decode
 logits-producing runtime path
 sampling
 generation
+interactive generation
+provider generation endpoint
 OpenAI-compatible generation
 Anthropic-compatible generation
+evaluation suite
 inference benchmarks
 benchmark performance
-evaluation suite
+advanced Runtime KV capacity
 execution_ready: true
 ```
 
-## 4. Inner Delivery Spine
+## 5. Inner Delivery Spine
+
+The main table records major completed and active milestones. Detailed planned
+work belongs in the track sections that follow; do not turn this table into an
+unbounded spreadsheet.
 
 | ID | Status | Title |
 | --- | --- | --- |
@@ -140,6 +204,8 @@ execution_ready: true
 | CLI.MODELS.0 | complete | Local model selection spine |
 | CLI.MODELS.1 | complete | Local model registry implementation |
 | CLI.MODELS.2 | complete | One-shot model alias resolution |
+| CLI.MODELS.3 | complete | Model selection in canonical REPL |
+| CLI.MODELS.4 | complete | Model alias resolution in yvexd |
 | DOCS.PUBLIC.0 | complete | Public documentation boundary cleanup |
 | CLI.PACKAGE.1 | complete | Minimal compiled-binary packaging baseline |
 | REPO.LAYOUT.1 | complete | Root-first C source layout collapse |
@@ -152,28 +218,137 @@ execution_ready: true
 | CODE.NATURAL.1 | complete | Final translation unit hygiene pass |
 | TEST.SURFACE.0 | complete | Test vectors and runner consolidation |
 | SPINE.REBASE.1 | complete | Execution-chain audit and M3-M8 technical rebase |
-| CLI.MODELS.3 | complete | Model selection in canonical REPL |
-| CLI.MODELS.4 | complete | Model alias resolution in yvexd |
 | DOCS.OPERATOR.RUNBOOK.0 | complete | Canonical operator runbook |
 | SPINE.REBASE.2 | complete | Runtime track rebase before M3 |
 | M3 | complete | Materialized-weight engine attachment |
 | M4 | complete | First executable fixture graph path |
+| SPINE.REBASE.3 | complete | End-to-end runtime and operator roadmap |
 | M5 | next | First real-model partial graph execution |
-| M6 | paused | Prefill runtime foundation |
-| M7 | paused | Decode and logits runtime foundation |
-| M8 | paused | First constrained generation path |
-| EVAL.FIXTURE.0 | planned | Fixture graph correctness vectors |
-| EVAL.PARTIAL.0 | planned | Real partial graph regression vectors |
-| EVAL.LOGITS.0 | planned | Deterministic logits regression |
-| EVAL.GEN.0 | planned | Constrained generation smoke/eval |
-| BENCH.RUNTIME.0 | planned | Runtime benchmark harness |
-| RUNTIME.KV.1 | planned | Static KV size estimator |
-| RUNTIME.KV.2 | planned | CUDA KV allocation proof |
-| RUNTIME.KV.3 | planned | GPU paged KV allocator skeleton |
-| RUNTIME.KV.4 | planned | Host RAM spill and cold-cache experiments |
-| RUNTIME.KV.5 | planned | KV quantization policy |
+| M6 | paused | Real-model graph segment expansion |
+| M7 | paused | Prompt/token input boundary |
+| M8 | paused | Prefill state foundation |
+| M9 | paused | Minimal KV ownership and append/read boundary |
+| M10 | paused | Decode step over existing runtime state |
+| M11 | paused | Logits production boundary |
+| M12 | paused | Deterministic logits regression |
+| M13 | paused | Sampling boundary |
+| M14 | paused | First constrained generation loop |
+| M15 | paused | Interactive CLI generation path |
+| M16 | paused | Provider/server generation boundary |
+| M17 | paused | Trace/profile hardening for generation |
+| MODEL.LIFECYCLE.* | planned | Concise model preparation and checking |
+| CLI.UX.* | planned | Operator command simplification and terminal UX |
+| SERVER.* | planned | Runtime-backed provider work after runtime generation |
+| EVAL.* | planned | Correctness/evaluation vectors by runtime boundary |
+| BENCH.* | planned | Benchmarks only after stable runtime paths |
+| KV.MIN.* | planned | Minimal KV correctness and lifecycle |
+| RUNTIME.KV.* | planned | Advanced post-generation KV capacity work |
+| BACKEND.PROFILE.* | planned | Hardware/backend profile reporting |
+| LAYOUT.* | planned | Repository/module boundary cleanup |
+| DOCS.* | planned | Public docs refresh after executable milestones |
 
-## 5. Tracks
+## 6. Runtime Ladder Dependencies
+
+```text
+selected artifact proof
+  -> materialized backend tensor
+  -> engine/session ownership
+  -> fixture graph execution
+  -> real-model partial graph execution
+  -> larger real-model graph segments
+  -> prompt/token input boundary
+  -> prefill state
+  -> minimal KV ownership
+  -> decode
+  -> logits
+  -> logits regression
+  -> sampling
+  -> constrained generation
+  -> interactive CLI generation
+  -> provider/server generation
+  -> generation traces/profiles/diagnostics
+```
+
+The separation matters. Real partial graph execution is not prefill. Prefill is
+not decode. Decode is not logits regression. Logits are not sampling. Sampling
+is not generation UX. Interactive CLI generation is not server/provider
+generation. Provider compatibility is not basic provider status. Benchmarking is
+not correctness.
+
+### Inference Runtime Pipeline
+
+```text
+M3 — complete — Materialized-weight engine attachment
+Attach selected materialized weights to engine/session ownership without
+claiming graph execution. Defines ownership boundaries between artifact
+descriptor, tensor table, backend tensor storage, engine state, and session
+lifecycle.
+
+M4 — complete — First executable fixture graph path
+Execute a deterministic tiny fixture graph over controlled weights. Proves
+planned embed-node ordering, backend dispatch, output allocation/readback,
+independent expected-output comparison, CPU execution, CUDA parity, and failure
+reporting on small non-model fixtures.
+
+M5 — next — First real-model partial graph execution
+Execute a constrained real-model graph segment using real attached model
+tensors. No prompt prefill. No decode. No logits claim. No generation.
+Completion requires command/API proof, CPU test, CUDA path or explicit CUDA
+boundary, independent expected/regression check, memory-plan evidence, backend
+dispatch, and cleanup/failure tests.
+
+M6 — paused — Real-model graph segment expansion
+Expand from one partial segment to a larger scheduled segment with multiple real
+ops and explicit memory plan. Still no prefill, logits, sampling, generation, or
+benchmark claim.
+
+M7 — paused — Prompt/token input boundary
+Connect tokenizer/prompt diagnostics to runtime input tensors, sequence
+positions, and session-owned input state without claiming prefill completion.
+
+M8 — paused — Prefill state foundation
+Run prompt-token input through scheduled graph work to produce prefill state
+boundaries. If KV or logits are not complete, the output must say so.
+
+M9 — paused — Minimal KV ownership and append/read boundary
+Introduce minimal session-owned KV shape, allocation, append/read, and lifecycle
+needed for prefill/decode. This is separate from advanced paged, spilled, or
+quantized KV.
+
+M10 — paused — Decode step over existing runtime state
+Execute one decode step over existing runtime/KV state. No sampling and no
+interactive generation claim.
+
+M11 — paused — Logits production boundary
+Produce logits through an implemented runtime path and expose deterministic
+diagnostics. Logits are not sampling and not generation quality.
+
+M12 — paused — Deterministic logits regression
+Add stable vector tests for logits, including tolerance, dtype/qtype boundaries,
+and backend parity where available.
+
+M13 — paused — Sampling boundary
+Implement sampling as a separate boundary over logits. Sampling is not model
+execution and must preserve deterministic diagnostics where configured.
+
+M14 — paused — First constrained generation loop
+Bounded token loop with stop conditions, token accounting, traces, and explicit
+unsupported edge cases.
+
+M15 — paused — Interactive CLI generation path
+Expose generation through CLI/REPL only after constrained generation is real.
+Line editing, slash commands, and display polish come after the runtime path.
+
+M16 — paused — Provider/server generation boundary
+Expose generation through daemon/server only after CLI/runtime generation is
+real. Provider compatibility is a later contract, not a status-shell property.
+
+M17 — paused — Trace/profile hardening for generation
+Make generation observable and debuggable through traces, profiles, metrics,
+runtime summaries, and failure reports.
+```
+
+## 7. Tracks
 
 ### Core Runtime
 
@@ -187,25 +362,49 @@ real-model graph execution not implemented
 prefill/decode/logits/sampling/generation not implemented
 ```
 
-### Open Weight Intake
+M5 must prove real attached tensor participation in scheduled computation. It
+must not become a vague inference milestone. Completion requires backend
+dispatch, memory plan, output/regression proof, and cleanup/failure tests.
+
+### Open Weight Intake / Model Family Flow
+
+Implemented sequence:
 
 ```text
-OWI.0 open weight intake and GGUF toolchain spine complete
-OWI.1 source manifest provenance complete
-OWI.2 native safetensors inventory complete
-OWI.3 GGUF template validation complete
-OWI.4 family tensor mapping complete
-OWI.5 qtype support and quant policy complete
-OWI.6 imatrix manifest surface complete
-OWI.7 controlled GGUF emission complete
-OWI.8 selected conversion and GGUF emission bridge complete
-OWI.9 quant-job bridge complete
-ARTIFACT.NAMING.0 artifact naming contract complete
-OWI.FINAL.0 reference purge and intake closeout complete
-materialization gate alignment complete through selected artifact audit
-DeepSeek selected embedding materialization proven
-native full-model quantization not implemented
-full-model GGUF conversion not implemented
+source manifest
+native safetensors inventory
+GGUF template validation
+family tensor mapping
+selected GGUF emission
+qtype support / quant policy
+quant-job manifest
+imatrix manifest
+artifact naming
+registry add/use
+materialization
+engine attachment
+fixture graph execution
+```
+
+Planned intake/operator work:
+
+| ID | Status | Title |
+| --- | --- | --- |
+| OWI.CLI.0 | planned | Concise intake command layout |
+| OWI.CLI.1 | planned | Family adapter report |
+| OWI.CLI.2 | planned | Selected artifact build/check preset |
+| OWI.CLI.3 | planned | Full-model conversion planning report |
+| OWI.RUNTIME.0 | planned | Runtime family adapter boundary for partial graph execution |
+
+Rules:
+
+```text
+full-model conversion remains unsupported until implemented
+selected conversion is not full conversion
+family mapping is not runtime support
+a registered artifact is not execution readiness
+DeepSeek selected embedding remains the active live pressure artifact
+another large open-weight artifact may become active only through explicit spine change
 ```
 
 ### Model Support Ladder
@@ -215,29 +414,77 @@ controlled GGUF emission proven
 selected-tensor materialization proven
 DeepSeek selected embedding is the active live target
 model-gate and materialize-gate pass on CPU/CUDA
-full model materialization not reached
 engine attachment complete
 fixture graph execution complete
+full model materialization not reached
 real-model partial graph execution not reached
-execution/prefill/decode/generation not reached
+execution/prefill/decode/logits/sampling/generation not reached
 execution_ready remains false
 ```
 
-### Runtime KV Cache
+DeepSeek is the current pressure target because it is large and real. YVEX must
+remain model-family-aware rather than one-model ad hoc. Family-specific mapping
+belongs in explicit adapters and reports.
+
+### Minimal KV Correctness
+
+Minimal KV state belongs inside the inference ladder because prefill/decode need
+runtime state. Advanced capacity work belongs later.
+
+| ID | Status | Title |
+| --- | --- | --- |
+| KV.MIN.0 | planned | Minimal KV shape and ownership for prefill state |
+| KV.MIN.1 | planned | KV append/read boundary for decode |
+| KV.MIN.2 | planned | KV lifecycle in session state |
+| KV.MIN.3 | planned | KV diagnostics and failure reporting |
+
+Rules:
 
 ```text
-RUNTIME.KV.0 policy complete
-minimal KV shape/allocation boundary may be pulled into M6 for prefill state
-advanced static estimator planned after M8 unless explicitly pulled forward
-advanced CUDA KV allocation proof planned after M8
-GPU paged KV allocator skeleton planned after M8
-host RAM spill and cold-cache experiments planned after M8
-KV quantization policy planned after M8
-KV runtime, paged KV, host spill, and KV quantization are not implemented
-KV ownership is not a generation claim
+KV.MIN.* is correctness/runtime-state work
+RUNTIME.KV.* is capacity/performance/long-context work
+do not mix them
+minimal KV does not imply paged KV, host spill, or KV quantization
 ```
 
-### CLI / Model Registry / Console
+### Runtime KV Capacity
+
+| ID | Status | Title |
+| --- | --- | --- |
+| RUNTIME.KV.0 | complete | KV cache policy |
+| RUNTIME.KV.1 | planned | Static KV size estimator |
+| RUNTIME.KV.2 | planned | CUDA KV allocation proof |
+| RUNTIME.KV.3 | planned | GPU paged KV allocator skeleton |
+| RUNTIME.KV.4 | planned | Host RAM spill and cold-cache experiments |
+| RUNTIME.KV.5 | planned | KV quantization policy |
+
+Advanced static estimators, CUDA KV allocation proof, paged KV, host spill,
+cold-cache behavior, and KV quantization are post-first-generation capacity
+work unless this spine explicitly pulls a minimal subset forward. KV runtime,
+paged KV, host spill, and KV quantization are not implemented.
+
+### Model Lifecycle / Preparation
+
+Low-level commands stay available for debug, CI, and exact gate checks. Normal
+operator paths need a concise lifecycle layer above them.
+
+| ID | Status | Title |
+| --- | --- | --- |
+| MODEL.LIFECYCLE.0 | planned | Unified model status and readiness report |
+| MODEL.LIFECYCLE.1 | planned | Model prepare preset over materialization and gates |
+| MODEL.LIFECYCLE.2 | planned | Model check preset for artifact, registry, backend, and qtype state |
+| MODEL.LIFECYCLE.3 | planned | Model doctor flow for common operator failures |
+| MODEL.LIFECYCLE.4 | planned | Model-class profile for large local artifacts |
+| MODEL.LIFECYCLE.5 | planned | Artifact cache and report hygiene |
+
+Planned operator surface may be singular `yvex model status|prepare|check|doctor`
+or an extension of the existing `yvex models` namespace. The taxonomy must be
+decided before implementation. Normal users should not need the full
+`model-gate` or `materialize-gate` flag set for common checks.
+
+### CLI / Operator UX
+
+Current complete state:
 
 ```text
 root binaries complete
@@ -248,140 +495,199 @@ chat can use current selected registry alias when --model is omitted
 explicit --model remains supported
 yvexd explicit --model alias resolution complete
 daemon current-selected model behavior not implemented
-line editing later
 ```
 
-### Benchmarking / Evaluation
+Planned UX work:
+
+| ID | Status | Title |
+| --- | --- | --- |
+| CLI.UX.0 | planned | Command taxonomy and help layout |
+| CLI.UX.1 | planned | Concise normal-path commands over low-level diagnostics |
+| CLI.UX.2 | planned | Colorized terminal output and status severity |
+| CLI.UX.3 | planned | Structured output modes for scripts |
+| CLI.UX.4 | planned | Interactive REPL line editing and history |
+| CLI.UX.5 | planned | REPL slash-command cleanup and discoverability |
+| CLI.UX.6 | planned | Doctor command for environment, registry, backend, CUDA, and artifacts |
+| CLI.UX.7 | planned | Operator profiles for workstation and future larger hardware |
+
+Principles:
 
 ```text
-EVAL.FIXTURE.0 planned after M4 fixture graph execution
-EVAL.PARTIAL.0 planned after M5 real partial graph execution
-EVAL.LOGITS.0 planned after M7 logits-producing runtime boundary
-EVAL.GEN.0 planned after M8 constrained generation path
-BENCH.RUNTIME.0 planned after an implemented runtime path is stable enough to measure
-no benchmark scores before benchmark implementation
-no token/sec tables before real runtime path
-no official capability claims before evaluation suite exists
-evaluation follows implemented runtime boundaries, not roadmap intent
+normal commands should fit on one line when possible
+long flags are reserved for debug/CI/gate exactness
+commands should expose defaults and presets
+help must show the short path first and advanced flags later
+terminal output should distinguish pass/warn/fail/unsupported clearly
+color support must degrade with NO_COLOR or non-TTY output
+machine-readable output must remain uncolored
 ```
 
-### Repository Layout / Docs
+### Server / Provider Runtime
+
+Current server state:
 
 ```text
-root-first source layout complete
-root source compression complete
-native root binaries complete
-CUDA surface promoted to cuda/
-first CUDA kernel translation unit complete
-GGUF parser/tooling extracted to gguf/
-family mapping consolidated into gguf/
-test vector surface established
-test runners consolidated
-natural C source style pass complete
-natural translation unit rewrite complete
-final translation unit hygiene complete
-private headers scoped by backend, console, and server
-run artifact helpers split from console private boundary
-public documentation boundary complete
-public artifact path hygiene complete
-README prose-first public boundary complete
-operator runbook complete
-minimal docs surface complete
+yvexd status shell implemented
+health/metrics/models endpoints implemented
+explicit --model alias resolution implemented
+generation endpoints unsupported
+provider compatibility unsupported
 ```
 
-Documentation roles:
+Planned server work:
+
+| ID | Status | Title |
+| --- | --- | --- |
+| SERVER.RUNTIME.0 | planned | Runtime-backed model state in daemon |
+| SERVER.RUNTIME.1 | planned | Daemon execution-state diagnostics without generation |
+| SERVER.GEN.0 | planned | First provider generation endpoint after constrained generation |
+| SERVER.API.0 | planned | OpenAI-compatible API boundary after generation exists |
+| SERVER.API.1 | planned | Anthropic-compatible API boundary after generation exists |
+| SERVER.STREAM.0 | planned | Streaming response boundary after generation exists |
+| SERVER.OBS.0 | planned | Server traces, metrics, and failure reports |
+
+Provider generation comes after CLI/runtime generation. Compatibility APIs come
+after basic provider generation. Streaming comes after a stable generation loop.
+No server compatibility claim is allowed before tests and command/API proof.
+
+### Eval / Bench
+
+Planned correctness/evaluation rows:
+
+| ID | Status | Title |
+| --- | --- | --- |
+| EVAL.FIXTURE.0 | planned | Fixture graph correctness vectors |
+| EVAL.PARTIAL.0 | planned | Real partial graph regression vectors |
+| EVAL.PREFILL.0 | planned | Prefill state regression |
+| EVAL.KV.0 | planned | KV append/read correctness vectors |
+| EVAL.DECODE.0 | planned | Decode-step regression |
+| EVAL.LOGITS.0 | planned | Deterministic logits regression |
+| EVAL.SAMPLING.0 | planned | Sampling determinism and distribution checks |
+| EVAL.GEN.0 | planned | Constrained generation smoke/eval |
+
+Planned benchmark rows:
+
+| ID | Status | Title |
+| --- | --- | --- |
+| BENCH.PREFILL.0 | planned | Prefill throughput benchmark |
+| BENCH.DECODE.0 | planned | Decode throughput benchmark |
+| BENCH.MEMORY.0 | planned | Runtime memory pressure benchmark |
+| BENCH.RUNTIME.0 | planned | End-to-end runtime benchmark harness |
+
+Dependencies:
 
 ```text
-README.md: public technical thesis and project overview
-docs/api.md: public C API surface, headers, ownership, error/capability map
-docs/contract.md: runtime/CLI/filesystem/backend/server behavior contract
-docs/operator-runbook.md: command-first operator workflow
-docs/spine.md: internal delivery map
+EVAL.FIXTURE.0 follows M4
+EVAL.PARTIAL.0 follows M5/M6
+EVAL.PREFILL.0 follows prefill implementation
+EVAL.KV.0 follows minimal KV implementation
+EVAL.DECODE.0 follows decode step
+EVAL.LOGITS.0 follows logits boundary
+EVAL.SAMPLING.0 follows sampling boundary
+EVAL.GEN.0 follows constrained generation
+BENCH.* follows stable implemented runtime path
 ```
 
-## 6. Runtime Ladder Dependencies
+Rules:
 
 ```text
-selected artifact proof
-  -> materialized backend tensor
-  -> engine/session ownership
-  -> fixture graph execution
-  -> real partial graph execution
-  -> prefill
-  -> decode/logits
-  -> constrained generation
+no benchmark score before benchmark implementation
+no token/sec table before prefill/decode exists
+no quality claim before evaluation vectors exist
+evaluation must use the same runtime path users run
+fixture eval is not model quality eval
+logits regression is not generation quality
+do not create a fake DS4Bench equivalent
 ```
 
-Selected-tensor materialization is evidence of residency, not execution. M3
-attached materialized selected weights to engine/session ownership without
-implying graph execution. M4 must execute deterministic fixture graphs before
-M5 touches real-model graph segments. M5 must prove real tensor participation in
-scheduled computation before prefill. M6 owns prompt-token to KV/logit-producing
-boundaries. M7 produces logits before any sampling boundary exists. M8 is the
-first place where constrained generation can be discussed as an implemented
-runtime path.
+Future tool names may be `yvex eval` and `yvex bench`, but they are planned
+only.
 
-Evaluation and benchmarking follow the same order. Fixture correctness vectors
-belong after M4. Real partial graph regression belongs after M5. Logits
-regression belongs after M7. Generation smoke/eval belongs after M8. Runtime
-benchmarking belongs after there is an implemented runtime path stable enough
-to measure.
+### Backend / Hardware Profiles
 
-KV work is split by dependency. M6 may need a minimal KV shape/allocation
-boundary to define prefill state, but static estimators, CUDA KV allocation
-proofs, paged KV, host spill/cold-cache behavior, and KV quantization policy are
-advanced capacity work after M8 unless this spine explicitly pulls a minimal
-subset forward.
+| ID | Status | Title |
+| --- | --- | --- |
+| BACKEND.PROFILE.0 | planned | CPU correctness profile |
+| BACKEND.PROFILE.1 | planned | Local CUDA workstation profile |
+| BACKEND.PROFILE.2 | planned | DGX Spark / GB10 CUDA profile |
+| BACKEND.PROFILE.3 | planned | Large-memory future hardware profile |
+| BACKEND.PROFILE.4 | planned | Backend failure and memory pressure reports |
+| BACKEND.PROFILE.5 | planned | Backend capability matrix |
 
-The staged ladder is:
+CPU remains the correctness baseline. CUDA remains the primary acceleration
+backend. Future hardware profiles are planning targets, not support claims. No
+Metal or ROCm claim is allowed unless explicitly implemented or added to the
+spine with tests.
+
+### Layout / Repository Architecture
+
+| ID | Status | Title |
+| --- | --- | --- |
+| LAYOUT.RUNTIME.0 | planned | Runtime module boundary audit |
+| LAYOUT.GRAPH.0 | planned | Graph/executor module separation |
+| LAYOUT.CLI.0 | planned | CLI command taxonomy cleanup |
+| LAYOUT.SERVER.0 | planned | Server/runtime boundary cleanup |
+| LAYOUT.TEST.0 | planned | Test fixture/eval/bench directory separation |
+| LAYOUT.DOCS.0 | planned | Public/internal docs boundary after spine retirement |
+
+The internal spine may eventually leave the public repository. If that happens,
+public docs must preserve the implemented contract, runbook, API surface, and
+capability boundaries without exposing delivery IDs.
+
+### Docs / Operator Surface
+
+| ID | Status | Title |
+| --- | --- | --- |
+| DOCS.README.2 | planned | Refresh README after executable graph and CLI simplification |
+| DOCS.RUNBOOK.1 | planned | Generic model-class operator flow |
+| DOCS.RUNBOOK.2 | planned | Reduced-flag normal path and preset workflow |
+| DOCS.RUNBOOK.3 | planned | Debug and failure-mode cookbook |
+| DOCS.CONTRACT.1 | planned | Update runtime contract after real partial graph execution |
+| DOCS.API.1 | planned | Update public API map after inference pipeline boundaries mature |
+
+Public docs stay role-specific:
 
 ```text
-M3 — Materialized-weight engine attachment
-Attach selected materialized weights to engine/session ownership without
-claiming graph execution. Define ownership boundaries between artifact
-descriptor, tensor table, backend tensor storage, engine state, and session
-lifecycle.
-
-M4 — First executable fixture graph path
-Execute a deterministic tiny fixture graph over controlled weights. Prove graph
-node ordering, backend dispatch, memory plan, output comparison, and failure
-reporting on small non-model fixtures.
-
-M5 — First real-model partial graph execution
-Execute a constrained real-model graph segment against the active DeepSeek
-selected artifact or another explicit partial artifact. No generation claim. No
-prefill claim. The target is real tensor participation in scheduled computation.
-
-M6 — Prefill runtime foundation
-Turn prompt/token input into scheduled graph work with explicit KV/logit-
-producing boundaries. Define prompt token ownership, sequence positions, KV
-shape/allocation policy, graph scratch, and backend execution report.
-
-M7 — Decode and logits runtime foundation
-Execute a one-step continuation over existing runtime/KV state and produce
-logits through the implemented boundary. Separate logits production from
-sampling. Preserve deterministic diagnostics and failure classes.
-
-M8 — First constrained generation path
-Add the first bounded sampling loop only after logits and decode are real.
-Define sampling inputs/outputs, stop conditions, token accounting,
-trace/profile output, and explicit generation support boundary.
+README explains what YVEX is and what is real now
+operator-runbook shows command execution
+contract states behavioral guarantees
+api maps public C surfaces
+spine remains internal until replaced by a public roadmap or removed
 ```
 
-## 7. Active Next
+The current runbook is command-correct but flag-heavy and DeepSeek-focused. It
+should evolve into layered usage:
+
+```text
+normal path:
+  build -> model add/use -> model prepare/check -> chat/run/serve
+
+debug path:
+  inspect -> tensors -> materialize -> gates -> traces
+
+intake path:
+  source manifest -> native inventory -> tensor map -> selected emit
+
+CI path:
+  gate commands with full explicit flags
+
+large-model path:
+  hardware/backend check -> memory report -> prepare/check -> runtime
+```
+
+## 8. Active Next
 
 ```text
 M5 - First real-model partial graph execution
 ```
 
-M4 completed deterministic fixture graph execution over controlled weights.
-The next implementation work is M5: execute a constrained real-model partial
-graph segment without generation, prefill, decode, logits, or benchmark claims.
-Do not begin M6-M8, advanced Runtime KV work, Benchmark/Eval work, or
-generation-facing work until the relevant earlier runtime state exists in code
-and tests.
+M5 sits inside the larger runtime pipeline. It must execute a constrained
+real-model partial graph segment with real attached model tensors, scheduled
+graph work, backend dispatch, memory-plan evidence, output/regression proof, and
+cleanup/failure tests. It must not claim prompt/prefill, KV runtime, logits,
+sampling, generation, server generation, evaluation, or benchmark readiness.
 
-## 8. Validation Gate
+## 9. Validation Gate
 
 Baseline:
 
@@ -428,7 +734,7 @@ local registry guardrail
 public path leak guardrail
 ```
 
-## 9. Non-Negotiable Rules
+## 10. Non-Negotiable Rules
 
 - No support claim without code, tests, and command proof.
 - No generated model artifacts in git.
@@ -439,10 +745,12 @@ public path leak guardrail
 - No Benchmark/Eval status promotion without implemented vectors, harnesses, or
   command proof at the matching runtime boundary.
 - No status promotion without command proof from the validation/audit gate.
-- No M3-M8 completion status until the relevant runtime state exists in code and
-  tests.
-- Do not collapse materialization, engine ownership, graph execution, prefill,
-  decode, logits, sampling, and generation into one wave.
+- No M-series completion status until the relevant runtime state exists in code
+  and tests.
+- No scaffold milestone completion.
+- Do not collapse materialization, engine ownership, graph execution, prompt
+  input, prefill, KV, decode, logits, sampling, generation, CLI generation, and
+  server generation into one wave.
 - Do not claim advanced Runtime KV capacity work until the relevant allocator,
   estimator, spill, or quantization behavior exists in code and tests.
 - No docs sprawl beyond `docs/api.md`, `docs/contract.md`,
