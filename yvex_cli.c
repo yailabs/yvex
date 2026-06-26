@@ -164,43 +164,43 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "inspect",
         "Inspect a GGUF artifact descriptor.",
-        "yvex inspect <path>",
-        "Opens a file, parses the GGUF directory, builds a YVEX tensor table and descriptor, and prints a descriptor-only summary. Tokenizers, backends, and model execution are not implemented.",
+        "yvex inspect FILE_OR_ALIAS",
+        "Opens a file, parses the GGUF directory, builds a YVEX tensor table and descriptor, and prints a descriptor-only summary. Inspect does not materialize weights or execute a graph.",
         command_inspect,
     },
     {
         "materialize",
-        "Materialize fixture weights into backend tensors.",
-        "yvex materialize --model FILE --backend cpu|cuda [--require-all] [--allow-unsupported-dtype]",
-        "Copies GGUF tensor bytes into backend-owned tensors and reports residency. This does not execute prefill, decode, sampling, generation, or inference.",
+        "Materialize selected weights into backend tensors.",
+        "yvex materialize --model FILE_OR_ALIAS --backend cpu|cuda [--require-all] [--allow-unsupported-dtype]",
+        "Resolves a model path or registered alias, copies GGUF tensor bytes into backend-owned tensors, and reports residency. This does not execute prefill, decode, sampling, generation, or inference.",
         command_materialize,
     },
     {
         "materialize-gate",
         "Run a repeatable materialization hardening gate.",
-        "yvex materialize-gate check --model FILE --label LABEL --family FAMILY --scope selected-tensor --expect-tensor NAME --expect-rank N --expect-dims model layer,D1[,D2,D3] --expect-dtype DTYPE --expect-bytes BYTES [--sha256 HASH] [--backend cpu] [--backend cuda] [--require-cpu] [--require-cuda] [--repeat N] [--check-cleanup] [--report-out FILE]",
+        "yvex materialize-gate check --model FILE_OR_ALIAS --label LABEL --family FAMILY --scope selected-tensor --expect-tensor NAME --expect-rank N --expect-dims model layer,D1[,D2,D3] --expect-dtype DTYPE --expect-bytes BYTES [--sha256 HASH] [--backend cpu] [--backend cuda] [--require-cpu] [--require-cuda] [--repeat N] [--check-cleanup] [--report-out FILE]",
         "Validates file identity, tensor specs, repeated CPU/CUDA materialization, cleanup, and failure classes. materialization gate uses DeepSeek as the only live target and does not claim execution or inference.",
         command_materialize_gate,
     },
     {
         "metadata",
         "Print parsed GGUF metadata entries.",
-        "yvex metadata <path>",
-        "Opens a GGUF file and prints parsed metadata key/value summaries. Arrays are summarized; tokenizers and model loading are not implemented.",
+        "yvex metadata FILE_OR_ALIAS",
+        "Resolves a model path or registered alias, opens a GGUF file, and prints parsed metadata key/value summaries. Arrays are summarized.",
         command_metadata,
     },
     {
         "model-gate",
         "Validate a produced GGUF artifact materialization gate.",
-        "yvex model-gate check --model FILE --label LABEL --family FAMILY --expect-tensor NAME --expect-rank N --expect-dims model layer,D1[,D2,D3] --expect-dtype DTYPE --expect-bytes BYTES [--sha256 HASH] [--backend cpu] [--backend cuda] [--require-cpu] [--require-cuda] [--report-out FILE]",
+        "yvex model-gate check --model FILE_OR_ALIAS --label LABEL --family FAMILY --expect-tensor NAME --expect-rank N --expect-dims model layer,D1[,D2,D3] --expect-dtype DTYPE --expect-bytes BYTES [--sha256 HASH] [--backend cpu] [--backend cuda] [--require-cpu] [--require-cuda] [--report-out FILE]",
         "Checks file identity, expected tensor specs, and requested CPU/CUDA materialization. It classifies selected-tensor materialization only and does not claim full-model support, graph execution, prefill, decode, generation, or inference.",
         command_model_gate,
     },
     {
         "models",
         "Manage the local model alias registry.",
-        "yvex models scan --root DIR [--registry FILE] | yvex models add --path FILE [--alias ALIAS] [--registry FILE] | yvex models list [--registry FILE] | yvex models use ALIAS [--registry FILE] | yvex models current [--registry FILE] | yvex models inspect ALIAS [--registry FILE] | yvex models remove ALIAS [--registry FILE]",
-        "Discovers, registers, lists, selects, inspects, and removes local model artifacts by alias. Registry entries are machine-local; one-shot model commands resolve aliases through the model reference layer.",
+        "yvex models scan --root DIR [--registry FILE] | yvex models add --path FILE [--alias ALIAS] [--support-level LEVEL] [--registry FILE] | yvex models list [--registry FILE] | yvex models use ALIAS [--registry FILE] | yvex models current [--registry FILE] | yvex models inspect ALIAS [--registry FILE] | yvex models remove ALIAS [--registry FILE]",
+        "Discovers, registers, lists, selects, inspects, and removes local model artifacts by alias. Aliases use canonical artifact names such as deepseek4-v4-flash-selected-embed; simple labels such as controlled are rejected.",
         command_models,
     },
     {
@@ -297,8 +297,8 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "tensors",
         "Print YVEX tensor table rows.",
-        "yvex tensors <path>",
-        "Opens a GGUF file and prints YVEX tensor table rows with role, dtype, and known storage bytes. Backend support and model execution are not implemented.",
+        "yvex tensors FILE_OR_ALIAS",
+        "Resolves a model path or registered alias and prints YVEX tensor table rows with role, dtype, known storage bytes, and offsets.",
         command_tensors,
     },
     {
@@ -1746,7 +1746,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: fixture materialization fixture weight materialization\n");
+    printf("status: selected tensor materialization and engine weight attachment\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -1758,9 +1758,9 @@ static int command_info(int argc, char **argv)
     printf("planner: estimate-only implemented\n");
     printf("backend: CPU reference implemented\n");
     printf("backend_cuda: tensor movement and F32 embed implemented when CUDA is available\n");
-    printf("weights: fixture materialization implemented\n");
-    printf("engine: runtime object skeleton implemented\n");
-    printf("session: lifecycle skeleton implemented\n");
+    printf("weights: selected tensor materialization implemented\n");
+    printf("engine: descriptor open and selected-weight attachment implemented\n");
+    printf("session: lifecycle diagnostics and engine attachment observer implemented\n");
     printf("run: accepted-only runtime shell implemented\n");
     printf("chat: accepted-only REPL shell implemented\n");
     printf("metrics: runtime collector implemented\n");
@@ -1809,8 +1809,8 @@ static int command_inspect(int argc, char **argv)
             print_command_help(stdout, find_command("inspect"));
             return 0;
         }
-        fprintf(stderr, "yvex: inspect requires exactly one path\n");
-        fprintf(stderr, "usage: yvex inspect <path>\n");
+        fprintf(stderr, "yvex: inspect requires exactly one FILE_OR_ALIAS\n");
+        fprintf(stderr, "usage: yvex inspect FILE_OR_ALIAS\n");
         return 2;
     }
 
@@ -1887,8 +1887,8 @@ static int command_metadata(int argc, char **argv)
             print_command_help(stdout, find_command("metadata"));
             return 0;
         }
-        fprintf(stderr, "yvex: metadata requires exactly one path\n");
-        fprintf(stderr, "usage: yvex metadata <path>\n");
+        fprintf(stderr, "yvex: metadata requires exactly one FILE_OR_ALIAS\n");
+        fprintf(stderr, "usage: yvex metadata FILE_OR_ALIAS\n");
         return 2;
     }
 
@@ -1949,7 +1949,7 @@ static int command_materialize(int argc, char **argv)
     for (i = 2; i < argc; ++i) {
         if (strcmp(argv[i], "--model") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "yvex: --model requires a file\n");
+                fprintf(stderr, "yvex: --model requires FILE_OR_ALIAS\n");
                 return 2;
             }
             model_path = argv[++i];
@@ -1971,8 +1971,8 @@ static int command_materialize(int argc, char **argv)
     }
 
     if (!model_path || !backend_name) {
-        fprintf(stderr, "yvex: materialize requires --model FILE and --backend cpu|cuda\n");
-        fprintf(stderr, "usage: yvex materialize --model FILE --backend cpu|cuda [--require-all] [--allow-unsupported-dtype]\n");
+        fprintf(stderr, "yvex: materialize requires --model FILE_OR_ALIAS and --backend cpu|cuda\n");
+        fprintf(stderr, "usage: yvex materialize --model FILE_OR_ALIAS --backend cpu|cuda [--require-all] [--allow-unsupported-dtype]\n");
         return 2;
     }
 
@@ -4696,8 +4696,8 @@ static int command_tensors(int argc, char **argv)
             print_command_help(stdout, find_command("tensors"));
             return 0;
         }
-        fprintf(stderr, "yvex: tensors requires exactly one path\n");
-        fprintf(stderr, "usage: yvex tensors <path>\n");
+        fprintf(stderr, "yvex: tensors requires exactly one FILE_OR_ALIAS\n");
+        fprintf(stderr, "usage: yvex tensors FILE_OR_ALIAS\n");
         return 2;
     }
 

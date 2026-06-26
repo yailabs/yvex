@@ -1062,7 +1062,7 @@ int yvex_model_ref_resolve(yvex_model_ref *out,
     yvex_model_registry *registry = NULL;
     yvex_model_registry_options registry_options;
     const yvex_model_registry_entry *entry;
-    char message[512];
+    char message[1024];
     int rc;
 
     if (!out || !input || !input[0]) {
@@ -1096,11 +1096,19 @@ int yvex_model_ref_resolve(yvex_model_ref *out,
     registry_options.create_if_missing = 0;
     rc = yvex_model_registry_open(&registry, &registry_options, err);
     if (rc != YVEX_OK) {
+        const char *env_registry = getenv("YVEX_MODELS_REGISTRY");
+
         out->status = YVEX_MODEL_REF_STATUS_REGISTRY_UNAVAILABLE;
         out->kind = YVEX_MODEL_REF_UNKNOWN;
-        yvex_error_setf(err, YVEX_ERR_IO, "model_ref",
-                        "model registry unavailable for reference: %s; hint: run './yvex models list' or pass an existing path",
-                        input);
+        if (env_registry && env_registry[0]) {
+            yvex_error_setf(err, YVEX_ERR_IO, "model_ref",
+                            "model registry unavailable for reference: %s; YVEX_MODELS_REGISTRY=%s; hint: register the alias in that registry, unset YVEX_MODELS_REGISTRY, or pass an existing path",
+                            input, env_registry);
+        } else {
+            yvex_error_setf(err, YVEX_ERR_IO, "model_ref",
+                            "model registry unavailable for reference: %s; hint: run './yvex models list' or pass an existing path",
+                            input);
+        }
         return YVEX_ERR_IO;
     }
 
@@ -1322,7 +1330,8 @@ int yvex_model_alias_validate(const char *alias, yvex_error *err)
         }
     }
     if (hyphens < 3) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_alias", "alias must include family, model, scope, and artifact class");
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_alias",
+                       "alias must include family, model, scope, and artifact class; example: deepseek4-v4-flash-selected-embed");
         return YVEX_ERR_INVALID_ARG;
     }
     if (is_ambiguous_token(alias)) {

@@ -99,7 +99,7 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: fixture materialization fixture weight materialization"
+contains "$OUT_DIR/info.out" "status: selected tensor materialization and engine weight attachment"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "artifact: open/read implemented"
@@ -111,9 +111,9 @@ contains "$OUT_DIR/info.out" "graph: partial planning implemented"
 contains "$OUT_DIR/info.out" "planner: estimate-only implemented"
 contains "$OUT_DIR/info.out" "backend: CPU reference implemented"
 contains "$OUT_DIR/info.out" "backend_cuda: tensor movement and F32 embed implemented when CUDA is available"
-contains "$OUT_DIR/info.out" "weights: fixture materialization implemented"
-contains "$OUT_DIR/info.out" "engine: runtime object skeleton implemented"
-contains "$OUT_DIR/info.out" "session: lifecycle skeleton implemented"
+contains "$OUT_DIR/info.out" "weights: selected tensor materialization implemented"
+contains "$OUT_DIR/info.out" "engine: descriptor open and selected-weight attachment implemented"
+contains "$OUT_DIR/info.out" "session: lifecycle diagnostics and engine attachment observer implemented"
 contains "$OUT_DIR/info.out" "run: accepted-only runtime shell implemented"
 contains "$OUT_DIR/info.out" "chat: accepted-only REPL shell implemented"
 contains "$OUT_DIR/info.out" "metrics: runtime collector implemented"
@@ -197,28 +197,29 @@ run_ok help_chat "$YVEX_BIN" help chat
 contains "$OUT_DIR/help_chat.out" "usage: yvex chat [--model FILE_OR_ALIAS]"
 
 run_ok help_inspect "$YVEX_BIN" help inspect
-contains "$OUT_DIR/help_inspect.out" "usage: yvex inspect <path>"
+contains "$OUT_DIR/help_inspect.out" "usage: yvex inspect FILE_OR_ALIAS"
 
 run_ok help_materialize "$YVEX_BIN" help materialize
-contains "$OUT_DIR/help_materialize.out" "usage: yvex materialize --model FILE"
+contains "$OUT_DIR/help_materialize.out" "usage: yvex materialize --model FILE_OR_ALIAS"
 
 run_ok help_materialize_gate "$YVEX_BIN" help materialize-gate
 contains "$OUT_DIR/help_materialize_gate.out" "usage: yvex materialize-gate check"
 
 run_ok help_metadata "$YVEX_BIN" help metadata
-contains "$OUT_DIR/help_metadata.out" "usage: yvex metadata <path>"
+contains "$OUT_DIR/help_metadata.out" "usage: yvex metadata FILE_OR_ALIAS"
 
 run_ok help_model_gate "$YVEX_BIN" help model-gate
 contains "$OUT_DIR/help_model_gate.out" "usage: yvex model-gate check"
 
 run_ok help_models "$YVEX_BIN" help models
 contains "$OUT_DIR/help_models.out" "usage: yvex models"
+contains "$OUT_DIR/help_models.out" "support-level LEVEL"
 
 run_ok help_native_weights "$YVEX_BIN" help native-weights
 contains "$OUT_DIR/help_native_weights.out" "usage: yvex native-weights --source DIR"
 
 run_ok help_tensors "$YVEX_BIN" help tensors
-contains "$OUT_DIR/help_tensors.out" "usage: yvex tensors <path>"
+contains "$OUT_DIR/help_tensors.out" "usage: yvex tensors FILE_OR_ALIAS"
 
 run_ok help_tokenizer "$YVEX_BIN" help tokenizer
 contains "$OUT_DIR/help_tokenizer.out" "usage: yvex tokenizer <path>"

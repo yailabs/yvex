@@ -21,6 +21,13 @@ mkdir -p "$ROOT"
   --support-level selected-tensor-materialized \
   --registry "$REG" >/dev/null
 
+"$YVEX_BIN" models add \
+  --path "$MODEL" \
+  --alias controlled \
+  --registry "$REG" > "$ROOT/bad-alias.out" 2> "$ROOT/bad-alias.err" && exit 1 || true
+grep 'alias must include family, model, scope, and artifact class' "$ROOT/bad-alias.err"
+grep 'deepseek4-v4-flash-selected-embed' "$ROOT/bad-alias.err"
+
 "$YVEX_BIN" models use "$ALIAS" --registry "$REG" >/dev/null
 
 export YVEX_MODELS_REGISTRY="$REG"
@@ -110,3 +117,9 @@ grep 'status: materialize-gate-pass' "$ROOT/materialize-gate.txt"
 grep 'model reference not found' "$ROOT/missing.err"
 grep 'models list' "$ROOT/missing.err"
 grep "$ALIAS" "$ROOT/missing.err"
+
+YVEX_MODELS_REGISTRY="$ROOT/no-registry/models.local.json" \
+  "$YVEX_BIN" inspect "$ALIAS" > "$ROOT/no-registry.out" 2> "$ROOT/no-registry.err" && exit 1 || true
+grep 'model registry unavailable' "$ROOT/no-registry.err"
+grep 'YVEX_MODELS_REGISTRY=' "$ROOT/no-registry.err"
+grep 'unset YVEX_MODELS_REGISTRY' "$ROOT/no-registry.err"
