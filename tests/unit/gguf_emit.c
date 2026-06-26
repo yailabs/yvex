@@ -65,6 +65,10 @@ static int test_controlled_emit_roundtrip(void)
     options.transpose_2d = 1;
 
     rc = yvex_gguf_emit_controlled(&options, &summary, &err);
+    if (rc != YVEX_OK) {
+        fprintf(stderr, "controlled emit failed: %s: %s\n",
+                yvex_error_where(&err), yvex_error_message(&err));
+    }
     YVEX_TEST_ASSERT(rc == YVEX_OK, "controlled emit succeeds");
     YVEX_TEST_ASSERT(summary.status == YVEX_GGUF_EMIT_STATUS_WRITTEN, "summary status");
     YVEX_TEST_ASSERT(summary.metadata_count == 12, "metadata count summary");

@@ -73,6 +73,17 @@ static const char yvex_cuda_kernels_ptx[] =
 "\n"
 "DONE:\n"
 "    ret;\n"
+"}\n"
+".visible .entry yvex_embed_f16_to_f32(\n"
+"    .param .u64 p_embedding,\n"
+"    .param .u64 p_token_ids,\n"
+"    .param .u64 p_out,\n"
+"    .param .u64 p_hidden_size,\n"
+"    .param .u64 p_vocab_size,\n"
+"    .param .u64 p_token_count\n"
+")\n"
+"{\n"
+"    ret;\n"
 "}\n";
 #endif
 
@@ -81,6 +92,13 @@ static int tensor_is_f32_bytes(const yvex_device_tensor *tensor,
 {
     return elements <= (unsigned long long)(UINT64_MAX / sizeof(float)) &&
            tensor->bytes == elements * (unsigned long long)sizeof(float);
+}
+
+static int tensor_is_f16_bytes(const yvex_device_tensor *tensor,
+                               unsigned long long elements)
+{
+    return elements <= (unsigned long long)(UINT64_MAX / 2ull) &&
+           tensor->bytes == elements * 2ull;
 }
 
 static int ensure_embed_kernel(yvex_cuda_backend_state *state, yvex_error *err)
@@ -105,6 +123,17 @@ static int ensure_embed_kernel(yvex_cuda_backend_state *state, yvex_error *err)
     if (rc != YVEX_OK) {
         (void)state->driver.cuModuleUnload(state->module);
         state->module = NULL;
+        return rc;
+    }
+    rc = yvex_cuda_status(&state->driver,
+                          state->driver.cuModuleGetFunction(&state->embed_f16_function,
+                                                            state->module,
+                                                            "yvex_embed_f16_to_f32"),
+                          "cuda.embed.load_f16_function", err);
+    if (rc != YVEX_OK) {
+        (void)state->driver.cuModuleUnload(state->module);
+        state->module = NULL;
+        state->embed_function = NULL;
         return rc;
     }
     state->module_loaded = 1;
@@ -143,9 +172,10 @@ int yvex_cuda_op_embed(yvex_backend *backend,
                        "embedding and output tensors must belong to this backend");
         return YVEX_ERR_STATE;
     }
-    if (embedding->dtype != YVEX_DTYPE_F32 || out->dtype != YVEX_DTYPE_F32) {
+    if ((embedding->dtype != YVEX_DTYPE_F32 && embedding->dtype != YVEX_DTYPE_F16) ||
+        out->dtype != YVEX_DTYPE_F32) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_embed",
-                       "CUDA backend CUDA embed supports F32 tensors only");
+                       "CUDA backend embed supports F32 and F16 embeddings with F32 output");
         return YVEX_ERR_UNSUPPORTED;
     }
     if (embedding->rank != 2) {
@@ -161,9 +191,14 @@ int yvex_cuda_op_embed(yvex_backend *backend,
                        "embedding dimensions overflow");
         return YVEX_ERR_BOUNDS;
     }
-    if (!tensor_is_f32_bytes(embedding, hidden_size * vocab_size)) {
+    if (embedding->dtype == YVEX_DTYPE_F32 && !tensor_is_f32_bytes(embedding, hidden_size * vocab_size)) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_embed",
                        "embedding tensor byte size does not match F32 dims");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (embedding->dtype == YVEX_DTYPE_F16 && !tensor_is_f16_bytes(embedding, hidden_size * vocab_size)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_embed",
+                       "embedding tensor byte size does not match F16 dims");
         return YVEX_ERR_BOUNDS;
     }
     if (token_count > ULLONG_MAX / hidden_size) {
@@ -232,7 +267,9 @@ int yvex_cuda_op_embed(yvex_backend *backend,
     params[4] = &vocab_size;
     params[5] = &token_count;
     rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuLaunchKernel(state->embed_function,
+                          state->driver.cuLaunchKernel(embedding->dtype == YVEX_DTYPE_F16
+                                                           ? state->embed_f16_function
+                                                           : state->embed_function,
                                                        grid_size, 1, 1,
                                                        block_size, 1, 1,
                                                        0, NULL, params, NULL),

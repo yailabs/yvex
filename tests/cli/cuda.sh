@@ -5,6 +5,7 @@ YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-${OUT_DIR:-build/tests/cli/cuda}}
 FIXTURE=tests/fixtures/gguf/valid-tokenizer-simple.gguf
 CONTROLLED="$OUT_DIR/cuda-controlled.gguf"
+PARTIAL="$OUT_DIR/cuda-controlled-f16.gguf"
 
 mkdir -p "$OUT_DIR"
 
@@ -110,6 +111,28 @@ contains "$OUT_DIR/fixture_graph_cuda.out" "fixture_output_values: 0,4,8,12"
 contains "$OUT_DIR/fixture_graph_cuda.out" "execution_ready: false"
 contains "$OUT_DIR/fixture_graph_cuda.out" "graph_execution_ready: false"
 contains "$OUT_DIR/fixture_graph_cuda.out" "status: fixture-graph-executed"
+
+"$YVEX_BIN" gguf-emit controlled \
+  --out "$PARTIAL" \
+  --model-name cuda-partial-graph \
+  --arch deepseek \
+  --target-qtype F16 \
+  --overwrite >"$OUT_DIR/emit_partial.out" 2>"$OUT_DIR/emit_partial.err"
+
+"$YVEX_BIN" graph --model "$PARTIAL" --backend cuda --execute-partial --partial-token 0 \
+  >"$OUT_DIR/partial_graph_cuda.out" 2>"$OUT_DIR/partial_graph_cuda.err"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    fail "partial graph cuda exit code was $rc"
+fi
+contains "$OUT_DIR/partial_graph_cuda.out" "real_partial_graph_executed: true"
+contains "$OUT_DIR/partial_graph_cuda.out" "partial_backend: cuda"
+contains "$OUT_DIR/partial_graph_cuda.out" "partial_weight_dtype: F16"
+contains "$OUT_DIR/partial_graph_cuda.out" "partial_output_sample_values: 0,4,8,12"
+contains "$OUT_DIR/partial_graph_cuda.out" "partial_max_abs_diff: 0"
+contains "$OUT_DIR/partial_graph_cuda.out" "execution_ready: false"
+contains "$OUT_DIR/partial_graph_cuda.out" "graph_execution_ready: false"
+contains "$OUT_DIR/partial_graph_cuda.out" "status: real-partial-graph-executed"
 
 "$YVEX_BIN" help cuda-info >"$OUT_DIR/help_cuda_info.out" 2>"$OUT_DIR/help_cuda_info.err"
 rc=$?

@@ -157,7 +157,55 @@ graph_execution_ready: false
 The engine owns the attached backend tensors. The session observes that state;
 it does not own or execute the weights.
 
-## 6. Execute a deterministic fixture graph
+## 6. Execute a real selected embedding segment
+
+The real partial graph path uses the selected `F16` DeepSeek embedding tensor. It
+executes a constrained token-embedding graph segment over engine-attached
+`token_embd.weight`, converts the selected row to `F32`, compares the backend
+output to a raw-artifact reference slice, and reports a checksum plus sample
+values.
+
+```sh
+./yvex graph \
+  --model deepseek4-v4-flash-selected-embed \
+  --backend cpu \
+  --execute-partial \
+  --partial-token 0
+```
+
+Expected outcome:
+
+```text
+real_partial_graph_executed: true
+partial_graph_kind: token-embedding
+partial_backend: cpu
+partial_weight: token_embd.weight
+partial_weight_dtype: F16
+partial_output_dtype: F32
+partial_output_count: 4096
+partial_output_bytes: 16384
+partial_max_abs_diff: 0
+execution_ready: false
+graph_execution_ready: false
+status: real-partial-graph-executed
+```
+
+CUDA-capable hosts can run the same boundary on CUDA:
+
+```sh
+./yvex graph \
+  --model deepseek4-v4-flash-selected-embed \
+  --backend cuda \
+  --execute-partial \
+  --partial-token 0
+```
+
+Expected outcome: CUDA reports the same output checksum, reference checksum, and
+sample values as CPU for the selected token. This is the first real-model partial
+graph segment. It is not prefill, KV runtime, decode, logits, sampling,
+generation, or a CUDA transformer backend.
+
+## 7. Execute a deterministic fixture graph
 
 M4 fixture execution uses a tiny controlled GGUF so output can be checked
 exactly. The example keeps the file under the operator-owned DeepSeek GGUF
@@ -215,7 +263,7 @@ CUDA-capable hosts can run the same fixture graph on CUDA:
 Expected outcome: the CUDA output values match the CPU fixture output. This is
 fixture graph parity only; it is not a CUDA transformer backend.
 
-## 7. Run yvexd with the DeepSeek alias
+## 8. Run yvexd with the DeepSeek alias
 
 `yvexd` is a provider/status shell. It accepts a direct path or registered alias
 for `--model`, then serves status endpoints. In one-request mode it exits after
@@ -262,7 +310,7 @@ GET /metrics
 GET /v1/models
 ```
 
-## 8. Run model and materialization gates
+## 9. Run model and materialization gates
 
 Use gates for repeatable selected-artifact checks. These commands encode
 expected file identity and tensor facts.
@@ -309,7 +357,7 @@ expected file identity and tensor facts.
 Expected outcome: gate status is pass when the selected artifact and CUDA host
 are available. The result remains selected-tensor materialization only.
 
-## 9. Use chat / REPL diagnostics only with tokenizer-bearing artifacts
+## 10. Use chat / REPL diagnostics only with tokenizer-bearing artifacts
 
 The selected DeepSeek embedding artifact does not include the tokenizer metadata
 needed by `chat`. Use `chat` with a tokenizer-bearing fixture or future
@@ -325,7 +373,7 @@ exits on `/quit`. Plain user text produces the diagnostic unsupported-generation
 placeholder; it is not inference. Do not use the selected DeepSeek embedding
 artifact as a chat model.
 
-## 10. Quantization / imatrix / provenance commands
+## 11. Quantization / imatrix / provenance commands
 
 Keep qtype storage, policy, provenance, and compute boundaries separate.
 
@@ -344,7 +392,7 @@ Manifest-dependent commands:
 Expected outcome: these surfaces report policy or provenance state. They do not
 run native quantization, calibration, or model execution.
 
-## 11. Validate the repository
+## 12. Validate the repository
 
 Run the standard validation gate before committing changes.
 
@@ -365,7 +413,7 @@ make check-cuda
 Expected outcome: baseline tests, CLI smoke, docs surface, repository surface,
 and CUDA validation pass. If CUDA is unavailable, report that explicitly.
 
-## 12. Artifact and path hygiene
+## 13. Artifact and path hygiene
 
 Check that generated artifacts and local model state are not tracked.
 
@@ -386,7 +434,7 @@ grep -R -nE '(/home|/Users|/mnt)/[^[:space:]]+' README.md MODEL_ARTIFACTS.md AGE
 Expected outcome: no personal or machine-specific absolute paths in public
 documentation.
 
-## 13. Debugging checklist
+## 14. Debugging checklist
 
 Use this order before assuming a runtime bug:
 
@@ -406,7 +454,7 @@ never commit generated GGUFs or local registry files
 For daemon checks, start with `--one-request` and a status endpoint before
 testing longer-lived processes.
 
-## 14. Benchmarking and evaluation status
+## 15. Benchmarking and evaluation status
 
 Benchmarking and capability evaluation are not implemented yet. Throughput,
 token latency, official-vector evaluation, logits regression, and generation
@@ -415,7 +463,7 @@ quality suites belong after the relevant graph/logits/generation runtime exists.
 Do not create benchmark claims from materialization, CUDA probing, daemon
 status, or diagnostic console behavior.
 
-## 15. What is not implemented yet
+## 16. What is not implemented yet
 
 The current runtime does not implement full model execution, prefill, decode,
 sampling, generation, provider-compatible generation, full DeepSeek support,

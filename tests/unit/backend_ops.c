@@ -44,6 +44,12 @@ static void make_desc(yvex_backend_tensor_desc *desc,
     desc->bytes = bytes;
 }
 
+static void write_u16le(unsigned char *p, unsigned int value)
+{
+    p[0] = (unsigned char)(value & 0xffu);
+    p[1] = (unsigned char)((value >> 8) & 0xffu);
+}
+
 static int test_capabilities(void)
 {
     yvex_backend *backend = NULL;
@@ -112,6 +118,57 @@ static int test_embed_success(void)
     return 0;
 }
 
+static int test_embed_f16_success(void)
+{
+    yvex_backend *backend = NULL;
+    yvex_device_tensor *embedding = NULL;
+    yvex_device_tensor *out = NULL;
+    yvex_backend_tensor_desc desc;
+    yvex_error err;
+    unsigned char embedding_data[24];
+    float out_data[8];
+    float expected[8] = {
+        0.0f, 1.0f, 2.0f, 3.0f,
+        20.0f, 21.0f, 22.0f, 23.0f,
+    };
+    unsigned int token_ids[2] = {0, 2};
+    unsigned int half_values[12] = {
+        0x0000u, 0x3c00u, 0x4000u, 0x4200u,
+        0x4900u, 0x4980u, 0x4a00u, 0x4a80u,
+        0x4d00u, 0x4d40u, 0x4d80u, 0x4dc0u,
+    };
+    unsigned int i;
+    int rc;
+
+    for (i = 0; i < 12u; ++i) {
+        write_u16le(embedding_data + (i * 2u), half_values[i]);
+    }
+
+    YVEX_TEST_ASSERT(yvex_backend_open_cpu(&backend, &err) == YVEX_OK, "open cpu f16");
+
+    make_desc(&desc, "embedding", YVEX_DTYPE_F16, 2, 4, 3, sizeof(embedding_data));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &embedding, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate f16 embedding");
+    rc = yvex_backend_tensor_write(backend, embedding, embedding_data, sizeof(embedding_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write f16 embedding");
+
+    make_desc(&desc, "out", YVEX_DTYPE_F32, 2, 2, 4, sizeof(out_data));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate f16 output");
+
+    rc = yvex_backend_op_embed(backend, embedding, token_ids, 2, out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "f16 embed succeeds");
+    rc = yvex_backend_tensor_read(backend, out, out_data, sizeof(out_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read f16 embed output");
+    YVEX_TEST_ASSERT(memcmp(out_data, expected, sizeof(expected)) == 0,
+                     "f16 embed output converts expected rows");
+
+    yvex_backend_tensor_free(backend, out);
+    yvex_backend_tensor_free(backend, embedding);
+    yvex_backend_close(backend);
+    return 0;
+}
+
 static int test_embed_failures(void)
 {
     yvex_backend *backend = NULL;
@@ -149,14 +206,14 @@ static int test_embed_failures(void)
     out = NULL;
 
     yvex_backend_tensor_free(backend, embedding);
-    make_desc(&desc, "f16_embedding", YVEX_DTYPE_F16, 2, 4, 3, 24);
+    make_desc(&desc, "bad_embedding", YVEX_DTYPE_BF16, 2, 4, 3, 24);
     rc = yvex_backend_tensor_alloc(backend, &desc, &embedding, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate f16 embedding");
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate bf16 embedding");
     make_desc(&desc, "out", YVEX_DTYPE_F32, 2, 1, 4, 4u * sizeof(float));
     rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate f16 output");
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate bf16 output");
     rc = yvex_backend_op_embed(backend, embedding, good_ids, 1, out, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_ERR_UNSUPPORTED, "non-F32 embedding unsupported");
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_UNSUPPORTED, "unsupported embedding dtype rejected");
 
     yvex_backend_tensor_free(backend, out);
     yvex_backend_tensor_free(backend, embedding);
@@ -168,6 +225,7 @@ int yvex_test_backend_ops(void)
 {
     if (test_capabilities() != 0) return 1;
     if (test_embed_success() != 0) return 1;
+    if (test_embed_f16_success() != 0) return 1;
     if (test_embed_failures() != 0) return 1;
     return 0;
 }

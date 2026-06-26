@@ -67,7 +67,8 @@ void yvex_gguf_template_print_summary(const yvex_gguf_template *tmpl,
 #define YVEX_GGUF_EMIT_NATIVE_ROWS 8u
 #define YVEX_GGUF_EMIT_NATIVE_COLS 4u
 #define YVEX_GGUF_EMIT_TENSOR_FLOATS 32u
-#define YVEX_GGUF_EMIT_PAYLOAD_BYTES 128ull
+#define YVEX_GGUF_EMIT_PAYLOAD_F32_BYTES 128ull
+#define YVEX_GGUF_EMIT_PAYLOAD_F16_BYTES 64ull
 
 typedef struct {
     const char *out_path;
@@ -76,6 +77,9 @@ typedef struct {
     const char *architecture;
     const char *tensor_name;
     const char *target_name;
+    const char *target_qtype;
+    unsigned int ggml_type;
+    unsigned long long scalar_bytes;
     int transpose_2d;
     int overwrite;
 } yvex_gguf_emit_plan_data;
@@ -95,6 +99,7 @@ int yvex_gguf_emit_write_u32(FILE *fp, unsigned int value, yvex_error *err, cons
 int yvex_gguf_emit_write_u64(FILE *fp, unsigned long long value, yvex_error *err, const char *field);
 int yvex_gguf_emit_write_i32(FILE *fp, int value, yvex_error *err, const char *field);
 int yvex_gguf_emit_write_f32(FILE *fp, float value, yvex_error *err, const char *field);
+int yvex_gguf_emit_write_u16(FILE *fp, unsigned int value, yvex_error *err, const char *field);
 int yvex_gguf_emit_write_string(FILE *fp, const char *value, yvex_error *err, const char *field);
 int yvex_gguf_emit_pad_to_alignment(FILE *fp, unsigned long long alignment, yvex_error *err);
 
@@ -109,6 +114,44 @@ static int path_exists(const char *path)
     }
     fclose(fp);
     return 1;
+}
+
+static unsigned int controlled_float_to_f16_bits(float f)
+{
+    uint32_t raw;
+    unsigned int sign;
+    int exp;
+    unsigned int mant;
+
+    memcpy(&raw, &f, sizeof(raw));
+    sign = (raw >> 16) & 0x8000u;
+    exp = (int)((raw >> 23) & 0xffu) - 127 + 15;
+    mant = raw & 0x7fffffu;
+
+    if (exp <= 0) {
+        return sign;
+    }
+    if (exp >= 31) {
+        return sign | 0x7c00u;
+    }
+    return sign | ((unsigned int)exp << 10) | (mant >> 13);
+}
+
+static int controlled_qtype_to_plan(const char *qtype,
+                                    unsigned int *ggml_type,
+                                    unsigned long long *scalar_bytes)
+{
+    if (!qtype || strcmp(qtype, "F32") == 0) {
+        *ggml_type = 0u;
+        *scalar_bytes = 4ull;
+        return 1;
+    }
+    if (strcmp(qtype, "F16") == 0) {
+        *ggml_type = 1u;
+        *scalar_bytes = 2ull;
+        return 1;
+    }
+    return 0;
 }
 
 static long file_size(FILE *fp)
@@ -205,8 +248,14 @@ int yvex_gguf_emit_controlled(const yvex_gguf_emit_options *options,
     plan.architecture = options->architecture ? options->architecture : "llama";
     plan.tensor_name = options->tensor_name ? options->tensor_name : "embed.weight";
     plan.target_name = options->target_name ? options->target_name : "token_embd.weight";
+    plan.target_qtype = options->target_qtype ? options->target_qtype : "F32";
     plan.transpose_2d = options->transpose_2d ? 1 : 1;
     plan.overwrite = options->overwrite;
+    if (!controlled_qtype_to_plan(plan.target_qtype, &plan.ggml_type, &plan.scalar_bytes)) {
+        yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_gguf_emit_controlled",
+                        "controlled emit target qtype is unsupported: %s", plan.target_qtype);
+        return YVEX_ERR_UNSUPPORTED;
+    }
 
     memset(&summary, 0, sizeof(summary));
     summary.status = YVEX_GGUF_EMIT_STATUS_PLANNED;
@@ -216,7 +265,7 @@ int yvex_gguf_emit_controlled(const yvex_gguf_emit_options *options,
     summary.architecture = plan.architecture;
     summary.metadata_count = YVEX_GGUF_EMIT_METADATA_COUNT;
     summary.tensor_count = YVEX_GGUF_EMIT_TENSOR_COUNT;
-    summary.tensor_payload_bytes = YVEX_GGUF_EMIT_PAYLOAD_BYTES;
+    summary.tensor_payload_bytes = (unsigned long long)YVEX_GGUF_EMIT_TENSOR_FLOATS * plan.scalar_bytes;
     summary.alignment = YVEX_GGUF_EMIT_ALIGNMENT;
 
     fp = fopen(plan.out_path, "wb");
@@ -318,6 +367,18 @@ int yvex_gguf_emit_write_f32(FILE *fp, float value, yvex_error *err, const char 
     return yvex_gguf_emit_write_u32(fp, raw, err, field);
 }
 
+int yvex_gguf_emit_write_u16(FILE *fp, unsigned int value, yvex_error *err, const char *field)
+{
+    unsigned char b[2];
+    b[0] = (unsigned char)(value & 0xffu);
+    b[1] = (unsigned char)((value >> 8) & 0xffu);
+    if (fwrite(b, 1u, sizeof(b), fp) != sizeof(b)) {
+        yvex_error_setf(err, YVEX_ERR_IO, "gguf_emit.write", "failed to write %s", field);
+        return YVEX_ERR_IO;
+    }
+    return YVEX_OK;
+}
+
 int yvex_gguf_emit_write_string(FILE *fp, const char *value, yvex_error *err, const char *field)
 {
     unsigned long long len;
@@ -400,7 +461,7 @@ int yvex_gguf_emit_write_metadata(FILE *fp,
     if (write_string_meta(fp, "general.architecture", plan->architecture, err) != YVEX_OK) return YVEX_ERR_IO;
     if (write_string_meta(fp, "general.name", plan->model_name, err) != YVEX_OK) return YVEX_ERR_IO;
     if (write_u32_meta(fp, "llama.context_length", 8u, err) != YVEX_OK) return YVEX_ERR_IO;
-    if (write_u32_meta(fp, "general.file_type", 0u, err) != YVEX_OK) return YVEX_ERR_IO;
+    if (write_u32_meta(fp, "general.file_type", plan->ggml_type, err) != YVEX_OK) return YVEX_ERR_IO;
     if (write_u32_meta(fp, "general.alignment", (unsigned int)YVEX_GGUF_EMIT_ALIGNMENT, err) != YVEX_OK) return YVEX_ERR_IO;
     if (write_string_meta(fp, "tokenizer.ggml.model", "llama", err) != YVEX_OK) return YVEX_ERR_IO;
     if (write_string_array(fp, "tokenizer.ggml.tokens", tokens, 8ull, err) != YVEX_OK) return YVEX_ERR_IO;
@@ -479,7 +540,7 @@ int yvex_gguf_emit_write_tensor_dir(FILE *fp,
     if (yvex_gguf_emit_write_u32(fp, 2u, err, "tensor rank") != YVEX_OK) return YVEX_ERR_IO;
     if (yvex_gguf_emit_write_u64(fp, 4ull, err, "tensor dim 0") != YVEX_OK) return YVEX_ERR_IO;
     if (yvex_gguf_emit_write_u64(fp, 8ull, err, "tensor dim 1") != YVEX_OK) return YVEX_ERR_IO;
-    if (yvex_gguf_emit_write_u32(fp, 0u, err, "tensor ggml type") != YVEX_OK) return YVEX_ERR_IO;
+    if (yvex_gguf_emit_write_u32(fp, plan->ggml_type, err, "tensor ggml type") != YVEX_OK) return YVEX_ERR_IO;
     return yvex_gguf_emit_write_u64(fp, 0ull, err, "tensor relative offset");
 }
 
@@ -500,7 +561,11 @@ int yvex_gguf_emit_write_tensor_payload(FILE *fp,
     if (plan->transpose_2d) {
         for (col = 0; col < YVEX_GGUF_EMIT_NATIVE_COLS; ++col) {
             for (row = 0; row < YVEX_GGUF_EMIT_NATIVE_ROWS; ++row) {
-                if (yvex_gguf_emit_write_f32(fp, native[row][col], err, "tensor payload") != YVEX_OK) {
+                if (plan->ggml_type == 1u) {
+                    if (yvex_gguf_emit_write_u16(fp, controlled_float_to_f16_bits(native[row][col]), err, "tensor payload") != YVEX_OK) {
+                        return YVEX_ERR_IO;
+                    }
+                } else if (yvex_gguf_emit_write_f32(fp, native[row][col], err, "tensor payload") != YVEX_OK) {
                     return YVEX_ERR_IO;
                 }
             }
@@ -508,7 +573,11 @@ int yvex_gguf_emit_write_tensor_payload(FILE *fp,
     } else {
         for (row = 0; row < YVEX_GGUF_EMIT_NATIVE_ROWS; ++row) {
             for (col = 0; col < YVEX_GGUF_EMIT_NATIVE_COLS; ++col) {
-                if (yvex_gguf_emit_write_f32(fp, native[row][col], err, "tensor payload") != YVEX_OK) {
+                if (plan->ggml_type == 1u) {
+                    if (yvex_gguf_emit_write_u16(fp, controlled_float_to_f16_bits(native[row][col]), err, "tensor payload") != YVEX_OK) {
+                        return YVEX_ERR_IO;
+                    }
+                } else if (yvex_gguf_emit_write_f32(fp, native[row][col], err, "tensor payload") != YVEX_OK) {
                     return YVEX_ERR_IO;
                 }
             }

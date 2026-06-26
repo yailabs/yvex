@@ -92,6 +92,7 @@ model artifacts remain outside the repository
 | Selected tensor materialization | implemented |
 | Engine-owned selected weight attachment | implemented |
 | Deterministic fixture graph execution | implemented for controlled fixtures |
+| Real selected embedding partial graph | implemented for `F16` `token_embd.weight` |
 | Local model registry | implemented |
 | Alias-or-path model resolver | implemented for one-shot commands |
 | Model gate | implemented |
@@ -113,3 +114,10 @@ failure behavior.
 
 The C API does not promise inference, generation, OpenAI-compatible generation,
 or benchmark performance.
+
+`yvex_engine_execute_partial_graph` borrows engine-attached weights owned by
+`yvex_engine` and returns a copied output summary only. The executor does not
+expose backend pointers, does not transfer ownership to sessions, and keeps
+`execution_ready` and broad graph readiness false. The implemented partial graph
+boundary is the selected token-embedding segment only; it is not prefill, decode,
+logits, sampling, generation, or full model execution.

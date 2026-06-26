@@ -39,6 +39,7 @@ typedef struct {
     const char *native_source_dir;
     const char *tensor_name;
     const char *target_name;
+    const char *target_qtype;
     const char *model_name;
     const char *architecture;
     int transpose_2d;

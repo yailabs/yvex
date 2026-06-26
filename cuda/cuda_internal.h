@@ -74,6 +74,7 @@ typedef struct {
     int driver_version;
     CUmodule module;
     CUfunction embed_function;
+    CUfunction embed_f16_function;
     int module_loaded;
 } yvex_cuda_backend_state;
 

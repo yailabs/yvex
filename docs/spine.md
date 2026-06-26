@@ -122,6 +122,10 @@ deterministic fixture graph execution over controlled F32 weights
 fixture embed-node backend dispatch
 CPU fixture graph execution
 CUDA fixture graph parity when CUDA is available
+real selected embedding partial graph execution
+real token_embd.weight F16 participation in scheduled graph work
+CPU real partial graph execution
+CUDA real partial graph parity when CUDA is available
 ```
 
 Current live target:
@@ -145,7 +149,6 @@ explicit spine change.
 Unsupported / not advanced:
 
 ```text
-real-model partial graph execution
 full model execution
 full DeepSeek materialization
 full GGUF conversion
@@ -228,8 +231,8 @@ unbounded spreadsheet.
 | M3 | complete | Materialized-weight engine attachment |
 | M4 | complete | First executable fixture graph path |
 | SPINE.REBASE.3 | complete | End-to-end runtime and operator roadmap |
-| M5 | next | First real-model partial graph execution |
-| M6 | planned | Real-model graph segment expansion |
+| M5 | complete | First real-model partial graph execution |
+| M6 | next | Real-model graph segment expansion |
 | M7 | planned | Prompt/token input boundary |
 | M8 | planned | Prefill state foundation |
 | M9 | planned | Minimal KV ownership and append/read boundary |
@@ -295,14 +298,15 @@ planned embed-node ordering, backend dispatch, output allocation/readback,
 independent expected-output comparison, CPU execution, CUDA parity, and failure
 reporting on small non-model fixtures.
 
-M5 — next — First real-model partial graph execution
-Execute a constrained real-model graph segment using real attached model
-tensors. No prompt prefill. No decode. No logits claim. No generation.
-Completion requires command/API proof, CPU test, CUDA path or explicit CUDA
-boundary, independent expected/regression check, memory-plan evidence, backend
-dispatch, and cleanup/failure tests.
+M5 — complete — First real-model partial graph execution
+Execute a constrained selected token-embedding graph segment using real attached
+F16 token_embd.weight. Proves real selected tensor participation in scheduled
+graph work, backend dispatch, F16-to-F32 output, independent raw-artifact
+reference comparison, CPU execution, CUDA parity where available, command proof,
+and cleanup/failure tests. No prompt prefill, KV runtime, decode, logits,
+sampling, generation, or benchmark claim.
 
-M6 — planned — Real-model graph segment expansion
+M6 — next — Real-model graph segment expansion
 Expand from one partial segment to a larger scheduled segment with multiple real
 ops, intermediate scratch/output buffers, and explicit memory plan. Failure
 reports must name the failing op, tensor, backend, or runtime stage. Still no
@@ -378,13 +382,15 @@ materialization produces backend-resident tensors
 engine owns attached selected materialized weights
 session can observe engine weight attachment state
 deterministic fixture graph execution complete
-real-model graph execution not implemented
+real selected embedding partial graph execution complete
+larger real-model graph execution not implemented
 prefill/decode/logits/sampling/generation not implemented
 ```
 
-M5 must prove real attached tensor participation in scheduled computation. It
-must not become a vague inference milestone. Completion requires backend
-dispatch, memory plan, output/regression proof, and cleanup/failure tests.
+M6 must expand real scheduled computation beyond the selected embedding segment.
+It must not become a vague inference milestone. Completion requires multiple real
+ops, backend dispatch, explicit intermediate/output memory planning,
+output/regression proof, and cleanup/failure tests.
 
 ### Open Weight Intake / Model Family Flow
 
@@ -437,8 +443,9 @@ DeepSeek selected embedding is the active live target
 model-gate and materialize-gate pass on CPU/CUDA
 engine attachment complete
 fixture graph execution complete
+real selected embedding partial graph execution complete
 full model materialization not reached
-real-model partial graph execution not reached
+larger real-model graph execution not reached
 execution/prefill/decode/logits/sampling/generation not reached
 execution_ready remains false
 ```
@@ -707,14 +714,15 @@ large-model path:
 ## 8. Active Next
 
 ```text
-M5 - First real-model partial graph execution
+M6 - Real-model graph segment expansion
 ```
 
-M5 sits inside the larger runtime pipeline. It must execute a constrained
-real-model partial graph segment with real attached model tensors, scheduled
-graph work, backend dispatch, memory-plan evidence, output/regression proof, and
-cleanup/failure tests. It must not claim prompt/prefill, KV runtime, logits,
-sampling, generation, server generation, evaluation, or benchmark readiness.
+M6 sits inside the larger runtime pipeline. It must expand from the selected
+embedding segment to a larger scheduled real-model graph segment with multiple
+real ops, backend dispatch, explicit intermediate/output memory planning,
+output/regression proof, and cleanup/failure tests. It must not claim
+prompt/prefill, KV runtime, logits, sampling, generation, server generation,
+evaluation, or benchmark readiness.
 
 ## 9. Validation Gate
 

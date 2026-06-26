@@ -117,7 +117,7 @@ static int test_engine_attaches_weights(void)
     return 0;
 }
 
-static int emit_controlled_engine_fixture(const char *path)
+static int emit_controlled_engine_fixture_with_qtype(const char *path, const char *target_qtype)
 {
     yvex_gguf_emit_options options;
     yvex_gguf_emit_summary summary;
@@ -132,6 +132,7 @@ static int emit_controlled_engine_fixture(const char *path)
     options.out_path = path;
     options.model_name = "m4-controlled";
     options.architecture = "deepseek";
+    options.target_qtype = target_qtype;
     options.overwrite = 1;
 
     rc = yvex_gguf_emit_controlled(&options, &summary, &err);
@@ -141,6 +142,11 @@ static int emit_controlled_engine_fixture(const char *path)
         return 1;
     }
     return 0;
+}
+
+static int emit_controlled_engine_fixture(const char *path)
+{
+    return emit_controlled_engine_fixture_with_qtype(path, NULL);
 }
 
 static int open_attached_engine(const char *path,
@@ -253,6 +259,106 @@ static int test_fixture_graph_failures(void)
     return 0;
 }
 
+static int test_engine_executes_partial_graph(void)
+{
+    const char *path = "build/tests/engine/m5-controlled-f16.gguf";
+    yvex_engine *engine = NULL;
+    yvex_partial_graph_options options;
+    yvex_partial_graph_result row0;
+    yvex_partial_graph_result row1;
+    yvex_error err;
+    int rc;
+
+    YVEX_TEST_ASSERT(emit_controlled_engine_fixture_with_qtype(path, "F16") == 0,
+                     "emit M5 F16 fixture");
+    YVEX_TEST_ASSERT(open_attached_engine(path, "cpu", 1, 1, &engine) == 0,
+                     "open attached M5 engine");
+
+    memset(&options, 0, sizeof(options));
+    rc = yvex_engine_execute_partial_graph(engine, &options, &row0, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "execute partial row 0");
+    YVEX_TEST_ASSERT(row0.executed == 1, "partial row 0 executed");
+    YVEX_TEST_ASSERT_STREQ(row0.backend_name, "cpu", "partial row 0 backend");
+    YVEX_TEST_ASSERT_STREQ(row0.segment_name, "token-embedding", "partial segment");
+    YVEX_TEST_ASSERT_STREQ(row0.weight_name, "token_embd.weight", "partial weight");
+    YVEX_TEST_ASSERT_STREQ(row0.weight_dtype, "F16", "partial weight dtype");
+    YVEX_TEST_ASSERT_STREQ(row0.output_dtype, "F32", "partial output dtype");
+    YVEX_TEST_ASSERT(row0.node_count == 1, "partial node count");
+    YVEX_TEST_ASSERT(row0.output_count == 4, "partial output count");
+    YVEX_TEST_ASSERT(row0.output_bytes == 16, "partial output bytes");
+    YVEX_TEST_ASSERT(row0.reference_checksum == row0.output_checksum,
+                     "partial checksum matches reference");
+    YVEX_TEST_ASSERT(row0.max_abs_diff == 0.0, "partial reference diff zero");
+    YVEX_TEST_ASSERT(row0.output_value_count == 4, "partial sample count");
+    YVEX_TEST_ASSERT(row0.output_values[0] == 0.0f &&
+                     row0.output_values[1] == 4.0f &&
+                     row0.output_values[2] == 8.0f &&
+                     row0.output_values[3] == 12.0f,
+                     "partial row 0 output constants");
+    YVEX_TEST_ASSERT(row0.execution_ready == 0, "partial execution false");
+    YVEX_TEST_ASSERT(row0.graph_execution_ready == 0, "partial graph execution false");
+
+    memset(&options, 0, sizeof(options));
+    options.token_id = 1;
+    rc = yvex_engine_execute_partial_graph(engine, &options, &row1, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "execute partial row 1");
+    YVEX_TEST_ASSERT(row1.output_values[0] == 16.0f &&
+                     row1.output_values[1] == 20.0f &&
+                     row1.output_values[2] == 24.0f &&
+                     row1.output_values[3] == 28.0f,
+                     "partial row 1 output constants");
+    YVEX_TEST_ASSERT(row0.output_checksum != row1.output_checksum,
+                     "partial tokens produce different checksums");
+
+    yvex_engine_close(engine);
+    return 0;
+}
+
+static int test_partial_graph_failures(void)
+{
+    const char *f16_path = "build/tests/engine/m5-controlled-f16.gguf";
+    const char *f32_path = "build/tests/engine/m4-controlled.gguf";
+    yvex_engine *engine = NULL;
+    yvex_partial_graph_options options;
+    yvex_partial_graph_result result;
+    yvex_error err;
+    int rc;
+
+    YVEX_TEST_ASSERT(emit_controlled_engine_fixture_with_qtype(f16_path, "F16") == 0,
+                     "emit M5 failure fixture");
+    YVEX_TEST_ASSERT(open_attached_engine(f16_path, "cpu", 1, 0, &engine) == 0,
+                     "open partial engine without attachment");
+    rc = yvex_engine_execute_partial_graph(engine, NULL, &result, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_STATE, "partial execution requires attached weights");
+    yvex_engine_close(engine);
+    engine = NULL;
+
+    YVEX_TEST_ASSERT(open_attached_engine(f16_path, "cpu", 0, 1, &engine) == 0,
+                     "open attached partial engine without graph");
+    rc = yvex_engine_execute_partial_graph(engine, NULL, &result, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_STATE, "partial execution requires built graph");
+    yvex_engine_close(engine);
+    engine = NULL;
+
+    YVEX_TEST_ASSERT(open_attached_engine(f16_path, "cpu", 1, 1, &engine) == 0,
+                     "open attached partial engine for bad token");
+    memset(&options, 0, sizeof(options));
+    options.token_id = 99;
+    rc = yvex_engine_execute_partial_graph(engine, &options, &result, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS, "bad partial token fails");
+    yvex_engine_close(engine);
+    engine = NULL;
+
+    YVEX_TEST_ASSERT(emit_controlled_engine_fixture(f32_path) == 0,
+                     "emit F32 partial incompatible fixture");
+    YVEX_TEST_ASSERT(open_attached_engine(f32_path, "cpu", 1, 1, &engine) == 0,
+                     "open attached F32 partial fixture");
+    rc = yvex_engine_execute_partial_graph(engine, NULL, &result, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_UNSUPPORTED, "F32 fixture rejected by partial path");
+    yvex_engine_close(engine);
+    return 0;
+}
+
 int yvex_test_engine(void)
 {
     if (test_engine_opens_fixture() != 0) return 1;
@@ -260,5 +366,7 @@ int yvex_test_engine(void)
     if (test_engine_attaches_weights() != 0) return 1;
     if (test_engine_executes_fixture_graph() != 0) return 1;
     if (test_fixture_graph_failures() != 0) return 1;
+    if (test_engine_executes_partial_graph() != 0) return 1;
+    if (test_partial_graph_failures() != 0) return 1;
     return 0;
 }

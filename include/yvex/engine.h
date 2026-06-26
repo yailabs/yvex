@@ -81,6 +81,7 @@ typedef struct {
 } yvex_engine_summary;
 
 #define YVEX_FIXTURE_GRAPH_MAX_OUTPUT_VALUES 16u
+#define YVEX_PARTIAL_GRAPH_MAX_OUTPUT_VALUES 16u
 
 typedef struct {
     unsigned int token_id;
@@ -101,6 +102,30 @@ typedef struct {
     int execution_ready;
     int graph_execution_ready;
 } yvex_fixture_graph_result;
+
+typedef struct {
+    unsigned int token_id;
+} yvex_partial_graph_options;
+
+typedef struct {
+    int executed;
+    const char *backend_name;
+    const char *segment_name;
+    const char *weight_name;
+    const char *weight_dtype;
+    const char *output_dtype;
+    unsigned int token_id;
+    unsigned long long node_count;
+    unsigned long long output_count;
+    unsigned long long output_bytes;
+    unsigned long long output_checksum;
+    unsigned long long reference_checksum;
+    double max_abs_diff;
+    unsigned long long output_value_count;
+    float output_values[YVEX_PARTIAL_GRAPH_MAX_OUTPUT_VALUES];
+    int execution_ready;
+    int graph_execution_ready;
+} yvex_partial_graph_result;
 
 int yvex_engine_open(yvex_engine **out,
                      const yvex_engine_options *options,
@@ -126,6 +151,10 @@ int yvex_engine_get_summary(const yvex_engine *engine,
 int yvex_engine_execute_fixture_graph(yvex_engine *engine,
                                       const yvex_fixture_graph_options *options,
                                       yvex_fixture_graph_result *out,
+                                      yvex_error *err);
+int yvex_engine_execute_partial_graph(yvex_engine *engine,
+                                      const yvex_partial_graph_options *options,
+                                      yvex_partial_graph_result *out,
                                       yvex_error *err);
 
 const char *yvex_engine_diagnostic_reason(const yvex_engine *engine);

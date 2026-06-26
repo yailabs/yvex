@@ -486,6 +486,47 @@ static int tensor_is_f32_bytes(const yvex_device_tensor *tensor,
            tensor->bytes == elements * (unsigned long long)sizeof(float);
 }
 
+static int tensor_is_f16_bytes(const yvex_device_tensor *tensor,
+                               unsigned long long elements)
+{
+    return elements <= (unsigned long long)(UINT64_MAX / 2ull) &&
+           tensor->bytes == elements * 2ull;
+}
+
+static float backend_f16_bits_to_float(unsigned int h)
+{
+    unsigned int sign = (h & 0x8000u) << 16;
+    unsigned int exp = (h >> 10) & 0x1fu;
+    unsigned int mant = h & 0x03ffu;
+    uint32_t raw;
+    float out;
+
+    if (exp == 0) {
+        if (mant == 0) {
+            raw = sign;
+        } else {
+            exp = 1u;
+            while ((mant & 0x0400u) == 0) {
+                mant <<= 1;
+                exp -= 1u;
+            }
+            mant &= 0x03ffu;
+            raw = sign | ((exp + (127u - 15u)) << 23) | (mant << 13);
+        }
+    } else if (exp == 31u) {
+        raw = sign | 0x7f800000u | (mant << 13);
+    } else {
+        raw = sign | ((exp + (127u - 15u)) << 23) | (mant << 13);
+    }
+    memcpy(&out, &raw, sizeof(out));
+    return out;
+}
+
+static unsigned int backend_read_u16le(const unsigned char *p)
+{
+    return ((unsigned int)p[0]) | ((unsigned int)p[1] << 8);
+}
+
 int yvex_cpu_op_embed(yvex_backend *backend,
                       const yvex_device_tensor *embedding,
                       const unsigned int *token_ids,
@@ -497,8 +538,10 @@ int yvex_cpu_op_embed(yvex_backend *backend,
     unsigned long long vocab_size;
     unsigned long long e;
     unsigned long long t;
-    const float *embedding_data;
+    const float *embedding_f32;
+    const unsigned char *embedding_f16;
     float *out_data;
+    unsigned long long element_count;
 
     if (!yvex_backend_tensor_owner_is(backend, embedding) ||
         !yvex_backend_tensor_owner_is(backend, out)) {
@@ -506,9 +549,10 @@ int yvex_cpu_op_embed(yvex_backend *backend,
                        "embedding and output tensors must belong to this backend");
         return YVEX_ERR_STATE;
     }
-    if (embedding->dtype != YVEX_DTYPE_F32 || out->dtype != YVEX_DTYPE_F32) {
+    if ((embedding->dtype != YVEX_DTYPE_F32 && embedding->dtype != YVEX_DTYPE_F16) ||
+        out->dtype != YVEX_DTYPE_F32) {
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_embed",
-                       "backend layer CPU embed supports F32 tensors only");
+                       "backend layer CPU embed supports F32 and F16 embeddings with F32 output");
         return YVEX_ERR_UNSUPPORTED;
     }
     if (embedding->rank != 2) {
@@ -523,9 +567,15 @@ int yvex_cpu_op_embed(yvex_backend *backend,
                        "embedding dimensions overflow");
         return YVEX_ERR_BOUNDS;
     }
-    if (!tensor_is_f32_bytes(embedding, hidden_size * vocab_size)) {
+    element_count = hidden_size * vocab_size;
+    if (embedding->dtype == YVEX_DTYPE_F32 && !tensor_is_f32_bytes(embedding, element_count)) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_embed",
                        "embedding tensor byte size does not match F32 dims");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (embedding->dtype == YVEX_DTYPE_F16 && !tensor_is_f16_bytes(embedding, element_count)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_embed",
+                       "embedding tensor byte size does not match F16 dims");
         return YVEX_ERR_BOUNDS;
     }
     if (token_count > ULLONG_MAX / hidden_size) {
@@ -544,7 +594,8 @@ int yvex_cpu_op_embed(yvex_backend *backend,
         return YVEX_ERR_BOUNDS;
     }
 
-    embedding_data = (const float *)embedding->data;
+    embedding_f32 = (const float *)embedding->data;
+    embedding_f16 = (const unsigned char *)embedding->data;
     out_data = (float *)out->data;
     for (t = 0; t < token_count; ++t) {
         unsigned int token_id = token_ids[t];
@@ -555,8 +606,13 @@ int yvex_cpu_op_embed(yvex_backend *backend,
             return YVEX_ERR_BOUNDS;
         }
         for (e = 0; e < hidden_size; ++e) {
-            out_data[(t * hidden_size) + e] =
-                embedding_data[((unsigned long long)token_id * hidden_size) + e];
+            unsigned long long index = ((unsigned long long)token_id * hidden_size) + e;
+            if (embedding->dtype == YVEX_DTYPE_F16) {
+                out_data[(t * hidden_size) + e] =
+                    backend_f16_bits_to_float(backend_read_u16le(embedding_f16 + (index * 2ull)));
+            } else {
+                out_data[(t * hidden_size) + e] = embedding_f32[index];
+            }
         }
     }
     out->is_written = 1;

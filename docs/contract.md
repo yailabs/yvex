@@ -64,6 +64,14 @@ readback, and comparison-friendly output values. It does not imply real-model
 graph execution, prefill, decode, logits, sampling, generation, or inference
 readiness.
 
+Real partial graph execution is implemented for the selected token-embedding
+segment. It executes a constrained scheduled graph segment over engine-attached
+`token_embd.weight`, converts the selected `F16` embedding row to an `F32` output
+summary, and compares backend output against a raw-artifact reference slice. This
+proves real selected tensor participation in scheduled graph work. It does not
+imply prompt prefill, KV runtime, decode, logits, sampling, generation, server
+generation, benchmark readiness, or full model execution.
+
 ## 5. Server Contract
 
 `./yvexd` exposes a provider/status shell:

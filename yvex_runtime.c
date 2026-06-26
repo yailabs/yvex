@@ -7,6 +7,7 @@
 
 #include <stddef.h>
 #include <yvex/yvex.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -385,6 +386,111 @@ static unsigned long long fixture_checksum_bytes(const unsigned char *data,
     return hash;
 }
 
+static unsigned int runtime_read_u16le(const unsigned char *p)
+{
+    return ((unsigned int)p[0]) | ((unsigned int)p[1] << 8);
+}
+
+static float runtime_f16_bits_to_float(unsigned int h)
+{
+    unsigned int sign = (h & 0x8000u) << 16;
+    unsigned int exp = (h >> 10) & 0x1fu;
+    unsigned int mant = h & 0x03ffu;
+    uint32_t raw;
+    float out;
+
+    if (exp == 0u) {
+        if (mant == 0u) {
+            raw = sign;
+        } else {
+            exp = 1u;
+            while ((mant & 0x0400u) == 0u) {
+                mant <<= 1;
+                exp -= 1u;
+            }
+            mant &= 0x03ffu;
+            raw = sign | ((exp + (127u - 15u)) << 23) | (mant << 13);
+        }
+    } else if (exp == 31u) {
+        raw = sign | 0x7f800000u | (mant << 13);
+    } else {
+        raw = sign | ((exp + (127u - 15u)) << 23) | (mant << 13);
+    }
+    memcpy(&out, &raw, sizeof(out));
+    return out;
+}
+
+static int build_f16_embedding_reference(const yvex_artifact *artifact,
+                                         const yvex_tensor_info *tensor,
+                                         unsigned int token_id,
+                                         unsigned long long hidden_size,
+                                         unsigned long long vocab_size,
+                                         float *out,
+                                         yvex_error *err)
+{
+    const unsigned char *data;
+    unsigned long long slice_bytes;
+    unsigned long long slice_offset;
+    unsigned long long i;
+    int rc;
+
+    if (!artifact || !tensor || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_execute_partial_graph",
+                       "artifact, tensor, and reference output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (hidden_size == 0 || vocab_size == 0 || (unsigned long long)token_id >= vocab_size) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_partial_graph",
+                       "partial token id is outside embedding range");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (hidden_size > ULLONG_MAX / 2ull) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_partial_graph",
+                       "partial reference slice is too large");
+        return YVEX_ERR_BOUNDS;
+    }
+    slice_bytes = hidden_size * 2ull;
+    if ((unsigned long long)token_id > ULLONG_MAX / slice_bytes ||
+        tensor->absolute_offset > ULLONG_MAX - ((unsigned long long)token_id * slice_bytes)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_partial_graph",
+                       "partial reference slice offset overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    slice_offset = tensor->absolute_offset + ((unsigned long long)token_id * slice_bytes);
+    rc = yvex_range_check(yvex_artifact_size(artifact), slice_offset, slice_bytes, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    data = yvex_artifact_data(artifact);
+    if (!data) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_execute_partial_graph",
+                       "artifact data is unavailable");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    for (i = 0; i < hidden_size; ++i) {
+        out[i] = runtime_f16_bits_to_float(runtime_read_u16le(data + slice_offset + (i * 2ull)));
+    }
+    return YVEX_OK;
+}
+
+static double max_abs_diff_f32(const float *a, const float *b, unsigned long long count)
+{
+    unsigned long long i;
+    double max_diff = 0.0;
+
+    for (i = 0; i < count; ++i) {
+        double diff = (double)a[i] - (double)b[i];
+        if (diff < 0.0) {
+            diff = -diff;
+        }
+        if (diff > max_diff) {
+            max_diff = diff;
+        }
+    }
+    return max_diff;
+}
+
 int yvex_engine_execute_fixture_graph(yvex_engine *engine,
                                       const yvex_fixture_graph_options *options,
                                       yvex_fixture_graph_result *out,
@@ -535,6 +641,202 @@ int yvex_engine_execute_fixture_graph(yvex_engine *engine,
 
     free(readback);
     yvex_backend_tensor_free(engine->weight_backend, output);
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_engine_execute_partial_graph(yvex_engine *engine,
+                                      const yvex_partial_graph_options *options,
+                                      yvex_partial_graph_result *out,
+                                      yvex_error *err)
+{
+    const yvex_graph_op_info *op = NULL;
+    const yvex_materialized_weight *weight;
+    const yvex_tensor_info *tensor;
+    const yvex_device_tensor *embedding;
+    yvex_backend_tensor_desc output_desc;
+    yvex_device_tensor *output = NULL;
+    unsigned int token_id = 0;
+    unsigned long long hidden_size;
+    unsigned long long vocab_size;
+    unsigned long long output_count;
+    unsigned long long output_bytes;
+    unsigned long long i;
+    float *readback = NULL;
+    float *reference = NULL;
+    int rc;
+
+    if (!engine || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_execute_partial_graph",
+                       "engine and out are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(out, 0, sizeof(*out));
+    out->backend_name = "none";
+    out->segment_name = "token-embedding";
+    out->weight_name = "token_embd.weight";
+    out->weight_dtype = "F16";
+    out->output_dtype = "F32";
+    out->execution_ready = 0;
+    out->graph_execution_ready = 0;
+
+    if (options) {
+        token_id = options->token_id;
+    }
+    out->token_id = token_id;
+
+    if (!engine->graph) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_engine_execute_partial_graph",
+                       "real partial graph requires a built graph");
+        return YVEX_ERR_STATE;
+    }
+    if (!engine->weight_backend || !engine->weights) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_engine_execute_partial_graph",
+                       "real partial graph requires engine-attached weights");
+        return YVEX_ERR_STATE;
+    }
+    out->backend_name = yvex_backend_kind_name(yvex_backend_kind_of(engine->weight_backend));
+
+    weight = yvex_weight_table_find(engine->weights, "token_embd.weight");
+    if (!weight) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_engine_execute_partial_graph",
+                       "required tensor not found: token_embd.weight");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (yvex_weight_dtype(weight) != YVEX_DTYPE_F16) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_engine_execute_partial_graph",
+                       "real partial embedding segment requires F16 token_embd.weight");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    tensor = yvex_tensor_table_find(engine->tensors, "token_embd.weight");
+    if (!tensor) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_engine_execute_partial_graph",
+                       "required tensor not found: token_embd.weight");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    embedding = yvex_weight_device_tensor(weight);
+    if (!embedding) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_engine_execute_partial_graph",
+                       "attached token embedding has no backend tensor");
+        return YVEX_ERR_STATE;
+    }
+    for (i = 0; i < yvex_graph_op_count(engine->graph); ++i) {
+        const yvex_graph_op_info *candidate = yvex_graph_op_at(engine->graph, i);
+        if (candidate && candidate->kind == YVEX_OP_EMBED) {
+            op = candidate;
+            break;
+        }
+    }
+    if (!op) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_engine_execute_partial_graph",
+                       "real partial graph requires a planned embed node");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (yvex_device_tensor_rank(embedding) != 2 || tensor->rank != 2) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_engine_execute_partial_graph",
+                       "real partial token embedding must have rank 2");
+        return YVEX_ERR_FORMAT;
+    }
+
+    hidden_size = yvex_device_tensor_dims(embedding)[0];
+    vocab_size = yvex_device_tensor_dims(embedding)[1];
+    if (hidden_size == 0 || vocab_size == 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_engine_execute_partial_graph",
+                       "real partial token embedding dimensions must be non-zero");
+        return YVEX_ERR_FORMAT;
+    }
+    if (tensor->dims[0] != hidden_size || tensor->dims[1] != vocab_size ||
+        tensor->storage_bytes != yvex_weight_bytes(weight)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_engine_execute_partial_graph",
+                       "attached token embedding shape does not match tensor descriptor");
+        return YVEX_ERR_FORMAT;
+    }
+    if ((unsigned long long)token_id >= vocab_size) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_partial_graph",
+                        "partial token out of range: %u >= %llu", token_id, vocab_size);
+        return YVEX_ERR_BOUNDS;
+    }
+    if (hidden_size > (unsigned long long)(~(size_t)0 / sizeof(float))) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_partial_graph",
+                       "partial graph output is too large for host readback");
+        return YVEX_ERR_BOUNDS;
+    }
+
+    output_count = hidden_size;
+    output_bytes = output_count * (unsigned long long)sizeof(float);
+    memset(&output_desc, 0, sizeof(output_desc));
+    output_desc.name = "partial.token_embedding.output";
+    output_desc.dtype = YVEX_DTYPE_F32;
+    output_desc.rank = 2;
+    output_desc.dims[0] = 1;
+    output_desc.dims[1] = hidden_size;
+    output_desc.bytes = output_bytes;
+
+    readback = (float *)malloc((size_t)output_bytes);
+    reference = (float *)malloc((size_t)output_bytes);
+    if (!readback || !reference) {
+        free(readback);
+        free(reference);
+        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_engine_execute_partial_graph",
+                       "failed to allocate partial graph readback buffers");
+        return YVEX_ERR_NOMEM;
+    }
+
+    rc = build_f16_embedding_reference(engine->artifact, tensor, token_id,
+                                       hidden_size, vocab_size, reference, err);
+    if (rc != YVEX_OK) {
+        free(readback);
+        free(reference);
+        return rc;
+    }
+
+    rc = yvex_backend_tensor_alloc(engine->weight_backend, &output_desc, &output, err);
+    if (rc != YVEX_OK) {
+        free(readback);
+        free(reference);
+        return rc;
+    }
+    rc = yvex_backend_op_embed(engine->weight_backend, embedding, &token_id, 1, output, err);
+    if (rc != YVEX_OK) {
+        yvex_backend_tensor_free(engine->weight_backend, output);
+        free(readback);
+        free(reference);
+        return rc;
+    }
+    rc = yvex_backend_tensor_read(engine->weight_backend, output, readback, output_bytes, err);
+    if (rc != YVEX_OK) {
+        yvex_backend_tensor_free(engine->weight_backend, output);
+        free(readback);
+        free(reference);
+        return rc;
+    }
+
+    out->executed = 1;
+    out->node_count = 1;
+    out->output_count = output_count;
+    out->output_bytes = output_bytes;
+    out->output_checksum = fixture_checksum_bytes((const unsigned char *)readback, output_bytes);
+    out->reference_checksum = fixture_checksum_bytes((const unsigned char *)reference, output_bytes);
+    out->max_abs_diff = max_abs_diff_f32(readback, reference, output_count);
+    if (out->max_abs_diff != 0.0) {
+        yvex_backend_tensor_free(engine->weight_backend, output);
+        free(readback);
+        free(reference);
+        yvex_error_setf(err, YVEX_ERR_FORMAT, "yvex_engine_execute_partial_graph",
+                        "partial graph reference comparison failed: max_abs_diff %.9g",
+                        out->max_abs_diff);
+        return YVEX_ERR_FORMAT;
+    }
+    out->output_value_count = output_count > YVEX_PARTIAL_GRAPH_MAX_OUTPUT_VALUES
+                                  ? YVEX_PARTIAL_GRAPH_MAX_OUTPUT_VALUES
+                                  : output_count;
+    for (i = 0; i < out->output_value_count; ++i) {
+        out->output_values[i] = readback[i];
+    }
+
+    yvex_backend_tensor_free(engine->weight_backend, output);
+    free(readback);
+    free(reference);
     yvex_error_clear(err);
     return YVEX_OK;
 }

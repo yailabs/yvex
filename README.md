@@ -17,15 +17,17 @@ explicit before claiming the next one.
 The current code does not run a full model. It does, however, cross more than
 the old parse-and-materialize boundary. YVEX can inspect `GGUF` artifacts,
 materialize selected tensors on `CPU` and `CUDA`, attach those tensors to
-engine-owned runtime state, and execute a deterministic fixture graph over
-controlled `F32` weights. The next runtime step is a constrained real-model
-partial graph segment. Prefill, decode, logits, sampling, generation, and
-provider generation are not implemented.
+engine-owned runtime state, execute a deterministic fixture graph over controlled
+`F32` weights, and execute a real selected embedding segment over `F16`
+`token_embd.weight`. The next runtime step is expanding real-model graph
+segments. Prefill, decode, logits, sampling, generation, and provider generation
+are not implemented.
 
 That boundary is deliberate. YVEX is being built from the lower runtime upward,
 so that later inference work has something concrete to stand on: artifact
 identity, tensor identity, backend residency, runtime ownership, executable
-graph proof, and only then real model execution.
+graph proof, selected embedding execution, and only then larger real model
+execution.
 
 ## What YVEX is
 
@@ -74,9 +76,9 @@ failed and get a narrower answer than "loading failed" or "inference failed."
 That approach is not meant to be academic. It is what lets the runtime grow
 without lying to itself. A selected embedding tensor materialized on `CUDA` is
 valuable, but it is not a transformer. A deterministic fixture graph is
-valuable, but it is not real-model inference. The next step, real-model partial
-graph execution, will still not be generation. The goal is to earn each word
-before using it.
+valuable, but it is not real-model inference. A selected embedding segment is
+valuable, but it is still not generation. The goal is to earn each word before
+using it.
 
 ## Project posture
 
@@ -112,16 +114,15 @@ earned through source provenance, tensor mapping, runtime execution, and tests.
 | Selected materialization | implemented | selected tensor bytes move into `CPU`/`CUDA` storage | full model loading |
 | Engine weight attachment | implemented | selected materialized weights are engine-owned state | graph execution |
 | Fixture graph execution | implemented for controlled `F32` fixtures | one deterministic graph path runs through backend dispatch | real-model inference |
-| Real-model partial graph | next | first real tensor graph segment | not implemented yet |
+| Real-model partial graph | implemented for selected embedding segment | first real selected tensor graph segment | not prefill, decode, logits, or generation |
 | Prefill, decode, logits | planned | future runtime stages | not implemented |
 | Generation and server generation | unsupported | no text generation path exists | provider endpoints are status-only |
 
-The important new line is fixture graph execution. YVEX now has a deterministic
-graph path for a controlled fixture: an embed node reads attached weights,
-dispatches through the selected backend, writes an output buffer, and reports
-stable output values. That is the first implemented step where the runtime moves
-from owned tensor state to scheduled work. It is still deliberately not a real
-model graph.
+The important new line after fixture execution is the selected embedding segment.
+YVEX can now move from owned real tensor state to scheduled work: an embed node
+reads the selected `F16` `token_embd.weight`, dispatches through the selected
+backend, writes an `F32` output buffer, and compares it with a raw-artifact
+reference slice. It is still deliberately not a full model graph.
 
 ## Execution boundary
 
@@ -146,30 +147,32 @@ backend, allocates output, reads back values, and reports stable output
 identity. That is graph execution for a fixture. It is not real-model
 inference.
 
-The next boundary is real-model partial graph execution. That means a
-constrained segment of a real model graph must participate in scheduled runtime
-computation with real attached tensors, memory planning, backend dispatch,
-regression output, cleanup, and failure tests. It still will not be prefill,
-decode, logits, sampling, or generation.
+The current real-model boundary is the selected embedding segment. The next
+boundary is real-model graph segment expansion: more than one real op must
+participate in scheduled runtime computation with real attached tensors, memory
+planning, backend dispatch, regression output, cleanup, and failure tests. It
+still will not be prefill, decode, logits, sampling, or generation.
 
 This is the reason the project is useful before full inference exists: it gives
 each future inference stage a concrete predecessor instead of a vague promise.
 
 ## What runs today
 
-The current runtime has two different proof paths, and they should not be
-confused.
+The current runtime has two different executable proof paths, and they should
+not be confused.
 
 The two paths are complementary: the selected-artifact path proves that YVEX can
-carry real model bytes through ownership boundaries; the controlled fixture path
-proves that YVEX can execute a small graph exactly.
+carry real model bytes through ownership boundaries and into a constrained
+embedding segment; the controlled fixture path proves that YVEX can execute a
+small graph exactly.
 
 The normal operator path works with the selected DeepSeek embedding artifact.
 It proves that YVEX can carry one real model tensor from operator-local artifact
 identity through `GGUF` parsing, descriptor construction, selected
-materialization, backend residency, and engine-owned attachment. That path is
-the one used by the model registry, `materialize`, `engine`, `session`, daemon
-status, and the selected-artifact gates.
+materialization, backend residency, engine-owned attachment, and selected
+embedding execution. That path is the one used by the model registry,
+`materialize`, `engine`, `session`, `graph --execute-partial`, daemon status,
+and the selected-artifact gates.
 
 The controlled fixture path is different. It uses a tiny controlled `F32`
 `GGUF` so graph execution can be checked exactly. That path proves the executor
@@ -228,6 +231,40 @@ graph_execution_ready: false
 The engine owns the attached backend tensors. The session observes that state;
 it does not own the weights and does not execute a transformer graph.
 
+The selected embedding segment executes the first real-model partial graph path:
+
+```sh
+./yvex graph \
+  --model deepseek4-v4-flash-selected-embed \
+  --backend cpu \
+  --execute-partial \
+  --partial-token 0
+```
+
+For token `0`, the selected artifact reports a real `F16` embedding segment
+summary:
+
+```text
+real_partial_graph_executed: true
+partial_graph_kind: token-embedding
+partial_backend: cpu
+partial_weight: token_embd.weight
+partial_weight_dtype: F16
+partial_output_dtype: F32
+partial_output_count: 4096
+partial_output_bytes: 16384
+partial_max_abs_diff: 0
+execution_ready: false
+graph_execution_ready: false
+status: real-partial-graph-executed
+```
+
+`CUDA`-capable hosts can run the same selected embedding segment with
+`--backend cuda`; the output checksum, reference checksum, and sample values
+should match the `CPU` path. This is real selected tensor participation in
+scheduled graph work. It is not prefill, `KV`, decode, logits, sampling,
+generation, or a transformer backend.
+
 ### Deterministic fixture graph proof
 
 The fixture graph is the current graph-execution proof. It is intentionally
@@ -274,8 +311,8 @@ graph parity only. It is not a `CUDA` transformer backend.
 
 | Path | Artifact | What it proves | What it does not prove |
 | --- | --- | --- | --- |
-| Selected-artifact path | DeepSeek selected `F16` embedding | real artifact identity, selected materialization, backend residency, engine attachment | graph execution or inference |
-| Controlled fixture path | DeepSeek-arch `F32` fixture `GGUF` | deterministic graph execution, backend dispatch, output readback | real-model partial graph or logits |
+| Selected-artifact path | DeepSeek selected `F16` embedding | real artifact identity, selected materialization, backend residency, engine attachment, selected embedding segment execution | full model graph, prefill, logits, or inference |
+| Controlled fixture path | DeepSeek-arch `F32` fixture `GGUF` | deterministic graph execution, backend dispatch, output readback | real-model graph expansion or logits |
 
 ## Live artifacts and fixtures
 
@@ -327,13 +364,14 @@ source provenance, tensor mapping, artifact identity, runtime work, and tests.
 
 ### Controlled fixture artifact
 
-The controlled `F32` fixture is the execution artifact for the current graph
-path. It is small by design. It exists so the executor can be checked exactly
-before real-model partial execution begins.
+The controlled `F32` fixture remains the exact execution artifact for the
+deterministic graph proof path. It is small by design. It exists so executor and
+backend regressions can be checked exactly beside the real selected embedding
+segment.
 
 | Artifact | Role | Current state |
 | --- | --- | --- |
-| DeepSeek selected `F16` embedding | canonical pressure artifact | inspect/materialize/attach pass; used by registry, engine/session, daemon status, and gates |
+| DeepSeek selected `F16` embedding | canonical pressure artifact | inspect/materialize/attach pass; selected embedding partial graph pass; used by registry, engine/session, daemon status, and gates |
 | Controlled DeepSeek-arch `F32` fixture | deterministic graph proof artifact | `CPU`/`CUDA` fixture graph pass; not a real model graph |
 
 ## Artifact workflow
@@ -512,13 +550,13 @@ make check-cuda
 
 The README keeps the normal path short. The operator runbook contains the full
 command-first sequence, including selected `GGUF` emission, alias registration,
-materialization, engine/session attachment, fixture graph execution, daemon
-status, gates, chat diagnostics, quantization/provenance commands, validation,
-artifact hygiene, and debugging.
+materialization, engine/session attachment, selected embedding partial graph
+execution, fixture graph execution, daemon status, gates, chat diagnostics,
+quantization/provenance commands, validation, artifact hygiene, and debugging.
 
 | Path | Reader | Where to go |
 | --- | --- | --- |
-| Normal selected-artifact path | build, register, inspect, materialize, attach | this README and [docs/operator-runbook.md](docs/operator-runbook.md) |
+| Normal selected-artifact path | build, register, inspect, materialize, attach, execute selected embedding segment | this README and [docs/operator-runbook.md](docs/operator-runbook.md) |
 | Deterministic fixture proof | controlled `F32` graph execution | this README and [docs/operator-runbook.md](docs/operator-runbook.md) |
 | Full gates and selected-artifact checks | exact validation and repeatable proof | [docs/operator-runbook.md](docs/operator-runbook.md) |
 | API/ownership extension | C API and lifecycle rules | [docs/api.md](docs/api.md) |
@@ -549,14 +587,16 @@ doctor, and runtime proof commands.
 
 YVEX does not publish token/sec or model-quality numbers yet. That is
 deliberate: without prefill, decode, logits, and generation, such numbers would
-be fictional. The current measurable boundary is fixture graph correctness.
-The controlled fixture output is a correctness proof, not a performance
-benchmark. The next measurable boundary is real-model partial graph regression.
+be fictional. The current measurable boundaries are fixture graph correctness
+and selected embedding partial graph correctness. The controlled fixture output
+and selected embedding checksum are correctness proofs, not performance
+benchmarks. The next measurable boundary is larger real-model graph segment
+regression.
 
 | Measurement | Current YVEX status | First valid point |
 | --- | --- | --- |
 | Fixture graph correctness | available after controlled fixture execution | current fixture path |
-| Real partial graph regression | next | after first real-model graph segment |
+| Real partial graph regression | available for selected embedding segment | current selected embedding partial path |
 | Prefill throughput | not available | after prompt-backed prefill |
 | Decode throughput | not available | after decode step |
 | Logits regression | not available | after logits boundary |
@@ -577,7 +617,7 @@ Capability and regression posture:
 | Eval group | Purpose | Status |
 | --- | --- | --- |
 | Fixture vectors | catch executor/backend regressions | available for the controlled fixture path |
-| Partial graph vectors | catch real-model graph segment drift | planned |
+| Partial graph vectors | catch real-model graph segment drift | available for selected embedding segment; broader vectors planned |
 | Prompt/token tests | catch tokenizer/template drift | diagnostics only |
 | Logits vectors | catch output distribution regressions | planned after logits |
 | Capability eval | inspect generation quality on curated tasks | future only |
@@ -590,24 +630,25 @@ and reproducibility notes. Until those pieces exist, the honest result is no
 published benchmark number.
 
 The measurement rule is simple: YVEX should only measure a boundary it actually
-owns. Fixture outputs are valid today because fixture execution exists. Real
-partial graph vectors become valid after real partial graph execution.
+owns. Fixture outputs are valid today because fixture execution exists. Selected
+embedding checksums are valid today because real partial embedding execution
+exists. Broader partial graph vectors become valid after graph segment expansion.
 Token/sec numbers become valid only after prefill and decode exist. Capability
 evaluation becomes meaningful only when the same generation path used by
 operators exists.
 
 ## Runtime roadmap
 
-The next step is not "inference" in one jump. It is real-model partial graph
-execution: one constrained segment of a real model graph participating in
-scheduled runtime computation with memory planning and backend dispatch.
-That stage should be the first point where the selected-artifact path and the
-graph-execution path begin to converge.
+The next step is not "inference" in one jump. YVEX now has the first real-model
+partial graph path for a selected embedding segment. The next step is expanding
+from that one real op to a larger real-model graph segment with more scheduled
+work, memory planning, backend dispatch, and regression coverage.
 
 | Runtime stage | Public meaning | Status |
 | --- | --- | --- |
 | Controlled fixture graph | deterministic executor proof | implemented |
-| Real partial graph | first real tensor graph segment | next |
+| Real partial graph | selected `F16` embedding segment | implemented |
+| Real graph segment expansion | larger scheduled real-model segment | next |
 | Prompt input | tokenizer/prompt into runtime tensors | planned |
 | Prefill | prompt tokens through graph state | planned |
 | Minimal KV | session-owned append/read state | planned |
