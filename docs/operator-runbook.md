@@ -1,10 +1,22 @@
 # YVEX Operator Runbook
 
 This runbook is the command-first path through the current YVEX operator
-surface. It uses repository-local binaries, operator-local artifact storage,
-DeepSeek native source weights, selected GGUF emission, registry aliases, and
-explicit boundary checks. It does not describe inference or generation because
-those paths are not implemented.
+surface. It uses repository-local binaries, operator-local model storage,
+selected GGUF emission, registry aliases, backend materialization, engine
+attachment, daemon status, and gates. It does not describe inference or
+generation because those paths are not implemented.
+
+The default examples assume this repository sits next to an operator-owned
+`../models/` directory:
+
+```text
+../models/hf/deepseek/DeepSeek-V4-Flash
+../models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+```
+
+That layout is a convenience, not a project rule. If your weights or GGUFs live
+elsewhere, replace the path arguments passed to `--native-source`, `--out`,
+`--path`, and `--report-out`. Keep real model artifacts outside this repository.
 
 ## 1. Build the repository
 
@@ -39,128 +51,86 @@ Use command help as the source of truth for flags and current behavior.
 Expected outcome: help text stays bounded. Commands may inspect, materialize,
 open diagnostics, and serve status endpoints; they must not claim generation.
 
-## 3. Configure operator-local paths
+## 3. Build or refresh the DeepSeek selected GGUF
 
-Use stable operator-local directories outside the repository. The runbook
-overwrites its selected GGUF and reports on each run, so repeated executions test
-the same artifact path instead of creating throwaway state.
-
-```sh
-: "${YVEX_OPERATOR_DIR:?set YVEX_OPERATOR_DIR to an operator-local work directory outside this repository}"
-
-DEEPSEEK_ALIAS=deepseek4-v4-flash-selected-embed
-DEEPSEEK_NATIVE_TENSOR="${DEEPSEEK_NATIVE_TENSOR:-model.embed_tokens.weight}"
-DEEPSEEK_TARGET_QTYPE="${DEEPSEEK_TARGET_QTYPE:-F16}"
-YVEX_ARTIFACT_DIR="$YVEX_OPERATOR_DIR/artifacts/deepseek"
-YVEX_REPORT_DIR="$YVEX_OPERATOR_DIR/reports"
-DEEPSEEK_GGUF="${DEEPSEEK_GGUF:-$YVEX_ARTIFACT_DIR/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf}"
-CONTROLLED_GGUF="$YVEX_ARTIFACT_DIR/controlled-yvex-fixture.gguf"
-
-mkdir -p "$YVEX_ARTIFACT_DIR" "$YVEX_REPORT_DIR"
-
-printf 'operator_dir: %s\n' "$YVEX_OPERATOR_DIR"
-printf 'artifact_dir: %s\n' "$YVEX_ARTIFACT_DIR"
-printf 'report_dir: %s\n' "$YVEX_REPORT_DIR"
-printf 'selected_gguf: %s\n' "$DEEPSEEK_GGUF"
-```
-
-Do not export `YVEX_MODELS_REGISTRY` for the normal operator path unless you
-intend to use an isolated registry. If it is already set from a previous test,
-unset it before using your normal `.yvex/models.local.json`.
+This is the real selected-artifact path. It reads local DeepSeek native
+safetensors and overwrites the selected embedding GGUF in the operator-owned
+GGUF directory.
 
 ```sh
-unset YVEX_MODELS_REGISTRY
-```
-
-Expected outcome: generated selected GGUFs and reports stay outside the
-repository under operator-owned storage. No command in this runbook writes model
-artifacts into git.
-
-## 4. Build or refresh the DeepSeek selected GGUF
-
-The main operator path creates the selected DeepSeek embedding GGUF from local
-native source weights. This is the real selected-artifact path. It overwrites
-`$DEEPSEEK_GGUF` every time so the same operator-local artifact is refreshed
-instead of creating temporary copies.
-
-```sh
-: "${YVEX_NATIVE_SOURCE:?set YVEX_NATIVE_SOURCE to the local DeepSeek native source directory}"
-: "${YVEX_SOURCE_REPO:?set YVEX_SOURCE_REPO to the upstream source repo id}"
-: "${YVEX_SOURCE_REVISION:?set YVEX_SOURCE_REVISION to the upstream source revision}"
-
-printf 'native_source: %s\n' "$YVEX_NATIVE_SOURCE"
-printf 'source_repo: %s\n' "$YVEX_SOURCE_REPO"
-printf 'source_revision: %s\n' "$YVEX_SOURCE_REVISION"
-
 ./yvex source-manifest create \
-  --hf-repo "$YVEX_SOURCE_REPO" \
-  --revision "$YVEX_SOURCE_REVISION" \
-  --local-path "$YVEX_NATIVE_SOURCE" \
+  --hf-repo OWNER/MODEL \
+  --revision REVISION \
+  --local-path ../models/hf/deepseek/DeepSeek-V4-Flash \
   --status in-progress \
-  --out "$YVEX_REPORT_DIR/deepseek-source-manifest.json"
+  --out ../models/gguf/deepseek/deepseek-source-manifest.json
 
-./yvex native-weights --source "$YVEX_NATIVE_SOURCE" --limit 20
-./yvex tensor-map --arch deepseek4 --native-source "$YVEX_NATIVE_SOURCE" --limit 20
+./yvex native-weights \
+  --source ../models/hf/deepseek/DeepSeek-V4-Flash \
+  --limit 20
+
+./yvex tensor-map \
+  --arch deepseek4 \
+  --native-source ../models/hf/deepseek/DeepSeek-V4-Flash \
+  --limit 20
+
 ./yvex convert plan \
   --arch deepseek4 \
-  --native-source "$YVEX_NATIVE_SOURCE" \
-  --out-plan "$YVEX_REPORT_DIR/deepseek-selected-plan.json"
+  --native-source ../models/hf/deepseek/DeepSeek-V4-Flash \
+  --out-plan ../models/gguf/deepseek/deepseek-selected-plan.json
 
 ./yvex convert emit \
   --arch deepseek4 \
-  --native-source "$YVEX_NATIVE_SOURCE" \
-  --tensor "$DEEPSEEK_NATIVE_TENSOR" \
-  --target-qtype "$DEEPSEEK_TARGET_QTYPE" \
-  --out "$DEEPSEEK_GGUF" \
+  --native-source ../models/hf/deepseek/DeepSeek-V4-Flash \
+  --tensor model.embed_tokens.weight \
+  --target-qtype F16 \
+  --out ../models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf \
   --overwrite
 
-./yvex inspect "$DEEPSEEK_GGUF"
-./yvex tensors "$DEEPSEEK_GGUF"
+./yvex inspect ../models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+./yvex tensors ../models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
 ```
 
 Expected outcome: `inspect` reports `architecture: deepseek`, and `tensors`
 shows `token_embd.weight` with shape `[4096,129280]`, dtype `F16`, and
 `1059061760` tensor bytes.
 
-If the native source is not present on this machine, set `DEEPSEEK_GGUF` to an
-already produced operator-local selected GGUF and continue from the next
-section. Do not document or commit the real machine path.
+If your native source or GGUF directory is somewhere else, change only the path
+arguments. Do not commit the real model source or generated selected GGUF.
 
-## 5. Register and inspect the DeepSeek selected GGUF
+## 4. Register and inspect the DeepSeek selected GGUF
 
-Register the selected GGUF using the canonical alias. The alias points to the
-operator-local file created or selected in section 4.
+Register the selected GGUF using the canonical alias.
 
 ```sh
 ./yvex models add \
-  --path "$DEEPSEEK_GGUF" \
-  --alias "$DEEPSEEK_ALIAS" \
+  --path ../models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf \
+  --alias deepseek4-v4-flash-selected-embed \
   --support-level selected-tensor-materialized
 
-./yvex models use "$DEEPSEEK_ALIAS"
+./yvex models use deepseek4-v4-flash-selected-embed
 ./yvex models current
-./yvex inspect "$DEEPSEEK_ALIAS"
-./yvex tensors "$DEEPSEEK_ALIAS"
+./yvex inspect deepseek4-v4-flash-selected-embed
+./yvex tensors deepseek4-v4-flash-selected-embed
 ```
 
 Expected outcome: `models current` prints the DeepSeek alias, `inspect` reports
-`architecture: deepseek`, and `tensors` shows `token_embd.weight` with shape
-`[4096,129280]`, dtype `F16`, and `1059061760` tensor bytes.
+`architecture: deepseek`, and `tensors` shows the selected F16 embedding tensor.
 
 Alias policy is strict. Use canonical aliases such as
 `deepseek4-v4-flash-selected-embed`; simple labels such as `controlled` are
 rejected.
 
-## 6. Materialize and attach DeepSeek selected weights
+## 5. Materialize and attach DeepSeek selected weights
 
 Materialization copies the selected tensor bytes into backend-owned storage.
 Engine attachment then makes that backend-resident tensor engine-owned runtime
 state. Neither step executes a transformer graph.
 
 ```sh
-./yvex materialize --model "$DEEPSEEK_ALIAS" --backend cpu
-./yvex engine --model "$DEEPSEEK_ALIAS" --backend cpu
-./yvex session "$DEEPSEEK_ALIAS" --backend cpu
+./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cpu
+./yvex engine --model deepseek4-v4-flash-selected-embed --backend cpu
+./yvex session deepseek4-v4-flash-selected-embed --backend cpu
 ```
 
 CUDA-capable hosts can also run:
@@ -168,9 +138,9 @@ CUDA-capable hosts can also run:
 ```sh
 ./yvex cuda-info
 ./yvex backend cuda
-./yvex materialize --model "$DEEPSEEK_ALIAS" --backend cuda
-./yvex engine --model "$DEEPSEEK_ALIAS" --backend cuda
-./yvex session "$DEEPSEEK_ALIAS" --backend cuda
+./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
+./yvex engine --model deepseek4-v4-flash-selected-embed --backend cuda
+./yvex session deepseek4-v4-flash-selected-embed --backend cuda
 ```
 
 Expected outcome:
@@ -188,107 +158,7 @@ graph_execution_ready: false
 The engine owns the attached backend tensors. The session observes that state;
 it does not own or execute the weights.
 
-## 7. Optional controlled GGUF sanity check
-
-Use the controlled GGUF path only when you want a repository-local sanity check
-that does not require external model weights. This is not the DeepSeek pipeline,
-and it intentionally reports `architecture: llama`.
-
-```sh
-./yvex gguf-emit controlled --out "$CONTROLLED_GGUF" --overwrite
-./yvex inspect "$CONTROLLED_GGUF"
-./yvex metadata "$CONTROLLED_GGUF"
-./yvex tensors "$CONTROLLED_GGUF"
-```
-
-Expected outcome: `inspect` reports GGUF v3 descriptor facts, `metadata` prints
-parsed metadata, and `tensors` shows the controlled `token_embd.weight` tensor.
-
-## 8. Materialize controlled weights on CPU and CUDA
-
-Materialization copies tensor bytes into backend-owned storage and reports
-residency. It does not execute a transformer graph.
-
-```sh
-./yvex materialize --model "$CONTROLLED_GGUF" --backend cpu
-```
-
-CUDA-capable hosts can also run:
-
-```sh
-./yvex cuda-info
-./yvex backend cuda
-./yvex materialize --model "$CONTROLLED_GGUF" --backend cuda
-```
-
-Expected outcome: `status: weights-materialized` and `execution_ready: false`.
-This proves controlled emission, parsing, tensor table inspection, and selected
-materialization, not full model execution.
-
-Attach the same selected materialized weights to the engine lifecycle:
-
-```sh
-./yvex engine --model "$CONTROLLED_GGUF" --backend cpu
-./yvex session "$CONTROLLED_GGUF" --backend cpu
-```
-
-CUDA, when available:
-
-```sh
-./yvex engine --model "$CONTROLLED_GGUF" --backend cuda
-./yvex session "$CONTROLLED_GGUF" --backend cuda
-```
-
-Expected outcome: `weights_attached: true`, `weight_tensor_count: 1`,
-`weights_backend: cpu` or `cuda`, and `graph_execution_ready: false`. The
-engine owns the attached backend tensors. The session observes that state; it
-does not own or execute the weights.
-
-## 9. Local registry notes
-
-The local model registry maps canonical aliases to external GGUF paths. When the
-artifact filename follows the YVEX naming grammar, `models add` can derive the
-alias from the filename and `--alias` is optional.
-
-```sh
-./yvex models add --path "$DEEPSEEK_GGUF"
-./yvex models list
-./yvex inspect "$DEEPSEEK_ALIAS"
-./yvex tensors "$DEEPSEEK_ALIAS"
-```
-
-Expected outcome: the DeepSeek alias resolves through the registry. The alias
-is local state; it does not change runtime capability.
-
-## 10. Select the current model
-
-Select one registered alias as the current model for console diagnostics.
-
-```sh
-./yvex models use "$DEEPSEEK_ALIAS"
-./yvex models current
-```
-
-Expected outcome: `models current` prints the DeepSeek alias. No command may
-silently choose the first model in the registry.
-
-## 11. Use chat / REPL diagnostics only with tokenizer-bearing artifacts
-
-The selected DeepSeek embedding artifact does not include the tokenizer metadata
-needed by `chat`. Use `chat` with a tokenizer-bearing fixture or future
-tokenizer-bearing model artifact. The diagnostic console accepts text and slash
-commands, but it does not generate model responses.
-
-```sh
-printf '/status\n/quit\n' | ./yvex chat --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
-```
-
-Expected outcome: the console opens against the explicit tokenizer fixture and
-exits on `/quit`. Plain user text produces the diagnostic unsupported-generation
-placeholder; it is not inference. Do not use the selected DeepSeek embedding
-artifact as a chat model.
-
-## 12. Run yvexd with the DeepSeek alias
+## 6. Run yvexd with the DeepSeek alias
 
 `yvexd` is a provider/status shell. It accepts a direct path or registered alias
 for `--model`, then serves status endpoints. In one-request mode it exits after
@@ -297,8 +167,12 @@ serving one HTTP request.
 Direct path:
 
 ```sh
-./yvexd --model "$DEEPSEEK_GGUF" --backend cpu \
-  --host 127.0.0.1 --port 18080 --one-request &
+./yvexd \
+  --model ../models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf \
+  --backend cpu \
+  --host 127.0.0.1 \
+  --port 18080 \
+  --one-request &
 server_pid=$!
 sleep 1
 curl -s http://127.0.0.1:18080/v1/models
@@ -308,13 +182,20 @@ wait "$server_pid" || true
 Alias:
 
 ```sh
-./yvexd --model "$DEEPSEEK_ALIAS" --backend cpu \
-  --host 127.0.0.1 --port 18081 --one-request &
+./yvexd \
+  --model deepseek4-v4-flash-selected-embed \
+  --backend cpu \
+  --host 127.0.0.1 \
+  --port 18081 \
+  --one-request &
 server_pid=$!
 sleep 1
 curl -s http://127.0.0.1:18081/v1/models
 wait "$server_pid" || true
 ```
+
+Expected outcome: `/v1/models` reports provider-shell model status with
+`generation_available: false`. The daemon is not a generation server.
 
 Status endpoints:
 
@@ -324,58 +205,14 @@ GET /metrics
 GET /v1/models
 ```
 
-Expected outcome: `/v1/models` reports provider-shell model status with
-`generation_available: false`. The daemon is not a generation server.
+## 7. Run model and materialization gates
 
-## 13. Active DeepSeek selected artifact facts
-
-The active DeepSeek selected embedding artifact is external operator state. The
-commands below should pass after section 4 registration.
-
-```sh
-./yvex models list
-./yvex models current
-./yvex inspect deepseek4-v4-flash-selected-embed
-./yvex tensors deepseek4-v4-flash-selected-embed
-./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cpu
-./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
-./yvex engine --model deepseek4-v4-flash-selected-embed --backend cpu
-./yvex engine --model deepseek4-v4-flash-selected-embed --backend cuda
-./yvex session deepseek4-v4-flash-selected-embed --backend cpu
-./yvex session deepseek4-v4-flash-selected-embed --backend cuda
-```
-
-Expected facts:
-
-```text
-tensor: token_embd.weight
-dims: [4096,129280]
-dtype: F16
-tensor_bytes: 1059061760
-weights_attached: true
-execution_ready: false
-graph_execution_ready: false
-```
-
-If the artifact is absent on this host, run section 4 to emit it from native
-source or set `DEEPSEEK_GGUF` to an already produced operator-local selected
-GGUF, then register it:
-
-```sh
-./yvex models add --path "$DEEPSEEK_GGUF" --alias "$DEEPSEEK_ALIAS"
-./yvex models use "$DEEPSEEK_ALIAS"
-```
-
-Do not commit the artifact or the local registry.
-
-## 14. Run model and materialization gates
-
-Use gates for repeatable selected-artifact checks. These commands are long
-because they encode expected file identity and tensor facts.
+Use gates for repeatable selected-artifact checks. These commands encode
+expected file identity and tensor facts.
 
 ```sh
 ./yvex model-gate check \
-  --model "$DEEPSEEK_ALIAS" \
+  --model deepseek4-v4-flash-selected-embed \
   --label deepseek-v4-flash-selected-embedding \
   --family deepseek4 \
   --sha256 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab \
@@ -388,12 +225,12 @@ because they encode expected file identity and tensor facts.
   --backend cuda \
   --require-cpu \
   --require-cuda \
-  --report-out "$YVEX_REPORT_DIR/model-gate.txt"
+  --report-out ../models/gguf/deepseek/deepseek-model-gate.txt
 ```
 
 ```sh
 ./yvex materialize-gate check \
-  --model "$DEEPSEEK_ALIAS" \
+  --model deepseek4-v4-flash-selected-embed \
   --label deepseek-v4-flash-selected-embedding \
   --family deepseek4 \
   --scope selected-tensor \
@@ -409,37 +246,47 @@ because they encode expected file identity and tensor facts.
   --require-cuda \
   --repeat 3 \
   --check-cleanup \
-  --report-out "$YVEX_REPORT_DIR/materialize-gate.txt"
+  --report-out ../models/gguf/deepseek/deepseek-materialize-gate.txt
 ```
 
-Expected outcome: gate status is pass when the external artifact and CUDA host
+Expected outcome: gate status is pass when the selected artifact and CUDA host
 are available. The result remains selected-tensor materialization only.
 
-## 15. Open-weight intake commands
+## 8. Use chat / REPL diagnostics only with tokenizer-bearing artifacts
 
-Section 4 is the canonical DeepSeek selected-emission path. The same command
-surface can be reused for other operator-local native sources by changing
-`YVEX_NATIVE_SOURCE`, output names, tensor name, and architecture.
+The selected DeepSeek embedding artifact does not include the tokenizer metadata
+needed by `chat`. Use `chat` with a tokenizer-bearing fixture or future
+tokenizer-bearing model artifact. The diagnostic console accepts text and slash
+commands, but it does not generate model responses.
 
 ```sh
-./yvex source-manifest create \
-  --hf-repo "$YVEX_SOURCE_REPO" \
-  --revision "$YVEX_SOURCE_REVISION" \
-  --local-path "$YVEX_NATIVE_SOURCE" \
-  --status in-progress \
-  --out "$YVEX_REPORT_DIR/source-manifest.json"
-
-./yvex native-weights --source "$YVEX_NATIVE_SOURCE" --limit 20
-./yvex tensor-map --arch deepseek4 --native-source "$YVEX_NATIVE_SOURCE" --limit 20
-./yvex convert plan --arch deepseek4 --native-source "$YVEX_NATIVE_SOURCE" --out-plan "$YVEX_REPORT_DIR/yvex-plan.json"
-./yvex convert emit --arch deepseek4 --native-source "$YVEX_NATIVE_SOURCE" --tensor "$DEEPSEEK_NATIVE_TENSOR" --target-qtype "$DEEPSEEK_TARGET_QTYPE" --out "$DEEPSEEK_GGUF" --overwrite
+printf '/status\n/quit\n' | ./yvex chat --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
 ```
 
-Expected outcome: source facts, tensor mapping, a conversion plan, or a selected
-GGUF. Full native quantization and full-model GGUF conversion are not current
-runtime capabilities.
+Expected outcome: the console opens against the explicit tokenizer fixture and
+exits on `/quit`. Plain user text produces the diagnostic unsupported-generation
+placeholder; it is not inference. Do not use the selected DeepSeek embedding
+artifact as a chat model.
 
-## 16. Quantization / imatrix / provenance commands
+## 9. Optional controlled GGUF sanity check
+
+Use the controlled GGUF path only when you want a repository-local sanity check
+that does not require external model weights. This is not the DeepSeek pipeline,
+and it intentionally reports `architecture: llama`.
+
+```sh
+./yvex gguf-emit controlled --out ../models/gguf/deepseek/controlled-yvex-fixture.gguf --overwrite
+./yvex inspect ../models/gguf/deepseek/controlled-yvex-fixture.gguf
+./yvex metadata ../models/gguf/deepseek/controlled-yvex-fixture.gguf
+./yvex tensors ../models/gguf/deepseek/controlled-yvex-fixture.gguf
+./yvex materialize --model ../models/gguf/deepseek/controlled-yvex-fixture.gguf --backend cpu
+```
+
+Expected outcome: `status: weights-materialized` and `execution_ready: false`.
+This proves controlled emission, parsing, tensor table inspection, and selected
+materialization, not full model execution.
+
+## 10. Quantization / imatrix / provenance commands
 
 Keep qtype storage, policy, provenance, and compute boundaries separate.
 
@@ -458,7 +305,7 @@ Manifest-dependent commands:
 Expected outcome: these surfaces report policy or provenance state. They do not
 run native quantization, calibration, or model execution.
 
-## 17. Validate the repository
+## 11. Validate the repository
 
 Run the standard validation gate before committing changes.
 
@@ -479,7 +326,7 @@ make check-cuda
 Expected outcome: baseline tests, CLI smoke, docs surface, repository surface,
 and CUDA validation pass. If CUDA is unavailable, report that explicitly.
 
-## 18. Artifact and path hygiene
+## 12. Artifact and path hygiene
 
 Check that generated artifacts and local model state are not tracked.
 
@@ -500,17 +347,15 @@ grep -R -nE '(/home|/Users|/mnt)/[^[:space:]]+' README.md MODEL_ARTIFACTS.md AGE
 Expected outcome: no personal or machine-specific absolute paths in public
 documentation.
 
-## 19. Debugging checklist
+## 13. Debugging checklist
 
 Use this order before assuming a runtime bug:
 
 ```text
 run ./yvex help <command>
-check YVEX_MODELS_REGISTRY
-check YVEX_OPERATOR_DIR
-check YVEX_NATIVE_SOURCE
-check YVEX_SOURCE_REPO
-check YVEX_SOURCE_REVISION
+check the path passed to --native-source
+check the path passed to --out
+check YVEX_MODELS_REGISTRY only if you intentionally use an isolated registry
 run ./yvex models current
 run ./yvex inspect <model>
 run ./yvex tensors <model>
@@ -522,7 +367,7 @@ never commit generated GGUFs or local registry files
 For daemon checks, start with `--one-request` and a status endpoint before
 testing longer-lived processes.
 
-## 20. Benchmarking and evaluation status
+## 14. Benchmarking and evaluation status
 
 Benchmarking and capability evaluation are not implemented yet. Throughput,
 token latency, official-vector evaluation, logits regression, and generation
@@ -531,7 +376,7 @@ quality suites belong after the relevant graph/logits/generation runtime exists.
 Do not create benchmark claims from materialization, CUDA probing, daemon
 status, or diagnostic console behavior.
 
-## 21. What is not implemented yet
+## 15. What is not implemented yet
 
 The current runtime does not implement full model execution, prefill, decode,
 sampling, generation, provider-compatible generation, full DeepSeek support,
