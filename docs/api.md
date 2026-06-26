@@ -73,6 +73,8 @@ public option structs borrow input pointers
 returned opaque handles must be closed by the matching close/free function
 registry and resolver objects own copied strings until cleared/closed
 backend tensors are released through backend/weight table close paths
+engine-attached weights are released by engine close
+sessions observe engine attachment state and do not own engine weights
 model artifacts remain outside the repository
 ```
 
@@ -88,6 +90,7 @@ model artifacts remain outside the repository
 | CPU backend | implemented |
 | CUDA tensor movement/parity subset | implemented when CUDA is available |
 | Selected tensor materialization | implemented |
+| Engine-owned selected weight attachment | implemented |
 | Local model registry | implemented |
 | Alias-or-path model resolver | implemented for one-shot commands |
 | Model gate | implemented |

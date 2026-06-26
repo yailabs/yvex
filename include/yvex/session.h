@@ -75,8 +75,13 @@ typedef struct {
     const char *logits_status;
     unsigned long long logits_capacity;
     int graph_partial;
+    int weights_attached;
+    const char *weights_backend;
+    unsigned long long weight_tensor_count;
+    unsigned long long weight_total_bytes;
     int backend_available;
     int execution_ready;
+    int graph_execution_ready;
 } yvex_session_summary;
 
 int yvex_session_create(yvex_session **out,

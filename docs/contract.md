@@ -52,6 +52,12 @@ CUDA support currently covers device probing, tensor allocation, tensor
 movement, and a kernel-backed parity subset. It does not imply matmul,
 attention, full model execution, generation, or benchmark support.
 
+Engine/session diagnostics may attach selected materialized weights as
+engine-owned runtime state. Attached weights prove backend residency under the
+engine lifecycle; they do not imply graph execution, prefill, decode, logits,
+sampling, generation, or inference readiness. Sessions may report the engine's
+attachment summary, but they do not own or free engine-attached weights.
+
 ## 5. Server Contract
 
 `./yvexd` exposes a provider/status shell:

@@ -38,6 +38,34 @@ grep 'token_embd.weight' "$ROOT/tensors.out"
 "$YVEX_BIN" engine "$ALIAS" > "$ROOT/engine.out"
 grep 'status: engine-descriptor' "$ROOT/engine.out"
 
+"$YVEX_BIN" engine --model "$MODEL" --backend cpu > "$ROOT/engine-path-attach.out"
+grep 'weights_attached: true' "$ROOT/engine-path-attach.out"
+grep 'weights_backend: cpu' "$ROOT/engine-path-attach.out"
+grep 'weight_tensor_count: 1' "$ROOT/engine-path-attach.out"
+grep 'weight_total_bytes: 128' "$ROOT/engine-path-attach.out"
+grep 'graph_execution_ready: false' "$ROOT/engine-path-attach.out"
+grep 'status: engine-weights-attached' "$ROOT/engine-path-attach.out"
+
+"$YVEX_BIN" engine --model "$ALIAS" --backend cpu > "$ROOT/engine-alias-attach.out"
+grep 'weights_attached: true' "$ROOT/engine-alias-attach.out"
+grep 'attached_weight_0: token_embd.weight' "$ROOT/engine-alias-attach.out"
+grep 'execution_ready: false' "$ROOT/engine-alias-attach.out"
+
+"$YVEX_BIN" session "$ALIAS" --backend cpu > "$ROOT/session-alias-attach.out"
+grep 'weights_attached: true' "$ROOT/session-alias-attach.out"
+grep 'weights_backend: cpu' "$ROOT/session-alias-attach.out"
+grep 'weight_tensor_count: 1' "$ROOT/session-alias-attach.out"
+grep 'execution_ready: false' "$ROOT/session-alias-attach.out"
+grep 'graph_execution_ready: false' "$ROOT/session-alias-attach.out"
+
+for i in 1 2 3; do
+  "$YVEX_BIN" engine --model "$MODEL" --backend cpu > "$ROOT/engine-repeat-$i.out"
+  grep 'status: engine-weights-attached' "$ROOT/engine-repeat-$i.out"
+done
+
+"$YVEX_BIN" engine --model "$MODEL" --backend missing > "$ROOT/engine-bad-backend.out" 2> "$ROOT/engine-bad-backend.err" && exit 1 || true
+grep 'unknown backend kind: missing' "$ROOT/engine-bad-backend.err"
+
 "$YVEX_BIN" graph "$ALIAS" > "$ROOT/graph.out"
 grep 'status: graph-partial' "$ROOT/graph.out"
 

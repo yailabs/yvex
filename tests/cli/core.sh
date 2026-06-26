@@ -230,7 +230,7 @@ run_ok help_detokenize "$YVEX_BIN" help detokenize
 contains "$OUT_DIR/help_detokenize.out" "usage: yvex detokenize <path> --ids IDS"
 
 run_ok help_engine "$YVEX_BIN" help engine
-contains "$OUT_DIR/help_engine.out" "usage: yvex engine <path>"
+contains "$OUT_DIR/help_engine.out" "usage: yvex engine [--model] FILE_OR_ALIAS [--backend cpu|cuda]"
 
 run_ok help_graph "$YVEX_BIN" help graph
 contains "$OUT_DIR/help_graph.out" "usage: yvex graph <path>"
@@ -263,7 +263,7 @@ run_ok help_run "$YVEX_BIN" help run
 contains "$OUT_DIR/help_run.out" "usage: yvex run --model FILE"
 
 run_ok help_session "$YVEX_BIN" help session
-contains "$OUT_DIR/help_session.out" "usage: yvex session <path>"
+contains "$OUT_DIR/help_session.out" "usage: yvex session FILE_OR_ALIAS [--backend cpu|cuda]"
 
 run_ok help_source_manifest "$YVEX_BIN" help source-manifest
 contains "$OUT_DIR/help_source_manifest.out" "usage: yvex source-manifest create"

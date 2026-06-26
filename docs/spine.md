@@ -63,6 +63,8 @@ quant-job fixture validation
 imatrix fixture validation
 server/provider status shell
 canonical operator runbook
+engine-owned selected materialized weight attachment
+session visibility into engine-attached weight state
 ```
 
 Current live target:
@@ -84,7 +86,6 @@ Unsupported / not advanced:
 full model execution
 full DeepSeek materialization
 full GGUF conversion
-engine ownership of materialized selected weights
 fixture graph execution
 real-model partial graph execution
 prefill
@@ -155,8 +156,8 @@ execution_ready: true
 | CLI.MODELS.4 | complete | Model alias resolution in yvexd |
 | DOCS.OPERATOR.RUNBOOK.0 | complete | Canonical operator runbook |
 | SPINE.REBASE.2 | complete | Runtime track rebase before M3 |
-| M3 | next | Materialized-weight engine attachment |
-| M4 | paused | First executable fixture graph path |
+| M3 | complete | Materialized-weight engine attachment |
+| M4 | next | First executable fixture graph path |
 | M5 | paused | First real-model partial graph execution |
 | M6 | paused | Prefill runtime foundation |
 | M7 | paused | Decode and logits runtime foundation |
@@ -178,8 +179,9 @@ execution_ready: true
 
 ```text
 parser/model/tokenizer/graph/backend/session shell implemented
-materialization produces backend-resident tensors only
-engine does not yet own materialized selected weights
+materialization produces backend-resident tensors
+engine owns attached selected materialized weights
+session can observe engine weight attachment state
 real graph execution not implemented
 prefill/decode/logits/sampling/generation not implemented
 ```
@@ -213,7 +215,8 @@ selected-tensor materialization proven
 DeepSeek selected embedding is the active live target
 model-gate and materialize-gate pass on CPU/CUDA
 full model materialization not reached
-engine attachment not reached
+engine attachment complete
+fixture graph execution not reached
 execution/prefill/decode/generation not reached
 execution_ready remains false
 ```
@@ -307,8 +310,8 @@ selected artifact proof
   -> constrained generation
 ```
 
-Selected-tensor materialization is evidence of residency, not execution. M3 must
-attach materialized selected weights to engine/session ownership without
+Selected-tensor materialization is evidence of residency, not execution. M3
+attached materialized selected weights to engine/session ownership without
 implying graph execution. M4 must execute deterministic fixture graphs before
 M5 touches real-model graph segments. M5 must prove real tensor participation in
 scheduled computation before prefill. M6 owns prompt-token to KV/logit-producing
@@ -366,14 +369,14 @@ trace/profile output, and explicit generation support boundary.
 ## 7. Active Next
 
 ```text
-M3 - Materialized-weight engine attachment
+M4 - First executable fixture graph path
 ```
 
-`SPINE.REBASE.2` completed the runtime track rebase after the operator runbook.
-The next implementation work is M3: attach selected materialized weights to
-engine/session ownership without claiming graph execution. Do not begin M4-M8,
-advanced Runtime KV work, Benchmark/Eval work, or generation-facing work until
-the relevant earlier runtime state exists in code and tests.
+M3 completed engine-owned selected weight attachment without graph execution.
+The next implementation work is M4: execute a deterministic tiny fixture graph
+over controlled weights. Do not begin M5-M8, advanced Runtime KV work,
+Benchmark/Eval work, or generation-facing work until the relevant earlier
+runtime state exists in code and tests.
 
 ## 8. Validation Gate
 

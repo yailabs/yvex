@@ -77,9 +77,49 @@ static int test_engine_errors(void)
     return 0;
 }
 
+static int test_engine_attaches_weights(void)
+{
+    yvex_engine *engine = NULL;
+    yvex_engine_options options;
+    yvex_engine_summary summary;
+    yvex_error err;
+    int rc;
+    int i;
+
+    for (i = 0; i < 3; ++i) {
+        memset(&options, 0, sizeof(options));
+        options.model_path = "tests/fixtures/gguf/valid-tokenizer-simple.gguf";
+        options.load_tokenizer = 1;
+        options.build_descriptor = 1;
+        options.build_default_graph = 1;
+        options.attach_weights = 1;
+        options.backend_name = "cpu";
+        options.require_all_weights = 1;
+
+        rc = yvex_engine_open(&engine, &options, &err);
+        YVEX_TEST_ASSERT(rc == YVEX_OK, "engine opens with attached weights");
+        rc = yvex_engine_get_summary(engine, &summary, &err);
+        YVEX_TEST_ASSERT(rc == YVEX_OK, "attached engine summary");
+        YVEX_TEST_ASSERT(summary.weights_attached == 1, "weights attached");
+        YVEX_TEST_ASSERT_STREQ(summary.weights_backend, "cpu", "weights backend cpu");
+        YVEX_TEST_ASSERT(summary.weight_tensor_count == 1, "attached tensor count");
+        YVEX_TEST_ASSERT(summary.weight_total_bytes == 128, "attached weight bytes");
+        YVEX_TEST_ASSERT(summary.weight_backend_allocated_bytes == 128,
+                         "attached backend allocated bytes");
+        YVEX_TEST_ASSERT(summary.graph_execution_ready == 0, "graph execution false");
+        YVEX_TEST_ASSERT_STREQ(summary.graph_status, "partial", "graph remains partial");
+
+        yvex_engine_close(engine);
+        engine = NULL;
+    }
+
+    return 0;
+}
+
 int yvex_test_engine(void)
 {
     if (test_engine_opens_fixture() != 0) return 1;
     if (test_engine_errors() != 0) return 1;
+    if (test_engine_attaches_weights() != 0) return 1;
     return 0;
 }

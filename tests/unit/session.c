@@ -163,10 +163,54 @@ static int test_session_context_overflow(void)
     return 0;
 }
 
+static int test_session_observes_engine_weights(void)
+{
+    yvex_engine *engine = NULL;
+    yvex_backend *backend = NULL;
+    yvex_session *session = NULL;
+    yvex_engine_options engine_options;
+    yvex_session_options session_options;
+    yvex_session_summary summary;
+    yvex_error err;
+    int rc;
+
+    memset(&engine_options, 0, sizeof(engine_options));
+    memset(&session_options, 0, sizeof(session_options));
+    engine_options.model_path = "tests/fixtures/gguf/valid-tokenizer-simple.gguf";
+    engine_options.load_tokenizer = 1;
+    engine_options.build_descriptor = 1;
+    engine_options.build_default_graph = 1;
+    engine_options.attach_weights = 1;
+    engine_options.backend_name = "cpu";
+    engine_options.require_all_weights = 1;
+    session_options.allow_partial_graph = 1;
+
+    rc = yvex_engine_open(&engine, &engine_options, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "open attached engine");
+    rc = yvex_backend_open_cpu(&backend, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "open session backend");
+    rc = yvex_session_create(&session, engine, backend, &session_options, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "create session over attached engine");
+    rc = yvex_session_get_summary(session, &summary, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "attached session summary");
+    YVEX_TEST_ASSERT(summary.weights_attached == 1, "session sees attached weights");
+    YVEX_TEST_ASSERT_STREQ(summary.weights_backend, "cpu", "session sees weight backend");
+    YVEX_TEST_ASSERT(summary.weight_tensor_count == 1, "session sees weight count");
+    YVEX_TEST_ASSERT(summary.weight_total_bytes == 128, "session sees weight bytes");
+    YVEX_TEST_ASSERT(summary.execution_ready == 0, "session execution false");
+    YVEX_TEST_ASSERT(summary.graph_execution_ready == 0, "session graph execution false");
+
+    yvex_session_close(session);
+    yvex_backend_close(backend);
+    yvex_engine_close(engine);
+    return 0;
+}
+
 int yvex_test_session(void)
 {
     if (test_session_lifecycle() != 0) return 1;
     if (test_session_tokens_and_unsupported_runtime() != 0) return 1;
     if (test_session_context_overflow() != 0) return 1;
+    if (test_session_observes_engine_weights() != 0) return 1;
     return 0;
 }

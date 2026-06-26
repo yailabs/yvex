@@ -115,8 +115,8 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "engine",
         "Open an engine descriptor.",
-        "yvex engine <path>",
-        "Opens the descriptor/tokenizer/graph stack and reports engine diagnostics. It does not execute prefill, decode, or generation.",
+        "yvex engine [--model] FILE_OR_ALIAS [--backend cpu|cuda]",
+        "Opens the descriptor/tokenizer/graph stack and, when --backend is provided, attaches selected materialized weights as engine-owned residency state. It does not execute prefill, decode, or generation.",
         command_engine,
     },
     {
@@ -269,8 +269,8 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "session",
         "Create an engine/session layer diagnostic session.",
-        "yvex session <path> [--backend cpu|cuda] [--ctx N] [--text TEXT] [--accept-tokens]",
-        "Creates a lifecycle-only session over an engine and backend. It may accept tokens for diagnostics, but it does not run prefill, decode, or generation.",
+        "yvex session FILE_OR_ALIAS [--backend cpu|cuda] [--ctx N] [--text TEXT] [--accept-tokens]",
+        "Creates a lifecycle-only session over an engine and backend. It observes engine-attached weights but does not run prefill, decode, or generation.",
         command_session,
     },
     {
@@ -1044,29 +1044,85 @@ static int command_engine(int argc, char **argv)
 {
     yvex_engine *engine = NULL;
     yvex_model_ref model_ref;
+    yvex_engine_options options;
     yvex_engine_summary summary;
     yvex_error err;
+    const char *model_arg = NULL;
+    const char *backend_name = NULL;
+    int i;
     int rc;
 
     yvex_error_clear(&err);
     memset(&model_ref, 0, sizeof(model_ref));
+    memset(&options, 0, sizeof(options));
 
-    if (argc != 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
-        if (argc == 3) {
-            print_command_help(stdout, find_command("engine"));
-            return 0;
+    if (argc < 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        print_command_help(stdout, find_command("engine"));
+        return argc >= 3 ? 0 : 2;
+    }
+
+    for (i = 2; i < argc; ++i) {
+        if (strcmp(argv[i], "--model") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --model requires a file or alias\n");
+                return 2;
+            }
+            if (model_arg) {
+                fprintf(stderr, "yvex: engine accepts only one model reference\n");
+                return 2;
+            }
+            model_arg = argv[++i];
+        } else if (strcmp(argv[i], "--backend") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --backend requires cpu or cuda\n");
+                return 2;
+            }
+            backend_name = argv[++i];
+        } else if (argv[i][0] == '-') {
+            fprintf(stderr, "yvex: unknown engine option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help engine' for usage.\n");
+            return 2;
+        } else {
+            if (model_arg) {
+                fprintf(stderr, "yvex: engine accepts only one model reference\n");
+                return 2;
+            }
+            model_arg = argv[i];
         }
-        fprintf(stderr, "yvex: engine requires exactly one path\n");
-        fprintf(stderr, "usage: yvex engine <path>\n");
+    }
+
+    if (!model_arg) {
+        fprintf(stderr, "yvex: engine requires FILE_OR_ALIAS\n");
+        fprintf(stderr, "usage: yvex engine [--model] FILE_OR_ALIAS [--backend cpu|cuda]\n");
+        return 2;
+    }
+    if (backend_name && strcmp(backend_name, "cpu") != 0 && strcmp(backend_name, "cuda") != 0) {
+        fprintf(stderr, "yvex: unknown backend kind: %s\n", backend_name);
         return 2;
     }
 
-    rc = yvex_model_ref_resolve(&model_ref, argv[2], NULL, &err);
+    rc = yvex_model_ref_resolve(&model_ref, model_arg, NULL, &err);
     if (rc != YVEX_OK) {
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
-    rc = yvex_engine_open_path(&engine, model_ref.path, &err);
+    options.model_path = model_ref.path;
+    options.load_tokenizer = backend_name ? 0 : 1;
+    options.build_descriptor = 1;
+    options.build_default_graph = 1;
+    options.attach_weights = backend_name != NULL;
+    options.backend_name = backend_name;
+    options.require_all_weights = 1;
+
+    rc = yvex_engine_open(&engine, &options, &err);
+    if (rc == YVEX_ERR_UNSUPPORTED && backend_name && strcmp(backend_name, "cuda") == 0) {
+        printf("backend: cuda\n");
+        printf("backend_status: unsupported\n");
+        printf("reason: %s\n", yvex_error_message(&err));
+        printf("status: engine-backend-unsupported\n");
+        yvex_model_ref_clear(&model_ref);
+        return 5;
+    }
     if (rc == YVEX_OK) {
         rc = yvex_engine_get_summary(engine, &summary, &err);
     }
@@ -1087,9 +1143,43 @@ static int command_engine(int argc, char **argv)
     printf("tokenizer_model: %s\n", summary.tokenizer_model);
     printf("tokenizer_support: %s\n", summary.tokenizer_support);
     printf("graph_status: %s\n", summary.graph_status);
+    printf("weights_attached: %s\n", summary.weights_attached ? "true" : "false");
+    printf("weights_backend: %s\n", summary.weights_backend);
+    printf("weight_tensor_count: %llu\n", summary.weight_tensor_count);
+    printf("weight_total_bytes: %llu\n", summary.weight_total_bytes);
+    printf("weight_backend_allocated_bytes: %llu\n", summary.weight_backend_allocated_bytes);
+    if (summary.weights_attached) {
+        const yvex_tensor_table *table = yvex_engine_tensors(engine);
+        unsigned long long count = yvex_tensor_table_count(table);
+        unsigned long long j;
+
+        for (j = 0; j < count; ++j) {
+            const yvex_tensor_info *tensor = yvex_tensor_table_at(table, j);
+            unsigned int d;
+
+            if (!tensor) {
+                continue;
+            }
+            printf("attached_weight_%llu: %s role=%s rank=%u dims=[",
+                   j,
+                   tensor->name ? tensor->name : "",
+                   yvex_tensor_role_name(tensor->role),
+                   tensor->rank);
+            for (d = 0; d < tensor->rank; ++d) {
+                if (d > 0) {
+                    printf(",");
+                }
+                printf("%llu", tensor->dims[d]);
+            }
+            printf("] dtype=%s bytes=%llu\n",
+                   yvex_dtype_name(tensor->dtype),
+                   tensor->storage_bytes);
+        }
+    }
     printf("execution_ready: false\n");
+    printf("graph_execution_ready: false\n");
     printf("reason: %s\n", yvex_engine_diagnostic_reason(engine));
-    printf("status: engine-descriptor\n");
+    printf("status: %s\n", summary.weights_attached ? "engine-weights-attached" : "engine-descriptor");
 
     yvex_engine_close(engine);
     yvex_model_ref_clear(&model_ref);
@@ -3939,6 +4029,7 @@ static int command_session(int argc, char **argv)
     yvex_backend *backend = NULL;
     yvex_session *session = NULL;
     yvex_model_ref model_ref;
+    yvex_engine_options engine_options;
     yvex_session_options session_options;
     yvex_session_summary summary;
     yvex_backend_options backend_options;
@@ -3952,6 +4043,7 @@ static int command_session(int argc, char **argv)
     int rc;
 
     yvex_error_clear(&err);
+    memset(&engine_options, 0, sizeof(engine_options));
     memset(&session_options, 0, sizeof(session_options));
     memset(&backend_options, 0, sizeof(backend_options));
     memset(&tokens, 0, sizeof(tokens));
@@ -4001,7 +4093,23 @@ static int command_session(int argc, char **argv)
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
-    rc = yvex_engine_open_path(&engine, model_ref.path, &err);
+    engine_options.model_path = model_ref.path;
+    engine_options.load_tokenizer = text ? 1 : 0;
+    engine_options.build_descriptor = 1;
+    engine_options.build_default_graph = 1;
+    engine_options.attach_weights = 1;
+    engine_options.backend_name = backend_name;
+    engine_options.require_all_weights = 1;
+
+    rc = yvex_engine_open(&engine, &engine_options, &err);
+    if (rc == YVEX_ERR_UNSUPPORTED && strcmp(backend_name, "cuda") == 0) {
+        printf("backend: cuda\n");
+        printf("backend_status: unsupported\n");
+        printf("reason: %s\n", yvex_error_message(&err));
+        printf("status: session-backend-unsupported\n");
+        yvex_model_ref_clear(&model_ref);
+        return 5;
+    }
     if (rc != YVEX_OK) {
         yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
@@ -4077,7 +4185,12 @@ static int command_session(int argc, char **argv)
     printf("kv_status: %s\n", summary.kv_status);
     printf("kv_bytes: %llu\n", summary.kv_bytes);
     printf("logits_status: %s\n", summary.logits_status);
+    printf("weights_attached: %s\n", summary.weights_attached ? "true" : "false");
+    printf("weights_backend: %s\n", summary.weights_backend);
+    printf("weight_tensor_count: %llu\n", summary.weight_tensor_count);
+    printf("weight_total_bytes: %llu\n", summary.weight_total_bytes);
     printf("execution_ready: false\n");
+    printf("graph_execution_ready: false\n");
     printf("reason: %s\n", yvex_session_diagnostic_reason(session));
     if (tokenized) {
         printf("tokens: %llu\n", tokens.len);

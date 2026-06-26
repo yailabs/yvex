@@ -23,6 +23,9 @@ struct yvex_engine {
     yvex_model_descriptor *model;
     yvex_tokenizer *tokenizer;
     yvex_graph *graph;
+    yvex_backend *weight_backend;
+    yvex_weight_table *weights;
+    yvex_materialize_summary weight_summary;
     char reason[YVEX_RUNTIME_REASON_CAP];
 };
 
@@ -76,6 +79,88 @@ static void set_engine_status_from_graph(yvex_engine *engine)
         engine->status = YVEX_ENGINE_STATUS_LOADED;
         yvex_runtime_set_graph_reason(engine->reason, sizeof(engine->reason), engine->graph);
     }
+}
+
+static int runtime_backend_kind_from_name(const char *name,
+                                          yvex_backend_kind *out,
+                                          yvex_error *err)
+{
+    if (!out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "runtime_backend_kind_from_name",
+                       "out is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (!name || strcmp(name, "cpu") == 0) {
+        *out = YVEX_BACKEND_KIND_CPU;
+        return YVEX_OK;
+    }
+    if (strcmp(name, "cuda") == 0) {
+        *out = YVEX_BACKEND_KIND_CUDA;
+        return YVEX_OK;
+    }
+
+    yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "yvex_engine_open",
+                    "unknown backend kind: %s", name);
+    return YVEX_ERR_INVALID_ARG;
+}
+
+static int attach_engine_weights(yvex_engine *engine,
+                                 const yvex_engine_options *options,
+                                 yvex_error *err)
+{
+    yvex_backend *backend = NULL;
+    yvex_weight_table *weights = NULL;
+    yvex_backend_options backend_options;
+    yvex_materialize_options materialize_options;
+    yvex_backend_kind kind;
+    const char *backend_name;
+    int rc;
+
+    if (!engine || !options || !options->attach_weights) {
+        return YVEX_OK;
+    }
+
+    backend_name = options->backend_name ? options->backend_name : "cpu";
+    memset(&backend_options, 0, sizeof(backend_options));
+    memset(&materialize_options, 0, sizeof(materialize_options));
+
+    rc = runtime_backend_kind_from_name(backend_name, &kind, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    backend_options.kind = kind;
+    rc = yvex_backend_open(&backend, &backend_options, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    materialize_options.backend_name = backend_name;
+    materialize_options.require_all_tensors = options->require_all_weights;
+    rc = yvex_weight_table_materialize(&weights,
+                                       engine->artifact,
+                                       engine->gguf,
+                                       engine->tensors,
+                                       backend,
+                                       &materialize_options,
+                                       err);
+    if (rc != YVEX_OK) {
+        yvex_weight_table_close(weights);
+        yvex_backend_close(backend);
+        return rc;
+    }
+
+    rc = yvex_weight_table_get_summary(weights, &engine->weight_summary, err);
+    if (rc != YVEX_OK) {
+        yvex_weight_table_close(weights);
+        yvex_backend_close(backend);
+        memset(&engine->weight_summary, 0, sizeof(engine->weight_summary));
+        return rc;
+    }
+
+    engine->weight_backend = backend;
+    engine->weights = weights;
+    return YVEX_OK;
 }
 
 int yvex_engine_open(yvex_engine **out,
@@ -144,6 +229,9 @@ int yvex_engine_open(yvex_engine **out,
         graph_options.include_prefill_path = 1;
         rc = yvex_graph_build_for_model(&engine->graph, engine->model, engine->tensors, &graph_options, err);
     }
+    if (rc == YVEX_OK) {
+        rc = attach_engine_weights(engine, options, err);
+    }
 
     if (rc != YVEX_OK) {
         engine->status = YVEX_ENGINE_STATUS_FAILED;
@@ -176,6 +264,8 @@ void yvex_engine_close(yvex_engine *engine)
     if (!engine) {
         return;
     }
+    yvex_weight_table_close(engine->weights);
+    yvex_backend_close(engine->weight_backend);
     yvex_graph_close(engine->graph);
     yvex_tokenizer_close(engine->tokenizer);
     yvex_model_descriptor_close(engine->model);
@@ -263,6 +353,14 @@ int yvex_engine_get_summary(const yvex_engine *engine,
     out->graph_status = engine->graph
                             ? yvex_graph_status_name(yvex_graph_status_of(engine->graph))
                             : "not-built";
+    out->weights_attached = engine->weights != NULL;
+    out->weights_backend = engine->weight_summary.backend_name
+                               ? engine->weight_summary.backend_name
+                               : "none";
+    out->weight_tensor_count = engine->weight_summary.tensors_materialized;
+    out->weight_total_bytes = engine->weight_summary.bytes_materialized;
+    out->weight_backend_allocated_bytes = engine->weight_summary.backend_allocated_bytes;
+    out->graph_execution_ready = 0;
 
     yvex_error_clear(err);
     return YVEX_OK;
@@ -621,6 +719,7 @@ int yvex_session_get_summary(const yvex_session *session,
 {
     yvex_kv_summary kv_summary;
     yvex_logits_summary logits_summary;
+    yvex_engine_summary engine_summary;
 
     if (!session || !out) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_session_get_summary", "session and out are required");
@@ -639,6 +738,14 @@ int yvex_session_get_summary(const yvex_session *session,
     out->graph_partial = session->graph_partial;
     out->backend_available = session->backend_available;
     out->execution_ready = 0;
+    out->graph_execution_ready = 0;
+
+    if (yvex_engine_get_summary(session->engine, &engine_summary, err) == YVEX_OK) {
+        out->weights_attached = engine_summary.weights_attached;
+        out->weights_backend = engine_summary.weights_backend;
+        out->weight_tensor_count = engine_summary.weight_tensor_count;
+        out->weight_total_bytes = engine_summary.weight_total_bytes;
+    }
 
     if (session->kv && yvex_kv_cache_get_summary(session->kv, &kv_summary, err) == YVEX_OK) {
         out->kv_status = yvex_kv_status_name(kv_summary.status);

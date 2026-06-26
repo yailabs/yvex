@@ -15,7 +15,6 @@
  *   - engine summary and diagnostics
  *
  * Does not own:
- *   - backend handles
  *   - sessions
  *   - sampler/runtime generation
  *   - server/provider behavior
@@ -56,6 +55,9 @@ typedef struct {
     int load_tokenizer;
     int build_descriptor;
     int build_default_graph;
+    int attach_weights;
+    const char *backend_name;
+    int require_all_weights;
 } yvex_engine_options;
 
 typedef struct {
@@ -70,6 +72,12 @@ typedef struct {
     const char *tokenizer_model;
     const char *tokenizer_support;
     const char *graph_status;
+    int weights_attached;
+    const char *weights_backend;
+    unsigned long long weight_tensor_count;
+    unsigned long long weight_total_bytes;
+    unsigned long long weight_backend_allocated_bytes;
+    int graph_execution_ready;
 } yvex_engine_summary;
 
 int yvex_engine_open(yvex_engine **out,

@@ -68,6 +68,29 @@ contains "$OUT_DIR/materialize_cuda_ready.out" "bytes_materialized: 128"
 contains "$OUT_DIR/materialize_cuda_ready.out" "execution_ready: false"
 contains "$OUT_DIR/materialize_cuda_ready.out" "status: weights-materialized"
 
+"$YVEX_BIN" engine --model "$FIXTURE" --backend cuda >"$OUT_DIR/engine_cuda_ready.out" 2>"$OUT_DIR/engine_cuda_ready.err"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    fail "engine cuda exit code was $rc"
+fi
+contains "$OUT_DIR/engine_cuda_ready.out" "weights_attached: true"
+contains "$OUT_DIR/engine_cuda_ready.out" "weights_backend: cuda"
+contains "$OUT_DIR/engine_cuda_ready.out" "weight_tensor_count: 1"
+contains "$OUT_DIR/engine_cuda_ready.out" "weight_total_bytes: 128"
+contains "$OUT_DIR/engine_cuda_ready.out" "graph_execution_ready: false"
+contains "$OUT_DIR/engine_cuda_ready.out" "status: engine-weights-attached"
+
+"$YVEX_BIN" session "$FIXTURE" --backend cuda >"$OUT_DIR/session_cuda_ready.out" 2>"$OUT_DIR/session_cuda_ready.err"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    fail "session cuda exit code was $rc"
+fi
+contains "$OUT_DIR/session_cuda_ready.out" "backend: cuda"
+contains "$OUT_DIR/session_cuda_ready.out" "weights_attached: true"
+contains "$OUT_DIR/session_cuda_ready.out" "weights_backend: cuda"
+contains "$OUT_DIR/session_cuda_ready.out" "weight_tensor_count: 1"
+contains "$OUT_DIR/session_cuda_ready.out" "execution_ready: false"
+
 "$YVEX_BIN" help cuda-info >"$OUT_DIR/help_cuda_info.out" 2>"$OUT_DIR/help_cuda_info.err"
 rc=$?
 if [ "$rc" -ne 0 ]; then
