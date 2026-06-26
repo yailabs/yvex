@@ -7,23 +7,23 @@ structure: parsed metadata, tensor roles, backend allocations, engine/session
 state, and scheduled graph work.
 
 The current code does not run a full model. It does, however, cross more than
-the old parse-and-materialize boundary. YVEX can inspect GGUF artifacts,
-materialize selected tensors on CPU and CUDA, attach those tensors to
+the old parse-and-materialize boundary. YVEX can inspect `GGUF` artifacts,
+materialize selected tensors on `CPU` and `CUDA`, attach those tensors to
 engine-owned runtime state, and execute a deterministic fixture graph over
-controlled F32 weights. The next runtime step is a constrained real-model
+controlled `F32` weights. The next runtime step is a constrained real-model
 partial graph segment. Prefill, decode, logits, sampling, generation, and
 provider generation are not implemented.
 
 That boundary is deliberate. YVEX is being built from the lower runtime upward,
 because local inference becomes unreliable when artifact loading, tensor
-mapping, backend residency, graph execution, KV state, and provider APIs are
+mapping, backend residency, graph execution, `KV` state, and provider APIs are
 treated as one vague operation.
 
 ## What YVEX is
 
 YVEX is concerned with the native path that most local-model tools compress
 into words like "loaded" or "supported." In this project, a loaded file, a
-parsed GGUF, a descriptor, a resident tensor, an engine-owned weight table, and
+parsed `GGUF`, a descriptor, a resident tensor, an engine-owned weight table, and
 an executable graph are different runtime states. The distinction matters
 because every one of those states can succeed while the next one still fails.
 
@@ -134,6 +134,9 @@ tmpdir="$(mktemp -d)"
 ./yvex graph --model "$tmpdir/controlled.gguf" --backend cuda --execute-fixture --fixture-token 0
 ```
 
+The `--backend cuda` line is for CUDA-capable hosts. On machines without CUDA,
+the CPU fixture path is still the baseline proof.
+
 Expected fields include:
 
 ```text
@@ -195,6 +198,13 @@ cleanup to be real before a full graph exists. One tensor is enough to make
 memory ownership and backend failure behavior concrete. It is not enough to
 claim a model run.
 
+The selected DeepSeek artifact is useful because it is both partial and heavy.
+`token_embd.weight` at `[4096,129280]` in `F16` is about one billion tensor
+bytes. That size is large enough to exercise long local artifact names,
+checksum identity, `GGUF` v3 tensor directory layout, shape and dtype
+preservation, byte accounting, `CPU`/`CUDA` allocation, backend cleanup, engine
+attachment, and repeatable gate reporting.
+
 DeepSeek is the current target because it creates useful pressure now. YVEX
 should remain able to move to another open-weight model family when hardware,
 model quality, or research direction changes. A new family requires explicit
@@ -219,6 +229,15 @@ local registries, logs, reports, and build artifacts stay on the machine that
 owns them. The repository keeps source, public headers, docs, tiny fixtures,
 tests, and contracts. That separation is not just cleanliness; it prevents a
 public runtime project from becoming a dump of local state.
+
+| Class | Location |
+| --- | --- |
+| Source code, public headers, docs, tiny fixtures | repository |
+| Real `GGUF` model artifacts | operator-local storage |
+| Native safetensors / raw weights | operator-local storage |
+| Generated `GGUF`s and quantization outputs | operator-local storage |
+| `.yvex/models.local.json` | local ignored state |
+| Build output, reports, logs | local/generated state |
 
 The local registry exists because real artifact paths are long and
 machine-specific. `.yvex/models.local.json` is ignored local state, and
@@ -378,6 +397,13 @@ make check-cuda
 
 Normal usage should start with short commands. Long gate invocations and exact
 selected-artifact checks live in [docs/operator-runbook.md](docs/operator-runbook.md).
+
+| Path | Reader | Where to go |
+| --- | --- | --- |
+| Normal operator path | build, register, inspect, run fixture/status commands | this README |
+| Full gates and selected-artifact checks | exact validation and repeatable proof | [docs/operator-runbook.md](docs/operator-runbook.md) |
+| API/ownership extension | C API and lifecycle rules | [docs/api.md](docs/api.md) |
+| Behavior contract | CLI/filesystem/backend/server guarantees | [docs/contract.md](docs/contract.md) |
 
 ```sh
 make
