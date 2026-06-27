@@ -68,6 +68,7 @@ typedef struct {
     const char *label;
     const char *family;
     const char *sha256;
+    const char *metadata_status;
     yvex_materialize_scope scope;
     const yvex_materialize_expected_tensor *expected_tensors;
     unsigned long long expected_tensor_count;
@@ -91,6 +92,17 @@ typedef struct {
     char actual_sha256[65];
     const char *digest_status;
     const char *identity_status;
+    const char *metadata_status;
+    const char *materialization_gate;
+    const char *materialization_phase;
+    const char *integrity_status;
+    const char *shape_status;
+    const char *range_status;
+    const char *backend_status;
+    const char *cleanup_status;
+    int allocation_attempted;
+    int transfer_attempted;
+    int cleanup_attempted;
     unsigned long long file_bytes;
     unsigned long long tensor_count;
     unsigned long long expected_tensor_matches;
@@ -101,6 +113,9 @@ typedef struct {
     yvex_materialize_backend_status cuda_status;
     unsigned int repeat_count;
     int cleanup_verified;
+    unsigned long long bytes_planned;
+    unsigned long long bytes_allocated;
+    unsigned long long bytes_transferred;
     int execution_ready;
 } yvex_materialize_gate_summary;
 

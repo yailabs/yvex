@@ -662,6 +662,13 @@ struct yvex_weight_table {
     yvex_materialize_summary summary;
 };
 
+static int yvex_test_env_enabled(const char *name)
+{
+    const char *value = getenv(name);
+
+    return value && value[0] != '\0' && strcmp(value, "0") != 0;
+}
+
 static char *yvex_weight_strdup(const char *text)
 {
     size_t len;
@@ -850,19 +857,37 @@ static int materialize_one(yvex_weight_table *table,
         return YVEX_ERR_INVALID_ARG;
     }
 
+    table->summary.materialization_phase = "allocation";
     rc = yvex_backend_tensor_alloc(table->backend, &desc, &device_tensor, err);
     if (rc != YVEX_OK) {
         return rc;
+    }
+    table->summary.allocation_attempted = 1;
+    table->summary.bytes_allocated += range.tensor_bytes;
+    if (yvex_test_env_enabled("YVEX_TEST_FAIL_MATERIALIZE_AFTER_ALLOC")) {
+        yvex_backend_tensor_free(table->backend, device_tensor);
+        table->summary.materialization_gate = "fail";
+        table->summary.materialization_phase = "allocation";
+        table->summary.cleanup_attempted = 1;
+        table->summary.cleanup_status = "pass";
+        table->summary.status = YVEX_WEIGHT_STATUS_FAILED;
+        yvex_error_set(err, YVEX_ERR_BACKEND, "yvex_weight_table_materialize",
+                       "test materialization failure after allocation");
+        return YVEX_ERR_BACKEND;
     }
 
     data = yvex_artifact_data(artifact);
     if (!data) {
         yvex_backend_tensor_free(table->backend, device_tensor);
+        table->summary.cleanup_attempted = 1;
+        table->summary.cleanup_status = "pass";
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_weight_table_materialize",
                        "artifact data is unavailable");
         return YVEX_ERR_INVALID_ARG;
     }
 
+    table->summary.materialization_phase = "transfer";
+    table->summary.transfer_attempted = 1;
     rc = yvex_backend_tensor_write(table->backend,
                                    device_tensor,
                                    data + range.tensor_absolute_offset,
@@ -870,13 +895,29 @@ static int materialize_one(yvex_weight_table *table,
                                    err);
     if (rc != YVEX_OK) {
         yvex_backend_tensor_free(table->backend, device_tensor);
+        table->summary.cleanup_attempted = 1;
+        table->summary.cleanup_status = "pass";
         return rc;
+    }
+    table->summary.bytes_transferred += range.tensor_bytes;
+    if (yvex_test_env_enabled("YVEX_TEST_FAIL_MATERIALIZE_AFTER_TRANSFER")) {
+        yvex_backend_tensor_free(table->backend, device_tensor);
+        table->summary.materialization_gate = "fail";
+        table->summary.materialization_phase = "transfer";
+        table->summary.cleanup_attempted = 1;
+        table->summary.cleanup_status = "pass";
+        table->summary.status = YVEX_WEIGHT_STATUS_FAILED;
+        yvex_error_set(err, YVEX_ERR_BACKEND, "yvex_weight_table_materialize",
+                       "test materialization write failure after transfer");
+        return YVEX_ERR_BACKEND;
     }
 
     weight = &table->items[table->count];
     weight->name = yvex_weight_strdup(tensor->name);
     if (!weight->name) {
         yvex_backend_tensor_free(table->backend, device_tensor);
+        table->summary.cleanup_attempted = 1;
+        table->summary.cleanup_status = "pass";
         yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_weight_table_materialize",
                        "failed to copy weight name");
         return YVEX_ERR_NOMEM;
@@ -943,6 +984,12 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
     }
 
     table->summary.backend_name = table->backend_name;
+    table->summary.materialization_gate = "fail";
+    table->summary.materialization_phase = "preflight";
+    table->summary.shape_status = "unchecked";
+    table->summary.range_status = "unchecked";
+    table->summary.backend_status = "ready";
+    table->summary.cleanup_status = "not-needed";
     table->summary.tensors_total = tensor_count;
     table->summary.execution_ready = 0;
 
@@ -974,7 +1021,10 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
             yvex_weight_table_close(table);
             return rc;
         }
+        table->summary.bytes_planned += range.tensor_bytes;
     }
+    table->summary.shape_status = "pass";
+    table->summary.range_status = "pass";
 
     for (i = 0; i < tensor_count; ++i) {
         const yvex_tensor_info *tensor = yvex_tensor_table_at(tensors, i);
@@ -1005,7 +1055,8 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
         rc = materialize_one(table, artifact, gguf, tensor, err);
         if (rc != YVEX_OK) {
             table->summary.tensors_failed += 1;
-            if (require_all || rc == YVEX_ERR_BOUNDS || rc == YVEX_ERR_FORMAT) {
+            if (require_all || rc == YVEX_ERR_BOUNDS || rc == YVEX_ERR_FORMAT ||
+                rc == YVEX_ERR_BACKEND || rc == YVEX_ERR_NOMEM) {
                 break;
             }
             rc = YVEX_OK;
@@ -1028,6 +1079,10 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
     } else {
         table->summary.status = YVEX_WEIGHT_STATUS_PARTIAL;
     }
+    table->summary.materialization_gate =
+        table->summary.status == YVEX_WEIGHT_STATUS_MATERIALIZED ? "pass" : "fail";
+    table->summary.materialization_phase = "complete";
+    table->summary.cleanup_status = "not-needed";
 
     if (yvex_backend_get_memory_stats(backend, &stats, err) == YVEX_OK) {
         table->summary.backend_allocated_bytes = stats.allocated_bytes;

@@ -148,6 +148,10 @@ registry metadata drift diagnostics
 registered primary tensor summary comparison
 selected embedding readiness drift detection
 support-level readiness comparison
+materialization integrity gate
+materialization preflight before backend allocation
+materialization failure phase reporting
+materialization cleanup verification
 ```
 
 Current live target:
@@ -174,7 +178,6 @@ Unsupported / not advanced:
 full model execution
 full DeepSeek materialization
 full GGUF conversion
-materialization integrity gate
 graph execution corruption guard
 operator integrity report
 full supply-chain security
@@ -265,8 +268,8 @@ unbounded spreadsheet.
 | ARTIFACT.INTEGRITY.3 | complete | Tensor directory offset and byte-range validation |
 | ARTIFACT.INTEGRITY.4 | complete | Shape, rank, dtype, and byte-count overflow hardening |
 | ARTIFACT.INTEGRITY.5 | complete | Registry alias metadata drift diagnostics |
-| ARTIFACT.INTEGRITY.6 | next | Materialization integrity gate |
-| ARTIFACT.INTEGRITY.7 | planned | Graph execution integrity guard |
+| ARTIFACT.INTEGRITY.6 | complete | Materialization integrity gate |
+| ARTIFACT.INTEGRITY.7 | next | Graph execution integrity guard |
 | ARTIFACT.INTEGRITY.8 | planned | Corrupt artifact regression harness |
 | ARTIFACT.INTEGRITY.9 | planned | Operator integrity report and doctor integration |
 | ARTIFACT.INTEGRITY.FINAL.0 | planned | Artifact integrity closeout before graph expansion |
@@ -514,8 +517,8 @@ mapped and the baseline validator exists.
 | ARTIFACT.INTEGRITY.3 | complete | Tensor directory offset and byte-range validation |
 | ARTIFACT.INTEGRITY.4 | complete | Shape, rank, dtype, and byte-count overflow hardening |
 | ARTIFACT.INTEGRITY.5 | complete | Registry alias metadata drift diagnostics |
-| ARTIFACT.INTEGRITY.6 | next | Materialization integrity gate |
-| ARTIFACT.INTEGRITY.7 | planned | Graph execution integrity guard |
+| ARTIFACT.INTEGRITY.6 | complete | Materialization integrity gate |
+| ARTIFACT.INTEGRITY.7 | next | Graph execution integrity guard |
 | ARTIFACT.INTEGRITY.8 | planned | Corrupt artifact regression harness |
 | ARTIFACT.INTEGRITY.9 | planned | Operator integrity report and doctor integration |
 | ARTIFACT.INTEGRITY.FINAL.0 | planned | Artifact integrity closeout before graph expansion |
@@ -576,9 +579,14 @@ facts against the current artifact and reports `metadata_status` and
 such as materialization and partial graph execution fail when metadata drift
 invalidates registered assumptions.
 
-ARTIFACT.INTEGRITY.6 adds a materialization integrity gate. It should prove that
-corrupt or inconsistent artifacts fail before backend allocation when possible,
-and fail with cleanup when allocation or transfer has already begun.
+ARTIFACT.INTEGRITY.6 adds a materialization integrity gate. Materialization now
+composes structural integrity, digest identity, registry metadata drift,
+shape/dtype accounting, tensor range validation, selected tensor readiness, and
+backend availability into a preflight before backend allocation. The command
+reports the materialization phase, allocation and transfer attempts, cleanup
+attempts, cleanup status, and byte accounting. Corrupt or inconsistent artifacts
+fail before backend allocation where possible; injected allocation/transfer
+failures prove cleanup reporting.
 
 ARTIFACT.INTEGRITY.7 guards graph execution. Fixture graph and real partial
 graph execution must not read missing tensors, out-of-range token slices,
@@ -941,13 +949,13 @@ No diagram may imply support that the code does not implement.
 ## 8. Active Next
 
 ```text
-ARTIFACT.INTEGRITY.6 - Materialization integrity gate
+ARTIFACT.INTEGRITY.7 - Graph execution integrity guard
 ```
 
-Next implementation: ARTIFACT.INTEGRITY.6. It must turn the artifact integrity
-and alias metadata checks into a materialization-specific gate that proves
-corrupt or inconsistent artifacts fail before backend allocation where possible,
-and fail with cleanup when allocation or transfer has already begun.
+Next implementation: ARTIFACT.INTEGRITY.7. It must turn the artifact integrity
+and alias metadata checks into graph-entry guards for fixture and real partial
+graph execution, including preflight before dispatch, payload/reference range
+guards, failure phase reporting, and cleanup/reporting for graph buffers.
 
 Next runtime expansion after integrity baseline:
 

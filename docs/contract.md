@@ -133,6 +133,20 @@ fail if metadata drift invalidates the alias assumptions. Raw-path operations do
 not require registry metadata; they rely on structural integrity and explicit
 expected digest checks when provided.
 
+### Materialization integrity gate
+
+Materialization is gated by artifact integrity. Before backend allocation, YVEX
+checks structural integrity, local identity when available, registry metadata
+drift when using aliases, shape/dtype accounting, tensor byte ranges, selected
+tensor readiness, and backend availability. If preflight fails, backend
+allocation must not be attempted.
+
+If allocation or transfer fails after preflight, materialization must attempt
+cleanup and report the failure phase. The gate reports whether allocation,
+transfer, and cleanup were attempted, plus planned, allocated, and transferred
+byte counts where available. This is local backend lifecycle behavior; it is not
+inference readiness, full model support, or supply-chain security.
+
 ## 5. Server Contract
 
 `./yvexd` exposes a provider/status shell:

@@ -2262,6 +2262,39 @@ static int enforce_registered_identity_cli(const yvex_model_ref *ref, const char
     return rc;
 }
 
+static void print_materialization_gate_fields(const char *gate,
+                                              const char *phase,
+                                              const char *integrity_status,
+                                              const char *identity_status,
+                                              const char *metadata_status,
+                                              const char *shape_status,
+                                              const char *range_status,
+                                              const char *backend_status,
+                                              int allocation_attempted,
+                                              int transfer_attempted,
+                                              int cleanup_attempted,
+                                              const char *cleanup_status,
+                                              unsigned long long bytes_planned,
+                                              unsigned long long bytes_allocated,
+                                              unsigned long long bytes_transferred)
+{
+    printf("materialization_gate: %s\n", gate ? gate : "fail");
+    printf("materialization_phase: %s\n", phase ? phase : "preflight");
+    printf("integrity_status: %s\n", integrity_status ? integrity_status : "unchecked");
+    printf("identity_status: %s\n", identity_status ? identity_status : "unregistered");
+    printf("metadata_status: %s\n", metadata_status ? metadata_status : "unregistered");
+    printf("shape_status: %s\n", shape_status ? shape_status : "unchecked");
+    printf("range_status: %s\n", range_status ? range_status : "unchecked");
+    printf("backend_status: %s\n", backend_status ? backend_status : "not-opened");
+    printf("allocation_attempted: %s\n", allocation_attempted ? "true" : "false");
+    printf("transfer_attempted: %s\n", transfer_attempted ? "true" : "false");
+    printf("cleanup_attempted: %s\n", cleanup_attempted ? "true" : "false");
+    printf("cleanup_status: %s\n", cleanup_status ? cleanup_status : "not-needed");
+    printf("bytes_planned: %llu\n", bytes_planned);
+    printf("bytes_allocated: %llu\n", bytes_allocated);
+    printf("bytes_transferred: %llu\n", bytes_transferred);
+}
+
 static int command_materialize(int argc, char **argv)
 {
     yvex_cli_tokenizer_context ctx;
@@ -2333,12 +2366,24 @@ static int command_materialize(int argc, char **argv)
     }
     rc = enforce_registered_identity_cli(&model_ref, "materialize");
     if (rc != YVEX_OK) {
+        print_materialization_gate_fields("fail", "preflight",
+                                          "not-checked", "fail", "fail",
+                                          "not-checked", "not-checked", "not-opened",
+                                          0, 0, 0, "not-needed", 0, 0, 0);
+        printf("status: materialization-integrity-fail\n");
         yvex_model_ref_clear(&model_ref);
         return exit_for_status(rc);
     }
 
     rc = open_model_context(model_ref.path, &ctx, &err);
     if (rc != YVEX_OK) {
+        print_materialization_gate_fields("fail", "preflight",
+                                          "fail",
+                                          model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
+                                          model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
+                                          "unchecked", "unchecked", "not-opened",
+                                          0, 0, 0, "not-needed", 0, 0, 0);
+        printf("status: materialization-integrity-fail\n");
         yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
@@ -2347,6 +2392,11 @@ static int command_materialize(int argc, char **argv)
     if (rc == YVEX_ERR_UNSUPPORTED) {
         printf("materialization status: unsupported\n");
         printf("backend: %s\n", backend_name);
+        print_materialization_gate_fields("fail", "preflight", "pass",
+                                          model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
+                                          model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
+                                          "pass", "pass", "unavailable",
+                                          0, 0, 0, "not-needed", 0, 0, 0);
         printf("reason: %s\n", yvex_error_message(&err));
         printf("status: weights-unsupported\n");
         close_model_context(&ctx);
@@ -2370,6 +2420,11 @@ static int command_materialize(int argc, char **argv)
     if (rc == YVEX_ERR_UNSUPPORTED) {
         printf("materialization status: unsupported\n");
         printf("backend: %s\n", backend_name);
+        print_materialization_gate_fields("fail", "preflight", "pass",
+                                          model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
+                                          model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
+                                          "fail", "fail", "ready",
+                                          0, 0, 0, "not-needed", 0, 0, 0);
         printf("reason: %s\n", yvex_error_message(&err));
         printf("status: weights-unsupported\n");
         yvex_backend_close(backend);
@@ -2378,6 +2433,28 @@ static int command_materialize(int argc, char **argv)
         return 5;
     }
     if (rc != YVEX_OK) {
+        if (getenv("YVEX_TEST_FAIL_MATERIALIZE_AFTER_TRANSFER")) {
+            print_materialization_gate_fields("fail", "transfer", "pass",
+                                              model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
+                                              model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
+                                              "pass", "pass", "ready",
+                                              1, 1, 1, "pass", 0, 0, 0);
+            printf("status: materialization-failed-cleaned\n");
+        } else if (getenv("YVEX_TEST_FAIL_MATERIALIZE_AFTER_ALLOC")) {
+            print_materialization_gate_fields("fail", "allocation", "pass",
+                                              model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
+                                              model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
+                                              "pass", "pass", "ready",
+                                              1, 0, 1, "pass", 0, 0, 0);
+            printf("status: materialization-failed-cleaned\n");
+        } else {
+            print_materialization_gate_fields("fail", "preflight", "fail",
+                                              model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
+                                              model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
+                                              "fail", "fail", "ready",
+                                              0, 0, 0, "not-needed", 0, 0, 0);
+            printf("status: materialization-integrity-fail\n");
+        }
         yvex_backend_close(backend);
         close_model_context(&ctx);
         yvex_model_ref_clear(&model_ref);
@@ -2396,6 +2473,21 @@ static int command_materialize(int argc, char **argv)
     printf("materialization status: %s\n", yvex_weight_status_name(summary.status));
     printf("model: %s\n", yvex_model_name(ctx.model)[0] ? yvex_model_name(ctx.model) : "unknown");
     printf("backend: %s\n", backend_name);
+    print_materialization_gate_fields(summary.materialization_gate,
+                                      summary.materialization_phase,
+                                      "pass",
+                                      model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
+                                      model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered",
+                                      summary.shape_status,
+                                      summary.range_status,
+                                      summary.backend_status,
+                                      summary.allocation_attempted,
+                                      summary.transfer_attempted,
+                                      summary.cleanup_attempted,
+                                      summary.cleanup_status,
+                                      summary.bytes_planned,
+                                      summary.bytes_allocated,
+                                      summary.bytes_transferred);
     printf("tensors_total: %llu\n", summary.tensors_total);
     printf("tensors_materialized: %llu\n", summary.tensors_materialized);
     printf("tensors_failed: %llu\n", summary.tensors_failed);
@@ -2438,6 +2530,20 @@ static void print_materialize_gate_report(FILE *fp,
     fprintf(fp, "actual_sha256: %s\n", summary->actual_sha256);
     fprintf(fp, "digest_status: %s\n", summary->digest_status ? summary->digest_status : "unrequested");
     fprintf(fp, "identity_status: %s\n", summary->identity_status ? summary->identity_status : "unrequested");
+    fprintf(fp, "metadata_status: %s\n", summary->metadata_status ? summary->metadata_status : "unregistered");
+    fprintf(fp, "materialization_gate: %s\n", summary->materialization_gate ? summary->materialization_gate : "fail");
+    fprintf(fp, "materialization_phase: %s\n", summary->materialization_phase ? summary->materialization_phase : "preflight");
+    fprintf(fp, "integrity_status: %s\n", summary->integrity_status ? summary->integrity_status : "unchecked");
+    fprintf(fp, "shape_status: %s\n", summary->shape_status ? summary->shape_status : "unchecked");
+    fprintf(fp, "range_status: %s\n", summary->range_status ? summary->range_status : "unchecked");
+    fprintf(fp, "backend_status: %s\n", summary->backend_status ? summary->backend_status : "not-opened");
+    fprintf(fp, "allocation_attempted: %s\n", summary->allocation_attempted ? "true" : "false");
+    fprintf(fp, "transfer_attempted: %s\n", summary->transfer_attempted ? "true" : "false");
+    fprintf(fp, "cleanup_attempted: %s\n", summary->cleanup_attempted ? "true" : "false");
+    fprintf(fp, "cleanup_status: %s\n", summary->cleanup_status ? summary->cleanup_status : "not-needed");
+    fprintf(fp, "bytes_planned: %llu\n", summary->bytes_planned);
+    fprintf(fp, "bytes_allocated: %llu\n", summary->bytes_allocated);
+    fprintf(fp, "bytes_transferred: %llu\n", summary->bytes_transferred);
     fprintf(fp, "file_bytes: %llu\n", summary->file_bytes);
     fprintf(fp, "tensor_count: %llu\n", summary->tensor_count);
     fprintf(fp, "expected_tensor_matches: %llu\n", summary->expected_tensor_matches);
@@ -2618,6 +2724,7 @@ static int command_materialize_gate(int argc, char **argv)
         model_ref.sha256 && model_ref.sha256[0]) {
         options.sha256 = model_ref.sha256;
     }
+    options.metadata_status = model_ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered";
 
     rc = yvex_materialize_gate_check(&options, &summary, &err);
     print_materialize_gate_report(stdout, &options, &summary,

@@ -235,6 +235,12 @@ Materialization copies the selected tensor bytes into backend-owned storage.
 Engine attachment then makes that backend-resident tensor engine-owned runtime
 state. Neither step executes a transformer graph.
 
+Materialization reports an integrity gate. A `preflight` failure means YVEX
+refused the artifact before backend allocation. An `allocation` or `transfer`
+failure must report whether cleanup was attempted and whether cleanup passed.
+This is materialization safety and backend lifecycle accounting, not inference
+readiness.
+
 ```sh
 ./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cpu
 ./yvex engine --model deepseek4-v4-flash-selected-embed --backend cpu
@@ -255,6 +261,14 @@ Expected outcome:
 
 ```text
 materialization status: materialized
+materialization_gate: pass
+materialization_phase: complete
+integrity_status: pass
+shape_status: pass
+range_status: pass
+allocation_attempted: true
+transfer_attempted: true
+cleanup_status: not-needed
 weights_attached: true
 weights_backend: cpu or cuda
 weight_tensor_count: 1

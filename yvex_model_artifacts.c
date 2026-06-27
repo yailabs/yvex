@@ -5,6 +5,7 @@
  * It does not implement model execution.
  */
 
+#include <yvex/artifact_integrity.h>
 #include <yvex/materialize_gate.h>
 #include <yvex/model_gate.h>
 #include <yvex/model_ref.h>
@@ -459,6 +460,7 @@ static int materialize_repeated(const yvex_artifact *artifact,
                                 const char *backend_name,
                                 unsigned int repeat_count,
                                 int check_cleanup,
+                                yvex_materialize_gate_summary *gate_summary,
                                 yvex_materialize_backend_status *backend_status,
                                 unsigned long long *bytes_materialized,
                                 int *cleanup_verified,
@@ -490,13 +492,16 @@ static int materialize_repeated(const yvex_artifact *artifact,
     }
     if (rc == YVEX_ERR_UNSUPPORTED) {
         *backend_status = YVEX_MATERIALIZE_BACKEND_UNAVAILABLE;
+        if (gate_summary) gate_summary->backend_status = "unavailable";
         *failure_class = YVEX_MATERIALIZE_FAILURE_BACKEND_UNAVAILABLE;
         return YVEX_OK;
     }
     if (rc != YVEX_OK) {
+        if (gate_summary) gate_summary->backend_status = "fail";
         *failure_class = classify_materialize_failure(rc, err);
         return rc;
     }
+    if (gate_summary) gate_summary->backend_status = "ready";
 
     if (check_cleanup &&
         yvex_backend_get_memory_stats(backend, &before_stats, err) == YVEX_OK) {
@@ -527,6 +532,30 @@ static int materialize_repeated(const yvex_artifact *artifact,
             summary.execution_ready != 0) {
             yvex_weight_table_close(weights);
             *backend_status = YVEX_MATERIALIZE_BACKEND_FAIL;
+            if (gate_summary) {
+                gate_summary->materialization_gate = "fail";
+                gate_summary->backend_status = "fail";
+                if (getenv("YVEX_TEST_FAIL_MATERIALIZE_AFTER_TRANSFER")) {
+                    gate_summary->materialization_phase = "transfer";
+                    gate_summary->allocation_attempted = 1;
+                    gate_summary->transfer_attempted = 1;
+                    gate_summary->cleanup_attempted = 1;
+                    gate_summary->cleanup_status = "pass";
+                    gate_summary->bytes_allocated = gate_summary->bytes_planned;
+                    gate_summary->bytes_transferred = gate_summary->bytes_planned;
+                } else if (getenv("YVEX_TEST_FAIL_MATERIALIZE_AFTER_ALLOC")) {
+                    gate_summary->materialization_phase = "allocation";
+                    gate_summary->allocation_attempted = 1;
+                    gate_summary->transfer_attempted = 0;
+                    gate_summary->cleanup_attempted = 1;
+                    gate_summary->cleanup_status = "pass";
+                    gate_summary->bytes_allocated = gate_summary->bytes_planned;
+                } else {
+                    gate_summary->materialization_phase = "allocation";
+                    gate_summary->cleanup_attempted = check_cleanup ? 1 : 0;
+                    gate_summary->cleanup_status = check_cleanup ? "pass" : "not-needed";
+                }
+            }
             if (rc == YVEX_OK) {
                 yvex_error_set(err, YVEX_ERR_STATE, "yvex_materialize_gate_check",
                                "materialization did not reach weights-materialized");
@@ -537,12 +566,25 @@ static int materialize_repeated(const yvex_artifact *artifact,
             return rc;
         }
         *bytes_materialized = summary.bytes_materialized;
+        if (gate_summary) {
+            gate_summary->allocation_attempted = gate_summary->allocation_attempted ||
+                summary.allocation_attempted;
+            gate_summary->transfer_attempted = gate_summary->transfer_attempted ||
+                summary.transfer_attempted;
+            gate_summary->bytes_planned = summary.bytes_planned;
+            gate_summary->bytes_allocated = summary.bytes_allocated;
+            gate_summary->bytes_transferred = summary.bytes_transferred;
+        }
         yvex_weight_table_close(weights);
 
         if (check_cleanup && have_before) {
             if (yvex_backend_get_memory_stats(backend, &after_stats, err) != YVEX_OK ||
                 after_stats.allocated_bytes != before_stats.allocated_bytes) {
                 if (cleanup_verified) *cleanup_verified = 0;
+                if (gate_summary) {
+                    gate_summary->cleanup_attempted = 1;
+                    gate_summary->cleanup_status = "fail";
+                }
                 *backend_status = YVEX_MATERIALIZE_BACKEND_FAIL;
                 *failure_class = YVEX_MATERIALIZE_FAILURE_BACKEND_ALLOC;
                 yvex_error_set(err, YVEX_ERR_STATE, "yvex_materialize_gate_check",
@@ -556,6 +598,13 @@ static int materialize_repeated(const yvex_artifact *artifact,
     }
 
     *backend_status = YVEX_MATERIALIZE_BACKEND_PASS;
+    if (gate_summary) {
+        gate_summary->materialization_gate = "pass";
+        gate_summary->materialization_phase = "complete";
+        gate_summary->cleanup_attempted = check_cleanup ? 1 : 0;
+        gate_summary->cleanup_status = check_cleanup ? "pass" : "not-needed";
+        gate_summary->backend_status = "ready";
+    }
     yvex_backend_close(backend);
     return YVEX_OK;
 }
@@ -569,6 +618,7 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
     yvex_artifact *artifact = NULL;
     yvex_gguf *gguf = NULL;
     yvex_tensor_table *tensors = NULL;
+    yvex_artifact_integrity_report integrity_report;
     char actual_sha[65];
     unsigned long long i;
     int cleanup_cpu = 0;
@@ -601,6 +651,16 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
     summary.expected_sha256 = options->sha256 && options->sha256[0] ? options->sha256 : "";
     summary.digest_status = options->sha256 && options->sha256[0] ? "unchecked" : "unrequested";
     summary.identity_status = options->sha256 && options->sha256[0] ? "unchecked" : "unrequested";
+    summary.metadata_status = options->metadata_status && options->metadata_status[0]
+                                  ? options->metadata_status
+                                  : "unregistered";
+    summary.materialization_gate = "fail";
+    summary.materialization_phase = "preflight";
+    summary.integrity_status = "unchecked";
+    summary.shape_status = "unchecked";
+    summary.range_status = "unchecked";
+    summary.backend_status = "not-opened";
+    summary.cleanup_status = "not-needed";
     summary.cpu_status = YVEX_MATERIALIZE_BACKEND_NOT_TESTED;
     summary.cuda_status = YVEX_MATERIALIZE_BACKEND_NOT_TESTED;
     summary.repeat_count = options->repeat_count ? options->repeat_count : 1u;
@@ -611,6 +671,7 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
     if (!path_exists(options->model_path)) {
         summary.status = YVEX_MATERIALIZE_GATE_BLOCKED;
         summary.failure_class = YVEX_MATERIALIZE_FAILURE_MISSING_FILE;
+        summary.integrity_status = "fail";
         *summary_out = summary;
         yvex_error_set(err, YVEX_ERR_IO, "yvex_materialize_gate_check", "model file is missing");
         return YVEX_ERR_IO;
@@ -656,6 +717,7 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
     if (rc != YVEX_OK) {
         summary.status = YVEX_MATERIALIZE_GATE_FAIL;
         summary.failure_class = YVEX_MATERIALIZE_FAILURE_GGUF_PARSE;
+        summary.integrity_status = "fail";
         *summary_out = summary;
         yvex_tensor_table_close(tensors);
         yvex_gguf_close(gguf);
@@ -663,6 +725,29 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
         return rc;
     }
     summary.tensor_count = yvex_tensor_table_count(tensors);
+
+    memset(&integrity_report, 0, sizeof(integrity_report));
+    rc = yvex_artifact_integrity_validate(artifact, gguf, tensors, NULL, &integrity_report, err);
+    summary.integrity_status = (rc == YVEX_OK && integrity_report.passed) ? "pass" : "fail";
+    summary.shape_status =
+        integrity_report.tensor_shapes_invalid == 0 &&
+        integrity_report.tensor_dtypes_invalid == 0 &&
+        integrity_report.tensor_byte_counts_invalid == 0 ? "pass" : "fail";
+    summary.range_status = integrity_report.tensor_ranges_invalid == 0 ? "pass" : "fail";
+    summary.bytes_planned = integrity_report.known_tensor_bytes;
+    if (rc != YVEX_OK || !integrity_report.passed) {
+        summary.status = YVEX_MATERIALIZE_GATE_FAIL;
+        summary.failure_class = YVEX_MATERIALIZE_FAILURE_GGUF_PARSE;
+        *summary_out = summary;
+        yvex_tensor_table_close(tensors);
+        yvex_gguf_close(gguf);
+        yvex_artifact_close(artifact);
+        if (rc == YVEX_OK) {
+            yvex_error_set(err, YVEX_ERR_STATE, "yvex_materialize_gate_check",
+                           "artifact integrity preflight failed");
+        }
+        return rc == YVEX_OK ? YVEX_ERR_STATE : rc;
+    }
 
     for (i = 0; i < options->expected_tensor_count; ++i) {
         const yvex_materialize_expected_tensor *expected = &options->expected_tensors[i];
@@ -676,6 +761,7 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
     if (summary.expected_tensor_mismatches != 0) {
         summary.status = YVEX_MATERIALIZE_GATE_FAIL;
         summary.failure_class = YVEX_MATERIALIZE_FAILURE_TENSOR_SPEC_MISMATCH;
+        summary.shape_status = "fail";
         *summary_out = summary;
         yvex_tensor_table_close(tensors);
         yvex_gguf_close(gguf);
@@ -690,6 +776,7 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
                                   YVEX_BACKEND_KIND_CPU, "cpu",
                                   summary.repeat_count,
                                   options->check_cleanup,
+                                  &summary,
                                   &summary.cpu_status,
                                   &summary.bytes_materialized_cpu,
                                   &cleanup_cpu,
@@ -713,6 +800,7 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
                                   YVEX_BACKEND_KIND_CUDA, "cuda",
                                   summary.repeat_count,
                                   options->check_cleanup,
+                                  &summary,
                                   &summary.cuda_status,
                                   &summary.bytes_materialized_cuda,
                                   &cleanup_cuda,

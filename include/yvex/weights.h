@@ -52,12 +52,24 @@ typedef struct {
 typedef struct {
     yvex_weight_status status;
     const char *backend_name;
+    const char *materialization_gate;
+    const char *materialization_phase;
+    const char *shape_status;
+    const char *range_status;
+    const char *backend_status;
+    const char *cleanup_status;
+    int allocation_attempted;
+    int transfer_attempted;
+    int cleanup_attempted;
     unsigned long long tensors_total;
     unsigned long long tensors_materialized;
     unsigned long long tensors_failed;
     unsigned long long bytes_total;
     unsigned long long bytes_materialized;
     unsigned long long backend_allocated_bytes;
+    unsigned long long bytes_planned;
+    unsigned long long bytes_allocated;
+    unsigned long long bytes_transferred;
     int execution_ready;
 } yvex_materialize_summary;
 

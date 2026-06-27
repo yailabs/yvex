@@ -171,3 +171,10 @@ partial graph path.
 to the selected embedding token slice used by the real partial graph path. These
 helpers do not prove tensor values are correct; they prove the byte ranges are
 bounded before reads, materialization, or graph reference extraction.
+
+Materialization summaries and materialize-gate summaries now include the
+materialization gate result, failure phase, integrity/shape/range/backend
+statuses, allocation/transfer/cleanup attempt flags, cleanup status, and planned
+or transferred byte counts where the operation can report them. These fields are
+copied scalar/string-literal report facts; they do not transfer backend tensor
+ownership and do not imply inference readiness.

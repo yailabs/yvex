@@ -411,6 +411,10 @@ Registry verification also compares recorded alias metadata against current
 artifact facts, so digest identity and tensor metadata drift are reported as
 different local operator signals.
 
+Materialization is integrity-gated: structural, identity, metadata, shape, and
+range checks run before backend allocation where possible, and allocation or
+transfer failures report cleanup status.
+
 The local registry exists because real artifact paths are long and
 machine-specific. `.yvex/models.local.json` is ignored local state, and
 `YVEX_MODELS_REGISTRY` can point commands at another local registry when a

@@ -32,6 +32,7 @@ run_section artifact-identity tests/cli/artifact_identity.sh
 run_section artifact-metadata tests/cli/artifact_metadata.sh
 run_section materialize tests/cli/materialize.sh
 run_section materialize-gate tests/cli/materialize_gate.sh
+run_section materialization-integrity-gate tests/cli/materialization_integrity_gate.sh
 run_section fixture-graph tests/cli/fixture_graph.sh
 run_section partial-graph tests/cli/partial_graph.sh
 run_section source-manifest tests/cli/source_manifest.sh
