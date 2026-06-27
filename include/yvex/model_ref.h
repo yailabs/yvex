@@ -47,6 +47,21 @@ typedef struct {
     const char *sha256;
     unsigned long long registered_file_size;
     const char *support_level;
+    const char *format;
+    const char *architecture;
+    unsigned long long tensor_count;
+    unsigned long long known_tensor_bytes;
+    const char *primary_tensor_name;
+    const char *primary_tensor_role;
+    const char *primary_tensor_dtype;
+    unsigned int primary_tensor_rank;
+    const char *primary_tensor_dims;
+    unsigned long long primary_tensor_bytes;
+    int selected_embedding_ready;
+    unsigned long long selected_embedding_hidden_size;
+    unsigned long long selected_embedding_vocab_size;
+    unsigned long long selected_embedding_output_count;
+    unsigned long long selected_embedding_slice_bytes;
     int execution_ready;
 } yvex_model_ref;
 

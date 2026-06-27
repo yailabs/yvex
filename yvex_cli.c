@@ -34,6 +34,17 @@ typedef struct {
     yvex_tokenizer *tokenizer;
 } yvex_cli_tokenizer_context;
 
+typedef struct {
+    yvex_model_registry_entry entry;
+    char format[16];
+    char architecture[64];
+    char primary_tensor_name[128];
+    char primary_tensor_role[64];
+    char primary_tensor_dtype[32];
+    char primary_tensor_dims[128];
+    char support_level[64];
+} yvex_cli_metadata_snapshot;
+
 static int command_backend(int argc, char **argv);
 static int command_chat(int argc, char **argv);
 static int command_commands(int argc, char **argv);
@@ -70,6 +81,12 @@ static int command_tokenizer(int argc, char **argv);
 static int command_tensors(int argc, char **argv);
 static int command_version(int argc, char **argv);
 static int enforce_registered_identity_cli(const yvex_model_ref *ref, const char *surface);
+static int populate_registry_metadata(yvex_cli_metadata_snapshot *snapshot,
+                                      const char *path,
+                                      yvex_error *err);
+static void model_ref_registry_entry_view(const yvex_model_ref *ref,
+                                          yvex_model_registry_entry *entry);
+static void print_metadata_drift_cli(const yvex_model_metadata_drift_report *report);
 
 static const yvex_cli_command yvex_commands[] = {
     {
@@ -2133,6 +2150,9 @@ static int command_metadata(int argc, char **argv)
 static int enforce_registered_identity_cli(const yvex_model_ref *ref, const char *surface)
 {
     yvex_artifact_file_identity identity;
+    yvex_cli_metadata_snapshot current_metadata;
+    yvex_model_registry_entry registered_metadata;
+    yvex_model_metadata_drift_report metadata_report;
     yvex_error err;
     const char *identity_status = "pass";
     const char *digest_status = "pass";
@@ -2168,6 +2188,59 @@ static int enforce_registered_identity_cli(const yvex_model_ref *ref, const char
         rc = YVEX_ERR_STATE;
     } else {
         rc = YVEX_OK;
+    }
+
+    if (pass) {
+        memset(&current_metadata, 0, sizeof(current_metadata));
+        memset(&registered_metadata, 0, sizeof(registered_metadata));
+        memset(&metadata_report, 0, sizeof(metadata_report));
+        rc = populate_registry_metadata(&current_metadata, ref->path, &err);
+        if (rc != YVEX_OK) {
+            printf("artifact_identity: check\n");
+            printf("surface: %s\n", surface ? surface : "unknown");
+            printf("alias: %s\n", ref->alias ? ref->alias : "");
+            printf("path: %s\n", ref->path ? ref->path : "");
+            printf("registered_sha256: %s\n", ref->sha256 && ref->sha256[0] ? ref->sha256 : "absent");
+            printf("current_sha256: %s\n", identity.sha256[0] ? identity.sha256 : "unavailable");
+            printf("registered_file_size: %llu\n", ref->registered_file_size);
+            printf("current_file_size: %llu\n", identity.file_size);
+            printf("digest_status: %s\n", digest_status);
+            printf("identity_status: %s\n", identity_status);
+            printf("metadata_status: fail\n");
+            printf("readiness_status: fail\n");
+            printf("metadata_issue_0_code: current-metadata-unavailable\n");
+            printf("metadata_issue_0_registered: available\n");
+            printf("metadata_issue_0_current: %s\n", yvex_error_message(&err));
+            printf("reason: current artifact metadata could not be parsed\n");
+            printf("status: models-metadata-drift\n");
+            return exit_for_status(YVEX_ERR_STATE);
+        }
+        model_ref_registry_entry_view(ref, &registered_metadata);
+        rc = yvex_model_registry_compare_metadata(&registered_metadata,
+                                                  &current_metadata.entry,
+                                                  &metadata_report,
+                                                  &err);
+        if (rc != YVEX_OK ||
+            strcmp(metadata_report.metadata_status, "pass") != 0 ||
+            strcmp(metadata_report.readiness_status, "pass") != 0) {
+            const char *status = strcmp(metadata_report.metadata_status, "missing") == 0
+                                     ? "models-metadata-missing"
+                                     : "models-metadata-drift";
+            printf("artifact_identity: check\n");
+            printf("surface: %s\n", surface ? surface : "unknown");
+            printf("alias: %s\n", ref->alias ? ref->alias : "");
+            printf("path: %s\n", ref->path ? ref->path : "");
+            printf("registered_sha256: %s\n", ref->sha256 && ref->sha256[0] ? ref->sha256 : "absent");
+            printf("current_sha256: %s\n", identity.sha256[0] ? identity.sha256 : "unavailable");
+            printf("registered_file_size: %llu\n", ref->registered_file_size);
+            printf("current_file_size: %llu\n", identity.file_size);
+            printf("digest_status: %s\n", digest_status);
+            printf("identity_status: %s\n", identity_status);
+            print_metadata_drift_cli(&metadata_report);
+            printf("reason: registered alias metadata does not match current artifact facts\n");
+            printf("status: %s\n", status);
+            return exit_for_status(YVEX_ERR_STATE);
+        }
     }
 
     if (!pass) {
@@ -2793,6 +2866,14 @@ static void print_model_registry_entry_cli(const yvex_model_registry_entry *entr
     printf("  registered_architecture: %s\n", entry->architecture ? entry->architecture : "");
     printf("  registered_tensor_count: %llu\n", entry->tensor_count);
     printf("  registered_known_tensor_bytes: %llu\n", entry->known_tensor_bytes);
+    printf("  registered_primary_tensor: %s\n", entry->primary_tensor_name ? entry->primary_tensor_name : "");
+    printf("  registered_primary_role: %s\n", entry->primary_tensor_role ? entry->primary_tensor_role : "");
+    printf("  registered_primary_dtype: %s\n", entry->primary_tensor_dtype ? entry->primary_tensor_dtype : "");
+    printf("  registered_primary_rank: %u\n", entry->primary_tensor_rank);
+    printf("  registered_primary_dims: %s\n", entry->primary_tensor_dims ? entry->primary_tensor_dims : "");
+    printf("  registered_primary_bytes: %llu\n", entry->primary_tensor_bytes);
+    printf("  registered_selected_embedding_ready: %s\n",
+           entry->selected_embedding_ready ? "true" : "false");
 }
 
 static void print_model_registry_scan_entry_cli(const yvex_model_registry_entry *entry)
@@ -2842,41 +2923,87 @@ static void dims_to_text(const unsigned long long *dims,
     }
 }
 
-static int populate_registry_identity(yvex_model_registry_entry *entry,
-                                      char sha256[YVEX_SHA256_HEX_CAP],
-                                      char format[16],
-                                      char architecture[64],
-                                      char primary_name[128],
-                                      char primary_dtype[32],
-                                      char primary_dims[128],
+static const char *current_support_from_metadata(const yvex_model_registry_entry *entry)
+{
+    if (entry && entry->primary_tensor_name && entry->primary_tensor_name[0]) {
+        return "selected-tensor-materialized";
+    }
+    if (entry && entry->format && entry->format[0]) {
+        return "descriptor-only";
+    }
+    return "";
+}
+
+static void model_ref_registry_entry_view(const yvex_model_ref *ref,
+                                          yvex_model_registry_entry *entry)
+{
+    memset(entry, 0, sizeof(*entry));
+    if (!ref) return;
+    entry->alias = ref->alias;
+    entry->path = ref->path;
+    entry->sha256 = ref->sha256;
+    entry->file_size = ref->registered_file_size;
+    entry->format = ref->format;
+    entry->architecture = ref->architecture;
+    entry->tensor_count = ref->tensor_count;
+    entry->known_tensor_bytes = ref->known_tensor_bytes;
+    entry->primary_tensor_name = ref->primary_tensor_name;
+    entry->primary_tensor_role = ref->primary_tensor_role;
+    entry->primary_tensor_dtype = ref->primary_tensor_dtype;
+    entry->primary_tensor_rank = ref->primary_tensor_rank;
+    entry->primary_tensor_dims = ref->primary_tensor_dims;
+    entry->primary_tensor_bytes = ref->primary_tensor_bytes;
+    entry->support_level = ref->support_level;
+    entry->selected_embedding_ready = ref->selected_embedding_ready;
+    entry->selected_embedding_hidden_size = ref->selected_embedding_hidden_size;
+    entry->selected_embedding_vocab_size = ref->selected_embedding_vocab_size;
+    entry->selected_embedding_output_count = ref->selected_embedding_output_count;
+    entry->selected_embedding_slice_bytes = ref->selected_embedding_slice_bytes;
+    entry->execution_ready = ref->execution_ready;
+}
+
+static void print_metadata_drift_cli(const yvex_model_metadata_drift_report *report)
+{
+    unsigned int i;
+
+    if (!report) return;
+    printf("metadata_status: %s\n", report->metadata_status[0] ? report->metadata_status : "unknown");
+    printf("readiness_status: %s\n", report->readiness_status[0] ? report->readiness_status : "unknown");
+    for (i = 0; i < report->issue_count; ++i) {
+        printf("metadata_issue_%u_code: %s\n", i, report->issues[i].code);
+        printf("metadata_issue_%u_registered: %s\n", i, report->issues[i].registered_value);
+        printf("metadata_issue_%u_current: %s\n", i, report->issues[i].current_value);
+    }
+}
+
+static int populate_registry_metadata(yvex_cli_metadata_snapshot *snapshot,
+                                      const char *path,
                                       yvex_error *err)
 {
-    yvex_artifact_file_identity identity;
     yvex_cli_tokenizer_context ctx;
     const yvex_tensor_info *primary = NULL;
+    const yvex_tensor_info *embedding = NULL;
+    yvex_selected_embedding_shape selected_shape;
     unsigned long long known_bytes = 0ull;
     unsigned long long i;
     int rc;
 
-    if (!entry || !entry->path) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "models_add_identity",
-                       "registry entry and path are required");
+    if (!snapshot || !path || !path[0]) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "models_metadata",
+                       "metadata snapshot and path are required");
         return YVEX_ERR_INVALID_ARG;
     }
 
+    memset(snapshot, 0, sizeof(*snapshot));
     memset(&ctx, 0, sizeof(ctx));
-    rc = yvex_artifact_identity_read(entry->path, &identity, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-    rc = open_model_context(entry->path, &ctx, err);
+    rc = open_model_context(path, &ctx, err);
     if (rc != YVEX_OK) {
         return rc;
     }
 
-    snprintf(sha256, YVEX_SHA256_HEX_CAP, "%s", identity.sha256);
-    snprintf(format, 16u, "gguf");
-    snprintf(architecture, 64u, "%s", yvex_arch_name(yvex_model_arch(ctx.model)));
+    snprintf(snapshot->format, sizeof(snapshot->format), "gguf");
+    snprintf(snapshot->architecture, sizeof(snapshot->architecture), "%s",
+             yvex_arch_name(yvex_model_arch(ctx.model)));
 
     for (i = 0; i < yvex_tensor_table_count(ctx.table); ++i) {
         const yvex_tensor_info *tensor = yvex_tensor_table_at(ctx.table, i);
@@ -2886,33 +3013,114 @@ static int populate_registry_identity(yvex_model_registry_entry *entry,
         known_bytes += tensor->storage_bytes;
         if (!primary && strcmp(tensor->name, "token_embd.weight") == 0) {
             primary = tensor;
+            embedding = tensor;
         }
     }
     if (!primary && yvex_tensor_table_count(ctx.table) > 0ull) {
         primary = yvex_tensor_table_at(ctx.table, 0);
     }
 
-    primary_name[0] = '\0';
-    primary_dtype[0] = '\0';
-    primary_dims[0] = '\0';
     if (primary) {
-        snprintf(primary_name, 128u, "%s", primary->name ? primary->name : "");
-        snprintf(primary_dtype, 32u, "%s", yvex_dtype_name(primary->dtype));
-        dims_to_text(primary->dims, primary->rank, primary_dims, 128u);
-        entry->primary_tensor_bytes = primary->storage_bytes;
+        snprintf(snapshot->primary_tensor_name, sizeof(snapshot->primary_tensor_name),
+                 "%s", primary->name ? primary->name : "");
+        snprintf(snapshot->primary_tensor_role, sizeof(snapshot->primary_tensor_role),
+                 "%s", yvex_tensor_role_name(primary->role));
+        snprintf(snapshot->primary_tensor_dtype, sizeof(snapshot->primary_tensor_dtype),
+                 "%s", yvex_dtype_name(primary->dtype));
+        dims_to_text(primary->dims, primary->rank, snapshot->primary_tensor_dims,
+                     sizeof(snapshot->primary_tensor_dims));
+        snapshot->entry.primary_tensor_rank = primary->rank;
+        snapshot->entry.primary_tensor_bytes = primary->storage_bytes;
     }
+
+    if (embedding) {
+        yvex_error shape_err;
+        yvex_error_clear(&shape_err);
+        memset(&selected_shape, 0, sizeof(selected_shape));
+        if (yvex_selected_embedding_shape_validate(embedding, 0u, &selected_shape,
+                                                   &shape_err) == YVEX_OK) {
+            snapshot->entry.selected_embedding_ready = 1;
+            snapshot->entry.selected_embedding_hidden_size = selected_shape.hidden_size;
+            snapshot->entry.selected_embedding_vocab_size = selected_shape.vocab_size;
+            snapshot->entry.selected_embedding_output_count = selected_shape.output_count;
+            snapshot->entry.selected_embedding_slice_bytes = selected_shape.slice_bytes;
+        } else {
+            yvex_error_clear(&shape_err);
+        }
+    }
+
+    snapshot->entry.path = path;
+    snapshot->entry.format = snapshot->format;
+    snapshot->entry.architecture = snapshot->architecture;
+    snapshot->entry.tensor_count = yvex_tensor_table_count(ctx.table);
+    snapshot->entry.known_tensor_bytes = known_bytes;
+    snapshot->entry.primary_tensor_name = snapshot->primary_tensor_name;
+    snapshot->entry.primary_tensor_role = snapshot->primary_tensor_role;
+    snapshot->entry.primary_tensor_dtype = snapshot->primary_tensor_dtype;
+    snapshot->entry.primary_tensor_dims = snapshot->primary_tensor_dims;
+    snprintf(snapshot->support_level, sizeof(snapshot->support_level), "%s",
+             current_support_from_metadata(&snapshot->entry));
+    snapshot->entry.support_level = snapshot->support_level;
+
+    close_model_context(&ctx);
+    return YVEX_OK;
+}
+
+static int populate_registry_identity(yvex_model_registry_entry *entry,
+                                      char sha256[YVEX_SHA256_HEX_CAP],
+                                      char format[16],
+                                      char architecture[64],
+                                      char primary_name[128],
+                                      char primary_role[64],
+                                      char primary_dtype[32],
+                                      char primary_dims[128],
+                                      yvex_error *err)
+{
+    yvex_artifact_file_identity identity;
+    yvex_cli_metadata_snapshot snapshot;
+    int rc;
+
+    if (!entry || !entry->path) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "models_add_identity",
+                       "registry entry and path are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    rc = yvex_artifact_identity_read(entry->path, &identity, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = populate_registry_metadata(&snapshot, entry->path, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    snprintf(sha256, YVEX_SHA256_HEX_CAP, "%s", identity.sha256);
+    snprintf(format, 16u, "%s", snapshot.format);
+    snprintf(architecture, 64u, "%s", snapshot.architecture);
+    snprintf(primary_name, 128u, "%s", snapshot.primary_tensor_name);
+    snprintf(primary_role, 64u, "%s", snapshot.primary_tensor_role);
+    snprintf(primary_dtype, 32u, "%s", snapshot.primary_tensor_dtype);
+    snprintf(primary_dims, 128u, "%s", snapshot.primary_tensor_dims);
 
     entry->sha256 = sha256;
     entry->file_size = identity.file_size;
     entry->format = format;
     entry->architecture = architecture;
-    entry->tensor_count = yvex_tensor_table_count(ctx.table);
-    entry->known_tensor_bytes = known_bytes;
+    entry->tensor_count = snapshot.entry.tensor_count;
+    entry->known_tensor_bytes = snapshot.entry.known_tensor_bytes;
     entry->primary_tensor_name = primary_name;
+    entry->primary_tensor_role = primary_role;
     entry->primary_tensor_dtype = primary_dtype;
+    entry->primary_tensor_rank = snapshot.entry.primary_tensor_rank;
     entry->primary_tensor_dims = primary_dims;
+    entry->primary_tensor_bytes = snapshot.entry.primary_tensor_bytes;
+    entry->selected_embedding_ready = snapshot.entry.selected_embedding_ready;
+    entry->selected_embedding_hidden_size = snapshot.entry.selected_embedding_hidden_size;
+    entry->selected_embedding_vocab_size = snapshot.entry.selected_embedding_vocab_size;
+    entry->selected_embedding_output_count = snapshot.entry.selected_embedding_output_count;
+    entry->selected_embedding_slice_bytes = snapshot.entry.selected_embedding_slice_bytes;
 
-    close_model_context(&ctx);
     return YVEX_OK;
 }
 
@@ -3028,6 +3236,7 @@ static int command_models_add(int argc, char **argv)
     char registered_format[16];
     char registered_architecture[64];
     char primary_tensor_name[128];
+    char primary_tensor_role[64];
     char primary_tensor_dtype[32];
     char primary_tensor_dims[128];
     int have_derived = 0;
@@ -3040,6 +3249,7 @@ static int command_models_add(int argc, char **argv)
     memset(registered_format, 0, sizeof(registered_format));
     memset(registered_architecture, 0, sizeof(registered_architecture));
     memset(primary_tensor_name, 0, sizeof(primary_tensor_name));
+    memset(primary_tensor_role, 0, sizeof(primary_tensor_role));
     memset(primary_tensor_dtype, 0, sizeof(primary_tensor_dtype));
     memset(primary_tensor_dims, 0, sizeof(primary_tensor_dims));
     rc = parse_models_add_options(argc, argv, &cli_options);
@@ -3074,10 +3284,17 @@ static int command_models_add(int argc, char **argv)
     entry.tensor_count = 0ull;
     entry.known_tensor_bytes = 0ull;
     entry.primary_tensor_name = "";
+    entry.primary_tensor_role = "";
     entry.primary_tensor_dtype = "";
+    entry.primary_tensor_rank = 0u;
     entry.primary_tensor_dims = "";
     entry.primary_tensor_bytes = 0ull;
     entry.support_level = cli_options.support_level ? cli_options.support_level : "";
+    entry.selected_embedding_ready = 0;
+    entry.selected_embedding_hidden_size = 0ull;
+    entry.selected_embedding_vocab_size = 0ull;
+    entry.selected_embedding_output_count = 0ull;
+    entry.selected_embedding_slice_bytes = 0ull;
     entry.execution_ready = 0;
 
     rc = populate_registry_identity(&entry,
@@ -3085,6 +3302,7 @@ static int command_models_add(int argc, char **argv)
                                     registered_format,
                                     registered_architecture,
                                     primary_tensor_name,
+                                    primary_tensor_role,
                                     primary_tensor_dtype,
                                     primary_tensor_dims,
                                     &err);
@@ -3115,6 +3333,22 @@ static int command_models_add(int argc, char **argv)
     printf("registered_architecture: %s\n", entry.architecture);
     printf("registered_tensor_count: %llu\n", entry.tensor_count);
     printf("registered_known_tensor_bytes: %llu\n", entry.known_tensor_bytes);
+    printf("registered_primary_tensor: %s\n", entry.primary_tensor_name);
+    printf("registered_primary_role: %s\n", entry.primary_tensor_role);
+    printf("registered_primary_dtype: %s\n", entry.primary_tensor_dtype);
+    printf("registered_primary_rank: %u\n", entry.primary_tensor_rank);
+    printf("registered_primary_dims: %s\n", entry.primary_tensor_dims);
+    printf("registered_primary_bytes: %llu\n", entry.primary_tensor_bytes);
+    printf("registered_selected_embedding_ready: %s\n",
+           entry.selected_embedding_ready ? "true" : "false");
+    printf("registered_selected_embedding_hidden_size: %llu\n",
+           entry.selected_embedding_hidden_size);
+    printf("registered_selected_embedding_vocab_size: %llu\n",
+           entry.selected_embedding_vocab_size);
+    printf("registered_selected_embedding_output_count: %llu\n",
+           entry.selected_embedding_output_count);
+    printf("registered_selected_embedding_slice_bytes: %llu\n",
+           entry.selected_embedding_slice_bytes);
     printf("identity_status: recorded\n");
     printf("status: models-added\n");
     yvex_model_registry_close(registry);
@@ -3209,6 +3443,13 @@ static int command_models_current(int argc, char **argv)
         printf("registered_architecture: %s\n", selected->architecture ? selected->architecture : "");
         printf("registered_tensor_count: %llu\n", selected->tensor_count);
         printf("registered_known_tensor_bytes: %llu\n", selected->known_tensor_bytes);
+        printf("registered_primary_tensor: %s\n", selected->primary_tensor_name ? selected->primary_tensor_name : "");
+        printf("registered_primary_role: %s\n", selected->primary_tensor_role ? selected->primary_tensor_role : "");
+        printf("registered_primary_dtype: %s\n", selected->primary_tensor_dtype ? selected->primary_tensor_dtype : "");
+        printf("registered_primary_rank: %u\n", selected->primary_tensor_rank);
+        printf("registered_primary_dims: %s\n", selected->primary_tensor_dims ? selected->primary_tensor_dims : "");
+        printf("metadata_status: %s\n",
+               selected->primary_tensor_name && selected->primary_tensor_name[0] ? "recorded" : "missing");
         printf("execution_ready: %s\n", selected->execution_ready ? "true" : "false");
         printf("status: models-current\n");
     } else {
@@ -3223,14 +3464,20 @@ static int command_models_verify(int argc, char **argv)
 {
     yvex_model_registry *registry = NULL;
     yvex_artifact_file_identity identity;
+    yvex_cli_metadata_snapshot current_metadata;
+    yvex_model_metadata_drift_report metadata_report;
     yvex_error err;
     const char *registry_path = NULL;
     const yvex_model_registry_entry *entry;
     const char *alias;
     const char *identity_status = "unknown";
     const char *digest_status = "unknown";
+    const char *metadata_status = "not-checked";
+    const char *readiness_status = "not-checked";
+    const char *status = "models-identity-fail";
     const char *reason = "";
     int pass = 0;
+    int metadata_checked = 0;
     int rc;
 
     if (argc < 4) {
@@ -3271,6 +3518,50 @@ static int command_models_verify(int argc, char **argv)
         digest_status = "pass";
         reason = "current file identity matches registered alias";
         pass = 1;
+        memset(&current_metadata, 0, sizeof(current_metadata));
+        memset(&metadata_report, 0, sizeof(metadata_report));
+        rc = populate_registry_metadata(&current_metadata, entry->path, &err);
+        if (rc != YVEX_OK) {
+            metadata_status = "fail";
+            readiness_status = "fail";
+            reason = "current artifact metadata could not be parsed";
+            pass = 0;
+            status = "models-metadata-drift";
+        } else {
+            rc = yvex_model_registry_compare_metadata(entry,
+                                                      &current_metadata.entry,
+                                                      &metadata_report,
+                                                      &err);
+            metadata_checked = 1;
+            if (rc != YVEX_OK) {
+                metadata_status = "fail";
+                readiness_status = "fail";
+                reason = yvex_error_message(&err);
+                pass = 0;
+                status = "models-metadata-drift";
+            } else {
+                metadata_status = metadata_report.metadata_status;
+                readiness_status = metadata_report.readiness_status;
+                if (strcmp(metadata_status, "pass") == 0 &&
+                    strcmp(readiness_status, "pass") == 0) {
+                    status = "models-identity-pass";
+                } else if (strcmp(metadata_status, "missing") == 0 ||
+                           strcmp(readiness_status, "missing") == 0) {
+                    reason = "registered alias lacks metadata summary; re-add model";
+                    pass = 0;
+                    status = "models-metadata-missing";
+                } else {
+                    reason = "registered alias metadata does not match current artifact facts";
+                    pass = 0;
+                    status = "models-metadata-drift";
+                }
+            }
+        }
+    }
+    if (strcmp(identity_status, "missing") == 0) {
+        status = "models-identity-missing";
+    } else if (strcmp(identity_status, "fail") == 0) {
+        status = "models-identity-fail";
     }
 
     printf("models: verify\n");
@@ -3282,10 +3573,64 @@ static int command_models_verify(int argc, char **argv)
     printf("current_file_size: %llu\n", identity.file_size);
     printf("digest_status: %s\n", digest_status);
     printf("identity_status: %s\n", identity_status);
+    printf("registered_support_level: %s\n", entry->support_level ? entry->support_level : "");
+    printf("current_support_level: %s\n",
+           metadata_checked ? current_metadata.entry.support_level : "not-checked");
+    printf("registered_architecture: %s\n", entry->architecture ? entry->architecture : "");
+    printf("current_architecture: %s\n",
+           metadata_checked ? current_metadata.entry.architecture : "not-checked");
+    printf("registered_tensor_count: %llu\n", entry->tensor_count);
+    printf("current_tensor_count: %llu\n",
+           metadata_checked ? current_metadata.entry.tensor_count : 0ull);
+    printf("registered_known_tensor_bytes: %llu\n", entry->known_tensor_bytes);
+    printf("current_known_tensor_bytes: %llu\n",
+           metadata_checked ? current_metadata.entry.known_tensor_bytes : 0ull);
+    printf("registered_primary_tensor: %s\n", entry->primary_tensor_name ? entry->primary_tensor_name : "");
+    printf("current_primary_tensor: %s\n",
+           metadata_checked ? current_metadata.entry.primary_tensor_name : "not-checked");
+    printf("registered_primary_role: %s\n", entry->primary_tensor_role ? entry->primary_tensor_role : "");
+    printf("current_primary_role: %s\n",
+           metadata_checked ? current_metadata.entry.primary_tensor_role : "not-checked");
+    printf("registered_primary_dtype: %s\n", entry->primary_tensor_dtype ? entry->primary_tensor_dtype : "");
+    printf("current_primary_dtype: %s\n",
+           metadata_checked ? current_metadata.entry.primary_tensor_dtype : "not-checked");
+    printf("registered_primary_rank: %u\n", entry->primary_tensor_rank);
+    printf("current_primary_rank: %u\n",
+           metadata_checked ? current_metadata.entry.primary_tensor_rank : 0u);
+    printf("registered_primary_dims: %s\n", entry->primary_tensor_dims ? entry->primary_tensor_dims : "");
+    printf("current_primary_dims: %s\n",
+           metadata_checked ? current_metadata.entry.primary_tensor_dims : "not-checked");
+    printf("registered_primary_bytes: %llu\n", entry->primary_tensor_bytes);
+    printf("current_primary_bytes: %llu\n",
+           metadata_checked ? current_metadata.entry.primary_tensor_bytes : 0ull);
+    printf("registered_selected_embedding_ready: %s\n",
+           entry->selected_embedding_ready ? "true" : "false");
+    printf("current_selected_embedding_ready: %s\n",
+           metadata_checked && current_metadata.entry.selected_embedding_ready ? "true" : "false");
+    printf("registered_selected_embedding_hidden_size: %llu\n",
+           entry->selected_embedding_hidden_size);
+    printf("current_selected_embedding_hidden_size: %llu\n",
+           metadata_checked ? current_metadata.entry.selected_embedding_hidden_size : 0ull);
+    printf("registered_selected_embedding_vocab_size: %llu\n",
+           entry->selected_embedding_vocab_size);
+    printf("current_selected_embedding_vocab_size: %llu\n",
+           metadata_checked ? current_metadata.entry.selected_embedding_vocab_size : 0ull);
+    printf("registered_selected_embedding_output_count: %llu\n",
+           entry->selected_embedding_output_count);
+    printf("current_selected_embedding_output_count: %llu\n",
+           metadata_checked ? current_metadata.entry.selected_embedding_output_count : 0ull);
+    printf("registered_selected_embedding_slice_bytes: %llu\n",
+           entry->selected_embedding_slice_bytes);
+    printf("current_selected_embedding_slice_bytes: %llu\n",
+           metadata_checked ? current_metadata.entry.selected_embedding_slice_bytes : 0ull);
+    if (metadata_checked) {
+        print_metadata_drift_cli(&metadata_report);
+    } else {
+        printf("metadata_status: %s\n", metadata_status);
+        printf("readiness_status: %s\n", readiness_status);
+    }
     printf("reason: %s\n", reason);
-    printf("status: %s\n", pass ? "models-identity-pass" :
-           (strcmp(identity_status, "missing") == 0 ? "models-identity-missing"
-                                                     : "models-identity-fail"));
+    printf("status: %s\n", status);
     yvex_model_registry_close(registry);
     return pass ? 0 : exit_for_status(YVEX_ERR_STATE);
 }
@@ -3364,9 +3709,16 @@ static int command_models_inspect(int argc, char **argv)
     printf("registered_tensor_count: %llu\n", entry->tensor_count);
     printf("registered_known_tensor_bytes: %llu\n", entry->known_tensor_bytes);
     printf("primary_tensor_name: %s\n", entry->primary_tensor_name ? entry->primary_tensor_name : "");
+    printf("primary_tensor_role: %s\n", entry->primary_tensor_role ? entry->primary_tensor_role : "");
     printf("primary_tensor_dtype: %s\n", entry->primary_tensor_dtype ? entry->primary_tensor_dtype : "");
+    printf("primary_tensor_rank: %u\n", entry->primary_tensor_rank);
     printf("primary_tensor_dims: %s\n", entry->primary_tensor_dims ? entry->primary_tensor_dims : "");
     printf("primary_tensor_bytes: %llu\n", entry->primary_tensor_bytes);
+    printf("selected_embedding_ready: %s\n", entry->selected_embedding_ready ? "true" : "false");
+    printf("selected_embedding_hidden_size: %llu\n", entry->selected_embedding_hidden_size);
+    printf("selected_embedding_vocab_size: %llu\n", entry->selected_embedding_vocab_size);
+    printf("selected_embedding_output_count: %llu\n", entry->selected_embedding_output_count);
+    printf("selected_embedding_slice_bytes: %llu\n", entry->selected_embedding_slice_bytes);
     printf("execution_ready: %s\n", entry->execution_ready ? "true" : "false");
     rc = open_model_context(entry->path, &ctx, &err);
     if (rc == YVEX_OK) {

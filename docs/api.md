@@ -96,6 +96,7 @@ model artifacts remain outside the repository
 | Real selected embedding partial graph | implemented for `F16` `token_embd.weight` |
 | Artifact integrity baseline | implemented for `GGUF` structural/range checks |
 | Local artifact identity | implemented with file size and SHA-256 digest |
+| Registry metadata drift diagnostics | implemented for local alias summaries |
 | Local model registry | implemented |
 | Alias-or-path model resolver | implemented for one-shot commands |
 | Model gate | implemented |
@@ -131,6 +132,15 @@ hashing path streams the file and does not read large model artifacts into
 memory. A digest match proves only that the bytes match a recorded or expected
 local value; it does not prove author identity, remote provenance, malware
 absence, or supply-chain trust.
+
+Registry entries also carry a bounded metadata summary for local alias drift
+diagnostics: support level, format, architecture, tensor count, known tensor
+bytes, primary tensor name/role/dtype/rank/dims/bytes, and selected embedding
+readiness facts. `yvex_model_registry_compare_metadata` compares a registered
+summary with current artifact facts and fills a caller-owned
+`yvex_model_metadata_drift_report` with copied status strings and a bounded issue
+list. The comparison does not own artifact objects, does not validate remote
+provenance, and does not claim model quality or full model support.
 
 `yvex_artifact_integrity_check_path` opens a local artifact path and returns a
 caller-owned `yvex_artifact_integrity_report`. `yvex_artifact_integrity_validate`

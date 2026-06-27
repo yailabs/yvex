@@ -82,7 +82,23 @@ static void fill_entry(yvex_model_registry_entry *entry, const char *path)
     entry->schema_version = "v1";
     entry->path = path;
     entry->sha256 = "abc123";
+    entry->file_size = 42ull;
+    entry->format = "gguf";
+    entry->architecture = "deepseek";
+    entry->tensor_count = 1ull;
+    entry->known_tensor_bytes = 64ull;
+    entry->primary_tensor_name = "token_embd.weight";
+    entry->primary_tensor_role = "token_embedding";
+    entry->primary_tensor_dtype = "F16";
+    entry->primary_tensor_rank = 2u;
+    entry->primary_tensor_dims = "[4,8]";
+    entry->primary_tensor_bytes = 64ull;
     entry->support_level = "selected-tensor-materialized";
+    entry->selected_embedding_ready = 1;
+    entry->selected_embedding_hidden_size = 4ull;
+    entry->selected_embedding_vocab_size = 8ull;
+    entry->selected_embedding_output_count = 4ull;
+    entry->selected_embedding_slice_bytes = 8ull;
     entry->execution_ready = 0;
 }
 
@@ -137,6 +153,11 @@ static int test_registry_lifecycle(void)
     found = yvex_model_registry_selected(registry);
     YVEX_TEST_ASSERT(found != NULL, "selected after reload");
     YVEX_TEST_ASSERT_STREQ(found->support_level, "selected-tensor-materialized", "support after reload");
+    YVEX_TEST_ASSERT_STREQ(found->primary_tensor_name, "token_embd.weight", "primary tensor after reload");
+    YVEX_TEST_ASSERT_STREQ(found->primary_tensor_role, "token_embedding", "primary role after reload");
+    YVEX_TEST_ASSERT_STREQ(found->primary_tensor_dtype, "F16", "primary dtype after reload");
+    YVEX_TEST_ASSERT_STREQ(found->primary_tensor_dims, "[4,8]", "primary dims after reload");
+    YVEX_TEST_ASSERT(found->selected_embedding_ready == 1, "selected embedding readiness after reload");
 
     rc = yvex_model_registry_remove(registry, "deepseek4-v4-flash-selected-embed", &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "remove entry");

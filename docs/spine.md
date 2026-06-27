@@ -144,6 +144,10 @@ file identity digest enforcement
 registered alias digest verification
 baseline registry alias digest drift detection
 model-gate/materialize-gate digest enforcement
+registry metadata drift diagnostics
+registered primary tensor summary comparison
+selected embedding readiness drift detection
+support-level readiness comparison
 ```
 
 Current live target:
@@ -260,8 +264,8 @@ unbounded spreadsheet.
 | ARTIFACT.INTEGRITY.2 | complete | GGUF structural corruption fixture suite |
 | ARTIFACT.INTEGRITY.3 | complete | Tensor directory offset and byte-range validation |
 | ARTIFACT.INTEGRITY.4 | complete | Shape, rank, dtype, and byte-count overflow hardening |
-| ARTIFACT.INTEGRITY.5 | next | Registry alias metadata drift diagnostics |
-| ARTIFACT.INTEGRITY.6 | planned | Materialization integrity gate |
+| ARTIFACT.INTEGRITY.5 | complete | Registry alias metadata drift diagnostics |
+| ARTIFACT.INTEGRITY.6 | next | Materialization integrity gate |
 | ARTIFACT.INTEGRITY.7 | planned | Graph execution integrity guard |
 | ARTIFACT.INTEGRITY.8 | planned | Corrupt artifact regression harness |
 | ARTIFACT.INTEGRITY.9 | planned | Operator integrity report and doctor integration |
@@ -509,8 +513,8 @@ mapped and the baseline validator exists.
 | ARTIFACT.INTEGRITY.2 | complete | GGUF structural corruption fixture suite |
 | ARTIFACT.INTEGRITY.3 | complete | Tensor directory offset and byte-range validation |
 | ARTIFACT.INTEGRITY.4 | complete | Shape, rank, dtype, and byte-count overflow hardening |
-| ARTIFACT.INTEGRITY.5 | next | Registry alias metadata drift diagnostics |
-| ARTIFACT.INTEGRITY.6 | planned | Materialization integrity gate |
+| ARTIFACT.INTEGRITY.5 | complete | Registry alias metadata drift diagnostics |
+| ARTIFACT.INTEGRITY.6 | next | Materialization integrity gate |
 | ARTIFACT.INTEGRITY.7 | planned | Graph execution integrity guard |
 | ARTIFACT.INTEGRITY.8 | planned | Corrupt artifact regression harness |
 | ARTIFACT.INTEGRITY.9 | planned | Operator integrity report and doctor integration |
@@ -564,10 +568,13 @@ count, and selected-token slice byte size for `token_embd.weight`. Storage dtype
 recognition remains separate from runtime compute support.
 
 ARTIFACT.INTEGRITY.5 adds higher-level registry metadata drift diagnostics after
-the digest baseline. It should compare recorded support level, expected primary
-tensor summary, shape/dtype, and command readiness against current artifact
-facts and present operator-facing warnings or failures depending on command
-mode.
+the digest baseline. `models add` now records support level, architecture, tensor
+count, known tensor bytes, primary tensor name/role/dtype/rank/dims/bytes, and
+selected embedding readiness facts. `models verify` compares those registered
+facts against the current artifact and reports `metadata_status` and
+`readiness_status` separately from `digest_status`. Safety-critical alias paths
+such as materialization and partial graph execution fail when metadata drift
+invalidates registered assumptions.
 
 ARTIFACT.INTEGRITY.6 adds a materialization integrity gate. It should prove that
 corrupt or inconsistent artifacts fail before backend allocation when possible,
@@ -934,13 +941,13 @@ No diagram may imply support that the code does not implement.
 ## 8. Active Next
 
 ```text
-ARTIFACT.INTEGRITY.5 - Registry alias metadata drift diagnostics
+ARTIFACT.INTEGRITY.6 - Materialization integrity gate
 ```
 
-Next implementation: ARTIFACT.INTEGRITY.5. It must compare registered alias
-metadata, primary tensor facts, shape/dtype, support level, and command
-readiness against current artifact facts now that digest identity and tensor
-shape/range accounting are canonical.
+Next implementation: ARTIFACT.INTEGRITY.6. It must turn the artifact integrity
+and alias metadata checks into a materialization-specific gate that proves
+corrupt or inconsistent artifacts fail before backend allocation where possible,
+and fail with cleanup when allocation or transfer has already begun.
 
 Next runtime expansion after integrity baseline:
 

@@ -120,6 +120,19 @@ execution. If a registered alias lacks digest identity or the current file
 digest no longer matches the registry, the command must fail before backend
 allocation or graph execution.
 
+Registered aliases also carry a local metadata summary. `models verify` compares
+that recorded summary against current artifact facts and reports metadata drift
+separately from digest drift: support level, architecture, tensor count, known
+tensor bytes, primary tensor name/role/dtype/rank/dims/bytes, and selected
+embedding readiness. Metadata drift diagnostics are local operator evidence, not
+remote provenance. A metadata match does not prove model quality, full model
+support, author identity, or supply-chain security.
+
+Safety-critical alias paths that depend on the registered metadata summary must
+fail if metadata drift invalidates the alias assumptions. Raw-path operations do
+not require registry metadata; they rely on structural integrity and explicit
+expected digest checks when provided.
+
 ## 5. Server Contract
 
 `./yvexd` exposes a provider/status shell:

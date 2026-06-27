@@ -177,7 +177,7 @@ For selected embedding readiness, include the partial-token boundary:
   --partial-token 0
 ```
 
-## 6. Verify artifact identity
+## 6. Verify artifact identity and registry metadata
 
 Registered aliases record local file identity. Verify the alias before
 materialization or graph execution when checking that the operator-local file is
@@ -196,8 +196,23 @@ registered_sha256: 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb4539
 current_sha256: 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab
 digest_status: pass
 identity_status: pass
+metadata_status: pass
+readiness_status: pass
+registered_primary_tensor: token_embd.weight
+current_primary_tensor: token_embd.weight
+registered_primary_dtype: F16
+current_primary_dtype: F16
+registered_primary_dims: [4096,129280]
+current_primary_dims: [4096,129280]
 status: models-identity-pass
 ```
+
+`models verify` checks both digest identity and registry metadata drift. A digest
+match proves only that the current bytes match the local registry record. A
+metadata pass proves that the registry's recorded summary still matches current
+parsed artifact facts: support level, architecture, tensor count, known tensor
+bytes, primary tensor name/role/dtype/rank/dims/bytes, and selected embedding
+readiness. This is not remote provenance or model-quality validation.
 
 You can also make an expected digest explicit:
 

@@ -39,12 +39,37 @@ typedef struct {
     unsigned long long tensor_count;
     unsigned long long known_tensor_bytes;
     const char *primary_tensor_name;
+    const char *primary_tensor_role;
     const char *primary_tensor_dtype;
+    unsigned int primary_tensor_rank;
     const char *primary_tensor_dims;
     unsigned long long primary_tensor_bytes;
     const char *support_level;
+    int selected_embedding_ready;
+    unsigned long long selected_embedding_hidden_size;
+    unsigned long long selected_embedding_vocab_size;
+    unsigned long long selected_embedding_output_count;
+    unsigned long long selected_embedding_slice_bytes;
     int execution_ready;
 } yvex_model_registry_entry;
+
+#define YVEX_MODEL_METADATA_STATUS_CAP 24u
+#define YVEX_MODEL_METADATA_CODE_CAP 64u
+#define YVEX_MODEL_METADATA_VALUE_CAP 128u
+#define YVEX_MODEL_METADATA_MAX_ISSUES 16u
+
+typedef struct {
+    char code[YVEX_MODEL_METADATA_CODE_CAP];
+    char registered_value[YVEX_MODEL_METADATA_VALUE_CAP];
+    char current_value[YVEX_MODEL_METADATA_VALUE_CAP];
+} yvex_model_metadata_issue;
+
+typedef struct {
+    char metadata_status[YVEX_MODEL_METADATA_STATUS_CAP];
+    char readiness_status[YVEX_MODEL_METADATA_STATUS_CAP];
+    unsigned int issue_count;
+    yvex_model_metadata_issue issues[YVEX_MODEL_METADATA_MAX_ISSUES];
+} yvex_model_metadata_drift_report;
 
 typedef struct {
     const char *registry_path;
@@ -97,6 +122,12 @@ int yvex_model_registry_scan_root(const char *root,
 
 void yvex_model_registry_scan_free(yvex_model_registry_entry *entries,
                                    unsigned long long count);
+
+int yvex_model_registry_compare_metadata(
+    const yvex_model_registry_entry *registered,
+    const yvex_model_registry_entry *current,
+    yvex_model_metadata_drift_report *out,
+    yvex_error *err);
 
 int yvex_model_registry_default_path(char *out,
                                      unsigned long long out_size,

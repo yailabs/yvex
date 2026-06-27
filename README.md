@@ -407,6 +407,9 @@ refusal paths. Those files are test assets, not model artifacts.
 Registered model aliases also record local file identity so YVEX can detect
 when an operator-local artifact changes after registration. Digest checks are
 local identity evidence, not supply-chain security or remote provenance.
+Registry verification also compares recorded alias metadata against current
+artifact facts, so digest identity and tensor metadata drift are reported as
+different local operator signals.
 
 The local registry exists because real artifact paths are long and
 machine-specific. `.yvex/models.local.json` is ignored local state, and
