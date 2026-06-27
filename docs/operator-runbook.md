@@ -288,6 +288,10 @@ executes a constrained token-embedding graph segment over engine-attached
 output to a raw-artifact reference slice, and reports a checksum plus sample
 values.
 
+Graph commands report `graph_integrity_guard` and `graph_execution_phase`. A
+`preflight` failure means no backend dispatch happened. This is graph-entry
+safety, not full model execution or inference readiness.
+
 ```sh
 ./yvex graph \
   --model deepseek4-v4-flash-selected-embed \
@@ -299,6 +303,12 @@ values.
 Expected outcome:
 
 ```text
+graph_integrity_guard: pass
+graph_execution_phase: complete
+graph_kind: selected-embedding-partial
+dispatch_attempted: true
+reference_read_attempted: true
+output_allocation_attempted: true
 real_partial_graph_executed: true
 partial_graph_kind: token-embedding
 partial_backend: cpu
@@ -335,6 +345,9 @@ exactly. The example keeps the file under the operator-owned DeepSeek GGUF
 directory and marks the fixture architecture as `deepseek`, but it is still a
 controlled F32 fixture, not the large selected F16 DeepSeek artifact.
 
+The fixture graph uses the same graph integrity guard. A `preflight` failure
+still means no backend dispatch happened.
+
 ```sh
 ./yvex gguf-emit controlled \
   --out /path/to/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
@@ -358,6 +371,12 @@ controlled F32 fixture, not the large selected F16 DeepSeek artifact.
 Expected outcome:
 
 ```text
+graph_integrity_guard: pass
+graph_execution_phase: complete
+graph_kind: fixture-embedding
+dispatch_attempted: true
+reference_read_attempted: false
+output_allocation_attempted: true
 fixture_graph_executed: true
 fixture_backend: cpu
 fixture_op: embed

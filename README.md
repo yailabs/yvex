@@ -414,6 +414,9 @@ different local operator signals.
 Materialization is integrity-gated: structural, identity, metadata, shape, and
 range checks run before backend allocation where possible, and allocation or
 transfer failures report cleanup status.
+Graph execution is integrity-guarded for the implemented fixture and selected
+embedding partial paths: preflight runs before backend dispatch and raw
+reference reads.
 
 The local registry exists because real artifact paths are long and
 machine-specific. `.yvex/models.local.json` is ignored local state, and

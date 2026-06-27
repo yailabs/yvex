@@ -89,6 +89,22 @@ typedef struct {
 
 typedef struct {
     int executed;
+    const char *graph_integrity_guard;
+    const char *graph_execution_phase;
+    const char *graph_kind;
+    const char *shape_status;
+    const char *range_status;
+    const char *slice_range_status;
+    const char *backend_status;
+    const char *backend_op_status;
+    int dispatch_attempted;
+    int reference_read_attempted;
+    int output_allocation_attempted;
+    int cleanup_attempted;
+    const char *cleanup_status;
+    unsigned long long output_bytes_planned;
+    unsigned long long output_bytes_allocated;
+    unsigned long long reference_bytes_planned;
     const char *backend_name;
     const char *op_name;
     const char *weight_name;
@@ -109,6 +125,22 @@ typedef struct {
 
 typedef struct {
     int executed;
+    const char *graph_integrity_guard;
+    const char *graph_execution_phase;
+    const char *graph_kind;
+    const char *shape_status;
+    const char *range_status;
+    const char *slice_range_status;
+    const char *backend_status;
+    const char *backend_op_status;
+    int dispatch_attempted;
+    int reference_read_attempted;
+    int output_allocation_attempted;
+    int cleanup_attempted;
+    const char *cleanup_status;
+    unsigned long long output_bytes_planned;
+    unsigned long long output_bytes_allocated;
+    unsigned long long reference_bytes_planned;
     const char *backend_name;
     const char *segment_name;
     const char *weight_name;

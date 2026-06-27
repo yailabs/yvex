@@ -147,6 +147,20 @@ transfer, and cleanup were attempted, plus planned, allocated, and transferred
 byte counts where available. This is local backend lifecycle behavior; it is not
 inference readiness, full model support, or supply-chain security.
 
+### Graph execution integrity guard
+
+Graph execution is guarded by artifact integrity. Fixture graph and real
+selected embedding partial graph execution run graph-specific preflight before
+dispatch: structural integrity, identity when using aliases, metadata drift,
+shape/dtype accounting, tensor range validation, selected token slice
+validation, backend availability, backend op support, output allocation size,
+and reference read bounds. Preflight failure must prevent dispatch.
+
+Post-preflight failures must attempt cleanup and report the graph phase. This
+guard applies only to the implemented controlled fixture and selected embedding
+partial graph paths. It is graph-entry safety, not full graph safety, inference
+readiness, full model support, or supply-chain security.
+
 ## 5. Server Contract
 
 `./yvexd` exposes a provider/status shell:

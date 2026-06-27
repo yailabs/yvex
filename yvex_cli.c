@@ -4495,6 +4495,244 @@ static int command_paths(int argc, char **argv)
     return 0;
 }
 
+typedef struct {
+    const char *guard_status;
+    const char *phase;
+    const char *graph_kind;
+    const char *integrity_status;
+    const char *identity_status;
+    const char *metadata_status;
+    const char *shape_status;
+    const char *range_status;
+    const char *slice_range_status;
+    const char *backend_status;
+    const char *backend_op_status;
+    int dispatch_attempted;
+    int reference_read_attempted;
+    int output_allocation_attempted;
+    int cleanup_attempted;
+    const char *cleanup_status;
+    unsigned long long output_bytes_planned;
+    unsigned long long output_bytes_allocated;
+    unsigned long long reference_bytes_planned;
+} yvex_cli_graph_guard_report;
+
+static int cli_test_env_enabled(const char *name)
+{
+    const char *value = getenv(name);
+
+    return value && value[0] != '\0' && strcmp(value, "0") != 0;
+}
+
+static void init_graph_guard_report(yvex_cli_graph_guard_report *report,
+                                    int execute_fixture,
+                                    const yvex_model_ref *model_ref)
+{
+    memset(report, 0, sizeof(*report));
+    report->guard_status = "fail";
+    report->phase = "preflight";
+    report->graph_kind = execute_fixture ? "fixture-embedding" : "selected-embedding-partial";
+    report->integrity_status = "unchecked";
+    report->identity_status = model_ref && model_ref->kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered";
+    report->metadata_status = model_ref && model_ref->kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered";
+    report->shape_status = "unchecked";
+    report->range_status = "unchecked";
+    report->slice_range_status = execute_fixture ? "not-needed" : "unchecked";
+    report->backend_status = "not-opened";
+    report->backend_op_status = "unchecked";
+    report->cleanup_status = "not-needed";
+}
+
+static void print_graph_guard_report(const yvex_cli_graph_guard_report *report)
+{
+    printf("graph_integrity_guard: %s\n", report->guard_status ? report->guard_status : "fail");
+    printf("graph_execution_phase: %s\n", report->phase ? report->phase : "preflight");
+    printf("graph_kind: %s\n", report->graph_kind ? report->graph_kind : "unknown");
+    printf("integrity_status: %s\n", report->integrity_status ? report->integrity_status : "unchecked");
+    printf("identity_status: %s\n", report->identity_status ? report->identity_status : "unregistered");
+    printf("metadata_status: %s\n", report->metadata_status ? report->metadata_status : "unregistered");
+    printf("shape_status: %s\n", report->shape_status ? report->shape_status : "unchecked");
+    printf("range_status: %s\n", report->range_status ? report->range_status : "unchecked");
+    printf("slice_range_status: %s\n", report->slice_range_status ? report->slice_range_status : "unchecked");
+    printf("backend_status: %s\n", report->backend_status ? report->backend_status : "not-opened");
+    printf("backend_op_status: %s\n", report->backend_op_status ? report->backend_op_status : "unchecked");
+    printf("dispatch_attempted: %s\n", report->dispatch_attempted ? "true" : "false");
+    printf("reference_read_attempted: %s\n", report->reference_read_attempted ? "true" : "false");
+    printf("output_allocation_attempted: %s\n", report->output_allocation_attempted ? "true" : "false");
+    printf("cleanup_attempted: %s\n", report->cleanup_attempted ? "true" : "false");
+    printf("cleanup_status: %s\n", report->cleanup_status ? report->cleanup_status : "not-needed");
+    printf("output_bytes_planned: %llu\n", report->output_bytes_planned);
+    printf("output_bytes_allocated: %llu\n", report->output_bytes_allocated);
+    printf("reference_bytes_planned: %llu\n", report->reference_bytes_planned);
+}
+
+static int preflight_graph_guard(const yvex_model_ref *model_ref,
+                                 const char *backend_name,
+                                 int execute_fixture,
+                                 unsigned int token_id,
+                                 yvex_cli_graph_guard_report *report,
+                                 yvex_error *err)
+{
+    yvex_cli_tokenizer_context ctx;
+    yvex_artifact_integrity_report integrity_report;
+    yvex_tensor_range tensor_range;
+    yvex_tensor_slice_range slice_range;
+    yvex_selected_embedding_shape embedding_shape;
+    yvex_backend_options backend_options;
+    yvex_backend *backend = NULL;
+    const yvex_tensor_info *tensor;
+    unsigned long long hidden_size;
+    int rc;
+
+    init_graph_guard_report(report, execute_fixture, model_ref);
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&integrity_report, 0, sizeof(integrity_report));
+    memset(&tensor_range, 0, sizeof(tensor_range));
+    memset(&slice_range, 0, sizeof(slice_range));
+    memset(&embedding_shape, 0, sizeof(embedding_shape));
+    memset(&backend_options, 0, sizeof(backend_options));
+
+    rc = open_model_context(model_ref->path, &ctx, err);
+    if (rc != YVEX_OK) {
+        report->integrity_status = "fail";
+        return rc;
+    }
+    rc = yvex_artifact_integrity_validate(ctx.artifact,
+                                          ctx.gguf,
+                                          ctx.table,
+                                          NULL,
+                                          &integrity_report,
+                                          err);
+    report->integrity_status = (rc == YVEX_OK && integrity_report.passed) ? "pass" : "fail";
+    report->shape_status =
+        integrity_report.tensor_shapes_invalid == 0 &&
+        integrity_report.tensor_dtypes_invalid == 0 &&
+        integrity_report.tensor_byte_counts_invalid == 0 ? "pass" : "fail";
+    report->range_status = integrity_report.tensor_ranges_invalid == 0 ? "pass" : "fail";
+    if (rc != YVEX_OK || !integrity_report.passed) {
+        close_model_context(&ctx);
+        if (rc == YVEX_OK) {
+            yvex_error_set(err, YVEX_ERR_STATE, "graph_integrity_preflight",
+                           "artifact integrity preflight failed");
+        }
+        return rc == YVEX_OK ? YVEX_ERR_STATE : rc;
+    }
+
+    tensor = yvex_tensor_table_find(ctx.table, "token_embd.weight");
+    if (!tensor) {
+        report->shape_status = "fail";
+        close_model_context(&ctx);
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "graph_integrity_preflight",
+                       "required tensor not found: token_embd.weight");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+
+    rc = yvex_tensor_range_validate(ctx.artifact, ctx.gguf, tensor, &tensor_range, err);
+    if (rc != YVEX_OK) {
+        report->range_status = "fail";
+        close_model_context(&ctx);
+        return rc;
+    }
+    report->range_status = "pass";
+
+    if (execute_fixture) {
+        if (tensor->dtype != YVEX_DTYPE_F32) {
+            report->shape_status = "fail";
+            close_model_context(&ctx);
+            yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "graph_integrity_preflight",
+                           "fixture graph embed execution requires F32 token_embd.weight");
+            return YVEX_ERR_UNSUPPORTED;
+        }
+        if (tensor->rank != 2 || tensor->dims[0] == 0 || tensor->dims[1] == 0) {
+            report->shape_status = "fail";
+            close_model_context(&ctx);
+            yvex_error_set(err, YVEX_ERR_FORMAT, "graph_integrity_preflight",
+                           "fixture graph token embedding must be rank 2 with non-zero dims");
+            return YVEX_ERR_FORMAT;
+        }
+        if ((unsigned long long)token_id >= tensor->dims[1]) {
+            report->slice_range_status = "fail";
+            close_model_context(&ctx);
+            yvex_error_setf(err, YVEX_ERR_BOUNDS, "graph_integrity_preflight",
+                            "fixture token id %u exceeds embedding vocab size %llu",
+                            token_id, tensor->dims[1]);
+            return YVEX_ERR_BOUNDS;
+        }
+        hidden_size = tensor->dims[0];
+        if (hidden_size > (unsigned long long)(~(size_t)0 / sizeof(float))) {
+            report->shape_status = "fail";
+            close_model_context(&ctx);
+            yvex_error_set(err, YVEX_ERR_BOUNDS, "graph_integrity_preflight",
+                           "fixture graph output is too large");
+            return YVEX_ERR_BOUNDS;
+        }
+        report->shape_status = "pass";
+        report->slice_range_status = "not-needed";
+        report->output_bytes_planned = hidden_size * (unsigned long long)sizeof(float);
+    } else {
+        if (tensor->dtype != YVEX_DTYPE_F16) {
+            report->shape_status = "fail";
+            report->slice_range_status = "fail";
+            close_model_context(&ctx);
+            yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "graph_integrity_preflight",
+                           "real partial embedding segment requires F16 token_embd.weight");
+            return YVEX_ERR_UNSUPPORTED;
+        }
+        rc = yvex_selected_embedding_shape_validate(tensor, token_id, &embedding_shape, err);
+        if (rc != YVEX_OK) {
+            const char *msg = yvex_error_message(err);
+            report->shape_status = msg && strstr(msg, "token-out-of-range") ? "pass" : "fail";
+            report->slice_range_status = "fail";
+            close_model_context(&ctx);
+            if (msg && strstr(msg, "token-out-of-range")) {
+                yvex_error_setf(err, YVEX_ERR_BOUNDS, "graph_integrity_preflight",
+                                "partial token out of range: %u >= %llu",
+                                token_id, embedding_shape.vocab_size);
+            }
+            return rc;
+        }
+        rc = yvex_tensor_embedding_slice_range_validate(&tensor_range,
+                                                        token_id,
+                                                        &slice_range,
+                                                        err);
+        if (rc != YVEX_OK) {
+            report->slice_range_status = "fail";
+            close_model_context(&ctx);
+            return rc;
+        }
+        report->shape_status = "pass";
+        report->slice_range_status = "pass";
+        report->output_bytes_planned = embedding_shape.output_bytes;
+        report->reference_bytes_planned = slice_range.slice_bytes;
+    }
+
+    backend_options.kind = strcmp(backend_name, "cuda") == 0
+                               ? YVEX_BACKEND_KIND_CUDA
+                               : YVEX_BACKEND_KIND_CPU;
+    rc = yvex_backend_open(&backend, &backend_options, err);
+    if (rc != YVEX_OK) {
+        report->backend_status = rc == YVEX_ERR_UNSUPPORTED ? "unavailable" : "fail";
+        report->backend_op_status = "unsupported";
+        close_model_context(&ctx);
+        return rc;
+    }
+    report->backend_status = "ready";
+    if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_EMBED) ||
+        cli_test_env_enabled("YVEX_TEST_GRAPH_BACKEND_OP_UNSUPPORTED")) {
+        report->backend_op_status = "unsupported";
+        yvex_backend_close(backend);
+        close_model_context(&ctx);
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "graph_integrity_preflight",
+                       "backend does not support graph embed op");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    report->backend_op_status = "supported";
+    report->guard_status = "pass";
+    yvex_backend_close(backend);
+    close_model_context(&ctx);
+    return YVEX_OK;
+}
+
 static int command_graph(int argc, char **argv)
 {
     yvex_cli_tokenizer_context ctx;
@@ -4505,6 +4743,7 @@ static int command_graph(int argc, char **argv)
     yvex_fixture_graph_result fixture_result;
     yvex_partial_graph_options partial_options;
     yvex_partial_graph_result partial_result;
+    yvex_cli_graph_guard_report graph_guard;
     yvex_model_ref model_ref;
     yvex_engine *engine = NULL;
     yvex_error err;
@@ -4522,6 +4761,7 @@ static int command_graph(int argc, char **argv)
     memset(&fixture_result, 0, sizeof(fixture_result));
     memset(&partial_options, 0, sizeof(partial_options));
     memset(&partial_result, 0, sizeof(partial_result));
+    memset(&graph_guard, 0, sizeof(graph_guard));
     memset(&model_ref, 0, sizeof(model_ref));
     options.sequence_length = 1;
     options.include_prefill_path = 1;
@@ -4602,8 +4842,26 @@ static int command_graph(int argc, char **argv)
         }
         rc = enforce_registered_identity_cli(&model_ref, execute_fixture ? "graph-fixture" : "graph-partial");
         if (rc != YVEX_OK) {
+            init_graph_guard_report(&graph_guard, execute_fixture, &model_ref);
+            graph_guard.identity_status = "fail";
+            graph_guard.metadata_status = "fail";
+            print_graph_guard_report(&graph_guard);
+            printf("status: graph-integrity-fail\n");
             yvex_model_ref_clear(&model_ref);
             return exit_for_status(rc);
+        }
+
+        rc = preflight_graph_guard(&model_ref,
+                                   backend_name,
+                                   execute_fixture,
+                                   execute_fixture ? fixture_options.token_id : partial_options.token_id,
+                                   &graph_guard,
+                                   &err);
+        if (rc != YVEX_OK) {
+            print_graph_guard_report(&graph_guard);
+            printf("status: graph-integrity-fail\n");
+            yvex_model_ref_clear(&model_ref);
+            return print_yvex_error(&err, exit_for_status(rc));
         }
 
         engine_options.model_path = model_ref.path;
@@ -4616,11 +4874,15 @@ static int command_graph(int argc, char **argv)
 
         rc = yvex_engine_open(&engine, &engine_options, &err);
         if (rc == YVEX_ERR_UNSUPPORTED && strcmp(backend_name, "cuda") == 0) {
+            graph_guard.guard_status = "fail";
+            graph_guard.phase = "preflight";
+            graph_guard.backend_status = "unavailable";
+            graph_guard.backend_op_status = "unsupported";
+            print_graph_guard_report(&graph_guard);
             printf("%s_backend: cuda\n", execute_fixture ? "fixture" : "partial");
             printf("%s_backend_status: unsupported\n", execute_fixture ? "fixture" : "partial");
             printf("reason: %s\n", yvex_error_message(&err));
-            printf("status: %s\n", execute_fixture ? "fixture-graph-backend-unsupported"
-                                                    : "real-partial-graph-backend-unsupported");
+            printf("status: graph-integrity-fail\n");
             yvex_model_ref_clear(&model_ref);
             return 5;
         }
@@ -4630,12 +4892,101 @@ static int command_graph(int argc, char **argv)
             rc = yvex_engine_execute_partial_graph(engine, &partial_options, &partial_result, &err);
         }
         if (rc != YVEX_OK) {
+            if (execute_fixture) {
+                graph_guard.phase = fixture_result.graph_execution_phase
+                                        ? fixture_result.graph_execution_phase
+                                        : "dispatch";
+                graph_guard.shape_status = fixture_result.shape_status
+                                               ? fixture_result.shape_status
+                                               : graph_guard.shape_status;
+                graph_guard.range_status = fixture_result.range_status
+                                               ? fixture_result.range_status
+                                               : graph_guard.range_status;
+                graph_guard.slice_range_status = fixture_result.slice_range_status
+                                                     ? fixture_result.slice_range_status
+                                                     : graph_guard.slice_range_status;
+                graph_guard.backend_status = fixture_result.backend_status
+                                                  ? fixture_result.backend_status
+                                                  : graph_guard.backend_status;
+                graph_guard.backend_op_status = fixture_result.backend_op_status
+                                                     ? fixture_result.backend_op_status
+                                                     : graph_guard.backend_op_status;
+                graph_guard.dispatch_attempted = fixture_result.dispatch_attempted;
+                graph_guard.reference_read_attempted = fixture_result.reference_read_attempted;
+                graph_guard.output_allocation_attempted = fixture_result.output_allocation_attempted;
+                graph_guard.cleanup_attempted = fixture_result.cleanup_attempted;
+                graph_guard.cleanup_status = fixture_result.cleanup_status
+                                                ? fixture_result.cleanup_status
+                                                : graph_guard.cleanup_status;
+                graph_guard.output_bytes_planned = fixture_result.output_bytes_planned;
+                graph_guard.output_bytes_allocated = fixture_result.output_bytes_allocated;
+                graph_guard.reference_bytes_planned = fixture_result.reference_bytes_planned;
+            } else {
+                graph_guard.phase = partial_result.graph_execution_phase
+                                        ? partial_result.graph_execution_phase
+                                        : "dispatch";
+                graph_guard.shape_status = partial_result.shape_status
+                                               ? partial_result.shape_status
+                                               : graph_guard.shape_status;
+                graph_guard.range_status = partial_result.range_status
+                                               ? partial_result.range_status
+                                               : graph_guard.range_status;
+                graph_guard.slice_range_status = partial_result.slice_range_status
+                                                     ? partial_result.slice_range_status
+                                                     : graph_guard.slice_range_status;
+                graph_guard.backend_status = partial_result.backend_status
+                                                  ? partial_result.backend_status
+                                                  : graph_guard.backend_status;
+                graph_guard.backend_op_status = partial_result.backend_op_status
+                                                     ? partial_result.backend_op_status
+                                                     : graph_guard.backend_op_status;
+                graph_guard.dispatch_attempted = partial_result.dispatch_attempted;
+                graph_guard.reference_read_attempted = partial_result.reference_read_attempted;
+                graph_guard.output_allocation_attempted = partial_result.output_allocation_attempted;
+                graph_guard.cleanup_attempted = partial_result.cleanup_attempted;
+                graph_guard.cleanup_status = partial_result.cleanup_status
+                                                ? partial_result.cleanup_status
+                                                : graph_guard.cleanup_status;
+                graph_guard.output_bytes_planned = partial_result.output_bytes_planned;
+                graph_guard.output_bytes_allocated = partial_result.output_bytes_allocated;
+                graph_guard.reference_bytes_planned = partial_result.reference_bytes_planned;
+            }
+            graph_guard.guard_status = "fail";
+            print_graph_guard_report(&graph_guard);
+            printf("status: %s\n",
+                   graph_guard.cleanup_attempted ? "graph-failed-cleaned" : "graph-integrity-fail");
             yvex_engine_close(engine);
             yvex_model_ref_clear(&model_ref);
             return print_yvex_error(&err, exit_for_status(rc));
         }
 
         if (execute_fixture) {
+            graph_guard.guard_status = fixture_result.graph_integrity_guard
+                                           ? fixture_result.graph_integrity_guard
+                                           : "pass";
+            graph_guard.phase = fixture_result.graph_execution_phase
+                                    ? fixture_result.graph_execution_phase
+                                    : "complete";
+            graph_guard.shape_status = fixture_result.shape_status ? fixture_result.shape_status : "pass";
+            graph_guard.range_status = fixture_result.range_status ? fixture_result.range_status : "pass";
+            graph_guard.slice_range_status = fixture_result.slice_range_status
+                                                 ? fixture_result.slice_range_status
+                                                 : "not-needed";
+            graph_guard.backend_status = fixture_result.backend_status ? fixture_result.backend_status : "ready";
+            graph_guard.backend_op_status = fixture_result.backend_op_status
+                                                ? fixture_result.backend_op_status
+                                                : "supported";
+            graph_guard.dispatch_attempted = fixture_result.dispatch_attempted;
+            graph_guard.reference_read_attempted = fixture_result.reference_read_attempted;
+            graph_guard.output_allocation_attempted = fixture_result.output_allocation_attempted;
+            graph_guard.cleanup_attempted = fixture_result.cleanup_attempted;
+            graph_guard.cleanup_status = fixture_result.cleanup_status
+                                            ? fixture_result.cleanup_status
+                                            : "not-needed";
+            graph_guard.output_bytes_planned = fixture_result.output_bytes_planned;
+            graph_guard.output_bytes_allocated = fixture_result.output_bytes_allocated;
+            graph_guard.reference_bytes_planned = fixture_result.reference_bytes_planned;
+            print_graph_guard_report(&graph_guard);
             printf("fixture_graph_executed: true\n");
             printf("fixture_backend: %s\n", fixture_result.backend_name);
             printf("fixture_op: %s\n", fixture_result.op_name);
@@ -4654,6 +5005,32 @@ static int command_graph(int argc, char **argv)
             printf("graph_execution_ready: false\n");
             printf("status: fixture-graph-executed\n");
         } else {
+            graph_guard.guard_status = partial_result.graph_integrity_guard
+                                           ? partial_result.graph_integrity_guard
+                                           : "pass";
+            graph_guard.phase = partial_result.graph_execution_phase
+                                    ? partial_result.graph_execution_phase
+                                    : "complete";
+            graph_guard.shape_status = partial_result.shape_status ? partial_result.shape_status : "pass";
+            graph_guard.range_status = partial_result.range_status ? partial_result.range_status : "pass";
+            graph_guard.slice_range_status = partial_result.slice_range_status
+                                                 ? partial_result.slice_range_status
+                                                 : "pass";
+            graph_guard.backend_status = partial_result.backend_status ? partial_result.backend_status : "ready";
+            graph_guard.backend_op_status = partial_result.backend_op_status
+                                                ? partial_result.backend_op_status
+                                                : "supported";
+            graph_guard.dispatch_attempted = partial_result.dispatch_attempted;
+            graph_guard.reference_read_attempted = partial_result.reference_read_attempted;
+            graph_guard.output_allocation_attempted = partial_result.output_allocation_attempted;
+            graph_guard.cleanup_attempted = partial_result.cleanup_attempted;
+            graph_guard.cleanup_status = partial_result.cleanup_status
+                                            ? partial_result.cleanup_status
+                                            : "not-needed";
+            graph_guard.output_bytes_planned = partial_result.output_bytes_planned;
+            graph_guard.output_bytes_allocated = partial_result.output_bytes_allocated;
+            graph_guard.reference_bytes_planned = partial_result.reference_bytes_planned;
+            print_graph_guard_report(&graph_guard);
             printf("real_partial_graph_executed: true\n");
             printf("partial_graph_kind: %s\n", partial_result.segment_name);
             printf("partial_backend: %s\n", partial_result.backend_name);

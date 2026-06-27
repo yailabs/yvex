@@ -152,6 +152,10 @@ materialization integrity gate
 materialization preflight before backend allocation
 materialization failure phase reporting
 materialization cleanup verification
+graph execution integrity guard
+graph preflight before backend dispatch
+reference read and token-slice guards
+graph failure phase reporting and cleanup verification
 ```
 
 Current live target:
@@ -178,7 +182,6 @@ Unsupported / not advanced:
 full model execution
 full DeepSeek materialization
 full GGUF conversion
-graph execution corruption guard
 operator integrity report
 full supply-chain security
 prompt-backed runtime prefill
@@ -269,8 +272,8 @@ unbounded spreadsheet.
 | ARTIFACT.INTEGRITY.4 | complete | Shape, rank, dtype, and byte-count overflow hardening |
 | ARTIFACT.INTEGRITY.5 | complete | Registry alias metadata drift diagnostics |
 | ARTIFACT.INTEGRITY.6 | complete | Materialization integrity gate |
-| ARTIFACT.INTEGRITY.7 | next | Graph execution integrity guard |
-| ARTIFACT.INTEGRITY.8 | planned | Corrupt artifact regression harness |
+| ARTIFACT.INTEGRITY.7 | complete | Graph execution integrity guard |
+| ARTIFACT.INTEGRITY.8 | next | Corrupt artifact regression harness |
 | ARTIFACT.INTEGRITY.9 | planned | Operator integrity report and doctor integration |
 | ARTIFACT.INTEGRITY.FINAL.0 | planned | Artifact integrity closeout before graph expansion |
 | M6 | planned | Real-model graph segment expansion |
@@ -518,8 +521,8 @@ mapped and the baseline validator exists.
 | ARTIFACT.INTEGRITY.4 | complete | Shape, rank, dtype, and byte-count overflow hardening |
 | ARTIFACT.INTEGRITY.5 | complete | Registry alias metadata drift diagnostics |
 | ARTIFACT.INTEGRITY.6 | complete | Materialization integrity gate |
-| ARTIFACT.INTEGRITY.7 | next | Graph execution integrity guard |
-| ARTIFACT.INTEGRITY.8 | planned | Corrupt artifact regression harness |
+| ARTIFACT.INTEGRITY.7 | complete | Graph execution integrity guard |
+| ARTIFACT.INTEGRITY.8 | next | Corrupt artifact regression harness |
 | ARTIFACT.INTEGRITY.9 | planned | Operator integrity report and doctor integration |
 | ARTIFACT.INTEGRITY.FINAL.0 | planned | Artifact integrity closeout before graph expansion |
 
@@ -588,10 +591,14 @@ attempts, cleanup status, and byte accounting. Corrupt or inconsistent artifacts
 fail before backend allocation where possible; injected allocation/transfer
 failures prove cleanup reporting.
 
-ARTIFACT.INTEGRITY.7 guards graph execution. Fixture graph and real partial
-graph execution must not read missing tensors, out-of-range token slices,
-invalid dtype ranges, corrupted tensor payloads, or shape-incompatible data.
-Error output must identify the artifact, tensor, or range reason.
+ARTIFACT.INTEGRITY.7 adds a graph execution integrity guard. Fixture graph and
+real selected embedding partial graph execution now run graph-specific preflight
+before backend dispatch. The guard composes structural integrity, digest
+identity, registry metadata drift, shape/dtype accounting, tensor range
+validation, selected token-slice validation, backend availability, backend op
+support, output allocation sizing, and reference read bounds. Preflight failure
+prevents dispatch; post-preflight failures report the graph phase and cleanup
+status.
 
 ARTIFACT.INTEGRITY.8 adds a corrupt artifact regression harness. It should run a
 compact corpus of intentional corruptions across inspect, tensors,
@@ -949,13 +956,13 @@ No diagram may imply support that the code does not implement.
 ## 8. Active Next
 
 ```text
-ARTIFACT.INTEGRITY.7 - Graph execution integrity guard
+ARTIFACT.INTEGRITY.8 - Corrupt artifact regression harness
 ```
 
-Next implementation: ARTIFACT.INTEGRITY.7. It must turn the artifact integrity
-and alias metadata checks into graph-entry guards for fixture and real partial
-graph execution, including preflight before dispatch, payload/reference range
-guards, failure phase reporting, and cleanup/reporting for graph buffers.
+Next implementation: ARTIFACT.INTEGRITY.8. It should consolidate the corrupt
+artifact regression harness across the integrity module and keep refusal
+coverage stable across inspect, tensors, materialize, engine/session, and graph
+execution surfaces.
 
 Next runtime expansion after integrity baseline:
 

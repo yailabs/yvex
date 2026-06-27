@@ -178,3 +178,9 @@ statuses, allocation/transfer/cleanup attempt flags, cleanup status, and planned
 or transferred byte counts where the operation can report them. These fields are
 copied scalar/string-literal report facts; they do not transfer backend tensor
 ownership and do not imply inference readiness.
+
+Fixture and partial graph result summaries include the graph guard result,
+failure phase, shape/range/slice/backend/op statuses, dispatch/reference/output
+attempt flags, cleanup status, and output/reference byte planning. These fields
+apply only to the implemented controlled fixture and selected embedding partial
+graph paths; they do not imply full graph safety or inference readiness.
