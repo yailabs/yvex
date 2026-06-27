@@ -148,6 +148,15 @@ structural regression coverage, not fuzzing.
 parsed tensor directory row. It computes element count, dtype size, tensor byte
 count, `tensor_data_offset + tensor_relative_offset`, end offset, file bounds,
 and alignment status before payload-reading paths use tensor bytes.
+`yvex_tensor_shape_accounting_validate` is the canonical shape/dtype accounting
+step that feeds that range calculation. It reports rank, dims, element count,
+storage byte accounting, storage support, and the narrow compute-support flags
+for the controlled `F32` fixture embedding path and the selected `F16`
+embedding path. Storage accounting support is not full runtime compute support.
+`yvex_selected_embedding_shape_validate` interprets `token_embd.weight` as
+`dims[0] = hidden_size` and `dims[1] = vocab_size`, validates the token id, and
+reports output count, output bytes, and selected-token slice bytes for the real
+partial graph path.
 `yvex_tensor_embedding_slice_range_validate` narrows that validated tensor range
 to the selected embedding token slice used by the real partial graph path. These
 helpers do not prove tensor values are correct; they prove the byte ranges are

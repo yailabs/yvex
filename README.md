@@ -397,6 +397,9 @@ tensor ranges, checked byte math, and selected embedding readiness. It is not a
 supply-chain security guarantee.
 Those integrity checks include canonical tensor byte-range validation before
 materialization or graph execution reads payload data.
+They also separate storage dtype recognition from runtime compute support. For
+example, `F16 token_embd.weight` is supported for the selected embedding segment,
+not for full-model inference.
 
 The repository also includes tiny corrupt `GGUF` fixture coverage for structural
 refusal paths. Those files are test assets, not model artifacts.

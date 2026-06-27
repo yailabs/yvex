@@ -98,6 +98,14 @@ Materialization uses that validated range before allocation/copy. Real partial
 graph execution also validates the selected token slice range before reading the
 raw-artifact reference slice.
 
+Tensor shape and dtype accounting is validated before byte-range validation and
+runtime payload reads. YVEX rejects unsupported rank, zero dimensions,
+element-count overflow, dtype-size ambiguity, tensor byte-count overflow, and
+selected embedding shape/dtype incompatibility. Storage dtype recognition is
+separate from runtime compute support: `F16 token_embd.weight` is supported for
+the selected embedding segment, while full `F16` model execution and full
+quantized inference remain unsupported.
+
 ### Artifact identity baseline
 
 YVEX records local file identity for registered model aliases using file size

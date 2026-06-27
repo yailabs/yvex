@@ -138,6 +138,9 @@ version: 3
 architecture: deepseek
 tensor_count: 1
 known_tensor_bytes: 1059061760
+tensor_shapes_checked: 1
+tensor_dtypes_checked: 1
+tensor_byte_counts_checked: 1
 integrity_status: pass
 integrity_errors: 0
 status: artifact-integrity-pass
@@ -153,6 +156,11 @@ declared tensor payload range is inside the local file, offset/byte arithmetic
 did not overflow, and selected embedding readiness checks can validate the
 requested token slice when `--require-token-embedding` is used. It does not prove
 the tensor values are correct.
+
+For selected embedding readiness, integrity output reports the interpreted
+hidden size, vocabulary size, output count, output byte count, and selected-token
+slice byte size. These are shape and dtype accounting facts for
+`token_embd.weight`, not inference readiness.
 
 The repository also runs tiny corrupt `GGUF` fixture tests against integrity,
 inspect, tensors, materialization, and graph-entry refusal paths. Those fixtures

@@ -136,6 +136,10 @@ canonical tensor byte-range validation
 validated tensor absolute/end offsets
 partial embedding token-slice range validation
 materialization and graph range guards
+canonical tensor shape/dtype accounting
+selected embedding shape readiness validation
+storage dtype versus compute support separation
+byte-count overflow hardening
 file identity digest enforcement
 registered alias digest verification
 baseline registry alias digest drift detection
@@ -255,8 +259,8 @@ unbounded spreadsheet.
 | ARTIFACT.INTEGRITY.1 | complete | File identity and digest enforcement |
 | ARTIFACT.INTEGRITY.2 | complete | GGUF structural corruption fixture suite |
 | ARTIFACT.INTEGRITY.3 | complete | Tensor directory offset and byte-range validation |
-| ARTIFACT.INTEGRITY.4 | next | Shape, rank, dtype, and byte-count overflow hardening |
-| ARTIFACT.INTEGRITY.5 | planned | Registry alias metadata drift diagnostics |
+| ARTIFACT.INTEGRITY.4 | complete | Shape, rank, dtype, and byte-count overflow hardening |
+| ARTIFACT.INTEGRITY.5 | next | Registry alias metadata drift diagnostics |
 | ARTIFACT.INTEGRITY.6 | planned | Materialization integrity gate |
 | ARTIFACT.INTEGRITY.7 | planned | Graph execution integrity guard |
 | ARTIFACT.INTEGRITY.8 | planned | Corrupt artifact regression harness |
@@ -504,8 +508,8 @@ mapped and the baseline validator exists.
 | ARTIFACT.INTEGRITY.1 | complete | File identity and digest enforcement |
 | ARTIFACT.INTEGRITY.2 | complete | GGUF structural corruption fixture suite |
 | ARTIFACT.INTEGRITY.3 | complete | Tensor directory offset and byte-range validation |
-| ARTIFACT.INTEGRITY.4 | next | Shape, rank, dtype, and byte-count overflow hardening |
-| ARTIFACT.INTEGRITY.5 | planned | Registry alias metadata drift diagnostics |
+| ARTIFACT.INTEGRITY.4 | complete | Shape, rank, dtype, and byte-count overflow hardening |
+| ARTIFACT.INTEGRITY.5 | next | Registry alias metadata drift diagnostics |
 | ARTIFACT.INTEGRITY.6 | planned | Materialization integrity gate |
 | ARTIFACT.INTEGRITY.7 | planned | Graph execution integrity guard |
 | ARTIFACT.INTEGRITY.8 | planned | Corrupt artifact regression harness |
@@ -550,10 +554,14 @@ listing, materialization, and real partial graph paths consume those validated
 range facts. The selected embedding partial graph also validates the requested
 token slice before raw reference extraction.
 
-ARTIFACT.INTEGRITY.4 hardens shape, rank, dtype, and byte-count math. It must
-validate rank limits, zero dims, huge dims, dtype byte size, element count
-overflow, output allocation bounds, and incompatible dtype for partial graph
-execution.
+ARTIFACT.INTEGRITY.4 hardens shape, rank, dtype, and byte-count accounting.
+YVEX now has canonical tensor shape/dtype accounting before byte-range
+validation and payload reads. The validator rejects unsupported rank, zero
+dims, element-count overflow, dtype-size ambiguity, tensor byte-count overflow,
+and selected embedding shape/dtype incompatibility. Selected embedding readiness
+records the interpreted hidden size, vocabulary size, output count, output byte
+count, and selected-token slice byte size for `token_embd.weight`. Storage dtype
+recognition remains separate from runtime compute support.
 
 ARTIFACT.INTEGRITY.5 adds higher-level registry metadata drift diagnostics after
 the digest baseline. It should compare recorded support level, expected primary
@@ -926,12 +934,13 @@ No diagram may imply support that the code does not implement.
 ## 8. Active Next
 
 ```text
-ARTIFACT.INTEGRITY.4 - Shape, rank, dtype, and byte-count overflow hardening
+ARTIFACT.INTEGRITY.5 - Registry alias metadata drift diagnostics
 ```
 
-Next implementation: ARTIFACT.INTEGRITY.4. It must harden shape, rank, dtype,
-and byte-count overflow behavior as its own domain now that tensor byte ranges
-have a canonical calculation path.
+Next implementation: ARTIFACT.INTEGRITY.5. It must compare registered alias
+metadata, primary tensor facts, shape/dtype, support level, and command
+readiness against current artifact facts now that digest identity and tensor
+shape/range accounting are canonical.
 
 Next runtime expansion after integrity baseline:
 

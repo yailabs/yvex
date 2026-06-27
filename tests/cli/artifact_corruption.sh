@@ -214,6 +214,10 @@ write(
     file_bytes(meta, [tensor("token_embd.weight", [4, 8], ggml_f32, 0)], b"\0" * 127),
 )
 write(
+    "tensor-byte-count-overflow.gguf",
+    file_bytes(meta, [tensor("token_embd.weight", [(1 << 64) // 4 + 1], ggml_f32, 0)], b""),
+)
+write(
     "tensor-absolute-offset-overflow.gguf",
     file_bytes(meta, [tensor("token_embd.weight", [4, 8], ggml_f32, (1 << 64) - 32)], b""),
 )
@@ -247,6 +251,8 @@ exercise_structural_case zero-dimension \
     tests/fixtures/gguf/tensor-dim-zero.gguf zero-dimension
 exercise_structural_case huge-dimension-overflow \
     tests/fixtures/gguf/tensor-dim-overflow.gguf element-count-overflow
+exercise_structural_case byte-count-overflow \
+    "$GEN_DIR/tensor-byte-count-overflow.gguf" tensor-byte-count-overflow
 exercise_structural_case unknown-dtype \
     "$GEN_DIR/unknown-dtype.gguf" unknown-dtype
 exercise_structural_case tensor-offset-out-of-file \

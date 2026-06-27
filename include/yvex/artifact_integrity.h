@@ -60,6 +60,24 @@ typedef struct {
     unsigned int rank;
     unsigned long long dims[YVEX_TENSOR_MAX_DIMS];
     unsigned long long element_count;
+    unsigned long long storage_unit_bytes;
+    unsigned long long storage_byte_count;
+    int dtype_known;
+    int byte_count_computable;
+    int storage_supported;
+    int compute_supported_for_selected_embedding;
+    int compute_supported_for_fixture_embedding;
+    int shape_valid;
+    int dtype_valid;
+    int byte_count_valid;
+} yvex_tensor_shape_accounting;
+
+typedef struct {
+    char tensor_name[YVEX_INTEGRITY_TENSOR_CAP];
+    yvex_dtype dtype;
+    unsigned int rank;
+    unsigned long long dims[YVEX_TENSOR_MAX_DIMS];
+    unsigned long long element_count;
     unsigned long long dtype_size;
     unsigned long long tensor_bytes;
     unsigned long long tensor_relative_offset;
@@ -80,6 +98,17 @@ typedef struct {
     unsigned long long slice_end_offset;
     int range_valid;
 } yvex_tensor_slice_range;
+
+typedef struct {
+    char tensor_name[YVEX_INTEGRITY_TENSOR_CAP];
+    unsigned int token_id;
+    unsigned long long hidden_size;
+    unsigned long long vocab_size;
+    unsigned long long output_count;
+    unsigned long long output_bytes;
+    unsigned long long slice_bytes;
+    int shape_valid;
+} yvex_selected_embedding_shape;
 
 typedef struct {
     int require_token_embedding;
@@ -106,6 +135,20 @@ typedef struct {
     unsigned long long tensor_ranges_checked;
     unsigned long long tensor_ranges_valid;
     unsigned long long tensor_ranges_invalid;
+    unsigned long long tensor_shapes_checked;
+    unsigned long long tensor_shapes_valid;
+    unsigned long long tensor_shapes_invalid;
+    unsigned long long tensor_dtypes_checked;
+    unsigned long long tensor_dtypes_valid;
+    unsigned long long tensor_dtypes_invalid;
+    unsigned long long tensor_byte_counts_checked;
+    unsigned long long tensor_byte_counts_invalid;
+    char selected_embedding_shape[YVEX_INTEGRITY_DIGEST_STATUS_CAP];
+    unsigned long long selected_embedding_hidden_size;
+    unsigned long long selected_embedding_vocab_size;
+    unsigned long long selected_embedding_output_count;
+    unsigned long long selected_embedding_output_bytes;
+    unsigned long long selected_embedding_slice_bytes;
     unsigned int error_count;
     unsigned int warning_count;
     unsigned int issue_count;
@@ -129,6 +172,17 @@ int yvex_tensor_range_validate(const yvex_artifact *artifact,
                                const yvex_tensor_info *tensor,
                                yvex_tensor_range *out,
                                yvex_error *err);
+
+int yvex_tensor_shape_accounting_validate(
+    const yvex_tensor_info *tensor,
+    yvex_tensor_shape_accounting *out,
+    yvex_error *err);
+
+int yvex_selected_embedding_shape_validate(
+    const yvex_tensor_info *tensor,
+    unsigned int token_id,
+    yvex_selected_embedding_shape *out,
+    yvex_error *err);
 
 int yvex_tensor_embedding_slice_range_validate(
     const yvex_tensor_range *range,

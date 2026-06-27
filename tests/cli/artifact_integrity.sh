@@ -4,6 +4,7 @@ set -eu
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/cli-artifact-integrity}
 MODEL="$OUT_DIR/integrity-controlled-F16.gguf"
+MODEL_F32="$OUT_DIR/integrity-controlled-F32.gguf"
 RANGE_SHORT="$OUT_DIR/range-one-byte-short.gguf"
 
 fail() {
@@ -34,6 +35,13 @@ mkdir -p "$OUT_DIR"
   --arch deepseek \
   --target-qtype F16 \
   --overwrite >"$OUT_DIR/emit.out" 2>"$OUT_DIR/emit.err"
+
+"$YVEX_BIN" gguf-emit controlled \
+  --out "$MODEL_F32" \
+  --model-name integrity-controlled-f32 \
+  --arch deepseek \
+  --target-qtype F32 \
+  --overwrite >"$OUT_DIR/emit-f32.out" 2>"$OUT_DIR/emit-f32.err"
 
 python3 - "$RANGE_SHORT" <<'PY'
 import struct
@@ -80,6 +88,20 @@ contains "$OUT_DIR/integrity-pass.out" "known_tensor_bytes: 64"
 contains "$OUT_DIR/integrity-pass.out" "tensor_ranges_checked: 1"
 contains "$OUT_DIR/integrity-pass.out" "tensor_ranges_valid: 1"
 contains "$OUT_DIR/integrity-pass.out" "tensor_ranges_invalid: 0"
+contains "$OUT_DIR/integrity-pass.out" "tensor_shapes_checked: 1"
+contains "$OUT_DIR/integrity-pass.out" "tensor_shapes_valid: 1"
+contains "$OUT_DIR/integrity-pass.out" "tensor_shapes_invalid: 0"
+contains "$OUT_DIR/integrity-pass.out" "tensor_dtypes_checked: 1"
+contains "$OUT_DIR/integrity-pass.out" "tensor_dtypes_valid: 1"
+contains "$OUT_DIR/integrity-pass.out" "tensor_dtypes_invalid: 0"
+contains "$OUT_DIR/integrity-pass.out" "tensor_byte_counts_checked: 1"
+contains "$OUT_DIR/integrity-pass.out" "tensor_byte_counts_invalid: 0"
+contains "$OUT_DIR/integrity-pass.out" "selected_embedding_shape: valid"
+contains "$OUT_DIR/integrity-pass.out" "selected_embedding_hidden_size: 4"
+contains "$OUT_DIR/integrity-pass.out" "selected_embedding_vocab_size: 8"
+contains "$OUT_DIR/integrity-pass.out" "selected_embedding_output_count: 4"
+contains "$OUT_DIR/integrity-pass.out" "selected_embedding_output_bytes: 16"
+contains "$OUT_DIR/integrity-pass.out" "selected_embedding_slice_bytes: 8"
 contains "$OUT_DIR/integrity-pass.out" "integrity_status: pass"
 contains "$OUT_DIR/integrity-pass.out" "status: artifact-integrity-pass"
 
@@ -112,6 +134,11 @@ contains "$OUT_DIR/range.out" "error_0_file_size:"
   >"$OUT_DIR/zero-dim.out" 2>"$OUT_DIR/zero-dim.err" && fail "zero-dim file passed" || true
 contains "$OUT_DIR/zero-dim.out" "integrity_status: fail"
 contains "$OUT_DIR/zero-dim.out" "error_0_code: zero-dimension"
+
+"$YVEX_BIN" integrity check --model "$MODEL_F32" --require-token-embedding --partial-token 0 \
+  >"$OUT_DIR/f32-selected.out" 2>"$OUT_DIR/f32-selected.err" && fail "F32 selected embedding readiness passed" || true
+contains "$OUT_DIR/f32-selected.out" "integrity_status: fail"
+contains "$OUT_DIR/f32-selected.out" "error_0_code: required-tensor-dtype-invalid"
 
 "$YVEX_BIN" integrity check --model tests/fixtures/gguf/valid-minimal.gguf --require-token-embedding \
   >"$OUT_DIR/missing-required.out" 2>"$OUT_DIR/missing-required.err" && fail "missing required passed" || true

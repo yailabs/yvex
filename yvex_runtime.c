@@ -656,6 +656,7 @@ int yvex_engine_execute_partial_graph(yvex_engine *engine,
     unsigned long long output_count;
     unsigned long long output_bytes;
     unsigned long long i;
+    yvex_selected_embedding_shape embedding_shape;
     yvex_tensor_range tensor_range;
     yvex_tensor_slice_range slice_range;
     float *readback = NULL;
@@ -728,20 +729,32 @@ int yvex_engine_execute_partial_graph(yvex_engine *engine,
                        "real partial graph requires a planned embed node");
         return YVEX_ERR_UNSUPPORTED;
     }
+    memset(&embedding_shape, 0, sizeof(embedding_shape));
+    rc = yvex_selected_embedding_shape_validate(tensor, token_id, &embedding_shape, err);
+    if (rc != YVEX_OK) {
+        if (strstr(yvex_error_message(err), "token-out-of-range")) {
+            yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_partial_graph",
+                            "partial token out of range: %u >= %llu",
+                            token_id, embedding_shape.vocab_size);
+        }
+        return rc;
+    }
     if (yvex_device_tensor_rank(embedding) != 2 || tensor->rank != 2) {
         yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_engine_execute_partial_graph",
                        "real partial token embedding must have rank 2");
         return YVEX_ERR_FORMAT;
     }
 
-    hidden_size = yvex_device_tensor_dims(embedding)[0];
-    vocab_size = yvex_device_tensor_dims(embedding)[1];
+    hidden_size = embedding_shape.hidden_size;
+    vocab_size = embedding_shape.vocab_size;
     if (hidden_size == 0 || vocab_size == 0) {
         yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_engine_execute_partial_graph",
                        "real partial token embedding dimensions must be non-zero");
         return YVEX_ERR_FORMAT;
     }
-    if (tensor->dims[0] != hidden_size || tensor->dims[1] != vocab_size ||
+    if (yvex_device_tensor_dims(embedding)[0] != hidden_size ||
+        yvex_device_tensor_dims(embedding)[1] != vocab_size ||
+        tensor->dims[0] != hidden_size || tensor->dims[1] != vocab_size ||
         tensor->storage_bytes != yvex_weight_bytes(weight)) {
         yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_engine_execute_partial_graph",
                        "attached token embedding shape does not match tensor descriptor");
@@ -769,14 +782,14 @@ int yvex_engine_execute_partial_graph(yvex_engine *engine,
         }
         return rc;
     }
-    if (hidden_size > (unsigned long long)(~(size_t)0 / sizeof(float))) {
+    if (embedding_shape.output_bytes > (unsigned long long)(~(size_t)0)) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_partial_graph",
                        "partial graph output is too large for host readback");
         return YVEX_ERR_BOUNDS;
     }
 
-    output_count = hidden_size;
-    output_bytes = output_count * (unsigned long long)sizeof(float);
+    output_count = embedding_shape.output_count;
+    output_bytes = embedding_shape.output_bytes;
     memset(&output_desc, 0, sizeof(output_desc));
     output_desc.name = "partial.token_embedding.output";
     output_desc.dtype = YVEX_DTYPE_F32;

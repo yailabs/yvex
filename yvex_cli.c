@@ -389,6 +389,22 @@ static void print_integrity_report(const yvex_artifact_integrity_report *report,
     printf("tensor_ranges_checked: %llu\n", report->tensor_ranges_checked);
     printf("tensor_ranges_valid: %llu\n", report->tensor_ranges_valid);
     printf("tensor_ranges_invalid: %llu\n", report->tensor_ranges_invalid);
+    printf("tensor_shapes_checked: %llu\n", report->tensor_shapes_checked);
+    printf("tensor_shapes_valid: %llu\n", report->tensor_shapes_valid);
+    printf("tensor_shapes_invalid: %llu\n", report->tensor_shapes_invalid);
+    printf("tensor_dtypes_checked: %llu\n", report->tensor_dtypes_checked);
+    printf("tensor_dtypes_valid: %llu\n", report->tensor_dtypes_valid);
+    printf("tensor_dtypes_invalid: %llu\n", report->tensor_dtypes_invalid);
+    printf("tensor_byte_counts_checked: %llu\n", report->tensor_byte_counts_checked);
+    printf("tensor_byte_counts_invalid: %llu\n", report->tensor_byte_counts_invalid);
+    if (report->selected_embedding_shape[0]) {
+        printf("selected_embedding_shape: %s\n", report->selected_embedding_shape);
+        printf("selected_embedding_hidden_size: %llu\n", report->selected_embedding_hidden_size);
+        printf("selected_embedding_vocab_size: %llu\n", report->selected_embedding_vocab_size);
+        printf("selected_embedding_output_count: %llu\n", report->selected_embedding_output_count);
+        printf("selected_embedding_output_bytes: %llu\n", report->selected_embedding_output_bytes);
+        printf("selected_embedding_slice_bytes: %llu\n", report->selected_embedding_slice_bytes);
+    }
     printf("identity_checked: %s\n", report->identity_checked ? "true" : "false");
     printf("sha256: %s\n", report->sha256[0] ? report->sha256 : "unavailable");
     printf("registered_sha256: %s\n", report->registered_sha256[0] ? report->registered_sha256 : "absent");

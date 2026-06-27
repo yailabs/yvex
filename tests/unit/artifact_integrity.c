@@ -146,6 +146,14 @@ static int test_valid_fixture_passes(void)
     YVEX_TEST_ASSERT(report.file_size > 0, "valid file size reported");
     YVEX_TEST_ASSERT(report.tensor_count == 1, "valid tensor count");
     YVEX_TEST_ASSERT(report.known_tensor_bytes == 128, "valid tensor bytes");
+    YVEX_TEST_ASSERT(report.tensor_shapes_checked == 1, "valid shape checked");
+    YVEX_TEST_ASSERT(report.tensor_shapes_valid == 1, "valid shape valid");
+    YVEX_TEST_ASSERT(report.tensor_shapes_invalid == 0, "valid shape invalid count");
+    YVEX_TEST_ASSERT(report.tensor_dtypes_checked == 1, "valid dtype checked");
+    YVEX_TEST_ASSERT(report.tensor_dtypes_valid == 1, "valid dtype valid");
+    YVEX_TEST_ASSERT(report.tensor_dtypes_invalid == 0, "valid dtype invalid count");
+    YVEX_TEST_ASSERT(report.tensor_byte_counts_checked == 1, "valid byte count checked");
+    YVEX_TEST_ASSERT(report.tensor_byte_counts_invalid == 0, "valid byte count invalid count");
     YVEX_TEST_ASSERT(report.tensor_ranges_checked == 1, "valid range checked");
     YVEX_TEST_ASSERT(report.tensor_ranges_valid == 1, "valid range valid");
     YVEX_TEST_ASSERT(report.tensor_ranges_invalid == 0, "valid range invalid count");
@@ -218,6 +226,8 @@ static int test_tensor_range_helper_validates_token_slices(void)
     yvex_gguf *gguf = NULL;
     yvex_tensor_table *table = NULL;
     const yvex_tensor_info *tensor;
+    yvex_tensor_shape_accounting accounting;
+    yvex_selected_embedding_shape selected_shape;
     yvex_tensor_range range;
     yvex_tensor_slice_range token0;
     yvex_tensor_slice_range token1;
@@ -250,6 +260,30 @@ static int test_tensor_range_helper_validates_token_slices(void)
     YVEX_TEST_ASSERT(rc == YVEX_OK, "open range helper tensor table");
     tensor = yvex_tensor_table_find(table, "token_embd.weight");
     YVEX_TEST_ASSERT(tensor != NULL, "range helper tensor exists");
+
+    memset(&accounting, 0, sizeof(accounting));
+    rc = yvex_tensor_shape_accounting_validate(tensor, &accounting, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "shape accounting validates");
+    YVEX_TEST_ASSERT(accounting.shape_valid == 1, "shape accounting shape valid");
+    YVEX_TEST_ASSERT(accounting.dtype_valid == 1, "shape accounting dtype valid");
+    YVEX_TEST_ASSERT(accounting.byte_count_valid == 1, "shape accounting byte count valid");
+    YVEX_TEST_ASSERT(accounting.element_count == 32, "shape accounting element count");
+    YVEX_TEST_ASSERT(accounting.storage_unit_bytes == 2, "shape accounting storage unit bytes");
+    YVEX_TEST_ASSERT(accounting.storage_byte_count == 64, "shape accounting storage bytes");
+    YVEX_TEST_ASSERT(accounting.compute_supported_for_selected_embedding == 1,
+                     "F16 selected embedding compute support flag");
+    YVEX_TEST_ASSERT(accounting.compute_supported_for_fixture_embedding == 0,
+                     "F16 fixture compute support flag");
+
+    memset(&selected_shape, 0, sizeof(selected_shape));
+    rc = yvex_selected_embedding_shape_validate(tensor, 0u, &selected_shape, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "selected embedding shape validates");
+    YVEX_TEST_ASSERT(selected_shape.shape_valid == 1, "selected embedding shape valid flag");
+    YVEX_TEST_ASSERT(selected_shape.hidden_size == 4, "selected embedding hidden size");
+    YVEX_TEST_ASSERT(selected_shape.vocab_size == 8, "selected embedding vocab size");
+    YVEX_TEST_ASSERT(selected_shape.output_count == 4, "selected embedding output count");
+    YVEX_TEST_ASSERT(selected_shape.output_bytes == 16, "selected embedding output bytes");
+    YVEX_TEST_ASSERT(selected_shape.slice_bytes == 8, "selected embedding slice bytes");
 
     memset(&range, 0, sizeof(range));
     rc = yvex_tensor_range_validate(artifact, gguf, tensor, &range, &err);
@@ -287,6 +321,27 @@ static int test_tensor_range_helper_validates_token_slices(void)
     yvex_tensor_table_close(table);
     yvex_gguf_close(gguf);
     yvex_artifact_close(artifact);
+    return 0;
+}
+
+static int test_selected_embedding_f32_dtype_fails(void)
+{
+    yvex_artifact_integrity_options options;
+    yvex_artifact_integrity_report report;
+    yvex_error err;
+    int rc;
+
+    memset(&options, 0, sizeof(options));
+    options.require_token_embedding = 1;
+    options.token_id = 0u;
+    yvex_error_clear(&err);
+    rc = yvex_artifact_integrity_check_path("tests/fixtures/gguf/valid-tokenizer-simple.gguf",
+                                            &options,
+                                            &report,
+                                            &err);
+    YVEX_TEST_ASSERT(rc != YVEX_OK, "F32 selected embedding readiness fails");
+    YVEX_TEST_ASSERT(first_issue_is(&report, "required-tensor-dtype-invalid"),
+                     "F32 selected embedding dtype code");
     return 0;
 }
 
@@ -385,6 +440,7 @@ int yvex_test_artifact_integrity(void)
     if (test_range_out_of_file_fails() != 0) return 1;
     if (test_one_byte_short_range_reports_range_fields() != 0) return 1;
     if (test_tensor_range_helper_validates_token_slices() != 0) return 1;
+    if (test_selected_embedding_f32_dtype_fails() != 0) return 1;
     if (test_zero_dimension_fails() != 0) return 1;
     if (test_required_tensor_missing_fails() != 0) return 1;
     if (test_token_out_of_range_fails() != 0) return 1;

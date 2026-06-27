@@ -229,6 +229,195 @@ static unsigned long long dtype_scalar_or_block_size(yvex_dtype dtype)
     return 0ull;
 }
 
+int yvex_tensor_shape_accounting_validate(
+    const yvex_tensor_info *tensor,
+    yvex_tensor_shape_accounting *out,
+    yvex_error *err)
+{
+    yvex_tensor_shape_accounting local;
+    yvex_tensor_shape_accounting *accounting = out ? out : &local;
+    const yvex_dtype_info *dtype_info;
+    unsigned long long element_count = 0ull;
+    unsigned long long storage_byte_count = 0ull;
+    unsigned int i;
+    int rc;
+
+    if (!tensor) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG,
+                       "yvex_tensor_shape_accounting_validate",
+                       "tensor is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    memset(accounting, 0, sizeof(*accounting));
+    integrity_copy(accounting->tensor_name, YVEX_INTEGRITY_TENSOR_CAP, tensor->name);
+    accounting->dtype = tensor->dtype;
+    accounting->rank = tensor->rank;
+    for (i = 0; i < tensor->rank && i < YVEX_TENSOR_MAX_DIMS; ++i) {
+        accounting->dims[i] = tensor->dims[i];
+    }
+
+    if (!tensor->name || tensor->name[0] == '\0') {
+        yvex_error_set(err, YVEX_ERR_FORMAT,
+                       "yvex_tensor_shape_accounting_validate",
+                       "tensor name is empty");
+        return YVEX_ERR_FORMAT;
+    }
+    if (tensor->rank == 0u || tensor->rank > YVEX_TENSOR_MAX_DIMS) {
+        yvex_error_setf(err, YVEX_ERR_FORMAT,
+                        "yvex_tensor_shape_accounting_validate",
+                        "tensor-rank-invalid: %s rank %u", tensor->name, tensor->rank);
+        return YVEX_ERR_FORMAT;
+    }
+    for (i = 0; i < tensor->rank; ++i) {
+        if (tensor->dims[i] == 0ull) {
+            yvex_error_setf(err, YVEX_ERR_FORMAT,
+                            "yvex_tensor_shape_accounting_validate",
+                            "tensor-dim-zero: %s", tensor->name);
+            return YVEX_ERR_FORMAT;
+        }
+    }
+    if (!tensor_element_count(tensor, &element_count)) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS,
+                        "yvex_tensor_shape_accounting_validate",
+                        "tensor-element-count-overflow: %s", tensor->name);
+        return YVEX_ERR_BOUNDS;
+    }
+    accounting->element_count = element_count;
+    accounting->shape_valid = 1;
+
+    dtype_info = yvex_dtype_get_info(tensor->dtype);
+    if (!dtype_info || dtype_info->dtype == YVEX_DTYPE_UNKNOWN) {
+        yvex_error_setf(err, YVEX_ERR_UNSUPPORTED,
+                        "yvex_tensor_shape_accounting_validate",
+                        "tensor-dtype-unknown: %s", tensor->name);
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    accounting->dtype_known = 1;
+    accounting->dtype_valid = 1;
+    accounting->storage_supported = dtype_info->is_supported_for_storage_accounting ? 1 : 0;
+    accounting->storage_unit_bytes = dtype_scalar_or_block_size(tensor->dtype);
+    accounting->compute_supported_for_selected_embedding =
+        tensor->dtype == YVEX_DTYPE_F16 ? 1 : 0;
+    accounting->compute_supported_for_fixture_embedding =
+        tensor->dtype == YVEX_DTYPE_F32 ? 1 : 0;
+
+    rc = yvex_dtype_storage_bytes(tensor->dtype, element_count, &storage_byte_count, err);
+    if (rc == YVEX_ERR_UNSUPPORTED) {
+        yvex_error_setf(err, YVEX_ERR_UNSUPPORTED,
+                        "yvex_tensor_shape_accounting_validate",
+                        "tensor-dtype-size-unknown: %s", tensor->name);
+        return rc;
+    }
+    if (rc != YVEX_OK) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS,
+                        "yvex_tensor_shape_accounting_validate",
+                        "tensor-byte-count-overflow: %s", tensor->name);
+        return rc;
+    }
+    if (storage_byte_count == 0ull) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS,
+                        "yvex_tensor_shape_accounting_validate",
+                        "tensor-byte-count-overflow: %s tensor byte count is zero",
+                        tensor->name);
+        return YVEX_ERR_BOUNDS;
+    }
+    if (tensor->storage_bytes != 0ull && tensor->storage_bytes != storage_byte_count) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS,
+                        "yvex_tensor_shape_accounting_validate",
+                        "tensor-byte-count-overflow: %s tensor table byte count mismatch",
+                        tensor->name);
+        return YVEX_ERR_BOUNDS;
+    }
+
+    accounting->byte_count_computable = 1;
+    accounting->storage_byte_count = storage_byte_count;
+    accounting->byte_count_valid = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_selected_embedding_shape_validate(
+    const yvex_tensor_info *tensor,
+    unsigned int token_id,
+    yvex_selected_embedding_shape *out,
+    yvex_error *err)
+{
+    yvex_selected_embedding_shape local;
+    yvex_selected_embedding_shape *shape = out ? out : &local;
+    yvex_tensor_shape_accounting accounting;
+    unsigned long long hidden_size;
+    unsigned long long vocab_size;
+    unsigned long long output_bytes = 0ull;
+    unsigned long long slice_bytes = 0ull;
+    int rc;
+
+    if (!tensor) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG,
+                       "yvex_selected_embedding_shape_validate",
+                       "tensor is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    memset(shape, 0, sizeof(*shape));
+    integrity_copy(shape->tensor_name, YVEX_INTEGRITY_TENSOR_CAP, tensor->name);
+    shape->token_id = token_id;
+
+    memset(&accounting, 0, sizeof(accounting));
+    rc = yvex_tensor_shape_accounting_validate(tensor, &accounting, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (tensor->rank != 2u) {
+        yvex_error_setf(err, YVEX_ERR_FORMAT,
+                        "yvex_selected_embedding_shape_validate",
+                        "selected-embedding-rank-invalid: %s rank %u",
+                        tensor->name, tensor->rank);
+        return YVEX_ERR_FORMAT;
+    }
+    if (tensor->dtype != YVEX_DTYPE_F16) {
+        yvex_error_setf(err, YVEX_ERR_UNSUPPORTED,
+                        "yvex_selected_embedding_shape_validate",
+                        "selected-embedding-dtype-invalid: %s requires F16",
+                        tensor->name);
+        return YVEX_ERR_UNSUPPORTED;
+    }
+
+    hidden_size = tensor->dims[0];
+    vocab_size = tensor->dims[1];
+    shape->hidden_size = hidden_size;
+    shape->vocab_size = vocab_size;
+    if ((unsigned long long)token_id >= vocab_size) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS,
+                        "yvex_selected_embedding_shape_validate",
+                        "token-out-of-range: %u >= %llu", token_id, vocab_size);
+        return YVEX_ERR_BOUNDS;
+    }
+    if (!checked_mul_ull(hidden_size,
+                         (unsigned long long)sizeof(float),
+                         &output_bytes)) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS,
+                        "yvex_selected_embedding_shape_validate",
+                        "selected-embedding-output-byte-count-overflow: %s",
+                        tensor->name);
+        return YVEX_ERR_BOUNDS;
+    }
+    if (!checked_mul_ull(hidden_size, 2ull, &slice_bytes)) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS,
+                        "yvex_selected_embedding_shape_validate",
+                        "selected-embedding-slice-byte-count-overflow: %s",
+                        tensor->name);
+        return YVEX_ERR_BOUNDS;
+    }
+
+    shape->output_count = hidden_size;
+    shape->output_bytes = output_bytes;
+    shape->slice_bytes = slice_bytes;
+    shape->shape_valid = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 int yvex_tensor_range_validate(const yvex_artifact *artifact,
                                const yvex_gguf *gguf,
                                const yvex_tensor_info *tensor,
@@ -237,8 +426,7 @@ int yvex_tensor_range_validate(const yvex_artifact *artifact,
 {
     yvex_tensor_range local;
     yvex_tensor_range *range = out ? out : &local;
-    unsigned long long element_count = 0ull;
-    unsigned long long tensor_bytes = 0ull;
+    yvex_tensor_shape_accounting accounting;
     unsigned long long absolute_offset = 0ull;
     unsigned long long end_offset = 0ull;
     unsigned int i;
@@ -257,65 +445,19 @@ int yvex_tensor_range_validate(const yvex_artifact *artifact,
     for (i = 0; i < tensor->rank && i < YVEX_TENSOR_MAX_DIMS; ++i) {
         range->dims[i] = tensor->dims[i];
     }
-    range->dtype_size = dtype_scalar_or_block_size(tensor->dtype);
     range->tensor_relative_offset = tensor->relative_offset;
     range->tensor_data_offset = yvex_gguf_tensor_data_offset(gguf);
     range->file_size = yvex_artifact_size(artifact);
     range->alignment = (unsigned long long)yvex_gguf_alignment(gguf);
 
-    if (!tensor->name || tensor->name[0] == '\0') {
-        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_tensor_range_validate",
-                       "tensor name is empty");
-        return YVEX_ERR_FORMAT;
-    }
-    if (tensor->rank == 0u || tensor->rank > YVEX_TENSOR_MAX_DIMS) {
-        yvex_error_setf(err, YVEX_ERR_FORMAT, "yvex_tensor_range_validate",
-                        "tensor-rank-invalid: %s rank %u", tensor->name, tensor->rank);
-        return YVEX_ERR_FORMAT;
-    }
-    if (!tensor_element_count(tensor, &element_count)) {
-        unsigned int d;
-        for (d = 0; d < tensor->rank && d < YVEX_TENSOR_MAX_DIMS; ++d) {
-            if (tensor->dims[d] == 0ull) {
-                yvex_error_setf(err, YVEX_ERR_FORMAT, "yvex_tensor_range_validate",
-                                "tensor-dim-zero: %s", tensor->name);
-                return YVEX_ERR_FORMAT;
-            }
-        }
-        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_tensor_range_validate",
-                        "tensor-element-count-overflow: %s", tensor->name);
-        return YVEX_ERR_BOUNDS;
-    }
-    range->element_count = element_count;
-
-    if (tensor->dtype == YVEX_DTYPE_UNKNOWN) {
-        yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_tensor_range_validate",
-                        "tensor-dtype-unknown: %s", tensor->name);
-        return YVEX_ERR_UNSUPPORTED;
-    }
-
-    rc = yvex_dtype_storage_bytes(tensor->dtype, element_count, &tensor_bytes, err);
-    if (rc == YVEX_ERR_UNSUPPORTED) {
-        yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_tensor_range_validate",
-                        "tensor-dtype-size-unknown: %s", tensor->name);
-        return rc;
-    }
+    memset(&accounting, 0, sizeof(accounting));
+    rc = yvex_tensor_shape_accounting_validate(tensor, &accounting, err);
     if (rc != YVEX_OK) {
-        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_tensor_range_validate",
-                        "tensor-byte-count-overflow: %s", tensor->name);
         return rc;
     }
-    range->tensor_bytes = tensor_bytes;
-    if (tensor_bytes == 0ull) {
-        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_tensor_range_validate",
-                        "tensor-byte-count-overflow: %s tensor byte count is zero", tensor->name);
-        return YVEX_ERR_BOUNDS;
-    }
-    if (tensor->storage_bytes != 0ull && tensor->storage_bytes != tensor_bytes) {
-        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_tensor_range_validate",
-                        "tensor-byte-count-overflow: %s tensor table byte count mismatch", tensor->name);
-        return YVEX_ERR_BOUNDS;
-    }
+    range->element_count = accounting.element_count;
+    range->dtype_size = accounting.storage_unit_bytes;
+    range->tensor_bytes = accounting.storage_byte_count;
     if (range->alignment > 0ull &&
         (tensor->relative_offset % range->alignment) != 0ull) {
         yvex_error_setf(err, YVEX_ERR_FORMAT, "yvex_tensor_range_validate",
@@ -350,7 +492,7 @@ int yvex_tensor_range_validate(const yvex_artifact *artifact,
                         tensor->name, absolute_offset, range->file_size);
         return YVEX_ERR_BOUNDS;
     }
-    if (!checked_add_ull(absolute_offset, tensor_bytes, &end_offset)) {
+    if (!checked_add_ull(absolute_offset, range->tensor_bytes, &end_offset)) {
         yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_tensor_range_validate",
                         "tensor-end-offset-overflow: %s", tensor->name);
         return YVEX_ERR_BOUNDS;
@@ -397,6 +539,13 @@ int yvex_tensor_embedding_slice_range_validate(
                        "yvex_tensor_embedding_slice_range_validate",
                        "selected embedding slice requires a valid rank-2 tensor range");
         return YVEX_ERR_FORMAT;
+    }
+    if (range->dtype != YVEX_DTYPE_F16) {
+        yvex_error_setf(err, YVEX_ERR_UNSUPPORTED,
+                        "yvex_tensor_embedding_slice_range_validate",
+                        "selected-embedding-dtype-invalid: %s requires F16",
+                        range->tensor_name);
+        return YVEX_ERR_UNSUPPORTED;
     }
     hidden_size = range->dims[0];
     vocab_size = range->dims[1];
@@ -506,12 +655,17 @@ static const char *range_error_code(const yvex_error *err)
 {
     const char *message = yvex_error_message(err);
 
+    if (!message) return "tensor-range-invalid";
     if (strstr(message, "tensor-rank-invalid")) return "tensor-rank-invalid";
     if (strstr(message, "tensor-dim-zero")) return "tensor-dim-zero";
     if (strstr(message, "tensor-element-count-overflow")) return "tensor-element-count-overflow";
     if (strstr(message, "tensor-dtype-unknown")) return "tensor-dtype-unknown";
     if (strstr(message, "tensor-dtype-size-unknown")) return "tensor-dtype-size-unknown";
     if (strstr(message, "tensor-byte-count-overflow")) return "tensor-byte-count-overflow";
+    if (strstr(message, "selected-embedding-rank-invalid")) return "selected-embedding-rank-invalid";
+    if (strstr(message, "selected-embedding-dtype-invalid")) return "selected-embedding-dtype-invalid";
+    if (strstr(message, "selected-embedding-output-byte-count-overflow")) return "selected-embedding-output-byte-count-overflow";
+    if (strstr(message, "selected-embedding-slice-byte-count-overflow")) return "selected-embedding-slice-byte-count-overflow";
     if (strstr(message, "tensor-relative-offset-overflow")) return "tensor-relative-offset-overflow";
     if (strstr(message, "tensor-absolute-offset-overflow")) return "tensor-absolute-offset-overflow";
     if (strstr(message, "tensor-offset-before-data")) return "tensor-offset-before-data";
@@ -559,6 +713,9 @@ static void map_parse_error_to_report(const yvex_error *source,
         code = "zero-dimension";
     } else if (strstr(message, "dimension product overflow")) {
         code = "element-count-overflow";
+    } else if (strstr(message, "storage byte overflow") ||
+               strstr(message, "block storage byte overflow")) {
+        code = "tensor-byte-count-overflow";
     } else if (strstr(message, "not aligned")) {
         code = "tensor-alignment-invalid";
     } else if (strstr(message, "absolute offset overflow")) {
@@ -612,6 +769,7 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
         const yvex_tensor_info *tensor = yvex_tensor_table_at(tensors, i);
         unsigned long long j;
         int duplicate = 0;
+        yvex_tensor_shape_accounting accounting;
         yvex_tensor_range range;
         int rc;
 
@@ -634,16 +792,58 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
             (void)add_error(report, "duplicate-tensor-name", tensor->name,
                             "duplicate tensor name in tensor directory");
         }
+        memset(&accounting, 0, sizeof(accounting));
+        report->tensor_shapes_checked += 1ull;
+        report->tensor_dtypes_checked += 1ull;
+        report->tensor_byte_counts_checked += 1ull;
+        rc = yvex_tensor_shape_accounting_validate(tensor, &accounting, err);
+        if (rc == YVEX_OK) {
+            report->tensor_shapes_valid += 1ull;
+            report->tensor_dtypes_valid += 1ull;
+            if (!checked_add_ull(report->known_tensor_bytes,
+                                 accounting.storage_byte_count,
+                                 &report->known_tensor_bytes)) {
+                (void)add_error(report, "tensor-byte-count-overflow", tensor->name,
+                                "known tensor byte sum overflows");
+            }
+        } else {
+            const char *code = range_error_code(err);
+            const char *public_code = code;
+            const char *reason = yvex_error_message(err);
+
+            if (strcmp(code, "tensor-rank-invalid") == 0) {
+                report->tensor_shapes_invalid += 1ull;
+                public_code = "rank-out-of-range";
+            } else if (strcmp(code, "tensor-dim-zero") == 0) {
+                report->tensor_shapes_invalid += 1ull;
+                public_code = "zero-dimension";
+            } else if (strcmp(code, "tensor-element-count-overflow") == 0) {
+                report->tensor_shapes_invalid += 1ull;
+                public_code = "element-count-overflow";
+            } else if (strcmp(code, "tensor-dtype-unknown") == 0) {
+                report->tensor_shapes_valid += 1ull;
+                report->tensor_dtypes_invalid += 1ull;
+                public_code = "unknown-dtype";
+            } else if (strcmp(code, "tensor-dtype-size-unknown") == 0) {
+                report->tensor_shapes_valid += 1ull;
+                report->tensor_dtypes_invalid += 1ull;
+                public_code = "dtype-size-unknown";
+            } else if (strcmp(code, "tensor-byte-count-overflow") == 0) {
+                report->tensor_shapes_valid += 1ull;
+                report->tensor_dtypes_valid += 1ull;
+                report->tensor_byte_counts_invalid += 1ull;
+            } else {
+                report->tensor_shapes_invalid += 1ull;
+            }
+            (void)add_error(report, public_code, tensor->name, reason);
+            yvex_error_clear(err);
+            continue;
+        }
         memset(&range, 0, sizeof(range));
         report->tensor_ranges_checked += 1ull;
         rc = yvex_tensor_range_validate(artifact, gguf, tensor, &range, err);
         if (rc == YVEX_OK) {
             report->tensor_ranges_valid += 1ull;
-            if (!checked_add_ull(report->known_tensor_bytes, range.tensor_bytes,
-                                 &report->known_tensor_bytes)) {
-                (void)add_range_error(report, "tensor-byte-count-overflow", tensor->name,
-                                      "known tensor byte sum overflows", &range);
-            }
         } else {
             const char *code = range_error_code(err);
             const char *public_code = code;
@@ -673,18 +873,27 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
             (void)add_error(report, "required-tensor-missing", "token_embd.weight",
                             "required tensor not found: token_embd.weight");
         } else {
-            if (tensor->rank != 2u) {
-                (void)add_error(report, "required-tensor-rank-invalid", tensor->name,
-                                "selected embedding readiness requires rank 2");
-            }
-            if (tensor->dtype != YVEX_DTYPE_F16) {
-                (void)add_error(report, "required-tensor-dtype-invalid", tensor->name,
-                                "selected embedding readiness requires F16 token_embd.weight");
-            }
-            if (tensor->rank == 2u) {
+            yvex_selected_embedding_shape selected_shape;
+            int shape_rc;
+
+            memset(&selected_shape, 0, sizeof(selected_shape));
+            shape_rc = yvex_selected_embedding_shape_validate(tensor,
+                                                              options->token_id,
+                                                              &selected_shape,
+                                                              err);
+            if (shape_rc == YVEX_OK) {
                 yvex_tensor_range range;
                 yvex_tensor_slice_range slice;
                 int rc;
+
+                integrity_copy(report->selected_embedding_shape,
+                               YVEX_INTEGRITY_DIGEST_STATUS_CAP,
+                               "valid");
+                report->selected_embedding_hidden_size = selected_shape.hidden_size;
+                report->selected_embedding_vocab_size = selected_shape.vocab_size;
+                report->selected_embedding_output_count = selected_shape.output_count;
+                report->selected_embedding_output_bytes = selected_shape.output_bytes;
+                report->selected_embedding_slice_bytes = selected_shape.slice_bytes;
 
                 memset(&range, 0, sizeof(range));
                 memset(&slice, 0, sizeof(slice));
@@ -707,6 +916,25 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
                     }
                     yvex_error_clear(err);
                 }
+            } else {
+                const char *code = range_error_code(err);
+                const char *public_code = code;
+                if (strcmp(code, "selected-embedding-dtype-invalid") == 0) {
+                    public_code = "required-tensor-dtype-invalid";
+                } else if (strcmp(code, "selected-embedding-rank-invalid") == 0) {
+                    public_code = "required-tensor-rank-invalid";
+                } else if (strcmp(code, "token-out-of-range") == 0) {
+                    public_code = "token-out-of-range";
+                } else if (strcmp(code, "tensor-dim-zero") == 0) {
+                    public_code = "zero-dimension";
+                } else if (strcmp(code, "tensor-element-count-overflow") == 0) {
+                    public_code = "element-count-overflow";
+                } else if (strcmp(code, "tensor-dtype-unknown") == 0) {
+                    public_code = "unknown-dtype";
+                }
+                (void)add_error(report, public_code, tensor->name,
+                                yvex_error_message(err));
+                yvex_error_clear(err);
             }
         }
     }
