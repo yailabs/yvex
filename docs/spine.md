@@ -132,6 +132,10 @@ tensor range and checked byte-count validation
 required selected embedding readiness check
 GGUF structural corruption fixture suite
 table-driven corrupt fixture refusal harness for integrity/inspect/tensors/materialize/graph
+canonical tensor byte-range validation
+validated tensor absolute/end offsets
+partial embedding token-slice range validation
+materialization and graph range guards
 file identity digest enforcement
 registered alias digest verification
 baseline registry alias digest drift detection
@@ -250,8 +254,8 @@ unbounded spreadsheet.
 | ARTIFACT.INTEGRITY.0 | complete | Artifact integrity threat model and validator baseline |
 | ARTIFACT.INTEGRITY.1 | complete | File identity and digest enforcement |
 | ARTIFACT.INTEGRITY.2 | complete | GGUF structural corruption fixture suite |
-| ARTIFACT.INTEGRITY.3 | next | Tensor directory offset and byte-range validation |
-| ARTIFACT.INTEGRITY.4 | planned | Shape, rank, dtype, and byte-count overflow hardening |
+| ARTIFACT.INTEGRITY.3 | complete | Tensor directory offset and byte-range validation |
+| ARTIFACT.INTEGRITY.4 | next | Shape, rank, dtype, and byte-count overflow hardening |
 | ARTIFACT.INTEGRITY.5 | planned | Registry alias metadata drift diagnostics |
 | ARTIFACT.INTEGRITY.6 | planned | Materialization integrity gate |
 | ARTIFACT.INTEGRITY.7 | planned | Graph execution integrity guard |
@@ -499,8 +503,8 @@ mapped and the baseline validator exists.
 | ARTIFACT.INTEGRITY.0 | complete | Artifact integrity threat model and validator baseline |
 | ARTIFACT.INTEGRITY.1 | complete | File identity and digest enforcement |
 | ARTIFACT.INTEGRITY.2 | complete | GGUF structural corruption fixture suite |
-| ARTIFACT.INTEGRITY.3 | next | Tensor directory offset and byte-range validation |
-| ARTIFACT.INTEGRITY.4 | planned | Shape, rank, dtype, and byte-count overflow hardening |
+| ARTIFACT.INTEGRITY.3 | complete | Tensor directory offset and byte-range validation |
+| ARTIFACT.INTEGRITY.4 | next | Shape, rank, dtype, and byte-count overflow hardening |
 | ARTIFACT.INTEGRITY.5 | planned | Registry alias metadata drift diagnostics |
 | ARTIFACT.INTEGRITY.6 | planned | Materialization integrity gate |
 | ARTIFACT.INTEGRITY.7 | planned | Graph execution integrity guard |
@@ -538,10 +542,13 @@ graph partial surfaces, while preserving the distinction between structurally
 corrupt artifacts and structurally valid artifacts that are not ready for
 selected embedding execution.
 
-ARTIFACT.INTEGRITY.3 hardens tensor directory offsets and byte ranges. It must
-validate tensor offset within file, tensor byte range within file, no overflow
-in offset plus bytes, and no read outside declared artifact bounds before
-materialization or graph execution.
+ARTIFACT.INTEGRITY.3 centralizes tensor directory offset and byte-range
+validation. YVEX now has one canonical range helper for element count, dtype
+size, tensor byte count, `tensor_data_offset` plus tensor-relative offset,
+absolute offset, end offset, file bounds, and alignment. Integrity, tensor
+listing, materialization, and real partial graph paths consume those validated
+range facts. The selected embedding partial graph also validates the requested
+token slice before raw reference extraction.
 
 ARTIFACT.INTEGRITY.4 hardens shape, rank, dtype, and byte-count math. It must
 validate rank limits, zero dims, huge dims, dtype byte size, element count
@@ -919,13 +926,12 @@ No diagram may imply support that the code does not implement.
 ## 8. Active Next
 
 ```text
-ARTIFACT.INTEGRITY.3 - Tensor directory offset and byte-range validation
+ARTIFACT.INTEGRITY.4 - Shape, rank, dtype, and byte-count overflow hardening
 ```
 
-Next implementation: ARTIFACT.INTEGRITY.3. It must deepen tensor directory
-offset and byte-range validation using the corruption fixture suite added in
-ARTIFACT.INTEGRITY.2, without mixing in digest or registry drift work that is
-already covered by ARTIFACT.INTEGRITY.1.
+Next implementation: ARTIFACT.INTEGRITY.4. It must harden shape, rank, dtype,
+and byte-count overflow behavior as its own domain now that tensor byte ranges
+have a canonical calculation path.
 
 Next runtime expansion after integrity baseline:
 

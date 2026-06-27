@@ -395,6 +395,8 @@ public runtime project from becoming a dump of local state.
 YVEX includes a baseline artifact integrity check for `GGUF` structural bounds,
 tensor ranges, checked byte math, and selected embedding readiness. It is not a
 supply-chain security guarantee.
+Those integrity checks include canonical tensor byte-range validation before
+materialization or graph execution reads payload data.
 
 The repository also includes tiny corrupt `GGUF` fixture coverage for structural
 refusal paths. Those files are test assets, not model artifacts.

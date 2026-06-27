@@ -386,6 +386,9 @@ static void print_integrity_report(const yvex_artifact_integrity_report *report,
     }
     printf("tensor_count: %llu\n", report->tensor_count);
     printf("known_tensor_bytes: %llu\n", report->known_tensor_bytes);
+    printf("tensor_ranges_checked: %llu\n", report->tensor_ranges_checked);
+    printf("tensor_ranges_valid: %llu\n", report->tensor_ranges_valid);
+    printf("tensor_ranges_invalid: %llu\n", report->tensor_ranges_invalid);
     printf("identity_checked: %s\n", report->identity_checked ? "true" : "false");
     printf("sha256: %s\n", report->sha256[0] ? report->sha256 : "unavailable");
     printf("registered_sha256: %s\n", report->registered_sha256[0] ? report->registered_sha256 : "absent");
@@ -409,6 +412,12 @@ static void print_integrity_report(const yvex_artifact_integrity_report *report,
         printf("%s_%u_code: %s\n", prefix, i, issue->code);
         if (issue->tensor[0]) {
             printf("%s_%u_tensor: %s\n", prefix, i, issue->tensor);
+        }
+        if (issue->has_range) {
+            printf("%s_%u_relative_offset: %llu\n", prefix, i, issue->relative_offset);
+            printf("%s_%u_absolute_offset: %llu\n", prefix, i, issue->absolute_offset);
+            printf("%s_%u_tensor_bytes: %llu\n", prefix, i, issue->tensor_bytes);
+            printf("%s_%u_file_size: %llu\n", prefix, i, issue->file_size);
         }
         printf("%s_%u_reason: %s\n", prefix, i, issue->reason);
     }
@@ -5434,17 +5443,31 @@ static int command_tensors(int argc, char **argv)
 
     for (i = 0; i < yvex_tensor_table_count(table); ++i) {
         const yvex_tensor_info *tensor = yvex_tensor_table_at(table, i);
+        yvex_tensor_range range;
+        int range_rc;
+
+        memset(&range, 0, sizeof(range));
+        range_rc = yvex_tensor_range_validate(artifact, gguf, tensor, &range, &err);
         printf("%llu %s role=%s rank=%u dims=",
                i,
                tensor->name,
                yvex_tensor_role_name(tensor->role),
                tensor->rank);
         print_tensor_dims(tensor->dims, tensor->rank);
-        printf(" dtype=%s bytes=%llu offset=%llu absolute=%llu\n",
+        printf(" dtype=%s bytes=%llu offset=%llu absolute=%llu",
                yvex_dtype_name(tensor->dtype),
                tensor->storage_bytes,
                tensor->relative_offset,
                tensor->absolute_offset);
+        if (range_rc == YVEX_OK) {
+            printf(" range=%llu..%llu range_status=valid alignment_status=%s\n",
+                   range.tensor_absolute_offset,
+                   range.tensor_end_offset,
+                   range.aligned ? "valid" : "invalid");
+        } else {
+            printf(" range_status=invalid alignment_status=unknown\n");
+            yvex_error_clear(&err);
+        }
     }
 
     yvex_tensor_table_close(table);

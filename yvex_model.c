@@ -6,6 +6,7 @@
  */
 
 #include <yvex/dtype.h>
+#include <yvex/artifact_integrity.h>
 #include <yvex/model.h>
 #include <yvex/tensor.h>
 #include <yvex/weights.h>
@@ -816,30 +817,24 @@ static int copy_tensor_dims(yvex_backend_tensor_desc *desc, const yvex_tensor_in
 
 static int materialize_one(yvex_weight_table *table,
                            const yvex_artifact *artifact,
+                           const yvex_gguf *gguf,
                            const yvex_tensor_info *tensor,
                            yvex_error *err)
 {
     yvex_backend_tensor_desc desc;
     yvex_device_tensor *device_tensor = NULL;
     yvex_materialized_weight *weight;
+    yvex_tensor_range range;
     const unsigned char *data;
     int rc;
 
-    if (!table || !artifact || !tensor) {
+    if (!table || !artifact || !gguf || !tensor) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_weight_table_materialize",
-                       "table, artifact and tensor are required");
+                       "table, artifact, gguf, and tensor are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (tensor->storage_bytes == 0) {
-        yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_weight_table_materialize",
-                        "tensor %s has unsupported storage accounting", tensor->name);
-        return YVEX_ERR_UNSUPPORTED;
-    }
-
-    rc = yvex_range_check(yvex_artifact_size(artifact),
-                          tensor->absolute_offset,
-                          tensor->storage_bytes,
-                          err);
+    memset(&range, 0, sizeof(range));
+    rc = yvex_tensor_range_validate(artifact, gguf, tensor, &range, err);
     if (rc != YVEX_OK) {
         return rc;
     }
@@ -848,7 +843,7 @@ static int materialize_one(yvex_weight_table *table,
     desc.name = tensor->name;
     desc.dtype = tensor->dtype;
     desc.rank = tensor->rank;
-    desc.bytes = tensor->storage_bytes;
+    desc.bytes = range.tensor_bytes;
     if (!copy_tensor_dims(&desc, tensor)) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_weight_table_materialize",
                        "invalid tensor rank");
@@ -870,8 +865,8 @@ static int materialize_one(yvex_weight_table *table,
 
     rc = yvex_backend_tensor_write(table->backend,
                                    device_tensor,
-                                   data + tensor->absolute_offset,
-                                   tensor->storage_bytes,
+                                   data + range.tensor_absolute_offset,
+                                   range.tensor_bytes,
                                    err);
     if (rc != YVEX_OK) {
         yvex_backend_tensor_free(table->backend, device_tensor);
@@ -888,7 +883,7 @@ static int materialize_one(yvex_weight_table *table,
     }
     weight->dtype = tensor->dtype;
     weight->role = tensor->role;
-    weight->bytes = tensor->storage_bytes;
+    weight->bytes = range.tensor_bytes;
     weight->residency = residency_from_backend(table->backend);
     weight->device_tensor = device_tensor;
     table->count += 1;
@@ -922,7 +917,6 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
                        "artifact, gguf, tensors and backend are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    (void)gguf;
     if (options) {
         require_all = options->require_all_tensors;
         allow_unsupported = options->allow_unsupported_dtype;
@@ -954,6 +948,36 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
 
     for (i = 0; i < tensor_count; ++i) {
         const yvex_tensor_info *tensor = yvex_tensor_table_at(tensors, i);
+        yvex_tensor_range range;
+
+        if (!tensor) {
+            if (require_all) {
+                yvex_weight_table_close(table);
+                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_weight_table_materialize",
+                               "missing tensor table row");
+                return YVEX_ERR_INVALID_ARG;
+            }
+            continue;
+        }
+        if (tensor->storage_bytes == 0) {
+            if (require_all && !allow_unsupported) {
+                yvex_weight_table_close(table);
+                yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_weight_table_materialize",
+                                "tensor %s has unsupported storage accounting", tensor->name);
+                return YVEX_ERR_UNSUPPORTED;
+            }
+            continue;
+        }
+        memset(&range, 0, sizeof(range));
+        rc = yvex_tensor_range_validate(artifact, gguf, tensor, &range, err);
+        if (rc != YVEX_OK) {
+            yvex_weight_table_close(table);
+            return rc;
+        }
+    }
+
+    for (i = 0; i < tensor_count; ++i) {
+        const yvex_tensor_info *tensor = yvex_tensor_table_at(tensors, i);
         if (!tensor) {
             table->summary.tensors_failed += 1;
             if (require_all) {
@@ -978,7 +1002,7 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
             continue;
         }
 
-        rc = materialize_one(table, artifact, tensor, err);
+        rc = materialize_one(table, artifact, gguf, tensor, err);
         if (rc != YVEX_OK) {
             table->summary.tensors_failed += 1;
             if (require_all || rc == YVEX_ERR_BOUNDS || rc == YVEX_ERR_FORMAT) {

@@ -433,46 +433,28 @@ static float runtime_f16_bits_to_float(unsigned int h)
 }
 
 static int build_f16_embedding_reference(const yvex_artifact *artifact,
-                                         const yvex_tensor_info *tensor,
-                                         unsigned int token_id,
-                                         unsigned long long hidden_size,
-                                         unsigned long long vocab_size,
+                                         const yvex_tensor_range *range,
+                                         const yvex_tensor_slice_range *slice,
                                          float *out,
                                          yvex_error *err)
 {
     const unsigned char *data;
-    unsigned long long slice_bytes;
+    unsigned long long hidden_size;
     unsigned long long slice_offset;
     unsigned long long i;
-    int rc;
 
-    if (!artifact || !tensor || !out) {
+    if (!artifact || !range || !slice || !out) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_execute_partial_graph",
-                       "artifact, tensor, and reference output are required");
+                       "artifact, range, slice, and reference output are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (hidden_size == 0 || vocab_size == 0 || (unsigned long long)token_id >= vocab_size) {
+    if (!range->range_valid || !slice->range_valid) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_partial_graph",
-                       "partial token id is outside embedding range");
+                       "partial reference slice range is invalid");
         return YVEX_ERR_BOUNDS;
     }
-    if (hidden_size > ULLONG_MAX / 2ull) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_partial_graph",
-                       "partial reference slice is too large");
-        return YVEX_ERR_BOUNDS;
-    }
-    slice_bytes = hidden_size * 2ull;
-    if ((unsigned long long)token_id > ULLONG_MAX / slice_bytes ||
-        tensor->absolute_offset > ULLONG_MAX - ((unsigned long long)token_id * slice_bytes)) {
-        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_partial_graph",
-                       "partial reference slice offset overflow");
-        return YVEX_ERR_BOUNDS;
-    }
-    slice_offset = tensor->absolute_offset + ((unsigned long long)token_id * slice_bytes);
-    rc = yvex_range_check(yvex_artifact_size(artifact), slice_offset, slice_bytes, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
+    hidden_size = range->dims[0];
+    slice_offset = slice->slice_absolute_offset;
     data = yvex_artifact_data(artifact);
     if (!data) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_execute_partial_graph",
@@ -674,6 +656,8 @@ int yvex_engine_execute_partial_graph(yvex_engine *engine,
     unsigned long long output_count;
     unsigned long long output_bytes;
     unsigned long long i;
+    yvex_tensor_range tensor_range;
+    yvex_tensor_slice_range slice_range;
     float *readback = NULL;
     float *reference = NULL;
     int rc;
@@ -763,10 +747,27 @@ int yvex_engine_execute_partial_graph(yvex_engine *engine,
                        "attached token embedding shape does not match tensor descriptor");
         return YVEX_ERR_FORMAT;
     }
-    if ((unsigned long long)token_id >= vocab_size) {
-        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_partial_graph",
-                        "partial token out of range: %u >= %llu", token_id, vocab_size);
-        return YVEX_ERR_BOUNDS;
+    memset(&tensor_range, 0, sizeof(tensor_range));
+    memset(&slice_range, 0, sizeof(slice_range));
+    rc = yvex_tensor_range_validate(engine->artifact, engine->gguf, tensor, &tensor_range, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (tensor_range.tensor_bytes != yvex_weight_bytes(weight)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_engine_execute_partial_graph",
+                       "attached token embedding byte count does not match validated tensor range");
+        return YVEX_ERR_FORMAT;
+    }
+    rc = yvex_tensor_embedding_slice_range_validate(&tensor_range,
+                                                    token_id,
+                                                    &slice_range,
+                                                    err);
+    if (rc != YVEX_OK) {
+        if ((unsigned long long)token_id >= vocab_size) {
+            yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_partial_graph",
+                            "partial token out of range: %u >= %llu", token_id, vocab_size);
+        }
+        return rc;
     }
     if (hidden_size > (unsigned long long)(~(size_t)0 / sizeof(float))) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_partial_graph",
@@ -794,8 +795,8 @@ int yvex_engine_execute_partial_graph(yvex_engine *engine,
         return YVEX_ERR_NOMEM;
     }
 
-    rc = build_f16_embedding_reference(engine->artifact, tensor, token_id,
-                                       hidden_size, vocab_size, reference, err);
+    rc = build_f16_embedding_reference(engine->artifact, &tensor_range, &slice_range,
+                                       reference, err);
     if (rc != YVEX_OK) {
         free(readback);
         free(reference);

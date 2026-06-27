@@ -47,7 +47,39 @@ typedef struct {
     char code[YVEX_INTEGRITY_CODE_CAP];
     char tensor[YVEX_INTEGRITY_TENSOR_CAP];
     char reason[YVEX_INTEGRITY_REASON_CAP];
+    unsigned long long relative_offset;
+    unsigned long long absolute_offset;
+    unsigned long long tensor_bytes;
+    unsigned long long file_size;
+    int has_range;
 } yvex_integrity_issue;
+
+typedef struct {
+    char tensor_name[YVEX_INTEGRITY_TENSOR_CAP];
+    yvex_dtype dtype;
+    unsigned int rank;
+    unsigned long long dims[YVEX_TENSOR_MAX_DIMS];
+    unsigned long long element_count;
+    unsigned long long dtype_size;
+    unsigned long long tensor_bytes;
+    unsigned long long tensor_relative_offset;
+    unsigned long long tensor_data_offset;
+    unsigned long long tensor_absolute_offset;
+    unsigned long long tensor_end_offset;
+    unsigned long long file_size;
+    unsigned long long alignment;
+    int aligned;
+    int range_valid;
+} yvex_tensor_range;
+
+typedef struct {
+    unsigned int token_id;
+    unsigned long long slice_bytes;
+    unsigned long long slice_relative_offset;
+    unsigned long long slice_absolute_offset;
+    unsigned long long slice_end_offset;
+    int range_valid;
+} yvex_tensor_slice_range;
 
 typedef struct {
     int require_token_embedding;
@@ -71,6 +103,9 @@ typedef struct {
     char digest_status[YVEX_INTEGRITY_DIGEST_STATUS_CAP];
     unsigned long long tensor_count;
     unsigned long long known_tensor_bytes;
+    unsigned long long tensor_ranges_checked;
+    unsigned long long tensor_ranges_valid;
+    unsigned long long tensor_ranges_invalid;
     unsigned int error_count;
     unsigned int warning_count;
     unsigned int issue_count;
@@ -88,6 +123,18 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
                                      const yvex_artifact_integrity_options *options,
                                      yvex_artifact_integrity_report *out,
                                      yvex_error *err);
+
+int yvex_tensor_range_validate(const yvex_artifact *artifact,
+                               const yvex_gguf *gguf,
+                               const yvex_tensor_info *tensor,
+                               yvex_tensor_range *out,
+                               yvex_error *err);
+
+int yvex_tensor_embedding_slice_range_validate(
+    const yvex_tensor_range *range,
+    unsigned int token_id,
+    yvex_tensor_slice_range *out,
+    yvex_error *err);
 
 const yvex_integrity_issue *yvex_artifact_integrity_issue_at(
     const yvex_artifact_integrity_report *report,

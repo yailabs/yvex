@@ -100,6 +100,36 @@ static int write_duplicate_tensor_fixture(const char *path)
     return 1;
 }
 
+static int write_one_byte_short_range_fixture(const char *path)
+{
+    unsigned char buf[512];
+    size_t len = 0u;
+    FILE *fp;
+
+    append_bytes(buf, &len, "GGUF", 4u);
+    append_u32(buf, &len, 3u);
+    append_u64(buf, &len, 1ull);
+    append_u64(buf, &len, 1ull);
+    append_metadata_string(buf, &len, "general.architecture", "deepseek");
+    append_tensor(buf, &len, "token_embd.weight", 0ull);
+    while ((len % 32u) != 0u) {
+        buf[len++] = 0u;
+    }
+    memset(buf + len, 0, 127u);
+    len += 127u;
+
+    fp = fopen(path, "wb");
+    if (!fp) {
+        return 0;
+    }
+    if (fwrite(buf, 1u, len, fp) != len) {
+        fclose(fp);
+        return 0;
+    }
+    fclose(fp);
+    return 1;
+}
+
 static int test_valid_fixture_passes(void)
 {
     yvex_artifact_integrity_report report;
@@ -116,6 +146,9 @@ static int test_valid_fixture_passes(void)
     YVEX_TEST_ASSERT(report.file_size > 0, "valid file size reported");
     YVEX_TEST_ASSERT(report.tensor_count == 1, "valid tensor count");
     YVEX_TEST_ASSERT(report.known_tensor_bytes == 128, "valid tensor bytes");
+    YVEX_TEST_ASSERT(report.tensor_ranges_checked == 1, "valid range checked");
+    YVEX_TEST_ASSERT(report.tensor_ranges_valid == 1, "valid range valid");
+    YVEX_TEST_ASSERT(report.tensor_ranges_invalid == 0, "valid range invalid count");
     return 0;
 }
 
@@ -148,6 +181,112 @@ static int test_range_out_of_file_fails(void)
                                             &err);
     YVEX_TEST_ASSERT(rc != YVEX_OK, "range out of file fails");
     YVEX_TEST_ASSERT(first_issue_is(&report, "tensor-range-out-of-file"), "range code");
+    return 0;
+}
+
+static int test_one_byte_short_range_reports_range_fields(void)
+{
+    const char *path = "build/tests/artifact-integrity/range-one-byte-short.gguf";
+    yvex_artifact_integrity_report report;
+    yvex_error err;
+    int rc;
+
+    (void)mkdir("build", 0777);
+    (void)mkdir("build/tests", 0777);
+    (void)mkdir("build/tests/artifact-integrity", 0777);
+    remove(path);
+    YVEX_TEST_ASSERT(write_one_byte_short_range_fixture(path), "write one-byte short fixture");
+    yvex_error_clear(&err);
+    rc = yvex_artifact_integrity_check_path(path, NULL, &report, &err);
+    YVEX_TEST_ASSERT(rc != YVEX_OK, "one-byte short range fails");
+    YVEX_TEST_ASSERT(first_issue_is(&report, "tensor-range-out-of-file"),
+                     "one-byte short range code");
+    YVEX_TEST_ASSERT(report.tensor_ranges_checked == 1, "range checked count");
+    YVEX_TEST_ASSERT(report.tensor_ranges_invalid == 1, "range invalid count");
+    YVEX_TEST_ASSERT(report.issues[0].has_range == 1, "range fields present");
+    YVEX_TEST_ASSERT(report.issues[0].file_size > 0, "range file size present");
+    return 0;
+}
+
+static int test_tensor_range_helper_validates_token_slices(void)
+{
+    const char *path = "build/tests/artifact-integrity/range-helper-f16.gguf";
+    yvex_gguf_emit_options emit_options;
+    yvex_gguf_emit_summary summary;
+    yvex_artifact_options artifact_options;
+    yvex_artifact *artifact = NULL;
+    yvex_gguf *gguf = NULL;
+    yvex_tensor_table *table = NULL;
+    const yvex_tensor_info *tensor;
+    yvex_tensor_range range;
+    yvex_tensor_slice_range token0;
+    yvex_tensor_slice_range token1;
+    yvex_error err;
+    int rc;
+
+    memset(&emit_options, 0, sizeof(emit_options));
+    memset(&summary, 0, sizeof(summary));
+    yvex_error_clear(&err);
+    (void)mkdir("build", 0777);
+    (void)mkdir("build/tests", 0777);
+    (void)mkdir("build/tests/artifact-integrity", 0777);
+    remove(path);
+    emit_options.out_path = path;
+    emit_options.model_name = "range-helper-f16";
+    emit_options.architecture = "deepseek";
+    emit_options.target_qtype = "F16";
+    emit_options.overwrite = 1;
+    rc = yvex_gguf_emit_controlled(&emit_options, &summary, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "emit range helper fixture");
+
+    memset(&artifact_options, 0, sizeof(artifact_options));
+    artifact_options.path = path;
+    artifact_options.readonly = 1;
+    rc = yvex_artifact_open(&artifact, &artifact_options, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "open range helper artifact");
+    rc = yvex_gguf_open(&gguf, artifact, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "open range helper gguf");
+    rc = yvex_tensor_table_from_gguf(&table, gguf, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "open range helper tensor table");
+    tensor = yvex_tensor_table_find(table, "token_embd.weight");
+    YVEX_TEST_ASSERT(tensor != NULL, "range helper tensor exists");
+
+    memset(&range, 0, sizeof(range));
+    rc = yvex_tensor_range_validate(artifact, gguf, tensor, &range, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "tensor range validates");
+    YVEX_TEST_ASSERT(range.range_valid == 1, "range valid flag");
+    YVEX_TEST_ASSERT(range.element_count == 32, "range element count");
+    YVEX_TEST_ASSERT(range.dtype_size == 2, "range dtype size");
+    YVEX_TEST_ASSERT(range.tensor_bytes == 64, "range tensor bytes");
+    YVEX_TEST_ASSERT(range.tensor_absolute_offset >= range.tensor_data_offset,
+                     "range absolute offset after data");
+    YVEX_TEST_ASSERT(range.tensor_end_offset <= range.file_size,
+                     "range end inside file");
+    YVEX_TEST_ASSERT(range.aligned == 1, "range alignment");
+
+    memset(&token0, 0, sizeof(token0));
+    rc = yvex_tensor_embedding_slice_range_validate(&range, 0u, &token0, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "token 0 slice validates");
+    YVEX_TEST_ASSERT(token0.range_valid == 1, "token 0 range valid");
+    YVEX_TEST_ASSERT(token0.slice_bytes == 8, "token 0 slice bytes");
+    YVEX_TEST_ASSERT(token0.slice_absolute_offset == range.tensor_absolute_offset,
+                     "token 0 slice starts at tensor");
+    YVEX_TEST_ASSERT(token0.slice_end_offset <= range.tensor_end_offset,
+                     "token 0 slice inside tensor");
+
+    memset(&token1, 0, sizeof(token1));
+    rc = yvex_tensor_embedding_slice_range_validate(&range, 1u, &token1, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "token 1 slice validates");
+    YVEX_TEST_ASSERT(token1.range_valid == 1, "token 1 range valid");
+    YVEX_TEST_ASSERT(token1.slice_bytes == 8, "token 1 slice bytes");
+    YVEX_TEST_ASSERT(token1.slice_absolute_offset == range.tensor_absolute_offset + 8ull,
+                     "token 1 slice offset");
+    YVEX_TEST_ASSERT(token1.slice_end_offset <= range.tensor_end_offset,
+                     "token 1 slice inside tensor");
+
+    yvex_tensor_table_close(table);
+    yvex_gguf_close(gguf);
+    yvex_artifact_close(artifact);
     return 0;
 }
 
@@ -244,6 +383,8 @@ int yvex_test_artifact_integrity(void)
     if (test_valid_fixture_passes() != 0) return 1;
     if (test_bad_magic_fails() != 0) return 1;
     if (test_range_out_of_file_fails() != 0) return 1;
+    if (test_one_byte_short_range_reports_range_fields() != 0) return 1;
+    if (test_tensor_range_helper_validates_token_slices() != 0) return 1;
     if (test_zero_dimension_fails() != 0) return 1;
     if (test_required_tensor_missing_fails() != 0) return 1;
     if (test_token_out_of_range_fails() != 0) return 1;

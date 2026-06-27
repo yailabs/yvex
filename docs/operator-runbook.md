@@ -148,6 +148,12 @@ byte-count failures, duplicate tensor names, and selected embedding readiness
 when requested. It is not a supply-chain security audit and does not prove model
 quality, author identity, malware absence, or provenance.
 
+The integrity output includes tensor range validation. A pass means each
+declared tensor payload range is inside the local file, offset/byte arithmetic
+did not overflow, and selected embedding readiness checks can validate the
+requested token slice when `--require-token-embedding` is used. It does not prove
+the tensor values are correct.
+
 The repository also runs tiny corrupt `GGUF` fixture tests against integrity,
 inspect, tensors, materialization, and graph-entry refusal paths. Those fixtures
 are repository validation assets, not operator model assets. Operators should

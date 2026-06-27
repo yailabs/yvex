@@ -37,6 +37,12 @@ static int add_error(yvex_artifact_integrity_report *report,
                      const char *tensor,
                      const char *reason);
 
+static int add_range_error(yvex_artifact_integrity_report *report,
+                           const char *code,
+                           const char *tensor,
+                           const char *reason,
+                           const yvex_tensor_range *range);
+
 static void apply_identity_digest(const yvex_artifact_file_identity *identity,
                                   const yvex_artifact_integrity_options *options,
                                   yvex_artifact_integrity_report *report)
@@ -130,6 +136,31 @@ static int add_error(yvex_artifact_integrity_report *report,
     return add_issue(report, YVEX_INTEGRITY_SEVERITY_ERROR, code, tensor, reason);
 }
 
+static int add_range_error(yvex_artifact_integrity_report *report,
+                           const char *code,
+                           const char *tensor,
+                           const char *reason,
+                           const yvex_tensor_range *range)
+{
+    unsigned int before;
+    int rc;
+
+    if (!report) {
+        return YVEX_ERR_INVALID_ARG;
+    }
+    before = report->issue_count;
+    rc = add_error(report, code, tensor, reason);
+    if (rc == YVEX_OK && range && report->issue_count > before) {
+        yvex_integrity_issue *issue = &report->issues[before];
+        issue->relative_offset = range->tensor_relative_offset;
+        issue->absolute_offset = range->tensor_absolute_offset;
+        issue->tensor_bytes = range->tensor_bytes;
+        issue->file_size = range->file_size;
+        issue->has_range = 1;
+    }
+    return rc;
+}
+
 static int checked_mul_ull(unsigned long long a,
                            unsigned long long b,
                            unsigned long long *out)
@@ -182,6 +213,254 @@ static int tensor_element_count(const yvex_tensor_info *tensor,
     return 1;
 }
 
+static unsigned long long dtype_scalar_or_block_size(yvex_dtype dtype)
+{
+    const yvex_dtype_info *info = yvex_dtype_get_info(dtype);
+
+    if (!info) {
+        return 0ull;
+    }
+    if (info->scalar_bytes > 0u) {
+        return (unsigned long long)info->scalar_bytes;
+    }
+    if (info->block_elems > 0u && info->block_bytes > 0u) {
+        return (unsigned long long)info->block_bytes;
+    }
+    return 0ull;
+}
+
+int yvex_tensor_range_validate(const yvex_artifact *artifact,
+                               const yvex_gguf *gguf,
+                               const yvex_tensor_info *tensor,
+                               yvex_tensor_range *out,
+                               yvex_error *err)
+{
+    yvex_tensor_range local;
+    yvex_tensor_range *range = out ? out : &local;
+    unsigned long long element_count = 0ull;
+    unsigned long long tensor_bytes = 0ull;
+    unsigned long long absolute_offset = 0ull;
+    unsigned long long end_offset = 0ull;
+    unsigned int i;
+    int rc;
+
+    if (!artifact || !gguf || !tensor) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_tensor_range_validate",
+                       "artifact, gguf, and tensor are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    memset(range, 0, sizeof(*range));
+    integrity_copy(range->tensor_name, YVEX_INTEGRITY_TENSOR_CAP, tensor->name);
+    range->dtype = tensor->dtype;
+    range->rank = tensor->rank;
+    for (i = 0; i < tensor->rank && i < YVEX_TENSOR_MAX_DIMS; ++i) {
+        range->dims[i] = tensor->dims[i];
+    }
+    range->dtype_size = dtype_scalar_or_block_size(tensor->dtype);
+    range->tensor_relative_offset = tensor->relative_offset;
+    range->tensor_data_offset = yvex_gguf_tensor_data_offset(gguf);
+    range->file_size = yvex_artifact_size(artifact);
+    range->alignment = (unsigned long long)yvex_gguf_alignment(gguf);
+
+    if (!tensor->name || tensor->name[0] == '\0') {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_tensor_range_validate",
+                       "tensor name is empty");
+        return YVEX_ERR_FORMAT;
+    }
+    if (tensor->rank == 0u || tensor->rank > YVEX_TENSOR_MAX_DIMS) {
+        yvex_error_setf(err, YVEX_ERR_FORMAT, "yvex_tensor_range_validate",
+                        "tensor-rank-invalid: %s rank %u", tensor->name, tensor->rank);
+        return YVEX_ERR_FORMAT;
+    }
+    if (!tensor_element_count(tensor, &element_count)) {
+        unsigned int d;
+        for (d = 0; d < tensor->rank && d < YVEX_TENSOR_MAX_DIMS; ++d) {
+            if (tensor->dims[d] == 0ull) {
+                yvex_error_setf(err, YVEX_ERR_FORMAT, "yvex_tensor_range_validate",
+                                "tensor-dim-zero: %s", tensor->name);
+                return YVEX_ERR_FORMAT;
+            }
+        }
+        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_tensor_range_validate",
+                        "tensor-element-count-overflow: %s", tensor->name);
+        return YVEX_ERR_BOUNDS;
+    }
+    range->element_count = element_count;
+
+    if (tensor->dtype == YVEX_DTYPE_UNKNOWN) {
+        yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_tensor_range_validate",
+                        "tensor-dtype-unknown: %s", tensor->name);
+        return YVEX_ERR_UNSUPPORTED;
+    }
+
+    rc = yvex_dtype_storage_bytes(tensor->dtype, element_count, &tensor_bytes, err);
+    if (rc == YVEX_ERR_UNSUPPORTED) {
+        yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_tensor_range_validate",
+                        "tensor-dtype-size-unknown: %s", tensor->name);
+        return rc;
+    }
+    if (rc != YVEX_OK) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_tensor_range_validate",
+                        "tensor-byte-count-overflow: %s", tensor->name);
+        return rc;
+    }
+    range->tensor_bytes = tensor_bytes;
+    if (tensor_bytes == 0ull) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_tensor_range_validate",
+                        "tensor-byte-count-overflow: %s tensor byte count is zero", tensor->name);
+        return YVEX_ERR_BOUNDS;
+    }
+    if (tensor->storage_bytes != 0ull && tensor->storage_bytes != tensor_bytes) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_tensor_range_validate",
+                        "tensor-byte-count-overflow: %s tensor table byte count mismatch", tensor->name);
+        return YVEX_ERR_BOUNDS;
+    }
+    if (range->alignment > 0ull &&
+        (tensor->relative_offset % range->alignment) != 0ull) {
+        yvex_error_setf(err, YVEX_ERR_FORMAT, "yvex_tensor_range_validate",
+                        "tensor-alignment-invalid: %s relative offset %llu is not aligned to %llu",
+                        tensor->name, tensor->relative_offset, range->alignment);
+        return YVEX_ERR_FORMAT;
+    }
+    range->aligned = 1;
+
+    if (!checked_add_ull(range->tensor_data_offset,
+                         tensor->relative_offset,
+                         &absolute_offset)) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_tensor_range_validate",
+                        "tensor-absolute-offset-overflow: %s", tensor->name);
+        return YVEX_ERR_BOUNDS;
+    }
+    range->tensor_absolute_offset = absolute_offset;
+    if (tensor->absolute_offset != 0ull && tensor->absolute_offset != absolute_offset) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_tensor_range_validate",
+                        "tensor-absolute-offset-overflow: %s tensor table absolute offset mismatch",
+                        tensor->name);
+        return YVEX_ERR_BOUNDS;
+    }
+    if (absolute_offset < range->tensor_data_offset) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_tensor_range_validate",
+                        "tensor-offset-before-data: %s", tensor->name);
+        return YVEX_ERR_BOUNDS;
+    }
+    if (absolute_offset > range->file_size) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_tensor_range_validate",
+                        "tensor-offset-out-of-file: %s absolute offset %llu exceeds file size %llu",
+                        tensor->name, absolute_offset, range->file_size);
+        return YVEX_ERR_BOUNDS;
+    }
+    if (!checked_add_ull(absolute_offset, tensor_bytes, &end_offset)) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_tensor_range_validate",
+                        "tensor-end-offset-overflow: %s", tensor->name);
+        return YVEX_ERR_BOUNDS;
+    }
+    range->tensor_end_offset = end_offset;
+    if (end_offset > range->file_size) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_tensor_range_validate",
+                        "tensor-range-out-of-file: %s byte range %llu..%llu exceeds file size %llu",
+                        tensor->name, absolute_offset, end_offset, range->file_size);
+        return YVEX_ERR_BOUNDS;
+    }
+
+    range->range_valid = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_tensor_embedding_slice_range_validate(
+    const yvex_tensor_range *range,
+    unsigned int token_id,
+    yvex_tensor_slice_range *out,
+    yvex_error *err)
+{
+    yvex_tensor_slice_range local;
+    yvex_tensor_slice_range *slice = out ? out : &local;
+    unsigned long long hidden_size;
+    unsigned long long vocab_size;
+    unsigned long long token_offset_bytes = 0ull;
+    unsigned long long slice_bytes = 0ull;
+    unsigned long long slice_absolute_offset = 0ull;
+    unsigned long long slice_end_offset = 0ull;
+
+    if (!range) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG,
+                       "yvex_tensor_embedding_slice_range_validate",
+                       "range is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(slice, 0, sizeof(*slice));
+    slice->token_id = token_id;
+
+    if (!range->range_valid || range->rank != 2u) {
+        yvex_error_set(err, YVEX_ERR_FORMAT,
+                       "yvex_tensor_embedding_slice_range_validate",
+                       "selected embedding slice requires a valid rank-2 tensor range");
+        return YVEX_ERR_FORMAT;
+    }
+    hidden_size = range->dims[0];
+    vocab_size = range->dims[1];
+    if (hidden_size == 0ull || vocab_size == 0ull) {
+        yvex_error_set(err, YVEX_ERR_FORMAT,
+                       "yvex_tensor_embedding_slice_range_validate",
+                       "selected embedding dimensions must be non-zero");
+        return YVEX_ERR_FORMAT;
+    }
+    if ((unsigned long long)token_id >= vocab_size) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS,
+                        "yvex_tensor_embedding_slice_range_validate",
+                        "token-out-of-range: %u >= %llu", token_id, vocab_size);
+        return YVEX_ERR_BOUNDS;
+    }
+    if (range->dtype_size == 0ull) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED,
+                       "yvex_tensor_embedding_slice_range_validate",
+                       "tensor-dtype-size-unknown");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (!checked_mul_ull(hidden_size, range->dtype_size, &slice_bytes)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS,
+                       "yvex_tensor_embedding_slice_range_validate",
+                       "token-slice-byte-count-overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (!checked_mul_ull((unsigned long long)token_id, slice_bytes,
+                         &token_offset_bytes)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS,
+                       "yvex_tensor_embedding_slice_range_validate",
+                       "token-slice-offset-overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (!checked_add_ull(range->tensor_absolute_offset, token_offset_bytes,
+                         &slice_absolute_offset)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS,
+                       "yvex_tensor_embedding_slice_range_validate",
+                       "token-slice-offset-overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (!checked_add_ull(slice_absolute_offset, slice_bytes, &slice_end_offset)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS,
+                       "yvex_tensor_embedding_slice_range_validate",
+                       "token-slice-end-overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (slice_absolute_offset < range->tensor_absolute_offset ||
+        slice_end_offset > range->tensor_end_offset) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS,
+                       "yvex_tensor_embedding_slice_range_validate",
+                       "token-slice-range-out-of-tensor");
+        return YVEX_ERR_BOUNDS;
+    }
+
+    slice->slice_bytes = slice_bytes;
+    slice->slice_relative_offset = token_offset_bytes;
+    slice->slice_absolute_offset = slice_absolute_offset;
+    slice->slice_end_offset = slice_end_offset;
+    slice->range_valid = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 static void set_basic_report(const yvex_artifact *artifact,
                              const yvex_gguf *gguf,
                              const yvex_tensor_table *tensors,
@@ -223,6 +502,31 @@ static void set_basic_report(const yvex_artifact *artifact,
     }
 }
 
+static const char *range_error_code(const yvex_error *err)
+{
+    const char *message = yvex_error_message(err);
+
+    if (strstr(message, "tensor-rank-invalid")) return "tensor-rank-invalid";
+    if (strstr(message, "tensor-dim-zero")) return "tensor-dim-zero";
+    if (strstr(message, "tensor-element-count-overflow")) return "tensor-element-count-overflow";
+    if (strstr(message, "tensor-dtype-unknown")) return "tensor-dtype-unknown";
+    if (strstr(message, "tensor-dtype-size-unknown")) return "tensor-dtype-size-unknown";
+    if (strstr(message, "tensor-byte-count-overflow")) return "tensor-byte-count-overflow";
+    if (strstr(message, "tensor-relative-offset-overflow")) return "tensor-relative-offset-overflow";
+    if (strstr(message, "tensor-absolute-offset-overflow")) return "tensor-absolute-offset-overflow";
+    if (strstr(message, "tensor-offset-before-data")) return "tensor-offset-before-data";
+    if (strstr(message, "tensor-offset-out-of-file")) return "tensor-offset-out-of-file";
+    if (strstr(message, "tensor-end-offset-overflow")) return "tensor-end-offset-overflow";
+    if (strstr(message, "tensor-range-out-of-file")) return "tensor-range-out-of-file";
+    if (strstr(message, "tensor-alignment-invalid")) return "tensor-alignment-invalid";
+    if (strstr(message, "token-out-of-range")) return "token-out-of-range";
+    if (strstr(message, "token-slice-offset-overflow")) return "token-slice-offset-overflow";
+    if (strstr(message, "token-slice-end-overflow")) return "token-slice-end-overflow";
+    if (strstr(message, "token-slice-range-out-of-tensor")) return "token-slice-range-out-of-tensor";
+    if (strstr(message, "tensor name is empty")) return "empty-tensor-name";
+    return "tensor-range-invalid";
+}
+
 static void map_parse_error_to_report(const yvex_error *source,
                                       yvex_artifact_integrity_report *report)
 {
@@ -257,6 +561,8 @@ static void map_parse_error_to_report(const yvex_error *source,
         code = "element-count-overflow";
     } else if (strstr(message, "not aligned")) {
         code = "tensor-alignment-invalid";
+    } else if (strstr(message, "absolute offset overflow")) {
+        code = "tensor-absolute-offset-overflow";
     } else if (strstr(message, "offset") || strstr(message, "out of bounds")) {
         code = "tensor-range-out-of-file";
     } else if (where && strstr(where, "metadata")) {
@@ -293,8 +599,6 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
     yvex_artifact_integrity_report local;
     yvex_artifact_integrity_report *report = out ? out : &local;
     unsigned long long i;
-    unsigned long long file_size;
-    unsigned int alignment;
 
     if (!artifact || !gguf || !tensors) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_artifact_integrity_validate",
@@ -303,16 +607,12 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
     }
 
     set_basic_report(artifact, gguf, tensors, report);
-    file_size = yvex_artifact_size(artifact);
-    alignment = yvex_gguf_alignment(gguf);
 
     for (i = 0; i < yvex_tensor_table_count(tensors); ++i) {
         const yvex_tensor_info *tensor = yvex_tensor_table_at(tensors, i);
-        unsigned long long element_count = 0ull;
-        unsigned long long storage_bytes = 0ull;
-        unsigned long long end_offset = 0ull;
         unsigned long long j;
         int duplicate = 0;
+        yvex_tensor_range range;
         int rc;
 
         if (!tensor) {
@@ -334,66 +634,35 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
             (void)add_error(report, "duplicate-tensor-name", tensor->name,
                             "duplicate tensor name in tensor directory");
         }
-        if (tensor->rank == 0u || tensor->rank > YVEX_TENSOR_MAX_DIMS) {
-            (void)add_error(report, "rank-out-of-range", tensor->name,
-                            "tensor rank is outside supported bounds");
-            continue;
-        }
-        if (!tensor_element_count(tensor, &element_count)) {
-            unsigned int d;
-            int zero_dim = 0;
-            for (d = 0; d < tensor->rank && d < YVEX_TENSOR_MAX_DIMS; ++d) {
-                if (tensor->dims[d] == 0ull) {
-                    zero_dim = 1;
-                }
+        memset(&range, 0, sizeof(range));
+        report->tensor_ranges_checked += 1ull;
+        rc = yvex_tensor_range_validate(artifact, gguf, tensor, &range, err);
+        if (rc == YVEX_OK) {
+            report->tensor_ranges_valid += 1ull;
+            if (!checked_add_ull(report->known_tensor_bytes, range.tensor_bytes,
+                                 &report->known_tensor_bytes)) {
+                (void)add_range_error(report, "tensor-byte-count-overflow", tensor->name,
+                                      "known tensor byte sum overflows", &range);
             }
-            (void)add_error(report,
-                            zero_dim ? "zero-dimension" : "element-count-overflow",
-                            tensor->name,
-                            zero_dim ? "tensor dimensions must be non-zero"
-                                     : "tensor element count overflows");
-            continue;
-        }
-        if (tensor->dtype == YVEX_DTYPE_UNKNOWN) {
-            (void)add_error(report, "unknown-dtype", tensor->name,
-                            "tensor dtype is not known to YVEX");
-            continue;
-        }
-        rc = yvex_dtype_storage_bytes(tensor->dtype, element_count, &storage_bytes, err);
-        if (rc == YVEX_ERR_UNSUPPORTED) {
-            (void)add_error(report, "dtype-size-unknown", tensor->name,
-                            "tensor dtype has no storage byte accounting");
+        } else {
+            const char *code = range_error_code(err);
+            const char *public_code = code;
+            const char *reason = yvex_error_message(err);
+
+            report->tensor_ranges_invalid += 1ull;
+            if (strcmp(code, "tensor-dim-zero") == 0) {
+                public_code = "zero-dimension";
+            } else if (strcmp(code, "tensor-element-count-overflow") == 0) {
+                public_code = "element-count-overflow";
+            } else if (strcmp(code, "tensor-dtype-unknown") == 0) {
+                public_code = "unknown-dtype";
+            } else if (strcmp(code, "tensor-dtype-size-unknown") == 0) {
+                public_code = "dtype-size-unknown";
+            } else if (strcmp(code, "tensor-rank-invalid") == 0) {
+                public_code = "rank-out-of-range";
+            }
+            (void)add_range_error(report, public_code, tensor->name, reason, &range);
             yvex_error_clear(err);
-            continue;
-        }
-        if (rc != YVEX_OK) {
-            (void)add_error(report, "tensor-byte-count-overflow", tensor->name,
-                            "tensor byte-count calculation failed");
-            yvex_error_clear(err);
-            continue;
-        }
-        if (tensor->storage_bytes != storage_bytes) {
-            (void)add_error(report, "tensor-byte-count-overflow", tensor->name,
-                            "tensor table byte count does not match checked dtype math");
-            continue;
-        }
-        if (!checked_add_ull(report->known_tensor_bytes, storage_bytes,
-                             &report->known_tensor_bytes)) {
-            (void)add_error(report, "tensor-byte-count-overflow", tensor->name,
-                            "known tensor byte sum overflows");
-        }
-        if (alignment > 0u && (tensor->relative_offset % (unsigned long long)alignment) != 0ull) {
-            (void)add_error(report, "tensor-alignment-invalid", tensor->name,
-                            "tensor relative offset is not aligned");
-        }
-        if (!checked_add_ull(tensor->absolute_offset, storage_bytes, &end_offset)) {
-            (void)add_error(report, "tensor-offset-overflow", tensor->name,
-                            "tensor end offset overflows");
-            continue;
-        }
-        if (tensor->absolute_offset > file_size || end_offset > file_size) {
-            (void)add_error(report, "tensor-range-out-of-file", tensor->name,
-                            "tensor byte range exceeds file size");
         }
     }
 
@@ -412,9 +681,32 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
                 (void)add_error(report, "required-tensor-dtype-invalid", tensor->name,
                                 "selected embedding readiness requires F16 token_embd.weight");
             }
-            if (tensor->rank == 2u && (unsigned long long)options->token_id >= tensor->dims[1]) {
-                (void)add_error(report, "token-out-of-range", tensor->name,
-                                "partial token id is outside embedding range");
+            if (tensor->rank == 2u) {
+                yvex_tensor_range range;
+                yvex_tensor_slice_range slice;
+                int rc;
+
+                memset(&range, 0, sizeof(range));
+                memset(&slice, 0, sizeof(slice));
+                rc = yvex_tensor_range_validate(artifact, gguf, tensor, &range, err);
+                if (rc == YVEX_OK) {
+                    rc = yvex_tensor_embedding_slice_range_validate(&range,
+                                                                    options->token_id,
+                                                                    &slice,
+                                                                    err);
+                }
+                if (rc != YVEX_OK) {
+                    const char *code = range_error_code(err);
+                    if (strcmp(code, "token-out-of-range") == 0) {
+                        (void)add_range_error(report, "token-out-of-range", tensor->name,
+                                              "partial token id is outside embedding range",
+                                              &range);
+                    } else {
+                        (void)add_range_error(report, code, tensor->name,
+                                              yvex_error_message(err), &range);
+                    }
+                    yvex_error_clear(err);
+                }
             }
         }
     }

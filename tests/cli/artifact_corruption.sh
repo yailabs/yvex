@@ -209,6 +209,14 @@ write(
     "tensor-range-out-of-file.gguf",
     file_bytes(meta, [tensor("token_embd.weight", [4, 8], ggml_f32, 0)], b"\0" * 16),
 )
+write(
+    "tensor-range-one-byte-short.gguf",
+    file_bytes(meta, [tensor("token_embd.weight", [4, 8], ggml_f32, 0)], b"\0" * 127),
+)
+write(
+    "tensor-absolute-offset-overflow.gguf",
+    file_bytes(meta, [tensor("token_embd.weight", [4, 8], ggml_f32, (1 << 64) - 32)], b""),
+)
 PY
 
 printf 'case|integrity|inspect|tensors|materialize|graph_partial\n' >"$OUT_DIR/refusal-matrix.txt"
@@ -245,6 +253,10 @@ exercise_structural_case tensor-offset-out-of-file \
     tests/fixtures/gguf/tensor-offset-out-of-bounds.gguf tensor-range-out-of-file
 exercise_structural_case tensor-range-out-of-file \
     "$GEN_DIR/tensor-range-out-of-file.gguf" tensor-range-out-of-file
+exercise_structural_case tensor-range-one-byte-short \
+    "$GEN_DIR/tensor-range-one-byte-short.gguf" tensor-range-out-of-file
+exercise_structural_case tensor-absolute-offset-overflow \
+    "$GEN_DIR/tensor-absolute-offset-overflow.gguf" tensor-absolute-offset-overflow
 exercise_structural_case misaligned-tensor-offset \
     tests/fixtures/gguf/tensor-offset-misaligned.gguf tensor-alignment-invalid
 

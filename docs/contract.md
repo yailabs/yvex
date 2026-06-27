@@ -90,6 +90,14 @@ validation. The suite proves that parser, integrity, materialization, and graph
 entry paths reject invalid artifacts before trusting tensor payloads. It is not
 fuzzing and does not claim complete malicious-input coverage.
 
+Tensor byte ranges are validated through a canonical calculation before runtime
+paths trust tensor payloads. The calculation checks element count, dtype-size
+multiplication, tensor byte count, `tensor_data_offset` plus tensor-relative
+offset, end offset, file bounds, and alignment where applicable.
+Materialization uses that validated range before allocation/copy. Real partial
+graph execution also validates the selected token slice range before reading the
+raw-artifact reference slice.
+
 ### Artifact identity baseline
 
 YVEX records local file identity for registered model aliases using file size

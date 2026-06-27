@@ -143,3 +143,12 @@ not a supply-chain security, malware, sandboxing, or remote provenance API.
 The repository test suite includes tiny corrupt `GGUF` fixtures that exercise
 the bounded issue list and parser-to-integrity error mapping; that corpus is
 structural regression coverage, not fuzzing.
+
+`yvex_tensor_range_validate` is the canonical byte-range calculation for a
+parsed tensor directory row. It computes element count, dtype size, tensor byte
+count, `tensor_data_offset + tensor_relative_offset`, end offset, file bounds,
+and alignment status before payload-reading paths use tensor bytes.
+`yvex_tensor_embedding_slice_range_validate` narrows that validated tensor range
+to the selected embedding token slice used by the real partial graph path. These
+helpers do not prove tensor values are correct; they prove the byte ranges are
+bounded before reads, materialization, or graph reference extraction.

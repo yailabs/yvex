@@ -4,6 +4,7 @@ set -eu
 YVEX_BIN=${YVEX_BIN:-./yvex}
 OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/cli-artifact-integrity}
 MODEL="$OUT_DIR/integrity-controlled-F16.gguf"
+RANGE_SHORT="$OUT_DIR/range-one-byte-short.gguf"
 
 fail() {
     printf 'FAIL: %s\n' "$1" >&2
@@ -34,6 +35,40 @@ mkdir -p "$OUT_DIR"
   --target-qtype F16 \
   --overwrite >"$OUT_DIR/emit.out" 2>"$OUT_DIR/emit.err"
 
+python3 - "$RANGE_SHORT" <<'PY'
+import struct
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+
+def u32(v):
+    return struct.pack("<I", v)
+
+def u64(v):
+    return struct.pack("<Q", v)
+
+def s(text):
+    data = text.encode("utf-8")
+    return u64(len(data)) + data
+
+def kv_string(key, value):
+    return s(key) + u32(8) + s(value)
+
+def tensor(name, dims, dtype, offset):
+    out = s(name) + u32(len(dims))
+    for dim in dims:
+        out += u64(dim)
+    return out + u32(dtype) + u64(offset)
+
+data = b"GGUF" + u32(3) + u64(1) + u64(1)
+data += kv_string("general.architecture", "deepseek")
+data += tensor("token_embd.weight", [4, 8], 0, 0)
+data += b"\0" * ((32 - (len(data) % 32)) % 32)
+data += b"\0" * 127
+path.write_bytes(data)
+PY
+
 "$YVEX_BIN" integrity check --model "$MODEL" --require-token-embedding --partial-token 0 \
   >"$OUT_DIR/integrity-pass.out" 2>"$OUT_DIR/integrity-pass.err"
 contains "$OUT_DIR/integrity-pass.out" "artifact_integrity: check"
@@ -42,6 +77,9 @@ contains "$OUT_DIR/integrity-pass.out" "version: 3"
 contains "$OUT_DIR/integrity-pass.out" "architecture: deepseek"
 contains "$OUT_DIR/integrity-pass.out" "tensor_count: 1"
 contains "$OUT_DIR/integrity-pass.out" "known_tensor_bytes: 64"
+contains "$OUT_DIR/integrity-pass.out" "tensor_ranges_checked: 1"
+contains "$OUT_DIR/integrity-pass.out" "tensor_ranges_valid: 1"
+contains "$OUT_DIR/integrity-pass.out" "tensor_ranges_invalid: 0"
 contains "$OUT_DIR/integrity-pass.out" "integrity_status: pass"
 contains "$OUT_DIR/integrity-pass.out" "status: artifact-integrity-pass"
 
@@ -59,10 +97,16 @@ contains "$OUT_DIR/bad-magic.out" "status: artifact-integrity-fail"
 contains "$OUT_DIR/truncated.out" "integrity_status: fail"
 contains "$OUT_DIR/truncated.out" "error_0_code: file-too-small"
 
-"$YVEX_BIN" integrity check --model tests/fixtures/gguf/tensor-offset-out-of-bounds.gguf \
+"$YVEX_BIN" integrity check --model "$RANGE_SHORT" \
   >"$OUT_DIR/range.out" 2>"$OUT_DIR/range.err" && fail "range-bad file passed" || true
 contains "$OUT_DIR/range.out" "integrity_status: fail"
 contains "$OUT_DIR/range.out" "error_0_code: tensor-range-out-of-file"
+contains "$OUT_DIR/range.out" "tensor_ranges_checked: 1"
+contains "$OUT_DIR/range.out" "tensor_ranges_invalid: 1"
+contains "$OUT_DIR/range.out" "error_0_relative_offset:"
+contains "$OUT_DIR/range.out" "error_0_absolute_offset:"
+contains "$OUT_DIR/range.out" "error_0_tensor_bytes:"
+contains "$OUT_DIR/range.out" "error_0_file_size:"
 
 "$YVEX_BIN" integrity check --model tests/fixtures/gguf/tensor-dim-zero.gguf \
   >"$OUT_DIR/zero-dim.out" 2>"$OUT_DIR/zero-dim.err" && fail "zero-dim file passed" || true
