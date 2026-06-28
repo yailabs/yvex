@@ -417,6 +417,9 @@ transfer failures report cleanup status.
 Graph execution is integrity-guarded for the implemented fixture and selected
 embedding partial paths: preflight runs before backend dispatch and raw
 reference reads.
+The test suite includes a consolidated artifact-integrity regression harness for
+structural corruption, identity drift, metadata drift, materialization preflight,
+and graph guard refusal paths.
 
 The local registry exists because real artifact paths are long and
 machine-specific. `.yvex/models.local.json` is ignored local state, and

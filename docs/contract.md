@@ -161,6 +161,14 @@ guard applies only to the implemented controlled fixture and selected embedding
 partial graph paths. It is graph-entry safety, not full graph safety, inference
 readiness, full model support, or supply-chain security.
 
+### Integrity regression harness
+
+The integrity module has a consolidated regression harness that exercises
+structural corruption, digest drift, metadata drift, materialization gate
+failures, graph guard failures, and cleanup/repeat behavior. The harness is
+regression coverage for implemented boundaries; it is not fuzzing, sandboxing,
+complete malicious-input coverage, or supply-chain security.
+
 ## 5. Server Contract
 
 `./yvexd` exposes a provider/status shell:

@@ -546,6 +546,12 @@ sh tests/test_docs_surface.sh
 sh tests/test_surface.sh
 ```
 
+`make check` runs the consolidated integrity regression harness. It exercises
+structural corruption, digest drift, metadata drift, materialization preflight,
+graph guard refusal, cleanup, and repeat behavior across repository fixtures.
+Operators do not need to run that harness on their model artifacts; they should
+use `integrity check`, `models verify`, `materialize`, and graph command output.
+
 CUDA-capable hosts:
 
 ```sh

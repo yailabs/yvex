@@ -156,6 +156,9 @@ graph execution integrity guard
 graph preflight before backend dispatch
 reference read and token-slice guards
 graph failure phase reporting and cleanup verification
+consolidated artifact integrity regression harness
+integrity/materialization/graph refusal matrix
+cleanup and repeat regression coverage
 ```
 
 Current live target:
@@ -273,8 +276,8 @@ unbounded spreadsheet.
 | ARTIFACT.INTEGRITY.5 | complete | Registry alias metadata drift diagnostics |
 | ARTIFACT.INTEGRITY.6 | complete | Materialization integrity gate |
 | ARTIFACT.INTEGRITY.7 | complete | Graph execution integrity guard |
-| ARTIFACT.INTEGRITY.8 | next | Corrupt artifact regression harness |
-| ARTIFACT.INTEGRITY.9 | planned | Operator integrity report and doctor integration |
+| ARTIFACT.INTEGRITY.8 | complete | Corrupt artifact regression harness |
+| ARTIFACT.INTEGRITY.9 | next | Operator integrity report and doctor integration |
 | ARTIFACT.INTEGRITY.FINAL.0 | planned | Artifact integrity closeout before graph expansion |
 | M6 | planned | Real-model graph segment expansion |
 | M7 | planned | Prompt/token input boundary |
@@ -522,8 +525,8 @@ mapped and the baseline validator exists.
 | ARTIFACT.INTEGRITY.5 | complete | Registry alias metadata drift diagnostics |
 | ARTIFACT.INTEGRITY.6 | complete | Materialization integrity gate |
 | ARTIFACT.INTEGRITY.7 | complete | Graph execution integrity guard |
-| ARTIFACT.INTEGRITY.8 | next | Corrupt artifact regression harness |
-| ARTIFACT.INTEGRITY.9 | planned | Operator integrity report and doctor integration |
+| ARTIFACT.INTEGRITY.8 | complete | Corrupt artifact regression harness |
+| ARTIFACT.INTEGRITY.9 | next | Operator integrity report and doctor integration |
 | ARTIFACT.INTEGRITY.FINAL.0 | planned | Artifact integrity closeout before graph expansion |
 
 ARTIFACT.INTEGRITY.0 defined the artifact integrity threat model and validator
@@ -600,9 +603,13 @@ support, output allocation sizing, and reference read bounds. Preflight failure
 prevents dispatch; post-preflight failures report the graph phase and cleanup
 status.
 
-ARTIFACT.INTEGRITY.8 adds a corrupt artifact regression harness. It should run a
-compact corpus of intentional corruptions across inspect, tensors,
-materialize, engine/session, and graph execution surfaces.
+ARTIFACT.INTEGRITY.8 adds a consolidated corrupt artifact regression harness.
+The harness generates a local matrix under build output and exercises
+structural corruption, digest drift, metadata drift, materialization gate
+failures, graph guard failures, cleanup, and repeat behavior across integrity,
+registry, inspect, tensors, materialize, materialize-gate, graph fixture, graph
+partial, engine, and session surfaces. It is regression coverage, not fuzzing or
+complete malicious-input coverage.
 
 ARTIFACT.INTEGRITY.9 exposes an operator integrity report and future doctor
 integration. The report should summarize file identity, digest, architecture,
@@ -956,13 +963,12 @@ No diagram may imply support that the code does not implement.
 ## 8. Active Next
 
 ```text
-ARTIFACT.INTEGRITY.8 - Corrupt artifact regression harness
+ARTIFACT.INTEGRITY.9 - Operator integrity report and doctor integration
 ```
 
-Next implementation: ARTIFACT.INTEGRITY.8. It should consolidate the corrupt
-artifact regression harness across the integrity module and keep refusal
-coverage stable across inspect, tensors, materialize, engine/session, and graph
-execution surfaces.
+Next implementation: ARTIFACT.INTEGRITY.9. It should expose operator-facing
+integrity reports and future doctor integration without converting local
+artifact checks into supply-chain security claims.
 
 Next runtime expansion after integrity baseline:
 
