@@ -78,6 +78,10 @@ typedef struct {
 
 const yvex_cli_command *yvex_cli_find_command(const char *name);
 void yvex_cli_print_command_help(FILE *fp, const yvex_cli_command *command);
+void yvex_cli_print_top_level_help(FILE *fp);
+int yvex_cli_command_commands(int argc, char **argv);
+int yvex_cli_command_help(int argc, char **argv);
+int yvex_cli_command_version(int argc, char **argv);
 
 int yvex_cli_command_backend(int argc, char **argv);
 int yvex_cli_command_chat(int argc, char **argv);
