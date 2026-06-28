@@ -841,6 +841,84 @@ it is not Q/K/V projection, transformer block execution, layer scheduling, full
 transformer prefill, decode, logits, sampling, generation, or a CUDA transformer
 backend.
 
+### Execute standalone matmul projection primitive
+
+The matmul primitive runs over explicit deterministic F32 row-major tensors. It
+does not read projection weights from a model artifact, does not create Q/K/V
+tensors for attention, and does not execute a transformer block. Use it to prove
+shape admission for `input=[m,k]`, `weight=[k,n]`, `output=[m,n]`, output
+allocation, backend dispatch, reference comparison, cleanup, checksum, and
+max-diff behavior.
+
+CPU projection proof:
+
+```sh
+./yvex graph \
+  --backend cpu \
+  --execute-op \
+  --op matmul \
+  --m 1 \
+  --k 8 \
+  --n 8
+```
+
+Expected outcome:
+
+```text
+graph_integrity_guard: pass
+graph_execution_phase: complete
+graph_kind: matmul-projection
+op: matmul
+backend: cpu
+dtype: f32
+m: 1
+k: 8
+n: 8
+projection_shape: true
+dispatch_attempted: true
+reference_attempted: true
+max_abs_diff: 0
+qkv_projection_ready: false
+transformer_block_ready: false
+decode_ready: false
+logits_ready: false
+generation_ready: false
+status: graph-op-executed
+```
+
+Non-projection matrix proof:
+
+```sh
+./yvex graph \
+  --backend cpu \
+  --execute-op \
+  --op matmul \
+  --m 2 \
+  --k 4 \
+  --n 3
+```
+
+Expected outcome: `graph_kind: matmul-matrix`, `projection_shape: false`,
+`non_projection_shape: true`, and `status: graph-op-executed`.
+
+CUDA-capable hosts can run the projection proof on CUDA:
+
+```sh
+./yvex graph \
+  --backend cuda \
+  --execute-op \
+  --op matmul \
+  --m 1 \
+  --k 8 \
+  --n 8
+```
+
+Expected outcome: CUDA reports `matmul_cuda_parity: pass` with max absolute
+diff inside tolerance. This is standalone F32 matmul/projection primitive parity
+only; it is not Q/K/V projection readiness, attention integration, transformer
+block execution, layer scheduling, full transformer prefill, decode, logits,
+sampling, generation, or a CUDA transformer backend.
+
 ## 14. Execute a deterministic fixture graph
 
 M4 fixture execution uses a tiny controlled GGUF so output can be checked

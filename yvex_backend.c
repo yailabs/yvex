@@ -391,6 +391,25 @@ int yvex_backend_op_rope(yvex_backend *backend,
     return backend->vtable->op_rope(backend, input, position, rope_base, out, err);
 }
 
+int yvex_backend_op_matmul(yvex_backend *backend,
+                           const yvex_device_tensor *input,
+                           const yvex_device_tensor *weight,
+                           yvex_device_tensor *out,
+                           yvex_error *err)
+{
+    if (!backend || !input || !weight || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_matmul",
+                       "backend, input, weight, and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (!backend->vtable || !backend->vtable->op_matmul) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_matmul",
+                       "backend does not support matmul op");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    return backend->vtable->op_matmul(backend, input, weight, out, err);
+}
+
 int yvex_backend_op_attention(yvex_backend *backend,
                               const yvex_device_tensor *query,
                               const yvex_device_tensor *keys,
@@ -475,6 +494,11 @@ int yvex_cpu_op_rope(yvex_backend *backend,
                      float rope_base,
                      yvex_device_tensor *out,
                      yvex_error *err);
+int yvex_cpu_op_matmul(yvex_backend *backend,
+                       const yvex_device_tensor *input,
+                       const yvex_device_tensor *weight,
+                       yvex_device_tensor *out,
+                       yvex_error *err);
 int yvex_cpu_op_attention(yvex_backend *backend,
                           const yvex_device_tensor *query,
                           const yvex_device_tensor *keys,
@@ -543,12 +567,11 @@ static int cpu_supports(const yvex_backend *backend, yvex_backend_capability cap
     case YVEX_BACKEND_CAP_TENSOR_ALLOC:
     case YVEX_BACKEND_CAP_TENSOR_READ_WRITE:
     case YVEX_BACKEND_CAP_OP_EMBED:
+    case YVEX_BACKEND_CAP_OP_MATMUL:
     case YVEX_BACKEND_CAP_OP_RMS_NORM:
     case YVEX_BACKEND_CAP_OP_ROPE:
     case YVEX_BACKEND_CAP_OP_ATTENTION:
         return 1;
-    case YVEX_BACKEND_CAP_OP_MATMUL:
-        return 0;
     }
     return 0;
 }
@@ -567,6 +590,7 @@ static const yvex_backend_vtable cpu_vtable = {
     yvex_cpu_op_embed,
     yvex_cpu_op_rms_norm,
     yvex_cpu_op_rope,
+    yvex_cpu_op_matmul,
     yvex_cpu_op_attention,
 };
 
@@ -909,6 +933,81 @@ static int backend_attention_validate(const yvex_backend *backend,
     return YVEX_OK;
 }
 
+static int backend_matmul_validate(const yvex_backend *backend,
+                                   const yvex_device_tensor *input,
+                                   const yvex_device_tensor *weight,
+                                   const yvex_device_tensor *out,
+                                   unsigned long long *m_out,
+                                   unsigned long long *k_out,
+                                   unsigned long long *n_out,
+                                   const char *where,
+                                   yvex_error *err)
+{
+    unsigned long long m;
+    unsigned long long k;
+    unsigned long long n;
+    unsigned long long input_elements;
+    unsigned long long weight_elements;
+    unsigned long long output_elements;
+
+    if (!yvex_backend_tensor_owner_is(backend, input) ||
+        !yvex_backend_tensor_owner_is(backend, weight) ||
+        !yvex_backend_tensor_owner_is(backend, out)) {
+        yvex_error_set(err, YVEX_ERR_STATE, where,
+                       "input, weight, and output tensors must belong to this backend");
+        return YVEX_ERR_STATE;
+    }
+    if (input->dtype != YVEX_DTYPE_F32 ||
+        weight->dtype != YVEX_DTYPE_F32 ||
+        out->dtype != YVEX_DTYPE_F32) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, where,
+                       "matmul primitive supports F32 input, weight, and output");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (input->rank != 2 || weight->rank != 2 || out->rank != 2) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "matmul tensors must be rank 2");
+        return YVEX_ERR_FORMAT;
+    }
+    m = input->dims[0];
+    k = input->dims[1];
+    n = weight->dims[1];
+    if (m == 0 || k == 0 || n == 0 || weight->dims[0] == 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where, "matmul-zero-dimension");
+        return YVEX_ERR_FORMAT;
+    }
+    if (weight->dims[0] != k) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "matmul input/weight inner dimensions must match");
+        return YVEX_ERR_FORMAT;
+    }
+    if (out->dims[0] != m || out->dims[1] != n) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "matmul output must have dims [m, n]");
+        return YVEX_ERR_FORMAT;
+    }
+    if (m > ULLONG_MAX / k ||
+        k > ULLONG_MAX / n ||
+        m > ULLONG_MAX / n) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "matmul-element-count-overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    input_elements = m * k;
+    weight_elements = k * n;
+    output_elements = m * n;
+    if (!tensor_is_f32_bytes(input, input_elements) ||
+        !tensor_is_f32_bytes(weight, weight_elements) ||
+        !tensor_is_f32_bytes(out, output_elements)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where,
+                       "matmul tensor bytes must match F32 shape accounting");
+        return YVEX_ERR_BOUNDS;
+    }
+    *m_out = m;
+    *k_out = k;
+    *n_out = n;
+    return YVEX_OK;
+}
+
 int yvex_cpu_op_embed(yvex_backend *backend,
                       const yvex_device_tensor *embedding,
                       const unsigned int *token_ids,
@@ -1091,6 +1190,47 @@ int yvex_cpu_op_attention(yvex_backend *backend,
 
     score_scratch->is_written = 1;
     probability_scratch->is_written = 1;
+    out->is_written = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_cpu_op_matmul(yvex_backend *backend,
+                       const yvex_device_tensor *input,
+                       const yvex_device_tensor *weight,
+                       yvex_device_tensor *out,
+                       yvex_error *err)
+{
+    const float *input_data;
+    const float *weight_data;
+    float *out_data;
+    unsigned long long m;
+    unsigned long long k;
+    unsigned long long n;
+    unsigned long long row;
+    unsigned long long col;
+    int rc;
+
+    rc = backend_matmul_validate(backend, input, weight, out,
+                                 &m, &k, &n, "yvex_backend_op_matmul", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    input_data = (const float *)input->data;
+    weight_data = (const float *)weight->data;
+    out_data = (float *)out->data;
+    for (row = 0; row < m; ++row) {
+        for (col = 0; col < n; ++col) {
+            double sum = 0.0;
+            unsigned long long inner;
+            for (inner = 0; inner < k; ++inner) {
+                sum += (double)input_data[(row * k) + inner] *
+                       (double)weight_data[(inner * n) + col];
+            }
+            out_data[(row * n) + col] = (float)sum;
+        }
+    }
     out->is_written = 1;
     yvex_error_clear(err);
     return YVEX_OK;

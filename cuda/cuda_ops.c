@@ -115,6 +115,17 @@ static const char yvex_cuda_kernels_ptx[] =
 "{\n"
 "    ret;\n"
 "}\n"
+".visible .entry yvex_matmul_f32(\n"
+"    .param .u64 p_input,\n"
+"    .param .u64 p_weight,\n"
+"    .param .u64 p_out,\n"
+"    .param .u64 p_m,\n"
+"    .param .u64 p_k,\n"
+"    .param .u64 p_n\n"
+")\n"
+"{\n"
+"    ret;\n"
+"}\n"
 ".visible .entry yvex_attention_f32(\n"
 "    .param .u64 p_query,\n"
 "    .param .u64 p_keys,\n"
@@ -298,6 +309,81 @@ static int cuda_attention_validate(const yvex_backend *backend,
     return YVEX_OK;
 }
 
+static int cuda_matmul_validate(const yvex_backend *backend,
+                                const yvex_device_tensor *input,
+                                const yvex_device_tensor *weight,
+                                const yvex_device_tensor *out,
+                                unsigned long long *m_out,
+                                unsigned long long *k_out,
+                                unsigned long long *n_out,
+                                const char *where,
+                                yvex_error *err)
+{
+    unsigned long long m;
+    unsigned long long k;
+    unsigned long long n;
+    unsigned long long input_elements;
+    unsigned long long weight_elements;
+    unsigned long long output_elements;
+
+    if (!yvex_backend_tensor_owner_is(backend, input) ||
+        !yvex_backend_tensor_owner_is(backend, weight) ||
+        !yvex_backend_tensor_owner_is(backend, out)) {
+        yvex_error_set(err, YVEX_ERR_STATE, where,
+                       "input, weight, and output tensors must belong to this backend");
+        return YVEX_ERR_STATE;
+    }
+    if (input->dtype != YVEX_DTYPE_F32 ||
+        weight->dtype != YVEX_DTYPE_F32 ||
+        out->dtype != YVEX_DTYPE_F32) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, where,
+                       "matmul primitive supports F32 input, weight, and output");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (input->rank != 2 || weight->rank != 2 || out->rank != 2) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "matmul tensors must be rank 2");
+        return YVEX_ERR_FORMAT;
+    }
+    m = input->dims[0];
+    k = input->dims[1];
+    n = weight->dims[1];
+    if (m == 0 || k == 0 || n == 0 || weight->dims[0] == 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where, "matmul-zero-dimension");
+        return YVEX_ERR_FORMAT;
+    }
+    if (weight->dims[0] != k) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "matmul input/weight inner dimensions must match");
+        return YVEX_ERR_FORMAT;
+    }
+    if (out->dims[0] != m || out->dims[1] != n) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "matmul output must have dims [m, n]");
+        return YVEX_ERR_FORMAT;
+    }
+    if (m > ULLONG_MAX / k ||
+        k > ULLONG_MAX / n ||
+        m > ULLONG_MAX / n) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "matmul-element-count-overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    input_elements = m * k;
+    weight_elements = k * n;
+    output_elements = m * n;
+    if (!tensor_is_f32_bytes(input, input_elements) ||
+        !tensor_is_f32_bytes(weight, weight_elements) ||
+        !tensor_is_f32_bytes(out, output_elements)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where,
+                       "matmul tensor bytes must match F32 shape accounting");
+        return YVEX_ERR_BOUNDS;
+    }
+    *m_out = m;
+    *k_out = k;
+    *n_out = n;
+    return YVEX_OK;
+}
+
 static int ensure_kernel_module(yvex_cuda_backend_state *state, const char *where, yvex_error *err)
 {
     int rc;
@@ -401,6 +487,29 @@ static int ensure_rope_kernel(yvex_cuda_backend_state *state, yvex_error *err)
                           "cuda.rope.load_function", err);
     if (rc != YVEX_OK) {
         state->rope_function = NULL;
+        return rc;
+    }
+    return YVEX_OK;
+}
+
+static int ensure_matmul_kernel(yvex_cuda_backend_state *state, yvex_error *err)
+{
+    int rc;
+
+    rc = ensure_kernel_module(state, "cuda.kernels.load_module", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (state->matmul_function) {
+        return YVEX_OK;
+    }
+    rc = yvex_cuda_status(&state->driver,
+                          state->driver.cuModuleGetFunction(&state->matmul_function,
+                                                            state->module,
+                                                            "yvex_matmul_f32"),
+                          "cuda.matmul.load_function", err);
+    if (rc != YVEX_OK) {
+        state->matmul_function = NULL;
         return rc;
     }
     return YVEX_OK;
@@ -780,6 +889,76 @@ int yvex_cuda_op_rope(yvex_backend *backend,
     if (rc == YVEX_OK) {
         rc = yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
                               "cuda.rope.sync", err);
+    }
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    out->is_written = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_cuda_op_matmul(yvex_backend *backend,
+                        const yvex_device_tensor *input,
+                        const yvex_device_tensor *weight,
+                        yvex_device_tensor *out,
+                        yvex_error *err)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    CUdeviceptr input_ptr;
+    CUdeviceptr weight_ptr;
+    CUdeviceptr out_ptr;
+    unsigned long long m;
+    unsigned long long k;
+    unsigned long long n;
+    unsigned long long output_elements;
+    unsigned int block_size = 128u;
+    unsigned int grid_size;
+    void *params[6];
+    int rc;
+
+    if (!state) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_op_matmul",
+                       "CUDA backend state is missing");
+        return YVEX_ERR_STATE;
+    }
+    rc = cuda_matmul_validate(backend, input, weight, out,
+                              &m, &k, &n, "yvex_backend_op_matmul", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    rc = yvex_cuda_set_current(backend, "yvex_backend_op_matmul", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = ensure_matmul_kernel(state, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    output_elements = m * n;
+    grid_size = (unsigned int)((output_elements + (unsigned long long)block_size - 1ull) /
+                               (unsigned long long)block_size);
+    input_ptr = yvex_cuda_tensor_ptr(input);
+    weight_ptr = yvex_cuda_tensor_ptr(weight);
+    out_ptr = yvex_cuda_tensor_ptr(out);
+    params[0] = &input_ptr;
+    params[1] = &weight_ptr;
+    params[2] = &out_ptr;
+    params[3] = &m;
+    params[4] = &k;
+    params[5] = &n;
+
+    rc = yvex_cuda_status(&state->driver,
+                          state->driver.cuLaunchKernel(state->matmul_function,
+                                                       grid_size, 1, 1,
+                                                       block_size, 1, 1,
+                                                       0, NULL, params, NULL),
+                          "cuda.matmul.launch", err);
+    if (rc == YVEX_OK) {
+        rc = yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
+                              "cuda.matmul.sync", err);
     }
     if (rc != YVEX_OK) {
         return rc;

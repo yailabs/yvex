@@ -193,6 +193,33 @@ extern "C" __global__ void yvex_rope_f32(const float *input,
     out[odd_index] = (even * sine) + (odd * cosine);
 }
 
+extern "C" __global__ void yvex_matmul_f32(const float *input,
+                                           const float *weight,
+                                           float *out,
+                                           unsigned long long m,
+                                           unsigned long long k,
+                                           unsigned long long n)
+{
+    unsigned long long idx =
+        ((unsigned long long)blockIdx.x * (unsigned long long)blockDim.x) +
+        (unsigned long long)threadIdx.x;
+    unsigned long long total = m * n;
+    unsigned long long row;
+    unsigned long long col;
+    unsigned long long inner;
+    float sum = 0.0f;
+
+    if (idx >= total) {
+        return;
+    }
+    row = idx / n;
+    col = idx % n;
+    for (inner = 0; inner < k; ++inner) {
+        sum += input[(row * k) + inner] * weight[(inner * n) + col];
+    }
+    out[idx] = sum;
+}
+
 extern "C" __global__ void yvex_attention_f32(const float *query,
                                               const float *keys,
                                               const float *values,

@@ -146,8 +146,8 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "graph",
         "Build graph diagnostics or execute narrow graph segments.",
-        "yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N] | yvex graph --backend cpu|cuda --execute-op --op rope --position N --head-dim N | yvex graph --backend cpu|cuda --execute-op --op attention --seq-len N --position N --head-dim N [--causal]",
-        "Opens a GGUF descriptor and prints graph planning diagnostics. Execution flags attach selected weights and run the deterministic fixture embed node, real selected F16 embedding segment, selected embedding-plus-RMSNorm segment, standalone RoPE position op, or standalone F32 attention primitive; none of these paths is inference or text generation.",
+        "yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N] | yvex graph --backend cpu|cuda --execute-op --op rope --position N --head-dim N | yvex graph --backend cpu|cuda --execute-op --op attention --seq-len N --position N --head-dim N [--causal] | yvex graph --backend cpu|cuda --execute-op --op matmul --m M --k K --n N",
+        "Opens a GGUF descriptor and prints graph planning diagnostics. Execution flags attach selected weights and run the deterministic fixture embed node, real selected F16 embedding segment, selected embedding-plus-RMSNorm segment, standalone RoPE position op, standalone F32 attention primitive, or standalone F32 matmul/projection primitive; none of these paths is inference or text generation.",
         command_graph,
     },
     {
@@ -2525,7 +2525,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, standalone RoPE and attention ops, explicit token input boundary, prefill state foundation, minimal KV binding, and minimal KV ownership\n");
+    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, standalone RoPE, attention, and matmul ops, explicit token input boundary, prefill state foundation, minimal KV binding, and minimal KV ownership\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -2535,10 +2535,10 @@ static int command_info(int argc, char **argv)
     printf("token_input: explicit token boundary implemented\n");
     printf("prefill_state: segment-summary foundation and minimal KV binding implemented\n");
     printf("prompt: default renderer implemented\n");
-    printf("graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, standalone RoPE position op, and standalone F32 attention primitive implemented\n");
+    printf("graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, standalone RoPE position op, standalone F32 attention primitive, and standalone F32 matmul/projection primitive implemented\n");
     printf("planner: estimate-only implemented\n");
     printf("backend: CPU reference implemented\n");
-    printf("backend_cuda: tensor movement plus F32/F16 embed, RMSNorm, RoPE position op, and F32 attention primitive implemented when CUDA is available\n");
+    printf("backend_cuda: tensor movement plus F32/F16 embed, RMSNorm, RoPE position op, F32 attention primitive, and F32 matmul/projection primitive implemented when CUDA is available\n");
     printf("weights: selected tensor materialization implemented\n");
     printf("engine: descriptor open and selected-weight attachment implemented\n");
     printf("session: lifecycle diagnostics, engine attachment observer, and KV ownership implemented\n");
@@ -5454,6 +5454,55 @@ static void cli_attention_reference(const float *query,
     }
 }
 
+static void cli_matmul_fill_inputs(float *input,
+                                   float *weight,
+                                   unsigned long long m,
+                                   unsigned long long k,
+                                   unsigned long long n)
+{
+    unsigned long long row;
+    unsigned long long inner;
+    unsigned long long col;
+
+    for (row = 0; row < m; ++row) {
+        for (inner = 0; inner < k; ++inner) {
+            input[(row * k) + inner] =
+                (float)(0.05 + ((double)(row + 1ull) * 0.02) +
+                        ((double)(inner + 1ull) * 0.01));
+        }
+    }
+    for (inner = 0; inner < k; ++inner) {
+        for (col = 0; col < n; ++col) {
+            weight[(inner * n) + col] =
+                (float)(0.03 + ((double)(inner + 1ull) * 0.004) +
+                        ((double)(col + 1ull) * 0.002));
+        }
+    }
+}
+
+static void cli_matmul_reference(const float *input,
+                                 const float *weight,
+                                 unsigned long long m,
+                                 unsigned long long k,
+                                 unsigned long long n,
+                                 float *out)
+{
+    unsigned long long row;
+    unsigned long long col;
+
+    for (row = 0; row < m; ++row) {
+        for (col = 0; col < n; ++col) {
+            double sum = 0.0;
+            unsigned long long inner;
+            for (inner = 0; inner < k; ++inner) {
+                sum += (double)input[(row * k) + inner] *
+                       (double)weight[(inner * n) + col];
+            }
+            out[(row * n) + col] = (float)sum;
+        }
+    }
+}
+
 static float cli_max_abs_diff_f32(const float *a,
                                   const float *b,
                                   unsigned long long count)
@@ -5498,6 +5547,20 @@ static void print_rope_readiness_fields(void)
 static void print_attention_readiness_fields(int primitive_executed)
 {
     printf("attention_primitive_executed: %s\n", primitive_executed ? "true" : "false");
+    printf("qkv_projection_ready: false\n");
+    printf("transformer_block_ready: false\n");
+    printf("full_prefill_ready: false\n");
+    printf("full_transformer_prefill_ready: false\n");
+    printf("decode_ready: false\n");
+    printf("logits_ready: false\n");
+    printf("generation_ready: false\n");
+    printf("generation: unsupported\n");
+    printf("execution_ready: false\n");
+}
+
+static void print_matmul_readiness_fields(int primitive_executed)
+{
+    printf("matmul_primitive_executed: %s\n", primitive_executed ? "true" : "false");
     printf("qkv_projection_ready: false\n");
     printf("transformer_block_ready: false\n");
     printf("full_prefill_ready: false\n");
@@ -6260,6 +6323,342 @@ cleanup_host:
     return exit_code;
 }
 
+static void print_matmul_operation_fields(const char *backend_name,
+                                          unsigned long long m,
+                                          unsigned long long k,
+                                          unsigned long long n,
+                                          unsigned long long input_bytes,
+                                          unsigned long long weight_bytes,
+                                          unsigned long long output_bytes,
+                                          unsigned long long reference_bytes)
+{
+    printf("op: matmul\n");
+    printf("backend: %s\n", backend_name);
+    printf("dtype: f32\n");
+    printf("m: %llu\n", m);
+    printf("k: %llu\n", k);
+    printf("n: %llu\n", n);
+    printf("projection_shape: %s\n", m == 1ull ? "true" : "false");
+    printf("non_projection_shape: %s\n", m == 1ull ? "false" : "true");
+    printf("input_bytes: %llu\n", input_bytes);
+    printf("weight_bytes: %llu\n", weight_bytes);
+    printf("output_bytes: %llu\n", output_bytes);
+    printf("scratch_bytes: 0\n");
+    printf("reference_bytes: %llu\n", reference_bytes);
+}
+
+static int command_graph_execute_matmul_op(const char *backend_name,
+                                           unsigned long long m,
+                                           unsigned long long k,
+                                           unsigned long long n)
+{
+    yvex_backend *backend = NULL;
+    yvex_device_tensor *input = NULL;
+    yvex_device_tensor *weight = NULL;
+    yvex_device_tensor *out = NULL;
+    yvex_backend_options backend_options;
+    yvex_backend_tensor_desc desc;
+    yvex_cli_graph_guard_report guard;
+    yvex_error err;
+    float *input_values = NULL;
+    float *weight_values = NULL;
+    float *output_values = NULL;
+    float *reference_values = NULL;
+    unsigned long long input_elements = 0ull;
+    unsigned long long weight_elements = 0ull;
+    unsigned long long output_elements = 0ull;
+    unsigned long long input_bytes = 0ull;
+    unsigned long long weight_bytes = 0ull;
+    unsigned long long output_bytes = 0ull;
+    unsigned long long reference_bytes = 0ull;
+    unsigned long long total_input_bytes = 0ull;
+    unsigned long long sample_count = 0ull;
+    float max_abs_diff = 0.0f;
+    const char *reason = NULL;
+    int rc = YVEX_OK;
+    int exit_code = 0;
+
+    yvex_error_clear(&err);
+    memset(&backend_options, 0, sizeof(backend_options));
+    memset(&desc, 0, sizeof(desc));
+    init_graph_guard_report(&guard, m == 1ull ? "matmul-projection" : "matmul-matrix",
+                            0, NULL);
+    guard.integrity_status = "not-applicable";
+    guard.identity_status = "unregistered";
+    guard.metadata_status = "unregistered";
+    guard.shape_status = "unchecked";
+    guard.range_status = "not-applicable";
+    guard.slice_range_status = "not-needed";
+
+    if (m == 0 || k == 0 || n == 0) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        print_matmul_operation_fields(backend_name, m, k, n, 0, 0, 0, 0);
+        print_matmul_readiness_fields(0);
+        printf("reason: matmul-zero-dimension\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_FORMAT);
+    }
+    if (cli_test_env_enabled("YVEX_TEST_MATMUL_BYTE_OVERFLOW") ||
+        m > ULLONG_MAX / k ||
+        k > ULLONG_MAX / n ||
+        m > ULLONG_MAX / n) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        print_matmul_operation_fields(backend_name, m, k, n, 0, 0, 0, 0);
+        print_matmul_readiness_fields(0);
+        printf("reason: byte-count-overflow\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+    input_elements = m * k;
+    weight_elements = k * n;
+    output_elements = m * n;
+    if (input_elements > ULLONG_MAX / (unsigned long long)sizeof(float) ||
+        weight_elements > ULLONG_MAX / (unsigned long long)sizeof(float) ||
+        output_elements > ULLONG_MAX / (unsigned long long)sizeof(float) ||
+        input_elements > (unsigned long long)(SIZE_MAX / sizeof(float)) ||
+        weight_elements > (unsigned long long)(SIZE_MAX / sizeof(float)) ||
+        output_elements > (unsigned long long)(SIZE_MAX / sizeof(float))) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        print_matmul_operation_fields(backend_name, m, k, n, 0, 0, 0, 0);
+        print_matmul_readiness_fields(0);
+        printf("reason: byte-count-overflow\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+    input_bytes = input_elements * (unsigned long long)sizeof(float);
+    weight_bytes = weight_elements * (unsigned long long)sizeof(float);
+    output_bytes = output_elements * (unsigned long long)sizeof(float);
+    reference_bytes = output_bytes;
+    if (input_bytes > ULLONG_MAX - weight_bytes) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        print_matmul_operation_fields(backend_name, m, k, n,
+                                      input_bytes, weight_bytes,
+                                      output_bytes, reference_bytes);
+        print_matmul_readiness_fields(0);
+        printf("reason: byte-count-overflow\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+    total_input_bytes = input_bytes + weight_bytes;
+    guard.shape_status = "pass";
+    guard.output_bytes_planned = output_bytes;
+    guard.reference_bytes_planned = reference_bytes;
+
+    input_values = (float *)malloc((size_t)input_bytes);
+    weight_values = (float *)malloc((size_t)weight_bytes);
+    output_values = (float *)malloc((size_t)output_bytes);
+    reference_values = (float *)malloc((size_t)reference_bytes);
+    if (!input_values || !weight_values || !output_values || !reference_values) {
+        yvex_error_set(&err, YVEX_ERR_NOMEM, "yvex graph matmul",
+                       "failed to allocate host buffers");
+        exit_code = print_yvex_error(&err, exit_for_status(YVEX_ERR_NOMEM));
+        goto cleanup_host;
+    }
+    cli_matmul_fill_inputs(input_values, weight_values, m, k, n);
+    cli_matmul_reference(input_values, weight_values, m, k, n, reference_values);
+    guard.reference_read_attempted = 1;
+
+    backend_options.kind = strcmp(backend_name, "cuda") == 0
+                               ? YVEX_BACKEND_KIND_CUDA
+                               : YVEX_BACKEND_KIND_CPU;
+    rc = yvex_backend_open(&backend, &backend_options, &err);
+    if (rc != YVEX_OK) {
+        guard.backend_status = rc == YVEX_ERR_UNSUPPORTED ? "unavailable" : "fail";
+        guard.backend_op_status = "unsupported";
+        reason = yvex_error_message(&err);
+        print_graph_guard_report(&guard);
+        print_matmul_operation_fields(backend_name, m, k, n,
+                                      input_bytes, weight_bytes,
+                                      output_bytes, reference_bytes);
+        print_matmul_readiness_fields(0);
+        printf("reason: %s\n", reason);
+        printf("status: graph-op-fail\n");
+        exit_code = exit_for_status(rc);
+        goto cleanup_host;
+    }
+    guard.backend_status = "ready";
+    if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MATMUL) ||
+        cli_test_env_enabled("YVEX_TEST_MATMUL_BACKEND_OP_UNSUPPORTED")) {
+        guard.backend_op_status = "unsupported";
+        print_graph_guard_report(&guard);
+        print_matmul_operation_fields(backend_name, m, k, n,
+                                      input_bytes, weight_bytes,
+                                      output_bytes, reference_bytes);
+        print_matmul_readiness_fields(0);
+        printf("reason: backend-op-matmul-unsupported\n");
+        printf("status: graph-op-fail\n");
+        exit_code = exit_for_status(YVEX_ERR_UNSUPPORTED);
+        goto cleanup_backend;
+    }
+    guard.backend_op_status = "supported";
+
+    desc.name = "matmul.input";
+    desc.dtype = YVEX_DTYPE_F32;
+    desc.rank = 2;
+    desc.dims[0] = m;
+    desc.dims[1] = k;
+    desc.bytes = input_bytes;
+    rc = yvex_backend_tensor_alloc(backend, &desc, &input, &err);
+    if (rc != YVEX_OK) {
+        guard.phase = "output";
+        guard.cleanup_attempted = input ? 1 : 0;
+        guard.cleanup_status = guard.cleanup_attempted ? "pass" : "not-needed";
+        reason = yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+    if (cli_test_env_enabled("YVEX_TEST_FAIL_MATMUL_AFTER_INPUT_ALLOC")) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = "injected-matmul-after-input-alloc";
+        goto fail_cleaned;
+    }
+
+    desc.name = "matmul.weight";
+    desc.dims[0] = k;
+    desc.dims[1] = n;
+    desc.bytes = weight_bytes;
+    rc = yvex_backend_tensor_alloc(backend, &desc, &weight, &err);
+    if (rc != YVEX_OK) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+    if (cli_test_env_enabled("YVEX_TEST_FAIL_MATMUL_AFTER_WEIGHT_ALLOC")) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = "injected-matmul-after-weight-alloc";
+        goto fail_cleaned;
+    }
+
+    desc.name = "matmul.output";
+    desc.dims[0] = m;
+    desc.dims[1] = n;
+    desc.bytes = output_bytes;
+    rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
+    if (rc != YVEX_OK) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+    guard.output_allocation_attempted = 1;
+    guard.output_bytes_allocated = output_bytes;
+
+    rc = yvex_backend_tensor_write(backend, input, input_values, input_bytes, &err);
+    if (rc == YVEX_OK) {
+        rc = yvex_backend_tensor_write(backend, weight, weight_values, weight_bytes, &err);
+    }
+    if (rc != YVEX_OK) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+    if (cli_test_env_enabled("YVEX_TEST_FAIL_MATMUL_AFTER_OUTPUT_ALLOC")) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = "injected-matmul-after-output-alloc";
+        goto fail_cleaned;
+    }
+
+    guard.dispatch_attempted = 1;
+    rc = yvex_backend_op_matmul(backend, input, weight, out, &err);
+    if (rc != YVEX_OK || cli_test_env_enabled("YVEX_TEST_FAIL_MATMUL_AFTER_DISPATCH")) {
+        guard.phase = "dispatch";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = rc == YVEX_OK ? "injected-matmul-after-dispatch" : yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+
+    rc = yvex_backend_tensor_read(backend, out, output_values, output_bytes, &err);
+    if (rc != YVEX_OK || cli_test_env_enabled("YVEX_TEST_FAIL_MATMUL_AFTER_REFERENCE")) {
+        guard.phase = "reference";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = rc == YVEX_OK ? "injected-matmul-after-reference" : yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+
+    max_abs_diff = cli_max_abs_diff_f32(output_values, reference_values, output_elements);
+    guard.guard_status = max_abs_diff <= 0.001f ? "pass" : "fail";
+    guard.phase = "complete";
+    guard.cleanup_status = "not-needed";
+    sample_count = output_elements < 8ull ? output_elements : 8ull;
+    exit_code = strcmp(guard.guard_status, "pass") == 0 ? 0 : exit_for_status(YVEX_ERR_STATE);
+
+    print_graph_guard_report(&guard);
+    print_matmul_operation_fields(backend_name, m, k, n,
+                                  input_bytes, weight_bytes,
+                                  output_bytes, reference_bytes);
+    printf("input_elements: %llu\n", input_elements);
+    printf("weight_elements: %llu\n", weight_elements);
+    printf("output_elements: %llu\n", output_elements);
+    printf("input_total_bytes: %llu\n", total_input_bytes);
+    printf("input_checksum: %llu\n", cli_checksum_bytes(input_values, input_bytes));
+    printf("weight_checksum: %llu\n", cli_checksum_bytes(weight_values, weight_bytes));
+    printf("output_checksum: %llu\n", cli_checksum_bytes(output_values, output_bytes));
+    printf("reference_checksum: %llu\n", cli_checksum_bytes(reference_values, reference_bytes));
+    printf("max_abs_diff: %.9g\n", (double)max_abs_diff);
+    printf("reference_attempted: true\n");
+    if (strcmp(backend_name, "cuda") == 0) {
+        printf("matmul_cuda_parity: %s\n", exit_code == 0 ? "pass" : "fail");
+        printf("cuda_reference_max_abs_diff: %.9g\n", (double)max_abs_diff);
+    } else {
+        printf("cpu_reference_max_abs_diff: %.9g\n", (double)max_abs_diff);
+    }
+    printf("output_sample_count: %llu\n", sample_count);
+    cli_print_float_values("input_sample_values", input_values,
+                           input_elements < 8ull ? input_elements : 8ull);
+    cli_print_float_values("weight_sample_values", weight_values,
+                           weight_elements < 8ull ? weight_elements : 8ull);
+    cli_print_float_values("output_sample_values", output_values, sample_count);
+    cli_print_float_values("reference_sample_values", reference_values, sample_count);
+    print_matmul_readiness_fields(exit_code == 0);
+    printf("status: %s\n", exit_code == 0 ? "graph-op-executed" : "graph-op-fail");
+    goto cleanup_backend;
+
+fail_cleaned:
+    print_graph_guard_report(&guard);
+    print_matmul_operation_fields(backend_name, m, k, n,
+                                  input_bytes, weight_bytes,
+                                  output_bytes, reference_bytes);
+    printf("input_elements: %llu\n", input_elements);
+    printf("weight_elements: %llu\n", weight_elements);
+    printf("output_elements: %llu\n", output_elements);
+    printf("input_total_bytes: %llu\n", total_input_bytes);
+    print_matmul_readiness_fields(0);
+    printf("reason: %s\n", reason ? reason : "matmul-op-failed");
+    printf("status: graph-op-failed-cleaned\n");
+    exit_code = exit_for_status(rc == YVEX_OK ? YVEX_ERR_STATE : rc);
+
+cleanup_backend:
+    if (backend) {
+        yvex_backend_tensor_free(backend, out);
+        yvex_backend_tensor_free(backend, weight);
+        yvex_backend_tensor_free(backend, input);
+        yvex_backend_close(backend);
+    }
+
+cleanup_host:
+    free(reference_values);
+    free(output_values);
+    free(weight_values);
+    free(input_values);
+    return exit_code;
+}
+
 static int preflight_graph_guard(const yvex_model_ref *model_ref,
                                  const char *backend_name,
                                  int execute_fixture,
@@ -6869,6 +7268,9 @@ static int command_graph(int argc, char **argv)
     unsigned long long rope_position = 0ull;
     unsigned long long rope_head_dim = 0ull;
     unsigned long long attention_seq_len = 0ull;
+    unsigned long long matmul_m = 0ull;
+    unsigned long long matmul_k = 0ull;
+    unsigned long long matmul_n = 0ull;
     int execute_fixture = 0;
     int execute_partial = 0;
     int execute_segment = 0;
@@ -6881,6 +7283,9 @@ static int command_graph(int argc, char **argv)
     int rope_position_provided = 0;
     int rope_head_dim_provided = 0;
     int attention_seq_len_provided = 0;
+    int matmul_m_provided = 0;
+    int matmul_k_provided = 0;
+    int matmul_n_provided = 0;
     int i;
     int rc;
 
@@ -6946,10 +7351,31 @@ static int command_graph(int argc, char **argv)
             execute_op = 1;
         } else if (strcmp(argv[i], "--op") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "yvex: --op requires rope or attention\n");
+                fprintf(stderr, "yvex: --op requires rope, attention, or matmul\n");
                 return 2;
             }
             op_name = argv[++i];
+        } else if (strcmp(argv[i], "--m") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &matmul_m)) {
+                fprintf(stderr, "yvex: --m requires a positive integer\n");
+                return 2;
+            }
+            matmul_m_provided = 1;
+            i += 1;
+        } else if (strcmp(argv[i], "--k") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &matmul_k)) {
+                fprintf(stderr, "yvex: --k requires a positive integer\n");
+                return 2;
+            }
+            matmul_k_provided = 1;
+            i += 1;
+        } else if (strcmp(argv[i], "--n") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &matmul_n)) {
+                fprintf(stderr, "yvex: --n requires a positive integer\n");
+                return 2;
+            }
+            matmul_n_provided = 1;
+            i += 1;
         } else if (strcmp(argv[i], "--seq-len") == 0) {
             if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &attention_seq_len)) {
                 fprintf(stderr, "yvex: --seq-len requires a positive integer\n");
@@ -7012,7 +7438,7 @@ static int command_graph(int argc, char **argv)
 
     if (!model_arg && !execute_op) {
         fprintf(stderr, "yvex: graph requires FILE_OR_ALIAS\n");
-        fprintf(stderr, "usage: yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N] | yvex graph --backend cpu|cuda --execute-op --op rope --position N --head-dim N | yvex graph --backend cpu|cuda --execute-op --op attention --seq-len N --position N --head-dim N [--causal]\n");
+        fprintf(stderr, "usage: yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N] | yvex graph --backend cpu|cuda --execute-op --op rope --position N --head-dim N | yvex graph --backend cpu|cuda --execute-op --op attention --seq-len N --position N --head-dim N [--causal] | yvex graph --backend cpu|cuda --execute-op --op matmul --m M --k K --n N\n");
         return 2;
     }
     if (strcmp(backend_name, "cpu") != 0 && strcmp(backend_name, "cuda") != 0) {
@@ -7029,15 +7455,28 @@ static int command_graph(int argc, char **argv)
             fprintf(stderr, "yvex: --execute-op does not take a model artifact\n");
             return 2;
         }
-        if (!op_name || (strcmp(op_name, "rope") != 0 && strcmp(op_name, "attention") != 0)) {
-            fprintf(stderr, "yvex: --execute-op requires --op rope or --op attention\n");
+        if (!op_name ||
+            (strcmp(op_name, "rope") != 0 &&
+             strcmp(op_name, "attention") != 0 &&
+             strcmp(op_name, "matmul") != 0)) {
+            fprintf(stderr, "yvex: --execute-op requires --op rope, --op attention, or --op matmul\n");
             return 2;
         }
-        if (!rope_position_provided) {
+        if (strcmp(op_name, "matmul") == 0) {
+            if (!matmul_m_provided || !matmul_k_provided || !matmul_n_provided) {
+                fprintf(stderr, "yvex: --execute-op --op matmul requires --m M --k K --n N\n");
+                return 2;
+            }
+            if (rope_position_provided || rope_head_dim_provided ||
+                attention_seq_len_provided || attention_causal) {
+                fprintf(stderr, "yvex: --position, --head-dim, --seq-len, and --causal require --op rope or --op attention\n");
+                return 2;
+            }
+        } else if (!rope_position_provided) {
             fprintf(stderr, "yvex: --execute-op requires --position N\n");
             return 2;
         }
-        if (!rope_head_dim_provided) {
+        if (strcmp(op_name, "matmul") != 0 && !rope_head_dim_provided) {
             fprintf(stderr, "yvex: --execute-op requires --head-dim N\n");
             return 2;
         }
@@ -7049,10 +7488,23 @@ static int command_graph(int argc, char **argv)
             fprintf(stderr, "yvex: --seq-len and --causal require --op attention\n");
             return 2;
         }
+        if (strcmp(op_name, "rope") != 0 && strcmp(op_name, "attention") != 0 &&
+            (rope_position_provided || rope_head_dim_provided)) {
+            fprintf(stderr, "yvex: --position and --head-dim require --op rope or --op attention\n");
+            return 2;
+        }
+        if (strcmp(op_name, "matmul") != 0 &&
+            (matmul_m_provided || matmul_k_provided || matmul_n_provided)) {
+            fprintf(stderr, "yvex: --m, --k, and --n require --op matmul\n");
+            return 2;
+        }
         if (fixture_token_provided || partial_token_provided || token_input_provided ||
             token_index_provided || segment_name) {
             fprintf(stderr, "yvex: --execute-op cannot be combined with model graph token or segment options\n");
             return 2;
+        }
+        if (strcmp(op_name, "matmul") == 0) {
+            return command_graph_execute_matmul_op(backend_name, matmul_m, matmul_k, matmul_n);
         }
         if (strcmp(op_name, "attention") == 0) {
             return command_graph_execute_attention_op(backend_name, attention_seq_len,
@@ -7062,8 +7514,9 @@ static int command_graph(int argc, char **argv)
         return command_graph_execute_rope_op(backend_name, rope_position, rope_head_dim);
     }
     if (op_name || rope_position_provided || rope_head_dim_provided ||
-        attention_seq_len_provided || attention_causal) {
-        fprintf(stderr, "yvex: --op, --position, --head-dim, --seq-len, and --causal require --execute-op\n");
+        attention_seq_len_provided || attention_causal ||
+        matmul_m_provided || matmul_k_provided || matmul_n_provided) {
+        fprintf(stderr, "yvex: --op, --position, --head-dim, --seq-len, --causal, --m, --k, and --n require --execute-op\n");
         return 2;
     }
     if (execute_segment) {

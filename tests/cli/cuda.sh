@@ -48,7 +48,7 @@ contains "$OUT_DIR/backend_cuda_ready.out" "op_embed: yes"
 contains "$OUT_DIR/backend_cuda_ready.out" "op_rms_norm: yes"
 contains "$OUT_DIR/backend_cuda_ready.out" "op_rope: yes"
 contains "$OUT_DIR/backend_cuda_ready.out" "op_attention: yes"
-contains "$OUT_DIR/backend_cuda_ready.out" "op_matmul: no"
+contains "$OUT_DIR/backend_cuda_ready.out" "op_matmul: yes"
 contains "$OUT_DIR/backend_cuda_ready.out" "status: backend-ready"
 
 "$YVEX_BIN" plan "$FIXTURE" --backend cuda >"$OUT_DIR/plan_cuda_ready.out" 2>"$OUT_DIR/plan_cuda_ready.err"
@@ -62,6 +62,7 @@ contains "$OUT_DIR/plan_cuda_ready.out" "op_embed: yes"
 contains "$OUT_DIR/plan_cuda_ready.out" "op_rms_norm: yes"
 contains "$OUT_DIR/plan_cuda_ready.out" "op_rope: yes"
 contains "$OUT_DIR/plan_cuda_ready.out" "op_attention: yes"
+contains "$OUT_DIR/plan_cuda_ready.out" "op_matmul: yes"
 contains "$OUT_DIR/plan_cuda_ready.out" "execution_ready: false"
 contains "$OUT_DIR/plan_cuda_ready.out" "status: plan-only"
 
@@ -110,6 +111,44 @@ contains "$OUT_DIR/attention_graph_cuda.out" "transformer_block_ready: false"
 contains "$OUT_DIR/attention_graph_cuda.out" "decode_ready: false"
 contains "$OUT_DIR/attention_graph_cuda.out" "generation_ready: false"
 contains "$OUT_DIR/attention_graph_cuda.out" "status: graph-op-executed"
+
+"$YVEX_BIN" graph --backend cuda --execute-op --op matmul --m 1 --k 8 --n 8 \
+  >"$OUT_DIR/matmul_projection_cuda.out" 2>"$OUT_DIR/matmul_projection_cuda.err"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    fail "matmul projection cuda exit code was $rc"
+fi
+contains "$OUT_DIR/matmul_projection_cuda.out" "graph_integrity_guard: pass"
+contains "$OUT_DIR/matmul_projection_cuda.out" "graph_execution_phase: complete"
+contains "$OUT_DIR/matmul_projection_cuda.out" "graph_kind: matmul-projection"
+contains "$OUT_DIR/matmul_projection_cuda.out" "op: matmul"
+contains "$OUT_DIR/matmul_projection_cuda.out" "backend: cuda"
+contains "$OUT_DIR/matmul_projection_cuda.out" "m: 1"
+contains "$OUT_DIR/matmul_projection_cuda.out" "k: 8"
+contains "$OUT_DIR/matmul_projection_cuda.out" "n: 8"
+contains "$OUT_DIR/matmul_projection_cuda.out" "projection_shape: true"
+contains "$OUT_DIR/matmul_projection_cuda.out" "backend_op_status: supported"
+contains "$OUT_DIR/matmul_projection_cuda.out" "dispatch_attempted: true"
+contains "$OUT_DIR/matmul_projection_cuda.out" "reference_attempted: true"
+contains "$OUT_DIR/matmul_projection_cuda.out" "matmul_cuda_parity: pass"
+contains "$OUT_DIR/matmul_projection_cuda.out" "qkv_projection_ready: false"
+contains "$OUT_DIR/matmul_projection_cuda.out" "transformer_block_ready: false"
+contains "$OUT_DIR/matmul_projection_cuda.out" "decode_ready: false"
+contains "$OUT_DIR/matmul_projection_cuda.out" "generation_ready: false"
+contains "$OUT_DIR/matmul_projection_cuda.out" "status: graph-op-executed"
+
+"$YVEX_BIN" graph --backend cuda --execute-op --op matmul --m 2 --k 4 --n 3 \
+  >"$OUT_DIR/matmul_matrix_cuda.out" 2>"$OUT_DIR/matmul_matrix_cuda.err"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    fail "matmul matrix cuda exit code was $rc"
+fi
+contains "$OUT_DIR/matmul_matrix_cuda.out" "graph_integrity_guard: pass"
+contains "$OUT_DIR/matmul_matrix_cuda.out" "graph_kind: matmul-matrix"
+contains "$OUT_DIR/matmul_matrix_cuda.out" "projection_shape: false"
+contains "$OUT_DIR/matmul_matrix_cuda.out" "non_projection_shape: true"
+contains "$OUT_DIR/matmul_matrix_cuda.out" "matmul_cuda_parity: pass"
+contains "$OUT_DIR/matmul_matrix_cuda.out" "status: graph-op-executed"
 
 "$YVEX_BIN" materialize --model "$FIXTURE" --backend cuda >"$OUT_DIR/materialize_cuda_ready.out" 2>"$OUT_DIR/materialize_cuda_ready.err"
 rc=$?

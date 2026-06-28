@@ -173,6 +173,12 @@ int yvex_backend_op_rope(yvex_backend *backend,
                          yvex_device_tensor *out,
                          yvex_error *err);
 
+int yvex_backend_op_matmul(yvex_backend *backend,
+                           const yvex_device_tensor *input,
+                           const yvex_device_tensor *weight,
+                           yvex_device_tensor *out,
+                           yvex_error *err);
+
 int yvex_backend_op_attention(yvex_backend *backend,
                               const yvex_device_tensor *query,
                               const yvex_device_tensor *keys,

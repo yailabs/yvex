@@ -108,6 +108,7 @@ minimal session-owned KV ownership and append/read boundary
 minimal KV-backed prefill binding from segment-summary state
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
+standalone F32 matmul/projection primitive boundary
 artifact integrity validator and corruption fixture suite
 file identity digest enforcement
 registry metadata drift diagnostics
@@ -254,8 +255,8 @@ tables.
 | PREFILL.1 | complete | prefill | KV-backed prefill state binding | M8 segment-summary state connects to minimal KV ownership without decode/logits claim |
 | GRAPH.OPS.0 | complete | graph | RoPE and position operation boundary | position-dependent graph op implemented with tests and backend rules |
 | GRAPH.OPS.1 | complete | graph | Attention primitive boundary | attention inputs, masks, scratch, backend dispatch, and failure paths implemented |
-| GRAPH.OPS.2 | next | graph | Projection and matmul primitive boundary | matmul/projection path implemented with dtype/qtype/backend limits |
-| GRAPH.OPS.3 | planned | graph | MLP and routed-expert primitive boundary | feed-forward or routed expert slice implemented with explicit tensor roles and backend support |
+| GRAPH.OPS.2 | complete | graph | Projection and matmul primitive boundary | F32 matmul/projection primitive implemented with shape, byte, backend, dispatch, reference, and cleanup limits |
+| GRAPH.OPS.3 | next | graph | MLP and routed-expert primitive boundary | feed-forward or routed expert slice implemented with explicit tensor roles and backend support |
 | GRAPH.BLOCK.0 | planned | graph | First transformer block execution | one block executes through normalization, attention, residual, MLP path with owned scratch |
 | GRAPH.LAYERS.0 | planned | graph | Layer scheduler and repeated block execution | scheduler can run repeated blocks over token positions with cleanup and failure reporting |
 | PREFILL.2 | planned | prefill | First real transformer prefill path | validated prompt tokens run through implemented layer path into KV-backed prefill state |
@@ -413,6 +414,15 @@ project Q/K/V from model tensors, write real KV cache rows, execute a
 transformer block, schedule layers, run full transformer prefill, decode,
 produce logits, sample, or generate.
 
+The standalone matmul/projection primitive proves explicit F32 row-major
+`input=[m,k]`, `weight=[k,n]`, `output=[m,n]` multiplication on CPU and CUDA
+where available. It validates projection shape `m=1`, non-projection matrix
+shape, non-zero dimensions, byte accounting, backend op support, output
+allocation, dispatch, reference comparison, cleanup, checksum, and max-diff
+reporting. It does not read real model projection weights, create Q/K/V tensors
+for attention, execute a transformer block, schedule layers, run full
+transformer prefill, decode, produce logits, sample, or generate.
+
 Full model materialization and placement are explicit planned work because the
 runtime must inventory and place the complete required tensor set before a real
 transformer path can rely on it. Decode cannot be meaningful until graph/layer
@@ -432,11 +442,11 @@ backend support.
 ## 7. Active Next
 
 ```text
-GRAPH.OPS.2 - Projection and matmul primitive boundary
+GRAPH.OPS.3 - MLP and routed-expert primitive boundary
 ```
 
-Next implementation: GRAPH.OPS.2. It must introduce the projection/matmul
-primitive boundary with explicit dtype/qtype/backend limits, shape accounting,
+Next implementation: GRAPH.OPS.3. It must introduce an MLP or routed-expert
+primitive boundary with explicit tensor roles, dtype/qtype/backend limits,
 scratch/output ownership, dispatch, reference comparison, failure paths, and
 cleanup behavior. It must not claim transformer block execution, layer
 scheduling, full transformer prefill, decode, logits, sampling, generation,
@@ -504,6 +514,8 @@ Standalone graph op proof set:
 ./yvex graph --backend cuda --execute-op --op rope --position 7 --head-dim 8
 ./yvex graph --backend cpu --execute-op --op attention --seq-len 4 --position 3 --head-dim 8 --causal
 ./yvex graph --backend cuda --execute-op --op attention --seq-len 4 --position 3 --head-dim 8 --causal
+./yvex graph --backend cpu --execute-op --op matmul --m 1 --k 8 --n 8
+./yvex graph --backend cuda --execute-op --op matmul --m 1 --k 8 --n 8
 ```
 
 Spine structure proof:

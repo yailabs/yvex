@@ -55,6 +55,11 @@ typedef struct yvex_backend_vtable {
                    float rope_base,
                    yvex_device_tensor *out,
                    yvex_error *err);
+    int (*op_matmul)(yvex_backend *backend,
+                     const yvex_device_tensor *input,
+                     const yvex_device_tensor *weight,
+                     yvex_device_tensor *out,
+                     yvex_error *err);
     int (*op_attention)(yvex_backend *backend,
                         const yvex_device_tensor *query,
                         const yvex_device_tensor *keys,

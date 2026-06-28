@@ -39,6 +39,7 @@ run_section partial-graph tests/cli/partial_graph.sh
 run_section segment-graph tests/cli/segment_graph.sh
 run_section rope-graph tests/cli/rope_graph.sh
 run_section attention-graph tests/cli/attention_graph.sh
+run_section matmul-graph tests/cli/matmul_graph.sh
 run_section token-input tests/cli/token_input.sh
 run_section prefill-state tests/cli/prefill_state.sh
 run_section kv tests/cli/kv.sh

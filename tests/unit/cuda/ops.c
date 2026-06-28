@@ -79,6 +79,9 @@ int yvex_cuda_test_ops(void)
     yvex_device_tensor *attention_scores = NULL;
     yvex_device_tensor *attention_probabilities = NULL;
     yvex_device_tensor *attention_out = NULL;
+    yvex_device_tensor *matmul_input = NULL;
+    yvex_device_tensor *matmul_weight = NULL;
+    yvex_device_tensor *matmul_out = NULL;
     yvex_device_tensor *out = NULL;
     yvex_backend_tensor_desc desc;
     yvex_error err;
@@ -114,12 +117,36 @@ int yvex_cuda_test_ops(void)
     float attention_out_data[4];
     float attention_score_data[3];
     float attention_probability_data[3];
+    float matmul_input_data[8] = {
+        1.0f, 2.0f, 3.0f, 4.0f,
+        5.0f, 6.0f, 7.0f, 8.0f,
+    };
+    float matmul_weight_data[12] = {
+        0.5f, 1.0f, 1.5f,
+        2.0f, 2.5f, 3.0f,
+        3.5f, 4.0f, 4.5f,
+        5.0f, 5.5f, 6.0f,
+    };
+    float matmul_out_data[6];
+    float matmul_expected[6];
     unsigned int rms_half_values[4] = {0x3c00u, 0x4000u, 0x4200u, 0x4400u};
     unsigned int i;
+    unsigned int row;
+    unsigned int col;
     int rc;
 
     for (i = 0; i < 4u; ++i) {
         write_u16le(rms_weight_data + (i * 2u), rms_half_values[i]);
+    }
+    for (row = 0; row < 2u; ++row) {
+        for (col = 0; col < 3u; ++col) {
+            double sum = 0.0;
+            for (i = 0; i < 4u; ++i) {
+                sum += (double)matmul_input_data[(row * 4u) + i] *
+                       (double)matmul_weight_data[(i * 3u) + col];
+            }
+            matmul_expected[(row * 3u) + col] = (float)sum;
+        }
     }
 
     rc = open_cuda_or_skip(&cuda_backend);
@@ -137,8 +164,8 @@ int yvex_cuda_test_ops(void)
                      "cuda rope supported");
     YVEX_TEST_ASSERT(yvex_backend_supports(cuda_backend, YVEX_BACKEND_CAP_OP_ATTENTION),
                      "cuda attention supported");
-    YVEX_TEST_ASSERT(!yvex_backend_supports(cuda_backend, YVEX_BACKEND_CAP_OP_MATMUL),
-                     "cuda matmul unsupported");
+    YVEX_TEST_ASSERT(yvex_backend_supports(cuda_backend, YVEX_BACKEND_CAP_OP_MATMUL),
+                     "cuda matmul supported");
 
     make_desc(&desc, "embedding", YVEX_DTYPE_F32, 2, 4, 3, sizeof(embedding_data));
     rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &embedding, &err);
@@ -269,6 +296,34 @@ int yvex_cuda_test_ops(void)
                                    attention_out, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS, "cuda attention rejects out-of-range position");
 
+    make_desc(&desc, "matmul_input", YVEX_DTYPE_F32, 2, 2, 4, sizeof(matmul_input_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &matmul_input, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda matmul input");
+    rc = yvex_backend_tensor_write(cuda_backend, matmul_input,
+                                   matmul_input_data, sizeof(matmul_input_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda matmul input");
+    make_desc(&desc, "matmul_weight", YVEX_DTYPE_F32, 2, 4, 3, sizeof(matmul_weight_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &matmul_weight, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda matmul weight");
+    rc = yvex_backend_tensor_write(cuda_backend, matmul_weight,
+                                   matmul_weight_data, sizeof(matmul_weight_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda matmul weight");
+    make_desc(&desc, "matmul_out", YVEX_DTYPE_F32, 2, 2, 3, sizeof(matmul_out_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &matmul_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda matmul output");
+    rc = yvex_backend_op_matmul(cuda_backend, matmul_input, matmul_weight, matmul_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "cuda matmul succeeds");
+    rc = yvex_backend_tensor_read(cuda_backend, matmul_out,
+                                  matmul_out_data, sizeof(matmul_out_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read cuda matmul output");
+    for (i = 0; i < 6u; ++i) {
+        YVEX_TEST_ASSERT(float_close(matmul_out_data[i], matmul_expected[i], 0.0001f),
+                         "cuda matmul output matches reference");
+    }
+
+    yvex_backend_tensor_free(cuda_backend, matmul_out);
+    yvex_backend_tensor_free(cuda_backend, matmul_weight);
+    yvex_backend_tensor_free(cuda_backend, matmul_input);
     yvex_backend_tensor_free(cuda_backend, attention_out);
     yvex_backend_tensor_free(cuda_backend, attention_probabilities);
     yvex_backend_tensor_free(cuda_backend, attention_scores);

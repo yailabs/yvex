@@ -123,12 +123,11 @@ static int cuda_supports(const yvex_backend *backend, yvex_backend_capability ca
     case YVEX_BACKEND_CAP_TENSOR_ALLOC:
     case YVEX_BACKEND_CAP_TENSOR_READ_WRITE:
     case YVEX_BACKEND_CAP_OP_EMBED:
+    case YVEX_BACKEND_CAP_OP_MATMUL:
     case YVEX_BACKEND_CAP_OP_RMS_NORM:
     case YVEX_BACKEND_CAP_OP_ROPE:
     case YVEX_BACKEND_CAP_OP_ATTENTION:
         return 1;
-    case YVEX_BACKEND_CAP_OP_MATMUL:
-        return 0;
     }
     return 0;
 }
@@ -147,6 +146,7 @@ static const yvex_backend_vtable cuda_vtable = {
     yvex_cuda_op_embed,
     yvex_cuda_op_rms_norm,
     yvex_cuda_op_rope,
+    yvex_cuda_op_matmul,
     yvex_cuda_op_attention,
 };
 

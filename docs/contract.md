@@ -203,6 +203,7 @@ The implemented runtime states are:
 | Minimal KV-backed prefill binding | Optional prefill mode that writes one diagnostic KV position per processed token into session-owned KV storage. |
 | Standalone RoPE op | Position-dependent F32 graph op over a bounded deterministic vector, checked against an independent reference. |
 | Standalone attention op | Explicit F32 Q/K/V scaled dot-product attention primitive with bounded causal mask, scratch, output, cleanup, and reference comparison. |
+| Standalone matmul op | Explicit F32 row-major `input=[m,k]`, `weight=[k,n]`, `output=[m,n]` primitive with projection-shape reporting, output cleanup, and reference comparison. |
 
 The runtime path after minimal KV ownership proceeds through minimal KV-backed
 prefill binding, full transformer prefill, decode, logits, sampling,
@@ -253,6 +254,18 @@ visible and masked key counts, dispatch/reference/allocation/cleanup fields, and
 unsupported readiness fields. Attention primitive support is not transformer
 block execution, layer scheduling, full transformer prefill, decode, logits,
 sampling, generation, or a provider path.
+
+The standalone matmul operation is admitted through `yvex graph --execute-op
+--op matmul`. It does not use a model artifact and does not read model
+projection weights. It validates backend availability, backend matmul support,
+explicit F32 rank-2 input/weight/output shapes, non-zero `m`, `k`, and `n`,
+byte-count accounting, output allocation, dispatch, reference comparison, and
+cleanup status. The result reports projection shape (`m=1`) separately from
+non-projection matrix shape, byte counts, checksums, max absolute diff, and
+unsupported readiness fields. Matmul primitive support is not Q/K/V projection
+readiness, attention integration, transformer block execution, layer
+scheduling, full transformer prefill, decode, logits, sampling, generation, or
+a provider path.
 
 Every implemented graph result should report guard status, failure phase where
 applicable, backend/op status, output planning, reference planning, checksums,
