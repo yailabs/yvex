@@ -9,28 +9,31 @@ scheduled graph work, and eventually token production by code that can explain
 what happened.
 
 That last word, "eventually", is important. YVEX does not yet run a complete
-text-generation path. It does not prefill a prompt, own a live `KV` cache,
-decode tokens, produce logits, sample text, or expose provider generation. What
+text-generation path. It does not own a real attention `KV` runtime, decode
+tokens, produce logits, sample text, or expose provider-backed generation. What
 exists today is narrower and real: controlled graph execution over fixture
 weights, selected `F16` embedding execution over real model bytes, a selected
 embedding-plus-RMSNorm segment over multiple real tensors, explicit token
-sequence input into those graph paths, and integrity gates that stop unsafe
-artifacts before allocation or dispatch.
+sequence input into those graph paths, and a prefill state summary built by
+running implemented selected graph segments over a token sequence. Those are
+engine foundations, not a full transformer run.
 
 That is the point of the project. Local inference is easy to make theatrical.
 A prompt box can hide a weak runtime. A server can answer `/v1/models` while no
 lower path can produce logits. A model can be "loaded" in half a dozen
 incompatible senses: a path exists, a file opened, a header parsed, tensor names
-were listed, weights moved to a device, graph work was scheduled, or tokens
-actually came out. YVEX is built for the space between those words.
+were listed, weights moved to a device, graph work was scheduled, a state
+summary was recorded, or tokens actually came out. YVEX is built for the space
+between those words.
 
 The project is opinionated: a local inference engine should earn every claim in
 the order the machine actually needs it. First the artifact has to be readable.
 Then the tensor directory has to make sense. Then tensor names must map to
 runtime roles. Then selected bytes must be safe to read. Then memory has to
 belong to a backend. Then the engine has to own the attachment. Then a graph
-has to dispatch and write an output that can be checked. Later, and only later,
-prompt prefill, `KV`, decode, logits, sampling, and generation should sit on top
+has to dispatch and write an output that can be checked. Then token input has
+to be explicit. Then a prefill state can be summarized. Later, and only later,
+real `KV` ownership, decode, logits, sampling, and generation should sit on top
 of that lower path.
 
 The `GGUF`, registry, integrity, qtype, and model-building machinery exists
@@ -52,10 +55,12 @@ attempted outside a hosted provider.
 
 YVEX exists because that world needs engines that can be debugged at the right
 depth. When a local model fails, the useful question is not "did inference fail?"
-but which boundary failed: file identity, GGUF parse, metadata, tensor mapping,
-dtype accounting, byte range, registry drift, allocation, transfer, engine
-attachment, graph preflight, backend op support, output allocation, reference
-read, token input, future prefill, future decode, future logits.
+The useful question is which boundary failed: file identity, GGUF parse,
+metadata, tensor mapping, dtype accounting, byte range, registry drift,
+allocation, transfer, engine attachment, graph preflight, backend op support,
+output allocation, reference read, token input, prefill state, future `KV`,
+future decode, future logits. Those are different locations in the runtime, and
+they deserve different failure modes.
 
 There are excellent local inference projects already. YVEX is not trying to be
 all of them. It is taking a narrower route: native C, explicit ownership, local
@@ -76,9 +81,9 @@ The project also exists because local runtime work should be inspectable by
 operators. A developer should be able to ask: which artifact am I using, which
 digest did I record, did the alias drift, which primary tensor did the registry
 remember, which backend was selected, how many bytes were planned, which graph
-kind ran, did cleanup happen after failure, and why is full execution still
-false? Those questions should not require reading a profiler trace or guessing
-from a chat transcript.
+kind ran, how many tokens were processed, did cleanup happen after failure, and
+why is full execution still false? Those questions should not require reading a
+profiler trace or guessing from a chat transcript.
 
 YVEX is therefore not just a file inspector. It is also not a complete
 inference system. It is the lower runtime being assembled in public, with each
@@ -135,7 +140,7 @@ It is concerned with states that many tools collapse into one word:
 - output allocation;
 - reference comparison;
 - token input;
-- future prompt prefill;
+- prefill state summary;
 - future `KV` ownership;
 - future logits and sampling.
 
@@ -148,14 +153,16 @@ The public command surface reflects that choice. `inspect`, `metadata`, and
 names without committing weights. `integrity report` summarizes local artifact
 state. `materialize`, `engine`, and `session` expose residency and ownership.
 `graph` runs the implemented fixture and selected real-tensor graph paths.
-`run`, `chat`, and `yvexd` are diagnostic/provider-shaped surfaces until the
-engine can produce model output for real.
+`input` makes token sequences explicit. `prefill` creates the current prefill
+state summary. `run`, `chat`, and `yvexd` are diagnostic/provider-shaped
+surfaces until the engine can produce model output for real.
 
 The project is not trying to make the incomplete part look complete. If a path
 is below generation, it says so. If an artifact is structurally valid but lacks
 selected embedding readiness, it says so. If a registered alias points to bytes
 that changed, it says so. If a backend cannot run an op, graph dispatch should
-not happen.
+not happen. If a prefill command only creates a segment-summary state, it must
+not call that state `KV`, logits, decode, or generation.
 
 ## What YVEX Is Not
 
@@ -165,7 +172,8 @@ the project claim.
 
 YVEX is not a wrapper around another inference runtime. The runtime state it
 does own is native: descriptors, selected weights, backend allocation summaries,
-engine/session ownership, graph result structs, and CLI reports.
+engine/session ownership, graph result structs, token input objects, prefill
+state summaries, and CLI reports.
 
 YVEX is not a chat UI. The `chat` and REPL surfaces are diagnostics until a real
 generation path exists under them.
@@ -176,8 +184,9 @@ It must keep reporting generation as unavailable until the runtime can back it.
 
 YVEX is not a benchmark leaderboard. It has correctness and regression
 measurements today: exact fixture values, checksums, max-diff comparisons, token
-selection, and guard/refusal behavior. Token/sec numbers wait for prefill,
-decode, logits, sampling, and generation in one reproducible path.
+selection, prefill state summaries, and guard/refusal behavior. Token/sec
+numbers wait for prefill over real transformer state, decode, logits, sampling,
+and generation in one reproducible path.
 
 YVEX is not a model artifact repository. Real weights, generated GGUFs,
 operator registries, reports, logs, and build output stay outside git. The repo
@@ -203,10 +212,10 @@ as `blk.0.attn_norm.weight`, along with the metadata needed to run embedding
 lookup followed by RMSNorm. That segment is useful because it makes graph work
 multi-tensor and multi-op while remaining below transformer prefill.
 
-`MODEL_ARTIFACTS.md` is the public artifact card surface. It records external
-artifact posture, selected pressure artifacts, digest facts, tensor facts, and
-validation posture. It should describe operator-local artifacts without leaking
-personal filesystem paths.
+[MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md) is the public artifact card surface. It
+records external artifact posture, selected pressure artifacts, digest facts,
+tensor facts, and validation posture. It should describe operator-local
+artifacts without leaking personal filesystem paths.
 
 A typical local registration looks like this:
 
@@ -365,7 +374,7 @@ The segment path uses the selected segment artifact and the segment graph mode:
 
 ```sh
 ./yvex graph \
-  --model deepseek4-v4-flash-selected-segment \
+  --model deepseek4-v4-flash-selected-embed-rmsnorm \
   --backend cpu \
   --execute-segment \
   --segment embedding-rmsnorm \
@@ -516,7 +525,7 @@ The command is intentionally explicit:
 
 ```sh
 ./yvex graph \
-  --model deepseek4-v4-flash-selected-segment \
+  --model deepseek4-v4-flash-selected-embed-rmsnorm \
   --backend cpu \
   --execute-segment \
   --segment embedding-rmsnorm \
@@ -556,6 +565,38 @@ token is out of range, graph dispatch should not happen. If prompt text lacks an
 executable tokenizer path for the artifact, it should not be quietly treated as
 prefill.
 
+## Prefill State Foundation
+
+YVEX now has a prefill state foundation. The word foundation is doing work here.
+This is not transformer prefill yet. It does not allocate attention `KV`, does
+not process full layers, does not produce logits, and does not make the session
+decode-ready.
+
+The current prefill state is a segment-summary state built from explicit token
+input. The runtime takes a validated token sequence, runs the implemented
+selected segment over tokens in order, records positions, per-token execution
+summaries, checksums, output byte accounting, and cleanup status, then reports
+that the state is not `KV`-ready, not decode-ready, not logits-ready, and not
+generation-ready.
+
+That may sound modest, but it is a real boundary. Before YVEX can own `KV`, it
+has to own the shape of token-sequence processing: token count, position range,
+per-token graph work, cleanup after partial failure, and a state object that
+can be inspected without pretending to be more than it is.
+
+The command shape is:
+
+```sh
+./yvex prefill \
+  --model deepseek4-v4-flash-selected-embed-rmsnorm \
+  --backend cpu \
+  --segment embedding-rmsnorm \
+  --tokens 0,1,2
+```
+
+The next runtime boundary is minimal `KV` ownership. The segment-summary
+foundation makes that next boundary less vague.
+
 ## Backend Lanes
 
 YVEX keeps backend lanes conceptually separate because each lane answers a
@@ -563,12 +604,13 @@ different engineering question.
 
 `CPU` is the reference lane. It should be boring, inspectable, and stable. It is
 where tiny fixtures, raw reference comparisons, shape/range failures, cleanup,
-and graph result accounting are easiest to reason about.
+prefill state summaries, and graph result accounting are easiest to reason
+about.
 
 `CUDA` is the active acceleration lane on Linux. The current CUDA path covers
 backend diagnostics, selected materialization, fixture parity, selected
-embedding execution, and the selected embedding-plus-RMSNorm segment where the
-host has CUDA available.
+embedding execution, selected embedding-plus-RMSNorm execution, and prefill
+state creation where the host has CUDA available.
 
 GB10 / DGX Spark matters as a pressure target because high-memory local CUDA
 machines change the scale of artifacts that can be exercised. It does not turn
@@ -589,7 +631,7 @@ know which runtime state exists before they can responsibly expose model output.
 
 The provider boundary must stay honest. A server that can answer status is not
 a server that can generate. A provider-shaped API is not provider-compatible
-generation. Until the runtime owns prefill, `KV`, decode, logits, sampling, and
+generation. Until the runtime owns real `KV`, decode, logits, sampling, and
 generation, `yvexd` should remain a status and diagnostics surface.
 
 Typical daemon exploration starts here:
@@ -614,16 +656,17 @@ boundaries the runtime owns:
 - raw-artifact reference checksums;
 - max absolute diff for embedding-plus-RMSNorm;
 - token parsing and bounds behavior;
+- prefill state summaries;
 - materialization planned/allocated/transferred byte accounting;
 - graph guard phase and cleanup behavior;
 - CPU/CUDA parity for implemented paths on CUDA hosts.
 
 Invalid claims today include token/sec, model quality, long-context throughput,
 provider latency, sampling behavior, and generation speed. Those require a
-runtime path that does not exist yet. When prefill, decode, logits, sampling,
-and generation are implemented in one reproducible path, benchmark reporting
-will need artifact identity, backend, qtype, context length, machine, command,
-and trace/profile context.
+runtime path that does not exist yet. When real prefill, decode, logits,
+sampling, and generation are implemented in one reproducible path, benchmark
+reporting will need artifact identity, backend, qtype, context length, machine,
+command, and trace/profile context.
 
 Until then, benchmark results: none.
 
@@ -686,40 +729,26 @@ wiring. Parser fixtures, runtime fixtures, evaluation vectors, and future
 benchmarks should remain distinct. Build output, reports, local registries, and
 operator artifacts should stay out of git.
 
-## More Documentation
+## Documentation
 
-If you want the command transcript, start with the runbook. If you want the C
-surface, read the API document. If you want the rules for what the CLI may
-claim, read the contract.
+If you are looking for a specific surface, YVEX keeps the canonical docs small
+and direct. Otherwise, this README gives the public project posture.
 
-- `docs/operator-runbook.md`: command-first workflow for local artifacts,
-  artifact integrity, materialization, engine/session attachment, graph proofs,
-  daemon status, token input, and validation.
-- `docs/api.md`: public C API, ownership rules, report structs, backend
-  capabilities, token input, materialization summaries, graph results, and
-  integrity report surfaces.
-- `docs/contract.md`: CLI, filesystem, registry, backend, server, console,
-  output, validation, and claim contract.
-- `MODEL_ARTIFACTS.md`: external artifact cards, selected pressure artifacts,
-  digest facts, tensor facts, and validation posture.
-- `AGENTS.md`: operating rules for humans and coding agents working in this
-  repository.
-- `docs/spine.md`: internal delivery map. It is not product documentation, but
-  it is the source of truth for implementation order inside this repository.
-
-## Current Reading Order
-
-For a new contributor, the shortest useful path is:
-
-1. Read this README for project posture and public boundaries.
-2. Read `docs/operator-runbook.md` and run the normal validation commands.
-3. Read `MODEL_ARTIFACTS.md` before touching real artifacts.
-4. Read `docs/contract.md` before changing CLI output or public claims.
-5. Read `docs/api.md` before changing public headers or ownership behavior.
-6. Read `docs/spine.md` before choosing implementation work.
-
-That order matters because YVEX is not only code; it is code plus a claim
-discipline. The project should become more capable without becoming vague.
+- [docs/operator-runbook.md](docs/operator-runbook.md): command-first workflow
+  for local artifacts, integrity, materialization, engine/session attachment,
+  graph proofs, daemon status, token input, prefill state, and validation.
+- [docs/api.md](docs/api.md): public C API, ownership rules, report structs,
+  backend capabilities, token input, prefill state summaries, materialization
+  summaries, graph results, and integrity surfaces.
+- [docs/contract.md](docs/contract.md): CLI, filesystem, registry, backend,
+  server, output, validation, and claim contract.
+- [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md): external artifact cards, selected
+  pressure artifacts, digest facts, tensor facts, and validation posture.
+- [AGENTS.md](AGENTS.md): operating rules for humans and coding agents working
+  in this repository.
+- [docs/spine.md](docs/spine.md): internal delivery map. It is not product
+  documentation, but it is the source of truth for implementation order inside
+  this repository.
 
 ## License
 
