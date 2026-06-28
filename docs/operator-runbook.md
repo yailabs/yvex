@@ -350,9 +350,9 @@ it does not own or execute the weights.
 ## 10. Validate prompt/token input boundary
 
 Explicit token input is a runtime boundary before full transformer prefill and
-KV ownership exist. It parses and bounds-checks token IDs, then graph commands
-can select one token from the validated sequence. This is not prompt prefill, KV
-runtime, decode, logits, sampling, or generation.
+KV-backed prefill. It parses and bounds-checks token IDs, then graph commands
+can select one token from the validated sequence. This is not prompt prefill,
+attention KV use, decode, logits, sampling, or generation.
 
 ```sh
 ./yvex input tokens \
@@ -466,6 +466,41 @@ Expected CUDA outcome includes `prefill_cuda_parity: pass` when the CUDA path is
 available. A failure before token execution reports `prefill_state_created:
 false` and `tokens_processed: 0`; an injected or post-dispatch failure reports
 the prefill phase, processed-token count, and cleanup status.
+
+### Prove minimal KV ownership
+
+The minimal KV command creates a bounded session-owned F32 key/value store,
+appends deterministic complete positions, reads one written position, and
+reports lifecycle facts. It is a storage and ownership proof only. It is not
+attention execution, KV-backed transformer prefill, decode, logits, sampling,
+or generation.
+
+```sh
+./yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8 --append-demo --read-position 0
+```
+
+Expected outcome:
+
+```text
+kv: ownership
+kv_created: true
+session_owned: true
+dtype: F32
+values_per_position: 16
+bytes_per_position: 64
+planned_bytes: 512
+allocated_bytes: 512
+append_count: 2
+read_count: 1
+written_positions: 2
+overflow_status: not-overflowed
+cleanup_status: pass
+decode_ready: false
+logits_ready: false
+generation_ready: false
+generation: unsupported
+status: kv-owned
+```
 
 ## 12. Execute a real selected embedding segment
 

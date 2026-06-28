@@ -12,9 +12,10 @@ boundary a function belongs to.
 YVEX exposes a staged local inference engine. A caller should be able to move
 from artifact evidence to descriptors, from descriptors to selected backend
 residency, from residency to engine-owned state, from engine-owned state to
-graph execution, and from token input to prefill summaries. Later layers such as
-KV ownership, decode, logits, sampling, generation, and provider serving extend
-the same chain as their runtime contracts mature.
+graph execution, and from token input to prefill summaries and minimal
+session-owned KV state. Later layers such as KV-backed transformer prefill,
+decode, logits, sampling, generation, and provider serving extend the same
+chain as their runtime contracts mature.
 
 This file is the API map. Runtime behavior is governed by
 [docs/contract.md](contract.md). Operator command transcripts live in
@@ -39,7 +40,7 @@ The umbrella header collects the supported public header groups.
 | Tokenizer and input | `tokenizer.h`, `token_input.h`, `prompt.h` | Tokenizer diagnostics, explicit token input objects, prompt rendering, and input normalization boundaries. |
 | Graph and planning | `graph.h`, `op.h`, `planner.h`, `memory_plan.h` | Graph reports, operation boundaries, planning structures, and memory planning summaries. |
 | Backend | `backend.h` | Backend discovery, capability reports, tensor allocation, transfer, and backend operation calls. |
-| Runtime and session | `engine.h`, `session.h`, `kv.h`, `logits.h` | Engine ownership, session visibility, KV/logits boundary types, and runtime-state integration points. |
+| Runtime and session | `engine.h`, `session.h`, `kv.h`, `logits.h` | Engine ownership, session visibility, minimal KV ownership, KV/logits boundary types, and runtime-state integration points. |
 | Metrics and traces | `metrics.h`, `trace.h`, `profile.h` | Runtime summaries, trace records, profiles, and measurement/reporting structures. |
 | Server | `server.h` | Daemon/status structures and server-facing runtime reports. |
 | Tooling APIs | `source_manifest.h`, `native_weights.h`, `conversion.h`, `weight_mapping.h`, `qtype_support.h`, `quant_policy.h`, `quant_job.h`, `imatrix.h`, `model_registry.h`, `model_ref.h`, `model_gate.h`, `materialize_gate.h` | Source provenance, native tensor inventory, conversion planning, tensor mapping, qtype policy, quantization evidence, local registry, model references, and gate reports. |
@@ -116,7 +117,7 @@ milestone.
 | Model references | Local registry entries, alias-or-path resolution, model references, model gates, and materialization gates. |
 | Backend residency | Backend discovery, selected tensor allocation, transfer, release, and materialization summaries. |
 | Engine ownership | Engine creation, selected weight attachment, engine-owned lifetime, and graph execution entry points. |
-| Session visibility | Session reports over engine-attached runtime state and future session-owned state. |
+| Session visibility | Session reports over engine-attached runtime state and minimal session-owned KV state. |
 | Graph execution | Controlled fixture graph results, selected embedding graph results, embedding-plus-RMSNorm segment results, graph guards, checksums, and max-diff reports. |
 | Token input | Bounded explicit token lists, token validation, token selection, and prompt-to-token boundaries through tokenizer paths. |
 | Prefill state | Segment-summary prefill reports over validated token sequences. |
@@ -228,10 +229,44 @@ that selected weights are attached and visible while the engine retains
 ownership. This keeps the lifetime model clear: the engine owns the weight
 table, and the session observes the runtime state it is attached to.
 
-As KV, decode, logits, sampling, and generation become runtime states, their API
-surfaces should follow the same pattern. The object that owns memory owns
-cleanup. The report that summarizes state is copied. The session-level
-relationship must stay visible.
+As KV-backed prefill, decode, logits, sampling, and generation become runtime
+states, their API surfaces should follow the same pattern. The object that owns
+memory owns cleanup. The report that summarizes state is copied. The
+session-level relationship must stay visible.
+
+## Minimal KV Ownership
+
+`kv.h` exposes the minimal session-owned KV boundary. It is an F32 storage and
+lifecycle surface, not attention execution and not decode state.
+
+`yvex_kv_shape` defines the bounded storage shape: layer count, KV head count,
+head dimension, and capacity. `yvex_kv_cache_create_shape` allocates a
+session-owned F32 KV store from that shape and rejects zero dimensions, value
+count overflow, byte-count overflow, and host allocation sizes that cannot be
+represented.
+
+`yvex_kv_cache_position_value_count` reports the exact number of F32 values in
+one position: `layers * heads * head_dim * 2`. The `2` is the key/value pair
+accounting. `yvex_kv_cache_append_position_f32` appends one complete position
+at the next writable slot. `yvex_kv_cache_read_position_f32` reads one written
+position by index. `yvex_kv_cache_clear` resets written positions and counters
+while preserving the allocated shape.
+
+`yvex_kv_summary` is copied report data. It reports owner, dtype, context
+length/capacity, layer/head/head-dim shape, values per position, bytes per
+position, planned and allocated bytes, written positions, append/read counts,
+last read position, overflow status, cleanup status, and false readiness flags
+for decode, logits, and generation.
+
+Sessions can create and own this minimal KV store by setting
+`yvex_session_options.create_kv` and `yvex_session_options.kv_shape`.
+`yvex_session_kv_append_position_f32`, `yvex_session_kv_read_position_f32`, and
+`yvex_session_kv_clear` delegate to the session-owned KV store while preserving
+session lifecycle checks. The session summary mirrors the copied KV facts.
+
+This boundary gives later KV-backed prefill a real ownership target. It does
+not run attention, does not bind transformer layer outputs yet, and does not
+make decode, logits, sampling, generation, or provider generation ready.
 
 ## Graph Execution
 

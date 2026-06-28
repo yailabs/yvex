@@ -104,6 +104,7 @@ real selected F16 token embedding partial graph execution
 real selected embedding plus RMSNorm graph segment
 explicit prompt/token input boundary
 segment-summary prefill state foundation from validated token sequences
+minimal session-owned KV ownership and append/read boundary
 artifact integrity validator and corruption fixture suite
 file identity digest enforcement
 registry metadata drift diagnostics
@@ -146,7 +147,7 @@ full DeepSeek materialization
 full GGUF conversion
 full supply-chain security
 full transformer prefill
-minimal KV runtime
+KV-backed prefill
 decode
 logits-producing runtime path
 sampling
@@ -246,8 +247,8 @@ tables.
 | M7 | complete | input | Prompt/token input boundary | validated token sequences route into implemented graph paths |
 | M8 | complete | prefill | Prefill state foundation | segment-summary prefill state created from validated token sequence |
 | SPINE.REBASE.5 | complete | docs | Unified full inference engine spine | all delivery rows consolidated into one ledger and dependency map |
-| M9 | next | kv | Minimal KV ownership and append/read boundary | session-owned KV shape, allocation, append/read, lifecycle, cleanup, and context overflow behavior |
-| PREFILL.1 | planned | prefill | KV-backed prefill state binding | M8 segment-summary state connects to minimal KV ownership without decode/logits claim |
+| M9 | complete | kv | Minimal KV ownership and append/read boundary | session-owned KV shape, allocation, append/read, lifecycle, cleanup, and context overflow behavior |
+| PREFILL.1 | next | prefill | KV-backed prefill state binding | M8 segment-summary state connects to minimal KV ownership without decode/logits claim |
 | GRAPH.OPS.0 | planned | graph | RoPE and position operation boundary | position-dependent graph op implemented with tests and backend rules |
 | GRAPH.OPS.1 | planned | graph | Attention primitive boundary | attention inputs, masks, scratch, backend dispatch, and failure paths implemented |
 | GRAPH.OPS.2 | planned | graph | Projection and matmul primitive boundary | matmul/projection path implemented with dtype/qtype/backend limits |
@@ -410,17 +411,17 @@ backend support.
 ## 7. Active Next
 
 ```text
-M9 - Minimal KV ownership and append/read boundary
+PREFILL.1 - KV-backed prefill state binding
 ```
 
-Next implementation: M9. It must introduce minimal session-owned KV shape,
-allocation, append/read behavior, lifecycle, cleanup, and context-overflow
-failure handling without claiming decode, logits, sampling, generation, server
-generation, evaluation, or benchmark readiness.
+Next implementation: PREFILL.1. It must connect the M8 segment-summary prefill
+state to minimal session-owned KV ownership without claiming full transformer
+prefill, decode, logits, sampling, generation, server generation, evaluation,
+or benchmark readiness.
 
-After M9, the next runtime work is not automatically decode. The spine expects
-KV-backed prefill and graph/layer expansion rows to determine whether decode can
-run over meaningful transformer state.
+After PREFILL.1, the next runtime work is not automatically decode. The spine
+expects graph/layer expansion rows to determine whether decode can run over
+meaningful transformer state.
 
 ## 8. Validation Gate
 

@@ -34,6 +34,7 @@ struct yvex_engine {
 
 struct yvex_kv_cache {
     yvex_kv_summary summary;
+    float *values;
 };
 
 struct yvex_logits {
@@ -1799,8 +1800,132 @@ int yvex_kv_cache_create(yvex_kv_cache **out,
 
     (void)model;
     kv->summary.status = YVEX_KV_STATUS_UNAVAILABLE;
+    kv->summary.owner = "session";
+    kv->summary.dtype = "none";
     kv->summary.context_length = context_length;
     kv->summary.bytes = 0;
+    kv->summary.overflow_status = "not-checked";
+    kv->summary.cleanup_status = "not-needed";
+    kv->summary.session_owned = 1;
+    kv->summary.decode_ready = 0;
+    kv->summary.logits_ready = 0;
+    kv->summary.generation_ready = 0;
+
+    *out = kv;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+static int kv_shape_values_per_position(const yvex_kv_shape *shape,
+                                        unsigned long long *out,
+                                        yvex_error *err)
+{
+    unsigned long long values = 0ull;
+    unsigned long long tmp = 0ull;
+
+    if (!shape || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_kv_cache_create_shape",
+                       "shape and out are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (shape->layer_count == 0ull) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_kv_cache_create_shape",
+                       "layer_count must be positive");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (shape->kv_head_count == 0ull) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_kv_cache_create_shape",
+                       "kv_head_count must be positive");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (shape->head_dim == 0ull) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_kv_cache_create_shape",
+                       "head_dim must be positive");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (shape->capacity == 0ull) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_kv_cache_create_shape",
+                       "capacity must be positive");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    if (!runtime_checked_mul_ull(shape->layer_count, shape->kv_head_count, &tmp) ||
+        !runtime_checked_mul_ull(tmp, shape->head_dim, &tmp) ||
+        !runtime_checked_mul_ull(tmp, 2ull, &values)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_kv_cache_create_shape",
+                       "KV shape value count overflows");
+        return YVEX_ERR_BOUNDS;
+    }
+    *out = values;
+    return YVEX_OK;
+}
+
+int yvex_kv_cache_create_shape(yvex_kv_cache **out,
+                               const yvex_kv_shape *shape,
+                               yvex_error *err)
+{
+    yvex_kv_cache *kv = NULL;
+    unsigned long long values_per_position = 0ull;
+    unsigned long long bytes_per_position = 0ull;
+    unsigned long long planned_bytes = 0ull;
+    int rc;
+
+    if (!out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_kv_cache_create_shape",
+                       "out is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    *out = NULL;
+
+    rc = kv_shape_values_per_position(shape, &values_per_position, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (!runtime_checked_mul_ull(values_per_position,
+                                 (unsigned long long)sizeof(float),
+                                 &bytes_per_position) ||
+        !runtime_checked_mul_ull(bytes_per_position, shape->capacity, &planned_bytes)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_kv_cache_create_shape",
+                       "KV byte count overflows");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (planned_bytes > (unsigned long long)SIZE_MAX) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_kv_cache_create_shape",
+                       "KV byte count exceeds host allocation size");
+        return YVEX_ERR_BOUNDS;
+    }
+
+    kv = (yvex_kv_cache *)calloc(1, sizeof(*kv));
+    if (!kv) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_kv_cache_create_shape",
+                       "failed to allocate KV cache");
+        return YVEX_ERR_NOMEM;
+    }
+    kv->values = (float *)calloc((size_t)(planned_bytes / sizeof(float)), sizeof(float));
+    if (!kv->values) {
+        free(kv);
+        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_kv_cache_create_shape",
+                       "failed to allocate KV storage");
+        return YVEX_ERR_NOMEM;
+    }
+
+    kv->summary.status = YVEX_KV_STATUS_ALLOCATED;
+    kv->summary.owner = "session";
+    kv->summary.dtype = "F32";
+    kv->summary.context_length = shape->capacity;
+    kv->summary.layer_count = shape->layer_count;
+    kv->summary.kv_head_count = shape->kv_head_count;
+    kv->summary.head_dim = shape->head_dim;
+    kv->summary.values_per_position = values_per_position;
+    kv->summary.bytes_per_position = bytes_per_position;
+    kv->summary.bytes = planned_bytes;
+    kv->summary.allocated_bytes = planned_bytes;
+    kv->summary.overflow_status = "not-overflowed";
+    kv->summary.cleanup_status = "not-needed";
+    kv->summary.session_owned = 1;
+    kv->summary.decode_ready = 0;
+    kv->summary.logits_ready = 0;
+    kv->summary.generation_ready = 0;
 
     *out = kv;
     yvex_error_clear(err);
@@ -1809,6 +1934,10 @@ int yvex_kv_cache_create(yvex_kv_cache **out,
 
 void yvex_kv_cache_close(yvex_kv_cache *kv)
 {
+    if (!kv) {
+        return;
+    }
+    free(kv->values);
     free(kv);
 }
 
@@ -1826,6 +1955,133 @@ const char *yvex_kv_status_name(yvex_kv_status status)
     case YVEX_KV_STATUS_ALLOCATED: return "allocated";
     }
     return "unknown";
+}
+
+unsigned long long yvex_kv_cache_position_value_count(const yvex_kv_cache *kv)
+{
+    return kv ? kv->summary.values_per_position : 0ull;
+}
+
+int yvex_kv_cache_append_position_f32(yvex_kv_cache *kv,
+                                      const float *values,
+                                      unsigned long long value_count,
+                                      unsigned long long *out_position,
+                                      yvex_error *err)
+{
+    unsigned long long offset = 0ull;
+
+    if (out_position) {
+        *out_position = 0ull;
+    }
+    if (!kv || !values) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_kv_cache_append_position_f32",
+                       "kv and values are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (kv->summary.status != YVEX_KV_STATUS_ALLOCATED || !kv->values) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_kv_cache_append_position_f32",
+                       "KV store is not allocated");
+        return YVEX_ERR_STATE;
+    }
+    if (value_count != kv->summary.values_per_position) {
+        yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "yvex_kv_cache_append_position_f32",
+                        "value_count must be %llu", kv->summary.values_per_position);
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (kv->summary.written_positions >= kv->summary.context_length) {
+        kv->summary.overflow_status = "capacity-exceeded";
+        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_kv_cache_append_position_f32",
+                        "append would exceed KV capacity %llu",
+                        kv->summary.context_length);
+        return YVEX_ERR_BOUNDS;
+    }
+    if (!runtime_checked_mul_ull(kv->summary.written_positions,
+                                 kv->summary.values_per_position,
+                                 &offset)) {
+        kv->summary.overflow_status = "offset-overflow";
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_kv_cache_append_position_f32",
+                       "KV append offset overflows");
+        return YVEX_ERR_BOUNDS;
+    }
+
+    memcpy(kv->values + offset, values, (size_t)value_count * sizeof(float));
+    if (out_position) {
+        *out_position = kv->summary.written_positions;
+    }
+    kv->summary.written_positions += 1ull;
+    kv->summary.append_count += 1ull;
+    kv->summary.overflow_status = "not-overflowed";
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_kv_cache_read_position_f32(yvex_kv_cache *kv,
+                                    unsigned long long position,
+                                    float *out_values,
+                                    unsigned long long value_count,
+                                    yvex_error *err)
+{
+    unsigned long long offset = 0ull;
+
+    if (!kv || !out_values) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_kv_cache_read_position_f32",
+                       "kv and out_values are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (kv->summary.status != YVEX_KV_STATUS_ALLOCATED || !kv->values) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_kv_cache_read_position_f32",
+                       "KV store is not allocated");
+        return YVEX_ERR_STATE;
+    }
+    if (value_count != kv->summary.values_per_position) {
+        yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "yvex_kv_cache_read_position_f32",
+                        "value_count must be %llu", kv->summary.values_per_position);
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (position >= kv->summary.context_length) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_kv_cache_read_position_f32",
+                        "read position %llu exceeds KV capacity %llu",
+                        position, kv->summary.context_length);
+        return YVEX_ERR_BOUNDS;
+    }
+    if (position >= kv->summary.written_positions) {
+        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_kv_cache_read_position_f32",
+                        "read position %llu has not been written", position);
+        return YVEX_ERR_BOUNDS;
+    }
+    if (!runtime_checked_mul_ull(position, kv->summary.values_per_position, &offset)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_kv_cache_read_position_f32",
+                       "KV read offset overflows");
+        return YVEX_ERR_BOUNDS;
+    }
+
+    memcpy(out_values, kv->values + offset, (size_t)value_count * sizeof(float));
+    kv->summary.read_count += 1ull;
+    kv->summary.last_read_position = position;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_kv_cache_clear(yvex_kv_cache *kv,
+                        yvex_error *err)
+{
+    if (!kv) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_kv_cache_clear", "kv is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (kv->values && kv->summary.allocated_bytes <= (unsigned long long)SIZE_MAX) {
+        memset(kv->values, 0, (size_t)kv->summary.allocated_bytes);
+    }
+    kv->summary.written_positions = 0ull;
+    kv->summary.append_count = 0ull;
+    kv->summary.read_count = 0ull;
+    kv->summary.last_read_position = 0ull;
+    kv->summary.overflow_status = kv->summary.status == YVEX_KV_STATUS_ALLOCATED
+                                      ? "not-overflowed"
+                                      : "not-checked";
+    kv->summary.cleanup_status = "pass";
+    yvex_error_clear(err);
+    return YVEX_OK;
 }
 
 int yvex_kv_cache_get_summary(const yvex_kv_cache *kv,
@@ -2067,7 +2323,11 @@ int yvex_session_create(yvex_session **out,
         return YVEX_ERR_UNSUPPORTED;
     }
 
-    rc = yvex_kv_cache_create(&session->kv, yvex_engine_model(engine), context_length, err);
+    if (options && options->create_kv) {
+        rc = yvex_kv_cache_create_shape(&session->kv, &options->kv_shape, err);
+    } else {
+        rc = yvex_kv_cache_create(&session->kv, yvex_engine_model(engine), context_length, err);
+    }
     if (rc == YVEX_OK) {
         rc = yvex_logits_create(&session->logits, yvex_engine_model(engine), err);
     }
@@ -2146,8 +2406,26 @@ int yvex_session_get_summary(const yvex_session *session,
     if (session->kv && yvex_kv_cache_get_summary(session->kv, &kv_summary, err) == YVEX_OK) {
         out->kv_status = yvex_kv_status_name(kv_summary.status);
         out->kv_bytes = kv_summary.bytes;
+        out->kv_owner = kv_summary.owner;
+        out->kv_dtype = kv_summary.dtype;
+        out->kv_layers = kv_summary.layer_count;
+        out->kv_heads = kv_summary.kv_head_count;
+        out->kv_head_dim = kv_summary.head_dim;
+        out->kv_capacity = kv_summary.context_length;
+        out->kv_bytes_per_position = kv_summary.bytes_per_position;
+        out->kv_allocated_bytes = kv_summary.allocated_bytes;
+        out->kv_written_positions = kv_summary.written_positions;
+        out->kv_append_count = kv_summary.append_count;
+        out->kv_read_count = kv_summary.read_count;
+        out->kv_overflow_status = kv_summary.overflow_status;
+        out->kv_cleanup_status = kv_summary.cleanup_status;
+        out->kv_session_owned = kv_summary.session_owned;
     } else {
         out->kv_status = "empty";
+        out->kv_owner = "none";
+        out->kv_dtype = "none";
+        out->kv_overflow_status = "not-checked";
+        out->kv_cleanup_status = "not-needed";
     }
     if (session->logits && yvex_logits_get_summary(session->logits, &logits_summary, err) == YVEX_OK) {
         out->logits_status = yvex_logits_status_name(logits_summary.status);
@@ -2267,10 +2545,64 @@ int yvex_session_reset(yvex_session *session,
     session->position = 0;
     session->accepted_tokens = 0;
     session->rejected_tokens = 0;
+    (void)yvex_kv_cache_clear(session->kv, err);
     session->state = reset_state_for_graph(session);
     set_session_reason_from_graph(session);
     yvex_error_clear(err);
     return YVEX_OK;
+}
+
+int yvex_session_kv_append_position_f32(yvex_session *session,
+                                        const float *values,
+                                        unsigned long long value_count,
+                                        unsigned long long *out_position,
+                                        yvex_error *err)
+{
+    if (!session) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_session_kv_append_position_f32",
+                       "session is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (session->state == YVEX_SESSION_STATE_CLOSED) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_session_kv_append_position_f32",
+                       "session is closed");
+        return YVEX_ERR_STATE;
+    }
+    return yvex_kv_cache_append_position_f32(session->kv, values, value_count, out_position, err);
+}
+
+int yvex_session_kv_read_position_f32(yvex_session *session,
+                                      unsigned long long position,
+                                      float *out_values,
+                                      unsigned long long value_count,
+                                      yvex_error *err)
+{
+    if (!session) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_session_kv_read_position_f32",
+                       "session is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (session->state == YVEX_SESSION_STATE_CLOSED) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_session_kv_read_position_f32",
+                       "session is closed");
+        return YVEX_ERR_STATE;
+    }
+    return yvex_kv_cache_read_position_f32(session->kv, position, out_values, value_count, err);
+}
+
+int yvex_session_kv_clear(yvex_session *session,
+                          yvex_error *err)
+{
+    if (!session) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_session_kv_clear",
+                       "session is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (session->state == YVEX_SESSION_STATE_CLOSED) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_session_kv_clear", "session is closed");
+        return YVEX_ERR_STATE;
+    }
+    return yvex_kv_cache_clear(session->kv, err);
 }
 
 

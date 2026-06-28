@@ -59,6 +59,8 @@ typedef struct {
     unsigned long long context_length;
     unsigned long long max_tokens;
     int allow_partial_graph;
+    int create_kv;
+    yvex_kv_shape kv_shape;
 } yvex_session_options;
 
 typedef struct {
@@ -72,6 +74,20 @@ typedef struct {
     unsigned long long rejected_tokens;
     const char *kv_status;
     unsigned long long kv_bytes;
+    const char *kv_owner;
+    const char *kv_dtype;
+    unsigned long long kv_layers;
+    unsigned long long kv_heads;
+    unsigned long long kv_head_dim;
+    unsigned long long kv_capacity;
+    unsigned long long kv_bytes_per_position;
+    unsigned long long kv_allocated_bytes;
+    unsigned long long kv_written_positions;
+    unsigned long long kv_append_count;
+    unsigned long long kv_read_count;
+    const char *kv_overflow_status;
+    const char *kv_cleanup_status;
+    int kv_session_owned;
     const char *logits_status;
     unsigned long long logits_capacity;
     int graph_partial;
@@ -115,6 +131,18 @@ int yvex_session_cancel(yvex_session *session,
                         yvex_error *err);
 int yvex_session_reset(yvex_session *session,
                        yvex_error *err);
+int yvex_session_kv_append_position_f32(yvex_session *session,
+                                        const float *values,
+                                        unsigned long long value_count,
+                                        unsigned long long *out_position,
+                                        yvex_error *err);
+int yvex_session_kv_read_position_f32(yvex_session *session,
+                                      unsigned long long position,
+                                      float *out_values,
+                                      unsigned long long value_count,
+                                      yvex_error *err);
+int yvex_session_kv_clear(yvex_session *session,
+                          yvex_error *err);
 
 #ifdef __cplusplus
 }

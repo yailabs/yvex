@@ -181,9 +181,9 @@ Runtime state must have visible ownership.
 Artifact handles own parsed artifact state. Backend tensors own backend memory.
 Weight tables own selected backend-resident weights until moved under engine
 ownership. Engines own attached weights. Sessions observe or own session-level
-state depending on the runtime layer. Future KV, decode, logits, sampling, and
-generation objects must follow the same pattern: the owner of the memory owns
-the cleanup path.
+state depending on the runtime layer. Minimal KV state is session-owned. Future
+KV-backed prefill, decode, logits, sampling, and generation objects must follow
+the same pattern: the owner of the memory owns the cleanup path.
 
 The implemented runtime states are:
 
@@ -199,11 +199,12 @@ The implemented runtime states are:
 | Selected segment result | Embedding-plus-RMSNorm execution over selected real tensors. |
 | Token input | Bounded explicit token sequences with validation and token-index selection. |
 | Prefill state summary | Segment-summary state over validated explicit token input. |
+| Minimal KV state | Session-owned F32 KV storage with shape, append/read, clear, overflow, and cleanup reports. |
 
-The runtime path after prefill state proceeds through KV ownership, KV-backed
-prefill, decode, logits, sampling, generation, CLI generation, and provider
-generation. Each layer enters the contract when code, tests, report shape,
-command proof, and cleanup behavior exist.
+The runtime path after minimal KV ownership proceeds through KV-backed prefill,
+decode, logits, sampling, generation, CLI generation, and provider generation.
+Each layer enters the contract when code, tests, report shape, command proof,
+and cleanup behavior exist.
 
 ## Graph Execution Contract
 
@@ -253,8 +254,39 @@ processed positions, segment execution count, output byte accounting, aggregate
 checksum, final-token checksum, max diff, and cleanup status.
 
 Current prefill summary readiness fields must report the state of the next
-layers accurately: KV, decode, logits, sampling, and generation become ready
-only when their runtime layers exist.
+layers accurately: KV ownership may exist while KV-backed transformer prefill,
+decode, logits, sampling, and generation remain not ready.
+
+## Minimal KV Contract
+
+Minimal KV is a session-owned storage boundary.
+
+`yvex kv --layers N --heads N --head-dim N --capacity N` creates a bounded F32
+KV store and reports shape, byte accounting, allocation, append/read counters,
+overflow status, cleanup status, and readiness fields. `--append-demo` appends
+deterministic complete positions. `--read-position N` reads one written
+position and reports a checksum and sample values.
+
+The shape contract is:
+
+```text
+values_per_position = layers * heads * head_dim * 2
+bytes_per_position = values_per_position * sizeof(F32)
+planned_bytes = bytes_per_position * capacity
+```
+
+All arithmetic is checked. Zero shape fields, value-count overflow, byte-count
+overflow, append past capacity, reads outside capacity, reads from unwritten
+positions, and mismatched position sizes must fail cleanly.
+
+Session-owned KV stores can be created through session options and manipulated
+through session KV append/read/clear functions. Session reports mirror KV owner,
+dtype, shape, byte counts, append/read counters, overflow state, and cleanup
+state.
+
+Minimal KV is not attention execution. It does not bind transformer layer
+outputs to KV rows yet, does not make prefill KV-backed, and does not make
+decode, logits, sampling, generation, or provider generation ready.
 
 ## Artifact Integrity Contract
 

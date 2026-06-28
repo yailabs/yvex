@@ -113,7 +113,7 @@ CURRENT_DOCS := README.md AGENTS.md MODEL_ARTIFACTS.md NOTICE.md \
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, explicit token input boundary, and prefill state foundation"
+	@echo "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, explicit token input boundary, prefill state foundation, and minimal KV ownership"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"
@@ -130,7 +130,7 @@ info:
 	@echo "backend_cuda: CUDA backend dynamic driver attachment implemented"
 	@echo "weights: fixture materialization implemented"
 	@echo "engine: runtime object skeleton implemented"
-	@echo "session: lifecycle skeleton implemented"
+	@echo "session: lifecycle diagnostics, engine attachment observer, and KV ownership implemented"
 	@echo "run: accepted-only runtime shell implemented"
 	@echo "chat: accepted-only REPL shell implemented"
 	@echo "metrics: runtime collector implemented"
@@ -152,7 +152,7 @@ info:
 	@echo "server_binary: yvexd shell implemented"
 	@echo "server_endpoints: health/metrics/models status implemented"
 	@echo "server_generation: not implemented"
-	@echo "kv: unavailable skeleton implemented"
+	@echo "kv: minimal session-owned append/read boundary implemented"
 	@echo "logits: unavailable skeleton implemented"
 	@echo "generation: unsupported"
 	@echo "inference: not implemented"

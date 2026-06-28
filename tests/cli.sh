@@ -39,6 +39,7 @@ run_section partial-graph tests/cli/partial_graph.sh
 run_section segment-graph tests/cli/segment_graph.sh
 run_section token-input tests/cli/token_input.sh
 run_section prefill-state tests/cli/prefill_state.sh
+run_section kv tests/cli/kv.sh
 run_section graph-integrity-guard tests/cli/graph_integrity_guard.sh
 run_section artifact-integrity-regression tests/cli/artifact_integrity_regression.sh
 run_section source-manifest tests/cli/source_manifest.sh

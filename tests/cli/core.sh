@@ -22,6 +22,7 @@
 #   - yvex qtype-support
 #   - yvex inspect
 #   - yvex input
+#   - yvex kv
 #   - yvex materialize
 #   - yvex materialize-gate
 #   - yvex metadata
@@ -100,7 +101,7 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, explicit token input boundary, and prefill state foundation"
+contains "$OUT_DIR/info.out" "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, explicit token input boundary, prefill state foundation, and minimal KV ownership"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "artifact: open/read implemented"
@@ -116,7 +117,7 @@ contains "$OUT_DIR/info.out" "backend: CPU reference implemented"
 contains "$OUT_DIR/info.out" "backend_cuda: tensor movement plus F32/F16 embed implemented when CUDA is available"
 contains "$OUT_DIR/info.out" "weights: selected tensor materialization implemented"
 contains "$OUT_DIR/info.out" "engine: descriptor open and selected-weight attachment implemented"
-contains "$OUT_DIR/info.out" "session: lifecycle diagnostics and engine attachment observer implemented"
+contains "$OUT_DIR/info.out" "session: lifecycle diagnostics, engine attachment observer, and KV ownership implemented"
 contains "$OUT_DIR/info.out" "run: accepted-only runtime shell implemented"
 contains "$OUT_DIR/info.out" "chat: accepted-only REPL shell implemented"
 contains "$OUT_DIR/info.out" "metrics: runtime collector implemented"
@@ -138,7 +139,7 @@ contains "$OUT_DIR/info.out" "imatrix: calibration artifact manifest implemented
 contains "$OUT_DIR/info.out" "server_binary: yvexd shell implemented"
 contains "$OUT_DIR/info.out" "server_endpoints: health/metrics/models status implemented"
 contains "$OUT_DIR/info.out" "server_generation: not implemented"
-contains "$OUT_DIR/info.out" "kv: unavailable skeleton implemented"
+contains "$OUT_DIR/info.out" "kv: minimal session-owned append/read boundary implemented"
 contains "$OUT_DIR/info.out" "logits: unavailable skeleton implemented"
 contains "$OUT_DIR/info.out" "generation: unsupported"
 contains "$OUT_DIR/info.out" "cuda: available when local driver/device probe succeeds"
@@ -161,6 +162,7 @@ contains "$OUT_DIR/commands.out" "  imatrix"
 contains "$OUT_DIR/commands.out" "  info"
 contains "$OUT_DIR/commands.out" "  inspect"
 contains "$OUT_DIR/commands.out" "  input"
+contains "$OUT_DIR/commands.out" "  kv"
 contains "$OUT_DIR/commands.out" "  materialize"
 contains "$OUT_DIR/commands.out" "  materialize-gate"
 contains "$OUT_DIR/commands.out" "  metadata"
@@ -205,6 +207,9 @@ contains "$OUT_DIR/help_inspect.out" "usage: yvex inspect FILE_OR_ALIAS"
 
 run_ok help_input "$YVEX_BIN" help input
 contains "$OUT_DIR/help_input.out" "usage: yvex input tokens"
+
+run_ok help_kv "$YVEX_BIN" help kv
+contains "$OUT_DIR/help_kv.out" "usage: yvex kv --layers N --heads N --head-dim N --capacity N"
 
 run_ok help_materialize "$YVEX_BIN" help materialize
 contains "$OUT_DIR/help_materialize.out" "usage: yvex materialize --model FILE_OR_ALIAS"
