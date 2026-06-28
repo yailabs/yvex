@@ -60,6 +60,7 @@ static int command_help(int argc, char **argv);
 static int command_imatrix(int argc, char **argv);
 static int command_info(int argc, char **argv);
 static int command_inspect(int argc, char **argv);
+static int command_input(int argc, char **argv);
 static int command_integrity(int argc, char **argv);
 static int command_integrity_report(int argc, char **argv);
 static int command_materialize(int argc, char **argv);
@@ -143,7 +144,7 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "graph",
         "Build graph diagnostics or execute narrow graph segments.",
-        "yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--fixture-token N] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N]",
+        "yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--fixture-token N] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N]",
         "Opens a GGUF descriptor and prints graph planning diagnostics. Execution flags attach selected weights and run the deterministic fixture embed node, real selected F16 embedding segment, or selected embedding-plus-RMSNorm segment; none of these paths is inference or text generation.",
         command_graph,
     },
@@ -188,6 +189,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex inspect FILE_OR_ALIAS",
         "Opens a file, parses the GGUF directory, builds a YVEX tensor table and descriptor, and prints a descriptor-only summary. Inspect does not materialize weights or execute a graph.",
         command_inspect,
+    },
+    {
+        "input",
+        "Parse and validate runtime token input.",
+        "yvex input tokens --model FILE_OR_ALIAS --tokens IDS | yvex input prompt --model FILE_OR_ALIAS --text TEXT",
+        "Parses explicit token sequences or tokenizer-backed prompt text into validated token input. This is not prefill, decode, logits, sampling, or generation.",
+        command_input,
     },
     {
         "integrity",
@@ -1087,6 +1095,317 @@ static int parse_uint_allow_zero(const char *text, unsigned int *out)
     return 1;
 }
 
+static void print_token_input_tokens(const yvex_token_input *input)
+{
+    unsigned long long i;
+
+    for (i = 0; input && i < input->token_count; ++i) {
+        printf("token_%llu: %u\n", i, input->tokens[i]);
+    }
+}
+
+static void print_token_input_summary(const yvex_token_input *input,
+                                      const char *status,
+                                      const char *bounds_status,
+                                      unsigned long long selected_index,
+                                      unsigned int selected_token,
+                                      int has_selected)
+{
+    printf("token_input_status: %s\n", status ? status : "fail");
+    printf("token_input_kind: %s\n",
+           input ? yvex_token_input_kind_name(input->kind) : "unknown");
+    printf("token_count: %llu\n", input ? input->token_count : 0ull);
+    if (input) {
+        printf("selected_token_index: %llu\n", selected_index);
+    }
+    if (has_selected) {
+        printf("selected_token_id: %u\n", selected_token);
+    } else if (input) {
+        printf("selected_token_id: unavailable\n");
+    }
+    printf("token_bounds_status: %s\n", bounds_status ? bounds_status : "not-checked");
+}
+
+static int cli_token_input_vocab_from_model(const char *path,
+                                            unsigned long long *out_vocab_size,
+                                            yvex_error *err)
+{
+    yvex_cli_tokenizer_context ctx;
+    const yvex_tensor_info *tensor;
+    yvex_tokenizer *tokenizer = NULL;
+    int rc;
+
+    if (!path || !out_vocab_size) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "cli_token_input_vocab_from_model",
+                       "path and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    *out_vocab_size = 0ull;
+    memset(&ctx, 0, sizeof(ctx));
+    rc = open_model_context(path, &ctx, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    tensor = yvex_tensor_table_find(ctx.table, "token_embd.weight");
+    if (tensor && tensor->rank == 2 && tensor->dims[1] > 0ull) {
+        *out_vocab_size = tensor->dims[1];
+        close_model_context(&ctx);
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+
+    rc = yvex_tokenizer_from_gguf(&tokenizer, ctx.gguf, ctx.model, err);
+    if (rc == YVEX_OK && yvex_tokenizer_vocab_size(tokenizer) > 0ull) {
+        *out_vocab_size = yvex_tokenizer_vocab_size(tokenizer);
+        yvex_tokenizer_close(tokenizer);
+        close_model_context(&ctx);
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+    yvex_tokenizer_close(tokenizer);
+    close_model_context(&ctx);
+    yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "cli_token_input_vocab_from_model",
+                   "tokenizer-metadata-missing");
+    return YVEX_ERR_UNSUPPORTED;
+}
+
+static int command_input(int argc, char **argv)
+{
+    yvex_model_ref ref;
+    yvex_cli_tokenizer_context ctx;
+    yvex_token_input input;
+    yvex_tokens tokens;
+    yvex_error err;
+    const char *subcommand;
+    const char *model_arg = NULL;
+    const char *tokens_text = NULL;
+    const char *prompt_text = NULL;
+    unsigned long long vocab_size = 0ull;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&ref, 0, sizeof(ref));
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&input, 0, sizeof(input));
+    memset(&tokens, 0, sizeof(tokens));
+
+    if (argc < 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        print_command_help(stdout, find_command("input"));
+        return argc >= 3 ? 0 : 2;
+    }
+
+    subcommand = argv[2];
+    if (strcmp(subcommand, "tokens") != 0 && strcmp(subcommand, "prompt") != 0) {
+        fprintf(stderr, "yvex: input requires tokens or prompt\n");
+        fprintf(stderr, "usage: yvex input tokens --model FILE_OR_ALIAS --tokens IDS | yvex input prompt --model FILE_OR_ALIAS --text TEXT\n");
+        return 2;
+    }
+
+    for (i = 3; i < argc; ++i) {
+        if (strcmp(argv[i], "--model") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --model requires FILE_OR_ALIAS\n");
+                return 2;
+            }
+            model_arg = argv[++i];
+        } else if (strcmp(argv[i], "--tokens") == 0 && strcmp(subcommand, "tokens") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --tokens requires IDS\n");
+                return 2;
+            }
+            tokens_text = argv[++i];
+        } else if (strcmp(argv[i], "--text") == 0 && strcmp(subcommand, "prompt") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --text requires TEXT\n");
+                return 2;
+            }
+            prompt_text = argv[++i];
+        } else {
+            fprintf(stderr, "yvex: unknown input option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help input' for usage.\n");
+            return 2;
+        }
+    }
+
+    if (!model_arg) {
+        fprintf(stderr, "yvex: input requires --model FILE_OR_ALIAS\n");
+        return 2;
+    }
+    if (strcmp(subcommand, "tokens") == 0 && !tokens_text) {
+        fprintf(stderr, "yvex: input tokens requires --tokens IDS\n");
+        return 2;
+    }
+    if (strcmp(subcommand, "prompt") == 0 && !prompt_text) {
+        fprintf(stderr, "yvex: input prompt requires --text TEXT\n");
+        return 2;
+    }
+
+    rc = yvex_model_ref_resolve(&ref, model_arg, NULL, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    rc = enforce_registered_identity_cli(&ref, "input");
+    if (rc != YVEX_OK) {
+        printf("token_input: %s\n", subcommand);
+        printf("model: %s\n", model_arg);
+        printf("resolved_path: %s\n", ref.path ? ref.path : "");
+        printf("identity_status: fail\n");
+        print_token_input_summary(NULL, "fail", "not-checked", 0ull, 0u, 0);
+        printf("prefill_ready: false\n");
+        printf("status: token-input-fail\n");
+        yvex_model_ref_clear(&ref);
+        return exit_for_status(rc);
+    }
+
+    if (strcmp(subcommand, "tokens") == 0) {
+        rc = yvex_token_input_parse_explicit(tokens_text, &input, &err);
+        if (rc == YVEX_OK) {
+            rc = cli_token_input_vocab_from_model(ref.path, &vocab_size, &err);
+        }
+        if (rc == YVEX_OK) {
+            rc = yvex_token_input_validate_bounds(&input, vocab_size, &err);
+        }
+
+        printf("token_input: tokens\n");
+        printf("model: %s\n", model_arg);
+        printf("resolved_path: %s\n", ref.path ? ref.path : "");
+        printf("model_input_kind: %s\n",
+               ref.kind == YVEX_MODEL_REF_ALIAS ? "alias" : "path");
+        printf("identity_status: %s\n",
+               ref.kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered");
+        print_token_input_summary(&input,
+                                  rc == YVEX_OK ? "pass" : "fail",
+                                  rc == YVEX_OK ? "pass" :
+                                  input.token_bounds_checked ? "fail" : "not-checked",
+                                  0ull,
+                                  input.token_count > 0ull ? input.tokens[0] : 0u,
+                                  input.token_count > 0ull);
+        printf("vocab_size: %llu\n", vocab_size);
+        print_token_input_tokens(&input);
+        printf("prefill_ready: false\n");
+        printf("logits_ready: false\n");
+        printf("generation: unsupported\n");
+        printf("status: %s\n", rc == YVEX_OK ? "token-input-pass" : "token-input-fail");
+        yvex_model_ref_clear(&ref);
+        if (rc != YVEX_OK) {
+            return print_yvex_error(&err, exit_for_status(rc));
+        }
+        return 0;
+    }
+
+    rc = open_model_context(ref.path, &ctx, &err);
+    if (rc != YVEX_OK) {
+        printf("token_input: prompt\n");
+        printf("model: %s\n", model_arg);
+        printf("resolved_path: %s\n", ref.path ? ref.path : "");
+        printf("model_input_kind: %s\n",
+               ref.kind == YVEX_MODEL_REF_ALIAS ? "alias" : "path");
+        printf("token_input_status: fail\n");
+        printf("token_input_kind: prompt-text\n");
+        printf("tokenizer_status: not-checked\n");
+        printf("reason: %s\n", yvex_error_message(&err));
+        printf("token_bounds_status: not-checked\n");
+        printf("prefill_ready: false\n");
+        printf("logits_ready: false\n");
+        printf("generation: unsupported\n");
+        printf("status: token-input-fail\n");
+        yvex_model_ref_clear(&ref);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_tokenizer_from_gguf(&ctx.tokenizer, ctx.gguf, ctx.model, &err);
+    if (rc != YVEX_OK) {
+        printf("token_input: prompt\n");
+        printf("model: %s\n", model_arg);
+        printf("resolved_path: %s\n", ref.path ? ref.path : "");
+        printf("model_input_kind: %s\n",
+               ref.kind == YVEX_MODEL_REF_ALIAS ? "alias" : "path");
+        printf("token_input_status: fail\n");
+        printf("token_input_kind: prompt-text\n");
+        printf("tokenizer_status: missing\n");
+        printf("reason: tokenizer-metadata-missing\n");
+        printf("token_bounds_status: not-checked\n");
+        printf("prefill_ready: false\n");
+        printf("logits_ready: false\n");
+        printf("generation: unsupported\n");
+        printf("status: token-input-fail\n");
+        close_model_context(&ctx);
+        yvex_model_ref_clear(&ref);
+        yvex_error_set(&err, YVEX_ERR_UNSUPPORTED, "yvex_input_prompt",
+                       "tokenizer-metadata-missing");
+        return print_yvex_error(&err, exit_for_status(YVEX_ERR_UNSUPPORTED));
+    }
+    if (yvex_tokenizer_support_of(ctx.tokenizer) != YVEX_TOKENIZER_SUPPORT_FIXTURE_ENCODE_DECODE) {
+        printf("token_input: prompt\n");
+        printf("model: %s\n", model_arg);
+        printf("resolved_path: %s\n", ref.path ? ref.path : "");
+        printf("model_input_kind: %s\n",
+               ref.kind == YVEX_MODEL_REF_ALIAS ? "alias" : "path");
+        printf("token_input_status: fail\n");
+        printf("token_input_kind: prompt-text\n");
+        printf("tokenizer_status: unsupported\n");
+        printf("tokenizer_support: %s\n",
+               yvex_tokenizer_support_name(yvex_tokenizer_support_of(ctx.tokenizer)));
+        printf("reason: tokenizer-metadata-missing\n");
+        printf("token_bounds_status: not-checked\n");
+        printf("prefill_ready: false\n");
+        printf("logits_ready: false\n");
+        printf("generation: unsupported\n");
+        printf("status: token-input-fail\n");
+        close_tokenizer_context(&ctx);
+        yvex_model_ref_clear(&ref);
+        yvex_error_set(&err, YVEX_ERR_UNSUPPORTED, "yvex_input_prompt",
+                       "tokenizer-metadata-missing");
+        return print_yvex_error(&err, exit_for_status(YVEX_ERR_UNSUPPORTED));
+    }
+
+    rc = yvex_tokenize_text(ctx.tokenizer, prompt_text, &tokens, &err);
+    if (rc == YVEX_OK) {
+        rc = yvex_token_input_from_ids(YVEX_TOKEN_INPUT_PROMPT_TEXT,
+                                       tokens.ids,
+                                       tokens.len,
+                                       &input,
+                                       &err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_token_input_validate_bounds(&input,
+                                              yvex_tokenizer_vocab_size(ctx.tokenizer),
+                                              &err);
+    }
+
+    printf("token_input: prompt\n");
+    printf("model: %s\n", model_arg);
+    printf("resolved_path: %s\n", ref.path ? ref.path : "");
+    printf("model_input_kind: %s\n",
+           ref.kind == YVEX_MODEL_REF_ALIAS ? "alias" : "path");
+    printf("tokenizer_status: present\n");
+    printf("tokenizer_support: %s\n",
+           yvex_tokenizer_support_name(yvex_tokenizer_support_of(ctx.tokenizer)));
+    print_token_input_summary(&input,
+                              rc == YVEX_OK ? "pass" : "fail",
+                              rc == YVEX_OK ? "pass" :
+                              input.token_bounds_checked ? "fail" : "not-checked",
+                              0ull,
+                              input.token_count > 0ull ? input.tokens[0] : 0u,
+                              input.token_count > 0ull);
+    printf("vocab_size: %llu\n", yvex_tokenizer_vocab_size(ctx.tokenizer));
+    print_token_input_tokens(&input);
+    printf("prefill_ready: false\n");
+    printf("logits_ready: false\n");
+    printf("generation: unsupported\n");
+    printf("status: %s\n", rc == YVEX_OK ? "token-input-pass" : "token-input-fail");
+
+    yvex_tokens_free(&tokens);
+    close_tokenizer_context(&ctx);
+    yvex_model_ref_clear(&ref);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    return 0;
+}
+
 static int command_integrity(int argc, char **argv)
 {
     yvex_artifact_integrity_options options;
@@ -1964,15 +2283,16 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, and real selected embedding partial graph execution\n");
+    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, and explicit token input boundary\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
     printf("gguf: metadata/tensor directory parsing implemented\n");
     printf("model: descriptor-only implemented\n");
     printf("tokenizer: fixture encode/decode implemented\n");
+    printf("token_input: explicit token boundary implemented\n");
     printf("prompt: default renderer implemented\n");
-    printf("graph: partial planning, deterministic fixture execution, and selected embedding partial execution implemented\n");
+    printf("graph: partial planning, deterministic fixture execution, selected embedding partial execution, and selected embedding RMSNorm segment execution implemented\n");
     printf("planner: estimate-only implemented\n");
     printf("backend: CPU reference implemented\n");
     printf("backend_cuda: tensor movement plus F32/F16 embed implemented when CUDA is available\n");
@@ -5217,14 +5537,23 @@ static int command_graph(int argc, char **argv)
     yvex_segment_graph_result segment_result;
     yvex_cli_graph_guard_report graph_guard;
     yvex_model_ref model_ref;
+    yvex_token_input token_input;
     yvex_engine *engine = NULL;
     yvex_error err;
     const char *model_arg = NULL;
     const char *backend_name = "cpu";
     const char *segment_name = NULL;
+    const char *tokens_text = NULL;
+    unsigned int token_index = 0u;
+    unsigned int selected_token_id = 0u;
+    unsigned long long token_vocab_size = 0ull;
     int execute_fixture = 0;
     int execute_partial = 0;
     int execute_segment = 0;
+    int fixture_token_provided = 0;
+    int partial_token_provided = 0;
+    int token_input_provided = 0;
+    int token_index_provided = 0;
     int i;
     int rc;
 
@@ -5239,6 +5568,7 @@ static int command_graph(int argc, char **argv)
     memset(&segment_result, 0, sizeof(segment_result));
     memset(&graph_guard, 0, sizeof(graph_guard));
     memset(&model_ref, 0, sizeof(model_ref));
+    memset(&token_input, 0, sizeof(token_input));
     options.sequence_length = 1;
     options.include_prefill_path = 1;
 
@@ -5279,6 +5609,7 @@ static int command_graph(int argc, char **argv)
                 fprintf(stderr, "yvex: --fixture-token requires a non-negative integer\n");
                 return 2;
             }
+            fixture_token_provided = 1;
             i += 1;
         } else if (strcmp(argv[i], "--execute-partial") == 0) {
             execute_partial = 1;
@@ -5296,6 +5627,21 @@ static int command_graph(int argc, char **argv)
                 return 2;
             }
             segment_options.token_id = partial_options.token_id;
+            partial_token_provided = 1;
+            i += 1;
+        } else if (strcmp(argv[i], "--tokens") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --tokens requires comma-separated token IDs\n");
+                return 2;
+            }
+            tokens_text = argv[++i];
+            token_input_provided = 1;
+        } else if (strcmp(argv[i], "--token-index") == 0) {
+            if (i + 1 >= argc || !parse_uint_allow_zero(argv[i + 1], &token_index)) {
+                fprintf(stderr, "yvex: --token-index requires a non-negative integer\n");
+                return 2;
+            }
+            token_index_provided = 1;
             i += 1;
         } else if (!model_arg) {
             model_arg = argv[i];
@@ -5308,7 +5654,7 @@ static int command_graph(int argc, char **argv)
 
     if (!model_arg) {
         fprintf(stderr, "yvex: graph requires FILE_OR_ALIAS\n");
-        fprintf(stderr, "usage: yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--fixture-token N] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N]\n");
+        fprintf(stderr, "usage: yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--fixture-token N] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N]\n");
         return 2;
     }
     if (strcmp(backend_name, "cpu") != 0 && strcmp(backend_name, "cuda") != 0) {
@@ -5331,6 +5677,18 @@ static int command_graph(int argc, char **argv)
         segment_options.segment_name = segment_name;
     } else if (segment_name) {
         fprintf(stderr, "yvex: --segment requires --execute-segment\n");
+        return 2;
+    }
+    if (token_index_provided && !token_input_provided) {
+        fprintf(stderr, "yvex: --token-index requires --tokens\n");
+        return 2;
+    }
+    if (token_input_provided && !(execute_fixture || execute_partial || execute_segment)) {
+        fprintf(stderr, "yvex: --tokens is only supported with graph execution flags\n");
+        return 2;
+    }
+    if (token_input_provided && (partial_token_provided || fixture_token_provided)) {
+        fprintf(stderr, "yvex: --tokens cannot be combined with --partial-token or --fixture-token\n");
         return 2;
     }
 
@@ -5357,6 +5715,57 @@ static int command_graph(int argc, char **argv)
             return exit_for_status(rc);
         }
 
+        if (token_input_provided) {
+            rc = yvex_token_input_parse_explicit(tokens_text, &token_input, &err);
+            if (rc == YVEX_OK) {
+                rc = cli_token_input_vocab_from_model(model_ref.path, &token_vocab_size, &err);
+            }
+            if (rc == YVEX_OK) {
+                rc = yvex_token_input_validate_bounds(&token_input, token_vocab_size, &err);
+            }
+            if (rc == YVEX_OK) {
+                rc = yvex_token_input_select(&token_input,
+                                             (unsigned long long)token_index,
+                                             &selected_token_id,
+                                             &err);
+            }
+            if (rc != YVEX_OK) {
+                init_graph_guard_report(&graph_guard,
+                                        execute_fixture ? "fixture-embedding" :
+                                        (execute_segment ? "selected-embedding-rmsnorm"
+                                                         : "selected-embedding-partial"),
+                                        !execute_fixture,
+                                        &model_ref);
+                graph_guard.slice_range_status =
+                    token_input.token_bounds_checked && token_input.token_bounds_valid
+                        ? "pass"
+                        : "fail";
+                print_token_input_summary(&token_input,
+                                          "fail",
+                                          token_input.token_bounds_checked
+                                              ? (token_input.token_bounds_valid ? "pass" : "fail")
+                                              : "not-checked",
+                                          (unsigned long long)token_index,
+                                          selected_token_id,
+                                          0);
+                printf("vocab_size: %llu\n", token_vocab_size);
+                print_graph_guard_report(&graph_guard);
+                printf("status: graph-integrity-fail\n");
+                yvex_model_ref_clear(&model_ref);
+                return print_yvex_error(&err, exit_for_status(rc));
+            }
+
+            if (execute_fixture) {
+                fixture_options.token_id = selected_token_id;
+            } else if (execute_segment) {
+                segment_options.token_id = selected_token_id;
+                partial_options.token_id = selected_token_id;
+            } else {
+                partial_options.token_id = selected_token_id;
+                segment_options.token_id = selected_token_id;
+            }
+        }
+
         rc = preflight_graph_guard(&model_ref,
                                    backend_name,
                                    execute_fixture,
@@ -5370,6 +5779,16 @@ static int command_graph(int argc, char **argv)
             printf("status: graph-integrity-fail\n");
             yvex_model_ref_clear(&model_ref);
             return print_yvex_error(&err, exit_for_status(rc));
+        }
+
+        if (token_input_provided) {
+            print_token_input_summary(&token_input,
+                                      "pass",
+                                      "pass",
+                                      (unsigned long long)token_index,
+                                      selected_token_id,
+                                      1);
+            printf("vocab_size: %llu\n", token_vocab_size);
         }
 
         engine_options.model_path = model_ref.path;

@@ -64,6 +64,7 @@ CORE_SRCS := \
 	yvex_graph.c \
 	yvex_metrics.c \
 	yvex_runtime.c \
+	yvex_token_input.c \
 	yvex_tokenizer.c \
 	yvex_chat.c \
 	yvex_server.c \

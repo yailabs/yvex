@@ -132,6 +132,10 @@ RMSNorm backend op for selected segment
 explicit segment memory plan
 CPU/CUDA real segment parity
 independent raw-artifact segment reference
+first-class prompt/token input boundary
+explicit token list parsing and bounds validation
+validated token sequence routing into implemented graph segments
+prompt text tokenizer boundary with tokenizer-metadata-missing failure
 artifact integrity validator baseline
 GGUF structural corruption detection
 tensor range and checked byte-count validation
@@ -297,8 +301,8 @@ unbounded spreadsheet.
 | ARTIFACT.INTEGRITY.9 | complete | Operator integrity report and doctor integration |
 | ARTIFACT.INTEGRITY.FINAL.0 | complete | Artifact integrity closeout before graph expansion |
 | M6 | complete | Real-model graph segment expansion |
-| M7 | next | Prompt/token input boundary |
-| M8 | planned | Prefill state foundation |
+| M7 | complete | Prompt/token input boundary |
+| M8 | next | Prefill state foundation |
 | M9 | planned | Minimal KV ownership and append/read boundary |
 | M10 | planned | Decode step over existing runtime state |
 | M11 | planned | Logits production boundary |
@@ -383,16 +387,19 @@ Expand from one partial segment to a selected embedding-plus-RMSNorm segment
 with multiple real tensors, two scheduled ops, intermediate scratch/output
 buffers, explicit memory plan, backend dispatch, independent raw-artifact
 reference comparison, CPU execution, CUDA parity where available, and
-cleanup/failure tests. Still no prompt input, prefill, KV runtime, decode,
-logits, sampling, generation, or benchmark claim.
+cleanup/failure tests. At the M6 boundary there was still no prompt input,
+prefill, KV runtime, decode, logits, sampling, generation, or benchmark claim.
 
-M7 — planned — Prompt/token input boundary
-Connect tokenizer/prompt diagnostics to runtime input tensors, sequence
-positions, model context, and session-owned input state. Prompt input may reach
-the scheduled graph boundary, but this is not prefill completion unless M8 is
-also complete.
+M7 — complete — Prompt/token input boundary
+Add a first-class token input object, explicit token list parsing, token bounds
+validation against selected embedding vocabulary facts, token-index selection,
+and routing into the implemented fixture, selected embedding, and selected
+embedding-plus-RMSNorm graph paths. Prompt text is accepted only when executable
+tokenizer metadata exists; selected artifacts without tokenizer metadata fail
+cleanly. This is not prefill, KV runtime, decode, logits, sampling, generation,
+or benchmark readiness.
 
-M8 — planned — Prefill state foundation
+M8 — next — Prefill state foundation
 Run prompt-token input through scheduled graph work to produce prefill state
 boundaries. Graph scratch and intermediate state must be owned and cleaned up.
 If KV or logits are not complete, the output must say so.
@@ -982,13 +989,13 @@ No diagram may imply support that the code does not implement.
 ## 8. Active Next
 
 ```text
-M7 - Prompt/token input boundary
+M8 - Prefill state foundation
 ```
 
-Next implementation: M7. It sits inside the larger runtime pipeline. It must
-connect tokenizer/prompt diagnostics to runtime input tensors and session-owned
-input state without claiming prefill completion. It must not claim KV runtime,
-logits, sampling, generation, server generation,
+Next implementation: M8. It sits inside the larger runtime pipeline. It must
+run validated prompt/token input through scheduled graph work to create the
+first prefill-state boundary without claiming decode or generation. It must not
+claim KV runtime, logits, sampling, generation, server generation,
 evaluation, or benchmark readiness.
 
 ## 9. Validation Gate

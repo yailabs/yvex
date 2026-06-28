@@ -28,6 +28,7 @@ int yvex_test_model_ref(void);
 int yvex_test_model_registry(void);
 int yvex_test_materialize_gate(void);
 int yvex_test_tokenizer(void);
+int yvex_test_token_input(void);
 int yvex_test_prompt(void);
 int yvex_test_shape(void);
 int yvex_test_graph(void);
@@ -115,6 +116,7 @@ static int run_model_weights(void)
 static int run_tokenizer_prompt(void)
 {
     if (run_test("tokenizer", yvex_test_tokenizer) != 0) return 1;
+    if (run_test("token_input", yvex_test_token_input) != 0) return 1;
     if (run_test("prompt", yvex_test_prompt) != 0) return 1;
     return 0;
 }

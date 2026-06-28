@@ -212,6 +212,22 @@ contains "$OUT_DIR/segment_graph_cuda.out" "segment_op_1: rms_norm"
 contains "$OUT_DIR/segment_graph_cuda.out" "segment_cuda_parity: pass"
 contains "$OUT_DIR/segment_graph_cuda.out" "status: real-segment-graph-executed"
 
+"$YVEX_BIN" graph --model "$SEGMENT" --backend cuda \
+  --execute-segment --segment embedding-rmsnorm --tokens 0,1 --token-index 1 \
+  >"$OUT_DIR/segment_graph_cuda_token_input.out" 2>"$OUT_DIR/segment_graph_cuda_token_input.err"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    fail "segment graph cuda token input exit code was $rc"
+fi
+contains "$OUT_DIR/segment_graph_cuda_token_input.out" "token_input_status: pass"
+contains "$OUT_DIR/segment_graph_cuda_token_input.out" "selected_token_index: 1"
+contains "$OUT_DIR/segment_graph_cuda_token_input.out" "selected_token_id: 1"
+contains "$OUT_DIR/segment_graph_cuda_token_input.out" "graph_kind: selected-embedding-rmsnorm"
+contains "$OUT_DIR/segment_graph_cuda_token_input.out" "segment_backend: cuda"
+contains "$OUT_DIR/segment_graph_cuda_token_input.out" "partial_token: 1"
+contains "$OUT_DIR/segment_graph_cuda_token_input.out" "segment_cuda_parity: pass"
+contains "$OUT_DIR/segment_graph_cuda_token_input.out" "status: real-segment-graph-executed"
+
 "$YVEX_BIN" help cuda-info >"$OUT_DIR/help_cuda_info.out" 2>"$OUT_DIR/help_cuda_info.err"
 rc=$?
 if [ "$rc" -ne 0 ]; then

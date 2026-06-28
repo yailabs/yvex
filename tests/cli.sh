@@ -37,6 +37,7 @@ run_section materialization-integrity-gate tests/cli/materialization_integrity_g
 run_section fixture-graph tests/cli/fixture_graph.sh
 run_section partial-graph tests/cli/partial_graph.sh
 run_section segment-graph tests/cli/segment_graph.sh
+run_section token-input tests/cli/token_input.sh
 run_section graph-integrity-guard tests/cli/graph_integrity_guard.sh
 run_section artifact-integrity-regression tests/cli/artifact_integrity_regression.sh
 run_section source-manifest tests/cli/source_manifest.sh

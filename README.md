@@ -115,7 +115,8 @@ earned through source provenance, tensor mapping, runtime execution, and tests.
 | Engine weight attachment | implemented | selected materialized weights are engine-owned state | graph execution |
 | Fixture graph execution | implemented for controlled `F32` fixtures | one deterministic graph path runs through backend dispatch | real-model inference |
 | Real-model partial graph | implemented for selected embedding segment | first real selected tensor graph segment | not prefill, decode, logits, or generation |
-| Real-model segment graph | implemented for selected embedding plus RMSNorm | multiple real tensors participate in scheduled graph work | not prompt input, prefill, logits, or generation |
+| Real-model segment graph | implemented for selected embedding plus RMSNorm | multiple real tensors participate in scheduled graph work | not prefill, logits, or generation |
+| Prompt/token input boundary | implemented for explicit token sequences | validated token sequence selects the token consumed by implemented graph segments | not prefill, KV, decode, logits, or generation |
 | Prefill, decode, logits | planned | future runtime stages | not implemented |
 | Generation and server generation | unsupported | no text generation path exists | provider endpoints are status-only |
 
@@ -181,6 +182,14 @@ A second selected-artifact path extends that proof to a larger real segment:
 `token_embd.weight` feeds an embedding lookup, then `blk.0.attn_norm.weight`
 feeds RMSNorm, and the final `F32` vector is compared with an independent
 raw-artifact reference. This is multi-tensor graph work, not transformer
+prefill.
+
+Prompt/token input is now a runtime boundary for explicit token sequences:
+`yvex input tokens` parses and bounds-checks token IDs, and `graph --tokens
+IDS --token-index N` routes one validated token into the implemented fixture,
+selected embedding, or selected embedding-plus-RMSNorm graph path. Prompt text
+only becomes token input when executable tokenizer metadata is present; selected
+artifacts without tokenizer metadata fail cleanly instead of pretending to
 prefill.
 
 The controlled fixture path is different. It uses a tiny controlled `F32`
@@ -355,7 +364,7 @@ graph parity only. It is not a `CUDA` transformer backend.
 | Path | Artifact | What it proves | What it does not prove |
 | --- | --- | --- | --- |
 | Selected-artifact path | DeepSeek selected `F16` embedding | real artifact identity, selected materialization, backend residency, engine attachment, selected embedding segment execution | full model graph, prefill, logits, or inference |
-| Selected segment path | DeepSeek selected `F16` embedding plus first RMSNorm weight | multiple real tensors, explicit segment memory plan, backend dispatch, raw-artifact reference comparison | prompt input, prefill, logits, decode, or generation |
+| Selected segment path | DeepSeek selected `F16` embedding plus first RMSNorm weight | multiple real tensors, explicit segment memory plan, backend dispatch, raw-artifact reference comparison, optional explicit token sequence input | prefill, logits, decode, or generation |
 | Controlled fixture path | DeepSeek-arch `F32` fixture `GGUF` | deterministic graph execution, backend dispatch, output readback | real-model graph expansion or logits |
 
 ## Live artifacts and fixtures
@@ -698,7 +707,7 @@ Capability and regression posture:
 | --- | --- | --- |
 | Fixture vectors | catch executor/backend regressions | available for the controlled fixture path |
 | Partial graph vectors | catch real-model graph segment drift | available for selected embedding and embedding-plus-RMSNorm segments |
-| Prompt/token tests | catch tokenizer/template drift | diagnostics only |
+| Prompt/token tests | catch token input and tokenizer/template drift | token boundary plus diagnostics only |
 | Logits vectors | catch output distribution regressions | planned after logits |
 | Capability eval | inspect generation quality on curated tasks | future only |
 
@@ -722,15 +731,16 @@ meaningful only when the same generation path used by operators exists.
 The next step is not "inference" in one jump. YVEX now has the first real-model
 partial graph path for a selected embedding segment and a larger selected
 embedding-plus-RMSNorm graph segment with multiple real tensors, explicit memory
-planning, backend dispatch, and regression coverage. The next runtime boundary
-is prompt/token input, not prefill.
+planning, backend dispatch, regression coverage, and explicit token input
+routing. The next runtime boundary is prefill state foundation, not decode or
+generation.
 
 | Runtime stage | Public meaning | Status |
 | --- | --- | --- |
 | Controlled fixture graph | deterministic executor proof | implemented |
 | Real partial graph | selected `F16` embedding segment | implemented |
 | Real graph segment expansion | selected embedding plus RMSNorm | implemented |
-| Prompt input | tokenizer/prompt into runtime tensors | next |
+| Prompt input | explicit token sequence boundary into implemented graph segments | implemented |
 | Prefill | prompt tokens through graph state | planned |
 | Minimal KV | session-owned append/read state | planned |
 | Decode | one step over existing state | planned |

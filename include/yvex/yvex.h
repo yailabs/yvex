@@ -65,6 +65,7 @@
 #include <yvex/source_manifest.h>
 #include <yvex/status.h>
 #include <yvex/tensor.h>
+#include <yvex/token_input.h>
 #include <yvex/tokenizer.h>
 #include <yvex/trace.h>
 #include <yvex/version.h>

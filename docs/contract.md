@@ -83,9 +83,22 @@ The segment is graph-guarded, integrity-gated, backend-dispatched,
 memory-planned, and compared against an independent raw-artifact reference. It
 requires validated tensor ranges, selected embedding shape readiness, RMSNorm
 shape/dtype compatibility, RMSNorm epsilon metadata, backend op support, and
-checked intermediate/output/reference byte accounting. It is not prompt input,
-prefill, KV runtime, decode, logits, sampling, generation, full transformer
+checked intermediate/output/reference byte accounting. It is not prefill, KV
+runtime, decode, logits, sampling, generation, full transformer
 execution, full model support, or a benchmark.
+
+### Prompt/token input boundary
+
+YVEX has a first-class token input boundary for explicit token sequences.
+`yvex input tokens` parses bounded comma-separated token IDs, validates token
+count and integer bounds, and checks token IDs against selected embedding
+vocabulary facts when available. Implemented graph paths can consume one token
+selected from that validated sequence with `--tokens IDS --token-index N`.
+
+Prompt text is only converted to token input when executable tokenizer metadata
+is present. If a selected artifact has no tokenizer metadata, prompt input fails
+with `tokenizer-metadata-missing`. This boundary does not create prefill state,
+KV state, decode, logits, sampling, generation, or benchmark readiness.
 
 ### Artifact integrity baseline
 
@@ -167,9 +180,10 @@ inference readiness, full model support, or supply-chain security.
 Graph execution is guarded by artifact integrity. Fixture graph and real
 selected embedding partial graph execution run graph-specific preflight before
 dispatch: structural integrity, identity when using aliases, metadata drift,
-shape/dtype accounting, tensor range validation, selected token slice
-validation, backend availability, backend op support, output allocation size,
-and reference read bounds. Preflight failure must prevent dispatch.
+shape/dtype accounting, tensor range validation, token input selection where
+provided, selected token slice validation, backend availability, backend op
+support, output allocation size, and reference read bounds. Preflight failure
+must prevent dispatch.
 
 Post-preflight failures must attempt cleanup and report the graph phase. This
 guard applies only to the implemented controlled fixture and selected embedding

@@ -25,7 +25,7 @@ model and tensors:
   dtype.h tensor.h model.h weights.h
 
 tokenizer and prompt:
-  tokenizer.h prompt.h
+  tokenizer.h token_input.h prompt.h
 
 graph and planning:
   graph.h op.h planner.h memory_plan.h
@@ -86,6 +86,7 @@ model artifacts remain outside the repository
 | GGUF metadata/tensor parse | implemented |
 | Tensor/model descriptor | implemented |
 | Tokenizer fixture path | implemented |
+| Token input boundary | implemented for explicit token sequences and tokenizer-backed fixture prompts |
 | Prompt rendering diagnostics | implemented |
 | Graph/planner substrate | implemented |
 | CPU backend | implemented |
@@ -133,15 +134,24 @@ state and executes the implemented selected segment kind,
 embedding tensor, the RMSNorm tensor, RMSNorm epsilon metadata key/value,
 explicit intermediate/output/scratch/reference byte planning, output and
 reference checksums, sample values, and max absolute difference against an
-independent raw-artifact reference. The segment is embedding lookup followed by
-RMSNorm only; it is not prompt input, prefill, KV runtime, decode, logits,
-sampling, generation, full transformer execution, or full model support.
+independent raw-artifact reference. The engine segment itself accepts a selected
+token id; prompt/token input is normalized before this call. The segment is
+embedding lookup followed by RMSNorm only; it is not prefill, KV runtime,
+decode, logits, sampling, generation, full transformer execution, or full model
+support.
 
 `yvex_backend_op_rms_norm` is the backend RMSNorm op used by the selected
 segment. It supports the narrow path needed by M6: `F32` input/output with
 `F16` or `F32` RMSNorm weights and explicit epsilon. Backend support for this op
 does not imply matmul, attention, logits, decode, generation, or full
 transformer backend coverage.
+
+`yvex_token_input_parse_explicit`, `yvex_token_input_validate_bounds`, and
+`yvex_token_input_select` define the public token input boundary. The token
+input object owns a bounded copied token list. It does not own tokenizer
+algorithms, prefill state, KV state, decode, logits, sampling, or generation.
+Prompt text can become token input only through existing tokenizer APIs when the
+artifact has executable tokenizer metadata.
 
 `yvex_artifact_identity_read` and `yvex_artifact_compute_sha256` provide local
 file identity evidence: current byte size plus lowercase SHA-256 digest. The
