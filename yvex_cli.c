@@ -71,6 +71,7 @@ static int command_models(int argc, char **argv);
 static int command_native_weights(int argc, char **argv);
 static int command_paths(int argc, char **argv);
 static int command_plan(int argc, char **argv);
+static int command_prefill(int argc, char **argv);
 static int command_prompt(int argc, char **argv);
 static int command_quant_job(int argc, char **argv);
 static int command_quant_policy(int argc, char **argv);
@@ -266,6 +267,13 @@ static const yvex_cli_command yvex_commands[] = {
         "yvex plan <path> [--backend cpu|cuda] [--seq N] [--ctx N]",
         "Builds a graph and memory estimate. CPU and CUDA backend capability labels are probed, but execution remains disabled.",
         command_plan,
+    },
+    {
+        "prefill",
+        "Create an inspectable prefill state summary.",
+        "yvex prefill --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS",
+        "Consumes validated explicit token input through the implemented selected embedding-plus-RMSNorm graph segment and records a segment-summary prefill foundation. It does not create KV, decode, logits, sampling, or generation.",
+        command_prefill,
     },
     {
         "prompt",
@@ -2283,7 +2291,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, and explicit token input boundary\n");
+    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, explicit token input boundary, and prefill state foundation\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -2291,6 +2299,7 @@ static int command_info(int argc, char **argv)
     printf("model: descriptor-only implemented\n");
     printf("tokenizer: fixture encode/decode implemented\n");
     printf("token_input: explicit token boundary implemented\n");
+    printf("prefill_state: segment-summary foundation implemented\n");
     printf("prompt: default renderer implemented\n");
     printf("graph: partial planning, deterministic fixture execution, selected embedding partial execution, and selected embedding RMSNorm segment execution implemented\n");
     printf("planner: estimate-only implemented\n");
@@ -6108,6 +6117,228 @@ static int command_graph(int argc, char **argv)
     if (rc != YVEX_OK) {
         return print_yvex_error(&err, exit_for_status(rc));
     }
+    return 0;
+}
+
+static void print_prefill_state_summary(const yvex_prefill_state_summary *summary,
+                                        const char *model_arg,
+                                        const char *backend_name,
+                                        const char *token_input_status,
+                                        const char *status)
+{
+    printf("prefill: state\n");
+    printf("prefill_state_created: %s\n",
+           summary && summary->prefill_state_created ? "true" : "false");
+    printf("prefill_state_kind: %s\n",
+           summary && summary->prefill_state_kind ? summary->prefill_state_kind : "segment-summary");
+    printf("sequence_execution_mode: %s\n",
+           summary && summary->sequence_execution_mode
+               ? summary->sequence_execution_mode
+               : "independent-token-segments");
+    printf("prefill_phase: %s\n",
+           summary && summary->prefill_phase ? summary->prefill_phase : "preflight");
+    printf("model: %s\n", model_arg ? model_arg : "");
+    printf("backend: %s\n",
+           summary && summary->backend_name && strcmp(summary->backend_name, "none") != 0
+               ? summary->backend_name
+               : (backend_name ? backend_name : "cpu"));
+    printf("segment: %s\n",
+           summary && summary->segment_name ? summary->segment_name : "embedding-rmsnorm");
+    printf("token_input_status: %s\n", token_input_status ? token_input_status : "fail");
+    printf("token_count: %llu\n", summary ? summary->token_count : 0ull);
+    printf("tokens_processed: %llu\n", summary ? summary->tokens_processed : 0ull);
+    printf("position_start: %llu\n", summary ? summary->position_start : 0ull);
+    printf("position_end: %llu\n", summary ? summary->position_end : 0ull);
+    printf("failed_token_index: %llu\n", summary ? summary->failed_token_index : 0ull);
+    printf("segment_graph_executions: %llu\n", summary ? summary->segment_graph_executions : 0ull);
+    printf("segment_output_count: %llu\n", summary ? summary->segment_output_count : 0ull);
+    printf("segment_output_bytes: %llu\n", summary ? summary->segment_output_bytes : 0ull);
+    printf("prefill_aggregate_checksum: %llu\n", summary ? summary->aggregate_checksum : 0ull);
+    printf("prefill_final_token_checksum: %llu\n", summary ? summary->final_token_checksum : 0ull);
+    printf("prefill_total_output_bytes: %llu\n", summary ? summary->total_output_bytes : 0ull);
+    printf("prefill_scratch_bytes: %llu\n", summary ? summary->scratch_bytes : 0ull);
+    printf("prefill_max_abs_diff: %.9g\n", summary ? summary->max_abs_diff : 0.0);
+    printf("cleanup_attempted: %s\n",
+           summary && summary->cleanup_attempted ? "true" : "false");
+    printf("cleanup_status: %s\n",
+           summary && summary->cleanup_status ? summary->cleanup_status : "not-needed");
+    if (summary && summary->cuda_parity) {
+        printf("prefill_cuda_parity: pass\n");
+    }
+    printf("kv_ready: false\n");
+    printf("decode_ready: false\n");
+    printf("logits_ready: false\n");
+    printf("generation: unsupported\n");
+    printf("status: %s\n", status ? status : "prefill-state-fail");
+}
+
+static int command_prefill(int argc, char **argv)
+{
+    yvex_model_ref model_ref;
+    yvex_token_input token_input;
+    yvex_engine_options engine_options;
+    yvex_prefill_state_options prefill_options;
+    yvex_prefill_state_summary prefill_summary;
+    yvex_cli_graph_guard_report graph_guard;
+    yvex_engine *engine = NULL;
+    yvex_error err;
+    const char *model_arg = NULL;
+    const char *backend_name = "cpu";
+    const char *segment_name = NULL;
+    const char *tokens_text = NULL;
+    unsigned long long vocab_size = 0ull;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&model_ref, 0, sizeof(model_ref));
+    memset(&token_input, 0, sizeof(token_input));
+    memset(&engine_options, 0, sizeof(engine_options));
+    memset(&prefill_options, 0, sizeof(prefill_options));
+    memset(&prefill_summary, 0, sizeof(prefill_summary));
+    memset(&graph_guard, 0, sizeof(graph_guard));
+
+    if (argc < 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        print_command_help(stdout, find_command("prefill"));
+        return argc >= 3 ? 0 : 2;
+    }
+
+    for (i = 2; i < argc; ++i) {
+        if (strcmp(argv[i], "--model") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --model requires FILE_OR_ALIAS\n");
+                return 2;
+            }
+            model_arg = argv[++i];
+        } else if (strcmp(argv[i], "--backend") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --backend requires cpu|cuda\n");
+                return 2;
+            }
+            backend_name = argv[++i];
+        } else if (strcmp(argv[i], "--segment") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --segment requires embedding-rmsnorm\n");
+                return 2;
+            }
+            segment_name = argv[++i];
+        } else if (strcmp(argv[i], "--tokens") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --tokens requires IDS\n");
+                return 2;
+            }
+            tokens_text = argv[++i];
+        } else if (!model_arg) {
+            model_arg = argv[i];
+        } else {
+            fprintf(stderr, "yvex: unknown prefill option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help prefill' for usage.\n");
+            return 2;
+        }
+    }
+
+    if (!model_arg || !tokens_text || !segment_name) {
+        fprintf(stderr, "usage: yvex prefill --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS\n");
+        return 2;
+    }
+    if (strcmp(backend_name, "cpu") != 0 && strcmp(backend_name, "cuda") != 0) {
+        fprintf(stderr, "yvex: unknown backend kind: %s\n", backend_name);
+        return 2;
+    }
+    if (strcmp(segment_name, "embedding-rmsnorm") != 0) {
+        fprintf(stderr, "yvex: unsupported prefill segment: %s\n", segment_name);
+        return 2;
+    }
+
+    rc = yvex_model_ref_resolve(&model_ref, model_arg, NULL, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    rc = enforce_registered_identity_cli(&model_ref, "prefill");
+    if (rc != YVEX_OK) {
+        prefill_summary.prefill_state_kind = "segment-summary";
+        prefill_summary.sequence_execution_mode = "independent-token-segments";
+        prefill_summary.prefill_phase = "preflight";
+        prefill_summary.segment_name = segment_name;
+        prefill_summary.cleanup_status = "not-needed";
+        print_prefill_state_summary(&prefill_summary, model_arg, backend_name, "fail", "prefill-state-fail");
+        yvex_model_ref_clear(&model_ref);
+        return exit_for_status(rc);
+    }
+
+    rc = yvex_token_input_parse_explicit(tokens_text, &token_input, &err);
+    if (rc == YVEX_OK) {
+        rc = cli_token_input_vocab_from_model(model_ref.path, &vocab_size, &err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_token_input_validate_bounds(&token_input, vocab_size, &err);
+    }
+    if (rc != YVEX_OK) {
+        prefill_summary.prefill_state_kind = "segment-summary";
+        prefill_summary.sequence_execution_mode = "independent-token-segments";
+        prefill_summary.prefill_phase = "preflight";
+        prefill_summary.segment_name = segment_name;
+        prefill_summary.token_count = token_input.token_count;
+        prefill_summary.cleanup_status = "not-needed";
+        print_prefill_state_summary(&prefill_summary, model_arg, backend_name, "fail", "prefill-state-fail");
+        yvex_model_ref_clear(&model_ref);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = preflight_graph_guard(&model_ref,
+                               backend_name,
+                               0,
+                               1,
+                               token_input.tokens[0],
+                               &graph_guard,
+                               &err);
+    if (rc != YVEX_OK) {
+        prefill_summary.prefill_state_kind = "segment-summary";
+        prefill_summary.sequence_execution_mode = "independent-token-segments";
+        prefill_summary.prefill_phase = "preflight";
+        prefill_summary.segment_name = segment_name;
+        prefill_summary.token_count = token_input.token_count;
+        prefill_summary.cleanup_status = "not-needed";
+        print_prefill_state_summary(&prefill_summary, model_arg, backend_name, "pass", "prefill-state-fail");
+        print_graph_guard_report(&graph_guard);
+        yvex_model_ref_clear(&model_ref);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    engine_options.model_path = model_ref.path;
+    engine_options.load_tokenizer = 0;
+    engine_options.build_descriptor = 1;
+    engine_options.build_default_graph = 1;
+    engine_options.attach_weights = 1;
+    engine_options.backend_name = backend_name;
+    engine_options.require_all_weights = 1;
+    rc = yvex_engine_open(&engine, &engine_options, &err);
+    if (rc != YVEX_OK) {
+        prefill_summary.prefill_state_kind = "segment-summary";
+        prefill_summary.sequence_execution_mode = "independent-token-segments";
+        prefill_summary.prefill_phase = "preflight";
+        prefill_summary.segment_name = segment_name;
+        prefill_summary.token_count = token_input.token_count;
+        prefill_summary.cleanup_status = "not-needed";
+        print_prefill_state_summary(&prefill_summary, model_arg, backend_name, "pass", "prefill-state-fail");
+        yvex_model_ref_clear(&model_ref);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    prefill_options.token_input = &token_input;
+    prefill_options.segment_name = segment_name;
+    prefill_options.position_start = 0ull;
+    rc = yvex_engine_create_prefill_state(engine, &prefill_options, &prefill_summary, &err);
+    if (rc != YVEX_OK) {
+        print_prefill_state_summary(&prefill_summary, model_arg, backend_name, "pass", "prefill-state-fail");
+        yvex_engine_close(engine);
+        yvex_model_ref_clear(&model_ref);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    print_prefill_state_summary(&prefill_summary, model_arg, backend_name, "pass", "prefill-state-created");
+    yvex_engine_close(engine);
+    yvex_model_ref_clear(&model_ref);
     return 0;
 }
 

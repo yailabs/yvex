@@ -113,7 +113,7 @@ CURRENT_DOCS := README.md AGENTS.md MODEL_ARTIFACTS.md NOTICE.md \
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: selected tensor materialization, engine weight attachment, and fixture graph execution"
+	@echo "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, explicit token input boundary, and prefill state foundation"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"
@@ -121,8 +121,10 @@ info:
 	@echo "gguf: metadata/tensor directory parsing implemented"
 	@echo "model: descriptor-only implemented"
 	@echo "tokenizer: fixture encode/decode implemented"
+	@echo "token_input: explicit token boundary implemented"
+	@echo "prefill_state: segment-summary foundation implemented"
 	@echo "prompt: default renderer implemented"
-	@echo "graph: partial planning and deterministic fixture execution implemented"
+	@echo "graph: partial planning, deterministic fixture execution, selected embedding partial execution, and selected embedding RMSNorm segment execution implemented"
 	@echo "planner: estimate-only implemented"
 	@echo "backend: CPU reference implemented"
 	@echo "backend_cuda: CUDA backend dynamic driver attachment implemented"

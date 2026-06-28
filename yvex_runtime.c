@@ -1,8 +1,9 @@
 /*
  * yvex_runtime.c - Engine, session, KV, and logits shells.
  *
- * This file owns descriptor-only runtime state. It does not implement prefill,
- * decode, sampling, or generation.
+ * This file owns descriptor and lower runtime state. It implements a
+ * segment-summary prefill foundation, but not attention KV, decode, sampling,
+ * or generation.
  */
 
 #include <stddef.h>
@@ -491,6 +492,18 @@ static int runtime_checked_add_ull(unsigned long long a,
     }
     *out = a + b;
     return 1;
+}
+
+static unsigned long long runtime_mix_checksum_u64(unsigned long long hash,
+                                                   unsigned long long value)
+{
+    unsigned int i;
+
+    for (i = 0; i < 8u; ++i) {
+        hash ^= (value >> (i * 8u)) & 0xffull;
+        hash *= 1099511628211ull;
+    }
+    return hash;
 }
 
 static double runtime_sqrt_double(double x)
@@ -1623,6 +1636,133 @@ int yvex_engine_execute_segment_graph(yvex_engine *engine,
     out->graph_integrity_guard = "pass";
     out->graph_execution_phase = "complete";
     out->cleanup_status = "not-needed";
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_engine_create_prefill_state(yvex_engine *engine,
+                                     const yvex_prefill_state_options *options,
+                                     yvex_prefill_state_summary *out,
+                                     yvex_error *err)
+{
+    yvex_segment_graph_options segment_options;
+    yvex_segment_graph_result segment_result;
+    const yvex_token_input *input;
+    const char *segment_name = "embedding-rmsnorm";
+    unsigned long long aggregate = 1469598103934665603ull;
+    unsigned long long i;
+    int rc;
+
+    if (!engine || !options || !options->token_input || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_create_prefill_state",
+                       "engine, options, token input, and out are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    memset(out, 0, sizeof(*out));
+    out->prefill_state_kind = "segment-summary";
+    out->sequence_execution_mode = "independent-token-segments";
+    out->prefill_phase = "preflight";
+    out->backend_name = "none";
+    out->segment_name = "embedding-rmsnorm";
+    out->cleanup_status = "not-needed";
+    out->generation_status = "unsupported";
+    out->kv_ready = 0;
+    out->decode_ready = 0;
+    out->logits_ready = 0;
+
+    input = options->token_input;
+    if (options->segment_name) {
+        segment_name = options->segment_name;
+    }
+    if (strcmp(segment_name, "embedding-rmsnorm") != 0) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_create_prefill_state",
+                       "unsupported prefill segment; expected embedding-rmsnorm");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    out->segment_name = segment_name;
+    out->token_count = input->token_count;
+    out->position_start = options->position_start;
+    out->position_end = options->position_start;
+
+    if (input->token_count == 0ull) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_create_prefill_state",
+                       "token-list-empty");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (!input->token_bounds_checked || !input->token_bounds_valid) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_engine_create_prefill_state",
+                       "validated token input is required before prefill state creation");
+        return YVEX_ERR_STATE;
+    }
+    if (input->token_count > ULLONG_MAX - options->position_start) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_create_prefill_state",
+                       "prefill position range overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    out->position_end = options->position_start + input->token_count - 1ull;
+
+    if (engine->weight_backend) {
+        out->backend_name = yvex_backend_kind_name(yvex_backend_kind_of(engine->weight_backend));
+    }
+
+    for (i = 0; i < input->token_count; ++i) {
+        memset(&segment_options, 0, sizeof(segment_options));
+        memset(&segment_result, 0, sizeof(segment_result));
+        segment_options.segment_name = segment_name;
+        segment_options.token_id = input->tokens[i];
+
+        out->prefill_phase = "token-execution";
+        rc = yvex_engine_execute_segment_graph(engine, &segment_options, &segment_result, err);
+        if (rc != YVEX_OK) {
+            out->failed_token_index = i;
+            out->cleanup_attempted = segment_result.cleanup_attempted;
+            out->cleanup_status = segment_result.cleanup_status
+                                      ? segment_result.cleanup_status
+                                      : (segment_result.cleanup_attempted ? "pass" : "not-needed");
+            return rc;
+        }
+
+        out->segment_graph_executions += 1ull;
+        out->tokens_processed += 1ull;
+        out->segment_output_count = segment_result.segment_output_count;
+        out->segment_output_bytes = segment_result.segment_output_bytes;
+        if (!runtime_checked_add_ull(out->total_output_bytes,
+                                     segment_result.segment_output_bytes,
+                                     &out->total_output_bytes) ||
+            !runtime_checked_add_ull(out->scratch_bytes,
+                                     segment_result.segment_scratch_bytes,
+                                     &out->scratch_bytes)) {
+            out->failed_token_index = i;
+            out->cleanup_attempted = 1;
+            out->cleanup_status = "pass";
+            yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_create_prefill_state",
+                           "prefill byte accounting overflow");
+            return YVEX_ERR_BOUNDS;
+        }
+        out->final_token_checksum = segment_result.output_checksum;
+        aggregate = runtime_mix_checksum_u64(aggregate, (unsigned long long)input->tokens[i]);
+        aggregate = runtime_mix_checksum_u64(aggregate, segment_result.output_checksum);
+        aggregate = runtime_mix_checksum_u64(aggregate, segment_result.reference_checksum);
+        if (segment_result.max_abs_diff > out->max_abs_diff) {
+            out->max_abs_diff = segment_result.max_abs_diff;
+        }
+
+        if (yvex_runtime_test_env_enabled("YVEX_TEST_FAIL_PREFILL_AFTER_TOKEN_0") && i == 0ull) {
+            out->failed_token_index = i + 1ull;
+            out->cleanup_attempted = 1;
+            out->cleanup_status = "pass";
+            yvex_error_set(err, YVEX_ERR_BACKEND, "yvex_engine_create_prefill_state",
+                           "test prefill failure after token 0");
+            return YVEX_ERR_BACKEND;
+        }
+    }
+
+    out->aggregate_checksum = aggregate;
+    out->prefill_state_created = 1;
+    out->prefill_phase = "complete";
+    out->cleanup_status = "not-needed";
+    out->cuda_parity = out->backend_name && strcmp(out->backend_name, "cuda") == 0;
     yvex_error_clear(err);
     return YVEX_OK;
 }

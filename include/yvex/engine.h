@@ -34,6 +34,7 @@
 #include <yvex/graph.h>
 #include <yvex/model.h>
 #include <yvex/tensor.h>
+#include <yvex/token_input.h>
 #include <yvex/tokenizer.h>
 
 #ifdef __cplusplus
@@ -211,6 +212,41 @@ typedef struct {
     int graph_execution_ready;
 } yvex_segment_graph_result;
 
+typedef struct {
+    const yvex_token_input *token_input;
+    const char *segment_name;
+    unsigned long long position_start;
+} yvex_prefill_state_options;
+
+typedef struct {
+    int prefill_state_created;
+    const char *prefill_state_kind;
+    const char *sequence_execution_mode;
+    const char *prefill_phase;
+    const char *backend_name;
+    const char *segment_name;
+    unsigned long long token_count;
+    unsigned long long tokens_processed;
+    unsigned long long position_start;
+    unsigned long long position_end;
+    unsigned long long failed_token_index;
+    unsigned long long segment_graph_executions;
+    unsigned long long segment_output_count;
+    unsigned long long segment_output_bytes;
+    unsigned long long total_output_bytes;
+    unsigned long long scratch_bytes;
+    unsigned long long aggregate_checksum;
+    unsigned long long final_token_checksum;
+    double max_abs_diff;
+    int cleanup_attempted;
+    const char *cleanup_status;
+    int cuda_parity;
+    int kv_ready;
+    int decode_ready;
+    int logits_ready;
+    const char *generation_status;
+} yvex_prefill_state_summary;
+
 int yvex_engine_open(yvex_engine **out,
                      const yvex_engine_options *options,
                      yvex_error *err);
@@ -244,6 +280,10 @@ int yvex_engine_execute_segment_graph(yvex_engine *engine,
                                       const yvex_segment_graph_options *options,
                                       yvex_segment_graph_result *out,
                                       yvex_error *err);
+int yvex_engine_create_prefill_state(yvex_engine *engine,
+                                     const yvex_prefill_state_options *options,
+                                     yvex_prefill_state_summary *out,
+                                     yvex_error *err);
 
 const char *yvex_engine_diagnostic_reason(const yvex_engine *engine);
 

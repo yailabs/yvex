@@ -136,6 +136,11 @@ first-class prompt/token input boundary
 explicit token list parsing and bounds validation
 validated token sequence routing into implemented graph segments
 prompt text tokenizer boundary with tokenizer-metadata-missing failure
+prefill state summary object
+token sequence prefill-state processing
+segment-summary prefill foundation
+per-token selected graph execution aggregation
+prefill cleanup/failure reporting
 artifact integrity validator baseline
 GGUF structural corruption detection
 tensor range and checked byte-count validation
@@ -302,8 +307,8 @@ unbounded spreadsheet.
 | ARTIFACT.INTEGRITY.FINAL.0 | complete | Artifact integrity closeout before graph expansion |
 | M6 | complete | Real-model graph segment expansion |
 | M7 | complete | Prompt/token input boundary |
-| M8 | next | Prefill state foundation |
-| M9 | planned | Minimal KV ownership and append/read boundary |
+| M8 | complete | Prefill state foundation |
+| M9 | next | Minimal KV ownership and append/read boundary |
 | M10 | planned | Decode step over existing runtime state |
 | M11 | planned | Logits production boundary |
 | M12 | planned | Deterministic logits regression |
@@ -399,12 +404,15 @@ tokenizer metadata exists; selected artifacts without tokenizer metadata fail
 cleanly. This is not prefill, KV runtime, decode, logits, sampling, generation,
 or benchmark readiness.
 
-M8 — next — Prefill state foundation
-Run prompt-token input through scheduled graph work to produce prefill state
-boundaries. Graph scratch and intermediate state must be owned and cleaned up.
-If KV or logits are not complete, the output must say so.
+M8 — complete — Prefill state foundation
+Create an inspectable segment-summary prefill state from validated token input
+by running the implemented selected embedding-plus-RMSNorm graph segment over
+each token in order. Reports token count, processed positions, per-token segment
+aggregation, checksums, byte accounting, and cleanup/failure status. This is not
+attention KV runtime, decode, logits, sampling, generation, or benchmark
+readiness.
 
-M9 — planned — Minimal KV ownership and append/read boundary
+M9 — next — Minimal KV ownership and append/read boundary
 Introduce minimal session-owned KV shape, allocation, append/read, and lifecycle
 needed for prefill/decode. KV state must be inspectable or summarizable, and
 cleanup plus context-overflow failure paths must be tested. This is separate
@@ -465,7 +473,8 @@ session can observe engine weight attachment state
 deterministic fixture graph execution complete
 real selected embedding partial graph execution complete
 selected embedding plus RMSNorm graph segment complete
-prefill/decode/logits/sampling/generation not implemented
+prefill state summary foundation complete
+KV/decode/logits/sampling/generation not implemented
 ```
 
 M6 expands real scheduled computation beyond the selected embedding segment. It
@@ -659,8 +668,9 @@ engine attachment complete
 fixture graph execution complete
 real selected embedding partial graph execution complete
 full model materialization not reached
-larger real-model graph execution not reached
-execution/prefill/decode/logits/sampling/generation not reached
+larger real-model graph segment execution reached
+prefill state foundation reached
+full execution/KV/decode/logits/sampling/generation not reached
 execution_ready remains false
 ```
 
@@ -822,7 +832,7 @@ Dependencies:
 ```text
 EVAL.FIXTURE.0 follows M4
 EVAL.PARTIAL.0 follows M5/M6
-EVAL.PREFILL.0 follows prefill implementation
+EVAL.PREFILL.0 follows prefill state foundation
 EVAL.KV.0 follows minimal KV implementation
 EVAL.DECODE.0 follows decode step
 EVAL.LOGITS.0 follows logits boundary
@@ -860,7 +870,7 @@ decode, logits, sampling, and generation are implemented.
 | Fixture graph correctness | M4 | output values/checksum | available |
 | Selected embedding partial graph correctness | M5 | output checksum/sample/max diff | available |
 | Real segment regression | M6 | output checksum/vector diff | available |
-| Prefill speed | M8/M9 | prompt tokens/sec, memory, scratch, KV state | planned |
+| Prefill speed | future transformer prefill/KV path | prompt tokens/sec, memory, scratch, KV state | planned |
 | Decode speed | M10/M11 | generated step/sec or token/sec after logits path | planned |
 | Generation speed | M14 | tokens/sec, latency, stop reason, context length | planned |
 | Provider latency | M16 | request latency, streaming latency, queue behavior | planned |
@@ -989,14 +999,14 @@ No diagram may imply support that the code does not implement.
 ## 8. Active Next
 
 ```text
-M8 - Prefill state foundation
+M9 - Minimal KV ownership and append/read boundary
 ```
 
-Next implementation: M8. It sits inside the larger runtime pipeline. It must
-run validated prompt/token input through scheduled graph work to create the
-first prefill-state boundary without claiming decode or generation. It must not
-claim KV runtime, logits, sampling, generation, server generation,
-evaluation, or benchmark readiness.
+Next implementation: M9. It sits inside the larger runtime pipeline. M8 created
+a segment-summary prefill foundation from validated token input, but it did not
+create attention KV runtime. M9 must introduce minimal KV ownership and
+append/read boundaries without claiming decode, logits, sampling, generation,
+server generation, evaluation, or benchmark readiness.
 
 ## 9. Validation Gate
 

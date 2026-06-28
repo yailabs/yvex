@@ -332,7 +332,13 @@ parses bounded comma-separated token IDs, validates them, and graph commands can
 select a token by index. Prompt text is different: it only becomes executable
 token input when tokenizer metadata is present and executable for the artifact.
 Selected artifacts without tokenizer metadata fail cleanly instead of
-pretending to prefill.
+pretending to run a full prompt prefill.
+
+YVEX can also build a prefill state summary from explicit token input by running
+the implemented selected segment over the token sequence. This is a foundation
+state: it records positions, per-token segment execution aggregation, checksums,
+and byte accounting. It is not attention `KV`, decode, logits, sampling, or
+generation.
 
 The short CPU path for the selected embedding proof is:
 

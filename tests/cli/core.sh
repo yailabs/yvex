@@ -100,7 +100,7 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, and explicit token input boundary"
+contains "$OUT_DIR/info.out" "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, explicit token input boundary, and prefill state foundation"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "artifact: open/read implemented"
@@ -108,6 +108,7 @@ contains "$OUT_DIR/info.out" "gguf: metadata/tensor directory parsing implemente
 contains "$OUT_DIR/info.out" "model: descriptor-only implemented"
 contains "$OUT_DIR/info.out" "tokenizer: fixture encode/decode implemented"
 contains "$OUT_DIR/info.out" "token_input: explicit token boundary implemented"
+contains "$OUT_DIR/info.out" "prefill_state: segment-summary foundation implemented"
 contains "$OUT_DIR/info.out" "prompt: default renderer implemented"
 contains "$OUT_DIR/info.out" "graph: partial planning, deterministic fixture execution, selected embedding partial execution, and selected embedding RMSNorm segment execution implemented"
 contains "$OUT_DIR/info.out" "planner: estimate-only implemented"

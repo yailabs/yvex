@@ -100,6 +100,19 @@ is present. If a selected artifact has no tokenizer metadata, prompt input fails
 with `tokenizer-metadata-missing`. This boundary does not create prefill state,
 KV state, decode, logits, sampling, generation, or benchmark readiness.
 
+### Prefill state foundation
+
+YVEX can create an inspectable prefill state summary from validated explicit
+token input. The prefill state runs the implemented selected
+embedding-plus-RMSNorm segment over each token in order and records token count,
+processed positions, segment execution count, output byte accounting,
+aggregate/final-token checksums, max diff, and cleanup status.
+
+This state is `segment-summary` foundation state. It does not allocate or expose
+attention KV tensors, decode state, logits buffers, sampler state, generated
+text, provider inference, or benchmark readiness. `kv_ready`, `decode_ready`,
+and `logits_ready` must remain false, and generation remains unsupported.
+
 ### Artifact integrity baseline
 
 YVEX validates baseline `GGUF` structural integrity before artifact paths that

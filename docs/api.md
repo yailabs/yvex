@@ -107,7 +107,8 @@ model artifacts remain outside the repository
 | KV cache runtime | unavailable skeleton |
 | Logits runtime | unavailable skeleton |
 | Full model execution | unsupported |
-| Prefill/decode | unsupported |
+| Prefill state summary | implemented as segment-summary foundation |
+| KV/decode/logits | unsupported |
 | Generation | unsupported |
 | Benchmarks | unsupported |
 
@@ -152,6 +153,15 @@ input object owns a bounded copied token list. It does not own tokenizer
 algorithms, prefill state, KV state, decode, logits, sampling, or generation.
 Prompt text can become token input only through existing tokenizer APIs when the
 artifact has executable tokenizer metadata.
+
+`yvex_engine_create_prefill_state` consumes a validated `yvex_token_input` and
+returns a copied `yvex_prefill_state_summary`. The summary is a
+`segment-summary` foundation built by running the implemented
+`embedding-rmsnorm` segment independently for each token in order. It reports
+token count, processed positions, segment execution count, output bytes,
+scratch bytes, aggregate/final-token checksums, max diff, cleanup status, and
+false KV/decode/logits readiness. It does not allocate attention KV, expose a
+decode state, return logits, own sampler state, or generate text.
 
 `yvex_artifact_identity_read` and `yvex_artifact_compute_sha256` provide local
 file identity evidence: current byte size plus lowercase SHA-256 digest. The
