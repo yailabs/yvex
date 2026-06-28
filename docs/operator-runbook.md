@@ -707,7 +707,8 @@ generation, or a CUDA transformer backend.
 RoPE is the first standalone position-dependent graph op. It runs over a small
 deterministic F32 vector and does not open or trust a model artifact. Use it to
 prove backend op admission, output allocation, dispatch, reference comparison,
-cleanup, and position-dependent output before attention enters the runtime.
+cleanup, and position-dependent output before wider graph work depends on
+position-aware tensors.
 
 CPU proof:
 
@@ -755,9 +756,90 @@ CUDA-capable hosts can run the same proof on CUDA:
 ```
 
 Expected outcome: CUDA reports `rope_cuda_parity: pass` with max absolute diff
-inside tolerance. This is RoPE position-op parity only; it is not attention,
-transformer block execution, decode, logits, sampling, generation, or a CUDA
-transformer backend.
+inside tolerance. This is RoPE position-op parity only; it is not transformer
+block execution, decode, logits, sampling, generation, or a CUDA transformer
+backend.
+
+### Execute standalone attention primitive
+
+The attention primitive runs over explicit deterministic F32 Q/K/V inputs. It
+does not read Q/K/V projection weights from a model artifact, does not update
+KV cache state, and does not execute a transformer block. Use it to prove
+bounded score calculation, causal masking, softmax, weighted value output,
+scratch ownership, backend dispatch, reference comparison, and cleanup.
+
+CPU proof:
+
+```sh
+./yvex graph \
+  --backend cpu \
+  --execute-op \
+  --op attention \
+  --seq-len 4 \
+  --position 3 \
+  --head-dim 8 \
+  --causal
+```
+
+Expected outcome:
+
+```text
+graph_integrity_guard: pass
+graph_execution_phase: complete
+graph_kind: attention-primitive
+op: attention
+backend: cpu
+dtype: f32
+seq_len: 4
+position: 3
+head_dim: 8
+mask: causal
+visible_keys: 4
+masked_keys: 0
+dispatch_attempted: true
+reference_attempted: true
+softmax_max_abs_diff: 0
+transformer_block_ready: false
+decode_ready: false
+logits_ready: false
+generation_ready: false
+status: graph-op-executed
+```
+
+Mask-bound proof:
+
+```sh
+./yvex graph \
+  --backend cpu \
+  --execute-op \
+  --op attention \
+  --seq-len 4 \
+  --position 0 \
+  --head-dim 8 \
+  --causal
+```
+
+Expected outcome: `visible_keys: 1`, `masked_keys: 3`,
+`causal_mask_future_prob_zero: true`, and `position_zero_single_key: true`.
+
+CUDA-capable hosts can run the same primitive on CUDA:
+
+```sh
+./yvex graph \
+  --backend cuda \
+  --execute-op \
+  --op attention \
+  --seq-len 4 \
+  --position 3 \
+  --head-dim 8 \
+  --causal
+```
+
+Expected outcome: CUDA reports `attention_cuda_parity: pass` with max absolute
+diff inside tolerance. This is standalone F32 attention primitive parity only;
+it is not Q/K/V projection, transformer block execution, layer scheduling, full
+transformer prefill, decode, logits, sampling, generation, or a CUDA transformer
+backend.
 
 ## 14. Execute a deterministic fixture graph
 

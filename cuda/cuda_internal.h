@@ -78,6 +78,7 @@ typedef struct {
     CUfunction rms_norm_f32_function;
     CUfunction rms_norm_f16_function;
     CUfunction rope_function;
+    CUfunction attention_function;
     int module_loaded;
 } yvex_cuda_backend_state;
 
@@ -131,5 +132,17 @@ int yvex_cuda_op_rope(yvex_backend *backend,
                       float rope_base,
                       yvex_device_tensor *out,
                       yvex_error *err);
+int yvex_cuda_op_attention(yvex_backend *backend,
+                           const yvex_device_tensor *query,
+                           const yvex_device_tensor *keys,
+                           const yvex_device_tensor *values,
+                           unsigned long long seq_len,
+                           unsigned long long position,
+                           float scale,
+                           int causal,
+                           yvex_device_tensor *score_scratch,
+                           yvex_device_tensor *probability_scratch,
+                           yvex_device_tensor *out,
+                           yvex_error *err);
 
 #endif /* YVEX_CUDA_INTERNAL_H */

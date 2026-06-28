@@ -73,6 +73,12 @@ int yvex_cuda_test_ops(void)
     yvex_device_tensor *rms_out = NULL;
     yvex_device_tensor *rope_input = NULL;
     yvex_device_tensor *rope_out = NULL;
+    yvex_device_tensor *attention_query = NULL;
+    yvex_device_tensor *attention_keys = NULL;
+    yvex_device_tensor *attention_values = NULL;
+    yvex_device_tensor *attention_scores = NULL;
+    yvex_device_tensor *attention_probabilities = NULL;
+    yvex_device_tensor *attention_out = NULL;
     yvex_device_tensor *out = NULL;
     yvex_backend_tensor_desc desc;
     yvex_error err;
@@ -94,6 +100,20 @@ int yvex_cuda_test_ops(void)
     float rms_expected[4] = {0.9999995f, 1.9999990f, 2.9999985f, 3.9999980f};
     float rope_input_data[8] = {0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f};
     float rope_out_data[8];
+    float attention_query_data[4] = {0.1f, 0.2f, 0.3f, 0.4f};
+    float attention_key_data[12] = {
+        0.2f, 0.1f, 0.0f, 0.3f,
+        0.4f, 0.3f, 0.2f, 0.1f,
+        0.1f, 0.5f, 0.3f, 0.2f,
+    };
+    float attention_value_data[12] = {
+        1.0f, 2.0f, 3.0f, 4.0f,
+        10.0f, 20.0f, 30.0f, 40.0f,
+        5.0f, 6.0f, 7.0f, 8.0f,
+    };
+    float attention_out_data[4];
+    float attention_score_data[3];
+    float attention_probability_data[3];
     unsigned int rms_half_values[4] = {0x3c00u, 0x4000u, 0x4200u, 0x4400u};
     unsigned int i;
     int rc;
@@ -115,10 +135,10 @@ int yvex_cuda_test_ops(void)
                      "cuda rmsnorm supported");
     YVEX_TEST_ASSERT(yvex_backend_supports(cuda_backend, YVEX_BACKEND_CAP_OP_ROPE),
                      "cuda rope supported");
+    YVEX_TEST_ASSERT(yvex_backend_supports(cuda_backend, YVEX_BACKEND_CAP_OP_ATTENTION),
+                     "cuda attention supported");
     YVEX_TEST_ASSERT(!yvex_backend_supports(cuda_backend, YVEX_BACKEND_CAP_OP_MATMUL),
                      "cuda matmul unsupported");
-    YVEX_TEST_ASSERT(!yvex_backend_supports(cuda_backend, YVEX_BACKEND_CAP_OP_ATTENTION),
-                     "cuda attention unsupported");
 
     make_desc(&desc, "embedding", YVEX_DTYPE_F32, 2, 4, 3, sizeof(embedding_data));
     rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &embedding, &err);
@@ -188,6 +208,73 @@ int yvex_cuda_test_ops(void)
     YVEX_TEST_ASSERT(!float_close(rope_out_data[0], rope_input_data[0], 0.0001f),
                      "cuda rope non-zero position changes first pair");
 
+    make_desc(&desc, "attention_query", YVEX_DTYPE_F32, 1, 4, 0, sizeof(attention_query_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &attention_query, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda attention query");
+    rc = yvex_backend_tensor_write(cuda_backend, attention_query,
+                                   attention_query_data, sizeof(attention_query_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda attention query");
+
+    make_desc(&desc, "attention_keys", YVEX_DTYPE_F32, 2, 3, 4, sizeof(attention_key_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &attention_keys, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda attention keys");
+    rc = yvex_backend_tensor_write(cuda_backend, attention_keys,
+                                   attention_key_data, sizeof(attention_key_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda attention keys");
+
+    make_desc(&desc, "attention_values", YVEX_DTYPE_F32, 2, 3, 4, sizeof(attention_value_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &attention_values, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda attention values");
+    rc = yvex_backend_tensor_write(cuda_backend, attention_values,
+                                   attention_value_data, sizeof(attention_value_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda attention values");
+
+    make_desc(&desc, "attention_scores", YVEX_DTYPE_F32, 1, 3, 0, sizeof(attention_score_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &attention_scores, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda attention scores");
+    make_desc(&desc, "attention_probabilities", YVEX_DTYPE_F32, 1, 3, 0, sizeof(attention_probability_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &attention_probabilities, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda attention probabilities");
+    make_desc(&desc, "attention_out", YVEX_DTYPE_F32, 1, 4, 0, sizeof(attention_out_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &attention_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda attention output");
+
+    rc = yvex_backend_op_attention(cuda_backend, attention_query, attention_keys,
+                                   attention_values, 3, 0, 0.5f, 1,
+                                   attention_scores, attention_probabilities,
+                                   attention_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "cuda attention position zero succeeds");
+    rc = yvex_backend_tensor_read(cuda_backend, attention_out,
+                                  attention_out_data, sizeof(attention_out_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read cuda attention output");
+    for (i = 0; i < 4u; ++i) {
+        YVEX_TEST_ASSERT(float_close(attention_out_data[i], attention_value_data[i], 0.0001f),
+                         "cuda attention position zero selects first value");
+    }
+
+    rc = yvex_backend_op_attention(cuda_backend, attention_query, attention_keys,
+                                   attention_values, 3, 2, 0.5f, 1,
+                                   attention_scores, attention_probabilities,
+                                   attention_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "cuda attention full prefix succeeds");
+    rc = yvex_backend_tensor_read(cuda_backend, attention_out,
+                                  attention_out_data, sizeof(attention_out_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read cuda attention prefix output");
+    YVEX_TEST_ASSERT(!float_close(attention_out_data[0], attention_value_data[0], 0.0001f),
+                     "cuda attention full prefix mixes more than first value");
+
+    rc = yvex_backend_op_attention(cuda_backend, attention_query, attention_keys,
+                                   attention_values, 3, 3, 0.5f, 1,
+                                   attention_scores, attention_probabilities,
+                                   attention_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS, "cuda attention rejects out-of-range position");
+
+    yvex_backend_tensor_free(cuda_backend, attention_out);
+    yvex_backend_tensor_free(cuda_backend, attention_probabilities);
+    yvex_backend_tensor_free(cuda_backend, attention_scores);
+    yvex_backend_tensor_free(cuda_backend, attention_values);
+    yvex_backend_tensor_free(cuda_backend, attention_keys);
+    yvex_backend_tensor_free(cuda_backend, attention_query);
     yvex_backend_tensor_free(cuda_backend, rope_out);
     yvex_backend_tensor_free(cuda_backend, rope_input);
     yvex_backend_tensor_free(cuda_backend, rms_out);

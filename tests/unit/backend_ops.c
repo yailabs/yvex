@@ -13,6 +13,7 @@
  *   - yvex_backend_capability_name
  *   - yvex_backend_op_embed
  *   - yvex_backend_op_rope
+ *   - yvex_backend_op_attention
  *
  * Commands:
  *   - make test-core
@@ -80,10 +81,10 @@ static int test_capabilities(void)
                      "supports rms norm");
     YVEX_TEST_ASSERT(yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ROPE),
                      "supports rope");
+    YVEX_TEST_ASSERT(yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ATTENTION),
+                     "supports attention");
     YVEX_TEST_ASSERT(!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MATMUL),
                      "matmul unsupported");
-    YVEX_TEST_ASSERT(!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ATTENTION),
-                     "attention unsupported");
     yvex_backend_close(backend);
     return 0;
 }
@@ -365,6 +366,96 @@ static int test_rope_failures(void)
     return 0;
 }
 
+static int test_attention_success_and_bounds(void)
+{
+    yvex_backend *backend = NULL;
+    yvex_device_tensor *query = NULL;
+    yvex_device_tensor *keys = NULL;
+    yvex_device_tensor *values = NULL;
+    yvex_device_tensor *scores = NULL;
+    yvex_device_tensor *probabilities = NULL;
+    yvex_device_tensor *out = NULL;
+    yvex_backend_tensor_desc desc;
+    yvex_error err;
+    float query_data[4] = {0.1f, 0.2f, 0.3f, 0.4f};
+    float key_data[12] = {
+        0.2f, 0.1f, 0.0f, 0.3f,
+        0.4f, 0.3f, 0.2f, 0.1f,
+        0.1f, 0.5f, 0.3f, 0.2f,
+    };
+    float value_data[12] = {
+        1.0f, 2.0f, 3.0f, 4.0f,
+        10.0f, 20.0f, 30.0f, 40.0f,
+        5.0f, 6.0f, 7.0f, 8.0f,
+    };
+    float out_data[4];
+    float score_data[3];
+    float probability_data[3];
+    int rc;
+    unsigned int i;
+
+    YVEX_TEST_ASSERT(yvex_backend_open_cpu(&backend, &err) == YVEX_OK, "open cpu attention");
+
+    make_desc(&desc, "attention_query", YVEX_DTYPE_F32, 1, 4, 0, sizeof(query_data));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &query, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate attention query");
+    rc = yvex_backend_tensor_write(backend, query, query_data, sizeof(query_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write attention query");
+
+    make_desc(&desc, "attention_keys", YVEX_DTYPE_F32, 2, 3, 4, sizeof(key_data));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &keys, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate attention keys");
+    rc = yvex_backend_tensor_write(backend, keys, key_data, sizeof(key_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write attention keys");
+
+    make_desc(&desc, "attention_values", YVEX_DTYPE_F32, 2, 3, 4, sizeof(value_data));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &values, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate attention values");
+    rc = yvex_backend_tensor_write(backend, values, value_data, sizeof(value_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write attention values");
+
+    make_desc(&desc, "attention_scores", YVEX_DTYPE_F32, 1, 3, 0, sizeof(score_data));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &scores, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate attention scores");
+    make_desc(&desc, "attention_probabilities", YVEX_DTYPE_F32, 1, 3, 0, sizeof(probability_data));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &probabilities, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate attention probabilities");
+    make_desc(&desc, "attention_out", YVEX_DTYPE_F32, 1, 4, 0, sizeof(out_data));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate attention output");
+
+    rc = yvex_backend_op_attention(backend, query, keys, values, 3, 0, 0.5f, 1,
+                                   scores, probabilities, out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "attention position zero succeeds");
+    rc = yvex_backend_tensor_read(backend, out, out_data, sizeof(out_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read attention output");
+    for (i = 0; i < 4u; ++i) {
+        YVEX_TEST_ASSERT(float_close(out_data[i], value_data[i], 0.000001f),
+                         "attention position zero selects first value");
+    }
+
+    rc = yvex_backend_op_attention(backend, query, keys, values, 3, 2, 0.5f, 1,
+                                   scores, probabilities, out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "attention full prefix succeeds");
+    rc = yvex_backend_tensor_read(backend, out, out_data, sizeof(out_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read attention prefix output");
+    YVEX_TEST_ASSERT(!float_close(out_data[0], value_data[0], 0.0001f),
+                     "attention full prefix mixes more than first value");
+
+    rc = yvex_backend_op_attention(backend, query, keys, values, 3, 3, 0.5f, 1,
+                                   scores, probabilities, out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS, "attention rejects out-of-range position");
+
+    yvex_backend_tensor_free(backend, out);
+    yvex_backend_tensor_free(backend, probabilities);
+    yvex_backend_tensor_free(backend, scores);
+    yvex_backend_tensor_free(backend, values);
+    yvex_backend_tensor_free(backend, keys);
+    yvex_backend_tensor_free(backend, query);
+    yvex_backend_close(backend);
+    return 0;
+}
+
 int yvex_test_backend_ops(void)
 {
     if (test_capabilities() != 0) return 1;
@@ -373,6 +464,7 @@ int yvex_test_backend_ops(void)
     if (test_rms_norm_success() != 0) return 1;
     if (test_rope_success() != 0) return 1;
     if (test_rope_failures() != 0) return 1;
+    if (test_attention_success_and_bounds() != 0) return 1;
     if (test_embed_failures() != 0) return 1;
     return 0;
 }

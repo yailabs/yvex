@@ -202,6 +202,7 @@ The implemented runtime states are:
 | Minimal KV state | Session-owned F32 KV storage with shape, append/read, clear, overflow, and cleanup reports. |
 | Minimal KV-backed prefill binding | Optional prefill mode that writes one diagnostic KV position per processed token into session-owned KV storage. |
 | Standalone RoPE op | Position-dependent F32 graph op over a bounded deterministic vector, checked against an independent reference. |
+| Standalone attention op | Explicit F32 Q/K/V scaled dot-product attention primitive with bounded causal mask, scratch, output, cleanup, and reference comparison. |
 
 The runtime path after minimal KV ownership proceeds through minimal KV-backed
 prefill binding, full transformer prefill, decode, logits, sampling,
@@ -240,6 +241,18 @@ cleanup status. The result reports checksums and max absolute diff against an
 independent reference. RoPE support is only a position operation boundary; it is
 not attention, QKV projection, transformer block execution, layer scheduling,
 decode, logits, sampling, generation, or a provider path.
+
+The standalone attention operation is admitted through `yvex graph
+--execute-op --op attention`. It does not use a model artifact and does not
+project Q/K/V from model tensors. It validates backend availability, backend
+attention support, explicit F32 query/key/value shapes, `seq_len`, `position`,
+positive `head_dim`, causal mask bounds, score/probability scratch sizing,
+output allocation, dispatch, reference comparison, and cleanup status. The
+result reports checksums, softmax probability diff, output max absolute diff,
+visible and masked key counts, dispatch/reference/allocation/cleanup fields, and
+unsupported readiness fields. Attention primitive support is not transformer
+block execution, layer scheduling, full transformer prefill, decode, logits,
+sampling, generation, or a provider path.
 
 Every implemented graph result should report guard status, failure phase where
 applicable, backend/op status, output planning, reference planning, checksums,

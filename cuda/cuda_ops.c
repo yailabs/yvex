@@ -114,6 +114,22 @@ static const char yvex_cuda_kernels_ptx[] =
 ")\n"
 "{\n"
 "    ret;\n"
+"}\n"
+".visible .entry yvex_attention_f32(\n"
+"    .param .u64 p_query,\n"
+"    .param .u64 p_keys,\n"
+"    .param .u64 p_values,\n"
+"    .param .u64 p_score_scratch,\n"
+"    .param .u64 p_probability_scratch,\n"
+"    .param .u64 p_out,\n"
+"    .param .u64 p_seq_len,\n"
+"    .param .u64 p_position,\n"
+"    .param .u64 p_head_dim,\n"
+"    .param .f32 p_scale,\n"
+"    .param .u32 p_causal\n"
+")\n"
+"{\n"
+"    ret;\n"
 "}\n";
 #endif
 
@@ -194,6 +210,91 @@ static int cuda_rope_head_dim(const yvex_device_tensor *tensor,
         return YVEX_ERR_FORMAT;
     }
     *out = head_dim;
+    return YVEX_OK;
+}
+
+static int cuda_attention_validate(const yvex_backend *backend,
+                                   const yvex_device_tensor *query,
+                                   const yvex_device_tensor *keys,
+                                   const yvex_device_tensor *values,
+                                   unsigned long long seq_len,
+                                   unsigned long long position,
+                                   yvex_device_tensor *score_scratch,
+                                   yvex_device_tensor *probability_scratch,
+                                   yvex_device_tensor *out,
+                                   unsigned long long *head_dim_out,
+                                   unsigned long long *kv_elements_out,
+                                   const char *where,
+                                   yvex_error *err)
+{
+    unsigned long long head_dim;
+    unsigned long long kv_elements;
+
+    if (!yvex_backend_tensor_owner_is(backend, query) ||
+        !yvex_backend_tensor_owner_is(backend, keys) ||
+        !yvex_backend_tensor_owner_is(backend, values) ||
+        !yvex_backend_tensor_owner_is(backend, score_scratch) ||
+        !yvex_backend_tensor_owner_is(backend, probability_scratch) ||
+        !yvex_backend_tensor_owner_is(backend, out)) {
+        yvex_error_set(err, YVEX_ERR_STATE, where,
+                       "Q/K/V, scratches, and output tensors must belong to this backend");
+        return YVEX_ERR_STATE;
+    }
+    if (query->dtype != YVEX_DTYPE_F32 || keys->dtype != YVEX_DTYPE_F32 ||
+        values->dtype != YVEX_DTYPE_F32 || score_scratch->dtype != YVEX_DTYPE_F32 ||
+        probability_scratch->dtype != YVEX_DTYPE_F32 || out->dtype != YVEX_DTYPE_F32) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, where,
+                       "attention primitive supports F32 Q/K/V, scratches, and output");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (seq_len == 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where, "attention-seq-len-zero");
+        return YVEX_ERR_FORMAT;
+    }
+    if (position >= seq_len) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "position-out-of-range");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (query->rank != 1 || query->dims[0] == 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "attention query must be rank 1 with non-zero head_dim");
+        return YVEX_ERR_FORMAT;
+    }
+    head_dim = query->dims[0];
+    if (seq_len > ULLONG_MAX / head_dim) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "attention-element-count-overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    kv_elements = seq_len * head_dim;
+    if (keys->rank != 2 || keys->dims[0] != seq_len || keys->dims[1] != head_dim ||
+        values->rank != 2 || values->dims[0] != seq_len || values->dims[1] != head_dim) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "attention keys and values must have dims [seq_len, head_dim]");
+        return YVEX_ERR_FORMAT;
+    }
+    if (score_scratch->rank != 1 || score_scratch->dims[0] != seq_len ||
+        probability_scratch->rank != 1 || probability_scratch->dims[0] != seq_len) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "attention score/probability scratches must have dims [seq_len]");
+        return YVEX_ERR_FORMAT;
+    }
+    if (out->rank != 1 || out->dims[0] != head_dim) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "attention output must have dims [head_dim]");
+        return YVEX_ERR_FORMAT;
+    }
+    if (!tensor_is_f32_bytes(query, head_dim) ||
+        !tensor_is_f32_bytes(keys, kv_elements) ||
+        !tensor_is_f32_bytes(values, kv_elements) ||
+        !tensor_is_f32_bytes(score_scratch, seq_len) ||
+        !tensor_is_f32_bytes(probability_scratch, seq_len) ||
+        !tensor_is_f32_bytes(out, head_dim)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where,
+                       "attention tensor bytes must match F32 shape accounting");
+        return YVEX_ERR_BOUNDS;
+    }
+    *head_dim_out = head_dim;
+    *kv_elements_out = kv_elements;
     return YVEX_OK;
 }
 
@@ -300,6 +401,29 @@ static int ensure_rope_kernel(yvex_cuda_backend_state *state, yvex_error *err)
                           "cuda.rope.load_function", err);
     if (rc != YVEX_OK) {
         state->rope_function = NULL;
+        return rc;
+    }
+    return YVEX_OK;
+}
+
+static int ensure_attention_kernel(yvex_cuda_backend_state *state, yvex_error *err)
+{
+    int rc;
+
+    rc = ensure_kernel_module(state, "cuda.kernels.load_module", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (state->attention_function) {
+        return YVEX_OK;
+    }
+    rc = yvex_cuda_status(&state->driver,
+                          state->driver.cuModuleGetFunction(&state->attention_function,
+                                                            state->module,
+                                                            "yvex_attention_f32"),
+                          "cuda.attention.load_function", err);
+    if (rc != YVEX_OK) {
+        state->attention_function = NULL;
         return rc;
     }
     return YVEX_OK;
@@ -660,6 +784,98 @@ int yvex_cuda_op_rope(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
+    out->is_written = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_cuda_op_attention(yvex_backend *backend,
+                           const yvex_device_tensor *query,
+                           const yvex_device_tensor *keys,
+                           const yvex_device_tensor *values,
+                           unsigned long long seq_len,
+                           unsigned long long position,
+                           float scale,
+                           int causal,
+                           yvex_device_tensor *score_scratch,
+                           yvex_device_tensor *probability_scratch,
+                           yvex_device_tensor *out,
+                           yvex_error *err)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    CUdeviceptr query_ptr;
+    CUdeviceptr keys_ptr;
+    CUdeviceptr values_ptr;
+    CUdeviceptr score_ptr;
+    CUdeviceptr probability_ptr;
+    CUdeviceptr out_ptr;
+    unsigned long long head_dim;
+    unsigned long long kv_elements;
+    int causal_flag = causal ? 1 : 0;
+    void *params[11];
+    int rc;
+
+    if (!state) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_op_attention",
+                       "CUDA backend state is missing");
+        return YVEX_ERR_STATE;
+    }
+    if (scale <= 0.0f) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_attention",
+                       "scale must be positive");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = cuda_attention_validate(backend, query, keys, values, seq_len, position,
+                                 score_scratch, probability_scratch, out,
+                                 &head_dim, &kv_elements,
+                                 "yvex_backend_op_attention", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    (void)kv_elements;
+
+    rc = yvex_cuda_set_current(backend, "yvex_backend_op_attention", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = ensure_attention_kernel(state, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    query_ptr = yvex_cuda_tensor_ptr(query);
+    keys_ptr = yvex_cuda_tensor_ptr(keys);
+    values_ptr = yvex_cuda_tensor_ptr(values);
+    score_ptr = yvex_cuda_tensor_ptr(score_scratch);
+    probability_ptr = yvex_cuda_tensor_ptr(probability_scratch);
+    out_ptr = yvex_cuda_tensor_ptr(out);
+    params[0] = &query_ptr;
+    params[1] = &keys_ptr;
+    params[2] = &values_ptr;
+    params[3] = &score_ptr;
+    params[4] = &probability_ptr;
+    params[5] = &out_ptr;
+    params[6] = &seq_len;
+    params[7] = &position;
+    params[8] = &head_dim;
+    params[9] = &scale;
+    params[10] = &causal_flag;
+
+    rc = yvex_cuda_status(&state->driver,
+                          state->driver.cuLaunchKernel(state->attention_function,
+                                                       1, 1, 1,
+                                                       1, 1, 1,
+                                                       0, NULL, params, NULL),
+                          "cuda.attention.launch", err);
+    if (rc == YVEX_OK) {
+        rc = yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
+                              "cuda.attention.sync", err);
+    }
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    score_scratch->is_written = 1;
+    probability_scratch->is_written = 1;
     out->is_written = 1;
     yvex_error_clear(err);
     return YVEX_OK;

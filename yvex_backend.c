@@ -391,6 +391,51 @@ int yvex_backend_op_rope(yvex_backend *backend,
     return backend->vtable->op_rope(backend, input, position, rope_base, out, err);
 }
 
+int yvex_backend_op_attention(yvex_backend *backend,
+                              const yvex_device_tensor *query,
+                              const yvex_device_tensor *keys,
+                              const yvex_device_tensor *values,
+                              unsigned long long seq_len,
+                              unsigned long long position,
+                              float scale,
+                              int causal,
+                              yvex_device_tensor *score_scratch,
+                              yvex_device_tensor *probability_scratch,
+                              yvex_device_tensor *out,
+                              yvex_error *err)
+{
+    if (!backend || !query || !keys || !values || !score_scratch ||
+        !probability_scratch || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_attention",
+                       "backend, Q/K/V, scratches, and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (seq_len == 0) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_attention",
+                       "seq_len must be positive");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (position >= seq_len) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_attention",
+                       "position-out-of-range");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (scale <= 0.0f) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_attention",
+                       "scale must be positive");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    (void)causal;
+    if (!backend->vtable || !backend->vtable->op_attention) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_attention",
+                       "backend does not support attention op");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    return backend->vtable->op_attention(backend, query, keys, values, seq_len,
+                                         position, scale, causal, score_scratch,
+                                         probability_scratch, out, err);
+}
+
 
 
 int yvex_cpu_tensor_alloc(yvex_backend *backend,
@@ -430,6 +475,18 @@ int yvex_cpu_op_rope(yvex_backend *backend,
                      float rope_base,
                      yvex_device_tensor *out,
                      yvex_error *err);
+int yvex_cpu_op_attention(yvex_backend *backend,
+                          const yvex_device_tensor *query,
+                          const yvex_device_tensor *keys,
+                          const yvex_device_tensor *values,
+                          unsigned long long seq_len,
+                          unsigned long long position,
+                          float scale,
+                          int causal,
+                          yvex_device_tensor *score_scratch,
+                          yvex_device_tensor *probability_scratch,
+                          yvex_device_tensor *out,
+                          yvex_error *err);
 
 static int cpu_close(yvex_backend *backend, yvex_error *err)
 {
@@ -488,9 +545,9 @@ static int cpu_supports(const yvex_backend *backend, yvex_backend_capability cap
     case YVEX_BACKEND_CAP_OP_EMBED:
     case YVEX_BACKEND_CAP_OP_RMS_NORM:
     case YVEX_BACKEND_CAP_OP_ROPE:
+    case YVEX_BACKEND_CAP_OP_ATTENTION:
         return 1;
     case YVEX_BACKEND_CAP_OP_MATMUL:
-    case YVEX_BACKEND_CAP_OP_ATTENTION:
         return 0;
     }
     return 0;
@@ -510,6 +567,7 @@ static const yvex_backend_vtable cpu_vtable = {
     yvex_cpu_op_embed,
     yvex_cpu_op_rms_norm,
     yvex_cpu_op_rope,
+    yvex_cpu_op_attention,
 };
 
 int yvex_backend_open_cpu_impl(yvex_backend **out,
@@ -691,6 +749,46 @@ static void backend_sincos_double(double x, double *sine, double *cosine)
     }
 }
 
+static double backend_exp_double(double x)
+{
+    const double ln2 = 0.69314718055994530942;
+    double term;
+    double sum;
+    int n = 0;
+    unsigned int i;
+
+    if (x < -60.0) {
+        return 0.0;
+    }
+    if (x > 60.0) {
+        x = 60.0;
+    }
+    while (x > 0.5) {
+        x -= ln2;
+        ++n;
+    }
+    while (x < -0.5) {
+        x += ln2;
+        --n;
+    }
+
+    term = 1.0;
+    sum = 1.0;
+    for (i = 1u; i <= 18u; ++i) {
+        term *= x / (double)i;
+        sum += term;
+    }
+    while (n > 0) {
+        sum *= 2.0;
+        --n;
+    }
+    while (n < 0) {
+        sum *= 0.5;
+        ++n;
+    }
+    return sum;
+}
+
 static int backend_rope_head_dim(const yvex_device_tensor *tensor,
                                  unsigned long long *out,
                                  yvex_error *err)
@@ -722,6 +820,92 @@ static int backend_rope_head_dim(const yvex_device_tensor *tensor,
         return YVEX_ERR_FORMAT;
     }
     *out = head_dim;
+    return YVEX_OK;
+}
+
+static int backend_attention_validate(const yvex_backend *backend,
+                                      const yvex_device_tensor *query,
+                                      const yvex_device_tensor *keys,
+                                      const yvex_device_tensor *values,
+                                      unsigned long long seq_len,
+                                      unsigned long long position,
+                                      yvex_device_tensor *score_scratch,
+                                      yvex_device_tensor *probability_scratch,
+                                      yvex_device_tensor *out,
+                                      unsigned long long *head_dim_out,
+                                      unsigned long long *kv_elements_out,
+                                      const char *where,
+                                      yvex_error *err)
+{
+    unsigned long long head_dim;
+    unsigned long long kv_elements;
+
+    if (!yvex_backend_tensor_owner_is(backend, query) ||
+        !yvex_backend_tensor_owner_is(backend, keys) ||
+        !yvex_backend_tensor_owner_is(backend, values) ||
+        !yvex_backend_tensor_owner_is(backend, score_scratch) ||
+        !yvex_backend_tensor_owner_is(backend, probability_scratch) ||
+        !yvex_backend_tensor_owner_is(backend, out)) {
+        yvex_error_set(err, YVEX_ERR_STATE, where,
+                       "Q/K/V, scratches, and output tensors must belong to this backend");
+        return YVEX_ERR_STATE;
+    }
+    if (query->dtype != YVEX_DTYPE_F32 || keys->dtype != YVEX_DTYPE_F32 ||
+        values->dtype != YVEX_DTYPE_F32 || score_scratch->dtype != YVEX_DTYPE_F32 ||
+        probability_scratch->dtype != YVEX_DTYPE_F32 || out->dtype != YVEX_DTYPE_F32) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, where,
+                       "attention primitive supports F32 Q/K/V, scratches, and output");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (seq_len == 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where, "attention-seq-len-zero");
+        return YVEX_ERR_FORMAT;
+    }
+    if (position >= seq_len) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "position-out-of-range");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (query->rank != 1 || query->dims[0] == 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "attention query must be rank 1 with non-zero head_dim");
+        return YVEX_ERR_FORMAT;
+    }
+    head_dim = query->dims[0];
+    if (seq_len > ULLONG_MAX / head_dim) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "attention-element-count-overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    kv_elements = seq_len * head_dim;
+    if (keys->rank != 2 || keys->dims[0] != seq_len || keys->dims[1] != head_dim ||
+        values->rank != 2 || values->dims[0] != seq_len || values->dims[1] != head_dim) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "attention keys and values must have dims [seq_len, head_dim]");
+        return YVEX_ERR_FORMAT;
+    }
+    if (score_scratch->rank != 1 || score_scratch->dims[0] != seq_len ||
+        probability_scratch->rank != 1 || probability_scratch->dims[0] != seq_len) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "attention score/probability scratches must have dims [seq_len]");
+        return YVEX_ERR_FORMAT;
+    }
+    if (out->rank != 1 || out->dims[0] != head_dim) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "attention output must have dims [head_dim]");
+        return YVEX_ERR_FORMAT;
+    }
+    if (!tensor_is_f32_bytes(query, head_dim) ||
+        !tensor_is_f32_bytes(keys, kv_elements) ||
+        !tensor_is_f32_bytes(values, kv_elements) ||
+        !tensor_is_f32_bytes(score_scratch, seq_len) ||
+        !tensor_is_f32_bytes(probability_scratch, seq_len) ||
+        !tensor_is_f32_bytes(out, head_dim)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where,
+                       "attention tensor bytes must match F32 shape accounting");
+        return YVEX_ERR_BOUNDS;
+    }
+
+    *head_dim_out = head_dim;
+    *kv_elements_out = kv_elements;
     return YVEX_OK;
 }
 
@@ -813,6 +997,100 @@ int yvex_cpu_op_embed(yvex_backend *backend,
             }
         }
     }
+    out->is_written = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_cpu_op_attention(yvex_backend *backend,
+                          const yvex_device_tensor *query,
+                          const yvex_device_tensor *keys,
+                          const yvex_device_tensor *values,
+                          unsigned long long seq_len,
+                          unsigned long long position,
+                          float scale,
+                          int causal,
+                          yvex_device_tensor *score_scratch,
+                          yvex_device_tensor *probability_scratch,
+                          yvex_device_tensor *out,
+                          yvex_error *err)
+{
+    const float *q_data;
+    const float *k_data;
+    const float *v_data;
+    float *score_data;
+    float *prob_data;
+    float *out_data;
+    unsigned long long head_dim;
+    unsigned long long kv_elements;
+    unsigned long long visible_count;
+    unsigned long long i;
+    unsigned long long d;
+    double max_score = 0.0;
+    double sum_exp = 0.0;
+    int rc;
+
+    if (scale <= 0.0f) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_attention",
+                       "scale must be positive");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = backend_attention_validate(backend, query, keys, values, seq_len, position,
+                                    score_scratch, probability_scratch, out,
+                                    &head_dim, &kv_elements,
+                                    "yvex_backend_op_attention", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    (void)kv_elements;
+
+    q_data = (const float *)query->data;
+    k_data = (const float *)keys->data;
+    v_data = (const float *)values->data;
+    score_data = (float *)score_scratch->data;
+    prob_data = (float *)probability_scratch->data;
+    out_data = (float *)out->data;
+    visible_count = causal ? position + 1ull : seq_len;
+
+    for (i = 0; i < seq_len; ++i) {
+        double score = 0.0;
+        if (causal && i > position) {
+            score_data[i] = 0.0f;
+            prob_data[i] = 0.0f;
+            continue;
+        }
+        for (d = 0; d < head_dim; ++d) {
+            score += (double)q_data[d] * (double)k_data[(i * head_dim) + d];
+        }
+        score *= (double)scale;
+        score_data[i] = (float)score;
+        if (i == 0 || score > max_score) {
+            max_score = score;
+        }
+    }
+    for (i = 0; i < visible_count; ++i) {
+        double e = backend_exp_double((double)score_data[i] - max_score);
+        prob_data[i] = (float)e;
+        sum_exp += e;
+    }
+    if (sum_exp <= 0.0) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_op_attention",
+                       "attention softmax sum is zero");
+        return YVEX_ERR_STATE;
+    }
+    for (i = 0; i < visible_count; ++i) {
+        prob_data[i] = (float)((double)prob_data[i] / sum_exp);
+    }
+    for (d = 0; d < head_dim; ++d) {
+        double value = 0.0;
+        for (i = 0; i < visible_count; ++i) {
+            value += (double)prob_data[i] * (double)v_data[(i * head_dim) + d];
+        }
+        out_data[d] = (float)value;
+    }
+
+    score_scratch->is_written = 1;
+    probability_scratch->is_written = 1;
     out->is_written = 1;
     yvex_error_clear(err);
     return YVEX_OK;

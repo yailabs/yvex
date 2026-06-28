@@ -192,3 +192,62 @@ extern "C" __global__ void yvex_rope_f32(const float *input,
     out[even_index] = (even * cosine) - (odd * sine);
     out[odd_index] = (even * sine) + (odd * cosine);
 }
+
+extern "C" __global__ void yvex_attention_f32(const float *query,
+                                              const float *keys,
+                                              const float *values,
+                                              float *score_scratch,
+                                              float *probability_scratch,
+                                              float *out,
+                                              unsigned long long seq_len,
+                                              unsigned long long position,
+                                              unsigned long long head_dim,
+                                              float scale,
+                                              int causal)
+{
+    unsigned long long visible_count;
+    unsigned long long i;
+    unsigned long long d;
+    float max_score = 0.0f;
+    float sum_exp = 0.0f;
+
+    if (threadIdx.x != 0 || blockIdx.x != 0) {
+        return;
+    }
+
+    visible_count = causal ? position + 1ull : seq_len;
+    for (i = 0; i < seq_len; ++i) {
+        float score = 0.0f;
+        if (causal && i > position) {
+            score_scratch[i] = 0.0f;
+            probability_scratch[i] = 0.0f;
+            continue;
+        }
+        for (d = 0; d < head_dim; ++d) {
+            score += query[d] * keys[(i * head_dim) + d];
+        }
+        score *= scale;
+        score_scratch[i] = score;
+        if (i == 0ull || score > max_score) {
+            max_score = score;
+        }
+    }
+    for (i = 0; i < visible_count; ++i) {
+        float e = expf(score_scratch[i] - max_score);
+        probability_scratch[i] = e;
+        sum_exp += e;
+    }
+    if (sum_exp == 0.0f) {
+        return;
+    }
+    for (i = 0; i < visible_count; ++i) {
+        probability_scratch[i] = probability_scratch[i] / sum_exp;
+    }
+    for (d = 0; d < head_dim; ++d) {
+        float value = 0.0f;
+        for (i = 0; i < visible_count; ++i) {
+            value += probability_scratch[i] * values[(i * head_dim) + d];
+        }
+        out[d] = value;
+    }
+}

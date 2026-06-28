@@ -124,7 +124,7 @@ info:
 	@echo "token_input: explicit token boundary implemented"
 	@echo "prefill_state: segment-summary foundation and minimal KV binding implemented"
 	@echo "prompt: default renderer implemented"
-	@echo "graph: partial planning, deterministic fixture execution, selected embedding partial execution, and selected embedding RMSNorm segment execution implemented"
+	@echo "graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, standalone RoPE position op, and standalone F32 attention primitive implemented"
 	@echo "planner: estimate-only implemented"
 	@echo "backend: CPU reference implemented"
 	@echo "backend_cuda: CUDA backend dynamic driver attachment implemented"
@@ -156,7 +156,7 @@ info:
 	@echo "logits: unavailable skeleton implemented"
 	@echo "generation: unsupported"
 	@echo "inference: not implemented"
-	@echo "cuda: tensor movement and F32 embed kernel parity implemented when driver/device are available"
+	@echo "cuda: tensor movement and F32/F16 embed, RMSNorm, RoPE position op, and F32 attention primitive implemented when driver/device are available"
 	@echo "server: yvexd status shell implemented"
 
 all: lib cli server

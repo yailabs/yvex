@@ -126,7 +126,7 @@ static const yvex_cli_command yvex_commands[] = {
         "cuda-info",
         "Probe CUDA devices.",
         "yvex cuda-info",
-        "Reports CUDA driver/device facts when CUDA is available. It does not claim CUDA model execution, matmul, attention, or inference.",
+        "Reports CUDA driver/device facts when CUDA is available. It does not claim CUDA model execution, matmul, transformer attention, or inference.",
         command_cuda_info,
     },
     {
@@ -146,8 +146,8 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "graph",
         "Build graph diagnostics or execute narrow graph segments.",
-        "yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N] | yvex graph --backend cpu|cuda --execute-op --op rope --position N --head-dim N",
-        "Opens a GGUF descriptor and prints graph planning diagnostics. Execution flags attach selected weights and run the deterministic fixture embed node, real selected F16 embedding segment, selected embedding-plus-RMSNorm segment, or standalone RoPE position op; none of these paths is inference or text generation.",
+        "yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N] | yvex graph --backend cpu|cuda --execute-op --op rope --position N --head-dim N | yvex graph --backend cpu|cuda --execute-op --op attention --seq-len N --position N --head-dim N [--causal]",
+        "Opens a GGUF descriptor and prints graph planning diagnostics. Execution flags attach selected weights and run the deterministic fixture embed node, real selected F16 embedding segment, selected embedding-plus-RMSNorm segment, standalone RoPE position op, or standalone F32 attention primitive; none of these paths is inference or text generation.",
         command_graph,
     },
     {
@@ -2525,7 +2525,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, standalone RoPE position op, explicit token input boundary, prefill state foundation, minimal KV binding, and minimal KV ownership\n");
+    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, standalone RoPE and attention ops, explicit token input boundary, prefill state foundation, minimal KV binding, and minimal KV ownership\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -2535,10 +2535,10 @@ static int command_info(int argc, char **argv)
     printf("token_input: explicit token boundary implemented\n");
     printf("prefill_state: segment-summary foundation and minimal KV binding implemented\n");
     printf("prompt: default renderer implemented\n");
-    printf("graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, and standalone RoPE position op implemented\n");
+    printf("graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, standalone RoPE position op, and standalone F32 attention primitive implemented\n");
     printf("planner: estimate-only implemented\n");
     printf("backend: CPU reference implemented\n");
-    printf("backend_cuda: tensor movement plus F32/F16 embed, RMSNorm, and RoPE position op implemented when CUDA is available\n");
+    printf("backend_cuda: tensor movement plus F32/F16 embed, RMSNorm, RoPE position op, and F32 attention primitive implemented when CUDA is available\n");
     printf("weights: selected tensor materialization implemented\n");
     printf("engine: descriptor open and selected-weight attachment implemented\n");
     printf("session: lifecycle diagnostics, engine attachment observer, and KV ownership implemented\n");
@@ -5208,6 +5208,60 @@ static double cli_abs_double(double x)
     return x < 0.0 ? -x : x;
 }
 
+static double cli_sqrt_double(double x)
+{
+    double guess;
+    unsigned int i;
+
+    if (x <= 0.0) {
+        return 0.0;
+    }
+    guess = x >= 1.0 ? x : 1.0;
+    for (i = 0; i < 32u; ++i) {
+        guess = 0.5 * (guess + (x / guess));
+    }
+    return guess;
+}
+
+static double cli_exp_double(double x)
+{
+    const double ln2 = 0.69314718055994530942;
+    double term;
+    double sum;
+    int n = 0;
+    unsigned int i;
+
+    if (x < -60.0) {
+        return 0.0;
+    }
+    if (x > 60.0) {
+        x = 60.0;
+    }
+    while (x > 0.5) {
+        x -= ln2;
+        ++n;
+    }
+    while (x < -0.5) {
+        x += ln2;
+        --n;
+    }
+    term = 1.0;
+    sum = 1.0;
+    for (i = 1u; i <= 18u; ++i) {
+        term *= x / (double)i;
+        sum += term;
+    }
+    while (n > 0) {
+        sum *= 2.0;
+        --n;
+    }
+    while (n < 0) {
+        sum *= 0.5;
+        ++n;
+    }
+    return sum;
+}
+
 static double cli_nth_root_double(double x, unsigned long long n)
 {
     double lo = 1.0;
@@ -5321,6 +5375,85 @@ static void cli_rope_reference(const float *input,
     }
 }
 
+static void cli_attention_fill_inputs(float *query,
+                                      float *keys,
+                                      float *values,
+                                      unsigned long long seq_len,
+                                      unsigned long long head_dim)
+{
+    unsigned long long i;
+    unsigned long long d;
+
+    for (d = 0; d < head_dim; ++d) {
+        query[d] = (float)(0.02 + ((double)(d + 1ull) * 0.01));
+    }
+    for (i = 0; i < seq_len; ++i) {
+        for (d = 0; d < head_dim; ++d) {
+            keys[(i * head_dim) + d] =
+                (float)(0.03 + ((double)(i + 1ull) * 0.04) + ((double)(d + 1ull) * 0.002));
+            values[(i * head_dim) + d] =
+                (float)(0.10 + ((double)(i + 1ull) * 0.08) + ((double)(d + 1ull) * 0.01));
+        }
+    }
+}
+
+static void cli_attention_reference(const float *query,
+                                    const float *keys,
+                                    const float *values,
+                                    unsigned long long seq_len,
+                                    unsigned long long position,
+                                    unsigned long long head_dim,
+                                    float scale,
+                                    int causal,
+                                    float *score_scratch,
+                                    float *probability_scratch,
+                                    float *out)
+{
+    unsigned long long visible_count = causal ? position + 1ull : seq_len;
+    unsigned long long i;
+    unsigned long long d;
+    double max_score = 0.0;
+    double sum_exp = 0.0;
+
+    for (i = 0; i < seq_len; ++i) {
+        double score = 0.0;
+        if (causal && i > position) {
+            score_scratch[i] = 0.0f;
+            probability_scratch[i] = 0.0f;
+            continue;
+        }
+        for (d = 0; d < head_dim; ++d) {
+            score += (double)query[d] * (double)keys[(i * head_dim) + d];
+        }
+        score *= (double)scale;
+        score_scratch[i] = (float)score;
+        if (i == 0ull || score > max_score) {
+            max_score = score;
+        }
+    }
+    for (i = 0; i < visible_count; ++i) {
+        double e = cli_exp_double((double)score_scratch[i] - max_score);
+        probability_scratch[i] = (float)e;
+        sum_exp += e;
+    }
+    if (sum_exp <= 0.0) {
+        for (d = 0; d < head_dim; ++d) {
+            out[d] = 0.0f;
+        }
+        return;
+    }
+    for (i = 0; i < visible_count; ++i) {
+        probability_scratch[i] = (float)((double)probability_scratch[i] / sum_exp);
+    }
+    for (d = 0; d < head_dim; ++d) {
+        double value = 0.0;
+        for (i = 0; i < visible_count; ++i) {
+            value += (double)probability_scratch[i] * (double)values[(i * head_dim) + d];
+        }
+        out[d] = (float)value;
+    }
+}
+
 static float cli_max_abs_diff_f32(const float *a,
                                   const float *b,
                                   unsigned long long count)
@@ -5354,6 +5487,20 @@ static void print_rope_readiness_fields(void)
 {
     printf("attention_ready: false\n");
     printf("transformer_block_ready: false\n");
+    printf("full_transformer_prefill_ready: false\n");
+    printf("decode_ready: false\n");
+    printf("logits_ready: false\n");
+    printf("generation_ready: false\n");
+    printf("generation: unsupported\n");
+    printf("execution_ready: false\n");
+}
+
+static void print_attention_readiness_fields(int primitive_executed)
+{
+    printf("attention_primitive_executed: %s\n", primitive_executed ? "true" : "false");
+    printf("qkv_projection_ready: false\n");
+    printf("transformer_block_ready: false\n");
+    printf("full_prefill_ready: false\n");
     printf("full_transformer_prefill_ready: false\n");
     printf("decode_ready: false\n");
     printf("logits_ready: false\n");
@@ -5676,6 +5823,440 @@ static int command_graph_execute_rope_op(const char *backend_name,
     free(reference_values);
     free(output_values);
     free(input_values);
+    return exit_code;
+}
+
+static void print_attention_operation_fields(const char *backend_name,
+                                             unsigned long long seq_len,
+                                             unsigned long long position,
+                                             unsigned long long head_dim,
+                                             float scale,
+                                             int causal,
+                                             unsigned long long query_bytes,
+                                             unsigned long long key_bytes,
+                                             unsigned long long value_bytes,
+                                             unsigned long long input_bytes,
+                                             unsigned long long score_scratch_bytes,
+                                             unsigned long long probability_scratch_bytes,
+                                             unsigned long long output_bytes,
+                                             unsigned long long reference_bytes)
+{
+    printf("op: attention\n");
+    printf("backend: %s\n", backend_name);
+    printf("dtype: f32\n");
+    printf("seq_len: %llu\n", seq_len);
+    printf("position: %llu\n", position);
+    printf("head_dim: %llu\n", head_dim);
+    printf("scale: %.9g\n", (double)scale);
+    printf("mask: %s\n", causal ? "causal" : "none");
+    printf("query_bytes: %llu\n", query_bytes);
+    printf("key_bytes: %llu\n", key_bytes);
+    printf("value_bytes: %llu\n", value_bytes);
+    printf("input_bytes: %llu\n", input_bytes);
+    printf("score_scratch_bytes: %llu\n", score_scratch_bytes);
+    printf("probability_scratch_bytes: %llu\n", probability_scratch_bytes);
+    printf("scratch_bytes: %llu\n", score_scratch_bytes + probability_scratch_bytes);
+    printf("output_bytes: %llu\n", output_bytes);
+    printf("reference_bytes: %llu\n", reference_bytes);
+}
+
+static int command_graph_execute_attention_op(const char *backend_name,
+                                              unsigned long long seq_len,
+                                              unsigned long long position,
+                                              unsigned long long head_dim,
+                                              int causal)
+{
+    yvex_backend *backend = NULL;
+    yvex_device_tensor *query = NULL;
+    yvex_device_tensor *keys = NULL;
+    yvex_device_tensor *values = NULL;
+    yvex_device_tensor *score_scratch = NULL;
+    yvex_device_tensor *probability_scratch = NULL;
+    yvex_device_tensor *out = NULL;
+    yvex_backend_options backend_options;
+    yvex_backend_tensor_desc desc;
+    yvex_cli_graph_guard_report guard;
+    yvex_error err;
+    float *query_values = NULL;
+    float *key_values = NULL;
+    float *value_values = NULL;
+    float *score_values = NULL;
+    float *probability_values = NULL;
+    float *output_values = NULL;
+    float *reference_values = NULL;
+    float *reference_scores = NULL;
+    float *reference_probabilities = NULL;
+    unsigned long long kv_elements = 0ull;
+    unsigned long long query_bytes = 0ull;
+    unsigned long long key_bytes = 0ull;
+    unsigned long long value_bytes = 0ull;
+    unsigned long long input_bytes = 0ull;
+    unsigned long long score_scratch_bytes = 0ull;
+    unsigned long long probability_scratch_bytes = 0ull;
+    unsigned long long output_bytes = 0ull;
+    unsigned long long reference_bytes = 0ull;
+    unsigned long long visible_keys = 0ull;
+    unsigned long long masked_keys = 0ull;
+    unsigned long long sample_count = 0ull;
+    float scale = 0.0f;
+    float max_abs_diff = 0.0f;
+    float probability_max_abs_diff = 0.0f;
+    float masked_probability_max = 0.0f;
+    float position_zero_value_diff = 0.0f;
+    const char *reason = NULL;
+    int rc;
+    int exit_code = 0;
+
+    yvex_error_clear(&err);
+    memset(&backend_options, 0, sizeof(backend_options));
+    memset(&desc, 0, sizeof(desc));
+    init_graph_guard_report(&guard, "attention-primitive", 0, NULL);
+    guard.integrity_status = "not-applicable";
+    guard.identity_status = "unregistered";
+    guard.metadata_status = "unregistered";
+    guard.shape_status = "unchecked";
+    guard.range_status = "not-applicable";
+    guard.slice_range_status = "unchecked";
+
+    if (head_dim == 0 || seq_len == 0) {
+        guard.shape_status = "fail";
+        reason = head_dim == 0 ? "attention-head-dim-zero" : "attention-seq-len-zero";
+        print_graph_guard_report(&guard);
+        print_attention_operation_fields(backend_name, seq_len, position, head_dim, 0.0f,
+                                         causal, 0, 0, 0, 0, 0, 0, 0, 0);
+        print_attention_readiness_fields(0);
+        printf("reason: %s\n", reason);
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_FORMAT);
+    }
+    scale = (float)(1.0 / cli_sqrt_double((double)head_dim));
+    if (position >= seq_len) {
+        guard.shape_status = "fail";
+        guard.slice_range_status = "fail";
+        print_graph_guard_report(&guard);
+        print_attention_operation_fields(backend_name, seq_len, position, head_dim, scale,
+                                         causal, 0, 0, 0, 0, 0, 0, 0, 0);
+        print_attention_readiness_fields(0);
+        printf("reason: position-out-of-range\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+    if (cli_test_env_enabled("YVEX_TEST_ATTENTION_BYTE_OVERFLOW") ||
+        seq_len > ULLONG_MAX / head_dim ||
+        head_dim > (unsigned long long)(SIZE_MAX / sizeof(float)) ||
+        seq_len > (unsigned long long)(SIZE_MAX / sizeof(float))) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        print_attention_operation_fields(backend_name, seq_len, position, head_dim, scale,
+                                         causal, 0, 0, 0, 0, 0, 0, 0, 0);
+        print_attention_readiness_fields(0);
+        printf("reason: byte-count-overflow\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+    kv_elements = seq_len * head_dim;
+    if (kv_elements > (unsigned long long)(SIZE_MAX / sizeof(float)) ||
+        kv_elements > ULLONG_MAX / (unsigned long long)sizeof(float)) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        print_attention_operation_fields(backend_name, seq_len, position, head_dim, scale,
+                                         causal, 0, 0, 0, 0, 0, 0, 0, 0);
+        print_attention_readiness_fields(0);
+        printf("reason: byte-count-overflow\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+    query_bytes = head_dim * (unsigned long long)sizeof(float);
+    key_bytes = kv_elements * (unsigned long long)sizeof(float);
+    value_bytes = key_bytes;
+    score_scratch_bytes = seq_len * (unsigned long long)sizeof(float);
+    probability_scratch_bytes = score_scratch_bytes;
+    output_bytes = query_bytes;
+    reference_bytes = output_bytes;
+    if (query_bytes > ULLONG_MAX - key_bytes ||
+        query_bytes + key_bytes > ULLONG_MAX - value_bytes) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        print_attention_operation_fields(backend_name, seq_len, position, head_dim, scale,
+                                         causal, query_bytes, key_bytes, value_bytes, 0,
+                                         score_scratch_bytes, probability_scratch_bytes,
+                                         output_bytes, reference_bytes);
+        print_attention_readiness_fields(0);
+        printf("reason: byte-count-overflow\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+    input_bytes = query_bytes + key_bytes + value_bytes;
+    visible_keys = causal ? position + 1ull : seq_len;
+    masked_keys = seq_len - visible_keys;
+    guard.shape_status = "pass";
+    guard.slice_range_status = "pass";
+    guard.output_bytes_planned = output_bytes;
+    guard.reference_bytes_planned = reference_bytes;
+
+    query_values = (float *)malloc((size_t)query_bytes);
+    key_values = (float *)malloc((size_t)key_bytes);
+    value_values = (float *)malloc((size_t)value_bytes);
+    score_values = (float *)malloc((size_t)score_scratch_bytes);
+    probability_values = (float *)malloc((size_t)probability_scratch_bytes);
+    output_values = (float *)malloc((size_t)output_bytes);
+    reference_values = (float *)malloc((size_t)reference_bytes);
+    reference_scores = (float *)malloc((size_t)score_scratch_bytes);
+    reference_probabilities = (float *)malloc((size_t)probability_scratch_bytes);
+    if (!query_values || !key_values || !value_values || !score_values ||
+        !probability_values || !output_values || !reference_values ||
+        !reference_scores || !reference_probabilities) {
+        yvex_error_set(&err, YVEX_ERR_NOMEM, "yvex graph attention",
+                       "failed to allocate host buffers");
+        exit_code = print_yvex_error(&err, exit_for_status(YVEX_ERR_NOMEM));
+        goto cleanup_host;
+    }
+    cli_attention_fill_inputs(query_values, key_values, value_values, seq_len, head_dim);
+    cli_attention_reference(query_values, key_values, value_values, seq_len, position,
+                            head_dim, scale, causal, reference_scores,
+                            reference_probabilities, reference_values);
+    guard.reference_read_attempted = 1;
+
+    backend_options.kind = strcmp(backend_name, "cuda") == 0
+                               ? YVEX_BACKEND_KIND_CUDA
+                               : YVEX_BACKEND_KIND_CPU;
+    rc = yvex_backend_open(&backend, &backend_options, &err);
+    if (rc != YVEX_OK) {
+        guard.backend_status = rc == YVEX_ERR_UNSUPPORTED ? "unavailable" : "fail";
+        guard.backend_op_status = "unsupported";
+        reason = yvex_error_message(&err);
+        print_graph_guard_report(&guard);
+        print_attention_operation_fields(backend_name, seq_len, position, head_dim, scale,
+                                         causal, query_bytes, key_bytes, value_bytes,
+                                         input_bytes, score_scratch_bytes,
+                                         probability_scratch_bytes, output_bytes,
+                                         reference_bytes);
+        print_attention_readiness_fields(0);
+        printf("visible_keys: %llu\n", visible_keys);
+        printf("masked_keys: %llu\n", masked_keys);
+        printf("reason: %s\n", reason);
+        printf("status: graph-op-fail\n");
+        exit_code = exit_for_status(rc);
+        goto cleanup_host;
+    }
+    guard.backend_status = "ready";
+    if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ATTENTION)) {
+        guard.backend_op_status = "unsupported";
+        print_graph_guard_report(&guard);
+        print_attention_operation_fields(backend_name, seq_len, position, head_dim, scale,
+                                         causal, query_bytes, key_bytes, value_bytes,
+                                         input_bytes, score_scratch_bytes,
+                                         probability_scratch_bytes, output_bytes,
+                                         reference_bytes);
+        print_attention_readiness_fields(0);
+        printf("visible_keys: %llu\n", visible_keys);
+        printf("masked_keys: %llu\n", masked_keys);
+        printf("reason: backend-op-attention-unsupported\n");
+        printf("status: graph-op-fail\n");
+        exit_code = exit_for_status(YVEX_ERR_UNSUPPORTED);
+        goto cleanup_backend;
+    }
+    guard.backend_op_status = "supported";
+
+    desc.name = "attention.query";
+    desc.dtype = YVEX_DTYPE_F32;
+    desc.rank = 1;
+    desc.dims[0] = head_dim;
+    desc.bytes = query_bytes;
+    rc = yvex_backend_tensor_alloc(backend, &desc, &query, &err);
+    if (rc == YVEX_OK) {
+        desc.name = "attention.keys";
+        desc.rank = 2;
+        desc.dims[0] = seq_len;
+        desc.dims[1] = head_dim;
+        desc.bytes = key_bytes;
+        rc = yvex_backend_tensor_alloc(backend, &desc, &keys, &err);
+    }
+    if (rc == YVEX_OK) {
+        desc.name = "attention.values";
+        desc.bytes = value_bytes;
+        rc = yvex_backend_tensor_alloc(backend, &desc, &values, &err);
+    }
+    if (rc == YVEX_OK) {
+        desc.name = "attention.scores";
+        desc.rank = 1;
+        desc.dims[0] = seq_len;
+        desc.dims[1] = 0;
+        desc.bytes = score_scratch_bytes;
+        rc = yvex_backend_tensor_alloc(backend, &desc, &score_scratch, &err);
+    }
+    if (rc == YVEX_OK) {
+        desc.name = "attention.probabilities";
+        desc.bytes = probability_scratch_bytes;
+        rc = yvex_backend_tensor_alloc(backend, &desc, &probability_scratch, &err);
+    }
+    if (rc == YVEX_OK) {
+        desc.name = "attention.output";
+        desc.dims[0] = head_dim;
+        desc.bytes = output_bytes;
+        rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
+    }
+    if (rc != YVEX_OK) {
+        guard.phase = "output";
+        guard.cleanup_attempted = query || keys || values || score_scratch ||
+                                  probability_scratch || out;
+        guard.cleanup_status = guard.cleanup_attempted ? "pass" : "not-needed";
+        reason = yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+    guard.output_allocation_attempted = 1;
+    guard.output_bytes_allocated = output_bytes;
+
+    rc = yvex_backend_tensor_write(backend, query, query_values, query_bytes, &err);
+    if (rc == YVEX_OK) {
+        rc = yvex_backend_tensor_write(backend, keys, key_values, key_bytes, &err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_backend_tensor_write(backend, values, value_values, value_bytes, &err);
+    }
+    if (rc != YVEX_OK) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+
+    if (cli_test_env_enabled("YVEX_TEST_FAIL_ATTENTION_AFTER_ALLOC")) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = "injected-attention-after-alloc";
+        goto fail_cleaned;
+    }
+
+    guard.dispatch_attempted = 1;
+    rc = yvex_backend_op_attention(backend, query, keys, values, seq_len, position,
+                                   scale, causal, score_scratch,
+                                   probability_scratch, out, &err);
+    if (rc != YVEX_OK || cli_test_env_enabled("YVEX_TEST_FAIL_ATTENTION_AFTER_DISPATCH")) {
+        guard.phase = "dispatch";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = rc == YVEX_OK ? "injected-attention-after-dispatch" : yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+
+    rc = yvex_backend_tensor_read(backend, out, output_values, output_bytes, &err);
+    if (rc == YVEX_OK) {
+        rc = yvex_backend_tensor_read(backend, score_scratch, score_values, score_scratch_bytes, &err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_backend_tensor_read(backend, probability_scratch, probability_values,
+                                      probability_scratch_bytes, &err);
+    }
+    if (rc != YVEX_OK || cli_test_env_enabled("YVEX_TEST_FAIL_ATTENTION_AFTER_REFERENCE")) {
+        guard.phase = "reference";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = rc == YVEX_OK ? "injected-attention-after-reference" : yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+
+    max_abs_diff = cli_max_abs_diff_f32(output_values, reference_values, head_dim);
+    probability_max_abs_diff = cli_max_abs_diff_f32(probability_values,
+                                                    reference_probabilities,
+                                                    seq_len);
+    if (causal) {
+        unsigned long long mask_index;
+        for (mask_index = position + 1ull; mask_index < seq_len; ++mask_index) {
+            float p = cli_abs_float(probability_values[mask_index]);
+            if (p > masked_probability_max) {
+                masked_probability_max = p;
+            }
+        }
+    }
+    position_zero_value_diff = cli_max_abs_diff_f32(output_values,
+                                                    value_values,
+                                                    head_dim);
+    guard.guard_status = (max_abs_diff <= 0.001f && probability_max_abs_diff <= 0.001f)
+                             ? "pass"
+                             : "fail";
+    guard.phase = "complete";
+    guard.cleanup_status = "not-needed";
+    sample_count = head_dim < 8ull ? head_dim : 8ull;
+    exit_code = strcmp(guard.guard_status, "pass") == 0 ? 0 : exit_for_status(YVEX_ERR_STATE);
+
+    print_graph_guard_report(&guard);
+    print_attention_operation_fields(backend_name, seq_len, position, head_dim, scale,
+                                     causal, query_bytes, key_bytes, value_bytes,
+                                     input_bytes, score_scratch_bytes,
+                                     probability_scratch_bytes, output_bytes,
+                                     reference_bytes);
+    printf("visible_keys: %llu\n", visible_keys);
+    printf("masked_keys: %llu\n", masked_keys);
+    printf("causal_prefix_keys: %llu\n", visible_keys);
+    printf("causal_mask_future_prob_zero: %s\n",
+           !causal || masked_probability_max <= 0.000001f ? "true" : "false");
+    printf("masked_probability_max: %.9g\n", (double)masked_probability_max);
+    printf("position_zero_single_key: %s\n",
+           position == 0ull && position_zero_value_diff <= 0.000001f ? "true" : "false");
+    printf("last_position_full_prefix: %s\n",
+           causal && position + 1ull == seq_len ? "true" : "false");
+    printf("query_checksum: %llu\n", cli_checksum_bytes(query_values, query_bytes));
+    printf("key_checksum: %llu\n", cli_checksum_bytes(key_values, key_bytes));
+    printf("value_checksum: %llu\n", cli_checksum_bytes(value_values, value_bytes));
+    printf("score_checksum: %llu\n", cli_checksum_bytes(score_values, score_scratch_bytes));
+    printf("probability_checksum: %llu\n", cli_checksum_bytes(probability_values, probability_scratch_bytes));
+    printf("output_checksum: %llu\n", cli_checksum_bytes(output_values, output_bytes));
+    printf("reference_checksum: %llu\n", cli_checksum_bytes(reference_values, reference_bytes));
+    printf("max_abs_diff: %.9g\n", (double)max_abs_diff);
+    printf("softmax_max_abs_diff: %.9g\n", (double)probability_max_abs_diff);
+    printf("reference_attempted: true\n");
+    if (strcmp(backend_name, "cuda") == 0) {
+        printf("attention_cuda_parity: %s\n", exit_code == 0 ? "pass" : "fail");
+        printf("cuda_reference_max_abs_diff: %.9g\n", (double)max_abs_diff);
+    } else {
+        printf("cpu_reference_max_abs_diff: %.9g\n", (double)max_abs_diff);
+    }
+    printf("output_sample_count: %llu\n", sample_count);
+    cli_print_float_values("query_sample_values", query_values, sample_count);
+    cli_print_float_values("output_sample_values", output_values, sample_count);
+    cli_print_float_values("reference_sample_values", reference_values, sample_count);
+    print_attention_readiness_fields(exit_code == 0);
+    printf("status: %s\n", exit_code == 0 ? "graph-op-executed" : "graph-op-fail");
+    goto cleanup_backend;
+
+fail_cleaned:
+    print_graph_guard_report(&guard);
+    print_attention_operation_fields(backend_name, seq_len, position, head_dim, scale,
+                                     causal, query_bytes, key_bytes, value_bytes,
+                                     input_bytes, score_scratch_bytes,
+                                     probability_scratch_bytes, output_bytes,
+                                     reference_bytes);
+    printf("visible_keys: %llu\n", visible_keys);
+    printf("masked_keys: %llu\n", masked_keys);
+    print_attention_readiness_fields(0);
+    printf("reason: %s\n", reason ? reason : "attention-op-failed");
+    printf("status: graph-op-failed-cleaned\n");
+    exit_code = exit_for_status(rc == YVEX_OK ? YVEX_ERR_STATE : rc);
+
+cleanup_backend:
+    if (backend) {
+        yvex_backend_tensor_free(backend, out);
+        yvex_backend_tensor_free(backend, probability_scratch);
+        yvex_backend_tensor_free(backend, score_scratch);
+        yvex_backend_tensor_free(backend, values);
+        yvex_backend_tensor_free(backend, keys);
+        yvex_backend_tensor_free(backend, query);
+        yvex_backend_close(backend);
+    }
+
+cleanup_host:
+    free(reference_probabilities);
+    free(reference_scores);
+    free(reference_values);
+    free(output_values);
+    free(probability_values);
+    free(score_values);
+    free(value_values);
+    free(key_values);
+    free(query_values);
     return exit_code;
 }
 
@@ -6287,16 +6868,19 @@ static int command_graph(int argc, char **argv)
     unsigned long long token_vocab_size = 0ull;
     unsigned long long rope_position = 0ull;
     unsigned long long rope_head_dim = 0ull;
+    unsigned long long attention_seq_len = 0ull;
     int execute_fixture = 0;
     int execute_partial = 0;
     int execute_segment = 0;
     int execute_op = 0;
+    int attention_causal = 0;
     int fixture_token_provided = 0;
     int partial_token_provided = 0;
     int token_input_provided = 0;
     int token_index_provided = 0;
     int rope_position_provided = 0;
     int rope_head_dim_provided = 0;
+    int attention_seq_len_provided = 0;
     int i;
     int rc;
 
@@ -6362,10 +6946,17 @@ static int command_graph(int argc, char **argv)
             execute_op = 1;
         } else if (strcmp(argv[i], "--op") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "yvex: --op requires rope\n");
+                fprintf(stderr, "yvex: --op requires rope or attention\n");
                 return 2;
             }
             op_name = argv[++i];
+        } else if (strcmp(argv[i], "--seq-len") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &attention_seq_len)) {
+                fprintf(stderr, "yvex: --seq-len requires a positive integer\n");
+                return 2;
+            }
+            attention_seq_len_provided = 1;
+            i += 1;
         } else if (strcmp(argv[i], "--position") == 0) {
             if (i + 1 >= argc || !parse_ull_allow_zero(argv[i + 1], &rope_position)) {
                 fprintf(stderr, "yvex: --position requires a non-negative integer\n");
@@ -6380,6 +6971,8 @@ static int command_graph(int argc, char **argv)
             }
             rope_head_dim_provided = 1;
             i += 1;
+        } else if (strcmp(argv[i], "--causal") == 0) {
+            attention_causal = 1;
         } else if (strcmp(argv[i], "--segment") == 0) {
             if (i + 1 >= argc) {
                 fprintf(stderr, "yvex: --segment requires embedding-rmsnorm\n");
@@ -6419,7 +7012,7 @@ static int command_graph(int argc, char **argv)
 
     if (!model_arg && !execute_op) {
         fprintf(stderr, "yvex: graph requires FILE_OR_ALIAS\n");
-        fprintf(stderr, "usage: yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N] | yvex graph --backend cpu|cuda --execute-op --op rope --position N --head-dim N\n");
+        fprintf(stderr, "usage: yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N] | yvex graph --backend cpu|cuda --execute-op --op rope --position N --head-dim N | yvex graph --backend cpu|cuda --execute-op --op attention --seq-len N --position N --head-dim N [--causal]\n");
         return 2;
     }
     if (strcmp(backend_name, "cpu") != 0 && strcmp(backend_name, "cuda") != 0) {
@@ -6436,8 +7029,8 @@ static int command_graph(int argc, char **argv)
             fprintf(stderr, "yvex: --execute-op does not take a model artifact\n");
             return 2;
         }
-        if (!op_name || strcmp(op_name, "rope") != 0) {
-            fprintf(stderr, "yvex: --execute-op requires --op rope\n");
+        if (!op_name || (strcmp(op_name, "rope") != 0 && strcmp(op_name, "attention") != 0)) {
+            fprintf(stderr, "yvex: --execute-op requires --op rope or --op attention\n");
             return 2;
         }
         if (!rope_position_provided) {
@@ -6448,15 +7041,29 @@ static int command_graph(int argc, char **argv)
             fprintf(stderr, "yvex: --execute-op requires --head-dim N\n");
             return 2;
         }
+        if (strcmp(op_name, "attention") == 0 && !attention_seq_len_provided) {
+            fprintf(stderr, "yvex: --execute-op --op attention requires --seq-len N\n");
+            return 2;
+        }
+        if (strcmp(op_name, "rope") == 0 && (attention_seq_len_provided || attention_causal)) {
+            fprintf(stderr, "yvex: --seq-len and --causal require --op attention\n");
+            return 2;
+        }
         if (fixture_token_provided || partial_token_provided || token_input_provided ||
             token_index_provided || segment_name) {
             fprintf(stderr, "yvex: --execute-op cannot be combined with model graph token or segment options\n");
             return 2;
         }
+        if (strcmp(op_name, "attention") == 0) {
+            return command_graph_execute_attention_op(backend_name, attention_seq_len,
+                                                      rope_position, rope_head_dim,
+                                                      attention_causal);
+        }
         return command_graph_execute_rope_op(backend_name, rope_position, rope_head_dim);
     }
-    if (op_name || rope_position_provided || rope_head_dim_provided) {
-        fprintf(stderr, "yvex: --op, --position, and --head-dim require --execute-op\n");
+    if (op_name || rope_position_provided || rope_head_dim_provided ||
+        attention_seq_len_provided || attention_causal) {
+        fprintf(stderr, "yvex: --op, --position, --head-dim, --seq-len, and --causal require --execute-op\n");
         return 2;
     }
     if (execute_segment) {

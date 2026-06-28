@@ -107,6 +107,7 @@ segment-summary prefill state foundation from validated token sequences
 minimal session-owned KV ownership and append/read boundary
 minimal KV-backed prefill binding from segment-summary state
 standalone RoPE/position graph op boundary
+standalone F32 attention primitive boundary
 artifact integrity validator and corruption fixture suite
 file identity digest enforcement
 registry metadata drift diagnostics
@@ -252,8 +253,8 @@ tables.
 | M9 | complete | kv | Minimal KV ownership and append/read boundary | session-owned KV shape, allocation, append/read, lifecycle, cleanup, and context overflow behavior |
 | PREFILL.1 | complete | prefill | KV-backed prefill state binding | M8 segment-summary state connects to minimal KV ownership without decode/logits claim |
 | GRAPH.OPS.0 | complete | graph | RoPE and position operation boundary | position-dependent graph op implemented with tests and backend rules |
-| GRAPH.OPS.1 | next | graph | Attention primitive boundary | attention inputs, masks, scratch, backend dispatch, and failure paths implemented |
-| GRAPH.OPS.2 | planned | graph | Projection and matmul primitive boundary | matmul/projection path implemented with dtype/qtype/backend limits |
+| GRAPH.OPS.1 | complete | graph | Attention primitive boundary | attention inputs, masks, scratch, backend dispatch, and failure paths implemented |
+| GRAPH.OPS.2 | next | graph | Projection and matmul primitive boundary | matmul/projection path implemented with dtype/qtype/backend limits |
 | GRAPH.OPS.3 | planned | graph | MLP and routed-expert primitive boundary | feed-forward or routed expert slice implemented with explicit tensor roles and backend support |
 | GRAPH.BLOCK.0 | planned | graph | First transformer block execution | one block executes through normalization, attention, residual, MLP path with owned scratch |
 | GRAPH.LAYERS.0 | planned | graph | Layer scheduler and repeated block execution | scheduler can run repeated blocks over token positions with cleanup and failure reporting |
@@ -403,6 +404,15 @@ allocation, dispatch, reference comparison, cleanup, checksum, and max-diff
 reporting. It does not prove attention, QKV projection, transformer block
 execution, layer scheduling, decode, logits, sampling, or generation.
 
+The standalone attention primitive proves explicit F32 Q/K/V scaled dot-product
+attention for one query over a bounded key/value prefix on CPU and CUDA where
+available. It validates `seq_len`, position bounds, head dimension, causal mask,
+scratch sizing, backend op support, output allocation, dispatch, reference
+comparison, cleanup, checksum, softmax diff, and max-diff reporting. It does not
+project Q/K/V from model tensors, write real KV cache rows, execute a
+transformer block, schedule layers, run full transformer prefill, decode,
+produce logits, sample, or generate.
+
 Full model materialization and placement are explicit planned work because the
 runtime must inventory and place the complete required tensor set before a real
 transformer path can rely on it. Decode cannot be meaningful until graph/layer
@@ -422,12 +432,13 @@ backend support.
 ## 7. Active Next
 
 ```text
-GRAPH.OPS.1 - Attention primitive boundary
+GRAPH.OPS.2 - Projection and matmul primitive boundary
 ```
 
-Next implementation: GRAPH.OPS.1. It must introduce the attention primitive
-boundary with explicit inputs, masks, scratch, backend dispatch, failure paths,
-and cleanup behavior. It must not claim transformer block execution, layer
+Next implementation: GRAPH.OPS.2. It must introduce the projection/matmul
+primitive boundary with explicit dtype/qtype/backend limits, shape accounting,
+scratch/output ownership, dispatch, reference comparison, failure paths, and
+cleanup behavior. It must not claim transformer block execution, layer
 scheduling, full transformer prefill, decode, logits, sampling, generation,
 server generation, evaluation, or benchmark readiness.
 
@@ -491,6 +502,8 @@ Standalone graph op proof set:
 ```sh
 ./yvex graph --backend cpu --execute-op --op rope --position 7 --head-dim 8
 ./yvex graph --backend cuda --execute-op --op rope --position 7 --head-dim 8
+./yvex graph --backend cpu --execute-op --op attention --seq-len 4 --position 3 --head-dim 8 --causal
+./yvex graph --backend cuda --execute-op --op attention --seq-len 4 --position 3 --head-dim 8 --causal
 ```
 
 Spine structure proof:
