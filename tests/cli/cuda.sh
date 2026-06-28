@@ -246,6 +246,30 @@ contains "$OUT_DIR/prefill_cuda.out" "logits_ready: false"
 contains "$OUT_DIR/prefill_cuda.out" "generation: unsupported"
 contains "$OUT_DIR/prefill_cuda.out" "status: prefill-state-created"
 
+"$YVEX_BIN" prefill --model "$SEGMENT" --backend cuda \
+  --segment embedding-rmsnorm --tokens 0,1 \
+  --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8 \
+  >"$OUT_DIR/prefill_cuda_kv.out" 2>"$OUT_DIR/prefill_cuda_kv.err"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    fail "prefill cuda kv exit code was $rc"
+fi
+contains "$OUT_DIR/prefill_cuda_kv.out" "prefill_state_created: true"
+contains "$OUT_DIR/prefill_cuda_kv.out" "backend: cuda"
+contains "$OUT_DIR/prefill_cuda_kv.out" "tokens_processed: 2"
+contains "$OUT_DIR/prefill_cuda_kv.out" "prefill_cuda_parity: pass"
+contains "$OUT_DIR/prefill_cuda_kv.out" "kv_ready: true"
+contains "$OUT_DIR/prefill_cuda_kv.out" "session_kv_owned: true"
+contains "$OUT_DIR/prefill_cuda_kv.out" "kv_bound_to_prefill: true"
+contains "$OUT_DIR/prefill_cuda_kv.out" "kv_positions_written: 2"
+contains "$OUT_DIR/prefill_cuda_kv.out" "kv_read_count: 1"
+contains "$OUT_DIR/prefill_cuda_kv.out" "full_transformer_prefill_ready: false"
+contains "$OUT_DIR/prefill_cuda_kv.out" "decode_ready: false"
+contains "$OUT_DIR/prefill_cuda_kv.out" "logits_ready: false"
+contains "$OUT_DIR/prefill_cuda_kv.out" "generation_ready: false"
+contains "$OUT_DIR/prefill_cuda_kv.out" "generation: unsupported"
+contains "$OUT_DIR/prefill_cuda_kv.out" "status: prefill-state-created"
+
 "$YVEX_BIN" help cuda-info >"$OUT_DIR/help_cuda_info.out" 2>"$OUT_DIR/help_cuda_info.err"
 rc=$?
 if [ "$rc" -ne 0 ]; then

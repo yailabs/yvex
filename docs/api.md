@@ -12,10 +12,10 @@ boundary a function belongs to.
 YVEX exposes a staged local inference engine. A caller should be able to move
 from artifact evidence to descriptors, from descriptors to selected backend
 residency, from residency to engine-owned state, from engine-owned state to
-graph execution, and from token input to prefill summaries and minimal
-session-owned KV state. Later layers such as KV-backed transformer prefill,
-decode, logits, sampling, generation, and provider serving extend the same
-chain as their runtime contracts mature.
+graph execution, and from token input to prefill summaries, minimal
+session-owned KV state, and minimal KV-backed prefill binding. Later layers
+such as full transformer prefill, decode, logits, sampling, generation, and
+provider serving extend the same chain as their runtime contracts mature.
 
 This file is the API map. Runtime behavior is governed by
 [docs/contract.md](contract.md). Operator command transcripts live in
@@ -120,7 +120,7 @@ milestone.
 | Session visibility | Session reports over engine-attached runtime state and minimal session-owned KV state. |
 | Graph execution | Controlled fixture graph results, selected embedding graph results, embedding-plus-RMSNorm segment results, graph guards, checksums, and max-diff reports. |
 | Token input | Bounded explicit token lists, token validation, token selection, and prompt-to-token boundaries through tokenizer paths. |
-| Prefill state | Segment-summary prefill reports over validated token sequences. |
+| Prefill state | Segment-summary prefill reports over validated token sequences, with optional minimal session-owned KV binding. |
 | Runtime reporting | Metrics, traces, profiles, integrity reports, materialization reports, graph reports, and failure phases. |
 | Server status | Daemon health, metrics, model listing, model reference resolution, and generation availability reports. |
 
@@ -264,9 +264,11 @@ Sessions can create and own this minimal KV store by setting
 `yvex_session_kv_clear` delegate to the session-owned KV store while preserving
 session lifecycle checks. The session summary mirrors the copied KV facts.
 
-This boundary gives later KV-backed prefill a real ownership target. It does
-not run attention, does not bind transformer layer outputs yet, and does not
-make decode, logits, sampling, generation, or provider generation ready.
+This boundary gives prefill a real ownership target. The prefill API can bind
+processed token positions into this minimal F32 store for diagnostic state
+continuity. The store still does not run attention, does not contain real
+attention K/V projections, and does not make decode, logits, sampling,
+generation, or provider generation ready.
 
 ## Graph Execution
 
@@ -323,13 +325,24 @@ positions, segment execution count, output bytes, scratch bytes, aggregate
 checksum, final-token checksum, max diff, cleanup status, and readiness fields
 for the next runtime layers.
 
-This is the first public surface where a token sequence becomes runtime state.
-It gives the KV path a concrete predecessor: positions, processed token count,
-per-token graph work, aggregation, cleanup behavior, and state reporting.
+When `yvex_prefill_state_options.attach_kv` is set, the options carry a
+`yvex_kv_shape` for a minimal session-owned KV store. The prefill path allocates
+that store, writes one deterministic diagnostic KV position per processed
+token, reads back position zero, and copies KV binding facts into
+`yvex_prefill_state_summary`: owner, dtype, shape, byte counts, positions
+written, append/read counts, readback checksum, sample values, overflow status,
+and cleanup status.
 
-KV-backed transformer prefill extends this path by attaching token ranges to
-session-owned KV state. Decode, logits, sampling, and generation build on top of
-that same state chain as their API surfaces mature.
+This is the first public surface where a token sequence becomes runtime state.
+It now has a minimal KV-backed binding mode: processed positions can be attached
+to session-owned KV storage without claiming attention execution. The stored
+values are diagnostic and deterministic, derived from the implemented segment
+result, not real transformer attention keys and values.
+
+Full transformer prefill extends this path later by computing real attention
+K/V projections through implemented graph operations and layer scheduling.
+Decode, logits, sampling, and generation build on top of that same state chain
+as their API surfaces mature.
 
 ## Operator Integrity Report
 

@@ -420,9 +420,11 @@ status: token-input-fail
 ## 11. Create a prefill state summary
 
 The prefill state command consumes validated explicit token input and runs the
-implemented selected segment once per token. It creates an inspectable
-`segment-summary` state only. It is not attention KV, decode, logits, sampling,
-or generation.
+implemented selected segment once per token. Without `--attach-kv`, it creates
+an inspectable `segment-summary` state only. With `--attach-kv`, it also binds
+processed positions into a minimal session-owned KV store using deterministic
+diagnostic values derived from the segment result. This is not attention
+computation, full transformer prefill, decode, logits, sampling, or generation.
 
 CPU example:
 
@@ -446,11 +448,53 @@ token_count: 2
 tokens_processed: 2
 segment_graph_executions: 2
 kv_ready: false
+kv_bound_to_prefill: false
 decode_ready: false
 logits_ready: false
 generation: unsupported
 status: prefill-state-created
 ```
+
+KV-backed binding example:
+
+```sh
+./yvex prefill \
+  --model deepseek4-v4-flash-selected-embed-rmsnorm \
+  --backend cpu \
+  --segment embedding-rmsnorm \
+  --tokens 0,1,2 \
+  --attach-kv \
+  --kv-layers 1 \
+  --kv-heads 2 \
+  --kv-head-dim 4 \
+  --kv-capacity 8
+```
+
+Expected outcome:
+
+```text
+prefill_state_created: true
+tokens_processed: 3
+kv_ready: true
+session_kv_owned: true
+kv_bound_to_prefill: true
+kv_binding_kind: minimal-diagnostic
+kv_status: allocated
+kv_positions_written: 3
+kv_append_count: 3
+kv_read_count: 1
+kv_cleanup_status: pass
+full_transformer_prefill_ready: false
+decode_ready: false
+logits_ready: false
+generation_ready: false
+generation: unsupported
+status: prefill-state-created
+```
+
+If `--kv-capacity` is smaller than the token count, the command fails before
+ambiguous state. If KV append fails after work has begun, the command reports
+the failure phase and cleanup status.
 
 CUDA-capable hosts can run the same foundation state on the CUDA lane:
 
@@ -467,13 +511,17 @@ available. A failure before token execution reports `prefill_state_created:
 false` and `tokens_processed: 0`; an injected or post-dispatch failure reports
 the prefill phase, processed-token count, and cleanup status.
 
+CUDA-capable hosts can also use `--attach-kv` with the same KV flags. The graph
+segment runs on CUDA; the minimal KV store remains session-owned diagnostic
+state and still reports `full_transformer_prefill_ready: false`.
+
 ### Prove minimal KV ownership
 
 The minimal KV command creates a bounded session-owned F32 key/value store,
 appends deterministic complete positions, reads one written position, and
 reports lifecycle facts. It is a storage and ownership proof only. It is not
-attention execution, KV-backed transformer prefill, decode, logits, sampling,
-or generation.
+attention execution, full transformer prefill, decode, logits, sampling, or
+generation.
 
 ```sh
 ./yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8 --append-demo --read-position 0

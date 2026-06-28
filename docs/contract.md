@@ -200,11 +200,13 @@ The implemented runtime states are:
 | Token input | Bounded explicit token sequences with validation and token-index selection. |
 | Prefill state summary | Segment-summary state over validated explicit token input. |
 | Minimal KV state | Session-owned F32 KV storage with shape, append/read, clear, overflow, and cleanup reports. |
+| Minimal KV-backed prefill binding | Optional prefill mode that writes one diagnostic KV position per processed token into session-owned KV storage. |
 
-The runtime path after minimal KV ownership proceeds through KV-backed prefill,
-decode, logits, sampling, generation, CLI generation, and provider generation.
-Each layer enters the contract when code, tests, report shape, command proof,
-and cleanup behavior exist.
+The runtime path after minimal KV ownership proceeds through minimal KV-backed
+prefill binding, full transformer prefill, decode, logits, sampling,
+generation, CLI generation, and provider generation. Each layer enters the
+contract when code, tests, report shape, command proof, and cleanup behavior
+exist.
 
 ## Graph Execution Contract
 
@@ -253,9 +255,19 @@ embedding-plus-RMSNorm segment over each token in order. It records token count,
 processed positions, segment execution count, output byte accounting, aggregate
 checksum, final-token checksum, max diff, and cleanup status.
 
-Current prefill summary readiness fields must report the state of the next
-layers accurately: KV ownership may exist while KV-backed transformer prefill,
-decode, logits, sampling, and generation remain not ready.
+`yvex prefill --attach-kv --kv-layers N --kv-heads N --kv-head-dim N
+--kv-capacity N` adds a minimal KV-backed binding layer. The command validates
+the token sequence, runs the existing segment per token, allocates a
+session-owned F32 KV store, writes one deterministic diagnostic KV position per
+processed token, reads back position zero, reports KV shape/byte/readback
+facts, and cleans up on failure. Capacity smaller than token count fails before
+ambiguous state.
+
+The minimal KV binding values are not real attention keys and values. They are
+diagnostic state derived from the implemented segment result. Current prefill
+summary readiness fields must report the state of the next layers accurately:
+minimal KV binding may exist while full transformer prefill, decode, logits,
+sampling, and generation remain not ready.
 
 ## Minimal KV Contract
 
@@ -284,9 +296,11 @@ through session KV append/read/clear functions. Session reports mirror KV owner,
 dtype, shape, byte counts, append/read counters, overflow state, and cleanup
 state.
 
-Minimal KV is not attention execution. It does not bind transformer layer
-outputs to KV rows yet, does not make prefill KV-backed, and does not make
-decode, logits, sampling, generation, or provider generation ready.
+Minimal KV is not attention execution. The prefill command can bind processed
+positions to KV rows with deterministic diagnostic values, but that does not
+mean transformer layer outputs are being projected into attention K/V rows.
+Minimal KV binding does not make full transformer prefill, decode, logits,
+sampling, generation, or provider generation ready.
 
 ## Artifact Integrity Contract
 

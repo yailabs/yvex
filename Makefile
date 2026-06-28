@@ -113,7 +113,7 @@ CURRENT_DOCS := README.md AGENTS.md MODEL_ARTIFACTS.md NOTICE.md \
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, explicit token input boundary, prefill state foundation, and minimal KV ownership"
+	@echo "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, explicit token input boundary, prefill state foundation, minimal KV binding, and minimal KV ownership"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"
@@ -122,7 +122,7 @@ info:
 	@echo "model: descriptor-only implemented"
 	@echo "tokenizer: fixture encode/decode implemented"
 	@echo "token_input: explicit token boundary implemented"
-	@echo "prefill_state: segment-summary foundation implemented"
+	@echo "prefill_state: segment-summary foundation and minimal KV binding implemented"
 	@echo "prompt: default renderer implemented"
 	@echo "graph: partial planning, deterministic fixture execution, selected embedding partial execution, and selected embedding RMSNorm segment execution implemented"
 	@echo "planner: estimate-only implemented"

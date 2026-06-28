@@ -105,6 +105,7 @@ real selected embedding plus RMSNorm graph segment
 explicit prompt/token input boundary
 segment-summary prefill state foundation from validated token sequences
 minimal session-owned KV ownership and append/read boundary
+minimal KV-backed prefill binding from segment-summary state
 artifact integrity validator and corruption fixture suite
 file identity digest enforcement
 registry metadata drift diagnostics
@@ -147,7 +148,6 @@ full DeepSeek materialization
 full GGUF conversion
 full supply-chain security
 full transformer prefill
-KV-backed prefill
 decode
 logits-producing runtime path
 sampling
@@ -165,8 +165,9 @@ execution_ready: true
 
 M8 is not the final prefill path. It is a segment-summary prefill-state
 foundation built from validated token input and implemented selected graph
-segments. Full transformer prefill still requires graph op expansion, first
-block execution, layer scheduling, and KV-backed runtime state.
+segments. PREFILL.1 binds that summary to minimal session-owned KV state with
+diagnostic values. Full transformer prefill still requires graph op expansion,
+first block execution, layer scheduling, and real attention K/V projection.
 
 ## 5. Unified Delivery Ledger
 
@@ -248,8 +249,8 @@ tables.
 | M8 | complete | prefill | Prefill state foundation | segment-summary prefill state created from validated token sequence |
 | SPINE.REBASE.5 | complete | docs | Unified full inference engine spine | all delivery rows consolidated into one ledger and dependency map |
 | M9 | complete | kv | Minimal KV ownership and append/read boundary | session-owned KV shape, allocation, append/read, lifecycle, cleanup, and context overflow behavior |
-| PREFILL.1 | next | prefill | KV-backed prefill state binding | M8 segment-summary state connects to minimal KV ownership without decode/logits claim |
-| GRAPH.OPS.0 | planned | graph | RoPE and position operation boundary | position-dependent graph op implemented with tests and backend rules |
+| PREFILL.1 | complete | prefill | KV-backed prefill state binding | M8 segment-summary state connects to minimal KV ownership without decode/logits claim |
+| GRAPH.OPS.0 | next | graph | RoPE and position operation boundary | position-dependent graph op implemented with tests and backend rules |
 | GRAPH.OPS.1 | planned | graph | Attention primitive boundary | attention inputs, masks, scratch, backend dispatch, and failure paths implemented |
 | GRAPH.OPS.2 | planned | graph | Projection and matmul primitive boundary | matmul/projection path implemented with dtype/qtype/backend limits |
 | GRAPH.OPS.3 | planned | graph | MLP and routed-expert primitive boundary | feed-forward or routed expert slice implemented with explicit tensor roles and backend support |
@@ -370,6 +371,7 @@ artifact/source evidence
   -> token input
   -> prefill state foundation
   -> minimal KV ownership
+  -> minimal KV-backed prefill binding
   -> KV-backed transformer prefill
   -> decode
   -> logits
@@ -382,9 +384,10 @@ artifact/source evidence
 ```
 
 M8 is not the final prefill path. It is the first prefill-state foundation.
-A full transformer run still requires graph op expansion, transformer block
-execution, layer scheduling, KV-backed prefill, decode, logits, sampling, and a
-generation loop.
+PREFILL.1 binds that foundation to minimal session-owned KV state, but it does
+not compute real attention K/V. A full transformer run still requires graph op
+expansion, transformer block execution, layer scheduling, real transformer
+prefill, decode, logits, sampling, and a generation loop.
 
 The current executable graph slices are controlled fixture embedding, selected
 real embedding, and selected real embedding-plus-RMSNorm. Those slices prove
@@ -395,7 +398,7 @@ attention, MLP, routed experts, logits, sampling, or generation.
 Full model materialization and placement are explicit planned work because the
 runtime must inventory and place the complete required tensor set before a real
 transformer path can rely on it. Decode cannot be meaningful until graph/layer
-execution and KV-backed prefill create runtime state worth advancing.
+execution and real transformer prefill create runtime state worth advancing.
 
 Evaluation must follow implemented runtime boundaries. Fixture eval is not model
 quality. Logits regression is not capability eval. Capability eval starts only
@@ -411,13 +414,12 @@ backend support.
 ## 7. Active Next
 
 ```text
-PREFILL.1 - KV-backed prefill state binding
+GRAPH.OPS.0 - RoPE and position operation boundary
 ```
 
-Next implementation: PREFILL.1. It must connect the M8 segment-summary prefill
-state to minimal session-owned KV ownership without claiming full transformer
-prefill, decode, logits, sampling, generation, server generation, evaluation,
-or benchmark readiness.
+Next implementation: GRAPH.OPS.0. It must add the first position-dependent graph
+operation boundary without claiming full transformer prefill, decode, logits,
+sampling, generation, server generation, evaluation, or benchmark readiness.
 
 After PREFILL.1, the next runtime work is not automatically decode. The spine
 expects graph/layer expansion rows to determine whether decode can run over
@@ -470,6 +472,8 @@ Selected segment proof set:
 ./yvex graph --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda --execute-segment --segment embedding-rmsnorm --tokens 0,1 --token-index 0
 ./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1
 ./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda --segment embedding-rmsnorm --tokens 0,1
+./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
+./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda --segment embedding-rmsnorm --tokens 0,1,2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
 ```
 
 Spine structure proof:

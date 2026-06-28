@@ -14,13 +14,13 @@ fail() {
 contains() {
     file=$1
     text=$2
-    grep -F "$text" "$file" >/dev/null || fail "$file missing: $text"
+    grep -F -- "$text" "$file" >/dev/null || fail "$file missing: $text"
 }
 
 not_contains() {
     file=$1
     text=$2
-    ! grep -F "$text" "$file" >/dev/null || fail "$file unexpectedly contained: $text"
+    ! grep -F -- "$text" "$file" >/dev/null || fail "$file unexpectedly contained: $text"
 }
 
 expect_fail() {
@@ -129,12 +129,79 @@ contains "$OUT_DIR/prefill-cpu.out" "segment_output_bytes: 16"
 contains "$OUT_DIR/prefill-cpu.out" "prefill_total_output_bytes: 48"
 contains "$OUT_DIR/prefill-cpu.out" "prefill_max_abs_diff: 0"
 contains "$OUT_DIR/prefill-cpu.out" "kv_ready: false"
+contains "$OUT_DIR/prefill-cpu.out" "kv_bound_to_prefill: false"
+contains "$OUT_DIR/prefill-cpu.out" "kv_status: not-requested"
+contains "$OUT_DIR/prefill-cpu.out" "full_transformer_prefill_ready: false"
 contains "$OUT_DIR/prefill-cpu.out" "decode_ready: false"
 contains "$OUT_DIR/prefill-cpu.out" "logits_ready: false"
+contains "$OUT_DIR/prefill-cpu.out" "generation_ready: false"
 contains "$OUT_DIR/prefill-cpu.out" "generation: unsupported"
 contains "$OUT_DIR/prefill-cpu.out" "status: prefill-state-created"
 not_contains "$OUT_DIR/prefill-cpu.out" "kv_ready: true"
 not_contains "$OUT_DIR/prefill-cpu.out" "logits_ready: true"
+
+"$YVEX_BIN" prefill --model "$SEGMENT_MODEL" --backend cpu \
+  --segment embedding-rmsnorm --tokens 0,1,2 \
+  --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8 \
+  >"$OUT_DIR/prefill-kv-cpu.out" 2>"$OUT_DIR/prefill-kv-cpu.err"
+contains "$OUT_DIR/prefill-kv-cpu.out" "prefill_state_created: true"
+contains "$OUT_DIR/prefill-kv-cpu.out" "tokens_processed: 3"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_ready: true"
+contains "$OUT_DIR/prefill-kv-cpu.out" "session_kv_owned: true"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_bound_to_prefill: true"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_binding_kind: minimal-diagnostic"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_status: allocated"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_owner: session"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_dtype: F32"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_layers: 1"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_heads: 2"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_head_dim: 4"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_capacity: 8"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_values_per_position: 16"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_bytes_per_position: 64"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_planned_bytes: 512"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_allocated_bytes: 512"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_positions_written: 3"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_append_count: 3"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_read_count: 1"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_read_position: 0"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_read_value_count: 16"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_read_checksum:"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_read_sample_values:"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_overflow: not-overflowed"
+contains "$OUT_DIR/prefill-kv-cpu.out" "kv_cleanup_status: pass"
+contains "$OUT_DIR/prefill-kv-cpu.out" "full_transformer_prefill_ready: false"
+contains "$OUT_DIR/prefill-kv-cpu.out" "decode_ready: false"
+contains "$OUT_DIR/prefill-kv-cpu.out" "logits_ready: false"
+contains "$OUT_DIR/prefill-kv-cpu.out" "generation_ready: false"
+contains "$OUT_DIR/prefill-kv-cpu.out" "generation: unsupported"
+contains "$OUT_DIR/prefill-kv-cpu.out" "status: prefill-state-created"
+
+"$YVEX_BIN" prefill --model "$SEGMENT_MODEL" --backend cpu \
+  --segment embedding-rmsnorm --tokens 0,1,2 \
+  --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 3 \
+  >"$OUT_DIR/prefill-kv-capacity-equal.out" 2>"$OUT_DIR/prefill-kv-capacity-equal.err"
+contains "$OUT_DIR/prefill-kv-capacity-equal.out" "kv_bound_to_prefill: true"
+contains "$OUT_DIR/prefill-kv-capacity-equal.out" "kv_capacity: 3"
+contains "$OUT_DIR/prefill-kv-capacity-equal.out" "kv_positions_written: 3"
+contains "$OUT_DIR/prefill-kv-capacity-equal.out" "kv_planned_bytes: 192"
+
+expect_fail kv-capacity-too-small "$YVEX_BIN" prefill --model "$SEGMENT_MODEL" --backend cpu \
+  --segment embedding-rmsnorm --tokens 0,1,2 \
+  --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 2
+contains "$OUT_DIR/kv-capacity-too-small.out" "prefill_state_created: false"
+contains "$OUT_DIR/kv-capacity-too-small.out" "prefill_phase: kv-preflight"
+contains "$OUT_DIR/kv-capacity-too-small.out" "tokens_processed: 0"
+contains "$OUT_DIR/kv-capacity-too-small.out" "kv_bound_to_prefill: false"
+contains "$OUT_DIR/kv-capacity-too-small.out" "kv_capacity: 2"
+contains "$OUT_DIR/kv-capacity-too-small.out" "kv_overflow: capacity-too-small"
+contains "$OUT_DIR/kv-capacity-too-small.out" "status: prefill-state-fail"
+contains "$OUT_DIR/kv-capacity-too-small.err" "KV capacity is smaller than token count"
+
+expect_fail kv-zero-capacity "$YVEX_BIN" prefill --model "$SEGMENT_MODEL" --backend cpu \
+  --segment embedding-rmsnorm --tokens 0,1 \
+  --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 0
+contains "$OUT_DIR/kv-zero-capacity.err" "--kv-capacity requires a positive integer"
 
 expect_fail malformed-token-list "$YVEX_BIN" prefill --model "$SEGMENT_MODEL" --backend cpu \
   --segment embedding-rmsnorm --tokens 1,,2
@@ -161,6 +228,17 @@ contains "$OUT_DIR/missing-rms.out" "dispatch_attempted: false"
 contains "$OUT_DIR/missing-rms.out" "status: prefill-state-fail"
 contains "$OUT_DIR/missing-rms.err" "rmsnorm-tensor-missing"
 
+expect_fail missing-rms-kv "$YVEX_BIN" prefill --model "$MISSING_RMS" --backend cpu \
+  --segment embedding-rmsnorm --tokens 0,1 \
+  --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
+contains "$OUT_DIR/missing-rms-kv.out" "prefill_state_created: false"
+contains "$OUT_DIR/missing-rms-kv.out" "tokens_processed: 0"
+contains "$OUT_DIR/missing-rms-kv.out" "kv_bound_to_prefill: false"
+contains "$OUT_DIR/missing-rms-kv.out" "kv_status: planned"
+contains "$OUT_DIR/missing-rms-kv.out" "graph_integrity_guard: fail"
+contains "$OUT_DIR/missing-rms-kv.out" "dispatch_attempted: false"
+contains "$OUT_DIR/missing-rms-kv.out" "status: prefill-state-fail"
+
 expect_fail injected-after-token-0 env YVEX_TEST_FAIL_PREFILL_AFTER_TOKEN_0=1 \
   "$YVEX_BIN" prefill --model "$SEGMENT_MODEL" --backend cpu \
   --segment embedding-rmsnorm --tokens 0,1
@@ -172,12 +250,36 @@ contains "$OUT_DIR/injected-after-token-0.out" "cleanup_attempted: true"
 contains "$OUT_DIR/injected-after-token-0.out" "cleanup_status: pass"
 contains "$OUT_DIR/injected-after-token-0.out" "status: prefill-state-fail"
 
+expect_fail injected-kv-after-append env YVEX_TEST_FAIL_PREFILL_KV_AFTER_APPEND_0=1 \
+  "$YVEX_BIN" prefill --model "$SEGMENT_MODEL" --backend cpu \
+  --segment embedding-rmsnorm --tokens 0,1 \
+  --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
+contains "$OUT_DIR/injected-kv-after-append.out" "prefill_state_created: false"
+contains "$OUT_DIR/injected-kv-after-append.out" "prefill_phase: kv-append"
+contains "$OUT_DIR/injected-kv-after-append.out" "failed_token_index: 1"
+contains "$OUT_DIR/injected-kv-after-append.out" "tokens_processed: 1"
+contains "$OUT_DIR/injected-kv-after-append.out" "kv_positions_written: 1"
+contains "$OUT_DIR/injected-kv-after-append.out" "cleanup_attempted: true"
+contains "$OUT_DIR/injected-kv-after-append.out" "cleanup_status: pass"
+contains "$OUT_DIR/injected-kv-after-append.out" "kv_cleanup_status: pass"
+contains "$OUT_DIR/injected-kv-after-append.out" "status: prefill-state-fail"
+
 "$YVEX_BIN" prefill --model "$SEGMENT_MODEL" --backend cpu \
   --segment embedding-rmsnorm --tokens 0,1 \
   >"$OUT_DIR/repeat-after-failure.out" 2>"$OUT_DIR/repeat-after-failure.err"
 contains "$OUT_DIR/repeat-after-failure.out" "prefill_state_created: true"
 contains "$OUT_DIR/repeat-after-failure.out" "tokens_processed: 2"
 contains "$OUT_DIR/repeat-after-failure.out" "status: prefill-state-created"
+
+"$YVEX_BIN" prefill --model "$SEGMENT_MODEL" --backend cpu \
+  --segment embedding-rmsnorm --tokens 0,1 \
+  --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8 \
+  >"$OUT_DIR/repeat-kv-after-failure.out" 2>"$OUT_DIR/repeat-kv-after-failure.err"
+contains "$OUT_DIR/repeat-kv-after-failure.out" "prefill_state_created: true"
+contains "$OUT_DIR/repeat-kv-after-failure.out" "tokens_processed: 2"
+contains "$OUT_DIR/repeat-kv-after-failure.out" "kv_bound_to_prefill: true"
+contains "$OUT_DIR/repeat-kv-after-failure.out" "kv_positions_written: 2"
+contains "$OUT_DIR/repeat-kv-after-failure.out" "status: prefill-state-created"
 
 "$YVEX_BIN" graph --model "$SEGMENT_MODEL" --backend cpu \
   --execute-segment --segment embedding-rmsnorm --tokens 0,1 --token-index 1 \

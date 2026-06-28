@@ -32,6 +32,7 @@
 #define YVEX_ENGINE_H
 
 #include <yvex/graph.h>
+#include <yvex/kv.h>
 #include <yvex/model.h>
 #include <yvex/tensor.h>
 #include <yvex/token_input.h>
@@ -84,6 +85,7 @@ typedef struct {
 #define YVEX_FIXTURE_GRAPH_MAX_OUTPUT_VALUES 16u
 #define YVEX_PARTIAL_GRAPH_MAX_OUTPUT_VALUES 16u
 #define YVEX_SEGMENT_GRAPH_MAX_OUTPUT_VALUES 16u
+#define YVEX_PREFILL_KV_MAX_SAMPLE_VALUES 8u
 
 typedef struct {
     unsigned int token_id;
@@ -216,6 +218,8 @@ typedef struct {
     const yvex_token_input *token_input;
     const char *segment_name;
     unsigned long long position_start;
+    int attach_kv;
+    yvex_kv_shape kv_shape;
 } yvex_prefill_state_options;
 
 typedef struct {
@@ -242,8 +246,34 @@ typedef struct {
     const char *cleanup_status;
     int cuda_parity;
     int kv_ready;
+    int session_kv_owned;
+    int kv_bound_to_prefill;
+    const char *kv_binding_kind;
+    const char *kv_status;
+    const char *kv_owner;
+    const char *kv_dtype;
+    unsigned long long kv_layers;
+    unsigned long long kv_heads;
+    unsigned long long kv_head_dim;
+    unsigned long long kv_capacity;
+    unsigned long long kv_values_per_position;
+    unsigned long long kv_bytes_per_position;
+    unsigned long long kv_planned_bytes;
+    unsigned long long kv_allocated_bytes;
+    unsigned long long kv_positions_written;
+    unsigned long long kv_append_count;
+    unsigned long long kv_read_count;
+    unsigned long long kv_read_position;
+    unsigned long long kv_read_value_count;
+    unsigned long long kv_read_checksum;
+    unsigned long long kv_read_sample_count;
+    float kv_read_sample_values[YVEX_PREFILL_KV_MAX_SAMPLE_VALUES];
+    const char *kv_overflow_status;
+    const char *kv_cleanup_status;
+    int full_transformer_prefill_ready;
     int decode_ready;
     int logits_ready;
+    int generation_ready;
     const char *generation_status;
 } yvex_prefill_state_summary;
 
