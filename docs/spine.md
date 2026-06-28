@@ -126,6 +126,12 @@ real selected embedding partial graph execution
 real token_embd.weight F16 participation in scheduled graph work
 CPU real partial graph execution
 CUDA real partial graph parity when CUDA is available
+real selected embedding plus RMSNorm graph segment
+multiple real tensor participation in scheduled graph work
+RMSNorm backend op for selected segment
+explicit segment memory plan
+CPU/CUDA real segment parity
+independent raw-artifact segment reference
 artifact integrity validator baseline
 GGUF structural corruption detection
 tensor range and checked byte-count validation
@@ -163,7 +169,7 @@ operator integrity report
 integrity report aggregation across artifact/identity/metadata/materialization/graph
 ```
 
-Current live target:
+Current live targets:
 
 ```text
 alias: deepseek4-v4-flash-selected-embed
@@ -174,12 +180,22 @@ tensor_bytes: 1059061760
 CPU materialization: pass
 CUDA materialization: pass
 execution_ready: false
+
+alias: deepseek4-v4-flash-selected-embed-rmsnorm
+tensors: token_embd.weight, blk.0.attn_norm.weight
+token_embd.weight dims: [4096,129280]
+blk.0.attn_norm.weight dims: [4096]
+dtype: F16
+tensor_bytes: 1059069952
+CPU segment execution: pass
+CUDA segment execution: pass
+execution_ready: false
 ```
 
-DeepSeek selected embedding remains the active pressure artifact. The active
-target can change if another large open-weight artifact becomes a better fit for
-the hardware profile, model-family work, or research path, but that requires an
-explicit spine change.
+DeepSeek selected embedding and selected embedding-plus-RMSNorm artifacts remain
+the active pressure targets. The active target can change if another large
+open-weight artifact becomes a better fit for the hardware profile,
+model-family work, or research path, but that requires an explicit spine change.
 
 Unsupported / not advanced:
 
@@ -280,8 +296,8 @@ unbounded spreadsheet.
 | ARTIFACT.INTEGRITY.8 | complete | Corrupt artifact regression harness |
 | ARTIFACT.INTEGRITY.9 | complete | Operator integrity report and doctor integration |
 | ARTIFACT.INTEGRITY.FINAL.0 | complete | Artifact integrity closeout before graph expansion |
-| M6 | next | Real-model graph segment expansion |
-| M7 | planned | Prompt/token input boundary |
+| M6 | complete | Real-model graph segment expansion |
+| M7 | next | Prompt/token input boundary |
 | M8 | planned | Prefill state foundation |
 | M9 | planned | Minimal KV ownership and append/read boundary |
 | M10 | planned | Decode step over existing runtime state |
@@ -313,7 +329,7 @@ source/native artifact evidence
   -> engine/session ownership
   -> fixture graph execution
   -> real selected embedding partial graph execution
-  -> larger real-model graph segments
+  -> real selected embedding plus RMSNorm graph segment
   -> prompt/token input boundary
   -> prefill state
   -> minimal KV ownership
@@ -336,8 +352,8 @@ not correctness.
 Artifact integrity is not optional once scheduled graph work reads real tensor
 ranges. M5 proved real selected tensor participation. The artifact integrity and
 corruption safety rung is now implemented through ARTIFACT.INTEGRITY.0-.9 and
-FINAL.0. Larger real-model graph segments may proceed only while preserving
-those gates.
+FINAL.0. M6 expanded graph execution to a real selected embedding-plus-RMSNorm
+segment while preserving those gates.
 
 ### Inference Runtime Pipeline
 
@@ -362,11 +378,13 @@ reference comparison, CPU execution, CUDA parity where available, command proof,
 and cleanup/failure tests. No prompt prefill, KV runtime, decode, logits,
 sampling, generation, or benchmark claim.
 
-M6 — planned — Real-model graph segment expansion
-Expand from one partial segment to a larger scheduled segment with multiple real
-ops, intermediate scratch/output buffers, and explicit memory plan. Failure
-reports must name the failing op, tensor, backend, or runtime stage. Still no
-prefill, logits, sampling, generation, or benchmark claim.
+M6 — complete — Real-model graph segment expansion
+Expand from one partial segment to a selected embedding-plus-RMSNorm segment
+with multiple real tensors, two scheduled ops, intermediate scratch/output
+buffers, explicit memory plan, backend dispatch, independent raw-artifact
+reference comparison, CPU execution, CUDA parity where available, and
+cleanup/failure tests. Still no prompt input, prefill, KV runtime, decode,
+logits, sampling, generation, or benchmark claim.
 
 M7 — planned — Prompt/token input boundary
 Connect tokenizer/prompt diagnostics to runtime input tensors, sequence
@@ -439,21 +457,16 @@ engine owns attached selected materialized weights
 session can observe engine weight attachment state
 deterministic fixture graph execution complete
 real selected embedding partial graph execution complete
-larger real-model graph execution not implemented
+selected embedding plus RMSNorm graph segment complete
 prefill/decode/logits/sampling/generation not implemented
 ```
 
-M6 must expand real scheduled computation beyond the selected embedding segment.
-It must not become a vague inference milestone. Completion requires multiple real
-ops, backend dispatch, explicit intermediate/output memory planning,
-output/regression proof, and cleanup/failure tests.
-
-M5 now reads a real selected F16 tensor slice for scheduled partial graph work.
-That makes artifact integrity a runtime prerequisite before M6 expands graph
-coverage. M6 should not broaden real tensor participation until artifact
-identity, tensor range validation, shape/dtype math, and corruption failure
-paths are mapped into the spine and at least the baseline validator is
-implemented.
+M6 expands real scheduled computation beyond the selected embedding segment. It
+executes embedding lookup followed by RMSNorm over real selected tensors with
+backend dispatch, explicit intermediate/output memory planning,
+output/regression proof, and cleanup/failure tests. It remains a constrained
+segment boundary, not prompt input, prefill, logits, sampling, generation, or
+benchmark readiness.
 
 ### Open Weight Intake / Model Family Flow
 
@@ -839,7 +852,7 @@ decode, logits, sampling, and generation are implemented.
 | --- | --- | --- | --- |
 | Fixture graph correctness | M4 | output values/checksum | available |
 | Selected embedding partial graph correctness | M5 | output checksum/sample/max diff | available |
-| Real segment regression | M6 | output checksum/vector diff | planned |
+| Real segment regression | M6 | output checksum/vector diff | available |
 | Prefill speed | M8/M9 | prompt tokens/sec, memory, scratch, KV state | planned |
 | Decode speed | M10/M11 | generated step/sec or token/sec after logits path | planned |
 | Generation speed | M14 | tokens/sec, latency, stop reason, context length | planned |
@@ -969,15 +982,13 @@ No diagram may imply support that the code does not implement.
 ## 8. Active Next
 
 ```text
-M6 - Real-model graph segment expansion
+M7 - Prompt/token input boundary
 ```
 
-Next implementation: M6. It sits inside the larger runtime pipeline. It must
-expand from the selected embedding segment to a larger scheduled real-model
-graph segment with multiple real ops, backend dispatch, explicit
-intermediate/output memory planning, output/regression proof, and
-cleanup/failure tests. It must not claim
-prompt/prefill, KV runtime, logits, sampling, generation, server generation,
+Next implementation: M7. It sits inside the larger runtime pipeline. It must
+connect tokenizer/prompt diagnostics to runtime input tensors and session-owned
+input state without claiming prefill completion. It must not claim KV runtime,
+logits, sampling, generation, server generation,
 evaluation, or benchmark readiness.
 
 ## 9. Validation Gate

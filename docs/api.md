@@ -94,6 +94,7 @@ model artifacts remain outside the repository
 | Engine-owned selected weight attachment | implemented |
 | Deterministic fixture graph execution | implemented for controlled fixtures |
 | Real selected embedding partial graph | implemented for `F16` `token_embd.weight` |
+| Real selected embedding/RMSNorm segment | implemented for selected `F16` embedding plus first RMSNorm weight |
 | Artifact integrity baseline | implemented for `GGUF` structural/range checks |
 | Local artifact identity | implemented with file size and SHA-256 digest |
 | Registry metadata drift diagnostics | implemented for local alias summaries |
@@ -125,6 +126,22 @@ expose backend pointers, does not transfer ownership to sessions, and keeps
 `execution_ready` and broad graph readiness false. The implemented partial graph
 boundary is the selected token-embedding segment only; it is not prefill, decode,
 logits, sampling, generation, or full model execution.
+
+`yvex_engine_execute_segment_graph` borrows the same engine-attached weight
+state and executes the implemented selected segment kind,
+`embedding-rmsnorm`. The result reports graph guard fields, the selected
+embedding tensor, the RMSNorm tensor, RMSNorm epsilon metadata key/value,
+explicit intermediate/output/scratch/reference byte planning, output and
+reference checksums, sample values, and max absolute difference against an
+independent raw-artifact reference. The segment is embedding lookup followed by
+RMSNorm only; it is not prompt input, prefill, KV runtime, decode, logits,
+sampling, generation, full transformer execution, or full model support.
+
+`yvex_backend_op_rms_norm` is the backend RMSNorm op used by the selected
+segment. It supports the narrow path needed by M6: `F32` input/output with
+`F16` or `F32` RMSNorm weights and explicit epsilon. Backend support for this op
+does not imply matmul, attention, logits, decode, generation, or full
+transformer backend coverage.
 
 `yvex_artifact_identity_read` and `yvex_artifact_compute_sha256` provide local
 file identity evidence: current byte size plus lowercase SHA-256 digest. The
@@ -179,11 +196,12 @@ or transferred byte counts where the operation can report them. These fields are
 copied scalar/string-literal report facts; they do not transfer backend tensor
 ownership and do not imply inference readiness.
 
-Fixture and partial graph result summaries include the graph guard result,
-failure phase, shape/range/slice/backend/op statuses, dispatch/reference/output
-attempt flags, cleanup status, and output/reference byte planning. These fields
-apply only to the implemented controlled fixture and selected embedding partial
-graph paths; they do not imply full graph safety or inference readiness.
+Fixture, partial graph, and segment graph result summaries include the graph
+guard result, failure phase, shape/range/slice/backend/op statuses,
+dispatch/reference/output attempt flags, cleanup status, and output/reference
+byte planning. These fields apply only to the implemented controlled fixture,
+selected embedding partial graph, and selected embedding/RMSNorm segment paths;
+they do not imply full graph safety or inference readiness.
 
 The operator integrity report is a CLI aggregation of existing report facts. It
 adds no new public ownership surface: it summarizes artifact integrity, local

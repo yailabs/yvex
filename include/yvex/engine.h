@@ -82,6 +82,7 @@ typedef struct {
 
 #define YVEX_FIXTURE_GRAPH_MAX_OUTPUT_VALUES 16u
 #define YVEX_PARTIAL_GRAPH_MAX_OUTPUT_VALUES 16u
+#define YVEX_SEGMENT_GRAPH_MAX_OUTPUT_VALUES 16u
 
 typedef struct {
     unsigned int token_id;
@@ -159,6 +160,57 @@ typedef struct {
     int graph_execution_ready;
 } yvex_partial_graph_result;
 
+typedef struct {
+    unsigned int token_id;
+    const char *segment_name;
+} yvex_segment_graph_options;
+
+typedef struct {
+    int executed;
+    const char *graph_integrity_guard;
+    const char *graph_execution_phase;
+    const char *graph_kind;
+    const char *shape_status;
+    const char *range_status;
+    const char *slice_range_status;
+    const char *backend_status;
+    const char *backend_op_status;
+    int dispatch_attempted;
+    int reference_read_attempted;
+    int output_allocation_attempted;
+    int cleanup_attempted;
+    const char *cleanup_status;
+    unsigned long long output_bytes_planned;
+    unsigned long long output_bytes_allocated;
+    unsigned long long reference_bytes_planned;
+    const char *backend_name;
+    const char *segment_name;
+    const char *token_tensor_name;
+    const char *token_tensor_dtype;
+    const char *rmsnorm_tensor_name;
+    const char *rmsnorm_tensor_dtype;
+    const char *rmsnorm_epsilon_key;
+    double rmsnorm_epsilon;
+    unsigned int token_id;
+    unsigned long long node_count;
+    unsigned long long hidden_size;
+    unsigned long long vocab_size;
+    unsigned long long segment_ops;
+    unsigned long long segment_intermediate_count;
+    unsigned long long segment_intermediate_bytes;
+    unsigned long long segment_output_count;
+    unsigned long long segment_output_bytes;
+    unsigned long long segment_scratch_bytes;
+    unsigned long long segment_reference_bytes;
+    unsigned long long output_checksum;
+    unsigned long long reference_checksum;
+    double max_abs_diff;
+    unsigned long long output_value_count;
+    float output_values[YVEX_SEGMENT_GRAPH_MAX_OUTPUT_VALUES];
+    int execution_ready;
+    int graph_execution_ready;
+} yvex_segment_graph_result;
+
 int yvex_engine_open(yvex_engine **out,
                      const yvex_engine_options *options,
                      yvex_error *err);
@@ -187,6 +239,10 @@ int yvex_engine_execute_fixture_graph(yvex_engine *engine,
 int yvex_engine_execute_partial_graph(yvex_engine *engine,
                                       const yvex_partial_graph_options *options,
                                       yvex_partial_graph_result *out,
+                                      yvex_error *err);
+int yvex_engine_execute_segment_graph(yvex_engine *engine,
+                                      const yvex_segment_graph_options *options,
+                                      yvex_segment_graph_result *out,
                                       yvex_error *err);
 
 const char *yvex_engine_diagnostic_reason(const yvex_engine *engine);

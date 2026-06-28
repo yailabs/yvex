@@ -50,6 +50,15 @@ static void write_u16le(unsigned char *p, unsigned int value)
     p[1] = (unsigned char)((value >> 8) & 0xffu);
 }
 
+static int float_close(float a, float b, float tolerance)
+{
+    float diff = a - b;
+    if (diff < 0.0f) {
+        diff = -diff;
+    }
+    return diff <= tolerance;
+}
+
 static int test_capabilities(void)
 {
     yvex_backend *backend = NULL;
@@ -64,10 +73,10 @@ static int test_capabilities(void)
                      "supports tensor read/write");
     YVEX_TEST_ASSERT(yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_EMBED),
                      "supports embed");
+    YVEX_TEST_ASSERT(yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_RMS_NORM),
+                     "supports rms norm");
     YVEX_TEST_ASSERT(!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MATMUL),
                      "matmul unsupported");
-    YVEX_TEST_ASSERT(!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_RMS_NORM),
-                     "rms norm unsupported");
     YVEX_TEST_ASSERT(!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ATTENTION),
                      "attention unsupported");
     yvex_backend_close(backend);
@@ -221,11 +230,65 @@ static int test_embed_failures(void)
     return 0;
 }
 
+static int test_rms_norm_success(void)
+{
+    yvex_backend *backend = NULL;
+    yvex_device_tensor *input = NULL;
+    yvex_device_tensor *weight = NULL;
+    yvex_device_tensor *out = NULL;
+    yvex_backend_tensor_desc desc;
+    yvex_error err;
+    float input_data[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    unsigned char weight_data[8];
+    float out_data[4];
+    float expected[4] = {0.9999995f, 1.9999990f, 2.9999985f, 3.9999980f};
+    unsigned int half_values[4] = {0x3c00u, 0x4000u, 0x4200u, 0x4400u};
+    unsigned int i;
+    int rc;
+
+    for (i = 0; i < 4u; ++i) {
+        write_u16le(weight_data + (i * 2u), half_values[i]);
+    }
+
+    YVEX_TEST_ASSERT(yvex_backend_open_cpu(&backend, &err) == YVEX_OK, "open cpu rms");
+
+    make_desc(&desc, "input", YVEX_DTYPE_F32, 2, 1, 4, sizeof(input_data));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &input, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate rms input");
+    rc = yvex_backend_tensor_write(backend, input, input_data, sizeof(input_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write rms input");
+
+    make_desc(&desc, "weight", YVEX_DTYPE_F16, 1, 4, 0, sizeof(weight_data));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &weight, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate rms weight");
+    rc = yvex_backend_tensor_write(backend, weight, weight_data, sizeof(weight_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write rms weight");
+
+    make_desc(&desc, "out", YVEX_DTYPE_F32, 2, 1, 4, sizeof(out_data));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate rms output");
+
+    rc = yvex_backend_op_rms_norm(backend, input, weight, 0.000001f, out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "rms norm succeeds");
+    rc = yvex_backend_tensor_read(backend, out, out_data, sizeof(out_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read rms output");
+    for (i = 0; i < 4u; ++i) {
+        YVEX_TEST_ASSERT(float_close(out_data[i], expected[i], 0.0001f), "rms output matches expected");
+    }
+
+    yvex_backend_tensor_free(backend, out);
+    yvex_backend_tensor_free(backend, weight);
+    yvex_backend_tensor_free(backend, input);
+    yvex_backend_close(backend);
+    return 0;
+}
+
 int yvex_test_backend_ops(void)
 {
     if (test_capabilities() != 0) return 1;
     if (test_embed_success() != 0) return 1;
     if (test_embed_f16_success() != 0) return 1;
+    if (test_rms_norm_success() != 0) return 1;
     if (test_embed_failures() != 0) return 1;
     return 0;
 }

@@ -7,7 +7,7 @@
  * Purpose:
  *   Defines the first YVEX backend abstraction and CPU reference backend
  *   surface. backend layer proves backend lifecycle, tensor allocation/read/write/copy,
- *   memory stats, capability reporting, and a minimal embed op.
+ *   memory stats, capability reporting, and the narrow implemented graph ops.
  *
  * Owns:
  *   - yvex_backend
@@ -157,6 +157,13 @@ int yvex_backend_op_embed(yvex_backend *backend,
                           unsigned long long token_count,
                           yvex_device_tensor *out,
                           yvex_error *err);
+
+int yvex_backend_op_rms_norm(yvex_backend *backend,
+                             const yvex_device_tensor *input,
+                             const yvex_device_tensor *weight,
+                             float epsilon,
+                             yvex_device_tensor *out,
+                             yvex_error *err);
 
 #ifdef __cplusplus
 }

@@ -339,6 +339,31 @@ int yvex_backend_op_embed(yvex_backend *backend,
     return backend->vtable->op_embed(backend, embedding, token_ids, token_count, out, err);
 }
 
+int yvex_backend_op_rms_norm(yvex_backend *backend,
+                             const yvex_device_tensor *input,
+                             const yvex_device_tensor *weight,
+                             float epsilon,
+                             yvex_device_tensor *out,
+                             yvex_error *err)
+{
+    if (!backend || !input || !weight || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rms_norm",
+                       "backend, input, weight, and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (epsilon <= 0.0f) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rms_norm",
+                       "epsilon must be positive");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (!backend->vtable || !backend->vtable->op_rms_norm) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_rms_norm",
+                       "backend does not support RMSNorm op");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    return backend->vtable->op_rms_norm(backend, input, weight, epsilon, out, err);
+}
+
 
 
 int yvex_cpu_tensor_alloc(yvex_backend *backend,
@@ -366,6 +391,12 @@ int yvex_cpu_op_embed(yvex_backend *backend,
                       unsigned long long token_count,
                       yvex_device_tensor *out,
                       yvex_error *err);
+int yvex_cpu_op_rms_norm(yvex_backend *backend,
+                         const yvex_device_tensor *input,
+                         const yvex_device_tensor *weight,
+                         float epsilon,
+                         yvex_device_tensor *out,
+                         yvex_error *err);
 
 static int cpu_close(yvex_backend *backend, yvex_error *err)
 {
@@ -422,9 +453,9 @@ static int cpu_supports(const yvex_backend *backend, yvex_backend_capability cap
     case YVEX_BACKEND_CAP_TENSOR_ALLOC:
     case YVEX_BACKEND_CAP_TENSOR_READ_WRITE:
     case YVEX_BACKEND_CAP_OP_EMBED:
+    case YVEX_BACKEND_CAP_OP_RMS_NORM:
         return 1;
     case YVEX_BACKEND_CAP_OP_MATMUL:
-    case YVEX_BACKEND_CAP_OP_RMS_NORM:
     case YVEX_BACKEND_CAP_OP_ATTENTION:
         return 0;
     }
@@ -443,6 +474,7 @@ static const yvex_backend_vtable cpu_vtable = {
     cpu_sync,
     cpu_supports,
     yvex_cpu_op_embed,
+    yvex_cpu_op_rms_norm,
 };
 
 int yvex_backend_open_cpu_impl(yvex_backend **out,
@@ -525,6 +557,21 @@ static float backend_f16_bits_to_float(unsigned int h)
 static unsigned int backend_read_u16le(const unsigned char *p)
 {
     return ((unsigned int)p[0]) | ((unsigned int)p[1] << 8);
+}
+
+static double backend_sqrt_double(double x)
+{
+    double guess;
+    unsigned int i;
+
+    if (x <= 0.0) {
+        return 0.0;
+    }
+    guess = x >= 1.0 ? x : 1.0;
+    for (i = 0; i < 32u; ++i) {
+        guess = 0.5 * (guess + (x / guess));
+    }
+    return guess;
 }
 
 int yvex_cpu_op_embed(yvex_backend *backend,
@@ -615,6 +662,106 @@ int yvex_cpu_op_embed(yvex_backend *backend,
             }
         }
     }
+    out->is_written = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_cpu_op_rms_norm(yvex_backend *backend,
+                         const yvex_device_tensor *input,
+                         const yvex_device_tensor *weight,
+                         float epsilon,
+                         yvex_device_tensor *out,
+                         yvex_error *err)
+{
+    const float *input_data;
+    const float *weight_f32;
+    const unsigned char *weight_f16;
+    float *out_data;
+    unsigned long long hidden_size;
+    unsigned long long i;
+    double sum_squares = 0.0;
+    double rms;
+    double inv_rms;
+
+    if (!yvex_backend_tensor_owner_is(backend, input) ||
+        !yvex_backend_tensor_owner_is(backend, weight) ||
+        !yvex_backend_tensor_owner_is(backend, out)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_op_rms_norm",
+                       "input, weight, and output tensors must belong to this backend");
+        return YVEX_ERR_STATE;
+    }
+    if (input->dtype != YVEX_DTYPE_F32 || out->dtype != YVEX_DTYPE_F32 ||
+        (weight->dtype != YVEX_DTYPE_F32 && weight->dtype != YVEX_DTYPE_F16)) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_rms_norm",
+                       "CPU RMSNorm supports F32 input/output with F16 or F32 weight");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (epsilon <= 0.0f) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rms_norm",
+                       "epsilon must be positive");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (input->rank == 2 && input->dims[0] == 1) {
+        hidden_size = input->dims[1];
+    } else if (input->rank == 1) {
+        hidden_size = input->dims[0];
+    } else {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rms_norm",
+                       "RMSNorm input must be rank 1 or dims [1, hidden]");
+        return YVEX_ERR_FORMAT;
+    }
+    if (hidden_size == 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rms_norm",
+                       "RMSNorm hidden size must be non-zero");
+        return YVEX_ERR_FORMAT;
+    }
+    if (weight->rank != 1 || weight->dims[0] != hidden_size) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rms_norm",
+                       "RMSNorm weight must be rank 1 and match hidden size");
+        return YVEX_ERR_FORMAT;
+    }
+    if (out->rank != input->rank ||
+        out->dims[0] != input->dims[0] ||
+        (input->rank == 2 && out->dims[1] != input->dims[1])) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rms_norm",
+                       "RMSNorm output shape must match input shape");
+        return YVEX_ERR_FORMAT;
+    }
+    if (!tensor_is_f32_bytes(input, hidden_size) ||
+        !tensor_is_f32_bytes(out, hidden_size)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_rms_norm",
+                       "RMSNorm input/output bytes must match F32 hidden size");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (weight->dtype == YVEX_DTYPE_F32 && !tensor_is_f32_bytes(weight, hidden_size)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_rms_norm",
+                       "RMSNorm F32 weight bytes must match hidden size");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (weight->dtype == YVEX_DTYPE_F16 && !tensor_is_f16_bytes(weight, hidden_size)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_rms_norm",
+                       "RMSNorm F16 weight bytes must match hidden size");
+        return YVEX_ERR_BOUNDS;
+    }
+
+    input_data = (const float *)input->data;
+    weight_f32 = (const float *)weight->data;
+    weight_f16 = (const unsigned char *)weight->data;
+    out_data = (float *)out->data;
+
+    for (i = 0; i < hidden_size; ++i) {
+        sum_squares += (double)input_data[i] * (double)input_data[i];
+    }
+    rms = backend_sqrt_double((sum_squares / (double)hidden_size) + (double)epsilon);
+    inv_rms = rms > 0.0 ? 1.0 / rms : 0.0;
+    for (i = 0; i < hidden_size; ++i) {
+        float w = weight->dtype == YVEX_DTYPE_F16
+                      ? backend_f16_bits_to_float(backend_read_u16le(weight_f16 + (i * 2ull)))
+                      : weight_f32[i];
+        out_data[i] = (float)((double)input_data[i] * inv_rms * (double)w);
+    }
+
     out->is_written = 1;
     yvex_error_clear(err);
     return YVEX_OK;

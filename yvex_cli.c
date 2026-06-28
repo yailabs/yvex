@@ -6,6 +6,7 @@
  */
 
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -142,8 +143,8 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "graph",
         "Build graph diagnostics or execute narrow graph segments.",
-        "yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--fixture-token N] [--execute-partial] [--partial-token N]",
-        "Opens a GGUF descriptor and prints graph planning diagnostics. Execution flags attach selected weights and run either the deterministic fixture embed node or the real selected F16 embedding segment; neither path is inference or text generation.",
+        "yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--fixture-token N] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N]",
+        "Opens a GGUF descriptor and prints graph planning diagnostics. Execution flags attach selected weights and run the deterministic fixture embed node, real selected F16 embedding segment, or selected embedding-plus-RMSNorm segment; none of these paths is inference or text generation.",
         command_graph,
     },
     {
@@ -4529,22 +4530,73 @@ static int cli_test_env_enabled(const char *name)
 }
 
 static void init_graph_guard_report(yvex_cli_graph_guard_report *report,
-                                    int execute_fixture,
+                                    const char *graph_kind,
+                                    int needs_slice_range,
                                     const yvex_model_ref *model_ref)
 {
     memset(report, 0, sizeof(*report));
     report->guard_status = "fail";
     report->phase = "preflight";
-    report->graph_kind = execute_fixture ? "fixture-embedding" : "selected-embedding-partial";
+    report->graph_kind = graph_kind ? graph_kind : "unknown";
     report->integrity_status = "unchecked";
     report->identity_status = model_ref && model_ref->kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered";
     report->metadata_status = model_ref && model_ref->kind == YVEX_MODEL_REF_ALIAS ? "pass" : "unregistered";
     report->shape_status = "unchecked";
     report->range_status = "unchecked";
-    report->slice_range_status = execute_fixture ? "not-needed" : "unchecked";
+    report->slice_range_status = needs_slice_range ? "unchecked" : "not-needed";
     report->backend_status = "not-opened";
     report->backend_op_status = "unchecked";
     report->cleanup_status = "not-needed";
+}
+
+static const yvex_tensor_info *cli_find_first_rmsnorm_tensor(const yvex_tensor_table *tensors)
+{
+    static const char *preferred[] = {
+        "blk.0.attn_norm.weight",
+        "blk.0.attention_norm.weight",
+        "blk.0.input_layernorm.weight",
+        "model.layers.0.input_layernorm.weight",
+    };
+    unsigned int i;
+    unsigned long long count;
+    unsigned long long index;
+
+    if (!tensors) {
+        return NULL;
+    }
+    for (i = 0; i < sizeof(preferred) / sizeof(preferred[0]); ++i) {
+        const yvex_tensor_info *tensor = yvex_tensor_table_find(tensors, preferred[i]);
+        if (tensor) {
+            return tensor;
+        }
+    }
+    count = yvex_tensor_table_count(tensors);
+    for (index = 0; index < count; ++index) {
+        const yvex_tensor_info *tensor = yvex_tensor_table_at(tensors, index);
+        if (tensor && tensor->role == YVEX_TENSOR_ROLE_ATTENTION_NORM) {
+            return tensor;
+        }
+    }
+    return NULL;
+}
+
+static int cli_has_rmsnorm_epsilon(const yvex_gguf *gguf)
+{
+    static const char *keys[] = {
+        "llama.attention.layer_norm_rms_epsilon",
+        "deepseek2.attention.layer_norm_rms_epsilon",
+        "general.rms_norm_epsilon",
+    };
+    unsigned int i;
+
+    for (i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
+        const yvex_gguf_value *value = yvex_gguf_metadata_find(gguf, keys[i]);
+        double epsilon = 0.0;
+        if (value && yvex_gguf_value_as_f64(value, &epsilon) == YVEX_OK && epsilon > 0.0) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static void print_graph_guard_report(const yvex_cli_graph_guard_report *report)
@@ -4573,6 +4625,7 @@ static void print_graph_guard_report(const yvex_cli_graph_guard_report *report)
 static int preflight_graph_guard(const yvex_model_ref *model_ref,
                                  const char *backend_name,
                                  int execute_fixture,
+                                 int execute_segment,
                                  unsigned int token_id,
                                  yvex_cli_graph_guard_report *report,
                                  yvex_error *err)
@@ -4585,10 +4638,18 @@ static int preflight_graph_guard(const yvex_model_ref *model_ref,
     yvex_backend_options backend_options;
     yvex_backend *backend = NULL;
     const yvex_tensor_info *tensor;
+    const yvex_tensor_info *rmsnorm_tensor = NULL;
     unsigned long long hidden_size;
+    unsigned long long output_bytes;
+    unsigned long long planned_bytes;
     int rc;
 
-    init_graph_guard_report(report, execute_fixture, model_ref);
+    init_graph_guard_report(report,
+                            execute_fixture ? "fixture-embedding" :
+                            (execute_segment ? "selected-embedding-rmsnorm"
+                                             : "selected-embedding-partial"),
+                            !execute_fixture,
+                            model_ref);
     memset(&ctx, 0, sizeof(ctx));
     memset(&integrity_report, 0, sizeof(integrity_report));
     memset(&tensor_range, 0, sizeof(tensor_range));
@@ -4708,6 +4769,55 @@ static int preflight_graph_guard(const yvex_model_ref *model_ref,
         report->slice_range_status = "pass";
         report->output_bytes_planned = embedding_shape.output_bytes;
         report->reference_bytes_planned = slice_range.slice_bytes;
+
+        if (execute_segment) {
+            rmsnorm_tensor = cli_find_first_rmsnorm_tensor(ctx.table);
+            if (!rmsnorm_tensor) {
+                report->shape_status = "fail";
+                close_model_context(&ctx);
+                yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "graph_integrity_preflight",
+                               "rmsnorm-tensor-missing");
+                return YVEX_ERR_UNSUPPORTED;
+            }
+            if (rmsnorm_tensor->rank != 1 || rmsnorm_tensor->dims[0] != embedding_shape.hidden_size) {
+                report->shape_status = "fail";
+                close_model_context(&ctx);
+                yvex_error_set(err, YVEX_ERR_FORMAT, "graph_integrity_preflight",
+                               "rmsnorm-shape-invalid");
+                return YVEX_ERR_FORMAT;
+            }
+            if (rmsnorm_tensor->dtype != YVEX_DTYPE_F16 &&
+                rmsnorm_tensor->dtype != YVEX_DTYPE_F32) {
+                report->shape_status = "fail";
+                close_model_context(&ctx);
+                yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "graph_integrity_preflight",
+                               "rmsnorm-dtype-invalid");
+                return YVEX_ERR_UNSUPPORTED;
+            }
+            rc = yvex_tensor_range_validate(ctx.artifact, ctx.gguf, rmsnorm_tensor, &tensor_range, err);
+            if (rc != YVEX_OK) {
+                report->range_status = "fail";
+                close_model_context(&ctx);
+                return rc;
+            }
+            if (!cli_has_rmsnorm_epsilon(ctx.gguf)) {
+                close_model_context(&ctx);
+                yvex_error_set(err, YVEX_ERR_FORMAT, "graph_integrity_preflight",
+                               "rmsnorm-epsilon-missing");
+                return YVEX_ERR_FORMAT;
+            }
+            if (embedding_shape.output_bytes > ULLONG_MAX / 2ull ||
+                embedding_shape.output_bytes > (unsigned long long)(~(size_t)0)) {
+                close_model_context(&ctx);
+                yvex_error_set(err, YVEX_ERR_BOUNDS, "graph_integrity_preflight",
+                               "segment-memory-plan-overflow");
+                return YVEX_ERR_BOUNDS;
+            }
+            output_bytes = embedding_shape.output_bytes;
+            planned_bytes = output_bytes * 2ull;
+            report->output_bytes_planned = planned_bytes;
+            report->reference_bytes_planned = output_bytes;
+        }
     }
 
     backend_options.kind = strcmp(backend_name, "cuda") == 0
@@ -4722,12 +4832,13 @@ static int preflight_graph_guard(const yvex_model_ref *model_ref,
     }
     report->backend_status = "ready";
     if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_EMBED) ||
+        (execute_segment && !yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_RMS_NORM)) ||
         cli_test_env_enabled("YVEX_TEST_GRAPH_BACKEND_OP_UNSUPPORTED")) {
         report->backend_op_status = "unsupported";
         yvex_backend_close(backend);
         close_model_context(&ctx);
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "graph_integrity_preflight",
-                       "backend does not support graph embed op");
+                       "backend-op-unsupported");
         return YVEX_ERR_UNSUPPORTED;
     }
     report->backend_op_status = "supported";
@@ -4969,6 +5080,7 @@ static int command_integrity_report(int argc, char **argv)
             rc = preflight_graph_guard(&ref,
                                        backend_name,
                                        0,
+                                       0,
                                        integrity_options.token_id,
                                        &graph_report,
                                        &graph_err);
@@ -5101,14 +5213,18 @@ static int command_graph(int argc, char **argv)
     yvex_fixture_graph_result fixture_result;
     yvex_partial_graph_options partial_options;
     yvex_partial_graph_result partial_result;
+    yvex_segment_graph_options segment_options;
+    yvex_segment_graph_result segment_result;
     yvex_cli_graph_guard_report graph_guard;
     yvex_model_ref model_ref;
     yvex_engine *engine = NULL;
     yvex_error err;
     const char *model_arg = NULL;
     const char *backend_name = "cpu";
+    const char *segment_name = NULL;
     int execute_fixture = 0;
     int execute_partial = 0;
+    int execute_segment = 0;
     int i;
     int rc;
 
@@ -5119,6 +5235,8 @@ static int command_graph(int argc, char **argv)
     memset(&fixture_result, 0, sizeof(fixture_result));
     memset(&partial_options, 0, sizeof(partial_options));
     memset(&partial_result, 0, sizeof(partial_result));
+    memset(&segment_options, 0, sizeof(segment_options));
+    memset(&segment_result, 0, sizeof(segment_result));
     memset(&graph_guard, 0, sizeof(graph_guard));
     memset(&model_ref, 0, sizeof(model_ref));
     options.sequence_length = 1;
@@ -5164,11 +5282,20 @@ static int command_graph(int argc, char **argv)
             i += 1;
         } else if (strcmp(argv[i], "--execute-partial") == 0) {
             execute_partial = 1;
+        } else if (strcmp(argv[i], "--execute-segment") == 0) {
+            execute_segment = 1;
+        } else if (strcmp(argv[i], "--segment") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --segment requires embedding-rmsnorm\n");
+                return 2;
+            }
+            segment_name = argv[++i];
         } else if (strcmp(argv[i], "--partial-token") == 0) {
             if (i + 1 >= argc || !parse_uint_allow_zero(argv[i + 1], &partial_options.token_id)) {
                 fprintf(stderr, "yvex: --partial-token requires a non-negative integer\n");
                 return 2;
             }
+            segment_options.token_id = partial_options.token_id;
             i += 1;
         } else if (!model_arg) {
             model_arg = argv[i];
@@ -5181,26 +5308,47 @@ static int command_graph(int argc, char **argv)
 
     if (!model_arg) {
         fprintf(stderr, "yvex: graph requires FILE_OR_ALIAS\n");
-        fprintf(stderr, "usage: yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--fixture-token N] [--execute-partial] [--partial-token N]\n");
+        fprintf(stderr, "usage: yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--fixture-token N] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N]\n");
         return 2;
     }
     if (strcmp(backend_name, "cpu") != 0 && strcmp(backend_name, "cuda") != 0) {
         fprintf(stderr, "yvex: unknown backend kind: %s\n", backend_name);
         return 2;
     }
-    if (execute_fixture && execute_partial) {
-        fprintf(stderr, "yvex: --execute-fixture and --execute-partial are mutually exclusive\n");
+    if ((execute_fixture ? 1 : 0) + (execute_partial ? 1 : 0) + (execute_segment ? 1 : 0) > 1) {
+        fprintf(stderr, "yvex: --execute-fixture, --execute-partial, and --execute-segment are mutually exclusive\n");
+        return 2;
+    }
+    if (execute_segment) {
+        if (!segment_name) {
+            fprintf(stderr, "yvex: --execute-segment requires --segment embedding-rmsnorm\n");
+            return 2;
+        }
+        if (strcmp(segment_name, "embedding-rmsnorm") != 0) {
+            fprintf(stderr, "yvex: unsupported segment: %s\n", segment_name);
+            return 2;
+        }
+        segment_options.segment_name = segment_name;
+    } else if (segment_name) {
+        fprintf(stderr, "yvex: --segment requires --execute-segment\n");
         return 2;
     }
 
-    if (execute_fixture || execute_partial) {
+    if (execute_fixture || execute_partial || execute_segment) {
         rc = yvex_model_ref_resolve(&model_ref, model_arg, NULL, &err);
         if (rc != YVEX_OK) {
             return print_yvex_error(&err, exit_for_status(rc));
         }
-        rc = enforce_registered_identity_cli(&model_ref, execute_fixture ? "graph-fixture" : "graph-partial");
+        rc = enforce_registered_identity_cli(&model_ref,
+                                             execute_fixture ? "graph-fixture" :
+                                             (execute_segment ? "graph-segment" : "graph-partial"));
         if (rc != YVEX_OK) {
-            init_graph_guard_report(&graph_guard, execute_fixture, &model_ref);
+            init_graph_guard_report(&graph_guard,
+                                    execute_fixture ? "fixture-embedding" :
+                                    (execute_segment ? "selected-embedding-rmsnorm"
+                                                     : "selected-embedding-partial"),
+                                    !execute_fixture,
+                                    &model_ref);
             graph_guard.identity_status = "fail";
             graph_guard.metadata_status = "fail";
             print_graph_guard_report(&graph_guard);
@@ -5212,7 +5360,9 @@ static int command_graph(int argc, char **argv)
         rc = preflight_graph_guard(&model_ref,
                                    backend_name,
                                    execute_fixture,
-                                   execute_fixture ? fixture_options.token_id : partial_options.token_id,
+                                   execute_segment,
+                                   execute_fixture ? fixture_options.token_id :
+                                   (execute_segment ? segment_options.token_id : partial_options.token_id),
                                    &graph_guard,
                                    &err);
         if (rc != YVEX_OK) {
@@ -5237,8 +5387,10 @@ static int command_graph(int argc, char **argv)
             graph_guard.backend_status = "unavailable";
             graph_guard.backend_op_status = "unsupported";
             print_graph_guard_report(&graph_guard);
-            printf("%s_backend: cuda\n", execute_fixture ? "fixture" : "partial");
-            printf("%s_backend_status: unsupported\n", execute_fixture ? "fixture" : "partial");
+            printf("%s_backend: cuda\n", execute_fixture ? "fixture" :
+                   (execute_segment ? "segment" : "partial"));
+            printf("%s_backend_status: unsupported\n", execute_fixture ? "fixture" :
+                   (execute_segment ? "segment" : "partial"));
             printf("reason: %s\n", yvex_error_message(&err));
             printf("status: graph-integrity-fail\n");
             yvex_model_ref_clear(&model_ref);
@@ -5246,6 +5398,8 @@ static int command_graph(int argc, char **argv)
         }
         if (rc == YVEX_OK && execute_fixture) {
             rc = yvex_engine_execute_fixture_graph(engine, &fixture_options, &fixture_result, &err);
+        } else if (rc == YVEX_OK && execute_segment) {
+            rc = yvex_engine_execute_segment_graph(engine, &segment_options, &segment_result, &err);
         } else if (rc == YVEX_OK) {
             rc = yvex_engine_execute_partial_graph(engine, &partial_options, &partial_result, &err);
         }
@@ -5279,6 +5433,35 @@ static int command_graph(int argc, char **argv)
                 graph_guard.output_bytes_planned = fixture_result.output_bytes_planned;
                 graph_guard.output_bytes_allocated = fixture_result.output_bytes_allocated;
                 graph_guard.reference_bytes_planned = fixture_result.reference_bytes_planned;
+            } else if (execute_segment) {
+                graph_guard.phase = segment_result.graph_execution_phase
+                                        ? segment_result.graph_execution_phase
+                                        : "dispatch";
+                graph_guard.shape_status = segment_result.shape_status
+                                               ? segment_result.shape_status
+                                               : graph_guard.shape_status;
+                graph_guard.range_status = segment_result.range_status
+                                               ? segment_result.range_status
+                                               : graph_guard.range_status;
+                graph_guard.slice_range_status = segment_result.slice_range_status
+                                                     ? segment_result.slice_range_status
+                                                     : graph_guard.slice_range_status;
+                graph_guard.backend_status = segment_result.backend_status
+                                                  ? segment_result.backend_status
+                                                  : graph_guard.backend_status;
+                graph_guard.backend_op_status = segment_result.backend_op_status
+                                                     ? segment_result.backend_op_status
+                                                     : graph_guard.backend_op_status;
+                graph_guard.dispatch_attempted = segment_result.dispatch_attempted;
+                graph_guard.reference_read_attempted = segment_result.reference_read_attempted;
+                graph_guard.output_allocation_attempted = segment_result.output_allocation_attempted;
+                graph_guard.cleanup_attempted = segment_result.cleanup_attempted;
+                graph_guard.cleanup_status = segment_result.cleanup_status
+                                                ? segment_result.cleanup_status
+                                                : graph_guard.cleanup_status;
+                graph_guard.output_bytes_planned = segment_result.output_bytes_planned;
+                graph_guard.output_bytes_allocated = segment_result.output_bytes_allocated;
+                graph_guard.reference_bytes_planned = segment_result.reference_bytes_planned;
             } else {
                 graph_guard.phase = partial_result.graph_execution_phase
                                         ? partial_result.graph_execution_phase
@@ -5362,6 +5545,76 @@ static int command_graph(int argc, char **argv)
             printf("execution_ready: false\n");
             printf("graph_execution_ready: false\n");
             printf("status: fixture-graph-executed\n");
+        } else if (execute_segment) {
+            graph_guard.guard_status = segment_result.graph_integrity_guard
+                                           ? segment_result.graph_integrity_guard
+                                           : "pass";
+            graph_guard.phase = segment_result.graph_execution_phase
+                                    ? segment_result.graph_execution_phase
+                                    : "complete";
+            graph_guard.shape_status = segment_result.shape_status ? segment_result.shape_status : "pass";
+            graph_guard.range_status = segment_result.range_status ? segment_result.range_status : "pass";
+            graph_guard.slice_range_status = segment_result.slice_range_status
+                                                 ? segment_result.slice_range_status
+                                                 : "pass";
+            graph_guard.backend_status = segment_result.backend_status ? segment_result.backend_status : "ready";
+            graph_guard.backend_op_status = segment_result.backend_op_status
+                                                ? segment_result.backend_op_status
+                                                : "supported";
+            graph_guard.dispatch_attempted = segment_result.dispatch_attempted;
+            graph_guard.reference_read_attempted = segment_result.reference_read_attempted;
+            graph_guard.output_allocation_attempted = segment_result.output_allocation_attempted;
+            graph_guard.cleanup_attempted = segment_result.cleanup_attempted;
+            graph_guard.cleanup_status = segment_result.cleanup_status
+                                            ? segment_result.cleanup_status
+                                            : "not-needed";
+            graph_guard.output_bytes_planned = segment_result.output_bytes_planned;
+            graph_guard.output_bytes_allocated = segment_result.output_bytes_allocated;
+            graph_guard.reference_bytes_planned = segment_result.reference_bytes_planned;
+            print_graph_guard_report(&graph_guard);
+            printf("segment_graph_executed: true\n");
+            printf("segment_backend: %s\n", segment_result.backend_name);
+            printf("segment_name: %s\n", segment_result.segment_name);
+            printf("segment_ops: %llu\n", segment_result.segment_ops);
+            printf("segment_op_0: embed\n");
+            printf("segment_op_1: rms_norm\n");
+            printf("partial_token: %u\n", segment_result.token_id);
+            printf("token_tensor: %s\n", segment_result.token_tensor_name);
+            printf("token_tensor_dtype: %s\n", segment_result.token_tensor_dtype);
+            printf("rmsnorm_tensor: %s\n", segment_result.rmsnorm_tensor_name);
+            printf("rmsnorm_tensor_dtype: %s\n", segment_result.rmsnorm_tensor_dtype);
+            printf("hidden_size: %llu\n", segment_result.hidden_size);
+            printf("vocab_size: %llu\n", segment_result.vocab_size);
+            printf("rmsnorm_epsilon_key: %s\n", segment_result.rmsnorm_epsilon_key);
+            printf("rmsnorm_epsilon: %.9g\n", segment_result.rmsnorm_epsilon);
+            printf("segment_memory_plan: explicit\n");
+            printf("segment_intermediate_count: %llu\n", segment_result.segment_intermediate_count);
+            printf("segment_intermediate_bytes: %llu\n", segment_result.segment_intermediate_bytes);
+            printf("segment_output_count: %llu\n", segment_result.segment_output_count);
+            printf("segment_output_bytes: %llu\n", segment_result.segment_output_bytes);
+            printf("segment_scratch_bytes: %llu\n", segment_result.segment_scratch_bytes);
+            printf("segment_reference_bytes: %llu\n", segment_result.segment_reference_bytes);
+            printf("segment_output_checksum: %llu\n", segment_result.output_checksum);
+            printf("segment_reference_checksum: %llu\n", segment_result.reference_checksum);
+            printf("segment_max_abs_diff: %.9g\n", segment_result.max_abs_diff);
+            if (strcmp(segment_result.backend_name, "cuda") == 0) {
+                printf("segment_cuda_parity: pass\n");
+                printf("cuda_reference_max_abs_diff: %.9g\n", segment_result.max_abs_diff);
+            } else {
+                printf("cpu_reference_max_abs_diff: %.9g\n", segment_result.max_abs_diff);
+            }
+            printf("segment_output_sample_count: %llu\n", segment_result.output_value_count);
+            printf("segment_output_sample_values:");
+            for (i = 0; (unsigned long long)i < segment_result.output_value_count; ++i) {
+                printf("%s%.9g", i == 0 ? " " : ",", (double)segment_result.output_values[i]);
+            }
+            printf("\n");
+            printf("execution_ready: false\n");
+            printf("graph_execution_ready: false\n");
+            printf("prefill_ready: false\n");
+            printf("logits_ready: false\n");
+            printf("generation: unsupported\n");
+            printf("status: real-segment-graph-executed\n");
         } else {
             graph_guard.guard_status = partial_result.graph_integrity_guard
                                            ? partial_result.graph_integrity_guard

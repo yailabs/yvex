@@ -72,6 +72,21 @@ proves real selected tensor participation in scheduled graph work. It does not
 imply prompt prefill, KV runtime, decode, logits, sampling, generation, server
 generation, benchmark readiness, or full model execution.
 
+### Real segment execution
+
+YVEX can execute a selected embedding-plus-RMSNorm segment over real selected
+tensors. The segment reads `token_embd.weight`, dispatches embedding lookup,
+uses a real first RMSNorm weight such as `blk.0.attn_norm.weight`, dispatches
+RMSNorm, and returns an `F32` output vector summary.
+
+The segment is graph-guarded, integrity-gated, backend-dispatched,
+memory-planned, and compared against an independent raw-artifact reference. It
+requires validated tensor ranges, selected embedding shape readiness, RMSNorm
+shape/dtype compatibility, RMSNorm epsilon metadata, backend op support, and
+checked intermediate/output/reference byte accounting. It is not prompt input,
+prefill, KV runtime, decode, logits, sampling, generation, full transformer
+execution, full model support, or a benchmark.
+
 ### Artifact integrity baseline
 
 YVEX validates baseline `GGUF` structural integrity before artifact paths that

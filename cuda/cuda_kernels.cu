@@ -89,3 +89,69 @@ extern "C" __global__ void yvex_embed_f16_to_f32(const unsigned short *embedding
 
     out[idx] = yvex_f16_bits_to_float((unsigned int)embedding[((unsigned long long)token_id * hidden_size) + dim]);
 }
+
+extern "C" __global__ void yvex_rms_norm_f32_weight_f32(const float *input,
+                                                        const float *weight,
+                                                        float *out,
+                                                        unsigned long long hidden_size,
+                                                        float epsilon)
+{
+    extern __shared__ float scratch[];
+    unsigned int tid = threadIdx.x;
+    unsigned int stride = blockDim.x;
+    unsigned long long i;
+    float sum = 0.0f;
+    float inv_rms;
+
+    for (i = (unsigned long long)tid; i < hidden_size; i += (unsigned long long)stride) {
+        float v = input[i];
+        sum += v * v;
+    }
+    scratch[tid] = sum;
+    __syncthreads();
+
+    for (unsigned int offset = blockDim.x >> 1; offset > 0; offset >>= 1) {
+        if (tid < offset) {
+            scratch[tid] += scratch[tid + offset];
+        }
+        __syncthreads();
+    }
+
+    inv_rms = rsqrtf((scratch[0] / (float)hidden_size) + epsilon);
+    for (i = (unsigned long long)tid; i < hidden_size; i += (unsigned long long)stride) {
+        out[i] = input[i] * inv_rms * weight[i];
+    }
+}
+
+extern "C" __global__ void yvex_rms_norm_f32_weight_f16(const float *input,
+                                                        const unsigned short *weight,
+                                                        float *out,
+                                                        unsigned long long hidden_size,
+                                                        float epsilon)
+{
+    extern __shared__ float scratch[];
+    unsigned int tid = threadIdx.x;
+    unsigned int stride = blockDim.x;
+    unsigned long long i;
+    float sum = 0.0f;
+    float inv_rms;
+
+    for (i = (unsigned long long)tid; i < hidden_size; i += (unsigned long long)stride) {
+        float v = input[i];
+        sum += v * v;
+    }
+    scratch[tid] = sum;
+    __syncthreads();
+
+    for (unsigned int offset = blockDim.x >> 1; offset > 0; offset >>= 1) {
+        if (tid < offset) {
+            scratch[tid] += scratch[tid + offset];
+        }
+        __syncthreads();
+    }
+
+    inv_rms = rsqrtf((scratch[0] / (float)hidden_size) + epsilon);
+    for (i = (unsigned long long)tid; i < hidden_size; i += (unsigned long long)stride) {
+        out[i] = input[i] * inv_rms * yvex_f16_bits_to_float((unsigned int)weight[i]);
+    }
+}

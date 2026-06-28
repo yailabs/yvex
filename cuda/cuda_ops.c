@@ -84,6 +84,26 @@ static const char yvex_cuda_kernels_ptx[] =
 ")\n"
 "{\n"
 "    ret;\n"
+"}\n"
+".visible .entry yvex_rms_norm_f32_weight_f32(\n"
+"    .param .u64 p_input,\n"
+"    .param .u64 p_weight,\n"
+"    .param .u64 p_out,\n"
+"    .param .u64 p_hidden_size,\n"
+"    .param .f32 p_epsilon\n"
+")\n"
+"{\n"
+"    ret;\n"
+"}\n"
+".visible .entry yvex_rms_norm_f32_weight_f16(\n"
+"    .param .u64 p_input,\n"
+"    .param .u64 p_weight,\n"
+"    .param .u64 p_out,\n"
+"    .param .u64 p_hidden_size,\n"
+"    .param .f32 p_epsilon\n"
+")\n"
+"{\n"
+"    ret;\n"
 "}\n";
 #endif
 
@@ -101,7 +121,7 @@ static int tensor_is_f16_bytes(const yvex_device_tensor *tensor,
            tensor->bytes == elements * 2ull;
 }
 
-static int ensure_embed_kernel(yvex_cuda_backend_state *state, yvex_error *err)
+static int ensure_kernel_module(yvex_cuda_backend_state *state, const char *where, yvex_error *err)
 {
     int rc;
 
@@ -111,9 +131,24 @@ static int ensure_embed_kernel(yvex_cuda_backend_state *state, yvex_error *err)
     rc = yvex_cuda_status(&state->driver,
                           state->driver.cuModuleLoadData(&state->module,
                                                          yvex_cuda_kernels_ptx),
-                          "cuda.embed.load_module", err);
+                          where, err);
     if (rc != YVEX_OK) {
         return rc;
+    }
+    state->module_loaded = 1;
+    return YVEX_OK;
+}
+
+static int ensure_embed_kernel(yvex_cuda_backend_state *state, yvex_error *err)
+{
+    int rc;
+
+    rc = ensure_kernel_module(state, "cuda.kernels.load_module", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (state->embed_function && state->embed_f16_function) {
+        return YVEX_OK;
     }
     rc = yvex_cuda_status(&state->driver,
                           state->driver.cuModuleGetFunction(&state->embed_function,
@@ -136,7 +171,38 @@ static int ensure_embed_kernel(yvex_cuda_backend_state *state, yvex_error *err)
         state->embed_function = NULL;
         return rc;
     }
-    state->module_loaded = 1;
+    return YVEX_OK;
+}
+
+static int ensure_rms_norm_kernel(yvex_cuda_backend_state *state, yvex_error *err)
+{
+    int rc;
+
+    rc = ensure_kernel_module(state, "cuda.kernels.load_module", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (state->rms_norm_f32_function && state->rms_norm_f16_function) {
+        return YVEX_OK;
+    }
+    rc = yvex_cuda_status(&state->driver,
+                          state->driver.cuModuleGetFunction(&state->rms_norm_f32_function,
+                                                            state->module,
+                                                            "yvex_rms_norm_f32_weight_f32"),
+                          "cuda.rms_norm.load_f32_function", err);
+    if (rc != YVEX_OK) {
+        state->rms_norm_f32_function = NULL;
+        return rc;
+    }
+    rc = yvex_cuda_status(&state->driver,
+                          state->driver.cuModuleGetFunction(&state->rms_norm_f16_function,
+                                                            state->module,
+                                                            "yvex_rms_norm_f32_weight_f16"),
+                          "cuda.rms_norm.load_f16_function", err);
+    if (rc != YVEX_OK) {
+        state->rms_norm_f16_function = NULL;
+        return rc;
+    }
     return YVEX_OK;
 }
 
@@ -279,6 +345,126 @@ int yvex_cuda_op_embed(yvex_backend *backend,
                               "cuda.embed.sync", err);
     }
     (void)state->driver.cuMemFree_v2(token_ids_device);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    out->is_written = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_cuda_op_rms_norm(yvex_backend *backend,
+                          const yvex_device_tensor *input,
+                          const yvex_device_tensor *weight,
+                          float epsilon,
+                          yvex_device_tensor *out,
+                          yvex_error *err)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    CUdeviceptr input_ptr;
+    CUdeviceptr weight_ptr;
+    CUdeviceptr out_ptr;
+    unsigned long long hidden_size;
+    unsigned int block_size = 256u;
+    unsigned int shared_bytes = block_size * (unsigned int)sizeof(float);
+    void *params[5];
+    int rc;
+
+    if (!state) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_op_rms_norm",
+                       "CUDA backend state is missing");
+        return YVEX_ERR_STATE;
+    }
+    if (!yvex_backend_tensor_owner_is(backend, input) ||
+        !yvex_backend_tensor_owner_is(backend, weight) ||
+        !yvex_backend_tensor_owner_is(backend, out)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_op_rms_norm",
+                       "input, weight, and output tensors must belong to this backend");
+        return YVEX_ERR_STATE;
+    }
+    if (input->dtype != YVEX_DTYPE_F32 || out->dtype != YVEX_DTYPE_F32 ||
+        (weight->dtype != YVEX_DTYPE_F32 && weight->dtype != YVEX_DTYPE_F16)) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_rms_norm",
+                       "CUDA RMSNorm supports F32 input/output with F16 or F32 weight");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (epsilon <= 0.0f) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rms_norm",
+                       "epsilon must be positive");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (input->rank == 2 && input->dims[0] == 1) {
+        hidden_size = input->dims[1];
+    } else if (input->rank == 1) {
+        hidden_size = input->dims[0];
+    } else {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rms_norm",
+                       "RMSNorm input must be rank 1 or dims [1, hidden]");
+        return YVEX_ERR_FORMAT;
+    }
+    if (hidden_size == 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rms_norm",
+                       "RMSNorm hidden size must be non-zero");
+        return YVEX_ERR_FORMAT;
+    }
+    if (weight->rank != 1 || weight->dims[0] != hidden_size) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rms_norm",
+                       "RMSNorm weight must be rank 1 and match hidden size");
+        return YVEX_ERR_FORMAT;
+    }
+    if (out->rank != input->rank ||
+        out->dims[0] != input->dims[0] ||
+        (input->rank == 2 && out->dims[1] != input->dims[1])) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rms_norm",
+                       "RMSNorm output shape must match input shape");
+        return YVEX_ERR_FORMAT;
+    }
+    if (!tensor_is_f32_bytes(input, hidden_size) || !tensor_is_f32_bytes(out, hidden_size)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_rms_norm",
+                       "RMSNorm input/output bytes must match F32 hidden size");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (weight->dtype == YVEX_DTYPE_F32 && !tensor_is_f32_bytes(weight, hidden_size)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_rms_norm",
+                       "RMSNorm F32 weight bytes must match hidden size");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (weight->dtype == YVEX_DTYPE_F16 && !tensor_is_f16_bytes(weight, hidden_size)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_rms_norm",
+                       "RMSNorm F16 weight bytes must match hidden size");
+        return YVEX_ERR_BOUNDS;
+    }
+
+    rc = yvex_cuda_set_current(backend, "yvex_backend_op_rms_norm", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = ensure_rms_norm_kernel(state, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    input_ptr = yvex_cuda_tensor_ptr(input);
+    weight_ptr = yvex_cuda_tensor_ptr(weight);
+    out_ptr = yvex_cuda_tensor_ptr(out);
+    params[0] = &input_ptr;
+    params[1] = &weight_ptr;
+    params[2] = &out_ptr;
+    params[3] = &hidden_size;
+    params[4] = &epsilon;
+
+    rc = yvex_cuda_status(&state->driver,
+                          state->driver.cuLaunchKernel(weight->dtype == YVEX_DTYPE_F16
+                                                           ? state->rms_norm_f16_function
+                                                           : state->rms_norm_f32_function,
+                                                       1, 1, 1,
+                                                       block_size, 1, 1,
+                                                       shared_bytes, NULL, params, NULL),
+                          "cuda.rms_norm.launch", err);
+    if (rc == YVEX_OK) {
+        rc = yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
+                              "cuda.rms_norm.sync", err);
+    }
     if (rc != YVEX_OK) {
         return rc;
     }

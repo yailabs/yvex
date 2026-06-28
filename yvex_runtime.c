@@ -468,6 +468,175 @@ static int build_f16_embedding_reference(const yvex_artifact *artifact,
     return YVEX_OK;
 }
 
+static int runtime_checked_mul_ull(unsigned long long a,
+                                   unsigned long long b,
+                                   unsigned long long *out)
+{
+    if (!out) {
+        return 0;
+    }
+    if (a != 0ull && b > ULLONG_MAX / a) {
+        return 0;
+    }
+    *out = a * b;
+    return 1;
+}
+
+static int runtime_checked_add_ull(unsigned long long a,
+                                   unsigned long long b,
+                                   unsigned long long *out)
+{
+    if (!out || a > ULLONG_MAX - b) {
+        return 0;
+    }
+    *out = a + b;
+    return 1;
+}
+
+static double runtime_sqrt_double(double x)
+{
+    double guess;
+    unsigned int i;
+
+    if (x <= 0.0) {
+        return 0.0;
+    }
+    guess = x >= 1.0 ? x : 1.0;
+    for (i = 0; i < 32u; ++i) {
+        guess = 0.5 * (guess + (x / guess));
+    }
+    return guess;
+}
+
+static int runtime_find_rmsnorm_epsilon(const yvex_gguf *gguf,
+                                        const char **key_out,
+                                        double *epsilon_out,
+                                        yvex_error *err)
+{
+    static const char *keys[] = {
+        "llama.attention.layer_norm_rms_epsilon",
+        "deepseek2.attention.layer_norm_rms_epsilon",
+        "general.rms_norm_epsilon",
+    };
+    unsigned int i;
+
+    if (!gguf || !key_out || !epsilon_out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_execute_segment_graph",
+                       "GGUF, key output, and epsilon output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    for (i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
+        const yvex_gguf_value *value = yvex_gguf_metadata_find(gguf, keys[i]);
+        double epsilon = 0.0;
+        if (!value) {
+            continue;
+        }
+        if (yvex_gguf_value_as_f64(value, &epsilon) != YVEX_OK || epsilon <= 0.0) {
+            yvex_error_setf(err, YVEX_ERR_FORMAT, "yvex_engine_execute_segment_graph",
+                            "rmsnorm-epsilon-invalid: %s", keys[i]);
+            return YVEX_ERR_FORMAT;
+        }
+        *key_out = keys[i];
+        *epsilon_out = epsilon;
+        return YVEX_OK;
+    }
+
+    yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_engine_execute_segment_graph",
+                   "rmsnorm-epsilon-missing");
+    return YVEX_ERR_FORMAT;
+}
+
+static const yvex_tensor_info *runtime_find_first_rmsnorm_tensor(const yvex_tensor_table *tensors)
+{
+    static const char *preferred[] = {
+        "blk.0.attn_norm.weight",
+        "blk.0.attention_norm.weight",
+        "blk.0.input_layernorm.weight",
+        "model.layers.0.input_layernorm.weight",
+    };
+    unsigned int i;
+    unsigned long long count;
+    unsigned long long index;
+
+    if (!tensors) {
+        return NULL;
+    }
+    for (i = 0; i < sizeof(preferred) / sizeof(preferred[0]); ++i) {
+        const yvex_tensor_info *tensor = yvex_tensor_table_find(tensors, preferred[i]);
+        if (tensor) {
+            return tensor;
+        }
+    }
+    count = yvex_tensor_table_count(tensors);
+    for (index = 0; index < count; ++index) {
+        const yvex_tensor_info *tensor = yvex_tensor_table_at(tensors, index);
+        if (tensor && tensor->role == YVEX_TENSOR_ROLE_ATTENTION_NORM) {
+            return tensor;
+        }
+    }
+    return NULL;
+}
+
+static int build_rmsnorm_weight_reference(const yvex_artifact *artifact,
+                                          const yvex_tensor_range *range,
+                                          float *out,
+                                          yvex_error *err)
+{
+    const unsigned char *data;
+    unsigned long long i;
+
+    if (!artifact || !range || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_execute_segment_graph",
+                       "artifact, range, and RMSNorm reference output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (!range->range_valid || range->rank != 1) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_segment_graph",
+                       "RMSNorm reference tensor range is invalid");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (range->dtype != YVEX_DTYPE_F16 && range->dtype != YVEX_DTYPE_F32) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_engine_execute_segment_graph",
+                       "rmsnorm-dtype-invalid");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    data = yvex_artifact_data(artifact);
+    if (!data) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_execute_segment_graph",
+                       "artifact data is unavailable");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    data += range->tensor_absolute_offset;
+    for (i = 0; i < range->dims[0]; ++i) {
+        if (range->dtype == YVEX_DTYPE_F16) {
+            out[i] = runtime_f16_bits_to_float(runtime_read_u16le(data + (i * 2ull)));
+        } else {
+            memcpy(&out[i], data + (i * (unsigned long long)sizeof(float)), sizeof(float));
+        }
+    }
+    return YVEX_OK;
+}
+
+static void build_rmsnorm_reference(const float *embedding,
+                                    const float *weight,
+                                    unsigned long long hidden_size,
+                                    double epsilon,
+                                    float *out)
+{
+    unsigned long long i;
+    double sum_squares = 0.0;
+    double inv_rms;
+
+    for (i = 0; i < hidden_size; ++i) {
+        sum_squares += (double)embedding[i] * (double)embedding[i];
+    }
+    inv_rms = 1.0 / runtime_sqrt_double((sum_squares / (double)hidden_size) + epsilon);
+    for (i = 0; i < hidden_size; ++i) {
+        out[i] = (float)((double)embedding[i] * inv_rms * (double)weight[i]);
+    }
+}
+
 static int yvex_runtime_test_env_enabled(const char *name)
 {
     const char *value = getenv(name);
@@ -990,6 +1159,467 @@ int yvex_engine_execute_partial_graph(yvex_engine *engine,
     yvex_backend_tensor_free(engine->weight_backend, output);
     free(readback);
     free(reference);
+    out->graph_integrity_guard = "pass";
+    out->graph_execution_phase = "complete";
+    out->cleanup_status = "not-needed";
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_engine_execute_segment_graph(yvex_engine *engine,
+                                      const yvex_segment_graph_options *options,
+                                      yvex_segment_graph_result *out,
+                                      yvex_error *err)
+{
+    const yvex_graph_op_info *embed_op = NULL;
+    const yvex_materialized_weight *token_weight;
+    const yvex_materialized_weight *rmsnorm_weight;
+    const yvex_tensor_info *token_tensor;
+    const yvex_tensor_info *rmsnorm_tensor;
+    const yvex_device_tensor *embedding;
+    const yvex_device_tensor *rmsnorm_weight_tensor;
+    yvex_backend_tensor_desc embed_desc;
+    yvex_backend_tensor_desc output_desc;
+    yvex_device_tensor *embed_output = NULL;
+    yvex_device_tensor *segment_output = NULL;
+    yvex_selected_embedding_shape embedding_shape;
+    yvex_tensor_range token_range;
+    yvex_tensor_range rmsnorm_range;
+    yvex_tensor_slice_range slice_range;
+    const char *epsilon_key = NULL;
+    double epsilon = 0.0;
+    unsigned int token_id = 0;
+    unsigned long long hidden_size;
+    unsigned long long vocab_size;
+    unsigned long long output_bytes;
+    unsigned long long planned_alloc_bytes;
+    unsigned long long i;
+    float *embedding_reference = NULL;
+    float *rmsnorm_weight_reference = NULL;
+    float *segment_reference = NULL;
+    float *readback = NULL;
+    int rc;
+
+    if (!engine || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_execute_segment_graph",
+                       "engine and out are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(out, 0, sizeof(*out));
+    out->backend_name = "none";
+    out->graph_integrity_guard = "fail";
+    out->graph_execution_phase = "preflight";
+    out->graph_kind = "selected-embedding-rmsnorm";
+    out->shape_status = "unchecked";
+    out->range_status = "unchecked";
+    out->slice_range_status = "unchecked";
+    out->backend_status = "unchecked";
+    out->backend_op_status = "unchecked";
+    out->cleanup_status = "not-needed";
+    out->segment_name = "embedding-rmsnorm";
+    out->token_tensor_name = "token_embd.weight";
+    out->token_tensor_dtype = "F16";
+    out->rmsnorm_tensor_name = "";
+    out->rmsnorm_tensor_dtype = "";
+    out->rmsnorm_epsilon_key = "";
+    out->execution_ready = 0;
+    out->graph_execution_ready = 0;
+
+    if (options) {
+        token_id = options->token_id;
+        if (options->segment_name && strcmp(options->segment_name, "embedding-rmsnorm") != 0) {
+            yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_execute_segment_graph",
+                           "unsupported segment; expected embedding-rmsnorm");
+            return YVEX_ERR_INVALID_ARG;
+        }
+    }
+    out->token_id = token_id;
+
+    if (!engine->graph) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_engine_execute_segment_graph",
+                       "real segment graph requires a built graph");
+        return YVEX_ERR_STATE;
+    }
+    if (!engine->weight_backend || !engine->weights) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_engine_execute_segment_graph",
+                       "real segment graph requires engine-attached weights");
+        return YVEX_ERR_STATE;
+    }
+    out->backend_name = yvex_backend_kind_name(yvex_backend_kind_of(engine->weight_backend));
+    out->backend_status = "ready";
+
+    for (i = 0; i < yvex_graph_op_count(engine->graph); ++i) {
+        const yvex_graph_op_info *candidate = yvex_graph_op_at(engine->graph, i);
+        if (candidate && candidate->kind == YVEX_OP_EMBED) {
+            embed_op = candidate;
+            break;
+        }
+    }
+    if (!embed_op) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_engine_execute_segment_graph",
+                       "real segment graph requires a planned embed node");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+
+    token_weight = yvex_weight_table_find(engine->weights, "token_embd.weight");
+    if (!token_weight) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_engine_execute_segment_graph",
+                       "required-tensor-missing: token_embd.weight");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (yvex_weight_dtype(token_weight) != YVEX_DTYPE_F16) {
+        out->shape_status = "fail";
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_engine_execute_segment_graph",
+                       "real segment embedding requires F16 token_embd.weight");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    token_tensor = yvex_tensor_table_find(engine->tensors, "token_embd.weight");
+    if (!token_tensor) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_engine_execute_segment_graph",
+                       "required-tensor-missing: token_embd.weight");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    embedding = yvex_weight_device_tensor(token_weight);
+    if (!embedding) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_engine_execute_segment_graph",
+                       "attached token embedding has no backend tensor");
+        return YVEX_ERR_STATE;
+    }
+
+    memset(&embedding_shape, 0, sizeof(embedding_shape));
+    rc = yvex_selected_embedding_shape_validate(token_tensor, token_id, &embedding_shape, err);
+    if (rc != YVEX_OK) {
+        out->shape_status = strstr(yvex_error_message(err), "token-out-of-range") ? "pass" : "fail";
+        out->slice_range_status = "fail";
+        if (strstr(yvex_error_message(err), "token-out-of-range")) {
+            yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_segment_graph",
+                            "partial token out of range: %u >= %llu",
+                            token_id, embedding_shape.vocab_size);
+        }
+        return rc;
+    }
+    hidden_size = embedding_shape.hidden_size;
+    vocab_size = embedding_shape.vocab_size;
+    if (yvex_device_tensor_rank(embedding) != 2 ||
+        yvex_device_tensor_dims(embedding)[0] != hidden_size ||
+        yvex_device_tensor_dims(embedding)[1] != vocab_size ||
+        yvex_weight_bytes(token_weight) != token_tensor->storage_bytes) {
+        out->shape_status = "fail";
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_engine_execute_segment_graph",
+                       "attached token embedding shape does not match tensor descriptor");
+        return YVEX_ERR_FORMAT;
+    }
+
+    rmsnorm_tensor = runtime_find_first_rmsnorm_tensor(engine->tensors);
+    if (!rmsnorm_tensor) {
+        out->shape_status = "fail";
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_engine_execute_segment_graph",
+                       "rmsnorm-tensor-missing");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    out->rmsnorm_tensor_name = rmsnorm_tensor->name;
+    out->rmsnorm_tensor_dtype = yvex_dtype_name(rmsnorm_tensor->dtype);
+    rmsnorm_weight = yvex_weight_table_find(engine->weights, rmsnorm_tensor->name);
+    if (!rmsnorm_weight) {
+        out->shape_status = "fail";
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_engine_execute_segment_graph",
+                       "rmsnorm-tensor-missing");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    rmsnorm_weight_tensor = yvex_weight_device_tensor(rmsnorm_weight);
+    if (!rmsnorm_weight_tensor) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_engine_execute_segment_graph",
+                       "attached RMSNorm weight has no backend tensor");
+        return YVEX_ERR_STATE;
+    }
+    if (rmsnorm_tensor->rank != 1 ||
+        rmsnorm_tensor->dims[0] != hidden_size ||
+        yvex_device_tensor_rank(rmsnorm_weight_tensor) != 1 ||
+        yvex_device_tensor_dims(rmsnorm_weight_tensor)[0] != hidden_size) {
+        out->shape_status = "fail";
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_engine_execute_segment_graph",
+                       "rmsnorm-shape-invalid");
+        return YVEX_ERR_FORMAT;
+    }
+    if (rmsnorm_tensor->dtype != YVEX_DTYPE_F16 && rmsnorm_tensor->dtype != YVEX_DTYPE_F32) {
+        out->shape_status = "fail";
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_engine_execute_segment_graph",
+                       "rmsnorm-dtype-invalid");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    out->shape_status = "pass";
+
+    memset(&token_range, 0, sizeof(token_range));
+    memset(&rmsnorm_range, 0, sizeof(rmsnorm_range));
+    memset(&slice_range, 0, sizeof(slice_range));
+    rc = yvex_tensor_range_validate(engine->artifact, engine->gguf, token_tensor, &token_range, err);
+    if (rc != YVEX_OK) {
+        out->range_status = "fail";
+        return rc;
+    }
+    rc = yvex_tensor_range_validate(engine->artifact, engine->gguf, rmsnorm_tensor, &rmsnorm_range, err);
+    if (rc != YVEX_OK) {
+        out->range_status = "fail";
+        return rc;
+    }
+    if (token_range.tensor_bytes != yvex_weight_bytes(token_weight) ||
+        rmsnorm_range.tensor_bytes != yvex_weight_bytes(rmsnorm_weight)) {
+        out->range_status = "fail";
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_engine_execute_segment_graph",
+                       "attached tensor byte count does not match validated range");
+        return YVEX_ERR_FORMAT;
+    }
+    out->range_status = "pass";
+    rc = yvex_tensor_embedding_slice_range_validate(&token_range, token_id, &slice_range, err);
+    if (rc != YVEX_OK) {
+        out->slice_range_status = "fail";
+        if ((unsigned long long)token_id >= vocab_size) {
+            yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_segment_graph",
+                            "partial token out of range: %u >= %llu", token_id, vocab_size);
+        }
+        return rc;
+    }
+    out->slice_range_status = "pass";
+
+    rc = runtime_find_rmsnorm_epsilon(engine->gguf, &epsilon_key, &epsilon, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    out->rmsnorm_epsilon_key = epsilon_key;
+    out->rmsnorm_epsilon = epsilon;
+
+    if (yvex_runtime_test_env_enabled("YVEX_TEST_SEGMENT_MEMORY_PLAN_OVERFLOW") ||
+        !runtime_checked_mul_ull(hidden_size, (unsigned long long)sizeof(float), &output_bytes) ||
+        output_bytes > (unsigned long long)(~(size_t)0) ||
+        !runtime_checked_add_ull(output_bytes, output_bytes, &planned_alloc_bytes)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_execute_segment_graph",
+                       "segment-memory-plan-overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    out->hidden_size = hidden_size;
+    out->vocab_size = vocab_size;
+    out->segment_ops = 2;
+    out->segment_intermediate_count = 1;
+    out->segment_intermediate_bytes = output_bytes;
+    out->segment_output_count = hidden_size;
+    out->segment_output_bytes = output_bytes;
+    out->segment_scratch_bytes = output_bytes;
+    out->segment_reference_bytes = output_bytes;
+    out->output_bytes_planned = planned_alloc_bytes;
+    out->reference_bytes_planned = output_bytes;
+
+    if (!yvex_backend_supports(engine->weight_backend, YVEX_BACKEND_CAP_OP_EMBED) ||
+        !yvex_backend_supports(engine->weight_backend, YVEX_BACKEND_CAP_OP_RMS_NORM) ||
+        yvex_runtime_test_env_enabled("YVEX_TEST_GRAPH_BACKEND_OP_UNSUPPORTED")) {
+        out->backend_op_status = "unsupported";
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_engine_execute_segment_graph",
+                       "backend-op-unsupported");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    out->backend_op_status = "supported";
+
+    embedding_reference = (float *)malloc((size_t)output_bytes);
+    rmsnorm_weight_reference = (float *)malloc((size_t)output_bytes);
+    segment_reference = (float *)malloc((size_t)output_bytes);
+    readback = (float *)malloc((size_t)output_bytes);
+    if (!embedding_reference || !rmsnorm_weight_reference || !segment_reference || !readback) {
+        free(embedding_reference);
+        free(rmsnorm_weight_reference);
+        free(segment_reference);
+        free(readback);
+        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_engine_execute_segment_graph",
+                       "failed to allocate segment reference/readback buffers");
+        return YVEX_ERR_NOMEM;
+    }
+
+    out->graph_execution_phase = "reference";
+    out->reference_read_attempted = 1;
+    rc = build_f16_embedding_reference(engine->artifact, &token_range, &slice_range,
+                                       embedding_reference, err);
+    if (rc == YVEX_OK) {
+        rc = build_rmsnorm_weight_reference(engine->artifact, &rmsnorm_range,
+                                            rmsnorm_weight_reference, err);
+    }
+    if (rc != YVEX_OK) {
+        free(embedding_reference);
+        free(rmsnorm_weight_reference);
+        free(segment_reference);
+        free(readback);
+        return rc;
+    }
+    build_rmsnorm_reference(embedding_reference,
+                            rmsnorm_weight_reference,
+                            hidden_size,
+                            epsilon,
+                            segment_reference);
+    if (yvex_runtime_test_env_enabled("YVEX_TEST_FAIL_GRAPH_AFTER_REFERENCE_READ")) {
+        free(embedding_reference);
+        free(rmsnorm_weight_reference);
+        free(segment_reference);
+        free(readback);
+        out->cleanup_attempted = 1;
+        out->cleanup_status = "pass";
+        yvex_error_set(err, YVEX_ERR_BACKEND, "yvex_engine_execute_segment_graph",
+                       "test graph failure after reference read");
+        return YVEX_ERR_BACKEND;
+    }
+
+    memset(&embed_desc, 0, sizeof(embed_desc));
+    embed_desc.name = "segment.embedding.output";
+    embed_desc.dtype = YVEX_DTYPE_F32;
+    embed_desc.rank = 2;
+    embed_desc.dims[0] = 1;
+    embed_desc.dims[1] = hidden_size;
+    embed_desc.bytes = output_bytes;
+    memset(&output_desc, 0, sizeof(output_desc));
+    output_desc.name = "segment.rmsnorm.output";
+    output_desc.dtype = YVEX_DTYPE_F32;
+    output_desc.rank = 2;
+    output_desc.dims[0] = 1;
+    output_desc.dims[1] = hidden_size;
+    output_desc.bytes = output_bytes;
+
+    out->graph_execution_phase = "output";
+    out->output_allocation_attempted = 1;
+    rc = yvex_backend_tensor_alloc(engine->weight_backend, &embed_desc, &embed_output, err);
+    if (rc != YVEX_OK) {
+        free(embedding_reference);
+        free(rmsnorm_weight_reference);
+        free(segment_reference);
+        free(readback);
+        return rc;
+    }
+    out->output_bytes_allocated = output_bytes;
+    rc = yvex_backend_tensor_alloc(engine->weight_backend, &output_desc, &segment_output, err);
+    if (rc != YVEX_OK) {
+        yvex_backend_tensor_free(engine->weight_backend, embed_output);
+        free(embedding_reference);
+        free(rmsnorm_weight_reference);
+        free(segment_reference);
+        free(readback);
+        out->cleanup_attempted = 1;
+        out->cleanup_status = "pass";
+        return rc;
+    }
+    out->output_bytes_allocated = planned_alloc_bytes;
+    if (yvex_runtime_test_env_enabled("YVEX_TEST_FAIL_GRAPH_AFTER_OUTPUT_ALLOC")) {
+        yvex_backend_tensor_free(engine->weight_backend, segment_output);
+        yvex_backend_tensor_free(engine->weight_backend, embed_output);
+        free(embedding_reference);
+        free(rmsnorm_weight_reference);
+        free(segment_reference);
+        free(readback);
+        out->cleanup_attempted = 1;
+        out->cleanup_status = "pass";
+        yvex_error_set(err, YVEX_ERR_BACKEND, "yvex_engine_execute_segment_graph",
+                       "test graph failure after output allocation");
+        return YVEX_ERR_BACKEND;
+    }
+
+    out->graph_execution_phase = "dispatch";
+    out->dispatch_attempted = 1;
+    rc = yvex_backend_op_embed(engine->weight_backend, embedding, &token_id, 1, embed_output, err);
+    if (rc != YVEX_OK) {
+        yvex_backend_tensor_free(engine->weight_backend, segment_output);
+        yvex_backend_tensor_free(engine->weight_backend, embed_output);
+        free(embedding_reference);
+        free(rmsnorm_weight_reference);
+        free(segment_reference);
+        free(readback);
+        out->cleanup_attempted = 1;
+        out->cleanup_status = "pass";
+        return rc;
+    }
+    if (yvex_runtime_test_env_enabled("YVEX_TEST_FAIL_GRAPH_AFTER_OP0") ||
+        yvex_runtime_test_env_enabled("YVEX_TEST_FAIL_SEGMENT_AFTER_OP0")) {
+        yvex_backend_tensor_free(engine->weight_backend, segment_output);
+        yvex_backend_tensor_free(engine->weight_backend, embed_output);
+        free(embedding_reference);
+        free(rmsnorm_weight_reference);
+        free(segment_reference);
+        free(readback);
+        out->cleanup_attempted = 1;
+        out->cleanup_status = "pass";
+        yvex_error_set(err, YVEX_ERR_BACKEND, "yvex_engine_execute_segment_graph",
+                       "test graph failure after segment op 0");
+        return YVEX_ERR_BACKEND;
+    }
+    rc = yvex_backend_op_rms_norm(engine->weight_backend,
+                                  embed_output,
+                                  rmsnorm_weight_tensor,
+                                  (float)epsilon,
+                                  segment_output,
+                                  err);
+    if (rc != YVEX_OK) {
+        yvex_backend_tensor_free(engine->weight_backend, segment_output);
+        yvex_backend_tensor_free(engine->weight_backend, embed_output);
+        free(embedding_reference);
+        free(rmsnorm_weight_reference);
+        free(segment_reference);
+        free(readback);
+        out->cleanup_attempted = 1;
+        out->cleanup_status = "pass";
+        return rc;
+    }
+    if (yvex_runtime_test_env_enabled("YVEX_TEST_FAIL_GRAPH_AFTER_DISPATCH")) {
+        yvex_backend_tensor_free(engine->weight_backend, segment_output);
+        yvex_backend_tensor_free(engine->weight_backend, embed_output);
+        free(embedding_reference);
+        free(rmsnorm_weight_reference);
+        free(segment_reference);
+        free(readback);
+        out->cleanup_attempted = 1;
+        out->cleanup_status = "pass";
+        yvex_error_set(err, YVEX_ERR_BACKEND, "yvex_engine_execute_segment_graph",
+                       "test graph failure after dispatch");
+        return YVEX_ERR_BACKEND;
+    }
+
+    rc = yvex_backend_tensor_read(engine->weight_backend, segment_output, readback, output_bytes, err);
+    if (rc != YVEX_OK) {
+        yvex_backend_tensor_free(engine->weight_backend, segment_output);
+        yvex_backend_tensor_free(engine->weight_backend, embed_output);
+        free(embedding_reference);
+        free(rmsnorm_weight_reference);
+        free(segment_reference);
+        free(readback);
+        out->cleanup_attempted = 1;
+        out->cleanup_status = "pass";
+        return rc;
+    }
+
+    out->executed = 1;
+    out->node_count = 2;
+    out->output_checksum = fixture_checksum_bytes((const unsigned char *)readback, output_bytes);
+    out->reference_checksum = fixture_checksum_bytes((const unsigned char *)segment_reference, output_bytes);
+    out->max_abs_diff = max_abs_diff_f32(readback, segment_reference, hidden_size);
+    if (out->max_abs_diff > 0.0001) {
+        yvex_backend_tensor_free(engine->weight_backend, segment_output);
+        yvex_backend_tensor_free(engine->weight_backend, embed_output);
+        free(embedding_reference);
+        free(rmsnorm_weight_reference);
+        free(segment_reference);
+        free(readback);
+        out->cleanup_attempted = 1;
+        out->cleanup_status = "pass";
+        yvex_error_setf(err, YVEX_ERR_FORMAT, "yvex_engine_execute_segment_graph",
+                        "segment graph reference comparison failed: max_abs_diff %.9g",
+                        out->max_abs_diff);
+        return YVEX_ERR_FORMAT;
+    }
+    out->output_value_count = hidden_size > YVEX_SEGMENT_GRAPH_MAX_OUTPUT_VALUES
+                                  ? YVEX_SEGMENT_GRAPH_MAX_OUTPUT_VALUES
+                                  : hidden_size;
+    for (i = 0; i < out->output_value_count; ++i) {
+        out->output_values[i] = readback[i];
+    }
+
+    yvex_backend_tensor_free(engine->weight_backend, segment_output);
+    yvex_backend_tensor_free(engine->weight_backend, embed_output);
+    free(embedding_reference);
+    free(rmsnorm_weight_reference);
+    free(segment_reference);
+    free(readback);
     out->graph_integrity_guard = "pass";
     out->graph_execution_phase = "complete";
     out->cleanup_status = "not-needed";

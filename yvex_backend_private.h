@@ -43,6 +43,12 @@ typedef struct yvex_backend_vtable {
                     unsigned long long token_count,
                     yvex_device_tensor *out,
                     yvex_error *err);
+    int (*op_rms_norm)(yvex_backend *backend,
+                       const yvex_device_tensor *input,
+                       const yvex_device_tensor *weight,
+                       float epsilon,
+                       yvex_device_tensor *out,
+                       yvex_error *err);
 } yvex_backend_vtable;
 
 struct yvex_backend {
