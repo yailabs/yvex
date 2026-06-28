@@ -204,6 +204,7 @@ The implemented runtime states are:
 | Standalone RoPE op | Position-dependent F32 graph op over a bounded deterministic vector, checked against an independent reference. |
 | Standalone attention op | Explicit F32 Q/K/V scaled dot-product attention primitive with bounded causal mask, scratch, output, cleanup, and reference comparison. |
 | Standalone matmul op | Explicit F32 row-major `input=[m,k]`, `weight=[k,n]`, `output=[m,n]` primitive with projection-shape reporting, output cleanup, and reference comparison. |
+| Standalone MLP op | Explicit F32 gated SiLU feed-forward primitive over deterministic dense weights or one selected routed expert slice, with intermediate/output cleanup and reference comparison. |
 
 The runtime path after minimal KV ownership proceeds through minimal KV-backed
 prefill binding, full transformer prefill, decode, logits, sampling,
@@ -266,6 +267,17 @@ unsupported readiness fields. Matmul primitive support is not Q/K/V projection
 readiness, attention integration, transformer block execution, layer
 scheduling, full transformer prefill, decode, logits, sampling, generation, or
 a provider path.
+
+The standalone MLP operation is admitted through `yvex graph --execute-op --op
+mlp`. It does not use a model artifact and does not read real MLP or expert
+weights. It validates backend availability, backend MLP support, explicit F32
+input/gate/up/down/intermediate/output shapes, non-zero hidden and feed-forward
+dimensions, gated `silu` activation, optional explicit expert count and
+`expert_id`, byte-count accounting, output allocation, dispatch, reference
+comparison, and cleanup status. Routed-expert mode selects one deterministic
+expert slice only. MLP primitive support is not router-logit computation, top-k
+routing, real MoE routing, transformer block execution, layer scheduling, full
+transformer prefill, decode, logits, sampling, generation, or a provider path.
 
 Every implemented graph result should report guard status, failure phase where
 applicable, backend/op status, output planning, reference planning, checksums,

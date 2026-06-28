@@ -220,6 +220,64 @@ extern "C" __global__ void yvex_matmul_f32(const float *input,
     out[idx] = sum;
 }
 
+extern "C" __global__ void yvex_mlp_f32(const float *input,
+                                        const float *gate_weight,
+                                        const float *up_weight,
+                                        const float *down_weight,
+                                        float *intermediate,
+                                        float *out,
+                                        unsigned long long batch,
+                                        unsigned long long hidden_dim,
+                                        unsigned long long ffn_dim,
+                                        unsigned long long expert_count,
+                                        unsigned long long expert_id,
+                                        int routed_expert_mode)
+{
+    unsigned long long row;
+    unsigned long long j;
+    unsigned long long h;
+    unsigned long long gate_offset = 0ull;
+    unsigned long long up_offset = 0ull;
+    unsigned long long down_offset = 0ull;
+
+    if (threadIdx.x != 0 || blockIdx.x != 0) {
+        return;
+    }
+    if (routed_expert_mode) {
+        unsigned long long up_elements = hidden_dim * ffn_dim;
+        unsigned long long down_elements = ffn_dim * hidden_dim;
+        if (expert_count == 0ull || expert_id >= expert_count) {
+            return;
+        }
+        gate_offset = expert_id * up_elements;
+        up_offset = gate_offset;
+        down_offset = expert_id * down_elements;
+    }
+
+    for (row = 0; row < batch; ++row) {
+        for (j = 0; j < ffn_dim; ++j) {
+            float gate_sum = 0.0f;
+            float up_sum = 0.0f;
+            float silu;
+            for (h = 0; h < hidden_dim; ++h) {
+                float x = input[(row * hidden_dim) + h];
+                gate_sum += x * gate_weight[gate_offset + (h * ffn_dim) + j];
+                up_sum += x * up_weight[up_offset + (h * ffn_dim) + j];
+            }
+            silu = gate_sum / (1.0f + expf(-gate_sum));
+            intermediate[(row * ffn_dim) + j] = silu * up_sum;
+        }
+        for (h = 0; h < hidden_dim; ++h) {
+            float sum = 0.0f;
+            for (j = 0; j < ffn_dim; ++j) {
+                sum += intermediate[(row * ffn_dim) + j] *
+                       down_weight[down_offset + (j * hidden_dim) + h];
+            }
+            out[(row * hidden_dim) + h] = sum;
+        }
+    }
+}
+
 extern "C" __global__ void yvex_attention_f32(const float *query,
                                               const float *keys,
                                               const float *values,

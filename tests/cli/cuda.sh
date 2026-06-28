@@ -49,6 +49,7 @@ contains "$OUT_DIR/backend_cuda_ready.out" "op_rms_norm: yes"
 contains "$OUT_DIR/backend_cuda_ready.out" "op_rope: yes"
 contains "$OUT_DIR/backend_cuda_ready.out" "op_attention: yes"
 contains "$OUT_DIR/backend_cuda_ready.out" "op_matmul: yes"
+contains "$OUT_DIR/backend_cuda_ready.out" "op_mlp: yes"
 contains "$OUT_DIR/backend_cuda_ready.out" "status: backend-ready"
 
 "$YVEX_BIN" plan "$FIXTURE" --backend cuda >"$OUT_DIR/plan_cuda_ready.out" 2>"$OUT_DIR/plan_cuda_ready.err"
@@ -63,6 +64,7 @@ contains "$OUT_DIR/plan_cuda_ready.out" "op_rms_norm: yes"
 contains "$OUT_DIR/plan_cuda_ready.out" "op_rope: yes"
 contains "$OUT_DIR/plan_cuda_ready.out" "op_attention: yes"
 contains "$OUT_DIR/plan_cuda_ready.out" "op_matmul: yes"
+contains "$OUT_DIR/plan_cuda_ready.out" "op_mlp: yes"
 contains "$OUT_DIR/plan_cuda_ready.out" "execution_ready: false"
 contains "$OUT_DIR/plan_cuda_ready.out" "status: plan-only"
 
@@ -149,6 +151,43 @@ contains "$OUT_DIR/matmul_matrix_cuda.out" "projection_shape: false"
 contains "$OUT_DIR/matmul_matrix_cuda.out" "non_projection_shape: true"
 contains "$OUT_DIR/matmul_matrix_cuda.out" "matmul_cuda_parity: pass"
 contains "$OUT_DIR/matmul_matrix_cuda.out" "status: graph-op-executed"
+
+"$YVEX_BIN" graph --backend cuda --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated \
+  >"$OUT_DIR/mlp_dense_cuda.out" 2>"$OUT_DIR/mlp_dense_cuda.err"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    fail "mlp dense cuda exit code was $rc"
+fi
+contains "$OUT_DIR/mlp_dense_cuda.out" "graph_integrity_guard: pass"
+contains "$OUT_DIR/mlp_dense_cuda.out" "graph_execution_phase: complete"
+contains "$OUT_DIR/mlp_dense_cuda.out" "graph_kind: mlp-feed-forward"
+contains "$OUT_DIR/mlp_dense_cuda.out" "op: mlp"
+contains "$OUT_DIR/mlp_dense_cuda.out" "backend: cuda"
+contains "$OUT_DIR/mlp_dense_cuda.out" "hidden_dim: 8"
+contains "$OUT_DIR/mlp_dense_cuda.out" "ffn_dim: 16"
+contains "$OUT_DIR/mlp_dense_cuda.out" "routed_expert_mode: false"
+contains "$OUT_DIR/mlp_dense_cuda.out" "backend_op_status: supported"
+contains "$OUT_DIR/mlp_dense_cuda.out" "dispatch_attempted: true"
+contains "$OUT_DIR/mlp_dense_cuda.out" "reference_attempted: true"
+contains "$OUT_DIR/mlp_dense_cuda.out" "mlp_cuda_parity: pass"
+contains "$OUT_DIR/mlp_dense_cuda.out" "transformer_block_ready: false"
+contains "$OUT_DIR/mlp_dense_cuda.out" "decode_ready: false"
+contains "$OUT_DIR/mlp_dense_cuda.out" "generation_ready: false"
+contains "$OUT_DIR/mlp_dense_cuda.out" "status: graph-op-executed"
+
+"$YVEX_BIN" graph --backend cuda --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated --experts 2 --expert-id 1 \
+  >"$OUT_DIR/mlp_routed_cuda.out" 2>"$OUT_DIR/mlp_routed_cuda.err"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    fail "mlp routed cuda exit code was $rc"
+fi
+contains "$OUT_DIR/mlp_routed_cuda.out" "graph_integrity_guard: pass"
+contains "$OUT_DIR/mlp_routed_cuda.out" "graph_kind: mlp-routed-expert"
+contains "$OUT_DIR/mlp_routed_cuda.out" "routed_expert_mode: true"
+contains "$OUT_DIR/mlp_routed_cuda.out" "expert_count: 2"
+contains "$OUT_DIR/mlp_routed_cuda.out" "expert_id: 1"
+contains "$OUT_DIR/mlp_routed_cuda.out" "mlp_cuda_parity: pass"
+contains "$OUT_DIR/mlp_routed_cuda.out" "status: graph-op-executed"
 
 "$YVEX_BIN" materialize --model "$FIXTURE" --backend cuda >"$OUT_DIR/materialize_cuda_ready.out" 2>"$OUT_DIR/materialize_cuda_ready.err"
 rc=$?

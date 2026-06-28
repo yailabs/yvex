@@ -47,6 +47,91 @@ static int float_close(float a, float b, float tolerance)
     return diff <= tolerance;
 }
 
+static double test_exp_double(double x)
+{
+    const double ln2 = 0.69314718055994530942;
+    double term;
+    double sum;
+    int n = 0;
+    unsigned int i;
+
+    if (x < -60.0) {
+        return 0.0;
+    }
+    if (x > 60.0) {
+        x = 60.0;
+    }
+    while (x > 0.5) {
+        x -= ln2;
+        ++n;
+    }
+    while (x < -0.5) {
+        x += ln2;
+        --n;
+    }
+    term = 1.0;
+    sum = 1.0;
+    for (i = 1u; i <= 18u; ++i) {
+        term *= x / (double)i;
+        sum += term;
+    }
+    while (n > 0) {
+        sum *= 2.0;
+        --n;
+    }
+    while (n < 0) {
+        sum *= 0.5;
+        ++n;
+    }
+    return sum;
+}
+
+static double test_silu_double(double x)
+{
+    return x / (1.0 + test_exp_double(-x));
+}
+
+static void mlp_reference(const float *input,
+                          const float *gate,
+                          const float *up,
+                          const float *down,
+                          unsigned long long batch,
+                          unsigned long long hidden_dim,
+                          unsigned long long ffn_dim,
+                          unsigned long long expert_id,
+                          int routed,
+                          float *intermediate,
+                          float *out)
+{
+    unsigned long long gate_offset = routed ? expert_id * hidden_dim * ffn_dim : 0ull;
+    unsigned long long down_offset = routed ? expert_id * ffn_dim * hidden_dim : 0ull;
+    unsigned long long row;
+    unsigned long long h;
+    unsigned long long j;
+
+    for (row = 0; row < batch; ++row) {
+        for (j = 0; j < ffn_dim; ++j) {
+            double gate_sum = 0.0;
+            double up_sum = 0.0;
+            for (h = 0; h < hidden_dim; ++h) {
+                double x = (double)input[(row * hidden_dim) + h];
+                gate_sum += x * (double)gate[gate_offset + (h * ffn_dim) + j];
+                up_sum += x * (double)up[gate_offset + (h * ffn_dim) + j];
+            }
+            intermediate[(row * ffn_dim) + j] =
+                (float)(test_silu_double(gate_sum) * up_sum);
+        }
+        for (h = 0; h < hidden_dim; ++h) {
+            double sum = 0.0;
+            for (j = 0; j < ffn_dim; ++j) {
+                sum += (double)intermediate[(row * ffn_dim) + j] *
+                       (double)down[down_offset + (j * hidden_dim) + h];
+            }
+            out[(row * hidden_dim) + h] = (float)sum;
+        }
+    }
+}
+
 static int open_cuda_or_skip(yvex_backend **out)
 {
     yvex_backend_options options;
@@ -82,8 +167,15 @@ int yvex_cuda_test_ops(void)
     yvex_device_tensor *matmul_input = NULL;
     yvex_device_tensor *matmul_weight = NULL;
     yvex_device_tensor *matmul_out = NULL;
+    yvex_device_tensor *mlp_input = NULL;
+    yvex_device_tensor *mlp_gate = NULL;
+    yvex_device_tensor *mlp_up = NULL;
+    yvex_device_tensor *mlp_down = NULL;
+    yvex_device_tensor *mlp_intermediate = NULL;
+    yvex_device_tensor *mlp_out = NULL;
     yvex_device_tensor *out = NULL;
     yvex_backend_tensor_desc desc;
+    yvex_mlp_options mlp_options;
     yvex_error err;
     float embedding_data[12] = {
         0.0f, 1.0f, 2.0f, 3.0f,
@@ -129,6 +221,34 @@ int yvex_cuda_test_ops(void)
     };
     float matmul_out_data[6];
     float matmul_expected[6];
+    float mlp_input_data[4] = {0.1f, 0.2f, 0.3f, 0.4f};
+    float mlp_gate_data[12] = {
+        0.01f, 0.02f, 0.03f,
+        0.04f, 0.05f, 0.06f,
+        0.07f, 0.08f, 0.09f,
+        0.10f, 0.11f, 0.12f,
+    };
+    float mlp_up_data[12] = {
+        0.02f, 0.03f, 0.04f,
+        0.05f, 0.06f, 0.07f,
+        0.08f, 0.09f, 0.10f,
+        0.11f, 0.12f, 0.13f,
+    };
+    float mlp_down_data[12] = {
+        0.03f, 0.04f, 0.05f, 0.06f,
+        0.07f, 0.08f, 0.09f, 0.10f,
+        0.11f, 0.12f, 0.13f, 0.14f,
+    };
+    float mlp_out_data[4];
+    float mlp_intermediate_data[3];
+    float mlp_expected[4];
+    float mlp_expected_mid[3];
+    float mlp_routed_gate_data[24];
+    float mlp_routed_up_data[24];
+    float mlp_routed_down_data[24];
+    float mlp_routed_out_data[4];
+    float mlp_routed_expected[4];
+    float mlp_routed_expected_mid[3];
     unsigned int rms_half_values[4] = {0x3c00u, 0x4000u, 0x4200u, 0x4400u};
     unsigned int i;
     unsigned int row;
@@ -148,6 +268,22 @@ int yvex_cuda_test_ops(void)
             matmul_expected[(row * 3u) + col] = (float)sum;
         }
     }
+    for (i = 0; i < 24u; ++i) {
+        mlp_routed_gate_data[i] = (float)(0.01 + ((double)(i + 1u) * 0.001));
+        mlp_routed_up_data[i] = (float)(0.015 + ((double)(i + 1u) * 0.0015));
+        mlp_routed_down_data[i] = (float)(0.02 + ((double)(i + 1u) * 0.0008));
+    }
+    mlp_reference(mlp_input_data, mlp_gate_data, mlp_up_data, mlp_down_data,
+                  1, 4, 3, 0, 0, mlp_expected_mid, mlp_expected);
+    mlp_reference(mlp_input_data, mlp_routed_gate_data, mlp_routed_up_data,
+                  mlp_routed_down_data, 1, 4, 3, 1, 1,
+                  mlp_routed_expected_mid, mlp_routed_expected);
+    memset(&mlp_options, 0, sizeof(mlp_options));
+    mlp_options.batch = 1;
+    mlp_options.hidden_dim = 4;
+    mlp_options.ffn_dim = 3;
+    mlp_options.gated = 1;
+    mlp_options.activation = "silu";
 
     rc = open_cuda_or_skip(&cuda_backend);
     if (rc == 77) return 77;
@@ -166,6 +302,8 @@ int yvex_cuda_test_ops(void)
                      "cuda attention supported");
     YVEX_TEST_ASSERT(yvex_backend_supports(cuda_backend, YVEX_BACKEND_CAP_OP_MATMUL),
                      "cuda matmul supported");
+    YVEX_TEST_ASSERT(yvex_backend_supports(cuda_backend, YVEX_BACKEND_CAP_OP_MLP),
+                     "cuda mlp supported");
 
     make_desc(&desc, "embedding", YVEX_DTYPE_F32, 2, 4, 3, sizeof(embedding_data));
     rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &embedding, &err);
@@ -321,6 +459,111 @@ int yvex_cuda_test_ops(void)
                          "cuda matmul output matches reference");
     }
 
+    make_desc(&desc, "mlp_input", YVEX_DTYPE_F32, 2, 1, 4, sizeof(mlp_input_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &mlp_input, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda mlp input");
+    rc = yvex_backend_tensor_write(cuda_backend, mlp_input,
+                                   mlp_input_data, sizeof(mlp_input_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda mlp input");
+    make_desc(&desc, "mlp_gate", YVEX_DTYPE_F32, 2, 4, 3, sizeof(mlp_gate_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &mlp_gate, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda mlp gate");
+    rc = yvex_backend_tensor_write(cuda_backend, mlp_gate,
+                                   mlp_gate_data, sizeof(mlp_gate_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda mlp gate");
+    make_desc(&desc, "mlp_up", YVEX_DTYPE_F32, 2, 4, 3, sizeof(mlp_up_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &mlp_up, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda mlp up");
+    rc = yvex_backend_tensor_write(cuda_backend, mlp_up,
+                                   mlp_up_data, sizeof(mlp_up_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda mlp up");
+    make_desc(&desc, "mlp_down", YVEX_DTYPE_F32, 2, 3, 4, sizeof(mlp_down_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &mlp_down, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda mlp down");
+    rc = yvex_backend_tensor_write(cuda_backend, mlp_down,
+                                   mlp_down_data, sizeof(mlp_down_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda mlp down");
+    make_desc(&desc, "mlp_intermediate", YVEX_DTYPE_F32, 2, 1, 3,
+              sizeof(mlp_intermediate_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &mlp_intermediate, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda mlp intermediate");
+    make_desc(&desc, "mlp_out", YVEX_DTYPE_F32, 2, 1, 4, sizeof(mlp_out_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &mlp_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda mlp output");
+    rc = yvex_backend_op_mlp(cuda_backend, mlp_input, mlp_gate, mlp_up, mlp_down,
+                             &mlp_options, mlp_intermediate, mlp_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "cuda dense mlp succeeds");
+    rc = yvex_backend_tensor_read(cuda_backend, mlp_out,
+                                  mlp_out_data, sizeof(mlp_out_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read cuda mlp output");
+    for (i = 0; i < 4u; ++i) {
+        YVEX_TEST_ASSERT(float_close(mlp_out_data[i], mlp_expected[i], 0.0001f),
+                         "cuda dense mlp output matches reference");
+    }
+
+    yvex_backend_tensor_free(cuda_backend, mlp_out);
+    yvex_backend_tensor_free(cuda_backend, mlp_intermediate);
+    yvex_backend_tensor_free(cuda_backend, mlp_down);
+    yvex_backend_tensor_free(cuda_backend, mlp_up);
+    yvex_backend_tensor_free(cuda_backend, mlp_gate);
+    mlp_out = NULL;
+    mlp_intermediate = NULL;
+    mlp_down = NULL;
+    mlp_up = NULL;
+    mlp_gate = NULL;
+
+    mlp_options.routed_expert_mode = 1;
+    mlp_options.expert_count = 2;
+    mlp_options.expert_id = 1;
+    make_desc(&desc, "mlp_routed_gate", YVEX_DTYPE_F32, 3, 2, 4,
+              sizeof(mlp_routed_gate_data));
+    desc.dims[2] = 3;
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &mlp_gate, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda routed mlp gate");
+    rc = yvex_backend_tensor_write(cuda_backend, mlp_gate,
+                                   mlp_routed_gate_data, sizeof(mlp_routed_gate_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda routed mlp gate");
+    make_desc(&desc, "mlp_routed_up", YVEX_DTYPE_F32, 3, 2, 4,
+              sizeof(mlp_routed_up_data));
+    desc.dims[2] = 3;
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &mlp_up, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda routed mlp up");
+    rc = yvex_backend_tensor_write(cuda_backend, mlp_up,
+                                   mlp_routed_up_data, sizeof(mlp_routed_up_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda routed mlp up");
+    make_desc(&desc, "mlp_routed_down", YVEX_DTYPE_F32, 3, 2, 3,
+              sizeof(mlp_routed_down_data));
+    desc.dims[2] = 4;
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &mlp_down, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda routed mlp down");
+    rc = yvex_backend_tensor_write(cuda_backend, mlp_down,
+                                   mlp_routed_down_data, sizeof(mlp_routed_down_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda routed mlp down");
+    make_desc(&desc, "mlp_routed_intermediate", YVEX_DTYPE_F32, 2, 1, 3,
+              sizeof(mlp_intermediate_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &mlp_intermediate, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda routed mlp intermediate");
+    make_desc(&desc, "mlp_routed_out", YVEX_DTYPE_F32, 2, 1, 4,
+              sizeof(mlp_routed_out_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &mlp_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda routed mlp output");
+    rc = yvex_backend_op_mlp(cuda_backend, mlp_input, mlp_gate, mlp_up, mlp_down,
+                             &mlp_options, mlp_intermediate, mlp_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "cuda routed mlp succeeds");
+    rc = yvex_backend_tensor_read(cuda_backend, mlp_out,
+                                  mlp_routed_out_data, sizeof(mlp_routed_out_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read cuda routed mlp output");
+    for (i = 0; i < 4u; ++i) {
+        YVEX_TEST_ASSERT(float_close(mlp_routed_out_data[i], mlp_routed_expected[i], 0.0001f),
+                         "cuda routed mlp output matches selected expert reference");
+    }
+
+    yvex_backend_tensor_free(cuda_backend, mlp_out);
+    yvex_backend_tensor_free(cuda_backend, mlp_intermediate);
+    yvex_backend_tensor_free(cuda_backend, mlp_down);
+    yvex_backend_tensor_free(cuda_backend, mlp_up);
+    yvex_backend_tensor_free(cuda_backend, mlp_gate);
+    yvex_backend_tensor_free(cuda_backend, mlp_input);
     yvex_backend_tensor_free(cuda_backend, matmul_out);
     yvex_backend_tensor_free(cuda_backend, matmul_weight);
     yvex_backend_tensor_free(cuda_backend, matmul_input);

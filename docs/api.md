@@ -118,7 +118,7 @@ milestone.
 | Backend residency | Backend discovery, selected tensor allocation, transfer, release, and materialization summaries. |
 | Engine ownership | Engine creation, selected weight attachment, engine-owned lifetime, and graph execution entry points. |
 | Session visibility | Session reports over engine-attached runtime state and minimal session-owned KV state. |
-| Graph execution | Controlled fixture graph results, selected embedding graph results, embedding-plus-RMSNorm segment results, standalone RoPE, attention, and matmul/projection op reports, graph guards, checksums, and max-diff reports. |
+| Graph execution | Controlled fixture graph results, selected embedding graph results, embedding-plus-RMSNorm segment results, standalone RoPE, attention, matmul/projection, and MLP/feed-forward op reports, graph guards, checksums, and max-diff reports. |
 | Token input | Bounded explicit token lists, token validation, token selection, and prompt-to-token boundaries through tokenizer paths. |
 | Prefill state | Segment-summary prefill reports over validated token sequences, with optional minimal session-owned KV binding. |
 | Runtime reporting | Metrics, traces, profiles, integrity reports, materialization reports, graph reports, and failure phases. |
@@ -313,6 +313,18 @@ weight, output, reference, dispatch, allocation, cleanup, checksum, and
 max-diff fields. This API surface does not read model projection weights,
 produce Q/K/V tensors for attention, execute a transformer block, schedule
 layers, run prefill/decode, produce logits, sample, or generate text.
+
+`yvex_backend_op_mlp` is the backend feed-forward primitive used by the
+standalone MLP proof path. It accepts explicit F32 tensors for input,
+gate/up/down weights, an intermediate activation buffer, and output. Dense mode
+uses `input=[batch,hidden_dim]`, `gate/up=[hidden_dim,ffn_dim]`,
+`down=[ffn_dim,hidden_dim]`, `intermediate=[batch,ffn_dim]`, and
+`output=[batch,hidden_dim]`. Routed-expert slice mode uses rank-3 expert weight
+sets and an explicit `expert_id`; it selects one deterministic expert and runs
+the same feed-forward computation. The operation supports the current `silu`
+gated path only. This API surface does not compute router logits, top-k routing,
+real model expert selection, a transformer block, full transformer prefill,
+decode, logits, sampling, or generation.
 
 `yvex_backend_op_attention` is the backend attention primitive used by the
 standalone attention proof path. It accepts explicit F32 query, key, and value

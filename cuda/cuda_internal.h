@@ -79,6 +79,7 @@ typedef struct {
     CUfunction rms_norm_f16_function;
     CUfunction rope_function;
     CUfunction matmul_function;
+    CUfunction mlp_function;
     CUfunction attention_function;
     int module_loaded;
 } yvex_cuda_backend_state;
@@ -138,6 +139,15 @@ int yvex_cuda_op_matmul(yvex_backend *backend,
                         const yvex_device_tensor *weight,
                         yvex_device_tensor *out,
                         yvex_error *err);
+int yvex_cuda_op_mlp(yvex_backend *backend,
+                     const yvex_device_tensor *input,
+                     const yvex_device_tensor *gate_weight,
+                     const yvex_device_tensor *up_weight,
+                     const yvex_device_tensor *down_weight,
+                     const yvex_mlp_options *options,
+                     yvex_device_tensor *intermediate,
+                     yvex_device_tensor *out,
+                     yvex_error *err);
 int yvex_cuda_op_attention(yvex_backend *backend,
                            const yvex_device_tensor *query,
                            const yvex_device_tensor *keys,

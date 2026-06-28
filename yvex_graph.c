@@ -48,6 +48,7 @@ struct yvex_plan {
     int backend_tensor_read_write;
     int backend_op_embed;
     int backend_op_matmul;
+    int backend_op_mlp;
     int backend_op_rms_norm;
     int backend_op_rope;
     int backend_op_attention;
@@ -759,6 +760,7 @@ static int fill_backend_status(yvex_plan *plan, const char *backend_name, yvex_e
         plan->backend_tensor_read_write = yvex_backend_supports(backend, YVEX_BACKEND_CAP_TENSOR_READ_WRITE);
         plan->backend_op_embed = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_EMBED);
         plan->backend_op_matmul = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MATMUL);
+        plan->backend_op_mlp = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MLP);
         plan->backend_op_rms_norm = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_RMS_NORM);
         plan->backend_op_rope = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ROPE);
         plan->backend_op_attention = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ATTENTION);
@@ -890,6 +892,7 @@ int yvex_plan_dump(const yvex_plan *plan, FILE *fp, yvex_error *err)
         fprintf(fp, "  tensor_read_write: %s\n", plan->backend_tensor_read_write ? "yes" : "no");
         fprintf(fp, "  op_embed: %s\n", plan->backend_op_embed ? "yes" : "no");
         fprintf(fp, "  op_matmul: %s\n", plan->backend_op_matmul ? "yes" : "no");
+        fprintf(fp, "  op_mlp: %s\n", plan->backend_op_mlp ? "yes" : "no");
         fprintf(fp, "  op_rms_norm: %s\n", plan->backend_op_rms_norm ? "yes" : "no");
         fprintf(fp, "  op_rope: %s\n", plan->backend_op_rope ? "yes" : "no");
         fprintf(fp, "  op_attention: %s\n", plan->backend_op_attention ? "yes" : "no");

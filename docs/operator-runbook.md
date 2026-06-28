@@ -919,6 +919,92 @@ only; it is not Q/K/V projection readiness, attention integration, transformer
 block execution, layer scheduling, full transformer prefill, decode, logits,
 sampling, generation, or a CUDA transformer backend.
 
+### Execute standalone MLP feed-forward primitive
+
+The MLP primitive runs over explicit deterministic F32 tensors. It proves the
+feed-forward operation shape boundary: gate projection, up projection, SiLU,
+gated multiply, down projection, intermediate buffer, output buffer, backend
+dispatch, reference comparison, cleanup, checksum, and max-diff behavior. It
+does not read real model MLP weights and does not execute a transformer block.
+
+CPU dense proof:
+
+```sh
+./yvex graph \
+  --backend cpu \
+  --execute-op \
+  --op mlp \
+  --hidden-dim 8 \
+  --ffn-dim 16 \
+  --activation silu \
+  --gated
+```
+
+Expected outcome:
+
+```text
+graph_integrity_guard: pass
+graph_execution_phase: complete
+graph_kind: mlp-feed-forward
+op: mlp
+backend: cpu
+dtype: f32
+hidden_dim: 8
+ffn_dim: 16
+activation: silu
+gated: true
+routed_expert_mode: false
+dispatch_attempted: true
+reference_attempted: true
+max_abs_diff: 0
+router_logits_ready: false
+top_k_routing_ready: false
+transformer_block_ready: false
+decode_ready: false
+logits_ready: false
+generation_ready: false
+status: graph-op-executed
+```
+
+CPU routed expert-slice proof:
+
+```sh
+./yvex graph \
+  --backend cpu \
+  --execute-op \
+  --op mlp \
+  --hidden-dim 8 \
+  --ffn-dim 16 \
+  --activation silu \
+  --gated \
+  --experts 2 \
+  --expert-id 1
+```
+
+Expected outcome: `graph_kind: mlp-routed-expert`,
+`routed_expert_mode: true`, `expert_count: 2`, `expert_id: 1`, and
+`status: graph-op-executed`. This selects a deterministic expert weight slice;
+it is not learned routing, top-k routing, load balancing, or real MoE expert
+execution.
+
+CUDA-capable hosts can run the dense proof on CUDA:
+
+```sh
+./yvex graph \
+  --backend cuda \
+  --execute-op \
+  --op mlp \
+  --hidden-dim 8 \
+  --ffn-dim 16 \
+  --activation silu \
+  --gated
+```
+
+Expected outcome: CUDA reports `mlp_cuda_parity: pass` with max absolute diff
+inside tolerance. This is standalone F32 MLP primitive parity only; it is not
+transformer block execution, layer scheduling, full transformer prefill,
+decode, logits, sampling, generation, or a CUDA transformer backend.
+
 ## 14. Execute a deterministic fixture graph
 
 M4 fixture execution uses a tiny controlled GGUF so output can be checked

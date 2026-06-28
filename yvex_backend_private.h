@@ -60,6 +60,15 @@ typedef struct yvex_backend_vtable {
                      const yvex_device_tensor *weight,
                      yvex_device_tensor *out,
                      yvex_error *err);
+    int (*op_mlp)(yvex_backend *backend,
+                  const yvex_device_tensor *input,
+                  const yvex_device_tensor *gate_weight,
+                  const yvex_device_tensor *up_weight,
+                  const yvex_device_tensor *down_weight,
+                  const yvex_mlp_options *options,
+                  yvex_device_tensor *intermediate,
+                  yvex_device_tensor *out,
+                  yvex_error *err);
     int (*op_attention)(yvex_backend *backend,
                         const yvex_device_tensor *query,
                         const yvex_device_tensor *keys,

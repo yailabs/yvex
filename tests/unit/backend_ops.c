@@ -14,6 +14,7 @@
  *   - yvex_backend_op_embed
  *   - yvex_backend_op_rope
  *   - yvex_backend_op_matmul
+ *   - yvex_backend_op_mlp
  *   - yvex_backend_op_attention
  *
  * Commands:
@@ -62,6 +63,91 @@ static int float_close(float a, float b, float tolerance)
     return diff <= tolerance;
 }
 
+static double test_exp_double(double x)
+{
+    const double ln2 = 0.69314718055994530942;
+    double term;
+    double sum;
+    int n = 0;
+    unsigned int i;
+
+    if (x < -60.0) {
+        return 0.0;
+    }
+    if (x > 60.0) {
+        x = 60.0;
+    }
+    while (x > 0.5) {
+        x -= ln2;
+        ++n;
+    }
+    while (x < -0.5) {
+        x += ln2;
+        --n;
+    }
+    term = 1.0;
+    sum = 1.0;
+    for (i = 1u; i <= 18u; ++i) {
+        term *= x / (double)i;
+        sum += term;
+    }
+    while (n > 0) {
+        sum *= 2.0;
+        --n;
+    }
+    while (n < 0) {
+        sum *= 0.5;
+        ++n;
+    }
+    return sum;
+}
+
+static double test_silu_double(double x)
+{
+    return x / (1.0 + test_exp_double(-x));
+}
+
+static void mlp_reference(const float *input,
+                          const float *gate,
+                          const float *up,
+                          const float *down,
+                          unsigned long long batch,
+                          unsigned long long hidden_dim,
+                          unsigned long long ffn_dim,
+                          unsigned long long expert_id,
+                          int routed,
+                          float *intermediate,
+                          float *out)
+{
+    unsigned long long gate_offset = routed ? expert_id * hidden_dim * ffn_dim : 0ull;
+    unsigned long long down_offset = routed ? expert_id * ffn_dim * hidden_dim : 0ull;
+    unsigned long long row;
+    unsigned long long h;
+    unsigned long long j;
+
+    for (row = 0; row < batch; ++row) {
+        for (j = 0; j < ffn_dim; ++j) {
+            double gate_sum = 0.0;
+            double up_sum = 0.0;
+            for (h = 0; h < hidden_dim; ++h) {
+                double x = (double)input[(row * hidden_dim) + h];
+                gate_sum += x * (double)gate[gate_offset + (h * ffn_dim) + j];
+                up_sum += x * (double)up[gate_offset + (h * ffn_dim) + j];
+            }
+            intermediate[(row * ffn_dim) + j] =
+                (float)(test_silu_double(gate_sum) * up_sum);
+        }
+        for (h = 0; h < hidden_dim; ++h) {
+            double sum = 0.0;
+            for (j = 0; j < ffn_dim; ++j) {
+                sum += (double)intermediate[(row * ffn_dim) + j] *
+                       (double)down[down_offset + (j * hidden_dim) + h];
+            }
+            out[(row * hidden_dim) + h] = (float)sum;
+        }
+    }
+}
+
 static int test_capabilities(void)
 {
     yvex_backend *backend = NULL;
@@ -86,6 +172,8 @@ static int test_capabilities(void)
                      "supports attention");
     YVEX_TEST_ASSERT(yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MATMUL),
                      "supports matmul");
+    YVEX_TEST_ASSERT(yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MLP),
+                     "supports mlp");
     yvex_backend_close(backend);
     return 0;
 }
@@ -588,6 +676,182 @@ static int test_matmul_success_and_failures(void)
     return 0;
 }
 
+static int test_mlp_success_and_failures(void)
+{
+    yvex_backend *backend = NULL;
+    yvex_device_tensor *input = NULL;
+    yvex_device_tensor *gate = NULL;
+    yvex_device_tensor *up = NULL;
+    yvex_device_tensor *down = NULL;
+    yvex_device_tensor *intermediate = NULL;
+    yvex_device_tensor *out = NULL;
+    yvex_backend_tensor_desc desc;
+    yvex_mlp_options options;
+    yvex_error err;
+    float dense_input[4] = {0.1f, 0.2f, 0.3f, 0.4f};
+    float dense_gate[12] = {
+        0.01f, 0.02f, 0.03f,
+        0.04f, 0.05f, 0.06f,
+        0.07f, 0.08f, 0.09f,
+        0.10f, 0.11f, 0.12f,
+    };
+    float dense_up[12] = {
+        0.02f, 0.03f, 0.04f,
+        0.05f, 0.06f, 0.07f,
+        0.08f, 0.09f, 0.10f,
+        0.11f, 0.12f, 0.13f,
+    };
+    float dense_down[12] = {
+        0.03f, 0.04f, 0.05f, 0.06f,
+        0.07f, 0.08f, 0.09f, 0.10f,
+        0.11f, 0.12f, 0.13f, 0.14f,
+    };
+    float dense_intermediate[3];
+    float dense_out[4];
+    float dense_expected_mid[3];
+    float dense_expected[4];
+    float routed_gate[24];
+    float routed_up[24];
+    float routed_down[24];
+    float routed_out[4];
+    float routed_expected_mid[3];
+    float routed_expected[4];
+    unsigned int i;
+    int rc;
+
+    for (i = 0; i < 24u; ++i) {
+        routed_gate[i] = (float)(0.01 + ((double)(i + 1u) * 0.001));
+        routed_up[i] = (float)(0.015 + ((double)(i + 1u) * 0.0015));
+        routed_down[i] = (float)(0.02 + ((double)(i + 1u) * 0.0008));
+    }
+    mlp_reference(dense_input, dense_gate, dense_up, dense_down,
+                  1, 4, 3, 0, 0, dense_expected_mid, dense_expected);
+    mlp_reference(dense_input, routed_gate, routed_up, routed_down,
+                  1, 4, 3, 1, 1, routed_expected_mid, routed_expected);
+
+    memset(&options, 0, sizeof(options));
+    options.batch = 1;
+    options.hidden_dim = 4;
+    options.ffn_dim = 3;
+    options.gated = 1;
+    options.activation = "silu";
+
+    YVEX_TEST_ASSERT(yvex_backend_open_cpu(&backend, &err) == YVEX_OK, "open cpu mlp");
+
+    make_desc(&desc, "mlp_input", YVEX_DTYPE_F32, 2, 1, 4, sizeof(dense_input));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &input, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate mlp input");
+    rc = yvex_backend_tensor_write(backend, input, dense_input, sizeof(dense_input), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write mlp input");
+    make_desc(&desc, "mlp_gate", YVEX_DTYPE_F32, 2, 4, 3, sizeof(dense_gate));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &gate, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate mlp gate");
+    rc = yvex_backend_tensor_write(backend, gate, dense_gate, sizeof(dense_gate), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write mlp gate");
+    make_desc(&desc, "mlp_up", YVEX_DTYPE_F32, 2, 4, 3, sizeof(dense_up));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &up, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate mlp up");
+    rc = yvex_backend_tensor_write(backend, up, dense_up, sizeof(dense_up), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write mlp up");
+    make_desc(&desc, "mlp_down", YVEX_DTYPE_F32, 2, 3, 4, sizeof(dense_down));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &down, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate mlp down");
+    rc = yvex_backend_tensor_write(backend, down, dense_down, sizeof(dense_down), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write mlp down");
+    make_desc(&desc, "mlp_intermediate", YVEX_DTYPE_F32, 2, 1, 3, sizeof(dense_intermediate));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &intermediate, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate mlp intermediate");
+    make_desc(&desc, "mlp_out", YVEX_DTYPE_F32, 2, 1, 4, sizeof(dense_out));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate mlp out");
+
+    rc = yvex_backend_op_mlp(backend, input, gate, up, down, &options,
+                             intermediate, out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "dense mlp succeeds");
+    rc = yvex_backend_tensor_read(backend, intermediate, dense_intermediate,
+                                  sizeof(dense_intermediate), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read dense mlp intermediate");
+    rc = yvex_backend_tensor_read(backend, out, dense_out, sizeof(dense_out), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read dense mlp output");
+    for (i = 0; i < 3u; ++i) {
+        YVEX_TEST_ASSERT(float_close(dense_intermediate[i], dense_expected_mid[i], 0.000001f),
+                         "dense mlp intermediate matches reference");
+    }
+    for (i = 0; i < 4u; ++i) {
+        YVEX_TEST_ASSERT(float_close(dense_out[i], dense_expected[i], 0.000001f),
+                         "dense mlp output matches reference");
+    }
+
+    options.activation = "relu";
+    rc = yvex_backend_op_mlp(backend, input, gate, up, down, &options,
+                             intermediate, out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_UNSUPPORTED, "mlp rejects unsupported activation");
+    options.activation = "silu";
+
+    yvex_backend_tensor_free(backend, out);
+    yvex_backend_tensor_free(backend, intermediate);
+    yvex_backend_tensor_free(backend, down);
+    yvex_backend_tensor_free(backend, up);
+    yvex_backend_tensor_free(backend, gate);
+    out = NULL;
+    intermediate = NULL;
+    down = NULL;
+    up = NULL;
+    gate = NULL;
+
+    options.routed_expert_mode = 1;
+    options.expert_count = 2;
+    options.expert_id = 1;
+
+    make_desc(&desc, "mlp_routed_gate", YVEX_DTYPE_F32, 3, 2, 4, sizeof(routed_gate));
+    desc.dims[2] = 3;
+    rc = yvex_backend_tensor_alloc(backend, &desc, &gate, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate routed mlp gate");
+    rc = yvex_backend_tensor_write(backend, gate, routed_gate, sizeof(routed_gate), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write routed mlp gate");
+    make_desc(&desc, "mlp_routed_up", YVEX_DTYPE_F32, 3, 2, 4, sizeof(routed_up));
+    desc.dims[2] = 3;
+    rc = yvex_backend_tensor_alloc(backend, &desc, &up, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate routed mlp up");
+    rc = yvex_backend_tensor_write(backend, up, routed_up, sizeof(routed_up), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write routed mlp up");
+    make_desc(&desc, "mlp_routed_down", YVEX_DTYPE_F32, 3, 2, 3, sizeof(routed_down));
+    desc.dims[2] = 4;
+    rc = yvex_backend_tensor_alloc(backend, &desc, &down, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate routed mlp down");
+    rc = yvex_backend_tensor_write(backend, down, routed_down, sizeof(routed_down), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write routed mlp down");
+    make_desc(&desc, "mlp_routed_intermediate", YVEX_DTYPE_F32, 2, 1, 3, sizeof(dense_intermediate));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &intermediate, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate routed mlp intermediate");
+    make_desc(&desc, "mlp_routed_out", YVEX_DTYPE_F32, 2, 1, 4, sizeof(routed_out));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate routed mlp out");
+
+    rc = yvex_backend_op_mlp(backend, input, gate, up, down, &options,
+                             intermediate, out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "routed mlp succeeds");
+    rc = yvex_backend_tensor_read(backend, out, routed_out, sizeof(routed_out), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read routed mlp output");
+    for (i = 0; i < 4u; ++i) {
+        YVEX_TEST_ASSERT(float_close(routed_out[i], routed_expected[i], 0.000001f),
+                         "routed mlp output matches selected expert reference");
+    }
+    options.expert_id = 2;
+    rc = yvex_backend_op_mlp(backend, input, gate, up, down, &options,
+                             intermediate, out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS, "routed mlp rejects expert id out of range");
+
+    yvex_backend_tensor_free(backend, out);
+    yvex_backend_tensor_free(backend, intermediate);
+    yvex_backend_tensor_free(backend, down);
+    yvex_backend_tensor_free(backend, up);
+    yvex_backend_tensor_free(backend, gate);
+    yvex_backend_tensor_free(backend, input);
+    yvex_backend_close(backend);
+    return 0;
+}
+
 int yvex_test_backend_ops(void)
 {
     if (test_capabilities() != 0) return 1;
@@ -598,6 +862,7 @@ int yvex_test_backend_ops(void)
     if (test_rope_failures() != 0) return 1;
     if (test_attention_success_and_bounds() != 0) return 1;
     if (test_matmul_success_and_failures() != 0) return 1;
+    if (test_mlp_success_and_failures() != 0) return 1;
     if (test_embed_failures() != 0) return 1;
     return 0;
 }

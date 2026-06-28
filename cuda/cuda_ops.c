@@ -8,6 +8,7 @@
 #include "cuda_internal.h"
 #include <limits.h>
 #include <stdint.h>
+#include <string.h>
 #include "cuda_kernels.h"
 
 
@@ -122,6 +123,23 @@ static const char yvex_cuda_kernels_ptx[] =
 "    .param .u64 p_m,\n"
 "    .param .u64 p_k,\n"
 "    .param .u64 p_n\n"
+")\n"
+"{\n"
+"    ret;\n"
+"}\n"
+".visible .entry yvex_mlp_f32(\n"
+"    .param .u64 p_input,\n"
+"    .param .u64 p_gate_weight,\n"
+"    .param .u64 p_up_weight,\n"
+"    .param .u64 p_down_weight,\n"
+"    .param .u64 p_intermediate,\n"
+"    .param .u64 p_out,\n"
+"    .param .u64 p_batch,\n"
+"    .param .u64 p_hidden_dim,\n"
+"    .param .u64 p_ffn_dim,\n"
+"    .param .u64 p_expert_count,\n"
+"    .param .u64 p_expert_id,\n"
+"    .param .u32 p_routed_expert_mode\n"
 ")\n"
 "{\n"
 "    ret;\n"
@@ -384,6 +402,166 @@ static int cuda_matmul_validate(const yvex_backend *backend,
     return YVEX_OK;
 }
 
+static int cuda_mlp_mul3(unsigned long long a,
+                         unsigned long long b,
+                         unsigned long long c,
+                         unsigned long long *out)
+{
+    unsigned long long ab;
+
+    if (a > ULLONG_MAX / b) {
+        return 0;
+    }
+    ab = a * b;
+    if (ab > ULLONG_MAX / c) {
+        return 0;
+    }
+    *out = ab * c;
+    return 1;
+}
+
+static int cuda_mlp_validate(const yvex_backend *backend,
+                             const yvex_device_tensor *input,
+                             const yvex_device_tensor *gate_weight,
+                             const yvex_device_tensor *up_weight,
+                             const yvex_device_tensor *down_weight,
+                             const yvex_mlp_options *options,
+                             const yvex_device_tensor *intermediate,
+                             const yvex_device_tensor *out,
+                             unsigned long long *batch_out,
+                             unsigned long long *hidden_dim_out,
+                             unsigned long long *ffn_dim_out,
+                             const char *where,
+                             yvex_error *err)
+{
+    unsigned long long batch;
+    unsigned long long hidden_dim;
+    unsigned long long ffn_dim;
+    unsigned long long input_elements;
+    unsigned long long intermediate_elements;
+    unsigned long long output_elements;
+    unsigned long long up_elements;
+    unsigned long long down_elements;
+    unsigned long long routed_up_elements;
+    unsigned long long routed_down_elements;
+
+    if (!yvex_backend_tensor_owner_is(backend, input) ||
+        !yvex_backend_tensor_owner_is(backend, gate_weight) ||
+        !yvex_backend_tensor_owner_is(backend, up_weight) ||
+        !yvex_backend_tensor_owner_is(backend, down_weight) ||
+        !yvex_backend_tensor_owner_is(backend, intermediate) ||
+        !yvex_backend_tensor_owner_is(backend, out)) {
+        yvex_error_set(err, YVEX_ERR_STATE, where,
+                       "input, weights, intermediate, and output tensors must belong to this backend");
+        return YVEX_ERR_STATE;
+    }
+    if (input->dtype != YVEX_DTYPE_F32 ||
+        gate_weight->dtype != YVEX_DTYPE_F32 ||
+        up_weight->dtype != YVEX_DTYPE_F32 ||
+        down_weight->dtype != YVEX_DTYPE_F32 ||
+        intermediate->dtype != YVEX_DTYPE_F32 ||
+        out->dtype != YVEX_DTYPE_F32) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, where,
+                       "MLP primitive supports F32 input, weights, intermediate, and output");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (!options || options->batch == 0 || options->hidden_dim == 0 ||
+        options->ffn_dim == 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where, "mlp-zero-dimension");
+        return YVEX_ERR_FORMAT;
+    }
+    if (!options->gated || !options->activation ||
+        strcmp(options->activation, "silu") != 0) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, where,
+                       "mlp-unsupported-activation");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (options->routed_expert_mode &&
+        (options->expert_count == 0 || options->expert_id >= options->expert_count)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "mlp-expert-id-out-of-range");
+        return YVEX_ERR_BOUNDS;
+    }
+
+    batch = options->batch;
+    hidden_dim = options->hidden_dim;
+    ffn_dim = options->ffn_dim;
+    if (batch > ULLONG_MAX / hidden_dim ||
+        batch > ULLONG_MAX / ffn_dim ||
+        hidden_dim > ULLONG_MAX / ffn_dim ||
+        ffn_dim > ULLONG_MAX / hidden_dim) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "mlp-element-count-overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    input_elements = batch * hidden_dim;
+    intermediate_elements = batch * ffn_dim;
+    output_elements = input_elements;
+    up_elements = hidden_dim * ffn_dim;
+    down_elements = ffn_dim * hidden_dim;
+
+    if (input->rank != 2 || input->dims[0] != batch || input->dims[1] != hidden_dim ||
+        intermediate->rank != 2 || intermediate->dims[0] != batch ||
+        intermediate->dims[1] != ffn_dim ||
+        out->rank != 2 || out->dims[0] != batch || out->dims[1] != hidden_dim) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "mlp input/intermediate/output shape mismatch");
+        return YVEX_ERR_FORMAT;
+    }
+    if (options->routed_expert_mode) {
+        if (!cuda_mlp_mul3(options->expert_count, hidden_dim, ffn_dim,
+                           &routed_up_elements) ||
+            !cuda_mlp_mul3(options->expert_count, ffn_dim, hidden_dim,
+                           &routed_down_elements)) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, where, "mlp-element-count-overflow");
+            return YVEX_ERR_BOUNDS;
+        }
+        if (gate_weight->rank != 3 || up_weight->rank != 3 || down_weight->rank != 3 ||
+            gate_weight->dims[0] != options->expert_count ||
+            gate_weight->dims[1] != hidden_dim || gate_weight->dims[2] != ffn_dim ||
+            up_weight->dims[0] != options->expert_count ||
+            up_weight->dims[1] != hidden_dim || up_weight->dims[2] != ffn_dim ||
+            down_weight->dims[0] != options->expert_count ||
+            down_weight->dims[1] != ffn_dim || down_weight->dims[2] != hidden_dim) {
+            yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                           "mlp routed weights must have dims [experts, hidden_dim, ffn_dim] and [experts, ffn_dim, hidden_dim]");
+            return YVEX_ERR_FORMAT;
+        }
+        if (!tensor_is_f32_bytes(gate_weight, routed_up_elements) ||
+            !tensor_is_f32_bytes(up_weight, routed_up_elements) ||
+            !tensor_is_f32_bytes(down_weight, routed_down_elements)) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, where,
+                           "mlp routed weight bytes must match F32 shape accounting");
+            return YVEX_ERR_BOUNDS;
+        }
+    } else {
+        if (gate_weight->rank != 2 || up_weight->rank != 2 || down_weight->rank != 2 ||
+            gate_weight->dims[0] != hidden_dim || gate_weight->dims[1] != ffn_dim ||
+            up_weight->dims[0] != hidden_dim || up_weight->dims[1] != ffn_dim ||
+            down_weight->dims[0] != ffn_dim || down_weight->dims[1] != hidden_dim) {
+            yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                           "mlp dense weights must have dims [hidden_dim, ffn_dim] and [ffn_dim, hidden_dim]");
+            return YVEX_ERR_FORMAT;
+        }
+        if (!tensor_is_f32_bytes(gate_weight, up_elements) ||
+            !tensor_is_f32_bytes(up_weight, up_elements) ||
+            !tensor_is_f32_bytes(down_weight, down_elements)) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, where,
+                           "mlp dense weight bytes must match F32 shape accounting");
+            return YVEX_ERR_BOUNDS;
+        }
+    }
+    if (!tensor_is_f32_bytes(input, input_elements) ||
+        !tensor_is_f32_bytes(intermediate, intermediate_elements) ||
+        !tensor_is_f32_bytes(out, output_elements)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where,
+                       "mlp tensor bytes must match F32 shape accounting");
+        return YVEX_ERR_BOUNDS;
+    }
+    *batch_out = batch;
+    *hidden_dim_out = hidden_dim;
+    *ffn_dim_out = ffn_dim;
+    return YVEX_OK;
+}
+
 static int ensure_kernel_module(yvex_cuda_backend_state *state, const char *where, yvex_error *err)
 {
     int rc;
@@ -510,6 +688,29 @@ static int ensure_matmul_kernel(yvex_cuda_backend_state *state, yvex_error *err)
                           "cuda.matmul.load_function", err);
     if (rc != YVEX_OK) {
         state->matmul_function = NULL;
+        return rc;
+    }
+    return YVEX_OK;
+}
+
+static int ensure_mlp_kernel(yvex_cuda_backend_state *state, yvex_error *err)
+{
+    int rc;
+
+    rc = ensure_kernel_module(state, "cuda.kernels.load_module", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (state->mlp_function) {
+        return YVEX_OK;
+    }
+    rc = yvex_cuda_status(&state->driver,
+                          state->driver.cuModuleGetFunction(&state->mlp_function,
+                                                            state->module,
+                                                            "yvex_mlp_f32"),
+                          "cuda.mlp.load_function", err);
+    if (rc != YVEX_OK) {
+        state->mlp_function = NULL;
         return rc;
     }
     return YVEX_OK;
@@ -963,6 +1164,94 @@ int yvex_cuda_op_matmul(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
+    out->is_written = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_cuda_op_mlp(yvex_backend *backend,
+                     const yvex_device_tensor *input,
+                     const yvex_device_tensor *gate_weight,
+                     const yvex_device_tensor *up_weight,
+                     const yvex_device_tensor *down_weight,
+                     const yvex_mlp_options *options,
+                     yvex_device_tensor *intermediate,
+                     yvex_device_tensor *out,
+                     yvex_error *err)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    CUdeviceptr input_ptr;
+    CUdeviceptr gate_ptr;
+    CUdeviceptr up_ptr;
+    CUdeviceptr down_ptr;
+    CUdeviceptr intermediate_ptr;
+    CUdeviceptr out_ptr;
+    unsigned long long batch;
+    unsigned long long hidden_dim;
+    unsigned long long ffn_dim;
+    unsigned long long expert_count;
+    unsigned long long expert_id;
+    int routed;
+    void *params[12];
+    int rc;
+
+    if (!state) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_op_mlp",
+                       "CUDA backend state is missing");
+        return YVEX_ERR_STATE;
+    }
+    rc = cuda_mlp_validate(backend, input, gate_weight, up_weight, down_weight,
+                           options, intermediate, out, &batch, &hidden_dim,
+                           &ffn_dim, "yvex_backend_op_mlp", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    rc = yvex_cuda_set_current(backend, "yvex_backend_op_mlp", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = ensure_mlp_kernel(state, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    input_ptr = yvex_cuda_tensor_ptr(input);
+    gate_ptr = yvex_cuda_tensor_ptr(gate_weight);
+    up_ptr = yvex_cuda_tensor_ptr(up_weight);
+    down_ptr = yvex_cuda_tensor_ptr(down_weight);
+    intermediate_ptr = yvex_cuda_tensor_ptr(intermediate);
+    out_ptr = yvex_cuda_tensor_ptr(out);
+    expert_count = options->expert_count;
+    expert_id = options->expert_id;
+    routed = options->routed_expert_mode ? 1 : 0;
+    params[0] = &input_ptr;
+    params[1] = &gate_ptr;
+    params[2] = &up_ptr;
+    params[3] = &down_ptr;
+    params[4] = &intermediate_ptr;
+    params[5] = &out_ptr;
+    params[6] = &batch;
+    params[7] = &hidden_dim;
+    params[8] = &ffn_dim;
+    params[9] = &expert_count;
+    params[10] = &expert_id;
+    params[11] = &routed;
+
+    rc = yvex_cuda_status(&state->driver,
+                          state->driver.cuLaunchKernel(state->mlp_function,
+                                                       1, 1, 1,
+                                                       1, 1, 1,
+                                                       0, NULL, params, NULL),
+                          "cuda.mlp.launch", err);
+    if (rc == YVEX_OK) {
+        rc = yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
+                              "cuda.mlp.sync", err);
+    }
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    intermediate->is_written = 1;
     out->is_written = 1;
     yvex_error_clear(err);
     return YVEX_OK;

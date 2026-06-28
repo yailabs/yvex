@@ -57,6 +57,7 @@ const char *yvex_backend_capability_name(yvex_backend_capability capability)
     case YVEX_BACKEND_CAP_TENSOR_READ_WRITE: return "tensor_read_write";
     case YVEX_BACKEND_CAP_OP_EMBED: return "op_embed";
     case YVEX_BACKEND_CAP_OP_MATMUL: return "op_matmul";
+    case YVEX_BACKEND_CAP_OP_MLP: return "op_mlp";
     case YVEX_BACKEND_CAP_OP_RMS_NORM: return "op_rms_norm";
     case YVEX_BACKEND_CAP_OP_ROPE: return "op_rope";
     case YVEX_BACKEND_CAP_OP_ATTENTION: return "op_attention";
@@ -410,6 +411,31 @@ int yvex_backend_op_matmul(yvex_backend *backend,
     return backend->vtable->op_matmul(backend, input, weight, out, err);
 }
 
+int yvex_backend_op_mlp(yvex_backend *backend,
+                        const yvex_device_tensor *input,
+                        const yvex_device_tensor *gate_weight,
+                        const yvex_device_tensor *up_weight,
+                        const yvex_device_tensor *down_weight,
+                        const yvex_mlp_options *options,
+                        yvex_device_tensor *intermediate,
+                        yvex_device_tensor *out,
+                        yvex_error *err)
+{
+    if (!backend || !input || !gate_weight || !up_weight || !down_weight ||
+        !options || !intermediate || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_mlp",
+                       "backend, input, weights, options, intermediate, and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (!backend->vtable || !backend->vtable->op_mlp) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_mlp",
+                       "backend does not support MLP op");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    return backend->vtable->op_mlp(backend, input, gate_weight, up_weight,
+                                   down_weight, options, intermediate, out, err);
+}
+
 int yvex_backend_op_attention(yvex_backend *backend,
                               const yvex_device_tensor *query,
                               const yvex_device_tensor *keys,
@@ -499,6 +525,15 @@ int yvex_cpu_op_matmul(yvex_backend *backend,
                        const yvex_device_tensor *weight,
                        yvex_device_tensor *out,
                        yvex_error *err);
+int yvex_cpu_op_mlp(yvex_backend *backend,
+                    const yvex_device_tensor *input,
+                    const yvex_device_tensor *gate_weight,
+                    const yvex_device_tensor *up_weight,
+                    const yvex_device_tensor *down_weight,
+                    const yvex_mlp_options *options,
+                    yvex_device_tensor *intermediate,
+                    yvex_device_tensor *out,
+                    yvex_error *err);
 int yvex_cpu_op_attention(yvex_backend *backend,
                           const yvex_device_tensor *query,
                           const yvex_device_tensor *keys,
@@ -568,6 +603,7 @@ static int cpu_supports(const yvex_backend *backend, yvex_backend_capability cap
     case YVEX_BACKEND_CAP_TENSOR_READ_WRITE:
     case YVEX_BACKEND_CAP_OP_EMBED:
     case YVEX_BACKEND_CAP_OP_MATMUL:
+    case YVEX_BACKEND_CAP_OP_MLP:
     case YVEX_BACKEND_CAP_OP_RMS_NORM:
     case YVEX_BACKEND_CAP_OP_ROPE:
     case YVEX_BACKEND_CAP_OP_ATTENTION:
@@ -591,6 +627,7 @@ static const yvex_backend_vtable cpu_vtable = {
     yvex_cpu_op_rms_norm,
     yvex_cpu_op_rope,
     yvex_cpu_op_matmul,
+    yvex_cpu_op_mlp,
     yvex_cpu_op_attention,
 };
 
@@ -1008,6 +1045,190 @@ static int backend_matmul_validate(const yvex_backend *backend,
     return YVEX_OK;
 }
 
+static double backend_silu_double(double x)
+{
+    return x / (1.0 + backend_exp_double(-x));
+}
+
+static int backend_mlp_mul3(unsigned long long a,
+                            unsigned long long b,
+                            unsigned long long c,
+                            unsigned long long *out)
+{
+    unsigned long long ab;
+
+    if (a > ULLONG_MAX / b) {
+        return 0;
+    }
+    ab = a * b;
+    if (ab > ULLONG_MAX / c) {
+        return 0;
+    }
+    *out = ab * c;
+    return 1;
+}
+
+static int backend_mlp_validate(const yvex_backend *backend,
+                                const yvex_device_tensor *input,
+                                const yvex_device_tensor *gate_weight,
+                                const yvex_device_tensor *up_weight,
+                                const yvex_device_tensor *down_weight,
+                                const yvex_mlp_options *options,
+                                const yvex_device_tensor *intermediate,
+                                const yvex_device_tensor *out,
+                                unsigned long long *batch_out,
+                                unsigned long long *hidden_dim_out,
+                                unsigned long long *ffn_dim_out,
+                                unsigned long long *gate_offset_out,
+                                unsigned long long *up_offset_out,
+                                unsigned long long *down_offset_out,
+                                const char *where,
+                                yvex_error *err)
+{
+    unsigned long long batch;
+    unsigned long long hidden_dim;
+    unsigned long long ffn_dim;
+    unsigned long long input_elements;
+    unsigned long long intermediate_elements;
+    unsigned long long output_elements;
+    unsigned long long dense_up_elements;
+    unsigned long long down_elements;
+    unsigned long long routed_up_elements;
+    unsigned long long routed_down_elements;
+    unsigned long long gate_offset = 0ull;
+    unsigned long long up_offset = 0ull;
+    unsigned long long down_offset = 0ull;
+
+    if (!yvex_backend_tensor_owner_is(backend, input) ||
+        !yvex_backend_tensor_owner_is(backend, gate_weight) ||
+        !yvex_backend_tensor_owner_is(backend, up_weight) ||
+        !yvex_backend_tensor_owner_is(backend, down_weight) ||
+        !yvex_backend_tensor_owner_is(backend, intermediate) ||
+        !yvex_backend_tensor_owner_is(backend, out)) {
+        yvex_error_set(err, YVEX_ERR_STATE, where,
+                       "input, weights, intermediate, and output tensors must belong to this backend");
+        return YVEX_ERR_STATE;
+    }
+    if (input->dtype != YVEX_DTYPE_F32 ||
+        gate_weight->dtype != YVEX_DTYPE_F32 ||
+        up_weight->dtype != YVEX_DTYPE_F32 ||
+        down_weight->dtype != YVEX_DTYPE_F32 ||
+        intermediate->dtype != YVEX_DTYPE_F32 ||
+        out->dtype != YVEX_DTYPE_F32) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, where,
+                       "MLP primitive supports F32 input, weights, intermediate, and output");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (!options || options->batch == 0 || options->hidden_dim == 0 ||
+        options->ffn_dim == 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where, "mlp-zero-dimension");
+        return YVEX_ERR_FORMAT;
+    }
+    if (!options->gated || !options->activation ||
+        strcmp(options->activation, "silu") != 0) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, where,
+                       "mlp-unsupported-activation");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (options->routed_expert_mode) {
+        if (options->expert_count == 0 || options->expert_id >= options->expert_count) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, where, "mlp-expert-id-out-of-range");
+            return YVEX_ERR_BOUNDS;
+        }
+    }
+
+    batch = options->batch;
+    hidden_dim = options->hidden_dim;
+    ffn_dim = options->ffn_dim;
+    if (batch > ULLONG_MAX / hidden_dim ||
+        batch > ULLONG_MAX / ffn_dim ||
+        hidden_dim > ULLONG_MAX / ffn_dim) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "mlp-element-count-overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    input_elements = batch * hidden_dim;
+    intermediate_elements = batch * ffn_dim;
+    output_elements = input_elements;
+    dense_up_elements = hidden_dim * ffn_dim;
+    if (ffn_dim > ULLONG_MAX / hidden_dim) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "mlp-element-count-overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    down_elements = ffn_dim * hidden_dim;
+
+    if (input->rank != 2 || input->dims[0] != batch || input->dims[1] != hidden_dim ||
+        intermediate->rank != 2 || intermediate->dims[0] != batch ||
+        intermediate->dims[1] != ffn_dim ||
+        out->rank != 2 || out->dims[0] != batch || out->dims[1] != hidden_dim) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                       "mlp input/intermediate/output shape mismatch");
+        return YVEX_ERR_FORMAT;
+    }
+
+    if (options->routed_expert_mode) {
+        if (!backend_mlp_mul3(options->expert_count, hidden_dim, ffn_dim,
+                              &routed_up_elements) ||
+            !backend_mlp_mul3(options->expert_count, ffn_dim, hidden_dim,
+                              &routed_down_elements)) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, where, "mlp-element-count-overflow");
+            return YVEX_ERR_BOUNDS;
+        }
+        if (gate_weight->rank != 3 || up_weight->rank != 3 || down_weight->rank != 3 ||
+            gate_weight->dims[0] != options->expert_count ||
+            gate_weight->dims[1] != hidden_dim || gate_weight->dims[2] != ffn_dim ||
+            up_weight->dims[0] != options->expert_count ||
+            up_weight->dims[1] != hidden_dim || up_weight->dims[2] != ffn_dim ||
+            down_weight->dims[0] != options->expert_count ||
+            down_weight->dims[1] != ffn_dim || down_weight->dims[2] != hidden_dim) {
+            yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                           "mlp routed weights must have dims [experts, hidden_dim, ffn_dim] and [experts, ffn_dim, hidden_dim]");
+            return YVEX_ERR_FORMAT;
+        }
+        if (!tensor_is_f32_bytes(gate_weight, routed_up_elements) ||
+            !tensor_is_f32_bytes(up_weight, routed_up_elements) ||
+            !tensor_is_f32_bytes(down_weight, routed_down_elements)) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, where,
+                           "mlp routed weight bytes must match F32 shape accounting");
+            return YVEX_ERR_BOUNDS;
+        }
+        gate_offset = options->expert_id * dense_up_elements;
+        up_offset = gate_offset;
+        down_offset = options->expert_id * down_elements;
+    } else {
+        if (gate_weight->rank != 2 || up_weight->rank != 2 || down_weight->rank != 2 ||
+            gate_weight->dims[0] != hidden_dim || gate_weight->dims[1] != ffn_dim ||
+            up_weight->dims[0] != hidden_dim || up_weight->dims[1] != ffn_dim ||
+            down_weight->dims[0] != ffn_dim || down_weight->dims[1] != hidden_dim) {
+            yvex_error_set(err, YVEX_ERR_FORMAT, where,
+                           "mlp dense weights must have dims [hidden_dim, ffn_dim] and [ffn_dim, hidden_dim]");
+            return YVEX_ERR_FORMAT;
+        }
+        if (!tensor_is_f32_bytes(gate_weight, dense_up_elements) ||
+            !tensor_is_f32_bytes(up_weight, dense_up_elements) ||
+            !tensor_is_f32_bytes(down_weight, down_elements)) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, where,
+                           "mlp dense weight bytes must match F32 shape accounting");
+            return YVEX_ERR_BOUNDS;
+        }
+    }
+
+    if (!tensor_is_f32_bytes(input, input_elements) ||
+        !tensor_is_f32_bytes(intermediate, intermediate_elements) ||
+        !tensor_is_f32_bytes(out, output_elements)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where,
+                       "mlp tensor bytes must match F32 shape accounting");
+        return YVEX_ERR_BOUNDS;
+    }
+
+    *batch_out = batch;
+    *hidden_dim_out = hidden_dim;
+    *ffn_dim_out = ffn_dim;
+    *gate_offset_out = gate_offset;
+    *up_offset_out = up_offset;
+    *down_offset_out = down_offset;
+    return YVEX_OK;
+}
+
 int yvex_cpu_op_embed(yvex_backend *backend,
                       const yvex_device_tensor *embedding,
                       const unsigned int *token_ids,
@@ -1231,6 +1452,75 @@ int yvex_cpu_op_matmul(yvex_backend *backend,
             out_data[(row * n) + col] = (float)sum;
         }
     }
+    out->is_written = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_cpu_op_mlp(yvex_backend *backend,
+                    const yvex_device_tensor *input,
+                    const yvex_device_tensor *gate_weight,
+                    const yvex_device_tensor *up_weight,
+                    const yvex_device_tensor *down_weight,
+                    const yvex_mlp_options *options,
+                    yvex_device_tensor *intermediate,
+                    yvex_device_tensor *out,
+                    yvex_error *err)
+{
+    const float *input_data;
+    const float *gate_data;
+    const float *up_data;
+    const float *down_data;
+    float *intermediate_data;
+    float *out_data;
+    unsigned long long batch;
+    unsigned long long hidden_dim;
+    unsigned long long ffn_dim;
+    unsigned long long gate_offset;
+    unsigned long long up_offset;
+    unsigned long long down_offset;
+    unsigned long long row;
+    unsigned long long j;
+    unsigned long long h;
+    int rc;
+
+    rc = backend_mlp_validate(backend, input, gate_weight, up_weight, down_weight,
+                              options, intermediate, out, &batch, &hidden_dim,
+                              &ffn_dim, &gate_offset, &up_offset, &down_offset,
+                              "yvex_backend_op_mlp", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    input_data = (const float *)input->data;
+    gate_data = (const float *)gate_weight->data + gate_offset;
+    up_data = (const float *)up_weight->data + up_offset;
+    down_data = (const float *)down_weight->data + down_offset;
+    intermediate_data = (float *)intermediate->data;
+    out_data = (float *)out->data;
+
+    for (row = 0; row < batch; ++row) {
+        for (j = 0; j < ffn_dim; ++j) {
+            double gate_sum = 0.0;
+            double up_sum = 0.0;
+            for (h = 0; h < hidden_dim; ++h) {
+                double x = (double)input_data[(row * hidden_dim) + h];
+                gate_sum += x * (double)gate_data[(h * ffn_dim) + j];
+                up_sum += x * (double)up_data[(h * ffn_dim) + j];
+            }
+            intermediate_data[(row * ffn_dim) + j] =
+                (float)(backend_silu_double(gate_sum) * up_sum);
+        }
+        for (h = 0; h < hidden_dim; ++h) {
+            double sum = 0.0;
+            for (j = 0; j < ffn_dim; ++j) {
+                sum += (double)intermediate_data[(row * ffn_dim) + j] *
+                       (double)down_data[(j * hidden_dim) + h];
+            }
+            out_data[(row * hidden_dim) + h] = (float)sum;
+        }
+    }
+    intermediate->is_written = 1;
     out->is_written = 1;
     yvex_error_clear(err);
     return YVEX_OK;

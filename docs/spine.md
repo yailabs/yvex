@@ -109,6 +109,7 @@ minimal KV-backed prefill binding from segment-summary state
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
+standalone F32 MLP/feed-forward primitive boundary
 artifact integrity validator and corruption fixture suite
 file identity digest enforcement
 registry metadata drift diagnostics
@@ -256,8 +257,8 @@ tables.
 | GRAPH.OPS.0 | complete | graph | RoPE and position operation boundary | position-dependent graph op implemented with tests and backend rules |
 | GRAPH.OPS.1 | complete | graph | Attention primitive boundary | attention inputs, masks, scratch, backend dispatch, and failure paths implemented |
 | GRAPH.OPS.2 | complete | graph | Projection and matmul primitive boundary | F32 matmul/projection primitive implemented with shape, byte, backend, dispatch, reference, and cleanup limits |
-| GRAPH.OPS.3 | next | graph | MLP and routed-expert primitive boundary | feed-forward or routed expert slice implemented with explicit tensor roles and backend support |
-| GRAPH.BLOCK.0 | planned | graph | First transformer block execution | one block executes through normalization, attention, residual, MLP path with owned scratch |
+| GRAPH.OPS.3 | complete | graph | MLP and routed-expert primitive boundary | F32 feed-forward and routed expert-slice primitive implemented with explicit tensor roles and backend support |
+| GRAPH.BLOCK.0 | next | graph | First transformer block execution | one block executes through normalization, attention, residual, MLP path with owned scratch |
 | GRAPH.LAYERS.0 | planned | graph | Layer scheduler and repeated block execution | scheduler can run repeated blocks over token positions with cleanup and failure reporting |
 | PREFILL.2 | planned | prefill | First real transformer prefill path | validated prompt tokens run through implemented layer path into KV-backed prefill state |
 | PREFILL.3 | planned | prefill | Chunked prefill and scratch lifecycle | chunked token ranges, scratch reuse, cleanup, and context-boundary behavior implemented |
@@ -423,6 +424,16 @@ reporting. It does not read real model projection weights, create Q/K/V tensors
 for attention, execute a transformer block, schedule layers, run full
 transformer prefill, decode, produce logits, sample, or generate.
 
+The standalone MLP/feed-forward primitive proves explicit F32 gated SiLU
+feed-forward execution on CPU and CUDA where available. Dense mode validates
+input, gate/up/down weights, intermediate activation, output byte accounting,
+backend op support, dispatch, reference comparison, cleanup, checksum, and
+max-diff reporting. Routed-expert mode selects one deterministic expert weight
+slice by explicit `expert_id`. It does not compute router logits, run top-k
+routing, load-balance experts, read real model expert tensors, execute a
+transformer block, schedule layers, run full transformer prefill, decode,
+produce logits, sample, or generate.
+
 Full model materialization and placement are explicit planned work because the
 runtime must inventory and place the complete required tensor set before a real
 transformer path can rely on it. Decode cannot be meaningful until graph/layer
@@ -442,15 +453,15 @@ backend support.
 ## 7. Active Next
 
 ```text
-GRAPH.OPS.3 - MLP and routed-expert primitive boundary
+GRAPH.BLOCK.0 - First transformer block execution
 ```
 
-Next implementation: GRAPH.OPS.3. It must introduce an MLP or routed-expert
-primitive boundary with explicit tensor roles, dtype/qtype/backend limits,
-scratch/output ownership, dispatch, reference comparison, failure paths, and
-cleanup behavior. It must not claim transformer block execution, layer
-scheduling, full transformer prefill, decode, logits, sampling, generation,
-server generation, evaluation, or benchmark readiness.
+Next implementation: GRAPH.BLOCK.0. It must compose the implemented standalone
+graph operation boundaries into a first transformer-block execution proof with
+explicit tensor roles, residual/state ownership, scratch/output lifecycle,
+dispatch, reference comparison, failure paths, and cleanup behavior. It must
+not claim layer scheduling, full transformer prefill, decode, logits, sampling,
+generation, server generation, evaluation, or benchmark readiness.
 
 After PREFILL.1, the next runtime work is not automatically decode. The spine
 expects graph/layer expansion rows to determine whether decode can run over
@@ -516,6 +527,10 @@ Standalone graph op proof set:
 ./yvex graph --backend cuda --execute-op --op attention --seq-len 4 --position 3 --head-dim 8 --causal
 ./yvex graph --backend cpu --execute-op --op matmul --m 1 --k 8 --n 8
 ./yvex graph --backend cuda --execute-op --op matmul --m 1 --k 8 --n 8
+./yvex graph --backend cpu --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated
+./yvex graph --backend cuda --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated
+./yvex graph --backend cpu --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated --experts 2 --expert-id 1
+./yvex graph --backend cuda --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated --experts 2 --expert-id 1
 ```
 
 Spine structure proof:

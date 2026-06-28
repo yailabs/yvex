@@ -95,10 +95,22 @@ typedef enum {
     YVEX_BACKEND_CAP_TENSOR_READ_WRITE,
     YVEX_BACKEND_CAP_OP_EMBED,
     YVEX_BACKEND_CAP_OP_MATMUL,
+    YVEX_BACKEND_CAP_OP_MLP,
     YVEX_BACKEND_CAP_OP_RMS_NORM,
     YVEX_BACKEND_CAP_OP_ROPE,
     YVEX_BACKEND_CAP_OP_ATTENTION
 } yvex_backend_capability;
+
+typedef struct {
+    unsigned long long batch;
+    unsigned long long hidden_dim;
+    unsigned long long ffn_dim;
+    unsigned long long expert_count;
+    unsigned long long expert_id;
+    int routed_expert_mode;
+    int gated;
+    const char *activation;
+} yvex_mlp_options;
 
 int yvex_backend_open(yvex_backend **out,
                       const yvex_backend_options *options,
@@ -178,6 +190,16 @@ int yvex_backend_op_matmul(yvex_backend *backend,
                            const yvex_device_tensor *weight,
                            yvex_device_tensor *out,
                            yvex_error *err);
+
+int yvex_backend_op_mlp(yvex_backend *backend,
+                        const yvex_device_tensor *input,
+                        const yvex_device_tensor *gate_weight,
+                        const yvex_device_tensor *up_weight,
+                        const yvex_device_tensor *down_weight,
+                        const yvex_mlp_options *options,
+                        yvex_device_tensor *intermediate,
+                        yvex_device_tensor *out,
+                        yvex_error *err);
 
 int yvex_backend_op_attention(yvex_backend *backend,
                               const yvex_device_tensor *query,

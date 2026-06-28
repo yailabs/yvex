@@ -146,8 +146,8 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "graph",
         "Build graph diagnostics or execute narrow graph segments.",
-        "yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N] | yvex graph --backend cpu|cuda --execute-op --op rope --position N --head-dim N | yvex graph --backend cpu|cuda --execute-op --op attention --seq-len N --position N --head-dim N [--causal] | yvex graph --backend cpu|cuda --execute-op --op matmul --m M --k K --n N",
-        "Opens a GGUF descriptor and prints graph planning diagnostics. Execution flags attach selected weights and run the deterministic fixture embed node, real selected F16 embedding segment, selected embedding-plus-RMSNorm segment, standalone RoPE position op, standalone F32 attention primitive, or standalone F32 matmul/projection primitive; none of these paths is inference or text generation.",
+        "yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N] | yvex graph --backend cpu|cuda --execute-op --op rope --position N --head-dim N | yvex graph --backend cpu|cuda --execute-op --op attention --seq-len N --position N --head-dim N [--causal] | yvex graph --backend cpu|cuda --execute-op --op matmul --m M --k K --n N | yvex graph --backend cpu|cuda --execute-op --op mlp --hidden-dim N --ffn-dim N --activation silu --gated [--experts N --expert-id N]",
+        "Opens a GGUF descriptor and prints graph planning diagnostics. Execution flags attach selected weights and run the deterministic fixture embed node, real selected F16 embedding segment, selected embedding-plus-RMSNorm segment, standalone RoPE position op, standalone F32 attention primitive, standalone F32 matmul/projection primitive, or standalone F32 MLP/feed-forward primitive; none of these paths is inference or text generation.",
         command_graph,
     },
     {
@@ -840,6 +840,7 @@ static int command_backend(int argc, char **argv)
     print_backend_capability(backend, YVEX_BACKEND_CAP_TENSOR_READ_WRITE);
     print_backend_capability(backend, YVEX_BACKEND_CAP_OP_EMBED);
     print_backend_capability(backend, YVEX_BACKEND_CAP_OP_MATMUL);
+    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_MLP);
     print_backend_capability(backend, YVEX_BACKEND_CAP_OP_RMS_NORM);
     print_backend_capability(backend, YVEX_BACKEND_CAP_OP_ROPE);
     print_backend_capability(backend, YVEX_BACKEND_CAP_OP_ATTENTION);
@@ -2525,7 +2526,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, standalone RoPE, attention, and matmul ops, explicit token input boundary, prefill state foundation, minimal KV binding, and minimal KV ownership\n");
+    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, standalone RoPE, attention, matmul, and MLP ops, explicit token input boundary, prefill state foundation, minimal KV binding, and minimal KV ownership\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -2535,10 +2536,10 @@ static int command_info(int argc, char **argv)
     printf("token_input: explicit token boundary implemented\n");
     printf("prefill_state: segment-summary foundation and minimal KV binding implemented\n");
     printf("prompt: default renderer implemented\n");
-    printf("graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, standalone RoPE position op, standalone F32 attention primitive, and standalone F32 matmul/projection primitive implemented\n");
+    printf("graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, standalone RoPE position op, standalone F32 attention primitive, standalone F32 matmul/projection primitive, and standalone F32 MLP/feed-forward primitive implemented\n");
     printf("planner: estimate-only implemented\n");
     printf("backend: CPU reference implemented\n");
-    printf("backend_cuda: tensor movement plus F32/F16 embed, RMSNorm, RoPE position op, F32 attention primitive, and F32 matmul/projection primitive implemented when CUDA is available\n");
+    printf("backend_cuda: tensor movement plus F32/F16 embed, RMSNorm, RoPE position op, F32 attention primitive, F32 matmul/projection primitive, and F32 MLP/feed-forward primitive implemented when CUDA is available\n");
     printf("weights: selected tensor materialization implemented\n");
     printf("engine: descriptor open and selected-weight attachment implemented\n");
     printf("session: lifecycle diagnostics, engine attachment observer, and KV ownership implemented\n");
@@ -5503,6 +5504,102 @@ static void cli_matmul_reference(const float *input,
     }
 }
 
+static double cli_silu_double(double x)
+{
+    return x / (1.0 + cli_exp_double(-x));
+}
+
+static void cli_mlp_fill_inputs(float *input,
+                                float *gate_weight,
+                                float *up_weight,
+                                float *down_weight,
+                                unsigned long long batch,
+                                unsigned long long hidden_dim,
+                                unsigned long long ffn_dim,
+                                unsigned long long expert_count,
+                                int routed)
+{
+    unsigned long long row;
+    unsigned long long h;
+    unsigned long long j;
+    unsigned long long e;
+    unsigned long long actual_experts = routed ? expert_count : 1ull;
+
+    for (row = 0; row < batch; ++row) {
+        for (h = 0; h < hidden_dim; ++h) {
+            input[(row * hidden_dim) + h] =
+                (float)(0.04 + ((double)(row + 1ull) * 0.03) +
+                        ((double)(h + 1ull) * 0.008));
+        }
+    }
+    for (e = 0; e < actual_experts; ++e) {
+        unsigned long long up_base = e * hidden_dim * ffn_dim;
+        unsigned long long down_base = e * ffn_dim * hidden_dim;
+        for (h = 0; h < hidden_dim; ++h) {
+            for (j = 0; j < ffn_dim; ++j) {
+                gate_weight[up_base + (h * ffn_dim) + j] =
+                    (float)(0.015 + ((double)(e + 1ull) * 0.004) +
+                            ((double)(h + 1ull) * 0.0015) +
+                            ((double)(j + 1ull) * 0.0007));
+                up_weight[up_base + (h * ffn_dim) + j] =
+                    (float)(0.02 + ((double)(e + 1ull) * 0.005) +
+                            ((double)(h + 1ull) * 0.0012) +
+                            ((double)(j + 1ull) * 0.0009));
+            }
+        }
+        for (j = 0; j < ffn_dim; ++j) {
+            for (h = 0; h < hidden_dim; ++h) {
+                down_weight[down_base + (j * hidden_dim) + h] =
+                    (float)(0.012 + ((double)(e + 1ull) * 0.003) +
+                            ((double)(j + 1ull) * 0.0008) +
+                            ((double)(h + 1ull) * 0.0011));
+            }
+        }
+    }
+}
+
+static void cli_mlp_reference(const float *input,
+                              const float *gate_weight,
+                              const float *up_weight,
+                              const float *down_weight,
+                              unsigned long long batch,
+                              unsigned long long hidden_dim,
+                              unsigned long long ffn_dim,
+                              unsigned long long expert_id,
+                              int routed,
+                              float *intermediate,
+                              float *out)
+{
+    unsigned long long gate_offset = routed ? expert_id * hidden_dim * ffn_dim : 0ull;
+    unsigned long long up_offset = gate_offset;
+    unsigned long long down_offset = routed ? expert_id * ffn_dim * hidden_dim : 0ull;
+    unsigned long long row;
+    unsigned long long h;
+    unsigned long long j;
+
+    for (row = 0; row < batch; ++row) {
+        for (j = 0; j < ffn_dim; ++j) {
+            double gate_sum = 0.0;
+            double up_sum = 0.0;
+            for (h = 0; h < hidden_dim; ++h) {
+                double x = (double)input[(row * hidden_dim) + h];
+                gate_sum += x * (double)gate_weight[gate_offset + (h * ffn_dim) + j];
+                up_sum += x * (double)up_weight[up_offset + (h * ffn_dim) + j];
+            }
+            intermediate[(row * ffn_dim) + j] =
+                (float)(cli_silu_double(gate_sum) * up_sum);
+        }
+        for (h = 0; h < hidden_dim; ++h) {
+            double sum = 0.0;
+            for (j = 0; j < ffn_dim; ++j) {
+                sum += (double)intermediate[(row * ffn_dim) + j] *
+                       (double)down_weight[down_offset + (j * hidden_dim) + h];
+            }
+            out[(row * hidden_dim) + h] = (float)sum;
+        }
+    }
+}
+
 static float cli_max_abs_diff_f32(const float *a,
                                   const float *b,
                                   unsigned long long count)
@@ -5562,6 +5659,21 @@ static void print_matmul_readiness_fields(int primitive_executed)
 {
     printf("matmul_primitive_executed: %s\n", primitive_executed ? "true" : "false");
     printf("qkv_projection_ready: false\n");
+    printf("transformer_block_ready: false\n");
+    printf("full_prefill_ready: false\n");
+    printf("full_transformer_prefill_ready: false\n");
+    printf("decode_ready: false\n");
+    printf("logits_ready: false\n");
+    printf("generation_ready: false\n");
+    printf("generation: unsupported\n");
+    printf("execution_ready: false\n");
+}
+
+static void print_mlp_readiness_fields(int primitive_executed)
+{
+    printf("mlp_primitive_executed: %s\n", primitive_executed ? "true" : "false");
+    printf("router_logits_ready: false\n");
+    printf("top_k_routing_ready: false\n");
     printf("transformer_block_ready: false\n");
     printf("full_prefill_ready: false\n");
     printf("full_transformer_prefill_ready: false\n");
@@ -6659,6 +6771,542 @@ cleanup_host:
     return exit_code;
 }
 
+static void print_mlp_operation_fields(const char *backend_name,
+                                       unsigned long long batch,
+                                       unsigned long long hidden_dim,
+                                       unsigned long long ffn_dim,
+                                       const char *activation,
+                                       int gated,
+                                       int routed,
+                                       unsigned long long expert_count,
+                                       unsigned long long expert_id,
+                                       unsigned long long input_bytes,
+                                       unsigned long long gate_bytes,
+                                       unsigned long long up_bytes,
+                                       unsigned long long down_bytes,
+                                       unsigned long long intermediate_bytes,
+                                       unsigned long long output_bytes,
+                                       unsigned long long reference_bytes)
+{
+    printf("op: mlp\n");
+    printf("backend: %s\n", backend_name);
+    printf("dtype: f32\n");
+    printf("batch: %llu\n", batch);
+    printf("hidden_dim: %llu\n", hidden_dim);
+    printf("ffn_dim: %llu\n", ffn_dim);
+    printf("activation: %s\n", activation ? activation : "unknown");
+    printf("gated: %s\n", gated ? "true" : "false");
+    printf("routed_expert_mode: %s\n", routed ? "true" : "false");
+    printf("expert_count: %llu\n", expert_count);
+    printf("expert_id: %llu\n", expert_id);
+    printf("input_bytes: %llu\n", input_bytes);
+    printf("gate_weight_bytes: %llu\n", gate_bytes);
+    printf("up_weight_bytes: %llu\n", up_bytes);
+    printf("down_weight_bytes: %llu\n", down_bytes);
+    printf("intermediate_bytes: %llu\n", intermediate_bytes);
+    printf("output_bytes: %llu\n", output_bytes);
+    printf("reference_bytes: %llu\n", reference_bytes);
+}
+
+static int command_graph_execute_mlp_op(const char *backend_name,
+                                        unsigned long long hidden_dim,
+                                        unsigned long long ffn_dim,
+                                        const char *activation,
+                                        int gated,
+                                        unsigned long long expert_count,
+                                        unsigned long long expert_id,
+                                        int routed)
+{
+    yvex_backend *backend = NULL;
+    yvex_device_tensor *input = NULL;
+    yvex_device_tensor *gate = NULL;
+    yvex_device_tensor *up = NULL;
+    yvex_device_tensor *down = NULL;
+    yvex_device_tensor *intermediate = NULL;
+    yvex_device_tensor *out = NULL;
+    yvex_backend_options backend_options;
+    yvex_backend_tensor_desc desc;
+    yvex_mlp_options options;
+    yvex_cli_graph_guard_report guard;
+    yvex_error err;
+    float *input_values = NULL;
+    float *gate_values = NULL;
+    float *up_values = NULL;
+    float *down_values = NULL;
+    float *intermediate_values = NULL;
+    float *reference_intermediate_values = NULL;
+    float *output_values = NULL;
+    float *reference_values = NULL;
+    unsigned long long batch = 1ull;
+    unsigned long long actual_experts = routed ? expert_count : 1ull;
+    unsigned long long input_elements = 0ull;
+    unsigned long long gate_elements = 0ull;
+    unsigned long long up_elements = 0ull;
+    unsigned long long down_elements = 0ull;
+    unsigned long long intermediate_elements = 0ull;
+    unsigned long long output_elements = 0ull;
+    unsigned long long input_bytes = 0ull;
+    unsigned long long gate_bytes = 0ull;
+    unsigned long long up_bytes = 0ull;
+    unsigned long long down_bytes = 0ull;
+    unsigned long long intermediate_bytes = 0ull;
+    unsigned long long output_bytes = 0ull;
+    unsigned long long reference_bytes = 0ull;
+    unsigned long long total_weight_bytes = 0ull;
+    unsigned long long total_input_bytes = 0ull;
+    unsigned long long sample_count = 0ull;
+    float max_abs_diff = 0.0f;
+    const char *reason = NULL;
+    int rc = YVEX_OK;
+    int exit_code = 0;
+
+    yvex_error_clear(&err);
+    memset(&backend_options, 0, sizeof(backend_options));
+    memset(&desc, 0, sizeof(desc));
+    memset(&options, 0, sizeof(options));
+    init_graph_guard_report(&guard, routed ? "mlp-routed-expert" : "mlp-feed-forward",
+                            0, NULL);
+    guard.integrity_status = "not-applicable";
+    guard.identity_status = "unregistered";
+    guard.metadata_status = "unregistered";
+    guard.shape_status = "unchecked";
+    guard.range_status = "not-applicable";
+    guard.slice_range_status = "not-needed";
+
+    if (hidden_dim == 0 || ffn_dim == 0) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        print_mlp_operation_fields(backend_name, batch, hidden_dim, ffn_dim,
+                                   activation, gated, routed, expert_count,
+                                   expert_id, 0, 0, 0, 0, 0, 0, 0);
+        print_mlp_readiness_fields(0);
+        printf("reason: mlp-zero-dimension\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_FORMAT);
+    }
+    if (!gated || !activation || strcmp(activation, "silu") != 0) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        print_mlp_operation_fields(backend_name, batch, hidden_dim, ffn_dim,
+                                   activation, gated, routed, expert_count,
+                                   expert_id, 0, 0, 0, 0, 0, 0, 0);
+        print_mlp_readiness_fields(0);
+        printf("reason: unsupported-activation\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_UNSUPPORTED);
+    }
+    if (routed && (expert_count == 0 || expert_id >= expert_count)) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        print_mlp_operation_fields(backend_name, batch, hidden_dim, ffn_dim,
+                                   activation, gated, routed, expert_count,
+                                   expert_id, 0, 0, 0, 0, 0, 0, 0);
+        print_mlp_readiness_fields(0);
+        printf("reason: expert-id-out-of-range\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+    if (cli_test_env_enabled("YVEX_TEST_MLP_BYTE_OVERFLOW") ||
+        hidden_dim > ULLONG_MAX / ffn_dim ||
+        actual_experts > ULLONG_MAX / hidden_dim ||
+        actual_experts * hidden_dim > ULLONG_MAX / ffn_dim ||
+        actual_experts > ULLONG_MAX / ffn_dim ||
+        actual_experts * ffn_dim > ULLONG_MAX / hidden_dim) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        print_mlp_operation_fields(backend_name, batch, hidden_dim, ffn_dim,
+                                   activation, gated, routed, expert_count,
+                                   expert_id, 0, 0, 0, 0, 0, 0, 0);
+        print_mlp_readiness_fields(0);
+        printf("reason: byte-count-overflow\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+
+    input_elements = batch * hidden_dim;
+    gate_elements = actual_experts * hidden_dim * ffn_dim;
+    up_elements = gate_elements;
+    down_elements = actual_experts * ffn_dim * hidden_dim;
+    intermediate_elements = batch * ffn_dim;
+    output_elements = input_elements;
+    if (input_elements > (unsigned long long)(SIZE_MAX / sizeof(float)) ||
+        gate_elements > (unsigned long long)(SIZE_MAX / sizeof(float)) ||
+        up_elements > (unsigned long long)(SIZE_MAX / sizeof(float)) ||
+        down_elements > (unsigned long long)(SIZE_MAX / sizeof(float)) ||
+        intermediate_elements > (unsigned long long)(SIZE_MAX / sizeof(float)) ||
+        output_elements > (unsigned long long)(SIZE_MAX / sizeof(float))) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        print_mlp_operation_fields(backend_name, batch, hidden_dim, ffn_dim,
+                                   activation, gated, routed, expert_count,
+                                   expert_id, 0, 0, 0, 0, 0, 0, 0);
+        print_mlp_readiness_fields(0);
+        printf("reason: byte-count-overflow\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+    input_bytes = input_elements * (unsigned long long)sizeof(float);
+    gate_bytes = gate_elements * (unsigned long long)sizeof(float);
+    up_bytes = up_elements * (unsigned long long)sizeof(float);
+    down_bytes = down_elements * (unsigned long long)sizeof(float);
+    intermediate_bytes = intermediate_elements * (unsigned long long)sizeof(float);
+    output_bytes = output_elements * (unsigned long long)sizeof(float);
+    reference_bytes = output_bytes;
+    if (gate_bytes > ULLONG_MAX - up_bytes ||
+        gate_bytes + up_bytes > ULLONG_MAX - down_bytes ||
+        input_bytes > ULLONG_MAX - gate_bytes ||
+        input_bytes + gate_bytes > ULLONG_MAX - up_bytes ||
+        input_bytes + gate_bytes + up_bytes > ULLONG_MAX - down_bytes) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        print_mlp_operation_fields(backend_name, batch, hidden_dim, ffn_dim,
+                                   activation, gated, routed, expert_count,
+                                   expert_id, input_bytes, gate_bytes, up_bytes,
+                                   down_bytes, intermediate_bytes, output_bytes,
+                                   reference_bytes);
+        print_mlp_readiness_fields(0);
+        printf("reason: byte-count-overflow\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+    total_weight_bytes = gate_bytes + up_bytes + down_bytes;
+    total_input_bytes = input_bytes + total_weight_bytes;
+    guard.shape_status = "pass";
+    guard.output_bytes_planned = output_bytes;
+    guard.reference_bytes_planned = reference_bytes;
+
+    input_values = (float *)malloc((size_t)input_bytes);
+    gate_values = (float *)malloc((size_t)gate_bytes);
+    up_values = (float *)malloc((size_t)up_bytes);
+    down_values = (float *)malloc((size_t)down_bytes);
+    intermediate_values = (float *)malloc((size_t)intermediate_bytes);
+    reference_intermediate_values = (float *)malloc((size_t)intermediate_bytes);
+    output_values = (float *)malloc((size_t)output_bytes);
+    reference_values = (float *)malloc((size_t)reference_bytes);
+    if (!input_values || !gate_values || !up_values || !down_values ||
+        !intermediate_values || !reference_intermediate_values ||
+        !output_values || !reference_values) {
+        yvex_error_set(&err, YVEX_ERR_NOMEM, "yvex graph mlp",
+                       "failed to allocate host buffers");
+        exit_code = print_yvex_error(&err, exit_for_status(YVEX_ERR_NOMEM));
+        goto cleanup_host;
+    }
+    cli_mlp_fill_inputs(input_values, gate_values, up_values, down_values,
+                        batch, hidden_dim, ffn_dim, actual_experts, routed);
+    cli_mlp_reference(input_values, gate_values, up_values, down_values,
+                      batch, hidden_dim, ffn_dim, expert_id, routed,
+                      reference_intermediate_values, reference_values);
+    guard.reference_read_attempted = 1;
+
+    backend_options.kind = strcmp(backend_name, "cuda") == 0
+                               ? YVEX_BACKEND_KIND_CUDA
+                               : YVEX_BACKEND_KIND_CPU;
+    rc = yvex_backend_open(&backend, &backend_options, &err);
+    if (rc != YVEX_OK) {
+        guard.backend_status = rc == YVEX_ERR_UNSUPPORTED ? "unavailable" : "fail";
+        guard.backend_op_status = "unsupported";
+        reason = yvex_error_message(&err);
+        print_graph_guard_report(&guard);
+        print_mlp_operation_fields(backend_name, batch, hidden_dim, ffn_dim,
+                                   activation, gated, routed, expert_count,
+                                   expert_id, input_bytes, gate_bytes, up_bytes,
+                                   down_bytes, intermediate_bytes, output_bytes,
+                                   reference_bytes);
+        print_mlp_readiness_fields(0);
+        printf("reason: %s\n", reason);
+        printf("status: graph-op-fail\n");
+        exit_code = exit_for_status(rc);
+        goto cleanup_host;
+    }
+    guard.backend_status = "ready";
+    if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MLP) ||
+        cli_test_env_enabled("YVEX_TEST_MLP_BACKEND_OP_UNSUPPORTED")) {
+        guard.backend_op_status = "unsupported";
+        print_graph_guard_report(&guard);
+        print_mlp_operation_fields(backend_name, batch, hidden_dim, ffn_dim,
+                                   activation, gated, routed, expert_count,
+                                   expert_id, input_bytes, gate_bytes, up_bytes,
+                                   down_bytes, intermediate_bytes, output_bytes,
+                                   reference_bytes);
+        print_mlp_readiness_fields(0);
+        printf("reason: backend-op-mlp-unsupported\n");
+        printf("status: graph-op-fail\n");
+        exit_code = exit_for_status(YVEX_ERR_UNSUPPORTED);
+        goto cleanup_backend;
+    }
+    guard.backend_op_status = "supported";
+
+    desc.name = "mlp.input";
+    desc.dtype = YVEX_DTYPE_F32;
+    desc.rank = 2;
+    desc.dims[0] = batch;
+    desc.dims[1] = hidden_dim;
+    desc.dims[2] = 0;
+    desc.bytes = input_bytes;
+    rc = yvex_backend_tensor_alloc(backend, &desc, &input, &err);
+    if (rc != YVEX_OK) {
+        guard.phase = "output";
+        guard.cleanup_attempted = input ? 1 : 0;
+        guard.cleanup_status = guard.cleanup_attempted ? "pass" : "not-needed";
+        reason = yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+    if (cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_INPUT_ALLOC")) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = "injected-mlp-after-input-alloc";
+        goto fail_cleaned;
+    }
+
+    desc.name = "mlp.gate_weight";
+    desc.rank = routed ? 3 : 2;
+    desc.dims[0] = routed ? actual_experts : hidden_dim;
+    desc.dims[1] = routed ? hidden_dim : ffn_dim;
+    desc.dims[2] = routed ? ffn_dim : 0;
+    desc.bytes = gate_bytes;
+    rc = yvex_backend_tensor_alloc(backend, &desc, &gate, &err);
+    if (rc != YVEX_OK) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+    if (cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_GATE_ALLOC")) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = "injected-mlp-after-gate-alloc";
+        goto fail_cleaned;
+    }
+
+    desc.name = "mlp.up_weight";
+    desc.bytes = up_bytes;
+    rc = yvex_backend_tensor_alloc(backend, &desc, &up, &err);
+    if (rc != YVEX_OK) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+    if (cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_UP_ALLOC")) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = "injected-mlp-after-up-alloc";
+        goto fail_cleaned;
+    }
+
+    desc.name = "mlp.down_weight";
+    desc.rank = routed ? 3 : 2;
+    desc.dims[0] = routed ? actual_experts : ffn_dim;
+    desc.dims[1] = routed ? ffn_dim : hidden_dim;
+    desc.dims[2] = routed ? hidden_dim : 0;
+    desc.bytes = down_bytes;
+    rc = yvex_backend_tensor_alloc(backend, &desc, &down, &err);
+    if (rc != YVEX_OK) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+    if (cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_DOWN_ALLOC")) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = "injected-mlp-after-down-alloc";
+        goto fail_cleaned;
+    }
+
+    desc.name = "mlp.intermediate";
+    desc.rank = 2;
+    desc.dims[0] = batch;
+    desc.dims[1] = ffn_dim;
+    desc.dims[2] = 0;
+    desc.bytes = intermediate_bytes;
+    rc = yvex_backend_tensor_alloc(backend, &desc, &intermediate, &err);
+    if (rc != YVEX_OK) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+    if (cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_INTERMEDIATE_ALLOC")) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = "injected-mlp-after-intermediate-alloc";
+        goto fail_cleaned;
+    }
+
+    desc.name = "mlp.output";
+    desc.dims[0] = batch;
+    desc.dims[1] = hidden_dim;
+    desc.bytes = output_bytes;
+    rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
+    if (rc != YVEX_OK) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+    guard.output_allocation_attempted = 1;
+    guard.output_bytes_allocated = output_bytes;
+
+    rc = yvex_backend_tensor_write(backend, input, input_values, input_bytes, &err);
+    if (rc == YVEX_OK) {
+        rc = yvex_backend_tensor_write(backend, gate, gate_values, gate_bytes, &err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_backend_tensor_write(backend, up, up_values, up_bytes, &err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_backend_tensor_write(backend, down, down_values, down_bytes, &err);
+    }
+    if (rc != YVEX_OK) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+    if (cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_OUTPUT_ALLOC")) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = "injected-mlp-after-output-alloc";
+        goto fail_cleaned;
+    }
+
+    options.batch = batch;
+    options.hidden_dim = hidden_dim;
+    options.ffn_dim = ffn_dim;
+    options.expert_count = routed ? expert_count : 0ull;
+    options.expert_id = routed ? expert_id : 0ull;
+    options.routed_expert_mode = routed;
+    options.gated = gated;
+    options.activation = activation;
+
+    guard.dispatch_attempted = 1;
+    rc = yvex_backend_op_mlp(backend, input, gate, up, down, &options,
+                             intermediate, out, &err);
+    if (rc != YVEX_OK || cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_DISPATCH")) {
+        guard.phase = "dispatch";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = rc == YVEX_OK ? "injected-mlp-after-dispatch" : yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+
+    rc = yvex_backend_tensor_read(backend, intermediate, intermediate_values,
+                                  intermediate_bytes, &err);
+    if (rc == YVEX_OK) {
+        rc = yvex_backend_tensor_read(backend, out, output_values, output_bytes, &err);
+    }
+    if (rc != YVEX_OK || cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_REFERENCE")) {
+        guard.phase = "reference";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        reason = rc == YVEX_OK ? "injected-mlp-after-reference" : yvex_error_message(&err);
+        goto fail_cleaned;
+    }
+
+    max_abs_diff = cli_max_abs_diff_f32(output_values, reference_values, output_elements);
+    guard.guard_status = max_abs_diff <= 0.001f ? "pass" : "fail";
+    guard.phase = "complete";
+    guard.cleanup_status = "not-needed";
+    sample_count = output_elements < 8ull ? output_elements : 8ull;
+    exit_code = strcmp(guard.guard_status, "pass") == 0 ? 0 : exit_for_status(YVEX_ERR_STATE);
+
+    print_graph_guard_report(&guard);
+    print_mlp_operation_fields(backend_name, batch, hidden_dim, ffn_dim,
+                               activation, gated, routed, expert_count,
+                               expert_id, input_bytes, gate_bytes, up_bytes,
+                               down_bytes, intermediate_bytes, output_bytes,
+                               reference_bytes);
+    printf("input_elements: %llu\n", input_elements);
+    printf("gate_weight_elements: %llu\n", gate_elements);
+    printf("up_weight_elements: %llu\n", up_elements);
+    printf("down_weight_elements: %llu\n", down_elements);
+    printf("intermediate_elements: %llu\n", intermediate_elements);
+    printf("output_elements: %llu\n", output_elements);
+    printf("weight_total_bytes: %llu\n", total_weight_bytes);
+    printf("input_total_bytes: %llu\n", total_input_bytes);
+    printf("input_checksum: %llu\n", cli_checksum_bytes(input_values, input_bytes));
+    printf("gate_weight_checksum: %llu\n", cli_checksum_bytes(gate_values, gate_bytes));
+    printf("up_weight_checksum: %llu\n", cli_checksum_bytes(up_values, up_bytes));
+    printf("down_weight_checksum: %llu\n", cli_checksum_bytes(down_values, down_bytes));
+    printf("intermediate_checksum: %llu\n", cli_checksum_bytes(intermediate_values, intermediate_bytes));
+    printf("reference_intermediate_checksum: %llu\n", cli_checksum_bytes(reference_intermediate_values, intermediate_bytes));
+    printf("output_checksum: %llu\n", cli_checksum_bytes(output_values, output_bytes));
+    printf("reference_checksum: %llu\n", cli_checksum_bytes(reference_values, reference_bytes));
+    printf("max_abs_diff: %.9g\n", (double)max_abs_diff);
+    printf("reference_attempted: true\n");
+    if (strcmp(backend_name, "cuda") == 0) {
+        printf("mlp_cuda_parity: %s\n", exit_code == 0 ? "pass" : "fail");
+        printf("cuda_reference_max_abs_diff: %.9g\n", (double)max_abs_diff);
+    } else {
+        printf("cpu_reference_max_abs_diff: %.9g\n", (double)max_abs_diff);
+    }
+    printf("output_sample_count: %llu\n", sample_count);
+    cli_print_float_values("input_sample_values", input_values,
+                           input_elements < 8ull ? input_elements : 8ull);
+    cli_print_float_values("intermediate_sample_values", intermediate_values,
+                           intermediate_elements < 8ull ? intermediate_elements : 8ull);
+    cli_print_float_values("output_sample_values", output_values, sample_count);
+    cli_print_float_values("reference_sample_values", reference_values, sample_count);
+    print_mlp_readiness_fields(exit_code == 0);
+    printf("status: %s\n", exit_code == 0 ? "graph-op-executed" : "graph-op-fail");
+    goto cleanup_backend;
+
+fail_cleaned:
+    print_graph_guard_report(&guard);
+    print_mlp_operation_fields(backend_name, batch, hidden_dim, ffn_dim,
+                               activation, gated, routed, expert_count,
+                               expert_id, input_bytes, gate_bytes, up_bytes,
+                               down_bytes, intermediate_bytes, output_bytes,
+                               reference_bytes);
+    printf("input_elements: %llu\n", input_elements);
+    printf("gate_weight_elements: %llu\n", gate_elements);
+    printf("up_weight_elements: %llu\n", up_elements);
+    printf("down_weight_elements: %llu\n", down_elements);
+    printf("intermediate_elements: %llu\n", intermediate_elements);
+    printf("output_elements: %llu\n", output_elements);
+    printf("weight_total_bytes: %llu\n", total_weight_bytes);
+    printf("input_total_bytes: %llu\n", total_input_bytes);
+    print_mlp_readiness_fields(0);
+    printf("reason: %s\n", reason ? reason : "mlp-op-failed");
+    printf("status: graph-op-failed-cleaned\n");
+    exit_code = exit_for_status(rc == YVEX_OK ? YVEX_ERR_STATE : rc);
+
+cleanup_backend:
+    if (backend) {
+        yvex_backend_tensor_free(backend, out);
+        yvex_backend_tensor_free(backend, intermediate);
+        yvex_backend_tensor_free(backend, down);
+        yvex_backend_tensor_free(backend, up);
+        yvex_backend_tensor_free(backend, gate);
+        yvex_backend_tensor_free(backend, input);
+        yvex_backend_close(backend);
+    }
+
+cleanup_host:
+    free(reference_values);
+    free(output_values);
+    free(reference_intermediate_values);
+    free(intermediate_values);
+    free(down_values);
+    free(up_values);
+    free(gate_values);
+    free(input_values);
+    return exit_code;
+}
+
 static int preflight_graph_guard(const yvex_model_ref *model_ref,
                                  const char *backend_name,
                                  int execute_fixture,
@@ -7271,11 +7919,16 @@ static int command_graph(int argc, char **argv)
     unsigned long long matmul_m = 0ull;
     unsigned long long matmul_k = 0ull;
     unsigned long long matmul_n = 0ull;
+    unsigned long long mlp_hidden_dim = 0ull;
+    unsigned long long mlp_ffn_dim = 0ull;
+    unsigned long long mlp_experts = 0ull;
+    unsigned long long mlp_expert_id = 0ull;
     int execute_fixture = 0;
     int execute_partial = 0;
     int execute_segment = 0;
     int execute_op = 0;
     int attention_causal = 0;
+    int mlp_gated = 0;
     int fixture_token_provided = 0;
     int partial_token_provided = 0;
     int token_input_provided = 0;
@@ -7286,6 +7939,12 @@ static int command_graph(int argc, char **argv)
     int matmul_m_provided = 0;
     int matmul_k_provided = 0;
     int matmul_n_provided = 0;
+    int mlp_hidden_dim_provided = 0;
+    int mlp_ffn_dim_provided = 0;
+    int mlp_activation_provided = 0;
+    int mlp_experts_provided = 0;
+    int mlp_expert_id_provided = 0;
+    const char *mlp_activation = NULL;
     int i;
     int rc;
 
@@ -7351,7 +8010,7 @@ static int command_graph(int argc, char **argv)
             execute_op = 1;
         } else if (strcmp(argv[i], "--op") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "yvex: --op requires rope, attention, or matmul\n");
+                fprintf(stderr, "yvex: --op requires rope, attention, matmul, or mlp\n");
                 return 2;
             }
             op_name = argv[++i];
@@ -7375,6 +8034,43 @@ static int command_graph(int argc, char **argv)
                 return 2;
             }
             matmul_n_provided = 1;
+            i += 1;
+        } else if (strcmp(argv[i], "--hidden-dim") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &mlp_hidden_dim)) {
+                fprintf(stderr, "yvex: --hidden-dim requires a positive integer\n");
+                return 2;
+            }
+            mlp_hidden_dim_provided = 1;
+            i += 1;
+        } else if (strcmp(argv[i], "--ffn-dim") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &mlp_ffn_dim)) {
+                fprintf(stderr, "yvex: --ffn-dim requires a positive integer\n");
+                return 2;
+            }
+            mlp_ffn_dim_provided = 1;
+            i += 1;
+        } else if (strcmp(argv[i], "--activation") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --activation requires silu\n");
+                return 2;
+            }
+            mlp_activation = argv[++i];
+            mlp_activation_provided = 1;
+        } else if (strcmp(argv[i], "--gated") == 0) {
+            mlp_gated = 1;
+        } else if (strcmp(argv[i], "--experts") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &mlp_experts)) {
+                fprintf(stderr, "yvex: --experts requires a positive integer\n");
+                return 2;
+            }
+            mlp_experts_provided = 1;
+            i += 1;
+        } else if (strcmp(argv[i], "--expert-id") == 0) {
+            if (i + 1 >= argc || !parse_ull_allow_zero(argv[i + 1], &mlp_expert_id)) {
+                fprintf(stderr, "yvex: --expert-id requires a non-negative integer\n");
+                return 2;
+            }
+            mlp_expert_id_provided = 1;
             i += 1;
         } else if (strcmp(argv[i], "--seq-len") == 0) {
             if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &attention_seq_len)) {
@@ -7458,8 +8154,9 @@ static int command_graph(int argc, char **argv)
         if (!op_name ||
             (strcmp(op_name, "rope") != 0 &&
              strcmp(op_name, "attention") != 0 &&
-             strcmp(op_name, "matmul") != 0)) {
-            fprintf(stderr, "yvex: --execute-op requires --op rope, --op attention, or --op matmul\n");
+             strcmp(op_name, "matmul") != 0 &&
+             strcmp(op_name, "mlp") != 0)) {
+            fprintf(stderr, "yvex: --execute-op requires --op rope, --op attention, --op matmul, or --op mlp\n");
             return 2;
         }
         if (strcmp(op_name, "matmul") == 0) {
@@ -7472,11 +8169,28 @@ static int command_graph(int argc, char **argv)
                 fprintf(stderr, "yvex: --position, --head-dim, --seq-len, and --causal require --op rope or --op attention\n");
                 return 2;
             }
+        } else if (strcmp(op_name, "mlp") == 0) {
+            if (!mlp_hidden_dim_provided || !mlp_ffn_dim_provided ||
+                !mlp_activation_provided || !mlp_gated) {
+                fprintf(stderr, "yvex: --execute-op --op mlp requires --hidden-dim N --ffn-dim N --activation silu --gated\n");
+                return 2;
+            }
+            if (rope_position_provided || rope_head_dim_provided ||
+                attention_seq_len_provided || attention_causal ||
+                matmul_m_provided || matmul_k_provided || matmul_n_provided) {
+                fprintf(stderr, "yvex: --op mlp cannot use --position, --head-dim, --seq-len, --causal, --m, --k, or --n\n");
+                return 2;
+            }
+            if (mlp_experts_provided != mlp_expert_id_provided) {
+                fprintf(stderr, "yvex: --experts and --expert-id must be provided together\n");
+                return 2;
+            }
         } else if (!rope_position_provided) {
             fprintf(stderr, "yvex: --execute-op requires --position N\n");
             return 2;
         }
-        if (strcmp(op_name, "matmul") != 0 && !rope_head_dim_provided) {
+        if (strcmp(op_name, "matmul") != 0 && strcmp(op_name, "mlp") != 0 &&
+            !rope_head_dim_provided) {
             fprintf(stderr, "yvex: --execute-op requires --head-dim N\n");
             return 2;
         }
@@ -7498,10 +8212,24 @@ static int command_graph(int argc, char **argv)
             fprintf(stderr, "yvex: --m, --k, and --n require --op matmul\n");
             return 2;
         }
+        if (strcmp(op_name, "mlp") != 0 &&
+            (mlp_hidden_dim_provided || mlp_ffn_dim_provided ||
+             mlp_activation_provided || mlp_gated || mlp_experts_provided ||
+             mlp_expert_id_provided)) {
+            fprintf(stderr, "yvex: --hidden-dim, --ffn-dim, --activation, --gated, --experts, and --expert-id require --op mlp\n");
+            return 2;
+        }
         if (fixture_token_provided || partial_token_provided || token_input_provided ||
             token_index_provided || segment_name) {
             fprintf(stderr, "yvex: --execute-op cannot be combined with model graph token or segment options\n");
             return 2;
+        }
+        if (strcmp(op_name, "mlp") == 0) {
+            return command_graph_execute_mlp_op(backend_name, mlp_hidden_dim,
+                                                mlp_ffn_dim, mlp_activation,
+                                                mlp_gated, mlp_experts,
+                                                mlp_expert_id,
+                                                mlp_experts_provided);
         }
         if (strcmp(op_name, "matmul") == 0) {
             return command_graph_execute_matmul_op(backend_name, matmul_m, matmul_k, matmul_n);
@@ -7515,8 +8243,11 @@ static int command_graph(int argc, char **argv)
     }
     if (op_name || rope_position_provided || rope_head_dim_provided ||
         attention_seq_len_provided || attention_causal ||
-        matmul_m_provided || matmul_k_provided || matmul_n_provided) {
-        fprintf(stderr, "yvex: --op, --position, --head-dim, --seq-len, --causal, --m, --k, and --n require --execute-op\n");
+        matmul_m_provided || matmul_k_provided || matmul_n_provided ||
+        mlp_hidden_dim_provided || mlp_ffn_dim_provided ||
+        mlp_activation_provided || mlp_gated || mlp_experts_provided ||
+        mlp_expert_id_provided) {
+        fprintf(stderr, "yvex: --op and standalone op options require --execute-op\n");
         return 2;
     }
     if (execute_segment) {
@@ -9004,6 +9735,8 @@ static void print_chat_backend(FILE *fp, const yvex_chat_runtime *runtime)
             yvex_backend_supports(runtime->backend, YVEX_BACKEND_CAP_TENSOR_READ_WRITE) ? "yes" : "no");
     fprintf(fp, "  op_embed: %s\n",
             yvex_backend_supports(runtime->backend, YVEX_BACKEND_CAP_OP_EMBED) ? "yes" : "no");
+    fprintf(fp, "  op_mlp: %s\n",
+            yvex_backend_supports(runtime->backend, YVEX_BACKEND_CAP_OP_MLP) ? "yes" : "no");
     fprintf(fp, "  op_rope: %s\n",
             yvex_backend_supports(runtime->backend, YVEX_BACKEND_CAP_OP_ROPE) ? "yes" : "no");
 }
