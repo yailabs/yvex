@@ -11,14 +11,16 @@ boundary, but not a developer workstation filesystem path.
 
 ```text
 full model support: no
-inference: no
+full inference: no
 generation: no
 execution_ready: false
 ```
 
-YVEX currently validates selected tensor GGUF artifacts and materializes them on
-CPU/CUDA. Full model GGUF emission, full materialization, graph execution,
-prefill, decode, and generation are not implemented.
+YVEX currently validates selected tensor GGUF artifacts, materializes selected
+weights on CPU/CUDA, attaches them to engine/session state, and executes bounded
+selected embedding and selected embedding-plus-RMSNorm graph proofs. Full model
+GGUF emission, full materialization, prefill, decode, logits, sampling, and
+generation are outside the current artifact cards.
 
 ## Active Artifact
 
@@ -46,7 +48,9 @@ Proof:
 ```sh
 ./yvex inspect deepseek4-v4-flash-selected-embed
 ./yvex tensors deepseek4-v4-flash-selected-embed
+./yvex integrity report --model deepseek4-v4-flash-selected-embed --backend cpu --require-token-embedding --partial-token 0
 ./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
+./yvex graph --model deepseek4-v4-flash-selected-embed --backend cpu --execute-partial --partial-token 0
 ```
 
 ## Historical Validation Artifact
@@ -79,7 +83,7 @@ active live model target.
 Full DeepSeek V4 Flash GGUF: not produced by YVEX yet
 Full DeepSeek materialization: not attempted
 Full Qwen3-8B GGUF: not active
-Inference: not implemented
-Generation: not implemented
+Full inference path: not available
+Generation: not available
 Benchmarks: none
 ```

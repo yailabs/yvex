@@ -2,7 +2,7 @@
 
 ## Project Rule
 
-YVEX is a C local runtime for open-weight model artifacts. Read
+YVEX is a native C local inference engine for open-weight model artifacts. Read
 `docs/spine.md` before choosing implementation work. That file is the only
 internal delivery map.
 
@@ -15,6 +15,9 @@ artifact loading
 GGUF parsing
 tensor inspection
 selected tensor materialization
+engine/session weight attachment
+bounded fixture and selected real-tensor graph execution
+token input diagnostics
 backend diagnostics
 server/provider status shell
 ```
@@ -37,7 +40,9 @@ benchmark performance
 execution_ready: true
 ```
 
-Current real-model support is selected-tensor materialization only.
+Current real-model support is bounded selected embedding and selected
+embedding-plus-RMSNorm graph execution only. Full inference/generation remains
+outside the current boundary.
 
 ## Artifacts
 
@@ -115,7 +120,8 @@ fixtures only.
 
 - Keep generated artifacts outside git.
 - Keep public docs free of internal delivery IDs.
-- Keep `execution_ready: false` until real execution exists.
+- Keep `execution_ready: false` until full execution readiness is actually
+  implemented, tested, command-proven, and documented.
 - After every implementation step that changes operator-visible commands,
   workflows, diagnostics, validation, or runtime boundaries, update
   `docs/operator-runbook.md` in the same wave.
