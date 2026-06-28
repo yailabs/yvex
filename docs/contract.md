@@ -161,6 +161,18 @@ guard applies only to the implemented controlled fixture and selected embedding
 partial graph paths. It is graph-entry safety, not full graph safety, inference
 readiness, full model support, or supply-chain security.
 
+### Operator integrity report
+
+The operator integrity report composes existing local checks into one summary:
+artifact structural integrity, local digest identity, registry metadata drift,
+shape/dtype accounting, tensor range validation, selected embedding readiness,
+materialization preflight when a backend is supplied, and graph-entry guard
+status for implemented graph paths.
+
+The report is local operator evidence. A passing report is not a supply-chain
+security audit, trusted provenance, model quality validation, full model
+support, inference readiness, generation readiness, or benchmark readiness.
+
 ### Integrity regression harness
 
 The integrity module has a consolidated regression harness that exercises

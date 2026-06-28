@@ -417,6 +417,9 @@ transfer failures report cleanup status.
 Graph execution is integrity-guarded for the implemented fixture and selected
 embedding partial paths: preflight runs before backend dispatch and raw
 reference reads.
+Operators can ask YVEX for a single local integrity report that summarizes
+artifact structure, digest identity, registry metadata drift, selected embedding
+readiness, materialization preflight, and graph-entry guard status.
 The test suite includes a consolidated artifact-integrity regression harness for
 structural corruption, identity drift, metadata drift, materialization preflight,
 and graph guard refusal paths.

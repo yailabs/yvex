@@ -184,3 +184,11 @@ failure phase, shape/range/slice/backend/op statuses, dispatch/reference/output
 attempt flags, cleanup status, and output/reference byte planning. These fields
 apply only to the implemented controlled fixture and selected embedding partial
 graph paths; they do not imply full graph safety or inference readiness.
+
+The operator integrity report is a CLI aggregation of existing report facts. It
+adds no new public ownership surface: it summarizes artifact integrity, local
+digest identity, registry metadata drift, shape/dtype accounting, tensor range
+validation, selected embedding readiness, materialization preflight, and graph
+entry guard status for implemented paths. A passing report is local evidence
+only; it is not supply-chain security, provenance, model quality validation, or
+inference readiness.

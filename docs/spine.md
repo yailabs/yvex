@@ -159,6 +159,8 @@ graph failure phase reporting and cleanup verification
 consolidated artifact integrity regression harness
 integrity/materialization/graph refusal matrix
 cleanup and repeat regression coverage
+operator integrity report
+integrity report aggregation across artifact/identity/metadata/materialization/graph
 ```
 
 Current live target:
@@ -185,7 +187,6 @@ Unsupported / not advanced:
 full model execution
 full DeepSeek materialization
 full GGUF conversion
-operator integrity report
 full supply-chain security
 prompt-backed runtime prefill
 minimal KV runtime
@@ -277,8 +278,8 @@ unbounded spreadsheet.
 | ARTIFACT.INTEGRITY.6 | complete | Materialization integrity gate |
 | ARTIFACT.INTEGRITY.7 | complete | Graph execution integrity guard |
 | ARTIFACT.INTEGRITY.8 | complete | Corrupt artifact regression harness |
-| ARTIFACT.INTEGRITY.9 | next | Operator integrity report and doctor integration |
-| ARTIFACT.INTEGRITY.FINAL.0 | planned | Artifact integrity closeout before graph expansion |
+| ARTIFACT.INTEGRITY.9 | complete | Operator integrity report and doctor integration |
+| ARTIFACT.INTEGRITY.FINAL.0 | next | Artifact integrity closeout before graph expansion |
 | M6 | planned | Real-model graph segment expansion |
 | M7 | planned | Prompt/token input boundary |
 | M8 | planned | Prefill state foundation |
@@ -526,8 +527,8 @@ mapped and the baseline validator exists.
 | ARTIFACT.INTEGRITY.6 | complete | Materialization integrity gate |
 | ARTIFACT.INTEGRITY.7 | complete | Graph execution integrity guard |
 | ARTIFACT.INTEGRITY.8 | complete | Corrupt artifact regression harness |
-| ARTIFACT.INTEGRITY.9 | next | Operator integrity report and doctor integration |
-| ARTIFACT.INTEGRITY.FINAL.0 | planned | Artifact integrity closeout before graph expansion |
+| ARTIFACT.INTEGRITY.9 | complete | Operator integrity report and doctor integration |
+| ARTIFACT.INTEGRITY.FINAL.0 | next | Artifact integrity closeout before graph expansion |
 
 ARTIFACT.INTEGRITY.0 defined the artifact integrity threat model and validator
 baseline. YVEX now rejects baseline structural corruption before
@@ -611,10 +612,13 @@ registry, inspect, tensors, materialize, materialize-gate, graph fixture, graph
 partial, engine, and session surfaces. It is regression coverage, not fuzzing or
 complete malicious-input coverage.
 
-ARTIFACT.INTEGRITY.9 exposes an operator integrity report and future doctor
-integration. The report should summarize file identity, digest, architecture,
-required tensors, tensor range checks, dtype/shape checks, registry drift, and
-command-specific readiness.
+ARTIFACT.INTEGRITY.9 exposes an operator integrity report and future-compatible
+doctor integration point. The report composes artifact structure, digest
+identity, registry metadata drift, shape/dtype accounting, tensor range
+validation, selected embedding readiness, materialization preflight, and
+graph-entry guard status for implemented paths. It is local operator evidence,
+not supply-chain security, model quality validation, full model support, or
+inference readiness.
 
 ARTIFACT.INTEGRITY.FINAL.0 closes the artifact integrity module before larger
 real-model graph expansion. Closeout requires validator coverage, corrupt
@@ -963,12 +967,13 @@ No diagram may imply support that the code does not implement.
 ## 8. Active Next
 
 ```text
-ARTIFACT.INTEGRITY.9 - Operator integrity report and doctor integration
+ARTIFACT.INTEGRITY.FINAL.0 - Artifact integrity closeout before graph expansion
 ```
 
-Next implementation: ARTIFACT.INTEGRITY.9. It should expose operator-facing
-integrity reports and future doctor integration without converting local
-artifact checks into supply-chain security claims.
+Next implementation: ARTIFACT.INTEGRITY.FINAL.0. It should close the artifact
+integrity module before broader graph expansion by auditing validator,
+corruption fixture, registry drift, materialization gate, graph guard, report,
+docs, and no-claim boundaries.
 
 Next runtime expansion after integrity baseline:
 

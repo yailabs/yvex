@@ -60,6 +60,7 @@ static int command_imatrix(int argc, char **argv);
 static int command_info(int argc, char **argv);
 static int command_inspect(int argc, char **argv);
 static int command_integrity(int argc, char **argv);
+static int command_integrity_report(int argc, char **argv);
 static int command_materialize(int argc, char **argv);
 static int command_materialize_gate(int argc, char **argv);
 static int command_metadata(int argc, char **argv);
@@ -189,9 +190,9 @@ static const yvex_cli_command yvex_commands[] = {
     },
     {
         "integrity",
-        "Check baseline GGUF artifact integrity.",
-        "yvex integrity check --model FILE_OR_ALIAS [--expect-sha256 HASH] [--require-token-embedding] [--partial-token N]",
-        "Validates GGUF structural bounds, tensor byte ranges, local file identity digest, checked dtype/shape accounting, and optional selected embedding readiness. It is not a supply-chain security audit.",
+        "Check or report local artifact integrity.",
+        "yvex integrity check --model FILE_OR_ALIAS [--expect-sha256 HASH] [--require-token-embedding] [--partial-token N] | yvex integrity report --model FILE_OR_ALIAS [--backend cpu|cuda] [--expect-sha256 HASH] [--require-token-embedding] [--partial-token N]",
+        "Validates GGUF structural bounds, tensor byte ranges, local file identity digest, checked dtype/shape accounting, optional selected embedding readiness, and operator report summaries. It is not a supply-chain security audit.",
         command_integrity,
     },
     {
@@ -1104,9 +1105,12 @@ static int command_integrity(int argc, char **argv)
         print_command_help(stdout, find_command("integrity"));
         return 0;
     }
+    if (argc >= 3 && strcmp(argv[2], "report") == 0) {
+        return command_integrity_report(argc, argv);
+    }
     if (argc < 3 || strcmp(argv[2], "check") != 0) {
-        fprintf(stderr, "yvex: integrity requires check\n");
-        fprintf(stderr, "usage: yvex integrity check --model FILE_OR_ALIAS [--expect-sha256 HASH] [--require-token-embedding] [--partial-token N]\n");
+        fprintf(stderr, "yvex: integrity requires check or report\n");
+        fprintf(stderr, "usage: yvex integrity check --model FILE_OR_ALIAS [--expect-sha256 HASH] [--require-token-embedding] [--partial-token N] | yvex integrity report --model FILE_OR_ALIAS [--backend cpu|cuda] [--expect-sha256 HASH] [--require-token-embedding] [--partial-token N]\n");
         return 2;
     }
 
@@ -4731,6 +4735,360 @@ static int preflight_graph_guard(const yvex_model_ref *model_ref,
     yvex_backend_close(backend);
     close_model_context(&ctx);
     return YVEX_OK;
+}
+
+static int command_integrity_report(int argc, char **argv)
+{
+    yvex_artifact_integrity_options integrity_options;
+    yvex_artifact_integrity_report integrity_report;
+    yvex_cli_metadata_snapshot current_metadata;
+    yvex_model_registry_entry registered_metadata;
+    yvex_model_metadata_drift_report metadata_report;
+    yvex_cli_graph_guard_report graph_report;
+    yvex_backend_options backend_options;
+    yvex_backend *backend = NULL;
+    yvex_model_ref ref;
+    yvex_error err;
+    const char *model_arg = NULL;
+    const char *backend_name = NULL;
+    const char *identity_status = "unregistered";
+    const char *metadata_status = "unregistered";
+    const char *readiness_status = "not-checked";
+    const char *support_level = "not-checked";
+    const char *materialization_preflight = "not-checked";
+    const char *materialization_gate = "not-checked";
+    const char *materialization_backend = "not-checked";
+    const char *backend_status = "not-checked";
+    const char *graph_fixture_guard = "not-applicable";
+    const char *graph_partial_guard = "not-checked";
+    const char *graph_partial_backend = "not-checked";
+    const char *graph_partial_dispatch_ready = "false";
+    const char *graph_partial_reference_ready = "false";
+    const char *report_status = "pass";
+    const char *status = "integrity-report-pass";
+    const char *model_input_kind;
+    unsigned long long selected_hidden_size = 0ull;
+    unsigned long long selected_vocab_size = 0ull;
+    unsigned long long selected_output_count = 0ull;
+    unsigned long long selected_output_bytes = 0ull;
+    unsigned long long selected_slice_bytes = 0ull;
+    int metadata_checked = 0;
+    int selected_ready = 0;
+    int hard_fail = 0;
+    int i;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&integrity_options, 0, sizeof(integrity_options));
+    memset(&integrity_report, 0, sizeof(integrity_report));
+    memset(&current_metadata, 0, sizeof(current_metadata));
+    memset(&registered_metadata, 0, sizeof(registered_metadata));
+    memset(&metadata_report, 0, sizeof(metadata_report));
+    memset(&graph_report, 0, sizeof(graph_report));
+    memset(&backend_options, 0, sizeof(backend_options));
+    memset(&ref, 0, sizeof(ref));
+
+    for (i = 3; i < argc; ++i) {
+        if (strcmp(argv[i], "--model") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --model requires FILE_OR_ALIAS\n");
+                return 2;
+            }
+            model_arg = argv[++i];
+        } else if (strcmp(argv[i], "--backend") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --backend requires cpu|cuda\n");
+                return 2;
+            }
+            backend_name = argv[++i];
+        } else if (strcmp(argv[i], "--expect-sha256") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --expect-sha256 requires HASH\n");
+                return 2;
+            }
+            integrity_options.expect_sha256 = argv[++i];
+        } else if (strcmp(argv[i], "--require-token-embedding") == 0) {
+            integrity_options.require_token_embedding = 1;
+        } else if (strcmp(argv[i], "--partial-token") == 0) {
+            if (i + 1 >= argc || !parse_uint_allow_zero(argv[i + 1],
+                                                        &integrity_options.token_id)) {
+                fprintf(stderr, "yvex: --partial-token requires a non-negative integer\n");
+                return 2;
+            }
+            integrity_options.require_token_embedding = 1;
+            i += 1;
+        } else {
+            fprintf(stderr, "yvex: unknown integrity report option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help integrity' for usage.\n");
+            return 2;
+        }
+    }
+
+    if (!model_arg) {
+        fprintf(stderr, "yvex: integrity report requires --model FILE_OR_ALIAS\n");
+        return 2;
+    }
+    if (backend_name &&
+        strcmp(backend_name, "cpu") != 0 &&
+        strcmp(backend_name, "cuda") != 0) {
+        fprintf(stderr, "yvex: unknown backend kind: %s\n", backend_name);
+        return 2;
+    }
+
+    rc = yvex_model_ref_resolve(&ref, model_arg, NULL, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    if (ref.kind == YVEX_MODEL_REF_ALIAS && ref.sha256 && ref.sha256[0]) {
+        integrity_options.registered_sha256 = ref.sha256;
+    }
+
+    rc = yvex_artifact_integrity_check_path(ref.path, &integrity_options,
+                                            &integrity_report, &err);
+    if (!integrity_report.passed) {
+        hard_fail = 1;
+    }
+
+    model_input_kind = ref.kind == YVEX_MODEL_REF_ALIAS ? "alias" : "path";
+    if (ref.kind == YVEX_MODEL_REF_ALIAS) {
+        if (!ref.sha256 || !ref.sha256[0] || !yvex_sha256_hex_is_valid(ref.sha256)) {
+            identity_status = "missing";
+            hard_fail = 1;
+        } else if (strcmp(integrity_report.digest_status, "pass") == 0 &&
+                   (ref.registered_file_size == 0ull ||
+                    ref.registered_file_size == integrity_report.file_size)) {
+            identity_status = "pass";
+        } else {
+            identity_status = "fail";
+            hard_fail = 1;
+        }
+    }
+
+    if (integrity_report.passed) {
+        yvex_error metadata_err;
+        yvex_error_clear(&metadata_err);
+        if (populate_registry_metadata(&current_metadata, ref.path, &metadata_err) == YVEX_OK) {
+            metadata_checked = 1;
+            support_level = current_metadata.entry.support_level &&
+                            current_metadata.entry.support_level[0]
+                                ? current_metadata.entry.support_level
+                                : "not-checked";
+            selected_ready = current_metadata.entry.selected_embedding_ready;
+            selected_hidden_size = current_metadata.entry.selected_embedding_hidden_size;
+            selected_vocab_size = current_metadata.entry.selected_embedding_vocab_size;
+            selected_output_count = current_metadata.entry.selected_embedding_output_count;
+            selected_slice_bytes = current_metadata.entry.selected_embedding_slice_bytes;
+            selected_output_bytes = selected_output_count * (unsigned long long)sizeof(float);
+
+            if (ref.kind == YVEX_MODEL_REF_ALIAS && strcmp(identity_status, "pass") == 0) {
+                model_ref_registry_entry_view(&ref, &registered_metadata);
+                if (yvex_model_registry_compare_metadata(&registered_metadata,
+                                                         &current_metadata.entry,
+                                                         &metadata_report,
+                                                         &metadata_err) == YVEX_OK) {
+                    metadata_status = metadata_report.metadata_status[0]
+                                          ? metadata_report.metadata_status
+                                          : "unknown";
+                    readiness_status = metadata_report.readiness_status[0]
+                                           ? metadata_report.readiness_status
+                                           : "unknown";
+                    support_level = ref.support_level && ref.support_level[0]
+                                        ? ref.support_level
+                                        : support_level;
+                    if (strcmp(metadata_status, "pass") != 0 ||
+                        strcmp(readiness_status, "pass") != 0) {
+                        hard_fail = 1;
+                    }
+                } else {
+                    metadata_status = "fail";
+                    readiness_status = "fail";
+                    hard_fail = 1;
+                }
+            } else if (ref.kind == YVEX_MODEL_REF_ALIAS) {
+                metadata_status = "not-checked";
+                readiness_status = "not-checked";
+            } else {
+                metadata_status = "unregistered";
+                readiness_status = selected_ready ? "pass" : "not-checked";
+            }
+        } else {
+            metadata_checked = 0;
+            if (ref.kind == YVEX_MODEL_REF_ALIAS && strcmp(identity_status, "pass") == 0) {
+                metadata_status = "fail";
+                readiness_status = "fail";
+                hard_fail = 1;
+            }
+            yvex_error_clear(&metadata_err);
+        }
+    }
+
+    if (integrity_report.selected_embedding_shape[0]) {
+        selected_ready = strcmp(integrity_report.selected_embedding_shape, "valid") == 0;
+        selected_hidden_size = integrity_report.selected_embedding_hidden_size;
+        selected_vocab_size = integrity_report.selected_embedding_vocab_size;
+        selected_output_count = integrity_report.selected_embedding_output_count;
+        selected_output_bytes = integrity_report.selected_embedding_output_bytes;
+        selected_slice_bytes = integrity_report.selected_embedding_slice_bytes;
+        readiness_status = selected_ready ? "pass" : "fail";
+    } else if (integrity_options.require_token_embedding) {
+        selected_ready = 0;
+        readiness_status = "fail";
+        hard_fail = 1;
+    }
+
+    if (backend_name) {
+        materialization_backend = backend_name;
+        graph_partial_backend = backend_name;
+        if (!hard_fail) {
+            backend_options.kind = strcmp(backend_name, "cuda") == 0
+                                       ? YVEX_BACKEND_KIND_CUDA
+                                       : YVEX_BACKEND_KIND_CPU;
+            rc = yvex_backend_open(&backend, &backend_options, &err);
+            if (rc == YVEX_OK) {
+                backend_status = "ready";
+                materialization_preflight = "pass";
+                materialization_gate = "pass";
+                yvex_backend_close(backend);
+                backend = NULL;
+            } else {
+                backend_status = rc == YVEX_ERR_UNSUPPORTED ? "unavailable" : "fail";
+                materialization_preflight = "fail";
+                materialization_gate = "fail";
+                hard_fail = 1;
+                yvex_error_clear(&err);
+            }
+        } else {
+            backend_status = "not-opened";
+            materialization_preflight = "fail";
+            materialization_gate = "fail";
+        }
+
+        if (!hard_fail && selected_ready) {
+            yvex_error graph_err;
+            yvex_error_clear(&graph_err);
+            rc = preflight_graph_guard(&ref,
+                                       backend_name,
+                                       0,
+                                       integrity_options.token_id,
+                                       &graph_report,
+                                       &graph_err);
+            if (rc == YVEX_OK && strcmp(graph_report.guard_status, "pass") == 0) {
+                graph_partial_guard = "pass";
+                graph_partial_dispatch_ready = "true";
+                graph_partial_reference_ready = "true";
+            } else {
+                graph_partial_guard = "fail";
+                graph_partial_dispatch_ready = "false";
+                graph_partial_reference_ready = "false";
+                hard_fail = 1;
+                yvex_error_clear(&graph_err);
+            }
+        } else if (backend_name && !selected_ready && integrity_options.require_token_embedding) {
+            graph_partial_guard = "fail";
+        } else if (backend_name && !selected_ready) {
+            graph_partial_guard = "not-applicable";
+        }
+    }
+
+    if (hard_fail) {
+        report_status = "fail";
+        status = "integrity-report-fail";
+    }
+
+    printf("artifact_integrity_report: summary\n");
+    printf("model: %s\n", model_arg);
+    printf("resolved_path: %s\n", ref.path ? ref.path : "");
+    printf("model_input_kind: %s\n", model_input_kind);
+    printf("format: %s\n", integrity_report.format[0] ? integrity_report.format : "unknown");
+    if (integrity_report.version) {
+        printf("version: %u\n", integrity_report.version);
+    }
+    printf("architecture: %s\n",
+           integrity_report.architecture[0] ? integrity_report.architecture : "unknown");
+    printf("identity_status: %s\n", identity_status);
+    printf("digest_status: %s\n",
+           integrity_report.digest_status[0] ? integrity_report.digest_status : "unknown");
+    printf("sha256: %s\n", integrity_report.sha256[0] ? integrity_report.sha256 : "unavailable");
+    printf("registered_sha256: %s\n",
+           integrity_report.registered_sha256[0] ? integrity_report.registered_sha256 : "absent");
+    if (integrity_report.expected_sha256[0]) {
+        printf("expected_sha256: %s\n", integrity_report.expected_sha256);
+        printf("actual_sha256: %s\n",
+               integrity_report.sha256[0] ? integrity_report.sha256 : "unavailable");
+    }
+    printf("metadata_status: %s\n", metadata_status);
+    printf("readiness_status: %s\n", readiness_status);
+    printf("support_level: %s\n", support_level);
+    printf("integrity_status: %s\n", integrity_report.passed ? "pass" : "fail");
+    printf("integrity_errors: %u\n", integrity_report.error_count);
+    printf("integrity_warnings: %u\n", integrity_report.warning_count);
+    printf("tensor_count: %llu\n", integrity_report.tensor_count);
+    printf("known_tensor_bytes: %llu\n", integrity_report.known_tensor_bytes);
+    printf("tensor_ranges_checked: %llu\n", integrity_report.tensor_ranges_checked);
+    printf("tensor_ranges_invalid: %llu\n", integrity_report.tensor_ranges_invalid);
+    printf("tensor_shapes_checked: %llu\n", integrity_report.tensor_shapes_checked);
+    printf("tensor_shapes_invalid: %llu\n", integrity_report.tensor_shapes_invalid);
+    printf("tensor_dtypes_checked: %llu\n", integrity_report.tensor_dtypes_checked);
+    printf("tensor_dtypes_invalid: %llu\n", integrity_report.tensor_dtypes_invalid);
+    printf("tensor_byte_counts_checked: %llu\n", integrity_report.tensor_byte_counts_checked);
+    printf("tensor_byte_counts_invalid: %llu\n", integrity_report.tensor_byte_counts_invalid);
+
+    printf("primary_tensor: %s\n",
+           metadata_checked && current_metadata.entry.primary_tensor_name
+               ? current_metadata.entry.primary_tensor_name
+               : "");
+    printf("primary_tensor_role: %s\n",
+           metadata_checked && current_metadata.entry.primary_tensor_role
+               ? current_metadata.entry.primary_tensor_role
+               : "");
+    printf("primary_tensor_dtype: %s\n",
+           metadata_checked && current_metadata.entry.primary_tensor_dtype
+               ? current_metadata.entry.primary_tensor_dtype
+               : "");
+    printf("primary_tensor_rank: %u\n",
+           metadata_checked ? current_metadata.entry.primary_tensor_rank : 0u);
+    printf("primary_tensor_dims: %s\n",
+           metadata_checked && current_metadata.entry.primary_tensor_dims
+               ? current_metadata.entry.primary_tensor_dims
+               : "");
+    printf("primary_tensor_bytes: %llu\n",
+           metadata_checked ? current_metadata.entry.primary_tensor_bytes : 0ull);
+    printf("selected_embedding_ready: %s\n", selected_ready ? "true" : "false");
+    printf("selected_embedding_hidden_size: %llu\n", selected_hidden_size);
+    printf("selected_embedding_vocab_size: %llu\n", selected_vocab_size);
+    printf("selected_embedding_output_count: %llu\n", selected_output_count);
+    printf("selected_embedding_output_bytes: %llu\n", selected_output_bytes);
+    printf("selected_embedding_slice_bytes: %llu\n", selected_slice_bytes);
+    printf("backend_status: %s\n", backend_status);
+    printf("materialization_preflight: %s\n", materialization_preflight);
+    printf("materialization_backend: %s\n", materialization_backend);
+    printf("materialization_gate: %s\n", materialization_gate);
+    printf("allocation_required_bytes: %llu\n", integrity_report.known_tensor_bytes);
+    printf("graph_fixture_guard: %s\n", graph_fixture_guard);
+    printf("graph_partial_guard: %s\n", graph_partial_guard);
+    printf("graph_partial_backend: %s\n", graph_partial_backend);
+    printf("graph_partial_token: %u\n", integrity_options.token_id);
+    printf("graph_partial_dispatch_ready: %s\n", graph_partial_dispatch_ready);
+    printf("graph_partial_reference_ready: %s\n", graph_partial_reference_ready);
+    if (metadata_checked && ref.kind == YVEX_MODEL_REF_ALIAS) {
+        for (i = 0; i < (int)metadata_report.issue_count; ++i) {
+            printf("metadata_issue_%u_code: %s\n", (unsigned int)i,
+                   metadata_report.issues[i].code);
+            printf("metadata_issue_%u_registered: %s\n", (unsigned int)i,
+                   metadata_report.issues[i].registered_value);
+            printf("metadata_issue_%u_current: %s\n", (unsigned int)i,
+                   metadata_report.issues[i].current_value);
+        }
+    }
+    printf("execution_ready: false\n");
+    printf("prefill_ready: false\n");
+    printf("logits_ready: false\n");
+    printf("generation: unsupported\n");
+    printf("report_status: %s\n", report_status);
+    printf("status: %s\n", status);
+
+    yvex_model_ref_clear(&ref);
+    return hard_fail ? exit_for_status(YVEX_ERR_STATE) : 0;
 }
 
 static int command_graph(int argc, char **argv)
