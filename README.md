@@ -8,15 +8,14 @@ model facts, tensor roles, backend-resident weights, engine/session ownership,
 scheduled graph work, and eventually token production by code that can explain
 what happened.
 
-That last word, "eventually", is important. YVEX does not yet run a complete
-text-generation path. It does not own a real attention `KV` runtime, decode
-tokens, produce logits, sample text, or expose provider-backed generation. What
-exists today is narrower and real: controlled graph execution over fixture
-weights, selected `F16` embedding execution over real model bytes, a selected
-embedding-plus-RMSNorm segment over multiple real tensors, explicit token
-sequence input into those graph paths, and a prefill state summary built by
-running implemented selected graph segments over a token sequence. Those are
-engine foundations, not a full transformer run.
+YVEX is being built toward the whole local transformer path, not toward a
+permanent demo slice. Today the engine owns the lower part of that path:
+controlled graph execution, selected `F16` embedding over real model bytes,
+embedding plus RMSNorm over multiple real tensors, explicit token input, and a
+prefill state foundation. Those stages are deliberately small because they are
+the load-bearing floor for the later parts of the run: `KV` ownership, decode,
+logits, sampling, and generation. The current boundary is not the final shape of
+YVEX; it is the part of the engine that has already been made accountable.
 
 That is the point of the project. Local inference is easy to make theatrical.
 A prompt box can hide a weak runtime. A server can answer `/v1/models` while no
@@ -85,9 +84,8 @@ kind ran, how many tokens were processed, did cleanup happen after failure, and
 why is full execution still false? Those questions should not require reading a
 profiler trace or guessing from a chat transcript.
 
-YVEX is therefore not just a file inspector. It is also not a complete
-inference system. It is the lower runtime being assembled in public, with each
-new boundary tested before the next claim is made.
+YVEX is therefore growing the inference system from the lower runtime upward,
+with each stage made inspectable before the next one is added.
 
 ## The Local Inference Bet
 
@@ -102,95 +100,68 @@ which context length will later be possible, and what happens when a local file
 changes under a registered alias. YVEX treats those details as first-class
 runtime concerns instead of operator trivia.
 
-The hardware lane is intentionally split:
+The hardware story follows the same rule as the runtime story: use the lanes
+that have evidence, name future pressure directions clearly, and do not blur a
+machine class into a support claim.
 
-- `CPU` is the correctness and diagnostics lane. It is where parser behavior,
-  tensor accounting, reference values, cleanup, and small graph execution should
-  be easiest to reason about.
-- `CUDA` on Linux is the current accelerated lane. It is used for selected
-  materialization and the implemented graph paths where CUDA parity exists.
-- DGX Spark / GB10 is a CUDA-class pressure target for larger local runtime
-  work. It matters because memory pressure changes what can be attempted.
-- Metal on macOS is an important future local-machine lane. YVEX does not claim
-  it today.
-- ROCm on Strix Halo-class systems is also an important future lane. YVEX does
-  not claim it today.
+## Machines and backend lanes
 
-This is deliberately different from saying "the project runs everywhere." It
-does not. The current implementation is compact and C-native. It has CPU and
-CUDA behavior for the lower runtime work that exists today. Other lanes are
-named because they are part of the local inference bet, not because the code has
-earned them.
+YVEX keeps machine classes and backend lanes visible because local inference is
+not abstract. Memory size, backend ownership, copy behavior, and graph op
+coverage change what the engine can prove.
+
+| Machine class | Backend lane | Why it matters |
+| --- | --- | --- |
+| CPU-only developer machine | CPU reference | Parser, descriptor, token input, integrity, cleanup, and small graph correctness stay debuggable. |
+| CUDA workstation | CUDA | Current accelerated lane for selected materialization and selected graph execution. |
+| DGX Spark / GB10-class CUDA machine | CUDA pressure target | Useful for larger local artifacts and future memory-pressure work. |
+| High-memory MacBook / Mac Studio | Metal direction | Important local inference class for future unified-memory work. |
+| Strix Halo-class system | ROCm direction | Important local inference class for future unified-memory AMD work. |
+
+The current public claim remains CPU plus CUDA behavior for the runtime
+boundaries that exist today. Metal and ROCm are named as local inference
+directions, not current support.
 
 ## What YVEX Is
 
-YVEX is the engine layer between local model artifacts and future generation.
-It is concerned with states that many tools collapse into one word:
+YVEX is the engine layer for local transformer execution. It cares about model
+files, tensor roles, backend memory, graph scheduling, token input, prefill
+state, future `KV`, future decode, future logits, and future sampling because
+all of those belong to one run. They are not separate side quests; they are the
+layers of the same inference engine.
 
-- a model path;
-- a parsed `GGUF`;
-- a model descriptor;
-- a tensor with a runtime role;
-- a selected tensor planned for materialization;
-- backend-owned storage;
-- engine-owned weight attachment;
-- session visibility into engine state;
-- graph preflight;
-- backend dispatch;
-- output allocation;
-- reference comparison;
-- token input;
-- prefill state summary;
-- future `KV` ownership;
-- future logits and sampling.
+That engine starts before a prompt exists. It starts when a local artifact can
+be identified, parsed, bounded, mapped into tensor roles, and attached to
+runtime ownership. It continues when selected weights become backend-resident,
+when graph preflight can prove the next read is legal, when a backend op
+dispatches, when output bytes can be checked against a reference path, and when
+token sequences become runtime state rather than loose command arguments.
 
-Those are different states. They fail differently. They also need different
-tests. YVEX keeps them separate so the runtime can refuse precisely instead of
-collapsing everything into a vague "load failed" or "inference failed."
-
-The public command surface reflects that choice. `inspect`, `metadata`, and
+The public command surface reflects those layers. `inspect`, `metadata`, and
 `tensors` show artifact facts. `models` gives operator-local artifacts stable
 names without committing weights. `integrity report` summarizes local artifact
 state. `materialize`, `engine`, and `session` expose residency and ownership.
 `graph` runs the implemented fixture and selected real-tensor graph paths.
 `input` makes token sequences explicit. `prefill` creates the current prefill
-state summary. `run`, `chat`, and `yvexd` are diagnostic/provider-shaped
-surfaces until the engine can produce model output for real.
-
-The project is not trying to make the incomplete part look complete. If a path
-is below generation, it says so. If an artifact is structurally valid but lacks
-selected embedding readiness, it says so. If a registered alias points to bytes
-that changed, it says so. If a backend cannot run an op, graph dispatch should
-not happen. If a prefill command only creates a segment-summary state, it must
-not call that state `KV`, logits, decode, or generation.
+state summary. `run`, `chat`, and `yvexd` keep user and provider shapes wired
+while the lower runtime grows into the generation path.
 
 ## What YVEX Is Not
 
-YVEX is not a generic `GGUF` runner. It parses and emits GGUF because that is
-the artifact boundary YVEX currently uses, but arbitrary GGUF execution is not
-the project claim.
+YVEX is intentionally not a generic `GGUF` runner, a wrapper around another
+runtime, a chat UI, a benchmark leaderboard, or a model-weight repository. Those
+choices are not limitations of ambition; they are boundary choices. The project
+is focused on owning the native inference path rather than hiding missing
+runtime state behind a broad surface.
 
-YVEX is not a wrapper around another inference runtime. The runtime state it
-does own is native: descriptors, selected weights, backend allocation summaries,
-engine/session ownership, graph result structs, token input objects, prefill
-state summaries, and CLI reports.
+`yvexd` is currently a provider/status boundary. It is there so server shape can
+be wired early, but provider-backed generation should only arrive when the same
+runtime path can actually prefill, decode, produce logits, sample, and stream
+tokens.
 
-YVEX is not a chat UI. The `chat` and REPL surfaces are diagnostics until a real
-generation path exists under them.
-
-YVEX is not a provider generation server. `yvexd` is useful for status, metrics,
-model listing, registry/direct-path handling, and provider-shaped diagnostics.
-It must keep reporting generation as unavailable until the runtime can back it.
-
-YVEX is not a benchmark leaderboard. It has correctness and regression
-measurements today: exact fixture values, checksums, max-diff comparisons, token
-selection, prefill state summaries, and guard/refusal behavior. Token/sec
-numbers wait for prefill over real transformer state, decode, logits, sampling,
-and generation in one reproducible path.
-
-YVEX is not a model artifact repository. Real weights, generated GGUFs,
-operator registries, reports, logs, and build output stay outside git. The repo
-contains source, headers, docs, tiny fixtures, and tests.
+Real weights, generated GGUFs, operator registries, reports, logs, and build
+output stay outside git. The repo contains source, headers, docs, tiny fixtures,
+and tests.
 
 ## Model Artifacts
 
@@ -515,11 +486,10 @@ first RMSNorm weight such as `blk.0.attn_norm.weight` with explicit epsilon to
 produce a normalized `F32` vector.
 
 That path is important for a different reason than the embedding-only segment.
-It proves that memory planning, graph scheduling, backend dispatch, reference
-comparison, and cleanup can cover more than one tensor and more than one op. It
-is the first larger real-model graph segment, but it is still a segment. It is
-not a transformer block. It is not prompt prefill. It does not own `KV`. It does
-not produce logits.
+It is the first larger real-model graph slice on the road to transformer block
+execution. It proves multi-tensor scheduling, intermediate memory planning,
+backend RMSNorm support, cleanup, and reference comparison before attention and
+MLP are added.
 
 The command is intentionally explicit:
 
@@ -567,22 +537,17 @@ prefill.
 
 ## Prefill State Foundation
 
-YVEX now has a prefill state foundation. The word foundation is doing work here.
-This is not transformer prefill yet. It does not allocate attention `KV`, does
-not process full layers, does not produce logits, and does not make the session
-decode-ready.
+The prefill state foundation is the first place where a token sequence becomes
+runtime state instead of a command argument. It records positions, processed
+tokens, per-token segment summaries, checksums, output byte accounting, and
+cleanup status. It is still below attention `KV` and logits, but it is no
+longer just token parsing.
 
-The current prefill state is a segment-summary state built from explicit token
-input. The runtime takes a validated token sequence, runs the implemented
-selected segment over tokens in order, records positions, per-token execution
-summaries, checksums, output byte accounting, and cleanup status, then reports
-that the state is not `KV`-ready, not decode-ready, not logits-ready, and not
-generation-ready.
-
-That may sound modest, but it is a real boundary. Before YVEX can own `KV`, it
-has to own the shape of token-sequence processing: token count, position range,
-per-token graph work, cleanup after partial failure, and a state object that
-can be inspected without pretending to be more than it is.
+The current state uses the implemented selected embedding-plus-RMSNorm segment
+as the per-token graph slice. That gives the next runtime boundary something
+concrete to attach to: position accounting, per-token graph work, failure
+cleanup, checksum aggregation, and a state object that can be inspected before
+minimal `KV` ownership arrives.
 
 The command shape is:
 
@@ -594,33 +559,8 @@ The command shape is:
   --tokens 0,1,2
 ```
 
-The next runtime boundary is minimal `KV` ownership. The segment-summary
-foundation makes that next boundary less vague.
-
-## Backend Lanes
-
-YVEX keeps backend lanes conceptually separate because each lane answers a
-different engineering question.
-
-`CPU` is the reference lane. It should be boring, inspectable, and stable. It is
-where tiny fixtures, raw reference comparisons, shape/range failures, cleanup,
-prefill state summaries, and graph result accounting are easiest to reason
-about.
-
-`CUDA` is the active acceleration lane on Linux. The current CUDA path covers
-backend diagnostics, selected materialization, fixture parity, selected
-embedding execution, selected embedding-plus-RMSNorm execution, and prefill
-state creation where the host has CUDA available.
-
-GB10 / DGX Spark matters as a pressure target because high-memory local CUDA
-machines change the scale of artifacts that can be exercised. It does not turn
-YVEX into a complete model runner by itself.
-
-Metal and ROCm are future lanes. They matter because local inference is not only
-about one vendor stack, and high-memory local machines are a central part of the
-project bet. But the README should not blur design pressure into support. The
-current public claim remains CPU plus CUDA behavior for the runtime boundaries
-that exist today.
+The next runtime boundary is minimal `KV` ownership. The prefill state
+foundation makes that boundary less vague.
 
 ## Provider Boundary
 
@@ -644,31 +584,22 @@ Typical daemon exploration starts here:
 The runbook has the current daemon examples. The README deliberately does not
 turn those examples into a generation story.
 
-## Measurement Posture
+## Speed and evaluation shape
 
-YVEX has measurements, but not benchmark numbers. That distinction matters.
+YVEX should publish speed numbers only for runtime paths it actually owns. Today
+that means correctness and regression evidence, not token/sec claims. When the
+engine owns real prefill, decode, logits, and generation in one path, speed
+tables should include machine, backend, artifact identity, qtype, context
+length, command, and reproducibility notes.
 
-Valid measurements today are correctness and regression measurements at
-boundaries the runtime owns:
-
-- exact output values for controlled fixtures;
-- output checksums for selected embedding;
-- raw-artifact reference checksums;
-- max absolute diff for embedding-plus-RMSNorm;
-- token parsing and bounds behavior;
-- prefill state summaries;
-- materialization planned/allocated/transferred byte accounting;
-- graph guard phase and cleanup behavior;
-- CPU/CUDA parity for implemented paths on CUDA hosts.
-
-Invalid claims today include token/sec, model quality, long-context throughput,
-provider latency, sampling behavior, and generation speed. Those require a
-runtime path that does not exist yet. When real prefill, decode, logits,
-sampling, and generation are implemented in one reproducible path, benchmark
-reporting will need artifact identity, backend, qtype, context length, machine,
-command, and trace/profile context.
-
-Until then, benchmark results: none.
+| Measurement | What will be measured | When it becomes meaningful |
+| --- | --- | --- |
+| Fixture graph correctness | exact values and checksums | already useful for executor regression |
+| Selected segment correctness | checksum and max-diff against raw-artifact reference | useful for graph/kernel regression |
+| Prefill throughput | token interval throughput over real prefill | once prefill owns real transformer state |
+| Decode throughput | generated-token decode speed | once decode and logits exist |
+| Generation throughput | end-to-end prompt plus generated tokens | once sampling and generation exist |
+| Capability regression | task-level output stability | once the same generation path users run exists |
 
 ## Build and Validation
 
@@ -731,24 +662,20 @@ operator artifacts should stay out of git.
 
 ## Documentation
 
-If you are looking for a specific surface, YVEX keeps the canonical docs small
-and direct. Otherwise, this README gives the public project posture.
-
-- [docs/operator-runbook.md](docs/operator-runbook.md): command-first workflow
-  for local artifacts, integrity, materialization, engine/session attachment,
-  graph proofs, daemon status, token input, prefill state, and validation.
-- [docs/api.md](docs/api.md): public C API, ownership rules, report structs,
-  backend capabilities, token input, prefill state summaries, materialization
-  summaries, graph results, and integrity surfaces.
-- [docs/contract.md](docs/contract.md): CLI, filesystem, registry, backend,
-  server, output, validation, and claim contract.
-- [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md): external artifact cards, selected
-  pressure artifacts, digest facts, tensor facts, and validation posture.
-- [AGENTS.md](AGENTS.md): operating rules for humans and coding agents working
-  in this repository.
-- [docs/spine.md](docs/spine.md): internal delivery map. It is not product
-  documentation, but it is the source of truth for implementation order inside
-  this repository.
+The public documentation is intentionally small:
+[docs/operator-runbook.md](docs/operator-runbook.md) is the command-first
+workflow for artifacts, integrity, materialization, graph proofs, token input,
+prefill state, daemon status, and validation; [docs/api.md](docs/api.md)
+documents the C API, ownership rules, report structs, backend capabilities,
+token input, prefill state summaries, materialization summaries, graph results,
+and integrity surfaces; [docs/contract.md](docs/contract.md) is the behavior
+and claim contract for CLI output, filesystem state, registry, backend, server,
+validation, and public boundaries; [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md)
+records external artifact cards, selected pressure artifacts, digest facts,
+tensor facts, and validation posture; [AGENTS.md](AGENTS.md) gives repository
+operating rules for humans and coding agents; and
+[docs/spine.md](docs/spine.md) is the internal delivery map, not product
+documentation.
 
 ## License
 

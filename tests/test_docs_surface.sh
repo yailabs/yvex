@@ -36,6 +36,16 @@ if grep -nE '^## Current state$|^## Runtime roadmap$|Current YVEX status|Runtime
   exit 1
 fi
 
+if grep -nF "not a full transformer run" README.md ||
+   grep -nF "not a complete inference system" README.md ||
+   grep -nF "not transformer prefill yet" README.md ||
+   grep -nF "not a real prefill" README.md ||
+   grep -nF "only foundations" README.md ||
+   grep -nF "benchmark results: none" README.md; then
+  echo "README must frame staged runtime progress as inference-engine vision, not boundary apology" >&2
+  exit 1
+fi
+
 count="$(find docs -maxdepth 1 -type f | wc -l | tr -d ' ')"
 if [ "$count" -ne 4 ]; then
   echo "unexpected docs file count: $count"
