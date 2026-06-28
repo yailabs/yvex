@@ -423,6 +423,9 @@ readiness, materialization preflight, and graph-entry guard status.
 The test suite includes a consolidated artifact-integrity regression harness for
 structural corruption, identity drift, metadata drift, materialization preflight,
 and graph guard refusal paths.
+Artifact integrity is now a closed prerequisite module for broader graph
+expansion. These checks are local runtime boundaries, not supply-chain security
+or inference readiness.
 
 The local registry exists because real artifact paths are long and
 machine-specific. `.yvex/models.local.json` is ignored local state, and

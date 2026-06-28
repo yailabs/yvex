@@ -279,8 +279,8 @@ unbounded spreadsheet.
 | ARTIFACT.INTEGRITY.7 | complete | Graph execution integrity guard |
 | ARTIFACT.INTEGRITY.8 | complete | Corrupt artifact regression harness |
 | ARTIFACT.INTEGRITY.9 | complete | Operator integrity report and doctor integration |
-| ARTIFACT.INTEGRITY.FINAL.0 | next | Artifact integrity closeout before graph expansion |
-| M6 | planned | Real-model graph segment expansion |
+| ARTIFACT.INTEGRITY.FINAL.0 | complete | Artifact integrity closeout before graph expansion |
+| M6 | next | Real-model graph segment expansion |
 | M7 | planned | Prompt/token input boundary |
 | M8 | planned | Prefill state foundation |
 | M9 | planned | Minimal KV ownership and append/read boundary |
@@ -322,9 +322,9 @@ source/native artifact evidence
   -> logits regression
   -> sampling
   -> constrained generation
-  -> interactive CLI generation
+  -> CLI generation
   -> provider/server generation
-  -> generation traces/profiles/diagnostics
+  -> traces/profiles
 ```
 
 The separation matters. Real partial graph execution is not prefill. Prefill is
@@ -334,9 +334,10 @@ generation. Provider compatibility is not basic provider status. Benchmarking is
 not correctness.
 
 Artifact integrity is not optional once scheduled graph work reads real tensor
-ranges. M5 proved real selected tensor participation. ARTIFACT.INTEGRITY.0 now
-hardens the artifact assumptions before M6 expands tensor participation beyond
-the selected embedding segment.
+ranges. M5 proved real selected tensor participation. The artifact integrity and
+corruption safety rung is now implemented through ARTIFACT.INTEGRITY.0-.9 and
+FINAL.0. Larger real-model graph segments may proceed only while preserving
+those gates.
 
 ### Inference Runtime Pipeline
 
@@ -528,7 +529,7 @@ mapped and the baseline validator exists.
 | ARTIFACT.INTEGRITY.7 | complete | Graph execution integrity guard |
 | ARTIFACT.INTEGRITY.8 | complete | Corrupt artifact regression harness |
 | ARTIFACT.INTEGRITY.9 | complete | Operator integrity report and doctor integration |
-| ARTIFACT.INTEGRITY.FINAL.0 | next | Artifact integrity closeout before graph expansion |
+| ARTIFACT.INTEGRITY.FINAL.0 | complete | Artifact integrity closeout before graph expansion |
 
 ARTIFACT.INTEGRITY.0 defined the artifact integrity threat model and validator
 baseline. YVEX now rejects baseline structural corruption before
@@ -620,11 +621,12 @@ graph-entry guard status for implemented paths. It is local operator evidence,
 not supply-chain security, model quality validation, full model support, or
 inference readiness.
 
-ARTIFACT.INTEGRITY.FINAL.0 closes the artifact integrity module before larger
-real-model graph expansion. Closeout requires validator coverage, corrupt
-fixture coverage, registry drift coverage, materialization guard coverage,
-graph execution guard coverage, operator report docs, and no unsupported
-integrity claims.
+ARTIFACT.INTEGRITY.FINAL.0 closes Artifact Integrity as a prerequisite module
+for M6. The module now covers structural validation, digest identity, registry
+metadata drift, corruption fixtures, tensor range validation, shape/dtype
+accounting, materialization preflight, graph-entry guards, operator reporting,
+and regression coverage. This does not imply supply-chain security, full model
+execution, inference readiness, generation, logits, or benchmarks.
 
 ### Model Support Ladder
 
@@ -967,24 +969,14 @@ No diagram may imply support that the code does not implement.
 ## 8. Active Next
 
 ```text
-ARTIFACT.INTEGRITY.FINAL.0 - Artifact integrity closeout before graph expansion
-```
-
-Next implementation: ARTIFACT.INTEGRITY.FINAL.0. It should close the artifact
-integrity module before broader graph expansion by auditing validator,
-corruption fixture, registry drift, materialization gate, graph guard, report,
-docs, and no-claim boundaries.
-
-Next runtime expansion after integrity baseline:
-
-```text
 M6 - Real-model graph segment expansion
 ```
 
-M6 sits inside the larger runtime pipeline. It must expand from the selected
-embedding segment to a larger scheduled real-model graph segment with multiple
-real ops, backend dispatch, explicit intermediate/output memory planning,
-output/regression proof, and cleanup/failure tests. It must not claim
+Next implementation: M6. It sits inside the larger runtime pipeline. It must
+expand from the selected embedding segment to a larger scheduled real-model
+graph segment with multiple real ops, backend dispatch, explicit
+intermediate/output memory planning, output/regression proof, and
+cleanup/failure tests. It must not claim
 prompt/prefill, KV runtime, logits, sampling, generation, server generation,
 evaluation, or benchmark readiness.
 
@@ -1035,6 +1027,23 @@ alias identity checks are current ARTIFACT.INTEGRITY.1 validation requirements:
 `models add`, `models verify`, `integrity check --expect-sha256`,
 model/materialize gate digest mismatch, and stale-alias refusal before
 materialization or graph execution.
+
+Selected artifact closeout proof set:
+
+```sh
+./yvex models verify deepseek4-v4-flash-selected-embed
+./yvex integrity report --model deepseek4-v4-flash-selected-embed --backend cpu --require-token-embedding --partial-token 0
+./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cpu
+./yvex graph --model deepseek4-v4-flash-selected-embed --backend cpu --execute-partial --partial-token 0
+./yvex integrity report --model deepseek4-v4-flash-selected-embed --backend cuda --require-token-embedding --partial-token 0
+./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
+./yvex graph --model deepseek4-v4-flash-selected-embed --backend cuda --execute-partial --partial-token 0
+```
+
+This proof set preserves the M5 selected embedding checksum boundary while
+checking identity, metadata, integrity report aggregation, materialization
+preflight, and graph-entry guard behavior. It remains selected embedding partial
+execution only.
 
 When the operator-local selected artifact and CUDA host are available,
 `model-gate` and `materialize-gate` must run against the active selected artifact

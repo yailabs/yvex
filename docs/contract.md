@@ -181,6 +181,13 @@ failures, graph guard failures, and cleanup/repeat behavior. The harness is
 regression coverage for implemented boundaries; it is not fuzzing, sandboxing,
 complete malicious-input coverage, or supply-chain security.
 
+Artifact integrity is closed as a prerequisite module for broader real-model
+graph expansion. The closed module covers structural validation, digest identity,
+registry metadata drift, corrupt fixture coverage, tensor byte ranges,
+shape/dtype accounting, materialization preflight, graph-entry guards, operator
+reporting, and regression coverage. This does not imply supply-chain security,
+full model execution, inference readiness, generation, logits, or benchmarks.
+
 ## 5. Server Contract
 
 `./yvexd` exposes a provider/status shell:

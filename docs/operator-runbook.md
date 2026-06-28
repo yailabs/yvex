@@ -120,7 +120,37 @@ Alias policy is strict. Use canonical aliases such as
 `deepseek4-v4-flash-selected-embed`; simple labels such as `controlled` are
 rejected.
 
-## 5. Check artifact integrity
+## 5. Normal selected-artifact path
+
+After the selected artifact is registered, the normal path is verify, report,
+materialize, attach, and execute the selected embedding segment.
+
+```sh
+./yvex models verify deepseek4-v4-flash-selected-embed
+
+./yvex integrity report \
+  --model deepseek4-v4-flash-selected-embed \
+  --backend cpu \
+  --require-token-embedding \
+  --partial-token 0
+
+./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cpu
+./yvex engine --model deepseek4-v4-flash-selected-embed --backend cpu
+./yvex session deepseek4-v4-flash-selected-embed --backend cpu
+
+./yvex graph \
+  --model deepseek4-v4-flash-selected-embed \
+  --backend cpu \
+  --execute-partial \
+  --partial-token 0
+```
+
+This path proves local artifact identity, integrity, backend residency, engine
+attachment, session visibility, and selected embedding partial graph execution.
+It is still not full model execution, prefill, decode, logits, sampling, or
+generation.
+
+## 6. Check artifact integrity
 
 Run the baseline integrity check before materialization or graph execution when
 checking operator-local artifacts.
@@ -177,7 +207,7 @@ For selected embedding readiness, include the partial-token boundary:
   --partial-token 0
 ```
 
-## 6. Verify artifact identity and registry metadata
+## 7. Verify artifact identity and registry metadata
 
 Registered aliases record local file identity. Verify the alias before
 materialization or graph execution when checking that the operator-local file is
@@ -229,7 +259,7 @@ or graph execution. Digest checks are local identity evidence only. They do not
 prove remote provenance, author identity, malware absence, model quality, or
 supply-chain security.
 
-## 7. Generate an operator integrity report
+## 8. Generate an operator integrity report
 
 Use the integrity report as the normal operator summary before materialization
 or real partial graph execution.
@@ -266,7 +296,7 @@ text, and it is not a supply-chain security audit.
 If no `--backend` is supplied, backend-dependent sections report
 `not-checked`.
 
-## 8. Materialize and attach DeepSeek selected weights
+## 9. Materialize and attach DeepSeek selected weights
 
 Materialization copies the selected tensor bytes into backend-owned storage.
 Engine attachment then makes that backend-resident tensor engine-owned runtime
@@ -317,7 +347,7 @@ graph_execution_ready: false
 The engine owns the attached backend tensors. The session observes that state;
 it does not own or execute the weights.
 
-## 9. Execute a real selected embedding segment
+## 10. Execute a real selected embedding segment
 
 The real partial graph path uses the selected `F16` DeepSeek embedding tensor. It
 executes a constrained token-embedding graph segment over engine-attached
@@ -375,7 +405,7 @@ sample values as CPU for the selected token. This is the first real-model partia
 graph segment. It is not prefill, KV runtime, decode, logits, sampling,
 generation, or a CUDA transformer backend.
 
-## 10. Execute a deterministic fixture graph
+## 11. Execute a deterministic fixture graph
 
 M4 fixture execution uses a tiny controlled GGUF so output can be checked
 exactly. The example keeps the file under the operator-owned DeepSeek GGUF
@@ -442,7 +472,7 @@ CUDA-capable hosts can run the same fixture graph on CUDA:
 Expected outcome: the CUDA output values match the CPU fixture output. This is
 fixture graph parity only; it is not a CUDA transformer backend.
 
-## 11. Run yvexd with the DeepSeek alias
+## 12. Run yvexd with the DeepSeek alias
 
 `yvexd` is a provider/status shell. It accepts a direct path or registered alias
 for `--model`, then serves status endpoints. In one-request mode it exits after
@@ -489,7 +519,7 @@ GET /metrics
 GET /v1/models
 ```
 
-## 12. Run model and materialization gates
+## 13. Run model and materialization gates
 
 Use gates for repeatable selected-artifact checks. These commands encode
 expected file identity and tensor facts.
@@ -536,7 +566,7 @@ expected file identity and tensor facts.
 Expected outcome: gate status is pass when the selected artifact and CUDA host
 are available. The result remains selected-tensor materialization only.
 
-## 13. Use chat / REPL diagnostics only with tokenizer-bearing artifacts
+## 14. Use chat / REPL diagnostics only with tokenizer-bearing artifacts
 
 The selected DeepSeek embedding artifact does not include the tokenizer metadata
 needed by `chat`. Use `chat` with a tokenizer-bearing fixture or future
@@ -552,7 +582,7 @@ exits on `/quit`. Plain user text produces the diagnostic unsupported-generation
 placeholder; it is not inference. Do not use the selected DeepSeek embedding
 artifact as a chat model.
 
-## 14. Quantization / imatrix / provenance commands
+## 15. Quantization / imatrix / provenance commands
 
 Keep qtype storage, policy, provenance, and compute boundaries separate.
 
@@ -571,7 +601,7 @@ Manifest-dependent commands:
 Expected outcome: these surfaces report policy or provenance state. They do not
 run native quantization, calibration, or model execution.
 
-## 15. Validate the repository
+## 16. Validate the repository
 
 Run the standard validation gate before committing changes.
 
@@ -598,7 +628,7 @@ make check-cuda
 Expected outcome: baseline tests, CLI smoke, docs surface, repository surface,
 and CUDA validation pass. If CUDA is unavailable, report that explicitly.
 
-## 16. Artifact and path hygiene
+## 17. Artifact and path hygiene
 
 Check that generated artifacts and local model state are not tracked.
 
@@ -619,7 +649,7 @@ grep -R -nE '(/home|/Users|/mnt)/[^[:space:]]+' README.md MODEL_ARTIFACTS.md AGE
 Expected outcome: no personal or machine-specific absolute paths in public
 documentation.
 
-## 17. Debugging checklist
+## 18. Debugging checklist
 
 Use this order before assuming a runtime bug:
 
@@ -639,7 +669,7 @@ never commit generated GGUFs or local registry files
 For daemon checks, start with `--one-request` and a status endpoint before
 testing longer-lived processes.
 
-## 18. Benchmarking and evaluation status
+## 19. Benchmarking and evaluation status
 
 Benchmarking and capability evaluation are not implemented yet. Throughput,
 token latency, official-vector evaluation, logits regression, and generation
@@ -648,7 +678,7 @@ quality suites belong after the relevant graph/logits/generation runtime exists.
 Do not create benchmark claims from materialization, CUDA probing, daemon
 status, or diagnostic console behavior.
 
-## 19. What is not implemented yet
+## 20. What is not implemented yet
 
 The current runtime does not implement full model execution, prefill, decode,
 sampling, generation, provider-compatible generation, full DeepSeek support,

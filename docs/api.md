@@ -192,3 +192,10 @@ validation, selected embedding readiness, materialization preflight, and graph
 entry guard status for implemented paths. A passing report is local evidence
 only; it is not supply-chain security, provenance, model quality validation, or
 inference readiness.
+
+Together, the artifact identity report, artifact integrity report, tensor range
+report, tensor shape accounting, registry metadata drift report,
+materialization gate summary, graph guard summary, and operator integrity report
+form the closed artifact-integrity surface. These are caller-owned reports with
+copied scalar or string fields; they do not transfer artifact ownership, backend
+ownership, or execution ownership.
