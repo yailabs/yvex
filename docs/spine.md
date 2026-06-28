@@ -106,6 +106,7 @@ explicit prompt/token input boundary
 segment-summary prefill state foundation from validated token sequences
 minimal session-owned KV ownership and append/read boundary
 minimal KV-backed prefill binding from segment-summary state
+standalone RoPE/position graph op boundary
 artifact integrity validator and corruption fixture suite
 file identity digest enforcement
 registry metadata drift diagnostics
@@ -250,8 +251,8 @@ tables.
 | SPINE.REBASE.5 | complete | docs | Unified full inference engine spine | all delivery rows consolidated into one ledger and dependency map |
 | M9 | complete | kv | Minimal KV ownership and append/read boundary | session-owned KV shape, allocation, append/read, lifecycle, cleanup, and context overflow behavior |
 | PREFILL.1 | complete | prefill | KV-backed prefill state binding | M8 segment-summary state connects to minimal KV ownership without decode/logits claim |
-| GRAPH.OPS.0 | next | graph | RoPE and position operation boundary | position-dependent graph op implemented with tests and backend rules |
-| GRAPH.OPS.1 | planned | graph | Attention primitive boundary | attention inputs, masks, scratch, backend dispatch, and failure paths implemented |
+| GRAPH.OPS.0 | complete | graph | RoPE and position operation boundary | position-dependent graph op implemented with tests and backend rules |
+| GRAPH.OPS.1 | next | graph | Attention primitive boundary | attention inputs, masks, scratch, backend dispatch, and failure paths implemented |
 | GRAPH.OPS.2 | planned | graph | Projection and matmul primitive boundary | matmul/projection path implemented with dtype/qtype/backend limits |
 | GRAPH.OPS.3 | planned | graph | MLP and routed-expert primitive boundary | feed-forward or routed expert slice implemented with explicit tensor roles and backend support |
 | GRAPH.BLOCK.0 | planned | graph | First transformer block execution | one block executes through normalization, attention, residual, MLP path with owned scratch |
@@ -395,6 +396,13 @@ parser, materialization, backend, graph scheduling, reference comparison, and
 cleanup boundaries. They do not prove full model materialization, transformer
 attention, MLP, routed experts, logits, sampling, or generation.
 
+The standalone RoPE operation proves a position-dependent F32 graph op over a
+small deterministic vector on CPU and CUDA where available. It validates
+head_dim parity, position, byte accounting, backend op support, output
+allocation, dispatch, reference comparison, cleanup, checksum, and max-diff
+reporting. It does not prove attention, QKV projection, transformer block
+execution, layer scheduling, decode, logits, sampling, or generation.
+
 Full model materialization and placement are explicit planned work because the
 runtime must inventory and place the complete required tensor set before a real
 transformer path can rely on it. Decode cannot be meaningful until graph/layer
@@ -414,12 +422,14 @@ backend support.
 ## 7. Active Next
 
 ```text
-GRAPH.OPS.0 - RoPE and position operation boundary
+GRAPH.OPS.1 - Attention primitive boundary
 ```
 
-Next implementation: GRAPH.OPS.0. It must add the first position-dependent graph
-operation boundary without claiming full transformer prefill, decode, logits,
-sampling, generation, server generation, evaluation, or benchmark readiness.
+Next implementation: GRAPH.OPS.1. It must introduce the attention primitive
+boundary with explicit inputs, masks, scratch, backend dispatch, failure paths,
+and cleanup behavior. It must not claim transformer block execution, layer
+scheduling, full transformer prefill, decode, logits, sampling, generation,
+server generation, evaluation, or benchmark readiness.
 
 After PREFILL.1, the next runtime work is not automatically decode. The spine
 expects graph/layer expansion rows to determine whether decode can run over
@@ -474,6 +484,13 @@ Selected segment proof set:
 ./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda --segment embedding-rmsnorm --tokens 0,1
 ./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
 ./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda --segment embedding-rmsnorm --tokens 0,1,2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
+```
+
+Standalone graph op proof set:
+
+```sh
+./yvex graph --backend cpu --execute-op --op rope --position 7 --head-dim 8
+./yvex graph --backend cuda --execute-op --op rope --position 7 --head-dim 8
 ```
 
 Spine structure proof:

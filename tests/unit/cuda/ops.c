@@ -71,6 +71,8 @@ int yvex_cuda_test_ops(void)
     yvex_device_tensor *rms_input = NULL;
     yvex_device_tensor *rms_weight = NULL;
     yvex_device_tensor *rms_out = NULL;
+    yvex_device_tensor *rope_input = NULL;
+    yvex_device_tensor *rope_out = NULL;
     yvex_device_tensor *out = NULL;
     yvex_backend_tensor_desc desc;
     yvex_error err;
@@ -90,6 +92,8 @@ int yvex_cuda_test_ops(void)
     unsigned char rms_weight_data[8];
     float rms_out_data[4];
     float rms_expected[4] = {0.9999995f, 1.9999990f, 2.9999985f, 3.9999980f};
+    float rope_input_data[8] = {0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f};
+    float rope_out_data[8];
     unsigned int rms_half_values[4] = {0x3c00u, 0x4000u, 0x4200u, 0x4400u};
     unsigned int i;
     int rc;
@@ -109,6 +113,8 @@ int yvex_cuda_test_ops(void)
                      "cuda embed supported");
     YVEX_TEST_ASSERT(yvex_backend_supports(cuda_backend, YVEX_BACKEND_CAP_OP_RMS_NORM),
                      "cuda rmsnorm supported");
+    YVEX_TEST_ASSERT(yvex_backend_supports(cuda_backend, YVEX_BACKEND_CAP_OP_ROPE),
+                     "cuda rope supported");
     YVEX_TEST_ASSERT(!yvex_backend_supports(cuda_backend, YVEX_BACKEND_CAP_OP_MATMUL),
                      "cuda matmul unsupported");
     YVEX_TEST_ASSERT(!yvex_backend_supports(cuda_backend, YVEX_BACKEND_CAP_OP_ATTENTION),
@@ -157,6 +163,33 @@ int yvex_cuda_test_ops(void)
                          "cuda rms output matches expected");
     }
 
+    make_desc(&desc, "rope_input", YVEX_DTYPE_F32, 1, 8, 0, sizeof(rope_input_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &rope_input, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda rope input");
+    rc = yvex_backend_tensor_write(cuda_backend, rope_input, rope_input_data, sizeof(rope_input_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda rope input");
+
+    make_desc(&desc, "rope_out", YVEX_DTYPE_F32, 1, 8, 0, sizeof(rope_out_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &rope_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda rope output");
+    rc = yvex_backend_op_rope(cuda_backend, rope_input, 0, 10000.0f, rope_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "cuda rope position zero succeeds");
+    rc = yvex_backend_tensor_read(cuda_backend, rope_out, rope_out_data, sizeof(rope_out_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read cuda rope zero output");
+    for (i = 0; i < 8u; ++i) {
+        YVEX_TEST_ASSERT(float_close(rope_out_data[i], rope_input_data[i], 0.0001f),
+                         "cuda rope position zero is identity");
+    }
+
+    rc = yvex_backend_op_rope(cuda_backend, rope_input, 7, 10000.0f, rope_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "cuda rope position seven succeeds");
+    rc = yvex_backend_tensor_read(cuda_backend, rope_out, rope_out_data, sizeof(rope_out_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read cuda rope output");
+    YVEX_TEST_ASSERT(!float_close(rope_out_data[0], rope_input_data[0], 0.0001f),
+                     "cuda rope non-zero position changes first pair");
+
+    yvex_backend_tensor_free(cuda_backend, rope_out);
+    yvex_backend_tensor_free(cuda_backend, rope_input);
     yvex_backend_tensor_free(cuda_backend, rms_out);
     yvex_backend_tensor_free(cuda_backend, rms_weight);
     yvex_backend_tensor_free(cuda_backend, rms_input);

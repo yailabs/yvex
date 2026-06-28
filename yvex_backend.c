@@ -58,6 +58,7 @@ const char *yvex_backend_capability_name(yvex_backend_capability capability)
     case YVEX_BACKEND_CAP_OP_EMBED: return "op_embed";
     case YVEX_BACKEND_CAP_OP_MATMUL: return "op_matmul";
     case YVEX_BACKEND_CAP_OP_RMS_NORM: return "op_rms_norm";
+    case YVEX_BACKEND_CAP_OP_ROPE: return "op_rope";
     case YVEX_BACKEND_CAP_OP_ATTENTION: return "op_attention";
     }
     return "unknown";
@@ -364,6 +365,32 @@ int yvex_backend_op_rms_norm(yvex_backend *backend,
     return backend->vtable->op_rms_norm(backend, input, weight, epsilon, out, err);
 }
 
+int yvex_backend_op_rope(yvex_backend *backend,
+                         const yvex_device_tensor *input,
+                         unsigned long long position,
+                         float rope_base,
+                         yvex_device_tensor *out,
+                         yvex_error *err)
+{
+    if (!backend || !input || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rope",
+                       "backend, input, and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (rope_base <= 1.0f) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rope",
+                       "rope_base must be greater than 1");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    (void)position;
+    if (!backend->vtable || !backend->vtable->op_rope) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_rope",
+                       "backend does not support RoPE op");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    return backend->vtable->op_rope(backend, input, position, rope_base, out, err);
+}
+
 
 
 int yvex_cpu_tensor_alloc(yvex_backend *backend,
@@ -397,6 +424,12 @@ int yvex_cpu_op_rms_norm(yvex_backend *backend,
                          float epsilon,
                          yvex_device_tensor *out,
                          yvex_error *err);
+int yvex_cpu_op_rope(yvex_backend *backend,
+                     const yvex_device_tensor *input,
+                     unsigned long long position,
+                     float rope_base,
+                     yvex_device_tensor *out,
+                     yvex_error *err);
 
 static int cpu_close(yvex_backend *backend, yvex_error *err)
 {
@@ -454,6 +487,7 @@ static int cpu_supports(const yvex_backend *backend, yvex_backend_capability cap
     case YVEX_BACKEND_CAP_TENSOR_READ_WRITE:
     case YVEX_BACKEND_CAP_OP_EMBED:
     case YVEX_BACKEND_CAP_OP_RMS_NORM:
+    case YVEX_BACKEND_CAP_OP_ROPE:
         return 1;
     case YVEX_BACKEND_CAP_OP_MATMUL:
     case YVEX_BACKEND_CAP_OP_ATTENTION:
@@ -475,6 +509,7 @@ static const yvex_backend_vtable cpu_vtable = {
     cpu_supports,
     yvex_cpu_op_embed,
     yvex_cpu_op_rms_norm,
+    yvex_cpu_op_rope,
 };
 
 int yvex_backend_open_cpu_impl(yvex_backend **out,
@@ -574,6 +609,122 @@ static double backend_sqrt_double(double x)
     return guess;
 }
 
+static double backend_abs_double(double x)
+{
+    return x < 0.0 ? -x : x;
+}
+
+static double backend_nth_root_double(double x, unsigned long long n)
+{
+    double lo = 1.0;
+    double hi = x > 1.0 ? x : 1.0;
+    unsigned int iter;
+
+    if (x <= 0.0 || n == 0) {
+        return 0.0;
+    }
+    if (n == 1) {
+        return x;
+    }
+    for (iter = 0; iter < 96u; ++iter) {
+        double mid = 0.5 * (lo + hi);
+        double acc = 1.0;
+        unsigned long long i;
+
+        for (i = 0; i < n; ++i) {
+            acc *= mid;
+            if (acc > x) {
+                break;
+            }
+        }
+        if (acc > x) {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    return 0.5 * (lo + hi);
+}
+
+static double backend_wrap_radians(double x)
+{
+    const double two_pi = 6.28318530717958647692;
+
+    while (x > 3.14159265358979323846) {
+        x -= two_pi;
+    }
+    while (x < -3.14159265358979323846) {
+        x += two_pi;
+    }
+    return x;
+}
+
+static void backend_sincos_double(double x, double *sine, double *cosine)
+{
+    double x2;
+    double s;
+    double c;
+
+    x = backend_wrap_radians(x);
+    x2 = x * x;
+    s = x * (1.0 -
+             (x2 / 6.0) +
+             ((x2 * x2) / 120.0) -
+             ((x2 * x2 * x2) / 5040.0) +
+             ((x2 * x2 * x2 * x2) / 362880.0));
+    c = 1.0 -
+        (x2 / 2.0) +
+        ((x2 * x2) / 24.0) -
+        ((x2 * x2 * x2) / 720.0) +
+        ((x2 * x2 * x2 * x2) / 40320.0);
+    if (backend_abs_double(s) < 0.000000000001) {
+        s = 0.0;
+    }
+    if (backend_abs_double(c) < 0.000000000001) {
+        c = 0.0;
+    }
+    if (sine) {
+        *sine = s;
+    }
+    if (cosine) {
+        *cosine = c;
+    }
+}
+
+static int backend_rope_head_dim(const yvex_device_tensor *tensor,
+                                 unsigned long long *out,
+                                 yvex_error *err)
+{
+    unsigned long long head_dim;
+
+    if (!tensor || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rope",
+                       "tensor and out are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (tensor->rank == 1) {
+        head_dim = tensor->dims[0];
+    } else if (tensor->rank == 2 && tensor->dims[0] == 1) {
+        head_dim = tensor->dims[1];
+    } else {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rope",
+                       "RoPE input must be rank 1 or dims [1, head_dim]");
+        return YVEX_ERR_FORMAT;
+    }
+    if (head_dim == 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rope",
+                       "rope-head-dim-zero");
+        return YVEX_ERR_FORMAT;
+    }
+    if ((head_dim & 1ull) != 0ull) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rope",
+                       "rope-head-dim-odd");
+        return YVEX_ERR_FORMAT;
+    }
+    *out = head_dim;
+    return YVEX_OK;
+}
+
 int yvex_cpu_op_embed(yvex_backend *backend,
                       const yvex_device_tensor *embedding,
                       const unsigned int *token_ids,
@@ -662,6 +813,78 @@ int yvex_cpu_op_embed(yvex_backend *backend,
             }
         }
     }
+    out->is_written = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_cpu_op_rope(yvex_backend *backend,
+                     const yvex_device_tensor *input,
+                     unsigned long long position,
+                     float rope_base,
+                     yvex_device_tensor *out,
+                     yvex_error *err)
+{
+    const float *input_data;
+    float *out_data;
+    unsigned long long head_dim;
+    unsigned long long pair_count;
+    unsigned long long pair;
+    double inverse_root;
+    double frequency = 1.0;
+    int rc;
+
+    if (!yvex_backend_tensor_owner_is(backend, input) ||
+        !yvex_backend_tensor_owner_is(backend, out)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_op_rope",
+                       "input and output tensors must belong to this backend");
+        return YVEX_ERR_STATE;
+    }
+    if (input->dtype != YVEX_DTYPE_F32 || out->dtype != YVEX_DTYPE_F32) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_rope",
+                       "CPU RoPE supports F32 input/output");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (!yvex_backend_tensor_same_shape(input, out)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rope",
+                       "RoPE output shape must match input shape");
+        return YVEX_ERR_FORMAT;
+    }
+    if (rope_base <= 1.0f) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rope",
+                       "rope_base must be greater than 1");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = backend_rope_head_dim(input, &head_dim, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (!tensor_is_f32_bytes(input, head_dim) || !tensor_is_f32_bytes(out, head_dim)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_rope",
+                       "RoPE input/output bytes must match F32 head_dim");
+        return YVEX_ERR_BOUNDS;
+    }
+
+    pair_count = head_dim / 2ull;
+    inverse_root = 1.0 / backend_nth_root_double((double)rope_base, pair_count);
+    input_data = (const float *)input->data;
+    out_data = (float *)out->data;
+
+    for (pair = 0; pair < pair_count; ++pair) {
+        unsigned long long even_index = pair * 2ull;
+        unsigned long long odd_index = even_index + 1ull;
+        double sine;
+        double cosine;
+        double even = (double)input_data[even_index];
+        double odd = (double)input_data[odd_index];
+        double angle = (double)position * frequency;
+
+        backend_sincos_double(angle, &sine, &cosine);
+        out_data[even_index] = (float)((even * cosine) - (odd * sine));
+        out_data[odd_index] = (float)((even * sine) + (odd * cosine));
+        frequency *= inverse_root;
+    }
+
     out->is_written = 1;
     yvex_error_clear(err);
     return YVEX_OK;

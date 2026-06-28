@@ -155,3 +155,40 @@ extern "C" __global__ void yvex_rms_norm_f32_weight_f16(const float *input,
         out[i] = input[i] * inv_rms * yvex_f16_bits_to_float((unsigned int)weight[i]);
     }
 }
+
+extern "C" __global__ void yvex_rope_f32(const float *input,
+                                         float *out,
+                                         unsigned long long head_dim,
+                                         unsigned long long position,
+                                         float inverse_root)
+{
+    unsigned long long pair =
+        ((unsigned long long)blockIdx.x * (unsigned long long)blockDim.x) +
+        (unsigned long long)threadIdx.x;
+    unsigned long long pair_count = head_dim / 2ull;
+    unsigned long long even_index;
+    unsigned long long odd_index;
+    unsigned long long i;
+    float frequency = 1.0f;
+    float angle;
+    float sine;
+    float cosine;
+    float even;
+    float odd;
+
+    if (pair >= pair_count) {
+        return;
+    }
+    for (i = 0; i < pair; ++i) {
+        frequency *= inverse_root;
+    }
+    angle = (float)position * frequency;
+    sine = sinf(angle);
+    cosine = cosf(angle);
+    even_index = pair * 2ull;
+    odd_index = even_index + 1ull;
+    even = input[even_index];
+    odd = input[odd_index];
+    out[even_index] = (even * cosine) - (odd * sine);
+    out[odd_index] = (even * sine) + (odd * cosine);
+}

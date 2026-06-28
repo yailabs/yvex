@@ -104,6 +104,16 @@ static const char yvex_cuda_kernels_ptx[] =
 ")\n"
 "{\n"
 "    ret;\n"
+"}\n"
+".visible .entry yvex_rope_f32(\n"
+"    .param .u64 p_input,\n"
+"    .param .u64 p_out,\n"
+"    .param .u64 p_head_dim,\n"
+"    .param .u64 p_position,\n"
+"    .param .f32 p_inverse_root\n"
+")\n"
+"{\n"
+"    ret;\n"
 "}\n";
 #endif
 
@@ -119,6 +129,72 @@ static int tensor_is_f16_bytes(const yvex_device_tensor *tensor,
 {
     return elements <= (unsigned long long)(UINT64_MAX / 2ull) &&
            tensor->bytes == elements * 2ull;
+}
+
+static double cuda_nth_root_double(double x, unsigned long long n)
+{
+    double lo = 1.0;
+    double hi = x > 1.0 ? x : 1.0;
+    unsigned int iter;
+
+    if (x <= 0.0 || n == 0) {
+        return 0.0;
+    }
+    if (n == 1) {
+        return x;
+    }
+    for (iter = 0; iter < 96u; ++iter) {
+        double mid = 0.5 * (lo + hi);
+        double acc = 1.0;
+        unsigned long long i;
+
+        for (i = 0; i < n; ++i) {
+            acc *= mid;
+            if (acc > x) {
+                break;
+            }
+        }
+        if (acc > x) {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    return 0.5 * (lo + hi);
+}
+
+static int cuda_rope_head_dim(const yvex_device_tensor *tensor,
+                              unsigned long long *out,
+                              yvex_error *err)
+{
+    unsigned long long head_dim;
+
+    if (!tensor || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rope",
+                       "tensor and out are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (tensor->rank == 1) {
+        head_dim = tensor->dims[0];
+    } else if (tensor->rank == 2 && tensor->dims[0] == 1) {
+        head_dim = tensor->dims[1];
+    } else {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rope",
+                       "RoPE input must be rank 1 or dims [1, head_dim]");
+        return YVEX_ERR_FORMAT;
+    }
+    if (head_dim == 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rope",
+                       "rope-head-dim-zero");
+        return YVEX_ERR_FORMAT;
+    }
+    if ((head_dim & 1ull) != 0ull) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rope",
+                       "rope-head-dim-odd");
+        return YVEX_ERR_FORMAT;
+    }
+    *out = head_dim;
+    return YVEX_OK;
 }
 
 static int ensure_kernel_module(yvex_cuda_backend_state *state, const char *where, yvex_error *err)
@@ -201,6 +277,29 @@ static int ensure_rms_norm_kernel(yvex_cuda_backend_state *state, yvex_error *er
                           "cuda.rms_norm.load_f16_function", err);
     if (rc != YVEX_OK) {
         state->rms_norm_f16_function = NULL;
+        return rc;
+    }
+    return YVEX_OK;
+}
+
+static int ensure_rope_kernel(yvex_cuda_backend_state *state, yvex_error *err)
+{
+    int rc;
+
+    rc = ensure_kernel_module(state, "cuda.kernels.load_module", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (state->rope_function) {
+        return YVEX_OK;
+    }
+    rc = yvex_cuda_status(&state->driver,
+                          state->driver.cuModuleGetFunction(&state->rope_function,
+                                                            state->module,
+                                                            "yvex_rope_f32"),
+                          "cuda.rope.load_function", err);
+    if (rc != YVEX_OK) {
+        state->rope_function = NULL;
         return rc;
     }
     return YVEX_OK;
@@ -464,6 +563,99 @@ int yvex_cuda_op_rms_norm(yvex_backend *backend,
     if (rc == YVEX_OK) {
         rc = yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
                               "cuda.rms_norm.sync", err);
+    }
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    out->is_written = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+int yvex_cuda_op_rope(yvex_backend *backend,
+                      const yvex_device_tensor *input,
+                      unsigned long long position,
+                      float rope_base,
+                      yvex_device_tensor *out,
+                      yvex_error *err)
+{
+    yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    CUdeviceptr input_ptr;
+    CUdeviceptr out_ptr;
+    unsigned long long head_dim;
+    unsigned long long pair_count;
+    unsigned int block_size = 128u;
+    unsigned int grid_size;
+    float inverse_root;
+    void *params[5];
+    int rc;
+
+    if (!state) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_op_rope",
+                       "CUDA backend state is missing");
+        return YVEX_ERR_STATE;
+    }
+    if (!yvex_backend_tensor_owner_is(backend, input) ||
+        !yvex_backend_tensor_owner_is(backend, out)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "yvex_backend_op_rope",
+                       "input and output tensors must belong to this backend");
+        return YVEX_ERR_STATE;
+    }
+    if (input->dtype != YVEX_DTYPE_F32 || out->dtype != YVEX_DTYPE_F32) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_rope",
+                       "CUDA RoPE supports F32 input/output");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    if (!yvex_backend_tensor_same_shape(input, out)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rope",
+                       "RoPE output shape must match input shape");
+        return YVEX_ERR_FORMAT;
+    }
+    if (rope_base <= 1.0f) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rope",
+                       "rope_base must be greater than 1");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = cuda_rope_head_dim(input, &head_dim, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (!tensor_is_f32_bytes(input, head_dim) || !tensor_is_f32_bytes(out, head_dim)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_backend_op_rope",
+                       "RoPE input/output bytes must match F32 head_dim");
+        return YVEX_ERR_BOUNDS;
+    }
+
+    rc = yvex_cuda_set_current(backend, "yvex_backend_op_rope", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = ensure_rope_kernel(state, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    pair_count = head_dim / 2ull;
+    inverse_root = (float)(1.0 / cuda_nth_root_double((double)rope_base, pair_count));
+    grid_size = (unsigned int)((pair_count + (unsigned long long)block_size - 1ull) /
+                               (unsigned long long)block_size);
+    input_ptr = yvex_cuda_tensor_ptr(input);
+    out_ptr = yvex_cuda_tensor_ptr(out);
+    params[0] = &input_ptr;
+    params[1] = &out_ptr;
+    params[2] = &head_dim;
+    params[3] = &position;
+    params[4] = &inverse_root;
+
+    rc = yvex_cuda_status(&state->driver,
+                          state->driver.cuLaunchKernel(state->rope_function,
+                                                       grid_size, 1, 1,
+                                                       block_size, 1, 1,
+                                                       0, NULL, params, NULL),
+                          "cuda.rope.launch", err);
+    if (rc == YVEX_OK) {
+        rc = yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
+                              "cuda.rope.sync", err);
     }
     if (rc != YVEX_OK) {
         return rc;

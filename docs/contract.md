@@ -201,6 +201,7 @@ The implemented runtime states are:
 | Prefill state summary | Segment-summary state over validated explicit token input. |
 | Minimal KV state | Session-owned F32 KV storage with shape, append/read, clear, overflow, and cleanup reports. |
 | Minimal KV-backed prefill binding | Optional prefill mode that writes one diagnostic KV position per processed token into session-owned KV storage. |
+| Standalone RoPE op | Position-dependent F32 graph op over a bounded deterministic vector, checked against an independent reference. |
 
 The runtime path after minimal KV ownership proceeds through minimal KV-backed
 prefill binding, full transformer prefill, decode, logits, sampling,
@@ -230,6 +231,15 @@ second tensor and a second operation. It reads `token_embd.weight`, applies
 RMSNorm using a real first RMSNorm weight such as `blk.0.attn_norm.weight`,
 dispatches backend RMSNorm, and reports an F32 output summary checked against an
 independent reference.
+
+The standalone RoPE operation is admitted through `yvex graph --execute-op --op
+rope`. It does not use a model artifact. It validates backend availability,
+backend RoPE support, F32 input/output byte accounting, even positive head
+dimension, position, output allocation, dispatch, reference comparison, and
+cleanup status. The result reports checksums and max absolute diff against an
+independent reference. RoPE support is only a position operation boundary; it is
+not attention, QKV projection, transformer block execution, layer scheduling,
+decode, logits, sampling, generation, or a provider path.
 
 Every implemented graph result should report guard status, failure phase where
 applicable, backend/op status, output planning, reference planning, checksums,

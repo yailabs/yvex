@@ -146,8 +146,8 @@ static const yvex_cli_command yvex_commands[] = {
     {
         "graph",
         "Build graph diagnostics or execute narrow graph segments.",
-        "yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--fixture-token N] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N]",
-        "Opens a GGUF descriptor and prints graph planning diagnostics. Execution flags attach selected weights and run the deterministic fixture embed node, real selected F16 embedding segment, or selected embedding-plus-RMSNorm segment; none of these paths is inference or text generation.",
+        "yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N] | yvex graph --backend cpu|cuda --execute-op --op rope --position N --head-dim N",
+        "Opens a GGUF descriptor and prints graph planning diagnostics. Execution flags attach selected weights and run the deterministic fixture embed node, real selected F16 embedding segment, selected embedding-plus-RMSNorm segment, or standalone RoPE position op; none of these paths is inference or text generation.",
         command_graph,
     },
     {
@@ -841,6 +841,7 @@ static int command_backend(int argc, char **argv)
     print_backend_capability(backend, YVEX_BACKEND_CAP_OP_EMBED);
     print_backend_capability(backend, YVEX_BACKEND_CAP_OP_MATMUL);
     print_backend_capability(backend, YVEX_BACKEND_CAP_OP_RMS_NORM);
+    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_ROPE);
     print_backend_capability(backend, YVEX_BACKEND_CAP_OP_ATTENTION);
     printf("status: backend-ready\n");
 
@@ -2524,7 +2525,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, explicit token input boundary, prefill state foundation, minimal KV binding, and minimal KV ownership\n");
+    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, standalone RoPE position op, explicit token input boundary, prefill state foundation, minimal KV binding, and minimal KV ownership\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -2534,10 +2535,10 @@ static int command_info(int argc, char **argv)
     printf("token_input: explicit token boundary implemented\n");
     printf("prefill_state: segment-summary foundation and minimal KV binding implemented\n");
     printf("prompt: default renderer implemented\n");
-    printf("graph: partial planning, deterministic fixture execution, selected embedding partial execution, and selected embedding RMSNorm segment execution implemented\n");
+    printf("graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, and standalone RoPE position op implemented\n");
     printf("planner: estimate-only implemented\n");
     printf("backend: CPU reference implemented\n");
-    printf("backend_cuda: tensor movement plus F32/F16 embed implemented when CUDA is available\n");
+    printf("backend_cuda: tensor movement plus F32/F16 embed, RMSNorm, and RoPE position op implemented when CUDA is available\n");
     printf("weights: selected tensor materialization implemented\n");
     printf("engine: descriptor open and selected-weight attachment implemented\n");
     printf("session: lifecycle diagnostics, engine attachment observer, and KV ownership implemented\n");
@@ -5184,6 +5185,500 @@ static void print_graph_guard_report(const yvex_cli_graph_guard_report *report)
     printf("reference_bytes_planned: %llu\n", report->reference_bytes_planned);
 }
 
+static unsigned long long cli_checksum_bytes(const void *data, unsigned long long len)
+{
+    const unsigned char *bytes = (const unsigned char *)data;
+    unsigned long long checksum = 1469598103934665603ull;
+    unsigned long long i;
+
+    for (i = 0; i < len; ++i) {
+        checksum ^= (unsigned long long)bytes[i];
+        checksum *= 1099511628211ull;
+    }
+    return checksum;
+}
+
+static float cli_abs_float(float x)
+{
+    return x < 0.0f ? -x : x;
+}
+
+static double cli_abs_double(double x)
+{
+    return x < 0.0 ? -x : x;
+}
+
+static double cli_nth_root_double(double x, unsigned long long n)
+{
+    double lo = 1.0;
+    double hi = x > 1.0 ? x : 1.0;
+    unsigned int iter;
+
+    if (x <= 0.0 || n == 0) {
+        return 0.0;
+    }
+    if (n == 1) {
+        return x;
+    }
+    for (iter = 0; iter < 96u; ++iter) {
+        double mid = 0.5 * (lo + hi);
+        double acc = 1.0;
+        unsigned long long i;
+
+        for (i = 0; i < n; ++i) {
+            acc *= mid;
+            if (acc > x) {
+                break;
+            }
+        }
+        if (acc > x) {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    return 0.5 * (lo + hi);
+}
+
+static double cli_wrap_radians(double x)
+{
+    const double two_pi = 6.28318530717958647692;
+
+    while (x > 3.14159265358979323846) {
+        x -= two_pi;
+    }
+    while (x < -3.14159265358979323846) {
+        x += two_pi;
+    }
+    return x;
+}
+
+static void cli_sincos_double(double x, double *sine, double *cosine)
+{
+    double x2;
+    double s;
+    double c;
+
+    x = cli_wrap_radians(x);
+    x2 = x * x;
+    s = x * (1.0 -
+             (x2 / 6.0) +
+             ((x2 * x2) / 120.0) -
+             ((x2 * x2 * x2) / 5040.0) +
+             ((x2 * x2 * x2 * x2) / 362880.0));
+    c = 1.0 -
+        (x2 / 2.0) +
+        ((x2 * x2) / 24.0) -
+        ((x2 * x2 * x2) / 720.0) +
+        ((x2 * x2 * x2 * x2) / 40320.0);
+    if (cli_abs_double(s) < 0.000000000001) {
+        s = 0.0;
+    }
+    if (cli_abs_double(c) < 0.000000000001) {
+        c = 0.0;
+    }
+    if (sine) {
+        *sine = s;
+    }
+    if (cosine) {
+        *cosine = c;
+    }
+}
+
+static void cli_rope_fill_input(float *values, unsigned long long head_dim)
+{
+    unsigned long long i;
+
+    for (i = 0; i < head_dim; ++i) {
+        values[i] = (float)((double)(i + 1ull) * 0.25);
+    }
+}
+
+static void cli_rope_reference(const float *input,
+                               unsigned long long head_dim,
+                               unsigned long long position,
+                               float rope_base,
+                               float *out)
+{
+    unsigned long long pair_count = head_dim / 2ull;
+    unsigned long long pair;
+    double inverse_root = 1.0 / cli_nth_root_double((double)rope_base, pair_count);
+    double frequency = 1.0;
+
+    for (pair = 0; pair < pair_count; ++pair) {
+        unsigned long long even_index = pair * 2ull;
+        unsigned long long odd_index = even_index + 1ull;
+        double sine;
+        double cosine;
+        double even = (double)input[even_index];
+        double odd = (double)input[odd_index];
+        double angle = (double)position * frequency;
+
+        cli_sincos_double(angle, &sine, &cosine);
+        out[even_index] = (float)((even * cosine) - (odd * sine));
+        out[odd_index] = (float)((even * sine) + (odd * cosine));
+        frequency *= inverse_root;
+    }
+}
+
+static float cli_max_abs_diff_f32(const float *a,
+                                  const float *b,
+                                  unsigned long long count)
+{
+    unsigned long long i;
+    float max_diff = 0.0f;
+
+    for (i = 0; i < count; ++i) {
+        float diff = cli_abs_float(a[i] - b[i]);
+        if (diff > max_diff) {
+            max_diff = diff;
+        }
+    }
+    return max_diff;
+}
+
+static void cli_print_float_values(const char *name,
+                                   const float *values,
+                                   unsigned long long count)
+{
+    unsigned long long i;
+
+    printf("%s:", name);
+    for (i = 0; i < count; ++i) {
+        printf("%s%.9g", i == 0 ? " " : ",", (double)values[i]);
+    }
+    printf("\n");
+}
+
+static void print_rope_readiness_fields(void)
+{
+    printf("attention_ready: false\n");
+    printf("transformer_block_ready: false\n");
+    printf("full_transformer_prefill_ready: false\n");
+    printf("decode_ready: false\n");
+    printf("logits_ready: false\n");
+    printf("generation_ready: false\n");
+    printf("generation: unsupported\n");
+    printf("execution_ready: false\n");
+}
+
+static int command_graph_execute_rope_op(const char *backend_name,
+                                         unsigned long long position,
+                                         unsigned long long head_dim)
+{
+    const float rope_base = 10000.0f;
+    yvex_backend *backend = NULL;
+    yvex_device_tensor *input = NULL;
+    yvex_device_tensor *out = NULL;
+    yvex_backend_options backend_options;
+    yvex_backend_tensor_desc desc;
+    yvex_cli_graph_guard_report guard;
+    yvex_error err;
+    float *input_values = NULL;
+    float *output_values = NULL;
+    float *reference_values = NULL;
+    unsigned long long bytes = 0ull;
+    unsigned long long sample_count;
+    float max_abs_diff = 0.0f;
+    float input_output_max_abs_diff = 0.0f;
+    int rc;
+    int exit_code = 0;
+
+    yvex_error_clear(&err);
+    memset(&backend_options, 0, sizeof(backend_options));
+    memset(&desc, 0, sizeof(desc));
+    init_graph_guard_report(&guard, "rope-position-op", 0, NULL);
+    guard.integrity_status = "not-applicable";
+    guard.identity_status = "unregistered";
+    guard.metadata_status = "unregistered";
+    guard.shape_status = "unchecked";
+    guard.range_status = "not-applicable";
+    guard.slice_range_status = "not-needed";
+
+    if (head_dim == 0) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        printf("op: rope\n");
+        printf("backend: %s\n", backend_name);
+        printf("position: %llu\n", position);
+        printf("head_dim: %llu\n", head_dim);
+        printf("dtype: f32\n");
+        print_rope_readiness_fields();
+        printf("reason: rope-head-dim-zero\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_FORMAT);
+    }
+    if ((head_dim & 1ull) != 0ull) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        printf("op: rope\n");
+        printf("backend: %s\n", backend_name);
+        printf("position: %llu\n", position);
+        printf("head_dim: %llu\n", head_dim);
+        printf("dtype: f32\n");
+        print_rope_readiness_fields();
+        printf("reason: rope-head-dim-odd\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_FORMAT);
+    }
+    if (cli_test_env_enabled("YVEX_TEST_ROPE_BYTE_OVERFLOW") ||
+        head_dim > ULLONG_MAX / (unsigned long long)sizeof(float) ||
+        head_dim > (unsigned long long)(SIZE_MAX / sizeof(float))) {
+        guard.shape_status = "fail";
+        print_graph_guard_report(&guard);
+        printf("op: rope\n");
+        printf("backend: %s\n", backend_name);
+        printf("position: %llu\n", position);
+        printf("head_dim: %llu\n", head_dim);
+        printf("dtype: f32\n");
+        print_rope_readiness_fields();
+        printf("reason: byte-count-overflow\n");
+        printf("status: graph-op-fail\n");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+
+    bytes = head_dim * (unsigned long long)sizeof(float);
+    guard.shape_status = "pass";
+    guard.range_status = "not-applicable";
+    guard.output_bytes_planned = bytes;
+    guard.reference_bytes_planned = bytes;
+
+    input_values = (float *)malloc((size_t)bytes);
+    output_values = (float *)malloc((size_t)bytes);
+    reference_values = (float *)malloc((size_t)bytes);
+    if (!input_values || !output_values || !reference_values) {
+        free(reference_values);
+        free(output_values);
+        free(input_values);
+        yvex_error_set(&err, YVEX_ERR_NOMEM, "yvex graph rope", "failed to allocate host buffers");
+        return print_yvex_error(&err, exit_for_status(YVEX_ERR_NOMEM));
+    }
+    cli_rope_fill_input(input_values, head_dim);
+    cli_rope_reference(input_values, head_dim, position, rope_base, reference_values);
+    guard.reference_read_attempted = 1;
+
+    backend_options.kind = strcmp(backend_name, "cuda") == 0
+                               ? YVEX_BACKEND_KIND_CUDA
+                               : YVEX_BACKEND_KIND_CPU;
+    rc = yvex_backend_open(&backend, &backend_options, &err);
+    if (rc != YVEX_OK) {
+        guard.backend_status = rc == YVEX_ERR_UNSUPPORTED ? "unavailable" : "fail";
+        guard.backend_op_status = "unsupported";
+        print_graph_guard_report(&guard);
+        printf("op: rope\n");
+        printf("backend: %s\n", backend_name);
+        printf("position: %llu\n", position);
+        printf("head_dim: %llu\n", head_dim);
+        printf("dtype: f32\n");
+        print_rope_readiness_fields();
+        printf("reason: %s\n", yvex_error_message(&err));
+        printf("status: graph-op-fail\n");
+        free(reference_values);
+        free(output_values);
+        free(input_values);
+        return exit_for_status(rc);
+    }
+    guard.backend_status = "ready";
+    if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ROPE)) {
+        guard.backend_op_status = "unsupported";
+        print_graph_guard_report(&guard);
+        printf("op: rope\n");
+        printf("backend: %s\n", backend_name);
+        printf("position: %llu\n", position);
+        printf("head_dim: %llu\n", head_dim);
+        printf("dtype: f32\n");
+        print_rope_readiness_fields();
+        printf("reason: backend-op-rope-unsupported\n");
+        printf("status: graph-op-fail\n");
+        yvex_backend_close(backend);
+        free(reference_values);
+        free(output_values);
+        free(input_values);
+        return exit_for_status(YVEX_ERR_UNSUPPORTED);
+    }
+    guard.backend_op_status = "supported";
+
+    desc.name = "rope.input";
+    desc.dtype = YVEX_DTYPE_F32;
+    desc.rank = 1;
+    desc.dims[0] = head_dim;
+    desc.bytes = bytes;
+    rc = yvex_backend_tensor_alloc(backend, &desc, &input, &err);
+    if (rc == YVEX_OK) {
+        desc.name = "rope.output";
+        rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
+    }
+    if (rc != YVEX_OK) {
+        guard.phase = "output";
+        guard.cleanup_attempted = input || out ? 1 : 0;
+        guard.cleanup_status = guard.cleanup_attempted ? "pass" : "not-needed";
+        yvex_backend_tensor_free(backend, out);
+        yvex_backend_tensor_free(backend, input);
+        print_graph_guard_report(&guard);
+        printf("op: rope\n");
+        printf("backend: %s\n", backend_name);
+        printf("position: %llu\n", position);
+        printf("head_dim: %llu\n", head_dim);
+        printf("dtype: f32\n");
+        print_rope_readiness_fields();
+        printf("status: graph-op-failed-cleaned\n");
+        yvex_backend_close(backend);
+        free(reference_values);
+        free(output_values);
+        free(input_values);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    guard.output_allocation_attempted = 1;
+    guard.output_bytes_allocated = bytes;
+
+    rc = yvex_backend_tensor_write(backend, input, input_values, bytes, &err);
+    if (rc != YVEX_OK) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        yvex_backend_tensor_free(backend, out);
+        yvex_backend_tensor_free(backend, input);
+        print_graph_guard_report(&guard);
+        printf("op: rope\n");
+        printf("backend: %s\n", backend_name);
+        printf("position: %llu\n", position);
+        printf("head_dim: %llu\n", head_dim);
+        printf("dtype: f32\n");
+        print_rope_readiness_fields();
+        printf("status: graph-op-failed-cleaned\n");
+        yvex_backend_close(backend);
+        free(reference_values);
+        free(output_values);
+        free(input_values);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    if (cli_test_env_enabled("YVEX_TEST_FAIL_ROPE_AFTER_ALLOC")) {
+        guard.phase = "output";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        print_graph_guard_report(&guard);
+        printf("op: rope\n");
+        printf("backend: %s\n", backend_name);
+        printf("position: %llu\n", position);
+        printf("head_dim: %llu\n", head_dim);
+        printf("dtype: f32\n");
+        printf("input_bytes: %llu\n", bytes);
+        printf("output_bytes: %llu\n", bytes);
+        printf("reference_bytes: %llu\n", bytes);
+        print_rope_readiness_fields();
+        printf("reason: injected-rope-after-alloc\n");
+        printf("status: graph-op-failed-cleaned\n");
+        yvex_backend_tensor_free(backend, out);
+        yvex_backend_tensor_free(backend, input);
+        yvex_backend_close(backend);
+        free(reference_values);
+        free(output_values);
+        free(input_values);
+        return exit_for_status(YVEX_ERR_STATE);
+    }
+
+    guard.dispatch_attempted = 1;
+    rc = yvex_backend_op_rope(backend, input, position, rope_base, out, &err);
+    if (rc != YVEX_OK || cli_test_env_enabled("YVEX_TEST_FAIL_ROPE_AFTER_DISPATCH")) {
+        guard.phase = "dispatch";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        print_graph_guard_report(&guard);
+        printf("op: rope\n");
+        printf("backend: %s\n", backend_name);
+        printf("position: %llu\n", position);
+        printf("head_dim: %llu\n", head_dim);
+        printf("dtype: f32\n");
+        printf("input_bytes: %llu\n", bytes);
+        printf("output_bytes: %llu\n", bytes);
+        printf("reference_bytes: %llu\n", bytes);
+        print_rope_readiness_fields();
+        printf("reason: %s\n",
+               rc == YVEX_OK ? "injected-rope-after-dispatch" : yvex_error_message(&err));
+        printf("status: graph-op-failed-cleaned\n");
+        yvex_backend_tensor_free(backend, out);
+        yvex_backend_tensor_free(backend, input);
+        yvex_backend_close(backend);
+        free(reference_values);
+        free(output_values);
+        free(input_values);
+        return rc == YVEX_OK ? exit_for_status(YVEX_ERR_STATE) : exit_for_status(rc);
+    }
+
+    rc = yvex_backend_tensor_read(backend, out, output_values, bytes, &err);
+    if (rc != YVEX_OK) {
+        guard.phase = "reference";
+        guard.cleanup_attempted = 1;
+        guard.cleanup_status = "pass";
+        print_graph_guard_report(&guard);
+        printf("op: rope\n");
+        printf("backend: %s\n", backend_name);
+        printf("position: %llu\n", position);
+        printf("head_dim: %llu\n", head_dim);
+        printf("dtype: f32\n");
+        print_rope_readiness_fields();
+        printf("status: graph-op-failed-cleaned\n");
+        yvex_backend_tensor_free(backend, out);
+        yvex_backend_tensor_free(backend, input);
+        yvex_backend_close(backend);
+        free(reference_values);
+        free(output_values);
+        free(input_values);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    max_abs_diff = cli_max_abs_diff_f32(output_values, reference_values, head_dim);
+    input_output_max_abs_diff = cli_max_abs_diff_f32(output_values, input_values, head_dim);
+    guard.guard_status = max_abs_diff <= 0.0005f ? "pass" : "fail";
+    guard.phase = "complete";
+    guard.cleanup_status = "not-needed";
+    sample_count = head_dim < 8ull ? head_dim : 8ull;
+    exit_code = strcmp(guard.guard_status, "pass") == 0 ? 0 : exit_for_status(YVEX_ERR_STATE);
+
+    print_graph_guard_report(&guard);
+    printf("op: rope\n");
+    printf("backend: %s\n", backend_name);
+    printf("position: %llu\n", position);
+    printf("head_dim: %llu\n", head_dim);
+    printf("rope_base: %.9g\n", (double)rope_base);
+    printf("dtype: f32\n");
+    printf("input_bytes: %llu\n", bytes);
+    printf("output_bytes: %llu\n", bytes);
+    printf("scratch_bytes: 0\n");
+    printf("reference_bytes: %llu\n", bytes);
+    printf("input_checksum: %llu\n", cli_checksum_bytes(input_values, bytes));
+    printf("output_checksum: %llu\n", cli_checksum_bytes(output_values, bytes));
+    printf("reference_checksum: %llu\n", cli_checksum_bytes(reference_values, bytes));
+    printf("max_abs_diff: %.9g\n", (double)max_abs_diff);
+    printf("input_output_max_abs_diff: %.9g\n", (double)input_output_max_abs_diff);
+    printf("position_zero_identity: %s\n",
+           position == 0ull && input_output_max_abs_diff <= 0.0000001f ? "true" : "false");
+    printf("position_dependent_output: %s\n",
+           position != 0ull && input_output_max_abs_diff > 0.0001f ? "true" : "false");
+    printf("reference_attempted: true\n");
+    if (strcmp(backend_name, "cuda") == 0) {
+        printf("rope_cuda_parity: %s\n", exit_code == 0 ? "pass" : "fail");
+        printf("cuda_reference_max_abs_diff: %.9g\n", (double)max_abs_diff);
+    } else {
+        printf("cpu_reference_max_abs_diff: %.9g\n", (double)max_abs_diff);
+    }
+    printf("output_sample_count: %llu\n", sample_count);
+    cli_print_float_values("input_sample_values", input_values, sample_count);
+    cli_print_float_values("output_sample_values", output_values, sample_count);
+    cli_print_float_values("reference_sample_values", reference_values, sample_count);
+    print_rope_readiness_fields();
+    printf("status: %s\n", exit_code == 0 ? "graph-op-executed" : "graph-op-fail");
+
+    yvex_backend_tensor_free(backend, out);
+    yvex_backend_tensor_free(backend, input);
+    yvex_backend_close(backend);
+    free(reference_values);
+    free(output_values);
+    free(input_values);
+    return exit_code;
+}
+
 static int preflight_graph_guard(const yvex_model_ref *model_ref,
                                  const char *backend_name,
                                  int execute_fixture,
@@ -5786,16 +6281,22 @@ static int command_graph(int argc, char **argv)
     const char *backend_name = "cpu";
     const char *segment_name = NULL;
     const char *tokens_text = NULL;
+    const char *op_name = NULL;
     unsigned int token_index = 0u;
     unsigned int selected_token_id = 0u;
     unsigned long long token_vocab_size = 0ull;
+    unsigned long long rope_position = 0ull;
+    unsigned long long rope_head_dim = 0ull;
     int execute_fixture = 0;
     int execute_partial = 0;
     int execute_segment = 0;
+    int execute_op = 0;
     int fixture_token_provided = 0;
     int partial_token_provided = 0;
     int token_input_provided = 0;
     int token_index_provided = 0;
+    int rope_position_provided = 0;
+    int rope_head_dim_provided = 0;
     int i;
     int rc;
 
@@ -5857,6 +6358,28 @@ static int command_graph(int argc, char **argv)
             execute_partial = 1;
         } else if (strcmp(argv[i], "--execute-segment") == 0) {
             execute_segment = 1;
+        } else if (strcmp(argv[i], "--execute-op") == 0) {
+            execute_op = 1;
+        } else if (strcmp(argv[i], "--op") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --op requires rope\n");
+                return 2;
+            }
+            op_name = argv[++i];
+        } else if (strcmp(argv[i], "--position") == 0) {
+            if (i + 1 >= argc || !parse_ull_allow_zero(argv[i + 1], &rope_position)) {
+                fprintf(stderr, "yvex: --position requires a non-negative integer\n");
+                return 2;
+            }
+            rope_position_provided = 1;
+            i += 1;
+        } else if (strcmp(argv[i], "--head-dim") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &rope_head_dim)) {
+                fprintf(stderr, "yvex: --head-dim requires a positive integer\n");
+                return 2;
+            }
+            rope_head_dim_provided = 1;
+            i += 1;
         } else if (strcmp(argv[i], "--segment") == 0) {
             if (i + 1 >= argc) {
                 fprintf(stderr, "yvex: --segment requires embedding-rmsnorm\n");
@@ -5894,17 +6417,46 @@ static int command_graph(int argc, char **argv)
         }
     }
 
-    if (!model_arg) {
+    if (!model_arg && !execute_op) {
         fprintf(stderr, "yvex: graph requires FILE_OR_ALIAS\n");
-        fprintf(stderr, "usage: yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--fixture-token N] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N]\n");
+        fprintf(stderr, "usage: yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N] | yvex graph --backend cpu|cuda --execute-op --op rope --position N --head-dim N\n");
         return 2;
     }
     if (strcmp(backend_name, "cpu") != 0 && strcmp(backend_name, "cuda") != 0) {
         fprintf(stderr, "yvex: unknown backend kind: %s\n", backend_name);
         return 2;
     }
-    if ((execute_fixture ? 1 : 0) + (execute_partial ? 1 : 0) + (execute_segment ? 1 : 0) > 1) {
-        fprintf(stderr, "yvex: --execute-fixture, --execute-partial, and --execute-segment are mutually exclusive\n");
+    if ((execute_fixture ? 1 : 0) + (execute_partial ? 1 : 0) +
+        (execute_segment ? 1 : 0) + (execute_op ? 1 : 0) > 1) {
+        fprintf(stderr, "yvex: --execute-fixture, --execute-partial, --execute-segment, and --execute-op are mutually exclusive\n");
+        return 2;
+    }
+    if (execute_op) {
+        if (model_arg) {
+            fprintf(stderr, "yvex: --execute-op does not take a model artifact\n");
+            return 2;
+        }
+        if (!op_name || strcmp(op_name, "rope") != 0) {
+            fprintf(stderr, "yvex: --execute-op requires --op rope\n");
+            return 2;
+        }
+        if (!rope_position_provided) {
+            fprintf(stderr, "yvex: --execute-op requires --position N\n");
+            return 2;
+        }
+        if (!rope_head_dim_provided) {
+            fprintf(stderr, "yvex: --execute-op requires --head-dim N\n");
+            return 2;
+        }
+        if (fixture_token_provided || partial_token_provided || token_input_provided ||
+            token_index_provided || segment_name) {
+            fprintf(stderr, "yvex: --execute-op cannot be combined with model graph token or segment options\n");
+            return 2;
+        }
+        return command_graph_execute_rope_op(backend_name, rope_position, rope_head_dim);
+    }
+    if (op_name || rope_position_provided || rope_head_dim_provided) {
+        fprintf(stderr, "yvex: --op, --position, and --head-dim require --execute-op\n");
         return 2;
     }
     if (execute_segment) {
@@ -7392,6 +7944,8 @@ static void print_chat_backend(FILE *fp, const yvex_chat_runtime *runtime)
             yvex_backend_supports(runtime->backend, YVEX_BACKEND_CAP_TENSOR_READ_WRITE) ? "yes" : "no");
     fprintf(fp, "  op_embed: %s\n",
             yvex_backend_supports(runtime->backend, YVEX_BACKEND_CAP_OP_EMBED) ? "yes" : "no");
+    fprintf(fp, "  op_rope: %s\n",
+            yvex_backend_supports(runtime->backend, YVEX_BACKEND_CAP_OP_ROPE) ? "yes" : "no");
 }
 
 static void print_chat_tokens(FILE *fp, const yvex_chat_runtime *runtime)

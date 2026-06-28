@@ -96,6 +96,7 @@ typedef enum {
     YVEX_BACKEND_CAP_OP_EMBED,
     YVEX_BACKEND_CAP_OP_MATMUL,
     YVEX_BACKEND_CAP_OP_RMS_NORM,
+    YVEX_BACKEND_CAP_OP_ROPE,
     YVEX_BACKEND_CAP_OP_ATTENTION
 } yvex_backend_capability;
 
@@ -164,6 +165,13 @@ int yvex_backend_op_rms_norm(yvex_backend *backend,
                              float epsilon,
                              yvex_device_tensor *out,
                              yvex_error *err);
+
+int yvex_backend_op_rope(yvex_backend *backend,
+                         const yvex_device_tensor *input,
+                         unsigned long long position,
+                         float rope_base,
+                         yvex_device_tensor *out,
+                         yvex_error *err);
 
 #ifdef __cplusplus
 }

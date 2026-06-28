@@ -77,6 +77,7 @@ typedef struct {
     CUfunction embed_f16_function;
     CUfunction rms_norm_f32_function;
     CUfunction rms_norm_f16_function;
+    CUfunction rope_function;
     int module_loaded;
 } yvex_cuda_backend_state;
 
@@ -124,5 +125,11 @@ int yvex_cuda_op_rms_norm(yvex_backend *backend,
                           float epsilon,
                           yvex_device_tensor *out,
                           yvex_error *err);
+int yvex_cuda_op_rope(yvex_backend *backend,
+                      const yvex_device_tensor *input,
+                      unsigned long long position,
+                      float rope_base,
+                      yvex_device_tensor *out,
+                      yvex_error *err);
 
 #endif /* YVEX_CUDA_INTERNAL_H */

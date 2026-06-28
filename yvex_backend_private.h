@@ -49,6 +49,12 @@ typedef struct yvex_backend_vtable {
                        float epsilon,
                        yvex_device_tensor *out,
                        yvex_error *err);
+    int (*op_rope)(yvex_backend *backend,
+                   const yvex_device_tensor *input,
+                   unsigned long long position,
+                   float rope_base,
+                   yvex_device_tensor *out,
+                   yvex_error *err);
 } yvex_backend_vtable;
 
 struct yvex_backend {

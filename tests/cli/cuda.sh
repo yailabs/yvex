@@ -46,6 +46,7 @@ contains "$OUT_DIR/backend_cuda_ready.out" "tensor_alloc: yes"
 contains "$OUT_DIR/backend_cuda_ready.out" "tensor_read_write: yes"
 contains "$OUT_DIR/backend_cuda_ready.out" "op_embed: yes"
 contains "$OUT_DIR/backend_cuda_ready.out" "op_rms_norm: yes"
+contains "$OUT_DIR/backend_cuda_ready.out" "op_rope: yes"
 contains "$OUT_DIR/backend_cuda_ready.out" "op_matmul: no"
 contains "$OUT_DIR/backend_cuda_ready.out" "status: backend-ready"
 
@@ -58,8 +59,31 @@ contains "$OUT_DIR/plan_cuda_ready.out" "backend: cuda"
 contains "$OUT_DIR/plan_cuda_ready.out" "backend_status: available"
 contains "$OUT_DIR/plan_cuda_ready.out" "op_embed: yes"
 contains "$OUT_DIR/plan_cuda_ready.out" "op_rms_norm: yes"
+contains "$OUT_DIR/plan_cuda_ready.out" "op_rope: yes"
 contains "$OUT_DIR/plan_cuda_ready.out" "execution_ready: false"
 contains "$OUT_DIR/plan_cuda_ready.out" "status: plan-only"
+
+"$YVEX_BIN" graph --backend cuda --execute-op --op rope --position 7 --head-dim 8 \
+  >"$OUT_DIR/rope_graph_cuda.out" 2>"$OUT_DIR/rope_graph_cuda.err"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    fail "rope graph cuda exit code was $rc"
+fi
+contains "$OUT_DIR/rope_graph_cuda.out" "graph_integrity_guard: pass"
+contains "$OUT_DIR/rope_graph_cuda.out" "graph_execution_phase: complete"
+contains "$OUT_DIR/rope_graph_cuda.out" "graph_kind: rope-position-op"
+contains "$OUT_DIR/rope_graph_cuda.out" "op: rope"
+contains "$OUT_DIR/rope_graph_cuda.out" "backend: cuda"
+contains "$OUT_DIR/rope_graph_cuda.out" "position: 7"
+contains "$OUT_DIR/rope_graph_cuda.out" "head_dim: 8"
+contains "$OUT_DIR/rope_graph_cuda.out" "backend_op_status: supported"
+contains "$OUT_DIR/rope_graph_cuda.out" "dispatch_attempted: true"
+contains "$OUT_DIR/rope_graph_cuda.out" "reference_attempted: true"
+contains "$OUT_DIR/rope_graph_cuda.out" "rope_cuda_parity: pass"
+contains "$OUT_DIR/rope_graph_cuda.out" "attention_ready: false"
+contains "$OUT_DIR/rope_graph_cuda.out" "decode_ready: false"
+contains "$OUT_DIR/rope_graph_cuda.out" "generation_ready: false"
+contains "$OUT_DIR/rope_graph_cuda.out" "status: graph-op-executed"
 
 "$YVEX_BIN" materialize --model "$FIXTURE" --backend cuda >"$OUT_DIR/materialize_cuda_ready.out" 2>"$OUT_DIR/materialize_cuda_ready.err"
 rc=$?

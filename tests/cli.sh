@@ -37,6 +37,7 @@ run_section materialization-integrity-gate tests/cli/materialization_integrity_g
 run_section fixture-graph tests/cli/fixture_graph.sh
 run_section partial-graph tests/cli/partial_graph.sh
 run_section segment-graph tests/cli/segment_graph.sh
+run_section rope-graph tests/cli/rope_graph.sh
 run_section token-input tests/cli/token_input.sh
 run_section prefill-state tests/cli/prefill_state.sh
 run_section kv tests/cli/kv.sh

@@ -702,6 +702,63 @@ diff within the segment tolerance. This path executes embedding lookup followed
 by RMSNorm only. It is not prefill, KV runtime, decode, logits, sampling,
 generation, or a CUDA transformer backend.
 
+### Execute standalone RoPE position op
+
+RoPE is the first standalone position-dependent graph op. It runs over a small
+deterministic F32 vector and does not open or trust a model artifact. Use it to
+prove backend op admission, output allocation, dispatch, reference comparison,
+cleanup, and position-dependent output before attention enters the runtime.
+
+CPU proof:
+
+```sh
+./yvex graph \
+  --backend cpu \
+  --execute-op \
+  --op rope \
+  --position 7 \
+  --head-dim 8
+```
+
+Expected outcome:
+
+```text
+graph_integrity_guard: pass
+graph_execution_phase: complete
+graph_kind: rope-position-op
+op: rope
+backend: cpu
+position: 7
+head_dim: 8
+dtype: f32
+dispatch_attempted: true
+reference_attempted: true
+max_abs_diff: 0
+position_dependent_output: true
+attention_ready: false
+transformer_block_ready: false
+decode_ready: false
+logits_ready: false
+generation_ready: false
+status: graph-op-executed
+```
+
+CUDA-capable hosts can run the same proof on CUDA:
+
+```sh
+./yvex graph \
+  --backend cuda \
+  --execute-op \
+  --op rope \
+  --position 7 \
+  --head-dim 8
+```
+
+Expected outcome: CUDA reports `rope_cuda_parity: pass` with max absolute diff
+inside tolerance. This is RoPE position-op parity only; it is not attention,
+transformer block execution, decode, logits, sampling, generation, or a CUDA
+transformer backend.
+
 ## 14. Execute a deterministic fixture graph
 
 M4 fixture execution uses a tiny controlled GGUF so output can be checked

@@ -12,6 +12,7 @@
  *   - yvex_backend_supports
  *   - yvex_backend_capability_name
  *   - yvex_backend_op_embed
+ *   - yvex_backend_op_rope
  *
  * Commands:
  *   - make test-core
@@ -67,6 +68,8 @@ static int test_capabilities(void)
     YVEX_TEST_ASSERT(yvex_backend_open_cpu(&backend, &err) == YVEX_OK, "open cpu");
     YVEX_TEST_ASSERT_STREQ(yvex_backend_capability_name(YVEX_BACKEND_CAP_TENSOR_ALLOC),
                            "tensor_alloc", "capability name");
+    YVEX_TEST_ASSERT_STREQ(yvex_backend_capability_name(YVEX_BACKEND_CAP_OP_ROPE),
+                           "op_rope", "rope capability name");
     YVEX_TEST_ASSERT(yvex_backend_supports(backend, YVEX_BACKEND_CAP_TENSOR_ALLOC),
                      "supports tensor alloc");
     YVEX_TEST_ASSERT(yvex_backend_supports(backend, YVEX_BACKEND_CAP_TENSOR_READ_WRITE),
@@ -75,6 +78,8 @@ static int test_capabilities(void)
                      "supports embed");
     YVEX_TEST_ASSERT(yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_RMS_NORM),
                      "supports rms norm");
+    YVEX_TEST_ASSERT(yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ROPE),
+                     "supports rope");
     YVEX_TEST_ASSERT(!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MATMUL),
                      "matmul unsupported");
     YVEX_TEST_ASSERT(!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ATTENTION),
@@ -283,12 +288,91 @@ static int test_rms_norm_success(void)
     return 0;
 }
 
+static int test_rope_success(void)
+{
+    yvex_backend *backend = NULL;
+    yvex_device_tensor *input = NULL;
+    yvex_device_tensor *out = NULL;
+    yvex_backend_tensor_desc desc;
+    yvex_error err;
+    float input_data[8] = {0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f};
+    float out_data[8];
+    unsigned int i;
+    int rc;
+
+    YVEX_TEST_ASSERT(yvex_backend_open_cpu(&backend, &err) == YVEX_OK, "open cpu rope");
+
+    make_desc(&desc, "rope_input", YVEX_DTYPE_F32, 1, 8, 0, sizeof(input_data));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &input, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate rope input");
+    rc = yvex_backend_tensor_write(backend, input, input_data, sizeof(input_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write rope input");
+
+    make_desc(&desc, "rope_out", YVEX_DTYPE_F32, 1, 8, 0, sizeof(out_data));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate rope output");
+
+    rc = yvex_backend_op_rope(backend, input, 0, 10000.0f, out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "rope position zero succeeds");
+    rc = yvex_backend_tensor_read(backend, out, out_data, sizeof(out_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read rope zero output");
+    for (i = 0; i < 8u; ++i) {
+        YVEX_TEST_ASSERT(float_close(out_data[i], input_data[i], 0.000001f),
+                         "rope position zero is identity");
+    }
+
+    rc = yvex_backend_op_rope(backend, input, 7, 10000.0f, out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "rope position seven succeeds");
+    rc = yvex_backend_tensor_read(backend, out, out_data, sizeof(out_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read rope output");
+    YVEX_TEST_ASSERT(!float_close(out_data[0], input_data[0], 0.0001f),
+                     "rope non-zero position changes first pair");
+
+    yvex_backend_tensor_free(backend, out);
+    yvex_backend_tensor_free(backend, input);
+    yvex_backend_close(backend);
+    return 0;
+}
+
+static int test_rope_failures(void)
+{
+    yvex_backend *backend = NULL;
+    yvex_device_tensor *input = NULL;
+    yvex_device_tensor *out = NULL;
+    yvex_backend_tensor_desc desc;
+    yvex_error err;
+    float input_data[7] = {0};
+    float out_data[7] = {0};
+    int rc;
+
+    YVEX_TEST_ASSERT(yvex_backend_open_cpu(&backend, &err) == YVEX_OK, "open cpu rope failures");
+
+    make_desc(&desc, "rope_bad_input", YVEX_DTYPE_F32, 1, 7, 0, sizeof(input_data));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &input, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate odd rope input");
+    rc = yvex_backend_tensor_write(backend, input, input_data, sizeof(input_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write odd rope input");
+
+    make_desc(&desc, "rope_bad_out", YVEX_DTYPE_F32, 1, 7, 0, sizeof(out_data));
+    rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate odd rope output");
+    rc = yvex_backend_op_rope(backend, input, 7, 10000.0f, out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT, "odd head dim rejected");
+
+    yvex_backend_tensor_free(backend, out);
+    yvex_backend_tensor_free(backend, input);
+    yvex_backend_close(backend);
+    return 0;
+}
+
 int yvex_test_backend_ops(void)
 {
     if (test_capabilities() != 0) return 1;
     if (test_embed_success() != 0) return 1;
     if (test_embed_f16_success() != 0) return 1;
     if (test_rms_norm_success() != 0) return 1;
+    if (test_rope_success() != 0) return 1;
+    if (test_rope_failures() != 0) return 1;
     if (test_embed_failures() != 0) return 1;
     return 0;
 }

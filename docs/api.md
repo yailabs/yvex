@@ -118,7 +118,7 @@ milestone.
 | Backend residency | Backend discovery, selected tensor allocation, transfer, release, and materialization summaries. |
 | Engine ownership | Engine creation, selected weight attachment, engine-owned lifetime, and graph execution entry points. |
 | Session visibility | Session reports over engine-attached runtime state and minimal session-owned KV state. |
-| Graph execution | Controlled fixture graph results, selected embedding graph results, embedding-plus-RMSNorm segment results, graph guards, checksums, and max-diff reports. |
+| Graph execution | Controlled fixture graph results, selected embedding graph results, embedding-plus-RMSNorm segment results, standalone RoPE op reports, graph guards, checksums, and max-diff reports. |
 | Token input | Bounded explicit token lists, token validation, token selection, and prompt-to-token boundaries through tokenizer paths. |
 | Prefill state | Segment-summary prefill reports over validated token sequences, with optional minimal session-owned KV binding. |
 | Runtime reporting | Metrics, traces, profiles, integrity reports, materialization reports, graph reports, and failure phases. |
@@ -294,6 +294,15 @@ happen before this call.
 `yvex_backend_op_rms_norm` is the backend RMSNorm operation used by the selected
 segment. It supports the current RMSNorm boundary: F32 input/output, F16 or F32
 RMSNorm weights, and explicit epsilon.
+
+`yvex_backend_op_rope` is the backend RoPE operation used by the standalone
+position-op proof path. It accepts F32 input/output tensors, a non-negative
+position, a rope base greater than one, and an even positive `head_dim` expressed
+as rank 1 or `[1, head_dim]`. The CLI report compares backend output against an
+independent CPU reference and reports input/output/reference bytes, checksums,
+max absolute diff, dispatch, reference, allocation, and cleanup fields. This API
+surface is a position operation boundary only; it is not attention, a
+transformer block, decode, logits, sampling, or generation.
 
 The graph API grows by adding explicit op, block, layer, prefill, decode,
 logits, and generation boundaries. Each new boundary should add its own report
