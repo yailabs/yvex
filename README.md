@@ -3,21 +3,20 @@
 YVEX is a native C inference engine for local open-weight models.
 
 The project starts from a simple requirement: a local model should become a real
-runtime, not a vague object hidden behind the word "loaded". When YVEX opens a
-model artifact, the interesting part is not that a file was found or that a CLI
-accepted a path. The interesting part is whether the model can be turned into
-owned execution state: known tensors, checked byte ranges, backend-resident
-weights, scheduled graph work, token positions, prefill state, KV, decode,
-logits, sampling, and eventually generated tokens that come from the same
-runtime chain.
+runtime, not a vague object hidden behind the word "loaded". Opening a model
+file is not the interesting part. The interesting part is whether that file can
+become owned execution state: tensors with roles, byte ranges that are safe to
+read, weights resident on a backend, graph work scheduled by the engine, token
+positions tracked by the runtime, KV owned by a session, logits produced from an
+actual path, and generated tokens that can be traced back to the same chain.
 
-YVEX is being built for the whole local transformer path. It begins below chat
-interfaces, provider APIs, sampling loops, and agent shells because those
-surfaces are only meaningful when the machine underneath can explain what it
-did. A server endpoint can exist before inference exists. A prompt box can
-exist before KV exists. A benchmark table can exist before the measured path is
+YVEX is built for the whole local transformer path. It lives below chat
+interfaces, provider APIs, agent shells, and sampling loops because those
+surfaces only matter when the machine underneath can explain what happened. A
+prompt box can exist before inference exists. A server can expose endpoints
+before logits exist. A benchmark table can appear before the measured path is
 real. YVEX takes the opposite route: make the lower runtime accountable first,
-then let user-facing surfaces grow out of it.
+then let the user-facing surfaces grow out of it.
 
 The current implementation owns the early part of that path. It can inspect and
 validate GGUF artifacts, map selected tensor facts into runtime descriptors,
@@ -27,11 +26,12 @@ embedding over real model bytes, execute an embedding-plus-RMSNorm slice over
 multiple real tensors, accept explicit token sequences, and build a prefill
 state summary from implemented graph slices.
 
-That is not the final transformer run yet, but it is already the beginning of
-one. The selected graph slices are small on purpose: they give the runtime a
-hard surface to stand on before attention, MLP, routed experts, full KV, decode,
-logits, and sampling arrive. A local engine that cannot explain its first
-tensor read will not become more trustworthy when the graph becomes larger.
+Those stages are small because the lower runtime has to be solid before the
+graph becomes large. A local engine that cannot explain its first tensor read
+will not become more trustworthy when attention, MLP, routed experts, KV,
+logits, sampling, and provider serving are added. The early slices give the
+project a hard surface: real tensors, real backend dispatch, real cleanup, real
+checksums, real refusal points.
 
 The long-term shape is a native local runtime that remains inspectable from
 artifact bytes to generated tokens. YVEX should know which file it is using,
@@ -56,17 +56,18 @@ never be vague.
 
 ## Why this project exists
 
-Local inference is becoming interesting again, but the words around it are
-still too coarse.
+Local inference is becoming interesting again, but much of the language around
+it is still too coarse.
 
-"Loaded" can mean that a path exists. It can mean the header parsed. It can
-mean metadata was read. It can mean tensor names were listed. It can mean
-selected weights moved to CUDA. It can mean a graph ran. It can mean logits
-were produced. It can mean an HTTP server accepted a request. Those states are
-very different, and confusing them is one of the easiest ways to make local
-inference look better than it is.
+A model can look "loaded" while only a path was accepted. It can look
+"supported" because metadata parsed. It can look "running" because a server
+answered a status endpoint. Those states are useful, but they are not
+inference. Between the file and the generated token there is a long mechanical
+path: parsing, tensor interpretation, memory ownership, graph execution, token
+state, KV, decode, logits, sampling, and serving. If that path is blurred, local
+inference becomes hard to debug and easy to overstate.
 
-YVEX exists to separate those states.
+YVEX exists to keep the path separated without turning it into theater.
 
 When a local model fails, the useful question is not simply "did inference
 fail?" The useful question is where the execution chain stopped. Maybe the
@@ -88,11 +89,11 @@ selected DeepSeek-class artifacts as pressure targets because they expose these
 problems early, before the full model path is ready.
 
 The project is narrow in the code it claims today and broad in the path it is
-preparing. It does not try to accept every GGUF file just because the parser can
-read one. It does not claim model support just because one selected tensor can
-run. It does not turn a provider-shaped daemon into generation. It builds the
-path a future generation surface must use: artifact evidence, model identity,
-tensor roles, backend memory, graph execution, token state, KV, decode, logits,
+preparing. It does not accept every GGUF file just because the parser can read
+one. It does not claim model support because one selected tensor can run. It
+does not turn a provider-shaped daemon into generation. It builds the path a
+future generation surface must use: artifact evidence, model identity, tensor
+roles, backend memory, graph execution, token state, KV, decode, logits,
 sampling, and serving.
 
 This is also why model-building belongs close to the runtime. Source manifests,
