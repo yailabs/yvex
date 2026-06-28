@@ -56,6 +56,7 @@ rather than hidden behind generic support claims.
 ```text
 root-first C source layout
 native root binaries: ./yvex and ./yvexd
+private CLI command implementation module behind root command dispatcher
 public headers: include/yvex/
 CUDA implementation: cuda/ with C host bridge and CUDA kernel unit
 GGUF domain and family mapping: gguf/
@@ -213,6 +214,7 @@ tables.
 | CLI.PACKAGE.0 | complete | cli | Repository CLI packaging baseline | root binaries and CLI packaging baseline established |
 | CLI.PACKAGE.1 | complete | cli | Minimal compiled-binary packaging baseline | compiled root binaries remain repository-local and validated |
 | CLI.CONSOLE.0 | complete | cli | CLI interface doctrine | CLI claim and command-output doctrine established |
+| CLI.SURFACE.0 | complete | cli | CLI translation unit split | command table and top-level dispatch separated from private command/proof implementations |
 | CLI.MODELS.0 | complete | cli | Local model selection spine | model selection design and registry shape established |
 | CLI.MODELS.1 | complete | cli | Local model registry implementation | local model registry add/list/use/current/remove works |
 | CLI.MODELS.2 | complete | cli | One-shot model alias resolution | model-taking commands resolve aliases or paths |

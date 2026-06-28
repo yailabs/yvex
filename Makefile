@@ -247,9 +247,11 @@ $(CUDA_PTX_OBJ): $(CUDA_PTX_C)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-$(YVEX_BIN): yvex_cli.c $(LIBYVEX)
+YVEX_CLI_SRCS := yvex_cli.c yvex_cli_runtime.c
+
+$(YVEX_BIN): $(YVEX_CLI_SRCS) yvex_cli_private.h $(LIBYVEX)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(YVEX_CLI_SRCS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
 $(YVEXD_BIN): yvexd.c $(LIBYVEX)
 	@mkdir -p $(@D)
