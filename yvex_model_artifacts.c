@@ -8,10 +8,14 @@
 
 #include "yvex_console_private.h"
 #include <yvex/artifact_integrity.h>
+#include <yvex/conversion.h>
+#include <yvex/fs.h>
 #include <yvex/materialize_gate.h>
 #include <yvex/model_gate.h>
 #include <yvex/model_ref.h>
 #include <yvex/model_registry.h>
+#include <yvex/native_weights.h>
+#include <yvex/source_manifest.h>
 #include <yvex/yvex.h>
 
 #include <ctype.h>
@@ -2889,6 +2893,506 @@ static int parse_models_add_options(int argc, char **argv,
     return 0;
 }
 
+typedef struct {
+    const char *target;
+    const char *source;
+    const char *out;
+    const char *out_dir;
+    const char *models_root;
+    const char *registry_path;
+    int overwrite;
+    int dry_run;
+    int register_alias;
+    int use_alias;
+} yvex_cli_models_prepare_options;
+
+static int cli_arg_value_valid(const char *value)
+{
+    return value && value[0] && !strchr(value, '\n') && !strchr(value, '\r');
+}
+
+static int expand_operator_path(const char *input,
+                                char *out,
+                                size_t out_cap,
+                                yvex_error *err,
+                                const char *where)
+{
+    const char *home;
+    int n;
+
+    if (!input || !out || out_cap == 0u) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, where, "path value is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (!cli_arg_value_valid(input)) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, where, "path value is empty or contains a newline");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (input[0] == '~' && input[1] == '/') {
+        home = getenv("HOME");
+        if (!home || !home[0]) {
+            yvex_error_set(err, YVEX_ERR_INVALID_ARG, where, "HOME is required to expand ~/ paths");
+            return YVEX_ERR_INVALID_ARG;
+        }
+        n = snprintf(out, out_cap, "%s/%s", home, input + 2);
+    } else {
+        n = snprintf(out, out_cap, "%s", input);
+    }
+    if (n < 0 || (size_t)n >= out_cap) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "path is too long");
+        return YVEX_ERR_BOUNDS;
+    }
+    return YVEX_OK;
+}
+
+static int path_join2(char *out,
+                      size_t out_cap,
+                      const char *dir,
+                      const char *file,
+                      yvex_error *err,
+                      const char *where)
+{
+    int n;
+
+    n = snprintf(out, out_cap, "%s/%s", dir, file);
+    if (n < 0 || (size_t)n >= out_cap) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where, "resolved path is too long");
+        return YVEX_ERR_BOUNDS;
+    }
+    return YVEX_OK;
+}
+
+static int path_parent_dir(const char *path, char *out, size_t out_cap)
+{
+    const char *slash;
+    size_t len;
+
+    if (!path || !out || out_cap == 0u) return 0;
+    slash = strrchr(path, '/');
+    if (!slash) {
+        snprintf(out, out_cap, ".");
+        return 1;
+    }
+    len = (size_t)(slash - path);
+    if (len == 0u) len = 1u;
+    if (len >= out_cap) return 0;
+    memcpy(out, path, len);
+    out[len] = '\0';
+    return 1;
+}
+
+static int parse_models_prepare_options(int argc,
+                                        char **argv,
+                                        yvex_cli_models_prepare_options *options)
+{
+    int i;
+
+    memset(options, 0, sizeof(*options));
+    options->register_alias = 1;
+    options->use_alias = 1;
+    if (argc < 4) {
+        fprintf(stderr, "yvex: models prepare requires TARGET\n");
+        return 2;
+    }
+    options->target = argv[3];
+    if (!cli_arg_value_valid(options->target)) {
+        fprintf(stderr, "yvex: models prepare target is empty or invalid\n");
+        return 2;
+    }
+    for (i = 4; i < argc; ++i) {
+        if (strcmp(argv[i], "--overwrite") == 0) {
+            options->overwrite = 1;
+        } else if (strcmp(argv[i], "--dry-run") == 0) {
+            options->dry_run = 1;
+        } else if (strcmp(argv[i], "--no-register") == 0) {
+            options->register_alias = 0;
+            options->use_alias = 0;
+        } else if (strcmp(argv[i], "--no-use") == 0) {
+            options->use_alias = 0;
+        } else if (strcmp(argv[i], "--source") == 0 ||
+                   strcmp(argv[i], "--out") == 0 ||
+                   strcmp(argv[i], "--out-dir") == 0 ||
+                   strcmp(argv[i], "--models-root") == 0 ||
+                   strcmp(argv[i], "--registry") == 0) {
+            const char *flag = argv[i];
+            const char *value;
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: models prepare %s requires a value\n", flag);
+                return 2;
+            }
+            value = argv[++i];
+            if (!cli_arg_value_valid(value)) {
+                fprintf(stderr, "yvex: models prepare %s value is empty or invalid\n", flag);
+                return 2;
+            }
+            if (strcmp(flag, "--source") == 0) options->source = value;
+            else if (strcmp(flag, "--out") == 0) options->out = value;
+            else if (strcmp(flag, "--out-dir") == 0) options->out_dir = value;
+            else if (strcmp(flag, "--models-root") == 0) options->models_root = value;
+            else options->registry_path = value;
+        } else {
+            fprintf(stderr, "yvex: unknown models prepare option: %s\n", argv[i]);
+            return 2;
+        }
+    }
+    if (options->out && options->out_dir) {
+        fprintf(stderr, "yvex: models prepare --out and --out-dir are mutually exclusive\n");
+        return 2;
+    }
+    if (!options->register_alias) {
+        options->use_alias = 0;
+    }
+    return 0;
+}
+
+static void print_prepare_common(const yvex_cli_models_prepare_options *options,
+                                 const yvex_operator_paths *operator_paths,
+                                 const char *source_path,
+                                 const char *artifact_path,
+                                 const char *manifest_path,
+                                 const char *plan_path,
+                                 const char *registry_path)
+{
+    printf("models: prepare\n");
+    printf("target_id: %s\n", options->target);
+    printf("models_root_source: %s\n", operator_paths->models_root_source);
+    printf("models_root: %s\n", operator_paths->models_root);
+    printf("source_path: %s\n", source_path);
+    printf("artifact_path: %s\n", artifact_path);
+    printf("source_manifest_path: %s\n", manifest_path);
+    printf("conversion_plan_path: %s\n", plan_path);
+    printf("registry_path: %s\n", registry_path && registry_path[0] ? registry_path : ".yvex/models.local.json");
+    printf("alias: deepseek4-v4-flash-selected-embed\n");
+    printf("overwrite: %s\n", options->overwrite ? "true" : "false");
+    printf("dry_run: %s\n", options->dry_run ? "true" : "false");
+    printf("register: %s\n", options->register_alias ? "true" : "false");
+    printf("use_alias: %s\n", options->use_alias ? "true" : "false");
+}
+
+static int print_prepare_unsupported(const char *target)
+{
+    printf("models: prepare\n");
+    printf("target_id: %s\n", target);
+    printf("stage: target unsupported\n");
+    printf("runtime_execution: not-performed\n");
+    printf("generation: unsupported\n");
+    if (strcmp(target, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0) {
+        printf("reason: segment prepare is planned, not implemented by this preset\n");
+    } else if (strcmp(target, "glm-5.2-official-safetensors") == 0) {
+        printf("reason: YVEX-produced GGUF emission for this target is planned, not implemented\n");
+    } else {
+        printf("reason: unknown model prepare target\n");
+        printf("status: model-prepare-unknown-target\n");
+        return 2;
+    }
+    printf("status: model-prepare-unsupported\n");
+    return exit_for_status(YVEX_ERR_UNSUPPORTED);
+}
+
+static int prepare_registry_verify(const yvex_model_registry_entry *entry,
+                                   yvex_error *err)
+{
+    yvex_artifact_file_identity identity;
+    yvex_cli_metadata_snapshot current_metadata;
+    yvex_model_metadata_drift_report metadata_report;
+    int rc;
+
+    if (!entry) {
+        yvex_error_set(err, YVEX_ERR_STATE, "model_prepare_registry", "prepared alias was not found after registration");
+        return YVEX_ERR_STATE;
+    }
+    memset(&identity, 0, sizeof(identity));
+    rc = yvex_artifact_identity_read(entry->path, &identity, err);
+    if (rc != YVEX_OK) return rc;
+    if (!entry->sha256 || strcmp(entry->sha256, identity.sha256) != 0 ||
+        entry->file_size != identity.file_size) {
+        yvex_error_set(err, YVEX_ERR_STATE, "model_prepare_registry", "registered identity does not match emitted artifact");
+        return YVEX_ERR_STATE;
+    }
+    memset(&current_metadata, 0, sizeof(current_metadata));
+    memset(&metadata_report, 0, sizeof(metadata_report));
+    rc = populate_registry_metadata(&current_metadata, entry->path, err);
+    if (rc != YVEX_OK) return rc;
+    rc = yvex_model_registry_compare_metadata(entry, &current_metadata.entry, &metadata_report, err);
+    if (rc != YVEX_OK) return rc;
+    if (strcmp(metadata_report.metadata_status, "pass") != 0 ||
+        strcmp(metadata_report.readiness_status, "pass") != 0) {
+        yvex_error_set(err, YVEX_ERR_STATE, "model_prepare_registry", "registered metadata drifted immediately after prepare");
+        return YVEX_ERR_STATE;
+    }
+    return YVEX_OK;
+}
+
+static int command_models_prepare(int argc, char **argv)
+{
+    static const char *target_alias = "deepseek4-v4-flash-selected-embed";
+    static const char *artifact_name = "deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf";
+    yvex_cli_models_prepare_options options;
+    yvex_paths paths;
+    yvex_operator_paths operator_paths;
+    yvex_source_manifest_options manifest_options;
+    yvex_source_manifest_summary manifest_summary;
+    yvex_native_weight_options native_options;
+    yvex_native_weight_table *native_table = NULL;
+    yvex_native_weight_summary native_summary;
+    yvex_conversion_options conversion_options;
+    yvex_conversion_summary conversion_summary;
+    yvex_cli_metadata_snapshot metadata_snapshot;
+    yvex_model_registry *registry = NULL;
+    yvex_model_registry_entry derived;
+    yvex_model_registry_entry entry;
+    yvex_error err;
+    char source_path[YVEX_PATH_CAP];
+    char out_dir[YVEX_PATH_CAP];
+    char artifact_path[YVEX_PATH_CAP];
+    char manifest_path[YVEX_PATH_CAP];
+    char plan_path[YVEX_PATH_CAP];
+    char registry_path_buf[YVEX_PATH_CAP];
+    char registered_sha256[YVEX_SHA256_HEX_CAP];
+    char registered_format[16];
+    char registered_architecture[64];
+    char primary_tensor_name[128];
+    char primary_tensor_role[64];
+    char primary_tensor_dtype[32];
+    char primary_tensor_dims[128];
+    const char *registry_path = NULL;
+    int source_exists;
+    int artifact_exists;
+    int rc;
+
+    rc = parse_models_prepare_options(argc, argv, &options);
+    if (rc != 0) return rc;
+    if (strcmp(options.target, target_alias) != 0) {
+        return print_prepare_unsupported(options.target);
+    }
+
+    memset(&paths, 0, sizeof(paths));
+    memset(&operator_paths, 0, sizeof(operator_paths));
+    yvex_error_clear(&err);
+    rc = yvex_operator_paths_resolve(&paths, options.models_root, &operator_paths, &err);
+    if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+
+    rc = yvex_operator_paths_resolve_target(&operator_paths, "deepseek", "source",
+                                            source_path, sizeof(source_path),
+                                            &source_exists, &err);
+    if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+    if (options.source) {
+        rc = expand_operator_path(options.source, source_path, sizeof(source_path), &err, "models_prepare");
+        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        source_exists = path_exists(source_path);
+    }
+
+    if (options.out) {
+        rc = expand_operator_path(options.out, artifact_path, sizeof(artifact_path), &err, "models_prepare");
+        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        if (!path_parent_dir(artifact_path, out_dir, sizeof(out_dir))) {
+            yvex_error_set(&err, YVEX_ERR_BOUNDS, "models_prepare", "output parent path is too long");
+            return print_yvex_error(&err, exit_for_status(YVEX_ERR_BOUNDS));
+        }
+    } else {
+        if (options.out_dir) {
+            rc = expand_operator_path(options.out_dir, out_dir, sizeof(out_dir), &err, "models_prepare");
+            if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        } else {
+            rc = yvex_operator_paths_resolve_target(&operator_paths, "deepseek", "gguf",
+                                                    out_dir, sizeof(out_dir),
+                                                    &artifact_exists, &err);
+            if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        }
+        rc = path_join2(artifact_path, sizeof(artifact_path), out_dir, artifact_name, &err, "models_prepare");
+        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+    }
+    artifact_exists = path_exists(artifact_path);
+
+    rc = path_join2(manifest_path, sizeof(manifest_path), out_dir, "deepseek-source-manifest.json", &err, "models_prepare");
+    if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+    rc = path_join2(plan_path, sizeof(plan_path), out_dir, "deepseek-selected-plan.json", &err, "models_prepare");
+    if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+
+    if (options.registry_path) {
+        rc = expand_operator_path(options.registry_path, registry_path_buf, sizeof(registry_path_buf), &err, "models_prepare");
+        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        registry_path = registry_path_buf;
+    } else {
+        rc = yvex_model_registry_default_path(registry_path_buf, sizeof(registry_path_buf), &err);
+        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        registry_path = registry_path_buf;
+    }
+
+    print_prepare_common(&options, &operator_paths, source_path, artifact_path,
+                         manifest_path, plan_path, registry_path);
+
+    if (options.dry_run) {
+        printf("stage: resolve-paths planned\n");
+        printf("stage: source-manifest planned\n");
+        printf("stage: native-weights planned\n");
+        printf("stage: tensor-map planned\n");
+        printf("stage: convert-plan planned\n");
+        printf("stage: convert-emit planned\n");
+        printf("stage: inspect planned\n");
+        printf("stage: tensors planned\n");
+        printf("stage: metadata planned\n");
+        printf("stage: registry-remove-existing %s\n", options.register_alias ? "planned" : "skipped");
+        printf("stage: registry-add %s\n", options.register_alias ? "planned" : "skipped");
+        printf("stage: registry-use %s\n", options.use_alias ? "planned" : "skipped");
+        printf("stage: registry-verify %s\n", options.register_alias ? "planned" : "skipped");
+        printf("runtime_execution: not-performed\n");
+        printf("generation: unsupported\n");
+        printf("status: model-prepare-dry-run\n");
+        return 0;
+    }
+
+    if (!source_exists) {
+        printf("stage: source-path fail\n");
+        printf("runtime_execution: not-performed\n");
+        printf("generation: unsupported\n");
+        printf("reason: source path does not exist\n");
+        printf("status: model-prepare-fail\n");
+        return exit_for_status(YVEX_ERR_IO);
+    }
+    if (artifact_exists && !options.overwrite) {
+        printf("stage: convert-emit refused\n");
+        printf("runtime_execution: not-performed\n");
+        printf("generation: unsupported\n");
+        printf("reason: artifact exists; pass --overwrite to replace it\n");
+        printf("status: model-prepare-refused\n");
+        return exit_for_status(YVEX_ERR_STATE);
+    }
+
+    rc = yvex_model_registry_mkdir_parent(artifact_path, &err);
+    if (rc == YVEX_OK) rc = yvex_model_registry_mkdir_parent(manifest_path, &err);
+    if (rc == YVEX_OK) rc = yvex_model_registry_mkdir_parent(plan_path, &err);
+    if (rc == YVEX_OK && options.register_alias) rc = yvex_model_registry_mkdir_parent(registry_path, &err);
+    if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+
+    memset(&manifest_options, 0, sizeof(manifest_options));
+    memset(&manifest_summary, 0, sizeof(manifest_summary));
+    manifest_options.repo = "deepseek-ai/DeepSeek-V4-Flash";
+    manifest_options.revision = "main";
+    manifest_options.local_path = source_path;
+    manifest_options.status = YVEX_SOURCE_STATUS_IN_PROGRESS;
+    rc = yvex_source_manifest_write_json(manifest_path, &manifest_options, &manifest_summary, &err);
+    if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+    printf("stage: source-manifest pass\n");
+
+    memset(&native_options, 0, sizeof(native_options));
+    memset(&native_summary, 0, sizeof(native_summary));
+    native_options.source_dir = source_path;
+    native_options.recursive = 1;
+    rc = yvex_native_weight_table_open(&native_table, &native_options, &err);
+    if (rc == YVEX_OK) rc = yvex_native_weight_table_summary(native_table, &native_summary, &err);
+    if (rc == YVEX_OK && !yvex_native_weight_table_find(native_table, "embed.weight")) {
+        yvex_error_set(&err, YVEX_ERR_STATE, "models_prepare", "required native tensor is missing: embed.weight");
+        rc = YVEX_ERR_STATE;
+    }
+    if (rc != YVEX_OK) {
+        yvex_native_weight_table_close(native_table);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    printf("stage: native-weights pass\n");
+    printf("native_tensor_count: %llu\n", native_summary.tensor_count);
+    printf("stage: tensor-map pass\n");
+    yvex_native_weight_table_close(native_table);
+    native_table = NULL;
+
+    memset(&conversion_options, 0, sizeof(conversion_options));
+    memset(&conversion_summary, 0, sizeof(conversion_summary));
+    conversion_options.architecture = "deepseek4";
+    conversion_options.source_manifest_path = manifest_path;
+    conversion_options.native_source_dir = source_path;
+    conversion_options.tensor_name = "embed.weight";
+    conversion_options.target_qtype = "F16";
+    conversion_options.out_path = artifact_path;
+    conversion_options.overwrite = options.overwrite;
+    rc = yvex_conversion_plan_write_json(&conversion_options, plan_path, &conversion_summary, &err);
+    if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+    printf("stage: convert-plan pass\n");
+
+    memset(&conversion_summary, 0, sizeof(conversion_summary));
+    rc = yvex_conversion_emit_gguf(&conversion_options, &conversion_summary, &err);
+    if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+    printf("stage: convert-emit pass\n");
+    printf("bytes_written: %llu\n", conversion_summary.bytes_written);
+
+    memset(&metadata_snapshot, 0, sizeof(metadata_snapshot));
+    rc = populate_registry_metadata(&metadata_snapshot, artifact_path, &err);
+    if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+    printf("stage: inspect pass\n");
+    printf("stage: tensors pass\n");
+    printf("stage: metadata pass\n");
+    printf("artifact_architecture: %s\n", metadata_snapshot.architecture);
+    printf("artifact_tensor_count: %llu\n", metadata_snapshot.entry.tensor_count);
+
+    if (options.register_alias) {
+        memset(&derived, 0, sizeof(derived));
+        memset(&entry, 0, sizeof(entry));
+        memset(registered_sha256, 0, sizeof(registered_sha256));
+        memset(registered_format, 0, sizeof(registered_format));
+        memset(registered_architecture, 0, sizeof(registered_architecture));
+        memset(primary_tensor_name, 0, sizeof(primary_tensor_name));
+        memset(primary_tensor_role, 0, sizeof(primary_tensor_role));
+        memset(primary_tensor_dtype, 0, sizeof(primary_tensor_dtype));
+        memset(primary_tensor_dims, 0, sizeof(primary_tensor_dims));
+
+        rc = yvex_model_registry_entry_derive_from_path(&derived, artifact_path, &err);
+        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        entry = derived;
+        entry.support_level = "selected-tensor-materialized";
+        rc = populate_registry_identity(&entry,
+                                        registered_sha256,
+                                        registered_format,
+                                        registered_architecture,
+                                        primary_tensor_name,
+                                        primary_tensor_role,
+                                        primary_tensor_dtype,
+                                        primary_tensor_dims,
+                                        &err);
+        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        rc = models_registry_open(&registry, registry_path, 1, &err);
+        if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+        if (yvex_model_registry_find(registry, target_alias)) {
+            rc = yvex_model_registry_remove(registry, target_alias, &err);
+            if (rc != YVEX_OK) {
+                yvex_model_registry_close(registry);
+                return print_yvex_error(&err, exit_for_status(rc));
+            }
+            printf("stage: registry-remove-existing pass\n");
+        } else {
+            printf("stage: registry-remove-existing not-found\n");
+        }
+        rc = yvex_model_registry_add(registry, &entry, &err);
+        if (rc == YVEX_OK) printf("stage: registry-add pass\n");
+        if (rc == YVEX_OK && options.use_alias) {
+            rc = yvex_model_registry_select(registry, target_alias, &err);
+            if (rc == YVEX_OK) printf("stage: registry-use pass\n");
+        } else if (rc == YVEX_OK) {
+            printf("stage: registry-use skipped\n");
+        }
+        if (rc == YVEX_OK) rc = yvex_model_registry_save(registry, registry_path, &err);
+        if (rc == YVEX_OK) {
+            const yvex_model_registry_entry *registered = yvex_model_registry_find(registry, target_alias);
+            rc = prepare_registry_verify(registered, &err);
+            if (rc == YVEX_OK) printf("stage: registry-verify pass\n");
+        }
+        if (rc != YVEX_OK) {
+            yvex_model_registry_close(registry);
+            return print_yvex_error(&err, exit_for_status(rc));
+        }
+        yvex_model_registry_close(registry);
+        registry = NULL;
+    } else {
+        printf("stage: registry-remove-existing skipped\n");
+        printf("stage: registry-add skipped\n");
+        printf("stage: registry-use skipped\n");
+        printf("stage: registry-verify skipped\n");
+    }
+
+    printf("runtime_execution: not-performed\n");
+    printf("generation: unsupported\n");
+    printf("status: model-prepare\n");
+    return 0;
+}
+
 static int command_models_scan(int argc, char **argv)
 {
     yvex_model_registry_entry *entries = NULL;
@@ -3459,11 +3963,12 @@ static int command_models(int argc, char **argv)
         return 0;
     }
     if (argc < 3) {
-        fprintf(stderr, "yvex: models requires scan, add, list, use, current, verify, inspect, or remove\n");
+        fprintf(stderr, "yvex: models requires scan, add, prepare, list, use, current, verify, inspect, or remove\n");
         return 2;
     }
     if (strcmp(argv[2], "scan") == 0) return command_models_scan(argc, argv);
     if (strcmp(argv[2], "add") == 0) return command_models_add(argc, argv);
+    if (strcmp(argv[2], "prepare") == 0) return command_models_prepare(argc, argv);
     if (strcmp(argv[2], "list") == 0) return command_models_list(argc, argv);
     if (strcmp(argv[2], "use") == 0) return command_models_use(argc, argv);
     if (strcmp(argv[2], "current") == 0) return command_models_current(argc, argv);
@@ -3483,7 +3988,8 @@ void yvex_models_help(FILE *fp)
 {
     fprintf(fp, "usage: yvex models scan --root DIR [--registry FILE]\n");
     fprintf(fp, "       yvex models add --path FILE [--alias ALIAS] [--support-level LEVEL] [--registry FILE]\n");
+    fprintf(fp, "       yvex models prepare TARGET [--overwrite] [--source DIR] [--out FILE | --out-dir DIR] [--models-root DIR] [--registry FILE] [--dry-run] [--no-register] [--no-use]\n");
     fprintf(fp, "       yvex models list|current [--registry FILE]\n");
     fprintf(fp, "       yvex models use|verify|inspect|remove ALIAS [--registry FILE]\n");
-    fprintf(fp, "\nModels manages the local alias registry, including digest identity and metadata drift facts for registered artifacts.\n");
+    fprintf(fp, "\nModels manages the local alias registry, selected artifact preparation, digest identity, and metadata drift facts for registered artifacts. Prepare currently supports deepseek4-v4-flash-selected-embed only and does not materialize, run graph execution, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
 }

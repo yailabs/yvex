@@ -149,11 +149,17 @@ pattern='token/sec'':'
 scan_forbidden_claim "$pattern"
 pattern='benchmark pa''ss'
 scan_forbidden_claim "$pattern"
-pattern='models prepare imple''mented'
-scan_forbidden_claim "$pattern"
 pattern='models check imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='graph check imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='DeepSeek generation imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='prepare material''izes'
+scan_forbidden_claim "$pattern"
+pattern='prepare runs gr''aph'
+scan_forbidden_claim "$pattern"
+pattern='prepare starts ser''ver'
 scan_forbidden_claim "$pattern"
 pattern='generation_rea''dy: true'
 scan_forbidden_claim "$pattern"
@@ -177,5 +183,10 @@ pattern='target paths inspect safeten''sors'
 scan_forbidden_claim "$pattern"
 pattern='target paths inspect GG''UF'
 scan_forbidden_claim "$pattern"
+
+if grep -nE '\b(system|popen|execl|execv|fork)[[:space:]]*\(' yvex_model_artifacts.c; then
+  echo "models prepare must not shell out"
+  exit 1
+fi
 
 echo "code naturalness: ok"

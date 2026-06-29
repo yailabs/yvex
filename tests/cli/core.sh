@@ -407,10 +407,17 @@ contains "$OUT_DIR/model_target_paths_glm.out" "runtime_execution: unsupported"
 contains "$OUT_DIR/model_target_paths_glm.out" "generation: unsupported"
 
 (
-    export YVEX_MODELS_ROOT="$MODEL_TARGET_PATHS_DIR/models"
-    run_ok model_target_paths_env "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed --paths
+    MODEL_TARGET_ENV_PROJECT="$MODEL_TARGET_PATHS_DIR/env-project"
+    OUT_DIR_ABS="$(pwd)/$OUT_DIR"
+    case "$YVEX_BIN" in
+        /*) YVEX_BIN_ABS="$YVEX_BIN" ;;
+        *) YVEX_BIN_ABS="$(pwd)/$YVEX_BIN" ;;
+    esac
+    mkdir -p "$MODEL_TARGET_ENV_PROJECT"
+    cd "$MODEL_TARGET_ENV_PROJECT"
+    YVEX_MODELS_ROOT="$MODEL_TARGET_MODELS_ROOT" "$YVEX_BIN_ABS" model-target inspect deepseek4-v4-flash-selected-embed --paths >"$OUT_DIR_ABS/model_target_paths_env.out" 2>"$OUT_DIR_ABS/model_target_paths_env.err"
 )
-contains "$OUT_DIR/model_target_paths_env.out" "models_root_source: env"
+contains "$OUT_DIR/model_target_paths_env.out" "models_root_source: environment"
 contains "$OUT_DIR/model_target_paths_env.out" "models_root: $MODEL_TARGET_MODELS_ROOT"
 contains "$OUT_DIR/model_target_paths_env.out" "artifact_path: $MODEL_TARGET_MODELS_ROOT/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
 

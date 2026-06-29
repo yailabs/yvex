@@ -762,6 +762,8 @@ copy-command operator lanes
 operator preset roadmap authority in spine
 operator-local model root configuration and path resolution
 model target operator path reporting
+DeepSeek selected artifact prepare preset
+prepare preset dry-run and registration-skip boundaries
 DeepSeek V4 Flash generation and speculative throughput target envelope in spine
 ```
 
@@ -844,7 +846,6 @@ huge-MoE generation
 external-GGUF capability attribution
 external-runner capability attribution
 full supply-chain security
-model prepare preset
 model check preset
 graph check preset
 diagnostic REPL layout hardening
@@ -956,9 +957,9 @@ tables.
 | SPINE.OPERATOR.PRESET.0 | complete | docs | Operator preset and path-resolution roadmap | spine defines path configuration, target path resolution, model prepare, model check, graph check, chat UX, and final runbook preset sequence |
 | OPERATOR.PATHS.0 | complete | operator | Operator model root configuration | `yvex paths configure` stores or resolves operator-local model roots without requiring shell export walls |
 | MODEL.TARGET.PATHS.0 | complete | model | Model target path resolution | `yvex model-target inspect TARGET --paths` reports source, artifact, report, registry, and planned paths without reading model payloads |
-| MODEL.PREPARE.0 | next | model | DeepSeek selected artifact prepare preset | `yvex models prepare deepseek4-v4-flash-selected-embed` runs the implemented source-to-selected-GGUF and alias registration path without generation claim |
-| MODEL.PREPARE.1 | planned | model | Prepare preset refusal and dry-run behavior | prepare reports unsupported targets such as GLM source-only targets and supports dry-run, no-register, and no-use boundaries |
-| MODEL.CHECK.0 | planned | model | Selected artifact check preset | `yvex models check TARGET --backend cpu|cuda --level quick|runtime|full` composes implemented inspect, integrity, materialization, engine/session, graph, and gate checks |
+| MODEL.PREPARE.0 | complete | model | DeepSeek selected artifact prepare preset | `yvex models prepare deepseek4-v4-flash-selected-embed` runs the implemented source-to-selected-GGUF and alias registration path without generation claim |
+| MODEL.PREPARE.1 | complete | model | Prepare preset refusal and dry-run behavior | prepare reports unsupported targets such as GLM source-only targets and supports dry-run, no-register, and no-use boundaries |
+| MODEL.CHECK.0 | next | model | Selected artifact check preset | `yvex models check TARGET --backend cpu|cuda --level quick|runtime|full` composes implemented inspect, integrity, materialization, engine/session, graph, and gate checks |
 | MODEL.CHECK.1 | planned | model | Segment artifact check preset | selected embedding-plus-RMSNorm checks include input tokens, selected segment graph, segment-summary prefill, and minimal KV binding where implemented |
 | GRAPH.CHECK.0 | planned | graph | Graph check preset suites | `yvex graph check --suite primitives|block|selected|segment|all` runs implemented graph proof suites without inventing graph capability |
 | CHAT.UX.0 | planned | operator | Diagnostic REPL clarity and layout | accepted-only chat shows status, help, model/backend/session state, optional color, NO_COLOR behavior, and unsupported generation boundary |
@@ -1917,18 +1918,18 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-MODEL.PREPARE.0 - DeepSeek selected artifact prepare preset
+MODEL.CHECK.0 - Selected artifact check preset
 ```
 
-MODEL.PREPARE.0 must compose only the already implemented DeepSeek selected
-source-to-GGUF and alias registration path. It must not materialize, run graph,
-start a server, run chat, decode, produce logits, sample, generate, evaluate,
-or benchmark.
+MODEL.CHECK.0 may compose only already implemented inspection, tensor table,
+metadata, integrity, materialization, engine/session, selected graph, and gate
+checks. It must not create artifacts, start a server, run chat, decode, produce
+logits, sample, generate, evaluate, benchmark, or claim runtime generation.
 
 SPINE.GENERATION.TARGET.0 records the long-term DeepSeek generation and
 throughput target. It does not change the immediate implementation order.
 
-MODEL.PREPARE.0 remains the next operator preset milestone.
+MODEL.PREPARE.0 is complete for the DeepSeek selected embedding target.
 
 Runtime active next remains:
 

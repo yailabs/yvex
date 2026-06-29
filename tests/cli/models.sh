@@ -56,3 +56,76 @@ grep 'alias not found: missing' "$ROOT/use-missing.err"
 
 "$YVEX_BIN" help models > "$ROOT/help.out"
 grep 'yvex models' "$ROOT/help.out"
+grep 'models prepare TARGET' "$ROOT/help.out"
+
+PREP="$ROOT/prepare"
+PREP_SOURCE="$PREP/hf/deepseek/DeepSeek-V4-Flash"
+PREP_REG="$PREP/registry/models.local.json"
+PREP_GGUF="$PREP/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
+mkdir -p "$PREP_SOURCE"
+
+python3 - "$PREP_SOURCE/model-00001.safetensors" <<'PY'
+import json
+import struct
+import sys
+
+path = sys.argv[1]
+header = {
+    "__metadata__": {"format": "pt"},
+    "embed.weight": {"dtype": "F16", "shape": [8, 4], "data_offsets": [0, 64]},
+}
+blob = json.dumps(header, separators=(",", ":")).encode("utf-8")
+with open(path, "wb") as f:
+    f.write(struct.pack("<Q", len(blob)))
+    f.write(blob)
+    f.write(bytes(range(64)))
+PY
+
+"$YVEX_BIN" models prepare deepseek4-v4-flash-selected-embed --dry-run --models-root "$PREP" --registry "$PREP_REG" > "$ROOT/prepare-dry-run.out"
+grep 'status: model-prepare-dry-run' "$ROOT/prepare-dry-run.out"
+grep 'stage: convert-emit planned' "$ROOT/prepare-dry-run.out"
+grep 'generation: unsupported' "$ROOT/prepare-dry-run.out"
+
+"$YVEX_BIN" models prepare deepseek4-v4-flash-selected-embed --models-root "$ROOT/missing-prepare" --registry "$ROOT/missing-prepare/registry/models.local.json" > "$ROOT/prepare-missing.out" 2> "$ROOT/prepare-missing.err" && exit 1 || true
+grep 'stage: source-path fail' "$ROOT/prepare-missing.out"
+grep 'status: model-prepare-fail' "$ROOT/prepare-missing.out"
+
+"$YVEX_BIN" models prepare deepseek4-v4-flash-selected-embed-rmsnorm --dry-run > "$ROOT/prepare-segment-unsupported.out" 2> "$ROOT/prepare-segment-unsupported.err" && exit 1 || true
+grep 'status: model-prepare-unsupported' "$ROOT/prepare-segment-unsupported.out"
+grep 'segment prepare is planned' "$ROOT/prepare-segment-unsupported.out"
+
+"$YVEX_BIN" models prepare glm-5.2-official-safetensors --dry-run > "$ROOT/prepare-glm-unsupported.out" 2> "$ROOT/prepare-glm-unsupported.err" && exit 1 || true
+grep 'status: model-prepare-unsupported' "$ROOT/prepare-glm-unsupported.out"
+grep 'YVEX-produced GGUF emission for this target is planned' "$ROOT/prepare-glm-unsupported.out"
+
+"$YVEX_BIN" models prepare deepseek4-v4-flash-selected-embed --models-root "$PREP" --registry "$PREP_REG" --overwrite --no-register > "$ROOT/prepare-no-register.out"
+grep 'stage: source-manifest pass' "$ROOT/prepare-no-register.out"
+grep 'stage: convert-emit pass' "$ROOT/prepare-no-register.out"
+grep 'stage: registry-add skipped' "$ROOT/prepare-no-register.out"
+grep 'status: model-prepare' "$ROOT/prepare-no-register.out"
+test -f "$PREP_GGUF"
+test ! -f "$PREP_REG"
+
+"$YVEX_BIN" models prepare deepseek4-v4-flash-selected-embed --models-root "$PREP" --registry "$PREP_REG" --overwrite --no-use > "$ROOT/prepare-no-use.out"
+grep 'stage: registry-add pass' "$ROOT/prepare-no-use.out"
+grep 'stage: registry-use skipped' "$ROOT/prepare-no-use.out"
+grep 'stage: registry-verify pass' "$ROOT/prepare-no-use.out"
+grep 'status: model-prepare' "$ROOT/prepare-no-use.out"
+
+"$YVEX_BIN" models current --registry "$PREP_REG" > "$ROOT/prepare-current-none.out"
+grep 'selected: none' "$ROOT/prepare-current-none.out"
+
+"$YVEX_BIN" models prepare deepseek4-v4-flash-selected-embed --models-root "$PREP" --registry "$PREP_REG" --overwrite > "$ROOT/prepare-register-use.out"
+grep 'stage: registry-remove-existing pass' "$ROOT/prepare-register-use.out"
+grep 'stage: registry-use pass' "$ROOT/prepare-register-use.out"
+grep 'status: model-prepare' "$ROOT/prepare-register-use.out"
+
+"$YVEX_BIN" models verify deepseek4-v4-flash-selected-embed --registry "$PREP_REG" > "$ROOT/prepare-verify.out"
+grep 'status: models-identity-pass' "$ROOT/prepare-verify.out"
+
+"$YVEX_BIN" models prepare deepseek4-v4-flash-selected-embed --models-root "$PREP" --registry "$PREP_REG" > "$ROOT/prepare-overwrite-refused.out" 2> "$ROOT/prepare-overwrite-refused.err" && exit 1 || true
+grep 'stage: convert-emit refused' "$ROOT/prepare-overwrite-refused.out"
+grep 'status: model-prepare-refused' "$ROOT/prepare-overwrite-refused.out"
+
+"$YVEX_BIN" models prepare deepseek4-v4-flash-selected-embed --out "$PREP_GGUF" --out-dir "$PREP/gguf/deepseek" > "$ROOT/prepare-invalid.out" 2> "$ROOT/prepare-invalid.err" && exit 1 || true
+grep 'mutually exclusive' "$ROOT/prepare-invalid.err"
