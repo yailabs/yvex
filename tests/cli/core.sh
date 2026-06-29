@@ -82,7 +82,7 @@ run_ok() {
 contains() {
     file=$1
     text=$2
-    grep -F "$text" "$file" >/dev/null || fail "$file missing: $text"
+    grep -F -- "$text" "$file" >/dev/null || fail "$file missing: $text"
 }
 
 run_fail() {
@@ -240,9 +240,12 @@ contains "$OUT_DIR/help_model_gate.out" "usage: yvex model-gate check"
 run_ok help_model_target "$YVEX_BIN" help model-target
 contains "$OUT_DIR/help_model_target.out" "usage: yvex model-target classes"
 contains "$OUT_DIR/help_model_target.out" "       yvex model-target list"
-contains "$OUT_DIR/help_model_target.out" "       yvex model-target inspect TARGET"
+contains "$OUT_DIR/help_model_target.out" "       yvex model-target inspect TARGET [--paths] [--models-root DIR]"
+contains "$OUT_DIR/help_model_target.out" "--paths           show expected operator-local source, artifact, report, reference, and registry paths"
+contains "$OUT_DIR/help_model_target.out" "--models-root DIR override configured operator model root for this command only"
 contains "$OUT_DIR/help_model_target.out" "Model targets are pressure objects, not capability claims."
 contains "$OUT_DIR/help_model_target.out" "External GGUFs and external runners are reference evidence only."
+contains "$OUT_DIR/help_model_target.out" "Model-target path reporting does not read model payloads, create artifacts, register aliases, or claim runtime support."
 
 run_ok help_models "$YVEX_BIN" help models
 contains "$OUT_DIR/help_models.out" "usage: yvex models"
@@ -348,6 +351,72 @@ contains "$OUT_DIR/model_target_glm.out" "external_reference: false"
 
 run_ok model_target_help_subcommand "$YVEX_BIN" model-target help
 contains "$OUT_DIR/model_target_help_subcommand.out" "Model targets are pressure objects, not capability claims."
+
+MODEL_TARGET_PATHS_DIR="$OUT_DIR/model-target-paths"
+MODEL_TARGET_MODELS_ROOT="$(pwd)/$MODEL_TARGET_PATHS_DIR/models"
+rm -rf "$MODEL_TARGET_PATHS_DIR"
+mkdir -p "$MODEL_TARGET_PATHS_DIR/models"
+
+run_ok model_target_paths_config "$YVEX_BIN" paths --project "$MODEL_TARGET_PATHS_DIR" configure --models-root "$MODEL_TARGET_PATHS_DIR/models" --create
+contains "$OUT_DIR/model_target_paths_config.out" "status: paths-configured"
+contains "$OUT_DIR/model_target_paths_config.out" "models_root_source: explicit"
+
+run_ok model_target_paths_embed "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed --paths --models-root "$MODEL_TARGET_PATHS_DIR/models"
+contains "$OUT_DIR/model_target_paths_embed.out" "target_id: deepseek4-v4-flash-selected-embed"
+contains "$OUT_DIR/model_target_paths_embed.out" "models_root_source: explicit"
+contains "$OUT_DIR/model_target_paths_embed.out" "models_root: $MODEL_TARGET_MODELS_ROOT"
+contains "$OUT_DIR/model_target_paths_embed.out" "source_path: $MODEL_TARGET_MODELS_ROOT/hf/deepseek/DeepSeek-V4-Flash"
+contains "$OUT_DIR/model_target_paths_embed.out" "source_exists:"
+contains "$OUT_DIR/model_target_paths_embed.out" "artifact_path: $MODEL_TARGET_MODELS_ROOT/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
+contains "$OUT_DIR/model_target_paths_embed.out" "artifact_exists:"
+contains "$OUT_DIR/model_target_paths_embed.out" "report_dir: $MODEL_TARGET_MODELS_ROOT/reports/deepseek"
+contains "$OUT_DIR/model_target_paths_embed.out" "report_dir_exists:"
+contains "$OUT_DIR/model_target_paths_embed.out" "reference_dir: $MODEL_TARGET_MODELS_ROOT/reference/deepseek"
+contains "$OUT_DIR/model_target_paths_embed.out" "reference_dir_exists:"
+contains "$OUT_DIR/model_target_paths_embed.out" "registry_dir: $MODEL_TARGET_MODELS_ROOT/registry"
+contains "$OUT_DIR/model_target_paths_embed.out" "registry_dir_exists:"
+contains "$OUT_DIR/model_target_paths_embed.out" "registry_alias: deepseek4-v4-flash-selected-embed"
+contains "$OUT_DIR/model_target_paths_embed.out" "source_artifact_class: official safetensors"
+contains "$OUT_DIR/model_target_paths_embed.out" "target_artifact_class: YVEX-produced selected GGUF"
+contains "$OUT_DIR/model_target_paths_embed.out" "runtime_execution: selected-boundary-only"
+contains "$OUT_DIR/model_target_paths_embed.out" "generation: unsupported"
+
+run_ok model_target_paths_rmsnorm "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths --models-root "$MODEL_TARGET_PATHS_DIR/models"
+contains "$OUT_DIR/model_target_paths_rmsnorm.out" "target_id: deepseek4-v4-flash-selected-embed-rmsnorm"
+contains "$OUT_DIR/model_target_paths_rmsnorm.out" "source_path: $MODEL_TARGET_MODELS_ROOT/hf/deepseek/DeepSeek-V4-Flash"
+contains "$OUT_DIR/model_target_paths_rmsnorm.out" "artifact_path: $MODEL_TARGET_MODELS_ROOT/gguf/deepseek/deepseek4-v4-flash-selected-embed-rmsnorm-F16-noimatrix-yvex-v1.gguf"
+contains "$OUT_DIR/model_target_paths_rmsnorm.out" "registry_alias: deepseek4-v4-flash-selected-embed-rmsnorm"
+contains "$OUT_DIR/model_target_paths_rmsnorm.out" "source_artifact_class: official safetensors"
+contains "$OUT_DIR/model_target_paths_rmsnorm.out" "target_artifact_class: YVEX-produced selected GGUF"
+contains "$OUT_DIR/model_target_paths_rmsnorm.out" "runtime_execution: selected-segment-boundary-only"
+contains "$OUT_DIR/model_target_paths_rmsnorm.out" "generation: unsupported"
+
+run_ok model_target_paths_glm "$YVEX_BIN" model-target inspect glm-5.2-official-safetensors --paths --models-root "$MODEL_TARGET_PATHS_DIR/models"
+contains "$OUT_DIR/model_target_paths_glm.out" "target_id: glm-5.2-official-safetensors"
+contains "$OUT_DIR/model_target_paths_glm.out" "models_root_source: explicit"
+contains "$OUT_DIR/model_target_paths_glm.out" "source_path: $MODEL_TARGET_MODELS_ROOT/hf/glm/GLM-5.2"
+contains "$OUT_DIR/model_target_paths_glm.out" "artifact_path: planned"
+contains "$OUT_DIR/model_target_paths_glm.out" "artifact_exists: false"
+contains "$OUT_DIR/model_target_paths_glm.out" "report_dir: $MODEL_TARGET_MODELS_ROOT/reports/glm"
+contains "$OUT_DIR/model_target_paths_glm.out" "reference_dir: $MODEL_TARGET_MODELS_ROOT/reference/glm"
+contains "$OUT_DIR/model_target_paths_glm.out" "registry_dir: $MODEL_TARGET_MODELS_ROOT/registry"
+contains "$OUT_DIR/model_target_paths_glm.out" "registry_alias: none"
+contains "$OUT_DIR/model_target_paths_glm.out" "source_artifact_class: official safetensors"
+contains "$OUT_DIR/model_target_paths_glm.out" "target_artifact_class: future YVEX-produced GGUF"
+contains "$OUT_DIR/model_target_paths_glm.out" "runtime_execution: unsupported"
+contains "$OUT_DIR/model_target_paths_glm.out" "generation: unsupported"
+
+(
+    export YVEX_MODELS_ROOT="$MODEL_TARGET_PATHS_DIR/models"
+    run_ok model_target_paths_env "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed --paths
+)
+contains "$OUT_DIR/model_target_paths_env.out" "models_root_source: env"
+contains "$OUT_DIR/model_target_paths_env.out" "models_root: $MODEL_TARGET_MODELS_ROOT"
+contains "$OUT_DIR/model_target_paths_env.out" "artifact_path: $MODEL_TARGET_MODELS_ROOT/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
+
+run_fail model_target_paths_empty_root "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed --paths --models-root ""
+run_fail model_target_paths_missing_root "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed --paths --models-root
+run_fail model_target_paths_root_without_paths "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed --models-root "$MODEL_TARGET_PATHS_DIR/models"
 
 set +e
 "$YVEX_BIN" model-target inspect missing-target >"$OUT_DIR/model_target_missing.out" 2>"$OUT_DIR/model_target_missing.err"

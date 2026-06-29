@@ -626,6 +626,7 @@ sectorized operator command atlas
 copy-command operator lanes
 operator preset roadmap authority in spine
 operator-local model root configuration and path resolution
+model target operator path reporting
 ```
 
 Current live target classes:
@@ -707,7 +708,6 @@ huge-MoE generation
 external-GGUF capability attribution
 external-runner capability attribution
 full supply-chain security
-model-target path resolution command
 model prepare preset
 model check preset
 graph check preset
@@ -811,8 +811,8 @@ tables.
 | OPERATOR.FLOW.2 | complete | operator | Sectorized copy-command operator atlas | runbook is split into model, backend, intake, artifact, integrity, materialization, graph, prefill/KV, daemon, validation, and GLM status lanes with standalone copyable commands |
 | SPINE.OPERATOR.PRESET.0 | complete | docs | Operator preset and path-resolution roadmap | spine defines path configuration, target path resolution, model prepare, model check, graph check, chat UX, and final runbook preset sequence |
 | OPERATOR.PATHS.0 | complete | operator | Operator model root configuration | `yvex paths configure` stores or resolves operator-local model roots without requiring shell export walls |
-| MODEL.TARGET.PATHS.0 | next | model | Model target path resolution | `yvex model-target inspect TARGET --paths` reports source, artifact, report, registry, and planned paths without reading model payloads |
-| MODEL.PREPARE.0 | planned | model | DeepSeek selected artifact prepare preset | `yvex models prepare deepseek4-v4-flash-selected-embed` runs the implemented source-to-selected-GGUF and alias registration path without generation claim |
+| MODEL.TARGET.PATHS.0 | complete | model | Model target path resolution | `yvex model-target inspect TARGET --paths` reports source, artifact, report, registry, and planned paths without reading model payloads |
+| MODEL.PREPARE.0 | next | model | DeepSeek selected artifact prepare preset | `yvex models prepare deepseek4-v4-flash-selected-embed` runs the implemented source-to-selected-GGUF and alias registration path without generation claim |
 | MODEL.PREPARE.1 | planned | model | Prepare preset refusal and dry-run behavior | prepare reports unsupported targets such as GLM source-only targets and supports dry-run, no-register, and no-use boundaries |
 | MODEL.CHECK.0 | planned | model | Selected artifact check preset | `yvex models check TARGET --backend cpu|cuda --level quick|runtime|full` composes implemented inspect, integrity, materialization, engine/session, graph, and gate checks |
 | MODEL.CHECK.1 | planned | model | Segment artifact check preset | selected embedding-plus-RMSNorm checks include input tokens, selected segment graph, segment-summary prefill, and minimal KV binding where implemented |
@@ -1423,8 +1423,15 @@ The command reports paths derived from the model target and operator root.
 For DeepSeek selected embedding, it reports:
 
   source_path
+  source_exists
   artifact_path
+  artifact_exists
   report_dir
+  report_dir_exists
+  reference_dir
+  reference_dir_exists
+  registry_dir
+  registry_dir_exists
   registry_alias
   source_artifact_class
   target_artifact_class
@@ -1434,8 +1441,12 @@ For DeepSeek selected embedding, it reports:
 For GLM-5.2 official safetensors, it reports:
 
   source_path
+  source_exists
   artifact_path: planned
+  artifact_exists: false
   report_dir
+  reference_dir
+  registry_dir
   registry_alias: none
   source_artifact_class: official safetensors
   target_artifact_class: future YVEX-produced GGUF
@@ -1654,12 +1665,13 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-MODEL.TARGET.PATHS.0 - Model target path resolution
+MODEL.PREPARE.0 - DeepSeek selected artifact prepare preset
 ```
 
-MODEL.TARGET.PATHS.0 must use the operator-local model root configured by
-OPERATOR.PATHS.0. It must not inspect model payloads, require GLM download
-completion, or claim runtime execution.
+MODEL.PREPARE.0 must compose only the already implemented DeepSeek selected
+source-to-GGUF and alias registration path. It must not materialize, run graph,
+start a server, run chat, decode, produce logits, sample, generate, evaluate,
+or benchmark.
 
 Runtime active next remains:
 

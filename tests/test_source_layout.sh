@@ -91,7 +91,17 @@ bad_command_files="$(
        -o -name 'yvex_operator_paths.h' \
        -o -name 'operator_paths.h' \
        -o -path './include/yvex/operator_paths.h' \
-       -o -path './include/yvex/paths.h' \) \
+       -o -path './include/yvex/paths.h' \
+       -o -name 'yvex_model_target_paths.c' \
+       -o -name 'yvex_target_paths.c' \
+       -o -name 'model_target_paths.c' \
+       -o -name 'target_paths.c' \
+       -o -name 'yvex_operator_targets.c' \
+       -o -name 'model_paths.c' \
+       -o -path './include/yvex/model_target_paths.h' \
+       -o -path './include/yvex/target_paths.h' \
+       -o -name 'yvex_model_target_paths_private.h' \
+       -o -name 'target_paths_private.h' \) \
     -print
 )"
 if [ -n "$bad_command_files" ]; then

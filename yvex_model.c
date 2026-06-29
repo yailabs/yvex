@@ -7,6 +7,7 @@
 
 #include <yvex/dtype.h>
 #include <yvex/artifact_integrity.h>
+#include <yvex/fs.h>
 #include <yvex/model.h>
 #include <yvex/tensor.h>
 #include <yvex/weights.h>
@@ -17,6 +18,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 /* Dtype registry */
 
@@ -1263,14 +1265,17 @@ static void print_model_target_usage(FILE *fp)
 {
     fprintf(fp, "usage: yvex model-target classes\n");
     fprintf(fp, "       yvex model-target list\n");
-    fprintf(fp, "       yvex model-target inspect TARGET\n");
+    fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR]\n");
 }
 
 void yvex_model_target_help(FILE *fp)
 {
     print_model_target_usage(fp);
+    fprintf(fp, "\n--paths           show expected operator-local source, artifact, report, reference, and registry paths\n");
+    fprintf(fp, "--models-root DIR override configured operator model root for this command only\n");
     fprintf(fp, "\nModel targets are pressure objects, not capability claims.\n");
     fprintf(fp, "External GGUFs and external runners are reference evidence only.\n");
+    fprintf(fp, "Model-target path reporting does not read model payloads, create artifacts, register aliases, or claim runtime support.\n");
 }
 
 static void print_model_target_classes(void)
@@ -1328,9 +1333,156 @@ static void print_model_target_record(const yvex_model_target_record *record)
     printf("external_reference: %s\n", record->external_reference);
 }
 
+static int path_exists(const char *path)
+{
+    struct stat st;
+    return path && path[0] != '\0' && stat(path, &st) == 0 ? 1 : 0;
+}
+
+static int format_model_target_artifact_path(char *out, size_t cap,
+                                             const yvex_operator_paths *operator_paths,
+                                             const char *family, const char *filename)
+{
+    int n;
+
+    if (!out || cap == 0 || !operator_paths || !family || !filename) {
+        fprintf(stderr, "model-target: artifact path fields are required\n");
+        return 2;
+    }
+    n = snprintf(out, cap, "%s/%s/%s", operator_paths->gguf_root, family, filename);
+    if (n < 0 || (size_t)n >= cap) {
+        fprintf(stderr, "model-target: artifact path is too long\n");
+        return 2;
+    }
+    return 0;
+}
+
+static int print_model_target_paths(const yvex_model_target_record *record,
+                                    const char *models_root_override)
+{
+    yvex_paths paths;
+    yvex_operator_paths operator_paths;
+    yvex_error err;
+    char source_path[YVEX_PATH_CAP];
+    char report_dir[YVEX_PATH_CAP];
+    char reference_dir[YVEX_PATH_CAP];
+    char registry_dir[YVEX_PATH_CAP];
+    char artifact_path[YVEX_PATH_CAP];
+    const char *family_key;
+    const char *registry_alias;
+    const char *source_class;
+    const char *target_class;
+    const char *runtime_execution;
+    int source_exists;
+    int report_exists;
+    int reference_exists;
+    int registry_exists;
+    int artifact_exists;
+    int rc;
+
+    memset(&paths, 0, sizeof(paths));
+    yvex_error_clear(&err);
+
+    rc = yvex_operator_paths_resolve(&paths, models_root_override, &operator_paths, &err);
+    if (rc != YVEX_OK) {
+        fprintf(stderr, "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
+        return rc == YVEX_ERR_INVALID_ARG ? 2 : 3;
+    }
+
+    if (strcmp(record->family, "DeepSeek") == 0) {
+        family_key = "deepseek";
+    } else if (strcmp(record->family, "GLM") == 0) {
+        family_key = "glm";
+    } else {
+        fprintf(stderr, "model-target: no path mapping for family: %s\n", record->family);
+        return 2;
+    }
+
+    rc = yvex_operator_paths_resolve_target(&operator_paths, family_key, "source",
+                                            source_path, sizeof(source_path), &source_exists, &err);
+    if (rc != YVEX_OK) {
+        fprintf(stderr, "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
+        return rc == YVEX_ERR_INVALID_ARG ? 2 : 3;
+    }
+    rc = yvex_operator_paths_resolve_target(&operator_paths, family_key, "reports",
+                                            report_dir, sizeof(report_dir), &report_exists, &err);
+    if (rc != YVEX_OK) {
+        fprintf(stderr, "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
+        return rc == YVEX_ERR_INVALID_ARG ? 2 : 3;
+    }
+    rc = yvex_operator_paths_resolve_target(&operator_paths, family_key, "reference",
+                                            reference_dir, sizeof(reference_dir), &reference_exists, &err);
+    if (rc != YVEX_OK) {
+        fprintf(stderr, "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
+        return rc == YVEX_ERR_INVALID_ARG ? 2 : 3;
+    }
+    rc = yvex_operator_paths_resolve_target(&operator_paths, family_key, "registry",
+                                            registry_dir, sizeof(registry_dir), &registry_exists, &err);
+    if (rc != YVEX_OK) {
+        fprintf(stderr, "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
+        return rc == YVEX_ERR_INVALID_ARG ? 2 : 3;
+    }
+
+    source_class = "official safetensors";
+    if (strcmp(record->target_id, "deepseek4-v4-flash-selected-embed") == 0) {
+        rc = format_model_target_artifact_path(
+            artifact_path, sizeof(artifact_path), &operator_paths, "deepseek",
+            "deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf");
+        if (rc != 0) {
+            return rc;
+        }
+        registry_alias = record->target_id;
+        target_class = "YVEX-produced selected GGUF";
+        runtime_execution = "selected-boundary-only";
+        artifact_exists = path_exists(artifact_path);
+    } else if (strcmp(record->target_id, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0) {
+        rc = format_model_target_artifact_path(
+            artifact_path, sizeof(artifact_path), &operator_paths, "deepseek",
+            "deepseek4-v4-flash-selected-embed-rmsnorm-F16-noimatrix-yvex-v1.gguf");
+        if (rc != 0) {
+            return rc;
+        }
+        registry_alias = record->target_id;
+        target_class = "YVEX-produced selected GGUF";
+        runtime_execution = "selected-segment-boundary-only";
+        artifact_exists = path_exists(artifact_path);
+    } else if (strcmp(record->target_id, "glm-5.2-official-safetensors") == 0) {
+        snprintf(artifact_path, sizeof(artifact_path), "%s", "planned");
+        registry_alias = "none";
+        target_class = "future YVEX-produced GGUF";
+        runtime_execution = "unsupported";
+        artifact_exists = 0;
+    } else {
+        fprintf(stderr, "model-target: no path mapping for target: %s\n", record->target_id);
+        return 2;
+    }
+
+    printf("models_root_source: %s\n", operator_paths.models_root_source);
+    printf("models_root: %s\n", operator_paths.models_root);
+    printf("source_path: %s\n", source_path);
+    printf("source_exists: %s\n", source_exists ? "true" : "false");
+    printf("artifact_path: %s\n", artifact_path);
+    printf("artifact_exists: %s\n", artifact_exists ? "true" : "false");
+    printf("report_dir: %s\n", report_dir);
+    printf("report_dir_exists: %s\n", report_exists ? "true" : "false");
+    printf("reference_dir: %s\n", reference_dir);
+    printf("reference_dir_exists: %s\n", reference_exists ? "true" : "false");
+    printf("registry_dir: %s\n", registry_dir);
+    printf("registry_dir_exists: %s\n", registry_exists ? "true" : "false");
+    printf("registry_alias: %s\n", registry_alias);
+    printf("source_artifact_class: %s\n", source_class);
+    printf("target_artifact_class: %s\n", target_class);
+    printf("runtime_execution: %s\n", runtime_execution);
+    printf("generation: unsupported\n");
+    return 0;
+}
+
 int yvex_model_target_command(int argc, char **argv)
 {
     const yvex_model_target_record *record;
+    const char *models_root = NULL;
+    int want_paths = 0;
+    int i;
 
     if (argc <= 2) {
         print_model_target_usage(stderr);
@@ -1361,7 +1513,7 @@ int yvex_model_target_command(int argc, char **argv)
         return 0;
     }
     if (strcmp(argv[2], "inspect") == 0) {
-        if (argc != 4) {
+        if (argc < 4) {
             print_model_target_usage(stderr);
             return 2;
         }
@@ -1370,7 +1522,28 @@ int yvex_model_target_command(int argc, char **argv)
             fprintf(stderr, "model-target: unknown target: %s\n", argv[3]);
             return 2;
         }
+        for (i = 4; i < argc; ++i) {
+            if (strcmp(argv[i], "--paths") == 0) {
+                want_paths = 1;
+            } else if (strcmp(argv[i], "--models-root") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "model-target: --models-root requires DIR\n");
+                    return 2;
+                }
+                models_root = argv[++i];
+            } else {
+                fprintf(stderr, "model-target: unknown inspect option: %s\n", argv[i]);
+                return 2;
+            }
+        }
+        if (models_root && !want_paths) {
+            fprintf(stderr, "model-target: --models-root requires --paths\n");
+            return 2;
+        }
         print_model_target_record(record);
+        if (want_paths) {
+            return print_model_target_paths(record, models_root);
+        }
         return 0;
     }
 

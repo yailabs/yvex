@@ -165,5 +165,17 @@ pattern='paths configure down''loads'
 scan_forbidden_claim "$pattern"
 pattern='paths configure creates art''ifacts'
 scan_forbidden_claim "$pattern"
+pattern='target paths prepare mod''els'
+scan_forbidden_claim "$pattern"
+pattern='target paths check mod''els'
+scan_forbidden_claim "$pattern"
+pattern='target paths create art''ifacts'
+scan_forbidden_claim "$pattern"
+pattern='target paths register ali''ases'
+scan_forbidden_claim "$pattern"
+pattern='target paths inspect safeten''sors'
+scan_forbidden_claim "$pattern"
+pattern='target paths inspect GG''UF'
+scan_forbidden_claim "$pattern"
 
 echo "code naturalness: ok"
