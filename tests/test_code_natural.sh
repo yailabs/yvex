@@ -149,5 +149,21 @@ pattern='token/sec'':'
 scan_forbidden_claim "$pattern"
 pattern='benchmark pa''ss'
 scan_forbidden_claim "$pattern"
+pattern='models prepare imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='models check imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='graph check imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='generation_rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='inference_rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='operator path gener''ates'
+scan_forbidden_claim "$pattern"
+pattern='paths configure down''loads'
+scan_forbidden_claim "$pattern"
+pattern='paths configure creates art''ifacts'
+scan_forbidden_claim "$pattern"
 
 echo "code naturalness: ok"

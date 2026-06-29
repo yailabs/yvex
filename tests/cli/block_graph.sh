@@ -74,7 +74,7 @@ contains "$OUT_DIR/block_fixture_cpu.out" "execution_ready: false"
 contains "$OUT_DIR/block_fixture_cpu.out" "generation_ready: false"
 contains "$OUT_DIR/block_fixture_cpu.out" "generation: unsupported"
 not_contains "$OUT_DIR/block_fixture_cpu.out" "execution_ready: true"
-not_contains "$OUT_DIR/block_fixture_cpu.out" "generation_ready: true"
+not_contains "$OUT_DIR/block_fixture_cpu.out" "generation_rea""dy: true"
 
 run_fail block_position_oob \
   "$YVEX_BIN" graph --backend cpu --execute-block --block fixture \

@@ -248,6 +248,487 @@ static int yvex_mkdir_p(const char *path, yvex_error *err)
     return yvex_mkdir_one(tmp, err);
 }
 
+static int yvex_operator_config_path(const yvex_paths *paths,
+                                     char *out,
+                                     size_t cap,
+                                     yvex_error *err)
+{
+    if (!paths || !out || cap == 0) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "operator_paths", "paths and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    if (paths->project_dir[0] != '\0') {
+        return yvex_path_format(out, cap, err, "operator_paths", "%s/operator-paths.conf", paths->project_dir);
+    }
+    return yvex_path_format(out, cap, err, "operator_paths", ".yvex/operator-paths.conf");
+}
+
+static int yvex_operator_config_dir(const yvex_paths *paths,
+                                    char *out,
+                                    size_t cap,
+                                    yvex_error *err)
+{
+    if (!paths || !out || cap == 0) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "operator_paths", "paths and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    if (paths->project_dir[0] != '\0') {
+        return yvex_path_format(out, cap, err, "operator_paths", "%s", paths->project_dir);
+    }
+    return yvex_path_format(out, cap, err, "operator_paths", ".yvex");
+}
+
+static int yvex_path_has_newline(const char *value)
+{
+    return value && (strchr(value, '\n') || strchr(value, '\r'));
+}
+
+static int yvex_operator_normalize_root(const char *value,
+                                        char *out,
+                                        size_t cap,
+                                        yvex_error *err,
+                                        const char *where)
+{
+    const char *home;
+    char cwd[YVEX_PATH_CAP];
+
+    if (!value || value[0] == '\0') {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, where, "models root is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (yvex_path_has_newline(value)) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, where, "models root must not contain a newline");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (strcmp(value, "/") == 0) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, where, "models root must not be filesystem root");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    if (value[0] == '/') {
+        return yvex_path_format(out, cap, err, where, "%s", value);
+    }
+
+    if (value[0] == '~' && value[1] == '/') {
+        home = getenv("HOME");
+        if (!home || home[0] == '\0') {
+            yvex_error_set(err, YVEX_ERR_INVALID_ARG, where, "HOME is required to expand ~/ paths");
+            return YVEX_ERR_INVALID_ARG;
+        }
+        return yvex_path_format(out, cap, err, where, "%s/%s", home, value + 2);
+    }
+
+    if (!getcwd(cwd, sizeof(cwd))) {
+        yvex_error_setf(err, YVEX_ERR_IO, where, "getcwd failed: %s", strerror(errno));
+        return YVEX_ERR_IO;
+    }
+    return yvex_path_format(out, cap, err, where, "%s/%s", cwd, value);
+}
+
+static int yvex_operator_fill(yvex_operator_paths *out,
+                              const char *source,
+                              const char *models_root,
+                              const char *config_path,
+                              yvex_error *err)
+{
+    int rc;
+
+    if (!out || !source || !models_root || !config_path) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "operator_paths", "operator path fields are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    memset(out, 0, sizeof(*out));
+    rc = yvex_path_format(out->models_root_source, sizeof(out->models_root_source), err,
+                          "operator_paths", "%s", source);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = yvex_path_format(out->models_root, sizeof(out->models_root), err,
+                          "operator_paths", "%s", models_root);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = yvex_path_format(out->hf_root, sizeof(out->hf_root), err,
+                          "operator_paths", "%s/hf", models_root);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = yvex_path_format(out->gguf_root, sizeof(out->gguf_root), err,
+                          "operator_paths", "%s/gguf", models_root);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = yvex_path_format(out->reports_root, sizeof(out->reports_root), err,
+                          "operator_paths", "%s/reports", models_root);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = yvex_path_format(out->reference_root, sizeof(out->reference_root), err,
+                          "operator_paths", "%s/reference", models_root);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = yvex_path_format(out->registry_root, sizeof(out->registry_root), err,
+                          "operator_paths", "%s/registry", models_root);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    return yvex_path_format(out->config_path, sizeof(out->config_path), err,
+                            "operator_paths", "%s", config_path);
+}
+
+static int yvex_operator_read_config(const yvex_paths *paths,
+                                     char *out_root,
+                                     size_t cap,
+                                     int *out_found,
+                                     char *out_config_path,
+                                     size_t config_cap,
+                                     yvex_error *err)
+{
+    FILE *fp;
+    char line[YVEX_PATH_CAP + 32];
+    char *value;
+    size_t len;
+    int rc;
+
+    if (!out_root || !out_found || !out_config_path) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "operator_paths", "config outputs are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    *out_found = 0;
+    out_root[0] = '\0';
+    rc = yvex_operator_config_path(paths, out_config_path, config_cap, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    fp = fopen(out_config_path, "r");
+    if (!fp) {
+        if (errno == ENOENT) {
+            return YVEX_OK;
+        }
+        yvex_error_setf(err, YVEX_ERR_IO, "operator_paths", "cannot read %s: %s",
+                        out_config_path, strerror(errno));
+        return YVEX_ERR_IO;
+    }
+
+    if (!fgets(line, sizeof(line), fp)) {
+        if (ferror(fp)) {
+            yvex_error_setf(err, YVEX_ERR_IO, "operator_paths", "cannot read %s: %s",
+                            out_config_path, strerror(errno));
+            fclose(fp);
+            return YVEX_ERR_IO;
+        }
+        fclose(fp);
+        return YVEX_OK;
+    }
+    fclose(fp);
+
+    value = line;
+    if (strncmp(value, "models_root=", 12) != 0) {
+        yvex_error_setf(err, YVEX_ERR_FORMAT, "operator_paths", "invalid operator path config: %s", out_config_path);
+        return YVEX_ERR_FORMAT;
+    }
+    value += 12;
+    len = strlen(value);
+    while (len > 0 && (value[len - 1] == '\n' || value[len - 1] == '\r')) {
+        value[--len] = '\0';
+    }
+    if (value[0] == '\0' || yvex_path_has_newline(value)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "operator_paths", "configured models root is invalid");
+        return YVEX_ERR_FORMAT;
+    }
+
+    rc = yvex_path_format(out_root, cap, err, "operator_paths", "%s", value);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    *out_found = 1;
+    return YVEX_OK;
+}
+
+int yvex_operator_paths_resolve(const yvex_paths *paths,
+                                const char *explicit_models_root,
+                                yvex_operator_paths *out,
+                                yvex_error *err)
+{
+    char config_path[YVEX_PATH_CAP];
+    char configured[YVEX_PATH_CAP];
+    char resolved[YVEX_PATH_CAP];
+    char builtin[YVEX_PATH_CAP];
+    const char *env;
+    const char *home;
+    int found;
+    int rc;
+
+    if (!paths || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "operator_paths", "paths and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    rc = yvex_operator_config_path(paths, config_path, sizeof(config_path), err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    if (explicit_models_root) {
+        rc = yvex_operator_normalize_root(explicit_models_root, resolved, sizeof(resolved), err, "operator_paths");
+        if (rc != YVEX_OK) {
+            return rc;
+        }
+        return yvex_operator_fill(out, "explicit", resolved, config_path, err);
+    }
+
+    rc = yvex_operator_read_config(paths, configured, sizeof(configured), &found,
+                                   config_path, sizeof(config_path), err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (found) {
+        return yvex_operator_fill(out, "configured", configured, config_path, err);
+    }
+
+    env = yvex_env_or_null("YVEX_MODELS_ROOT");
+    if (env) {
+        rc = yvex_operator_normalize_root(env, resolved, sizeof(resolved), err, "operator_paths");
+        if (rc != YVEX_OK) {
+            return rc;
+        }
+        return yvex_operator_fill(out, "environment", resolved, config_path, err);
+    }
+
+    home = getenv("HOME");
+    if (home && home[0] != '\0') {
+        rc = yvex_path_format(builtin, sizeof(builtin), err, "operator_paths", "%s/lab/models", home);
+    } else {
+        rc = yvex_operator_normalize_root("./models", builtin, sizeof(builtin), err, "operator_paths");
+    }
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    return yvex_operator_fill(out, "builtin", builtin, config_path, err);
+}
+
+int yvex_operator_paths_configure(const yvex_paths *paths,
+                                  const char *models_root,
+                                  int create_dirs,
+                                  yvex_operator_paths *out,
+                                  yvex_error *err)
+{
+    char config_dir[YVEX_PATH_CAP];
+    FILE *fp;
+    int rc;
+
+    rc = yvex_operator_paths_resolve(paths, models_root, out, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    rc = yvex_operator_config_dir(paths, config_dir, sizeof(config_dir), err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = yvex_mkdir_p(config_dir, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    fp = fopen(out->config_path, "w");
+    if (!fp) {
+        yvex_error_setf(err, YVEX_ERR_IO, "operator_paths", "cannot write %s: %s",
+                        out->config_path, strerror(errno));
+        return YVEX_ERR_IO;
+    }
+    if (fprintf(fp, "models_root=%s\n", out->models_root) < 0) {
+        yvex_error_setf(err, YVEX_ERR_IO, "operator_paths", "cannot write %s: %s",
+                        out->config_path, strerror(errno));
+        fclose(fp);
+        return YVEX_ERR_IO;
+    }
+    if (fclose(fp) != 0) {
+        yvex_error_setf(err, YVEX_ERR_IO, "operator_paths", "cannot close %s: %s",
+                        out->config_path, strerror(errno));
+        return YVEX_ERR_IO;
+    }
+
+    if (create_dirs) {
+        rc = yvex_operator_paths_create(out, err);
+        if (rc != YVEX_OK) {
+            return rc;
+        }
+    }
+
+    return YVEX_OK;
+}
+
+int yvex_operator_paths_reset(const yvex_paths *paths,
+                              int *out_removed,
+                              yvex_operator_paths *out,
+                              yvex_error *err)
+{
+    char config_path[YVEX_PATH_CAP];
+    int rc;
+
+    if (!out_removed) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "operator_paths", "removed output is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    rc = yvex_operator_config_path(paths, config_path, sizeof(config_path), err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    if (unlink(config_path) == 0) {
+        *out_removed = 1;
+    } else if (errno == ENOENT) {
+        *out_removed = 0;
+    } else {
+        yvex_error_setf(err, YVEX_ERR_IO, "operator_paths", "cannot remove %s: %s",
+                        config_path, strerror(errno));
+        return YVEX_ERR_IO;
+    }
+
+    return yvex_operator_paths_resolve(paths, NULL, out, err);
+}
+
+int yvex_operator_paths_create(const yvex_operator_paths *operator_paths, yvex_error *err)
+{
+    const char *dirs[13];
+    char family_dir[YVEX_PATH_CAP];
+    char glm_dir[YVEX_PATH_CAP];
+    char gguf_deepseek[YVEX_PATH_CAP];
+    char gguf_glm[YVEX_PATH_CAP];
+    char reports_deepseek[YVEX_PATH_CAP];
+    char reports_glm[YVEX_PATH_CAP];
+    char reference_deepseek[YVEX_PATH_CAP];
+    char reference_glm[YVEX_PATH_CAP];
+    int rc;
+    int i;
+
+    if (!operator_paths || operator_paths->models_root[0] == '\0') {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "operator_paths", "operator paths are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    rc = yvex_path_format(family_dir, sizeof(family_dir), err, "operator_paths", "%s/deepseek", operator_paths->hf_root);
+    if (rc != YVEX_OK) return rc;
+    rc = yvex_path_format(glm_dir, sizeof(glm_dir), err, "operator_paths", "%s/glm", operator_paths->hf_root);
+    if (rc != YVEX_OK) return rc;
+    rc = yvex_path_format(gguf_deepseek, sizeof(gguf_deepseek), err, "operator_paths", "%s/deepseek", operator_paths->gguf_root);
+    if (rc != YVEX_OK) return rc;
+    rc = yvex_path_format(gguf_glm, sizeof(gguf_glm), err, "operator_paths", "%s/glm", operator_paths->gguf_root);
+    if (rc != YVEX_OK) return rc;
+    rc = yvex_path_format(reports_deepseek, sizeof(reports_deepseek), err, "operator_paths", "%s/deepseek", operator_paths->reports_root);
+    if (rc != YVEX_OK) return rc;
+    rc = yvex_path_format(reports_glm, sizeof(reports_glm), err, "operator_paths", "%s/glm", operator_paths->reports_root);
+    if (rc != YVEX_OK) return rc;
+    rc = yvex_path_format(reference_deepseek, sizeof(reference_deepseek), err, "operator_paths", "%s/deepseek", operator_paths->reference_root);
+    if (rc != YVEX_OK) return rc;
+    rc = yvex_path_format(reference_glm, sizeof(reference_glm), err, "operator_paths", "%s/glm", operator_paths->reference_root);
+    if (rc != YVEX_OK) return rc;
+
+    dirs[0] = operator_paths->models_root;
+    dirs[1] = operator_paths->hf_root;
+    dirs[2] = family_dir;
+    dirs[3] = glm_dir;
+    dirs[4] = operator_paths->gguf_root;
+    dirs[5] = gguf_deepseek;
+    dirs[6] = gguf_glm;
+    dirs[7] = operator_paths->reports_root;
+    dirs[8] = reports_deepseek;
+    dirs[9] = reports_glm;
+    dirs[10] = operator_paths->reference_root;
+    dirs[11] = reference_deepseek;
+    dirs[12] = reference_glm;
+
+    for (i = 0; i < 13; ++i) {
+        rc = yvex_mkdir_p(dirs[i], err);
+        if (rc != YVEX_OK) {
+            return rc;
+        }
+    }
+
+    return yvex_mkdir_p(operator_paths->registry_root, err);
+}
+
+int yvex_operator_paths_resolve_target(const yvex_operator_paths *operator_paths,
+                                       const char *family,
+                                       const char *kind,
+                                       char *out,
+                                       size_t cap,
+                                       int *out_exists,
+                                       yvex_error *err)
+{
+    struct stat st;
+    int rc;
+
+    if (!operator_paths || !family || !kind || !out || !out_exists) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "operator_paths", "family, kind and outputs are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (strcmp(family, "deepseek") != 0 && strcmp(family, "glm") != 0) {
+        yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "operator_paths", "unknown family: %s", family);
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    if (strcmp(kind, "source") == 0) {
+        rc = yvex_path_format(out, cap, err, "operator_paths", "%s/hf/%s/%s",
+                              operator_paths->models_root,
+                              family,
+                              strcmp(family, "deepseek") == 0 ? "DeepSeek-V4-Flash" : "GLM-5.2");
+    } else if (strcmp(kind, "gguf") == 0) {
+        rc = yvex_path_format(out, cap, err, "operator_paths", "%s/gguf/%s", operator_paths->models_root, family);
+    } else if (strcmp(kind, "reports") == 0) {
+        rc = yvex_path_format(out, cap, err, "operator_paths", "%s/reports/%s", operator_paths->models_root, family);
+    } else if (strcmp(kind, "reference") == 0) {
+        rc = yvex_path_format(out, cap, err, "operator_paths", "%s/reference/%s", operator_paths->models_root, family);
+    } else if (strcmp(kind, "registry") == 0) {
+        rc = yvex_path_format(out, cap, err, "operator_paths", "%s", operator_paths->registry_root);
+    } else {
+        yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "operator_paths", "unknown kind: %s", kind);
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+
+    *out_exists = stat(out, &st) == 0 ? 1 : 0;
+    return YVEX_OK;
+}
+
+int yvex_operator_paths_print(const yvex_operator_paths *operator_paths,
+                              FILE *fp,
+                              const char *status,
+                              int created,
+                              int include_created,
+                              yvex_error *err)
+{
+    if (!operator_paths || !fp || !status) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "operator_paths", "operator paths, status and file are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    fprintf(fp, "status: %s\n", status);
+    fprintf(fp, "models_root_source: %s\n", operator_paths->models_root_source);
+    fprintf(fp, "models_root: %s\n", operator_paths->models_root);
+    fprintf(fp, "hf_root: %s\n", operator_paths->hf_root);
+    fprintf(fp, "gguf_root: %s\n", operator_paths->gguf_root);
+    fprintf(fp, "reports_root: %s\n", operator_paths->reports_root);
+    fprintf(fp, "reference_root: %s\n", operator_paths->reference_root);
+    fprintf(fp, "registry_root: %s\n", operator_paths->registry_root);
+    fprintf(fp, "operator_config_path: %s\n", operator_paths->config_path);
+    if (include_created) {
+        fprintf(fp, "created: %s\n", created ? "true" : "false");
+    }
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 int yvex_run_id_make(char *out, unsigned long cap, yvex_error *err)
 {
     time_t now;

@@ -80,7 +80,18 @@ bad_command_files="$(
        -o -name 'block.h' \
        -o -name 'layer.h' \
        -o -name 'layers.h' \
-       -o -name 'executor.h' \) \
+       -o -name 'executor.h' \
+       -o -name 'yvex_paths.c' \
+       -o -name 'yvex_operator_paths.c' \
+       -o -name 'yvex_path_config.c' \
+       -o -name 'operator_paths.c' \
+       -o -name 'paths_config.c' \
+       -o -name 'path_config.c' \
+       -o -name 'yvex_paths_private.h' \
+       -o -name 'yvex_operator_paths.h' \
+       -o -name 'operator_paths.h' \
+       -o -path './include/yvex/operator_paths.h' \
+       -o -path './include/yvex/paths.h' \) \
     -print
 )"
 if [ -n "$bad_command_files" ]; then

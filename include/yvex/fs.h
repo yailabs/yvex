@@ -54,6 +54,17 @@ typedef struct {
 } yvex_paths;
 
 typedef struct {
+    char models_root_source[32];
+    char models_root[YVEX_PATH_CAP];
+    char hf_root[YVEX_PATH_CAP];
+    char gguf_root[YVEX_PATH_CAP];
+    char reports_root[YVEX_PATH_CAP];
+    char reference_root[YVEX_PATH_CAP];
+    char registry_root[YVEX_PATH_CAP];
+    char config_path[YVEX_PATH_CAP];
+} yvex_operator_paths;
+
+typedef struct {
     char run_id[YVEX_RUN_ID_CAP];
     char root[YVEX_PATH_CAP];
     char command_path[YVEX_PATH_CAP];
@@ -67,6 +78,33 @@ typedef struct {
 int yvex_paths_default(yvex_paths *out, yvex_error *err);
 int yvex_paths_project(yvex_paths *out, const char *project_root, yvex_error *err);
 int yvex_paths_print(const yvex_paths *paths, FILE *fp, yvex_error *err);
+int yvex_operator_paths_resolve(const yvex_paths *paths,
+                                const char *explicit_models_root,
+                                yvex_operator_paths *out,
+                                yvex_error *err);
+int yvex_operator_paths_configure(const yvex_paths *paths,
+                                  const char *models_root,
+                                  int create_dirs,
+                                  yvex_operator_paths *out,
+                                  yvex_error *err);
+int yvex_operator_paths_reset(const yvex_paths *paths,
+                              int *out_removed,
+                              yvex_operator_paths *out,
+                              yvex_error *err);
+int yvex_operator_paths_create(const yvex_operator_paths *operator_paths, yvex_error *err);
+int yvex_operator_paths_resolve_target(const yvex_operator_paths *operator_paths,
+                                       const char *family,
+                                       const char *kind,
+                                       char *out,
+                                       size_t cap,
+                                       int *out_exists,
+                                       yvex_error *err);
+int yvex_operator_paths_print(const yvex_operator_paths *operator_paths,
+                              FILE *fp,
+                              const char *status,
+                              int created,
+                              int include_created,
+                              yvex_error *err);
 
 int yvex_run_id_make(char *out, unsigned long cap, yvex_error *err);
 int yvex_run_dir_prepare(yvex_run_dir *out, const yvex_paths *paths, const char *run_id, yvex_error *err);

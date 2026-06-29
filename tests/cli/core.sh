@@ -85,6 +85,18 @@ contains() {
     grep -F "$text" "$file" >/dev/null || fail "$file missing: $text"
 }
 
+run_fail() {
+    name=$1
+    shift
+    set +e
+    "$@" >"$OUT_DIR/$name.out" 2>"$OUT_DIR/$name.err"
+    rc=$?
+    set -e
+    if [ "$rc" -eq 0 ]; then
+        fail "$name unexpectedly succeeded"
+    fi
+}
+
 run_ok no_args "$YVEX_BIN"
 contains "$OUT_DIR/no_args.out" "usage: yvex <command> [options]"
 
@@ -553,6 +565,8 @@ contains "$OUT_DIR/inspect_bad_magic.out" "status: unsupported"
 
 run_ok help_paths "$YVEX_BIN" help paths
 contains "$OUT_DIR/help_paths.out" "usage: yvex paths"
+contains "$OUT_DIR/help_paths.out" "yvex paths [--project DIR] configure --models-root DIR [--create]"
+contains "$OUT_DIR/help_paths.out" "yvex paths [--project DIR] resolve --family deepseek|glm --kind source|gguf|reports|reference|registry"
 
 run_ok paths "$YVEX_BIN" paths
 contains "$OUT_DIR/paths.out" "config:"
@@ -560,6 +574,15 @@ contains "$OUT_DIR/paths.out" "cache:"
 contains "$OUT_DIR/paths.out" "state:"
 contains "$OUT_DIR/paths.out" "data:"
 contains "$OUT_DIR/paths.out" "project:"
+contains "$OUT_DIR/paths.out" "status: paths"
+contains "$OUT_DIR/paths.out" "models_root_source:"
+contains "$OUT_DIR/paths.out" "models_root:"
+contains "$OUT_DIR/paths.out" "hf_root:"
+contains "$OUT_DIR/paths.out" "gguf_root:"
+contains "$OUT_DIR/paths.out" "reports_root:"
+contains "$OUT_DIR/paths.out" "reference_root:"
+contains "$OUT_DIR/paths.out" "registry_root:"
+contains "$OUT_DIR/paths.out" "operator_config_path:"
 
 run_ok paths_project "$YVEX_BIN" paths --project .
 contains "$OUT_DIR/paths_project.out" "project: ./.yvex"
@@ -574,6 +597,82 @@ contains "$OUT_DIR/paths_run.out" "command:"
 )
 contains "$OUT_DIR/paths_run_create.out" "root: $OUT_DIR/runs/run_"
 test -d "$OUT_DIR/runs" || fail "paths --run --create did not create run root"
+
+OPERATOR_PATHS_DIR="$OUT_DIR/operator-paths"
+rm -rf "$OPERATOR_PATHS_DIR"
+mkdir -p "$OPERATOR_PATHS_DIR"
+
+run_ok operator_paths_initial "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR"
+contains "$OUT_DIR/operator_paths_initial.out" "status: paths"
+contains "$OUT_DIR/operator_paths_initial.out" "models_root_source:"
+contains "$OUT_DIR/operator_paths_initial.out" "operator_config_path: $OPERATOR_PATHS_DIR/.yvex/operator-paths.conf"
+
+run_ok operator_paths_configure "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR" configure --models-root "$OPERATOR_PATHS_DIR/models"
+contains "$OUT_DIR/operator_paths_configure.out" "status: paths-configured"
+contains "$OUT_DIR/operator_paths_configure.out" "models_root_source: explicit"
+contains "$OUT_DIR/operator_paths_configure.out" "models_root:"
+contains "$OUT_DIR/operator_paths_configure.out" "hf_root:"
+contains "$OUT_DIR/operator_paths_configure.out" "gguf_root:"
+contains "$OUT_DIR/operator_paths_configure.out" "reports_root:"
+contains "$OUT_DIR/operator_paths_configure.out" "reference_root:"
+contains "$OUT_DIR/operator_paths_configure.out" "registry_root:"
+contains "$OUT_DIR/operator_paths_configure.out" "config_path: $OPERATOR_PATHS_DIR/.yvex/operator-paths.conf"
+contains "$OUT_DIR/operator_paths_configure.out" "created: false"
+
+run_ok operator_paths_after_config "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR"
+contains "$OUT_DIR/operator_paths_after_config.out" "status: paths"
+contains "$OUT_DIR/operator_paths_after_config.out" "models_root_source: configured"
+
+for family in deepseek glm; do
+    for kind in source gguf reports reference registry; do
+        name="operator_paths_resolve_${family}_${kind}"
+        run_ok "$name" "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR" resolve --family "$family" --kind "$kind"
+        contains "$OUT_DIR/$name.out" "status: paths-resolve"
+        contains "$OUT_DIR/$name.out" "models_root_source: configured"
+        contains "$OUT_DIR/$name.out" "family: $family"
+        contains "$OUT_DIR/$name.out" "kind: $kind"
+        contains "$OUT_DIR/$name.out" "path:"
+        contains "$OUT_DIR/$name.out" "exists:"
+    done
+done
+
+run_ok operator_paths_configure_create "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR" configure --models-root "$OPERATOR_PATHS_DIR/models" --create
+contains "$OUT_DIR/operator_paths_configure_create.out" "status: paths-configured"
+contains "$OUT_DIR/operator_paths_configure_create.out" "created: true"
+
+for dir in \
+    "$OPERATOR_PATHS_DIR/models/hf" \
+    "$OPERATOR_PATHS_DIR/models/hf/deepseek" \
+    "$OPERATOR_PATHS_DIR/models/hf/glm" \
+    "$OPERATOR_PATHS_DIR/models/gguf" \
+    "$OPERATOR_PATHS_DIR/models/gguf/deepseek" \
+    "$OPERATOR_PATHS_DIR/models/gguf/glm" \
+    "$OPERATOR_PATHS_DIR/models/reports" \
+    "$OPERATOR_PATHS_DIR/models/reports/deepseek" \
+    "$OPERATOR_PATHS_DIR/models/reports/glm" \
+    "$OPERATOR_PATHS_DIR/models/reference" \
+    "$OPERATOR_PATHS_DIR/models/reference/deepseek" \
+    "$OPERATOR_PATHS_DIR/models/reference/glm" \
+    "$OPERATOR_PATHS_DIR/models/registry"; do
+    test -d "$dir" || fail "operator path directory was not created: $dir"
+done
+
+run_ok operator_paths_create "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR" --create
+contains "$OUT_DIR/operator_paths_create.out" "status: paths-created"
+contains "$OUT_DIR/operator_paths_create.out" "created: true"
+
+run_ok operator_paths_reset "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR" configure --reset
+contains "$OUT_DIR/operator_paths_reset.out" "status: paths-reset"
+contains "$OUT_DIR/operator_paths_reset.out" "removed: true"
+contains "$OUT_DIR/operator_paths_reset.out" "models_root_source:"
+contains "$OUT_DIR/operator_paths_reset.out" "models_root:"
+
+run_fail operator_paths_configure_missing "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR" configure
+run_fail operator_paths_configure_empty "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR" configure --models-root ""
+run_fail operator_paths_bad_family "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR" resolve --family missing --kind source
+run_fail operator_paths_bad_kind "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR" resolve --family deepseek --kind missing
+run_fail operator_paths_missing_kind "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR" resolve --family deepseek
+run_fail operator_paths_missing_family "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR" resolve --kind source
 
 set +e
 "$YVEX_BIN" unknown >"$OUT_DIR/unknown.out" 2>"$OUT_DIR/unknown.err"

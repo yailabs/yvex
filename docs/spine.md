@@ -625,6 +625,7 @@ full implemented command inventory in operator runbook
 sectorized operator command atlas
 copy-command operator lanes
 operator preset roadmap authority in spine
+operator-local model root configuration and path resolution
 ```
 
 Current live target classes:
@@ -706,7 +707,6 @@ huge-MoE generation
 external-GGUF capability attribution
 external-runner capability attribution
 full supply-chain security
-operator model root configuration command
 model-target path resolution command
 model prepare preset
 model check preset
@@ -810,8 +810,8 @@ tables.
 | OPERATOR.FLOW.1 | complete | operator | Single-paste operator transcript | runbook contains one copy-paste transcript, full implemented command inventory, inline command style, artifact hygiene, and current/future boundary |
 | OPERATOR.FLOW.2 | complete | operator | Sectorized copy-command operator atlas | runbook is split into model, backend, intake, artifact, integrity, materialization, graph, prefill/KV, daemon, validation, and GLM status lanes with standalone copyable commands |
 | SPINE.OPERATOR.PRESET.0 | complete | docs | Operator preset and path-resolution roadmap | spine defines path configuration, target path resolution, model prepare, model check, graph check, chat UX, and final runbook preset sequence |
-| OPERATOR.PATHS.0 | next | operator | Operator model root configuration | `yvex paths configure` stores or resolves operator-local model roots without requiring shell export walls |
-| MODEL.TARGET.PATHS.0 | planned | model | Model target path resolution | `yvex model-target inspect TARGET --paths` reports source, artifact, report, registry, and planned paths without reading model payloads |
+| OPERATOR.PATHS.0 | complete | operator | Operator model root configuration | `yvex paths configure` stores or resolves operator-local model roots without requiring shell export walls |
+| MODEL.TARGET.PATHS.0 | next | model | Model target path resolution | `yvex model-target inspect TARGET --paths` reports source, artifact, report, registry, and planned paths without reading model payloads |
 | MODEL.PREPARE.0 | planned | model | DeepSeek selected artifact prepare preset | `yvex models prepare deepseek4-v4-flash-selected-embed` runs the implemented source-to-selected-GGUF and alias registration path without generation claim |
 | MODEL.PREPARE.1 | planned | model | Prepare preset refusal and dry-run behavior | prepare reports unsupported targets such as GLM source-only targets and supports dry-run, no-register, and no-use boundaries |
 | MODEL.CHECK.0 | planned | model | Selected artifact check preset | `yvex models check TARGET --backend cpu|cuda --level quick|runtime|full` composes implemented inspect, integrity, materialization, engine/session, graph, and gate checks |
@@ -1654,12 +1654,12 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-OPERATOR.PATHS.0 - Operator model root configuration
+MODEL.TARGET.PATHS.0 - Model target path resolution
 ```
 
-The immediate implementation path moves to operator path configuration so the
-normal YVEX workflow no longer depends on shell export walls or repeated manual
-path composition.
+MODEL.TARGET.PATHS.0 must use the operator-local model root configured by
+OPERATOR.PATHS.0. It must not inspect model payloads, require GLM download
+completion, or claim runtime execution.
 
 Runtime active next remains:
 
