@@ -215,6 +215,7 @@ tables.
 | CLI.PACKAGE.1 | complete | cli | Minimal compiled-binary packaging baseline | compiled root binaries remain repository-local and validated |
 | CLI.CONSOLE.0 | complete | cli | CLI interface doctrine | CLI claim and command-output doctrine established |
 | CLI.SURFACE.0 | complete | cli | CLI translation unit split | top-level dispatch separated from private command catalog and command/proof implementations |
+| CLI.SURFACE.1 | complete | cli | CLI command monolith domain split | private CLI command implementation split into common, graph, models, artifacts, tools, and run domains |
 | CLI.MODELS.0 | complete | cli | Local model selection spine | model selection design and registry shape established |
 | CLI.MODELS.1 | complete | cli | Local model registry implementation | local model registry add/list/use/current/remove works |
 | CLI.MODELS.2 | complete | cli | One-shot model alias resolution | model-taking commands resolve aliases or paths |

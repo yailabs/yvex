@@ -78,6 +78,37 @@ typedef struct {
 
 const yvex_cli_command *yvex_cli_find_command(const char *name);
 void yvex_cli_print_command_help(FILE *fp, const yvex_cli_command *command);
+
+int print_yvex_error(const yvex_error *err, int exit_code);
+int exit_for_status(int status);
+void print_quoted_bytes(const char *data, unsigned long long len);
+int open_artifact_for_gguf(const char *path, yvex_artifact **artifact, yvex_error *err);
+void close_tokenizer_context(yvex_cli_tokenizer_context *ctx);
+void close_model_context(yvex_cli_tokenizer_context *ctx);
+int open_model_context(const char *path, yvex_cli_tokenizer_context *ctx, yvex_error *err);
+int open_tokenizer_context(const char *path, yvex_cli_tokenizer_context *ctx, yvex_error *err);
+void print_tensor_dims(const unsigned long long *dims, unsigned int rank);
+void print_native_dims(const unsigned long long *dims, unsigned int rank);
+void print_token_ids(const yvex_tokens *tokens);
+int parse_id_list(const char *text, unsigned int **out_ids, unsigned long long *out_len);
+int parse_positive_ull(const char *text, unsigned long long *out);
+int parse_ull_allow_zero(const char *text, unsigned long long *out);
+int parse_uint_allow_zero(const char *text, unsigned int *out);
+int parse_dims_csv(const char *text, unsigned int expected_rank, unsigned long long dims[4]);
+int populate_registry_metadata(yvex_cli_metadata_snapshot *snapshot, const char *path, yvex_error *err);
+void model_ref_registry_entry_view(const yvex_model_ref *ref, yvex_model_registry_entry *entry);
+void print_metadata_drift_cli(const yvex_model_metadata_drift_report *report);
+int enforce_registered_identity_cli(const yvex_model_ref *ref, const char *surface);
+void print_graph_guard_report(const yvex_cli_graph_guard_report *report);
+int cli_token_input_vocab_from_model(const char *path, unsigned long long *vocab_size, yvex_error *err);
+void print_token_input_summary(const yvex_token_input *input,
+                               const char *status,
+                               const char *bounds_status,
+                               unsigned long long selected_index,
+                               unsigned int selected_token,
+                               int has_selected);
+int models_registry_open(yvex_model_registry **registry, const char *registry_path, int create_if_missing, yvex_error *err);
+int preflight_graph_guard(const yvex_model_ref *model_ref, const char *backend_name, int execute_fixture, int execute_segment, unsigned int token_id, yvex_cli_graph_guard_report *report, yvex_error *err);
 void yvex_cli_print_top_level_help(FILE *fp);
 int yvex_cli_command_commands(int argc, char **argv);
 int yvex_cli_command_help(int argc, char **argv);
