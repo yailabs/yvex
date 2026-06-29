@@ -704,7 +704,8 @@ Documentation roles:
 README.md: public technical thesis and project overview
 docs/api.md: public C API surface, headers, ownership, error/capability map
 docs/contract.md: runtime/CLI/filesystem/backend/server behavior contract
-docs/operator-runbook.md: command-first operator workflow
+docs/operator-runbook.md: runbook index and routing surface
+docs/runbooks/: model-scoped and common operator copy-pack lanes
 MODEL_ARTIFACTS.md: external artifact cards and selected pressure facts
 AGENTS.md: repository operating rules
 docs/spine.md: internal delivery map
@@ -764,6 +765,7 @@ operator-local model root configuration and path resolution
 model target operator path reporting
 DeepSeek selected artifact prepare preset
 prepare preset dry-run and registration-skip boundaries
+model-scoped operator runbooks
 DeepSeek V4 Flash generation and speculative throughput target envelope in spine
 ```
 
@@ -995,6 +997,7 @@ tables.
 | DOCS.PUBLIC.0 | complete | docs | Public documentation boundary cleanup | public docs cleaned of internal delivery leakage |
 | DOCS.MIN.0 | complete | docs | Minimal documentation surface | canonical docs surface established |
 | DOCS.OPERATOR.RUNBOOK.0 | complete | docs | Canonical operator runbook | command-first runbook exists |
+| DOCS.RUNBOOKS.MODEL.0 | complete | docs | Model-scoped operator runbooks | operator runbook becomes an index and detailed copy-pack lanes move into docs/runbooks/deepseek.md, docs/runbooks/glm.md, and docs/runbooks/common.md |
 | SPINE.REBASE.1 | complete | docs | Execution-chain audit and M3-M8 technical rebase | runtime ladder through M8 mapped |
 | SPINE.REBASE.2 | complete | docs | Runtime track rebase before M3 | M3/M4 path clarified before implementation |
 | SPINE.REBASE.3 | complete | docs | End-to-end runtime and operator roadmap | runtime/operator roadmap expanded |
@@ -2314,7 +2317,7 @@ no runtime file change for spine-only rebases
 - Do not claim advanced Runtime KV capacity work until the relevant allocator,
   estimator, spill, or quantization behavior exists in code and tests.
 - No docs sprawl beyond `docs/api.md`, `docs/contract.md`,
-  `docs/operator-runbook.md`, and `docs/spine.md`.
+  `docs/operator-runbook.md`, `docs/runbooks/`, and `docs/spine.md`.
 - Keep DeepSeek as the selected-runtime-slice pressure target and GLM-5.2
   official safetensors as the huge-model source-tensor pressure target unless
   this spine changes.

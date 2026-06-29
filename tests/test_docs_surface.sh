@@ -7,6 +7,11 @@ test -f MODEL_ARTIFACTS.md
 test -f docs/api.md
 test -f docs/contract.md
 test -f docs/operator-runbook.md
+test -d docs/runbooks
+test -f docs/runbooks/README.md
+test -f docs/runbooks/deepseek.md
+test -f docs/runbooks/glm.md
+test -f docs/runbooks/common.md
 test -f docs/spine.md
 
 test ! -e docs/README.md
@@ -50,6 +55,32 @@ count="$(find docs -maxdepth 1 -type f | wc -l | tr -d ' ')"
 if [ "$count" -ne 4 ]; then
   echo "unexpected docs file count: $count"
   find docs -maxdepth 1 -type f | sort
+  exit 1
+fi
+
+runbook_count="$(find docs/runbooks -maxdepth 1 -type f | wc -l | tr -d ' ')"
+if [ "$runbook_count" -ne 4 ]; then
+  echo "unexpected runbook file count: $runbook_count"
+  find docs/runbooks -maxdepth 1 -type f | sort
+  exit 1
+fi
+
+unexpected_runbooks="$(
+  find docs/runbooks -maxdepth 1 -type f \
+    ! -name README.md \
+    ! -name deepseek.md \
+    ! -name glm.md \
+    ! -name common.md \
+    -print
+)"
+if [ -n "$unexpected_runbooks" ]; then
+  echo "$unexpected_runbooks"
+  echo "unexpected runbook files"
+  exit 1
+fi
+
+if grep -nE 'OPERATOR\.PATHS\.0|MODEL\.TARGET\.PATHS\.0|MODEL\.PREPARE\.0|MODEL\.CHECK\.0|SPINE\.GENERATION\.TARGET\.0|DOCS\.RUNBOOKS\.MODEL\.0' docs/operator-runbook.md docs/runbooks/*.md; then
+  echo "public runbooks must not expose internal delivery IDs" >&2
   exit 1
 fi
 

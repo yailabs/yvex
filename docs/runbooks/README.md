@@ -1,0 +1,29 @@
+# YVEX Runbooks
+
+These runbooks are operator copy-pack lanes.
+
+Use a model-specific runbook when working with a concrete target.
+
+## Files
+
+- `deepseek.md` - current DeepSeek selected artifact path from local safetensors to selected graph execution.
+- `glm.md` - GLM-5.2 official-source tensor target status and download checks.
+- `common.md` - shared configuration, graph-only checks, daemon diagnostics, and repository validation.
+
+## Rules
+
+Do not paste every file.
+
+Pick the file for the model or task.
+
+Each lane states:
+
+- purpose;
+- requirements;
+- writes;
+- rerun safety;
+- stop point;
+- boundary.
+
+Current YVEX does not implement decode, logits, sampling, generation, provider
+generation, capability evaluation, or benchmarks.
