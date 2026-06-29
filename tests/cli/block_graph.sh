@@ -1,0 +1,99 @@
+#!/bin/sh
+set -eu
+
+YVEX_BIN=${YVEX_BIN:-./yvex}
+OUT_DIR=${YVEX_TEST_OUT_DIR:-build/tests/cli/block-graph}
+
+mkdir -p "$OUT_DIR"
+
+fail() {
+    printf 'FAIL: %s\n' "$1" >&2
+    exit 1
+}
+
+contains() {
+    file=$1
+    text=$2
+    grep -F -- "$text" "$file" >/dev/null || fail "$file missing: $text"
+}
+
+not_contains() {
+    file=$1
+    text=$2
+    if grep -F -- "$text" "$file" >/dev/null; then
+        fail "$file unexpectedly contained: $text"
+    fi
+}
+
+run_ok() {
+    name=$1
+    shift
+    "$@" >"$OUT_DIR/$name.out" 2>"$OUT_DIR/$name.err" || fail "$name exited non-zero"
+}
+
+run_fail() {
+    name=$1
+    shift
+    if "$@" >"$OUT_DIR/$name.out" 2>"$OUT_DIR/$name.err"; then
+        fail "$name unexpectedly succeeded"
+    fi
+}
+
+run_ok block_fixture_cpu \
+  "$YVEX_BIN" graph --backend cpu --execute-block --block fixture \
+    --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
+contains "$OUT_DIR/block_fixture_cpu.out" "status: graph-block"
+contains "$OUT_DIR/block_fixture_cpu.out" "block: fixture"
+contains "$OUT_DIR/block_fixture_cpu.out" "backend: cpu"
+contains "$OUT_DIR/block_fixture_cpu.out" "seq_len: 4"
+contains "$OUT_DIR/block_fixture_cpu.out" "position: 3"
+contains "$OUT_DIR/block_fixture_cpu.out" "hidden_dim: 8"
+contains "$OUT_DIR/block_fixture_cpu.out" "head_dim: 8"
+contains "$OUT_DIR/block_fixture_cpu.out" "ffn_dim: 16"
+contains "$OUT_DIR/block_fixture_cpu.out" "causal: true"
+contains "$OUT_DIR/block_fixture_cpu.out" "gated: true"
+contains "$OUT_DIR/block_fixture_cpu.out" "phase: input"
+contains "$OUT_DIR/block_fixture_cpu.out" "phase: attn_norm"
+contains "$OUT_DIR/block_fixture_cpu.out" "phase: q_projection"
+contains "$OUT_DIR/block_fixture_cpu.out" "phase: k_projection"
+contains "$OUT_DIR/block_fixture_cpu.out" "phase: v_projection"
+contains "$OUT_DIR/block_fixture_cpu.out" "phase: rope"
+contains "$OUT_DIR/block_fixture_cpu.out" "phase: attention"
+contains "$OUT_DIR/block_fixture_cpu.out" "phase: o_projection"
+contains "$OUT_DIR/block_fixture_cpu.out" "phase: residual_attn"
+contains "$OUT_DIR/block_fixture_cpu.out" "phase: post_attn_norm"
+contains "$OUT_DIR/block_fixture_cpu.out" "phase: mlp"
+contains "$OUT_DIR/block_fixture_cpu.out" "phase: residual_mlp"
+contains "$OUT_DIR/block_fixture_cpu.out" "phase: output"
+contains "$OUT_DIR/block_fixture_cpu.out" "phase: cleanup"
+contains "$OUT_DIR/block_fixture_cpu.out" "checksum:"
+contains "$OUT_DIR/block_fixture_cpu.out" "reference_checksum:"
+contains "$OUT_DIR/block_fixture_cpu.out" "max_abs_diff:"
+contains "$OUT_DIR/block_fixture_cpu.out" "cleanup: pass"
+contains "$OUT_DIR/block_fixture_cpu.out" "execution_ready: false"
+contains "$OUT_DIR/block_fixture_cpu.out" "generation_ready: false"
+contains "$OUT_DIR/block_fixture_cpu.out" "generation: unsupported"
+not_contains "$OUT_DIR/block_fixture_cpu.out" "execution_ready: true"
+not_contains "$OUT_DIR/block_fixture_cpu.out" "generation_ready: true"
+
+run_fail block_position_oob \
+  "$YVEX_BIN" graph --backend cpu --execute-block --block fixture \
+    --seq-len 4 --position 4 --hidden-dim 8 --head-dim 8 --ffn-dim 16
+contains "$OUT_DIR/block_position_oob.err" "position must be less than seq-len"
+
+run_fail block_bad_divisibility \
+  "$YVEX_BIN" graph --backend cpu --execute-block --block fixture \
+    --seq-len 4 --position 3 --hidden-dim 12 --head-dim 8 --ffn-dim 16
+contains "$OUT_DIR/block_bad_divisibility.err" "hidden-dim must be divisible by head-dim"
+
+run_fail block_missing_block \
+  "$YVEX_BIN" graph --backend cpu --execute-block \
+    --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
+contains "$OUT_DIR/block_missing_block.err" "--execute-block requires --block fixture"
+
+run_fail block_unsupported_real \
+  "$YVEX_BIN" graph --backend cpu --execute-block --block real \
+    --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
+contains "$OUT_DIR/block_unsupported_real.err" "unsupported block: real"
+
+printf 'cli block graph: ok\n'

@@ -512,6 +512,7 @@ standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
 standalone F32 MLP/feed-forward primitive boundary
+controlled first transformer block fixture execution
 artifact integrity validator and corruption fixture suite
 file identity digest enforcement
 registry metadata drift diagnostics
@@ -759,8 +760,8 @@ tables.
 | GRAPH.OPS.1 | complete | graph | Attention primitive boundary | attention inputs, masks, scratch, backend dispatch, and failure paths implemented |
 | GRAPH.OPS.2 | complete | graph | Projection and matmul primitive boundary | F32 matmul/projection primitive implemented with shape, byte, backend, dispatch, reference, and cleanup limits |
 | GRAPH.OPS.3 | complete | graph | MLP and routed-expert primitive boundary | F32 feed-forward and routed expert-slice primitive implemented with explicit tensor roles and backend support |
-| GRAPH.BLOCK.0 | next | graph | First transformer block execution | one block executes through normalization, attention, residual, MLP path with owned scratch |
-| GRAPH.LAYERS.0 | planned | graph | Layer scheduler and repeated block execution | scheduler can run repeated blocks over token positions with cleanup and failure reporting |
+| GRAPH.BLOCK.0 | complete | graph | First transformer block execution | controlled fixture block executes through normalization, attention, residual, MLP path with owned scratch |
+| GRAPH.LAYERS.0 | next | graph | Layer scheduler and repeated block execution | scheduler can run repeated controlled blocks over token positions with cleanup and failure reporting |
 | PREFILL.2 | planned | prefill | First real transformer prefill path | validated prompt tokens run through implemented layer path into KV-backed prefill state |
 | PREFILL.3 | planned | prefill | Chunked prefill and scratch lifecycle | chunked token ranges, scratch reuse, cleanup, and context-boundary behavior implemented |
 | PREFILL.4 | planned | prefill | Prefill diagnostics and regression reports | prefill positions, memory, KV rows, checksums, and failure phases visible |
@@ -1227,7 +1228,7 @@ Tiny synthetic GGUF fixtures in tests are the only exception.
 ## 7. Active Next
 
 ```text
-GRAPH.BLOCK.0 - First transformer block execution
+GRAPH.LAYERS.0 - Layer scheduler and repeated block execution
 ```
 
 OWI.TARGETS.1 remains planned until multi-family source manifest evidence is
@@ -1242,12 +1243,11 @@ SPINE.BLOCKS.1 - Planned-row deduplication and command-flow compression
 
 SPINE.BLOCKS.1 is a future cleanup row, not the active next implementation.
 
-GRAPH.BLOCK.0 must compose the implemented standalone graph operation
-boundaries into a first transformer-block execution proof with explicit tensor
-roles, residual/state ownership, scratch/output lifecycle, dispatch, reference
-comparison, failure paths, and cleanup behavior. It must not claim layer
-scheduling, full transformer prefill, decode, logits, sampling, generation,
-server generation, evaluation, or benchmark readiness.
+GRAPH.LAYERS.0 must schedule repeated controlled block fixture executions over
+token positions with explicit per-position state, scratch reuse, cleanup,
+failure phases, and reference comparison. It must not claim full transformer
+prefill, decode, logits, sampling, generation, server generation, evaluation,
+or benchmark readiness.
 
 After PREFILL.1, the next runtime work is not automatically decode. The spine
 expects graph/layer expansion rows to determine whether decode can run over
@@ -1357,7 +1357,7 @@ grep -nF 'OWI.TARGETS.0' docs/spine.md
 grep -nF 'OWI.HUGE.0' docs/spine.md
 grep -nF 'STORAGE.STREAM.0' docs/spine.md
 grep -nF 'MODEL.CLASS.0' docs/spine.md
-grep -nF 'GRAPH.BLOCK.0 - First transformer block execution' docs/spine.md
+grep -nF 'GRAPH.LAYERS.0 - Layer scheduler and repeated block execution' docs/spine.md
 
 pattern='external GGUF satisfies OW''I'
 grep -nF "$pattern" docs/spine.md && exit 1 || true

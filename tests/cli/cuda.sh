@@ -189,6 +189,33 @@ contains "$OUT_DIR/mlp_routed_cuda.out" "expert_id: 1"
 contains "$OUT_DIR/mlp_routed_cuda.out" "mlp_cuda_parity: pass"
 contains "$OUT_DIR/mlp_routed_cuda.out" "status: graph-op-executed"
 
+"$YVEX_BIN" graph --backend cuda --execute-block --block fixture \
+  --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16 \
+  >"$OUT_DIR/block_fixture_cuda.out" 2>"$OUT_DIR/block_fixture_cuda.err"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    fail "block fixture cuda exit code was $rc"
+fi
+contains "$OUT_DIR/block_fixture_cuda.out" "status: graph-block"
+contains "$OUT_DIR/block_fixture_cuda.out" "block: fixture"
+contains "$OUT_DIR/block_fixture_cuda.out" "backend: cuda"
+contains "$OUT_DIR/block_fixture_cuda.out" "seq_len: 4"
+contains "$OUT_DIR/block_fixture_cuda.out" "position: 3"
+contains "$OUT_DIR/block_fixture_cuda.out" "hidden_dim: 8"
+contains "$OUT_DIR/block_fixture_cuda.out" "head_dim: 8"
+contains "$OUT_DIR/block_fixture_cuda.out" "ffn_dim: 16"
+contains "$OUT_DIR/block_fixture_cuda.out" "phase: attn_norm"
+contains "$OUT_DIR/block_fixture_cuda.out" "phase: attention"
+contains "$OUT_DIR/block_fixture_cuda.out" "phase: residual_mlp"
+contains "$OUT_DIR/block_fixture_cuda.out" "phase: cleanup"
+contains "$OUT_DIR/block_fixture_cuda.out" "checksum:"
+contains "$OUT_DIR/block_fixture_cuda.out" "reference_checksum:"
+contains "$OUT_DIR/block_fixture_cuda.out" "max_abs_diff:"
+contains "$OUT_DIR/block_fixture_cuda.out" "cleanup: pass"
+contains "$OUT_DIR/block_fixture_cuda.out" "block_cuda_parity: pass"
+contains "$OUT_DIR/block_fixture_cuda.out" "execution_ready: false"
+contains "$OUT_DIR/block_fixture_cuda.out" "generation_ready: false"
+
 "$YVEX_BIN" materialize --model "$FIXTURE" --backend cuda >"$OUT_DIR/materialize_cuda_ready.out" 2>"$OUT_DIR/materialize_cuda_ready.err"
 rc=$?
 if [ "$rc" -ne 0 ]; then

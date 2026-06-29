@@ -49,7 +49,7 @@ test -d tests
 test -d tests/vectors
 
 bad_command_files="$(
-  find . -maxdepth 2 \
+  find . -maxdepth 3 \
     \( -name 'yvex_cli_*.c' \
        -o -name 'yvex_cli_*.h' \
        -o -name 'yvex_*_commands.c' \
@@ -66,7 +66,21 @@ bad_command_files="$(
        -o -name 'owintake_targets.c' \
        -o -name 'yvex_model_target.h' \
        -o -name 'yvex_target_private.h' \
-       -o -name 'yvex_owi_private.h' \) \
+       -o -name 'yvex_owi_private.h' \
+       -o -name 'yvex_block.c' \
+       -o -name 'yvex_transformer_block.c' \
+       -o -name 'yvex_layer.c' \
+       -o -name 'yvex_layers.c' \
+       -o -name 'yvex_executor.c' \
+       -o -name 'yvex_graph_executor.c' \
+       -o -name 'block.c' \
+       -o -name 'layer.c' \
+       -o -name 'layers.c' \
+       -o -name 'executor.c' \
+       -o -name 'block.h' \
+       -o -name 'layer.h' \
+       -o -name 'layers.h' \
+       -o -name 'executor.h' \) \
     -print
 )"
 if [ -n "$bad_command_files" ]; then

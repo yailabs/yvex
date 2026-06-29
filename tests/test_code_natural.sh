@@ -129,5 +129,25 @@ pattern='external runner proves YV''EX'
 scan_forbidden_claim "$pattern"
 pattern='model target is capab''ility'
 scan_forbidden_claim "$pattern"
+pattern='full inference imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='transformer inference rea''dy'
+scan_forbidden_claim "$pattern"
+pattern='DeepSeek block rea''dy'
+scan_forbidden_claim "$pattern"
+pattern='GLM block rea''dy'
+scan_forbidden_claim "$pattern"
+pattern='generation rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='decode rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='logits rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='first token gener''ated'
+scan_forbidden_claim "$pattern"
+pattern='token/sec'':'
+scan_forbidden_claim "$pattern"
+pattern='benchmark pa''ss'
+scan_forbidden_claim "$pattern"
 
 echo "code naturalness: ok"
