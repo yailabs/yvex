@@ -1,8 +1,13 @@
 /*
- * yvex_cli_tools.c - Intake, conversion, quantization, imatrix, and GGUF tooling commands.
+ * gguf/commands.c - GGUF and intake command adapters.
+ *
+ * This file owns argv/output adapters for GGUF templates, controlled emission,
+ * conversion, quantization manifests, imatrix manifests, source manifests, and
+ * native tensor inventory. Domain behavior remains owned by gguf/ and source
+ * modules.
  */
 
-#include "yvex_cli_private.h"
+#include "../yvex_command_private.h"
 
 static int parse_source_status(const char *text, yvex_source_status *out)
 {

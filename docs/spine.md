@@ -56,7 +56,8 @@ rather than hidden behind generic support claims.
 ```text
 root-first C source layout
 native root binaries: ./yvex and ./yvexd
-private CLI command catalog and implementation modules behind root dispatcher
+single CLI adapter in yvex_cli.c; command behavior owned by domain modules
+canonical runtime/eval/bench root skeleton files with responsibility headers
 public headers: include/yvex/
 CUDA implementation: cuda/ with C host bridge and CUDA kernel unit
 GGUF domain and family mapping: gguf/
@@ -216,6 +217,7 @@ tables.
 | CLI.CONSOLE.0 | complete | cli | CLI interface doctrine | CLI claim and command-output doctrine established |
 | CLI.SURFACE.0 | complete | cli | CLI translation unit split | top-level dispatch separated from private command catalog and command/proof implementations |
 | CLI.SURFACE.1 | complete | cli | CLI command monolith domain split | private CLI command implementation split into common, graph, models, artifacts, tools, and run domains |
+| CLI.SURFACE.2 | complete | cli/layout | CLI surface compression | only yvex_cli.c remains as CLI-prefixed source; command/proof logic promoted to domain owners |
 | CLI.MODELS.0 | complete | cli | Local model selection spine | model selection design and registry shape established |
 | CLI.MODELS.1 | complete | cli | Local model registry implementation | local model registry add/list/use/current/remove works |
 | CLI.MODELS.2 | complete | cli | One-shot model alias resolution | model-taking commands resolve aliases or paths |
@@ -229,6 +231,7 @@ tables.
 | CUDA.SURFACE.0 | complete | backend | CUDA kernel translation unit | CUDA kernels live in CUDA translation unit |
 | CODE.NATURAL.0 | complete | layout | Natural translation unit rewrite | translation units rewritten to project style |
 | CODE.NATURAL.1 | complete | layout | Final translation unit hygiene pass | final source hygiene pass complete |
+| YVEX.SKELETON.0 | complete | layout | Canonical runtime/eval/bench source skeleton | definitive root ownership files exist with responsibility headers and no capability claim |
 | TEST.SURFACE.0 | complete | test | Test vectors and runner consolidation | compact test runners and vectors consolidated |
 | DOCS.PUBLIC.0 | complete | docs | Public documentation boundary cleanup | public docs cleaned of internal delivery leakage |
 | DOCS.MIN.0 | complete | docs | Minimal documentation surface | canonical docs surface established |

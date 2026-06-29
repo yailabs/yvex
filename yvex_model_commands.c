@@ -1,8 +1,12 @@
 /*
- * yvex_cli_models.c - Model registry command implementation and metadata drift helpers.
+ * yvex_model_commands.c - Model registry command adapters.
+ *
+ * This file owns argv/output adapters for local model alias commands. Registry
+ * storage, identity, metadata drift, and artifact facts remain owned by
+ * yvex_model_artifacts.c.
  */
 
-#include "yvex_cli_private.h"
+#include "yvex_command_private.h"
 
 int models_registry_open(yvex_model_registry **registry,
                                 const char *registry_path,

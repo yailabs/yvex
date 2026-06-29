@@ -1,8 +1,12 @@
 /*
- * yvex_cli_artifacts.c - Artifact, integrity, materialization, and tensor command implementation.
+ * yvex_artifact_commands.c - Artifact command adapters.
+ *
+ * This file owns argv/output adapters for integrity, materialization, model
+ * gates, metadata, inspect, and tensor-table commands. Artifact validation and
+ * materialization behavior remain owned by artifact/model modules.
  */
 
-#include "yvex_cli_private.h"
+#include "yvex_command_private.h"
 
 static int command_integrity_report(int argc, char **argv);
 

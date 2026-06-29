@@ -1,5 +1,12 @@
-#ifndef YVEX_CLI_PRIVATE_H
-#define YVEX_CLI_PRIVATE_H
+#ifndef YVEX_COMMAND_PRIVATE_H
+#define YVEX_COMMAND_PRIVATE_H
+
+/*
+ * yvex_command_private.h - Private operator command adapter surface.
+ *
+ * This header is shared by yvex_cli.c and the domain-owned command adapters.
+ * It is not a public API and must not become a second runtime ownership map.
+ */
 
 #include <errno.h>
 #include <limits.h>

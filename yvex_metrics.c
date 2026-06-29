@@ -413,53 +413,6 @@ int yvex_metrics_write_json(const char *path,
     return YVEX_OK;
 }
 
-int yvex_profile_write_json(const char *path,
-                            const yvex_profile_summary *summary,
-                            const yvex_metrics *metrics,
-                            yvex_error *err)
-{
-    FILE *fp;
-    yvex_metric_counters counters;
-    int rc;
-
-    if (!summary || !metrics) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_profile_write_json",
-                       "summary and metrics are required");
-        return YVEX_ERR_INVALID_ARG;
-    }
-    rc = open_output(&fp, path, err, "yvex_profile_write_json");
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-
-    rc = yvex_metrics_get_counters(metrics, &counters, err);
-    if (rc != YVEX_OK) {
-        fclose(fp);
-        return rc;
-    }
-
-    fprintf(fp, "{\n");
-    fprintf(fp, "  \"schema\": \"yvex.profile.v1\",\n");
-    fprintf(fp, "  \"run_id\": ");
-    yvex_json_write_string(fp, summary->run_id);
-    fprintf(fp, ",\n  \"command\": ");
-    yvex_json_write_string(fp, summary->command);
-    fprintf(fp, ",\n  \"model\": ");
-    yvex_json_write_string(fp, summary->model_name);
-    fprintf(fp, ",\n  \"backend\": ");
-    yvex_json_write_string(fp, summary->backend_name);
-    fprintf(fp, ",\n  \"status\": ");
-    yvex_json_write_string(fp, summary->status);
-    fprintf(fp, ",\n  \"execution_ready\": %s,\n", summary->execution_ready ? "true" : "false");
-    fprintf(fp, "  \"generation\": \"unsupported\",\n");
-    write_counters(fp, &counters);
-    fprintf(fp, "\n}\n");
-
-    fclose(fp);
-    yvex_error_clear(err);
-    return YVEX_OK;
-}
-
 #define _POSIX_C_SOURCE 200809L
 
 

@@ -1,8 +1,12 @@
 /*
- * yvex_cli_graph.c - Graph command and standalone graph-op proof helpers.
+ * yvex_graph_commands.c - Graph command adapters.
+ *
+ * This file owns argv/output adapters for graph diagnostics and narrow graph
+ * proof commands. Core graph construction and runtime execution remain owned
+ * by yvex_graph.c and yvex_runtime.c.
  */
 
-#include "yvex_cli_private.h"
+#include "yvex_command_private.h"
 
 static int cli_test_env_enabled(const char *name)
 {

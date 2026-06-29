@@ -63,12 +63,21 @@ CORE_SRCS := \
 	yvex_backend.c \
 	yvex_graph.c \
 	yvex_metrics.c \
+	yvex_profile.c \
 	yvex_runtime.c \
+	yvex_prefill.c \
+	yvex_kv.c \
+	yvex_decode.c \
+	yvex_logits.c \
+	yvex_sampling.c \
+	yvex_generation.c \
 	yvex_token_input.c \
 	yvex_tokenizer.c \
 	yvex_chat.c \
 	yvex_server.c \
 	yvex_model_artifacts.c \
+	yvex_eval.c \
+	yvex_bench.c \
 	gguf/conversion.c \
 	gguf/quant.c \
 	yvex_source.c
@@ -249,15 +258,13 @@ $(CUDA_PTX_OBJ): $(CUDA_PTX_C)
 
 YVEX_CLI_SRCS := \
 	yvex_cli.c \
-	yvex_cli_commands.c \
-	yvex_cli_common.c \
-	yvex_cli_graph.c \
-	yvex_cli_models.c \
-	yvex_cli_artifacts.c \
-	yvex_cli_tools.c \
-	yvex_cli_run.c
+	yvex_graph_commands.c \
+	yvex_model_commands.c \
+	yvex_artifact_commands.c \
+	yvex_runtime_commands.c \
+	gguf/commands.c
 
-$(YVEX_BIN): $(YVEX_CLI_SRCS) yvex_cli_private.h $(LIBYVEX)
+$(YVEX_BIN): $(YVEX_CLI_SRCS) yvex_command_private.h $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(YVEX_CLI_SRCS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 

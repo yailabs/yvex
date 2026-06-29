@@ -1,8 +1,12 @@
 /*
- * yvex_cli_run.c - Runtime/operator command implementation for backend, token, KV, prefill, run, session, and chat.
+ * yvex_runtime_commands.c - Runtime command adapters.
+ *
+ * This file owns argv/output adapters for backend, token, KV, prefill, run,
+ * session, and accepted-only chat diagnostics. Runtime state and lifecycle
+ * behavior remain owned by yvex_runtime.c and related modules.
  */
 
-#include "yvex_cli_private.h"
+#include "yvex_command_private.h"
 
 static int print_special_id_line(const char *name, int (*fn)(const yvex_tokenizer *, unsigned int *), const yvex_tokenizer *tokenizer)
 {
