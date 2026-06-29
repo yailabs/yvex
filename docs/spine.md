@@ -526,6 +526,8 @@ source-tensor-first model-target roadmap authority in spine
 command-visible model target class registry
 canonical inference block directory in spine
 plug-and-play operator runbook flow
+single-paste operator transcript
+full implemented command inventory in operator runbook
 ```
 
 Current live target classes:
@@ -701,6 +703,7 @@ tables.
 | COMPUTE.BACKEND.0 | planned | backend | Backend capability matrix | CPU, CUDA, future Metal, and future ROCm op capability states are reported |
 | COMPUTE.BACKEND.1 | planned | backend | Backend memory pressure reports | allocation, transfer, op failure, cleanup, and fallback reports are implemented |
 | OPERATOR.FLOW.0 | complete | operator | Procedural operator flow | source, artifact, residency, graph, runtime, serve, eval, and bench command paths are shown as short flows |
+| OPERATOR.FLOW.1 | complete | operator | Single-paste operator transcript | runbook contains one copy-paste transcript, full implemented command inventory, inline command style, artifact hygiene, and current/future boundary |
 | SERVE.RUNTIME.0 | planned | serve | Serving runtime ownership map | daemon/provider surfaces are mapped to runtime generation ownership without generation claim |
 | ARTIFACT.NAMING.0 | complete | artifact | GGUF artifact naming contract | canonical artifact alias/name rules implemented |
 | RUNTIME.KV.0 | complete | kv-policy | KV cache policy | KV policy documented without runtime claim |

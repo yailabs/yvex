@@ -1,516 +1,283 @@
 # YVEX Operator Runbook
 
-This runbook is the operator transcript for the current YVEX surface.
-It is not a product tutorial and not a generation claim.
+## What this runbook is
+
+This runbook is the current operator transcript for YVEX.
+
 It is designed to be rerun after every implementation wave.
 
-YVEX currently separates:
+It is not a product tutorial.
+
+It is not a generation claim.
+
+It checks the implemented source, artifact, registry, integrity, backend, graph,
+runtime-diagnostic, daemon-status, and validation surfaces.
+
+The future shape is shorter: prepare a model, run/chat, serve.
+
+The current shape is longer because YVEX still exposes its internal boundaries
+explicitly: source intake, YVEX-produced artifact creation, artifact identity,
+registry selection, backend materialization, graph proof, runtime diagnostics,
+daemon status, and repository validation.
+
+Run the transcript from the `yailabs/yvex` source repository root.
+
+Keep real source tensors, generated GGUFs, reports, reference artifacts, local
+registries, logs, and caches outside the source repository.
+
+## One-paste transcript
+
+Paste this block from the repository root.
+
+Change only `YVEX_MODELS_ROOT` and `YVEX_BACKEND` when needed.
+
+Default model storage:
 
 ```text
-source intake
-YVEX-produced artifact creation
-artifact identity/integrity
-registry selection
-backend materialization
-graph proof
-runtime diagnostics
-daemon/status checks
-repository validation
+$HOME/lab/models
 ```
 
-The future operator path is a short model prepare plus run/chat flow. That path
-is not claimed until runtime generation exists.
+Default backend:
 
-Run these commands from the `yailabs/yvex` source repository. Keep source
-weights, generated GGUFs, reports, local registries, and logs in operator-local
-model storage outside this repository.
+```text
+cpu
+```
 
-## 1. Bootstrap Operator Context
-
-Copy this once per shell. Only `YVEX_MODELS_ROOT`, `YVEX_BACKEND`, and registry
-mode should normally be changed by hand. Everything else is derived.
+The transcript uses shell-local variables. It does not require an export wall.
 
 ```sh
-# Run from the YVEX repository root.
+set -u
 
-: "${YVEX_MODELS_ROOT:=$HOME/lab/models}"
-: "${YVEX_FAMILY:=deepseek}"
-: "${YVEX_BACKEND:=cpu}"
-: "${YVEX_REGISTRY_MODE:=local}"
+models_root="${YVEX_MODELS_ROOT:-$HOME/lab/models}"
+backend="${YVEX_BACKEND:-cpu}"
 
-export YVEX_MODELS_ROOT
-export YVEX_FAMILY
-export YVEX_BACKEND
-export YVEX_REGISTRY_MODE
+hf_root="$models_root/hf"
+gguf_root="$models_root/gguf"
+report_root="$models_root/reports"
+reference_root="$models_root/reference"
+registry_root="$models_root/registry"
 
-export YVEX_HF_ROOT="$YVEX_MODELS_ROOT/hf"
-export YVEX_GGUF_ROOT="$YVEX_MODELS_ROOT/gguf"
-export YVEX_REPORT_ROOT="$YVEX_MODELS_ROOT/reports"
-export YVEX_REFERENCE_ROOT="$YVEX_MODELS_ROOT/reference"
-export YVEX_REGISTRY_ROOT="$YVEX_MODELS_ROOT/registry"
+deepseek_source="$hf_root/deepseek/DeepSeek-V4-Flash"
+deepseek_gguf_dir="$gguf_root/deepseek"
+deepseek_report_dir="$report_root/deepseek"
 
-export DEEPSEEK_SOURCE="$YVEX_HF_ROOT/deepseek/DeepSeek-V4-Flash"
-export DEEPSEEK_GGUF_DIR="$YVEX_GGUF_ROOT/deepseek"
-export DEEPSEEK_REPORT_DIR="$YVEX_REPORT_ROOT/deepseek"
+selected_alias="deepseek4-v4-flash-selected-embed"
+segment_alias="deepseek4-v4-flash-selected-embed-rmsnorm"
+glm_target="glm-5.2-official-safetensors"
 
-export SELECTED_ALIAS="deepseek4-v4-flash-selected-embed"
-export SEGMENT_ALIAS="deepseek4-v4-flash-selected-embed-rmsnorm"
-export GLM_TARGET="glm-5.2-official-safetensors"
+selected_gguf="$deepseek_gguf_dir/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
+segment_gguf="$deepseek_gguf_dir/deepseek4-v4-flash-selected-embed-rmsnorm-F16-noimatrix-yvex-v1.gguf"
+fixture_gguf="$deepseek_gguf_dir/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf"
 
-export SELECTED_GGUF="$DEEPSEEK_GGUF_DIR/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
-export SEGMENT_GGUF="$DEEPSEEK_GGUF_DIR/deepseek4-v4-flash-selected-embed-rmsnorm-F16-noimatrix-yvex-v1.gguf"
-export FIXTURE_GGUF="$DEEPSEEK_GGUF_DIR/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf"
+tokenizer_fixture="tests/fixtures/gguf/valid-tokenizer-simple.gguf"
 
-export SELECTED_MODEL_REF="$SELECTED_ALIAS"
-export SEGMENT_MODEL_REF="$SEGMENT_ALIAS"
+policy_json="$deepseek_report_dir/policy.json"
+quant_job_json="$deepseek_report_dir/quant-job.json"
+imatrix_json="$deepseek_report_dir/imatrix.json"
+template_json="$deepseek_report_dir/template.json"
 
-export TOKENIZER_FIXTURE="tests/fixtures/gguf/valid-tokenizer-simple.gguf"
+mkdir -p "$hf_root" "$gguf_root" "$report_root" "$reference_root" "$registry_root" "$deepseek_gguf_dir" "$deepseek_report_dir"
 
-mkdir -p \
-  "$YVEX_HF_ROOT" \
-  "$YVEX_GGUF_ROOT" \
-  "$YVEX_REPORT_ROOT" \
-  "$YVEX_REFERENCE_ROOT" \
-  "$YVEX_REGISTRY_ROOT" \
-  "$DEEPSEEK_GGUF_DIR" \
-  "$DEEPSEEK_REPORT_DIR"
-```
+selected_ref=""
+segment_ref=""
 
-Registry mode is normally local. Use an isolated registry only when you want the
-runbook to avoid the default local model registry.
-
-```sh
-if [ "$YVEX_REGISTRY_MODE" = "isolated" ]; then
-  export YVEX_MODELS_REGISTRY="$YVEX_REGISTRY_ROOT/models.local.json"
-else
-  unset YVEX_MODELS_REGISTRY
-fi
-```
-
-## Artifact Storage Policy
-
-Source weights live outside the source repository:
-
-```text
-$YVEX_MODELS_ROOT/hf/<family>/<model>/
-```
-
-YVEX-produced GGUF artifacts live outside the source repository:
-
-```text
-$YVEX_MODELS_ROOT/gguf/<family>/
-```
-
-External reference artifacts live outside the source repository:
-
-```text
-$YVEX_MODELS_ROOT/reference/<family>/
-```
-
-Generated reports live outside the source repository:
-
-```text
-$YVEX_MODELS_ROOT/reports/<family>/
-```
-
-The source repository is `yailabs/yvex`. The artifact root is operator-local
-model storage. Publishing YVEX-produced GGUFs later means publishing to an
-artifact distribution target such as Hugging Face Hub, not committing real model
-artifacts to the source repository.
-
-No `.safetensors`, `.bin`, `.dat`, or real `.gguf` file belongs in the YVEX
-source repository. Tiny parser fixtures under `tests/fixtures/gguf/` are the
-only exception.
-
-## 2. Quick Start: Current Runtime Boundary
-
-Use this block to verify the repository and current command surface before
-touching local model artifacts.
-
-```sh
+printf '\n== build and discover ==\n'
 make
+./yvex version
+./yvex --version
 ./yvex commands
-./yvex model-target list
-./yvex models current || true
-./yvex backend "$YVEX_BACKEND"
+./yvex info
+./yvexd --help
+
+printf '\n== help surface ==\n'
+./yvex help backend
+./yvex help chat
+./yvex help commands
+./yvex help convert
+./yvex help cuda-info
+./yvex help detokenize
+./yvex help engine
 ./yvex help graph
-```
+./yvex help gguf-template
+./yvex help gguf-emit
+./yvex help help
+./yvex help imatrix
+./yvex help info
+./yvex help inspect
+./yvex help input
+./yvex help integrity
+./yvex help kv
+./yvex help materialize
+./yvex help materialize-gate
+./yvex help metadata
+./yvex help model-gate
+./yvex help model-target
+./yvex help models
+./yvex help native-weights
+./yvex help paths
+./yvex help plan
+./yvex help prefill
+./yvex help prompt
+./yvex help quant-job
+./yvex help quant-policy
+./yvex help qtype-support
+./yvex help run
+./yvex help session
+./yvex help source-manifest
+./yvex help tensor-map
+./yvex help tokenize
+./yvex help tokenizer
+./yvex help tensors
+./yvex help version
 
-If a selected DeepSeek alias is already registered, continue with the selected
-artifact validation flow. If it is not registered, run the build-or-register
-artifact flow below.
+printf '\n== model targets ==\n'
+./yvex model-target classes
+./yvex model-target list
+./yvex model-target inspect "$selected_alias"
+./yvex model-target inspect "$segment_alias"
+./yvex model-target inspect "$glm_target"
 
-## 3. Operator Modes
-
-Mode A - no model artifacts required:
-
-```text
-build/discover
-model-target registry
-CPU standalone graph ops
-controlled fixture graph
-tokenizer fixture diagnostics
-repository validation
-```
-
-Mode B - selected DeepSeek GGUF available:
-
-```text
-register alias
-inspect/tensors/metadata
-integrity
-materialize
-engine/session
-selected graph partial
-gates
-daemon status
-```
-
-Mode C - selected embedding-plus-RMSNorm GGUF available:
-
-```text
-register segment alias
-selected segment graph
-prefill state summary
-prefill plus minimal KV binding
-```
-
-Mode D - CUDA-capable host:
-
-```text
-cuda-info
-backend cuda
-CUDA graph ops
-CUDA materialization
-make check-cuda
-```
-
-Mode E - source tensor intake:
-
-```text
-source-manifest
-native-weights
-tensor-map
-convert plan
-convert emit
-```
-
-Mode F - future generation path:
-
-```text
-model prepare
-runtime generation
-chat generation
-daemon/provider generation
-streaming generation
-```
-
-Mode F is future-only until decode, logits, sampling, and generation exist.
-
-## 4. Build Or Refresh Selected DeepSeek GGUF
-
-Run this section only when the operator-local DeepSeek source tensors already
-exist under `$DEEPSEEK_SOURCE`.
-
-```sh
-./yvex source-manifest create \
-  --hf-repo "deepseek-ai/DeepSeek-V4-Flash" \
-  --revision "main" \
-  --local-path "$DEEPSEEK_SOURCE" \
-  --status in-progress \
-  --out "$DEEPSEEK_GGUF_DIR/deepseek-source-manifest.json"
-
-./yvex native-weights --source "$DEEPSEEK_SOURCE" --limit 20
-./yvex tensor-map --arch deepseek4 --native-source "$DEEPSEEK_SOURCE" --limit 20
-
-./yvex convert plan \
-  --arch deepseek4 \
-  --native-source "$DEEPSEEK_SOURCE" \
-  --out-plan "$DEEPSEEK_GGUF_DIR/deepseek-selected-plan.json"
-
-./yvex convert emit \
-  --arch deepseek4 \
-  --native-source "$DEEPSEEK_SOURCE" \
-  --tensor embed.weight \
-  --target-qtype F16 \
-  --out "$SELECTED_GGUF" \
-  --overwrite
-
-./yvex inspect "$SELECTED_GGUF"
-./yvex tensors "$SELECTED_GGUF"
-./yvex metadata "$SELECTED_GGUF"
-```
-
-This selected conversion emits only the selected embedding GGUF. It does not
-create the embedding-plus-RMSNorm segment artifact and does not create a full
-model artifact.
-
-## 5. Register Or Refresh Aliases
-
-Register the selected artifact idempotently. After this block, the rest of the
-runbook can use `$SELECTED_MODEL_REF`.
-
-```sh
-./yvex models remove "$SELECTED_ALIAS" || true
-./yvex models add \
-  --path "$SELECTED_GGUF" \
-  --alias "$SELECTED_ALIAS" \
-  --support-level selected-tensor-materialized
-./yvex models use "$SELECTED_ALIAS"
-./yvex models current
-./yvex models inspect "$SELECTED_ALIAS"
-
-export SELECTED_MODEL_REF="$SELECTED_ALIAS"
-```
-
-Only run the segment alias block if `$SEGMENT_GGUF` already exists. The selected
-embedding-only conversion flow does not create this segment artifact.
-
-```sh
-if [ -f "$SEGMENT_GGUF" ]; then
-  ./yvex models remove "$SEGMENT_ALIAS" || true
-  ./yvex models add \
-    --path "$SEGMENT_GGUF" \
-    --alias "$SEGMENT_ALIAS" \
-    --support-level selected-tensor-materialized
-  ./yvex models inspect "$SEGMENT_ALIAS"
-  export SEGMENT_MODEL_REF="$SEGMENT_ALIAS"
+printf '\n== paths and backend ==\n'
+./yvex paths
+./yvex paths --run
+./yvex paths --run --create
+./yvex backend cpu
+if ./yvex cuda-info >/tmp/yvex-cuda-info.txt 2>&1; then
+  cat /tmp/yvex-cuda-info.txt
+  ./yvex backend cuda
 else
-  printf 'skip segment alias: %s not found\n' "$SEGMENT_GGUF"
+  cat /tmp/yvex-cuda-info.txt
+  printf 'cuda unavailable: continuing CPU transcript\n'
 fi
-```
+rm -f /tmp/yvex-cuda-info.txt
 
-Direct path mode remains valid if you do not want to use aliases:
+printf '\n== tokenizer fixture diagnostics ==\n'
+./yvex tokenizer "$tokenizer_fixture"
+./yvex tokenize "$tokenizer_fixture" --text "hello"
+./yvex detokenize "$tokenizer_fixture" --ids 0,1
+./yvex prompt "$tokenizer_fixture" --user "hello" --tokens
+./yvex input prompt --model "$tokenizer_fixture" --text "hello"
+./yvex input tokens --model "$tokenizer_fixture" --tokens 0,1
 
-```sh
-export SELECTED_MODEL_REF="$SELECTED_GGUF"
-export SEGMENT_MODEL_REF="$SEGMENT_GGUF"
-```
+printf '\n== standalone graph proofs ==\n'
+./yvex graph --backend cpu --execute-op --op rope --position 7 --head-dim 8
+./yvex graph --backend cpu --execute-op --op attention --seq-len 4 --position 3 --head-dim 8 --causal
+./yvex graph --backend cpu --execute-op --op matmul --m 1 --k 8 --n 8
+./yvex graph --backend cpu --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated
+./yvex graph --backend cpu --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated --experts 2 --expert-id 1
 
-## 6. Verify Artifact Identity And Integrity
+printf '\n== controlled tiny GGUF fixture ==\n'
+./yvex gguf-emit controlled --out "$fixture_gguf" --model-name yvex-controlled-fixture --arch deepseek --overwrite
+./yvex inspect "$fixture_gguf"
+./yvex tensors "$fixture_gguf"
+./yvex metadata "$fixture_gguf"
+./yvex graph --model "$fixture_gguf" --backend cpu --execute-fixture --fixture-token 0
+./yvex graph --model "$fixture_gguf" --backend cpu --execute-fixture --fixture-token 1
 
-Run the selected artifact chain in this order: descriptor, tensor table,
-metadata, integrity check, and operator integrity report.
+printf '\n== controlled block fixture ==\n'
+./yvex graph --backend cpu --execute-block --block fixture --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
 
-```sh
-./yvex inspect "$SELECTED_MODEL_REF"
-./yvex tensors "$SELECTED_MODEL_REF"
-./yvex metadata "$SELECTED_MODEL_REF"
-
-./yvex integrity check \
-  --model "$SELECTED_MODEL_REF" \
-  --require-token-embedding \
-  --partial-token 0
-
-./yvex integrity report \
-  --model "$SELECTED_MODEL_REF" \
-  --backend "$YVEX_BACKEND" \
-  --require-token-embedding \
-  --partial-token 0
-```
-
-If `$SELECTED_MODEL_REF` is an alias, verify registry identity and metadata
-drift before materialization or graph execution.
-
-```sh
-./yvex models verify "$SELECTED_ALIAS"
-```
-
-The report is local operator evidence only. It is not remote provenance, model
-quality evidence, malware detection, sandboxing, or a generation claim.
-
-## 7. Materialize And Attach Runtime State
-
-CPU is the default path. `$YVEX_BACKEND` defaults to `cpu`, so this block can be
-rerun after every artifact refresh.
-
-```sh
-./yvex materialize --model "$SELECTED_MODEL_REF" --backend "$YVEX_BACKEND"
-./yvex engine --model "$SELECTED_MODEL_REF" --backend "$YVEX_BACKEND"
-./yvex session "$SELECTED_MODEL_REF" --backend "$YVEX_BACKEND"
-```
-
-CUDA add-on:
-
-```sh
-./yvex cuda-info
-./yvex backend cuda
-./yvex materialize --model "$SELECTED_MODEL_REF" --backend cuda
-./yvex engine --model "$SELECTED_MODEL_REF" --backend cuda
-./yvex session "$SELECTED_MODEL_REF" --backend cuda
-./yvex graph --model "$SELECTED_MODEL_REF" --backend cuda --execute-partial --partial-token 0
-```
-
-Materialization creates backend-owned tensor residency. Engine/session
-attachment exposes runtime state. These commands do not execute a full
-transformer path.
-
-## 8. Execute Current Graph Proofs
-
-Standalone graph ops do not open a model artifact. They prove bounded primitive
-behavior over deterministic F32 inputs.
-
-```sh
-./yvex graph --backend "$YVEX_BACKEND" --execute-op --op rope \
-  --position 7 \
-  --head-dim 8
-
-./yvex graph --backend "$YVEX_BACKEND" --execute-op --op attention \
-  --seq-len 4 \
-  --position 3 \
-  --head-dim 8 \
-  --causal
-
-./yvex graph --backend "$YVEX_BACKEND" --execute-op --op matmul \
-  --m 1 \
-  --k 8 \
-  --n 8
-
-./yvex graph --backend "$YVEX_BACKEND" --execute-op --op mlp \
-  --hidden-dim 8 \
-  --ffn-dim 16 \
-  --activation silu \
-  --gated
-```
-
-Controlled fixture graph creates a tiny local GGUF under operator-local model
-storage and executes deterministic embedding fixture tokens.
-
-```sh
-./yvex gguf-emit controlled \
-  --out "$FIXTURE_GGUF" \
-  --model-name yvex-controlled-fixture \
-  --arch deepseek \
-  --overwrite
-
-./yvex graph \
-  --model "$FIXTURE_GGUF" \
-  --backend "$YVEX_BACKEND" \
-  --execute-fixture \
-  --fixture-token 0
-
-./yvex graph \
-  --model "$FIXTURE_GGUF" \
-  --backend "$YVEX_BACKEND" \
-  --execute-fixture \
-  --fixture-token 1
-```
-
-Controlled block fixture composes the implemented primitive ops into one
-bounded transformer-block-shaped proof. It uses deterministic fixture tensors,
-not real model block weights.
-
-```sh
-./yvex graph \
-  --backend "$YVEX_BACKEND" \
-  --execute-block \
-  --block fixture \
-  --seq-len 4 \
-  --position 3 \
-  --hidden-dim 8 \
-  --head-dim 8 \
-  --ffn-dim 16
-```
-
-Selected artifact graph executes the selected F16 embedding partial over the
-selected artifact.
-
-```sh
-./yvex graph \
-  --model "$SELECTED_MODEL_REF" \
-  --backend "$YVEX_BACKEND" \
-  --execute-partial \
-  --partial-token 0
-```
-
-Selected segment graph requires the embedding-plus-RMSNorm segment artifact.
-
-```sh
-if [ -f "$SEGMENT_GGUF" ]; then
-  ./yvex graph \
-    --model "$SEGMENT_MODEL_REF" \
-    --backend "$YVEX_BACKEND" \
-    --execute-segment \
-    --segment embedding-rmsnorm \
-    --tokens 0,1 \
-    --token-index 1
+printf '\n== source intake and selected GGUF refresh ==\n'
+if [ -d "$deepseek_source" ]; then
+  ./yvex source-manifest create --hf-repo "deepseek-ai/DeepSeek-V4-Flash" --revision "main" --local-path "$deepseek_source" --status in-progress --out "$deepseek_gguf_dir/deepseek-source-manifest.json"
+  ./yvex native-weights --source "$deepseek_source" --limit 20
+  ./yvex tensor-map --arch deepseek4 --native-source "$deepseek_source" --limit 20
+  ./yvex convert plan --arch deepseek4 --native-source "$deepseek_source" --out-plan "$deepseek_gguf_dir/deepseek-selected-plan.json"
+  ./yvex convert emit --arch deepseek4 --native-source "$deepseek_source" --tensor embed.weight --target-qtype F16 --out "$selected_gguf" --overwrite
+  ./yvex inspect "$selected_gguf"
+  ./yvex tensors "$selected_gguf"
+  ./yvex metadata "$selected_gguf"
 else
-  printf 'skip segment graph: %s not found\n' "$SEGMENT_GGUF"
+  printf 'skip source intake: %s not found\n' "$deepseek_source"
 fi
-```
 
-Future layer scheduling will repeat controlled block execution over token
-positions with explicit state, scratch reuse, cleanup, and reference comparison.
-It is not a current operator command until the command exists.
-
-## 9. Execute Prefill And KV Diagnostics
-
-Minimal KV ownership is always runnable and does not require model artifacts.
-
-```sh
-./yvex kv \
-  --layers 1 \
-  --heads 2 \
-  --head-dim 4 \
-  --capacity 8 \
-  --append-demo \
-  --read-position 0
-```
-
-Prefill state summaries require the selected embedding-plus-RMSNorm segment
-artifact.
-
-```sh
-if [ -f "$SEGMENT_GGUF" ]; then
-  ./yvex input tokens \
-    --model "$SEGMENT_MODEL_REF" \
-    --tokens 0,1
-
-  ./yvex prefill \
-    --model "$SEGMENT_MODEL_REF" \
-    --backend "$YVEX_BACKEND" \
-    --segment embedding-rmsnorm \
-    --tokens 0,1
-
-  ./yvex prefill \
-    --model "$SEGMENT_MODEL_REF" \
-    --backend "$YVEX_BACKEND" \
-    --segment embedding-rmsnorm \
-    --tokens 0,1,2 \
-    --attach-kv \
-    --kv-layers 1 \
-    --kv-heads 2 \
-    --kv-head-dim 4 \
-    --kv-capacity 8
+printf '\n== alias refresh ==\n'
+if [ -f "$selected_gguf" ]; then
+  ./yvex models remove "$selected_alias" || true
+  ./yvex models add --path "$selected_gguf" --alias "$selected_alias" --support-level selected-tensor-materialized
+  ./yvex models use "$selected_alias"
+  ./yvex models current
+  ./yvex models list
+  ./yvex models inspect "$selected_alias"
+  ./yvex models verify "$selected_alias"
+  selected_ref="$selected_alias"
 else
-  printf 'skip prefill diagnostics: %s not found\n' "$SEGMENT_GGUF"
+  printf 'skip selected alias: %s not found\n' "$selected_gguf"
 fi
-```
 
-This is segment-summary prefill state plus minimal diagnostic KV binding. It is
-not attention-backed transformer prefill, decode, logits, sampling, or
-generation.
+if [ -f "$segment_gguf" ]; then
+  ./yvex models remove "$segment_alias" || true
+  ./yvex models add --path "$segment_gguf" --alias "$segment_alias" --support-level selected-tensor-materialized
+  ./yvex models inspect "$segment_alias"
+  ./yvex models verify "$segment_alias"
+  segment_ref="$segment_alias"
+else
+  printf 'skip segment alias: %s not found\n' "$segment_gguf"
+fi
 
-## 10. Run Daemon Status Checks
+printf '\n== selected artifact validation ==\n'
+if [ -n "${selected_ref:-}" ]; then
+  ./yvex inspect "$selected_ref"
+  ./yvex tensors "$selected_ref"
+  ./yvex metadata "$selected_ref"
+  ./yvex integrity check --model "$selected_ref"
+  ./yvex integrity check --model "$selected_ref" --require-token-embedding --partial-token 0
+  ./yvex integrity report --model "$selected_ref" --backend cpu --require-token-embedding --partial-token 0
+  ./yvex materialize --model "$selected_ref" --backend cpu
+  ./yvex engine --model "$selected_ref" --backend cpu
+  ./yvex session "$selected_ref" --backend cpu
+  ./yvex plan "$selected_ref" --backend cpu --seq 1 --ctx 16
+  ./yvex graph --model "$selected_ref" --backend cpu --execute-partial --partial-token 0
+else
+  printf 'skip selected artifact validation: no selected_ref\n'
+fi
 
-`yvexd` is a provider/status shell. Use one-request mode for repeatable checks.
+printf '\n== selected segment validation ==\n'
+if [ -n "${segment_ref:-}" ]; then
+  ./yvex inspect "$segment_ref"
+  ./yvex tensors "$segment_ref"
+  ./yvex integrity check --model "$segment_ref" --require-token-embedding --partial-token 0
+  ./yvex integrity report --model "$segment_ref" --backend cpu --require-token-embedding --partial-token 0
+  ./yvex materialize --model "$segment_ref" --backend cpu
+  ./yvex engine --model "$segment_ref" --backend cpu
+  ./yvex session "$segment_ref" --backend cpu
+  ./yvex input tokens --model "$segment_ref" --tokens 0,1
+  ./yvex graph --model "$segment_ref" --backend cpu --execute-segment --segment embedding-rmsnorm --tokens 0,1 --token-index 1
+  ./yvex prefill --model "$segment_ref" --backend cpu --segment embedding-rmsnorm --tokens 0,1
+  ./yvex prefill --model "$segment_ref" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
+else
+  printf 'skip selected segment validation: no segment_ref\n'
+fi
 
-```sh
-./yvexd \
-  --model "$SELECTED_MODEL_REF" \
-  --backend "$YVEX_BACKEND" \
-  --host 127.0.0.1 \
-  --port 18080 \
-  --one-request &
-server_pid=$!
-sleep 1
-curl -s http://127.0.0.1:18080/v1/models
-wait "$server_pid" || true
-```
+printf '\n== KV diagnostics ==\n'
+./yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8 --append-demo --read-position 0
 
-Additional status endpoints:
+printf '\n== gates ==\n'
+if [ -n "${selected_ref:-}" ]; then
+  ./yvex model-gate check --model "$selected_ref" --label deepseek-v4-flash-selected-embedding --family deepseek4 --expect-tensor token_embd.weight --expect-rank 2 --expect-dims 4096,129280 --expect-dtype F16 --expect-bytes 1059061760 --backend cpu --require-cpu --report-out "$deepseek_report_dir/deepseek-model-gate-cpu.txt"
+  ./yvex materialize-gate check --model "$selected_ref" --label deepseek-v4-flash-selected-embedding --family deepseek4 --scope selected-tensor --expect-tensor token_embd.weight --expect-rank 2 --expect-dims 4096,129280 --expect-dtype F16 --expect-bytes 1059061760 --backend cpu --require-cpu --repeat 3 --check-cleanup --report-out "$deepseek_report_dir/deepseek-materialize-gate-cpu.txt"
+else
+  printf 'skip gates: no selected_ref\n'
+fi
 
-```sh
+printf '\n== quant/template command coverage ==\n'
+./yvex qtype-support
+if [ -f "$policy_json" ]; then ./yvex quant-policy inspect --policy "$policy_json"; ./yvex quant-policy validate --policy "$policy_json"; else printf 'skip quant-policy: %s not found\n' "$policy_json"; fi
+if [ -f "$quant_job_json" ]; then ./yvex quant-job inspect --manifest "$quant_job_json"; ./yvex quant-job validate --manifest "$quant_job_json"; else printf 'skip quant-job: %s not found\n' "$quant_job_json"; fi
+if [ -f "$imatrix_json" ]; then ./yvex imatrix inspect --manifest "$imatrix_json"; ./yvex imatrix validate --manifest "$imatrix_json"; else printf 'skip imatrix: %s not found\n' "$imatrix_json"; fi
+if [ -f "$template_json" ]; then ./yvex gguf-template inspect --template "$template_json"; ./yvex gguf-template validate --template "$template_json"; if [ -d "$deepseek_source" ]; then ./yvex gguf-template compare --template "$template_json" --native-source "$deepseek_source"; fi; else printf 'skip gguf-template: %s not found\n' "$template_json"; fi
+
+printf '\n== daemon status ==\n'
+if [ -n "${selected_ref:-}" ]; then
+  ./yvexd --model "$selected_ref" --backend cpu --host 127.0.0.1 --port 18080 --one-request &
+  server_pid=$!
+  sleep 1
+  curl -s http://127.0.0.1:18080/v1/models
+  wait "$server_pid" || true
+else
+  printf 'skip daemon models endpoint: no selected_ref\n'
+fi
+
 ./yvexd --host 127.0.0.1 --port 18081 --one-request &
 server_pid=$!
 sleep 1
@@ -522,38 +289,12 @@ server_pid=$!
 sleep 1
 curl -s http://127.0.0.1:18082/metrics
 wait "$server_pid" || true
-```
 
-The daemon status surface does not serve generation.
+printf '\n== accepted-only chat/run diagnostics ==\n'
+printf '/status\n/quit\n' | ./yvex chat --model "$tokenizer_fixture" --backend cpu
+./yvex run --model "$tokenizer_fixture" --backend cpu --prompt "hello"
 
-## 11. Run Diagnostic Console And Accepted-Only Paths
-
-YVEX does not currently behave like DS4 when launched with `./yvex`. DS4 can
-enter a generation REPL because its runtime path exists. YVEX will move toward a
-short prepare/run/chat path only after runtime generation exists.
-
-Current diagnostic console and run commands use tokenizer-bearing fixtures.
-They accept text or prompt input and report diagnostics only.
-
-```sh
-printf '/status\n/quit\n' | ./yvex chat \
-  --model "$TOKENIZER_FIXTURE" \
-  --backend "$YVEX_BACKEND"
-
-./yvex run \
-  --model "$TOKENIZER_FIXTURE" \
-  --backend "$YVEX_BACKEND" \
-  --prompt "hello"
-```
-
-Selected DeepSeek embedding artifacts do not contain tokenizer metadata for the
-diagnostic console.
-
-## 12. Run Repository Validation
-
-Run the standard validation gate before committing changes.
-
-```sh
+printf '\n== repository validation ==\n'
 git diff --check
 make check
 make smoke
@@ -561,116 +302,192 @@ sh tests/test_docs_surface.sh
 sh tests/test_surface.sh
 sh tests/test_source_layout.sh
 sh tests/test_code_natural.sh
-```
+if ./yvex cuda-info >/dev/null 2>&1; then make check-cuda; else printf 'skip make check-cuda: CUDA unavailable\n'; fi
 
-CUDA-capable hosts:
-
-```sh
-make check-cuda
-```
-
-`make check` includes the consolidated integrity regression harness. Operators
-do not need to run that harness on their own artifacts; use `integrity check`,
-`models verify`, `materialize`, and graph command output for local artifacts.
-
-## 13. Artifact And Path Hygiene
-
-Check that generated artifacts and local model state are not tracked.
-
-```sh
+printf '\n== artifact hygiene ==\n'
+git status --short
 git ls-files '*.safetensors' '*.bin' '*.dat'
 git ls-files '*.gguf'
+grep -R -nE '(/home|/Users|/mnt)/[^[:space:]]+' README.md MODEL_ARTIFACTS.md AGENTS.md docs/contract.md docs/spine.md docs/operator-runbook.md || true
+
+printf '\nYVEX operator transcript complete.\n'
 ```
 
-Expected result:
+## Full command inventory
+
+Every implemented `./yvex` command must appear here.
+
+Each line says where the command appears in the one-paste transcript.
 
 ```text
-No downloaded source tensors.
-No real model GGUFs.
-Tiny test fixtures only.
+backend — paths and backend
+chat — accepted-only chat/run diagnostics
+commands — build and discover
+convert — source intake and selected GGUF refresh
+cuda-info — paths and backend, repository validation
+detokenize — tokenizer fixture diagnostics
+engine — selected artifact validation, selected segment validation
+graph — standalone graph proofs, controlled tiny GGUF fixture, selected artifact validation, selected segment validation, controlled block fixture
+gguf-template — quant/template command coverage, conditional
+gguf-emit — controlled tiny GGUF fixture
+help — help surface
+imatrix — quant/template command coverage, conditional
+info — build and discover
+inspect — controlled tiny GGUF fixture, source intake, selected artifact validation, selected segment validation
+input — tokenizer fixture diagnostics, selected segment validation
+integrity — selected artifact validation, selected segment validation
+kv — KV diagnostics
+materialize — selected artifact validation, selected segment validation
+materialize-gate — gates, conditional on selected artifact
+metadata — controlled tiny GGUF fixture, source intake, selected artifact validation
+model-gate — gates, conditional on selected artifact
+model-target — model targets
+models — alias refresh
+native-weights — source intake and selected GGUF refresh, conditional on source tensors
+paths — paths and backend
+plan — selected artifact validation
+prefill — selected segment validation, conditional on segment artifact
+prompt — tokenizer fixture diagnostics
+quant-job — quant/template command coverage, conditional
+quant-policy — quant/template command coverage, conditional
+qtype-support — quant/template command coverage
+run — accepted-only chat/run diagnostics
+session — selected artifact validation, selected segment validation
+source-manifest — source intake and selected GGUF refresh, conditional on source tensors
+tensor-map — source intake and selected GGUF refresh, conditional on source tensors
+tokenize — tokenizer fixture diagnostics
+tokenizer — tokenizer fixture diagnostics
+tensors — controlled tiny GGUF fixture, source intake, selected artifact validation, selected segment validation
+version — build and discover
 ```
 
-Run a public-doc path leak scan before publishing docs:
+The inventory is not a capability claim. It is a map from implemented command
+names to the transcript location that exercises or discovers them.
+
+## Artifact roots and generated files
+
+Source tensors stay in operator-local model storage:
+
+```text
+$HOME/lab/models/hf/<family>/<model>/
+```
+
+YVEX-produced GGUFs stay in operator-local model storage:
+
+```text
+$HOME/lab/models/gguf/<family>/
+```
+
+External reference artifacts stay in:
+
+```text
+$HOME/lab/models/reference/<family>/
+```
+
+Reports stay in:
+
+```text
+$HOME/lab/models/reports/<family>/
+```
+
+The source repository stays clean.
+
+Publishing YVEX-produced GGUFs later means uploading them to an artifact
+distribution target, not committing them to the source repository.
+
+## Optional flows
+
+### CUDA rerun
+
+Run the transcript again with CUDA selected:
 
 ```sh
-grep -R -nE '(/home|/Users|/mnt)/[^[:space:]]+' \
-  README.md MODEL_ARTIFACTS.md AGENTS.md docs/contract.md docs/spine.md docs/operator-runbook.md || true
+YVEX_BACKEND=cuda sh -c '<paste the one-paste transcript again from the top>'
 ```
 
-## 14. Manual Debug Order
+The transcript itself detects CUDA for `make check-cuda`.
+
+### Direct path mode
+
+The transcript uses aliases after registration.
+
+To force direct path mode, run the relevant commands manually with:
+
+```text
+$selected_gguf
+$segment_gguf
+```
+
+Do not set a global direct-path mode unless you are debugging registry behavior.
+
+### Isolated registry mode
+
+Use an isolated registry only for registry experiments:
+
+```sh
+YVEX_MODELS_REGISTRY="$HOME/lab/models/registry/models.local.json"
+```
+
+The default transcript uses the normal local registry.
+
+### GLM source download status
+
+GLM source tensors are downloaded outside the transcript.
+
+Use this status check:
+
+```sh
+models_root="${YVEX_MODELS_ROOT:-$HOME/lab/models}"
+pid_file="$models_root/logs/glm52-safetensors-download.pid"
+log_file="$models_root/logs/glm52-safetensors-download.log"
+[ -f "$pid_file" ] && ps -p "$(cat "$pid_file")" -o pid,stat,etime,cmd || true
+[ -f "$log_file" ] && tail -n 40 "$log_file" || true
+find "$models_root/hf/glm/GLM-5.2" -maxdepth 1 -type f -name "*.safetensors" | wc -l
+du -sh "$models_root/hf/glm/GLM-5.2" 2>/dev/null || true
+```
+
+Do not add GLM download commands to the main transcript.
+
+## Current boundary
+
+Current YVEX can inspect, emit selected artifacts, register aliases, validate
+integrity, materialize selected tensors, attach engine/session state, run
+controlled graph proofs, run selected graph slices, run segment-summary prefill,
+run minimal KV diagnostics, run daemon status checks, and run accepted-only
+chat/run diagnostics.
+
+Current YVEX does not implement complete transformer execution, full transformer
+prefill, decode, logits, sampling, generation, provider generation, capability
+evaluation, or benchmarks.
+
+Future shape:
+
+```text
+prepare model
+run/chat
+serve
+stream
+evaluate
+benchmark
+```
+
+That future shape is not claimed by the current implementation.
+
+## Manual debug fallback
 
 Use this order before assuming a runtime bug:
 
 ```text
-run ./yvex help <command>
-check the path passed to --native-source
-check the path passed to --out
-check YVEX_MODELS_REGISTRY only if isolated registry mode is intentional
-run ./yvex model-target list
-run ./yvex models current
-run ./yvex inspect <model>
-run ./yvex tensors <model>
-run ./yvex integrity check --model <model>
-test CPU before CUDA
-use CUDA only on CUDA-capable hosts
-never commit generated GGUFs or local registry files
-```
-
-For daemon checks, start with `--one-request` and a status endpoint before
-testing longer-lived processes.
-
-## 15. Future One-Command Shape
-
-Future target shape, not current capability:
-
-```sh
-./yvex prepare <model-or-alias> --backend cuda
-./yvex chat --model <model-or-alias> --backend cuda
-./yvexd --model <model-or-alias> --backend cuda
-```
-
-The current runbook stays longer because the implemented surface still exposes
-the source/artifact/registry/integrity/materialization/graph/runtime boundaries
-separately. The short path belongs after decode, logits, sampling, and runtime
-generation exist.
-
-## 16. Current Boundary
-
-Current implemented boundaries:
-
-```text
-source tensor inventory and selected conversion planning
-selected DeepSeek embedding GGUF emission
-alias registry and identity checks
-artifact integrity and metadata drift checks
-CPU/CUDA selected materialization
-engine/session attachment
-controlled fixture graph execution
-selected embedding partial graph execution
-selected embedding-plus-RMSNorm segment execution
-standalone RoPE, attention, matmul, and MLP primitive proofs
-controlled transformer-block fixture proof
-segment-summary prefill state diagnostics
-minimal KV ownership and diagnostic binding
-daemon status endpoints
-accepted-only chat/run diagnostics
-```
-
-Current unsupported boundaries:
-
-```text
-complete model materialization
-complete transformer execution
-attention-backed transformer prefill
-decode
-logits
-sampling
-generation
-interactive generation
-provider generation
-capability evaluation
-benchmark: unsupported
-generation: unsupported
-external reference only
-accepted-only diagnostic path
+1. ./yvex commands
+2. ./yvex help <command>
+3. ./yvex model-target list
+4. ./yvex models current
+5. ./yvex models list
+6. ./yvex inspect <model-or-alias>
+7. ./yvex tensors <model-or-alias>
+8. ./yvex integrity check --model <model-or-alias>
+9. ./yvex backend cpu
+10. ./yvex cuda-info
+11. rerun CPU before CUDA
+12. check git status before committing
 ```
