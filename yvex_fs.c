@@ -8,6 +8,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <yvex/fs.h>
+#include "yvex_console_private.h"
 
 #include <errno.h>
 #include <stdarg.h>
@@ -879,4 +880,231 @@ int yvex_run_dir_print(const yvex_run_dir *run, FILE *fp, yvex_error *err)
 
     yvex_error_clear(err);
     return YVEX_OK;
+}
+
+/* Domain-owned command surface moved out of yvex_runtime.c. */
+
+static int command_paths(int argc, char **argv)
+{
+    const char *project_root = NULL;
+    const char *models_root = NULL;
+    const char *family = NULL;
+    const char *kind = NULL;
+    int want_run = 0;
+    int want_create = 0;
+    int want_reset = 0;
+    int i;
+    int rc;
+    int removed = 0;
+    int exists = 0;
+    char resolved_path[YVEX_PATH_CAP];
+    yvex_paths paths;
+    yvex_operator_paths operator_paths;
+    yvex_run_dir run;
+    yvex_error err;
+
+    yvex_error_clear(&err);
+
+    i = 2;
+    while (i < argc) {
+        if (strcmp(argv[i], "--project") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: --project requires a path\n");
+                return 2;
+            }
+            project_root = argv[++i];
+            ++i;
+        } else {
+            break;
+        }
+    }
+
+    rc = project_root ? yvex_paths_project(&paths, project_root, &err) : yvex_paths_default(&paths, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+    }
+
+    if (i < argc && strcmp(argv[i], "configure") == 0) {
+        ++i;
+        while (i < argc) {
+            if (strcmp(argv[i], "--models-root") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "yvex: --models-root requires a path\n");
+                    return 2;
+                }
+                models_root = argv[++i];
+            } else if (strcmp(argv[i], "--create") == 0) {
+                want_create = 1;
+            } else if (strcmp(argv[i], "--reset") == 0) {
+                want_reset = 1;
+            } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+                yvex_paths_help(stdout);
+                return 0;
+            } else {
+                fprintf(stderr, "yvex: unknown paths configure option: %s\n", argv[i]);
+                fprintf(stderr, "Try 'yvex help paths' for usage.\n");
+                return 2;
+            }
+            ++i;
+        }
+        if (want_reset && (models_root || want_create)) {
+            fprintf(stderr, "yvex: paths configure --reset does not accept --models-root or --create\n");
+            return 2;
+        }
+        if (!want_reset && !models_root) {
+            fprintf(stderr, "yvex: paths configure requires --models-root DIR or --reset\n");
+            return 2;
+        }
+
+        if (want_reset) {
+            rc = yvex_operator_paths_reset(&paths, &removed, &operator_paths, &err);
+            if (rc != YVEX_OK) {
+                return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+            }
+            printf("status: paths-reset\n");
+            printf("config_path: %s\n", operator_paths.config_path);
+            printf("removed: %s\n", removed ? "true" : "false");
+            printf("models_root_source: %s\n", operator_paths.models_root_source);
+            printf("models_root: %s\n", operator_paths.models_root);
+            return 0;
+        }
+
+        rc = yvex_operator_paths_configure(&paths, models_root, want_create, &operator_paths, &err);
+        if (rc != YVEX_OK) {
+            return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+        }
+        printf("status: paths-configured\n");
+        printf("models_root_source: %s\n", operator_paths.models_root_source);
+        printf("models_root: %s\n", operator_paths.models_root);
+        printf("hf_root: %s\n", operator_paths.hf_root);
+        printf("gguf_root: %s\n", operator_paths.gguf_root);
+        printf("reports_root: %s\n", operator_paths.reports_root);
+        printf("reference_root: %s\n", operator_paths.reference_root);
+        printf("registry_root: %s\n", operator_paths.registry_root);
+        printf("config_path: %s\n", operator_paths.config_path);
+        printf("created: %s\n", want_create ? "true" : "false");
+        return 0;
+    }
+
+    if (i < argc && strcmp(argv[i], "resolve") == 0) {
+        ++i;
+        while (i < argc) {
+            if (strcmp(argv[i], "--family") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "yvex: --family requires a value\n");
+                    return 2;
+                }
+                family = argv[++i];
+            } else if (strcmp(argv[i], "--kind") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "yvex: --kind requires a value\n");
+                    return 2;
+                }
+                kind = argv[++i];
+            } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+                yvex_paths_help(stdout);
+                return 0;
+            } else {
+                fprintf(stderr, "yvex: unknown paths resolve option: %s\n", argv[i]);
+                fprintf(stderr, "Try 'yvex help paths' for usage.\n");
+                return 2;
+            }
+            ++i;
+        }
+        if (!family) {
+            fprintf(stderr, "yvex: paths resolve requires --family\n");
+            return 2;
+        }
+        if (!kind) {
+            fprintf(stderr, "yvex: paths resolve requires --kind\n");
+            return 2;
+        }
+        rc = yvex_operator_paths_resolve(&paths, NULL, &operator_paths, &err);
+        if (rc != YVEX_OK) {
+            return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+        }
+        rc = yvex_operator_paths_resolve_target(&operator_paths, family, kind,
+                                                resolved_path, sizeof(resolved_path), &exists, &err);
+        if (rc != YVEX_OK) {
+            return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+        }
+        printf("status: paths-resolve\n");
+        printf("models_root_source: %s\n", operator_paths.models_root_source);
+        printf("family: %s\n", family);
+        printf("kind: %s\n", kind);
+        printf("path: %s\n", resolved_path);
+        printf("exists: %s\n", exists ? "true" : "false");
+        return 0;
+    }
+
+    for (; i < argc; ++i) {
+        if (strcmp(argv[i], "--run") == 0) {
+            want_run = 1;
+        } else if (strcmp(argv[i], "--create") == 0) {
+            want_create = 1;
+        } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            yvex_paths_help(stdout);
+            return 0;
+        } else {
+            fprintf(stderr, "yvex: unknown paths option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help paths' for usage.\n");
+            return 2;
+        }
+    }
+
+    if (!want_run) {
+        rc = yvex_paths_print(&paths, stdout, &err);
+        if (rc != YVEX_OK) {
+            return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+        }
+        rc = yvex_operator_paths_resolve(&paths, NULL, &operator_paths, &err);
+        if (rc != YVEX_OK) {
+            return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+        }
+        if (want_create) {
+            rc = yvex_operator_paths_create(&operator_paths, &err);
+            if (rc != YVEX_OK) {
+                return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+            }
+            return yvex_operator_paths_print(&operator_paths, stdout, "paths-created", 1, 1, &err);
+        }
+        rc = yvex_operator_paths_print(&operator_paths, stdout, "paths", 0, 0, &err);
+        if (rc != YVEX_OK) {
+            return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+        }
+        return 0;
+    }
+
+    rc = yvex_run_dir_prepare(&run, &paths, NULL, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+    }
+
+    if (want_create) {
+        rc = yvex_run_dir_create(&run, &err);
+        if (rc != YVEX_OK) {
+            return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+        }
+    }
+
+    rc = yvex_run_dir_print(&run, stdout, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+    }
+    return 0;
+}
+
+int yvex_paths_command(int argc, char **argv)
+{
+    return command_paths(argc, argv);
+}
+
+void yvex_paths_help(FILE *fp)
+{
+    fprintf(fp, "usage: yvex paths [--project DIR] [--create]\n");
+    fprintf(fp, "       yvex paths [--project DIR] --run [--create]\n");
+    fprintf(fp, "       yvex paths [--project DIR] configure --models-root DIR [--create]\n");
+    fprintf(fp, "       yvex paths [--project DIR] configure --reset\n");
+    fprintf(fp, "       yvex paths [--project DIR] resolve --family deepseek|glm --kind source|gguf|reports|reference|registry\n\n");
+    fprintf(fp, "Path configuration records operator-local storage only; it does not download models, create artifacts, register aliases, or claim runtime support.\n");
 }

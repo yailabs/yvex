@@ -110,7 +110,15 @@ bad_command_files="$(
        -o -name 'yvex_prepare_private.h' \
        -o -name 'yvex_model_prepare_private.h' \
        -o -path './include/yvex/prepare.h' \
-       -o -path './include/yvex/model_prepare.h' \) \
+       -o -path './include/yvex/model_prepare.h' \
+       -o -name 'yvex_runtime_cli_backend.c' \
+       -o -name 'yvex_runtime_cli_tokenizer.c' \
+       -o -name 'yvex_runtime_cli_paths.c' \
+       -o -name 'yvex_runtime_cli_graph.c' \
+       -o -name 'yvex_runtime_engine_commands.c' \
+       -o -name 'yvex_runtime_session_commands.c' \
+       -o -name 'runtime_commands.c' \
+       -o -name 'runtime_graph.c' \) \
     -print
 )"
 if [ -n "$bad_command_files" ]; then

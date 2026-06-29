@@ -766,6 +766,7 @@ model target operator path reporting
 DeepSeek selected artifact prepare preset
 prepare preset dry-run and registration-skip boundaries
 model-scoped operator runbooks
+runtime ownership cleanup and quality compression
 DeepSeek V4 Flash generation and speculative throughput target envelope in spine
 ```
 
@@ -1112,7 +1113,7 @@ tables.
 | BACKEND.PROFILE.5 | planned | backend | Backend capability matrix | op and memory capability matrix |
 | BACKEND.METAL.0 | planned | backend | Metal feasibility profile | future lane only, no support claim |
 | BACKEND.ROCM.0 | planned | backend | ROCm/Strix Halo feasibility profile | future lane only, no support claim |
-| LAYOUT.RUNTIME.0 | planned | layout | Runtime module boundary audit | runtime ownership separated from CLI/server glue |
+| LAYOUT.RUNTIME.0 | complete | layout | Runtime module boundary audit | runtime ownership separated from CLI/server glue without changing runtime capability |
 | LAYOUT.GRAPH.0 | planned | layout | Graph/executor module separation | graph scheduler/executor boundaries clarified |
 | LAYOUT.CLI.0 | planned | layout | CLI command taxonomy cleanup | command parsing organized by domain |
 | LAYOUT.SERVER.0 | planned | layout | Server/runtime boundary cleanup | daemon does not duplicate CLI runtime wiring |

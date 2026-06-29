@@ -6,6 +6,7 @@
  */
 
 #include "yvex_backend_private.h"
+#include "yvex_console_private.h"
 
 #include <limits.h>
 #include <stdint.h>
@@ -1922,4 +1923,181 @@ int yvex_cpu_tensor_copy(yvex_backend *backend,
     dst->is_written = src->is_written;
     yvex_error_clear(err);
     return YVEX_OK;
+}
+
+/* Domain-owned command surface moved out of yvex_runtime.c. */
+
+static void print_backend_capability(const yvex_backend *backend, yvex_backend_capability capability)
+{
+    printf("  %s: %s\n",
+           yvex_backend_capability_name(capability),
+           yvex_backend_supports(backend, capability) ? "yes" : "no");
+}
+
+static const char *yes_no(int value)
+{
+    return value ? "yes" : "no";
+}
+
+static int command_backend(int argc, char **argv)
+{
+    yvex_backend *backend = NULL;
+    yvex_backend_options options;
+    yvex_backend_memory_stats stats;
+    yvex_backend_device_info device_info;
+    yvex_error err;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&options, 0, sizeof(options));
+
+    if (argc != 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+        if (argc == 3) {
+            yvex_backend_help(stdout);
+            return 0;
+        }
+        fprintf(stderr, "yvex: backend requires cpu or cuda\n");
+        fprintf(stderr, "usage: yvex backend cpu|cuda\n");
+        return 2;
+    }
+
+    if (strcmp(argv[2], "cpu") == 0) {
+        options.kind = YVEX_BACKEND_KIND_CPU;
+    } else if (strcmp(argv[2], "cuda") == 0) {
+        options.kind = YVEX_BACKEND_KIND_CUDA;
+    } else {
+        fprintf(stderr, "yvex: unknown backend kind: %s\n", argv[2]);
+        fprintf(stderr, "Try 'yvex help backend' for usage.\n");
+        return 2;
+    }
+
+    rc = yvex_backend_open(&backend, &options, &err);
+    if (rc == YVEX_ERR_UNSUPPORTED) {
+        printf("backend: %s\n", argv[2]);
+        printf("status: unsupported\n");
+        printf("reason: %s\n", yvex_error_message(&err));
+        printf("status: backend-unsupported\n");
+        return 5;
+    }
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_backend_get_memory_stats(backend, &stats, &err);
+    if (rc != YVEX_OK) {
+        yvex_backend_close(backend);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    printf("backend: %s\n", yvex_backend_kind_name(yvex_backend_kind_of(backend)));
+    printf("status: %s\n", yvex_backend_status_name(yvex_backend_status_of(backend)));
+    if (yvex_backend_get_device_info(backend, &device_info, &err) == YVEX_OK &&
+        yvex_backend_kind_of(backend) == YVEX_BACKEND_KIND_CUDA) {
+        printf("device: %d\n", device_info.device_index);
+        printf("name: %s\n", device_info.name ? device_info.name : "");
+        printf("compute_capability: %d.%d\n",
+               device_info.compute_capability_major,
+               device_info.compute_capability_minor);
+        printf("memory:\n");
+        printf("  free_bytes: %llu\n", device_info.free_memory_bytes);
+        printf("  total_bytes: %llu\n", device_info.total_memory_bytes);
+        printf("  allocated_bytes: %llu\n", stats.allocated_bytes);
+        printf("  allocation_count: %llu\n", stats.allocation_count);
+        printf("  peak_allocated_bytes: %llu\n", stats.peak_allocated_bytes);
+    } else {
+        printf("memory:\n");
+        printf("  allocated_bytes: %llu\n", stats.allocated_bytes);
+        printf("  allocation_count: %llu\n", stats.allocation_count);
+        printf("  peak_allocated_bytes: %llu\n", stats.peak_allocated_bytes);
+    }
+    printf("capabilities:\n");
+    print_backend_capability(backend, YVEX_BACKEND_CAP_TENSOR_ALLOC);
+    print_backend_capability(backend, YVEX_BACKEND_CAP_TENSOR_READ_WRITE);
+    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_EMBED);
+    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_MATMUL);
+    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_MLP);
+    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_RMS_NORM);
+    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_ROPE);
+    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_ATTENTION);
+    printf("status: backend-ready\n");
+
+    yvex_backend_close(backend);
+    return 0;
+}
+
+static int command_cuda_info(int argc, char **argv)
+{
+    yvex_backend *backend = NULL;
+    yvex_backend_options options;
+    yvex_backend_device_info info;
+    yvex_error err;
+    int rc;
+
+    if (argc != 2 && !(argc == 3 && (strcmp(argv[2], "--help") == 0 ||
+                                    strcmp(argv[2], "-h") == 0))) {
+        fprintf(stderr, "usage: yvex cuda-info\n");
+        return 2;
+    }
+    if (argc == 3) {
+        yvex_cuda_info_help(stdout);
+        return 0;
+    }
+
+    yvex_error_clear(&err);
+    memset(&options, 0, sizeof(options));
+    options.kind = YVEX_BACKEND_KIND_CUDA;
+    rc = yvex_backend_open(&backend, &options, &err);
+    if (rc == YVEX_ERR_UNSUPPORTED) {
+        printf("cuda: unavailable\n");
+        printf("reason: %s\n", yvex_error_message(&err));
+        printf("status: cuda-unavailable\n");
+        return 5;
+    }
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    rc = yvex_backend_get_device_info(backend, &info, &err);
+    if (rc != YVEX_OK) {
+        yvex_backend_close(backend);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+
+    printf("cuda: available\n");
+    printf("device_count: >=1\n");
+    printf("\n");
+    printf("device %d:\n", info.device_index);
+    printf("  name: %s\n", info.name ? info.name : "");
+    printf("  compute_capability: %d.%d\n",
+           info.compute_capability_major,
+           info.compute_capability_minor);
+    printf("  global_memory_bytes: %llu\n", info.global_memory_bytes);
+    printf("  free_memory_bytes: %llu\n", info.free_memory_bytes);
+    printf("  total_memory_bytes: %llu\n", info.total_memory_bytes);
+    printf("  unified_addressing: %s\n", yes_no(info.unified_addressing));
+    printf("  managed_memory: %s\n", yes_no(info.managed_memory));
+    printf("\n");
+    printf("status: cuda-info\n");
+    yvex_backend_close(backend);
+    return 0;
+}
+
+int yvex_backend_command(int argc, char **argv)
+{
+    return command_backend(argc, argv);
+}
+
+int yvex_cuda_info_command(int argc, char **argv)
+{
+    return command_cuda_info(argc, argv);
+}
+
+void yvex_backend_help(FILE *fp)
+{
+    fprintf(fp, "usage: yvex backend cpu|cuda\n\nReports backend status and implemented capabilities.\n");
+}
+
+void yvex_cuda_info_help(FILE *fp)
+{
+    fprintf(fp, "usage: yvex cuda-info\n\nReports CUDA driver and device facts when available.\n");
 }

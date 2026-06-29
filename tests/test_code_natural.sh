@@ -189,4 +189,30 @@ if grep -nE '\b(system|popen|execl|execv|fork)[[:space:]]*\(' yvex_model_artifac
   exit 1
 fi
 
+runtime_files="$(git ls-files 'yvex_runtime*.c' 'yvex_backend.c' 'yvex_tokenizer.c' 'yvex_token_input.c' 'yvex_kv.c' 'yvex_prefill.c' 'yvex_fs.c' 2>/dev/null || true)"
+
+if [ -n "$runtime_files" ] && grep -nE '\b(system|popen|execl|execv|fork)[[:space:]]*\(' $runtime_files; then
+  echo "runtime ownership files must not shell out"
+  exit 1
+fi
+
+scan_runtime_claim() {
+  pattern=$1
+  if [ -n "$runtime_files" ] && git grep -nF "$pattern" -- $runtime_files; then
+    echo "forbidden runtime claim found: $pattern"
+    exit 1
+  fi
+}
+
+pattern='execution_ready: tr''ue'
+scan_runtime_claim "$pattern"
+pattern='generation_ready: tr''ue'
+scan_runtime_claim "$pattern"
+pattern='generation rea''dy'
+scan_runtime_claim "$pattern"
+pattern='inference rea''dy'
+scan_runtime_claim "$pattern"
+pattern='DeepSeek generation imple''mented'
+scan_runtime_claim "$pattern"
+
 echo "code naturalness: ok"
