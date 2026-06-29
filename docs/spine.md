@@ -22,6 +22,40 @@ Git history should tell the technical story in natural subjects. Internal spine
 IDs may appear here and in final reports, but commit subjects should describe
 behavior, not milestone labels.
 
+## 1.1 Engine Identity
+
+YVEX is an inference engine, not a chat wrapper.
+
+Its primary object is the model execution pipeline:
+
+```text
+official source tensors
+  -> YVEX-produced artifacts
+  -> artifact identity
+  -> model-family mapping
+  -> tensor collections
+  -> residency
+  -> graph execution
+  -> runtime state
+  -> prefill
+  -> KV
+  -> decode
+  -> logits
+  -> sampling
+  -> generation
+  -> serving
+  -> evaluation
+  -> benchmark/profile evidence
+```
+
+YVEX must remain transparent about which parts are implemented, which parts are
+planned, and which observations come from external runners.
+
+YVEX may compare itself with llama.cpp, KTransformers, vLLM, SGLang, Ollama,
+DwarfStar/DS4, and other systems only as external reference systems. Such
+comparisons must identify whether the evidence comes from YVEX code or from an
+external runtime.
+
 ## 2. Implementation Doctrine
 
 No scaffold milestone is complete. A file, API shape, command option,
@@ -114,6 +148,303 @@ behavior, cache policy, and staged residency. It is not generation.
 No storage-stream milestone may claim runtime generation until the normal
 runtime generation path reaches decode, logits, sampling, and generation.
 
+## 2.1 Canonical Block Directory
+
+YVEX implementation blocks:
+
+```text
+BLOCK 0 — Source and target evidence
+  Owns official model source references, local source storage, source manifests,
+  model target classes, and source artifact classes.
+  Current rows: OWI.REBASE.0, OWI.TARGETS.*, OWI.HUGE.*
+  Normal proof: source manifest, native tensor inventory, shard count, source
+  footprint, identity/drift report.
+
+BLOCK 1 — Artifact production
+  Owns tensor mapping, quantization policy, calibration/imatrix evidence,
+  conversion plans, YVEX-produced GGUF emission, split artifact strategy, and
+  artifact naming.
+  Current rows: OWI.3-OWI.9, ARTIFACT.NAMING.0, OWI.HUGE.4.
+  Normal proof: conversion plan, template validation, qtype policy, emitted
+  controlled or selected GGUF, parse roundtrip.
+
+BLOCK 2 — Artifact identity and integrity
+  Owns file identity, digest, tensor byte ranges, shape, dtype, element count,
+  corruption fixtures, materialization gate, graph integrity guard, and operator
+  integrity reports.
+  Current rows: ARTIFACT.INTEGRITY.*.
+  Normal proof: integrity report, corruption refusal, digest check, tensor range
+  validation, cleanup/failure phase.
+
+BLOCK 3 — Model class and tensor collections
+  Owns architecture family, model class, MoE facts, tensor role collections,
+  attention type, layer shape, context class, qtype class, runtime requirements,
+  and unsupported blockers.
+  Current rows: MODEL.CLASS.*, FAMILY.RUNTIME.0, FULLMODEL.*.
+  Normal proof: model-class report, tensor collection inventory, runtime
+  requirement report, unsupported blocker list.
+
+BLOCK 4 — Residency and storage
+  Owns CPU/GPU/system-memory/SSD/distributed residency classes, storage-stream
+  planning, shard index, tensor page/chunk access, cold/warm read probes, cache
+  policy, staging, eviction, and cleanup.
+  Current rows: STORAGE.STREAM.*, RUNTIME.KV.*, future RESIDENCY.*.
+  Normal proof: shard index, byte-range map, cold/warm read diagnostics,
+  staged-residency report, cleanup/failure report.
+
+BLOCK 5 — Compute backend and hardware profiles
+  Owns CPU, CUDA, future Metal, future ROCm, build profiles, hardware profiles,
+  backend op capability matrix, allocation/transfer failure behavior, and
+  machine-specific pressure reports.
+  Current rows: L0, CUDA.SURFACE.0, BACKEND.PROFILE.*, BACKEND.METAL.0,
+  BACKEND.ROCM.0.
+  Normal proof: backend probe, op capability report, allocation/transfer test,
+  parity test, hardware profile report.
+
+BLOCK 6 — Graph execution
+  Owns primitive graph ops, normalization, attention, projection, MLP, routed
+  expert slices, transformer block execution, residual/state ownership, layer
+  scheduler, reference comparison, scratch lifecycle, and graph failure paths.
+  Current rows: GRAPH.OPS.*, GRAPH.BLOCK.0, GRAPH.LAYERS.0.
+  Normal proof: command-visible graph execution, reference comparison, checksum,
+  max-diff, cleanup/failure report.
+
+BLOCK 7 — Runtime state
+  Owns engine/session ownership, token input, context planning, prefill, KV
+  cache, decode, logits, sampling, generation state, interruption, traces, and
+  profiles.
+  Current rows: M7-M17, PREFILL.*, KV.*, DECODE.*, LOGITS.*, SAMPLING.*,
+  GEN.LOOP.*, RUNTIME.KV.*.
+  Normal proof: runtime command over implemented state, lifecycle test, context
+  boundary test, cleanup/interruption report.
+
+BLOCK 8 — Operator and serving surfaces
+  Owns CLI presets, command taxonomy, doctor flow, REPL, daemon state,
+  provider endpoints, streaming responses, structured output, and server
+  observability.
+  Current rows: CLI.UX.*, MODEL.LIFECYCLE.*, SERVER.*.
+  Normal proof: short operator command, JSON/text output, daemon endpoint,
+  refusal path, structured diagnostics.
+
+BLOCK 9 — Evaluation, benchmarks, and public evidence
+  Owns fixture eval, partial regression, prefill regression, decode/logits/
+  sampling/generation eval, capability eval, runtime benchmarks, memory
+  pressure, server latency, documentation diagrams, and public target tables.
+  Current rows: EVAL.*, BENCH.*, DOCS.*.
+  Normal proof: same runtime path users run, model/artifact identity, backend,
+  qtype, context, machine, command, reproducibility note.
+```
+
+## 2.2 Naming and Ownership Rules
+
+Canonical nouns:
+
+```text
+source tensor:
+  an upstream official tensor file, usually safetensors, before YVEX conversion.
+
+YVEX-produced artifact:
+  an artifact emitted or controlled by YVEX, such as a controlled or selected
+  GGUF. This is the primary artifact class for runtime claims.
+
+external reference artifact:
+  an artifact not produced by YVEX, used only for comparison or deployment
+  evidence.
+
+model class:
+  architecture-level facts: family, dense/MoE, layer count, hidden size,
+  attention type, expert facts, context class, tokenizer requirements, and
+  runtime blockers.
+
+tensor collection:
+  a named group of tensor roles needed by execution, such as embedding,
+  normalization, Q/K/V/O projection, MLP, MoE experts, router, output head,
+  tokenizer metadata, and KV cache.
+
+residency:
+  where a tensor or runtime state lives at a given phase: CPU memory, CUDA
+  memory, managed memory, SSD storage, host cache, or future distributed node.
+
+backend:
+  the compute implementation used to execute operations, such as CPU, CUDA,
+  future Metal, or future ROCm.
+
+hardware profile:
+  a machine-specific pressure profile, such as Spark/GB10, local workstation,
+  large-memory machine, or future distributed system.
+
+serve:
+  provider/server exposure after runtime generation exists. Serving does not
+  own generation semantics.
+
+evaluation:
+  correctness or capability measurement over implemented runtime paths.
+
+benchmark:
+  performance measurement over implemented runtime paths with reproducibility
+  metadata.
+```
+
+Avoid these ambiguous nouns in new rows:
+
+```text
+runtime backend
+server runtime
+model support
+inference support
+storage inference
+external benchmark
+helper
+glue
+generic support
+```
+
+Use these canonical track names in future rows:
+
+```text
+OWI for source-to-artifact intake.
+ARTIFACT for identity, integrity, naming, and gates.
+MODEL.CLASS for architecture and model-family requirements.
+TENSOR.COLLECTION for tensor role grouping.
+RESIDENCY for memory/storage placement.
+STORAGE.STREAM for SSD-backed and page/chunk storage planning.
+COMPUTE.BACKEND for CPU/CUDA/Metal/ROCm execution backends.
+HARDWARE.PROFILE for machine-specific reports.
+GRAPH for graph and transformer execution.
+CONTEXT for context window and prompt/prefill planning.
+KV for KV cache ownership and capacity.
+RUNTIME for engine/session/decode/logits/sampling/generation.
+OPERATOR for CLI and local operator workflows.
+SERVE for daemon/provider/API/streaming surfaces.
+EVAL for correctness and capability evaluation.
+BENCH for performance measurement.
+DOCS for public documentation and diagrams.
+```
+
+Future row naming alignment:
+
+```text
+Older planned row families such as SERVER.*, BACKEND.PROFILE.*, CLI.UX.*,
+MODEL.LIFECYCLE.*, LAYOUT.*, and DOCS.* remain in the ledger for continuity.
+New work should prefer the canonical nouns OPERATOR, SERVE, COMPUTE.BACKEND,
+HARDWARE.PROFILE, RESIDENCY, TENSOR.COLLECTION, CONTEXT, KV, GRAPH, RUNTIME,
+EVAL, BENCH, and DOCS.
+
+A future cleanup wave may retire or merge redundant planned rows only if it
+does not remove completed history and does not hide required work.
+```
+
+## 2.3 Procedural Implementation Order
+
+Every new implementation wave must choose exactly one primary block.
+
+The default order is:
+
+1. select source/target evidence;
+2. inventory source or artifact without loading unnecessary payloads;
+3. validate identity and integrity;
+4. map model family and tensor collections;
+5. decide artifact production or residency plan;
+6. prove backend capability for the needed operation;
+7. execute the smallest graph boundary;
+8. connect graph output to runtime state;
+9. expose one short operator command;
+10. add failure paths and cleanup;
+11. add regression proof;
+12. only then promote the spine row.
+
+No wave may skip from artifact inventory to generation. No wave may skip from
+external runner evidence to YVEX capability. No wave may skip from graph
+primitive to full inference. No wave may skip from storage-stream diagnostics
+to disk-backed generation.
+
+## 2.4 Conceptual Command Taxonomy
+
+Conceptual operator command families:
+
+```text
+source commands:
+  source-manifest
+  native-weights
+  tensor-map
+  model-target
+  model-class
+
+artifact commands:
+  gguf-template
+  gguf-emit
+  convert
+  quant-policy
+  quant-job
+  imatrix
+  inspect
+  metadata
+  tensors
+  integrity
+  materialize
+  materialize-gate
+  model-gate
+
+residency/storage commands:
+  storage-plan
+  shard-index
+  cold-read
+  warm-read
+  residency-plan
+  residency-stage
+
+backend/hardware commands:
+  backend
+  cuda-info
+  backend-profile
+  hardware-profile
+  qtype-support
+
+graph commands:
+  graph
+  graph block
+  graph layers
+  graph attention
+  graph moe
+
+runtime commands:
+  engine
+  session
+  input
+  prefill
+  kv
+  decode
+  logits
+  sample
+  generate
+
+operator commands:
+  models
+  paths
+  info
+  doctor
+  run
+  chat
+
+serve commands:
+  yvexd status
+  yvexd models
+  yvexd generate
+  yvexd stream
+
+eval/bench commands:
+  eval fixture
+  eval logits
+  eval generation
+  bench prefill
+  bench decode
+  bench generation
+  bench memory
+```
+
+A command listed here is conceptual unless it already exists in code and tests.
+The command taxonomy is not a capability claim.
+
 ## 3. Current Repository State
 
 ```text
@@ -191,6 +522,7 @@ graph execution integrity guard
 consolidated artifact integrity regression harness
 operator integrity report
 source-tensor-first model-target roadmap authority in spine
+canonical inference block directory in spine
 ```
 
 Current live target classes:
@@ -348,6 +680,25 @@ tables.
 | MODEL.CLASS.1 | planned | model | Huge MoE family adapter inventory | MoE metadata, expert count, active expert count, shared expert facts, and routing metadata are reported |
 | MODEL.CLASS.2 | planned | model | Runtime requirement report | required ops, tensor roles, KV shape, cache pressure, and unsupported execution blockers are visible |
 | MODEL.CLASS.3 | planned | model | GLM-family mapping boundary | GLM tensor names and architecture metadata map to YVEX roles without execution claim |
+| TENSOR.COLLECTION.0 | planned | tensor-collection | Canonical tensor collection schema | embedding, norm, attention, KV, MLP, MoE, output, and tokenizer collections are reported without execution claim |
+| TENSOR.COLLECTION.1 | planned | tensor-collection | DeepSeek tensor collection report | selected DeepSeek tensors map into explicit runtime collections |
+| TENSOR.COLLECTION.2 | planned | tensor-collection | GLM tensor collection inventory | GLM source tensor names map into collection candidates without runtime claim |
+| ATTENTION.CLASS.0 | planned | attention | Attention class report | attention type, head layout, position behavior, mask rules, and KV requirements are reported |
+| CONTEXT.CLASS.0 | planned | context | Context class report | model max context, requested context, chunking policy, overflow behavior, and runtime blockers are reported |
+| KV.CACHE.0 | planned | kv | KV cache class report | KV dtype, layout, layer/head/position indexing, residency class, capacity, and unsupported blockers are reported |
+| MOE.CLASS.0 | planned | moe | MoE model-class report | expert count, active expert count, router facts, shared experts, and expert tensor classes are reported |
+| MOE.ACT.0 | planned | moe | Expert activation boundary | router logits, top-k selection, expert dispatch, accumulation, and cleanup are implemented and tested |
+| RESIDENCY.0 | planned | residency | Residency class report | resident, host-staged, SSD-staged, SSD-streamed, managed-memory, hybrid, and distributed classes are reported |
+| RESIDENCY.1 | planned | residency | Tensor residency plan | tensor collections are assigned planned residency classes with memory and storage pressure reports |
+| RESIDENCY.2 | planned | residency | Runtime residency transition proof | selected tensors move between storage, host memory, and backend memory with cleanup/failure reports |
+| BUILD.PROFILE.0 | planned | build | Build profile matrix | CPU, CUDA, debug, release, sanitizer, and future backend build profiles are documented and command-visible |
+| HARDWARE.PROFILE.0 | planned | hardware | Spark GB10 hardware profile | Spark memory, CUDA, SSD, and storage pressure profile is reported without benchmark claim |
+| HARDWARE.PROFILE.1 | planned | hardware | Workstation hardware profile | local workstation capability report is separated from backend support |
+| HARDWARE.PROFILE.2 | planned | hardware | Future distributed hardware profile | distributed node assumptions are recorded without support claim |
+| COMPUTE.BACKEND.0 | planned | backend | Backend capability matrix | CPU, CUDA, future Metal, and future ROCm op capability states are reported |
+| COMPUTE.BACKEND.1 | planned | backend | Backend memory pressure reports | allocation, transfer, op failure, cleanup, and fallback reports are implemented |
+| OPERATOR.FLOW.0 | planned | operator | Procedural operator flow | source, artifact, residency, graph, runtime, serve, eval, and bench command paths are shown as short flows |
+| SERVE.RUNTIME.0 | planned | serve | Serving runtime ownership map | daemon/provider surfaces are mapped to runtime generation ownership without generation claim |
 | ARTIFACT.NAMING.0 | complete | artifact | GGUF artifact naming contract | canonical artifact alias/name rules implemented |
 | RUNTIME.KV.0 | complete | kv-policy | KV cache policy | KV policy documented without runtime claim |
 | M1 | complete | runtime | Real model conversion/materialization gate | selected real artifact gate and materialization proof exists |
@@ -399,6 +750,8 @@ tables.
 | M7 | complete | input | Prompt/token input boundary | validated token sequences route into implemented graph paths |
 | M8 | complete | prefill | Prefill state foundation | segment-summary prefill state created from validated token sequence |
 | SPINE.REBASE.5 | complete | docs | Unified full inference engine spine | all delivery rows consolidated into one ledger and dependency map |
+| SPINE.BLOCKS.0 | complete | docs | Canonical inference block directory | spine defines engine identity, canonical implementation blocks, naming rules, command taxonomy, tensor collections, residency modes, and procedural order |
+| SPINE.BLOCKS.1 | planned | docs | Planned-row deduplication and command-flow compression | redundant planned rows are merged into canonical blocks without deleting completed history |
 | M9 | complete | kv | Minimal KV ownership and append/read boundary | session-owned KV shape, allocation, append/read, lifecycle, cleanup, and context overflow behavior |
 | PREFILL.1 | complete | prefill | KV-backed prefill state binding | M8 segment-summary state connects to minimal KV ownership without decode/logits claim |
 | GRAPH.OPS.0 | complete | graph | RoPE and position operation boundary | position-dependent graph op implemented with tests and backend rules |
@@ -506,73 +859,240 @@ tables.
 | DOCS.DIAGRAMS.5 | planned | docs | Backend/hardware target matrix | diagram explains CPU/CUDA/future lanes |
 | DOCS.DIAGRAMS.6 | planned | docs | README visual integration | diagrams integrated only where they clarify real boundaries |
 
+## Execution and Residency Modes
+
+YVEX must plan for multiple execution and residency modes:
+
+```text
+resident:
+  required tensors and runtime state fit in the selected backend memory.
+
+host-staged:
+  tensors are staged from system memory into backend memory.
+
+ssd-staged:
+  tensors are staged from operator-local SSD into system or backend memory.
+
+ssd-streamed:
+  tensor pages or chunks are read according to an explicit storage-stream plan.
+
+managed-memory:
+  backend/platform-managed memory is used with explicit capability and failure
+  reporting.
+
+distributed:
+  tensors or runtime phases are distributed across future nodes. This is planned
+  only and not supported.
+
+hybrid:
+  some tensors or states are resident, some host-staged, some SSD-staged, or
+  future distributed.
+```
+
+A residency mode is not a generation claim. It only becomes runtime capability
+when the corresponding graph/runtime path consumes that residency mode with
+tests, command proof, failure paths, and cleanup.
+
+## Tensor Collections
+
+YVEX must make tensor collections explicit before full runtime claims.
+
+Canonical tensor collections:
+
+```text
+embedding:
+  token embedding and related input projection tensors.
+
+normalization:
+  attention norm, post-attention norm, final norm, and model-family-specific
+  normalization tensors.
+
+attention:
+  Q, K, V, O projection tensors, attention scale rules, RoPE/position rules,
+  attention type, head layout, and mask requirements.
+
+KV cache:
+  runtime-owned K/V state, layer/head/position indexing, dtype/qtype,
+  residency, capacity, page/chunk policy, and cleanup.
+
+MLP:
+  gate, up, down, activation, intermediate, and output tensors for dense
+  feed-forward paths.
+
+MoE:
+  router tensors, expert tensors, active expert count, shared expert tensors,
+  top-k routing facts, expert activation, expert residency, and expert dispatch.
+
+output:
+  final normalization, output head, logits projection, and vocabulary-facing
+  tensors.
+
+tokenizer/runtime input:
+  tokenizer metadata, prompt format, explicit token input, and special-token
+  behavior.
+```
+
+Tensor collection support is not model support. A collection becomes supported
+only when its parser, mapping, residency, graph/runtime consumer, tests, command
+proof, failure paths, and cleanup exist.
+
+## Attention, KV, and Context Rules
+
+Attention support must identify:
+
+```text
+attention type:
+  MHA, MQA, GQA, MLA, or model-family-specific variants.
+
+position behavior:
+  RoPE, alternative position encoding, scaling behavior, context extension, and
+  model-family-specific constraints.
+
+KV ownership:
+  whether K/V values are produced by prefill, advanced by decode, stored by
+  layer/head/position, staged, paged, quantized, or resident.
+
+context class:
+  requested context, model maximum context, active context, chunk size, prefill
+  chunking, decode position, and context overflow behavior.
+```
+
+No decode row may be promoted before KV-backed transformer prefill and relevant
+graph/layer execution exist. No logits row may be promoted before an actual
+runtime path produces a logits buffer. No sampling row may be promoted before
+logits exist. No generation row may be promoted before decode, logits, and
+sampling are integrated.
+
+## MoE and Expert Activation Rules
+
+MoE support must identify:
+
+```text
+router:
+  router tensor roles, router logits, routing dtype, top-k rule, and failure
+  behavior.
+
+experts:
+  expert tensor collections, expert count, active expert count, shared expert
+  facts, qtype classes, residency, and dispatch requirements.
+
+activation:
+  selected experts per token, expert weights, expert output accumulation, expert
+  load boundaries, and cleanup.
+
+storage pressure:
+  expert tensors may dominate source/artifact footprint. Storage-stream work may
+  profile expert layout before runtime MoE execution exists.
+```
+
+A routed-expert primitive is not full MoE support. Full MoE support requires
+router execution, expert selection, expert residency, expert dispatch,
+accumulation, graph integration, tests, and command-visible proof.
+
+## Build, Backend, and Hardware Profile Rules
+
+Build profiles describe what the binary is compiled to use.
+
+Backend profiles describe what compute paths are implemented.
+
+Hardware profiles describe what the current machine can actually run.
+
+Canonical profile classes:
+
+```text
+build profile:
+  CPU-only, CUDA-enabled, future Metal-enabled, future ROCm-enabled, debug,
+  release, sanitizer, and benchmark builds.
+
+backend profile:
+  CPU reference, CUDA implementation, future Metal feasibility, future ROCm
+  feasibility, and backend op capability matrix.
+
+hardware profile:
+  Spark/GB10, local workstation, large-memory future hardware, and future
+  distributed nodes.
+```
+
+A hardware profile is not a backend implementation. A backend implementation is
+not a model capability. A build flag is not runtime support.
+
 ## 6. Dependency Map
 
 ```text
-open-weight source evidence track:
+source-to-artifact track:
   official source tensors
   -> source manifest
+  -> source artifact identity
+  -> native tensor inventory
   -> model target class
-  -> source artifact class
-  -> target artifact class
-  -> safetensors/native tensor inventory
-  -> artifact identity
-  -> tensor inventory
-  -> model-family mapping
+  -> model class profile
+  -> tensor collections
+  -> tensor role mapping
   -> quantization policy
-  -> YVEX-produced GGUF plan
+  -> conversion plan
   -> YVEX-produced GGUF
-  -> artifact identity and registry
+  -> artifact identity
+  -> registry/materialization readiness
 
-selected runtime slice track:
-  YVEX-produced selected GGUF
-  -> artifact identity/integrity
-  -> selected/full model tensor mapping
-  -> materialization/backend residency
-  -> engine/session ownership
-  -> controlled graph proof
-  -> selected real graph segment proof
-  -> graph op expansion
+residency track:
+  artifact identity
+  -> shard index
+  -> tensor byte-range map
+  -> residency class report
+  -> memory/storage pressure report
+  -> cold read probe
+  -> warm read probe
+  -> page/chunk plan
+  -> staged residency
+  -> runtime residency integration
+
+graph track:
+  tensor collections
+  -> backend capability
+  -> primitive op proof
+  -> normalization
+  -> attention projection
+  -> attention execution
+  -> residual
+  -> MLP or MoE expert slice
   -> first transformer block
   -> layer scheduler
 
-runtime generation track:
+runtime track:
   token input
-  -> prefill state foundation
-  -> minimal KV ownership
-  -> minimal KV-backed prefill binding
+  -> context plan
+  -> prefill state
   -> KV-backed transformer prefill
   -> decode
   -> logits
-  -> logits regression
   -> sampling
-  -> constrained generation
+  -> generation loop
   -> CLI generation
-  -> provider generation
-  -> eval/bench/profile hardening
+  -> serve generation
+  -> streaming generation
 
-storage-stream track:
-  huge source tensor identity
-  -> source shard index
-  -> target GGUF split plan
-  -> future GGUF shard identity
-  -> qtype distribution
-  -> tensor byte-range map
-  -> cold read probe
-  -> warm read probe
-  -> page/chunk access plan
-  -> storage-backed residency prototype
-  -> storage-stream failure reports
-  -> future runtime integration
+measurement track:
+  fixture regression
+  -> partial graph regression
+  -> prefill regression
+  -> decode/logits regression
+  -> sampling determinism
+  -> generation smoke
+  -> capability eval
+  -> prefill/decode/generation/memory/server benchmarks
+
+backend and hardware track:
+  build profile
+  -> backend probe
+  -> op capability matrix
+  -> allocation/transfer pressure
+  -> hardware profile
+  -> machine-specific reproducibility metadata
 ```
 
-The storage-stream track is allowed to advance before generation because it is
-artifact, source, conversion, and residency work. It cannot claim runtime
-generation until the normal runtime generation track reaches decode, logits,
-sampling, and generation.
-
-The GLM track begins from official safetensors. External GGUFs are reference
-evidence only and do not satisfy the YVEX-produced GGUF path.
+These tracks may advance in parallel only when their boundaries are explicit.
+A row is complete only when its command proof demonstrates the boundary it
+claims.
 
 M8 is not the final prefill path. It is the first prefill-state foundation.
 PREFILL.1 binds that foundation to minimal session-owned KV state, but it does
@@ -720,6 +1240,14 @@ Runtime active next:
 GRAPH.BLOCK.0 - First transformer block execution
 ```
 
+Spine structure next after this rebase:
+
+```text
+SPINE.BLOCKS.1 - Planned-row deduplication and command-flow compression
+```
+
+SPINE.BLOCKS.1 is a future cleanup row, not the active next implementation.
+
 GRAPH.BLOCK.0 must compose the implemented standalone graph operation
 boundaries into a first transformer-block execution proof with explicit tensor
 roles, residual/state ownership, scratch/output lifecycle, dispatch, reference
@@ -851,6 +1379,49 @@ pattern='YVEX GLM bench''mark'
 grep -nF "$pattern" docs/spine.md && exit 1 || true
 ```
 
+Canonical block directory proof:
+
+```sh
+grep -nF '## 1.1 Engine Identity' docs/spine.md
+grep -nF '## 2.1 Canonical Block Directory' docs/spine.md
+grep -nF 'BLOCK 0 — Source and target evidence' docs/spine.md
+grep -nF 'BLOCK 9 — Evaluation, benchmarks, and public evidence' docs/spine.md
+grep -nF '## 2.2 Naming and Ownership Rules' docs/spine.md
+grep -nF '## 2.3 Procedural Implementation Order' docs/spine.md
+grep -nF '## 2.4 Conceptual Command Taxonomy' docs/spine.md
+grep -nF '## Execution and Residency Modes' docs/spine.md
+grep -nF '## Tensor Collections' docs/spine.md
+grep -nF '## Attention, KV, and Context Rules' docs/spine.md
+grep -nF '## MoE and Expert Activation Rules' docs/spine.md
+grep -nF '## Build, Backend, and Hardware Profile Rules' docs/spine.md
+grep -nF 'SPINE.BLOCKS.0' docs/spine.md
+grep -nF 'SPINE.BLOCKS.1' docs/spine.md
+grep -nF 'TENSOR.COLLECTION.0' docs/spine.md
+grep -nF 'ATTENTION.CLASS.0' docs/spine.md
+grep -nF 'CONTEXT.CLASS.0' docs/spine.md
+grep -nF 'KV.CACHE.0' docs/spine.md
+grep -nF 'MOE.CLASS.0' docs/spine.md
+grep -nF 'RESIDENCY.0' docs/spine.md
+grep -nF 'BUILD.PROFILE.0' docs/spine.md
+grep -nF 'HARDWARE.PROFILE.0' docs/spine.md
+grep -nF 'COMPUTE.BACKEND.0' docs/spine.md
+grep -nF 'OPERATOR.FLOW.0' docs/spine.md
+grep -nF 'SERVE.RUNTIME.0' docs/spine.md
+
+pattern='YVEX supports GLM gener''ation'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+pattern='disk-backed generation imple''mented'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+pattern='external runner proves YV''EX'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+pattern='external GGUF satisfies OW''I'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+pattern='storage streaming is gener''ation'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+pattern='backend implementation is model sup''port'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+```
+
 Additional guardrails:
 
 ```text
@@ -866,6 +1437,18 @@ no runtime file change for spine-only rebases
 ## 9. Non-Negotiable Rules
 
 - No support claim without code, tests, and command proof.
+- Every new implementation wave must name one primary canonical block.
+- No command proof may close a row outside the boundary it actually exercises.
+- No external runner result may close a YVEX runtime row.
+- No external GGUF may close a YVEX-produced artifact row.
+- No backend probe may close a model capability row.
+- No hardware profile may close a backend implementation row.
+- No storage read probe may close a generation row.
+- No routed expert slice may close full MoE support.
+- No tensor collection report may close runtime execution.
+- No build profile may imply runtime support.
+- New planned rows should use canonical nouns unless preserving historical
+  continuity.
 - Official source tensors are the primary OWI input.
 - YVEX-produced GGUF is the primary OWI output artifact.
 - External GGUFs may be recorded only as reference evidence.
