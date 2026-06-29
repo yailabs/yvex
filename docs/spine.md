@@ -225,6 +225,9 @@ BLOCK 8 — Operator and serving surfaces
   Current rows: CLI.UX.*, MODEL.LIFECYCLE.*, SERVER.*.
   Normal proof: short operator command, JSON/text output, daemon endpoint,
   refusal path, structured diagnostics.
+  Operator presets must reduce shell glue by moving common path resolution,
+  model preparation, model checks, graph suites, and diagnostic REPL clarity
+  into YVEX commands.
 
 BLOCK 9 — Evaluation, benchmarks, and public evidence
   Owns fixture eval, partial regression, prefill regression, decode/logits/
@@ -283,6 +286,34 @@ evaluation:
 benchmark:
   performance measurement over implemented runtime paths with reproducibility
   metadata.
+
+Operator preset nouns:
+
+operator root:
+  the configured operator-local model storage root, usually a directory such as
+  `$HOME/lab/models`, but stored or resolved by YVEX rather than manually
+  exported for every command.
+
+target path:
+  a source, artifact, report, registry, or reference path resolved from a model
+  target and operator root.
+
+prepare:
+  a preset that builds or refreshes a YVEX-produced artifact for a known target,
+  then optionally registers and selects the alias.
+
+check:
+  a preset that runs a bounded verification chain over a known target, such as
+  inspect, tensor table, metadata, integrity, materialization, engine/session,
+  graph, and gates according to a selected level.
+
+graph check:
+  a preset that runs a named graph suite such as primitives, block fixture,
+  selected artifact graph, or selected segment graph.
+
+diagnostic REPL:
+  an interactive accepted-only console that reports runtime state clearly but
+  does not claim generation.
 ```
 
 Avoid these ambiguous nouns in new rows:
@@ -297,6 +328,12 @@ external benchmark
 helper
 glue
 generic support
+shell bootstrap
+export flow
+script transcript
+magical support
+automatic inference
+one-click generation
 ```
 
 Use these canonical track names in future rows:
@@ -357,6 +394,22 @@ No wave may skip from artifact inventory to generation. No wave may skip from
 external runner evidence to YVEX capability. No wave may skip from graph
 primitive to full inference. No wave may skip from storage-stream diagnostics
 to disk-backed generation.
+
+Operator preset work follows its own order:
+
+1. configure or resolve operator model roots;
+2. resolve target paths from model target records;
+3. implement prepare presets only for targets whose source-to-artifact path
+   already exists;
+4. implement check presets only over behavior already implemented by lower
+   commands;
+5. implement graph check presets only after the underlying graph commands exist;
+6. improve accepted-only chat UX without claiming generation;
+7. rewrite the runbook around the new commands;
+8. refresh public README/operator examples only after the CLI shape is stable.
+
+No operator preset may claim a capability that the lower-level command path does
+not already prove.
 
 ## 2.4 Conceptual Command Taxonomy
 
@@ -445,6 +498,47 @@ eval/bench commands:
 A command listed here is conceptual unless it already exists in code and tests.
 The command taxonomy is not a capability claim.
 
+## 2.5 Operator Preset Doctrine
+
+Operator presets are first-class YVEX behavior. The runbook must document
+usable commands; it must not hide missing CLI ergonomics behind shell exports,
+copy-paste variable walls, or external scripts.
+
+A normal operator path should not require a user to define many shell variables
+before understanding the model, artifact, backend, or runtime boundary.
+
+YVEX must make these things command-visible:
+
+- where operator-local model storage is rooted;
+- where source tensors are expected;
+- where YVEX-produced artifacts are written;
+- where reports and local registries live;
+- what a model target means;
+- whether a model target has source tensors, a YVEX-produced artifact, or only
+  future planned artifacts;
+- how to prepare a known target when the source and conversion path exist;
+- how to check a known target without manually composing every diagnostic
+  command;
+- which graph/runtime behavior is implemented and which behavior remains
+  unsupported.
+
+Shell environment variables may remain as technical overrides, but they are not
+the primary operator interface.
+
+The preferred operator shape is:
+
+```text
+yvex paths configure
+yvex model-target inspect TARGET --paths
+yvex models prepare TARGET
+yvex models check TARGET
+yvex graph check ...
+yvex chat ...
+```
+
+The final short path is not a generation claim. It remains bounded by the
+runtime rows that actually exist.
+
 ## 3. Current Repository State
 
 ```text
@@ -530,6 +624,7 @@ single-paste operator transcript
 full implemented command inventory in operator runbook
 sectorized operator command atlas
 copy-command operator lanes
+operator preset roadmap authority in spine
 ```
 
 Current live target classes:
@@ -611,6 +706,13 @@ huge-MoE generation
 external-GGUF capability attribution
 external-runner capability attribution
 full supply-chain security
+operator model root configuration command
+model-target path resolution command
+model prepare preset
+model check preset
+graph check preset
+diagnostic REPL layout hardening
+final operator runbook over preset commands
 full transformer prefill
 decode
 logits-producing runtime path
@@ -707,6 +809,17 @@ tables.
 | OPERATOR.FLOW.0 | complete | operator | Procedural operator flow | source, artifact, residency, graph, runtime, serve, eval, and bench command paths are shown as short flows |
 | OPERATOR.FLOW.1 | complete | operator | Single-paste operator transcript | runbook contains one copy-paste transcript, full implemented command inventory, inline command style, artifact hygiene, and current/future boundary |
 | OPERATOR.FLOW.2 | complete | operator | Sectorized copy-command operator atlas | runbook is split into model, backend, intake, artifact, integrity, materialization, graph, prefill/KV, daemon, validation, and GLM status lanes with standalone copyable commands |
+| SPINE.OPERATOR.PRESET.0 | complete | docs | Operator preset and path-resolution roadmap | spine defines path configuration, target path resolution, model prepare, model check, graph check, chat UX, and final runbook preset sequence |
+| OPERATOR.PATHS.0 | next | operator | Operator model root configuration | `yvex paths configure` stores or resolves operator-local model roots without requiring shell export walls |
+| MODEL.TARGET.PATHS.0 | planned | model | Model target path resolution | `yvex model-target inspect TARGET --paths` reports source, artifact, report, registry, and planned paths without reading model payloads |
+| MODEL.PREPARE.0 | planned | model | DeepSeek selected artifact prepare preset | `yvex models prepare deepseek4-v4-flash-selected-embed` runs the implemented source-to-selected-GGUF and alias registration path without generation claim |
+| MODEL.PREPARE.1 | planned | model | Prepare preset refusal and dry-run behavior | prepare reports unsupported targets such as GLM source-only targets and supports dry-run, no-register, and no-use boundaries |
+| MODEL.CHECK.0 | planned | model | Selected artifact check preset | `yvex models check TARGET --backend cpu|cuda --level quick|runtime|full` composes implemented inspect, integrity, materialization, engine/session, graph, and gate checks |
+| MODEL.CHECK.1 | planned | model | Segment artifact check preset | selected embedding-plus-RMSNorm checks include input tokens, selected segment graph, segment-summary prefill, and minimal KV binding where implemented |
+| GRAPH.CHECK.0 | planned | graph | Graph check preset suites | `yvex graph check --suite primitives|block|selected|segment|all` runs implemented graph proof suites without inventing graph capability |
+| CHAT.UX.0 | planned | operator | Diagnostic REPL clarity and layout | accepted-only chat shows status, help, model/backend/session state, optional color, NO_COLOR behavior, and unsupported generation boundary |
+| OPERATOR.FLOW.3 | planned | operator | Runbook over real operator presets | operator runbook is rewritten around `paths configure`, `model-target --paths`, `models prepare`, `models check`, graph lanes, accepted-only chat, validation, and artifact hygiene |
+| DOCS.README.OPERATOR.0 | planned | docs | Public operator examples after preset stabilization | README examples use stable operator presets without internal IDs or unsupported generation claims |
 | SERVE.RUNTIME.0 | planned | serve | Serving runtime ownership map | daemon/provider surfaces are mapped to runtime generation ownership without generation claim |
 | ARTIFACT.NAMING.0 | complete | artifact | GGUF artifact naming contract | canonical artifact alias/name rules implemented |
 | RUNTIME.KV.0 | complete | kv-policy | KV cache policy | KV policy documented without runtime claim |
@@ -1097,11 +1210,26 @@ backend and hardware track:
   -> allocation/transfer pressure
   -> hardware profile
   -> machine-specific reproducibility metadata
+
+operator preset track:
+  operator model root configuration
+  -> model target path resolution
+  -> model prepare preset
+  -> model check preset
+  -> graph check preset
+  -> diagnostic REPL clarity
+  -> final operator runbook
+  -> public operator examples
 ```
 
 These tracks may advance in parallel only when their boundaries are explicit.
 A row is complete only when its command proof demonstrates the boundary it
 claims.
+
+The operator preset track may advance before runtime generation because it
+compresses already implemented lower-level boundaries into safer operator
+commands. It cannot claim a model, graph, runtime, generation, eval, or
+benchmark capability that the lower-level command path has not already proven.
 
 M8 is not the final prefill path. It is the first prefill-state foundation.
 PREFILL.1 binds that foundation to minimal session-owned KV state, but it does
@@ -1232,11 +1360,316 @@ depend on these personal paths.
 No `.safetensors`, `.bin`, `.dat`, or real `.gguf` shard may be committed.
 Tiny synthetic GGUF fixtures in tests are the only exception.
 
+## Operator Preset Command Contracts
+
+### OPERATOR.PATHS.0 command contract
+
+```text
+OPERATOR.PATHS.0 command surface:
+
+  yvex paths configure --models-root DIR
+  yvex paths configure --models-root DIR --create
+  yvex paths configure --reset
+  yvex paths
+  yvex paths --create
+  yvex paths resolve --family deepseek --kind source
+  yvex paths resolve --family deepseek --kind gguf
+  yvex paths resolve --family deepseek --kind reports
+  yvex paths resolve --family deepseek --kind reference
+  yvex paths resolve --family deepseek --kind registry
+  yvex paths resolve --family glm --kind source
+  yvex paths resolve --family glm --kind gguf
+  yvex paths resolve --family glm --kind reports
+  yvex paths resolve --family glm --kind reference
+  yvex paths resolve --family glm --kind registry
+
+Path resolution precedence:
+
+  explicit command flag
+  -> configured operator-local YVEX state
+  -> technical environment override
+  -> builtin development default
+
+The technical environment override may exist, but it is not the normal operator
+path.
+
+`paths configure` does not download models, create model artifacts, register
+aliases, or claim runtime capability.
+```
+
+Expected fields:
+
+```text
+status: paths-configured
+models_root:
+hf_root:
+gguf_root:
+reports_root:
+reference_root:
+registry_root:
+created:
+```
+
+### MODEL.TARGET.PATHS.0 command contract
+
+```text
+MODEL.TARGET.PATHS.0 command surface:
+
+  yvex model-target inspect TARGET --paths
+  yvex model-target inspect TARGET --paths --models-root DIR
+
+The command reports paths derived from the model target and operator root.
+
+For DeepSeek selected embedding, it reports:
+
+  source_path
+  artifact_path
+  report_dir
+  registry_alias
+  source_artifact_class
+  target_artifact_class
+  runtime_execution
+  generation
+
+For GLM-5.2 official safetensors, it reports:
+
+  source_path
+  artifact_path: planned
+  report_dir
+  registry_alias: none
+  source_artifact_class: official safetensors
+  target_artifact_class: future YVEX-produced GGUF
+  runtime_execution: unsupported
+  generation: unsupported
+
+The command must not inspect GLM safetensors, require GLM download completion,
+hash GLM files, or claim GLM execution.
+```
+
+### MODEL.PREPARE.0 command contract
+
+```text
+MODEL.PREPARE.0 command surface:
+
+  yvex models prepare TARGET
+  yvex models prepare TARGET --overwrite
+  yvex models prepare TARGET --source DIR
+  yvex models prepare TARGET --out FILE
+  yvex models prepare TARGET --out-dir DIR
+  yvex models prepare TARGET --models-root DIR
+  yvex models prepare TARGET --registry FILE
+  yvex models prepare TARGET --dry-run
+  yvex models prepare TARGET --no-register
+  yvex models prepare TARGET --no-use
+
+For `deepseek4-v4-flash-selected-embed`, prepare composes only the already
+implemented selected source-to-GGUF path:
+
+  source manifest
+  native tensor inventory
+  tensor mapping
+  conversion plan
+  selected GGUF emission
+  inspect
+  tensors
+  metadata
+  registry add
+  registry use
+  registry verify
+
+Prepare does not materialize, run graph, start a server, run chat, decode,
+produce logits, sample, generate, evaluate, or benchmark.
+
+For source-only targets such as `glm-5.2-official-safetensors`, prepare returns
+a clear unsupported report until the corresponding YVEX-produced GGUF path
+exists.
+```
+
+Expected output fields:
+
+```text
+status: model-prepare
+target_id:
+source_path:
+artifact_path:
+alias:
+stage:
+runtime_execution:
+generation:
+```
+
+### MODEL.CHECK.0 command contract
+
+```text
+MODEL.CHECK.0 command surface:
+
+  yvex models check TARGET
+  yvex models check TARGET --backend cpu
+  yvex models check TARGET --backend cuda
+  yvex models check TARGET --level quick
+  yvex models check TARGET --level runtime
+  yvex models check TARGET --level full
+  yvex models check TARGET --models-root DIR
+  yvex models check TARGET --registry FILE
+  yvex models check TARGET --report-dir DIR
+  yvex models check TARGET --no-materialize
+  yvex models check TARGET --no-graph
+
+Level semantics:
+
+  quick:
+    resolve target or alias
+    inspect
+    tensors
+    metadata
+    integrity check
+
+  runtime:
+    quick
+    integrity report
+    materialize
+    engine
+    session
+    plan
+    selected graph partial when the target supports it
+
+  full:
+    runtime
+    model gate when target expectations are known
+    materialization gate when target expectations are known
+
+`models check` never claims generation. It cannot close decode, logits,
+sampling, generation, eval, or benchmark rows.
+```
+
+Expected output fields:
+
+```text
+status: model-check
+target_id:
+backend:
+level:
+stage:
+runtime_execution:
+generation:
+```
+
+### MODEL.CHECK.1 segment contract
+
+```text
+MODEL.CHECK.1 extends `models check` for the selected embedding-plus-RMSNorm
+segment target.
+
+Runtime-level segment checks may include:
+
+  input tokens
+  selected embedding-plus-RMSNorm graph segment
+  segment-summary prefill
+  segment-summary prefill plus minimal KV binding
+
+This remains segment-summary diagnostics only. It is not full transformer
+prefill, attention-backed KV, decode, logits, sampling, or generation.
+```
+
+### GRAPH.CHECK.0 command contract
+
+```text
+GRAPH.CHECK.0 command surface, after GRAPH.BLOCK.0 exists:
+
+  yvex graph check --suite primitives --backend cpu
+  yvex graph check --suite primitives --backend cuda
+  yvex graph check --suite block --backend cpu
+  yvex graph check --suite block --backend cuda
+  yvex graph check --suite selected --model TARGET --backend cpu
+  yvex graph check --suite selected --model TARGET --backend cuda
+  yvex graph check --suite segment --model TARGET --backend cpu
+  yvex graph check --suite segment --model TARGET --backend cuda
+  yvex graph check --suite all --backend cpu
+
+Suite semantics:
+
+  primitives:
+    RoPE, attention, matmul, MLP primitive proofs.
+
+  block:
+    controlled block fixture proof after GRAPH.BLOCK.0.
+
+  selected:
+    selected embedding graph over selected artifact.
+
+  segment:
+    selected embedding-plus-RMSNorm segment graph over segment artifact.
+
+  all:
+    implemented suites only; unsupported suites report unsupported rather than
+    pretending to pass.
+
+`graph check` does not read full model weights and does not claim full
+transformer execution unless the underlying graph rows exist.
+```
+
+### CHAT.UX.0 command contract
+
+```text
+CHAT.UX.0 improves the accepted-only diagnostic REPL.
+
+It may improve:
+
+  startup banner
+  /help
+  /status
+  /quit and /exit wording
+  model/backend/session state display
+  unsupported generation warning
+  optional color
+  NO_COLOR support
+  non-TTY fallback
+
+It must not implement generation.
+
+It must not present the accepted-only REPL as a chat model.
+
+It must continue to state that decode, logits, sampling, and generation are
+unsupported until implemented by runtime rows.
+```
+
+### OPERATOR.FLOW.3 docs contract
+
+```text
+OPERATOR.FLOW.3 rewrites the runbook after the preset commands exist.
+
+The final runbook should be based on commands such as:
+
+  yvex paths configure --models-root DIR
+  yvex model-target inspect TARGET --paths
+  yvex models prepare TARGET
+  yvex models check TARGET --backend cpu --level runtime
+  yvex graph check --suite primitives --backend cpu
+  yvex chat --model FIXTURE --backend cpu
+
+The runbook must not compensate for missing CLI behavior with shell export
+walls, scripts, conditionals, or path derivation logic.
+```
+
 ## 7. Active Next
+
+```text
+OPERATOR.PATHS.0 - Operator model root configuration
+```
+
+The immediate implementation path moves to operator path configuration so the
+normal YVEX workflow no longer depends on shell export walls or repeated manual
+path composition.
+
+Runtime active next remains:
 
 ```text
 GRAPH.LAYERS.0 - Layer scheduler and repeated block execution
 ```
+
+GRAPH.LAYERS.0 remains the next runtime milestone. It is not cancelled. The
+operator preset track exists to remove shell glue before runtime work
+continues.
 
 OWI.TARGETS.1 remains planned until multi-family source manifest evidence is
 implemented over available source artifacts. GLM source tensors may continue
@@ -1423,6 +1856,39 @@ pattern='backend implementation is model sup''port'
 grep -nF "$pattern" docs/spine.md && exit 1 || true
 ```
 
+Operator preset roadmap proof:
+
+```sh
+grep -nF 'SPINE.OPERATOR.PRESET.0' docs/spine.md
+grep -nF 'OPERATOR.PATHS.0' docs/spine.md
+grep -nF 'MODEL.TARGET.PATHS.0' docs/spine.md
+grep -nF 'MODEL.PREPARE.0' docs/spine.md
+grep -nF 'MODEL.CHECK.0' docs/spine.md
+grep -nF 'GRAPH.CHECK.0' docs/spine.md
+grep -nF 'CHAT.UX.0' docs/spine.md
+grep -nF 'OPERATOR.FLOW.3' docs/spine.md
+grep -nF 'DOCS.README.OPERATOR.0' docs/spine.md
+grep -nF 'Operator Preset Command Contracts' docs/spine.md
+grep -nF 'operator preset track:' docs/spine.md
+grep -nF 'OPERATOR.PATHS.0 - Operator model root configuration' docs/spine.md
+grep -nF 'GRAPH.LAYERS.0 - Layer scheduler and repeated block execution' docs/spine.md
+
+pattern='paths configure imple''mented'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+
+pattern='model prepare imple''mented'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+
+pattern='model check imple''mented'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+
+pattern='graph check imple''mented'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+
+pattern='generation imple''mented'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+```
+
 Additional guardrails:
 
 ```text
@@ -1439,6 +1905,18 @@ no runtime file change for spine-only rebases
 
 - No support claim without code, tests, and command proof.
 - Every new implementation wave must name one primary canonical block.
+- The runbook must not compensate for missing CLI ergonomics with shell export
+  walls, helper scripts, or path derivation logic.
+- Normal operator flows should prefer `paths configure`, `model-target --paths`,
+  `models prepare`, and `models check` once those commands exist.
+- Shell environment variables may be supported as technical overrides, but they
+  must not be the primary documented interface for normal operator paths.
+- A prepare preset may only compose lower-level behavior that already exists.
+- A check preset may only close the boundary it actually exercises.
+- A graph check preset may not claim graph capability beyond the underlying
+  graph commands it runs.
+- A chat UX improvement may not claim generation.
+- Public operator examples must wait until the preset CLI shape is stable.
 - No command proof may close a row outside the boundary it actually exercises.
 - No external runner result may close a YVEX runtime row.
 - No external GGUF may close a YVEX-produced artifact row.
