@@ -743,6 +743,7 @@ standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
 standalone F32 MLP/feed-forward primitive boundary
 controlled first transformer block fixture execution
+controlled block executor boundary and scratch lifecycle cleanup
 artifact integrity validator and corruption fixture suite
 file identity digest enforcement
 registry metadata drift diagnostics
@@ -1114,7 +1115,7 @@ tables.
 | BACKEND.METAL.0 | planned | backend | Metal feasibility profile | future lane only, no support claim |
 | BACKEND.ROCM.0 | planned | backend | ROCm/Strix Halo feasibility profile | future lane only, no support claim |
 | LAYOUT.RUNTIME.0 | complete | layout | Runtime module boundary audit | runtime ownership separated from CLI/server glue without changing runtime capability |
-| LAYOUT.GRAPH.0 | planned | layout | Graph/executor module separation | graph scheduler/executor boundaries clarified |
+| LAYOUT.GRAPH.0 | complete | layout | Graph/executor module separation | controlled block fixture execution separated from CLI parsing before repeated layer scheduling |
 | LAYOUT.CLI.0 | planned | layout | CLI command taxonomy cleanup | command parsing organized by domain |
 | LAYOUT.SERVER.0 | planned | layout | Server/runtime boundary cleanup | daemon does not duplicate CLI runtime wiring |
 | LAYOUT.TEST.0 | planned | layout | Test fixture/eval/bench separation | parser fixtures, runtime fixtures, eval vectors, benches separated |

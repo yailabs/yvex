@@ -2199,6 +2199,686 @@ static int block_read_f32(yvex_backend *backend,
                                     err);
 }
 
+typedef struct {
+    const char *backend_name;
+    unsigned long long seq_len;
+    unsigned long long position;
+    unsigned long long hidden_dim;
+    unsigned long long head_dim;
+    unsigned long long ffn_dim;
+    const char *activation;
+    int causal;
+    int gated;
+} yvex_controlled_block_request;
+
+typedef struct {
+    float *input_values;
+    float *attn_norm_weight_values;
+    float *post_attn_norm_weight_values;
+    float *q_weight_values;
+    float *k_weight_values;
+    float *v_weight_values;
+    float *o_weight_values;
+    float *mlp_gate_values;
+    float *mlp_up_values;
+    float *mlp_down_values;
+    float *normalized_values;
+    float *q_values;
+    float *k_values;
+    float *v_values;
+    float *rope_q_values;
+    float *rope_k_values;
+    float *attention_values;
+    float *projected_values;
+    float *residual_values;
+    float *post_norm_values;
+    float *mlp_values;
+    float *output_values;
+    float *reference_values;
+    float *row_values;
+    float *mlp_intermediate_values;
+} yvex_controlled_block_host_scratch;
+
+typedef struct {
+    yvex_backend *backend;
+    yvex_cli_block_tensors t;
+} yvex_controlled_block_backend_scratch;
+
+typedef struct {
+    const char *status;
+    const char *graph_integrity_guard;
+    const char *graph_execution_phase;
+    const char *graph_kind;
+    const char *backend_name;
+    const char *backend_status;
+    const char *backend_op_status;
+    unsigned long long seq_len;
+    unsigned long long position;
+    unsigned long long hidden_dim;
+    unsigned long long head_dim;
+    unsigned long long ffn_dim;
+    int causal;
+    int gated;
+    unsigned long long op_count;
+    unsigned long long input_bytes;
+    unsigned long long qkv_weight_bytes_each;
+    unsigned long long mlp_weight_bytes;
+    unsigned long long score_scratch_bytes;
+    unsigned long long mlp_intermediate_bytes;
+    unsigned long long scratch_planned_bytes;
+    unsigned long long backend_allocated_bytes;
+    unsigned long long output_bytes;
+    unsigned long long output_checksum;
+    unsigned long long reference_checksum;
+    float max_abs_diff;
+    int cleanup_attempted;
+    const char *cleanup_status;
+    int execution_ready;
+    int graph_execution_ready;
+    int generation_ready;
+    int block_cuda_parity;
+    unsigned long long sample_count;
+    float output_sample_values[8];
+    float reference_sample_values[8];
+} yvex_controlled_block_result;
+
+static void controlled_block_result_init(yvex_controlled_block_result *result,
+                                         const yvex_controlled_block_request *request)
+{
+    memset(result, 0, sizeof(*result));
+    result->status = "graph-block-fail";
+    result->graph_integrity_guard = "fail";
+    result->graph_execution_phase = "scratch-plan";
+    result->graph_kind = "controlled-block-fixture";
+    result->backend_name = request->backend_name;
+    result->backend_status = "not-opened";
+    result->backend_op_status = "unchecked";
+    result->seq_len = request->seq_len;
+    result->position = request->position;
+    result->hidden_dim = request->hidden_dim;
+    result->head_dim = request->head_dim;
+    result->ffn_dim = request->ffn_dim;
+    result->causal = request->causal;
+    result->gated = request->gated;
+    result->op_count = 12ull;
+    result->cleanup_status = "not-needed";
+    result->execution_ready = 0;
+    result->graph_execution_ready = 0;
+    result->generation_ready = 0;
+}
+
+static void controlled_block_host_scratch_free(yvex_controlled_block_host_scratch *scratch)
+{
+    if (!scratch) {
+        return;
+    }
+    free(scratch->mlp_intermediate_values);
+    free(scratch->row_values);
+    free(scratch->reference_values);
+    free(scratch->output_values);
+    free(scratch->mlp_values);
+    free(scratch->post_norm_values);
+    free(scratch->residual_values);
+    free(scratch->projected_values);
+    free(scratch->attention_values);
+    free(scratch->rope_k_values);
+    free(scratch->rope_q_values);
+    free(scratch->v_values);
+    free(scratch->k_values);
+    free(scratch->q_values);
+    free(scratch->normalized_values);
+    free(scratch->mlp_down_values);
+    free(scratch->mlp_up_values);
+    free(scratch->mlp_gate_values);
+    free(scratch->o_weight_values);
+    free(scratch->v_weight_values);
+    free(scratch->k_weight_values);
+    free(scratch->q_weight_values);
+    free(scratch->post_attn_norm_weight_values);
+    free(scratch->attn_norm_weight_values);
+    free(scratch->input_values);
+    memset(scratch, 0, sizeof(*scratch));
+}
+
+static int controlled_block_host_scratch_has_allocations(
+    const yvex_controlled_block_host_scratch *scratch)
+{
+    return scratch &&
+           (scratch->input_values ||
+            scratch->attn_norm_weight_values ||
+            scratch->post_attn_norm_weight_values ||
+            scratch->q_weight_values ||
+            scratch->k_weight_values ||
+            scratch->v_weight_values ||
+            scratch->o_weight_values ||
+            scratch->mlp_gate_values ||
+            scratch->mlp_up_values ||
+            scratch->mlp_down_values ||
+            scratch->normalized_values ||
+            scratch->q_values ||
+            scratch->k_values ||
+            scratch->v_values ||
+            scratch->rope_q_values ||
+            scratch->rope_k_values ||
+            scratch->attention_values ||
+            scratch->projected_values ||
+            scratch->residual_values ||
+            scratch->post_norm_values ||
+            scratch->mlp_values ||
+            scratch->output_values ||
+            scratch->reference_values ||
+            scratch->row_values ||
+            scratch->mlp_intermediate_values);
+}
+
+static void controlled_block_backend_scratch_close(
+    yvex_controlled_block_backend_scratch *scratch)
+{
+    if (!scratch) {
+        return;
+    }
+    if (scratch->backend) {
+        block_free_tensors(scratch->backend, &scratch->t);
+        yvex_backend_close(scratch->backend);
+    }
+    memset(scratch, 0, sizeof(*scratch));
+}
+
+static int controlled_block_backend_scratch_has_allocations(
+    const yvex_controlled_block_backend_scratch *scratch)
+{
+    return scratch && scratch->backend;
+}
+
+static unsigned long long controlled_block_tensor_bytes(unsigned int rank,
+                                                        unsigned long long d0,
+                                                        unsigned long long d1)
+{
+    unsigned long long elements = rank > 1 ? d0 * d1 : d0;
+    return elements * (unsigned long long)sizeof(float);
+}
+
+static int controlled_block_alloc_f32(yvex_backend *backend,
+                                      const char *name,
+                                      unsigned int rank,
+                                      unsigned long long d0,
+                                      unsigned long long d1,
+                                      yvex_device_tensor **out,
+                                      yvex_controlled_block_result *result,
+                                      yvex_error *err)
+{
+    int rc = block_alloc_f32(backend, name, rank, d0, d1, out, err);
+    if (rc == YVEX_OK) {
+        result->backend_allocated_bytes += controlled_block_tensor_bytes(rank, d0, d1);
+    }
+    return rc;
+}
+
+static void controlled_block_result_print(const yvex_controlled_block_result *result)
+{
+    unsigned long long i;
+
+    printf("status: %s\n", result->status);
+    printf("graph_integrity_guard: %s\n", result->graph_integrity_guard);
+    printf("graph_execution_phase: %s\n", result->graph_execution_phase);
+    printf("graph_kind: %s\n", result->graph_kind);
+    printf("block: fixture\n");
+    printf("backend: %s\n", result->backend_name);
+    printf("backend_status: %s\n", result->backend_status);
+    printf("backend_op_status: %s\n", result->backend_op_status);
+    printf("seq_len: %llu\n", result->seq_len);
+    printf("position: %llu\n", result->position);
+    printf("hidden_dim: %llu\n", result->hidden_dim);
+    printf("head_dim: %llu\n", result->head_dim);
+    printf("ffn_dim: %llu\n", result->ffn_dim);
+    printf("causal: %s\n", result->causal ? "true" : "false");
+    printf("gated: %s\n", result->gated ? "true" : "false");
+    printf("op_count: %llu\n", result->op_count);
+    printf("phase: input\n");
+    printf("phase: attn_norm\n");
+    printf("phase: q_projection\n");
+    printf("phase: k_projection\n");
+    printf("phase: v_projection\n");
+    printf("phase: rope\n");
+    printf("phase: attention\n");
+    printf("phase: o_projection\n");
+    printf("phase: residual_attn\n");
+    printf("phase: post_attn_norm\n");
+    printf("phase: mlp\n");
+    printf("phase: residual_mlp\n");
+    printf("phase: output\n");
+    printf("input_bytes: %llu\n", result->input_bytes);
+    printf("qkv_weight_bytes_each: %llu\n", result->qkv_weight_bytes_each);
+    printf("mlp_weight_bytes: %llu\n", result->mlp_weight_bytes);
+    printf("score_scratch_bytes: %llu\n", result->score_scratch_bytes);
+    printf("mlp_intermediate_bytes: %llu\n", result->mlp_intermediate_bytes);
+    printf("scratch_planned_bytes: %llu\n", result->scratch_planned_bytes);
+    printf("backend_allocated_bytes: %llu\n", result->backend_allocated_bytes);
+    printf("output_bytes: %llu\n", result->output_bytes);
+    printf("checksum: %llu\n", result->output_checksum);
+    printf("output_checksum: %llu\n", result->output_checksum);
+    printf("reference_checksum: %llu\n", result->reference_checksum);
+    printf("max_abs_diff: %.9g\n", (double)result->max_abs_diff);
+    printf("phase: cleanup\n");
+    printf("cleanup: %s\n",
+           strcmp(result->cleanup_status, "fail") == 0 ? "fail" : "pass");
+    printf("cleanup_attempted: %s\n", result->cleanup_attempted ? "true" : "false");
+    printf("cleanup_status: %s\n", result->cleanup_status);
+    if (strcmp(result->backend_name, "cuda") == 0) {
+        printf("block_cuda_parity: %s\n", result->block_cuda_parity ? "pass" : "fail");
+    }
+    printf("sample_count: %llu\n", result->sample_count);
+    printf("output_sample_values:");
+    for (i = 0; i < result->sample_count; ++i) {
+        printf("%s%.9g", i == 0 ? " " : ",", (double)result->output_sample_values[i]);
+    }
+    printf("\n");
+    printf("reference_sample_values:");
+    for (i = 0; i < result->sample_count; ++i) {
+        printf("%s%.9g", i == 0 ? " " : ",", (double)result->reference_sample_values[i]);
+    }
+    printf("\n");
+    printf("execution_ready: false\n");
+    printf("graph_execution_ready: false\n");
+    printf("generation_ready: false\n");
+    printf("generation: unsupported\n");
+}
+
+static int controlled_block_execute_fixture(
+    const yvex_controlled_block_request *request,
+    yvex_controlled_block_result *result,
+    yvex_error *err)
+{
+    const float epsilon = 0.000001f;
+    const float rope_base = 10000.0f;
+    yvex_backend_options backend_options;
+    yvex_controlled_block_host_scratch host;
+    yvex_controlled_block_backend_scratch device;
+    yvex_mlp_options mlp_options;
+    unsigned long long seq_hidden;
+    unsigned long long hidden_hidden;
+    unsigned long long hidden_ffn;
+    unsigned long long hidden_bytes;
+    unsigned long long seq_hidden_bytes;
+    unsigned long long ffn_bytes;
+    unsigned long long hidden_hidden_bytes;
+    unsigned long long hidden_ffn_bytes;
+    unsigned long long ffn_hidden_bytes;
+    unsigned long long score_bytes;
+    unsigned long long output_bytes;
+    unsigned long long row;
+    unsigned long long i;
+    float scale;
+    int rc = YVEX_OK;
+    int exit_code = 1;
+
+    memset(&backend_options, 0, sizeof(backend_options));
+    memset(&host, 0, sizeof(host));
+    memset(&device, 0, sizeof(device));
+    memset(&mlp_options, 0, sizeof(mlp_options));
+    controlled_block_result_init(result, request);
+
+    seq_hidden = request->seq_len * request->hidden_dim;
+    hidden_hidden = request->hidden_dim * request->hidden_dim;
+    hidden_ffn = request->hidden_dim * request->ffn_dim;
+    hidden_bytes = request->hidden_dim * (unsigned long long)sizeof(float);
+    seq_hidden_bytes = seq_hidden * (unsigned long long)sizeof(float);
+    ffn_bytes = request->ffn_dim * (unsigned long long)sizeof(float);
+    hidden_hidden_bytes = hidden_hidden * (unsigned long long)sizeof(float);
+    hidden_ffn_bytes = hidden_ffn * (unsigned long long)sizeof(float);
+    ffn_hidden_bytes = request->ffn_dim * request->hidden_dim *
+                       (unsigned long long)sizeof(float);
+    score_bytes = request->seq_len * (unsigned long long)sizeof(float);
+    output_bytes = hidden_bytes;
+    scale = (float)(1.0 / cli_sqrt_double((double)request->head_dim));
+    result->input_bytes = seq_hidden_bytes;
+    result->qkv_weight_bytes_each = hidden_hidden_bytes;
+    result->mlp_weight_bytes = hidden_ffn_bytes + hidden_ffn_bytes + ffn_hidden_bytes;
+    result->score_scratch_bytes = score_bytes;
+    result->mlp_intermediate_bytes = ffn_bytes;
+    result->scratch_planned_bytes =
+        (seq_hidden_bytes * 4ull) + (hidden_bytes * 10ull) +
+        (score_bytes * 2ull) + ffn_bytes;
+    result->output_bytes = output_bytes;
+
+    result->graph_execution_phase = "host-allocation";
+    host.input_values = (float *)calloc((size_t)seq_hidden, sizeof(float));
+    host.attn_norm_weight_values = (float *)calloc((size_t)request->hidden_dim, sizeof(float));
+    host.post_attn_norm_weight_values = (float *)calloc((size_t)request->hidden_dim, sizeof(float));
+    host.q_weight_values = (float *)calloc((size_t)hidden_hidden, sizeof(float));
+    host.k_weight_values = (float *)calloc((size_t)hidden_hidden, sizeof(float));
+    host.v_weight_values = (float *)calloc((size_t)hidden_hidden, sizeof(float));
+    host.o_weight_values = (float *)calloc((size_t)hidden_hidden, sizeof(float));
+    host.mlp_gate_values = (float *)calloc((size_t)hidden_ffn, sizeof(float));
+    host.mlp_up_values = (float *)calloc((size_t)hidden_ffn, sizeof(float));
+    host.mlp_down_values = (float *)calloc((size_t)(request->ffn_dim * request->hidden_dim), sizeof(float));
+    host.normalized_values = (float *)calloc((size_t)seq_hidden, sizeof(float));
+    host.q_values = (float *)calloc((size_t)seq_hidden, sizeof(float));
+    host.k_values = (float *)calloc((size_t)seq_hidden, sizeof(float));
+    host.v_values = (float *)calloc((size_t)seq_hidden, sizeof(float));
+    host.rope_q_values = (float *)calloc((size_t)request->hidden_dim, sizeof(float));
+    host.rope_k_values = (float *)calloc((size_t)seq_hidden, sizeof(float));
+    host.attention_values = (float *)calloc((size_t)request->hidden_dim, sizeof(float));
+    host.projected_values = (float *)calloc((size_t)request->hidden_dim, sizeof(float));
+    host.residual_values = (float *)calloc((size_t)request->hidden_dim, sizeof(float));
+    host.post_norm_values = (float *)calloc((size_t)request->hidden_dim, sizeof(float));
+    host.mlp_values = (float *)calloc((size_t)request->hidden_dim, sizeof(float));
+    host.output_values = (float *)calloc((size_t)request->hidden_dim, sizeof(float));
+    host.reference_values = (float *)calloc((size_t)request->hidden_dim, sizeof(float));
+    host.row_values = (float *)calloc((size_t)request->hidden_dim, sizeof(float));
+    host.mlp_intermediate_values = (float *)calloc((size_t)request->ffn_dim, sizeof(float));
+    if (!host.input_values || !host.attn_norm_weight_values ||
+        !host.post_attn_norm_weight_values || !host.q_weight_values ||
+        !host.k_weight_values || !host.v_weight_values || !host.o_weight_values ||
+        !host.mlp_gate_values || !host.mlp_up_values || !host.mlp_down_values ||
+        !host.normalized_values || !host.q_values || !host.k_values ||
+        !host.v_values || !host.rope_q_values || !host.rope_k_values ||
+        !host.attention_values || !host.projected_values ||
+        !host.residual_values || !host.post_norm_values || !host.mlp_values ||
+        !host.output_values || !host.reference_values || !host.row_values ||
+        !host.mlp_intermediate_values) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex graph block",
+                       "failed to allocate host block buffers");
+        exit_code = exit_for_status(YVEX_ERR_NOMEM);
+        goto cleanup;
+    }
+
+    block_fill_input(host.input_values, request->seq_len, request->hidden_dim);
+    block_fill_norm_weight(host.attn_norm_weight_values, request->hidden_dim, 1.0);
+    block_fill_norm_weight(host.post_attn_norm_weight_values, request->hidden_dim, 0.95);
+    block_fill_projection_weight(host.q_weight_values, request->hidden_dim, 0.006);
+    block_fill_projection_weight(host.k_weight_values, request->hidden_dim, 0.007);
+    block_fill_projection_weight(host.v_weight_values, request->hidden_dim, 0.008);
+    block_fill_projection_weight(host.o_weight_values, request->hidden_dim, 0.005);
+    block_fill_mlp_weights(host.mlp_gate_values, host.mlp_up_values,
+                           host.mlp_down_values, request->hidden_dim,
+                           request->ffn_dim);
+
+    result->graph_execution_phase = "backend-allocation";
+    memset(&backend_options, 0, sizeof(backend_options));
+    backend_options.kind = strcmp(request->backend_name, "cuda") == 0
+                               ? YVEX_BACKEND_KIND_CUDA
+                               : YVEX_BACKEND_KIND_CPU;
+    rc = yvex_backend_open(&device.backend, &backend_options, err);
+    if (rc != YVEX_OK) {
+        exit_code = exit_for_status(rc);
+        goto cleanup;
+    }
+    result->backend_status = "ready";
+    if (!yvex_backend_supports(device.backend, YVEX_BACKEND_CAP_OP_RMS_NORM) ||
+        !yvex_backend_supports(device.backend, YVEX_BACKEND_CAP_OP_MATMUL) ||
+        !yvex_backend_supports(device.backend, YVEX_BACKEND_CAP_OP_ROPE) ||
+        !yvex_backend_supports(device.backend, YVEX_BACKEND_CAP_OP_ATTENTION) ||
+        !yvex_backend_supports(device.backend, YVEX_BACKEND_CAP_OP_MLP)) {
+        result->backend_op_status = "unsupported";
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex graph block",
+                       "graph block fixture requires RMSNorm, matmul, RoPE, attention, and MLP backend ops");
+        exit_code = 5;
+        goto cleanup;
+    }
+    result->backend_op_status = "supported";
+
+    rc = controlled_block_alloc_f32(device.backend, "block.input_hidden_states",
+                                    2, request->seq_len, request->hidden_dim,
+                                    &device.t.input_states, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.attn_norm.weight", 1, request->hidden_dim, 0, &device.t.attn_norm_weight, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.normalized_input", 2, request->seq_len, request->hidden_dim, &device.t.normalized_input, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.q.weight", 2, request->hidden_dim, request->hidden_dim, &device.t.q_weight, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.k.weight", 2, request->hidden_dim, request->hidden_dim, &device.t.k_weight, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.v.weight", 2, request->hidden_dim, request->hidden_dim, &device.t.v_weight, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.o.weight", 2, request->hidden_dim, request->hidden_dim, &device.t.o_weight, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.q", 2, request->seq_len, request->hidden_dim, &device.t.q, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.k", 2, request->seq_len, request->hidden_dim, &device.t.k, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.v", 2, request->seq_len, request->hidden_dim, &device.t.v, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.row_input", 1, request->hidden_dim, 0, &device.t.row_input, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.row_output", 1, request->hidden_dim, 0, &device.t.row_output, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.rope_q", 1, request->hidden_dim, 0, &device.t.rope_q, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.rope_k", 2, request->seq_len, request->hidden_dim, &device.t.rope_k, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.attention_output", 1, request->hidden_dim, 0, &device.t.attention_output, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.attention_scores", 1, request->seq_len, 0, &device.t.attention_scores, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.attention_probabilities", 1, request->seq_len, 0, &device.t.attention_probabilities, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.attention_output_matrix", 2, 1, request->hidden_dim, &device.t.attention_output_matrix, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.projected_attention", 2, 1, request->hidden_dim, &device.t.projected_attention, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.residual_after_attention", 2, 1, request->hidden_dim, &device.t.residual_after_attention, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.post_attn_norm.weight", 1, request->hidden_dim, 0, &device.t.post_attn_norm_weight, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.post_attn_norm", 2, 1, request->hidden_dim, &device.t.post_attn_norm, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.mlp.gate", 2, request->hidden_dim, request->ffn_dim, &device.t.mlp_gate_weight, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.mlp.up", 2, request->hidden_dim, request->ffn_dim, &device.t.mlp_up_weight, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.mlp.down", 2, request->ffn_dim, request->hidden_dim, &device.t.mlp_down_weight, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.mlp.intermediate", 2, 1, request->ffn_dim, &device.t.mlp_intermediate, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.mlp.output", 2, 1, request->hidden_dim, &device.t.mlp_output, result, err);
+    if (rc == YVEX_OK) rc = controlled_block_alloc_f32(device.backend, "block.output", 2, 1, request->hidden_dim, &device.t.block_output, result, err);
+    if (rc != YVEX_OK) {
+        exit_code = exit_for_status(rc);
+        goto cleanup;
+    }
+    if (cli_test_env_enabled("YVEX_TEST_FAIL_BLOCK_AFTER_BACKEND_ALLOC")) {
+        yvex_error_set(err, YVEX_ERR_BACKEND, "yvex graph block",
+                       "test block failure after backend allocation");
+        exit_code = exit_for_status(YVEX_ERR_BACKEND);
+        goto cleanup;
+    }
+
+    result->graph_execution_phase = "dispatch";
+    rc = block_write_f32(device.backend, device.t.input_states,
+                         host.input_values, seq_hidden, err);
+    if (rc == YVEX_OK) rc = block_write_f32(device.backend, device.t.attn_norm_weight, host.attn_norm_weight_values, request->hidden_dim, err);
+    if (rc == YVEX_OK) rc = block_write_f32(device.backend, device.t.q_weight, host.q_weight_values, hidden_hidden, err);
+    if (rc == YVEX_OK) rc = block_write_f32(device.backend, device.t.k_weight, host.k_weight_values, hidden_hidden, err);
+    if (rc == YVEX_OK) rc = block_write_f32(device.backend, device.t.v_weight, host.v_weight_values, hidden_hidden, err);
+    if (rc == YVEX_OK) rc = block_write_f32(device.backend, device.t.o_weight, host.o_weight_values, hidden_hidden, err);
+    if (rc == YVEX_OK) rc = block_write_f32(device.backend, device.t.post_attn_norm_weight, host.post_attn_norm_weight_values, request->hidden_dim, err);
+    if (rc == YVEX_OK) rc = block_write_f32(device.backend, device.t.mlp_gate_weight, host.mlp_gate_values, hidden_ffn, err);
+    if (rc == YVEX_OK) rc = block_write_f32(device.backend, device.t.mlp_up_weight, host.mlp_up_values, hidden_ffn, err);
+    if (rc == YVEX_OK) rc = block_write_f32(device.backend, device.t.mlp_down_weight, host.mlp_down_values, request->ffn_dim * request->hidden_dim, err);
+    if (rc != YVEX_OK) {
+        exit_code = exit_for_status(rc);
+        goto cleanup;
+    }
+
+    for (row = 0; row < request->seq_len; ++row) {
+        rc = block_write_f32(device.backend, device.t.row_input,
+                             host.input_values + (row * request->hidden_dim),
+                             request->hidden_dim, err);
+        if (rc == YVEX_OK) {
+            rc = yvex_backend_op_rms_norm(device.backend, device.t.row_input,
+                                          device.t.attn_norm_weight, epsilon,
+                                          device.t.row_output, err);
+        }
+        if (rc == YVEX_OK) {
+            rc = block_read_f32(device.backend, device.t.row_output,
+                                host.normalized_values + (row * request->hidden_dim),
+                                request->hidden_dim, err);
+        }
+        if (rc != YVEX_OK) {
+            exit_code = exit_for_status(rc);
+            goto cleanup;
+        }
+    }
+    rc = block_write_f32(device.backend, device.t.normalized_input,
+                         host.normalized_values, seq_hidden, err);
+    if (rc == YVEX_OK) rc = yvex_backend_op_matmul(device.backend, device.t.normalized_input, device.t.q_weight, device.t.q, err);
+    if (rc == YVEX_OK) rc = yvex_backend_op_matmul(device.backend, device.t.normalized_input, device.t.k_weight, device.t.k, err);
+    if (rc == YVEX_OK) rc = yvex_backend_op_matmul(device.backend, device.t.normalized_input, device.t.v_weight, device.t.v, err);
+    if (rc == YVEX_OK) rc = block_read_f32(device.backend, device.t.q, host.q_values, seq_hidden, err);
+    if (rc == YVEX_OK) rc = block_read_f32(device.backend, device.t.k, host.k_values, seq_hidden, err);
+    if (rc == YVEX_OK) rc = block_read_f32(device.backend, device.t.v, host.v_values, seq_hidden, err);
+    if (rc != YVEX_OK) {
+        exit_code = exit_for_status(rc);
+        goto cleanup;
+    }
+
+    rc = block_write_f32(device.backend, device.t.row_input,
+                         host.q_values + (request->position * request->hidden_dim),
+                         request->hidden_dim, err);
+    if (rc == YVEX_OK) {
+        rc = yvex_backend_op_rope(device.backend, device.t.row_input,
+                                  request->position, rope_base, device.t.rope_q, err);
+    }
+    if (rc == YVEX_OK) {
+        rc = block_read_f32(device.backend, device.t.rope_q,
+                            host.rope_q_values, request->hidden_dim, err);
+    }
+    if (rc != YVEX_OK) {
+        exit_code = exit_for_status(rc);
+        goto cleanup;
+    }
+    for (row = 0; row < request->seq_len; ++row) {
+        rc = block_write_f32(device.backend, device.t.row_input,
+                             host.k_values + (row * request->hidden_dim),
+                             request->hidden_dim, err);
+        if (rc == YVEX_OK) {
+            rc = yvex_backend_op_rope(device.backend, device.t.row_input,
+                                      row, rope_base, device.t.row_output, err);
+        }
+        if (rc == YVEX_OK) {
+            rc = block_read_f32(device.backend, device.t.row_output,
+                                host.rope_k_values + (row * request->hidden_dim),
+                                request->hidden_dim, err);
+        }
+        if (rc != YVEX_OK) {
+            exit_code = exit_for_status(rc);
+            goto cleanup;
+        }
+    }
+    rc = block_write_f32(device.backend, device.t.rope_k,
+                         host.rope_k_values, seq_hidden, err);
+    if (rc == YVEX_OK) {
+        rc = yvex_backend_op_attention(device.backend, device.t.rope_q,
+                                       device.t.rope_k, device.t.v,
+                                       request->seq_len, request->position,
+                                       scale, request->causal,
+                                       device.t.attention_scores,
+                                       device.t.attention_probabilities,
+                                       device.t.attention_output, err);
+    }
+    if (rc == YVEX_OK) {
+        rc = block_read_f32(device.backend, device.t.attention_output,
+                            host.attention_values, request->hidden_dim, err);
+    }
+    if (rc != YVEX_OK) {
+        exit_code = exit_for_status(rc);
+        goto cleanup;
+    }
+
+    rc = block_write_f32(device.backend, device.t.attention_output_matrix,
+                         host.attention_values, request->hidden_dim, err);
+    if (rc == YVEX_OK) {
+        rc = yvex_backend_op_matmul(device.backend,
+                                    device.t.attention_output_matrix,
+                                    device.t.o_weight,
+                                    device.t.projected_attention, err);
+    }
+    if (rc == YVEX_OK) {
+        rc = block_read_f32(device.backend, device.t.projected_attention,
+                            host.projected_values, request->hidden_dim, err);
+    }
+    if (rc != YVEX_OK) {
+        exit_code = exit_for_status(rc);
+        goto cleanup;
+    }
+    block_residual_add(host.input_values + (request->position * request->hidden_dim),
+                       host.projected_values, request->hidden_dim,
+                       host.residual_values);
+    rc = block_write_f32(device.backend, device.t.residual_after_attention,
+                         host.residual_values, request->hidden_dim, err);
+    if (rc == YVEX_OK) {
+        rc = yvex_backend_op_rms_norm(device.backend,
+                                      device.t.residual_after_attention,
+                                      device.t.post_attn_norm_weight, epsilon,
+                                      device.t.post_attn_norm, err);
+    }
+    if (rc == YVEX_OK) {
+        rc = block_read_f32(device.backend, device.t.post_attn_norm,
+                            host.post_norm_values, request->hidden_dim, err);
+    }
+    if (rc != YVEX_OK) {
+        exit_code = exit_for_status(rc);
+        goto cleanup;
+    }
+
+    mlp_options.batch = 1ull;
+    mlp_options.hidden_dim = request->hidden_dim;
+    mlp_options.ffn_dim = request->ffn_dim;
+    mlp_options.activation = request->activation;
+    mlp_options.gated = request->gated;
+    rc = yvex_backend_op_mlp(device.backend, device.t.post_attn_norm,
+                             device.t.mlp_gate_weight, device.t.mlp_up_weight,
+                             device.t.mlp_down_weight, &mlp_options,
+                             device.t.mlp_intermediate, device.t.mlp_output, err);
+    if (rc == YVEX_OK) {
+        rc = block_read_f32(device.backend, device.t.mlp_output,
+                            host.mlp_values, request->hidden_dim, err);
+    }
+    if (rc == YVEX_OK) {
+        rc = block_read_f32(device.backend, device.t.mlp_intermediate,
+                            host.mlp_intermediate_values, request->ffn_dim, err);
+    }
+    if (rc != YVEX_OK) {
+        exit_code = exit_for_status(rc);
+        goto cleanup;
+    }
+    block_residual_add(host.residual_values, host.mlp_values,
+                       request->hidden_dim, host.output_values);
+    rc = block_write_f32(device.backend, device.t.block_output,
+                         host.output_values, request->hidden_dim, err);
+    if (rc == YVEX_OK) {
+        rc = block_read_f32(device.backend, device.t.block_output,
+                            host.output_values, request->hidden_dim, err);
+    }
+    if (rc != YVEX_OK) {
+        exit_code = exit_for_status(rc);
+        goto cleanup;
+    }
+
+    result->graph_execution_phase = "readback-reference";
+    block_reference(host.input_values, host.attn_norm_weight_values,
+                    host.q_weight_values, host.k_weight_values,
+                    host.v_weight_values, host.o_weight_values,
+                    host.post_attn_norm_weight_values,
+                    host.mlp_gate_values, host.mlp_up_values,
+                    host.mlp_down_values, request->seq_len, request->position,
+                    request->hidden_dim, request->ffn_dim, request->causal,
+                    host.reference_values);
+
+    result->graph_execution_phase = "comparison";
+    result->max_abs_diff = cli_max_abs_diff_f32(host.output_values,
+                                                host.reference_values,
+                                                request->hidden_dim);
+    result->output_checksum = cli_checksum_bytes(host.output_values, output_bytes);
+    result->reference_checksum = cli_checksum_bytes(host.reference_values, output_bytes);
+    result->sample_count = request->hidden_dim < 8ull ? request->hidden_dim : 8ull;
+    for (i = 0; i < result->sample_count; ++i) {
+        result->output_sample_values[i] = host.output_values[i];
+        result->reference_sample_values[i] = host.reference_values[i];
+    }
+    if (result->max_abs_diff > 0.002f) {
+        yvex_error_setf(err, YVEX_ERR_STATE, "yvex graph block",
+                        "controlled block reference comparison failed: max_abs_diff %.9g",
+                        (double)result->max_abs_diff);
+        exit_code = exit_for_status(YVEX_ERR_STATE);
+        goto cleanup;
+    }
+    result->status = "graph-block";
+    result->graph_integrity_guard = "pass";
+    result->graph_execution_phase = "complete";
+    result->block_cuda_parity = 1;
+    exit_code = 0;
+
+cleanup:
+    if (controlled_block_backend_scratch_has_allocations(&device) ||
+        controlled_block_host_scratch_has_allocations(&host)) {
+        result->cleanup_attempted = 1;
+        result->cleanup_status = "pass";
+    }
+    controlled_block_backend_scratch_close(&device);
+    controlled_block_host_scratch_free(&host);
+    if (exit_code == 0) {
+        yvex_error_clear(err);
+    }
+    return exit_code;
+}
+
 static int command_graph_execute_block_fixture(const char *backend_name,
                                                unsigned long long seq_len,
                                                unsigned long long position,
@@ -2208,60 +2888,15 @@ static int command_graph_execute_block_fixture(const char *backend_name,
                                                int causal,
                                                int gated)
 {
-    const float epsilon = 0.000001f;
-    const float rope_base = 10000.0f;
-    yvex_backend *backend = NULL;
-    yvex_backend_options backend_options;
-    yvex_cli_block_tensors t;
-    yvex_mlp_options mlp_options;
+    yvex_controlled_block_request request;
+    yvex_controlled_block_result result;
     yvex_error err;
-    float *input_values = NULL;
-    float *attn_norm_weight_values = NULL;
-    float *post_attn_norm_weight_values = NULL;
-    float *q_weight_values = NULL;
-    float *k_weight_values = NULL;
-    float *v_weight_values = NULL;
-    float *o_weight_values = NULL;
-    float *mlp_gate_values = NULL;
-    float *mlp_up_values = NULL;
-    float *mlp_down_values = NULL;
-    float *normalized_values = NULL;
-    float *q_values = NULL;
-    float *k_values = NULL;
-    float *v_values = NULL;
-    float *rope_q_values = NULL;
-    float *rope_k_values = NULL;
-    float *attention_values = NULL;
-    float *projected_values = NULL;
-    float *residual_values = NULL;
-    float *post_norm_values = NULL;
-    float *mlp_values = NULL;
-    float *output_values = NULL;
-    float *reference_values = NULL;
-    float *row_values = NULL;
-    float *mlp_intermediate_values = NULL;
-    unsigned long long seq_hidden = 0ull;
-    unsigned long long hidden_bytes = 0ull;
-    unsigned long long seq_hidden_bytes = 0ull;
-    unsigned long long ffn_bytes = 0ull;
-    unsigned long long hidden_hidden = 0ull;
-    unsigned long long hidden_ffn = 0ull;
-    unsigned long long hidden_hidden_bytes = 0ull;
-    unsigned long long hidden_ffn_bytes = 0ull;
-    unsigned long long ffn_hidden_bytes = 0ull;
-    unsigned long long score_bytes = 0ull;
-    unsigned long long output_bytes = 0ull;
-    unsigned long long row = 0ull;
-    unsigned long long sample_count = 0ull;
-    float scale = 0.0f;
-    float max_abs_diff = 0.0f;
-    int rc = YVEX_OK;
-    int exit_code = 1;
+    unsigned long long seq_hidden;
+    unsigned long long hidden_hidden;
+    unsigned long long hidden_ffn;
+    int exit_code;
 
     yvex_error_clear(&err);
-    memset(&backend_options, 0, sizeof(backend_options));
-    memset(&t, 0, sizeof(t));
-    memset(&mlp_options, 0, sizeof(mlp_options));
 
     if (seq_len == 0 || hidden_dim == 0 || head_dim == 0 || ffn_dim == 0) {
         fprintf(stderr, "yvex: block fixture dimensions must be positive\n");
@@ -2300,322 +2935,23 @@ static int command_graph_execute_block_fixture(const char *backend_name,
         fprintf(stderr, "yvex: block fixture byte count overflow\n");
         return 4;
     }
-    hidden_bytes = hidden_dim * (unsigned long long)sizeof(float);
-    seq_hidden_bytes = seq_hidden * (unsigned long long)sizeof(float);
-    ffn_bytes = ffn_dim * (unsigned long long)sizeof(float);
-    hidden_hidden_bytes = hidden_hidden * (unsigned long long)sizeof(float);
-    hidden_ffn_bytes = hidden_ffn * (unsigned long long)sizeof(float);
-    ffn_hidden_bytes = ffn_dim * hidden_dim * (unsigned long long)sizeof(float);
-    score_bytes = seq_len * (unsigned long long)sizeof(float);
-    output_bytes = hidden_bytes;
-    scale = (float)(1.0 / cli_sqrt_double((double)head_dim));
 
-    input_values = (float *)calloc((size_t)seq_hidden, sizeof(float));
-    attn_norm_weight_values = (float *)calloc((size_t)hidden_dim, sizeof(float));
-    post_attn_norm_weight_values = (float *)calloc((size_t)hidden_dim, sizeof(float));
-    q_weight_values = (float *)calloc((size_t)hidden_hidden, sizeof(float));
-    k_weight_values = (float *)calloc((size_t)hidden_hidden, sizeof(float));
-    v_weight_values = (float *)calloc((size_t)hidden_hidden, sizeof(float));
-    o_weight_values = (float *)calloc((size_t)hidden_hidden, sizeof(float));
-    mlp_gate_values = (float *)calloc((size_t)hidden_ffn, sizeof(float));
-    mlp_up_values = (float *)calloc((size_t)hidden_ffn, sizeof(float));
-    mlp_down_values = (float *)calloc((size_t)(ffn_dim * hidden_dim), sizeof(float));
-    normalized_values = (float *)calloc((size_t)seq_hidden, sizeof(float));
-    q_values = (float *)calloc((size_t)seq_hidden, sizeof(float));
-    k_values = (float *)calloc((size_t)seq_hidden, sizeof(float));
-    v_values = (float *)calloc((size_t)seq_hidden, sizeof(float));
-    rope_q_values = (float *)calloc((size_t)hidden_dim, sizeof(float));
-    rope_k_values = (float *)calloc((size_t)seq_hidden, sizeof(float));
-    attention_values = (float *)calloc((size_t)hidden_dim, sizeof(float));
-    projected_values = (float *)calloc((size_t)hidden_dim, sizeof(float));
-    residual_values = (float *)calloc((size_t)hidden_dim, sizeof(float));
-    post_norm_values = (float *)calloc((size_t)hidden_dim, sizeof(float));
-    mlp_values = (float *)calloc((size_t)hidden_dim, sizeof(float));
-    output_values = (float *)calloc((size_t)hidden_dim, sizeof(float));
-    reference_values = (float *)calloc((size_t)hidden_dim, sizeof(float));
-    row_values = (float *)calloc((size_t)hidden_dim, sizeof(float));
-    mlp_intermediate_values = (float *)calloc((size_t)ffn_dim, sizeof(float));
-    if (!input_values || !attn_norm_weight_values || !post_attn_norm_weight_values ||
-        !q_weight_values || !k_weight_values || !v_weight_values || !o_weight_values ||
-        !mlp_gate_values || !mlp_up_values || !mlp_down_values || !normalized_values ||
-        !q_values || !k_values || !v_values || !rope_q_values || !rope_k_values ||
-        !attention_values || !projected_values || !residual_values ||
-        !post_norm_values || !mlp_values || !output_values || !reference_values ||
-        !row_values || !mlp_intermediate_values) {
-        yvex_error_set(&err, YVEX_ERR_NOMEM, "yvex graph block",
-                       "failed to allocate host block buffers");
-        exit_code = print_yvex_error(&err, exit_for_status(YVEX_ERR_NOMEM));
-        goto cleanup_host;
-    }
+    memset(&request, 0, sizeof(request));
+    request.backend_name = backend_name;
+    request.seq_len = seq_len;
+    request.position = position;
+    request.hidden_dim = hidden_dim;
+    request.head_dim = head_dim;
+    request.ffn_dim = ffn_dim;
+    request.activation = "silu";
+    request.causal = causal;
+    request.gated = gated;
 
-    block_fill_input(input_values, seq_len, hidden_dim);
-    block_fill_norm_weight(attn_norm_weight_values, hidden_dim, 1.0);
-    block_fill_norm_weight(post_attn_norm_weight_values, hidden_dim, 0.95);
-    block_fill_projection_weight(q_weight_values, hidden_dim, 0.006);
-    block_fill_projection_weight(k_weight_values, hidden_dim, 0.007);
-    block_fill_projection_weight(v_weight_values, hidden_dim, 0.008);
-    block_fill_projection_weight(o_weight_values, hidden_dim, 0.005);
-    block_fill_mlp_weights(mlp_gate_values, mlp_up_values, mlp_down_values,
-                           hidden_dim, ffn_dim);
-    block_reference(input_values, attn_norm_weight_values, q_weight_values,
-                    k_weight_values, v_weight_values, o_weight_values,
-                    post_attn_norm_weight_values, mlp_gate_values,
-                    mlp_up_values, mlp_down_values, seq_len, position,
-                    hidden_dim, ffn_dim, causal, reference_values);
-
-    backend_options.kind = strcmp(backend_name, "cuda") == 0
-                               ? YVEX_BACKEND_KIND_CUDA
-                               : YVEX_BACKEND_KIND_CPU;
-    rc = yvex_backend_open(&backend, &backend_options, &err);
-    if (rc != YVEX_OK) {
-        exit_code = print_yvex_error(&err, exit_for_status(rc));
-        goto cleanup_host;
+    exit_code = controlled_block_execute_fixture(&request, &result, &err);
+    controlled_block_result_print(&result);
+    if (exit_code != 0 && yvex_error_code(&err) != YVEX_OK) {
+        return print_yvex_error(&err, exit_code);
     }
-    if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_RMS_NORM) ||
-        !yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MATMUL) ||
-        !yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ROPE) ||
-        !yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ATTENTION) ||
-        !yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MLP)) {
-        fprintf(stderr, "yvex: graph block fixture requires RMSNorm, matmul, RoPE, attention, and MLP backend ops\n");
-        exit_code = 5;
-        goto cleanup_backend;
-    }
-
-    rc = block_alloc_f32(backend, "block.input_hidden_states", 2, seq_len, hidden_dim,
-                         &t.input_states, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.attn_norm.weight", 1, hidden_dim, 0, &t.attn_norm_weight, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.normalized_input", 2, seq_len, hidden_dim, &t.normalized_input, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.q.weight", 2, hidden_dim, hidden_dim, &t.q_weight, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.k.weight", 2, hidden_dim, hidden_dim, &t.k_weight, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.v.weight", 2, hidden_dim, hidden_dim, &t.v_weight, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.o.weight", 2, hidden_dim, hidden_dim, &t.o_weight, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.q", 2, seq_len, hidden_dim, &t.q, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.k", 2, seq_len, hidden_dim, &t.k, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.v", 2, seq_len, hidden_dim, &t.v, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.row_input", 1, hidden_dim, 0, &t.row_input, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.row_output", 1, hidden_dim, 0, &t.row_output, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.rope_q", 1, hidden_dim, 0, &t.rope_q, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.rope_k", 2, seq_len, hidden_dim, &t.rope_k, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.attention_output", 1, hidden_dim, 0, &t.attention_output, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.attention_scores", 1, seq_len, 0, &t.attention_scores, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.attention_probabilities", 1, seq_len, 0, &t.attention_probabilities, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.attention_output_matrix", 2, 1, hidden_dim, &t.attention_output_matrix, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.projected_attention", 2, 1, hidden_dim, &t.projected_attention, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.residual_after_attention", 2, 1, hidden_dim, &t.residual_after_attention, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.post_attn_norm.weight", 1, hidden_dim, 0, &t.post_attn_norm_weight, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.post_attn_norm", 2, 1, hidden_dim, &t.post_attn_norm, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.mlp.gate", 2, hidden_dim, ffn_dim, &t.mlp_gate_weight, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.mlp.up", 2, hidden_dim, ffn_dim, &t.mlp_up_weight, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.mlp.down", 2, ffn_dim, hidden_dim, &t.mlp_down_weight, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.mlp.intermediate", 2, 1, ffn_dim, &t.mlp_intermediate, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.mlp.output", 2, 1, hidden_dim, &t.mlp_output, &err);
-    if (rc == YVEX_OK) rc = block_alloc_f32(backend, "block.output", 2, 1, hidden_dim, &t.block_output, &err);
-    if (rc != YVEX_OK) {
-        exit_code = print_yvex_error(&err, exit_for_status(rc));
-        goto cleanup_backend;
-    }
-
-    rc = block_write_f32(backend, t.input_states, input_values, seq_hidden, &err);
-    if (rc == YVEX_OK) rc = block_write_f32(backend, t.attn_norm_weight, attn_norm_weight_values, hidden_dim, &err);
-    if (rc == YVEX_OK) rc = block_write_f32(backend, t.q_weight, q_weight_values, hidden_hidden, &err);
-    if (rc == YVEX_OK) rc = block_write_f32(backend, t.k_weight, k_weight_values, hidden_hidden, &err);
-    if (rc == YVEX_OK) rc = block_write_f32(backend, t.v_weight, v_weight_values, hidden_hidden, &err);
-    if (rc == YVEX_OK) rc = block_write_f32(backend, t.o_weight, o_weight_values, hidden_hidden, &err);
-    if (rc == YVEX_OK) rc = block_write_f32(backend, t.post_attn_norm_weight, post_attn_norm_weight_values, hidden_dim, &err);
-    if (rc == YVEX_OK) rc = block_write_f32(backend, t.mlp_gate_weight, mlp_gate_values, hidden_ffn, &err);
-    if (rc == YVEX_OK) rc = block_write_f32(backend, t.mlp_up_weight, mlp_up_values, hidden_ffn, &err);
-    if (rc == YVEX_OK) rc = block_write_f32(backend, t.mlp_down_weight, mlp_down_values, ffn_dim * hidden_dim, &err);
-    if (rc != YVEX_OK) {
-        exit_code = print_yvex_error(&err, exit_for_status(rc));
-        goto cleanup_backend;
-    }
-
-    for (row = 0; row < seq_len; ++row) {
-        rc = block_write_f32(backend, t.row_input, input_values + (row * hidden_dim),
-                             hidden_dim, &err);
-        if (rc == YVEX_OK) {
-            rc = yvex_backend_op_rms_norm(backend, t.row_input, t.attn_norm_weight,
-                                          epsilon, t.row_output, &err);
-        }
-        if (rc == YVEX_OK) {
-            rc = block_read_f32(backend, t.row_output,
-                                normalized_values + (row * hidden_dim),
-                                hidden_dim, &err);
-        }
-        if (rc != YVEX_OK) {
-            exit_code = print_yvex_error(&err, exit_for_status(rc));
-            goto cleanup_backend;
-        }
-    }
-    rc = block_write_f32(backend, t.normalized_input, normalized_values, seq_hidden, &err);
-    if (rc == YVEX_OK) rc = yvex_backend_op_matmul(backend, t.normalized_input, t.q_weight, t.q, &err);
-    if (rc == YVEX_OK) rc = yvex_backend_op_matmul(backend, t.normalized_input, t.k_weight, t.k, &err);
-    if (rc == YVEX_OK) rc = yvex_backend_op_matmul(backend, t.normalized_input, t.v_weight, t.v, &err);
-    if (rc == YVEX_OK) rc = block_read_f32(backend, t.q, q_values, seq_hidden, &err);
-    if (rc == YVEX_OK) rc = block_read_f32(backend, t.k, k_values, seq_hidden, &err);
-    if (rc == YVEX_OK) rc = block_read_f32(backend, t.v, v_values, seq_hidden, &err);
-    if (rc != YVEX_OK) {
-        exit_code = print_yvex_error(&err, exit_for_status(rc));
-        goto cleanup_backend;
-    }
-
-    rc = block_write_f32(backend, t.row_input, q_values + (position * hidden_dim), hidden_dim, &err);
-    if (rc == YVEX_OK) rc = yvex_backend_op_rope(backend, t.row_input, position, rope_base, t.rope_q, &err);
-    if (rc == YVEX_OK) rc = block_read_f32(backend, t.rope_q, rope_q_values, hidden_dim, &err);
-    if (rc != YVEX_OK) {
-        exit_code = print_yvex_error(&err, exit_for_status(rc));
-        goto cleanup_backend;
-    }
-    for (row = 0; row < seq_len; ++row) {
-        rc = block_write_f32(backend, t.row_input, k_values + (row * hidden_dim),
-                             hidden_dim, &err);
-        if (rc == YVEX_OK) {
-            rc = yvex_backend_op_rope(backend, t.row_input, row, rope_base, t.row_output, &err);
-        }
-        if (rc == YVEX_OK) {
-            rc = block_read_f32(backend, t.row_output, rope_k_values + (row * hidden_dim),
-                                hidden_dim, &err);
-        }
-        if (rc != YVEX_OK) {
-            exit_code = print_yvex_error(&err, exit_for_status(rc));
-            goto cleanup_backend;
-        }
-    }
-    rc = block_write_f32(backend, t.rope_k, rope_k_values, seq_hidden, &err);
-    if (rc == YVEX_OK) {
-        rc = yvex_backend_op_attention(backend, t.rope_q, t.rope_k, t.v, seq_len,
-                                       position, scale, causal, t.attention_scores,
-                                       t.attention_probabilities, t.attention_output, &err);
-    }
-    if (rc == YVEX_OK) rc = block_read_f32(backend, t.attention_output, attention_values, hidden_dim, &err);
-    if (rc != YVEX_OK) {
-        exit_code = print_yvex_error(&err, exit_for_status(rc));
-        goto cleanup_backend;
-    }
-
-    rc = block_write_f32(backend, t.attention_output_matrix, attention_values, hidden_dim, &err);
-    if (rc == YVEX_OK) rc = yvex_backend_op_matmul(backend, t.attention_output_matrix, t.o_weight, t.projected_attention, &err);
-    if (rc == YVEX_OK) rc = block_read_f32(backend, t.projected_attention, projected_values, hidden_dim, &err);
-    if (rc != YVEX_OK) {
-        exit_code = print_yvex_error(&err, exit_for_status(rc));
-        goto cleanup_backend;
-    }
-    block_residual_add(input_values + (position * hidden_dim), projected_values,
-                       hidden_dim, residual_values);
-    rc = block_write_f32(backend, t.residual_after_attention, residual_values, hidden_dim, &err);
-    if (rc == YVEX_OK) {
-        rc = yvex_backend_op_rms_norm(backend, t.residual_after_attention,
-                                      t.post_attn_norm_weight, epsilon,
-                                      t.post_attn_norm, &err);
-    }
-    if (rc == YVEX_OK) rc = block_read_f32(backend, t.post_attn_norm, post_norm_values, hidden_dim, &err);
-    if (rc != YVEX_OK) {
-        exit_code = print_yvex_error(&err, exit_for_status(rc));
-        goto cleanup_backend;
-    }
-
-    mlp_options.batch = 1ull;
-    mlp_options.hidden_dim = hidden_dim;
-    mlp_options.ffn_dim = ffn_dim;
-    mlp_options.activation = "silu";
-    mlp_options.gated = gated;
-    rc = yvex_backend_op_mlp(backend, t.post_attn_norm, t.mlp_gate_weight,
-                             t.mlp_up_weight, t.mlp_down_weight, &mlp_options,
-                             t.mlp_intermediate, t.mlp_output, &err);
-    if (rc == YVEX_OK) rc = block_read_f32(backend, t.mlp_output, mlp_values, hidden_dim, &err);
-    if (rc == YVEX_OK) rc = block_read_f32(backend, t.mlp_intermediate, mlp_intermediate_values, ffn_dim, &err);
-    if (rc != YVEX_OK) {
-        exit_code = print_yvex_error(&err, exit_for_status(rc));
-        goto cleanup_backend;
-    }
-    block_residual_add(residual_values, mlp_values, hidden_dim, output_values);
-    rc = block_write_f32(backend, t.block_output, output_values, hidden_dim, &err);
-    if (rc == YVEX_OK) rc = block_read_f32(backend, t.block_output, output_values, hidden_dim, &err);
-    if (rc != YVEX_OK) {
-        exit_code = print_yvex_error(&err, exit_for_status(rc));
-        goto cleanup_backend;
-    }
-
-    max_abs_diff = cli_max_abs_diff_f32(output_values, reference_values, hidden_dim);
-    exit_code = max_abs_diff <= 0.002f ? 0 : exit_for_status(YVEX_ERR_STATE);
-    sample_count = hidden_dim < 8ull ? hidden_dim : 8ull;
-
-    printf("status: graph-block\n");
-    printf("block: fixture\n");
-    printf("backend: %s\n", backend_name);
-    printf("seq_len: %llu\n", seq_len);
-    printf("position: %llu\n", position);
-    printf("hidden_dim: %llu\n", hidden_dim);
-    printf("head_dim: %llu\n", head_dim);
-    printf("ffn_dim: %llu\n", ffn_dim);
-    printf("causal: %s\n", causal ? "true" : "false");
-    printf("gated: %s\n", gated ? "true" : "false");
-    printf("phase: input\n");
-    printf("phase: attn_norm\n");
-    printf("phase: q_projection\n");
-    printf("phase: k_projection\n");
-    printf("phase: v_projection\n");
-    printf("phase: rope\n");
-    printf("phase: attention\n");
-    printf("phase: o_projection\n");
-    printf("phase: residual_attn\n");
-    printf("phase: post_attn_norm\n");
-    printf("phase: mlp\n");
-    printf("phase: residual_mlp\n");
-    printf("phase: output\n");
-    printf("input_bytes: %llu\n", seq_hidden_bytes);
-    printf("qkv_weight_bytes_each: %llu\n", hidden_hidden_bytes);
-    printf("mlp_weight_bytes: %llu\n", hidden_ffn_bytes + hidden_ffn_bytes + ffn_hidden_bytes);
-    printf("score_scratch_bytes: %llu\n", score_bytes);
-    printf("mlp_intermediate_bytes: %llu\n", ffn_bytes);
-    printf("output_bytes: %llu\n", output_bytes);
-    printf("checksum: %llu\n", cli_checksum_bytes(output_values, output_bytes));
-    printf("reference_checksum: %llu\n", cli_checksum_bytes(reference_values, output_bytes));
-    printf("max_abs_diff: %.9g\n", (double)max_abs_diff);
-    printf("phase: cleanup\n");
-    printf("cleanup: pass\n");
-    if (strcmp(backend_name, "cuda") == 0) {
-        printf("block_cuda_parity: %s\n", exit_code == 0 ? "pass" : "fail");
-    }
-    printf("sample_count: %llu\n", sample_count);
-    cli_print_float_values("output_sample_values", output_values, sample_count);
-    cli_print_float_values("reference_sample_values", reference_values, sample_count);
-    printf("execution_ready: false\n");
-    printf("generation_ready: false\n");
-    printf("generation: unsupported\n");
-
-cleanup_backend:
-    if (backend) {
-        block_free_tensors(backend, &t);
-        yvex_backend_close(backend);
-    }
-
-cleanup_host:
-    free(mlp_intermediate_values);
-    free(row_values);
-    free(reference_values);
-    free(output_values);
-    free(mlp_values);
-    free(post_norm_values);
-    free(residual_values);
-    free(projected_values);
-    free(attention_values);
-    free(rope_k_values);
-    free(rope_q_values);
-    free(v_values);
-    free(k_values);
-    free(q_values);
-    free(normalized_values);
-    free(mlp_down_values);
-    free(mlp_up_values);
-    free(mlp_gate_values);
-    free(o_weight_values);
-    free(v_weight_values);
-    free(k_weight_values);
-    free(q_weight_values);
-    free(post_attn_norm_weight_values);
-    free(attn_norm_weight_values);
-    free(input_values);
     return exit_code;
 }
 
