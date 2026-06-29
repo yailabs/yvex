@@ -51,6 +51,69 @@ and failure boundaries. They are not the whole system. Runtime code must remain
 model-family-aware, with family mapping and runtime adapters made explicit
 rather than hidden behind generic support claims.
 
+Open-weight intake doctrine:
+
+Open-weight intake starts from official source tensors and source manifests.
+YVEX-produced artifacts are downstream products of that intake path. Downloaded
+external GGUFs may be useful as reference evidence, but they cannot satisfy a
+YVEX open-weight intake, conversion, quantization, or GGUF-emission milestone.
+
+The canonical OWI chain is:
+
+```text
+official source tensors
+  -> source manifest
+  -> safetensors/native tensor inventory
+  -> family/model-class profile
+  -> tensor role mapping
+  -> quantization policy
+  -> calibration/imatrix evidence when required
+  -> YVEX conversion/quantization job
+  -> YVEX-produced GGUF
+  -> YVEX artifact identity
+  -> registry/materialization/storage/runtime reports
+```
+
+A model target is not a capability claim. It is a pressure object used to force
+parser, artifact identity, tensor inventory, qtype accounting, model-family
+mapping, storage residency, memory budget, graph requirements, and failure
+behavior.
+
+External GGUF and external runner evidence:
+
+External GGUFs and external runners are reference evidence only. They may be
+used to compare artifact size, shard layout, qtype choices, deployment
+constraints, or external runtime behavior. They are not YVEX-produced artifacts,
+not YVEX runtime execution, not YVEX generation, not YVEX benchmarks, and not
+YVEX model support.
+
+Model target doctrine:
+
+YVEX must not be validated against only one open-weight family.
+
+DeepSeek selected GGUF artifacts remain the live selected-runtime-slice pressure
+target. They force real parser, identity, selected materialization, backend
+residency, graph execution, graph guard, and cleanup boundaries over manageable
+YVEX-produced artifacts.
+
+GLM-5.2 official safetensors become the first huge-MoE source-tensor pressure
+target. GLM forces OWI to handle huge source tensor inventory, multi-shard
+safetensors, model-class profiling, MoE metadata, future quantization policy,
+future YVEX-produced GGUF emission, storage layout, and storage-stream planning.
+
+GLM-5.2 does not replace DeepSeek. GLM-5.2 does not promote execution,
+prefill, decode, logits, sampling, generation, eval, or benchmark readiness.
+
+Storage-stream doctrine:
+
+Storage streaming is a planned residency mode for artifacts whose full tensor
+set does not fit comfortably in GPU memory or system memory. It starts from
+artifact inventory, shard indexing, tensor byte-range mapping, cold/warm read
+behavior, cache policy, and staged residency. It is not generation.
+
+No storage-stream milestone may claim runtime generation until the normal
+runtime generation path reaches decode, logits, sampling, and generation.
+
 ## 3. Current Repository State
 
 ```text
@@ -63,6 +126,10 @@ canonical runtime/eval/bench root skeleton files with responsibility headers
 public headers: include/yvex/
 CUDA implementation: cuda/ with C host bridge and CUDA kernel unit
 GGUF domain and family mapping: gguf/
+multi-family official-source open-weight intake roadmap
+source-tensor-first GLM-5.2 huge-MoE pressure target
+future YVEX-produced GGUF target path
+huge-model storage-stream roadmap
 docs: docs/api.md, docs/contract.md, docs/operator-runbook.md, docs/spine.md
 public README: prose-first runtime boundary, public-safe artifact wording
 artifact docs: operator-local paths only, no personal absolute paths
@@ -123,11 +190,36 @@ materialization integrity gate
 graph execution integrity guard
 consolidated artifact integrity regression harness
 operator integrity report
+source-tensor-first model-target roadmap authority in spine
 ```
 
-Current live targets:
+Current live target classes:
 
 ```text
+selected-runtime-slice target:
+  family: DeepSeek
+  source class: YVEX-produced selected GGUF
+  purpose: force parser, identity, selected materialization, backend residency,
+           selected graph execution, graph guard, and cleanup boundaries
+  aliases:
+    deepseek4-v4-flash-selected-embed
+    deepseek4-v4-flash-selected-embed-rmsnorm
+  execution_ready: false
+
+huge-MoE source-tensor target:
+  family: GLM
+  model: GLM-5.2
+  source class: official safetensors
+  public base: zai-org/GLM-5.2
+  local source storage class: operator-local model storage
+  current operator path class: hf/glm/GLM-5.2
+  dry-run source footprint: 282 safetensors, 1.5T-class
+  immediate YVEX use: source manifest, safetensors inventory, model-class profile,
+                      future tensor mapping, future quantization policy, future
+                      YVEX-produced GGUF
+  YVEX execution_ready: false
+  YVEX generation_ready: false
+
 alias: deepseek4-v4-flash-selected-embed
 tensor: token_embd.weight
 dims: [4096,129280]
@@ -146,6 +238,19 @@ tensor_bytes: 1059069952
 CPU segment execution: pass
 CUDA segment execution: pass
 execution_ready: false
+
+GLM-5.2 target facts:
+  base model: zai-org/GLM-5.2
+  source artifact: official safetensors
+  shard count target: 282 safetensors
+  source footprint class: 1.5T
+  architecture class: huge MoE
+  immediate YVEX use: official source-tensor OWI target only
+  external GGUF evidence: reference only
+  external runner evidence: reference only
+  YVEX-produced GGUF: planned
+  YVEX inference: not implemented
+  YVEX generation: not implemented
 ```
 
 Unsupported / not advanced:
@@ -154,6 +259,18 @@ Unsupported / not advanced:
 full model execution
 full DeepSeek materialization
 full GGUF conversion
+GLM source tensor inventory completion
+GLM tensor mapping
+GLM quantization policy
+GLM YVEX-produced GGUF
+GLM runtime execution
+GLM full materialization
+GLM storage-stream execution
+SSD-backed tensor paging
+disk-backed generation
+huge-MoE generation
+external-GGUF capability attribution
+external-runner capability attribution
 full supply-chain security
 full transformer prefill
 decode
@@ -210,6 +327,27 @@ tables.
 | OWI.8 | complete | intake | Open weight conversion bridge | selected conversion planning/bridge exists |
 | OWI.9 | complete | intake | DeepSeek quantization job bridge | DeepSeek quant job bridge and validation exist |
 | OWI.FINAL.0 | complete | intake | Open-weight intake closeout | intake closeout docs, tests, and guardrails complete |
+| OWI.REBASE.0 | complete | intake | Source-tensor-first OWI target rebase | spine records official source tensors as primary OWI inputs and YVEX-produced GGUF as the target artifact class |
+| OWI.TARGETS.0 | planned | intake | Generic model target registry | model target classes, pressure targets, and non-capability target rules exist in command-visible form |
+| OWI.TARGETS.1 | planned | intake | Multi-family source manifest profile | source manifests distinguish base family, model class, source artifact class, target artifact class, qtype class, and pressure purpose |
+| OWI.TARGETS.2 | planned | intake | Multi-model artifact cards | MODEL_ARTIFACTS records DeepSeek selected targets and GLM source-tensor targets without runtime claim |
+| OWI.TARGETS.3 | planned | intake | Model target command profile | operator command reports target class, source artifact class, target artifact class, qtype class, and unsupported runtime boundary |
+| OWI.HUGE.0 | planned | intake | Huge source tensor inventory | huge safetensors shard sets are inventoried without loading full tensor payloads |
+| OWI.HUGE.1 | planned | intake | Huge safetensors shard index | safetensors shard metadata, tensor placement, offsets, and dtype distribution are indexed |
+| OWI.HUGE.2 | planned | intake | Huge-model qtype and target profile | planned quantization target, qtype policy, per-role qtype classes, and expected storage bytes are reported |
+| OWI.HUGE.3 | planned | intake | Huge-model artifact identity | shard-level file size, digest, manifest, and drift checks are implemented |
+| OWI.HUGE.4 | planned | intake | Huge-model YVEX GGUF emission plan | conversion output naming, split GGUF strategy, quant policy, and artifact identity plan exist without emitting full GLM GGUF yet |
+| STORAGE.STREAM.0 | planned | storage | Storage-stream threat and residency model | SSD-backed residency rules, cache policy, and non-generation boundaries are documented |
+| STORAGE.STREAM.1 | planned | storage | Storage path and cache layout | operator-local model cache layout separates source, YVEX-produced GGUF, external reference artifacts, derived reports, and runtime cache |
+| STORAGE.STREAM.2 | planned | storage | Shard open and cold-read probe | source shards and future GGUF shards can be opened/read from SSD with timing and cleanup reports |
+| STORAGE.STREAM.3 | planned | storage | Tensor page/chunk access plan | tensor byte ranges are mapped to page/chunk reads with overflow and bounds checks |
+| STORAGE.STREAM.4 | planned | storage | Warm cache and repeated-read diagnostics | repeated shard/tensor reads report cold/warm timing without benchmark claim |
+| STORAGE.STREAM.5 | planned | storage | Storage-backed residency prototype | selected tensors can be staged from SSD into backend memory under explicit residency rules |
+| STORAGE.STREAM.6 | planned | storage | Storage-stream failure and cleanup reports | missing shard, short read, digest mismatch, eviction, and cleanup failures are reported |
+| MODEL.CLASS.0 | planned | model | Model-class profile schema | model class, architecture family, MoE shape, source artifact class, target artifact class, context class, and runtime requirements are reported |
+| MODEL.CLASS.1 | planned | model | Huge MoE family adapter inventory | MoE metadata, expert count, active expert count, shared expert facts, and routing metadata are reported |
+| MODEL.CLASS.2 | planned | model | Runtime requirement report | required ops, tensor roles, KV shape, cache pressure, and unsupported execution blockers are visible |
+| MODEL.CLASS.3 | planned | model | GLM-family mapping boundary | GLM tensor names and architecture metadata map to YVEX roles without execution claim |
 | ARTIFACT.NAMING.0 | complete | artifact | GGUF artifact naming contract | canonical artifact alias/name rules implemented |
 | RUNTIME.KV.0 | complete | kv-policy | KV cache policy | KV policy documented without runtime claim |
 | M1 | complete | runtime | Real model conversion/materialization gate | selected real artifact gate and materialization proof exists |
@@ -371,7 +509,23 @@ tables.
 ## 6. Dependency Map
 
 ```text
-artifact/source evidence
+open-weight source evidence track:
+  official source tensors
+  -> source manifest
+  -> model target class
+  -> source artifact class
+  -> target artifact class
+  -> safetensors/native tensor inventory
+  -> artifact identity
+  -> tensor inventory
+  -> model-family mapping
+  -> quantization policy
+  -> YVEX-produced GGUF plan
+  -> YVEX-produced GGUF
+  -> artifact identity and registry
+
+selected runtime slice track:
+  YVEX-produced selected GGUF
   -> artifact identity/integrity
   -> selected/full model tensor mapping
   -> materialization/backend residency
@@ -381,7 +535,9 @@ artifact/source evidence
   -> graph op expansion
   -> first transformer block
   -> layer scheduler
-  -> token input
+
+runtime generation track:
+  token input
   -> prefill state foundation
   -> minimal KV ownership
   -> minimal KV-backed prefill binding
@@ -394,7 +550,29 @@ artifact/source evidence
   -> CLI generation
   -> provider generation
   -> eval/bench/profile hardening
+
+storage-stream track:
+  huge source tensor identity
+  -> source shard index
+  -> target GGUF split plan
+  -> future GGUF shard identity
+  -> qtype distribution
+  -> tensor byte-range map
+  -> cold read probe
+  -> warm read probe
+  -> page/chunk access plan
+  -> storage-backed residency prototype
+  -> storage-stream failure reports
+  -> future runtime integration
 ```
+
+The storage-stream track is allowed to advance before generation because it is
+artifact, source, conversion, and residency work. It cannot claim runtime
+generation until the normal runtime generation track reaches decode, logits,
+sampling, and generation.
+
+The GLM track begins from official safetensors. External GGUFs are reference
+evidence only and do not satisfy the YVEX-produced GGUF path.
 
 M8 is not the final prefill path. It is the first prefill-state foundation.
 PREFILL.1 binds that foundation to minimal session-owned KV state, but it does
@@ -459,18 +637,95 @@ context, and reproducibility note.
 Metal and ROCm rows are feasibility lanes only. They do not claim implemented
 backend support.
 
+## Model Target Classes
+
+YVEX target classes:
+
+```text
+selected-runtime-slice:
+  a small executable or materializable slice of a real YVEX-produced artifact
+  used to prove parser, materialization, backend, graph, reference, and cleanup
+  behavior.
+
+official-source-huge-model:
+  official upstream source tensors used to force source manifest, native tensor
+  inventory, model-class profiling, tensor mapping, quantization policy, and
+  future YVEX-produced artifacts.
+
+full-runtime-model:
+  a complete tensor set required for transformer prefill, decode, logits, and
+  generation. This class is planned and not implemented.
+
+huge-model-storage-stream:
+  a model whose source or target artifact footprint forces shard inventory,
+  qtype profiling, storage layout, cold/warm access, page/chunk planning, and
+  staged residency before runtime execution can be claimed.
+
+external-GGUF-reference:
+  an external GGUF used only to compare artifact layout, qtype choice, or
+  external runner behavior. It is never a YVEX-produced artifact.
+
+external-runner-reference:
+  an external run used to compare deployment constraints or runtime behavior.
+  It is never a YVEX runtime capability claim.
+
+Current target assignments:
+  DeepSeek selected embed: selected-runtime-slice
+  DeepSeek selected embed + RMSNorm: selected-runtime-slice
+  GLM-5.2 official safetensors: official-source-huge-model
+  GLM-5.2 future YVEX-produced GGUF: huge-model-storage-stream
+  External GLM GGUFs: external-GGUF-reference only
+```
+
+## Operator-local Artifact Storage
+
+Large model files must live outside the repository.
+
+Current Spark operator-local layout:
+
+```text
+source weights:
+  ~/lab/models/hf/<family>/<model>/
+
+YVEX-produced GGUF:
+  ~/lab/models/gguf/<family>/
+
+external reference artifacts:
+  ~/lab/models/reference/<family>/
+
+generated reports:
+  ~/lab/models/reports/<family>/
+```
+
+The spine records this as operator-local model storage. Public docs must not
+depend on these personal paths.
+
+No `.safetensors`, `.bin`, `.dat`, or real `.gguf` shard may be committed.
+Tiny synthetic GGUF fixtures in tests are the only exception.
+
 ## 7. Active Next
+
+```text
+OWI.TARGETS.0 - Generic model target registry
+```
+
+The immediate implementation path returns to open-weight intake while GLM-5.2
+official safetensors download into operator-local storage. This does not cancel
+the runtime ladder. Runtime work continues on the DeepSeek selected GGUF path,
+and the runtime active next remains GRAPH.BLOCK.0.
+
+Runtime active next:
 
 ```text
 GRAPH.BLOCK.0 - First transformer block execution
 ```
 
-Next implementation: GRAPH.BLOCK.0. It must compose the implemented standalone
-graph operation boundaries into a first transformer-block execution proof with
-explicit tensor roles, residual/state ownership, scratch/output lifecycle,
-dispatch, reference comparison, failure paths, and cleanup behavior. It must
-not claim layer scheduling, full transformer prefill, decode, logits, sampling,
-generation, server generation, evaluation, or benchmark readiness.
+GRAPH.BLOCK.0 must compose the implemented standalone graph operation
+boundaries into a first transformer-block execution proof with explicit tensor
+roles, residual/state ownership, scratch/output lifecycle, dispatch, reference
+comparison, failure paths, and cleanup behavior. It must not claim layer
+scheduling, full transformer prefill, decode, logits, sampling, generation,
+server generation, evaluation, or benchmark readiness.
 
 After PREFILL.1, the next runtime work is not automatically decode. The spine
 expects graph/layer expansion rows to determine whether decode can run over
@@ -567,6 +822,35 @@ grep -nF 'BACKEND.METAL.0' docs/spine.md
 grep -nF 'BACKEND.ROCM.0' docs/spine.md
 ```
 
+Source-tensor OWI spine proof:
+
+```sh
+grep -nF 'OWI.REBASE.0' docs/spine.md
+grep -nF 'official source tensors' docs/spine.md
+grep -nF 'YVEX-produced GGUF' docs/spine.md
+grep -nF 'GLM-5.2 official safetensors' docs/spine.md
+grep -nF 'official-source-huge-model' docs/spine.md
+grep -nF 'external-GGUF-reference' docs/spine.md
+grep -nF 'OWI.TARGETS.0' docs/spine.md
+grep -nF 'OWI.HUGE.0' docs/spine.md
+grep -nF 'STORAGE.STREAM.0' docs/spine.md
+grep -nF 'MODEL.CLASS.0' docs/spine.md
+grep -nF 'GRAPH.BLOCK.0 - First transformer block execution' docs/spine.md
+
+pattern='external GGUF satisfies OW''I'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+pattern='GLM runtime execution: imple''mented'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+pattern='GLM generation: imple''mented'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+pattern='storage-stream generation: imple''mented'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+pattern='disk-backed generation: imple''mented'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+pattern='YVEX GLM bench''mark'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+```
+
 Additional guardrails:
 
 ```text
@@ -582,6 +866,24 @@ no runtime file change for spine-only rebases
 ## 9. Non-Negotiable Rules
 
 - No support claim without code, tests, and command proof.
+- Official source tensors are the primary OWI input.
+- YVEX-produced GGUF is the primary OWI output artifact.
+- External GGUFs may be recorded only as reference evidence.
+- No external GGUF may satisfy a YVEX conversion, quantization, GGUF emission,
+  runtime, eval, or benchmark milestone.
+- No external runner result may be presented as YVEX runtime execution.
+- No GLM runtime claim before YVEX maps the GLM family, required tensor roles,
+  qtype profile, graph requirements, KV requirements, decode requirements, and
+  logits path.
+- No huge-model benchmark claim before YVEX implements the measured
+  storage/runtime path and records artifact identity, qtype, context, backend,
+  machine, command, and reproducibility metadata.
+- No SSD-streaming claim before shard index, tensor byte-range mapping,
+  cold/warm read probes, cache policy, and failure/cleanup reports exist.
+- No generated GLM artifacts in git.
+- No downloaded model source or GGUF shard in git.
+- GLM source-tensor work belongs to open-weight intake, model class, and
+  storage-stream tracks until the runtime path can consume it.
 - No generated model artifacts in git.
 - No personal absolute artifact paths in public docs.
 - No internal delivery IDs outside `docs/spine.md`.
@@ -632,5 +934,7 @@ no runtime file change for spine-only rebases
   estimator, spill, or quantization behavior exists in code and tests.
 - No docs sprawl beyond `docs/api.md`, `docs/contract.md`,
   `docs/operator-runbook.md`, and `docs/spine.md`.
-- Keep DeepSeek as the active live model target unless this spine changes.
+- Keep DeepSeek as the selected-runtime-slice pressure target and GLM-5.2
+  official safetensors as the huge-model source-tensor pressure target unless
+  this spine changes.
 - Keep Qwen as historical validation evidence unless this spine changes.
