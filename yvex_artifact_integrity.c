@@ -1,9 +1,9 @@
 /*
- * yvex_artifact_integrity.c - Baseline GGUF artifact integrity checks.
+ * yvex_artifact_integrity.c - Local artifact integrity and refusal reports.
  *
- * This module validates local GGUF structure before payload-reading runtime
- * paths trust tensor ranges. It is intentionally narrower than provenance or
- * supply-chain security.
+ * This file owns structural GGUF validation, tensor range validation, shape,
+ * dtype, and byte-count checks, file identity diagnostics, and integrity report
+ * construction. It does not claim supply-chain security.
  */
 
 #include <yvex/artifact_integrity.h>

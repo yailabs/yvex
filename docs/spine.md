@@ -56,7 +56,9 @@ rather than hidden behind generic support claims.
 ```text
 root-first C source layout
 native root binaries: ./yvex and ./yvexd
-single CLI adapter in yvex_cli.c; command behavior owned by domain modules
+single top-level CLI adapter in yvex_cli.c
+domain-owned command/help entrypoints in runtime, graph, artifact, model, GGUF, tokenizer, prefill, KV, backend, CUDA, source, eval, and bench owners
+no private CLI command forest
 canonical runtime/eval/bench root skeleton files with responsibility headers
 public headers: include/yvex/
 CUDA implementation: cuda/ with C host bridge and CUDA kernel unit
@@ -218,6 +220,7 @@ tables.
 | CLI.SURFACE.0 | complete | cli | CLI translation unit split | top-level dispatch separated from private command catalog and command/proof implementations |
 | CLI.SURFACE.1 | complete | cli | CLI command monolith domain split | private CLI command implementation split into common, graph, models, artifacts, tools, and run domains |
 | CLI.SURFACE.2 | complete | cli/layout | CLI surface compression | only yvex_cli.c remains as CLI-prefixed source; command/proof logic promoted to domain owners |
+| CLI.SURFACE.3 | complete | cli/layout | Domain-owned CLI help and command extraction | yvex_cli.c contains only short command table and dispatch; detailed help and command behavior live in domain owners; command split files are removed |
 | CLI.MODELS.0 | complete | cli | Local model selection spine | model selection design and registry shape established |
 | CLI.MODELS.1 | complete | cli | Local model registry implementation | local model registry add/list/use/current/remove works |
 | CLI.MODELS.2 | complete | cli | One-shot model alias resolution | model-taking commands resolve aliases or paths |

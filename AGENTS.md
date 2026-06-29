@@ -118,27 +118,44 @@ fixtures only.
 
 ## Source Ownership
 
-Do not create a new root source file for a delivery unless `docs/spine.md`
-explicitly adds a new ownership domain. Prefer the canonical owner listed here:
+Do not create new root source files during a delivery unless the spine first
+adds a new ownership domain.
+
+Do not create `*_commands.c` files.
+
+Do not create `yvex_cli_*` files.
+
+Do not create a private command catalog header.
+
+`yvex_cli.c` owns only top-level CLI command lookup, short command listing,
+top-level help, and argv dispatch. It does not own domain help text, runtime
+helpers, model/artifact context helpers, graph probes, proof references,
+materialization reports, registry behavior, conversion behavior, eval behavior,
+or benchmark behavior.
+
+Detailed command help and command behavior live in the domain module that owns
+the underlying capability.
 
 ```text
-yvex_cli.c: top-level CLI grammar, help, dispatch, and small shared adapters
-yvexd.c: daemon entrypoint only
+yvex_cli.c: top-level CLI lookup, short help, command dispatch
+yvexd.c: daemon entrypoint
 yvex_server.c: daemon/server behavior and provider boundary
-yvex_runtime.c: runtime coordination not owned by graph/model/backend/session-specific modules
-yvex_graph.c: graph construction, graph execution proofs, op probes, references, graph reports
-yvex_backend.c: backend abstraction and CPU backend ownership
-cuda/: CUDA backend, kernels, tensor movement, CUDA op implementations
-yvex_model.c: model descriptors, model-family runtime facts, registry-facing model behavior
-yvex_model_artifacts.c: model artifact cards, selected/full artifact status, model gates
-yvex_artifact*.c: artifact IO, identity, integrity, range/shape/dtype validation
-gguf/: GGUF parsing, conversion, quant/intake tooling internals
+yvex_runtime.c: runtime coordination and runtime operator commands not owned by more specific modules
+yvex_graph.c: graph construction, graph execution proofs, op probes, references, graph reports, graph help
+yvex_backend.c: backend abstraction, CPU backend command, backend reports
+cuda/: CUDA backend, CUDA info command, kernels, tensor movement, CUDA op implementations
+yvex_model.c: model descriptors, model registry behavior, model command/help
+yvex_model_artifacts.c: model artifact status, model gates, selected/full artifact reports
+yvex_artifact.c: artifact IO, inspect/metadata/tensor command surfaces
+yvex_artifact_identity.c: artifact identity and digest behavior
+yvex_artifact_integrity.c: artifact integrity checks, integrity command/help, corruption/refusal reports
+gguf/: GGUF parsing, GGUF tooling, conversion, quant/intake internals
 yvex_source.c: source manifests and open-weight provenance
-yvex_tokenizer.c: tokenizer metadata and fixture encode/decode
-yvex_token_input.c: explicit token/prompt input validation
-yvex_prefill.c: prefill state creation and prefill reports
-yvex_kv.c: KV shape, ownership, append/read, lifecycle, capacity diagnostics
-yvex_decode.c: decode step over existing KV-backed transformer state
+yvex_tokenizer.c: tokenizer metadata, tokenize/detokenize/prompt command surfaces
+yvex_token_input.c: explicit token/prompt input validation and input command
+yvex_prefill.c: prefill state creation, prefill command/help, prefill reports
+yvex_kv.c: KV shape, ownership, append/read, lifecycle, capacity diagnostics, KV command/help
+yvex_decode.c: decode step boundary over existing KV-backed transformer state
 yvex_logits.c: logits buffer ownership and diagnostics
 yvex_sampling.c: deterministic and stochastic sampling over logits
 yvex_generation.c: generation loop integrating decode, logits, and sampling
@@ -146,16 +163,12 @@ yvex_eval.c: eval harness after runtime generation exists
 yvex_bench.c: reproducible runtime benchmark harness after measured paths exist
 yvex_metrics.c: metrics and trace/profile counters
 yvex_profile.c: profile output and runtime profile documents
-yvex_chat.c: interactive accepted-only or future runtime-backed REPL shell
+yvex_chat.c: interactive diagnostic console and future runtime-backed REPL shell
 ```
 
-Domain `*_commands.c` files are argv/output adapters for `./yvex` only. They
-must not become hidden owners of runtime state, graph behavior, artifact
-validation, registry semantics, eval logic, or benchmark logic.
-
-No `yvex_cli_*.c` or `yvex_cli_*.h` files. No command/proof logic may be hidden
-in a file named runtime just because it is convenient. No eval or benchmark
-claim may be introduced by creating skeleton files.
+A delivery that adds command behavior to `yvex_cli.c` fails review. A delivery
+that adds long command usage strings to `yvex_cli.c` fails review. A delivery
+that adds a new `*_commands.c` file fails review.
 
 ## Work Rules
 

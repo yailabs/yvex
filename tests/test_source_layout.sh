@@ -48,8 +48,28 @@ test -d docs
 test -d tests
 test -d tests/vectors
 
-if find . -maxdepth 1 \( -name 'yvex_cli_*.c' -o -name 'yvex_cli_*.h' \) -print | grep .; then
-  echo "private CLI-prefixed source files are not allowed"
+bad_command_files="$(
+  find . -maxdepth 2 \
+    \( -name 'yvex_cli_*.c' \
+       -o -name 'yvex_cli_*.h' \
+       -o -name 'yvex_*_commands.c' \
+       -o -name 'commands.c' \
+       -o -name 'yvex_command_private.h' \) \
+    -print
+)"
+if [ -n "$bad_command_files" ]; then
+  echo "$bad_command_files"
+  echo "unexpected command/CLI split files"
+  exit 1
+fi
+
+if grep -nE 'FILE_OR_ALIAS|--execute-op|--execute-fixture|--execute-partial|--execute-segment|--attach-kv|--expect-sha256|--native-source|standalone F32|standalone RoPE|DeepSeek|GGUF descriptor' yvex_cli.c; then
+  echo "long command catalog text must not live in yvex_cli.c"
+  exit 1
+fi
+
+if grep -nE 'open_artifact_for_gguf|open_model_context|open_tokenizer_context|close_model_context|close_tokenizer_context|print_quoted_bytes|print_tensor_dims|print_native_dims|parse_id_list|parse_positive_ull|parse_ull_allow_zero|parse_uint_allow_zero|parse_dims_csv' yvex_cli.c; then
+  echo "shared command helpers must not live in yvex_cli.c"
   exit 1
 fi
 
@@ -58,9 +78,15 @@ if grep -E 'cli_rope_reference|cli_attention_reference|cli_matmul_reference|cli_
   exit 1
 fi
 
+cli_lines="$(wc -l < yvex_cli.c)"
+if [ "$cli_lines" -gt 260 ]; then
+  echo "yvex_cli.c is too large: $cli_lines lines"
+  exit 1
+fi
+
 root_c_count="$(find . -maxdepth 1 -type f -name 'yvex*.c' | wc -l | tr -d ' ')"
 
-if [ "$root_c_count" -gt 31 ]; then
+if [ "$root_c_count" -gt 27 ]; then
   echo "too many root C files: $root_c_count"
   exit 1
 fi

@@ -73,4 +73,34 @@ END {
 
 test ! -f yvex_internal.h
 
+awk '
+FNR == 1 {
+    in_header = 0
+    checked = 0
+}
+FNR <= 24 && checked == 0 {
+    if ($0 ~ /^[[:space:]]*\/\*/) {
+        in_header = 1
+    }
+    if (in_header && $0 ~ /command implementations|helper functions|miscellaneous|glue|stuff|TODO|future implementation goes here|placeholder/) {
+        print FILENAME ":" FNR ": vague file header text"
+        bad = 1
+    }
+    if (in_header && $0 ~ /\*\//) {
+        checked = 1
+        in_header = 0
+    }
+}
+END {
+    exit bad ? 1 : 0
+}
+' \
+  $impl_files
+
+if grep -nE 'implemented|ready|supports generation|benchmark result|token/sec|evaluation suite implemented|decode implemented|sampling implemented|generation implemented' \
+    yvex_decode.c yvex_logits.c yvex_sampling.c yvex_generation.c yvex_eval.c yvex_bench.c; then
+  echo "future boundary files must not claim runtime readiness"
+  exit 1
+fi
+
 echo "code naturalness: ok"

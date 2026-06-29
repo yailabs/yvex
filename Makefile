@@ -257,14 +257,9 @@ $(CUDA_PTX_OBJ): $(CUDA_PTX_C)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 YVEX_CLI_SRCS := \
-	yvex_cli.c \
-	yvex_graph_commands.c \
-	yvex_model_commands.c \
-	yvex_artifact_commands.c \
-	yvex_runtime_commands.c \
-	gguf/commands.c
+	yvex_cli.c
 
-$(YVEX_BIN): $(YVEX_CLI_SRCS) yvex_command_private.h $(LIBYVEX)
+$(YVEX_BIN): $(YVEX_CLI_SRCS) $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(YVEX_CLI_SRCS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
