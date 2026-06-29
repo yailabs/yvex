@@ -111,6 +111,13 @@ bad_command_files="$(
        -o -name 'yvex_model_prepare_private.h' \
        -o -path './include/yvex/prepare.h' \
        -o -path './include/yvex/model_prepare.h' \
+       -o -name 'yvex_model_check.c' \
+       -o -name 'models_check.c' \
+       -o -name 'model_check.c' \
+       -o -name 'check.c' \
+       -o -name 'yvex_check.c' \
+       -o -name 'yvex_model_check_private.h' \
+       -o -path './include/yvex/model_check.h' \
        -o -name 'yvex_runtime_cli_backend.c' \
        -o -name 'yvex_runtime_cli_tokenizer.c' \
        -o -name 'yvex_runtime_cli_paths.c' \

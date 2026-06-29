@@ -161,6 +161,30 @@ pattern='prepare runs gr''aph'
 scan_forbidden_claim "$pattern"
 pattern='prepare starts ser''ver'
 scan_forbidden_claim "$pattern"
+pattern='prepare runs ch''at'
+scan_forbidden_claim "$pattern"
+pattern='prepare dec''odes'
+scan_forbidden_claim "$pattern"
+pattern='prepare produces log''its'
+scan_forbidden_claim "$pattern"
+pattern='prepare sam''ples'
+scan_forbidden_claim "$pattern"
+pattern='prepare gener''ates'
+scan_forbidden_claim "$pattern"
+pattern='prepare bench''marks'
+scan_forbidden_claim "$pattern"
+pattern='check material''izes as generation'
+scan_forbidden_claim "$pattern"
+pattern='check runs gr''aph as generation'
+scan_forbidden_claim "$pattern"
+pattern='check produces log''its'
+scan_forbidden_claim "$pattern"
+pattern='check gener''ates'
+scan_forbidden_claim "$pattern"
+pattern='20 tok/s achie''ved'
+scan_forbidden_claim "$pattern"
+pattern='DSpark par''ity'
+scan_forbidden_claim "$pattern"
 pattern='generation_rea''dy: true'
 scan_forbidden_claim "$pattern"
 pattern='inference_rea''dy: true'
@@ -185,7 +209,7 @@ pattern='target paths inspect GG''UF'
 scan_forbidden_claim "$pattern"
 
 if grep -nE '\b(system|popen|execl|execv|fork)[[:space:]]*\(' yvex_model_artifacts.c; then
-  echo "models prepare must not shell out"
+  echo "models prepare/check must not shell out"
   exit 1
 fi
 

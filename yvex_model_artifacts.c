@@ -3393,6 +3393,998 @@ static int command_models_prepare(int argc, char **argv)
     return 0;
 }
 
+typedef enum {
+    YVEX_CLI_MODEL_CHECK_QUICK = 0,
+    YVEX_CLI_MODEL_CHECK_RUNTIME,
+    YVEX_CLI_MODEL_CHECK_FULL
+} yvex_cli_model_check_level;
+
+typedef struct {
+    const char *target;
+    const char *backend_name;
+    const char *level_name;
+    const char *models_root;
+    const char *registry_path;
+    const char *report_dir;
+    int no_materialize;
+    int no_graph;
+    yvex_cli_model_check_level level;
+} yvex_cli_models_check_options;
+
+typedef struct {
+    char target_id[256];
+    char model_input_kind[32];
+    char backend_name[16];
+    char level_name[16];
+    char artifact_path[YVEX_PATH_CAP];
+    char registry_path[YVEX_PATH_CAP];
+    char report_path[YVEX_PATH_CAP];
+    char error[256];
+    char graph_skip_reason[128];
+    const char *stage_resolve_target;
+    const char *stage_resolve_artifact;
+    const char *stage_inspect;
+    const char *stage_tensors;
+    const char *stage_metadata;
+    const char *stage_registry_identity;
+    const char *stage_integrity_check;
+    const char *stage_integrity_report;
+    const char *stage_materialize;
+    const char *stage_engine;
+    const char *stage_session;
+    const char *stage_plan;
+    const char *stage_graph_partial;
+    const char *stage_model_gate;
+    const char *stage_materialize_gate;
+    const char *runtime_execution;
+    const char *final_status;
+} yvex_cli_model_check_report;
+
+static void model_check_report_init(yvex_cli_model_check_report *report,
+                                    const yvex_cli_models_check_options *options)
+{
+    memset(report, 0, sizeof(*report));
+    snprintf(report->target_id, sizeof(report->target_id), "%s",
+             options->target ? options->target : "");
+    snprintf(report->backend_name, sizeof(report->backend_name), "%s",
+             options->backend_name ? options->backend_name : "cpu");
+    snprintf(report->level_name, sizeof(report->level_name), "%s",
+             options->level_name ? options->level_name : "quick");
+    snprintf(report->model_input_kind, sizeof(report->model_input_kind), "unknown");
+    report->stage_resolve_target = "not-run";
+    report->stage_resolve_artifact = "not-run";
+    report->stage_inspect = "not-run";
+    report->stage_tensors = "not-run";
+    report->stage_metadata = "not-run";
+    report->stage_registry_identity = "skipped";
+    report->stage_integrity_check = "not-run";
+    report->stage_integrity_report = "skipped";
+    report->stage_materialize = "skipped";
+    report->stage_engine = "skipped";
+    report->stage_session = "skipped";
+    report->stage_plan = "skipped";
+    report->stage_graph_partial = "skipped";
+    report->stage_model_gate = "skipped";
+    report->stage_materialize_gate = "skipped";
+    report->runtime_execution = "not-performed";
+    report->final_status = "model-check-fail";
+}
+
+static void model_check_report_print(FILE *fp,
+                                     const yvex_cli_model_check_report *report)
+{
+    fprintf(fp, "status: model-check\n");
+    fprintf(fp, "target_id: %s\n", report->target_id);
+    fprintf(fp, "model_input_kind: %s\n", report->model_input_kind);
+    fprintf(fp, "backend: %s\n", report->backend_name);
+    fprintf(fp, "level: %s\n", report->level_name);
+    fprintf(fp, "artifact_path: %s\n", report->artifact_path);
+    fprintf(fp, "registry_path: %s\n", report->registry_path);
+    if (report->report_path[0]) {
+        fprintf(fp, "report_path: %s\n", report->report_path);
+    }
+    fprintf(fp, "stage: resolve-target %s\n", report->stage_resolve_target);
+    fprintf(fp, "stage: resolve-artifact %s\n", report->stage_resolve_artifact);
+    fprintf(fp, "stage: inspect %s\n", report->stage_inspect);
+    fprintf(fp, "stage: tensors %s\n", report->stage_tensors);
+    fprintf(fp, "stage: metadata %s\n", report->stage_metadata);
+    fprintf(fp, "stage: registry-identity %s\n", report->stage_registry_identity);
+    fprintf(fp, "stage: integrity-check %s\n", report->stage_integrity_check);
+    fprintf(fp, "stage: integrity-report %s\n", report->stage_integrity_report);
+    fprintf(fp, "stage: materialize %s\n", report->stage_materialize);
+    fprintf(fp, "stage: engine %s\n", report->stage_engine);
+    fprintf(fp, "stage: session %s\n", report->stage_session);
+    fprintf(fp, "stage: plan %s\n", report->stage_plan);
+    fprintf(fp, "stage: graph-partial %s\n", report->stage_graph_partial);
+    if (report->graph_skip_reason[0]) {
+        fprintf(fp, "graph_partial_reason: %s\n", report->graph_skip_reason);
+    }
+    fprintf(fp, "stage: model-gate %s\n", report->stage_model_gate);
+    fprintf(fp, "stage: materialize-gate %s\n", report->stage_materialize_gate);
+    if (report->error[0]) {
+        fprintf(fp, "error: %s\n", report->error);
+    }
+    fprintf(fp, "runtime_execution: %s\n", report->runtime_execution);
+    fprintf(fp, "execution_ready: false\n");
+    fprintf(fp, "graph_execution_ready: false\n");
+    fprintf(fp, "prefill_ready: false\n");
+    fprintf(fp, "logits_ready: false\n");
+    fprintf(fp, "generation: unsupported\n");
+    fprintf(fp, "status: %s\n", report->final_status);
+}
+
+static int model_check_write_report(const yvex_cli_models_check_options *options,
+                                    yvex_cli_model_check_report *report,
+                                    yvex_error *err)
+{
+    FILE *fp;
+    char report_dir[YVEX_PATH_CAP];
+    char report_name[128];
+    int rc;
+    int n;
+
+    if (!options->report_dir) {
+        return YVEX_OK;
+    }
+    rc = expand_operator_path(options->report_dir, report_dir, sizeof(report_dir),
+                              err, "models_check");
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    n = snprintf(report_name, sizeof(report_name),
+                 "model-check-deepseek4-v4-flash-selected-embed-%s-%s.txt",
+                 report->backend_name, report->level_name);
+    if (n < 0 || (size_t)n >= sizeof(report_name)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "models_check", "report filename is too long");
+        return YVEX_ERR_BOUNDS;
+    }
+    rc = path_join2(report->report_path, sizeof(report->report_path),
+                    report_dir, report_name, err, "models_check");
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = yvex_model_registry_mkdir_parent(report->report_path, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    fp = fopen(report->report_path, "w");
+    if (!fp) {
+        yvex_error_setf(err, YVEX_ERR_IO, "models_check",
+                        "failed to open report: %s", report->report_path);
+        return YVEX_ERR_IO;
+    }
+    model_check_report_print(fp, report);
+    if (fclose(fp) != 0) {
+        yvex_error_setf(err, YVEX_ERR_IO, "models_check",
+                        "failed to close report: %s", report->report_path);
+        return YVEX_ERR_IO;
+    }
+    return YVEX_OK;
+}
+
+static int parse_models_check_options(int argc,
+                                      char **argv,
+                                      yvex_cli_models_check_options *options)
+{
+    int i;
+
+    memset(options, 0, sizeof(*options));
+    options->backend_name = "cpu";
+    options->level_name = "quick";
+    options->level = YVEX_CLI_MODEL_CHECK_QUICK;
+    if (argc < 4) {
+        fprintf(stderr, "yvex: models check requires TARGET\n");
+        return 2;
+    }
+    options->target = argv[3];
+    if (!cli_arg_value_valid(options->target)) {
+        fprintf(stderr, "yvex: models check target is empty or invalid\n");
+        return 2;
+    }
+    for (i = 4; i < argc; ++i) {
+        if (strcmp(argv[i], "--no-materialize") == 0) {
+            options->no_materialize = 1;
+        } else if (strcmp(argv[i], "--no-graph") == 0) {
+            options->no_graph = 1;
+        } else if (strcmp(argv[i], "--backend") == 0 ||
+                   strcmp(argv[i], "--level") == 0 ||
+                   strcmp(argv[i], "--models-root") == 0 ||
+                   strcmp(argv[i], "--registry") == 0 ||
+                   strcmp(argv[i], "--report-dir") == 0) {
+            const char *flag = argv[i];
+            const char *value;
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: models check %s requires a value\n", flag);
+                return 2;
+            }
+            value = argv[++i];
+            if (!cli_arg_value_valid(value)) {
+                fprintf(stderr, "yvex: models check %s value is empty or invalid\n", flag);
+                return 2;
+            }
+            if (strcmp(flag, "--backend") == 0) {
+                options->backend_name = value;
+            } else if (strcmp(flag, "--level") == 0) {
+                options->level_name = value;
+            } else if (strcmp(flag, "--models-root") == 0) {
+                options->models_root = value;
+            } else if (strcmp(flag, "--registry") == 0) {
+                options->registry_path = value;
+            } else {
+                options->report_dir = value;
+            }
+        } else if (argv[i][0] == '-') {
+            fprintf(stderr, "yvex: unknown models check option: %s\n", argv[i]);
+            return 2;
+        } else {
+            fprintf(stderr, "yvex: models check accepts only one TARGET\n");
+            return 2;
+        }
+    }
+    if (strcmp(options->backend_name, "cpu") != 0 &&
+        strcmp(options->backend_name, "cuda") != 0) {
+        fprintf(stderr, "yvex: unknown backend kind: %s\n", options->backend_name);
+        return 2;
+    }
+    if (strcmp(options->level_name, "quick") == 0) {
+        options->level = YVEX_CLI_MODEL_CHECK_QUICK;
+    } else if (strcmp(options->level_name, "runtime") == 0) {
+        options->level = YVEX_CLI_MODEL_CHECK_RUNTIME;
+    } else if (strcmp(options->level_name, "full") == 0) {
+        options->level = YVEX_CLI_MODEL_CHECK_FULL;
+    } else {
+        fprintf(stderr, "yvex: unknown models check level: %s\n", options->level_name);
+        return 2;
+    }
+    return 0;
+}
+
+static int print_model_check_unsupported(const char *target)
+{
+    printf("status: model-check-unsupported\n");
+    printf("target_id: %s\n", target);
+    if (strcmp(target, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0) {
+        printf("reason: segment check is planned, not implemented by this preset\n");
+    } else {
+        printf("reason: source-only target cannot be checked as a YVEX-produced runtime artifact yet\n");
+    }
+    printf("runtime_execution: unsupported\n");
+    printf("generation: unsupported\n");
+    return exit_for_status(YVEX_ERR_UNSUPPORTED);
+}
+
+static int model_check_resolve_registry_path(const yvex_cli_models_check_options *options,
+                                             char *registry_path,
+                                             size_t registry_path_cap,
+                                             yvex_error *err)
+{
+    if (options->registry_path) {
+        return expand_operator_path(options->registry_path, registry_path,
+                                    registry_path_cap, err, "models_check");
+    }
+    return yvex_model_registry_default_path(registry_path,
+                                            (unsigned long long)registry_path_cap,
+                                            err);
+}
+
+static int model_check_resolve_canonical_path(
+    const yvex_cli_models_check_options *options,
+    yvex_model_ref *ref,
+    yvex_cli_model_check_report *report,
+    yvex_error *err)
+{
+    static const char *artifact_name =
+        "deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf";
+    yvex_paths paths;
+    yvex_operator_paths operator_paths;
+    char gguf_dir[YVEX_PATH_CAP];
+    char artifact_path[YVEX_PATH_CAP];
+    int exists = 0;
+    int rc;
+
+    memset(&paths, 0, sizeof(paths));
+    memset(&operator_paths, 0, sizeof(operator_paths));
+    rc = yvex_operator_paths_resolve(&paths, options->models_root, &operator_paths, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = yvex_operator_paths_resolve_target(&operator_paths, "deepseek", "gguf",
+                                            gguf_dir, sizeof(gguf_dir), &exists, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = path_join2(artifact_path, sizeof(artifact_path), gguf_dir, artifact_name,
+                    err, "models_check");
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (!path_exists(artifact_path)) {
+        yvex_error_setf(err, YVEX_ERR_IO, "models_check",
+                        "canonical selected artifact does not exist: %s",
+                        artifact_path);
+        return YVEX_ERR_IO;
+    }
+    rc = set_path_ref(ref, artifact_path, err);
+    if (rc == YVEX_OK) {
+        snprintf(report->model_input_kind, sizeof(report->model_input_kind), "target");
+    }
+    return rc;
+}
+
+static int model_check_resolve_ref(const yvex_cli_models_check_options *options,
+                                   const char *registry_path,
+                                   yvex_model_ref *ref,
+                                   yvex_cli_model_check_report *report,
+                                   yvex_error *err)
+{
+    yvex_model_ref_options ref_options;
+    int rc;
+
+    if (options->models_root &&
+        strcmp(options->target, "deepseek4-v4-flash-selected-embed") == 0 &&
+        !is_path_like_reference(options->target)) {
+        return model_check_resolve_canonical_path(options, ref, report, err);
+    }
+
+    memset(&ref_options, 0, sizeof(ref_options));
+    ref_options.registry_path = registry_path;
+    ref_options.allow_registry = 1;
+    rc = yvex_model_ref_resolve(ref, options->target, &ref_options, err);
+    if (rc == YVEX_OK) {
+        if (is_path_like_reference(options->target)) {
+            snprintf(report->model_input_kind, sizeof(report->model_input_kind), "path");
+        } else if (strcmp(options->target, "deepseek4-v4-flash-selected-embed") == 0) {
+            snprintf(report->model_input_kind, sizeof(report->model_input_kind), "target");
+        } else {
+            snprintf(report->model_input_kind, sizeof(report->model_input_kind), "alias");
+        }
+        return YVEX_OK;
+    }
+    if (strcmp(options->target, "deepseek4-v4-flash-selected-embed") == 0) {
+        yvex_error_clear(err);
+        yvex_model_ref_clear(ref);
+        return model_check_resolve_canonical_path(options, ref, report, err);
+    }
+    return rc;
+}
+
+static int model_check_verify_registry_identity(const yvex_model_ref *ref,
+                                                yvex_error *err)
+{
+    yvex_artifact_file_identity identity;
+    yvex_cli_metadata_snapshot current_metadata;
+    yvex_model_registry_entry registered_metadata;
+    yvex_model_metadata_drift_report metadata_report;
+    int rc;
+
+    if (!ref || ref->kind != YVEX_MODEL_REF_ALIAS) {
+        return YVEX_OK;
+    }
+    memset(&identity, 0, sizeof(identity));
+    memset(&current_metadata, 0, sizeof(current_metadata));
+    memset(&registered_metadata, 0, sizeof(registered_metadata));
+    memset(&metadata_report, 0, sizeof(metadata_report));
+
+    rc = yvex_artifact_identity_read(ref->path, &identity, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (!ref->sha256 || !ref->sha256[0] ||
+        strcmp(ref->sha256, identity.sha256) != 0 ||
+        (ref->registered_file_size != 0ull &&
+         ref->registered_file_size != identity.file_size)) {
+        yvex_error_set(err, YVEX_ERR_STATE, "models_check",
+                       "registry identity drift");
+        return YVEX_ERR_STATE;
+    }
+    rc = populate_registry_metadata(&current_metadata, ref->path, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    model_ref_registry_entry_view(ref, &registered_metadata);
+    rc = yvex_model_registry_compare_metadata(&registered_metadata,
+                                              &current_metadata.entry,
+                                              &metadata_report,
+                                              err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (strcmp(metadata_report.metadata_status, "pass") != 0 ||
+        strcmp(metadata_report.readiness_status, "pass") != 0) {
+        yvex_error_set(err, YVEX_ERR_STATE, "models_check",
+                       "registry identity drift");
+        return YVEX_ERR_STATE;
+    }
+    return YVEX_OK;
+}
+
+static int model_check_integrity(const yvex_model_ref *ref,
+                                 int require_embedding,
+                                 yvex_artifact_integrity_report *report,
+                                 yvex_error *err)
+{
+    yvex_artifact_integrity_options integrity_options;
+
+    memset(&integrity_options, 0, sizeof(integrity_options));
+    integrity_options.require_token_embedding = require_embedding;
+    integrity_options.token_id = 0u;
+    if (ref->kind == YVEX_MODEL_REF_ALIAS && ref->sha256 && ref->sha256[0]) {
+        integrity_options.registered_sha256 = ref->sha256;
+    }
+    return yvex_artifact_integrity_check_path(ref->path, &integrity_options,
+                                             report, err);
+}
+
+static int model_check_backend_probe(const char *backend_name, yvex_error *err)
+{
+    yvex_backend *backend = NULL;
+    yvex_backend_options options;
+    int rc;
+
+    memset(&options, 0, sizeof(options));
+    options.kind = strcmp(backend_name, "cuda") == 0
+                       ? YVEX_BACKEND_KIND_CUDA
+                       : YVEX_BACKEND_KIND_CPU;
+    rc = yvex_backend_open(&backend, &options, err);
+    if (rc == YVEX_OK) {
+        yvex_backend_close(backend);
+    }
+    return rc;
+}
+
+static int model_check_materialize(const char *path,
+                                   const char *backend_name,
+                                   yvex_error *err)
+{
+    yvex_cli_tokenizer_context ctx;
+    yvex_backend *backend = NULL;
+    yvex_weight_table *weights = NULL;
+    yvex_backend_options backend_options;
+    yvex_materialize_options materialize_options;
+    yvex_materialize_summary summary;
+    int rc;
+
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&backend_options, 0, sizeof(backend_options));
+    memset(&materialize_options, 0, sizeof(materialize_options));
+    memset(&summary, 0, sizeof(summary));
+    rc = open_model_context(path, &ctx, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    backend_options.kind = strcmp(backend_name, "cuda") == 0
+                               ? YVEX_BACKEND_KIND_CUDA
+                               : YVEX_BACKEND_KIND_CPU;
+    rc = yvex_backend_open(&backend, &backend_options, err);
+    if (rc != YVEX_OK) {
+        close_model_context(&ctx);
+        return rc;
+    }
+    materialize_options.backend_name = backend_name;
+    materialize_options.require_all_tensors = 1;
+    rc = yvex_weight_table_materialize(&weights,
+                                       ctx.artifact,
+                                       ctx.gguf,
+                                       ctx.table,
+                                       backend,
+                                       &materialize_options,
+                                       err);
+    if (rc == YVEX_OK) {
+        rc = yvex_weight_table_get_summary(weights, &summary, err);
+    }
+    if (rc == YVEX_OK && summary.status != YVEX_WEIGHT_STATUS_MATERIALIZED) {
+        yvex_error_set(err, YVEX_ERR_STATE, "models_check",
+                       "materialization did not reach weights-materialized");
+        rc = YVEX_ERR_STATE;
+    }
+    yvex_weight_table_close(weights);
+    yvex_backend_close(backend);
+    close_model_context(&ctx);
+    return rc;
+}
+
+static int model_check_engine(const char *path,
+                              const char *backend_name,
+                              yvex_error *err)
+{
+    yvex_engine *engine = NULL;
+    yvex_engine_options options;
+    yvex_engine_summary summary;
+    int rc;
+
+    memset(&options, 0, sizeof(options));
+    memset(&summary, 0, sizeof(summary));
+    options.model_path = path;
+    options.load_tokenizer = 0;
+    options.build_descriptor = 1;
+    options.build_default_graph = 1;
+    options.attach_weights = 1;
+    options.backend_name = backend_name;
+    options.require_all_weights = 1;
+    rc = yvex_engine_open(&engine, &options, err);
+    if (rc == YVEX_OK) {
+        rc = yvex_engine_get_summary(engine, &summary, err);
+    }
+    if (rc == YVEX_OK && !summary.weights_attached) {
+        yvex_error_set(err, YVEX_ERR_STATE, "models_check",
+                       "engine did not attach selected weights");
+        rc = YVEX_ERR_STATE;
+    }
+    yvex_engine_close(engine);
+    return rc;
+}
+
+static int model_check_session(const char *path,
+                               const char *backend_name,
+                               yvex_error *err)
+{
+    yvex_engine *engine = NULL;
+    yvex_backend *backend = NULL;
+    yvex_session *session = NULL;
+    yvex_engine_options engine_options;
+    yvex_backend_options backend_options;
+    yvex_session_options session_options;
+    yvex_session_summary summary;
+    int rc;
+
+    memset(&engine_options, 0, sizeof(engine_options));
+    memset(&backend_options, 0, sizeof(backend_options));
+    memset(&session_options, 0, sizeof(session_options));
+    memset(&summary, 0, sizeof(summary));
+    engine_options.model_path = path;
+    engine_options.load_tokenizer = 0;
+    engine_options.build_descriptor = 1;
+    engine_options.build_default_graph = 1;
+    engine_options.attach_weights = 1;
+    engine_options.backend_name = backend_name;
+    engine_options.require_all_weights = 1;
+    rc = yvex_engine_open(&engine, &engine_options, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    backend_options.kind = strcmp(backend_name, "cuda") == 0
+                               ? YVEX_BACKEND_KIND_CUDA
+                               : YVEX_BACKEND_KIND_CPU;
+    rc = yvex_backend_open(&backend, &backend_options, err);
+    if (rc == YVEX_OK) {
+        session_options.allow_partial_graph = 1;
+        rc = yvex_session_create(&session, engine, backend, &session_options, err);
+    }
+    if (rc == YVEX_OK) {
+        rc = yvex_session_get_summary(session, &summary, err);
+    }
+    if (rc == YVEX_OK && !summary.weights_attached) {
+        yvex_error_set(err, YVEX_ERR_STATE, "models_check",
+                       "session did not observe attached weights");
+        rc = YVEX_ERR_STATE;
+    }
+    yvex_session_close(session);
+    yvex_backend_close(backend);
+    yvex_engine_close(engine);
+    return rc;
+}
+
+static int model_check_plan(const char *path,
+                            const char *backend_name,
+                            yvex_error *err)
+{
+    yvex_cli_tokenizer_context ctx;
+    yvex_plan *plan = NULL;
+    yvex_plan_options options;
+    int rc;
+
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&options, 0, sizeof(options));
+    options.sequence_length = 1ull;
+    options.context_length = 16ull;
+    options.backend_name = backend_name;
+    rc = open_model_context(path, &ctx, err);
+    if (rc == YVEX_OK) {
+        rc = yvex_plan_create(&plan, ctx.model, ctx.table, &options, err);
+    }
+    yvex_plan_close(plan);
+    close_model_context(&ctx);
+    return rc;
+}
+
+static int model_check_graph_partial(const char *path,
+                                     const char *backend_name,
+                                     yvex_error *err)
+{
+    yvex_engine *engine = NULL;
+    yvex_engine_options engine_options;
+    yvex_partial_graph_options partial_options;
+    yvex_partial_graph_result partial_result;
+    int rc;
+
+    memset(&engine_options, 0, sizeof(engine_options));
+    memset(&partial_options, 0, sizeof(partial_options));
+    memset(&partial_result, 0, sizeof(partial_result));
+    engine_options.model_path = path;
+    engine_options.load_tokenizer = 0;
+    engine_options.build_descriptor = 1;
+    engine_options.build_default_graph = 1;
+    engine_options.attach_weights = 1;
+    engine_options.backend_name = backend_name;
+    engine_options.require_all_weights = 1;
+    partial_options.token_id = 0u;
+    rc = yvex_engine_open(&engine, &engine_options, err);
+    if (rc == YVEX_OK) {
+        rc = yvex_engine_execute_partial_graph(engine, &partial_options,
+                                              &partial_result, err);
+    }
+    if (rc == YVEX_OK && !partial_result.executed) {
+        yvex_error_set(err, YVEX_ERR_STATE, "models_check",
+                       "selected partial graph did not execute");
+        rc = YVEX_ERR_STATE;
+    }
+    yvex_engine_close(engine);
+    return rc;
+}
+
+static int model_check_is_real_selected_embedding(
+    const yvex_cli_metadata_snapshot *metadata)
+{
+    return metadata &&
+           strcmp(metadata->entry.primary_tensor_name, "token_embd.weight") == 0 &&
+           strcmp(metadata->entry.primary_tensor_dtype, "F16") == 0 &&
+           metadata->entry.primary_tensor_rank == 2u &&
+           strcmp(metadata->entry.primary_tensor_dims, "[4096,129280]") == 0 &&
+           metadata->entry.primary_tensor_bytes == 1059061760ull;
+}
+
+static int model_check_run_model_gate(const yvex_model_ref *ref,
+                                      const char *backend_name,
+                                      yvex_error *err)
+{
+    yvex_model_gate_expected_tensor expected;
+    yvex_model_gate_options options;
+    yvex_model_gate_summary summary;
+    int rc;
+
+    memset(&expected, 0, sizeof(expected));
+    memset(&options, 0, sizeof(options));
+    memset(&summary, 0, sizeof(summary));
+    expected.name = "token_embd.weight";
+    expected.dtype = "F16";
+    expected.rank = 2u;
+    expected.dims[0] = 4096ull;
+    expected.dims[1] = 129280ull;
+    expected.bytes = 1059061760ull;
+    options.model_path = ref->path;
+    options.model_label = "deepseek-v4-flash-selected-embedding";
+    options.family = "deepseek4";
+    options.artifact_sha256 = ref->kind == YVEX_MODEL_REF_ALIAS ? ref->sha256 : NULL;
+    options.expected_tensors = &expected;
+    options.expected_tensor_count = 1ull;
+    options.check_cpu = strcmp(backend_name, "cpu") == 0;
+    options.check_cuda = strcmp(backend_name, "cuda") == 0;
+    options.require_cpu = options.check_cpu;
+    options.require_cuda = options.check_cuda;
+    rc = yvex_model_gate_check(&options, &summary, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (summary.status != YVEX_MODEL_GATE_PASS) {
+        yvex_error_set(err, YVEX_ERR_STATE, "models_check",
+                       "model gate did not pass");
+        return YVEX_ERR_STATE;
+    }
+    return YVEX_OK;
+}
+
+static int model_check_run_materialize_gate(const yvex_model_ref *ref,
+                                            const char *backend_name,
+                                            yvex_error *err)
+{
+    yvex_materialize_expected_tensor expected;
+    yvex_materialize_gate_options options;
+    yvex_materialize_gate_summary summary;
+    int rc;
+
+    memset(&expected, 0, sizeof(expected));
+    memset(&options, 0, sizeof(options));
+    memset(&summary, 0, sizeof(summary));
+    expected.name = "token_embd.weight";
+    expected.dtype = "F16";
+    expected.rank = 2u;
+    expected.dims[0] = 4096ull;
+    expected.dims[1] = 129280ull;
+    expected.bytes = 1059061760ull;
+    options.model_path = ref->path;
+    options.label = "deepseek-v4-flash-selected-embedding";
+    options.family = "deepseek4";
+    options.sha256 = ref->kind == YVEX_MODEL_REF_ALIAS ? ref->sha256 : NULL;
+    options.metadata_status = "pass";
+    options.scope = YVEX_MATERIALIZE_SCOPE_SELECTED_TENSOR;
+    options.expected_tensors = &expected;
+    options.expected_tensor_count = 1ull;
+    options.check_cpu = strcmp(backend_name, "cpu") == 0;
+    options.check_cuda = strcmp(backend_name, "cuda") == 0;
+    options.require_cpu = options.check_cpu;
+    options.require_cuda = options.check_cuda;
+    options.repeat_count = 1u;
+    options.check_cleanup = 1;
+    rc = yvex_materialize_gate_check(&options, &summary, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (summary.status != YVEX_MATERIALIZE_GATE_PASS) {
+        yvex_error_set(err, YVEX_ERR_STATE, "models_check",
+                       "materialize gate did not pass");
+        return YVEX_ERR_STATE;
+    }
+    return YVEX_OK;
+}
+
+static int model_check_finish(yvex_cli_models_check_options *options,
+                              yvex_cli_model_check_report *report,
+                              int exit_code,
+                              yvex_error *err)
+{
+    int rc;
+
+    rc = model_check_write_report(options, report, err);
+    if (rc != YVEX_OK && exit_code == 0) {
+        snprintf(report->error, sizeof(report->error), "%s", yvex_error_message(err));
+        report->final_status = "model-check-fail";
+        exit_code = exit_for_status(rc);
+    }
+    model_check_report_print(stdout, report);
+    return exit_code;
+}
+
+static int command_models_check(int argc, char **argv)
+{
+    yvex_cli_models_check_options options;
+    yvex_cli_model_check_report report;
+    yvex_model_ref ref;
+    yvex_cli_tokenizer_context ctx;
+    yvex_cli_metadata_snapshot metadata_snapshot;
+    yvex_artifact_integrity_report integrity_report;
+    yvex_error err;
+    char registry_path[YVEX_PATH_CAP];
+    int rc;
+    int exit_code = 0;
+
+    yvex_error_clear(&err);
+    memset(&ref, 0, sizeof(ref));
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&metadata_snapshot, 0, sizeof(metadata_snapshot));
+    memset(&integrity_report, 0, sizeof(integrity_report));
+    memset(registry_path, 0, sizeof(registry_path));
+
+    rc = parse_models_check_options(argc, argv, &options);
+    if (rc != 0) {
+        return rc;
+    }
+    if (strcmp(options.target, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0 ||
+        strcmp(options.target, "glm-5.2-official-safetensors") == 0) {
+        return print_model_check_unsupported(options.target);
+    }
+    if (strcmp(options.target, "deepseek4-v4-flash-selected-embed") != 0 &&
+        !is_path_like_reference(options.target)) {
+        yvex_model_ref_options ref_options;
+        memset(&ref_options, 0, sizeof(ref_options));
+        ref_options.allow_registry = 1;
+        ref_options.registry_path = options.registry_path;
+        rc = yvex_model_ref_resolve(&ref, options.target, &ref_options, &err);
+        if (rc != YVEX_OK) {
+            return print_yvex_error(&err, exit_for_status(rc));
+        }
+        yvex_model_ref_clear(&ref);
+    }
+
+    model_check_report_init(&report, &options);
+    rc = model_check_resolve_registry_path(&options, registry_path,
+                                           sizeof(registry_path), &err);
+    if (rc != YVEX_OK) {
+        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
+        return model_check_finish(&options, &report, exit_for_status(rc), &err);
+    }
+    snprintf(report.registry_path, sizeof(report.registry_path), "%s", registry_path);
+
+    rc = model_check_resolve_ref(&options, registry_path, &ref, &report, &err);
+    if (rc != YVEX_OK) {
+        report.stage_resolve_target = "fail";
+        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
+        return model_check_finish(&options, &report, exit_for_status(rc), &err);
+    }
+    report.stage_resolve_target = "pass";
+    snprintf(report.artifact_path, sizeof(report.artifact_path), "%s", ref.path);
+    report.stage_resolve_artifact = path_exists(ref.path) ? "pass" : "fail";
+    if (strcmp(report.stage_resolve_artifact, "pass") != 0) {
+        snprintf(report.error, sizeof(report.error), "artifact path does not exist");
+        yvex_model_ref_clear(&ref);
+        return model_check_finish(&options, &report,
+                                  exit_for_status(YVEX_ERR_IO), &err);
+    }
+
+    rc = open_model_context(ref.path, &ctx, &err);
+    if (rc != YVEX_OK) {
+        report.stage_inspect = "fail";
+        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
+        yvex_model_ref_clear(&ref);
+        return model_check_finish(&options, &report, exit_for_status(rc), &err);
+    }
+    report.stage_inspect = "pass";
+    report.stage_tensors = "pass";
+
+    rc = populate_registry_metadata(&metadata_snapshot, ref.path, &err);
+    if (rc != YVEX_OK) {
+        report.stage_metadata = "fail";
+        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
+        close_model_context(&ctx);
+        yvex_model_ref_clear(&ref);
+        return model_check_finish(&options, &report, exit_for_status(rc), &err);
+    }
+    report.stage_metadata = "pass";
+
+    if (ref.kind == YVEX_MODEL_REF_ALIAS) {
+        rc = model_check_verify_registry_identity(&ref, &err);
+        if (rc != YVEX_OK) {
+            report.stage_registry_identity = "fail";
+            snprintf(report.error, sizeof(report.error), "registry identity drift");
+            close_model_context(&ctx);
+            yvex_model_ref_clear(&ref);
+            return model_check_finish(&options, &report,
+                                      exit_for_status(YVEX_ERR_STATE), &err);
+        }
+        report.stage_registry_identity = "pass";
+    } else {
+        report.stage_registry_identity = "unregistered";
+    }
+
+    rc = model_check_integrity(&ref, 0, &integrity_report, &err);
+    if (rc != YVEX_OK || !integrity_report.passed) {
+        report.stage_integrity_check = "fail";
+        snprintf(report.error, sizeof(report.error), "%s",
+                 rc != YVEX_OK ? yvex_error_message(&err) : "artifact integrity failed");
+        close_model_context(&ctx);
+        yvex_model_ref_clear(&ref);
+        return model_check_finish(&options, &report,
+                                  exit_for_status(rc != YVEX_OK ? rc : YVEX_ERR_FORMAT),
+                                  &err);
+    }
+    report.stage_integrity_check = "pass";
+
+    if (options.level == YVEX_CLI_MODEL_CHECK_QUICK) {
+        if (options.no_graph) {
+            snprintf(report.graph_skip_reason, sizeof(report.graph_skip_reason),
+                     "quick level does not run graph");
+        }
+        report.final_status = "model-check-pass";
+        close_model_context(&ctx);
+        yvex_model_ref_clear(&ref);
+        return model_check_finish(&options, &report, 0, &err);
+    }
+
+    rc = model_check_backend_probe(options.backend_name, &err);
+    if (rc != YVEX_OK) {
+        report.stage_integrity_report = "fail";
+        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
+        close_model_context(&ctx);
+        yvex_model_ref_clear(&ref);
+        return model_check_finish(&options, &report,
+                                  rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc),
+                                  &err);
+    }
+    report.stage_integrity_report = "pass";
+
+    if (options.no_materialize) {
+        report.stage_materialize = "skipped";
+        report.stage_engine = "skipped";
+        report.stage_session = "skipped";
+        report.stage_plan = "skipped";
+        report.stage_graph_partial = "skipped";
+        snprintf(report.graph_skip_reason, sizeof(report.graph_skip_reason),
+                 "disabled by --no-materialize");
+        report.stage_model_gate = "skipped";
+        report.stage_materialize_gate = "skipped";
+        report.runtime_execution = "not-performed";
+        report.final_status = "model-check-pass";
+        close_model_context(&ctx);
+        yvex_model_ref_clear(&ref);
+        return model_check_finish(&options, &report, 0, &err);
+    }
+
+    rc = model_check_materialize(ref.path, options.backend_name, &err);
+    if (rc != YVEX_OK) {
+        report.stage_materialize = "fail";
+        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
+        close_model_context(&ctx);
+        yvex_model_ref_clear(&ref);
+        return model_check_finish(&options, &report,
+                                  rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc),
+                                  &err);
+    }
+    report.stage_materialize = "pass";
+
+    rc = model_check_engine(ref.path, options.backend_name, &err);
+    if (rc != YVEX_OK) {
+        report.stage_engine = "fail";
+        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
+        close_model_context(&ctx);
+        yvex_model_ref_clear(&ref);
+        return model_check_finish(&options, &report,
+                                  rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc),
+                                  &err);
+    }
+    report.stage_engine = "pass";
+
+    rc = model_check_session(ref.path, options.backend_name, &err);
+    if (rc != YVEX_OK) {
+        report.stage_session = "fail";
+        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
+        close_model_context(&ctx);
+        yvex_model_ref_clear(&ref);
+        return model_check_finish(&options, &report,
+                                  rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc),
+                                  &err);
+    }
+    report.stage_session = "pass";
+
+    rc = model_check_plan(ref.path, options.backend_name, &err);
+    if (rc != YVEX_OK) {
+        report.stage_plan = "fail";
+        snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
+        close_model_context(&ctx);
+        yvex_model_ref_clear(&ref);
+        return model_check_finish(&options, &report, exit_for_status(rc), &err);
+    }
+    report.stage_plan = "pass";
+
+    if (options.no_graph) {
+        report.stage_graph_partial = "skipped";
+        snprintf(report.graph_skip_reason, sizeof(report.graph_skip_reason),
+                 "disabled by --no-graph");
+    } else {
+        rc = model_check_graph_partial(ref.path, options.backend_name, &err);
+        if (rc != YVEX_OK) {
+            report.stage_graph_partial = rc == YVEX_ERR_UNSUPPORTED ? "unsupported" : "fail";
+            snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
+            close_model_context(&ctx);
+            yvex_model_ref_clear(&ref);
+            return model_check_finish(&options, &report,
+                                      rc == YVEX_ERR_UNSUPPORTED ? 5 : exit_for_status(rc),
+                                      &err);
+        }
+        report.stage_graph_partial = "pass";
+    }
+    report.runtime_execution = "selected-boundary-only";
+
+    if (options.level == YVEX_CLI_MODEL_CHECK_FULL &&
+        model_check_is_real_selected_embedding(&metadata_snapshot) &&
+        !options.no_materialize) {
+        rc = model_check_run_model_gate(&ref, options.backend_name, &err);
+        if (rc != YVEX_OK) {
+            report.stage_model_gate = "fail";
+            snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
+            close_model_context(&ctx);
+            yvex_model_ref_clear(&ref);
+            return model_check_finish(&options, &report, exit_for_status(rc), &err);
+        }
+        report.stage_model_gate = "pass";
+        rc = model_check_run_materialize_gate(&ref, options.backend_name, &err);
+        if (rc != YVEX_OK) {
+            report.stage_materialize_gate = "fail";
+            snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
+            close_model_context(&ctx);
+            yvex_model_ref_clear(&ref);
+            return model_check_finish(&options, &report, exit_for_status(rc), &err);
+        }
+        report.stage_materialize_gate = "pass";
+    } else if (options.level == YVEX_CLI_MODEL_CHECK_FULL) {
+        report.stage_model_gate = "skipped";
+        report.stage_materialize_gate = "skipped";
+    }
+
+    report.final_status = "model-check-pass";
+    close_model_context(&ctx);
+    yvex_model_ref_clear(&ref);
+    return model_check_finish(&options, &report, exit_code, &err);
+}
+
 static int command_models_scan(int argc, char **argv)
 {
     yvex_model_registry_entry *entries = NULL;
@@ -3963,12 +4955,13 @@ static int command_models(int argc, char **argv)
         return 0;
     }
     if (argc < 3) {
-        fprintf(stderr, "yvex: models requires scan, add, prepare, list, use, current, verify, inspect, or remove\n");
+        fprintf(stderr, "yvex: models requires scan, add, prepare, check, list, use, current, verify, inspect, or remove\n");
         return 2;
     }
     if (strcmp(argv[2], "scan") == 0) return command_models_scan(argc, argv);
     if (strcmp(argv[2], "add") == 0) return command_models_add(argc, argv);
     if (strcmp(argv[2], "prepare") == 0) return command_models_prepare(argc, argv);
+    if (strcmp(argv[2], "check") == 0) return command_models_check(argc, argv);
     if (strcmp(argv[2], "list") == 0) return command_models_list(argc, argv);
     if (strcmp(argv[2], "use") == 0) return command_models_use(argc, argv);
     if (strcmp(argv[2], "current") == 0) return command_models_current(argc, argv);
@@ -3989,7 +4982,14 @@ void yvex_models_help(FILE *fp)
     fprintf(fp, "usage: yvex models scan --root DIR [--registry FILE]\n");
     fprintf(fp, "       yvex models add --path FILE [--alias ALIAS] [--support-level LEVEL] [--registry FILE]\n");
     fprintf(fp, "       yvex models prepare TARGET [--overwrite] [--source DIR] [--out FILE | --out-dir DIR] [--models-root DIR] [--registry FILE] [--dry-run] [--no-register] [--no-use]\n");
+    fprintf(fp, "       yvex models check TARGET [--backend cpu|cuda] [--level quick|runtime|full] [--models-root DIR] [--registry FILE] [--report-dir DIR] [--no-materialize] [--no-graph]\n");
     fprintf(fp, "       yvex models list|current [--registry FILE]\n");
     fprintf(fp, "       yvex models use|verify|inspect|remove ALIAS [--registry FILE]\n");
-    fprintf(fp, "\nModels manages the local alias registry, selected artifact preparation, digest identity, and metadata drift facts for registered artifacts. Prepare currently supports deepseek4-v4-flash-selected-embed only and does not materialize, run graph execution, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
+    fprintf(fp, "\nExamples:\n");
+    fprintf(fp, "  yvex models check deepseek4-v4-flash-selected-embed\n");
+    fprintf(fp, "  yvex models check deepseek4-v4-flash-selected-embed --backend cpu --level runtime\n");
+    fprintf(fp, "  yvex models check deepseek4-v4-flash-selected-embed --backend cuda --level runtime --no-graph\n");
+    fprintf(fp, "  yvex models check deepseek4-v4-flash-selected-embed --level full --report-dir build/reports\n");
+    fprintf(fp, "\nModels manages the local alias registry, selected artifact preparation, selected artifact checks, digest identity, and metadata drift facts for registered artifacts. Prepare currently supports deepseek4-v4-flash-selected-embed only and does not materialize, run graph execution, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
+    fprintf(fp, "Check composes implemented artifact, identity, integrity, selected materialization, engine/session, plan, selected graph, and selected gates only; it does not create artifacts, run source conversion, run prefill, decode, produce logits, sample, generate, evaluate, or benchmark.\n");
 }
