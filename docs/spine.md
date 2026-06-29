@@ -148,6 +148,93 @@ behavior, cache policy, and staged residency. It is not generation.
 No storage-stream milestone may claim runtime generation until the normal
 runtime generation path reaches decode, logits, sampling, and generation.
 
+DeepSeek generation target doctrine:
+
+DeepSeek V4 Flash is the current internal full-generation pressure target.
+
+The current selected DeepSeek artifacts remain selected-runtime-slice targets.
+They prove parser, artifact identity, selected materialization, backend
+residency, graph execution, graph guard, and cleanup behavior over manageable
+YVEX-produced artifacts.
+
+The final DeepSeek V4 Flash target is larger:
+
+```text
+official safetensors
+  -> source manifest
+  -> native tensor inventory
+  -> family mapping
+  -> tensor collections
+  -> quantization policy
+  -> YVEX-produced GGUF
+  -> artifact identity
+  -> registry
+  -> materialization
+  -> residency
+  -> graph layers
+  -> real transformer prefill
+  -> KV
+  -> decode
+  -> logits
+  -> sampling
+  -> generation
+  -> CLI/server
+  -> benchmark
+  -> speculative acceleration
+```
+
+This target is not current capability.
+
+Today, YVEX generation is unsupported and real YVEX generation throughput is
+zero because decode, logits, sampling, and the generation loop do not exist.
+
+The internal performance target for DeepSeek V4 Flash is to exceed a reference
+decode threshold of 15 tokens/sec and pursue at least 20 tokens/sec baseline
+decode on a GB10-class CUDA machine, after and only after the real generation
+path exists and the benchmark harness records model identity, artifact identity,
+qtype, context, backend, machine, command, and reproducibility metadata.
+
+The 20 tokens/sec target is an internal engineering target, not a guarantee and
+not a public claim.
+
+Speculative decoding is a later acceleration track. It may be considered only
+after baseline decode, logits, sampling, and generation exist.
+
+DSpark reference doctrine:
+
+DSpark is external reference evidence for future speculative decoding design.
+
+The DSpark paper describes confidence-scheduled speculative decoding with
+semi-autoregressive generation. Its relevance to YVEX is architectural:
+
+```text
+baseline autoregressive decode remains necessary;
+draft generation may later propose multiple tokens;
+confidence or acceptance prediction may guide how many draft tokens to verify;
+target-model verification remains the correctness boundary;
+hardware-aware scheduling may shift throughput/interactivity tradeoffs.
+```
+
+YVEX may use DSpark as a reference for a future speculative acceleration track.
+
+YVEX must not present DSpark throughput, DSpark acceptance length, DeepSeek
+serving numbers, or external runner measurements as YVEX benchmark results.
+
+A DSpark-like acceleration row cannot be promoted before YVEX implements:
+
+```text
+baseline generation;
+target-model decode;
+logits;
+sampling;
+token append state;
+verification semantics;
+acceptance accounting;
+benchmark harness.
+```
+
+External speculative decoding evidence is not YVEX runtime execution.
+
 ## 2.1 Canonical Block Directory
 
 YVEX implementation blocks:
@@ -217,6 +304,9 @@ BLOCK 7 — Runtime state
   GEN.LOOP.*, RUNTIME.KV.*.
   Normal proof: runtime command over implemented state, lifecycle test, context
   boundary test, cleanup/interruption report.
+  The DeepSeek V4 Flash full-generation target must pass through real
+  transformer prefill, KV, decode, logits, sampling, and generation before any
+  CLI or server generation claim exists.
 
 BLOCK 8 — Operator and serving surfaces
   Owns CLI presets, command taxonomy, doctor flow, REPL, daemon state,
@@ -236,6 +326,9 @@ BLOCK 9 — Evaluation, benchmarks, and public evidence
   Current rows: EVAL.*, BENCH.*, DOCS.*.
   Normal proof: same runtime path users run, model/artifact identity, backend,
   qtype, context, machine, command, reproducibility note.
+  Internal throughput targets such as DeepSeek V4 Flash >=20 tok/s decode are
+  engineering targets only until measured by the benchmark harness over the same
+  runtime path users run.
 ```
 
 ## 2.2 Naming and Ownership Rules
@@ -287,6 +380,42 @@ benchmark:
   performance measurement over implemented runtime paths with reproducibility
   metadata.
 
+Generation target nouns:
+
+```text
+baseline decode:
+  the normal autoregressive next-token runtime path after real transformer
+  prefill, KV, decode, logits, and sampling exist.
+
+generation loop:
+  the repeated decode -> logits -> sample -> append-token path with stop
+  conditions, interruption, cleanup, and token accounting.
+
+speculative decode:
+  an acceleration technique that drafts candidate tokens and verifies them with
+  the target model. It is not a replacement for baseline decode.
+
+draft model:
+  a smaller or auxiliary model/path that proposes candidate tokens. A draft
+  model is not the authority for final accepted tokens.
+
+target verification:
+  the target model pass that verifies drafted tokens and determines accepted
+  prefix length.
+
+accepted-token accounting:
+  the runtime accounting of how many proposed draft tokens survived target
+  verification.
+
+throughput target:
+  an internal engineering target, not a measured benchmark and not a public
+  claim.
+
+benchmark result:
+  a measured value over an implemented runtime path with model, artifact, qtype,
+  context, backend, machine, command, and reproducibility metadata.
+```
+
 Operator preset nouns:
 
 operator root:
@@ -334,6 +463,12 @@ script transcript
 magical support
 automatic inference
 one-click generation
+tok/s claim
+speed claim
+DSpark-parity claim
+speculative support
+DeepSeek generation ready
+DeepSeek benchmark ready
 ```
 
 Use these canonical track names in future rows:
@@ -627,6 +762,7 @@ copy-command operator lanes
 operator preset roadmap authority in spine
 operator-local model root configuration and path resolution
 model target operator path reporting
+DeepSeek V4 Flash generation and speculative throughput target envelope in spine
 ```
 
 Current live target classes:
@@ -713,6 +849,14 @@ model check preset
 graph check preset
 diagnostic REPL layout hardening
 final operator runbook over preset commands
+DeepSeek V4 Flash full generation path
+DeepSeek V4 Flash baseline decode benchmark
+DeepSeek V4 Flash end-to-end generation benchmark
+speculative decoding
+DSpark-like draft/verify runtime
+accepted-token speculative accounting
+speculative generation benchmark
+20 tok/s measured YVEX decode result
 full transformer prefill
 decode
 logits-producing runtime path
@@ -898,6 +1042,13 @@ tables.
 | M15 | planned | cli | Interactive CLI generation path | CLI/REPL generation uses real runtime generation loop |
 | M16 | planned | server | Provider/server generation boundary | daemon/server generation uses runtime-backed generation path |
 | M17 | planned | profile | Trace/profile hardening for generation | traces and profiles identify artifact/backend/graph/KV/decode/logits/sampling/server failures |
+| SPINE.GENERATION.TARGET.0 | complete | docs | DeepSeek generation and speculative throughput target envelope | spine records DeepSeek V4 Flash full-generation target, internal decode throughput target, DSpark external reference doctrine, and non-claim benchmark boundary |
+| GEN.DEEPSEEK.0 | planned | generation | DeepSeek V4 Flash full generation path | DeepSeek V4 Flash reaches real decode, logits, sampling, token append, stop conditions, cleanup, and CLI-visible generation over YVEX runtime |
+| BENCH.DEEPSEEK.DECODE.0 | planned | bench | DeepSeek V4 Flash baseline decode throughput target | after generation exists, benchmark harness measures decode tok/s with artifact identity, qtype, context, backend, machine, command, and reproducibility metadata |
+| BENCH.DEEPSEEK.GEN.0 | planned | bench | DeepSeek V4 Flash end-to-end generation throughput target | after generation exists, benchmark harness measures prompt plus generated-token throughput separately from prefill |
+| SPEC.DSPARK.REF.0 | planned | reference | DSpark speculative decoding reference | DSpark is recorded as external reference evidence for semi-autoregressive drafting, confidence scheduling, and hardware-aware verification, not as YVEX runtime capability |
+| SPEC.DEEPSEEK.0 | planned | generation | DeepSeek speculative decoding target | after baseline generation exists, YVEX may implement draft, verification, accepted-token accounting, and speculative generation over DeepSeek target runtime |
+| BENCH.DEEPSEEK.SPEC.0 | planned | bench | DeepSeek speculative generation benchmark | after speculative decoding exists, benchmark harness measures accepted tokens, verification cost, latency, throughput, and speedup over YVEX baseline generation |
 | FULLMODEL.0 | planned | model | Full model inventory and placement plan | full artifact tensor inventory, memory budget, and backend placement report |
 | FULLMODEL.1 | planned | model | Full model materialization plan | selected-family full tensor placement and materialization preflight without generation claim |
 | FULLMODEL.2 | planned | model | Full model materialization proof | full required tensor set materializes or fails with phase/cleanup reports |
@@ -980,6 +1131,97 @@ tables.
 | DOCS.DIAGRAMS.4 | planned | docs | Eval/bench measurement map | diagram maps measurements to runtime boundaries |
 | DOCS.DIAGRAMS.5 | planned | docs | Backend/hardware target matrix | diagram explains CPU/CUDA/future lanes |
 | DOCS.DIAGRAMS.6 | planned | docs | README visual integration | diagrams integrated only where they clarify real boundaries |
+
+## DeepSeek Generation and Throughput Target
+
+DeepSeek V4 Flash is the internal generation pressure target.
+
+Current state:
+
+```text
+YVEX generation: unsupported
+YVEX real generation throughput: 0 tok/s
+reason: decode, logits, sampling, and generation loop are not implemented
+```
+
+Internal target:
+
+```text
+baseline model: DeepSeek V4 Flash
+machine class: GB10-class CUDA
+baseline threshold to exceed: 15 tok/s decode
+YVEX target: >=20 tok/s baseline decode
+public claim: none
+benchmark status: not measured
+```
+
+The target is valid only after the real generation path exists.
+
+A valid DeepSeek decode benchmark must record:
+
+```text
+model identity
+source artifact identity
+YVEX-produced artifact identity
+qtype
+context length
+prompt length
+generated token count
+backend
+machine
+command
+run count
+reproducibility note
+```
+
+Prefill throughput, decode throughput, and end-to-end generation throughput are
+separate measurements.
+
+Selected artifact execution is not a generation benchmark.
+
+External runner output is not a YVEX benchmark.
+
+DSpark or other speculative decoding systems are reference evidence until YVEX
+implements its own draft, verification, acceptance, and benchmark path.
+
+## Speculative Decoding Reference Track
+
+Speculative decoding is a future acceleration track.
+
+The baseline YVEX path must exist first:
+
+```text
+real transformer prefill
+KV
+decode
+logits
+sampling
+generation loop
+```
+
+Only after that baseline exists may YVEX add speculative acceleration.
+
+A future speculative path must define:
+
+```text
+draft source
+draft token count
+target verification
+accepted-prefix accounting
+rejected-token behavior
+KV interaction
+logits ownership
+sampling interaction
+interruption and cleanup
+speedup measurement against YVEX baseline
+```
+
+DSpark is a reference design for this track because it combines
+semi-autoregressive drafting with confidence-scheduled verification and
+hardware-aware scheduling.
+
+DSpark evidence remains external evidence. It does not imply YVEX implements
+speculative decoding and does not imply YVEX reaches any throughput target.
 
 ## Execution and Residency Modes
 
@@ -1192,6 +1434,12 @@ runtime track:
   -> CLI generation
   -> serve generation
   -> streaming generation
+  -> baseline decode benchmark
+  -> end-to-end generation benchmark
+  -> speculative draft path
+  -> target verification
+  -> accepted-token accounting
+  -> speculative generation benchmark
 
 measurement track:
   fixture regression
@@ -1225,6 +1473,10 @@ operator preset track:
 These tracks may advance in parallel only when their boundaries are explicit.
 A row is complete only when its command proof demonstrates the boundary it
 claims.
+
+The speculative acceleration track starts after baseline generation exists. It
+cannot replace decode, logits, sampling, or the generation loop. Its benchmark
+must compare against YVEX baseline generation, not against external claims.
 
 The operator preset track may advance before runtime generation because it
 compresses already implemented lower-level boundaries into safer operator
@@ -1673,6 +1925,11 @@ source-to-GGUF and alias registration path. It must not materialize, run graph,
 start a server, run chat, decode, produce logits, sample, generate, evaluate,
 or benchmark.
 
+SPINE.GENERATION.TARGET.0 records the long-term DeepSeek generation and
+throughput target. It does not change the immediate implementation order.
+
+MODEL.PREPARE.0 remains the next operator preset milestone.
+
 Runtime active next remains:
 
 ```text
@@ -1901,6 +2158,44 @@ pattern='generation imple''mented'
 grep -nF "$pattern" docs/spine.md && exit 1 || true
 ```
 
+Generation target envelope proof:
+
+```sh
+grep -nF 'SPINE.GENERATION.TARGET.0' docs/spine.md
+grep -nF 'GEN.DEEPSEEK.0' docs/spine.md
+grep -nF 'BENCH.DEEPSEEK.DECODE.0' docs/spine.md
+grep -nF 'BENCH.DEEPSEEK.GEN.0' docs/spine.md
+grep -nF 'SPEC.DSPARK.REF.0' docs/spine.md
+grep -nF 'SPEC.DEEPSEEK.0' docs/spine.md
+grep -nF 'BENCH.DEEPSEEK.SPEC.0' docs/spine.md
+grep -nF '## DeepSeek Generation and Throughput Target' docs/spine.md
+grep -nF '## Speculative Decoding Reference Track' docs/spine.md
+grep -nF 'YVEX real generation throughput: 0 tok/s' docs/spine.md
+grep -nF 'YVEX target: >=20 tok/s baseline decode' docs/spine.md
+grep -nF 'DSpark evidence remains external evidence' docs/spine.md
+
+pattern='DeepSeek generation imple''mented'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+
+pattern='DeepSeek decode benchmark imple''mented'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+
+pattern='speculative decoding imple''mented'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+
+pattern='DSpark imple''mented'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+
+pattern='20 tok/s achie''ved'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+
+pattern='YVEX supports DS''park'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+
+pattern='DSpark par''ity'
+grep -nF "$pattern" docs/spine.md && exit 1 || true
+```
+
 Additional guardrails:
 
 ```text
@@ -1963,6 +2258,17 @@ no runtime file change for spine-only rebases
 - No internal delivery IDs outside `docs/spine.md`.
 - No inference or generation claim until implemented.
 - No benchmark claim without benchmark implementation and proof.
+- DeepSeek V4 Flash >=20 tok/s decode is an internal target only until measured
+  by the benchmark harness over an implemented YVEX generation path.
+- No public throughput claim before model identity, artifact identity, qtype,
+  context, backend, machine, command, run count, and reproducibility metadata
+  exist.
+- DSpark and other speculative decoding systems are external reference evidence
+  only until YVEX implements its own speculative path.
+- Speculative decoding may not be promoted before baseline generation exists.
+- A speculative path must measure accepted tokens, rejected tokens,
+  verification cost, latency, throughput, and speedup against YVEX baseline.
+- External DSpark serving numbers cannot close a YVEX benchmark row.
 - No status promotion without command proof from the validation/audit gate.
 - No M-series completion status until the relevant runtime state exists in code
   and tests.
