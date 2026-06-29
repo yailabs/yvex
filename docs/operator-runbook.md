@@ -1,1089 +1,504 @@
 # YVEX Operator Runbook
 
-This runbook is the command-first path through the current YVEX operator
-surface. It uses repository-local binaries, operator-local model storage,
-selected GGUF emission, registry aliases, backend materialization, engine
-attachment, daemon status, and gates. It does not describe inference or
-generation because those paths are not implemented.
+This runbook is the operator transcript for the current YVEX surface.
+It is not a product tutorial and not a generation claim.
+It is designed to be rerun after every implementation wave.
 
-The default examples use an operator-owned model root outside this repository:
+YVEX currently separates:
 
 ```text
-/path/to/models/hf/deepseek/DeepSeek-V4-Flash
-/path/to/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+source intake
+YVEX-produced artifact creation
+artifact identity/integrity
+registry selection
+backend materialization
+graph proof
+runtime diagnostics
+daemon/status checks
+repository validation
 ```
 
-That layout is a placeholder, not a project rule. If your weights or GGUFs live
-elsewhere, use those operator-local paths in `--native-source`, `--out`,
-`--path`, and `--report-out`. Keep real model artifacts outside this repository.
+The future operator path is a short model prepare plus run/chat flow. That path
+is not claimed until runtime generation exists.
 
-## 1. Build the repository
+Run these commands from the `yailabs/yvex` source repository. Keep source
+weights, generated GGUFs, reports, local registries, and logs in operator-local
+model storage outside this repository.
 
-YVEX currently runs from repository-local binaries: `./yvex` and `./yvexd`.
-Build them before running operator commands.
+## 1. Bootstrap Operator Context
+
+Copy this once per shell. Only `YVEX_MODELS_ROOT`, `YVEX_BACKEND`, and registry
+mode should normally be changed by hand. Everything else is derived.
+
+```sh
+# Run from the YVEX repository root.
+
+: "${YVEX_MODELS_ROOT:=$HOME/lab/models}"
+: "${YVEX_FAMILY:=deepseek}"
+: "${YVEX_BACKEND:=cpu}"
+: "${YVEX_REGISTRY_MODE:=local}"
+
+export YVEX_MODELS_ROOT
+export YVEX_FAMILY
+export YVEX_BACKEND
+export YVEX_REGISTRY_MODE
+
+export YVEX_HF_ROOT="$YVEX_MODELS_ROOT/hf"
+export YVEX_GGUF_ROOT="$YVEX_MODELS_ROOT/gguf"
+export YVEX_REPORT_ROOT="$YVEX_MODELS_ROOT/reports"
+export YVEX_REFERENCE_ROOT="$YVEX_MODELS_ROOT/reference"
+export YVEX_REGISTRY_ROOT="$YVEX_MODELS_ROOT/registry"
+
+export DEEPSEEK_SOURCE="$YVEX_HF_ROOT/deepseek/DeepSeek-V4-Flash"
+export DEEPSEEK_GGUF_DIR="$YVEX_GGUF_ROOT/deepseek"
+export DEEPSEEK_REPORT_DIR="$YVEX_REPORT_ROOT/deepseek"
+
+export SELECTED_ALIAS="deepseek4-v4-flash-selected-embed"
+export SEGMENT_ALIAS="deepseek4-v4-flash-selected-embed-rmsnorm"
+export GLM_TARGET="glm-5.2-official-safetensors"
+
+export SELECTED_GGUF="$DEEPSEEK_GGUF_DIR/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
+export SEGMENT_GGUF="$DEEPSEEK_GGUF_DIR/deepseek4-v4-flash-selected-embed-rmsnorm-F16-noimatrix-yvex-v1.gguf"
+export FIXTURE_GGUF="$DEEPSEEK_GGUF_DIR/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf"
+
+export SELECTED_MODEL_REF="$SELECTED_ALIAS"
+export SEGMENT_MODEL_REF="$SEGMENT_ALIAS"
+
+export TOKENIZER_FIXTURE="tests/fixtures/gguf/valid-tokenizer-simple.gguf"
+
+mkdir -p \
+  "$YVEX_HF_ROOT" \
+  "$YVEX_GGUF_ROOT" \
+  "$YVEX_REPORT_ROOT" \
+  "$YVEX_REFERENCE_ROOT" \
+  "$YVEX_REGISTRY_ROOT" \
+  "$DEEPSEEK_GGUF_DIR" \
+  "$DEEPSEEK_REPORT_DIR"
+```
+
+Registry mode is normally local. Use an isolated registry only when you want the
+runbook to avoid the default local model registry.
+
+```sh
+if [ "$YVEX_REGISTRY_MODE" = "isolated" ]; then
+  export YVEX_MODELS_REGISTRY="$YVEX_REGISTRY_ROOT/models.local.json"
+else
+  unset YVEX_MODELS_REGISTRY
+fi
+```
+
+## Artifact Storage Policy
+
+Source weights live outside the source repository:
+
+```text
+$YVEX_MODELS_ROOT/hf/<family>/<model>/
+```
+
+YVEX-produced GGUF artifacts live outside the source repository:
+
+```text
+$YVEX_MODELS_ROOT/gguf/<family>/
+```
+
+External reference artifacts live outside the source repository:
+
+```text
+$YVEX_MODELS_ROOT/reference/<family>/
+```
+
+Generated reports live outside the source repository:
+
+```text
+$YVEX_MODELS_ROOT/reports/<family>/
+```
+
+The source repository is `yailabs/yvex`. The artifact root is operator-local
+model storage. Publishing YVEX-produced GGUFs later means publishing to an
+artifact distribution target such as Hugging Face Hub, not committing real model
+artifacts to the source repository.
+
+No `.safetensors`, `.bin`, `.dat`, or real `.gguf` file belongs in the YVEX
+source repository. Tiny parser fixtures under `tests/fixtures/gguf/` are the
+only exception.
+
+## 2. Quick Start: Current Runtime Boundary
+
+Use this block to verify the repository and current command surface before
+touching local model artifacts.
 
 ```sh
 make
-./yvex version
 ./yvex commands
-./yvex info
+./yvex model-target list
+./yvex models current || true
+./yvex backend "$YVEX_BACKEND"
+./yvex help graph
 ```
 
-Expected outcome: the binaries exist in the repository root and `./yvex info`
-reports implemented artifact, GGUF, backend, registry, console, and daemon
-status surfaces.
+If a selected DeepSeek alias is already registered, continue with the selected
+artifact validation flow. If it is not registered, run the build-or-register
+artifact flow below.
 
-## 2. Discover the command surface
+## 3. Operator Modes
 
-Use command help as the source of truth for flags and current behavior.
+Mode A - no model artifacts required:
 
-```sh
-./yvex help inspect
-./yvex help materialize
-./yvex help models
-./yvex help chat
-./yvex help model-gate
-./yvex help materialize-gate
-./yvexd --help
+```text
+build/discover
+model-target registry
+CPU standalone graph ops
+controlled fixture graph
+tokenizer fixture diagnostics
+repository validation
 ```
 
-Expected outcome: help text stays bounded. Commands may inspect, materialize,
-open diagnostics, and serve status endpoints; they must not claim generation.
+Mode B - selected DeepSeek GGUF available:
 
-## 3. Build or refresh the DeepSeek selected GGUF
+```text
+register alias
+inspect/tensors/metadata
+integrity
+materialize
+engine/session
+selected graph partial
+gates
+daemon status
+```
 
-This is the real selected-artifact path. It reads local DeepSeek native
-safetensors and overwrites the selected embedding GGUF in the operator-owned
-GGUF directory.
+Mode C - selected embedding-plus-RMSNorm GGUF available:
+
+```text
+register segment alias
+selected segment graph
+prefill state summary
+prefill plus minimal KV binding
+```
+
+Mode D - CUDA-capable host:
+
+```text
+cuda-info
+backend cuda
+CUDA graph ops
+CUDA materialization
+make check-cuda
+```
+
+Mode E - source tensor intake:
+
+```text
+source-manifest
+native-weights
+tensor-map
+convert plan
+convert emit
+```
+
+Mode F - future generation path:
+
+```text
+model prepare
+runtime generation
+chat generation
+daemon/provider generation
+streaming generation
+```
+
+Mode F is future-only until decode, logits, sampling, and generation exist.
+
+## 4. Build Or Refresh Selected DeepSeek GGUF
+
+Run this section only when the operator-local DeepSeek source tensors already
+exist under `$DEEPSEEK_SOURCE`.
 
 ```sh
 ./yvex source-manifest create \
-  --hf-repo OWNER/MODEL \
-  --revision REVISION \
-  --local-path /path/to/models/hf/deepseek/DeepSeek-V4-Flash \
+  --hf-repo "deepseek-ai/DeepSeek-V4-Flash" \
+  --revision "main" \
+  --local-path "$DEEPSEEK_SOURCE" \
   --status in-progress \
-  --out /path/to/models/gguf/deepseek/deepseek-source-manifest.json
+  --out "$DEEPSEEK_GGUF_DIR/deepseek-source-manifest.json"
 
-./yvex native-weights \
-  --source /path/to/models/hf/deepseek/DeepSeek-V4-Flash \
-  --limit 20
-
-./yvex tensor-map \
-  --arch deepseek4 \
-  --native-source /path/to/models/hf/deepseek/DeepSeek-V4-Flash \
-  --limit 20
+./yvex native-weights --source "$DEEPSEEK_SOURCE" --limit 20
+./yvex tensor-map --arch deepseek4 --native-source "$DEEPSEEK_SOURCE" --limit 20
 
 ./yvex convert plan \
   --arch deepseek4 \
-  --native-source /path/to/models/hf/deepseek/DeepSeek-V4-Flash \
-  --out-plan /path/to/models/gguf/deepseek/deepseek-selected-plan.json
+  --native-source "$DEEPSEEK_SOURCE" \
+  --out-plan "$DEEPSEEK_GGUF_DIR/deepseek-selected-plan.json"
 
 ./yvex convert emit \
   --arch deepseek4 \
-  --native-source /path/to/models/hf/deepseek/DeepSeek-V4-Flash \
+  --native-source "$DEEPSEEK_SOURCE" \
   --tensor embed.weight \
   --target-qtype F16 \
-  --out /path/to/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf \
+  --out "$SELECTED_GGUF" \
   --overwrite
 
-./yvex inspect /path/to/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
-./yvex tensors /path/to/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
+./yvex inspect "$SELECTED_GGUF"
+./yvex tensors "$SELECTED_GGUF"
+./yvex metadata "$SELECTED_GGUF"
 ```
 
-Expected outcome: `inspect` reports `architecture: deepseek`, and `tensors`
-shows `token_embd.weight` with shape `[4096,129280]`, dtype `F16`, and
-`1059061760` tensor bytes.
+This selected conversion emits only the selected embedding GGUF. It does not
+create the embedding-plus-RMSNorm segment artifact and does not create a full
+model artifact.
 
-If your native source or GGUF directory is somewhere else, change only the path
-arguments. Do not commit the real model source or generated selected GGUF.
+## 5. Register Or Refresh Aliases
 
-## 4. Register and inspect the DeepSeek selected GGUF
-
-Register the selected GGUF using the canonical alias.
+Register the selected artifact idempotently. After this block, the rest of the
+runbook can use `$SELECTED_MODEL_REF`.
 
 ```sh
+./yvex models remove "$SELECTED_ALIAS" || true
 ./yvex models add \
-  --path /path/to/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf \
-  --alias deepseek4-v4-flash-selected-embed \
+  --path "$SELECTED_GGUF" \
+  --alias "$SELECTED_ALIAS" \
   --support-level selected-tensor-materialized
-
-./yvex models use deepseek4-v4-flash-selected-embed
+./yvex models use "$SELECTED_ALIAS"
 ./yvex models current
-./yvex inspect deepseek4-v4-flash-selected-embed
-./yvex tensors deepseek4-v4-flash-selected-embed
+./yvex models inspect "$SELECTED_ALIAS"
+
+export SELECTED_MODEL_REF="$SELECTED_ALIAS"
 ```
 
-Expected outcome: `models current` prints the DeepSeek alias, `inspect` reports
-`architecture: deepseek`, and `tensors` shows the selected F16 embedding tensor.
-
-Alias policy is strict. Use canonical aliases such as
-`deepseek4-v4-flash-selected-embed`; simple labels such as `controlled` are
-rejected.
-
-## 5. Normal selected-artifact path
-
-After the selected artifact is registered, the normal path is verify, report,
-materialize, attach, and execute the selected embedding segment.
+Only run the segment alias block if `$SEGMENT_GGUF` already exists. The selected
+embedding-only conversion flow does not create this segment artifact.
 
 ```sh
-./yvex models verify deepseek4-v4-flash-selected-embed
+if [ -f "$SEGMENT_GGUF" ]; then
+  ./yvex models remove "$SEGMENT_ALIAS" || true
+  ./yvex models add \
+    --path "$SEGMENT_GGUF" \
+    --alias "$SEGMENT_ALIAS" \
+    --support-level selected-tensor-materialized
+  ./yvex models inspect "$SEGMENT_ALIAS"
+  export SEGMENT_MODEL_REF="$SEGMENT_ALIAS"
+else
+  printf 'skip segment alias: %s not found\n' "$SEGMENT_GGUF"
+fi
+```
+
+Direct path mode remains valid if you do not want to use aliases:
+
+```sh
+export SELECTED_MODEL_REF="$SELECTED_GGUF"
+export SEGMENT_MODEL_REF="$SEGMENT_GGUF"
+```
+
+## 6. Verify Artifact Identity And Integrity
+
+Run the selected artifact chain in this order: descriptor, tensor table,
+metadata, integrity check, and operator integrity report.
+
+```sh
+./yvex inspect "$SELECTED_MODEL_REF"
+./yvex tensors "$SELECTED_MODEL_REF"
+./yvex metadata "$SELECTED_MODEL_REF"
+
+./yvex integrity check \
+  --model "$SELECTED_MODEL_REF" \
+  --require-token-embedding \
+  --partial-token 0
 
 ./yvex integrity report \
-  --model deepseek4-v4-flash-selected-embed \
-  --backend cpu \
-  --require-token-embedding \
-  --partial-token 0
-
-./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cpu
-./yvex engine --model deepseek4-v4-flash-selected-embed --backend cpu
-./yvex session deepseek4-v4-flash-selected-embed --backend cpu
-
-./yvex graph \
-  --model deepseek4-v4-flash-selected-embed \
-  --backend cpu \
-  --execute-partial \
-  --partial-token 0
-```
-
-This path proves local artifact identity, integrity, backend residency, engine
-attachment, session visibility, and selected embedding partial graph execution.
-It is still not full model execution, prefill, decode, logits, sampling, or
-generation.
-
-## 6. Check artifact integrity
-
-Run the baseline integrity check before materialization or graph execution when
-checking operator-local artifacts.
-
-```sh
-./yvex integrity check --model deepseek4-v4-flash-selected-embed
-```
-
-Expected outcome:
-
-```text
-artifact_integrity: check
-format: gguf
-version: 3
-architecture: deepseek
-tensor_count: 1
-known_tensor_bytes: 1059061760
-tensor_shapes_checked: 1
-tensor_dtypes_checked: 1
-tensor_byte_counts_checked: 1
-integrity_status: pass
-integrity_errors: 0
-status: artifact-integrity-pass
-```
-
-The check catches structural corruption, tensor range problems, checked
-byte-count failures, duplicate tensor names, and selected embedding readiness
-when requested. It is not a supply-chain security audit and does not prove model
-quality, author identity, malware absence, or provenance.
-
-The integrity output includes tensor range validation. A pass means each
-declared tensor payload range is inside the local file, offset/byte arithmetic
-did not overflow, and selected embedding readiness checks can validate the
-requested token slice when `--require-token-embedding` is used. It does not prove
-the tensor values are correct.
-
-For selected embedding readiness, integrity output reports the interpreted
-hidden size, vocabulary size, output count, output byte count, and selected-token
-slice byte size. These are shape and dtype accounting facts for
-`token_embd.weight`, not inference readiness.
-
-The repository also runs tiny corrupt `GGUF` fixture tests against integrity,
-inspect, tensors, materialization, and graph-entry refusal paths. Those fixtures
-are repository validation assets, not operator model assets. Operators should
-run `integrity check` and `models verify` on their own artifacts; they only need
-the corrupt fixture suite when debugging YVEX itself.
-
-For selected embedding readiness, include the partial-token boundary:
-
-```sh
-./yvex integrity check \
-  --model deepseek4-v4-flash-selected-embed \
+  --model "$SELECTED_MODEL_REF" \
+  --backend "$YVEX_BACKEND" \
   --require-token-embedding \
   --partial-token 0
 ```
 
-## 7. Verify artifact identity and registry metadata
-
-Registered aliases record local file identity. Verify the alias before
-materialization or graph execution when checking that the operator-local file is
-still the same file YVEX registered.
+If `$SELECTED_MODEL_REF` is an alias, verify registry identity and metadata
+drift before materialization or graph execution.
 
 ```sh
-./yvex models verify deepseek4-v4-flash-selected-embed
+./yvex models verify "$SELECTED_ALIAS"
 ```
 
-Expected outcome:
+The report is local operator evidence only. It is not remote provenance, model
+quality evidence, malware detection, sandboxing, or a generation claim.
 
-```text
-models: verify
-alias: deepseek4-v4-flash-selected-embed
-registered_sha256: 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab
-current_sha256: 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab
-digest_status: pass
-identity_status: pass
-metadata_status: pass
-readiness_status: pass
-registered_primary_tensor: token_embd.weight
-current_primary_tensor: token_embd.weight
-registered_primary_dtype: F16
-current_primary_dtype: F16
-registered_primary_dims: [4096,129280]
-current_primary_dims: [4096,129280]
-status: models-identity-pass
-```
+## 7. Materialize And Attach Runtime State
 
-`models verify` checks both digest identity and registry metadata drift. A digest
-match proves only that the current bytes match the local registry record. A
-metadata pass proves that the registry's recorded summary still matches current
-parsed artifact facts: support level, architecture, tensor count, known tensor
-bytes, primary tensor name/role/dtype/rank/dims/bytes, and selected embedding
-readiness. This is not remote provenance or model-quality validation.
-
-You can also make an expected digest explicit:
+CPU is the default path. `$YVEX_BACKEND` defaults to `cpu`, so this block can be
+rerun after every artifact refresh.
 
 ```sh
-./yvex integrity check \
-  --model deepseek4-v4-flash-selected-embed \
-  --expect-sha256 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab
+./yvex materialize --model "$SELECTED_MODEL_REF" --backend "$YVEX_BACKEND"
+./yvex engine --model "$SELECTED_MODEL_REF" --backend "$YVEX_BACKEND"
+./yvex session "$SELECTED_MODEL_REF" --backend "$YVEX_BACKEND"
 ```
 
-If an alias points to bytes that changed after registration, safety-critical
-paths such as `materialize`, `engine --backend`, `session`, `model-gate`,
-`materialize-gate`, and `graph --execute-partial` fail before backend allocation
-or graph execution. Digest checks are local identity evidence only. They do not
-prove remote provenance, author identity, malware absence, model quality, or
-supply-chain security.
-
-## 8. Generate an operator integrity report
-
-Use the integrity report as the normal operator summary before materialization
-or real partial graph execution.
-
-```sh
-./yvex integrity report \
-  --model deepseek4-v4-flash-selected-embed \
-  --backend cpu \
-  --require-token-embedding \
-  --partial-token 0
-```
-
-Expected outcome:
-
-```text
-artifact_integrity_report: summary
-identity_status: pass
-metadata_status: pass
-integrity_status: pass
-selected_embedding_ready: true
-materialization_preflight: pass
-graph_partial_guard: pass
-execution_ready: false
-generation: unsupported
-status: integrity-report-pass
-```
-
-The report composes existing checks: artifact structure, local digest identity,
-registry metadata drift, shape/dtype accounting, tensor range validation,
-selected embedding readiness, materialization preflight, and graph-entry guard
-status for implemented graph paths. It does not mean the model can generate
-text, and it is not a supply-chain security audit.
-
-If no `--backend` is supplied, backend-dependent sections report
-`not-checked`.
-
-## 9. Materialize and attach DeepSeek selected weights
-
-Materialization copies the selected tensor bytes into backend-owned storage.
-Engine attachment then makes that backend-resident tensor engine-owned runtime
-state. Neither step executes a transformer graph.
-
-Materialization reports an integrity gate. A `preflight` failure means YVEX
-refused the artifact before backend allocation. An `allocation` or `transfer`
-failure must report whether cleanup was attempted and whether cleanup passed.
-This is materialization safety and backend lifecycle accounting, not inference
-readiness.
-
-```sh
-./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cpu
-./yvex engine --model deepseek4-v4-flash-selected-embed --backend cpu
-./yvex session deepseek4-v4-flash-selected-embed --backend cpu
-```
-
-CUDA-capable hosts can also run:
+CUDA add-on:
 
 ```sh
 ./yvex cuda-info
 ./yvex backend cuda
-./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
-./yvex engine --model deepseek4-v4-flash-selected-embed --backend cuda
-./yvex session deepseek4-v4-flash-selected-embed --backend cuda
+./yvex materialize --model "$SELECTED_MODEL_REF" --backend cuda
+./yvex engine --model "$SELECTED_MODEL_REF" --backend cuda
+./yvex session "$SELECTED_MODEL_REF" --backend cuda
+./yvex graph --model "$SELECTED_MODEL_REF" --backend cuda --execute-partial --partial-token 0
 ```
 
-Expected outcome:
+Materialization creates backend-owned tensor residency. Engine/session
+attachment exposes runtime state. These commands do not execute a full
+transformer path.
 
-```text
-materialization status: materialized
-materialization_gate: pass
-materialization_phase: complete
-integrity_status: pass
-shape_status: pass
-range_status: pass
-allocation_attempted: true
-transfer_attempted: true
-cleanup_status: not-needed
-weights_attached: true
-weights_backend: cpu or cuda
-weight_tensor_count: 1
-weight_total_bytes: 1059061760
-execution_ready: false
-graph_execution_ready: false
-```
+## 8. Execute Current Graph Proofs
 
-The engine owns the attached backend tensors. The session observes that state;
-it does not own or execute the weights.
-
-## 10. Validate prompt/token input boundary
-
-Explicit token input is a runtime boundary before full transformer prefill and
-KV-backed prefill. It parses and bounds-checks token IDs, then graph commands
-can select one token from the validated sequence. This is not prompt prefill,
-attention KV use, decode, logits, sampling, or generation.
+Standalone graph ops do not open a model artifact. They prove bounded primitive
+behavior over deterministic F32 inputs.
 
 ```sh
-./yvex input tokens \
-  --model deepseek4-v4-flash-selected-embed-rmsnorm \
-  --tokens 0,1
-```
-
-Expected outcome:
-
-```text
-token_input: tokens
-token_input_status: pass
-token_input_kind: explicit
-token_count: 2
-token_bounds_status: pass
-prefill_ready: false
-generation: unsupported
-status: token-input-pass
-```
-
-The selected graph segment can consume one token from the same explicit
-sequence:
-
-```sh
-./yvex graph \
-  --model deepseek4-v4-flash-selected-embed-rmsnorm \
-  --backend cpu \
-  --execute-segment \
-  --segment embedding-rmsnorm \
-  --tokens 0,1 \
-  --token-index 1
-```
-
-Expected outcome includes:
-
-```text
-token_input_status: pass
-selected_token_index: 1
-selected_token_id: 1
-token_bounds_status: pass
-graph_integrity_guard: pass
-graph_kind: selected-embedding-rmsnorm
-status: real-segment-graph-executed
-```
-
-Prompt text is only accepted when executable tokenizer metadata exists. Selected
-DeepSeek artifacts without tokenizer metadata fail cleanly:
-
-```sh
-./yvex input prompt \
-  --model deepseek4-v4-flash-selected-embed-rmsnorm \
-  --text "hello"
-```
-
-Expected outcome:
-
-```text
-token_input_status: fail
-token_input_kind: prompt-text
-tokenizer_status: missing
-reason: tokenizer-metadata-missing
-status: token-input-fail
-```
-
-## 11. Create a prefill state summary
-
-The prefill state command consumes validated explicit token input and runs the
-implemented selected segment once per token. Without `--attach-kv`, it creates
-an inspectable `segment-summary` state only. With `--attach-kv`, it also binds
-processed positions into a minimal session-owned KV store using deterministic
-diagnostic values derived from the segment result. This is not attention
-computation, full transformer prefill, decode, logits, sampling, or generation.
-
-CPU example:
-
-```sh
-./yvex prefill \
-  --model deepseek4-v4-flash-selected-embed-rmsnorm \
-  --backend cpu \
-  --segment embedding-rmsnorm \
-  --tokens 0,1
-```
-
-Expected outcome:
-
-```text
-prefill: state
-prefill_state_created: true
-prefill_state_kind: segment-summary
-sequence_execution_mode: independent-token-segments
-token_input_status: pass
-token_count: 2
-tokens_processed: 2
-segment_graph_executions: 2
-kv_ready: false
-kv_bound_to_prefill: false
-decode_ready: false
-logits_ready: false
-generation: unsupported
-status: prefill-state-created
-```
-
-KV-backed binding example:
-
-```sh
-./yvex prefill \
-  --model deepseek4-v4-flash-selected-embed-rmsnorm \
-  --backend cpu \
-  --segment embedding-rmsnorm \
-  --tokens 0,1,2 \
-  --attach-kv \
-  --kv-layers 1 \
-  --kv-heads 2 \
-  --kv-head-dim 4 \
-  --kv-capacity 8
-```
-
-Expected outcome:
-
-```text
-prefill_state_created: true
-tokens_processed: 3
-kv_ready: true
-session_kv_owned: true
-kv_bound_to_prefill: true
-kv_binding_kind: minimal-diagnostic
-kv_status: allocated
-kv_positions_written: 3
-kv_append_count: 3
-kv_read_count: 1
-kv_cleanup_status: pass
-full_transformer_prefill_ready: false
-decode_ready: false
-logits_ready: false
-generation_ready: false
-generation: unsupported
-status: prefill-state-created
-```
-
-If `--kv-capacity` is smaller than the token count, the command fails before
-ambiguous state. If KV append fails after work has begun, the command reports
-the failure phase and cleanup status.
-
-CUDA-capable hosts can run the same foundation state on the CUDA lane:
-
-```sh
-./yvex prefill \
-  --model deepseek4-v4-flash-selected-embed-rmsnorm \
-  --backend cuda \
-  --segment embedding-rmsnorm \
-  --tokens 0,1
-```
-
-Expected CUDA outcome includes `prefill_cuda_parity: pass` when the CUDA path is
-available. A failure before token execution reports `prefill_state_created:
-false` and `tokens_processed: 0`; an injected or post-dispatch failure reports
-the prefill phase, processed-token count, and cleanup status.
-
-CUDA-capable hosts can also use `--attach-kv` with the same KV flags. The graph
-segment runs on CUDA; the minimal KV store remains session-owned diagnostic
-state and still reports `full_transformer_prefill_ready: false`.
-
-### Prove minimal KV ownership
-
-The minimal KV command creates a bounded session-owned F32 key/value store,
-appends deterministic complete positions, reads one written position, and
-reports lifecycle facts. It is a storage and ownership proof only. It is not
-attention execution, full transformer prefill, decode, logits, sampling, or
-generation.
-
-```sh
-./yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8 --append-demo --read-position 0
-```
-
-Expected outcome:
-
-```text
-kv: ownership
-kv_created: true
-session_owned: true
-dtype: F32
-values_per_position: 16
-bytes_per_position: 64
-planned_bytes: 512
-allocated_bytes: 512
-append_count: 2
-read_count: 1
-written_positions: 2
-overflow_status: not-overflowed
-cleanup_status: pass
-decode_ready: false
-logits_ready: false
-generation_ready: false
-generation: unsupported
-status: kv-owned
-```
-
-## 12. Execute a real selected embedding segment
-
-The real partial graph path uses the selected `F16` DeepSeek embedding tensor. It
-executes a constrained token-embedding graph segment over engine-attached
-`token_embd.weight`, converts the selected row to `F32`, compares the backend
-output to a raw-artifact reference slice, and reports a checksum plus sample
-values.
-
-Graph commands report `graph_integrity_guard` and `graph_execution_phase`. A
-`preflight` failure means no backend dispatch happened. This is graph-entry
-safety, not full model execution or inference readiness.
-
-```sh
-./yvex graph \
-  --model deepseek4-v4-flash-selected-embed \
-  --backend cpu \
-  --execute-partial \
-  --partial-token 0
-```
-
-Expected outcome:
-
-```text
-graph_integrity_guard: pass
-graph_execution_phase: complete
-graph_kind: selected-embedding-partial
-dispatch_attempted: true
-reference_read_attempted: true
-output_allocation_attempted: true
-real_partial_graph_executed: true
-partial_graph_kind: token-embedding
-partial_backend: cpu
-partial_weight: token_embd.weight
-partial_weight_dtype: F16
-partial_output_dtype: F32
-partial_output_count: 4096
-partial_output_bytes: 16384
-partial_max_abs_diff: 0
-execution_ready: false
-graph_execution_ready: false
-status: real-partial-graph-executed
-```
-
-CUDA-capable hosts can run the same boundary on CUDA:
-
-```sh
-./yvex graph \
-  --model deepseek4-v4-flash-selected-embed \
-  --backend cuda \
-  --execute-partial \
-  --partial-token 0
-```
-
-Expected outcome: CUDA reports the same output checksum, reference checksum, and
-sample values as CPU for the selected token. This is the first real-model partial
-graph segment. It is not prefill, KV runtime, decode, logits, sampling,
-generation, or a CUDA transformer backend.
-
-## 13. Execute selected embedding plus RMSNorm segment
-
-The selected embedding-plus-RMSNorm path uses an operator-local selected GGUF
-that contains the real `token_embd.weight` tensor and the first real RMSNorm
-weight, currently `blk.0.attn_norm.weight`. The current registry support level
-used for this selected artifact is `selected-tensor-materialized`; that means
-selected tensors can be materialized and used by the implemented segment path,
-not that a full model is supported.
-
-Register the selected segment artifact with its own alias:
-
-```sh
-./yvex models add \
-  --path /path/to/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-rmsnorm-F16-noimatrix-yvex-v1.gguf \
-  --alias deepseek4-v4-flash-selected-embed-rmsnorm \
-  --support-level selected-tensor-materialized
-
-./yvex models verify deepseek4-v4-flash-selected-embed-rmsnorm
-```
-
-Check the operator report and materialization preflight:
-
-```sh
-./yvex integrity report \
-  --model deepseek4-v4-flash-selected-embed-rmsnorm \
-  --backend cpu \
-  --require-token-embedding \
-  --partial-token 0
-
-./yvex materialize \
-  --model deepseek4-v4-flash-selected-embed-rmsnorm \
-  --backend cpu
-```
-
-Execute the CPU segment:
-
-```sh
-./yvex graph \
-  --model deepseek4-v4-flash-selected-embed-rmsnorm \
-  --backend cpu \
-  --execute-segment \
-  --segment embedding-rmsnorm \
-  --partial-token 0
-```
-
-Expected outcome:
-
-```text
-graph_integrity_guard: pass
-graph_execution_phase: complete
-graph_kind: selected-embedding-rmsnorm
-segment_graph_executed: true
-segment_backend: cpu
-segment_ops: 2
-segment_op_0: embed
-segment_op_1: rms_norm
-rmsnorm_tensor: blk.0.attn_norm.weight
-segment_memory_plan: explicit
-segment_output_count: 4096
-segment_output_bytes: 16384
-segment_max_abs_diff: 0
-execution_ready: false
-prefill_ready: false
-logits_ready: false
-generation: unsupported
-status: real-segment-graph-executed
-```
-
-CUDA-capable hosts can run the same selected segment:
-
-```sh
-./yvex integrity report \
-  --model deepseek4-v4-flash-selected-embed-rmsnorm \
-  --backend cuda \
-  --require-token-embedding \
-  --partial-token 0
-
-./yvex materialize \
-  --model deepseek4-v4-flash-selected-embed-rmsnorm \
-  --backend cuda
-
-./yvex graph \
-  --model deepseek4-v4-flash-selected-embed-rmsnorm \
-  --backend cuda \
-  --execute-segment \
-  --segment embedding-rmsnorm \
-  --partial-token 0
-```
-
-Expected outcome: CUDA reports `segment_cuda_parity: pass` and a max absolute
-diff within the segment tolerance. This path executes embedding lookup followed
-by RMSNorm only. It is not prefill, KV runtime, decode, logits, sampling,
-generation, or a CUDA transformer backend.
-
-### Execute standalone RoPE position op
-
-RoPE is the first standalone position-dependent graph op. It runs over a small
-deterministic F32 vector and does not open or trust a model artifact. Use it to
-prove backend op admission, output allocation, dispatch, reference comparison,
-cleanup, and position-dependent output before wider graph work depends on
-position-aware tensors.
-
-CPU proof:
-
-```sh
-./yvex graph \
-  --backend cpu \
-  --execute-op \
-  --op rope \
+./yvex graph --backend "$YVEX_BACKEND" --execute-op --op rope \
   --position 7 \
   --head-dim 8
-```
 
-Expected outcome:
-
-```text
-graph_integrity_guard: pass
-graph_execution_phase: complete
-graph_kind: rope-position-op
-op: rope
-backend: cpu
-position: 7
-head_dim: 8
-dtype: f32
-dispatch_attempted: true
-reference_attempted: true
-max_abs_diff: 0
-position_dependent_output: true
-attention_ready: false
-transformer_block_ready: false
-decode_ready: false
-logits_ready: false
-generation_ready: false
-status: graph-op-executed
-```
-
-CUDA-capable hosts can run the same proof on CUDA:
-
-```sh
-./yvex graph \
-  --backend cuda \
-  --execute-op \
-  --op rope \
-  --position 7 \
-  --head-dim 8
-```
-
-Expected outcome: CUDA reports `rope_cuda_parity: pass` with max absolute diff
-inside tolerance. This is RoPE position-op parity only; it is not transformer
-block execution, decode, logits, sampling, generation, or a CUDA transformer
-backend.
-
-### Execute standalone attention primitive
-
-The attention primitive runs over explicit deterministic F32 Q/K/V inputs. It
-does not read Q/K/V projection weights from a model artifact, does not update
-KV cache state, and does not execute a transformer block. Use it to prove
-bounded score calculation, causal masking, softmax, weighted value output,
-scratch ownership, backend dispatch, reference comparison, and cleanup.
-
-CPU proof:
-
-```sh
-./yvex graph \
-  --backend cpu \
-  --execute-op \
-  --op attention \
+./yvex graph --backend "$YVEX_BACKEND" --execute-op --op attention \
   --seq-len 4 \
   --position 3 \
   --head-dim 8 \
   --causal
-```
 
-Expected outcome:
-
-```text
-graph_integrity_guard: pass
-graph_execution_phase: complete
-graph_kind: attention-primitive
-op: attention
-backend: cpu
-dtype: f32
-seq_len: 4
-position: 3
-head_dim: 8
-mask: causal
-visible_keys: 4
-masked_keys: 0
-dispatch_attempted: true
-reference_attempted: true
-softmax_max_abs_diff: 0
-transformer_block_ready: false
-decode_ready: false
-logits_ready: false
-generation_ready: false
-status: graph-op-executed
-```
-
-Mask-bound proof:
-
-```sh
-./yvex graph \
-  --backend cpu \
-  --execute-op \
-  --op attention \
-  --seq-len 4 \
-  --position 0 \
-  --head-dim 8 \
-  --causal
-```
-
-Expected outcome: `visible_keys: 1`, `masked_keys: 3`,
-`causal_mask_future_prob_zero: true`, and `position_zero_single_key: true`.
-
-CUDA-capable hosts can run the same primitive on CUDA:
-
-```sh
-./yvex graph \
-  --backend cuda \
-  --execute-op \
-  --op attention \
-  --seq-len 4 \
-  --position 3 \
-  --head-dim 8 \
-  --causal
-```
-
-Expected outcome: CUDA reports `attention_cuda_parity: pass` with max absolute
-diff inside tolerance. This is standalone F32 attention primitive parity only;
-it is not Q/K/V projection, transformer block execution, layer scheduling, full
-transformer prefill, decode, logits, sampling, generation, or a CUDA transformer
-backend.
-
-### Execute standalone matmul projection primitive
-
-The matmul primitive runs over explicit deterministic F32 row-major tensors. It
-does not read projection weights from a model artifact, does not create Q/K/V
-tensors for attention, and does not execute a transformer block. Use it to prove
-shape admission for `input=[m,k]`, `weight=[k,n]`, `output=[m,n]`, output
-allocation, backend dispatch, reference comparison, cleanup, checksum, and
-max-diff behavior.
-
-CPU projection proof:
-
-```sh
-./yvex graph \
-  --backend cpu \
-  --execute-op \
-  --op matmul \
+./yvex graph --backend "$YVEX_BACKEND" --execute-op --op matmul \
   --m 1 \
   --k 8 \
   --n 8
-```
 
-Expected outcome:
-
-```text
-graph_integrity_guard: pass
-graph_execution_phase: complete
-graph_kind: matmul-projection
-op: matmul
-backend: cpu
-dtype: f32
-m: 1
-k: 8
-n: 8
-projection_shape: true
-dispatch_attempted: true
-reference_attempted: true
-max_abs_diff: 0
-qkv_projection_ready: false
-transformer_block_ready: false
-decode_ready: false
-logits_ready: false
-generation_ready: false
-status: graph-op-executed
-```
-
-Non-projection matrix proof:
-
-```sh
-./yvex graph \
-  --backend cpu \
-  --execute-op \
-  --op matmul \
-  --m 2 \
-  --k 4 \
-  --n 3
-```
-
-Expected outcome: `graph_kind: matmul-matrix`, `projection_shape: false`,
-`non_projection_shape: true`, and `status: graph-op-executed`.
-
-CUDA-capable hosts can run the projection proof on CUDA:
-
-```sh
-./yvex graph \
-  --backend cuda \
-  --execute-op \
-  --op matmul \
-  --m 1 \
-  --k 8 \
-  --n 8
-```
-
-Expected outcome: CUDA reports `matmul_cuda_parity: pass` with max absolute
-diff inside tolerance. This is standalone F32 matmul/projection primitive parity
-only; it is not Q/K/V projection readiness, attention integration, transformer
-block execution, layer scheduling, full transformer prefill, decode, logits,
-sampling, generation, or a CUDA transformer backend.
-
-### Execute standalone MLP feed-forward primitive
-
-The MLP primitive runs over explicit deterministic F32 tensors. It proves the
-feed-forward operation shape boundary: gate projection, up projection, SiLU,
-gated multiply, down projection, intermediate buffer, output buffer, backend
-dispatch, reference comparison, cleanup, checksum, and max-diff behavior. It
-does not read real model MLP weights and does not execute a transformer block.
-
-CPU dense proof:
-
-```sh
-./yvex graph \
-  --backend cpu \
-  --execute-op \
-  --op mlp \
+./yvex graph --backend "$YVEX_BACKEND" --execute-op --op mlp \
   --hidden-dim 8 \
   --ffn-dim 16 \
   --activation silu \
   --gated
 ```
 
-Expected outcome:
-
-```text
-graph_integrity_guard: pass
-graph_execution_phase: complete
-graph_kind: mlp-feed-forward
-op: mlp
-backend: cpu
-dtype: f32
-hidden_dim: 8
-ffn_dim: 16
-activation: silu
-gated: true
-routed_expert_mode: false
-dispatch_attempted: true
-reference_attempted: true
-max_abs_diff: 0
-router_logits_ready: false
-top_k_routing_ready: false
-transformer_block_ready: false
-decode_ready: false
-logits_ready: false
-generation_ready: false
-status: graph-op-executed
-```
-
-CPU routed expert-slice proof:
-
-```sh
-./yvex graph \
-  --backend cpu \
-  --execute-op \
-  --op mlp \
-  --hidden-dim 8 \
-  --ffn-dim 16 \
-  --activation silu \
-  --gated \
-  --experts 2 \
-  --expert-id 1
-```
-
-Expected outcome: `graph_kind: mlp-routed-expert`,
-`routed_expert_mode: true`, `expert_count: 2`, `expert_id: 1`, and
-`status: graph-op-executed`. This selects a deterministic expert weight slice;
-it is not learned routing, top-k routing, load balancing, or real MoE expert
-execution.
-
-CUDA-capable hosts can run the dense proof on CUDA:
-
-```sh
-./yvex graph \
-  --backend cuda \
-  --execute-op \
-  --op mlp \
-  --hidden-dim 8 \
-  --ffn-dim 16 \
-  --activation silu \
-  --gated
-```
-
-Expected outcome: CUDA reports `mlp_cuda_parity: pass` with max absolute diff
-inside tolerance. This is standalone F32 MLP primitive parity only; it is not
-transformer block execution, layer scheduling, full transformer prefill,
-decode, logits, sampling, generation, or a CUDA transformer backend.
-
-## 14. Execute a deterministic fixture graph
-
-M4 fixture execution uses a tiny controlled GGUF so output can be checked
-exactly. The example keeps the file under the operator-owned DeepSeek GGUF
-directory and marks the fixture architecture as `deepseek`, but it is still a
-controlled F32 fixture, not the large selected F16 DeepSeek artifact.
-
-The fixture graph uses the same graph integrity guard. A `preflight` failure
-still means no backend dispatch happened.
+Controlled fixture graph creates a tiny local GGUF under operator-local model
+storage and executes deterministic embedding fixture tokens.
 
 ```sh
 ./yvex gguf-emit controlled \
-  --out /path/to/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
-  --model-name yvex-m4-deepseek-fixture \
+  --out "$FIXTURE_GGUF" \
+  --model-name yvex-controlled-fixture \
   --arch deepseek \
   --overwrite
 
 ./yvex graph \
-  --model /path/to/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
-  --backend cpu \
+  --model "$FIXTURE_GGUF" \
+  --backend "$YVEX_BACKEND" \
   --execute-fixture \
   --fixture-token 0
 
 ./yvex graph \
-  --model /path/to/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
-  --backend cpu \
+  --model "$FIXTURE_GGUF" \
+  --backend "$YVEX_BACKEND" \
   --execute-fixture \
   --fixture-token 1
 ```
 
-Expected outcome:
-
-```text
-graph_integrity_guard: pass
-graph_execution_phase: complete
-graph_kind: fixture-embedding
-dispatch_attempted: true
-reference_read_attempted: false
-output_allocation_attempted: true
-fixture_graph_executed: true
-fixture_backend: cpu
-fixture_op: embed
-fixture_weight: token_embd.weight
-fixture_output_values: 0,4,8,12
-execution_ready: false
-graph_execution_ready: false
-status: fixture-graph-executed
-```
-
-Token `1` should produce `fixture_output_values: 16,20,24,28`. That proves the
-fixture graph reads attached tensor bytes, dispatches the embed node through the
-backend, and writes a real output buffer. It does not execute a real DeepSeek
-model graph, produce logits, or generate text.
-
-CUDA-capable hosts can run the same fixture graph on CUDA:
+Controlled block fixture composes the implemented primitive ops into one
+bounded transformer-block-shaped proof. It uses deterministic fixture tensors,
+not real model block weights.
 
 ```sh
 ./yvex graph \
-  --model /path/to/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf \
-  --backend cuda \
-  --execute-fixture \
-  --fixture-token 0
+  --backend "$YVEX_BACKEND" \
+  --execute-block \
+  --block fixture \
+  --seq-len 4 \
+  --position 3 \
+  --hidden-dim 8 \
+  --head-dim 8 \
+  --ffn-dim 16
 ```
 
-Expected outcome: the CUDA output values match the CPU fixture output. This is
-fixture graph parity only; it is not a CUDA transformer backend.
+Selected artifact graph executes the selected F16 embedding partial over the
+selected artifact.
 
-## 15. Run yvexd with the DeepSeek alias
+```sh
+./yvex graph \
+  --model "$SELECTED_MODEL_REF" \
+  --backend "$YVEX_BACKEND" \
+  --execute-partial \
+  --partial-token 0
+```
 
-`yvexd` is a provider/status shell. It accepts a direct path or registered alias
-for `--model`, then serves status endpoints. In one-request mode it exits after
-serving one HTTP request.
+Selected segment graph requires the embedding-plus-RMSNorm segment artifact.
 
-Direct path:
+```sh
+if [ -f "$SEGMENT_GGUF" ]; then
+  ./yvex graph \
+    --model "$SEGMENT_MODEL_REF" \
+    --backend "$YVEX_BACKEND" \
+    --execute-segment \
+    --segment embedding-rmsnorm \
+    --tokens 0,1 \
+    --token-index 1
+else
+  printf 'skip segment graph: %s not found\n' "$SEGMENT_GGUF"
+fi
+```
+
+Future layer scheduling will repeat controlled block execution over token
+positions with explicit state, scratch reuse, cleanup, and reference comparison.
+It is not a current operator command until the command exists.
+
+## 9. Execute Prefill And KV Diagnostics
+
+Minimal KV ownership is always runnable and does not require model artifacts.
+
+```sh
+./yvex kv \
+  --layers 1 \
+  --heads 2 \
+  --head-dim 4 \
+  --capacity 8 \
+  --append-demo \
+  --read-position 0
+```
+
+Prefill state summaries require the selected embedding-plus-RMSNorm segment
+artifact.
+
+```sh
+if [ -f "$SEGMENT_GGUF" ]; then
+  ./yvex input tokens \
+    --model "$SEGMENT_MODEL_REF" \
+    --tokens 0,1
+
+  ./yvex prefill \
+    --model "$SEGMENT_MODEL_REF" \
+    --backend "$YVEX_BACKEND" \
+    --segment embedding-rmsnorm \
+    --tokens 0,1
+
+  ./yvex prefill \
+    --model "$SEGMENT_MODEL_REF" \
+    --backend "$YVEX_BACKEND" \
+    --segment embedding-rmsnorm \
+    --tokens 0,1,2 \
+    --attach-kv \
+    --kv-layers 1 \
+    --kv-heads 2 \
+    --kv-head-dim 4 \
+    --kv-capacity 8
+else
+  printf 'skip prefill diagnostics: %s not found\n' "$SEGMENT_GGUF"
+fi
+```
+
+This is segment-summary prefill state plus minimal diagnostic KV binding. It is
+not attention-backed transformer prefill, decode, logits, sampling, or
+generation.
+
+## 10. Run Daemon Status Checks
+
+`yvexd` is a provider/status shell. Use one-request mode for repeatable checks.
 
 ```sh
 ./yvexd \
-  --model /path/to/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf \
-  --backend cpu \
+  --model "$SELECTED_MODEL_REF" \
+  --backend "$YVEX_BACKEND" \
   --host 127.0.0.1 \
   --port 18080 \
   --one-request &
@@ -1093,115 +508,48 @@ curl -s http://127.0.0.1:18080/v1/models
 wait "$server_pid" || true
 ```
 
-Alias:
+Additional status endpoints:
 
 ```sh
-./yvexd \
-  --model deepseek4-v4-flash-selected-embed \
-  --backend cpu \
-  --host 127.0.0.1 \
-  --port 18081 \
-  --one-request &
+./yvexd --host 127.0.0.1 --port 18081 --one-request &
 server_pid=$!
 sleep 1
-curl -s http://127.0.0.1:18081/v1/models
+curl -s http://127.0.0.1:18081/health
+wait "$server_pid" || true
+
+./yvexd --host 127.0.0.1 --port 18082 --one-request &
+server_pid=$!
+sleep 1
+curl -s http://127.0.0.1:18082/metrics
 wait "$server_pid" || true
 ```
 
-Expected outcome: `/v1/models` reports provider-shell model status with
-`generation_available: false`. The daemon is not a generation server.
+The daemon status surface does not serve generation.
 
-Status endpoints:
+## 11. Run Diagnostic Console And Accepted-Only Paths
 
-```text
-GET /health
-GET /metrics
-GET /v1/models
-```
+YVEX does not currently behave like DS4 when launched with `./yvex`. DS4 can
+enter a generation REPL because its runtime path exists. YVEX will move toward a
+short prepare/run/chat path only after runtime generation exists.
 
-## 16. Run model and materialization gates
-
-Use gates for repeatable selected-artifact checks. These commands encode
-expected file identity and tensor facts.
+Current diagnostic console and run commands use tokenizer-bearing fixtures.
+They accept text or prompt input and report diagnostics only.
 
 ```sh
-./yvex model-gate check \
-  --model deepseek4-v4-flash-selected-embed \
-  --label deepseek-v4-flash-selected-embedding \
-  --family deepseek4 \
-  --sha256 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab \
-  --expect-tensor token_embd.weight \
-  --expect-rank 2 \
-  --expect-dims 4096,129280 \
-  --expect-dtype F16 \
-  --expect-bytes 1059061760 \
-  --backend cpu \
-  --backend cuda \
-  --require-cpu \
-  --require-cuda \
-  --report-out /path/to/models/gguf/deepseek/deepseek-model-gate.txt
+printf '/status\n/quit\n' | ./yvex chat \
+  --model "$TOKENIZER_FIXTURE" \
+  --backend "$YVEX_BACKEND"
+
+./yvex run \
+  --model "$TOKENIZER_FIXTURE" \
+  --backend "$YVEX_BACKEND" \
+  --prompt "hello"
 ```
 
-```sh
-./yvex materialize-gate check \
-  --model deepseek4-v4-flash-selected-embed \
-  --label deepseek-v4-flash-selected-embedding \
-  --family deepseek4 \
-  --scope selected-tensor \
-  --sha256 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab \
-  --expect-tensor token_embd.weight \
-  --expect-rank 2 \
-  --expect-dims 4096,129280 \
-  --expect-dtype F16 \
-  --expect-bytes 1059061760 \
-  --backend cpu \
-  --backend cuda \
-  --require-cpu \
-  --require-cuda \
-  --repeat 3 \
-  --check-cleanup \
-  --report-out /path/to/models/gguf/deepseek/deepseek-materialize-gate.txt
-```
+Selected DeepSeek embedding artifacts do not contain tokenizer metadata for the
+diagnostic console.
 
-Expected outcome: gate status is pass when the selected artifact and CUDA host
-are available. The result remains selected-tensor materialization only.
-
-## 17. Use chat / REPL diagnostics only with tokenizer-bearing artifacts
-
-The selected DeepSeek embedding artifact does not include the tokenizer metadata
-needed by `chat`. Use `chat` with a tokenizer-bearing fixture or future
-tokenizer-bearing model artifact. The diagnostic console accepts text and slash
-commands, but it does not generate model responses.
-
-```sh
-printf '/status\n/quit\n' | ./yvex chat --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
-```
-
-Expected outcome: the console opens against the explicit tokenizer fixture and
-exits on `/quit`. Plain user text produces the diagnostic unsupported-generation
-placeholder; it is not inference. Do not use the selected DeepSeek embedding
-artifact as a chat model.
-
-## 18. Quantization / imatrix / provenance commands
-
-Keep qtype storage, policy, provenance, and compute boundaries separate.
-
-```sh
-./yvex qtype-support
-```
-
-Manifest-dependent commands:
-
-```sh
-./yvex quant-policy validate --policy /path/to/policy.json
-./yvex quant-job inspect --manifest /path/to/quant-job.json
-./yvex imatrix inspect --manifest /path/to/imatrix.json
-```
-
-Expected outcome: these surfaces report policy or provenance state. They do not
-run native quantization, calibration, or model execution.
-
-## 19. Validate the repository
+## 12. Run Repository Validation
 
 Run the standard validation gate before committing changes.
 
@@ -1211,13 +559,9 @@ make check
 make smoke
 sh tests/test_docs_surface.sh
 sh tests/test_surface.sh
+sh tests/test_source_layout.sh
+sh tests/test_code_natural.sh
 ```
-
-`make check` runs the consolidated integrity regression harness. It exercises
-structural corruption, digest drift, metadata drift, materialization preflight,
-graph guard refusal, cleanup, and repeat behavior across repository fixtures.
-Operators do not need to run that harness on their model artifacts; they should
-use `integrity check`, `models verify`, `materialize`, and graph command output.
 
 CUDA-capable hosts:
 
@@ -1225,10 +569,11 @@ CUDA-capable hosts:
 make check-cuda
 ```
 
-Expected outcome: baseline tests, CLI smoke, docs surface, repository surface,
-and CUDA validation pass. If CUDA is unavailable, report that explicitly.
+`make check` includes the consolidated integrity regression harness. Operators
+do not need to run that harness on their own artifacts; use `integrity check`,
+`models verify`, `materialize`, and graph command output for local artifacts.
 
-## 20. Artifact and path hygiene
+## 13. Artifact And Path Hygiene
 
 Check that generated artifacts and local model state are not tracked.
 
@@ -1237,19 +582,22 @@ git ls-files '*.safetensors' '*.bin' '*.dat'
 git ls-files '*.gguf'
 ```
 
-Expected outcome: no tracked large model artifacts. Tracked GGUF files are tiny
-parser fixtures only.
+Expected result:
+
+```text
+No downloaded source tensors.
+No real model GGUFs.
+Tiny test fixtures only.
+```
 
 Run a public-doc path leak scan before publishing docs:
 
 ```sh
-grep -R -nE '(/home|/Users|/mnt)/[^[:space:]]+' README.md MODEL_ARTIFACTS.md AGENTS.md docs/contract.md docs/spine.md docs/operator-runbook.md || true
+grep -R -nE '(/home|/Users|/mnt)/[^[:space:]]+' \
+  README.md MODEL_ARTIFACTS.md AGENTS.md docs/contract.md docs/spine.md docs/operator-runbook.md || true
 ```
 
-Expected outcome: no personal or machine-specific absolute paths in public
-documentation.
-
-## 21. Debugging checklist
+## 14. Manual Debug Order
 
 Use this order before assuming a runtime bug:
 
@@ -1257,10 +605,12 @@ Use this order before assuming a runtime bug:
 run ./yvex help <command>
 check the path passed to --native-source
 check the path passed to --out
-check YVEX_MODELS_REGISTRY only if you intentionally use an isolated registry
+check YVEX_MODELS_REGISTRY only if isolated registry mode is intentional
+run ./yvex model-target list
 run ./yvex models current
 run ./yvex inspect <model>
 run ./yvex tensors <model>
+run ./yvex integrity check --model <model>
 test CPU before CUDA
 use CUDA only on CUDA-capable hosts
 never commit generated GGUFs or local registry files
@@ -1269,21 +619,58 @@ never commit generated GGUFs or local registry files
 For daemon checks, start with `--one-request` and a status endpoint before
 testing longer-lived processes.
 
-## 22. Benchmarking and evaluation status
+## 15. Future One-Command Shape
 
-Benchmarking and capability evaluation are not implemented yet. Throughput,
-token latency, official-vector evaluation, logits regression, and generation
-quality suites belong after the relevant graph/logits/generation runtime exists.
+Future target shape, not current capability:
 
-Do not create benchmark claims from materialization, CUDA probing, daemon
-status, or diagnostic console behavior.
+```sh
+./yvex prepare <model-or-alias> --backend cuda
+./yvex chat --model <model-or-alias> --backend cuda
+./yvexd --model <model-or-alias> --backend cuda
+```
 
-## 23. What is not implemented yet
+The current runbook stays longer because the implemented surface still exposes
+the source/artifact/registry/integrity/materialization/graph/runtime boundaries
+separately. The short path belongs after decode, logits, sampling, and runtime
+generation exist.
 
-The current runtime does not implement full model execution, transformer
-prefill, attention KV runtime, decode, sampling, generation,
-provider-compatible generation, full DeepSeek support, full GGUF conversion, SSD
-streaming, distributed inference, or benchmark performance.
+## 16. Current Boundary
 
-`execution_ready` remains false until scheduled graph operations, required graph
-weights, scratch, KV, logits, decode, and sampling form an implemented path.
+Current implemented boundaries:
+
+```text
+source tensor inventory and selected conversion planning
+selected DeepSeek embedding GGUF emission
+alias registry and identity checks
+artifact integrity and metadata drift checks
+CPU/CUDA selected materialization
+engine/session attachment
+controlled fixture graph execution
+selected embedding partial graph execution
+selected embedding-plus-RMSNorm segment execution
+standalone RoPE, attention, matmul, and MLP primitive proofs
+controlled transformer-block fixture proof
+segment-summary prefill state diagnostics
+minimal KV ownership and diagnostic binding
+daemon status endpoints
+accepted-only chat/run diagnostics
+```
+
+Current unsupported boundaries:
+
+```text
+complete model materialization
+complete transformer execution
+attention-backed transformer prefill
+decode
+logits
+sampling
+generation
+interactive generation
+provider generation
+capability evaluation
+benchmark: unsupported
+generation: unsupported
+external reference only
+accepted-only diagnostic path
+```

@@ -525,6 +525,7 @@ operator integrity report
 source-tensor-first model-target roadmap authority in spine
 command-visible model target class registry
 canonical inference block directory in spine
+plug-and-play operator runbook flow
 ```
 
 Current live target classes:
@@ -699,7 +700,7 @@ tables.
 | HARDWARE.PROFILE.2 | planned | hardware | Future distributed hardware profile | distributed node assumptions are recorded without support claim |
 | COMPUTE.BACKEND.0 | planned | backend | Backend capability matrix | CPU, CUDA, future Metal, and future ROCm op capability states are reported |
 | COMPUTE.BACKEND.1 | planned | backend | Backend memory pressure reports | allocation, transfer, op failure, cleanup, and fallback reports are implemented |
-| OPERATOR.FLOW.0 | planned | operator | Procedural operator flow | source, artifact, residency, graph, runtime, serve, eval, and bench command paths are shown as short flows |
+| OPERATOR.FLOW.0 | complete | operator | Procedural operator flow | source, artifact, residency, graph, runtime, serve, eval, and bench command paths are shown as short flows |
 | SERVE.RUNTIME.0 | planned | serve | Serving runtime ownership map | daemon/provider surfaces are mapped to runtime generation ownership without generation claim |
 | ARTIFACT.NAMING.0 | complete | artifact | GGUF artifact naming contract | canonical artifact alias/name rules implemented |
 | RUNTIME.KV.0 | complete | kv-policy | KV cache policy | KV policy documented without runtime claim |
@@ -1152,7 +1153,7 @@ Evaluation must follow implemented runtime boundaries. Fixture eval is not model
 quality. Logits regression is not capability eval. Capability eval starts only
 when the same generation path users run exists.
 
-Benchmarks must follow implemented runtime paths. No token/sec number is valid
+Benchmarks must follow implemented runtime paths. No throughput number is valid
 without the measured command, machine, backend, artifact identity, qtype,
 context, and reproducibility note.
 
