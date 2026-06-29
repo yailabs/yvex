@@ -12,6 +12,10 @@ It is not a generation claim.
 
 It does not hide YVEX behind a single magical command yet.
 
+The current short entry is path configuration plus model-target path reporting.
+Artifact preparation still uses the lower-level source, conversion, and
+registry commands until a prepare preset exists.
+
 Current YVEX exposes the actual engine boundaries:
 
 - source intake;
@@ -115,6 +119,68 @@ No real `.safetensors`, `.bin`, `.dat`, or `.gguf` file belongs in the YVEX
 source repository.
 
 Tiny parser fixtures under tests are the only exception.
+
+## Configure once lane
+
+Use this lane once per local checkout or operator machine.
+
+```sh
+./yvex paths configure --models-root "$HOME/lab/models" --create
+```
+
+```sh
+./yvex paths
+```
+
+```sh
+./yvex paths resolve --family deepseek --kind source
+```
+
+```sh
+./yvex paths resolve --family deepseek --kind gguf
+```
+
+```sh
+./yvex paths resolve --family deepseek --kind reports
+```
+
+```sh
+./yvex paths resolve --family deepseek --kind reference
+```
+
+```sh
+./yvex paths resolve --family deepseek --kind registry
+```
+
+```sh
+./yvex paths resolve --family glm --kind source
+```
+
+```sh
+./yvex paths resolve --family glm --kind gguf
+```
+
+```sh
+./yvex paths resolve --family glm --kind reports
+```
+
+```sh
+./yvex paths resolve --family glm --kind reference
+```
+
+```sh
+./yvex paths resolve --family glm --kind registry
+```
+
+Boundary:
+
+```text
+path configuration only
+no model download
+no artifact creation
+no alias registration
+no runtime support claim
+```
 
 ## Model lanes
 
@@ -232,6 +298,47 @@ not YVEX benchmark
 not model support
 ```
 
+## Model target path reporting lanes
+
+### DeepSeek selected embedding target paths
+
+```sh
+./yvex model-target inspect deepseek4-v4-flash-selected-embed --paths
+```
+
+### DeepSeek selected embedding-plus-RMSNorm target paths
+
+```sh
+./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths
+```
+
+### GLM-5.2 official safetensors target paths
+
+```sh
+./yvex model-target inspect glm-5.2-official-safetensors --paths
+```
+
+### Explicit model root override
+
+Use this when checking a different operator-local model root without changing
+configuration.
+
+```sh
+./yvex model-target inspect deepseek4-v4-flash-selected-embed --paths --models-root "$HOME/lab/models"
+```
+
+Boundary:
+
+```text
+target path reporting only
+no safetensors inspection
+no GGUF inspection
+no artifact creation
+no alias registration
+no runtime support claim
+generation: unsupported
+```
+
 ## Backend lanes
 
 ### CPU lane
@@ -292,6 +399,22 @@ make
 ```
 
 ```sh
+./yvex paths configure --models-root "$HOME/lab/models" --create
+```
+
+```sh
+./yvex paths resolve --family deepseek --kind source
+```
+
+```sh
+./yvex paths resolve --family deepseek --kind gguf
+```
+
+```sh
+./yvex paths resolve --family glm --kind source
+```
+
+```sh
 ./yvex model-target classes
 ```
 
@@ -304,11 +427,23 @@ make
 ```
 
 ```sh
+./yvex model-target inspect deepseek4-v4-flash-selected-embed --paths
+```
+
+```sh
 ./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm
 ```
 
 ```sh
+./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths
+```
+
+```sh
 ./yvex model-target inspect glm-5.2-official-safetensors
+```
+
+```sh
+./yvex model-target inspect glm-5.2-official-safetensors --paths
 ```
 
 ```sh
@@ -360,6 +495,9 @@ Expected boundary:
 ```text
 tokenizer fixture diagnostics pass
 model-target registry is visible
+operator-local paths resolve
+model-target path reporting is visible
+no model payload is inspected by path reporting
 minimal KV diagnostics pass
 no generation claim
 ```
@@ -420,6 +558,18 @@ Use these commands when this source directory exists:
 $HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash
 ```
 
+Use model-target path reporting first to see the expected source and artifact
+locations. The commands below are the low-level source-to-selected-GGUF path
+until a prepare preset exists.
+
+```sh
+./yvex model-target inspect deepseek4-v4-flash-selected-embed --paths
+```
+
+```sh
+./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths
+```
+
 ```sh
 ./yvex source-manifest create --hf-repo "deepseek-ai/DeepSeek-V4-Flash" --revision "main" --local-path "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --status in-progress --out "$HOME/lab/models/gguf/deepseek/deepseek-source-manifest.json"
 ```
@@ -466,7 +616,7 @@ Use this lane only for source evidence while the GLM safetensors exist or are
 downloading.
 
 ```sh
-./yvex model-target inspect glm-5.2-official-safetensors
+./yvex model-target inspect glm-5.2-official-safetensors --paths
 ```
 
 Current boundary:
@@ -480,6 +630,9 @@ GLM execution is unsupported
 ```
 
 ## Artifact registration lanes
+
+This is the current low-level registration path. A prepare preset is planned
+but not current.
 
 ### Register DeepSeek selected embedding GGUF
 
@@ -947,6 +1100,10 @@ tiny fixtures only
 Use these commands to inspect the GLM-5.2 source tensor download.
 
 ```sh
+./yvex model-target inspect glm-5.2-official-safetensors --paths
+```
+
+```sh
 ps -p "$(cat "$HOME/lab/models/logs/glm52-safetensors-download.pid")" -o pid,stat,etime,cmd
 ```
 
@@ -995,10 +1152,10 @@ materialize — materialization and runtime attachment lanes
 materialize-gate — integrity and gate lanes
 metadata — artifact inspection lanes
 model-gate — integrity and gate lanes
-model-target — model lanes, fast regression lane
+model-target — model lanes, model target path reporting lanes, fast regression lane
 models — artifact registration lanes
 native-weights — source intake lanes
-paths — fast regression lane
+paths — configure once lane, fast regression lane, path resolution
 plan — materialization and runtime attachment lanes
 prefill — prefill and KV lanes
 prompt — fast regression lane
@@ -1036,11 +1193,13 @@ Current YVEX can inspect, emit selected artifacts, register aliases, validate
 integrity, materialize selected tensors, attach engine/session state, run
 controlled graph proofs, run selected graph slices, run segment-summary prefill,
 run minimal KV diagnostics, run daemon status checks, and run accepted-only
-chat/run diagnostics.
+chat/run diagnostics. It can also configure operator-local model roots and
+report model target paths.
 
 Current YVEX does not implement complete transformer execution, complete
-transformer prefill, decode, logits, sampling, generation, provider generation,
-capability evaluation, or benchmarks.
+transformer prefill, model prepare preset, model check preset, graph check
+preset, decode, logits, sampling, generation, provider generation, capability
+evaluation, or benchmarks.
 
 ## Manual debug fallback
 

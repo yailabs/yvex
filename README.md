@@ -173,6 +173,20 @@ Current artifacts are selected pressure artifacts. They sit between tiny
 fixtures and future full-model GGUFs. Their purpose is to force real runtime
 behavior before the whole transformer path lands.
 
+Start by making the operator-local layout explicit:
+
+```sh
+make
+./yvex paths configure --models-root "$HOME/lab/models" --create
+./yvex model-target list
+./yvex model-target inspect deepseek4-v4-flash-selected-embed --paths
+./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths
+./yvex model-target inspect glm-5.2-official-safetensors --paths
+```
+
+The path commands do not download weights, create artifacts, register aliases,
+or claim runtime support; they make the operator-local storage layout explicit.
+
 | Artifact class | Role | Location | Why it matters |
 | --- | --- | --- | --- |
 | Native source weights | Source evidence and tensor inventory | Operator-local storage | Preserves original tensor names, shapes, and family-specific facts before GGUF emission. |
@@ -199,15 +213,13 @@ posture without leaking workstation paths.
 A typical selected-artifact registration looks like this:
 
 ```sh
-./yvex models add \
-  --path /path/to/operator/model.gguf \
-  --alias deepseek4-v4-flash-selected-embed \
-  --support-level selected-tensor-materialized
-
+./yvex models add --path "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf" --alias deepseek4-v4-flash-selected-embed --support-level selected-tensor-materialized
 ./yvex models use deepseek4-v4-flash-selected-embed
 ./yvex models current
 ./yvex models verify deepseek4-v4-flash-selected-embed
 ```
+
+This remains the low-level registration path until a prepare preset exists.
 
 The alias is a local handle for a specific artifact and support level. It gives
 the operator a stable name while YVEX keeps checking file identity, metadata
@@ -246,6 +258,19 @@ mapping connects external names to runtime roles. Template validation defines
 what the artifact is supposed to contain. Selected emission produces the narrow
 GGUF that the current engine can exercise. Integrity and graph admission keep
 later commands grounded in checked facts.
+
+The low-level source-to-selected path is explicit:
+
+```sh
+./yvex source-manifest create --hf-repo "deepseek-ai/DeepSeek-V4-Flash" --revision "main" --local-path "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --status in-progress --out "$HOME/lab/models/gguf/deepseek/deepseek-source-manifest.json"
+./yvex native-weights --source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --limit 20
+./yvex tensor-map --arch deepseek4 --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --limit 20
+./yvex convert plan --arch deepseek4 --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --out-plan "$HOME/lab/models/gguf/deepseek/deepseek-selected-plan.json"
+./yvex convert emit --arch deepseek4 --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --tensor embed.weight --target-qtype F16 --out "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf" --overwrite
+```
+
+This emits the selected embedding artifact only; it is not full DeepSeek
+conversion and not generation.
 
 Quantization follows the same discipline. A qtype can describe artifact storage
 before backend compute support exists for a graph path. A policy can allow a
@@ -306,6 +331,15 @@ materialization. KV ownership is separate from prefill summaries. Decode is
 separate from logits. Sampling is separate from generation. The separation is
 how the runtime stays debuggable as the model class becomes harder.
 
+For larger source-tensor pressure targets, start with path reporting:
+
+```sh
+./yvex model-target inspect glm-5.2-official-safetensors --paths
+```
+
+GLM-5.2 is currently an official-source tensor target only; this path report
+does not inspect safetensors, emit a GGUF, or claim GLM execution.
+
 ## Current runtime surface
 
 YVEX currently runs two graph lanes.
@@ -359,35 +393,19 @@ make
 The selected segment path:
 
 ```sh
-./yvex graph \
-  --model deepseek4-v4-flash-selected-embed-rmsnorm \
-  --backend cpu \
-  --execute-segment \
-  --segment embedding-rmsnorm \
-  --tokens 0,1 \
-  --token-index 0
+./yvex graph --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --execute-segment --segment embedding-rmsnorm --tokens 0,1 --token-index 0
 ```
 
 The current prefill-state path:
 
 ```sh
-./yvex prefill \
-  --model deepseek4-v4-flash-selected-embed-rmsnorm \
-  --backend cpu \
-  --segment embedding-rmsnorm \
-  --tokens 0,1,2
+./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2
 ```
 
 The minimal KV proof path:
 
 ```sh
-./yvex kv \
-  --layers 1 \
-  --heads 2 \
-  --head-dim 4 \
-  --capacity 8 \
-  --append-demo \
-  --read-position 0
+./yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8 --append-demo --read-position 0
 ```
 
 The operator runbook contains longer transcripts, CUDA variants, fixture
@@ -407,11 +425,7 @@ belong here.
 The normal operator report is:
 
 ```sh
-./yvex integrity report \
-  --model deepseek4-v4-flash-selected-embed \
-  --backend cpu \
-  --require-token-embedding \
-  --partial-token 0
+./yvex integrity report --model deepseek4-v4-flash-selected-embed --backend cpu --require-token-embedding --partial-token 0
 ```
 
 For a registered alias, the report can include digest identity, registry drift,
