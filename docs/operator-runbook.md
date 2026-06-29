@@ -12,44 +12,31 @@ It is not a generation claim.
 
 It does not hide YVEX behind a single magical command yet.
 
+The primary unit in this runbook is a copy-pack lane. A copy-pack lane is a
+complete operator flow that can be pasted as a block. Use the lane that matches
+the task. Do not paste the whole file.
+
 The current short entry is path configuration plus model-target path reporting.
 Artifact preparation still uses the lower-level source, conversion, and
 registry commands until a prepare preset exists.
 
-Current YVEX exposes the actual engine boundaries:
+Current YVEX exposes source intake, YVEX-produced artifact creation, artifact
+identity, registry selection, backend materialization, graph proof, runtime
+diagnostics, daemon status, and validation.
 
-- source intake;
-- YVEX-produced artifact creation;
-- artifact identity;
-- registry selection;
-- backend materialization;
-- graph proof;
-- runtime diagnostics;
-- daemon status;
-- validation.
-
-The future shape is shorter:
-
-```text
-prepare model
-run/chat
-serve
-stream
-evaluate
-benchmark
-```
-
-That future shape is not claimed until decode, logits, sampling, generation,
-and serving exist.
+The future shape is shorter: prepare model, run/chat, serve, stream, evaluate,
+and benchmark. That future shape is not claimed until decode, logits, sampling,
+generation, and serving exist.
 
 Run commands from the `yailabs/yvex` source repository root.
 
 Real source tensors, generated GGUFs, reports, reference artifacts, local
 registries, logs, and caches stay outside the source repository.
 
-## How to read commands
+## How to use copy-pack lanes
 
-Every command in this runbook is intended to be copied directly.
+Every copy-pack lane states what it is for, what it requires, what it writes,
+whether it is safe to rerun, where to stop, and what boundary it proves.
 
 There are no shell loops.
 
@@ -59,11 +46,12 @@ There are no `export` walls.
 
 There are no multiline YVEX commands.
 
-When a command depends on a local artifact, the section says so.
+Every YVEX command is one physical line.
 
-Path convention used below:
+When a lane depends on a local artifact, the lane says so. Commands use the
+default operator-local path convention:
 
-```text
+```sh
 $HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash
 $HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
 $HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-rmsnorm-F16-noimatrix-yvex-v1.gguf
@@ -73,41 +61,21 @@ $HOME/lab/models/reference/
 ```
 
 For another model, quantization, or artifact, replace only the path or alias in
-the command you copy.
+the command block you copy.
 
 Do not change the YVEX source repository to store real model artifacts.
 
 ## Operator storage layout
 
-Source tensors:
+Source tensors: `$HOME/lab/models/hf/<family>/<model>/`
 
-```text
-$HOME/lab/models/hf/<family>/<model>/
-```
+YVEX-produced GGUF artifacts: `$HOME/lab/models/gguf/<family>/`
 
-YVEX-produced GGUF artifacts:
+External reference artifacts: `$HOME/lab/models/reference/<family>/`
 
-```text
-$HOME/lab/models/gguf/<family>/
-```
+Generated reports: `$HOME/lab/models/reports/<family>/`
 
-External reference artifacts:
-
-```text
-$HOME/lab/models/reference/<family>/
-```
-
-Generated reports:
-
-```text
-$HOME/lab/models/reports/<family>/
-```
-
-Local registries:
-
-```text
-$HOME/lab/models/registry/
-```
+Local registries: `$HOME/lab/models/registry/`
 
 The source repository stays clean.
 
@@ -116,395 +84,439 @@ distribution target such as Hugging Face Hub, not committing the real GGUF to
 the source repository.
 
 No real `.safetensors`, `.bin`, `.dat`, or `.gguf` file belongs in the YVEX
-source repository.
+source repository. Tiny parser fixtures under tests are the only exception.
 
-Tiny parser fixtures under tests are the only exception.
+## Lane 0 — Configure operator storage
 
-## Configure once lane
+Purpose:
+  Make YVEX remember the operator-local model root and show the canonical
+  storage layout.
 
-Use this lane once per local checkout or operator machine.
+Requires:
+  Repository root.
+
+Writes:
+  `.yvex/operator-paths.conf`
+  `$HOME/lab/models` directory tree
+
+Safe to rerun:
+  yes
+
+Stop after:
+  paths resolve commands report expected DeepSeek and GLM locations.
+
+Boundary:
+  no model download
+  no artifact creation
+  no alias registration
+  no runtime support claim
 
 ```sh
 ./yvex paths configure --models-root "$HOME/lab/models" --create
-```
-
-```sh
 ./yvex paths
-```
-
-```sh
 ./yvex paths resolve --family deepseek --kind source
-```
-
-```sh
 ./yvex paths resolve --family deepseek --kind gguf
-```
-
-```sh
 ./yvex paths resolve --family deepseek --kind reports
-```
-
-```sh
 ./yvex paths resolve --family deepseek --kind reference
-```
-
-```sh
 ./yvex paths resolve --family deepseek --kind registry
-```
-
-```sh
 ./yvex paths resolve --family glm --kind source
-```
-
-```sh
 ./yvex paths resolve --family glm --kind gguf
-```
-
-```sh
 ./yvex paths resolve --family glm --kind reports
-```
-
-```sh
 ./yvex paths resolve --family glm --kind reference
-```
-
-```sh
 ./yvex paths resolve --family glm --kind registry
-```
-
-Boundary:
-
-```text
-path configuration only
-no model download
-no artifact creation
-no alias registration
-no runtime support claim
-```
-
-## Model lanes
-
-### DeepSeek selected embedding lane
-
-Use this lane for the selected embedding GGUF.
-
-Alias:
-
-```text
-deepseek4-v4-flash-selected-embed
-```
-
-YVEX-produced GGUF:
-
-```text
-$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf
-```
-
-Purpose:
-
-```text
-selected token embedding materialization and selected graph slice
-```
-
-Boundary:
-
-```text
-not complete model execution
-not complete transformer prefill
-not decode
-not logits
-not generation
-```
-
-### DeepSeek selected embedding-plus-RMSNorm lane
-
-Use this lane for the selected segment GGUF.
-
-Alias:
-
-```text
-deepseek4-v4-flash-selected-embed-rmsnorm
-```
-
-YVEX-produced GGUF:
-
-```text
-$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-rmsnorm-F16-noimatrix-yvex-v1.gguf
-```
-
-Purpose:
-
-```text
-selected embedding plus RMSNorm segment execution and segment-summary prefill
-```
-
-Boundary:
-
-```text
-not complete transformer prefill
-not attention-backed KV
-not decode
-not logits
-not generation
-```
-
-### GLM-5.2 official source tensor lane
-
-Use this lane for downloaded GLM-5.2 official safetensors.
-
-Target:
-
-```text
-glm-5.2-official-safetensors
-```
-
-Source path:
-
-```text
-$HOME/lab/models/hf/glm/GLM-5.2
-```
-
-Purpose:
-
-```text
-huge source tensor intake, future model-class profile, future tensor mapping, future YVEX-produced GGUF, future storage-stream planning
-```
-
-Boundary:
-
-```text
-source evidence only
-not GLM execution
-not GLM generation
-not GLM benchmark
-```
-
-### External reference artifact lane
-
-Use this lane only for comparison artifacts not produced by YVEX.
-
-Purpose:
-
-```text
-compare artifact layout, qtype choice, shard layout, external runner behavior
-```
-
-Boundary:
-
-```text
-not YVEX-produced artifact
-not YVEX runtime execution
-not YVEX benchmark
-not model support
-```
-
-## Model target path reporting lanes
-
-### DeepSeek selected embedding target paths
-
-```sh
+./yvex model-target list
 ./yvex model-target inspect deepseek4-v4-flash-selected-embed --paths
-```
-
-### DeepSeek selected embedding-plus-RMSNorm target paths
-
-```sh
 ./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths
-```
-
-### GLM-5.2 official safetensors target paths
-
-```sh
 ./yvex model-target inspect glm-5.2-official-safetensors --paths
 ```
 
-### Explicit model root override
+## Lane 1 — Fast regression after a wave
 
-Use this when checking a different operator-local model root without changing
-configuration.
+Purpose:
+  Quickly check that command discovery, path resolution, model-target reporting,
+  tokenizer fixture diagnostics, and minimal KV diagnostics still work.
 
-```sh
-./yvex model-target inspect deepseek4-v4-flash-selected-embed --paths --models-root "$HOME/lab/models"
-```
+Requires:
+  Repository root.
+  Configured model root is useful but not mandatory.
+  No real model artifact required.
+
+Writes:
+  No real model artifact.
+  May touch normal runtime/test output produced by existing commands.
+
+Safe to rerun:
+  yes
+
+Stop after:
+  minimal KV diagnostics pass and no model payload path is required.
 
 Boundary:
-
-```text
-target path reporting only
-no safetensors inspection
-no GGUF inspection
-no artifact creation
-no alias registration
-no runtime support claim
-generation: unsupported
-```
-
-## Backend lanes
-
-### CPU lane
-
-CPU is the reference lane.
-
-```sh
-./yvex backend cpu
-```
-
-Use CPU first when debugging model artifacts, graph proofs, and runtime
-diagnostics.
-
-### CUDA lane
-
-Use CUDA only on CUDA-capable hosts.
-
-```sh
-./yvex cuda-info
-```
-
-```sh
-./yvex backend cuda
-```
-
-CUDA backend availability is not a model capability claim.
-
-A CUDA probe does not prove generation.
-
-A CUDA graph primitive proof does not prove complete model execution.
-
-## Fast regression lane
-
-Run these after most implementation waves.
+  read/diagnostic command surface only
+  no source conversion
+  no alias refresh
+  no materialization
+  no daemon
+  no generation claim
 
 ```sh
 make
-```
-
-```sh
 ./yvex version
-```
-
-```sh
 ./yvex --version
-```
-
-```sh
 ./yvex commands
-```
-
-```sh
 ./yvex info
-```
-
-```sh
 ./yvexd --help
-```
-
-```sh
-./yvex paths configure --models-root "$HOME/lab/models" --create
-```
-
-```sh
-./yvex paths resolve --family deepseek --kind source
-```
-
-```sh
-./yvex paths resolve --family deepseek --kind gguf
-```
-
-```sh
-./yvex paths resolve --family glm --kind source
-```
-
-```sh
-./yvex model-target classes
-```
-
-```sh
-./yvex model-target list
-```
-
-```sh
-./yvex model-target inspect deepseek4-v4-flash-selected-embed
-```
-
-```sh
-./yvex model-target inspect deepseek4-v4-flash-selected-embed --paths
-```
-
-```sh
-./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm
-```
-
-```sh
-./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths
-```
-
-```sh
-./yvex model-target inspect glm-5.2-official-safetensors
-```
-
-```sh
-./yvex model-target inspect glm-5.2-official-safetensors --paths
-```
-
-```sh
 ./yvex paths
-```
-
-```sh
-./yvex paths --run
-```
-
-```sh
-./yvex paths --run --create
-```
-
-```sh
+./yvex paths resolve --family deepseek --kind source
+./yvex paths resolve --family deepseek --kind gguf
+./yvex paths resolve --family glm --kind source
+./yvex model-target classes
+./yvex model-target list
+./yvex model-target inspect deepseek4-v4-flash-selected-embed
+./yvex model-target inspect deepseek4-v4-flash-selected-embed --paths
+./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm
+./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths
+./yvex model-target inspect glm-5.2-official-safetensors
+./yvex model-target inspect glm-5.2-official-safetensors --paths
 ./yvex backend cpu
-```
-
-```sh
 ./yvex tokenizer tests/fixtures/gguf/valid-tokenizer-simple.gguf
-```
-
-```sh
 ./yvex tokenize tests/fixtures/gguf/valid-tokenizer-simple.gguf --text "hello"
-```
-
-```sh
 ./yvex detokenize tests/fixtures/gguf/valid-tokenizer-simple.gguf --ids 0,1
-```
-
-```sh
 ./yvex prompt tests/fixtures/gguf/valid-tokenizer-simple.gguf --user "hello" --tokens
-```
-
-```sh
 ./yvex input prompt --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --text "hello"
-```
-
-```sh
 ./yvex input tokens --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --tokens 0,1
-```
-
-```sh
 ./yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8 --append-demo --read-position 0
 ```
 
-Expected boundary:
+## Lane 2 — DeepSeek selected embedding: source tensors to selected graph
 
-```text
-tokenizer fixture diagnostics pass
-model-target registry is visible
-operator-local paths resolve
-model-target path reporting is visible
-no model payload is inspected by path reporting
-minimal KV diagnostics pass
-no generation claim
+Purpose:
+  Start from local DeepSeek source tensors, emit the selected embedding GGUF,
+  register it, validate it, materialize it, attach it, and execute the selected
+  embedding graph.
+
+Requires:
+  `$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash` exists.
+
+Writes:
+  source manifest
+  conversion plan
+  selected embedding GGUF
+  local model registry entry
+  operator reports from integrity/gates when commands write reports
+
+Safe to rerun:
+  yes, but it overwrites the selected embedding GGUF and refreshes the alias.
+
+Stop after:
+  selected embedding graph partial executes.
+
+Boundary:
+  selected embedding only
+  not full DeepSeek conversion
+  not full model execution
+  not complete transformer prefill
+  not decode
+  not logits
+  not sampling
+  not generation
+
+```sh
+./yvex paths configure --models-root "$HOME/lab/models" --create
+./yvex model-target inspect deepseek4-v4-flash-selected-embed --paths
+./yvex source-manifest create --hf-repo "deepseek-ai/DeepSeek-V4-Flash" --revision "main" --local-path "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --status in-progress --out "$HOME/lab/models/gguf/deepseek/deepseek-source-manifest.json"
+./yvex native-weights --source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --limit 20
+./yvex tensor-map --arch deepseek4 --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --limit 20
+./yvex convert plan --arch deepseek4 --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --out-plan "$HOME/lab/models/gguf/deepseek/deepseek-selected-plan.json"
+./yvex convert emit --arch deepseek4 --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --tensor embed.weight --target-qtype F16 --out "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf" --overwrite
+./yvex inspect "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
+./yvex tensors "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
+./yvex metadata "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
+./yvex models remove deepseek4-v4-flash-selected-embed
+./yvex models add --path "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf" --alias deepseek4-v4-flash-selected-embed --support-level selected-tensor-materialized
+./yvex models use deepseek4-v4-flash-selected-embed
+./yvex models current
+./yvex models list
+./yvex models inspect deepseek4-v4-flash-selected-embed
+./yvex models verify deepseek4-v4-flash-selected-embed
+./yvex integrity check --model deepseek4-v4-flash-selected-embed
+./yvex integrity check --model deepseek4-v4-flash-selected-embed --require-token-embedding --partial-token 0
+./yvex integrity report --model deepseek4-v4-flash-selected-embed --backend cpu --require-token-embedding --partial-token 0
+./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cpu
+./yvex engine --model deepseek4-v4-flash-selected-embed --backend cpu
+./yvex session deepseek4-v4-flash-selected-embed --backend cpu
+./yvex plan deepseek4-v4-flash-selected-embed --backend cpu --seq 1 --ctx 16
+./yvex graph --model deepseek4-v4-flash-selected-embed --backend cpu --execute-partial --partial-token 0
 ```
 
-## Full help lane
+## Lane 3 — DeepSeek selected segment: RMSNorm, prefill, and KV diagnostics
 
-Use this lane when checking that the command surface is still discoverable.
+Purpose:
+  Validate and exercise the selected embedding-plus-RMSNorm segment artifact
+  through graph segment execution, prefill summary, and minimal KV-backed
+  binding.
+
+Requires:
+  `deepseek4-v4-flash-selected-embed-rmsnorm` GGUF exists.
+
+Writes:
+  local model registry entry for the segment alias
+
+Safe to rerun:
+  yes, but it refreshes the segment alias.
+
+Stop after:
+  segment-summary prefill with minimal KV binding completes.
+
+Boundary:
+  selected embedding-plus-RMSNorm segment only
+  segment-summary prefill only
+  minimal diagnostic KV binding only
+  not attention-backed transformer prefill
+  not decode
+  not logits
+  not sampling
+  not generation
+
+```sh
+./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths
+./yvex models remove deepseek4-v4-flash-selected-embed-rmsnorm
+./yvex models add --path "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-rmsnorm-F16-noimatrix-yvex-v1.gguf" --alias deepseek4-v4-flash-selected-embed-rmsnorm --support-level selected-tensor-materialized
+./yvex models inspect deepseek4-v4-flash-selected-embed-rmsnorm
+./yvex models verify deepseek4-v4-flash-selected-embed-rmsnorm
+./yvex inspect deepseek4-v4-flash-selected-embed-rmsnorm
+./yvex tensors deepseek4-v4-flash-selected-embed-rmsnorm
+./yvex integrity check --model deepseek4-v4-flash-selected-embed-rmsnorm --require-token-embedding --partial-token 0
+./yvex integrity report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --require-token-embedding --partial-token 0
+./yvex materialize --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu
+./yvex engine --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu
+./yvex session deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu
+./yvex input tokens --model deepseek4-v4-flash-selected-embed-rmsnorm --tokens 0,1
+./yvex graph --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --execute-segment --segment embedding-rmsnorm --tokens 0,1 --token-index 1
+./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1
+./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
+./yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8 --append-demo --read-position 0
+```
+
+## Lane 4 — Graph-only regression
+
+Purpose:
+  Exercise standalone graph primitives, controlled fixture graph, and
+  controlled transformer block fixture.
+
+Requires:
+  No real model artifact.
+
+Writes:
+  controlled tiny GGUF fixture under operator-local model storage
+
+Safe to rerun:
+  yes, but it overwrites the controlled tiny fixture.
+
+Stop after:
+  controlled transformer block fixture executes.
+
+Boundary:
+  controlled graph proofs only
+  standalone primitives only
+  controlled block fixture only
+  not real transformer block over model weights
+  not layer scheduling
+  not full transformer prefill
+  not decode/logits/sampling/generation
+
+```sh
+./yvex graph --backend cpu --execute-op --op rope --position 7 --head-dim 8
+./yvex graph --backend cpu --execute-op --op attention --seq-len 4 --position 3 --head-dim 8 --causal
+./yvex graph --backend cpu --execute-op --op matmul --m 1 --k 8 --n 8
+./yvex graph --backend cpu --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated
+./yvex graph --backend cpu --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated --experts 2 --expert-id 1
+./yvex gguf-emit controlled --out "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf" --model-name yvex-controlled-fixture --arch deepseek --overwrite
+./yvex inspect "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf"
+./yvex tensors "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf"
+./yvex graph --model "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf" --backend cpu --execute-fixture --fixture-token 0
+./yvex graph --model "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf" --backend cpu --execute-fixture --fixture-token 1
+./yvex graph --backend cpu --execute-block --block fixture --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
+```
+
+## Lane 5 — CUDA pressure lane
+
+Purpose:
+  Run CUDA probe, CUDA primitive graph proofs, and CUDA selected artifact graph
+  checks.
+
+Requires:
+  CUDA-capable host.
+  Registered selected aliases for selected artifact commands.
+
+Writes:
+  No model artifact.
+  May create normal command output.
+
+Safe to rerun:
+  yes on CUDA-capable hosts.
+
+Stop after:
+  CUDA selected segment prefill with minimal KV binding completes.
+
+Boundary:
+  CUDA over implemented selected/materialized/graph surfaces only
+  not full model execution
+  not generation
+  not benchmark
+
+```sh
+./yvex cuda-info
+./yvex backend cuda
+./yvex graph --backend cuda --execute-op --op rope --position 7 --head-dim 8
+./yvex graph --backend cuda --execute-op --op attention --seq-len 4 --position 3 --head-dim 8 --causal
+./yvex graph --backend cuda --execute-op --op matmul --m 1 --k 8 --n 8
+./yvex graph --backend cuda --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated
+./yvex integrity report --model deepseek4-v4-flash-selected-embed --backend cuda --require-token-embedding --partial-token 0
+./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
+./yvex engine --model deepseek4-v4-flash-selected-embed --backend cuda
+./yvex session deepseek4-v4-flash-selected-embed --backend cuda
+./yvex graph --model deepseek4-v4-flash-selected-embed --backend cuda --execute-partial --partial-token 0
+./yvex graph --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda --execute-segment --segment embedding-rmsnorm --tokens 0,1 --token-index 1
+./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda --segment embedding-rmsnorm --tokens 0,1
+./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda --segment embedding-rmsnorm --tokens 0,1,2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
+```
+
+## Lane 6 — Daemon and accepted-only runtime lane
+
+Purpose:
+  Check daemon status surface and accepted-only diagnostic chat/run commands.
+
+Requires:
+  Registered selected embedding alias for model-status daemon path.
+  Tokenizer fixture for chat/run diagnostics.
+
+Writes:
+  No model artifacts.
+
+Safe to rerun:
+  yes
+
+Stop after:
+  daemon one-request commands and accepted-only diagnostics complete.
+
+Boundary:
+  daemon status only
+  accepted-only diagnostic path
+  not provider completion
+  not streaming
+  not generation
+
+```sh
+./yvexd --model deepseek4-v4-flash-selected-embed --backend cpu --host 127.0.0.1 --port 18080 --one-request
+./yvexd --host 127.0.0.1 --port 18081 --one-request
+./yvexd --host 127.0.0.1 --port 18082 --one-request
+./yvex chat --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
+./yvex run --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --prompt "hello"
+```
+
+## Lane 7 — GLM source-target status lane
+
+Purpose:
+  Check GLM target path reporting and source-download status.
+
+Requires:
+  GLM download status commands require an existing pid/log after a download has
+  been started.
+
+Writes:
+  No YVEX artifact.
+
+Safe to rerun:
+  yes after GLM download state exists.
+
+Stop after:
+  source path, download process/log, shard count, and source size are visible.
+
+Boundary:
+  GLM source evidence only
+  not GLM inventory completion
+  not GLM GGUF emission
+  not GLM runtime execution
+  not GLM generation
+
+```sh
+./yvex model-target inspect glm-5.2-official-safetensors --paths
+ps -p "$(cat "$HOME/lab/models/logs/glm52-safetensors-download.pid")" -o pid,stat,etime,cmd
+tail -n 40 "$HOME/lab/models/logs/glm52-safetensors-download.log"
+find "$HOME/lab/models/hf/glm/GLM-5.2" -maxdepth 1 -type f -name "*.safetensors" | wc -l
+du -sh "$HOME/lab/models/hf/glm/GLM-5.2"
+```
+
+## Lane 8 — Full repository validation and hygiene
+
+Purpose:
+  Run repository validation, CUDA validation, and artifact guardrails before
+  commit.
+
+Requires:
+  Repository root.
+  CUDA validation requires CUDA-capable host.
+
+Writes:
+  No model artifact.
+  May create normal build/test output.
+
+Safe to rerun:
+  yes
+
+Stop after:
+  validation commands pass and artifact guardrails show no tracked real model
+  artifacts.
+
+Boundary:
+  validation only
+  no model capability claim
+  no benchmark claim
+  no artifact commit
+
+```sh
+git diff --check
+make check
+make smoke
+sh tests/test_docs_surface.sh
+sh tests/test_surface.sh
+sh tests/test_source_layout.sh
+sh tests/test_code_natural.sh
+make check-cuda
+git status --short
+git ls-files '*.safetensors' '*.bin' '*.dat'
+git ls-files '*.gguf'
+```
+
+## Lane 9 — Low-level command atlas
+
+Purpose:
+  Provide compact low-level reference commands without becoming the primary
+  workflow.
+
+Requires:
+  Repository root.
+  Relevant local artifact or manifest paths for artifact-specific commands.
+
+Writes:
+  Depends on the command group selected.
+
+Safe to rerun:
+  depends on the command group selected.
+
+Stop after:
+  the specific diagnostic or low-level command family answers the question.
+
+Boundary:
+  reference only
+  not a replacement for lanes 0 through 8
+  no model prepare claim
+  no model check claim
+  no graph check claim
+  no generation claim
+
+Full help:
 
 ```sh
 ./yvex help backend
@@ -548,642 +560,108 @@ Use this lane when checking that the command surface is still discoverable.
 ./yvex help version
 ```
 
-## Source intake lanes
-
-### DeepSeek source-to-selected-GGUF lane
-
-Use these commands when this source directory exists:
-
-```text
-$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash
-```
-
-Use model-target path reporting first to see the expected source and artifact
-locations. The commands below are the low-level source-to-selected-GGUF path
-until a prepare preset exists.
-
-```sh
-./yvex model-target inspect deepseek4-v4-flash-selected-embed --paths
-```
-
-```sh
-./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths
-```
-
-```sh
-./yvex source-manifest create --hf-repo "deepseek-ai/DeepSeek-V4-Flash" --revision "main" --local-path "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --status in-progress --out "$HOME/lab/models/gguf/deepseek/deepseek-source-manifest.json"
-```
-
-```sh
-./yvex native-weights --source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --limit 20
-```
-
-```sh
-./yvex tensor-map --arch deepseek4 --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --limit 20
-```
-
-```sh
-./yvex convert plan --arch deepseek4 --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --out-plan "$HOME/lab/models/gguf/deepseek/deepseek-selected-plan.json"
-```
-
-```sh
-./yvex convert emit --arch deepseek4 --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --tensor embed.weight --target-qtype F16 --out "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf" --overwrite
-```
-
-```sh
-./yvex inspect "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
-```
-
-```sh
-./yvex tensors "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
-```
-
-```sh
-./yvex metadata "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
-```
-
-Expected boundary:
-
-```text
-selected embedding GGUF emitted
-not complete DeepSeek GGUF
-not generation
-```
-
-### GLM-5.2 source tensor lane
-
-Use this lane only for source evidence while the GLM safetensors exist or are
-downloading.
-
-```sh
-./yvex model-target inspect glm-5.2-official-safetensors --paths
-```
-
-Current boundary:
-
-```text
-GLM is source evidence only
-GLM source inventory is planned
-GLM conversion is planned
-GLM YVEX-produced GGUF is planned
-GLM execution is unsupported
-```
-
-## Artifact registration lanes
-
-This is the current low-level registration path. A prepare preset is planned
-but not current.
-
-### Register DeepSeek selected embedding GGUF
-
-```sh
-./yvex models remove deepseek4-v4-flash-selected-embed
-```
-
-```sh
-./yvex models add --path "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf" --alias deepseek4-v4-flash-selected-embed --support-level selected-tensor-materialized
-```
-
-```sh
-./yvex models use deepseek4-v4-flash-selected-embed
-```
-
-```sh
-./yvex models current
-```
-
-```sh
-./yvex models list
-```
-
-```sh
-./yvex models inspect deepseek4-v4-flash-selected-embed
-```
-
-```sh
-./yvex models verify deepseek4-v4-flash-selected-embed
-```
-
-### Register DeepSeek selected embedding-plus-RMSNorm GGUF
-
-Run this lane when the segment GGUF exists.
-
-```sh
-./yvex models remove deepseek4-v4-flash-selected-embed-rmsnorm
-```
-
-```sh
-./yvex models add --path "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-rmsnorm-F16-noimatrix-yvex-v1.gguf" --alias deepseek4-v4-flash-selected-embed-rmsnorm --support-level selected-tensor-materialized
-```
-
-```sh
-./yvex models inspect deepseek4-v4-flash-selected-embed-rmsnorm
-```
-
-```sh
-./yvex models verify deepseek4-v4-flash-selected-embed-rmsnorm
-```
-
-## Artifact inspection lanes
-
-### DeepSeek selected embedding by alias
+Artifact inspection by alias/path:
 
 ```sh
 ./yvex inspect deepseek4-v4-flash-selected-embed
-```
-
-```sh
 ./yvex tensors deepseek4-v4-flash-selected-embed
-```
-
-```sh
 ./yvex metadata deepseek4-v4-flash-selected-embed
-```
-
-### DeepSeek selected embedding by path
-
-```sh
 ./yvex inspect "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
-```
-
-```sh
 ./yvex tensors "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
-```
-
-```sh
 ./yvex metadata "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
-```
-
-### DeepSeek selected segment by alias
-
-```sh
 ./yvex inspect deepseek4-v4-flash-selected-embed-rmsnorm
-```
-
-```sh
 ./yvex tensors deepseek4-v4-flash-selected-embed-rmsnorm
 ```
 
-## Integrity and gate lanes
-
-### Selected embedding integrity
+Integrity and gates:
 
 ```sh
 ./yvex integrity check --model deepseek4-v4-flash-selected-embed
-```
-
-```sh
 ./yvex integrity check --model deepseek4-v4-flash-selected-embed --require-token-embedding --partial-token 0
-```
-
-```sh
 ./yvex integrity report --model deepseek4-v4-flash-selected-embed --backend cpu --require-token-embedding --partial-token 0
-```
-
-### Selected segment integrity
-
-```sh
 ./yvex integrity check --model deepseek4-v4-flash-selected-embed-rmsnorm --require-token-embedding --partial-token 0
-```
-
-```sh
 ./yvex integrity report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --require-token-embedding --partial-token 0
-```
-
-### Selected embedding gates
-
-```sh
 ./yvex model-gate check --model deepseek4-v4-flash-selected-embed --label deepseek-v4-flash-selected-embedding --family deepseek4 --expect-tensor token_embd.weight --expect-rank 2 --expect-dims 4096,129280 --expect-dtype F16 --expect-bytes 1059061760 --backend cpu --require-cpu --report-out "$HOME/lab/models/reports/deepseek/deepseek-model-gate-cpu.txt"
-```
-
-```sh
 ./yvex materialize-gate check --model deepseek4-v4-flash-selected-embed --label deepseek-v4-flash-selected-embedding --family deepseek4 --scope selected-tensor --expect-tensor token_embd.weight --expect-rank 2 --expect-dims 4096,129280 --expect-dtype F16 --expect-bytes 1059061760 --backend cpu --require-cpu --repeat 3 --check-cleanup --report-out "$HOME/lab/models/reports/deepseek/deepseek-materialize-gate-cpu.txt"
 ```
 
-## Materialization and runtime attachment lanes
-
-### CPU selected embedding
+Materialization and runtime attachment:
 
 ```sh
 ./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cpu
-```
-
-```sh
 ./yvex engine --model deepseek4-v4-flash-selected-embed --backend cpu
-```
-
-```sh
 ./yvex session deepseek4-v4-flash-selected-embed --backend cpu
-```
-
-```sh
 ./yvex plan deepseek4-v4-flash-selected-embed --backend cpu --seq 1 --ctx 16
-```
-
-### CUDA selected embedding
-
-```sh
 ./yvex cuda-info
-```
-
-```sh
 ./yvex backend cuda
-```
-
-```sh
 ./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
-```
-
-```sh
 ./yvex engine --model deepseek4-v4-flash-selected-embed --backend cuda
-```
-
-```sh
 ./yvex session deepseek4-v4-flash-selected-embed --backend cuda
-```
-
-### CPU selected segment
-
-```sh
 ./yvex materialize --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu
-```
-
-```sh
 ./yvex engine --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu
-```
-
-```sh
 ./yvex session deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu
 ```
 
-## Graph lanes
-
-### Standalone graph ops, CPU
-
-```sh
-./yvex graph --backend cpu --execute-op --op rope --position 7 --head-dim 8
-```
-
-```sh
-./yvex graph --backend cpu --execute-op --op attention --seq-len 4 --position 3 --head-dim 8 --causal
-```
-
-```sh
-./yvex graph --backend cpu --execute-op --op matmul --m 1 --k 8 --n 8
-```
-
-```sh
-./yvex graph --backend cpu --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated
-```
-
-```sh
-./yvex graph --backend cpu --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated --experts 2 --expert-id 1
-```
-
-### Standalone graph ops, CUDA
-
-```sh
-./yvex graph --backend cuda --execute-op --op rope --position 7 --head-dim 8
-```
-
-```sh
-./yvex graph --backend cuda --execute-op --op attention --seq-len 4 --position 3 --head-dim 8 --causal
-```
-
-```sh
-./yvex graph --backend cuda --execute-op --op matmul --m 1 --k 8 --n 8
-```
-
-```sh
-./yvex graph --backend cuda --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated
-```
-
-### Controlled tiny GGUF fixture
-
-```sh
-./yvex gguf-emit controlled --out "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf" --model-name yvex-controlled-fixture --arch deepseek --overwrite
-```
-
-```sh
-./yvex inspect "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf"
-```
-
-```sh
-./yvex tensors "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf"
-```
-
-```sh
-./yvex graph --model "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf" --backend cpu --execute-fixture --fixture-token 0
-```
-
-```sh
-./yvex graph --model "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf" --backend cpu --execute-fixture --fixture-token 1
-```
-
-### Controlled transformer block fixture
-
-```sh
-./yvex graph --backend cpu --execute-block --block fixture --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
-```
-
-### Selected embedding graph
-
-```sh
-./yvex graph --model deepseek4-v4-flash-selected-embed --backend cpu --execute-partial --partial-token 0
-```
-
-```sh
-./yvex graph --model deepseek4-v4-flash-selected-embed --backend cuda --execute-partial --partial-token 0
-```
-
-### Selected embedding-plus-RMSNorm segment graph
-
-```sh
-./yvex graph --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --execute-segment --segment embedding-rmsnorm --tokens 0,1 --token-index 1
-```
-
-```sh
-./yvex graph --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda --execute-segment --segment embedding-rmsnorm --tokens 0,1 --token-index 1
-```
-
-## Prefill and KV lanes
-
-### Minimal KV diagnostics
-
-```sh
-./yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8 --append-demo --read-position 0
-```
-
-### Segment-summary prefill
-
-```sh
-./yvex input tokens --model deepseek4-v4-flash-selected-embed-rmsnorm --tokens 0,1
-```
-
-```sh
-./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1
-```
-
-```sh
-./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
-```
-
-### CUDA segment-summary prefill
-
-```sh
-./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda --segment embedding-rmsnorm --tokens 0,1
-```
-
-```sh
-./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda --segment embedding-rmsnorm --tokens 0,1,2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
-```
-
-## Daemon and accepted-only runtime lanes
-
-### Daemon model status
-
-```sh
-./yvexd --model deepseek4-v4-flash-selected-embed --backend cpu --host 127.0.0.1 --port 18080 --one-request
-```
-
-### Daemon health and metrics
-
-```sh
-./yvexd --host 127.0.0.1 --port 18081 --one-request
-```
-
-```sh
-./yvexd --host 127.0.0.1 --port 18082 --one-request
-```
-
-### Accepted-only chat and run diagnostics
-
-```sh
-./yvex chat --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
-```
-
-```sh
-./yvex run --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --prompt "hello"
-```
-
-Boundary:
-
-```text
-accepted-only diagnostic path
-not generation
-not provider completion
-not streaming
-```
-
-## Quant/template/intake manifest lanes
-
-### Qtype support
+Quant/template/intake manifests:
 
 ```sh
 ./yvex qtype-support
-```
-
-### Quant policy
-
-Use when a policy file exists.
-
-```sh
 ./yvex quant-policy inspect --policy "$HOME/lab/models/reports/deepseek/policy.json"
-```
-
-```sh
 ./yvex quant-policy validate --policy "$HOME/lab/models/reports/deepseek/policy.json"
-```
-
-### Quant job
-
-Use when a quant job manifest exists.
-
-```sh
 ./yvex quant-job inspect --manifest "$HOME/lab/models/reports/deepseek/quant-job.json"
-```
-
-```sh
 ./yvex quant-job validate --manifest "$HOME/lab/models/reports/deepseek/quant-job.json"
-```
-
-### Imatrix
-
-Use when an imatrix manifest exists.
-
-```sh
 ./yvex imatrix inspect --manifest "$HOME/lab/models/reports/deepseek/imatrix.json"
-```
-
-```sh
 ./yvex imatrix validate --manifest "$HOME/lab/models/reports/deepseek/imatrix.json"
-```
-
-### GGUF template
-
-Use when a GGUF template exists.
-
-```sh
 ./yvex gguf-template inspect --template "$HOME/lab/models/reports/deepseek/template.json"
-```
-
-```sh
 ./yvex gguf-template validate --template "$HOME/lab/models/reports/deepseek/template.json"
-```
-
-```sh
 ./yvex gguf-template compare --template "$HOME/lab/models/reports/deepseek/template.json" --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash"
-```
-
-## Repository validation lanes
-
-### Standard validation
-
-```sh
-git diff --check
-```
-
-```sh
-make check
-```
-
-```sh
-make smoke
-```
-
-```sh
-sh tests/test_docs_surface.sh
-```
-
-```sh
-sh tests/test_surface.sh
-```
-
-```sh
-sh tests/test_source_layout.sh
-```
-
-```sh
-sh tests/test_code_natural.sh
-```
-
-### CUDA validation
-
-```sh
-make check-cuda
-```
-
-### Artifact hygiene
-
-```sh
-git status --short
-```
-
-```sh
-git ls-files '*.safetensors' '*.bin' '*.dat'
-```
-
-```sh
-git ls-files '*.gguf'
-```
-
-Expected:
-
-```text
-no downloaded source tensors tracked
-no real GGUF artifacts tracked
-tiny fixtures only
-```
-
-## GLM source download status
-
-Use these commands to inspect the GLM-5.2 source tensor download.
-
-```sh
-./yvex model-target inspect glm-5.2-official-safetensors --paths
-```
-
-```sh
-ps -p "$(cat "$HOME/lab/models/logs/glm52-safetensors-download.pid")" -o pid,stat,etime,cmd
-```
-
-```sh
-tail -n 40 "$HOME/lab/models/logs/glm52-safetensors-download.log"
-```
-
-```sh
-find "$HOME/lab/models/hf/glm/GLM-5.2" -maxdepth 1 -type f -name "*.safetensors" | wc -l
-```
-
-```sh
-du -sh "$HOME/lab/models/hf/glm/GLM-5.2"
-```
-
-Boundary:
-
-```text
-GLM source tensors are source evidence
-not GLM execution
-not GLM GGUF emission
-not GLM generation
 ```
 
 ## Full implemented command inventory
 
-```text
-backend — backend lanes
-chat — daemon and accepted-only runtime lanes
-commands — fast regression lane
-convert — source intake lanes
-cuda-info — backend lanes
-detokenize — fast regression lane
-engine — materialization and runtime attachment lanes
-graph — graph lanes
-gguf-template — quant/template/intake manifest lanes
-gguf-emit — graph lanes
-help — full help lane
-imatrix — quant/template/intake manifest lanes
-info — fast regression lane
-inspect — artifact inspection lanes
-input — fast regression lane, prefill and KV lanes
-integrity — integrity and gate lanes
-kv — prefill and KV lanes
-materialize — materialization and runtime attachment lanes
-materialize-gate — integrity and gate lanes
-metadata — artifact inspection lanes
-model-gate — integrity and gate lanes
-model-target — model lanes, model target path reporting lanes, fast regression lane
-models — artifact registration lanes
-native-weights — source intake lanes
-paths — configure once lane, fast regression lane, path resolution
-plan — materialization and runtime attachment lanes
-prefill — prefill and KV lanes
-prompt — fast regression lane
-quant-job — quant/template/intake manifest lanes
-quant-policy — quant/template/intake manifest lanes
-qtype-support — quant/template/intake manifest lanes
-run — daemon and accepted-only runtime lanes
-session — materialization and runtime attachment lanes
-source-manifest — source intake lanes
-tensor-map — source intake lanes
-tokenize — fast regression lane
-tokenizer — fast regression lane
-tensors — artifact inspection lanes
-version — fast regression lane
-```
+- `backend`: backend lanes
+- `chat`: daemon and accepted-only runtime lanes
+- `commands`: fast regression lane
+- `convert`: source intake lanes
+- `cuda-info`: backend lanes
+- `detokenize`: fast regression lane
+- `engine`: materialization and runtime attachment lanes
+- `graph`: graph lanes
+- `gguf-template`: quant/template/intake manifest lanes
+- `gguf-emit`: graph lanes
+- `help`: full help lane
+- `imatrix`: quant/template/intake manifest lanes
+- `info`: fast regression lane
+- `inspect`: artifact inspection lanes
+- `input`: fast regression lane, prefill and KV lanes
+- `integrity`: integrity and gate lanes
+- `kv`: prefill and KV lanes
+- `materialize`: materialization and runtime attachment lanes
+- `materialize-gate`: integrity and gate lanes
+- `metadata`: artifact inspection lanes
+- `model-gate`: integrity and gate lanes
+- `model-target`: model lanes, model target path reporting lanes, fast regression lane
+- `models`: artifact registration lanes
+- `native-weights`: source intake lanes
+- `paths`: configure once lane, fast regression lane, path resolution
+- `plan`: materialization and runtime attachment lanes
+- `prefill`: prefill and KV lanes
+- `prompt`: fast regression lane
+- `quant-job`: quant/template/intake manifest lanes
+- `quant-policy`: quant/template/intake manifest lanes
+- `qtype-support`: quant/template/intake manifest lanes
+- `run`: daemon and accepted-only runtime lanes
+- `session`: materialization and runtime attachment lanes
+- `source-manifest`: source intake lanes
+- `tensor-map`: source intake lanes
+- `tokenize`: fast regression lane
+- `tokenizer`: fast regression lane
+- `tensors`: artifact inspection lanes
+- `version`: fast regression lane
 
 ## Future one-command shape
 
-Future shape:
-
-```text
-prepare model
-run/chat
-serve
-stream
-evaluate
-benchmark
-```
+Future shape: prepare model, run/chat, serve, stream, evaluate, and benchmark.
 
 That future shape is not claimed by the current implementation.
 
@@ -1205,17 +683,15 @@ evaluation, or benchmarks.
 
 Use this order before assuming a runtime bug:
 
-```text
-1. ./yvex commands
-2. ./yvex help <command>
-3. ./yvex model-target list
-4. ./yvex models current
-5. ./yvex models list
-6. ./yvex inspect <model-or-alias>
-7. ./yvex tensors <model-or-alias>
-8. ./yvex integrity check --model <model-or-alias>
-9. ./yvex backend cpu
-10. ./yvex cuda-info
-11. rerun CPU before CUDA
-12. check git status before committing
-```
+1. `./yvex commands`
+2. `./yvex help <command>`
+3. `./yvex model-target list`
+4. `./yvex models current`
+5. `./yvex models list`
+6. `./yvex inspect <model-or-alias>`
+7. `./yvex tensors <model-or-alias>`
+8. `./yvex integrity check --model <model-or-alias>`
+9. `./yvex backend cpu`
+10. `./yvex cuda-info`
+11. Rerun CPU before CUDA.
+12. Check `git status` before committing.
