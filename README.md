@@ -142,8 +142,9 @@ KV is now a real session-owned boundary. The current store is intentionally
 minimal, but it proves the ownership model that later attention state needs:
 shape is explicit, capacity is bounded, appends and reads are checked, clear
 and close paths are tested, and overflow is a visible runtime condition.
-KV-backed prefill is the next step because it connects token-sequence
-processing to owned attention state.
+Minimal KV-backed prefill binding now connects the segment-summary prefill
+state to a small diagnostic KV store. This is still not attention-backed
+transformer prefill, decode, logits, sampling, or generation.
 
 ```text
 source weights
@@ -342,12 +343,18 @@ does not inspect safetensors, emit a GGUF, or claim GLM execution.
 
 ## Current runtime surface
 
-YVEX currently runs two graph lanes.
+YVEX currently exposes controlled fixture graph proofs, standalone F32 graph
+primitive proofs, and selected real-artifact graph slices.
 
-The controlled lane uses tiny F32 fixtures. Its job is exactness. A fixture
-graph proves descriptor construction, weight attachment, backend dispatch,
-output allocation, readback, cleanup, and checksum behavior. This keeps
-executor mechanics boring.
+The controlled lane uses tiny F32 fixtures. Its job is exactness. Fixture graph
+proofs cover descriptor construction, weight attachment, backend dispatch,
+output allocation, readback, cleanup, checksum behavior, and a bounded
+transformer-block-shaped path. This keeps executor mechanics boring.
+
+Standalone primitives prove RoPE, attention, matmul/projection, and MLP
+operation boundaries over deterministic F32 inputs. Real model attention, real
+model MLP, full layer scheduling, full transformer prefill, decode, logits,
+sampling, and generation still come later.
 
 The selected real-artifact lane uses operator-local DeepSeek-class artifacts.
 The selected embedding path reads `token_embd.weight`, interprets it as
@@ -357,10 +364,10 @@ slice.
 
 The embedding-plus-RMSNorm path reads the same embedding row, applies RMSNorm
 using a real first-layer normalization weight, and checks the final vector by
-checksum and max-diff. This is the current real-model graph segment. Attention
-and MLP still come later, but the segment already establishes multi-tensor
-scheduling, intermediate memory planning, backend RMSNorm support, cleanup, and
-reference comparison.
+checksum and max-diff. This is the current real-model graph segment. Real model
+attention and real model MLP still come later, but the segment already
+establishes multi-tensor scheduling, intermediate memory planning, backend
+RMSNorm support, cleanup, and reference comparison.
 
 Token input is explicit. `yvex input tokens` parses bounded token sequences,
 validates them against vocabulary facts when available, and lets graph commands
@@ -396,10 +403,25 @@ The selected segment path:
 ./yvex graph --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --execute-segment --segment embedding-rmsnorm --tokens 0,1 --token-index 0
 ```
 
+The controlled block fixture path:
+
+```sh
+./yvex graph --backend cpu --execute-block --block fixture --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
+```
+
+This is a controlled transformer-block-shaped fixture proof, not full model
+inference.
+
 The current prefill-state path:
 
 ```sh
 ./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2
+```
+
+The minimal KV-backed prefill binding path:
+
+```sh
+./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
 ```
 
 The minimal KV proof path:
