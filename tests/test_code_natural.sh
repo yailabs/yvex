@@ -103,4 +103,31 @@ if grep -nE 'implemented|ready|supports generation|benchmark result|token/sec|ev
   exit 1
 fi
 
+scan_forbidden_claim() {
+  pattern=$1
+  if git grep -nF "$pattern" -- README.md MODEL_ARTIFACTS.md docs '*.c' include tests; then
+    echo "forbidden capability claim found: $pattern"
+    exit 1
+  fi
+}
+
+pattern='GLM sup''port'
+scan_forbidden_claim "$pattern"
+pattern='GLM generation rea''dy'
+scan_forbidden_claim "$pattern"
+pattern='GLM execution rea''dy'
+scan_forbidden_claim "$pattern"
+pattern='GLM runtime rea''dy'
+scan_forbidden_claim "$pattern"
+pattern='GLM inference imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='YVEX supports GLM gener''ation'
+scan_forbidden_claim "$pattern"
+pattern='external GGUF satisfies OW''I'
+scan_forbidden_claim "$pattern"
+pattern='external runner proves YV''EX'
+scan_forbidden_claim "$pattern"
+pattern='model target is capab''ility'
+scan_forbidden_claim "$pattern"
+
 echo "code naturalness: ok"

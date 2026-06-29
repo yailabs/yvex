@@ -54,7 +54,19 @@ bad_command_files="$(
        -o -name 'yvex_cli_*.h' \
        -o -name 'yvex_*_commands.c' \
        -o -name 'commands.c' \
-       -o -name 'yvex_command_private.h' \) \
+       -o -name 'yvex_command_private.h' \
+       -o -name 'yvex_model_target.c' \
+       -o -name 'yvex_model_targets.c' \
+       -o -name 'yvex_targets.c' \
+       -o -name 'yvex_target_registry.c' \
+       -o -name 'model_target.c' \
+       -o -name 'model_targets.c' \
+       -o -name 'target_registry.c' \
+       -o -name 'source_target.c' \
+       -o -name 'owintake_targets.c' \
+       -o -name 'yvex_model_target.h' \
+       -o -name 'yvex_target_private.h' \
+       -o -name 'yvex_owi_private.h' \) \
     -print
 )"
 if [ -n "$bad_command_files" ]; then

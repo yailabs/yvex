@@ -13,6 +13,7 @@
 
 #include <limits.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1112,4 +1113,268 @@ int yvex_weight_table_get_summary(const yvex_weight_table *weights,
         out->backend_allocated_bytes = stats.allocated_bytes;
     }
     return YVEX_OK;
+}
+
+
+
+/* Model pressure target registry */
+
+typedef struct {
+    const char *class_id;
+    const char *capability_claim;
+    const char *runtime_execution;
+    const char *generation;
+    const char *description;
+} yvex_model_target_class_record;
+
+typedef struct {
+    const char *target_id;
+    const char *family;
+    const char *model;
+    const char *target_class;
+    const char *source_artifact_class;
+    const char *target_artifact_class;
+    const char *pressure_purpose;
+    const char *tensor_set;
+    const char *local_path_class;
+    const char *source_footprint_class;
+    const char *runtime_boundary;
+    const char *runtime_execution;
+    const char *generation;
+    const char *external_reference;
+} yvex_model_target_record;
+
+static const yvex_model_target_class_record model_target_classes[] = {
+    {
+        "selected-runtime-slice",
+        "false",
+        "partial-boundary-only",
+        "unsupported",
+        "selected real artifact slice used to prove parser, materialization, backend, graph, reference, and cleanup boundaries",
+    },
+    {
+        "official-source-huge-model",
+        "false",
+        "unsupported",
+        "unsupported",
+        "official upstream source tensors used to force source manifest, native tensor inventory, model-class profiling, tensor mapping, quantization policy, and future YVEX-produced artifacts",
+    },
+    {
+        "full-runtime-model",
+        "false",
+        "planned",
+        "planned",
+        "complete tensor set required for transformer prefill, decode, logits, sampling, and generation after runtime support exists",
+    },
+    {
+        "huge-model-storage-stream",
+        "false",
+        "planned",
+        "unsupported",
+        "huge artifact target used to force shard inventory, storage layout, page or chunk planning, staged residency, and cleanup boundaries",
+    },
+    {
+        "external-GGUF-reference",
+        "false",
+        "external-reference-only",
+        "external-reference-only",
+        "external GGUF evidence used only to compare artifact layout, qtype choices, deployment constraints, or external behavior",
+    },
+    {
+        "external-runner-reference",
+        "false",
+        "external-reference-only",
+        "external-reference-only",
+        "external runtime evidence used only to compare deployment constraints or external behavior",
+    },
+};
+
+static const yvex_model_target_record model_targets[] = {
+    {
+        "deepseek4-v4-flash-selected-embed",
+        "DeepSeek",
+        "DeepSeek-V4-Flash",
+        "selected-runtime-slice",
+        "YVEX-produced selected GGUF",
+        "YVEX-produced selected GGUF",
+        "selected-token-embedding-materialization",
+        "token_embd.weight",
+        "none",
+        "none",
+        "selected materialization and selected graph slice only",
+        "unsupported",
+        "unsupported",
+        "false",
+    },
+    {
+        "deepseek4-v4-flash-selected-embed-rmsnorm",
+        "DeepSeek",
+        "DeepSeek-V4-Flash",
+        "selected-runtime-slice",
+        "YVEX-produced selected GGUF",
+        "YVEX-produced selected GGUF",
+        "selected-embedding-plus-rmsnorm-segment",
+        "token_embd.weight,blk.0.attn_norm.weight",
+        "none",
+        "none",
+        "selected segment execution only",
+        "unsupported",
+        "unsupported",
+        "false",
+    },
+    {
+        "glm-5.2-official-safetensors",
+        "GLM",
+        "GLM-5.2",
+        "official-source-huge-model",
+        "official safetensors",
+        "future YVEX-produced GGUF",
+        "huge-source-tensor-intake-moe-storage-stream-planning",
+        "none",
+        "hf/glm/GLM-5.2",
+        "282 safetensors,1.5T-class",
+        "source evidence only",
+        "unsupported",
+        "unsupported",
+        "false",
+    },
+};
+
+static const unsigned long model_target_class_count =
+    sizeof(model_target_classes) / sizeof(model_target_classes[0]);
+static const unsigned long model_target_count = sizeof(model_targets) / sizeof(model_targets[0]);
+
+static const yvex_model_target_record *find_model_target(const char *target_id)
+{
+    unsigned long i;
+
+    if (!target_id) {
+        return NULL;
+    }
+    for (i = 0; i < model_target_count; ++i) {
+        if (strcmp(model_targets[i].target_id, target_id) == 0) {
+            return &model_targets[i];
+        }
+    }
+    return NULL;
+}
+
+static void print_model_target_usage(FILE *fp)
+{
+    fprintf(fp, "usage: yvex model-target classes\n");
+    fprintf(fp, "       yvex model-target list\n");
+    fprintf(fp, "       yvex model-target inspect TARGET\n");
+}
+
+void yvex_model_target_help(FILE *fp)
+{
+    print_model_target_usage(fp);
+    fprintf(fp, "\nModel targets are pressure objects, not capability claims.\n");
+    fprintf(fp, "External GGUFs and external runners are reference evidence only.\n");
+}
+
+static void print_model_target_classes(void)
+{
+    unsigned long i;
+
+    printf("status: model-target-classes\n");
+    for (i = 0; i < model_target_class_count; ++i) {
+        const yvex_model_target_class_record *record = &model_target_classes[i];
+        printf("class: %s\n", record->class_id);
+        printf("capability_claim: %s\n", record->capability_claim);
+        printf("runtime_execution: %s\n", record->runtime_execution);
+        printf("generation: %s\n", record->generation);
+        printf("description: %s\n", record->description);
+        if (i + 1 < model_target_class_count) {
+            printf("\n");
+        }
+    }
+}
+
+static void print_model_target_list(void)
+{
+    unsigned long i;
+
+    printf("status: model-target-list\n");
+    for (i = 0; i < model_target_count; ++i) {
+        const yvex_model_target_record *record = &model_targets[i];
+        printf("target: %s\n", record->target_id);
+        printf("family: %s\n", record->family);
+        printf("target_class: %s\n", record->target_class);
+        printf("runtime_execution: %s\n", record->runtime_execution);
+        printf("generation: %s\n", record->generation);
+        if (i + 1 < model_target_count) {
+            printf("\n");
+        }
+    }
+}
+
+static void print_model_target_record(const yvex_model_target_record *record)
+{
+    printf("status: model-target\n");
+    printf("target_id: %s\n", record->target_id);
+    printf("family: %s\n", record->family);
+    printf("model: %s\n", record->model);
+    printf("target_class: %s\n", record->target_class);
+    printf("source_artifact_class: %s\n", record->source_artifact_class);
+    printf("target_artifact_class: %s\n", record->target_artifact_class);
+    printf("pressure_purpose: %s\n", record->pressure_purpose);
+    printf("tensor_set: %s\n", record->tensor_set);
+    printf("local_path_class: %s\n", record->local_path_class);
+    printf("source_footprint_class: %s\n", record->source_footprint_class);
+    printf("runtime_boundary: %s\n", record->runtime_boundary);
+    printf("runtime_execution: %s\n", record->runtime_execution);
+    printf("generation: %s\n", record->generation);
+    printf("external_reference: %s\n", record->external_reference);
+}
+
+int yvex_model_target_command(int argc, char **argv)
+{
+    const yvex_model_target_record *record;
+
+    if (argc <= 2) {
+        print_model_target_usage(stderr);
+        return 2;
+    }
+    if (strcmp(argv[2], "help") == 0) {
+        if (argc != 3) {
+            print_model_target_usage(stderr);
+            return 2;
+        }
+        yvex_model_target_help(stdout);
+        return 0;
+    }
+    if (strcmp(argv[2], "classes") == 0) {
+        if (argc != 3) {
+            print_model_target_usage(stderr);
+            return 2;
+        }
+        print_model_target_classes();
+        return 0;
+    }
+    if (strcmp(argv[2], "list") == 0) {
+        if (argc != 3) {
+            print_model_target_usage(stderr);
+            return 2;
+        }
+        print_model_target_list();
+        return 0;
+    }
+    if (strcmp(argv[2], "inspect") == 0) {
+        if (argc != 4) {
+            print_model_target_usage(stderr);
+            return 2;
+        }
+        record = find_model_target(argv[3]);
+        if (!record) {
+            fprintf(stderr, "model-target: unknown target: %s\n", argv[3]);
+            return 2;
+        }
+        print_model_target_record(record);
+        return 0;
+    }
+
+    fprintf(stderr, "model-target: unknown subcommand: %s\n", argv[2]);
+    fprintf(stderr, "Try 'yvex help model-target' for usage.\n");
+    return 2;
 }

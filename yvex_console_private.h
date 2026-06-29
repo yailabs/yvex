@@ -146,6 +146,8 @@ int yvex_metadata_command(int argc, char **argv);
 void yvex_metadata_help(FILE *fp);
 int yvex_model_gate_command(int argc, char **argv);
 void yvex_model_gate_help(FILE *fp);
+int yvex_model_target_command(int argc, char **argv);
+void yvex_model_target_help(FILE *fp);
 int yvex_models_command(int argc, char **argv);
 void yvex_models_help(FILE *fp);
 int yvex_native_weights_command(int argc, char **argv);

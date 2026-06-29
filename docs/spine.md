@@ -522,6 +522,7 @@ graph execution integrity guard
 consolidated artifact integrity regression harness
 operator integrity report
 source-tensor-first model-target roadmap authority in spine
+command-visible model target class registry
 canonical inference block directory in spine
 ```
 
@@ -660,7 +661,7 @@ tables.
 | OWI.9 | complete | intake | DeepSeek quantization job bridge | DeepSeek quant job bridge and validation exist |
 | OWI.FINAL.0 | complete | intake | Open-weight intake closeout | intake closeout docs, tests, and guardrails complete |
 | OWI.REBASE.0 | complete | intake | Source-tensor-first OWI target rebase | spine records official source tensors as primary OWI inputs and YVEX-produced GGUF as the target artifact class |
-| OWI.TARGETS.0 | planned | intake | Generic model target registry | model target classes, pressure targets, and non-capability target rules exist in command-visible form |
+| OWI.TARGETS.0 | complete | intake | Generic model target registry | model target classes, pressure targets, and non-capability target rules exist in command-visible form |
 | OWI.TARGETS.1 | planned | intake | Multi-family source manifest profile | source manifests distinguish base family, model class, source artifact class, target artifact class, qtype class, and pressure purpose |
 | OWI.TARGETS.2 | planned | intake | Multi-model artifact cards | MODEL_ARTIFACTS records DeepSeek selected targets and GLM source-tensor targets without runtime claim |
 | OWI.TARGETS.3 | planned | intake | Model target command profile | operator command reports target class, source artifact class, target artifact class, qtype class, and unsupported runtime boundary |
@@ -1226,19 +1227,12 @@ Tiny synthetic GGUF fixtures in tests are the only exception.
 ## 7. Active Next
 
 ```text
-OWI.TARGETS.0 - Generic model target registry
-```
-
-The immediate implementation path returns to open-weight intake while GLM-5.2
-official safetensors download into operator-local storage. This does not cancel
-the runtime ladder. Runtime work continues on the DeepSeek selected GGUF path,
-and the runtime active next remains GRAPH.BLOCK.0.
-
-Runtime active next:
-
-```text
 GRAPH.BLOCK.0 - First transformer block execution
 ```
+
+OWI.TARGETS.1 remains planned until multi-family source manifest evidence is
+implemented over available source artifacts. GLM source tensors may continue
+downloading while runtime work resumes on the DeepSeek selected GGUF path.
 
 Spine structure next after this rebase:
 

@@ -27,6 +27,7 @@
 #   - yvex materialize-gate
 #   - yvex metadata
 #   - yvex model-gate
+#   - yvex model-target
 #   - yvex models
 #   - yvex native-weights
 #   - yvex paths
@@ -167,6 +168,7 @@ contains "$OUT_DIR/commands.out" "  materialize"
 contains "$OUT_DIR/commands.out" "  materialize-gate"
 contains "$OUT_DIR/commands.out" "  metadata"
 contains "$OUT_DIR/commands.out" "  model-gate"
+contains "$OUT_DIR/commands.out" "  model-target"
 contains "$OUT_DIR/commands.out" "  models"
 contains "$OUT_DIR/commands.out" "  native-weights"
 contains "$OUT_DIR/commands.out" "  paths"
@@ -222,6 +224,13 @@ contains "$OUT_DIR/help_metadata.out" "usage: yvex metadata FILE_OR_ALIAS"
 
 run_ok help_model_gate "$YVEX_BIN" help model-gate
 contains "$OUT_DIR/help_model_gate.out" "usage: yvex model-gate check"
+
+run_ok help_model_target "$YVEX_BIN" help model-target
+contains "$OUT_DIR/help_model_target.out" "usage: yvex model-target classes"
+contains "$OUT_DIR/help_model_target.out" "       yvex model-target list"
+contains "$OUT_DIR/help_model_target.out" "       yvex model-target inspect TARGET"
+contains "$OUT_DIR/help_model_target.out" "Model targets are pressure objects, not capability claims."
+contains "$OUT_DIR/help_model_target.out" "External GGUFs and external runners are reference evidence only."
 
 run_ok help_models "$YVEX_BIN" help models
 contains "$OUT_DIR/help_models.out" "usage: yvex models"
@@ -280,6 +289,71 @@ contains "$OUT_DIR/help_session.out" "usage: yvex session FILE_OR_ALIAS [--backe
 
 run_ok help_source_manifest "$YVEX_BIN" help source-manifest
 contains "$OUT_DIR/help_source_manifest.out" "usage: yvex source-manifest create"
+
+run_ok model_target_classes "$YVEX_BIN" model-target classes
+contains "$OUT_DIR/model_target_classes.out" "status: model-target-classes"
+contains "$OUT_DIR/model_target_classes.out" "class: selected-runtime-slice"
+contains "$OUT_DIR/model_target_classes.out" "class: official-source-huge-model"
+contains "$OUT_DIR/model_target_classes.out" "class: external-GGUF-reference"
+contains "$OUT_DIR/model_target_classes.out" "capability_claim: false"
+contains "$OUT_DIR/model_target_classes.out" "runtime_execution: partial-boundary-only"
+contains "$OUT_DIR/model_target_classes.out" "generation: unsupported"
+
+run_ok model_target_list "$YVEX_BIN" model-target list
+contains "$OUT_DIR/model_target_list.out" "status: model-target-list"
+contains "$OUT_DIR/model_target_list.out" "target: deepseek4-v4-flash-selected-embed"
+contains "$OUT_DIR/model_target_list.out" "target: deepseek4-v4-flash-selected-embed-rmsnorm"
+contains "$OUT_DIR/model_target_list.out" "target: glm-5.2-official-safetensors"
+contains "$OUT_DIR/model_target_list.out" "runtime_execution: unsupported"
+contains "$OUT_DIR/model_target_list.out" "generation: unsupported"
+
+run_ok model_target_deepseek_embed "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed
+contains "$OUT_DIR/model_target_deepseek_embed.out" "status: model-target"
+contains "$OUT_DIR/model_target_deepseek_embed.out" "target_id: deepseek4-v4-flash-selected-embed"
+contains "$OUT_DIR/model_target_deepseek_embed.out" "target_artifact_class: YVEX-produced selected GGUF"
+contains "$OUT_DIR/model_target_deepseek_embed.out" "tensor_set: token_embd.weight"
+contains "$OUT_DIR/model_target_deepseek_embed.out" "runtime_execution: unsupported"
+contains "$OUT_DIR/model_target_deepseek_embed.out" "generation: unsupported"
+contains "$OUT_DIR/model_target_deepseek_embed.out" "external_reference: false"
+
+run_ok model_target_deepseek_rmsnorm "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm
+contains "$OUT_DIR/model_target_deepseek_rmsnorm.out" "target_id: deepseek4-v4-flash-selected-embed-rmsnorm"
+contains "$OUT_DIR/model_target_deepseek_rmsnorm.out" "pressure_purpose: selected-embedding-plus-rmsnorm-segment"
+contains "$OUT_DIR/model_target_deepseek_rmsnorm.out" "tensor_set: token_embd.weight,blk.0.attn_norm.weight"
+contains "$OUT_DIR/model_target_deepseek_rmsnorm.out" "runtime_execution: unsupported"
+contains "$OUT_DIR/model_target_deepseek_rmsnorm.out" "generation: unsupported"
+contains "$OUT_DIR/model_target_deepseek_rmsnorm.out" "external_reference: false"
+
+run_ok model_target_glm "$YVEX_BIN" model-target inspect glm-5.2-official-safetensors
+contains "$OUT_DIR/model_target_glm.out" "target_id: glm-5.2-official-safetensors"
+contains "$OUT_DIR/model_target_glm.out" "target_class: official-source-huge-model"
+contains "$OUT_DIR/model_target_glm.out" "target_artifact_class: future YVEX-produced GGUF"
+contains "$OUT_DIR/model_target_glm.out" "local_path_class: hf/glm/GLM-5.2"
+contains "$OUT_DIR/model_target_glm.out" "source_footprint_class: 282 safetensors,1.5T-class"
+contains "$OUT_DIR/model_target_glm.out" "runtime_execution: unsupported"
+contains "$OUT_DIR/model_target_glm.out" "generation: unsupported"
+contains "$OUT_DIR/model_target_glm.out" "external_reference: false"
+
+run_ok model_target_help_subcommand "$YVEX_BIN" model-target help
+contains "$OUT_DIR/model_target_help_subcommand.out" "Model targets are pressure objects, not capability claims."
+
+set +e
+"$YVEX_BIN" model-target inspect missing-target >"$OUT_DIR/model_target_missing.out" 2>"$OUT_DIR/model_target_missing.err"
+rc=$?
+set -e
+if [ "$rc" -ne 2 ]; then
+    fail "missing model target exit code was $rc, expected 2"
+fi
+contains "$OUT_DIR/model_target_missing.err" "model-target: unknown target: missing-target"
+
+set +e
+"$YVEX_BIN" model-target missing-subcommand >"$OUT_DIR/model_target_bad_subcommand.out" 2>"$OUT_DIR/model_target_bad_subcommand.err"
+rc=$?
+set -e
+if [ "$rc" -ne 2 ]; then
+    fail "bad model-target subcommand exit code was $rc, expected 2"
+fi
+contains "$OUT_DIR/model_target_bad_subcommand.err" "model-target: unknown subcommand: missing-subcommand"
 
 run_ok inspect_valid "$YVEX_BIN" inspect tests/fixtures/gguf/valid-minimal.gguf
 contains "$OUT_DIR/inspect_valid.out" "format: gguf"

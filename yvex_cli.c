@@ -51,6 +51,7 @@ static const yvex_cli_command yvex_commands[] = {
     { "materialize-gate", "Run a materialization hardening gate.", yvex_materialize_gate_command, yvex_materialize_gate_help },
     { "metadata", "Print parsed metadata entries.", yvex_metadata_command, yvex_metadata_help },
     { "model-gate", "Validate selected artifact materialization facts.", yvex_model_gate_command, yvex_model_gate_help },
+    { "model-target", "Inspect model pressure targets.", yvex_model_target_command, yvex_model_target_help },
     { "models", "Manage the local model alias registry.", yvex_models_command, yvex_models_help },
     { "native-weights", "Inventory safetensors native weights.", yvex_native_weights_command, yvex_native_weights_help },
     { "paths", "Show runtime filesystem paths.", yvex_paths_command, yvex_paths_help },
