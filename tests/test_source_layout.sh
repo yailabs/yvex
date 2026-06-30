@@ -5,6 +5,12 @@ test ! -d src
 test ! -d cli
 test ! -d server
 test ! -d backends
+test ! -d graph
+test ! -d runtime
+test ! -d commands
+test ! -d operator
+test ! -d scheduler
+test ! -d executor
 
 test -x ./yvex
 test -x ./yvexd
@@ -55,6 +61,16 @@ bad_command_files="$(
        -o -name 'yvex_*_commands.c' \
        -o -name 'commands.c' \
        -o -name 'yvex_command_private.h' \
+       -o -name 'yvex_graph_block.c' \
+       -o -name 'yvex_graph_commands.c' \
+       -o -name 'yvex_graph_guard.c' \
+       -o -name 'yvex_graph_primitives.c' \
+       -o -name 'yvex_graph_private.h' \
+       -o -name 'yvex_graph_reference.c' \
+       -o -name 'yvex_graph_layers.c' \
+       -o -name 'yvex_model_artifact_support.c' \
+       -o -name 'yvex_model_artifacts_private.h' \
+       -o -name 'yvex_model_artifact_commands.c' \
        -o -name 'yvex_model_target.c' \
        -o -name 'yvex_model_targets.c' \
        -o -name 'yvex_targets.c' \
@@ -124,6 +140,9 @@ bad_command_files="$(
        -o -name 'yvex_runtime_cli_graph.c' \
        -o -name 'yvex_runtime_engine_commands.c' \
        -o -name 'yvex_runtime_session_commands.c' \
+       -o -name 'yvex_runtime_commands.c' \
+       -o -name 'yvex_runtime_graph.c' \
+       -o -name 'yvex_runtime_support.c' \
        -o -name 'runtime_commands.c' \
        -o -name 'runtime_graph.c' \) \
     -print

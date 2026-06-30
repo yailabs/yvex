@@ -268,7 +268,7 @@ This boundary gives prefill a real ownership target. The prefill API can bind
 processed token positions into this minimal F32 store for diagnostic state
 continuity. The store still does not run attention, does not contain real
 attention K/V projections, and does not make decode, logits, sampling,
-generation, or provider generation ready.
+generation, or provider generation-ready state.
 
 ## Graph Execution
 

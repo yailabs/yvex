@@ -7,16 +7,6 @@
  */
 
 #include "yvex_console_private.h"
-#include <yvex/artifact_integrity.h>
-#include <yvex/conversion.h>
-#include <yvex/fs.h>
-#include <yvex/materialize_gate.h>
-#include <yvex/model_gate.h>
-#include <yvex/model_ref.h>
-#include <yvex/model_registry.h>
-#include <yvex/native_weights.h>
-#include <yvex/source_manifest.h>
-#include <yvex/yvex.h>
 
 #include <ctype.h>
 #include <dirent.h>
@@ -30,6 +20,16 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <yvex/artifact_integrity.h>
+#include <yvex/conversion.h>
+#include <yvex/fs.h>
+#include <yvex/materialize_gate.h>
+#include <yvex/model_gate.h>
+#include <yvex/model_ref.h>
+#include <yvex/model_registry.h>
+#include <yvex/native_weights.h>
+#include <yvex/source_manifest.h>
+#include <yvex/yvex.h>
 
 /* Private registry types */
 
@@ -2547,7 +2547,7 @@ void yvex_model_registry_scan_free(yvex_model_registry_entry *entries,
     free(entries);
 }
 
-/* Domain-owned command surface moved from yvex_model_commands.c. */
+/* Model registry CLI helpers and shared model command support. */
 
 int models_registry_open(yvex_model_registry **registry,
                                 const char *registry_path,
@@ -2905,6 +2905,8 @@ typedef struct {
     int register_alias;
     int use_alias;
 } yvex_cli_models_prepare_options;
+
+/* Selected artifact prepare preset. */
 
 static int cli_arg_value_valid(const char *value)
 {
@@ -3398,6 +3400,8 @@ typedef enum {
     YVEX_CLI_MODEL_CHECK_RUNTIME,
     YVEX_CLI_MODEL_CHECK_FULL
 } yvex_cli_model_check_level;
+
+/* Selected artifact check preset. */
 
 typedef struct {
     const char *target;
@@ -4947,6 +4951,8 @@ static int command_models_inspect(int argc, char **argv)
     yvex_model_registry_close(registry);
     return 0;
 }
+
+/* Models command dispatch and help. */
 
 static int command_models(int argc, char **argv)
 {

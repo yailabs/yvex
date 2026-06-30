@@ -8,16 +8,17 @@
  */
 
 #include "yvex_console_private.h"
-#include <errno.h>
-#include <stddef.h>
-#include <yvex/yvex.h>
 #include "yvex_runtime_private.h"
+
+#include <errno.h>
 #include <limits.h>
+#include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
+#include <yvex/yvex.h>
 
 struct yvex_session {
     const yvex_engine *engine;
@@ -40,6 +41,7 @@ void yvex_runtime_set_graph_reason(char *out, size_t cap, const yvex_graph *grap
 void yvex_runtime_set_text_reason(char *out, size_t cap, const char *text);
 
 
+/* Engine lifecycle and backend attachment. */
 
 static void set_engine_status_from_graph(yvex_engine *engine)
 {
@@ -2064,7 +2066,7 @@ const char *yvex_session_state_name(yvex_session_state state)
     return "unknown";
 }
 
-/* Shared operator command helpers. */
+/* Shared runtime command helpers. */
 
 int print_yvex_error(const yvex_error *err, int exit_code)
 {
@@ -2374,7 +2376,7 @@ int parse_dims_csv(const char *text,
     return 1;
 }
 
-/* Runtime-owned command surface. Domain-specific commands live with their owners. */
+/* Token input and runtime command surfaces. */
 
 static void print_token_input_tokens(const yvex_token_input *input)
 {
@@ -2989,6 +2991,8 @@ static void print_prefill_state_summary(const yvex_prefill_state_summary *summar
     printf("status: %s\n", status ? status : "prefill-state-fail");
 }
 
+/* Segment-summary prefill command surface. */
+
 static void init_prefill_summary_cli_defaults(yvex_prefill_state_summary *summary,
                                               const char *segment_name,
                                               int attach_kv,
@@ -3375,6 +3379,8 @@ static int cli_write_observability_files(const char *command_name,
     yvex_error_clear(err);
     return YVEX_OK;
 }
+
+/* Accepted-only run diagnostics. */
 
 static int command_run(int argc, char **argv)
 {
@@ -3944,6 +3950,8 @@ static int resolve_chat_model_ref(yvex_model_ref *out,
 
     return yvex_model_ref_resolve(out, alias, NULL, err);
 }
+
+/* Accepted-only diagnostic REPL command surface. */
 
 static int command_chat(int argc, char **argv)
 {

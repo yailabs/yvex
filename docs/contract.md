@@ -348,7 +348,7 @@ Minimal KV is not attention execution. The prefill command can bind processed
 positions to KV rows with deterministic diagnostic values, but that does not
 mean transformer layer outputs are being projected into attention K/V rows.
 Minimal KV binding does not make full transformer prefill, decode, logits,
-sampling, generation, or provider generation ready.
+sampling, generation, or provider generation-ready state.
 
 ## Artifact Integrity Contract
 

@@ -467,8 +467,8 @@ tok/s claim
 speed claim
 DSpark-parity claim
 speculative support
-DeepSeek generation ready
-DeepSeek benchmark ready
+DeepSeek generation-readiness claim
+DeepSeek benchmark-readiness claim
 ```
 
 Use these canonical track names in future rows:
@@ -769,6 +769,7 @@ prepare preset dry-run and registration-skip boundaries
 selected artifact check preset
 model-scoped operator runbooks
 runtime ownership cleanup and quality compression
+in-place core compression and monolith cleanup
 DeepSeek V4 Flash generation and speculative throughput target envelope in spine
 ```
 
@@ -994,6 +995,7 @@ tables.
 | CUDA.SURFACE.0 | complete | backend | CUDA kernel translation unit | CUDA kernels live in CUDA translation unit |
 | CODE.NATURAL.0 | complete | layout | Natural translation unit rewrite | translation units rewritten to project style |
 | CODE.NATURAL.1 | complete | layout | Final translation unit hygiene pass | final source hygiene pass complete |
+| REWRITE.CORE.COMPRESS.0 | complete | cleanup | In-place core compression | graph, runtime, and model artifact files cleaned and compressed in place without source splitting or capability change |
 | YVEX.SKELETON.0 | complete | layout | Canonical runtime/eval/bench source skeleton | definitive root ownership files exist with responsibility headers and no capability claim |
 | TEST.SURFACE.0 | complete | test | Test vectors and runner consolidation | compact test runners and vectors consolidated |
 | DOCS.PUBLIC.0 | complete | docs | Public documentation boundary cleanup | public docs cleaned of internal delivery leakage |

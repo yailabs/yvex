@@ -8,13 +8,17 @@
  */
 
 #include "yvex_console_private.h"
-#include <yvex/yvex.h>
-#include <stdlib.h>
+
 #include <limits.h>
-#include <yvex/op.h>
-#include <string.h>
-#include <yvex/graph.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <yvex/graph.h>
+#include <yvex/op.h>
+#include <yvex/yvex.h>
+
+/* Graph ownership and planning state. */
 
 typedef struct {
     unsigned int input_ids[4];
@@ -1297,7 +1301,7 @@ const yvex_graph_op_edges *yvex_graph_op_edges_at(const yvex_graph *graph,
     return &graph->edges[index];
 }
 
-/* Domain-owned command surface moved from yvex_graph_commands.c. */
+/* Graph guard and selected-artifact preflight helpers. */
 
 static int cli_test_env_enabled(const char *name)
 {
@@ -1398,6 +1402,8 @@ void print_graph_guard_report(const yvex_cli_graph_guard_report *report)
     printf("output_bytes_allocated: %llu\n", report->output_bytes_allocated);
     printf("reference_bytes_planned: %llu\n", report->reference_bytes_planned);
 }
+
+/* Deterministic reference helpers for graph proof commands. */
 
 static unsigned long long cli_checksum_bytes(const void *data, unsigned long long len)
 {
@@ -1889,6 +1895,8 @@ static void print_mlp_readiness_fields(int primitive_executed)
     printf("full_transformer_prefill_ready: false\n");
     print_no_generation_readiness_fields();
 }
+
+/* Controlled transformer-block fixture proof. */
 
 typedef struct {
     yvex_device_tensor *input_states;
@@ -2954,6 +2962,8 @@ static int command_graph_execute_block_fixture(const char *backend_name,
     }
     return exit_code;
 }
+
+/* Standalone primitive graph proof executors. */
 
 static int command_graph_execute_rope_op(const char *backend_name,
                                          unsigned long long position,
@@ -4578,6 +4588,8 @@ cleanup_host:
     return exit_code;
 }
 
+/* Selected fixture, partial, and segment graph preflight. */
+
 int preflight_graph_guard(const yvex_model_ref *model_ref,
                                  const char *backend_name,
                                  int execute_fixture,
@@ -4803,6 +4815,8 @@ int preflight_graph_guard(const yvex_model_ref *model_ref,
     close_model_context(&ctx);
     return YVEX_OK;
 }
+
+/* Graph command parser and output surface. */
 
 static int command_graph(int argc, char **argv)
 {
