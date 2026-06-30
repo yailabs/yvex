@@ -742,6 +742,16 @@ static int backend_allowed(const char *name)
     return strcmp(name, "cpu") == 0 || strcmp(name, "none") == 0 || strcmp(name, "cuda") == 0;
 }
 
+static int graph_backend_valid(const char *name)
+{
+    return name && (strcmp(name, "cpu") == 0 || strcmp(name, "cuda") == 0);
+}
+
+static yvex_backend_kind graph_backend_kind_from_name(const char *name)
+{
+    return strcmp(name, "cuda") == 0 ? YVEX_BACKEND_KIND_CUDA : YVEX_BACKEND_KIND_CPU;
+}
+
 static int fill_backend_status(yvex_plan *plan, const char *backend_name, yvex_error *err)
 {
     yvex_backend *backend = NULL;
@@ -750,9 +760,7 @@ static int fill_backend_status(yvex_plan *plan, const char *backend_name, yvex_e
 
     if (strcmp(backend_name, "cpu") == 0 || strcmp(backend_name, "cuda") == 0) {
         memset(&backend_options, 0, sizeof(backend_options));
-        backend_options.kind = strcmp(backend_name, "cuda") == 0
-                                   ? YVEX_BACKEND_KIND_CUDA
-                                   : YVEX_BACKEND_KIND_CPU;
+        backend_options.kind = graph_backend_kind_from_name(backend_name);
         rc = yvex_backend_open(&backend, &backend_options, err);
         if (rc == YVEX_ERR_UNSUPPORTED && strcmp(backend_name, "cuda") == 0) {
             plan->backend_status = yvex_graph_strdup("unavailable");
@@ -1401,6 +1409,28 @@ void print_graph_guard_report(const yvex_cli_graph_guard_report *report)
     printf("output_bytes_planned: %llu\n", report->output_bytes_planned);
     printf("output_bytes_allocated: %llu\n", report->output_bytes_allocated);
     printf("reference_bytes_planned: %llu\n", report->reference_bytes_planned);
+}
+
+static void init_standalone_graph_guard(yvex_cli_graph_guard_report *guard,
+                                        const char *graph_kind,
+                                        const char *slice_range_status)
+{
+    init_graph_guard_report(guard, graph_kind, 0, NULL);
+    guard->integrity_status = "not-applicable";
+    guard->identity_status = "unregistered";
+    guard->metadata_status = "unregistered";
+    guard->shape_status = "unchecked";
+    guard->range_status = "not-applicable";
+    guard->slice_range_status = slice_range_status ? slice_range_status : "not-needed";
+}
+
+static void graph_guard_mark_cleanup(yvex_cli_graph_guard_report *guard,
+                                     const char *phase,
+                                     int attempted)
+{
+    guard->phase = phase ? phase : "output";
+    guard->cleanup_attempted = attempted ? 1 : 0;
+    guard->cleanup_status = attempted ? "pass" : "not-needed";
 }
 
 /* Deterministic reference helpers for graph proof commands. */
@@ -2088,22 +2118,23 @@ static void block_residual_add(const float *a,
     }
 }
 
-static void block_reference(const float *input,
-                            const float *attn_norm_weight,
-                            const float *q_weight,
-                            const float *k_weight,
-                            const float *v_weight,
-                            const float *o_weight,
-                            const float *post_attn_norm_weight,
-                            const float *mlp_gate_weight,
-                            const float *mlp_up_weight,
-                            const float *mlp_down_weight,
-                            unsigned long long seq_len,
-                            unsigned long long position,
-                            unsigned long long hidden_dim,
-                            unsigned long long ffn_dim,
-                            int causal,
-                            float *reference_out)
+static int block_reference(const float *input,
+                           const float *attn_norm_weight,
+                           const float *q_weight,
+                           const float *k_weight,
+                           const float *v_weight,
+                           const float *o_weight,
+                           const float *post_attn_norm_weight,
+                           const float *mlp_gate_weight,
+                           const float *mlp_up_weight,
+                           const float *mlp_down_weight,
+                           unsigned long long seq_len,
+                           unsigned long long position,
+                           unsigned long long hidden_dim,
+                           unsigned long long ffn_dim,
+                           int causal,
+                           float *reference_out,
+                           yvex_error *err)
 {
     const float epsilon = 0.000001f;
     const float rope_base = 10000.0f;
@@ -2124,6 +2155,7 @@ static void block_reference(const float *input,
     float *mlp_out = NULL;
     unsigned long long seq_hidden = seq_len * hidden_dim;
     unsigned long long row;
+    int rc = YVEX_OK;
 
     normalized = (float *)calloc((size_t)seq_hidden, sizeof(float));
     q = (float *)calloc((size_t)seq_hidden, sizeof(float));
@@ -2142,6 +2174,9 @@ static void block_reference(const float *input,
     if (!normalized || !q || !k || !v || !rope_q || !rope_k || !scores ||
         !probabilities || !attention || !projected || !residual_attn ||
         !post_norm || !mlp_intermediate || !mlp_out) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex graph block",
+                       "failed to allocate controlled block reference scratch");
+        rc = YVEX_ERR_NOMEM;
         goto done;
     }
 
@@ -2183,6 +2218,7 @@ done:
     free(k);
     free(q);
     free(normalized);
+    return rc;
 }
 
 static int block_write_f32(yvex_backend *backend,
@@ -2604,9 +2640,7 @@ static int controlled_block_execute_fixture(
 
     result->graph_execution_phase = "backend-allocation";
     memset(&backend_options, 0, sizeof(backend_options));
-    backend_options.kind = strcmp(request->backend_name, "cuda") == 0
-                               ? YVEX_BACKEND_KIND_CUDA
-                               : YVEX_BACKEND_KIND_CPU;
+    backend_options.kind = graph_backend_kind_from_name(request->backend_name);
     rc = yvex_backend_open(&device.backend, &backend_options, err);
     if (rc != YVEX_OK) {
         exit_code = exit_for_status(rc);
@@ -2840,14 +2874,18 @@ static int controlled_block_execute_fixture(
     }
 
     result->graph_execution_phase = "readback-reference";
-    block_reference(host.input_values, host.attn_norm_weight_values,
-                    host.q_weight_values, host.k_weight_values,
-                    host.v_weight_values, host.o_weight_values,
-                    host.post_attn_norm_weight_values,
-                    host.mlp_gate_values, host.mlp_up_values,
-                    host.mlp_down_values, request->seq_len, request->position,
-                    request->hidden_dim, request->ffn_dim, request->causal,
-                    host.reference_values);
+    rc = block_reference(host.input_values, host.attn_norm_weight_values,
+                         host.q_weight_values, host.k_weight_values,
+                         host.v_weight_values, host.o_weight_values,
+                         host.post_attn_norm_weight_values,
+                         host.mlp_gate_values, host.mlp_up_values,
+                         host.mlp_down_values, request->seq_len, request->position,
+                         request->hidden_dim, request->ffn_dim, request->causal,
+                         host.reference_values, err);
+    if (rc != YVEX_OK) {
+        exit_code = exit_for_status(rc);
+        goto cleanup;
+    }
 
     result->graph_execution_phase = "comparison";
     result->max_abs_diff = cli_max_abs_diff_f32(host.output_values,
@@ -2990,13 +3028,7 @@ static int command_graph_execute_rope_op(const char *backend_name,
     yvex_error_clear(&err);
     memset(&backend_options, 0, sizeof(backend_options));
     memset(&desc, 0, sizeof(desc));
-    init_graph_guard_report(&guard, "rope-position-op", 0, NULL);
-    guard.integrity_status = "not-applicable";
-    guard.identity_status = "unregistered";
-    guard.metadata_status = "unregistered";
-    guard.shape_status = "unchecked";
-    guard.range_status = "not-applicable";
-    guard.slice_range_status = "not-needed";
+    init_standalone_graph_guard(&guard, "rope-position-op", "not-needed");
 
     if (head_dim == 0) {
         guard.shape_status = "fail";
@@ -3060,9 +3092,7 @@ static int command_graph_execute_rope_op(const char *backend_name,
     cli_rope_reference(input_values, head_dim, position, rope_base, reference_values);
     guard.reference_read_attempted = 1;
 
-    backend_options.kind = strcmp(backend_name, "cuda") == 0
-                               ? YVEX_BACKEND_KIND_CUDA
-                               : YVEX_BACKEND_KIND_CPU;
+    backend_options.kind = graph_backend_kind_from_name(backend_name);
     rc = yvex_backend_open(&backend, &backend_options, &err);
     if (rc != YVEX_OK) {
         guard.backend_status = rc == YVEX_ERR_UNSUPPORTED ? "unavailable" : "fail";
@@ -3112,9 +3142,7 @@ static int command_graph_execute_rope_op(const char *backend_name,
         rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
     }
     if (rc != YVEX_OK) {
-        guard.phase = "output";
-        guard.cleanup_attempted = input || out ? 1 : 0;
-        guard.cleanup_status = guard.cleanup_attempted ? "pass" : "not-needed";
+        graph_guard_mark_cleanup(&guard, "output", input || out);
         yvex_backend_tensor_free(backend, out);
         yvex_backend_tensor_free(backend, input);
         print_graph_guard_report(&guard);
@@ -3136,9 +3164,7 @@ static int command_graph_execute_rope_op(const char *backend_name,
 
     rc = yvex_backend_tensor_write(backend, input, input_values, bytes, &err);
     if (rc != YVEX_OK) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         yvex_backend_tensor_free(backend, out);
         yvex_backend_tensor_free(backend, input);
         print_graph_guard_report(&guard);
@@ -3157,9 +3183,7 @@ static int command_graph_execute_rope_op(const char *backend_name,
     }
 
     if (cli_test_env_enabled("YVEX_TEST_FAIL_ROPE_AFTER_ALLOC")) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         print_graph_guard_report(&guard);
         printf("op: rope\n");
         printf("backend: %s\n", backend_name);
@@ -3184,9 +3208,7 @@ static int command_graph_execute_rope_op(const char *backend_name,
     guard.dispatch_attempted = 1;
     rc = yvex_backend_op_rope(backend, input, position, rope_base, out, &err);
     if (rc != YVEX_OK || cli_test_env_enabled("YVEX_TEST_FAIL_ROPE_AFTER_DISPATCH")) {
-        guard.phase = "dispatch";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "dispatch", 1);
         print_graph_guard_report(&guard);
         printf("op: rope\n");
         printf("backend: %s\n", backend_name);
@@ -3211,9 +3233,7 @@ static int command_graph_execute_rope_op(const char *backend_name,
 
     rc = yvex_backend_tensor_read(backend, out, output_values, bytes, &err);
     if (rc != YVEX_OK) {
-        guard.phase = "reference";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "reference", 1);
         print_graph_guard_report(&guard);
         printf("op: rope\n");
         printf("backend: %s\n", backend_name);
@@ -3366,13 +3386,7 @@ static int command_graph_execute_attention_op(const char *backend_name,
     yvex_error_clear(&err);
     memset(&backend_options, 0, sizeof(backend_options));
     memset(&desc, 0, sizeof(desc));
-    init_graph_guard_report(&guard, "attention-primitive", 0, NULL);
-    guard.integrity_status = "not-applicable";
-    guard.identity_status = "unregistered";
-    guard.metadata_status = "unregistered";
-    guard.shape_status = "unchecked";
-    guard.range_status = "not-applicable";
-    guard.slice_range_status = "unchecked";
+    init_standalone_graph_guard(&guard, "attention-primitive", "unchecked");
 
     if (head_dim == 0 || seq_len == 0) {
         guard.shape_status = "fail";
@@ -3473,9 +3487,7 @@ static int command_graph_execute_attention_op(const char *backend_name,
                             reference_probabilities, reference_values);
     guard.reference_read_attempted = 1;
 
-    backend_options.kind = strcmp(backend_name, "cuda") == 0
-                               ? YVEX_BACKEND_KIND_CUDA
-                               : YVEX_BACKEND_KIND_CPU;
+    backend_options.kind = graph_backend_kind_from_name(backend_name);
     rc = yvex_backend_open(&backend, &backend_options, &err);
     if (rc != YVEX_OK) {
         guard.backend_status = rc == YVEX_ERR_UNSUPPORTED ? "unavailable" : "fail";
@@ -3553,10 +3565,10 @@ static int command_graph_execute_attention_op(const char *backend_name,
         rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
     }
     if (rc != YVEX_OK) {
-        guard.phase = "output";
-        guard.cleanup_attempted = query || keys || values || score_scratch ||
-                                  probability_scratch || out;
-        guard.cleanup_status = guard.cleanup_attempted ? "pass" : "not-needed";
+        graph_guard_mark_cleanup(&guard,
+                                 "output",
+                                 query || keys || values || score_scratch ||
+                                     probability_scratch || out);
         reason = yvex_error_message(&err);
         goto fail_cleaned;
     }
@@ -3571,17 +3583,13 @@ static int command_graph_execute_attention_op(const char *backend_name,
         rc = yvex_backend_tensor_write(backend, values, value_values, value_bytes, &err);
     }
     if (rc != YVEX_OK) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = yvex_error_message(&err);
         goto fail_cleaned;
     }
 
     if (cli_test_env_enabled("YVEX_TEST_FAIL_ATTENTION_AFTER_ALLOC")) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = "injected-attention-after-alloc";
         goto fail_cleaned;
     }
@@ -3591,9 +3599,7 @@ static int command_graph_execute_attention_op(const char *backend_name,
                                    scale, causal, score_scratch,
                                    probability_scratch, out, &err);
     if (rc != YVEX_OK || cli_test_env_enabled("YVEX_TEST_FAIL_ATTENTION_AFTER_DISPATCH")) {
-        guard.phase = "dispatch";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "dispatch", 1);
         reason = rc == YVEX_OK ? "injected-attention-after-dispatch" : yvex_error_message(&err);
         goto fail_cleaned;
     }
@@ -3607,9 +3613,7 @@ static int command_graph_execute_attention_op(const char *backend_name,
                                       probability_scratch_bytes, &err);
     }
     if (rc != YVEX_OK || cli_test_env_enabled("YVEX_TEST_FAIL_ATTENTION_AFTER_REFERENCE")) {
-        guard.phase = "reference";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "reference", 1);
         reason = rc == YVEX_OK ? "injected-attention-after-reference" : yvex_error_message(&err);
         goto fail_cleaned;
     }
@@ -3774,14 +3778,9 @@ static int command_graph_execute_matmul_op(const char *backend_name,
     yvex_error_clear(&err);
     memset(&backend_options, 0, sizeof(backend_options));
     memset(&desc, 0, sizeof(desc));
-    init_graph_guard_report(&guard, m == 1ull ? "matmul-projection" : "matmul-matrix",
-                            0, NULL);
-    guard.integrity_status = "not-applicable";
-    guard.identity_status = "unregistered";
-    guard.metadata_status = "unregistered";
-    guard.shape_status = "unchecked";
-    guard.range_status = "not-applicable";
-    guard.slice_range_status = "not-needed";
+    init_standalone_graph_guard(&guard,
+                                m == 1ull ? "matmul-projection" : "matmul-matrix",
+                                "not-needed");
 
     if (m == 0 || k == 0 || n == 0) {
         guard.shape_status = "fail";
@@ -3855,9 +3854,7 @@ static int command_graph_execute_matmul_op(const char *backend_name,
     cli_matmul_reference(input_values, weight_values, m, k, n, reference_values);
     guard.reference_read_attempted = 1;
 
-    backend_options.kind = strcmp(backend_name, "cuda") == 0
-                               ? YVEX_BACKEND_KIND_CUDA
-                               : YVEX_BACKEND_KIND_CPU;
+    backend_options.kind = graph_backend_kind_from_name(backend_name);
     rc = yvex_backend_open(&backend, &backend_options, &err);
     if (rc != YVEX_OK) {
         guard.backend_status = rc == YVEX_ERR_UNSUPPORTED ? "unavailable" : "fail";
@@ -3897,16 +3894,12 @@ static int command_graph_execute_matmul_op(const char *backend_name,
     desc.bytes = input_bytes;
     rc = yvex_backend_tensor_alloc(backend, &desc, &input, &err);
     if (rc != YVEX_OK) {
-        guard.phase = "output";
-        guard.cleanup_attempted = input ? 1 : 0;
-        guard.cleanup_status = guard.cleanup_attempted ? "pass" : "not-needed";
+        graph_guard_mark_cleanup(&guard, "output", input != NULL);
         reason = yvex_error_message(&err);
         goto fail_cleaned;
     }
     if (cli_test_env_enabled("YVEX_TEST_FAIL_MATMUL_AFTER_INPUT_ALLOC")) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = "injected-matmul-after-input-alloc";
         goto fail_cleaned;
     }
@@ -3917,16 +3910,12 @@ static int command_graph_execute_matmul_op(const char *backend_name,
     desc.bytes = weight_bytes;
     rc = yvex_backend_tensor_alloc(backend, &desc, &weight, &err);
     if (rc != YVEX_OK) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = yvex_error_message(&err);
         goto fail_cleaned;
     }
     if (cli_test_env_enabled("YVEX_TEST_FAIL_MATMUL_AFTER_WEIGHT_ALLOC")) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = "injected-matmul-after-weight-alloc";
         goto fail_cleaned;
     }
@@ -3937,9 +3926,7 @@ static int command_graph_execute_matmul_op(const char *backend_name,
     desc.bytes = output_bytes;
     rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
     if (rc != YVEX_OK) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = yvex_error_message(&err);
         goto fail_cleaned;
     }
@@ -3951,16 +3938,12 @@ static int command_graph_execute_matmul_op(const char *backend_name,
         rc = yvex_backend_tensor_write(backend, weight, weight_values, weight_bytes, &err);
     }
     if (rc != YVEX_OK) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = yvex_error_message(&err);
         goto fail_cleaned;
     }
     if (cli_test_env_enabled("YVEX_TEST_FAIL_MATMUL_AFTER_OUTPUT_ALLOC")) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = "injected-matmul-after-output-alloc";
         goto fail_cleaned;
     }
@@ -3968,18 +3951,14 @@ static int command_graph_execute_matmul_op(const char *backend_name,
     guard.dispatch_attempted = 1;
     rc = yvex_backend_op_matmul(backend, input, weight, out, &err);
     if (rc != YVEX_OK || cli_test_env_enabled("YVEX_TEST_FAIL_MATMUL_AFTER_DISPATCH")) {
-        guard.phase = "dispatch";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "dispatch", 1);
         reason = rc == YVEX_OK ? "injected-matmul-after-dispatch" : yvex_error_message(&err);
         goto fail_cleaned;
     }
 
     rc = yvex_backend_tensor_read(backend, out, output_values, output_bytes, &err);
     if (rc != YVEX_OK || cli_test_env_enabled("YVEX_TEST_FAIL_MATMUL_AFTER_REFERENCE")) {
-        guard.phase = "reference";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "reference", 1);
         reason = rc == YVEX_OK ? "injected-matmul-after-reference" : yvex_error_message(&err);
         goto fail_cleaned;
     }
@@ -4145,14 +4124,9 @@ static int command_graph_execute_mlp_op(const char *backend_name,
     memset(&backend_options, 0, sizeof(backend_options));
     memset(&desc, 0, sizeof(desc));
     memset(&options, 0, sizeof(options));
-    init_graph_guard_report(&guard, routed ? "mlp-routed-expert" : "mlp-feed-forward",
-                            0, NULL);
-    guard.integrity_status = "not-applicable";
-    guard.identity_status = "unregistered";
-    guard.metadata_status = "unregistered";
-    guard.shape_status = "unchecked";
-    guard.range_status = "not-applicable";
-    guard.slice_range_status = "not-needed";
+    init_standalone_graph_guard(&guard,
+                                routed ? "mlp-routed-expert" : "mlp-feed-forward",
+                                "not-needed");
 
     if (hidden_dim == 0 || ffn_dim == 0) {
         guard.shape_status = "fail";
@@ -4279,9 +4253,7 @@ static int command_graph_execute_mlp_op(const char *backend_name,
                       reference_intermediate_values, reference_values);
     guard.reference_read_attempted = 1;
 
-    backend_options.kind = strcmp(backend_name, "cuda") == 0
-                               ? YVEX_BACKEND_KIND_CUDA
-                               : YVEX_BACKEND_KIND_CPU;
+    backend_options.kind = graph_backend_kind_from_name(backend_name);
     rc = yvex_backend_open(&backend, &backend_options, &err);
     if (rc != YVEX_OK) {
         guard.backend_status = rc == YVEX_ERR_UNSUPPORTED ? "unavailable" : "fail";
@@ -4326,16 +4298,12 @@ static int command_graph_execute_mlp_op(const char *backend_name,
     desc.bytes = input_bytes;
     rc = yvex_backend_tensor_alloc(backend, &desc, &input, &err);
     if (rc != YVEX_OK) {
-        guard.phase = "output";
-        guard.cleanup_attempted = input ? 1 : 0;
-        guard.cleanup_status = guard.cleanup_attempted ? "pass" : "not-needed";
+        graph_guard_mark_cleanup(&guard, "output", input != NULL);
         reason = yvex_error_message(&err);
         goto fail_cleaned;
     }
     if (cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_INPUT_ALLOC")) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = "injected-mlp-after-input-alloc";
         goto fail_cleaned;
     }
@@ -4348,16 +4316,12 @@ static int command_graph_execute_mlp_op(const char *backend_name,
     desc.bytes = gate_bytes;
     rc = yvex_backend_tensor_alloc(backend, &desc, &gate, &err);
     if (rc != YVEX_OK) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = yvex_error_message(&err);
         goto fail_cleaned;
     }
     if (cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_GATE_ALLOC")) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = "injected-mlp-after-gate-alloc";
         goto fail_cleaned;
     }
@@ -4366,16 +4330,12 @@ static int command_graph_execute_mlp_op(const char *backend_name,
     desc.bytes = up_bytes;
     rc = yvex_backend_tensor_alloc(backend, &desc, &up, &err);
     if (rc != YVEX_OK) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = yvex_error_message(&err);
         goto fail_cleaned;
     }
     if (cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_UP_ALLOC")) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = "injected-mlp-after-up-alloc";
         goto fail_cleaned;
     }
@@ -4388,16 +4348,12 @@ static int command_graph_execute_mlp_op(const char *backend_name,
     desc.bytes = down_bytes;
     rc = yvex_backend_tensor_alloc(backend, &desc, &down, &err);
     if (rc != YVEX_OK) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = yvex_error_message(&err);
         goto fail_cleaned;
     }
     if (cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_DOWN_ALLOC")) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = "injected-mlp-after-down-alloc";
         goto fail_cleaned;
     }
@@ -4410,16 +4366,12 @@ static int command_graph_execute_mlp_op(const char *backend_name,
     desc.bytes = intermediate_bytes;
     rc = yvex_backend_tensor_alloc(backend, &desc, &intermediate, &err);
     if (rc != YVEX_OK) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = yvex_error_message(&err);
         goto fail_cleaned;
     }
     if (cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_INTERMEDIATE_ALLOC")) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = "injected-mlp-after-intermediate-alloc";
         goto fail_cleaned;
     }
@@ -4430,9 +4382,7 @@ static int command_graph_execute_mlp_op(const char *backend_name,
     desc.bytes = output_bytes;
     rc = yvex_backend_tensor_alloc(backend, &desc, &out, &err);
     if (rc != YVEX_OK) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = yvex_error_message(&err);
         goto fail_cleaned;
     }
@@ -4450,16 +4400,12 @@ static int command_graph_execute_mlp_op(const char *backend_name,
         rc = yvex_backend_tensor_write(backend, down, down_values, down_bytes, &err);
     }
     if (rc != YVEX_OK) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = yvex_error_message(&err);
         goto fail_cleaned;
     }
     if (cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_OUTPUT_ALLOC")) {
-        guard.phase = "output";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "output", 1);
         reason = "injected-mlp-after-output-alloc";
         goto fail_cleaned;
     }
@@ -4477,9 +4423,7 @@ static int command_graph_execute_mlp_op(const char *backend_name,
     rc = yvex_backend_op_mlp(backend, input, gate, up, down, &options,
                              intermediate, out, &err);
     if (rc != YVEX_OK || cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_DISPATCH")) {
-        guard.phase = "dispatch";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "dispatch", 1);
         reason = rc == YVEX_OK ? "injected-mlp-after-dispatch" : yvex_error_message(&err);
         goto fail_cleaned;
     }
@@ -4490,9 +4434,7 @@ static int command_graph_execute_mlp_op(const char *backend_name,
         rc = yvex_backend_tensor_read(backend, out, output_values, output_bytes, &err);
     }
     if (rc != YVEX_OK || cli_test_env_enabled("YVEX_TEST_FAIL_MLP_AFTER_REFERENCE")) {
-        guard.phase = "reference";
-        guard.cleanup_attempted = 1;
-        guard.cleanup_status = "pass";
+        graph_guard_mark_cleanup(&guard, "reference", 1);
         reason = rc == YVEX_OK ? "injected-mlp-after-reference" : yvex_error_message(&err);
         goto fail_cleaned;
     }
@@ -4788,9 +4730,7 @@ int preflight_graph_guard(const yvex_model_ref *model_ref,
         }
     }
 
-    backend_options.kind = strcmp(backend_name, "cuda") == 0
-                               ? YVEX_BACKEND_KIND_CUDA
-                               : YVEX_BACKEND_KIND_CPU;
+    backend_options.kind = graph_backend_kind_from_name(backend_name);
     rc = yvex_backend_open(&backend, &backend_options, err);
     if (rc != YVEX_OK) {
         report->backend_status = rc == YVEX_ERR_UNSUPPORTED ? "unavailable" : "fail";
@@ -4814,6 +4754,172 @@ int preflight_graph_guard(const yvex_model_ref *model_ref,
     yvex_backend_close(backend);
     close_model_context(&ctx);
     return YVEX_OK;
+}
+
+static const char *graph_text_or(const char *value, const char *fallback)
+{
+    return value ? value : fallback;
+}
+
+static void graph_guard_apply_result_common(yvex_cli_graph_guard_report *guard,
+                                            const char *guard_status,
+                                            const char *phase,
+                                            const char *shape_status,
+                                            const char *range_status,
+                                            const char *slice_range_status,
+                                            const char *backend_status,
+                                            const char *backend_op_status,
+                                            int dispatch_attempted,
+                                            int reference_read_attempted,
+                                            int output_allocation_attempted,
+                                            int cleanup_attempted,
+                                            const char *cleanup_status,
+                                            unsigned long long output_bytes_planned,
+                                            unsigned long long output_bytes_allocated,
+                                            unsigned long long reference_bytes_planned,
+                                            const char *slice_success_default,
+                                            int success)
+{
+    guard->guard_status = success ? graph_text_or(guard_status, "pass") : "fail";
+    guard->phase = graph_text_or(phase, success ? "complete" : "dispatch");
+    guard->shape_status = graph_text_or(shape_status, success ? "pass" : guard->shape_status);
+    guard->range_status = graph_text_or(range_status, success ? "pass" : guard->range_status);
+    guard->slice_range_status =
+        graph_text_or(slice_range_status,
+                      success ? slice_success_default : guard->slice_range_status);
+    guard->backend_status = graph_text_or(backend_status, success ? "ready" : guard->backend_status);
+    guard->backend_op_status =
+        graph_text_or(backend_op_status, success ? "supported" : guard->backend_op_status);
+    guard->dispatch_attempted = dispatch_attempted;
+    guard->reference_read_attempted = reference_read_attempted;
+    guard->output_allocation_attempted = output_allocation_attempted;
+    guard->cleanup_attempted = cleanup_attempted;
+    guard->cleanup_status = graph_text_or(cleanup_status,
+                                          success ? "not-needed" : guard->cleanup_status);
+    guard->output_bytes_planned = output_bytes_planned;
+    guard->output_bytes_allocated = output_bytes_allocated;
+    guard->reference_bytes_planned = reference_bytes_planned;
+}
+
+static void graph_guard_apply_fixture_result(yvex_cli_graph_guard_report *guard,
+                                             const yvex_fixture_graph_result *result,
+                                             int success)
+{
+    graph_guard_apply_result_common(guard,
+                                    result->graph_integrity_guard,
+                                    result->graph_execution_phase,
+                                    result->shape_status,
+                                    result->range_status,
+                                    result->slice_range_status,
+                                    result->backend_status,
+                                    result->backend_op_status,
+                                    result->dispatch_attempted,
+                                    result->reference_read_attempted,
+                                    result->output_allocation_attempted,
+                                    result->cleanup_attempted,
+                                    result->cleanup_status,
+                                    result->output_bytes_planned,
+                                    result->output_bytes_allocated,
+                                    result->reference_bytes_planned,
+                                    "not-needed",
+                                    success);
+}
+
+static void graph_guard_apply_partial_result(yvex_cli_graph_guard_report *guard,
+                                             const yvex_partial_graph_result *result,
+                                             int success)
+{
+    graph_guard_apply_result_common(guard,
+                                    result->graph_integrity_guard,
+                                    result->graph_execution_phase,
+                                    result->shape_status,
+                                    result->range_status,
+                                    result->slice_range_status,
+                                    result->backend_status,
+                                    result->backend_op_status,
+                                    result->dispatch_attempted,
+                                    result->reference_read_attempted,
+                                    result->output_allocation_attempted,
+                                    result->cleanup_attempted,
+                                    result->cleanup_status,
+                                    result->output_bytes_planned,
+                                    result->output_bytes_allocated,
+                                    result->reference_bytes_planned,
+                                    "pass",
+                                    success);
+}
+
+static void graph_guard_apply_segment_result(yvex_cli_graph_guard_report *guard,
+                                             const yvex_segment_graph_result *result,
+                                             int success)
+{
+    graph_guard_apply_result_common(guard,
+                                    result->graph_integrity_guard,
+                                    result->graph_execution_phase,
+                                    result->shape_status,
+                                    result->range_status,
+                                    result->slice_range_status,
+                                    result->backend_status,
+                                    result->backend_op_status,
+                                    result->dispatch_attempted,
+                                    result->reference_read_attempted,
+                                    result->output_allocation_attempted,
+                                    result->cleanup_attempted,
+                                    result->cleanup_status,
+                                    result->output_bytes_planned,
+                                    result->output_bytes_allocated,
+                                    result->reference_bytes_planned,
+                                    "pass",
+                                    success);
+}
+
+static int graph_mode_count(int execute_fixture,
+                            int execute_partial,
+                            int execute_segment,
+                            int execute_op,
+                            int execute_block)
+{
+    return (execute_fixture ? 1 : 0) +
+           (execute_partial ? 1 : 0) +
+           (execute_segment ? 1 : 0) +
+           (execute_op ? 1 : 0) +
+           (execute_block ? 1 : 0);
+}
+
+static const char *graph_guard_kind_for_mode(int execute_fixture, int execute_segment)
+{
+    if (execute_fixture) {
+        return "fixture-embedding";
+    }
+    return execute_segment ? "selected-embedding-rmsnorm" : "selected-embedding-partial";
+}
+
+static const char *graph_execution_label_for_mode(int execute_fixture, int execute_segment)
+{
+    if (execute_fixture) {
+        return "graph-fixture";
+    }
+    return execute_segment ? "graph-segment" : "graph-partial";
+}
+
+static const char *graph_backend_label_for_mode(int execute_fixture, int execute_segment)
+{
+    if (execute_fixture) {
+        return "fixture";
+    }
+    return execute_segment ? "segment" : "partial";
+}
+
+static unsigned int graph_token_for_mode(int execute_fixture,
+                                         int execute_segment,
+                                         const yvex_fixture_graph_options *fixture_options,
+                                         const yvex_partial_graph_options *partial_options,
+                                         const yvex_segment_graph_options *segment_options)
+{
+    if (execute_fixture) {
+        return fixture_options->token_id;
+    }
+    return execute_segment ? segment_options->token_id : partial_options->token_id;
 }
 
 /* Graph command parser and output surface. */
@@ -5079,13 +5185,12 @@ static int command_graph(int argc, char **argv)
         fprintf(stderr, "usage: yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N] | yvex graph --backend cpu|cuda --execute-block --block fixture --seq-len N --position N --hidden-dim N --head-dim N --ffn-dim N [--causal] [--gated]\n");
         return 2;
     }
-    if (strcmp(backend_name, "cpu") != 0 && strcmp(backend_name, "cuda") != 0) {
+    if (!graph_backend_valid(backend_name)) {
         fprintf(stderr, "yvex: unknown backend kind: %s\n", backend_name);
         return 2;
     }
-    if ((execute_fixture ? 1 : 0) + (execute_partial ? 1 : 0) +
-        (execute_segment ? 1 : 0) + (execute_op ? 1 : 0) +
-        (execute_block ? 1 : 0) > 1) {
+    if (graph_mode_count(execute_fixture, execute_partial, execute_segment,
+                         execute_op, execute_block) > 1) {
         fprintf(stderr, "yvex: --execute-fixture, --execute-partial, --execute-segment, --execute-op, and --execute-block are mutually exclusive\n");
         return 2;
     }
@@ -5266,13 +5371,11 @@ static int command_graph(int argc, char **argv)
             return print_yvex_error(&err, exit_for_status(rc));
         }
         rc = enforce_registered_identity_cli(&model_ref,
-                                             execute_fixture ? "graph-fixture" :
-                                             (execute_segment ? "graph-segment" : "graph-partial"));
+                                             graph_execution_label_for_mode(execute_fixture,
+                                                                           execute_segment));
         if (rc != YVEX_OK) {
             init_graph_guard_report(&graph_guard,
-                                    execute_fixture ? "fixture-embedding" :
-                                    (execute_segment ? "selected-embedding-rmsnorm"
-                                                     : "selected-embedding-partial"),
+                                    graph_guard_kind_for_mode(execute_fixture, execute_segment),
                                     !execute_fixture,
                                     &model_ref);
             graph_guard.identity_status = "fail";
@@ -5299,9 +5402,8 @@ static int command_graph(int argc, char **argv)
             }
             if (rc != YVEX_OK) {
                 init_graph_guard_report(&graph_guard,
-                                        execute_fixture ? "fixture-embedding" :
-                                        (execute_segment ? "selected-embedding-rmsnorm"
-                                                         : "selected-embedding-partial"),
+                                        graph_guard_kind_for_mode(execute_fixture,
+                                                                  execute_segment),
                                         !execute_fixture,
                                         &model_ref);
                 graph_guard.slice_range_status =
@@ -5338,8 +5440,11 @@ static int command_graph(int argc, char **argv)
                                    backend_name,
                                    execute_fixture,
                                    execute_segment,
-                                   execute_fixture ? fixture_options.token_id :
-                                   (execute_segment ? segment_options.token_id : partial_options.token_id),
+                                   graph_token_for_mode(execute_fixture,
+                                                        execute_segment,
+                                                        &fixture_options,
+                                                        &partial_options,
+                                                        &segment_options),
                                    &graph_guard,
                                    &err);
         if (rc != YVEX_OK) {
@@ -5374,10 +5479,10 @@ static int command_graph(int argc, char **argv)
             graph_guard.backend_status = "unavailable";
             graph_guard.backend_op_status = "unsupported";
             print_graph_guard_report(&graph_guard);
-            printf("%s_backend: cuda\n", execute_fixture ? "fixture" :
-                   (execute_segment ? "segment" : "partial"));
-            printf("%s_backend_status: unsupported\n", execute_fixture ? "fixture" :
-                   (execute_segment ? "segment" : "partial"));
+            printf("%s_backend: cuda\n", graph_backend_label_for_mode(execute_fixture,
+                                                                       execute_segment));
+            printf("%s_backend_status: unsupported\n",
+                   graph_backend_label_for_mode(execute_fixture, execute_segment));
             printf("reason: %s\n", yvex_error_message(&err));
             printf("status: graph-integrity-fail\n");
             yvex_model_ref_clear(&model_ref);
@@ -5392,94 +5497,12 @@ static int command_graph(int argc, char **argv)
         }
         if (rc != YVEX_OK) {
             if (execute_fixture) {
-                graph_guard.phase = fixture_result.graph_execution_phase
-                                        ? fixture_result.graph_execution_phase
-                                        : "dispatch";
-                graph_guard.shape_status = fixture_result.shape_status
-                                               ? fixture_result.shape_status
-                                               : graph_guard.shape_status;
-                graph_guard.range_status = fixture_result.range_status
-                                               ? fixture_result.range_status
-                                               : graph_guard.range_status;
-                graph_guard.slice_range_status = fixture_result.slice_range_status
-                                                     ? fixture_result.slice_range_status
-                                                     : graph_guard.slice_range_status;
-                graph_guard.backend_status = fixture_result.backend_status
-                                                  ? fixture_result.backend_status
-                                                  : graph_guard.backend_status;
-                graph_guard.backend_op_status = fixture_result.backend_op_status
-                                                     ? fixture_result.backend_op_status
-                                                     : graph_guard.backend_op_status;
-                graph_guard.dispatch_attempted = fixture_result.dispatch_attempted;
-                graph_guard.reference_read_attempted = fixture_result.reference_read_attempted;
-                graph_guard.output_allocation_attempted = fixture_result.output_allocation_attempted;
-                graph_guard.cleanup_attempted = fixture_result.cleanup_attempted;
-                graph_guard.cleanup_status = fixture_result.cleanup_status
-                                                ? fixture_result.cleanup_status
-                                                : graph_guard.cleanup_status;
-                graph_guard.output_bytes_planned = fixture_result.output_bytes_planned;
-                graph_guard.output_bytes_allocated = fixture_result.output_bytes_allocated;
-                graph_guard.reference_bytes_planned = fixture_result.reference_bytes_planned;
+                graph_guard_apply_fixture_result(&graph_guard, &fixture_result, 0);
             } else if (execute_segment) {
-                graph_guard.phase = segment_result.graph_execution_phase
-                                        ? segment_result.graph_execution_phase
-                                        : "dispatch";
-                graph_guard.shape_status = segment_result.shape_status
-                                               ? segment_result.shape_status
-                                               : graph_guard.shape_status;
-                graph_guard.range_status = segment_result.range_status
-                                               ? segment_result.range_status
-                                               : graph_guard.range_status;
-                graph_guard.slice_range_status = segment_result.slice_range_status
-                                                     ? segment_result.slice_range_status
-                                                     : graph_guard.slice_range_status;
-                graph_guard.backend_status = segment_result.backend_status
-                                                  ? segment_result.backend_status
-                                                  : graph_guard.backend_status;
-                graph_guard.backend_op_status = segment_result.backend_op_status
-                                                     ? segment_result.backend_op_status
-                                                     : graph_guard.backend_op_status;
-                graph_guard.dispatch_attempted = segment_result.dispatch_attempted;
-                graph_guard.reference_read_attempted = segment_result.reference_read_attempted;
-                graph_guard.output_allocation_attempted = segment_result.output_allocation_attempted;
-                graph_guard.cleanup_attempted = segment_result.cleanup_attempted;
-                graph_guard.cleanup_status = segment_result.cleanup_status
-                                                ? segment_result.cleanup_status
-                                                : graph_guard.cleanup_status;
-                graph_guard.output_bytes_planned = segment_result.output_bytes_planned;
-                graph_guard.output_bytes_allocated = segment_result.output_bytes_allocated;
-                graph_guard.reference_bytes_planned = segment_result.reference_bytes_planned;
+                graph_guard_apply_segment_result(&graph_guard, &segment_result, 0);
             } else {
-                graph_guard.phase = partial_result.graph_execution_phase
-                                        ? partial_result.graph_execution_phase
-                                        : "dispatch";
-                graph_guard.shape_status = partial_result.shape_status
-                                               ? partial_result.shape_status
-                                               : graph_guard.shape_status;
-                graph_guard.range_status = partial_result.range_status
-                                               ? partial_result.range_status
-                                               : graph_guard.range_status;
-                graph_guard.slice_range_status = partial_result.slice_range_status
-                                                     ? partial_result.slice_range_status
-                                                     : graph_guard.slice_range_status;
-                graph_guard.backend_status = partial_result.backend_status
-                                                  ? partial_result.backend_status
-                                                  : graph_guard.backend_status;
-                graph_guard.backend_op_status = partial_result.backend_op_status
-                                                     ? partial_result.backend_op_status
-                                                     : graph_guard.backend_op_status;
-                graph_guard.dispatch_attempted = partial_result.dispatch_attempted;
-                graph_guard.reference_read_attempted = partial_result.reference_read_attempted;
-                graph_guard.output_allocation_attempted = partial_result.output_allocation_attempted;
-                graph_guard.cleanup_attempted = partial_result.cleanup_attempted;
-                graph_guard.cleanup_status = partial_result.cleanup_status
-                                                ? partial_result.cleanup_status
-                                                : graph_guard.cleanup_status;
-                graph_guard.output_bytes_planned = partial_result.output_bytes_planned;
-                graph_guard.output_bytes_allocated = partial_result.output_bytes_allocated;
-                graph_guard.reference_bytes_planned = partial_result.reference_bytes_planned;
+                graph_guard_apply_partial_result(&graph_guard, &partial_result, 0);
             }
-            graph_guard.guard_status = "fail";
             print_graph_guard_report(&graph_guard);
             printf("status: %s\n",
                    graph_guard.cleanup_attempted ? "graph-failed-cleaned" : "graph-integrity-fail");
@@ -5489,31 +5512,7 @@ static int command_graph(int argc, char **argv)
         }
 
         if (execute_fixture) {
-            graph_guard.guard_status = fixture_result.graph_integrity_guard
-                                           ? fixture_result.graph_integrity_guard
-                                           : "pass";
-            graph_guard.phase = fixture_result.graph_execution_phase
-                                    ? fixture_result.graph_execution_phase
-                                    : "complete";
-            graph_guard.shape_status = fixture_result.shape_status ? fixture_result.shape_status : "pass";
-            graph_guard.range_status = fixture_result.range_status ? fixture_result.range_status : "pass";
-            graph_guard.slice_range_status = fixture_result.slice_range_status
-                                                 ? fixture_result.slice_range_status
-                                                 : "not-needed";
-            graph_guard.backend_status = fixture_result.backend_status ? fixture_result.backend_status : "ready";
-            graph_guard.backend_op_status = fixture_result.backend_op_status
-                                                ? fixture_result.backend_op_status
-                                                : "supported";
-            graph_guard.dispatch_attempted = fixture_result.dispatch_attempted;
-            graph_guard.reference_read_attempted = fixture_result.reference_read_attempted;
-            graph_guard.output_allocation_attempted = fixture_result.output_allocation_attempted;
-            graph_guard.cleanup_attempted = fixture_result.cleanup_attempted;
-            graph_guard.cleanup_status = fixture_result.cleanup_status
-                                            ? fixture_result.cleanup_status
-                                            : "not-needed";
-            graph_guard.output_bytes_planned = fixture_result.output_bytes_planned;
-            graph_guard.output_bytes_allocated = fixture_result.output_bytes_allocated;
-            graph_guard.reference_bytes_planned = fixture_result.reference_bytes_planned;
+            graph_guard_apply_fixture_result(&graph_guard, &fixture_result, 1);
             print_graph_guard_report(&graph_guard);
             printf("fixture_graph_executed: true\n");
             printf("fixture_backend: %s\n", fixture_result.backend_name);
@@ -5533,31 +5532,7 @@ static int command_graph(int argc, char **argv)
             printf("graph_execution_ready: false\n");
             printf("status: fixture-graph-executed\n");
         } else if (execute_segment) {
-            graph_guard.guard_status = segment_result.graph_integrity_guard
-                                           ? segment_result.graph_integrity_guard
-                                           : "pass";
-            graph_guard.phase = segment_result.graph_execution_phase
-                                    ? segment_result.graph_execution_phase
-                                    : "complete";
-            graph_guard.shape_status = segment_result.shape_status ? segment_result.shape_status : "pass";
-            graph_guard.range_status = segment_result.range_status ? segment_result.range_status : "pass";
-            graph_guard.slice_range_status = segment_result.slice_range_status
-                                                 ? segment_result.slice_range_status
-                                                 : "pass";
-            graph_guard.backend_status = segment_result.backend_status ? segment_result.backend_status : "ready";
-            graph_guard.backend_op_status = segment_result.backend_op_status
-                                                ? segment_result.backend_op_status
-                                                : "supported";
-            graph_guard.dispatch_attempted = segment_result.dispatch_attempted;
-            graph_guard.reference_read_attempted = segment_result.reference_read_attempted;
-            graph_guard.output_allocation_attempted = segment_result.output_allocation_attempted;
-            graph_guard.cleanup_attempted = segment_result.cleanup_attempted;
-            graph_guard.cleanup_status = segment_result.cleanup_status
-                                            ? segment_result.cleanup_status
-                                            : "not-needed";
-            graph_guard.output_bytes_planned = segment_result.output_bytes_planned;
-            graph_guard.output_bytes_allocated = segment_result.output_bytes_allocated;
-            graph_guard.reference_bytes_planned = segment_result.reference_bytes_planned;
+            graph_guard_apply_segment_result(&graph_guard, &segment_result, 1);
             print_graph_guard_report(&graph_guard);
             printf("segment_graph_executed: true\n");
             printf("segment_backend: %s\n", segment_result.backend_name);
@@ -5603,31 +5578,7 @@ static int command_graph(int argc, char **argv)
             printf("generation: unsupported\n");
             printf("status: real-segment-graph-executed\n");
         } else {
-            graph_guard.guard_status = partial_result.graph_integrity_guard
-                                           ? partial_result.graph_integrity_guard
-                                           : "pass";
-            graph_guard.phase = partial_result.graph_execution_phase
-                                    ? partial_result.graph_execution_phase
-                                    : "complete";
-            graph_guard.shape_status = partial_result.shape_status ? partial_result.shape_status : "pass";
-            graph_guard.range_status = partial_result.range_status ? partial_result.range_status : "pass";
-            graph_guard.slice_range_status = partial_result.slice_range_status
-                                                 ? partial_result.slice_range_status
-                                                 : "pass";
-            graph_guard.backend_status = partial_result.backend_status ? partial_result.backend_status : "ready";
-            graph_guard.backend_op_status = partial_result.backend_op_status
-                                                ? partial_result.backend_op_status
-                                                : "supported";
-            graph_guard.dispatch_attempted = partial_result.dispatch_attempted;
-            graph_guard.reference_read_attempted = partial_result.reference_read_attempted;
-            graph_guard.output_allocation_attempted = partial_result.output_allocation_attempted;
-            graph_guard.cleanup_attempted = partial_result.cleanup_attempted;
-            graph_guard.cleanup_status = partial_result.cleanup_status
-                                            ? partial_result.cleanup_status
-                                            : "not-needed";
-            graph_guard.output_bytes_planned = partial_result.output_bytes_planned;
-            graph_guard.output_bytes_allocated = partial_result.output_bytes_allocated;
-            graph_guard.reference_bytes_planned = partial_result.reference_bytes_planned;
+            graph_guard_apply_partial_result(&graph_guard, &partial_result, 1);
             print_graph_guard_report(&graph_guard);
             printf("real_partial_graph_executed: true\n");
             printf("partial_graph_kind: %s\n", partial_result.segment_name);

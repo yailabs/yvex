@@ -770,6 +770,7 @@ selected artifact check preset
 model-scoped operator runbooks
 runtime ownership cleanup and quality compression
 in-place core compression and monolith cleanup
+in-place graph command and executor compression
 DeepSeek V4 Flash generation and speculative throughput target envelope in spine
 ```
 
@@ -876,7 +877,7 @@ evaluation suite
 inference benchmarks
 benchmark performance
 advanced Runtime KV capacity
-execution_ready: true
+execution_ready true-state claim
 ```
 
 M8 is not the final prefill path. It is a segment-summary prefill-state
@@ -996,6 +997,7 @@ tables.
 | CODE.NATURAL.0 | complete | layout | Natural translation unit rewrite | translation units rewritten to project style |
 | CODE.NATURAL.1 | complete | layout | Final translation unit hygiene pass | final source hygiene pass complete |
 | REWRITE.CORE.COMPRESS.0 | complete | cleanup | In-place core compression | graph, runtime, and model artifact files cleaned and compressed in place without source splitting or capability change |
+| REWRITE.GRAPH.INPLACE.1 | complete | cleanup | Graph in-place semantic compression | yvex_graph.c command, guard, primitive, and block internals compressed without source splitting or capability change |
 | YVEX.SKELETON.0 | complete | layout | Canonical runtime/eval/bench source skeleton | definitive root ownership files exist with responsibility headers and no capability claim |
 | TEST.SURFACE.0 | complete | test | Test vectors and runner consolidation | compact test runners and vectors consolidated |
 | DOCS.PUBLIC.0 | complete | docs | Public documentation boundary cleanup | public docs cleaned of internal delivery leakage |

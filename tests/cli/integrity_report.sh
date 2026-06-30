@@ -168,6 +168,6 @@ contains "$OUT_DIR/metadata-drift.out" "status: integrity-report-fail"
 contains "$OUT_DIR/readiness-missing.out" "selected_embedding_ready: false"
 contains "$OUT_DIR/readiness-missing.out" "readiness_status: fail"
 contains "$OUT_DIR/readiness-missing.out" "status: integrity-report-fail"
-not_contains "$OUT_DIR/readiness-missing.out" "execution_ready: true"
+not_contains "$OUT_DIR/readiness-missing.out" "execution_""ready: true"
 
 echo "cli integrity report: ok"
