@@ -772,6 +772,7 @@ runtime ownership cleanup and quality compression
 in-place core compression and monolith cleanup
 in-place graph command and executor compression
 in-place runtime engine, session, graph-slice, and command compression
+in-place model artifact registry, target, prepare, and check compression
 DeepSeek V4 Flash generation and speculative throughput target envelope in spine
 ```
 
@@ -1000,6 +1001,7 @@ tables.
 | REWRITE.CORE.COMPRESS.0 | complete | cleanup | In-place core compression | graph, runtime, and model artifact files cleaned and compressed in place without source splitting or capability change |
 | REWRITE.GRAPH.INPLACE.1 | complete | cleanup | Graph in-place semantic compression | yvex_graph.c command, guard, primitive, and block internals compressed without source splitting or capability change |
 | REWRITE.RUNTIME.INPLACE.1 | complete | cleanup | Runtime in-place semantic compression | yvex_runtime.c engine, session, selected graph execution, prefill, run, and chat internals compressed without source splitting or capability change |
+| REWRITE.MODEL.ARTIFACTS.INPLACE.1 | complete | cleanup | Model artifact in-place semantic compression | yvex_model_artifacts.c registry, target, prepare, check, and command internals compressed without source splitting or capability change |
 | YVEX.SKELETON.0 | complete | layout | Canonical runtime/eval/bench source skeleton | definitive root ownership files exist with responsibility headers and no capability claim |
 | TEST.SURFACE.0 | complete | test | Test vectors and runner consolidation | compact test runners and vectors consolidated |
 | DOCS.PUBLIC.0 | complete | docs | Public documentation boundary cleanup | public docs cleaned of internal delivery leakage |

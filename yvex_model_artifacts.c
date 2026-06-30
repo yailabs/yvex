@@ -31,7 +31,7 @@
 #include <yvex/source_manifest.h>
 #include <yvex/yvex.h>
 
-/* Private registry types */
+/* Registry storage types. */
 
 typedef struct {
     char *alias;
@@ -72,7 +72,7 @@ struct yvex_model_registry {
     unsigned long long cap;
 };
 
-/* Private helper declarations */
+/* Forward declarations for in-file registry/reference ownership. */
 
 static char *yvex_model_registry_strdup(const char *s);
 static void yvex_model_registry_owned_entry_clear(yvex_model_registry_owned_entry *entry);
@@ -94,6 +94,9 @@ static int yvex_model_ref_copy_from_entry(yvex_model_ref *out,
                                           const char *input,
                                           const yvex_model_registry_entry *entry,
                                           yvex_error *err);
+
+/* Model gate helpers and summaries. */
+
 static int yvex_model_gate_dtype_matches(const char *expected, yvex_dtype actual)
 {
     const char *actual_name = yvex_dtype_name(actual);
@@ -407,6 +410,8 @@ int yvex_model_gate_json_translation_unit_anchor(void)
     return 0;
 }
 
+
+/* Materialization gate helpers and summaries. */
 
 
 static int path_exists(const char *path)
@@ -931,6 +936,8 @@ int yvex_materialize_gate_report_translation_unit_anchor(void)
 }
 
 
+/* Model reference resolution. */
+
 
 static char *yvex_model_ref_strdup(const char *s)
 {
@@ -1197,6 +1204,8 @@ const char *yvex_model_ref_status_name(yvex_model_ref_status status)
     }
 }
 
+
+/* Registry storage, metadata drift, and JSON persistence. */
 
 
 static char *yvex_model_registry_strdup(const char *s)
@@ -2070,6 +2079,26 @@ static void free_entry_view_strings(yvex_model_registry_entry *view)
     memset(view, 0, sizeof(*view));
 }
 
+static int append_owned_registry_entry(yvex_model_registry *registry,
+                                       yvex_model_registry_owned_entry *owned,
+                                       yvex_error *err)
+{
+    int rc;
+
+    if (!registry || !owned) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_registry_json",
+                       "registry and owned entry are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = registry_reserve(registry, registry->count + 1u, err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    registry->entries[registry->count++] = *owned;
+    memset(owned, 0, sizeof(*owned));
+    return YVEX_OK;
+}
+
 static const char *find_matching_object_end(const char *start)
 {
     int depth = 0;
@@ -2206,21 +2235,12 @@ static int yvex_model_registry_parse_json_file(const char *path,
             free(json);
             return rc;
         }
-        if (registry->count == registry->cap) {
-            yvex_model_registry_owned_entry *next;
-            unsigned long long cap = registry->cap ? registry->cap * 2u : 4u;
-            next = (yvex_model_registry_owned_entry *)realloc(registry->entries, (size_t)cap * sizeof(*next));
-            if (!next) {
-                yvex_model_registry_owned_entry_clear(&owned);
-                free(json);
-                yvex_error_set(err, YVEX_ERR_NOMEM, "model_registry_json", "registry allocation failed");
-                return YVEX_ERR_NOMEM;
-            }
-            memset(next + registry->cap, 0, (size_t)(cap - registry->cap) * sizeof(*next));
-            registry->entries = next;
-            registry->cap = cap;
+        rc = append_owned_registry_entry(registry, &owned, err);
+        if (rc != YVEX_OK) {
+            yvex_model_registry_owned_entry_clear(&owned);
+            free(json);
+            return rc;
         }
-        registry->entries[registry->count++] = owned;
         p = obj_end;
     }
     free(json);
@@ -2411,35 +2431,7 @@ static int append_scan_entry(yvex_model_registry_entry **entries,
     if (rc != YVEX_OK) return rc;
     yvex_model_registry_entry_view(&owned, &view);
     (*entries)[*count] = view;
-    (*entries)[*count].alias = owned.alias;
-    (*entries)[*count].family = owned.family;
-    (*entries)[*count].model = owned.model;
-    (*entries)[*count].scope = owned.scope;
-    (*entries)[*count].artifact_class = owned.artifact_class;
-    (*entries)[*count].qprofile = owned.qprofile;
-    (*entries)[*count].calibration = owned.calibration;
-    (*entries)[*count].producer = owned.producer;
-    (*entries)[*count].schema_version = owned.schema_version;
-    (*entries)[*count].path = owned.path;
-    (*entries)[*count].sha256 = owned.sha256;
-    (*entries)[*count].file_size = owned.file_size;
-    (*entries)[*count].format = owned.format;
-    (*entries)[*count].architecture = owned.architecture;
-    (*entries)[*count].tensor_count = owned.tensor_count;
-    (*entries)[*count].known_tensor_bytes = owned.known_tensor_bytes;
-    (*entries)[*count].primary_tensor_name = owned.primary_tensor_name;
-    (*entries)[*count].primary_tensor_role = owned.primary_tensor_role;
-    (*entries)[*count].primary_tensor_dtype = owned.primary_tensor_dtype;
-    (*entries)[*count].primary_tensor_rank = owned.primary_tensor_rank;
-    (*entries)[*count].primary_tensor_dims = owned.primary_tensor_dims;
-    (*entries)[*count].primary_tensor_bytes = owned.primary_tensor_bytes;
-    (*entries)[*count].support_level = owned.support_level;
-    (*entries)[*count].selected_embedding_ready = owned.selected_embedding_ready;
-    (*entries)[*count].selected_embedding_hidden_size = owned.selected_embedding_hidden_size;
-    (*entries)[*count].selected_embedding_vocab_size = owned.selected_embedding_vocab_size;
-    (*entries)[*count].selected_embedding_output_count = owned.selected_embedding_output_count;
-    (*entries)[*count].selected_embedding_slice_bytes = owned.selected_embedding_slice_bytes;
-    (*entries)[*count].execution_ready = owned.execution_ready;
+    memset(&owned, 0, sizeof(owned));
     (*count)++;
     return YVEX_OK;
 }
@@ -2525,24 +2517,7 @@ void yvex_model_registry_scan_free(yvex_model_registry_entry *entries,
 
     if (!entries) return;
     for (i = 0; i < count; ++i) {
-        free((char *)entries[i].alias);
-        free((char *)entries[i].family);
-        free((char *)entries[i].model);
-        free((char *)entries[i].scope);
-        free((char *)entries[i].artifact_class);
-        free((char *)entries[i].qprofile);
-        free((char *)entries[i].calibration);
-        free((char *)entries[i].producer);
-        free((char *)entries[i].schema_version);
-        free((char *)entries[i].path);
-        free((char *)entries[i].sha256);
-        free((char *)entries[i].format);
-        free((char *)entries[i].architecture);
-        free((char *)entries[i].primary_tensor_name);
-        free((char *)entries[i].primary_tensor_role);
-        free((char *)entries[i].primary_tensor_dtype);
-        free((char *)entries[i].primary_tensor_dims);
-        free((char *)entries[i].support_level);
+        free_entry_view_strings(&entries[i]);
     }
     free(entries);
 }
@@ -2893,6 +2868,60 @@ static int parse_models_add_options(int argc, char **argv,
     return 0;
 }
 
+/* Shared stage/status, path, and flag helpers for model commands. */
+
+static void model_stage_print(const char *stage, const char *status)
+{
+    printf("stage: %s %s\n", stage ? stage : "", status ? status : "");
+}
+
+static void model_print_runtime_generation(const char *runtime_execution)
+{
+    printf("runtime_execution: %s\n", runtime_execution ? runtime_execution : "not-performed");
+    printf("generation: unsupported\n");
+}
+
+static int cli_arg_value_valid(const char *value)
+{
+    return value && value[0] && !strchr(value, '\n') && !strchr(value, '\r');
+}
+
+static int parse_models_value_option(const char *command,
+                                     const char *flag,
+                                     int argc,
+                                     char **argv,
+                                     int *index,
+                                     const char **value)
+{
+    if (*index + 1 >= argc) {
+        fprintf(stderr, "yvex: %s %s requires a value\n", command, flag);
+        return 2;
+    }
+    *value = argv[++(*index)];
+    if (!cli_arg_value_valid(*value)) {
+        fprintf(stderr, "yvex: %s %s value is empty or invalid\n", command, flag);
+        return 2;
+    }
+    return 0;
+}
+
+static int model_backend_kind_from_name(const char *backend_name,
+                                        yvex_backend_kind *kind)
+{
+    if (!kind) {
+        return 0;
+    }
+    if (!backend_name || strcmp(backend_name, "cpu") == 0) {
+        *kind = YVEX_BACKEND_KIND_CPU;
+        return 1;
+    }
+    if (strcmp(backend_name, "cuda") == 0) {
+        *kind = YVEX_BACKEND_KIND_CUDA;
+        return 1;
+    }
+    return 0;
+}
+
 typedef struct {
     const char *target;
     const char *source;
@@ -2907,11 +2936,6 @@ typedef struct {
 } yvex_cli_models_prepare_options;
 
 /* Selected artifact prepare preset. */
-
-static int cli_arg_value_valid(const char *value)
-{
-    return value && value[0] && !strchr(value, '\n') && !strchr(value, '\r');
-}
 
 static int expand_operator_path(const char *input,
                                 char *out,
@@ -3017,16 +3041,10 @@ static int parse_models_prepare_options(int argc,
                    strcmp(argv[i], "--models-root") == 0 ||
                    strcmp(argv[i], "--registry") == 0) {
             const char *flag = argv[i];
-            const char *value;
-            if (i + 1 >= argc) {
-                fprintf(stderr, "yvex: models prepare %s requires a value\n", flag);
-                return 2;
-            }
-            value = argv[++i];
-            if (!cli_arg_value_valid(value)) {
-                fprintf(stderr, "yvex: models prepare %s value is empty or invalid\n", flag);
-                return 2;
-            }
+            const char *value = NULL;
+            int rc = parse_models_value_option("models prepare", flag,
+                                               argc, argv, &i, &value);
+            if (rc != 0) return rc;
             if (strcmp(flag, "--source") == 0) options->source = value;
             else if (strcmp(flag, "--out") == 0) options->out = value;
             else if (strcmp(flag, "--out-dir") == 0) options->out_dir = value;
@@ -3071,22 +3089,55 @@ static void print_prepare_common(const yvex_cli_models_prepare_options *options,
     printf("use_alias: %s\n", options->use_alias ? "true" : "false");
 }
 
+static void print_prepare_dry_run_stages(int register_alias, int use_alias)
+{
+    static const char *planned[] = {
+        "resolve-paths",
+        "source-manifest",
+        "native-weights",
+        "tensor-map",
+        "convert-plan",
+        "convert-emit",
+        "inspect",
+        "tensors",
+        "metadata"
+    };
+    unsigned long i;
+
+    for (i = 0; i < sizeof(planned) / sizeof(planned[0]); ++i) {
+        model_stage_print(planned[i], "planned");
+    }
+    model_stage_print("registry-remove-existing", register_alias ? "planned" : "skipped");
+    model_stage_print("registry-add", register_alias ? "planned" : "skipped");
+    model_stage_print("registry-use", use_alias ? "planned" : "skipped");
+    model_stage_print("registry-verify", register_alias ? "planned" : "skipped");
+}
+
+static const char *prepare_unsupported_reason(const char *target)
+{
+    if (strcmp(target, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0) {
+        return "segment prepare is planned, not implemented by this preset";
+    }
+    if (strcmp(target, "glm-5.2-official-safetensors") == 0) {
+        return "YVEX-produced GGUF emission for this target is planned, not implemented";
+    }
+    return NULL;
+}
+
 static int print_prepare_unsupported(const char *target)
 {
+    const char *reason = prepare_unsupported_reason(target);
+
     printf("models: prepare\n");
     printf("target_id: %s\n", target);
-    printf("stage: target unsupported\n");
-    printf("runtime_execution: not-performed\n");
-    printf("generation: unsupported\n");
-    if (strcmp(target, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0) {
-        printf("reason: segment prepare is planned, not implemented by this preset\n");
-    } else if (strcmp(target, "glm-5.2-official-safetensors") == 0) {
-        printf("reason: YVEX-produced GGUF emission for this target is planned, not implemented\n");
-    } else {
+    model_stage_print("target", "unsupported");
+    model_print_runtime_generation("not-performed");
+    if (!reason) {
         printf("reason: unknown model prepare target\n");
         printf("status: model-prepare-unknown-target\n");
         return 2;
     }
+    printf("reason: %s\n", reason);
     printf("status: model-prepare-unsupported\n");
     return exit_for_status(YVEX_ERR_UNSUPPORTED);
 }
@@ -3225,37 +3276,22 @@ static int command_models_prepare(int argc, char **argv)
                          manifest_path, plan_path, registry_path);
 
     if (options.dry_run) {
-        printf("stage: resolve-paths planned\n");
-        printf("stage: source-manifest planned\n");
-        printf("stage: native-weights planned\n");
-        printf("stage: tensor-map planned\n");
-        printf("stage: convert-plan planned\n");
-        printf("stage: convert-emit planned\n");
-        printf("stage: inspect planned\n");
-        printf("stage: tensors planned\n");
-        printf("stage: metadata planned\n");
-        printf("stage: registry-remove-existing %s\n", options.register_alias ? "planned" : "skipped");
-        printf("stage: registry-add %s\n", options.register_alias ? "planned" : "skipped");
-        printf("stage: registry-use %s\n", options.use_alias ? "planned" : "skipped");
-        printf("stage: registry-verify %s\n", options.register_alias ? "planned" : "skipped");
-        printf("runtime_execution: not-performed\n");
-        printf("generation: unsupported\n");
+        print_prepare_dry_run_stages(options.register_alias, options.use_alias);
+        model_print_runtime_generation("not-performed");
         printf("status: model-prepare-dry-run\n");
         return 0;
     }
 
     if (!source_exists) {
-        printf("stage: source-path fail\n");
-        printf("runtime_execution: not-performed\n");
-        printf("generation: unsupported\n");
+        model_stage_print("source-path", "fail");
+        model_print_runtime_generation("not-performed");
         printf("reason: source path does not exist\n");
         printf("status: model-prepare-fail\n");
         return exit_for_status(YVEX_ERR_IO);
     }
     if (artifact_exists && !options.overwrite) {
-        printf("stage: convert-emit refused\n");
-        printf("runtime_execution: not-performed\n");
-        printf("generation: unsupported\n");
+        model_stage_print("convert-emit", "refused");
+        model_print_runtime_generation("not-performed");
         printf("reason: artifact exists; pass --overwrite to replace it\n");
         printf("status: model-prepare-refused\n");
         return exit_for_status(YVEX_ERR_STATE);
@@ -3275,7 +3311,7 @@ static int command_models_prepare(int argc, char **argv)
     manifest_options.status = YVEX_SOURCE_STATUS_IN_PROGRESS;
     rc = yvex_source_manifest_write_json(manifest_path, &manifest_options, &manifest_summary, &err);
     if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
-    printf("stage: source-manifest pass\n");
+    model_stage_print("source-manifest", "pass");
 
     memset(&native_options, 0, sizeof(native_options));
     memset(&native_summary, 0, sizeof(native_summary));
@@ -3291,9 +3327,9 @@ static int command_models_prepare(int argc, char **argv)
         yvex_native_weight_table_close(native_table);
         return print_yvex_error(&err, exit_for_status(rc));
     }
-    printf("stage: native-weights pass\n");
+    model_stage_print("native-weights", "pass");
     printf("native_tensor_count: %llu\n", native_summary.tensor_count);
-    printf("stage: tensor-map pass\n");
+    model_stage_print("tensor-map", "pass");
     yvex_native_weight_table_close(native_table);
     native_table = NULL;
 
@@ -3308,20 +3344,20 @@ static int command_models_prepare(int argc, char **argv)
     conversion_options.overwrite = options.overwrite;
     rc = yvex_conversion_plan_write_json(&conversion_options, plan_path, &conversion_summary, &err);
     if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
-    printf("stage: convert-plan pass\n");
+    model_stage_print("convert-plan", "pass");
 
     memset(&conversion_summary, 0, sizeof(conversion_summary));
     rc = yvex_conversion_emit_gguf(&conversion_options, &conversion_summary, &err);
     if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
-    printf("stage: convert-emit pass\n");
+    model_stage_print("convert-emit", "pass");
     printf("bytes_written: %llu\n", conversion_summary.bytes_written);
 
     memset(&metadata_snapshot, 0, sizeof(metadata_snapshot));
     rc = populate_registry_metadata(&metadata_snapshot, artifact_path, &err);
     if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
-    printf("stage: inspect pass\n");
-    printf("stage: tensors pass\n");
-    printf("stage: metadata pass\n");
+    model_stage_print("inspect", "pass");
+    model_stage_print("tensors", "pass");
+    model_stage_print("metadata", "pass");
     printf("artifact_architecture: %s\n", metadata_snapshot.architecture);
     printf("artifact_tensor_count: %llu\n", metadata_snapshot.entry.tensor_count);
 
@@ -3358,23 +3394,23 @@ static int command_models_prepare(int argc, char **argv)
                 yvex_model_registry_close(registry);
                 return print_yvex_error(&err, exit_for_status(rc));
             }
-            printf("stage: registry-remove-existing pass\n");
+            model_stage_print("registry-remove-existing", "pass");
         } else {
-            printf("stage: registry-remove-existing not-found\n");
+            model_stage_print("registry-remove-existing", "not-found");
         }
         rc = yvex_model_registry_add(registry, &entry, &err);
-        if (rc == YVEX_OK) printf("stage: registry-add pass\n");
+        if (rc == YVEX_OK) model_stage_print("registry-add", "pass");
         if (rc == YVEX_OK && options.use_alias) {
             rc = yvex_model_registry_select(registry, target_alias, &err);
-            if (rc == YVEX_OK) printf("stage: registry-use pass\n");
+            if (rc == YVEX_OK) model_stage_print("registry-use", "pass");
         } else if (rc == YVEX_OK) {
-            printf("stage: registry-use skipped\n");
+            model_stage_print("registry-use", "skipped");
         }
         if (rc == YVEX_OK) rc = yvex_model_registry_save(registry, registry_path, &err);
         if (rc == YVEX_OK) {
             const yvex_model_registry_entry *registered = yvex_model_registry_find(registry, target_alias);
             rc = prepare_registry_verify(registered, &err);
-            if (rc == YVEX_OK) printf("stage: registry-verify pass\n");
+            if (rc == YVEX_OK) model_stage_print("registry-verify", "pass");
         }
         if (rc != YVEX_OK) {
             yvex_model_registry_close(registry);
@@ -3383,14 +3419,13 @@ static int command_models_prepare(int argc, char **argv)
         yvex_model_registry_close(registry);
         registry = NULL;
     } else {
-        printf("stage: registry-remove-existing skipped\n");
-        printf("stage: registry-add skipped\n");
-        printf("stage: registry-use skipped\n");
-        printf("stage: registry-verify skipped\n");
+        model_stage_print("registry-remove-existing", "skipped");
+        model_stage_print("registry-add", "skipped");
+        model_stage_print("registry-use", "skipped");
+        model_stage_print("registry-verify", "skipped");
     }
 
-    printf("runtime_execution: not-performed\n");
-    printf("generation: unsupported\n");
+    model_print_runtime_generation("not-performed");
     printf("status: model-prepare\n");
     return 0;
 }
@@ -3596,16 +3631,10 @@ static int parse_models_check_options(int argc,
                    strcmp(argv[i], "--registry") == 0 ||
                    strcmp(argv[i], "--report-dir") == 0) {
             const char *flag = argv[i];
-            const char *value;
-            if (i + 1 >= argc) {
-                fprintf(stderr, "yvex: models check %s requires a value\n", flag);
-                return 2;
-            }
-            value = argv[++i];
-            if (!cli_arg_value_valid(value)) {
-                fprintf(stderr, "yvex: models check %s value is empty or invalid\n", flag);
-                return 2;
-            }
+            const char *value = NULL;
+            int rc = parse_models_value_option("models check", flag,
+                                               argc, argv, &i, &value);
+            if (rc != 0) return rc;
             if (strcmp(flag, "--backend") == 0) {
                 options->backend_name = value;
             } else if (strcmp(flag, "--level") == 0) {
@@ -3652,8 +3681,7 @@ static int print_model_check_unsupported(const char *target)
     } else {
         printf("reason: source-only target cannot be checked as a YVEX-produced runtime artifact yet\n");
     }
-    printf("runtime_execution: unsupported\n");
-    printf("generation: unsupported\n");
+    model_print_runtime_generation("unsupported");
     return exit_for_status(YVEX_ERR_UNSUPPORTED);
 }
 
@@ -3826,9 +3854,7 @@ static int model_check_backend_probe(const char *backend_name, yvex_error *err)
     int rc;
 
     memset(&options, 0, sizeof(options));
-    options.kind = strcmp(backend_name, "cuda") == 0
-                       ? YVEX_BACKEND_KIND_CUDA
-                       : YVEX_BACKEND_KIND_CPU;
+    (void)model_backend_kind_from_name(backend_name, &options.kind);
     rc = yvex_backend_open(&backend, &options, err);
     if (rc == YVEX_OK) {
         yvex_backend_close(backend);
@@ -3856,9 +3882,7 @@ static int model_check_materialize(const char *path,
     if (rc != YVEX_OK) {
         return rc;
     }
-    backend_options.kind = strcmp(backend_name, "cuda") == 0
-                               ? YVEX_BACKEND_KIND_CUDA
-                               : YVEX_BACKEND_KIND_CPU;
+    (void)model_backend_kind_from_name(backend_name, &backend_options.kind);
     rc = yvex_backend_open(&backend, &backend_options, err);
     if (rc != YVEX_OK) {
         close_model_context(&ctx);
@@ -3946,9 +3970,7 @@ static int model_check_session(const char *path,
     if (rc != YVEX_OK) {
         return rc;
     }
-    backend_options.kind = strcmp(backend_name, "cuda") == 0
-                               ? YVEX_BACKEND_KIND_CUDA
-                               : YVEX_BACKEND_KIND_CPU;
+    (void)model_backend_kind_from_name(backend_name, &backend_options.kind);
     rc = yvex_backend_open(&backend, &backend_options, err);
     if (rc == YVEX_OK) {
         session_options.allow_partial_graph = 1;
@@ -4388,6 +4410,8 @@ static int command_models_check(int argc, char **argv)
     yvex_model_ref_clear(&ref);
     return model_check_finish(&options, &report, exit_code, &err);
 }
+
+/* Registry-backed models subcommands. */
 
 static int command_models_scan(int argc, char **argv)
 {
@@ -4954,8 +4978,30 @@ static int command_models_inspect(int argc, char **argv)
 
 /* Models command dispatch and help. */
 
+typedef int (*yvex_models_subcommand_fn)(int argc, char **argv);
+
+typedef struct {
+    const char *name;
+    yvex_models_subcommand_fn run;
+} yvex_models_subcommand;
+
+static const yvex_models_subcommand model_subcommands[] = {
+    { "scan", command_models_scan },
+    { "add", command_models_add },
+    { "prepare", command_models_prepare },
+    { "check", command_models_check },
+    { "list", command_models_list },
+    { "use", command_models_use },
+    { "current", command_models_current },
+    { "verify", command_models_verify },
+    { "inspect", command_models_inspect },
+    { "remove", command_models_remove }
+};
+
 static int command_models(int argc, char **argv)
 {
+    unsigned long i;
+
     if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
         yvex_models_help(stdout);
         return 0;
@@ -4964,16 +5010,11 @@ static int command_models(int argc, char **argv)
         fprintf(stderr, "yvex: models requires scan, add, prepare, check, list, use, current, verify, inspect, or remove\n");
         return 2;
     }
-    if (strcmp(argv[2], "scan") == 0) return command_models_scan(argc, argv);
-    if (strcmp(argv[2], "add") == 0) return command_models_add(argc, argv);
-    if (strcmp(argv[2], "prepare") == 0) return command_models_prepare(argc, argv);
-    if (strcmp(argv[2], "check") == 0) return command_models_check(argc, argv);
-    if (strcmp(argv[2], "list") == 0) return command_models_list(argc, argv);
-    if (strcmp(argv[2], "use") == 0) return command_models_use(argc, argv);
-    if (strcmp(argv[2], "current") == 0) return command_models_current(argc, argv);
-    if (strcmp(argv[2], "verify") == 0) return command_models_verify(argc, argv);
-    if (strcmp(argv[2], "inspect") == 0) return command_models_inspect(argc, argv);
-    if (strcmp(argv[2], "remove") == 0) return command_models_remove(argc, argv);
+    for (i = 0; i < sizeof(model_subcommands) / sizeof(model_subcommands[0]); ++i) {
+        if (strcmp(argv[2], model_subcommands[i].name) == 0) {
+            return model_subcommands[i].run(argc, argv);
+        }
+    }
     fprintf(stderr, "yvex: unknown models subcommand: %s\n", argv[2]);
     return 2;
 }
