@@ -30,6 +30,12 @@ Expected source path:
 $HOME/lab/models/hf/glm/GLM-5.2
 ```
 
+Source repository:
+
+```text
+zai-org/GLM-5.2
+```
+
 Report path:
 
 ```text
@@ -105,7 +111,69 @@ Boundary:
 ./yvex model-target inspect glm-5.2-official-safetensors --paths
 ```
 
-## Lane 2 — GLM Download Status
+## Lane 2 — Start GLM Source Download
+
+Purpose:
+  Start an external GLM safetensors download into operator-local storage.
+
+Requires:
+  Repository root.
+  Hugging Face `hf` CLI installed and authenticated if the local environment
+  requires a token.
+
+Writes:
+  `$HOME/lab/models/hf/glm/GLM-5.2`
+  `$HOME/lab/models/logs/glm52-safetensors-download.log`
+  `$HOME/lab/models/logs/glm52-safetensors-download.pid`
+
+Safe to rerun:
+  yes, after confirming no previous GLM download is still active.
+
+Stop after:
+  download process, log, and target path are visible.
+
+Boundary:
+  external source download only
+  no YVEX artifact creation
+  not GLM inventory completion
+  not GLM GGUF emission
+  not GLM runtime execution
+  not GLM generation
+
+Use `hf`, not the deprecated `huggingface-cli`. The GLM-5.2 source target uses
+`zai-org/GLM-5.2`; `THUDM/GLM-5.2` is not the repository ID for this target.
+
+```sh
+export YVEX_MODELS="$HOME/lab/models"
+export HF_BIN="${HF_BIN:-hf}"
+export GLM_HF_REPO="zai-org/GLM-5.2"
+
+TARGET="$YVEX_MODELS/hf/glm/GLM-5.2"
+PID_FILE="$YVEX_MODELS/logs/glm52-safetensors-download.pid"
+LOG_FILE="$YVEX_MODELS/logs/glm52-safetensors-download.log"
+
+mkdir -p "$TARGET" "$YVEX_MODELS/logs"
+
+nohup "$HF_BIN" download \
+  "$GLM_HF_REPO" \
+  --include "*.safetensors" \
+  --local-dir "$TARGET" \
+  > "$LOG_FILE" 2>&1 &
+
+echo $! > "$PID_FILE"
+
+sleep 5
+tail -n 40 "$LOG_FILE"
+ps -p "$(cat "$PID_FILE")" -o pid,stat,etime,cmd
+```
+
+If the log says `Repository not found`, first verify `GLM_HF_REPO` is
+`zai-org/GLM-5.2` and then check local Hugging Face authentication or network
+access. That failure happens before YVEX sees any source artifact.
+
+If the log says `huggingface-cli` is deprecated, rerun this lane with `hf`.
+
+## Lane 3 — GLM Download Status
 
 Purpose:
   Inspect a GLM source download that has already been started outside YVEX.

@@ -41,7 +41,8 @@ Use this when working with the current GLM-5.2 official-source tensor target.
 Covers:
 
 - GLM target path reporting;
-- GLM source-download status checks;
+- GLM source-download start and status checks;
+- Hugging Face CLI and repository namespace boundaries;
 - GLM boundaries.
 
 GLM remains source evidence only. It is not GLM execution or GLM generation.

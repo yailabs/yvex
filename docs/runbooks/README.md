@@ -7,7 +7,7 @@ Use a model-specific runbook when working with a concrete target.
 ## Files
 
 - `deepseek.md` - current DeepSeek selected artifact path from local safetensors to selected graph execution.
-- `glm.md` - GLM-5.2 official-source tensor target status and download checks.
+- `glm.md` - GLM-5.2 official-source tensor target status and download start and status checks.
 - `common.md` - shared configuration, graph-only checks, daemon diagnostics, and repository validation.
 
 ## Rules
