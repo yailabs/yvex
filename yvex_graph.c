@@ -2253,6 +2253,10 @@ typedef struct {
     const char *activation;
     int causal;
     int gated;
+    const float *input_override_values;
+    float *output_copy_values;
+    float *reference_copy_values;
+    int fail_after_backend_alloc;
 } yvex_controlled_block_request;
 
 typedef struct {
@@ -2637,6 +2641,10 @@ static int controlled_block_execute_fixture(
     block_fill_mlp_weights(host.mlp_gate_values, host.mlp_up_values,
                            host.mlp_down_values, request->hidden_dim,
                            request->ffn_dim);
+    if (request->input_override_values) {
+        memcpy(host.input_values, request->input_override_values,
+               (size_t)seq_hidden_bytes);
+    }
 
     result->graph_execution_phase = "backend-allocation";
     memset(&backend_options, 0, sizeof(backend_options));
@@ -2694,7 +2702,8 @@ static int controlled_block_execute_fixture(
         exit_code = exit_for_status(rc);
         goto cleanup;
     }
-    if (cli_test_env_enabled("YVEX_TEST_FAIL_BLOCK_AFTER_BACKEND_ALLOC")) {
+    if (request->fail_after_backend_alloc ||
+        cli_test_env_enabled("YVEX_TEST_FAIL_BLOCK_AFTER_BACKEND_ALLOC")) {
         yvex_error_set(err, YVEX_ERR_BACKEND, "yvex graph block",
                        "test block failure after backend allocation");
         exit_code = exit_for_status(YVEX_ERR_BACKEND);
@@ -2898,6 +2907,14 @@ static int controlled_block_execute_fixture(
         result->output_sample_values[i] = host.output_values[i];
         result->reference_sample_values[i] = host.reference_values[i];
     }
+    if (request->output_copy_values) {
+        memcpy(request->output_copy_values, host.output_values,
+               (size_t)output_bytes);
+    }
+    if (request->reference_copy_values) {
+        memcpy(request->reference_copy_values, host.reference_values,
+               (size_t)output_bytes);
+    }
     if (result->max_abs_diff > 0.002f) {
         yvex_error_setf(err, YVEX_ERR_STATE, "yvex graph block",
                         "controlled block reference comparison failed: max_abs_diff %.9g",
@@ -2995,6 +3012,352 @@ static int command_graph_execute_block_fixture(const char *backend_name,
 
     exit_code = controlled_block_execute_fixture(&request, &result, &err);
     controlled_block_result_print(&result);
+    if (exit_code != 0 && yvex_error_code(&err) != YVEX_OK) {
+        return print_yvex_error(&err, exit_code);
+    }
+    return exit_code;
+}
+
+typedef struct {
+    const char *backend_name;
+    unsigned long long layers;
+    unsigned long long seq_len;
+    unsigned long long position;
+    unsigned long long hidden_dim;
+    unsigned long long head_dim;
+    unsigned long long ffn_dim;
+    int causal;
+    int gated;
+} yvex_controlled_layer_scheduler_request;
+
+typedef struct {
+    const char *status;
+    const char *graph_integrity_guard;
+    const char *graph_execution_phase;
+    const char *graph_kind;
+    const char *backend_name;
+    const char *backend_status;
+    const char *backend_op_status;
+    unsigned long long layers;
+    unsigned long long seq_len;
+    unsigned long long position;
+    unsigned long long hidden_dim;
+    unsigned long long head_dim;
+    unsigned long long ffn_dim;
+    int causal;
+    int gated;
+    unsigned long long op_count_per_layer;
+    unsigned long long total_op_count;
+    unsigned long long input_bytes_per_layer;
+    unsigned long long scratch_planned_bytes_per_layer;
+    unsigned long long backend_allocated_bytes_total;
+    unsigned long long output_bytes;
+    unsigned long long layer_output_checksums[16];
+    unsigned long long layer_reference_checksums[16];
+    float layer_max_abs_diffs[16];
+    unsigned long long final_output_checksum;
+    unsigned long long final_reference_checksum;
+    float final_max_abs_diff;
+    int cleanup_attempted;
+    const char *cleanup_status;
+    int layers_cuda_parity;
+} yvex_controlled_layer_scheduler_result;
+
+static void controlled_layer_scheduler_result_init(
+    yvex_controlled_layer_scheduler_result *result,
+    const yvex_controlled_layer_scheduler_request *request)
+{
+    memset(result, 0, sizeof(*result));
+    result->status = "graph-layers-fail";
+    result->graph_integrity_guard = "fail";
+    result->graph_execution_phase = "scratch-plan";
+    result->graph_kind = "controlled-layer-fixture";
+    result->backend_name = request->backend_name;
+    result->backend_status = "not-opened";
+    result->backend_op_status = "unchecked";
+    result->layers = request->layers;
+    result->seq_len = request->seq_len;
+    result->position = request->position;
+    result->hidden_dim = request->hidden_dim;
+    result->head_dim = request->head_dim;
+    result->ffn_dim = request->ffn_dim;
+    result->causal = request->causal;
+    result->gated = request->gated;
+    result->op_count_per_layer = 12ull;
+    result->total_op_count = request->layers * 12ull;
+    result->cleanup_status = "not-needed";
+    result->layers_cuda_parity = 1;
+}
+
+static void controlled_layer_scheduler_print(
+    const yvex_controlled_layer_scheduler_result *result)
+{
+    unsigned long long layer;
+
+    printf("status: %s\n", result->status);
+    printf("graph_integrity_guard: %s\n", result->graph_integrity_guard);
+    printf("graph_execution_phase: %s\n", result->graph_execution_phase);
+    printf("graph_kind: %s\n", result->graph_kind);
+    printf("block: fixture\n");
+    printf("backend: %s\n", result->backend_name);
+    printf("backend_status: %s\n", result->backend_status);
+    printf("backend_op_status: %s\n", result->backend_op_status);
+    printf("layers: %llu\n", result->layers);
+    printf("seq_len: %llu\n", result->seq_len);
+    printf("position: %llu\n", result->position);
+    printf("hidden_dim: %llu\n", result->hidden_dim);
+    printf("head_dim: %llu\n", result->head_dim);
+    printf("ffn_dim: %llu\n", result->ffn_dim);
+    printf("causal: %s\n", result->causal ? "true" : "false");
+    printf("gated: %s\n", result->gated ? "true" : "false");
+    printf("layer_handoff: selected-position-row\n");
+    printf("sequence_rebuild: deterministic-with-previous-position-row\n");
+    printf("op_count_per_layer: %llu\n", result->op_count_per_layer);
+    printf("total_op_count: %llu\n", result->total_op_count);
+    printf("input_bytes_per_layer: %llu\n", result->input_bytes_per_layer);
+    printf("scratch_planned_bytes_per_layer: %llu\n",
+           result->scratch_planned_bytes_per_layer);
+    printf("backend_allocated_bytes_total: %llu\n",
+           result->backend_allocated_bytes_total);
+    printf("output_bytes: %llu\n", result->output_bytes);
+    for (layer = 0; layer < result->layers && layer < 16ull; ++layer) {
+        printf("layer_%llu_checksum: %llu\n", layer,
+               result->layer_output_checksums[layer]);
+        printf("layer_%llu_reference_checksum: %llu\n", layer,
+               result->layer_reference_checksums[layer]);
+        printf("layer_%llu_max_abs_diff: %.9g\n", layer,
+               (double)result->layer_max_abs_diffs[layer]);
+    }
+    printf("final_output_checksum: %llu\n", result->final_output_checksum);
+    printf("final_reference_checksum: %llu\n", result->final_reference_checksum);
+    printf("final_max_abs_diff: %.9g\n", (double)result->final_max_abs_diff);
+    if (strcmp(result->backend_name, "cuda") == 0) {
+        printf("layers_cuda_parity: %s\n",
+               result->layers_cuda_parity ? "pass" : "fail");
+        printf("cuda_reference_max_abs_diff: %.9g\n",
+               (double)result->final_max_abs_diff);
+    } else {
+        printf("cpu_reference_max_abs_diff: %.9g\n",
+               (double)result->final_max_abs_diff);
+    }
+    printf("phase: cleanup\n");
+    printf("cleanup_attempted: %s\n", result->cleanup_attempted ? "true" : "false");
+    printf("cleanup_status: %s\n", result->cleanup_status);
+    printf("execution_ready: false\n");
+    printf("graph_execution_ready: false\n");
+    printf("prefill_ready: false\n");
+    printf("logits_ready: false\n");
+    printf("generation_ready: false\n");
+    printf("generation: unsupported\n");
+    printf("status: %s\n", result->status);
+}
+
+static int controlled_layer_scheduler_execute(
+    const yvex_controlled_layer_scheduler_request *request,
+    yvex_controlled_layer_scheduler_result *result,
+    yvex_error *err)
+{
+    yvex_controlled_block_request block_request;
+    yvex_controlled_block_result block_result;
+    float *sequence_values = NULL;
+    float *previous_output_values = NULL;
+    float *layer_output_values = NULL;
+    float *layer_reference_values = NULL;
+    unsigned long long seq_hidden;
+    unsigned long long hidden_bytes;
+    unsigned long long seq_hidden_bytes;
+    unsigned long long layer;
+    int fail_after_layer_0;
+    int fail_after_backend_alloc;
+    int exit_code = 1;
+
+    controlled_layer_scheduler_result_init(result, request);
+    seq_hidden = request->seq_len * request->hidden_dim;
+    hidden_bytes = request->hidden_dim * (unsigned long long)sizeof(float);
+    seq_hidden_bytes = seq_hidden * (unsigned long long)sizeof(float);
+    result->input_bytes_per_layer = seq_hidden_bytes;
+    result->output_bytes = hidden_bytes;
+
+    result->graph_execution_phase = "host-allocation";
+    sequence_values = (float *)calloc((size_t)seq_hidden, sizeof(float));
+    previous_output_values = (float *)calloc((size_t)request->hidden_dim, sizeof(float));
+    layer_output_values = (float *)calloc((size_t)request->hidden_dim, sizeof(float));
+    layer_reference_values = (float *)calloc((size_t)request->hidden_dim, sizeof(float));
+    if (!sequence_values || !previous_output_values ||
+        !layer_output_values || !layer_reference_values) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex graph layers",
+                       "failed to allocate layer scheduler host buffers");
+        exit_code = exit_for_status(YVEX_ERR_NOMEM);
+        goto cleanup;
+    }
+    result->cleanup_attempted = 1;
+    result->cleanup_status = "pass";
+
+    fail_after_layer_0 = cli_test_env_enabled("YVEX_TEST_FAIL_LAYERS_AFTER_LAYER_0");
+    fail_after_backend_alloc =
+        cli_test_env_enabled("YVEX_TEST_FAIL_LAYERS_AFTER_BACKEND_ALLOC");
+
+    for (layer = 0; layer < request->layers; ++layer) {
+        block_fill_input(sequence_values, request->seq_len, request->hidden_dim);
+        if (layer > 0) {
+            memcpy(sequence_values + (request->position * request->hidden_dim),
+                   previous_output_values, (size_t)hidden_bytes);
+        }
+
+        memset(&block_request, 0, sizeof(block_request));
+        memset(&block_result, 0, sizeof(block_result));
+        memset(layer_output_values, 0, (size_t)hidden_bytes);
+        memset(layer_reference_values, 0, (size_t)hidden_bytes);
+        block_request.backend_name = request->backend_name;
+        block_request.seq_len = request->seq_len;
+        block_request.position = request->position;
+        block_request.hidden_dim = request->hidden_dim;
+        block_request.head_dim = request->head_dim;
+        block_request.ffn_dim = request->ffn_dim;
+        block_request.activation = "silu";
+        block_request.causal = request->causal;
+        block_request.gated = request->gated;
+        block_request.input_override_values = sequence_values;
+        block_request.output_copy_values = layer_output_values;
+        block_request.reference_copy_values = layer_reference_values;
+        block_request.fail_after_backend_alloc =
+            fail_after_backend_alloc && layer == 0ull;
+
+        result->graph_execution_phase = "layer-dispatch";
+        exit_code = controlled_block_execute_fixture(&block_request,
+                                                     &block_result, err);
+        result->backend_status = block_result.backend_status;
+        result->backend_op_status = block_result.backend_op_status;
+        result->scratch_planned_bytes_per_layer = block_result.scratch_planned_bytes;
+        result->backend_allocated_bytes_total += block_result.backend_allocated_bytes;
+        result->layer_output_checksums[layer] = block_result.output_checksum;
+        result->layer_reference_checksums[layer] = block_result.reference_checksum;
+        result->layer_max_abs_diffs[layer] = block_result.max_abs_diff;
+        result->final_output_checksum = block_result.output_checksum;
+        result->final_reference_checksum = block_result.reference_checksum;
+        result->final_max_abs_diff = block_result.max_abs_diff;
+        if (strcmp(request->backend_name, "cuda") == 0 &&
+            !block_result.block_cuda_parity) {
+            result->layers_cuda_parity = 0;
+        }
+        if (block_result.cleanup_attempted) {
+            result->cleanup_attempted = 1;
+            result->cleanup_status = "pass";
+        }
+        if (exit_code != 0) {
+            result->status = "graph-layers-failed-cleaned";
+            result->graph_integrity_guard = "fail";
+            result->graph_execution_phase = block_result.graph_execution_phase;
+            goto cleanup;
+        }
+        memcpy(previous_output_values, layer_output_values, (size_t)hidden_bytes);
+        if (fail_after_layer_0 && layer == 0ull) {
+            yvex_error_set(err, YVEX_ERR_STATE, "yvex graph layers",
+                           "test layer scheduler failure after layer 0");
+            result->status = "graph-layers-failed-cleaned";
+            result->graph_integrity_guard = "fail";
+            result->graph_execution_phase = "layer-0-complete";
+            exit_code = exit_for_status(YVEX_ERR_STATE);
+            goto cleanup;
+        }
+    }
+
+    result->status = "graph-layers";
+    result->graph_integrity_guard = "pass";
+    result->graph_execution_phase = "complete";
+    exit_code = 0;
+
+cleanup:
+    if (sequence_values || previous_output_values ||
+        layer_output_values || layer_reference_values) {
+        result->cleanup_attempted = 1;
+        result->cleanup_status = "pass";
+    }
+    free(layer_reference_values);
+    free(layer_output_values);
+    free(previous_output_values);
+    free(sequence_values);
+    if (exit_code == 0) {
+        yvex_error_clear(err);
+    }
+    return exit_code;
+}
+
+static int command_graph_execute_layers_fixture(const char *backend_name,
+                                                unsigned long long layers,
+                                                unsigned long long seq_len,
+                                                unsigned long long position,
+                                                unsigned long long hidden_dim,
+                                                unsigned long long head_dim,
+                                                unsigned long long ffn_dim,
+                                                int causal,
+                                                int gated)
+{
+    yvex_controlled_layer_scheduler_request request;
+    yvex_controlled_layer_scheduler_result result;
+    yvex_error err;
+    unsigned long long seq_hidden;
+    unsigned long long hidden_hidden;
+    unsigned long long hidden_ffn;
+    int exit_code;
+
+    yvex_error_clear(&err);
+    if (layers == 0 || layers > 16ull) {
+        fprintf(stderr, "yvex: layer scheduler requires 1 <= --layers <= 16\n");
+        return 2;
+    }
+    if (seq_len == 0 || hidden_dim == 0 || head_dim == 0 || ffn_dim == 0) {
+        fprintf(stderr, "yvex: layer scheduler dimensions must be positive\n");
+        return 2;
+    }
+    if (position >= seq_len) {
+        fprintf(stderr, "yvex: layer scheduler position must be less than seq-len\n");
+        return 2;
+    }
+    if (hidden_dim % head_dim != 0ull) {
+        fprintf(stderr, "yvex: layer scheduler hidden-dim must be divisible by head-dim\n");
+        return 2;
+    }
+    if (hidden_dim != head_dim) {
+        fprintf(stderr, "yvex: layer scheduler currently supports one attention head\n");
+        return 5;
+    }
+    if (!gated) {
+        fprintf(stderr, "yvex: layer scheduler requires gated MLP\n");
+        return 2;
+    }
+    if (seq_len > ULLONG_MAX / hidden_dim ||
+        hidden_dim > ULLONG_MAX / hidden_dim ||
+        hidden_dim > ULLONG_MAX / ffn_dim ||
+        ffn_dim > ULLONG_MAX / hidden_dim ||
+        layers > ULLONG_MAX / 12ull) {
+        fprintf(stderr, "yvex: layer scheduler dimension overflow\n");
+        return 4;
+    }
+    seq_hidden = seq_len * hidden_dim;
+    hidden_hidden = hidden_dim * hidden_dim;
+    hidden_ffn = hidden_dim * ffn_dim;
+    if (seq_hidden > (unsigned long long)(SIZE_MAX / sizeof(float)) ||
+        hidden_hidden > (unsigned long long)(SIZE_MAX / sizeof(float)) ||
+        hidden_ffn > (unsigned long long)(SIZE_MAX / sizeof(float)) ||
+        (ffn_dim * hidden_dim) > (unsigned long long)(SIZE_MAX / sizeof(float))) {
+        fprintf(stderr, "yvex: layer scheduler byte count overflow\n");
+        return 4;
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.backend_name = backend_name;
+    request.layers = layers;
+    request.seq_len = seq_len;
+    request.position = position;
+    request.hidden_dim = hidden_dim;
+    request.head_dim = head_dim;
+    request.ffn_dim = ffn_dim;
+    request.causal = causal;
+    request.gated = gated;
+
+    exit_code = controlled_layer_scheduler_execute(&request, &result, &err);
+    controlled_layer_scheduler_print(&result);
     if (exit_code != 0 && yvex_error_code(&err) != YVEX_OK) {
         return print_yvex_error(&err, exit_code);
     }
@@ -4877,13 +5240,15 @@ static int graph_mode_count(int execute_fixture,
                             int execute_partial,
                             int execute_segment,
                             int execute_op,
-                            int execute_block)
+                            int execute_block,
+                            int execute_layers)
 {
     return (execute_fixture ? 1 : 0) +
            (execute_partial ? 1 : 0) +
            (execute_segment ? 1 : 0) +
            (execute_op ? 1 : 0) +
-           (execute_block ? 1 : 0);
+           (execute_block ? 1 : 0) +
+           (execute_layers ? 1 : 0);
 }
 
 static const char *graph_guard_kind_for_mode(int execute_fixture, int execute_segment)
@@ -4960,11 +5325,13 @@ static int command_graph(int argc, char **argv)
     unsigned long long mlp_ffn_dim = 0ull;
     unsigned long long mlp_experts = 0ull;
     unsigned long long mlp_expert_id = 0ull;
+    unsigned long long layer_count = 0ull;
     int execute_fixture = 0;
     int execute_partial = 0;
     int execute_segment = 0;
     int execute_op = 0;
     int execute_block = 0;
+    int execute_layers = 0;
     int attention_causal = 0;
     int mlp_gated = 0;
     int block_name_provided = 0;
@@ -4983,6 +5350,7 @@ static int command_graph(int argc, char **argv)
     int mlp_activation_provided = 0;
     int mlp_experts_provided = 0;
     int mlp_expert_id_provided = 0;
+    int layers_provided = 0;
     const char *mlp_activation = NULL;
     int i;
     int rc;
@@ -5049,6 +5417,8 @@ static int command_graph(int argc, char **argv)
             execute_op = 1;
         } else if (strcmp(argv[i], "--execute-block") == 0) {
             execute_block = 1;
+        } else if (strcmp(argv[i], "--execute-layers") == 0) {
+            execute_layers = 1;
         } else if (strcmp(argv[i], "--op") == 0) {
             if (i + 1 >= argc) {
                 fprintf(stderr, "yvex: --op requires rope, attention, matmul, or mlp\n");
@@ -5120,6 +5490,13 @@ static int command_graph(int argc, char **argv)
             }
             mlp_expert_id_provided = 1;
             i += 1;
+        } else if (strcmp(argv[i], "--layers") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &layer_count)) {
+                fprintf(stderr, "yvex: --layers requires a positive integer\n");
+                return 2;
+            }
+            layers_provided = 1;
+            i += 1;
         } else if (strcmp(argv[i], "--seq-len") == 0) {
             if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &attention_seq_len)) {
                 fprintf(stderr, "yvex: --seq-len requires a positive integer\n");
@@ -5180,9 +5557,9 @@ static int command_graph(int argc, char **argv)
         }
     }
 
-    if (!model_arg && !execute_op && !execute_block) {
+    if (!model_arg && !execute_op && !execute_block && !execute_layers) {
         fprintf(stderr, "yvex: graph requires FILE_OR_ALIAS\n");
-        fprintf(stderr, "usage: yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N] | yvex graph --backend cpu|cuda --execute-block --block fixture --seq-len N --position N --hidden-dim N --head-dim N --ffn-dim N [--causal] [--gated]\n");
+        fprintf(stderr, "usage: yvex graph [--model] FILE_OR_ALIAS [--seq N] [--ctx N] [--backend cpu|cuda] [--execute-fixture] [--execute-partial] [--execute-segment --segment embedding-rmsnorm] [--partial-token N] [--tokens IDS --token-index N] | yvex graph --backend cpu|cuda --execute-block --block fixture --seq-len N --position N --hidden-dim N --head-dim N --ffn-dim N [--causal] [--gated] | yvex graph --backend cpu|cuda --execute-layers --layers N --block fixture --seq-len N --position N --hidden-dim N --head-dim N --ffn-dim N [--causal] [--gated]\n");
         return 2;
     }
     if (!graph_backend_valid(backend_name)) {
@@ -5190,9 +5567,50 @@ static int command_graph(int argc, char **argv)
         return 2;
     }
     if (graph_mode_count(execute_fixture, execute_partial, execute_segment,
-                         execute_op, execute_block) > 1) {
-        fprintf(stderr, "yvex: --execute-fixture, --execute-partial, --execute-segment, --execute-op, and --execute-block are mutually exclusive\n");
+                         execute_op, execute_block, execute_layers) > 1) {
+        fprintf(stderr, "yvex: --execute-fixture, --execute-partial, --execute-segment, --execute-op, --execute-block, and --execute-layers are mutually exclusive\n");
         return 2;
+    }
+    if (execute_layers) {
+        if (model_arg) {
+            fprintf(stderr, "yvex: --execute-layers does not take a model artifact\n");
+            return 2;
+        }
+        if (!block_name_provided) {
+            fprintf(stderr, "yvex: --execute-layers requires --block fixture\n");
+            return 2;
+        }
+        if (strcmp(block_name, "fixture") != 0) {
+            fprintf(stderr, "yvex: unsupported block: %s\n", block_name);
+            return 2;
+        }
+        if (!layers_provided) {
+            fprintf(stderr, "yvex: --execute-layers requires --layers N\n");
+            return 2;
+        }
+        if (!attention_seq_len_provided || !rope_position_provided ||
+            !mlp_hidden_dim_provided || !rope_head_dim_provided ||
+            !mlp_ffn_dim_provided) {
+            fprintf(stderr, "yvex: --execute-layers requires --seq-len N --position N --hidden-dim N --head-dim N --ffn-dim N\n");
+            return 2;
+        }
+        if (op_name || matmul_m_provided || matmul_k_provided ||
+            matmul_n_provided || mlp_activation_provided ||
+            mlp_experts_provided || mlp_expert_id_provided ||
+            fixture_token_provided || partial_token_provided ||
+            token_input_provided || token_index_provided || segment_name) {
+            fprintf(stderr, "yvex: --execute-layers cannot be combined with model graph, segment, token, or standalone op options\n");
+            return 2;
+        }
+        return command_graph_execute_layers_fixture(backend_name,
+                                                    layer_count,
+                                                    attention_seq_len,
+                                                    rope_position,
+                                                    mlp_hidden_dim,
+                                                    rope_head_dim,
+                                                    mlp_ffn_dim,
+                                                    1,
+                                                    1);
     }
     if (execute_block) {
         if (model_arg) {
@@ -5326,7 +5744,7 @@ static int command_graph(int argc, char **argv)
         return command_graph_execute_rope_op(backend_name, rope_position, rope_head_dim);
     }
     if (block_name_provided) {
-        fprintf(stderr, "yvex: --block requires --execute-block\n");
+        fprintf(stderr, "yvex: --block requires --execute-block or --execute-layers\n");
         return 2;
     }
     if (op_name || rope_position_provided || rope_head_dim_provided ||
@@ -5334,7 +5752,7 @@ static int command_graph(int argc, char **argv)
         matmul_m_provided || matmul_k_provided || matmul_n_provided ||
         mlp_hidden_dim_provided || mlp_ffn_dim_provided ||
         mlp_activation_provided || mlp_gated || mlp_experts_provided ||
-        mlp_expert_id_provided) {
+        mlp_expert_id_provided || layers_provided) {
         fprintf(stderr, "yvex: --op and standalone op options require --execute-op\n");
         return 2;
     }
@@ -5643,5 +6061,7 @@ void yvex_graph_help(FILE *fp)
     fprintf(fp, "       yvex graph --backend cpu|cuda --execute-op --op matmul --m M --k K --n N\n");
     fprintf(fp, "       yvex graph --backend cpu|cuda --execute-op --op mlp --hidden-dim N --ffn-dim N --activation silu --gated [--experts N --expert-id N]\n");
     fprintf(fp, "       yvex graph --backend cpu|cuda --execute-block --block fixture --seq-len N --position N --hidden-dim N --head-dim N --ffn-dim N [--causal] [--gated]\n");
-    fprintf(fp, "\nGraph commands run descriptor diagnostics, bounded fixture and selected real graph proofs, standalone primitive probes, or one controlled transformer-block fixture. They do not run inference or text generation.\n");
+    fprintf(fp, "       yvex graph --backend cpu|cuda --execute-layers --layers N --block fixture --seq-len N --position N --hidden-dim N --head-dim N --ffn-dim N [--causal] [--gated]\n");
+    fprintf(fp, "\nGraph commands run descriptor diagnostics, bounded fixture and selected real graph proofs, standalone primitive probes, one controlled transformer-block fixture, or a controlled layer scheduler fixture. They do not run inference or text generation.\n");
+    fprintf(fp, "Layer execution is a controlled fixture scheduler over repeated diagnostic blocks; it is not model prefill, decode, logits, sampling, or generation.\n");
 }

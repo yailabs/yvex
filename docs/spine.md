@@ -744,6 +744,7 @@ standalone F32 matmul/projection primitive boundary
 standalone F32 MLP/feed-forward primitive boundary
 controlled first transformer block fixture execution
 controlled block executor boundary and scratch lifecycle cleanup
+controlled layer scheduler fixture over repeated diagnostic blocks
 artifact integrity validator and corruption fixture suite
 file identity digest enforcement
 registry metadata drift diagnostics
@@ -1039,7 +1040,7 @@ tables.
 | GRAPH.OPS.2 | complete | graph | Projection and matmul primitive boundary | F32 matmul/projection primitive implemented with shape, byte, backend, dispatch, reference, and cleanup limits |
 | GRAPH.OPS.3 | complete | graph | MLP and routed-expert primitive boundary | F32 feed-forward and routed expert-slice primitive implemented with explicit tensor roles and backend support |
 | GRAPH.BLOCK.0 | complete | graph | First transformer block execution | controlled fixture block executes through normalization, attention, residual, MLP path with owned scratch |
-| GRAPH.LAYERS.0 | next | graph | Layer scheduler and repeated block execution | scheduler can run repeated controlled blocks over token positions with cleanup and failure reporting |
+| GRAPH.LAYERS.0 | complete | graph | Layer scheduler and repeated block execution | `yvex graph --execute-layers --block fixture` runs a bounded repeated controlled block fixture with selected-position activation handoff, cleanup proof, CPU/CUDA parity, and no prefill/decode/logits/sampling/generation claim |
 | PREFILL.2 | planned | prefill | First real transformer prefill path | validated prompt tokens run through implemented layer path into KV-backed prefill state |
 | PREFILL.3 | planned | prefill | Chunked prefill and scratch lifecycle | chunked token ranges, scratch reuse, cleanup, and context-boundary behavior implemented |
 | PREFILL.4 | planned | prefill | Prefill diagnostics and regression reports | prefill positions, memory, KV rows, checksums, and failure phases visible |
@@ -1931,31 +1932,30 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-MODEL.CHECK.1 - Segment artifact check preset
+GRAPH.CHECK.0 - Graph check preset for primitive/block/layer proofs
 ```
 
-MODEL.CHECK.1 may compose only already implemented segment behavior: resolve,
-inspect, tensors, metadata, integrity checks, materialization, engine/session,
-selected embedding-plus-RMSNorm graph segment, segment-summary prefill, and
-minimal KV binding. It must not create artifacts, start a server, run chat,
-decode, produce logits, sample, generate, evaluate, benchmark, or claim runtime
-generation.
+GRAPH.CHECK.0 may compose only graph behavior already implemented by lower
+commands: standalone primitives, controlled block fixture execution, and
+controlled layer scheduler fixture execution. It must not claim real model layer
+execution, prefill, decode, logits, sampling, generation, evaluation, or
+benchmark readiness.
 
 SPINE.GENERATION.TARGET.0 records the long-term DeepSeek generation and
 throughput target. It does not change the immediate implementation order.
 
 MODEL.PREPARE.0 and MODEL.CHECK.0 are complete for the DeepSeek selected
-embedding target.
+embedding target. MODEL.CHECK.1 remains planned.
 
 Runtime active next remains:
 
 ```text
-GRAPH.LAYERS.0 - Layer scheduler and repeated block execution
+GRAPH.CHECK.0 - Graph check preset for primitive/block/layer proofs
 ```
 
-GRAPH.LAYERS.0 remains the next runtime milestone. It is not cancelled. The
-operator preset track exists to remove shell glue before runtime work
-continues.
+GRAPH.CHECK.0 is a command preset over existing graph proofs. It must not
+create new graph capability beyond the primitive, block, and layer fixture
+commands it runs.
 
 OWI.TARGETS.1 remains planned until multi-family source manifest evidence is
 implemented over available source artifacts. GLM source tensors may continue
@@ -1969,11 +1969,10 @@ SPINE.BLOCKS.1 - Planned-row deduplication and command-flow compression
 
 SPINE.BLOCKS.1 is a future cleanup row, not the active next implementation.
 
-GRAPH.LAYERS.0 must schedule repeated controlled block fixture executions over
-token positions with explicit per-position state, scratch reuse, cleanup,
-failure phases, and reference comparison. It must not claim full transformer
-prefill, decode, logits, sampling, generation, server generation, evaluation,
-or benchmark readiness.
+GRAPH.LAYERS.0 is complete as a repeated controlled block fixture with
+selected-position activation handoff. It is not full transformer prefill,
+decode, logits, sampling, generation, server generation, evaluation, or
+benchmark readiness.
 
 After PREFILL.1, the next runtime work is not automatically decode. The spine
 expects graph/layer expansion rows to determine whether decode can run over

@@ -105,6 +105,55 @@ contains "$OUT_DIR/block_after_backend_alloc.out" "generation_ready: false"
 contains "$OUT_DIR/block_after_backend_alloc.out" "generation: unsupported"
 contains "$OUT_DIR/block_after_backend_alloc.err" "test block failure after backend allocation"
 
+run_ok layer_fixture_cpu \
+  "$YVEX_BIN" graph --backend cpu --execute-layers --layers 2 --block fixture \
+    --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
+contains "$OUT_DIR/layer_fixture_cpu.out" "status: graph-layers"
+contains "$OUT_DIR/layer_fixture_cpu.out" "graph_integrity_guard: pass"
+contains "$OUT_DIR/layer_fixture_cpu.out" "graph_kind: controlled-layer-fixture"
+contains "$OUT_DIR/layer_fixture_cpu.out" "layers: 2"
+contains "$OUT_DIR/layer_fixture_cpu.out" "layer_handoff: selected-position-row"
+contains "$OUT_DIR/layer_fixture_cpu.out" "sequence_rebuild: deterministic-with-previous-position-row"
+contains "$OUT_DIR/layer_fixture_cpu.out" "total_op_count: 24"
+contains "$OUT_DIR/layer_fixture_cpu.out" "layer_0_checksum:"
+contains "$OUT_DIR/layer_fixture_cpu.out" "layer_1_checksum:"
+contains "$OUT_DIR/layer_fixture_cpu.out" "final_max_abs_diff:"
+contains "$OUT_DIR/layer_fixture_cpu.out" "execution_ready: false"
+contains "$OUT_DIR/layer_fixture_cpu.out" "graph_execution_ready: false"
+contains "$OUT_DIR/layer_fixture_cpu.out" "generation_ready: false"
+contains "$OUT_DIR/layer_fixture_cpu.out" "generation: unsupported"
+not_contains "$OUT_DIR/layer_fixture_cpu.out" "execution_""ready: true"
+not_contains "$OUT_DIR/layer_fixture_cpu.out" "generation_rea""dy: true"
+
+run_fail layers_after_layer_0 \
+  env YVEX_TEST_FAIL_LAYERS_AFTER_LAYER_0=1 \
+    "$YVEX_BIN" graph --backend cpu --execute-layers --layers 2 --block fixture \
+      --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
+contains "$OUT_DIR/layers_after_layer_0.out" "status: graph-layers-failed-cleaned"
+contains "$OUT_DIR/layers_after_layer_0.out" "cleanup_attempted: true"
+contains "$OUT_DIR/layers_after_layer_0.out" "cleanup_status: pass"
+contains "$OUT_DIR/layers_after_layer_0.out" "generation: unsupported"
+
+run_fail layers_missing_layers \
+  "$YVEX_BIN" graph --backend cpu --execute-layers --block fixture \
+    --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
+contains "$OUT_DIR/layers_missing_layers.err" "--execute-layers requires --layers N"
+
+run_fail layers_zero \
+  "$YVEX_BIN" graph --backend cpu --execute-layers --layers 0 --block fixture \
+    --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
+contains "$OUT_DIR/layers_zero.err" "--layers requires a positive integer"
+
+run_fail layers_too_many \
+  "$YVEX_BIN" graph --backend cpu --execute-layers --layers 17 --block fixture \
+    --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
+contains "$OUT_DIR/layers_too_many.err" "requires 1 <= --layers <= 16"
+
+run_fail layers_unsupported_block \
+  "$YVEX_BIN" graph --backend cpu --execute-layers --layers 2 --block nope \
+    --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
+contains "$OUT_DIR/layers_unsupported_block.err" "unsupported block: nope"
+
 run_fail block_position_oob \
   "$YVEX_BIN" graph --backend cpu --execute-block --block fixture \
     --seq-len 4 --position 4 --hidden-dim 8 --head-dim 8 --ffn-dim 16
