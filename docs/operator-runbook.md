@@ -19,8 +19,12 @@ text diagnostic output. It still does not implement full model generation,
 provider generation, streaming generation, capability evaluation, or benchmarks.
 YVEX also exposes `yvex fullmodel report` for GGUF metadata/tensor-directory
 inventory, tensor collection candidate classification, memory/placement
-pressure, and full-model runtime blocker reporting without payload
-materialization or generation claims.
+pressure, and full-model runtime blocker reporting. `yvex fullmodel
+materialization-plan` turns that inventory into placement phases, residency
+classes, backend fit estimates, preflight blockers, cleanup planning, and
+next proof readiness reporting without payload materialization, full backend
+allocation, full model execution, generation, evaluation, benchmark, or
+throughput claims.
 
 ## Runbook Index
 
@@ -41,7 +45,7 @@ Covers:
 - segment-summary prefill;
 - minimal KV diagnostics;
 - bounded diagnostic generate help and copy-pack commands;
-- fullmodel inventory and placement blocker reports;
+- fullmodel inventory and materialization planning reports;
 - CUDA selected checks;
 - daemon and accepted-only diagnostics.
 
@@ -71,7 +75,7 @@ Covers:
 
 - operator storage configuration;
 - fast regression;
-- fullmodel report help and command-surface checks;
+- fullmodel report and materialization-plan command-surface checks;
 - graph-only fixture regression;
 - daemon and accepted-only runtime diagnostics;
 - repository validation and artifact hygiene.

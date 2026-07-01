@@ -1420,6 +1420,14 @@ DeepSeek required-role coverage and missing-role report
 CPU/CUDA placement pressure estimate without allocation
 full model runtime blocker report
 fullmodel no-claim boundary for execution, materialization, generation, evaluation, and benchmarks
+fullmodel materialization-plan command over the FULLMODEL.0 inventory facts
+planned placement phase report without payload materialization
+tensor collection materialization grouping
+residency mode planning for resident, host-staged, SSD-staged, and hybrid classes
+CPU/CUDA backend fit estimate without full backend allocation
+preflight blocker report separated from missing tensor roles
+cleanup plan for future failed/partial materialization attempts
+FULLMODEL.2 readiness and blocker report
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -1527,6 +1535,7 @@ Unsupported / not advanced:
 ```text
 full model execution
 full DeepSeek materialization
+full model materialization proof
 full GGUF conversion
 GLM source tensor inventory completion
 GLM tensor mapping
@@ -1786,7 +1795,7 @@ tables.
 | SPEC.DEEPSEEK.0 | planned | generation | DeepSeek speculative decoding target | after baseline generation exists, YVEX may implement draft, verification, accepted-token accounting, and speculative generation over DeepSeek target runtime |
 | BENCH.DEEPSEEK.SPEC.0 | planned | bench | DeepSeek speculative generation benchmark | after speculative decoding exists, benchmark harness measures accepted tokens, verification cost, latency, throughput, and speedup over YVEX baseline generation |
 | FULLMODEL.0 | complete | model | Full model inventory and placement plan | `yvex fullmodel report --model FILE_OR_ALIAS` reports GGUF metadata/tensor-directory inventory, qtype/dtype summaries, tensor collections, role coverage, memory and CPU/CUDA placement pressure, and runtime blockers without payload materialization, backend allocation, full model execution, generation, evaluation, or benchmark claim |
-| FULLMODEL.1 | planned | model | Full model materialization plan | selected-family full tensor placement and materialization preflight without generation claim |
+| FULLMODEL.1 | complete | model | Full model materialization plan | selected-family full tensor placement phases, residency classes, backend fit estimates, preflight blockers, cleanup plan, and FULLMODEL.2 readiness are command-visible without full materialization, full model execution, DeepSeek generation, provider generation, streaming, eval, benchmark, or throughput claim |
 | FULLMODEL.2 | planned | model | Full model materialization proof | full required tensor set materializes or fails with phase/cleanup reports |
 | FULLMODEL.3 | planned | model | Full model runtime descriptor | model descriptor covers all tensors needed by prefill/decode/logits path |
 | FAMILY.RUNTIME.0 | planned | model | Runtime family adapter boundary | model-family-specific tensor roles and graph requirements exposed as reports |
@@ -3059,16 +3068,17 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-FULLMODEL.1 - Full model materialization plan
+FULLMODEL.2 - Full model materialization proof
 ```
 
-FULLMODEL.1 may plan selected-family full tensor placement and materialization
-preflight only. It must build on `fullmodel report` inventory facts and must not
-claim full model execution, real DeepSeek generation, provider generation,
-streaming generation, evaluation, benchmark readiness, or throughput.
+FULLMODEL.2 may attempt materialization of the required tensor set or fail with
+phase, backend, cleanup, and refusal reports. It must build on `fullmodel
+materialization-plan` and still must not claim full model execution, real
+DeepSeek generation, provider generation, streaming generation, evaluation,
+benchmark readiness, or throughput.
 
 Algorithm/CLI research hardening runs in parallel with runtime closure. It does
-not replace FULLMODEL.1 or the current runtime Active Next.
+not replace FULLMODEL.2 or the current runtime Active Next.
 
 GEN.CONTRACT.0 hardens the contract for the generation loop. GEN.LOOP.0 is
 complete for bounded diagnostic loop control only.
@@ -3087,7 +3097,7 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-FULLMODEL.1 - Full model materialization plan
+FULLMODEL.2 - Full model materialization proof
 ```
 
 CLI.GEN.0 is complete as an operator-grade command surface over the bounded
@@ -3137,9 +3147,10 @@ selected-position activation handoff. It is not full transformer prefill,
 decode, logits, sampling, generation, server generation, evaluation, or
 benchmark readiness.
 
-After CLI.GEN.0, the bounded diagnostic generation command surface is stable
-enough to stop adding operator polish as the active runtime path. The next
-runtime pressure moves to full-model inventory and placement. Real model
+After FULLMODEL.1, full-model inventory has a command-visible placement plan,
+residency plan, backend fit estimate, blocker report, cleanup plan, and
+FULLMODEL.2 readiness report. The next runtime pressure is proof: attempt full
+tensor materialization or fail with phase and cleanup reports. Real model
 output-head logits, real vocabulary sampling, full DeepSeek runtime work, OS
 signal cancellation, provider/server generation, streaming, evaluation, and
 benchmark measurement remain planned tracks.

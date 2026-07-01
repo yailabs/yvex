@@ -17,6 +17,9 @@ model-class profiling, tensor mapping, quantization policy, YVEX-produced GGUF
 planning, storage layout, and storage-stream planning.
 `yvex fullmodel report --model glm-5.2-official-safetensors` currently reports
 the source-only unsupported boundary without inspecting GLM safetensors.
+`yvex fullmodel materialization-plan --model glm-5.2-official-safetensors`
+refuses as source-only because materialization planning needs a GGUF tensor
+inventory.
 
 ## GLM Paths And Target
 
@@ -106,12 +109,14 @@ Boundary:
   not GLM inventory completion
   not GLM tensor mapping
   not GLM GGUF emission
+  not GLM materialization planning over source-only safetensors
   not GLM runtime execution
   not GLM generation
 
 ```sh
 ./yvex model-target inspect glm-5.2-official-safetensors --paths
 ./yvex fullmodel report --model glm-5.2-official-safetensors --backend cpu
+./yvex fullmodel materialization-plan --model glm-5.2-official-safetensors --backend cpu
 ```
 
 ## Lane 2 — Start GLM Source Download

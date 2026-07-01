@@ -20,6 +20,9 @@ and bounded diagnostic generation-loop control with explicit stop-policy
 reporting, local cancellation, partial-output preservation, cleanup reporting,
 trace-level diagnostics over the selected segment, and fullmodel inventory/
 placement blocker reporting over GGUF metadata and tensor-directory facts.
+The fullmodel materialization-plan lane reports future placement phases,
+residency class, backend fit, preflight blockers, cleanup plan, and
+next proof readiness without attempting full materialization.
 
 ## DeepSeek Paths And Artifacts
 
@@ -314,18 +317,22 @@ Safe to rerun:
   yes
 
 Stop after:
-  selected artifacts report incomplete full-model inventory and generation stays
+  selected artifacts report incomplete full-model inventory, partial
+  materialization plans, full materialization proof not ready, and generation stays
   unsupported-full-model.
 
 Boundary:
   metadata and tensor-directory inventory only
   no payload materialization
-  no full model materialization
+  no full model materialization proof
+  no full backend allocation
   no full model execution
   no real DeepSeek generation
   no provider generation
+  no streaming generation
   no evaluation
   no benchmark
+  no throughput
 
 ```sh
 ./yvex help fullmodel
@@ -333,6 +340,12 @@ Boundary:
 ./yvex fullmodel report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu
 ./yvex fullmodel report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda
 ./yvex fullmodel report --model "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-rmsnorm-F16-noimatrix-yvex-v1.gguf" --target deepseek4-v4-flash --backend cpu --limit-tensors 20
+./yvex fullmodel materialization-plan --model deepseek4-v4-flash-selected-embed --backend cpu
+./yvex fullmodel materialization-plan --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu
+./yvex fullmodel materialization-plan --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda
+./yvex fullmodel materialization-plan --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --residency resident
+./yvex fullmodel materialization-plan --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --residency host-staged
+./yvex fullmodel materialization-plan --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --residency hybrid
 ```
 
 ## Lane 5 — DeepSeek CUDA Pressure Lane
@@ -479,6 +492,7 @@ YVEX does not currently implement:
 
 - full DeepSeek conversion;
 - full DeepSeek materialization;
+- full DeepSeek materialization proof;
 - complete transformer execution;
 - complete transformer prefill;
 - real DeepSeek decode;

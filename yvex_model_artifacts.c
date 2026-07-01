@@ -4978,23 +4978,38 @@ static int command_models_inspect(int argc, char **argv)
 
 /* Full model inventory and placement reporting. */
 
+typedef enum {
+    YVEX_FULLMODEL_COMMAND_REPORT = 0,
+    YVEX_FULLMODEL_COMMAND_MATERIALIZATION_PLAN
+} yvex_fullmodel_command_kind;
+
 typedef struct {
     const char *model;
     const char *backend;
     const char *target;
     const char *registry_path;
+    const char *residency;
     unsigned long long limit_tensors;
+    yvex_fullmodel_command_kind command;
 } yvex_cli_fullmodel_options;
 
 typedef struct {
     unsigned long long embedding;
+    unsigned long long embedding_bytes;
     unsigned long long normalization;
+    unsigned long long normalization_bytes;
     unsigned long long attention;
+    unsigned long long attention_bytes;
     unsigned long long mlp;
+    unsigned long long mlp_bytes;
     unsigned long long moe;
+    unsigned long long moe_bytes;
     unsigned long long output;
+    unsigned long long output_bytes;
     unsigned long long tokenizer;
+    unsigned long long tokenizer_bytes;
     unsigned long long unknown;
+    unsigned long long unknown_bytes;
     int has_token_embedding;
     int has_attention_norm;
     int has_post_attention_norm;
@@ -5055,15 +5070,28 @@ static int parse_fullmodel_options(int argc,
     if (!options) return 2;
     memset(options, 0, sizeof(*options));
     options->backend = "cpu";
+    options->residency = "resident";
     options->limit_tensors = 5ull;
+    options->command = YVEX_FULLMODEL_COMMAND_REPORT;
 
     if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
         yvex_fullmodel_help(stdout);
         return 1;
     }
-    if (argc < 3 || strcmp(argv[2], "report") != 0) {
-        fprintf(stderr, "yvex: fullmodel requires report\n");
+    if (argc < 3) {
+        fprintf(stderr, "yvex: fullmodel requires report or materialization-plan\n");
+        fprintf(stderr, "usage: yvex fullmodel materialization-plan --model FILE_OR_ALIAS [--backend cpu|cuda] [--residency resident|host-staged|ssd-staged|hybrid] [--limit-tensors N]\n");
+        return 2;
+    }
+    if (strcmp(argv[2], "report") == 0) {
+        options->command = YVEX_FULLMODEL_COMMAND_REPORT;
+    } else if (strcmp(argv[2], "materialization-plan") == 0 ||
+               strcmp(argv[2], "plan") == 0) {
+        options->command = YVEX_FULLMODEL_COMMAND_MATERIALIZATION_PLAN;
+    } else {
+        fprintf(stderr, "yvex: unknown fullmodel subcommand: %s\n", argv[2]);
         fprintf(stderr, "usage: yvex fullmodel report --model FILE_OR_ALIAS [--backend cpu|cuda] [--target TARGET] [--limit-tensors N]\n");
+        fprintf(stderr, "usage: yvex fullmodel materialization-plan --model FILE_OR_ALIAS [--backend cpu|cuda] [--residency resident|host-staged|ssd-staged|hybrid] [--limit-tensors N]\n");
         return 2;
     }
 
@@ -5089,6 +5117,20 @@ static int parse_fullmodel_options(int argc,
             int rc = fullmodel_parse_value_option("--registry", argc, argv, &i, &value);
             if (rc != 0) return rc;
             options->registry_path = value;
+        } else if (strcmp(argv[i], "--residency") == 0) {
+            int rc = fullmodel_parse_value_option("--residency", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            if (strcmp(value, "resident") != 0 &&
+                strcmp(value, "host-staged") != 0 &&
+                strcmp(value, "ssd-staged") != 0 &&
+                strcmp(value, "hybrid") != 0 &&
+                strcmp(value, "ssd-streamed") != 0 &&
+                strcmp(value, "managed-memory") != 0 &&
+                strcmp(value, "distributed") != 0) {
+                fprintf(stderr, "yvex: fullmodel --residency must be resident, host-staged, ssd-staged, hybrid, ssd-streamed, managed-memory, or distributed\n");
+                return 2;
+            }
+            options->residency = value;
         } else if (strcmp(argv[i], "--limit-tensors") == 0) {
             unsigned long long parsed = 0ull;
             int rc = fullmodel_parse_value_option("--limit-tensors", argc, argv, &i, &value);
@@ -5104,7 +5146,10 @@ static int parse_fullmodel_options(int argc,
         }
     }
     if (!options->model) {
-        fprintf(stderr, "yvex: fullmodel report requires --model FILE_OR_ALIAS\n");
+        fprintf(stderr, "yvex: fullmodel %s requires --model FILE_OR_ALIAS\n",
+                options->command == YVEX_FULLMODEL_COMMAND_MATERIALIZATION_PLAN
+                    ? "materialization-plan"
+                    : "report");
         return 2;
     }
     return 0;
@@ -5152,6 +5197,14 @@ static void fullmodel_csv_append(char *buf,
     if (used >= cap - 1u) return;
     n = snprintf(buf + used, cap - used, "%s%s", used == 0u ? "" : ",", item);
     if (n < 0 || (size_t)n >= cap - used) buf[cap - 1u] = '\0';
+}
+
+static void fullmodel_collection_add(unsigned long long *count,
+                                     unsigned long long *bytes,
+                                     const yvex_tensor_info *tensor)
+{
+    if (count) (*count)++;
+    if (bytes && tensor) *bytes += tensor->storage_bytes;
 }
 
 static void fullmodel_record_dtype(yvex_fullmodel_dtype_bucket buckets[32],
@@ -5243,61 +5296,61 @@ static void fullmodel_classify_tensor(const yvex_tensor_info *tensor,
     name = tensor->name ? tensor->name : "";
     switch (tensor->role) {
     case YVEX_TENSOR_ROLE_TOKEN_EMBEDDING:
-        collections->embedding++;
+        fullmodel_collection_add(&collections->embedding, &collections->embedding_bytes, tensor);
         collections->has_token_embedding = 1;
         return;
     case YVEX_TENSOR_ROLE_OUTPUT_NORM:
-        collections->normalization++;
+        fullmodel_collection_add(&collections->normalization, &collections->normalization_bytes, tensor);
         collections->has_output_norm = 1;
         return;
     case YVEX_TENSOR_ROLE_OUTPUT_HEAD:
-        collections->output++;
+        fullmodel_collection_add(&collections->output, &collections->output_bytes, tensor);
         collections->has_output_head = 1;
         return;
     case YVEX_TENSOR_ROLE_ATTENTION_NORM:
-        collections->normalization++;
+        fullmodel_collection_add(&collections->normalization, &collections->normalization_bytes, tensor);
         collections->has_attention_norm = 1;
         return;
     case YVEX_TENSOR_ROLE_ATTENTION_Q:
-        collections->attention++;
+        fullmodel_collection_add(&collections->attention, &collections->attention_bytes, tensor);
         collections->has_attention_q = 1;
         return;
     case YVEX_TENSOR_ROLE_ATTENTION_K:
-        collections->attention++;
+        fullmodel_collection_add(&collections->attention, &collections->attention_bytes, tensor);
         collections->has_attention_k = 1;
         return;
     case YVEX_TENSOR_ROLE_ATTENTION_V:
-        collections->attention++;
+        fullmodel_collection_add(&collections->attention, &collections->attention_bytes, tensor);
         collections->has_attention_v = 1;
         return;
     case YVEX_TENSOR_ROLE_ATTENTION_OUT:
-        collections->attention++;
+        fullmodel_collection_add(&collections->attention, &collections->attention_bytes, tensor);
         collections->has_attention_out = 1;
         return;
     case YVEX_TENSOR_ROLE_FFN_NORM:
-        collections->normalization++;
+        fullmodel_collection_add(&collections->normalization, &collections->normalization_bytes, tensor);
         collections->has_post_attention_norm = 1;
         return;
     case YVEX_TENSOR_ROLE_FFN_GATE:
-        collections->mlp++;
+        fullmodel_collection_add(&collections->mlp, &collections->mlp_bytes, tensor);
         collections->has_ffn_gate = 1;
         return;
     case YVEX_TENSOR_ROLE_FFN_UP:
-        collections->mlp++;
+        fullmodel_collection_add(&collections->mlp, &collections->mlp_bytes, tensor);
         collections->has_ffn_up = 1;
         return;
     case YVEX_TENSOR_ROLE_FFN_DOWN:
-        collections->mlp++;
+        fullmodel_collection_add(&collections->mlp, &collections->mlp_bytes, tensor);
         collections->has_ffn_down = 1;
         return;
     case YVEX_TENSOR_ROLE_MOE_ROUTER:
-        collections->moe++;
+        fullmodel_collection_add(&collections->moe, &collections->moe_bytes, tensor);
         collections->has_moe_router = 1;
         return;
     case YVEX_TENSOR_ROLE_MOE_EXPERT_GATE:
     case YVEX_TENSOR_ROLE_MOE_EXPERT_UP:
     case YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN:
-        collections->moe++;
+        fullmodel_collection_add(&collections->moe, &collections->moe_bytes, tensor);
         collections->has_moe_expert = 1;
         return;
     default:
@@ -5305,51 +5358,51 @@ static void fullmodel_classify_tensor(const yvex_tensor_info *tensor,
     }
 
     if (fullmodel_name_has(name, "token_embd") || fullmodel_name_has(name, "embed")) {
-        collections->embedding++;
+        fullmodel_collection_add(&collections->embedding, &collections->embedding_bytes, tensor);
         collections->has_token_embedding = 1;
     } else if (fullmodel_name_has(name, "attn_norm") ||
                fullmodel_name_has(name, "input_layernorm")) {
-        collections->normalization++;
+        fullmodel_collection_add(&collections->normalization, &collections->normalization_bytes, tensor);
         collections->has_attention_norm = 1;
     } else if (fullmodel_name_has(name, "ffn_norm") ||
                fullmodel_name_has(name, "post_attention_layernorm")) {
-        collections->normalization++;
+        fullmodel_collection_add(&collections->normalization, &collections->normalization_bytes, tensor);
         collections->has_post_attention_norm = 1;
     } else if (fullmodel_name_has(name, "attn_q") || fullmodel_name_has(name, "q_proj")) {
-        collections->attention++;
+        fullmodel_collection_add(&collections->attention, &collections->attention_bytes, tensor);
         collections->has_attention_q = 1;
     } else if (fullmodel_name_has(name, "attn_k") || fullmodel_name_has(name, "k_proj")) {
-        collections->attention++;
+        fullmodel_collection_add(&collections->attention, &collections->attention_bytes, tensor);
         collections->has_attention_k = 1;
     } else if (fullmodel_name_has(name, "attn_v") || fullmodel_name_has(name, "v_proj")) {
-        collections->attention++;
+        fullmodel_collection_add(&collections->attention, &collections->attention_bytes, tensor);
         collections->has_attention_v = 1;
     } else if (fullmodel_name_has(name, "attn_output") || fullmodel_name_has(name, "o_proj")) {
-        collections->attention++;
+        fullmodel_collection_add(&collections->attention, &collections->attention_bytes, tensor);
         collections->has_attention_out = 1;
     } else if (fullmodel_name_has(name, "ffn_gate") || fullmodel_name_has(name, "gate_proj")) {
-        collections->mlp++;
+        fullmodel_collection_add(&collections->mlp, &collections->mlp_bytes, tensor);
         collections->has_ffn_gate = 1;
     } else if (fullmodel_name_has(name, "ffn_up") || fullmodel_name_has(name, "up_proj")) {
-        collections->mlp++;
+        fullmodel_collection_add(&collections->mlp, &collections->mlp_bytes, tensor);
         collections->has_ffn_up = 1;
     } else if (fullmodel_name_has(name, "ffn_down") || fullmodel_name_has(name, "down_proj")) {
-        collections->mlp++;
+        fullmodel_collection_add(&collections->mlp, &collections->mlp_bytes, tensor);
         collections->has_ffn_down = 1;
     } else if (fullmodel_name_has(name, "router") || fullmodel_name_has(name, "gate.weight")) {
-        collections->moe++;
+        fullmodel_collection_add(&collections->moe, &collections->moe_bytes, tensor);
         collections->has_moe_router = 1;
     } else if (fullmodel_name_has(name, "expert")) {
-        collections->moe++;
+        fullmodel_collection_add(&collections->moe, &collections->moe_bytes, tensor);
         collections->has_moe_expert = 1;
     } else if (fullmodel_name_has(name, "output_norm") || fullmodel_name_has(name, "norm.weight")) {
-        collections->normalization++;
+        fullmodel_collection_add(&collections->normalization, &collections->normalization_bytes, tensor);
         collections->has_output_norm = 1;
     } else if (strcmp(name, "output.weight") == 0 || fullmodel_name_has(name, "lm_head")) {
-        collections->output++;
+        fullmodel_collection_add(&collections->output, &collections->output_bytes, tensor);
         collections->has_output_head = 1;
     } else {
-        collections->unknown++;
+        fullmodel_collection_add(&collections->unknown, &collections->unknown_bytes, tensor);
     }
 }
 
@@ -5430,11 +5483,147 @@ static int print_fullmodel_source_only_report(const char *target,
     return 0;
 }
 
+static void fullmodel_print_phase(unsigned int index,
+                                  const char *name,
+                                  const char *status,
+                                  unsigned long long tensor_count,
+                                  unsigned long long tensor_bytes,
+                                  const char *residency,
+                                  int required,
+                                  int blocked,
+                                  const char *blocker);
+static unsigned int fullmodel_print_blocker(unsigned int index,
+                                            const char *category,
+                                            const char *severity,
+                                            const char *message,
+                                            int blocks_full_materialization,
+                                            int blocks_generation);
+
+static int print_fullmodel_source_only_plan(const yvex_cli_fullmodel_options *options,
+                                            const char *target)
+{
+    const char *backend = options && options->backend ? options->backend : "cpu";
+    const char *residency = options && options->residency ? options->residency : "resident";
+
+    printf("fullmodel: materialization-plan\n");
+    printf("status: fullmodel-materialization-plan-unsupported\n");
+    printf("model: %s\n", options && options->model ? options->model : target ? target : "");
+    printf("model_resolved_path: source-only-target\n");
+    printf("target_id: %s\n", target ? target : "");
+    printf("target_class: official-source-huge-model\n");
+    printf("artifact_exists: false\n");
+    printf("artifact_bytes: 0\n");
+    printf("artifact_identity_status: not-applicable\n");
+    printf("tensor_inventory_status: not-performed-source-only-target\n");
+    printf("tensor_count: 0\n");
+    printf("total_tensor_bytes: 0\n");
+    printf("backend: %s\n", backend);
+    printf("residency: %s\n", residency);
+    printf("plan_status: unsupported\n");
+    printf("materialization_plan_ready: false\n");
+    printf("materialization_attempted: false\n");
+    printf("full_materialization_proof: false\n");
+    printf("full_model_execution: unsupported\n");
+    printf("generation_ready: false\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("plan_id: fullmodel-materialization:%s:%s:%s\n",
+           target ? target : "source-only-target", backend, residency);
+    printf("plan_kind: full-model-materialization\n");
+    printf("plan_source: source-target-without-YVEX-GGUF\n");
+    printf("plan_backend: %s\n", backend);
+    printf("plan_residency: %s\n", residency);
+    printf("plan_tensor_count: 0\n");
+    printf("plan_tensor_bytes: 0\n");
+    printf("plan_collection_count: 0\n");
+    printf("plan_phase_count: 1\n");
+    printf("plan_blocker_count: 1\n");
+    printf("plan_cleanup_required: false\n");
+    printf("plan_cleanup_phases: none\n");
+    printf("backend_available: unknown\n");
+    printf("backend_memory_known: false\n");
+    printf("backend_memory_total_bytes: unknown\n");
+    printf("backend_memory_available_bytes: unknown\n");
+    printf("backend_required_bytes: 0\n");
+    printf("backend_fit_status: unsupported\n");
+    printf("backend_fit_reason: source-only target has no YVEX-produced GGUF tensor inventory\n");
+    printf("backend_allocation_attempted: false\n");
+    fullmodel_print_phase(0u, "preflight", "unsupported",
+                          0ull, 0ull, "not-applicable", 1, 1,
+                          "YVEX-produced GGUF artifact required before planning");
+    (void)fullmodel_print_blocker(0u, "artifact", "fatal",
+                                  "YVEX-produced GGUF artifact required before materialization planning",
+                                  1, 1);
+    printf("cleanup_plan_required: false\n");
+    printf("cleanup_plan_phases: none\n");
+    printf("cleanup_idempotent_required: true\n");
+    printf("cleanup_failure_policy: preserve-failure-report\n");
+    printf("next_required_row: FULLMODEL.2\n");
+    printf("proof_ready_for_fullmodel_2: false\n");
+    printf("fullmodel_2_blockers: YVEX-produced GGUF artifact missing; full tensor inventory unavailable\n");
+    return 5;
+}
+
+static void print_fullmodel_failed_plan_fields(const yvex_cli_fullmodel_options *options,
+                                               const char *phase,
+                                               const char *reason,
+                                               unsigned long long artifact_bytes)
+{
+    const char *backend = options && options->backend ? options->backend : "cpu";
+    const char *residency = options && options->residency ? options->residency : "resident";
+
+    printf("residency: %s\n", residency);
+    printf("plan_status: failed\n");
+    printf("materialization_plan_ready: false\n");
+    printf("materialization_attempted: false\n");
+    printf("full_materialization_proof: false\n");
+    printf("full_model_execution: unsupported\n");
+    printf("generation_ready: false\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("plan_id: unavailable\n");
+    printf("plan_kind: full-model-materialization\n");
+    printf("plan_source: tensor-inventory\n");
+    printf("plan_backend: %s\n", backend);
+    printf("plan_residency: %s\n", residency);
+    printf("plan_tensor_count: 0\n");
+    printf("plan_tensor_bytes: 0\n");
+    printf("plan_collection_count: 0\n");
+    printf("plan_phase_count: 1\n");
+    printf("plan_blocker_count: 1\n");
+    printf("plan_cleanup_required: false\n");
+    printf("plan_cleanup_phases: none\n");
+    printf("backend_available: unknown\n");
+    printf("backend_memory_known: false\n");
+    printf("backend_memory_total_bytes: unknown\n");
+    printf("backend_memory_available_bytes: unknown\n");
+    printf("backend_required_bytes: 0\n");
+    printf("backend_fit_status: unknown\n");
+    printf("backend_fit_reason: inventory failed before backend fit preflight\n");
+    printf("backend_allocation_attempted: false\n");
+    fullmodel_print_phase(0u, phase ? phase : "preflight", "blocked",
+                          0ull, artifact_bytes, "not-applicable", 1, 1,
+                          reason ? reason : "inventory failed");
+    (void)fullmodel_print_blocker(0u, "inventory", "fatal",
+                                  reason ? reason : "inventory failed",
+                                  1, 1);
+    printf("cleanup_plan_required: false\n");
+    printf("cleanup_plan_phases: none\n");
+    printf("cleanup_idempotent_required: true\n");
+    printf("cleanup_failure_policy: preserve-failure-report\n");
+    printf("next_required_row: FULLMODEL.2\n");
+    printf("proof_ready_for_fullmodel_2: false\n");
+    printf("fullmodel_2_blockers: tensor inventory unavailable; materialization plan unavailable\n");
+}
+
 static int print_fullmodel_missing_report(const yvex_cli_fullmodel_options *options,
                                           const char *resolved_path)
 {
-    printf("fullmodel: report\n");
-    printf("status: fullmodel-report-fail\n");
+    int is_plan = options &&
+                  options->command == YVEX_FULLMODEL_COMMAND_MATERIALIZATION_PLAN;
+
+    printf("fullmodel: %s\n", is_plan ? "materialization-plan" : "report");
+    printf("status: %s\n", is_plan ? "fullmodel-materialization-plan-fail" : "fullmodel-report-fail");
     printf("model: %s\n", options && options->model ? options->model : "");
     printf("model_resolved_path: %s\n", resolved_path ? resolved_path : "");
     printf("target_id: %s\n", options && options->target ? options->target : "unknown");
@@ -5483,6 +5672,12 @@ static int print_fullmodel_missing_report(const yvex_cli_fullmodel_options *opti
     printf("unsupported_required_roles: full-runtime-model\n");
     printf("runtime_blockers: artifact path missing\n");
     print_fullmodel_common_boundaries();
+    if (is_plan) {
+        print_fullmodel_failed_plan_fields(options,
+                                           "preflight",
+                                           "artifact path does not exist",
+                                           0ull);
+    }
     printf("reason: artifact path does not exist\n");
     return exit_for_status(YVEX_ERR_IO);
 }
@@ -5493,10 +5688,12 @@ static int print_fullmodel_parse_failure_report(const yvex_cli_fullmodel_options
                                                 int rc)
 {
     unsigned long long artifact_bytes = 0ull;
+    int is_plan = options &&
+                  options->command == YVEX_FULLMODEL_COMMAND_MATERIALIZATION_PLAN;
 
     fullmodel_file_size(ref && ref->path ? ref->path : "", &artifact_bytes);
-    printf("fullmodel: report\n");
-    printf("status: fullmodel-report-fail\n");
+    printf("fullmodel: %s\n", is_plan ? "materialization-plan" : "report");
+    printf("status: %s\n", is_plan ? "fullmodel-materialization-plan-fail" : "fullmodel-report-fail");
     printf("model: %s\n", options && options->model ? options->model : "");
     printf("model_resolved_path: %s\n", ref && ref->path ? ref->path : "");
     printf("target_id: %s\n", options && options->target ? options->target : (ref && ref->alias && ref->alias[0] ? ref->alias : "path"));
@@ -5545,6 +5742,12 @@ static int print_fullmodel_parse_failure_report(const yvex_cli_fullmodel_options
     printf("unsupported_required_roles: full-runtime-model\n");
     printf("runtime_blockers: GGUF metadata or tensor directory parse failed\n");
     print_fullmodel_common_boundaries();
+    if (is_plan) {
+        print_fullmodel_failed_plan_fields(options,
+                                           "tensor-directory",
+                                           reason ? reason : "parse failed",
+                                           artifact_bytes);
+    }
     printf("reason: %s\n", reason ? reason : "parse failed");
     return exit_for_status(rc);
 }
@@ -5578,6 +5781,529 @@ static const char *fullmodel_identity_status(const yvex_model_ref *ref,
         return "registered-size-drift";
     }
     return "registered-size-match";
+}
+
+typedef struct {
+    int available;
+    int memory_known;
+    unsigned long long total_bytes;
+    unsigned long long available_bytes;
+    unsigned long long required_bytes;
+    const char *fit_status;
+    char fit_reason[160];
+} yvex_fullmodel_backend_fit;
+
+static int fullmodel_residency_is_future_unsupported(const char *residency)
+{
+    return residency &&
+           (strcmp(residency, "ssd-streamed") == 0 ||
+            strcmp(residency, "managed-memory") == 0 ||
+            strcmp(residency, "distributed") == 0);
+}
+
+static const char *fullmodel_placement_for_residency(const char *backend,
+                                                     const char *residency,
+                                                     int present)
+{
+    if (!present) return "not-planned";
+    if (fullmodel_residency_is_future_unsupported(residency)) return "unsupported";
+    if (strcmp(residency, "host-staged") == 0) return "host-staged";
+    if (strcmp(residency, "ssd-staged") == 0) return "ssd-staged";
+    if (strcmp(residency, "hybrid") == 0) return "hybrid";
+    return backend && strcmp(backend, "cuda") == 0 ? "cuda-resident" : "cpu-resident";
+}
+
+static const char *fullmodel_required_bool(int value)
+{
+    return value ? "true" : "false";
+}
+
+static void fullmodel_probe_backend_fit(const char *backend,
+                                        unsigned long long required_bytes,
+                                        yvex_fullmodel_backend_fit *fit)
+{
+    yvex_backend *opened = NULL;
+    yvex_backend_options options;
+    yvex_backend_memory_stats stats;
+    yvex_backend_device_info device_info;
+    yvex_error err;
+    int rc;
+
+    if (!fit) return;
+    memset(fit, 0, sizeof(*fit));
+    fit->required_bytes = required_bytes;
+    fit->fit_status = "unknown";
+    snprintf(fit->fit_reason, sizeof(fit->fit_reason),
+             "system memory availability is not queried");
+
+    if (!backend || strcmp(backend, "cpu") == 0) {
+        fit->available = 1;
+        return;
+    }
+
+    memset(&options, 0, sizeof(options));
+    memset(&stats, 0, sizeof(stats));
+    memset(&device_info, 0, sizeof(device_info));
+    yvex_error_clear(&err);
+    options.kind = YVEX_BACKEND_KIND_CUDA;
+    rc = yvex_backend_open(&opened, &options, &err);
+    if (rc != YVEX_OK) {
+        fit->available = 0;
+        fit->fit_status = "unsupported";
+        snprintf(fit->fit_reason, sizeof(fit->fit_reason),
+                 "CUDA backend unavailable: %s", yvex_error_message(&err));
+        yvex_error_clear(&err);
+        return;
+    }
+
+    fit->available = 1;
+    rc = yvex_backend_get_memory_stats(opened, &stats, &err);
+    if (rc == YVEX_OK &&
+        yvex_backend_get_device_info(opened, &device_info, &err) == YVEX_OK &&
+        device_info.total_memory_bytes > 0ull) {
+        fit->memory_known = 1;
+        fit->total_bytes = device_info.total_memory_bytes;
+        fit->available_bytes = device_info.free_memory_bytes;
+        if (required_bytes <= device_info.free_memory_bytes) {
+            fit->fit_status = "fits";
+            snprintf(fit->fit_reason, sizeof(fit->fit_reason),
+                     "required bytes fit current CUDA free memory; no allocation attempted");
+        } else {
+            fit->fit_status = "does-not-fit";
+            snprintf(fit->fit_reason, sizeof(fit->fit_reason),
+                     "required bytes exceed current CUDA free memory; no allocation attempted");
+        }
+    } else {
+        fit->fit_status = "unknown";
+        snprintf(fit->fit_reason, sizeof(fit->fit_reason),
+                 "CUDA memory info unavailable; no allocation attempted");
+        yvex_error_clear(&err);
+    }
+    yvex_backend_close(opened);
+}
+
+static int fullmodel_has_attention_collection(const yvex_fullmodel_collections *collections)
+{
+    return collections &&
+           collections->has_attention_q &&
+           collections->has_attention_k &&
+           collections->has_attention_v &&
+           collections->has_attention_out;
+}
+
+static int fullmodel_has_mlp_collection(const yvex_fullmodel_collections *collections)
+{
+    return collections &&
+           collections->has_ffn_gate &&
+           collections->has_ffn_up &&
+           collections->has_ffn_down;
+}
+
+static int fullmodel_has_normalization_collection(const yvex_fullmodel_collections *collections)
+{
+    return collections &&
+           (collections->has_attention_norm ||
+            collections->has_post_attention_norm ||
+            collections->has_output_norm);
+}
+
+static unsigned int fullmodel_plan_missing_collection_blockers(const yvex_fullmodel_collections *collections)
+{
+    unsigned int count = 0u;
+
+    if (!collections) return 0u;
+    if (!collections->has_token_embedding) count++;
+    if (!fullmodel_has_normalization_collection(collections)) count++;
+    if (!fullmodel_has_attention_collection(collections)) count++;
+    if (!fullmodel_has_mlp_collection(collections)) count++;
+    if (!collections->has_moe_router && !collections->has_moe_expert) count++;
+    if (!collections->has_output_head) count++;
+    if (!collections->has_tokenizer_metadata) count++;
+    return count;
+}
+
+static unsigned int fullmodel_plan_blocker_count(const yvex_fullmodel_collections *collections,
+                                                 int selected_target,
+                                                 const char *residency,
+                                                 const yvex_fullmodel_backend_fit *fit)
+{
+    unsigned int count = 7u; /* runtime-consumer plus six generation-boundary blockers. */
+
+    count += fullmodel_plan_missing_collection_blockers(collections);
+    if (selected_target) count++;
+    if (fullmodel_residency_is_future_unsupported(residency)) count++;
+    if (fit && !fit->available) count++;
+    if (fit && strcmp(fit->fit_status ? fit->fit_status : "unknown", "does-not-fit") == 0) count++;
+    return count;
+}
+
+static const char *fullmodel_plan_status(const yvex_fullmodel_collections *collections,
+                                         int selected_target,
+                                         const char *residency,
+                                         const yvex_fullmodel_backend_fit *fit)
+{
+    if (fullmodel_residency_is_future_unsupported(residency)) return "unsupported";
+    if (fit && !fit->available) return "partial";
+    if (selected_target) return "partial";
+    if (fullmodel_plan_missing_collection_blockers(collections) > 0u) return "partial";
+    return "ready";
+}
+
+static void fullmodel_print_phase(unsigned int index,
+                                  const char *name,
+                                  const char *status,
+                                  unsigned long long tensor_count,
+                                  unsigned long long tensor_bytes,
+                                  const char *residency,
+                                  int required,
+                                  int blocked,
+                                  const char *blocker)
+{
+    printf("phase.%u.name: %s\n", index, name ? name : "");
+    printf("phase.%u.status: %s\n", index, status ? status : "planned");
+    printf("phase.%u.tensor_count: %llu\n", index, tensor_count);
+    printf("phase.%u.tensor_bytes: %llu\n", index, tensor_bytes);
+    printf("phase.%u.residency: %s\n", index, residency ? residency : "not-applicable");
+    printf("phase.%u.required: %s\n", index, required ? "true" : "false");
+    printf("phase.%u.blocked: %s\n", index, blocked ? "true" : "false");
+    printf("phase.%u.blocker: %s\n", index, blocker && blocker[0] ? blocker : "none");
+}
+
+static void fullmodel_print_collection_plan(const char *name,
+                                            const char *status,
+                                            unsigned long long tensor_count,
+                                            unsigned long long tensor_bytes,
+                                            int required_for_generation,
+                                            int present,
+                                            const char *placement,
+                                            const char *phase,
+                                            const char *runtime_consumer,
+                                            const char *blocker)
+{
+    printf("collection.%s.status: %s\n", name, status ? status : "planned");
+    printf("collection.%s.tensor_count: %llu\n", name, tensor_count);
+    printf("collection.%s.tensor_bytes: %llu\n", name, tensor_bytes);
+    printf("collection.%s.required_for_generation: %s\n",
+           name, fullmodel_required_bool(required_for_generation));
+    printf("collection.%s.present: %s\n", name, fullmodel_required_bool(present));
+    printf("collection.%s.placement: %s\n", name, placement ? placement : "unknown");
+    printf("collection.%s.materialization_phase: %s\n", name, phase ? phase : "collection-grouping");
+    printf("collection.%s.runtime_consumer: %s\n", name, runtime_consumer ? runtime_consumer : "planned");
+    printf("collection.%s.blocker: %s\n", name, blocker && blocker[0] ? blocker : "none");
+}
+
+static unsigned int fullmodel_print_blocker(unsigned int index,
+                                            const char *category,
+                                            const char *severity,
+                                            const char *message,
+                                            int blocks_full_materialization,
+                                            int blocks_generation)
+{
+    printf("blocker.%u.category: %s\n", index, category ? category : "runtime-consumer");
+    printf("blocker.%u.severity: %s\n", index, severity ? severity : "warning");
+    printf("blocker.%u.message: %s\n", index, message ? message : "");
+    printf("blocker.%u.blocks_full_materialization: %s\n",
+           index, blocks_full_materialization ? "true" : "false");
+    printf("blocker.%u.blocks_generation: %s\n",
+           index, blocks_generation ? "true" : "false");
+    return index + 1u;
+}
+
+static void fullmodel_print_missing_collection_blockers(unsigned int *index,
+                                                        const yvex_fullmodel_collections *collections)
+{
+    if (!index || !collections) return;
+    if (!collections->has_token_embedding) {
+        *index = fullmodel_print_blocker(*index, "role-coverage", "fatal",
+                                         "embedding collection missing",
+                                         1, 1);
+    }
+    if (!fullmodel_has_normalization_collection(collections)) {
+        *index = fullmodel_print_blocker(*index, "role-coverage", "error",
+                                         "normalization collection missing",
+                                         1, 1);
+    }
+    if (!fullmodel_has_attention_collection(collections)) {
+        *index = fullmodel_print_blocker(*index, "role-coverage", "fatal",
+                                         "attention collection missing",
+                                         1, 1);
+    }
+    if (!fullmodel_has_mlp_collection(collections)) {
+        *index = fullmodel_print_blocker(*index, "role-coverage", "fatal",
+                                         "MLP collection missing",
+                                         1, 1);
+    }
+    if (!collections->has_moe_router && !collections->has_moe_expert) {
+        *index = fullmodel_print_blocker(*index, "role-coverage", "warning",
+                                         "MoE collection missing or not identified",
+                                         1, 1);
+    }
+    if (!collections->has_output_head) {
+        *index = fullmodel_print_blocker(*index, "role-coverage", "fatal",
+                                         "output collection missing",
+                                         1, 1);
+    }
+    if (!collections->has_tokenizer_metadata) {
+        *index = fullmodel_print_blocker(*index, "tokenizer", "error",
+                                         "tokenizer/full runtime metadata incomplete",
+                                         1, 1);
+    }
+}
+
+static void fullmodel_print_materialization_plan(const yvex_cli_fullmodel_options *options,
+                                                 const yvex_model_ref *ref,
+                                                 const char *target_id,
+                                                 const char *target_class,
+                                                 unsigned long long artifact_bytes,
+                                                 yvex_arch arch,
+                                                 unsigned long long tensor_count,
+                                                 unsigned long long total_tensor_bytes,
+                                                 const yvex_fullmodel_collections *collections,
+                                                 const char *dtype_summary,
+                                                 const char *role_coverage,
+                                                 const char *missing_roles,
+                                                 int selected_target)
+{
+    yvex_fullmodel_backend_fit fit;
+    const char *plan_status;
+    int materialization_plan_ready;
+    unsigned int blocker_count;
+    unsigned int blocker_index = 0u;
+    const char *placement;
+    const char *backend = options && options->backend ? options->backend : "cpu";
+    const char *residency = options && options->residency ? options->residency : "resident";
+    int backend_blocked;
+    int future_residency;
+
+    fullmodel_probe_backend_fit(backend, total_tensor_bytes, &fit);
+    plan_status = fullmodel_plan_status(collections, selected_target, residency, &fit);
+    future_residency = fullmodel_residency_is_future_unsupported(residency);
+    materialization_plan_ready = !selected_target && !future_residency && tensor_count > 0ull;
+    blocker_count = fullmodel_plan_blocker_count(collections, selected_target, residency, &fit);
+    backend_blocked = !fit.available || strcmp(fit.fit_status, "does-not-fit") == 0;
+
+    printf("fullmodel: materialization-plan\n");
+    printf("status: fullmodel-materialization-plan\n");
+    printf("model: %s\n", options && options->model ? options->model : "");
+    printf("model_resolved_path: %s\n", ref && ref->path ? ref->path : "");
+    printf("target_id: %s\n", target_id ? target_id : "path");
+    printf("target_class: %s\n", target_class ? target_class : "candidate-GGUF-path");
+    printf("artifact_exists: true\n");
+    printf("artifact_bytes: %llu\n", artifact_bytes);
+    printf("artifact_identity_status: %s\n", fullmodel_identity_status(ref, artifact_bytes));
+    printf("tensor_inventory_status: pass\n");
+    printf("tensor_count: %llu\n", tensor_count);
+    printf("total_tensor_bytes: %llu\n", total_tensor_bytes);
+    printf("architecture: %s\n", yvex_arch_name(arch));
+    printf("family: %s\n", fullmodel_family_from_arch(arch));
+    printf("qtype_summary: %s\n", dtype_summary ? dtype_summary : "none");
+    printf("dtype_summary: %s\n", dtype_summary ? dtype_summary : "none");
+    printf("required_role_coverage: %s\n", role_coverage ? role_coverage : "partial");
+    printf("missing_required_roles: %s\n", missing_roles ? missing_roles : "unknown");
+    printf("backend: %s\n", backend);
+    printf("residency: %s\n", residency);
+    printf("plan_status: %s\n", plan_status);
+    printf("materialization_plan_ready: %s\n", materialization_plan_ready ? "true" : "false");
+    printf("materialization_attempted: false\n");
+    printf("full_materialization_proof: false\n");
+    printf("full_model_execution: unsupported\n");
+    printf("generation_ready: false\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("plan_id: fullmodel-materialization:%s:%s:%s\n",
+           target_id ? target_id : "path", backend, residency);
+    printf("plan_kind: full-model-materialization\n");
+    printf("plan_source: tensor-inventory\n");
+    printf("plan_backend: %s\n", backend);
+    printf("plan_residency: %s\n", residency);
+    printf("plan_tensor_count: %llu\n", tensor_count);
+    printf("plan_tensor_bytes: %llu\n", total_tensor_bytes);
+    printf("plan_collection_count: 10\n");
+    printf("plan_phase_count: 11\n");
+    printf("plan_blocker_count: %u\n", blocker_count);
+    printf("plan_cleanup_required: true\n");
+    printf("plan_cleanup_phases: release-backend-buffers,release-host-staging,release-scratch,clear-partial-residency,preserve-failure-report\n");
+
+    printf("backend_available: %s\n", fit.available ? "true" : "false");
+    printf("backend_memory_known: %s\n", fit.memory_known ? "true" : "false");
+    if (fit.memory_known) {
+        printf("backend_memory_total_bytes: %llu\n", fit.total_bytes);
+        printf("backend_memory_available_bytes: %llu\n", fit.available_bytes);
+    } else {
+        printf("backend_memory_total_bytes: unknown\n");
+        printf("backend_memory_available_bytes: unknown\n");
+    }
+    printf("backend_required_bytes: %llu\n", fit.required_bytes);
+    printf("backend_fit_status: %s\n", fit.fit_status);
+    printf("backend_fit_reason: %s\n", fit.fit_reason);
+    printf("backend_allocation_attempted: false\n");
+
+    fullmodel_print_phase(0u, "preflight", future_residency ? "unsupported" : "ready",
+                          tensor_count, total_tensor_bytes, residency, 1,
+                          future_residency, future_residency ? "residency mode is not implemented" : "none");
+    fullmodel_print_phase(1u, "artifact-identity", "ready",
+                          0ull, artifact_bytes, "host", 1, 0, "none");
+    fullmodel_print_phase(2u, "tensor-directory", "ready",
+                          tensor_count, total_tensor_bytes, "host", 1, 0, "none");
+    fullmodel_print_phase(3u, "tensor-range-validation", "ready",
+                          tensor_count, total_tensor_bytes, "host", 1, 0, "none");
+    fullmodel_print_phase(4u, "collection-grouping",
+                          selected_target || strcmp(role_coverage ? role_coverage : "partial", "observed") != 0
+                              ? "partial"
+                              : "ready",
+                          tensor_count, total_tensor_bytes, "host", 1,
+                          selected_target,
+                          selected_target ? "selected artifacts cannot satisfy full materialization" : "none");
+    fullmodel_print_phase(5u, "backend-capability",
+                          !fit.available ? "blocked" : "ready",
+                          0ull, 0ull, backend, 1, !fit.available,
+                          fit.available ? "none" : fit.fit_reason);
+    fullmodel_print_phase(6u, "host-residency", "planned",
+                          tensor_count, total_tensor_bytes, "host-staged", 1, 0, "none");
+    fullmodel_print_phase(7u, "backend-residency",
+                          backend_blocked ? "blocked" : "planned",
+                          tensor_count, total_tensor_bytes,
+                          fullmodel_placement_for_residency(backend, residency, 1),
+                          1, backend_blocked,
+                          backend_blocked ? fit.fit_reason : "none");
+    fullmodel_print_phase(8u, "kv-residency", "unsupported",
+                          0ull, 0ull, "not-planned", 1, 1,
+                          "real attention-backed KV not implemented");
+    fullmodel_print_phase(9u, "scratch-residency", "planned",
+                          0ull, 0ull, "host-staged", 1, 0,
+                          "scratch sizing remains planned");
+    fullmodel_print_phase(10u, "cleanup", "planned",
+                          0ull, 0ull, "not-applicable", 1, 0, "none");
+
+    placement = fullmodel_placement_for_residency(backend, residency,
+                                                  collections && collections->embedding > 0ull);
+    fullmodel_print_collection_plan("embedding",
+                                    collections && collections->embedding > 0ull ? "planned" : "blocked",
+                                    collections ? collections->embedding : 0ull,
+                                    collections ? collections->embedding_bytes : 0ull,
+                                    1, collections && collections->embedding > 0ull,
+                                    placement, "backend-residency", "planned",
+                                    collections && collections->embedding > 0ull ? "none" : "embedding collection missing");
+    placement = fullmodel_placement_for_residency(backend, residency,
+                                                  collections && collections->normalization > 0ull);
+    fullmodel_print_collection_plan("normalization",
+                                    collections && collections->normalization > 0ull ? "planned" : "blocked",
+                                    collections ? collections->normalization : 0ull,
+                                    collections ? collections->normalization_bytes : 0ull,
+                                    1, collections && collections->normalization > 0ull,
+                                    placement, "backend-residency", "planned",
+                                    collections && collections->normalization > 0ull ? "none" : "normalization collection missing");
+    placement = fullmodel_placement_for_residency(backend, residency,
+                                                  collections && collections->attention > 0ull);
+    fullmodel_print_collection_plan("attention",
+                                    fullmodel_has_attention_collection(collections) ? "planned" : "blocked",
+                                    collections ? collections->attention : 0ull,
+                                    collections ? collections->attention_bytes : 0ull,
+                                    1, collections && collections->attention > 0ull,
+                                    placement, "backend-residency", "planned",
+                                    fullmodel_has_attention_collection(collections) ? "none" : "attention collection missing");
+    placement = fullmodel_placement_for_residency(backend, residency,
+                                                  collections && collections->mlp > 0ull);
+    fullmodel_print_collection_plan("mlp",
+                                    fullmodel_has_mlp_collection(collections) ? "planned" : "blocked",
+                                    collections ? collections->mlp : 0ull,
+                                    collections ? collections->mlp_bytes : 0ull,
+                                    1, collections && collections->mlp > 0ull,
+                                    placement, "backend-residency", "planned",
+                                    fullmodel_has_mlp_collection(collections) ? "none" : "MLP collection missing");
+    placement = fullmodel_placement_for_residency(backend, residency,
+                                                  collections && collections->moe > 0ull);
+    fullmodel_print_collection_plan("moe",
+                                    collections && collections->moe > 0ull ? "planned" : "blocked",
+                                    collections ? collections->moe : 0ull,
+                                    collections ? collections->moe_bytes : 0ull,
+                                    1, collections && collections->moe > 0ull,
+                                    placement, "backend-residency", "planned",
+                                    collections && collections->moe > 0ull ? "none" : "MoE collection missing or not identified");
+    placement = fullmodel_placement_for_residency(backend, residency,
+                                                  collections && collections->output > 0ull);
+    fullmodel_print_collection_plan("output",
+                                    collections && collections->output > 0ull ? "planned" : "blocked",
+                                    collections ? collections->output : 0ull,
+                                    collections ? collections->output_bytes : 0ull,
+                                    1, collections && collections->output > 0ull,
+                                    placement, "backend-residency", "planned",
+                                    collections && collections->output > 0ull ? "none" : "output collection missing");
+    fullmodel_print_collection_plan("tokenizer-runtime-input",
+                                    collections && collections->tokenizer > 0ull ? "planned" : "blocked",
+                                    collections ? collections->tokenizer : 0ull,
+                                    collections ? collections->tokenizer_bytes : 0ull,
+                                    1, collections && collections->tokenizer > 0ull,
+                                    collections && collections->tokenizer > 0ull ? "host-staged" : "not-planned",
+                                    "preflight", "planned",
+                                    collections && collections->tokenizer > 0ull ? "none" : "tokenizer/full runtime metadata incomplete");
+    fullmodel_print_collection_plan("kv-cache-runtime", "unsupported",
+                                    0ull, 0ull, 1, 0, "not-planned",
+                                    "kv-residency", "unsupported",
+                                    "real attention-backed KV not implemented");
+    fullmodel_print_collection_plan("scratch-runtime", "planned",
+                                    0ull, 0ull, 1, 0, "host-staged",
+                                    "scratch-residency", "planned",
+                                    "scratch sizing remains planned");
+    fullmodel_print_collection_plan("unknown",
+                                    collections && collections->unknown > 0ull ? "partial" : "not-applicable",
+                                    collections ? collections->unknown : 0ull,
+                                    collections ? collections->unknown_bytes : 0ull,
+                                    0, collections && collections->unknown > 0ull,
+                                    collections && collections->unknown > 0ull ? "unknown" : "not-planned",
+                                    "collection-grouping", "unsupported",
+                                    collections && collections->unknown > 0ull ? "unknown tensor role" : "none");
+
+    if (selected_target) {
+        blocker_index = fullmodel_print_blocker(blocker_index, "artifact", "fatal",
+                                                "selected artifacts cannot satisfy full materialization",
+                                                1, 1);
+    }
+    if (future_residency) {
+        blocker_index = fullmodel_print_blocker(blocker_index, "backend-capability", "error",
+                                                "requested residency mode is planned but unsupported",
+                                                1, 1);
+    }
+    if (!fit.available) {
+        blocker_index = fullmodel_print_blocker(blocker_index, "backend-capability", "error",
+                                                fit.fit_reason, 1, 0);
+    } else if (strcmp(fit.fit_status ? fit.fit_status : "unknown", "does-not-fit") == 0) {
+        blocker_index = fullmodel_print_blocker(blocker_index, "backend-memory", "error",
+                                                fit.fit_reason, 1, 0);
+    }
+    fullmodel_print_missing_collection_blockers(&blocker_index, collections);
+    blocker_index = fullmodel_print_blocker(blocker_index, "runtime-consumer", "fatal",
+                                            "full collection runtime consumers are not implemented",
+                                            0, 1);
+    blocker_index = fullmodel_print_blocker(blocker_index, "generation-boundary", "fatal",
+                                            "real transformer prefill not implemented",
+                                            0, 1);
+    blocker_index = fullmodel_print_blocker(blocker_index, "generation-boundary", "fatal",
+                                            "real attention-backed KV not implemented",
+                                            0, 1);
+    blocker_index = fullmodel_print_blocker(blocker_index, "generation-boundary", "fatal",
+                                            "real DeepSeek decode not implemented",
+                                            0, 1);
+    blocker_index = fullmodel_print_blocker(blocker_index, "generation-boundary", "fatal",
+                                            "real output-head logits not implemented",
+                                            0, 1);
+    blocker_index = fullmodel_print_blocker(blocker_index, "generation-boundary", "fatal",
+                                            "real vocabulary sampling not implemented",
+                                            0, 1);
+    blocker_index = fullmodel_print_blocker(blocker_index, "generation-boundary", "fatal",
+                                            "full runtime descriptor not implemented",
+                                            0, 1);
+
+    printf("cleanup_plan_required: true\n");
+    printf("cleanup_plan_phases: release-backend-buffers,release-host-staging,release-scratch,clear-partial-residency,preserve-failure-report\n");
+    printf("cleanup_idempotent_required: true\n");
+    printf("cleanup_failure_policy: preserve-failure-report\n");
+    printf("next_required_row: FULLMODEL.2\n");
+    printf("proof_ready_for_fullmodel_2: false\n");
+    printf("fullmodel_2_blockers: %s\n",
+           selected_target
+               ? "full tensor set missing; full materialization executor not implemented; cleanup proof not implemented"
+               : "full materialization executor not implemented; cleanup proof not implemented; runtime descriptor not implemented");
 }
 
 int yvex_fullmodel_command(int argc, char **argv)
@@ -5629,6 +6355,9 @@ int yvex_fullmodel_command(int argc, char **argv)
 
     if (strcmp(options.model, "glm-5.2-official-safetensors") == 0 ||
         (options.target && strcmp(options.target, "glm-5.2-official-safetensors") == 0)) {
+        if (options.command == YVEX_FULLMODEL_COMMAND_MATERIALIZATION_PLAN) {
+            return print_fullmodel_source_only_plan(&options, "glm-5.2-official-safetensors");
+        }
         return print_fullmodel_source_only_report("glm-5.2-official-safetensors", options.backend);
     }
 
@@ -5666,6 +6395,7 @@ int yvex_fullmodel_command(int argc, char **argv)
     if (yvex_gguf_metadata_find(ctx.gguf, "tokenizer.ggml.tokens") ||
         yvex_gguf_metadata_find(ctx.gguf, "tokenizer.ggml.model")) {
         collections.tokenizer = 1ull;
+        collections.tokenizer_bytes = 0ull;
         collections.has_tokenizer_metadata = 1;
     }
     fullmodel_dtype_summary(dtype_summary, sizeof(dtype_summary),
@@ -5715,6 +6445,25 @@ int yvex_fullmodel_command(int argc, char **argv)
     cuda_placement = strcmp(options.backend, "cuda") == 0
                          ? (yvex_backend_cuda_available() ? "selected-or-candidate-tensors-only" : "unavailable")
                          : "not-requested";
+
+    if (options.command == YVEX_FULLMODEL_COMMAND_MATERIALIZATION_PLAN) {
+        fullmodel_print_materialization_plan(&options,
+                                             &ref,
+                                             target_id,
+                                             target_class,
+                                             artifact_bytes,
+                                             arch,
+                                             tensor_count,
+                                             total_tensor_bytes,
+                                             &collections,
+                                             dtype_summary,
+                                             role_coverage,
+                                             missing_roles,
+                                             selected_target);
+        close_model_context(&ctx);
+        yvex_model_ref_clear(&ref);
+        return 0;
+    }
 
     printf("fullmodel: report\n");
     printf("status: fullmodel-report\n");
@@ -5779,12 +6528,22 @@ int yvex_fullmodel_command(int argc, char **argv)
 void yvex_fullmodel_help(FILE *fp)
 {
     fprintf(fp, "usage: yvex fullmodel report --model FILE_OR_ALIAS [--backend cpu|cuda] [--target TARGET] [--limit-tensors N] [--registry FILE]\n");
+    fprintf(fp, "usage: yvex fullmodel materialization-plan --model FILE_OR_ALIAS [--backend cpu|cuda] [--residency resident|host-staged|ssd-staged|hybrid] [--target TARGET] [--limit-tensors N] [--registry FILE]\n");
+    fprintf(fp, "alias: yvex fullmodel plan --model FILE_OR_ALIAS [options]\n");
     fprintf(fp, "\nExamples:\n");
     fprintf(fp, "  yvex fullmodel report --model deepseek4-v4-flash-selected-embed --backend cpu\n");
     fprintf(fp, "  yvex fullmodel report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --limit-tensors 8\n");
     fprintf(fp, "  yvex fullmodel report --model ./candidate.gguf --target deepseek4-v4-flash --backend cuda\n");
-    fprintf(fp, "\nFullmodel report reads GGUF metadata and tensor-directory facts only. It estimates inventory, qtype/dtype summaries, tensor collections, placement pressure, and runtime blockers. It does not materialize tensors, allocate backend memory, run graph execution, decode, produce logits, sample, generate, evaluate, or benchmark.\n");
-    fprintf(fp, "Boundary: no materialization, graph execution, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
+    fprintf(fp, "  yvex fullmodel materialization-plan --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --residency resident\n");
+    fprintf(fp, "  yvex fullmodel materialization-plan --model ./candidate.gguf --target deepseek4-v4-flash --backend cuda --residency hybrid\n");
+    fprintf(fp, "\nfullmodel report:\n");
+    fprintf(fp, "  inventory and placement pressure report.\n");
+    fprintf(fp, "\nfullmodel materialization-plan:\n");
+    fprintf(fp, "  planned placement phases and materialization preflight only.\n");
+    fprintf(fp, "\nfullmodel materialization proof:\n");
+    fprintf(fp, "  not implemented until FULLMODEL.2.\n");
+    fprintf(fp, "\nFullmodel report reads GGUF metadata and tensor-directory facts only. Materialization-plan reuses those inventory facts to plan collection placement, residency, backend fit, blockers, and cleanup. It does not materialize tensors, allocate full backend memory, run full model execution, run inference, decode, produce real logits, sample, generate, evaluate, benchmark, or report throughput.\n");
+    fprintf(fp, "Boundary: no full allocation, no full model execution, no inference, no decode, logits, sampling, generation, no benchmark, no throughput.\n");
 }
 
 /* Models command dispatch and help. */
