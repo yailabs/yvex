@@ -138,6 +138,79 @@ future YVEX-produced GGUF emission, storage layout, and storage-stream planning.
 GLM-5.2 does not replace DeepSeek. GLM-5.2 does not promote execution,
 prefill, decode, logits, sampling, generation, eval, or benchmark readiness.
 
+Qwen on Apple Silicon / Metal becomes a reduced-scale full-runtime
+portability pressure lane. Qwen-Metal forces backend portability, Metal
+feasibility, unified-memory residency, Qwen model-class mapping, and
+small/medium full-runtime planning. It is not the primary DeepSeek generation
+target and not the huge-MoE source-tensor target.
+
+Canonical model and hardware pressure relationship:
+
+```text
+DeepSeek / Spark / CUDA:
+  selected-runtime-slice and future semi-frontier full-generation pressure.
+
+GLM-5.2 / source tensors / storage-stream:
+  huge-MoE source tensor and storage pressure.
+
+Qwen / MacBook / Metal:
+  reduced-scale Apple Silicon pressure lane for backend portability,
+  unified-memory residency, source-to-artifact flow, and future small/medium
+  full-runtime generation.
+
+Strix Halo / ROCm:
+  future AMD/ROCm pressure lane using the same staged doctrine.
+```
+
+## Qwen Metal Pressure Lane Doctrine
+
+Qwen-Metal is a reduced-scale full-runtime pressure lane for Apple Silicon.
+
+It exists to force:
+- Metal backend feasibility;
+- Apple unified-memory residency planning;
+- Qwen source tensor intake;
+- Qwen tensor-role mapping;
+- Qwen YVEX-produced artifact identity;
+- selected Qwen materialization;
+- Metal primitive parity;
+- future small/medium model generation over YVEX runtime.
+
+Qwen-Metal does not replace DeepSeek.
+Qwen-Metal does not replace GLM.
+It does not prove Metal support.
+It does not prove Qwen runtime support.
+It does not prove full model generation.
+It does not prove benchmark readiness.
+
+External Qwen GGUFs and external Apple/Metal runners are reference evidence
+only. They cannot close YVEX source-to-artifact, backend, runtime, generation,
+eval, or benchmark rows.
+
+Qwen-Metal follows the same YVEX chain:
+
+```text
+official source tensors
+-> source manifest
+-> native tensor inventory
+-> model-class profile
+-> tensor role mapping
+-> quantization policy
+-> YVEX-produced GGUF
+-> artifact identity
+-> materialization
+-> residency
+-> Metal backend capability
+-> graph execution
+-> real transformer prefill
+-> KV
+-> decode
+-> logits
+-> sampling
+-> generation
+-> eval/benchmark only after implemented runtime path exists
+```
+
 Storage-stream doctrine:
 
 Storage streaming is a planned residency mode for artifacts whose full tensor
@@ -1450,6 +1523,7 @@ command-visible model target class registry
 canonical inference block directory in spine
 paper-backed algorithm doctrine and CLI research surface roadmap in spine
 generation loop state machine and token lifecycle contract in spine
+Qwen Metal pressure lane recorded in spine
 plug-and-play operator runbook flow
 single-paste operator transcript
 full implemented command inventory in operator runbook
@@ -1528,6 +1602,20 @@ GLM-5.2 target facts:
   YVEX-produced GGUF: planned
   YVEX inference: not implemented
   YVEX generation: not implemented
+
+Qwen-Metal planned target facts:
+  family: Qwen
+  source class: official source tensors
+  pressure class: planned metal-reduced-full-runtime-pressure
+  hardware lane: Apple Silicon / Metal
+  immediate YVEX use: spine-only pressure lane
+  external GGUF evidence: reference only
+  external runner evidence: reference only
+  YVEX-produced GGUF: planned
+  YVEX materialization: not implemented
+  YVEX Metal backend: not implemented
+  YVEX Qwen runtime: not implemented
+  YVEX generation: not implemented
 ```
 
 Unsupported / not advanced:
@@ -1544,6 +1632,20 @@ GLM YVEX-produced GGUF
 GLM runtime execution
 GLM full materialization
 GLM storage-stream execution
+Apple Silicon hardware profile implementation
+Metal backend implementation
+Metal allocation/movement implementation
+Metal graph primitive execution
+Qwen official source tensor intake
+Qwen tensor mapping
+Qwen YVEX-produced GGUF
+Qwen artifact identity
+Qwen materialization
+Qwen runtime execution
+Qwen real generation
+Qwen Metal benchmark
+Qwen external GGUF capability attribution
+Qwen external runner capability attribution
 SSD-backed tensor paging
 disk-backed generation
 huge-MoE generation
@@ -1788,6 +1890,19 @@ tables.
 | M16 | planned | server | Provider/server generation boundary | daemon/server generation uses runtime-backed generation path |
 | M17 | planned | profile | Trace/profile hardening for generation | traces and profiles identify artifact/backend/graph/KV/decode/logits/sampling/server failures |
 | SPINE.GENERATION.TARGET.0 | complete | docs | DeepSeek generation and speculative throughput target envelope | spine records DeepSeek V4 Flash full-generation target, internal decode throughput target, DSpark external reference doctrine, and non-claim benchmark boundary |
+| SPINE.METAL.QWEN.0 | complete | docs | Qwen Metal pressure lane | spine records Qwen on Apple Silicon / Metal as a reduced-scale portability and full-runtime pressure lane without Metal support, Qwen runtime, generation, eval, benchmark, or throughput claim |
+| HARDWARE.PROFILE.MAC.0 | planned | hardware | Apple Silicon Mac hardware profile | MacBook Apple Silicon CPU/GPU/unified-memory/storage profile is reported without backend or model capability claim |
+| COMPUTE.BACKEND.METAL.0 | planned | backend | Metal feasibility profile | Metal build/toolchain/device/memory feasibility is reported without backend op support claim |
+| COMPUTE.BACKEND.METAL.1 | planned | backend | Metal allocation and movement boundary | Metal buffer allocation, unified-memory behavior, transfer/visibility rules, failure paths, and cleanup are implemented and tested without model execution claim |
+| GRAPH.METAL.0 | planned | graph | Metal primitive parity baseline | selected primitive graph ops run on Metal with CPU reference comparison, checksum, max-diff, failure paths, and cleanup without transformer or generation claim |
+| OWI.TARGETS.QWEN.0 | planned | intake | Qwen source target profile | Qwen official source tensors are recorded as Apple Silicon / Metal pressure targets without runtime or generation claim |
+| MODEL.CLASS.QWEN.0 | planned | model | Qwen model-class profile | Qwen architecture, tensor roles, attention/KV requirements, tokenizer requirements, and unsupported runtime blockers are reported |
+| TENSOR.COLLECTION.QWEN.0 | planned | tensor-collection | Qwen tensor collection inventory | Qwen tensor names map into embedding, normalization, attention, MLP/MoE, output, tokenizer, and KV collection candidates without runtime claim |
+| ARTIFACT.QWEN.0 | planned | artifact | Qwen YVEX-produced artifact identity | Qwen YVEX-produced GGUF identity, digest, tensor byte ranges, qtype summary, and registry metadata are recorded without runtime claim |
+| RESIDENCY.METAL.0 | planned | residency | Metal unified-memory residency plan | Qwen tensor collections are assigned planned Apple unified-memory/host-staged/Metal residency classes with memory pressure and unsupported blockers |
+| FULLMODEL.QWEN.0 | planned | model | Qwen full model inventory and placement report | Qwen full artifact tensor inventory, memory budget, collection coverage, backend placement pressure, and runtime blockers are reported without materialization or generation claim |
+| GEN.QWEN.METAL.0 | planned | generation | Qwen Metal full-runtime generation target | after real Metal backend, Qwen full runtime descriptor, real prefill, KV, decode, output-head logits, and vocabulary sampling exist, Qwen small/medium generation may run over YVEX runtime |
+| BENCH.QWEN.METAL.0 | planned | bench | Qwen Metal generation benchmark | after Qwen Metal generation exists, benchmark harness measures runtime path with artifact identity, qtype, context, backend, machine, command, run count, and reproducibility metadata |
 | GEN.DEEPSEEK.0 | planned | generation | DeepSeek V4 Flash full generation path | DeepSeek V4 Flash reaches real decode, logits, sampling, token append, stop conditions, cleanup, and CLI-visible generation over YVEX runtime |
 | BENCH.DEEPSEEK.DECODE.0 | planned | bench | DeepSeek V4 Flash baseline decode throughput target | after generation exists, benchmark harness measures decode tok/s with artifact identity, qtype, context, backend, machine, command, and reproducibility metadata |
 | BENCH.DEEPSEEK.GEN.0 | planned | bench | DeepSeek V4 Flash end-to-end generation throughput target | after generation exists, benchmark harness measures prompt plus generated-token throughput separately from prefill |
@@ -2615,11 +2730,37 @@ operator preset track:
   -> diagnostic REPL clarity
   -> final operator runbook
   -> public operator examples
+
+Qwen-Metal portability track:
+  Apple Silicon hardware profile
+  -> Metal feasibility profile
+  -> Qwen official source target
+  -> Qwen source manifest
+  -> Qwen native tensor inventory
+  -> Qwen model-class profile
+  -> Qwen tensor collections
+  -> Qwen quantization policy
+  -> Qwen YVEX-produced GGUF
+  -> Qwen artifact identity
+  -> Metal/unified-memory residency plan
+  -> Metal allocation/movement
+  -> Metal graph primitive parity
+  -> Qwen selected slice materialization
+  -> Qwen full model inventory
+  -> Qwen materialization plan
+  -> Qwen full runtime descriptor
+  -> real Qwen prefill/KV/decode/logits/sampling
+  -> Qwen Metal generation
+  -> Qwen Metal eval/benchmark
 ```
 
 These tracks may advance in parallel only when their boundaries are explicit.
 A row is complete only when its command proof demonstrates the boundary it
 claims.
+
+This track may advance in parallel with DeepSeek CUDA and GLM source-tensor
+work only when boundaries remain explicit. Qwen-Metal cannot close DeepSeek
+generation, GLM source-tensor, CUDA, ROCm, eval, or benchmark rows.
 
 The first bounded generation loop is not the same as DeepSeek full generation.
 DeepSeek full generation remains blocked until full model runtime requirements
@@ -2721,6 +2862,13 @@ huge-model-storage-stream:
   qtype profiling, storage layout, cold/warm access, page/chunk planning, and
   staged residency before runtime execution can be claimed.
 
+metal-reduced-full-runtime-pressure:
+  an Apple Silicon / Metal pressure target using smaller or medium open-weight
+  Qwen-family models to force backend portability, unified-memory residency,
+  source-to-artifact intake, tensor role mapping, YVEX-produced artifact
+  identity, selected materialization, Metal primitive parity, and future
+  full-runtime generation. This class is planned and not implemented.
+
 external-GGUF-reference:
   an external GGUF used only to compare artifact layout, qtype choice, or
   external runner behavior. It is never a YVEX-produced artifact.
@@ -2735,6 +2883,10 @@ Current target assignments:
   GLM-5.2 official safetensors: official-source-huge-model
   GLM-5.2 future YVEX-produced GGUF: huge-model-storage-stream
   External GLM GGUFs: external-GGUF-reference only
+  Qwen small/medium official source tensors: planned metal-reduced-full-runtime-pressure
+  Qwen future YVEX-produced GGUF: planned YVEX-produced artifact
+  Qwen external GGUFs: external-GGUF-reference only
+  Qwen external runners: external-runner-reference only
 ```
 
 ## Operator-local Artifact Storage
@@ -3068,17 +3220,17 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-FULLMODEL.2 - Full model materialization proof
+FULLMODEL.1 - Full model materialization plan
 ```
 
-FULLMODEL.2 may attempt materialization of the required tensor set or fail with
-phase, backend, cleanup, and refusal reports. It must build on `fullmodel
-materialization-plan` and still must not claim full model execution, real
-DeepSeek generation, provider generation, streaming generation, evaluation,
-benchmark readiness, or throughput.
+FULLMODEL.1 records the full model materialization plan: placement phases,
+residency classes, backend fit estimates, preflight blockers, cleanup plan, and
+FULLMODEL.2 readiness. It must not claim full model materialization, full model
+execution, real DeepSeek generation, provider generation, streaming generation,
+evaluation, benchmark readiness, or throughput.
 
 Algorithm/CLI research hardening runs in parallel with runtime closure. It does
-not replace FULLMODEL.2 or the current runtime Active Next.
+not replace FULLMODEL.1 or the current runtime Active Next.
 
 GEN.CONTRACT.0 hardens the contract for the generation loop. GEN.LOOP.0 is
 complete for bounded diagnostic loop control only.
@@ -3097,8 +3249,11 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-FULLMODEL.2 - Full model materialization proof
+FULLMODEL.1 - Full model materialization plan
 ```
+
+SPINE.METAL.QWEN.0 records a future parallel pressure lane. It does not replace
+the current Active Next. Runtime active next remains FULLMODEL.1.
 
 CLI.GEN.0 is complete as an operator-grade command surface over the bounded
 diagnostic generation loop: stable help, normal/trace/cancel/context examples,
