@@ -64,6 +64,7 @@ static const yvex_cli_command yvex_commands[] = {
     { "quant-policy", "Inspect, validate, or derive a quantization policy.", yvex_quant_policy_command, yvex_quant_policy_help },
     { "qtype-support", "Print qtype support policy.", yvex_qtype_support_command, yvex_qtype_support_help },
     { "run", "Accept one prompt through diagnostics.", yvex_run_command, yvex_run_help },
+    { "sample", "Select one bounded diagnostic token.", yvex_sample_command, yvex_sample_help },
     { "session", "Create an engine/session diagnostic session.", yvex_session_command, yvex_session_help },
     { "source-manifest", "Create a source provenance manifest.", yvex_source_manifest_command, yvex_source_manifest_help },
     { "tensor-map", "Map native tensors to YVEX roles.", yvex_tensor_map_command, yvex_tensor_map_help },

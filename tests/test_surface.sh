@@ -17,6 +17,7 @@ test -f tests/test_docs_surface.sh
 test -f tests/test_source_layout.sh
 test -f include/yvex/decode.h
 test -f include/yvex/logits.h
+test -f include/yvex/sampling.h
 
 c_count="$(find tests -maxdepth 1 -type f \( -name 'test.c' -o -name 'test_*.c' \) | wc -l | tr -d ' ')"
 if [ "$c_count" -gt 2 ]; then

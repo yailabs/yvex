@@ -186,8 +186,8 @@ official safetensors
 This target is not current capability.
 
 Today, YVEX generation is unsupported and real YVEX generation throughput is
-zero because real DeepSeek decode, real output-head logits, sampling, and the
-generation loop do not exist.
+zero because real DeepSeek decode, real output-head logits, real vocabulary
+sampling, and the generation loop do not exist.
 
 YVEX real generation throughput: 0 tok/s
 
@@ -754,6 +754,7 @@ bounded layer-backed prefill state over selected segment output and controlled l
 chunked prefill lifecycle with context-boundary and prefill scratch reuse reporting
 bounded diagnostic decode-state step over implemented prefill/KV summary
 bounded diagnostic logits buffer over implemented decode state
+bounded greedy sampler over implemented diagnostic logits buffer
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -887,7 +888,8 @@ full transformer prefill
 full model decode
 real DeepSeek decode
 real output-head logits-producing runtime path
-sampling
+real vocabulary sampling
+stochastic sampling
 generation
 interactive generation
 provider generation endpoint
@@ -1072,7 +1074,7 @@ tables.
 | LOGITS.1 | planned | logits | Logprob/top-k diagnostics | logprob/top-k diagnostic path over implemented logits buffer |
 | M12 | planned | logits | Deterministic logits regression | stable vector tests for logits with model/artifact identity and backend tolerance |
 | M13 | planned | sampling | Sampling boundary | greedy and stochastic sampling over logits with seed and parameter validation |
-| SAMPLING.0 | planned | sampling | First sampler boundary | greedy sampler selects a token from implemented logits with parameter validation, deterministic output, and no generation loop claim |
+| SAMPLING.0 | complete | sampling | First sampler boundary | `yvex sample` invokes implemented logits, performs deterministic greedy selection over the bounded diagnostic logits buffer, reports selected index/token/logit/checksum fields, and preserves real vocab sampling, generation, and benchmark unsupported boundaries |
 | SAMPLING.1 | planned | sampling | Sampling diagnostics and reproducibility | seed, parameters, stop reason, and reproducibility diagnostics over implemented sampler |
 | M14 | planned | generation | First constrained generation loop | decode -> logits -> sample -> append token loop with stop conditions and token accounting |
 | GEN.LOOP.0 | planned | generation | First constrained generation loop | composes prefill, decode, logits, sampling, token append, stop conditions, and cleanup into a bounded runtime generation loop without benchmark claim |
@@ -1991,12 +1993,13 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-SAMPLING.0 - First sampler boundary
+GEN.LOOP.0 - First constrained generation loop
 ```
 
-SAMPLING.0 must select a token from the implemented bounded logits buffer with
-deterministic validation and without claiming generation quality, full DeepSeek
-execution, provider generation, evaluation, or benchmark readiness.
+GEN.LOOP.0 must compose prefill, decode, logits, sampling, token append, stop
+conditions, and cleanup into a bounded runtime generation loop without claiming
+real DeepSeek full generation, provider generation, evaluation, or benchmark
+readiness.
 
 PREFILL.4 remains planned as diagnostics/regression hardening over the
 implemented prefill state path. PREFILL.5 remains planned as a future
@@ -2012,7 +2015,7 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-SAMPLING.0 - First sampler boundary
+GEN.LOOP.0 - First constrained generation loop
 ```
 
 GRAPH.CHECK.0 is complete as a command preset over existing graph proofs. It
@@ -2036,9 +2039,10 @@ selected-position activation handoff. It is not full transformer prefill,
 decode, logits, sampling, generation, server generation, evaluation, or
 benchmark readiness.
 
-After LOGITS.0, the bounded runtime closure path proceeds to SAMPLING.0. Real
-model output-head logits and full DeepSeek runtime work remain planned tracks,
-but they do not block the first bounded sampler boundary.
+After SAMPLING.0, the bounded runtime closure path proceeds to GEN.LOOP.0. Real
+model output-head logits, real vocabulary sampling, and full DeepSeek runtime
+work remain planned tracks, but they do not block the first bounded generation
+loop boundary.
 
 ## 8. Validation Gate
 
@@ -2060,6 +2064,7 @@ Current command-surface audit:
 ./yvex commands
 ./yvex help decode
 ./yvex help logits
+./yvex help sample
 ./yvex help graph
 ./yvex help input
 ./yvex help prefill

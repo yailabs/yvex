@@ -158,6 +158,12 @@ bad_command_files="$(
        -o -name 'yvex_logits_runtime.c' \
        -o -name 'logits_command.c' \
        -o -name 'logits_runtime.c' \
+       -o -name 'yvex_sampling_command.c' \
+       -o -name 'yvex_sampling_runtime.c' \
+       -o -name 'sampling_command.c' \
+       -o -name 'sampling_runtime.c' \
+       -o -name 'sample_command.c' \
+       -o -name 'sample_runtime.c' \
        -o -name 'yvex_prefill_chunks.c' \
        -o -name 'yvex_prefill_layers.c' \
        -o -name 'yvex_prefill_runtime.c' \

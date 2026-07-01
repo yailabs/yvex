@@ -61,6 +61,7 @@
 #include <yvex/quant_job.h>
 #include <yvex/quant_policy.h>
 #include <yvex/qtype_support.h>
+#include <yvex/sampling.h>
 #include <yvex/server.h>
 #include <yvex/session.h>
 #include <yvex/source_manifest.h>

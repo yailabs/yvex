@@ -207,6 +207,8 @@ int yvex_qtype_support_command(int argc, char **argv);
 void yvex_qtype_support_help(FILE *fp);
 int yvex_run_command(int argc, char **argv);
 void yvex_run_help(FILE *fp);
+int yvex_sample_command(int argc, char **argv);
+void yvex_sample_help(FILE *fp);
 int yvex_session_command(int argc, char **argv);
 void yvex_session_help(FILE *fp);
 int yvex_source_manifest_command(int argc, char **argv);

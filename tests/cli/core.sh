@@ -22,6 +22,7 @@
 #   - yvex qtype-support
 #   - yvex decode
 #   - yvex logits
+#   - yvex sample
 #   - yvex inspect
 #   - yvex input
 #   - yvex kv
@@ -170,6 +171,7 @@ contains "$OUT_DIR/info.out" "server_generation: not implemented"
 contains "$OUT_DIR/info.out" "kv: minimal session-owned append/read boundary implemented"
 contains "$OUT_DIR/info.out" "decode: bounded diagnostic state step implemented"
 contains "$OUT_DIR/info.out" "logits: bounded diagnostic buffer implemented"
+contains "$OUT_DIR/info.out" "sampling: bounded greedy sampler implemented"
 contains "$OUT_DIR/info.out" "generation: unsupported"
 contains "$OUT_DIR/info.out" "cuda: available when local driver/device probe succeeds"
 contains "$OUT_DIR/info.out" "server: yvexd status shell implemented"
@@ -208,6 +210,7 @@ contains "$OUT_DIR/commands.out" "  quant-job"
 contains "$OUT_DIR/commands.out" "  quant-policy"
 contains "$OUT_DIR/commands.out" "  qtype-support"
 contains "$OUT_DIR/commands.out" "  run"
+contains "$OUT_DIR/commands.out" "  sample"
 contains "$OUT_DIR/commands.out" "  session"
 contains "$OUT_DIR/commands.out" "  source-manifest"
 contains "$OUT_DIR/commands.out" "  tensor-map"
@@ -240,6 +243,11 @@ run_ok help_logits "$YVEX_BIN" help logits
 contains "$OUT_DIR/help_logits.out" "usage: yvex logits"
 contains "$OUT_DIR/help_logits.out" "bounded diagnostic logits buffer"
 contains "$OUT_DIR/help_logits.out" "does not run the real model output head, sample, generate"
+
+run_ok help_sample "$YVEX_BIN" help sample
+contains "$OUT_DIR/help_sample.out" "usage: yvex sample"
+contains "$OUT_DIR/help_sample.out" "bounded diagnostic token"
+contains "$OUT_DIR/help_sample.out" "does not run stochastic sampling, append tokens, generate"
 
 run_ok help_chat "$YVEX_BIN" help chat
 contains "$OUT_DIR/help_chat.out" "usage: yvex chat [--model FILE_OR_ALIAS]"
@@ -493,6 +501,20 @@ run_fail_code logits_layers_zero 2 "$YVEX_BIN" logits --model missing --backend 
 run_fail_code logits_layers_too_many 2 "$YVEX_BIN" logits --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 17
 run_fail_code logits_layer_without_layers 2 "$YVEX_BIN" logits --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layer-hidden-dim 8
 run_fail_code logits_layer_partial_dims 2 "$YVEX_BIN" logits --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 2 --layer-hidden-dim 8 --layer-head-dim 4
+
+run_fail_code sample_missing_model 2 "$YVEX_BIN" sample --backend cpu --segment embedding-rmsnorm --tokens 0,1
+run_fail_code sample_wrong_segment 2 "$YVEX_BIN" sample --model missing --backend cpu --segment nope --tokens 0,1
+run_fail_code sample_missing_tokens 2 "$YVEX_BIN" sample --model missing --backend cpu --segment embedding-rmsnorm
+run_fail_code sample_strategy_stochastic 2 "$YVEX_BIN" sample --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --strategy stochastic
+run_fail_code sample_logits_count_zero 2 "$YVEX_BIN" sample --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --logits-count 0
+run_fail_code sample_logits_count_too_many 2 "$YVEX_BIN" sample --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --logits-count 257
+run_fail_code sample_context_length_zero 2 "$YVEX_BIN" sample --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --context-length 0
+run_fail_code sample_position_start_invalid 2 "$YVEX_BIN" sample --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --position-start nope
+run_fail_code sample_chunk_size_zero 2 "$YVEX_BIN" sample --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --chunk-size 0
+run_fail_code sample_layers_zero 2 "$YVEX_BIN" sample --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 0
+run_fail_code sample_layers_too_many 2 "$YVEX_BIN" sample --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 17
+run_fail_code sample_layer_without_layers 2 "$YVEX_BIN" sample --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layer-hidden-dim 8
+run_fail_code sample_layer_partial_dims 2 "$YVEX_BIN" sample --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 2 --layer-hidden-dim 8 --layer-head-dim 4
 
 set +e
 "$YVEX_BIN" model-target inspect missing-target >"$OUT_DIR/model_target_missing.out" 2>"$OUT_DIR/model_target_missing.err"
