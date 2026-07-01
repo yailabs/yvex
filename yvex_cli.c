@@ -48,6 +48,7 @@ static const yvex_cli_command yvex_commands[] = {
     { "input", "Parse and validate token input.", yvex_input_command, yvex_input_help },
     { "integrity", "Check or report local artifact integrity.", yvex_integrity_command, yvex_integrity_help },
     { "kv", "Create a minimal session-owned KV store.", yvex_kv_command, yvex_kv_help },
+    { "logits", "Create a bounded diagnostic logits buffer.", yvex_logits_command, yvex_logits_help },
     { "materialize", "Materialize selected weights.", yvex_materialize_command, yvex_materialize_help },
     { "materialize-gate", "Run a materialization hardening gate.", yvex_materialize_gate_command, yvex_materialize_gate_help },
     { "metadata", "Print parsed metadata entries.", yvex_metadata_command, yvex_metadata_help },

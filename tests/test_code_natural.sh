@@ -97,8 +97,8 @@ END {
 ' \
   $impl_files
 
-if grep -nE 'implemented|ready|supports generation|benchmark result|token/sec|evaluation suite implemented|decode implemented|sampling implemented|generation implemented' \
-    yvex_logits.c yvex_sampling.c yvex_generation.c yvex_eval.c yvex_bench.c; then
+if grep -nE 'implemented|ready|supports generation|benchmark result|token/sec|evaluation suite implemented|sampling implemented|generation implemented' \
+    yvex_sampling.c yvex_generation.c yvex_eval.c yvex_bench.c; then
   echo "future boundary files must not claim runtime readiness"
   exit 1
 fi

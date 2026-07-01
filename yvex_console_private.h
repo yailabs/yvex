@@ -175,6 +175,8 @@ int yvex_integrity_command(int argc, char **argv);
 void yvex_integrity_help(FILE *fp);
 int yvex_kv_command(int argc, char **argv);
 void yvex_kv_help(FILE *fp);
+int yvex_logits_command(int argc, char **argv);
+void yvex_logits_help(FILE *fp);
 int yvex_materialize_command(int argc, char **argv);
 void yvex_materialize_help(FILE *fp);
 int yvex_materialize_gate_command(int argc, char **argv);

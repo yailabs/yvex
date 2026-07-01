@@ -186,7 +186,8 @@ official safetensors
 This target is not current capability.
 
 Today, YVEX generation is unsupported and real YVEX generation throughput is
-zero because decode, logits, sampling, and the generation loop do not exist.
+zero because real DeepSeek decode, real output-head logits, sampling, and the
+generation loop do not exist.
 
 YVEX real generation throughput: 0 tok/s
 
@@ -752,6 +753,7 @@ minimal KV-backed prefill binding from segment-summary state
 bounded layer-backed prefill state over selected segment output and controlled layer fixture scheduling
 chunked prefill lifecycle with context-boundary and prefill scratch reuse reporting
 bounded diagnostic decode-state step over implemented prefill/KV summary
+bounded diagnostic logits buffer over implemented decode state
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -884,7 +886,7 @@ speculative generation benchmark
 full transformer prefill
 full model decode
 real DeepSeek decode
-logits-producing runtime path
+real output-head logits-producing runtime path
 sampling
 generation
 interactive generation
@@ -1066,7 +1068,7 @@ tables.
 | DECODE.0 | complete | decode | First bounded decode state step | `yvex decode` invokes implemented chunked/layer-backed prefill, advances one bounded diagnostic decode-state position, validates context boundary, reports checksum/state/cleanup fields, and preserves logits/sampling/generation unsupported boundaries |
 | DECODE.1 | planned | decode | Decode lifecycle and repeatability | repeated decode steps, context-end handling, interruption, cleanup, and deterministic diagnostics over existing state |
 | M11 | planned | logits | Logits production boundary | logits buffer ownership, dtype, backend tolerance, and diagnostics implemented |
-| LOGITS.0 | planned | logits | First bounded logits buffer | produces a deterministic bounded logits buffer from decode state without claiming real model output head or generation quality |
+| LOGITS.0 | complete | logits | First bounded logits buffer | `yvex logits` invokes implemented decode, produces a bounded deterministic logits buffer from decode state, reports checksum/min/max/sample/cleanup fields, and preserves real output-head, sampling, generation, and benchmark unsupported boundaries |
 | LOGITS.1 | planned | logits | Logprob/top-k diagnostics | logprob/top-k diagnostic path over implemented logits buffer |
 | M12 | planned | logits | Deterministic logits regression | stable vector tests for logits with model/artifact identity and backend tolerance |
 | M13 | planned | sampling | Sampling boundary | greedy and stochastic sampling over logits with seed and parameter validation |
@@ -1989,13 +1991,12 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-LOGITS.0 - First bounded logits buffer
+SAMPLING.0 - First sampler boundary
 ```
 
-LOGITS.0 must produce a deterministic bounded logits buffer from the implemented
-decode state without claiming real model output-head logits, sampling,
-generation, full DeepSeek execution, provider generation, evaluation, or
-benchmark readiness.
+SAMPLING.0 must select a token from the implemented bounded logits buffer with
+deterministic validation and without claiming generation quality, full DeepSeek
+execution, provider generation, evaluation, or benchmark readiness.
 
 PREFILL.4 remains planned as diagnostics/regression hardening over the
 implemented prefill state path. PREFILL.5 remains planned as a future
@@ -2011,7 +2012,7 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-LOGITS.0 - First bounded logits buffer
+SAMPLING.0 - First sampler boundary
 ```
 
 GRAPH.CHECK.0 is complete as a command preset over existing graph proofs. It
@@ -2035,9 +2036,9 @@ selected-position activation handoff. It is not full transformer prefill,
 decode, logits, sampling, generation, server generation, evaluation, or
 benchmark readiness.
 
-After DECODE.0, the bounded runtime closure path proceeds to LOGITS.0. Real
+After LOGITS.0, the bounded runtime closure path proceeds to SAMPLING.0. Real
 model output-head logits and full DeepSeek runtime work remain planned tracks,
-but they do not block the first bounded logits-buffer boundary.
+but they do not block the first bounded sampler boundary.
 
 ## 8. Validation Gate
 
@@ -2058,6 +2059,7 @@ Current command-surface audit:
 ```sh
 ./yvex commands
 ./yvex help decode
+./yvex help logits
 ./yvex help graph
 ./yvex help input
 ./yvex help prefill
