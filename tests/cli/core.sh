@@ -97,6 +97,19 @@ run_fail() {
     fi
 }
 
+run_fail_code() {
+    name=$1
+    expected=$2
+    shift 2
+    set +e
+    "$@" >"$OUT_DIR/$name.out" 2>"$OUT_DIR/$name.err"
+    rc=$?
+    set -e
+    if [ "$rc" -ne "$expected" ]; then
+        fail "$name exit code was $rc, expected $expected"
+    fi
+}
+
 run_ok no_args "$YVEX_BIN"
 contains "$OUT_DIR/no_args.out" "usage: yvex <command> [options]"
 
@@ -122,7 +135,7 @@ contains "$OUT_DIR/info.out" "gguf: metadata/tensor directory parsing implemente
 contains "$OUT_DIR/info.out" "model: descriptor-only implemented"
 contains "$OUT_DIR/info.out" "tokenizer: fixture encode/decode implemented"
 contains "$OUT_DIR/info.out" "token_input: explicit token boundary implemented"
-contains "$OUT_DIR/info.out" "prefill_state: segment-summary foundation and minimal KV binding implemented"
+contains "$OUT_DIR/info.out" "prefill_state: segment-summary foundation, bounded layer-backed prefill state, and minimal KV binding implemented"
 contains "$OUT_DIR/info.out" "prompt: default renderer implemented"
 contains "$OUT_DIR/info.out" "graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, standalone RoPE position op, standalone F32 attention primitive, standalone F32 matmul/projection primitive, and standalone F32 MLP/feed-forward primitive implemented"
 contains "$OUT_DIR/info.out" "planner: estimate-only implemented"
@@ -293,6 +306,11 @@ contains "$OUT_DIR/help_imatrix.out" "usage: yvex imatrix"
 run_ok help_plan "$YVEX_BIN" help plan
 contains "$OUT_DIR/help_plan.out" "usage: yvex plan <path>"
 
+run_ok help_prefill "$YVEX_BIN" help prefill
+contains "$OUT_DIR/help_prefill.out" "--layers N"
+contains "$OUT_DIR/help_prefill.out" "Layer-backed prefill uses the selected embedding+RMSNorm segment plus a controlled layer fixture scheduler over a sampled row."
+contains "$OUT_DIR/help_prefill.out" "It is not full transformer prefill, decode, logits, sampling, or generation."
+
 run_ok help_prompt "$YVEX_BIN" help prompt
 contains "$OUT_DIR/help_prompt.out" "usage: yvex prompt <path>"
 
@@ -424,6 +442,11 @@ contains "$OUT_DIR/model_target_paths_env.out" "artifact_path: $MODEL_TARGET_MOD
 run_fail model_target_paths_empty_root "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed --paths --models-root ""
 run_fail model_target_paths_missing_root "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed --paths --models-root
 run_fail model_target_paths_root_without_paths "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed --models-root "$MODEL_TARGET_PATHS_DIR/models"
+
+run_fail_code prefill_layer_without_layers 2 "$YVEX_BIN" prefill --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layer-hidden-dim 8
+run_fail_code prefill_layers_zero 2 "$YVEX_BIN" prefill --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 0
+run_fail_code prefill_layers_too_many 2 "$YVEX_BIN" prefill --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 17
+run_fail_code prefill_layer_partial_dims 2 "$YVEX_BIN" prefill --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 2 --layer-hidden-dim 8 --layer-head-dim 4
 
 set +e
 "$YVEX_BIN" model-target inspect missing-target >"$OUT_DIR/model_target_missing.out" 2>"$OUT_DIR/model_target_missing.err"

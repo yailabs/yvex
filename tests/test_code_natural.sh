@@ -131,6 +131,8 @@ pattern='model target is capab''ility'
 scan_forbidden_claim "$pattern"
 pattern='full inference imple''mented'
 scan_forbidden_claim "$pattern"
+pattern='full transformer prefill imple''mented'
+scan_forbidden_claim "$pattern"
 pattern='transformer inference rea''dy'
 scan_forbidden_claim "$pattern"
 pattern='DeepSeek block rea''dy'

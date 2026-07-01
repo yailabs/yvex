@@ -738,6 +738,7 @@ explicit prompt/token input boundary
 segment-summary prefill state foundation from validated token sequences
 minimal session-owned KV ownership and append/read boundary
 minimal KV-backed prefill binding from segment-summary state
+bounded layer-backed prefill state over selected segment output and controlled layer fixture scheduling
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -857,7 +858,6 @@ huge-MoE generation
 external-GGUF capability attribution
 external-runner capability attribution
 full supply-chain security
-graph check preset
 diagnostic REPL layout hardening
 final operator runbook over preset commands
 DeepSeek V4 Flash full generation path
@@ -887,8 +887,10 @@ execution_ready true-state claim
 M8 is not the final prefill path. It is a segment-summary prefill-state
 foundation built from validated token input and implemented selected graph
 segments. PREFILL.1 binds that summary to minimal session-owned KV state with
-diagnostic values. Full transformer prefill still requires graph op expansion,
-first block execution, layer scheduling, and real attention K/V projection.
+diagnostic values. PREFILL.2 adds a bounded layer-backed state path by handing a
+selected segment output sample into the controlled layer fixture scheduler.
+Full transformer prefill still requires real model layer weights, attention K/V
+projection, and the future chunked prefill lifecycle.
 
 ## 5. Unified Delivery Ledger
 
@@ -1042,7 +1044,7 @@ tables.
 | GRAPH.OPS.3 | complete | graph | MLP and routed-expert primitive boundary | F32 feed-forward and routed expert-slice primitive implemented with explicit tensor roles and backend support |
 | GRAPH.BLOCK.0 | complete | graph | First transformer block execution | controlled fixture block executes through normalization, attention, residual, MLP path with owned scratch |
 | GRAPH.LAYERS.0 | complete | graph | Layer scheduler and repeated block execution | `yvex graph --execute-layers --block fixture` runs a bounded repeated controlled block fixture with selected-position activation handoff, cleanup proof, CPU/CUDA parity, and no prefill/decode/logits/sampling/generation claim |
-| PREFILL.2 | planned | prefill | First real transformer prefill path | validated prompt tokens run through implemented layer path into KV-backed prefill state |
+| PREFILL.2 | complete | prefill | Bounded layer-backed prefill state path | validated token sequences run selected embedding-plus-RMSNorm segments, hand sampled rows into the controlled layer fixture scheduler, and optionally bind diagnostic KV without full transformer/decode/logits/sampling/generation claim |
 | PREFILL.3 | planned | prefill | Chunked prefill and scratch lifecycle | chunked token ranges, scratch reuse, cleanup, and context-boundary behavior implemented |
 | PREFILL.4 | planned | prefill | Prefill diagnostics and regression reports | prefill positions, memory, KV rows, checksums, and failure phases visible |
 | PREFILL.5 | planned | prefill | Prefill throughput measurement gate | benchmarkable prefill command exists, but only after real transformer prefill path |
@@ -1933,13 +1935,13 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-PREFILL.2 - First real transformer prefill path
+PREFILL.3 - Chunked prefill and scratch lifecycle
 ```
 
-PREFILL.2 must build on implemented graph/layer fixture boundaries without
-claiming decode, logits, sampling, generation, evaluation, or benchmark
-readiness. It must not skip required runtime state, KV, cleanup, failure, and
-reference boundaries.
+PREFILL.3 must build on the bounded layer-backed state path by making token
+chunking, scratch reuse, cleanup, and context-boundary behavior explicit. It
+must not claim decode, logits, sampling, generation, evaluation, or benchmark
+readiness.
 
 SPINE.GENERATION.TARGET.0 records the long-term DeepSeek generation and
 throughput target. It does not change the immediate implementation order.
@@ -1950,7 +1952,7 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-PREFILL.2 - First real transformer prefill path
+PREFILL.3 - Chunked prefill and scratch lifecycle
 ```
 
 GRAPH.CHECK.0 is complete as a command preset over existing graph proofs. It
@@ -1974,9 +1976,10 @@ selected-position activation handoff. It is not full transformer prefill,
 decode, logits, sampling, generation, server generation, evaluation, or
 benchmark readiness.
 
-After PREFILL.1, the next runtime work is not automatically decode. The spine
-expects graph/layer expansion rows to determine whether decode can run over
-meaningful transformer state.
+After PREFILL.2, the next runtime work is not automatically decode. The spine
+expects chunked prefill, scratch lifecycle, real model layer requirements, and
+KV-backed transformer state to determine whether decode can run over meaningful
+runtime state.
 
 ## 8. Validation Gate
 
@@ -2027,6 +2030,9 @@ Selected segment proof set:
 ./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda --segment embedding-rmsnorm --tokens 0,1
 ./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
 ./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda --segment embedding-rmsnorm --tokens 0,1,2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
+./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 1
+./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 2
+./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2 --layers 2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
 ```
 
 Standalone graph op proof set:

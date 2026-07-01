@@ -149,7 +149,13 @@ bad_command_files="$(
        -o -name 'yvex_runtime_graph.c' \
        -o -name 'yvex_runtime_support.c' \
        -o -name 'runtime_commands.c' \
-       -o -name 'runtime_graph.c' \) \
+       -o -name 'runtime_graph.c' \
+       -o -name 'yvex_prefill_layers.c' \
+       -o -name 'yvex_prefill_runtime.c' \
+       -o -name 'yvex_graph_prefill.c' \
+       -o -name 'yvex_runtime_prefill.c' \
+       -o -name 'prefill_layers.c' \
+       -o -name 'graph_prefill.c' \) \
     -print
 )"
 if [ -n "$bad_command_files" ]; then

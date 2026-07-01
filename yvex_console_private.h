@@ -68,6 +68,38 @@ typedef struct {
     unsigned long long reference_bytes_planned;
 } yvex_cli_graph_guard_report;
 
+typedef struct {
+    const char *backend_name;
+    unsigned long long layers;
+    unsigned long long seq_len;
+    unsigned long long position;
+    unsigned long long hidden_dim;
+    unsigned long long head_dim;
+    unsigned long long ffn_dim;
+    const float *initial_position_values;
+    unsigned long long initial_position_value_count;
+} yvex_cli_layer_fixture_options;
+
+typedef struct {
+    int executed;
+    const char *status;
+    const char *graph_integrity_guard;
+    const char *graph_execution_phase;
+    const char *backend_status;
+    const char *backend_op_status;
+    unsigned long long layers;
+    unsigned long long total_op_count;
+    unsigned long long output_bytes;
+    unsigned long long scratch_bytes;
+    unsigned long long final_output_checksum;
+    unsigned long long final_reference_checksum;
+    double final_max_abs_diff;
+    unsigned long long output_value_count;
+    float output_values[YVEX_SEGMENT_GRAPH_MAX_OUTPUT_VALUES];
+    int cleanup_attempted;
+    const char *cleanup_status;
+} yvex_cli_layer_fixture_result;
+
 int print_yvex_error(const yvex_error *err, int exit_code);
 int exit_for_status(int status);
 void print_quoted_bytes(const char *data, unsigned long long len);
@@ -107,6 +139,9 @@ int preflight_graph_guard(const yvex_model_ref *model_ref,
                           unsigned int token_id,
                           yvex_cli_graph_guard_report *report,
                           yvex_error *err);
+int yvex_cli_graph_execute_layer_fixture(const yvex_cli_layer_fixture_options *options,
+                                         yvex_cli_layer_fixture_result *out,
+                                         yvex_error *err);
 
 int yvex_backend_command(int argc, char **argv);
 void yvex_backend_help(FILE *fp);

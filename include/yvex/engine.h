@@ -220,6 +220,10 @@ typedef struct {
     unsigned long long position_start;
     int attach_kv;
     yvex_kv_shape kv_shape;
+    unsigned long long layer_count;
+    unsigned long long layer_hidden_dim;
+    unsigned long long layer_head_dim;
+    unsigned long long layer_ffn_dim;
 } yvex_prefill_state_options;
 
 typedef struct {
@@ -242,6 +246,25 @@ typedef struct {
     unsigned long long aggregate_checksum;
     unsigned long long final_token_checksum;
     double max_abs_diff;
+    int layer_prefill_requested;
+    const char *layer_execution_kind;
+    const char *layer_input_projection;
+    const char *layer_handoff;
+    const char *layer_sequence_rebuild;
+    int model_layer_execution;
+    unsigned long long layer_count;
+    unsigned long long layer_graph_executions;
+    unsigned long long layer_block_executions;
+    unsigned long long layer_total_op_count;
+    unsigned long long layer_output_count;
+    unsigned long long layer_output_bytes;
+    unsigned long long layer_total_output_bytes;
+    unsigned long long layer_total_scratch_bytes;
+    unsigned long long layer_final_checksum;
+    unsigned long long layer_final_reference_checksum;
+    double layer_max_abs_diff;
+    unsigned long long layer_output_sample_count;
+    float layer_output_sample_values[YVEX_SEGMENT_GRAPH_MAX_OUTPUT_VALUES];
     int cleanup_attempted;
     const char *cleanup_status;
     int cuda_parity;
@@ -249,6 +272,7 @@ typedef struct {
     int session_kv_owned;
     int kv_bound_to_prefill;
     const char *kv_binding_kind;
+    const char *kv_binding_source;
     const char *kv_status;
     const char *kv_owner;
     const char *kv_dtype;

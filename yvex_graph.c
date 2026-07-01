@@ -3028,6 +3028,8 @@ typedef struct {
     unsigned long long ffn_dim;
     int causal;
     int gated;
+    const float *initial_position_values;
+    unsigned long long initial_position_value_count;
 } yvex_controlled_layer_scheduler_request;
 
 typedef struct {
@@ -3058,6 +3060,8 @@ typedef struct {
     unsigned long long final_output_checksum;
     unsigned long long final_reference_checksum;
     float final_max_abs_diff;
+    unsigned long long output_value_count;
+    float output_values[YVEX_SEGMENT_GRAPH_MAX_OUTPUT_VALUES];
     int cleanup_attempted;
     const char *cleanup_status;
     int layers_cuda_parity;
@@ -3167,6 +3171,7 @@ static int controlled_layer_scheduler_execute(
     unsigned long long hidden_bytes;
     unsigned long long seq_hidden_bytes;
     unsigned long long layer;
+    unsigned long long copy_count;
     int fail_after_layer_0;
     int fail_after_backend_alloc;
     int exit_code = 1;
@@ -3199,7 +3204,15 @@ static int controlled_layer_scheduler_execute(
 
     for (layer = 0; layer < request->layers; ++layer) {
         block_fill_input(sequence_values, request->seq_len, request->hidden_dim);
-        if (layer > 0) {
+        if (layer == 0ull && request->initial_position_values &&
+            request->initial_position_value_count > 0ull) {
+            copy_count = request->initial_position_value_count < request->hidden_dim
+                             ? request->initial_position_value_count
+                             : request->hidden_dim;
+            memcpy(sequence_values + (request->position * request->hidden_dim),
+                   request->initial_position_values,
+                   (size_t)(copy_count * (unsigned long long)sizeof(float)));
+        } else if (layer > 0ull) {
             memcpy(sequence_values + (request->position * request->hidden_dim),
                    previous_output_values, (size_t)hidden_bytes);
         }
@@ -3236,6 +3249,13 @@ static int controlled_layer_scheduler_execute(
         result->final_output_checksum = block_result.output_checksum;
         result->final_reference_checksum = block_result.reference_checksum;
         result->final_max_abs_diff = block_result.max_abs_diff;
+        result->output_value_count =
+            request->hidden_dim < YVEX_SEGMENT_GRAPH_MAX_OUTPUT_VALUES
+                ? request->hidden_dim
+                : YVEX_SEGMENT_GRAPH_MAX_OUTPUT_VALUES;
+        for (copy_count = 0; copy_count < result->output_value_count; ++copy_count) {
+            result->output_values[copy_count] = layer_output_values[copy_count];
+        }
         if (strcmp(request->backend_name, "cuda") == 0 &&
             !block_result.block_cuda_parity) {
             result->layers_cuda_parity = 0;
@@ -3280,6 +3300,128 @@ cleanup:
     if (exit_code == 0) {
         yvex_error_clear(err);
     }
+    return exit_code;
+}
+
+int yvex_cli_graph_execute_layer_fixture(const yvex_cli_layer_fixture_options *options,
+                                         yvex_cli_layer_fixture_result *out,
+                                         yvex_error *err)
+{
+    yvex_controlled_layer_scheduler_request request;
+    yvex_controlled_layer_scheduler_result result;
+    unsigned long long seq_hidden;
+    unsigned long long hidden_hidden;
+    unsigned long long hidden_ffn;
+    unsigned long long i;
+    int exit_code;
+
+    if (!options || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex graph layers",
+                       "layer fixture options and output are required");
+        return exit_for_status(YVEX_ERR_INVALID_ARG);
+    }
+    memset(out, 0, sizeof(*out));
+    out->status = "graph-layers-fail";
+    out->graph_integrity_guard = "fail";
+    out->graph_execution_phase = "preflight";
+    out->backend_status = "not-opened";
+    out->backend_op_status = "unchecked";
+    out->cleanup_status = "not-needed";
+
+    if (!options->backend_name ||
+        (strcmp(options->backend_name, "cpu") != 0 &&
+         strcmp(options->backend_name, "cuda") != 0)) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex graph layers",
+                       "unknown backend kind");
+        return exit_for_status(YVEX_ERR_INVALID_ARG);
+    }
+    if (options->layers == 0ull || options->layers > 16ull) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex graph layers",
+                       "layer scheduler requires 1 <= layers <= 16");
+        return exit_for_status(YVEX_ERR_INVALID_ARG);
+    }
+    if (options->seq_len == 0ull || options->hidden_dim == 0ull ||
+        options->head_dim == 0ull || options->ffn_dim == 0ull) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex graph layers",
+                       "layer scheduler dimensions must be positive");
+        return exit_for_status(YVEX_ERR_INVALID_ARG);
+    }
+    if (options->position >= options->seq_len) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex graph layers",
+                       "layer scheduler position must be less than sequence length");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+    if (options->hidden_dim % options->head_dim != 0ull) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex graph layers",
+                       "layer scheduler hidden dimension must be divisible by head dimension");
+        return exit_for_status(YVEX_ERR_INVALID_ARG);
+    }
+    if (options->hidden_dim != options->head_dim) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex graph layers",
+                       "layer scheduler currently supports one attention head");
+        return exit_for_status(YVEX_ERR_UNSUPPORTED);
+    }
+    if (options->initial_position_value_count > options->hidden_dim) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex graph layers",
+                       "initial selected-position row exceeds hidden dimension");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+    if (options->seq_len > ULLONG_MAX / options->hidden_dim ||
+        options->hidden_dim > ULLONG_MAX / options->hidden_dim ||
+        options->hidden_dim > ULLONG_MAX / options->ffn_dim ||
+        options->ffn_dim > ULLONG_MAX / options->hidden_dim ||
+        options->layers > ULLONG_MAX / 12ull) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex graph layers",
+                       "layer scheduler dimension overflow");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+
+    seq_hidden = options->seq_len * options->hidden_dim;
+    hidden_hidden = options->hidden_dim * options->hidden_dim;
+    hidden_ffn = options->hidden_dim * options->ffn_dim;
+    if (seq_hidden > (unsigned long long)(SIZE_MAX / sizeof(float)) ||
+        hidden_hidden > (unsigned long long)(SIZE_MAX / sizeof(float)) ||
+        hidden_ffn > (unsigned long long)(SIZE_MAX / sizeof(float)) ||
+        (options->ffn_dim * options->hidden_dim) >
+            (unsigned long long)(SIZE_MAX / sizeof(float))) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex graph layers",
+                       "layer scheduler byte count overflow");
+        return exit_for_status(YVEX_ERR_BOUNDS);
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.backend_name = options->backend_name;
+    request.layers = options->layers;
+    request.seq_len = options->seq_len;
+    request.position = options->position;
+    request.hidden_dim = options->hidden_dim;
+    request.head_dim = options->head_dim;
+    request.ffn_dim = options->ffn_dim;
+    request.causal = 1;
+    request.gated = 1;
+    request.initial_position_values = options->initial_position_values;
+    request.initial_position_value_count = options->initial_position_value_count;
+
+    exit_code = controlled_layer_scheduler_execute(&request, &result, err);
+    out->executed = exit_code == 0;
+    out->status = result.status;
+    out->graph_integrity_guard = result.graph_integrity_guard;
+    out->graph_execution_phase = result.graph_execution_phase;
+    out->backend_status = result.backend_status;
+    out->backend_op_status = result.backend_op_status;
+    out->layers = result.layers;
+    out->total_op_count = result.total_op_count;
+    out->output_bytes = result.output_bytes;
+    out->scratch_bytes = result.scratch_planned_bytes_per_layer * result.layers;
+    out->final_output_checksum = result.final_output_checksum;
+    out->final_reference_checksum = result.final_reference_checksum;
+    out->final_max_abs_diff = result.final_max_abs_diff;
+    out->output_value_count = result.output_value_count;
+    for (i = 0; i < result.output_value_count; ++i) {
+        out->output_values[i] = result.output_values[i];
+    }
+    out->cleanup_attempted = result.cleanup_attempted;
+    out->cleanup_status = result.cleanup_status;
     return exit_code;
 }
 

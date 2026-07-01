@@ -1,12 +1,13 @@
 /*
  * yvex_prefill.c - Prefill state runtime boundary.
  *
- * This file owns the implemented segment-summary prefill foundation and minimal
- * KV binding. It does not claim full transformer prefill, decode, logits,
- * sampling, or generation.
+ * This file owns the implemented segment-summary prefill foundation, bounded
+ * layer-backed diagnostic state path, and minimal KV binding. It does not
+ * claim full transformer prefill, decode, logits, sampling, or generation.
  */
 
 #include <yvex/engine.h>
+#include "yvex_console_private.h"
 #include "yvex_runtime_private.h"
 
 #include <limits.h>
@@ -61,18 +62,17 @@ static unsigned long long prefill_checksum_f32_values(const float *values,
 
 static void fill_prefill_kv_values(float *values,
                                    unsigned long long value_count,
-                                   const yvex_segment_graph_result *segment,
+                                   const float *source_values,
+                                   unsigned long long source_count,
                                    unsigned int token_id,
                                    unsigned long long position)
 {
-    unsigned long long sample_count;
     unsigned long long i;
 
-    sample_count = segment ? segment->output_value_count : 0ull;
     for (i = 0; values && i < value_count; ++i) {
         float base = 0.0f;
-        if (segment && sample_count > 0ull) {
-            base = segment->output_values[i % sample_count];
+        if (source_values && source_count > 0ull) {
+            base = source_values[i % source_count];
         }
         values[i] = base +
                     (float)(position * 0.001) +
@@ -132,10 +132,15 @@ int yvex_engine_create_prefill_state(yvex_engine *engine,
 {
     yvex_segment_graph_options segment_options;
     yvex_segment_graph_result segment_result;
+    yvex_cli_layer_fixture_options layer_options;
+    yvex_cli_layer_fixture_result layer_result;
     yvex_kv_cache *kv = NULL;
     yvex_kv_summary kv_summary;
     const yvex_token_input *input;
     const char *segment_name = "embedding-rmsnorm";
+    const float *kv_source_values = NULL;
+    unsigned long long kv_source_count = 0ull;
+    float layer_seed_values[YVEX_SEGMENT_GRAPH_MAX_OUTPUT_VALUES];
     float *kv_values = NULL;
     float *kv_read_values = NULL;
     unsigned long long aggregate = 1469598103934665603ull;
@@ -143,6 +148,8 @@ int yvex_engine_create_prefill_state(yvex_engine *engine,
     unsigned long long kv_position = 0ull;
     unsigned long long kv_sample_count = 0ull;
     unsigned long long i;
+    unsigned long long j;
+    int layer_prefill_requested;
     int rc;
 
     if (!engine || !options || !options->token_input || !out) {
@@ -151,9 +158,14 @@ int yvex_engine_create_prefill_state(yvex_engine *engine,
         return YVEX_ERR_INVALID_ARG;
     }
 
+    layer_prefill_requested = options->layer_count > 0ull;
     memset(out, 0, sizeof(*out));
-    out->prefill_state_kind = "segment-summary";
-    out->sequence_execution_mode = "independent-token-segments";
+    out->prefill_state_kind = layer_prefill_requested
+                                  ? "layer-backed-segment-summary"
+                                  : "segment-summary";
+    out->sequence_execution_mode = layer_prefill_requested
+                                       ? "segment-then-controlled-layer-fixture"
+                                       : "independent-token-segments";
     out->prefill_phase = "preflight";
     out->backend_name = "none";
     out->segment_name = "embedding-rmsnorm";
@@ -163,6 +175,9 @@ int yvex_engine_create_prefill_state(yvex_engine *engine,
     out->session_kv_owned = 0;
     out->kv_bound_to_prefill = 0;
     out->kv_binding_kind = options->attach_kv ? "minimal-diagnostic" : "none";
+    out->kv_binding_source = layer_prefill_requested
+                                 ? "layer-final-sample"
+                                 : "segment-output-sample";
     out->kv_status = options->attach_kv ? "planned" : "not-requested";
     out->kv_owner = "none";
     out->kv_dtype = "none";
@@ -172,6 +187,21 @@ int yvex_engine_create_prefill_state(yvex_engine *engine,
     out->decode_ready = 0;
     out->logits_ready = 0;
     out->generation_ready = 0;
+    out->layer_prefill_requested = layer_prefill_requested;
+    out->layer_execution_kind = layer_prefill_requested
+                                    ? "controlled-layer-fixture"
+                                    : "none";
+    out->layer_input_projection = layer_prefill_requested
+                                      ? "segment-sample-prefix"
+                                      : "none";
+    out->layer_handoff = layer_prefill_requested
+                             ? "selected-position-row"
+                             : "none";
+    out->layer_sequence_rebuild = layer_prefill_requested
+                                      ? "deterministic-with-previous-position-row"
+                                      : "none";
+    out->model_layer_execution = 0;
+    out->layer_count = options->layer_count;
 
     input = options->token_input;
     if (options->segment_name) {
@@ -181,6 +211,21 @@ int yvex_engine_create_prefill_state(yvex_engine *engine,
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_create_prefill_state",
                        "unsupported prefill segment; expected embedding-rmsnorm");
         return YVEX_ERR_INVALID_ARG;
+    }
+    if (layer_prefill_requested) {
+        if (options->layer_count > 16ull ||
+            options->layer_hidden_dim == 0ull ||
+            options->layer_head_dim == 0ull ||
+            options->layer_ffn_dim == 0ull) {
+            yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_engine_create_prefill_state",
+                           "layer-backed prefill requires 1 <= layers <= 16 and positive layer dimensions");
+            return YVEX_ERR_INVALID_ARG;
+        }
+        if (options->layer_hidden_dim > YVEX_SEGMENT_GRAPH_MAX_OUTPUT_VALUES) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_create_prefill_state",
+                           "layer-backed prefill hidden dimension exceeds segment sample capacity");
+            return YVEX_ERR_BOUNDS;
+        }
     }
     out->segment_name = segment_name;
     out->token_count = input->token_count;
@@ -308,12 +353,137 @@ int yvex_engine_create_prefill_state(yvex_engine *engine,
         if (segment_result.max_abs_diff > out->max_abs_diff) {
             out->max_abs_diff = segment_result.max_abs_diff;
         }
+        kv_source_values = segment_result.output_values;
+        kv_source_count = segment_result.output_value_count;
+
+        if (layer_prefill_requested) {
+            if (segment_result.output_value_count < options->layer_hidden_dim) {
+                out->failed_token_index = i;
+                if (kv) {
+                    (void)prefill_cleanup_kv(kv, out);
+                    free(kv_values);
+                    free(kv_read_values);
+                    yvex_kv_cache_close(kv);
+                } else {
+                    out->cleanup_attempted = 1;
+                    out->cleanup_status = "pass";
+                }
+                yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_create_prefill_state",
+                               "segment output sample is too small for layer-backed prefill");
+                return YVEX_ERR_BOUNDS;
+            }
+            for (j = 0; j < options->layer_hidden_dim; ++j) {
+                layer_seed_values[j] = segment_result.output_values[j];
+            }
+
+            memset(&layer_options, 0, sizeof(layer_options));
+            memset(&layer_result, 0, sizeof(layer_result));
+            layer_options.backend_name = out->backend_name;
+            layer_options.layers = options->layer_count;
+            layer_options.seq_len = input->token_count;
+            layer_options.position = i;
+            layer_options.hidden_dim = options->layer_hidden_dim;
+            layer_options.head_dim = options->layer_head_dim;
+            layer_options.ffn_dim = options->layer_ffn_dim;
+            layer_options.initial_position_values = layer_seed_values;
+            layer_options.initial_position_value_count = options->layer_hidden_dim;
+
+            out->prefill_phase = "layer-execution";
+            rc = yvex_cli_graph_execute_layer_fixture(&layer_options, &layer_result, err);
+            out->layer_graph_executions += 1ull;
+            out->layer_block_executions += layer_result.layers;
+            out->layer_total_op_count += layer_result.total_op_count;
+            out->layer_output_count = layer_result.output_value_count;
+            out->layer_output_bytes = layer_result.output_bytes;
+            out->layer_final_checksum = layer_result.final_output_checksum;
+            out->layer_final_reference_checksum = layer_result.final_reference_checksum;
+            out->layer_max_abs_diff = layer_result.final_max_abs_diff;
+            out->layer_output_sample_count = layer_result.output_value_count;
+            for (j = 0; j < layer_result.output_value_count; ++j) {
+                out->layer_output_sample_values[j] = layer_result.output_values[j];
+            }
+            if (!prefill_checked_add_ull(out->layer_total_output_bytes,
+                                         layer_result.output_bytes,
+                                         &out->layer_total_output_bytes) ||
+                !prefill_checked_add_ull(out->layer_total_scratch_bytes,
+                                         layer_result.scratch_bytes,
+                                         &out->layer_total_scratch_bytes) ||
+                !prefill_checked_add_ull(out->total_output_bytes,
+                                         layer_result.output_bytes,
+                                         &out->total_output_bytes) ||
+                !prefill_checked_add_ull(out->scratch_bytes,
+                                         layer_result.scratch_bytes,
+                                         &out->scratch_bytes)) {
+                out->failed_token_index = i;
+                if (kv) {
+                    (void)prefill_cleanup_kv(kv, out);
+                    free(kv_values);
+                    free(kv_read_values);
+                    yvex_kv_cache_close(kv);
+                } else {
+                    out->cleanup_attempted = 1;
+                    out->cleanup_status = "pass";
+                }
+                yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_engine_create_prefill_state",
+                               "layer-backed prefill byte accounting overflow");
+                return YVEX_ERR_BOUNDS;
+            }
+            if (rc != 0) {
+                yvex_status layer_status = yvex_error_code(err);
+                out->failed_token_index = i;
+                if (kv) {
+                    (void)prefill_cleanup_kv(kv, out);
+                    free(kv_values);
+                    free(kv_read_values);
+                    yvex_kv_cache_close(kv);
+                } else {
+                    out->cleanup_attempted = layer_result.cleanup_attempted;
+                    out->cleanup_status = layer_result.cleanup_status
+                                              ? layer_result.cleanup_status
+                                              : (layer_result.cleanup_attempted ? "pass" : "not-needed");
+                }
+                if (layer_status == YVEX_OK) {
+                    yvex_error_set(err, YVEX_ERR_STATE, "yvex_engine_create_prefill_state",
+                                   "layer-backed prefill fixture execution failed");
+                    layer_status = YVEX_ERR_STATE;
+                }
+                return layer_status;
+            }
+            aggregate = prefill_mix_checksum_u64(aggregate, layer_result.final_output_checksum);
+            aggregate = prefill_mix_checksum_u64(aggregate, layer_result.final_reference_checksum);
+            out->final_token_checksum = layer_result.final_output_checksum;
+            if (layer_result.final_max_abs_diff > out->max_abs_diff) {
+                out->max_abs_diff = layer_result.final_max_abs_diff;
+            }
+            kv_source_values = layer_result.output_values;
+            kv_source_count = layer_result.output_value_count;
+
+            if (prefill_test_env_enabled("YVEX_TEST_FAIL_PREFILL_LAYERS_AFTER_LAYER_EXECUTION")) {
+                out->failed_token_index = i;
+                out->prefill_phase = "layer-execution-complete";
+                if (kv) {
+                    (void)prefill_cleanup_kv(kv, out);
+                    free(kv_values);
+                    free(kv_read_values);
+                    yvex_kv_cache_close(kv);
+                } else {
+                    out->cleanup_attempted = layer_result.cleanup_attempted;
+                    out->cleanup_status = layer_result.cleanup_status
+                                              ? layer_result.cleanup_status
+                                              : "pass";
+                }
+                yvex_error_set(err, YVEX_ERR_BACKEND, "yvex_engine_create_prefill_state",
+                               "test prefill layer failure after layer execution");
+                return YVEX_ERR_BACKEND;
+            }
+        }
 
         if (kv) {
             out->prefill_phase = "kv-append";
             fill_prefill_kv_values(kv_values,
                                    kv_value_count,
-                                   &segment_result,
+                                   kv_source_values,
+                                   kv_source_count,
                                    input->tokens[i],
                                    options->position_start + i);
             rc = yvex_kv_cache_append_position_f32(kv,
@@ -360,6 +530,25 @@ int yvex_engine_create_prefill_state(yvex_engine *engine,
                                "test prefill KV failure after append 0");
                 return YVEX_ERR_BACKEND;
             }
+        }
+
+        if (layer_prefill_requested &&
+            prefill_test_env_enabled("YVEX_TEST_FAIL_PREFILL_LAYERS_AFTER_TOKEN_0") &&
+            i == 0ull) {
+            out->failed_token_index = i + 1ull;
+            out->prefill_phase = "layer-token-complete";
+            if (kv) {
+                (void)prefill_cleanup_kv(kv, out);
+                free(kv_values);
+                free(kv_read_values);
+                yvex_kv_cache_close(kv);
+            } else {
+                out->cleanup_attempted = 1;
+                out->cleanup_status = "pass";
+            }
+            yvex_error_set(err, YVEX_ERR_BACKEND, "yvex_engine_create_prefill_state",
+                           "test prefill layer failure after token 0");
+            return YVEX_ERR_BACKEND;
         }
 
         if (prefill_test_env_enabled("YVEX_TEST_FAIL_PREFILL_AFTER_TOKEN_0") && i == 0ull) {
