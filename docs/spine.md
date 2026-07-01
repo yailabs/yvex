@@ -1389,6 +1389,7 @@ source-tensor-first model-target roadmap authority in spine
 command-visible model target class registry
 canonical inference block directory in spine
 paper-backed algorithm doctrine and CLI research surface roadmap in spine
+generation loop state machine and token lifecycle contract in spine
 plug-and-play operator runbook flow
 single-paste operator transcript
 full implemented command inventory in operator runbook
@@ -1701,6 +1702,10 @@ tables.
 | M13 | planned | sampling | Sampling boundary | greedy and stochastic sampling over logits with seed and parameter validation |
 | SAMPLING.0 | complete | sampling | First sampler boundary | `yvex sample` invokes implemented logits, performs deterministic greedy selection over the bounded diagnostic logits buffer, reports selected index/token/logit/checksum fields, and preserves real vocab sampling, generation, and benchmark unsupported boundaries |
 | SAMPLING.1 | planned | sampling | Sampling diagnostics and reproducibility | seed, parameters, stop reason, and reproducibility diagnostics over implemented sampler |
+| GEN.CONTRACT.0 | complete | docs | Generation loop contract | spine defines generation loop state machine, token lifecycle, stop reasons, CLI output fields, trace levels, cleanup/failure phases, and bounded-vs-full generation boundary without implementation claim |
+| GEN.TRACE.0 | planned | trace | Generation trace surface | generation traces expose token, step, KV, logits, sampling, tensor, and cleanup phases where implemented |
+| GEN.APPEND.0 | planned | generation | Token append lifecycle | generated-token append, position advance, context checks, and partial-output accounting are implemented and tested |
+| GEN.STOP.0 | planned | generation | Stop-condition policy | max-new-tokens, context limit, EOS, stop tokens, interruption, and failure stop reasons are command-visible |
 | M14 | planned | generation | First constrained generation loop | decode -> logits -> sample -> append token loop with stop conditions and token accounting |
 | GEN.LOOP.0 | planned | generation | First constrained generation loop | composes prefill, decode, logits, sampling, token append, stop conditions, and cleanup into a bounded runtime generation loop without benchmark claim |
 | GEN.LOOP.1 | planned | generation | Generation state and interruption | interruption, cleanup, trace, and partial-output behavior over implemented generation loop |
@@ -1956,6 +1961,272 @@ throughput.
 A bounded generation loop may exist before full DeepSeek generation. It must
 report its diagnostic/model-boundary status honestly. It cannot close DeepSeek
 full generation, benchmark, provider generation, or public throughput rows.
+
+## Generation Loop Contract
+
+A generation loop is the repeated composition of:
+
+```text
+prefill state
+-> decode state step
+-> logits buffer
+-> sampler decision
+-> token append
+-> stop-condition check
+-> cleanup/failure reporting
+```
+
+bounded diagnostic generation loop:
+  local runtime loop over implemented diagnostic prefill/decode/logits/sample
+  boundaries. It proves runtime control flow, state ownership, append semantics,
+  stop reasons, failure behavior, and cleanup. It does not prove full DeepSeek
+  generation.
+
+full model generation loop:
+  runtime loop over real model prefill, real decode, real output-head logits,
+  real vocabulary sampling, real tokenizer append/detokenization, and measured
+  runtime behavior.
+
+The first `yvex generate` command may close bounded runtime control flow before
+full DeepSeek generation exists, but it must print its diagnostic/full-model
+boundary honestly.
+
+## Generation State Machine
+
+created:
+  generation options parsed and state allocated.
+
+prefill:
+  implemented prefill path invoked.
+
+decode:
+  one decode-state step invoked for current position.
+
+logits:
+  bounded or real logits buffer produced.
+
+sample:
+  sampler selects one candidate token.
+
+append:
+  selected token is appended to runtime token sequence.
+
+stop-check:
+  max-new-tokens, context boundary, EOS/stop token, interruption, or failure is
+  checked.
+
+complete:
+  loop ended successfully by a stop reason.
+
+failed:
+  loop failed and cleanup state is reported.
+
+cancelled:
+  future interruption path stops loop and reports partial output.
+
+cleaned:
+  allocated runtime loop state was released.
+
+A generation state transition must be command-visible through status fields,
+trace fields, or failure reports.
+
+## Generation Token Lifecycle
+
+prompt tokens:
+  input tokens accepted before generation loop begins.
+
+prefill tokens:
+  tokens consumed by prefill to create runtime state.
+
+decode position:
+  next position after prefill or after the previous generated token.
+
+candidate token:
+  token selected by sampler from logits.
+
+accepted token:
+  candidate token appended to runtime sequence.
+
+generated token:
+  accepted token counted as new output token.
+
+detokenized text:
+  optional text rendering of generated tokens through tokenizer where supported.
+
+Bounded diagnostic generation may set selected_token_id from bounded sampler
+output. That token ID is diagnostic unless it comes from a real model
+output-head and real vocabulary sampling path.
+
+A token append is not full model generation by itself.
+
+A generated token count is not a benchmark by itself.
+
+## Generation Stop Reasons
+
+Allowed stop reason vocabulary:
+
+```text
+max-new-tokens
+context-limit
+eos-token
+stop-token
+sampler-failure
+decode-failure
+logits-failure
+append-failure
+interrupted
+unsupported
+internal-error
+```
+
+For `GEN.LOOP.0`, required minimum stop reasons:
+
+```text
+max-new-tokens
+context-limit
+decode-failure
+logits-failure
+sampler-failure
+append-failure
+internal-error
+```
+
+EOS/stop-token may remain planned until tokenizer/stop policy is implemented.
+
+A stop reason must be printed in every generation result.
+
+## Generation CLI Output Contract
+
+Required future output fields for `GEN.LOOP.0`:
+
+```text
+generate: loop
+status:
+model:
+backend:
+segment:
+token_input_status:
+prompt_token_count:
+max_new_tokens:
+generated_token_count:
+total_token_count:
+position_start:
+prefill_position_end:
+current_decode_position:
+generation_loop_kind:
+generation_mode:
+decode_mode:
+logits_mode:
+sampling_strategy:
+bounded_generation:
+full_model_generation:
+real_deepseek_generation:
+prefill_invoked:
+decode_steps:
+logits_steps:
+sample_steps:
+append_steps:
+last_selected_token_id:
+last_selected_logit:
+stop_reason:
+generation_checksum:
+cleanup_attempted:
+cleanup_status:
+generation_ready:
+generation:
+benchmark_status:
+```
+
+Required boundary values for first bounded loop:
+
+```text
+generation_loop_kind: bounded-diagnostic
+generation_mode: diagnostic-runtime
+decode_mode: bounded-diagnostic
+logits_mode: bounded-diagnostic
+sampling_strategy: greedy
+bounded_generation: true
+full_model_generation: false
+real_deepseek_generation: false
+generation_ready: false
+generation: unsupported-full-model
+benchmark_status: not-measured
+```
+
+`bounded_generation: true` is allowed only if a loop exists and runs.
+
+It must not imply:
+
+```text
+full_model_generation: true
+generation_ready true-state
+real_deepseek_generation: true
+```
+
+Those remain false.
+
+## Generation Trace Contract
+
+Conceptual trace levels:
+
+none:
+  final summary only.
+
+tokens:
+  prompt/generation token IDs and stop reason.
+
+steps:
+  per-token decode/logits/sample/append step summary.
+
+kv:
+  KV state position/read/write summaries where implemented.
+
+logits:
+  checksum/min/max/top candidates where implemented.
+
+sampling:
+  selected token, selected logit, strategy, seed where implemented.
+
+tensors:
+  future tensor IDs, shapes, dtypes, residency, and graph op ownership.
+
+full:
+  all implemented trace fields.
+
+Trace level is conceptual until parser, runtime behavior, tests, and output
+contract exist.
+
+## Generation Failure and Cleanup Contract
+
+Required failure phases:
+
+```text
+preflight
+prefill
+decode
+logits
+sample
+append
+stop-check
+cleanup
+```
+
+Failure output must include:
+
+```text
+failed_phase:
+failed_step:
+partial_generated_token_count:
+last_successful_position:
+cleanup_attempted:
+cleanup_status:
+stop_reason:
+generation: unsupported-full-model
+benchmark_status: not-measured
+```
+
+A failed generation loop may produce partial diagnostic tokens, but partial
+diagnostic output is not model quality and not benchmark evidence.
 
 ## Tensor Collections
 
@@ -2629,6 +2900,9 @@ readiness.
 Algorithm/CLI research hardening runs in parallel with runtime closure. It does
 not replace GEN.LOOP.0 or the current runtime Active Next.
 
+GEN.CONTRACT.0 hardens the contract for GEN.LOOP.0. It does not replace or
+complete GEN.LOOP.0.
+
 PREFILL.4 remains planned as diagnostics/regression hardening over the
 implemented prefill state path. PREFILL.5 remains planned as a future
 measurement gate. Neither blocks the first bounded decode/logits/sampling/
@@ -2954,6 +3228,16 @@ no runtime file change for spine-only rebases
 - A top-k command shape is not top-k sampling support.
 - A stochastic sampling row is not implemented sampling.
 - A generation mode report is not generation.
+- A generation contract is not generation implementation.
+- A generation trace contract is not trace implementation.
+- A token lifecycle definition is not token append implementation.
+- A stop-reason vocabulary is not stop policy implementation.
+- A bounded generation loop is not full model generation.
+- A generated diagnostic token is not model quality.
+- A partial diagnostic output is not a benchmark.
+- A `yvex generate` command may not claim full generation unless real decode,
+  real output-head logits, real vocabulary sampling, token append, stop
+  conditions, cleanup, and command proof exist.
 - No generation claim without decode, logits, sampling, and generation loop.
 - No benchmark claim without measured runtime path and reproducibility metadata.
 - No external paper or runner result may close a YVEX implementation row.
