@@ -188,6 +188,14 @@ This target is not current capability.
 Today, YVEX generation is unsupported and real YVEX generation throughput is
 zero because decode, logits, sampling, and the generation loop do not exist.
 
+YVEX real generation throughput: 0 tok/s
+
+benchmark status: not measured
+
+A bounded generation loop may later close local runtime control flow before
+DeepSeek V4 Flash full generation is complete. That bounded loop is not a
+DeepSeek throughput claim and not full model generation.
+
 The internal performance target for DeepSeek V4 Flash is to exceed a reference
 decode threshold of 15 tokens/sec and pursue at least 20 tokens/sec baseline
 decode on a GB10-class CUDA machine, after and only after the real generation
@@ -196,6 +204,9 @@ qtype, context, backend, machine, command, and reproducibility metadata.
 
 The 20 tokens/sec target is an internal engineering target, not a guarantee and
 not a public claim.
+
+DeepSeek V4 Flash >=20 tok/s remains an internal target until measured by the
+benchmark harness over an implemented full generation path.
 
 Speculative decoding is a later acceleration track. It may be considered only
 after baseline decode, logits, sampling, and generation exist.
@@ -1047,18 +1058,23 @@ tables.
 | GRAPH.LAYERS.0 | complete | graph | Layer scheduler and repeated block execution | `yvex graph --execute-layers --block fixture` runs a bounded repeated controlled block fixture with selected-position activation handoff, cleanup proof, CPU/CUDA parity, and no prefill/decode/logits/sampling/generation claim |
 | PREFILL.2 | complete | prefill | Bounded layer-backed prefill state path | validated token sequences run selected embedding-plus-RMSNorm segments, hand sampled rows into the controlled layer fixture scheduler, and optionally bind diagnostic KV without full transformer/decode/logits/sampling/generation claim |
 | PREFILL.3 | complete | prefill | Chunked prefill and scratch lifecycle | `yvex prefill --chunk-size N` partitions validated token input into bounded chunks, validates position/context boundaries, reuses prefill host scratch for diagnostic staging, preserves segment and layer-backed prefill paths, optionally binds KV rows in token order, and reports cleanup/failure state without full transformer prefill, decode, logits, sampling, generation, evaluation, or benchmark claim |
-| PREFILL.4 | planned | prefill | Prefill diagnostics and regression reports | prefill positions, memory, KV rows, checksums, and failure phases visible |
-| PREFILL.5 | planned | prefill | Prefill throughput measurement gate | benchmarkable prefill command exists, but only after real transformer prefill path |
+| PREFILL.4 | planned | prefill | Prefill diagnostics and regression reports | regression/reporting layer over implemented segment, layer-backed, chunked, KV-bound prefill; not a blocker for first decode/logits/sampling/generation closure |
+| PREFILL.5 | planned | bench | Prefill throughput measurement gate | benchmarkable prefill measurement after runtime path and measurement harness exist; no throughput claim before artifact/backend/context/machine metadata |
 | M10 | planned | decode | Decode step over existing runtime state | one decode step advances existing KV-backed state by one position |
-| DECODE.1 | planned | decode | Decode lifecycle and repeatability | repeat decode, interrupt, cleanup, and context-end behavior tested |
+| DECODE.0 | planned | decode | First bounded decode state step | advances existing chunked prefill/KV-backed runtime state by one diagnostic token position without logits, sampling, generation, or benchmark claim |
+| DECODE.1 | planned | decode | Decode lifecycle and repeatability | repeated decode steps, context-end handling, interruption, cleanup, and deterministic diagnostics over existing state |
 | M11 | planned | logits | Logits production boundary | logits buffer ownership, dtype, backend tolerance, and diagnostics implemented |
-| LOGITS.1 | planned | logits | Logprob/top-k diagnostics | dump-logits or logprob diagnostic path implemented over real logits buffer |
+| LOGITS.0 | planned | logits | First bounded logits buffer | produces a deterministic bounded logits buffer from decode state without claiming real model output head or generation quality |
+| LOGITS.1 | planned | logits | Logprob/top-k diagnostics | logprob/top-k diagnostic path over implemented logits buffer |
 | M12 | planned | logits | Deterministic logits regression | stable vector tests for logits with model/artifact identity and backend tolerance |
 | M13 | planned | sampling | Sampling boundary | greedy and stochastic sampling over logits with seed and parameter validation |
-| SAMPLING.1 | planned | sampling | Sampling diagnostics and reproducibility | sampling reports seed, parameters, stop reason, and failure behavior |
+| SAMPLING.0 | planned | sampling | First sampler boundary | greedy sampler selects a token from implemented logits with parameter validation, deterministic output, and no generation loop claim |
+| SAMPLING.1 | planned | sampling | Sampling diagnostics and reproducibility | seed, parameters, stop reason, and reproducibility diagnostics over implemented sampler |
 | M14 | planned | generation | First constrained generation loop | decode -> logits -> sample -> append token loop with stop conditions and token accounting |
-| GEN.LOOP.1 | planned | generation | Generation state and interruption | interruption, cleanup, trace, and partial-output behavior tested |
+| GEN.LOOP.0 | planned | generation | First constrained generation loop | composes prefill, decode, logits, sampling, token append, stop conditions, and cleanup into a bounded runtime generation loop without benchmark claim |
+| GEN.LOOP.1 | planned | generation | Generation state and interruption | interruption, cleanup, trace, and partial-output behavior over implemented generation loop |
 | M15 | planned | cli | Interactive CLI generation path | CLI/REPL generation uses real runtime generation loop |
+| CLI.GEN.0 | planned | cli | CLI generation command surface | exposes the implemented bounded generation loop through CLI with honest unsupported/full-model/benchmark boundaries |
 | M16 | planned | server | Provider/server generation boundary | daemon/server generation uses runtime-backed generation path |
 | M17 | planned | profile | Trace/profile hardening for generation | traces and profiles identify artifact/backend/graph/KV/decode/logits/sampling/server failures |
 | SPINE.GENERATION.TARGET.0 | complete | docs | DeepSeek generation and speculative throughput target envelope | spine records DeepSeek V4 Flash full-generation target, internal decode throughput target, DSpark external reference doctrine, and non-claim benchmark boundary |
@@ -1276,6 +1292,40 @@ A residency mode is not a generation claim. It only becomes runtime capability
 when the corresponding graph/runtime path consumes that residency mode with
 tests, command proof, failure paths, and cleanup.
 
+## Runtime Closure Doctrine
+
+There are two different closures:
+
+```text
+Bounded runtime closure:
+  implemented prefill/KV state
+  -> decode state step
+  -> bounded logits
+  -> sampler
+  -> generation loop
+```
+
+This can close the local runtime loop without claiming real DeepSeek full
+generation.
+
+```text
+Full model generation closure:
+  full tensor inventory
+  -> real layer weights
+  -> attention/KV projection
+  -> real logits/output head
+  -> sampling
+  -> generation
+  -> benchmark
+```
+
+This is required before claiming DeepSeek generation, inference readiness, or
+throughput.
+
+A bounded generation loop may exist before full DeepSeek generation. It must
+report its diagnostic/model-boundary status honestly. It cannot close DeepSeek
+full generation, benchmark, provider generation, or public throughput rows.
+
 ## Tensor Collections
 
 YVEX must make tensor collections explicit before full runtime claims.
@@ -1445,20 +1495,17 @@ runtime track:
   token input
   -> context plan
   -> prefill state
-  -> KV-backed transformer prefill
-  -> decode
-  -> logits
-  -> sampling
-  -> generation loop
+  -> KV-backed chunked prefill lifecycle
+  -> decode state step
+  -> logits buffer
+  -> sampler
+  -> constrained generation loop
   -> CLI generation
   -> serve generation
   -> streaming generation
   -> baseline decode benchmark
   -> end-to-end generation benchmark
   -> speculative draft path
-  -> target verification
-  -> accepted-token accounting
-  -> speculative generation benchmark
 
 measurement track:
   fixture regression
@@ -1492,6 +1539,10 @@ operator preset track:
 These tracks may advance in parallel only when their boundaries are explicit.
 A row is complete only when its command proof demonstrates the boundary it
 claims.
+
+The first bounded generation loop is not the same as DeepSeek full generation.
+DeepSeek full generation remains blocked until full model runtime requirements
+are implemented.
 
 The speculative acceleration track starts after baseline generation exists. It
 cannot replace decode, logits, sampling, or the generation loop. Its benchmark
@@ -1936,13 +1987,18 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-PREFILL.4 - Prefill diagnostics and regression reports
+DECODE.0 - First bounded decode state step
 ```
 
-PREFILL.4 must turn the implemented prefill state path into stable diagnostics
-and regression reports over positions, chunks, scratch, KV rows, checksums, and
-failure phases. It must not claim decode, logits, sampling, generation,
-evaluation, or benchmark readiness.
+DECODE.0 must advance existing chunked prefill/KV-backed runtime state by one
+bounded diagnostic token position. It must not claim logits, sampling,
+generation, full DeepSeek execution, provider generation, evaluation, or
+benchmark readiness.
+
+PREFILL.4 remains planned as diagnostics/regression hardening over the
+implemented prefill state path. PREFILL.5 remains planned as a future
+measurement gate. Neither blocks the first bounded decode/logits/sampling/
+generation closure.
 
 SPINE.GENERATION.TARGET.0 records the long-term DeepSeek generation and
 throughput target. It does not change the immediate implementation order.
@@ -1953,7 +2009,7 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-PREFILL.4 - Prefill diagnostics and regression reports
+DECODE.0 - First bounded decode state step
 ```
 
 GRAPH.CHECK.0 is complete as a command preset over existing graph proofs. It
@@ -1977,10 +2033,10 @@ selected-position activation handoff. It is not full transformer prefill,
 decode, logits, sampling, generation, server generation, evaluation, or
 benchmark readiness.
 
-After PREFILL.3, the next runtime work is not automatically decode. The spine
-expects stable prefill diagnostics, real model layer requirements, and
-KV-backed transformer state to determine whether decode can run over meaningful
-runtime state.
+After PREFILL.3, the bounded prefill lifecycle is sufficient to start the first
+decode-state row. Stable prefill diagnostics, real model layer requirements,
+and full DeepSeek runtime work remain planned tracks, but they do not block
+DECODE.0.
 
 ## 8. Validation Gate
 
@@ -2008,6 +2064,17 @@ Current command-surface audit:
 ./yvex help integrity
 ./yvex help models
 ```
+
+Planned decode/logits/sampling/generation closure proof sequence:
+
+```text
+./yvex decode --model ... --backend cpu --tokens ...
+./yvex logits --model ... --backend cpu --tokens ...
+./yvex sample --model ... --backend cpu --tokens ...
+./yvex generate --model ... --backend cpu --prompt ...
+```
+
+These are planned command shapes until the corresponding rows are implemented.
 
 Selected artifact closeout proof set:
 
@@ -2312,6 +2379,17 @@ no runtime file change for spine-only rebases
 - No sampling milestone may be promoted before logits exist.
 - No generation milestone may be promoted before decode, logits, and sampling
   are integrated.
+- A bounded generation loop may close local runtime control flow but may not
+  close full model generation.
+- Diagnostic logits may close a logits-buffer boundary but may not claim real
+  model output-head logits.
+- A sampler may close token selection over implemented logits but may not claim
+  generation quality.
+- A CLI generation command may expose the implemented bounded generation loop
+  but must preserve full-model and benchmark disclaimers.
+- DeepSeek full generation remains separate from bounded diagnostic generation
+  until full model tensor, layer, attention, KV, output-head, and benchmark
+  requirements are met.
 - No CLI or server generation surface before the lower runtime generation loop
   exists.
 - No provider generation milestone may be promoted before CLI/runtime generation
