@@ -686,6 +686,619 @@ yvex chat ...
 The final short path is not a generation claim. It remains bounded by the
 runtime rows that actually exist.
 
+## YVEX Research CLI Doctrine
+
+YVEX is a tensor-to-token research engine.
+
+The CLI must expose both normal operator paths and research paths.
+
+Normal operator path:
+  short, safe, preset-driven, and intended to run implemented behavior.
+
+Research path:
+  explicit modes, flags, reports, and traces that reveal tensor roles, tensor
+  shapes, dtypes, residency, graph ops, attention behavior, KV layout, prefill
+  chunks, decode state, logits buffers, sampling decisions, checksums, cleanup,
+  and failure phases.
+
+The research CLI is not a convenience layer on top of generation.
+
+The research CLI is the inspection surface for the runtime itself.
+
+Every runtime algorithm that affects tensors, memory, graph execution, KV state,
+decode state, logits, sampling, or generation should eventually have an
+operator-visible command, flag, report, trace, or proof.
+
+A conceptual CLI flag is not implemented until all of the following exist:
+
+```text
+parser
+runtime behavior
+output contract
+tests
+failure paths
+cleanup/lifecycle behavior
+claim boundary
+spine completion row
+```
+
+A conceptual command shape is not a command implementation.
+A conceptual flag is not an implemented mode.
+A report is not runtime execution.
+A tensor trace is not model quality.
+A research command is not a benchmark.
+A CLI mode registry is not mode support.
+
+## Paper-backed Algorithm Doctrine
+
+YVEX may use papers as algorithmic references, but a paper reference does not
+imply implemented runtime support.
+
+A paper-backed algorithm must be tracked by implementation stage, not by
+citation alone.
+
+Canonical paper-backed implementation ladder:
+
+```text
+paper-reference
+-> algorithm report
+-> fixture proof
+-> selected-slice proof
+-> runtime mode
+-> CLI control surface
+-> regression/eval
+-> benchmark
+```
+
+Stage meanings:
+
+paper-reference:
+  the paper or external system is recorded as reference evidence only.
+
+algorithm report:
+  YVEX reports the algorithm family, required tensor roles, runtime blockers,
+  expected memory behavior, backend requirements, and unsupported boundaries.
+
+fixture proof:
+  a small synthetic or controlled fixture proves the mathematical operation,
+  layout, cleanup, and failure behavior.
+
+selected-slice proof:
+  a small YVEX-produced selected artifact participates in the algorithm path,
+  without claiming full model execution.
+
+runtime mode:
+  the algorithm is selectable and executed by the runtime over implemented
+  state.
+
+CLI control surface:
+  the algorithm is visible through a stable command or flag with tests and
+  output contract.
+
+regression/eval:
+  stable vectors or correctness checks exist over the implemented runtime path.
+
+benchmark:
+  a measured result exists over the same runtime path users run, with model
+  identity, artifact identity, qtype, context, backend, machine, command, run
+  count, and reproducibility metadata.
+
+A paper reference without code is documentation.
+A fixture proof is not model support.
+A selected-slice proof is not full model execution.
+A runtime mode is not a benchmark.
+An external runner result is not YVEX runtime execution.
+A benchmark row requires the measured YVEX runtime path.
+
+## Algorithm Families
+
+This section records algorithm families and stage boundaries. It does not claim
+implementation except for modes already listed in Current Capability and closed
+ledger rows.
+
+### Attention families
+
+full attention / scaled dot-product attention:
+  baseline exact attention family. It owns Q/K/V, mask behavior, softmax,
+  weighted value accumulation, and output projection requirements.
+
+MHA:
+  multi-head attention with separate query, key, and value heads.
+
+MQA:
+  multi-query attention where query heads share a smaller set of KV heads.
+
+GQA:
+  grouped-query attention where groups of query heads share KV heads.
+
+MLA / latent KV:
+  compressed or latent KV representation where model-family-supported.
+
+FlashAttention:
+  IO-aware exact attention reference family using tiling to reduce memory
+  traffic. It is a reference family until a backend implementation exists.
+
+PagedAttention / paged KV attention:
+  KV cache organized as logical blocks mapped to physical memory blocks. It is
+  a reference family until paged KV allocation, lookup, eviction, and runtime
+  attention consumption exist.
+
+block-sparse attention:
+  attention over a restricted block pattern.
+
+local / sliding-window attention:
+  attention restricted to local windows or sliding context.
+
+LongCat LoZA / ZigZag sparse attention:
+  long-context sparse attention reference family. It is a reference family until
+  YVEX implements tensor roles, sparse mask construction, runtime execution, and
+  tests.
+
+model-family attention:
+  DeepSeek, GLM, and future families may require family-specific attention,
+  RoPE, MLA, GQA, MQA, mask, or KV rules.
+
+An attention family becomes supported only when YVEX implements and tests:
+
+```text
+tensor role mapping
+Q/K/V source tensors
+position behavior
+mask rules
+KV layout
+backend operation
+reference comparison or deterministic proof
+cleanup/failure behavior
+CLI command or flag
+output contract
+claim boundary
+```
+
+A standalone attention primitive is not full transformer attention.
+A FlashAttention reference is not FlashAttention support.
+A PagedAttention reference is not paged KV support.
+A LongCat/LoZA reference is not LongCat support.
+A model-family attention report is not model-family runtime support.
+
+### Prefill families
+
+segment-summary prefill:
+  implemented selected segment summary path over embedding-plus-RMSNorm.
+
+KV-bound prefill:
+  implemented minimal diagnostic KV binding from prefill summary state.
+
+layer-backed prefill:
+  implemented bounded path that hands selected segment sample output into the
+  controlled layer scheduler.
+
+chunked prefill:
+  implemented bounded chunk lifecycle, context-boundary reporting, diagnostic
+  scratch reuse, and cleanup/failure reporting.
+
+dense/full transformer prefill:
+  planned; requires real model layer weights, attention Q/K/V projection, real
+  KV writes, residual path, MLP/MoE path, and full runtime state.
+
+sparse/chunk-select prefill:
+  planned; selected chunks or token subsets feed runtime state.
+
+SSD-staged prefill:
+  planned; tensors or chunks are staged from SSD into host/backend memory before
+  compute.
+
+SSD-streamed prefill:
+  planned; tensor pages/chunks are read according to explicit byte-range,
+  residency, cache, and failure rules.
+
+prefill-decode disaggregation:
+  planned doctrine where prefill state and decode state remain explicit,
+  inspectable, separable, and schedulable.
+
+A prefill mode becomes supported only when YVEX implements parser flags,
+context rules, token/chunk accounting, graph/runtime behavior, KV behavior where
+required, scratch lifecycle, cleanup/failure behavior, tests, and stable CLI
+output.
+
+### KV/cache families
+
+contiguous KV:
+  linear KV storage over positions.
+
+paged KV:
+  logical KV blocks mapped to physical blocks.
+
+chunked KV:
+  KV grouped by chunk ranges or token windows.
+
+host-staged KV:
+  KV state staged through host memory.
+
+SSD-staged KV:
+  KV state or tensor sources staged from SSD before use.
+
+SSD-streamed KV:
+  KV or tensor chunks accessed by explicit storage stream policy.
+
+quantized KV:
+  KV stored in reduced precision with explicit qtype policy.
+
+managed-memory KV:
+  backend/platform-managed memory with explicit capability and failure reports.
+
+distributed KV:
+  future-only KV state distributed across nodes.
+
+KV layout must be command-visible before runtime support is claimed.
+
+A KV report is not KV runtime support.
+A KV layout row is not attention support.
+A KV allocator is not decode support unless decode consumes it.
+
+### Decode families
+
+bounded diagnostic decode:
+  implemented local runtime closure path over prefill/KV summary state.
+
+baseline autoregressive decode:
+  planned one-token-at-a-time decode over runtime KV state.
+
+speculative decode:
+  planned draft-token plus target-verification family.
+
+tree speculative decode:
+  planned draft-tree and verification family.
+
+block/diffusion speculative decode:
+  DFlash-like reference family; not implemented.
+
+DeepSeek-specific speculative decode:
+  DSpark/DFlash/HyperDFlash-like reference lane only until YVEX implements its
+  own draft, verification, acceptance accounting, and benchmark path.
+
+parallel or multi-token prediction decode:
+  future family-specific row; not a replacement for baseline decode unless
+  verified by target-model semantics.
+
+A decode mode becomes supported only when the runtime state, KV interaction,
+position update, cleanup, interruption behavior, CLI command, tests, and output
+contract exist.
+
+### Logits families
+
+bounded diagnostic logits:
+  implemented after LOGITS.0.
+
+real output-head logits:
+  planned; requires final hidden state and output/vocab projection tensor.
+
+logprob diagnostics:
+  planned; computes selected-token log probabilities over implemented logits.
+
+top-k diagnostics:
+  planned; reports top-k candidates over implemented logits.
+
+dense vocab projection:
+  planned output head matmul over full vocabulary.
+
+sharded vocab projection:
+  planned output head split across shards or memory placements.
+
+staged/SSD-backed output head:
+  future residency family for very large output projection tensors.
+
+A logits mode becomes supported only when logits buffer ownership, dtype, shape,
+projection source, checksum/reporting, CLI command, tests, and cleanup exist.
+
+### Sampling families
+
+greedy:
+  deterministic argmax.
+
+temperature:
+  distribution scaling by temperature.
+
+top-k:
+  candidate truncation to k highest logits.
+
+top-p / nucleus:
+  cumulative probability truncation.
+
+min-p:
+  probability floor strategy.
+
+typical:
+  entropy-relative typical sampling family.
+
+seeded stochastic:
+  reproducible stochastic sampling with explicit seed.
+
+speculative acceptance sampling:
+  future strategy coupled to speculative decode acceptance semantics.
+
+A sampling strategy becomes supported only when it consumes implemented logits,
+validates parameters, reports seed/strategy/candidate set/selected token, has
+tests, and does not claim generation unless integrated into a generation loop.
+
+### Generation-loop families
+
+bounded diagnostic generation loop:
+  planned local closure over implemented prefill/decode/logits/sample path.
+
+baseline autoregressive generation:
+  planned repeated decode -> logits -> sample -> append-token loop over real
+  runtime state.
+
+speculative generation:
+  planned draft -> verify -> accept/reject -> append path.
+
+streaming generation:
+  planned token emission surface after runtime generation exists.
+
+provider generation:
+  planned server/provider surface after CLI/runtime generation exists.
+
+A generation loop becomes supported only when decode, logits, sampling, token
+append, stop conditions, interruption, cleanup, command proof, and tests are
+integrated.
+
+### Residency and storage-stream families
+
+resident:
+  tensors/runtime state stay in backend memory.
+
+host-staged:
+  tensors/state move through host memory.
+
+SSD-staged:
+  tensors/chunks are staged from SSD before execution.
+
+SSD-streamed:
+  tensor pages/chunks are read on demand according to a storage-stream plan.
+
+warm-cache:
+  repeated reads are measured as cache/residency diagnostics.
+
+managed memory:
+  backend/platform-managed memory behavior is reported explicitly.
+
+hybrid:
+  different tensor collections use different residency modes.
+
+Storage-stream support is not generation support.
+A cold-read probe is not runtime execution.
+A residency report is not model support.
+
+## CLI Research Surface Matrix
+
+All command shapes in this matrix are conceptual unless the corresponding code,
+tests, command proof, and spine row exist.
+
+attention research:
+
+```text
+yvex attention report --model TARGET
+yvex attention inspect --model TARGET --layer N
+yvex attention run --mode full|flash|paged|sparse|longcat-loza
+yvex graph --execute-op --op attention --attention-mode MODE
+yvex graph --execute-block --attention-mode MODE
+yvex graph --execute-layers --attention-mode MODE
+```
+
+Required future output fields:
+
+```text
+attention_mode:
+attention_family:
+paper_reference:
+qkv_source:
+mask_rule:
+position_rule:
+kv_layout:
+backend:
+backend_op_status:
+checksum:
+max_abs_diff:
+support_status:
+generation: unsupported
+```
+
+prefill research:
+
+```text
+yvex prefill --prefill-mode segment-summary|layer-backed|chunked|dense|sparse|ssd-staged
+yvex prefill report --tokens IDS --chunk-size N --context-length N
+yvex prefill trace --trace-level tensors|kv|chunks|scratch
+yvex prefill compare --mode A --mode B
+```
+
+Required future output fields:
+
+```text
+prefill_mode:
+chunk_size:
+chunk_count:
+context_boundary_status:
+kv_binding_source:
+scratch_lifecycle:
+tokens_processed:
+aggregate_checksum:
+support_status:
+generation: unsupported
+```
+
+KV research:
+
+```text
+yvex kv report --layout contiguous|paged|chunked
+yvex kv inspect --position N --layer N --head N
+yvex kv residency --mode resident|host-staged|ssd-staged|ssd-streamed
+yvex kv trace --range START:END
+```
+
+Required future output fields:
+
+```text
+kv_layout:
+kv_dtype:
+kv_layers:
+kv_heads:
+kv_head_dim:
+kv_capacity:
+positions_written:
+residency:
+cleanup_status:
+support_status:
+generation: unsupported
+```
+
+decode research:
+
+```text
+yvex decode --decode-mode diagnostic|autoregressive|speculative|block-diffusion
+yvex decode trace --position N --kv-read
+yvex decode compare --mode baseline --mode speculative
+```
+
+Required future output fields:
+
+```text
+decode_mode:
+decode_position:
+kv_read_status:
+decode_state_checksum:
+speculative_status:
+support_status:
+logits_ready:
+generation: unsupported
+```
+
+logits research:
+
+```text
+yvex logits --logits-mode diagnostic|output-head
+yvex logits topk --k N
+yvex logits logprob --token ID
+yvex logits compare --mode diagnostic --mode output-head
+```
+
+Required future output fields:
+
+```text
+logits_mode:
+logits_count:
+logits_checksum:
+logits_min:
+logits_max:
+top_k:
+logprob_status:
+real_model_output_head:
+generation: unsupported
+```
+
+sampling research:
+
+```text
+yvex sample --strategy greedy|temperature|top-k|top-p|min-p|typical
+yvex sample --seed N --temperature X --top-k K --top-p P
+yvex sample compare --strategy greedy --strategy top-k
+```
+
+Required future output fields:
+
+```text
+sampling_strategy:
+seed:
+temperature:
+top_k:
+top_p:
+candidate_count:
+selected_token_id:
+selected_logit:
+sample_checksum:
+generation: unsupported
+```
+
+generation research:
+
+```text
+yvex generate --decode-mode baseline|speculative
+yvex generate --prefill-mode MODE --attention-mode MODE --sampling-strategy STRATEGY
+yvex generate trace --trace-level tokens|kv|logits|sampling
+yvex generate compare --decode-mode baseline --decode-mode speculative
+```
+
+Required future output fields:
+
+```text
+generation_mode:
+prefill_mode:
+decode_mode:
+attention_mode:
+sampling_strategy:
+tokens_generated:
+stop_reason:
+generation_checksum:
+full_model_generation:
+benchmark_status:
+```
+
+paper/reference:
+
+```text
+yvex papers list
+yvex papers inspect ID
+yvex algorithms list
+yvex algorithms inspect ID
+yvex algorithms report --family attention|prefill|decode|logits|sampling|kv|residency
+```
+
+Required future output fields:
+
+```text
+paper_id:
+algorithm_family:
+implementation_stage:
+command_surface:
+support_status:
+runtime_claim:
+benchmark_claim:
+```
+
+## Algorithm Stage Vocabulary
+
+Allowed stage strings:
+
+reference-only:
+  paper or external runtime reference only.
+
+report-only:
+  command-visible report exists; no runtime execution.
+
+fixture:
+  synthetic or controlled proof exists.
+
+selected-slice:
+  selected YVEX-produced artifact participates in a bounded proof.
+
+diagnostic-runtime:
+  runtime consumes implemented state but does not claim full model semantics.
+
+full-runtime:
+  real model tensor path participates in runtime execution.
+
+eval-ready:
+  implemented runtime path has regression/eval vectors.
+
+benchmark-ready:
+  benchmark harness and measured runtime path exist.
+
+unsupported:
+  explicit refusal or planned-only boundary.
+
+Rows and command outputs should prefer these stage names when reporting
+algorithm support.
+
 ## 3. Current Repository State
 
 ```text
@@ -775,6 +1388,7 @@ operator integrity report
 source-tensor-first model-target roadmap authority in spine
 command-visible model target class registry
 canonical inference block directory in spine
+paper-backed algorithm doctrine and CLI research surface roadmap in spine
 plug-and-play operator runbook flow
 single-paste operator transcript
 full implemented command inventory in operator runbook
@@ -1054,6 +1668,17 @@ tables.
 | SPINE.REBASE.5 | complete | docs | Unified full inference engine spine | all delivery rows consolidated into one ledger and dependency map |
 | SPINE.BLOCKS.0 | complete | docs | Canonical inference block directory | spine defines engine identity, canonical implementation blocks, naming rules, command taxonomy, tensor collections, residency modes, and procedural order |
 | SPINE.BLOCKS.1 | planned | docs | Planned-row deduplication and command-flow compression | redundant planned rows are merged into canonical blocks without deleting completed history |
+| PAPER.INDEX.0 | planned | docs | Paper-to-algorithm registry | spine records paper references, algorithm family, implementation stage, command surface, and unsupported boundary without claiming implementation |
+| ALGORITHM.MODES.0 | planned | docs | Runtime algorithm mode registry | attention, prefill, decode, logits, sampling, KV, and residency modes are mapped to command surfaces and implementation stages |
+| CLI.RESEARCH.0 | planned | cli | Research CLI surface matrix | CLI exposes algorithm-mode inspection and explicit tensor/runtime diagnostics without hiding behind automatic generation paths |
+| ATTENTION.MODES.0 | planned | attention | Attention mode report | full, MQA/GQA, FlashAttention, paged, sparse, LongCat-style, and model-family attention modes are command-visible as support/report/unsupported states |
+| PREFILL.MODES.0 | planned | prefill | Prefill mode report and selection | segment-summary, layer-backed, chunked, dense, sparse, and SSD-staged prefill modes are reportable and selectable where implemented |
+| DECODE.MODES.0 | planned | decode | Decode mode report and selection | diagnostic, autoregressive, speculative, block/diffusion, and model-family decode modes are reportable and selectable where implemented |
+| LOGITS.MODES.0 | planned | logits | Logits mode report and selection | diagnostic, output-head, sharded, staged, and logprob/top-k logits modes are reportable and selectable where implemented |
+| SAMPLING.MODES.0 | planned | sampling | Sampling strategy report and selection | greedy, temperature, top-k, top-p, min-p, typical, and seeded stochastic sampling strategies are command-visible where implemented |
+| GENERATION.MODES.0 | planned | generation | Generation mode report and selection | baseline, bounded diagnostic, speculative, streaming, and provider generation modes are reportable without unsupported claims |
+| KV.MODES.0 | planned | kv | KV layout and residency mode report | contiguous, paged, chunked, host-staged, SSD-staged, SSD-streamed, and quantized KV modes are reportable without unsupported claims |
+| TENSOR.TRACE.0 | planned | trace | Tensor-level runtime trace | tensor IDs, shapes, dtypes, residency, graph op ownership, checksums, and cleanup phases are CLI-visible for runtime study |
 | M9 | complete | kv | Minimal KV ownership and append/read boundary | session-owned KV shape, allocation, append/read, lifecycle, cleanup, and context overflow behavior |
 | PREFILL.1 | complete | prefill | KV-backed prefill state binding | M8 segment-summary state connects to minimal KV ownership without decode/logits claim |
 | GRAPH.OPS.0 | complete | graph | RoPE and position operation boundary | position-dependent graph op implemented with tests and backend rules |
@@ -2001,6 +2626,9 @@ conditions, and cleanup into a bounded runtime generation loop without claiming
 real DeepSeek full generation, provider generation, evaluation, or benchmark
 readiness.
 
+Algorithm/CLI research hardening runs in parallel with runtime closure. It does
+not replace GEN.LOOP.0 or the current runtime Active Next.
+
 PREFILL.4 remains planned as diagnostics/regression hardening over the
 implemented prefill state path. PREFILL.5 remains planned as a future
 measurement gate. Neither blocks the first bounded decode/logits/sampling/
@@ -2313,6 +2941,22 @@ no runtime file change for spine-only rebases
 ## 9. Non-Negotiable Rules
 
 - No support claim without code, tests, and command proof.
+- A paper reference is not implementation.
+- An algorithm row is not support.
+- A CLI flag listed conceptually is not implemented.
+- A research report is not runtime execution.
+- A tensor trace is not model quality.
+- A mode registry is not mode support.
+- A FlashAttention reference is not a FlashAttention backend.
+- A PagedAttention reference is not paged KV implementation.
+- A LongCat/LoZA reference is not LongCat support.
+- A DFlash/DSpark/HyperDFlash reference is not speculative decoding support.
+- A top-k command shape is not top-k sampling support.
+- A stochastic sampling row is not implemented sampling.
+- A generation mode report is not generation.
+- No generation claim without decode, logits, sampling, and generation loop.
+- No benchmark claim without measured runtime path and reproducibility metadata.
+- No external paper or runner result may close a YVEX implementation row.
 - Every new implementation wave must name one primary canonical block.
 - The runbook must not compensate for missing CLI ergonomics with shell export
   walls, helper scripts, or path derivation logic.
