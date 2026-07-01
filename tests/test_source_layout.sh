@@ -69,7 +69,9 @@ bad_command_files="$(
        -o -name 'yvex_graph_reference.c' \
        -o -name 'yvex_graph_layers.c' \
        -o -name 'yvex_graph_scheduler.c' \
+       -o -name 'yvex_graph_check.c' \
        -o -name 'graph_layers.c' \
+       -o -name 'graph_check.c' \
        -o -name 'scheduler.c' \
        -o -name 'yvex_model_artifact_support.c' \
        -o -name 'yvex_model_artifacts_private.h' \

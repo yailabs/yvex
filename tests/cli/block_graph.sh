@@ -154,6 +154,62 @@ run_fail layers_unsupported_block \
     --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
 contains "$OUT_DIR/layers_unsupported_block.err" "unsupported block: nope"
 
+run_ok graph_check_all_cpu \
+  "$YVEX_BIN" graph check --backend cpu --suite all --layers 2
+contains "$OUT_DIR/graph_check_all_cpu.out" "status: graph-check"
+contains "$OUT_DIR/graph_check_all_cpu.out" "backend: cpu"
+contains "$OUT_DIR/graph_check_all_cpu.out" "suite: all"
+contains "$OUT_DIR/graph_check_all_cpu.out" "graph_check_kind: fixture-proof-preset"
+contains "$OUT_DIR/graph_check_all_cpu.out" "stage: rope pass"
+contains "$OUT_DIR/graph_check_all_cpu.out" "stage: attention pass"
+contains "$OUT_DIR/graph_check_all_cpu.out" "stage: matmul pass"
+contains "$OUT_DIR/graph_check_all_cpu.out" "stage: mlp pass"
+contains "$OUT_DIR/graph_check_all_cpu.out" "stage: block pass"
+contains "$OUT_DIR/graph_check_all_cpu.out" "stage: layers pass"
+contains "$OUT_DIR/graph_check_all_cpu.out" "checks_failed: 0"
+contains "$OUT_DIR/graph_check_all_cpu.out" "execution_ready: false"
+contains "$OUT_DIR/graph_check_all_cpu.out" "graph_execution_ready: false"
+contains "$OUT_DIR/graph_check_all_cpu.out" "generation_ready: false"
+contains "$OUT_DIR/graph_check_all_cpu.out" "generation: unsupported"
+contains "$OUT_DIR/graph_check_all_cpu.out" "status: graph-check-pass"
+
+run_ok graph_check_primitives_cpu \
+  "$YVEX_BIN" graph check --backend cpu --suite primitives
+contains "$OUT_DIR/graph_check_primitives_cpu.out" "stage: rope pass"
+contains "$OUT_DIR/graph_check_primitives_cpu.out" "stage: attention pass"
+contains "$OUT_DIR/graph_check_primitives_cpu.out" "stage: matmul pass"
+contains "$OUT_DIR/graph_check_primitives_cpu.out" "stage: mlp pass"
+contains "$OUT_DIR/graph_check_primitives_cpu.out" "stage: block skipped"
+contains "$OUT_DIR/graph_check_primitives_cpu.out" "stage: layers skipped"
+contains "$OUT_DIR/graph_check_primitives_cpu.out" "status: graph-check-pass"
+
+run_ok graph_check_layers_cpu \
+  "$YVEX_BIN" graph check --backend cpu --suite layers --layers 2
+contains "$OUT_DIR/graph_check_layers_cpu.out" "stage: rope skipped"
+contains "$OUT_DIR/graph_check_layers_cpu.out" "stage: block skipped"
+contains "$OUT_DIR/graph_check_layers_cpu.out" "stage: layers pass"
+contains "$OUT_DIR/graph_check_layers_cpu.out" "status: graph-check-pass"
+
+run_fail graph_check_bad_backend "$YVEX_BIN" graph check --backend nope
+contains "$OUT_DIR/graph_check_bad_backend.err" "unknown backend kind: nope"
+
+run_fail graph_check_bad_suite "$YVEX_BIN" graph check --suite nope
+contains "$OUT_DIR/graph_check_bad_suite.err" "--suite requires primitives, block, layers, or all"
+
+run_fail graph_check_zero_layers "$YVEX_BIN" graph check --layers 0
+contains "$OUT_DIR/graph_check_zero_layers.err" "--layers requires a positive integer"
+
+run_fail graph_check_too_many_layers "$YVEX_BIN" graph check --layers 17
+contains "$OUT_DIR/graph_check_too_many_layers.err" "requires 1 <= --layers <= 16"
+
+run_fail graph_check_model_flag \
+  "$YVEX_BIN" graph check --model deepseek4-v4-flash-selected-embed
+contains "$OUT_DIR/graph_check_model_flag.err" "graph check preset is fixture-only"
+
+run_fail graph_check_model_arg \
+  "$YVEX_BIN" graph check deepseek4-v4-flash-selected-embed
+contains "$OUT_DIR/graph_check_model_arg.err" "graph check preset is fixture-only"
+
 run_fail block_position_oob \
   "$YVEX_BIN" graph --backend cpu --execute-block --block fixture \
     --seq-len 4 --position 4 --hidden-dim 8 --head-dim 8 --ffn-dim 16

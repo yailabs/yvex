@@ -3364,6 +3364,260 @@ static int command_graph_execute_layers_fixture(const char *backend_name,
     return exit_code;
 }
 
+typedef struct {
+    const char *backend_name;
+    const char *suite_name;
+    unsigned long long layers;
+    int run_primitives;
+    int run_block;
+    int run_layers;
+} yvex_graph_check_options;
+
+typedef struct {
+    const char *rope;
+    const char *attention;
+    const char *matmul;
+    const char *mlp;
+    const char *block;
+    const char *layers;
+    unsigned long long primitive_checks;
+    unsigned long long block_checks;
+    unsigned long long layer_checks;
+    unsigned long long checks_passed;
+    unsigned long long checks_failed;
+    const char *failed_stage;
+    int failed_exit_code;
+    const char *final_status;
+} yvex_graph_check_result;
+
+static void graph_check_result_init(yvex_graph_check_result *result)
+{
+    memset(result, 0, sizeof(*result));
+    result->rope = "skipped";
+    result->attention = "skipped";
+    result->matmul = "skipped";
+    result->mlp = "skipped";
+    result->block = "skipped";
+    result->layers = "skipped";
+    result->final_status = "graph-check-pass";
+}
+
+static void graph_check_note_stage(yvex_graph_check_result *result,
+                                   const char **stage_status,
+                                   const char *stage_name,
+                                   int exit_code)
+{
+    if (exit_code == 0) {
+        *stage_status = "pass";
+        result->checks_passed++;
+        return;
+    }
+    *stage_status = "fail";
+    result->checks_failed++;
+    if (!result->failed_stage) {
+        result->failed_stage = stage_name;
+        result->failed_exit_code = exit_code;
+    }
+}
+
+static void graph_check_print_header(const yvex_graph_check_options *options)
+{
+    printf("status: graph-check\n");
+    printf("backend: %s\n", options->backend_name);
+    printf("suite: %s\n", options->suite_name);
+    printf("layers: %llu\n", options->layers);
+    printf("graph_check_kind: fixture-proof-preset\n");
+    printf("graph_check_scope: primitives-block-layers\n");
+    printf("real_model_execution: false\n");
+    printf("selected_artifact_execution: false\n");
+    printf("prefill_execution: false\n");
+}
+
+static void graph_check_print_summary(const yvex_graph_check_result *result)
+{
+    printf("stage: rope %s\n", result->rope);
+    printf("stage: attention %s\n", result->attention);
+    printf("stage: matmul %s\n", result->matmul);
+    printf("stage: mlp %s\n", result->mlp);
+    printf("stage: block %s\n", result->block);
+    printf("stage: layers %s\n", result->layers);
+    printf("primitive_checks: %llu\n", result->primitive_checks);
+    printf("block_checks: %llu\n", result->block_checks);
+    printf("layer_checks: %llu\n", result->layer_checks);
+    printf("checks_passed: %llu\n", result->checks_passed);
+    printf("checks_failed: %llu\n", result->checks_failed);
+    if (result->failed_stage) {
+        printf("failed_stage: %s\n", result->failed_stage);
+        printf("failed_exit_code: %d\n", result->failed_exit_code);
+    }
+    printf("execution_ready: false\n");
+    printf("graph_execution_ready: false\n");
+    printf("prefill_ready: false\n");
+    printf("logits_ready: false\n");
+    printf("generation_ready: false\n");
+    printf("generation: unsupported\n");
+    printf("status: %s\n", result->final_status);
+}
+
+static int graph_check_backend_supported(const char *backend_name,
+                                         const char **backend_status)
+{
+    yvex_backend_options options;
+    yvex_backend *backend = NULL;
+    yvex_error err;
+    int supported;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&options, 0, sizeof(options));
+    options.kind = graph_backend_kind_from_name(backend_name);
+    rc = yvex_backend_open(&backend, &options, &err);
+    if (rc != YVEX_OK) {
+        *backend_status = rc == YVEX_ERR_UNSUPPORTED ? "unsupported" : "unavailable";
+        yvex_error_clear(&err);
+        return 0;
+    }
+    supported = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ROPE) &&
+                yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ATTENTION) &&
+                yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MATMUL) &&
+                yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_RMS_NORM) &&
+                yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MLP);
+    yvex_backend_close(backend);
+    *backend_status = supported ? "ready" : "unsupported";
+    return supported;
+}
+
+static int command_graph_execute_rope_op(const char *backend_name,
+                                         unsigned long long position,
+                                         unsigned long long head_dim);
+static int command_graph_execute_attention_op(const char *backend_name,
+                                              unsigned long long seq_len,
+                                              unsigned long long position,
+                                              unsigned long long head_dim,
+                                              int causal);
+static int command_graph_execute_matmul_op(const char *backend_name,
+                                           unsigned long long m,
+                                           unsigned long long k,
+                                           unsigned long long n);
+static int command_graph_execute_mlp_op(const char *backend_name,
+                                        unsigned long long hidden_dim,
+                                        unsigned long long ffn_dim,
+                                        const char *activation,
+                                        int gated,
+                                        unsigned long long experts,
+                                        unsigned long long expert_id,
+                                        int use_expert);
+
+static int command_graph_check(int argc, char **argv)
+{
+    yvex_graph_check_options options;
+    yvex_graph_check_result result;
+    const char *backend_status = "ready";
+    int rc;
+    int i;
+
+    memset(&options, 0, sizeof(options));
+    options.backend_name = "cpu";
+    options.suite_name = "all";
+    options.layers = 2ull;
+
+    for (i = 3; i < argc; ++i) {
+        if (strcmp(argv[i], "--backend") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: graph check --backend requires cpu|cuda\n");
+                return 2;
+            }
+            options.backend_name = argv[++i];
+        } else if (strcmp(argv[i], "--suite") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: graph check --suite requires primitives, block, layers, or all\n");
+                return 2;
+            }
+            options.suite_name = argv[++i];
+        } else if (strcmp(argv[i], "--layers") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &options.layers)) {
+                fprintf(stderr, "yvex: graph check --layers requires a positive integer\n");
+                return 2;
+            }
+            i += 1;
+        } else if (strcmp(argv[i], "--model") == 0) {
+            fprintf(stderr, "yvex: graph check preset is fixture-only in GRAPH.CHECK.0\n");
+            return 2;
+        } else if (argv[i][0] == '-') {
+            fprintf(stderr, "yvex: unknown graph check option: %s\n", argv[i]);
+            return 2;
+        } else {
+            fprintf(stderr, "yvex: graph check preset is fixture-only in GRAPH.CHECK.0\n");
+            return 2;
+        }
+    }
+    if (!graph_backend_valid(options.backend_name)) {
+        fprintf(stderr, "yvex: unknown backend kind: %s\n", options.backend_name);
+        return 2;
+    }
+    if (strcmp(options.suite_name, "primitives") == 0) {
+        options.run_primitives = 1;
+    } else if (strcmp(options.suite_name, "block") == 0) {
+        options.run_block = 1;
+    } else if (strcmp(options.suite_name, "layers") == 0) {
+        options.run_layers = 1;
+    } else if (strcmp(options.suite_name, "all") == 0) {
+        options.run_primitives = 1;
+        options.run_block = 1;
+        options.run_layers = 1;
+    } else {
+        fprintf(stderr, "yvex: graph check --suite requires primitives, block, layers, or all\n");
+        return 2;
+    }
+    if (options.layers == 0ull || options.layers > 16ull) {
+        fprintf(stderr, "yvex: graph check requires 1 <= --layers <= 16\n");
+        return 2;
+    }
+
+    graph_check_result_init(&result);
+    result.primitive_checks = options.run_primitives ? 4ull : 0ull;
+    result.block_checks = options.run_block ? 1ull : 0ull;
+    result.layer_checks = options.run_layers ? 1ull : 0ull;
+    graph_check_print_header(&options);
+
+    if (!graph_check_backend_supported(options.backend_name, &backend_status)) {
+        printf("backend_status: %s\n", backend_status);
+        result.final_status = "graph-check-unsupported";
+        graph_check_print_summary(&result);
+        return 5;
+    }
+
+    if (options.run_primitives) {
+        rc = command_graph_execute_rope_op(options.backend_name, 7ull, 8ull);
+        graph_check_note_stage(&result, &result.rope, "rope", rc);
+        rc = command_graph_execute_attention_op(options.backend_name, 4ull, 3ull, 8ull, 1);
+        graph_check_note_stage(&result, &result.attention, "attention", rc);
+        rc = command_graph_execute_matmul_op(options.backend_name, 1ull, 8ull, 8ull);
+        graph_check_note_stage(&result, &result.matmul, "matmul", rc);
+        rc = command_graph_execute_mlp_op(options.backend_name, 8ull, 16ull,
+                                          "silu", 1, 0ull, 0ull, 0);
+        graph_check_note_stage(&result, &result.mlp, "mlp", rc);
+    }
+    if (options.run_block) {
+        rc = command_graph_execute_block_fixture(options.backend_name,
+                                                 4ull, 3ull, 8ull, 8ull,
+                                                 16ull, 1, 1);
+        graph_check_note_stage(&result, &result.block, "block", rc);
+    }
+    if (options.run_layers) {
+        rc = command_graph_execute_layers_fixture(options.backend_name,
+                                                  options.layers,
+                                                  4ull, 3ull, 8ull, 8ull,
+                                                  16ull, 1, 1);
+        graph_check_note_stage(&result, &result.layers, "layers", rc);
+    }
+
+    result.final_status =
+        result.checks_failed == 0ull ? "graph-check-pass" : "graph-check-fail";
+    graph_check_print_summary(&result);
+    return result.checks_failed == 0ull ? 0 : 1;
+}
+
 /* Standalone primitive graph proof executors. */
 
 static int command_graph_execute_rope_op(const char *backend_name,
@@ -5374,6 +5628,9 @@ static int command_graph(int argc, char **argv)
         yvex_graph_help(stdout);
         return argc >= 3 ? 0 : 2;
     }
+    if (strcmp(argv[2], "check") == 0) {
+        return command_graph_check(argc, argv);
+    }
 
     for (i = 2; i < argc; ++i) {
         if (strcmp(argv[i], "--model") == 0) {
@@ -6062,6 +6319,8 @@ void yvex_graph_help(FILE *fp)
     fprintf(fp, "       yvex graph --backend cpu|cuda --execute-op --op mlp --hidden-dim N --ffn-dim N --activation silu --gated [--experts N --expert-id N]\n");
     fprintf(fp, "       yvex graph --backend cpu|cuda --execute-block --block fixture --seq-len N --position N --hidden-dim N --head-dim N --ffn-dim N [--causal] [--gated]\n");
     fprintf(fp, "       yvex graph --backend cpu|cuda --execute-layers --layers N --block fixture --seq-len N --position N --hidden-dim N --head-dim N --ffn-dim N [--causal] [--gated]\n");
+    fprintf(fp, "       yvex graph check [--backend cpu|cuda] [--suite primitives|block|layers|all] [--layers N]\n");
     fprintf(fp, "\nGraph commands run descriptor diagnostics, bounded fixture and selected real graph proofs, standalone primitive probes, one controlled transformer-block fixture, or a controlled layer scheduler fixture. They do not run inference or text generation.\n");
     fprintf(fp, "Layer execution is a controlled fixture scheduler over repeated diagnostic blocks; it is not model prefill, decode, logits, sampling, or generation.\n");
+    fprintf(fp, "Graph check composes existing fixture proof commands only; it does not execute real model layers, prefill, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
 }

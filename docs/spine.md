@@ -745,6 +745,7 @@ standalone F32 MLP/feed-forward primitive boundary
 controlled first transformer block fixture execution
 controlled block executor boundary and scratch lifecycle cleanup
 controlled layer scheduler fixture over repeated diagnostic blocks
+graph check preset over primitive, block, and layer fixture proofs
 artifact integrity validator and corruption fixture suite
 file identity digest enforcement
 registry metadata drift diagnostics
@@ -970,7 +971,7 @@ tables.
 | MODEL.PREPARE.1 | complete | model | Prepare preset refusal and dry-run behavior | prepare reports unsupported targets such as GLM source-only targets and supports dry-run, no-register, and no-use boundaries |
 | MODEL.CHECK.0 | complete | model | Selected artifact check preset | `yvex models check deepseek4-v4-flash-selected-embed --backend cpu|cuda --level quick|runtime|full` composes implemented selected artifact verification through selected runtime graph checks without generation claim |
 | MODEL.CHECK.1 | planned | model | Segment artifact check preset | selected embedding-plus-RMSNorm checks include input tokens, selected segment graph, segment-summary prefill, and minimal KV binding where implemented |
-| GRAPH.CHECK.0 | planned | graph | Graph check preset suites | `yvex graph check --suite primitives|block|selected|segment|all` runs implemented graph proof suites without inventing graph capability |
+| GRAPH.CHECK.0 | complete | graph | Graph check preset suites | `yvex graph check --suite primitives|block|layers|all` composes existing standalone primitive, controlled block, and controlled layer scheduler fixture proofs without real model layer execution, prefill, decode, logits, sampling, generation, evaluation, or benchmark claim |
 | CHAT.UX.0 | planned | operator | Diagnostic REPL clarity and layout | accepted-only chat shows status, help, model/backend/session state, optional color, NO_COLOR behavior, and unsupported generation boundary |
 | OPERATOR.FLOW.3 | planned | operator | Runbook over real operator presets | operator runbook is rewritten around `paths configure`, `model-target --paths`, `models prepare`, `models check`, graph lanes, accepted-only chat, validation, and artifact hygiene |
 | DOCS.README.OPERATOR.0 | planned | docs | Public operator examples after preset stabilization | README examples use stable operator presets without internal IDs or unsupported generation claims |
@@ -1932,14 +1933,13 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-GRAPH.CHECK.0 - Graph check preset for primitive/block/layer proofs
+PREFILL.2 - First real transformer prefill path
 ```
 
-GRAPH.CHECK.0 may compose only graph behavior already implemented by lower
-commands: standalone primitives, controlled block fixture execution, and
-controlled layer scheduler fixture execution. It must not claim real model layer
-execution, prefill, decode, logits, sampling, generation, evaluation, or
-benchmark readiness.
+PREFILL.2 must build on implemented graph/layer fixture boundaries without
+claiming decode, logits, sampling, generation, evaluation, or benchmark
+readiness. It must not skip required runtime state, KV, cleanup, failure, and
+reference boundaries.
 
 SPINE.GENERATION.TARGET.0 records the long-term DeepSeek generation and
 throughput target. It does not change the immediate implementation order.
@@ -1950,12 +1950,12 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-GRAPH.CHECK.0 - Graph check preset for primitive/block/layer proofs
+PREFILL.2 - First real transformer prefill path
 ```
 
-GRAPH.CHECK.0 is a command preset over existing graph proofs. It must not
-create new graph capability beyond the primitive, block, and layer fixture
-commands it runs.
+GRAPH.CHECK.0 is complete as a command preset over existing graph proofs. It
+does not create new graph capability beyond the primitive, block, and layer
+fixture commands it runs.
 
 OWI.TARGETS.1 remains planned until multi-family source manifest evidence is
 implemented over available source artifacts. GLM source tensors may continue
