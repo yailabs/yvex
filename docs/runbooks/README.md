@@ -26,6 +26,6 @@ Each lane states:
 - boundary.
 
 Current YVEX exposes bounded diagnostic decode, logits, greedy sampling, and a
-bounded diagnostic generation loop over the selected segment path. It does not
-implement full model generation, provider generation, capability evaluation, or
-benchmarks.
+bounded diagnostic generation loop with explicit generated-token append
+accounting over the selected segment path. It does not implement full model
+generation, provider generation, capability evaluation, or benchmarks.

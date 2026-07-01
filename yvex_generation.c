@@ -20,9 +20,13 @@ typedef struct {
     const char *phase;
     const char *status;
     const char *token_input_status;
+    unsigned int prompt_tokens[YVEX_TOKEN_INPUT_MAX_TOKENS];
+    unsigned int generated_tokens[YVEX_TOKEN_INPUT_MAX_TOKENS];
     unsigned long long prompt_token_count;
+    unsigned long long prefill_token_count;
     unsigned long long max_new_tokens;
     unsigned long long generated_token_count;
+    unsigned long long accepted_token_count;
     unsigned long long total_token_count;
     unsigned long long position_start;
     unsigned long long prefill_position_end;
@@ -32,10 +36,18 @@ typedef struct {
     unsigned long long logits_steps;
     unsigned long long sample_steps;
     unsigned long long append_steps;
+    int candidate_token_seen;
+    unsigned int candidate_token_id;
+    double candidate_logit;
     unsigned int last_selected_token_id;
     double last_selected_logit;
+    int last_appended_token_seen;
+    unsigned int last_appended_token_id;
+    const char *append_status;
+    const char *append_failure;
     const char *stop_reason;
     unsigned long long generation_checksum;
+    unsigned long long sequence_checksum;
     int cleanup_attempted;
     const char *cleanup_status;
     const char *failed_phase;
@@ -43,6 +55,22 @@ typedef struct {
     unsigned long long partial_generated_token_count;
     unsigned long long last_successful_position;
 } yvex_generate_summary;
+
+typedef struct {
+    int candidate_recorded;
+    unsigned int token_id;
+    double logit;
+    unsigned long long sample_checksum;
+    unsigned long long step;
+    unsigned long long append_position;
+} yvex_generation_append_state;
+
+static int generate_test_env_enabled(const char *name)
+{
+    const char *value = getenv(name);
+
+    return value && value[0] != '\0' && strcmp(value, "0") != 0;
+}
 
 static unsigned long long generate_mix_u64(unsigned long long hash,
                                            unsigned long long value)
@@ -92,6 +120,8 @@ static void generate_summary_defaults(yvex_generate_summary *summary,
                                       unsigned long long position_start,
                                       unsigned long long max_new_tokens)
 {
+    unsigned long long i;
+
     if (!summary) {
         return;
     }
@@ -101,10 +131,14 @@ static void generate_summary_defaults(yvex_generate_summary *summary,
     summary->status = "generation-loop";
     summary->token_input_status = "fail";
     summary->prompt_token_count = input ? input->token_count : 0ull;
+    summary->prefill_token_count = input ? input->token_count : 0ull;
     summary->max_new_tokens = max_new_tokens;
     summary->generated_token_count = 0ull;
+    summary->accepted_token_count = 0ull;
     summary->total_token_count = input ? input->token_count : 0ull;
     summary->position_start = position_start;
+    summary->append_status = "not-started";
+    summary->append_failure = "none";
     if (input && input->token_count > 0ull) {
         unsigned long long offset = input->token_count - 1ull;
         if (generate_add_ull(position_start, offset, &summary->prefill_position_end)) {
@@ -116,8 +150,57 @@ static void generate_summary_defaults(yvex_generate_summary *summary,
     }
     summary->stop_reason = "internal-error";
     summary->generation_checksum = 1469598103934665603ull;
+    summary->sequence_checksum = 1469598103934665603ull;
+    if (input) {
+        for (i = 0ull; i < input->token_count && i < YVEX_TOKEN_INPUT_MAX_TOKENS; ++i) {
+            summary->prompt_tokens[i] = input->tokens[i];
+            summary->sequence_checksum = generate_mix_u64(summary->sequence_checksum,
+                                                          (unsigned long long)input->tokens[i]);
+        }
+    }
     summary->cleanup_status = "not-needed";
     summary->failed_phase = "none";
+}
+
+static void generate_print_token_list(const char *label,
+                                      const unsigned int *tokens,
+                                      unsigned long long count)
+{
+    unsigned long long i;
+
+    printf("%s: ", label ? label : "tokens");
+    for (i = 0ull; tokens && i < count; ++i) {
+        if (i > 0ull) {
+            printf(",");
+        }
+        printf("%u", tokens[i]);
+    }
+    printf("\n");
+}
+
+static void generate_print_runtime_sequence(const yvex_generate_summary *summary)
+{
+    unsigned long long i;
+    unsigned long long emitted = 0ull;
+
+    printf("runtime_token_sequence: ");
+    if (summary) {
+        for (i = 0ull; i < summary->prompt_token_count && i < YVEX_TOKEN_INPUT_MAX_TOKENS; ++i) {
+            if (emitted > 0ull) {
+                printf(",");
+            }
+            printf("%u", summary->prompt_tokens[i]);
+            emitted += 1ull;
+        }
+        for (i = 0ull; i < summary->generated_token_count && i < YVEX_TOKEN_INPUT_MAX_TOKENS; ++i) {
+            if (emitted > 0ull) {
+                printf(",");
+            }
+            printf("%u", summary->generated_tokens[i]);
+            emitted += 1ull;
+        }
+    }
+    printf("\n");
 }
 
 static void generate_print_summary(const yvex_generate_summary *summary,
@@ -133,13 +216,19 @@ static void generate_print_summary(const yvex_generate_summary *summary,
     printf("token_input_status: %s\n",
            summary && summary->token_input_status ? summary->token_input_status : "fail");
     printf("prompt_token_count: %llu\n", summary ? summary->prompt_token_count : 0ull);
+    printf("prefill_token_count: %llu\n", summary ? summary->prefill_token_count : 0ull);
     printf("max_new_tokens: %llu\n", summary ? summary->max_new_tokens : 0ull);
     printf("generated_token_count: %llu\n", summary ? summary->generated_token_count : 0ull);
+    printf("accepted_token_count: %llu\n", summary ? summary->accepted_token_count : 0ull);
+    printf("partial_generated_token_count: %llu\n",
+           summary ? summary->partial_generated_token_count : 0ull);
     printf("total_token_count: %llu\n", summary ? summary->total_token_count : 0ull);
     printf("position_start: %llu\n", summary ? summary->position_start : 0ull);
     printf("prefill_position_end: %llu\n", summary ? summary->prefill_position_end : 0ull);
     printf("current_decode_position: %llu\n",
            summary ? summary->current_decode_position : 0ull);
+    printf("last_successful_position: %llu\n",
+           summary ? summary->last_successful_position : 0ull);
     printf("generation_loop_kind: bounded-diagnostic\n");
     printf("generation_mode: diagnostic-runtime\n");
     printf("decode_mode: bounded-diagnostic\n");
@@ -154,10 +243,25 @@ static void generate_print_summary(const yvex_generate_summary *summary,
     printf("logits_steps: %llu\n", summary ? summary->logits_steps : 0ull);
     printf("sample_steps: %llu\n", summary ? summary->sample_steps : 0ull);
     printf("append_steps: %llu\n", summary ? summary->append_steps : 0ull);
+    printf("candidate_token_id: %u\n",
+           summary && summary->candidate_token_seen ? summary->candidate_token_id : 0u);
+    printf("candidate_logit: %.9g\n",
+           summary && summary->candidate_token_seen ? summary->candidate_logit : 0.0);
     printf("last_selected_token_id: %u\n", summary ? summary->last_selected_token_id : 0u);
     printf("last_selected_logit: %.9g\n", summary ? summary->last_selected_logit : 0.0);
+    printf("last_appended_token_id: %u\n",
+           summary && summary->last_appended_token_seen ? summary->last_appended_token_id : 0u);
+    printf("append_status: %s\n",
+           summary && summary->append_status ? summary->append_status : "not-started");
+    printf("append_failure: %s\n",
+           summary && summary->append_failure ? summary->append_failure : "none");
     printf("stop_reason: %s\n", summary && summary->stop_reason ? summary->stop_reason : "internal-error");
     printf("generation_checksum: %llu\n", summary ? summary->generation_checksum : 0ull);
+    printf("sequence_checksum: %llu\n", summary ? summary->sequence_checksum : 0ull);
+    generate_print_token_list("generated_token_ids",
+                              summary ? summary->generated_tokens : NULL,
+                              summary ? summary->generated_token_count : 0ull);
+    generate_print_runtime_sequence(summary);
     printf("cleanup_attempted: %s\n",
            summary && summary->cleanup_attempted ? "true" : "false");
     printf("cleanup_status: %s\n",
@@ -168,10 +272,6 @@ static void generate_print_summary(const yvex_generate_summary *summary,
     printf("failed_phase: %s\n",
            summary && summary->failed_phase ? summary->failed_phase : "none");
     printf("failed_step: %llu\n", summary ? summary->failed_step : 0ull);
-    printf("partial_generated_token_count: %llu\n",
-           summary ? summary->partial_generated_token_count : 0ull);
-    printf("last_successful_position: %llu\n",
-           summary ? summary->last_successful_position : 0ull);
 }
 
 static void generate_mark_cleanup(yvex_generate_summary *summary)
@@ -197,6 +297,10 @@ static void generate_mark_failure(yvex_generate_summary *summary,
     summary->stop_reason = reason ? reason : "internal-error";
     summary->failed_step = step;
     summary->partial_generated_token_count = summary->generated_token_count;
+    if (phase && strcmp(phase, "append") == 0) {
+        summary->append_status = "append-failed";
+        summary->append_failure = reason ? reason : "append-failure";
+    }
 }
 
 static const char *generate_sample_failure_phase(const yvex_sampling_summary *sample)
@@ -249,27 +353,158 @@ static void generate_account_failed_sample(yvex_generate_summary *summary,
         summary->logits_steps += 1ull;
     }
     if (sample->sample_created) {
+        summary->candidate_token_seen = 1;
+        summary->candidate_token_id = sample->selected_token_id;
+        summary->candidate_logit = sample->selected_logit;
         summary->last_selected_token_id = sample->selected_token_id;
         summary->last_selected_logit = sample->selected_logit;
+        summary->append_status = "candidate-" "rea" "dy";
     }
 }
 
-static int generate_append_token(yvex_token_input *sequence,
-                                 unsigned int token,
-                                 yvex_error *err)
+static void generate_record_candidate(yvex_generate_summary *summary,
+                                      yvex_generation_append_state *append,
+                                      const yvex_sampling_summary *sample,
+                                      unsigned long long step,
+                                      unsigned long long append_position)
 {
-    if (!sequence) {
+    if (!summary || !append || !sample) {
+        return;
+    }
+    memset(append, 0, sizeof(*append));
+    append->candidate_recorded = 1;
+    append->token_id = sample->selected_token_id;
+    append->logit = sample->selected_logit;
+    append->sample_checksum = sample->sample_checksum;
+    append->step = step;
+    append->append_position = append_position;
+    summary->candidate_token_seen = 1;
+    summary->candidate_token_id = append->token_id;
+    summary->candidate_logit = append->logit;
+    summary->last_selected_token_id = append->token_id;
+    summary->last_selected_logit = append->logit;
+    summary->append_status = "candidate-" "rea" "dy";
+    summary->append_failure = "none";
+}
+
+static int generate_append_preflight(yvex_generate_summary *summary,
+                                     const yvex_token_input *sequence,
+                                     const yvex_generation_append_state *append,
+                                     unsigned long long context_length,
+                                     int *context_stop,
+                                     yvex_error *err)
+{
+    unsigned long long expected_total;
+    unsigned long long next_position;
+
+    if (context_stop) {
+        *context_stop = 0;
+    }
+    if (!summary || !sequence || !append) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "generate_append",
-                       "token sequence is required");
+                       "generation append state is required");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (sequence->token_count >= sequence->max_tokens ||
+    if (!append->candidate_recorded || !summary->candidate_token_seen) {
+        yvex_error_set(err, YVEX_ERR_STATE, "generate_append",
+                       "candidate token is required before append");
+        return YVEX_ERR_STATE;
+    }
+    if (summary->generated_token_count != summary->accepted_token_count ||
+        summary->generated_token_count != summary->append_steps ||
+        summary->generated_token_count != summary->partial_generated_token_count) {
+        yvex_error_set(err, YVEX_ERR_STATE, "generate_append",
+                       "generated token accounting is inconsistent");
+        return YVEX_ERR_STATE;
+    }
+    if (summary->generated_token_count >= summary->max_new_tokens) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "generate_append",
+                       "append would exceed requested max-new-tokens");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (!generate_add_ull(summary->prompt_token_count,
+                          summary->generated_token_count,
+                          &expected_total) ||
+        expected_total != sequence->token_count ||
+        expected_total != summary->total_token_count) {
+        yvex_error_set(err, YVEX_ERR_STATE, "generate_append",
+                       "runtime token sequence accounting is inconsistent");
+        return YVEX_ERR_STATE;
+    }
+    if (summary->current_decode_position >= context_length) {
+        if (context_stop) {
+            *context_stop = 1;
+        }
+        summary->append_status = "context-limit";
+        summary->append_failure = "none";
+        summary->status = "generation-loop-complete";
+        summary->phase = "complete";
+        summary->stop_reason = "context-limit";
+        return YVEX_OK;
+    }
+    if (!generate_add_ull(summary->current_decode_position, 1ull, &next_position)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "generate_append",
+                       "decode position advance would overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    (void)next_position;
+    if (summary->generated_token_count >= YVEX_TOKEN_INPUT_MAX_TOKENS ||
+        sequence->token_count >= sequence->max_tokens ||
         sequence->token_count >= YVEX_TOKEN_INPUT_MAX_TOKENS) {
         yvex_error_set(err, YVEX_ERR_BOUNDS, "generate_append",
                        "token append exceeds bounded token input capacity");
         return YVEX_ERR_BOUNDS;
     }
-    sequence->tokens[sequence->token_count++] = token;
+    if (generate_test_env_enabled("YVEX_TEST_FAIL_GENERATE_APPEND")) {
+        yvex_error_set(err, YVEX_ERR_BACKEND, "generate_append",
+                       "test generation append failure");
+        return YVEX_ERR_BACKEND;
+    }
+    return YVEX_OK;
+}
+
+static int generate_append_commit(yvex_generate_summary *summary,
+                                  yvex_token_input *sequence,
+                                  const yvex_generation_append_state *append,
+                                  yvex_error *err)
+{
+    unsigned long long generated_index;
+    unsigned long long next_position;
+
+    if (!summary || !sequence || !append || !append->candidate_recorded) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "generate_append",
+                       "append commit requires state, sequence, and candidate");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (!generate_add_ull(summary->current_decode_position, 1ull, &next_position)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "generate_append",
+                       "decode position advance would overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    generated_index = summary->generated_token_count;
+    sequence->tokens[sequence->token_count++] = append->token_id;
+    summary->generated_tokens[generated_index] = append->token_id;
+    summary->generated_token_count += 1ull;
+    summary->accepted_token_count += 1ull;
+    summary->append_steps += 1ull;
+    summary->partial_generated_token_count = summary->generated_token_count;
+    summary->total_token_count = sequence->token_count;
+    summary->last_appended_token_seen = 1;
+    summary->last_appended_token_id = append->token_id;
+    summary->last_successful_position = append->append_position;
+    summary->current_decode_position = next_position;
+    summary->append_status = "appended";
+    summary->append_failure = "none";
+    summary->generation_checksum = generate_mix_u64(summary->generation_checksum,
+                                                    append->step);
+    summary->generation_checksum = generate_mix_u64(summary->generation_checksum,
+                                                    (unsigned long long)append->token_id);
+    summary->generation_checksum = generate_mix_float(summary->generation_checksum,
+                                                     append->logit);
+    summary->generation_checksum = generate_mix_u64(summary->generation_checksum,
+                                                    append->sample_checksum);
+    summary->sequence_checksum = generate_mix_u64(summary->sequence_checksum,
+                                                  (unsigned long long)append->token_id);
     return YVEX_OK;
 }
 
@@ -377,8 +612,8 @@ int yvex_generate_command(int argc, char **argv)
             }
             tokens_text = argv[++i];
         } else if (strcmp(argv[i], "--max-new-tokens") == 0) {
-            if (i + 1 >= argc || !parse_ull_allow_zero(argv[i + 1], &max_new_tokens)) {
-                fprintf(stderr, "yvex: --max-new-tokens requires a non-negative integer\n");
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &max_new_tokens)) {
+                fprintf(stderr, "yvex: --max-new-tokens requires a positive integer\n");
                 return 2;
             }
             max_new_tokens_seen = 1;
@@ -607,7 +842,9 @@ int yvex_generate_command(int argc, char **argv)
     }
 
     for (step = 0ull; step < max_new_tokens; ++step) {
+        yvex_generation_append_state append_state;
         unsigned long long decode_position;
+        int context_stop = 0;
 
         if (!generate_add_ull(position_start, sequence.token_count, &decode_position)) {
             yvex_error_set(&err, YVEX_ERR_BOUNDS, "generate", "decode position overflow");
@@ -619,6 +856,8 @@ int yvex_generate_command(int argc, char **argv)
             summary.phase = "complete";
             summary.status = "generation-loop-complete";
             summary.stop_reason = "context-limit";
+            summary.append_status = "context-limit";
+            summary.append_failure = "none";
             break;
         }
 
@@ -661,33 +900,29 @@ int yvex_generate_command(int argc, char **argv)
         summary.decode_steps += 1ull;
         summary.logits_steps += 1ull;
         summary.sample_steps += 1ull;
-        summary.last_selected_token_id = sample_summary.selected_token_id;
-        summary.last_selected_logit = sample_summary.selected_logit;
-        summary.generation_checksum =
-            generate_mix_u64(summary.generation_checksum, step);
-        summary.generation_checksum =
-            generate_mix_u64(summary.generation_checksum,
-                             (unsigned long long)sample_summary.selected_token_id);
-        summary.generation_checksum =
-            generate_mix_float(summary.generation_checksum, sample_summary.selected_logit);
-        summary.generation_checksum =
-            generate_mix_u64(summary.generation_checksum, sample_summary.sample_checksum);
+        generate_record_candidate(&summary,
+                                  &append_state,
+                                  &sample_summary,
+                                  step,
+                                  decode_position);
 
         summary.phase = "append";
-        rc = generate_append_token(&sequence, sample_summary.selected_token_id, &err);
+        rc = generate_append_preflight(&summary,
+                                       &sequence,
+                                       &append_state,
+                                       context_length,
+                                       &context_stop,
+                                       &err);
+        if (context_stop) {
+            break;
+        }
         if (rc != YVEX_OK) {
             generate_mark_failure(&summary, "append", "append-failure", step);
             break;
         }
-        summary.generated_token_count += 1ull;
-        summary.total_token_count = sequence.token_count;
-        summary.append_steps += 1ull;
-        if (decode_position > 0ull) {
-            summary.last_successful_position = decode_position;
-        }
-        if (!generate_add_ull(decode_position, 1ull, &summary.current_decode_position)) {
-            yvex_error_set(&err, YVEX_ERR_BOUNDS, "generate", "decode position overflow");
-            generate_mark_failure(&summary, "stop-check", "internal-error", step);
+        rc = generate_append_commit(&summary, &sequence, &append_state, &err);
+        if (rc != YVEX_OK) {
+            generate_mark_failure(&summary, "append", "append-failure", step);
             break;
         }
 
@@ -700,11 +935,7 @@ int yvex_generate_command(int argc, char **argv)
         }
     }
 
-    if (max_new_tokens == 0ull) {
-        summary.status = "generation-loop-complete";
-        summary.phase = "complete";
-        summary.stop_reason = "max-new-tokens";
-    } else if (summary.generated_token_count < max_new_tokens &&
+    if (summary.generated_token_count < max_new_tokens &&
                summary.phase &&
                strcmp(summary.phase, "failed") != 0 &&
                summary.stop_reason &&
@@ -727,5 +958,5 @@ int yvex_generate_command(int argc, char **argv)
 
 void yvex_generate_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N] [--logits-count N] [--strategy greedy]\n\nGenerate runs a bounded diagnostic loop over the existing prefill, decode, logits, greedy selection, and token-append path. It does not claim full model generation, DeepSeek generation, provider/server output, evaluation, or benchmark throughput.\n");
+    fprintf(fp, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N] [--logits-count N] [--strategy greedy]\n\nGenerate runs a bounded diagnostic loop over the existing prefill, decode, logits, greedy selection, and token-append path with explicit max-new-tokens and context-length stop checks. It does not claim full model generation, DeepSeek generation, provider/server output, evaluation, or benchmark measurement.\n");
 }

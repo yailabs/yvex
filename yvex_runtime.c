@@ -2908,7 +2908,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, standalone RoPE, attention, matmul, and MLP ops, explicit token input boundary, prefill state foundation, minimal KV binding, minimal KV ownership, bounded decode/logits/sampling diagnostics, and bounded diagnostic generation loop\n");
+    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, standalone RoPE, attention, matmul, and MLP ops, explicit token input boundary, prefill state foundation, minimal KV binding, minimal KV ownership, bounded decode/logits/sampling diagnostics, and bounded diagnostic generation loop with explicit append accounting\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");

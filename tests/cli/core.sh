@@ -131,7 +131,7 @@ contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, standalone RoPE, attention, matmul, and MLP ops, explicit token input boundary, prefill state foundation, minimal KV binding, minimal KV ownership, bounded decode/logits/sampling diagnostics, and bounded diagnostic generation loop"
+contains "$OUT_DIR/info.out" "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, standalone RoPE, attention, matmul, and MLP ops, explicit token input boundary, prefill state foundation, minimal KV binding, minimal KV ownership, bounded decode/logits/sampling diagnostics, and bounded diagnostic generation loop with explicit append accounting"
 contains "$OUT_DIR/info.out" "library: libyvex.a"
 contains "$OUT_DIR/info.out" "filesystem: implemented"
 contains "$OUT_DIR/info.out" "artifact: open/read implemented"
@@ -255,6 +255,7 @@ contains "$OUT_DIR/help_sample.out" "does not run stochastic sampling, append to
 run_ok help_generate "$YVEX_BIN" help generate
 contains "$OUT_DIR/help_generate.out" "usage: yvex generate"
 contains "$OUT_DIR/help_generate.out" "bounded diagnostic loop"
+contains "$OUT_DIR/help_generate.out" "max-new-tokens and context-length stop checks"
 contains "$OUT_DIR/help_generate.out" "does not claim full model generation"
 
 run_ok help_chat "$YVEX_BIN" help chat
@@ -529,6 +530,7 @@ run_fail_code generate_wrong_segment 2 "$YVEX_BIN" generate --model missing --ba
 run_fail_code generate_missing_tokens 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --max-new-tokens 1
 run_fail_code generate_missing_max_new_tokens 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1
 run_fail_code generate_max_new_tokens_invalid 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens nope
+run_fail_code generate_max_new_tokens_zero 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 0
 run_fail_code generate_strategy_stochastic 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --strategy stochastic
 run_fail_code generate_logits_count_zero 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --logits-count 0
 run_fail_code generate_logits_count_too_many 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --logits-count 257

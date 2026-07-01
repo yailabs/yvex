@@ -122,7 +122,7 @@ CURRENT_DOCS := README.md AGENTS.md MODEL_ARTIFACTS.md NOTICE.md \
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, explicit token input boundary, prefill state foundation, minimal KV binding, decode/logits/sampling diagnostics, and bounded diagnostic generation loop"
+	@echo "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, explicit token input boundary, prefill state foundation, minimal KV binding, decode/logits/sampling diagnostics, and bounded diagnostic generation loop with explicit append accounting"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"

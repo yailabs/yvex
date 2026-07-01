@@ -9,9 +9,10 @@ The detailed copy-pack lanes live under `docs/runbooks/`.
 Use the model-specific runbook when working with a concrete model target.
 
 YVEX now exposes bounded diagnostic decode, logits, greedy sampling, and a
-bounded diagnostic generation loop over the implemented selected segment path.
-It still does not implement full model generation, provider generation,
-capability evaluation, or benchmarks.
+bounded diagnostic generation loop with explicit generated-token append
+accounting over the implemented selected segment path. It still does not
+implement full model generation, provider generation, capability evaluation, or
+benchmarks.
 
 ## Runbook Index
 
