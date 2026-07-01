@@ -4976,6 +4976,817 @@ static int command_models_inspect(int argc, char **argv)
     return 0;
 }
 
+/* Full model inventory and placement reporting. */
+
+typedef struct {
+    const char *model;
+    const char *backend;
+    const char *target;
+    const char *registry_path;
+    unsigned long long limit_tensors;
+} yvex_cli_fullmodel_options;
+
+typedef struct {
+    unsigned long long embedding;
+    unsigned long long normalization;
+    unsigned long long attention;
+    unsigned long long mlp;
+    unsigned long long moe;
+    unsigned long long output;
+    unsigned long long tokenizer;
+    unsigned long long unknown;
+    int has_token_embedding;
+    int has_attention_norm;
+    int has_post_attention_norm;
+    int has_attention_q;
+    int has_attention_k;
+    int has_attention_v;
+    int has_attention_out;
+    int has_ffn_gate;
+    int has_ffn_up;
+    int has_ffn_down;
+    int has_moe_router;
+    int has_moe_expert;
+    int has_output_norm;
+    int has_output_head;
+    int has_tokenizer_metadata;
+} yvex_fullmodel_collections;
+
+typedef struct {
+    char name[32];
+    unsigned long long count;
+    unsigned long long bytes;
+} yvex_fullmodel_dtype_bucket;
+
+typedef struct {
+    const yvex_tensor_info *tensor;
+    unsigned long long bytes;
+} yvex_fullmodel_largest_tensor;
+
+static int fullmodel_string_is_empty(const char *text)
+{
+    return !text || !text[0];
+}
+
+static int fullmodel_parse_value_option(const char *flag,
+                                        int argc,
+                                        char **argv,
+                                        int *index,
+                                        const char **value)
+{
+    if (*index + 1 >= argc) {
+        fprintf(stderr, "yvex: fullmodel %s requires a value\n", flag);
+        return 2;
+    }
+    *value = argv[++(*index)];
+    if (fullmodel_string_is_empty(*value)) {
+        fprintf(stderr, "yvex: fullmodel %s value is empty\n", flag);
+        return 2;
+    }
+    return 0;
+}
+
+static int parse_fullmodel_options(int argc,
+                                   char **argv,
+                                   yvex_cli_fullmodel_options *options)
+{
+    int i;
+
+    if (!options) return 2;
+    memset(options, 0, sizeof(*options));
+    options->backend = "cpu";
+    options->limit_tensors = 5ull;
+
+    if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        yvex_fullmodel_help(stdout);
+        return 1;
+    }
+    if (argc < 3 || strcmp(argv[2], "report") != 0) {
+        fprintf(stderr, "yvex: fullmodel requires report\n");
+        fprintf(stderr, "usage: yvex fullmodel report --model FILE_OR_ALIAS [--backend cpu|cuda] [--target TARGET] [--limit-tensors N]\n");
+        return 2;
+    }
+
+    for (i = 3; i < argc; ++i) {
+        const char *value = NULL;
+        if (strcmp(argv[i], "--model") == 0) {
+            int rc = fullmodel_parse_value_option("--model", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            options->model = value;
+        } else if (strcmp(argv[i], "--backend") == 0) {
+            int rc = fullmodel_parse_value_option("--backend", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            if (strcmp(value, "cpu") != 0 && strcmp(value, "cuda") != 0) {
+                fprintf(stderr, "yvex: fullmodel --backend must be cpu or cuda\n");
+                return 2;
+            }
+            options->backend = value;
+        } else if (strcmp(argv[i], "--target") == 0) {
+            int rc = fullmodel_parse_value_option("--target", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            options->target = value;
+        } else if (strcmp(argv[i], "--registry") == 0) {
+            int rc = fullmodel_parse_value_option("--registry", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            options->registry_path = value;
+        } else if (strcmp(argv[i], "--limit-tensors") == 0) {
+            unsigned long long parsed = 0ull;
+            int rc = fullmodel_parse_value_option("--limit-tensors", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            if (!parse_positive_ull(value, &parsed) || parsed == 0ull) {
+                fprintf(stderr, "yvex: fullmodel --limit-tensors requires a positive integer\n");
+                return 2;
+            }
+            options->limit_tensors = parsed > 16ull ? 16ull : parsed;
+        } else {
+            fprintf(stderr, "yvex: unknown fullmodel option: %s\n", argv[i]);
+            return 2;
+        }
+    }
+    if (!options->model) {
+        fprintf(stderr, "yvex: fullmodel report requires --model FILE_OR_ALIAS\n");
+        return 2;
+    }
+    return 0;
+}
+
+static int fullmodel_file_size(const char *path,
+                               unsigned long long *bytes)
+{
+    struct stat st;
+
+    if (bytes) *bytes = 0ull;
+    if (!path || stat(path, &st) != 0) return 0;
+    if (bytes) *bytes = (unsigned long long)st.st_size;
+    return 1;
+}
+
+static const char *fullmodel_family_from_arch(yvex_arch arch)
+{
+    switch (arch) {
+    case YVEX_ARCH_DEEPSEEK: return "deepseek";
+    case YVEX_ARCH_GLM: return "glm";
+    case YVEX_ARCH_LLAMA: return "llama";
+    case YVEX_ARCH_QWEN: return "qwen";
+    case YVEX_ARCH_GEMMA: return "gemma";
+    case YVEX_ARCH_PHI: return "phi";
+    case YVEX_ARCH_KIMI: return "kimi";
+    default: return "unknown";
+    }
+}
+
+static int fullmodel_name_has(const char *name, const char *needle)
+{
+    return name && needle && strstr(name, needle) != NULL;
+}
+
+static void fullmodel_csv_append(char *buf,
+                                 size_t cap,
+                                 const char *item)
+{
+    size_t used;
+    int n;
+
+    if (!buf || cap == 0u || !item || !item[0]) return;
+    used = strlen(buf);
+    if (used >= cap - 1u) return;
+    n = snprintf(buf + used, cap - used, "%s%s", used == 0u ? "" : ",", item);
+    if (n < 0 || (size_t)n >= cap - used) buf[cap - 1u] = '\0';
+}
+
+static void fullmodel_record_dtype(yvex_fullmodel_dtype_bucket buckets[32],
+                                   unsigned int *bucket_count,
+                                   const yvex_tensor_info *tensor)
+{
+    const char *name;
+    unsigned int i;
+
+    if (!buckets || !bucket_count || !tensor) return;
+    name = yvex_dtype_name(tensor->dtype);
+    for (i = 0; i < *bucket_count; ++i) {
+        if (strcmp(buckets[i].name, name) == 0) {
+            buckets[i].count++;
+            buckets[i].bytes += tensor->storage_bytes;
+            return;
+        }
+    }
+    if (*bucket_count < 32u) {
+        snprintf(buckets[*bucket_count].name, sizeof(buckets[*bucket_count].name), "%s", name);
+        buckets[*bucket_count].count = 1ull;
+        buckets[*bucket_count].bytes = tensor->storage_bytes;
+        (*bucket_count)++;
+    }
+}
+
+static void fullmodel_dtype_summary(char *out,
+                                    size_t out_cap,
+                                    const yvex_fullmodel_dtype_bucket buckets[32],
+                                    unsigned int bucket_count)
+{
+    unsigned int i;
+    size_t used = 0u;
+
+    if (!out || out_cap == 0u) return;
+    out[0] = '\0';
+    for (i = 0; i < bucket_count; ++i) {
+        int n = snprintf(out + used,
+                         used < out_cap ? out_cap - used : 0u,
+                         "%s%s:%llu:%llu",
+                         i == 0 ? "" : ",",
+                         buckets[i].name,
+                         buckets[i].count,
+                         buckets[i].bytes);
+        if (n < 0 || (size_t)n >= (used < out_cap ? out_cap - used : 0u)) {
+            out[out_cap - 1u] = '\0';
+            return;
+        }
+        used += (size_t)n;
+    }
+    if (bucket_count == 0u) snprintf(out, out_cap, "none");
+}
+
+static void fullmodel_record_largest(yvex_fullmodel_largest_tensor top[16],
+                                     unsigned int *top_count,
+                                     unsigned int limit,
+                                     const yvex_tensor_info *tensor)
+{
+    unsigned int i;
+    unsigned int pos;
+
+    if (!top || !top_count || !tensor || limit == 0u) return;
+    if (limit > 16u) limit = 16u;
+    pos = *top_count;
+    for (i = 0; i < *top_count; ++i) {
+        if (tensor->storage_bytes > top[i].bytes) {
+            pos = i;
+            break;
+        }
+    }
+    if (*top_count < limit) {
+        (*top_count)++;
+    } else if (pos >= limit) {
+        return;
+    }
+    for (i = *top_count - 1u; i > pos; --i) {
+        top[i] = top[i - 1u];
+    }
+    top[pos].tensor = tensor;
+    top[pos].bytes = tensor->storage_bytes;
+}
+
+static void fullmodel_classify_tensor(const yvex_tensor_info *tensor,
+                                      yvex_fullmodel_collections *collections)
+{
+    const char *name;
+
+    if (!tensor || !collections) return;
+    name = tensor->name ? tensor->name : "";
+    switch (tensor->role) {
+    case YVEX_TENSOR_ROLE_TOKEN_EMBEDDING:
+        collections->embedding++;
+        collections->has_token_embedding = 1;
+        return;
+    case YVEX_TENSOR_ROLE_OUTPUT_NORM:
+        collections->normalization++;
+        collections->has_output_norm = 1;
+        return;
+    case YVEX_TENSOR_ROLE_OUTPUT_HEAD:
+        collections->output++;
+        collections->has_output_head = 1;
+        return;
+    case YVEX_TENSOR_ROLE_ATTENTION_NORM:
+        collections->normalization++;
+        collections->has_attention_norm = 1;
+        return;
+    case YVEX_TENSOR_ROLE_ATTENTION_Q:
+        collections->attention++;
+        collections->has_attention_q = 1;
+        return;
+    case YVEX_TENSOR_ROLE_ATTENTION_K:
+        collections->attention++;
+        collections->has_attention_k = 1;
+        return;
+    case YVEX_TENSOR_ROLE_ATTENTION_V:
+        collections->attention++;
+        collections->has_attention_v = 1;
+        return;
+    case YVEX_TENSOR_ROLE_ATTENTION_OUT:
+        collections->attention++;
+        collections->has_attention_out = 1;
+        return;
+    case YVEX_TENSOR_ROLE_FFN_NORM:
+        collections->normalization++;
+        collections->has_post_attention_norm = 1;
+        return;
+    case YVEX_TENSOR_ROLE_FFN_GATE:
+        collections->mlp++;
+        collections->has_ffn_gate = 1;
+        return;
+    case YVEX_TENSOR_ROLE_FFN_UP:
+        collections->mlp++;
+        collections->has_ffn_up = 1;
+        return;
+    case YVEX_TENSOR_ROLE_FFN_DOWN:
+        collections->mlp++;
+        collections->has_ffn_down = 1;
+        return;
+    case YVEX_TENSOR_ROLE_MOE_ROUTER:
+        collections->moe++;
+        collections->has_moe_router = 1;
+        return;
+    case YVEX_TENSOR_ROLE_MOE_EXPERT_GATE:
+    case YVEX_TENSOR_ROLE_MOE_EXPERT_UP:
+    case YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN:
+        collections->moe++;
+        collections->has_moe_expert = 1;
+        return;
+    default:
+        break;
+    }
+
+    if (fullmodel_name_has(name, "token_embd") || fullmodel_name_has(name, "embed")) {
+        collections->embedding++;
+        collections->has_token_embedding = 1;
+    } else if (fullmodel_name_has(name, "attn_norm") ||
+               fullmodel_name_has(name, "input_layernorm")) {
+        collections->normalization++;
+        collections->has_attention_norm = 1;
+    } else if (fullmodel_name_has(name, "ffn_norm") ||
+               fullmodel_name_has(name, "post_attention_layernorm")) {
+        collections->normalization++;
+        collections->has_post_attention_norm = 1;
+    } else if (fullmodel_name_has(name, "attn_q") || fullmodel_name_has(name, "q_proj")) {
+        collections->attention++;
+        collections->has_attention_q = 1;
+    } else if (fullmodel_name_has(name, "attn_k") || fullmodel_name_has(name, "k_proj")) {
+        collections->attention++;
+        collections->has_attention_k = 1;
+    } else if (fullmodel_name_has(name, "attn_v") || fullmodel_name_has(name, "v_proj")) {
+        collections->attention++;
+        collections->has_attention_v = 1;
+    } else if (fullmodel_name_has(name, "attn_output") || fullmodel_name_has(name, "o_proj")) {
+        collections->attention++;
+        collections->has_attention_out = 1;
+    } else if (fullmodel_name_has(name, "ffn_gate") || fullmodel_name_has(name, "gate_proj")) {
+        collections->mlp++;
+        collections->has_ffn_gate = 1;
+    } else if (fullmodel_name_has(name, "ffn_up") || fullmodel_name_has(name, "up_proj")) {
+        collections->mlp++;
+        collections->has_ffn_up = 1;
+    } else if (fullmodel_name_has(name, "ffn_down") || fullmodel_name_has(name, "down_proj")) {
+        collections->mlp++;
+        collections->has_ffn_down = 1;
+    } else if (fullmodel_name_has(name, "router") || fullmodel_name_has(name, "gate.weight")) {
+        collections->moe++;
+        collections->has_moe_router = 1;
+    } else if (fullmodel_name_has(name, "expert")) {
+        collections->moe++;
+        collections->has_moe_expert = 1;
+    } else if (fullmodel_name_has(name, "output_norm") || fullmodel_name_has(name, "norm.weight")) {
+        collections->normalization++;
+        collections->has_output_norm = 1;
+    } else if (strcmp(name, "output.weight") == 0 || fullmodel_name_has(name, "lm_head")) {
+        collections->output++;
+        collections->has_output_head = 1;
+    } else {
+        collections->unknown++;
+    }
+}
+
+static int fullmodel_is_selected_target(const char *text)
+{
+    return text &&
+           (strcmp(text, "deepseek4-v4-flash-selected-embed") == 0 ||
+            strcmp(text, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0);
+}
+
+static void print_fullmodel_common_boundaries(void)
+{
+    printf("prefill_ready: false\n");
+    printf("decode_ready: false\n");
+    printf("logits_ready: false\n");
+    printf("sampling_ready: false\n");
+    printf("full_model_execution: unsupported\n");
+    printf("full_model_materialization: planned\n");
+    printf("full_runtime_descriptor: planned\n");
+    printf("generation_ready: false\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+}
+
+static int print_fullmodel_source_only_report(const char *target,
+                                              const char *backend)
+{
+    printf("fullmodel: report\n");
+    printf("status: fullmodel-report-unsupported\n");
+    printf("model: %s\n", target ? target : "");
+    printf("model_resolved_path: source-only-target\n");
+    printf("target_id: %s\n", target ? target : "");
+    printf("target_class: official-source-huge-model\n");
+    printf("source_artifact_class: official safetensors\n");
+    printf("target_artifact_class: future YVEX-produced GGUF\n");
+    printf("artifact_exists: false\n");
+    printf("artifact_bytes: 0\n");
+    printf("artifact_identity_status: not-applicable\n");
+    printf("tensor_count: 0\n");
+    printf("tensor_inventory_status: not-performed-source-only-target\n");
+    printf("metadata_status: not-performed\n");
+    printf("architecture: glm\n");
+    printf("family: glm\n");
+    printf("model_class: huge-MoE-source-target\n");
+    printf("fullmodel_inventory: unsupported-source-only\n");
+    printf("qtype_summary: none\n");
+    printf("dtype_summary: none\n");
+    printf("total_tensor_bytes: 0\n");
+    printf("estimated_cpu_resident_bytes: unknown\n");
+    printf("estimated_cuda_resident_bytes: unknown\n");
+    printf("estimated_kv_bytes: planned\n");
+    printf("estimated_scratch_bytes: planned\n");
+    printf("estimated_total_runtime_bytes: unknown\n");
+    printf("backend: %s\n", backend ? backend : "cpu");
+    printf("backend_placement_status: not-performed\n");
+    printf("cpu_placement: unsupported-source-only\n");
+    printf("cuda_placement: unsupported-source-only\n");
+    printf("cuda_available: %s\n", yvex_backend_cuda_available() ? "true" : "false");
+    printf("cuda_memory_status: unavailable\n");
+    printf("residency_plan: future-YVEX-produced-artifact-required\n");
+    printf("tensor_collections_status: not-performed\n");
+    printf("collection_detected: no\n");
+    printf("collection_supported: false\n");
+    printf("runtime_consumer: unsupported\n");
+    printf("embedding_tensors: 0\n");
+    printf("normalization_tensors: 0\n");
+    printf("attention_tensors: 0\n");
+    printf("kv_cache_requirements: planned\n");
+    printf("mlp_tensors: 0\n");
+    printf("moe_tensors: 0\n");
+    printf("output_tensors: 0\n");
+    printf("tokenizer_tensors: 0\n");
+    printf("required_role_coverage: none\n");
+    printf("missing_required_roles: YVEX-produced-GGUF-artifact\n");
+    printf("unsupported_required_roles: GLM-runtime-family-mapping,GLM-YVEX-produced-GGUF-emission,GLM-runtime-execution\n");
+    printf("runtime_blockers: source-only target; YVEX-produced GGUF emission planned; full model runtime unsupported\n");
+    print_fullmodel_common_boundaries();
+    return 0;
+}
+
+static int print_fullmodel_missing_report(const yvex_cli_fullmodel_options *options,
+                                          const char *resolved_path)
+{
+    printf("fullmodel: report\n");
+    printf("status: fullmodel-report-fail\n");
+    printf("model: %s\n", options && options->model ? options->model : "");
+    printf("model_resolved_path: %s\n", resolved_path ? resolved_path : "");
+    printf("target_id: %s\n", options && options->target ? options->target : "unknown");
+    printf("target_class: unresolved-artifact\n");
+    printf("source_artifact_class: unknown\n");
+    printf("target_artifact_class: GGUF artifact\n");
+    printf("artifact_exists: false\n");
+    printf("artifact_bytes: 0\n");
+    printf("artifact_identity_status: unavailable\n");
+    printf("tensor_count: 0\n");
+    printf("tensor_inventory_status: failed\n");
+    printf("metadata_status: failed\n");
+    printf("architecture: unknown\n");
+    printf("family: unknown\n");
+    printf("model_class: unresolved\n");
+    printf("fullmodel_inventory: unavailable\n");
+    printf("qtype_summary: none\n");
+    printf("dtype_summary: none\n");
+    printf("total_tensor_bytes: 0\n");
+    printf("estimated_cpu_resident_bytes: unknown\n");
+    printf("estimated_cuda_resident_bytes: unknown\n");
+    printf("estimated_kv_bytes: planned\n");
+    printf("estimated_scratch_bytes: planned\n");
+    printf("estimated_total_runtime_bytes: unknown\n");
+    printf("backend: %s\n", options && options->backend ? options->backend : "cpu");
+    printf("backend_placement_status: failed-missing-artifact\n");
+    printf("cpu_placement: unavailable\n");
+    printf("cuda_placement: unavailable\n");
+    printf("cuda_available: %s\n", yvex_backend_cuda_available() ? "true" : "false");
+    printf("cuda_memory_status: unavailable\n");
+    printf("residency_plan: unavailable\n");
+    printf("tensor_collections_status: unavailable\n");
+    printf("collection_detected: no\n");
+    printf("collection_supported: false\n");
+    printf("runtime_consumer: unsupported\n");
+    printf("embedding_tensors: 0\n");
+    printf("normalization_tensors: 0\n");
+    printf("attention_tensors: 0\n");
+    printf("kv_cache_requirements: planned\n");
+    printf("mlp_tensors: 0\n");
+    printf("moe_tensors: 0\n");
+    printf("output_tensors: 0\n");
+    printf("tokenizer_tensors: 0\n");
+    printf("required_role_coverage: none\n");
+    printf("missing_required_roles: artifact\n");
+    printf("unsupported_required_roles: full-runtime-model\n");
+    printf("runtime_blockers: artifact path missing\n");
+    print_fullmodel_common_boundaries();
+    printf("reason: artifact path does not exist\n");
+    return exit_for_status(YVEX_ERR_IO);
+}
+
+static int print_fullmodel_parse_failure_report(const yvex_cli_fullmodel_options *options,
+                                                const yvex_model_ref *ref,
+                                                const char *reason,
+                                                int rc)
+{
+    unsigned long long artifact_bytes = 0ull;
+
+    fullmodel_file_size(ref && ref->path ? ref->path : "", &artifact_bytes);
+    printf("fullmodel: report\n");
+    printf("status: fullmodel-report-fail\n");
+    printf("model: %s\n", options && options->model ? options->model : "");
+    printf("model_resolved_path: %s\n", ref && ref->path ? ref->path : "");
+    printf("target_id: %s\n", options && options->target ? options->target : (ref && ref->alias && ref->alias[0] ? ref->alias : "path"));
+    printf("target_class: GGUF-artifact\n");
+    printf("source_artifact_class: unknown\n");
+    printf("target_artifact_class: GGUF artifact\n");
+    printf("artifact_exists: true\n");
+    printf("artifact_bytes: %llu\n", artifact_bytes);
+    printf("artifact_identity_status: not-checked\n");
+    printf("tensor_count: 0\n");
+    printf("tensor_inventory_status: failed\n");
+    printf("metadata_status: failed\n");
+    printf("architecture: unknown\n");
+    printf("family: unknown\n");
+    printf("model_class: parse-failed\n");
+    printf("fullmodel_inventory: unavailable\n");
+    printf("qtype_summary: none\n");
+    printf("dtype_summary: none\n");
+    printf("total_tensor_bytes: 0\n");
+    printf("estimated_cpu_resident_bytes: unknown\n");
+    printf("estimated_cuda_resident_bytes: unknown\n");
+    printf("estimated_kv_bytes: planned\n");
+    printf("estimated_scratch_bytes: planned\n");
+    printf("estimated_total_runtime_bytes: unknown\n");
+    printf("backend: %s\n", options && options->backend ? options->backend : "cpu");
+    printf("backend_placement_status: failed-parse\n");
+    printf("cpu_placement: unavailable\n");
+    printf("cuda_placement: unavailable\n");
+    printf("cuda_available: %s\n", yvex_backend_cuda_available() ? "true" : "false");
+    printf("cuda_memory_status: unavailable\n");
+    printf("residency_plan: unavailable\n");
+    printf("tensor_collections_status: failed\n");
+    printf("collection_detected: no\n");
+    printf("collection_supported: false\n");
+    printf("runtime_consumer: unsupported\n");
+    printf("embedding_tensors: 0\n");
+    printf("normalization_tensors: 0\n");
+    printf("attention_tensors: 0\n");
+    printf("kv_cache_requirements: planned\n");
+    printf("mlp_tensors: 0\n");
+    printf("moe_tensors: 0\n");
+    printf("output_tensors: 0\n");
+    printf("tokenizer_tensors: 0\n");
+    printf("required_role_coverage: none\n");
+    printf("missing_required_roles: parseable-GGUF-tensor-directory\n");
+    printf("unsupported_required_roles: full-runtime-model\n");
+    printf("runtime_blockers: GGUF metadata or tensor directory parse failed\n");
+    print_fullmodel_common_boundaries();
+    printf("reason: %s\n", reason ? reason : "parse failed");
+    return exit_for_status(rc);
+}
+
+static void fullmodel_print_largest(const yvex_fullmodel_largest_tensor top[16],
+                                    unsigned int top_count)
+{
+    unsigned int i;
+
+    for (i = 0; i < top_count; ++i) {
+        char dims[128];
+        const yvex_tensor_info *tensor = top[i].tensor;
+        if (!tensor) continue;
+        dims_to_text(tensor->dims, tensor->rank, dims, sizeof(dims));
+        printf("largest_tensor_%u: name=%s dtype=%s role=%s dims=%s bytes=%llu\n",
+               i,
+               tensor->name ? tensor->name : "",
+               yvex_dtype_name(tensor->dtype),
+               yvex_tensor_role_name(tensor->role),
+               dims,
+               tensor->storage_bytes);
+    }
+}
+
+static const char *fullmodel_identity_status(const yvex_model_ref *ref,
+                                             unsigned long long artifact_bytes)
+{
+    if (!ref || ref->kind != YVEX_MODEL_REF_ALIAS) return "not-checked";
+    if (!ref->sha256 || !ref->sha256[0]) return "registered-without-digest";
+    if (ref->registered_file_size != 0ull && ref->registered_file_size != artifact_bytes) {
+        return "registered-size-drift";
+    }
+    return "registered-size-match";
+}
+
+int yvex_fullmodel_command(int argc, char **argv)
+{
+    yvex_cli_fullmodel_options options;
+    yvex_model_ref_options ref_options;
+    yvex_model_ref ref;
+    yvex_cli_tokenizer_context ctx;
+    yvex_fullmodel_collections collections;
+    yvex_fullmodel_dtype_bucket dtype_buckets[32];
+    yvex_fullmodel_largest_tensor largest[16];
+    yvex_error err;
+    char dtype_summary[512];
+    char missing_roles[768];
+    char unsupported_roles[512];
+    const char *target_id;
+    const char *target_class;
+    const char *source_artifact_class;
+    const char *target_artifact_class;
+    const char *model_class;
+    const char *inventory_status;
+    const char *role_coverage;
+    const char *backend_placement_status;
+    const char *cpu_placement;
+    const char *cuda_placement;
+    yvex_arch arch;
+    unsigned long long artifact_bytes = 0ull;
+    unsigned long long total_tensor_bytes = 0ull;
+    unsigned long long tensor_count;
+    unsigned long long i;
+    unsigned int dtype_bucket_count = 0u;
+    unsigned int largest_count = 0u;
+    int selected_target = 0;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&options, 0, sizeof(options));
+    memset(&ref, 0, sizeof(ref));
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&collections, 0, sizeof(collections));
+    memset(dtype_buckets, 0, sizeof(dtype_buckets));
+    memset(largest, 0, sizeof(largest));
+    memset(missing_roles, 0, sizeof(missing_roles));
+    memset(unsupported_roles, 0, sizeof(unsupported_roles));
+
+    rc = parse_fullmodel_options(argc, argv, &options);
+    if (rc == 1) return 0;
+    if (rc != 0) return rc;
+
+    if (strcmp(options.model, "glm-5.2-official-safetensors") == 0 ||
+        (options.target && strcmp(options.target, "glm-5.2-official-safetensors") == 0)) {
+        return print_fullmodel_source_only_report("glm-5.2-official-safetensors", options.backend);
+    }
+
+    memset(&ref_options, 0, sizeof(ref_options));
+    ref_options.allow_registry = 1;
+    ref_options.registry_path = options.registry_path;
+    rc = yvex_model_ref_resolve(&ref, options.model, &ref_options, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    if (!fullmodel_file_size(ref.path, &artifact_bytes)) {
+        rc = print_fullmodel_missing_report(&options, ref.path);
+        yvex_model_ref_clear(&ref);
+        return rc;
+    }
+
+    rc = open_model_context(ref.path, &ctx, &err);
+    if (rc != YVEX_OK) {
+        int out = print_fullmodel_parse_failure_report(&options, &ref, yvex_error_message(&err), rc);
+        yvex_error_clear(&err);
+        yvex_model_ref_clear(&ref);
+        return out;
+    }
+
+    tensor_count = yvex_tensor_table_count(ctx.table);
+    for (i = 0; i < tensor_count; ++i) {
+        const yvex_tensor_info *tensor = yvex_tensor_table_at(ctx.table, i);
+        if (!tensor) continue;
+        total_tensor_bytes += tensor->storage_bytes;
+        fullmodel_record_dtype(dtype_buckets, &dtype_bucket_count, tensor);
+        fullmodel_record_largest(largest, &largest_count,
+                                 (unsigned int)options.limit_tensors, tensor);
+        fullmodel_classify_tensor(tensor, &collections);
+    }
+    if (yvex_gguf_metadata_find(ctx.gguf, "tokenizer.ggml.tokens") ||
+        yvex_gguf_metadata_find(ctx.gguf, "tokenizer.ggml.model")) {
+        collections.tokenizer = 1ull;
+        collections.has_tokenizer_metadata = 1;
+    }
+    fullmodel_dtype_summary(dtype_summary, sizeof(dtype_summary),
+                            dtype_buckets, dtype_bucket_count);
+
+    arch = yvex_model_arch(ctx.model);
+    target_id = options.target ? options.target :
+                (ref.alias && ref.alias[0] ? ref.alias : "path");
+    selected_target = fullmodel_is_selected_target(target_id) ||
+                      fullmodel_is_selected_target(options.model);
+    target_class = selected_target ? "selected-runtime-slice" :
+                   (options.target && strcmp(options.target, "deepseek4-v4-flash") == 0
+                        ? "full-runtime-model-planned"
+                        : "candidate-GGUF-path");
+    source_artifact_class = selected_target ? "YVEX-produced selected GGUF" : "GGUF artifact";
+    target_artifact_class = selected_target ? "YVEX-produced selected GGUF" : "candidate GGUF artifact";
+    model_class = selected_target ? "selected-runtime-slice" : "descriptor-only-candidate";
+    inventory_status = selected_target ? "incomplete" : "partial";
+
+    if (!collections.has_token_embedding) fullmodel_csv_append(missing_roles, sizeof(missing_roles), "token-embedding");
+    if (!collections.has_attention_norm) fullmodel_csv_append(missing_roles, sizeof(missing_roles), "attention-norm");
+    if (!collections.has_post_attention_norm) fullmodel_csv_append(missing_roles, sizeof(missing_roles), "post-attention-norm");
+    if (!collections.has_attention_q) fullmodel_csv_append(missing_roles, sizeof(missing_roles), "attention-q-projection");
+    if (!collections.has_attention_k) fullmodel_csv_append(missing_roles, sizeof(missing_roles), "attention-k-projection");
+    if (!collections.has_attention_v) fullmodel_csv_append(missing_roles, sizeof(missing_roles), "attention-v-projection");
+    if (!collections.has_attention_out) fullmodel_csv_append(missing_roles, sizeof(missing_roles), "attention-output-projection");
+    if (!collections.has_ffn_gate) fullmodel_csv_append(missing_roles, sizeof(missing_roles), "mlp-gate");
+    if (!collections.has_ffn_up) fullmodel_csv_append(missing_roles, sizeof(missing_roles), "mlp-up");
+    if (!collections.has_ffn_down) fullmodel_csv_append(missing_roles, sizeof(missing_roles), "mlp-down");
+    if (!collections.has_moe_router) fullmodel_csv_append(missing_roles, sizeof(missing_roles), "moe-router");
+    if (!collections.has_moe_expert) fullmodel_csv_append(missing_roles, sizeof(missing_roles), "moe-experts");
+    if (!collections.has_output_norm) fullmodel_csv_append(missing_roles, sizeof(missing_roles), "final-norm");
+    if (!collections.has_output_head) fullmodel_csv_append(missing_roles, sizeof(missing_roles), "output-head");
+    if (!collections.has_tokenizer_metadata) fullmodel_csv_append(missing_roles, sizeof(missing_roles), "tokenizer-metadata");
+    if (!missing_roles[0]) snprintf(missing_roles, sizeof(missing_roles), "none");
+
+    fullmodel_csv_append(unsupported_roles, sizeof(unsupported_roles), "real-transformer-prefill");
+    fullmodel_csv_append(unsupported_roles, sizeof(unsupported_roles), "real-DeepSeek-decode");
+    fullmodel_csv_append(unsupported_roles, sizeof(unsupported_roles), "real-output-head-logits");
+    fullmodel_csv_append(unsupported_roles, sizeof(unsupported_roles), "real-vocabulary-sampling");
+    fullmodel_csv_append(unsupported_roles, sizeof(unsupported_roles), "full-model-materialization");
+
+    role_coverage = strcmp(missing_roles, "none") == 0 ? "observed" : "partial";
+    if (selected_target) role_coverage = "partial";
+    backend_placement_status = selected_target ? "selected-tensor-plan-only" : "report-only";
+    cpu_placement = selected_target ? "selected-tensors-only" : "planned-full-model";
+    cuda_placement = strcmp(options.backend, "cuda") == 0
+                         ? (yvex_backend_cuda_available() ? "selected-or-candidate-tensors-only" : "unavailable")
+                         : "not-requested";
+
+    printf("fullmodel: report\n");
+    printf("status: fullmodel-report\n");
+    printf("model: %s\n", options.model);
+    printf("model_resolved_path: %s\n", ref.path ? ref.path : "");
+    printf("target_id: %s\n", target_id);
+    printf("target_class: %s\n", target_class);
+    printf("source_artifact_class: %s\n", source_artifact_class);
+    printf("target_artifact_class: %s\n", target_artifact_class);
+    printf("artifact_exists: true\n");
+    printf("artifact_bytes: %llu\n", artifact_bytes);
+    printf("artifact_identity_status: %s\n", fullmodel_identity_status(&ref, artifact_bytes));
+    printf("tensor_count: %llu\n", tensor_count);
+    printf("tensor_inventory_status: pass\n");
+    printf("metadata_status: pass\n");
+    printf("architecture: %s\n", yvex_arch_name(arch));
+    printf("family: %s\n", fullmodel_family_from_arch(arch));
+    printf("model_class: %s\n", model_class);
+    printf("fullmodel_inventory: %s\n", inventory_status);
+    printf("full_runtime_model: false\n");
+    printf("qtype_summary: %s\n", dtype_summary);
+    printf("dtype_summary: %s\n", dtype_summary);
+    printf("total_tensor_bytes: %llu\n", total_tensor_bytes);
+    printf("estimated_cpu_resident_bytes: %llu\n", total_tensor_bytes);
+    printf("estimated_cuda_resident_bytes: %llu\n", total_tensor_bytes);
+    printf("estimated_kv_bytes: planned\n");
+    printf("estimated_scratch_bytes: planned\n");
+    printf("estimated_total_runtime_bytes: unknown\n");
+    printf("backend: %s\n", options.backend);
+    printf("backend_placement_status: %s\n", backend_placement_status);
+    printf("cpu_placement: %s\n", cpu_placement);
+    printf("cuda_placement: %s\n", cuda_placement);
+    printf("cuda_available: %s\n", yvex_backend_cuda_available() ? "true" : "false");
+    printf("cuda_memory_status: %s\n", yvex_backend_cuda_available() ? "probe-available-no-allocation" : "unavailable");
+    printf("residency_plan: report-only-no-allocation\n");
+    printf("tensor_collections_status: %s\n", role_coverage);
+    printf("collection_detected: %s\n", tensor_count > 0ull ? "yes" : "no");
+    printf("collection_supported: partial\n");
+    printf("runtime_consumer: unsupported\n");
+    printf("embedding_tensors: %llu\n", collections.embedding);
+    printf("normalization_tensors: %llu\n", collections.normalization);
+    printf("attention_tensors: %llu\n", collections.attention);
+    printf("kv_cache_requirements: planned\n");
+    printf("mlp_tensors: %llu\n", collections.mlp);
+    printf("moe_tensors: %llu\n", collections.moe);
+    printf("output_tensors: %llu\n", collections.output);
+    printf("tokenizer_tensors: %llu\n", collections.tokenizer);
+    printf("unknown_tensors: %llu\n", collections.unknown);
+    printf("required_role_coverage: %s\n", role_coverage);
+    printf("missing_required_roles: %s\n", missing_roles);
+    printf("unsupported_required_roles: %s\n", unsupported_roles);
+    printf("runtime_blockers: full tensor set missing; attention projection tensors may be missing; MLP/MoE tensors may be missing; output head may be missing; real transformer prefill unsupported; real DeepSeek decode unsupported; real output-head logits unsupported; real vocabulary sampling unsupported; full model materialization not implemented\n");
+    print_fullmodel_common_boundaries();
+    printf("largest_tensor_report_limit: %llu\n", options.limit_tensors);
+    fullmodel_print_largest(largest, largest_count);
+
+    close_model_context(&ctx);
+    yvex_model_ref_clear(&ref);
+    return 0;
+}
+
+void yvex_fullmodel_help(FILE *fp)
+{
+    fprintf(fp, "usage: yvex fullmodel report --model FILE_OR_ALIAS [--backend cpu|cuda] [--target TARGET] [--limit-tensors N] [--registry FILE]\n");
+    fprintf(fp, "\nExamples:\n");
+    fprintf(fp, "  yvex fullmodel report --model deepseek4-v4-flash-selected-embed --backend cpu\n");
+    fprintf(fp, "  yvex fullmodel report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --limit-tensors 8\n");
+    fprintf(fp, "  yvex fullmodel report --model ./candidate.gguf --target deepseek4-v4-flash --backend cuda\n");
+    fprintf(fp, "\nFullmodel report reads GGUF metadata and tensor-directory facts only. It estimates inventory, qtype/dtype summaries, tensor collections, placement pressure, and runtime blockers. It does not materialize tensors, allocate backend memory, run graph execution, decode, produce logits, sample, generate, evaluate, or benchmark.\n");
+    fprintf(fp, "Boundary: no materialization, graph execution, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
+}
+
 /* Models command dispatch and help. */
 
 typedef int (*yvex_models_subcommand_fn)(int argc, char **argv);

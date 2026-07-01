@@ -15,6 +15,8 @@ This file does not describe GLM GGUF emission.
 YVEX uses GLM as a huge-MoE source-tensor pressure target for future inventory,
 model-class profiling, tensor mapping, quantization policy, YVEX-produced GGUF
 planning, storage layout, and storage-stream planning.
+`yvex fullmodel report --model glm-5.2-official-safetensors` currently reports
+the source-only unsupported boundary without inspecting GLM safetensors.
 
 ## GLM Paths And Target
 
@@ -109,6 +111,7 @@ Boundary:
 
 ```sh
 ./yvex model-target inspect glm-5.2-official-safetensors --paths
+./yvex fullmodel report --model glm-5.2-official-safetensors --backend cpu
 ```
 
 ## Lane 2 — Start GLM Source Download

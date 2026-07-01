@@ -38,6 +38,7 @@ static const yvex_cli_command yvex_commands[] = {
     { "decode", "Create one bounded diagnostic decode-state step.", yvex_decode_command, yvex_decode_help },
     { "detokenize", "Decode token IDs.", yvex_detokenize_command, yvex_detokenize_help },
     { "engine", "Open an engine descriptor.", yvex_engine_command, yvex_engine_help },
+    { "fullmodel", "full model tensor inventory and placement report.", yvex_fullmodel_command, yvex_fullmodel_help },
     { "graph", "Build graph diagnostics or run narrow graph proofs.", yvex_graph_command, yvex_graph_help },
     { "generate", "bounded diagnostic generation loop.", yvex_generate_command, yvex_generate_help },
     { "gguf-template", "Inspect or validate a GGUF conversion template.", yvex_gguf_template_command, yvex_gguf_template_help },

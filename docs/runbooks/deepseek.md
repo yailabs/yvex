@@ -18,7 +18,8 @@ alias registration, integrity, selected tensor materialization, engine/session
 attachment, selected graph execution, bounded diagnostic decode/logits/sampling,
 and bounded diagnostic generation-loop control with explicit stop-policy
 reporting, local cancellation, partial-output preservation, cleanup reporting,
-and trace-level diagnostics over the selected segment.
+trace-level diagnostics over the selected segment, and fullmodel inventory/
+placement blocker reporting over GGUF metadata and tensor-directory facts.
 
 ## DeepSeek Paths And Artifacts
 
@@ -295,7 +296,46 @@ Boundary:
 ./yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8 --append-demo --read-position 0
 ```
 
-## Lane 4 — DeepSeek CUDA Pressure Lane
+## Lane 4 — DeepSeek Fullmodel Inventory And Placement Report
+
+Purpose:
+  Report tensor inventory, qtype/dtype bytes, tensor collection candidates,
+  DeepSeek role coverage, placement pressure, and runtime blockers for selected
+  DeepSeek artifacts.
+
+Requires:
+  Registered selected aliases or direct GGUF paths.
+
+Writes:
+  No model artifact.
+  No registry change.
+
+Safe to rerun:
+  yes
+
+Stop after:
+  selected artifacts report incomplete full-model inventory and generation stays
+  unsupported-full-model.
+
+Boundary:
+  metadata and tensor-directory inventory only
+  no payload materialization
+  no full model materialization
+  no full model execution
+  no real DeepSeek generation
+  no provider generation
+  no evaluation
+  no benchmark
+
+```sh
+./yvex help fullmodel
+./yvex fullmodel report --model deepseek4-v4-flash-selected-embed --backend cpu
+./yvex fullmodel report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu
+./yvex fullmodel report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda
+./yvex fullmodel report --model "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-rmsnorm-F16-noimatrix-yvex-v1.gguf" --target deepseek4-v4-flash --backend cpu --limit-tensors 20
+```
+
+## Lane 5 — DeepSeek CUDA Pressure Lane
 
 Purpose:
   Run CUDA probe, CUDA primitive graph proofs, and CUDA selected artifact graph
@@ -337,7 +377,7 @@ Boundary:
 ./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda --segment embedding-rmsnorm --tokens 0,1,2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
 ```
 
-## Lane 5 — DeepSeek Daemon And Accepted-Only Diagnostics
+## Lane 6 — DeepSeek Daemon And Accepted-Only Diagnostics
 
 Purpose:
   Check daemon status surface and accepted-only diagnostic chat/run commands.
@@ -370,7 +410,7 @@ Boundary:
 ./yvex run --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --prompt "hello"
 ```
 
-## Lane 6 — DeepSeek Validation And Hygiene
+## Lane 7 — DeepSeek Validation And Hygiene
 
 Purpose:
   Run repository validation, CUDA validation, and artifact guardrails before

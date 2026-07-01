@@ -13,7 +13,8 @@ evaluation, or benchmark capability.
 
 Purpose:
   Quickly check command discovery, path resolution, model-target reporting,
-  tokenizer fixture diagnostics, and minimal KV diagnostics.
+  fullmodel report help, tokenizer fixture diagnostics, and minimal KV
+  diagnostics.
 
 Requires:
   Repository root.
@@ -45,6 +46,7 @@ make
 ./yvex commands
 ./yvex info
 ./yvex help generate
+./yvex help fullmodel
 ./yvexd --help
 ./yvex paths
 ./yvex paths resolve --family deepseek --kind source
@@ -58,6 +60,7 @@ make
 ./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths
 ./yvex model-target inspect glm-5.2-official-safetensors
 ./yvex model-target inspect glm-5.2-official-safetensors --paths
+./yvex fullmodel report --model glm-5.2-official-safetensors --backend cpu
 ./yvex backend cpu
 ./yvex tokenizer tests/fixtures/gguf/valid-tokenizer-simple.gguf
 ./yvex tokenize tests/fixtures/gguf/valid-tokenizer-simple.gguf --text "hello"
@@ -217,6 +220,7 @@ Full help:
 ./yvex help cuda-info
 ./yvex help detokenize
 ./yvex help engine
+./yvex help fullmodel
 ./yvex help graph
 ./yvex help gguf-template
 ./yvex help gguf-emit

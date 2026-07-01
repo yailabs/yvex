@@ -161,6 +161,8 @@ int yvex_graph_command(int argc, char **argv);
 void yvex_graph_help(FILE *fp);
 int yvex_generate_command(int argc, char **argv);
 void yvex_generate_help(FILE *fp);
+int yvex_fullmodel_command(int argc, char **argv);
+void yvex_fullmodel_help(FILE *fp);
 int yvex_gguf_template_command(int argc, char **argv);
 void yvex_gguf_template_help(FILE *fp);
 int yvex_gguf_emit_command(int argc, char **argv);

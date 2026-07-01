@@ -1412,6 +1412,14 @@ bounded diagnostic generate command inventory entry
 generate argument validation and refusal wording
 stable text output policy for bounded diagnostic generation
 runbook bounded diagnostic generate lane
+fullmodel report command over GGUF tensor directory and metadata inventory
+GGUF tensor inventory without payload materialization
+qtype and dtype summary reporting
+tensor collection classification for embedding, normalization, attention, MLP, MoE, output, and tokenizer metadata
+DeepSeek required-role coverage and missing-role report
+CPU/CUDA placement pressure estimate without allocation
+full model runtime blocker report
+fullmodel no-claim boundary for execution, materialization, generation, evaluation, and benchmarks
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -1777,7 +1785,7 @@ tables.
 | SPEC.DSPARK.REF.0 | planned | reference | DSpark speculative decoding reference | DSpark is recorded as external reference evidence for semi-autoregressive drafting, confidence scheduling, and hardware-aware verification, not as YVEX runtime capability |
 | SPEC.DEEPSEEK.0 | planned | generation | DeepSeek speculative decoding target | after baseline generation exists, YVEX may implement draft, verification, accepted-token accounting, and speculative generation over DeepSeek target runtime |
 | BENCH.DEEPSEEK.SPEC.0 | planned | bench | DeepSeek speculative generation benchmark | after speculative decoding exists, benchmark harness measures accepted tokens, verification cost, latency, throughput, and speedup over YVEX baseline generation |
-| FULLMODEL.0 | planned | model | Full model inventory and placement plan | full artifact tensor inventory, memory budget, and backend placement report |
+| FULLMODEL.0 | complete | model | Full model inventory and placement plan | `yvex fullmodel report --model FILE_OR_ALIAS` reports GGUF metadata/tensor-directory inventory, qtype/dtype summaries, tensor collections, role coverage, memory and CPU/CUDA placement pressure, and runtime blockers without payload materialization, backend allocation, full model execution, generation, evaluation, or benchmark claim |
 | FULLMODEL.1 | planned | model | Full model materialization plan | selected-family full tensor placement and materialization preflight without generation claim |
 | FULLMODEL.2 | planned | model | Full model materialization proof | full required tensor set materializes or fails with phase/cleanup reports |
 | FULLMODEL.3 | planned | model | Full model runtime descriptor | model descriptor covers all tensors needed by prefill/decode/logits path |
@@ -3051,17 +3059,16 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-FULLMODEL.0 - Full model inventory and placement plan
+FULLMODEL.1 - Full model materialization plan
 ```
 
-FULLMODEL.0 must leave selected-slice-only execution and inventory the complete
-required model tensor set, memory budget, placement classes, tensor roles, and
-runtime blockers before any real full-model generation work can be promoted. It
-must not claim full model execution, real DeepSeek generation, provider
-generation, streaming generation, evaluation, benchmark readiness, or throughput.
+FULLMODEL.1 may plan selected-family full tensor placement and materialization
+preflight only. It must build on `fullmodel report` inventory facts and must not
+claim full model execution, real DeepSeek generation, provider generation,
+streaming generation, evaluation, benchmark readiness, or throughput.
 
 Algorithm/CLI research hardening runs in parallel with runtime closure. It does
-not replace FULLMODEL.0 or the current runtime Active Next.
+not replace FULLMODEL.1 or the current runtime Active Next.
 
 GEN.CONTRACT.0 hardens the contract for the generation loop. GEN.LOOP.0 is
 complete for bounded diagnostic loop control only.
@@ -3080,7 +3087,7 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-FULLMODEL.0 - Full model inventory and placement plan
+FULLMODEL.1 - Full model materialization plan
 ```
 
 CLI.GEN.0 is complete as an operator-grade command surface over the bounded
