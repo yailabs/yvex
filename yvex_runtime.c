@@ -2947,6 +2947,7 @@ static int command_info(int argc, char **argv)
     printf("server_endpoints: health/metrics/models status implemented\n");
     printf("server_generation: not implemented\n");
     printf("kv: minimal session-owned append/read boundary implemented\n");
+    printf("decode: bounded diagnostic state step implemented\n");
     printf("logits: unavailable skeleton implemented\n");
     printf("generation: unsupported\n");
     printf("inference: not implemented\n");

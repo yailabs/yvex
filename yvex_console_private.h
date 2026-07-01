@@ -151,6 +151,8 @@ int yvex_convert_command(int argc, char **argv);
 void yvex_convert_help(FILE *fp);
 int yvex_cuda_info_command(int argc, char **argv);
 void yvex_cuda_info_help(FILE *fp);
+int yvex_decode_command(int argc, char **argv);
+void yvex_decode_help(FILE *fp);
 int yvex_detokenize_command(int argc, char **argv);
 void yvex_detokenize_help(FILE *fp);
 int yvex_engine_command(int argc, char **argv);

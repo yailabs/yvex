@@ -98,7 +98,7 @@ END {
   $impl_files
 
 if grep -nE 'implemented|ready|supports generation|benchmark result|token/sec|evaluation suite implemented|decode implemented|sampling implemented|generation implemented' \
-    yvex_decode.c yvex_logits.c yvex_sampling.c yvex_generation.c yvex_eval.c yvex_bench.c; then
+    yvex_logits.c yvex_sampling.c yvex_generation.c yvex_eval.c yvex_bench.c; then
   echo "future boundary files must not claim runtime readiness"
   exit 1
 fi
@@ -187,7 +187,17 @@ pattern='20 tok/s achie''ved'
 scan_forbidden_claim "$pattern"
 pattern='DSpark par''ity'
 scan_forbidden_claim "$pattern"
+pattern='decode_rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='logits_rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='sampling_rea''dy: true'
+scan_forbidden_claim "$pattern"
 pattern='generation_rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='execution_rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='graph_execution_rea''dy: true'
 scan_forbidden_claim "$pattern"
 pattern='inference_rea''dy: true'
 scan_forbidden_claim "$pattern"

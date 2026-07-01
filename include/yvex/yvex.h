@@ -33,6 +33,7 @@
 #include <yvex/artifact_naming.h>
 #include <yvex/backend.h>
 #include <yvex/conversion.h>
+#include <yvex/decode.h>
 #include <yvex/dtype.h>
 #include <yvex/engine.h>
 #include <yvex/error.h>

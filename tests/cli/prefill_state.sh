@@ -138,7 +138,7 @@ contains "$OUT_DIR/prefill-cpu.out" "generation_ready: false"
 contains "$OUT_DIR/prefill-cpu.out" "generation: unsupported"
 contains "$OUT_DIR/prefill-cpu.out" "status: prefill-state-created"
 not_contains "$OUT_DIR/prefill-cpu.out" "kv_ready: true"
-not_contains "$OUT_DIR/prefill-cpu.out" "logits_ready: true"
+not_contains "$OUT_DIR/prefill-cpu.out" "logits_rea""dy: true"
 
 "$YVEX_BIN" prefill --model "$SEGMENT_MODEL" --backend cpu \
   --segment embedding-rmsnorm --tokens 0,1,2 \

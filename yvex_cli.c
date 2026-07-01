@@ -35,6 +35,7 @@ static const yvex_cli_command yvex_commands[] = {
     { "commands", "List implemented CLI commands.", command_commands, command_commands_help },
     { "convert", "Plan or emit selected GGUF conversions.", yvex_convert_command, yvex_convert_help },
     { "cuda-info", "Probe CUDA devices.", yvex_cuda_info_command, yvex_cuda_info_help },
+    { "decode", "Create one bounded diagnostic decode-state step.", yvex_decode_command, yvex_decode_help },
     { "detokenize", "Decode token IDs.", yvex_detokenize_command, yvex_detokenize_help },
     { "engine", "Open an engine descriptor.", yvex_engine_command, yvex_engine_help },
     { "graph", "Build graph diagnostics or run narrow graph proofs.", yvex_graph_command, yvex_graph_help },

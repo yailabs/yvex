@@ -751,6 +751,7 @@ minimal session-owned KV ownership and append/read boundary
 minimal KV-backed prefill binding from segment-summary state
 bounded layer-backed prefill state over selected segment output and controlled layer fixture scheduling
 chunked prefill lifecycle with context-boundary and prefill scratch reuse reporting
+bounded diagnostic decode-state step over implemented prefill/KV summary
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -881,7 +882,8 @@ accepted-token speculative accounting
 speculative generation benchmark
 20 tok/s measured YVEX decode result
 full transformer prefill
-decode
+full model decode
+real DeepSeek decode
 logits-producing runtime path
 sampling
 generation
@@ -1061,7 +1063,7 @@ tables.
 | PREFILL.4 | planned | prefill | Prefill diagnostics and regression reports | regression/reporting layer over implemented segment, layer-backed, chunked, KV-bound prefill; not a blocker for first decode/logits/sampling/generation closure |
 | PREFILL.5 | planned | bench | Prefill throughput measurement gate | benchmarkable prefill measurement after runtime path and measurement harness exist; no throughput claim before artifact/backend/context/machine metadata |
 | M10 | planned | decode | Decode step over existing runtime state | one decode step advances existing KV-backed state by one position |
-| DECODE.0 | planned | decode | First bounded decode state step | advances existing chunked prefill/KV-backed runtime state by one diagnostic token position without logits, sampling, generation, or benchmark claim |
+| DECODE.0 | complete | decode | First bounded decode state step | `yvex decode` invokes implemented chunked/layer-backed prefill, advances one bounded diagnostic decode-state position, validates context boundary, reports checksum/state/cleanup fields, and preserves logits/sampling/generation unsupported boundaries |
 | DECODE.1 | planned | decode | Decode lifecycle and repeatability | repeated decode steps, context-end handling, interruption, cleanup, and deterministic diagnostics over existing state |
 | M11 | planned | logits | Logits production boundary | logits buffer ownership, dtype, backend tolerance, and diagnostics implemented |
 | LOGITS.0 | planned | logits | First bounded logits buffer | produces a deterministic bounded logits buffer from decode state without claiming real model output head or generation quality |
@@ -1987,11 +1989,11 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-DECODE.0 - First bounded decode state step
+LOGITS.0 - First bounded logits buffer
 ```
 
-DECODE.0 must advance existing chunked prefill/KV-backed runtime state by one
-bounded diagnostic token position. It must not claim logits, sampling,
+LOGITS.0 must produce a deterministic bounded logits buffer from the implemented
+decode state without claiming real model output-head logits, sampling,
 generation, full DeepSeek execution, provider generation, evaluation, or
 benchmark readiness.
 
@@ -2009,7 +2011,7 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-DECODE.0 - First bounded decode state step
+LOGITS.0 - First bounded logits buffer
 ```
 
 GRAPH.CHECK.0 is complete as a command preset over existing graph proofs. It
@@ -2033,10 +2035,9 @@ selected-position activation handoff. It is not full transformer prefill,
 decode, logits, sampling, generation, server generation, evaluation, or
 benchmark readiness.
 
-After PREFILL.3, the bounded prefill lifecycle is sufficient to start the first
-decode-state row. Stable prefill diagnostics, real model layer requirements,
-and full DeepSeek runtime work remain planned tracks, but they do not block
-DECODE.0.
+After DECODE.0, the bounded runtime closure path proceeds to LOGITS.0. Real
+model output-head logits and full DeepSeek runtime work remain planned tracks,
+but they do not block the first bounded logits-buffer boundary.
 
 ## 8. Validation Gate
 
@@ -2056,6 +2057,7 @@ Current command-surface audit:
 
 ```sh
 ./yvex commands
+./yvex help decode
 ./yvex help graph
 ./yvex help input
 ./yvex help prefill

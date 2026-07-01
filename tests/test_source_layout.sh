@@ -150,6 +150,10 @@ bad_command_files="$(
        -o -name 'yvex_runtime_support.c' \
        -o -name 'runtime_commands.c' \
        -o -name 'runtime_graph.c' \
+       -o -name 'yvex_decode_command.c' \
+       -o -name 'yvex_decode_runtime.c' \
+       -o -name 'decode_command.c' \
+       -o -name 'decode_runtime.c' \
        -o -name 'yvex_prefill_chunks.c' \
        -o -name 'yvex_prefill_layers.c' \
        -o -name 'yvex_prefill_runtime.c' \

@@ -20,6 +20,7 @@
 #   - yvex info
 #   - yvex convert
 #   - yvex qtype-support
+#   - yvex decode
 #   - yvex inspect
 #   - yvex input
 #   - yvex kv
@@ -166,6 +167,7 @@ contains "$OUT_DIR/info.out" "server_binary: yvexd shell implemented"
 contains "$OUT_DIR/info.out" "server_endpoints: health/metrics/models status implemented"
 contains "$OUT_DIR/info.out" "server_generation: not implemented"
 contains "$OUT_DIR/info.out" "kv: minimal session-owned append/read boundary implemented"
+contains "$OUT_DIR/info.out" "decode: bounded diagnostic state step implemented"
 contains "$OUT_DIR/info.out" "logits: unavailable skeleton implemented"
 contains "$OUT_DIR/info.out" "generation: unsupported"
 contains "$OUT_DIR/info.out" "cuda: available when local driver/device probe succeeds"
@@ -178,6 +180,7 @@ contains "$OUT_DIR/commands.out" "  chat"
 contains "$OUT_DIR/commands.out" "  commands"
 contains "$OUT_DIR/commands.out" "  convert"
 contains "$OUT_DIR/commands.out" "  cuda-info"
+contains "$OUT_DIR/commands.out" "  decode"
 contains "$OUT_DIR/commands.out" "  detokenize"
 contains "$OUT_DIR/commands.out" "  engine"
 contains "$OUT_DIR/commands.out" "  graph"
@@ -225,6 +228,11 @@ contains "$OUT_DIR/help_qtype_support.out" "usage: yvex qtype-support"
 
 run_ok help_cuda_info "$YVEX_BIN" help cuda-info
 contains "$OUT_DIR/help_cuda_info.out" "usage: yvex cuda-info"
+
+run_ok help_decode "$YVEX_BIN" help decode
+contains "$OUT_DIR/help_decode.out" "usage: yvex decode"
+contains "$OUT_DIR/help_decode.out" "bounded diagnostic decode-state step"
+contains "$OUT_DIR/help_decode.out" "does not produce logits, sample, generate"
 
 run_ok help_chat "$YVEX_BIN" help chat
 contains "$OUT_DIR/help_chat.out" "usage: yvex chat [--model FILE_OR_ALIAS]"
@@ -454,6 +462,17 @@ run_fail_code prefill_layer_partial_dims 2 "$YVEX_BIN" prefill --model missing -
 run_fail_code prefill_chunk_size_zero 2 "$YVEX_BIN" prefill --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --chunk-size 0
 run_fail_code prefill_position_start_invalid 2 "$YVEX_BIN" prefill --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --position-start nope
 run_fail_code prefill_context_length_zero 2 "$YVEX_BIN" prefill --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --context-length 0
+
+run_fail_code decode_missing_model 2 "$YVEX_BIN" decode --backend cpu --segment embedding-rmsnorm --tokens 0,1
+run_fail_code decode_wrong_segment 2 "$YVEX_BIN" decode --model missing --backend cpu --segment nope --tokens 0,1
+run_fail_code decode_missing_tokens 2 "$YVEX_BIN" decode --model missing --backend cpu --segment embedding-rmsnorm
+run_fail_code decode_context_length_zero 2 "$YVEX_BIN" decode --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --context-length 0
+run_fail_code decode_position_start_invalid 2 "$YVEX_BIN" decode --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --position-start nope
+run_fail_code decode_chunk_size_zero 2 "$YVEX_BIN" decode --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --chunk-size 0
+run_fail_code decode_layers_zero 2 "$YVEX_BIN" decode --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 0
+run_fail_code decode_layers_too_many 2 "$YVEX_BIN" decode --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 17
+run_fail_code decode_layer_without_layers 2 "$YVEX_BIN" decode --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layer-hidden-dim 8
+run_fail_code decode_layer_partial_dims 2 "$YVEX_BIN" decode --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 2 --layer-hidden-dim 8 --layer-head-dim 4
 
 set +e
 "$YVEX_BIN" model-target inspect missing-target >"$OUT_DIR/model_target_missing.out" 2>"$OUT_DIR/model_target_missing.err"
