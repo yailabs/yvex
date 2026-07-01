@@ -191,6 +191,8 @@ pattern='generation_rea''dy: true'
 scan_forbidden_claim "$pattern"
 pattern='inference_rea''dy: true'
 scan_forbidden_claim "$pattern"
+pattern='full_transformer_prefill_ready: tr''ue'
+scan_forbidden_claim "$pattern"
 pattern='operator path gener''ates'
 scan_forbidden_claim "$pattern"
 pattern='paths configure down''loads'

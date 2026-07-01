@@ -2916,7 +2916,7 @@ static int command_info(int argc, char **argv)
     printf("model: descriptor-only implemented\n");
     printf("tokenizer: fixture encode/decode implemented\n");
     printf("token_input: explicit token boundary implemented\n");
-    printf("prefill_state: segment-summary foundation, bounded layer-backed prefill state, and minimal KV binding implemented\n");
+    printf("prefill_state: segment-summary foundation, bounded layer-backed prefill state, chunked prefill lifecycle, and minimal KV binding implemented\n");
     printf("prompt: default renderer implemented\n");
     printf("graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, standalone RoPE position op, standalone F32 attention primitive, standalone F32 matmul/projection primitive, and standalone F32 MLP/feed-forward primitive implemented\n");
     printf("planner: estimate-only implemented\n");
@@ -2987,6 +2987,34 @@ static void print_prefill_state_summary(const yvex_prefill_state_summary *summar
     printf("position_start: %llu\n", summary ? summary->position_start : 0ull);
     printf("position_end: %llu\n", summary ? summary->position_end : 0ull);
     printf("failed_token_index: %llu\n", summary ? summary->failed_token_index : 0ull);
+    printf("context_boundary_status: %s\n",
+           summary && summary->context_boundary_status ? summary->context_boundary_status : "unchecked");
+    printf("context_length: %llu\n", summary ? summary->context_length : 0ull);
+    printf("chunked_prefill_requested: %s\n",
+           summary && summary->chunked_prefill_requested ? "true" : "false");
+    printf("chunk_execution_mode: %s\n",
+           summary && summary->chunk_execution_mode ? summary->chunk_execution_mode : "token-loop");
+    printf("chunk_size: %llu\n", summary ? summary->chunk_size : 0ull);
+    printf("chunk_count: %llu\n", summary ? summary->chunk_count : 0ull);
+    printf("chunks_processed: %llu\n", summary ? summary->chunks_processed : 0ull);
+    printf("failed_chunk_index: %llu\n", summary ? summary->failed_chunk_index : 0ull);
+    printf("current_chunk_start: %llu\n", summary ? summary->current_chunk_start : 0ull);
+    printf("current_chunk_end: %llu\n", summary ? summary->current_chunk_end : 0ull);
+    printf("final_chunk_checksum: %llu\n", summary ? summary->final_chunk_checksum : 0ull);
+    printf("prefill_scratch_kind: %s\n",
+           summary && summary->prefill_scratch_kind ? summary->prefill_scratch_kind : "host-diagnostic-reuse");
+    printf("prefill_scratch_reuse: %s\n",
+           summary && summary->prefill_scratch_reuse ? "true" : "false");
+    printf("prefill_scratch_allocations: %llu\n",
+           summary ? summary->prefill_scratch_allocations : 0ull);
+    printf("prefill_scratch_reuse_count: %llu\n",
+           summary ? summary->prefill_scratch_reuse_count : 0ull);
+    printf("prefill_scratch_cleanup_attempted: %s\n",
+           summary && summary->prefill_scratch_cleanup_attempted ? "true" : "false");
+    printf("prefill_scratch_cleanup_status: %s\n",
+           summary && summary->prefill_scratch_cleanup_status
+               ? summary->prefill_scratch_cleanup_status
+               : "not-needed");
     printf("segment_graph_executions: %llu\n", summary ? summary->segment_graph_executions : 0ull);
     printf("segment_output_count: %llu\n", summary ? summary->segment_output_count : 0ull);
     printf("segment_output_bytes: %llu\n", summary ? summary->segment_output_bytes : 0ull);
@@ -3088,7 +3116,10 @@ static void init_prefill_summary_cli_defaults(yvex_prefill_state_summary *summar
                                               const char *segment_name,
                                               int attach_kv,
                                               const yvex_kv_shape *shape,
-                                              unsigned long long layer_count)
+                                              unsigned long long layer_count,
+                                              unsigned long long chunk_size,
+                                              unsigned long long position_start,
+                                              unsigned long long context_length)
 {
     if (!summary) {
         return;
@@ -3102,6 +3133,16 @@ static void init_prefill_summary_cli_defaults(yvex_prefill_state_summary *summar
                                            : "independent-token-segments";
     summary->prefill_phase = "preflight";
     summary->segment_name = segment_name ? segment_name : "embedding-rmsnorm";
+    summary->position_start = position_start;
+    summary->position_end = position_start;
+    summary->chunked_prefill_requested = chunk_size > 0ull;
+    summary->chunk_execution_mode = chunk_size > 0ull ? "bounded-token-chunks" : "token-loop";
+    summary->chunk_size = chunk_size;
+    summary->context_length = context_length;
+    summary->context_boundary_status = "unchecked";
+    summary->prefill_scratch_kind = "host-diagnostic-reuse";
+    summary->prefill_scratch_reuse = chunk_size > 0ull;
+    summary->prefill_scratch_cleanup_status = "not-needed";
     summary->cleanup_status = "not-needed";
     summary->generation_status = "unsupported";
     summary->layer_prefill_requested = layer_count > 0ull;
@@ -3149,12 +3190,16 @@ static int command_prefill(int argc, char **argv)
     unsigned long long layer_hidden_dim = 0ull;
     unsigned long long layer_head_dim = 0ull;
     unsigned long long layer_ffn_dim = 0ull;
+    unsigned long long chunk_size = 0ull;
+    unsigned long long position_start = 0ull;
+    unsigned long long context_length = 0ull;
     int attach_kv = 0;
     int kv_shape_seen = 0;
     int layer_count_seen = 0;
     int layer_hidden_seen = 0;
     int layer_head_seen = 0;
     int layer_ffn_seen = 0;
+    int chunk_size_seen = 0;
     int i;
     int rc;
 
@@ -3255,6 +3300,25 @@ static int command_prefill(int argc, char **argv)
             }
             layer_ffn_seen = 1;
             i += 1;
+        } else if (strcmp(argv[i], "--chunk-size") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &chunk_size)) {
+                fprintf(stderr, "yvex: --chunk-size requires a positive integer\n");
+                return 2;
+            }
+            chunk_size_seen = 1;
+            i += 1;
+        } else if (strcmp(argv[i], "--position-start") == 0) {
+            if (i + 1 >= argc || !parse_ull_allow_zero(argv[i + 1], &position_start)) {
+                fprintf(stderr, "yvex: --position-start requires a non-negative integer\n");
+                return 2;
+            }
+            i += 1;
+        } else if (strcmp(argv[i], "--context-length") == 0) {
+            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &context_length)) {
+                fprintf(stderr, "yvex: --context-length requires a positive integer\n");
+                return 2;
+            }
+            i += 1;
         } else if (!model_arg) {
             model_arg = argv[i];
         } else {
@@ -3265,7 +3329,7 @@ static int command_prefill(int argc, char **argv)
     }
 
     if (!model_arg || !tokens_text || !segment_name) {
-        fprintf(stderr, "usage: yvex prefill --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N]\n");
+        fprintf(stderr, "usage: yvex prefill --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N]\n");
         return 2;
     }
     if (!runtime_backend_name_valid(backend_name)) {
@@ -3318,7 +3382,9 @@ static int command_prefill(int argc, char **argv)
     rc = enforce_registered_identity_cli(&model_ref, "prefill");
     if (rc != YVEX_OK) {
         init_prefill_summary_cli_defaults(&prefill_summary, segment_name,
-                                          attach_kv, &kv_shape, layer_count);
+                                          attach_kv, &kv_shape, layer_count,
+                                          chunk_size, position_start,
+                                          context_length);
         print_prefill_state_summary(&prefill_summary, model_arg, backend_name, "fail", "prefill-state-fail");
         yvex_model_ref_clear(&model_ref);
         return exit_for_status(rc);
@@ -3333,7 +3399,9 @@ static int command_prefill(int argc, char **argv)
     }
     if (rc != YVEX_OK) {
         init_prefill_summary_cli_defaults(&prefill_summary, segment_name,
-                                          attach_kv, &kv_shape, layer_count);
+                                          attach_kv, &kv_shape, layer_count,
+                                          chunk_size, position_start,
+                                          context_length);
         prefill_summary.token_count = token_input.token_count;
         print_prefill_state_summary(&prefill_summary, model_arg, backend_name, "fail", "prefill-state-fail");
         yvex_model_ref_clear(&model_ref);
@@ -3349,7 +3417,9 @@ static int command_prefill(int argc, char **argv)
                                &err);
     if (rc != YVEX_OK) {
         init_prefill_summary_cli_defaults(&prefill_summary, segment_name,
-                                          attach_kv, &kv_shape, layer_count);
+                                          attach_kv, &kv_shape, layer_count,
+                                          chunk_size, position_start,
+                                          context_length);
         prefill_summary.token_count = token_input.token_count;
         print_prefill_state_summary(&prefill_summary, model_arg, backend_name, "pass", "prefill-state-fail");
         print_graph_guard_report(&graph_guard);
@@ -3367,7 +3437,9 @@ static int command_prefill(int argc, char **argv)
     rc = yvex_engine_open(&engine, &engine_options, &err);
     if (rc != YVEX_OK) {
         init_prefill_summary_cli_defaults(&prefill_summary, segment_name,
-                                          attach_kv, &kv_shape, layer_count);
+                                          attach_kv, &kv_shape, layer_count,
+                                          chunk_size, position_start,
+                                          context_length);
         prefill_summary.token_count = token_input.token_count;
         print_prefill_state_summary(&prefill_summary, model_arg, backend_name, "pass", "prefill-state-fail");
         yvex_model_ref_clear(&model_ref);
@@ -3376,7 +3448,9 @@ static int command_prefill(int argc, char **argv)
 
     prefill_options.token_input = &token_input;
     prefill_options.segment_name = segment_name;
-    prefill_options.position_start = 0ull;
+    prefill_options.position_start = position_start;
+    prefill_options.chunk_size = chunk_size_seen ? chunk_size : 0ull;
+    prefill_options.context_length = context_length;
     prefill_options.attach_kv = attach_kv;
     prefill_options.kv_shape = kv_shape;
     prefill_options.layer_count = layer_count_seen ? layer_count : 0ull;
@@ -4419,7 +4493,7 @@ void yvex_plan_help(FILE *fp)
 
 void yvex_prefill_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex prefill --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N]\n\nPrefill records a segment-summary prefill foundation from validated token input and can bind processed positions to minimal KV ownership. Layer-backed prefill uses the selected embedding+RMSNorm segment plus a controlled layer fixture scheduler over a sampled row. It is not full transformer prefill, decode, logits, sampling, or generation.\n");
+    fprintf(fp, "usage: yvex prefill --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N]\n\nPrefill records a segment-summary prefill foundation from validated token input and can bind processed positions to minimal KV ownership. Layer-backed prefill uses the selected embedding+RMSNorm segment plus a controlled layer fixture scheduler over a sampled row. Chunked prefill partitions validated token input into bounded diagnostic chunks with explicit scratch and context-boundary reporting. It is not full transformer prefill, decode, logits, sampling, or generation.\n");
 }
 
 void yvex_run_help(FILE *fp)

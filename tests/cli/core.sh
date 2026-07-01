@@ -135,7 +135,7 @@ contains "$OUT_DIR/info.out" "gguf: metadata/tensor directory parsing implemente
 contains "$OUT_DIR/info.out" "model: descriptor-only implemented"
 contains "$OUT_DIR/info.out" "tokenizer: fixture encode/decode implemented"
 contains "$OUT_DIR/info.out" "token_input: explicit token boundary implemented"
-contains "$OUT_DIR/info.out" "prefill_state: segment-summary foundation, bounded layer-backed prefill state, and minimal KV binding implemented"
+contains "$OUT_DIR/info.out" "prefill_state: segment-summary foundation, bounded layer-backed prefill state, chunked prefill lifecycle, and minimal KV binding implemented"
 contains "$OUT_DIR/info.out" "prompt: default renderer implemented"
 contains "$OUT_DIR/info.out" "graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, standalone RoPE position op, standalone F32 attention primitive, standalone F32 matmul/projection primitive, and standalone F32 MLP/feed-forward primitive implemented"
 contains "$OUT_DIR/info.out" "planner: estimate-only implemented"
@@ -308,7 +308,11 @@ contains "$OUT_DIR/help_plan.out" "usage: yvex plan <path>"
 
 run_ok help_prefill "$YVEX_BIN" help prefill
 contains "$OUT_DIR/help_prefill.out" "--layers N"
+contains "$OUT_DIR/help_prefill.out" "--chunk-size N"
+contains "$OUT_DIR/help_prefill.out" "--position-start N"
+contains "$OUT_DIR/help_prefill.out" "--context-length N"
 contains "$OUT_DIR/help_prefill.out" "Layer-backed prefill uses the selected embedding+RMSNorm segment plus a controlled layer fixture scheduler over a sampled row."
+contains "$OUT_DIR/help_prefill.out" "Chunked prefill partitions validated token input into bounded diagnostic chunks"
 contains "$OUT_DIR/help_prefill.out" "It is not full transformer prefill, decode, logits, sampling, or generation."
 
 run_ok help_prompt "$YVEX_BIN" help prompt
@@ -447,6 +451,9 @@ run_fail_code prefill_layer_without_layers 2 "$YVEX_BIN" prefill --model missing
 run_fail_code prefill_layers_zero 2 "$YVEX_BIN" prefill --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 0
 run_fail_code prefill_layers_too_many 2 "$YVEX_BIN" prefill --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 17
 run_fail_code prefill_layer_partial_dims 2 "$YVEX_BIN" prefill --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 2 --layer-hidden-dim 8 --layer-head-dim 4
+run_fail_code prefill_chunk_size_zero 2 "$YVEX_BIN" prefill --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --chunk-size 0
+run_fail_code prefill_position_start_invalid 2 "$YVEX_BIN" prefill --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --position-start nope
+run_fail_code prefill_context_length_zero 2 "$YVEX_BIN" prefill --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --context-length 0
 
 set +e
 "$YVEX_BIN" model-target inspect missing-target >"$OUT_DIR/model_target_missing.out" 2>"$OUT_DIR/model_target_missing.err"
