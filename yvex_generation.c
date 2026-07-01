@@ -9,10 +9,46 @@
 #include <yvex/yvex.h>
 #include "yvex_console_private.h"
 
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+typedef enum {
+    YVEX_GENERATE_TRACE_NONE = 0,
+    YVEX_GENERATE_TRACE_TOKENS,
+    YVEX_GENERATE_TRACE_STEPS,
+    YVEX_GENERATE_TRACE_KV,
+    YVEX_GENERATE_TRACE_LOGITS,
+    YVEX_GENERATE_TRACE_SAMPLING,
+    YVEX_GENERATE_TRACE_FULL
+} yvex_generation_trace_level;
+
+typedef struct {
+    int attempted;
+    unsigned long long index;
+    unsigned long long decode_position;
+    const char *decode_status;
+    const char *logits_status;
+    const char *sample_status;
+    const char *append_status;
+    unsigned int selected_token_id;
+    unsigned int appended_token_id;
+    unsigned int candidate_token_id;
+    double candidate_logit;
+    unsigned long long position_after_append;
+    const char *stop_reason;
+    const char *stop_timing;
+    unsigned long long logits_checksum;
+    double logits_min;
+    double logits_max;
+    unsigned long long sample_checksum;
+    unsigned long long accepted_token_count;
+    unsigned long long generated_token_count;
+    unsigned long long total_token_count;
+    unsigned long long sequence_checksum;
+} yvex_generation_trace_step;
 
 typedef struct {
     int loop_created;
@@ -58,6 +94,24 @@ typedef struct {
     int unsupported_stop_feature;
     const char *eos_policy;
     const char *stop_token_policy;
+    yvex_generation_trace_level trace_level;
+    const char *trace_level_name;
+    int trace_enabled;
+    const char *trace_status;
+    unsigned long long trace_records;
+    unsigned long long trace_tokens;
+    unsigned long long trace_steps;
+    unsigned long long trace_kv;
+    unsigned long long trace_logits;
+    unsigned long long trace_sampling;
+    unsigned long long trace_append;
+    unsigned long long trace_stop;
+    unsigned long long trace_cleanup;
+    unsigned long long trace_failures;
+    yvex_generation_trace_step trace_step_records[YVEX_TOKEN_INPUT_MAX_TOKENS];
+    unsigned long long trace_step_count;
+    int trace_kv_requested;
+    yvex_kv_shape trace_kv_shape;
     unsigned long long generation_checksum;
     unsigned long long sequence_checksum;
     int cleanup_attempted;
@@ -127,10 +181,95 @@ static int generate_logits_count_valid(unsigned long long count)
     return count >= 1ull && count <= 256ull;
 }
 
+static const char *generate_trace_level_name(yvex_generation_trace_level level)
+{
+    switch (level) {
+    case YVEX_GENERATE_TRACE_TOKENS:
+        return "tokens";
+    case YVEX_GENERATE_TRACE_STEPS:
+        return "steps";
+    case YVEX_GENERATE_TRACE_KV:
+        return "kv";
+    case YVEX_GENERATE_TRACE_LOGITS:
+        return "logits";
+    case YVEX_GENERATE_TRACE_SAMPLING:
+        return "sampling";
+    case YVEX_GENERATE_TRACE_FULL:
+        return "full";
+    case YVEX_GENERATE_TRACE_NONE:
+    default:
+        return "none";
+    }
+}
+
+static int generate_parse_trace_level(const char *text,
+                                      yvex_generation_trace_level *out)
+{
+    if (!text || !out) {
+        return 0;
+    }
+    if (strcmp(text, "none") == 0) {
+        *out = YVEX_GENERATE_TRACE_NONE;
+    } else if (strcmp(text, "tokens") == 0) {
+        *out = YVEX_GENERATE_TRACE_TOKENS;
+    } else if (strcmp(text, "steps") == 0) {
+        *out = YVEX_GENERATE_TRACE_STEPS;
+    } else if (strcmp(text, "kv") == 0) {
+        *out = YVEX_GENERATE_TRACE_KV;
+    } else if (strcmp(text, "logits") == 0) {
+        *out = YVEX_GENERATE_TRACE_LOGITS;
+    } else if (strcmp(text, "sampling") == 0) {
+        *out = YVEX_GENERATE_TRACE_SAMPLING;
+    } else if (strcmp(text, "full") == 0) {
+        *out = YVEX_GENERATE_TRACE_FULL;
+    } else {
+        return 0;
+    }
+    return 1;
+}
+
+static int generate_trace_wants_tokens(yvex_generation_trace_level level)
+{
+    return level == YVEX_GENERATE_TRACE_TOKENS || level == YVEX_GENERATE_TRACE_FULL;
+}
+
+static int generate_trace_wants_steps(yvex_generation_trace_level level)
+{
+    return level == YVEX_GENERATE_TRACE_STEPS || level == YVEX_GENERATE_TRACE_FULL;
+}
+
+static int generate_trace_wants_kv(yvex_generation_trace_level level)
+{
+    return level == YVEX_GENERATE_TRACE_KV || level == YVEX_GENERATE_TRACE_FULL;
+}
+
+static int generate_trace_wants_logits(yvex_generation_trace_level level)
+{
+    return level == YVEX_GENERATE_TRACE_LOGITS || level == YVEX_GENERATE_TRACE_FULL;
+}
+
+static int generate_trace_wants_sampling(yvex_generation_trace_level level)
+{
+    return level == YVEX_GENERATE_TRACE_SAMPLING || level == YVEX_GENERATE_TRACE_FULL;
+}
+
+static void generate_summary_trace_defaults(yvex_generate_summary *summary,
+                                            yvex_generation_trace_level level)
+{
+    if (!summary) {
+        return;
+    }
+    summary->trace_level = level;
+    summary->trace_level_name = generate_trace_level_name(level);
+    summary->trace_enabled = level != YVEX_GENERATE_TRACE_NONE;
+    summary->trace_status = summary->trace_enabled ? "enabled" : "disabled";
+}
+
 static void generate_summary_defaults(yvex_generate_summary *summary,
                                       const yvex_token_input *input,
                                       unsigned long long position_start,
-                                      unsigned long long max_new_tokens)
+                                      unsigned long long max_new_tokens,
+                                      yvex_generation_trace_level trace_level)
 {
     unsigned long long i;
 
@@ -178,6 +317,122 @@ static void generate_summary_defaults(yvex_generate_summary *summary,
     }
     summary->cleanup_status = "not-needed";
     summary->failed_phase = "none";
+    generate_summary_trace_defaults(summary, trace_level);
+}
+
+static void generate_summary_trace_kv(yvex_generate_summary *summary,
+                                      int attach_kv,
+                                      const yvex_kv_shape *shape)
+{
+    if (!summary) {
+        return;
+    }
+    summary->trace_kv_requested = attach_kv ? 1 : 0;
+    if (shape) {
+        summary->trace_kv_shape = *shape;
+    }
+}
+
+static yvex_generation_trace_step *generate_trace_step_at(yvex_generate_summary *summary,
+                                                          unsigned long long step)
+{
+    if (!summary || step >= YVEX_TOKEN_INPUT_MAX_TOKENS) {
+        return NULL;
+    }
+    if (step >= summary->trace_step_count) {
+        summary->trace_step_count = step + 1ull;
+    }
+    return &summary->trace_step_records[step];
+}
+
+static yvex_generation_trace_step *generate_trace_step_begin(yvex_generate_summary *summary,
+                                                             unsigned long long step,
+                                                             unsigned long long position)
+{
+    yvex_generation_trace_step *record = generate_trace_step_at(summary, step);
+
+    if (!record) {
+        return NULL;
+    }
+    memset(record, 0, sizeof(*record));
+    record->attempted = 1;
+    record->index = step;
+    record->decode_position = position;
+    record->decode_status = "pending";
+    record->logits_status = "pending";
+    record->sample_status = "pending";
+    record->append_status = "not-started";
+    record->stop_reason = "none";
+    record->stop_timing = "none";
+    return record;
+}
+
+static void generate_trace_step_mark_stop(yvex_generate_summary *summary,
+                                          const char *reason,
+                                          const char *timing,
+                                          unsigned long long step,
+                                          int before_append)
+{
+    yvex_generation_trace_step *record;
+
+    if (!summary || step >= summary->trace_step_count) {
+        return;
+    }
+    record = &summary->trace_step_records[step];
+    if (!record->attempted) {
+        return;
+    }
+    record->stop_reason = reason ? reason : "internal-error";
+    record->stop_timing = timing ? timing : "failure";
+    if (before_append && record->decode_status &&
+        strcmp(record->decode_status, "pending") == 0) {
+        record->decode_status = "skipped";
+        record->logits_status = "skipped";
+        record->sample_status = "skipped";
+    }
+    if (before_append && (!record->append_status ||
+                          strcmp(record->append_status, "not-started") == 0 ||
+                          strcmp(record->append_status, "candidate") == 0)) {
+        record->append_status = "context-limit";
+    }
+}
+
+static void generate_trace_step_mark_failure(yvex_generate_summary *summary,
+                                             const char *phase,
+                                             unsigned long long step)
+{
+    yvex_generation_trace_step *record;
+
+    if (!summary || step >= summary->trace_step_count) {
+        return;
+    }
+    record = &summary->trace_step_records[step];
+    if (!record->attempted) {
+        return;
+    }
+    if (phase && strcmp(phase, "decode") == 0) {
+        record->decode_status = "fail";
+        record->logits_status = "skipped";
+        record->sample_status = "skipped";
+        record->append_status = "not-started";
+    } else if (phase && strcmp(phase, "logits") == 0) {
+        record->decode_status = "pass";
+        record->logits_status = "fail";
+        record->sample_status = "skipped";
+        record->append_status = "not-started";
+    } else if (phase && strcmp(phase, "sample") == 0) {
+        record->decode_status = "pass";
+        record->logits_status = "pass";
+        record->sample_status = "fail";
+        record->append_status = "not-started";
+    } else if (phase && strcmp(phase, "append") == 0) {
+        record->decode_status = "pass";
+        record->logits_status = "pass";
+        record->sample_status = "pass";
+        record->append_status = "fail";
+    } else {
+        record->append_status = "fail";
+    }
 }
 
 static void generate_stop_record(yvex_generate_summary *summary,
@@ -202,6 +457,8 @@ static void generate_stop_record(yvex_generate_summary *summary,
     summary->stop_after_append = after_append ? 1 : 0;
     summary->failure_stop = failure ? 1 : 0;
     summary->unsupported_stop_feature = unsupported ? 1 : 0;
+    generate_trace_step_mark_stop(summary, summary->stop_reason, summary->stop_timing,
+                                  step, before_append);
 }
 
 static void generate_print_token_list(const char *label,
@@ -243,6 +500,395 @@ static void generate_print_runtime_sequence(const yvex_generate_summary *summary
         }
     }
     printf("\n");
+}
+
+static void generate_trace_printf(yvex_generate_summary *summary,
+                                  unsigned long long *category_count,
+                                  const char *fmt,
+                                  ...)
+{
+    va_list ap;
+
+    if (!summary || !fmt) {
+        return;
+    }
+    va_start(ap, fmt);
+    vprintf(fmt, ap);
+    va_end(ap);
+    printf("\n");
+    summary->trace_records += 1ull;
+    if (category_count) {
+        *category_count += 1ull;
+    }
+}
+
+static void generate_trace_token_list(yvex_generate_summary *summary,
+                                      unsigned long long *category_count,
+                                      const char *label,
+                                      const unsigned int *tokens,
+                                      unsigned long long count)
+{
+    unsigned long long i;
+
+    if (!summary || !label) {
+        return;
+    }
+    printf("%s: ", label);
+    for (i = 0ull; tokens && i < count; ++i) {
+        if (i > 0ull) {
+            printf(",");
+        }
+        printf("%u", tokens[i]);
+    }
+    printf("\n");
+    summary->trace_records += 1ull;
+    if (category_count) {
+        *category_count += 1ull;
+    }
+}
+
+static void generate_trace_runtime_sequence(yvex_generate_summary *summary,
+                                            unsigned long long *category_count)
+{
+    unsigned long long i;
+    unsigned long long emitted = 0ull;
+
+    if (!summary) {
+        return;
+    }
+    printf("trace.tokens.runtime_sequence: ");
+    for (i = 0ull; i < summary->prompt_token_count && i < YVEX_TOKEN_INPUT_MAX_TOKENS; ++i) {
+        if (emitted > 0ull) {
+            printf(",");
+        }
+        printf("%u", summary->prompt_tokens[i]);
+        emitted += 1ull;
+    }
+    for (i = 0ull; i < summary->generated_token_count && i < YVEX_TOKEN_INPUT_MAX_TOKENS; ++i) {
+        if (emitted > 0ull) {
+            printf(",");
+        }
+        printf("%u", summary->generated_tokens[i]);
+        emitted += 1ull;
+    }
+    printf("\n");
+    summary->trace_records += 1ull;
+    if (category_count) {
+        *category_count += 1ull;
+    }
+}
+
+static void generate_emit_token_trace(yvex_generate_summary *summary)
+{
+    if (!summary) {
+        return;
+    }
+    generate_trace_token_list(summary, &summary->trace_tokens, "trace.tokens.prompt",
+                              summary->prompt_tokens, summary->prompt_token_count);
+    generate_trace_token_list(summary, &summary->trace_tokens, "trace.tokens.generated",
+                              summary->generated_tokens, summary->generated_token_count);
+    generate_trace_runtime_sequence(summary, &summary->trace_tokens);
+    generate_trace_printf(summary, &summary->trace_tokens,
+                          "trace.tokens.prompt_count: %llu",
+                          summary->prompt_token_count);
+    generate_trace_printf(summary, &summary->trace_tokens,
+                          "trace.tokens.generated_count: %llu",
+                          summary->generated_token_count);
+    generate_trace_printf(summary, &summary->trace_tokens,
+                          "trace.tokens.total_count: %llu",
+                          summary->total_token_count);
+    generate_trace_printf(summary, &summary->trace_tokens,
+                          "trace.tokens.stop_reason: %s",
+                          summary->stop_reason ? summary->stop_reason : "none");
+}
+
+static void generate_emit_step_trace(yvex_generate_summary *summary)
+{
+    unsigned long long i;
+
+    if (!summary) {
+        return;
+    }
+    for (i = 0ull; i < summary->trace_step_count; ++i) {
+        const yvex_generation_trace_step *record = &summary->trace_step_records[i];
+        if (!record->attempted) {
+            continue;
+        }
+        generate_trace_printf(summary, &summary->trace_steps,
+                              "trace.step.%llu.index: %llu", i, record->index);
+        generate_trace_printf(summary, &summary->trace_steps,
+                              "trace.step.%llu.decode_position: %llu",
+                              i, record->decode_position);
+        generate_trace_printf(summary, &summary->trace_steps,
+                              "trace.step.%llu.decode_status: %s",
+                              i, record->decode_status ? record->decode_status : "skipped");
+        generate_trace_printf(summary, &summary->trace_steps,
+                              "trace.step.%llu.logits_status: %s",
+                              i, record->logits_status ? record->logits_status : "skipped");
+        generate_trace_printf(summary, &summary->trace_steps,
+                              "trace.step.%llu.sample_status: %s",
+                              i, record->sample_status ? record->sample_status : "skipped");
+        generate_trace_printf(summary, &summary->trace_steps,
+                              "trace.step.%llu.append_status: %s",
+                              i, record->append_status ? record->append_status : "not-started");
+        generate_trace_printf(summary, &summary->trace_steps,
+                              "trace.step.%llu.selected_token_id: %u",
+                              i, record->selected_token_id);
+        generate_trace_printf(summary, &summary->trace_steps,
+                              "trace.step.%llu.appended_token_id: %u",
+                              i, record->appended_token_id);
+        generate_trace_printf(summary, &summary->trace_steps,
+                              "trace.step.%llu.position_after_append: %llu",
+                              i, record->position_after_append);
+        generate_trace_printf(summary, &summary->trace_steps,
+                              "trace.step.%llu.stop_reason: %s",
+                              i, record->stop_reason ? record->stop_reason : "none");
+        generate_trace_printf(summary, &summary->trace_steps,
+                              "trace.step.%llu.stop_timing: %s",
+                              i, record->stop_timing ? record->stop_timing : "none");
+    }
+}
+
+static void generate_emit_kv_trace(yvex_generate_summary *summary)
+{
+    if (!summary) {
+        return;
+    }
+    generate_trace_printf(summary, &summary->trace_kv, "trace.kv.status: %s",
+                          summary->trace_kv_requested ? "requested" : "unavailable");
+    generate_trace_printf(summary, &summary->trace_kv, "trace.kv.mode: diagnostic");
+    generate_trace_printf(summary, &summary->trace_kv,
+                          "trace.kv.real_attention_kv: false");
+    generate_trace_printf(summary, &summary->trace_kv,
+                          "trace.kv.full_model_kv: false");
+    if (summary->trace_kv_requested) {
+        generate_trace_printf(summary, &summary->trace_kv,
+                              "trace.kv.layers: %llu",
+                              summary->trace_kv_shape.layer_count);
+        generate_trace_printf(summary, &summary->trace_kv,
+                              "trace.kv.heads: %llu",
+                              summary->trace_kv_shape.kv_head_count);
+        generate_trace_printf(summary, &summary->trace_kv,
+                              "trace.kv.head_dim: %llu",
+                              summary->trace_kv_shape.head_dim);
+        generate_trace_printf(summary, &summary->trace_kv,
+                              "trace.kv.capacity: %llu",
+                              summary->trace_kv_shape.capacity);
+        generate_trace_printf(summary, &summary->trace_kv,
+                              "trace.kv.binding_source: generate-decode-options");
+    }
+}
+
+static void generate_emit_logits_trace(yvex_generate_summary *summary)
+{
+    unsigned long long i;
+
+    if (!summary) {
+        return;
+    }
+    for (i = 0ull; i < summary->trace_step_count; ++i) {
+        const yvex_generation_trace_step *record = &summary->trace_step_records[i];
+        if (!record->attempted) {
+            continue;
+        }
+        generate_trace_printf(summary, &summary->trace_logits,
+                              "trace.step.%llu.logits_mode: bounded-diagnostic", i);
+        generate_trace_printf(summary, &summary->trace_logits,
+                              "trace.step.%llu.logits_checksum: %llu",
+                              i, record->logits_checksum);
+        generate_trace_printf(summary, &summary->trace_logits,
+                              "trace.step.%llu.logits_min: %.9g",
+                              i, record->logits_min);
+        generate_trace_printf(summary, &summary->trace_logits,
+                              "trace.step.%llu.logits_max: %.9g",
+                              i, record->logits_max);
+        generate_trace_printf(summary, &summary->trace_logits,
+                              "trace.step.%llu.real_output_head_logits: false", i);
+    }
+}
+
+static void generate_emit_sampling_trace(yvex_generate_summary *summary)
+{
+    unsigned long long i;
+
+    if (!summary) {
+        return;
+    }
+    for (i = 0ull; i < summary->trace_step_count; ++i) {
+        const yvex_generation_trace_step *record = &summary->trace_step_records[i];
+        if (!record->attempted) {
+            continue;
+        }
+        generate_trace_printf(summary, &summary->trace_sampling,
+                              "trace.step.%llu.sampling_strategy: greedy", i);
+        generate_trace_printf(summary, &summary->trace_sampling,
+                              "trace.step.%llu.candidate_token_id: %u",
+                              i, record->candidate_token_id);
+        generate_trace_printf(summary, &summary->trace_sampling,
+                              "trace.step.%llu.candidate_logit: %.9g",
+                              i, record->candidate_logit);
+        generate_trace_printf(summary, &summary->trace_sampling,
+                              "trace.step.%llu.sample_checksum: %llu",
+                              i, record->sample_checksum);
+        generate_trace_printf(summary, &summary->trace_sampling,
+                              "trace.step.%llu.real_vocab_sampling: false", i);
+        generate_trace_printf(summary, &summary->trace_sampling,
+                              "trace.step.%llu.stochastic_sampling: false", i);
+    }
+}
+
+static void generate_emit_append_trace(yvex_generate_summary *summary)
+{
+    unsigned long long i;
+
+    if (!summary) {
+        return;
+    }
+    for (i = 0ull; i < summary->trace_step_count; ++i) {
+        const yvex_generation_trace_step *record = &summary->trace_step_records[i];
+        if (!record->attempted) {
+            continue;
+        }
+        generate_trace_printf(summary, &summary->trace_append,
+                              "trace.append.%llu.append_status: %s",
+                              i, record->append_status ? record->append_status : "not-started");
+        generate_trace_printf(summary, &summary->trace_append,
+                              "trace.append.%llu.candidate_token_id: %u",
+                              i, record->candidate_token_id);
+        generate_trace_printf(summary, &summary->trace_append,
+                              "trace.append.%llu.appended_token_id: %u",
+                              i, record->appended_token_id);
+        generate_trace_printf(summary, &summary->trace_append,
+                              "trace.append.%llu.accepted_token_count: %llu",
+                              i, record->accepted_token_count);
+        generate_trace_printf(summary, &summary->trace_append,
+                              "trace.append.%llu.generated_token_count: %llu",
+                              i, record->generated_token_count);
+        generate_trace_printf(summary, &summary->trace_append,
+                              "trace.append.%llu.total_token_count: %llu",
+                              i, record->total_token_count);
+        generate_trace_printf(summary, &summary->trace_append,
+                              "trace.append.%llu.sequence_checksum: %llu",
+                              i, record->sequence_checksum);
+    }
+}
+
+static void generate_emit_stop_trace(yvex_generate_summary *summary)
+{
+    if (!summary) {
+        return;
+    }
+    generate_trace_printf(summary, &summary->trace_stop,
+                          "trace.stop.policy: %s",
+                          summary->stop_policy ? summary->stop_policy : "bounded-diagnostic");
+    generate_trace_printf(summary, &summary->trace_stop,
+                          "trace.stop.requested: %s",
+                          summary->stop_requested ? "true" : "false");
+    generate_trace_printf(summary, &summary->trace_stop,
+                          "trace.stop.reason: %s",
+                          summary->stop_reason ? summary->stop_reason : "internal-error");
+    generate_trace_printf(summary, &summary->trace_stop,
+                          "trace.stop.phase: %s",
+                          summary->stop_phase ? summary->stop_phase : "preflight");
+    generate_trace_printf(summary, &summary->trace_stop,
+                          "trace.stop.step: %llu", summary->stop_step);
+    generate_trace_printf(summary, &summary->trace_stop,
+                          "trace.stop.timing: %s",
+                          summary->stop_timing ? summary->stop_timing : "preflight");
+    generate_trace_printf(summary, &summary->trace_stop,
+                          "trace.stop.before_append: %s",
+                          summary->stop_before_append ? "true" : "false");
+    generate_trace_printf(summary, &summary->trace_stop,
+                          "trace.stop.after_append: %s",
+                          summary->stop_after_append ? "true" : "false");
+    generate_trace_printf(summary, &summary->trace_stop,
+                          "trace.stop.failure_stop: %s",
+                          summary->failure_stop ? "true" : "false");
+    generate_trace_printf(summary, &summary->trace_stop,
+                          "trace.stop.unsupported_stop_feature: %s",
+                          summary->unsupported_stop_feature ? "true" : "false");
+    generate_trace_printf(summary, &summary->trace_stop,
+                          "trace.stop.eos_policy: %s",
+                          summary->eos_policy ? summary->eos_policy : "unsupported");
+    generate_trace_printf(summary, &summary->trace_stop,
+                          "trace.stop.stop_token_policy: %s",
+                          summary->stop_token_policy ? summary->stop_token_policy : "unsupported");
+}
+
+static void generate_emit_failure_trace(yvex_generate_summary *summary)
+{
+    if (!summary || !summary->phase || strcmp(summary->phase, "failed") != 0) {
+        return;
+    }
+    generate_trace_printf(summary, &summary->trace_failures,
+                          "trace.failure.phase: %s",
+                          summary->failed_phase ? summary->failed_phase : "internal-error");
+    generate_trace_printf(summary, &summary->trace_failures,
+                          "trace.failure.step: %llu", summary->failed_step);
+    generate_trace_printf(summary, &summary->trace_failures,
+                          "trace.failure.stop_reason: %s",
+                          summary->stop_reason ? summary->stop_reason : "internal-error");
+    generate_trace_printf(summary, &summary->trace_failures,
+                          "trace.failure.partial_generated_token_count: %llu",
+                          summary->partial_generated_token_count);
+    generate_trace_printf(summary, &summary->trace_failures,
+                          "trace.failure.last_successful_position: %llu",
+                          summary->last_successful_position);
+    generate_trace_printf(summary, &summary->trace_failures,
+                          "trace.failure.cleanup_attempted: %s",
+                          summary->cleanup_attempted ? "true" : "false");
+}
+
+static void generate_emit_cleanup_trace(yvex_generate_summary *summary)
+{
+    if (!summary) {
+        return;
+    }
+    generate_trace_printf(summary, &summary->trace_cleanup,
+                          "trace.cleanup.attempted: %s",
+                          summary->cleanup_attempted ? "true" : "false");
+    generate_trace_printf(summary, &summary->trace_cleanup,
+                          "trace.cleanup.status: %s",
+                          summary->cleanup_status ? summary->cleanup_status : "not-needed");
+}
+
+static void generate_emit_trace(yvex_generate_summary *summary)
+{
+    int failed;
+
+    if (!summary || !summary->trace_enabled) {
+        if (summary) {
+            summary->trace_status = "disabled";
+        }
+        return;
+    }
+    failed = summary->phase && strcmp(summary->phase, "failed") == 0;
+    if (generate_trace_wants_tokens(summary->trace_level)) {
+        generate_emit_token_trace(summary);
+    }
+    if (generate_trace_wants_steps(summary->trace_level)) {
+        generate_emit_step_trace(summary);
+    }
+    if (generate_trace_wants_kv(summary->trace_level)) {
+        generate_emit_kv_trace(summary);
+    }
+    if (generate_trace_wants_logits(summary->trace_level)) {
+        generate_emit_logits_trace(summary);
+    }
+    if (generate_trace_wants_sampling(summary->trace_level)) {
+        generate_emit_sampling_trace(summary);
+    }
+    if (summary->trace_level == YVEX_GENERATE_TRACE_FULL) {
+        generate_emit_append_trace(summary);
+        generate_emit_stop_trace(summary);
+    }
+    if (failed) {
+        generate_emit_failure_trace(summary);
+    }
+    if (summary->trace_level == YVEX_GENERATE_TRACE_FULL || failed) {
+        generate_emit_cleanup_trace(summary);
+    }
+    summary->trace_status = summary->trace_records > 0ull ? "emitted" : "enabled";
 }
 
 static void generate_print_summary(const yvex_generate_summary *summary,
@@ -318,6 +964,21 @@ static void generate_print_summary(const yvex_generate_summary *summary,
     printf("eos_policy: %s\n", summary && summary->eos_policy ? summary->eos_policy : "unsupported");
     printf("stop_token_policy: %s\n",
            summary && summary->stop_token_policy ? summary->stop_token_policy : "unsupported");
+    printf("trace_level: %s\n",
+           summary && summary->trace_level_name ? summary->trace_level_name : "none");
+    printf("trace_enabled: %s\n", summary && summary->trace_enabled ? "true" : "false");
+    printf("trace_records: %llu\n", summary ? summary->trace_records : 0ull);
+    printf("trace_tokens: %llu\n", summary ? summary->trace_tokens : 0ull);
+    printf("trace_steps: %llu\n", summary ? summary->trace_steps : 0ull);
+    printf("trace_kv: %llu\n", summary ? summary->trace_kv : 0ull);
+    printf("trace_logits: %llu\n", summary ? summary->trace_logits : 0ull);
+    printf("trace_sampling: %llu\n", summary ? summary->trace_sampling : 0ull);
+    printf("trace_append: %llu\n", summary ? summary->trace_append : 0ull);
+    printf("trace_stop: %llu\n", summary ? summary->trace_stop : 0ull);
+    printf("trace_cleanup: %llu\n", summary ? summary->trace_cleanup : 0ull);
+    printf("trace_failures: %llu\n", summary ? summary->trace_failures : 0ull);
+    printf("trace_status: %s\n",
+           summary && summary->trace_status ? summary->trace_status : "disabled");
     printf("generation_checksum: %llu\n", summary ? summary->generation_checksum : 0ull);
     printf("sequence_checksum: %llu\n", summary ? summary->sequence_checksum : 0ull);
     generate_print_token_list("generated_token_ids",
@@ -334,6 +995,15 @@ static void generate_print_summary(const yvex_generate_summary *summary,
     printf("failed_phase: %s\n",
            summary && summary->failed_phase ? summary->failed_phase : "none");
     printf("failed_step: %llu\n", summary ? summary->failed_step : 0ull);
+}
+
+static void generate_print_trace_and_summary(yvex_generate_summary *summary,
+                                             const char *model_arg,
+                                             const char *backend_name,
+                                             const char *segment_name)
+{
+    generate_emit_trace(summary);
+    generate_print_summary(summary, model_arg, backend_name, segment_name);
 }
 
 static void generate_mark_cleanup(yvex_generate_summary *summary)
@@ -371,6 +1041,7 @@ static void generate_mark_failure(yvex_generate_summary *summary,
         summary->append_status = "append-failed";
         summary->append_failure = reason ? reason : "append-failure";
     }
+    generate_trace_step_mark_failure(summary, phase, step);
 }
 
 static const char *generate_sample_failure_phase(const yvex_sampling_summary *sample)
@@ -404,7 +1075,8 @@ static const char *generate_sample_failure_reason(const yvex_sampling_summary *s
 }
 
 static void generate_account_failed_sample(yvex_generate_summary *summary,
-                                           const yvex_sampling_summary *sample)
+                                           const yvex_sampling_summary *sample,
+                                           unsigned long long step)
 {
     if (!summary || !sample) {
         return;
@@ -417,18 +1089,42 @@ static void generate_account_failed_sample(yvex_generate_summary *summary,
         summary->decode_steps += 1ull;
     }
     if (sample->logits_buffer_created) {
+        yvex_generation_trace_step *record;
+
         if (summary->decode_steps == 0ull) {
             summary->decode_steps += 1ull;
         }
         summary->logits_steps += 1ull;
+        if (step < summary->trace_step_count) {
+            record = &summary->trace_step_records[step];
+            record->logits_checksum = sample->logits_checksum;
+            record->logits_min = sample->logits_min;
+            record->logits_max = sample->logits_max;
+            record->accepted_token_count = summary->accepted_token_count;
+            record->generated_token_count = summary->generated_token_count;
+            record->total_token_count = summary->total_token_count;
+            record->sequence_checksum = summary->sequence_checksum;
+        }
     }
     if (sample->sample_created) {
+        yvex_generation_trace_step *record;
+
         summary->candidate_token_seen = 1;
         summary->candidate_token_id = sample->selected_token_id;
         summary->candidate_logit = sample->selected_logit;
         summary->last_selected_token_id = sample->selected_token_id;
         summary->last_selected_logit = sample->selected_logit;
         summary->append_status = "candidate-" "rea" "dy";
+        if (step < summary->trace_step_count) {
+            record = &summary->trace_step_records[step];
+            record->candidate_token_id = sample->selected_token_id;
+            record->candidate_logit = sample->selected_logit;
+            record->selected_token_id = sample->selected_token_id;
+            record->logits_checksum = sample->logits_checksum;
+            record->logits_min = sample->logits_min;
+            record->logits_max = sample->logits_max;
+            record->sample_checksum = sample->sample_checksum;
+        }
     }
 }
 
@@ -455,6 +1151,21 @@ static void generate_record_candidate(yvex_generate_summary *summary,
     summary->last_selected_logit = append->logit;
     summary->append_status = "candidate-" "rea" "dy";
     summary->append_failure = "none";
+    if (step < summary->trace_step_count) {
+        yvex_generation_trace_step *record = &summary->trace_step_records[step];
+
+        record->decode_status = "pass";
+        record->logits_status = "pass";
+        record->sample_status = "pass";
+        record->append_status = "candidate";
+        record->selected_token_id = sample->selected_token_id;
+        record->candidate_token_id = sample->selected_token_id;
+        record->candidate_logit = sample->selected_logit;
+        record->logits_checksum = sample->logits_checksum;
+        record->logits_min = sample->logits_min;
+        record->logits_max = sample->logits_max;
+        record->sample_checksum = sample->sample_checksum;
+    }
 }
 
 static int generate_append_preflight(yvex_generate_summary *summary,
@@ -584,6 +1295,17 @@ static int generate_append_commit(yvex_generate_summary *summary,
                                                     append->sample_checksum);
     summary->sequence_checksum = generate_mix_u64(summary->sequence_checksum,
                                                   (unsigned long long)append->token_id);
+    if (append->step < summary->trace_step_count) {
+        yvex_generation_trace_step *record = &summary->trace_step_records[append->step];
+
+        record->append_status = "appended";
+        record->appended_token_id = append->token_id;
+        record->position_after_append = next_position;
+        record->accepted_token_count = summary->accepted_token_count;
+        record->generated_token_count = summary->generated_token_count;
+        record->total_token_count = summary->total_token_count;
+        record->sequence_checksum = summary->sequence_checksum;
+    }
     return YVEX_OK;
 }
 
@@ -635,6 +1357,7 @@ int yvex_generate_command(int argc, char **argv)
     unsigned long long logits_count = 16ull;
     unsigned long long max_new_tokens = 0ull;
     unsigned long long step;
+    yvex_generation_trace_level trace_level = YVEX_GENERATE_TRACE_NONE;
     int max_new_tokens_seen = 0;
     int attach_kv = 0;
     int kv_shape_seen = 0;
@@ -700,6 +1423,12 @@ int yvex_generate_command(int argc, char **argv)
         } else if (strcmp(argv[i], "--strategy") == 0) {
             if (i + 1 >= argc || !generate_parse_strategy(argv[i + 1])) {
                 fprintf(stderr, "yvex: --strategy supports only greedy\n");
+                return 2;
+            }
+            i += 1;
+        } else if (strcmp(argv[i], "--trace-level") == 0) {
+            if (i + 1 >= argc || !generate_parse_trace_level(argv[i + 1], &trace_level)) {
+                fprintf(stderr, "yvex: --trace-level requires none|tokens|steps|kv|logits|sampling|full\n");
                 return 2;
             }
             i += 1;
@@ -796,7 +1525,7 @@ int yvex_generate_command(int argc, char **argv)
     }
 
     if (!model_arg || !backend_name || !tokens_text || !segment_name || !max_new_tokens_seen) {
-        fprintf(stderr, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N] [--logits-count N] [--strategy greedy]\n");
+        fprintf(stderr, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N] [--logits-count N] [--strategy greedy] [--trace-level none|tokens|steps|kv|logits|sampling|full]\n");
         return 2;
     }
     if (!generate_backend_name_valid(backend_name)) {
@@ -847,12 +1576,13 @@ int yvex_generate_command(int argc, char **argv)
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
-    generate_summary_defaults(&summary, NULL, position_start, max_new_tokens);
+    generate_summary_defaults(&summary, NULL, position_start, max_new_tokens, trace_level);
+    generate_summary_trace_kv(&summary, attach_kv, &kv_shape);
     rc = enforce_registered_identity_cli(&model_ref, "generate");
     if (rc != YVEX_OK) {
         generate_mark_failure(&summary, "preflight", "internal-error", 0ull);
         generate_mark_cleanup(&summary);
-        generate_print_summary(&summary, model_arg, backend_name, segment_name);
+        generate_print_trace_and_summary(&summary, model_arg, backend_name, segment_name);
         yvex_model_ref_clear(&model_ref);
         return exit_for_status(rc);
     }
@@ -864,11 +1594,12 @@ int yvex_generate_command(int argc, char **argv)
     if (rc == YVEX_OK) {
         rc = yvex_token_input_validate_bounds(&prompt_input, vocab_size, &err);
     }
-    generate_summary_defaults(&summary, &prompt_input, position_start, max_new_tokens);
+    generate_summary_defaults(&summary, &prompt_input, position_start, max_new_tokens, trace_level);
+    generate_summary_trace_kv(&summary, attach_kv, &kv_shape);
     if (rc != YVEX_OK) {
         generate_mark_failure(&summary, "preflight", "internal-error", 0ull);
         generate_mark_cleanup(&summary);
-        generate_print_summary(&summary, model_arg, backend_name, segment_name);
+        generate_print_trace_and_summary(&summary, model_arg, backend_name, segment_name);
         yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
@@ -883,7 +1614,7 @@ int yvex_generate_command(int argc, char **argv)
         yvex_error_set(&err, YVEX_ERR_BOUNDS, "generate", "context length overflow");
         generate_mark_failure(&summary, "preflight", "internal-error", 0ull);
         generate_mark_cleanup(&summary);
-        generate_print_summary(&summary, model_arg, backend_name, segment_name);
+        generate_print_trace_and_summary(&summary, model_arg, backend_name, segment_name);
         yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(YVEX_ERR_BOUNDS));
     }
@@ -899,7 +1630,7 @@ int yvex_generate_command(int argc, char **argv)
     if (rc != YVEX_OK) {
         generate_mark_failure(&summary, "preflight", "internal-error", 0ull);
         generate_mark_cleanup(&summary);
-        generate_print_summary(&summary, model_arg, backend_name, segment_name);
+        generate_print_trace_and_summary(&summary, model_arg, backend_name, segment_name);
         print_graph_guard_report(&graph_guard);
         yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
@@ -916,7 +1647,7 @@ int yvex_generate_command(int argc, char **argv)
     if (rc != YVEX_OK) {
         generate_mark_failure(&summary, "preflight", "internal-error", 0ull);
         generate_mark_cleanup(&summary);
-        generate_print_summary(&summary, model_arg, backend_name, segment_name);
+        generate_print_trace_and_summary(&summary, model_arg, backend_name, segment_name);
         yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
@@ -932,6 +1663,7 @@ int yvex_generate_command(int argc, char **argv)
             break;
         }
         summary.current_decode_position = decode_position;
+        (void)generate_trace_step_begin(&summary, step, decode_position);
         if (decode_position >= context_length) {
             summary.phase = "complete";
             summary.status = "generation-loop-complete";
@@ -976,7 +1708,7 @@ int yvex_generate_command(int argc, char **argv)
         summary.phase = "sample";
         rc = yvex_engine_sample_token(engine, &sample_options, &sample_summary, &err);
         if (rc != YVEX_OK) {
-            generate_account_failed_sample(&summary, &sample_summary);
+            generate_account_failed_sample(&summary, &sample_summary, step);
             generate_mark_failure(&summary,
                                   generate_sample_failure_phase(&sample_summary),
                                   generate_sample_failure_reason(&sample_summary),
@@ -1051,7 +1783,7 @@ int yvex_generate_command(int argc, char **argv)
     }
 
     generate_mark_cleanup(&summary);
-    generate_print_summary(&summary, model_arg, backend_name, segment_name);
+    generate_print_trace_and_summary(&summary, model_arg, backend_name, segment_name);
     yvex_engine_close(engine);
     yvex_model_ref_clear(&model_ref);
     if (summary.phase && strcmp(summary.phase, "failed") == 0) {
@@ -1063,5 +1795,5 @@ int yvex_generate_command(int argc, char **argv)
 
 void yvex_generate_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N] [--logits-count N] [--strategy greedy]\n\nGenerate runs a bounded diagnostic loop over the existing prefill, decode, logits, greedy selection, and token-append path. It uses a bounded diagnostic stop policy, stops on max-new-tokens or context-length, reports decode/logits/sample/append failure stop reasons, and keeps EOS and stop-token policies unsupported. It does not claim full model generation, DeepSeek generation, provider/server output, evaluation, or benchmark measurement.\n");
+    fprintf(fp, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N] [--logits-count N] [--strategy greedy] [--trace-level none|tokens|steps|kv|logits|sampling|full]\n\nGenerate runs a bounded diagnostic loop over the existing prefill, decode, logits, greedy selection, and token-append path. It uses a bounded diagnostic stop policy, stops on max-new-tokens or context-length, reports decode/logits/sample/append failure stop reasons, and keeps EOS and stop-token policies unsupported. Trace levels are bounded diagnostic records only. It does not claim full model generation, DeepSeek generation, provider/server output, evaluation, or benchmark measurement.\n");
 }

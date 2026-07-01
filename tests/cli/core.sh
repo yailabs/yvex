@@ -254,11 +254,13 @@ contains "$OUT_DIR/help_sample.out" "does not run stochastic sampling, append to
 
 run_ok help_generate "$YVEX_BIN" help generate
 contains "$OUT_DIR/help_generate.out" "usage: yvex generate"
+contains "$OUT_DIR/help_generate.out" "--trace-level none|tokens|steps|kv|logits|sampling|full"
 contains "$OUT_DIR/help_generate.out" "bounded diagnostic loop"
 contains "$OUT_DIR/help_generate.out" "bounded diagnostic stop policy"
 contains "$OUT_DIR/help_generate.out" "stops on max-new-tokens or context-length"
 contains "$OUT_DIR/help_generate.out" "failure stop reasons"
 contains "$OUT_DIR/help_generate.out" "EOS and stop-token policies unsupported"
+contains "$OUT_DIR/help_generate.out" "Trace levels are bounded diagnostic records only"
 contains "$OUT_DIR/help_generate.out" "does not claim full model generation"
 
 run_ok help_chat "$YVEX_BIN" help chat
@@ -535,6 +537,7 @@ run_fail_code generate_missing_max_new_tokens 2 "$YVEX_BIN" generate --model mis
 run_fail_code generate_max_new_tokens_invalid 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens nope
 run_fail_code generate_max_new_tokens_zero 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 0
 run_fail_code generate_strategy_stochastic 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --strategy stochastic
+run_fail_code generate_trace_level_invalid 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --trace-level nope
 run_fail_code generate_logits_count_zero 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --logits-count 0
 run_fail_code generate_logits_count_too_many 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --logits-count 257
 run_fail_code generate_context_length_zero 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --context-length 0

@@ -1387,6 +1387,17 @@ stop timing/source reporting
 unsupported EOS/stop-token boundary
 stop-policy cleanup and partial-output accounting
 generation cleanup/failure reporting
+generation trace-level parser
+token trace for prompt/generated/runtime diagnostic token sequences
+step trace for decode/logits/sample/append/stop phases
+diagnostic KV trace boundary
+bounded logits trace
+greedy sampling trace
+append trace
+stop-policy trace
+failure trace
+cleanup trace
+trace counters and stable trace output
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -1529,6 +1540,8 @@ real DeepSeek generation
 tokenizer-quality generation
 EOS-backed real tokenizer stop
 stop-token text matching
+tensor-level full-model trace
+raw tensor dumps
 interruption/cancellation
 interactive generation
 provider generation endpoint
@@ -1730,7 +1743,7 @@ tables.
 | SAMPLING.0 | complete | sampling | First sampler boundary | `yvex sample` invokes implemented logits, performs deterministic greedy selection over the bounded diagnostic logits buffer, reports selected index/token/logit/checksum fields, and preserves real vocab sampling, generation, and benchmark unsupported boundaries |
 | SAMPLING.1 | planned | sampling | Sampling diagnostics and reproducibility | seed, parameters, stop reason, and reproducibility diagnostics over implemented sampler |
 | GEN.CONTRACT.0 | complete | docs | Generation loop contract | spine defines generation loop state machine, token lifecycle, stop reasons, CLI output fields, trace levels, cleanup/failure phases, and bounded-vs-full generation boundary without implementation claim |
-| GEN.TRACE.0 | planned | trace | Generation trace surface | generation traces expose token, step, KV, logits, sampling, tensor, and cleanup phases where implemented |
+| GEN.TRACE.0 | complete | trace | Generation trace surface | `yvex generate --trace-level none|tokens|steps|kv|logits|sampling|full` exposes stable bounded diagnostic token, step, KV, logits, sampling, append, stop, failure, cleanup, and trace-counter records without full-model, DeepSeek, provider, eval, benchmark, raw tensor, or tensor-dump claim |
 | GEN.APPEND.0 | complete | generation | Token append lifecycle | generated-token append, candidate/accepted/generated token accounting, runtime sequence mutation, position advance, context-limit non-mutation, partial-output accounting, append failure reporting, checksum/accounting, and cleanup behavior are implemented and tested for the bounded diagnostic generation loop without full-model, DeepSeek, provider, eval, or benchmark claim |
 | GEN.STOP.0 | complete | generation | Stop-condition policy | max-new-tokens, context-limit, failure stop reasons, stop timing, stop phase, partial-output accounting, unsupported EOS/stop-token boundary, and cleanup behavior are implemented and tested for the bounded diagnostic generation loop without full-model, DeepSeek, provider, eval, or benchmark claim |
 | M14 | planned | generation | First constrained generation loop | decode -> logits -> sample -> append token loop with stop conditions and token accounting |
@@ -2193,6 +2206,19 @@ failure_stop:
 unsupported_stop_feature:
 eos_policy:
 stop_token_policy:
+trace_level:
+trace_enabled:
+trace_records:
+trace_tokens:
+trace_steps:
+trace_kv:
+trace_logits:
+trace_sampling:
+trace_append:
+trace_stop:
+trace_cleanup:
+trace_failures:
+trace_status:
 generation_checksum:
 sequence_checksum:
 generated_token_ids:
@@ -2234,34 +2260,41 @@ Those remain false.
 
 ## Generation Trace Contract
 
-Conceptual trace levels:
+Implemented trace levels:
 
 none:
-  final summary only.
+  final summary only; no `trace.*` records.
 
 tokens:
-  prompt/generation token IDs and stop reason.
+  prompt, generated, runtime diagnostic token IDs, counts, and stop reason.
 
 steps:
-  per-token decode/logits/sample/append step summary.
+  per-attempted-token decode/logits/sample/append/stop step summary.
 
 kv:
-  KV state position/read/write summaries where implemented.
+  diagnostic KV boundary and requested shape only; no real attention KV claim.
 
 logits:
-  checksum/min/max/top candidates where implemented.
+  bounded diagnostic logits checksum/min/max only; no real output-head claim.
 
 sampling:
-  selected token, selected logit, strategy, seed where implemented.
-
-tensors:
-  future tensor IDs, shapes, dtypes, residency, and graph op ownership.
+  greedy candidate token/logit/checksum only; no stochastic or real vocab claim.
 
 full:
-  all implemented trace fields.
+  token, step, KV, logits, sampling, append, stop, failure, and cleanup records.
 
-Trace level is conceptual until parser, runtime behavior, tests, and output
-contract exist.
+Every trace line uses this stable text shape:
+
+```text
+trace.<category>.<index>.<field>: value
+```
+
+Index is omitted for singleton categories such as `tokens`, `kv`, `stop`,
+`failure`, and `cleanup`.
+
+Current trace output does not dump raw tensors, expose full-model tensor traces,
+claim real DeepSeek generation, claim provider generation, evaluate capability,
+or measure benchmark throughput.
 
 ## Generation Failure and Cleanup Contract
 
@@ -2956,24 +2989,23 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-GEN.TRACE.0 - Generation trace surface
+GEN.LOOP.1 - Generation state and interruption
 ```
 
-GEN.TRACE.0 must make the bounded diagnostic generation loop observable across
-token, step, prefill, decode, logits, sample, append, stop, failure, and cleanup
-phases where those phases are implemented. It must not claim real DeepSeek full
-generation, tokenizer-quality output, provider generation, evaluation, or
-benchmark readiness.
+GEN.LOOP.1 must harden bounded diagnostic generation state across interruption,
+cleanup, and partial-output behavior. It must not claim full model generation,
+real DeepSeek generation, provider generation, evaluation, or benchmark
+readiness.
 
 Algorithm/CLI research hardening runs in parallel with runtime closure. It does
-not replace GEN.TRACE.0 or the current runtime Active Next.
+not replace GEN.LOOP.1 or the current runtime Active Next.
 
 GEN.CONTRACT.0 hardens the contract for the generation loop. GEN.LOOP.0 is
 complete for bounded diagnostic loop control only.
 
 PREFILL.4 remains planned as diagnostics/regression hardening over the
 implemented prefill state path. PREFILL.5 remains planned as a future
-measurement gate. Neither blocks generation trace hardening or later full-model
+measurement gate. Neither blocks generation state hardening or later full-model
 runtime work.
 
 SPINE.GENERATION.TARGET.0 records the long-term DeepSeek generation and
@@ -2985,8 +3017,13 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-GEN.TRACE.0 - Generation trace surface
+GEN.LOOP.1 - Generation state and interruption
 ```
+
+GEN.TRACE.0 is complete as a stable trace-level surface over the bounded
+diagnostic generation loop. It does not create full-model generation, real
+DeepSeek generation, provider generation, evaluation, benchmark, raw tensor, or
+tensor-dump capability.
 
 GEN.STOP.0 is complete as explicit stop-policy behavior for the bounded
 diagnostic generation loop: max-new-tokens is a post-append stop,

@@ -17,7 +17,7 @@ The current DeepSeek path proves selected source-to-artifact emission, local
 alias registration, integrity, selected tensor materialization, engine/session
 attachment, selected graph execution, bounded diagnostic decode/logits/sampling,
 and bounded diagnostic generation-loop control with explicit stop-policy
-reporting over the selected segment.
+reporting and trace-level diagnostics over the selected segment.
 
 ## DeepSeek Paths And Artifacts
 
@@ -250,6 +250,7 @@ Boundary:
   bounded diagnostic decode/logits/greedy sampling only
   bounded diagnostic generated-token append/accounting only
   bounded diagnostic stop-policy reporting only
+  bounded diagnostic trace reporting only
   not attention-backed transformer prefill
   not real model decode
   not real output-head logits
@@ -279,6 +280,7 @@ Boundary:
 ./yvex logits --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3
 ./yvex sample --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3
 ./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3
+./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2 --trace-level full
 ./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --context-length 4
 ./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --context-length 5
 ./yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8 --append-demo --read-position 0

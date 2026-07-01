@@ -16,6 +16,14 @@ contains() {
     grep -F -- "$text" "$file" >/dev/null || fail "$file missing: $text"
 }
 
+not_contains() {
+    file=$1
+    text=$2
+    if grep -F -- "$text" "$file" >/dev/null; then
+        fail "$file unexpectedly contained: $text"
+    fi
+}
+
 line_count() {
     file=$1
     text=$2
@@ -128,6 +136,20 @@ contains "$OUT_DIR/max_one.out" "full_model_generation: false"
 contains "$OUT_DIR/max_one.out" "real_deepseek_generation: false"
 contains "$OUT_DIR/max_one.out" "generation: unsupported-full-model"
 contains "$OUT_DIR/max_one.out" "benchmark_status: not-measured"
+contains "$OUT_DIR/max_one.out" "trace_level: none"
+contains "$OUT_DIR/max_one.out" "trace_enabled: false"
+contains "$OUT_DIR/max_one.out" "trace_records: 0"
+contains "$OUT_DIR/max_one.out" "trace_tokens: 0"
+contains "$OUT_DIR/max_one.out" "trace_steps: 0"
+contains "$OUT_DIR/max_one.out" "trace_kv: 0"
+contains "$OUT_DIR/max_one.out" "trace_logits: 0"
+contains "$OUT_DIR/max_one.out" "trace_sampling: 0"
+contains "$OUT_DIR/max_one.out" "trace_append: 0"
+contains "$OUT_DIR/max_one.out" "trace_stop: 0"
+contains "$OUT_DIR/max_one.out" "trace_cleanup: 0"
+contains "$OUT_DIR/max_one.out" "trace_failures: 0"
+contains "$OUT_DIR/max_one.out" "trace_status: disabled"
+not_contains "$OUT_DIR/max_one.out" "trace.step."
 line_count "$OUT_DIR/max_one.out" "stop_reason:" 1
 
 run_ok max_three "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3
@@ -140,6 +162,80 @@ contains "$OUT_DIR/max_three.out" "stop_reason: max-new-tokens"
 contains "$OUT_DIR/max_three.out" "stop_step: 2"
 contains "$OUT_DIR/max_three.out" "stop_timing: post-append"
 contains "$OUT_DIR/max_three.out" "failure_stop: false"
+
+run_fail invalid_trace "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --trace-level nonsense
+contains "$OUT_DIR/invalid_trace.err" "--trace-level requires none|tokens|steps|kv|logits|sampling|full"
+
+run_ok trace_none "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --trace-level none
+contains "$OUT_DIR/trace_none.out" "trace_level: none"
+contains "$OUT_DIR/trace_none.out" "trace_enabled: false"
+contains "$OUT_DIR/trace_none.out" "trace_records: 0"
+not_contains "$OUT_DIR/trace_none.out" "trace.tokens."
+
+run_ok trace_tokens "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2 --trace-level tokens
+contains "$OUT_DIR/trace_tokens.out" "trace.tokens.prompt: 0,1,2,3"
+contains "$OUT_DIR/trace_tokens.out" "trace.tokens.generated:"
+contains "$OUT_DIR/trace_tokens.out" "trace.tokens.runtime_sequence:"
+contains "$OUT_DIR/trace_tokens.out" "trace.tokens.prompt_count: 4"
+contains "$OUT_DIR/trace_tokens.out" "trace.tokens.generated_count: 2"
+contains "$OUT_DIR/trace_tokens.out" "trace.tokens.total_count: 6"
+contains "$OUT_DIR/trace_tokens.out" "trace.tokens.stop_reason: max-new-tokens"
+contains "$OUT_DIR/trace_tokens.out" "trace_level: tokens"
+contains "$OUT_DIR/trace_tokens.out" "trace_enabled: true"
+contains "$OUT_DIR/trace_tokens.out" "trace_status: emitted"
+not_contains "$OUT_DIR/trace_tokens.out" "trace.step.0.logits_checksum"
+
+run_ok trace_steps "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --trace-level steps
+contains "$OUT_DIR/trace_steps.out" "trace.step.0.index: 0"
+contains "$OUT_DIR/trace_steps.out" "trace.step.2.index: 2"
+contains "$OUT_DIR/trace_steps.out" "trace.step.2.stop_reason: max-new-tokens"
+contains "$OUT_DIR/trace_steps.out" "trace.step.2.stop_timing: post-append"
+contains "$OUT_DIR/trace_steps.out" "trace_level: steps"
+contains "$OUT_DIR/trace_steps.out" "trace_status: emitted"
+
+run_ok trace_kv "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --trace-level kv
+contains "$OUT_DIR/trace_kv.out" "trace.kv.status: unavailable"
+contains "$OUT_DIR/trace_kv.out" "trace.kv.mode: diagnostic"
+contains "$OUT_DIR/trace_kv.out" "trace.kv.real_attention_kv: false"
+contains "$OUT_DIR/trace_kv.out" "trace.kv.full_model_kv: false"
+contains "$OUT_DIR/trace_kv.out" "trace_level: kv"
+
+run_ok trace_kv_requested "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8 --trace-level kv
+contains "$OUT_DIR/trace_kv_requested.out" "trace.kv.status: requested"
+contains "$OUT_DIR/trace_kv_requested.out" "trace.kv.layers: 1"
+contains "$OUT_DIR/trace_kv_requested.out" "trace.kv.heads: 2"
+contains "$OUT_DIR/trace_kv_requested.out" "trace.kv.head_dim: 4"
+contains "$OUT_DIR/trace_kv_requested.out" "trace.kv.capacity: 8"
+contains "$OUT_DIR/trace_kv_requested.out" "trace.kv.binding_source: generate-decode-options"
+
+run_ok trace_logits "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --trace-level logits
+contains "$OUT_DIR/trace_logits.out" "trace.step.0.logits_mode: bounded-diagnostic"
+contains "$OUT_DIR/trace_logits.out" "trace.step.0.logits_checksum:"
+contains "$OUT_DIR/trace_logits.out" "trace.step.0.logits_min:"
+contains "$OUT_DIR/trace_logits.out" "trace.step.0.logits_max:"
+contains "$OUT_DIR/trace_logits.out" "trace.step.0.real_output_head_logits: false"
+contains "$OUT_DIR/trace_logits.out" "trace_level: logits"
+
+run_ok trace_sampling "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --trace-level sampling
+contains "$OUT_DIR/trace_sampling.out" "trace.step.0.sampling_strategy: greedy"
+contains "$OUT_DIR/trace_sampling.out" "trace.step.0.candidate_token_id:"
+contains "$OUT_DIR/trace_sampling.out" "trace.step.0.candidate_logit:"
+contains "$OUT_DIR/trace_sampling.out" "trace.step.0.sample_checksum:"
+contains "$OUT_DIR/trace_sampling.out" "trace.step.0.real_vocab_sampling: false"
+contains "$OUT_DIR/trace_sampling.out" "trace.step.0.stochastic_sampling: false"
+contains "$OUT_DIR/trace_sampling.out" "trace_level: sampling"
+
+run_ok trace_full "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2 --trace-level full
+contains "$OUT_DIR/trace_full.out" "trace.tokens.prompt: 0,1,2,3"
+contains "$OUT_DIR/trace_full.out" "trace.step.0.index: 0"
+contains "$OUT_DIR/trace_full.out" "trace.kv.status: unavailable"
+contains "$OUT_DIR/trace_full.out" "trace.step.0.logits_mode: bounded-diagnostic"
+contains "$OUT_DIR/trace_full.out" "trace.step.0.sampling_strategy: greedy"
+contains "$OUT_DIR/trace_full.out" "trace.append.0.append_status: appended"
+contains "$OUT_DIR/trace_full.out" "trace.stop.reason: max-new-tokens"
+contains "$OUT_DIR/trace_full.out" "trace.cleanup.attempted: true"
+contains "$OUT_DIR/trace_full.out" "trace_level: full"
+contains "$OUT_DIR/trace_full.out" "trace_status: emitted"
 
 run_ok context_before "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --context-length 4
 contains "$OUT_DIR/context_before.out" "context_length: 4"
@@ -157,6 +253,15 @@ contains "$OUT_DIR/context_before.out" "stop_after_append: false"
 contains "$OUT_DIR/context_before.out" "stop_before_append: true"
 contains "$OUT_DIR/context_before.out" "failure_stop: false"
 contains "$OUT_DIR/context_before.out" "cleanup_attempted: true"
+
+run_ok context_before_trace "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --context-length 4 --trace-level full
+contains "$OUT_DIR/context_before_trace.out" "trace.step.0.decode_status: skipped"
+contains "$OUT_DIR/context_before_trace.out" "trace.step.0.logits_status: skipped"
+contains "$OUT_DIR/context_before_trace.out" "trace.step.0.sample_status: skipped"
+contains "$OUT_DIR/context_before_trace.out" "trace.step.0.append_status: context-limit"
+contains "$OUT_DIR/context_before_trace.out" "trace.stop.reason: context-limit"
+contains "$OUT_DIR/context_before_trace.out" "trace.stop.timing: pre-append"
+contains "$OUT_DIR/context_before_trace.out" "trace.stop.before_append: true"
 
 run_ok context_after "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --context-length 5
 contains "$OUT_DIR/context_after.out" "context_length: 5"
@@ -191,6 +296,14 @@ contains "$OUT_DIR/sample_failure.out" "stop_phase: sample"
 contains "$OUT_DIR/sample_failure.out" "failure_stop: true"
 contains "$OUT_DIR/sample_failure.out" "failed_phase: sample"
 contains "$OUT_DIR/sample_failure.out" "cleanup_attempted: true"
+
+run_fail sample_failure_trace env YVEX_TEST_FAIL_SAMPLE_AFTER_LOGITS=1 "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2 --trace-level full
+contains "$OUT_DIR/sample_failure_trace.out" "trace.failure.phase: sample"
+contains "$OUT_DIR/sample_failure_trace.out" "trace.failure.stop_reason: sampler-failure"
+contains "$OUT_DIR/sample_failure_trace.out" "trace.failure.partial_generated_token_count: 0"
+contains "$OUT_DIR/sample_failure_trace.out" "trace.cleanup.attempted: true"
+contains "$OUT_DIR/sample_failure_trace.out" "trace_failures:"
+contains "$OUT_DIR/sample_failure_trace.out" "trace_status: emitted"
 
 run_fail append_failure env YVEX_TEST_FAIL_GENERATE_APPEND=1 "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2
 contains "$OUT_DIR/append_failure.out" "append_status: append-failed"
