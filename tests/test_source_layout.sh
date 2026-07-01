@@ -164,6 +164,12 @@ bad_command_files="$(
        -o -name 'sampling_runtime.c' \
        -o -name 'sample_command.c' \
        -o -name 'sample_runtime.c' \
+       -o -name 'yvex_generation_command.c' \
+       -o -name 'yvex_generation_runtime.c' \
+       -o -name 'generation_command.c' \
+       -o -name 'generation_runtime.c' \
+       -o -name 'generate_command.c' \
+       -o -name 'generate_runtime.c' \
        -o -name 'yvex_prefill_chunks.c' \
        -o -name 'yvex_prefill_layers.c' \
        -o -name 'yvex_prefill_runtime.c' \

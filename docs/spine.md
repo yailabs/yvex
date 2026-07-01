@@ -185,17 +185,17 @@ official safetensors
 
 This target is not current capability.
 
-Today, YVEX generation is unsupported and real YVEX generation throughput is
-zero because real DeepSeek decode, real output-head logits, real vocabulary
-sampling, and the generation loop do not exist.
+Today, YVEX full model generation is unsupported and real YVEX generation
+throughput is zero because real DeepSeek decode, real output-head logits, real
+vocabulary sampling, and the full model generation loop do not exist.
 
 YVEX real generation throughput: 0 tok/s
 
 benchmark status: not measured
 
-A bounded generation loop may later close local runtime control flow before
-DeepSeek V4 Flash full generation is complete. That bounded loop is not a
-DeepSeek throughput claim and not full model generation.
+A bounded diagnostic generation loop may close local runtime control flow
+before DeepSeek V4 Flash full generation is complete. That bounded loop is not
+a DeepSeek throughput claim and not full model generation.
 
 The internal performance target for DeepSeek V4 Flash is to exceed a reference
 decode threshold of 15 tokens/sec and pursue at least 20 tokens/sec baseline
@@ -1023,7 +1023,8 @@ tests, and does not claim generation unless integrated into a generation loop.
 ### Generation-loop families
 
 bounded diagnostic generation loop:
-  planned local closure over implemented prefill/decode/logits/sample path.
+  current local closure over implemented prefill/decode/logits/sample path,
+  diagnostic token append, stop reporting, and cleanup.
 
 baseline autoregressive generation:
   planned repeated decode -> logits -> sample -> append-token loop over real
@@ -1368,6 +1369,10 @@ chunked prefill lifecycle with context-boundary and prefill scratch reuse report
 bounded diagnostic decode-state step over implemented prefill/KV summary
 bounded diagnostic logits buffer over implemented decode state
 bounded greedy sampler over implemented diagnostic logits buffer
+bounded diagnostic generation loop over implemented prefill/decode/logits/sample path
+diagnostic generated-token append/accounting
+max-new-tokens and context-limit stop reporting
+generation cleanup/failure reporting
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -1505,7 +1510,9 @@ real DeepSeek decode
 real output-head logits-producing runtime path
 real vocabulary sampling
 stochastic sampling
-generation
+full model generation
+real DeepSeek generation
+tokenizer-quality generation
 interactive generation
 provider generation endpoint
 OpenAI-compatible generation
@@ -1707,7 +1714,7 @@ tables.
 | GEN.APPEND.0 | planned | generation | Token append lifecycle | generated-token append, position advance, context checks, and partial-output accounting are implemented and tested |
 | GEN.STOP.0 | planned | generation | Stop-condition policy | max-new-tokens, context limit, EOS, stop tokens, interruption, and failure stop reasons are command-visible |
 | M14 | planned | generation | First constrained generation loop | decode -> logits -> sample -> append token loop with stop conditions and token accounting |
-| GEN.LOOP.0 | planned | generation | First constrained generation loop | composes prefill, decode, logits, sampling, token append, stop conditions, and cleanup into a bounded runtime generation loop without benchmark claim |
+| GEN.LOOP.0 | complete | generation | First constrained generation loop | `yvex generate` composes implemented prefill, decode, logits, greedy sampling, token append, stop checks, and cleanup into a bounded diagnostic generation loop without full-model, DeepSeek, provider, eval, or benchmark claim |
 | GEN.LOOP.1 | planned | generation | Generation state and interruption | interruption, cleanup, trace, and partial-output behavior over implemented generation loop |
 | M15 | planned | cli | Interactive CLI generation path | CLI/REPL generation uses real runtime generation loop |
 | CLI.GEN.0 | planned | cli | CLI generation command surface | exposes the implemented bounded generation loop through CLI with honest unsupported/full-model/benchmark boundaries |
@@ -1810,9 +1817,10 @@ DeepSeek V4 Flash is the internal generation pressure target.
 Current state:
 
 ```text
-YVEX generation: unsupported
+YVEX full model generation: unsupported
 YVEX real generation throughput: 0 tok/s
-reason: decode, logits, sampling, and generation loop are not implemented
+reason: real DeepSeek decode, real output-head logits, real vocabulary sampling,
+        and full model generation loop are not implemented
 ```
 
 Internal target:
@@ -2097,7 +2105,7 @@ A stop reason must be printed in every generation result.
 
 ## Generation CLI Output Contract
 
-Required future output fields for `GEN.LOOP.0`:
+Required output fields for `GEN.LOOP.0`:
 
 ```text
 generate: loop
@@ -2158,9 +2166,9 @@ benchmark_status: not-measured
 It must not imply:
 
 ```text
-full_model_generation: true
+full_model_generation true-state
 generation_ready true-state
-real_deepseek_generation: true
+real_deepseek_generation true-state
 ```
 
 Those remain false.
@@ -2889,24 +2897,25 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-GEN.LOOP.0 - First constrained generation loop
+GEN.APPEND.0 - Token append lifecycle
 ```
 
-GEN.LOOP.0 must compose prefill, decode, logits, sampling, token append, stop
-conditions, and cleanup into a bounded runtime generation loop without claiming
-real DeepSeek full generation, provider generation, evaluation, or benchmark
-readiness.
+GEN.APPEND.0 must harden generated-token append, position advance, context
+checks, and partial-output accounting beyond the minimal append path inside the
+bounded diagnostic generation loop. It must not claim real DeepSeek full
+generation, tokenizer-quality output, provider generation, evaluation, or
+benchmark readiness.
 
 Algorithm/CLI research hardening runs in parallel with runtime closure. It does
-not replace GEN.LOOP.0 or the current runtime Active Next.
+not replace GEN.APPEND.0 or the current runtime Active Next.
 
-GEN.CONTRACT.0 hardens the contract for GEN.LOOP.0. It does not replace or
-complete GEN.LOOP.0.
+GEN.CONTRACT.0 hardens the contract for the generation loop. GEN.LOOP.0 is
+complete for bounded diagnostic loop control only.
 
 PREFILL.4 remains planned as diagnostics/regression hardening over the
 implemented prefill state path. PREFILL.5 remains planned as a future
-measurement gate. Neither blocks the first bounded decode/logits/sampling/
-generation closure.
+measurement gate. Neither blocks append lifecycle hardening or later full-model
+runtime work.
 
 SPINE.GENERATION.TARGET.0 records the long-term DeepSeek generation and
 throughput target. It does not change the immediate implementation order.
@@ -2917,7 +2926,7 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-GEN.LOOP.0 - First constrained generation loop
+GEN.APPEND.0 - Token append lifecycle
 ```
 
 GRAPH.CHECK.0 is complete as a command preset over existing graph proofs. It
@@ -2941,10 +2950,10 @@ selected-position activation handoff. It is not full transformer prefill,
 decode, logits, sampling, generation, server generation, evaluation, or
 benchmark readiness.
 
-After SAMPLING.0, the bounded runtime closure path proceeds to GEN.LOOP.0. Real
-model output-head logits, real vocabulary sampling, and full DeepSeek runtime
-work remain planned tracks, but they do not block the first bounded generation
-loop boundary.
+After GEN.LOOP.0, bounded diagnostic generation control exists. Real model
+output-head logits, real vocabulary sampling, full DeepSeek runtime work, and
+provider/server generation remain planned tracks, but they do not block append
+lifecycle hardening.
 
 ## 8. Validation Gate
 
@@ -2976,16 +2985,18 @@ Current command-surface audit:
 ./yvex help models
 ```
 
-Planned decode/logits/sampling/generation closure proof sequence:
+Bounded decode/logits/sampling/generation closure proof sequence:
 
-```text
-./yvex decode --model ... --backend cpu --tokens ...
-./yvex logits --model ... --backend cpu --tokens ...
-./yvex sample --model ... --backend cpu --tokens ...
-./yvex generate --model ... --backend cpu --prompt ...
+```sh
+./yvex decode --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3
+./yvex logits --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3
+./yvex sample --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3
+./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3
 ```
 
-These are planned command shapes until the corresponding rows are implemented.
+These commands prove bounded diagnostic runtime control only. They do not prove
+full DeepSeek generation, provider generation, evaluation, or benchmark
+readiness.
 
 Selected artifact closeout proof set:
 

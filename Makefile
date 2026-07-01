@@ -122,7 +122,7 @@ CURRENT_DOCS := README.md AGENTS.md MODEL_ARTIFACTS.md NOTICE.md \
 
 info:
 	@echo "yvex: C local inference engine"
-	@echo "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, explicit token input boundary, prefill state foundation, minimal KV binding, and minimal KV ownership"
+	@echo "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, explicit token input boundary, prefill state foundation, minimal KV binding, decode/logits/sampling diagnostics, and bounded diagnostic generation loop"
 	@echo "interface: CLI-only"
 	@echo "library: libyvex.a"
 	@echo "filesystem: implemented"
@@ -133,7 +133,7 @@ info:
 	@echo "token_input: explicit token boundary implemented"
 	@echo "prefill_state: segment-summary foundation and minimal KV binding implemented"
 	@echo "prompt: default renderer implemented"
-	@echo "graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, standalone RoPE position op, and standalone F32 attention primitive implemented"
+	@echo "graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, standalone RoPE, attention, matmul, and MLP primitives, controlled block, and controlled layer scheduler implemented"
 	@echo "planner: estimate-only implemented"
 	@echo "backend: CPU reference implemented"
 	@echo "backend_cuda: CUDA backend dynamic driver attachment implemented"
@@ -162,10 +162,12 @@ info:
 	@echo "server_endpoints: health/metrics/models status implemented"
 	@echo "server_generation: not implemented"
 	@echo "kv: minimal session-owned append/read boundary implemented"
-	@echo "logits: unavailable skeleton implemented"
-	@echo "generation: unsupported"
+	@echo "decode: bounded diagnostic state step implemented"
+	@echo "logits: bounded diagnostic buffer implemented"
+	@echo "sampling: bounded greedy sampler implemented"
+	@echo "generation: bounded diagnostic loop available; full model unsupported"
 	@echo "inference: not implemented"
-	@echo "cuda: tensor movement and F32/F16 embed, RMSNorm, RoPE position op, and F32 attention primitive implemented when driver/device are available"
+	@echo "cuda: tensor movement and F32/F16 embed, RMSNorm, RoPE, attention, matmul, and MLP primitives implemented when driver/device are available"
 	@echo "server: yvexd status shell implemented"
 
 all: lib cli server

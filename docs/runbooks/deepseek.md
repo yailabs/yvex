@@ -7,7 +7,7 @@ This runbook is the DeepSeek model-scoped operator path for YVEX.
 Its primary paths start from local DeepSeek source tensors and reach the current
 selected graph boundary.
 
-It is not a generation runbook.
+It is not a full model generation runbook.
 
 It is not full DeepSeek conversion.
 
@@ -15,7 +15,8 @@ It is not full model execution.
 
 The current DeepSeek path proves selected source-to-artifact emission, local
 alias registration, integrity, selected tensor materialization, engine/session
-attachment, and selected graph execution.
+attachment, selected graph execution, bounded diagnostic decode/logits/sampling,
+and bounded diagnostic generation-loop control over the selected segment.
 
 ## DeepSeek Paths And Artifacts
 
@@ -225,8 +226,9 @@ du -sh "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash"
 
 Purpose:
   Validate and exercise the selected embedding-plus-RMSNorm segment artifact
-  through graph segment execution, prefill summary, and minimal KV-backed
-  binding.
+  through graph segment execution, prefill summary, minimal KV-backed binding,
+  bounded diagnostic decode/logits/sampling, and bounded diagnostic generation
+  loop control.
 
 Requires:
   `deepseek4-v4-flash-selected-embed-rmsnorm` GGUF exists.
@@ -238,17 +240,21 @@ Safe to rerun:
   yes, but it refreshes the segment alias.
 
 Stop after:
-  segment-summary prefill with minimal KV binding completes.
+  bounded diagnostic generation loop reporting completes.
 
 Boundary:
   selected embedding-plus-RMSNorm segment only
   segment-summary prefill only
   minimal diagnostic KV binding only
+  bounded diagnostic decode/logits/greedy sampling only
+  bounded diagnostic generated-token append/accounting only
   not attention-backed transformer prefill
-  not decode
-  not logits
-  not sampling
-  not generation
+  not real model decode
+  not real output-head logits
+  not real vocabulary sampling
+  not full model generation
+  not provider generation
+  not benchmark
 
 ```sh
 ./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths
@@ -267,6 +273,11 @@ Boundary:
 ./yvex graph --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --execute-segment --segment embedding-rmsnorm --tokens 0,1 --token-index 1
 ./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1
 ./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
+./yvex decode --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3
+./yvex logits --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3
+./yvex sample --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3
+./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3
+./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 0
 ./yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8 --append-demo --read-position 0
 ```
 
@@ -403,7 +414,10 @@ YVEX can:
 - execute selected embedding graph;
 - execute selected embedding-plus-RMSNorm segment when the segment artifact exists;
 - create segment-summary prefill state;
-- bind that state to minimal diagnostic KV.
+- bind that state to minimal diagnostic KV;
+- run bounded diagnostic decode/logits/greedy sampling over the selected segment;
+- run a bounded diagnostic generation loop with token append/accounting over the
+  selected segment.
 
 YVEX does not currently implement:
 
@@ -411,9 +425,9 @@ YVEX does not currently implement:
 - full DeepSeek materialization;
 - complete transformer execution;
 - complete transformer prefill;
-- decode;
-- logits;
-- sampling;
-- generation;
+- real DeepSeek decode;
+- real output-head logits;
+- real vocabulary sampling;
+- full model generation;
 - provider generation;
 - benchmarks.

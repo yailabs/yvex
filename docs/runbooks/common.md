@@ -6,8 +6,8 @@ This runbook contains model-independent YVEX operator lanes.
 
 Use model-specific runbooks for DeepSeek or GLM work.
 
-This file does not claim generation, provider generation, evaluation, or
-benchmark capability.
+This file does not claim full model generation, provider generation,
+evaluation, or benchmark capability.
 
 ## Lane 0 — Fast regression after a wave
 
@@ -44,6 +44,7 @@ make
 ./yvex --version
 ./yvex commands
 ./yvex info
+./yvex help generate
 ./yvexd --help
 ./yvex paths
 ./yvex paths resolve --family deepseek --kind source

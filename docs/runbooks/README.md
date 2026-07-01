@@ -25,5 +25,7 @@ Each lane states:
 - stop point;
 - boundary.
 
-Current YVEX does not implement decode, logits, sampling, generation, provider
-generation, capability evaluation, or benchmarks.
+Current YVEX exposes bounded diagnostic decode, logits, greedy sampling, and a
+bounded diagnostic generation loop over the selected segment path. It does not
+implement full model generation, provider generation, capability evaluation, or
+benchmarks.

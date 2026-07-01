@@ -2908,7 +2908,7 @@ static int command_info(int argc, char **argv)
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
     printf("interface: CLI-only\n");
-    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, standalone RoPE, attention, matmul, and MLP ops, explicit token input boundary, prefill state foundation, minimal KV binding, and minimal KV ownership\n");
+    printf("status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, standalone RoPE, attention, matmul, and MLP ops, explicit token input boundary, prefill state foundation, minimal KV binding, minimal KV ownership, bounded decode/logits/sampling diagnostics, and bounded diagnostic generation loop\n");
     printf("library: libyvex.a\n");
     printf("filesystem: implemented\n");
     printf("artifact: open/read implemented\n");
@@ -2950,7 +2950,8 @@ static int command_info(int argc, char **argv)
     printf("decode: bounded diagnostic state step implemented\n");
     printf("logits: bounded diagnostic buffer implemented\n");
     printf("sampling: bounded greedy sampler implemented\n");
-    printf("generation: unsupported\n");
+    printf("generation_loop: bounded diagnostic loop implemented\n");
+    printf("generation: unsupported-full-model\n");
     printf("inference: not implemented\n");
     printf("cuda: available when local driver/device probe succeeds\n");
     printf("server: yvexd status shell implemented\n");

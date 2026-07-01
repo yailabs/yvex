@@ -195,6 +195,16 @@ pattern='sampling_rea''dy: true'
 scan_forbidden_claim "$pattern"
 pattern='generation_rea''dy: true'
 scan_forbidden_claim "$pattern"
+pattern='full_model_generation: tr''ue'
+scan_forbidden_claim "$pattern"
+pattern='real_deepseek_generation: tr''ue'
+scan_forbidden_claim "$pattern"
+pattern='benchmark_status: mea''sured'
+scan_forbidden_claim "$pattern"
+pattern='provider generation imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='streaming generation imple''mented'
+scan_forbidden_claim "$pattern"
 pattern='execution_rea''dy: true'
 scan_forbidden_claim "$pattern"
 pattern='graph_execution_rea''dy: true'
