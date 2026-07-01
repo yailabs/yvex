@@ -10,10 +10,11 @@ Use the model-specific runbook when working with a concrete model target.
 
 YVEX now exposes bounded diagnostic decode, logits, greedy sampling, and a
 bounded diagnostic generation loop with explicit generated-token append
-accounting, explicit stop-policy reporting, and bounded trace-level reporting
-over the implemented selected segment path. It still does not implement full
-model generation, provider
-generation, capability evaluation, or benchmarks.
+accounting, explicit stop-policy reporting, deterministic local cancellation,
+partial-output preservation, cleanup lifecycle reporting, and bounded
+trace-level reporting over the implemented selected segment path. It still does
+not implement full model generation, provider generation, streaming generation,
+capability evaluation, or benchmarks.
 
 ## Runbook Index
 

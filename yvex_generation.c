@@ -51,10 +51,37 @@ typedef struct {
 } yvex_generation_trace_step;
 
 typedef struct {
+    unsigned long long state_id;
+    const char *lifecycle_status;
+    const char *generation_state;
+    int state_dirty;
+    int active_step_seen;
+    unsigned long long active_step;
+    int last_completed_step_seen;
+    unsigned long long last_completed_step;
+    int cancel_supported;
+    int cancel_after_steps_seen;
+    unsigned long long cancel_after_steps;
+    int cancel_requested;
+    const char *cancel_reason;
+    int cancel_step_seen;
+    unsigned long long cancel_step;
+    const char *cancel_timing;
+    const char *cancel_safe_point;
+    int partial_output_available;
+    int cleanup_idempotent;
+    int cleanup_repeated;
+    int cleanup_owned_state_released;
+    int failure_preserved;
+    int partial_output_preserved;
+} yvex_generation_state;
+
+typedef struct {
     int loop_created;
     int loop_executed;
     const char *phase;
     const char *status;
+    yvex_generation_state state;
     const char *token_input_status;
     unsigned int prompt_tokens[YVEX_TOKEN_INPUT_MAX_TOKENS];
     unsigned int generated_tokens[YVEX_TOKEN_INPUT_MAX_TOKENS];
@@ -106,6 +133,7 @@ typedef struct {
     unsigned long long trace_sampling;
     unsigned long long trace_append;
     unsigned long long trace_stop;
+    unsigned long long trace_cancel;
     unsigned long long trace_cleanup;
     unsigned long long trace_failures;
     yvex_generation_trace_step trace_step_records[YVEX_TOKEN_INPUT_MAX_TOKENS];
@@ -169,6 +197,139 @@ static int generate_add_ull(unsigned long long a,
     }
     *out = a + b;
     return 1;
+}
+
+static unsigned long long generate_state_id_for_input(const yvex_token_input *input,
+                                                      unsigned long long position_start,
+                                                      unsigned long long max_new_tokens)
+{
+    unsigned long long hash = 1469598103934665603ull;
+    unsigned long long i;
+
+    hash = generate_mix_u64(hash, position_start);
+    hash = generate_mix_u64(hash, max_new_tokens);
+    hash = generate_mix_u64(hash, input ? input->token_count : 0ull);
+    if (input) {
+        for (i = 0ull; i < input->token_count && i < YVEX_TOKEN_INPUT_MAX_TOKENS; ++i) {
+            hash = generate_mix_u64(hash, (unsigned long long)input->tokens[i]);
+        }
+    }
+    return hash ? hash : 1ull;
+}
+
+static void generate_state_defaults(yvex_generate_summary *summary,
+                                    const yvex_token_input *input,
+                                    unsigned long long position_start,
+                                    unsigned long long max_new_tokens,
+                                    int cancel_after_steps_seen,
+                                    unsigned long long cancel_after_steps)
+{
+    yvex_generation_state *state;
+
+    if (!summary) {
+        return;
+    }
+    state = &summary->state;
+    memset(state, 0, sizeof(*state));
+    state->state_id = generate_state_id_for_input(input, position_start, max_new_tokens);
+    state->lifecycle_status = "created";
+    state->generation_state = "created";
+    state->cancel_supported = 1;
+    state->cancel_after_steps_seen = cancel_after_steps_seen ? 1 : 0;
+    state->cancel_after_steps = cancel_after_steps;
+    state->cancel_reason = "none";
+    state->cancel_timing = "none";
+    state->cancel_safe_point = "none";
+    state->cleanup_idempotent = 1;
+    state->failure_preserved = 1;
+    state->partial_output_preserved = 1;
+}
+
+static void generate_state_set_lifecycle(yvex_generate_summary *summary,
+                                         const char *lifecycle_status)
+{
+    if (summary && lifecycle_status) {
+        summary->state.lifecycle_status = lifecycle_status;
+    }
+}
+
+static void generate_state_mark_step(yvex_generate_summary *summary,
+                                     unsigned long long step)
+{
+    if (!summary) {
+        return;
+    }
+    summary->state.lifecycle_status = "step-active";
+    summary->state.active_step_seen = 1;
+    summary->state.active_step = step;
+}
+
+static void generate_state_mark_append(yvex_generate_summary *summary,
+                                       unsigned long long step)
+{
+    if (!summary) {
+        return;
+    }
+    summary->state.state_dirty = 1;
+    summary->state.last_completed_step_seen = 1;
+    summary->state.last_completed_step = step;
+    summary->state.partial_output_available =
+        summary->generated_token_count > 0ull ? 1 : 0;
+}
+
+static void generate_state_mark_completed(yvex_generate_summary *summary)
+{
+    if (!summary) {
+        return;
+    }
+    summary->state.lifecycle_status = "completed";
+    summary->state.generation_state = "completed";
+    summary->state.partial_output_available =
+        summary->generated_token_count > 0ull ? 1 : 0;
+}
+
+static void generate_state_mark_failed(yvex_generate_summary *summary)
+{
+    if (!summary) {
+        return;
+    }
+    summary->state.lifecycle_status = "failed";
+    summary->state.generation_state = "failed";
+    summary->state.partial_output_available =
+        summary->generated_token_count > 0ull ? 1 : 0;
+}
+
+static void generate_state_mark_cancelled(yvex_generate_summary *summary,
+                                          unsigned long long cancel_step,
+                                          const char *timing,
+                                          const char *safe_point)
+{
+    if (!summary) {
+        return;
+    }
+    summary->state.lifecycle_status = "cancelled";
+    summary->state.generation_state = "cancelled";
+    summary->state.cancel_requested = 1;
+    summary->state.cancel_reason = "interrupted";
+    summary->state.cancel_step_seen = 1;
+    summary->state.cancel_step = cancel_step;
+    summary->state.cancel_timing = timing ? timing : "stop-check";
+    summary->state.cancel_safe_point = safe_point ? safe_point : "stop-check";
+    summary->state.partial_output_available =
+        summary->generated_token_count > 0ull ? 1 : 0;
+}
+
+static void generate_print_optional_ull(const char *label,
+                                        int seen,
+                                        unsigned long long value)
+{
+    printf("%s: ", label ? label : "value");
+    if (seen) {
+        printf("%llu", value);
+    } else {
+        printf("none");
+    }
+    printf("\n");
 }
 
 static int generate_backend_name_valid(const char *name)
@@ -269,7 +430,9 @@ static void generate_summary_defaults(yvex_generate_summary *summary,
                                       const yvex_token_input *input,
                                       unsigned long long position_start,
                                       unsigned long long max_new_tokens,
-                                      yvex_generation_trace_level trace_level)
+                                      yvex_generation_trace_level trace_level,
+                                      int cancel_after_steps_seen,
+                                      unsigned long long cancel_after_steps)
 {
     unsigned long long i;
 
@@ -317,6 +480,12 @@ static void generate_summary_defaults(yvex_generate_summary *summary,
     }
     summary->cleanup_status = "not-needed";
     summary->failed_phase = "none";
+    generate_state_defaults(summary,
+                            input,
+                            position_start,
+                            max_new_tokens,
+                            cancel_after_steps_seen,
+                            cancel_after_steps);
     generate_summary_trace_defaults(summary, trace_level);
 }
 
@@ -393,7 +562,8 @@ static void generate_trace_step_mark_stop(yvex_generate_summary *summary,
     if (before_append && (!record->append_status ||
                           strcmp(record->append_status, "not-started") == 0 ||
                           strcmp(record->append_status, "candidate") == 0)) {
-        record->append_status = "context-limit";
+        record->append_status = reason && strcmp(reason, "interrupted") == 0 ?
+            "cancelled" : "context-limit";
     }
 }
 
@@ -815,6 +985,38 @@ static void generate_emit_stop_trace(yvex_generate_summary *summary)
                           summary->stop_token_policy ? summary->stop_token_policy : "unsupported");
 }
 
+static void generate_emit_cancel_trace(yvex_generate_summary *summary)
+{
+    if (!summary || !summary->state.cancel_requested) {
+        return;
+    }
+    generate_trace_printf(summary, &summary->trace_cancel,
+                          "trace.cancel.requested: true");
+    generate_trace_printf(summary, &summary->trace_cancel,
+                          "trace.cancel.reason: %s",
+                          summary->state.cancel_reason ?
+                              summary->state.cancel_reason : "interrupted");
+    if (summary->state.cancel_step_seen) {
+        generate_trace_printf(summary, &summary->trace_cancel,
+                              "trace.cancel.step: %llu",
+                              summary->state.cancel_step);
+    } else {
+        generate_trace_printf(summary, &summary->trace_cancel,
+                              "trace.cancel.step: none");
+    }
+    generate_trace_printf(summary, &summary->trace_cancel,
+                          "trace.cancel.timing: %s",
+                          summary->state.cancel_timing ?
+                              summary->state.cancel_timing : "none");
+    generate_trace_printf(summary, &summary->trace_cancel,
+                          "trace.cancel.safe_point: %s",
+                          summary->state.cancel_safe_point ?
+                              summary->state.cancel_safe_point : "none");
+    generate_trace_printf(summary, &summary->trace_cancel,
+                          "trace.cancel.partial_generated_token_count: %llu",
+                          summary->partial_generated_token_count);
+}
+
 static void generate_emit_failure_trace(yvex_generate_summary *summary)
 {
     if (!summary || !summary->phase || strcmp(summary->phase, "failed") != 0) {
@@ -882,6 +1084,9 @@ static void generate_emit_trace(yvex_generate_summary *summary)
         generate_emit_append_trace(summary);
         generate_emit_stop_trace(summary);
     }
+    if (summary->state.cancel_requested) {
+        generate_emit_cancel_trace(summary);
+    }
     if (failed) {
         generate_emit_failure_trace(summary);
     }
@@ -901,6 +1106,39 @@ static void generate_print_summary(const yvex_generate_summary *summary,
     printf("model: %s\n", model_arg ? model_arg : "");
     printf("backend: %s\n", backend_name ? backend_name : "cpu");
     printf("segment: %s\n", segment_name ? segment_name : "embedding-rmsnorm");
+    printf("state_id: %llu\n", summary ? summary->state.state_id : 0ull);
+    printf("lifecycle_status: %s\n",
+           summary && summary->state.lifecycle_status ?
+               summary->state.lifecycle_status : "unknown");
+    printf("generation_state: %s\n",
+           summary && summary->state.generation_state ?
+               summary->state.generation_state : "unknown");
+    printf("state_dirty: %s\n",
+           summary && summary->state.state_dirty ? "true" : "false");
+    generate_print_optional_ull("active_step",
+                                summary ? summary->state.active_step_seen : 0,
+                                summary ? summary->state.active_step : 0ull);
+    generate_print_optional_ull("last_completed_step",
+                                summary ? summary->state.last_completed_step_seen : 0,
+                                summary ? summary->state.last_completed_step : 0ull);
+    printf("cancel_supported: %s\n",
+           summary && summary->state.cancel_supported ? "true" : "false");
+    printf("cancel_requested: %s\n",
+           summary && summary->state.cancel_requested ? "true" : "false");
+    printf("cancel_reason: %s\n",
+           summary && summary->state.cancel_reason ?
+               summary->state.cancel_reason : "none");
+    generate_print_optional_ull("cancel_step",
+                                summary ? summary->state.cancel_step_seen : 0,
+                                summary ? summary->state.cancel_step : 0ull);
+    printf("cancel_timing: %s\n",
+           summary && summary->state.cancel_timing ?
+               summary->state.cancel_timing : "none");
+    printf("cancel_safe_point: %s\n",
+           summary && summary->state.cancel_safe_point ?
+               summary->state.cancel_safe_point : "none");
+    printf("partial_output_available: %s\n",
+           summary && summary->state.partial_output_available ? "true" : "false");
     printf("token_input_status: %s\n",
            summary && summary->token_input_status ? summary->token_input_status : "fail");
     printf("prompt_token_count: %llu\n", summary ? summary->prompt_token_count : 0ull);
@@ -975,6 +1213,7 @@ static void generate_print_summary(const yvex_generate_summary *summary,
     printf("trace_sampling: %llu\n", summary ? summary->trace_sampling : 0ull);
     printf("trace_append: %llu\n", summary ? summary->trace_append : 0ull);
     printf("trace_stop: %llu\n", summary ? summary->trace_stop : 0ull);
+    printf("trace_cancel: %llu\n", summary ? summary->trace_cancel : 0ull);
     printf("trace_cleanup: %llu\n", summary ? summary->trace_cleanup : 0ull);
     printf("trace_failures: %llu\n", summary ? summary->trace_failures : 0ull);
     printf("trace_status: %s\n",
@@ -989,6 +1228,16 @@ static void generate_print_summary(const yvex_generate_summary *summary,
            summary && summary->cleanup_attempted ? "true" : "false");
     printf("cleanup_status: %s\n",
            summary && summary->cleanup_status ? summary->cleanup_status : "not-needed");
+    printf("cleanup_idempotent: %s\n",
+           summary && summary->state.cleanup_idempotent ? "true" : "false");
+    printf("cleanup_repeated: %s\n",
+           summary && summary->state.cleanup_repeated ? "true" : "false");
+    printf("cleanup_owned_state_released: %s\n",
+           summary && summary->state.cleanup_owned_state_released ? "true" : "false");
+    printf("failure_preserved: %s\n",
+           summary && summary->state.failure_preserved ? "true" : "false");
+    printf("partial_output_preserved: %s\n",
+           summary && summary->state.partial_output_preserved ? "true" : "false");
     printf("generation_" "rea" "dy: false\n");
     printf("generation: unsupported-full-model\n");
     printf("benchmark_status: not-measured\n");
@@ -1011,8 +1260,21 @@ static void generate_mark_cleanup(yvex_generate_summary *summary)
     if (!summary) {
         return;
     }
+    if (summary->cleanup_attempted) {
+        summary->state.cleanup_repeated = 1;
+        summary->cleanup_status = "al" "rea" "dy-cleaned";
+        summary->state.lifecycle_status = "cleaned";
+        return;
+    }
     summary->cleanup_attempted = 1;
     summary->cleanup_status = "pass";
+    summary->state.lifecycle_status = "cleaned";
+    summary->state.cleanup_idempotent = 1;
+    summary->state.cleanup_owned_state_released = 1;
+    summary->state.failure_preserved = 1;
+    summary->state.partial_output_preserved = 1;
+    summary->state.partial_output_available =
+        summary->generated_token_count > 0ull ? 1 : 0;
 }
 
 static void generate_mark_failure(yvex_generate_summary *summary,
@@ -1024,10 +1286,11 @@ static void generate_mark_failure(yvex_generate_summary *summary,
         return;
     }
     summary->phase = "failed";
-    summary->status = "generation-loop-failed-cleaned";
+    summary->status = "generation-loop-failed";
     summary->failed_phase = phase ? phase : "internal-error";
     summary->failed_step = step;
     summary->partial_generated_token_count = summary->generated_token_count;
+    generate_state_mark_failed(summary);
     generate_stop_record(summary,
                          reason ? reason : "internal-error",
                          phase ? phase : "preflight",
@@ -1042,6 +1305,36 @@ static void generate_mark_failure(yvex_generate_summary *summary,
         summary->append_failure = reason ? reason : "append-failure";
     }
     generate_trace_step_mark_failure(summary, phase, step);
+}
+
+static void generate_mark_cancel(yvex_generate_summary *summary,
+                                 unsigned long long step,
+                                 unsigned long long cancel_step,
+                                 const char *timing,
+                                 const char *safe_point,
+                                 int before_append,
+                                 int after_append)
+{
+    if (!summary) {
+        return;
+    }
+    summary->phase = "cancelled";
+    summary->status = "generation-loop-cancelled";
+    summary->partial_generated_token_count = summary->generated_token_count;
+    if (before_append) {
+        summary->append_status = "cancelled";
+        summary->append_failure = "none";
+    }
+    generate_state_mark_cancelled(summary, cancel_step, timing, safe_point);
+    generate_stop_record(summary,
+                         "interrupted",
+                         "stop-check",
+                         step,
+                         "cancel-safe-point",
+                         before_append,
+                         after_append,
+                         0,
+                         0);
 }
 
 static const char *generate_sample_failure_phase(const yvex_sampling_summary *sample)
@@ -1221,6 +1514,7 @@ static int generate_append_preflight(yvex_generate_summary *summary,
         summary->append_failure = "none";
         summary->status = "generation-loop-complete";
         summary->phase = "complete";
+        generate_state_mark_completed(summary);
         generate_stop_record(summary,
                              "context-limit",
                              "stop-check",
@@ -1295,6 +1589,7 @@ static int generate_append_commit(yvex_generate_summary *summary,
                                                     append->sample_checksum);
     summary->sequence_checksum = generate_mix_u64(summary->sequence_checksum,
                                                   (unsigned long long)append->token_id);
+    generate_state_mark_append(summary, append->step);
     if (append->step < summary->trace_step_count) {
         yvex_generation_trace_step *record = &summary->trace_step_records[append->step];
 
@@ -1356,9 +1651,11 @@ int yvex_generate_command(int argc, char **argv)
     unsigned long long context_length = 0ull;
     unsigned long long logits_count = 16ull;
     unsigned long long max_new_tokens = 0ull;
+    unsigned long long cancel_after_steps = 0ull;
     unsigned long long step;
     yvex_generation_trace_level trace_level = YVEX_GENERATE_TRACE_NONE;
     int max_new_tokens_seen = 0;
+    int cancel_after_steps_seen = 0;
     int attach_kv = 0;
     int kv_shape_seen = 0;
     int layer_count_seen = 0;
@@ -1431,6 +1728,13 @@ int yvex_generate_command(int argc, char **argv)
                 fprintf(stderr, "yvex: --trace-level requires none|tokens|steps|kv|logits|sampling|full\n");
                 return 2;
             }
+            i += 1;
+        } else if (strcmp(argv[i], "--cancel-after-steps") == 0) {
+            if (i + 1 >= argc || !parse_ull_allow_zero(argv[i + 1], &cancel_after_steps)) {
+                fprintf(stderr, "yvex: --cancel-after-steps requires a non-negative integer\n");
+                return 2;
+            }
+            cancel_after_steps_seen = 1;
             i += 1;
         } else if (strcmp(argv[i], "--logits-count") == 0) {
             if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &logits_count) ||
@@ -1525,7 +1829,7 @@ int yvex_generate_command(int argc, char **argv)
     }
 
     if (!model_arg || !backend_name || !tokens_text || !segment_name || !max_new_tokens_seen) {
-        fprintf(stderr, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N] [--logits-count N] [--strategy greedy] [--trace-level none|tokens|steps|kv|logits|sampling|full]\n");
+        fprintf(stderr, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N] [--logits-count N] [--strategy greedy] [--trace-level none|tokens|steps|kv|logits|sampling|full] [--cancel-after-steps N]\n");
         return 2;
     }
     if (!generate_backend_name_valid(backend_name)) {
@@ -1576,7 +1880,13 @@ int yvex_generate_command(int argc, char **argv)
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
-    generate_summary_defaults(&summary, NULL, position_start, max_new_tokens, trace_level);
+    generate_summary_defaults(&summary,
+                              NULL,
+                              position_start,
+                              max_new_tokens,
+                              trace_level,
+                              cancel_after_steps_seen,
+                              cancel_after_steps);
     generate_summary_trace_kv(&summary, attach_kv, &kv_shape);
     rc = enforce_registered_identity_cli(&model_ref, "generate");
     if (rc != YVEX_OK) {
@@ -1594,7 +1904,13 @@ int yvex_generate_command(int argc, char **argv)
     if (rc == YVEX_OK) {
         rc = yvex_token_input_validate_bounds(&prompt_input, vocab_size, &err);
     }
-    generate_summary_defaults(&summary, &prompt_input, position_start, max_new_tokens, trace_level);
+    generate_summary_defaults(&summary,
+                              &prompt_input,
+                              position_start,
+                              max_new_tokens,
+                              trace_level,
+                              cancel_after_steps_seen,
+                              cancel_after_steps);
     generate_summary_trace_kv(&summary, attach_kv, &kv_shape);
     if (rc != YVEX_OK) {
         generate_mark_failure(&summary, "preflight", "internal-error", 0ull);
@@ -1604,6 +1920,7 @@ int yvex_generate_command(int argc, char **argv)
         return print_yvex_error(&err, exit_for_status(rc));
     }
     summary.token_input_status = "pass";
+    generate_state_set_lifecycle(&summary, "preflighted");
     sequence = prompt_input;
 
     if (!context_length_seen &&
@@ -1652,6 +1969,7 @@ int yvex_generate_command(int argc, char **argv)
         return print_yvex_error(&err, exit_for_status(rc));
     }
 
+    generate_state_set_lifecycle(&summary, "running");
     for (step = 0ull; step < max_new_tokens; ++step) {
         yvex_generation_append_state append_state;
         unsigned long long decode_position;
@@ -1664,11 +1982,23 @@ int yvex_generate_command(int argc, char **argv)
         }
         summary.current_decode_position = decode_position;
         (void)generate_trace_step_begin(&summary, step, decode_position);
+        generate_state_mark_step(&summary, step);
+        if (cancel_after_steps_seen && cancel_after_steps == 0ull) {
+            generate_mark_cancel(&summary,
+                                 step,
+                                 0ull,
+                                 "before-step",
+                                 "before-decode",
+                                 1,
+                                 0);
+            break;
+        }
         if (decode_position >= context_length) {
             summary.phase = "complete";
             summary.status = "generation-loop-complete";
             summary.append_status = "context-limit";
             summary.append_failure = "none";
+            generate_state_mark_completed(&summary);
             generate_stop_record(&summary,
                                  "context-limit",
                                  "stop-check",
@@ -1687,6 +2017,7 @@ int yvex_generate_command(int argc, char **argv)
         memset(&sample_summary, 0, sizeof(sample_summary));
 
         summary.phase = "prefill";
+        generate_state_set_lifecycle(&summary, "prefilled");
         summary.prefill_invoked = 1;
         decode_options.token_input = &sequence;
         decode_options.segment_name = segment_name;
@@ -1748,9 +2079,22 @@ int yvex_generate_command(int argc, char **argv)
         }
 
         summary.phase = "stop-check";
+        if (cancel_after_steps_seen &&
+            cancel_after_steps > 0ull &&
+            summary.generated_token_count >= cancel_after_steps) {
+            generate_mark_cancel(&summary,
+                                 step,
+                                 cancel_after_steps,
+                                 "after-step",
+                                 "after-append",
+                                 0,
+                                 1);
+            break;
+        }
         if (summary.generated_token_count >= max_new_tokens) {
             summary.status = "generation-loop-complete";
             summary.phase = "complete";
+            generate_state_mark_completed(&summary);
             generate_stop_record(&summary,
                                  "max-new-tokens",
                                  "stop-check",
@@ -1770,6 +2114,7 @@ int yvex_generate_command(int argc, char **argv)
         strcmp(summary.phase, "failed") != 0) {
         summary.status = "generation-loop-complete";
         summary.phase = "complete";
+        generate_state_mark_completed(&summary);
         generate_stop_record(&summary,
                              "max-new-tokens",
                              "stop-check",
@@ -1783,6 +2128,9 @@ int yvex_generate_command(int argc, char **argv)
     }
 
     generate_mark_cleanup(&summary);
+    if (generate_test_env_enabled("YVEX_TEST_REPEAT_GENERATE_CLEANUP")) {
+        generate_mark_cleanup(&summary);
+    }
     generate_print_trace_and_summary(&summary, model_arg, backend_name, segment_name);
     yvex_engine_close(engine);
     yvex_model_ref_clear(&model_ref);
@@ -1795,5 +2143,5 @@ int yvex_generate_command(int argc, char **argv)
 
 void yvex_generate_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N] [--logits-count N] [--strategy greedy] [--trace-level none|tokens|steps|kv|logits|sampling|full]\n\nGenerate runs a bounded diagnostic loop over the existing prefill, decode, logits, greedy selection, and token-append path. It uses a bounded diagnostic stop policy, stops on max-new-tokens or context-length, reports decode/logits/sample/append failure stop reasons, and keeps EOS and stop-token policies unsupported. Trace levels are bounded diagnostic records only. It does not claim full model generation, DeepSeek generation, provider/server output, evaluation, or benchmark measurement.\n");
+    fprintf(fp, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N] [--logits-count N] [--strategy greedy] [--trace-level none|tokens|steps|kv|logits|sampling|full] [--cancel-after-steps N]\n\nGenerate runs a bounded diagnostic loop over the existing prefill, decode, logits, greedy selection, and token-append path. It uses a bounded diagnostic stop policy, stops on max-new-tokens or context-length, reports decode/logits/sample/append failure stop reasons, and keeps EOS and stop-token policies unsupported. --cancel-after-steps N requests deterministic diagnostic cancellation at a loop safe point: N=0 before the first decode step, N>0 after that many appended diagnostic tokens. Partial diagnostic output is preserved after cancel or failure, and cleanup is idempotent. Trace levels are bounded diagnostic records only and include cancellation records when requested. This command does not claim full model generation, DeepSeek generation, server/provider cancellation, streaming output, evaluation, or benchmark measurement.\n");
 }

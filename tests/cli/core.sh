@@ -261,7 +261,12 @@ contains "$OUT_DIR/help_generate.out" "stops on max-new-tokens or context-length
 contains "$OUT_DIR/help_generate.out" "failure stop reasons"
 contains "$OUT_DIR/help_generate.out" "EOS and stop-token policies unsupported"
 contains "$OUT_DIR/help_generate.out" "Trace levels are bounded diagnostic records only"
+contains "$OUT_DIR/help_generate.out" "--cancel-after-steps N"
+contains "$OUT_DIR/help_generate.out" "deterministic diagnostic cancellation"
+contains "$OUT_DIR/help_generate.out" "Partial diagnostic output is preserved"
+contains "$OUT_DIR/help_generate.out" "cleanup is idempotent"
 contains "$OUT_DIR/help_generate.out" "does not claim full model generation"
+contains "$OUT_DIR/help_generate.out" "server/provider cancellation"
 
 run_ok help_chat "$YVEX_BIN" help chat
 contains "$OUT_DIR/help_chat.out" "usage: yvex chat [--model FILE_OR_ALIAS]"
@@ -538,6 +543,10 @@ run_fail_code generate_max_new_tokens_invalid 2 "$YVEX_BIN" generate --model mis
 run_fail_code generate_max_new_tokens_zero 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 0
 run_fail_code generate_strategy_stochastic 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --strategy stochastic
 run_fail_code generate_trace_level_invalid 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --trace-level nope
+run_fail_code generate_cancel_after_steps_missing 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --cancel-after-steps
+run_fail_code generate_cancel_after_steps_invalid 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --cancel-after-steps nope
+run_fail_code generate_cancel_after_steps_negative 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --cancel-after-steps -1
+run_fail_code generate_cancel_after_steps_overflow 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --cancel-after-steps 18446744073709551616
 run_fail_code generate_logits_count_zero 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --logits-count 0
 run_fail_code generate_logits_count_too_many 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --logits-count 257
 run_fail_code generate_context_length_zero 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --context-length 0

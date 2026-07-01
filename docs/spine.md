@@ -1398,6 +1398,14 @@ stop-policy trace
 failure trace
 cleanup trace
 trace counters and stable trace output
+explicit bounded diagnostic generation state lifecycle
+deterministic bounded cancellation/interruption path
+interrupted stop reason over implemented cancel path
+partial-output preservation on cancel/failure
+cleanup idempotence and state-release reporting
+lifecycle fields in generate output
+cancellation trace records
+failure/cancel state preservation
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -1542,7 +1550,10 @@ EOS-backed real tokenizer stop
 stop-token text matching
 tensor-level full-model trace
 raw tensor dumps
-interruption/cancellation
+OS signal cancellation
+server/provider cancellation
+streaming cancellation
+external interruption source integration
 interactive generation
 provider generation endpoint
 streaming generation
@@ -1748,7 +1759,7 @@ tables.
 | GEN.STOP.0 | complete | generation | Stop-condition policy | max-new-tokens, context-limit, failure stop reasons, stop timing, stop phase, partial-output accounting, unsupported EOS/stop-token boundary, and cleanup behavior are implemented and tested for the bounded diagnostic generation loop without full-model, DeepSeek, provider, eval, or benchmark claim |
 | M14 | planned | generation | First constrained generation loop | decode -> logits -> sample -> append token loop with stop conditions and token accounting |
 | GEN.LOOP.0 | complete | generation | First constrained generation loop | `yvex generate` composes implemented prefill, decode, logits, greedy sampling, token append, stop checks, and cleanup into a bounded diagnostic generation loop without full-model, DeepSeek, provider, eval, or benchmark claim |
-| GEN.LOOP.1 | planned | generation | Generation state and interruption | interruption, cleanup, trace, and partial-output behavior over implemented generation loop |
+| GEN.LOOP.1 | complete | generation | Generation state and interruption | bounded diagnostic generation state lifecycle, deterministic `--cancel-after-steps` interruption, cancel trace records, cleanup idempotence, and partial-output preservation are implemented without full-model, DeepSeek, provider, streaming, eval, or benchmark claim |
 | M15 | planned | cli | Interactive CLI generation path | CLI/REPL generation uses real runtime generation loop |
 | CLI.GEN.0 | planned | cli | CLI generation command surface | exposes the implemented bounded generation loop through CLI with honest unsupported/full-model/benchmark boundaries |
 | M16 | planned | server | Provider/server generation boundary | daemon/server generation uses runtime-backed generation path |
@@ -2161,6 +2172,19 @@ status:
 model:
 backend:
 segment:
+state_id:
+lifecycle_status:
+generation_state:
+state_dirty:
+active_step:
+last_completed_step:
+cancel_supported:
+cancel_requested:
+cancel_reason:
+cancel_step:
+cancel_timing:
+cancel_safe_point:
+partial_output_available:
 token_input_status:
 prompt_token_count:
 prefill_token_count:
@@ -2216,6 +2240,7 @@ trace_logits:
 trace_sampling:
 trace_append:
 trace_stop:
+trace_cancel:
 trace_cleanup:
 trace_failures:
 trace_status:
@@ -2225,6 +2250,11 @@ generated_token_ids:
 runtime_token_sequence:
 cleanup_attempted:
 cleanup_status:
+cleanup_idempotent:
+cleanup_repeated:
+cleanup_owned_state_released:
+failure_preserved:
+partial_output_preserved:
 generation_ready:
 generation:
 benchmark_status:
@@ -2247,6 +2277,31 @@ benchmark_status: not-measured
 ```
 
 `bounded_generation: true` is allowed only if a loop exists and runs.
+
+Bounded cancellation is local and deterministic:
+
+```text
+--cancel-after-steps 0:
+  requests interruption before the first decode step after preflight.
+
+--cancel-after-steps N:
+  for N > 0, requests interruption after N generated diagnostic tokens have
+  been appended.
+
+Cancelled output:
+  status: generation-loop-cancelled
+  generation_state: cancelled
+  stop_reason: interrupted
+  stop_phase: stop-check
+  stop_timing: cancel-safe-point
+  failure_stop: false
+```
+
+Cancellation is checked only at loop safe points. It must not interrupt a
+token append in the middle of mutation. Partial generated-token output and
+failure/cancel state must remain visible after cleanup. This does not provide
+OS signal cancellation, server/provider cancellation, streaming cancellation,
+or full model generation.
 
 It must not imply:
 
@@ -2281,7 +2336,8 @@ sampling:
   greedy candidate token/logit/checksum only; no stochastic or real vocab claim.
 
 full:
-  token, step, KV, logits, sampling, append, stop, failure, and cleanup records.
+  token, step, KV, logits, sampling, append, stop, cancel, failure, and cleanup
+  records.
 
 Every trace line uses this stable text shape:
 
@@ -2290,7 +2346,7 @@ trace.<category>.<index>.<field>: value
 ```
 
 Index is omitted for singleton categories such as `tokens`, `kv`, `stop`,
-`failure`, and `cleanup`.
+`cancel`, `failure`, and `cleanup`.
 
 Current trace output does not dump raw tensors, expose full-model tensor traces,
 claim real DeepSeek generation, claim provider generation, evaluate capability,
@@ -2989,16 +3045,16 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-GEN.LOOP.1 - Generation state and interruption
+CLI.GEN.0 - CLI generation command surface
 ```
 
-GEN.LOOP.1 must harden bounded diagnostic generation state across interruption,
-cleanup, and partial-output behavior. It must not claim full model generation,
-real DeepSeek generation, provider generation, evaluation, or benchmark
-readiness.
+CLI.GEN.0 may expose the implemented bounded diagnostic generation loop through
+clearer CLI ergonomics and help. It must preserve the full-model, real
+DeepSeek, provider, streaming, evaluation, and benchmark unsupported
+boundaries.
 
 Algorithm/CLI research hardening runs in parallel with runtime closure. It does
-not replace GEN.LOOP.1 or the current runtime Active Next.
+not replace CLI.GEN.0 or the current runtime Active Next.
 
 GEN.CONTRACT.0 hardens the contract for the generation loop. GEN.LOOP.0 is
 complete for bounded diagnostic loop control only.
@@ -3017,8 +3073,16 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-GEN.LOOP.1 - Generation state and interruption
+CLI.GEN.0 - CLI generation command surface
 ```
+
+GEN.LOOP.1 is complete as local bounded diagnostic generation state hardening:
+state lifecycle fields, deterministic `--cancel-after-steps`, interrupted stop
+reason, cancel trace records, cleanup idempotence, state-release reporting, and
+partial-output preservation exist for the implemented generate command. It
+does not provide OS signal cancellation, server/provider cancellation,
+streaming cancellation, full model generation, real DeepSeek generation,
+evaluation, or benchmark measurement.
 
 GEN.TRACE.0 is complete as a stable trace-level surface over the bounded
 diagnostic generation loop. It does not create full-model generation, real
@@ -3052,10 +3116,11 @@ selected-position activation handoff. It is not full transformer prefill,
 decode, logits, sampling, generation, server generation, evaluation, or
 benchmark readiness.
 
-After GEN.LOOP.0, bounded diagnostic generation control exists. Real model
-output-head logits, real vocabulary sampling, full DeepSeek runtime work, and
-provider/server generation remain planned tracks, but they do not block append
-lifecycle hardening.
+After GEN.LOOP.1, bounded diagnostic generation state and local cancellation
+are explicit enough for CLI surface hardening. Real model output-head logits,
+real vocabulary sampling, full DeepSeek runtime work, OS signal cancellation,
+provider/server generation, streaming, evaluation, and benchmark measurement
+remain planned tracks.
 
 ## 8. Validation Gate
 
