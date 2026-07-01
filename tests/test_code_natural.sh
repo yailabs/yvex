@@ -183,7 +183,7 @@ pattern='check produces log''its'
 scan_forbidden_claim "$pattern"
 pattern='check gener''ates'
 scan_forbidden_claim "$pattern"
-pattern='20 tok/s achie''ved'
+pattern='20 tok''/s achie''ved'
 scan_forbidden_claim "$pattern"
 pattern='DSpark par''ity'
 scan_forbidden_claim "$pattern"

@@ -1406,6 +1406,12 @@ cleanup idempotence and state-release reporting
 lifecycle fields in generate output
 cancellation trace records
 failure/cancel state preservation
+operator-grade `yvex generate` command surface
+stable `yvex generate` help with normal, trace, cancel, and context examples
+bounded diagnostic generate command inventory entry
+generate argument validation and refusal wording
+stable text output policy for bounded diagnostic generation
+runbook bounded diagnostic generate lane
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -1761,7 +1767,7 @@ tables.
 | GEN.LOOP.0 | complete | generation | First constrained generation loop | `yvex generate` composes implemented prefill, decode, logits, greedy sampling, token append, stop checks, and cleanup into a bounded diagnostic generation loop without full-model, DeepSeek, provider, eval, or benchmark claim |
 | GEN.LOOP.1 | complete | generation | Generation state and interruption | bounded diagnostic generation state lifecycle, deterministic `--cancel-after-steps` interruption, cancel trace records, cleanup idempotence, and partial-output preservation are implemented without full-model, DeepSeek, provider, streaming, eval, or benchmark claim |
 | M15 | planned | cli | Interactive CLI generation path | CLI/REPL generation uses real runtime generation loop |
-| CLI.GEN.0 | planned | cli | CLI generation command surface | exposes the implemented bounded generation loop through CLI with honest unsupported/full-model/benchmark boundaries |
+| CLI.GEN.0 | complete | cli | CLI generation command surface | `yvex generate` exposes the implemented bounded diagnostic generation loop through a stable operator CLI surface with clear help, examples, argument validation, command inventory, refusal wording, trace/cancel/context usage, runbook coverage, and unsupported full-model/DeepSeek/provider/eval/benchmark boundaries |
 | M16 | planned | server | Provider/server generation boundary | daemon/server generation uses runtime-backed generation path |
 | M17 | planned | profile | Trace/profile hardening for generation | traces and profiles identify artifact/backend/graph/KV/decode/logits/sampling/server failures |
 | SPINE.GENERATION.TARGET.0 | complete | docs | DeepSeek generation and speculative throughput target envelope | spine records DeepSeek V4 Flash full-generation target, internal decode throughput target, DSpark external reference doctrine, and non-claim benchmark boundary |
@@ -3045,16 +3051,17 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-CLI.GEN.0 - CLI generation command surface
+FULLMODEL.0 - Full model inventory and placement plan
 ```
 
-CLI.GEN.0 may expose the implemented bounded diagnostic generation loop through
-clearer CLI ergonomics and help. It must preserve the full-model, real
-DeepSeek, provider, streaming, evaluation, and benchmark unsupported
-boundaries.
+FULLMODEL.0 must leave selected-slice-only execution and inventory the complete
+required model tensor set, memory budget, placement classes, tensor roles, and
+runtime blockers before any real full-model generation work can be promoted. It
+must not claim full model execution, real DeepSeek generation, provider
+generation, streaming generation, evaluation, benchmark readiness, or throughput.
 
 Algorithm/CLI research hardening runs in parallel with runtime closure. It does
-not replace CLI.GEN.0 or the current runtime Active Next.
+not replace FULLMODEL.0 or the current runtime Active Next.
 
 GEN.CONTRACT.0 hardens the contract for the generation loop. GEN.LOOP.0 is
 complete for bounded diagnostic loop control only.
@@ -3073,8 +3080,15 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-CLI.GEN.0 - CLI generation command surface
+FULLMODEL.0 - Full model inventory and placement plan
 ```
+
+CLI.GEN.0 is complete as an operator-grade command surface over the bounded
+diagnostic generation loop: stable help, normal/trace/cancel/context examples,
+argument validation, command inventory, refusal wording, text output policy, and
+runbook coverage exist. It does not create full model generation, real DeepSeek
+generation, provider generation, streaming generation, evaluation, benchmark, or
+throughput capability.
 
 GEN.LOOP.1 is complete as local bounded diagnostic generation state hardening:
 state lifecycle fields, deterministic `--cancel-after-steps`, interrupted stop
@@ -3116,11 +3130,12 @@ selected-position activation handoff. It is not full transformer prefill,
 decode, logits, sampling, generation, server generation, evaluation, or
 benchmark readiness.
 
-After GEN.LOOP.1, bounded diagnostic generation state and local cancellation
-are explicit enough for CLI surface hardening. Real model output-head logits,
-real vocabulary sampling, full DeepSeek runtime work, OS signal cancellation,
-provider/server generation, streaming, evaluation, and benchmark measurement
-remain planned tracks.
+After CLI.GEN.0, the bounded diagnostic generation command surface is stable
+enough to stop adding operator polish as the active runtime path. The next
+runtime pressure moves to full-model inventory and placement. Real model
+output-head logits, real vocabulary sampling, full DeepSeek runtime work, OS
+signal cancellation, provider/server generation, streaming, evaluation, and
+benchmark measurement remain planned tracks.
 
 ## 8. Validation Gate
 

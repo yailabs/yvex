@@ -230,7 +230,8 @@ Purpose:
   Validate and exercise the selected embedding-plus-RMSNorm segment artifact
   through graph segment execution, prefill summary, minimal KV-backed binding,
   bounded diagnostic decode/logits/sampling, and bounded diagnostic generation
-  loop control with stop-policy reporting.
+  loop control with stop-policy reporting, trace/cancel/context examples, and
+  stable operator-facing help/refusal semantics.
 
 Requires:
   `deepseek4-v4-flash-selected-embed-rmsnorm` GGUF exists.
@@ -252,15 +253,20 @@ Boundary:
   bounded diagnostic generated-token append/accounting only
   bounded diagnostic stop-policy reporting only
   bounded diagnostic trace reporting only
+  stable text diagnostic output only
   not attention-backed transformer prefill
   not real model decode
   not real output-head logits
   not real vocabulary sampling
+  not tokenizer-quality text generation
   not full model generation
   not provider generation
+  not streaming generation
+  not evaluation
   not benchmark
 
 ```sh
+./yvex help generate
 ./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths
 ./yvex models remove deepseek4-v4-flash-selected-embed-rmsnorm
 ./yvex models add --path "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-rmsnorm-F16-noimatrix-yvex-v1.gguf" --alias deepseek4-v4-flash-selected-embed-rmsnorm --support-level selected-tensor-materialized
@@ -425,7 +431,9 @@ YVEX can:
 - bind that state to minimal diagnostic KV;
 - run bounded diagnostic decode/logits/greedy sampling over the selected segment;
 - run a bounded diagnostic generation loop with token append/accounting and
-  stop-policy reporting over the selected segment.
+  stop-policy reporting over the selected segment;
+- use stable `yvex generate` help, command inventory, refusal wording,
+  trace/cancel/context examples, and text diagnostic output.
 
 YVEX does not currently implement:
 
@@ -436,6 +444,9 @@ YVEX does not currently implement:
 - real DeepSeek decode;
 - real output-head logits;
 - real vocabulary sampling;
+- tokenizer-quality text generation;
 - full model generation;
 - provider generation;
+- streaming generation;
+- evaluation;
 - benchmarks.

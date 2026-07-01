@@ -34,6 +34,14 @@ line_count() {
     fi
 }
 
+no_ansi() {
+    file=$1
+    esc=$(printf '\033')
+    if LC_ALL=C grep -F -- "$esc" "$file" >/dev/null; then
+        fail "$file contained ANSI escape sequences"
+    fi
+}
+
 run_ok() {
     name=$1
     shift
@@ -168,6 +176,7 @@ contains "$OUT_DIR/max_one.out" "cleanup_owned_state_released: true"
 contains "$OUT_DIR/max_one.out" "failure_preserved: true"
 contains "$OUT_DIR/max_one.out" "partial_output_preserved: true"
 not_contains "$OUT_DIR/max_one.out" "trace.step."
+no_ansi "$OUT_DIR/max_one.out"
 line_count "$OUT_DIR/max_one.out" "stop_reason:" 1
 
 run_ok max_three "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3
@@ -247,10 +256,10 @@ contains "$OUT_DIR/cleanup_repeated.out" "cleanup_repeated: true"
 contains "$OUT_DIR/cleanup_repeated.out" "cleanup_owned_state_released: true"
 
 run_fail invalid_trace "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --trace-level nonsense
-contains "$OUT_DIR/invalid_trace.err" "--trace-level requires none|tokens|steps|kv|logits|sampling|full"
+contains "$OUT_DIR/invalid_trace.err" "error: --trace-level requires none|tokens|steps|kv|logits|sampling|full"
 
 run_fail invalid_cancel "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --cancel-after-steps nope
-contains "$OUT_DIR/invalid_cancel.err" "--cancel-after-steps requires a non-negative integer"
+contains "$OUT_DIR/invalid_cancel.err" "error: --cancel-after-steps must be a non-negative integer"
 
 run_ok trace_none "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --trace-level none
 contains "$OUT_DIR/trace_none.out" "trace_level: none"
@@ -322,6 +331,7 @@ contains "$OUT_DIR/trace_full.out" "trace.stop.reason: max-new-tokens"
 contains "$OUT_DIR/trace_full.out" "trace.cleanup.attempted: true"
 contains "$OUT_DIR/trace_full.out" "trace_level: full"
 contains "$OUT_DIR/trace_full.out" "trace_status: emitted"
+no_ansi "$OUT_DIR/trace_full.out"
 
 run_ok context_before "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --context-length 4
 contains "$OUT_DIR/context_before.out" "context_length: 4"

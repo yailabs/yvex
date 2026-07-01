@@ -12,9 +12,11 @@ YVEX now exposes bounded diagnostic decode, logits, greedy sampling, and a
 bounded diagnostic generation loop with explicit generated-token append
 accounting, explicit stop-policy reporting, deterministic local cancellation,
 partial-output preservation, cleanup lifecycle reporting, and bounded
-trace-level reporting over the implemented selected segment path. It still does
-not implement full model generation, provider generation, streaming generation,
-capability evaluation, or benchmarks.
+trace-level reporting over the implemented selected segment path. The
+`yvex generate` operator surface has stable help, normal/trace/cancel/context
+examples, deterministic refusal wording, command-inventory description, and
+text diagnostic output. It still does not implement full model generation,
+provider generation, streaming generation, capability evaluation, or benchmarks.
 
 ## Runbook Index
 
@@ -34,6 +36,7 @@ Covers:
 - selected embedding-plus-RMSNorm segment;
 - segment-summary prefill;
 - minimal KV diagnostics;
+- bounded diagnostic generate help and copy-pack commands;
 - CUDA selected checks;
 - daemon and accepted-only diagnostics.
 

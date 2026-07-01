@@ -1622,6 +1622,32 @@ static int generate_parse_strategy(const char *text)
     return text && strcmp(text, "greedy") == 0;
 }
 
+static int generate_parse_positive_ull_cli(const char *text,
+                                           unsigned long long *out)
+{
+    if (!text || text[0] == '-') {
+        return 0;
+    }
+    return parse_positive_ull(text, out);
+}
+
+static int generate_parse_ull_allow_zero_cli(const char *text,
+                                             unsigned long long *out)
+{
+    if (!text || text[0] == '-') {
+        return 0;
+    }
+    return parse_ull_allow_zero(text, out);
+}
+
+static void generate_print_usage_error(void)
+{
+    fprintf(stderr,
+            "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda "
+            "--segment embedding-rmsnorm --tokens IDS --max-new-tokens N [options]\n");
+    fprintf(stderr, "Try 'yvex help generate' for examples and boundaries.\n");
+}
+
 int yvex_generate_command(int argc, char **argv)
 {
     yvex_model_ref model_ref;
@@ -1680,188 +1706,230 @@ int yvex_generate_command(int argc, char **argv)
     memset(&graph_guard, 0, sizeof(graph_guard));
     memset(&kv_shape, 0, sizeof(kv_shape));
 
-    if (argc < 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
+    if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
         yvex_generate_help(stdout);
-        return argc >= 3 ? 0 : 2;
+        return 0;
+    }
+    if (argc < 3) {
+        fprintf(stderr, "error: generate requires --model FILE_OR_ALIAS\n");
+        generate_print_usage_error();
+        return 2;
     }
 
     for (i = 2; i < argc; ++i) {
         if (strcmp(argv[i], "--model") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "yvex: --model requires FILE_OR_ALIAS\n");
+                fprintf(stderr, "error: --model requires FILE_OR_ALIAS\n");
                 return 2;
             }
             model_arg = argv[++i];
         } else if (strcmp(argv[i], "--backend") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "yvex: --backend requires cpu|cuda\n");
+                fprintf(stderr, "error: --backend requires cpu|cuda\n");
                 return 2;
             }
             backend_name = argv[++i];
         } else if (strcmp(argv[i], "--segment") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "yvex: --segment requires embedding-rmsnorm\n");
+                fprintf(stderr, "error: --segment requires embedding-rmsnorm\n");
                 return 2;
             }
             segment_name = argv[++i];
         } else if (strcmp(argv[i], "--tokens") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "yvex: --tokens requires IDS\n");
+                fprintf(stderr, "error: --tokens requires IDS\n");
                 return 2;
             }
             tokens_text = argv[++i];
         } else if (strcmp(argv[i], "--max-new-tokens") == 0) {
-            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &max_new_tokens)) {
-                fprintf(stderr, "yvex: --max-new-tokens requires a positive integer\n");
+            if (i + 1 >= argc ||
+                !generate_parse_positive_ull_cli(argv[i + 1], &max_new_tokens)) {
+                fprintf(stderr, "error: --max-new-tokens must be an integer greater than 0\n");
                 return 2;
             }
             max_new_tokens_seen = 1;
             i += 1;
         } else if (strcmp(argv[i], "--strategy") == 0) {
             if (i + 1 >= argc || !generate_parse_strategy(argv[i + 1])) {
-                fprintf(stderr, "yvex: --strategy supports only greedy\n");
+                fprintf(stderr, "error: --strategy currently supports greedy only\n");
                 return 2;
             }
             i += 1;
         } else if (strcmp(argv[i], "--trace-level") == 0) {
             if (i + 1 >= argc || !generate_parse_trace_level(argv[i + 1], &trace_level)) {
-                fprintf(stderr, "yvex: --trace-level requires none|tokens|steps|kv|logits|sampling|full\n");
+                fprintf(stderr, "error: --trace-level requires none|tokens|steps|kv|logits|sampling|full\n");
                 return 2;
             }
             i += 1;
         } else if (strcmp(argv[i], "--cancel-after-steps") == 0) {
-            if (i + 1 >= argc || !parse_ull_allow_zero(argv[i + 1], &cancel_after_steps)) {
-                fprintf(stderr, "yvex: --cancel-after-steps requires a non-negative integer\n");
+            if (i + 1 >= argc ||
+                !generate_parse_ull_allow_zero_cli(argv[i + 1], &cancel_after_steps)) {
+                fprintf(stderr, "error: --cancel-after-steps must be a non-negative integer\n");
                 return 2;
             }
             cancel_after_steps_seen = 1;
             i += 1;
         } else if (strcmp(argv[i], "--logits-count") == 0) {
-            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &logits_count) ||
+            if (i + 1 >= argc ||
+                !generate_parse_positive_ull_cli(argv[i + 1], &logits_count) ||
                 !generate_logits_count_valid(logits_count)) {
-                fprintf(stderr, "yvex: --logits-count requires 1 <= N <= 256\n");
+                fprintf(stderr, "error: --logits-count requires 1 <= N <= 256\n");
                 return 2;
             }
             i += 1;
         } else if (strcmp(argv[i], "--attach-kv") == 0) {
             attach_kv = 1;
         } else if (strcmp(argv[i], "--kv-layers") == 0) {
-            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &kv_shape.layer_count)) {
-                fprintf(stderr, "yvex: --kv-layers requires a positive integer\n");
+            if (i + 1 >= argc ||
+                !generate_parse_positive_ull_cli(argv[i + 1], &kv_shape.layer_count)) {
+                fprintf(stderr, "error: --kv-layers requires a positive integer\n");
                 return 2;
             }
             kv_shape_seen = 1;
             i += 1;
         } else if (strcmp(argv[i], "--kv-heads") == 0) {
-            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &kv_shape.kv_head_count)) {
-                fprintf(stderr, "yvex: --kv-heads requires a positive integer\n");
+            if (i + 1 >= argc ||
+                !generate_parse_positive_ull_cli(argv[i + 1], &kv_shape.kv_head_count)) {
+                fprintf(stderr, "error: --kv-heads requires a positive integer\n");
                 return 2;
             }
             kv_shape_seen = 1;
             i += 1;
         } else if (strcmp(argv[i], "--kv-head-dim") == 0) {
-            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &kv_shape.head_dim)) {
-                fprintf(stderr, "yvex: --kv-head-dim requires a positive integer\n");
+            if (i + 1 >= argc ||
+                !generate_parse_positive_ull_cli(argv[i + 1], &kv_shape.head_dim)) {
+                fprintf(stderr, "error: --kv-head-dim requires a positive integer\n");
                 return 2;
             }
             kv_shape_seen = 1;
             i += 1;
         } else if (strcmp(argv[i], "--kv-capacity") == 0) {
-            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &kv_shape.capacity)) {
-                fprintf(stderr, "yvex: --kv-capacity requires a positive integer\n");
+            if (i + 1 >= argc ||
+                !generate_parse_positive_ull_cli(argv[i + 1], &kv_shape.capacity)) {
+                fprintf(stderr, "error: --kv-capacity requires a positive integer\n");
                 return 2;
             }
             kv_shape_seen = 1;
             i += 1;
         } else if (strcmp(argv[i], "--layers") == 0) {
-            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &layer_count)) {
-                fprintf(stderr, "yvex: --layers requires a positive integer\n");
+            if (i + 1 >= argc ||
+                !generate_parse_positive_ull_cli(argv[i + 1], &layer_count)) {
+                fprintf(stderr, "error: --layers requires a positive integer\n");
                 return 2;
             }
             layer_count_seen = 1;
             i += 1;
         } else if (strcmp(argv[i], "--layer-hidden-dim") == 0) {
-            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &layer_hidden_dim)) {
-                fprintf(stderr, "yvex: --layer-hidden-dim requires a positive integer\n");
+            if (i + 1 >= argc ||
+                !generate_parse_positive_ull_cli(argv[i + 1], &layer_hidden_dim)) {
+                fprintf(stderr, "error: --layer-hidden-dim requires a positive integer\n");
                 return 2;
             }
             layer_hidden_seen = 1;
             i += 1;
         } else if (strcmp(argv[i], "--layer-head-dim") == 0) {
-            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &layer_head_dim)) {
-                fprintf(stderr, "yvex: --layer-head-dim requires a positive integer\n");
+            if (i + 1 >= argc ||
+                !generate_parse_positive_ull_cli(argv[i + 1], &layer_head_dim)) {
+                fprintf(stderr, "error: --layer-head-dim requires a positive integer\n");
                 return 2;
             }
             layer_head_seen = 1;
             i += 1;
         } else if (strcmp(argv[i], "--layer-ffn-dim") == 0) {
-            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &layer_ffn_dim)) {
-                fprintf(stderr, "yvex: --layer-ffn-dim requires a positive integer\n");
+            if (i + 1 >= argc ||
+                !generate_parse_positive_ull_cli(argv[i + 1], &layer_ffn_dim)) {
+                fprintf(stderr, "error: --layer-ffn-dim requires a positive integer\n");
                 return 2;
             }
             layer_ffn_seen = 1;
             i += 1;
         } else if (strcmp(argv[i], "--chunk-size") == 0) {
-            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &chunk_size)) {
-                fprintf(stderr, "yvex: --chunk-size requires a positive integer\n");
+            if (i + 1 >= argc ||
+                !generate_parse_positive_ull_cli(argv[i + 1], &chunk_size)) {
+                fprintf(stderr, "error: --chunk-size requires a positive integer\n");
                 return 2;
             }
             chunk_size_seen = 1;
             i += 1;
         } else if (strcmp(argv[i], "--position-start") == 0) {
-            if (i + 1 >= argc || !parse_ull_allow_zero(argv[i + 1], &position_start)) {
-                fprintf(stderr, "yvex: --position-start requires a non-negative integer\n");
+            if (i + 1 >= argc ||
+                !generate_parse_ull_allow_zero_cli(argv[i + 1], &position_start)) {
+                fprintf(stderr, "error: --position-start requires a non-negative integer\n");
                 return 2;
             }
             i += 1;
         } else if (strcmp(argv[i], "--context-length") == 0) {
-            if (i + 1 >= argc || !parse_positive_ull(argv[i + 1], &context_length)) {
-                fprintf(stderr, "yvex: --context-length requires a positive integer\n");
+            if (i + 1 >= argc ||
+                !generate_parse_positive_ull_cli(argv[i + 1], &context_length)) {
+                fprintf(stderr, "error: --context-length requires a positive integer\n");
                 return 2;
             }
             context_length_seen = 1;
             i += 1;
         } else {
-            fprintf(stderr, "yvex: unknown generate option: %s\n", argv[i]);
+            fprintf(stderr, "error: unknown generate option: %s\n", argv[i]);
             fprintf(stderr, "Try 'yvex help generate' for usage.\n");
             return 2;
         }
     }
 
-    if (!model_arg || !backend_name || !tokens_text || !segment_name || !max_new_tokens_seen) {
-        fprintf(stderr, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N] [--logits-count N] [--strategy greedy] [--trace-level none|tokens|steps|kv|logits|sampling|full] [--cancel-after-steps N]\n");
+    if (!model_arg) {
+        fprintf(stderr, "error: generate requires --model FILE_OR_ALIAS\n");
+        generate_print_usage_error();
+        return 2;
+    }
+    if (!backend_name) {
+        fprintf(stderr, "error: generate requires --backend cpu|cuda\n");
+        generate_print_usage_error();
+        return 2;
+    }
+    if (!segment_name) {
+        fprintf(stderr, "error: generate requires --segment embedding-rmsnorm\n");
+        generate_print_usage_error();
+        return 2;
+    }
+    if (!tokens_text) {
+        fprintf(stderr, "error: generate requires --tokens IDS\n");
+        generate_print_usage_error();
+        return 2;
+    }
+    if (!max_new_tokens_seen) {
+        fprintf(stderr, "error: generate requires --max-new-tokens N\n");
+        generate_print_usage_error();
         return 2;
     }
     if (!generate_backend_name_valid(backend_name)) {
-        fprintf(stderr, "yvex: unknown backend kind: %s\n", backend_name);
+        fprintf(stderr,
+                "error: --backend supports cpu|cuda for bounded diagnostics\n");
         return 2;
     }
     if (strcmp(segment_name, "embedding-rmsnorm") != 0) {
-        fprintf(stderr, "yvex: unsupported generate segment: %s\n", segment_name);
+        fprintf(stderr,
+                "error: generate segment currently supports embedding-rmsnorm for bounded diagnostics\n");
         return 2;
     }
     if (kv_shape_seen && !attach_kv) {
-        fprintf(stderr, "yvex: --kv-* options require --attach-kv\n");
+        fprintf(stderr, "error: --kv-* options require --attach-kv\n");
         return 2;
     }
     if (attach_kv && (kv_shape.layer_count == 0ull ||
                       kv_shape.kv_head_count == 0ull ||
                       kv_shape.head_dim == 0ull ||
                       kv_shape.capacity == 0ull)) {
-        fprintf(stderr, "yvex: --attach-kv requires --kv-layers, --kv-heads, --kv-head-dim, and --kv-capacity\n");
+        fprintf(stderr, "error: --attach-kv requires --kv-layers, --kv-heads, --kv-head-dim, and --kv-capacity\n");
         return 2;
     }
     if (!layer_count_seen && (layer_hidden_seen || layer_head_seen || layer_ffn_seen)) {
-        fprintf(stderr, "yvex: --layer-* options require --layers N\n");
+        fprintf(stderr, "error: --layer-* options require --layers N\n");
         return 2;
     }
     if (layer_count_seen && (layer_hidden_seen || layer_head_seen || layer_ffn_seen) &&
         !(layer_hidden_seen && layer_head_seen && layer_ffn_seen)) {
-        fprintf(stderr, "yvex: custom layer dimensions require --layer-hidden-dim, --layer-head-dim, and --layer-ffn-dim\n");
+        fprintf(stderr, "error: custom layer dimensions require --layer-hidden-dim, --layer-head-dim, and --layer-ffn-dim\n");
         return 2;
     }
     if (layer_count_seen && (layer_count == 0ull || layer_count > 16ull)) {
-        fprintf(stderr, "yvex: --layers requires 1 <= N <= 16\n");
+        fprintf(stderr, "error: --layers requires 1 <= N <= 16\n");
         return 2;
     }
     if (layer_count_seen && !layer_hidden_seen) {
@@ -1870,7 +1938,7 @@ int yvex_generate_command(int argc, char **argv)
         layer_ffn_dim = 16ull;
     }
     if (layer_count_seen && layer_hidden_dim > YVEX_SEGMENT_GRAPH_MAX_OUTPUT_VALUES) {
-        fprintf(stderr, "yvex: --layer-hidden-dim cannot exceed %u for sampled segment handoff\n",
+        fprintf(stderr, "error: --layer-hidden-dim cannot exceed %u for sampled segment handoff\n",
                 (unsigned int)YVEX_SEGMENT_GRAPH_MAX_OUTPUT_VALUES);
         return 2;
     }
@@ -2143,5 +2211,47 @@ int yvex_generate_command(int argc, char **argv)
 
 void yvex_generate_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N] [--logits-count N] [--strategy greedy] [--trace-level none|tokens|steps|kv|logits|sampling|full] [--cancel-after-steps N]\n\nGenerate runs a bounded diagnostic loop over the existing prefill, decode, logits, greedy selection, and token-append path. It uses a bounded diagnostic stop policy, stops on max-new-tokens or context-length, reports decode/logits/sample/append failure stop reasons, and keeps EOS and stop-token policies unsupported. --cancel-after-steps N requests deterministic diagnostic cancellation at a loop safe point: N=0 before the first decode step, N>0 after that many appended diagnostic tokens. Partial diagnostic output is preserved after cancel or failure, and cleanup is idempotent. Trace levels are bounded diagnostic records only and include cancellation records when requested. This command does not claim full model generation, DeepSeek generation, server/provider cancellation, streaming output, evaluation, or benchmark measurement.\n");
+    fprintf(fp, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [options]\n\n");
+    fprintf(fp, "Bounded diagnostic generation loop over the existing prefill, decode, bounded logits, greedy sample, token append, stop, trace, cancel, and cleanup path.\n\n");
+    fprintf(fp, "Normal path:\n");
+    fprintf(fp, "  ./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3\n\n");
+    fprintf(fp, "Examples:\n");
+    fprintf(fp, "  ./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2 --trace-level full\n");
+    fprintf(fp, "  ./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --cancel-after-steps 1\n");
+    fprintf(fp, "  ./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --context-length 5\n\n");
+    fprintf(fp, "Required arguments:\n");
+    fprintf(fp, "  --model FILE_OR_ALIAS      selected segment artifact path or registry alias\n");
+    fprintf(fp, "  --backend cpu|cuda         backend used by the bounded diagnostic path\n");
+    fprintf(fp, "  --segment embedding-rmsnorm\n");
+    fprintf(fp, "  --tokens IDS               comma-separated diagnostic token IDs\n");
+    fprintf(fp, "  --max-new-tokens N         positive bounded diagnostic token budget\n\n");
+    fprintf(fp, "Diagnostic options:\n");
+    fprintf(fp, "  --strategy greedy          only greedy is accepted\n");
+    fprintf(fp, "  --context-length N         stop before append when the bounded context is full\n");
+    fprintf(fp, "  --logits-count N           bounded diagnostic logits count, 1 <= N <= 256\n");
+    fprintf(fp, "  --layers N                 optional controlled layer fixture scheduling\n");
+    fprintf(fp, "  --chunk-size N             optional bounded prefill chunking\n");
+    fprintf(fp, "  --attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N\n\n");
+    fprintf(fp, "Trace options:\n");
+    fprintf(fp, "  --trace-level none|tokens|steps|kv|logits|sampling|full\n");
+    fprintf(fp, "  Trace records are diagnostic text records only; they do not dump raw tensors.\n\n");
+    fprintf(fp, "Cancellation options:\n");
+    fprintf(fp, "  --cancel-after-steps N     N=0 cancels before first decode; N>0 cancels after N appended diagnostic tokens\n\n");
+    fprintf(fp, "Stop behavior:\n");
+    fprintf(fp, "  max-new-tokens stops after append; context-length stops before append; decode/logits/sample/append failures preserve partial diagnostic output.\n");
+    fprintf(fp, "  Partial diagnostic output is preserved on failure, cancellation, and context stops.\n");
+    fprintf(fp, "  EOS and stop-token text matching are unsupported for this bounded path.\n\n");
+    fprintf(fp, "Output policy:\n");
+    fprintf(fp, "  Text output is the stable operator contract. Fields are diagnostic state, counters, trace, cancel, cleanup, and boundary records.\n");
+    fprintf(fp, "  The command emits no ANSI color by default.\n\n");
+    fprintf(fp, "Boundaries:\n");
+    fprintf(fp, "  full model generation: unsupported\n");
+    fprintf(fp, "  real DeepSeek generation: unsupported\n");
+    fprintf(fp, "  real output-head logits: unsupported\n");
+    fprintf(fp, "  real vocabulary sampling: unsupported\n");
+    fprintf(fp, "  tokenizer-quality text generation: unsupported\n");
+    fprintf(fp, "  provider/server/streaming generation: unsupported\n");
+    fprintf(fp, "  evaluation: unsupported\n");
+    fprintf(fp, "  benchmark_status: not-measured\n");
+    fprintf(fp, "  throughput: not-measured\n");
 }

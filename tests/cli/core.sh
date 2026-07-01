@@ -190,6 +190,7 @@ contains "$OUT_DIR/commands.out" "  detokenize"
 contains "$OUT_DIR/commands.out" "  engine"
 contains "$OUT_DIR/commands.out" "  graph"
 contains "$OUT_DIR/commands.out" "  generate"
+contains "$OUT_DIR/commands.out" "bounded diagnostic generation loop"
 contains "$OUT_DIR/commands.out" "  gguf-emit"
 contains "$OUT_DIR/commands.out" "  gguf-template"
 contains "$OUT_DIR/commands.out" "  help"
@@ -253,20 +254,32 @@ contains "$OUT_DIR/help_sample.out" "bounded diagnostic token"
 contains "$OUT_DIR/help_sample.out" "does not run stochastic sampling, append tokens, generate"
 
 run_ok help_generate "$YVEX_BIN" help generate
-contains "$OUT_DIR/help_generate.out" "usage: yvex generate"
+contains "$OUT_DIR/help_generate.out" "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [options]"
+contains "$OUT_DIR/help_generate.out" "Normal path:"
+contains "$OUT_DIR/help_generate.out" "./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3"
+contains "$OUT_DIR/help_generate.out" "--max-new-tokens 2 --trace-level full"
+contains "$OUT_DIR/help_generate.out" "--cancel-after-steps 1"
+contains "$OUT_DIR/help_generate.out" "--context-length 5"
+contains "$OUT_DIR/help_generate.out" "Required arguments:"
+contains "$OUT_DIR/help_generate.out" "Diagnostic options:"
+contains "$OUT_DIR/help_generate.out" "Trace options:"
+contains "$OUT_DIR/help_generate.out" "Cancellation options:"
+contains "$OUT_DIR/help_generate.out" "Stop behavior:"
+contains "$OUT_DIR/help_generate.out" "Output policy:"
+contains "$OUT_DIR/help_generate.out" "Boundaries:"
 contains "$OUT_DIR/help_generate.out" "--trace-level none|tokens|steps|kv|logits|sampling|full"
-contains "$OUT_DIR/help_generate.out" "bounded diagnostic loop"
-contains "$OUT_DIR/help_generate.out" "bounded diagnostic stop policy"
-contains "$OUT_DIR/help_generate.out" "stops on max-new-tokens or context-length"
-contains "$OUT_DIR/help_generate.out" "failure stop reasons"
-contains "$OUT_DIR/help_generate.out" "EOS and stop-token policies unsupported"
-contains "$OUT_DIR/help_generate.out" "Trace levels are bounded diagnostic records only"
+contains "$OUT_DIR/help_generate.out" "Bounded diagnostic generation loop"
+contains "$OUT_DIR/help_generate.out" "EOS and stop-token text matching are unsupported"
+contains "$OUT_DIR/help_generate.out" "Trace records are diagnostic text records only"
 contains "$OUT_DIR/help_generate.out" "--cancel-after-steps N"
-contains "$OUT_DIR/help_generate.out" "deterministic diagnostic cancellation"
 contains "$OUT_DIR/help_generate.out" "Partial diagnostic output is preserved"
-contains "$OUT_DIR/help_generate.out" "cleanup is idempotent"
-contains "$OUT_DIR/help_generate.out" "does not claim full model generation"
-contains "$OUT_DIR/help_generate.out" "server/provider cancellation"
+contains "$OUT_DIR/help_generate.out" "The command emits no ANSI color by default"
+contains "$OUT_DIR/help_generate.out" "full model generation: unsupported"
+contains "$OUT_DIR/help_generate.out" "real DeepSeek generation: unsupported"
+contains "$OUT_DIR/help_generate.out" "real output-head logits: unsupported"
+contains "$OUT_DIR/help_generate.out" "real vocabulary sampling: unsupported"
+contains "$OUT_DIR/help_generate.out" "provider/server/streaming generation: unsupported"
+contains "$OUT_DIR/help_generate.out" "benchmark_status: not-measured"
 
 run_ok help_chat "$YVEX_BIN" help chat
 contains "$OUT_DIR/help_chat.out" "usage: yvex chat [--model FILE_OR_ALIAS]"
@@ -535,27 +548,53 @@ run_fail_code sample_layers_too_many 2 "$YVEX_BIN" sample --model missing --back
 run_fail_code sample_layer_without_layers 2 "$YVEX_BIN" sample --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layer-hidden-dim 8
 run_fail_code sample_layer_partial_dims 2 "$YVEX_BIN" sample --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --layers 2 --layer-hidden-dim 8 --layer-head-dim 4
 
+run_fail_code generate_no_args 2 "$YVEX_BIN" generate
+contains "$OUT_DIR/generate_no_args.err" "error: generate requires --model FILE_OR_ALIAS"
+contains "$OUT_DIR/generate_no_args.err" "usage: yvex generate --model FILE_OR_ALIAS"
 run_fail_code generate_missing_model 2 "$YVEX_BIN" generate --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1
+contains "$OUT_DIR/generate_missing_model.err" "error: generate requires --model FILE_OR_ALIAS"
+run_fail_code generate_bad_backend 2 "$YVEX_BIN" generate --model missing --backend tpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1
+contains "$OUT_DIR/generate_bad_backend.err" "error: --backend supports cpu|cuda for bounded diagnostics"
 run_fail_code generate_wrong_segment 2 "$YVEX_BIN" generate --model missing --backend cpu --segment nope --tokens 0,1 --max-new-tokens 1
+contains "$OUT_DIR/generate_wrong_segment.err" "error: generate segment currently supports embedding-rmsnorm for bounded diagnostics"
 run_fail_code generate_missing_tokens 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --max-new-tokens 1
+contains "$OUT_DIR/generate_missing_tokens.err" "error: generate requires --tokens IDS"
 run_fail_code generate_missing_max_new_tokens 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1
+contains "$OUT_DIR/generate_missing_max_new_tokens.err" "error: generate requires --max-new-tokens N"
 run_fail_code generate_max_new_tokens_invalid 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens nope
+contains "$OUT_DIR/generate_max_new_tokens_invalid.err" "error: --max-new-tokens must be an integer greater than 0"
 run_fail_code generate_max_new_tokens_zero 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 0
+contains "$OUT_DIR/generate_max_new_tokens_zero.err" "error: --max-new-tokens must be an integer greater than 0"
+run_fail_code generate_max_new_tokens_negative 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens -1
+contains "$OUT_DIR/generate_max_new_tokens_negative.err" "error: --max-new-tokens must be an integer greater than 0"
 run_fail_code generate_strategy_stochastic 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --strategy stochastic
+contains "$OUT_DIR/generate_strategy_stochastic.err" "error: --strategy currently supports greedy only"
 run_fail_code generate_trace_level_invalid 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --trace-level nope
+contains "$OUT_DIR/generate_trace_level_invalid.err" "error: --trace-level requires none|tokens|steps|kv|logits|sampling|full"
 run_fail_code generate_cancel_after_steps_missing 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --cancel-after-steps
+contains "$OUT_DIR/generate_cancel_after_steps_missing.err" "error: --cancel-after-steps must be a non-negative integer"
 run_fail_code generate_cancel_after_steps_invalid 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --cancel-after-steps nope
+contains "$OUT_DIR/generate_cancel_after_steps_invalid.err" "error: --cancel-after-steps must be a non-negative integer"
 run_fail_code generate_cancel_after_steps_negative 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --cancel-after-steps -1
+contains "$OUT_DIR/generate_cancel_after_steps_negative.err" "error: --cancel-after-steps must be a non-negative integer"
 run_fail_code generate_cancel_after_steps_overflow 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --cancel-after-steps 18446744073709551616
+contains "$OUT_DIR/generate_cancel_after_steps_overflow.err" "error: --cancel-after-steps must be a non-negative integer"
 run_fail_code generate_logits_count_zero 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --logits-count 0
+contains "$OUT_DIR/generate_logits_count_zero.err" "error: --logits-count requires 1 <= N <= 256"
 run_fail_code generate_logits_count_too_many 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --logits-count 257
+contains "$OUT_DIR/generate_logits_count_too_many.err" "error: --logits-count requires 1 <= N <= 256"
 run_fail_code generate_context_length_zero 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --context-length 0
+contains "$OUT_DIR/generate_context_length_zero.err" "error: --context-length requires a positive integer"
+run_fail_code generate_context_length_negative 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --context-length -1
+contains "$OUT_DIR/generate_context_length_negative.err" "error: --context-length requires a positive integer"
 run_fail_code generate_position_start_invalid 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --position-start nope
 run_fail_code generate_chunk_size_zero 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --chunk-size 0
 run_fail_code generate_layers_zero 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --layers 0
 run_fail_code generate_layers_too_many 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --layers 17
 run_fail_code generate_layer_without_layers 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --layer-hidden-dim 8
 run_fail_code generate_layer_partial_dims 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --layers 2 --layer-hidden-dim 8 --layer-head-dim 4
+run_fail_code generate_unknown_flag 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --unknown
+contains "$OUT_DIR/generate_unknown_flag.err" "error: unknown generate option: --unknown"
 
 set +e
 "$YVEX_BIN" model-target inspect missing-target >"$OUT_DIR/model_target_missing.out" 2>"$OUT_DIR/model_target_missing.err"
