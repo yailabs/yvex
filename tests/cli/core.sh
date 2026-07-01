@@ -255,7 +255,10 @@ contains "$OUT_DIR/help_sample.out" "does not run stochastic sampling, append to
 run_ok help_generate "$YVEX_BIN" help generate
 contains "$OUT_DIR/help_generate.out" "usage: yvex generate"
 contains "$OUT_DIR/help_generate.out" "bounded diagnostic loop"
-contains "$OUT_DIR/help_generate.out" "max-new-tokens and context-length stop checks"
+contains "$OUT_DIR/help_generate.out" "bounded diagnostic stop policy"
+contains "$OUT_DIR/help_generate.out" "stops on max-new-tokens or context-length"
+contains "$OUT_DIR/help_generate.out" "failure stop reasons"
+contains "$OUT_DIR/help_generate.out" "EOS and stop-token policies unsupported"
 contains "$OUT_DIR/help_generate.out" "does not claim full model generation"
 
 run_ok help_chat "$YVEX_BIN" help chat

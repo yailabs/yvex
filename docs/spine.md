@@ -1379,7 +1379,13 @@ decode-position advance after append
 context-limit non-mutation behavior
 append failure and partial-output reporting
 deterministic generation/sequence checksum for diagnostic generated tokens
-max-new-tokens and context-limit stop reporting
+explicit bounded diagnostic generation stop policy
+max-new-tokens post-append stop
+context-limit pre-append stop
+phase-specific failure stop reasons
+stop timing/source reporting
+unsupported EOS/stop-token boundary
+stop-policy cleanup and partial-output accounting
 generation cleanup/failure reporting
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
@@ -1521,12 +1527,18 @@ stochastic sampling
 full model generation
 real DeepSeek generation
 tokenizer-quality generation
+EOS-backed real tokenizer stop
+stop-token text matching
+interruption/cancellation
 interactive generation
 provider generation endpoint
+streaming generation
 OpenAI-compatible generation
 Anthropic-compatible generation
 evaluation suite
+capability eval
 inference benchmarks
+benchmark throughput
 benchmark performance
 advanced Runtime KV capacity
 execution_ready true-state claim
@@ -1720,7 +1732,7 @@ tables.
 | GEN.CONTRACT.0 | complete | docs | Generation loop contract | spine defines generation loop state machine, token lifecycle, stop reasons, CLI output fields, trace levels, cleanup/failure phases, and bounded-vs-full generation boundary without implementation claim |
 | GEN.TRACE.0 | planned | trace | Generation trace surface | generation traces expose token, step, KV, logits, sampling, tensor, and cleanup phases where implemented |
 | GEN.APPEND.0 | complete | generation | Token append lifecycle | generated-token append, candidate/accepted/generated token accounting, runtime sequence mutation, position advance, context-limit non-mutation, partial-output accounting, append failure reporting, checksum/accounting, and cleanup behavior are implemented and tested for the bounded diagnostic generation loop without full-model, DeepSeek, provider, eval, or benchmark claim |
-| GEN.STOP.0 | planned | generation | Stop-condition policy | max-new-tokens, context limit, EOS, stop tokens, interruption, and failure stop reasons are command-visible |
+| GEN.STOP.0 | complete | generation | Stop-condition policy | max-new-tokens, context-limit, failure stop reasons, stop timing, stop phase, partial-output accounting, unsupported EOS/stop-token boundary, and cleanup behavior are implemented and tested for the bounded diagnostic generation loop without full-model, DeepSeek, provider, eval, or benchmark claim |
 | M14 | planned | generation | First constrained generation loop | decode -> logits -> sample -> append token loop with stop conditions and token accounting |
 | GEN.LOOP.0 | complete | generation | First constrained generation loop | `yvex generate` composes implemented prefill, decode, logits, greedy sampling, token append, stop checks, and cleanup into a bounded diagnostic generation loop without full-model, DeepSeek, provider, eval, or benchmark claim |
 | GEN.LOOP.1 | planned | generation | Generation state and interruption | interruption, cleanup, trace, and partial-output behavior over implemented generation loop |
@@ -2095,7 +2107,7 @@ unsupported
 internal-error
 ```
 
-For `GEN.LOOP.0`, required minimum stop reasons:
+For the current bounded diagnostic generation loop, implemented stop reasons:
 
 ```text
 max-new-tokens
@@ -2107,7 +2119,22 @@ append-failure
 internal-error
 ```
 
-EOS/stop-token may remain planned until tokenizer/stop policy is implemented.
+Current stop timing:
+
+```text
+max-new-tokens:
+  post-append stop after the requested diagnostic token count is committed.
+
+context-limit:
+  pre-append stop before runtime sequence mutation would exceed active context.
+
+decode/logits/sampler/append/internal failure:
+  failure stop with phase-specific failure reporting and cleanup.
+```
+
+EOS and stop-token policy are currently reported as unsupported. They must not
+be treated as real tokenizer-backed stop behavior until tokenizer special-token
+and stop-token matching support exists.
 
 A stop reason must be printed in every generation result.
 
@@ -2125,6 +2152,7 @@ token_input_status:
 prompt_token_count:
 prefill_token_count:
 max_new_tokens:
+context_length:
 generated_token_count:
 accepted_token_count:
 partial_generated_token_count:
@@ -2153,7 +2181,18 @@ last_selected_logit:
 last_appended_token_id:
 append_status:
 append_failure:
+stop_policy:
+stop_requested:
 stop_reason:
+stop_phase:
+stop_step:
+stop_timing:
+stop_after_append:
+stop_before_append:
+failure_stop:
+unsupported_stop_feature:
+eos_policy:
+stop_token_policy:
 generation_checksum:
 sequence_checksum:
 generated_token_ids:
@@ -2917,24 +2956,24 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-GEN.STOP.0 - Stop-condition policy
+GEN.TRACE.0 - Generation trace surface
 ```
 
-GEN.STOP.0 must make stop policy a first-class runtime boundary after append
-lifecycle hardening: max-new-tokens, context-limit, failure stop reasons,
-future EOS/stop-token, interruption boundary, and output consistency. It must
-not claim real DeepSeek full generation, tokenizer-quality output, provider
-generation, evaluation, or benchmark readiness.
+GEN.TRACE.0 must make the bounded diagnostic generation loop observable across
+token, step, prefill, decode, logits, sample, append, stop, failure, and cleanup
+phases where those phases are implemented. It must not claim real DeepSeek full
+generation, tokenizer-quality output, provider generation, evaluation, or
+benchmark readiness.
 
 Algorithm/CLI research hardening runs in parallel with runtime closure. It does
-not replace GEN.STOP.0 or the current runtime Active Next.
+not replace GEN.TRACE.0 or the current runtime Active Next.
 
 GEN.CONTRACT.0 hardens the contract for the generation loop. GEN.LOOP.0 is
 complete for bounded diagnostic loop control only.
 
 PREFILL.4 remains planned as diagnostics/regression hardening over the
 implemented prefill state path. PREFILL.5 remains planned as a future
-measurement gate. Neither blocks stop-policy hardening or later full-model
+measurement gate. Neither blocks generation trace hardening or later full-model
 runtime work.
 
 SPINE.GENERATION.TARGET.0 records the long-term DeepSeek generation and
@@ -2946,8 +2985,14 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-GEN.STOP.0 - Stop-condition policy
+GEN.TRACE.0 - Generation trace surface
 ```
+
+GEN.STOP.0 is complete as explicit stop-policy behavior for the bounded
+diagnostic generation loop: max-new-tokens is a post-append stop,
+context-limit is a pre-append stop, phase-specific failures are failure stops,
+and EOS/stop-token behavior remains unsupported until real tokenizer-backed
+policy exists.
 
 GRAPH.CHECK.0 is complete as a command preset over existing graph proofs. It
 does not create new graph capability beyond the primitive, block, and layer

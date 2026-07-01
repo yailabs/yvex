@@ -16,7 +16,8 @@ It is not full model execution.
 The current DeepSeek path proves selected source-to-artifact emission, local
 alias registration, integrity, selected tensor materialization, engine/session
 attachment, selected graph execution, bounded diagnostic decode/logits/sampling,
-and bounded diagnostic generation-loop control over the selected segment.
+and bounded diagnostic generation-loop control with explicit stop-policy
+reporting over the selected segment.
 
 ## DeepSeek Paths And Artifacts
 
@@ -228,7 +229,7 @@ Purpose:
   Validate and exercise the selected embedding-plus-RMSNorm segment artifact
   through graph segment execution, prefill summary, minimal KV-backed binding,
   bounded diagnostic decode/logits/sampling, and bounded diagnostic generation
-  loop control.
+  loop control with stop-policy reporting.
 
 Requires:
   `deepseek4-v4-flash-selected-embed-rmsnorm` GGUF exists.
@@ -248,6 +249,7 @@ Boundary:
   minimal diagnostic KV binding only
   bounded diagnostic decode/logits/greedy sampling only
   bounded diagnostic generated-token append/accounting only
+  bounded diagnostic stop-policy reporting only
   not attention-backed transformer prefill
   not real model decode
   not real output-head logits
@@ -417,8 +419,8 @@ YVEX can:
 - create segment-summary prefill state;
 - bind that state to minimal diagnostic KV;
 - run bounded diagnostic decode/logits/greedy sampling over the selected segment;
-- run a bounded diagnostic generation loop with token append/accounting over the
-  selected segment.
+- run a bounded diagnostic generation loop with token append/accounting and
+  stop-policy reporting over the selected segment.
 
 YVEX does not currently implement:
 

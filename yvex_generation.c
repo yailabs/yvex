@@ -45,7 +45,19 @@ typedef struct {
     unsigned int last_appended_token_id;
     const char *append_status;
     const char *append_failure;
+    unsigned long long context_length;
+    const char *stop_policy;
+    int stop_requested;
     const char *stop_reason;
+    const char *stop_phase;
+    unsigned long long stop_step;
+    const char *stop_timing;
+    int stop_after_append;
+    int stop_before_append;
+    int failure_stop;
+    int unsupported_stop_feature;
+    const char *eos_policy;
+    const char *stop_token_policy;
     unsigned long long generation_checksum;
     unsigned long long sequence_checksum;
     int cleanup_attempted;
@@ -139,6 +151,13 @@ static void generate_summary_defaults(yvex_generate_summary *summary,
     summary->position_start = position_start;
     summary->append_status = "not-started";
     summary->append_failure = "none";
+    summary->context_length = 0ull;
+    summary->stop_policy = "bounded-diagnostic";
+    summary->stop_reason = "internal-error";
+    summary->stop_phase = "preflight";
+    summary->stop_timing = "preflight";
+    summary->eos_policy = "unsupported";
+    summary->stop_token_policy = "unsupported";
     if (input && input->token_count > 0ull) {
         unsigned long long offset = input->token_count - 1ull;
         if (generate_add_ull(position_start, offset, &summary->prefill_position_end)) {
@@ -148,7 +167,6 @@ static void generate_summary_defaults(yvex_generate_summary *summary,
             summary->last_successful_position = summary->prefill_position_end;
         }
     }
-    summary->stop_reason = "internal-error";
     summary->generation_checksum = 1469598103934665603ull;
     summary->sequence_checksum = 1469598103934665603ull;
     if (input) {
@@ -160,6 +178,30 @@ static void generate_summary_defaults(yvex_generate_summary *summary,
     }
     summary->cleanup_status = "not-needed";
     summary->failed_phase = "none";
+}
+
+static void generate_stop_record(yvex_generate_summary *summary,
+                                 const char *reason,
+                                 const char *phase,
+                                 unsigned long long step,
+                                 const char *timing,
+                                 int before_append,
+                                 int after_append,
+                                 int failure,
+                                 int unsupported)
+{
+    if (!summary) {
+        return;
+    }
+    summary->stop_requested = 1;
+    summary->stop_reason = reason ? reason : "internal-error";
+    summary->stop_phase = phase ? phase : "stop-check";
+    summary->stop_step = step;
+    summary->stop_timing = timing ? timing : "failure";
+    summary->stop_before_append = before_append ? 1 : 0;
+    summary->stop_after_append = after_append ? 1 : 0;
+    summary->failure_stop = failure ? 1 : 0;
+    summary->unsupported_stop_feature = unsupported ? 1 : 0;
 }
 
 static void generate_print_token_list(const char *label,
@@ -218,6 +260,7 @@ static void generate_print_summary(const yvex_generate_summary *summary,
     printf("prompt_token_count: %llu\n", summary ? summary->prompt_token_count : 0ull);
     printf("prefill_token_count: %llu\n", summary ? summary->prefill_token_count : 0ull);
     printf("max_new_tokens: %llu\n", summary ? summary->max_new_tokens : 0ull);
+    printf("context_length: %llu\n", summary ? summary->context_length : 0ull);
     printf("generated_token_count: %llu\n", summary ? summary->generated_token_count : 0ull);
     printf("accepted_token_count: %llu\n", summary ? summary->accepted_token_count : 0ull);
     printf("partial_generated_token_count: %llu\n",
@@ -255,7 +298,26 @@ static void generate_print_summary(const yvex_generate_summary *summary,
            summary && summary->append_status ? summary->append_status : "not-started");
     printf("append_failure: %s\n",
            summary && summary->append_failure ? summary->append_failure : "none");
+    printf("stop_policy: %s\n",
+           summary && summary->stop_policy ? summary->stop_policy : "bounded-diagnostic");
+    printf("stop_requested: %s\n",
+           summary && summary->stop_requested ? "true" : "false");
     printf("stop_reason: %s\n", summary && summary->stop_reason ? summary->stop_reason : "internal-error");
+    printf("stop_phase: %s\n",
+           summary && summary->stop_phase ? summary->stop_phase : "preflight");
+    printf("stop_step: %llu\n", summary ? summary->stop_step : 0ull);
+    printf("stop_timing: %s\n",
+           summary && summary->stop_timing ? summary->stop_timing : "preflight");
+    printf("stop_after_append: %s\n",
+           summary && summary->stop_after_append ? "true" : "false");
+    printf("stop_before_append: %s\n",
+           summary && summary->stop_before_append ? "true" : "false");
+    printf("failure_stop: %s\n", summary && summary->failure_stop ? "true" : "false");
+    printf("unsupported_stop_feature: %s\n",
+           summary && summary->unsupported_stop_feature ? "true" : "false");
+    printf("eos_policy: %s\n", summary && summary->eos_policy ? summary->eos_policy : "unsupported");
+    printf("stop_token_policy: %s\n",
+           summary && summary->stop_token_policy ? summary->stop_token_policy : "unsupported");
     printf("generation_checksum: %llu\n", summary ? summary->generation_checksum : 0ull);
     printf("sequence_checksum: %llu\n", summary ? summary->sequence_checksum : 0ull);
     generate_print_token_list("generated_token_ids",
@@ -294,9 +356,17 @@ static void generate_mark_failure(yvex_generate_summary *summary,
     summary->phase = "failed";
     summary->status = "generation-loop-failed-cleaned";
     summary->failed_phase = phase ? phase : "internal-error";
-    summary->stop_reason = reason ? reason : "internal-error";
     summary->failed_step = step;
     summary->partial_generated_token_count = summary->generated_token_count;
+    generate_stop_record(summary,
+                         reason ? reason : "internal-error",
+                         phase ? phase : "preflight",
+                         step,
+                         "failure",
+                         0,
+                         0,
+                         1,
+                         0);
     if (phase && strcmp(phase, "append") == 0) {
         summary->append_status = "append-failed";
         summary->append_failure = reason ? reason : "append-failure";
@@ -391,6 +461,7 @@ static int generate_append_preflight(yvex_generate_summary *summary,
                                      const yvex_token_input *sequence,
                                      const yvex_generation_append_state *append,
                                      unsigned long long context_length,
+                                     unsigned long long step,
                                      int *context_stop,
                                      yvex_error *err)
 {
@@ -439,7 +510,15 @@ static int generate_append_preflight(yvex_generate_summary *summary,
         summary->append_failure = "none";
         summary->status = "generation-loop-complete";
         summary->phase = "complete";
-        summary->stop_reason = "context-limit";
+        generate_stop_record(summary,
+                             "context-limit",
+                             "stop-check",
+                             step,
+                             "pre-append",
+                             1,
+                             0,
+                             0,
+                             0);
         return YVEX_OK;
     }
     if (!generate_add_ull(summary->current_decode_position, 1ull, &next_position)) {
@@ -808,6 +887,7 @@ int yvex_generate_command(int argc, char **argv)
         yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(YVEX_ERR_BOUNDS));
     }
+    summary.context_length = context_length;
 
     rc = preflight_graph_guard(&model_ref,
                                backend_name,
@@ -855,9 +935,17 @@ int yvex_generate_command(int argc, char **argv)
         if (decode_position >= context_length) {
             summary.phase = "complete";
             summary.status = "generation-loop-complete";
-            summary.stop_reason = "context-limit";
             summary.append_status = "context-limit";
             summary.append_failure = "none";
+            generate_stop_record(&summary,
+                                 "context-limit",
+                                 "stop-check",
+                                 step,
+                                 "pre-append",
+                                 1,
+                                 0,
+                                 0,
+                                 0);
             break;
         }
 
@@ -911,6 +999,7 @@ int yvex_generate_command(int argc, char **argv)
                                        &sequence,
                                        &append_state,
                                        context_length,
+                                       step,
                                        &context_stop,
                                        &err);
         if (context_stop) {
@@ -930,19 +1019,35 @@ int yvex_generate_command(int argc, char **argv)
         if (summary.generated_token_count >= max_new_tokens) {
             summary.status = "generation-loop-complete";
             summary.phase = "complete";
-            summary.stop_reason = "max-new-tokens";
+            generate_stop_record(&summary,
+                                 "max-new-tokens",
+                                 "stop-check",
+                                 step,
+                                 "post-append",
+                                 0,
+                                 1,
+                                 0,
+                                 0);
             break;
         }
     }
 
-    if (summary.generated_token_count < max_new_tokens &&
-               summary.phase &&
-               strcmp(summary.phase, "failed") != 0 &&
-               summary.stop_reason &&
-               strcmp(summary.stop_reason, "context-limit") != 0) {
+    if (!summary.stop_requested &&
+        summary.generated_token_count >= max_new_tokens &&
+        summary.phase &&
+        strcmp(summary.phase, "failed") != 0) {
         summary.status = "generation-loop-complete";
         summary.phase = "complete";
-        summary.stop_reason = "max-new-tokens";
+        generate_stop_record(&summary,
+                             "max-new-tokens",
+                             "stop-check",
+                             summary.generated_token_count > 0ull ?
+                                 summary.generated_token_count - 1ull : 0ull,
+                             "post-append",
+                             0,
+                             1,
+                             0,
+                             0);
     }
 
     generate_mark_cleanup(&summary);
@@ -958,5 +1063,5 @@ int yvex_generate_command(int argc, char **argv)
 
 void yvex_generate_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N] [--logits-count N] [--strategy greedy]\n\nGenerate runs a bounded diagnostic loop over the existing prefill, decode, logits, greedy selection, and token-append path with explicit max-new-tokens and context-length stop checks. It does not claim full model generation, DeepSeek generation, provider/server output, evaluation, or benchmark measurement.\n");
+    fprintf(fp, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [--layers N [--layer-hidden-dim N --layer-head-dim N --layer-ffn-dim N]] [--chunk-size N] [--position-start N] [--context-length N] [--attach-kv --kv-layers N --kv-heads N --kv-head-dim N --kv-capacity N] [--logits-count N] [--strategy greedy]\n\nGenerate runs a bounded diagnostic loop over the existing prefill, decode, logits, greedy selection, and token-append path. It uses a bounded diagnostic stop policy, stops on max-new-tokens or context-length, reports decode/logits/sample/append failure stop reasons, and keeps EOS and stop-token policies unsupported. It does not claim full model generation, DeepSeek generation, provider/server output, evaluation, or benchmark measurement.\n");
 }
