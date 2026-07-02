@@ -1261,10 +1261,307 @@ static const yvex_model_target_record *find_model_target(const char *target_id)
     return NULL;
 }
 
+static void print_model_target_decision_usage(FILE *fp)
+{
+    fprintf(fp, "usage: yvex model-target decision --release v0.1.0 [options]\n");
+    fprintf(fp, "       yvex model-target decision --help\n");
+    fprintf(fp, "\noptions:\n");
+    fprintf(fp, "  --candidate TARGET             report decision facts for one target\n");
+    fprintf(fp, "  --include-candidates           include target candidate classifications\n");
+    fprintf(fp, "  --include-pressure-targets     include pressure-lane status fields\n");
+    fprintf(fp, "  --include-blockers             include blocker row fields\n");
+    fprintf(fp, "  --include-critical-path        include release-critical track fields\n");
+    fprintf(fp, "  --include-next                 include deterministic next row fields\n");
+    fprintf(fp, "  --strict                       keep invalid usage fatal; honest blocked decisions still pass\n");
+}
+
+static void print_model_target_decision_help(FILE *fp)
+{
+    print_model_target_decision_usage(fp);
+    fprintf(fp, "\nThis command records the v0.1.0 target decision. It does not download models, emit artifacts, materialize tensors, execute graph work, run prefill, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
+    fprintf(fp, "v0.1.0 requires an honest full-runtime-candidate target before runtime graph, prefill, KV, decode, logits, sampling, and generation rows can advance.\n");
+    fprintf(fp, "Selected runtime slices, source-only pressure targets, external references, and fixture-only targets are ineligible for full-runtime closure.\n");
+}
+
+static int target_decision_is_full_runtime_candidate(const yvex_model_target_record *record)
+{
+    if (!record || !record->target_class) return 0;
+    if (strcmp(record->target_class, "full-runtime-model") == 0) return 1;
+    if (strcmp(record->target_class, "full-runtime-candidate") == 0) return 1;
+    return 0;
+}
+
+static const char *target_decision_candidate_class(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    if (strcmp(record->target_id, "glm-5.2-official-safetensors") == 0) {
+        return "huge-source-pressure";
+    }
+    return record->target_class ? record->target_class : "unknown";
+}
+
+static const char *target_decision_candidate_status(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    if (target_decision_is_full_runtime_candidate(record)) return "eligible";
+    if (strcmp(record->target_class, "selected-runtime-slice") == 0) {
+        return "ineligible-selected-slice";
+    }
+    if (strcmp(record->target_class, "official-source-huge-model") == 0 ||
+        strcmp(record->target_id, "glm-5.2-official-safetensors") == 0) {
+        return "ineligible-source-only";
+    }
+    if (strcmp(record->target_class, "external-GGUF-reference") == 0 ||
+        strcmp(record->target_class, "external-runner-reference") == 0) {
+        return "ineligible-external-reference";
+    }
+    return "unknown";
+}
+
+static const char *target_decision_candidate_reason(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown target";
+    if (target_decision_is_full_runtime_candidate(record)) {
+        return "full-runtime candidate can feed v0.1.0 planning";
+    }
+    if (strcmp(record->target_id, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0) {
+        return "selected-runtime-slice missing MoE router/expert tensor coverage";
+    }
+    if (strcmp(record->target_class, "selected-runtime-slice") == 0) {
+        return "selected-runtime-slice cannot close full-runtime generation";
+    }
+    if (strcmp(record->target_id, "glm-5.2-official-safetensors") == 0) {
+        return "source-only target has no YVEX-produced artifact/runtime path";
+    }
+    if (strcmp(record->target_class, "external-GGUF-reference") == 0 ||
+        strcmp(record->target_class, "external-runner-reference") == 0) {
+        return "external reference cannot close YVEX runtime";
+    }
+    return "target is not an implemented full-runtime candidate";
+}
+
+static const char *target_decision_candidate_next(const yvex_model_target_record *record)
+{
+    if (!record) return "none";
+    if (target_decision_is_full_runtime_candidate(record)) return "class-and-tensor-gates";
+    if (strcmp(record->target_id, "glm-5.2-official-safetensors") == 0) {
+        return "source/storage pressure";
+    }
+    if (strcmp(record->target_class, "selected-runtime-slice") == 0) return "pressure-only";
+    if (strcmp(record->target_class, "external-GGUF-reference") == 0 ||
+        strcmp(record->target_class, "external-runner-reference") == 0) {
+        return "reference-only";
+    }
+    return "target-report";
+}
+
+static void print_model_target_decision_candidate(unsigned long index,
+                                                  const yvex_model_target_record *record)
+{
+    const char *status;
+
+    status = target_decision_candidate_status(record);
+    printf("candidate.%lu.id: %s\n", index, record->target_id);
+    printf("candidate.%lu.class: %s\n", index, target_decision_candidate_class(record));
+    printf("candidate.%lu.family: %s\n", index, record->family);
+    printf("candidate.%lu.model: %s\n", index, record->model);
+    printf("candidate.%lu.source_class: %s\n", index, record->source_artifact_class);
+    printf("candidate.%lu.artifact_class: %s\n", index, record->target_artifact_class);
+    printf("candidate.%lu.status: %s\n", index, status);
+    printf("candidate.%lu.eligible_for_v010: %s\n", index,
+           strcmp(status, "eligible") == 0 ? "true" : "false");
+    printf("candidate.%lu.reason: %s\n", index, target_decision_candidate_reason(record));
+    printf("candidate.%lu.next: %s\n", index, target_decision_candidate_next(record));
+}
+
+static void print_target_decision_constant_tail(void)
+{
+    printf("release_critical_tracks: TRACK.TARGET,TRACK.SOURCE,TRACK.ARTIFACT,TRACK.INTEGRITY,TRACK.MODEL,TRACK.TENSOR,TRACK.RESIDENCY,TRACK.BACKEND,TRACK.GRAPH,TRACK.PREFILL,TRACK.KV,TRACK.DECODE,TRACK.LOGITS,TRACK.SAMPLING,TRACK.TOKENIZER,TRACK.GENERATION,TRACK.OPERATOR,TRACK.CI,TRACK.RELEASE\n");
+    printf("blocked_tracks: TRACK.TARGET,TRACK.ARTIFACT,TRACK.MODEL,TRACK.TENSOR,TRACK.GRAPH,TRACK.PREFILL,TRACK.KV,TRACK.DECODE,TRACK.LOGITS,TRACK.SAMPLING,TRACK.GENERATION\n");
+    printf("excluded_tracks: TRACK.SERVE,TRACK.EVAL,TRACK.BENCH,TRACK.SPEC\n");
+    printf("post010_tracks: TRACK.SERVE,TRACK.BENCH,TRACK.SPEC,TRACK.POST010\n");
+    printf("blocking_rows: V010.TARGET.2,V010.TARGET.3,V010.TARGET.4,V010.MAP.2,V010.ARTIFACT.EMIT.2,V010.FULLMODEL.6\n");
+    printf("next_required_rows: V010.TARGET.2\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+}
+
+static int print_model_target_decision_unsupported_release(const char *release)
+{
+    const char *value;
+
+    value = release && release[0] ? release : "unknown";
+    printf("target_decision: %s\n", value);
+    printf("status: unsupported-release\n");
+    printf("release: %s\n", value);
+    printf("decision_state: deferred\n");
+    printf("selected_target_id: none\n");
+    printf("selected_target_class: none\n");
+    printf("selected_family: none\n");
+    printf("selected_model: none\n");
+    printf("selected_source_class: none\n");
+    printf("selected_artifact_class: none\n");
+    printf("selected_backend_policy: none\n");
+    printf("selected_reason: unsupported release target decision vocabulary\n");
+    printf("full_runtime_candidate_status: unknown\n");
+    printf("candidate_count: 0\n");
+    printf("eligible_candidate_count: 0\n");
+    printf("ineligible_candidate_count: 0\n");
+    printf("selected_runtime_slice_eligible: false\n");
+    printf("source_only_eligible: false\n");
+    printf("external_reference_eligible: false\n");
+    printf("fixture_only_eligible: false\n");
+    printf("deepseek_pressure_status: unknown\n");
+    printf("glm_pressure_status: unknown\n");
+    printf("qwen_metal_pressure_status: unknown\n");
+    printf("dense_candidate_status: unknown\n");
+    printf("moe_candidate_status: unknown\n");
+    printf("selected_candidate_tensor_coverage: none\n");
+    printf("selected_candidate_artifact_status: none\n");
+    printf("selected_candidate_integrity_status: none\n");
+    printf("selected_candidate_backend_status: none\n");
+    printf("selected_candidate_graph_status: unsupported\n");
+    printf("selected_candidate_prefill_status: unsupported\n");
+    printf("selected_candidate_kv_status: unsupported\n");
+    printf("selected_candidate_decode_status: unsupported\n");
+    printf("selected_candidate_logits_status: unsupported\n");
+    printf("selected_candidate_sampling_status: unsupported\n");
+    printf("selected_candidate_generation_status: unsupported\n");
+    print_target_decision_constant_tail();
+    return 2;
+}
+
+static int print_model_target_decision_missing_candidate(const char *release,
+                                                        const char *candidate)
+{
+    const char *release_value;
+    const char *candidate_value;
+
+    release_value = release && release[0] ? release : "v0.1.0";
+    candidate_value = candidate && candidate[0] ? candidate : "none";
+    printf("target_decision: %s\n", release_value);
+    printf("status: missing-candidate\n");
+    printf("release: %s\n", release_value);
+    printf("candidate_requested: %s\n", candidate_value);
+    printf("decision_state: blocked-no-candidate\n");
+    printf("selected_target_id: none\n");
+    printf("selected_target_class: none\n");
+    printf("selected_family: none\n");
+    printf("selected_model: none\n");
+    printf("selected_source_class: none\n");
+    printf("selected_artifact_class: none\n");
+    printf("selected_backend_policy: none\n");
+    printf("selected_reason: requested candidate is not registered\n");
+    printf("full_runtime_candidate_status: missing\n");
+    printf("candidate_count: 0\n");
+    printf("eligible_candidate_count: 0\n");
+    printf("ineligible_candidate_count: 0\n");
+    printf("selected_runtime_slice_eligible: false\n");
+    printf("source_only_eligible: false\n");
+    printf("external_reference_eligible: false\n");
+    printf("fixture_only_eligible: false\n");
+    printf("deepseek_pressure_status: selected-slice-pressure-only\n");
+    printf("glm_pressure_status: source-storage-pressure-only\n");
+    printf("qwen_metal_pressure_status: planned-portability-pressure-only\n");
+    printf("dense_candidate_status: missing\n");
+    printf("moe_candidate_status: blocked-missing-tensor-map\n");
+    printf("selected_candidate_tensor_coverage: none\n");
+    printf("selected_candidate_artifact_status: none\n");
+    printf("selected_candidate_integrity_status: none\n");
+    printf("selected_candidate_backend_status: none\n");
+    printf("selected_candidate_graph_status: unsupported\n");
+    printf("selected_candidate_prefill_status: unsupported\n");
+    printf("selected_candidate_kv_status: unsupported\n");
+    printf("selected_candidate_decode_status: unsupported\n");
+    printf("selected_candidate_logits_status: unsupported\n");
+    printf("selected_candidate_sampling_status: unsupported\n");
+    printf("selected_candidate_generation_status: unsupported\n");
+    print_target_decision_constant_tail();
+    return 2;
+}
+
+static int print_model_target_decision_report(const char *release,
+                                              const yvex_model_target_record *candidate_filter)
+{
+    const yvex_model_target_record *selected = NULL;
+    unsigned long candidate_count = 0;
+    unsigned long eligible_count = 0;
+    unsigned long ineligible_count = 0;
+    unsigned long i;
+    unsigned long out_index = 0;
+
+    for (i = 0; i < model_target_count; ++i) {
+        const yvex_model_target_record *record = &model_targets[i];
+        int include_record = candidate_filter ? record == candidate_filter : 1;
+        int eligible;
+
+        if (!include_record) continue;
+        eligible = target_decision_is_full_runtime_candidate(record);
+        candidate_count++;
+        if (eligible) {
+            eligible_count++;
+            if (!selected) selected = record;
+        } else {
+            ineligible_count++;
+        }
+    }
+
+    printf("target_decision: %s\n", release);
+    printf("status: %s\n", selected ? "target-decision-selected" : "target-decision-blocked");
+    printf("release: %s\n", release);
+    printf("decision_state: %s\n", selected ? "selected" : "blocked-no-candidate");
+    printf("selected_target_id: %s\n", selected ? selected->target_id : "none");
+    printf("selected_target_class: %s\n", selected ? target_decision_candidate_class(selected) : "none");
+    printf("selected_family: %s\n", selected ? selected->family : "none");
+    printf("selected_model: %s\n", selected ? selected->model : "none");
+    printf("selected_source_class: %s\n", selected ? selected->source_artifact_class : "none");
+    printf("selected_artifact_class: %s\n", selected ? selected->target_artifact_class : "none");
+    printf("selected_backend_policy: %s\n", selected ? "cpu-cuda-capability-required" : "none");
+    printf("selected_reason: %s\n", selected
+           ? "registered full-runtime candidate selected for v0.1.0 planning"
+           : "no current full-runtime-candidate target is eligible for v0.1.0");
+    printf("full_runtime_candidate_status: %s\n", eligible_count ? "present" : "missing");
+    printf("candidate_count: %lu\n", candidate_count);
+    printf("eligible_candidate_count: %lu\n", eligible_count);
+    printf("ineligible_candidate_count: %lu\n", ineligible_count);
+    printf("selected_runtime_slice_eligible: false\n");
+    printf("source_only_eligible: false\n");
+    printf("external_reference_eligible: false\n");
+    printf("fixture_only_eligible: false\n");
+    printf("deepseek_pressure_status: selected-slice-pressure-only\n");
+    printf("glm_pressure_status: source-storage-pressure-only\n");
+    printf("qwen_metal_pressure_status: planned-portability-pressure-only\n");
+    printf("dense_candidate_status: %s\n", selected ? "selected" : "missing");
+    printf("moe_candidate_status: %s\n", selected ? "target-dependent" : "blocked-missing-tensor-map");
+    printf("selected_candidate_tensor_coverage: %s\n", selected ? "requires-report" : "none");
+    printf("selected_candidate_artifact_status: %s\n", selected ? "requires-integrity-gate" : "none");
+    printf("selected_candidate_integrity_status: %s\n", selected ? "requires-integrity-gate" : "none");
+    printf("selected_candidate_backend_status: %s\n", selected ? "requires-backend-gate" : "none");
+    printf("selected_candidate_graph_status: unsupported\n");
+    printf("selected_candidate_prefill_status: unsupported\n");
+    printf("selected_candidate_kv_status: unsupported\n");
+    printf("selected_candidate_decode_status: unsupported\n");
+    printf("selected_candidate_logits_status: unsupported\n");
+    printf("selected_candidate_sampling_status: unsupported\n");
+    printf("selected_candidate_generation_status: unsupported\n");
+    print_target_decision_constant_tail();
+
+    for (i = 0; i < model_target_count; ++i) {
+        const yvex_model_target_record *record = &model_targets[i];
+        if (candidate_filter && record != candidate_filter) continue;
+        printf("\n");
+        print_model_target_decision_candidate(out_index++, record);
+    }
+    return 0;
+}
+
 static void print_model_target_usage(FILE *fp)
 {
     fprintf(fp, "usage: yvex model-target classes\n");
     fprintf(fp, "       yvex model-target list\n");
+    fprintf(fp, "       yvex model-target decision --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR]\n");
 }
 
@@ -1273,6 +1570,9 @@ void yvex_model_target_help(FILE *fp)
     print_model_target_usage(fp);
     fprintf(fp, "\n--paths           show expected operator-local source, artifact, report, reference, and registry paths\n");
     fprintf(fp, "--models-root DIR override configured operator model root for this command only\n");
+    fprintf(fp, "\nDecision report:\n");
+    fprintf(fp, "  yvex model-target decision --release v0.1.0 --include-candidates --include-blockers --include-next\n");
+    fprintf(fp, "  This command records the v0.1.0 target decision. It does not download models, emit artifacts, materialize tensors, execute graph work, run prefill, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
     fprintf(fp, "\nModel targets are pressure objects, not capability claims.\n");
     fprintf(fp, "External GGUFs and external runners are reference evidence only.\n");
     fprintf(fp, "Model-target path reporting does not read model payloads, create artifacts, register aliases, or claim runtime support.\n");
@@ -1511,6 +1811,59 @@ int yvex_model_target_command(int argc, char **argv)
         }
         print_model_target_list();
         return 0;
+    }
+    if (strcmp(argv[2], "decision") == 0) {
+        const yvex_model_target_record *candidate_filter = NULL;
+        const char *release = NULL;
+        const char *candidate_id = NULL;
+
+        for (i = 3; i < argc; ++i) {
+            if (strcmp(argv[i], "--help") == 0) {
+                if (argc != 4) {
+                    print_model_target_decision_usage(stderr);
+                    return 2;
+                }
+                print_model_target_decision_help(stdout);
+                return 0;
+            } else if (strcmp(argv[i], "--release") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "model-target decision: --release requires VERSION\n");
+                    return 2;
+                }
+                release = argv[++i];
+            } else if (strcmp(argv[i], "--candidate") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "model-target decision: --candidate requires TARGET\n");
+                    return 2;
+                }
+                candidate_id = argv[++i];
+            } else if (strcmp(argv[i], "--include-candidates") == 0 ||
+                       strcmp(argv[i], "--include-pressure-targets") == 0 ||
+                       strcmp(argv[i], "--include-blockers") == 0 ||
+                       strcmp(argv[i], "--include-critical-path") == 0 ||
+                       strcmp(argv[i], "--include-next") == 0 ||
+                       strcmp(argv[i], "--strict") == 0) {
+                continue;
+            } else {
+                fprintf(stderr, "model-target decision: unknown option: %s\n", argv[i]);
+                return 2;
+            }
+        }
+        if (!release || release[0] == '\0') {
+            fprintf(stderr, "model-target decision: --release is required\n");
+            print_model_target_decision_usage(stderr);
+            return 2;
+        }
+        if (strcmp(release, "v0.1.0") != 0) {
+            return print_model_target_decision_unsupported_release(release);
+        }
+        if (candidate_id) {
+            candidate_filter = find_model_target(candidate_id);
+            if (!candidate_filter) {
+                return print_model_target_decision_missing_candidate(release, candidate_id);
+            }
+        }
+        return print_model_target_decision_report(release, candidate_filter);
     }
     if (strcmp(argv[2], "inspect") == 0) {
         if (argc < 4) {

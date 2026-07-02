@@ -65,6 +65,12 @@ report-only and does not materialize tensors, execute router logits, select
 experts, dispatch experts, accumulate expert outputs, run MoE blocks, run
 prefill/decode/logits/sampling, generate, evaluate, benchmark, or report
 throughput.
+`yvex model-target decision --release v0.1.0` records the current target
+decision state and classifies selected slices, source-only targets, pressure
+lanes, blockers, and next rows. It is report-only and does not download models,
+emit artifacts, materialize tensors, execute graph work, run prefill, decode,
+logits, sampling, generation, evaluation, benchmarks, or mark the release
+ready.
 
 ## Runbook Index
 
@@ -115,6 +121,7 @@ Covers:
 
 - operator storage configuration;
 - fast regression;
+- target decision reporting;
 - fullmodel report, materialization-plan, materialize, descriptor, family-runtime, attention, KV, context, MoE, and tensor-collection command-surface checks;
 - graph-only fixture regression;
 - daemon and accepted-only runtime diagnostics;
@@ -128,13 +135,16 @@ Covers:
 ./yvex model-target inspect deepseek4-v4-flash-selected-embed --paths
 ./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths
 ./yvex model-target inspect glm-5.2-official-safetensors --paths
+./yvex model-target decision --release v0.1.0 --include-candidates --include-blockers --include-next
 ```
 
 Boundary:
 
 Path configuration and target path reporting do not download weights, create
 artifacts, register aliases, materialize tensors, run graph execution, or claim
-runtime support.
+runtime support. Target decision reporting also does not select an implemented
+runtime path, claim generation, evaluate capability, benchmark throughput, or
+mark a release ready.
 
 For the current DeepSeek selected embedding path, use
 `docs/runbooks/deepseek.md`.

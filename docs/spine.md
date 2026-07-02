@@ -28,7 +28,7 @@ Current benchmark status:
   not measured
 
 Active implementation next:
-  V010.TARGET.9 - v0.1.0 target decision record
+  V010.TARGET.2 - full-runtime-candidate target report
 
 Current release target:
   v0.1.0 - first honest full-runtime path
@@ -39,7 +39,7 @@ Primary pressure targets:
   Qwen/Metal future portability
 
 Main v0.1.0 blocker:
-  no real full-runtime path yet
+  no eligible full-runtime-candidate target yet
 ```
 
 | Field | Current value |
@@ -57,7 +57,7 @@ Main v0.1.0 blocker:
 | Full model generation | unsupported |
 | DeepSeek generation | unsupported |
 | Eval/benchmark | unsupported / not measured |
-| Active next | V010.TARGET.9 |
+| Active next | V010.TARGET.2 |
 
 ## 1. Spine Nomenclature
 
@@ -237,7 +237,7 @@ no evaluation, no benchmark, and no throughput claim.
 | selected-runtime-slice | DeepSeek selected embed / embed+RMSNorm | implemented selected-slice proofs | not full runtime |
 | huge source/storage | GLM-5.2 official safetensors | source/storage pressure lane | no GLM execution |
 | future portability | Qwen/Metal | docs/planned | no Metal/Qwen runtime |
-| full-runtime model | v0.1.0 selected target | planned | target decision and runtime path pending |
+| full-runtime model | v0.1.0 selected target | blocked-no-candidate | V010.TARGET.2 must identify/evaluate a full-runtime candidate |
 
 ## 4. Forward Track Matrix
 
@@ -246,7 +246,7 @@ lanes; rows are the delivery units that complete track work.
 
 | Track ID | Track name | Owns | Current status | Implemented evidence | Next gap | Active / Later |
 | --- | --- | --- | --- | --- | --- | --- |
-| TRACK.TARGET | Target selection and pressure objects | target classes and release target decision | partial | target registry and path reports | v0.1.0 target decision | active |
+| TRACK.TARGET | Target selection and pressure objects | target classes and release target decision | blocked-no-candidate | target registry, path reports, and `yvex model-target decision` | full-runtime-candidate target report | active |
 | TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory | multi-family huge source profile | active |
 | TRACK.ARTIFACT | Artifact production | YVEX-produced GGUF and conversion plan | selected-slice | controlled/selected GGUF emission | full-runtime artifact production | later |
 | TRACK.INTEGRITY | Artifact identity and gates | digest/ranges/corruption/materialization gates | implemented | integrity harness and reports | full-runtime gate coverage | active |
@@ -292,19 +292,19 @@ Does not own:
   runtime implementation or benchmark evidence.
 
 Current status:
-  partial.
+  blocked-no-candidate.
 
 Current evidence:
-  target registry and path reports.
+  target registry, path reports, and `yvex model-target decision --release v0.1.0`.
 
 v0.1.0 rows:
   V010.TARGET.*.
 
 Main blockers:
-  v0.1.0 target decision.
+  no current registered target is eligible as a v0.1.0 full-runtime candidate.
 
 Next possible row:
-  V010.TARGET.9.
+  V010.TARGET.2.
 
 Boundary:
   a target is not a capability claim.
@@ -435,7 +435,7 @@ Main blockers:
   tensors; final runtime tensor map needs a v0.1.0 target/full artifact path.
 
 Next possible row:
-  V010.TARGET.9 or V010.MAP.2 / V010.FULLMODEL.6 after target decision.
+  V010.TARGET.2, then V010.MAP.2 / V010.FULLMODEL.6 after a candidate exists.
 
 Boundary:
   tensor collection reports are not model support.
@@ -593,7 +593,7 @@ Main blockers:
   storage/residency pressure; router/top-k; dispatch/accumulation.
 
 Next possible row:
-  V010.TARGET.9.
+  V010.TARGET.2 before MoE activation/runtime rows.
 
 Boundary:
   routed expert primitive is not full MoE support.
@@ -3013,7 +3013,8 @@ release blocker:
 ### 6.6 v0.1.0 Track Critical Path
 
 ```text
-V010.TARGET.9
+V010.TARGET.9 decision record: blocked-no-candidate
+-> V010.TARGET.2 full-runtime-candidate target report
 -> V010.SOURCE / V010.MAP / V010.ARTIFACT as required
 -> V010.INTEGRITY gate
 -> V010.FULLMODEL gate
@@ -3696,7 +3697,7 @@ claims are downstream unless explicitly included after real generation exists.
 
 | Step | Track | Gate | Current status | Required evidence | Blocks |
 | --- | --- | --- | --- | --- | --- |
-| 1 | TRACK.TARGET | GATE.SCOPE | planned/partial | target decision report | all v0.1.0 runtime |
+| 1 | TRACK.TARGET | GATE.SCOPE | complete / blocked-no-candidate | `yvex model-target decision --release v0.1.0`; full-runtime candidate missing | all v0.1.0 runtime |
 | 2 | TRACK.ARTIFACT | GATE.ARTIFACT | partial | identity/integrity proof | full runtime |
 | 3 | TRACK.MODEL | GATE.CLASS | partial/report-only | class reports | tensor/runtime path |
 | 4 | TRACK.TENSOR | GATE.TENSOR | partial/planned | tensor collection coverage | graph |
@@ -3723,77 +3724,35 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 ## 7. Active Next
 
 ```text
-V010.TARGET.9 - v0.1.0 target decision record
+V010.TARGET.2 - full-runtime-candidate target report
 ```
 
-MOE.CLASS.0 and TENSOR.MOE.0 are complete as report-only rows. The current
-runtime planning chain is now:
+`V010.TARGET.9` is complete as a report-only implementation row. The command
+`yvex model-target decision --release v0.1.0` records:
 
 ```text
-FAMILY.RUNTIME.0
-ATTENTION.CLASS.0
-KV.CACHE.0
-CONTEXT.CLASS.0
-MOE.CLASS.0
-TENSOR.MOE.0
+decision_state: blocked-no-candidate
+selected_target_id: none
+full_runtime_candidate_status: missing
+deepseek_pressure_status: selected-slice-pressure-only
+glm_pressure_status: source-storage-pressure-only
+qwen_metal_pressure_status: planned-portability-pressure-only
+runtime_claim: unsupported
+generation: unsupported-full-model
+benchmark_status: not-measured
+release_ready: false
+next_required_rows: V010.TARGET.2
 ```
 
-`yvex tensor-collection report --collection moe` now reports:
+The current DeepSeek selected artifacts remain pressure targets for parser,
+materialization, graph-slice, diagnostic runtime, and MoE planning. They cannot
+close v0.1.0 full-runtime generation. GLM remains source/storage pressure only,
+and Qwen/Metal remains planned portability pressure only.
 
-```text
-router collection status
-router tensor role/name/presence/dtype/qtype/shape/source
-expert gate/up/down role status
-expert tensor count status
-shared expert collection status
-dispatch metadata status
-expert indexing policy status
-expert storage/residency pressure
-present/missing/unknown role lists
-blocked rows
-next required rows
-```
-
-The current report result for DeepSeek selected-runtime-slice targets is still
-`ok-partial`: the family is classified as MoE, but selected artifacts do not
-contain router/expert/shared-expert tensor roles. That is enough to make the
-blocker command-visible, but not enough to advance into activation, dispatch,
-MoE block integration, MoE prefill, MoE decode, generation, evaluation, or
-benchmark rows.
-
-TENSOR.MOE.0 completed the report-only surface for:
-
-```text
-MoE router collection
-MoE expert gate/up/down collection
-MoE shared expert collection
-MoE dispatch metadata collection
-```
-
-TENSOR.MOE.0 did not claim:
-
-```text
-router execution
-router logits
-top-k routing
-expert activation
-expert dispatch
-expert accumulation
-MoE block execution
-full transformer prefill
-real decode
-real logits
-generation
-evaluation
-benchmark
-throughput
-```
-
-Active Next is now V010.TARGET.9 because the report output shows that the
-current selected artifacts are too narrow for MoE activation work. The next
-decision must choose whether v0.1.0 proceeds through a different full-runtime
-candidate, a fuller DeepSeek artifact/tensor-map path, or another honest target
-boundary before STORAGE/RESIDENCY/MOE activation rows are selected.
+Active Next is now `V010.TARGET.2` because no current registered target can
+honestly serve as the first full-runtime candidate. The next row must identify
+or evaluate a concrete full-runtime candidate before graph/runtime rows,
+MoE activation, serving, evaluation, benchmark, or release rows can advance.
 
 ## 8. Historical Delivery Ledger
 
@@ -3843,6 +3802,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | OWI.TARGETS.1 | planned | intake | Multi-family source manifest profile | source manifests distinguish base family, model class, source artifact class, target artifact class, qtype class, and pressure purpose |
 | OWI.TARGETS.2 | planned | intake | Multi-model artifact cards | MODEL_ARTIFACTS records DeepSeek selected targets and GLM source-tensor targets without runtime claim |
 | OWI.TARGETS.3 | planned | intake | Model target command profile | operator command reports target class, source artifact class, target artifact class, qtype class, and unsupported runtime boundary |
+| V010.TARGET.9 | complete | target | v0.1.0 target decision record | `yvex model-target decision --release v0.1.0` is command-visible and classifies selected-runtime-slice, source-only, pressure, and full-runtime-candidate eligibility; the current decision is blocked-no-candidate with `V010.TARGET.2` as next required row, while preserving unsupported runtime, generation, eval, benchmark, throughput, and release boundaries |
 | OWI.HUGE.0 | planned | intake | Huge source tensor inventory | huge safetensors shard sets are inventoried without loading full tensor payloads |
 | OWI.HUGE.1 | planned | intake | Huge safetensors shard index | safetensors shard metadata, tensor placement, offsets, and dtype distribution are indexed |
 | OWI.HUGE.2 | planned | intake | Huge-model qtype and target profile | planned quantization target, qtype policy, per-role qtype classes, and expected storage bytes are reported |
@@ -4166,6 +4126,7 @@ indexes, not runtime capability by themselves.
 | --- | --- | --- | --- | --- |
 | `yvex inspect` / `metadata` / `tensors` | implemented artifact inspection | GGUF metadata/tensor directory parsing | model execution | ARTIFACT, INTEGRITY |
 | `yvex integrity report` | implemented integrity gate | digest/range/shape/dtype checks | supply-chain security beyond checks | INTEGRITY |
+| `yvex model-target decision` | report-only | v0.1.0 target decision state, target eligibility, pressure-lane classification, blockers, and next rows | runtime execution, target implementation, generation, release readiness | TRACK.TARGET |
 | `yvex graph --execute-op` | fixture-proof | standalone graph primitives | full transformer runtime | TRACK.GRAPH |
 | `yvex prefill` | diagnostic-runtime | segment/chunk diagnostic prefill | real transformer prefill | TRACK.PREFILL |
 | `yvex kv report` | report-only / diagnostic | KV facts and diagnostic KV boundary | real attention KV | TRACK.KV |
@@ -4186,6 +4147,7 @@ indexes, not runtime capability by themselves.
 | graph tests | fixture/selected-slice | primitive/block/layer/selected graph behavior | full transformer runtime | GRAPH |
 | prefill/KV/decode/logits/sample/generate tests | diagnostic-runtime | bounded runtime control flow | full-model generation | RUNTIME |
 | CLI tests | operator evidence | command surface, refusal, help, presets | new runtime semantics | OPERATOR |
+| target decision tests | report-only | v0.1.0 decision state, candidate classification, unsupported release, missing candidate, boundary fields | target implementation or runtime capability | TRACK.TARGET |
 | MoE report tests | report-only | selected-slice MoE class report, GLM source-only refusal, unknown-family and missing-model boundaries | MoE runtime execution | TRACK.MOE |
 | MoE tensor collection tests | report-only | selected-slice MoE tensor collection missing roles, GLM source-only refusal, unsupported family, missing model, invalid collection, CPU/CUDA report surfaces | MoE runtime execution or tensor materialization | TRACK.TENSOR, TRACK.MOE |
 | CUDA tests | backend evidence | CUDA probe/movement/parity subset | model support | BACKEND |
@@ -4221,7 +4183,7 @@ grep -nF 'TRACK.LOGITS' docs/spine.md
 grep -nF 'TRACK.SAMPLING' docs/spine.md
 grep -nF 'TRACK.GENERATION' docs/spine.md
 grep -nF 'SPINE.REDESIGN.0' docs/spine.md
-grep -nF 'V010.TARGET.9 - v0.1.0 target decision record' docs/spine.md
+grep -nF 'V010.TARGET.2 - full-runtime-candidate target report' docs/spine.md
 ```
 
 ### 10.5 Detailed Validation Gate Archive
@@ -4400,7 +4362,7 @@ grep -nF 'Output Head & Logits' docs/spine.md
 grep -nF 'Sampling Runtime' docs/spine.md
 grep -nF 'Generation Runtime' docs/spine.md
 grep -nF 'SPINE.NAVIGATION.0' docs/spine.md
-grep -nF 'V010.TARGET.9 - v0.1.0 target decision record' docs/spine.md
+grep -nF 'V010.TARGET.2 - full-runtime-candidate target report' docs/spine.md
 ```
 
 Canonical block directory proof:
@@ -4559,6 +4521,7 @@ no runtime file change for spine-only rebases
 | `yvex fullmodel materialize` | selected-slice-proof | bounded required proof tensor materialization or clean refusal | full DeepSeek materialization, full model execution | FULLMODEL.2, V010.FULLMODEL.* |
 | `yvex fullmodel descriptor` | report-only | tensor role map, collection map, runtime requirements and blockers | runtime mutation, decode, logits, generation | FULLMODEL.3, V010.CLASS.*, V010.TENSOR.* |
 | `yvex fullmodel family-runtime` | report-only | family adapter roles, attention/KV/MoE/output requirements, next dependencies | model-family runtime support | FAMILY.RUNTIME.0, V010.CLASS.* |
+| `yvex model-target decision` | report-only | v0.1.0 decision state, selected target if any, candidate eligibility, pressure-lane status, blockers, release-critical tracks, and next rows | target implementation, artifact emission, tensor materialization, graph/runtime execution, generation, eval, benchmark, release | V010.TARGET.9 |
 | `yvex models prepare` | operator-preset | implemented selected source-to-GGUF and registry path for supported target | materialization, graph, generation, eval, benchmark | MODEL.PREPARE.*, V010.CLI.6 |
 | `yvex models check` | operator-preset | selected artifact inspect/integrity/materialize/graph composition by level | decode, logits, sampling, generation | MODEL.CHECK.0, V010.CLI.7 |
 | `yvex paths` | operator-preset | operator-local root/path resolution and creation boundaries | download, artifact creation, runtime capability | OPERATOR.PATHS.0, V010.PATHS.* |
@@ -4591,6 +4554,7 @@ no runtime file change for spine-only rebases
 | context report tests | context report/refusal/chunk/overflow output | report-only | no long-context runtime | V010.CONTEXT.* |
 | MoE report tests | MoE class/refusal/boundary output in fullmodel/core paths | report-only | no router execution or expert dispatch | MOE.CLASS.0 / V010.TENSOR.14-17 |
 | MoE tensor collection tests | MoE tensor collection selected-slice, GLM source-only, unsupported-family, missing-model, invalid-collection, and CPU/CUDA report paths | report-only | no tensor materialization, router logits, expert activation, dispatch, prefill, decode, or generation | TENSOR.MOE.0 / V010.TENSOR.14-17 |
+| target decision tests | v0.1.0 target decision help/report/refusal output, selected-slice/source-only classification, unsupported release, missing candidate | report-only | no target implementation, artifact emission, runtime execution, generation, benchmark, or release | V010.TARGET.9 |
 | fullmodel report/materialize/descriptor/family-runtime tests | fullmodel inventory, refusal, tiny proof, descriptors, family reports | report-only / selected-slice-proof | broad row-to-test mapping still incomplete | SPINE.TESTMAP.0 |
 | operator preset tests | paths, target inspect, prepare/check, model registry | operator-preset | no fully automated row promotion map | SPINE.TESTMAP.0 |
 | runbook/public claim tests | public docs boundary and command examples | docs/meta | no release claim audit transcript yet | V010.DOCS.PUBLIC.*, V010.RELEASE.* |
@@ -4624,9 +4588,10 @@ the report-only model-class lane after resolving the docs/meta blocker.
 ### 11.4 Follow-Up Rows
 
 `SPINE.TESTMAP.0` and `SPINE.FILEMAP.0` remain useful non-runtime follow-ups.
-Runtime planning now continues through `V010.TARGET.9` because the MoE tensor
-collection report shows selected artifacts do not carry the tensor roles needed
-for activation or dispatch.
+Runtime planning now continues through `V010.TARGET.2` because the v0.1.0
+target decision report is complete and records `blocked-no-candidate`: selected
+DeepSeek slices, GLM source-only pressure, and Qwen/Metal planned portability
+cannot close the first full-runtime path.
 
 ### 11.5 Detailed Audit Tables
 
@@ -4945,7 +4910,7 @@ outside `docs/spine.md`.
 | P2 medium | Fullmodel report-only surfaces could be mistaken for runtime readiness | command output says unsupported but Current Capability is flat | claim-risk | `SPINE.RECONCILE.0` | v0.1.0 target clarity |
 | P2 medium | Diagnostic generation has rich proof and may be mistaken for full generation | generate command emits generated diagnostic tokens | claim-risk | `SPINE.RECONCILE.0` | public claim clarity |
 | P2 medium | Output-head/tokenizer real-runtime path is underdeveloped relative to v0.1.0 gates | V010.LOGITS/TOKENIZER planned | v0.1.0 target may block later | V010.CLASS.12-13 / V010.TOKENIZER.* | full runtime |
-| P2 medium | Dense full-runtime target decision is not made | V010.TARGET.9 planned | MoE path may overfit DeepSeek | V010.TARGET.9 | v0.1.0 release path |
+| P2 medium | Full-runtime candidate is not identified | V010.TARGET.9 complete / blocked-no-candidate | release path has no executable target boundary | V010.TARGET.2 | v0.1.0 release path |
 | P2 medium | CUDA validation depends on host availability | CUDA tests are available but hardware-dependent | audit variance | CI/HARDWARE profile row | CUDA proof consistency |
 | P3 low | Public docs use `$HOME/lab/models` examples | path scan | acceptable operator-local example | keep | none |
 | P3 low | Claim scans flag internal target strings in `docs/spine.md` | claim-risk scan | expected internal target language | keep | none |
@@ -4996,7 +4961,7 @@ work.
 | AUDIT.P2.3 | P2 | Fullmodel report-only surfaces could be mistaken for runtime readiness | Moved fullmodel surfaces to report-only group and command crosswalk with unsupported boundary | resolved-in-spine | none |
 | AUDIT.P2.4 | P2 | Diagnostic generation has rich proof and may be mistaken for full generation | Moved generation loop to diagnostic-runtime group and command crosswalk with full-generation exclusions | resolved-in-spine | none |
 | AUDIT.P2.5 | P2 | Output-head/tokenizer real-runtime path is underdeveloped relative to v0.1.0 gates | Preserved as runtime gap under block/V010 crosswalk and Active Next decision grammar | deferred-to-runtime | V010.CLASS.12-13 / V010.TOKENIZER.* |
-| AUDIT.P2.6 | P2 | Dense full-runtime target decision is not made | Preserved as target decision gap in block/V010 crosswalk and Active Next decision grammar | deferred-to-runtime | V010.TARGET.9 |
+| AUDIT.P2.6 | P2 | Full-runtime candidate is not identified | V010.TARGET.9 resolved the decision as blocked-no-candidate; candidate discovery/evaluation is now explicit | deferred-to-target | V010.TARGET.2 |
 | AUDIT.P2.7 | P2 | CUDA validation depends on host availability | Preserved as validation/environment boundary in test crosswalk | partially-resolved | V010.HARDWARE.*, V010.CI.3 |
 | AUDIT.P2.8 | P2 | Audit summary counted one P2 beyond the individually expanded weak-point table | Assigned unexpanded audit detail to row/test/file mapping follow-ups instead of inventing a runtime blocker | requires-follow-up | SPINE.TESTMAP.0 / SPINE.FILEMAP.0 |
 | AUDIT.P3.GROUP | P3 | `$HOME/lab/models` examples, internal target strings, long diagnostic flags, future eval/bench skeletons, and tiny GGUF fixtures are low-risk audit notes | Kept as non-blocking guardrail notes; no runtime or public claim change | partially-resolved | V010.CI.*, V010.DOCS.PUBLIC.* |
@@ -5021,18 +4986,18 @@ SPINE.FILEMAP.0:
   decision row.
 ```
 
-If no remaining P1 finding blocks runtime planning after TENSOR.MOE.0, Active
-Next advances to:
+After V010.TARGET.9 completed with `blocked-no-candidate`, Active Next advances
+to:
 
 ```text
-V010.TARGET.9 - v0.1.0 target decision record
+V010.TARGET.2 - full-runtime-candidate target report
 ```
 
 If any P1 finding remains blocking, Active Next becomes the named follow-up row.
 
 | Condition | Active Next |
 | --- | --- |
-| all P1 resolved or assigned non-blocking follow-up after TENSOR.MOE.0 | V010.TARGET.9 |
+| target decision complete and no full-runtime candidate exists | V010.TARGET.2 |
 | Current Capability still overclaims implementation | SPINE.CAPABILITY.REWRITE.0 |
 | command/help boundaries still overclaim | SPINE.COMMAND.AUDIT.0 |
 | test-to-ledger coverage remains blocking | SPINE.TESTMAP.0 |
@@ -5042,14 +5007,13 @@ Current reconciliation result:
 
 ```text
 Active Next:
-  V010.TARGET.9 - v0.1.0 target decision record
+  V010.TARGET.2 - full-runtime-candidate target report
 
 Reason:
-  P1 evidence-taxonomy and namespace blockers are resolved in spine or assigned
-  to non-blocking follow-up rows. MOE.CLASS.0 and TENSOR.MOE.0 are complete as
-  report-only evidence; selected DeepSeek slices still lack router/expert/
-  shared-expert tensor-role coverage, so the next runtime-planning decision
-  returns to TRACK.TARGET.
+  V010.TARGET.9 records blocked-no-candidate. Current selected DeepSeek slices,
+  GLM source-only pressure, and Qwen/Metal planned portability cannot close
+  v0.1.0 full runtime, so TRACK.TARGET must identify or evaluate a concrete
+  full-runtime candidate next.
 ```
 
 

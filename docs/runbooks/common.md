@@ -13,6 +13,7 @@ evaluation, or benchmark capability.
 
 Purpose:
   Quickly check command discovery, path resolution, model-target reporting,
+  target decision reporting,
   fullmodel report/materialization-plan/materialize/descriptor/family-runtime
   help, attention/KV/context/MoE/tensor-collection report help, tokenizer fixture diagnostics, and
   minimal KV diagnostics.
@@ -36,6 +37,7 @@ Boundary:
   read/diagnostic command surface only
   no source conversion
   no alias refresh
+  target decision report only
   bounded fullmodel proof/refusal, descriptor, family-runtime, attention, KV, context, MoE, and tensor-collection diagnostics only
   no uncontrolled full backend allocation
   no daemon
@@ -67,6 +69,8 @@ make
 ./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths
 ./yvex model-target inspect glm-5.2-official-safetensors
 ./yvex model-target inspect glm-5.2-official-safetensors --paths
+./yvex model-target decision --help
+./yvex model-target decision --release v0.1.0 --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
 ./yvex fullmodel report --model glm-5.2-official-safetensors --backend cpu
 ./yvex fullmodel materialization-plan --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
 ./yvex fullmodel materialize --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --dry-run
@@ -309,7 +313,7 @@ Quant/template/intake manifests:
 - `materialize-gate`: integrity and gate lanes
 - `metadata`: artifact inspection lanes
 - `model-gate`: integrity and gate lanes
-- `model-target`: model lanes, model target path reporting lanes, fast regression lane
+- `model-target`: model lanes, model target path and target decision reporting lanes, fast regression lane
 - `models`: artifact registration and selected prepare lanes
 - `native-weights`: source intake lanes
 - `paths`: configure once lane, fast regression lane, path resolution
@@ -335,12 +339,13 @@ Use this order before assuming a runtime bug:
 1. `./yvex commands`
 2. `./yvex help <command>`
 3. `./yvex model-target list`
-4. `./yvex models current`
-5. `./yvex models list`
-6. `./yvex inspect <model-or-alias>`
-7. `./yvex tensors <model-or-alias>`
-8. `./yvex integrity check --model <model-or-alias>`
-9. `./yvex backend cpu`
-10. `./yvex cuda-info`
-11. Rerun CPU before CUDA.
-12. Check `git status` before committing.
+4. `./yvex model-target decision --release v0.1.0`
+5. `./yvex models current`
+6. `./yvex models list`
+7. `./yvex inspect <model-or-alias>`
+8. `./yvex tensors <model-or-alias>`
+9. `./yvex integrity check --model <model-or-alias>`
+10. `./yvex backend cpu`
+11. `./yvex cuda-info`
+12. Rerun CPU before CUDA.
+13. Check `git status` before committing.
