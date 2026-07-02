@@ -20,7 +20,9 @@ the source-only unsupported boundary without inspecting GLM safetensors.
 `yvex fullmodel materialization-plan --model glm-5.2-official-safetensors`
 refuses as source-only because materialization planning needs a GGUF tensor
 inventory. `yvex fullmodel materialize --model glm-5.2-official-safetensors`
-also refuses as source-only and does not inspect GLM safetensors.
+also refuses as source-only and does not inspect GLM safetensors. `yvex
+fullmodel descriptor --model glm-5.2-official-safetensors` reports the same
+source-only runtime descriptor boundary without inspecting GLM safetensors.
 
 ## GLM Paths And Target
 
@@ -112,6 +114,7 @@ Boundary:
   not GLM GGUF emission
   not GLM materialization planning over source-only safetensors
   not GLM materialization proof over source-only safetensors
+  not GLM runtime descriptor over GGUF tensors
   not GLM runtime execution
   not GLM generation
 
@@ -120,6 +123,7 @@ Boundary:
 ./yvex fullmodel report --model glm-5.2-official-safetensors --backend cpu
 ./yvex fullmodel materialization-plan --model glm-5.2-official-safetensors --backend cpu
 ./yvex fullmodel materialize --model glm-5.2-official-safetensors --backend cpu
+./yvex fullmodel descriptor --model glm-5.2-official-safetensors --backend cpu
 ```
 
 ## Lane 2 — Start GLM Source Download

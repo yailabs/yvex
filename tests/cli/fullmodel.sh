@@ -140,17 +140,23 @@ grep 'status: models-added' "$ROOT/add-selected.out"
 grep 'status: models-added' "$ROOT/add-rmsnorm.out"
 
 "$YVEX_BIN" commands > "$ROOT/commands.out"
-grep 'fullmodel[[:space:]]*full model inventory, placement, and materialization proof' "$ROOT/commands.out"
+grep 'fullmodel[[:space:]]*full model inventory, materialization, and runtime descriptor reports' "$ROOT/commands.out"
 
 "$YVEX_BIN" help fullmodel > "$ROOT/help.out"
 grep 'usage: yvex fullmodel report --model FILE_OR_ALIAS' "$ROOT/help.out"
 grep 'usage: yvex fullmodel materialization-plan --model FILE_OR_ALIAS' "$ROOT/help.out"
 grep 'usage: yvex fullmodel materialize --model FILE_OR_ALIAS' "$ROOT/help.out"
+grep 'usage: yvex fullmodel descriptor --model FILE_OR_ALIAS' "$ROOT/help.out"
 grep 'fullmodel report:' "$ROOT/help.out"
 grep 'fullmodel materialization-plan:' "$ROOT/help.out"
 grep 'fullmodel materialization proof:' "$ROOT/help.out"
+grep 'fullmodel descriptor:' "$ROOT/help.out"
 grep 'controlled proof over a tiny full-ish GGUF tensor set' "$ROOT/help.out"
 grep 'allocates and releases only the bounded required proof tensors' "$ROOT/help.out"
+grep 'planning/reporting boundary for tensor roles' "$ROOT/help.out"
+grep 'does not execute the model' "$ROOT/help.out"
+grep 'does not.*generate' "$ROOT/help.out"
+grep 'does not.*benchmark' "$ROOT/help.out"
 grep 'no full model execution' "$ROOT/help.out"
 grep 'no inference readiness' "$ROOT/help.out"
 grep 'no DeepSeek generation' "$ROOT/help.out"
@@ -196,7 +202,7 @@ grep 'real attention-backed KV not implemented' "$ROOT/selected-plan.out"
 grep 'real DeepSeek decode not implemented' "$ROOT/selected-plan.out"
 grep 'real output-head logits not implemented' "$ROOT/selected-plan.out"
 grep 'real vocabulary sampling not implemented' "$ROOT/selected-plan.out"
-grep 'full runtime descriptor not implemented' "$ROOT/selected-plan.out"
+grep 'runtime family adapter not implemented' "$ROOT/selected-plan.out"
 grep 'proof_ready_for_fullmodel_2: false' "$ROOT/selected-plan.out"
 
 "$YVEX_BIN" fullmodel materialize --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" > "$ROOT/selected-materialize.out"
@@ -214,6 +220,39 @@ grep 'failed_phase: role-coverage' "$ROOT/selected-materialize.out"
 grep 'failed_reason: selected-runtime-slice' "$ROOT/selected-materialize.out"
 grep 'cleanup_attempted: true' "$ROOT/selected-materialize.out"
 grep 'owned_state_released: true' "$ROOT/selected-materialize.out"
+
+"$YVEX_BIN" fullmodel descriptor --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" > "$ROOT/selected-descriptor.out"
+grep 'fullmodel: descriptor' "$ROOT/selected-descriptor.out"
+grep 'status: fullmodel-descriptor' "$ROOT/selected-descriptor.out"
+grep 'target_class: selected-runtime-slice' "$ROOT/selected-descriptor.out"
+grep 'runtime_descriptor: report-only' "$ROOT/selected-descriptor.out"
+grep 'runtime_descriptor_status: partial' "$ROOT/selected-descriptor.out"
+grep 'runtime_descriptor_kind: fullmodel-planning' "$ROOT/selected-descriptor.out"
+grep 'full_runtime_model: false' "$ROOT/selected-descriptor.out"
+grep 'full_model_execution: unsupported' "$ROOT/selected-descriptor.out"
+grep 'generation_ready: false' "$ROOT/selected-descriptor.out"
+grep 'generation: unsupported-full-model' "$ROOT/selected-descriptor.out"
+grep 'benchmark_status: not-measured' "$ROOT/selected-descriptor.out"
+grep 'tensor_role_map_status: partial' "$ROOT/selected-descriptor.out"
+grep 'tensor_collection_map_status: partial' "$ROOT/selected-descriptor.out"
+grep 'required_role_coverage: partial' "$ROOT/selected-descriptor.out"
+grep 'role.token_embedding.status: present' "$ROOT/selected-descriptor.out"
+grep 'role.q_projection.status: missing' "$ROOT/selected-descriptor.out"
+grep 'role.output_head.status: missing' "$ROOT/selected-descriptor.out"
+grep 'embedding_descriptor: present' "$ROOT/selected-descriptor.out"
+grep 'attention_descriptor: missing' "$ROOT/selected-descriptor.out"
+grep 'mlp_descriptor: missing' "$ROOT/selected-descriptor.out"
+grep 'output_descriptor: missing' "$ROOT/selected-descriptor.out"
+grep 'graph.attention_primitive: implemented-fixture' "$ROOT/selected-descriptor.out"
+grep 'graph.full_transformer_attention: missing-tensor' "$ROOT/selected-descriptor.out"
+grep 'prefill_descriptor: unsupported-full-transformer-prefill' "$ROOT/selected-descriptor.out"
+grep 'kv_write_ready: false' "$ROOT/selected-descriptor.out"
+grep 'real_output_head_logits: false' "$ROOT/selected-descriptor.out"
+grep 'logits_ready: false' "$ROOT/selected-descriptor.out"
+grep 'prefill_ready: false' "$ROOT/selected-descriptor.out"
+grep 'decode_ready: false' "$ROOT/selected-descriptor.out"
+grep 'sampling_ready: false' "$ROOT/selected-descriptor.out"
+grep 'full runtime tensor set incomplete' "$ROOT/selected-descriptor.out"
 
 "$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" > "$ROOT/rmsnorm.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm.out"
@@ -240,6 +279,20 @@ grep 'full_model_materialization_proof: refused' "$ROOT/rmsnorm-materialize.out"
 grep 'failed_reason: selected-runtime-slice' "$ROOT/rmsnorm-materialize.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-materialize.out"
 
+"$YVEX_BIN" fullmodel descriptor --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" > "$ROOT/rmsnorm-descriptor.out"
+grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-descriptor.out"
+grep 'runtime_descriptor_status: partial' "$ROOT/rmsnorm-descriptor.out"
+grep 'role.token_embedding.status: present' "$ROOT/rmsnorm-descriptor.out"
+grep 'role.attention_norm.status: present' "$ROOT/rmsnorm-descriptor.out"
+grep 'normalization_descriptor: present' "$ROOT/rmsnorm-descriptor.out"
+grep 'attention_descriptor: missing' "$ROOT/rmsnorm-descriptor.out"
+grep 'output_descriptor: missing' "$ROOT/rmsnorm-descriptor.out"
+grep 'prefill_ready: false' "$ROOT/rmsnorm-descriptor.out"
+grep 'decode_ready: false' "$ROOT/rmsnorm-descriptor.out"
+grep 'logits_ready: false' "$ROOT/rmsnorm-descriptor.out"
+grep 'sampling_ready: false' "$ROOT/rmsnorm-descriptor.out"
+grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-descriptor.out"
+
 "$YVEX_BIN" fullmodel report --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 3 > "$ROOT/fullish.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish.out"
 grep 'target_class: full-runtime-model-planned' "$ROOT/fullish.out"
@@ -260,6 +313,45 @@ grep 'cuda_available:' "$ROOT/fullish-cuda.out"
 grep 'cuda_memory_status:' "$ROOT/fullish-cuda.out"
 grep 'cuda_placement:' "$ROOT/fullish-cuda.out"
 grep 'residency_plan: report-only-no-allocation' "$ROOT/fullish-cuda.out"
+
+"$YVEX_BIN" fullmodel descriptor --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 40 --format text --include-blockers --include-placement --include-graph --include-kv --include-logits > "$ROOT/fullish-descriptor.out"
+grep 'status: fullmodel-descriptor' "$ROOT/fullish-descriptor.out"
+grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish-descriptor.out"
+grep 'target_class: full-runtime-model-planned' "$ROOT/fullish-descriptor.out"
+grep 'runtime_descriptor_status: complete' "$ROOT/fullish-descriptor.out"
+grep 'runtime_descriptor_kind: fullmodel-planning' "$ROOT/fullish-descriptor.out"
+grep 'required_role_coverage: complete' "$ROOT/fullish-descriptor.out"
+grep 'missing_required_roles: none' "$ROOT/fullish-descriptor.out"
+grep 'role.q_projection.status: present' "$ROOT/fullish-descriptor.out"
+grep 'role.k_projection.status: present' "$ROOT/fullish-descriptor.out"
+grep 'role.v_projection.status: present' "$ROOT/fullish-descriptor.out"
+grep 'role.o_projection.status: present' "$ROOT/fullish-descriptor.out"
+grep 'role.mlp_gate.status: present' "$ROOT/fullish-descriptor.out"
+grep 'role.output_head.status: present' "$ROOT/fullish-descriptor.out"
+grep 'attention_descriptor: present' "$ROOT/fullish-descriptor.out"
+grep 'mlp_descriptor: present' "$ROOT/fullish-descriptor.out"
+grep 'output_descriptor: present' "$ROOT/fullish-descriptor.out"
+grep 'tokenizer_descriptor: present' "$ROOT/fullish-descriptor.out"
+grep 'graph_requirements_status: blocked' "$ROOT/fullish-descriptor.out"
+grep 'graph.attention_primitive: implemented-fixture' "$ROOT/fullish-descriptor.out"
+grep 'graph.full_transformer_attention: unsupported' "$ROOT/fullish-descriptor.out"
+grep 'prefill.requires_real_kv_writes: true' "$ROOT/fullish-descriptor.out"
+grep 'kv.runtime_status: unsupported' "$ROOT/fullish-descriptor.out"
+grep 'decode.current_status: unsupported' "$ROOT/fullish-descriptor.out"
+grep 'output_head_present: true' "$ROOT/fullish-descriptor.out"
+grep 'logits_buffer_required: true' "$ROOT/fullish-descriptor.out"
+grep 'real_output_head_logits: false' "$ROOT/fullish-descriptor.out"
+grep 'backend.full_transformer_integration: unsupported' "$ROOT/fullish-descriptor.out"
+grep 'full_model_execution: unsupported' "$ROOT/fullish-descriptor.out"
+grep 'generation_ready: false' "$ROOT/fullish-descriptor.out"
+grep 'generation: unsupported-full-model' "$ROOT/fullish-descriptor.out"
+grep 'benchmark_status: not-measured' "$ROOT/fullish-descriptor.out"
+
+"$YVEX_BIN" fullmodel descriptor --model "$FULLISH" --target deepseek4-v4-flash --backend cuda > "$ROOT/fullish-descriptor-cuda.out"
+grep 'backend: cuda' "$ROOT/fullish-descriptor-cuda.out"
+grep 'backend.cuda.available:' "$ROOT/fullish-descriptor-cuda.out"
+grep 'backend.full_transformer_integration: unsupported' "$ROOT/fullish-descriptor-cuda.out"
+grep 'backend_allocation_attempted: false' "$ROOT/fullish-descriptor-cuda.out"
 
 "$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 20 > "$ROOT/fullish-plan.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish-plan.out"
@@ -397,6 +489,14 @@ grep 'target_class: official-source-huge-model' "$ROOT/glm-materialize.out"
 grep 'full_model_materialization_proof: unsupported' "$ROOT/glm-materialize.out"
 grep 'generation: unsupported-full-model' "$ROOT/glm-materialize.out"
 
+"$YVEX_BIN" fullmodel descriptor --model glm-5.2-official-safetensors --backend cpu > "$ROOT/glm-descriptor.out" && exit 1 || true
+grep 'status: fullmodel-descriptor-unsupported' "$ROOT/glm-descriptor.out"
+grep 'target_class: official-source-huge-model' "$ROOT/glm-descriptor.out"
+grep 'tensor_inventory_status: not-performed-source-only-target' "$ROOT/glm-descriptor.out"
+grep 'runtime_descriptor_status: unsupported' "$ROOT/glm-descriptor.out"
+grep 'full_model_execution: unsupported' "$ROOT/glm-descriptor.out"
+grep 'generation: unsupported-full-model' "$ROOT/glm-descriptor.out"
+
 "$YVEX_BIN" fullmodel report --model "$ROOT/missing.gguf" > "$ROOT/missing.out" 2> "$ROOT/missing.err" && exit 1 || true
 grep 'status: fullmodel-report-fail' "$ROOT/missing.out"
 grep 'artifact_exists: false' "$ROOT/missing.out"
@@ -413,6 +513,13 @@ grep 'status: fullmodel-materialize-fail' "$ROOT/missing-materialize.out"
 grep 'failed_phase: resolve-model' "$ROOT/missing-materialize.out"
 grep 'failed_reason: artifact path does not exist' "$ROOT/missing-materialize.out"
 grep 'generation: unsupported-full-model' "$ROOT/missing-materialize.out"
+
+"$YVEX_BIN" fullmodel descriptor --model "$ROOT/missing.gguf" > "$ROOT/missing-descriptor.out" 2> "$ROOT/missing-descriptor.err" && exit 1 || true
+grep 'status: fullmodel-descriptor-fail' "$ROOT/missing-descriptor.out"
+grep 'runtime_descriptor_status: fail' "$ROOT/missing-descriptor.out"
+grep 'descriptor_phase.1.name: resolve-model' "$ROOT/missing-descriptor.out"
+grep 'descriptor_phase.1.status: fail' "$ROOT/missing-descriptor.out"
+grep 'reason: artifact path does not exist' "$ROOT/missing-descriptor.out"
 
 printf 'not-gguf' > "$CORRUPT"
 "$YVEX_BIN" fullmodel report --model "$CORRUPT" > "$ROOT/corrupt.out" 2> "$ROOT/corrupt.err" && exit 1 || true
@@ -431,6 +538,13 @@ grep 'status: fullmodel-materialize-fail' "$ROOT/corrupt-materialize.out"
 grep 'failed_phase: tensor-inventory' "$ROOT/corrupt-materialize.out"
 grep 'generation_ready: false' "$ROOT/corrupt-materialize.out"
 
+"$YVEX_BIN" fullmodel descriptor --model "$CORRUPT" > "$ROOT/corrupt-descriptor.out" 2> "$ROOT/corrupt-descriptor.err" && exit 1 || true
+grep 'status: fullmodel-descriptor-fail' "$ROOT/corrupt-descriptor.out"
+grep 'tensor_inventory_status: failed' "$ROOT/corrupt-descriptor.out"
+grep 'runtime_descriptor_status: fail' "$ROOT/corrupt-descriptor.out"
+grep 'descriptor_phase.3.name: tensor-inventory' "$ROOT/corrupt-descriptor.out"
+grep 'descriptor_phase.3.status: fail' "$ROOT/corrupt-descriptor.out"
+
 "$YVEX_BIN" fullmodel report --model "$FULLISH" --limit-tensors 0 > "$ROOT/invalid.out" 2> "$ROOT/invalid.err" && exit 1 || true
 grep 'requires a positive integer' "$ROOT/invalid.err"
 
@@ -440,13 +554,20 @@ grep 'fullmodel --residency must be' "$ROOT/bad-residency.err"
 "$YVEX_BIN" fullmodel materialize --model "$FULLISH" --limit-bytes 0 > "$ROOT/bad-limit-bytes.out" 2> "$ROOT/bad-limit-bytes.err" && exit 1 || true
 grep 'limit-bytes requires a positive integer' "$ROOT/bad-limit-bytes.err"
 
+"$YVEX_BIN" fullmodel descriptor --model "$FULLISH" --format json > "$ROOT/bad-format.out" 2> "$ROOT/bad-format.err" && exit 1 || true
+grep 'descriptor currently supports --format text only' "$ROOT/bad-format.err"
+
 for file in \
   "$ROOT/selected-plan.out" \
   "$ROOT/selected-materialize.out" \
+  "$ROOT/selected-descriptor.out" \
   "$ROOT/rmsnorm-plan.out" \
   "$ROOT/rmsnorm-materialize.out" \
+  "$ROOT/rmsnorm-descriptor.out" \
   "$ROOT/fullish-plan.out" \
   "$ROOT/fullish-plan-cuda.out" \
+  "$ROOT/fullish-descriptor.out" \
+  "$ROOT/fullish-descriptor-cuda.out" \
   "$ROOT/fullish-materialize.out" \
   "$ROOT/fullish-materialize-dry-run.out" \
   "$ROOT/fullish-materialize-plan-only.out" \
@@ -476,5 +597,7 @@ do
   pattern='DeepSeek generation imple''mented'
   ! grep "$pattern" "$file"
   pattern='inference rea''dy'
+  ! grep "$pattern" "$file"
+  pattern='full model sup''port'
   ! grep "$pattern" "$file"
 done

@@ -6,9 +6,9 @@ Use a model-specific runbook when working with a concrete target.
 
 ## Files
 
-- `deepseek.md` - current DeepSeek selected artifact path from local safetensors to selected graph execution, bounded diagnostics, and fullmodel inventory/materialization-plan/materialize reports.
-- `glm.md` - GLM-5.2 official-source tensor target status, source-only fullmodel unsupported report/refusal, and download start/status checks.
-- `common.md` - shared configuration, fullmodel report/plan/materialize command-surface checks, graph-only checks, daemon diagnostics, and repository validation.
+- `deepseek.md` - current DeepSeek selected artifact path from local safetensors to selected graph execution, bounded diagnostics, and fullmodel inventory/materialization-plan/materialize/descriptor reports.
+- `glm.md` - GLM-5.2 official-source tensor target status, source-only fullmodel unsupported report/descriptor/refusal, and download start/status checks.
+- `common.md` - shared configuration, fullmodel report/plan/materialize/descriptor command-surface checks, graph-only checks, daemon diagnostics, and repository validation.
 
 ## Rules
 
@@ -37,5 +37,7 @@ fullmodel materialization-plan` reports planned placement phases, residency
 classes, backend fit estimates, blockers, cleanup, and proof readiness. `yvex
 fullmodel materialize` allocates and releases only bounded required proof
 tensors for a controlled tiny/full-ish GGUF, or refuses artifacts outside that
-boundary. It does not run full model execution, generate, evaluate, benchmark,
-or report throughput.
+boundary. `yvex fullmodel descriptor` reports tensor roles, tensor collections,
+residency, graph, prefill, KV, decode, logits, sampling, output-head,
+tokenizer, backend requirements, and blockers. It does not run full model
+execution, generate, evaluate, benchmark, or report throughput.

@@ -24,7 +24,10 @@ The fullmodel materialization-plan lane reports placement phases, residency
 class, backend fit, preflight blockers, and cleanup plan. The fullmodel
 materialize lane proves the bounded tiny/full-ish allocation-and-release
 boundary where role coverage is complete, and cleanly refuses the current
-selected DeepSeek runtime slices as not full-model artifacts.
+selected DeepSeek runtime slices as not full-model artifacts. The fullmodel
+descriptor lane reports tensor roles, collections, residency expectations,
+graph, prefill, KV, decode, logits, sampling, output-head, tokenizer, backend
+requirements, and blockers without executing the model.
 
 ## DeepSeek Paths And Artifacts
 
@@ -320,13 +323,14 @@ Safe to rerun:
 
 Stop after:
   selected artifacts report incomplete full-model inventory, partial
-  materialization plans, selected-slice materialization proof refusal, and
-  generation stays unsupported-full-model.
+  materialization plans, selected-slice materialization proof refusal, partial
+  runtime descriptors, and generation stays unsupported-full-model.
 
 Boundary:
   metadata and tensor-directory inventory only
   bounded proof allocation only for controlled tiny/full-ish artifacts
   selected DeepSeek artifacts refuse fullmodel materialization proof
+  descriptor reports requirements and blockers only
   no uncontrolled full backend allocation
   no full model execution
   no real DeepSeek generation
@@ -351,6 +355,9 @@ Boundary:
 ./yvex fullmodel materialize --model deepseek4-v4-flash-selected-embed --backend cpu
 ./yvex fullmodel materialize --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu
 ./yvex fullmodel materialize --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda
+./yvex fullmodel descriptor --model deepseek4-v4-flash-selected-embed --backend cpu
+./yvex fullmodel descriptor --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu
+./yvex fullmodel descriptor --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda
 ```
 
 ## Lane 5 — DeepSeek CUDA Pressure Lane
