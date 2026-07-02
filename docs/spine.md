@@ -56,6 +56,174 @@ DwarfStar/DS4, and other systems only as external reference systems. Such
 comparisons must identify whether the evidence comes from YVEX code or from an
 external runtime.
 
+## v0.1.0 Release Doctrine
+
+YVEX v0.1.0 is the first internally coherent end-to-end inference-engine release
+target.
+
+v0.1.0 is not a marketing release.
+
+v0.1.0 is not defined by chat UX, provider compatibility, speculative decoding,
+external benchmark comparison, or public speed claims.
+
+v0.1.0 is defined by one honest implemented model execution path:
+
+```text
+model target
+-> source/artifact identity
+-> YVEX-produced or YVEX-controlled artifact
+-> artifact integrity
+-> model-class profile
+-> tensor collections
+-> residency plan
+-> backend capability
+-> graph execution
+-> real prefill
+-> real KV writes/reads
+-> real decode
+-> real output-head logits
+-> real vocabulary sampling
+-> token append
+-> stop/failure policy
+-> cleanup/lifecycle behavior
+-> CLI-visible generation
+-> validation transcript
+-> release boundary
+```
+
+v0.1.0 may close on a feasible dense or small/medium model target first if that
+is the fastest honest path to a real end-to-end engine.
+
+DeepSeek V4 Flash remains the primary semi-frontier pressure target, but
+DeepSeek V4 Flash full generation is not automatically the minimum v0.1.0
+release blocker unless explicitly chosen by a v0.1.0 target decision row.
+
+The rule is:
+
+```text
+close one real full-runtime path first;
+keep DeepSeek pressure explicit;
+keep GLM source/storage pressure explicit;
+keep Qwen/Metal portability pressure explicit;
+never claim a target that did not run through its own implemented path.
+```
+
+## v0.1.0 Target Policy
+
+YVEX has multiple target classes:
+
+```text
+selected-runtime-slice:
+  proves parser/materialization/partial graph/diagnostic runtime boundaries.
+
+full-runtime-candidate:
+  candidate model/artifact small enough to close end-to-end generation.
+
+semi-frontier-pressure:
+  DeepSeek V4 Flash path, used to force real architectural pressure.
+
+huge-source-pressure:
+  GLM-5.2 official source tensors, used to force source/shard/storage/model-class pressure.
+
+portability-pressure:
+  Qwen/Metal path, used to force backend portability and reduced-scale runtime planning.
+
+reference-only:
+  external GGUFs, external runners, papers, and public systems.
+```
+
+v0.1.0 requires at least one full-runtime-candidate to reach honest CLI
+generation.
+
+A selected-runtime-slice cannot close v0.1.0 full runtime.
+
+A source-only huge model cannot close v0.1.0 full runtime.
+
+An external runner cannot close v0.1.0 runtime.
+
+A public benchmark cannot substitute for YVEX command proof.
+
+## v0.1.0 Acceptance Gates
+
+```text
+GATE.SCOPE:
+  release target, included tracks, excluded tracks, and post-v0.1.0 tracks are explicit.
+
+GATE.ARTIFACT:
+  artifact identity, digest, tensor ranges, dtype/qtype, shape, registry, and drift checks pass.
+
+GATE.CLASS:
+  model class, target class, dense/MoE/source-only/selected-slice path, output-head,
+  tokenizer, and runtime blockers are command-visible.
+
+GATE.TENSOR:
+  all required runtime tensor collections for the v0.1.0 target are mapped.
+
+GATE.RESIDENCY:
+  all required tensor/runtime-state collections have residency decisions or explicit unsupported blockers.
+
+GATE.BACKEND:
+  CPU baseline and selected backend capability reports exist.
+
+GATE.GRAPH:
+  implemented graph path over selected v0.1.0 target exists with reference/checksum/tolerance/failure reports.
+
+GATE.PREFILL:
+  real prefill path exists for the selected runtime target.
+
+GATE.KV:
+  real KV allocation/write/read/cleanup exists for the selected runtime target.
+
+GATE.DECODE:
+  real decode step exists over real runtime state.
+
+GATE.LOGITS:
+  real output-head logits exist over the selected runtime path.
+
+GATE.SAMPLE:
+  at least greedy sampling over real logits exists.
+
+GATE.TOKENIZER:
+  token ID input/output and stop policy boundary are explicit.
+
+GATE.GEN:
+  CLI generation composes real prefill, KV, decode, logits, sampling, append, stop, cleanup.
+
+GATE.FAILURE:
+  failure phases, cleanup, partial state, and refusal behavior are tested.
+
+GATE.OPERATOR:
+  short operator commands exist for prepare/check/generate or equivalent v0.1.0 path.
+
+GATE.EVIDENCE:
+  validation transcript exists; benchmark claims remain absent unless measured.
+
+GATE.PUBLIC:
+  public docs do not expose internal IDs and do not overclaim.
+
+GATE.RELEASE:
+  version, tag, changelog/release notes, clean tree, artifact guardrail, and claim audit pass.
+```
+
+## v0.1.0 Non-Goals
+
+- full DeepSeek V4 Flash generation unless explicitly implemented;
+- DeepSeek >=20 tok/s claim;
+- speculative decoding;
+- DSpark/DFlash/HyperDFlash parity;
+- provider/server generation before CLI/runtime generation;
+- streaming before real generation;
+- OpenAI/Anthropic compatibility before server generation;
+- capability evaluation suite;
+- public benchmark table;
+- GLM full runtime;
+- GLM YVEX-produced full GGUF unless implemented;
+- Qwen/Metal runtime unless Metal backend and Qwen path are implemented;
+- SSD-streamed generation unless storage stream is consumed by runtime;
+- distributed inference;
+- production serving SLA;
+- security/supply-chain guarantees beyond implemented integrity gates.
+
 ## 2. Implementation Doctrine
 
 No scaffold milestone is complete. A file, API shape, command option,
@@ -1707,6 +1875,7 @@ routing-aware speculative verification doctrine in spine
 canonical runtime sequence rebase in spine
 dynamic dense/MoE runtime path doctrine in spine
 planned row supersession map in spine
+exhaustive v0.1.0 master implementation spine
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -2108,6 +2277,7 @@ tables.
 | SPINE.GENERATION.TARGET.0 | complete | docs | DeepSeek generation and speculative throughput target envelope | spine records DeepSeek V4 Flash full-generation target, internal decode throughput target, DSpark external reference doctrine, and non-claim benchmark boundary |
 | SPINE.SPEC.VERIFICATION.0 | complete | docs | Token verification and verification-cost doctrine | spine separates draft proposal, target verification, verification-cost control, accepted-token accounting, KV/state accounting, and MoE routing-aware verification boundaries without speculative runtime, DeepSeek generation, benchmark, throughput, or external-runner claim |
 | SPINE.SEQUENCE.REBASE.0 | complete | docs | Runtime sequence rebase and planned row normalization | spine records canonical diagnostic, model-class dynamic, dense, MoE, DeepSeek, serving, eval/bench, speculative, and public-evidence sequences; preserves completed history; maps redundant planned rows into a supersession map; keeps `MOE.CLASS.0` as Active Next without runtime implementation, DeepSeek generation, provider generation, eval, benchmark, or throughput claim |
+| SPINE.V0_1_0.MASTER.1 | complete | docs | Exhaustive v0.1.0 spine expansion | spine expands v0.1.0 into exhaustive target, path, source, mapping, quantization, artifact, integrity, fullmodel, class, tensor, storage, residency, backend, hardware, graph, attention, MoE, KV, context, prefill, decode, logits, sampling, tokenizer, generation, runtime lifecycle, trace, CLI, doctor, serving, eval, benchmark, speculative, paper, docs, packaging, CI, release, and post-v0.1.0 tracks without runtime implementation, generation, eval, benchmark, throughput, or public release claim |
 | SPINE.METAL.QWEN.0 | complete | docs | Qwen Metal pressure lane | spine records Qwen on Apple Silicon / Metal as a reduced-scale portability and full-runtime pressure lane without Metal support, Qwen runtime, generation, eval, benchmark, or throughput claim |
 | HARDWARE.PROFILE.MAC.0 | planned | hardware | Apple Silicon Mac hardware profile | MacBook Apple Silicon CPU/GPU/unified-memory/storage profile is reported without backend or model capability claim |
 | COMPUTE.BACKEND.METAL.0 | planned | backend | Metal feasibility profile | Metal build/toolchain/device/memory feasibility is reported without backend op support claim |
@@ -3193,6 +3363,881 @@ DOCS.PUBLIC.EVIDENCE.0
 Public docs cannot expose internal IDs. Public claims wait for implemented
 behavior and measured evidence.
 
+## 6.2 v0.1.0 Master Implementation Spine
+
+This section is the main v0.1.0 forward roadmap. It expands the compact runtime
+sequences into delivery-sized rows so future waves can choose one concrete
+boundary without collapsing source intake, artifact identity, graph execution,
+runtime state, generation, evaluation, benchmark, serving, and release work.
+
+All rows in this section are planned unless they map to completed ledger history
+above. A V010 row is not complete until implemented behavior, tests, command
+proof, failure paths, cleanup/lifecycle behavior, and explicit boundaries exist.
+
+### TRACK 00 — Scope, Version, and Release Authority
+
+```text
+V010.SCOPE.0        v0.1.0 release doctrine
+V010.SCOPE.1        v0.1.0 minimum gates
+V010.SCOPE.2        v0.1.0 non-goals
+V010.SCOPE.3        v0.1.0 included track map
+V010.SCOPE.4        v0.1.0 excluded/postponed track map
+V010.SCOPE.5        v0.1.0 target selection policy
+V010.SCOPE.6        v0.1.0 release-readiness vocabulary
+V010.SCOPE.7        v0.1.0 claim boundary map
+```
+
+Boundary: spine only, no implementation.
+
+### TRACK 01 — Target Registry and Target Decision
+
+```text
+V010.TARGET.0       target class registry refresh
+V010.TARGET.1       selected-runtime-slice target report
+V010.TARGET.2       full-runtime-candidate target report
+V010.TARGET.3       dense candidate target report
+V010.TARGET.4       MoE candidate target report
+V010.TARGET.5       DeepSeek pressure target report
+V010.TARGET.6       GLM source-only pressure target report
+V010.TARGET.7       Qwen/Metal pressure target report
+V010.TARGET.8       external reference target report
+V010.TARGET.9       v0.1.0 target decision record
+V010.TARGET.10      target decision refusal/rollback policy
+```
+
+Purpose: decide what can actually close v0.1.0.
+
+v0.1.0 cannot remain undefined. Completion requires a command-visible target
+policy/report, not generation.
+
+### TRACK 02 — Operator-Local Storage Layout
+
+```text
+V010.PATHS.0        operator root layout report
+V010.PATHS.1        source/artifact/reference/report/cache separation
+V010.PATHS.2        registry path layout
+V010.PATHS.3        report output layout
+V010.PATHS.4        runtime cache layout
+V010.PATHS.5        artifact hygiene report
+V010.PATHS.6        path override precedence
+V010.PATHS.7        missing path/refusal behavior
+V010.PATHS.8        v0.1.0 path acceptance gate
+```
+
+Purpose: no shell wall, no personal path leaks, no artifact sprawl.
+
+### TRACK 03 — Official Source Intake
+
+```text
+V010.SOURCE.0       source manifest schema refresh
+V010.SOURCE.1       source family/profile fields
+V010.SOURCE.2       source artifact class fields
+V010.SOURCE.3       source shard count/footprint report
+V010.SOURCE.4       source provenance fields
+V010.SOURCE.5       native safetensors inventory
+V010.SOURCE.6       source tensor metadata inventory
+V010.SOURCE.7       source-only refusal behavior
+V010.SOURCE.8       GLM source pressure report
+V010.SOURCE.9       Qwen source pressure report
+V010.SOURCE.10      v0.1.0 source acceptance gate
+```
+
+Boundary: source intake is not runtime execution.
+
+### TRACK 04 — Tensor Mapping and Conversion Planning
+
+```text
+V010.MAP.0          tensor mapping schema
+V010.MAP.1          dense tensor naming map
+V010.MAP.2          MoE tensor naming map
+V010.MAP.3          DeepSeek tensor naming map
+V010.MAP.4          GLM tensor naming map
+V010.MAP.5          Qwen tensor naming map
+V010.MAP.6          output-head tensor mapping
+V010.MAP.7          tokenizer metadata mapping
+V010.MAP.8          missing-role blocker report
+V010.MAP.9          v0.1.0 tensor mapping gate
+```
+
+Purpose: before graph/runtime, tensor names must map to roles.
+
+### TRACK 05 — Quantization and Artifact Production
+
+```text
+V010.QUANT.0        qtype policy report
+V010.QUANT.1        dtype/qtype support by role
+V010.QUANT.2        qtype compute/refusal matrix
+V010.QUANT.3        calibration/imatrix requirement report
+V010.ARTIFACT.EMIT.0 controlled artifact emission
+V010.ARTIFACT.EMIT.1 selected artifact emission
+V010.ARTIFACT.EMIT.2 small full-runtime artifact emission
+V010.ARTIFACT.EMIT.3 split artifact plan
+V010.ARTIFACT.EMIT.4 artifact parse roundtrip
+V010.ARTIFACT.EMIT.5 artifact registration
+V010.ARTIFACT.EMIT.6 v0.1.0 artifact production gate
+```
+
+Boundary: artifact emission is not inference.
+
+### TRACK 06 — Artifact Identity and Integrity
+
+```text
+V010.INTEGRITY.0    artifact identity manifest
+V010.INTEGRITY.1    size/digest gate
+V010.INTEGRITY.2    metadata parse gate
+V010.INTEGRITY.3    tensor directory gate
+V010.INTEGRITY.4    tensor byte-range gate
+V010.INTEGRITY.5    shape/rank/dtype gate
+V010.INTEGRITY.6    element count/overflow gate
+V010.INTEGRITY.7    qtype support gate
+V010.INTEGRITY.8    registry drift gate
+V010.INTEGRITY.9    corruption fixture regression
+V010.INTEGRITY.10   materialization preflight gate
+V010.INTEGRITY.11   graph integrity gate
+V010.INTEGRITY.12   runtime integrity gate
+V010.INTEGRITY.13   v0.1.0 integrity acceptance gate
+```
+
+Boundary: integrity checks are not supply-chain security beyond implemented
+evidence.
+
+### TRACK 07 — Full Model Inventory and Materialization
+
+```text
+V010.FULLMODEL.0    full tensor inventory refresh
+V010.FULLMODEL.1    tensor role coverage report
+V010.FULLMODEL.2    qtype/dtype summary
+V010.FULLMODEL.3    memory pressure report
+V010.FULLMODEL.4    materialization plan
+V010.FULLMODEL.5    bounded proof tensor materialization
+V010.FULLMODEL.6    full-runtime-candidate materialization proof
+V010.FULLMODEL.7    selected-slice materialization refusal
+V010.FULLMODEL.8    source-only materialization refusal
+V010.FULLMODEL.9    byte-limit failure behavior
+V010.FULLMODEL.10   materialization cleanup/release
+V010.FULLMODEL.11   v0.1.0 materialization gate
+```
+
+Mapping: builds on `FULLMODEL.0`-`FULLMODEL.3`, but expands the future v0.1.0
+full-runtime candidate path.
+
+Boundary: materialization is not execution.
+
+### TRACK 08 — Model Class and Dynamic Runtime Routing
+
+```text
+V010.CLASS.0        model-class schema finalization
+V010.CLASS.1        target class detector
+V010.CLASS.2        dense model-class report
+V010.CLASS.3        MoE model-class report
+V010.CLASS.4        source-only class report
+V010.CLASS.5        selected-slice class report
+V010.CLASS.6        DeepSeek class report
+V010.CLASS.7        GLM class/source-only report
+V010.CLASS.8        Qwen class report
+V010.CLASS.9        context class integration
+V010.CLASS.10       attention class integration
+V010.CLASS.11       KV class integration
+V010.CLASS.12       output-head class report
+V010.CLASS.13       tokenizer class report
+V010.CLASS.14       runtime requirement report
+V010.CLASS.15       dynamic path selection report
+V010.CLASS.16       v0.1.0 class acceptance gate
+```
+
+Active next mapping: `MOE.CLASS.0` maps to `V010.CLASS.3`.
+
+Boundary: reports only. No runtime.
+
+### TRACK 09 — Tensor Collections
+
+```text
+V010.TENSOR.0       tensor collection schema
+V010.TENSOR.1       embedding collection
+V010.TENSOR.2       attention norm collection
+V010.TENSOR.3       post-attention norm collection
+V010.TENSOR.4       final norm collection
+V010.TENSOR.5       Q projection collection
+V010.TENSOR.6       K projection collection
+V010.TENSOR.7       V projection collection
+V010.TENSOR.8       O projection collection
+V010.TENSOR.9       RoPE/position metadata collection
+V010.TENSOR.10      attention mask/rule collection
+V010.TENSOR.11      KV runtime-state collection
+V010.TENSOR.12      dense MLP gate/up/down collection
+V010.TENSOR.13      dense activation collection
+V010.TENSOR.14      MoE router collection
+V010.TENSOR.15      MoE expert gate/up/down collection
+V010.TENSOR.16      MoE shared expert collection
+V010.TENSOR.17      MoE dispatch metadata collection
+V010.TENSOR.18      output-head collection
+V010.TENSOR.19      tokenizer metadata collection
+V010.TENSOR.20      runtime input/output token collection
+V010.TENSOR.21      required tensor coverage report
+V010.TENSOR.22      missing tensor blocker report
+V010.TENSOR.23      v0.1.0 tensor collection gate
+```
+
+Boundary: tensor collection support is not model support.
+
+### TRACK 10 — Storage Stream
+
+```text
+V010.STORAGE.0      storage-stream doctrine refresh
+V010.STORAGE.1      storage root and cache layout
+V010.STORAGE.2      source shard index
+V010.STORAGE.3      artifact shard index
+V010.STORAGE.4      tensor byte-range map
+V010.STORAGE.5      tensor page map
+V010.STORAGE.6      tensor chunk map
+V010.STORAGE.7      cold-read probe
+V010.STORAGE.8      warm-read probe
+V010.STORAGE.9      repeated-read diagnostics
+V010.STORAGE.10     staged-read proof
+V010.STORAGE.11     host cache policy
+V010.STORAGE.12     eviction policy
+V010.STORAGE.13     short read failure
+V010.STORAGE.14     missing shard failure
+V010.STORAGE.15     digest mismatch failure
+V010.STORAGE.16     cleanup/release report
+V010.STORAGE.17     GLM source storage pressure report
+V010.STORAGE.18     MoE expert storage pressure report
+V010.STORAGE.19     output-head storage pressure report
+V010.STORAGE.20     v0.1.0 storage gate
+```
+
+Boundary: storage-stream support is not generation.
+
+### TRACK 11 — Residency
+
+```text
+V010.RESIDENCY.0    residency class report
+V010.RESIDENCY.1    resident tensor plan
+V010.RESIDENCY.2    CPU residency plan
+V010.RESIDENCY.3    CUDA residency plan
+V010.RESIDENCY.4    managed-memory report
+V010.RESIDENCY.5    host-staged residency plan
+V010.RESIDENCY.6    SSD-staged residency plan
+V010.RESIDENCY.7    SSD-streamed residency plan
+V010.RESIDENCY.8    hybrid residency plan
+V010.RESIDENCY.9    distributed future-only report
+V010.RESIDENCY.10   embedding residency
+V010.RESIDENCY.11   attention tensor residency
+V010.RESIDENCY.12   KV residency
+V010.RESIDENCY.13   dense MLP residency
+V010.RESIDENCY.14   MoE expert residency
+V010.RESIDENCY.15   output-head residency
+V010.RESIDENCY.16   tokenizer/runtime metadata residency
+V010.RESIDENCY.17   residency transition proof
+V010.RESIDENCY.18   residency cleanup/failure report
+V010.RESIDENCY.19   v0.1.0 residency gate
+```
+
+Boundary: residency plan is not model support.
+
+### TRACK 12 — Backend Capability
+
+```text
+V010.BACKEND.0      backend capability matrix
+V010.BACKEND.1      CPU baseline capability report
+V010.BACKEND.2      CUDA capability report
+V010.BACKEND.3      CUDA allocation proof
+V010.BACKEND.4      CUDA transfer proof
+V010.BACKEND.5      CUDA op parity subset
+V010.BACKEND.6      backend op refusal policy
+V010.BACKEND.7      backend fallback policy
+V010.BACKEND.8      backend scratch allocation policy
+V010.BACKEND.9      backend cleanup/failure report
+V010.BACKEND.10     future Metal feasibility report
+V010.BACKEND.11     future ROCm feasibility report
+V010.BACKEND.12     v0.1.0 backend gate
+```
+
+Boundary: backend support is not model support.
+
+### TRACK 13 — Hardware and Build Profiles
+
+```text
+V010.HARDWARE.0     local workstation profile
+V010.HARDWARE.1     Spark/GB10 profile
+V010.HARDWARE.2     Mac/Apple Silicon profile
+V010.HARDWARE.3     Strix Halo/ROCm future profile
+V010.HARDWARE.4     memory budget report
+V010.HARDWARE.5     storage bandwidth pressure report
+V010.HARDWARE.6     reproducibility metadata profile
+V010.BUILD.0        build profile matrix
+V010.BUILD.1        CPU debug build
+V010.BUILD.2        CPU release build
+V010.BUILD.3        CUDA debug build
+V010.BUILD.4        CUDA release build
+V010.BUILD.5        sanitizer build
+V010.BUILD.6        release artifact hygiene
+V010.BUILD.7        v0.1.0 build gate
+```
+
+Boundary: hardware profile is not backend implementation.
+
+### TRACK 14 — Graph Primitive Integration
+
+```text
+V010.GRAPH.PRIM.0   primitive inventory report
+V010.GRAPH.PRIM.1   RoPE integration readiness
+V010.GRAPH.PRIM.2   attention primitive readiness
+V010.GRAPH.PRIM.3   matmul/projection readiness
+V010.GRAPH.PRIM.4   MLP primitive readiness
+V010.GRAPH.PRIM.5   expert-slice primitive readiness
+V010.GRAPH.PRIM.6   softmax/numerics policy
+V010.GRAPH.PRIM.7   activation function policy
+V010.GRAPH.PRIM.8   residual/add policy
+V010.GRAPH.PRIM.9   normalization policy
+V010.GRAPH.PRIM.10  graph primitive regression gate
+```
+
+Purpose: bridge completed standalone primitives into real graph integration.
+
+### TRACK 15 — Real Transformer Graph Path
+
+```text
+V010.GRAPH.0        graph requirement report
+V010.GRAPH.1        real embedding graph input
+V010.GRAPH.2        real attention norm
+V010.GRAPH.3        real Q projection
+V010.GRAPH.4        real K projection
+V010.GRAPH.5        real V projection
+V010.GRAPH.6        real RoPE/position application
+V010.GRAPH.7        real attention score path
+V010.GRAPH.8        real causal/mask path
+V010.GRAPH.9        real softmax path
+V010.GRAPH.10       real value accumulation
+V010.GRAPH.11       real O projection
+V010.GRAPH.12       attention residual path
+V010.GRAPH.13       post-attention norm
+V010.GRAPH.14       dense MLP gate/up/down path
+V010.GRAPH.15       dense MLP residual path
+V010.GRAPH.16       final norm path
+V010.GRAPH.17       output hidden state ownership
+V010.GRAPH.18       graph scratch lifecycle
+V010.GRAPH.19       graph cleanup/failure report
+V010.GRAPH.20       first real transformer block
+V010.GRAPH.21       repeated real layer stack
+V010.GRAPH.22       selected-slice graph proof
+V010.GRAPH.23       full-runtime-candidate graph proof
+V010.GRAPH.24       v0.1.0 graph gate
+```
+
+Boundary: graph is not generation until runtime loop consumes it.
+
+### TRACK 16 — MoE Graph Path
+
+```text
+V010.MOE.0          MoE requirement report
+V010.MOE.1          expert count report
+V010.MOE.2          active expert count report
+V010.MOE.3          shared expert report
+V010.MOE.4          router tensor report
+V010.MOE.5          router logits boundary
+V010.MOE.6          routing dtype/top-k policy
+V010.MOE.7          top-k expert selection
+V010.MOE.8          expert weight selection
+V010.MOE.9          expert dispatch plan
+V010.MOE.10         expert dispatch proof
+V010.MOE.11         expert compute proof
+V010.MOE.12         expert accumulation proof
+V010.MOE.13         shared expert integration
+V010.MOE.14         MoE residual integration
+V010.MOE.15         MoE cleanup/failure report
+V010.MOE.16         MoE selected-slice proof
+V010.MOE.17         MoE block integration
+V010.MOE.18         MoE prefill integration
+V010.MOE.19         MoE decode integration
+V010.MOE.20         v0.1.0 MoE gate
+```
+
+Active next: `MOE.CLASS.0` feeds this track but does not implement it.
+
+Boundary: a routed expert primitive is not full MoE support.
+
+### TRACK 17 — Attention Runtime
+
+```text
+V010.ATTN.0         attention runtime requirement report
+V010.ATTN.1         Q source validation
+V010.ATTN.2         K source validation
+V010.ATTN.3         V source validation
+V010.ATTN.4         O source validation
+V010.ATTN.5         head layout validation
+V010.ATTN.6         RoPE/position runtime rule
+V010.ATTN.7         mask runtime rule
+V010.ATTN.8         attention scratch policy
+V010.ATTN.9         full attention runtime path
+V010.ATTN.10        GQA/MQA/MLA family rule if required
+V010.ATTN.11        attention reference comparison
+V010.ATTN.12        attention cleanup/failure
+V010.ATTN.13        v0.1.0 attention gate
+```
+
+Boundary: attention primitive alone is not full transformer attention.
+
+### TRACK 18 — KV Runtime
+
+```text
+V010.KV.0           KV requirement report
+V010.KV.1           KV shape policy
+V010.KV.2           KV dtype/qtype policy
+V010.KV.3           KV capacity estimator
+V010.KV.4           CPU KV allocation
+V010.KV.5           CUDA KV allocation
+V010.KV.6           K write from prefill attention
+V010.KV.7           V write from prefill attention
+V010.KV.8           K/V read during decode
+V010.KV.9           layer/head/position indexing
+V010.KV.10          token position advancement
+V010.KV.11          context overflow behavior
+V010.KV.12          KV clear/reinit
+V010.KV.13          KV cleanup/failure
+V010.KV.14          KV trace/inspect
+V010.KV.15          paged KV plan
+V010.KV.16          paged KV skeleton
+V010.KV.17          host spill experiment
+V010.KV.18          SSD spill experiment
+V010.KV.19          KV quantization policy
+V010.KV.20          v0.1.0 KV gate
+```
+
+Boundary: KV allocator is not decode support unless decode reads it.
+
+### TRACK 19 — Context and Prefill Planning
+
+```text
+V010.CONTEXT.0      active context policy
+V010.CONTEXT.1      model max context report
+V010.CONTEXT.2      requested context report
+V010.CONTEXT.3      chunk size policy
+V010.CONTEXT.4      chunk planner
+V010.CONTEXT.5      prefill position policy
+V010.CONTEXT.6      decode position policy
+V010.CONTEXT.7      overflow refusal behavior
+V010.CONTEXT.8      context stop behavior
+V010.CONTEXT.9      context trace
+V010.CONTEXT.10     v0.1.0 context gate
+```
+
+Mapping: builds on `CONTEXT.CLASS.0`.
+
+### TRACK 20 — Real Prefill Runtime
+
+```text
+V010.PREFILL.0      prefill requirement report
+V010.PREFILL.1      token input to prefill planner
+V010.PREFILL.2      embedding prefill input
+V010.PREFILL.3      real layer-0 prefill entry
+V010.PREFILL.4      real attention prefill
+V010.PREFILL.5      real KV write during prefill
+V010.PREFILL.6      dense MLP prefill
+V010.PREFILL.7      MoE router/expert prefill
+V010.PREFILL.8      repeated layer prefill
+V010.PREFILL.9      chunked real prefill
+V010.PREFILL.10     staged/SSD prefill plan
+V010.PREFILL.11     prefill state ownership
+V010.PREFILL.12     prefill cleanup/failure
+V010.PREFILL.13     prefill trace
+V010.PREFILL.14     prefill regression
+V010.PREFILL.15     v0.1.0 prefill gate
+```
+
+Boundary: diagnostic prefill remains separate.
+
+### TRACK 21 — Real Decode Runtime
+
+```text
+V010.DECODE.0       decode requirement report
+V010.DECODE.1       decode state ownership
+V010.DECODE.2       decode position input
+V010.DECODE.3       decode reads real KV
+V010.DECODE.4       decode attention step
+V010.DECODE.5       decode dense MLP path
+V010.DECODE.6       decode MoE path
+V010.DECODE.7       decode hidden state output
+V010.DECODE.8       one real decode step
+V010.DECODE.9       repeated decode lifecycle
+V010.DECODE.10      decode interruption/cancel safe point
+V010.DECODE.11      decode cleanup/failure
+V010.DECODE.12      decode trace
+V010.DECODE.13      decode regression
+V010.DECODE.14      v0.1.0 decode gate
+```
+
+Boundary: decode is not generation without logits/sampling/append.
+
+### TRACK 22 — Output Head and Logits
+
+```text
+V010.LOGITS.0       logits requirement report
+V010.LOGITS.1       final hidden-state ownership
+V010.LOGITS.2       final norm integration
+V010.LOGITS.3       output-head tensor mapping
+V010.LOGITS.4       output-head residency
+V010.LOGITS.5       output-head projection
+V010.LOGITS.6       logits buffer allocation
+V010.LOGITS.7       logits dtype/range report
+V010.LOGITS.8       logits checksum report
+V010.LOGITS.9       top-k diagnostics
+V010.LOGITS.10      logprob diagnostics
+V010.LOGITS.11      sharded output-head plan
+V010.LOGITS.12      staged/SSD output-head plan
+V010.LOGITS.13      logits cleanup/failure
+V010.LOGITS.14      logits trace
+V010.LOGITS.15      logits regression
+V010.LOGITS.16      v0.1.0 logits gate
+```
+
+Boundary: diagnostic logits are not real model logits.
+
+### TRACK 23 — Sampling Runtime
+
+```text
+V010.SAMPLE.0       sampling requirement report
+V010.SAMPLE.1       greedy over real logits
+V010.SAMPLE.2       selected token report
+V010.SAMPLE.3       candidate set report
+V010.SAMPLE.4       temperature validation
+V010.SAMPLE.5       top-k sampling
+V010.SAMPLE.6       top-p sampling
+V010.SAMPLE.7       min-p sampling
+V010.SAMPLE.8       typical sampling
+V010.SAMPLE.9       seeded stochastic sampling
+V010.SAMPLE.10      deterministic reproducibility report
+V010.SAMPLE.11      sampling cleanup/failure
+V010.SAMPLE.12      sampling trace
+V010.SAMPLE.13      sampling regression
+V010.SAMPLE.14      v0.1.0 sampling gate
+```
+
+Minimum: greedy over real logits.
+
+### TRACK 24 — Tokenizer, Detokenization, and Stop Policy
+
+```text
+V010.TOKENIZER.0    tokenizer requirement report
+V010.TOKENIZER.1    tokenizer metadata loader/report
+V010.TOKENIZER.2    token ID input contract
+V010.TOKENIZER.3    token ID output contract
+V010.TOKENIZER.4    special token report
+V010.TOKENIZER.5    EOS token policy
+V010.TOKENIZER.6    stop-token text policy
+V010.TOKENIZER.7    prompt/template policy
+V010.TOKENIZER.8    detokenization boundary
+V010.TOKENIZER.9    tokenizer failure/refusal behavior
+V010.TOKENIZER.10   tokenizer trace
+V010.TOKENIZER.11   tokenizer regression
+V010.TOKENIZER.12   v0.1.0 tokenizer gate
+```
+
+Minimum: token IDs may be acceptable for v0.1.0 if text detokenization remains
+explicitly unsupported.
+
+### TRACK 25 — Generation Runtime
+
+```text
+V010.GEN.0          generation requirement report
+V010.GEN.1          real generation state ownership
+V010.GEN.2          generation option parser
+V010.GEN.3          prefill -> decode composition
+V010.GEN.4          decode -> logits composition
+V010.GEN.5          logits -> sample composition
+V010.GEN.6          sample -> append composition
+V010.GEN.7          real token append
+V010.GEN.8          context stop policy
+V010.GEN.9          EOS stop policy
+V010.GEN.10         stop-token policy
+V010.GEN.11         max-new-tokens policy
+V010.GEN.12         generation checksum
+V010.GEN.13         generation trace
+V010.GEN.14         failure/cancel safe points
+V010.GEN.15         cleanup/release
+V010.GEN.16         CLI real generation command
+V010.GEN.17         generation smoke
+V010.GEN.18         generation regression
+V010.GEN.19         v0.1.0 generation gate
+```
+
+Boundary: generation must state whether it is diagnostic or real-runtime.
+
+### TRACK 26 — Runtime Lifecycle, Cancellation, and Failure
+
+```text
+V010.RUNTIME.0      runtime lifecycle report
+V010.RUNTIME.1      engine/session ownership finalization
+V010.RUNTIME.2      runtime state creation
+V010.RUNTIME.3      runtime state mutation rules
+V010.RUNTIME.4      runtime cleanup idempotence
+V010.RUNTIME.5      partial output preservation
+V010.RUNTIME.6      phase failure vocabulary
+V010.RUNTIME.7      preflight failure behavior
+V010.RUNTIME.8      graph failure behavior
+V010.RUNTIME.9      prefill failure behavior
+V010.RUNTIME.10     KV failure behavior
+V010.RUNTIME.11     decode failure behavior
+V010.RUNTIME.12     logits failure behavior
+V010.RUNTIME.13     sampling failure behavior
+V010.RUNTIME.14     append failure behavior
+V010.RUNTIME.15     cancellation safe points
+V010.RUNTIME.16     OS signal boundary
+V010.RUNTIME.17     v0.1.0 runtime lifecycle gate
+```
+
+Boundary: OS signal cancellation may remain unsupported if explicit.
+
+### TRACK 27 — Trace, Diagnostics, and Research Surface
+
+```text
+V010.TRACE.0        trace taxonomy refresh
+V010.TRACE.1        token trace
+V010.TRACE.2        graph trace
+V010.TRACE.3        tensor role trace
+V010.TRACE.4        residency trace
+V010.TRACE.5        prefill trace
+V010.TRACE.6        KV trace
+V010.TRACE.7        decode trace
+V010.TRACE.8        logits trace
+V010.TRACE.9        sampling trace
+V010.TRACE.10       generation trace
+V010.TRACE.11       cleanup/failure trace
+V010.TRACE.12       raw tensor dump refusal policy
+V010.TRACE.13       structured trace output
+V010.TRACE.14       v0.1.0 trace gate
+```
+
+Purpose: YVEX is a research engine; runtime must be inspectable.
+
+### TRACK 28 — Operator CLI
+
+```text
+V010.CLI.0          command inventory refresh
+V010.CLI.1          help layout refresh
+V010.CLI.2          normal path first policy
+V010.CLI.3          advanced diagnostic flags policy
+V010.CLI.4          model target inspect final
+V010.CLI.5          paths configure final
+V010.CLI.6          models prepare final
+V010.CLI.7          models check final
+V010.CLI.8          graph check final
+V010.CLI.9          runtime check command
+V010.CLI.10         real generate normal path
+V010.CLI.11         diagnostic generate path
+V010.CLI.12         refusal wording audit
+V010.CLI.13         structured output mode
+V010.CLI.14         NO_COLOR/non-TTY behavior
+V010.CLI.15         command proof transcript
+V010.CLI.16         v0.1.0 CLI gate
+```
+
+Boundary: CLI cannot claim lower runtime behavior that does not exist.
+
+### TRACK 29 — Doctor and Operator Reports
+
+```text
+V010.DOCTOR.0       doctor command scope
+V010.DOCTOR.1       environment checks
+V010.DOCTOR.2       build/backend checks
+V010.DOCTOR.3       CUDA checks
+V010.DOCTOR.4       artifact checks
+V010.DOCTOR.5       registry checks
+V010.DOCTOR.6       model target checks
+V010.DOCTOR.7       graph checks
+V010.DOCTOR.8       runtime checks
+V010.DOCTOR.9       generation readiness checks
+V010.DOCTOR.10      common failure cookbook
+V010.DOCTOR.11      v0.1.0 doctor gate
+```
+
+Purpose: local operators should know what failed without reading code.
+
+### TRACK 30 — Daemon and Serving
+
+```text
+V010.SERVE.0        serving ownership map
+V010.SERVE.1        daemon state reflects runtime state
+V010.SERVE.2        model registry exposed by daemon
+V010.SERVE.3        runtime readiness endpoint
+V010.SERVE.4        generate endpoint after CLI generation
+V010.SERVE.5        streaming endpoint after real generation
+V010.SERVE.6        cancellation boundary
+V010.SERVE.7        provider compatibility boundary
+V010.SERVE.8        OpenAI compatibility after generation
+V010.SERVE.9        Anthropic compatibility after generation
+V010.SERVE.10       server observability
+V010.SERVE.11       v0.1.0 serving decision gate
+```
+
+Default: serving may be post-v0.1.0 unless scope includes it after CLI
+generation.
+
+### TRACK 31 — Evaluation
+
+```text
+V010.EVAL.0         eval harness structure
+V010.EVAL.1         fixture graph eval
+V010.EVAL.2         primitive eval
+V010.EVAL.3         selected partial graph eval
+V010.EVAL.4         full-runtime-candidate graph eval
+V010.EVAL.5         prefill eval
+V010.EVAL.6         KV eval
+V010.EVAL.7         decode eval
+V010.EVAL.8         logits eval
+V010.EVAL.9         sampling eval
+V010.EVAL.10        generation smoke eval
+V010.EVAL.11        tokenizer/stop eval
+V010.EVAL.12        failure-path eval
+V010.EVAL.13        capability eval plan
+V010.EVAL.14        v0.1.0 eval gate
+```
+
+Minimum v0.1.0: smoke/regression over implemented path.
+
+### TRACK 32 — Benchmark and Profiling
+
+```text
+V010.BENCH.0        benchmark harness metadata contract
+V010.BENCH.1        machine profile record
+V010.BENCH.2        artifact identity record
+V010.BENCH.3        qtype/context/backend record
+V010.BENCH.4        run count/reproducibility record
+V010.BENCH.5        prefill benchmark
+V010.BENCH.6        decode benchmark
+V010.BENCH.7        generation benchmark
+V010.BENCH.8        memory pressure benchmark
+V010.BENCH.9        server benchmark
+V010.BENCH.10       DeepSeek benchmark only after DeepSeek generation
+V010.PROFILE.0      runtime profile trace
+V010.PROFILE.1      memory profile trace
+V010.PROFILE.2      storage profile trace
+V010.PROFILE.3      backend profile trace
+V010.BENCH.11       v0.1.0 benchmark decision gate
+```
+
+Default: benchmarks are not required for v0.1.0 public claims unless measured.
+
+### TRACK 33 — Speculative and Acceleration
+
+```text
+V010.SPEC.0         speculative reference registry
+V010.SPEC.1         DSpark reference record
+V010.SPEC.2         DFlash/HyperDFlash reference record
+V010.SPEC.3         draft source report
+V010.SPEC.4         token verification semantics
+V010.SPEC.5         accepted-prefix accounting
+V010.SPEC.6         rejected-token behavior
+V010.SPEC.7         KV rollback/reuse policy
+V010.SPEC.8         dense speculative verification
+V010.SPEC.9         MoE routing-aware verification report
+V010.SPEC.10        MoE expert-budget verification
+V010.SPEC.11        verification-cost utility report
+V010.SPEC.12        DeepSeek speculative path
+V010.SPEC.13        speculative benchmark
+```
+
+Default: post-v0.1.0 unless baseline generation and benchmark harness already
+exist.
+
+### TRACK 34 — Paper and Algorithm Registry
+
+```text
+V010.PAPER.0        paper registry schema
+V010.PAPER.1        attention paper references
+V010.PAPER.2        KV/cache paper references
+V010.PAPER.3        prefill paper references
+V010.PAPER.4        storage/residency paper references
+V010.PAPER.5        MoE/routing paper references
+V010.PAPER.6        speculative decoding references
+V010.PAPER.7        algorithm family map
+V010.PAPER.8        implementation stage map
+V010.PAPER.9        command surface map
+V010.PAPER.10       unsupported boundary map
+```
+
+Boundary: paper reference is not implementation.
+
+### TRACK 35 — Public/Internal Documentation
+
+```text
+V010.DOCS.INTERNAL.0 internal v0.1.0 spine summary
+V010.DOCS.RUNBOOK.0 operator v0.1.0 runbook
+V010.DOCS.RUNBOOK.1 model-specific runbooks
+V010.DOCS.API.0     API docs for implemented surface
+V010.DOCS.CONTRACT.0 behavior contract update
+V010.DOCS.README.0  README runtime thesis update
+V010.DOCS.DIAGRAM.0 artifact-to-runtime diagram
+V010.DOCS.DIAGRAM.1 runtime ladder diagram
+V010.DOCS.DIAGRAM.2 evidence/benchmark diagram
+V010.DOCS.DIAGRAM.3 dense vs MoE path diagram
+V010.DOCS.DIAGRAM.4 storage/residency diagram
+V010.DOCS.PUBLIC.0  public claim audit
+V010.DOCS.PUBLIC.1  internal ID leak audit
+V010.DOCS.PUBLIC.2  v0.1.0 docs acceptance gate
+```
+
+Boundary: public docs wait for implementation.
+
+### TRACK 36 — Packaging, Versioning, and Release
+
+```text
+V010.VERSION.0      version string policy
+V010.VERSION.1      v0.1.0 version bump
+V010.PACKAGE.0      binary packaging policy
+V010.PACKAGE.1      release build artifact policy
+V010.PACKAGE.2      no model artifact packaging rule
+V010.RELEASE.0      scope lock
+V010.RELEASE.1      target lock
+V010.RELEASE.2      command proof transcript
+V010.RELEASE.3      failure proof transcript
+V010.RELEASE.4      artifact guardrail transcript
+V010.RELEASE.5      claim audit
+V010.RELEASE.6      docs audit
+V010.RELEASE.7      changelog/release notes
+V010.RELEASE.8      tag readiness report
+V010.RELEASE.9      v0.1.0 tag
+```
+
+Boundary: no release tag before all gates pass.
+
+### TRACK 37 — CI, Test Surface, and Guardrails
+
+```text
+V010.CI.0           CI/test matrix refresh
+V010.CI.1           make check gate
+V010.CI.2           make smoke gate
+V010.CI.3           make check-cuda gate where available
+V010.CI.4           docs surface gate
+V010.CI.5           source layout gate
+V010.CI.6           code natural gate
+V010.CI.7           artifact guardrail
+V010.CI.8           forbidden claim scan
+V010.CI.9           public docs leak scan
+V010.CI.10          command proof transcript gate
+V010.CI.11          failure-path transcript gate
+V010.CI.12          v0.1.0 CI acceptance gate
+```
+
+Purpose: v0.1.0 must be mechanically auditable.
+
+### TRACK 38 — Post-v0.1.0 Tracks
+
+```text
+POST010.DEEPSEEK.FULL.0     full DeepSeek generation if not closed in v0.1.0
+POST010.GLM.RUNTIME.0       GLM runtime path
+POST010.QWEN.METAL.0        Qwen Metal runtime path
+POST010.ROCM.0              ROCm/Strix Halo path
+POST010.STORAGE.GEN.0       SSD-streamed generation
+POST010.SERVE.PUBLIC.0      production serving surface
+POST010.SPEC.0              speculative acceleration
+POST010.BENCH.PUBLIC.0      public benchmark table
+POST010.EVAL.CAPABILITY.0   capability eval suite
+POST010.DOCS.PUBLIC.0       public evidence expansion
+```
+
+Purpose: make future ambition explicit without letting it contaminate v0.1.0.
+
 ## Planned Row Supersession Map
 
 This map prevents old planned rows from competing with the canonical forward
@@ -3200,54 +4245,116 @@ sequences. It does not delete completed history and does not promote planned
 work to complete.
 
 ```text
+SPINE.RUNTIME.LADDER.0:
+  superseded-by: SPINE.V0_1_0.MASTER.1.
+
+SPINE.V0_1_0.MASTER.0:
+  superseded-by: SPINE.V0_1_0.MASTER.1 if MASTER.0 exists.
+
 MODEL.CLASS.0:
-  superseded-by: B4/B5 and DEEPSEEK.CLASS/MOE.CLASS sequence rows.
+  superseded-by: V010.CLASS.0, V010.CLASS.2, V010.CLASS.3, and V010.TARGET.*.
 
 MODEL.CLASS.1:
-  superseded-by: MOE.CLASS.0 and DEEPSEEK.MOE.0.
+  superseded-by: MOE.CLASS.0, V010.CLASS.3, and V010.MOE.0-4.
 
 MODEL.CLASS.2:
-  superseded-by: family runtime plus attention/KV/context/MoE/output-head reports.
+  superseded-by: V010.CLASS.9-15 and family runtime plus attention/KV/context/MoE/output-head reports.
 
 MODEL.CLASS.3:
-  superseded-by: source-target family profiles and future GLM model-class sequence rows.
+  superseded-by: V010.CLASS.7, V010.SOURCE.8, and future GLM source/model-class rows.
+
+MODEL.CLASS.*:
+  superseded-by: V010.CLASS.*.
 
 TENSOR.COLLECTION.0:
-  superseded-by: B7, MOE.TENSOR.0, and future dense tensor rows.
+  superseded-by: V010.TENSOR.0 and V010.TENSOR.21-23.
 
 TENSOR.COLLECTION.1:
-  superseded-by: B7, DEEPSEEK.CLASS.0, DEEPSEEK.MOE.0, and DEEPSEEK.RESIDENCY.0.
+  superseded-by: V010.TENSOR.*, V010.CLASS.6, V010.MOE.*, and V010.RESIDENCY.*.
 
 TENSOR.COLLECTION.2:
-  superseded-by: GLM source inventory/model-class/storage-stream sequence rows.
+  superseded-by: V010.SOURCE.8, V010.MAP.4, V010.STORAGE.17, and GLM source inventory/model-class rows.
+
+TENSOR.COLLECTION.*:
+  superseded-by: V010.TENSOR.*.
+
+STORAGE.STREAM.*:
+  superseded-by: V010.STORAGE.*.
+
+RESIDENCY.*:
+  superseded-by: V010.RESIDENCY.*.
+
+COMPUTE.BACKEND.*:
+  superseded-by: V010.BACKEND.* and V010.HARDWARE.*.
+
+BACKEND.PROFILE.*:
+  superseded-by: V010.BACKEND.* and V010.HARDWARE.*.
+
+BUILD.PROFILE.*:
+  superseded-by: V010.BUILD.* and V010.CI.*.
+
+HARDWARE.PROFILE.*:
+  superseded-by: V010.HARDWARE.*.
+
+PREFILL.* planned:
+  superseded-by: V010.PREFILL.* and V010.CONTEXT.*.
 
 KV.MIN.*:
   historical minimal diagnostic KV rows. Do not use as future full-runtime KV
-  sequence names unless still needed for regression continuity.
+  sequence names unless still needed for regression continuity. Future KV work
+  is superseded-by: V010.KV.*.
 
 RUNTIME.KV.*:
   future advanced KV capacity, estimator, allocation, paging, spill, and
-  quantization work. It should connect to B8 and the dense/MoE runtime
-  sequences before runtime claims.
+  quantization work. Superseded-by: V010.KV.*, V010.RESIDENCY.*, and
+  V010.STORAGE.*.
+
+DECODE.* planned:
+  superseded-by: V010.DECODE.*.
+
+LOGITS.* planned:
+  superseded-by: V010.LOGITS.*.
+
+SAMPLING.* planned:
+  superseded-by: V010.SAMPLE.*.
+
+GEN.* planned:
+  superseded-by: V010.GEN.*, V010.RUNTIME.*, and V010.CLI.*.
 
 MODEL.LIFECYCLE.*:
-  superseded-by: OPERATOR model prepare/check/status sequence.
+  superseded-by: V010.CLI.*, V010.DOCTOR.*, V010.PATHS.*, and V010.TARGET.*.
 
 CLI.UX.*:
-  superseded-by: OPERATOR/CLI command-surface sequence.
+  superseded-by: V010.CLI.*, V010.DOCTOR.*, and V010.TRACE.*.
 
 SERVER.* and SERVER.RUNTIME.*:
-  superseded-by: SERVE.* sequence.
+  superseded-by: V010.SERVE.*.
 
-BACKEND.PROFILE.*:
-  superseded-by: COMPUTE.BACKEND.* and HARDWARE.PROFILE.* sequences.
+EVAL.*:
+  superseded-by: V010.EVAL.*.
+
+BENCH.*:
+  superseded-by: V010.BENCH.* and V010.PROFILE.*.
+
+SPEC.*:
+  superseded-by or mapped under: V010.SPEC.*.
+
+PAPER.INDEX.0:
+  mapped under V010.PAPER.*.
+
+ALGORITHM.MODES.0:
+  mapped under V010.PAPER.*, V010.TRACE.*, V010.CLI.*, and algorithm family doctrine.
+
+CLI.RESEARCH.0:
+  mapped under V010.TRACE.*, V010.CLI.*, V010.PAPER.*, and algorithm family doctrine.
 
 LAYOUT.*:
   superseded-by: completed root-first layout history and future cleanup-only
-  rows.
+  rows. Future layout pressure is routed through V010.CI.*, V010.BUILD.*, and
+  V010.DOCS.*.
 
 DOCS.*:
-  superseded-by: DOCS.* canonical documentation/public-evidence sequence.
+  superseded-by: V010.DOCS.*, V010.RELEASE.*, and V010.CI.*.
 ```
 
 These tracks may advance in parallel only when their boundaries are explicit.
@@ -3719,23 +4826,55 @@ walls, scripts, conditionals, or path derivation logic.
 MOE.CLASS.0 - MoE model-class report
 ```
 
-MOE.CLASS.0 must make MoE model-class facts command-visible after attention, KV,
-and context class reports. The next boundary is expert count, active expert
-count, router facts, shared experts, expert tensor classes, storage/residency
-pressure, and runtime blockers. It must not claim expert activation, full
-transformer prefill, full model decode, full model execution, real DeepSeek
-generation, provider generation, streaming generation, evaluation, benchmark
-readiness, or throughput.
+MOE.CLASS.0 remains Active Next because it is the first model-class dynamic
+routing row that must be completed after attention, KV, and context reports.
 
-Expected continuation after `MOE.CLASS.0`:
+MOE.CLASS.0 maps to:
 
 ```text
-MOE.CLASS.0
--> MOE.TENSOR.0 or MOE.RESIDENCY.0 if class report exposes missing tensor/residency facts
--> MOE.ACT.0 when activation is ready
--> MOE.DISPATCH.0
--> MOE.BLOCK.0
--> DEEPSEEK.PREFILL.0 or generic MOE.PREFILL.0
+V010.CLASS.3
+V010.MOE.0
+V010.MOE.1
+V010.MOE.2
+V010.MOE.3
+V010.MOE.4
+```
+
+It feeds:
+
+```text
+V010.TENSOR.14-17
+V010.RESIDENCY.14
+V010.MOE.5-20
+V010.GRAPH MoE rows
+V010.PREFILL.7
+V010.DECODE.6
+```
+
+The next boundary is expert count, active expert count, router facts, shared
+experts, expert tensor classes, storage/residency pressure, and runtime
+blockers. It must not claim expert activation, full transformer prefill, full
+model decode, full model execution, real DeepSeek generation, provider
+generation, streaming generation, evaluation, benchmark readiness, or
+throughput.
+
+After `MOE.CLASS.0`, next selection is conditional:
+
+```text
+if tensor roles are missing:
+  go to V010.TENSOR.14-17
+
+if expert residency/storage pressure blocks runtime:
+  go to V010.STORAGE.18 / V010.RESIDENCY.14
+
+if graph activation can start:
+  go to V010.MOE.5 / V010.MOE.7
+
+if v0.1.0 target decision requires smaller dense full-runtime target:
+  go to V010.TARGET.2 / V010.CLASS.2 / dense path
+
+if output head/tokenizer is the larger blocker:
+  go to V010.CLASS.12-13 / V010.LOGITS / V010.TOKENIZER
 ```
 
 This continuation is planned order only. It does not implement MoE, dense
@@ -3746,6 +4885,10 @@ not replace MOE.CLASS.0 or the current runtime Active Next.
 
 SPINE.SEQUENCE.REBASE.0 normalizes the active forward sequences and supersession
 map. It preserves completed history and does not change runtime capability.
+
+SPINE.V0_1_0.MASTER.1 expands those sequences into an exhaustive v0.1.0 release
+spine. It does not change runtime capability, release status, model support,
+generation, evaluation, benchmark, or throughput.
 
 GEN.CONTRACT.0 hardens the contract for the generation loop. GEN.LOOP.0 is
 complete for bounded diagnostic loop control only.
