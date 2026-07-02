@@ -13,7 +13,7 @@ evaluation, or benchmark capability.
 
 Purpose:
   Quickly check command discovery, path resolution, model-target reporting,
-  target decision reporting,
+  target decision and full-runtime candidate reporting,
   fullmodel report/materialization-plan/materialize/descriptor/family-runtime
   help, attention/KV/context/MoE/tensor-collection report help, tokenizer fixture diagnostics, and
   minimal KV diagnostics.
@@ -38,6 +38,7 @@ Boundary:
   no source conversion
   no alias refresh
   target decision report only
+  full-runtime candidate report only
   bounded fullmodel proof/refusal, descriptor, family-runtime, attention, KV, context, MoE, and tensor-collection diagnostics only
   no uncontrolled full backend allocation
   no daemon
@@ -71,6 +72,8 @@ make
 ./yvex model-target inspect glm-5.2-official-safetensors --paths
 ./yvex model-target decision --help
 ./yvex model-target decision --release v0.1.0 --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
+./yvex model-target candidate --help
+./yvex model-target candidate --release v0.1.0 --include-candidates --include-pressure-targets --include-blockers --include-next
 ./yvex fullmodel report --model glm-5.2-official-safetensors --backend cpu
 ./yvex fullmodel materialization-plan --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
 ./yvex fullmodel materialize --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --dry-run
@@ -313,7 +316,7 @@ Quant/template/intake manifests:
 - `materialize-gate`: integrity and gate lanes
 - `metadata`: artifact inspection lanes
 - `model-gate`: integrity and gate lanes
-- `model-target`: model lanes, model target path and target decision reporting lanes, fast regression lane
+- `model-target`: model lanes, model target path, target decision, and full-runtime candidate reporting lanes, fast regression lane
 - `models`: artifact registration and selected prepare lanes
 - `native-weights`: source intake lanes
 - `paths`: configure once lane, fast regression lane, path resolution
@@ -340,12 +343,13 @@ Use this order before assuming a runtime bug:
 2. `./yvex help <command>`
 3. `./yvex model-target list`
 4. `./yvex model-target decision --release v0.1.0`
-5. `./yvex models current`
-6. `./yvex models list`
-7. `./yvex inspect <model-or-alias>`
-8. `./yvex tensors <model-or-alias>`
-9. `./yvex integrity check --model <model-or-alias>`
-10. `./yvex backend cpu`
+5. `./yvex model-target candidate --release v0.1.0`
+6. `./yvex models current`
+7. `./yvex models list`
+8. `./yvex inspect <model-or-alias>`
+9. `./yvex tensors <model-or-alias>`
+10. `./yvex integrity check --model <model-or-alias>`
+11. `./yvex backend cpu`
 11. `./yvex cuda-info`
 12. Rerun CPU before CUDA.
 13. Check `git status` before committing.

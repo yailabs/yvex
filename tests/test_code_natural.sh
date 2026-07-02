@@ -141,6 +141,18 @@ pattern='GLM block rea''dy'
 scan_forbidden_claim "$pattern"
 pattern='generation rea''dy: true'
 scan_forbidden_claim "$pattern"
+pattern='release_rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='runtime_claim: sup''ported'
+scan_forbidden_claim "$pattern"
+pattern='generation: sup''ported'
+scan_forbidden_claim "$pattern"
+pattern='full_model_generation: tr''ue'
+scan_forbidden_claim "$pattern"
+pattern='real_deepseek_generation: tr''ue'
+scan_forbidden_claim "$pattern"
+pattern='benchmark_status: meas''ured'
+scan_forbidden_claim "$pattern"
 pattern='decode rea''dy: true'
 scan_forbidden_claim "$pattern"
 pattern='logits rea''dy: true'

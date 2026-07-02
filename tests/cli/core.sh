@@ -347,9 +347,11 @@ contains "$OUT_DIR/help_model_gate.out" "usage: yvex model-gate check"
 run_ok help_model_target "$YVEX_BIN" help model-target
 contains "$OUT_DIR/help_model_target.out" "usage: yvex model-target classes"
 contains "$OUT_DIR/help_model_target.out" "       yvex model-target list"
+contains "$OUT_DIR/help_model_target.out" "       yvex model-target candidate --release v0.1.0 [options]"
 contains "$OUT_DIR/help_model_target.out" "       yvex model-target inspect TARGET [--paths] [--models-root DIR]"
 contains "$OUT_DIR/help_model_target.out" "--paths           show expected operator-local source, artifact, report, reference, and registry paths"
 contains "$OUT_DIR/help_model_target.out" "--models-root DIR override configured operator model root for this command only"
+contains "$OUT_DIR/help_model_target.out" "The candidate report evaluates full-runtime target eligibility for a release."
 contains "$OUT_DIR/help_model_target.out" "Model targets are pressure objects, not capability claims."
 contains "$OUT_DIR/help_model_target.out" "External GGUFs and external runners are reference evidence only."
 contains "$OUT_DIR/help_model_target.out" "Model-target path reporting does not read model payloads, create artifacts, register aliases, or claim runtime support."
@@ -437,6 +439,64 @@ contains "$OUT_DIR/model_target_list.out" "target: deepseek4-v4-flash-selected-e
 contains "$OUT_DIR/model_target_list.out" "target: glm-5.2-official-safetensors"
 contains "$OUT_DIR/model_target_list.out" "runtime_execution: unsupported"
 contains "$OUT_DIR/model_target_list.out" "generation: unsupported"
+
+run_ok model_target_candidate_help "$YVEX_BIN" model-target candidate --help
+contains "$OUT_DIR/model_target_candidate_help.out" "usage: yvex model-target candidate --release v0.1.0 [options]"
+contains "$OUT_DIR/model_target_candidate_help.out" "The candidate report evaluates full-runtime target eligibility for a release."
+contains "$OUT_DIR/model_target_candidate_help.out" "does not select a ready model"
+
+run_ok model_target_candidate "$YVEX_BIN" model-target candidate --release v0.1.0
+contains "$OUT_DIR/model_target_candidate.out" "model-target: candidate"
+contains "$OUT_DIR/model_target_candidate.out" "status: full-runtime-candidate-report"
+contains "$OUT_DIR/model_target_candidate.out" "release: v0.1.0"
+contains "$OUT_DIR/model_target_candidate.out" "decision_state: blocked-no-candidate"
+contains "$OUT_DIR/model_target_candidate.out" "full_runtime_candidate_status: missing"
+contains "$OUT_DIR/model_target_candidate.out" "eligible_candidate_count: 0"
+contains "$OUT_DIR/model_target_candidate.out" "runtime_claim: unsupported"
+contains "$OUT_DIR/model_target_candidate.out" "generation: unsupported-full-model"
+contains "$OUT_DIR/model_target_candidate.out" "benchmark_status: not-measured"
+contains "$OUT_DIR/model_target_candidate.out" "release_ready: false"
+
+run_ok model_target_candidate_full "$YVEX_BIN" model-target candidate --release v0.1.0 --include-candidates --include-pressure-targets --include-blockers --include-next
+contains "$OUT_DIR/model_target_candidate_full.out" "deepseek_pressure_status: selected-slice-pressure-only"
+contains "$OUT_DIR/model_target_candidate_full.out" "glm_pressure_status: source-storage-pressure-only"
+contains "$OUT_DIR/model_target_candidate_full.out" "qwen_metal_pressure_status: planned-portability-pressure-only"
+contains "$OUT_DIR/model_target_candidate_full.out" "next_required_rows: V010.TARGET.3"
+contains "$OUT_DIR/model_target_candidate_full.out" "candidate_0_id: deepseek4-v4-flash-selected-embed"
+contains "$OUT_DIR/model_target_candidate_full.out" "candidate_0_stage: selected-slice"
+contains "$OUT_DIR/model_target_candidate_full.out" "candidate_0_eligibility: selected-slice-only"
+contains "$OUT_DIR/model_target_candidate_full.out" "candidate_0_blocker_0: selected-runtime-slice-only"
+contains "$OUT_DIR/model_target_candidate_full.out" "candidate_1_id: deepseek4-v4-flash-selected-embed-rmsnorm"
+contains "$OUT_DIR/model_target_candidate_full.out" "candidate_1_stage: diagnostic-runtime"
+contains "$OUT_DIR/model_target_candidate_full.out" "candidate_1_eligibility: selected-slice-only"
+contains "$OUT_DIR/model_target_candidate_full.out" "candidate_2_id: glm-5.2-official-safetensors"
+contains "$OUT_DIR/model_target_candidate_full.out" "candidate_2_eligibility: source-only"
+contains "$OUT_DIR/model_target_candidate_full.out" "candidate_3_id: qwen-metal-portability-pressure"
+contains "$OUT_DIR/model_target_candidate_full.out" "candidate_3_eligibility: planned-portability-only"
+contains "$OUT_DIR/model_target_candidate_full.out" "candidate_4_id: tests/fixtures/gguf/valid-tokenizer-simple.gguf"
+contains "$OUT_DIR/model_target_candidate_full.out" "candidate_4_eligibility: fixture-only"
+
+run_ok model_target_candidate_rmsnorm "$YVEX_BIN" model-target candidate --release v0.1.0 --target deepseek4-v4-flash-selected-embed-rmsnorm --include-blockers --include-next
+contains "$OUT_DIR/model_target_candidate_rmsnorm.out" "candidate_count: 1"
+contains "$OUT_DIR/model_target_candidate_rmsnorm.out" "candidate_0_id: deepseek4-v4-flash-selected-embed-rmsnorm"
+contains "$OUT_DIR/model_target_candidate_rmsnorm.out" "candidate_0_stage: diagnostic-runtime"
+contains "$OUT_DIR/model_target_candidate_rmsnorm.out" "candidate_0_eligibility: selected-slice-only"
+contains "$OUT_DIR/model_target_candidate_rmsnorm.out" "candidate_0_blocker_0: selected-runtime-slice-only"
+contains "$OUT_DIR/model_target_candidate_rmsnorm.out" "candidate_0_next_required_rows: V010.TARGET.3,V010.TARGET.4,V010.MAP.2,V010.FULLMODEL.6"
+
+run_fail_code model_target_candidate_missing_release 2 "$YVEX_BIN" model-target candidate
+contains "$OUT_DIR/model_target_candidate_missing_release.err" "model-target candidate: --release is required"
+run_fail_code model_target_candidate_bad_release 2 "$YVEX_BIN" model-target candidate --release nope
+contains "$OUT_DIR/model_target_candidate_bad_release.out" "status: unsupported-release"
+run_fail_code model_target_candidate_unknown_flag 2 "$YVEX_BIN" model-target candidate --release v0.1.0 --unknown
+contains "$OUT_DIR/model_target_candidate_unknown_flag.err" "model-target candidate: unknown option: --unknown"
+run_fail_code model_target_candidate_missing_release_value 2 "$YVEX_BIN" model-target candidate --release
+contains "$OUT_DIR/model_target_candidate_missing_release_value.err" "model-target candidate: --release requires VERSION"
+run_fail_code model_target_candidate_missing_target_value 2 "$YVEX_BIN" model-target candidate --release v0.1.0 --target
+contains "$OUT_DIR/model_target_candidate_missing_target_value.err" "model-target candidate: --target requires TARGET"
+run_fail_code model_target_candidate_unknown_target 2 "$YVEX_BIN" model-target candidate --release v0.1.0 --target missing-target
+contains "$OUT_DIR/model_target_candidate_unknown_target.out" "status: full-runtime-candidate-report-fail"
+contains "$OUT_DIR/model_target_candidate_unknown_target.out" "target_requested: missing-target"
 
 run_ok model_target_deepseek_embed "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed
 contains "$OUT_DIR/model_target_deepseek_embed.out" "status: model-target"

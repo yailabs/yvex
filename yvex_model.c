@@ -9,6 +9,7 @@
 #include <yvex/artifact_integrity.h>
 #include <yvex/fs.h>
 #include <yvex/model.h>
+#include <yvex/model_registry.h>
 #include <yvex/tensor.h>
 #include <yvex/weights.h>
 
@@ -1246,6 +1247,170 @@ static const unsigned long model_target_class_count =
     sizeof(model_target_classes) / sizeof(model_target_classes[0]);
 static const unsigned long model_target_count = sizeof(model_targets) / sizeof(model_targets[0]);
 
+typedef struct {
+    const char *id;
+    const char *class_name;
+    const char *stage;
+    const char *eligibility;
+    const char *artifact_status;
+    const char *source_status;
+    const char *tensor_coverage_status;
+    const char *runtime_path_status;
+    const char *generation_status;
+    const char *benchmark_status;
+    const char *next_required_rows;
+    const char *blockers[16];
+    unsigned int blocker_count;
+    int pressure_target;
+    int fixture_target;
+} yvex_full_runtime_candidate_fact;
+
+static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
+    {
+        "deepseek4-v4-flash-selected-embed",
+        "selected-runtime-slice",
+        "selected-slice",
+        "selected-slice-only",
+        "selected-artifact-known",
+        "official-source-pressure",
+        "missing-required-tensor-coverage",
+        "diagnostic-runtime-only",
+        "unsupported-full-model",
+        "not-measured",
+        "V010.TARGET.3,V010.TARGET.4,V010.MAP.2,V010.FULLMODEL.6",
+        {
+            "selected-runtime-slice-only",
+            "missing-required-tensor-coverage",
+            "missing-tokenizer-metadata",
+            "missing-output-head",
+            "missing-attention-qkv",
+            "missing-real-kv-path",
+            "missing-real-prefill",
+            "missing-real-decode",
+            "missing-real-logits",
+            "missing-real-sampling",
+            "missing-generation-loop-over-real-state",
+        },
+        11,
+        1,
+        0,
+    },
+    {
+        "deepseek4-v4-flash-selected-embed-rmsnorm",
+        "selected-runtime-slice",
+        "diagnostic-runtime",
+        "selected-slice-only",
+        "selected-segment-artifact-known",
+        "official-source-pressure",
+        "missing-required-tensor-coverage",
+        "bounded-diagnostic-runtime-only",
+        "unsupported-full-model",
+        "not-measured",
+        "V010.TARGET.3,V010.TARGET.4,V010.MAP.2,V010.FULLMODEL.6",
+        {
+            "selected-runtime-slice-only",
+            "missing-required-tensor-coverage",
+            "missing-tokenizer-metadata",
+            "missing-output-head",
+            "missing-attention-qkv",
+            "missing-real-kv-path",
+            "missing-real-prefill",
+            "missing-real-decode",
+            "missing-real-logits",
+            "missing-real-sampling",
+            "missing-generation-loop-over-real-state",
+        },
+        11,
+        1,
+        0,
+    },
+    {
+        "glm-5.2-official-safetensors",
+        "official-source-huge-model",
+        "report-only",
+        "source-only",
+        "missing-full-artifact",
+        "source-storage-pressure",
+        "missing-tensor-map",
+        "unsupported",
+        "unsupported-full-model",
+        "not-measured",
+        "OWI.HUGE.0,V010.SOURCE.8,V010.MAP.4,V010.ARTIFACT.EMIT.2,V010.FULLMODEL.6",
+        {
+            "source-only-target",
+            "missing-source-inventory",
+            "missing-tensor-map",
+            "missing-full-artifact",
+            "missing-required-tensor-coverage",
+            "missing-materialization-plan",
+            "missing-residency-plan",
+            "missing-real-prefill",
+            "missing-real-decode",
+            "missing-real-logits",
+            "missing-real-sampling",
+        },
+        11,
+        1,
+        0,
+    },
+    {
+        "qwen-metal-portability-pressure",
+        "metal-reduced-full-runtime-pressure",
+        "report-only",
+        "planned-portability-only",
+        "planned",
+        "planned",
+        "missing-tensor-map",
+        "unsupported",
+        "unsupported-full-model",
+        "not-measured",
+        "HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0,OWI.TARGETS.QWEN.0",
+        {
+            "planned-portability-only",
+            "missing-source-inventory",
+            "missing-tensor-map",
+            "missing-full-artifact",
+            "missing-integrity-gate",
+            "missing-real-prefill",
+            "missing-real-decode",
+            "missing-real-logits",
+            "missing-real-sampling",
+        },
+        9,
+        1,
+        0,
+    },
+    {
+        "tests/fixtures/gguf/valid-tokenizer-simple.gguf",
+        "fixture-artifact",
+        "fixture",
+        "fixture-only",
+        "tiny-fixture-present",
+        "fixture-only",
+        "fixture-only",
+        "unsupported",
+        "unsupported-full-model",
+        "not-measured",
+        "V010.TARGET.3",
+        {
+            "fixture-only",
+            "missing-full-artifact",
+            "missing-required-tensor-coverage",
+            "missing-real-kv-path",
+            "missing-real-prefill",
+            "missing-real-decode",
+            "missing-real-logits",
+            "missing-real-sampling",
+        },
+        8,
+        0,
+        1,
+    },
+};
+
+static const unsigned long full_runtime_candidate_fact_count =
+    sizeof(full_runtime_candidate_facts) / sizeof(full_runtime_candidate_facts[0]);
+
 static const yvex_model_target_record *find_model_target(const char *target_id)
 {
     unsigned long i;
@@ -1281,6 +1446,24 @@ static void print_model_target_decision_help(FILE *fp)
     fprintf(fp, "\nThis command records the v0.1.0 target decision. It does not download models, emit artifacts, materialize tensors, execute graph work, run prefill, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
     fprintf(fp, "v0.1.0 requires an honest full-runtime-candidate target before runtime graph, prefill, KV, decode, logits, sampling, and generation rows can advance.\n");
     fprintf(fp, "Selected runtime slices, source-only pressure targets, external references, and fixture-only targets are ineligible for full-runtime closure.\n");
+}
+
+static void print_model_target_candidate_usage(FILE *fp)
+{
+    fprintf(fp, "usage: yvex model-target candidate --release v0.1.0 [options]\n");
+    fprintf(fp, "       yvex model-target candidate --help\n");
+    fprintf(fp, "\noptions:\n");
+    fprintf(fp, "  --target TARGET                report one candidate target\n");
+    fprintf(fp, "  --include-candidates           include candidate classification blocks\n");
+    fprintf(fp, "  --include-pressure-targets     include pressure target count fields\n");
+    fprintf(fp, "  --include-blockers             include stable blocker fields\n");
+    fprintf(fp, "  --include-next                 include next required row fields\n");
+}
+
+static void print_model_target_candidate_help(FILE *fp)
+{
+    print_model_target_candidate_usage(fp);
+    fprintf(fp, "\nThe candidate report evaluates full-runtime target eligibility for a release. It does not select a ready model, download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
 }
 
 static int target_decision_is_full_runtime_candidate(const yvex_model_target_record *record)
@@ -1386,6 +1569,250 @@ static void print_target_decision_constant_tail(void)
     printf("generation: unsupported-full-model\n");
     printf("benchmark_status: not-measured\n");
     printf("release_ready: false\n");
+}
+
+static const yvex_full_runtime_candidate_fact *find_full_runtime_candidate_fact(const char *id)
+{
+    unsigned long i;
+
+    if (!id) return NULL;
+    for (i = 0; i < full_runtime_candidate_fact_count; ++i) {
+        if (strcmp(full_runtime_candidate_facts[i].id, id) == 0) {
+            return &full_runtime_candidate_facts[i];
+        }
+    }
+    return NULL;
+}
+
+static int open_candidate_registry(yvex_model_registry **registry)
+{
+    yvex_model_registry_options options;
+    yvex_error err;
+
+    if (!registry) return YVEX_ERR_INVALID_ARG;
+    *registry = NULL;
+    memset(&options, 0, sizeof(options));
+    yvex_error_clear(&err);
+    options.create_if_missing = 0;
+    return yvex_model_registry_open(registry, &options, &err);
+}
+
+static unsigned long candidate_registry_extra_count(const yvex_model_registry *registry)
+{
+    unsigned long long i;
+    unsigned long count = 0;
+
+    if (!registry) return 0;
+    for (i = 0; i < yvex_model_registry_count(registry); ++i) {
+        const yvex_model_registry_entry *entry = yvex_model_registry_at(registry, i);
+        if (!entry || !entry->alias || find_full_runtime_candidate_fact(entry->alias)) continue;
+        count++;
+    }
+    return count;
+}
+
+static const char *registered_candidate_tensor_status(const yvex_model_registry_entry *entry)
+{
+    if (!entry) return "unknown";
+    return entry->tensor_count > 0 ? "registered-partial" : "unknown";
+}
+
+static void print_full_runtime_candidate_fact(unsigned long index,
+                                              const yvex_full_runtime_candidate_fact *fact,
+                                              int include_blockers,
+                                              int include_next)
+{
+    unsigned int i;
+
+    if (!fact) return;
+    printf("candidate_%lu_id: %s\n", index, fact->id);
+    printf("candidate_%lu_class: %s\n", index, fact->class_name);
+    printf("candidate_%lu_stage: %s\n", index, fact->stage);
+    printf("candidate_%lu_eligibility: %s\n", index, fact->eligibility);
+    printf("candidate_%lu_artifact_status: %s\n", index, fact->artifact_status);
+    printf("candidate_%lu_source_status: %s\n", index, fact->source_status);
+    printf("candidate_%lu_tensor_coverage_status: %s\n", index, fact->tensor_coverage_status);
+    printf("candidate_%lu_runtime_path_status: %s\n", index, fact->runtime_path_status);
+    printf("candidate_%lu_generation_status: %s\n", index, fact->generation_status);
+    printf("candidate_%lu_benchmark_status: %s\n", index, fact->benchmark_status);
+    printf("candidate_%lu_blocker_count: %u\n", index, fact->blocker_count);
+    if (include_blockers) {
+        for (i = 0; i < fact->blocker_count; ++i) {
+            printf("candidate_%lu_blocker_%u: %s\n", index, i, fact->blockers[i]);
+        }
+    }
+    if (include_next) {
+        printf("candidate_%lu_next_required_rows: %s\n", index, fact->next_required_rows);
+    }
+}
+
+static void print_registered_candidate(unsigned long index,
+                                       const yvex_model_registry_entry *entry,
+                                       int include_blockers,
+                                       int include_next)
+{
+    const char *alias = entry && entry->alias ? entry->alias : "unknown-registered-alias";
+
+    printf("candidate_%lu_id: %s\n", index, alias);
+    printf("candidate_%lu_class: registered-alias\n", index);
+    printf("candidate_%lu_stage: report-only\n", index);
+    printf("candidate_%lu_eligibility: candidate-incomplete\n", index);
+    printf("candidate_%lu_artifact_status: registered-artifact-not-inspected\n", index);
+    printf("candidate_%lu_source_status: unknown\n", index);
+    printf("candidate_%lu_tensor_coverage_status: %s\n", index,
+           registered_candidate_tensor_status(entry));
+    printf("candidate_%lu_runtime_path_status: unsupported\n", index);
+    printf("candidate_%lu_generation_status: unsupported-full-model\n", index);
+    printf("candidate_%lu_benchmark_status: not-measured\n", index);
+    printf("candidate_%lu_blocker_count: 8\n", index);
+    if (include_blockers) {
+        printf("candidate_%lu_blocker_0: missing-source-inventory\n", index);
+        printf("candidate_%lu_blocker_1: missing-tensor-map\n", index);
+        printf("candidate_%lu_blocker_2: missing-required-tensor-coverage\n", index);
+        printf("candidate_%lu_blocker_3: missing-tokenizer-metadata\n", index);
+        printf("candidate_%lu_blocker_4: missing-output-head\n", index);
+        printf("candidate_%lu_blocker_5: missing-real-prefill\n", index);
+        printf("candidate_%lu_blocker_6: missing-real-decode\n", index);
+        printf("candidate_%lu_blocker_7: missing-real-logits\n", index);
+    }
+    if (include_next) {
+        printf("candidate_%lu_next_required_rows: V010.TARGET.3,V010.MAP.*,V010.FULLMODEL.*\n", index);
+    }
+}
+
+static int print_model_target_candidate_missing(const char *release, const char *target)
+{
+    printf("model-target: candidate\n");
+    printf("status: full-runtime-candidate-report-fail\n");
+    printf("release: %s\n", release && release[0] ? release : "v0.1.0");
+    printf("target_requested: %s\n", target && target[0] ? target : "none");
+    printf("decision_state: blocked-no-candidate\n");
+    printf("selected_target_id: none\n");
+    printf("full_runtime_candidate_status: missing\n");
+    printf("candidate_count: 0\n");
+    printf("eligible_candidate_count: 0\n");
+    printf("pressure_target_count: 0\n");
+    printf("fixture_target_count: 0\n");
+    printf("global_blocker: no eligible full-runtime candidate\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    return 2;
+}
+
+static int print_model_target_candidate_unsupported_release(const char *release)
+{
+    printf("model-target: candidate\n");
+    printf("status: unsupported-release\n");
+    printf("release: %s\n", release && release[0] ? release : "unknown");
+    printf("decision_state: blocked-no-candidate\n");
+    printf("selected_target_id: none\n");
+    printf("full_runtime_candidate_status: missing\n");
+    printf("candidate_count: 0\n");
+    printf("eligible_candidate_count: 0\n");
+    printf("pressure_target_count: 0\n");
+    printf("fixture_target_count: 0\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    return 2;
+}
+
+static int print_model_target_candidate_report(const char *release,
+                                               const char *target_id,
+                                               int include_candidates,
+                                               int include_pressure_targets,
+                                               int include_blockers,
+                                               int include_next)
+{
+    const yvex_full_runtime_candidate_fact *target_fact = NULL;
+    const yvex_model_registry_entry *target_entry = NULL;
+    yvex_model_registry *registry = NULL;
+    unsigned long registry_count = 0;
+    unsigned long candidate_count = 0;
+    unsigned long pressure_count = 0;
+    unsigned long fixture_count = 0;
+    unsigned long i;
+
+    (void)open_candidate_registry(&registry);
+    registry_count = candidate_registry_extra_count(registry);
+    if (target_id) {
+        target_fact = find_full_runtime_candidate_fact(target_id);
+        if (!target_fact && registry) {
+            target_entry = yvex_model_registry_find(registry, target_id);
+        }
+        if (!target_fact && !target_entry) {
+            yvex_model_registry_close(registry);
+            return print_model_target_candidate_missing(release, target_id);
+        }
+        candidate_count = 1;
+        pressure_count = target_fact && target_fact->pressure_target ? 1 : 0;
+        fixture_count = target_fact && target_fact->fixture_target ? 1 : 0;
+    } else {
+        candidate_count = full_runtime_candidate_fact_count + registry_count;
+        for (i = 0; i < full_runtime_candidate_fact_count; ++i) {
+            if (full_runtime_candidate_facts[i].pressure_target) pressure_count++;
+            if (full_runtime_candidate_facts[i].fixture_target) fixture_count++;
+        }
+    }
+
+    printf("model-target: candidate\n");
+    printf("status: full-runtime-candidate-report\n");
+    printf("release: %s\n", release);
+    printf("decision_state: blocked-no-candidate\n");
+    printf("selected_target_id: none\n");
+    printf("full_runtime_candidate_status: missing\n");
+    printf("candidate_count: %lu\n", candidate_count);
+    printf("eligible_candidate_count: 0\n");
+    printf("pressure_target_count: %lu\n", pressure_count);
+    printf("fixture_target_count: %lu\n", fixture_count);
+    printf("registered_alias_count: %lu\n", target_id ? (target_entry ? 1ul : 0ul) : registry_count);
+    if (include_pressure_targets) {
+        printf("deepseek_pressure_status: selected-slice-pressure-only\n");
+        printf("glm_pressure_status: source-storage-pressure-only\n");
+        printf("qwen_metal_pressure_status: planned-portability-pressure-only\n");
+    }
+    printf("global_blocker: no eligible full-runtime candidate\n");
+    if (include_next) {
+        printf("next_required_rows: V010.TARGET.3\n");
+    }
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+
+    if (include_candidates || target_id) {
+        unsigned long out_index = 0;
+        if (target_fact) {
+            print_full_runtime_candidate_fact(out_index, target_fact, include_blockers, include_next);
+        } else if (target_entry) {
+            print_registered_candidate(out_index, target_entry, include_blockers, include_next);
+        } else {
+            for (i = 0; i < full_runtime_candidate_fact_count; ++i) {
+                print_full_runtime_candidate_fact(out_index++,
+                                                  &full_runtime_candidate_facts[i],
+                                                  include_blockers,
+                                                  include_next);
+            }
+            if (registry) {
+                unsigned long long ri;
+                for (ri = 0; ri < yvex_model_registry_count(registry); ++ri) {
+                    const yvex_model_registry_entry *entry =
+                        yvex_model_registry_at(registry, ri);
+                    if (!entry || !entry->alias ||
+                        find_full_runtime_candidate_fact(entry->alias)) {
+                        continue;
+                    }
+                    print_registered_candidate(out_index++, entry, include_blockers, include_next);
+                }
+            }
+        }
+    }
+
+    yvex_model_registry_close(registry);
+    return 0;
 }
 
 static int print_model_target_decision_unsupported_release(const char *release)
@@ -1561,6 +1988,7 @@ static void print_model_target_usage(FILE *fp)
 {
     fprintf(fp, "usage: yvex model-target classes\n");
     fprintf(fp, "       yvex model-target list\n");
+    fprintf(fp, "       yvex model-target candidate --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target decision --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR]\n");
 }
@@ -1573,6 +2001,9 @@ void yvex_model_target_help(FILE *fp)
     fprintf(fp, "\nDecision report:\n");
     fprintf(fp, "  yvex model-target decision --release v0.1.0 --include-candidates --include-blockers --include-next\n");
     fprintf(fp, "  This command records the v0.1.0 target decision. It does not download models, emit artifacts, materialize tensors, execute graph work, run prefill, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
+    fprintf(fp, "\nCandidate report:\n");
+    fprintf(fp, "  yvex model-target candidate --release v0.1.0 --include-candidates --include-blockers --include-next\n");
+    fprintf(fp, "  The candidate report evaluates full-runtime target eligibility for a release. It does not select a ready model, download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "\nModel targets are pressure objects, not capability claims.\n");
     fprintf(fp, "External GGUFs and external runners are reference evidence only.\n");
     fprintf(fp, "Model-target path reporting does not read model payloads, create artifacts, register aliases, or claim runtime support.\n");
@@ -1811,6 +2242,62 @@ int yvex_model_target_command(int argc, char **argv)
         }
         print_model_target_list();
         return 0;
+    }
+    if (strcmp(argv[2], "candidate") == 0) {
+        const char *release = NULL;
+        const char *target_id = NULL;
+        int include_candidates = 0;
+        int include_pressure_targets = 0;
+        int include_blockers = 0;
+        int include_next = 0;
+
+        for (i = 3; i < argc; ++i) {
+            if (strcmp(argv[i], "--help") == 0) {
+                if (argc != 4) {
+                    print_model_target_candidate_usage(stderr);
+                    return 2;
+                }
+                print_model_target_candidate_help(stdout);
+                return 0;
+            } else if (strcmp(argv[i], "--release") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "model-target candidate: --release requires VERSION\n");
+                    return 2;
+                }
+                release = argv[++i];
+            } else if (strcmp(argv[i], "--target") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "model-target candidate: --target requires TARGET\n");
+                    return 2;
+                }
+                target_id = argv[++i];
+            } else if (strcmp(argv[i], "--include-candidates") == 0) {
+                include_candidates = 1;
+            } else if (strcmp(argv[i], "--include-pressure-targets") == 0) {
+                include_pressure_targets = 1;
+            } else if (strcmp(argv[i], "--include-blockers") == 0) {
+                include_blockers = 1;
+            } else if (strcmp(argv[i], "--include-next") == 0) {
+                include_next = 1;
+            } else {
+                fprintf(stderr, "model-target candidate: unknown option: %s\n", argv[i]);
+                return 2;
+            }
+        }
+        if (!release || release[0] == '\0') {
+            fprintf(stderr, "model-target candidate: --release is required\n");
+            print_model_target_candidate_usage(stderr);
+            return 2;
+        }
+        if (strcmp(release, "v0.1.0") != 0) {
+            return print_model_target_candidate_unsupported_release(release);
+        }
+        return print_model_target_candidate_report(release,
+                                                   target_id,
+                                                   include_candidates,
+                                                   include_pressure_targets,
+                                                   include_blockers,
+                                                   include_next);
     }
     if (strcmp(argv[2], "decision") == 0) {
         const yvex_model_target_record *candidate_filter = NULL;
