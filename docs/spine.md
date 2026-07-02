@@ -7,6 +7,243 @@ Language: C
 Primary platform: Linux + CUDA
 Interface: CLI
 
+## 0. Spine Control Panel
+
+This panel is the front door for the spine. It gives the current project state,
+the forward runtime map, the row vocabulary, and the reading order before the
+long historical ledger begins.
+
+## 0.1 Project Identity
+
+YVEX is a local-first inference engine, not a chat wrapper.
+
+Its internal object is the model execution pipeline from official source
+tensors through YVEX-produced artifacts, artifact identity, model-family
+mapping, tensor collections, residency, graph execution, runtime state, token
+production, serving, evaluation, and benchmark/profile evidence.
+
+`docs/spine.md` is the internal delivery authority. Public docs must explain
+the project without delivery IDs, internal status ledgers, handoff language, or
+implementation diary text.
+
+## 0.2 Current Runtime State
+
+Current highest implemented runtime stage: bounded diagnostic generation.
+
+Current implemented runtime closure:
+
+```text
+selected/diagnostic artifact path
+-> token input
+-> segment/chunk diagnostic prefill
+-> diagnostic KV binding
+-> bounded diagnostic decode
+-> bounded diagnostic logits
+-> bounded greedy sampling
+-> diagnostic append/stop/cleanup
+-> CLI `yvex generate`
+```
+
+Current unimplemented runtime stage: full-model generation over a model-backed
+transformer path.
+
+Still unsupported:
+
+```text
+model-backed transformer prefill
+attention-backed KV writes
+decode over attention-backed KV
+output-head logits
+vocabulary sampling
+full-model generation
+DeepSeek full-generation target
+provider/server generation
+evaluation
+benchmarking
+throughput claims
+```
+
+## 0.3 v0.1.0 Release Target
+
+v0.1.0 targets one honest full-runtime path. It does not require the complete
+DeepSeek V4 Flash target unless this spine explicitly selects that target for
+the release path.
+
+The release path requires:
+
+```text
+model target
+-> artifact identity
+-> model class
+-> tensor collections
+-> residency
+-> backend
+-> graph
+-> model-backed prefill
+-> KV
+-> decode
+-> logits
+-> sampling
+-> generation
+-> CLI proof
+-> validation transcript
+```
+
+v0.1.0 does not require provider compatibility, speculative acceleration,
+capability evaluation, public benchmark tables, or throughput claims.
+
+## 0.4 Active Next
+
+Navigation control wave:
+
+```text
+SPINE.NAVIGATION.0 - Spine information architecture and runtime map unification
+```
+
+Runtime active next after this navigation wave:
+
+```text
+MOE.CLASS.0 - MoE model-class report
+```
+
+`SPINE.NAVIGATION.0` is a docs/meta wave. It does not change runtime capability.
+
+## 0.5 Master Maps
+
+| Map | Section | Use |
+| --- | --- | --- |
+| Master Table A | `## 5. Historical Unified Delivery Ledger` | Audit historical completed and planned delivery rows. |
+| Master Table B | `## 6.0 Forward Runtime Track Matrix` | Choose the next forward implementation lane. |
+| Master Table C | `## 5.1 Meta-Spine and Rebase Waves` | Audit spine, rebase, navigation, and project-control waves. |
+| Master Table D | `## 8.1 Command-to-Evidence Crosswalk` | Map commands to evidence stages and row families. |
+| Master Table E | `## 8.2 Test-to-Evidence Crosswalk` | Map tests to evidence stages and row families. |
+
+## 0.6 Reading Order
+
+Implementation planning:
+
+```text
+0 -> 1 -> 2.7 -> 4 -> 6.0 -> 6.1 -> 6.2 -> 7 -> 8
+```
+
+Capability checking:
+
+```text
+4 -> 8.1 -> 8.2 -> 10
+```
+
+Historical audit:
+
+```text
+5 -> 5.1 -> 10
+```
+
+Release planning:
+
+```text
+0.3 -> 6.0 -> 6.2 -> 6.8 -> 9
+```
+
+## 0.7 Nomenclature Table
+
+| Term | Meaning | Example | Where it lives | Can change runtime capability? |
+| --- | --- | --- | --- | --- |
+| block | Canonical ownership domain. | `BLOCK 7 - Runtime state` | `## 2.1` | No, unless paired with implementation rows. |
+| track | Roadmap lane grouping related work. | `Generation Runtime` | `## 6.0`, `## 6.2` | No by itself. |
+| sequence | Ordered dependency chain. | Sequence D for MoE runtime | `## 6.1` | No by itself. |
+| row | Smallest planned or completed delivery boundary. | `MOE.CLASS.0` | `## 5`, `## 6.2` | Only if it implements behavior. |
+| wave | One execution package for a worker. | `SPINE.NAVIGATION.0` | commit/final report, sometimes ledger | Only if the wave includes implementation. |
+| ledger | Historical delivery table. | Historical unified delivery ledger | `## 5` | No, it records status. |
+| gate | Evidence condition required before promotion. | validation transcript | `## 8`, `## 9` | No, it controls promotion. |
+| claim | Human-readable capability statement. | generation supported | public docs, runbooks, output | Only after backed by implemented evidence. |
+| boundary | Explicit statement of what evidence does not prove. | not full-model generation | row text and command output | No, it limits claims. |
+| meta-spine row | Docs/control row that organizes the spine. | `SPINE.RECONCILE.0` | `## 5.1` | No. |
+| implementation row | Row that changes executable behavior. | `GRAPH.OPS.2` | `## 5` | Yes, after proof and tests. |
+| report row | Row that exposes facts or blockers. | `ATTENTION.CLASS.0` | `## 5`, command output | It can increase inspection capability only. |
+
+## 0.8 Runtime Architecture Map
+
+| Stage | Purpose | Current evidence stage | Implemented? | Main command/evidence | Next gap |
+| --- | --- | --- | --- | --- | --- |
+| official source tensors | Upstream source authority for open-weight intake. | report-only | partial | source manifest and target records | multi-family source profile completion |
+| source manifest | Provenance and source footprint contract. | implemented | yes | `yvex source-manifest` | larger family coverage |
+| native tensor inventory | Safetensors/native tensor directory without payload loading. | implemented | yes | `yvex native-weights` | huge shard indexing |
+| YVEX-produced artifact | Controlled or selected GGUF emitted by YVEX. | selected-slice | partial | controlled/selected GGUF emission | full-runtime artifact production |
+| artifact identity/integrity | Digest, byte ranges, shape/dtype, corruption refusal. | implemented | yes | integrity report and tests | full-runtime artifact gate |
+| model-family mapping | Family adapter facts and runtime blockers. | report-only | partial | `yvex fullmodel family-runtime` | MoE class facts |
+| model class | Architecture class, dense/MoE/source-only/selected-slice routing. | report-only | partial | fullmodel descriptor reports | `MOE.CLASS.0` |
+| tensor collections | Embedding, norm, attention, MLP/MoE, output, tokenizer roles. | report-only | partial | fullmodel report and descriptor | final runtime tensor map |
+| residency/storage | Placement, storage-stream, cache, staged movement planning. | report-only | partial | materialization plan reports | staged residency proof |
+| backend capability | CPU/CUDA probes, movement, primitive capability evidence. | implemented | partial | backend/CUDA checks, graph op parity | capability matrix hardening |
+| graph primitives | RoPE, attention, matmul, MLP fixture operations. | implemented | yes | `yvex graph --execute-op` | model-backed graph integration |
+| model-backed transformer graph | Target tensor graph through block/layer execution. | planned | no | fixture block/layer evidence only | target tensor Q/K/V/O path |
+| context planning | Requested/active context, chunking, overflow, decode position. | report-only | yes | `yvex context report` | connect to full-runtime prefill |
+| model-backed prefill | Transformer prefill over target layer tensors. | planned | no | diagnostic prefill only | target tensor prefill path |
+| KV cache | KV ownership, layout, capacity, append/read diagnostics. | diagnostic-runtime | partial | `yvex kv report`, prefill KV binding | attention-backed KV production/consumption |
+| decode | Next-position state advance over implemented runtime state. | diagnostic-runtime | partial | `yvex decode` | decode over attention-backed KV |
+| logits | Bounded logits buffer and future output-head projection. | diagnostic-runtime | partial | `yvex logits` | output-head logits |
+| sampling | Greedy selection over implemented logits. | diagnostic-runtime | partial | `yvex sample` | vocabulary sampling strategies |
+| tokenizer/stop | Tokenizer metadata, detokenization, EOS/stop policy. | planned | partial | tokenizer diagnostics | tokenizer-backed stop behavior |
+| generation loop | Decode/logits/sample/append/stop/cleanup loop. | diagnostic-runtime | partial | `yvex generate` | full-model generation loop |
+| CLI generation | Operator surface for implemented generation path. | diagnostic-runtime | partial | `yvex generate --help`, runbook | full-runtime normal path |
+| serving | Daemon/provider exposure after runtime generation. | planned | no | `yvexd` status shell | runtime-backed provider generation |
+| evaluation | Correctness/capability checks over implemented runtime paths. | planned | no | planned eval rows | generation smoke/eval path |
+| benchmark/profile evidence | Measured performance with reproducibility metadata. | planned | no | planned bench rows | benchmark harness and measured runs |
+| speculative acceleration | Draft/verify/accept acceleration family. | post-v0.1.0 | no | doctrine only | baseline generation first |
+| release | Versioned release gate and transcript. | planned | no | v0.1.0 gates | final validation transcript |
+
+## 0.9 Standard Boundary Vocabulary
+
+| Boundary phrase | Meaning | Use when |
+| --- | --- | --- |
+| not full-model generation | The command does not execute the complete target model generation path. | Diagnostic and selected-slice generation evidence. |
+| not DeepSeek generation | The evidence does not close the DeepSeek V4 Flash target path. | DeepSeek pressure target remains future work. |
+| not benchmark | The output is not a measured performance result. | Any command that reports checksums, traces, or diagnostics. |
+| report-only | The row exposes facts, blockers, or classifications. | Model class, attention, KV, context, residency reports. |
+| diagnostic-runtime | The runtime executes bounded local state for control-flow proof. | Decode/logits/sample/generate diagnostic chain. |
+| selected-slice | A bounded YVEX-produced artifact slice participates in proof. | Selected DeepSeek embedding or segment targets. |
+| source-only | The target is limited to source intake/storage/model-class work. | GLM source tensor pressure target. |
+| external-reference | Evidence comes from external artifacts, papers, or runners. | DSpark, external GGUFs, external runner notes. |
+
+## 0.10 Ledger vs Track vs Architecture Map
+
+Architecture Map:
+  the current execution pipeline and evidence status from source tensors through
+  release evidence.
+
+Forward Runtime Track Matrix:
+  the remaining implementation lanes and their current status, next gap, and
+  blockers.
+
+Historical Unified Delivery Ledger:
+  every delivery row, including completed history, planned rows, and legacy
+  continuity rows.
+
+Meta-Spine Table:
+  docs, rebase, audit, reconciliation, navigation, and project-control waves
+  that organize the work without increasing runtime capability.
+
+Use the Architecture Map to understand the engine, the Track Matrix to choose
+the next work lane, the Ledger to audit history, and the Meta-Spine Table to
+audit project-control waves.
+
+## 0.11 Spine Section Order
+
+| Section | Role |
+| --- | --- |
+| 0 Control Panel | Orientation, nomenclature, architecture map, and reading order. |
+| 1 Authority | Internal authority and project identity. |
+| 2 Doctrine | Implementation rules, ownership, and command taxonomy. |
+| 3 Repository State | Current repository shape. |
+| 4 Capability State | Implemented, report, planned, and unsupported state. |
+| 5 History | Historical ledger and meta-spine rows. |
+| 6 Forward Plan | Architecture tracks and v0.1.0 roadmap. |
+| 7 Active Next | Current next implementation row. |
+| 8 Evidence | Validation commands, command evidence, and test evidence. |
+| 9 Guardrails | Non-negotiable rules. |
+| 10 Audit | Whole-repo implementation/spine audit. |
+| 11 Appendix | Long doctrine and reference material. |
+
 ## 1. Authority
 
 `docs/spine.md` is the only internal delivery map. Public docs must not expose
@@ -1381,6 +1618,21 @@ better represented by `V010.*`.
 changed code behavior and tests. If they changed code behavior, they probably
 do not belong in the meta-spine class.
 
+## 2.7 Doctrine Navigation Index
+
+This index keeps the detailed doctrine reachable without making it the primary
+roadmap.
+
+| Doctrine area | Primary location | Use |
+| --- | --- | --- |
+| Implementation order | `## 2.3 Procedural Implementation Order` | Choose the next proof boundary. |
+| Command taxonomy | `## 2.4 Conceptual Command Taxonomy` | Keep command surfaces staged and honest. |
+| Operator presets | `## 2.5 Operator Preset Doctrine` | Keep normal operator paths short and preset-driven. |
+| Forward namespaces | `## 2.6 Forward Namespace Rules` | Name future rows without reviving legacy row families. |
+| Algorithm and research CLI | `## 11. Doctrine Appendix` | Inspect detailed reference material. |
+| Active roadmap | `## 6.0 Forward Runtime Track Matrix` | Pick the next implementation lane. |
+| Current next row | `## 7. Active Next` | Confirm the immediate row before coding. |
+
 ## YVEX Research CLI Doctrine
 
 YVEX is a tensor-to-token research engine.
@@ -2442,7 +2694,7 @@ Qwen-Metal planned target facts:
   YVEX generation: not implemented
 ```
 
-### 4.11 Unsupported / not advanced
+### 4.11 Unsupported / Not Advanced Boundary Registry
 
 ```text
 full model execution
@@ -2537,11 +2789,15 @@ selected segment output sample into the controlled layer fixture scheduler.
 Full transformer prefill still requires real model layer weights, attention K/V
 projection, and the future chunked prefill lifecycle.
 
-## 5. Unified Delivery Ledger
+## 5. Historical Unified Delivery Ledger
 
 The table is the spine. Every delivery row is recorded here; sections after the
 table explain dependency logic, validation, and rules without duplicating status
 tables.
+
+This table is the historical record of deliveries. It is not the preferred
+forward roadmap. For forward implementation planning, use `## 6.0 Forward
+Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 
 | ID | Status | Area | Title | Completion boundary |
 | --- | --- | --- | --- | --- |
@@ -2732,6 +2988,7 @@ tables.
 | SPINE.V0_1_0.MASTER.2 | complete | docs | Row-level v0.1.0 delivery contracts | spine adds row-level delivery contracts, contract families, promotion rules, next-row decision grammar, critical path, parallelization rules, final transcript requirements, and Active Next decision rules for the exhaustive v0.1.0 spine without runtime implementation, generation, eval, benchmark, throughput, or release claim |
 | SPINE.AUDIT.0 | complete | docs | Whole-repo implementation/spine consistency audit | repo-wide audit compares docs/spine Current Capability, completed rows, planned rows, command surfaces, tests, source ownership, public docs, and V010 architecture against tracked implementation evidence, records weak points, meta/rebase row classification, mismatch findings, and follow-up rows without runtime implementation, generation, eval, benchmark, throughput, or release claim |
 | SPINE.RECONCILE.0 | complete | docs | Current Capability and ledger reconciliation | Current Capability, completed row boundaries, meta-spine classification, namespace rules, block/V010 crosswalks, command evidence, test evidence, audit actions, and Active Next are reconciled against audited code/test/command evidence without runtime implementation, generation, eval, benchmark, throughput, or capability promotion |
+| SPINE.NAVIGATION.0 | complete | docs | Spine information architecture and runtime map unification | spine adds front control panel, nomenclature table, runtime architecture map, forward runtime track matrix, ledger/track/meta distinctions, standard boundary vocabulary, section-order guide, and navigation cleanup without runtime implementation, capability promotion, generation, eval, benchmark, throughput, or release claim |
 | SPINE.TESTMAP.0 | planned | docs | Test-to-ledger coverage map | tests are mapped to ledger rows, evidence stages, commands, and failure paths without runtime implementation or capability promotion |
 | SPINE.FILEMAP.0 | planned | docs | Source ownership and file map | source/header/test files are mapped to canonical blocks and spine rows without runtime implementation or capability promotion |
 | SPINE.METAL.QWEN.0 | complete | docs | Qwen Metal pressure lane | spine records Qwen on Apple Silicon / Metal as a reduced-scale portability and full-runtime pressure lane without Metal support, Qwen runtime, generation, eval, benchmark, or throughput claim |
@@ -2841,11 +3098,15 @@ tables.
 | DOCS.DIAGRAMS.5 | planned | docs | Backend/hardware target matrix | diagram explains CPU/CUDA/future lanes |
 | DOCS.DIAGRAMS.6 | planned | docs | README visual integration | diagrams integrated only where they clarify real boundaries |
 
-## 5.1 Spine Rebase and Meta Waves
+## 5.1 Meta-Spine and Rebase Waves
 
 This table classifies project-control waves. These rows may remain in the
 unified ledger for historical continuity, but they must not inflate runtime
 capability.
+
+This is not the implementation ledger. It records project-control rows that
+organize the spine, reconcile evidence, audit drift, or improve navigation
+without increasing runtime capability.
 
 Audit finding:
 
@@ -2870,6 +3131,7 @@ meta-spine rows should not inflate Current Capability as runtime implementation.
 | SPINE.V0_1_0.MASTER.2 | complete | delivery doctrine | row-level V010 contracts | none | contract | docs-only; no runtime implementation |
 | SPINE.AUDIT.0 | complete | audit | repo/spine consistency | none | audit | docs-only; no runtime implementation |
 | SPINE.RECONCILE.0 | complete | reconciliation | evidence taxonomy and Active Next | none | namespace | docs-only; no runtime implementation |
+| SPINE.NAVIGATION.0 | complete | navigation | control panel and runtime maps | none | information architecture | docs-only; no runtime implementation |
 | SPINE.METAL.QWEN.0 | complete | pressure-lane doctrine | Qwen/Metal future lane | none | target-pressure | docs-only; no generation claim |
 
 ## DeepSeek Generation and Throughput Target
@@ -3640,6 +3902,38 @@ Qwen-Metal portability track:
   -> Qwen Metal generation
   -> Qwen Metal eval/benchmark
 ```
+
+## 6.0 Forward Runtime Track Matrix
+
+This matrix is the preferred forward planning view. It groups the remaining
+work by architecture lane instead of forcing the reader to scan the historical
+ledger.
+
+| Track | Name | Owns | Current status | Implemented evidence | Next gap | Blocks |
+| --- | --- | --- | --- | --- | --- | --- |
+| T00 | Target & Source | official source tensors, target class, source artifact class, source manifests | partial | source manifest and native inventory commands | multi-family source profile | artifact production and model-class routing |
+| T01 | Artifact & Integrity | YVEX-produced artifact identity, digest, byte ranges, corruption refusal, registry drift | implemented | integrity reports, materialization gates, corruption tests | full-runtime artifact gate | graph/runtime trust boundary |
+| T02 | Model Class & Tensor Collections | family, dense/MoE/source-only/selected-slice routing, tensor role groups | report-only | fullmodel descriptor, family-runtime, attention/KV/context reports | MoE class and final tensor map | graph/runtime path selection |
+| T03 | Storage & Residency | resident, host-staged, SSD-staged, SSD-streamed, hybrid placement | report-only | placement plans and pressure reports | staged residency proof | full-runtime materialization and prefill |
+| T04 | Backend & Hardware | CPU/CUDA capability, future Metal/ROCm lanes, build/hardware profiles | partial | CPU/CUDA movement and graph parity subset | capability matrix and memory pressure reports | graph ops and runtime residency |
+| T05 | Graph Core | primitives, controlled block, repeated layer fixture, selected graph segments | implemented | graph op, block, layer, selected-slice commands | target tensor graph integration | prefill, decode, logits |
+| T06 | Attention Runtime | Q/K/V/O requirements, position, mask, head layout, attention execution | report-only | attention report and standalone attention primitive | target tensor Q/K/V/O path | KV and transformer prefill |
+| T07 | MoE Runtime | router facts, expert classes, expert residency, activation, dispatch, accumulation | planned | routed expert-slice primitive only | `MOE.CLASS.0` | MoE prefill/decode/generation |
+| T08 | Context & Prefill Planning | requested/active context, chunking, overflow, decode position policy | report-only | context report and chunked diagnostic prefill | connect planning to target tensor prefill | KV/decode correctness |
+| T09 | Model-Backed Prefill | transformer prefill over target layer tensors | planned | diagnostic segment/layer/chunk prefill only | target tensor prefill entry | KV production and decode |
+| T10 | KV Runtime | KV layout, capacity, ownership, append/read, attention interaction | diagnostic-runtime | minimal KV ownership and diagnostic binding | attention-backed KV production/consumption | decode runtime |
+| T11 | Decode Runtime | one-step and repeated decode over runtime state | diagnostic-runtime | bounded diagnostic decode | decode over attention-backed KV | logits and generation |
+| T12 | Output Head & Logits | output projection, logits buffer, logprob/top-k diagnostics | diagnostic-runtime | bounded diagnostic logits | output-head logits | sampling |
+| T13 | Sampling Runtime | greedy, stochastic, top-k/top-p/min-p/typical, seeded behavior | diagnostic-runtime | bounded greedy sampler | vocabulary sampling strategy surface | generation |
+| T14 | Tokenizer & Stop Policy | detokenization, EOS, stop-token matching, tokenizer quality boundary | planned | tokenizer/prompt diagnostics and unsupported stop policy | tokenizer-backed stop behavior | user-facing generation |
+| T15 | Generation Runtime | decode -> logits -> sample -> append -> stop -> cleanup | diagnostic-runtime | bounded diagnostic `yvex generate` | full-model generation loop | CLI normal path, serving, eval |
+| T16 | Runtime Lifecycle & Trace | lifecycle, cancellation, traces, cleanup, failure preservation | diagnostic-runtime | generate trace/cancel/cleanup records | external interruption and runtime tracing | operator reliability |
+| T17 | Operator CLI | paths, targets, prepare, check, graph check, generate surface | partial | preset commands and runbook lanes | segment check and final normal path | v0.1.0 transcript |
+| T18 | Serving | daemon state, provider endpoints, streaming, observability | planned | status shell only | runtime-backed provider generation | provider compatibility |
+| T19 | Evaluation | fixture, runtime, generation, capability evaluation | planned | test runners only | generation smoke/eval path | benchmark confidence |
+| T20 | Benchmark/Profile | reproducible performance harness and machine/artifact metadata | planned | doctrine and planned rows | measured runtime harness | public evidence |
+| T21 | Speculative Acceleration | draft, verification, accepted-token accounting, routing-aware cost | post-v0.1.0 | doctrine and external-reference rows | baseline generation first | acceleration claims |
+| T22 | Docs & Release | contracts, runbooks, validation transcript, version/release gate | partial | spine contracts and operator docs | release transcript over implemented path | v0.1.0 completion |
 
 ## 6.1 Canonical Runtime Sequences
 
@@ -6127,8 +6421,8 @@ returns to MOE.CLASS.0.
 MOE.CLASS.0 remains the next runtime row. It must make MoE model-class facts
 command-visible after attention, KV, and context reports. It must not claim
 expert activation, full transformer prefill, full model decode, full model
-execution, real DeepSeek generation, provider generation, streaming generation,
-evaluation, benchmark readiness, or throughput.
+execution, DeepSeek full-generation target completion, provider generation,
+streaming generation, evaluation, benchmark readiness, or throughput.
 
 MOE.CLASS.0 maps to:
 
@@ -6155,8 +6449,8 @@ V010.DECODE.6
 The next boundary is expert count, active expert count, router facts, shared
 experts, expert tensor classes, storage/residency pressure, and runtime
 blockers. It must not claim expert activation, full transformer prefill, full
-model decode, full model execution, real DeepSeek generation, provider
-generation, streaming generation, evaluation, benchmark readiness, or
+model decode, full model execution, DeepSeek full-generation target completion,
+provider generation, streaming generation, evaluation, benchmark readiness, or
 throughput.
 
 The next delivery after MOE.CLASS.0 must use the row-level decision grammar.
@@ -6277,11 +6571,11 @@ and KV facts into model/requested/active context, token counts, chunking,
 overflow behavior, prefill boundary, decode position policy, bounded
 diagnostic versus full runtime context, and next runtime dependencies.
 MOE.CLASS.0 remains next because DeepSeek full runtime needs explicit MoE facts
-before real transformer prefill, expert activation, real decode, output-head
-logits, sampling, or generation can advance. Real model output-head logits,
-real vocabulary sampling, full DeepSeek runtime work, OS signal cancellation,
-provider/server generation, streaming, evaluation, and benchmark measurement
-remain planned tracks.
+before model-backed transformer prefill, expert activation, decode over
+attention-backed KV, output-head logits, sampling, or generation can advance.
+Output-head logits, vocabulary sampling, full DeepSeek runtime work, OS signal
+cancellation, provider/server generation, streaming, evaluation, and benchmark
+measurement remain planned tracks.
 
 ## 8. Validation Gate
 
@@ -6427,6 +6721,34 @@ pattern='disk-backed generation: imple''mented'
 grep -nF "$pattern" docs/spine.md && exit 1 || true
 pattern='YVEX GLM bench''mark'
 grep -nF "$pattern" docs/spine.md && exit 1 || true
+```
+
+Spine navigation proof:
+
+```sh
+grep -nF '## 0. Spine Control Panel' docs/spine.md
+grep -nF '## 0.7 Nomenclature Table' docs/spine.md
+grep -nF '## 0.8 Runtime Architecture Map' docs/spine.md
+grep -nF '## 0.9 Standard Boundary Vocabulary' docs/spine.md
+grep -nF '## 0.10 Ledger vs Track vs Architecture Map' docs/spine.md
+grep -nF '## 0.11 Spine Section Order' docs/spine.md
+grep -nF '## 5. Historical Unified Delivery Ledger' docs/spine.md
+grep -nF '## 5.1 Meta-Spine and Rebase Waves' docs/spine.md
+grep -nF '## 6.0 Forward Runtime Track Matrix' docs/spine.md
+grep -nF 'Target & Source' docs/spine.md
+grep -nF 'Artifact & Integrity' docs/spine.md
+grep -nF 'Model Class & Tensor Collections' docs/spine.md
+grep -nF 'Graph Core' docs/spine.md
+grep -nF 'Attention Runtime' docs/spine.md
+grep -nF 'MoE Runtime' docs/spine.md
+grep -nF 'Model-Backed Prefill' docs/spine.md
+grep -nF 'KV Runtime' docs/spine.md
+grep -nF 'Decode Runtime' docs/spine.md
+grep -nF 'Output Head & Logits' docs/spine.md
+grep -nF 'Sampling Runtime' docs/spine.md
+grep -nF 'Generation Runtime' docs/spine.md
+grep -nF 'SPINE.NAVIGATION.0' docs/spine.md
+grep -nF 'MOE.CLASS.0 - MoE model-class report' docs/spine.md
 ```
 
 Canonical block directory proof:
@@ -6844,7 +7166,7 @@ found to require immediate status rollback in this audit.
 
 ### 10.7 Spine Rebase / Meta Waves Table
 
-See `## 5.1 Spine Rebase and Meta Waves`.
+See `## 5.1 Meta-Spine and Rebase Waves`.
 
 ### 10.8 Public Docs Claim Audit
 
@@ -6965,7 +7287,7 @@ work.
 | Follow-up row | Reason | Priority | Should run before MOE.CLASS.0? |
 | --- | --- | --- | --- |
 | `SPINE.RECONCILE.0 — Current Capability and ledger reconciliation` | P1 Current Capability and old/V010 namespace mismatch | P1 | complete |
-| `SPINE.META.TABLE.0 — Move spine/meta rows into separate meta table` | merged into `SPINE.RECONCILE.0` through `## 5.1 Spine Rebase and Meta Waves` | P1 | no |
+| `SPINE.META.TABLE.0 — Move spine/meta rows into separate meta table` | merged into `SPINE.RECONCILE.0` through `## 5.1 Meta-Spine and Rebase Waves` | P1 | no |
 | `SPINE.TESTMAP.0 — Test-to-ledger coverage map` | completion proof is summarized but not row-addressable enough | P1 | no |
 | `SPINE.FILEMAP.0 — Source ownership map` | full source/header ownership map is not committed | P2 | no |
 | `SPINE.COMMAND.AUDIT.0 — Command/help/output-boundary audit` | command evidence is summarized; source/help changes are not required by this wave | P2 | no |
@@ -7193,3 +7515,56 @@ Reason:
   official safetensors as the huge-model source-tensor pressure target unless
   this spine changes.
 - Keep Qwen as historical validation evidence unless this spine changes.
+
+## 11. Doctrine Appendix
+
+Appendix-level doctrine: the detailed reference material remains in place for
+historical continuity. Use this appendix as a router; use `## 0` and `## 6.0`
+for primary navigation and forward planning.
+
+## 11.1 Paper and Algorithm Doctrine
+
+Primary location: `## Paper-backed Algorithm Doctrine`.
+
+Use for paper/reference staging, algorithm support vocabulary, and the rule
+that citations do not imply implementation.
+
+## 11.2 Algorithm Families
+
+Primary location: `## Algorithm Families`.
+
+Use for attention, prefill, KV, decode, logits, sampling, generation-loop, and
+residency/storage-stream family boundaries.
+
+## 11.3 CLI Research Surface Matrix
+
+Primary location: `## CLI Research Surface Matrix`.
+
+Use for future research command shapes and output-field expectations. Command
+shapes remain conceptual until parser, behavior, output contract, tests,
+failure paths, cleanup, and claim boundary exist.
+
+## 11.4 Generation Contracts
+
+Primary locations: `## Generation Loop Contract`, `## Generation State Machine`,
+`## Generation Token Lifecycle`, `## Generation Stop Reasons`,
+`## Generation CLI Output Contract`, `## Generation Trace Contract`, and
+`## Generation Failure and Cleanup Contract`.
+
+Use for diagnostic generation semantics, full-model generation requirements,
+trace levels, stop reasons, cancellation boundaries, cleanup, and failure
+reporting.
+
+## 11.5 Operator Command Contracts
+
+Primary location: `## Operator Preset Command Contracts`.
+
+Use for path configuration, model target path resolution, prepare/check
+presets, graph check suites, diagnostic chat, and runbook expectations.
+
+## 11.6 Non-Negotiable Rules
+
+Primary location: `## 9. Non-Negotiable Rules`.
+
+Use for claim boundaries, artifact hygiene, public-doc restrictions, row
+promotion rules, benchmark rules, and source ownership constraints.
