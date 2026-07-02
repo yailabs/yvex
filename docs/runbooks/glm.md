@@ -34,6 +34,9 @@ runtime claim.
 `yvex context report --model glm-5.2-official-safetensors --family glm` uses
 the same source-only refusal boundary: no GLM safetensors inspection and no GLM
 runtime context claim.
+`yvex moe report --model glm-5.2-official-safetensors --family glm` uses the
+same source-only refusal boundary: no GLM safetensors inspection and no GLM MoE
+runtime claim.
 
 ## GLM Paths And Target
 

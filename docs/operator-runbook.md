@@ -51,6 +51,12 @@ chunking, overflow behavior, prefill boundary, decode position policy,
 attention/KV dependency, and blockers visible. It is report-only and does not
 run full transformer prefill, execute real decode, extend context, generate,
 evaluate, benchmark, or report throughput.
+`yvex moe report` makes MoE class facts visible: model_is_moe, expert count
+status, active expert count status, router tensor facts, shared expert facts,
+expert tensor roles, storage/residency pressure, blockers, and next rows. It is
+report-only and does not execute router logits, top-k routing, expert
+activation, expert dispatch, expert accumulation, graph/prefill/decode
+integration, generation, evaluation, benchmark, or throughput.
 
 ## Runbook Index
 
@@ -71,7 +77,7 @@ Covers:
 - segment-summary prefill;
 - minimal KV diagnostics;
 - bounded diagnostic generate help and copy-pack commands;
-- fullmodel inventory, materialization planning, proof/refusal, runtime descriptor, family-runtime, attention, KV cache class, and context class reports;
+- fullmodel inventory, materialization planning, proof/refusal, runtime descriptor, family-runtime, attention, KV cache class, context class, and MoE class reports;
 - CUDA selected checks;
 - daemon and accepted-only diagnostics.
 
@@ -84,7 +90,7 @@ Use this when working with the current GLM-5.2 official-source tensor target.
 Covers:
 
 - GLM target path reporting;
-- GLM source-only fullmodel unsupported report, descriptor, family-runtime, attention, KV, context report, and materialization refusal;
+- GLM source-only fullmodel unsupported report, descriptor, family-runtime, attention, KV, context report, MoE report, and materialization refusal;
 - GLM source-download start and status checks;
 - Hugging Face CLI and repository namespace boundaries;
 - GLM boundaries.
@@ -101,7 +107,7 @@ Covers:
 
 - operator storage configuration;
 - fast regression;
-- fullmodel report, materialization-plan, materialize, descriptor, family-runtime, attention, KV, and context command-surface checks;
+- fullmodel report, materialization-plan, materialize, descriptor, family-runtime, attention, KV, context, and MoE command-surface checks;
 - graph-only fixture regression;
 - daemon and accepted-only runtime diagnostics;
 - repository validation and artifact hygiene.

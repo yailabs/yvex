@@ -28,7 +28,7 @@ Current benchmark status:
   not measured
 
 Active implementation next:
-  MOE.CLASS.0 - MoE model-class report
+  V010.TENSOR.14-17 - MoE tensor collection report
 
 Current release target:
   v0.1.0 - first honest full-runtime path
@@ -57,7 +57,7 @@ Main v0.1.0 blocker:
 | Full model generation | unsupported |
 | DeepSeek generation | unsupported |
 | Eval/benchmark | unsupported / not measured |
-| Active next | MOE.CLASS.0 |
+| Active next | V010.TENSOR.14-17 |
 
 ## 1. Spine Nomenclature
 
@@ -126,9 +126,9 @@ official source tensors
 | tensor mapping | map source/artifact tensor names to YVEX roles | partial/report-only | partial | tensor-map and family-runtime reports | final runtime role coverage |
 | artifact production | produce controlled or selected GGUF | selected-slice | partial | controlled/selected GGUF emission | full-runtime artifact production |
 | artifact identity/integrity | digest, range, shape/dtype, corruption refusal | implemented | yes | integrity reports and tests | full-runtime artifact gate |
-| model-family mapping | family adapter facts and blockers | report-only | partial | `yvex fullmodel family-runtime` | MoE class facts |
-| model class | dense/MoE/source-only/selected-slice routing | report-only | partial | fullmodel descriptor reports | `MOE.CLASS.0` |
-| tensor collections | embedding/norm/attention/MLP/MoE/output/tokenizer roles | report-only | partial | fullmodel report and descriptor | final runtime tensor map |
+| model-family mapping | family adapter facts and blockers | report-only | partial | `yvex fullmodel family-runtime` | dense/output/tokenizer class facts |
+| model class | dense/MoE/source-only/selected-slice routing | report-only | partial | fullmodel descriptor reports and `yvex moe report` | final runtime route |
+| tensor collections | embedding/norm/attention/MLP/MoE/output/tokenizer roles | report-only | partial | fullmodel report, descriptor, and MoE blockers | MoE router/expert/shared-expert tensor map |
 | storage/residency | placement, cache, staging, storage-stream planning | report-only | partial | materialization plans | staged residency proof |
 | backend capability | CPU/CUDA/future backend capability | partial | partial | CPU/CUDA checks and parity | capability matrix hardening |
 | graph primitives | standalone op proof | fixture-proof | yes | `yvex graph --execute-op` | real transformer graph |
@@ -153,7 +153,7 @@ official source tensors
 | Model class | Runtime path | Current state | Next required evidence |
 | --- | --- | --- | --- |
 | dense | embedding -> norm -> attention -> dense MLP -> output head -> logits -> sampling -> generation | planned | dense target decision / dense class report |
-| MoE | embedding -> norm -> attention -> router -> expert selection -> dispatch -> accumulation -> output head -> logits -> sampling -> generation | report-only next | MOE.CLASS.0 |
+| MoE | embedding -> norm -> attention -> router -> expert selection -> dispatch -> accumulation -> output head -> logits -> sampling -> generation | report-only complete / runtime planned | V010.TENSOR.14-17 |
 | source-only | source/intake/storage/model-class only | GLM pressure lane | source inventory / storage stream |
 | selected-runtime-slice | parser/materialization/partial graph/diagnostic runtime only | DeepSeek selected artifacts | does not close full runtime |
 | Metal/Qwen | backend portability lane | docs/planned | hardware/backend/source target rows |
@@ -179,6 +179,7 @@ operator-readable state.
 | generation | diagnostic-runtime | partial | `yvex generate` | not full model generation |
 | fullmodel reports | report-only/selected-slice proof | yes | `yvex fullmodel ...` | not execution |
 | attention/context/KV class | report-only | yes | `yvex attention/kv/context report` | not runtime execution |
+| MoE class | report-only | yes | `yvex moe report` | not router/expert execution |
 | operator paths/presets | operator-preset | yes | paths/model-target/models prepare/check | not extra runtime capability |
 | docs/meta | docs-only | yes | spine rows | not runtime capability |
 
@@ -206,9 +207,9 @@ CLI `yvex generate` over diagnostic state.
 ### 3.5 Implemented Report-Only Capability
 
 YVEX reports fullmodel inventory/materialization plans/descriptors,
-family-runtime facts, attention class facts, KV class facts, and context class
-facts. Report-only capability increases inspection but does not execute runtime
-semantics.
+family-runtime facts, attention class facts, KV class facts, context class
+facts, and MoE class facts. Report-only capability increases inspection but
+does not execute runtime semantics.
 
 ### 3.6 Implemented Operator Capability
 
@@ -249,14 +250,14 @@ lanes; rows are the delivery units that complete track work.
 | TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory | multi-family huge source profile | active |
 | TRACK.ARTIFACT | Artifact production | YVEX-produced GGUF and conversion plan | selected-slice | controlled/selected GGUF emission | full-runtime artifact production | later |
 | TRACK.INTEGRITY | Artifact identity and gates | digest/ranges/corruption/materialization gates | implemented | integrity harness and reports | full-runtime gate coverage | active |
-| TRACK.MODEL | Model class and runtime routing | dense/MoE/source-only/selected-slice class reports | partial/report-only | family-runtime, attention, KV, context reports | MOE.CLASS.0 | active |
-| TRACK.TENSOR | Tensor collections | embedding, norm, attention, MLP/MoE, output, tokenizer roles | partial/report-only | fullmodel descriptor/report | final runtime tensor map | active |
+| TRACK.MODEL | Model class and runtime routing | dense/MoE/source-only/selected-slice class reports | partial/report-only | family-runtime, attention, KV, context, MoE reports | final runtime route and dense/output/tokenizer class gaps | active |
+| TRACK.TENSOR | Tensor collections | embedding, norm, attention, MLP/MoE, output, tokenizer roles | partial/report-only | fullmodel descriptor/report and MoE class blockers | MoE router/expert/shared-expert tensor map | active |
 | TRACK.STORAGE | Storage stream | shard index, cold/warm reads, byte ranges, cache policy | planned | doctrine/plans | shard and read probes | later |
 | TRACK.RESIDENCY | Residency | resident/staged/hybrid placement and movement | report-only | placement plans | staged residency proof | later |
 | TRACK.BACKEND | Backend capability | CPU/CUDA/future Metal/ROCm operations and memory reports | partial | CPU/CUDA probes and parity | capability matrix | active |
 | TRACK.GRAPH | Graph core | primitives, block/layer fixtures, model-backed graph path | partial | graph primitives and selected-slice graph | real transformer graph | later |
 | TRACK.ATTENTION | Attention runtime | Q/K/V/O, masks, position, attention execution | report-only | attention report and primitive proof | target tensor attention | later |
-| TRACK.MOE | MoE runtime path | router, experts, activation, dispatch, accumulation | planned/report-only next | routed expert primitive only | MOE.CLASS.0 then tensor/residency/activation | active |
+| TRACK.MOE | MoE runtime path | router, experts, activation, dispatch, accumulation | report-only complete / runtime planned | `yvex moe report`; routed expert primitive only | MoE tensor collections and residency pressure | active |
 | TRACK.CONTEXT | Context planning | requested/active context, chunking, overflow, decode policy | report-only | context report | connect to full-runtime prefill | active |
 | TRACK.PREFILL | Real prefill | real transformer prefill and KV writes | diagnostic-runtime only | segment/chunk diagnostic prefill | real attention-backed prefill | later |
 | TRACK.KV | KV runtime | KV layout, capacity, writes/reads, attention/decode interaction | diagnostic/report-only | diagnostic KV and `yvex kv report` | real KV write/read | later |
@@ -398,16 +399,16 @@ Current status:
   partial/report-only.
 
 Current evidence:
-  family-runtime, attention, KV, context reports.
+  family-runtime, attention, KV, context, and MoE reports.
 
 v0.1.0 rows:
   V010.CLASS.*, MOE.CLASS.0.
 
 Main blockers:
-  MoE model-class facts.
+  final runtime route, dense target decision, output-head class, tokenizer class.
 
 Next possible row:
-  MOE.CLASS.0.
+  V010.TENSOR.14-17 or V010.CLASS.12-13.
 
 Boundary:
   model-class reports are not runtime execution.
@@ -577,19 +578,19 @@ Does not own:
   dense MLP runtime, output-head logits, generation loop, benchmark.
 
 Current status:
-  planned / report-only next.
+  report-only complete / runtime planned.
 
 Current evidence:
-  routed expert-slice primitive; DeepSeek family-runtime MoE requirements.
+  `yvex moe report`; routed expert-slice primitive; DeepSeek family-runtime MoE requirements.
 
 v0.1.0 rows:
   V010.CLASS.3, V010.TENSOR.14-17, V010.RESIDENCY.14, V010.MOE.0-20, V010.PREFILL.7, V010.DECODE.6.
 
 Main blockers:
-  MOE.CLASS.0; expert tensor map; residency pressure; router/top-k; dispatch/accumulation.
+  MoE router/expert/shared-expert tensor map; expert storage/residency pressure; router/top-k; dispatch/accumulation.
 
 Next possible row:
-  MOE.CLASS.0.
+  V010.TENSOR.14-17.
 
 Boundary:
   routed expert primitive is not full MoE support.
@@ -1185,12 +1186,12 @@ ledger.
 | --- | --- | --- | --- | --- | --- | --- |
 | T00 | Target & Source | official source tensors, target class, source artifact class, source manifests | partial | source manifest and native inventory commands | multi-family source profile | artifact production and model-class routing |
 | T01 | Artifact & Integrity | YVEX-produced artifact identity, digest, byte ranges, corruption refusal, registry drift | implemented | integrity reports, materialization gates, corruption tests | full-runtime artifact gate | graph/runtime trust boundary |
-| T02 | Model Class & Tensor Collections | family, dense/MoE/source-only/selected-slice routing, tensor role groups | report-only | fullmodel descriptor, family-runtime, attention/KV/context reports | MoE class and final tensor map | graph/runtime path selection |
+| T02 | Model Class & Tensor Collections | family, dense/MoE/source-only/selected-slice routing, tensor role groups | report-only | fullmodel descriptor, family-runtime, attention/KV/context/MoE reports | MoE tensor map and final runtime route | graph/runtime path selection |
 | T03 | Storage & Residency | resident, host-staged, SSD-staged, SSD-streamed, hybrid placement | report-only | placement plans and pressure reports | staged residency proof | full-runtime materialization and prefill |
 | T04 | Backend & Hardware | CPU/CUDA capability, future Metal/ROCm lanes, build/hardware profiles | partial | CPU/CUDA movement and graph parity subset | capability matrix and memory pressure reports | graph ops and runtime residency |
 | T05 | Graph Core | primitives, controlled block, repeated layer fixture, selected graph segments | implemented | graph op, block, layer, selected-slice commands | target tensor graph integration | prefill, decode, logits |
 | T06 | Attention Runtime | Q/K/V/O requirements, position, mask, head layout, attention execution | report-only | attention report and standalone attention primitive | target tensor Q/K/V/O path | KV and transformer prefill |
-| T07 | MoE Runtime | router facts, expert classes, expert residency, activation, dispatch, accumulation | planned | routed expert-slice primitive only | `MOE.CLASS.0` | MoE prefill/decode/generation |
+| T07 | MoE Runtime | router facts, expert classes, expert residency, activation, dispatch, accumulation | report-only complete / runtime planned | `yvex moe report`; routed expert-slice primitive only | `V010.TENSOR.14-17` | MoE prefill/decode/generation |
 | T08 | Context & Prefill Planning | requested/active context, chunking, overflow, decode position policy | report-only | context report and chunked diagnostic prefill | connect planning to target tensor prefill | KV/decode correctness |
 | T09 | Model-Backed Prefill | transformer prefill over target layer tensors | planned | diagnostic segment/layer/chunk prefill only | target tensor prefill entry | KV production and decode |
 | T10 | KV Runtime | KV layout, capacity, ownership, append/read, attention interaction | diagnostic-runtime | minimal KV ownership and diagnostic binding | attention-backed KV production/consumption | decode runtime |
@@ -1223,9 +1224,9 @@ Active forward sequences:
 | Sequence | Purpose | Current state | Boundary |
 | --- | --- | --- | --- |
 | A | Completed diagnostic runtime closure | implemented through bounded diagnostic CLI generation | not full model generation |
-| B | Model-class dynamic planning | active, next row is `MOE.CLASS.0` | report/planning only until runtime rows exist |
+| B | Model-class dynamic planning | active; MoE class report complete, output/tokenizer/dense class gaps remain | report/planning only until runtime rows exist |
 | C | Dense full-runtime path | planned | cannot close DeepSeek/MoE runtime |
-| D | MoE full-runtime path | planned, first row active next | cannot claim MoE support before activation/dispatch/runtime integration |
+| D | MoE full-runtime path | active; next row is `V010.TENSOR.14-17` | cannot claim MoE support before activation/dispatch/runtime integration |
 | E | DeepSeek target path | planned beyond current selected slices | DeepSeek-specific rows only when generic rows are insufficient |
 | F | Serving path | planned | starts after runtime generation exists |
 | G | Evaluation and benchmark path | planned | measurements require reproducibility metadata |
@@ -1278,10 +1279,10 @@ B0 family runtime adapter report              complete
 B1 attention class report                     complete
 B2 KV cache class report                      complete
 B3 context class report                       complete
-B4 MoE class report                           next
+B4 MoE class report                           complete
 B5 dense class report                         planned if/when dense target is selected
 B6 output-head/tokenizer class report         planned
-B7 tensor collection final runtime map        planned
+B7 MoE tensor collection final runtime map    next
 B8 residency class/tensor residency plan      planned
 ```
 
@@ -1308,8 +1309,8 @@ evaluation, benchmark, or throughput claims.
 #### Sequence D - MoE Full-Runtime Path
 
 ```text
-MOE.CLASS.0      MoE model-class report
-MOE.TENSOR.0     MoE tensor collection report
+MOE.CLASS.0      MoE model-class report complete
+MOE.TENSOR.0     MoE tensor collection report next
 MOE.RESIDENCY.0  Expert residency and storage pressure report
 MOE.ACT.0        Expert activation boundary
 MOE.DISPATCH.0   Expert dispatch and accumulation boundary
@@ -1598,7 +1599,7 @@ V010.CLASS.15       dynamic path selection report
 V010.CLASS.16       v0.1.0 class acceptance gate
 ```
 
-Active next mapping: `MOE.CLASS.0` maps to `V010.CLASS.3`.
+Completed mapping: `MOE.CLASS.0` maps to `V010.CLASS.3`.
 
 Boundary: reports only. No runtime.
 
@@ -1806,7 +1807,8 @@ V010.MOE.19         MoE decode integration
 V010.MOE.20         v0.1.0 MoE gate
 ```
 
-Active next: `MOE.CLASS.0` feeds this track but does not implement it.
+Active next: `V010.TENSOR.14-17` follows the report-only MoE class facts and
+must not implement activation or dispatch.
 
 Boundary: a routed expert primitive is not full MoE support.
 
@@ -3712,19 +3714,21 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 ## 7. Active Next
 
 ```text
-MOE.CLASS.0 - MoE model-class report
+V010.TENSOR.14-17 - MoE tensor collection report
 ```
 
-MOE.CLASS.0 is next because the current runtime planning chain has completed:
+MOE.CLASS.0 is complete as a report-only row. The current runtime planning
+chain is now:
 
 ```text
 FAMILY.RUNTIME.0
 ATTENTION.CLASS.0
 KV.CACHE.0
 CONTEXT.CLASS.0
+MOE.CLASS.0
 ```
 
-MOE.CLASS.0 must report:
+`yvex moe report` now reports:
 
 ```text
 model_is_moe
@@ -3738,7 +3742,21 @@ runtime blockers
 next rows
 ```
 
-MOE.CLASS.0 must not claim:
+The current report result for DeepSeek selected-runtime-slice targets is
+`ok-partial`: the family is classified as MoE, but selected artifacts do not
+contain enough router/expert/shared-expert tensor roles to advance into
+activation or dispatch.
+
+V010.TENSOR.14-17 is next because it owns:
+
+```text
+MoE router collection
+MoE expert gate/up/down collection
+MoE shared expert collection
+MoE dispatch metadata collection
+```
+
+MOE.CLASS.0 did not claim:
 
 ```text
 router execution
@@ -3752,10 +3770,10 @@ generation
 benchmark
 ```
 
-After MOE.CLASS.0, next selection is conditional: missing tensor roles should
-feed TRACK.TENSOR, expert residency pressure should feed TRACK.RESIDENCY or
-TRACK.STORAGE, sufficient router facts may feed TRACK.MOE activation rows, and
-target uncertainty should feed TRACK.TARGET.
+After V010.TENSOR.14-17, missing expert residency pressure should feed
+TRACK.RESIDENCY or TRACK.STORAGE. Sufficient router and expert tensor facts may
+then feed TRACK.MOE activation rows. Target uncertainty still feeds
+TRACK.TARGET.
 
 ## 8. Historical Delivery Ledger
 
@@ -3827,7 +3845,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | ATTENTION.CLASS.0 | complete | attention | Attention class report | `yvex attention report` is command-visible for DeepSeek-family artifacts, mapping family-runtime facts into attention type/status, head layout, Q/K/V/O role requirements, RoPE/position requirements, mask rules, KV requirements, context blockers, graph primitive versus full-transformer attention distinction, backend requirements, selected-slice partial reports, source-only refusals, unknown-family refusals, and next runtime dependencies without full transformer attention execution, real attention-backed KV, full model execution, DeepSeek generation, provider generation, eval, benchmark, or throughput claim |
 | CONTEXT.CLASS.0 | complete | context | Context class report | `yvex context report` is command-visible with model/requested/active context fields, token input counts, chunking policy, overflow behavior, decode position policy, bounded diagnostic versus full runtime context distinction, attention/KV dependency reports, selected-slice partial reports, source-only refusals, unknown-family refusals, backend reports, and next runtime dependencies without full transformer prefill, real decode, full model execution, DeepSeek generation, provider generation, eval, benchmark, or throughput claim |
 | KV.CACHE.0 | complete | kv | KV cache class report | `yvex kv report` is command-visible with diagnostic-vs-real KV boundary, layout/dtype/layer/head/position/capacity requirements, residency classes, context dependency, attention dependency, prefill write/decode read requirements, selected-slice partial reports, source-only refusals, unknown-family refusals, backend reports, and next runtime dependencies without real attention-backed KV writes, full transformer prefill, decode, logits, generation, provider generation, eval, benchmark, or throughput claim |
-| MOE.CLASS.0 | planned | moe | MoE model-class report | expert count, active expert count, router facts, shared experts, and expert tensor classes are reported |
+| MOE.CLASS.0 | complete | moe | MoE model-class report | `yvex moe report` is command-visible for DeepSeek selected-runtime-slice targets, GLM source-only targets, unsupported families, and missing models; it reports model_is_moe, expert count status, active expert count status, router facts, shared expert facts, expert tensor roles, storage/residency pressure, blockers, and next rows without router logits, top-k routing, expert activation, expert dispatch, expert accumulation, graph/prefill/decode integration, generation, eval, benchmark, or throughput claim |
 | MOE.ACT.0 | planned | moe | Expert activation boundary | router logits, top-k selection, expert dispatch, accumulation, and cleanup are implemented and tested |
 | RESIDENCY.0 | planned | residency | Residency class report | resident, host-staged, SSD-staged, SSD-streamed, managed-memory, hybrid, and distributed classes are reported |
 | RESIDENCY.1 | planned | residency | Tensor residency plan | tensor collections are assigned planned residency classes with memory and storage pressure reports |
@@ -4130,6 +4148,7 @@ indexes, not runtime capability by themselves.
 | `yvex graph --execute-op` | fixture-proof | standalone graph primitives | full transformer runtime | TRACK.GRAPH |
 | `yvex prefill` | diagnostic-runtime | segment/chunk diagnostic prefill | real transformer prefill | TRACK.PREFILL |
 | `yvex kv report` | report-only / diagnostic | KV facts and diagnostic KV boundary | real attention KV | TRACK.KV |
+| `yvex moe report` | report-only | MoE class facts, router/expert/shared-expert blockers, next tensor/residency rows | router execution or expert dispatch | TRACK.MOE |
 | `yvex decode` | diagnostic-runtime | bounded decode state step | real decode over real KV | TRACK.DECODE |
 | `yvex logits` | diagnostic-runtime | bounded logits buffer | output-head logits | TRACK.LOGITS |
 | `yvex sample` | diagnostic-runtime | bounded greedy selection | real vocabulary sampling | TRACK.SAMPLING |
@@ -4145,6 +4164,7 @@ indexes, not runtime capability by themselves.
 | graph tests | fixture/selected-slice | primitive/block/layer/selected graph behavior | full transformer runtime | GRAPH |
 | prefill/KV/decode/logits/sample/generate tests | diagnostic-runtime | bounded runtime control flow | full-model generation | RUNTIME |
 | CLI tests | operator evidence | command surface, refusal, help, presets | new runtime semantics | OPERATOR |
+| MoE report tests | report-only | selected-slice MoE class report, GLM source-only refusal, unknown-family and missing-model boundaries | MoE runtime execution | TRACK.MOE |
 | CUDA tests | backend evidence | CUDA probe/movement/parity subset | model support | BACKEND |
 | docs/source/surface tests | guardrail | repository hygiene | runtime behavior | CI |
 
@@ -4178,7 +4198,7 @@ grep -nF 'TRACK.LOGITS' docs/spine.md
 grep -nF 'TRACK.SAMPLING' docs/spine.md
 grep -nF 'TRACK.GENERATION' docs/spine.md
 grep -nF 'SPINE.REDESIGN.0' docs/spine.md
-grep -nF 'MOE.CLASS.0 - MoE model-class report' docs/spine.md
+grep -nF 'V010.TENSOR.14-17 - MoE tensor collection report' docs/spine.md
 ```
 
 ### 10.5 Detailed Validation Gate Archive
@@ -4357,7 +4377,7 @@ grep -nF 'Output Head & Logits' docs/spine.md
 grep -nF 'Sampling Runtime' docs/spine.md
 grep -nF 'Generation Runtime' docs/spine.md
 grep -nF 'SPINE.NAVIGATION.0' docs/spine.md
-grep -nF 'MOE.CLASS.0 - MoE model-class report' docs/spine.md
+grep -nF 'V010.TENSOR.14-17 - MoE tensor collection report' docs/spine.md
 ```
 
 Canonical block directory proof:
@@ -4505,6 +4525,7 @@ no runtime file change for spine-only rebases
 | `yvex kv report` | report-only | KV class, diagnostic-vs-real boundary, layout/capacity/residency blockers | real attention KV allocation/write/read | KV.CACHE.0, V010.KV.* |
 | `yvex context report` | report-only | requested/active context, token counts, chunking, overflow and decode-position policy | long-context runtime or real generation context | CONTEXT.CLASS.0, V010.CONTEXT.* |
 | `yvex attention report` | report-only | attention class, Q/K/V/O requirements, RoPE/mask/KV/context blockers | full transformer attention, real QKV projection, real KV writes, generation | ATTENTION.CLASS.0, V010.ATTN.* |
+| `yvex moe report` | report-only | MoE class facts, router/expert/shared-expert role blockers, storage/residency pressure, next rows | router logits, top-k routing, expert activation/dispatch/accumulation, generation | MOE.CLASS.0, V010.CLASS.3, V010.TENSOR.14-17 |
 | `yvex decode` | diagnostic-runtime | bounded diagnostic decode-state step over implemented prefill/KV summary | real decode over full transformer KV | DECODE.0, V010.DECODE.* |
 | `yvex logits` | diagnostic-runtime | bounded diagnostic logits buffer with checksum/min/max | real output-head logits | LOGITS.0, V010.LOGITS.* |
 | `yvex sample` | diagnostic-runtime | deterministic greedy selection over implemented diagnostic logits | stochastic sampling, real vocabulary sampling, generation quality | SAMPLING.0, V010.SAMPLE.* |
@@ -4544,6 +4565,7 @@ no runtime file change for spine-only rebases
 | attention report tests | attention report/refusal/boundary output in fullmodel/core paths | report-only | no real attention runtime | V010.ATTN.* |
 | KV report tests | KV class/refusal/boundary output | report-only | no full KV allocation/write/read | V010.KV.* |
 | context report tests | context report/refusal/chunk/overflow output | report-only | no long-context runtime | V010.CONTEXT.* |
+| MoE report tests | MoE class/refusal/boundary output in fullmodel/core paths | report-only | no router execution or expert dispatch | MOE.CLASS.0 / V010.TENSOR.14-17 |
 | fullmodel report/materialize/descriptor/family-runtime tests | fullmodel inventory, refusal, tiny proof, descriptors, family reports | report-only / selected-slice-proof | broad row-to-test mapping still incomplete | SPINE.TESTMAP.0 |
 | operator preset tests | paths, target inspect, prepare/check, model registry | operator-preset | no fully automated row promotion map | SPINE.TESTMAP.0 |
 | runbook/public claim tests | public docs boundary and command examples | docs/meta | no release claim audit transcript yet | V010.DOCS.PUBLIC.*, V010.RELEASE.* |
@@ -4571,13 +4593,13 @@ coverage maps.
 ### 11.3 Reconciliation Actions
 
 SPINE.RECONCILE.0 classified evidence stages, normalized forward namespace
-rules, added block/command/test crosswalks, and returned Active Next to
-MOE.CLASS.0 after resolving the docs/meta blocker.
+rules, added block/command/test crosswalks, and returned runtime planning to
+the report-only model-class lane after resolving the docs/meta blocker.
 
 ### 11.4 Follow-Up Rows
 
 `SPINE.TESTMAP.0` and `SPINE.FILEMAP.0` remain useful non-runtime follow-ups.
-Runtime planning returns to `MOE.CLASS.0`.
+Runtime planning now continues through `V010.TENSOR.14-17`.
 
 ### 11.5 Detailed Audit Tables
 
@@ -4969,20 +4991,21 @@ SPINE.TESTMAP.0:
 
 SPINE.FILEMAP.0:
   planned full file ownership expansion, not required before the next
-  model-class report row.
+  tensor-collection report row.
 ```
 
-If no remaining P1 finding blocks runtime planning, Active Next returns to:
+If no remaining P1 finding blocks runtime planning after MOE.CLASS.0, Active
+Next advances to:
 
 ```text
-MOE.CLASS.0 - MoE model-class report
+V010.TENSOR.14-17 - MoE tensor collection report
 ```
 
 If any P1 finding remains blocking, Active Next becomes the named follow-up row.
 
 | Condition | Active Next |
 | --- | --- |
-| all P1 resolved or assigned non-blocking follow-up | MOE.CLASS.0 |
+| all P1 resolved or assigned non-blocking follow-up after MOE.CLASS.0 | V010.TENSOR.14-17 |
 | Current Capability still overclaims implementation | SPINE.CAPABILITY.REWRITE.0 |
 | command/help boundaries still overclaim | SPINE.COMMAND.AUDIT.0 |
 | test-to-ledger coverage remains blocking | SPINE.TESTMAP.0 |
@@ -4992,12 +5015,14 @@ Current reconciliation result:
 
 ```text
 Active Next:
-  MOE.CLASS.0 - MoE model-class report
+  V010.TENSOR.14-17 - MoE tensor collection report
 
 Reason:
   P1 evidence-taxonomy and namespace blockers are resolved in spine or assigned
-  to non-blocking follow-up rows. The next runtime-planning row is report-only
-  and remains bounded by attention, KV, and context report evidence.
+  to non-blocking follow-up rows. MOE.CLASS.0 is complete as report-only
+  evidence; selected DeepSeek slices still lack router/expert/shared-expert
+  tensor-role coverage, so the next runtime-planning row remains in
+  TRACK.TENSOR.
 ```
 
 

@@ -144,6 +144,7 @@ grep 'fullmodel[[:space:]]*full model inventory, materialization, descriptor, an
 grep 'attention[[:space:]]*attention class and KV requirement reports' "$ROOT/commands.out"
 grep 'context[[:space:]]*context class and runtime boundary reports' "$ROOT/commands.out"
 grep 'kv[[:space:]]*KV diagnostics and KV cache class reports' "$ROOT/commands.out"
+grep 'moe[[:space:]]*MoE model-class reports and blockers' "$ROOT/commands.out"
 
 "$YVEX_BIN" help fullmodel > "$ROOT/help.out"
 grep 'usage: yvex fullmodel report --model FILE_OR_ALIAS' "$ROOT/help.out"
@@ -205,6 +206,24 @@ grep 'does not execute real decode' "$ROOT/context-help.out"
 grep 'does not generate' "$ROOT/context-help.out"
 grep 'does not benchmark' "$ROOT/context-help.out"
 grep 'no long-context runtime support' "$ROOT/context-help.out"
+
+"$YVEX_BIN" help moe > "$ROOT/moe-help.out"
+grep 'usage: yvex moe report --model FILE_OR_ALIAS' "$ROOT/moe-help.out"
+grep 'moe report:' "$ROOT/moe-help.out"
+grep 'classifies the model as MoE' "$ROOT/moe-help.out"
+grep 'report-only boundary' "$ROOT/moe-help.out"
+grep 'does not execute router logits' "$ROOT/moe-help.out"
+grep 'does not perform top-k routing' "$ROOT/moe-help.out"
+grep 'does not activate experts' "$ROOT/moe-help.out"
+grep 'does not dispatch experts' "$ROOT/moe-help.out"
+grep 'does not generate' "$ROOT/moe-help.out"
+grep 'does not benchmark' "$ROOT/moe-help.out"
+grep 'selected-runtime-slice targets may return ok-partial' "$ROOT/moe-help.out"
+grep 'source-only targets are reported without opening huge source shards' "$ROOT/moe-help.out"
+
+"$YVEX_BIN" moe report --help > "$ROOT/moe-report-help.out"
+grep 'usage: yvex moe report --model FILE_OR_ALIAS' "$ROOT/moe-report-help.out"
+grep 'moe report:' "$ROOT/moe-report-help.out"
 
 "$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" > "$ROOT/selected.out"
 grep 'status: fullmodel-report' "$ROOT/selected.out"
@@ -332,6 +351,40 @@ grep 'runtime_execution_ready: false' "$ROOT/selected-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/selected-family.out"
 grep 'benchmark_status: not-measured' "$ROOT/selected-family.out"
 grep 'next_required_rows: ATTENTION.CLASS.0' "$ROOT/selected-family.out"
+
+"$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" --include-tensors --include-residency --include-blockers > "$ROOT/selected-moe.out"
+grep 'moe: report' "$ROOT/selected-moe.out"
+grep 'status: ok-partial' "$ROOT/selected-moe.out"
+grep 'target_id: deepseek4-v4-flash-selected-embed' "$ROOT/selected-moe.out"
+grep 'target_class: selected-runtime-slice' "$ROOT/selected-moe.out"
+grep 'family: deepseek' "$ROOT/selected-moe.out"
+grep 'backend: cpu' "$ROOT/selected-moe.out"
+grep 'source_class: YVEX-produced selected GGUF' "$ROOT/selected-moe.out"
+grep 'artifact_class: YVEX-produced selected GGUF' "$ROOT/selected-moe.out"
+grep 'implementation_stage: report-only' "$ROOT/selected-moe.out"
+grep 'model_is_moe: true' "$ROOT/selected-moe.out"
+grep 'moe_class_status: partial' "$ROOT/selected-moe.out"
+grep 'expert_count_status: unknown' "$ROOT/selected-moe.out"
+grep 'active_expert_count_status: unknown' "$ROOT/selected-moe.out"
+grep 'router_tensor_status: missing' "$ROOT/selected-moe.out"
+grep 'router_logits_status: unsupported' "$ROOT/selected-moe.out"
+grep 'top_k_policy_status: unknown' "$ROOT/selected-moe.out"
+grep 'shared_expert_status: unknown' "$ROOT/selected-moe.out"
+grep 'expert_tensor_collection_status: missing' "$ROOT/selected-moe.out"
+grep 'expert_tensor_roles: missing' "$ROOT/selected-moe.out"
+grep 'expert_activation_status: unsupported' "$ROOT/selected-moe.out"
+grep 'expert_dispatch_status: unsupported' "$ROOT/selected-moe.out"
+grep 'expert_accumulation_status: unsupported' "$ROOT/selected-moe.out"
+grep 'prefill_integration_status: unsupported' "$ROOT/selected-moe.out"
+grep 'decode_integration_status: unsupported' "$ROOT/selected-moe.out"
+grep 'graph_integration_status: unsupported' "$ROOT/selected-moe.out"
+grep 'runtime_claim: unsupported' "$ROOT/selected-moe.out"
+grep 'generation: unsupported-full-model' "$ROOT/selected-moe.out"
+grep 'benchmark_status: not-measured' "$ROOT/selected-moe.out"
+grep 'next_required_rows: V010.TENSOR.14' "$ROOT/selected-moe.out"
+grep 'report_options.include_tensors: true' "$ROOT/selected-moe.out"
+grep 'report_options.include_residency: true' "$ROOT/selected-moe.out"
+grep 'report_options.include_blockers: true' "$ROOT/selected-moe.out"
 
 "$YVEX_BIN" attention report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" > "$ROOT/selected-attention.out"
 grep 'attention: report' "$ROOT/selected-attention.out"
@@ -504,6 +557,34 @@ grep 'moe_dispatch_ready: false' "$ROOT/rmsnorm-family.out"
 grep 'real_output_head_logits: false' "$ROOT/rmsnorm-family.out"
 grep 'runtime_blockers:' "$ROOT/rmsnorm-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-family.out"
+
+"$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --include-tensors --include-residency --include-blockers > "$ROOT/rmsnorm-moe.out"
+grep 'moe: report' "$ROOT/rmsnorm-moe.out"
+grep 'status: ok-partial' "$ROOT/rmsnorm-moe.out"
+grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-moe.out"
+grep 'target_class: selected-runtime-slice' "$ROOT/rmsnorm-moe.out"
+grep 'family: deepseek' "$ROOT/rmsnorm-moe.out"
+grep 'backend: cpu' "$ROOT/rmsnorm-moe.out"
+grep 'implementation_stage: report-only' "$ROOT/rmsnorm-moe.out"
+grep 'model_is_moe: true' "$ROOT/rmsnorm-moe.out"
+grep 'router_tensor_status: missing' "$ROOT/rmsnorm-moe.out"
+grep 'expert_tensor_collection_status: missing' "$ROOT/rmsnorm-moe.out"
+grep 'expert_tensor_roles: missing' "$ROOT/rmsnorm-moe.out"
+grep 'runtime_claim: unsupported' "$ROOT/rmsnorm-moe.out"
+grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-moe.out"
+grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-moe.out"
+grep 'next_required_rows: V010.TENSOR.14' "$ROOT/rmsnorm-moe.out"
+
+"$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cuda --registry "$REG" --include-tensors --include-residency --include-blockers > "$ROOT/rmsnorm-moe-cuda.out"
+grep 'moe: report' "$ROOT/rmsnorm-moe-cuda.out"
+grep 'status: ok-partial' "$ROOT/rmsnorm-moe-cuda.out"
+grep 'backend: cuda' "$ROOT/rmsnorm-moe-cuda.out"
+grep 'implementation_stage: report-only' "$ROOT/rmsnorm-moe-cuda.out"
+grep 'expert_activation_status: unsupported' "$ROOT/rmsnorm-moe-cuda.out"
+grep 'expert_dispatch_status: unsupported' "$ROOT/rmsnorm-moe-cuda.out"
+grep 'runtime_claim: unsupported' "$ROOT/rmsnorm-moe-cuda.out"
+grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-moe-cuda.out"
+grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-moe-cuda.out"
 
 "$YVEX_BIN" fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --registry "$REG" > "$ROOT/rmsnorm-family-auto.out"
 grep 'family_requested: auto' "$ROOT/rmsnorm-family-auto.out"
@@ -1002,6 +1083,26 @@ grep 'real_attention_kv_ready: false' "$ROOT/glm-context.out"
 grep 'generation: unsupported-full-model' "$ROOT/glm-context.out"
 grep 'benchmark_status: not-measured' "$ROOT/glm-context.out"
 
+"$YVEX_BIN" moe report --model glm-5.2-official-safetensors --family glm --backend cpu --include-blockers > "$ROOT/glm-moe.out" && exit 1 || true
+grep 'moe: report' "$ROOT/glm-moe.out"
+grep 'status: unsupported-source-only' "$ROOT/glm-moe.out"
+grep 'target_class: huge-source-pressure' "$ROOT/glm-moe.out"
+grep 'family: glm' "$ROOT/glm-moe.out"
+grep 'backend: cpu' "$ROOT/glm-moe.out"
+grep 'source_class: official safetensors' "$ROOT/glm-moe.out"
+grep 'artifact_class: future YVEX-produced GGUF' "$ROOT/glm-moe.out"
+grep 'implementation_stage: report-only' "$ROOT/glm-moe.out"
+grep 'model_is_moe: true' "$ROOT/glm-moe.out"
+grep 'moe_class_status: source-only' "$ROOT/glm-moe.out"
+grep 'router_logits_status: unsupported' "$ROOT/glm-moe.out"
+grep 'expert_activation_status: unsupported' "$ROOT/glm-moe.out"
+grep 'expert_dispatch_status: unsupported' "$ROOT/glm-moe.out"
+grep 'expert_accumulation_status: unsupported' "$ROOT/glm-moe.out"
+grep 'runtime_claim: unsupported' "$ROOT/glm-moe.out"
+grep 'generation: unsupported-full-model' "$ROOT/glm-moe.out"
+grep 'benchmark_status: not-measured' "$ROOT/glm-moe.out"
+grep 'next_required_rows: OWI.HUGE.0' "$ROOT/glm-moe.out"
+
 "$YVEX_BIN" fullmodel report --model "$ROOT/missing.gguf" > "$ROOT/missing.out" 2> "$ROOT/missing.err" && exit 1 || true
 grep 'status: fullmodel-report-fail' "$ROOT/missing.out"
 grep 'artifact_exists: false' "$ROOT/missing.out"
@@ -1068,6 +1169,25 @@ grep 'family_requested: unknown-family' "$ROOT/bad-family.out"
 grep 'runtime_claim: unsupported' "$ROOT/bad-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/bad-family.out"
 
+"$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family unknown --backend cpu --registry "$REG" > "$ROOT/bad-moe-family.out" 2> "$ROOT/bad-moe-family.err" && exit 1 || true
+grep 'moe: report' "$ROOT/bad-moe-family.out"
+grep 'status: unsupported-family' "$ROOT/bad-moe-family.out"
+grep 'family: unknown' "$ROOT/bad-moe-family.out"
+grep 'family_requested: unknown' "$ROOT/bad-moe-family.out"
+grep 'model_is_moe: unknown' "$ROOT/bad-moe-family.out"
+grep 'runtime_claim: unsupported' "$ROOT/bad-moe-family.out"
+grep 'generation: unsupported-full-model' "$ROOT/bad-moe-family.out"
+grep 'benchmark_status: not-measured' "$ROOT/bad-moe-family.out"
+
+"$YVEX_BIN" moe report --model missing-moe-alias --family deepseek --backend cpu --registry "$REG" > "$ROOT/missing-moe.out" 2> "$ROOT/missing-moe.err" && exit 1 || true
+grep 'moe: report' "$ROOT/missing-moe.out"
+grep 'status: missing-model' "$ROOT/missing-moe.out"
+grep 'target_id: missing-moe-alias' "$ROOT/missing-moe.out"
+grep 'family_requested: deepseek' "$ROOT/missing-moe.out"
+grep 'runtime_claim: unsupported' "$ROOT/missing-moe.out"
+grep 'generation: unsupported-full-model' "$ROOT/missing-moe.out"
+grep 'benchmark_status: not-measured' "$ROOT/missing-moe.out"
+
 "$YVEX_BIN" attention report --model "$FULLISH" --family unknown-family --backend cpu > "$ROOT/bad-attention-family.out" 2> "$ROOT/bad-attention-family.err" && exit 1 || true
 grep 'status: attention-report-unsupported' "$ROOT/bad-attention-family.out"
 grep 'family_requested: unknown-family' "$ROOT/bad-attention-family.out"
@@ -1097,6 +1217,7 @@ for file in \
   "$ROOT/selected-materialize.out" \
   "$ROOT/selected-descriptor.out" \
 	  "$ROOT/selected-family.out" \
+	  "$ROOT/selected-moe.out" \
 	  "$ROOT/selected-attention.out" \
 	  "$ROOT/selected-kv.out" \
 	  "$ROOT/selected-context.out" \
@@ -1105,6 +1226,8 @@ for file in \
 	  "$ROOT/rmsnorm-descriptor.out" \
 	  "$ROOT/rmsnorm-family.out" \
 	  "$ROOT/rmsnorm-family-auto.out" \
+	  "$ROOT/rmsnorm-moe.out" \
+	  "$ROOT/rmsnorm-moe-cuda.out" \
 	  "$ROOT/rmsnorm-attention.out" \
 	  "$ROOT/rmsnorm-attention-auto.out" \
 	  "$ROOT/rmsnorm-kv.out" \
@@ -1137,6 +1260,9 @@ for file in \
 	  "$ROOT/glm-attention.out" \
 	  "$ROOT/glm-kv.out" \
 	  "$ROOT/glm-context.out" \
+	  "$ROOT/glm-moe.out" \
+	  "$ROOT/bad-moe-family.out" \
+	  "$ROOT/missing-moe.out" \
 	  "$ROOT/bad-attention-family.out" \
 	  "$ROOT/bad-kv-family.out" \
 	  "$ROOT/bad-context-family.out"

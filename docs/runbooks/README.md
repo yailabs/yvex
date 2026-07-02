@@ -6,9 +6,9 @@ Use a model-specific runbook when working with a concrete target.
 
 ## Files
 
-- `deepseek.md` - current DeepSeek selected artifact path from local safetensors to selected graph execution, bounded diagnostics, fullmodel inventory/materialization-plan/materialize/descriptor/family-runtime reports, attention class reports, KV cache class reports, and context class reports.
-- `glm.md` - GLM-5.2 official-source tensor target status, source-only fullmodel, attention, KV, and context unsupported report/descriptor/refusal, and download start/status checks.
-- `common.md` - shared configuration, fullmodel report/plan/materialize/descriptor/family-runtime, attention, KV, and context command-surface checks, graph-only checks, daemon diagnostics, and repository validation.
+- `deepseek.md` - current DeepSeek selected artifact path from local safetensors to selected graph execution, bounded diagnostics, fullmodel inventory/materialization-plan/materialize/descriptor/family-runtime reports, attention class reports, KV cache class reports, context class reports, and MoE class reports.
+- `glm.md` - GLM-5.2 official-source tensor target status, source-only fullmodel, attention, KV, context, and MoE unsupported report/descriptor/refusal, and download start/status checks.
+- `common.md` - shared configuration, fullmodel report/plan/materialize/descriptor/family-runtime, attention, KV, context, and MoE command-surface checks, graph-only checks, daemon diagnostics, and repository validation.
 
 ## Rules
 

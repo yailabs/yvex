@@ -551,6 +551,10 @@ YVEX can:
   counts, chunking policy, overflow behavior, prefill boundary, decode position
   policy, attention/KV dependency, and next runtime blockers without running
   full transformer prefill or real decode.
+- report DeepSeek MoE class facts, router/expert/shared-expert blockers,
+  storage/residency pressure, and next tensor rows without running router
+  logits, top-k routing, expert activation, expert dispatch, or expert
+  accumulation.
 
 YVEX does not currently implement:
 
