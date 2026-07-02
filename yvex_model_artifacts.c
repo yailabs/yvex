@@ -7452,6 +7452,606 @@ static int print_fullmodel_parse_failure_report(const yvex_cli_fullmodel_options
     return exit_for_status(rc);
 }
 
+typedef struct {
+    const char *model;
+    const char *backend;
+    const char *family;
+    const char *registry_path;
+    int include_kv;
+    int include_context;
+    int include_graph;
+    int include_blockers;
+} yvex_cli_attention_options;
+
+static int attention_parse_value_option(const char *flag,
+                                        int argc,
+                                        char **argv,
+                                        int *index,
+                                        const char **value)
+{
+    if (*index + 1 >= argc) {
+        fprintf(stderr, "yvex: attention %s requires a value\n", flag);
+        return 2;
+    }
+    *value = argv[++(*index)];
+    if (fullmodel_string_is_empty(*value)) {
+        fprintf(stderr, "yvex: attention %s value is empty\n", flag);
+        return 2;
+    }
+    return 0;
+}
+
+static int parse_attention_options(int argc,
+                                   char **argv,
+                                   yvex_cli_attention_options *options)
+{
+    int i;
+
+    if (!options) return 2;
+    memset(options, 0, sizeof(*options));
+    options->backend = "cpu";
+    options->family = "auto";
+
+    if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        yvex_attention_help(stdout);
+        return 1;
+    }
+    if (argc < 3 || strcmp(argv[2], "report") != 0) {
+        fprintf(stderr, "yvex: attention requires report\n");
+        fprintf(stderr, "usage: yvex attention report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--registry FILE] [--include-kv] [--include-context] [--include-graph] [--include-blockers]\n");
+        return 2;
+    }
+
+    for (i = 3; i < argc; ++i) {
+        const char *value = NULL;
+        if (strcmp(argv[i], "--model") == 0) {
+            int rc = attention_parse_value_option("--model", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            options->model = value;
+        } else if (strcmp(argv[i], "--backend") == 0) {
+            int rc = attention_parse_value_option("--backend", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            if (strcmp(value, "cpu") != 0 && strcmp(value, "cuda") != 0) {
+                fprintf(stderr, "yvex: attention --backend must be cpu or cuda\n");
+                return 2;
+            }
+            options->backend = value;
+        } else if (strcmp(argv[i], "--family") == 0) {
+            int rc = attention_parse_value_option("--family", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            options->family = value;
+        } else if (strcmp(argv[i], "--registry") == 0) {
+            int rc = attention_parse_value_option("--registry", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            options->registry_path = value;
+        } else if (strcmp(argv[i], "--include-kv") == 0) {
+            options->include_kv = 1;
+        } else if (strcmp(argv[i], "--include-context") == 0) {
+            options->include_context = 1;
+        } else if (strcmp(argv[i], "--include-graph") == 0) {
+            options->include_graph = 1;
+        } else if (strcmp(argv[i], "--include-blockers") == 0) {
+            options->include_blockers = 1;
+        } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            yvex_attention_help(stdout);
+            return 1;
+        } else {
+            fprintf(stderr, "yvex: unknown attention option: %s\n", argv[i]);
+            return 2;
+        }
+    }
+
+    if (!options->model || !options->model[0]) {
+        fprintf(stderr, "yvex: attention report requires --model FILE_OR_ALIAS\n");
+        return 2;
+    }
+    return 0;
+}
+
+static const char *attention_requested_family(const yvex_cli_attention_options *options)
+{
+    return options && options->family && options->family[0] ? options->family : "auto";
+}
+
+static void attention_print_phase(unsigned int index,
+                                  const char *name,
+                                  const char *status)
+{
+    printf("attention_phase.%u.name: %s\n", index, name ? name : "");
+    printf("attention_phase.%u.status: %s\n", index, status ? status : "planned");
+}
+
+static void attention_print_phases(const char *attention_status,
+                                   const char *head_layout_status,
+                                   const char *qkv_status,
+                                   const char *failure_phase)
+{
+    static const char *const phases[] = {
+        "preflight",
+        "resolve-model",
+        "resolve-family",
+        "load-family-runtime",
+        "attention-profile",
+        "head-layout",
+        "qkv-role-check",
+        "position-rules",
+        "mask-rules",
+        "kv-requirements",
+        "context-requirements",
+        "graph-requirements",
+        "backend-requirements",
+        "blocker-report",
+        "complete",
+        "failed",
+        "cleanup"
+    };
+    unsigned int i;
+    int failed_seen = 0;
+
+    for (i = 0; i < sizeof(phases) / sizeof(phases[0]); ++i) {
+        const char *status = "pass";
+        if (failure_phase && strcmp(failure_phase, phases[i]) == 0) {
+            status = "failed";
+            failed_seen = 1;
+        } else if (failed_seen) {
+            status = "blocked";
+        } else if (strcmp(phases[i], "attention-profile") == 0) {
+            status = attention_status ? attention_status : "partial";
+        } else if (strcmp(phases[i], "head-layout") == 0) {
+            status = head_layout_status ? head_layout_status : "unknown";
+        } else if (strcmp(phases[i], "qkv-role-check") == 0) {
+            status = qkv_status ? qkv_status : "partial";
+        } else if (strcmp(phases[i], "position-rules") == 0 ||
+                   strcmp(phases[i], "mask-rules") == 0 ||
+                   strcmp(phases[i], "context-requirements") == 0) {
+            status = "planned";
+        } else if (strcmp(phases[i], "kv-requirements") == 0 ||
+                   strcmp(phases[i], "graph-requirements") == 0 ||
+                   strcmp(phases[i], "backend-requirements") == 0) {
+            status = "blocked";
+        } else if (strcmp(phases[i], "failed") == 0 && !failure_phase) {
+            status = "unsupported";
+        }
+        attention_print_phase(i, phases[i], status);
+    }
+}
+
+static const char *attention_role_status(yvex_cli_tokenizer_context *ctx,
+                                         const yvex_fullmodel_collections *collections,
+                                         const char *role)
+{
+    return fullmodel_role_status_from_tensor(ctx, collections, role);
+}
+
+static void attention_print_projection_role(yvex_cli_tokenizer_context *ctx,
+                                            const yvex_fullmodel_collections *collections,
+                                            const char *role,
+                                            const char *prefix)
+{
+    const yvex_tensor_info *tensor = fullmodel_descriptor_find_tensor(ctx, role);
+    char dims[128];
+    const char *status = attention_role_status(ctx, collections, role);
+
+    dims[0] = '\0';
+    if (tensor) dims_to_text(tensor->dims, tensor->rank, dims, sizeof(dims));
+    printf("%s_required: true\n", prefix);
+    printf("%s_status: %s\n", prefix, status);
+    printf("%s_tensor: %s\n", prefix, tensor && tensor->name ? tensor->name : "none");
+    printf("%s_shape: %s\n", prefix, tensor ? dims : "unknown");
+    printf("%s_dtype: %s\n", prefix, tensor ? yvex_dtype_name(tensor->dtype) : "unknown");
+    printf("%s_qtype: %s\n", prefix, tensor ? yvex_dtype_name(tensor->dtype) : "unknown");
+    printf("%s_bytes: %llu\n", prefix, tensor ? tensor->storage_bytes : 0ull);
+    printf("%s_runtime_consumer: %s\n", prefix,
+           tensor ? "planned-full-transformer-attention" : "blocked-missing-role");
+}
+
+static void attention_print_unsupported_common(const char *model,
+                                               const char *resolved_path,
+                                               const char *target_id,
+                                               const char *target_class,
+                                               const char *backend,
+                                               const char *family,
+                                               const char *detected,
+                                               const char *requested,
+                                               const char *status,
+                                               const char *reason,
+                                               const char *phase)
+{
+    printf("attention: report\n");
+    printf("status: %s\n", status ? status : "attention-report-unsupported");
+    printf("model: %s\n", model ? model : "");
+    printf("model_resolved_path: %s\n", resolved_path ? resolved_path : "");
+    printf("target_id: %s\n", target_id ? target_id : "unknown");
+    printf("target_class: %s\n", target_class ? target_class : "unknown");
+    printf("backend: %s\n", backend ? backend : "cpu");
+    printf("family: %s\n", family ? family : "unknown");
+    printf("family_detected: %s\n", detected ? detected : "unknown");
+    printf("family_requested: %s\n", requested ? requested : "auto");
+    printf("family_runtime_status: unsupported\n");
+    printf("attention_class_status: unsupported\n");
+    printf("attention_stage: report-only\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("attention_family: unsupported\n");
+    printf("attention_type: unknown\n");
+    printf("attention_support_status: report-only\n");
+    printf("full_transformer_attention: unsupported\n");
+    printf("attention_runtime_ready: false\n");
+    printf("attention_backend_ready: false\n");
+    printf("full_model_execution: unsupported\n");
+    printf("generation_ready: false\n");
+    printf("q_projection_required: true\n");
+    printf("k_projection_required: true\n");
+    printf("v_projection_required: true\n");
+    printf("o_projection_required: true\n");
+    printf("q_projection_status: unknown\n");
+    printf("k_projection_status: unknown\n");
+    printf("v_projection_status: unknown\n");
+    printf("o_projection_status: unknown\n");
+    printf("attention_heads: unknown\n");
+    printf("kv_heads: unknown\n");
+    printf("head_dim: unknown\n");
+    printf("hidden_size: unknown\n");
+    printf("head_layout_status: unknown\n");
+    printf("head_layout_source: unknown\n");
+    printf("head_layout_blockers: attention class unavailable\n");
+    printf("position_policy: planned\n");
+    printf("rope_required: true\n");
+    printf("rope_status: planned\n");
+    printf("rope_base: unknown\n");
+    printf("rope_scaling: unknown\n");
+    printf("rope_dimension: unknown\n");
+    printf("rope_runtime_ready: false\n");
+    printf("mask_policy: planned\n");
+    printf("causal_mask_required: true\n");
+    printf("mask_status: planned\n");
+    printf("mask_runtime_ready: false\n");
+    printf("kv_required: true\n");
+    printf("kv_layout: planned\n");
+    printf("kv_dtype: planned\n");
+    printf("kv_layers: unknown\n");
+    printf("kv_heads: unknown\n");
+    printf("kv_head_dim: unknown\n");
+    printf("kv_capacity_status: unsupported-full-transformer-kv\n");
+    printf("kv_write_ready: false\n");
+    printf("kv_read_ready: false\n");
+    printf("attention_kv_runtime_ready: false\n");
+    printf("kv_boundary: diagnostic-kv-exists-real-attention-kv-unsupported\n");
+    printf("context_policy: planned\n");
+    printf("max_context: unknown\n");
+    printf("requested_context: not-requested\n");
+    printf("context_status: planned\n");
+    printf("context_blockers: attention class unavailable\n");
+    printf("graph_rope_primitive: implemented\n");
+    printf("graph_attention_primitive: implemented-fixture\n");
+    printf("graph_qkv_projection: unsupported\n");
+    printf("graph_o_projection: unsupported\n");
+    printf("graph_full_transformer_attention: unsupported\n");
+    printf("graph_backend_status: report-only\n");
+    printf("unsupported_graph_ops: full-transformer-attention,real-attention-backed-kv,real-transformer-prefill\n");
+    printf("backend_attention_status: implemented-fixture-full-transformer-unsupported\n");
+    printf("backend_rope_status: implemented-primitive\n");
+    printf("backend_softmax_status: implemented-inside-attention-fixture\n");
+    printf("backend_matmul_status: implemented-primitive\n");
+    printf("backend_kv_status: unsupported-real-attention-kv\n");
+    printf("attention_blockers: %s\n", reason ? reason : "attention class unavailable");
+    printf("next_required_rows: ATTENTION.CLASS.0,KV.CACHE.0,CONTEXT.CLASS.0\n");
+    printf("cleanup_attempted: false\n");
+    printf("cleanup_status: not-needed\n");
+    attention_print_phases("unsupported", "unknown", "unknown", phase);
+    printf("reason: %s\n", reason ? reason : "unsupported attention class report");
+}
+
+static int attention_print_source_only_report(const yvex_cli_attention_options *options,
+                                              const char *target)
+{
+    attention_print_unsupported_common(options && options->model ? options->model : target,
+                                       "source-only-target",
+                                       target,
+                                       "official-source-huge-model",
+                                       options && options->backend ? options->backend : "cpu",
+                                       "glm",
+                                       "glm",
+                                       attention_requested_family(options),
+                                       "attention-report-unsupported",
+                                       "source-only target has no YVEX-produced GGUF tensor inventory; GLM attention class mapping planned",
+                                       "resolve-model");
+    printf("tensor_inventory_status: not-performed-source-only-target\n");
+    printf("source_artifact_class: official safetensors\n");
+    printf("target_artifact_class: future YVEX-produced GGUF\n");
+    return 5;
+}
+
+static int attention_print_report(const yvex_cli_attention_options *options,
+                                  yvex_model_ref *ref,
+                                  yvex_cli_tokenizer_context *ctx,
+                                  const char *target_id,
+                                  const char *target_class,
+                                  unsigned long long artifact_bytes,
+                                  yvex_arch arch,
+                                  unsigned long long tensor_count,
+                                  unsigned long long total_tensor_bytes,
+                                  const yvex_fullmodel_collections *collections,
+                                  int selected_target)
+{
+    yvex_fullmodel_backend_fit fit;
+    const char *backend = options && options->backend ? options->backend : "cpu";
+    const char *requested = attention_requested_family(options);
+    yvex_cli_fullmodel_options family_probe;
+    const char *detected;
+    int request_matches;
+    int supported_family;
+    int has_q;
+    int has_k;
+    int has_v;
+    int has_o;
+    int has_all_qkvo;
+    const char *attention_class_status;
+    const char *qkv_status;
+    const char *graph_projection_status;
+    const char *blockers;
+
+    memset(&family_probe, 0, sizeof(family_probe));
+    family_probe.model = options ? options->model : NULL;
+    family_probe.family = options ? options->family : "auto";
+    detected = fullmodel_detect_family(&family_probe, arch, target_id);
+    request_matches = fullmodel_family_request_matches(requested, detected);
+    supported_family = request_matches && strcmp(detected, "deepseek") == 0;
+    if (!supported_family) {
+        const char *reason = !request_matches
+                                 ? "requested family does not match detected family"
+                                 : "attention report supports DeepSeek-family artifacts first";
+        attention_print_unsupported_common(options && options->model ? options->model : "",
+                                           ref && ref->path ? ref->path : "",
+                                           target_id ? target_id : "path",
+                                           target_class ? target_class : "candidate-GGUF-path",
+                                           backend,
+                                           detected ? detected : "unknown",
+                                           detected ? detected : "unknown",
+                                           requested,
+                                           "attention-report-unsupported",
+                                           reason,
+                                           "resolve-family");
+        return 5;
+    }
+
+    has_q = collections && collections->has_attention_q;
+    has_k = collections && collections->has_attention_k;
+    has_v = collections && collections->has_attention_v;
+    has_o = collections && collections->has_attention_out;
+    has_all_qkvo = has_q && has_k && has_v && has_o;
+    attention_class_status = selected_target || !has_all_qkvo ? "partial" : "complete";
+    qkv_status = has_all_qkvo ? "pass" : "partial";
+    graph_projection_status = has_all_qkvo ? "planned" : "missing-tensor";
+    blockers = has_all_qkvo
+                   ? "real QKV projection over model tensors unsupported; attention-backed KV write unsupported; full transformer attention integration unsupported; real transformer prefill unsupported"
+                   : "q projection tensor missing; k projection tensor missing; v projection tensor missing; o projection tensor missing; attention head layout incomplete; real QKV projection unsupported; real attention-backed KV writes unsupported; full transformer attention unsupported; real transformer prefill unsupported";
+
+    fullmodel_probe_backend_fit(backend, total_tensor_bytes, &fit);
+
+    printf("attention: report\n");
+    printf("status: attention-report\n");
+    printf("model: %s\n", options && options->model ? options->model : "");
+    printf("model_resolved_path: %s\n", ref && ref->path ? ref->path : "");
+    printf("target_id: %s\n", target_id ? target_id : "path");
+    printf("target_class: %s\n", target_class ? target_class : "candidate-GGUF-path");
+    printf("backend: %s\n", backend);
+    printf("family: deepseek\n");
+    printf("family_detected: %s\n", detected);
+    printf("family_requested: %s\n", requested);
+    printf("family_runtime_status: %s\n", attention_class_status);
+    printf("attention_class_status: %s\n", attention_class_status);
+    printf("attention_stage: report-only\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("artifact_identity_status: %s\n", fullmodel_identity_status(ref, artifact_bytes));
+    printf("tensor_inventory_status: pass\n");
+    printf("tensor_count: %llu\n", tensor_count);
+    printf("total_tensor_bytes: %llu\n", total_tensor_bytes);
+    printf("attention_family: model-family-specific\n");
+    printf("attention_type: unknown\n");
+    printf("attention_support_status: report-only\n");
+    printf("full_transformer_attention: unsupported\n");
+    printf("attention_runtime_ready: false\n");
+    printf("attention_backend_ready: false\n");
+    printf("full_model_execution: unsupported\n");
+    printf("generation_ready: false\n");
+    printf("attention_metadata_status: incomplete\n");
+    printf("attention_blocker: attention metadata incomplete\n");
+    printf("attention_norm_role: %s\n", attention_role_status(ctx, collections, "attention_norm"));
+    attention_print_projection_role(ctx, collections, "q_projection", "q_projection");
+    attention_print_projection_role(ctx, collections, "k_projection", "k_projection");
+    attention_print_projection_role(ctx, collections, "v_projection", "v_projection");
+    attention_print_projection_role(ctx, collections, "o_projection", "o_projection");
+    printf("attention_heads: unknown\n");
+    printf("kv_heads: unknown\n");
+    printf("head_dim: unknown\n");
+    printf("hidden_size: unknown\n");
+    printf("head_layout_status: unknown\n");
+    printf("head_layout_source: unknown\n");
+    printf("head_layout_blockers: attention metadata incomplete; head count, KV head count, and head dimension unavailable\n");
+    printf("position_policy: rope-or-family-specific-planned\n");
+    printf("rope_required: true\n");
+    printf("rope_status: planned\n");
+    printf("rope_base: unknown\n");
+    printf("rope_scaling: unknown\n");
+    printf("rope_dimension: unknown\n");
+    printf("graph_rope_primitive: implemented\n");
+    printf("rope_runtime_ready: false\n");
+    printf("mask_policy: causal-or-family-specific-planned\n");
+    printf("causal_mask_required: true\n");
+    printf("mask_status: planned\n");
+    printf("mask_runtime_ready: false\n");
+    printf("kv_required: true\n");
+    printf("kv_layout: planned\n");
+    printf("kv_dtype: planned\n");
+    printf("kv_layers: unknown\n");
+    printf("kv_heads: unknown\n");
+    printf("kv_head_dim: unknown\n");
+    printf("kv_capacity_status: unsupported-full-transformer-kv\n");
+    printf("kv_write_ready: false\n");
+    printf("kv_read_ready: false\n");
+    printf("attention_kv_runtime_ready: false\n");
+    printf("kv_boundary: diagnostic-kv-exists-real-attention-kv-unsupported\n");
+    printf("context_policy: planned\n");
+    printf("max_context: metadata-or-unknown\n");
+    printf("requested_context: not-requested\n");
+    printf("context_status: planned\n");
+    printf("context_blockers: context class report pending; attention head layout incomplete\n");
+    printf("graph_attention_primitive: implemented-fixture\n");
+    printf("graph_matmul_primitive: implemented\n");
+    printf("graph_qkv_projection: %s\n", graph_projection_status);
+    printf("graph_o_projection: %s\n", has_o ? "planned" : "missing-tensor");
+    printf("graph_model_qkv_projection: unsupported\n");
+    printf("graph_attention_kv_write: unsupported\n");
+    printf("graph_layer_integrated_attention: unsupported\n");
+    printf("graph_full_transformer_attention: unsupported\n");
+    printf("graph_backend_status: report-only\n");
+    printf("unsupported_graph_ops: full-transformer-attention,real-qkv-projection,attention-backed-kv-write,layer-integrated-attention,real-transformer-prefill\n");
+    printf("backend_attention_status: implemented-fixture-full-transformer-unsupported\n");
+    printf("backend_rope_status: implemented-primitive\n");
+    printf("backend_softmax_status: implemented-inside-attention-fixture\n");
+    printf("backend_matmul_status: implemented-primitive\n");
+    printf("backend_kv_status: unsupported-real-attention-kv\n");
+    printf("backend_available: %s\n", fit.available ? "true" : "false");
+    printf("backend_required_bytes: %llu\n", fit.required_bytes);
+    printf("backend_fit_status: %s\n", fit.fit_status);
+    printf("backend_allocation_attempted: false\n");
+    printf("attention_blockers: %s\n", blockers);
+    printf("prefill_ready: false\n");
+    printf("decode_ready: false\n");
+    printf("logits_ready: false\n");
+    printf("sampling_ready: false\n");
+    printf("runtime_execution_ready: false\n");
+    printf("next_required_rows: KV.CACHE.0,CONTEXT.CLASS.0,real-transformer-prefill,real-attention-backed-KV,real-decode,GEN.DEEPSEEK.0\n");
+    printf("cleanup_attempted: false\n");
+    printf("cleanup_status: not-needed\n");
+    attention_print_phases(attention_class_status, "unknown", qkv_status, NULL);
+    return 0;
+}
+
+int yvex_attention_command(int argc, char **argv)
+{
+    yvex_cli_attention_options options;
+    yvex_model_ref_options ref_options;
+    yvex_model_ref ref;
+    yvex_cli_tokenizer_context ctx;
+    yvex_fullmodel_collections collections;
+    yvex_error err;
+    const char *target_id;
+    const char *target_class;
+    yvex_arch arch;
+    unsigned long long artifact_bytes = 0ull;
+    unsigned long long total_tensor_bytes = 0ull;
+    unsigned long long tensor_count;
+    unsigned long long i;
+    int selected_target;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&options, 0, sizeof(options));
+    memset(&ref, 0, sizeof(ref));
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&collections, 0, sizeof(collections));
+
+    rc = parse_attention_options(argc, argv, &options);
+    if (rc == 1) return 0;
+    if (rc != 0) return rc;
+
+    if (strcmp(options.model, "glm-5.2-official-safetensors") == 0) {
+        return attention_print_source_only_report(&options, "glm-5.2-official-safetensors");
+    }
+
+    memset(&ref_options, 0, sizeof(ref_options));
+    ref_options.allow_registry = 1;
+    ref_options.registry_path = options.registry_path;
+    rc = yvex_model_ref_resolve(&ref, options.model, &ref_options, &err);
+    if (rc != YVEX_OK) {
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    if (!fullmodel_file_size(ref.path, &artifact_bytes)) {
+        attention_print_unsupported_common(options.model,
+                                           ref.path,
+                                           ref.alias && ref.alias[0] ? ref.alias : "unknown",
+                                           "unresolved-artifact",
+                                           options.backend,
+                                           "unknown",
+                                           "unknown",
+                                           attention_requested_family(&options),
+                                           "attention-report-fail",
+                                           "artifact path does not exist",
+                                           "resolve-model");
+        yvex_model_ref_clear(&ref);
+        return exit_for_status(YVEX_ERR_IO);
+    }
+
+    rc = open_model_context(ref.path, &ctx, &err);
+    if (rc != YVEX_OK) {
+        attention_print_unsupported_common(options.model,
+                                           ref.path,
+                                           ref.alias && ref.alias[0] ? ref.alias : "path",
+                                           "GGUF-artifact",
+                                           options.backend,
+                                           "unknown",
+                                           "unknown",
+                                           attention_requested_family(&options),
+                                           "attention-report-fail",
+                                           yvex_error_message(&err),
+                                           "load-family-runtime");
+        yvex_error_clear(&err);
+        yvex_model_ref_clear(&ref);
+        return exit_for_status(rc);
+    }
+
+    tensor_count = yvex_tensor_table_count(ctx.table);
+    for (i = 0; i < tensor_count; ++i) {
+        const yvex_tensor_info *tensor = yvex_tensor_table_at(ctx.table, i);
+        if (!tensor) continue;
+        total_tensor_bytes += tensor->storage_bytes;
+        fullmodel_classify_tensor(tensor, &collections);
+    }
+    if (yvex_gguf_metadata_find(ctx.gguf, "tokenizer.ggml.tokens") ||
+        yvex_gguf_metadata_find(ctx.gguf, "tokenizer.ggml.model")) {
+        collections.tokenizer = 1ull;
+        collections.has_tokenizer_metadata = 1;
+    }
+
+    arch = yvex_model_arch(ctx.model);
+    target_id = ref.alias && ref.alias[0] ? ref.alias : "path";
+    selected_target = fullmodel_is_selected_target(target_id) ||
+                      fullmodel_is_selected_target(options.model);
+    target_class = selected_target ? "selected-runtime-slice" : "candidate-GGUF-path";
+    rc = attention_print_report(&options,
+                                &ref,
+                                &ctx,
+                                target_id,
+                                target_class,
+                                artifact_bytes,
+                                arch,
+                                tensor_count,
+                                total_tensor_bytes,
+                                &collections,
+                                selected_target);
+    close_model_context(&ctx);
+    yvex_model_ref_clear(&ref);
+    return rc;
+}
+
+void yvex_attention_help(FILE *fp)
+{
+    fprintf(fp, "usage: yvex attention report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--registry FILE] [--include-kv] [--include-context] [--include-graph] [--include-blockers]\n");
+    fprintf(fp, "\nExamples:\n");
+    fprintf(fp, "  yvex attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu\n");
+    fprintf(fp, "  yvex attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --include-kv --include-graph\n");
+    fprintf(fp, "\nattention report:\n");
+    fprintf(fp, "  classifies attention requirements, head layout, Q/K/V/O roles, RoPE/position rules, mask rules, KV requirements, context blockers, graph requirements, backend requirements, and runtime blockers.\n");
+    fprintf(fp, "  report-only boundary: it does not run full attention, does not run transformer prefill, does not project Q/K/V from model tensors, does not write real attention-backed KV, does not generate, and does not benchmark.\n");
+    fprintf(fp, "  standalone RoPE and attention primitives may be implemented, but those primitive proofs are not full transformer attention and are not model inference support.\n");
+    fprintf(fp, "Boundary: no full transformer attention execution, no real QKV projection, no real attention-backed KV writes, no full model execution, no DeepSeek generation, no provider generation, no eval, no benchmark, no throughput.\n");
+}
+
 static void fullmodel_print_largest(const yvex_fullmodel_largest_tensor top[16],
                                     unsigned int top_count)
 {

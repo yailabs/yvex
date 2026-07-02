@@ -25,6 +25,9 @@ fullmodel descriptor --model glm-5.2-official-safetensors` reports the same
 source-only runtime descriptor boundary without inspecting GLM safetensors.
 `yvex fullmodel family-runtime --model glm-5.2-official-safetensors --family
 glm` also refuses as source-only and does not inspect GLM safetensors.
+`yvex attention report --model glm-5.2-official-safetensors --family glm`
+uses the same source-only refusal boundary: no GLM safetensors inspection and no
+GLM attention/runtime claim.
 
 ## GLM Paths And Target
 
@@ -118,6 +121,7 @@ Boundary:
   not GLM materialization proof over source-only safetensors
   not GLM runtime descriptor over GGUF tensors
   not GLM family-runtime adapter over GGUF tensors
+  not GLM attention class support over source-only safetensors
   not GLM runtime execution
   not GLM generation
 
@@ -128,6 +132,7 @@ Boundary:
 ./yvex fullmodel materialize --model glm-5.2-official-safetensors --backend cpu
 ./yvex fullmodel descriptor --model glm-5.2-official-safetensors --backend cpu
 ./yvex fullmodel family-runtime --model glm-5.2-official-safetensors --family glm --backend cpu
+./yvex attention report --model glm-5.2-official-safetensors --family glm --backend cpu
 ```
 
 ## Lane 2 — Start GLM Source Download
@@ -234,6 +239,7 @@ YVEX can:
 - record GLM as an official-source huge-model target;
 - refuse source-only fullmodel family-runtime reporting without inspecting
   safetensors;
+- refuse source-only attention reporting without inspecting safetensors;
 - plan future source inventory, model-class profiling, tensor mapping,
   quantization policy, YVEX-produced GGUF emission, and storage-stream work.
 

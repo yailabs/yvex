@@ -180,6 +180,8 @@ contains "$OUT_DIR/info.out" "server: yvexd status shell implemented"
 
 run_ok commands "$YVEX_BIN" commands
 contains "$OUT_DIR/commands.out" "Implemented commands:"
+contains "$OUT_DIR/commands.out" "  attention"
+contains "$OUT_DIR/commands.out" "attention class and KV requirement reports"
 contains "$OUT_DIR/commands.out" "  backend"
 contains "$OUT_DIR/commands.out" "  chat"
 contains "$OUT_DIR/commands.out" "  commands"
@@ -228,6 +230,17 @@ contains "$OUT_DIR/help_info.out" "usage: yvex info"
 
 run_ok help_backend "$YVEX_BIN" help backend
 contains "$OUT_DIR/help_backend.out" "usage: yvex backend cpu|cuda"
+
+run_ok help_attention "$YVEX_BIN" help attention
+contains "$OUT_DIR/help_attention.out" "usage: yvex attention report --model FILE_OR_ALIAS"
+contains "$OUT_DIR/help_attention.out" "classifies attention requirements"
+contains "$OUT_DIR/help_attention.out" "report-only boundary"
+contains "$OUT_DIR/help_attention.out" "does not run full attention"
+contains "$OUT_DIR/help_attention.out" "does not run transformer prefill"
+contains "$OUT_DIR/help_attention.out" "does not write real attention-backed KV"
+contains "$OUT_DIR/help_attention.out" "does not generate"
+contains "$OUT_DIR/help_attention.out" "does not benchmark"
+contains "$OUT_DIR/help_attention.out" "not full transformer attention"
 
 run_ok help_convert "$YVEX_BIN" help convert
 contains "$OUT_DIR/help_convert.out" "usage: yvex convert"

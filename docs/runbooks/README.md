@@ -6,9 +6,9 @@ Use a model-specific runbook when working with a concrete target.
 
 ## Files
 
-- `deepseek.md` - current DeepSeek selected artifact path from local safetensors to selected graph execution, bounded diagnostics, and fullmodel inventory/materialization-plan/materialize/descriptor reports.
-- `glm.md` - GLM-5.2 official-source tensor target status, source-only fullmodel unsupported report/descriptor/refusal, and download start/status checks.
-- `common.md` - shared configuration, fullmodel report/plan/materialize/descriptor command-surface checks, graph-only checks, daemon diagnostics, and repository validation.
+- `deepseek.md` - current DeepSeek selected artifact path from local safetensors to selected graph execution, bounded diagnostics, fullmodel inventory/materialization-plan/materialize/descriptor/family-runtime reports, and attention class reports.
+- `glm.md` - GLM-5.2 official-source tensor target status, source-only fullmodel and attention unsupported report/descriptor/refusal, and download start/status checks.
+- `common.md` - shared configuration, fullmodel report/plan/materialize/descriptor/family-runtime and attention command-surface checks, graph-only checks, daemon diagnostics, and repository validation.
 
 ## Rules
 
@@ -41,3 +41,9 @@ boundary. `yvex fullmodel descriptor` reports tensor roles, tensor collections,
 residency, graph, prefill, KV, decode, logits, sampling, output-head,
 tokenizer, backend requirements, and blockers. It does not run full model
 execution, generate, evaluate, benchmark, or report throughput.
+
+`yvex attention report` maps DeepSeek-family runtime facts into attention
+class, head layout, Q/K/V/O roles, RoPE/position, mask, KV, context,
+graph/backend, blocker, and next-dependency reporting. It does not run full
+transformer attention, project real Q/K/V from model tensors, write real
+attention-backed KV, generate, evaluate, benchmark, or report throughput.

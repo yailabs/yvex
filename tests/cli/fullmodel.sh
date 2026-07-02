@@ -141,6 +141,7 @@ grep 'status: models-added' "$ROOT/add-rmsnorm.out"
 
 "$YVEX_BIN" commands > "$ROOT/commands.out"
 grep 'fullmodel[[:space:]]*full model inventory, materialization, descriptor, and family-runtime reports' "$ROOT/commands.out"
+grep 'attention[[:space:]]*attention class and KV requirement reports' "$ROOT/commands.out"
 
 "$YVEX_BIN" help fullmodel > "$ROOT/help.out"
 grep 'usage: yvex fullmodel report --model FILE_OR_ALIAS' "$ROOT/help.out"
@@ -165,6 +166,19 @@ grep 'no inference readiness' "$ROOT/help.out"
 grep 'no DeepSeek generation' "$ROOT/help.out"
 grep 'no benchmark' "$ROOT/help.out"
 grep 'no throughput' "$ROOT/help.out"
+
+"$YVEX_BIN" help attention > "$ROOT/attention-help.out"
+grep 'usage: yvex attention report --model FILE_OR_ALIAS' "$ROOT/attention-help.out"
+grep 'attention report:' "$ROOT/attention-help.out"
+grep 'classifies attention requirements' "$ROOT/attention-help.out"
+grep 'report-only boundary' "$ROOT/attention-help.out"
+grep 'does not run full attention' "$ROOT/attention-help.out"
+grep 'does not run transformer prefill' "$ROOT/attention-help.out"
+grep 'does not write real attention-backed KV' "$ROOT/attention-help.out"
+grep 'does not generate' "$ROOT/attention-help.out"
+grep 'does not benchmark' "$ROOT/attention-help.out"
+grep 'standalone RoPE and attention primitives' "$ROOT/attention-help.out"
+grep 'not full transformer attention' "$ROOT/attention-help.out"
 
 "$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" > "$ROOT/selected.out"
 grep 'status: fullmodel-report' "$ROOT/selected.out"
@@ -293,6 +307,49 @@ grep 'generation: unsupported-full-model' "$ROOT/selected-family.out"
 grep 'benchmark_status: not-measured' "$ROOT/selected-family.out"
 grep 'next_required_rows: ATTENTION.CLASS.0' "$ROOT/selected-family.out"
 
+"$YVEX_BIN" attention report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" > "$ROOT/selected-attention.out"
+grep 'attention: report' "$ROOT/selected-attention.out"
+grep 'status: attention-report' "$ROOT/selected-attention.out"
+grep 'target_id: deepseek4-v4-flash-selected-embed' "$ROOT/selected-attention.out"
+grep 'target_class: selected-runtime-slice' "$ROOT/selected-attention.out"
+grep 'backend: cpu' "$ROOT/selected-attention.out"
+grep 'family: deepseek' "$ROOT/selected-attention.out"
+grep 'family_detected: deepseek' "$ROOT/selected-attention.out"
+grep 'family_requested: deepseek' "$ROOT/selected-attention.out"
+grep 'family_runtime_status: partial' "$ROOT/selected-attention.out"
+grep 'attention_class_status: partial' "$ROOT/selected-attention.out"
+grep 'attention_stage: report-only' "$ROOT/selected-attention.out"
+grep 'runtime_claim: unsupported' "$ROOT/selected-attention.out"
+grep 'attention_family: model-family-specific' "$ROOT/selected-attention.out"
+grep 'attention_type: unknown' "$ROOT/selected-attention.out"
+grep 'attention_support_status: report-only' "$ROOT/selected-attention.out"
+grep 'full_transformer_attention: unsupported' "$ROOT/selected-attention.out"
+grep 'attention_runtime_ready: false' "$ROOT/selected-attention.out"
+grep 'attention_backend_ready: false' "$ROOT/selected-attention.out"
+grep 'q_projection_status: missing' "$ROOT/selected-attention.out"
+grep 'k_projection_status: missing' "$ROOT/selected-attention.out"
+grep 'v_projection_status: missing' "$ROOT/selected-attention.out"
+grep 'o_projection_status: missing' "$ROOT/selected-attention.out"
+grep 'head_layout_status: unknown' "$ROOT/selected-attention.out"
+grep 'rope_required: true' "$ROOT/selected-attention.out"
+grep 'rope_runtime_ready: false' "$ROOT/selected-attention.out"
+grep 'mask_runtime_ready: false' "$ROOT/selected-attention.out"
+grep 'kv_required: true' "$ROOT/selected-attention.out"
+grep 'kv_layout: planned' "$ROOT/selected-attention.out"
+grep 'kv_write_ready: false' "$ROOT/selected-attention.out"
+grep 'kv_read_ready: false' "$ROOT/selected-attention.out"
+grep 'attention_kv_runtime_ready: false' "$ROOT/selected-attention.out"
+grep 'graph_rope_primitive: implemented' "$ROOT/selected-attention.out"
+grep 'graph_attention_primitive: implemented-fixture' "$ROOT/selected-attention.out"
+grep 'graph_qkv_projection: missing-tensor' "$ROOT/selected-attention.out"
+grep 'graph_full_transformer_attention: unsupported' "$ROOT/selected-attention.out"
+grep 'backend_attention_status: implemented-fixture-full-transformer-unsupported' "$ROOT/selected-attention.out"
+grep 'q projection tensor missing' "$ROOT/selected-attention.out"
+grep 'real attention-backed KV writes unsupported' "$ROOT/selected-attention.out"
+grep 'next_required_rows: KV.CACHE.0' "$ROOT/selected-attention.out"
+grep 'generation: unsupported-full-model' "$ROOT/selected-attention.out"
+grep 'benchmark_status: not-measured' "$ROOT/selected-attention.out"
+
 "$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" > "$ROOT/rmsnorm.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm.out"
 grep 'normalization_tensors: 1' "$ROOT/rmsnorm.out"
@@ -354,6 +411,31 @@ grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-family.out"
 grep 'family_requested: auto' "$ROOT/rmsnorm-family-auto.out"
 grep 'family_detected: deepseek' "$ROOT/rmsnorm-family-auto.out"
 grep 'status: fullmodel-family-runtime' "$ROOT/rmsnorm-family-auto.out"
+
+"$YVEX_BIN" attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --include-kv --include-context --include-graph --include-blockers > "$ROOT/rmsnorm-attention.out"
+grep 'attention: report' "$ROOT/rmsnorm-attention.out"
+grep 'status: attention-report' "$ROOT/rmsnorm-attention.out"
+grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-attention.out"
+grep 'family: deepseek' "$ROOT/rmsnorm-attention.out"
+grep 'attention_class_status: partial' "$ROOT/rmsnorm-attention.out"
+grep 'attention_norm_role: present' "$ROOT/rmsnorm-attention.out"
+grep 'q_projection_status: missing' "$ROOT/rmsnorm-attention.out"
+grep 'k_projection_status: missing' "$ROOT/rmsnorm-attention.out"
+grep 'v_projection_status: missing' "$ROOT/rmsnorm-attention.out"
+grep 'o_projection_status: missing' "$ROOT/rmsnorm-attention.out"
+grep 'full_transformer_attention: unsupported' "$ROOT/rmsnorm-attention.out"
+grep 'attention_runtime_ready: false' "$ROOT/rmsnorm-attention.out"
+grep 'rope_runtime_ready: false' "$ROOT/rmsnorm-attention.out"
+grep 'mask_runtime_ready: false' "$ROOT/rmsnorm-attention.out"
+grep 'attention_kv_runtime_ready: false' "$ROOT/rmsnorm-attention.out"
+grep 'graph_attention_kv_write: unsupported' "$ROOT/rmsnorm-attention.out"
+grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-attention.out"
+grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-attention.out"
+
+"$YVEX_BIN" attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --registry "$REG" > "$ROOT/rmsnorm-attention-auto.out"
+grep 'family_requested: auto' "$ROOT/rmsnorm-attention-auto.out"
+grep 'family_detected: deepseek' "$ROOT/rmsnorm-attention-auto.out"
+grep 'status: attention-report' "$ROOT/rmsnorm-attention-auto.out"
 
 "$YVEX_BIN" fullmodel report --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 3 > "$ROOT/fullish.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish.out"
@@ -430,6 +512,28 @@ grep 'logits_projection_ready: false' "$ROOT/fullish-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-family.out"
 grep 'benchmark_status: not-measured' "$ROOT/fullish-family.out"
 
+"$YVEX_BIN" attention report --model "$FULLISH" --family deepseek --backend cpu > "$ROOT/fullish-attention.out"
+grep 'attention: report' "$ROOT/fullish-attention.out"
+grep 'status: attention-report' "$ROOT/fullish-attention.out"
+grep 'target_class: candidate-GGUF-path' "$ROOT/fullish-attention.out"
+grep 'backend: cpu' "$ROOT/fullish-attention.out"
+grep 'family: deepseek' "$ROOT/fullish-attention.out"
+grep 'family_runtime_status: complete' "$ROOT/fullish-attention.out"
+grep 'attention_class_status: complete' "$ROOT/fullish-attention.out"
+grep 'q_projection_status: present' "$ROOT/fullish-attention.out"
+grep 'k_projection_status: present' "$ROOT/fullish-attention.out"
+grep 'v_projection_status: present' "$ROOT/fullish-attention.out"
+grep 'o_projection_status: present' "$ROOT/fullish-attention.out"
+grep 'graph_qkv_projection: planned' "$ROOT/fullish-attention.out"
+grep 'graph_o_projection: planned' "$ROOT/fullish-attention.out"
+grep 'graph_full_transformer_attention: unsupported' "$ROOT/fullish-attention.out"
+grep 'attention_runtime_ready: false' "$ROOT/fullish-attention.out"
+grep 'attention_backend_ready: false' "$ROOT/fullish-attention.out"
+grep 'real QKV projection over model tensors unsupported' "$ROOT/fullish-attention.out"
+grep 'attention-backed KV write unsupported' "$ROOT/fullish-attention.out"
+grep 'generation: unsupported-full-model' "$ROOT/fullish-attention.out"
+grep 'benchmark_status: not-measured' "$ROOT/fullish-attention.out"
+
 "$YVEX_BIN" fullmodel descriptor --model "$FULLISH" --target deepseek4-v4-flash --backend cuda > "$ROOT/fullish-descriptor-cuda.out"
 grep 'backend: cuda' "$ROOT/fullish-descriptor-cuda.out"
 grep 'backend.cuda.available:' "$ROOT/fullish-descriptor-cuda.out"
@@ -441,6 +545,14 @@ grep 'backend: cuda' "$ROOT/fullish-family-cuda.out"
 grep 'backend_allocation_attempted: false' "$ROOT/fullish-family-cuda.out"
 grep 'graph.full_attention_from_model_tensors: unsupported' "$ROOT/fullish-family-cuda.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-family-cuda.out"
+
+"$YVEX_BIN" attention report --model "$FULLISH" --family deepseek --backend cuda > "$ROOT/fullish-attention-cuda.out"
+grep 'backend: cuda' "$ROOT/fullish-attention-cuda.out"
+grep 'backend_attention_status: implemented-fixture-full-transformer-unsupported' "$ROOT/fullish-attention-cuda.out"
+grep 'graph_full_transformer_attention: unsupported' "$ROOT/fullish-attention-cuda.out"
+grep 'attention_backend_ready: false' "$ROOT/fullish-attention-cuda.out"
+grep 'backend_allocation_attempted: false' "$ROOT/fullish-attention-cuda.out"
+grep 'generation: unsupported-full-model' "$ROOT/fullish-attention-cuda.out"
 
 "$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 20 > "$ROOT/fullish-plan.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish-plan.out"
@@ -596,6 +708,19 @@ grep 'runtime_claim: unsupported' "$ROOT/glm-family.out"
 grep 'full_model_execution: unsupported' "$ROOT/glm-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/glm-family.out"
 
+"$YVEX_BIN" attention report --model glm-5.2-official-safetensors --family glm --backend cpu > "$ROOT/glm-attention.out" && exit 1 || true
+grep 'attention: report' "$ROOT/glm-attention.out"
+grep 'status: attention-report-unsupported' "$ROOT/glm-attention.out"
+grep 'target_class: official-source-huge-model' "$ROOT/glm-attention.out"
+grep 'family: glm' "$ROOT/glm-attention.out"
+grep 'family_requested: glm' "$ROOT/glm-attention.out"
+grep 'tensor_inventory_status: not-performed-source-only-target' "$ROOT/glm-attention.out"
+grep 'source_artifact_class: official safetensors' "$ROOT/glm-attention.out"
+grep 'runtime_claim: unsupported' "$ROOT/glm-attention.out"
+grep 'full_transformer_attention: unsupported' "$ROOT/glm-attention.out"
+grep 'generation: unsupported-full-model' "$ROOT/glm-attention.out"
+grep 'benchmark_status: not-measured' "$ROOT/glm-attention.out"
+
 "$YVEX_BIN" fullmodel report --model "$ROOT/missing.gguf" > "$ROOT/missing.out" 2> "$ROOT/missing.err" && exit 1 || true
 grep 'status: fullmodel-report-fail' "$ROOT/missing.out"
 grep 'artifact_exists: false' "$ROOT/missing.out"
@@ -662,31 +787,45 @@ grep 'family_requested: unknown-family' "$ROOT/bad-family.out"
 grep 'runtime_claim: unsupported' "$ROOT/bad-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/bad-family.out"
 
+"$YVEX_BIN" attention report --model "$FULLISH" --family unknown-family --backend cpu > "$ROOT/bad-attention-family.out" 2> "$ROOT/bad-attention-family.err" && exit 1 || true
+grep 'status: attention-report-unsupported' "$ROOT/bad-attention-family.out"
+grep 'family_requested: unknown-family' "$ROOT/bad-attention-family.out"
+grep 'runtime_claim: unsupported' "$ROOT/bad-attention-family.out"
+grep 'full_transformer_attention: unsupported' "$ROOT/bad-attention-family.out"
+grep 'generation: unsupported-full-model' "$ROOT/bad-attention-family.out"
+
 for file in \
   "$ROOT/selected-plan.out" \
   "$ROOT/selected-materialize.out" \
   "$ROOT/selected-descriptor.out" \
-  "$ROOT/selected-family.out" \
-  "$ROOT/rmsnorm-plan.out" \
-  "$ROOT/rmsnorm-materialize.out" \
-  "$ROOT/rmsnorm-descriptor.out" \
-  "$ROOT/rmsnorm-family.out" \
-  "$ROOT/rmsnorm-family-auto.out" \
-  "$ROOT/fullish-plan.out" \
-  "$ROOT/fullish-plan-cuda.out" \
-  "$ROOT/fullish-descriptor.out" \
-  "$ROOT/fullish-descriptor-cuda.out" \
-  "$ROOT/fullish-family.out" \
-  "$ROOT/fullish-family-cuda.out" \
-  "$ROOT/fullish-materialize.out" \
-  "$ROOT/fullish-materialize-dry-run.out" \
-  "$ROOT/fullish-materialize-plan-only.out" \
+	  "$ROOT/selected-family.out" \
+	  "$ROOT/selected-attention.out" \
+	  "$ROOT/rmsnorm-plan.out" \
+	  "$ROOT/rmsnorm-materialize.out" \
+	  "$ROOT/rmsnorm-descriptor.out" \
+	  "$ROOT/rmsnorm-family.out" \
+	  "$ROOT/rmsnorm-family-auto.out" \
+	  "$ROOT/rmsnorm-attention.out" \
+	  "$ROOT/rmsnorm-attention-auto.out" \
+	  "$ROOT/fullish-plan.out" \
+	  "$ROOT/fullish-plan-cuda.out" \
+	  "$ROOT/fullish-descriptor.out" \
+	  "$ROOT/fullish-descriptor-cuda.out" \
+	  "$ROOT/fullish-family.out" \
+	  "$ROOT/fullish-family-cuda.out" \
+	  "$ROOT/fullish-attention.out" \
+	  "$ROOT/fullish-attention-cuda.out" \
+	  "$ROOT/fullish-materialize.out" \
+	  "$ROOT/fullish-materialize-dry-run.out" \
+	  "$ROOT/fullish-materialize-plan-only.out" \
   "$ROOT/fullish-materialize-limit.out" \
   "$ROOT/fullish-materialize-injected.out" \
-  "$ROOT/resident.out" \
-  "$ROOT/host-staged.out" \
-  "$ROOT/ssd-staged.out" \
-  "$ROOT/hybrid.out"
+	  "$ROOT/resident.out" \
+	  "$ROOT/host-staged.out" \
+	  "$ROOT/ssd-staged.out" \
+	  "$ROOT/hybrid.out" \
+	  "$ROOT/glm-attention.out" \
+	  "$ROOT/bad-attention-family.out"
 do
   pattern='full_model_execution: tr''ue'
   ! grep "$pattern" "$file"
@@ -700,16 +839,26 @@ do
   ! grep "$pattern" "$file"
   pattern='execution_rea''dy: true'
   ! grep "$pattern" "$file"
-  pattern='runtime_execution_rea''dy: true'
-  ! grep "$pattern" "$file"
-  pattern='benchmark_status: mea''sured'
-  ! grep "$pattern" "$file"
+	  pattern='runtime_execution_rea''dy: true'
+	  ! grep "$pattern" "$file"
+	  pattern='attention_runtime_rea''dy: true'
+	  ! grep "$pattern" "$file"
+	  pattern='attention_backend_rea''dy: true'
+	  ! grep "$pattern" "$file"
+	  pattern='full_transformer_attention: tr''ue'
+	  ! grep "$pattern" "$file"
+	  pattern='benchmark_status: mea''sured'
+	  ! grep "$pattern" "$file"
   pattern='tok/''s'
   ! grep "$pattern" "$file"
   pattern='tokens/''sec'
   ! grep "$pattern" "$file"
-  pattern='DeepSeek generation imple''mented'
-  ! grep "$pattern" "$file"
+	  pattern='DeepSeek generation imple''mented'
+	  ! grep "$pattern" "$file"
+	  pattern='DeepSeek attention imple''mented'
+	  ! grep "$pattern" "$file"
+	  pattern='full transformer attention imple''mented'
+	  ! grep "$pattern" "$file"
   pattern='inference rea''dy'
   ! grep "$pattern" "$file"
   pattern='full model sup''port'

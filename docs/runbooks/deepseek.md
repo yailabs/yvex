@@ -32,6 +32,11 @@ The fullmodel family-runtime lane maps descriptor facts into DeepSeek-specific
 runtime adapter facts: tensor roles, tensor collections, attention/KV, MoE,
 output-head/logits, graph/backend requirements, blockers, and next runtime
 dependencies. It is still report-only.
+The attention report lane maps those family-runtime facts into attention
+class/status, head layout, Q/K/V/O role requirements, RoPE/position
+requirements, mask rules, KV requirements, context blockers, graph primitive
+versus full-transformer attention distinction, backend requirements, blockers,
+and next runtime dependencies. It is report-only.
 
 ## DeepSeek Paths And Artifacts
 
@@ -336,7 +341,11 @@ Boundary:
   selected DeepSeek artifacts refuse fullmodel materialization proof
   descriptor reports requirements and blockers only
   family-runtime maps descriptor facts into DeepSeek adapter facts only
+  attention report maps adapter facts into attention requirements only
   no uncontrolled full backend allocation
+  no full transformer attention
+  no real QKV projection from model tensors
+  no real attention-backed KV writes
   no full model execution
   no real DeepSeek generation
   no provider generation
@@ -367,6 +376,11 @@ Boundary:
 ./yvex fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu
 ./yvex fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu
 ./yvex fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cuda
+./yvex help attention
+./yvex attention report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu
+./yvex attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu
+./yvex attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu
+./yvex attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cuda
 ```
 
 ## Lane 5 — DeepSeek CUDA Pressure Lane
@@ -509,7 +523,10 @@ YVEX can:
 - use stable `yvex generate` help, command inventory, refusal wording,
   trace/cancel/context examples, and text diagnostic output;
 - report DeepSeek runtime family adapter facts from fullmodel descriptor
-  inventory without executing a full transformer path.
+  inventory without executing a full transformer path;
+- report DeepSeek attention class facts, Q/K/V/O role requirements, RoPE/mask
+  requirements, attention KV requirements, graph primitive/full-transformer
+  distinctions, and next runtime dependencies without executing attention.
 
 YVEX does not currently implement:
 
@@ -517,6 +534,9 @@ YVEX does not currently implement:
 - full DeepSeek materialization;
 - full DeepSeek materialization proof;
 - complete transformer execution;
+- full transformer attention;
+- real QKV projection from model tensors;
+- real attention-backed KV writes;
 - complete transformer prefill;
 - real DeepSeek decode;
 - real output-head logits;

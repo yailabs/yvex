@@ -143,6 +143,8 @@ int yvex_cli_graph_execute_layer_fixture(const yvex_cli_layer_fixture_options *o
                                          yvex_cli_layer_fixture_result *out,
                                          yvex_error *err);
 
+int yvex_attention_command(int argc, char **argv);
+void yvex_attention_help(FILE *fp);
 int yvex_backend_command(int argc, char **argv);
 void yvex_backend_help(FILE *fp);
 int yvex_chat_command(int argc, char **argv);

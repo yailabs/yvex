@@ -14,7 +14,8 @@ evaluation, or benchmark capability.
 Purpose:
   Quickly check command discovery, path resolution, model-target reporting,
   fullmodel report/materialization-plan/materialize/descriptor/family-runtime
-  help, tokenizer fixture diagnostics, and minimal KV diagnostics.
+  help, attention report help, tokenizer fixture diagnostics, and minimal KV
+  diagnostics.
 
 Requires:
   Repository root.
@@ -35,7 +36,7 @@ Boundary:
   read/diagnostic command surface only
   no source conversion
   no alias refresh
-  bounded fullmodel proof/refusal, descriptor, and family-runtime diagnostics only
+  bounded fullmodel proof/refusal, descriptor, family-runtime, and attention diagnostics only
   no uncontrolled full backend allocation
   no daemon
   no generation claim
@@ -48,6 +49,7 @@ make
 ./yvex info
 ./yvex help generate
 ./yvex help fullmodel
+./yvex help attention
 ./yvexd --help
 ./yvex paths
 ./yvex paths resolve --family deepseek --kind source
@@ -65,6 +67,7 @@ make
 ./yvex fullmodel materialization-plan --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
 ./yvex fullmodel materialize --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --dry-run
 ./yvex fullmodel descriptor --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
+./yvex attention report --model glm-5.2-official-safetensors --family glm --backend cpu
 ./yvex backend cpu
 ./yvex tokenizer tests/fixtures/gguf/valid-tokenizer-simple.gguf
 ./yvex tokenize tests/fixtures/gguf/valid-tokenizer-simple.gguf --text "hello"
@@ -218,6 +221,7 @@ Full help:
 
 ```sh
 ./yvex help backend
+./yvex help attention
 ./yvex help chat
 ./yvex help commands
 ./yvex help convert

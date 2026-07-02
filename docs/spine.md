@@ -1530,6 +1530,19 @@ graph primitive versus full-transformer requirement distinction
 source-only family-runtime refusal without safetensors inspection
 unknown-family family-runtime refusal
 next runtime dependency report after family adapter mapping
+attention report command
+DeepSeek attention class report
+Q/K/V/O role requirement report
+head layout report
+RoPE/position requirement report
+mask rule report
+attention KV requirement report
+context blocker report
+graph primitive versus full-transformer attention distinction
+selected-slice partial attention report
+source-only attention refusal
+unknown-family attention refusal
+next runtime dependency report after attention class mapping
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -1690,6 +1703,9 @@ DSpark-like draft/verify runtime
 accepted-token speculative accounting
 speculative generation benchmark
 20 tok/s measured YVEX decode result
+full transformer attention
+real QKV projection from model tensors
+real attention-backed KV writes
 full transformer prefill
 full model decode
 real DeepSeek decode
@@ -1786,7 +1802,7 @@ tables.
 | TENSOR.COLLECTION.0 | planned | tensor-collection | Canonical tensor collection schema | embedding, norm, attention, KV, MLP, MoE, output, and tokenizer collections are reported without execution claim |
 | TENSOR.COLLECTION.1 | planned | tensor-collection | DeepSeek tensor collection report | selected DeepSeek tensors map into explicit runtime collections |
 | TENSOR.COLLECTION.2 | planned | tensor-collection | GLM tensor collection inventory | GLM source tensor names map into collection candidates without runtime claim |
-| ATTENTION.CLASS.0 | planned | attention | Attention class report | attention type, head layout, position behavior, mask rules, and KV requirements are reported |
+| ATTENTION.CLASS.0 | complete | attention | Attention class report | `yvex attention report` is command-visible for DeepSeek-family artifacts, mapping family-runtime facts into attention type/status, head layout, Q/K/V/O role requirements, RoPE/position requirements, mask rules, KV requirements, context blockers, graph primitive versus full-transformer attention distinction, backend requirements, selected-slice partial reports, source-only refusals, unknown-family refusals, and next runtime dependencies without full transformer attention execution, real attention-backed KV, full model execution, DeepSeek generation, provider generation, eval, benchmark, or throughput claim |
 | CONTEXT.CLASS.0 | planned | context | Context class report | model max context, requested context, chunking policy, overflow behavior, and runtime blockers are reported |
 | KV.CACHE.0 | planned | kv | KV cache class report | KV dtype, layout, layer/head/position indexing, residency class, capacity, and unsupported blockers are reported |
 | MOE.CLASS.0 | planned | moe | MoE model-class report | expert count, active expert count, router facts, shared experts, and expert tensor classes are reported |
@@ -3248,19 +3264,19 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-ATTENTION.CLASS.0 - Attention class report
+KV.CACHE.0 - KV cache class report
 ```
 
-ATTENTION.CLASS.0 must turn the family-runtime adapter facts into an explicit
-attention class report. The next boundary is attention type, head layout,
-position/RoPE behavior, mask rules, KV requirements, context blockers, and
-unsupported full-transformer attention requirements in command-visible form. It
-must not claim full model execution, real DeepSeek generation, provider
-generation, streaming generation, evaluation, benchmark readiness, or
-throughput.
+KV.CACHE.0 must turn attention-class requirements into an explicit KV cache
+class report. The next boundary is KV layout, dtype, layer/head/position
+indexing, residency, capacity, paging/chunking policy, diagnostic-KV versus real
+attention-KV separation, and unsupported blockers in command-visible form. It
+must not claim full transformer prefill, full model decode, full model
+execution, real DeepSeek generation, provider generation, streaming generation,
+evaluation, benchmark readiness, or throughput.
 
 Algorithm/CLI research hardening runs in parallel with runtime closure. It does
-not replace ATTENTION.CLASS.0 or the current runtime Active Next.
+not replace KV.CACHE.0 or the current runtime Active Next.
 
 GEN.CONTRACT.0 hardens the contract for the generation loop. GEN.LOOP.0 is
 complete for bounded diagnostic loop control only.
@@ -3279,11 +3295,11 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-ATTENTION.CLASS.0 - Attention class report
+KV.CACHE.0 - KV cache class report
 ```
 
 SPINE.METAL.QWEN.0 records a future parallel pressure lane. It does not replace
-the current Active Next. Runtime active next remains ATTENTION.CLASS.0.
+the current Active Next. Runtime active next remains KV.CACHE.0.
 
 CLI.GEN.0 is complete as an operator-grade command surface over the bounded
 diagnostic generation loop: stable help, normal/trace/cancel/context examples,
@@ -3332,14 +3348,13 @@ selected-position activation handoff. It is not full transformer prefill,
 decode, logits, sampling, generation, server generation, evaluation, or
 benchmark readiness.
 
-After FAMILY.RUNTIME.0, the fullmodel command can map descriptor facts into a
-DeepSeek-family runtime adapter report with tensor roles, collections,
-attention/KV requirements, MoE requirements, output-head/logits requirements,
-graph/backend requirements, runtime blockers, and next dependencies.
-ATTENTION.CLASS.0 remains next because attention type, head layout, position
-behavior, mask rules, KV requirements, and attention-specific blockers must be
-made explicit before real transformer prefill, decode, output-head logits,
-sampling, or generation can advance. Real model output-head logits, real
+After ATTENTION.CLASS.0, the attention report can map DeepSeek-family adapter
+facts into attention type/status, head layout, Q/K/V/O requirements, RoPE and
+mask requirements, KV requirements, context blockers, graph primitive versus
+full-transformer attention distinction, backend requirements, and next runtime
+dependencies. KV.CACHE.0 remains next because the attention report now needs an
+explicit KV cache class before real transformer prefill, decode, output-head
+logits, sampling, or generation can advance. Real model output-head logits, real
 vocabulary sampling, full DeepSeek runtime work, OS signal cancellation,
 provider/server generation, streaming, evaluation, and benchmark measurement
 remain planned tracks.
