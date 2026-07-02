@@ -37,7 +37,7 @@ generation
 prefill
 decode
 benchmark performance
-execution_ready: true
+execution-ready true-state
 ```
 
 Current real-model support is bounded selected embedding and selected

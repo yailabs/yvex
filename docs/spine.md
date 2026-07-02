@@ -56,6 +56,78 @@ DwarfStar/DS4, and other systems only as external reference systems. Such
 comparisons must identify whether the evidence comes from YVEX code or from an
 external runtime.
 
+## 1.2 How to Read This Spine
+
+This spine contains multiple row classes. They are not equivalent.
+
+```text
+implementation row:
+  changes executable behavior and must have code, command proof, tests, failure
+  paths, cleanup/lifecycle behavior, and explicit boundary.
+
+report row:
+  exposes command-visible facts, blockers, or classifications without executing
+  runtime behavior.
+
+diagnostic-runtime row:
+  runs implemented local runtime state but does not claim full model semantics.
+
+selected-slice row:
+  runs or materializes a bounded YVEX-produced slice of a real artifact but does
+  not claim full model execution.
+
+meta-spine row:
+  organizes doctrine, sequence, naming, contracts, audits, or roadmap structure.
+  It does not change runtime capability.
+
+release row:
+  closes packaging, validation, docs, version, tag, or release gates. It cannot
+  create runtime behavior.
+
+reference row:
+  records papers, external systems, external GGUFs, or external runners as
+  reference evidence only.
+```
+
+Only implementation rows can increase runtime capability.
+Report rows can increase inspection capability.
+Diagnostic-runtime rows can close local control-flow behavior.
+Selected-slice rows can prove bounded artifact/graph/runtime facts.
+Meta-spine rows increase project control but not runtime behavior.
+Release rows close release readiness but not model execution.
+
+Reader vocabulary:
+
+```text
+block:
+  canonical ownership domain.
+
+track:
+  grouped roadmap lane, usually inside v0.1.0.
+
+sequence:
+  ordered dependency chain.
+
+row:
+  smallest planned or completed delivery boundary.
+
+wave:
+  one execution package sent to the AI/Codex worker.
+
+gate:
+  release or evidence condition.
+
+claim:
+  human-readable capability statement that must be backed by evidence.
+
+boundary:
+  explicit statement of what a row does not prove.
+```
+
+When reading Current Capability, always ask which evidence stage the line belongs
+to: implementation, report-only, diagnostic-runtime, selected-slice, docs/meta,
+operator workflow, or refactor/quality.
+
 ## v0.1.0 Release Doctrine
 
 YVEX v0.1.0 is the first internally coherent end-to-end inference-engine release
@@ -623,65 +695,226 @@ YVEX implementation blocks:
 
 ```text
 BLOCK 0 — Source and target evidence
-  Owns official model source references, local source storage, source manifests,
-  model target classes, and source artifact classes.
+  owns:
+    official source references, local source storage facts, source manifests,
+    target class registry, target pressure class, source artifact class.
+  does not own:
+    conversion, runtime materialization, graph execution, generation.
+  entry evidence:
+    known upstream model source or selected artifact target.
+  exit evidence:
+    source/target report with class, source path, artifact class, missing status,
+    and unsupported runtime boundary.
+  common failure modes:
+    missing source, incomplete download, source-only target mistaken for runtime,
+    external GGUF mistaken for YVEX artifact.
+  typical command proof:
+    yvex model-target inspect TARGET --paths
+    yvex source-manifest ...
+    yvex native-weights ...
+  v0.1.0 related tracks:
+    V010.TARGET.*
+    V010.SOURCE.*
   Current rows: OWI.REBASE.0, OWI.TARGETS.*, OWI.HUGE.*
   Normal proof: source manifest, native tensor inventory, shard count, source
   footprint, identity/drift report.
 
 BLOCK 1 — Artifact production
-  Owns tensor mapping, quantization policy, calibration/imatrix evidence,
-  conversion plans, YVEX-produced GGUF emission, split artifact strategy, and
-  artifact naming.
+  owns:
+    tensor mapping, quant policy, imatrix/calibration contract, conversion plan,
+    GGUF emission, artifact naming.
+  does not own:
+    artifact integrity after emission, runtime materialization, graph execution.
+  entry evidence:
+    source tensor inventory and tensor role mapping.
+  exit evidence:
+    YVEX-produced or controlled artifact with parse roundtrip and registry entry.
+  common failure modes:
+    unsupported qtype, missing tensor role, invalid template, external artifact
+    used as produced artifact.
+  typical command proof:
+    yvex gguf-template ...
+    yvex convert ...
+    yvex models prepare TARGET
+  v0.1.0 related tracks:
+    V010.MAP.*
+    V010.QUANT.*
+    V010.ARTIFACT.EMIT.*
   Current rows: OWI.3-OWI.9, ARTIFACT.NAMING.0, OWI.HUGE.4.
   Normal proof: conversion plan, template validation, qtype policy, emitted
   controlled or selected GGUF, parse roundtrip.
 
 BLOCK 2 — Artifact identity and integrity
-  Owns file identity, digest, tensor byte ranges, shape, dtype, element count,
-  corruption fixtures, materialization gate, graph integrity guard, and operator
-  integrity reports.
+  owns:
+    file identity, digest, metadata, tensor byte ranges, dtype/shape/rank/element
+    count, corruption refusal, materialization gate, graph integrity guard.
+  does not own:
+    model-family semantics, graph algorithms, generation.
+  entry evidence:
+    candidate artifact path or emitted artifact.
+  exit evidence:
+    integrity report, drift report, corruption refusal, materialization preflight.
+  common failure modes:
+    short read, corrupt header, invalid tensor directory, byte range overflow,
+    digest drift, registry alias drift.
+  typical command proof:
+    yvex integrity report ...
+    yvex materialize ...
+    yvex models check ...
+  v0.1.0 related tracks:
+    V010.INTEGRITY.*
+    V010.FULLMODEL.*
   Current rows: ARTIFACT.INTEGRITY.*.
   Normal proof: integrity report, corruption refusal, digest check, tensor range
   validation, cleanup/failure phase.
 
 BLOCK 3 — Model class and tensor collections
-  Owns architecture family, model class, MoE facts, tensor role collections,
-  attention type, layer shape, context class, qtype class, runtime requirements,
-  and unsupported blockers.
+  owns:
+    family, architecture class, dense/MoE/source-only/selected-slice class,
+    tensor collections, attention/KV/context/output/tokenizer requirements,
+    runtime blockers.
+  does not own:
+    residency transition, graph compute, runtime mutation, generation.
+  entry evidence:
+    artifact/source descriptor, tensor inventory, family adapter facts.
+  exit evidence:
+    class/tensor report with required roles, missing roles, blockers, target
+    class, and next rows.
+  common failure modes:
+    unknown family, ambiguous tensor role, source-only target promoted too far,
+    selected-slice promoted to full runtime, dense/MoE conflation.
+  typical command proof:
+    yvex fullmodel descriptor ...
+    yvex fullmodel family-runtime ...
+    yvex attention report ...
+    yvex kv report ...
+    yvex context report ...
+    future yvex moe report ...
+  v0.1.0 related tracks:
+    V010.CLASS.*
+    V010.TENSOR.*
+    V010.MOE.0-4
   Current rows: MODEL.CLASS.*, FAMILY.RUNTIME.0, FULLMODEL.*.
   Normal proof: model-class report, tensor collection inventory, runtime
   requirement report, unsupported blocker list.
 
 BLOCK 4 — Residency and storage
-  Owns CPU/GPU/system-memory/SSD/distributed residency classes, storage-stream
-  planning, shard index, tensor page/chunk access, cold/warm read probes, cache
-  policy, staging, eviction, and cleanup.
+  owns:
+    resident/host-staged/SSD-staged/SSD-streamed/managed/hybrid/distributed
+    residency classes, shard index, page/chunk maps, cold/warm reads, staging,
+    cache/eviction, storage cleanup.
+  does not own:
+    compute semantics, graph correctness, generation semantics.
+  entry evidence:
+    artifact identity, tensor byte ranges, tensor collection requirements.
+  exit evidence:
+    residency/storage report with memory/storage pressure, staging/refusal
+    behavior, and cleanup.
+  common failure modes:
+    missing shard, short read, digest mismatch, page overflow, cache
+    inconsistency, storage read mistaken for generation.
+  typical command proof:
+    future yvex storage-plan ...
+    future yvex shard-index ...
+    future yvex residency-plan ...
+  v0.1.0 related tracks:
+    V010.STORAGE.*
+    V010.RESIDENCY.*
+    V010.KV.15-19
   Current rows: STORAGE.STREAM.*, RUNTIME.KV.*, future RESIDENCY.*.
   Normal proof: shard index, byte-range map, cold/warm read diagnostics,
   staged-residency report, cleanup/failure report.
 
 BLOCK 5 — Compute backend and hardware profiles
-  Owns CPU, CUDA, future Metal, future ROCm, build profiles, hardware profiles,
-  backend op capability matrix, allocation/transfer failure behavior, and
-  machine-specific pressure reports.
+  owns:
+    CPU/CUDA/future Metal/future ROCm build capability, backend op matrix,
+    allocation/transfer behavior, hardware profiles, build profiles.
+  does not own:
+    model support, graph algorithm ownership, generation.
+  entry evidence:
+    build flags, device probe, op requirement.
+  exit evidence:
+    backend/hardware report with supported ops, unsupported ops,
+    allocation/transfer failure behavior.
+  common failure modes:
+    backend probe mistaken for model support, build flag mistaken for runtime
+    support, hardware availability mistaken for implementation.
+  typical command proof:
+    yvex backend ...
+    yvex cuda-info ...
+    make check-cuda
+    future yvex hardware-profile ...
+  v0.1.0 related tracks:
+    V010.BACKEND.*
+    V010.HARDWARE.*
+    V010.BUILD.*
   Current rows: L0, CUDA.SURFACE.0, BACKEND.PROFILE.*, BACKEND.METAL.0,
   BACKEND.ROCM.0.
   Normal proof: backend probe, op capability report, allocation/transfer test,
   parity test, hardware profile report.
 
 BLOCK 6 — Graph execution
-  Owns primitive graph ops, normalization, attention, projection, MLP, routed
-  expert slices, transformer block execution, residual/state ownership, layer
-  scheduler, reference comparison, scratch lifecycle, and graph failure paths.
+  owns:
+    primitive ops, normalization, attention projection/execution, MLP, MoE
+    slices, residuals, block/layer scheduling, scratch lifecycle, reference
+    comparison.
+  does not own:
+    tokenizer semantics, runtime generation loop, benchmark claims.
+  entry evidence:
+    tensor collection mapping, backend capability, validated tensor ranges.
+  exit evidence:
+    graph command proof with checksum/max-diff/reference/cleanup/failure
+    behavior.
+  common failure modes:
+    primitive mistaken for full transformer, expert-slice mistaken for MoE,
+    attention primitive mistaken for model attention, selected slice mistaken
+    for full runtime.
+  typical command proof:
+    yvex graph --execute-op ...
+    yvex graph --execute-block ...
+    yvex graph --execute-layers ...
+    yvex graph check ...
+  v0.1.0 related tracks:
+    V010.GRAPH.PRIM.*
+    V010.GRAPH.*
+    V010.ATTN.*
+    V010.MOE.*
   Current rows: GRAPH.OPS.*, GRAPH.BLOCK.0, GRAPH.LAYERS.0.
   Normal proof: command-visible graph execution, reference comparison, checksum,
   max-diff, cleanup/failure report.
 
 BLOCK 7 — Runtime state
-  Owns engine/session ownership, token input, context planning, prefill, KV
-  cache, decode, logits, sampling, generation state, interruption, traces, and
-  profiles.
+  owns:
+    engine/session state, token input, context, prefill, KV, decode, logits,
+    sampling, generation state, interruption, cleanup, traces.
+  does not own:
+    artifact conversion, backend implementation, server/provider compatibility,
+    benchmark measurement.
+  entry evidence:
+    implemented graph output, runtime state, KV/state requirements.
+  exit evidence:
+    runtime command proof with state fields, lifecycle, failure, cleanup, and
+    boundary.
+  common failure modes:
+    diagnostic runtime mistaken for full runtime, generated diagnostic token
+    mistaken for model output, logits buffer mistaken for output-head logits,
+    generation command mistaken for DeepSeek generation.
+  typical command proof:
+    yvex prefill ...
+    yvex decode ...
+    yvex logits ...
+    yvex sample ...
+    yvex generate ...
+  v0.1.0 related tracks:
+    V010.CONTEXT.*
+    V010.PREFILL.*
+    V010.KV.*
+    V010.DECODE.*
+    V010.LOGITS.*
+    V010.SAMPLE.*
+    V010.TOKENIZER.*
+    V010.GEN.*
+    V010.RUNTIME.*
   Current rows: M7-M17, PREFILL.*, KV.*, DECODE.*, LOGITS.*, SAMPLING.*,
   GEN.LOOP.*, RUNTIME.KV.*.
   Normal proof: runtime command over implemented state, lifecycle test, context
@@ -691,9 +924,31 @@ BLOCK 7 — Runtime state
   CLI or server generation claim exists.
 
 BLOCK 8 — Operator and serving surfaces
-  Owns CLI presets, command taxonomy, doctor flow, REPL, daemon state,
-  provider endpoints, streaming responses, structured output, and server
-  observability.
+  owns:
+    CLI presets, help layout, normal/advanced command paths, doctor, REPL,
+    daemon state, provider endpoints, streaming, observability.
+  does not own:
+    lower runtime semantics, model generation capability, benchmark truth.
+  entry evidence:
+    lower-level implemented commands and runtime surfaces.
+  exit evidence:
+    short operator command, help, structured output/refusal, server endpoint
+    where runtime exists.
+  common failure modes:
+    operator preset overclaims lower behavior, server status shell mistaken for
+    generation endpoint, chat shell mistaken for model chat.
+  typical command proof:
+    yvex commands
+    yvex help ...
+    yvex models prepare ...
+    yvex models check ...
+    yvex paths ...
+    yvexd status
+  v0.1.0 related tracks:
+    V010.CLI.*
+    V010.DOCTOR.*
+    V010.PATHS.*
+    V010.SERVE.*
   Current rows: CLI.UX.*, MODEL.LIFECYCLE.*, SERVER.*.
   Normal proof: short operator command, JSON/text output, daemon endpoint,
   refusal path, structured diagnostics.
@@ -702,9 +957,30 @@ BLOCK 8 — Operator and serving surfaces
   into YVEX commands.
 
 BLOCK 9 — Evaluation, benchmarks, and public evidence
-  Owns fixture eval, partial regression, prefill regression, decode/logits/
-  sampling/generation eval, capability eval, runtime benchmarks, memory
-  pressure, server latency, documentation diagrams, and public target tables.
+  owns:
+    eval vectors, correctness regressions, benchmark harness,
+    machine/backend/artifact metadata, public docs, diagrams, release evidence.
+  does not own:
+    runtime implementation itself.
+  entry evidence:
+    implemented runtime path.
+  exit evidence:
+    eval/benchmark proof over same path users run, with reproducibility metadata.
+  common failure modes:
+    fixture eval mistaken for capability eval, external runner mistaken for YVEX
+    benchmark, throughput without metadata, public claim before implementation.
+  typical command proof:
+    future yvex eval ...
+    future yvex bench ...
+    docs claim audit
+    release transcript
+  v0.1.0 related tracks:
+    V010.EVAL.*
+    V010.BENCH.*
+    V010.PROFILE.*
+    V010.DOCS.*
+    V010.RELEASE.*
+    V010.CI.*
   Current rows: EVAL.*, BENCH.*, DOCS.*.
   Normal proof: same runtime path users run, model/artifact identity, backend,
   qtype, context, machine, command, reproducibility note.
@@ -1055,6 +1331,55 @@ yvex chat ...
 
 The final short path is not a generation claim. It remains bounded by the
 runtime rows that actually exist.
+
+## 2.6 Forward Namespace Rules
+
+Historical implementation rows:
+
+```text
+P*, A*, B*, C*, M*, PREFILL.*, DECODE.*, LOGITS.*, SAMPLING.*, GEN.*,
+FULLMODEL.*, FAMILY.RUNTIME.*, ATTENTION.CLASS.*, KV.CACHE.*, CONTEXT.CLASS.*
+remain for history and completed capability boundaries.
+```
+
+Forward implementation rows before v0.1.0:
+
+```text
+use V010.*.
+```
+
+Forward post-v0.1.0 rows:
+
+```text
+use POST010.*.
+```
+
+Meta-spine rows:
+
+```text
+use SPINE.*.
+```
+
+Reference and paper rows:
+
+```text
+use V010.PAPER.* or existing SPEC.* where preserved for continuity.
+```
+
+New implementation waves should generally map to exactly one V010 row.
+
+Do not create new M-series rows.
+
+Do not create new loose `CLI.UX.*`, `SERVER.*`, `BACKEND.PROFILE.*`,
+`MODEL.LIFECYCLE.*`, `LAYOUT.*`, or `DOCS.*` rows unless preserving historical
+continuity.
+
+If a future wave must use an older namespace, it must explain why the row is not
+better represented by `V010.*`.
+
+`SPINE.*` rows must never be interpreted as runtime capability unless they also
+changed code behavior and tests. If they changed code behavior, they probably
+do not belong in the meta-spine class.
 
 ## YVEX Research CLI Doctrine
 
@@ -1717,27 +2042,111 @@ docs/spine.md: internal delivery map
 
 ## 4. Current Capability
 
-Implemented and audited:
+Current capability is grouped by evidence stage. A line in this section is not a
+generic support claim; read it through the group boundary it belongs to.
+
+### 4.1 Implemented parser, artifact, and integrity behavior
 
 ```text
 GGUF inspection and tensor table parsing
 tensor/model descriptor construction
-tokenizer fixture path and prompt diagnostics
-graph/planner substrate
-CPU backend selected materialization
-CUDA probe, tensor movement, kernel unit, and parity subset
+GGUF tensor inventory without payload materialization
+artifact integrity validator and corruption fixture suite
+file identity digest enforcement
+registry metadata drift diagnostics
+canonical tensor byte-range validation
+canonical tensor shape/dtype accounting
+materialization integrity gate
+graph execution integrity guard
+consolidated artifact integrity regression harness
+operator integrity report
+model gate and materialization gate diagnostics
+```
+
+Boundary:
+
+```text
+Artifact and integrity behavior does not imply runtime execution, model
+support, generation, eval, benchmark, or throughput.
+```
+
+### 4.2 Implemented source/intake and artifact-production behavior
+
+```text
 controlled GGUF emission
 selected-tensor GGUF emission
 DeepSeek selected embedding alias and selected materialization
-model gate and materialization gate diagnostics
-local model registry and alias resolution
 qtype support separated by policy/storage/emit/quantize/compute
-server/provider status shell
+source-tensor-first model-target roadmap authority in spine
+command-visible model target class registry
+```
+
+Boundary:
+
+```text
+YVEX-produced or selected artifacts are artifact capabilities. They do not
+prove full model execution unless runtime rows consume them.
+```
+
+### 4.3 Implemented backend, materialization, and residency planning behavior
+
+```text
+CPU backend selected materialization
+CUDA probe, tensor movement, kernel unit, and parity subset
 engine-owned selected materialized weight attachment
 session visibility into engine-attached weight state
+fullmodel materialization-plan command over the FULLMODEL.0 inventory facts
+planned placement phase report without payload materialization
+tensor collection materialization grouping
+residency mode planning for resident, host-staged, SSD-staged, and hybrid classes
+CPU/CUDA backend fit estimate without full backend allocation
+preflight blocker report separated from missing tensor roles
+cleanup plan for future failed/partial materialization attempts
+FULLMODEL.2 readiness and blocker report
+fullmodel materialize command over bounded required proof tensors
+selected-runtime-slice fullmodel materialization refusal
+controlled tiny full-ish GGUF materialization proof on CPU/CUDA when available
+phase-specific fullmodel materialization failure reports
+fullmodel byte-limit refusal boundary
+fullmodel materialization cleanup and owned-state release report
+```
+
+Boundary:
+
+```text
+Materialization and backend movement are not graph execution, prefill, decode,
+logits, sampling, generation, eval, or benchmark.
+```
+
+### 4.4 Implemented graph fixture and selected-slice behavior
+
+```text
+graph/planner substrate
 deterministic controlled F32 fixture graph execution
 real selected F16 token embedding partial graph execution
 real selected embedding plus RMSNorm graph segment
+standalone RoPE/position graph op boundary
+standalone F32 attention primitive boundary
+standalone F32 matmul/projection primitive boundary
+standalone F32 MLP/feed-forward primitive boundary
+controlled first transformer block fixture execution
+controlled block executor boundary and scratch lifecycle cleanup
+controlled layer scheduler fixture over repeated diagnostic blocks
+graph check preset over primitive, block, and layer fixture proofs
+```
+
+Boundary:
+
+```text
+Graph fixtures and selected-slice proofs do not prove real full transformer
+prefill, real QKV projection from full model tensors, real attention-backed
+KV, real decode, output-head logits, sampling, or generation.
+```
+
+### 4.5 Implemented diagnostic runtime behavior
+
+```text
+tokenizer fixture path and prompt diagnostics
 explicit prompt/token input boundary
 segment-summary prefill state foundation from validated token sequences
 minimal session-owned KV ownership and append/read boundary
@@ -1784,34 +2193,26 @@ cleanup idempotence and state-release reporting
 lifecycle fields in generate output
 cancellation trace records
 failure/cancel state preservation
-operator-grade `yvex generate` command surface
-stable `yvex generate` help with normal, trace, cancel, and context examples
-bounded diagnostic generate command inventory entry
-generate argument validation and refusal wording
-stable text output policy for bounded diagnostic generation
-runbook bounded diagnostic generate lane
+```
+
+Boundary:
+
+```text
+Diagnostic runtime closes local control flow over implemented diagnostic state.
+It is not full model generation, not DeepSeek generation, not provider
+generation, not eval, not benchmark, and not model quality evidence.
+```
+
+### 4.6 Implemented report-only command surfaces
+
+```text
 fullmodel report command over GGUF tensor directory and metadata inventory
-GGUF tensor inventory without payload materialization
 qtype and dtype summary reporting
 tensor collection classification for embedding, normalization, attention, MLP, MoE, output, and tokenizer metadata
 DeepSeek required-role coverage and missing-role report
 CPU/CUDA placement pressure estimate without allocation
 full model runtime blocker report
 fullmodel no-claim boundary for full execution, full DeepSeek materialization, generation, evaluation, and benchmarks
-fullmodel materialization-plan command over the FULLMODEL.0 inventory facts
-planned placement phase report without payload materialization
-tensor collection materialization grouping
-residency mode planning for resident, host-staged, SSD-staged, and hybrid classes
-CPU/CUDA backend fit estimate without full backend allocation
-preflight blocker report separated from missing tensor roles
-cleanup plan for future failed/partial materialization attempts
-FULLMODEL.2 readiness and blocker report
-fullmodel materialize command over bounded required proof tensors
-selected-runtime-slice fullmodel materialization refusal
-controlled tiny full-ish GGUF materialization proof on CPU/CUDA when available
-phase-specific fullmodel materialization failure reports
-fullmodel byte-limit refusal boundary
-fullmodel materialization cleanup and owned-state release report
 fullmodel descriptor command
 runtime tensor role map
 tensor collection runtime descriptor
@@ -1871,36 +2272,26 @@ selected-slice partial context report
 source-only context refusal
 unknown-family context refusal
 next runtime dependency report after context class mapping
-routing-aware speculative verification doctrine in spine
-canonical runtime sequence rebase in spine
-dynamic dense/MoE runtime path doctrine in spine
-planned row supersession map in spine
-exhaustive v0.1.0 master implementation spine
-row-level v0.1.0 delivery contract grammar in spine
-whole-repo implementation/spine consistency audit in spine
-standalone RoPE/position graph op boundary
-standalone F32 attention primitive boundary
-standalone F32 matmul/projection primitive boundary
-standalone F32 MLP/feed-forward primitive boundary
-controlled first transformer block fixture execution
-controlled block executor boundary and scratch lifecycle cleanup
-controlled layer scheduler fixture over repeated diagnostic blocks
-graph check preset over primitive, block, and layer fixture proofs
-artifact integrity validator and corruption fixture suite
-file identity digest enforcement
-registry metadata drift diagnostics
-canonical tensor byte-range validation
-canonical tensor shape/dtype accounting
-materialization integrity gate
-graph execution integrity guard
-consolidated artifact integrity regression harness
-operator integrity report
-source-tensor-first model-target roadmap authority in spine
-command-visible model target class registry
-canonical inference block directory in spine
-paper-backed algorithm doctrine and CLI research surface roadmap in spine
-generation loop state machine and token lifecycle contract in spine
-Qwen Metal pressure lane recorded in spine
+```
+
+Boundary:
+
+```text
+Report-only command surfaces improve inspection and planning. They do not
+execute runtime behavior unless explicitly paired with implemented runtime rows.
+```
+
+### 4.7 Implemented operator workflow and CLI surfaces
+
+```text
+local model registry and alias resolution
+server/provider status shell
+operator-grade `yvex generate` command surface
+stable `yvex generate` help with normal, trace, cancel, and context examples
+bounded diagnostic generate command inventory entry
+generate argument validation and refusal wording
+stable text output policy for bounded diagnostic generation
+runbook bounded diagnostic generate lane
 plug-and-play operator runbook flow
 single-paste operator transcript
 full implemented command inventory in operator runbook
@@ -1913,15 +2304,71 @@ DeepSeek selected artifact prepare preset
 prepare preset dry-run and registration-skip boundaries
 selected artifact check preset
 model-scoped operator runbooks
+```
+
+Boundary:
+
+```text
+Operator workflows may compose existing lower-level behavior. They do not
+create model/runtime capability beyond the commands they actually execute.
+```
+
+### 4.8 Implemented docs, doctrine, and meta-spine control
+
+```text
+routing-aware speculative verification doctrine in spine
+canonical runtime sequence rebase in spine
+dynamic dense/MoE runtime path doctrine in spine
+planned row supersession map in spine
+exhaustive v0.1.0 master implementation spine
+row-level v0.1.0 delivery contract grammar in spine
+whole-repo implementation/spine consistency audit in spine
+audit-driven spine architecture reconciliation in spine
+source-tensor-first model-target roadmap authority in spine
+canonical inference block directory in spine
+paper-backed algorithm doctrine and CLI research surface roadmap in spine
+generation loop state machine and token lifecycle contract in spine
+Qwen Metal pressure lane recorded in spine
+DeepSeek V4 Flash generation and speculative throughput target envelope in spine
+```
+
+Boundary:
+
+```text
+Docs, doctrine, and meta-spine rows are project-control capability, not runtime
+capability. They must not be counted as model execution, generation, eval,
+benchmark, or throughput.
+```
+
+### 4.9 Implemented refactor, compression, and repository quality work
+
+```text
 runtime ownership cleanup and quality compression
 in-place core compression and monolith cleanup
 in-place graph command and executor compression
 in-place runtime engine, session, graph-slice, and command compression
 in-place model artifact registry, target, prepare, and check compression
-DeepSeek V4 Flash generation and speculative throughput target envelope in spine
+root-first C source layout
+native root binaries
+source layout refoundation
+canonical runtime/eval/bench source skeleton
+test vectors and runner consolidation
+compact test runners and vectors
+public documentation boundary cleanup
+minimal documentation surface
+model-scoped operator runbooks
+code natural hygiene
 ```
 
-Current live target classes:
+Boundary:
+
+```text
+Refactor and compression preserve or clarify existing behavior. They do not
+create new runtime capability unless explicitly paired with tests and command
+proof for behavior change.
+```
+
+### 4.10 Current live target classes
 
 ```text
 selected-runtime-slice target:
@@ -1995,7 +2442,7 @@ Qwen-Metal planned target facts:
   YVEX generation: not implemented
 ```
 
-Unsupported / not advanced:
+### 4.11 Unsupported / not advanced
 
 ```text
 full model execution
@@ -2078,6 +2525,8 @@ benchmark throughput
 benchmark performance
 advanced Runtime KV capacity
 execution_ready true-state claim
+generation_ready true-state claim
+v0.1.0 release
 ```
 
 M8 is not the final prefill path. It is a segment-summary prefill-state
@@ -2282,7 +2731,9 @@ tables.
 | SPINE.V0_1_0.MASTER.1 | complete | docs | Exhaustive v0.1.0 spine expansion | spine expands v0.1.0 into exhaustive target, path, source, mapping, quantization, artifact, integrity, fullmodel, class, tensor, storage, residency, backend, hardware, graph, attention, MoE, KV, context, prefill, decode, logits, sampling, tokenizer, generation, runtime lifecycle, trace, CLI, doctor, serving, eval, benchmark, speculative, paper, docs, packaging, CI, release, and post-v0.1.0 tracks without runtime implementation, generation, eval, benchmark, throughput, or public release claim |
 | SPINE.V0_1_0.MASTER.2 | complete | docs | Row-level v0.1.0 delivery contracts | spine adds row-level delivery contracts, contract families, promotion rules, next-row decision grammar, critical path, parallelization rules, final transcript requirements, and Active Next decision rules for the exhaustive v0.1.0 spine without runtime implementation, generation, eval, benchmark, throughput, or release claim |
 | SPINE.AUDIT.0 | complete | docs | Whole-repo implementation/spine consistency audit | repo-wide audit compares docs/spine Current Capability, completed rows, planned rows, command surfaces, tests, source ownership, public docs, and V010 architecture against tracked implementation evidence, records weak points, meta/rebase row classification, mismatch findings, and follow-up rows without runtime implementation, generation, eval, benchmark, throughput, or release claim |
-| SPINE.RECONCILE.0 | planned | docs | Current Capability and ledger reconciliation | Current Capability, completed row boundaries, meta-spine classification, and unsupported lists are rewritten to match audited code/test/command evidence without runtime implementation or capability promotion |
+| SPINE.RECONCILE.0 | complete | docs | Current Capability and ledger reconciliation | Current Capability, completed row boundaries, meta-spine classification, namespace rules, block/V010 crosswalks, command evidence, test evidence, audit actions, and Active Next are reconciled against audited code/test/command evidence without runtime implementation, generation, eval, benchmark, throughput, or capability promotion |
+| SPINE.TESTMAP.0 | planned | docs | Test-to-ledger coverage map | tests are mapped to ledger rows, evidence stages, commands, and failure paths without runtime implementation or capability promotion |
+| SPINE.FILEMAP.0 | planned | docs | Source ownership and file map | source/header/test files are mapped to canonical blocks and spine rows without runtime implementation or capability promotion |
 | SPINE.METAL.QWEN.0 | complete | docs | Qwen Metal pressure lane | spine records Qwen on Apple Silicon / Metal as a reduced-scale portability and full-runtime pressure lane without Metal support, Qwen runtime, generation, eval, benchmark, or throughput claim |
 | HARDWARE.PROFILE.MAC.0 | planned | hardware | Apple Silicon Mac hardware profile | MacBook Apple Silicon CPU/GPU/unified-memory/storage profile is reported without backend or model capability claim |
 | COMPUTE.BACKEND.METAL.0 | planned | backend | Metal feasibility profile | Metal build/toolchain/device/memory feasibility is reported without backend op support claim |
@@ -2392,10 +2843,9 @@ tables.
 
 ## 5.1 Spine Rebase and Meta Waves
 
-This table classifies docs/rebase/doctrine waves that organize the project but
-do not implement runtime behavior. It is not a second implementation ledger.
-Completed history remains in the unified ledger above until a future cleanup can
-move docs-only meta rows without hiding history or breaking surface tests.
+This table classifies project-control waves. These rows may remain in the
+unified ledger for historical continuity, but they must not inflate runtime
+capability.
 
 Audit finding:
 
@@ -2403,23 +2853,24 @@ Audit finding:
 meta-spine rows should not inflate Current Capability as runtime implementation.
 ```
 
-| ID | Status | Meta kind | Affects | Runtime capability change | Boundary |
-| --- | --- | --- | --- | --- | --- |
-| SPINE.REBASE.1 | complete | runtime rebase | M-series runtime ladder | none | docs-only historical execution-chain audit |
-| SPINE.REBASE.2 | complete | runtime rebase | M3/M4 planning | none | docs-only runtime track clarification |
-| SPINE.REBASE.3 | complete | roadmap rebase | runtime/operator roadmap | none | docs-only roadmap expansion |
-| SPINE.REBASE.4 | complete | roadmap rebase | integrity and measurement target | none | docs-only boundary placement |
-| SPINE.REBASE.5 | complete | ledger rebase | unified delivery ledger | none | docs-only ledger consolidation |
-| SPINE.BLOCKS.0 | complete | block doctrine | canonical block directory | none | docs-only ownership taxonomy |
-| SPINE.BLOCKS.1 | planned | cleanup doctrine | planned-row deduplication | none | future docs-only compression |
-| SPINE.OPERATOR.PRESET.0 | complete | operator doctrine | preset command roadmap | none | docs-only operator roadmap authority |
-| SPINE.GENERATION.TARGET.0 | complete | target doctrine | DeepSeek target and throughput envelope | none | internal target, no benchmark claim |
-| SPINE.SPEC.VERIFICATION.0 | complete | speculative doctrine | token verification and cost control | none | docs-only speculative boundary |
-| SPINE.SEQUENCE.REBASE.0 | complete | sequence doctrine | runtime sequence normalization | none | docs-only active sequence map |
-| SPINE.V0_1_0.MASTER.1 | complete | release doctrine | exhaustive V010 track map | none | docs-only v0.1.0 roadmap expansion |
-| SPINE.V0_1_0.MASTER.2 | complete | delivery doctrine | row-level V010 contracts | none | docs-only delivery grammar |
-| SPINE.METAL.QWEN.0 | complete | pressure-lane doctrine | Qwen/Metal future lane | none | docs-only portability pressure lane |
-| SPINE.AUDIT.0 | complete | audit | repo/spine consistency | none | docs-only audit and follow-up selection |
+| ID | Status | Meta kind | Affects | Runtime capability change | Evidence type | Boundary |
+| --- | --- | --- | --- | --- | --- | --- |
+| SPINE.REBASE.1 | complete | runtime rebase | M-series runtime ladder | none | roadmap | docs-only; no runtime implementation |
+| SPINE.REBASE.2 | complete | runtime rebase | M3/M4 planning | none | roadmap | docs-only; no runtime implementation |
+| SPINE.REBASE.3 | complete | roadmap rebase | runtime/operator roadmap | none | roadmap | docs-only; no generation claim |
+| SPINE.REBASE.4 | complete | roadmap rebase | integrity and measurement target | none | roadmap | docs-only; no benchmark claim |
+| SPINE.REBASE.5 | complete | ledger rebase | unified delivery ledger | none | namespace | docs-only; no runtime implementation |
+| SPINE.BLOCKS.0 | complete | block doctrine | canonical block directory | none | doctrine | docs-only; no runtime implementation |
+| SPINE.BLOCKS.1 | planned | cleanup doctrine | planned-row deduplication | none | namespace | future docs-only compression |
+| SPINE.OPERATOR.PRESET.0 | complete | operator doctrine | preset command roadmap | none | doctrine | docs-only; no runtime implementation |
+| SPINE.GENERATION.TARGET.0 | complete | target doctrine | DeepSeek target and throughput envelope | none | target-pressure | docs-only; no benchmark claim |
+| SPINE.SPEC.VERIFICATION.0 | complete | speculative doctrine | token verification and cost control | none | doctrine | docs-only; no generation claim |
+| SPINE.SEQUENCE.REBASE.0 | complete | sequence doctrine | runtime sequence normalization | none | roadmap | docs-only; no runtime implementation |
+| SPINE.V0_1_0.MASTER.1 | complete | release doctrine | exhaustive V010 track map | none | release-planning | docs-only; no v0.1.0 release claim |
+| SPINE.V0_1_0.MASTER.2 | complete | delivery doctrine | row-level V010 contracts | none | contract | docs-only; no runtime implementation |
+| SPINE.AUDIT.0 | complete | audit | repo/spine consistency | none | audit | docs-only; no runtime implementation |
+| SPINE.RECONCILE.0 | complete | reconciliation | evidence taxonomy and Active Next | none | namespace | docs-only; no runtime implementation |
+| SPINE.METAL.QWEN.0 | complete | pressure-lane doctrine | Qwen/Metal future lane | none | target-pressure | docs-only; no generation claim |
 
 ## DeepSeek Generation and Throughput Target
 
@@ -5060,6 +5511,21 @@ The final v0.1.0 release candidate must include a single transcript containing:
 22. docs audit;
 23. tag readiness report.
 
+## 6.9 Block-to-V010 Crosswalk
+
+| Block | Owns | V010 tracks | Current evidence | Main gap before v0.1.0 |
+| --- | --- | --- | --- | --- |
+| BLOCK 0 | source/target evidence | V010.TARGET.*, V010.SOURCE.* | model target registry, source doctrine, DeepSeek/GLM/Qwen target facts | v0.1.0 full-runtime target decision |
+| BLOCK 1 | artifact production | V010.MAP.*, V010.QUANT.*, V010.ARTIFACT.EMIT.* | controlled/selected GGUF emission, DeepSeek selected prepare | small/full-runtime candidate artifact path |
+| BLOCK 2 | identity/integrity | V010.INTEGRITY.*, V010.FULLMODEL.* | digest, byte range, corruption, materialization gates | v0.1.0 artifact acceptance gate |
+| BLOCK 3 | class/tensor | V010.CLASS.*, V010.TENSOR.*, V010.MOE.* | family-runtime, attention/KV/context reports | MoE class, output-head/tokenizer class, tensor coverage |
+| BLOCK 4 | storage/residency | V010.STORAGE.*, V010.RESIDENCY.* | residency planning in fullmodel reports | storage stream and expert/output-head residency proof |
+| BLOCK 5 | backend/hardware/build | V010.BACKEND.*, V010.HARDWARE.*, V010.BUILD.* | CPU/CUDA probe/movement/parity subset | full backend matrix and v0.1.0 build profile |
+| BLOCK 6 | graph | V010.GRAPH.*, V010.ATTN.*, V010.MOE.* | primitives, block/layers fixture, selected graph | real QKV/O, real block/layer over target tensors |
+| BLOCK 7 | runtime | V010.CONTEXT.*, V010.PREFILL.*, V010.KV.*, V010.DECODE.*, V010.LOGITS.*, V010.SAMPLE.*, V010.TOKENIZER.*, V010.GEN.*, V010.RUNTIME.* | diagnostic prefill/KV/decode/logits/sample/generate | real prefill/KV/decode/logits/sampling/generation |
+| BLOCK 8 | operator/serve | V010.CLI.*, V010.DOCTOR.*, V010.PATHS.*, V010.SERVE.* | paths, prepare, check, bounded generate CLI, yvexd status | real generation normal path and doctor/server gates |
+| BLOCK 9 | evidence/release | V010.EVAL.*, V010.BENCH.*, V010.PROFILE.*, V010.DOCS.*, V010.RELEASE.*, V010.CI.* | docs tests, runbooks, guardrails | eval smoke, benchmark harness, release transcript |
+
 ## Planned Row Supersession Map
 
 This map prevents old planned rows from competing with the canonical forward
@@ -5645,22 +6111,24 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-SPINE.RECONCILE.0 - Current Capability and ledger reconciliation
+MOE.CLASS.0 - MoE model-class report
 ```
 
-SPINE.AUDIT.0 found no P0 runtime contradiction, but it found P1 spine
-coherence risks: Current Capability mixes implementation, report-only,
-diagnostic-runtime, selected-slice, docs-only/meta, and code-quality rows; old
-planned namespaces still overlap V010 rows; and tests are not yet mapped
-row-by-row to completed ledger boundaries.
+SPINE.AUDIT.0 found no P0 runtime contradiction, but it found P1 spine coherence
+risks. SPINE.RECONCILE.0 resolved the blocking evidence-taxonomy and namespace
+parts of those findings by splitting Current Capability into evidence-stage
+groups, classifying meta-spine rows, adding forward namespace rules, deepening
+canonical block definitions, and adding block/command/test crosswalks.
 
-SPINE.RECONCILE.0 is therefore Active Next before runtime work resumes. It must
-rewrite Current Capability and ledger/meta classification around audited
-evidence without changing runtime behavior or promoting capability.
+Remaining `SPINE.TESTMAP.0` and `SPINE.FILEMAP.0` follow-ups are useful but
+non-blocking for a report-only model-class row. Runtime planning therefore
+returns to MOE.CLASS.0.
 
-MOE.CLASS.0 remains the next runtime implementation row after reconciliation
-because it is the first model-class dynamic routing row that must be completed
-after attention, KV, and context reports.
+MOE.CLASS.0 remains the next runtime row. It must make MoE model-class facts
+command-visible after attention, KV, and context reports. It must not claim
+expert activation, full transformer prefill, full model decode, full model
+execution, real DeepSeek generation, provider generation, streaming generation,
+evaluation, benchmark readiness, or throughput.
 
 MOE.CLASS.0 maps to:
 
@@ -5746,14 +6214,14 @@ throughput target. It does not change the immediate implementation order.
 MODEL.PREPARE.0 and MODEL.CHECK.0 are complete for the DeepSeek selected
 embedding target. MODEL.CHECK.1 remains planned.
 
-Runtime active next after reconciliation remains:
+Runtime active next remains:
 
 ```text
 MOE.CLASS.0 - MoE model-class report
 ```
 
 SPINE.METAL.QWEN.0 records a future parallel pressure lane. It does not replace
-SPINE.RECONCILE.0 or the post-reconciliation runtime next row.
+MOE.CLASS.0 or the current runtime next row.
 
 CLI.GEN.0 is complete as an operator-grade command surface over the bounded
 diagnostic generation loop: stable help, normal/trace/cancel/context examples,
@@ -6091,6 +6559,66 @@ public path leak guardrail
 no runtime file change for spine-only rebases
 ```
 
+## 8.1 Command-to-Evidence Crosswalk
+
+| Command family | Current stage | Proves | Does not prove | Related rows |
+| --- | --- | --- | --- | --- |
+| `yvex inspect/metadata/tensors` | artifact-inspection | GGUF metadata, tensor directory, descriptor facts | runtime execution, model support, generation | C0, C1, ARTIFACT.*, V010.INTEGRITY.* |
+| `yvex integrity` | integrity-proof | identity, digest/range/shape/dtype checks, corruption refusal | supply-chain security, model execution | ARTIFACT.INTEGRITY.*, V010.INTEGRITY.* |
+| `yvex materialize` | selected-slice-proof | bounded selected tensor materialization and cleanup | graph execution, prefill, decode, generation | M1, M2, ARTIFACT.INTEGRITY.6, V010.FULLMODEL.* |
+| `yvex graph --execute-op` | fixture-proof | standalone primitive operation with checksum/reference/cleanup | full transformer block, prefill, decode, generation | GRAPH.OPS.*, V010.GRAPH.PRIM.* |
+| `yvex graph --execute-block` | fixture-proof | controlled transformer-block fixture execution | real model layer execution, generation | GRAPH.BLOCK.0, V010.GRAPH.* |
+| `yvex graph --execute-layers` | fixture-proof | controlled repeated layer scheduler fixture | real full layer stack, full transformer prefill | GRAPH.LAYERS.0, V010.GRAPH.* |
+| `yvex graph check` | fixture-proof | preset over implemented primitive/block/layer graph proofs | new graph capability beyond underlying commands | GRAPH.CHECK.0, V010.CLI.8 |
+| `yvex prefill` | diagnostic-runtime | segment-summary/layer-backed/chunked diagnostic prefill and optional diagnostic KV binding | full transformer prefill, real attention KV writes | M8, PREFILL.1-3, V010.PREFILL.* |
+| `yvex kv report` | report-only | KV class, diagnostic-vs-real boundary, layout/capacity/residency blockers | real attention KV allocation/write/read | KV.CACHE.0, V010.KV.* |
+| `yvex context report` | report-only | requested/active context, token counts, chunking, overflow and decode-position policy | long-context runtime or real generation context | CONTEXT.CLASS.0, V010.CONTEXT.* |
+| `yvex attention report` | report-only | attention class, Q/K/V/O requirements, RoPE/mask/KV/context blockers | full transformer attention, real QKV projection, real KV writes, generation | ATTENTION.CLASS.0, V010.ATTN.* |
+| `yvex decode` | diagnostic-runtime | bounded diagnostic decode-state step over implemented prefill/KV summary | real decode over full transformer KV | DECODE.0, V010.DECODE.* |
+| `yvex logits` | diagnostic-runtime | bounded diagnostic logits buffer with checksum/min/max | real output-head logits | LOGITS.0, V010.LOGITS.* |
+| `yvex sample` | diagnostic-runtime | deterministic greedy selection over implemented diagnostic logits | stochastic sampling, real vocabulary sampling, generation quality | SAMPLING.0, V010.SAMPLE.* |
+| `yvex generate` | diagnostic-runtime | bounded diagnostic prefill/decode/logits/sample/append/stop/cleanup | full model generation, DeepSeek generation, provider generation, eval, benchmark, tok/s | GEN.LOOP.*, CLI.GEN.0, V010.GEN.* |
+| `yvex fullmodel report` | report-only | GGUF inventory, qtype/dtype summary, collection coverage, blockers | payload materialization, runtime execution | FULLMODEL.0, V010.FULLMODEL.* |
+| `yvex fullmodel materialization-plan` | report-only | planned placement phases, residency classes, fit estimates, cleanup plan | full materialization, graph execution, generation | FULLMODEL.1, V010.FULLMODEL.*, V010.RESIDENCY.* |
+| `yvex fullmodel materialize` | selected-slice-proof | bounded required proof tensor materialization or clean refusal | full DeepSeek materialization, full model execution | FULLMODEL.2, V010.FULLMODEL.* |
+| `yvex fullmodel descriptor` | report-only | tensor role map, collection map, runtime requirements and blockers | runtime mutation, decode, logits, generation | FULLMODEL.3, V010.CLASS.*, V010.TENSOR.* |
+| `yvex fullmodel family-runtime` | report-only | family adapter roles, attention/KV/MoE/output requirements, next dependencies | model-family runtime support | FAMILY.RUNTIME.0, V010.CLASS.* |
+| `yvex models prepare` | operator-preset | implemented selected source-to-GGUF and registry path for supported target | materialization, graph, generation, eval, benchmark | MODEL.PREPARE.*, V010.CLI.6 |
+| `yvex models check` | operator-preset | selected artifact inspect/integrity/materialize/graph composition by level | decode, logits, sampling, generation | MODEL.CHECK.0, V010.CLI.7 |
+| `yvex paths` | operator-preset | operator-local root/path resolution and creation boundaries | download, artifact creation, runtime capability | OPERATOR.PATHS.0, V010.PATHS.* |
+| `yvex model-target inspect` | report-only | target class, source/artifact/report/registry paths and unsupported runtime boundary | source inspection, conversion, execution | MODEL.TARGET.PATHS.0, V010.TARGET.* |
+| `yvexd status/models` | server-status-shell | daemon/provider status shell and model registry visibility | provider generation, streaming, compatibility | K0, SERVE.RUNTIME.0, V010.SERVE.* |
+
+## 8.2 Test-to-Evidence Crosswalk
+
+| Test family | Covers | Evidence stage | Missing or weak coverage | Follow-up row |
+| --- | --- | --- | --- | --- |
+| docs surface tests | public/internal docs boundaries and allowed surfaces | docs/meta | no row-by-row docs-to-ledger map | SPINE.TESTMAP.0 |
+| source layout tests | root-first source ownership and forbidden source-file sprawl | refactor/quality | no full source-to-row map | SPINE.FILEMAP.0 |
+| code natural tests | style/naturalness guardrails and forbidden claim literals | refactor/quality | not behavior proof | SPINE.TESTMAP.0 |
+| GGUF/parser tests | GGUF parse, metadata, tensor table, fixtures | artifact-inspection | none critical | none |
+| artifact integrity tests | digest, corruption, byte ranges, shape/dtype/rank, refusal | integrity-proof | none critical | none |
+| registry/model alias tests | registry add/use/current/remove/alias resolution | operator-preset | no complete ledger row map | SPINE.TESTMAP.0 |
+| materialization tests | CPU selected materialization, gates, cleanup/refusal | selected-slice-proof | full-runtime materialization remains planned | V010.FULLMODEL.* |
+| CUDA probe/movement/parity tests | CUDA info, tensors, ops, parity, selected materialization | fixture-proof / selected-slice-proof | machine availability varies | V010.BACKEND.*, V010.HARDWARE.* |
+| graph primitive tests | RoPE, attention, matmul, MLP/expert-slice primitives | fixture-proof | full transformer integration missing | V010.GRAPH.*, V010.ATTN.*, V010.MOE.* |
+| graph block/layer tests | controlled block and repeated layer fixture | fixture-proof | real model block/layer execution missing | V010.GRAPH.* |
+| selected graph tests | selected embedding and embedding-plus-RMSNorm graph slices | selected-slice-proof | not full runtime | V010.GRAPH.22-24 |
+| prefill tests | segment, layer-backed, chunked, KV-bound diagnostic prefill | diagnostic-runtime | real full transformer prefill missing | V010.PREFILL.* |
+| KV tests | minimal KV ownership/report, overflow/refusal, cleanup | diagnostic-runtime / report-only | real attention-backed KV missing | V010.KV.* |
+| decode tests | bounded diagnostic decode through CLI/core paths | diagnostic-runtime | repeated real decode missing | V010.DECODE.* |
+| logits tests | bounded diagnostic logits buffer and checksum | diagnostic-runtime | real output-head logits missing | V010.LOGITS.* |
+| sample tests | deterministic greedy diagnostic sampler | diagnostic-runtime | stochastic and real vocab sampling missing | V010.SAMPLE.* |
+| generate tests | bounded diagnostic generation, append, stop, cancel, cleanup | diagnostic-runtime | OS/server cancellation and full generation missing | V010.GEN.*, V010.RUNTIME.* |
+| attention report tests | attention report/refusal/boundary output in fullmodel/core paths | report-only | no real attention runtime | V010.ATTN.* |
+| KV report tests | KV class/refusal/boundary output | report-only | no full KV allocation/write/read | V010.KV.* |
+| context report tests | context report/refusal/chunk/overflow output | report-only | no long-context runtime | V010.CONTEXT.* |
+| fullmodel report/materialize/descriptor/family-runtime tests | fullmodel inventory, refusal, tiny proof, descriptors, family reports | report-only / selected-slice-proof | broad row-to-test mapping still incomplete | SPINE.TESTMAP.0 |
+| operator preset tests | paths, target inspect, prepare/check, model registry | operator-preset | no fully automated row promotion map | SPINE.TESTMAP.0 |
+| runbook/public claim tests | public docs boundary and command examples | docs/meta | no release claim audit transcript yet | V010.DOCS.PUBLIC.*, V010.RELEASE.* |
+| artifact guardrail scans | no real model artifacts in git; tiny fixtures only | guardrail | manual transcript required at release | V010.CI.7 |
+| forbidden claim scans | no forbidden generation/benchmark/release wording | guardrail | exact scan needs maintained allowlist discipline | V010.CI.8 |
+
 ## 10. Spine and Implementation Audit
 
 ### 10.1 Audit Scope
@@ -6271,9 +6799,9 @@ by evidence class and names the high-risk bullets that need reconciliation.
 | Runtime ownership cleanup and in-place compression bullets | docs/code quality | source history and current file ownership | no direct command proof for compression as behavior | surface/source-layout/code-natural tests | not a runtime lifecycle proof | docs-only-valid / under-specified | move to meta/code-quality group |
 | Routing-aware speculative doctrine, V010 master, row contract grammar, Qwen lane, block directory doctrine | docs-only-valid | `docs/spine.md` | grep proof/docs tests | docs surface tests | not applicable | docs-only-valid | move to meta-spine group, not runtime capability |
 
-Finding: Current Capability is directionally accurate but too flat. It should be
-rewritten into classified groups by `SPINE.RECONCILE.0` before implementation
-continues past `MOE.CLASS.0`.
+Finding: Current Capability was directionally accurate but too flat.
+`SPINE.RECONCILE.0` rewrote it into classified groups before implementation
+continued past the audit blocker.
 
 ### 10.5 Completed Ledger Row Audit
 
@@ -6428,20 +6956,87 @@ outside `docs/spine.md`.
 | Unsupported/not advanced list | unsupported / explicitly not advanced | keep | important claim boundary |
 | Future V010/post-v0.1.0 rows | planned but not implemented | keep planned | not Current Capability |
 
-`SPINE.RECONCILE.0` should rewrite Current Capability into these grouped
-sections. This audit deliberately does not perform the rewrite.
+`SPINE.RECONCILE.0` rewrote Current Capability into these grouped sections and
+kept the remaining row-to-test and file-map detail as non-blocking follow-up
+work.
 
 ### 10.14 Required Follow-Up Rows
 
 | Follow-up row | Reason | Priority | Should run before MOE.CLASS.0? |
 | --- | --- | --- | --- |
-| `SPINE.RECONCILE.0 — Current Capability and ledger reconciliation` | P1 Current Capability and old/V010 namespace mismatch | P1 | yes |
-| `SPINE.META.TABLE.0 — Move spine/meta rows into separate meta table` | meta rows still inflate unified ledger/current capability | P1 | yes, or merge into reconcile |
-| `SPINE.TESTMAP.0 — Test-to-ledger coverage map` | completion proof is not row-addressable enough | P1 | yes, if reconcile does not include it |
+| `SPINE.RECONCILE.0 — Current Capability and ledger reconciliation` | P1 Current Capability and old/V010 namespace mismatch | P1 | complete |
+| `SPINE.META.TABLE.0 — Move spine/meta rows into separate meta table` | merged into `SPINE.RECONCILE.0` through `## 5.1 Spine Rebase and Meta Waves` | P1 | no |
+| `SPINE.TESTMAP.0 — Test-to-ledger coverage map` | completion proof is summarized but not row-addressable enough | P1 | no |
 | `SPINE.FILEMAP.0 — Source ownership map` | full source/header ownership map is not committed | P2 | no |
-| `SPINE.COMMAND.AUDIT.0 — Command/help/output-boundary audit` | help is mostly good but output contracts need row mapping | P2 | no |
-| `SPINE.CLAIM.AUDIT.0 — Public/internal claim audit` | public docs pass now; future release needs formal audit | P3 | no |
+| `SPINE.COMMAND.AUDIT.0 — Command/help/output-boundary audit` | command evidence is summarized; source/help changes are not required by this wave | P2 | no |
+| `SPINE.CLAIM.AUDIT.0 — Public/internal claim audit` | public docs pass now; future release needs formal audit transcript | P3 | no |
 | `MOE.CLASS.0 — MoE model-class report` | original runtime active next remains valid after reconciliation | P1 | after reconciliation |
+
+### 10.15 Reconciliation Actions
+
+| Finding ID | Priority | Original finding | Reconciliation action | Status after SPINE.RECONCILE.0 | Follow-up row |
+| --- | --- | --- | --- | --- | --- |
+| AUDIT.P1.1 | P1 | Current Capability mixes implementation, report-only, diagnostic runtime, selected-slice, docs-only/meta, and cleanup-quality bullets | Split Current Capability into evidence-stage groups with explicit boundaries | resolved-in-spine | none |
+| AUDIT.P1.2 | P1 | Meta-spine rows remain in unified ledger and Current Capability | Added meta-spine table with runtime capability change set to none and moved docs/meta capability into its own group | resolved-in-spine | none |
+| AUDIT.P1.3 | P1 | Planned rows are duplicated across old namespaces and V010 rows | Added forward namespace rules and block-to-V010 crosswalk; preserved history without making old namespaces preferred | resolved-in-spine | none |
+| AUDIT.P1.4 | P1 | Tests are strong but not mapped row-by-row to ledger rows | Added test-to-evidence crosswalk and assigned full row mapping to a planned follow-up | requires-follow-up | SPINE.TESTMAP.0 |
+| AUDIT.P2.1 | P2 | Source/header ownership exists but is not committed as a full file-to-row map | Kept grouped file audit and assigned complete source/header/test map to follow-up | requires-follow-up | SPINE.FILEMAP.0 |
+| AUDIT.P2.2 | P2 | `yvex_model_artifacts.c`, `yvex_graph.c`, and `yvex_runtime.c` remain large multi-responsibility files | Recorded as maintainability pressure only; no source split in this docs wave | deferred-to-runtime | future in-place cleanup only if needed |
+| AUDIT.P2.3 | P2 | Fullmodel report-only surfaces could be mistaken for runtime readiness | Moved fullmodel surfaces to report-only group and command crosswalk with unsupported boundary | resolved-in-spine | none |
+| AUDIT.P2.4 | P2 | Diagnostic generation has rich proof and may be mistaken for full generation | Moved generation loop to diagnostic-runtime group and command crosswalk with full-generation exclusions | resolved-in-spine | none |
+| AUDIT.P2.5 | P2 | Output-head/tokenizer real-runtime path is underdeveloped relative to v0.1.0 gates | Preserved as runtime gap under block/V010 crosswalk and Active Next decision grammar | deferred-to-runtime | V010.CLASS.12-13 / V010.TOKENIZER.* |
+| AUDIT.P2.6 | P2 | Dense full-runtime target decision is not made | Preserved as target decision gap in block/V010 crosswalk and Active Next decision grammar | deferred-to-runtime | V010.TARGET.9 |
+| AUDIT.P2.7 | P2 | CUDA validation depends on host availability | Preserved as validation/environment boundary in test crosswalk | partially-resolved | V010.HARDWARE.*, V010.CI.3 |
+| AUDIT.P2.8 | P2 | Audit summary counted one P2 beyond the individually expanded weak-point table | Assigned unexpanded audit detail to row/test/file mapping follow-ups instead of inventing a runtime blocker | requires-follow-up | SPINE.TESTMAP.0 / SPINE.FILEMAP.0 |
+| AUDIT.P3.GROUP | P3 | `$HOME/lab/models` examples, internal target strings, long diagnostic flags, future eval/bench skeletons, and tiny GGUF fixtures are low-risk audit notes | Kept as non-blocking guardrail notes; no runtime or public claim change | partially-resolved | V010.CI.*, V010.DOCS.PUBLIC.* |
+
+### 10.16 Reconciled Active Next Decision
+
+SPINE.AUDIT.0 moved Active Next to SPINE.RECONCILE.0 because audit found P1/P2
+reconciliation needs.
+
+SPINE.RECONCILE.0 resolves the spine-structure and evidence-taxonomy part of
+those findings.
+
+Remaining follow-up rows are useful, but they do not block runtime planning:
+
+```text
+SPINE.TESTMAP.0:
+  planned row-to-test expansion, not required before the next report-only
+  runtime-planning row.
+
+SPINE.FILEMAP.0:
+  planned full file ownership expansion, not required before the next
+  model-class report row.
+```
+
+If no remaining P1 finding blocks runtime planning, Active Next returns to:
+
+```text
+MOE.CLASS.0 - MoE model-class report
+```
+
+If any P1 finding remains blocking, Active Next becomes the named follow-up row.
+
+| Condition | Active Next |
+| --- | --- |
+| all P1 resolved or assigned non-blocking follow-up | MOE.CLASS.0 |
+| Current Capability still overclaims implementation | SPINE.CAPABILITY.REWRITE.0 |
+| command/help boundaries still overclaim | SPINE.COMMAND.AUDIT.0 |
+| test-to-ledger coverage remains blocking | SPINE.TESTMAP.0 |
+| public docs claim risk remains blocking | SPINE.PUBLIC.CLAIM.0 |
+
+Current reconciliation result:
+
+```text
+Active Next:
+  MOE.CLASS.0 - MoE model-class report
+
+Reason:
+  P1 evidence-taxonomy and namespace blockers are resolved in spine or assigned
+  to non-blocking follow-up rows. The next runtime-planning row is report-only
+  and remains bounded by attention, KV, and context report evidence.
+```
 
 ## 9. Non-Negotiable Rules
 
