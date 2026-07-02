@@ -40,6 +40,12 @@ head layout, Q/K/V/O role, RoPE/position, mask, KV, context, graph/backend, and
 blocker reporting. It is report-only: no full transformer attention, no real
 QKV projection, no real attention-backed KV, no full model execution, no
 generation, and no benchmark.
+`yvex kv report` turns the attention/family facts into a KV cache class report:
+diagnostic-versus-real KV boundary, layout, dtype, layer/head/position indexing,
+capacity, context dependency, residency class, attention dependency, and next
+runtime blockers. It does not allocate full runtime KV, write real
+attention-backed KV, read KV from real decode, generate, evaluate, benchmark, or
+report throughput.
 
 ## Runbook Index
 
@@ -60,7 +66,7 @@ Covers:
 - segment-summary prefill;
 - minimal KV diagnostics;
 - bounded diagnostic generate help and copy-pack commands;
-- fullmodel inventory, materialization planning, proof/refusal, runtime descriptor, family-runtime, and attention reports;
+- fullmodel inventory, materialization planning, proof/refusal, runtime descriptor, family-runtime, attention, and KV cache class reports;
 - CUDA selected checks;
 - daemon and accepted-only diagnostics.
 
@@ -73,7 +79,7 @@ Use this when working with the current GLM-5.2 official-source tensor target.
 Covers:
 
 - GLM target path reporting;
-- GLM source-only fullmodel unsupported report, descriptor, family-runtime, attention, and materialization refusal;
+- GLM source-only fullmodel unsupported report, descriptor, family-runtime, attention, KV report, and materialization refusal;
 - GLM source-download start and status checks;
 - Hugging Face CLI and repository namespace boundaries;
 - GLM boundaries.
@@ -90,7 +96,7 @@ Covers:
 
 - operator storage configuration;
 - fast regression;
-- fullmodel report, materialization-plan, materialize, descriptor, family-runtime, and attention command-surface checks;
+- fullmodel report, materialization-plan, materialize, descriptor, family-runtime, attention, and KV command-surface checks;
 - graph-only fixture regression;
 - daemon and accepted-only runtime diagnostics;
 - repository validation and artifact hygiene.

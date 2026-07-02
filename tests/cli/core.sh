@@ -201,6 +201,7 @@ contains "$OUT_DIR/commands.out" "  info"
 contains "$OUT_DIR/commands.out" "  inspect"
 contains "$OUT_DIR/commands.out" "  input"
 contains "$OUT_DIR/commands.out" "  kv"
+contains "$OUT_DIR/commands.out" "KV diagnostics and KV cache class reports"
 contains "$OUT_DIR/commands.out" "  logits"
 contains "$OUT_DIR/commands.out" "  materialize"
 contains "$OUT_DIR/commands.out" "  materialize-gate"
@@ -304,7 +305,17 @@ run_ok help_input "$YVEX_BIN" help input
 contains "$OUT_DIR/help_input.out" "usage: yvex input tokens"
 
 run_ok help_kv "$YVEX_BIN" help kv
+contains "$OUT_DIR/help_kv.out" "usage: yvex kv report --model FILE_OR_ALIAS"
 contains "$OUT_DIR/help_kv.out" "usage: yvex kv --layers N --heads N --head-dim N --capacity N"
+contains "$OUT_DIR/help_kv.out" "KV cache class and requirements report"
+contains "$OUT_DIR/help_kv.out" "report-only boundary"
+contains "$OUT_DIR/help_kv.out" "does not allocate full runtime KV"
+contains "$OUT_DIR/help_kv.out" "write real attention-backed KV"
+contains "$OUT_DIR/help_kv.out" "execute decode"
+contains "$OUT_DIR/help_kv.out" "generate"
+contains "$OUT_DIR/help_kv.out" "benchmark"
+contains "$OUT_DIR/help_kv.out" "diagnostic/minimal"
+contains "$OUT_DIR/help_kv.out" "not DeepSeek KV, real attention KV"
 
 run_ok help_materialize "$YVEX_BIN" help materialize
 contains "$OUT_DIR/help_materialize.out" "usage: yvex materialize --model FILE_OR_ALIAS"

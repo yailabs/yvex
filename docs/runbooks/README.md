@@ -6,9 +6,9 @@ Use a model-specific runbook when working with a concrete target.
 
 ## Files
 
-- `deepseek.md` - current DeepSeek selected artifact path from local safetensors to selected graph execution, bounded diagnostics, fullmodel inventory/materialization-plan/materialize/descriptor/family-runtime reports, and attention class reports.
-- `glm.md` - GLM-5.2 official-source tensor target status, source-only fullmodel and attention unsupported report/descriptor/refusal, and download start/status checks.
-- `common.md` - shared configuration, fullmodel report/plan/materialize/descriptor/family-runtime and attention command-surface checks, graph-only checks, daemon diagnostics, and repository validation.
+- `deepseek.md` - current DeepSeek selected artifact path from local safetensors to selected graph execution, bounded diagnostics, fullmodel inventory/materialization-plan/materialize/descriptor/family-runtime reports, attention class reports, and KV cache class reports.
+- `glm.md` - GLM-5.2 official-source tensor target status, source-only fullmodel, attention, and KV unsupported report/descriptor/refusal, and download start/status checks.
+- `common.md` - shared configuration, fullmodel report/plan/materialize/descriptor/family-runtime, attention, and KV command-surface checks, graph-only checks, daemon diagnostics, and repository validation.
 
 ## Rules
 
@@ -46,4 +46,10 @@ execution, generate, evaluate, benchmark, or report throughput.
 class, head layout, Q/K/V/O roles, RoPE/position, mask, KV, context,
 graph/backend, blocker, and next-dependency reporting. It does not run full
 transformer attention, project real Q/K/V from model tensors, write real
+attention-backed KV, generate, evaluate, benchmark, or report throughput.
+
+`yvex kv report` maps those requirements into KV cache class facts: diagnostic
+KV versus real attention KV, layout, dtype, layer/head/position indexing,
+capacity, residency class, context dependency, attention dependency, and next
+runtime blockers. It does not allocate full runtime KV, write or read real
 attention-backed KV, generate, evaluate, benchmark, or report throughput.

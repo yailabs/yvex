@@ -342,10 +342,12 @@ Boundary:
   descriptor reports requirements and blockers only
   family-runtime maps descriptor facts into DeepSeek adapter facts only
   attention report maps adapter facts into attention requirements only
+  KV report maps attention/family facts into KV cache class requirements only
   no uncontrolled full backend allocation
   no full transformer attention
   no real QKV projection from model tensors
   no real attention-backed KV writes
+  no real KV reads by decode
   no full model execution
   no real DeepSeek generation
   no provider generation
@@ -381,6 +383,11 @@ Boundary:
 ./yvex attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu
 ./yvex attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu
 ./yvex attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cuda
+./yvex help kv
+./yvex kv report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu
+./yvex kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --include-attention --include-context --include-residency --include-blockers
+./yvex kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu
+./yvex kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cuda
 ```
 
 ## Lane 5 — DeepSeek CUDA Pressure Lane
@@ -527,6 +534,9 @@ YVEX can:
 - report DeepSeek attention class facts, Q/K/V/O role requirements, RoPE/mask
   requirements, attention KV requirements, graph primitive/full-transformer
   distinctions, and next runtime dependencies without executing attention.
+- report DeepSeek KV cache class facts, diagnostic-versus-real KV boundary,
+  layout/dtype/indexing/capacity/residency requirements, context and attention
+  dependencies, and next runtime blockers without allocating full runtime KV.
 
 YVEX does not currently implement:
 
@@ -537,6 +547,9 @@ YVEX does not currently implement:
 - full transformer attention;
 - real QKV projection from model tensors;
 - real attention-backed KV writes;
+- real KV reads by decode;
+- paged, chunked, SSD-backed, or quantized KV runtime;
+- CUDA full KV allocation proof;
 - complete transformer prefill;
 - real DeepSeek decode;
 - real output-head logits;

@@ -9,6 +9,7 @@
 #include <yvex/kv.h>
 #include "yvex_console_private.h"
 
+#include <ctype.h>
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -388,6 +389,775 @@ static unsigned long long checksum_kv_values(const float *values,
     return checksum;
 }
 
+typedef struct {
+    const char *model;
+    const char *family;
+    const char *backend;
+    const char *registry_path;
+    int include_attention;
+    int include_context;
+    int include_residency;
+    int include_blockers;
+} yvex_kv_report_options;
+
+typedef struct {
+    unsigned long long tensor_count;
+    unsigned long long total_tensor_bytes;
+    int has_token_embedding;
+    int has_attention_norm;
+    int has_q;
+    int has_k;
+    int has_v;
+    int has_o;
+    int has_output_head;
+    const yvex_tensor_info *q_tensor;
+    const yvex_tensor_info *k_tensor;
+    const yvex_tensor_info *v_tensor;
+} yvex_kv_role_scan;
+
+static const char *kv_bool(int value)
+{
+    return value ? "true" : "false";
+}
+
+static int kv_streq(const char *a, const char *b)
+{
+    return a && b && strcmp(a, b) == 0;
+}
+
+static int kv_contains_ci(const char *text, const char *needle)
+{
+    size_t needle_len;
+    size_t i;
+    size_t j;
+
+    if (!text || !needle) {
+        return 0;
+    }
+    needle_len = strlen(needle);
+    if (needle_len == 0u) {
+        return 1;
+    }
+    for (i = 0u; text[i] != '\0'; ++i) {
+        for (j = 0u; j < needle_len; ++j) {
+            unsigned char a = (unsigned char)text[i + j];
+            unsigned char b = (unsigned char)needle[j];
+            if (a == '\0' || (char)tolower(a) != (char)tolower(b)) {
+                break;
+            }
+        }
+        if (j == needle_len) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int kv_known_family(const char *family)
+{
+    return kv_streq(family, "auto") ||
+           kv_streq(family, "deepseek") ||
+           kv_streq(family, "glm") ||
+           kv_streq(family, "qwen") ||
+           kv_streq(family, "llama");
+}
+
+static const char *kv_family_from_text(const char *text)
+{
+    if (kv_contains_ci(text, "deepseek")) {
+        return "deepseek";
+    }
+    if (kv_contains_ci(text, "glm")) {
+        return "glm";
+    }
+    if (kv_contains_ci(text, "qwen")) {
+        return "qwen";
+    }
+    if (kv_contains_ci(text, "llama")) {
+        return "llama";
+    }
+    return "unknown";
+}
+
+static const char *kv_detect_family(const yvex_model_ref *ref,
+                                    const yvex_cli_tokenizer_context *ctx,
+                                    const char *input)
+{
+    const char *arch = NULL;
+
+    if (ctx && ctx->model) {
+        arch = yvex_arch_name(yvex_model_arch(ctx->model));
+        if (arch && strcmp(arch, "unknown") != 0) {
+            return arch;
+        }
+    }
+    if (ref) {
+        if (ref->family && ref->family[0]) {
+            return ref->family;
+        }
+        if (ref->architecture && ref->architecture[0]) {
+            return ref->architecture;
+        }
+        if (ref->alias) {
+            arch = kv_family_from_text(ref->alias);
+            if (strcmp(arch, "unknown") != 0) {
+                return arch;
+            }
+        }
+        if (ref->path) {
+            arch = kv_family_from_text(ref->path);
+            if (strcmp(arch, "unknown") != 0) {
+                return arch;
+            }
+        }
+    }
+    return kv_family_from_text(input);
+}
+
+static int kv_source_only_target(const char *model)
+{
+    return kv_contains_ci(model, "glm-5.2-official-safetensors");
+}
+
+static const char *kv_target_class_for_model(const char *model,
+                                             const yvex_model_ref *ref)
+{
+    const char *text = model ? model : "";
+
+    if (kv_source_only_target(text)) {
+        return "official-source-huge-model";
+    }
+    if (kv_contains_ci(text, "selected-embed") ||
+        (ref && ref->alias && kv_contains_ci(ref->alias, "selected-embed"))) {
+        return "selected-runtime-slice";
+    }
+    return "candidate-GGUF-path";
+}
+
+static const char *kv_target_id_for_model(const yvex_kv_report_options *options,
+                                          const yvex_model_ref *ref)
+{
+    if (ref && ref->alias && ref->alias[0]) {
+        return ref->alias;
+    }
+    if (options && options->model && kv_source_only_target(options->model)) {
+        return "glm-5.2-official-safetensors";
+    }
+    if (options && options->model && kv_contains_ci(options->model, "selected-embed-rmsnorm")) {
+        return "deepseek4-v4-flash-selected-embed-rmsnorm";
+    }
+    if (options && options->model && kv_contains_ci(options->model, "selected-embed")) {
+        return "deepseek4-v4-flash-selected-embed";
+    }
+    return "candidate-GGUF-path";
+}
+
+static const char *kv_role_status(int present)
+{
+    return present ? "present" : "missing";
+}
+
+static void kv_scan_roles(const yvex_tensor_table *table, yvex_kv_role_scan *scan)
+{
+    unsigned long long i;
+
+    memset(scan, 0, sizeof(*scan));
+    if (!table) {
+        return;
+    }
+    scan->tensor_count = yvex_tensor_table_count(table);
+    for (i = 0ull; i < scan->tensor_count; ++i) {
+        const yvex_tensor_info *tensor = yvex_tensor_table_at(table, i);
+        if (!tensor) {
+            continue;
+        }
+        scan->total_tensor_bytes += tensor->storage_bytes;
+        switch (tensor->role) {
+        case YVEX_TENSOR_ROLE_TOKEN_EMBEDDING:
+            scan->has_token_embedding = 1;
+            break;
+        case YVEX_TENSOR_ROLE_ATTENTION_NORM:
+            scan->has_attention_norm = 1;
+            break;
+        case YVEX_TENSOR_ROLE_ATTENTION_Q:
+            scan->has_q = 1;
+            scan->q_tensor = tensor;
+            break;
+        case YVEX_TENSOR_ROLE_ATTENTION_K:
+            scan->has_k = 1;
+            scan->k_tensor = tensor;
+            break;
+        case YVEX_TENSOR_ROLE_ATTENTION_V:
+            scan->has_v = 1;
+            scan->v_tensor = tensor;
+            break;
+        case YVEX_TENSOR_ROLE_ATTENTION_OUT:
+            scan->has_o = 1;
+            break;
+        case YVEX_TENSOR_ROLE_OUTPUT_HEAD:
+            scan->has_output_head = 1;
+            break;
+        default:
+            break;
+        }
+    }
+}
+
+static const char *kv_attention_dependency_status(const yvex_kv_role_scan *scan)
+{
+    if (!scan || !scan->has_q || !scan->has_k || !scan->has_v) {
+        return "blocked-missing-qkv";
+    }
+    return "blocked-runtime-integration";
+}
+
+static const char *kv_class_status_for_scan(const yvex_kv_role_scan *scan)
+{
+    if (scan && scan->has_q && scan->has_k && scan->has_v && scan->has_o) {
+        return "complete";
+    }
+    return "partial";
+}
+
+static const char *kv_family_status_for_scan(const yvex_kv_role_scan *scan)
+{
+    return kv_class_status_for_scan(scan);
+}
+
+static void kv_print_phases(const char *status, const char *failed_phase)
+{
+    static const char *names[] = {
+        "preflight",
+        "resolve-model",
+        "resolve-family",
+        "load-family-runtime",
+        "load-attention-class",
+        "kv-profile",
+        "kv-layout",
+        "kv-shape",
+        "kv-indexing",
+        "kv-capacity",
+        "kv-residency",
+        "kv-context",
+        "kv-readiness",
+        "blocker-report",
+        "complete",
+        "failed",
+        "cleanup"
+    };
+    unsigned long i;
+    unsigned long failed_index = sizeof(names) / sizeof(names[0]);
+
+    if (failed_phase) {
+        for (i = 0u; i < sizeof(names) / sizeof(names[0]); ++i) {
+            if (strcmp(names[i], failed_phase) == 0) {
+                failed_index = i;
+                break;
+            }
+        }
+    }
+
+    for (i = 0u; i < sizeof(names) / sizeof(names[0]); ++i) {
+        const char *phase_status = status;
+        if (!failed_phase && strcmp(names[i], "failed") == 0) {
+            phase_status = "unknown";
+        } else if (failed_phase) {
+            if (i < failed_index) {
+                phase_status = "pass";
+            } else if (i == failed_index || strcmp(names[i], "failed") == 0) {
+                phase_status = "failed";
+            } else if (strcmp(names[i], "cleanup") == 0) {
+                phase_status = "pass";
+            } else {
+                phase_status = "blocked";
+            }
+        }
+        printf("kv_phase.%lu.name: %s\n", i, names[i]);
+        printf("kv_phase.%lu.status: %s\n", i, phase_status);
+    }
+}
+
+static void kv_print_next_rows(void)
+{
+    printf("next_required_rows: ATTENTION.CLASS.0 complete,CONTEXT.CLASS.0,RUNTIME.KV.1,RUNTIME.KV.2,RUNTIME.KV.3,real-transformer-prefill,real-decode,real-output-head-logits,GEN.DEEPSEEK.0\n");
+}
+
+static void kv_print_report_header(const yvex_kv_report_options *options,
+                                   const yvex_model_ref *ref,
+                                   const char *status,
+                                   const char *resolved_path,
+                                   const char *target_class,
+                                   const char *family,
+                                   const char *family_detected,
+                                   const char *family_runtime_status,
+                                   const char *attention_class_status,
+                                   const char *kv_class_status)
+{
+    printf("kv: report\n");
+    printf("status: %s\n", status);
+    printf("model: %s\n", options->model ? options->model : "none");
+    printf("model_resolved_path: %s\n", resolved_path ? resolved_path : "not-resolved");
+    printf("target_id: %s\n", kv_target_id_for_model(options, ref));
+    printf("target_class: %s\n", target_class ? target_class : "unknown");
+    printf("backend: %s\n", options->backend ? options->backend : "cpu");
+    printf("family: %s\n", family ? family : "unknown");
+    printf("family_detected: %s\n", family_detected ? family_detected : "unknown");
+    printf("family_requested: %s\n", options->family ? options->family : "auto");
+    printf("family_runtime_status: %s\n", family_runtime_status ? family_runtime_status : "unknown");
+    printf("attention_class_status: %s\n", attention_class_status ? attention_class_status : "unknown");
+    printf("kv_class_status: %s\n", kv_class_status ? kv_class_status : "report-only");
+    printf("kv_stage: report-only\n");
+    printf("kv_support_status: report-only\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation_ready: false\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+}
+
+static void kv_print_boundary_fields(void)
+{
+    printf("diagnostic_kv_available: true\n");
+    printf("diagnostic_kv_boundary: segment-summary/minimal diagnostic KV\n");
+    printf("real_attention_kv: unsupported\n");
+    printf("real_attention_kv_write_ready: false\n");
+    printf("real_attention_kv_read_ready: false\n");
+    printf("decode_kv_consumer_ready: false\n");
+}
+
+static void kv_print_requirement_fields(const yvex_kv_role_scan *scan,
+                                        unsigned long long max_context)
+{
+    const int has_qkv = scan && scan->has_q && scan->has_k && scan->has_v;
+
+    printf("kv_required: true\n");
+    printf("kv_source: attention-qkv-requirements\n");
+    printf("kv_layout: planned\n");
+    printf("kv_layout_status: planned\n");
+    printf("kv_dtype: planned\n");
+    printf("kv_dtype_status: planned\n");
+    printf("kv_layers: unknown\n");
+    printf("kv_layers_status: planned\n");
+    printf("kv_heads: unknown\n");
+    printf("kv_heads_status: planned\n");
+    printf("kv_head_dim: unknown\n");
+    printf("kv_head_dim_status: planned\n");
+    printf("kv_positions: context-dependent\n");
+    printf("kv_capacity: planned\n");
+    printf("kv_capacity_status: planned\n");
+    printf("kv_indexing: layer-head-position-token-order\n");
+    printf("kv_layer_indexing: planned\n");
+    printf("kv_head_indexing: planned\n");
+    printf("kv_position_indexing: planned\n");
+    printf("kv_token_order_policy: prompt-order-then-append-order\n");
+    printf("kv_residency_class: planned\n");
+    printf("kv_residency_status: planned\n");
+    printf("kv_cpu_bytes_estimate: unknown\n");
+    printf("kv_cuda_bytes_estimate: unknown\n");
+    printf("kv_host_staged_bytes_estimate: unknown\n");
+    printf("kv_ssd_staged_status: planned\n");
+    printf("kv_ssd_streamed_status: planned\n");
+    printf("kv_paged_status: planned\n");
+    printf("kv_chunked_status: planned\n");
+    printf("kv_quantized_status: planned\n");
+    printf("kv_managed_memory_status: planned\n");
+    printf("context_required: true\n");
+    printf("context_length_source: %s\n", max_context > 0ull ? "model-metadata" : "planned");
+    printf("max_context: %s", max_context > 0ull ? "" : "unknown");
+    if (max_context > 0ull) {
+        printf("%llu", max_context);
+    }
+    printf("\n");
+    printf("requested_context: not-requested\n");
+    printf("context_capacity_status: planned\n");
+    printf("context_overflow_policy: planned-refusal-before-mutation\n");
+    printf("attention_dependency_status: %s\n", kv_attention_dependency_status(scan));
+    printf("attention_q_required: true\n");
+    printf("attention_k_required: true\n");
+    printf("attention_v_required: true\n");
+    printf("attention_q_status: %s\n", kv_role_status(scan && scan->has_q));
+    printf("attention_k_status: %s\n", kv_role_status(scan && scan->has_k));
+    printf("attention_v_status: %s\n", kv_role_status(scan && scan->has_v));
+    printf("attention_o_status: %s\n", kv_role_status(scan && scan->has_o));
+    printf("attention_runtime_ready: false\n");
+    printf("full_transformer_attention_ready: false\n");
+    printf("prefill_kv_write_required: true\n");
+    printf("prefill_kv_write_ready: false\n");
+    printf("decode_kv_read_required: true\n");
+    printf("decode_kv_read_ready: false\n");
+    printf("qkv_role_coverage: %s\n", has_qkv ? "present" : "missing");
+}
+
+static void kv_print_role_summary(const yvex_kv_role_scan *scan)
+{
+    printf("tensor_inventory_status: loaded-gguf-directory\n");
+    printf("tensor_count: %llu\n", scan ? scan->tensor_count : 0ull);
+    printf("tensor_bytes: %llu\n", scan ? scan->total_tensor_bytes : 0ull);
+    printf("role.token_embedding.status: %s\n", kv_role_status(scan && scan->has_token_embedding));
+    printf("role.attention_norm.status: %s\n", kv_role_status(scan && scan->has_attention_norm));
+    printf("role.q_projection.status: %s\n", kv_role_status(scan && scan->has_q));
+    printf("role.k_projection.status: %s\n", kv_role_status(scan && scan->has_k));
+    printf("role.v_projection.status: %s\n", kv_role_status(scan && scan->has_v));
+    printf("role.o_projection.status: %s\n", kv_role_status(scan && scan->has_o));
+    printf("role.output_head.status: %s\n", kv_role_status(scan && scan->has_output_head));
+}
+
+static unsigned long long kv_report_context_length(const yvex_cli_tokenizer_context *ctx)
+{
+    static const char *keys[] = {
+        "llama.context_length",
+        "deepseek.context_length",
+        "qwen.context_length",
+        "glm.context_length",
+        "general.context_length"
+    };
+    unsigned long i;
+    unsigned long long value_u64 = 0ull;
+
+    if (!ctx) {
+        return 0ull;
+    }
+    if (ctx->model) {
+        value_u64 = yvex_model_context_length(ctx->model);
+        if (value_u64 > 0ull) {
+            return value_u64;
+        }
+    }
+    for (i = 0u; i < sizeof(keys) / sizeof(keys[0]); ++i) {
+        const yvex_gguf_value *value = yvex_gguf_metadata_find(ctx->gguf, keys[i]);
+        if (value && yvex_gguf_value_as_u64(value, &value_u64) == YVEX_OK) {
+            return value_u64;
+        }
+    }
+    return 0ull;
+}
+
+static void kv_print_blockers(const yvex_kv_role_scan *scan)
+{
+    if (!scan || !scan->has_q || !scan->has_k || !scan->has_v) {
+        printf("kv_blockers: ");
+        if (!scan || !scan->has_q) {
+            printf("q projection tensor missing; ");
+        }
+        if (!scan || !scan->has_k) {
+            printf("k projection tensor missing; ");
+        }
+        if (!scan || !scan->has_v) {
+            printf("v projection tensor missing; ");
+        }
+        printf("real attention-backed KV writes unsupported; decode KV consumer unsupported; context class report pending; KV capacity estimator pending\n");
+        return;
+    }
+    printf("kv_blockers: real attention-backed KV writes unsupported; decode KV consumer unsupported; KV capacity estimator pending; context class report pending; full transformer prefill unsupported\n");
+}
+
+static int kv_print_source_only_report(const yvex_kv_report_options *options)
+{
+    const char *family = kv_streq(options->family, "auto") ? "glm" : options->family;
+
+    kv_print_report_header(options, NULL, "kv-report-unsupported",
+                           "not-resolved-source-only-target",
+                           "official-source-huge-model",
+                           family, "glm", "unsupported", "unsupported",
+                           "unsupported");
+    kv_print_boundary_fields();
+    printf("tensor_inventory_status: not-performed-source-only-target\n");
+    printf("source_artifact_class: official safetensors\n");
+    printf("target_artifact_class: future YVEX-produced GGUF\n");
+    printf("kv_required: true\n");
+    printf("kv_source: planned-family-mapping\n");
+    printf("kv_layout: planned\n");
+    printf("kv_layout_status: planned\n");
+    printf("kv_dtype: planned\n");
+    printf("kv_dtype_status: planned\n");
+    printf("kv_layers: unknown\n");
+    printf("kv_layers_status: planned\n");
+    printf("kv_heads: unknown\n");
+    printf("kv_heads_status: planned\n");
+    printf("kv_head_dim: unknown\n");
+    printf("kv_head_dim_status: planned\n");
+    printf("kv_positions: planned\n");
+    printf("kv_capacity: planned\n");
+    printf("kv_capacity_status: planned\n");
+    printf("kv_indexing: planned\n");
+    printf("kv_layer_indexing: planned\n");
+    printf("kv_head_indexing: planned\n");
+    printf("kv_position_indexing: planned\n");
+    printf("kv_token_order_policy: planned\n");
+    printf("kv_residency_class: planned\n");
+    printf("kv_residency_status: planned\n");
+    printf("kv_cpu_bytes_estimate: unknown\n");
+    printf("kv_cuda_bytes_estimate: unknown\n");
+    printf("kv_host_staged_bytes_estimate: unknown\n");
+    printf("kv_ssd_staged_status: planned\n");
+    printf("kv_ssd_streamed_status: planned\n");
+    printf("kv_paged_status: planned\n");
+    printf("kv_chunked_status: planned\n");
+    printf("kv_quantized_status: planned\n");
+    printf("context_required: true\n");
+    printf("context_length_source: planned-source-manifest\n");
+    printf("max_context: unknown\n");
+    printf("requested_context: not-requested\n");
+    printf("context_capacity_status: planned\n");
+    printf("context_overflow_policy: planned\n");
+    printf("attention_dependency_status: unsupported-source-only\n");
+    printf("attention_q_required: true\n");
+    printf("attention_k_required: true\n");
+    printf("attention_v_required: true\n");
+    printf("attention_runtime_ready: false\n");
+    printf("full_transformer_attention_ready: false\n");
+    printf("prefill_kv_write_required: true\n");
+    printf("prefill_kv_write_ready: false\n");
+    printf("decode_kv_read_required: true\n");
+    printf("decode_kv_read_ready: false\n");
+    printf("kv_blockers: source-only target has no YVEX-produced GGUF tensor inventory; GLM KV mapping planned; real attention-backed KV writes unsupported\n");
+    kv_print_next_rows();
+    printf("cleanup_attempted: true\n");
+    printf("cleanup_status: pass\n");
+    kv_print_phases("planned", "load-family-runtime");
+    return 5;
+}
+
+static int kv_print_unsupported_family_report(const yvex_kv_report_options *options,
+                                              const char *detected,
+                                              const char *reason)
+{
+    kv_print_report_header(options, NULL, "kv-report-unsupported",
+                           "not-resolved",
+                           "unknown",
+                           options->family ? options->family : "unknown",
+                           detected ? detected : "unknown",
+                           "unsupported",
+                           "unsupported",
+                           "unsupported");
+    kv_print_boundary_fields();
+    printf("tensor_inventory_status: not-performed\n");
+    printf("kv_required: unknown\n");
+    printf("kv_source: unsupported-family\n");
+    printf("kv_layout: unsupported\n");
+    printf("kv_layout_status: unsupported\n");
+    printf("kv_dtype: unsupported\n");
+    printf("kv_dtype_status: unsupported\n");
+    printf("kv_layers: unknown\n");
+    printf("kv_layers_status: unsupported\n");
+    printf("kv_heads: unknown\n");
+    printf("kv_heads_status: unsupported\n");
+    printf("kv_head_dim: unknown\n");
+    printf("kv_head_dim_status: unsupported\n");
+    printf("kv_positions: unknown\n");
+    printf("kv_capacity: unsupported\n");
+    printf("kv_capacity_status: unsupported\n");
+    printf("kv_indexing: unsupported\n");
+    printf("kv_layer_indexing: unsupported\n");
+    printf("kv_head_indexing: unsupported\n");
+    printf("kv_position_indexing: unsupported\n");
+    printf("kv_token_order_policy: unsupported\n");
+    printf("kv_residency_class: unsupported\n");
+    printf("kv_residency_status: unsupported\n");
+    printf("kv_cpu_bytes_estimate: unknown\n");
+    printf("kv_cuda_bytes_estimate: unknown\n");
+    printf("kv_host_staged_bytes_estimate: unknown\n");
+    printf("kv_ssd_staged_status: unsupported\n");
+    printf("kv_paged_status: unsupported\n");
+    printf("kv_chunked_status: unsupported\n");
+    printf("kv_quantized_status: unsupported\n");
+    printf("context_required: unknown\n");
+    printf("context_length_source: unsupported-family\n");
+    printf("max_context: unknown\n");
+    printf("requested_context: not-requested\n");
+    printf("context_capacity_status: unsupported\n");
+    printf("context_overflow_policy: unsupported\n");
+    printf("attention_dependency_status: unsupported-family\n");
+    printf("attention_q_required: unknown\n");
+    printf("attention_k_required: unknown\n");
+    printf("attention_v_required: unknown\n");
+    printf("attention_runtime_ready: false\n");
+    printf("full_transformer_attention_ready: false\n");
+    printf("prefill_kv_write_required: unknown\n");
+    printf("prefill_kv_write_ready: false\n");
+    printf("decode_kv_read_required: unknown\n");
+    printf("decode_kv_read_ready: false\n");
+    printf("kv_blockers: %s\n", reason ? reason : "unsupported family");
+    kv_print_next_rows();
+    printf("cleanup_attempted: true\n");
+    printf("cleanup_status: pass\n");
+    kv_print_phases("unsupported", "resolve-family");
+    return 5;
+}
+
+static int command_kv_report(int argc, char **argv)
+{
+    yvex_kv_report_options options;
+    yvex_model_ref_options ref_options;
+    yvex_model_ref ref;
+    yvex_cli_tokenizer_context ctx;
+    yvex_kv_role_scan scan;
+    yvex_error err;
+    const char *detected_family = "unknown";
+    const char *family = "unknown";
+    const char *target_class = "unknown";
+    unsigned long long max_context = 0ull;
+    int rc;
+    int i;
+
+    memset(&options, 0, sizeof(options));
+    memset(&ref_options, 0, sizeof(ref_options));
+    memset(&ref, 0, sizeof(ref));
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&scan, 0, sizeof(scan));
+    yvex_error_clear(&err);
+
+    options.family = "auto";
+    options.backend = "cpu";
+
+    for (i = 3; i < argc; ++i) {
+        if (strcmp(argv[i], "--model") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: kv report --model requires FILE_OR_ALIAS\n");
+                return 2;
+            }
+            options.model = argv[++i];
+        } else if (strcmp(argv[i], "--family") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: kv report --family requires a family name\n");
+                return 2;
+            }
+            options.family = argv[++i];
+        } else if (strcmp(argv[i], "--backend") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: kv report --backend requires cpu or cuda\n");
+                return 2;
+            }
+            options.backend = argv[++i];
+        } else if (strcmp(argv[i], "--registry") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: kv report --registry requires FILE\n");
+                return 2;
+            }
+            options.registry_path = argv[++i];
+        } else if (strcmp(argv[i], "--include-attention") == 0) {
+            options.include_attention = 1;
+        } else if (strcmp(argv[i], "--include-context") == 0) {
+            options.include_context = 1;
+        } else if (strcmp(argv[i], "--include-residency") == 0) {
+            options.include_residency = 1;
+        } else if (strcmp(argv[i], "--include-blockers") == 0) {
+            options.include_blockers = 1;
+        } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            yvex_kv_help(stdout);
+            return 0;
+        } else {
+            fprintf(stderr, "yvex: unknown kv report option: %s\n", argv[i]);
+            fprintf(stderr, "Try 'yvex help kv' for usage.\n");
+            return 2;
+        }
+    }
+
+    if (!options.model) {
+        fprintf(stderr, "usage: yvex kv report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen|llama] [--backend cpu|cuda]\n");
+        return 2;
+    }
+    if (!kv_streq(options.backend, "cpu") && !kv_streq(options.backend, "cuda")) {
+        fprintf(stderr, "yvex: kv report --backend must be cpu or cuda\n");
+        return 2;
+    }
+    if (!kv_known_family(options.family)) {
+        return kv_print_unsupported_family_report(&options, "unknown", "unknown family requested; KV class report is not generic model support");
+    }
+    if (kv_source_only_target(options.model)) {
+        return kv_print_source_only_report(&options);
+    }
+
+    ref_options.allow_registry = 1;
+    ref_options.registry_path = options.registry_path;
+    rc = yvex_model_ref_resolve(&ref, options.model, &ref_options, &err);
+    if (rc != YVEX_OK) {
+        kv_print_report_header(&options, &ref, "kv-report-fail",
+                               ref.path, "unknown",
+                               kv_streq(options.family, "auto") ? "unknown" : options.family,
+                               "unknown", "failed", "failed", "failed");
+        kv_print_boundary_fields();
+        printf("tensor_inventory_status: failed\n");
+        printf("reason: %s\n", err.message[0] ? err.message : "model resolution failed");
+        printf("cleanup_attempted: true\n");
+        printf("cleanup_status: pass\n");
+        kv_print_phases("failed", "resolve-model");
+        yvex_model_ref_clear(&ref);
+        return exit_for_status(rc);
+    }
+
+    rc = open_model_context(ref.path, &ctx, &err);
+    if (rc != YVEX_OK) {
+        kv_print_report_header(&options, &ref, "kv-report-fail",
+                               ref.path, kv_target_class_for_model(options.model, &ref),
+                               kv_streq(options.family, "auto") ? "unknown" : options.family,
+                               "unknown", "failed", "failed", "failed");
+        kv_print_boundary_fields();
+        printf("tensor_inventory_status: failed\n");
+        printf("reason: %s\n", err.message[0] ? err.message : "tensor inventory failed");
+        printf("cleanup_attempted: true\n");
+        printf("cleanup_status: pass\n");
+        kv_print_phases("failed", "kv-profile");
+        yvex_model_ref_clear(&ref);
+        return exit_for_status(rc);
+    }
+
+    detected_family = kv_detect_family(&ref, &ctx, options.model);
+    family = kv_streq(options.family, "auto") ? detected_family : options.family;
+    if (!kv_streq(options.family, "auto") && !kv_streq(options.family, detected_family)) {
+        close_model_context(&ctx);
+        yvex_model_ref_clear(&ref);
+        return kv_print_unsupported_family_report(&options, detected_family,
+                                                  "requested family does not match resolved model family");
+    }
+    if (!kv_streq(family, "deepseek")) {
+        close_model_context(&ctx);
+        yvex_model_ref_clear(&ref);
+        return kv_print_unsupported_family_report(&options, detected_family,
+                                                  "KV class report is currently implemented for DeepSeek-family GGUF artifacts only");
+    }
+
+    kv_scan_roles(ctx.table, &scan);
+    target_class = kv_target_class_for_model(options.model, &ref);
+    max_context = kv_report_context_length(&ctx);
+
+    kv_print_report_header(&options, &ref, "kv-report",
+                           ref.path,
+                           target_class,
+                           family,
+                           detected_family,
+                           kv_family_status_for_scan(&scan),
+                           kv_family_status_for_scan(&scan),
+                           kv_class_status_for_scan(&scan));
+    printf("report_options.include_attention: %s\n", kv_bool(options.include_attention));
+    printf("report_options.include_context: %s\n", kv_bool(options.include_context));
+    printf("report_options.include_residency: %s\n", kv_bool(options.include_residency));
+    printf("report_options.include_blockers: %s\n", kv_bool(options.include_blockers));
+    kv_print_boundary_fields();
+    kv_print_role_summary(&scan);
+    kv_print_requirement_fields(&scan, max_context);
+    kv_print_blockers(&scan);
+    kv_print_next_rows();
+    printf("backend_allocation_attempted: false\n");
+    printf("full_kv_allocation_proof: false\n");
+    printf("cuda_full_kv_allocation_proof: false\n");
+    printf("paged_kv_implementation: false\n");
+    printf("chunked_kv_runtime_implementation: false\n");
+    printf("ssd_backed_kv: false\n");
+    printf("quantized_kv_runtime: false\n");
+    printf("full_transformer_prefill_ready: false\n");
+    printf("decode_ready: false\n");
+    printf("logits_ready: false\n");
+    printf("sampling_ready: false\n");
+    printf("runtime_execution_ready: false\n");
+    printf("cleanup_attempted: true\n");
+    printf("cleanup_status: pass\n");
+    kv_print_phases("pass", NULL);
+
+    close_model_context(&ctx);
+    yvex_model_ref_clear(&ref);
+    return 0;
+}
+
 static int command_kv(int argc, char **argv)
 {
     yvex_kv_shape shape;
@@ -415,6 +1185,9 @@ static int command_kv(int argc, char **argv)
     if (argc < 3 || strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0) {
         yvex_kv_help(stdout);
         return argc >= 3 ? 0 : 2;
+    }
+    if (strcmp(argv[2], "report") == 0) {
+        return command_kv_report(argc, argv);
     }
 
     for (i = 2; i < argc; ++i) {
@@ -578,5 +1351,16 @@ int yvex_kv_command(int argc, char **argv)
 
 void yvex_kv_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex kv --layers N --heads N --head-dim N --capacity N [--append-demo] [--read-position N]\n\nKV allocates a minimal F32 session-owned KV store and reports lifecycle/bounds facts. It does not run attention, decode, logits, sampling, generation, or prefill.\n");
+    fprintf(fp,
+            "usage: yvex kv report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen|llama] [--backend cpu|cuda] [options]\n"
+            "usage: yvex kv --layers N --heads N --head-dim N --capacity N [--append-demo] [--read-position N]\n\n"
+            "kv report:\n"
+            "  KV cache class and requirements report over model/family facts.\n"
+            "  Reports layout, dtype, layer/head/position indexing, capacity, context dependency, residency class, attention dependency, and blockers.\n"
+            "  This is a report-only boundary: it does not allocate full runtime KV, write real attention-backed KV, execute decode, generate, evaluate, benchmark, or report throughput.\n"
+            "  Existing diagnostic KV is segment-summary/minimal only and is not DeepSeek KV, real attention KV, full transformer KV, or decode-ready KV.\n"
+            "  Options: --include-attention --include-context --include-residency --include-blockers --registry FILE\n\n"
+            "minimal KV diagnostic:\n"
+            "  --append-demo allocates a minimal F32 session-owned KV store and reports lifecycle/bounds facts.\n"
+            "  It remains diagnostic/minimal and does not run attention, decode, logits, sampling, generation, or prefill.\n");
 }

@@ -142,6 +142,7 @@ grep 'status: models-added' "$ROOT/add-rmsnorm.out"
 "$YVEX_BIN" commands > "$ROOT/commands.out"
 grep 'fullmodel[[:space:]]*full model inventory, materialization, descriptor, and family-runtime reports' "$ROOT/commands.out"
 grep 'attention[[:space:]]*attention class and KV requirement reports' "$ROOT/commands.out"
+grep 'kv[[:space:]]*KV diagnostics and KV cache class reports' "$ROOT/commands.out"
 
 "$YVEX_BIN" help fullmodel > "$ROOT/help.out"
 grep 'usage: yvex fullmodel report --model FILE_OR_ALIAS' "$ROOT/help.out"
@@ -179,6 +180,17 @@ grep 'does not generate' "$ROOT/attention-help.out"
 grep 'does not benchmark' "$ROOT/attention-help.out"
 grep 'standalone RoPE and attention primitives' "$ROOT/attention-help.out"
 grep 'not full transformer attention' "$ROOT/attention-help.out"
+
+"$YVEX_BIN" help kv > "$ROOT/kv-help.out"
+grep 'usage: yvex kv report --model FILE_OR_ALIAS' "$ROOT/kv-help.out"
+grep 'KV cache class and requirements report' "$ROOT/kv-help.out"
+grep 'report-only boundary' "$ROOT/kv-help.out"
+grep 'does not allocate full runtime KV' "$ROOT/kv-help.out"
+grep 'write real attention-backed KV' "$ROOT/kv-help.out"
+grep 'execute decode' "$ROOT/kv-help.out"
+grep 'generate' "$ROOT/kv-help.out"
+grep 'benchmark' "$ROOT/kv-help.out"
+grep 'diagnostic/minimal' "$ROOT/kv-help.out"
 
 "$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" > "$ROOT/selected.out"
 grep 'status: fullmodel-report' "$ROOT/selected.out"
@@ -350,6 +362,53 @@ grep 'next_required_rows: KV.CACHE.0' "$ROOT/selected-attention.out"
 grep 'generation: unsupported-full-model' "$ROOT/selected-attention.out"
 grep 'benchmark_status: not-measured' "$ROOT/selected-attention.out"
 
+"$YVEX_BIN" kv report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" > "$ROOT/selected-kv.out"
+grep 'kv: report' "$ROOT/selected-kv.out"
+grep 'status: kv-report' "$ROOT/selected-kv.out"
+grep 'target_id: deepseek4-v4-flash-selected-embed' "$ROOT/selected-kv.out"
+grep 'target_class: selected-runtime-slice' "$ROOT/selected-kv.out"
+grep 'backend: cpu' "$ROOT/selected-kv.out"
+grep 'family: deepseek' "$ROOT/selected-kv.out"
+grep 'family_detected: deepseek' "$ROOT/selected-kv.out"
+grep 'family_requested: deepseek' "$ROOT/selected-kv.out"
+grep 'family_runtime_status: partial' "$ROOT/selected-kv.out"
+grep 'attention_class_status: partial' "$ROOT/selected-kv.out"
+grep 'kv_class_status: partial' "$ROOT/selected-kv.out"
+grep 'kv_stage: report-only' "$ROOT/selected-kv.out"
+grep 'runtime_claim: unsupported' "$ROOT/selected-kv.out"
+grep 'diagnostic_kv_available: true' "$ROOT/selected-kv.out"
+grep 'diagnostic_kv_boundary: segment-summary/minimal diagnostic KV' "$ROOT/selected-kv.out"
+grep 'real_attention_kv: unsupported' "$ROOT/selected-kv.out"
+grep 'real_attention_kv_write_ready: false' "$ROOT/selected-kv.out"
+grep 'real_attention_kv_read_ready: false' "$ROOT/selected-kv.out"
+grep 'decode_kv_consumer_ready: false' "$ROOT/selected-kv.out"
+grep 'kv_required: true' "$ROOT/selected-kv.out"
+grep 'kv_source: attention-qkv-requirements' "$ROOT/selected-kv.out"
+grep 'kv_layout: planned' "$ROOT/selected-kv.out"
+grep 'kv_dtype: planned' "$ROOT/selected-kv.out"
+grep 'kv_heads: unknown' "$ROOT/selected-kv.out"
+grep 'kv_head_dim: unknown' "$ROOT/selected-kv.out"
+grep 'kv_capacity_status: planned' "$ROOT/selected-kv.out"
+grep 'kv_indexing: layer-head-position-token-order' "$ROOT/selected-kv.out"
+grep 'kv_residency_class: planned' "$ROOT/selected-kv.out"
+grep 'context_required: true' "$ROOT/selected-kv.out"
+grep 'attention_dependency_status: blocked-missing-qkv' "$ROOT/selected-kv.out"
+grep 'attention_q_status: missing' "$ROOT/selected-kv.out"
+grep 'attention_k_status: missing' "$ROOT/selected-kv.out"
+grep 'attention_v_status: missing' "$ROOT/selected-kv.out"
+grep 'prefill_kv_write_ready: false' "$ROOT/selected-kv.out"
+grep 'decode_kv_read_ready: false' "$ROOT/selected-kv.out"
+grep 'q projection tensor missing' "$ROOT/selected-kv.out"
+grep 'k projection tensor missing' "$ROOT/selected-kv.out"
+grep 'v projection tensor missing' "$ROOT/selected-kv.out"
+grep 'next_required_rows: ATTENTION.CLASS.0 complete,CONTEXT.CLASS.0,RUNTIME.KV.1' "$ROOT/selected-kv.out"
+grep 'backend_allocation_attempted: false' "$ROOT/selected-kv.out"
+grep 'full_kv_allocation_proof: false' "$ROOT/selected-kv.out"
+grep 'runtime_execution_ready: false' "$ROOT/selected-kv.out"
+grep 'generation_ready: false' "$ROOT/selected-kv.out"
+grep 'generation: unsupported-full-model' "$ROOT/selected-kv.out"
+grep 'benchmark_status: not-measured' "$ROOT/selected-kv.out"
+
 "$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" > "$ROOT/rmsnorm.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm.out"
 grep 'normalization_tensors: 1' "$ROOT/rmsnorm.out"
@@ -436,6 +495,35 @@ grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-attention.out"
 grep 'family_requested: auto' "$ROOT/rmsnorm-attention-auto.out"
 grep 'family_detected: deepseek' "$ROOT/rmsnorm-attention-auto.out"
 grep 'status: attention-report' "$ROOT/rmsnorm-attention-auto.out"
+
+"$YVEX_BIN" kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --include-attention --include-context --include-residency --include-blockers > "$ROOT/rmsnorm-kv.out"
+grep 'kv: report' "$ROOT/rmsnorm-kv.out"
+grep 'status: kv-report' "$ROOT/rmsnorm-kv.out"
+grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-kv.out"
+grep 'target_class: selected-runtime-slice' "$ROOT/rmsnorm-kv.out"
+grep 'family: deepseek' "$ROOT/rmsnorm-kv.out"
+grep 'family_runtime_status: partial' "$ROOT/rmsnorm-kv.out"
+grep 'attention_class_status: partial' "$ROOT/rmsnorm-kv.out"
+grep 'kv_class_status: partial' "$ROOT/rmsnorm-kv.out"
+grep 'report_options.include_attention: true' "$ROOT/rmsnorm-kv.out"
+grep 'report_options.include_context: true' "$ROOT/rmsnorm-kv.out"
+grep 'report_options.include_residency: true' "$ROOT/rmsnorm-kv.out"
+grep 'report_options.include_blockers: true' "$ROOT/rmsnorm-kv.out"
+grep 'diagnostic_kv_available: true' "$ROOT/rmsnorm-kv.out"
+grep 'real_attention_kv: unsupported' "$ROOT/rmsnorm-kv.out"
+grep 'role.attention_norm.status: present' "$ROOT/rmsnorm-kv.out"
+grep 'role.q_projection.status: missing' "$ROOT/rmsnorm-kv.out"
+grep 'attention_dependency_status: blocked-missing-qkv' "$ROOT/rmsnorm-kv.out"
+grep 'prefill_kv_write_ready: false' "$ROOT/rmsnorm-kv.out"
+grep 'decode_kv_read_ready: false' "$ROOT/rmsnorm-kv.out"
+grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-kv.out"
+grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-kv.out"
+
+"$YVEX_BIN" kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --registry "$REG" > "$ROOT/rmsnorm-kv-auto.out"
+grep 'family_requested: auto' "$ROOT/rmsnorm-kv-auto.out"
+grep 'family_detected: deepseek' "$ROOT/rmsnorm-kv-auto.out"
+grep 'status: kv-report' "$ROOT/rmsnorm-kv-auto.out"
+grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-kv-auto.out"
 
 "$YVEX_BIN" fullmodel report --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 3 > "$ROOT/fullish.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish.out"
@@ -553,6 +641,40 @@ grep 'graph_full_transformer_attention: unsupported' "$ROOT/fullish-attention-cu
 grep 'attention_backend_ready: false' "$ROOT/fullish-attention-cuda.out"
 grep 'backend_allocation_attempted: false' "$ROOT/fullish-attention-cuda.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-attention-cuda.out"
+
+"$YVEX_BIN" kv report --model "$FULLISH" --family deepseek --backend cpu > "$ROOT/fullish-kv.out"
+grep 'kv: report' "$ROOT/fullish-kv.out"
+grep 'status: kv-report' "$ROOT/fullish-kv.out"
+grep 'target_class: candidate-GGUF-path' "$ROOT/fullish-kv.out"
+grep 'backend: cpu' "$ROOT/fullish-kv.out"
+grep 'family: deepseek' "$ROOT/fullish-kv.out"
+grep 'family_runtime_status: complete' "$ROOT/fullish-kv.out"
+grep 'attention_class_status: complete' "$ROOT/fullish-kv.out"
+grep 'kv_class_status: complete' "$ROOT/fullish-kv.out"
+grep 'kv_stage: report-only' "$ROOT/fullish-kv.out"
+grep 'role.q_projection.status: present' "$ROOT/fullish-kv.out"
+grep 'role.k_projection.status: present' "$ROOT/fullish-kv.out"
+grep 'role.v_projection.status: present' "$ROOT/fullish-kv.out"
+grep 'role.o_projection.status: present' "$ROOT/fullish-kv.out"
+grep 'qkv_role_coverage: present' "$ROOT/fullish-kv.out"
+grep 'attention_dependency_status: blocked-runtime-integration' "$ROOT/fullish-kv.out"
+grep 'real_attention_kv: unsupported' "$ROOT/fullish-kv.out"
+grep 'real_attention_kv_write_ready: false' "$ROOT/fullish-kv.out"
+grep 'decode_kv_consumer_ready: false' "$ROOT/fullish-kv.out"
+grep 'context_length_source: model-metadata' "$ROOT/fullish-kv.out"
+grep 'max_context: 128' "$ROOT/fullish-kv.out"
+grep 'kv_blockers: real attention-backed KV writes unsupported' "$ROOT/fullish-kv.out"
+grep 'full_kv_allocation_proof: false' "$ROOT/fullish-kv.out"
+grep 'paged_kv_implementation: false' "$ROOT/fullish-kv.out"
+grep 'generation: unsupported-full-model' "$ROOT/fullish-kv.out"
+grep 'benchmark_status: not-measured' "$ROOT/fullish-kv.out"
+
+"$YVEX_BIN" kv report --model "$FULLISH" --family deepseek --backend cuda > "$ROOT/fullish-kv-cuda.out"
+grep 'backend: cuda' "$ROOT/fullish-kv-cuda.out"
+grep 'cuda_full_kv_allocation_proof: false' "$ROOT/fullish-kv-cuda.out"
+grep 'backend_allocation_attempted: false' "$ROOT/fullish-kv-cuda.out"
+grep 'real_attention_kv: unsupported' "$ROOT/fullish-kv-cuda.out"
+grep 'generation: unsupported-full-model' "$ROOT/fullish-kv-cuda.out"
 
 "$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 20 > "$ROOT/fullish-plan.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish-plan.out"
@@ -721,6 +843,23 @@ grep 'full_transformer_attention: unsupported' "$ROOT/glm-attention.out"
 grep 'generation: unsupported-full-model' "$ROOT/glm-attention.out"
 grep 'benchmark_status: not-measured' "$ROOT/glm-attention.out"
 
+"$YVEX_BIN" kv report --model glm-5.2-official-safetensors --family glm --backend cpu > "$ROOT/glm-kv.out" && exit 1 || true
+grep 'kv: report' "$ROOT/glm-kv.out"
+grep 'status: kv-report-unsupported' "$ROOT/glm-kv.out"
+grep 'target_class: official-source-huge-model' "$ROOT/glm-kv.out"
+grep 'family: glm' "$ROOT/glm-kv.out"
+grep 'family_detected: glm' "$ROOT/glm-kv.out"
+grep 'tensor_inventory_status: not-performed-source-only-target' "$ROOT/glm-kv.out"
+grep 'source_artifact_class: official safetensors' "$ROOT/glm-kv.out"
+grep 'target_artifact_class: future YVEX-produced GGUF' "$ROOT/glm-kv.out"
+grep 'runtime_claim: unsupported' "$ROOT/glm-kv.out"
+grep 'real_attention_kv: unsupported' "$ROOT/glm-kv.out"
+grep 'attention_dependency_status: unsupported-source-only' "$ROOT/glm-kv.out"
+grep 'prefill_kv_write_ready: false' "$ROOT/glm-kv.out"
+grep 'decode_kv_read_ready: false' "$ROOT/glm-kv.out"
+grep 'generation: unsupported-full-model' "$ROOT/glm-kv.out"
+grep 'benchmark_status: not-measured' "$ROOT/glm-kv.out"
+
 "$YVEX_BIN" fullmodel report --model "$ROOT/missing.gguf" > "$ROOT/missing.out" 2> "$ROOT/missing.err" && exit 1 || true
 grep 'status: fullmodel-report-fail' "$ROOT/missing.out"
 grep 'artifact_exists: false' "$ROOT/missing.out"
@@ -794,12 +933,21 @@ grep 'runtime_claim: unsupported' "$ROOT/bad-attention-family.out"
 grep 'full_transformer_attention: unsupported' "$ROOT/bad-attention-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/bad-attention-family.out"
 
+"$YVEX_BIN" kv report --model "$FULLISH" --family unknown-family --backend cpu > "$ROOT/bad-kv-family.out" 2> "$ROOT/bad-kv-family.err" && exit 1 || true
+grep 'status: kv-report-unsupported' "$ROOT/bad-kv-family.out"
+grep 'family_requested: unknown-family' "$ROOT/bad-kv-family.out"
+grep 'runtime_claim: unsupported' "$ROOT/bad-kv-family.out"
+grep 'real_attention_kv: unsupported' "$ROOT/bad-kv-family.out"
+grep 'kv_layout: unsupported' "$ROOT/bad-kv-family.out"
+grep 'generation: unsupported-full-model' "$ROOT/bad-kv-family.out"
+
 for file in \
   "$ROOT/selected-plan.out" \
   "$ROOT/selected-materialize.out" \
   "$ROOT/selected-descriptor.out" \
 	  "$ROOT/selected-family.out" \
 	  "$ROOT/selected-attention.out" \
+	  "$ROOT/selected-kv.out" \
 	  "$ROOT/rmsnorm-plan.out" \
 	  "$ROOT/rmsnorm-materialize.out" \
 	  "$ROOT/rmsnorm-descriptor.out" \
@@ -807,6 +955,8 @@ for file in \
 	  "$ROOT/rmsnorm-family-auto.out" \
 	  "$ROOT/rmsnorm-attention.out" \
 	  "$ROOT/rmsnorm-attention-auto.out" \
+	  "$ROOT/rmsnorm-kv.out" \
+	  "$ROOT/rmsnorm-kv-auto.out" \
 	  "$ROOT/fullish-plan.out" \
 	  "$ROOT/fullish-plan-cuda.out" \
 	  "$ROOT/fullish-descriptor.out" \
@@ -815,6 +965,8 @@ for file in \
 	  "$ROOT/fullish-family-cuda.out" \
 	  "$ROOT/fullish-attention.out" \
 	  "$ROOT/fullish-attention-cuda.out" \
+	  "$ROOT/fullish-kv.out" \
+	  "$ROOT/fullish-kv-cuda.out" \
 	  "$ROOT/fullish-materialize.out" \
 	  "$ROOT/fullish-materialize-dry-run.out" \
 	  "$ROOT/fullish-materialize-plan-only.out" \
@@ -825,7 +977,9 @@ for file in \
 	  "$ROOT/ssd-staged.out" \
 	  "$ROOT/hybrid.out" \
 	  "$ROOT/glm-attention.out" \
-	  "$ROOT/bad-attention-family.out"
+	  "$ROOT/glm-kv.out" \
+	  "$ROOT/bad-attention-family.out" \
+	  "$ROOT/bad-kv-family.out"
 do
   pattern='full_model_execution: tr''ue'
   ! grep "$pattern" "$file"
@@ -847,6 +1001,12 @@ do
 	  ! grep "$pattern" "$file"
 	  pattern='full_transformer_attention: tr''ue'
 	  ! grep "$pattern" "$file"
+	  pattern='real_attention_kv: tr''ue'
+	  ! grep "$pattern" "$file"
+	  pattern='kv_write_rea''dy: true'
+	  ! grep "$pattern" "$file"
+	  pattern='decode_kv_consumer_rea''dy: true'
+	  ! grep "$pattern" "$file"
 	  pattern='benchmark_status: mea''sured'
 	  ! grep "$pattern" "$file"
   pattern='tok/''s'
@@ -856,6 +1016,12 @@ do
 	  pattern='DeepSeek generation imple''mented'
 	  ! grep "$pattern" "$file"
 	  pattern='DeepSeek attention imple''mented'
+	  ! grep "$pattern" "$file"
+	  pattern='DeepSeek KV imple''mented'
+	  ! grep "$pattern" "$file"
+	  pattern='paged KV imple''mented'
+	  ! grep "$pattern" "$file"
+	  pattern='full KV allocation imple''mented'
 	  ! grep "$pattern" "$file"
 	  pattern='full transformer attention imple''mented'
 	  ! grep "$pattern" "$file"
