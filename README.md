@@ -2,101 +2,113 @@
 
 YVEX is a native C inference engine for local open-weight models.
 
-Local inference becomes serious when model weights stop being an opaque payload
-and start behaving like runtime state. Opening a GGUF file is only the
-beginning. The interesting work starts when the program can explain why an
-artifact was accepted, how its tensors became executable structure, where
-memory was placed, what graph work actually ran, and which state is available
-for the next step of the model.
+The project starts from a point that most local inference stacks hide too
+quickly: model weights are not useful just because a process can open them. A
+GGUF file can parse, a registry alias can exist, a daemon can answer status,
+and a command can print something impressive while the actual machine path is
+still unclear. YVEX exists to make that path explicit. The engine should be
+able to explain where an artifact came from, why it was accepted, how its
+tensors became runtime structure, where memory was placed, what graph work
+actually ran, and why the next boundary is either ready or still unsupported.
 
-YVEX is built around that transition from file to runtime.
+That is the core idea: move from file evidence to runtime evidence without
+pretending that all intermediate states are the same thing.
 
-The project lives below chat surfaces, provider APIs, agent shells, and
-benchmark tables. Those layers are useful only when the engine underneath them
-is real. A local system should be able to say what artifact it used, what the
-runtime understood about that artifact, how far execution advanced, and why a
-later boundary is or is not ready. Otherwise the interface can look finished
-while the machine path remains vague.
+YVEX lives below chat interfaces, provider-compatible APIs, agent shells, and
+benchmark tables. Those surfaces matter only after the lower engine path has
+been implemented and checked. A local system becomes trustworthy when it can
+say, with mechanical evidence, that a specific artifact was validated, a
+specific tensor was materialized, a specific backend owned that memory, a
+specific graph path consumed it, and a specific runtime state was created from
+it. Without that, the outside interface can look complete while the inference
+engine remains mostly theater.
 
-The current codebase already owns a concrete lower path. GGUF artifacts are
-parsed through structural checks. Selected DeepSeek-class tensors become
-descriptors, then backend-resident weights, then engine-owned state. Fixture
-graphs give the executor a small exact world where output can be checked
-directly. Real selected artifacts bring large F16 model bytes into scheduled
-graph execution. The embedding path proves the first real tensor slice; the
-embedding-plus-RMSNorm path adds a second tensor and a second operation.
-Explicit token input gives the graph a sequence boundary, and the prefill-state
-summary records the first sequence-level runtime state.
+The current codebase already owns the lower part of that path. GGUF artifacts
+are parsed through structural checks, selected DeepSeek-class tensors become
+descriptors, descriptors become backend-resident weights, and those weights
+become engine-owned state. The controlled fixture lane gives the executor a
+small world where every result can be checked directly. The selected-artifact
+lane takes large F16 model bytes and forces them through scheduled graph
+execution. The embedding path proves the first selected tensor slice. The
+embedding-plus-RMSNorm path adds a second tensor and a second operation, so
+the runtime has to handle a concrete multi-op segment instead of a single
+lookup. Token input then gives the graph a sequence boundary, and the
+prefill-state foundation turns that sequence into the first runtime state
+derived from model execution.
 
-Minimal KV ownership has now entered the runtime as well. A session can own a
-small KV store with explicit shape, allocation, append, read, clear, summary,
-bounds, overflow, and lifecycle behavior. This is not decode and not
-generation; it is the first owned attention-state boundary that later
-KV-backed prefill can attach to.
+KV ownership has entered the runtime as a separate boundary. The current KV
+store is intentionally minimal, but it proves the shape of the ownership
+problem: a session can allocate KV state, mutate it through append/read
+behavior, refuse overflow, clear it, and release it. This is not decode and not
+generation. It is the first point where attention-state ownership becomes
+concrete enough for later runtime stages to depend on it.
 
-That staged shape is deliberate. Transformer execution should not appear as one
-dramatic jump from parser to chatbot. The lower chain has to become
-inspectable first. Artifact evidence becomes runtime description. Runtime
-description becomes backend residency. Backend residency becomes engine state.
-Graph execution produces checked output. Token input becomes prefill state. KV
-gives the session a place to preserve attention state. Decode, logits,
-sampling, CLI generation, and server generation should arrive as continuations
-of that same path.
+The staged shape is deliberate. Transformer execution should not appear as one
+dramatic jump from parser to chatbot. Artifact evidence must become runtime
+description. Runtime description must become backend residency. Backend
+residency must become engine-owned state. Engine state must feed graph
+execution. Token input must become prefill state. Prefill state must connect to
+KV. KV must support decode. Decode must produce logits. Sampling must turn
+logits into accepted tokens. CLI and server surfaces should sit above that
+chain, not beside it.
 
-GGUF is the current envelope for this work. It gives YVEX a concrete source of
-model facts: architecture metadata, tensor layout, storage formats, offsets,
-alignment, and tokenizer data where present. The runtime turns those file facts
-into execution evidence. Registry entries, qtype policy, conversion helpers,
-integrity reports, and artifact cards are part of the same machinery, because
-they keep the route from open weights to local execution explicit enough to
-debug.
+GGUF is the current envelope for this work because it gives YVEX a concrete
+source of model facts: architecture metadata, tensor layout, storage formats,
+offsets, alignment, and tokenizer data where present. YVEX does not treat
+those facts as passive metadata. It turns them into execution evidence.
+Registry entries, qtype policy, conversion helpers, integrity reports, and
+artifact cards belong to the same route because they preserve the chain from
+open weights to local runtime behavior.
 
-YVEX is written in C because this layer rewards exact ownership. Memory needs a
-visible owner. Cleanup needs a phase. Tensor access needs bounds. Backend
-residency should not be confused with model support. A report should tell the
-operator where the run stands without asking them to infer which part of the
-system was real. The top of YVEX can become simple only if the bottom remains
-precise.
+YVEX is written in C because this layer rewards visible ownership. Memory needs
+an owner. Cleanup needs a phase. Tensor access needs bounds. Backend residency
+should not be confused with model support. A report should tell the operator
+where execution stands without forcing them to infer which part of the system
+actually ran. The top of the engine can become simple only if the bottom
+remains precise.
 
 ## Why this project exists
 
 Open-weight models have moved past the toy phase. The useful question is no
 longer whether a local machine can run something that looks like a model. The
 harder question is whether local hardware can run models capable enough to
-matter, while keeping the runtime understandable enough to trust.
+matter while keeping the runtime understandable enough to trust.
 
-Small models are useful. They are fast, convenient, cheap to move, and often
-good enough for narrow jobs. Larger open-weight models create a different
+Small models are useful because they are fast, cheap to move, and often good
+enough for narrow jobs. Larger open-weight models create a different
 engineering problem. They preserve more reasoning ability, more coding
 competence, broader knowledge, and longer-context usefulness, but they also
-expose weak runtime design immediately. Memory pressure becomes architectural.
-Quantization policy affects quality. KV layout becomes central. Tensor
-placement and backend kernels stop being hidden details and become part of the
-actual product.
+expose weak runtime design immediately. Memory pressure stops being a
+deployment detail and becomes architecture. Quantization policy stops being
+only a file-size choice and starts affecting quality. KV layout becomes
+central. Tensor placement and backend kernels become part of the product.
 
 YVEX is aimed at that harder side of local inference.
 
-The project avoids treating "loaded" as a meaningful end state. A model path
+The project avoids treating `loaded` as a meaningful end state. A model path
 can be accepted while no tensor is executable. A GGUF header can parse while a
 later tensor read would be unsafe. Backend memory can exist without a graph
-path that uses it. A daemon can expose status endpoints before generation
-exists. Those distinctions are not cosmetic; they are where a local inference
-engine becomes debuggable.
+path that uses it. A daemon can expose status before generation exists. Those
+distinctions are where a local inference engine becomes debuggable. If the
+runtime cannot say exactly where it stopped, every later abstraction becomes
+suspect.
 
-Selected DeepSeek-class artifacts are useful pressure targets because they
-force the runtime to handle scale before the full transformer path is present.
-A tiny fixture proves parser mechanics. A billion-byte embedding tensor proves
-something else: large range accounting, backend transfer, digest checks,
-cleanup behavior, and reference extraction all have to work under the same
-command path. Adding RMSNorm turns the selected slice into a small real graph
-segment rather than a single-tensor demonstration.
+Selected DeepSeek-class artifacts are useful because they apply pressure
+without pretending the full transformer path is already present. A tiny fixture
+proves that parser and executor mechanics behave in a perfectly checkable
+world. A billion-byte embedding tensor proves something else: the engine must
+account for large byte ranges, move selected tensor data through the backend
+path, preserve file identity, release owned memory, and still compare the
+result against artifact evidence. Adding RMSNorm turns the selected slice into
+a small model-backed graph segment rather than a single-tensor demonstration.
 
 The larger goal is one coherent execution chain. Source weights become
 artifact evidence. Artifact evidence becomes descriptors. Descriptors become
 backend residency. Backend residency becomes engine state. Engine state feeds
 graph execution. Token input becomes prefill state. Prefill state connects to
 KV. KV supports decode. Decode produces logits. Sampling turns logits into
-tokens. CLI and server surfaces should sit above that chain, not beside it.
+tokens. CLI and server surfaces should sit above that chain as operator
+interfaces, not beside it as substitutes for runtime work.
 
 Model-building belongs near the runtime for the same reason. A local engine
 needs to know where an artifact came from, how native tensor names map into
@@ -110,41 +122,69 @@ YVEX follows the path from model evidence to execution.
 
 The path begins before the final runtime artifact. Source manifests record
 where weights came from. Native tensor inventories describe the original weight
-set. Family maps translate model-native tensor names into YVEX roles. GGUF then
-becomes the concrete container the engine can open, validate, register, and
-execute against.
+set before conversion. Family maps translate model-native tensor names into
+YVEX roles. GGUF then becomes the concrete container the engine can open,
+validate, register, and execute against.
 
 From that artifact, YVEX builds descriptors. This is where parsed data becomes
 executable meaning. A descriptor does more than say that a tensor exists. For
 the selected embedding path, it explains how `token_embd.weight` is shaped, how
-a token index selects a slice, how many output values the graph should produce,
-and which byte range belongs to the operation.
+a token index selects a slice, how many values the graph should produce, and
+which byte range belongs to that operation. The descriptor is the point where a
+file stops being only bytes and starts becoming a runtime object.
 
 Materialization is the residency boundary. CPU and CUDA paths receive selected
 tensor bytes and turn them into backend-owned storage. The runtime can report
 what was planned, what moved, and how cleanup behaved. Once selected weights
 are resident, the engine attaches them to engine-owned state. Sessions observe
-that state through a defined lifetime relationship.
+that state through a defined lifetime relationship instead of reaching back
+into loader internals.
 
 Graph execution turns the loader into an engine. The controlled fixture lane
-gives executor code a small exact world where output can be checked directly.
-The selected real-artifact lane brings real model bytes into scheduled work.
-Embedding lookup proves the first real tensor path. RMSNorm adds a second
-tensor, a second operation, and an independent reference comparison.
+uses tiny F32 fixtures because exactness needs a closed world. In that lane the
+executor can complete the full mechanical circuit under conditions where the
+answer is known: the descriptor is built, the weights are attached, the backend
+is chosen, output storage is created, the result is read back, the checksum is
+compared, and owned memory is released. The point is not to make the fixture
+impressive. The point is to make the executor boring before model-backed
+tensors make the problem larger.
+
+Standalone primitives serve the same purpose at the operation level. RoPE,
+attention, matmul/projection, and MLP are not presented as model support. They
+are isolated operation boundaries. Each primitive gives YVEX a place to prove
+shape handling, backend dispatch, scratch ownership, reference comparison, and
+cleanup before those operations are composed inside a full transformer block.
+Model-backed attention, model-backed MLP, full layer scheduling, full
+transformer prefill, decode, output-head logits, vocabulary sampling, and
+generation still come later.
+
+The selected-artifact lane brings model bytes into scheduled work. Embedding
+lookup proves the first selected tensor path. RMSNorm adds a second tensor, a
+second operation, and an independent reference comparison. This is still a
+selected slice, not full transformer execution, but it already forces the
+runtime to deal with multi-tensor scheduling, intermediate storage, backend
+math, output comparison, and cleanup in a way tiny fixtures cannot.
 
 Token input moves the system toward sequence processing. Explicit token lists
 become bounded runtime objects. A selected token can drive the graph. The
-prefill-state foundation records what happened across a sequence: positions,
-processed tokens, graph summaries, checksums, byte accounting, and cleanup
-behavior.
+prefill-state foundation records the result of running the selected segment
+across a sequence. It does not merely print a pile of counters. It gives the
+runtime a compact account of sequence execution: every position in the bounded
+input passes through the selected graph segment, each token contributes to the
+aggregate state, and the resulting summary is tied to checksums, byte
+accounting, and cleanup. That summary is below full transformer prefill, but
+it is already runtime state rather than argument parsing.
 
-KV is now a real session-owned boundary. The current store is intentionally
-minimal, but it proves the ownership model that later attention state needs:
-shape is explicit, capacity is bounded, appends and reads are checked, clear
-and close paths are tested, and overflow is a visible runtime condition.
-Minimal KV-backed prefill binding now connects the segment-summary prefill
-state to a small diagnostic KV store. This is still not attention-backed
-transformer prefill, decode, logits, sampling, or generation.
+KV is now a concrete session-owned boundary. The current store is intentionally
+small, but it proves the ownership model that later attention state needs.
+Shape is explicit. Capacity is bounded. Mutation is checked. Reads are bounded.
+Clear and close paths are tested. Overflow is not hidden; it becomes a visible
+runtime condition. Minimal KV-backed prefill binding connects the
+segment-summary prefill state to a diagnostic KV store. This is still not
+attention-backed transformer prefill, decode, logits, sampling, or generation.
+It is the first point where sequence state and KV ownership touch.
+
+The intended execution chain is:
 
 ```text
 source weights
@@ -164,15 +204,18 @@ source weights
   -> server surface
 ```
 
+Each arrow is a boundary. YVEX tries not to hide those boundaries behind the
+word `inference`.
+
 ## Model artifacts
 
-YVEX keeps real model weights outside git. The repository carries code, public
+YVEX keeps model weights outside git. The repository carries code, public
 headers, documentation, tiny fixtures, and tests. Large artifacts remain
 operator-local.
 
 Current artifacts are selected pressure artifacts. They sit between tiny
-fixtures and future full-model GGUFs. Their purpose is to force real runtime
-behavior before the whole transformer path lands.
+fixtures and future full-model GGUFs. Their purpose is to force implemented
+runtime behavior before the whole transformer path lands.
 
 Start by making the operator-local layout explicit:
 
@@ -191,9 +234,9 @@ or claim runtime support; they make the operator-local storage layout explicit.
 | Artifact class | Role | Location | Why it matters |
 | --- | --- | --- | --- |
 | Native source weights | Source evidence and tensor inventory | Operator-local storage | Preserves original tensor names, shapes, and family-specific facts before GGUF emission. |
-| Selected embedding GGUF | Main real-tensor pressure artifact | Operator-local storage | Exercises identity, range math, backend materialization, engine attachment, and selected embedding execution over a large F16 tensor. |
-| Selected embedding plus RMSNorm GGUF | First real multi-tensor segment | Operator-local storage | Adds a second tensor and a second operation, making graph scheduling and RMSNorm reference checks concrete. |
-| Controlled F32 fixtures | Deterministic parser and graph tests | Repository tests | Keeps parser, corruption, executor, and backend behavior exactly checkable while real weights stay local. |
+| Selected embedding GGUF | Main model-tensor pressure artifact | Operator-local storage | Exercises identity, range math, backend materialization, engine attachment, and selected embedding execution over a large F16 tensor. |
+| Selected embedding plus RMSNorm GGUF | First model-backed multi-tensor segment | Operator-local storage | Adds a second tensor and a second operation, making graph scheduling and RMSNorm reference checks concrete. |
+| Controlled F32 fixtures | Deterministic parser and graph tests | Repository tests | Keeps parser, corruption, executor, and backend behavior exactly checkable while model weights stay local. |
 | Future full model GGUF | Full local inference target | Operator-local storage | Becomes relevant when the runtime owns full tensor placement, transformer blocks, KV-backed prefill, decode, logits, and sampling. |
 | Quantization and imatrix manifests | Provenance and calibration evidence | Operator-local or tiny test/docs fixtures | Keeps quantization decisions visible while storage recognition and compute support remain separate facts. |
 
@@ -220,8 +263,6 @@ A typical selected-artifact registration looks like this:
 ./yvex models verify deepseek4-v4-flash-selected-embed
 ```
 
-This remains the low-level registration path until a prepare preset exists.
-
 The alias is a local handle for a specific artifact and support level. It gives
 the operator a stable name while YVEX keeps checking file identity, metadata
 drift, tensor readiness, and graph admission.
@@ -234,33 +275,14 @@ tensor inventories, family maps, qtype policy, conversion constraints, and GGUF
 template checks.
 
 A local inference engine cannot treat `GGUF` as a file extension only. A useful
-local artifact is the result of a chain of evidence: source weights, tensor
-inventory, mapping rules, template expectations, qtype decisions, and
-conversion constraints. YVEX keeps that chain explicit so runtime behavior can
-be traced back to artifact construction.
-
-```text
-official/open weights
-  -> source manifest
-  -> native tensor inventory
-  -> family tensor mapping
-  -> GGUF template validation
-  -> selected emission
-  -> local registry alias
-  -> integrity report
-  -> materialization
-  -> engine attachment
-  -> graph execution
-```
-
-Each stage answers a different question. The source manifest records
+local artifact is the result of a chain of evidence. Source weights establish
 provenance. Native inventory describes the tensors before conversion. Family
 mapping connects external names to runtime roles. Template validation defines
 what the artifact is supposed to contain. Selected emission produces the narrow
 GGUF that the current engine can exercise. Integrity and graph admission keep
 later commands grounded in checked facts.
 
-The low-level source-to-selected path is explicit:
+The current source-to-selected path is intentionally explicit:
 
 ```sh
 ./yvex source-manifest create --hf-repo "deepseek-ai/DeepSeek-V4-Flash" --revision "main" --local-path "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --status in-progress --out "$HOME/lab/models/gguf/deepseek/deepseek-source-manifest.json"
@@ -270,8 +292,8 @@ The low-level source-to-selected path is explicit:
 ./yvex convert emit --arch deepseek4 --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" --tensor embed.weight --target-qtype F16 --out "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf" --overwrite
 ```
 
-This emits the selected embedding artifact only; it is not full DeepSeek
-conversion and not generation.
+That last command emits the selected embedding artifact only. It is not full
+DeepSeek conversion and not generation.
 
 Quantization follows the same discipline. A qtype can describe artifact storage
 before backend compute support exists for a graph path. A policy can allow a
@@ -293,19 +315,31 @@ ownership, copy behavior, and kernel coverage determine what the runtime can
 prove.
 
 CPU is the reference lane. CUDA is the current acceleration lane. Metal and
-ROCm are future lanes because high-memory local machines matter for the kind of
-inference YVEX is designed to reach.
+ROCm are future lanes because high-memory local machines matter for the kind
+of inference YVEX is designed to reach.
 
-| Machine class | Backend lane | Engine role | Public posture |
-| --- | --- | --- | --- |
-| CPU-only developer machine | CPU reference | Parser behavior, descriptor construction, token input, integrity checks, cleanup paths, KV ownership tests, and small graph correctness stay easy to inspect. | Reference and diagnostics lane. |
-| CUDA workstation | CUDA | Current accelerated lane for selected materialization, fixture parity, selected embedding execution, embedding-plus-RMSNorm, and prefill-state summaries where CUDA is available. | Current acceleration lane. |
-| DGX Spark / GB10-class CUDA machine | CUDA pressure target | Useful for larger artifacts, memory pressure, backend allocation behavior, and future graph growth. | Hardware pressure target. |
-| High-memory MacBook / Mac Studio | Metal direction | Unified memory and fast local storage make this class important for future local inference. | Future backend lane. |
-| Strix Halo-class system | ROCm direction | AMD unified-memory systems are relevant for future local workstation inference. | Future backend lane. |
+On a CPU-only developer machine, YVEX keeps parser behavior, descriptor
+construction, token input, integrity checks, cleanup paths, KV ownership tests,
+and small graph correctness easy to inspect. That lane is not meant to win
+speed comparisons. It is the lane where correctness should be easiest to
+understand.
+
+CUDA is the current accelerated lane. It is used for selected materialization,
+fixture parity, selected embedding execution, embedding-plus-RMSNorm, and
+prefill-state summaries where CUDA is available. The point is not to claim
+broad GPU model support. The point is to let the same checked boundaries run
+through an accelerator path with checked tensor movement.
+
+DGX Spark or GB10-class CUDA systems are pressure targets for larger artifacts,
+memory pressure, backend allocation behavior, and future graph growth.
+High-memory MacBooks and Mac Studios matter for future Metal work because
+unified memory and fast local storage change the shape of local inference.
+Strix Halo-class systems matter for the same reason on the AMD side. Those
+future lanes are not current support claims.
 
 YVEX currently claims CPU and CUDA only for the runtime surfaces that exist
-today.
+today. A backend probe is not model support. A hardware profile is not an
+implemented runtime path. A build flag is not a generation claim.
 
 ## Larger-model direction
 
@@ -313,17 +347,17 @@ YVEX is ultimately aimed at models large enough to justify local inference as
 serious infrastructure.
 
 The relevant machines are no longer only small laptops running small dense
-models. High-memory workstations, Mac Studios, DGX Spark / GB10-class CUDA
+models. High-memory workstations, Mac Studios, DGX Spark or GB10-class CUDA
 systems, and future unified-memory AMD boxes create a different question: how
-much of a semi-frontier model can be made resident, how expensive the KV state
+much of a semi-frontier model can be made resident, how expensive KV state
 becomes, which qtypes preserve quality, and where throughput collapses.
 
 A larger model changes the runtime shape. The model may fit only under a
 particular quantization profile. KV can become a first-order memory object.
-Scratch space competes with resident weights. Backend placement becomes part of
-the execution plan. Long-context prefill stresses a different part of the
+Scratch space competes with resident weights. Backend placement becomes part
+of the execution plan. Long-context prefill stresses a different part of the
 system than token-by-token decode. Distributed execution, if it arrives, will
-be mainly about capacity and long-prefill throughput before it becomes a
+mainly be about capacity and long-prefill throughput before it becomes a
 pleasant generation path.
 
 YVEX prepares for that by keeping placement, ownership, and measurement
@@ -338,34 +372,43 @@ For larger source-tensor pressure targets, start with path reporting:
 ./yvex model-target inspect glm-5.2-official-safetensors --paths
 ```
 
-GLM-5.2 is currently an official-source tensor target only; this path report
+GLM-5.2 is currently an official-source tensor target only. This path report
 does not inspect safetensors, emit a GGUF, or claim GLM execution.
 
 ## Current runtime surface
 
 YVEX currently exposes controlled fixture graph proofs, standalone F32 graph
-primitive proofs, and selected real-artifact graph slices.
+primitive proofs, selected-artifact graph slices, diagnostic prefill/KV state,
+and a bounded diagnostic generation path.
 
-The controlled lane uses tiny F32 fixtures. Its job is exactness. Fixture graph
-proofs cover descriptor construction, weight attachment, backend dispatch,
-output allocation, readback, cleanup, checksum behavior, and a bounded
-transformer-block-shaped path. This keeps executor mechanics boring.
+The controlled lane uses tiny F32 fixtures because the executor needs a place
+where correctness is not negotiable. In that lane, the values are small enough
+for direct reference checks but complete enough to exercise owned-memory
+behavior: data enters the backend, an operation runs, output is allocated,
+results are read back, cleanup is observed, and the command reports enough
+evidence to catch regressions. This is not a decorative test mode. It is the
+stable ground that lets the executor grow without guessing.
 
-Standalone primitives prove RoPE, attention, matmul/projection, and MLP
-operation boundaries over deterministic F32 inputs. Real model attention, real
-model MLP, full layer scheduling, full transformer prefill, decode, logits,
-sampling, and generation still come later.
+The standalone primitive path does not pretend that isolated RoPE, attention,
+matmul/projection, or MLP equals model execution. It gives each operation a
+boundary before the transformer composes them. That boundary is useful because
+every future full-model path will depend on the same boring facts: valid
+shapes, owned scratch, backend dispatch, reference comparison, and cleanup.
+When model-backed attention arrives, it should not also be the first time the
+engine learns how to run an attention-shaped operation.
 
-The selected real-artifact lane uses operator-local DeepSeek-class artifacts.
+The selected-artifact lane uses operator-local DeepSeek-class artifacts.
 The selected embedding path reads `token_embd.weight`, interprets it as
 `[hidden_size, vocab_size]`, selects a token, converts the F16 row into an F32
 vector, and checks the result against an independent raw-artifact reference
-slice.
+slice. That path matters because it joins artifact identity, byte-range safety,
+backend residency, engine state, and graph execution on a tensor large enough
+to expose large-tensor pressure.
 
 The embedding-plus-RMSNorm path reads the same embedding row, applies RMSNorm
-using a real first-layer normalization weight, and checks the final vector by
-checksum and max-diff. This is the current real-model graph segment. Real model
-attention and real model MLP still come later, but the segment already
+using the first-layer normalization weight, and checks the final vector by
+checksum and max-diff. This is the current model-backed graph segment.
+Model-backed attention and model-backed MLP still come later, but the segment already
 establishes multi-tensor scheduling, intermediate memory planning, backend
 RMSNorm support, cleanup, and reference comparison.
 
@@ -375,20 +418,23 @@ select a token by index. Prompt text becomes executable token input when
 tokenizer metadata is present and the runtime path supports it.
 
 The prefill-state foundation runs the selected embedding-plus-RMSNorm segment
-across a token sequence. It records positions, processed tokens, per-token
-summaries, checksums, output bytes, and cleanup status. It sits below
-attention-backed transformer prefill, but it is already runtime state rather
-than plain argument parsing.
+across a token sequence. It is deliberately below attention-backed transformer
+prefill. Its job is to turn a token sequence into owned runtime evidence. Each
+token position is pushed through the selected graph segment, the segment output
+contributes to a summary, and the runtime records enough checksum and
+byte-accounting information to prove that the sequence was processed rather
+than merely accepted as input. That summary gives later KV-backed and decode
+paths something concrete to depend on.
 
-The KV command proves the new session-owned state boundary. It creates a
-bounded KV store, appends values, reads them back, reports shape and byte
-accounting, exercises clear behavior, and preserves the line between KV
-ownership and later decode/logits work.
+The KV command proves the session-owned state boundary. It creates a bounded KV
+store, mutates it, reads from it, reports its shape and byte footprint,
+exercises clear behavior, and preserves the line between KV ownership and later
+decode/logits work. This is not yet attention-backed KV, but it prevents KV
+from remaining a vague future noun.
 
-A short selected-artifact path:
+A short selected-artifact path is:
 
 ```sh
-make
 ./yvex models current
 ./yvex models verify deepseek4-v4-flash-selected-embed
 ./yvex integrity report --model deepseek4-v4-flash-selected-embed --backend cpu --require-token-embedding --partial-token 0
@@ -397,13 +443,13 @@ make
 ./yvex graph --model deepseek4-v4-flash-selected-embed --backend cpu --execute-partial --partial-token 0
 ```
 
-The selected segment path:
+The selected segment path is:
 
 ```sh
 ./yvex graph --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --execute-segment --segment embedding-rmsnorm --tokens 0,1 --token-index 0
 ```
 
-The controlled block fixture path:
+The controlled block fixture path is:
 
 ```sh
 ./yvex graph --backend cpu --execute-block --block fixture --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
@@ -412,19 +458,19 @@ The controlled block fixture path:
 This is a controlled transformer-block-shaped fixture proof, not full model
 inference.
 
-The current prefill-state path:
+The current prefill-state path is:
 
 ```sh
 ./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2
 ```
 
-The minimal KV-backed prefill binding path:
+The minimal KV-backed prefill binding path is:
 
 ```sh
 ./yvex prefill --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2 --attach-kv --kv-layers 1 --kv-heads 2 --kv-head-dim 4 --kv-capacity 8
 ```
 
-The minimal KV proof path:
+The minimal KV proof path is:
 
 ```sh
 ./yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8 --append-demo --read-position 0
@@ -459,11 +505,11 @@ Admission control is useful because it stops the runtime at the right phase.
 Structural problems stop before materialization. Digest drift stops before
 alias assumptions are trusted. Metadata drift stops before graph dispatch.
 Token range errors stop before reference extraction. The result is a local
-engine that fails with evidence.
+engine that fails with evidence instead of failing later with mystery.
 
 ## Speed and evaluation
 
-YVEX should publish speed numbers when the measured runtime path exists.
+YVEX should publish speed numbers only when the measured runtime path exists.
 
 A useful benchmark row must identify the machine, backend, artifact, qtype,
 prompt shape, context length, command, and reproducibility conditions. Prefill
@@ -472,31 +518,23 @@ parts of the runtime. Long-context prefill is mostly about processing a large
 token range into state. Decode is autoregressive and pays the cost of each new
 token.
 
-The public benchmark table should eventually look like this:
+The public benchmark table should eventually compare CPU developer machines,
+CUDA workstations, DGX Spark or GB10-class CUDA systems, high-memory Apple
+Silicon machines, and future ROCm systems, but only after the relevant runtime
+path exists. Today, fixture correctness is not capability evaluation. Selected
+graph checks are not model quality. KV ownership tests are not prefill quality.
+Logits regression becomes meaningful after an implemented logits path exists.
+Capability regression belongs after generation uses the same runtime path users
+run.
 
-| Machine | Backend | Artifact / qtype | Prompt | Prefill t/s | Generation t/s |
-| --- | --- | --- | --- | --- | --- |
-| CPU developer machine | CPU | fixtures / selected artifacts | diagnostic tokens | correctness row | diagnostic row |
-| CUDA workstation | CUDA | selected artifacts now, full GGUF later | short and medium prompts | measured after real prefill | measured after decode/logits/sampling |
-| DGX Spark / GB10-class system | CUDA | large DeepSeek-class artifacts | medium and long prompts | pressure row after full prefill | pressure row after generation |
-| High-memory MacBook / Mac Studio | Metal | future local GGUF path | long prompts and agent-style workloads | future row | future row |
-| Strix Halo-class system | ROCm | future local GGUF path | short and long prompts | future row | future row |
-
-Evaluation should follow the same rule. Fixture correctness is not capability
-evaluation. Selected graph checks are not model quality. KV ownership tests are
-not prefill quality. Logits regression becomes meaningful after a real logits
-path exists. Capability regression belongs after generation uses the same
-runtime path users run.
-
-| Measurement | Runtime boundary | Purpose |
-| --- | --- | --- |
-| Fixture correctness | Controlled graph execution | Catches executor and backend regressions early. |
-| Selected segment correctness | Real selected graph slice | Catches tensor mapping, dtype, backend, and graph-slice regressions. |
-| KV ownership checks | Session-owned KV state | Catches shape, append/read, clear, overflow, lifecycle, and cleanup regressions. |
-| Prefill throughput | Real transformer prefill | Measures the cost of turning prompt tokens into runtime state. |
-| Decode throughput | Existing KV-backed state | Measures autoregressive next-token execution. |
-| Generation throughput | Decode, logits, sampling loop | Measures user-visible local generation. |
-| Capability regression | Real generation path | Detects prompt, tokenizer, logits, sampling, and output regressions. |
+Measurement should follow the engine. Fixture correctness catches executor and
+backend regressions early. Selected segment correctness catches tensor mapping,
+dtype, backend, and graph-slice regressions. KV ownership checks catch shape,
+append/read, clear, overflow, lifecycle, and cleanup regressions. Prefill
+throughput becomes meaningful only when full transformer prefill exists. Decode
+throughput requires existing KV-backed state. Generation throughput requires
+the decode, logits, and sampling loop. Capability evaluation requires
+implemented generation, not selected-slice proof.
 
 ## Server and operator surface
 
@@ -513,7 +551,7 @@ The CLI stays explicit. Low-level commands are visible because they cross
 different runtime boundaries. A future operator UX can compress common flows
 into presets, but the evidence should remain available. `models`, `integrity`,
 `materialize`, `engine`, `session`, `graph`, `input`, `prefill`, and `kv` each
-answer a different question.
+answer a different runtime question.
 
 ## Build and validation
 
@@ -546,27 +584,21 @@ git ls-files '*.safetensors' '*.bin' '*.dat'
 git ls-files '*.gguf'
 ```
 
-Real model weights stay outside git. Tracked GGUF files are tiny fixtures under
-`tests/`.
+Model weights stay outside git. Tracked GGUF files are tiny fixtures under
+tests.
 
 ## Documentation
 
 The public docs are intentionally small.
 
-- [docs/operator-runbook.md](docs/operator-runbook.md): command-first workflow
-  for artifacts, integrity, materialization, graph proofs, token input, prefill
-  state, minimal KV, daemon status, and validation.
-- [docs/api.md](docs/api.md): public C surface, ownership rules, report
-  structs, backend capabilities, token input, prefill summaries, KV state,
-  materialization summaries, graph results, and integrity surfaces.
-- [docs/contract.md](docs/contract.md): runtime behavior for CLI output,
-  filesystem state, registry resolution, backend boundaries, server status,
-  validation, and public claims.
-- [MODEL_ARTIFACTS.md](MODEL_ARTIFACTS.md): selected pressure artifacts and
-  validation posture.
-- [AGENTS.md](AGENTS.md): repository operating rules.
-- [docs/spine.md](docs/spine.md): internal delivery map, not product
-  documentation.
+`docs/operator-runbook.md` is the command-first workflow for artifacts,
+integrity, materialization, graph proofs, token input, prefill state, minimal
+KV, daemon status, and validation. `docs/api.md` is the public C surface and
+ownership map. `docs/contract.md` describes runtime behavior for CLI output,
+filesystem state, registry resolution, backend boundaries, server status,
+validation, and public claims. `MODEL_ARTIFACTS.md` records selected pressure
+artifacts and validation posture. `AGENTS.md` records repository operating
+rules. `docs/spine.md` is the internal delivery map, not product documentation.
 
 ## Acknowledgements
 
