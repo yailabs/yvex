@@ -29,6 +29,7 @@
 #include <yvex/model_registry.h>
 #include <yvex/native_weights.h>
 #include <yvex/source_manifest.h>
+#include <yvex/token_input.h>
 #include <yvex/yvex.h>
 
 /* Registry storage types. */
@@ -8050,6 +8051,744 @@ void yvex_attention_help(FILE *fp)
     fprintf(fp, "  report-only boundary: it does not run full attention, does not run transformer prefill, does not project Q/K/V from model tensors, does not write real attention-backed KV, does not generate, and does not benchmark.\n");
     fprintf(fp, "  standalone RoPE and attention primitives may be implemented, but those primitive proofs are not full transformer attention and are not model inference support.\n");
     fprintf(fp, "Boundary: no full transformer attention execution, no real QKV projection, no real attention-backed KV writes, no full model execution, no DeepSeek generation, no provider generation, no eval, no benchmark, no throughput.\n");
+}
+
+typedef struct {
+    const char *model;
+    const char *backend;
+    const char *family;
+    const char *registry_path;
+    const char *tokens_text;
+    unsigned long long context_length;
+    unsigned long long chunk_size;
+    int context_length_seen;
+    int chunk_size_seen;
+    int include_attention;
+    int include_kv;
+    int include_prefill;
+    int include_decode;
+    int include_blockers;
+} yvex_cli_context_options;
+
+static int context_parse_value_option(const char *flag,
+                                      int argc,
+                                      char **argv,
+                                      int *index,
+                                      const char **value)
+{
+    if (*index + 1 >= argc) {
+        fprintf(stderr, "yvex: context %s requires a value\n", flag);
+        return 2;
+    }
+    *value = argv[++(*index)];
+    if (fullmodel_string_is_empty(*value)) {
+        fprintf(stderr, "yvex: context %s value is empty\n", flag);
+        return 2;
+    }
+    return 0;
+}
+
+static int parse_context_options(int argc,
+                                 char **argv,
+                                 yvex_cli_context_options *options)
+{
+    int i;
+
+    if (!options) return 2;
+    memset(options, 0, sizeof(*options));
+    options->backend = "cpu";
+    options->family = "auto";
+
+    if (argc >= 3 && (strcmp(argv[2], "--help") == 0 || strcmp(argv[2], "-h") == 0)) {
+        yvex_context_help(stdout);
+        return 1;
+    }
+    if (argc < 3 || strcmp(argv[2], "report") != 0) {
+        fprintf(stderr, "yvex: context requires report\n");
+        fprintf(stderr, "usage: yvex context report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [options]\n");
+        return 2;
+    }
+
+    for (i = 3; i < argc; ++i) {
+        const char *value = NULL;
+        if (strcmp(argv[i], "--model") == 0) {
+            int rc = context_parse_value_option("--model", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            options->model = value;
+        } else if (strcmp(argv[i], "--backend") == 0) {
+            int rc = context_parse_value_option("--backend", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            if (strcmp(value, "cpu") != 0 && strcmp(value, "cuda") != 0) {
+                fprintf(stderr, "yvex: context --backend must be cpu or cuda\n");
+                return 2;
+            }
+            options->backend = value;
+        } else if (strcmp(argv[i], "--family") == 0) {
+            int rc = context_parse_value_option("--family", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            options->family = value;
+        } else if (strcmp(argv[i], "--registry") == 0) {
+            int rc = context_parse_value_option("--registry", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            options->registry_path = value;
+        } else if (strcmp(argv[i], "--tokens") == 0) {
+            int rc = context_parse_value_option("--tokens", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            options->tokens_text = value;
+        } else if (strcmp(argv[i], "--context-length") == 0) {
+            int rc = context_parse_value_option("--context-length", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            if (!parse_positive_ull(value, &options->context_length)) {
+                fprintf(stderr, "yvex: context --context-length requires a positive integer\n");
+                return 2;
+            }
+            options->context_length_seen = 1;
+        } else if (strcmp(argv[i], "--chunk-size") == 0) {
+            int rc = context_parse_value_option("--chunk-size", argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            if (!parse_positive_ull(value, &options->chunk_size)) {
+                fprintf(stderr, "yvex: context --chunk-size requires a positive integer\n");
+                return 2;
+            }
+            options->chunk_size_seen = 1;
+        } else if (strcmp(argv[i], "--include-attention") == 0) {
+            options->include_attention = 1;
+        } else if (strcmp(argv[i], "--include-kv") == 0) {
+            options->include_kv = 1;
+        } else if (strcmp(argv[i], "--include-prefill") == 0) {
+            options->include_prefill = 1;
+        } else if (strcmp(argv[i], "--include-decode") == 0) {
+            options->include_decode = 1;
+        } else if (strcmp(argv[i], "--include-blockers") == 0) {
+            options->include_blockers = 1;
+        } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            yvex_context_help(stdout);
+            return 1;
+        } else {
+            fprintf(stderr, "yvex: unknown context option: %s\n", argv[i]);
+            return 2;
+        }
+    }
+    if (!options->model || !options->model[0]) {
+        fprintf(stderr, "yvex: context report requires --model FILE_OR_ALIAS\n");
+        return 2;
+    }
+    return 0;
+}
+
+static const char *context_requested_family(const yvex_cli_context_options *options)
+{
+    return options && options->family && options->family[0] ? options->family : "auto";
+}
+
+static void context_print_phase(unsigned int index,
+                                const char *name,
+                                const char *status)
+{
+    printf("context_phase.%u.name: %s\n", index, name ? name : "");
+    printf("context_phase.%u.status: %s\n", index, status ? status : "unknown");
+}
+
+static void context_print_phases(const char *family_status,
+                                 const char *attention_status,
+                                 const char *kv_status,
+                                 const char *context_status,
+                                 const char *failure_phase)
+{
+    static const char *const phases[] = {
+        "preflight",
+        "resolve-model",
+        "resolve-family",
+        "load-family-runtime",
+        "load-attention-class",
+        "load-kv-class",
+        "context-profile",
+        "model-context",
+        "requested-context",
+        "active-context",
+        "token-input",
+        "chunking-policy",
+        "prefill-boundary",
+        "decode-position-policy",
+        "overflow-policy",
+        "runtime-blockers",
+        "complete",
+        "failed",
+        "cleanup"
+    };
+    unsigned int i;
+    int failed_seen = 0;
+
+    for (i = 0; i < sizeof(phases) / sizeof(phases[0]); ++i) {
+        const char *status = "pass";
+        if (failure_phase && strcmp(failure_phase, phases[i]) == 0) {
+            status = "failed";
+            failed_seen = 1;
+        } else if (failed_seen && strcmp(phases[i], "cleanup") != 0) {
+            status = "blocked";
+        } else if (strcmp(phases[i], "load-family-runtime") == 0) {
+            status = family_status ? family_status : "unknown";
+        } else if (strcmp(phases[i], "load-attention-class") == 0) {
+            status = attention_status ? attention_status : "unknown";
+        } else if (strcmp(phases[i], "load-kv-class") == 0) {
+            status = kv_status ? kv_status : "unknown";
+        } else if (strcmp(phases[i], "context-profile") == 0) {
+            status = context_status ? context_status : "planned";
+        } else if (strcmp(phases[i], "prefill-boundary") == 0 ||
+                   strcmp(phases[i], "decode-position-policy") == 0 ||
+                   strcmp(phases[i], "runtime-blockers") == 0) {
+            status = "blocked";
+        } else if (strcmp(phases[i], "failed") == 0 && !failure_phase) {
+            status = "unsupported";
+        }
+        context_print_phase(i, phases[i], status);
+    }
+}
+
+static unsigned long long context_metadata_max_context(yvex_cli_tokenizer_context *ctx,
+                                                       const char **source)
+{
+    static const char *const keys[] = {
+        "llama.context_length",
+        "deepseek.context_length",
+        "qwen.context_length",
+        "glm.context_length",
+        "general.context_length"
+    };
+    unsigned int i;
+    unsigned long long value = 0ull;
+
+    if (source) *source = "unknown";
+    if (ctx && ctx->model) {
+        value = yvex_model_context_length(ctx->model);
+        if (value > 0ull) {
+            if (source) *source = "model-descriptor";
+            return value;
+        }
+    }
+    for (i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
+        const yvex_gguf_value *meta = ctx && ctx->gguf ? yvex_gguf_metadata_find(ctx->gguf, keys[i]) : NULL;
+        if (meta && yvex_gguf_value_as_u64(meta, &value) == YVEX_OK && value > 0ull) {
+            if (source) *source = keys[i];
+            return value;
+        }
+    }
+    return 0ull;
+}
+
+static const char *context_status_from_collections(const yvex_fullmodel_collections *collections,
+                                                   int selected_target)
+{
+    if (selected_target) return "partial";
+    if (collections &&
+        collections->has_token_embedding &&
+        collections->has_attention_q &&
+        collections->has_attention_k &&
+        collections->has_attention_v &&
+        collections->has_attention_out) {
+        return "complete";
+    }
+    return "partial";
+}
+
+static void context_print_common_header(const yvex_cli_context_options *options,
+                                        const char *status,
+                                        const char *resolved_path,
+                                        const char *target_id,
+                                        const char *target_class,
+                                        const char *family,
+                                        const char *detected,
+                                        const char *family_status,
+                                        const char *attention_status,
+                                        const char *kv_status)
+{
+    printf("context: report\n");
+    printf("status: %s\n", status ? status : "context-report");
+    printf("model: %s\n", options && options->model ? options->model : "");
+    printf("model_resolved_path: %s\n", resolved_path ? resolved_path : "");
+    printf("target_id: %s\n", target_id ? target_id : "unknown");
+    printf("target_class: %s\n", target_class ? target_class : "unknown");
+    printf("backend: %s\n", options && options->backend ? options->backend : "cpu");
+    printf("family: %s\n", family ? family : "unknown");
+    printf("family_detected: %s\n", detected ? detected : "unknown");
+    printf("family_requested: %s\n", context_requested_family(options));
+    printf("family_runtime_status: %s\n", family_status ? family_status : "unknown");
+    printf("attention_class_status: %s\n", attention_status ? attention_status : "unknown");
+    printf("kv_class_status: %s\n", kv_status ? kv_status : "unknown");
+    printf("context_class_status: report-only\n");
+    printf("context_stage: report-only\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+}
+
+static void context_print_unsupported_source_only(const yvex_cli_context_options *options)
+{
+    const char *family = strcmp(context_requested_family(options), "auto") == 0
+                             ? "glm"
+                             : context_requested_family(options);
+    context_print_common_header(options,
+                                "context-report-unsupported",
+                                "source-only-target",
+                                "glm-5.2-official-safetensors",
+                                "official-source-huge-model",
+                                family,
+                                "glm",
+                                "unsupported",
+                                "unsupported",
+                                "unsupported");
+    printf("model_max_context: unknown\n");
+    printf("model_max_context_source: source-manifest-planned\n");
+    printf("model_max_context_status: unsupported-source-only\n");
+    printf("requested_context: %s", options && options->context_length_seen ? "" : "not-requested");
+    if (options && options->context_length_seen) printf("%llu", options->context_length);
+    printf("\n");
+    printf("requested_context_source: %s\n", options && options->context_length_seen ? "operator-request" : "none");
+    printf("requested_context_status: %s\n", options && options->context_length_seen ? "reported-only" : "not-requested");
+    printf("active_context: unsupported\n");
+    printf("active_context_source: source-only-target\n");
+    printf("active_context_status: unsupported\n");
+    printf("token_input_status: not-performed-source-only-target\n");
+    printf("token_count: 0\n");
+    printf("prompt_token_count: 0\n");
+    printf("prefill_token_count: 0\n");
+    printf("generated_token_count: 0\n");
+    printf("token_range_start: none\n");
+    printf("token_range_end: none\n");
+    printf("chunking_required: false\n");
+    printf("chunk_size: not-requested\n");
+    printf("chunk_count: 0\n");
+    printf("last_chunk_size: 0\n");
+    printf("chunking_policy: unsupported-source-only\n");
+    printf("chunking_status: unsupported\n");
+    printf("prefill_boundary_status: unsupported\n");
+    printf("prefill_position_start: unknown\n");
+    printf("prefill_position_end: unknown\n");
+    printf("prefill_context_ready: false\n");
+    printf("full_transformer_prefill_ready: false\n");
+    printf("decode_position_policy: unsupported-source-only\n");
+    printf("decode_start_position: unknown\n");
+    printf("decode_position_status: unsupported\n");
+    printf("decode_context_ready: false\n");
+    printf("decode_ready: false\n");
+    printf("overflow_policy: unsupported-source-only\n");
+    printf("context_overflow: unsupported\n");
+    printf("overflow_check_status: unsupported\n");
+    printf("overflow_stop_reason: unsupported\n");
+    printf("overflow_mutates_state: false\n");
+    printf("attention_dependency_status: unsupported-source-only\n");
+    printf("attention_context_ready: false\n");
+    printf("attention_position_policy: planned\n");
+    printf("rope_context_status: planned\n");
+    printf("mask_context_status: planned\n");
+    printf("kv_dependency_status: unsupported-source-only\n");
+    printf("kv_capacity_required: true\n");
+    printf("kv_capacity_status: planned\n");
+    printf("kv_context_positions: unknown\n");
+    printf("kv_context_ready: false\n");
+    printf("real_attention_kv_ready: false\n");
+    printf("generation_context_status: unsupported-full-model\n");
+    printf("bounded_generation_context_policy: diagnostic-only-not-run\n");
+    printf("full_generation_context_ready: false\n");
+    printf("generation_ready: false\n");
+    printf("context_blockers: source-only target has no YVEX-produced GGUF tensor inventory; GLM context mapping planned; real transformer prefill unsupported\n");
+    printf("next_required_rows: MOE.CLASS.0,source-manifest-context-profile,YVEX-produced-GGUF,real-transformer-prefill,real-decode,GEN.DEEPSEEK.0\n");
+    printf("cleanup_attempted: true\n");
+    printf("cleanup_status: pass\n");
+    context_print_phases("unsupported", "unsupported", "unsupported", "unsupported", "context-profile");
+}
+
+static int context_print_unsupported_family(const yvex_cli_context_options *options,
+                                            const char *resolved_path,
+                                            const char *target_id,
+                                            const char *target_class,
+                                            const char *detected,
+                                            const char *reason)
+{
+    context_print_common_header(options,
+                                "context-report-unsupported",
+                                resolved_path,
+                                target_id,
+                                target_class,
+                                context_requested_family(options),
+                                detected ? detected : "unknown",
+                                "unsupported",
+                                "unsupported",
+                                "unsupported");
+    printf("model_max_context: unknown\n");
+    printf("model_max_context_source: unsupported-family\n");
+    printf("model_max_context_status: unsupported\n");
+    printf("requested_context: not-requested\n");
+    printf("requested_context_source: none\n");
+    printf("requested_context_status: not-requested\n");
+    printf("active_context: unsupported\n");
+    printf("active_context_source: unsupported-family\n");
+    printf("active_context_status: unsupported\n");
+    printf("token_input_status: not-performed\n");
+    printf("token_count: 0\n");
+    printf("prompt_token_count: 0\n");
+    printf("prefill_token_count: 0\n");
+    printf("generated_token_count: 0\n");
+    printf("token_range_start: none\n");
+    printf("token_range_end: none\n");
+    printf("chunking_required: false\n");
+    printf("chunk_size: not-requested\n");
+    printf("chunk_count: 0\n");
+    printf("last_chunk_size: 0\n");
+    printf("chunking_policy: unsupported-family\n");
+    printf("chunking_status: unsupported\n");
+    printf("prefill_boundary_status: unsupported\n");
+    printf("prefill_position_start: unknown\n");
+    printf("prefill_position_end: unknown\n");
+    printf("prefill_context_ready: false\n");
+    printf("full_transformer_prefill_ready: false\n");
+    printf("decode_position_policy: unsupported-family\n");
+    printf("decode_start_position: unknown\n");
+    printf("decode_position_status: unsupported\n");
+    printf("decode_context_ready: false\n");
+    printf("decode_ready: false\n");
+    printf("overflow_policy: unsupported-family\n");
+    printf("context_overflow: unsupported\n");
+    printf("overflow_check_status: unsupported\n");
+    printf("overflow_stop_reason: unsupported\n");
+    printf("overflow_mutates_state: false\n");
+    printf("attention_dependency_status: unsupported-family\n");
+    printf("attention_context_ready: false\n");
+    printf("attention_position_policy: unsupported\n");
+    printf("rope_context_status: unsupported\n");
+    printf("mask_context_status: unsupported\n");
+    printf("kv_dependency_status: unsupported-family\n");
+    printf("kv_capacity_required: unknown\n");
+    printf("kv_capacity_status: unsupported\n");
+    printf("kv_context_positions: unknown\n");
+    printf("kv_context_ready: false\n");
+    printf("real_attention_kv_ready: false\n");
+    printf("generation_context_status: unsupported-full-model\n");
+    printf("bounded_generation_context_policy: diagnostic-only-not-run\n");
+    printf("full_generation_context_ready: false\n");
+    printf("generation_ready: false\n");
+    printf("context_blockers: %s\n", reason ? reason : "unsupported context family");
+    printf("next_required_rows: CONTEXT.CLASS.0,MOE.CLASS.0,real-transformer-prefill,real-decode,GEN.DEEPSEEK.0\n");
+    printf("cleanup_attempted: true\n");
+    printf("cleanup_status: pass\n");
+    context_print_phases("unsupported", "unsupported", "unsupported", "unsupported", "resolve-family");
+    printf("reason: %s\n", reason ? reason : "unsupported context family");
+    return 5;
+}
+
+static int context_print_report(const yvex_cli_context_options *options,
+                                yvex_model_ref *ref,
+                                yvex_cli_tokenizer_context *ctx,
+                                const char *target_id,
+                                const char *target_class,
+                                yvex_arch arch,
+                                const yvex_fullmodel_collections *collections,
+                                int selected_target)
+{
+    yvex_cli_fullmodel_options family_probe;
+    yvex_token_input input;
+    yvex_error err;
+    const char *requested = context_requested_family(options);
+    const char *detected;
+    const char *source = "unknown";
+    const char *coverage_status;
+    unsigned long long model_max_context;
+    unsigned long long active_context = 0ull;
+    unsigned long long token_count = 0ull;
+    unsigned long long chunk_count = 0ull;
+    unsigned long long last_chunk = 0ull;
+    unsigned long long decode_start = 0ull;
+    int overflow_known = 0;
+    int overflow = 0;
+    int has_qkv;
+    int rc;
+
+    memset(&family_probe, 0, sizeof(family_probe));
+    memset(&input, 0, sizeof(input));
+    yvex_error_clear(&err);
+
+    family_probe.model = options ? options->model : NULL;
+    family_probe.family = options ? options->family : "auto";
+    detected = fullmodel_detect_family(&family_probe, arch, target_id);
+    if (!fullmodel_family_request_matches(requested, detected) ||
+        strcmp(detected, "deepseek") != 0) {
+        return context_print_unsupported_family(options,
+                                                ref && ref->path ? ref->path : "",
+                                                target_id,
+                                                target_class,
+                                                detected,
+                                                "context report supports DeepSeek-family GGUF artifacts first");
+    }
+
+    model_max_context = context_metadata_max_context(ctx, &source);
+    coverage_status = context_status_from_collections(collections, selected_target);
+    has_qkv = collections &&
+              collections->has_attention_q &&
+              collections->has_attention_k &&
+              collections->has_attention_v;
+
+    if (options && options->tokens_text) {
+        rc = yvex_token_input_parse_explicit(options->tokens_text, &input, &err);
+        if (rc != YVEX_OK) {
+            context_print_common_header(options,
+                                        "context-report-fail",
+                                        ref && ref->path ? ref->path : "",
+                                        target_id,
+                                        target_class,
+                                        "deepseek",
+                                        detected,
+                                        coverage_status,
+                                        coverage_status,
+                                        coverage_status);
+            printf("token_input_status: failed\n");
+            printf("reason: %s\n", yvex_error_message(&err));
+            printf("cleanup_attempted: true\n");
+            printf("cleanup_status: pass\n");
+            context_print_phases(coverage_status, coverage_status, coverage_status, "failed", "token-input");
+            return exit_for_status(rc);
+        }
+        token_count = input.token_count;
+    }
+
+    if (options && options->context_length_seen) {
+        active_context = options->context_length;
+        overflow_known = 1;
+    } else if (model_max_context > 0ull && !selected_target) {
+        active_context = model_max_context;
+        overflow_known = 1;
+    } else {
+        active_context = 0ull;
+    }
+    if (overflow_known && token_count > active_context) {
+        overflow = 1;
+    }
+    if (options && options->chunk_size_seen && token_count > 0ull) {
+        chunk_count = (token_count + options->chunk_size - 1ull) / options->chunk_size;
+        last_chunk = token_count % options->chunk_size;
+        if (last_chunk == 0ull) last_chunk = options->chunk_size;
+    }
+    decode_start = token_count;
+
+    context_print_common_header(options,
+                                "context-report",
+                                ref && ref->path ? ref->path : "",
+                                target_id,
+                                target_class,
+                                "deepseek",
+                                detected,
+                                coverage_status,
+                                coverage_status,
+                                coverage_status);
+    printf("report_options.include_attention: %s\n", options && options->include_attention ? "true" : "false");
+    printf("report_options.include_kv: %s\n", options && options->include_kv ? "true" : "false");
+    printf("report_options.include_prefill: %s\n", options && options->include_prefill ? "true" : "false");
+    printf("report_options.include_decode: %s\n", options && options->include_decode ? "true" : "false");
+    printf("report_options.include_blockers: %s\n", options && options->include_blockers ? "true" : "false");
+
+    printf("model_max_context: ");
+    if (model_max_context > 0ull) printf("%llu", model_max_context);
+    else printf("unknown");
+    printf("\n");
+    printf("model_max_context_source: %s\n", model_max_context > 0ull ? source : "metadata-missing-or-selected-slice");
+    printf("model_max_context_status: %s\n", model_max_context > 0ull ? "available" : "planned");
+    printf("requested_context: ");
+    if (options && options->context_length_seen) printf("%llu", options->context_length);
+    else printf("not-requested");
+    printf("\n");
+    printf("requested_context_source: %s\n", options && options->context_length_seen ? "operator-request" : "none");
+    printf("requested_context_status: %s\n", options && options->context_length_seen ? "reported-only" : "not-requested");
+    printf("active_context: ");
+    if (active_context > 0ull) printf("%llu", active_context);
+    else printf("diagnostic");
+    printf("\n");
+    printf("active_context_source: %s\n",
+           options && options->context_length_seen ? "operator-request" :
+           (model_max_context > 0ull && !selected_target ? "model-metadata" : "diagnostic-runtime-boundary"));
+    printf("active_context_status: %s\n", active_context > 0ull ? "reported-only" : "diagnostic");
+
+    printf("token_input_status: %s\n", options && options->tokens_text ? "available" : "not-provided");
+    printf("token_count: %llu\n", token_count);
+    printf("prompt_token_count: %llu\n", token_count);
+    printf("prefill_token_count: %llu\n", token_count);
+    printf("generated_token_count: 0\n");
+    printf("token_range_start: %s\n", token_count > 0ull ? "0" : "none");
+    printf("token_range_end: ");
+    if (token_count > 0ull) printf("%llu", token_count - 1ull);
+    else printf("none");
+    printf("\n");
+
+    printf("chunking_required: %s\n", options && options->chunk_size_seen ? "true" : "false");
+    printf("chunk_size: ");
+    if (options && options->chunk_size_seen) printf("%llu", options->chunk_size);
+    else printf("not-requested");
+    printf("\n");
+    printf("chunk_count: %llu\n", chunk_count);
+    printf("last_chunk_size: %llu\n", last_chunk);
+    printf("chunking_policy: %s\n", options && options->chunk_size_seen ? "explicit-token-chunks-report-only" : "not-requested");
+    printf("chunking_status: %s\n", options && options->chunk_size_seen ? "report-only" : "planned");
+
+    printf("prefill_boundary_status: report-only\n");
+    printf("prefill_position_start: %s\n", token_count > 0ull ? "0" : "none");
+    printf("prefill_position_end: %llu\n", token_count);
+    printf("prefill_context_ready: false\n");
+    printf("full_transformer_prefill_ready: false\n");
+    printf("decode_position_policy: prefill-end-token-count\n");
+    printf("decode_start_position: %llu\n", decode_start);
+    printf("decode_position_status: report-only\n");
+    printf("decode_context_ready: false\n");
+    printf("decode_ready: false\n");
+
+    printf("overflow_policy: bounded-diagnostic-refuse-before-mutation\n");
+    printf("context_overflow: %s\n", overflow_known ? (overflow ? "overflow" : "none") : "unknown");
+    printf("overflow_check_status: %s\n", overflow_known ? "pass" : "unknown");
+    printf("overflow_stop_reason: %s\n", overflow ? "context-limit" : "none");
+    printf("overflow_mutates_state: false\n");
+
+    printf("attention_dependency_status: %s\n", has_qkv ? "blocked-runtime-integration" : "blocked-missing-qkv");
+    printf("attention_context_ready: false\n");
+    printf("attention_position_policy: rope-or-family-specific-planned\n");
+    printf("rope_context_status: planned\n");
+    printf("mask_context_status: planned\n");
+    printf("kv_dependency_status: %s\n", has_qkv ? "blocked-runtime-integration" : "blocked-missing-qkv");
+    printf("kv_capacity_required: true\n");
+    printf("kv_capacity_status: planned\n");
+    printf("kv_context_positions: %s", active_context > 0ull ? "" : "unknown");
+    if (active_context > 0ull) printf("%llu", active_context);
+    printf("\n");
+    printf("kv_context_ready: false\n");
+    printf("real_attention_kv_ready: false\n");
+    printf("generation_context_status: bounded-diagnostic-only\n");
+    printf("bounded_generation_context_policy: context-limit-pre-append\n");
+    printf("full_generation_context_ready: false\n");
+    printf("generation_ready: false\n");
+    printf("context_blockers: %s\n",
+           selected_target
+               ? "selected runtime slice has no full context metadata, no real attention KV, no full transformer prefill, no real decode, no full generation"
+               : "full transformer prefill unsupported; real attention-backed KV unsupported; real decode unsupported; full generation unsupported");
+    printf("next_required_rows: MOE.CLASS.0,RUNTIME.KV.1,real-transformer-prefill,real-decode,real-output-head-logits,GEN.DEEPSEEK.0\n");
+    printf("cleanup_attempted: true\n");
+    printf("cleanup_status: pass\n");
+    context_print_phases(coverage_status, coverage_status, coverage_status, "report-only", NULL);
+    return 0;
+}
+
+int yvex_context_command(int argc, char **argv)
+{
+    yvex_cli_context_options options;
+    yvex_model_ref_options ref_options;
+    yvex_model_ref ref;
+    yvex_cli_tokenizer_context ctx;
+    yvex_fullmodel_collections collections;
+    yvex_error err;
+    const char *target_id;
+    const char *target_class;
+    yvex_arch arch;
+    unsigned long long tensor_count;
+    unsigned long long i;
+    int selected_target;
+    int rc;
+
+    yvex_error_clear(&err);
+    memset(&options, 0, sizeof(options));
+    memset(&ref_options, 0, sizeof(ref_options));
+    memset(&ref, 0, sizeof(ref));
+    memset(&ctx, 0, sizeof(ctx));
+    memset(&collections, 0, sizeof(collections));
+
+    rc = parse_context_options(argc, argv, &options);
+    if (rc == 1) return 0;
+    if (rc != 0) return rc;
+
+    if (strcmp(options.model, "glm-5.2-official-safetensors") == 0) {
+        context_print_unsupported_source_only(&options);
+        return 5;
+    }
+
+    ref_options.allow_registry = 1;
+    ref_options.registry_path = options.registry_path;
+    rc = yvex_model_ref_resolve(&ref, options.model, &ref_options, &err);
+    if (rc != YVEX_OK) {
+        context_print_common_header(&options,
+                                    "context-report-fail",
+                                    "",
+                                    "unknown",
+                                    "unknown",
+                                    "unknown",
+                                    "unknown",
+                                    "failed",
+                                    "failed",
+                                    "failed");
+        printf("reason: %s\n", yvex_error_message(&err));
+        printf("cleanup_attempted: true\n");
+        printf("cleanup_status: pass\n");
+        context_print_phases("failed", "failed", "failed", "failed", "resolve-model");
+        yvex_error_clear(&err);
+        return exit_for_status(rc);
+    }
+
+    rc = open_model_context(ref.path, &ctx, &err);
+    if (rc != YVEX_OK) {
+        context_print_common_header(&options,
+                                    "context-report-fail",
+                                    ref.path,
+                                    ref.alias && ref.alias[0] ? ref.alias : "path",
+                                    "GGUF-artifact",
+                                    "unknown",
+                                    "unknown",
+                                    "failed",
+                                    "failed",
+                                    "failed");
+        printf("reason: %s\n", yvex_error_message(&err));
+        printf("cleanup_attempted: true\n");
+        printf("cleanup_status: pass\n");
+        context_print_phases("failed", "failed", "failed", "failed", "context-profile");
+        yvex_error_clear(&err);
+        yvex_model_ref_clear(&ref);
+        return exit_for_status(rc);
+    }
+
+    tensor_count = yvex_tensor_table_count(ctx.table);
+    for (i = 0; i < tensor_count; ++i) {
+        const yvex_tensor_info *tensor = yvex_tensor_table_at(ctx.table, i);
+        if (tensor) fullmodel_classify_tensor(tensor, &collections);
+    }
+    if (yvex_gguf_metadata_find(ctx.gguf, "tokenizer.ggml.tokens") ||
+        yvex_gguf_metadata_find(ctx.gguf, "tokenizer.ggml.model")) {
+        collections.tokenizer = 1ull;
+        collections.has_tokenizer_metadata = 1;
+    }
+
+    arch = yvex_model_arch(ctx.model);
+    target_id = ref.alias && ref.alias[0] ? ref.alias : "path";
+    selected_target = fullmodel_is_selected_target(target_id) ||
+                      fullmodel_is_selected_target(options.model);
+    target_class = selected_target ? "selected-runtime-slice" : "candidate-GGUF-path";
+    rc = context_print_report(&options,
+                              &ref,
+                              &ctx,
+                              target_id,
+                              target_class,
+                              arch,
+                              &collections,
+                              selected_target);
+    close_model_context(&ctx);
+    yvex_model_ref_clear(&ref);
+    return rc;
+}
+
+void yvex_context_help(FILE *fp)
+{
+    fprintf(fp, "usage: yvex context report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [options]\n\n");
+    fprintf(fp, "Examples:\n");
+    fprintf(fp, "  yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --tokens 0,1,2,3\n");
+    fprintf(fp, "  yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --tokens 0,1,2,3 --chunk-size 2\n");
+    fprintf(fp, "  yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --tokens 0,1,2,3 --context-length 2\n\n");
+    fprintf(fp, "Options: --registry FILE --context-length N --tokens IDS --chunk-size N --include-attention --include-kv --include-prefill --include-decode --include-blockers\n\n");
+    fprintf(fp, "context report:\n");
+    fprintf(fp, "  report-only boundary for model/requested/active context, token counts, chunking policy, overflow behavior, prefill boundary, decode position policy, attention dependency, KV dependency, and runtime blockers.\n");
+    fprintf(fp, "  It reports bounded diagnostic context behavior separately from full model context readiness.\n");
+    fprintf(fp, "  It does not run full transformer prefill, does not execute real decode, does not write real attention-backed KV, does not generate, does not evaluate, does not benchmark, and does not report throughput.\n");
+    fprintf(fp, "Boundary: no long-context runtime support, no context extension support, no full model execution, no DeepSeek generation, no provider generation, no streaming generation, no eval, no benchmark.\n");
 }
 
 static void fullmodel_print_largest(const yvex_fullmodel_largest_tensor top[16],

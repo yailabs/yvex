@@ -343,7 +343,11 @@ Boundary:
   family-runtime maps descriptor facts into DeepSeek adapter facts only
   attention report maps adapter facts into attention requirements only
   KV report maps attention/family facts into KV cache class requirements only
+  context report maps model/requested/active context, token counts, chunking,
+  overflow, prefill boundary, decode position, and attention/KV dependencies only
   no uncontrolled full backend allocation
+  no long-context runtime support
+  no context extension support
   no full transformer attention
   no real QKV projection from model tensors
   no real attention-backed KV writes
@@ -388,6 +392,12 @@ Boundary:
 ./yvex kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --include-attention --include-context --include-residency --include-blockers
 ./yvex kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu
 ./yvex kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cuda
+./yvex help context
+./yvex context report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu
+./yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --tokens 0,1,2,3
+./yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --tokens 0,1,2,3 --chunk-size 2
+./yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --tokens 0,1,2,3 --context-length 2
+./yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cuda --tokens 0,1,2,3
 ```
 
 ## Lane 5 — DeepSeek CUDA Pressure Lane
@@ -537,6 +547,10 @@ YVEX can:
 - report DeepSeek KV cache class facts, diagnostic-versus-real KV boundary,
   layout/dtype/indexing/capacity/residency requirements, context and attention
   dependencies, and next runtime blockers without allocating full runtime KV.
+- report DeepSeek context class facts, model/requested/active context, token
+  counts, chunking policy, overflow behavior, prefill boundary, decode position
+  policy, attention/KV dependency, and next runtime blockers without running
+  full transformer prefill or real decode.
 
 YVEX does not currently implement:
 
@@ -550,6 +564,8 @@ YVEX does not currently implement:
 - real KV reads by decode;
 - paged, chunked, SSD-backed, or quantized KV runtime;
 - CUDA full KV allocation proof;
+- long-context runtime support;
+- context extension support;
 - complete transformer prefill;
 - real DeepSeek decode;
 - real output-head logits;

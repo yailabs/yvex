@@ -142,6 +142,7 @@ grep 'status: models-added' "$ROOT/add-rmsnorm.out"
 "$YVEX_BIN" commands > "$ROOT/commands.out"
 grep 'fullmodel[[:space:]]*full model inventory, materialization, descriptor, and family-runtime reports' "$ROOT/commands.out"
 grep 'attention[[:space:]]*attention class and KV requirement reports' "$ROOT/commands.out"
+grep 'context[[:space:]]*context class and runtime boundary reports' "$ROOT/commands.out"
 grep 'kv[[:space:]]*KV diagnostics and KV cache class reports' "$ROOT/commands.out"
 
 "$YVEX_BIN" help fullmodel > "$ROOT/help.out"
@@ -191,6 +192,19 @@ grep 'execute decode' "$ROOT/kv-help.out"
 grep 'generate' "$ROOT/kv-help.out"
 grep 'benchmark' "$ROOT/kv-help.out"
 grep 'diagnostic/minimal' "$ROOT/kv-help.out"
+
+"$YVEX_BIN" help context > "$ROOT/context-help.out"
+grep 'usage: yvex context report --model FILE_OR_ALIAS' "$ROOT/context-help.out"
+grep 'context report:' "$ROOT/context-help.out"
+grep 'report-only boundary' "$ROOT/context-help.out"
+grep 'model/requested/active context' "$ROOT/context-help.out"
+grep 'chunking policy' "$ROOT/context-help.out"
+grep 'overflow behavior' "$ROOT/context-help.out"
+grep 'does not run full transformer prefill' "$ROOT/context-help.out"
+grep 'does not execute real decode' "$ROOT/context-help.out"
+grep 'does not generate' "$ROOT/context-help.out"
+grep 'does not benchmark' "$ROOT/context-help.out"
+grep 'no long-context runtime support' "$ROOT/context-help.out"
 
 "$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" > "$ROOT/selected.out"
 grep 'status: fullmodel-report' "$ROOT/selected.out"
@@ -409,6 +423,31 @@ grep 'generation_ready: false' "$ROOT/selected-kv.out"
 grep 'generation: unsupported-full-model' "$ROOT/selected-kv.out"
 grep 'benchmark_status: not-measured' "$ROOT/selected-kv.out"
 
+"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" > "$ROOT/selected-context.out"
+grep 'context: report' "$ROOT/selected-context.out"
+grep 'status: context-report' "$ROOT/selected-context.out"
+grep 'target_id: deepseek4-v4-flash-selected-embed' "$ROOT/selected-context.out"
+grep 'target_class: selected-runtime-slice' "$ROOT/selected-context.out"
+grep 'backend: cpu' "$ROOT/selected-context.out"
+grep 'family: deepseek' "$ROOT/selected-context.out"
+grep 'family_detected: deepseek' "$ROOT/selected-context.out"
+grep 'family_runtime_status: partial' "$ROOT/selected-context.out"
+grep 'attention_class_status: partial' "$ROOT/selected-context.out"
+grep 'kv_class_status: partial' "$ROOT/selected-context.out"
+grep 'context_class_status: report-only' "$ROOT/selected-context.out"
+grep 'context_stage: report-only' "$ROOT/selected-context.out"
+grep 'runtime_claim: unsupported' "$ROOT/selected-context.out"
+grep 'model_max_context: 8' "$ROOT/selected-context.out"
+grep 'active_context: diagnostic' "$ROOT/selected-context.out"
+grep 'token_input_status: not-provided' "$ROOT/selected-context.out"
+grep 'full_transformer_prefill_ready: false' "$ROOT/selected-context.out"
+grep 'decode_context_ready: false' "$ROOT/selected-context.out"
+grep 'real_attention_kv_ready: false' "$ROOT/selected-context.out"
+grep 'full_generation_context_ready: false' "$ROOT/selected-context.out"
+grep 'generation_ready: false' "$ROOT/selected-context.out"
+grep 'generation: unsupported-full-model' "$ROOT/selected-context.out"
+grep 'benchmark_status: not-measured' "$ROOT/selected-context.out"
+
 "$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" > "$ROOT/rmsnorm.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm.out"
 grep 'normalization_tensors: 1' "$ROOT/rmsnorm.out"
@@ -524,6 +563,59 @@ grep 'family_requested: auto' "$ROOT/rmsnorm-kv-auto.out"
 grep 'family_detected: deepseek' "$ROOT/rmsnorm-kv-auto.out"
 grep 'status: kv-report' "$ROOT/rmsnorm-kv-auto.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-kv-auto.out"
+
+"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --tokens 0,1,2,3 --include-attention --include-kv --include-prefill --include-decode --include-blockers > "$ROOT/rmsnorm-context.out"
+grep 'context: report' "$ROOT/rmsnorm-context.out"
+grep 'status: context-report' "$ROOT/rmsnorm-context.out"
+grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-context.out"
+grep 'target_class: selected-runtime-slice' "$ROOT/rmsnorm-context.out"
+grep 'family: deepseek' "$ROOT/rmsnorm-context.out"
+grep 'family_runtime_status: partial' "$ROOT/rmsnorm-context.out"
+grep 'context_class_status: report-only' "$ROOT/rmsnorm-context.out"
+grep 'report_options.include_attention: true' "$ROOT/rmsnorm-context.out"
+grep 'report_options.include_kv: true' "$ROOT/rmsnorm-context.out"
+grep 'report_options.include_prefill: true' "$ROOT/rmsnorm-context.out"
+grep 'report_options.include_decode: true' "$ROOT/rmsnorm-context.out"
+grep 'token_input_status: available' "$ROOT/rmsnorm-context.out"
+grep 'token_count: 4' "$ROOT/rmsnorm-context.out"
+grep 'prompt_token_count: 4' "$ROOT/rmsnorm-context.out"
+grep 'prefill_token_count: 4' "$ROOT/rmsnorm-context.out"
+grep 'generated_token_count: 0' "$ROOT/rmsnorm-context.out"
+grep 'token_range_start: 0' "$ROOT/rmsnorm-context.out"
+grep 'token_range_end: 3' "$ROOT/rmsnorm-context.out"
+grep 'prefill_position_start: 0' "$ROOT/rmsnorm-context.out"
+grep 'prefill_position_end: 4' "$ROOT/rmsnorm-context.out"
+grep 'decode_position_policy: prefill-end-token-count' "$ROOT/rmsnorm-context.out"
+grep 'decode_start_position: 4' "$ROOT/rmsnorm-context.out"
+grep 'bounded_generation_context_policy: context-limit-pre-append' "$ROOT/rmsnorm-context.out"
+grep 'full_generation_context_ready: false' "$ROOT/rmsnorm-context.out"
+grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-context.out"
+grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-context.out"
+
+"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --registry "$REG" --tokens 0,1,2,3 > "$ROOT/rmsnorm-context-auto.out"
+grep 'family_requested: auto' "$ROOT/rmsnorm-context-auto.out"
+grep 'family_detected: deepseek' "$ROOT/rmsnorm-context-auto.out"
+grep 'status: context-report' "$ROOT/rmsnorm-context-auto.out"
+grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-context-auto.out"
+
+"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --tokens 0,1,2,3 --chunk-size 2 > "$ROOT/rmsnorm-context-chunk.out"
+grep 'chunking_required: true' "$ROOT/rmsnorm-context-chunk.out"
+grep 'chunk_size: 2' "$ROOT/rmsnorm-context-chunk.out"
+grep 'chunk_count: 2' "$ROOT/rmsnorm-context-chunk.out"
+grep 'last_chunk_size: 2' "$ROOT/rmsnorm-context-chunk.out"
+grep 'chunking_policy: explicit-token-chunks-report-only' "$ROOT/rmsnorm-context-chunk.out"
+grep 'chunking_status: report-only' "$ROOT/rmsnorm-context-chunk.out"
+grep 'full_transformer_prefill_ready: false' "$ROOT/rmsnorm-context-chunk.out"
+grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-context-chunk.out"
+
+"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --tokens 0,1,2,3 --context-length 2 > "$ROOT/rmsnorm-context-overflow.out"
+grep 'requested_context: 2' "$ROOT/rmsnorm-context-overflow.out"
+grep 'active_context: 2' "$ROOT/rmsnorm-context-overflow.out"
+grep 'context_overflow: overflow' "$ROOT/rmsnorm-context-overflow.out"
+grep 'overflow_check_status: pass' "$ROOT/rmsnorm-context-overflow.out"
+grep 'overflow_stop_reason: context-limit' "$ROOT/rmsnorm-context-overflow.out"
+grep 'overflow_mutates_state: false' "$ROOT/rmsnorm-context-overflow.out"
+grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-context-overflow.out"
 
 "$YVEX_BIN" fullmodel report --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 3 > "$ROOT/fullish.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish.out"
@@ -675,6 +767,41 @@ grep 'cuda_full_kv_allocation_proof: false' "$ROOT/fullish-kv-cuda.out"
 grep 'backend_allocation_attempted: false' "$ROOT/fullish-kv-cuda.out"
 grep 'real_attention_kv: unsupported' "$ROOT/fullish-kv-cuda.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-kv-cuda.out"
+
+"$YVEX_BIN" context report --model "$FULLISH" --family deepseek --backend cpu --tokens 0,1,2,3 --context-length 8 --chunk-size 2 > "$ROOT/fullish-context.out"
+grep 'context: report' "$ROOT/fullish-context.out"
+grep 'status: context-report' "$ROOT/fullish-context.out"
+grep 'target_class: candidate-GGUF-path' "$ROOT/fullish-context.out"
+grep 'backend: cpu' "$ROOT/fullish-context.out"
+grep 'family: deepseek' "$ROOT/fullish-context.out"
+grep 'family_runtime_status: complete' "$ROOT/fullish-context.out"
+grep 'attention_class_status: complete' "$ROOT/fullish-context.out"
+grep 'kv_class_status: complete' "$ROOT/fullish-context.out"
+grep 'context_class_status: report-only' "$ROOT/fullish-context.out"
+grep 'model_max_context: 128' "$ROOT/fullish-context.out"
+grep 'model_max_context_source: deepseek.context_length' "$ROOT/fullish-context.out"
+grep 'requested_context: 8' "$ROOT/fullish-context.out"
+grep 'active_context: 8' "$ROOT/fullish-context.out"
+grep 'token_count: 4' "$ROOT/fullish-context.out"
+grep 'chunk_count: 2' "$ROOT/fullish-context.out"
+grep 'last_chunk_size: 2' "$ROOT/fullish-context.out"
+grep 'context_overflow: none' "$ROOT/fullish-context.out"
+grep 'attention_dependency_status: blocked-runtime-integration' "$ROOT/fullish-context.out"
+grep 'kv_dependency_status: blocked-runtime-integration' "$ROOT/fullish-context.out"
+grep 'kv_context_positions: 8' "$ROOT/fullish-context.out"
+grep 'full_transformer_prefill_ready: false' "$ROOT/fullish-context.out"
+grep 'decode_context_ready: false' "$ROOT/fullish-context.out"
+grep 'full_generation_context_ready: false' "$ROOT/fullish-context.out"
+grep 'generation: unsupported-full-model' "$ROOT/fullish-context.out"
+grep 'benchmark_status: not-measured' "$ROOT/fullish-context.out"
+
+"$YVEX_BIN" context report --model "$FULLISH" --family deepseek --backend cuda --tokens 0,1,2,3 > "$ROOT/fullish-context-cuda.out"
+grep 'backend: cuda' "$ROOT/fullish-context-cuda.out"
+grep 'status: context-report' "$ROOT/fullish-context-cuda.out"
+grep 'model_max_context: 128' "$ROOT/fullish-context-cuda.out"
+grep 'full_transformer_prefill_ready: false' "$ROOT/fullish-context-cuda.out"
+grep 'decode_context_ready: false' "$ROOT/fullish-context-cuda.out"
+grep 'generation: unsupported-full-model' "$ROOT/fullish-context-cuda.out"
 
 "$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 20 > "$ROOT/fullish-plan.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish-plan.out"
@@ -860,6 +987,21 @@ grep 'decode_kv_read_ready: false' "$ROOT/glm-kv.out"
 grep 'generation: unsupported-full-model' "$ROOT/glm-kv.out"
 grep 'benchmark_status: not-measured' "$ROOT/glm-kv.out"
 
+"$YVEX_BIN" context report --model glm-5.2-official-safetensors --family glm --backend cpu > "$ROOT/glm-context.out" && exit 1 || true
+grep 'context: report' "$ROOT/glm-context.out"
+grep 'status: context-report-unsupported' "$ROOT/glm-context.out"
+grep 'target_class: official-source-huge-model' "$ROOT/glm-context.out"
+grep 'family: glm' "$ROOT/glm-context.out"
+grep 'family_detected: glm' "$ROOT/glm-context.out"
+grep 'model_max_context_status: unsupported-source-only' "$ROOT/glm-context.out"
+grep 'token_input_status: not-performed-source-only-target' "$ROOT/glm-context.out"
+grep 'active_context: unsupported' "$ROOT/glm-context.out"
+grep 'prefill_context_ready: false' "$ROOT/glm-context.out"
+grep 'decode_context_ready: false' "$ROOT/glm-context.out"
+grep 'real_attention_kv_ready: false' "$ROOT/glm-context.out"
+grep 'generation: unsupported-full-model' "$ROOT/glm-context.out"
+grep 'benchmark_status: not-measured' "$ROOT/glm-context.out"
+
 "$YVEX_BIN" fullmodel report --model "$ROOT/missing.gguf" > "$ROOT/missing.out" 2> "$ROOT/missing.err" && exit 1 || true
 grep 'status: fullmodel-report-fail' "$ROOT/missing.out"
 grep 'artifact_exists: false' "$ROOT/missing.out"
@@ -941,6 +1083,15 @@ grep 'real_attention_kv: unsupported' "$ROOT/bad-kv-family.out"
 grep 'kv_layout: unsupported' "$ROOT/bad-kv-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/bad-kv-family.out"
 
+"$YVEX_BIN" context report --model "$FULLISH" --family unknown-family --backend cpu > "$ROOT/bad-context-family.out" 2> "$ROOT/bad-context-family.err" && exit 1 || true
+grep 'status: context-report-unsupported' "$ROOT/bad-context-family.out"
+grep 'family_requested: unknown-family' "$ROOT/bad-context-family.out"
+grep 'runtime_claim: unsupported' "$ROOT/bad-context-family.out"
+grep 'active_context: unsupported' "$ROOT/bad-context-family.out"
+grep 'decode_context_ready: false' "$ROOT/bad-context-family.out"
+grep 'full_generation_context_ready: false' "$ROOT/bad-context-family.out"
+grep 'generation: unsupported-full-model' "$ROOT/bad-context-family.out"
+
 for file in \
   "$ROOT/selected-plan.out" \
   "$ROOT/selected-materialize.out" \
@@ -948,6 +1099,7 @@ for file in \
 	  "$ROOT/selected-family.out" \
 	  "$ROOT/selected-attention.out" \
 	  "$ROOT/selected-kv.out" \
+	  "$ROOT/selected-context.out" \
 	  "$ROOT/rmsnorm-plan.out" \
 	  "$ROOT/rmsnorm-materialize.out" \
 	  "$ROOT/rmsnorm-descriptor.out" \
@@ -957,6 +1109,10 @@ for file in \
 	  "$ROOT/rmsnorm-attention-auto.out" \
 	  "$ROOT/rmsnorm-kv.out" \
 	  "$ROOT/rmsnorm-kv-auto.out" \
+	  "$ROOT/rmsnorm-context.out" \
+	  "$ROOT/rmsnorm-context-auto.out" \
+	  "$ROOT/rmsnorm-context-chunk.out" \
+	  "$ROOT/rmsnorm-context-overflow.out" \
 	  "$ROOT/fullish-plan.out" \
 	  "$ROOT/fullish-plan-cuda.out" \
 	  "$ROOT/fullish-descriptor.out" \
@@ -967,6 +1123,8 @@ for file in \
 	  "$ROOT/fullish-attention-cuda.out" \
 	  "$ROOT/fullish-kv.out" \
 	  "$ROOT/fullish-kv-cuda.out" \
+	  "$ROOT/fullish-context.out" \
+	  "$ROOT/fullish-context-cuda.out" \
 	  "$ROOT/fullish-materialize.out" \
 	  "$ROOT/fullish-materialize-dry-run.out" \
 	  "$ROOT/fullish-materialize-plan-only.out" \
@@ -978,8 +1136,10 @@ for file in \
 	  "$ROOT/hybrid.out" \
 	  "$ROOT/glm-attention.out" \
 	  "$ROOT/glm-kv.out" \
+	  "$ROOT/glm-context.out" \
 	  "$ROOT/bad-attention-family.out" \
-	  "$ROOT/bad-kv-family.out"
+	  "$ROOT/bad-kv-family.out" \
+	  "$ROOT/bad-context-family.out"
 do
   pattern='full_model_execution: tr''ue'
   ! grep "$pattern" "$file"
@@ -1007,6 +1167,12 @@ do
 	  ! grep "$pattern" "$file"
 	  pattern='decode_kv_consumer_rea''dy: true'
 	  ! grep "$pattern" "$file"
+	  pattern='full_transformer_prefill_rea''dy: true'
+	  ! grep "$pattern" "$file"
+	  pattern='decode_context_rea''dy: true'
+	  ! grep "$pattern" "$file"
+	  pattern='full_generation_context_rea''dy: true'
+	  ! grep "$pattern" "$file"
 	  pattern='benchmark_status: mea''sured'
 	  ! grep "$pattern" "$file"
   pattern='tok/''s'
@@ -1024,6 +1190,12 @@ do
 	  pattern='full KV allocation imple''mented'
 	  ! grep "$pattern" "$file"
 	  pattern='full transformer attention imple''mented'
+	  ! grep "$pattern" "$file"
+	  pattern='long context imple''mented'
+	  ! grep "$pattern" "$file"
+	  pattern='context extension imple''mented'
+	  ! grep "$pattern" "$file"
+	  pattern='DeepSeek context sup''port'
 	  ! grep "$pattern" "$file"
   pattern='inference rea''dy'
   ! grep "$pattern" "$file"

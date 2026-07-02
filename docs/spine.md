@@ -1627,6 +1627,18 @@ selected-slice partial KV report
 source-only KV refusal
 unknown-family KV refusal
 next runtime dependency report after KV class mapping
+context class report command
+model/requested/active context report
+token input count report
+chunking policy report
+overflow policy report
+decode position policy report
+bounded diagnostic versus full runtime context boundary
+attention/KV context dependency report
+selected-slice partial context report
+source-only context refusal
+unknown-family context refusal
+next runtime dependency report after context class mapping
 routing-aware speculative verification doctrine in spine
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
@@ -1798,6 +1810,8 @@ SSD-backed KV
 quantized KV
 CUDA full KV allocation proof
 full transformer prefill
+long-context runtime support
+context extension support
 full model decode
 real DeepSeek decode
 real output-head logits-producing runtime path
@@ -1894,7 +1908,7 @@ tables.
 | TENSOR.COLLECTION.1 | planned | tensor-collection | DeepSeek tensor collection report | selected DeepSeek tensors map into explicit runtime collections |
 | TENSOR.COLLECTION.2 | planned | tensor-collection | GLM tensor collection inventory | GLM source tensor names map into collection candidates without runtime claim |
 | ATTENTION.CLASS.0 | complete | attention | Attention class report | `yvex attention report` is command-visible for DeepSeek-family artifacts, mapping family-runtime facts into attention type/status, head layout, Q/K/V/O role requirements, RoPE/position requirements, mask rules, KV requirements, context blockers, graph primitive versus full-transformer attention distinction, backend requirements, selected-slice partial reports, source-only refusals, unknown-family refusals, and next runtime dependencies without full transformer attention execution, real attention-backed KV, full model execution, DeepSeek generation, provider generation, eval, benchmark, or throughput claim |
-| CONTEXT.CLASS.0 | planned | context | Context class report | model max context, requested context, chunking policy, overflow behavior, and runtime blockers are reported |
+| CONTEXT.CLASS.0 | complete | context | Context class report | `yvex context report` is command-visible with model/requested/active context fields, token input counts, chunking policy, overflow behavior, decode position policy, bounded diagnostic versus full runtime context distinction, attention/KV dependency reports, selected-slice partial reports, source-only refusals, unknown-family refusals, backend reports, and next runtime dependencies without full transformer prefill, real decode, full model execution, DeepSeek generation, provider generation, eval, benchmark, or throughput claim |
 | KV.CACHE.0 | complete | kv | KV cache class report | `yvex kv report` is command-visible with diagnostic-vs-real KV boundary, layout/dtype/layer/head/position/capacity requirements, residency classes, context dependency, attention dependency, prefill write/decode read requirements, selected-slice partial reports, source-only refusals, unknown-family refusals, backend reports, and next runtime dependencies without real attention-backed KV writes, full transformer prefill, decode, logits, generation, provider generation, eval, benchmark, or throughput claim |
 | MOE.CLASS.0 | planned | moe | MoE model-class report | expert count, active expert count, router facts, shared experts, and expert tensor classes are reported |
 | MOE.ACT.0 | planned | moe | Expert activation boundary | router logits, top-k selection, expert dispatch, accumulation, and cleanup are implemented and tested |
@@ -3368,18 +3382,19 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-CONTEXT.CLASS.0 - Context class report
+MOE.CLASS.0 - MoE model-class report
 ```
 
-CONTEXT.CLASS.0 must make context semantics command-visible after attention and
-KV class reports. The next boundary is model max context, requested context,
-active context, chunking policy, overflow behavior, decode position policy, and
-runtime blockers. It must not claim full transformer prefill, full model decode,
-full model execution, real DeepSeek generation, provider generation, streaming
-generation, evaluation, benchmark readiness, or throughput.
+MOE.CLASS.0 must make MoE model-class facts command-visible after attention, KV,
+and context class reports. The next boundary is expert count, active expert
+count, router facts, shared experts, expert tensor classes, storage/residency
+pressure, and runtime blockers. It must not claim expert activation, full
+transformer prefill, full model decode, full model execution, real DeepSeek
+generation, provider generation, streaming generation, evaluation, benchmark
+readiness, or throughput.
 
 Algorithm/CLI research hardening runs in parallel with runtime closure. It does
-not replace CONTEXT.CLASS.0 or the current runtime Active Next.
+not replace MOE.CLASS.0 or the current runtime Active Next.
 
 GEN.CONTRACT.0 hardens the contract for the generation loop. GEN.LOOP.0 is
 complete for bounded diagnostic loop control only.
@@ -3398,11 +3413,11 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-CONTEXT.CLASS.0 - Context class report
+MOE.CLASS.0 - MoE model-class report
 ```
 
 SPINE.METAL.QWEN.0 records a future parallel pressure lane. It does not replace
-the current Active Next. Runtime active next remains CONTEXT.CLASS.0.
+the current Active Next. Runtime active next remains MOE.CLASS.0.
 
 CLI.GEN.0 is complete as an operator-grade command surface over the bounded
 diagnostic generation loop: stable help, normal/trace/cancel/context examples,
@@ -3451,14 +3466,14 @@ selected-position activation handoff. It is not full transformer prefill,
 decode, logits, sampling, generation, server generation, evaluation, or
 benchmark readiness.
 
-After KV.CACHE.0, the KV report can map DeepSeek-family and attention-class
-facts into diagnostic-versus-real KV boundaries, layout/dtype/indexing/capacity
-requirements, residency classes, context dependency, prefill write/decode read
-requirements, and next runtime dependencies. CONTEXT.CLASS.0 remains next
-because real transformer prefill and decode need explicit context semantics
-before KV capacity, overflow policy, decode positions, output-head logits,
-sampling, or generation can advance. Real model output-head logits, real
-vocabulary sampling, full DeepSeek runtime work, OS signal cancellation,
+After CONTEXT.CLASS.0, the context report can map DeepSeek-family, attention,
+and KV facts into model/requested/active context, token counts, chunking,
+overflow behavior, prefill boundary, decode position policy, bounded
+diagnostic versus full runtime context, and next runtime dependencies.
+MOE.CLASS.0 remains next because DeepSeek full runtime needs explicit MoE facts
+before real transformer prefill, expert activation, real decode, output-head
+logits, sampling, or generation can advance. Real model output-head logits,
+real vocabulary sampling, full DeepSeek runtime work, OS signal cancellation,
 provider/server generation, streaming, evaluation, and benchmark measurement
 remain planned tracks.
 
@@ -3487,6 +3502,7 @@ Current command-surface audit:
 ./yvex help input
 ./yvex help prefill
 ./yvex help kv
+./yvex help context
 ./yvex help engine
 ./yvex help session
 ./yvex help integrity
@@ -3497,6 +3513,7 @@ Bounded decode/logits/sampling/generation closure proof sequence:
 
 ```sh
 ./yvex kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --include-attention --include-context --include-residency --include-blockers
+./yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --tokens 0,1,2,3 --chunk-size 2 --include-attention --include-kv --include-prefill --include-decode --include-blockers
 ./yvex decode --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3
 ./yvex logits --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3
 ./yvex sample --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3

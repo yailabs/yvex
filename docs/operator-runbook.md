@@ -46,6 +46,11 @@ capacity, context dependency, residency class, attention dependency, and next
 runtime blockers. It does not allocate full runtime KV, write real
 attention-backed KV, read KV from real decode, generate, evaluate, benchmark, or
 report throughput.
+`yvex context report` makes model/requested/active context, token counts,
+chunking, overflow behavior, prefill boundary, decode position policy,
+attention/KV dependency, and blockers visible. It is report-only and does not
+run full transformer prefill, execute real decode, extend context, generate,
+evaluate, benchmark, or report throughput.
 
 ## Runbook Index
 
@@ -66,7 +71,7 @@ Covers:
 - segment-summary prefill;
 - minimal KV diagnostics;
 - bounded diagnostic generate help and copy-pack commands;
-- fullmodel inventory, materialization planning, proof/refusal, runtime descriptor, family-runtime, attention, and KV cache class reports;
+- fullmodel inventory, materialization planning, proof/refusal, runtime descriptor, family-runtime, attention, KV cache class, and context class reports;
 - CUDA selected checks;
 - daemon and accepted-only diagnostics.
 
@@ -79,7 +84,7 @@ Use this when working with the current GLM-5.2 official-source tensor target.
 Covers:
 
 - GLM target path reporting;
-- GLM source-only fullmodel unsupported report, descriptor, family-runtime, attention, KV report, and materialization refusal;
+- GLM source-only fullmodel unsupported report, descriptor, family-runtime, attention, KV, context report, and materialization refusal;
 - GLM source-download start and status checks;
 - Hugging Face CLI and repository namespace boundaries;
 - GLM boundaries.
@@ -96,7 +101,7 @@ Covers:
 
 - operator storage configuration;
 - fast regression;
-- fullmodel report, materialization-plan, materialize, descriptor, family-runtime, attention, and KV command-surface checks;
+- fullmodel report, materialization-plan, materialize, descriptor, family-runtime, attention, KV, and context command-surface checks;
 - graph-only fixture regression;
 - daemon and accepted-only runtime diagnostics;
 - repository validation and artifact hygiene.

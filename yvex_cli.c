@@ -34,6 +34,7 @@ static const yvex_cli_command yvex_commands[] = {
     { "backend", "Inspect backend availability.", yvex_backend_command, yvex_backend_help },
     { "chat", "Open the diagnostic console.", yvex_chat_command, yvex_chat_help },
     { "commands", "List implemented CLI commands.", command_commands, command_commands_help },
+    { "context", "context class and runtime boundary reports.", yvex_context_command, yvex_context_help },
     { "convert", "Plan or emit selected GGUF conversions.", yvex_convert_command, yvex_convert_help },
     { "cuda-info", "Probe CUDA devices.", yvex_cuda_info_command, yvex_cuda_info_help },
     { "decode", "Create one bounded diagnostic decode-state step.", yvex_decode_command, yvex_decode_help },

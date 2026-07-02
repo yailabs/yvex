@@ -14,8 +14,8 @@ evaluation, or benchmark capability.
 Purpose:
   Quickly check command discovery, path resolution, model-target reporting,
   fullmodel report/materialization-plan/materialize/descriptor/family-runtime
-  help, attention and KV report help, tokenizer fixture diagnostics, and minimal KV
-  diagnostics.
+  help, attention/KV/context report help, tokenizer fixture diagnostics, and
+  minimal KV diagnostics.
 
 Requires:
   Repository root.
@@ -36,7 +36,7 @@ Boundary:
   read/diagnostic command surface only
   no source conversion
   no alias refresh
-  bounded fullmodel proof/refusal, descriptor, family-runtime, attention, and KV diagnostics only
+  bounded fullmodel proof/refusal, descriptor, family-runtime, attention, KV, and context diagnostics only
   no uncontrolled full backend allocation
   no daemon
   no generation claim
@@ -51,6 +51,7 @@ make
 ./yvex help fullmodel
 ./yvex help attention
 ./yvex help kv
+./yvex help context
 ./yvexd --help
 ./yvex paths
 ./yvex paths resolve --family deepseek --kind source
@@ -70,6 +71,7 @@ make
 ./yvex fullmodel descriptor --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
 ./yvex attention report --model glm-5.2-official-safetensors --family glm --backend cpu
 ./yvex kv report --model glm-5.2-official-safetensors --family glm --backend cpu
+./yvex context report --model glm-5.2-official-safetensors --family glm --backend cpu
 ./yvex backend cpu
 ./yvex tokenizer tests/fixtures/gguf/valid-tokenizer-simple.gguf
 ./yvex tokenize tests/fixtures/gguf/valid-tokenizer-simple.gguf --text "hello"

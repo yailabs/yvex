@@ -149,6 +149,8 @@ int yvex_backend_command(int argc, char **argv);
 void yvex_backend_help(FILE *fp);
 int yvex_chat_command(int argc, char **argv);
 void yvex_chat_help(FILE *fp);
+int yvex_context_command(int argc, char **argv);
+void yvex_context_help(FILE *fp);
 int yvex_convert_command(int argc, char **argv);
 void yvex_convert_help(FILE *fp);
 int yvex_cuda_info_command(int argc, char **argv);
