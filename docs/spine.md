@@ -320,6 +320,71 @@ benchmark harness.
 
 External speculative decoding evidence is not YVEX runtime execution.
 
+## Token Verification and Verification-Cost Doctrine
+
+Speculative generation is not only draft decoding.
+
+YVEX separates speculative generation into:
+
+```text
+draft proposal:
+  a draft path proposes one or more candidate tokens.
+
+target verification:
+  the target model verifies candidate tokens and determines the accepted prefix.
+
+verification-cost control:
+  the runtime estimates whether verifying the proposed token set is cheaper
+  than normal baseline decode.
+
+accepted-token accounting:
+  only target-verified tokens may become accepted/generated tokens.
+
+KV and runtime-state accounting:
+  accepted tokens update runtime state; rejected tokens must not corrupt KV,
+  sequence state, logits state, expert state, traces, or cleanup accounting.
+```
+
+For dense models, target verification cost is mostly controlled by target
+forward cost, draft-target alignment, accepted prefix length, batching behavior,
+and draft overhead.
+
+For MoE models, target verification cost also depends on router execution,
+expert fanout, expert residency, expert dispatch, expert memory movement,
+expert activation balance, and KV consistency.
+
+A MoE speculative path must therefore be verification-cost-aware, not only
+confidence-aware.
+
+YVEX may later track speculative verification utility as:
+
+```text
+accepted_token_gain / target_verification_cost
+```
+
+For MoE targets, `target_verification_cost` may include:
+
+```text
+router work
+activated expert count
+unique expert fanout
+expert residency state
+expert bytes moved
+dispatch/combination overhead
+KV mutation or rollback cost
+target logits cost
+```
+
+A high-confidence draft is not automatically useful if target verification
+activates expensive or non-resident experts.
+
+A lower-confidence draft may still be useful if target verification remains
+cheap and produces accepted tokens.
+
+This doctrine does not implement speculative decoding, routing-aware
+verification, expert budgeting, KV rollback, accepted-token accounting, or
+benchmarking.
+
 ## 2.1 Canonical Block Directory
 
 YVEX implementation blocks:
@@ -1029,6 +1094,14 @@ DeepSeek-specific speculative decode:
   DSpark/DFlash/HyperDFlash-like reference lane only until YVEX implements its
   own draft, verification, acceptance accounting, and benchmark path.
 
+routing-aware speculative verification:
+  planned MoE-oriented verification family where draft length or speculation
+  enablement depends on both expected token acceptance and expected target
+  verification cost, including router and expert behavior. It is reference-only
+  until baseline generation, target verification, accepted-token accounting, KV
+  state rules, expert activation accounting, command proof, and benchmark
+  comparison exist.
+
 parallel or multi-token prediction decode:
   future family-specific row; not a replacement for baseline decode unless
   verified by target-model semantics.
@@ -1554,6 +1627,7 @@ selected-slice partial KV report
 source-only KV refusal
 unknown-family KV refusal
 next runtime dependency report after KV class mapping
+routing-aware speculative verification doctrine in spine
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -1951,6 +2025,7 @@ tables.
 | M16 | planned | server | Provider/server generation boundary | daemon/server generation uses runtime-backed generation path |
 | M17 | planned | profile | Trace/profile hardening for generation | traces and profiles identify artifact/backend/graph/KV/decode/logits/sampling/server failures |
 | SPINE.GENERATION.TARGET.0 | complete | docs | DeepSeek generation and speculative throughput target envelope | spine records DeepSeek V4 Flash full-generation target, internal decode throughput target, DSpark external reference doctrine, and non-claim benchmark boundary |
+| SPINE.SPEC.VERIFICATION.0 | complete | docs | Token verification and verification-cost doctrine | spine separates draft proposal, target verification, verification-cost control, accepted-token accounting, KV/state accounting, and MoE routing-aware verification boundaries without speculative runtime, DeepSeek generation, benchmark, throughput, or external-runner claim |
 | SPINE.METAL.QWEN.0 | complete | docs | Qwen Metal pressure lane | spine records Qwen on Apple Silicon / Metal as a reduced-scale portability and full-runtime pressure lane without Metal support, Qwen runtime, generation, eval, benchmark, or throughput claim |
 | HARDWARE.PROFILE.MAC.0 | planned | hardware | Apple Silicon Mac hardware profile | MacBook Apple Silicon CPU/GPU/unified-memory/storage profile is reported without backend or model capability claim |
 | COMPUTE.BACKEND.METAL.0 | planned | backend | Metal feasibility profile | Metal build/toolchain/device/memory feasibility is reported without backend op support claim |
@@ -1968,6 +2043,11 @@ tables.
 | BENCH.DEEPSEEK.DECODE.0 | planned | bench | DeepSeek V4 Flash baseline decode throughput target | after generation exists, benchmark harness measures decode tok/s with artifact identity, qtype, context, backend, machine, command, and reproducibility metadata |
 | BENCH.DEEPSEEK.GEN.0 | planned | bench | DeepSeek V4 Flash end-to-end generation throughput target | after generation exists, benchmark harness measures prompt plus generated-token throughput separately from prefill |
 | SPEC.DSPARK.REF.0 | planned | reference | DSpark speculative decoding reference | DSpark is recorded as external reference evidence for semi-autoregressive drafting, confidence scheduling, and hardware-aware verification, not as YVEX runtime capability |
+| SPEC.VERIFY.0 | planned | generation | Token verification semantics | target-model verification, accepted prefix, rejected-token behavior, state mutation boundary, and cleanup rules are reported without speculative runtime claim |
+| SPEC.VERIFY.COST.0 | planned | generation | Verification-cost utility report | speculative verification utility reports accepted-token gain versus target verification cost without runtime acceleration or benchmark claim |
+| SPEC.MOE.ROUTING.0 | planned | moe | Routing-aware verification report | MoE speculative verification reports router fanout, activated experts, expert residency, expert movement, and verification blockers without MoE speculative runtime claim |
+| SPEC.MOE.EXPERT.BUDGET.0 | planned | moe | Expert-budget verification policy | future verification policy constrains expert fanout/movement during speculative verification without changing target correctness semantics |
+| SPEC.DEEPSEEK.ACCOUNTING.0 | planned | generation | DeepSeek accepted-token and expert accounting | accepted/rejected speculative tokens are accounted with KV, expert-routing, cleanup, and trace semantics after baseline DeepSeek generation exists |
 | SPEC.DEEPSEEK.0 | planned | generation | DeepSeek speculative decoding target | after baseline generation exists, YVEX may implement draft, verification, accepted-token accounting, and speculative generation over DeepSeek target runtime |
 | BENCH.DEEPSEEK.SPEC.0 | planned | bench | DeepSeek speculative generation benchmark | after speculative decoding exists, benchmark harness measures accepted tokens, verification cost, latency, throughput, and speedup over YVEX baseline generation |
 | FULLMODEL.0 | complete | model | Full model inventory and placement plan | `yvex fullmodel report --model FILE_OR_ALIAS` reports GGUF metadata/tensor-directory inventory, qtype/dtype summaries, tensor collections, role coverage, memory and CPU/CUDA placement pressure, and runtime blockers without payload materialization, backend allocation, full model execution, generation, evaluation, or benchmark claim |
@@ -2141,6 +2221,13 @@ speedup measurement against YVEX baseline
 DSpark is a reference design for this track because it combines
 semi-autoregressive drafting with confidence-scheduled verification and
 hardware-aware scheduling.
+
+DSpark-like confidence scheduling is reference evidence only. For dense
+targets, confidence may help choose the number of drafted tokens. For MoE
+targets, confidence is insufficient by itself because target verification cost
+also depends on router fanout, expert residency, expert dispatch, and KV/state
+accounting. YVEX speculative work must distinguish dense verification cost from
+MoE routing-aware verification cost before claiming acceleration.
 
 DSpark evidence remains external evidence. It does not imply YVEX implements
 speculative decoding and does not imply YVEX reaches any throughput target.
@@ -3729,8 +3816,16 @@ no runtime file change for spine-only rebases
 - DSpark and other speculative decoding systems are external reference evidence
   only until YVEX implements its own speculative path.
 - Speculative decoding may not be promoted before baseline generation exists.
+- No speculative decoding claim before target-model verification semantics
+  exist.
+- No MoE speculative claim before router, expert activation, expert residency,
+  KV/state accounting, and accepted-token accounting exist.
+- No confidence-only speculative scheduler may claim MoE acceleration without
+  verification-cost accounting.
 - A speculative path must measure accepted tokens, rejected tokens,
   verification cost, latency, throughput, and speedup against YVEX baseline.
+- No speculative benchmark may be reported without comparison against YVEX
+  baseline generation on the same model/artifact/backend/context/machine.
 - External DSpark serving numbers cannot close a YVEX benchmark row.
 - No status promotion without command proof from the validation/audit gate.
 - No M-series completion status until the relevant runtime state exists in code
