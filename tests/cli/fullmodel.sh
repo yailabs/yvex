@@ -140,23 +140,26 @@ grep 'status: models-added' "$ROOT/add-selected.out"
 grep 'status: models-added' "$ROOT/add-rmsnorm.out"
 
 "$YVEX_BIN" commands > "$ROOT/commands.out"
-grep 'fullmodel[[:space:]]*full model inventory, materialization, and runtime descriptor reports' "$ROOT/commands.out"
+grep 'fullmodel[[:space:]]*full model inventory, materialization, descriptor, and family-runtime reports' "$ROOT/commands.out"
 
 "$YVEX_BIN" help fullmodel > "$ROOT/help.out"
 grep 'usage: yvex fullmodel report --model FILE_OR_ALIAS' "$ROOT/help.out"
 grep 'usage: yvex fullmodel materialization-plan --model FILE_OR_ALIAS' "$ROOT/help.out"
 grep 'usage: yvex fullmodel materialize --model FILE_OR_ALIAS' "$ROOT/help.out"
 grep 'usage: yvex fullmodel descriptor --model FILE_OR_ALIAS' "$ROOT/help.out"
+grep 'usage: yvex fullmodel family-runtime --model FILE_OR_ALIAS' "$ROOT/help.out"
 grep 'fullmodel report:' "$ROOT/help.out"
 grep 'fullmodel materialization-plan:' "$ROOT/help.out"
 grep 'fullmodel materialization proof:' "$ROOT/help.out"
 grep 'fullmodel descriptor:' "$ROOT/help.out"
+grep 'fullmodel family-runtime:' "$ROOT/help.out"
 grep 'controlled proof over a tiny full-ish GGUF tensor set' "$ROOT/help.out"
 grep 'allocates and releases only the bounded required proof tensors' "$ROOT/help.out"
 grep 'planning/reporting boundary for tensor roles' "$ROOT/help.out"
-grep 'does not execute the model' "$ROOT/help.out"
-grep 'does not.*generate' "$ROOT/help.out"
-grep 'does not.*benchmark' "$ROOT/help.out"
+grep 'maps descriptor facts into model-family runtime adapter facts' "$ROOT/help.out"
+grep 'do not execute the model' "$ROOT/help.out"
+grep 'do not.*generate' "$ROOT/help.out"
+grep 'do not.*benchmark' "$ROOT/help.out"
 grep 'no full model execution' "$ROOT/help.out"
 grep 'no inference readiness' "$ROOT/help.out"
 grep 'no DeepSeek generation' "$ROOT/help.out"
@@ -254,6 +257,42 @@ grep 'decode_ready: false' "$ROOT/selected-descriptor.out"
 grep 'sampling_ready: false' "$ROOT/selected-descriptor.out"
 grep 'full runtime tensor set incomplete' "$ROOT/selected-descriptor.out"
 
+"$YVEX_BIN" fullmodel family-runtime --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" > "$ROOT/selected-family.out"
+grep 'family_runtime: report' "$ROOT/selected-family.out"
+grep 'status: fullmodel-family-runtime' "$ROOT/selected-family.out"
+grep 'target_id: deepseek4-v4-flash-selected-embed' "$ROOT/selected-family.out"
+grep 'target_class: selected-runtime-slice' "$ROOT/selected-family.out"
+grep 'family: deepseek' "$ROOT/selected-family.out"
+grep 'family_detected: deepseek' "$ROOT/selected-family.out"
+grep 'family_requested: deepseek' "$ROOT/selected-family.out"
+grep 'family_adapter: deepseek-runtime-report' "$ROOT/selected-family.out"
+grep 'family_adapter_status: partial' "$ROOT/selected-family.out"
+grep 'family_runtime_stage: report-only' "$ROOT/selected-family.out"
+grep 'runtime_claim: unsupported' "$ROOT/selected-family.out"
+grep 'token_embedding_role: present' "$ROOT/selected-family.out"
+grep 'attention_norm_role: missing' "$ROOT/selected-family.out"
+grep 'q_projection_role: missing' "$ROOT/selected-family.out"
+grep 'k_projection_role: missing' "$ROOT/selected-family.out"
+grep 'v_projection_role: missing' "$ROOT/selected-family.out"
+grep 'o_projection_role: missing' "$ROOT/selected-family.out"
+grep 'output_head_role: missing' "$ROOT/selected-family.out"
+grep 'attention_rules: blocked-missing-qkv' "$ROOT/selected-family.out"
+grep 'graph.attention_primitive: implemented-fixture' "$ROOT/selected-family.out"
+grep 'graph.full_attention_from_model_tensors: unsupported' "$ROOT/selected-family.out"
+grep 'graph.full_transformer_block_from_model_tensors: unsupported' "$ROOT/selected-family.out"
+grep 'kv_write_ready: false' "$ROOT/selected-family.out"
+grep 'kv_read_ready: false' "$ROOT/selected-family.out"
+grep 'logits_projection_ready: false' "$ROOT/selected-family.out"
+grep 'real_output_head_logits: false' "$ROOT/selected-family.out"
+grep 'prefill_ready: false' "$ROOT/selected-family.out"
+grep 'decode_ready: false' "$ROOT/selected-family.out"
+grep 'logits_ready: false' "$ROOT/selected-family.out"
+grep 'sampling_ready: false' "$ROOT/selected-family.out"
+grep 'runtime_execution_ready: false' "$ROOT/selected-family.out"
+grep 'generation: unsupported-full-model' "$ROOT/selected-family.out"
+grep 'benchmark_status: not-measured' "$ROOT/selected-family.out"
+grep 'next_required_rows: ATTENTION.CLASS.0' "$ROOT/selected-family.out"
+
 "$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" > "$ROOT/rmsnorm.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm.out"
 grep 'normalization_tensors: 1' "$ROOT/rmsnorm.out"
@@ -292,6 +331,29 @@ grep 'decode_ready: false' "$ROOT/rmsnorm-descriptor.out"
 grep 'logits_ready: false' "$ROOT/rmsnorm-descriptor.out"
 grep 'sampling_ready: false' "$ROOT/rmsnorm-descriptor.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-descriptor.out"
+
+"$YVEX_BIN" fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --include-blockers --include-roles --include-graph --include-kv --include-moe --include-output > "$ROOT/rmsnorm-family.out"
+grep 'family_runtime: report' "$ROOT/rmsnorm-family.out"
+grep 'status: fullmodel-family-runtime' "$ROOT/rmsnorm-family.out"
+grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-family.out"
+grep 'family_adapter_status: partial' "$ROOT/rmsnorm-family.out"
+grep 'token_embedding_role: present' "$ROOT/rmsnorm-family.out"
+grep 'attention_norm_role: present' "$ROOT/rmsnorm-family.out"
+grep 'q_projection_role: missing' "$ROOT/rmsnorm-family.out"
+grep 'k_projection_role: missing' "$ROOT/rmsnorm-family.out"
+grep 'v_projection_role: missing' "$ROOT/rmsnorm-family.out"
+grep 'o_projection_role: missing' "$ROOT/rmsnorm-family.out"
+grep 'output_head_role: missing' "$ROOT/rmsnorm-family.out"
+grep 'attention_rule_status: blocked-missing-qkv' "$ROOT/rmsnorm-family.out"
+grep 'moe_dispatch_ready: false' "$ROOT/rmsnorm-family.out"
+grep 'real_output_head_logits: false' "$ROOT/rmsnorm-family.out"
+grep 'runtime_blockers:' "$ROOT/rmsnorm-family.out"
+grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-family.out"
+
+"$YVEX_BIN" fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --registry "$REG" > "$ROOT/rmsnorm-family-auto.out"
+grep 'family_requested: auto' "$ROOT/rmsnorm-family-auto.out"
+grep 'family_detected: deepseek' "$ROOT/rmsnorm-family-auto.out"
+grep 'status: fullmodel-family-runtime' "$ROOT/rmsnorm-family-auto.out"
 
 "$YVEX_BIN" fullmodel report --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 3 > "$ROOT/fullish.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish.out"
@@ -347,11 +409,38 @@ grep 'generation_ready: false' "$ROOT/fullish-descriptor.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-descriptor.out"
 grep 'benchmark_status: not-measured' "$ROOT/fullish-descriptor.out"
 
+"$YVEX_BIN" fullmodel family-runtime --model "$FULLISH" --target deepseek4-v4-flash --family deepseek --backend cpu > "$ROOT/fullish-family.out"
+grep 'family_runtime: report' "$ROOT/fullish-family.out"
+grep 'status: fullmodel-family-runtime' "$ROOT/fullish-family.out"
+grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish-family.out"
+grep 'family_adapter_status: complete' "$ROOT/fullish-family.out"
+grep 'role_adapter_status: complete' "$ROOT/fullish-family.out"
+grep 'collection_adapter_status: complete' "$ROOT/fullish-family.out"
+grep 'q_projection_role: present' "$ROOT/fullish-family.out"
+grep 'k_projection_role: present' "$ROOT/fullish-family.out"
+grep 'v_projection_role: present' "$ROOT/fullish-family.out"
+grep 'o_projection_role: present' "$ROOT/fullish-family.out"
+grep 'mlp_gate_role: present' "$ROOT/fullish-family.out"
+grep 'output_head_role: present' "$ROOT/fullish-family.out"
+grep 'attention_rule_status: blocked-full-transformer-integration' "$ROOT/fullish-family.out"
+grep 'graph.attention_primitive: implemented-fixture' "$ROOT/fullish-family.out"
+grep 'graph.full_transformer_block_from_model_tensors: unsupported' "$ROOT/fullish-family.out"
+grep 'full_transformer_graph_ready: false' "$ROOT/fullish-family.out"
+grep 'logits_projection_ready: false' "$ROOT/fullish-family.out"
+grep 'generation: unsupported-full-model' "$ROOT/fullish-family.out"
+grep 'benchmark_status: not-measured' "$ROOT/fullish-family.out"
+
 "$YVEX_BIN" fullmodel descriptor --model "$FULLISH" --target deepseek4-v4-flash --backend cuda > "$ROOT/fullish-descriptor-cuda.out"
 grep 'backend: cuda' "$ROOT/fullish-descriptor-cuda.out"
 grep 'backend.cuda.available:' "$ROOT/fullish-descriptor-cuda.out"
 grep 'backend.full_transformer_integration: unsupported' "$ROOT/fullish-descriptor-cuda.out"
 grep 'backend_allocation_attempted: false' "$ROOT/fullish-descriptor-cuda.out"
+
+"$YVEX_BIN" fullmodel family-runtime --model "$FULLISH" --target deepseek4-v4-flash --family deepseek --backend cuda > "$ROOT/fullish-family-cuda.out"
+grep 'backend: cuda' "$ROOT/fullish-family-cuda.out"
+grep 'backend_allocation_attempted: false' "$ROOT/fullish-family-cuda.out"
+grep 'graph.full_attention_from_model_tensors: unsupported' "$ROOT/fullish-family-cuda.out"
+grep 'generation: unsupported-full-model' "$ROOT/fullish-family-cuda.out"
 
 "$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 20 > "$ROOT/fullish-plan.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish-plan.out"
@@ -497,6 +586,16 @@ grep 'runtime_descriptor_status: unsupported' "$ROOT/glm-descriptor.out"
 grep 'full_model_execution: unsupported' "$ROOT/glm-descriptor.out"
 grep 'generation: unsupported-full-model' "$ROOT/glm-descriptor.out"
 
+"$YVEX_BIN" fullmodel family-runtime --model glm-5.2-official-safetensors --family glm --backend cpu > "$ROOT/glm-family.out" && exit 1 || true
+grep 'status: fullmodel-family-runtime-unsupported' "$ROOT/glm-family.out"
+grep 'target_class: official-source-huge-model' "$ROOT/glm-family.out"
+grep 'family_detected: glm' "$ROOT/glm-family.out"
+grep 'family_requested: glm' "$ROOT/glm-family.out"
+grep 'tensor_inventory_status: not-performed-source-only-target' "$ROOT/glm-family.out"
+grep 'runtime_claim: unsupported' "$ROOT/glm-family.out"
+grep 'full_model_execution: unsupported' "$ROOT/glm-family.out"
+grep 'generation: unsupported-full-model' "$ROOT/glm-family.out"
+
 "$YVEX_BIN" fullmodel report --model "$ROOT/missing.gguf" > "$ROOT/missing.out" 2> "$ROOT/missing.err" && exit 1 || true
 grep 'status: fullmodel-report-fail' "$ROOT/missing.out"
 grep 'artifact_exists: false' "$ROOT/missing.out"
@@ -557,17 +656,28 @@ grep 'limit-bytes requires a positive integer' "$ROOT/bad-limit-bytes.err"
 "$YVEX_BIN" fullmodel descriptor --model "$FULLISH" --format json > "$ROOT/bad-format.out" 2> "$ROOT/bad-format.err" && exit 1 || true
 grep 'descriptor currently supports --format text only' "$ROOT/bad-format.err"
 
+"$YVEX_BIN" fullmodel family-runtime --model "$FULLISH" --family unknown-family --backend cpu > "$ROOT/bad-family.out" 2> "$ROOT/bad-family.err" && exit 1 || true
+grep 'status: fullmodel-family-runtime-unsupported' "$ROOT/bad-family.out"
+grep 'family_requested: unknown-family' "$ROOT/bad-family.out"
+grep 'runtime_claim: unsupported' "$ROOT/bad-family.out"
+grep 'generation: unsupported-full-model' "$ROOT/bad-family.out"
+
 for file in \
   "$ROOT/selected-plan.out" \
   "$ROOT/selected-materialize.out" \
   "$ROOT/selected-descriptor.out" \
+  "$ROOT/selected-family.out" \
   "$ROOT/rmsnorm-plan.out" \
   "$ROOT/rmsnorm-materialize.out" \
   "$ROOT/rmsnorm-descriptor.out" \
+  "$ROOT/rmsnorm-family.out" \
+  "$ROOT/rmsnorm-family-auto.out" \
   "$ROOT/fullish-plan.out" \
   "$ROOT/fullish-plan-cuda.out" \
   "$ROOT/fullish-descriptor.out" \
   "$ROOT/fullish-descriptor-cuda.out" \
+  "$ROOT/fullish-family.out" \
+  "$ROOT/fullish-family-cuda.out" \
   "$ROOT/fullish-materialize.out" \
   "$ROOT/fullish-materialize-dry-run.out" \
   "$ROOT/fullish-materialize-plan-only.out" \
@@ -590,7 +700,11 @@ do
   ! grep "$pattern" "$file"
   pattern='execution_rea''dy: true'
   ! grep "$pattern" "$file"
+  pattern='runtime_execution_rea''dy: true'
+  ! grep "$pattern" "$file"
   pattern='benchmark_status: mea''sured'
+  ! grep "$pattern" "$file"
+  pattern='tok/''s'
   ! grep "$pattern" "$file"
   pattern='tokens/''sec'
   ! grep "$pattern" "$file"

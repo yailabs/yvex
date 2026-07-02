@@ -1519,6 +1519,17 @@ selected-slice partial descriptor
 tiny full-ish fixture descriptor
 source-only descriptor refusal
 full runtime blocker report
+fullmodel family-runtime command
+DeepSeek runtime family adapter report
+model-family-specific tensor role mapping from descriptor facts
+model-family tensor collection adapter report
+DeepSeek attention, position, mask, and KV requirement report
+DeepSeek MoE and expert requirement report
+DeepSeek output-head and real-logits requirement report
+graph primitive versus full-transformer requirement distinction
+source-only family-runtime refusal without safetensors inspection
+unknown-family family-runtime refusal
+next runtime dependency report after family adapter mapping
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -1930,7 +1941,7 @@ tables.
 | FULLMODEL.1 | complete | model | Full model materialization plan | selected-family full tensor placement phases, residency classes, backend fit estimates, preflight blockers, cleanup plan, and FULLMODEL.2 readiness are command-visible without full materialization, full model execution, DeepSeek generation, provider generation, streaming, eval, benchmark, or throughput claim |
 | FULLMODEL.2 | complete | model | Full model materialization proof | `yvex fullmodel materialize --model FILE_OR_ALIAS --backend cpu|cuda` either allocates and releases bounded required proof tensors for a controlled tiny full-ish GGUF or refuses selected/runtime-slice, source-only, incomplete, oversized, missing, and corrupt artifacts with phase, byte-limit, and cleanup reports; it does not create full model execution, DeepSeek materialization, generation, provider generation, eval, benchmark, or throughput capability |
 | FULLMODEL.3 | complete | model | Full model runtime descriptor | full model runtime descriptor is command-visible with tensor role map, collection map, residency requirements, graph requirements, prefill/KV/decode/logits/sampling requirements, output-head/tokenizer requirements, backend requirements, runtime blockers, selected-slice partial descriptors, tiny full-ish fixture descriptors, and source-only refusal without full model execution, DeepSeek generation, provider generation, eval, benchmark, or throughput claim |
-| FAMILY.RUNTIME.0 | planned | model | Runtime family adapter boundary | model-family-specific tensor roles and graph requirements exposed as reports |
+| FAMILY.RUNTIME.0 | complete | model | Runtime family adapter boundary | `yvex fullmodel family-runtime` maps descriptor facts into DeepSeek-family tensor roles, tensor collections, attention/KV, MoE, output-head/logits, graph/backend requirements, runtime blockers, and next dependencies without full model execution, real DeepSeek generation, provider generation, eval, benchmark, or throughput claim |
 | KV.MIN.0 | planned | kv | Minimal KV shape and ownership | session-owned KV shape, allocation, and release |
 | KV.MIN.1 | planned | kv | KV append/read boundary | append/read by layer/head/position with checks and diagnostics |
 | KV.MIN.2 | planned | kv | KV lifecycle in session state | save/clear/reinit behavior inside session lifecycle |
@@ -3237,18 +3248,19 @@ walls, scripts, conditionals, or path derivation logic.
 ## 7. Active Next
 
 ```text
-FAMILY.RUNTIME.0 - Runtime family adapter boundary
+ATTENTION.CLASS.0 - Attention class report
 ```
 
-FAMILY.RUNTIME.0 must bind descriptor facts into model-family-specific runtime
-adapters. The next boundary is DeepSeek-aware tensor roles, tensor collections,
-graph requirements, attention/KV requirements, MoE requirements, output-head
-requirements, and runtime blockers in command-visible form. It must not claim
-full model execution, real DeepSeek generation, provider generation, streaming
-generation, evaluation, benchmark readiness, or throughput.
+ATTENTION.CLASS.0 must turn the family-runtime adapter facts into an explicit
+attention class report. The next boundary is attention type, head layout,
+position/RoPE behavior, mask rules, KV requirements, context blockers, and
+unsupported full-transformer attention requirements in command-visible form. It
+must not claim full model execution, real DeepSeek generation, provider
+generation, streaming generation, evaluation, benchmark readiness, or
+throughput.
 
 Algorithm/CLI research hardening runs in parallel with runtime closure. It does
-not replace FAMILY.RUNTIME.0 or the current runtime Active Next.
+not replace ATTENTION.CLASS.0 or the current runtime Active Next.
 
 GEN.CONTRACT.0 hardens the contract for the generation loop. GEN.LOOP.0 is
 complete for bounded diagnostic loop control only.
@@ -3267,11 +3279,11 @@ embedding target. MODEL.CHECK.1 remains planned.
 Runtime active next remains:
 
 ```text
-FAMILY.RUNTIME.0 - Runtime family adapter boundary
+ATTENTION.CLASS.0 - Attention class report
 ```
 
 SPINE.METAL.QWEN.0 records a future parallel pressure lane. It does not replace
-the current Active Next. Runtime active next remains FAMILY.RUNTIME.0.
+the current Active Next. Runtime active next remains ATTENTION.CLASS.0.
 
 CLI.GEN.0 is complete as an operator-grade command surface over the bounded
 diagnostic generation loop: stable help, normal/trace/cancel/context examples,
@@ -3320,15 +3332,17 @@ selected-position activation handoff. It is not full transformer prefill,
 decode, logits, sampling, generation, server generation, evaluation, or
 benchmark readiness.
 
-After FULLMODEL.3, the fullmodel command can report tensor roles, collections,
-residency requirements, graph requirements, prefill/KV/decode/logits/sampling
-requirements, output-head/tokenizer requirements, backend requirements, and
-runtime blockers. FAMILY.RUNTIME.0 remains next because those descriptor facts
-must become model-family-specific runtime adapter facts before real transformer
-prefill, decode, output-head logits, sampling, or generation can advance. Real
-model output-head logits, real vocabulary sampling, full DeepSeek runtime work,
-OS signal cancellation, provider/server generation, streaming, evaluation, and
-benchmark measurement remain planned tracks.
+After FAMILY.RUNTIME.0, the fullmodel command can map descriptor facts into a
+DeepSeek-family runtime adapter report with tensor roles, collections,
+attention/KV requirements, MoE requirements, output-head/logits requirements,
+graph/backend requirements, runtime blockers, and next dependencies.
+ATTENTION.CLASS.0 remains next because attention type, head layout, position
+behavior, mask rules, KV requirements, and attention-specific blockers must be
+made explicit before real transformer prefill, decode, output-head logits,
+sampling, or generation can advance. Real model output-head logits, real
+vocabulary sampling, full DeepSeek runtime work, OS signal cancellation,
+provider/server generation, streaming, evaluation, and benchmark measurement
+remain planned tracks.
 
 ## 8. Validation Gate
 

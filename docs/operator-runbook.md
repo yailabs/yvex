@@ -31,6 +31,10 @@ logits/sampling requirements, output-head/tokenizer requirements, backend
 requirements, and blockers. It still does not claim full model execution,
 DeepSeek generation, provider generation, streaming generation, evaluation,
 benchmark, or throughput.
+`yvex fullmodel family-runtime` maps those descriptor facts into a
+model-family runtime adapter report. The first concrete report target is
+DeepSeek; GLM remains a source-only refusal until a YVEX-produced GGUF tensor
+inventory exists. This is still a report boundary, not runtime execution.
 
 ## Runbook Index
 
@@ -51,7 +55,7 @@ Covers:
 - segment-summary prefill;
 - minimal KV diagnostics;
 - bounded diagnostic generate help and copy-pack commands;
-- fullmodel inventory, materialization planning, proof/refusal, and runtime descriptor reports;
+- fullmodel inventory, materialization planning, proof/refusal, runtime descriptor, and family-runtime reports;
 - CUDA selected checks;
 - daemon and accepted-only diagnostics.
 
@@ -64,7 +68,7 @@ Use this when working with the current GLM-5.2 official-source tensor target.
 Covers:
 
 - GLM target path reporting;
-- GLM source-only fullmodel unsupported report, descriptor, and materialization refusal;
+- GLM source-only fullmodel unsupported report, descriptor, family-runtime, and materialization refusal;
 - GLM source-download start and status checks;
 - Hugging Face CLI and repository namespace boundaries;
 - GLM boundaries.
@@ -81,7 +85,7 @@ Covers:
 
 - operator storage configuration;
 - fast regression;
-- fullmodel report, materialization-plan, materialize, and descriptor command-surface checks;
+- fullmodel report, materialization-plan, materialize, descriptor, and family-runtime command-surface checks;
 - graph-only fixture regression;
 - daemon and accepted-only runtime diagnostics;
 - repository validation and artifact hygiene.

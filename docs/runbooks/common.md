@@ -13,8 +13,8 @@ evaluation, or benchmark capability.
 
 Purpose:
   Quickly check command discovery, path resolution, model-target reporting,
-  fullmodel report/materialization-plan/materialize/descriptor help, tokenizer fixture
-  diagnostics, and minimal KV diagnostics.
+  fullmodel report/materialization-plan/materialize/descriptor/family-runtime
+  help, tokenizer fixture diagnostics, and minimal KV diagnostics.
 
 Requires:
   Repository root.
@@ -35,7 +35,7 @@ Boundary:
   read/diagnostic command surface only
   no source conversion
   no alias refresh
-  bounded fullmodel proof/refusal and descriptor diagnostics only
+  bounded fullmodel proof/refusal, descriptor, and family-runtime diagnostics only
   no uncontrolled full backend allocation
   no daemon
   no generation claim

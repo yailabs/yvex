@@ -28,6 +28,10 @@ selected DeepSeek runtime slices as not full-model artifacts. The fullmodel
 descriptor lane reports tensor roles, collections, residency expectations,
 graph, prefill, KV, decode, logits, sampling, output-head, tokenizer, backend
 requirements, and blockers without executing the model.
+The fullmodel family-runtime lane maps descriptor facts into DeepSeek-specific
+runtime adapter facts: tensor roles, tensor collections, attention/KV, MoE,
+output-head/logits, graph/backend requirements, blockers, and next runtime
+dependencies. It is still report-only.
 
 ## DeepSeek Paths And Artifacts
 
@@ -331,6 +335,7 @@ Boundary:
   bounded proof allocation only for controlled tiny/full-ish artifacts
   selected DeepSeek artifacts refuse fullmodel materialization proof
   descriptor reports requirements and blockers only
+  family-runtime maps descriptor facts into DeepSeek adapter facts only
   no uncontrolled full backend allocation
   no full model execution
   no real DeepSeek generation
@@ -358,6 +363,10 @@ Boundary:
 ./yvex fullmodel descriptor --model deepseek4-v4-flash-selected-embed --backend cpu
 ./yvex fullmodel descriptor --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu
 ./yvex fullmodel descriptor --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cuda
+./yvex fullmodel family-runtime --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu
+./yvex fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu
+./yvex fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu
+./yvex fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cuda
 ```
 
 ## Lane 5 — DeepSeek CUDA Pressure Lane
@@ -498,7 +507,9 @@ YVEX can:
 - run a bounded diagnostic generation loop with token append/accounting and
   stop-policy reporting over the selected segment;
 - use stable `yvex generate` help, command inventory, refusal wording,
-  trace/cancel/context examples, and text diagnostic output.
+  trace/cancel/context examples, and text diagnostic output;
+- report DeepSeek runtime family adapter facts from fullmodel descriptor
+  inventory without executing a full transformer path.
 
 YVEX does not currently implement:
 
