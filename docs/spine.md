@@ -1876,6 +1876,7 @@ canonical runtime sequence rebase in spine
 dynamic dense/MoE runtime path doctrine in spine
 planned row supersession map in spine
 exhaustive v0.1.0 master implementation spine
+row-level v0.1.0 delivery contract grammar in spine
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -2278,6 +2279,7 @@ tables.
 | SPINE.SPEC.VERIFICATION.0 | complete | docs | Token verification and verification-cost doctrine | spine separates draft proposal, target verification, verification-cost control, accepted-token accounting, KV/state accounting, and MoE routing-aware verification boundaries without speculative runtime, DeepSeek generation, benchmark, throughput, or external-runner claim |
 | SPINE.SEQUENCE.REBASE.0 | complete | docs | Runtime sequence rebase and planned row normalization | spine records canonical diagnostic, model-class dynamic, dense, MoE, DeepSeek, serving, eval/bench, speculative, and public-evidence sequences; preserves completed history; maps redundant planned rows into a supersession map; keeps `MOE.CLASS.0` as Active Next without runtime implementation, DeepSeek generation, provider generation, eval, benchmark, or throughput claim |
 | SPINE.V0_1_0.MASTER.1 | complete | docs | Exhaustive v0.1.0 spine expansion | spine expands v0.1.0 into exhaustive target, path, source, mapping, quantization, artifact, integrity, fullmodel, class, tensor, storage, residency, backend, hardware, graph, attention, MoE, KV, context, prefill, decode, logits, sampling, tokenizer, generation, runtime lifecycle, trace, CLI, doctor, serving, eval, benchmark, speculative, paper, docs, packaging, CI, release, and post-v0.1.0 tracks without runtime implementation, generation, eval, benchmark, throughput, or public release claim |
+| SPINE.V0_1_0.MASTER.2 | complete | docs | Row-level v0.1.0 delivery contracts | spine adds row-level delivery contracts, contract families, promotion rules, next-row decision grammar, critical path, parallelization rules, final transcript requirements, and Active Next decision rules for the exhaustive v0.1.0 spine without runtime implementation, generation, eval, benchmark, throughput, or release claim |
 | SPINE.METAL.QWEN.0 | complete | docs | Qwen Metal pressure lane | spine records Qwen on Apple Silicon / Metal as a reduced-scale portability and full-runtime pressure lane without Metal support, Qwen runtime, generation, eval, benchmark, or throughput claim |
 | HARDWARE.PROFILE.MAC.0 | planned | hardware | Apple Silicon Mac hardware profile | MacBook Apple Silicon CPU/GPU/unified-memory/storage profile is reported without backend or model capability claim |
 | COMPUTE.BACKEND.METAL.0 | planned | backend | Metal feasibility profile | Metal build/toolchain/device/memory feasibility is reported without backend op support claim |
@@ -4238,6 +4240,792 @@ POST010.DOCS.PUBLIC.0       public evidence expansion
 
 Purpose: make future ambition explicit without letting it contaminate v0.1.0.
 
+## 6.3 v0.1.0 Row-Level Delivery Contract
+
+A V010 row is not complete because it appears in the spine.
+
+A V010 row is complete only when its row contract is satisfied.
+
+Every future V010 implementation delivery must define:
+
+```text
+row id
+primary block
+owned boundary
+allowed inputs
+disallowed inputs
+implementation surface
+command/API proof
+output contract
+failure paths
+cleanup/lifecycle behavior
+tests
+validation commands
+forbidden claims
+docs/spine update
+next-row decision
+```
+
+A row may be report-only, fixture, selected-slice, diagnostic-runtime,
+full-runtime, eval-ready, benchmark-ready, or unsupported.
+
+A row may not silently promote itself to a higher stage.
+
+V010 stage vocabulary:
+
+```text
+doctrine-only:
+  spine/documentation rule only; no runtime behavior.
+
+report-only:
+  command-visible report exists; no runtime execution.
+
+fixture-proof:
+  synthetic/controlled fixture proves operation, lifecycle, and failure behavior.
+
+selected-slice-proof:
+  selected YVEX-produced artifact participates in bounded proof without full model claim.
+
+diagnostic-runtime:
+  implemented runtime state is consumed but does not claim full model semantics.
+
+full-runtime-candidate:
+  real model tensor path participates in the selected v0.1.0 full-runtime target.
+
+target-specific-runtime:
+  specific family/target path, such as DeepSeek, Qwen, or GLM, participates in runtime.
+
+eval-ready:
+  implemented runtime path has correctness/regression evidence.
+
+benchmark-ready:
+  implemented runtime path has measured benchmark metadata.
+
+release-ready:
+  row has passed v0.1.0 release gate.
+
+unsupported:
+  explicit refusal/planned-only boundary.
+```
+
+### Universal V010 Row Contract
+
+Every implementation row must define:
+
+```text
+row:
+  V010.<TRACK>.<N>
+
+title:
+  human-readable row title
+
+primary block:
+  exactly one canonical block
+
+secondary blocks:
+  optional related blocks
+
+stage target:
+  doctrine-only | report-only | fixture-proof | selected-slice-proof |
+  diagnostic-runtime | full-runtime-candidate | target-specific-runtime |
+  eval-ready | benchmark-ready | release-ready | unsupported
+
+owned boundary:
+  the smallest behavior or report this row owns
+
+does not own:
+  explicit capabilities this row must not claim
+
+allowed inputs:
+  artifacts, source facts, prior row outputs, fixtures, reports, or runtime state
+  this row may consume
+
+disallowed inputs:
+  external runner output, downloaded artifact claims, personal paths, unverified
+  tensor ranges, unsupported model families, or future rows
+
+command/API surface:
+  exact command or API endpoint that proves the boundary
+
+required output fields:
+  stable fields that must appear in text/JSON output
+
+failure paths:
+  missing input
+  invalid input
+  unsupported target
+  unsupported backend
+  missing tensor role
+  shape/dtype mismatch
+  allocation failure
+  read failure
+  graph/runtime failure
+  cleanup failure
+
+cleanup/lifecycle:
+  ownership, release, idempotence, partial-state behavior
+
+tests:
+  unit tests
+  command tests
+  failure tests
+  guardrail tests
+
+proof commands:
+  commands to paste in final delivery
+
+docs update:
+  current capability update if implemented
+  unsupported list update
+  active next update
+  ledger row status update
+
+claim boundary:
+  forbidden strings and required boundary fields
+
+next decision:
+  deterministic rule for choosing the next row
+
+completion text:
+  exact sentence that can be used in the ledger completion boundary
+```
+
+### Contract Family A — Doctrine / Spine Rows
+
+Applies to:
+- `V010.SCOPE.*`
+- doctrine-only rows
+- supersession maps
+- release policy rows
+
+Required contract:
+
+```text
+stage target:
+  doctrine-only
+
+command/API surface:
+  none, unless docs tests/grep proof count as command proof
+
+must include:
+  rationale
+  scope
+  non-goals
+  forbidden claims
+  relationship to Active Next
+  no runtime implementation boundary
+
+tests:
+  git diff --check
+  sh tests/test_docs_surface.sh
+  sh tests/test_surface.sh
+  required grep proof
+  forbidden claim scan
+
+completion boundary:
+  docs/spine only; no runtime capability.
+```
+
+Forbidden:
+- runtime implementation claim;
+- generation claim;
+- eval/benchmark claim;
+- public release claim.
+
+### Contract Family B — Report-Only Rows
+
+Applies to:
+- `V010.TARGET.*`
+- `V010.CLASS.*`
+- `V010.TENSOR.*`
+- `V010.RESIDENCY.*` when report-only
+- `V010.BACKEND.*` capability reports
+- `V010.HARDWARE.*`
+- `V010.PAPER.*`
+
+Required contract:
+
+```text
+stage target:
+  report-only
+
+command/API surface:
+  must expose a stable CLI report or explicitly cite existing report command
+
+required fields:
+  report:
+  status:
+  target_id:
+  target_class:
+  model:
+  family:
+  backend:
+  source_class:
+  artifact_class:
+  implementation_stage:
+  runtime_claim:
+  generation:
+  benchmark_status:
+  blockers:
+  next_required_rows:
+```
+
+Required boundary fields:
+
+```text
+runtime_claim: unsupported
+generation: unsupported-full-model
+benchmark_status: not-measured
+```
+
+Completion requires:
+- command-visible report;
+- source-only refusal where relevant;
+- unknown-family refusal where relevant;
+- tests for success/refusal paths.
+
+### Contract Family C — Source / Artifact Rows
+
+Applies to:
+- `V010.SOURCE.*`
+- `V010.MAP.*`
+- `V010.QUANT.*`
+- `V010.ARTIFACT.EMIT.*`
+- `V010.INTEGRITY.*`
+- `V010.FULLMODEL.*`
+
+Required contract:
+
+```text
+stage target:
+  report-only | fixture-proof | selected-slice-proof
+
+allowed inputs:
+  official source tensors
+  YVEX-produced artifacts
+  tiny synthetic fixtures
+  selected YVEX-produced artifacts
+
+disallowed inputs:
+  external GGUF as implementation proof
+  external runner output as implementation proof
+  downloaded real model files in git
+
+required fields:
+  source_path:
+  source_class:
+  artifact_path:
+  artifact_class:
+  yvex_produced:
+  digest_status:
+  tensor_range_status:
+  dtype_status:
+  qtype_status:
+  materialization_status:
+  cleanup_status:
+  runtime_claim:
+  generation:
+  benchmark_status:
+```
+
+Failure paths:
+- missing file;
+- short read;
+- invalid header;
+- corrupt tensor directory;
+- byte-range overflow;
+- unsupported qtype;
+- byte limit exceeded;
+- cleanup failure.
+
+### Contract Family D — Storage and Residency Rows
+
+Applies to:
+- `V010.STORAGE.*`
+- `V010.RESIDENCY.*`
+- `V010.KV.15-19`
+- storage-backed prefill/output-head rows
+
+Required contract:
+
+```text
+stage target:
+  report-only | fixture-proof | selected-slice-proof
+
+required fields:
+  storage_mode:
+  residency_mode:
+  source_path:
+  artifact_path:
+  tensor_name:
+  byte_range_start:
+  byte_range_end:
+  page_size:
+  chunk_size:
+  cold_read_status:
+  warm_read_status:
+  staged_read_status:
+  cache_policy:
+  eviction_policy:
+  cleanup_status:
+  runtime_claim:
+  generation:
+  benchmark_status:
+```
+
+Forbidden:
+- storage-stream generation claim;
+- disk-backed generation claim;
+- benchmark claim from cold-read probe.
+
+Completion requires:
+- bounded read proof or explicit report-only boundary;
+- failure and cleanup behavior.
+
+### Contract Family E — Backend / Hardware / Build Rows
+
+Applies to:
+- `V010.BACKEND.*`
+- `V010.HARDWARE.*`
+- `V010.BUILD.*`
+
+Required fields:
+
+```text
+backend:
+build_profile:
+hardware_profile:
+device_status:
+allocation_status:
+transfer_status:
+op_support_status:
+fallback_status:
+cleanup_status:
+model_support:
+runtime_claim:
+generation:
+benchmark_status:
+```
+
+Required boundary:
+
+```text
+model_support: unsupported
+runtime_claim: unsupported
+generation: unsupported-full-model
+benchmark_status: not-measured
+```
+
+Hardware profile is not backend support. Backend support is not model support.
+Build flag is not runtime support.
+
+### Contract Family F — Graph Rows
+
+Applies to:
+- `V010.GRAPH.PRIM.*`
+- `V010.GRAPH.*`
+- `V010.ATTN.*`
+- `V010.MOE.*`
+
+Required fields:
+
+```text
+graph: report|run
+status:
+graph_stage:
+target_id:
+target_class:
+backend:
+op:
+layer:
+tensor_sources:
+input_shape:
+output_shape:
+dtype:
+qtype:
+reference_status:
+checksum:
+max_abs_diff:
+scratch_status:
+cleanup_status:
+runtime_state_mutated:
+prefill_ready:
+decode_ready:
+logits_ready:
+generation:
+benchmark_status:
+```
+
+Required boundary:
+- graph op proof is not prefill;
+- transformer block proof is not generation;
+- MoE expert-slice proof is not full MoE support;
+- attention primitive is not full transformer attention.
+
+Failure paths:
+- missing tensor;
+- invalid shape;
+- dtype mismatch;
+- unsupported backend;
+- allocation failure;
+- reference mismatch;
+- cleanup failure.
+
+### Contract Family G — Runtime State Rows
+
+Applies to:
+- `V010.CONTEXT.*`
+- `V010.PREFILL.*`
+- `V010.KV.*`
+- `V010.DECODE.*`
+- `V010.LOGITS.*`
+- `V010.SAMPLE.*`
+- `V010.TOKENIZER.*`
+- `V010.GEN.*`
+- `V010.RUNTIME.*`
+
+Required fields:
+
+```text
+runtime:
+status:
+runtime_stage:
+model:
+target_id:
+target_class:
+backend:
+state_id:
+lifecycle_status:
+input_token_count:
+prefill_token_count:
+decode_position:
+kv_status:
+logits_status:
+sampling_status:
+generation_state:
+cleanup_attempted:
+cleanup_status:
+generation_ready:
+generation:
+benchmark_status:
+```
+
+Required boundary fields until real full runtime exists:
+
+```text
+generation_ready: false
+generation: unsupported-full-model
+benchmark_status: not-measured
+```
+
+Rows that become real-runtime must explicitly distinguish:
+- diagnostic-runtime;
+- selected-slice;
+- full-runtime-candidate;
+- target-specific-runtime.
+
+Failure paths:
+- invalid token input;
+- context overflow;
+- missing prefill state;
+- KV capacity failure;
+- decode failure;
+- logits failure;
+- sampling failure;
+- append failure;
+- cleanup failure.
+
+### Contract Family H — CLI / Operator Rows
+
+Applies to:
+- `V010.CLI.*`
+- `V010.DOCTOR.*`
+- `V010.PATHS.*`
+- operator preset rows
+
+Required fields:
+
+```text
+command:
+status:
+normal_path:
+advanced_flags:
+target_id:
+backend:
+output_mode:
+structured_output:
+no_color:
+non_tty:
+refusal_status:
+runtime_claim:
+generation:
+benchmark_status:
+```
+
+Rules:
+- normal path first;
+- advanced diagnostic flags later;
+- no shell walls;
+- no command may claim lower-level behavior not implemented.
+
+### Contract Family I — Serving Rows
+
+Applies to:
+- `V010.SERVE.*`
+
+Required fields:
+
+```text
+serve:
+status:
+daemon_state:
+runtime_state:
+model_registry_status:
+generation_endpoint_status:
+streaming_status:
+provider_compatibility:
+runtime_claim:
+generation:
+benchmark_status:
+```
+
+Rules:
+- serving starts after CLI/runtime generation;
+- server does not own generation semantics;
+- provider compatibility cannot precede tested server generation.
+
+### Contract Family J — Eval / Benchmark / Profile Rows
+
+Applies to:
+- `V010.EVAL.*`
+- `V010.BENCH.*`
+- `V010.PROFILE.*`
+
+Eval required fields:
+
+```text
+eval:
+status:
+runtime_path:
+model_identity:
+artifact_identity:
+backend:
+qtype:
+context:
+test_case:
+expected:
+observed:
+tolerance:
+pass:
+generation:
+benchmark_status:
+```
+
+Benchmark required fields:
+
+```text
+bench:
+status:
+runtime_path:
+model_identity:
+artifact_identity:
+qtype:
+context:
+prompt_length:
+generated_token_count:
+backend:
+machine:
+command:
+run_count:
+warmup_count:
+duration:
+tokens_per_second:
+reproducibility_note:
+benchmark_status:
+```
+
+Rules:
+- eval follows implemented runtime;
+- benchmark follows implemented runtime;
+- no throughput without benchmark harness metadata.
+
+### Contract Family K — Release Rows
+
+Applies to:
+- `V010.VERSION.*`
+- `V010.PACKAGE.*`
+- `V010.RELEASE.*`
+- `V010.CI.*`
+- `V010.DOCS.PUBLIC.*`
+
+Required fields:
+
+```text
+release:
+status:
+version:
+scope_locked:
+target_locked:
+commands_proven:
+failures_proven:
+artifact_guardrail:
+claim_audit:
+docs_audit:
+tag_ready:
+tag:
+```
+
+Rules:
+- no v0.1.0 tag before all gates pass;
+- release notes cannot overclaim;
+- no internal IDs in public docs;
+- no model artifacts packaged.
+
+## 6.4 v0.1.0 Row Promotion Rules
+
+A V010 row can move from planned to complete only if:
+
+1. it names one primary block;
+2. it satisfies its contract family;
+3. command/API proof exists;
+4. success and refusal paths are tested;
+5. cleanup/lifecycle behavior is visible;
+6. docs/spine is updated;
+7. unsupported claims remain unsupported;
+8. Active Next is updated or intentionally preserved;
+9. final delivery contains commit SHA, validation, push status, and boundary.
+
+A row may move to blocked only if:
+- blocker is explicit;
+- next unblock row is named;
+- no capability is claimed.
+
+A row may move to superseded only if:
+- replacement row exists;
+- completed history is preserved;
+- no implemented behavior is hidden.
+
+## 6.5 v0.1.0 Next-Row Decision Grammar
+
+After each completed row, choose next row by blocker class:
+
+```text
+source blocker:
+  V010.SOURCE.* or V010.MAP.*
+
+artifact blocker:
+  V010.ARTIFACT.EMIT.* or V010.INTEGRITY.*
+
+class blocker:
+  V010.CLASS.*
+
+tensor blocker:
+  V010.TENSOR.*
+
+storage blocker:
+  V010.STORAGE.*
+
+residency blocker:
+  V010.RESIDENCY.*
+
+backend blocker:
+  V010.BACKEND.* or V010.BUILD.*
+
+graph blocker:
+  V010.GRAPH.*, V010.ATTN.*, or V010.MOE.*
+
+runtime blocker:
+  V010.CONTEXT.*, V010.PREFILL.*, V010.KV.*, V010.DECODE.*,
+  V010.LOGITS.*, V010.SAMPLE.*, V010.TOKENIZER.*, V010.GEN.*
+
+operator blocker:
+  V010.CLI.*, V010.DOCTOR.*, V010.PATHS.*
+
+evidence blocker:
+  V010.EVAL.*, V010.BENCH.*, V010.PROFILE.*
+
+release blocker:
+  V010.DOCS.*, V010.CI.*, V010.RELEASE.*, V010.VERSION.*, V010.PACKAGE.*
+```
+
+## 6.6 v0.1.0 Track Critical Path
+
+```text
+V010.TARGET.9
+-> V010.SOURCE / V010.MAP / V010.ARTIFACT as required
+-> V010.INTEGRITY gate
+-> V010.FULLMODEL gate
+-> V010.CLASS gate
+-> V010.TENSOR gate
+-> V010.RESIDENCY gate
+-> V010.BACKEND gate
+-> V010.GRAPH gate
+-> V010.CONTEXT gate
+-> V010.PREFILL gate
+-> V010.KV gate
+-> V010.DECODE gate
+-> V010.LOGITS gate
+-> V010.SAMPLE gate
+-> V010.TOKENIZER boundary
+-> V010.GEN gate
+-> V010.CLI gate
+-> V010.EVAL smoke
+-> V010.CI gate
+-> V010.DOCS public/internal audit
+-> V010.RELEASE tag readiness
+```
+
+The critical path may choose dense or MoE runtime depending on the v0.1.0 target
+decision. DeepSeek pressure remains active, but a smaller full-runtime candidate
+may close v0.1.0 if selected honestly.
+
+## 6.7 v0.1.0 Track Parallelization Rules
+
+Can run in parallel:
+- source/intake reports and storage reports;
+- model-class reports and tensor collection reports;
+- backend capability reports and artifact integrity reports;
+- docs/internal runbook updates and implemented command surfaces;
+- eval fixture planning and runtime work, if eval does not claim unimplemented runtime.
+
+Cannot run ahead:
+- generation before decode/logits/sampling;
+- decode before real prefill and KV read/write;
+- logits before final hidden state and output head;
+- sampling before real logits;
+- serving before CLI/runtime generation;
+- benchmark before measured runtime path;
+- speculative before baseline generation and target verification semantics;
+- public claim before implementation and claim audit.
+
+## 6.8 v0.1.0 Required Final Transcript
+
+The final v0.1.0 release candidate must include a single transcript containing:
+
+1. clean checkout status;
+2. build profile;
+3. target decision report;
+4. paths report;
+5. artifact identity report;
+6. model class report;
+7. tensor collection report;
+8. residency/backend report;
+9. graph proof;
+10. prefill proof;
+11. KV proof;
+12. decode proof;
+13. logits proof;
+14. sampling proof;
+15. tokenizer/stop boundary proof;
+16. generation proof;
+17. failure proof;
+18. cleanup proof;
+19. eval smoke proof;
+20. claim audit;
+21. artifact guardrail;
+22. docs audit;
+23. tag readiness report.
+
 ## Planned Row Supersession Map
 
 This map prevents old planned rows from competing with the canonical forward
@@ -4858,23 +5646,26 @@ model decode, full model execution, real DeepSeek generation, provider
 generation, streaming generation, evaluation, benchmark readiness, or
 throughput.
 
+The next delivery after MOE.CLASS.0 must use the row-level decision grammar.
+It must not default blindly to expert activation.
+
 After `MOE.CLASS.0`, next selection is conditional:
 
 ```text
-if tensor roles are missing:
-  go to V010.TENSOR.14-17
+If MOE.CLASS.0 exposes missing tensor roles:
+  next = V010.TENSOR.14-17
 
-if expert residency/storage pressure blocks runtime:
-  go to V010.STORAGE.18 / V010.RESIDENCY.14
+If MOE.CLASS.0 exposes expert residency/storage pressure:
+  next = V010.STORAGE.18 or V010.RESIDENCY.14
 
-if graph activation can start:
-  go to V010.MOE.5 / V010.MOE.7
+If MOE.CLASS.0 exposes sufficient router facts:
+  next = V010.MOE.5 or V010.MOE.7
 
-if v0.1.0 target decision requires smaller dense full-runtime target:
-  go to V010.TARGET.2 / V010.CLASS.2 / dense path
+If v0.1.0 target decision becomes the blocker:
+  next = V010.TARGET.9
 
-if output head/tokenizer is the larger blocker:
-  go to V010.CLASS.12-13 / V010.LOGITS / V010.TOKENIZER
+If output-head/tokenizer becomes the blocker:
+  next = V010.CLASS.12-13 or V010.TOKENIZER.*
 ```
 
 This continuation is planned order only. It does not implement MoE, dense
@@ -4889,6 +5680,12 @@ map. It preserves completed history and does not change runtime capability.
 SPINE.V0_1_0.MASTER.1 expands those sequences into an exhaustive v0.1.0 release
 spine. It does not change runtime capability, release status, model support,
 generation, evaluation, benchmark, or throughput.
+
+SPINE.V0_1_0.MASTER.2 adds row-level delivery contracts, contract families,
+promotion rules, next-row decision grammar, critical path, parallelization
+rules, and final transcript requirements. It does not change runtime
+capability, release status, model support, generation, evaluation, benchmark,
+or throughput.
 
 GEN.CONTRACT.0 hardens the contract for the generation loop. GEN.LOOP.0 is
 complete for bounded diagnostic loop control only.
