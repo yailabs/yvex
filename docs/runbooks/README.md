@@ -6,9 +6,9 @@ Use a model-specific runbook when working with a concrete target.
 
 ## Files
 
-- `deepseek.md` - current DeepSeek selected artifact path from local safetensors to selected graph execution, bounded diagnostics, fullmodel inventory/materialization-plan/materialize/descriptor/family-runtime reports, attention class reports, KV cache class reports, context class reports, and MoE class reports.
-- `glm.md` - GLM-5.2 official-source tensor target status, source-only fullmodel, attention, KV, context, and MoE unsupported report/descriptor/refusal, and download start/status checks.
-- `common.md` - shared configuration, fullmodel report/plan/materialize/descriptor/family-runtime, attention, KV, context, and MoE command-surface checks, graph-only checks, daemon diagnostics, and repository validation.
+- `deepseek.md` - current DeepSeek selected artifact path from local safetensors to selected graph execution, bounded diagnostics, fullmodel inventory/materialization-plan/materialize/descriptor/family-runtime reports, attention class reports, KV cache class reports, context class reports, MoE class reports, and MoE tensor collection reports.
+- `glm.md` - GLM-5.2 official-source tensor target status, source-only fullmodel, attention, KV, context, MoE, and MoE tensor-collection unsupported report/descriptor/refusal, and download start/status checks.
+- `common.md` - shared configuration, fullmodel report/plan/materialize/descriptor/family-runtime, attention, KV, context, MoE, and tensor-collection command-surface checks, graph-only checks, daemon diagnostics, and repository validation.
 
 ## Rules
 
@@ -47,6 +47,12 @@ class, head layout, Q/K/V/O roles, RoPE/position, mask, KV, context,
 graph/backend, blocker, and next-dependency reporting. It does not run full
 transformer attention, project real Q/K/V from model tensors, write real
 attention-backed KV, generate, evaluate, benchmark, or report throughput.
+
+`yvex tensor-collection report --collection moe` reports MoE router, expert,
+shared-expert, dispatch, indexing, storage, and residency collection coverage.
+It is report-only and does not materialize tensors, run router logits, select
+or dispatch experts, run prefill/decode/logits/sampling, generate, evaluate,
+benchmark, or report throughput.
 
 `yvex kv report` maps those requirements into KV cache class facts: diagnostic
 KV versus real attention KV, layout, dtype, layer/head/position indexing,

@@ -145,6 +145,7 @@ grep 'attention[[:space:]]*attention class and KV requirement reports' "$ROOT/co
 grep 'context[[:space:]]*context class and runtime boundary reports' "$ROOT/commands.out"
 grep 'kv[[:space:]]*KV diagnostics and KV cache class reports' "$ROOT/commands.out"
 grep 'moe[[:space:]]*MoE model-class reports and blockers' "$ROOT/commands.out"
+grep 'tensor-collection[[:space:]]*tensor collection reports and blockers' "$ROOT/commands.out"
 
 "$YVEX_BIN" help fullmodel > "$ROOT/help.out"
 grep 'usage: yvex fullmodel report --model FILE_OR_ALIAS' "$ROOT/help.out"
@@ -224,6 +225,28 @@ grep 'source-only targets are reported without opening huge source shards' "$ROO
 "$YVEX_BIN" moe report --help > "$ROOT/moe-report-help.out"
 grep 'usage: yvex moe report --model FILE_OR_ALIAS' "$ROOT/moe-report-help.out"
 grep 'moe report:' "$ROOT/moe-report-help.out"
+
+"$YVEX_BIN" help tensor-collection > "$ROOT/tensor-collection-help.out"
+grep 'usage: yvex tensor-collection report --model FILE_OR_ALIAS' "$ROOT/tensor-collection-help.out"
+grep 'tensor-collection report:' "$ROOT/tensor-collection-help.out"
+grep 'reports tensor collection requirements and coverage' "$ROOT/tensor-collection-help.out"
+grep 'current implemented collection is moe' "$ROOT/tensor-collection-help.out"
+grep 'report-only boundary' "$ROOT/tensor-collection-help.out"
+grep 'does not materialize tensors' "$ROOT/tensor-collection-help.out"
+grep 'does not execute router logits' "$ROOT/tensor-collection-help.out"
+grep 'does not select experts' "$ROOT/tensor-collection-help.out"
+grep 'does not dispatch experts' "$ROOT/tensor-collection-help.out"
+grep 'does not run prefill' "$ROOT/tensor-collection-help.out"
+grep 'does not run decode' "$ROOT/tensor-collection-help.out"
+grep 'does not produce logits' "$ROOT/tensor-collection-help.out"
+grep 'does not sample' "$ROOT/tensor-collection-help.out"
+grep 'does not generate' "$ROOT/tensor-collection-help.out"
+grep 'does not benchmark' "$ROOT/tensor-collection-help.out"
+grep 'source-only targets are reported without opening huge source shards' "$ROOT/tensor-collection-help.out"
+
+"$YVEX_BIN" tensor-collection report --help > "$ROOT/tensor-collection-report-help.out"
+grep 'usage: yvex tensor-collection report --model FILE_OR_ALIAS' "$ROOT/tensor-collection-report-help.out"
+grep 'tensor-collection report:' "$ROOT/tensor-collection-report-help.out"
 
 "$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" > "$ROOT/selected.out"
 grep 'status: fullmodel-report' "$ROOT/selected.out"
@@ -385,6 +408,51 @@ grep 'next_required_rows: V010.TENSOR.14' "$ROOT/selected-moe.out"
 grep 'report_options.include_tensors: true' "$ROOT/selected-moe.out"
 grep 'report_options.include_residency: true' "$ROOT/selected-moe.out"
 grep 'report_options.include_blockers: true' "$ROOT/selected-moe.out"
+
+"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed --family deepseek --collection moe --backend cpu --registry "$REG" --include-router --include-experts --include-shared --include-dispatch --include-storage --include-residency --include-blockers > "$ROOT/selected-tensor-moe.out"
+grep 'tensor_collection: moe' "$ROOT/selected-tensor-moe.out"
+grep 'status: ok-partial' "$ROOT/selected-tensor-moe.out"
+grep 'target_id: deepseek4-v4-flash-selected-embed' "$ROOT/selected-tensor-moe.out"
+grep 'target_class: selected-runtime-slice' "$ROOT/selected-tensor-moe.out"
+grep 'family: deepseek' "$ROOT/selected-tensor-moe.out"
+grep 'backend: cpu' "$ROOT/selected-tensor-moe.out"
+grep 'source_class: YVEX-produced selected GGUF' "$ROOT/selected-tensor-moe.out"
+grep 'artifact_class: YVEX-produced selected GGUF' "$ROOT/selected-tensor-moe.out"
+grep 'implementation_stage: report-only' "$ROOT/selected-tensor-moe.out"
+grep 'collection_stage: report-only' "$ROOT/selected-tensor-moe.out"
+grep 'model_is_moe: true' "$ROOT/selected-tensor-moe.out"
+grep 'moe_class_status: partial' "$ROOT/selected-tensor-moe.out"
+grep 'router_collection_status: missing' "$ROOT/selected-tensor-moe.out"
+grep 'router_role_status: missing' "$ROOT/selected-tensor-moe.out"
+grep 'router_tensor_present: false' "$ROOT/selected-tensor-moe.out"
+grep 'router_tensor_status: missing' "$ROOT/selected-tensor-moe.out"
+grep 'router_logits_status: unsupported' "$ROOT/selected-tensor-moe.out"
+grep 'top_k_policy_status: unknown' "$ROOT/selected-tensor-moe.out"
+grep 'expert_collection_status: missing' "$ROOT/selected-tensor-moe.out"
+grep 'expert_role_status: missing' "$ROOT/selected-tensor-moe.out"
+grep 'expert_gate_role_status: missing' "$ROOT/selected-tensor-moe.out"
+grep 'expert_up_role_status: missing' "$ROOT/selected-tensor-moe.out"
+grep 'expert_down_role_status: missing' "$ROOT/selected-tensor-moe.out"
+grep 'expert_tensor_count_status: missing' "$ROOT/selected-tensor-moe.out"
+grep 'expert_tensor_count: 0' "$ROOT/selected-tensor-moe.out"
+grep 'shared_expert_collection_status: unknown' "$ROOT/selected-tensor-moe.out"
+grep 'dispatch_metadata_status: unknown' "$ROOT/selected-tensor-moe.out"
+grep 'expert_storage_pressure: selected-slice-missing' "$ROOT/selected-tensor-moe.out"
+grep 'expert_residency_pressure: selected-slice-missing' "$ROOT/selected-tensor-moe.out"
+grep 'missing_roles: moe_router,moe_expert_gate,moe_expert_up,moe_expert_down' "$ROOT/selected-tensor-moe.out"
+grep 'blocked_rows: V010.TENSOR.14' "$ROOT/selected-tensor-moe.out"
+grep 'next_required_rows: V010.TENSOR.14' "$ROOT/selected-tensor-moe.out"
+grep 'V010.TARGET.9' "$ROOT/selected-tensor-moe.out"
+grep 'runtime_claim: unsupported' "$ROOT/selected-tensor-moe.out"
+grep 'generation: unsupported-full-model' "$ROOT/selected-tensor-moe.out"
+grep 'benchmark_status: not-measured' "$ROOT/selected-tensor-moe.out"
+grep 'report_options.include_router: true' "$ROOT/selected-tensor-moe.out"
+grep 'report_options.include_experts: true' "$ROOT/selected-tensor-moe.out"
+grep 'report_options.include_shared: true' "$ROOT/selected-tensor-moe.out"
+grep 'report_options.include_dispatch: true' "$ROOT/selected-tensor-moe.out"
+grep 'report_options.include_storage: true' "$ROOT/selected-tensor-moe.out"
+grep 'report_options.include_residency: true' "$ROOT/selected-tensor-moe.out"
+grep 'report_options.include_blockers: true' "$ROOT/selected-tensor-moe.out"
 
 "$YVEX_BIN" attention report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" > "$ROOT/selected-attention.out"
 grep 'attention: report' "$ROOT/selected-attention.out"
@@ -575,6 +643,27 @@ grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-moe.out"
 grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-moe.out"
 grep 'next_required_rows: V010.TENSOR.14' "$ROOT/rmsnorm-moe.out"
 
+"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection moe --backend cpu --registry "$REG" --include-router --include-experts --include-shared --include-dispatch --include-storage --include-residency --include-blockers > "$ROOT/rmsnorm-tensor-moe.out"
+grep 'tensor_collection: moe' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'status: ok-partial' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'target_class: selected-runtime-slice' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'family: deepseek' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'backend: cpu' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'implementation_stage: report-only' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'collection_stage: report-only' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'model_is_moe: true' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'router_tensor_status: missing' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'expert_collection_status: missing' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'expert_tensor_roles: missing' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'shared_expert_collection_status: unknown' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'dispatch_metadata_status: unknown' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'runtime_claim: unsupported' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'next_required_rows: V010.TENSOR.14' "$ROOT/rmsnorm-tensor-moe.out"
+grep 'V010.TARGET.9' "$ROOT/rmsnorm-tensor-moe.out"
+
 "$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cuda --registry "$REG" --include-tensors --include-residency --include-blockers > "$ROOT/rmsnorm-moe-cuda.out"
 grep 'moe: report' "$ROOT/rmsnorm-moe-cuda.out"
 grep 'status: ok-partial' "$ROOT/rmsnorm-moe-cuda.out"
@@ -585,6 +674,17 @@ grep 'expert_dispatch_status: unsupported' "$ROOT/rmsnorm-moe-cuda.out"
 grep 'runtime_claim: unsupported' "$ROOT/rmsnorm-moe-cuda.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-moe-cuda.out"
 grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-moe-cuda.out"
+
+"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection moe --backend cuda --registry "$REG" --include-router --include-experts --include-blockers > "$ROOT/rmsnorm-tensor-moe-cuda.out"
+grep 'tensor_collection: moe' "$ROOT/rmsnorm-tensor-moe-cuda.out"
+grep 'status: ok-partial' "$ROOT/rmsnorm-tensor-moe-cuda.out"
+grep 'backend: cuda' "$ROOT/rmsnorm-tensor-moe-cuda.out"
+grep 'implementation_stage: report-only' "$ROOT/rmsnorm-tensor-moe-cuda.out"
+grep 'collection_stage: report-only' "$ROOT/rmsnorm-tensor-moe-cuda.out"
+grep 'router_logits_status: unsupported' "$ROOT/rmsnorm-tensor-moe-cuda.out"
+grep 'runtime_claim: unsupported' "$ROOT/rmsnorm-tensor-moe-cuda.out"
+grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-tensor-moe-cuda.out"
+grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-tensor-moe-cuda.out"
 
 "$YVEX_BIN" fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --registry "$REG" > "$ROOT/rmsnorm-family-auto.out"
 grep 'family_requested: auto' "$ROOT/rmsnorm-family-auto.out"
@@ -1103,6 +1203,27 @@ grep 'generation: unsupported-full-model' "$ROOT/glm-moe.out"
 grep 'benchmark_status: not-measured' "$ROOT/glm-moe.out"
 grep 'next_required_rows: OWI.HUGE.0' "$ROOT/glm-moe.out"
 
+"$YVEX_BIN" tensor-collection report --model glm-5.2-official-safetensors --family glm --collection moe --backend cpu --include-blockers > "$ROOT/glm-tensor-moe.out" && exit 1 || true
+grep 'tensor_collection: moe' "$ROOT/glm-tensor-moe.out"
+grep 'status: unsupported-source-only' "$ROOT/glm-tensor-moe.out"
+grep 'target_class: huge-source-pressure' "$ROOT/glm-tensor-moe.out"
+grep 'family: glm' "$ROOT/glm-tensor-moe.out"
+grep 'backend: cpu' "$ROOT/glm-tensor-moe.out"
+grep 'source_class: official safetensors' "$ROOT/glm-tensor-moe.out"
+grep 'artifact_class: future YVEX-produced GGUF' "$ROOT/glm-tensor-moe.out"
+grep 'implementation_stage: report-only' "$ROOT/glm-tensor-moe.out"
+grep 'collection_stage: report-only' "$ROOT/glm-tensor-moe.out"
+grep 'model_is_moe: true' "$ROOT/glm-tensor-moe.out"
+grep 'moe_class_status: source-only' "$ROOT/glm-tensor-moe.out"
+grep 'router_logits_status: unsupported' "$ROOT/glm-tensor-moe.out"
+grep 'expert_collection_status: unsupported' "$ROOT/glm-tensor-moe.out"
+grep 'expert_storage_pressure: source-only-unmeasured' "$ROOT/glm-tensor-moe.out"
+grep 'expert_residency_pressure: requires-storage-stream-plan' "$ROOT/glm-tensor-moe.out"
+grep 'runtime_claim: unsupported' "$ROOT/glm-tensor-moe.out"
+grep 'generation: unsupported-full-model' "$ROOT/glm-tensor-moe.out"
+grep 'benchmark_status: not-measured' "$ROOT/glm-tensor-moe.out"
+grep 'next_required_rows: OWI.HUGE.0' "$ROOT/glm-tensor-moe.out"
+
 "$YVEX_BIN" fullmodel report --model "$ROOT/missing.gguf" > "$ROOT/missing.out" 2> "$ROOT/missing.err" && exit 1 || true
 grep 'status: fullmodel-report-fail' "$ROOT/missing.out"
 grep 'artifact_exists: false' "$ROOT/missing.out"
@@ -1188,6 +1309,34 @@ grep 'runtime_claim: unsupported' "$ROOT/missing-moe.out"
 grep 'generation: unsupported-full-model' "$ROOT/missing-moe.out"
 grep 'benchmark_status: not-measured' "$ROOT/missing-moe.out"
 
+"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family unknown --collection moe --backend cpu --registry "$REG" > "$ROOT/bad-tensor-moe-family.out" 2> "$ROOT/bad-tensor-moe-family.err" && exit 1 || true
+grep 'tensor_collection: moe' "$ROOT/bad-tensor-moe-family.out"
+grep 'status: unsupported-family' "$ROOT/bad-tensor-moe-family.out"
+grep 'family: unknown' "$ROOT/bad-tensor-moe-family.out"
+grep 'family_requested: unknown' "$ROOT/bad-tensor-moe-family.out"
+grep 'model_is_moe: unknown' "$ROOT/bad-tensor-moe-family.out"
+grep 'runtime_claim: unsupported' "$ROOT/bad-tensor-moe-family.out"
+grep 'generation: unsupported-full-model' "$ROOT/bad-tensor-moe-family.out"
+grep 'benchmark_status: not-measured' "$ROOT/bad-tensor-moe-family.out"
+
+"$YVEX_BIN" tensor-collection report --model missing-tensor-collection-alias --family deepseek --collection moe --backend cpu --registry "$REG" > "$ROOT/missing-tensor-moe.out" 2> "$ROOT/missing-tensor-moe.err" && exit 1 || true
+grep 'tensor_collection: moe' "$ROOT/missing-tensor-moe.out"
+grep 'status: missing-model' "$ROOT/missing-tensor-moe.out"
+grep 'target_id: missing-tensor-collection-alias' "$ROOT/missing-tensor-moe.out"
+grep 'family_requested: deepseek' "$ROOT/missing-tensor-moe.out"
+grep 'runtime_claim: unsupported' "$ROOT/missing-tensor-moe.out"
+grep 'generation: unsupported-full-model' "$ROOT/missing-tensor-moe.out"
+grep 'benchmark_status: not-measured' "$ROOT/missing-tensor-moe.out"
+
+"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection dense --backend cpu --registry "$REG" > "$ROOT/bad-tensor-collection.out" 2> "$ROOT/bad-tensor-collection.err" && exit 1 || true
+grep 'tensor_collection: dense' "$ROOT/bad-tensor-collection.out"
+grep 'status: invalid-argument' "$ROOT/bad-tensor-collection.out"
+grep 'implementation_stage: report-only' "$ROOT/bad-tensor-collection.out"
+grep 'collection_stage: report-only' "$ROOT/bad-tensor-collection.out"
+grep 'runtime_claim: unsupported' "$ROOT/bad-tensor-collection.out"
+grep 'generation: unsupported-full-model' "$ROOT/bad-tensor-collection.out"
+grep 'benchmark_status: not-measured' "$ROOT/bad-tensor-collection.out"
+
 "$YVEX_BIN" attention report --model "$FULLISH" --family unknown-family --backend cpu > "$ROOT/bad-attention-family.out" 2> "$ROOT/bad-attention-family.err" && exit 1 || true
 grep 'status: attention-report-unsupported' "$ROOT/bad-attention-family.out"
 grep 'family_requested: unknown-family' "$ROOT/bad-attention-family.out"
@@ -1218,6 +1367,7 @@ for file in \
   "$ROOT/selected-descriptor.out" \
 	  "$ROOT/selected-family.out" \
 	  "$ROOT/selected-moe.out" \
+	  "$ROOT/selected-tensor-moe.out" \
 	  "$ROOT/selected-attention.out" \
 	  "$ROOT/selected-kv.out" \
 	  "$ROOT/selected-context.out" \
@@ -1228,6 +1378,8 @@ for file in \
 	  "$ROOT/rmsnorm-family-auto.out" \
 	  "$ROOT/rmsnorm-moe.out" \
 	  "$ROOT/rmsnorm-moe-cuda.out" \
+	  "$ROOT/rmsnorm-tensor-moe.out" \
+	  "$ROOT/rmsnorm-tensor-moe-cuda.out" \
 	  "$ROOT/rmsnorm-attention.out" \
 	  "$ROOT/rmsnorm-attention-auto.out" \
 	  "$ROOT/rmsnorm-kv.out" \
@@ -1261,8 +1413,12 @@ for file in \
 	  "$ROOT/glm-kv.out" \
 	  "$ROOT/glm-context.out" \
 	  "$ROOT/glm-moe.out" \
+	  "$ROOT/glm-tensor-moe.out" \
 	  "$ROOT/bad-moe-family.out" \
 	  "$ROOT/missing-moe.out" \
+	  "$ROOT/bad-tensor-moe-family.out" \
+	  "$ROOT/missing-tensor-moe.out" \
+	  "$ROOT/bad-tensor-collection.out" \
 	  "$ROOT/bad-attention-family.out" \
 	  "$ROOT/bad-kv-family.out" \
 	  "$ROOT/bad-context-family.out"

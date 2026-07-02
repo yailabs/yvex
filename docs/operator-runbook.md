@@ -57,6 +57,14 @@ expert tensor roles, storage/residency pressure, blockers, and next rows. It is
 report-only and does not execute router logits, top-k routing, expert
 activation, expert dispatch, expert accumulation, graph/prefill/decode
 integration, generation, evaluation, benchmark, or throughput.
+`yvex tensor-collection report --collection moe` makes MoE tensor collection
+coverage visible: router role coverage, expert gate/up/down roles, shared
+expert status, dispatch metadata, indexing policy, present/missing/unknown
+roles, storage pressure, residency pressure, blockers, and next rows. It is
+report-only and does not materialize tensors, execute router logits, select
+experts, dispatch experts, accumulate expert outputs, run MoE blocks, run
+prefill/decode/logits/sampling, generate, evaluate, benchmark, or report
+throughput.
 
 ## Runbook Index
 
@@ -77,7 +85,7 @@ Covers:
 - segment-summary prefill;
 - minimal KV diagnostics;
 - bounded diagnostic generate help and copy-pack commands;
-- fullmodel inventory, materialization planning, proof/refusal, runtime descriptor, family-runtime, attention, KV cache class, context class, and MoE class reports;
+- fullmodel inventory, materialization planning, proof/refusal, runtime descriptor, family-runtime, attention, KV cache class, context class, MoE class, and MoE tensor collection reports;
 - CUDA selected checks;
 - daemon and accepted-only diagnostics.
 
@@ -90,7 +98,7 @@ Use this when working with the current GLM-5.2 official-source tensor target.
 Covers:
 
 - GLM target path reporting;
-- GLM source-only fullmodel unsupported report, descriptor, family-runtime, attention, KV, context report, MoE report, and materialization refusal;
+- GLM source-only fullmodel unsupported report, descriptor, family-runtime, attention, KV, context report, MoE report, MoE tensor collection report, and materialization refusal;
 - GLM source-download start and status checks;
 - Hugging Face CLI and repository namespace boundaries;
 - GLM boundaries.
@@ -107,7 +115,7 @@ Covers:
 
 - operator storage configuration;
 - fast regression;
-- fullmodel report, materialization-plan, materialize, descriptor, family-runtime, attention, KV, context, and MoE command-surface checks;
+- fullmodel report, materialization-plan, materialize, descriptor, family-runtime, attention, KV, context, MoE, and tensor-collection command-surface checks;
 - graph-only fixture regression;
 - daemon and accepted-only runtime diagnostics;
 - repository validation and artifact hygiene.

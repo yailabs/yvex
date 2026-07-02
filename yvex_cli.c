@@ -72,6 +72,7 @@ static const yvex_cli_command yvex_commands[] = {
     { "sample", "Select one bounded diagnostic token.", yvex_sample_command, yvex_sample_help },
     { "session", "Create an engine/session diagnostic session.", yvex_session_command, yvex_session_help },
     { "source-manifest", "Create a source provenance manifest.", yvex_source_manifest_command, yvex_source_manifest_help },
+    { "tensor-collection", "tensor collection reports and blockers.", yvex_tensor_collection_command, yvex_tensor_collection_help },
     { "tensor-map", "Map native tensors to YVEX roles.", yvex_tensor_map_command, yvex_tensor_map_help },
     { "tokenize", "Encode text with an implemented tokenizer.", yvex_tokenize_command, yvex_tokenize_help },
     { "tokenizer", "Inspect tokenizer metadata.", yvex_tokenizer_command, yvex_tokenizer_help },

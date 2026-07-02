@@ -32,6 +32,12 @@ The fullmodel family-runtime lane maps descriptor facts into DeepSeek-specific
 runtime adapter facts: tensor roles, tensor collections, attention/KV, MoE,
 output-head/logits, graph/backend requirements, blockers, and next runtime
 dependencies. It is still report-only.
+The tensor-collection lane reports MoE router, expert gate/up/down, shared
+expert, dispatch metadata, indexing, storage, residency, present/missing/
+unknown roles, blockers, and next rows. It is report-only and does not
+materialize tensors, run router logits, select or dispatch experts, run
+prefill/decode/logits/sampling, generate, evaluate, benchmark, or report
+throughput.
 The attention report lane maps those family-runtime facts into attention
 class/status, head layout, Q/K/V/O role requirements, RoPE/position
 requirements, mask rules, KV requirements, context blockers, graph primitive
@@ -382,6 +388,10 @@ Boundary:
 ./yvex fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu
 ./yvex fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu
 ./yvex fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cuda
+./yvex help tensor-collection
+./yvex tensor-collection report --model deepseek4-v4-flash-selected-embed --family deepseek --collection moe --backend cpu --include-router --include-experts --include-shared --include-dispatch --include-storage --include-residency --include-blockers
+./yvex tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection moe --backend cpu --include-router --include-experts --include-shared --include-dispatch --include-storage --include-residency --include-blockers
+./yvex tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection moe --backend cuda --include-router --include-experts --include-blockers
 ./yvex help attention
 ./yvex attention report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu
 ./yvex attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu
@@ -555,6 +565,9 @@ YVEX can:
   storage/residency pressure, and next tensor rows without running router
   logits, top-k routing, expert activation, expert dispatch, or expert
   accumulation.
+- report DeepSeek MoE tensor collection coverage, missing router/expert/shared
+  roles, dispatch metadata status, storage/residency pressure, and blockers
+  without materializing tensors or running MoE runtime behavior.
 
 YVEX does not currently implement:
 

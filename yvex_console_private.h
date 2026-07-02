@@ -223,6 +223,8 @@ int yvex_session_command(int argc, char **argv);
 void yvex_session_help(FILE *fp);
 int yvex_source_manifest_command(int argc, char **argv);
 void yvex_source_manifest_help(FILE *fp);
+int yvex_tensor_collection_command(int argc, char **argv);
+void yvex_tensor_collection_help(FILE *fp);
 int yvex_tensor_map_command(int argc, char **argv);
 void yvex_tensor_map_help(FILE *fp);
 int yvex_tokenize_command(int argc, char **argv);

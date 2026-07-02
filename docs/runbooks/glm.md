@@ -37,6 +37,10 @@ runtime context claim.
 `yvex moe report --model glm-5.2-official-safetensors --family glm` uses the
 same source-only refusal boundary: no GLM safetensors inspection and no GLM MoE
 runtime claim.
+`yvex tensor-collection report --model glm-5.2-official-safetensors --family
+glm --collection moe` uses the same source-only refusal boundary: no GLM
+safetensors inspection, no tensor materialization, and no GLM MoE runtime
+claim.
 
 ## GLM Paths And Target
 
@@ -146,6 +150,8 @@ Boundary:
 ./yvex attention report --model glm-5.2-official-safetensors --family glm --backend cpu
 ./yvex kv report --model glm-5.2-official-safetensors --family glm --backend cpu
 ./yvex context report --model glm-5.2-official-safetensors --family glm --backend cpu
+./yvex moe report --model glm-5.2-official-safetensors --family glm --backend cpu --include-blockers
+./yvex tensor-collection report --model glm-5.2-official-safetensors --family glm --collection moe --backend cpu --include-blockers
 ```
 
 ## Lane 2 — Start GLM Source Download
@@ -255,6 +261,8 @@ YVEX can:
 - refuse source-only attention reporting without inspecting safetensors;
 - refuse source-only KV reporting without inspecting safetensors;
 - refuse source-only context reporting without inspecting safetensors;
+- refuse source-only MoE tensor collection reporting without inspecting
+  safetensors;
 - plan future source inventory, model-class profiling, tensor mapping,
   quantization policy, YVEX-produced GGUF emission, and storage-stream work.
 

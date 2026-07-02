@@ -14,7 +14,7 @@ evaluation, or benchmark capability.
 Purpose:
   Quickly check command discovery, path resolution, model-target reporting,
   fullmodel report/materialization-plan/materialize/descriptor/family-runtime
-  help, attention/KV/context/MoE report help, tokenizer fixture diagnostics, and
+  help, attention/KV/context/MoE/tensor-collection report help, tokenizer fixture diagnostics, and
   minimal KV diagnostics.
 
 Requires:
@@ -36,7 +36,7 @@ Boundary:
   read/diagnostic command surface only
   no source conversion
   no alias refresh
-  bounded fullmodel proof/refusal, descriptor, family-runtime, attention, KV, context, and MoE diagnostics only
+  bounded fullmodel proof/refusal, descriptor, family-runtime, attention, KV, context, MoE, and tensor-collection diagnostics only
   no uncontrolled full backend allocation
   no daemon
   no generation claim
@@ -53,6 +53,7 @@ make
 ./yvex help kv
 ./yvex help context
 ./yvex help moe
+./yvex help tensor-collection
 ./yvexd --help
 ./yvex paths
 ./yvex paths resolve --family deepseek --kind source
@@ -74,6 +75,7 @@ make
 ./yvex kv report --model glm-5.2-official-safetensors --family glm --backend cpu
 ./yvex context report --model glm-5.2-official-safetensors --family glm --backend cpu
 ./yvex moe report --model glm-5.2-official-safetensors --family glm --backend cpu --include-blockers
+./yvex tensor-collection report --model glm-5.2-official-safetensors --family glm --collection moe --backend cpu --include-blockers
 ./yvex backend cpu
 ./yvex tokenizer tests/fixtures/gguf/valid-tokenizer-simple.gguf
 ./yvex tokenize tests/fixtures/gguf/valid-tokenizer-simple.gguf --text "hello"
