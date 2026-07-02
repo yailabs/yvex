@@ -385,6 +385,70 @@ This doctrine does not implement speculative decoding, routing-aware
 verification, expert budgeting, KV rollback, accepted-token accounting, or
 benchmarking.
 
+## Model-Class Dynamic Runtime Doctrine
+
+YVEX runtime paths are selected by model class and target class.
+
+YVEX must not assume that the DeepSeek/MoE path is universal.
+
+A dense target must not be forced through router/expert rows. A MoE target must
+not be forced through a dense-only MLP path. A source-only target must not be
+forced into runtime execution. A selected-runtime-slice artifact must not be
+promoted into a full-runtime model.
+
+Model class determines runtime path:
+
+```text
+dense -> dense transformer path
+MoE -> router/expert transformer path
+source-only -> intake/storage/model-class path only
+selected-runtime-slice -> bounded partial/diagnostic path only
+```
+
+Dense models use a dense transformer path:
+
+```text
+embedding
+-> normalization
+-> attention
+-> dense MLP
+-> output head
+-> logits
+-> sampling
+-> generation
+```
+
+MoE models use a router/expert transformer path:
+
+```text
+embedding
+-> normalization
+-> attention
+-> router
+-> expert selection
+-> expert dispatch
+-> expert accumulation
+-> output head
+-> logits
+-> sampling
+-> generation
+```
+
+Selected-runtime-slice artifacts may close parser, materialization, partial
+graph, and diagnostic runtime boundaries. They do not close full model
+execution.
+
+Source-only huge models may close source intake, storage, model-class, and
+planning boundaries. They do not close runtime execution.
+
+Qwen/Metal targets use the same staged doctrine through a future
+backend-specific path. They do not imply Metal support, Qwen runtime support,
+or Qwen generation.
+
+Speculative paths are selected only after baseline generation exists. Dense
+speculative verification and MoE routing-aware verification are separate future
+acceleration families.
+
 ## 2.1 Canonical Block Directory
 
 YVEX implementation blocks:
@@ -1640,6 +1704,9 @@ source-only context refusal
 unknown-family context refusal
 next runtime dependency report after context class mapping
 routing-aware speculative verification doctrine in spine
+canonical runtime sequence rebase in spine
+dynamic dense/MoE runtime path doctrine in spine
+planned row supersession map in spine
 standalone RoPE/position graph op boundary
 standalone F32 attention primitive boundary
 standalone F32 matmul/projection primitive boundary
@@ -2040,6 +2107,7 @@ tables.
 | M17 | planned | profile | Trace/profile hardening for generation | traces and profiles identify artifact/backend/graph/KV/decode/logits/sampling/server failures |
 | SPINE.GENERATION.TARGET.0 | complete | docs | DeepSeek generation and speculative throughput target envelope | spine records DeepSeek V4 Flash full-generation target, internal decode throughput target, DSpark external reference doctrine, and non-claim benchmark boundary |
 | SPINE.SPEC.VERIFICATION.0 | complete | docs | Token verification and verification-cost doctrine | spine separates draft proposal, target verification, verification-cost control, accepted-token accounting, KV/state accounting, and MoE routing-aware verification boundaries without speculative runtime, DeepSeek generation, benchmark, throughput, or external-runner claim |
+| SPINE.SEQUENCE.REBASE.0 | complete | docs | Runtime sequence rebase and planned row normalization | spine records canonical diagnostic, model-class dynamic, dense, MoE, DeepSeek, serving, eval/bench, speculative, and public-evidence sequences; preserves completed history; maps redundant planned rows into a supersession map; keeps `MOE.CLASS.0` as Active Next without runtime implementation, DeepSeek generation, provider generation, eval, benchmark, or throughput claim |
 | SPINE.METAL.QWEN.0 | complete | docs | Qwen Metal pressure lane | spine records Qwen on Apple Silicon / Metal as a reduced-scale portability and full-runtime pressure lane without Metal support, Qwen runtime, generation, eval, benchmark, or throughput claim |
 | HARDWARE.PROFILE.MAC.0 | planned | hardware | Apple Silicon Mac hardware profile | MacBook Apple Silicon CPU/GPU/unified-memory/storage profile is reported without backend or model capability claim |
 | COMPUTE.BACKEND.METAL.0 | planned | backend | Metal feasibility profile | Metal build/toolchain/device/memory feasibility is reported without backend op support claim |
@@ -2916,6 +2984,272 @@ Qwen-Metal portability track:
   -> Qwen Metal eval/benchmark
 ```
 
+## 6.1 Canonical Runtime Sequences
+
+This section is the active forward roadmap. It normalizes planned work into
+sequences so future implementation waves do not add isolated runtime rows.
+
+The unified ledger preserves completed history. Older planned rows remain
+visible for continuity, but the sequences below define the operational order for
+new runtime work. A sequence row is not complete until implemented behavior,
+tests, command proof, failure paths, cleanup behavior, and explicit boundaries
+exist.
+
+Active forward sequences:
+
+| Sequence | Purpose | Current state | Boundary |
+| --- | --- | --- | --- |
+| A | Completed diagnostic runtime closure | implemented through bounded diagnostic CLI generation | not full model generation |
+| B | Model-class dynamic planning | active, next row is `MOE.CLASS.0` | report/planning only until runtime rows exist |
+| C | Dense full-runtime path | planned | cannot close DeepSeek/MoE runtime |
+| D | MoE full-runtime path | planned, first row active next | cannot claim MoE support before activation/dispatch/runtime integration |
+| E | DeepSeek target path | planned beyond current selected slices | DeepSeek-specific rows only when generic rows are insufficient |
+| F | Serving path | planned | starts after runtime generation exists |
+| G | Evaluation and benchmark path | planned | measurements require reproducibility metadata |
+| H | Speculative and routing-aware acceleration path | planned | starts after baseline generation and benchmark harness exist |
+| I | Documentation and public evidence path | planned | public docs wait for implemented behavior and measured evidence |
+
+Model-class dynamic selection:
+
+```text
+model class detected
+-> dense path if dense
+-> MoE path if MoE
+-> future Metal/Qwen path if Qwen/Metal
+-> future GLM huge-source/storage path if GLM/source-only
+```
+
+YVEX must remain dynamic by model class:
+
+```text
+dense -> dense transformer path
+MoE -> router/expert transformer path
+source-only -> intake/storage/model-class path only
+selected-runtime-slice -> bounded partial/diagnostic path only
+```
+
+### Sequence A - Current Completed Diagnostic Chain
+
+```text
+A0 selected artifact identity/materialization
+A1 selected graph segment
+A2 token input
+A3 segment-summary prefill
+A4 diagnostic KV binding
+A5 bounded diagnostic decode
+A6 bounded diagnostic logits
+A7 bounded greedy sampling
+A8 bounded diagnostic generation
+A9 CLI generate surface
+```
+
+Sequence A is implemented diagnostic runtime closure only. It proves local
+runtime control flow over bounded diagnostic state. It is not full model
+generation, DeepSeek generation, provider generation, evaluation, benchmark, or
+throughput evidence.
+
+### Sequence B - Model-Class Dynamic Runtime Planning
+
+```text
+B0 family runtime adapter report              complete
+B1 attention class report                     complete
+B2 KV cache class report                      complete
+B3 context class report                       complete
+B4 MoE class report                           next
+B5 dense class report                         planned if/when dense target is selected
+B6 output-head/tokenizer class report         planned
+B7 tensor collection final runtime map        planned
+B8 residency class/tensor residency plan      planned
+```
+
+`B5 dense class report` is intentionally present so YVEX does not become
+DeepSeek/MoE-only. It is planned and not implemented.
+
+### Sequence C - Dense Full-Runtime Path
+
+```text
+DENSE.RUNTIME.0  Dense model-class report
+DENSE.GRAPH.0    Dense transformer block requirements
+DENSE.PREFILL.0  Real dense transformer prefill
+DENSE.DECODE.0   Real dense decode over KV
+DENSE.LOGITS.0   Real output-head logits
+DENSE.SAMPLE.0   Real vocabulary sampling
+DENSE.GEN.0      Dense baseline generation
+DENSE.BENCH.0    Dense baseline benchmark
+```
+
+Dense sequence rows are future rows. They cannot close DeepSeek/MoE runtime,
+MoE activation, MoE dispatch, DeepSeek generation, provider generation,
+evaluation, benchmark, or throughput claims.
+
+### Sequence D - MoE Full-Runtime Path
+
+```text
+MOE.CLASS.0      MoE model-class report
+MOE.TENSOR.0     MoE tensor collection report
+MOE.RESIDENCY.0  Expert residency and storage pressure report
+MOE.ACT.0        Expert activation boundary
+MOE.DISPATCH.0   Expert dispatch and accumulation boundary
+MOE.BLOCK.0      MoE transformer block fixture/selected-slice boundary
+MOE.PREFILL.0    Real MoE transformer prefill
+MOE.DECODE.0     Real MoE decode over KV
+MOE.LOGITS.0     Real MoE path to output-head logits
+MOE.SAMPLE.0     Real vocabulary sampling over MoE logits
+MOE.GEN.0        MoE baseline generation
+```
+
+`MOE.CLASS.0` is only a report. `MOE.ACT.0` is not full MoE support unless
+graph/runtime integration exists. `MOE.GEN.0` cannot complete before real
+prefill, decode, logits, sampling, token append, stop conditions, cleanup, and
+command proof exist.
+
+### Sequence E - DeepSeek Target Path
+
+```text
+DEEPSEEK.CLASS.0       DeepSeek model-family runtime facts
+DEEPSEEK.MOE.0         DeepSeek MoE class report
+DEEPSEEK.RESIDENCY.0   DeepSeek tensor/expert residency plan
+DEEPSEEK.PREFILL.0     DeepSeek real transformer prefill
+DEEPSEEK.DECODE.0      DeepSeek real decode
+DEEPSEEK.LOGITS.0      DeepSeek real output-head logits
+DEEPSEEK.SAMPLE.0      DeepSeek real vocabulary sampling
+GEN.DEEPSEEK.0         DeepSeek V4 Flash full generation path
+BENCH.DEEPSEEK.DECODE.0
+BENCH.DEEPSEEK.GEN.0
+```
+
+This sequence may reuse generic MoE rows when generic rows are sufficient. Use
+DeepSeek-specific rows only when DeepSeek-specific behavior must be isolated.
+Selected DeepSeek slices do not close DeepSeek full generation.
+
+### Sequence F - Serving Path
+
+```text
+SERVE.RUNTIME.0   Serving runtime ownership map
+SERVE.STATE.0     Daemon reflects real runtime model state
+SERVE.GEN.0       Provider generation backed by real generation
+SERVE.STREAM.0    Streaming tokens from real generation
+SERVE.API.0       Compatibility layer after server generation exists
+SERVE.OBS.0       Server traces/metrics
+```
+
+Serving starts only after runtime generation exists. Serving does not own
+generation semantics.
+
+### Sequence G - Evaluation and Benchmark Path
+
+```text
+EVAL.FIXTURE.0
+EVAL.PARTIAL.0
+EVAL.PREFILL.0
+EVAL.KV.0
+EVAL.DECODE.0
+EVAL.LOGITS.0
+EVAL.SAMPLING.0
+EVAL.GEN.0
+EVAL.CAPABILITY.0
+BENCH.RUNTIME.0
+BENCH.PREFILL.0
+BENCH.DECODE.0
+BENCH.GEN.0
+BENCH.MEMORY.0
+BENCH.SERVER.0
+```
+
+Benchmarks must always record model identity, artifact identity, qtype,
+context, backend, machine, command, run count, and reproducibility metadata.
+
+### Sequence H - Speculative and Routing-Aware Acceleration Path
+
+```text
+SPEC.DSPARK.REF.0
+SPEC.VERIFY.0
+SPEC.VERIFY.COST.0
+SPEC.MOE.ROUTING.0
+SPEC.MOE.EXPERT.BUDGET.0
+SPEC.DEEPSEEK.ACCOUNTING.0
+SPEC.DEEPSEEK.0
+BENCH.DEEPSEEK.SPEC.0
+```
+
+Speculative rows are after baseline generation and benchmark harness readiness.
+Dense speculative verification and MoE routing-aware verification must remain
+separate.
+
+### Sequence I - Docs and Public Evidence Path
+
+```text
+DOCS.INTERNAL.SEQUENCE.0
+DOCS.RUNBOOK.RUNTIME.0
+DOCS.RUNBOOK.DEEPSEEK.0
+DOCS.API.RUNTIME.0
+DOCS.CONTRACT.RUNTIME.0
+DOCS.README.RUNTIME.0
+DOCS.DIAGRAM.RUNTIME.0
+DOCS.DIAGRAM.MEASUREMENT.0
+DOCS.PUBLIC.EVIDENCE.0
+```
+
+Public docs cannot expose internal IDs. Public claims wait for implemented
+behavior and measured evidence.
+
+## Planned Row Supersession Map
+
+This map prevents old planned rows from competing with the canonical forward
+sequences. It does not delete completed history and does not promote planned
+work to complete.
+
+```text
+MODEL.CLASS.0:
+  superseded-by: B4/B5 and DEEPSEEK.CLASS/MOE.CLASS sequence rows.
+
+MODEL.CLASS.1:
+  superseded-by: MOE.CLASS.0 and DEEPSEEK.MOE.0.
+
+MODEL.CLASS.2:
+  superseded-by: family runtime plus attention/KV/context/MoE/output-head reports.
+
+MODEL.CLASS.3:
+  superseded-by: source-target family profiles and future GLM model-class sequence rows.
+
+TENSOR.COLLECTION.0:
+  superseded-by: B7, MOE.TENSOR.0, and future dense tensor rows.
+
+TENSOR.COLLECTION.1:
+  superseded-by: B7, DEEPSEEK.CLASS.0, DEEPSEEK.MOE.0, and DEEPSEEK.RESIDENCY.0.
+
+TENSOR.COLLECTION.2:
+  superseded-by: GLM source inventory/model-class/storage-stream sequence rows.
+
+KV.MIN.*:
+  historical minimal diagnostic KV rows. Do not use as future full-runtime KV
+  sequence names unless still needed for regression continuity.
+
+RUNTIME.KV.*:
+  future advanced KV capacity, estimator, allocation, paging, spill, and
+  quantization work. It should connect to B8 and the dense/MoE runtime
+  sequences before runtime claims.
+
+MODEL.LIFECYCLE.*:
+  superseded-by: OPERATOR model prepare/check/status sequence.
+
+CLI.UX.*:
+  superseded-by: OPERATOR/CLI command-surface sequence.
+
+SERVER.* and SERVER.RUNTIME.*:
+  superseded-by: SERVE.* sequence.
+
+BACKEND.PROFILE.*:
+  superseded-by: COMPUTE.BACKEND.* and HARDWARE.PROFILE.* sequences.
+
+LAYOUT.*:
+  superseded-by: completed root-first layout history and future cleanup-only
+  rows.
+
+DOCS.*:
+  superseded-by: DOCS.* canonical documentation/public-evidence sequence.
+```
+
 These tracks may advance in parallel only when their boundaries are explicit.
 A row is complete only when its command proof demonstrates the boundary it
 claims.
@@ -3393,8 +3727,25 @@ transformer prefill, full model decode, full model execution, real DeepSeek
 generation, provider generation, streaming generation, evaluation, benchmark
 readiness, or throughput.
 
+Expected continuation after `MOE.CLASS.0`:
+
+```text
+MOE.CLASS.0
+-> MOE.TENSOR.0 or MOE.RESIDENCY.0 if class report exposes missing tensor/residency facts
+-> MOE.ACT.0 when activation is ready
+-> MOE.DISPATCH.0
+-> MOE.BLOCK.0
+-> DEEPSEEK.PREFILL.0 or generic MOE.PREFILL.0
+```
+
+This continuation is planned order only. It does not implement MoE, dense
+runtime, DeepSeek generation, serving, evaluation, benchmark, or throughput.
+
 Algorithm/CLI research hardening runs in parallel with runtime closure. It does
 not replace MOE.CLASS.0 or the current runtime Active Next.
+
+SPINE.SEQUENCE.REBASE.0 normalizes the active forward sequences and supersession
+map. It preserves completed history and does not change runtime capability.
 
 GEN.CONTRACT.0 hardens the contract for the generation loop. GEN.LOOP.0 is
 complete for bounded diagnostic loop control only.
@@ -3453,13 +3804,15 @@ OWI.TARGETS.1 remains planned until multi-family source manifest evidence is
 implemented over available source artifacts. GLM source tensors may continue
 downloading while runtime work resumes on the DeepSeek selected GGUF path.
 
-Spine structure next after this rebase:
+A future spine cleanup lane remains:
 
 ```text
 SPINE.BLOCKS.1 - Planned-row deduplication and command-flow compression
 ```
 
-SPINE.BLOCKS.1 is a future cleanup row, not the active next implementation.
+SPINE.BLOCKS.1 is a future cleanup row, not the active next implementation. It
+must not compete with the canonical runtime sequences recorded by
+SPINE.SEQUENCE.REBASE.0.
 
 GRAPH.LAYERS.0 is complete as a repeated controlled block fixture with
 selected-position activation handoff. It is not full transformer prefill,
@@ -3638,6 +3991,10 @@ grep -nF '## Tensor Collections' docs/spine.md
 grep -nF '## Attention, KV, and Context Rules' docs/spine.md
 grep -nF '## MoE and Expert Activation Rules' docs/spine.md
 grep -nF '## Build, Backend, and Hardware Profile Rules' docs/spine.md
+grep -nF '## 6.1 Canonical Runtime Sequences' docs/spine.md
+grep -nF 'dense -> dense transformer path' docs/spine.md
+grep -nF 'MoE -> router/expert transformer path' docs/spine.md
+grep -nF 'Planned Row Supersession Map' docs/spine.md
 grep -nF 'SPINE.BLOCKS.0' docs/spine.md
 grep -nF 'SPINE.BLOCKS.1' docs/spine.md
 grep -nF 'TENSOR.COLLECTION.0' docs/spine.md
