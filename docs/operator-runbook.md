@@ -22,9 +22,12 @@ inventory, tensor collection candidate classification, memory/placement
 pressure, and full-model runtime blocker reporting. `yvex fullmodel
 materialization-plan` turns that inventory into placement phases, residency
 classes, backend fit estimates, preflight blockers, cleanup planning, and
-next proof readiness reporting without payload materialization, full backend
-allocation, full model execution, generation, evaluation, benchmark, or
-throughput claims.
+next proof readiness reporting. `yvex fullmodel materialize` proves a bounded
+tiny/full-ish required-tensor allocation-and-release path or refuses selected,
+source-only, incomplete, oversized, missing, and corrupt artifacts with phase
+and cleanup reports. It still does not claim full model execution, DeepSeek
+generation, provider generation, streaming generation, evaluation, benchmark,
+or throughput.
 
 ## Runbook Index
 
@@ -45,7 +48,7 @@ Covers:
 - segment-summary prefill;
 - minimal KV diagnostics;
 - bounded diagnostic generate help and copy-pack commands;
-- fullmodel inventory and materialization planning reports;
+- fullmodel inventory, materialization planning, and materialization proof/refusal reports;
 - CUDA selected checks;
 - daemon and accepted-only diagnostics.
 
@@ -58,7 +61,7 @@ Use this when working with the current GLM-5.2 official-source tensor target.
 Covers:
 
 - GLM target path reporting;
-- GLM source-only fullmodel unsupported report;
+- GLM source-only fullmodel unsupported report and materialization refusal;
 - GLM source-download start and status checks;
 - Hugging Face CLI and repository namespace boundaries;
 - GLM boundaries.
@@ -75,7 +78,7 @@ Covers:
 
 - operator storage configuration;
 - fast regression;
-- fullmodel report and materialization-plan command-surface checks;
+- fullmodel report, materialization-plan, and materialize command-surface checks;
 - graph-only fixture regression;
 - daemon and accepted-only runtime diagnostics;
 - repository validation and artifact hygiene.

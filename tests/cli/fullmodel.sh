@@ -140,20 +140,20 @@ grep 'status: models-added' "$ROOT/add-selected.out"
 grep 'status: models-added' "$ROOT/add-rmsnorm.out"
 
 "$YVEX_BIN" commands > "$ROOT/commands.out"
-grep 'fullmodel[[:space:]]*full model inventory and materialization planning' "$ROOT/commands.out"
+grep 'fullmodel[[:space:]]*full model inventory, placement, and materialization proof' "$ROOT/commands.out"
 
 "$YVEX_BIN" help fullmodel > "$ROOT/help.out"
 grep 'usage: yvex fullmodel report --model FILE_OR_ALIAS' "$ROOT/help.out"
 grep 'usage: yvex fullmodel materialization-plan --model FILE_OR_ALIAS' "$ROOT/help.out"
+grep 'usage: yvex fullmodel materialize --model FILE_OR_ALIAS' "$ROOT/help.out"
 grep 'fullmodel report:' "$ROOT/help.out"
 grep 'fullmodel materialization-plan:' "$ROOT/help.out"
 grep 'fullmodel materialization proof:' "$ROOT/help.out"
-grep 'not implemented until FULLMODEL.2' "$ROOT/help.out"
-grep 'does not materialize' "$ROOT/help.out"
-grep 'no full allocation' "$ROOT/help.out"
+grep 'controlled proof over a tiny full-ish GGUF tensor set' "$ROOT/help.out"
+grep 'allocates and releases only the bounded required proof tensors' "$ROOT/help.out"
 grep 'no full model execution' "$ROOT/help.out"
-grep 'no inference' "$ROOT/help.out"
-grep 'decode, logits, sampling, generation' "$ROOT/help.out"
+grep 'no inference readiness' "$ROOT/help.out"
+grep 'no DeepSeek generation' "$ROOT/help.out"
 grep 'no benchmark' "$ROOT/help.out"
 grep 'no throughput' "$ROOT/help.out"
 
@@ -199,6 +199,22 @@ grep 'real vocabulary sampling not implemented' "$ROOT/selected-plan.out"
 grep 'full runtime descriptor not implemented' "$ROOT/selected-plan.out"
 grep 'proof_ready_for_fullmodel_2: false' "$ROOT/selected-plan.out"
 
+"$YVEX_BIN" fullmodel materialize --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" > "$ROOT/selected-materialize.out"
+grep 'fullmodel: materialize' "$ROOT/selected-materialize.out"
+grep 'status: fullmodel-materialize-refused' "$ROOT/selected-materialize.out"
+grep 'target_class: selected-runtime-slice' "$ROOT/selected-materialize.out"
+grep 'required_role_coverage: partial' "$ROOT/selected-materialize.out"
+grep 'full_model_materialization: refused-selected-runtime-slice' "$ROOT/selected-materialize.out"
+grep 'full_model_materialization_proof: refused' "$ROOT/selected-materialize.out"
+grep 'full_model_execution: unsupported' "$ROOT/selected-materialize.out"
+grep 'generation_ready: false' "$ROOT/selected-materialize.out"
+grep 'generation: unsupported-full-model' "$ROOT/selected-materialize.out"
+grep 'benchmark_status: not-measured' "$ROOT/selected-materialize.out"
+grep 'failed_phase: role-coverage' "$ROOT/selected-materialize.out"
+grep 'failed_reason: selected-runtime-slice' "$ROOT/selected-materialize.out"
+grep 'cleanup_attempted: true' "$ROOT/selected-materialize.out"
+grep 'owned_state_released: true' "$ROOT/selected-materialize.out"
+
 "$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" > "$ROOT/rmsnorm.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm.out"
 grep 'normalization_tensors: 1' "$ROOT/rmsnorm.out"
@@ -216,6 +232,13 @@ grep 'collection.attention.blocker: attention collection missing' "$ROOT/rmsnorm
 grep 'collection.output.blocker: output collection missing' "$ROOT/rmsnorm-plan.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-plan.out"
 grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-plan.out"
+
+"$YVEX_BIN" fullmodel materialize --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" > "$ROOT/rmsnorm-materialize.out"
+grep 'status: fullmodel-materialize-refused' "$ROOT/rmsnorm-materialize.out"
+grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-materialize.out"
+grep 'full_model_materialization_proof: refused' "$ROOT/rmsnorm-materialize.out"
+grep 'failed_reason: selected-runtime-slice' "$ROOT/rmsnorm-materialize.out"
+grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-materialize.out"
 
 "$YVEX_BIN" fullmodel report --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 3 > "$ROOT/fullish.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish.out"
@@ -272,6 +295,56 @@ grep 'full_model_execution: unsupported' "$ROOT/fullish-plan.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-plan.out"
 grep 'benchmark_status: not-measured' "$ROOT/fullish-plan.out"
 
+"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-bytes 1048576 > "$ROOT/fullish-materialize.out"
+grep 'fullmodel: materialize' "$ROOT/fullish-materialize.out"
+grep 'status: fullmodel-materialize-pass' "$ROOT/fullish-materialize.out"
+grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish-materialize.out"
+grep 'target_class: full-runtime-model-planned' "$ROOT/fullish-materialize.out"
+grep 'required_role_coverage: complete' "$ROOT/fullish-materialize.out"
+grep 'missing_required_roles: none' "$ROOT/fullish-materialize.out"
+grep 'memory_budget_status: pass' "$ROOT/fullish-materialize.out"
+grep 'backend_preflight_status: pass' "$ROOT/fullish-materialize.out"
+grep 'materialization_mode: controlled-fullmodel-proof' "$ROOT/fullish-materialize.out"
+grep 'full_model_materialization: controlled-tiny-proof' "$ROOT/fullish-materialize.out"
+grep 'full_model_materialization_proof: pass' "$ROOT/fullish-materialize.out"
+grep 'full_model_execution: unsupported' "$ROOT/fullish-materialize.out"
+grep 'generation_ready: false' "$ROOT/fullish-materialize.out"
+grep 'generation: unsupported-full-model' "$ROOT/fullish-materialize.out"
+grep 'benchmark_status: not-measured' "$ROOT/fullish-materialize.out"
+grep 'phase: complete' "$ROOT/fullish-materialize.out"
+grep 'failed_phase: none' "$ROOT/fullish-materialize.out"
+grep 'cleanup_attempted: true' "$ROOT/fullish-materialize.out"
+grep 'cleanup_status: pass' "$ROOT/fullish-materialize.out"
+grep 'cleanup_idempotent: true' "$ROOT/fullish-materialize.out"
+grep 'owned_state_released: true' "$ROOT/fullish-materialize.out"
+grep 'partial_materialization: false' "$ROOT/fullish-materialize.out"
+grep 'materialized_tensor_count: 12' "$ROOT/fullish-materialize.out"
+grep 'required_tensor_count: 12' "$ROOT/fullish-materialize.out"
+
+"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --dry-run --limit-bytes 1048576 > "$ROOT/fullish-materialize-dry-run.out"
+grep 'status: fullmodel-materialize-dry-run' "$ROOT/fullish-materialize-dry-run.out"
+grep 'dry_run: true' "$ROOT/fullish-materialize-dry-run.out"
+grep 'full_model_materialization_proof: planned' "$ROOT/fullish-materialize-dry-run.out"
+grep 'materialized_tensor_count: 0' "$ROOT/fullish-materialize-dry-run.out"
+
+"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --plan-only --limit-bytes 1048576 > "$ROOT/fullish-materialize-plan-only.out"
+grep 'status: fullmodel-materialize-plan-only' "$ROOT/fullish-materialize-plan-only.out"
+grep 'plan_only: true' "$ROOT/fullish-materialize-plan-only.out"
+grep 'full_model_materialization_proof: planned' "$ROOT/fullish-materialize-plan-only.out"
+
+"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-bytes 1024 > "$ROOT/fullish-materialize-limit.out" 2> "$ROOT/fullish-materialize-limit.err" && exit 1 || true
+grep 'status: fullmodel-materialize-fail' "$ROOT/fullish-materialize-limit.out"
+grep 'memory_budget_status: fail' "$ROOT/fullish-materialize-limit.out"
+grep 'failed_phase: memory-budget' "$ROOT/fullish-materialize-limit.out"
+grep 'failed_reason: byte-limit' "$ROOT/fullish-materialize-limit.out"
+grep 'generation: unsupported-full-model' "$ROOT/fullish-materialize-limit.out"
+
+"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-bytes 1048576 --fail-after-phase backend-preflight > "$ROOT/fullish-materialize-injected.out" 2> "$ROOT/fullish-materialize-injected.err" && exit 1 || true
+grep 'status: fullmodel-materialize-fail' "$ROOT/fullish-materialize-injected.out"
+grep 'failed_phase: backend-preflight' "$ROOT/fullish-materialize-injected.out"
+grep 'failed_reason: injected-failure' "$ROOT/fullish-materialize-injected.out"
+grep 'cleanup_attempted: true' "$ROOT/fullish-materialize-injected.out"
+
 "$YVEX_BIN" fullmodel plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu > "$ROOT/fullish-plan-alias.out"
 grep 'fullmodel: materialization-plan' "$ROOT/fullish-plan-alias.out"
 grep 'plan_kind: full-model-materialization' "$ROOT/fullish-plan-alias.out"
@@ -282,6 +355,15 @@ grep 'backend_available:' "$ROOT/fullish-plan-cuda.out"
 grep 'backend_memory_known:' "$ROOT/fullish-plan-cuda.out"
 grep 'backend_fit_status:' "$ROOT/fullish-plan-cuda.out"
 grep 'backend_allocation_attempted: false' "$ROOT/fullish-plan-cuda.out"
+
+if "$YVEX_BIN" cuda-info >/dev/null 2>&1; then
+  "$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cuda --limit-bytes 1048576 > "$ROOT/fullish-materialize-cuda.out"
+  grep 'status: fullmodel-materialize-pass' "$ROOT/fullish-materialize-cuda.out"
+  grep 'backend: cuda' "$ROOT/fullish-materialize-cuda.out"
+  grep 'cuda_resident_bytes:' "$ROOT/fullish-materialize-cuda.out"
+  grep 'full_model_materialization_proof: pass' "$ROOT/fullish-materialize-cuda.out"
+  grep 'generation: unsupported-full-model' "$ROOT/fullish-materialize-cuda.out"
+fi
 
 "$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --residency resident > "$ROOT/resident.out"
 grep 'residency: resident' "$ROOT/resident.out"
@@ -309,6 +391,12 @@ grep 'status: fullmodel-materialization-plan-unsupported' "$ROOT/glm-plan.out"
 grep 'materialization_attempted: false' "$ROOT/glm-plan.out"
 grep 'generation: unsupported-full-model' "$ROOT/glm-plan.out"
 
+"$YVEX_BIN" fullmodel materialize --model glm-5.2-official-safetensors > "$ROOT/glm-materialize.out" && exit 1 || true
+grep 'status: fullmodel-materialize-unsupported' "$ROOT/glm-materialize.out"
+grep 'target_class: official-source-huge-model' "$ROOT/glm-materialize.out"
+grep 'full_model_materialization_proof: unsupported' "$ROOT/glm-materialize.out"
+grep 'generation: unsupported-full-model' "$ROOT/glm-materialize.out"
+
 "$YVEX_BIN" fullmodel report --model "$ROOT/missing.gguf" > "$ROOT/missing.out" 2> "$ROOT/missing.err" && exit 1 || true
 grep 'status: fullmodel-report-fail' "$ROOT/missing.out"
 grep 'artifact_exists: false' "$ROOT/missing.out"
@@ -319,6 +407,12 @@ grep 'status: fullmodel-materialization-plan-fail' "$ROOT/missing-plan.out"
 grep 'artifact_exists: false' "$ROOT/missing-plan.out"
 grep 'materialization_attempted: false' "$ROOT/missing-plan.out"
 grep 'generation: unsupported-full-model' "$ROOT/missing-plan.out"
+
+"$YVEX_BIN" fullmodel materialize --model "$ROOT/missing.gguf" > "$ROOT/missing-materialize.out" 2> "$ROOT/missing-materialize.err" && exit 1 || true
+grep 'status: fullmodel-materialize-fail' "$ROOT/missing-materialize.out"
+grep 'failed_phase: resolve-model' "$ROOT/missing-materialize.out"
+grep 'failed_reason: artifact path does not exist' "$ROOT/missing-materialize.out"
+grep 'generation: unsupported-full-model' "$ROOT/missing-materialize.out"
 
 printf 'not-gguf' > "$CORRUPT"
 "$YVEX_BIN" fullmodel report --model "$CORRUPT" > "$ROOT/corrupt.out" 2> "$ROOT/corrupt.err" && exit 1 || true
@@ -332,17 +426,32 @@ grep 'tensor_inventory_status: failed' "$ROOT/corrupt-plan.out"
 grep 'materialization_attempted: false' "$ROOT/corrupt-plan.out"
 grep 'generation_ready: false' "$ROOT/corrupt-plan.out"
 
+"$YVEX_BIN" fullmodel materialize --model "$CORRUPT" > "$ROOT/corrupt-materialize.out" 2> "$ROOT/corrupt-materialize.err" && exit 1 || true
+grep 'status: fullmodel-materialize-fail' "$ROOT/corrupt-materialize.out"
+grep 'failed_phase: tensor-inventory' "$ROOT/corrupt-materialize.out"
+grep 'generation_ready: false' "$ROOT/corrupt-materialize.out"
+
 "$YVEX_BIN" fullmodel report --model "$FULLISH" --limit-tensors 0 > "$ROOT/invalid.out" 2> "$ROOT/invalid.err" && exit 1 || true
 grep 'requires a positive integer' "$ROOT/invalid.err"
 
 "$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --residency magic > "$ROOT/bad-residency.out" 2> "$ROOT/bad-residency.err" && exit 1 || true
 grep 'fullmodel --residency must be' "$ROOT/bad-residency.err"
 
+"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --limit-bytes 0 > "$ROOT/bad-limit-bytes.out" 2> "$ROOT/bad-limit-bytes.err" && exit 1 || true
+grep 'limit-bytes requires a positive integer' "$ROOT/bad-limit-bytes.err"
+
 for file in \
   "$ROOT/selected-plan.out" \
+  "$ROOT/selected-materialize.out" \
   "$ROOT/rmsnorm-plan.out" \
+  "$ROOT/rmsnorm-materialize.out" \
   "$ROOT/fullish-plan.out" \
   "$ROOT/fullish-plan-cuda.out" \
+  "$ROOT/fullish-materialize.out" \
+  "$ROOT/fullish-materialize-dry-run.out" \
+  "$ROOT/fullish-materialize-plan-only.out" \
+  "$ROOT/fullish-materialize-limit.out" \
+  "$ROOT/fullish-materialize-injected.out" \
   "$ROOT/resident.out" \
   "$ROOT/host-staged.out" \
   "$ROOT/ssd-staged.out" \

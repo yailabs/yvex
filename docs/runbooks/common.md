@@ -13,8 +13,8 @@ evaluation, or benchmark capability.
 
 Purpose:
   Quickly check command discovery, path resolution, model-target reporting,
-  fullmodel report/materialization-plan help, tokenizer fixture diagnostics, and
-  minimal KV diagnostics.
+  fullmodel report/materialization-plan/materialize help, tokenizer fixture
+  diagnostics, and minimal KV diagnostics.
 
 Requires:
   Repository root.
@@ -35,8 +35,8 @@ Boundary:
   read/diagnostic command surface only
   no source conversion
   no alias refresh
-  no materialization proof
-  no full backend allocation
+  bounded fullmodel proof/refusal diagnostics only
+  no uncontrolled full backend allocation
   no daemon
   no generation claim
 
@@ -63,6 +63,7 @@ make
 ./yvex model-target inspect glm-5.2-official-safetensors --paths
 ./yvex fullmodel report --model glm-5.2-official-safetensors --backend cpu
 ./yvex fullmodel materialization-plan --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
+./yvex fullmodel materialize --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --dry-run
 ./yvex backend cpu
 ./yvex tokenizer tests/fixtures/gguf/valid-tokenizer-simple.gguf
 ./yvex tokenize tests/fixtures/gguf/valid-tokenizer-simple.gguf --text "hello"
