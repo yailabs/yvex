@@ -1450,7 +1450,7 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.SOURCE.4,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
+        "V010.SOURCE.5,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
@@ -1478,7 +1478,7 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.SOURCE.4,MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0",
+        "V010.SOURCE.5,MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0",
         {
             "planned-dense-pressure-only",
             "missing-gemma-source-path",
@@ -1668,7 +1668,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,V010.SOURCE.4,COMPUTE.BACKEND.METAL.0",
+        "V010.TARGET.7,V010.SOURCE.5,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
@@ -1714,7 +1714,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,V010.SOURCE.4,MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0",
+        "V010.TARGET.7,V010.SOURCE.5,MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0",
         {
             "planned-dense-pressure-only",
             "missing-gemma-source-path",
@@ -2100,7 +2100,7 @@ static const char *target_decision_candidate_next(const yvex_model_target_record
     }
     if (strcmp(record->target_class, "metal-reduced-full-runtime-pressure") == 0 ||
         strcmp(record->target_class, "reduced-dense-full-runtime-pressure") == 0) {
-        return "source provenance fields";
+        return "native safetensors inventory";
     }
     if (strcmp(record->target_class, "selected-runtime-slice") == 0) return "pressure-only";
     if (strcmp(record->target_class, "external-GGUF-reference") == 0 ||
@@ -2428,7 +2428,7 @@ static int print_model_target_candidate_normal(const char *release,
     printf("candidates: 0 eligible / %lu known (%lu pressure, %lu fixture)\n",
            candidate_count, pressure_count, fixture_count);
     printf("top_blocker: no eligible full-runtime candidate\n");
-    printf("next: V010.SOURCE.4\n");
+    printf("next: V010.SOURCE.5\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
@@ -2550,7 +2550,7 @@ static void print_registered_dense_candidate(unsigned long index,
         printf("dense_candidate_%lu_blocker_11: missing-real-logits\n", index);
     }
     if (include_next) {
-        printf("dense_candidate_%lu_next_required_rows: V010.TARGET.7,V010.SOURCE.4,V010.MAP.*\n", index);
+        printf("dense_candidate_%lu_next_required_rows: V010.TARGET.7,V010.SOURCE.5,V010.MAP.*\n", index);
     }
 }
 
@@ -2754,7 +2754,7 @@ static int print_model_target_dense_candidate_normal(const char *release,
     printf("candidates: %lu eligible / %lu known (%lu dense pressure)\n",
            eligible_count, dense_candidate_count, dense_pressure_count);
     printf("top_blocker: no selected dense full-runtime candidate\n");
-    printf("next: V010.SOURCE.4\n");
+    printf("next: V010.SOURCE.5\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
@@ -2921,7 +2921,7 @@ static int print_model_target_qwen_metal_report(const char *release,
         }
     }
     if (include_next) {
-        printf("next_required_rows: V010.SOURCE.4\n");
+        printf("next_required_rows: V010.SOURCE.5\n");
     }
     return 0;
 }
@@ -2947,7 +2947,7 @@ static int print_model_target_qwen_metal_normal(const char *release,
     printf("source_target: profiled\n");
     printf("source: missing\n");
     printf("backend: metal unsupported\n");
-    printf("next: V010.SOURCE.4\n");
+    printf("next: V010.SOURCE.5\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     return 0;
 }
@@ -3153,7 +3153,7 @@ static int print_model_target_decision_normal(const char *release,
     printf("eligible: %lu / %lu candidates (%lu ineligible)\n",
            eligible_count, candidate_count, ineligible_count);
     printf("top_blocker: %s\n", selected ? "none" : "no eligible full-runtime candidate");
-    printf("next: V010.SOURCE.4\n");
+    printf("next: V010.SOURCE.5\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     return 0;
 }
@@ -3322,6 +3322,78 @@ static const char *model_target_source_tensor_payload_status(const yvex_model_ta
     return "unsupported";
 }
 
+static const char *model_target_source_provenance_status(const yvex_model_target_record *record)
+{
+    const char *artifact_status;
+
+    if (!record) return "unknown";
+    artifact_status = model_target_source_artifact_status(record);
+    if (strcmp(artifact_status, "missing") == 0) return "missing";
+    if (strcmp(artifact_status, "planned") == 0) return "planned";
+    if (strcmp(artifact_status, "external-reference-only") == 0) {
+        return "external-reference-only";
+    }
+    return "unknown";
+}
+
+static const char *model_target_source_origin(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    if (strncmp(record->source_artifact_class, "official", 8) == 0) {
+        return "planned-official";
+    }
+    if (strncmp(record->source_artifact_class, "external", 8) == 0) {
+        return "external-reference";
+    }
+    if (strncmp(record->source_artifact_class, "YVEX", 4) == 0) {
+        return "YVEX-produced";
+    }
+    return "unknown";
+}
+
+static const char *model_target_source_authority(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    if (strncmp(record->source_artifact_class, "official", 8) == 0) {
+        return "upstream-official-planned";
+    }
+    if (strncmp(record->source_artifact_class, "external", 8) == 0) {
+        return "external-reference-only";
+    }
+    if (strncmp(record->source_artifact_class, "YVEX", 4) == 0) {
+        return "YVEX";
+    }
+    return "unknown";
+}
+
+static const char *model_target_source_revision_status(const yvex_model_target_record *record)
+{
+    (void)record;
+    return "unknown";
+}
+
+static const char *model_target_source_identity_status(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    if (strcmp(model_target_source_artifact_status(record), "missing") == 0) {
+        return "not-present";
+    }
+    return "not-verified";
+}
+
+static const char *model_target_source_hash_status(const yvex_model_target_record *record)
+{
+    (void)record;
+    return "not-computed";
+}
+
+static const char *model_target_source_verification_status(
+    const yvex_model_target_record *record)
+{
+    (void)record;
+    return "not-verified";
+}
+
 static const char *model_target_target_artifact_status(const yvex_model_target_record *record)
 {
     if (!record) return "unknown";
@@ -3414,6 +3486,17 @@ static void print_model_target_list(void)
                model_target_source_artifact_origin(record));
         printf("target_artifact_origin: %s\n",
                model_target_target_artifact_origin(record));
+        printf("source_provenance_status: %s\n",
+               model_target_source_provenance_status(record));
+        printf("source_origin: %s\n", model_target_source_origin(record));
+        printf("source_authority: %s\n", model_target_source_authority(record));
+        printf("source_revision_status: %s\n",
+               model_target_source_revision_status(record));
+        printf("source_identity_status: %s\n",
+               model_target_source_identity_status(record));
+        printf("source_hash_status: %s\n", model_target_source_hash_status(record));
+        printf("source_verification_status: %s\n",
+               model_target_source_verification_status(record));
         printf("runtime_execution: %s\n", record->runtime_execution);
         printf("runtime_claim: unsupported\n");
         printf("generation: %s\n", record->generation);
@@ -3465,6 +3548,17 @@ static void print_model_target_record(const yvex_model_target_record *record)
     printf("source_tensor_container: %s\n", model_target_source_tensor_container(record));
     printf("source_tensor_payload_status: %s\n",
            model_target_source_tensor_payload_status(record));
+    printf("source_provenance_status: %s\n",
+           model_target_source_provenance_status(record));
+    printf("source_origin: %s\n", model_target_source_origin(record));
+    printf("source_authority: %s\n", model_target_source_authority(record));
+    printf("source_revision_status: %s\n",
+           model_target_source_revision_status(record));
+    printf("source_identity_status: %s\n",
+           model_target_source_identity_status(record));
+    printf("source_hash_status: %s\n", model_target_source_hash_status(record));
+    printf("source_verification_status: %s\n",
+           model_target_source_verification_status(record));
     printf("target_artifact_class: %s\n", record->target_artifact_class);
     printf("target_artifact_status: %s\n", model_target_target_artifact_status(record));
     printf("target_artifact_origin: %s\n", model_target_target_artifact_origin(record));
@@ -3501,7 +3595,7 @@ static void print_model_target_record_normal(const yvex_model_target_record *rec
                model_target_target_artifact_status(record));
         printf("runtime: %s\n", record->runtime_execution);
         printf("generation: %s\n", record->generation);
-        printf("next: V010.SOURCE.4\n");
+        printf("next: V010.SOURCE.5\n");
         printf("boundary: target/source profile only; no source download/runtime/generation\n");
         printf("status: model-target\n");
         return;
@@ -3517,7 +3611,7 @@ static void print_model_target_record_normal(const yvex_model_target_record *rec
                model_target_target_artifact_status(record));
         printf("runtime: %s\n", record->runtime_execution);
         printf("generation: %s\n", record->generation);
-        printf("next: V010.SOURCE.4\n");
+        printf("next: V010.SOURCE.5\n");
         printf("boundary: source/storage pressure only; no GLM runtime/generation\n");
         printf("status: model-target\n");
         return;
@@ -3573,7 +3667,7 @@ static void print_model_target_report_table(const char *report,
            status ? status : "blocked",
            selected ? selected : "none",
            eligible_count,
-           "V010.SOURCE.4");
+           "V010.SOURCE.5");
 }
 
 static int path_exists(const char *path)

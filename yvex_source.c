@@ -742,6 +742,8 @@ typedef struct {
     int generation_config_exists;
     int tokenizer_json_exists;
     int tokenizer_config_exists;
+    int readme_exists;
+    int license_exists;
     int manifest_exists;
     int native_inventory_exists;
     unsigned long long source_file_count;
@@ -1135,6 +1137,63 @@ static const char *qwen_source_footprint_status(const yvex_qwen_source_pressure_
     return "report-only";
 }
 
+static const char *qwen_source_provenance_origin_normal(
+    const yvex_qwen_source_pressure_report *report)
+{
+    return report && report->source_exists ? "local-path" : "planned-official";
+}
+
+static const char *qwen_source_provenance_origin_audit(
+    const yvex_qwen_source_report_options *options,
+    const yvex_qwen_source_pressure_report *report)
+{
+    if (!report || !report->source_exists) {
+        return "planned-official";
+    }
+    if (options && options->source) {
+        return "explicit-source-path";
+    }
+    return "configured-models-root";
+}
+
+static const char *qwen_source_provenance_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    if (!report || !report->source_exists) {
+        return "missing";
+    }
+    return "local-unverified";
+}
+
+static const char *qwen_source_authority(const yvex_qwen_source_pressure_report *report)
+{
+    return report && report->source_exists
+               ? "local-unverified"
+               : "upstream-official-planned";
+}
+
+static const char *qwen_source_authority_status(const yvex_qwen_source_pressure_report *report)
+{
+    return report && report->source_exists ? "local-unverified" : "planned";
+}
+
+static const char *qwen_source_manifest_provenance_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    return report && report->manifest_exists ? "manifest-present" : "manifest-missing";
+}
+
+static const char *qwen_source_manifest_authority(
+    const yvex_qwen_source_pressure_report *report)
+{
+    return report && report->manifest_exists ? "local-unverified" : "unknown";
+}
+
+static const char *qwen_source_presence_verification_status(int present)
+{
+    return present ? "present-unverified" : "not-present";
+}
+
 static int qwen_source_build_report(const yvex_qwen_source_report_options *options,
                                     yvex_qwen_source_pressure_report *report)
 {
@@ -1193,6 +1252,11 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
             qwen_source_check_file(report->source_path, "tokenizer.json");
         report->tokenizer_config_exists =
             qwen_source_check_file(report->source_path, "tokenizer_config.json");
+        report->readme_exists = qwen_source_check_file(report->source_path, "README.md");
+        report->license_exists =
+            qwen_source_check_file(report->source_path, "LICENSE") ||
+            qwen_source_check_file(report->source_path, "LICENSE.txt") ||
+            qwen_source_check_file(report->source_path, "COPYING");
         qwen_source_scan_top_footprint(report->source_path, report);
     }
 
@@ -1216,11 +1280,11 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
     if (!report->source_exists) {
         report->status = "source-target-profiled";
         report->top_blocker = options->profile->source_path_blocker;
-        report->next_row = "V010.SOURCE.4";
+        report->next_row = "V010.SOURCE.5";
     } else if (!report->manifest_exists) {
         report->status = "source-present-report-only";
         report->top_blocker = options->profile->source_manifest_blocker;
-        report->next_row = "V010.SOURCE.4";
+        report->next_row = "V010.SOURCE.5";
     } else if (!report->native_inventory_exists) {
         report->status = "source-present-report-only";
         report->top_blocker = options->profile->native_inventory_blocker;
@@ -1270,6 +1334,9 @@ static void qwen_source_print_normal(const yvex_qwen_source_report_options *opti
            report->safetensors_count,
            report->total_size_bytes,
            qwen_source_footprint_class(report));
+    printf("provenance: %s status=%s revision=unknown\n",
+           qwen_source_provenance_origin_normal(report),
+           qwen_source_provenance_status(report));
     printf("top_blocker: %s\n", report->top_blocker);
     printf("next: %s\n", report->next_row);
     printf("boundary: source report only; no artifact/runtime/generation/benchmark\n");
@@ -1279,17 +1346,17 @@ static void qwen_source_print_table(const yvex_qwen_source_report_options *optio
                                     const yvex_qwen_source_pressure_report *report)
 {
     printf("SOURCE PRESSURE  release=%s\n\n", options->release);
-    printf("%-6s  %-24s  %-7s  %5s  %11s  %5s  %-9s  %s\n",
-           "FAMILY", "TARGET", "SOURCE", "FILES", "SAFETENSORS",
-           "BYTES", "FOOTPRINT", "NEXT");
-    printf("%-6s  %-24s  %-7s  %5llu  %11llu  %5llu  %-9s  %s\n",
+    printf("%-6s  %-24s  %-7s  %5s  %5s  %-9s  %-16s  %s\n",
+           "FAMILY", "TARGET", "SOURCE", "FILES", "BYTES", "FOOTPRINT",
+           "PROVENANCE", "NEXT");
+    printf("%-6s  %-24s  %-7s  %5llu  %5llu  %-9s  %-16s  %s\n",
            options->profile->family_key,
            options->target,
            report->source_state,
            report->source_file_count,
-           report->safetensors_count,
            report->total_size_bytes,
            qwen_source_footprint_class(report),
+           qwen_source_provenance_origin_normal(report),
            report->next_row);
 }
 
@@ -1334,6 +1401,10 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
     printf("hardware_lane: %s\n", options->profile->hardware_lane);
     printf("backend_lane: %s\n", options->profile->backend_lane);
     printf("source_class: %s\n", options->profile->source_class);
+    printf("source_provenance_status: %s\n", qwen_source_provenance_status(report));
+    printf("source_origin: %s\n", qwen_source_provenance_origin_audit(options, report));
+    printf("source_authority: %s\n", qwen_source_authority(report));
+    printf("source_authority_status: %s\n", qwen_source_authority_status(report));
     printf("source_path: %s\n", report->source_path);
     printf("source_path_source: %s\n", report->source_path_source);
     printf("source_path_status: %s\n", report->source_state);
@@ -1368,6 +1439,26 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
     printf("source_manifest_status: %s\n", qwen_source_manifest_status(report));
     printf("source_manifest_path: %s\n",
            report->manifest_path[0] ? report->manifest_path : "unknown");
+    printf("source_manifest_authority: %s\n",
+           qwen_source_manifest_authority(report));
+    printf("source_manifest_provenance_status: %s\n",
+           qwen_source_manifest_provenance_status(report));
+    printf("source_revision: unknown\n");
+    printf("source_revision_status: unknown\n");
+    printf("source_commit: unknown\n");
+    printf("source_commit_status: unknown\n");
+    printf("source_tag: unknown\n");
+    printf("source_tag_status: unknown\n");
+    printf("source_license_status: %s\n",
+           qwen_source_presence_verification_status(report->license_exists));
+    printf("source_readme_status: %s\n",
+           qwen_source_presence_verification_status(report->readme_exists));
+    printf("source_identity_status: %s\n",
+           report->source_exists ? "not-verified" : "not-present");
+    printf("source_digest_status: not-computed\n");
+    printf("source_hash_status: not-computed\n");
+    printf("source_verification_status: not-verified\n");
+    printf("source_remote_checked: false\n");
     printf("native_inventory_status: %s\n",
            qwen_source_native_inventory_status(report));
     printf("native_inventory_path: %s\n",
@@ -1403,8 +1494,9 @@ static void qwen_source_report_help(FILE *fp)
     fprintf(fp, "  --target qwen-metal-portability|qwen-small|qwen-medium|gemma-dense-portability\n");
     fprintf(fp, "  --include-files --include-config --include-blockers --include-next\n");
     fprintf(fp, "  --audit | --output normal|table|audit\n\n");
-    fprintf(fp, "Report fields include source artifact class, target artifact class, and source footprint evidence.\n");
+    fprintf(fp, "Report fields include source artifact class, target artifact class, source footprint, and source provenance evidence.\n");
     fprintf(fp, "Source footprint reports count top-level regular files and bytes without loading tensor payloads.\n");
+    fprintf(fp, "Source provenance fields classify local/planned state only; they do not verify upstream identity, hash files, or prove source readiness.\n");
     fprintf(fp, "The source pressure report inspects source-path readiness only. It does not download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
 }
 

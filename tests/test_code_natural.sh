@@ -125,11 +125,15 @@ pattern='YVEX supports GLM gener''ation'
 scan_forbidden_claim "$pattern"
 pattern='Qwen source down''loaded'
 scan_forbidden_claim "$pattern"
+pattern='Qwen source veri''fied'
+scan_forbidden_claim "$pattern"
 pattern='Qwen runtime imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='Qwen generation imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='Gemma source down''loaded'
+scan_forbidden_claim "$pattern"
+pattern='Gemma source veri''fied'
 scan_forbidden_claim "$pattern"
 pattern='native inventory implemented for Qw''en'
 scan_forbidden_claim "$pattern"
@@ -142,6 +146,12 @@ scan_forbidden_claim "$pattern"
 pattern='Metal support imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='source_rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='source_identity_veri''fied: true'
+scan_forbidden_claim "$pattern"
+pattern='source_hash_veri''fied: true'
+scan_forbidden_claim "$pattern"
+pattern='source_remote_chec''ked: true'
 scan_forbidden_claim "$pattern"
 pattern='generation_rea''dy: true'
 scan_forbidden_claim "$pattern"

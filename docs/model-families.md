@@ -160,17 +160,26 @@ sidecar bytes, other bytes, largest file, and footprint class without reading
 tensor payloads, parsing safetensors headers, parsing tokenizer JSON, hashing
 files, creating manifests, or proving provenance.
 
+Source provenance fields are command-visible as classification state only. They
+report whether the source is planned official or a local/explicit path, expose
+authority/status vocabulary, keep revision/commit/tag unknown when not known,
+and report README/LICENSE presence without parsing contents. They do not perform
+remote lookup, hash files, verify upstream identity, create manifests, prove
+source identity, or imply source readiness.
+
 The report checks only local source-path pressure facts: concrete target slot,
 configured source path, source path existence, config/tokenizer file visibility,
-top-level safetensors presence, top-level source footprint, source manifest
-status, native inventory status, blockers, and next rows. It does not download
-sources, create source manifests, imply source readiness, emit artifacts,
-materialize tensors, inspect tensor payloads, implement Metal, execute Qwen or
-Gemma runtime paths, generate, evaluate, benchmark, or mark a release ready.
+top-level safetensors presence, top-level source footprint, provenance fields,
+source manifest status, native inventory status, blockers, and next rows. It
+does not download sources, create source manifests, imply source readiness,
+emit artifacts, materialize tensors, inspect tensor payloads, implement Metal,
+execute Qwen or Gemma runtime paths, generate, evaluate, benchmark, or mark a
+release ready.
 
-Source family/profile fields, source artifact class fields, and source
-footprint fields are command-visible for Qwen and Gemma. The next source
-pressure step is provenance fields without tensor payload loading.
+Source family/profile fields, source artifact class fields, source footprint
+fields, and source provenance fields are command-visible for Qwen and Gemma.
+The next source pressure step is native safetensors inventory without tensor
+payload loading.
 
 ## Family Classification
 
