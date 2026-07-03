@@ -394,6 +394,7 @@ typedef struct {
     const char *family;
     const char *backend;
     const char *registry_path;
+    int audit_output;
     int include_attention;
     int include_context;
     int include_residency;
@@ -418,6 +419,20 @@ typedef struct {
 static const char *kv_bool(int value)
 {
     return value ? "true" : "false";
+}
+
+static int kv_parse_output_mode(const char *value, int *audit_output)
+{
+    if (!value || !audit_output) return 0;
+    if (strcmp(value, "normal") == 0) {
+        *audit_output = 0;
+        return 1;
+    }
+    if (strcmp(value, "audit") == 0) {
+        *audit_output = 1;
+        return 1;
+    }
+    return 0;
 }
 
 static int kv_streq(const char *a, const char *b)
@@ -854,6 +869,17 @@ static int kv_print_source_only_report(const yvex_kv_report_options *options)
 {
     const char *family = kv_streq(options->family, "auto") ? "glm" : options->family;
 
+    if (options && !options->audit_output) {
+        printf("report: kv\n");
+        printf("model: %s\n", options->model ? options->model : "");
+        printf("family: %s\n", family ? family : "unknown");
+        printf("status: unsupported\n");
+        printf("top_blocker: source-only target has no YVEX-produced GGUF tensor inventory\n");
+        printf("next: V010.KV.*\n");
+        printf("boundary: report-only, no runtime execution\n");
+        return 5;
+    }
+
     kv_print_report_header(options, NULL, "kv-report-unsupported",
                            "not-resolved-source-only-target",
                            "official-source-huge-model",
@@ -921,6 +947,17 @@ static int kv_print_unsupported_family_report(const yvex_kv_report_options *opti
                                               const char *detected,
                                               const char *reason)
 {
+    if (options && !options->audit_output) {
+        printf("report: kv\n");
+        printf("model: %s\n", options->model ? options->model : "");
+        printf("family: %s\n", options->family ? options->family : "unknown");
+        printf("status: unsupported\n");
+        printf("top_blocker: %s\n", reason ? reason : "unsupported family");
+        printf("next: V010.KV.*\n");
+        printf("boundary: report-only, no runtime execution\n");
+        return 5;
+    }
+
     kv_print_report_header(options, NULL, "kv-report-unsupported",
                            "not-resolved",
                            "unknown",
@@ -1008,6 +1045,7 @@ static int command_kv_report(int argc, char **argv)
 
     options.family = "auto";
     options.backend = "cpu";
+    options.audit_output = 0;
 
     for (i = 3; i < argc; ++i) {
         if (strcmp(argv[i], "--model") == 0) {
@@ -1042,6 +1080,17 @@ static int command_kv_report(int argc, char **argv)
             options.include_residency = 1;
         } else if (strcmp(argv[i], "--include-blockers") == 0) {
             options.include_blockers = 1;
+        } else if (strcmp(argv[i], "--audit") == 0) {
+            options.audit_output = 1;
+        } else if (strcmp(argv[i], "--output") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: kv report --output requires normal or audit\n");
+                return 2;
+            }
+            if (!kv_parse_output_mode(argv[++i], &options.audit_output)) {
+                fprintf(stderr, "yvex: kv report unsupported output mode: %s\n", argv[i]);
+                return 2;
+            }
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             yvex_kv_help(stdout);
             return 0;
@@ -1071,6 +1120,17 @@ static int command_kv_report(int argc, char **argv)
     ref_options.registry_path = options.registry_path;
     rc = yvex_model_ref_resolve(&ref, options.model, &ref_options, &err);
     if (rc != YVEX_OK) {
+        if (!options.audit_output) {
+            printf("report: kv\n");
+            printf("model: %s\n", options.model ? options.model : "");
+            printf("family: %s\n", kv_streq(options.family, "auto") ? "unknown" : options.family);
+            printf("status: fail\n");
+            printf("top_blocker: %s\n", err.message[0] ? err.message : "model resolution failed");
+            printf("next: V010.KV.*\n");
+            printf("boundary: report-only, no runtime execution\n");
+            yvex_model_ref_clear(&ref);
+            return exit_for_status(rc);
+        }
         kv_print_report_header(&options, &ref, "kv-report-fail",
                                ref.path, "unknown",
                                kv_streq(options.family, "auto") ? "unknown" : options.family,
@@ -1087,6 +1147,17 @@ static int command_kv_report(int argc, char **argv)
 
     rc = open_model_context(ref.path, &ctx, &err);
     if (rc != YVEX_OK) {
+        if (!options.audit_output) {
+            printf("report: kv\n");
+            printf("model: %s\n", options.model ? options.model : "");
+            printf("family: %s\n", kv_streq(options.family, "auto") ? "unknown" : options.family);
+            printf("status: fail\n");
+            printf("top_blocker: %s\n", err.message[0] ? err.message : "tensor inventory failed");
+            printf("next: V010.KV.*\n");
+            printf("boundary: report-only, no runtime execution\n");
+            yvex_model_ref_clear(&ref);
+            return exit_for_status(rc);
+        }
         kv_print_report_header(&options, &ref, "kv-report-fail",
                                ref.path, kv_target_class_for_model(options.model, &ref),
                                kv_streq(options.family, "auto") ? "unknown" : options.family,
@@ -1119,6 +1190,19 @@ static int command_kv_report(int argc, char **argv)
     kv_scan_roles(ctx.table, &scan);
     target_class = kv_target_class_for_model(options.model, &ref);
     max_context = kv_report_context_length(&ctx);
+
+    if (!options.audit_output) {
+        printf("report: kv\n");
+        printf("model: %s\n", options.model ? options.model : "");
+        printf("family: %s\n", family ? family : "unknown");
+        printf("status: %s\n", kv_class_status_for_scan(&scan));
+        printf("top_blocker: real attention-backed KV unsupported\n");
+        printf("next: V010.KV.*\n");
+        printf("boundary: report-only, no runtime execution\n");
+        close_model_context(&ctx);
+        yvex_model_ref_clear(&ref);
+        return 0;
+    }
 
     kv_print_report_header(&options, &ref, "kv-report",
                            ref.path,
@@ -1352,14 +1436,15 @@ int yvex_kv_command(int argc, char **argv)
 void yvex_kv_help(FILE *fp)
 {
     fprintf(fp,
-            "usage: yvex kv report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen|llama] [--backend cpu|cuda] [options]\n"
+            "usage: yvex kv report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen|llama] [--backend cpu|cuda] [--audit | --output normal|audit] [options]\n"
             "usage: yvex kv --layers N --heads N --head-dim N --capacity N [--append-demo] [--read-position N]\n\n"
             "kv report:\n"
             "  KV cache class and requirements report over model/family facts.\n"
             "  Reports layout, dtype, layer/head/position indexing, capacity, context dependency, residency class, attention dependency, and blockers.\n"
             "  This is a report-only boundary: it does not allocate full runtime KV, write real attention-backed KV, execute decode, generate, evaluate, benchmark, or report throughput.\n"
             "  Existing diagnostic KV is segment-summary/minimal only and is not DeepSeek KV, real attention KV, full transformer KV, or decode-ready KV.\n"
-            "  Options: --include-attention --include-context --include-residency --include-blockers --registry FILE\n\n"
+            "  Options: --include-attention --include-context --include-residency --include-blockers --registry FILE\n"
+            "  Default report output is compact. Use --audit for full diagnostic fields.\n\n"
             "minimal KV diagnostic:\n"
             "  --append-demo allocates a minimal F32 session-owned KV store and reports lifecycle/bounds facts.\n"
             "  It remains diagnostic/minimal and does not run attention, decode, logits, sampling, generation, or prefill.\n");

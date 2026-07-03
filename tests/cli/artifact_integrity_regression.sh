@@ -340,7 +340,7 @@ GOOD_SHA=$(awk '/^registered_sha256: / { print $2 }' "$OUT_DIR/models-add.out")
 test -n "$GOOD_SHA" || fail "missing registered sha"
 
 run_expect_pass identity-pass models-verify "status: models-identity-pass" identity false false not-needed \
-    "$YVEX_BIN" models verify "$ALIAS" --registry "$REG"
+    "$YVEX_BIN" models verify "$ALIAS" --registry "$REG" --audit
 contains "$OUT_DIR/identity-pass.models-verify.out" "identity_status: pass"
 contains "$OUT_DIR/identity-pass.models-verify.out" "metadata_status: pass"
 
@@ -351,7 +351,7 @@ contains "$OUT_DIR/expected-sha-mismatch.integrity.out" "error_0_code: digest-mi
 
 remove_digest_identity "$REG" "$OLD_REG"
 run_expect_fail old-registry-missing-digest models-verify "status: models-identity-missing" identity false false not-needed \
-    "$YVEX_BIN" models verify "$ALIAS" --registry "$OLD_REG"
+    "$YVEX_BIN" models verify "$ALIAS" --registry "$OLD_REG" --audit
 contains "$OUT_DIR/old-registry-missing-digest.models-verify.out" "identity_status: missing"
 
 cp "$F16_MODEL" "$STALE_MODEL"
@@ -362,7 +362,7 @@ cp "$F16_MODEL" "$STALE_MODEL"
   --registry "$STALE_REG" >"$OUT_DIR/stale-add.out" 2>"$OUT_DIR/stale-add.err"
 mutate_file_byte "$STALE_MODEL"
 run_expect_fail stale-alias models-verify "status: models-identity-fail" identity false false not-needed \
-    "$YVEX_BIN" models verify "$ALIAS" --registry "$STALE_REG"
+    "$YVEX_BIN" models verify "$ALIAS" --registry "$STALE_REG" --audit
 contains "$OUT_DIR/stale-alias.models-verify.out" "digest_status: fail"
 contains "$OUT_DIR/stale-alias.models-verify.out" "identity_status: fail"
 
@@ -402,7 +402,7 @@ do
     reg=$(printf '%s' "$item" | cut -d: -f2)
     issue=$(printf '%s' "$item" | cut -d: -f3)
     run_expect_fail "$name" models-verify "status: models-metadata-drift" metadata false false not-needed \
-        "$YVEX_BIN" models verify "$ALIAS" --registry "$reg"
+        "$YVEX_BIN" models verify "$ALIAS" --registry "$reg" --audit
     contains "$OUT_DIR/$name.models-verify.out" "metadata_status: fail"
     contains "$OUT_DIR/$name.models-verify.out" "$issue"
 done

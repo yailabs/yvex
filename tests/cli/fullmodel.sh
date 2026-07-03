@@ -248,7 +248,57 @@ grep 'source-only targets are reported without opening huge source shards' "$ROO
 grep 'usage: yvex tensor-collection report --model FILE_OR_ALIAS' "$ROOT/tensor-collection-report-help.out"
 grep 'tensor-collection report:' "$ROOT/tensor-collection-report-help.out"
 
-"$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" > "$ROOT/selected.out"
+"$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" > "$ROOT/normal-fullmodel.out"
+grep 'fullmodel: report' "$ROOT/normal-fullmodel.out"
+grep 'boundary: report-only, no full model execution' "$ROOT/normal-fullmodel.out"
+test "$(wc -l < "$ROOT/normal-fullmodel.out")" -le 8
+
+"$YVEX_BIN" fullmodel materialization-plan --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" > "$ROOT/normal-fullmodel-plan.out"
+grep 'materialization-plan:' "$ROOT/normal-fullmodel-plan.out"
+grep 'boundary: plan-only, no materialization' "$ROOT/normal-fullmodel-plan.out"
+test "$(wc -l < "$ROOT/normal-fullmodel-plan.out")" -le 8
+
+"$YVEX_BIN" attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" > "$ROOT/normal-attention.out"
+grep 'report: attention' "$ROOT/normal-attention.out"
+grep 'boundary: report-only, no runtime execution' "$ROOT/normal-attention.out"
+test "$(wc -l < "$ROOT/normal-attention.out")" -le 8
+
+"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --tokens 0,1 > "$ROOT/normal-context.out"
+grep 'report: context' "$ROOT/normal-context.out"
+grep 'boundary: report-only, no runtime execution' "$ROOT/normal-context.out"
+test "$(wc -l < "$ROOT/normal-context.out")" -le 8
+
+"$YVEX_BIN" kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" > "$ROOT/normal-kv.out"
+grep 'report: kv' "$ROOT/normal-kv.out"
+grep 'boundary: report-only, no runtime execution' "$ROOT/normal-kv.out"
+test "$(wc -l < "$ROOT/normal-kv.out")" -le 8
+
+"$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" > "$ROOT/normal-moe.out"
+grep 'report: moe' "$ROOT/normal-moe.out"
+grep 'boundary: report-only, no runtime execution' "$ROOT/normal-moe.out"
+test "$(wc -l < "$ROOT/normal-moe.out")" -le 8
+
+"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection moe --backend cpu --registry "$REG" > "$ROOT/normal-tensor-collection.out"
+grep 'report: tensor-collection' "$ROOT/normal-tensor-collection.out"
+grep 'boundary: report-only, no runtime execution' "$ROOT/normal-tensor-collection.out"
+test "$(wc -l < "$ROOT/normal-tensor-collection.out")" -le 8
+
+"$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" --output nope > "$ROOT/bad-fullmodel-output.out" 2> "$ROOT/bad-fullmodel-output.err" && exit 1 || true
+grep 'unsupported output mode: nope' "$ROOT/bad-fullmodel-output.err"
+
+"$YVEX_BIN" attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --output nope > "$ROOT/bad-attention-output.out" 2> "$ROOT/bad-attention-output.err" && exit 1 || true
+grep 'unsupported output mode: nope' "$ROOT/bad-attention-output.err"
+
+"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --output nope > "$ROOT/bad-context-output.out" 2> "$ROOT/bad-context-output.err" && exit 1 || true
+grep 'unsupported output mode: nope' "$ROOT/bad-context-output.err"
+
+"$YVEX_BIN" kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --output nope > "$ROOT/bad-kv-output.out" 2> "$ROOT/bad-kv-output.err" && exit 1 || true
+grep 'unsupported output mode: nope' "$ROOT/bad-kv-output.err"
+
+"$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --output nope > "$ROOT/bad-moe-output.out" 2> "$ROOT/bad-moe-output.err" && exit 1 || true
+grep 'unsupported output mode: nope' "$ROOT/bad-moe-output.err"
+
+"$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" --audit > "$ROOT/selected.out"
 grep 'status: fullmodel-report' "$ROOT/selected.out"
 grep 'target_class: selected-runtime-slice' "$ROOT/selected.out"
 grep 'fullmodel_inventory: incomplete' "$ROOT/selected.out"
@@ -261,7 +311,7 @@ grep 'generation_ready: false' "$ROOT/selected.out"
 grep 'generation: unsupported-full-model' "$ROOT/selected.out"
 grep 'benchmark_status: not-measured' "$ROOT/selected.out"
 
-"$YVEX_BIN" fullmodel materialization-plan --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" > "$ROOT/selected-plan.out"
+"$YVEX_BIN" fullmodel materialization-plan --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" --audit > "$ROOT/selected-plan.out"
 grep 'fullmodel: materialization-plan' "$ROOT/selected-plan.out"
 grep 'status: fullmodel-materialization-plan' "$ROOT/selected-plan.out"
 grep 'target_class: selected-runtime-slice' "$ROOT/selected-plan.out"
@@ -290,7 +340,7 @@ grep 'real vocabulary sampling not implemented' "$ROOT/selected-plan.out"
 grep 'runtime family adapter not implemented' "$ROOT/selected-plan.out"
 grep 'proof_ready_for_fullmodel_2: false' "$ROOT/selected-plan.out"
 
-"$YVEX_BIN" fullmodel materialize --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" > "$ROOT/selected-materialize.out"
+"$YVEX_BIN" fullmodel materialize --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" --audit > "$ROOT/selected-materialize.out"
 grep 'fullmodel: materialize' "$ROOT/selected-materialize.out"
 grep 'status: fullmodel-materialize-refused' "$ROOT/selected-materialize.out"
 grep 'target_class: selected-runtime-slice' "$ROOT/selected-materialize.out"
@@ -306,7 +356,7 @@ grep 'failed_reason: selected-runtime-slice' "$ROOT/selected-materialize.out"
 grep 'cleanup_attempted: true' "$ROOT/selected-materialize.out"
 grep 'owned_state_released: true' "$ROOT/selected-materialize.out"
 
-"$YVEX_BIN" fullmodel descriptor --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" > "$ROOT/selected-descriptor.out"
+"$YVEX_BIN" fullmodel descriptor --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" --audit > "$ROOT/selected-descriptor.out"
 grep 'fullmodel: descriptor' "$ROOT/selected-descriptor.out"
 grep 'status: fullmodel-descriptor' "$ROOT/selected-descriptor.out"
 grep 'target_class: selected-runtime-slice' "$ROOT/selected-descriptor.out"
@@ -339,7 +389,7 @@ grep 'decode_ready: false' "$ROOT/selected-descriptor.out"
 grep 'sampling_ready: false' "$ROOT/selected-descriptor.out"
 grep 'full runtime tensor set incomplete' "$ROOT/selected-descriptor.out"
 
-"$YVEX_BIN" fullmodel family-runtime --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" > "$ROOT/selected-family.out"
+"$YVEX_BIN" fullmodel family-runtime --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" --audit > "$ROOT/selected-family.out"
 grep 'family_runtime: report' "$ROOT/selected-family.out"
 grep 'status: fullmodel-family-runtime' "$ROOT/selected-family.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed' "$ROOT/selected-family.out"
@@ -375,7 +425,7 @@ grep 'generation: unsupported-full-model' "$ROOT/selected-family.out"
 grep 'benchmark_status: not-measured' "$ROOT/selected-family.out"
 grep 'next_required_rows: ATTENTION.CLASS.0' "$ROOT/selected-family.out"
 
-"$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" --include-tensors --include-residency --include-blockers > "$ROOT/selected-moe.out"
+"$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" --include-tensors --include-residency --include-blockers --audit > "$ROOT/selected-moe.out"
 grep 'moe: report' "$ROOT/selected-moe.out"
 grep 'status: ok-partial' "$ROOT/selected-moe.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed' "$ROOT/selected-moe.out"
@@ -409,7 +459,7 @@ grep 'report_options.include_tensors: true' "$ROOT/selected-moe.out"
 grep 'report_options.include_residency: true' "$ROOT/selected-moe.out"
 grep 'report_options.include_blockers: true' "$ROOT/selected-moe.out"
 
-"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed --family deepseek --collection moe --backend cpu --registry "$REG" --include-router --include-experts --include-shared --include-dispatch --include-storage --include-residency --include-blockers > "$ROOT/selected-tensor-moe.out"
+"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed --family deepseek --collection moe --backend cpu --registry "$REG" --include-router --include-experts --include-shared --include-dispatch --include-storage --include-residency --include-blockers --audit > "$ROOT/selected-tensor-moe.out"
 grep 'tensor_collection: moe' "$ROOT/selected-tensor-moe.out"
 grep 'status: ok-partial' "$ROOT/selected-tensor-moe.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed' "$ROOT/selected-tensor-moe.out"
@@ -454,7 +504,7 @@ grep 'report_options.include_storage: true' "$ROOT/selected-tensor-moe.out"
 grep 'report_options.include_residency: true' "$ROOT/selected-tensor-moe.out"
 grep 'report_options.include_blockers: true' "$ROOT/selected-tensor-moe.out"
 
-"$YVEX_BIN" attention report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" > "$ROOT/selected-attention.out"
+"$YVEX_BIN" attention report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" --audit > "$ROOT/selected-attention.out"
 grep 'attention: report' "$ROOT/selected-attention.out"
 grep 'status: attention-report' "$ROOT/selected-attention.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed' "$ROOT/selected-attention.out"
@@ -497,7 +547,7 @@ grep 'next_required_rows: KV.CACHE.0' "$ROOT/selected-attention.out"
 grep 'generation: unsupported-full-model' "$ROOT/selected-attention.out"
 grep 'benchmark_status: not-measured' "$ROOT/selected-attention.out"
 
-"$YVEX_BIN" kv report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" > "$ROOT/selected-kv.out"
+"$YVEX_BIN" kv report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" --audit > "$ROOT/selected-kv.out"
 grep 'kv: report' "$ROOT/selected-kv.out"
 grep 'status: kv-report' "$ROOT/selected-kv.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed' "$ROOT/selected-kv.out"
@@ -544,7 +594,7 @@ grep 'generation_ready: false' "$ROOT/selected-kv.out"
 grep 'generation: unsupported-full-model' "$ROOT/selected-kv.out"
 grep 'benchmark_status: not-measured' "$ROOT/selected-kv.out"
 
-"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" > "$ROOT/selected-context.out"
+"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed --family deepseek --backend cpu --registry "$REG" --audit > "$ROOT/selected-context.out"
 grep 'context: report' "$ROOT/selected-context.out"
 grep 'status: context-report' "$ROOT/selected-context.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed' "$ROOT/selected-context.out"
@@ -569,13 +619,13 @@ grep 'generation_ready: false' "$ROOT/selected-context.out"
 grep 'generation: unsupported-full-model' "$ROOT/selected-context.out"
 grep 'benchmark_status: not-measured' "$ROOT/selected-context.out"
 
-"$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" > "$ROOT/rmsnorm.out"
+"$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" --audit > "$ROOT/rmsnorm.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm.out"
 grep 'normalization_tensors: 1' "$ROOT/rmsnorm.out"
 grep 'missing_required_roles:' "$ROOT/rmsnorm.out"
 grep 'real-transformer-prefill' "$ROOT/rmsnorm.out"
 
-"$YVEX_BIN" fullmodel materialization-plan --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" > "$ROOT/rmsnorm-plan.out"
+"$YVEX_BIN" fullmodel materialization-plan --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" --audit > "$ROOT/rmsnorm-plan.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-plan.out"
 grep 'target_class: selected-runtime-slice' "$ROOT/rmsnorm-plan.out"
 grep 'plan_status: partial' "$ROOT/rmsnorm-plan.out"
@@ -587,14 +637,14 @@ grep 'collection.output.blocker: output collection missing' "$ROOT/rmsnorm-plan.
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-plan.out"
 grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-plan.out"
 
-"$YVEX_BIN" fullmodel materialize --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" > "$ROOT/rmsnorm-materialize.out"
+"$YVEX_BIN" fullmodel materialize --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" --audit > "$ROOT/rmsnorm-materialize.out"
 grep 'status: fullmodel-materialize-refused' "$ROOT/rmsnorm-materialize.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-materialize.out"
 grep 'full_model_materialization_proof: refused' "$ROOT/rmsnorm-materialize.out"
 grep 'failed_reason: selected-runtime-slice' "$ROOT/rmsnorm-materialize.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-materialize.out"
 
-"$YVEX_BIN" fullmodel descriptor --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" > "$ROOT/rmsnorm-descriptor.out"
+"$YVEX_BIN" fullmodel descriptor --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --registry "$REG" --audit > "$ROOT/rmsnorm-descriptor.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-descriptor.out"
 grep 'runtime_descriptor_status: partial' "$ROOT/rmsnorm-descriptor.out"
 grep 'role.token_embedding.status: present' "$ROOT/rmsnorm-descriptor.out"
@@ -608,7 +658,7 @@ grep 'logits_ready: false' "$ROOT/rmsnorm-descriptor.out"
 grep 'sampling_ready: false' "$ROOT/rmsnorm-descriptor.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-descriptor.out"
 
-"$YVEX_BIN" fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --include-blockers --include-roles --include-graph --include-kv --include-moe --include-output > "$ROOT/rmsnorm-family.out"
+"$YVEX_BIN" fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --include-blockers --include-roles --include-graph --include-kv --include-moe --include-output --audit > "$ROOT/rmsnorm-family.out"
 grep 'family_runtime: report' "$ROOT/rmsnorm-family.out"
 grep 'status: fullmodel-family-runtime' "$ROOT/rmsnorm-family.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-family.out"
@@ -626,7 +676,7 @@ grep 'real_output_head_logits: false' "$ROOT/rmsnorm-family.out"
 grep 'runtime_blockers:' "$ROOT/rmsnorm-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-family.out"
 
-"$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --include-tensors --include-residency --include-blockers > "$ROOT/rmsnorm-moe.out"
+"$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --include-tensors --include-residency --include-blockers --audit > "$ROOT/rmsnorm-moe.out"
 grep 'moe: report' "$ROOT/rmsnorm-moe.out"
 grep 'status: ok-partial' "$ROOT/rmsnorm-moe.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-moe.out"
@@ -643,7 +693,7 @@ grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-moe.out"
 grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-moe.out"
 grep 'next_required_rows: V010.TENSOR.14' "$ROOT/rmsnorm-moe.out"
 
-"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection moe --backend cpu --registry "$REG" --include-router --include-experts --include-shared --include-dispatch --include-storage --include-residency --include-blockers > "$ROOT/rmsnorm-tensor-moe.out"
+"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection moe --backend cpu --registry "$REG" --include-router --include-experts --include-shared --include-dispatch --include-storage --include-residency --include-blockers --audit > "$ROOT/rmsnorm-tensor-moe.out"
 grep 'tensor_collection: moe' "$ROOT/rmsnorm-tensor-moe.out"
 grep 'status: ok-partial' "$ROOT/rmsnorm-tensor-moe.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-tensor-moe.out"
@@ -664,7 +714,7 @@ grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-tensor-moe.out"
 grep 'next_required_rows: V010.TENSOR.14' "$ROOT/rmsnorm-tensor-moe.out"
 grep 'V010.TARGET.9' "$ROOT/rmsnorm-tensor-moe.out"
 
-"$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cuda --registry "$REG" --include-tensors --include-residency --include-blockers > "$ROOT/rmsnorm-moe-cuda.out"
+"$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cuda --registry "$REG" --include-tensors --include-residency --include-blockers --audit > "$ROOT/rmsnorm-moe-cuda.out"
 grep 'moe: report' "$ROOT/rmsnorm-moe-cuda.out"
 grep 'status: ok-partial' "$ROOT/rmsnorm-moe-cuda.out"
 grep 'backend: cuda' "$ROOT/rmsnorm-moe-cuda.out"
@@ -675,7 +725,7 @@ grep 'runtime_claim: unsupported' "$ROOT/rmsnorm-moe-cuda.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-moe-cuda.out"
 grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-moe-cuda.out"
 
-"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection moe --backend cuda --registry "$REG" --include-router --include-experts --include-blockers > "$ROOT/rmsnorm-tensor-moe-cuda.out"
+"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection moe --backend cuda --registry "$REG" --include-router --include-experts --include-blockers --audit > "$ROOT/rmsnorm-tensor-moe-cuda.out"
 grep 'tensor_collection: moe' "$ROOT/rmsnorm-tensor-moe-cuda.out"
 grep 'status: ok-partial' "$ROOT/rmsnorm-tensor-moe-cuda.out"
 grep 'backend: cuda' "$ROOT/rmsnorm-tensor-moe-cuda.out"
@@ -686,12 +736,12 @@ grep 'runtime_claim: unsupported' "$ROOT/rmsnorm-tensor-moe-cuda.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-tensor-moe-cuda.out"
 grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-tensor-moe-cuda.out"
 
-"$YVEX_BIN" fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --registry "$REG" > "$ROOT/rmsnorm-family-auto.out"
+"$YVEX_BIN" fullmodel family-runtime --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --registry "$REG" --audit > "$ROOT/rmsnorm-family-auto.out"
 grep 'family_requested: auto' "$ROOT/rmsnorm-family-auto.out"
 grep 'family_detected: deepseek' "$ROOT/rmsnorm-family-auto.out"
 grep 'status: fullmodel-family-runtime' "$ROOT/rmsnorm-family-auto.out"
 
-"$YVEX_BIN" attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --include-kv --include-context --include-graph --include-blockers > "$ROOT/rmsnorm-attention.out"
+"$YVEX_BIN" attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --include-kv --include-context --include-graph --include-blockers --audit > "$ROOT/rmsnorm-attention.out"
 grep 'attention: report' "$ROOT/rmsnorm-attention.out"
 grep 'status: attention-report' "$ROOT/rmsnorm-attention.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-attention.out"
@@ -711,12 +761,12 @@ grep 'graph_attention_kv_write: unsupported' "$ROOT/rmsnorm-attention.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-attention.out"
 grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-attention.out"
 
-"$YVEX_BIN" attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --registry "$REG" > "$ROOT/rmsnorm-attention-auto.out"
+"$YVEX_BIN" attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --registry "$REG" --audit > "$ROOT/rmsnorm-attention-auto.out"
 grep 'family_requested: auto' "$ROOT/rmsnorm-attention-auto.out"
 grep 'family_detected: deepseek' "$ROOT/rmsnorm-attention-auto.out"
 grep 'status: attention-report' "$ROOT/rmsnorm-attention-auto.out"
 
-"$YVEX_BIN" kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --include-attention --include-context --include-residency --include-blockers > "$ROOT/rmsnorm-kv.out"
+"$YVEX_BIN" kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --include-attention --include-context --include-residency --include-blockers --audit > "$ROOT/rmsnorm-kv.out"
 grep 'kv: report' "$ROOT/rmsnorm-kv.out"
 grep 'status: kv-report' "$ROOT/rmsnorm-kv.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-kv.out"
@@ -739,13 +789,13 @@ grep 'decode_kv_read_ready: false' "$ROOT/rmsnorm-kv.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-kv.out"
 grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-kv.out"
 
-"$YVEX_BIN" kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --registry "$REG" > "$ROOT/rmsnorm-kv-auto.out"
+"$YVEX_BIN" kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --registry "$REG" --audit > "$ROOT/rmsnorm-kv-auto.out"
 grep 'family_requested: auto' "$ROOT/rmsnorm-kv-auto.out"
 grep 'family_detected: deepseek' "$ROOT/rmsnorm-kv-auto.out"
 grep 'status: kv-report' "$ROOT/rmsnorm-kv-auto.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-kv-auto.out"
 
-"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --tokens 0,1,2,3 --include-attention --include-kv --include-prefill --include-decode --include-blockers > "$ROOT/rmsnorm-context.out"
+"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --tokens 0,1,2,3 --include-attention --include-kv --include-prefill --include-decode --include-blockers --audit > "$ROOT/rmsnorm-context.out"
 grep 'context: report' "$ROOT/rmsnorm-context.out"
 grep 'status: context-report' "$ROOT/rmsnorm-context.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/rmsnorm-context.out"
@@ -773,13 +823,13 @@ grep 'full_generation_context_ready: false' "$ROOT/rmsnorm-context.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-context.out"
 grep 'benchmark_status: not-measured' "$ROOT/rmsnorm-context.out"
 
-"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --registry "$REG" --tokens 0,1,2,3 > "$ROOT/rmsnorm-context-auto.out"
+"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --registry "$REG" --tokens 0,1,2,3 --audit > "$ROOT/rmsnorm-context-auto.out"
 grep 'family_requested: auto' "$ROOT/rmsnorm-context-auto.out"
 grep 'family_detected: deepseek' "$ROOT/rmsnorm-context-auto.out"
 grep 'status: context-report' "$ROOT/rmsnorm-context-auto.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-context-auto.out"
 
-"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --tokens 0,1,2,3 --chunk-size 2 > "$ROOT/rmsnorm-context-chunk.out"
+"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --tokens 0,1,2,3 --chunk-size 2 --audit > "$ROOT/rmsnorm-context-chunk.out"
 grep 'chunking_required: true' "$ROOT/rmsnorm-context-chunk.out"
 grep 'chunk_size: 2' "$ROOT/rmsnorm-context-chunk.out"
 grep 'chunk_count: 2' "$ROOT/rmsnorm-context-chunk.out"
@@ -789,7 +839,7 @@ grep 'chunking_status: report-only' "$ROOT/rmsnorm-context-chunk.out"
 grep 'full_transformer_prefill_ready: false' "$ROOT/rmsnorm-context-chunk.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-context-chunk.out"
 
-"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --tokens 0,1,2,3 --context-length 2 > "$ROOT/rmsnorm-context-overflow.out"
+"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --tokens 0,1,2,3 --context-length 2 --audit > "$ROOT/rmsnorm-context-overflow.out"
 grep 'requested_context: 2' "$ROOT/rmsnorm-context-overflow.out"
 grep 'active_context: 2' "$ROOT/rmsnorm-context-overflow.out"
 grep 'context_overflow: overflow' "$ROOT/rmsnorm-context-overflow.out"
@@ -798,7 +848,7 @@ grep 'overflow_stop_reason: context-limit' "$ROOT/rmsnorm-context-overflow.out"
 grep 'overflow_mutates_state: false' "$ROOT/rmsnorm-context-overflow.out"
 grep 'generation: unsupported-full-model' "$ROOT/rmsnorm-context-overflow.out"
 
-"$YVEX_BIN" fullmodel report --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 3 > "$ROOT/fullish.out"
+"$YVEX_BIN" fullmodel report --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 3 --audit > "$ROOT/fullish.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish.out"
 grep 'target_class: full-runtime-model-planned' "$ROOT/fullish.out"
 grep 'architecture: deepseek' "$ROOT/fullish.out"
@@ -812,14 +862,14 @@ grep 'largest_tensor_2:' "$ROOT/fullish.out"
 ! grep 'largest_tensor_3:' "$ROOT/fullish.out"
 grep 'full_model_materialization: planned' "$ROOT/fullish.out"
 
-"$YVEX_BIN" fullmodel report --model "$FULLISH" --target deepseek4-v4-flash --backend cuda > "$ROOT/fullish-cuda.out"
+"$YVEX_BIN" fullmodel report --model "$FULLISH" --target deepseek4-v4-flash --backend cuda --audit > "$ROOT/fullish-cuda.out"
 grep 'backend: cuda' "$ROOT/fullish-cuda.out"
 grep 'cuda_available:' "$ROOT/fullish-cuda.out"
 grep 'cuda_memory_status:' "$ROOT/fullish-cuda.out"
 grep 'cuda_placement:' "$ROOT/fullish-cuda.out"
 grep 'residency_plan: report-only-no-allocation' "$ROOT/fullish-cuda.out"
 
-"$YVEX_BIN" fullmodel descriptor --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 40 --format text --include-blockers --include-placement --include-graph --include-kv --include-logits > "$ROOT/fullish-descriptor.out"
+"$YVEX_BIN" fullmodel descriptor --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 40 --format text --include-blockers --include-placement --include-graph --include-kv --include-logits --audit > "$ROOT/fullish-descriptor.out"
 grep 'status: fullmodel-descriptor' "$ROOT/fullish-descriptor.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish-descriptor.out"
 grep 'target_class: full-runtime-model-planned' "$ROOT/fullish-descriptor.out"
@@ -852,7 +902,7 @@ grep 'generation_ready: false' "$ROOT/fullish-descriptor.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-descriptor.out"
 grep 'benchmark_status: not-measured' "$ROOT/fullish-descriptor.out"
 
-"$YVEX_BIN" fullmodel family-runtime --model "$FULLISH" --target deepseek4-v4-flash --family deepseek --backend cpu > "$ROOT/fullish-family.out"
+"$YVEX_BIN" fullmodel family-runtime --model "$FULLISH" --target deepseek4-v4-flash --family deepseek --backend cpu --audit > "$ROOT/fullish-family.out"
 grep 'family_runtime: report' "$ROOT/fullish-family.out"
 grep 'status: fullmodel-family-runtime' "$ROOT/fullish-family.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish-family.out"
@@ -873,7 +923,7 @@ grep 'logits_projection_ready: false' "$ROOT/fullish-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-family.out"
 grep 'benchmark_status: not-measured' "$ROOT/fullish-family.out"
 
-"$YVEX_BIN" attention report --model "$FULLISH" --family deepseek --backend cpu > "$ROOT/fullish-attention.out"
+"$YVEX_BIN" attention report --model "$FULLISH" --family deepseek --backend cpu --audit > "$ROOT/fullish-attention.out"
 grep 'attention: report' "$ROOT/fullish-attention.out"
 grep 'status: attention-report' "$ROOT/fullish-attention.out"
 grep 'target_class: candidate-GGUF-path' "$ROOT/fullish-attention.out"
@@ -895,19 +945,19 @@ grep 'attention-backed KV write unsupported' "$ROOT/fullish-attention.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-attention.out"
 grep 'benchmark_status: not-measured' "$ROOT/fullish-attention.out"
 
-"$YVEX_BIN" fullmodel descriptor --model "$FULLISH" --target deepseek4-v4-flash --backend cuda > "$ROOT/fullish-descriptor-cuda.out"
+"$YVEX_BIN" fullmodel descriptor --model "$FULLISH" --target deepseek4-v4-flash --backend cuda --audit > "$ROOT/fullish-descriptor-cuda.out"
 grep 'backend: cuda' "$ROOT/fullish-descriptor-cuda.out"
 grep 'backend.cuda.available:' "$ROOT/fullish-descriptor-cuda.out"
 grep 'backend.full_transformer_integration: unsupported' "$ROOT/fullish-descriptor-cuda.out"
 grep 'backend_allocation_attempted: false' "$ROOT/fullish-descriptor-cuda.out"
 
-"$YVEX_BIN" fullmodel family-runtime --model "$FULLISH" --target deepseek4-v4-flash --family deepseek --backend cuda > "$ROOT/fullish-family-cuda.out"
+"$YVEX_BIN" fullmodel family-runtime --model "$FULLISH" --target deepseek4-v4-flash --family deepseek --backend cuda --audit > "$ROOT/fullish-family-cuda.out"
 grep 'backend: cuda' "$ROOT/fullish-family-cuda.out"
 grep 'backend_allocation_attempted: false' "$ROOT/fullish-family-cuda.out"
 grep 'graph.full_attention_from_model_tensors: unsupported' "$ROOT/fullish-family-cuda.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-family-cuda.out"
 
-"$YVEX_BIN" attention report --model "$FULLISH" --family deepseek --backend cuda > "$ROOT/fullish-attention-cuda.out"
+"$YVEX_BIN" attention report --model "$FULLISH" --family deepseek --backend cuda --audit > "$ROOT/fullish-attention-cuda.out"
 grep 'backend: cuda' "$ROOT/fullish-attention-cuda.out"
 grep 'backend_attention_status: implemented-fixture-full-transformer-unsupported' "$ROOT/fullish-attention-cuda.out"
 grep 'graph_full_transformer_attention: unsupported' "$ROOT/fullish-attention-cuda.out"
@@ -915,7 +965,7 @@ grep 'attention_backend_ready: false' "$ROOT/fullish-attention-cuda.out"
 grep 'backend_allocation_attempted: false' "$ROOT/fullish-attention-cuda.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-attention-cuda.out"
 
-"$YVEX_BIN" kv report --model "$FULLISH" --family deepseek --backend cpu > "$ROOT/fullish-kv.out"
+"$YVEX_BIN" kv report --model "$FULLISH" --family deepseek --backend cpu --audit > "$ROOT/fullish-kv.out"
 grep 'kv: report' "$ROOT/fullish-kv.out"
 grep 'status: kv-report' "$ROOT/fullish-kv.out"
 grep 'target_class: candidate-GGUF-path' "$ROOT/fullish-kv.out"
@@ -942,14 +992,14 @@ grep 'paged_kv_implementation: false' "$ROOT/fullish-kv.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-kv.out"
 grep 'benchmark_status: not-measured' "$ROOT/fullish-kv.out"
 
-"$YVEX_BIN" kv report --model "$FULLISH" --family deepseek --backend cuda > "$ROOT/fullish-kv-cuda.out"
+"$YVEX_BIN" kv report --model "$FULLISH" --family deepseek --backend cuda --audit > "$ROOT/fullish-kv-cuda.out"
 grep 'backend: cuda' "$ROOT/fullish-kv-cuda.out"
 grep 'cuda_full_kv_allocation_proof: false' "$ROOT/fullish-kv-cuda.out"
 grep 'backend_allocation_attempted: false' "$ROOT/fullish-kv-cuda.out"
 grep 'real_attention_kv: unsupported' "$ROOT/fullish-kv-cuda.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-kv-cuda.out"
 
-"$YVEX_BIN" context report --model "$FULLISH" --family deepseek --backend cpu --tokens 0,1,2,3 --context-length 8 --chunk-size 2 > "$ROOT/fullish-context.out"
+"$YVEX_BIN" context report --model "$FULLISH" --family deepseek --backend cpu --tokens 0,1,2,3 --context-length 8 --chunk-size 2 --audit > "$ROOT/fullish-context.out"
 grep 'context: report' "$ROOT/fullish-context.out"
 grep 'status: context-report' "$ROOT/fullish-context.out"
 grep 'target_class: candidate-GGUF-path' "$ROOT/fullish-context.out"
@@ -976,7 +1026,7 @@ grep 'full_generation_context_ready: false' "$ROOT/fullish-context.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-context.out"
 grep 'benchmark_status: not-measured' "$ROOT/fullish-context.out"
 
-"$YVEX_BIN" context report --model "$FULLISH" --family deepseek --backend cuda --tokens 0,1,2,3 > "$ROOT/fullish-context-cuda.out"
+"$YVEX_BIN" context report --model "$FULLISH" --family deepseek --backend cuda --tokens 0,1,2,3 --audit > "$ROOT/fullish-context-cuda.out"
 grep 'backend: cuda' "$ROOT/fullish-context-cuda.out"
 grep 'status: context-report' "$ROOT/fullish-context-cuda.out"
 grep 'model_max_context: 128' "$ROOT/fullish-context-cuda.out"
@@ -984,7 +1034,7 @@ grep 'full_transformer_prefill_ready: false' "$ROOT/fullish-context-cuda.out"
 grep 'decode_context_ready: false' "$ROOT/fullish-context-cuda.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-context-cuda.out"
 
-"$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 20 > "$ROOT/fullish-plan.out"
+"$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-tensors 20 --audit > "$ROOT/fullish-plan.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish-plan.out"
 grep 'target_class: full-runtime-model-planned' "$ROOT/fullish-plan.out"
 grep 'plan_status: partial' "$ROOT/fullish-plan.out"
@@ -1018,7 +1068,7 @@ grep 'full_model_execution: unsupported' "$ROOT/fullish-plan.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-plan.out"
 grep 'benchmark_status: not-measured' "$ROOT/fullish-plan.out"
 
-"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-bytes 1048576 > "$ROOT/fullish-materialize.out"
+"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-bytes 1048576 --audit > "$ROOT/fullish-materialize.out"
 grep 'fullmodel: materialize' "$ROOT/fullish-materialize.out"
 grep 'status: fullmodel-materialize-pass' "$ROOT/fullish-materialize.out"
 grep 'target_id: deepseek4-v4-flash' "$ROOT/fullish-materialize.out"
@@ -1044,35 +1094,35 @@ grep 'partial_materialization: false' "$ROOT/fullish-materialize.out"
 grep 'materialized_tensor_count: 12' "$ROOT/fullish-materialize.out"
 grep 'required_tensor_count: 12' "$ROOT/fullish-materialize.out"
 
-"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --dry-run --limit-bytes 1048576 > "$ROOT/fullish-materialize-dry-run.out"
+"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --dry-run --limit-bytes 1048576 --audit > "$ROOT/fullish-materialize-dry-run.out"
 grep 'status: fullmodel-materialize-dry-run' "$ROOT/fullish-materialize-dry-run.out"
 grep 'dry_run: true' "$ROOT/fullish-materialize-dry-run.out"
 grep 'full_model_materialization_proof: planned' "$ROOT/fullish-materialize-dry-run.out"
 grep 'materialized_tensor_count: 0' "$ROOT/fullish-materialize-dry-run.out"
 
-"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --plan-only --limit-bytes 1048576 > "$ROOT/fullish-materialize-plan-only.out"
+"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --plan-only --limit-bytes 1048576 --audit > "$ROOT/fullish-materialize-plan-only.out"
 grep 'status: fullmodel-materialize-plan-only' "$ROOT/fullish-materialize-plan-only.out"
 grep 'plan_only: true' "$ROOT/fullish-materialize-plan-only.out"
 grep 'full_model_materialization_proof: planned' "$ROOT/fullish-materialize-plan-only.out"
 
-"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-bytes 1024 > "$ROOT/fullish-materialize-limit.out" 2> "$ROOT/fullish-materialize-limit.err" && exit 1 || true
+"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-bytes 1024 --audit > "$ROOT/fullish-materialize-limit.out" 2> "$ROOT/fullish-materialize-limit.err" && exit 1 || true
 grep 'status: fullmodel-materialize-fail' "$ROOT/fullish-materialize-limit.out"
 grep 'memory_budget_status: fail' "$ROOT/fullish-materialize-limit.out"
 grep 'failed_phase: memory-budget' "$ROOT/fullish-materialize-limit.out"
 grep 'failed_reason: byte-limit' "$ROOT/fullish-materialize-limit.out"
 grep 'generation: unsupported-full-model' "$ROOT/fullish-materialize-limit.out"
 
-"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-bytes 1048576 --fail-after-phase backend-preflight > "$ROOT/fullish-materialize-injected.out" 2> "$ROOT/fullish-materialize-injected.err" && exit 1 || true
+"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --limit-bytes 1048576 --fail-after-phase backend-preflight --audit > "$ROOT/fullish-materialize-injected.out" 2> "$ROOT/fullish-materialize-injected.err" && exit 1 || true
 grep 'status: fullmodel-materialize-fail' "$ROOT/fullish-materialize-injected.out"
 grep 'failed_phase: backend-preflight' "$ROOT/fullish-materialize-injected.out"
 grep 'failed_reason: injected-failure' "$ROOT/fullish-materialize-injected.out"
 grep 'cleanup_attempted: true' "$ROOT/fullish-materialize-injected.out"
 
-"$YVEX_BIN" fullmodel plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu > "$ROOT/fullish-plan-alias.out"
+"$YVEX_BIN" fullmodel plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --audit > "$ROOT/fullish-plan-alias.out"
 grep 'fullmodel: materialization-plan' "$ROOT/fullish-plan-alias.out"
 grep 'plan_kind: full-model-materialization' "$ROOT/fullish-plan-alias.out"
 
-"$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cuda > "$ROOT/fullish-plan-cuda.out"
+"$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cuda --audit > "$ROOT/fullish-plan-cuda.out"
 grep 'backend: cuda' "$ROOT/fullish-plan-cuda.out"
 grep 'backend_available:' "$ROOT/fullish-plan-cuda.out"
 grep 'backend_memory_known:' "$ROOT/fullish-plan-cuda.out"
@@ -1080,7 +1130,7 @@ grep 'backend_fit_status:' "$ROOT/fullish-plan-cuda.out"
 grep 'backend_allocation_attempted: false' "$ROOT/fullish-plan-cuda.out"
 
 if "$YVEX_BIN" cuda-info >/dev/null 2>&1; then
-  "$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cuda --limit-bytes 1048576 > "$ROOT/fullish-materialize-cuda.out"
+  "$YVEX_BIN" fullmodel materialize --model "$FULLISH" --target deepseek4-v4-flash --backend cuda --limit-bytes 1048576 --audit > "$ROOT/fullish-materialize-cuda.out"
   grep 'status: fullmodel-materialize-pass' "$ROOT/fullish-materialize-cuda.out"
   grep 'backend: cuda' "$ROOT/fullish-materialize-cuda.out"
   grep 'cuda_resident_bytes:' "$ROOT/fullish-materialize-cuda.out"
@@ -1088,39 +1138,39 @@ if "$YVEX_BIN" cuda-info >/dev/null 2>&1; then
   grep 'generation: unsupported-full-model' "$ROOT/fullish-materialize-cuda.out"
 fi
 
-"$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --residency resident > "$ROOT/resident.out"
+"$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --residency resident --audit > "$ROOT/resident.out"
 grep 'residency: resident' "$ROOT/resident.out"
 grep 'collection.embedding.placement: cpu-resident' "$ROOT/resident.out"
 
-"$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --residency host-staged > "$ROOT/host-staged.out"
+"$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --residency host-staged --audit > "$ROOT/host-staged.out"
 grep 'residency: host-staged' "$ROOT/host-staged.out"
 grep 'collection.embedding.placement: host-staged' "$ROOT/host-staged.out"
 
-"$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --residency ssd-staged > "$ROOT/ssd-staged.out"
+"$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --residency ssd-staged --audit > "$ROOT/ssd-staged.out"
 grep 'residency: ssd-staged' "$ROOT/ssd-staged.out"
 grep 'collection.embedding.placement: ssd-staged' "$ROOT/ssd-staged.out"
 
-"$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --residency hybrid > "$ROOT/hybrid.out"
+"$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --target deepseek4-v4-flash --backend cpu --residency hybrid --audit > "$ROOT/hybrid.out"
 grep 'residency: hybrid' "$ROOT/hybrid.out"
 grep 'collection.embedding.placement: hybrid' "$ROOT/hybrid.out"
 
-"$YVEX_BIN" fullmodel report --model glm-5.2-official-safetensors > "$ROOT/glm.out"
+"$YVEX_BIN" fullmodel report --model glm-5.2-official-safetensors --audit > "$ROOT/glm.out"
 grep 'status: fullmodel-report-unsupported' "$ROOT/glm.out"
 grep 'target_class: official-source-huge-model' "$ROOT/glm.out"
 grep 'generation: unsupported-full-model' "$ROOT/glm.out"
 
-"$YVEX_BIN" fullmodel materialization-plan --model glm-5.2-official-safetensors > "$ROOT/glm-plan.out" && exit 1 || true
+"$YVEX_BIN" fullmodel materialization-plan --model glm-5.2-official-safetensors --audit > "$ROOT/glm-plan.out" && exit 1 || true
 grep 'status: fullmodel-materialization-plan-unsupported' "$ROOT/glm-plan.out"
 grep 'materialization_attempted: false' "$ROOT/glm-plan.out"
 grep 'generation: unsupported-full-model' "$ROOT/glm-plan.out"
 
-"$YVEX_BIN" fullmodel materialize --model glm-5.2-official-safetensors > "$ROOT/glm-materialize.out" && exit 1 || true
+"$YVEX_BIN" fullmodel materialize --model glm-5.2-official-safetensors --audit > "$ROOT/glm-materialize.out" && exit 1 || true
 grep 'status: fullmodel-materialize-unsupported' "$ROOT/glm-materialize.out"
 grep 'target_class: official-source-huge-model' "$ROOT/glm-materialize.out"
 grep 'full_model_materialization_proof: unsupported' "$ROOT/glm-materialize.out"
 grep 'generation: unsupported-full-model' "$ROOT/glm-materialize.out"
 
-"$YVEX_BIN" fullmodel descriptor --model glm-5.2-official-safetensors --backend cpu > "$ROOT/glm-descriptor.out" && exit 1 || true
+"$YVEX_BIN" fullmodel descriptor --model glm-5.2-official-safetensors --backend cpu --audit > "$ROOT/glm-descriptor.out" && exit 1 || true
 grep 'status: fullmodel-descriptor-unsupported' "$ROOT/glm-descriptor.out"
 grep 'target_class: official-source-huge-model' "$ROOT/glm-descriptor.out"
 grep 'tensor_inventory_status: not-performed-source-only-target' "$ROOT/glm-descriptor.out"
@@ -1128,7 +1178,7 @@ grep 'runtime_descriptor_status: unsupported' "$ROOT/glm-descriptor.out"
 grep 'full_model_execution: unsupported' "$ROOT/glm-descriptor.out"
 grep 'generation: unsupported-full-model' "$ROOT/glm-descriptor.out"
 
-"$YVEX_BIN" fullmodel family-runtime --model glm-5.2-official-safetensors --family glm --backend cpu > "$ROOT/glm-family.out" && exit 1 || true
+"$YVEX_BIN" fullmodel family-runtime --model glm-5.2-official-safetensors --family glm --backend cpu --audit > "$ROOT/glm-family.out" && exit 1 || true
 grep 'status: fullmodel-family-runtime-unsupported' "$ROOT/glm-family.out"
 grep 'target_class: official-source-huge-model' "$ROOT/glm-family.out"
 grep 'family_detected: glm' "$ROOT/glm-family.out"
@@ -1138,7 +1188,7 @@ grep 'runtime_claim: unsupported' "$ROOT/glm-family.out"
 grep 'full_model_execution: unsupported' "$ROOT/glm-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/glm-family.out"
 
-"$YVEX_BIN" attention report --model glm-5.2-official-safetensors --family glm --backend cpu > "$ROOT/glm-attention.out" && exit 1 || true
+"$YVEX_BIN" attention report --model glm-5.2-official-safetensors --family glm --backend cpu --audit > "$ROOT/glm-attention.out" && exit 1 || true
 grep 'attention: report' "$ROOT/glm-attention.out"
 grep 'status: attention-report-unsupported' "$ROOT/glm-attention.out"
 grep 'target_class: official-source-huge-model' "$ROOT/glm-attention.out"
@@ -1151,7 +1201,7 @@ grep 'full_transformer_attention: unsupported' "$ROOT/glm-attention.out"
 grep 'generation: unsupported-full-model' "$ROOT/glm-attention.out"
 grep 'benchmark_status: not-measured' "$ROOT/glm-attention.out"
 
-"$YVEX_BIN" kv report --model glm-5.2-official-safetensors --family glm --backend cpu > "$ROOT/glm-kv.out" && exit 1 || true
+"$YVEX_BIN" kv report --model glm-5.2-official-safetensors --family glm --backend cpu --audit > "$ROOT/glm-kv.out" && exit 1 || true
 grep 'kv: report' "$ROOT/glm-kv.out"
 grep 'status: kv-report-unsupported' "$ROOT/glm-kv.out"
 grep 'target_class: official-source-huge-model' "$ROOT/glm-kv.out"
@@ -1168,7 +1218,7 @@ grep 'decode_kv_read_ready: false' "$ROOT/glm-kv.out"
 grep 'generation: unsupported-full-model' "$ROOT/glm-kv.out"
 grep 'benchmark_status: not-measured' "$ROOT/glm-kv.out"
 
-"$YVEX_BIN" context report --model glm-5.2-official-safetensors --family glm --backend cpu > "$ROOT/glm-context.out" && exit 1 || true
+"$YVEX_BIN" context report --model glm-5.2-official-safetensors --family glm --backend cpu --audit > "$ROOT/glm-context.out" && exit 1 || true
 grep 'context: report' "$ROOT/glm-context.out"
 grep 'status: context-report-unsupported' "$ROOT/glm-context.out"
 grep 'target_class: official-source-huge-model' "$ROOT/glm-context.out"
@@ -1183,7 +1233,7 @@ grep 'real_attention_kv_ready: false' "$ROOT/glm-context.out"
 grep 'generation: unsupported-full-model' "$ROOT/glm-context.out"
 grep 'benchmark_status: not-measured' "$ROOT/glm-context.out"
 
-"$YVEX_BIN" moe report --model glm-5.2-official-safetensors --family glm --backend cpu --include-blockers > "$ROOT/glm-moe.out" && exit 1 || true
+"$YVEX_BIN" moe report --model glm-5.2-official-safetensors --family glm --backend cpu --include-blockers --audit > "$ROOT/glm-moe.out" && exit 1 || true
 grep 'moe: report' "$ROOT/glm-moe.out"
 grep 'status: unsupported-source-only' "$ROOT/glm-moe.out"
 grep 'target_class: huge-source-pressure' "$ROOT/glm-moe.out"
@@ -1203,7 +1253,7 @@ grep 'generation: unsupported-full-model' "$ROOT/glm-moe.out"
 grep 'benchmark_status: not-measured' "$ROOT/glm-moe.out"
 grep 'next_required_rows: OWI.HUGE.0' "$ROOT/glm-moe.out"
 
-"$YVEX_BIN" tensor-collection report --model glm-5.2-official-safetensors --family glm --collection moe --backend cpu --include-blockers > "$ROOT/glm-tensor-moe.out" && exit 1 || true
+"$YVEX_BIN" tensor-collection report --model glm-5.2-official-safetensors --family glm --collection moe --backend cpu --include-blockers --audit > "$ROOT/glm-tensor-moe.out" && exit 1 || true
 grep 'tensor_collection: moe' "$ROOT/glm-tensor-moe.out"
 grep 'status: unsupported-source-only' "$ROOT/glm-tensor-moe.out"
 grep 'target_class: huge-source-pressure' "$ROOT/glm-tensor-moe.out"
@@ -1224,24 +1274,24 @@ grep 'generation: unsupported-full-model' "$ROOT/glm-tensor-moe.out"
 grep 'benchmark_status: not-measured' "$ROOT/glm-tensor-moe.out"
 grep 'next_required_rows: OWI.HUGE.0' "$ROOT/glm-tensor-moe.out"
 
-"$YVEX_BIN" fullmodel report --model "$ROOT/missing.gguf" > "$ROOT/missing.out" 2> "$ROOT/missing.err" && exit 1 || true
+"$YVEX_BIN" fullmodel report --model "$ROOT/missing.gguf" --audit > "$ROOT/missing.out" 2> "$ROOT/missing.err" && exit 1 || true
 grep 'status: fullmodel-report-fail' "$ROOT/missing.out"
 grep 'artifact_exists: false' "$ROOT/missing.out"
 grep 'generation: unsupported-full-model' "$ROOT/missing.out"
 
-"$YVEX_BIN" fullmodel materialization-plan --model "$ROOT/missing.gguf" > "$ROOT/missing-plan.out" 2> "$ROOT/missing-plan.err" && exit 1 || true
+"$YVEX_BIN" fullmodel materialization-plan --model "$ROOT/missing.gguf" --audit > "$ROOT/missing-plan.out" 2> "$ROOT/missing-plan.err" && exit 1 || true
 grep 'status: fullmodel-materialization-plan-fail' "$ROOT/missing-plan.out"
 grep 'artifact_exists: false' "$ROOT/missing-plan.out"
 grep 'materialization_attempted: false' "$ROOT/missing-plan.out"
 grep 'generation: unsupported-full-model' "$ROOT/missing-plan.out"
 
-"$YVEX_BIN" fullmodel materialize --model "$ROOT/missing.gguf" > "$ROOT/missing-materialize.out" 2> "$ROOT/missing-materialize.err" && exit 1 || true
+"$YVEX_BIN" fullmodel materialize --model "$ROOT/missing.gguf" --audit > "$ROOT/missing-materialize.out" 2> "$ROOT/missing-materialize.err" && exit 1 || true
 grep 'status: fullmodel-materialize-fail' "$ROOT/missing-materialize.out"
 grep 'failed_phase: resolve-model' "$ROOT/missing-materialize.out"
 grep 'failed_reason: artifact path does not exist' "$ROOT/missing-materialize.out"
 grep 'generation: unsupported-full-model' "$ROOT/missing-materialize.out"
 
-"$YVEX_BIN" fullmodel descriptor --model "$ROOT/missing.gguf" > "$ROOT/missing-descriptor.out" 2> "$ROOT/missing-descriptor.err" && exit 1 || true
+"$YVEX_BIN" fullmodel descriptor --model "$ROOT/missing.gguf" --audit > "$ROOT/missing-descriptor.out" 2> "$ROOT/missing-descriptor.err" && exit 1 || true
 grep 'status: fullmodel-descriptor-fail' "$ROOT/missing-descriptor.out"
 grep 'runtime_descriptor_status: fail' "$ROOT/missing-descriptor.out"
 grep 'descriptor_phase.1.name: resolve-model' "$ROOT/missing-descriptor.out"
@@ -1249,48 +1299,48 @@ grep 'descriptor_phase.1.status: fail' "$ROOT/missing-descriptor.out"
 grep 'reason: artifact path does not exist' "$ROOT/missing-descriptor.out"
 
 printf 'not-gguf' > "$CORRUPT"
-"$YVEX_BIN" fullmodel report --model "$CORRUPT" > "$ROOT/corrupt.out" 2> "$ROOT/corrupt.err" && exit 1 || true
+"$YVEX_BIN" fullmodel report --model "$CORRUPT" --audit > "$ROOT/corrupt.out" 2> "$ROOT/corrupt.err" && exit 1 || true
 grep 'status: fullmodel-report-fail' "$ROOT/corrupt.out"
 grep 'tensor_inventory_status: failed' "$ROOT/corrupt.out"
 grep 'generation_ready: false' "$ROOT/corrupt.out"
 
-"$YVEX_BIN" fullmodel materialization-plan --model "$CORRUPT" > "$ROOT/corrupt-plan.out" 2> "$ROOT/corrupt-plan.err" && exit 1 || true
+"$YVEX_BIN" fullmodel materialization-plan --model "$CORRUPT" --audit > "$ROOT/corrupt-plan.out" 2> "$ROOT/corrupt-plan.err" && exit 1 || true
 grep 'status: fullmodel-materialization-plan-fail' "$ROOT/corrupt-plan.out"
 grep 'tensor_inventory_status: failed' "$ROOT/corrupt-plan.out"
 grep 'materialization_attempted: false' "$ROOT/corrupt-plan.out"
 grep 'generation_ready: false' "$ROOT/corrupt-plan.out"
 
-"$YVEX_BIN" fullmodel materialize --model "$CORRUPT" > "$ROOT/corrupt-materialize.out" 2> "$ROOT/corrupt-materialize.err" && exit 1 || true
+"$YVEX_BIN" fullmodel materialize --model "$CORRUPT" --audit > "$ROOT/corrupt-materialize.out" 2> "$ROOT/corrupt-materialize.err" && exit 1 || true
 grep 'status: fullmodel-materialize-fail' "$ROOT/corrupt-materialize.out"
 grep 'failed_phase: tensor-inventory' "$ROOT/corrupt-materialize.out"
 grep 'generation_ready: false' "$ROOT/corrupt-materialize.out"
 
-"$YVEX_BIN" fullmodel descriptor --model "$CORRUPT" > "$ROOT/corrupt-descriptor.out" 2> "$ROOT/corrupt-descriptor.err" && exit 1 || true
+"$YVEX_BIN" fullmodel descriptor --model "$CORRUPT" --audit > "$ROOT/corrupt-descriptor.out" 2> "$ROOT/corrupt-descriptor.err" && exit 1 || true
 grep 'status: fullmodel-descriptor-fail' "$ROOT/corrupt-descriptor.out"
 grep 'tensor_inventory_status: failed' "$ROOT/corrupt-descriptor.out"
 grep 'runtime_descriptor_status: fail' "$ROOT/corrupt-descriptor.out"
 grep 'descriptor_phase.3.name: tensor-inventory' "$ROOT/corrupt-descriptor.out"
 grep 'descriptor_phase.3.status: fail' "$ROOT/corrupt-descriptor.out"
 
-"$YVEX_BIN" fullmodel report --model "$FULLISH" --limit-tensors 0 > "$ROOT/invalid.out" 2> "$ROOT/invalid.err" && exit 1 || true
+"$YVEX_BIN" fullmodel report --model "$FULLISH" --limit-tensors 0 --audit > "$ROOT/invalid.out" 2> "$ROOT/invalid.err" && exit 1 || true
 grep 'requires a positive integer' "$ROOT/invalid.err"
 
-"$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --residency magic > "$ROOT/bad-residency.out" 2> "$ROOT/bad-residency.err" && exit 1 || true
+"$YVEX_BIN" fullmodel materialization-plan --model "$FULLISH" --residency magic --audit > "$ROOT/bad-residency.out" 2> "$ROOT/bad-residency.err" && exit 1 || true
 grep 'fullmodel --residency must be' "$ROOT/bad-residency.err"
 
-"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --limit-bytes 0 > "$ROOT/bad-limit-bytes.out" 2> "$ROOT/bad-limit-bytes.err" && exit 1 || true
+"$YVEX_BIN" fullmodel materialize --model "$FULLISH" --limit-bytes 0 --audit > "$ROOT/bad-limit-bytes.out" 2> "$ROOT/bad-limit-bytes.err" && exit 1 || true
 grep 'limit-bytes requires a positive integer' "$ROOT/bad-limit-bytes.err"
 
-"$YVEX_BIN" fullmodel descriptor --model "$FULLISH" --format json > "$ROOT/bad-format.out" 2> "$ROOT/bad-format.err" && exit 1 || true
+"$YVEX_BIN" fullmodel descriptor --model "$FULLISH" --format json --audit > "$ROOT/bad-format.out" 2> "$ROOT/bad-format.err" && exit 1 || true
 grep 'descriptor currently supports --format text only' "$ROOT/bad-format.err"
 
-"$YVEX_BIN" fullmodel family-runtime --model "$FULLISH" --family unknown-family --backend cpu > "$ROOT/bad-family.out" 2> "$ROOT/bad-family.err" && exit 1 || true
+"$YVEX_BIN" fullmodel family-runtime --model "$FULLISH" --family unknown-family --backend cpu --audit > "$ROOT/bad-family.out" 2> "$ROOT/bad-family.err" && exit 1 || true
 grep 'status: fullmodel-family-runtime-unsupported' "$ROOT/bad-family.out"
 grep 'family_requested: unknown-family' "$ROOT/bad-family.out"
 grep 'runtime_claim: unsupported' "$ROOT/bad-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/bad-family.out"
 
-"$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family unknown --backend cpu --registry "$REG" > "$ROOT/bad-moe-family.out" 2> "$ROOT/bad-moe-family.err" && exit 1 || true
+"$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family unknown --backend cpu --registry "$REG" --audit > "$ROOT/bad-moe-family.out" 2> "$ROOT/bad-moe-family.err" && exit 1 || true
 grep 'moe: report' "$ROOT/bad-moe-family.out"
 grep 'status: unsupported-family' "$ROOT/bad-moe-family.out"
 grep 'family: unknown' "$ROOT/bad-moe-family.out"
@@ -1300,7 +1350,7 @@ grep 'runtime_claim: unsupported' "$ROOT/bad-moe-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/bad-moe-family.out"
 grep 'benchmark_status: not-measured' "$ROOT/bad-moe-family.out"
 
-"$YVEX_BIN" moe report --model missing-moe-alias --family deepseek --backend cpu --registry "$REG" > "$ROOT/missing-moe.out" 2> "$ROOT/missing-moe.err" && exit 1 || true
+"$YVEX_BIN" moe report --model missing-moe-alias --family deepseek --backend cpu --registry "$REG" --audit > "$ROOT/missing-moe.out" 2> "$ROOT/missing-moe.err" && exit 1 || true
 grep 'moe: report' "$ROOT/missing-moe.out"
 grep 'status: missing-model' "$ROOT/missing-moe.out"
 grep 'target_id: missing-moe-alias' "$ROOT/missing-moe.out"
@@ -1309,7 +1359,7 @@ grep 'runtime_claim: unsupported' "$ROOT/missing-moe.out"
 grep 'generation: unsupported-full-model' "$ROOT/missing-moe.out"
 grep 'benchmark_status: not-measured' "$ROOT/missing-moe.out"
 
-"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family unknown --collection moe --backend cpu --registry "$REG" > "$ROOT/bad-tensor-moe-family.out" 2> "$ROOT/bad-tensor-moe-family.err" && exit 1 || true
+"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family unknown --collection moe --backend cpu --registry "$REG" --audit > "$ROOT/bad-tensor-moe-family.out" 2> "$ROOT/bad-tensor-moe-family.err" && exit 1 || true
 grep 'tensor_collection: moe' "$ROOT/bad-tensor-moe-family.out"
 grep 'status: unsupported-family' "$ROOT/bad-tensor-moe-family.out"
 grep 'family: unknown' "$ROOT/bad-tensor-moe-family.out"
@@ -1319,7 +1369,7 @@ grep 'runtime_claim: unsupported' "$ROOT/bad-tensor-moe-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/bad-tensor-moe-family.out"
 grep 'benchmark_status: not-measured' "$ROOT/bad-tensor-moe-family.out"
 
-"$YVEX_BIN" tensor-collection report --model missing-tensor-collection-alias --family deepseek --collection moe --backend cpu --registry "$REG" > "$ROOT/missing-tensor-moe.out" 2> "$ROOT/missing-tensor-moe.err" && exit 1 || true
+"$YVEX_BIN" tensor-collection report --model missing-tensor-collection-alias --family deepseek --collection moe --backend cpu --registry "$REG" --audit > "$ROOT/missing-tensor-moe.out" 2> "$ROOT/missing-tensor-moe.err" && exit 1 || true
 grep 'tensor_collection: moe' "$ROOT/missing-tensor-moe.out"
 grep 'status: missing-model' "$ROOT/missing-tensor-moe.out"
 grep 'target_id: missing-tensor-collection-alias' "$ROOT/missing-tensor-moe.out"
@@ -1328,7 +1378,7 @@ grep 'runtime_claim: unsupported' "$ROOT/missing-tensor-moe.out"
 grep 'generation: unsupported-full-model' "$ROOT/missing-tensor-moe.out"
 grep 'benchmark_status: not-measured' "$ROOT/missing-tensor-moe.out"
 
-"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection dense --backend cpu --registry "$REG" > "$ROOT/bad-tensor-collection.out" 2> "$ROOT/bad-tensor-collection.err" && exit 1 || true
+"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection dense --backend cpu --registry "$REG" --audit > "$ROOT/bad-tensor-collection.out" 2> "$ROOT/bad-tensor-collection.err" && exit 1 || true
 grep 'tensor_collection: dense' "$ROOT/bad-tensor-collection.out"
 grep 'status: invalid-argument' "$ROOT/bad-tensor-collection.out"
 grep 'implementation_stage: report-only' "$ROOT/bad-tensor-collection.out"
@@ -1337,14 +1387,14 @@ grep 'runtime_claim: unsupported' "$ROOT/bad-tensor-collection.out"
 grep 'generation: unsupported-full-model' "$ROOT/bad-tensor-collection.out"
 grep 'benchmark_status: not-measured' "$ROOT/bad-tensor-collection.out"
 
-"$YVEX_BIN" attention report --model "$FULLISH" --family unknown-family --backend cpu > "$ROOT/bad-attention-family.out" 2> "$ROOT/bad-attention-family.err" && exit 1 || true
+"$YVEX_BIN" attention report --model "$FULLISH" --family unknown-family --backend cpu --audit > "$ROOT/bad-attention-family.out" 2> "$ROOT/bad-attention-family.err" && exit 1 || true
 grep 'status: attention-report-unsupported' "$ROOT/bad-attention-family.out"
 grep 'family_requested: unknown-family' "$ROOT/bad-attention-family.out"
 grep 'runtime_claim: unsupported' "$ROOT/bad-attention-family.out"
 grep 'full_transformer_attention: unsupported' "$ROOT/bad-attention-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/bad-attention-family.out"
 
-"$YVEX_BIN" kv report --model "$FULLISH" --family unknown-family --backend cpu > "$ROOT/bad-kv-family.out" 2> "$ROOT/bad-kv-family.err" && exit 1 || true
+"$YVEX_BIN" kv report --model "$FULLISH" --family unknown-family --backend cpu --audit > "$ROOT/bad-kv-family.out" 2> "$ROOT/bad-kv-family.err" && exit 1 || true
 grep 'status: kv-report-unsupported' "$ROOT/bad-kv-family.out"
 grep 'family_requested: unknown-family' "$ROOT/bad-kv-family.out"
 grep 'runtime_claim: unsupported' "$ROOT/bad-kv-family.out"
@@ -1352,7 +1402,7 @@ grep 'real_attention_kv: unsupported' "$ROOT/bad-kv-family.out"
 grep 'kv_layout: unsupported' "$ROOT/bad-kv-family.out"
 grep 'generation: unsupported-full-model' "$ROOT/bad-kv-family.out"
 
-"$YVEX_BIN" context report --model "$FULLISH" --family unknown-family --backend cpu > "$ROOT/bad-context-family.out" 2> "$ROOT/bad-context-family.err" && exit 1 || true
+"$YVEX_BIN" context report --model "$FULLISH" --family unknown-family --backend cpu --audit > "$ROOT/bad-context-family.out" 2> "$ROOT/bad-context-family.err" && exit 1 || true
 grep 'status: context-report-unsupported' "$ROOT/bad-context-family.out"
 grep 'family_requested: unknown-family' "$ROOT/bad-context-family.out"
 grep 'runtime_claim: unsupported' "$ROOT/bad-context-family.out"

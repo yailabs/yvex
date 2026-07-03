@@ -73,8 +73,28 @@ mkdir -p "$OUT_DIR"
 
 "$YVEX_BIN" integrity report \
   --model "$MODEL" \
+  --backend cpu \
   --require-token-embedding \
   --partial-token 0 \
+  >"$OUT_DIR/raw-backend-normal.out" 2>"$OUT_DIR/raw-backend-normal.err"
+contains "$OUT_DIR/raw-backend-normal.out" "integrity: pass model=$MODEL backend=cpu"
+contains "$OUT_DIR/raw-backend-normal.out" "boundary: integrity gate only, generation unsupported"
+contains "$OUT_DIR/raw-backend-normal.out" "status: integrity-report-pass"
+test "$(wc -l < "$OUT_DIR/raw-backend-normal.out")" -le 8
+
+"$YVEX_BIN" integrity report \
+  --model "$MODEL" \
+  --backend cpu \
+  --output nope \
+  >"$OUT_DIR/raw-bad-output.out" 2>"$OUT_DIR/raw-bad-output.err" && \
+  fail "bad integrity output mode unexpectedly passed" || true
+contains "$OUT_DIR/raw-bad-output.err" "unsupported output mode: nope"
+
+"$YVEX_BIN" integrity report \
+  --model "$MODEL" \
+  --require-token-embedding \
+  --partial-token 0 \
+  --audit \
   >"$OUT_DIR/raw-pass.out" 2>"$OUT_DIR/raw-pass.err"
 contains "$OUT_DIR/raw-pass.out" "artifact_integrity_report: summary"
 contains "$OUT_DIR/raw-pass.out" "model_input_kind: path"
@@ -94,6 +114,7 @@ contains "$OUT_DIR/raw-pass.out" "status: integrity-report-pass"
   --backend cpu \
   --require-token-embedding \
   --partial-token 0 \
+  --audit \
   >"$OUT_DIR/raw-backend-pass.out" 2>"$OUT_DIR/raw-backend-pass.err"
 contains "$OUT_DIR/raw-backend-pass.out" "backend_status: ready"
 contains "$OUT_DIR/raw-backend-pass.out" "materialization_preflight: pass"
@@ -114,6 +135,7 @@ YVEX_MODELS_REGISTRY="$REG" "$YVEX_BIN" integrity report \
   --backend cpu \
   --require-token-embedding \
   --partial-token 0 \
+  --audit \
   >"$OUT_DIR/alias-pass.out" 2>"$OUT_DIR/alias-pass.err"
 contains "$OUT_DIR/alias-pass.out" "model_input_kind: alias"
 contains "$OUT_DIR/alias-pass.out" "identity_status: pass"
@@ -123,7 +145,7 @@ contains "$OUT_DIR/alias-pass.out" "readiness_status: pass"
 contains "$OUT_DIR/alias-pass.out" "support_level: selected-tensor-materialized"
 contains "$OUT_DIR/alias-pass.out" "status: integrity-report-pass"
 
-"$YVEX_BIN" integrity report --model tests/fixtures/gguf/bad-magic.gguf \
+"$YVEX_BIN" integrity report --model tests/fixtures/gguf/bad-magic.gguf --audit \
   >"$OUT_DIR/corrupt.out" 2>"$OUT_DIR/corrupt.err" && \
   fail "corrupt report unexpectedly passed" || true
 contains "$OUT_DIR/corrupt.out" "integrity_status: fail"
@@ -134,6 +156,7 @@ cp "$REG" "$STALE_REG"
 mutate_file_byte "$MODEL"
 YVEX_MODELS_REGISTRY="$STALE_REG" "$YVEX_BIN" integrity report \
   --model "$ALIAS" \
+  --audit \
   >"$OUT_DIR/stale.out" 2>"$OUT_DIR/stale.err" && \
   fail "stale alias report unexpectedly passed" || true
 contains "$OUT_DIR/stale.out" "identity_status: fail"
@@ -151,6 +174,7 @@ contains "$OUT_DIR/stale.out" "status: integrity-report-fail"
 mutate_registry "$REG" "$DTYPE_REG" "primary_tensor_dtype" "F32"
 YVEX_MODELS_REGISTRY="$DTYPE_REG" "$YVEX_BIN" integrity report \
   --model "$ALIAS" \
+  --audit \
   >"$OUT_DIR/metadata-drift.out" 2>"$OUT_DIR/metadata-drift.err" && \
   fail "metadata drift report unexpectedly passed" || true
 contains "$OUT_DIR/metadata-drift.out" "identity_status: pass"
@@ -163,6 +187,7 @@ contains "$OUT_DIR/metadata-drift.out" "status: integrity-report-fail"
   --model tests/fixtures/gguf/valid-minimal.gguf \
   --require-token-embedding \
   --partial-token 0 \
+  --audit \
   >"$OUT_DIR/readiness-missing.out" 2>"$OUT_DIR/readiness-missing.err" && \
   fail "readiness missing report unexpectedly passed" || true
 contains "$OUT_DIR/readiness-missing.out" "selected_embedding_ready: false"

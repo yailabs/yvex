@@ -141,7 +141,7 @@ contains "$OUT_DIR/add.out" "registered_primary_dtype: F16"
 contains "$OUT_DIR/add.out" "registered_primary_dims: [4,8]"
 contains "$OUT_DIR/add.out" "registered_selected_embedding_ready: true"
 
-"$YVEX_BIN" models verify "$ALIAS" --registry "$REG" \
+"$YVEX_BIN" models verify "$ALIAS" --registry "$REG" --audit \
   >"$OUT_DIR/verify-pass.out" 2>"$OUT_DIR/verify-pass.err"
 contains "$OUT_DIR/verify-pass.out" "identity_status: pass"
 contains "$OUT_DIR/verify-pass.out" "metadata_status: pass"
@@ -155,7 +155,7 @@ contains "$OUT_DIR/verify-pass.out" "current_primary_dims: [4,8]"
 contains "$OUT_DIR/verify-pass.out" "status: models-identity-pass"
 
 remove_metadata_fields "$REG" "$OLD_REG"
-"$YVEX_BIN" models verify "$ALIAS" --registry "$OLD_REG" \
+"$YVEX_BIN" models verify "$ALIAS" --registry "$OLD_REG" --audit \
   >"$OUT_DIR/verify-old.out" 2>"$OUT_DIR/verify-old.err" && \
   fail "old registry metadata unexpectedly passed" || true
 contains "$OUT_DIR/verify-old.out" "metadata_status: missing"
@@ -163,7 +163,7 @@ contains "$OUT_DIR/verify-old.out" "registered-metadata-missing"
 contains "$OUT_DIR/verify-old.out" "status: models-metadata-missing"
 
 mutate_registry "$REG" "$DTYPE_REG" "primary_tensor_dtype" "F32"
-"$YVEX_BIN" models verify "$ALIAS" --registry "$DTYPE_REG" \
+"$YVEX_BIN" models verify "$ALIAS" --registry "$DTYPE_REG" --audit \
   >"$OUT_DIR/verify-dtype.out" 2>"$OUT_DIR/verify-dtype.err" && \
   fail "dtype drift unexpectedly passed" || true
 contains "$OUT_DIR/verify-dtype.out" "metadata_status: fail"
@@ -171,7 +171,7 @@ contains "$OUT_DIR/verify-dtype.out" "primary-tensor-dtype-mismatch"
 contains "$OUT_DIR/verify-dtype.out" "status: models-metadata-drift"
 
 mutate_registry "$REG" "$DIMS_REG" "primary_tensor_dims" "[4,7]"
-"$YVEX_BIN" models verify "$ALIAS" --registry "$DIMS_REG" \
+"$YVEX_BIN" models verify "$ALIAS" --registry "$DIMS_REG" --audit \
   >"$OUT_DIR/verify-dims.out" 2>"$OUT_DIR/verify-dims.err" && \
   fail "dims drift unexpectedly passed" || true
 contains "$OUT_DIR/verify-dims.out" "metadata_status: fail"
@@ -179,7 +179,7 @@ contains "$OUT_DIR/verify-dims.out" "primary-tensor-dims-mismatch"
 contains "$OUT_DIR/verify-dims.out" "status: models-metadata-drift"
 
 mutate_registry "$REG" "$ARCH_REG" "architecture" "qwen"
-"$YVEX_BIN" models verify "$ALIAS" --registry "$ARCH_REG" \
+"$YVEX_BIN" models verify "$ALIAS" --registry "$ARCH_REG" --audit \
   >"$OUT_DIR/verify-arch.out" 2>"$OUT_DIR/verify-arch.err" && \
   fail "architecture drift unexpectedly passed" || true
 contains "$OUT_DIR/verify-arch.out" "metadata_status: fail"
@@ -194,7 +194,7 @@ contains "$OUT_DIR/verify-arch.out" "status: models-metadata-drift"
 contains "$OUT_DIR/add-f32.out" "registered_primary_dtype: F32"
 contains "$OUT_DIR/add-f32.out" "registered_selected_embedding_ready: false"
 force_selected_embedding_ready "$READY_REG" "$READY_REG"
-"$YVEX_BIN" models verify "$ALIAS" --registry "$READY_REG" \
+"$YVEX_BIN" models verify "$ALIAS" --registry "$READY_REG" --audit \
   >"$OUT_DIR/verify-readiness.out" 2>"$OUT_DIR/verify-readiness.err" && \
   fail "readiness drift unexpectedly passed" || true
 contains "$OUT_DIR/verify-readiness.out" "metadata_status: fail"

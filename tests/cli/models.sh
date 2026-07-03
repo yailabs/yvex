@@ -52,10 +52,20 @@ grep 'status: models-current' "$ROOT/current-audit.out"
 grep 'unsupported output mode: nope' "$ROOT/list-bad-output.err"
 
 "$YVEX_BIN" models inspect deepseek4-v4-flash-selected-embed --registry "$REG" > "$ROOT/inspect.out"
-grep 'alias: deepseek4-v4-flash-selected-embed' "$ROOT/inspect.out"
-grep 'gguf:' "$ROOT/inspect.out"
-grep 'tensor_count: 1' "$ROOT/inspect.out"
+grep 'model: deepseek4-v4-flash-selected-embed' "$ROOT/inspect.out"
+grep 'family: deepseek class=selected-slice' "$ROOT/inspect.out"
+grep 'boundary: selected-slice only, full-runtime generation unsupported' "$ROOT/inspect.out"
 grep 'status: models-inspect' "$ROOT/inspect.out"
+test "$(wc -l < "$ROOT/inspect.out")" -le 8
+
+"$YVEX_BIN" models inspect deepseek4-v4-flash-selected-embed --registry "$REG" --audit > "$ROOT/inspect-audit.out"
+grep 'alias: deepseek4-v4-flash-selected-embed' "$ROOT/inspect-audit.out"
+grep 'gguf:' "$ROOT/inspect-audit.out"
+grep 'tensor_count: 1' "$ROOT/inspect-audit.out"
+grep 'status: models-inspect' "$ROOT/inspect-audit.out"
+
+"$YVEX_BIN" models inspect deepseek4-v4-flash-selected-embed --registry "$REG" --output nope > "$ROOT/inspect-bad-output.out" 2> "$ROOT/inspect-bad-output.err" && exit 1 || true
+grep 'unsupported output mode: nope' "$ROOT/inspect-bad-output.err"
 
 "$YVEX_BIN" models remove deepseek4-v4-flash-selected-embed --registry "$REG" > "$ROOT/remove.out"
 grep 'removed: deepseek4-v4-flash-selected-embed' "$ROOT/remove.out"
@@ -137,6 +147,15 @@ grep 'status: model-prepare' "$ROOT/prepare-register-use.out"
 
 "$YVEX_BIN" models verify deepseek4-v4-flash-selected-embed --registry "$PREP_REG" > "$ROOT/prepare-verify.out"
 grep 'status: models-identity-pass' "$ROOT/prepare-verify.out"
+grep 'verify: pass alias=deepseek4-v4-flash-selected-embed' "$ROOT/prepare-verify.out"
+
+"$YVEX_BIN" models verify deepseek4-v4-flash-selected-embed --registry "$PREP_REG" --audit > "$ROOT/prepare-verify-audit.out"
+grep 'current_sha256:' "$ROOT/prepare-verify-audit.out"
+grep 'digest_status: pass' "$ROOT/prepare-verify-audit.out"
+grep 'status: models-identity-pass' "$ROOT/prepare-verify-audit.out"
+
+"$YVEX_BIN" models verify deepseek4-v4-flash-selected-embed --registry "$PREP_REG" --output nope > "$ROOT/verify-bad-output.out" 2> "$ROOT/verify-bad-output.err" && exit 1 || true
+grep 'unsupported output mode: nope' "$ROOT/verify-bad-output.err"
 
 "$YVEX_BIN" models prepare deepseek4-v4-flash-selected-embed --models-root "$PREP" --registry "$PREP_REG" > "$ROOT/prepare-overwrite-refused.out" 2> "$ROOT/prepare-overwrite-refused.err" && exit 1 || true
 grep 'stage: convert-emit refused' "$ROOT/prepare-overwrite-refused.out"
@@ -158,7 +177,12 @@ mkdir -p "$CHECK/models" "$CHECK/registry" "$CHECK_ROOT/gguf/deepseek"
 "$YVEX_BIN" models add --path "$CHECK_GGUF" --alias deepseek4-v4-flash-selected-embed --support-level selected-tensor-materialized --registry "$CHECK_REG" > "$ROOT/check-add.out"
 grep 'status: models-added' "$ROOT/check-add.out"
 
-"$YVEX_BIN" models check deepseek4-v4-flash-selected-embed --level quick --registry "$CHECK_REG" > "$ROOT/check-quick.out"
+"$YVEX_BIN" models check deepseek4-v4-flash-selected-embed --level quick --registry "$CHECK_REG" > "$ROOT/check-quick-normal.out"
+grep 'model-check: pass target=deepseek4-v4-flash-selected-embed level=quick' "$ROOT/check-quick-normal.out"
+grep 'boundary: selected-slice check only, generation unsupported' "$ROOT/check-quick-normal.out"
+test "$(wc -l < "$ROOT/check-quick-normal.out")" -le 8
+
+"$YVEX_BIN" models check deepseek4-v4-flash-selected-embed --level quick --registry "$CHECK_REG" --audit > "$ROOT/check-quick.out"
 grep 'status: model-check' "$ROOT/check-quick.out"
 grep 'target_id: deepseek4-v4-flash-selected-embed' "$ROOT/check-quick.out"
 grep 'backend: cpu' "$ROOT/check-quick.out"
@@ -174,14 +198,14 @@ grep 'execution_ready: false' "$ROOT/check-quick.out"
 grep 'generation: unsupported' "$ROOT/check-quick.out"
 grep 'status: model-check-pass' "$ROOT/check-quick.out"
 
-"$YVEX_BIN" models check deepseek4-v4-flash-selected-embed --level quick --models-root "$CHECK_ROOT" > "$ROOT/check-models-root.out"
+"$YVEX_BIN" models check deepseek4-v4-flash-selected-embed --level quick --models-root "$CHECK_ROOT" --audit > "$ROOT/check-models-root.out"
 grep 'model_input_kind: target' "$ROOT/check-models-root.out"
 grep 'build/tests/model-check/root/gguf/deepseek/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf' "$ROOT/check-models-root.out"
 grep 'stage: registry-identity unregistered' "$ROOT/check-models-root.out"
 grep 'stage: integrity-check pass' "$ROOT/check-models-root.out"
 grep 'status: model-check-pass' "$ROOT/check-models-root.out"
 
-"$YVEX_BIN" models check deepseek4-v4-flash-selected-embed --backend cpu --level runtime --registry "$CHECK_REG" --no-graph > "$ROOT/check-runtime-no-graph.out"
+"$YVEX_BIN" models check deepseek4-v4-flash-selected-embed --backend cpu --level runtime --registry "$CHECK_REG" --no-graph --audit > "$ROOT/check-runtime-no-graph.out"
 grep 'status: model-check' "$ROOT/check-runtime-no-graph.out"
 grep 'level: runtime' "$ROOT/check-runtime-no-graph.out"
 grep 'stage: integrity-report pass' "$ROOT/check-runtime-no-graph.out"
@@ -194,7 +218,7 @@ grep 'runtime_execution: selected-boundary-only' "$ROOT/check-runtime-no-graph.o
 grep 'generation: unsupported' "$ROOT/check-runtime-no-graph.out"
 grep 'status: model-check-pass' "$ROOT/check-runtime-no-graph.out"
 
-"$YVEX_BIN" models check deepseek4-v4-flash-selected-embed --backend cpu --level runtime --registry "$CHECK_REG" --no-materialize > "$ROOT/check-runtime-no-materialize.out"
+"$YVEX_BIN" models check deepseek4-v4-flash-selected-embed --backend cpu --level runtime --registry "$CHECK_REG" --no-materialize --audit > "$ROOT/check-runtime-no-materialize.out"
 grep 'stage: integrity-report pass' "$ROOT/check-runtime-no-materialize.out"
 grep 'stage: materialize skipped' "$ROOT/check-runtime-no-materialize.out"
 grep 'stage: engine skipped' "$ROOT/check-runtime-no-materialize.out"
@@ -204,7 +228,7 @@ grep 'stage: graph-partial skipped' "$ROOT/check-runtime-no-materialize.out"
 grep 'runtime_execution: not-performed' "$ROOT/check-runtime-no-materialize.out"
 grep 'status: model-check-pass' "$ROOT/check-runtime-no-materialize.out"
 
-"$YVEX_BIN" models check deepseek4-v4-flash-selected-embed --backend cpu --level full --registry "$CHECK_REG" --no-graph --report-dir "$CHECK/reports" > "$ROOT/check-full-report.out"
+"$YVEX_BIN" models check deepseek4-v4-flash-selected-embed --backend cpu --level full --registry "$CHECK_REG" --no-graph --report-dir "$CHECK/reports" --audit > "$ROOT/check-full-report.out"
 grep 'level: full' "$ROOT/check-full-report.out"
 grep 'stage: model-gate skipped' "$ROOT/check-full-report.out"
 grep 'stage: materialize-gate skipped' "$ROOT/check-full-report.out"
@@ -215,12 +239,12 @@ test -f "$CHECK/reports/model-check-deepseek4-v4-flash-selected-embed-cpu-full.t
 "$YVEX_BIN" models check glm-5.2-official-safetensors --dry-run > "$ROOT/check-invalid-dry-run.out" 2> "$ROOT/check-invalid-dry-run.err" && exit 1 || true
 grep 'unknown models check option' "$ROOT/check-invalid-dry-run.err"
 
-"$YVEX_BIN" models check glm-5.2-official-safetensors --level quick > "$ROOT/check-glm-unsupported.out" 2> "$ROOT/check-glm-unsupported.err" && exit 1 || true
+"$YVEX_BIN" models check glm-5.2-official-safetensors --level quick --audit > "$ROOT/check-glm-unsupported.out" 2> "$ROOT/check-glm-unsupported.err" && exit 1 || true
 grep 'status: model-check-unsupported' "$ROOT/check-glm-unsupported.out"
 grep 'source-only target cannot be checked as a YVEX-produced runtime artifact yet' "$ROOT/check-glm-unsupported.out"
 grep 'generation: unsupported' "$ROOT/check-glm-unsupported.out"
 
-"$YVEX_BIN" models check deepseek4-v4-flash-selected-embed-rmsnorm --level quick > "$ROOT/check-segment-unsupported.out" 2> "$ROOT/check-segment-unsupported.err" && exit 1 || true
+"$YVEX_BIN" models check deepseek4-v4-flash-selected-embed-rmsnorm --level quick --audit > "$ROOT/check-segment-unsupported.out" 2> "$ROOT/check-segment-unsupported.err" && exit 1 || true
 grep 'status: model-check-unsupported' "$ROOT/check-segment-unsupported.out"
 grep 'segment check is planned' "$ROOT/check-segment-unsupported.out"
 grep 'generation: unsupported' "$ROOT/check-segment-unsupported.out"
@@ -248,6 +272,9 @@ grep 'empty or invalid' "$ROOT/check-invalid-report-dir.err"
 
 "$YVEX_BIN" models check deepseek4-v4-flash-selected-embed --unknown-flag > "$ROOT/check-invalid-unknown.out" 2> "$ROOT/check-invalid-unknown.err" && exit 1 || true
 grep 'unknown models check option' "$ROOT/check-invalid-unknown.err"
+
+"$YVEX_BIN" models check deepseek4-v4-flash-selected-embed --output nope > "$ROOT/check-invalid-output.out" 2> "$ROOT/check-invalid-output.err" && exit 1 || true
+grep 'unsupported output mode: nope' "$ROOT/check-invalid-output.err"
 
 "$YVEX_BIN" help model-target > "$ROOT/model-target-help.out"
 grep 'model-target decision --release v0.1.0' "$ROOT/model-target-help.out"

@@ -28,7 +28,7 @@ Current benchmark status:
   not measured
 
 Active implementation next:
-  V010.CLI.18 - diagnostic output demotion
+  V010.CLI.19 - compact report/table output
 
 Current release target:
   v0.1.0 - first honest full-runtime path
@@ -39,7 +39,7 @@ Primary pressure targets:
   Qwen/Metal future portability
 
 Main v0.1.0 blocker:
-  diagnostic output still needs broader demotion from normal operator paths
+  compact report/table output remains inconsistent across broader operator paths
 ```
 
 | Field | Current value |
@@ -57,7 +57,7 @@ Main v0.1.0 blocker:
 | Full model generation | unsupported |
 | DeepSeek generation | unsupported |
 | Eval/benchmark | unsupported / not measured |
-| Active next | V010.CLI.18 |
+| Active next | V010.CLI.19 |
 
 ## 1. Spine Nomenclature
 
@@ -562,7 +562,7 @@ lanes; rows are the delivery units that complete track work.
 | TRACK.TOKENIZER | Tokenizer and stop policy | detokenization, EOS, stop tokens, prompt boundary | partial/planned | tokenizer diagnostics | tokenizer-backed stop behavior | later |
 | TRACK.GENERATION | Generation runtime | decode/logits/sample/append/stop/cleanup | diagnostic-runtime | `yvex generate` | full-runtime generation | later |
 | TRACK.RUNTIME | Runtime lifecycle and trace | lifecycle, cancellation, trace, failure preservation | diagnostic-runtime | generate trace/cancel/cleanup | external interruption/runtime trace | later |
-| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output UX doctrine, and normal/audit baseline | diagnostic output demotion | active |
+| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output UX doctrine, normal/audit baseline, and diagnostic output demotion for broader CLI report surfaces | compact report/table output | active |
 | TRACK.SERVE | Serving | daemon state, provider endpoints, streaming | planned | status shell | runtime-backed generation endpoint | later |
 | TRACK.EVAL | Evaluation | fixture/runtime/generation/capability eval | planned | tests only | eval over generation path | later |
 | TRACK.BENCH | Benchmark/profile | reproducible performance measurement | planned | doctrine only | measured runtime harness | later |
@@ -1148,16 +1148,18 @@ Current status:
 Current evidence:
   paths/model-target/models prepare/check, graph check, generate help, CLI
   output UX doctrine in the spine, and normal/audit output baseline for core
-  operator commands.
+  operator commands, plus diagnostic output demotion for broader CLI report
+  surfaces.
 
 v0.1.0 rows:
   V010.CLI.*, V010.OPERATOR.*.
 
 Main blockers:
-  diagnostic output demotion is incomplete across the broader command surface.
+  compact report/table output remains inconsistent across broader operator
+  paths.
 
 Next possible row:
-  V010.CLI.18.
+  V010.CLI.19.
 
 Boundary:
   operator presets compose lower behavior only.
@@ -2412,8 +2414,14 @@ V010.CLI.24         hardcoded print reduction pass
 operator output is compact by default for `info`, `paths`, `models
 list/current`, target reports, and bounded diagnostic `generate`, while
 `--audit` / `--output audit` preserves row-promotion evidence and diagnostic
-fields. `V010.CLI.18` remains the next operator interlock before returning to
-source target work because broader diagnostic output still needs demotion.
+fields.
+
+`V010.CLI.18` is complete as the diagnostic demotion pass: report-heavy model,
+integrity, fullmodel, attention, context, KV, MoE, and tensor-collection
+surfaces default to compact normal output where touched, while `--audit` /
+`--output audit` preserves row-promotion evidence and diagnostic fields.
+`V010.CLI.19` remains the next operator interlock before returning to source
+target work because compact report/table output still needs a consistency pass.
 
 Boundary: CLI cannot claim lower runtime behavior that does not exist.
 
@@ -4043,7 +4051,7 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 ## 7. Active Next
 
 ```text
-V010.CLI.18 - diagnostic output demotion
+V010.CLI.19 - compact report/table output
 ```
 
 `SPINE.OUTPUT.UX.CONTRACT.0` is complete as a docs/control row. It defines the
@@ -4071,6 +4079,21 @@ and `yvex generate` now default to compact normal output where implemented.
 row promotion and evidence review. This is an operator-output improvement only;
 it does not add runtime execution, full model generation, evaluation,
 benchmark, throughput, or release readiness.
+
+Completed CLI implementation row:
+
+```text
+V010.CLI.18 - diagnostic output demotion
+```
+
+`V010.CLI.18` demotes diagnostic-heavy report output from broader normal CLI
+surfaces. Models inspect/verify/check, integrity report, fullmodel reports,
+attention/context/KV/MoE reports, and MoE tensor-collection reports now default
+to compact normal output where touched; `--audit` and `--output audit` preserve
+the detailed diagnostic evidence and unsupported runtime/generation/benchmark
+boundaries required for row promotion. This is an operator-output improvement
+only; it does not add runtime execution, full model generation, evaluation,
+benchmark, throughput, JSON output, color output, or release readiness.
 
 `V010.TARGET.9`, `V010.TARGET.2`, `V010.TARGET.3`, and `V010.TARGET.7` are also
 complete as report-only implementation rows. The commands `yvex model-target
@@ -4110,13 +4133,11 @@ close v0.1.0 full-runtime generation. GLM remains source/storage pressure only,
 Qwen/Metal is now command-visible as a reduced-scale Apple Silicon / Metal
 pressure lane, and tiny fixtures remain fixture-only.
 
-Active Next is now `V010.CLI.18` because `V010.CLI.17` covered the first normal
-output baseline, but broader diagnostic-heavy output still needs demotion from
-normal operator paths. The next code wave should continue compacting normal
-surfaces while preserving full audit evidence behind explicit modes.
+Active Next is now `V010.CLI.19` because `V010.CLI.18` demoted the next
+report-heavy group, but compact report/table output still needs a consistency
+pass before returning to source target work.
 
-After the diagnostic output demotion interlock, the next target/source lane
-remains:
+After the compact report/table pass, the next target/source lane remains:
 
 ```text
 V010.SOURCE.9 - Qwen source pressure report
@@ -4124,7 +4145,8 @@ V010.SOURCE.9 - Qwen source pressure report
 
 `V010.TARGET.7` remains complete. `V010.SOURCE.9` is still required before the
 Qwen/Metal lane has source target, manifest, native inventory, source config,
-and model-class facts.
+and model-class facts. `V010.SOURCE.9` remains the next target/source lane
+after the compact report/table pass unless the CLI remains too noisy.
 
 ## 8. Historical Delivery Ledger
 
@@ -4179,6 +4201,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | V010.TARGET.2 | complete | target | Full-runtime candidate target report | `yvex model-target candidate --release v0.1.0` reports full-runtime candidate eligibility across known target classes, classifies selected-slice/source-only/pressure/fixture targets, prints blockers and next rows, and preserves unsupported runtime, generation, evaluation, benchmark, throughput, and release-ready boundaries |
 | V010.TARGET.9 | complete | target | v0.1.0 target decision record | `yvex model-target decision --release v0.1.0` is command-visible and classifies selected-runtime-slice, source-only, pressure, and full-runtime-candidate eligibility; the current decision is blocked-no-candidate with `V010.TARGET.2` as next required row, while preserving unsupported runtime, generation, eval, benchmark, throughput, and release boundaries |
 | V010.CLI.17 | complete | operator | Normal output contract and layout baseline | core operator commands default to compact normal output for `info`, `paths`, `models list/current`, target reports, and bounded diagnostic `generate`, while `--audit` / `--output audit` preserves diagnostic fields and row-promotion evidence without adding runtime execution, generation, evaluation, benchmark, throughput, or release readiness |
+| V010.CLI.18 | complete | operator | Diagnostic output demotion | diagnostic-heavy report output is demoted from broader normal operator paths; models inspect/verify/check, integrity report, fullmodel reports, attention/context/KV/MoE reports, and MoE tensor-collection reports default to compact normal output where touched while `--audit` / `--output audit` preserves detailed diagnostic evidence and unsupported runtime/generation/benchmark boundaries |
 | OWI.HUGE.0 | planned | intake | Huge source tensor inventory | huge safetensors shard sets are inventoried without loading full tensor payloads |
 | OWI.HUGE.1 | planned | intake | Huge safetensors shard index | safetensors shard metadata, tensor placement, offsets, and dtype distribution are indexed |
 | OWI.HUGE.2 | planned | intake | Huge-model qtype and target profile | planned quantization target, qtype policy, per-role qtype classes, and expected storage bytes are reported |
@@ -4979,9 +5002,9 @@ the report-only model-class lane after resolving the docs/meta blocker.
 
 `SPINE.TESTMAP.0` and `SPINE.FILEMAP.0` remain useful non-runtime follow-ups.
 Target/source planning remains queued through `V010.SOURCE.9` after
-`V010.CLI.18` because the Qwen/Metal pressure lane is command-visible but still
+`V010.CLI.19` because the Qwen/Metal pressure lane is command-visible but still
 lacks source target, manifest, native inventory, source config, and model-class
-facts after the CLI diagnostic-demotion interlock.
+facts after the CLI compact report/table interlock.
 
 ### 11.5 Detailed Audit Tables
 
@@ -5379,17 +5402,18 @@ SPINE.FILEMAP.0:
   decision row.
 ```
 
-After `SPINE.OUTPUT.UX.CONTRACT.0` and `V010.CLI.17` completed, Active Next
-advances to:
+After `SPINE.OUTPUT.UX.CONTRACT.0`, `V010.CLI.17`, and `V010.CLI.18` completed,
+Active Next advances to:
 
 ```text
-V010.CLI.18 - diagnostic output demotion
+V010.CLI.19 - compact report/table output
 ```
 
 If any P1 finding remains blocking, Active Next becomes the named follow-up row.
 
 | Condition | Active Next |
 | --- | --- |
+| diagnostic output demotion complete and compact report/table output remains inconsistent | V010.CLI.19 |
 | normal output baseline complete and diagnostic walls still dominate broader normal output | V010.CLI.18 |
 | Qwen/Metal pressure report complete and Qwen source facts are missing | V010.SOURCE.9 |
 | dense candidate report complete and no eligible dense full-runtime candidate exists | V010.TARGET.7 |
@@ -5402,15 +5426,16 @@ Current reconciliation result:
 
 ```text
 Active Next:
-  V010.CLI.18 - diagnostic output demotion
+  V010.CLI.19 - compact report/table output
 
 Reason:
-  The first normal operator output baseline is implemented, but broader
-  diagnostic-heavy output still needs demotion from normal command paths.
-  V010.CLI.18 is the remaining operator-output interlock before returning to
-  V010.SOURCE.9. V010.TARGET.7 remains complete; Qwen source target, manifest,
-  native inventory, source config, and model-class facts remain the next
-  target/source blocker after the CLI diagnostic-demotion pass.
+  The first normal operator output baseline and broader diagnostic output
+  demotion are implemented, but compact report/table output still needs a
+  consistency pass. V010.CLI.19 is the remaining operator-output interlock
+  before returning to V010.SOURCE.9. V010.TARGET.7 remains complete; Qwen
+  source target, manifest, native inventory, source config, and model-class
+  facts remain the next target/source blocker after the CLI compact
+  report/table pass.
 ```
 
 

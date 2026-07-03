@@ -63,7 +63,7 @@ contains "$OUT_DIR/add.out" "status: models-added"
 GOOD_SHA=$(awk '/^registered_sha256: / { print $2 }' "$OUT_DIR/add.out")
 test -n "$GOOD_SHA" || fail "missing registered sha"
 
-"$YVEX_BIN" models verify "$ALIAS" --registry "$REG" \
+"$YVEX_BIN" models verify "$ALIAS" --registry "$REG" --audit \
   >"$OUT_DIR/verify-pass.out" 2>"$OUT_DIR/verify-pass.err"
 contains "$OUT_DIR/verify-pass.out" "digest_status: pass"
 contains "$OUT_DIR/verify-pass.out" "identity_status: pass"
@@ -104,7 +104,7 @@ contains "$OUT_DIR/integrity-raw.out" "status: artifact-integrity-pass"
   >"$OUT_DIR/stale-add.out" 2>"$OUT_DIR/stale-add.err"
 printf Z | dd of="$STALE_MODEL" bs=1 seek=128 conv=notrunc status=none
 
-"$YVEX_BIN" models verify "$ALIAS" --registry "$STALE_REG" \
+"$YVEX_BIN" models verify "$ALIAS" --registry "$STALE_REG" --audit \
   >"$OUT_DIR/verify-stale.out" 2>"$OUT_DIR/verify-stale.err" && \
   fail "mutated registered artifact unexpectedly verified" || true
 contains "$OUT_DIR/verify-stale.out" "digest_status: fail"

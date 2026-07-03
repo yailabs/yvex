@@ -1347,6 +1347,7 @@ static int command_integrity_report(int argc, char **argv)
     const char *report_status = "pass";
     const char *status = "integrity-report-pass";
     const char *model_input_kind;
+    int audit_output = 0;
     unsigned long long selected_hidden_size = 0ull;
     unsigned long long selected_vocab_size = 0ull;
     unsigned long long selected_output_count = 0ull;
@@ -1397,6 +1398,22 @@ static int command_integrity_report(int argc, char **argv)
             }
             integrity_options.require_token_embedding = 1;
             i += 1;
+        } else if (strcmp(argv[i], "--audit") == 0) {
+            audit_output = 1;
+        } else if (strcmp(argv[i], "--output") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: integrity report --output requires normal or audit\n");
+                return 2;
+            }
+            i += 1;
+            if (strcmp(argv[i], "normal") == 0) {
+                audit_output = 0;
+            } else if (strcmp(argv[i], "audit") == 0) {
+                audit_output = 1;
+            } else {
+                fprintf(stderr, "yvex: integrity report unsupported output mode: %s\n", argv[i]);
+                return 2;
+            }
         } else {
             fprintf(stderr, "yvex: unknown integrity report option: %s\n", argv[i]);
             fprintf(stderr, "Try 'yvex help integrity' for usage.\n");
@@ -1574,6 +1591,40 @@ static int command_integrity_report(int argc, char **argv)
     if (hard_fail) {
         report_status = "fail";
         status = "integrity-report-fail";
+    }
+
+    if (!audit_output) {
+        const char *top_blocker = "none";
+        if (hard_fail) {
+            if (integrity_report.error_count > 0u && integrity_report.issues[0].code[0]) {
+                top_blocker = integrity_report.issues[0].code;
+            } else if (strcmp(identity_status, "pass") != 0) {
+                top_blocker = "identity";
+            } else if (strcmp(metadata_status, "pass") != 0 &&
+                       strcmp(metadata_status, "unregistered") != 0) {
+                top_blocker = "metadata";
+            } else if (strcmp(materialization_preflight, "pass") != 0 &&
+                       strcmp(materialization_preflight, "not-checked") != 0) {
+                top_blocker = "materialization-preflight";
+            } else {
+                top_blocker = "integrity";
+            }
+        }
+        printf("integrity: %s model=%s backend=%s\n",
+               hard_fail ? "fail" : "pass",
+               model_arg,
+               backend_name ? backend_name : "not-requested");
+        printf("identity: %s digest: %s tensors=%llu invalid_ranges=%llu\n",
+               identity_status,
+               integrity_report.digest_status[0] ? integrity_report.digest_status : "unknown",
+               integrity_report.tensor_count,
+               integrity_report.tensor_ranges_invalid);
+        printf("materialization_preflight: %s\n", materialization_preflight);
+        printf("top_blocker: %s\n", top_blocker);
+        printf("boundary: integrity gate only, generation unsupported\n");
+        printf("status: %s\n", status);
+        yvex_model_ref_clear(&ref);
+        return hard_fail ? exit_for_status(YVEX_ERR_STATE) : 0;
     }
 
     printf("artifact_integrity_report: summary\n");
@@ -1808,8 +1859,9 @@ void yvex_inspect_help(FILE *fp)
 void yvex_integrity_help(FILE *fp)
 {
     fprintf(fp, "usage: yvex integrity check --model FILE_OR_ALIAS [--expect-sha256 HASH] [--require-token-embedding] [--partial-token N]\n");
-    fprintf(fp, "       yvex integrity report --model FILE_OR_ALIAS [--backend cpu|cuda] [--expect-sha256 HASH] [--require-token-embedding] [--partial-token N]\n");
+    fprintf(fp, "       yvex integrity report --model FILE_OR_ALIAS [--backend cpu|cuda] [--expect-sha256 HASH] [--require-token-embedding] [--partial-token N] [--audit | --output normal|audit]\n");
     fprintf(fp, "\nIntegrity validates local GGUF structure, tensor accounting, digest identity when supplied, metadata drift, and selected embedding readiness. It is not a supply-chain security audit.\n");
+    fprintf(fp, "Default report output is compact. Use --audit for full diagnostic fields.\n");
 }
 
 void yvex_materialize_help(FILE *fp)

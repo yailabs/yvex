@@ -84,15 +84,15 @@ make
 ./yvex model-target dense-candidate --release v0.1.0 --audit --include-candidates --include-requirements --include-blockers --include-next
 ./yvex model-target qwen-metal --help
 ./yvex model-target qwen-metal --release v0.1.0 --audit --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next
-./yvex fullmodel report --model glm-5.2-official-safetensors --backend cpu
-./yvex fullmodel materialization-plan --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
-./yvex fullmodel materialize --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --dry-run
-./yvex fullmodel descriptor --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
-./yvex attention report --model glm-5.2-official-safetensors --family glm --backend cpu
-./yvex kv report --model glm-5.2-official-safetensors --family glm --backend cpu
-./yvex context report --model glm-5.2-official-safetensors --family glm --backend cpu
-./yvex moe report --model glm-5.2-official-safetensors --family glm --backend cpu --include-blockers
-./yvex tensor-collection report --model glm-5.2-official-safetensors --family glm --collection moe --backend cpu --include-blockers
+./yvex fullmodel report --model glm-5.2-official-safetensors --backend cpu --audit
+./yvex fullmodel materialization-plan --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --audit
+./yvex fullmodel materialize --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --dry-run --audit
+./yvex fullmodel descriptor --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --audit
+./yvex attention report --model glm-5.2-official-safetensors --family glm --backend cpu --audit
+./yvex kv report --model glm-5.2-official-safetensors --family glm --backend cpu --audit
+./yvex context report --model glm-5.2-official-safetensors --family glm --backend cpu --audit
+./yvex moe report --model glm-5.2-official-safetensors --family glm --backend cpu --include-blockers --audit
+./yvex tensor-collection report --model glm-5.2-official-safetensors --family glm --collection moe --backend cpu --include-blockers --audit
 ./yvex backend cpu
 ./yvex tokenizer tests/fixtures/gguf/valid-tokenizer-simple.gguf
 ./yvex tokenize tests/fixtures/gguf/valid-tokenizer-simple.gguf --text "hello"
