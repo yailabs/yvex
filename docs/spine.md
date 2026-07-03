@@ -28,7 +28,7 @@ Current benchmark status:
   not measured
 
 Active implementation next:
-  V010.CLI.17 - normal output contract and layout baseline
+  V010.CLI.18 - diagnostic output demotion
 
 Current release target:
   v0.1.0 - first honest full-runtime path
@@ -39,7 +39,7 @@ Primary pressure targets:
   Qwen/Metal future portability
 
 Main v0.1.0 blocker:
-  normal operator output is not separated from diagnostic/audit output yet
+  diagnostic output still needs broader demotion from normal operator paths
 ```
 
 | Field | Current value |
@@ -57,7 +57,7 @@ Main v0.1.0 blocker:
 | Full model generation | unsupported |
 | DeepSeek generation | unsupported |
 | Eval/benchmark | unsupported / not measured |
-| Active next | V010.CLI.17 |
+| Active next | V010.CLI.18 |
 
 ## 1. Spine Nomenclature
 
@@ -181,6 +181,7 @@ operator-readable state.
 | attention/context/KV class | report-only | yes | `yvex attention/kv/context report` | not runtime execution |
 | MoE class | report-only | yes | `yvex moe report` | not router/expert execution |
 | operator paths/presets | operator-preset | yes | paths/model-target/models prepare/check | not extra runtime capability |
+| normal CLI output baseline | operator-output | yes | `info`, `paths`, `models`, `model-target`, and `generate` normal/audit tests | not new runtime capability |
 | docs/meta | docs-only | yes | spine rows | not runtime capability |
 
 ### 3.2 Implemented Artifact and Integrity Capability
@@ -225,7 +226,9 @@ Qwen/Metal pressure target report
 YVEX exposes operator-local path configuration, model target path reporting,
 target decision and candidate reporting,
 selected artifact prepare/check presets, graph check presets, bounded generate
-help/runbook coverage, and clear unsupported boundaries.
+help/runbook coverage, compact normal output for core operator paths, explicit
+audit output preservation for diagnostic evidence, and clear unsupported
+boundaries.
 
 ### 3.7 Implemented Docs/Meta Capability
 
@@ -559,7 +562,7 @@ lanes; rows are the delivery units that complete track work.
 | TRACK.TOKENIZER | Tokenizer and stop policy | detokenization, EOS, stop tokens, prompt boundary | partial/planned | tokenizer diagnostics | tokenizer-backed stop behavior | later |
 | TRACK.GENERATION | Generation runtime | decode/logits/sample/append/stop/cleanup | diagnostic-runtime | `yvex generate` | full-runtime generation | later |
 | TRACK.RUNTIME | Runtime lifecycle and trace | lifecycle, cancellation, trace, failure preservation | diagnostic-runtime | generate trace/cancel/cleanup | external interruption/runtime trace | later |
-| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate and CLI output UX doctrine | normal output contract and layout baseline | active |
+| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output UX doctrine, and normal/audit baseline | diagnostic output demotion | active |
 | TRACK.SERVE | Serving | daemon state, provider endpoints, streaming | planned | status shell | runtime-backed generation endpoint | later |
 | TRACK.EVAL | Evaluation | fixture/runtime/generation/capability eval | planned | tests only | eval over generation path | later |
 | TRACK.BENCH | Benchmark/profile | reproducible performance measurement | planned | doctrine only | measured runtime harness | later |
@@ -1143,17 +1146,18 @@ Current status:
   partial.
 
 Current evidence:
-  paths/model-target/models prepare/check, graph check, generate help, and CLI
-  output UX doctrine in the spine.
+  paths/model-target/models prepare/check, graph check, generate help, CLI
+  output UX doctrine in the spine, and normal/audit output baseline for core
+  operator commands.
 
 v0.1.0 rows:
   V010.CLI.*, V010.OPERATOR.*.
 
 Main blockers:
-  normal operator output is not separated from diagnostic/audit output.
+  diagnostic output demotion is incomplete across the broader command surface.
 
 Next possible row:
-  V010.CLI.17.
+  V010.CLI.18.
 
 Boundary:
   operator presets compose lower behavior only.
@@ -2404,9 +2408,12 @@ V010.CLI.23         quiet/no-color output policy
 V010.CLI.24         hardcoded print reduction pass
 ```
 
-`V010.CLI.17` is the next implementation interlock before returning to source
-target work. It must make normal operator output usable without deleting
-diagnostic/audit evidence.
+`V010.CLI.17` is complete as the first implementation baseline: core normal
+operator output is compact by default for `info`, `paths`, `models
+list/current`, target reports, and bounded diagnostic `generate`, while
+`--audit` / `--output audit` preserves row-promotion evidence and diagnostic
+fields. `V010.CLI.18` remains the next operator interlock before returning to
+source target work because broader diagnostic output still needs demotion.
 
 Boundary: CLI cannot claim lower runtime behavior that does not exist.
 
@@ -4036,7 +4043,7 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 ## 7. Active Next
 
 ```text
-V010.CLI.17 - normal output contract and layout baseline
+V010.CLI.18 - diagnostic output demotion
 ```
 
 `SPINE.OUTPUT.UX.CONTRACT.0` is complete as a docs/control row. It defines the
@@ -4049,6 +4056,21 @@ Completed row:
 ```text
 SPINE.OUTPUT.UX.CONTRACT.0 - CLI output UX contract and diagnostic demotion plan
 ```
+
+Completed CLI implementation row:
+
+```text
+V010.CLI.17 - normal output contract and layout baseline
+```
+
+`V010.CLI.17` makes the first normal operator output baseline command-visible:
+`yvex info`, `yvex paths`, `yvex models list`, `yvex models current`, `yvex
+model-target decision/candidate/dense-candidate/qwen-metal --release v0.1.0`,
+and `yvex generate` now default to compact normal output where implemented.
+`--audit` and `--output audit` preserve the long diagnostic fields required for
+row promotion and evidence review. This is an operator-output improvement only;
+it does not add runtime execution, full model generation, evaluation,
+benchmark, throughput, or release readiness.
 
 `V010.TARGET.9`, `V010.TARGET.2`, `V010.TARGET.3`, and `V010.TARGET.7` are also
 complete as report-only implementation rows. The commands `yvex model-target
@@ -4088,12 +4110,13 @@ close v0.1.0 full-runtime generation. GLM remains source/storage pressure only,
 Qwen/Metal is now command-visible as a reduced-scale Apple Silicon / Metal
 pressure lane, and tiny fixtures remain fixture-only.
 
-Active Next is now `V010.CLI.17` because the current command output is still
-too verbose and diagnostic-heavy for normal operator use. The next code wave
-must make normal output compact while preserving diagnostic/audit evidence
-behind explicit modes.
+Active Next is now `V010.CLI.18` because `V010.CLI.17` covered the first normal
+output baseline, but broader diagnostic-heavy output still needs demotion from
+normal operator paths. The next code wave should continue compacting normal
+surfaces while preserving full audit evidence behind explicit modes.
 
-After the CLI output interlock, the next target/source lane remains:
+After the diagnostic output demotion interlock, the next target/source lane
+remains:
 
 ```text
 V010.SOURCE.9 - Qwen source pressure report
@@ -4155,6 +4178,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | V010.TARGET.7 | complete | target | Qwen/Metal pressure target report | `yvex model-target qwen-metal --release v0.1.0` reports the reduced-scale Qwen on Apple Silicon / Metal pressure lane, source/config, hardware, backend, candidate, blocker, and next-row fields, and preserves unsupported Qwen runtime, Metal backend, materialization, graph/runtime execution, generation, evaluation, benchmark, throughput, and release-ready boundaries |
 | V010.TARGET.2 | complete | target | Full-runtime candidate target report | `yvex model-target candidate --release v0.1.0` reports full-runtime candidate eligibility across known target classes, classifies selected-slice/source-only/pressure/fixture targets, prints blockers and next rows, and preserves unsupported runtime, generation, evaluation, benchmark, throughput, and release-ready boundaries |
 | V010.TARGET.9 | complete | target | v0.1.0 target decision record | `yvex model-target decision --release v0.1.0` is command-visible and classifies selected-runtime-slice, source-only, pressure, and full-runtime-candidate eligibility; the current decision is blocked-no-candidate with `V010.TARGET.2` as next required row, while preserving unsupported runtime, generation, eval, benchmark, throughput, and release boundaries |
+| V010.CLI.17 | complete | operator | Normal output contract and layout baseline | core operator commands default to compact normal output for `info`, `paths`, `models list/current`, target reports, and bounded diagnostic `generate`, while `--audit` / `--output audit` preserves diagnostic fields and row-promotion evidence without adding runtime execution, generation, evaluation, benchmark, throughput, or release readiness |
 | OWI.HUGE.0 | planned | intake | Huge source tensor inventory | huge safetensors shard sets are inventoried without loading full tensor payloads |
 | OWI.HUGE.1 | planned | intake | Huge safetensors shard index | safetensors shard metadata, tensor placement, offsets, and dtype distribution are indexed |
 | OWI.HUGE.2 | planned | intake | Huge-model qtype and target profile | planned quantization target, qtype policy, per-role qtype classes, and expected storage bytes are reported |
@@ -4955,9 +4979,9 @@ the report-only model-class lane after resolving the docs/meta blocker.
 
 `SPINE.TESTMAP.0` and `SPINE.FILEMAP.0` remain useful non-runtime follow-ups.
 Target/source planning remains queued through `V010.SOURCE.9` after
-`V010.CLI.17` because the Qwen/Metal pressure lane is command-visible but still
+`V010.CLI.18` because the Qwen/Metal pressure lane is command-visible but still
 lacks source target, manifest, native inventory, source config, and model-class
-facts.
+facts after the CLI diagnostic-demotion interlock.
 
 ### 11.5 Detailed Audit Tables
 
@@ -5355,18 +5379,18 @@ SPINE.FILEMAP.0:
   decision row.
 ```
 
-After `SPINE.OUTPUT.UX.CONTRACT.0` completed as a docs/control row, Active
-Next advances to:
+After `SPINE.OUTPUT.UX.CONTRACT.0` and `V010.CLI.17` completed, Active Next
+advances to:
 
 ```text
-V010.CLI.17 - normal output contract and layout baseline
+V010.CLI.18 - diagnostic output demotion
 ```
 
 If any P1 finding remains blocking, Active Next becomes the named follow-up row.
 
 | Condition | Active Next |
 | --- | --- |
-| CLI output UX contract complete and diagnostic walls still dominate normal output | V010.CLI.17 |
+| normal output baseline complete and diagnostic walls still dominate broader normal output | V010.CLI.18 |
 | Qwen/Metal pressure report complete and Qwen source facts are missing | V010.SOURCE.9 |
 | dense candidate report complete and no eligible dense full-runtime candidate exists | V010.TARGET.7 |
 | Current Capability still overclaims implementation | SPINE.CAPABILITY.REWRITE.0 |
@@ -5378,14 +5402,15 @@ Current reconciliation result:
 
 ```text
 Active Next:
-  V010.CLI.17 - normal output contract and layout baseline
+  V010.CLI.18 - diagnostic output demotion
 
 Reason:
-  Normal operator output is not yet separated from diagnostic/audit output.
-  V010.CLI.17 is the implementation interlock before returning to
+  The first normal operator output baseline is implemented, but broader
+  diagnostic-heavy output still needs demotion from normal command paths.
+  V010.CLI.18 is the remaining operator-output interlock before returning to
   V010.SOURCE.9. V010.TARGET.7 remains complete; Qwen source target, manifest,
   native inventory, source config, and model-class facts remain the next
-  target/source blocker after the CLI output layout baseline.
+  target/source blocker after the CLI diagnostic-demotion pass.
 ```
 
 

@@ -121,7 +121,18 @@ header += b"\0" * ((-len(header)) % 32)
 path.write_bytes(header + embed_payload + rms_payload)
 PY
 
-run_ok max_one "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1
+run_ok max_one_normal "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1
+contains "$OUT_DIR/max_one_normal.out" "status: diagnostic-generation"
+contains "$OUT_DIR/max_one_normal.out" "tokens: 4 -> 1 diagnostic"
+contains "$OUT_DIR/max_one_normal.out" "stop: max-new-tokens"
+contains "$OUT_DIR/max_one_normal.out" "boundary: full-model generation unsupported"
+contains "$OUT_DIR/max_one_normal.out" "hint: use --audit or --trace-level full for diagnostic internals"
+not_contains "$OUT_DIR/max_one_normal.out" "generation_ready:"
+not_contains "$OUT_DIR/max_one_normal.out" "decode_steps:"
+not_contains "$OUT_DIR/max_one_normal.out" "cleanup_attempted:"
+line_count "$OUT_DIR/max_one_normal.out" "stop:" 1
+
+run_ok max_one "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --audit
 contains "$OUT_DIR/max_one.out" "status: generation-loop-complete"
 contains "$OUT_DIR/max_one.out" "lifecycle_status: cleaned"
 contains "$OUT_DIR/max_one.out" "generation_state: completed"
@@ -179,7 +190,7 @@ not_contains "$OUT_DIR/max_one.out" "trace.step."
 no_ansi "$OUT_DIR/max_one.out"
 line_count "$OUT_DIR/max_one.out" "stop_reason:" 1
 
-run_ok max_three "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3
+run_ok max_three "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --audit
 contains "$OUT_DIR/max_three.out" "context_length: 7"
 contains "$OUT_DIR/max_three.out" "generated_token_count: 3"
 contains "$OUT_DIR/max_three.out" "accepted_token_count: 3"
@@ -190,7 +201,7 @@ contains "$OUT_DIR/max_three.out" "stop_step: 2"
 contains "$OUT_DIR/max_three.out" "stop_timing: post-append"
 contains "$OUT_DIR/max_three.out" "failure_stop: false"
 
-run_ok cancel_before_first "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --cancel-after-steps 0
+run_ok cancel_before_first "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --cancel-after-steps 0 --audit
 contains "$OUT_DIR/cancel_before_first.out" "status: generation-loop-cancelled"
 contains "$OUT_DIR/cancel_before_first.out" "generation_state: cancelled"
 contains "$OUT_DIR/cancel_before_first.out" "state_dirty: false"
@@ -213,7 +224,7 @@ contains "$OUT_DIR/cancel_before_first.out" "stop_timing: cancel-safe-point"
 contains "$OUT_DIR/cancel_before_first.out" "stop_before_append: true"
 contains "$OUT_DIR/cancel_before_first.out" "failure_stop: false"
 
-run_ok cancel_after_one "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --cancel-after-steps 1
+run_ok cancel_after_one "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --cancel-after-steps 1 --audit
 contains "$OUT_DIR/cancel_after_one.out" "status: generation-loop-cancelled"
 contains "$OUT_DIR/cancel_after_one.out" "generation_state: cancelled"
 contains "$OUT_DIR/cancel_after_one.out" "state_dirty: true"
@@ -240,7 +251,7 @@ contains "$OUT_DIR/cancel_after_two_trace.out" "trace.cancel.partial_generated_t
 contains "$OUT_DIR/cancel_after_two_trace.out" "trace_cancel:"
 contains "$OUT_DIR/cancel_after_two_trace.out" "trace.cleanup.status: pass"
 
-run_ok cancel_beyond_max "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2 --cancel-after-steps 999
+run_ok cancel_beyond_max "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2 --cancel-after-steps 999 --audit
 contains "$OUT_DIR/cancel_beyond_max.out" "status: generation-loop-complete"
 contains "$OUT_DIR/cancel_beyond_max.out" "generation_state: completed"
 contains "$OUT_DIR/cancel_beyond_max.out" "cancel_requested: false"
@@ -248,7 +259,7 @@ contains "$OUT_DIR/cancel_beyond_max.out" "cancel_step: none"
 contains "$OUT_DIR/cancel_beyond_max.out" "stop_reason: max-new-tokens"
 contains "$OUT_DIR/cancel_beyond_max.out" "generated_token_count: 2"
 
-run_ok cleanup_repeated env YVEX_TEST_REPEAT_GENERATE_CLEANUP=1 "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1
+run_ok cleanup_repeated env YVEX_TEST_REPEAT_GENERATE_CLEANUP=1 "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --audit
 contains "$OUT_DIR/cleanup_repeated.out" "cleanup_attempted: true"
 contains "$OUT_DIR/cleanup_repeated.out" "cleanup_status: already-cleaned"
 contains "$OUT_DIR/cleanup_repeated.out" "cleanup_idempotent: true"
@@ -258,10 +269,13 @@ contains "$OUT_DIR/cleanup_repeated.out" "cleanup_owned_state_released: true"
 run_fail invalid_trace "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --trace-level nonsense
 contains "$OUT_DIR/invalid_trace.err" "error: --trace-level requires none|tokens|steps|kv|logits|sampling|full"
 
+run_fail invalid_output "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --output nope
+contains "$OUT_DIR/invalid_output.err" "error: unsupported output mode: nope"
+
 run_fail invalid_cancel "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --cancel-after-steps nope
 contains "$OUT_DIR/invalid_cancel.err" "error: --cancel-after-steps must be a non-negative integer"
 
-run_ok trace_none "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --trace-level none
+run_ok trace_none "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1 --trace-level none --audit
 contains "$OUT_DIR/trace_none.out" "trace_level: none"
 contains "$OUT_DIR/trace_none.out" "trace_enabled: false"
 contains "$OUT_DIR/trace_none.out" "trace_records: 0"
@@ -333,7 +347,7 @@ contains "$OUT_DIR/trace_full.out" "trace_level: full"
 contains "$OUT_DIR/trace_full.out" "trace_status: emitted"
 no_ansi "$OUT_DIR/trace_full.out"
 
-run_ok context_before "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --context-length 4
+run_ok context_before "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --context-length 4 --audit
 contains "$OUT_DIR/context_before.out" "context_length: 4"
 contains "$OUT_DIR/context_before.out" "generated_token_count: 0"
 contains "$OUT_DIR/context_before.out" "accepted_token_count: 0"
@@ -359,7 +373,7 @@ contains "$OUT_DIR/context_before_trace.out" "trace.stop.reason: context-limit"
 contains "$OUT_DIR/context_before_trace.out" "trace.stop.timing: pre-append"
 contains "$OUT_DIR/context_before_trace.out" "trace.stop.before_append: true"
 
-run_ok context_after "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --context-length 5
+run_ok context_after "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --context-length 5 --audit
 contains "$OUT_DIR/context_after.out" "context_length: 5"
 contains "$OUT_DIR/context_after.out" "generated_token_count: 1"
 contains "$OUT_DIR/context_after.out" "accepted_token_count: 1"
@@ -372,7 +386,7 @@ contains "$OUT_DIR/context_after.out" "stop_timing: pre-append"
 contains "$OUT_DIR/context_after.out" "stop_before_append: true"
 contains "$OUT_DIR/context_after.out" "failure_stop: false"
 
-run_fail decode_failure env YVEX_TEST_FAIL_DECODE_AFTER_PREFILL=1 "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2
+run_fail decode_failure env YVEX_TEST_FAIL_DECODE_AFTER_PREFILL=1 "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2 --audit
 contains "$OUT_DIR/decode_failure.out" "status: generation-loop-failed"
 contains "$OUT_DIR/decode_failure.out" "generation_state: failed"
 contains "$OUT_DIR/decode_failure.out" "partial_output_available: false"
@@ -384,7 +398,7 @@ contains "$OUT_DIR/decode_failure.out" "cleanup_attempted: true"
 contains "$OUT_DIR/decode_failure.out" "failure_preserved: true"
 contains "$OUT_DIR/decode_failure.out" "partial_output_preserved: true"
 
-run_fail logits_failure env YVEX_TEST_FAIL_LOGITS_AFTER_DECODE=1 "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2
+run_fail logits_failure env YVEX_TEST_FAIL_LOGITS_AFTER_DECODE=1 "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2 --audit
 contains "$OUT_DIR/logits_failure.out" "status: generation-loop-failed"
 contains "$OUT_DIR/logits_failure.out" "generation_state: failed"
 contains "$OUT_DIR/logits_failure.out" "stop_reason: logits-failure"
@@ -394,7 +408,7 @@ contains "$OUT_DIR/logits_failure.out" "failed_phase: logits"
 contains "$OUT_DIR/logits_failure.out" "cleanup_attempted: true"
 contains "$OUT_DIR/logits_failure.out" "failure_preserved: true"
 
-run_fail sample_failure env YVEX_TEST_FAIL_SAMPLE_AFTER_LOGITS=1 "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2
+run_fail sample_failure env YVEX_TEST_FAIL_SAMPLE_AFTER_LOGITS=1 "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2 --audit
 contains "$OUT_DIR/sample_failure.out" "status: generation-loop-failed"
 contains "$OUT_DIR/sample_failure.out" "generation_state: failed"
 contains "$OUT_DIR/sample_failure.out" "stop_reason: sampler-failure"
@@ -412,7 +426,7 @@ contains "$OUT_DIR/sample_failure_trace.out" "trace.cleanup.attempted: true"
 contains "$OUT_DIR/sample_failure_trace.out" "trace_failures:"
 contains "$OUT_DIR/sample_failure_trace.out" "trace_status: emitted"
 
-run_fail append_failure env YVEX_TEST_FAIL_GENERATE_APPEND=1 "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2
+run_fail append_failure env YVEX_TEST_FAIL_GENERATE_APPEND=1 "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2 --audit
 contains "$OUT_DIR/append_failure.out" "status: generation-loop-failed"
 contains "$OUT_DIR/append_failure.out" "generation_state: failed"
 contains "$OUT_DIR/append_failure.out" "append_status: append-failed"

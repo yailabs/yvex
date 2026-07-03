@@ -26,7 +26,13 @@ test -f "$REG"
 
 "$YVEX_BIN" models list --registry "$REG" > "$ROOT/list.out"
 grep 'deepseek4-v4-flash-selected-embed' "$ROOT/list.out"
+grep 'format: marker alias | family | artifact_class | ready' "$ROOT/list.out"
 grep 'status: models-list' "$ROOT/list.out"
+
+"$YVEX_BIN" models list --registry "$REG" --audit > "$ROOT/list-audit.out"
+grep 'registered_sha256:' "$ROOT/list-audit.out"
+grep 'registered_selected_embedding_ready:' "$ROOT/list-audit.out"
+grep 'status: models-list' "$ROOT/list-audit.out"
 
 "$YVEX_BIN" models use deepseek4-v4-flash-selected-embed --registry "$REG" > "$ROOT/use.out"
 grep 'selected: deepseek4-v4-flash-selected-embed' "$ROOT/use.out"
@@ -36,6 +42,14 @@ grep 'status: models-selected' "$ROOT/use.out"
 grep 'selected: deepseek4-v4-flash-selected-embed' "$ROOT/current.out"
 grep 'execution_ready: false' "$ROOT/current.out"
 grep 'status: models-current' "$ROOT/current.out"
+
+"$YVEX_BIN" models current --registry "$REG" --audit > "$ROOT/current-audit.out"
+grep 'registered_sha256:' "$ROOT/current-audit.out"
+grep 'registered_tensor_count:' "$ROOT/current-audit.out"
+grep 'status: models-current' "$ROOT/current-audit.out"
+
+"$YVEX_BIN" models list --registry "$REG" --output nope > "$ROOT/list-bad-output.out" 2> "$ROOT/list-bad-output.err" && exit 1 || true
+grep 'unsupported output mode: nope' "$ROOT/list-bad-output.err"
 
 "$YVEX_BIN" models inspect deepseek4-v4-flash-selected-embed --registry "$REG" > "$ROOT/inspect.out"
 grep 'alias: deepseek4-v4-flash-selected-embed' "$ROOT/inspect.out"
@@ -243,7 +257,15 @@ grep 'This command records the v0.1.0 target decision' "$ROOT/model-target-help.
 grep 'usage: yvex model-target decision --release v0.1.0' "$ROOT/model-target-decision-help.out"
 grep 'does not download models, emit artifacts, materialize tensors, execute graph work, run prefill, decode, logits, sampling, generation, evaluation, or benchmarks' "$ROOT/model-target-decision-help.out"
 
-"$YVEX_BIN" model-target decision --release v0.1.0 --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next > "$ROOT/model-target-decision.out"
+"$YVEX_BIN" model-target decision --release v0.1.0 > "$ROOT/model-target-decision-normal.out"
+grep 'report: target-decision' "$ROOT/model-target-decision-normal.out"
+grep 'status: target-decision-blocked' "$ROOT/model-target-decision-normal.out"
+grep 'selected: none' "$ROOT/model-target-decision-normal.out"
+grep 'top_blocker: no eligible full-runtime candidate' "$ROOT/model-target-decision-normal.out"
+grep 'next: V010.CLI.18' "$ROOT/model-target-decision-normal.out"
+grep 'boundary: report-only; generation unsupported; benchmark not measured' "$ROOT/model-target-decision-normal.out"
+
+"$YVEX_BIN" model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next > "$ROOT/model-target-decision.out"
 grep 'target_decision: v0.1.0' "$ROOT/model-target-decision.out"
 grep 'status: target-decision-blocked' "$ROOT/model-target-decision.out"
 grep 'decision_state: blocked-no-candidate' "$ROOT/model-target-decision.out"
@@ -267,13 +289,13 @@ grep 'glm_pressure_status: source-storage-pressure-only' "$ROOT/model-target-dec
 grep 'qwen_metal_pressure_status: planned-portability-pressure-only' "$ROOT/model-target-decision.out"
 grep 'next_required_rows: V010.TARGET.2' "$ROOT/model-target-decision.out"
 
-"$YVEX_BIN" model-target decision --release v0.1.0 --candidate deepseek4-v4-flash-selected-embed-rmsnorm --include-blockers --include-next > "$ROOT/model-target-decision-rmsnorm.out"
+"$YVEX_BIN" model-target decision --release v0.1.0 --audit --candidate deepseek4-v4-flash-selected-embed-rmsnorm --include-blockers --include-next > "$ROOT/model-target-decision-rmsnorm.out"
 grep 'candidate_count: 1' "$ROOT/model-target-decision-rmsnorm.out"
 grep 'candidate.0.id: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/model-target-decision-rmsnorm.out"
 grep 'candidate.0.status: ineligible-selected-slice' "$ROOT/model-target-decision-rmsnorm.out"
 grep 'generation: unsupported-full-model' "$ROOT/model-target-decision-rmsnorm.out"
 
-"$YVEX_BIN" model-target decision --release v0.1.0 --candidate glm-5.2-official-safetensors --include-blockers --include-next > "$ROOT/model-target-decision-glm.out"
+"$YVEX_BIN" model-target decision --release v0.1.0 --audit --candidate glm-5.2-official-safetensors --include-blockers --include-next > "$ROOT/model-target-decision-glm.out"
 grep 'candidate_count: 1' "$ROOT/model-target-decision-glm.out"
 grep 'candidate.0.id: glm-5.2-official-safetensors' "$ROOT/model-target-decision-glm.out"
 grep 'candidate.0.class: huge-source-pressure' "$ROOT/model-target-decision-glm.out"

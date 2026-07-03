@@ -130,53 +130,62 @@ run_ok version_command "$YVEX_BIN" version
 contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
 
 run_ok info "$YVEX_BIN" info
-contains "$OUT_DIR/info.out" "name: YVEX"
-contains "$OUT_DIR/info.out" "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, standalone RoPE, attention, matmul, and MLP ops, explicit token input boundary, prefill state foundation, minimal KV binding, minimal KV ownership, bounded decode/logits/sampling diagnostics, and bounded diagnostic generation loop with explicit append accounting"
-contains "$OUT_DIR/info.out" "library: libyvex.a"
-contains "$OUT_DIR/info.out" "filesystem: implemented"
-contains "$OUT_DIR/info.out" "artifact: open/read implemented"
-contains "$OUT_DIR/info.out" "gguf: metadata/tensor directory parsing implemented"
-contains "$OUT_DIR/info.out" "model: descriptor-only implemented"
-contains "$OUT_DIR/info.out" "tokenizer: fixture encode/decode implemented"
-contains "$OUT_DIR/info.out" "token_input: explicit token boundary implemented"
-contains "$OUT_DIR/info.out" "prefill_state: segment-summary foundation, bounded layer-backed prefill state, chunked prefill lifecycle, and minimal KV binding implemented"
-contains "$OUT_DIR/info.out" "prompt: default renderer implemented"
-contains "$OUT_DIR/info.out" "graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, standalone RoPE position op, standalone F32 attention primitive, standalone F32 matmul/projection primitive, and standalone F32 MLP/feed-forward primitive implemented"
-contains "$OUT_DIR/info.out" "planner: estimate-only implemented"
-contains "$OUT_DIR/info.out" "backend: CPU reference implemented"
-contains "$OUT_DIR/info.out" "backend_cuda: tensor movement plus F32/F16 embed, RMSNorm, RoPE position op, F32 attention primitive, F32 matmul/projection primitive, and F32 MLP/feed-forward primitive implemented when CUDA is available"
-contains "$OUT_DIR/info.out" "weights: selected tensor materialization implemented"
-contains "$OUT_DIR/info.out" "engine: descriptor open and selected-weight attachment implemented"
-contains "$OUT_DIR/info.out" "session: lifecycle diagnostics, engine attachment observer, and KV ownership implemented"
-contains "$OUT_DIR/info.out" "run: accepted-only runtime shell implemented"
-contains "$OUT_DIR/info.out" "chat: accepted-only REPL shell implemented"
-contains "$OUT_DIR/info.out" "metrics: runtime collector implemented"
-contains "$OUT_DIR/info.out" "trace: JSONL writer implemented"
-contains "$OUT_DIR/info.out" "profile: JSON writer implemented"
-contains "$OUT_DIR/info.out" "run_artifacts: metrics/trace/profile files implemented"
-contains "$OUT_DIR/info.out" "source_manifest: provenance JSON writer implemented"
-contains "$OUT_DIR/info.out" "native_weights: safetensors header inventory implemented"
-contains "$OUT_DIR/info.out" "gguf_template: contract validator implemented"
-contains "$OUT_DIR/info.out" "gguf_emit: controlled GGUF writer implemented"
-contains "$OUT_DIR/info.out" "conversion: open-weight selected tensor bridge implemented"
-contains "$OUT_DIR/info.out" "model_ref: alias-or-path resolver implemented"
-contains "$OUT_DIR/info.out" "model_registry: local model alias registry implemented"
-contains "$OUT_DIR/info.out" "quant_job: external quantization job manifest implemented"
-contains "$OUT_DIR/info.out" "qtype_support: conversion support matrix implemented"
-contains "$OUT_DIR/info.out" "weight_mapping: tensor adapter contract implemented"
-contains "$OUT_DIR/info.out" "quant_policy: manifest validator implemented"
-contains "$OUT_DIR/info.out" "imatrix: calibration artifact manifest implemented"
-contains "$OUT_DIR/info.out" "server_binary: yvexd shell implemented"
-contains "$OUT_DIR/info.out" "server_endpoints: health/metrics/models status implemented"
-contains "$OUT_DIR/info.out" "server_generation: not implemented"
-contains "$OUT_DIR/info.out" "kv: minimal session-owned append/read boundary implemented"
-contains "$OUT_DIR/info.out" "decode: bounded diagnostic state step implemented"
-contains "$OUT_DIR/info.out" "logits: bounded diagnostic buffer implemented"
-contains "$OUT_DIR/info.out" "sampling: bounded greedy sampler implemented"
-contains "$OUT_DIR/info.out" "generation_loop: bounded diagnostic loop implemented"
-contains "$OUT_DIR/info.out" "generation: unsupported-full-model"
-contains "$OUT_DIR/info.out" "cuda: available when local driver/device probe succeeds"
-contains "$OUT_DIR/info.out" "server: yvexd status shell implemented"
+contains "$OUT_DIR/info.out" "info: YVEX"
+contains "$OUT_DIR/info.out" "runtime: bounded diagnostic generation"
+contains "$OUT_DIR/info.out" "cli_output: normal"
+contains "$OUT_DIR/info.out" "full_model_generation: unsupported"
+contains "$OUT_DIR/info.out" "hint: use --audit for full diagnostic fields"
+
+run_ok info_audit "$YVEX_BIN" info --audit
+contains "$OUT_DIR/info_audit.out" "name: YVEX"
+contains "$OUT_DIR/info_audit.out" "status: selected tensor materialization, engine weight attachment, fixture graph execution, real selected graph segments, standalone RoPE, attention, matmul, and MLP ops, explicit token input boundary, prefill state foundation, minimal KV binding, minimal KV ownership, bounded decode/logits/sampling diagnostics, and bounded diagnostic generation loop with explicit append accounting"
+contains "$OUT_DIR/info_audit.out" "library: libyvex.a"
+contains "$OUT_DIR/info_audit.out" "filesystem: implemented"
+contains "$OUT_DIR/info_audit.out" "artifact: open/read implemented"
+contains "$OUT_DIR/info_audit.out" "gguf: metadata/tensor directory parsing implemented"
+contains "$OUT_DIR/info_audit.out" "model: descriptor-only implemented"
+contains "$OUT_DIR/info_audit.out" "tokenizer: fixture encode/decode implemented"
+contains "$OUT_DIR/info_audit.out" "token_input: explicit token boundary implemented"
+contains "$OUT_DIR/info_audit.out" "prefill_state: segment-summary foundation, bounded layer-backed prefill state, chunked prefill lifecycle, and minimal KV binding implemented"
+contains "$OUT_DIR/info_audit.out" "prompt: default renderer implemented"
+contains "$OUT_DIR/info_audit.out" "graph: partial planning, deterministic fixture execution, selected embedding partial execution, selected embedding RMSNorm segment execution, standalone RoPE position op, standalone F32 attention primitive, standalone F32 matmul/projection primitive, and standalone F32 MLP/feed-forward primitive implemented"
+contains "$OUT_DIR/info_audit.out" "planner: estimate-only implemented"
+contains "$OUT_DIR/info_audit.out" "backend: CPU reference implemented"
+contains "$OUT_DIR/info_audit.out" "backend_cuda: tensor movement plus F32/F16 embed, RMSNorm, RoPE position op, F32 attention primitive, F32 matmul/projection primitive, and F32 MLP/feed-forward primitive implemented when CUDA is available"
+contains "$OUT_DIR/info_audit.out" "weights: selected tensor materialization implemented"
+contains "$OUT_DIR/info_audit.out" "engine: descriptor open and selected-weight attachment implemented"
+contains "$OUT_DIR/info_audit.out" "session: lifecycle diagnostics, engine attachment observer, and KV ownership implemented"
+contains "$OUT_DIR/info_audit.out" "run: accepted-only runtime shell implemented"
+contains "$OUT_DIR/info_audit.out" "chat: accepted-only REPL shell implemented"
+contains "$OUT_DIR/info_audit.out" "metrics: runtime collector implemented"
+contains "$OUT_DIR/info_audit.out" "trace: JSONL writer implemented"
+contains "$OUT_DIR/info_audit.out" "profile: JSON writer implemented"
+contains "$OUT_DIR/info_audit.out" "run_artifacts: metrics/trace/profile files implemented"
+contains "$OUT_DIR/info_audit.out" "source_manifest: provenance JSON writer implemented"
+contains "$OUT_DIR/info_audit.out" "native_weights: safetensors header inventory implemented"
+contains "$OUT_DIR/info_audit.out" "gguf_template: contract validator implemented"
+contains "$OUT_DIR/info_audit.out" "gguf_emit: controlled GGUF writer implemented"
+contains "$OUT_DIR/info_audit.out" "conversion: open-weight selected tensor bridge implemented"
+contains "$OUT_DIR/info_audit.out" "model_ref: alias-or-path resolver implemented"
+contains "$OUT_DIR/info_audit.out" "model_registry: local model alias registry implemented"
+contains "$OUT_DIR/info_audit.out" "quant_job: external quantization job manifest implemented"
+contains "$OUT_DIR/info_audit.out" "qtype_support: conversion support matrix implemented"
+contains "$OUT_DIR/info_audit.out" "weight_mapping: tensor adapter contract implemented"
+contains "$OUT_DIR/info_audit.out" "quant_policy: manifest validator implemented"
+contains "$OUT_DIR/info_audit.out" "imatrix: calibration artifact manifest implemented"
+contains "$OUT_DIR/info_audit.out" "server_binary: yvexd shell implemented"
+contains "$OUT_DIR/info_audit.out" "server_endpoints: health/metrics/models status implemented"
+contains "$OUT_DIR/info_audit.out" "server_generation: not implemented"
+contains "$OUT_DIR/info_audit.out" "kv: minimal session-owned append/read boundary implemented"
+contains "$OUT_DIR/info_audit.out" "decode: bounded diagnostic state step implemented"
+contains "$OUT_DIR/info_audit.out" "logits: bounded diagnostic buffer implemented"
+contains "$OUT_DIR/info_audit.out" "sampling: bounded greedy sampler implemented"
+contains "$OUT_DIR/info_audit.out" "generation_loop: bounded diagnostic loop implemented"
+contains "$OUT_DIR/info_audit.out" "generation: unsupported-full-model"
+contains "$OUT_DIR/info_audit.out" "cuda: available when local driver/device probe succeeds"
+contains "$OUT_DIR/info_audit.out" "server: yvexd status shell implemented"
+run_fail_code info_bad_output 2 "$YVEX_BIN" info --output nope
+contains "$OUT_DIR/info_bad_output.err" "yvex info: unsupported output mode: nope"
 
 run_ok commands "$YVEX_BIN" commands
 contains "$OUT_DIR/commands.out" "Implemented commands:"
@@ -450,18 +459,15 @@ contains "$OUT_DIR/model_target_candidate_help.out" "The candidate report evalua
 contains "$OUT_DIR/model_target_candidate_help.out" "does not select a ready model"
 
 run_ok model_target_candidate "$YVEX_BIN" model-target candidate --release v0.1.0
-contains "$OUT_DIR/model_target_candidate.out" "model-target: candidate"
-contains "$OUT_DIR/model_target_candidate.out" "status: full-runtime-candidate-report"
+contains "$OUT_DIR/model_target_candidate.out" "report: model-target candidate"
+contains "$OUT_DIR/model_target_candidate.out" "status: blocked-no-candidate"
 contains "$OUT_DIR/model_target_candidate.out" "release: v0.1.0"
-contains "$OUT_DIR/model_target_candidate.out" "decision_state: blocked-no-candidate"
-contains "$OUT_DIR/model_target_candidate.out" "full_runtime_candidate_status: missing"
-contains "$OUT_DIR/model_target_candidate.out" "eligible_candidate_count: 0"
-contains "$OUT_DIR/model_target_candidate.out" "runtime_claim: unsupported"
-contains "$OUT_DIR/model_target_candidate.out" "generation: unsupported-full-model"
-contains "$OUT_DIR/model_target_candidate.out" "benchmark_status: not-measured"
-contains "$OUT_DIR/model_target_candidate.out" "release_ready: false"
+contains "$OUT_DIR/model_target_candidate.out" "selected: none"
+contains "$OUT_DIR/model_target_candidate.out" "top_blocker: no eligible full-runtime candidate"
+contains "$OUT_DIR/model_target_candidate.out" "next: V010.CLI.18"
+contains "$OUT_DIR/model_target_candidate.out" "boundary: report-only; generation unsupported; benchmark not measured"
 
-run_ok model_target_candidate_full "$YVEX_BIN" model-target candidate --release v0.1.0 --include-candidates --include-pressure-targets --include-blockers --include-next
+run_ok model_target_candidate_full "$YVEX_BIN" model-target candidate --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-next
 contains "$OUT_DIR/model_target_candidate_full.out" "deepseek_pressure_status: selected-slice-pressure-only"
 contains "$OUT_DIR/model_target_candidate_full.out" "glm_pressure_status: source-storage-pressure-only"
 contains "$OUT_DIR/model_target_candidate_full.out" "qwen_metal_pressure_status: planned-portability-pressure-only"
@@ -480,7 +486,7 @@ contains "$OUT_DIR/model_target_candidate_full.out" "candidate_3_eligibility: pl
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_4_id: tests/fixtures/gguf/valid-tokenizer-simple.gguf"
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_4_eligibility: fixture-only"
 
-run_ok model_target_candidate_rmsnorm "$YVEX_BIN" model-target candidate --release v0.1.0 --target deepseek4-v4-flash-selected-embed-rmsnorm --include-blockers --include-next
+run_ok model_target_candidate_rmsnorm "$YVEX_BIN" model-target candidate --release v0.1.0 --audit --target deepseek4-v4-flash-selected-embed-rmsnorm --include-blockers --include-next
 contains "$OUT_DIR/model_target_candidate_rmsnorm.out" "candidate_count: 1"
 contains "$OUT_DIR/model_target_candidate_rmsnorm.out" "candidate_0_id: deepseek4-v4-flash-selected-embed-rmsnorm"
 contains "$OUT_DIR/model_target_candidate_rmsnorm.out" "candidate_0_stage: diagnostic-runtime"
@@ -492,6 +498,8 @@ run_fail_code model_target_candidate_missing_release 2 "$YVEX_BIN" model-target 
 contains "$OUT_DIR/model_target_candidate_missing_release.err" "model-target candidate: --release is required"
 run_fail_code model_target_candidate_bad_release 2 "$YVEX_BIN" model-target candidate --release nope
 contains "$OUT_DIR/model_target_candidate_bad_release.out" "status: unsupported-release"
+run_fail_code model_target_candidate_bad_output 2 "$YVEX_BIN" model-target candidate --release v0.1.0 --output nope
+contains "$OUT_DIR/model_target_candidate_bad_output.err" "model-target candidate: unsupported output mode: nope"
 run_fail_code model_target_candidate_unknown_flag 2 "$YVEX_BIN" model-target candidate --release v0.1.0 --unknown
 contains "$OUT_DIR/model_target_candidate_unknown_flag.err" "model-target candidate: unknown option: --unknown"
 run_fail_code model_target_candidate_missing_release_value 2 "$YVEX_BIN" model-target candidate --release
@@ -508,19 +516,15 @@ contains "$OUT_DIR/model_target_dense_candidate_help.out" "The dense-candidate r
 contains "$OUT_DIR/model_target_dense_candidate_help.out" "does not download weights, emit artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready"
 
 run_ok model_target_dense_candidate "$YVEX_BIN" model-target dense-candidate --release v0.1.0
-contains "$OUT_DIR/model_target_dense_candidate.out" "model-target: dense-candidate"
-contains "$OUT_DIR/model_target_dense_candidate.out" "status: dense-candidate-report"
+contains "$OUT_DIR/model_target_dense_candidate.out" "report: model-target dense-candidate"
+contains "$OUT_DIR/model_target_dense_candidate.out" "status: dense-candidate-missing"
 contains "$OUT_DIR/model_target_dense_candidate.out" "release: v0.1.0"
-contains "$OUT_DIR/model_target_dense_candidate.out" "decision_state: dense-candidate-missing"
-contains "$OUT_DIR/model_target_dense_candidate.out" "selected_dense_candidate_id: none"
-contains "$OUT_DIR/model_target_dense_candidate.out" "dense_candidate_status: missing"
-contains "$OUT_DIR/model_target_dense_candidate.out" "eligible_dense_candidate_count: 0"
-contains "$OUT_DIR/model_target_dense_candidate.out" "runtime_claim: unsupported"
-contains "$OUT_DIR/model_target_dense_candidate.out" "generation: unsupported-full-model"
-contains "$OUT_DIR/model_target_dense_candidate.out" "benchmark_status: not-measured"
-contains "$OUT_DIR/model_target_dense_candidate.out" "release_ready: false"
+contains "$OUT_DIR/model_target_dense_candidate.out" "selected: none"
+contains "$OUT_DIR/model_target_dense_candidate.out" "top_blocker: no selected dense full-runtime candidate"
+contains "$OUT_DIR/model_target_dense_candidate.out" "next: V010.CLI.18"
+contains "$OUT_DIR/model_target_dense_candidate.out" "boundary: report-only; generation unsupported; benchmark not measured"
 
-run_ok model_target_dense_candidate_full "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --include-candidates --include-requirements --include-blockers --include-next
+run_ok model_target_dense_candidate_full "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --audit --include-candidates --include-requirements --include-blockers --include-next
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "next_required_rows: V010.TARGET.7"
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_0_id: deepseek4-v4-flash-selected-embed"
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_0_stage: selected-slice"
@@ -539,7 +543,7 @@ contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_3_blo
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_4_id: tests/fixtures/gguf/valid-tokenizer-simple.gguf"
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_4_eligibility: fixture-only"
 
-run_ok model_target_dense_candidate_rmsnorm "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --target deepseek4-v4-flash-selected-embed-rmsnorm --include-blockers --include-next
+run_ok model_target_dense_candidate_rmsnorm "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --audit --target deepseek4-v4-flash-selected-embed-rmsnorm --include-blockers --include-next
 contains "$OUT_DIR/model_target_dense_candidate_rmsnorm.out" "dense_candidate_count: 1"
 contains "$OUT_DIR/model_target_dense_candidate_rmsnorm.out" "dense_candidate_0_id: deepseek4-v4-flash-selected-embed-rmsnorm"
 contains "$OUT_DIR/model_target_dense_candidate_rmsnorm.out" "dense_candidate_0_stage: diagnostic-runtime"
@@ -548,7 +552,7 @@ contains "$OUT_DIR/model_target_dense_candidate_rmsnorm.out" "dense_candidate_0_
 contains "$OUT_DIR/model_target_dense_candidate_rmsnorm.out" "dense_candidate_0_blocker_1: selected-runtime-slice-only"
 contains "$OUT_DIR/model_target_dense_candidate_rmsnorm.out" "dense_candidate_0_next_required_rows: V010.TARGET.7,V010.TARGET.4,V010.MAP.2,V010.FULLMODEL.6"
 
-run_ok model_target_dense_candidate_qwen "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --target qwen-metal-portability-pressure --include-blockers --include-next
+run_ok model_target_dense_candidate_qwen "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --audit --target qwen-metal-portability-pressure --include-blockers --include-next
 contains "$OUT_DIR/model_target_dense_candidate_qwen.out" "dense_candidate_status: candidate-incomplete"
 contains "$OUT_DIR/model_target_dense_candidate_qwen.out" "dense_candidate_0_eligibility: dense-pressure-only"
 contains "$OUT_DIR/model_target_dense_candidate_qwen.out" "dense_candidate_0_blocker_0: planned-portability-only"
@@ -573,26 +577,16 @@ contains "$OUT_DIR/model_target_qwen_metal_help.out" "The Qwen/Metal pressure re
 contains "$OUT_DIR/model_target_qwen_metal_help.out" "does not download weights, implement Metal, emit Qwen artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready"
 
 run_ok model_target_qwen_metal "$YVEX_BIN" model-target qwen-metal --release v0.1.0
-contains "$OUT_DIR/model_target_qwen_metal.out" "model-target: qwen-metal"
-contains "$OUT_DIR/model_target_qwen_metal.out" "status: qwen-metal-pressure-report"
+contains "$OUT_DIR/model_target_qwen_metal.out" "report: model-target qwen-metal"
+contains "$OUT_DIR/model_target_qwen_metal.out" "status: pressure-target-only"
 contains "$OUT_DIR/model_target_qwen_metal.out" "release: v0.1.0"
-contains "$OUT_DIR/model_target_qwen_metal.out" "lane_id: qwen-metal"
-contains "$OUT_DIR/model_target_qwen_metal.out" "target_family: qwen"
-contains "$OUT_DIR/model_target_qwen_metal.out" "target_class: metal-reduced-full-runtime-pressure"
-contains "$OUT_DIR/model_target_qwen_metal.out" "runtime_shape: dense-or-dense-like-candidate-pending-source-config"
-contains "$OUT_DIR/model_target_qwen_metal.out" "hardware_lane: apple-silicon-metal"
-contains "$OUT_DIR/model_target_qwen_metal.out" "backend_lane: metal-planned"
-contains "$OUT_DIR/model_target_qwen_metal.out" "source_status: missing"
-contains "$OUT_DIR/model_target_qwen_metal.out" "artifact_status: missing"
-contains "$OUT_DIR/model_target_qwen_metal.out" "metal_backend_status: unsupported"
-contains "$OUT_DIR/model_target_qwen_metal.out" "qwen_runtime_status: unsupported"
-contains "$OUT_DIR/model_target_qwen_metal.out" "full_runtime_candidate_status: candidate-planned"
-contains "$OUT_DIR/model_target_qwen_metal.out" "runtime_claim: unsupported"
-contains "$OUT_DIR/model_target_qwen_metal.out" "generation: unsupported-full-model"
-contains "$OUT_DIR/model_target_qwen_metal.out" "benchmark_status: not-measured"
-contains "$OUT_DIR/model_target_qwen_metal.out" "release_ready: false"
+contains "$OUT_DIR/model_target_qwen_metal.out" "lane: qwen-metal / apple-silicon-metal"
+contains "$OUT_DIR/model_target_qwen_metal.out" "source: missing"
+contains "$OUT_DIR/model_target_qwen_metal.out" "backend: metal unsupported"
+contains "$OUT_DIR/model_target_qwen_metal.out" "next: V010.SOURCE.9"
+contains "$OUT_DIR/model_target_qwen_metal.out" "boundary: report-only; generation unsupported; benchmark not measured"
 
-run_ok model_target_qwen_metal_full "$YVEX_BIN" model-target qwen-metal --release v0.1.0 --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next
+run_ok model_target_qwen_metal_full "$YVEX_BIN" model-target qwen-metal --release v0.1.0 --audit --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_count: 3"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_0_id: qwen-small"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_0_class: metal-reduced-full-runtime-pressure"
@@ -624,7 +618,7 @@ contains "$OUT_DIR/model_target_qwen_metal_full.out" "blocker_21: missing-real-o
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "blocker_22: missing-real-vocabulary-sampling"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "next_required_rows: V010.SOURCE.9"
 
-run_ok model_target_qwen_metal_small "$YVEX_BIN" model-target qwen-metal --release v0.1.0 --target qwen-small --include-blockers --include-next
+run_ok model_target_qwen_metal_small "$YVEX_BIN" model-target qwen-metal --release v0.1.0 --audit --target qwen-small --include-blockers --include-next
 contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_count: 1"
 contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_0_id: qwen-small"
 contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_0_blocker_0: missing-qwen-source-target"
@@ -818,6 +812,8 @@ run_fail_code generate_strategy_stochastic 2 "$YVEX_BIN" generate --model missin
 contains "$OUT_DIR/generate_strategy_stochastic.err" "error: --strategy currently supports greedy only"
 run_fail_code generate_trace_level_invalid 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --trace-level nope
 contains "$OUT_DIR/generate_trace_level_invalid.err" "error: --trace-level requires none|tokens|steps|kv|logits|sampling|full"
+run_fail_code generate_output_invalid 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --output nope
+contains "$OUT_DIR/generate_output_invalid.err" "error: unsupported output mode: nope"
 run_fail_code generate_cancel_after_steps_missing 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --cancel-after-steps
 contains "$OUT_DIR/generate_cancel_after_steps_missing.err" "error: --cancel-after-steps must be a non-negative integer"
 run_fail_code generate_cancel_after_steps_invalid 2 "$YVEX_BIN" generate --model missing --backend cpu --segment embedding-rmsnorm --tokens 0,1 --max-new-tokens 1 --cancel-after-steps nope
@@ -1063,23 +1059,30 @@ contains "$OUT_DIR/help_paths.out" "yvex paths [--project DIR] configure --model
 contains "$OUT_DIR/help_paths.out" "yvex paths [--project DIR] resolve --family deepseek|glm --kind source|gguf|reports|reference|registry"
 
 run_ok paths "$YVEX_BIN" paths
-contains "$OUT_DIR/paths.out" "config:"
-contains "$OUT_DIR/paths.out" "cache:"
-contains "$OUT_DIR/paths.out" "state:"
-contains "$OUT_DIR/paths.out" "data:"
-contains "$OUT_DIR/paths.out" "project:"
-contains "$OUT_DIR/paths.out" "status: paths"
+contains "$OUT_DIR/paths.out" "paths: normal"
 contains "$OUT_DIR/paths.out" "models_root_source:"
 contains "$OUT_DIR/paths.out" "models_root:"
 contains "$OUT_DIR/paths.out" "hf_root:"
 contains "$OUT_DIR/paths.out" "gguf_root:"
 contains "$OUT_DIR/paths.out" "reports_root:"
-contains "$OUT_DIR/paths.out" "reference_root:"
 contains "$OUT_DIR/paths.out" "registry_root:"
-contains "$OUT_DIR/paths.out" "operator_config_path:"
+contains "$OUT_DIR/paths.out" "hint: use --audit for project/cache/state paths"
+
+run_ok paths_audit "$YVEX_BIN" paths --audit
+contains "$OUT_DIR/paths_audit.out" "config:"
+contains "$OUT_DIR/paths_audit.out" "cache:"
+contains "$OUT_DIR/paths_audit.out" "state:"
+contains "$OUT_DIR/paths_audit.out" "data:"
+contains "$OUT_DIR/paths_audit.out" "project:"
+contains "$OUT_DIR/paths_audit.out" "status: paths"
+contains "$OUT_DIR/paths_audit.out" "reference_root:"
+contains "$OUT_DIR/paths_audit.out" "operator_config_path:"
+run_fail_code paths_bad_output 2 "$YVEX_BIN" paths --output nope
+contains "$OUT_DIR/paths_bad_output.err" "yvex paths: unsupported output mode: nope"
 
 run_ok paths_project "$YVEX_BIN" paths --project .
-contains "$OUT_DIR/paths_project.out" "project: ./.yvex"
+contains "$OUT_DIR/paths_project.out" "paths: normal"
+contains "$OUT_DIR/paths_project.out" "models_root:"
 
 run_ok paths_run "$YVEX_BIN" paths --run
 contains "$OUT_DIR/paths_run.out" "run_id: run_"
@@ -1096,7 +1099,7 @@ OPERATOR_PATHS_DIR="$OUT_DIR/operator-paths"
 rm -rf "$OPERATOR_PATHS_DIR"
 mkdir -p "$OPERATOR_PATHS_DIR"
 
-run_ok operator_paths_initial "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR"
+run_ok operator_paths_initial "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR" --audit
 contains "$OUT_DIR/operator_paths_initial.out" "status: paths"
 contains "$OUT_DIR/operator_paths_initial.out" "models_root_source:"
 contains "$OUT_DIR/operator_paths_initial.out" "operator_config_path: $OPERATOR_PATHS_DIR/.yvex/operator-paths.conf"
@@ -1114,7 +1117,7 @@ contains "$OUT_DIR/operator_paths_configure.out" "config_path: $OPERATOR_PATHS_D
 contains "$OUT_DIR/operator_paths_configure.out" "created: false"
 
 run_ok operator_paths_after_config "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR"
-contains "$OUT_DIR/operator_paths_after_config.out" "status: paths"
+contains "$OUT_DIR/operator_paths_after_config.out" "paths: normal"
 contains "$OUT_DIR/operator_paths_after_config.out" "models_root_source: configured"
 
 for family in deepseek glm; do
@@ -1151,7 +1154,7 @@ for dir in \
     test -d "$dir" || fail "operator path directory was not created: $dir"
 done
 
-run_ok operator_paths_create "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR" --create
+run_ok operator_paths_create "$YVEX_BIN" paths --project "$OPERATOR_PATHS_DIR" --create --audit
 contains "$OUT_DIR/operator_paths_create.out" "status: paths-created"
 contains "$OUT_DIR/operator_paths_create.out" "created: true"
 

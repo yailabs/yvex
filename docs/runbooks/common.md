@@ -9,6 +9,9 @@ Use model-specific runbooks for DeepSeek or GLM work.
 This file does not claim full model generation, provider generation,
 evaluation, or benchmark capability.
 
+Normal output is compact by default. Use `--audit` for row-promotion evidence
+and full diagnostic fields.
+
 ## Lane 0 — Fast regression after a wave
 
 Purpose:
@@ -74,13 +77,13 @@ make
 ./yvex model-target inspect glm-5.2-official-safetensors
 ./yvex model-target inspect glm-5.2-official-safetensors --paths
 ./yvex model-target decision --help
-./yvex model-target decision --release v0.1.0 --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
+./yvex model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
 ./yvex model-target candidate --help
-./yvex model-target candidate --release v0.1.0 --include-candidates --include-pressure-targets --include-blockers --include-next
+./yvex model-target candidate --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-next
 ./yvex model-target dense-candidate --help
-./yvex model-target dense-candidate --release v0.1.0 --include-candidates --include-requirements --include-blockers --include-next
+./yvex model-target dense-candidate --release v0.1.0 --audit --include-candidates --include-requirements --include-blockers --include-next
 ./yvex model-target qwen-metal --help
-./yvex model-target qwen-metal --release v0.1.0 --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next
+./yvex model-target qwen-metal --release v0.1.0 --audit --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next
 ./yvex fullmodel report --model glm-5.2-official-safetensors --backend cpu
 ./yvex fullmodel materialization-plan --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
 ./yvex fullmodel materialize --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --dry-run

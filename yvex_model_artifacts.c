@@ -2526,9 +2526,9 @@ void yvex_model_registry_scan_free(yvex_model_registry_entry *entries,
 /* Model registry CLI helpers and shared model command support. */
 
 int models_registry_open(yvex_model_registry **registry,
-                                const char *registry_path,
-                                int create_if_missing,
-                                yvex_error *err)
+                         const char *registry_path,
+                         int create_if_missing,
+                         yvex_error *err)
 {
     yvex_model_registry_options options;
 
@@ -2536,6 +2536,27 @@ int models_registry_open(yvex_model_registry **registry,
     options.registry_path = registry_path;
     options.create_if_missing = create_if_missing;
     return yvex_model_registry_open(registry, &options, err);
+}
+
+typedef enum {
+    YVEX_MODELS_OUTPUT_NORMAL = 0,
+    YVEX_MODELS_OUTPUT_AUDIT
+} yvex_models_output_mode;
+
+static int parse_models_output_mode(const char *value, yvex_models_output_mode *mode)
+{
+    if (!value || !mode) {
+        return 0;
+    }
+    if (strcmp(value, "normal") == 0) {
+        *mode = YVEX_MODELS_OUTPUT_NORMAL;
+        return 1;
+    }
+    if (strcmp(value, "audit") == 0) {
+        *mode = YVEX_MODELS_OUTPUT_AUDIT;
+        return 1;
+    }
+    return 0;
 }
 
 static void print_model_registry_entry_cli(const yvex_model_registry_entry *entry,
@@ -2568,6 +2589,18 @@ static void print_model_registry_entry_cli(const yvex_model_registry_entry *entr
     printf("  registered_primary_bytes: %llu\n", entry->primary_tensor_bytes);
     printf("  registered_selected_embedding_ready: %s\n",
            entry->selected_embedding_ready ? "true" : "false");
+}
+
+static void print_model_registry_entry_normal(const yvex_model_registry_entry *entry,
+                                              int selected)
+{
+    if (!entry) return;
+    printf("%c %s | %s | %s | ready=%s\n",
+           selected ? '*' : '-',
+           entry->alias ? entry->alias : "",
+           entry->family ? entry->family : "",
+           entry->artifact_class ? entry->artifact_class : "",
+           entry->execution_ready ? "true" : "false");
 }
 
 static void print_model_registry_scan_entry_cli(const yvex_model_registry_entry *entry)
@@ -2831,6 +2864,46 @@ static int parse_models_registry_option(int argc, char **argv, int start, const 
             *registry_path = argv[++i];
         } else if (strcmp(argv[i], "--json") == 0) {
             /* Reserved for future machine-readable output; text output remains canonical. */
+        } else {
+            fprintf(stderr, "yvex: unknown models option: %s\n", argv[i]);
+            return 2;
+        }
+    }
+    return 0;
+}
+
+static int parse_models_registry_output_options(int argc,
+                                                char **argv,
+                                                int start,
+                                                const char **registry_path,
+                                                yvex_models_output_mode *output_mode)
+{
+    int i;
+
+    if (output_mode) {
+        *output_mode = YVEX_MODELS_OUTPUT_NORMAL;
+    }
+    for (i = start; i < argc; ++i) {
+        if (strcmp(argv[i], "--registry") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: models --registry requires a file\n");
+                return 2;
+            }
+            *registry_path = argv[++i];
+        } else if (strcmp(argv[i], "--audit") == 0) {
+            if (output_mode) *output_mode = YVEX_MODELS_OUTPUT_AUDIT;
+        } else if (strcmp(argv[i], "--output") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex: models --output requires normal|audit\n");
+                return 2;
+            }
+            if (!output_mode || !parse_models_output_mode(argv[++i], output_mode)) {
+                fprintf(stderr, "yvex: models unsupported output mode: %s\n", argv[i]);
+                return 2;
+            }
+        } else if (strcmp(argv[i], "--json") == 0) {
+            fprintf(stderr, "yvex: models JSON output is unsupported; use --output normal|audit\n");
+            return 2;
         } else {
             fprintf(stderr, "yvex: unknown models option: %s\n", argv[i]);
             return 2;
@@ -4599,6 +4672,7 @@ static int command_models_list(int argc, char **argv)
     yvex_model_registry *registry = NULL;
     yvex_error err;
     const char *registry_path = NULL;
+    yvex_models_output_mode output_mode = YVEX_MODELS_OUTPUT_NORMAL;
     const yvex_model_registry_entry *selected;
     char selected_alias[256];
     unsigned long long i;
@@ -4606,7 +4680,7 @@ static int command_models_list(int argc, char **argv)
     int rc;
 
     yvex_error_clear(&err);
-    rc = parse_models_registry_option(argc, argv, 3, &registry_path);
+    rc = parse_models_registry_output_options(argc, argv, 3, &registry_path, &output_mode);
     if (rc != 0) return rc;
     rc = models_registry_open(&registry, registry_path, 1, &err);
     if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
@@ -4617,6 +4691,19 @@ static int command_models_list(int argc, char **argv)
     }
     count = yvex_model_registry_count(registry);
     printf("models: list\n");
+    if (output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+        printf("count: %llu\n", count);
+        printf("selected: %s\n", selected_alias[0] ? selected_alias : "none");
+        printf("format: marker alias | family | artifact_class | ready\n");
+        for (i = 0; i < count; ++i) {
+            const yvex_model_registry_entry *entry = yvex_model_registry_at(registry, i);
+            int is_selected = selected_alias[0] && entry && strcmp(selected_alias, entry->alias) == 0;
+            print_model_registry_entry_normal(entry, is_selected);
+        }
+        printf("status: models-list\n");
+        yvex_model_registry_close(registry);
+        return 0;
+    }
     for (i = 0; i < count; ++i) {
         const yvex_model_registry_entry *entry = yvex_model_registry_at(registry, i);
         int is_selected = selected_alias[0] && entry && strcmp(selected_alias, entry->alias) == 0;
@@ -4663,10 +4750,11 @@ static int command_models_current(int argc, char **argv)
     yvex_model_registry *registry = NULL;
     yvex_error err;
     const char *registry_path = NULL;
+    yvex_models_output_mode output_mode = YVEX_MODELS_OUTPUT_NORMAL;
     const yvex_model_registry_entry *selected;
     int rc;
 
-    rc = parse_models_registry_option(argc, argv, 3, &registry_path);
+    rc = parse_models_registry_output_options(argc, argv, 3, &registry_path, &output_mode);
     if (rc != 0) return rc;
     yvex_error_clear(&err);
     rc = models_registry_open(&registry, registry_path, 1, &err);
@@ -4674,6 +4762,15 @@ static int command_models_current(int argc, char **argv)
     selected = yvex_model_registry_selected(registry);
     printf("models: current\n");
     if (selected) {
+        if (output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+            printf("selected: %s\n", selected->alias);
+            printf("path: %s\n", selected->path);
+            printf("execution_ready: %s\n", selected->execution_ready ? "true" : "false");
+            printf("status: models-current\n");
+            printf("hint: use --audit for registered digest and tensor fields\n");
+            yvex_model_registry_close(registry);
+            return 0;
+        }
         printf("selected: %s\n", selected->alias);
         printf("path: %s\n", selected->path);
         printf("registered_file_size: %llu\n", selected->file_size);
@@ -4694,6 +4791,9 @@ static int command_models_current(int argc, char **argv)
     } else {
         printf("selected: none\n");
         printf("status: models-none\n");
+        if (output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+            printf("hint: use 'yvex models use ALIAS' to select a model\n");
+        }
     }
     yvex_model_registry_close(registry);
     return 0;
@@ -11433,7 +11533,7 @@ void yvex_models_help(FILE *fp)
     fprintf(fp, "       yvex models add --path FILE [--alias ALIAS] [--support-level LEVEL] [--registry FILE]\n");
     fprintf(fp, "       yvex models prepare TARGET [--overwrite] [--source DIR] [--out FILE | --out-dir DIR] [--models-root DIR] [--registry FILE] [--dry-run] [--no-register] [--no-use]\n");
     fprintf(fp, "       yvex models check TARGET [--backend cpu|cuda] [--level quick|runtime|full] [--models-root DIR] [--registry FILE] [--report-dir DIR] [--no-materialize] [--no-graph]\n");
-    fprintf(fp, "       yvex models list|current [--registry FILE]\n");
+    fprintf(fp, "       yvex models list|current [--registry FILE] [--audit | --output normal|audit]\n");
     fprintf(fp, "       yvex models use|verify|inspect|remove ALIAS [--registry FILE]\n");
     fprintf(fp, "\nExamples:\n");
     fprintf(fp, "  yvex models check deepseek4-v4-flash-selected-embed\n");

@@ -25,6 +25,11 @@ typedef enum {
     YVEX_GENERATE_TRACE_FULL
 } yvex_generation_trace_level;
 
+typedef enum {
+    YVEX_GENERATE_OUTPUT_NORMAL = 0,
+    YVEX_GENERATE_OUTPUT_AUDIT
+} yvex_generation_output_mode;
+
 typedef struct {
     int attempted;
     unsigned long long index;
@@ -387,6 +392,23 @@ static int generate_parse_trace_level(const char *text,
         return 0;
     }
     return 1;
+}
+
+static int generate_parse_output_mode(const char *text,
+                                      yvex_generation_output_mode *out)
+{
+    if (!text || !out) {
+        return 0;
+    }
+    if (strcmp(text, "normal") == 0) {
+        *out = YVEX_GENERATE_OUTPUT_NORMAL;
+        return 1;
+    }
+    if (strcmp(text, "audit") == 0) {
+        *out = YVEX_GENERATE_OUTPUT_AUDIT;
+        return 1;
+    }
+    return 0;
 }
 
 static int generate_trace_wants_tokens(yvex_generation_trace_level level)
@@ -1255,6 +1277,37 @@ static void generate_print_trace_and_summary(yvex_generate_summary *summary,
     generate_print_summary(summary, model_arg, backend_name, segment_name);
 }
 
+static void generate_print_normal_summary(const yvex_generate_summary *summary,
+                                          const char *model_arg,
+                                          const char *backend_name)
+{
+    printf("status: diagnostic-generation\n");
+    printf("model: %s\n", model_arg ? model_arg : "");
+    printf("backend: %s\n", backend_name ? backend_name : "cpu");
+    printf("tokens: %llu -> %llu diagnostic\n",
+           summary ? summary->prompt_token_count : 0ull,
+           summary ? summary->generated_token_count : 0ull);
+    printf("stop: %s\n",
+           summary && summary->stop_reason ? summary->stop_reason : "internal-error");
+    printf("boundary: full-model generation unsupported\n");
+    printf("benchmark_status: not-measured\n");
+    printf("hint: use --audit or --trace-level full for diagnostic internals\n");
+}
+
+static void generate_print_output(yvex_generate_summary *summary,
+                                  const char *model_arg,
+                                  const char *backend_name,
+                                  const char *segment_name,
+                                  yvex_generation_output_mode output_mode)
+{
+    if (output_mode == YVEX_GENERATE_OUTPUT_AUDIT ||
+        (summary && summary->trace_level != YVEX_GENERATE_TRACE_NONE)) {
+        generate_print_trace_and_summary(summary, model_arg, backend_name, segment_name);
+        return;
+    }
+    generate_print_normal_summary(summary, model_arg, backend_name);
+}
+
 static void generate_mark_cleanup(yvex_generate_summary *summary)
 {
     if (!summary) {
@@ -1680,6 +1733,7 @@ int yvex_generate_command(int argc, char **argv)
     unsigned long long cancel_after_steps = 0ull;
     unsigned long long step;
     yvex_generation_trace_level trace_level = YVEX_GENERATE_TRACE_NONE;
+    yvex_generation_output_mode output_mode = YVEX_GENERATE_OUTPUT_NORMAL;
     int max_new_tokens_seen = 0;
     int cancel_after_steps_seen = 0;
     int attach_kv = 0;
@@ -1761,6 +1815,20 @@ int yvex_generate_command(int argc, char **argv)
                 return 2;
             }
             i += 1;
+        } else if (strcmp(argv[i], "--audit") == 0) {
+            output_mode = YVEX_GENERATE_OUTPUT_AUDIT;
+        } else if (strcmp(argv[i], "--output") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "error: --output requires normal|audit\n");
+                return 2;
+            }
+            if (!generate_parse_output_mode(argv[++i], &output_mode)) {
+                fprintf(stderr, "error: unsupported output mode: %s\n", argv[i]);
+                return 2;
+            }
+        } else if (strcmp(argv[i], "--json") == 0) {
+            fprintf(stderr, "error: JSON output is unsupported for generate; use --output normal|audit\n");
+            return 2;
         } else if (strcmp(argv[i], "--cancel-after-steps") == 0) {
             if (i + 1 >= argc ||
                 !generate_parse_ull_allow_zero_cli(argv[i + 1], &cancel_after_steps)) {
@@ -1960,7 +2028,7 @@ int yvex_generate_command(int argc, char **argv)
     if (rc != YVEX_OK) {
         generate_mark_failure(&summary, "preflight", "internal-error", 0ull);
         generate_mark_cleanup(&summary);
-        generate_print_trace_and_summary(&summary, model_arg, backend_name, segment_name);
+        generate_print_output(&summary, model_arg, backend_name, segment_name, output_mode);
         yvex_model_ref_clear(&model_ref);
         return exit_for_status(rc);
     }
@@ -1983,7 +2051,7 @@ int yvex_generate_command(int argc, char **argv)
     if (rc != YVEX_OK) {
         generate_mark_failure(&summary, "preflight", "internal-error", 0ull);
         generate_mark_cleanup(&summary);
-        generate_print_trace_and_summary(&summary, model_arg, backend_name, segment_name);
+        generate_print_output(&summary, model_arg, backend_name, segment_name, output_mode);
         yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
@@ -1999,7 +2067,7 @@ int yvex_generate_command(int argc, char **argv)
         yvex_error_set(&err, YVEX_ERR_BOUNDS, "generate", "context length overflow");
         generate_mark_failure(&summary, "preflight", "internal-error", 0ull);
         generate_mark_cleanup(&summary);
-        generate_print_trace_and_summary(&summary, model_arg, backend_name, segment_name);
+        generate_print_output(&summary, model_arg, backend_name, segment_name, output_mode);
         yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(YVEX_ERR_BOUNDS));
     }
@@ -2015,7 +2083,7 @@ int yvex_generate_command(int argc, char **argv)
     if (rc != YVEX_OK) {
         generate_mark_failure(&summary, "preflight", "internal-error", 0ull);
         generate_mark_cleanup(&summary);
-        generate_print_trace_and_summary(&summary, model_arg, backend_name, segment_name);
+        generate_print_output(&summary, model_arg, backend_name, segment_name, output_mode);
         print_graph_guard_report(&graph_guard);
         yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
@@ -2032,7 +2100,7 @@ int yvex_generate_command(int argc, char **argv)
     if (rc != YVEX_OK) {
         generate_mark_failure(&summary, "preflight", "internal-error", 0ull);
         generate_mark_cleanup(&summary);
-        generate_print_trace_and_summary(&summary, model_arg, backend_name, segment_name);
+        generate_print_output(&summary, model_arg, backend_name, segment_name, output_mode);
         yvex_model_ref_clear(&model_ref);
         return print_yvex_error(&err, exit_for_status(rc));
     }
@@ -2199,7 +2267,7 @@ int yvex_generate_command(int argc, char **argv)
     if (generate_test_env_enabled("YVEX_TEST_REPEAT_GENERATE_CLEANUP")) {
         generate_mark_cleanup(&summary);
     }
-    generate_print_trace_and_summary(&summary, model_arg, backend_name, segment_name);
+    generate_print_output(&summary, model_arg, backend_name, segment_name, output_mode);
     yvex_engine_close(engine);
     yvex_model_ref_clear(&model_ref);
     if (summary.phase && strcmp(summary.phase, "failed") == 0) {
@@ -2242,7 +2310,9 @@ void yvex_generate_help(FILE *fp)
     fprintf(fp, "  Partial diagnostic output is preserved on failure, cancellation, and context stops.\n");
     fprintf(fp, "  EOS and stop-token text matching are unsupported for this bounded path.\n\n");
     fprintf(fp, "Output policy:\n");
-    fprintf(fp, "  Text output is the stable operator contract. Fields are diagnostic state, counters, trace, cancel, cleanup, and boundary records.\n");
+    fprintf(fp, "  --output normal|audit     normal is compact; audit preserves full diagnostic state fields\n");
+    fprintf(fp, "  --audit                   shortcut for --output audit\n");
+    fprintf(fp, "  Text output is the stable operator contract. Normal output is compact by default; audit/trace output carries diagnostic state, counters, trace, cancel, cleanup, and boundary records.\n");
     fprintf(fp, "  The command emits no ANSI color by default.\n\n");
     fprintf(fp, "Boundaries:\n");
     fprintf(fp, "  full model generation: unsupported\n");

@@ -884,6 +884,49 @@ int yvex_run_dir_print(const yvex_run_dir *run, FILE *fp, yvex_error *err)
 
 /* Domain-owned command surface moved out of yvex_runtime.c. */
 
+typedef enum {
+    YVEX_PATHS_OUTPUT_NORMAL = 0,
+    YVEX_PATHS_OUTPUT_AUDIT
+} yvex_paths_output_mode;
+
+static int parse_paths_output_mode(const char *value, yvex_paths_output_mode *mode)
+{
+    if (!value || !mode) {
+        return 0;
+    }
+    if (strcmp(value, "normal") == 0) {
+        *mode = YVEX_PATHS_OUTPUT_NORMAL;
+        return 1;
+    }
+    if (strcmp(value, "audit") == 0) {
+        *mode = YVEX_PATHS_OUTPUT_AUDIT;
+        return 1;
+    }
+    return 0;
+}
+
+static int print_operator_paths_normal(const yvex_operator_paths *operator_paths,
+                                       const char *status,
+                                       yvex_error *err)
+{
+    if (!operator_paths || !status) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "operator_paths",
+                       "operator paths and status are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+
+    printf("paths: %s\n", status);
+    printf("models_root_source: %s\n", operator_paths->models_root_source);
+    printf("models_root: %s\n", operator_paths->models_root);
+    printf("hf_root: %s\n", operator_paths->hf_root);
+    printf("gguf_root: %s\n", operator_paths->gguf_root);
+    printf("reports_root: %s\n", operator_paths->reports_root);
+    printf("registry_root: %s\n", operator_paths->registry_root);
+    printf("hint: use --audit for project/cache/state paths\n");
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 static int command_paths(int argc, char **argv)
 {
     const char *project_root = NULL;
@@ -893,6 +936,7 @@ static int command_paths(int argc, char **argv)
     int want_run = 0;
     int want_create = 0;
     int want_reset = 0;
+    yvex_paths_output_mode output_mode = YVEX_PATHS_OUTPUT_NORMAL;
     int i;
     int rc;
     int removed = 0;
@@ -1042,6 +1086,17 @@ static int command_paths(int argc, char **argv)
             want_run = 1;
         } else if (strcmp(argv[i], "--create") == 0) {
             want_create = 1;
+        } else if (strcmp(argv[i], "--audit") == 0) {
+            output_mode = YVEX_PATHS_OUTPUT_AUDIT;
+        } else if (strcmp(argv[i], "--output") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex paths: --output requires normal|audit\n");
+                return 2;
+            }
+            if (!parse_paths_output_mode(argv[++i], &output_mode)) {
+                fprintf(stderr, "yvex paths: unsupported output mode: %s\n", argv[i]);
+                return 2;
+            }
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             yvex_paths_help(stdout);
             return 0;
@@ -1053,10 +1108,6 @@ static int command_paths(int argc, char **argv)
     }
 
     if (!want_run) {
-        rc = yvex_paths_print(&paths, stdout, &err);
-        if (rc != YVEX_OK) {
-            return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
-        }
         rc = yvex_operator_paths_resolve(&paths, NULL, &operator_paths, &err);
         if (rc != YVEX_OK) {
             return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
@@ -1066,9 +1117,24 @@ static int command_paths(int argc, char **argv)
             if (rc != YVEX_OK) {
                 return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
             }
-            return yvex_operator_paths_print(&operator_paths, stdout, "paths-created", 1, 1, &err);
+            if (output_mode == YVEX_PATHS_OUTPUT_AUDIT) {
+                rc = yvex_paths_print(&paths, stdout, &err);
+                if (rc != YVEX_OK) {
+                    return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+                }
+                return yvex_operator_paths_print(&operator_paths, stdout, "paths-created", 1, 1, &err);
+            }
+            return print_operator_paths_normal(&operator_paths, "created", &err);
         }
-        rc = yvex_operator_paths_print(&operator_paths, stdout, "paths", 0, 0, &err);
+        if (output_mode == YVEX_PATHS_OUTPUT_AUDIT) {
+            rc = yvex_paths_print(&paths, stdout, &err);
+            if (rc != YVEX_OK) {
+                return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
+            }
+            rc = yvex_operator_paths_print(&operator_paths, stdout, "paths", 0, 0, &err);
+        } else {
+            rc = print_operator_paths_normal(&operator_paths, "normal", &err);
+        }
         if (rc != YVEX_OK) {
             return print_yvex_error(&err, rc == YVEX_ERR_INVALID_ARG ? 2 : 3);
         }
@@ -1101,7 +1167,7 @@ int yvex_paths_command(int argc, char **argv)
 
 void yvex_paths_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex paths [--project DIR] [--create]\n");
+    fprintf(fp, "usage: yvex paths [--project DIR] [--create] [--audit | --output normal|audit]\n");
     fprintf(fp, "       yvex paths [--project DIR] --run [--create]\n");
     fprintf(fp, "       yvex paths [--project DIR] configure --models-root DIR [--create]\n");
     fprintf(fp, "       yvex paths [--project DIR] configure --reset\n");

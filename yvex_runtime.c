@@ -2899,11 +2899,39 @@ static int command_engine(int argc, char **argv)
     return 0;
 }
 
-static int command_info(int argc, char **argv)
-{
-    (void)argc;
-    (void)argv;
+typedef enum {
+    YVEX_INFO_OUTPUT_NORMAL = 0,
+    YVEX_INFO_OUTPUT_AUDIT
+} yvex_info_output_mode;
 
+static int parse_info_output_mode(const char *value, yvex_info_output_mode *mode)
+{
+    if (!value || !mode) {
+        return 0;
+    }
+    if (strcmp(value, "normal") == 0) {
+        *mode = YVEX_INFO_OUTPUT_NORMAL;
+        return 1;
+    }
+    if (strcmp(value, "audit") == 0) {
+        *mode = YVEX_INFO_OUTPUT_AUDIT;
+        return 1;
+    }
+    return 0;
+}
+
+static void print_info_normal(void)
+{
+    printf("info: YVEX %s\n", yvex_version_string());
+    printf("runtime: bounded diagnostic generation\n");
+    printf("cli_output: normal\n");
+    printf("full_model_generation: unsupported\n");
+    printf("benchmark_status: not-measured\n");
+    printf("hint: use --audit for full diagnostic fields\n");
+}
+
+static void print_info_audit(void)
+{
     printf("name: YVEX\n");
     printf("version: %s\n", yvex_version_string());
     printf("language: C\n");
@@ -2955,6 +2983,42 @@ static int command_info(int argc, char **argv)
     printf("inference: not implemented\n");
     printf("cuda: available when local driver/device probe succeeds\n");
     printf("server: yvexd status shell implemented\n");
+}
+
+static int command_info(int argc, char **argv)
+{
+    yvex_info_output_mode output_mode = YVEX_INFO_OUTPUT_NORMAL;
+    int i;
+
+    for (i = 2; i < argc; ++i) {
+        if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            yvex_runtime_info_help(stdout);
+            return 0;
+        }
+        if (strcmp(argv[i], "--audit") == 0) {
+            output_mode = YVEX_INFO_OUTPUT_AUDIT;
+            continue;
+        }
+        if (strcmp(argv[i], "--output") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "yvex info: --output requires normal|audit\n");
+                return 2;
+            }
+            if (!parse_info_output_mode(argv[++i], &output_mode)) {
+                fprintf(stderr, "yvex info: unsupported output mode: %s\n", argv[i]);
+                return 2;
+            }
+            continue;
+        }
+        fprintf(stderr, "yvex info: unknown option: %s\n", argv[i]);
+        return 2;
+    }
+
+    if (output_mode == YVEX_INFO_OUTPUT_AUDIT) {
+        print_info_audit();
+    } else {
+        print_info_normal();
+    }
     return 0;
 }
 
@@ -4479,7 +4543,7 @@ void yvex_engine_help(FILE *fp)
 
 void yvex_runtime_info_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex info\n\nPrints the implemented build and runtime boundary status.\n");
+    fprintf(fp, "usage: yvex info [--audit | --output normal|audit]\n\nPrints the implemented build and runtime boundary status. Normal output is compact; audit output preserves full diagnostic fields.\n");
 }
 
 void yvex_input_help(FILE *fp)
