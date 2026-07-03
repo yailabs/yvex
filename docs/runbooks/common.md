@@ -357,6 +357,7 @@ Quant/template/intake manifests:
 - `run`: daemon and accepted-only runtime lanes
 - `session`: materialization and runtime attachment lanes
 - `source-manifest`: source intake lanes, Qwen/Gemma source pressure report-only lanes
+- `source-manifest report --audit`: source artifact class/status, target artifact class/status, origin/authority, sidecar, tensor container, and payload-read boundary fields
 - `tensor-map`: source intake lanes
 - `tokenize`: fast regression lane
 - `tokenizer`: fast regression lane

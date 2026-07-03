@@ -123,15 +123,34 @@ lanes. The current command-visible source surface is:
 
 `qwen-metal-portability` is source-target profile only. It is a pressure-target
 slot for Qwen family, the `<models_root>/hf/qwen/qwen-metal-portability` source
-path convention, official source tensor expectation, future YVEX-produced GGUF
+path convention, official source tensor expectation, future-YVEX-produced-GGUF
 artifact class, and Apple Silicon / Metal portability pressure. It is pending
 source/config verification.
 
 `gemma-dense-portability` is source-target profile only. It is a pressure-target
 slot for Gemma family, the `<models_root>/hf/gemma/gemma-dense-portability`
-source path convention, official source tensor expectation, future
-YVEX-produced GGUF artifact class, and dense-candidate-pending-source-config
+source path convention, official source tensor expectation,
+future-YVEX-produced-GGUF artifact class, and dense-candidate-pending-source-config
 pressure. It is pending source/config verification.
+
+Source artifact class fields are command-visible in normal/table/audit source
+reports and in target audit reports. The stable values used by these pressure
+lanes include:
+
+```text
+official-source-tensors-planned
+official-safetensors
+official-safetensors-huge
+official-config-tokenizer-sidecars
+YVEX-produced-selected-GGUF
+future-YVEX-produced-GGUF
+external-GGUF-reference
+external-runner-reference
+unknown-source-artifact
+```
+
+These values classify evidence only. They do not claim source readiness,
+artifact emission, runtime support, generation, or benchmark readiness.
 
 The report checks only local source-path pressure facts: concrete target slot,
 configured source path, source path existence, config/tokenizer file visibility,
@@ -141,8 +160,9 @@ emit artifacts, materialize tensors, inspect tensor payloads, implement Metal,
 execute Qwen or Gemma runtime paths, generate, evaluate, benchmark, or mark a
 release ready.
 
-Source family/profile fields are command-visible for Qwen and Gemma. The next
-source pressure step is source artifact class reporting.
+Source family/profile fields and source artifact class fields are
+command-visible for Qwen and Gemma. The next source pressure step is source
+shard count and footprint reporting without tensor payload loading.
 
 ## Family Classification
 

@@ -578,7 +578,15 @@ typedef struct {
     const char *source_target_status;
     const char *source_family_profile_status;
     const char *source_artifact_class;
+    const char *source_artifact_format;
+    const char *source_artifact_origin;
+    const char *source_artifact_authority;
+    const char *source_tensor_container;
     const char *target_artifact_class;
+    const char *target_artifact_origin;
+    const char *target_artifact_required;
+    const char *external_reference_status;
+    const char *yvex_produced_artifact_status;
     const char *pressure_purpose;
     const char *runtime_shape;
     const char *hardware_lane;
@@ -643,7 +651,15 @@ static const yvex_source_family_profile source_family_profiles[] = {
         "profiled",
         "present",
         "official-source-tensors-planned",
+        "safetensors+config-tokenizer-sidecars",
+        "official",
+        "upstream-official",
+        "safetensors",
         "future-YVEX-produced-GGUF",
+        "planned",
+        "true",
+        "false",
+        "planned",
         "reduced-scale-portability-and-full-runtime-pressure",
         "dense-or-dense-like-candidate-pending-source-config",
         "apple-silicon-metal",
@@ -669,7 +685,15 @@ static const yvex_source_family_profile source_family_profiles[] = {
         "profiled",
         "present",
         "official-source-tensors-planned",
+        "safetensors+config-tokenizer-sidecars",
+        "official",
+        "upstream-official",
+        "safetensors",
         "future-YVEX-produced-GGUF",
+        "planned",
+        "true",
+        "false",
+        "planned",
         "dense-candidate-pending-source-config-pressure",
         "dense-candidate-pending-source-config",
         "hardware-lane-unselected",
@@ -961,9 +985,37 @@ static const char *qwen_source_native_inventory_status(const yvex_qwen_source_pr
     return report && report->native_inventory_exists ? "available-report-only" : "missing";
 }
 
-static const char *qwen_source_native_inventory_table_status(const yvex_qwen_source_pressure_report *report)
+static const char *qwen_source_sidecar_status(const yvex_qwen_source_pressure_report *report)
 {
-    return report && report->native_inventory_exists ? "present" : "missing";
+    int has_config;
+    int has_tokenizer;
+
+    if (!report || !report->source_exists) {
+        return "missing";
+    }
+    has_config = report->config_exists || report->generation_config_exists;
+    has_tokenizer = report->tokenizer_json_exists || report->tokenizer_config_exists;
+    if (has_config && has_tokenizer) {
+        return "present";
+    }
+    if (has_config || has_tokenizer) {
+        return "partial";
+    }
+    return "missing";
+}
+
+static const char *qwen_source_tensor_payload_status(const yvex_qwen_source_pressure_report *report)
+{
+    if (!report || !report->source_exists || report->safetensors_count == 0) {
+        return "not-present";
+    }
+    return "present-not-loaded";
+}
+
+static const char *qwen_source_target_artifact_status(const yvex_source_family_profile *profile)
+{
+    (void)profile;
+    return "planned";
 }
 
 static int qwen_source_build_report(const yvex_qwen_source_report_options *options,
@@ -1048,11 +1100,11 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
     if (!report->source_exists) {
         report->status = "source-target-profiled";
         report->top_blocker = options->profile->source_path_blocker;
-        report->next_row = "V010.SOURCE.2";
+        report->next_row = "V010.SOURCE.3";
     } else if (!report->manifest_exists) {
         report->status = "source-present-report-only";
         report->top_blocker = options->profile->source_manifest_blocker;
-        report->next_row = "V010.SOURCE.2";
+        report->next_row = "V010.SOURCE.3";
     } else if (!report->native_inventory_exists) {
         report->status = "source-present-report-only";
         report->top_blocker = options->profile->native_inventory_blocker;
@@ -1091,7 +1143,12 @@ static void qwen_source_print_normal(const yvex_qwen_source_report_options *opti
     printf("status: %s\n", report->status);
     printf("family: %s\n", options->profile->family_key);
     printf("target: %s\n", options->target);
-    printf("source: %s\n", report->source_state);
+    printf("source: %s  status=%s\n",
+           options->profile->source_artifact_class,
+           report->source_state);
+    printf("artifact: %s  status=%s\n",
+           options->profile->target_artifact_class,
+           qwen_source_target_artifact_status(options->profile));
     printf("top_blocker: %s\n", report->top_blocker);
     printf("next: %s\n", report->next_row);
     printf("boundary: source report only; no artifact/runtime/generation/benchmark\n");
@@ -1101,14 +1158,16 @@ static void qwen_source_print_table(const yvex_qwen_source_report_options *optio
                                     const yvex_qwen_source_pressure_report *report)
 {
     printf("SOURCE PRESSURE  release=%s\n\n", options->release);
-    printf("%-6s  %-24s  %-7s  %-8s  %-9s  %s\n",
-           "FAMILY", "TARGET", "SOURCE", "MANIFEST", "INVENTORY", "NEXT");
-    printf("%-6s  %-24s  %-7s  %-8s  %-9s  %s\n",
+    printf("%-6s  %-24s  %-31s  %-7s  %-27s  %-8s  %s\n",
+           "FAMILY", "TARGET", "SOURCE_CLASS", "SOURCE",
+           "TARGET_ARTIFACT_CLASS", "ARTIFACT", "NEXT");
+    printf("%-6s  %-24s  %-31s  %-7s  %-27s  %-8s  %s\n",
            options->profile->family_key,
            options->target,
+           options->profile->source_artifact_class,
            report->source_state,
-           qwen_source_manifest_status(report),
-           qwen_source_native_inventory_table_status(report),
+           options->profile->target_artifact_class,
+           qwen_source_target_artifact_status(options->profile),
            report->next_row);
 }
 
@@ -1129,7 +1188,25 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
     printf("source_family_profile_status: %s\n",
            options->profile->source_family_profile_status);
     printf("source_artifact_class: %s\n", options->profile->source_artifact_class);
+    printf("source_artifact_status: %s\n", report->source_state);
+    printf("source_artifact_format: %s\n", options->profile->source_artifact_format);
+    printf("source_artifact_origin: %s\n", options->profile->source_artifact_origin);
+    printf("source_artifact_authority: %s\n",
+           options->profile->source_artifact_authority);
+    printf("source_sidecar_status: %s\n", qwen_source_sidecar_status(report));
+    printf("source_tensor_container: %s\n", options->profile->source_tensor_container);
+    printf("source_tensor_payload_status: %s\n",
+           qwen_source_tensor_payload_status(report));
     printf("target_artifact_class: %s\n", options->profile->target_artifact_class);
+    printf("target_artifact_status: %s\n",
+           qwen_source_target_artifact_status(options->profile));
+    printf("target_artifact_origin: %s\n", options->profile->target_artifact_origin);
+    printf("target_artifact_required: %s\n",
+           options->profile->target_artifact_required);
+    printf("external_reference_status: %s\n",
+           options->profile->external_reference_status);
+    printf("yvex_produced_artifact_status: %s\n",
+           options->profile->yvex_produced_artifact_status);
     printf("pressure_purpose: %s\n", options->profile->pressure_purpose);
     printf("runtime_shape: %s\n", options->profile->runtime_shape);
     printf("hardware_lane: %s\n", options->profile->hardware_lane);
@@ -1183,6 +1260,7 @@ static void qwen_source_report_help(FILE *fp)
     fprintf(fp, "  --target qwen-metal-portability|qwen-small|qwen-medium|gemma-dense-portability\n");
     fprintf(fp, "  --include-files --include-config --include-blockers --include-next\n");
     fprintf(fp, "  --audit | --output normal|table|audit\n\n");
+    fprintf(fp, "Report fields include source artifact class and target artifact class evidence.\n");
     fprintf(fp, "The source pressure report inspects source-path readiness only. It does not download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
 }
 

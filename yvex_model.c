@@ -1212,8 +1212,8 @@ static const yvex_model_target_record model_targets[] = {
         "DeepSeek",
         "DeepSeek-V4-Flash",
         "selected-runtime-slice",
-        "YVEX-produced selected GGUF",
-        "YVEX-produced selected GGUF",
+        "official-safetensors",
+        "YVEX-produced-selected-GGUF",
         "selected-token-embedding-materialization",
         "token_embd.weight",
         "none",
@@ -1228,8 +1228,8 @@ static const yvex_model_target_record model_targets[] = {
         "DeepSeek",
         "DeepSeek-V4-Flash",
         "selected-runtime-slice",
-        "YVEX-produced selected GGUF",
-        "YVEX-produced selected GGUF",
+        "official-safetensors",
+        "YVEX-produced-selected-GGUF",
         "selected-embedding-plus-rmsnorm-segment",
         "token_embd.weight,blk.0.attn_norm.weight",
         "none",
@@ -1244,8 +1244,8 @@ static const yvex_model_target_record model_targets[] = {
         "GLM",
         "GLM-5.2",
         "official-source-huge-model",
-        "official safetensors",
-        "future YVEX-produced GGUF",
+        "official-safetensors-huge",
+        "future-YVEX-produced-GGUF",
         "huge-source-tensor-intake-moe-storage-stream-planning",
         "none",
         "hf/glm/GLM-5.2",
@@ -1450,7 +1450,7 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.SOURCE.2,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
+        "V010.SOURCE.3,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
@@ -1478,7 +1478,7 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.SOURCE.2,MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0",
+        "V010.SOURCE.3,MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0",
         {
             "planned-dense-pressure-only",
             "missing-gemma-source-path",
@@ -1668,7 +1668,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,V010.SOURCE.2,COMPUTE.BACKEND.METAL.0",
+        "V010.TARGET.7,V010.SOURCE.3,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
@@ -1714,7 +1714,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,V010.SOURCE.2,MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0",
+        "V010.TARGET.7,V010.SOURCE.3,MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0",
         {
             "planned-dense-pressure-only",
             "missing-gemma-source-path",
@@ -2100,7 +2100,7 @@ static const char *target_decision_candidate_next(const yvex_model_target_record
     }
     if (strcmp(record->target_class, "metal-reduced-full-runtime-pressure") == 0 ||
         strcmp(record->target_class, "reduced-dense-full-runtime-pressure") == 0) {
-        return "source artifact class fields";
+        return "source shard count/footprint report";
     }
     if (strcmp(record->target_class, "selected-runtime-slice") == 0) return "pressure-only";
     if (strcmp(record->target_class, "external-GGUF-reference") == 0 ||
@@ -2428,7 +2428,7 @@ static int print_model_target_candidate_normal(const char *release,
     printf("candidates: 0 eligible / %lu known (%lu pressure, %lu fixture)\n",
            candidate_count, pressure_count, fixture_count);
     printf("top_blocker: no eligible full-runtime candidate\n");
-    printf("next: V010.SOURCE.2\n");
+    printf("next: V010.SOURCE.3\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
@@ -2550,7 +2550,7 @@ static void print_registered_dense_candidate(unsigned long index,
         printf("dense_candidate_%lu_blocker_11: missing-real-logits\n", index);
     }
     if (include_next) {
-        printf("dense_candidate_%lu_next_required_rows: V010.TARGET.7,V010.SOURCE.2,V010.MAP.*\n", index);
+        printf("dense_candidate_%lu_next_required_rows: V010.TARGET.7,V010.SOURCE.3,V010.MAP.*\n", index);
     }
 }
 
@@ -2754,7 +2754,7 @@ static int print_model_target_dense_candidate_normal(const char *release,
     printf("candidates: %lu eligible / %lu known (%lu dense pressure)\n",
            eligible_count, dense_candidate_count, dense_pressure_count);
     printf("top_blocker: no selected dense full-runtime candidate\n");
-    printf("next: V010.SOURCE.2\n");
+    printf("next: V010.SOURCE.3\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
@@ -2921,7 +2921,7 @@ static int print_model_target_qwen_metal_report(const char *release,
         }
     }
     if (include_next) {
-        printf("next_required_rows: V010.SOURCE.2\n");
+        printf("next_required_rows: V010.SOURCE.3\n");
     }
     return 0;
 }
@@ -2947,7 +2947,7 @@ static int print_model_target_qwen_metal_normal(const char *release,
     printf("source_target: profiled\n");
     printf("source: missing\n");
     printf("backend: metal unsupported\n");
-    printf("next: V010.SOURCE.2\n");
+    printf("next: V010.SOURCE.3\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     return 0;
 }
@@ -3153,7 +3153,7 @@ static int print_model_target_decision_normal(const char *release,
     printf("eligible: %lu / %lu candidates (%lu ineligible)\n",
            eligible_count, candidate_count, ineligible_count);
     printf("top_blocker: %s\n", selected ? "none" : "no eligible full-runtime candidate");
-    printf("next: V010.SOURCE.2\n");
+    printf("next: V010.SOURCE.3\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     return 0;
 }
@@ -3215,6 +3215,185 @@ static void print_model_target_classes(void)
     }
 }
 
+static int model_target_is_selected_slice(const yvex_model_target_record *record)
+{
+    return record && strcmp(record->target_class, "selected-runtime-slice") == 0;
+}
+
+static const char *model_target_source_artifact_status(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    if (model_target_is_selected_slice(record)) return "unknown";
+    if (strcmp(record->source_artifact_class, "official-source-tensors-planned") == 0) {
+        return "missing";
+    }
+    if (strcmp(record->source_artifact_class, "official-safetensors-huge") == 0) {
+        return "planned";
+    }
+    if (strcmp(record->source_artifact_class, "external-GGUF-reference") == 0 ||
+        strcmp(record->source_artifact_class, "external-runner-reference") == 0) {
+        return "external-reference-only";
+    }
+    return "unknown";
+}
+
+static const char *model_target_source_artifact_format(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    if (strcmp(record->source_artifact_class, "official-source-tensors-planned") == 0) {
+        return "safetensors+config-tokenizer-sidecars";
+    }
+    if (strcmp(record->source_artifact_class, "official-safetensors") == 0 ||
+        strcmp(record->source_artifact_class, "official-safetensors-huge") == 0) {
+        return "safetensors";
+    }
+    if (strcmp(record->source_artifact_class, "external-GGUF-reference") == 0) {
+        return "gguf";
+    }
+    if (strcmp(record->source_artifact_class, "external-runner-reference") == 0) {
+        return "external-runner";
+    }
+    return "unknown";
+}
+
+static const char *model_target_source_artifact_origin(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    if (strncmp(record->source_artifact_class, "official", 8) == 0) return "official";
+    if (strncmp(record->source_artifact_class, "external", 8) == 0) return "external-reference";
+    if (strncmp(record->source_artifact_class, "YVEX", 4) == 0) return "local";
+    if (strcmp(record->source_artifact_class, "unknown-source-artifact") == 0) return "unknown";
+    return "planned";
+}
+
+static const char *model_target_source_artifact_authority(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    if (strncmp(record->source_artifact_class, "official", 8) == 0) return "upstream-official";
+    if (strncmp(record->source_artifact_class, "external", 8) == 0) return "external-reference";
+    if (strncmp(record->source_artifact_class, "YVEX", 4) == 0) return "YVEX";
+    return "unknown";
+}
+
+static const char *model_target_source_sidecar_status(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    if (strcmp(record->source_artifact_class, "official-source-tensors-planned") == 0) {
+        return "missing";
+    }
+    if (strcmp(record->source_artifact_class, "official-safetensors") == 0) {
+        return "unknown";
+    }
+    if (strcmp(record->source_artifact_class, "official-safetensors-huge") == 0) {
+        return "planned";
+    }
+    return "unknown";
+}
+
+static const char *model_target_source_tensor_container(const yvex_model_target_record *record)
+{
+    const char *format = model_target_source_artifact_format(record);
+
+    if (strcmp(format, "safetensors") == 0 ||
+        strcmp(format, "safetensors+config-tokenizer-sidecars") == 0) {
+        return "safetensors";
+    }
+    if (strcmp(format, "gguf") == 0) {
+        return "gguf";
+    }
+    if (strcmp(format, "external-runner") == 0) {
+        return "none";
+    }
+    return "unknown";
+}
+
+static const char *model_target_source_tensor_payload_status(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    if (strcmp(model_target_source_artifact_status(record), "missing") == 0) {
+        return "not-present";
+    }
+    if (model_target_is_selected_slice(record)) {
+        return "not-read";
+    }
+    if (strcmp(record->source_artifact_class, "official-safetensors-huge") == 0) {
+        return "not-read";
+    }
+    return "unsupported";
+}
+
+static const char *model_target_target_artifact_status(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    if (strcmp(record->target_artifact_class, "YVEX-produced-selected-GGUF") == 0) {
+        return "present";
+    }
+    if (strcmp(record->target_artifact_class, "future-YVEX-produced-GGUF") == 0) {
+        return "planned";
+    }
+    if (strcmp(record->target_artifact_class, "none-source-only") == 0) {
+        return "report-only";
+    }
+    if (strcmp(record->target_artifact_class, "external-reference-only") == 0) {
+        return "external-reference-only";
+    }
+    return "unknown";
+}
+
+static const char *model_target_target_artifact_origin(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    if (strcmp(record->target_artifact_class, "YVEX-produced-selected-GGUF") == 0) {
+        return "YVEX";
+    }
+    if (strcmp(record->target_artifact_class, "future-YVEX-produced-GGUF") == 0) {
+        return "planned";
+    }
+    if (strcmp(record->target_artifact_class, "external-reference-only") == 0) {
+        return "external-reference";
+    }
+    if (strcmp(record->target_artifact_class, "none-source-only") == 0) {
+        return "none";
+    }
+    return "unknown";
+}
+
+static const char *model_target_target_artifact_required(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    return strcmp(record->target_artifact_class, "none-source-only") == 0 ? "false" : "true";
+}
+
+static const char *model_target_external_reference_status(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    return strcmp(record->external_reference, "true") == 0 ? "reference-only" : "false";
+}
+
+static const char *model_target_yvex_produced_artifact_status(const yvex_model_target_record *record)
+{
+    if (!record) return "unknown";
+    if (strcmp(record->target_artifact_class, "YVEX-produced-selected-GGUF") == 0) {
+        return "selected-only";
+    }
+    if (strcmp(record->target_artifact_class, "future-YVEX-produced-GGUF") == 0) {
+        return "planned";
+    }
+    return "not-applicable";
+}
+
+static const char *model_target_runtime_display(const yvex_model_target_record *record)
+{
+    if (!record) return "unsupported";
+    if (strcmp(record->target_id, "deepseek4-v4-flash-selected-embed") == 0) {
+        return "selected-boundary-only";
+    }
+    if (strcmp(record->target_id, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0) {
+        return "selected-segment-boundary-only";
+    }
+    return record->runtime_execution;
+}
+
 static void print_model_target_list(void)
 {
     unsigned long i;
@@ -3225,8 +3404,21 @@ static void print_model_target_list(void)
         printf("target: %s\n", record->target_id);
         printf("family: %s\n", record->family);
         printf("target_class: %s\n", record->target_class);
+        printf("source_artifact_class: %s\n", record->source_artifact_class);
+        printf("source_artifact_status: %s\n",
+               model_target_source_artifact_status(record));
+        printf("target_artifact_class: %s\n", record->target_artifact_class);
+        printf("target_artifact_status: %s\n",
+               model_target_target_artifact_status(record));
+        printf("source_artifact_origin: %s\n",
+               model_target_source_artifact_origin(record));
+        printf("target_artifact_origin: %s\n",
+               model_target_target_artifact_origin(record));
         printf("runtime_execution: %s\n", record->runtime_execution);
+        printf("runtime_claim: unsupported\n");
         printf("generation: %s\n", record->generation);
+        printf("benchmark_status: not-measured\n");
+        printf("release_ready: false\n");
         if (i + 1 < model_target_count) {
             printf("\n");
         }
@@ -3264,14 +3456,34 @@ static void print_model_target_record(const yvex_model_target_record *record)
     printf("model: %s\n", record->model);
     printf("target_class: %s\n", record->target_class);
     printf("source_artifact_class: %s\n", record->source_artifact_class);
+    printf("source_artifact_status: %s\n", model_target_source_artifact_status(record));
+    printf("source_artifact_format: %s\n", model_target_source_artifact_format(record));
+    printf("source_artifact_origin: %s\n", model_target_source_artifact_origin(record));
+    printf("source_artifact_authority: %s\n",
+           model_target_source_artifact_authority(record));
+    printf("source_sidecar_status: %s\n", model_target_source_sidecar_status(record));
+    printf("source_tensor_container: %s\n", model_target_source_tensor_container(record));
+    printf("source_tensor_payload_status: %s\n",
+           model_target_source_tensor_payload_status(record));
     printf("target_artifact_class: %s\n", record->target_artifact_class);
+    printf("target_artifact_status: %s\n", model_target_target_artifact_status(record));
+    printf("target_artifact_origin: %s\n", model_target_target_artifact_origin(record));
+    printf("target_artifact_required: %s\n",
+           model_target_target_artifact_required(record));
+    printf("external_reference_status: %s\n",
+           model_target_external_reference_status(record));
+    printf("yvex_produced_artifact_status: %s\n",
+           model_target_yvex_produced_artifact_status(record));
     printf("pressure_purpose: %s\n", record->pressure_purpose);
     printf("tensor_set: %s\n", record->tensor_set);
     printf("local_path_class: %s\n", record->local_path_class);
     printf("source_footprint_class: %s\n", record->source_footprint_class);
     printf("runtime_boundary: %s\n", record->runtime_boundary);
     printf("runtime_execution: %s\n", record->runtime_execution);
+    printf("runtime_claim: unsupported\n");
     printf("generation: %s\n", record->generation);
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
     printf("external_reference: %s\n", record->external_reference);
 }
 
@@ -3281,21 +3493,59 @@ static void print_model_target_record_normal(const yvex_model_target_record *rec
         strcmp(record->target_id, "gemma-dense-portability") == 0) {
         printf("target: %s\n", record->target_id);
         printf("family: %s  class=%s\n", record->family, record->target_class);
-        printf("source: %s\n", record->source_artifact_class);
-        printf("artifact: %s\n", record->target_artifact_class);
+        printf("source: %s  status=%s\n",
+               record->source_artifact_class,
+               model_target_source_artifact_status(record));
+        printf("artifact: %s  status=%s\n",
+               record->target_artifact_class,
+               model_target_target_artifact_status(record));
         printf("runtime: %s\n", record->runtime_execution);
         printf("generation: %s\n", record->generation);
-        printf("next: V010.SOURCE.2\n");
-        printf("boundary: target profile only; no source download/runtime/generation\n");
+        printf("next: V010.SOURCE.3\n");
+        printf("boundary: target/source profile only; no source download/runtime/generation\n");
+        printf("status: model-target\n");
+        return;
+    }
+    if (strcmp(record->target_id, "glm-5.2-official-safetensors") == 0) {
+        printf("target: %s\n", record->target_id);
+        printf("family: %s  class=%s\n", record->family, record->target_class);
+        printf("source: %s  status=%s\n",
+               record->source_artifact_class,
+               model_target_source_artifact_status(record));
+        printf("artifact: %s  status=%s\n",
+               record->target_artifact_class,
+               model_target_target_artifact_status(record));
+        printf("runtime: %s\n", record->runtime_execution);
+        printf("generation: %s\n", record->generation);
+        printf("next: V010.SOURCE.3\n");
+        printf("boundary: source/storage pressure only; no GLM runtime/generation\n");
+        printf("status: model-target\n");
+        return;
+    }
+    if (model_target_is_selected_slice(record)) {
+        printf("target: %s\n", record->target_id);
+        printf("family: %s  class=%s\n", record->family, record->target_class);
+        printf("source: %s  status=%s\n",
+               record->source_artifact_class,
+               model_target_source_artifact_status(record));
+        printf("artifact: %s  status=%s\n",
+               record->target_artifact_class,
+               model_target_target_artifact_status(record));
+        printf("runtime: %s\n", model_target_runtime_display(record));
+        printf("generation: %s\n", record->generation);
+        printf("boundary: selected-slice only; no full-runtime generation\n");
         printf("status: model-target\n");
         return;
     }
 
     printf("target: %s\n", record->target_id);
     printf("family: %s class=%s\n", record->family, record->target_class);
-    printf("source: %s target=%s\n",
+    printf("source: %s  status=%s\n",
            record->source_artifact_class,
-           record->target_artifact_class);
+           model_target_source_artifact_status(record));
+    printf("artifact: %s  status=%s\n",
+           record->target_artifact_class,
+           model_target_target_artifact_status(record));
     printf("runtime: %s generation=%s\n",
            record->runtime_execution,
            record->generation);
@@ -3323,7 +3573,7 @@ static void print_model_target_report_table(const char *report,
            status ? status : "blocked",
            selected ? selected : "none",
            eligible_count,
-           "V010.SOURCE.2");
+           "V010.SOURCE.3");
 }
 
 static int path_exists(const char *path)
@@ -3421,7 +3671,7 @@ static int print_model_target_paths(const yvex_model_target_record *record,
         return rc == YVEX_ERR_INVALID_ARG ? 2 : 3;
     }
 
-    source_class = "official safetensors";
+    source_class = record->source_artifact_class;
     if (strcmp(record->target_id, "deepseek4-v4-flash-selected-embed") == 0) {
         rc = format_model_target_artifact_path(
             artifact_path, sizeof(artifact_path), &operator_paths, "deepseek",
@@ -3430,7 +3680,7 @@ static int print_model_target_paths(const yvex_model_target_record *record,
             return rc;
         }
         registry_alias = record->target_id;
-        target_class = "YVEX-produced selected GGUF";
+        target_class = record->target_artifact_class;
         runtime_execution = "selected-boundary-only";
         artifact_exists = path_exists(artifact_path);
     } else if (strcmp(record->target_id, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0) {
@@ -3441,13 +3691,13 @@ static int print_model_target_paths(const yvex_model_target_record *record,
             return rc;
         }
         registry_alias = record->target_id;
-        target_class = "YVEX-produced selected GGUF";
+        target_class = record->target_artifact_class;
         runtime_execution = "selected-segment-boundary-only";
         artifact_exists = path_exists(artifact_path);
     } else if (strcmp(record->target_id, "glm-5.2-official-safetensors") == 0) {
         snprintf(artifact_path, sizeof(artifact_path), "%s", "planned");
         registry_alias = "none";
-        target_class = "future YVEX-produced GGUF";
+        target_class = record->target_artifact_class;
         runtime_execution = "unsupported";
         artifact_exists = 0;
     } else if (strcmp(record->target_id, "qwen-metal-portability") == 0 ||
@@ -3473,7 +3723,9 @@ static int print_model_target_paths(const yvex_model_target_record *record,
             strcmp(record->target_id, "gemma-dense-portability") == 0) {
             printf("target: %s\n", record->target_id);
             printf("source: %s  %s\n", source_exists ? "present" : "missing", source_path);
+            printf("source_class: %s\n", source_class);
             printf("artifact: planned  %s\n", artifact_path);
+            printf("artifact_class: %s\n", target_class);
             printf("reports: %s\n", report_dir);
             printf("registry: %s\n", registry_dir);
             printf("boundary: path report only, no runtime execution\n");
@@ -3483,7 +3735,9 @@ static int print_model_target_paths(const yvex_model_target_record *record,
         printf("target: %s\n", record->target_id);
         printf("models_root: %s\n", operator_paths.models_root);
         printf("source: %s exists=%s\n", source_path, source_exists ? "true" : "false");
+        printf("source_class: %s\n", source_class);
         printf("artifact: %s exists=%s\n", artifact_path, artifact_exists ? "true" : "false");
+        printf("artifact_class: %s\n", target_class);
         printf("registry_alias: %s\n", registry_alias);
         printf("boundary: path report only, no payload read or runtime execution\n");
         printf("status: model-target-paths\n");
@@ -3502,9 +3756,37 @@ static int print_model_target_paths(const yvex_model_target_record *record,
         printf("registry_dir_exists: %s\n", registry_exists ? "true" : "false");
         printf("registry_alias: %s\n", registry_alias);
         printf("source_artifact_class: %s\n", source_class);
+        printf("source_artifact_status: %s\n",
+               source_exists ? "present" : model_target_source_artifact_status(record));
+        printf("source_artifact_format: %s\n",
+               model_target_source_artifact_format(record));
+        printf("source_artifact_origin: %s\n",
+               model_target_source_artifact_origin(record));
+        printf("source_artifact_authority: %s\n",
+               model_target_source_artifact_authority(record));
+        printf("source_sidecar_status: %s\n",
+               model_target_source_sidecar_status(record));
+        printf("source_tensor_container: %s\n",
+               model_target_source_tensor_container(record));
+        printf("source_tensor_payload_status: %s\n",
+               source_exists ? "present-not-loaded"
+                             : model_target_source_tensor_payload_status(record));
         printf("target_artifact_class: %s\n", target_class);
+        printf("target_artifact_status: %s\n",
+               artifact_exists ? "present" : model_target_target_artifact_status(record));
+        printf("target_artifact_origin: %s\n",
+               model_target_target_artifact_origin(record));
+        printf("target_artifact_required: %s\n",
+               model_target_target_artifact_required(record));
+        printf("external_reference_status: %s\n",
+               model_target_external_reference_status(record));
+        printf("yvex_produced_artifact_status: %s\n",
+               model_target_yvex_produced_artifact_status(record));
         printf("runtime_execution: %s\n", runtime_execution);
+        printf("runtime_claim: unsupported\n");
         printf("generation: unsupported\n");
+        printf("benchmark_status: not-measured\n");
+        printf("release_ready: false\n");
         printf("status: model-target-paths\n");
     }
     return 0;
