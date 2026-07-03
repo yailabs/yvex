@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <stdint.h>
+#include <limits.h>
 
 
 typedef struct {
@@ -56,6 +57,9 @@ struct yvex_native_weight_table {
     unsigned long long count;
     unsigned long long cap;
     yvex_native_weight_summary summary;
+    unsigned long long header_read_count;
+    unsigned long long header_error_count;
+    unsigned long long header_bytes;
 };
 
 int yvex_native_weight_table_add(yvex_native_weight_table *table,
@@ -760,6 +764,29 @@ typedef struct {
     unsigned long long other_size_bytes;
     unsigned long long largest_source_file_bytes;
     char largest_source_file_name[YVEX_PATH_CAP];
+    unsigned long long native_safetensors_count;
+    unsigned long long native_safetensors_opened;
+    unsigned long long native_safetensors_header_read_count;
+    unsigned long long native_safetensors_header_error_count;
+    unsigned long long native_safetensors_header_bytes;
+    unsigned long long native_tensor_count;
+    unsigned long long native_declared_data_bytes;
+    unsigned long long native_declared_tensor_bytes;
+    unsigned long long native_max_rank;
+    unsigned long long native_max_tensor_elements;
+    char native_largest_tensor_name[YVEX_PATH_CAP];
+    unsigned long long native_largest_tensor_bytes;
+    unsigned long long native_dtype_f16_count;
+    unsigned long long native_dtype_bf16_count;
+    unsigned long long native_dtype_f32_count;
+    unsigned long long native_dtype_i8_count;
+    unsigned long long native_dtype_i16_count;
+    unsigned long long native_dtype_i32_count;
+    unsigned long long native_dtype_i64_count;
+    unsigned long long native_dtype_u8_count;
+    unsigned long long native_dtype_other_count;
+    unsigned long long native_invalid_file_count;
+    unsigned long long native_inventory_error_count;
     const char *blockers[32];
     unsigned long blocker_count;
 } yvex_qwen_source_pressure_report;
@@ -960,6 +987,208 @@ static void qwen_source_scan_top_footprint(const char *dir,
     closedir(dp);
 }
 
+static unsigned long long qwen_source_native_tensor_elements(
+    const yvex_native_weight_info *info)
+{
+    unsigned long long elements = 1;
+    unsigned int i;
+
+    if (!info) {
+        return 0;
+    }
+    for (i = 0; i < info->rank; ++i) {
+        if (info->dims[i] == 0) {
+            return 0;
+        }
+        if (elements > ULLONG_MAX / info->dims[i]) {
+            return ULLONG_MAX;
+        }
+        elements *= info->dims[i];
+    }
+    return elements;
+}
+
+static int qwen_source_native_shard_first_seen(const yvex_native_weight_table *table,
+                                               unsigned long long index)
+{
+    unsigned long long i;
+    const char *shard;
+
+    if (!table || index >= table->count) {
+        return 0;
+    }
+    shard = table->items[index].shard_path;
+    for (i = 0; i < index; ++i) {
+        if (strcmp(table->items[i].shard_path, shard) == 0) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static unsigned long long qwen_source_native_shard_max_data_end(
+    const yvex_native_weight_table *table,
+    const char *shard)
+{
+    unsigned long long i;
+    unsigned long long max_end = 0;
+
+    if (!table || !shard) {
+        return 0;
+    }
+    for (i = 0; i < table->count; ++i) {
+        if (strcmp(table->items[i].shard_path, shard) == 0 &&
+            table->items[i].data_end > max_end) {
+            max_end = table->items[i].data_end;
+        }
+    }
+    return max_end;
+}
+
+static void qwen_source_native_count_dtype(yvex_qwen_source_pressure_report *report,
+                                           yvex_native_dtype dtype)
+{
+    switch (dtype) {
+    case YVEX_NATIVE_DTYPE_F16:
+        report->native_dtype_f16_count++;
+        break;
+    case YVEX_NATIVE_DTYPE_BF16:
+        report->native_dtype_bf16_count++;
+        break;
+    case YVEX_NATIVE_DTYPE_F32:
+        report->native_dtype_f32_count++;
+        break;
+    case YVEX_NATIVE_DTYPE_I8:
+        report->native_dtype_i8_count++;
+        break;
+    case YVEX_NATIVE_DTYPE_I16:
+        report->native_dtype_i16_count++;
+        break;
+    case YVEX_NATIVE_DTYPE_I32:
+        report->native_dtype_i32_count++;
+        break;
+    case YVEX_NATIVE_DTYPE_I64:
+        report->native_dtype_i64_count++;
+        break;
+    case YVEX_NATIVE_DTYPE_U8:
+        report->native_dtype_u8_count++;
+        break;
+    default:
+        report->native_dtype_other_count++;
+        break;
+    }
+}
+
+static void qwen_source_native_collect_table(
+    yvex_qwen_source_pressure_report *report,
+    const yvex_native_weight_table *table)
+{
+    unsigned long long i;
+
+    if (!report || !table) {
+        return;
+    }
+    report->native_safetensors_header_read_count = table->header_read_count;
+    report->native_safetensors_header_error_count = table->header_error_count;
+    report->native_safetensors_header_bytes = table->header_bytes;
+    report->native_tensor_count = table->count;
+    report->native_declared_tensor_bytes = table->summary.total_tensor_bytes;
+    report->native_invalid_file_count = table->header_error_count;
+    report->native_inventory_error_count = table->header_error_count;
+
+    for (i = 0; i < table->count; ++i) {
+        const yvex_native_weight_info *info = &table->items[i];
+        unsigned long long elements = qwen_source_native_tensor_elements(info);
+
+        qwen_source_native_count_dtype(report, info->dtype);
+        if (info->rank > report->native_max_rank) {
+            report->native_max_rank = info->rank;
+        }
+        if (elements > report->native_max_tensor_elements) {
+            report->native_max_tensor_elements = elements;
+        }
+        if (info->data_bytes > report->native_largest_tensor_bytes) {
+            report->native_largest_tensor_bytes = info->data_bytes;
+            snprintf(report->native_largest_tensor_name,
+                     sizeof(report->native_largest_tensor_name),
+                     "%s",
+                     info->name ? info->name : "unknown");
+        }
+        if (qwen_source_native_shard_first_seen(table, i)) {
+            report->native_declared_data_bytes +=
+                qwen_source_native_shard_max_data_end(table, info->shard_path);
+        }
+    }
+}
+
+static int qwen_source_scan_native_inventory(const char *dir,
+                                             yvex_qwen_source_pressure_report *report)
+{
+    const unsigned long long max_safetensors_files = 1024;
+    yvex_native_weight_table *table;
+    DIR *dp;
+    struct dirent *ent;
+    int fatal_rc = 0;
+    unsigned long long scan_error_count = 0;
+
+    if (!dir || !report || !report->source_exists) {
+        return 0;
+    }
+    table = (yvex_native_weight_table *)calloc(1, sizeof(*table));
+    if (!table) {
+        return 3;
+    }
+    dp = opendir(dir);
+    if (!dp) {
+        free(table);
+        return 0;
+    }
+    while ((ent = readdir(dp)) != NULL) {
+        char path[YVEX_PATH_CAP];
+        struct stat st;
+        yvex_error err;
+        int rc;
+
+        if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0 ||
+            !yvex_sm_ends_with(ent->d_name, ".safetensors")) {
+            continue;
+        }
+        if (!qwen_source_path_format(path, sizeof(path), "%s/%s", dir, ent->d_name)) {
+            continue;
+        }
+        if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) {
+            continue;
+        }
+        if (report->native_safetensors_count >= max_safetensors_files) {
+            scan_error_count++;
+            break;
+        }
+
+        report->native_safetensors_count++;
+        report->native_safetensors_opened++;
+        table->summary.shard_count++;
+        yvex_error_clear(&err);
+        {
+            unsigned long long error_count_before = table->header_error_count;
+            rc = yvex_safetensors_read_header_file(path, ent->d_name, table, &err);
+            if (rc != YVEX_OK && table->header_error_count == error_count_before) {
+                table->header_error_count++;
+            }
+        }
+        if (rc == YVEX_ERR_NOMEM) {
+            fatal_rc = 3;
+            break;
+        }
+    }
+    closedir(dp);
+    qwen_source_native_collect_table(report, table);
+    report->native_safetensors_header_error_count += scan_error_count;
+    report->native_invalid_file_count += scan_error_count;
+    report->native_inventory_error_count += scan_error_count;
+    yvex_native_weight_table_close(table);
+    return fatal_rc;
+}
+
 static void qwen_source_choose_report_file(char *out, size_t cap,
                                            const yvex_source_family_profile *profile,
                                            const char *reports_root,
@@ -1065,9 +1294,66 @@ static const char *qwen_source_manifest_status(const yvex_qwen_source_pressure_r
     return report && report->manifest_exists ? "present" : "missing";
 }
 
-static const char *qwen_source_native_inventory_status(const yvex_qwen_source_pressure_report *report)
+static const char *qwen_source_native_inventory_report_status(
+    const yvex_qwen_source_pressure_report *report)
 {
     return report && report->native_inventory_exists ? "available-report-only" : "missing";
+}
+
+static const char *qwen_source_native_inventory_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    if (!report || !report->source_exists) {
+        return "missing";
+    }
+    if (report->native_safetensors_count == 0) {
+        return "no-safetensors";
+    }
+    if (report->native_safetensors_header_error_count > 0) {
+        return "header-error";
+    }
+    if (report->native_safetensors_header_read_count > 0) {
+        return "header-only";
+    }
+    return "unknown";
+}
+
+static const char *qwen_source_native_inventory_source(
+    const yvex_qwen_source_pressure_report *report)
+{
+    return report && report->source_exists ? "source-path" : "not-present";
+}
+
+static const char *qwen_source_native_tensor_metadata_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    const char *status = qwen_source_native_inventory_status(report);
+
+    if (strcmp(status, "header-only") == 0) {
+        return "header-only";
+    }
+    if (strcmp(status, "header-error") == 0) {
+        return report && report->native_tensor_count > 0
+                   ? "partial-header-only"
+                   : "header-error";
+    }
+    if (strcmp(status, "missing") == 0 ||
+        strcmp(status, "no-safetensors") == 0) {
+        return "not-present";
+    }
+    return "unknown";
+}
+
+static const char *qwen_source_native_tensor_payload_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    const char *status = qwen_source_native_inventory_status(report);
+
+    if (strcmp(status, "missing") == 0 ||
+        strcmp(status, "no-safetensors") == 0) {
+        return "not-present";
+    }
+    return "not-loaded";
 }
 
 static const char *qwen_source_sidecar_status(const yvex_qwen_source_pressure_report *report)
@@ -1258,6 +1544,10 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
             qwen_source_check_file(report->source_path, "LICENSE.txt") ||
             qwen_source_check_file(report->source_path, "COPYING");
         qwen_source_scan_top_footprint(report->source_path, report);
+        rc = qwen_source_scan_native_inventory(report->source_path, report);
+        if (rc != 0) {
+            return rc;
+        }
     }
 
     qwen_source_choose_report_file(report->manifest_path, sizeof(report->manifest_path),
@@ -1280,15 +1570,15 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
     if (!report->source_exists) {
         report->status = "source-target-profiled";
         report->top_blocker = options->profile->source_path_blocker;
-        report->next_row = "V010.SOURCE.5";
+        report->next_row = "V010.SOURCE.6";
     } else if (!report->manifest_exists) {
         report->status = "source-present-report-only";
         report->top_blocker = options->profile->source_manifest_blocker;
-        report->next_row = "V010.SOURCE.5";
+        report->next_row = "V010.SOURCE.6";
     } else if (!report->native_inventory_exists) {
         report->status = "source-present-report-only";
         report->top_blocker = options->profile->native_inventory_blocker;
-        report->next_row = "V010.SOURCE.5";
+        report->next_row = "V010.SOURCE.6";
     } else {
         report->status = "source-profile-incomplete";
         report->top_blocker = options->profile->model_class_blocker;
@@ -1337,6 +1627,11 @@ static void qwen_source_print_normal(const yvex_qwen_source_report_options *opti
     printf("provenance: %s status=%s revision=unknown\n",
            qwen_source_provenance_origin_normal(report),
            qwen_source_provenance_status(report));
+    printf("native: %s  files=%llu  tensors=%llu  header_bytes=%llu\n",
+           qwen_source_native_inventory_status(report),
+           report->native_safetensors_count,
+           report->native_tensor_count,
+           report->native_safetensors_header_bytes);
     printf("top_blocker: %s\n", report->top_blocker);
     printf("next: %s\n", report->next_row);
     printf("boundary: source report only; no artifact/runtime/generation/benchmark\n");
@@ -1346,17 +1641,17 @@ static void qwen_source_print_table(const yvex_qwen_source_report_options *optio
                                     const yvex_qwen_source_pressure_report *report)
 {
     printf("SOURCE PRESSURE  release=%s\n\n", options->release);
-    printf("%-6s  %-24s  %-7s  %5s  %5s  %-9s  %-16s  %s\n",
-           "FAMILY", "TARGET", "SOURCE", "FILES", "BYTES", "FOOTPRINT",
-           "PROVENANCE", "NEXT");
-    printf("%-6s  %-24s  %-7s  %5llu  %5llu  %-9s  %-16s  %s\n",
+    printf("%-6s  %-24s  %-7s  %5s  %11s  %7s  %-11s  %s\n",
+           "FAMILY", "TARGET", "SOURCE", "FILES", "SAFETENSORS",
+           "TENSORS", "NATIVE", "NEXT");
+    printf("%-6s  %-24s  %-7s  %5llu  %11llu  %7llu  %-11s  %s\n",
            options->profile->family_key,
            options->target,
            report->source_state,
            report->source_file_count,
-           report->total_size_bytes,
-           qwen_source_footprint_class(report),
-           qwen_source_provenance_origin_normal(report),
+           report->safetensors_count,
+           report->native_tensor_count,
+           qwen_source_native_inventory_status(report),
            report->next_row);
 }
 
@@ -1461,6 +1756,51 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
     printf("source_remote_checked: false\n");
     printf("native_inventory_status: %s\n",
            qwen_source_native_inventory_status(report));
+    printf("native_inventory_scope: top-level-safetensors-headers\n");
+    printf("native_inventory_source: %s\n",
+           qwen_source_native_inventory_source(report));
+    printf("native_safetensors_count: %llu\n", report->native_safetensors_count);
+    printf("native_safetensors_opened: %llu\n", report->native_safetensors_opened);
+    printf("native_safetensors_header_read_count: %llu\n",
+           report->native_safetensors_header_read_count);
+    printf("native_safetensors_header_error_count: %llu\n",
+           report->native_safetensors_header_error_count);
+    printf("native_safetensors_header_bytes: %llu\n",
+           report->native_safetensors_header_bytes);
+    printf("native_safetensors_payload_loaded: false\n");
+    printf("native_safetensors_payload_bytes_read: 0\n");
+    printf("native_tensor_count: %llu\n", report->native_tensor_count);
+    printf("native_tensor_metadata_status: %s\n",
+           qwen_source_native_tensor_metadata_status(report));
+    printf("native_tensor_payload_status: %s\n",
+           qwen_source_native_tensor_payload_status(report));
+    printf("native_declared_data_bytes: %llu\n",
+           report->native_declared_data_bytes);
+    printf("native_declared_tensor_bytes: %llu\n",
+           report->native_declared_tensor_bytes);
+    printf("native_max_rank: %llu\n", report->native_max_rank);
+    printf("native_max_tensor_elements: %llu\n",
+           report->native_max_tensor_elements);
+    printf("native_largest_tensor_name: %s\n",
+           report->native_largest_tensor_name[0]
+               ? report->native_largest_tensor_name
+               : "none");
+    printf("native_largest_tensor_bytes: %llu\n",
+           report->native_largest_tensor_bytes);
+    printf("native_dtype_f16_count: %llu\n", report->native_dtype_f16_count);
+    printf("native_dtype_bf16_count: %llu\n", report->native_dtype_bf16_count);
+    printf("native_dtype_f32_count: %llu\n", report->native_dtype_f32_count);
+    printf("native_dtype_i8_count: %llu\n", report->native_dtype_i8_count);
+    printf("native_dtype_i16_count: %llu\n", report->native_dtype_i16_count);
+    printf("native_dtype_i32_count: %llu\n", report->native_dtype_i32_count);
+    printf("native_dtype_i64_count: %llu\n", report->native_dtype_i64_count);
+    printf("native_dtype_u8_count: %llu\n", report->native_dtype_u8_count);
+    printf("native_dtype_other_count: %llu\n", report->native_dtype_other_count);
+    printf("native_invalid_file_count: %llu\n", report->native_invalid_file_count);
+    printf("native_inventory_error_count: %llu\n",
+           report->native_inventory_error_count);
+    printf("native_inventory_report_status: %s\n",
+           qwen_source_native_inventory_report_status(report));
     printf("native_inventory_path: %s\n",
            report->native_inventory_path[0] ? report->native_inventory_path : "unknown");
     printf("model_class_profile_status: missing\n");
@@ -1497,6 +1837,7 @@ static void qwen_source_report_help(FILE *fp)
     fprintf(fp, "Report fields include source artifact class, target artifact class, source footprint, and source provenance evidence.\n");
     fprintf(fp, "Source footprint reports count top-level regular files and bytes without loading tensor payloads.\n");
     fprintf(fp, "Source provenance fields classify local/planned state only; they do not verify upstream identity, hash files, or prove source readiness.\n");
+    fprintf(fp, "Native safetensors inventory reads safetensors headers only and never loads tensor payload bytes.\n");
     fprintf(fp, "The source pressure report inspects source-path readiness only. It does not download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
 }
 
@@ -1998,6 +2339,7 @@ int yvex_safetensors_read_header_file(const char *abs_path,
     if (stat(abs_path, &st) != 0 || st.st_size < 8) {
         yvex_error_setf(err, YVEX_ERR_FORMAT, "safetensors_header", "short safetensors file: %s", shard_path);
         table->summary.malformed_shard_count++;
+        table->header_error_count++;
         return YVEX_ERR_FORMAT;
     }
     file_size = (unsigned long long)st.st_size;
@@ -2010,6 +2352,7 @@ int yvex_safetensors_read_header_file(const char *abs_path,
         fclose(fp);
         yvex_error_setf(err, YVEX_ERR_FORMAT, "safetensors_header", "cannot read safetensors header length: %s", shard_path);
         table->summary.malformed_shard_count++;
+        table->header_error_count++;
         return YVEX_ERR_FORMAT;
     }
     header_len = st_le64(len_bytes);
@@ -2017,6 +2360,7 @@ int yvex_safetensors_read_header_file(const char *abs_path,
         fclose(fp);
         yvex_error_setf(err, YVEX_ERR_FORMAT, "safetensors_header", "invalid safetensors header length: %s", shard_path);
         table->summary.malformed_shard_count++;
+        table->header_error_count++;
         return YVEX_ERR_FORMAT;
     }
     json = (char *)malloc((size_t)header_len + 1u);
@@ -2030,14 +2374,18 @@ int yvex_safetensors_read_header_file(const char *abs_path,
         fclose(fp);
         yvex_error_setf(err, YVEX_ERR_FORMAT, "safetensors_header", "cannot read safetensors header: %s", shard_path);
         table->summary.malformed_shard_count++;
+        table->header_error_count++;
         return YVEX_ERR_FORMAT;
     }
     fclose(fp);
     json[header_len] = '\0';
+    table->header_read_count++;
+    table->header_bytes += header_len;
     payload_bytes = file_size - 8 - header_len;
     rc = yvex_safetensors_parse_header(json, payload_bytes, shard_path, table, err);
     if (rc != YVEX_OK) {
         table->summary.malformed_shard_count++;
+        table->header_error_count++;
     }
     free(json);
     return rc;

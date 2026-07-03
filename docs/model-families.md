@@ -167,19 +167,26 @@ and report README/LICENSE presence without parsing contents. They do not perform
 remote lookup, hash files, verify upstream identity, create manifests, prove
 source identity, or imply source readiness.
 
+Native safetensors inventory fields are command-visible for Qwen and Gemma as
+header-only source evidence. They open top-level `.safetensors` files, read
+header lengths and JSON header bytes, count tensor records, dtype/rank/shape
+summaries, declared data bytes, and malformed headers, and keep payload bytes
+unloaded. Malformed headers are reported as source evidence, not executed or
+treated as runtime readiness.
+
 The report checks only local source-path pressure facts: concrete target slot,
 configured source path, source path existence, config/tokenizer file visibility,
 top-level safetensors presence, top-level source footprint, provenance fields,
-source manifest status, native inventory status, blockers, and next rows. It
-does not download sources, create source manifests, imply source readiness,
-emit artifacts, materialize tensors, inspect tensor payloads, implement Metal,
+native safetensors inventory, source manifest status, blockers, and next rows.
+It does not download sources, create source manifests, imply source readiness,
+emit artifacts, materialize tensors, load tensor payloads, implement Metal,
 execute Qwen or Gemma runtime paths, generate, evaluate, benchmark, or mark a
 release ready.
 
 Source family/profile fields, source artifact class fields, source footprint
-fields, and source provenance fields are command-visible for Qwen and Gemma.
-The next source pressure step is native safetensors inventory without tensor
-payload loading.
+fields, source provenance fields, and native safetensors inventory are
+command-visible for Qwen and Gemma. The next source pressure step is source
+tensor metadata inventory without tensor payload loading.
 
 ## Family Classification
 

@@ -139,6 +139,10 @@ pattern='native inventory implemented for Qw''en'
 scan_forbidden_claim "$pattern"
 pattern='native inventory implemented for Gem''ma'
 scan_forbidden_claim "$pattern"
+pattern='native inventory proves source rea''dy'
+scan_forbidden_claim "$pattern"
+pattern='native_inventory_rea''dy: true'
+scan_forbidden_claim "$pattern"
 pattern='Gemma runtime imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='Gemma generation imple''mented'
@@ -153,7 +157,15 @@ pattern='source_hash_veri''fied: true'
 scan_forbidden_claim "$pattern"
 pattern='source_remote_chec''ked: true'
 scan_forbidden_claim "$pattern"
+pattern='payload_loa''ded: true'
+scan_forbidden_claim "$pattern"
+pattern='native_safetensors_payload_loa''ded: true'
+scan_forbidden_claim "$pattern"
 pattern='generation_rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='benchmark_status: measu''red'
+scan_forbidden_claim "$pattern"
+pattern='release_rea''dy: true'
 scan_forbidden_claim "$pattern"
 pattern='20 tok/s achie''ved'
 scan_forbidden_claim "$pattern"

@@ -357,9 +357,10 @@ Quant/template/intake manifests:
 - `run`: daemon and accepted-only runtime lanes
 - `session`: materialization and runtime attachment lanes
 - `source-manifest`: source intake lanes, Qwen/Gemma source pressure report-only lanes
-- `source-manifest report --audit`: source artifact class/status, target artifact class/status, origin/authority, provenance, sidecar, tensor container, source footprint, and payload-read boundary fields
+- `source-manifest report --audit`: source artifact class/status, target artifact class/status, origin/authority, provenance, sidecar, tensor container, source footprint, native safetensors header inventory, and payload-read boundary fields
 - `source-manifest report`: source footprint counts top-level regular files and bytes only; it does not load tensor payloads, create manifests, or imply source readiness
 - `source-manifest report`: source provenance fields classify local/planned source state only; they do not perform remote lookup, hash files, prove identity, or imply source readiness
+- `source-manifest report`: native safetensors inventory reads safetensors headers only; payload bytes are not loaded, malformed headers are reported, and header inventory is not runtime readiness
 - `tensor-map`: source intake lanes
 - `tokenize`: fast regression lane
 - `tokenizer`: fast regression lane
