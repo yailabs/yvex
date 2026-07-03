@@ -8,8 +8,10 @@ Use a model-specific runbook when working with a concrete target.
 
 - `deepseek.md` - current DeepSeek selected artifact path from local safetensors to selected graph execution, bounded diagnostics, fullmodel inventory/materialization-plan/materialize/descriptor/family-runtime reports, attention class reports, KV cache class reports, context class reports, MoE class reports, and MoE tensor collection reports.
 - `glm.md` - GLM-5.2 official-source tensor target status, source-only fullmodel, attention, KV, context, MoE, and MoE tensor-collection unsupported report/descriptor/refusal, and download start/status checks.
-- `model-families.md` - family-level pressure lanes such as Qwen on Apple Silicon / Metal before they become concrete model-specific operator paths.
 - `common.md` - shared configuration, fullmodel report/plan/materialize/descriptor/family-runtime, attention, KV, context, MoE, and tensor-collection command-surface checks, graph-only checks, daemon diagnostics, and repository validation.
+
+Model-family integration taxonomy lives in `../model-families.md`. It is not a
+runbook and does not contain operator command lanes.
 
 ## Rules
 

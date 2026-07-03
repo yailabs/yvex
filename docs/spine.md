@@ -4977,6 +4977,7 @@ audited inputs:
   README.md
   docs/api.md
   docs/contract.md
+  docs/model-families.md
   docs/operator-runbook.md
   docs/runbooks/*
   include/yvex/*
@@ -5097,6 +5098,7 @@ should expand this into a full source/header-to-row map.
 | `README.md` | public docs | BLOCK 9 | public thesis and boundaries | boundary wording found | docs surface tests | low | keep; audit benchmark table wording later |
 | `docs/api.md` | public docs | BLOCK 9 | public API ownership map | boundary wording found | docs surface tests | low | keep |
 | `docs/contract.md` | public docs | BLOCK 9 | behavior contract | boundary wording found | docs surface tests | low | keep |
+| `docs/model-families.md` | public docs | BLOCK 3 | family integration taxonomy | dense/sparse promotion and non-claim wording found | docs surface tests | low | keep |
 | `docs/operator-runbook.md` | public docs | BLOCK 8 | operator routing index | preset/generation boundaries found | docs surface tests | low | keep |
 | `docs/runbooks/deepseek.md` | public runbook | BLOCK 8 | selected DeepSeek lanes | repeated no-generation boundaries found | docs surface tests | low | keep |
 | `docs/runbooks/glm.md` | public runbook | BLOCK 0/4 | GLM source/storage lane | source-only boundaries found | docs surface tests | low | keep |
@@ -5195,6 +5197,7 @@ See `## 5.1 Meta-Spine and Rebase Waves`.
 | `README.md` | engine thesis, selected runtime, future benchmark table shape | none | no internal IDs found; no achieved tok/s found | keep; review future table after benchmark harness |
 | `docs/api.md` | API ownership and future runtime surfaces | none | boundary wording separates future generation | keep |
 | `docs/contract.md` | runtime/CLI/server behavior contract | none | says provider generation waits for runtime generation | keep |
+| `docs/model-families.md` | family integration taxonomy | none | separates family classification from support | keep |
 | `docs/operator-runbook.md` | operator flows and bounded generation lane | none | explicitly says full generation/eval/bench unsupported | keep |
 | `docs/runbooks/deepseek.md` | selected DeepSeek lanes | none | repeatedly says not full generation/benchmark | keep |
 | `docs/runbooks/glm.md` | GLM source/storage lane | none | says not GLM generation/benchmark | keep |
@@ -7558,7 +7561,7 @@ multi-family official-source open-weight intake roadmap
 source-tensor-first GLM-5.2 huge-MoE pressure target
 future YVEX-produced GGUF target path
 huge-model storage-stream roadmap
-docs: docs/api.md, docs/contract.md, docs/operator-runbook.md, docs/spine.md
+docs: docs/api.md, docs/contract.md, docs/model-families.md, docs/operator-runbook.md, docs/spine.md
 public README: prose-first runtime boundary, public-safe artifact wording
 artifact docs: operator-local paths only, no personal absolute paths
 tests: compact runners, fixtures, vectors, and integrity regression harnesses
@@ -7572,6 +7575,7 @@ Documentation roles:
 README.md: public technical thesis and project overview
 docs/api.md: public C API surface, headers, ownership, error/capability map
 docs/contract.md: runtime/CLI/filesystem/backend/server behavior contract
+docs/model-families.md: family integration taxonomy and dense/sparse promotion rules
 docs/operator-runbook.md: runbook index and routing surface
 docs/runbooks/: model-scoped and common operator copy-pack lanes
 MODEL_ARTIFACTS.md: external artifact cards and selected pressure facts
@@ -8893,7 +8897,8 @@ not a model capability. A build flag is not runtime support.
 - Do not claim advanced Runtime KV capacity work until the relevant allocator,
   estimator, spill, or quantization behavior exists in code and tests.
 - No docs sprawl beyond `docs/api.md`, `docs/contract.md`,
-  `docs/operator-runbook.md`, `docs/runbooks/`, and `docs/spine.md`.
+  `docs/model-families.md`, `docs/operator-runbook.md`, `docs/runbooks/`,
+  and `docs/spine.md`.
 - Keep DeepSeek as the selected-runtime-slice pressure target and GLM-5.2
   official safetensors as the huge-model source-tensor pressure target unless
   this spine changes.

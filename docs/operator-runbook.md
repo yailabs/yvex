@@ -138,17 +138,18 @@ Covers:
 
 ### Model Families
 
-Use this for family-level pressure lanes before they become model-specific
-operator paths.
+Use this for the model-family integration taxonomy before a family becomes a
+model-specific operator path.
 
-- `docs/runbooks/model-families.md`
+- `docs/model-families.md`
 
 Covers:
 
-- Qwen on Apple Silicon / Metal pressure-lane reporting;
-- source, hardware, backend, candidate, blocker, and next-row fields;
-- explicit no-download, no-Metal-support, no-runtime, no-generation, no-eval,
-  and no-benchmark boundaries.
+- how a family enters the engine from source tensors;
+- dense versus sparse/MoE promotion paths;
+- family adapter, artifact contract, runtime descriptor, residency, graph, KV,
+  logits, sampling, support-level, and non-claim rules;
+- why family classification is not model support.
 
 ## Current Short Entry
 

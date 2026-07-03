@@ -6,13 +6,13 @@ test -f AGENTS.md
 test -f MODEL_ARTIFACTS.md
 test -f docs/api.md
 test -f docs/contract.md
+test -f docs/model-families.md
 test -f docs/operator-runbook.md
 test -d docs/runbooks
 test -f docs/runbooks/README.md
 test -f docs/runbooks/deepseek.md
 test -f docs/runbooks/glm.md
 test -f docs/runbooks/common.md
-test -f docs/runbooks/model-families.md
 test -f docs/spine.md
 
 test ! -e docs/README.md
@@ -53,14 +53,14 @@ if grep -nF "not a full transformer run" README.md ||
 fi
 
 count="$(find docs -maxdepth 1 -type f | wc -l | tr -d ' ')"
-if [ "$count" -ne 4 ]; then
+if [ "$count" -ne 5 ]; then
   echo "unexpected docs file count: $count"
   find docs -maxdepth 1 -type f | sort
   exit 1
 fi
 
 runbook_count="$(find docs/runbooks -maxdepth 1 -type f | wc -l | tr -d ' ')"
-if [ "$runbook_count" -ne 5 ]; then
+if [ "$runbook_count" -ne 4 ]; then
   echo "unexpected runbook file count: $runbook_count"
   find docs/runbooks -maxdepth 1 -type f | sort
   exit 1
@@ -72,7 +72,6 @@ unexpected_runbooks="$(
     ! -name deepseek.md \
     ! -name glm.md \
     ! -name common.md \
-    ! -name model-families.md \
     -print
 )"
 if [ -n "$unexpected_runbooks" ]; then
@@ -81,7 +80,7 @@ if [ -n "$unexpected_runbooks" ]; then
   exit 1
 fi
 
-if grep -nE 'OPERATOR\.PATHS\.0|MODEL\.TARGET\.PATHS\.0|MODEL\.PREPARE\.0|MODEL\.CHECK\.0|SPINE\.GENERATION\.TARGET\.0|DOCS\.RUNBOOKS\.MODEL\.0' docs/operator-runbook.md docs/runbooks/*.md; then
+if grep -nE 'OPERATOR\.PATHS\.0|MODEL\.TARGET\.PATHS\.0|MODEL\.PREPARE\.0|MODEL\.CHECK\.0|SPINE\.GENERATION\.TARGET\.0|DOCS\.RUNBOOKS\.MODEL\.0' docs/operator-runbook.md docs/model-families.md docs/runbooks/*.md; then
   echo "public runbooks must not expose internal delivery IDs" >&2
   exit 1
 fi
