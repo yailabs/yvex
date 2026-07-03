@@ -152,17 +152,25 @@ unknown-source-artifact
 These values classify evidence only. They do not claim source readiness,
 artifact emission, runtime support, generation, or benchmark readiness.
 
+Source footprint fields are also command-visible for Qwen and Gemma source
+pressure reports. They count only top-level regular files and byte sizes from
+the configured or explicit source directory. The report classifies
+`.safetensors`, `.bin`, `.dat`, JSON/config/tokenizer sidecars, total bytes,
+sidecar bytes, other bytes, largest file, and footprint class without reading
+tensor payloads, parsing safetensors headers, parsing tokenizer JSON, hashing
+files, creating manifests, or proving provenance.
+
 The report checks only local source-path pressure facts: concrete target slot,
 configured source path, source path existence, config/tokenizer file visibility,
-top-level safetensors presence, source manifest status, native inventory status,
-blockers, and next rows. It does not download sources, create source manifests,
-emit artifacts, materialize tensors, inspect tensor payloads, implement Metal,
-execute Qwen or Gemma runtime paths, generate, evaluate, benchmark, or mark a
-release ready.
+top-level safetensors presence, top-level source footprint, source manifest
+status, native inventory status, blockers, and next rows. It does not download
+sources, create source manifests, imply source readiness, emit artifacts,
+materialize tensors, inspect tensor payloads, implement Metal, execute Qwen or
+Gemma runtime paths, generate, evaluate, benchmark, or mark a release ready.
 
-Source family/profile fields and source artifact class fields are
-command-visible for Qwen and Gemma. The next source pressure step is source
-shard count and footprint reporting without tensor payload loading.
+Source family/profile fields, source artifact class fields, and source
+footprint fields are command-visible for Qwen and Gemma. The next source
+pressure step is provenance fields without tensor payload loading.
 
 ## Family Classification
 

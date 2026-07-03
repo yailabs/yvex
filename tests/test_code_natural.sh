@@ -131,6 +131,10 @@ pattern='Qwen generation imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='Gemma source down''loaded'
 scan_forbidden_claim "$pattern"
+pattern='native inventory implemented for Qw''en'
+scan_forbidden_claim "$pattern"
+pattern='native inventory implemented for Gem''ma'
+scan_forbidden_claim "$pattern"
 pattern='Gemma runtime imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='Gemma generation imple''mented'

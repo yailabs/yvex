@@ -744,7 +744,20 @@ typedef struct {
     int tokenizer_config_exists;
     int manifest_exists;
     int native_inventory_exists;
+    unsigned long long source_file_count;
+    unsigned long long source_regular_file_count;
     unsigned long long safetensors_count;
+    unsigned long long bin_count;
+    unsigned long long dat_count;
+    unsigned long long json_count;
+    unsigned long long tokenizer_file_count;
+    unsigned long long config_file_count;
+    unsigned long long total_size_bytes;
+    unsigned long long safetensors_size_bytes;
+    unsigned long long sidecar_size_bytes;
+    unsigned long long other_size_bytes;
+    unsigned long long largest_source_file_bytes;
+    char largest_source_file_name[YVEX_PATH_CAP];
     const char *blockers[32];
     unsigned long blocker_count;
 } yvex_qwen_source_pressure_report;
@@ -842,37 +855,107 @@ static int qwen_source_check_file(const char *dir, const char *name)
     return qwen_source_stat_kind(path, 0);
 }
 
-static unsigned long long qwen_source_count_top_safetensors(const char *dir)
+static int qwen_source_is_config_file(const char *name)
+{
+    return name && (strcmp(name, "config.json") == 0 ||
+                    strcmp(name, "generation_config.json") == 0);
+}
+
+static int qwen_source_is_tokenizer_file(const char *name)
+{
+    return name && (strcmp(name, "tokenizer.json") == 0 ||
+                    strcmp(name, "tokenizer_config.json") == 0);
+}
+
+static int qwen_source_is_sidecar_file(const char *name)
+{
+    if (!name) {
+        return 0;
+    }
+    return qwen_source_is_config_file(name) ||
+           qwen_source_is_tokenizer_file(name) ||
+           strcmp(name, "README.md") == 0 ||
+           yvex_sm_ends_with(name, ".json");
+}
+
+static unsigned long long qwen_source_stat_size_bytes(const struct stat *st)
+{
+    if (!st || st->st_size <= 0) {
+        return 0;
+    }
+    return (unsigned long long)st->st_size;
+}
+
+static void qwen_source_scan_top_footprint(const char *dir,
+                                           yvex_qwen_source_pressure_report *report)
 {
     DIR *dp;
     struct dirent *ent;
-    unsigned long long count = 0;
 
-    if (!dir || dir[0] == '\0') {
-        return 0;
+    if (!dir || dir[0] == '\0' || !report) {
+        return;
     }
     dp = opendir(dir);
     if (!dp) {
-        return 0;
+        return;
     }
     while ((ent = readdir(dp)) != NULL) {
         char path[YVEX_PATH_CAP];
+        struct stat st;
+        unsigned long long size_bytes;
+        int is_safetensors;
+        int is_sidecar;
 
         if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) {
-            continue;
-        }
-        if (!yvex_sm_ends_with(ent->d_name, ".safetensors")) {
             continue;
         }
         if (!qwen_source_path_format(path, sizeof(path), "%s/%s", dir, ent->d_name)) {
             continue;
         }
-        if (qwen_source_stat_kind(path, 0)) {
-            count++;
+        if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) {
+            continue;
+        }
+
+        size_bytes = qwen_source_stat_size_bytes(&st);
+        is_safetensors = yvex_sm_ends_with(ent->d_name, ".safetensors");
+        is_sidecar = qwen_source_is_sidecar_file(ent->d_name);
+
+        report->source_file_count++;
+        report->source_regular_file_count++;
+        report->total_size_bytes += size_bytes;
+
+        if (is_safetensors) {
+            report->safetensors_count++;
+            report->safetensors_size_bytes += size_bytes;
+        } else if (is_sidecar) {
+            report->sidecar_size_bytes += size_bytes;
+        } else {
+            report->other_size_bytes += size_bytes;
+        }
+        if (yvex_sm_ends_with(ent->d_name, ".bin")) {
+            report->bin_count++;
+        }
+        if (yvex_sm_ends_with(ent->d_name, ".dat")) {
+            report->dat_count++;
+        }
+        if (yvex_sm_ends_with(ent->d_name, ".json")) {
+            report->json_count++;
+        }
+        if (qwen_source_is_tokenizer_file(ent->d_name)) {
+            report->tokenizer_file_count++;
+        }
+        if (qwen_source_is_config_file(ent->d_name)) {
+            report->config_file_count++;
+        }
+        if (size_bytes > report->largest_source_file_bytes) {
+            report->largest_source_file_bytes = size_bytes;
+            snprintf(report->largest_source_file_name,
+                     sizeof(report->largest_source_file_name),
+                     "%s",
+                     ent->d_name);
         }
     }
     closedir(dp);
-    return count;
 }
 
 static void qwen_source_choose_report_file(char *out, size_t cap,
@@ -1018,6 +1101,40 @@ static const char *qwen_source_target_artifact_status(const yvex_source_family_p
     return "planned";
 }
 
+static const char *qwen_source_footprint_class(const yvex_qwen_source_pressure_report *report)
+{
+    const unsigned long long mib = 1024ULL * 1024ULL;
+    const unsigned long long gib = 1024ULL * mib;
+
+    if (!report || !report->source_exists) {
+        return "missing";
+    }
+    if (report->source_regular_file_count == 0) {
+        return "empty";
+    }
+    if (report->total_size_bytes < 100ULL * mib) {
+        return "tiny";
+    }
+    if (report->total_size_bytes < 5ULL * gib) {
+        return "small";
+    }
+    if (report->total_size_bytes < 30ULL * gib) {
+        return "medium";
+    }
+    if (report->total_size_bytes < 200ULL * gib) {
+        return "large";
+    }
+    return "huge";
+}
+
+static const char *qwen_source_footprint_status(const yvex_qwen_source_pressure_report *report)
+{
+    if (!report || !report->source_exists) {
+        return "missing";
+    }
+    return "report-only";
+}
+
 static int qwen_source_build_report(const yvex_qwen_source_report_options *options,
                                     yvex_qwen_source_pressure_report *report)
 {
@@ -1076,8 +1193,7 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
             qwen_source_check_file(report->source_path, "tokenizer.json");
         report->tokenizer_config_exists =
             qwen_source_check_file(report->source_path, "tokenizer_config.json");
-        report->safetensors_count =
-            qwen_source_count_top_safetensors(report->source_path);
+        qwen_source_scan_top_footprint(report->source_path, report);
     }
 
     qwen_source_choose_report_file(report->manifest_path, sizeof(report->manifest_path),
@@ -1100,11 +1216,11 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
     if (!report->source_exists) {
         report->status = "source-target-profiled";
         report->top_blocker = options->profile->source_path_blocker;
-        report->next_row = "V010.SOURCE.3";
+        report->next_row = "V010.SOURCE.4";
     } else if (!report->manifest_exists) {
         report->status = "source-present-report-only";
         report->top_blocker = options->profile->source_manifest_blocker;
-        report->next_row = "V010.SOURCE.3";
+        report->next_row = "V010.SOURCE.4";
     } else if (!report->native_inventory_exists) {
         report->status = "source-present-report-only";
         report->top_blocker = options->profile->native_inventory_blocker;
@@ -1149,6 +1265,11 @@ static void qwen_source_print_normal(const yvex_qwen_source_report_options *opti
     printf("artifact: %s  status=%s\n",
            options->profile->target_artifact_class,
            qwen_source_target_artifact_status(options->profile));
+    printf("files: %llu  safetensors: %llu  bytes: %llu  footprint: %s\n",
+           report->source_file_count,
+           report->safetensors_count,
+           report->total_size_bytes,
+           qwen_source_footprint_class(report));
     printf("top_blocker: %s\n", report->top_blocker);
     printf("next: %s\n", report->next_row);
     printf("boundary: source report only; no artifact/runtime/generation/benchmark\n");
@@ -1158,16 +1279,17 @@ static void qwen_source_print_table(const yvex_qwen_source_report_options *optio
                                     const yvex_qwen_source_pressure_report *report)
 {
     printf("SOURCE PRESSURE  release=%s\n\n", options->release);
-    printf("%-6s  %-24s  %-31s  %-7s  %-27s  %-8s  %s\n",
-           "FAMILY", "TARGET", "SOURCE_CLASS", "SOURCE",
-           "TARGET_ARTIFACT_CLASS", "ARTIFACT", "NEXT");
-    printf("%-6s  %-24s  %-31s  %-7s  %-27s  %-8s  %s\n",
+    printf("%-6s  %-24s  %-7s  %5s  %11s  %5s  %-9s  %s\n",
+           "FAMILY", "TARGET", "SOURCE", "FILES", "SAFETENSORS",
+           "BYTES", "FOOTPRINT", "NEXT");
+    printf("%-6s  %-24s  %-7s  %5llu  %11llu  %5llu  %-9s  %s\n",
            options->profile->family_key,
            options->target,
-           options->profile->source_artifact_class,
            report->source_state,
-           options->profile->target_artifact_class,
-           qwen_source_target_artifact_status(options->profile),
+           report->source_file_count,
+           report->safetensors_count,
+           report->total_size_bytes,
+           qwen_source_footprint_class(report),
            report->next_row);
 }
 
@@ -1216,6 +1338,27 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
     printf("source_path_source: %s\n", report->source_path_source);
     printf("source_path_status: %s\n", report->source_state);
     printf("source_exists: %s\n", report->source_exists ? "true" : "false");
+    printf("source_file_count: %llu\n", report->source_file_count);
+    printf("source_regular_file_count: %llu\n", report->source_regular_file_count);
+    printf("source_safetensors_count: %llu\n", report->safetensors_count);
+    printf("source_bin_count: %llu\n", report->bin_count);
+    printf("source_dat_count: %llu\n", report->dat_count);
+    printf("source_json_count: %llu\n", report->json_count);
+    printf("source_tokenizer_file_count: %llu\n", report->tokenizer_file_count);
+    printf("source_config_file_count: %llu\n", report->config_file_count);
+    printf("source_total_size_bytes: %llu\n", report->total_size_bytes);
+    printf("source_safetensors_size_bytes: %llu\n", report->safetensors_size_bytes);
+    printf("source_sidecar_size_bytes: %llu\n", report->sidecar_size_bytes);
+    printf("source_other_size_bytes: %llu\n", report->other_size_bytes);
+    printf("source_footprint_class: %s\n", qwen_source_footprint_class(report));
+    printf("source_footprint_status: %s\n", qwen_source_footprint_status(report));
+    printf("source_count_scope: top-level-regular-files\n");
+    printf("source_payload_loaded: false\n");
+    printf("largest_source_file_bytes: %llu\n", report->largest_source_file_bytes);
+    printf("largest_source_file_name: %s\n",
+           report->largest_source_file_name[0]
+               ? report->largest_source_file_name
+               : "none");
     printf("config_status: %s\n", qwen_source_present_missing(report->config_exists));
     printf("tokenizer_status: %s\n", qwen_source_tokenizer_status(report));
     printf("generation_config_status: %s\n",
@@ -1260,7 +1403,8 @@ static void qwen_source_report_help(FILE *fp)
     fprintf(fp, "  --target qwen-metal-portability|qwen-small|qwen-medium|gemma-dense-portability\n");
     fprintf(fp, "  --include-files --include-config --include-blockers --include-next\n");
     fprintf(fp, "  --audit | --output normal|table|audit\n\n");
-    fprintf(fp, "Report fields include source artifact class and target artifact class evidence.\n");
+    fprintf(fp, "Report fields include source artifact class, target artifact class, and source footprint evidence.\n");
+    fprintf(fp, "Source footprint reports count top-level regular files and bytes without loading tensor payloads.\n");
     fprintf(fp, "The source pressure report inspects source-path readiness only. It does not download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
 }
 
