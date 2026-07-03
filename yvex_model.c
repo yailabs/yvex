@@ -1288,6 +1288,22 @@ typedef struct {
     int eligible;
 } yvex_dense_candidate_fact;
 
+typedef struct {
+    const char *id;
+    const char *class_name;
+    const char *stage;
+    const char *eligibility;
+    const char *source_status;
+    const char *artifact_status;
+    const char *tensor_map_status;
+    const char *backend_status;
+    const char *runtime_status;
+    const char *generation_status;
+    const char *benchmark_status;
+    const char *blockers[16];
+    unsigned int blocker_count;
+} yvex_qwen_metal_candidate_fact;
+
 static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
     {
         "deepseek4-v4-flash-selected-embed",
@@ -1646,6 +1662,121 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
 static const unsigned long dense_candidate_fact_count =
     sizeof(dense_candidate_facts) / sizeof(dense_candidate_facts[0]);
 
+static const char *qwen_metal_blockers[] = {
+    "missing-qwen-source-target",
+    "missing-qwen-source-manifest",
+    "missing-qwen-native-inventory",
+    "missing-qwen-source-config",
+    "missing-qwen-model-class-profile",
+    "missing-qwen-tensor-map",
+    "missing-qwen-tokenizer-map",
+    "missing-qwen-output-head-map",
+    "missing-qwen-yvex-artifact",
+    "missing-qwen-artifact-identity",
+    "missing-metal-hardware-profile",
+    "missing-metal-backend-feasibility",
+    "missing-metal-allocation-boundary",
+    "missing-metal-transfer-boundary",
+    "missing-metal-graph-primitive-parity",
+    "missing-unified-memory-residency-plan",
+    "missing-qwen-fullmodel-report",
+    "missing-qwen-materialization-plan",
+    "missing-real-prefill",
+    "missing-real-kv-path",
+    "missing-real-decode",
+    "missing-real-output-head-logits",
+    "missing-real-vocabulary-sampling",
+    "missing-generation-loop-over-real-state",
+    "missing-eval-path",
+    "missing-benchmark-path",
+};
+
+static const unsigned long qwen_metal_blocker_count =
+    sizeof(qwen_metal_blockers) / sizeof(qwen_metal_blockers[0]);
+
+static const yvex_qwen_metal_candidate_fact qwen_metal_candidate_facts[] = {
+    {
+        "qwen-small",
+        "metal-reduced-full-runtime-pressure",
+        "report-only",
+        "pressure-target-only",
+        "missing",
+        "missing",
+        "missing",
+        "unsupported",
+        "unsupported",
+        "unsupported-full-model",
+        "not-measured",
+        {
+            "missing-qwen-source-target",
+            "missing-qwen-source-manifest",
+            "missing-qwen-native-inventory",
+            "missing-qwen-model-class-profile",
+            "missing-qwen-tensor-map",
+            "missing-qwen-yvex-artifact",
+            "missing-metal-backend-feasibility",
+            "missing-real-prefill",
+            "missing-real-output-head-logits",
+        },
+        9,
+    },
+    {
+        "qwen-medium",
+        "metal-reduced-full-runtime-pressure",
+        "report-only",
+        "pressure-target-only",
+        "missing",
+        "missing",
+        "missing",
+        "unsupported",
+        "unsupported",
+        "unsupported-full-model",
+        "not-measured",
+        {
+            "missing-qwen-source-target",
+            "missing-qwen-source-manifest",
+            "missing-qwen-native-inventory",
+            "missing-qwen-model-class-profile",
+            "missing-qwen-tensor-map",
+            "missing-qwen-yvex-artifact",
+            "missing-metal-hardware-profile",
+            "missing-metal-backend-feasibility",
+            "missing-unified-memory-residency-plan",
+            "missing-real-decode",
+        },
+        10,
+    },
+    {
+        "qwen-metal-portability",
+        "metal-reduced-full-runtime-pressure",
+        "report-only",
+        "pressure-target-only",
+        "planned",
+        "planned",
+        "missing",
+        "unsupported",
+        "unsupported",
+        "unsupported-full-model",
+        "not-measured",
+        {
+            "missing-qwen-source-target",
+            "missing-qwen-source-config",
+            "missing-qwen-model-class-profile",
+            "missing-qwen-tokenizer-map",
+            "missing-qwen-output-head-map",
+            "missing-metal-backend-feasibility",
+            "missing-metal-allocation-boundary",
+            "missing-metal-graph-primitive-parity",
+            "missing-real-kv-path",
+            "missing-generation-loop-over-real-state",
+        },
+        10,
+    },
+};
+
+static const unsigned long qwen_metal_candidate_fact_count =
+    sizeof(qwen_metal_candidate_facts) / sizeof(qwen_metal_candidate_facts[0]);
+
 static const yvex_model_target_record *find_model_target(const char *target_id)
 {
     unsigned long i;
@@ -1717,6 +1848,26 @@ static void print_model_target_dense_candidate_help(FILE *fp)
 {
     print_model_target_dense_candidate_usage(fp);
     fprintf(fp, "\nThe dense-candidate report evaluates whether a dense model target can become the first v0.1.0 full-runtime candidate. It does not download weights, emit artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+}
+
+static void print_model_target_qwen_metal_usage(FILE *fp)
+{
+    fprintf(fp, "usage: yvex model-target qwen-metal --release v0.1.0 [options]\n");
+    fprintf(fp, "       yvex model-target qwen-metal --help\n");
+    fprintf(fp, "\noptions:\n");
+    fprintf(fp, "  --target TARGET                report one planned Qwen/Metal candidate slot\n");
+    fprintf(fp, "  --include-candidates           include planned candidate slot blocks\n");
+    fprintf(fp, "  --include-hardware             include Apple Silicon / Metal hardware pressure fields\n");
+    fprintf(fp, "  --include-backend              include Metal backend pressure fields\n");
+    fprintf(fp, "  --include-source               include Qwen source/config pressure fields\n");
+    fprintf(fp, "  --include-blockers             include stable blocker fields\n");
+    fprintf(fp, "  --include-next                 include next required row fields\n");
+}
+
+static void print_model_target_qwen_metal_help(FILE *fp)
+{
+    print_model_target_qwen_metal_usage(fp);
+    fprintf(fp, "\nThe Qwen/Metal pressure report records a planned reduced-scale Apple Silicon / Metal lane for future full-runtime work. It does not download weights, implement Metal, emit Qwen artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
 }
 
 static int target_decision_is_full_runtime_candidate(const yvex_model_target_record *record)
@@ -2347,6 +2498,166 @@ static int print_model_target_dense_candidate_report(const char *release,
     return 0;
 }
 
+static const yvex_qwen_metal_candidate_fact *find_qwen_metal_candidate_fact(const char *id)
+{
+    unsigned long i;
+
+    if (!id) return NULL;
+    for (i = 0; i < qwen_metal_candidate_fact_count; ++i) {
+        if (strcmp(qwen_metal_candidate_facts[i].id, id) == 0) {
+            return &qwen_metal_candidate_facts[i];
+        }
+    }
+    return NULL;
+}
+
+static void print_qwen_metal_candidate(unsigned long index,
+                                       const yvex_qwen_metal_candidate_fact *fact,
+                                       int include_blockers)
+{
+    unsigned int i;
+
+    if (!fact) return;
+    printf("qwen_candidate_%lu_id: %s\n", index, fact->id);
+    printf("qwen_candidate_%lu_class: %s\n", index, fact->class_name);
+    printf("qwen_candidate_%lu_stage: %s\n", index, fact->stage);
+    printf("qwen_candidate_%lu_eligibility: %s\n", index, fact->eligibility);
+    printf("qwen_candidate_%lu_source_status: %s\n", index, fact->source_status);
+    printf("qwen_candidate_%lu_artifact_status: %s\n", index, fact->artifact_status);
+    printf("qwen_candidate_%lu_tensor_map_status: %s\n", index, fact->tensor_map_status);
+    printf("qwen_candidate_%lu_backend_status: %s\n", index, fact->backend_status);
+    printf("qwen_candidate_%lu_runtime_status: %s\n", index, fact->runtime_status);
+    printf("qwen_candidate_%lu_generation_status: %s\n", index, fact->generation_status);
+    printf("qwen_candidate_%lu_benchmark_status: %s\n", index, fact->benchmark_status);
+    printf("qwen_candidate_%lu_blocker_count: %u\n", index, fact->blocker_count);
+    if (include_blockers) {
+        for (i = 0; i < fact->blocker_count; ++i) {
+            printf("qwen_candidate_%lu_blocker_%u: %s\n", index, i, fact->blockers[i]);
+        }
+    }
+}
+
+static int print_model_target_qwen_metal_missing(const char *release, const char *target)
+{
+    printf("model-target: qwen-metal\n");
+    printf("status: qwen-metal-pressure-report-fail\n");
+    printf("release: %s\n", release && release[0] ? release : "v0.1.0");
+    printf("target_requested: %s\n", target && target[0] ? target : "none");
+    printf("lane_id: qwen-metal\n");
+    printf("target_family: qwen\n");
+    printf("target_class: metal-reduced-full-runtime-pressure\n");
+    printf("runtime_shape: dense-or-dense-like-candidate-pending-source-config\n");
+    printf("hardware_lane: apple-silicon-metal\n");
+    printf("backend_lane: metal-planned\n");
+    printf("full_runtime_candidate_status: candidate-planned\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    return 2;
+}
+
+static int print_model_target_qwen_metal_unsupported_release(const char *release)
+{
+    printf("model-target: qwen-metal\n");
+    printf("status: unsupported-release\n");
+    printf("release: %s\n", release && release[0] ? release : "unknown");
+    printf("lane_id: qwen-metal\n");
+    printf("target_family: qwen\n");
+    printf("target_class: metal-reduced-full-runtime-pressure\n");
+    printf("runtime_shape: dense-or-dense-like-candidate-pending-source-config\n");
+    printf("hardware_lane: apple-silicon-metal\n");
+    printf("backend_lane: metal-planned\n");
+    printf("full_runtime_candidate_status: missing\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    return 2;
+}
+
+static int print_model_target_qwen_metal_report(const char *release,
+                                                const char *target_id,
+                                                int include_candidates,
+                                                int include_hardware,
+                                                int include_backend,
+                                                int include_source,
+                                                int include_blockers,
+                                                int include_next)
+{
+    const yvex_qwen_metal_candidate_fact *target_fact = NULL;
+    unsigned long i;
+
+    if (target_id) {
+        target_fact = find_qwen_metal_candidate_fact(target_id);
+        if (!target_fact) {
+            return print_model_target_qwen_metal_missing(release, target_id);
+        }
+    }
+
+    printf("model-target: qwen-metal\n");
+    printf("status: qwen-metal-pressure-report\n");
+    printf("release: %s\n", release);
+    printf("lane_id: qwen-metal\n");
+    printf("target_family: qwen\n");
+    printf("target_class: metal-reduced-full-runtime-pressure\n");
+    printf("stage: report-only\n");
+    printf("eligibility: pressure-target-only\n");
+    printf("runtime_shape: dense-or-dense-like-candidate-pending-source-config\n");
+    printf("hardware_lane: apple-silicon-metal\n");
+    printf("backend_lane: metal-planned\n");
+    printf("source_status: missing\n");
+    printf("artifact_status: missing\n");
+    printf("metal_backend_status: unsupported\n");
+    printf("qwen_runtime_status: unsupported\n");
+    printf("full_runtime_candidate_status: candidate-planned\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+
+    if (include_candidates || target_id) {
+        if (target_fact) {
+            printf("qwen_candidate_count: 1\n");
+            print_qwen_metal_candidate(0, target_fact, include_blockers);
+        } else {
+            printf("qwen_candidate_count: %lu\n", qwen_metal_candidate_fact_count);
+            for (i = 0; i < qwen_metal_candidate_fact_count; ++i) {
+                print_qwen_metal_candidate(i, &qwen_metal_candidate_facts[i], include_blockers);
+            }
+        }
+    }
+
+    if (include_hardware) {
+        printf("hardware_profile_status: planned\n");
+        printf("machine_profile_required: true\n");
+        printf("unified_memory_report_required: true\n");
+        printf("metal_device_report_required: true\n");
+    }
+    if (include_backend) {
+        printf("metal_feasibility_status: missing\n");
+        printf("metal_allocation_status: unsupported\n");
+        printf("metal_graph_primitive_status: unsupported\n");
+        printf("cuda_lane_independent: true\n");
+    }
+    if (include_source) {
+        printf("source_family: qwen\n");
+        printf("source_manifest_status: missing\n");
+        printf("native_tensor_inventory_status: missing\n");
+        printf("source_config_status: missing\n");
+        printf("model_class_profile_status: missing\n");
+    }
+    if (include_blockers) {
+        for (i = 0; i < qwen_metal_blocker_count; ++i) {
+            printf("blocker_%lu: %s\n", i, qwen_metal_blockers[i]);
+        }
+    }
+    if (include_next) {
+        printf("next_required_rows: V010.SOURCE.9\n");
+    }
+    return 0;
+}
+
 static int print_model_target_decision_unsupported_release(const char *release)
 {
     const char *value;
@@ -2522,6 +2833,7 @@ static void print_model_target_usage(FILE *fp)
     fprintf(fp, "       yvex model-target list\n");
     fprintf(fp, "       yvex model-target candidate --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target dense-candidate --release v0.1.0 [options]\n");
+    fprintf(fp, "       yvex model-target qwen-metal --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target decision --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR]\n");
 }
@@ -2540,6 +2852,9 @@ void yvex_model_target_help(FILE *fp)
     fprintf(fp, "\nDense candidate report:\n");
     fprintf(fp, "  yvex model-target dense-candidate --release v0.1.0 --include-candidates --include-requirements --include-blockers --include-next\n");
     fprintf(fp, "  The dense-candidate report evaluates whether a dense model target can become the first v0.1.0 full-runtime candidate. It does not download weights, emit artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    fprintf(fp, "\nQwen/Metal pressure report:\n");
+    fprintf(fp, "  yvex model-target qwen-metal --release v0.1.0 --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next\n");
+    fprintf(fp, "  The Qwen/Metal pressure report records a planned reduced-scale Apple Silicon / Metal lane for future full-runtime work. It does not download weights, implement Metal, emit Qwen artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "\nModel targets are pressure objects, not capability claims.\n");
     fprintf(fp, "External GGUFs and external runners are reference evidence only.\n");
     fprintf(fp, "Model-target path reporting does not read model payloads, create artifacts, register aliases, or claim runtime support.\n");
@@ -2890,6 +3205,70 @@ int yvex_model_target_command(int argc, char **argv)
                                                          include_requirements,
                                                          include_blockers,
                                                          include_next);
+    }
+    if (strcmp(argv[2], "qwen-metal") == 0) {
+        const char *release = NULL;
+        const char *target_id = NULL;
+        int include_candidates = 0;
+        int include_hardware = 0;
+        int include_backend = 0;
+        int include_source = 0;
+        int include_blockers = 0;
+        int include_next = 0;
+
+        for (i = 3; i < argc; ++i) {
+            if (strcmp(argv[i], "--help") == 0) {
+                if (argc != 4) {
+                    print_model_target_qwen_metal_usage(stderr);
+                    return 2;
+                }
+                print_model_target_qwen_metal_help(stdout);
+                return 0;
+            } else if (strcmp(argv[i], "--release") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "model-target qwen-metal: --release requires VERSION\n");
+                    return 2;
+                }
+                release = argv[++i];
+            } else if (strcmp(argv[i], "--target") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "model-target qwen-metal: --target requires TARGET\n");
+                    return 2;
+                }
+                target_id = argv[++i];
+            } else if (strcmp(argv[i], "--include-candidates") == 0) {
+                include_candidates = 1;
+            } else if (strcmp(argv[i], "--include-hardware") == 0) {
+                include_hardware = 1;
+            } else if (strcmp(argv[i], "--include-backend") == 0) {
+                include_backend = 1;
+            } else if (strcmp(argv[i], "--include-source") == 0) {
+                include_source = 1;
+            } else if (strcmp(argv[i], "--include-blockers") == 0) {
+                include_blockers = 1;
+            } else if (strcmp(argv[i], "--include-next") == 0) {
+                include_next = 1;
+            } else {
+                fprintf(stderr, "model-target qwen-metal: unknown option: %s\n", argv[i]);
+                return 2;
+            }
+        }
+        if (!release || release[0] == '\0') {
+            fprintf(stderr, "model-target qwen-metal: --release is required\n");
+            print_model_target_qwen_metal_usage(stderr);
+            return 2;
+        }
+        if (strcmp(release, "v0.1.0") != 0) {
+            return print_model_target_qwen_metal_unsupported_release(release);
+        }
+        return print_model_target_qwen_metal_report(release,
+                                                    target_id,
+                                                    include_candidates,
+                                                    include_hardware,
+                                                    include_backend,
+                                                    include_source,
+                                                    include_blockers,
+                                                    include_next);
     }
     if (strcmp(argv[2], "decision") == 0) {
         const yvex_model_target_record *candidate_filter = NULL;

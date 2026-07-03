@@ -213,6 +213,14 @@ pattern='real_deepseek_generation: tr''ue'
 scan_forbidden_claim "$pattern"
 pattern='benchmark_status: mea''sured'
 scan_forbidden_claim "$pattern"
+pattern='qwen_runtime_status: sup''ported'
+scan_forbidden_claim "$pattern"
+pattern='metal_backend_status: sup''ported'
+scan_forbidden_claim "$pattern"
+pattern='Qwen generation imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='Metal support imple''mented'
+scan_forbidden_claim "$pattern"
 pattern='provider generation imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='streaming generation imple''mented'

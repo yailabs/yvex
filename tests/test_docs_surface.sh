@@ -12,6 +12,7 @@ test -f docs/runbooks/README.md
 test -f docs/runbooks/deepseek.md
 test -f docs/runbooks/glm.md
 test -f docs/runbooks/common.md
+test -f docs/runbooks/model-families.md
 test -f docs/spine.md
 
 test ! -e docs/README.md
@@ -59,7 +60,7 @@ if [ "$count" -ne 4 ]; then
 fi
 
 runbook_count="$(find docs/runbooks -maxdepth 1 -type f | wc -l | tr -d ' ')"
-if [ "$runbook_count" -ne 4 ]; then
+if [ "$runbook_count" -ne 5 ]; then
   echo "unexpected runbook file count: $runbook_count"
   find docs/runbooks -maxdepth 1 -type f | sort
   exit 1
@@ -71,6 +72,7 @@ unexpected_runbooks="$(
     ! -name deepseek.md \
     ! -name glm.md \
     ! -name common.md \
+    ! -name model-families.md \
     -print
 )"
 if [ -n "$unexpected_runbooks" ]; then

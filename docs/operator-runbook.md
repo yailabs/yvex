@@ -74,6 +74,12 @@ the first honest v0.1.0 full-runtime candidate. These commands are report-only
 and do not download models, emit artifacts, materialize tensors, execute graph
 work, run prefill, decode, logits, sampling, generation, evaluation,
 benchmarks, or mark the release ready.
+`yvex model-target qwen-metal --release v0.1.0` reports the planned Qwen on
+Apple Silicon / Metal pressure lane, including source, hardware, backend,
+candidate, blocker, and next-row fields. It is report-only and does not
+download Qwen weights, implement Metal, emit artifacts, materialize tensors,
+execute graph/runtime paths, generate, evaluate, benchmark, or mark the release
+ready.
 
 ## Runbook Index
 
@@ -130,6 +136,20 @@ Covers:
 - daemon and accepted-only runtime diagnostics;
 - repository validation and artifact hygiene.
 
+### Model Families
+
+Use this for family-level pressure lanes before they become model-specific
+operator paths.
+
+- `docs/runbooks/model-families.md`
+
+Covers:
+
+- Qwen on Apple Silicon / Metal pressure-lane reporting;
+- source, hardware, backend, candidate, blocker, and next-row fields;
+- explicit no-download, no-Metal-support, no-runtime, no-generation, no-eval,
+  and no-benchmark boundaries.
+
 ## Current Short Entry
 
 ```sh
@@ -141,6 +161,7 @@ Covers:
 ./yvex model-target decision --release v0.1.0 --include-candidates --include-blockers --include-next
 ./yvex model-target candidate --release v0.1.0 --include-candidates --include-blockers --include-next
 ./yvex model-target dense-candidate --release v0.1.0 --include-candidates --include-requirements --include-blockers --include-next
+./yvex model-target qwen-metal --release v0.1.0 --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next
 ```
 
 Boundary:
@@ -149,7 +170,9 @@ Path configuration and target path reporting do not download weights, create
 artifacts, register aliases, materialize tensors, run graph execution, or claim
 runtime support. Target decision and candidate reporting also do not select an
 implemented runtime path, claim generation, evaluate capability, benchmark
-throughput, or mark a release ready.
+throughput, or mark a release ready. Qwen/Metal pressure reporting does not
+implement Metal, support Qwen runtime, emit Qwen artifacts, or make Qwen a
+selected v0.1.0 runtime target.
 
 For the current DeepSeek selected embedding path, use
 `docs/runbooks/deepseek.md`.
