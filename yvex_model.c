@@ -1804,6 +1804,7 @@ static void print_model_target_decision_usage(FILE *fp)
     fprintf(fp, "  --include-critical-path        include release-critical track fields\n");
     fprintf(fp, "  --include-next                 include deterministic next row fields\n");
     fprintf(fp, "  --strict                       keep invalid usage fatal; honest blocked decisions still pass\n");
+    fprintf(fp, "  --audit | --output normal|table|audit\n");
 }
 
 static void print_model_target_decision_help(FILE *fp)
@@ -1824,6 +1825,7 @@ static void print_model_target_candidate_usage(FILE *fp)
     fprintf(fp, "  --include-pressure-targets     include pressure target count fields\n");
     fprintf(fp, "  --include-blockers             include stable blocker fields\n");
     fprintf(fp, "  --include-next                 include next required row fields\n");
+    fprintf(fp, "  --audit | --output normal|table|audit\n");
 }
 
 static void print_model_target_candidate_help(FILE *fp)
@@ -1842,6 +1844,7 @@ static void print_model_target_dense_candidate_usage(FILE *fp)
     fprintf(fp, "  --include-requirements         include required dense runtime role groups\n");
     fprintf(fp, "  --include-blockers             include stable blocker fields\n");
     fprintf(fp, "  --include-next                 include next required row fields\n");
+    fprintf(fp, "  --audit | --output normal|table|audit\n");
 }
 
 static void print_model_target_dense_candidate_help(FILE *fp)
@@ -1862,6 +1865,7 @@ static void print_model_target_qwen_metal_usage(FILE *fp)
     fprintf(fp, "  --include-source               include Qwen source/config pressure fields\n");
     fprintf(fp, "  --include-blockers             include stable blocker fields\n");
     fprintf(fp, "  --include-next                 include next required row fields\n");
+    fprintf(fp, "  --audit | --output normal|table|audit\n");
 }
 
 static void print_model_target_qwen_metal_help(FILE *fp)
@@ -1880,6 +1884,7 @@ static int target_decision_is_full_runtime_candidate(const yvex_model_target_rec
 
 typedef enum {
     YVEX_MODEL_TARGET_OUTPUT_NORMAL = 0,
+    YVEX_MODEL_TARGET_OUTPUT_TABLE,
     YVEX_MODEL_TARGET_OUTPUT_AUDIT
 } yvex_model_target_output_mode;
 
@@ -1891,6 +1896,10 @@ static int parse_model_target_output_mode(const char *value,
     }
     if (strcmp(value, "normal") == 0) {
         *mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
+        return 1;
+    }
+    if (strcmp(value, "table") == 0) {
+        *mode = YVEX_MODEL_TARGET_OUTPUT_TABLE;
         return 1;
     }
     if (strcmp(value, "audit") == 0) {
@@ -2282,7 +2291,7 @@ static int print_model_target_candidate_normal(const char *release,
     printf("candidates: 0 eligible / %lu known (%lu pressure, %lu fixture)\n",
            candidate_count, pressure_count, fixture_count);
     printf("top_blocker: no eligible full-runtime candidate\n");
-    printf("next: V010.CLI.18\n");
+    printf("next: V010.SOURCE.9\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
@@ -2608,7 +2617,7 @@ static int print_model_target_dense_candidate_normal(const char *release,
     printf("candidates: %lu eligible / %lu known (%lu dense pressure)\n",
            eligible_count, dense_candidate_count, dense_pressure_count);
     printf("top_blocker: no selected dense full-runtime candidate\n");
-    printf("next: V010.CLI.18\n");
+    printf("next: V010.SOURCE.9\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
@@ -2998,7 +3007,7 @@ static int print_model_target_decision_normal(const char *release,
     printf("eligible: %lu / %lu candidates (%lu ineligible)\n",
            eligible_count, candidate_count, ineligible_count);
     printf("top_blocker: %s\n", selected ? "none" : "no eligible full-runtime candidate");
-    printf("next: V010.CLI.18\n");
+    printf("next: V010.SOURCE.9\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     return 0;
 }
@@ -3006,12 +3015,12 @@ static int print_model_target_decision_normal(const char *release,
 static void print_model_target_usage(FILE *fp)
 {
     fprintf(fp, "usage: yvex model-target classes\n");
-    fprintf(fp, "       yvex model-target list\n");
+    fprintf(fp, "       yvex model-target list [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target candidate --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target dense-candidate --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target qwen-metal --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target decision --release v0.1.0 [options]\n");
-    fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR]\n");
+    fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR] [--audit | --output normal|table|audit]\n");
 }
 
 void yvex_model_target_help(FILE *fp)
@@ -3019,6 +3028,7 @@ void yvex_model_target_help(FILE *fp)
     print_model_target_usage(fp);
     fprintf(fp, "\n--paths           show expected operator-local source, artifact, report, reference, and registry paths\n");
     fprintf(fp, "--models-root DIR override configured operator model root for this command only\n");
+    fprintf(fp, "--audit | --output normal|table|audit\n");
     fprintf(fp, "\nDecision report:\n");
     fprintf(fp, "  yvex model-target decision --release v0.1.0 --include-candidates --include-blockers --include-next\n");
     fprintf(fp, "  This command records the v0.1.0 target decision. It does not download models, emit artifacts, materialize tensors, execute graph work, run prefill, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
@@ -3035,7 +3045,8 @@ void yvex_model_target_help(FILE *fp)
     fprintf(fp, "  yvex model-target qwen-metal --release v0.1.0 --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next\n");
     fprintf(fp, "  The Qwen/Metal pressure report records a planned reduced-scale Apple Silicon / Metal lane for future full-runtime work. It does not download weights, implement Metal, emit Qwen artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "  Default output is compact. Use --audit or --output audit for hardware, backend, source, and blocker detail.\n");
-    fprintf(fp, "\nModel targets are pressure objects, not capability claims.\n");
+    fprintf(fp, "\nDefault output is compact. Use --audit for full diagnostic fields.\n");
+    fprintf(fp, "Model targets are pressure objects, not capability claims.\n");
     fprintf(fp, "External GGUFs and external runners are reference evidence only.\n");
     fprintf(fp, "Model-target path reporting does not read model payloads, create artifacts, register aliases, or claim runtime support.\n");
 }
@@ -3076,6 +3087,29 @@ static void print_model_target_list(void)
     }
 }
 
+static void print_model_target_list_table(void)
+{
+    unsigned long i;
+
+    printf("MODEL TARGETS  count=%lu\n\n", model_target_count);
+    printf("%-43s  %-8s  %-26s  %-11s  %s\n",
+           "TARGET",
+           "FAMILY",
+           "CLASS",
+           "RUNTIME",
+           "GENERATION");
+    for (i = 0; i < model_target_count; ++i) {
+        const yvex_model_target_record *record = &model_targets[i];
+        printf("%-43s  %-8s  %-26s  %-11s  %s\n",
+               record->target_id,
+               record->family,
+               record->target_class,
+               record->runtime_execution,
+               record->generation);
+    }
+    printf("status: model-target-list\n");
+}
+
 static void print_model_target_record(const yvex_model_target_record *record)
 {
     printf("status: model-target\n");
@@ -3093,6 +3127,43 @@ static void print_model_target_record(const yvex_model_target_record *record)
     printf("runtime_execution: %s\n", record->runtime_execution);
     printf("generation: %s\n", record->generation);
     printf("external_reference: %s\n", record->external_reference);
+}
+
+static void print_model_target_record_normal(const yvex_model_target_record *record)
+{
+    printf("target: %s\n", record->target_id);
+    printf("family: %s class=%s\n", record->family, record->target_class);
+    printf("source: %s target=%s\n",
+           record->source_artifact_class,
+           record->target_artifact_class);
+    printf("runtime: %s generation=%s\n",
+           record->runtime_execution,
+           record->generation);
+    printf("top_blocker: %s\n",
+           strcmp(record->runtime_execution, "unsupported") == 0
+               ? "full-runtime target facts incomplete"
+               : "full-runtime execution unsupported");
+    printf("boundary: target report only, no runtime execution\n");
+    printf("status: model-target\n");
+}
+
+static void print_model_target_report_table(const char *report,
+                                            const char *status,
+                                            const char *selected,
+                                            unsigned long eligible_count)
+{
+    printf("%-24s  %-8s  %-8s  %8s  %s\n",
+           "REPORT",
+           "STATUS",
+           "SELECTED",
+           "ELIGIBLE",
+           "NEXT");
+    printf("%-24s  %-8s  %-8s  %8lu  %s\n",
+           report ? report : "report",
+           status ? status : "blocked",
+           selected ? selected : "none",
+           eligible_count,
+           "V010.SOURCE.9");
 }
 
 static int path_exists(const char *path)
@@ -3120,7 +3191,8 @@ static int format_model_target_artifact_path(char *out, size_t cap,
 }
 
 static int print_model_target_paths(const yvex_model_target_record *record,
-                                    const char *models_root_override)
+                                    const char *models_root_override,
+                                    int audit_output)
 {
     yvex_paths paths;
     yvex_operator_paths operator_paths;
@@ -3219,23 +3291,34 @@ static int print_model_target_paths(const yvex_model_target_record *record,
         return 2;
     }
 
-    printf("models_root_source: %s\n", operator_paths.models_root_source);
-    printf("models_root: %s\n", operator_paths.models_root);
-    printf("source_path: %s\n", source_path);
-    printf("source_exists: %s\n", source_exists ? "true" : "false");
-    printf("artifact_path: %s\n", artifact_path);
-    printf("artifact_exists: %s\n", artifact_exists ? "true" : "false");
-    printf("report_dir: %s\n", report_dir);
-    printf("report_dir_exists: %s\n", report_exists ? "true" : "false");
-    printf("reference_dir: %s\n", reference_dir);
-    printf("reference_dir_exists: %s\n", reference_exists ? "true" : "false");
-    printf("registry_dir: %s\n", registry_dir);
-    printf("registry_dir_exists: %s\n", registry_exists ? "true" : "false");
-    printf("registry_alias: %s\n", registry_alias);
-    printf("source_artifact_class: %s\n", source_class);
-    printf("target_artifact_class: %s\n", target_class);
-    printf("runtime_execution: %s\n", runtime_execution);
-    printf("generation: unsupported\n");
+    if (!audit_output) {
+        printf("target: %s\n", record->target_id);
+        printf("models_root: %s\n", operator_paths.models_root);
+        printf("source: %s exists=%s\n", source_path, source_exists ? "true" : "false");
+        printf("artifact: %s exists=%s\n", artifact_path, artifact_exists ? "true" : "false");
+        printf("registry_alias: %s\n", registry_alias);
+        printf("boundary: path report only, no payload read or runtime execution\n");
+        printf("status: model-target-paths\n");
+    } else {
+        printf("models_root_source: %s\n", operator_paths.models_root_source);
+        printf("models_root: %s\n", operator_paths.models_root);
+        printf("source_path: %s\n", source_path);
+        printf("source_exists: %s\n", source_exists ? "true" : "false");
+        printf("artifact_path: %s\n", artifact_path);
+        printf("artifact_exists: %s\n", artifact_exists ? "true" : "false");
+        printf("report_dir: %s\n", report_dir);
+        printf("report_dir_exists: %s\n", report_exists ? "true" : "false");
+        printf("reference_dir: %s\n", reference_dir);
+        printf("reference_dir_exists: %s\n", reference_exists ? "true" : "false");
+        printf("registry_dir: %s\n", registry_dir);
+        printf("registry_dir_exists: %s\n", registry_exists ? "true" : "false");
+        printf("registry_alias: %s\n", registry_alias);
+        printf("source_artifact_class: %s\n", source_class);
+        printf("target_artifact_class: %s\n", target_class);
+        printf("runtime_execution: %s\n", runtime_execution);
+        printf("generation: unsupported\n");
+        printf("status: model-target-paths\n");
+    }
     return 0;
 }
 
@@ -3243,6 +3326,7 @@ int yvex_model_target_command(int argc, char **argv)
 {
     const yvex_model_target_record *record;
     const char *models_root = NULL;
+    yvex_model_target_output_mode output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
     int want_paths = 0;
     int i;
 
@@ -3267,11 +3351,29 @@ int yvex_model_target_command(int argc, char **argv)
         return 0;
     }
     if (strcmp(argv[2], "list") == 0) {
-        if (argc != 3) {
-            print_model_target_usage(stderr);
-            return 2;
+        yvex_model_target_output_mode output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
+        for (i = 3; i < argc; ++i) {
+            if (strcmp(argv[i], "--audit") == 0) {
+                output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
+            } else if (strcmp(argv[i], "--output") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "model-target list: --output requires normal|table|audit\n");
+                    return 2;
+                }
+                if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
+                    fprintf(stderr, "model-target list: unsupported output mode: %s\n", argv[i]);
+                    return 2;
+                }
+            } else {
+                fprintf(stderr, "model-target list: unknown option: %s\n", argv[i]);
+                return 2;
+            }
         }
-        print_model_target_list();
+        if (output_mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+            print_model_target_list();
+        } else {
+            print_model_target_list_table();
+        }
         return 0;
     }
     if (strcmp(argv[2], "candidate") == 0) {
@@ -3315,7 +3417,7 @@ int yvex_model_target_command(int argc, char **argv)
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
             } else if (strcmp(argv[i], "--output") == 0) {
                 if (i + 1 >= argc) {
-                    fprintf(stderr, "model-target candidate: --output requires normal|audit\n");
+                    fprintf(stderr, "model-target candidate: --output requires normal|table|audit\n");
                     return 2;
                 }
                 if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
@@ -3323,7 +3425,7 @@ int yvex_model_target_command(int argc, char **argv)
                     return 2;
                 }
             } else if (strcmp(argv[i], "--json") == 0) {
-                fprintf(stderr, "model-target candidate: JSON output is unsupported; use --output normal|audit\n");
+                fprintf(stderr, "model-target candidate: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
             } else {
                 fprintf(stderr, "model-target candidate: unknown option: %s\n", argv[i]);
@@ -3337,6 +3439,13 @@ int yvex_model_target_command(int argc, char **argv)
         }
         if (strcmp(release, "v0.1.0") != 0) {
             return print_model_target_candidate_unsupported_release(release);
+        }
+        if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+            print_model_target_report_table("full-runtime-candidate",
+                                            "missing",
+                                            "none",
+                                            0);
+            return 0;
         }
         if (output_mode == YVEX_MODEL_TARGET_OUTPUT_NORMAL) {
             return print_model_target_candidate_normal(release, target_id);
@@ -3389,7 +3498,7 @@ int yvex_model_target_command(int argc, char **argv)
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
             } else if (strcmp(argv[i], "--output") == 0) {
                 if (i + 1 >= argc) {
-                    fprintf(stderr, "model-target dense-candidate: --output requires normal|audit\n");
+                    fprintf(stderr, "model-target dense-candidate: --output requires normal|table|audit\n");
                     return 2;
                 }
                 if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
@@ -3397,7 +3506,7 @@ int yvex_model_target_command(int argc, char **argv)
                     return 2;
                 }
             } else if (strcmp(argv[i], "--json") == 0) {
-                fprintf(stderr, "model-target dense-candidate: JSON output is unsupported; use --output normal|audit\n");
+                fprintf(stderr, "model-target dense-candidate: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
             } else {
                 fprintf(stderr, "model-target dense-candidate: unknown option: %s\n", argv[i]);
@@ -3411,6 +3520,13 @@ int yvex_model_target_command(int argc, char **argv)
         }
         if (strcmp(release, "v0.1.0") != 0) {
             return print_model_target_dense_candidate_unsupported_release(release);
+        }
+        if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+            print_model_target_report_table("dense-candidate",
+                                            "missing",
+                                            "none",
+                                            0);
+            return 0;
         }
         if (output_mode == YVEX_MODEL_TARGET_OUTPUT_NORMAL) {
             return print_model_target_dense_candidate_normal(release, target_id);
@@ -3469,7 +3585,7 @@ int yvex_model_target_command(int argc, char **argv)
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
             } else if (strcmp(argv[i], "--output") == 0) {
                 if (i + 1 >= argc) {
-                    fprintf(stderr, "model-target qwen-metal: --output requires normal|audit\n");
+                    fprintf(stderr, "model-target qwen-metal: --output requires normal|table|audit\n");
                     return 2;
                 }
                 if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
@@ -3477,7 +3593,7 @@ int yvex_model_target_command(int argc, char **argv)
                     return 2;
                 }
             } else if (strcmp(argv[i], "--json") == 0) {
-                fprintf(stderr, "model-target qwen-metal: JSON output is unsupported; use --output normal|audit\n");
+                fprintf(stderr, "model-target qwen-metal: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
             } else {
                 fprintf(stderr, "model-target qwen-metal: unknown option: %s\n", argv[i]);
@@ -3491,6 +3607,13 @@ int yvex_model_target_command(int argc, char **argv)
         }
         if (strcmp(release, "v0.1.0") != 0) {
             return print_model_target_qwen_metal_unsupported_release(release);
+        }
+        if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+            print_model_target_report_table("qwen-metal-pressure",
+                                            "pressure",
+                                            "none",
+                                            0);
+            return 0;
         }
         if (output_mode == YVEX_MODEL_TARGET_OUTPUT_NORMAL) {
             return print_model_target_qwen_metal_normal(release, target_id);
@@ -3541,7 +3664,7 @@ int yvex_model_target_command(int argc, char **argv)
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
             } else if (strcmp(argv[i], "--output") == 0) {
                 if (i + 1 >= argc) {
-                    fprintf(stderr, "model-target decision: --output requires normal|audit\n");
+                    fprintf(stderr, "model-target decision: --output requires normal|table|audit\n");
                     return 2;
                 }
                 if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
@@ -3549,7 +3672,7 @@ int yvex_model_target_command(int argc, char **argv)
                     return 2;
                 }
             } else if (strcmp(argv[i], "--json") == 0) {
-                fprintf(stderr, "model-target decision: JSON output is unsupported; use --output normal|audit\n");
+                fprintf(stderr, "model-target decision: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
             } else {
                 fprintf(stderr, "model-target decision: unknown option: %s\n", argv[i]);
@@ -3570,12 +3693,20 @@ int yvex_model_target_command(int argc, char **argv)
                 return print_model_target_decision_missing_candidate(release, candidate_id);
             }
         }
+        if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+            print_model_target_report_table("target-decision",
+                                            "blocked",
+                                            "none",
+                                            0);
+            return 0;
+        }
         if (output_mode == YVEX_MODEL_TARGET_OUTPUT_NORMAL) {
             return print_model_target_decision_normal(release, candidate_filter);
         }
         return print_model_target_decision_report(release, candidate_filter);
     }
     if (strcmp(argv[2], "inspect") == 0) {
+        output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
         if (argc < 4) {
             print_model_target_usage(stderr);
             return 2;
@@ -3588,6 +3719,17 @@ int yvex_model_target_command(int argc, char **argv)
         for (i = 4; i < argc; ++i) {
             if (strcmp(argv[i], "--paths") == 0) {
                 want_paths = 1;
+            } else if (strcmp(argv[i], "--audit") == 0) {
+                output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
+            } else if (strcmp(argv[i], "--output") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "model-target inspect: --output requires normal|table|audit\n");
+                    return 2;
+                }
+                if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
+                    fprintf(stderr, "model-target inspect: unsupported output mode: %s\n", argv[i]);
+                    return 2;
+                }
             } else if (strcmp(argv[i], "--models-root") == 0) {
                 if (i + 1 >= argc) {
                     fprintf(stderr, "model-target: --models-root requires DIR\n");
@@ -3603,9 +3745,18 @@ int yvex_model_target_command(int argc, char **argv)
             fprintf(stderr, "model-target: --models-root requires --paths\n");
             return 2;
         }
-        print_model_target_record(record);
         if (want_paths) {
-            return print_model_target_paths(record, models_root);
+            if (output_mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+                print_model_target_record(record);
+            }
+            return print_model_target_paths(record,
+                                            models_root,
+                                            output_mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT);
+        }
+        if (output_mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+            print_model_target_record(record);
+        } else {
+            print_model_target_record_normal(record);
         }
         return 0;
     }

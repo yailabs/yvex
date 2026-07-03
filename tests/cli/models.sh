@@ -6,6 +6,12 @@ ROOT=${YVEX_TEST_OUT_DIR:-build/tests/models-cli}
 REG="$ROOT/models.local.json"
 GGUF="$ROOT/deepseek4-v4-flash-selected-embed-F16-noimatrix-yvex-v1.gguf"
 
+matches() {
+  file=$1
+  pattern=$2
+  grep -E -- "$pattern" "$file" >/dev/null
+}
+
 rm -rf "$ROOT"
 mkdir -p "$ROOT"
 
@@ -26,8 +32,17 @@ test -f "$REG"
 
 "$YVEX_BIN" models list --registry "$REG" > "$ROOT/list.out"
 grep 'deepseek4-v4-flash-selected-embed' "$ROOT/list.out"
-grep 'format: marker alias | family | artifact_class | ready' "$ROOT/list.out"
+grep 'MODELS  count=1' "$ROOT/list.out"
+matches "$ROOT/list.out" '^SEL[[:space:]]{2,}ALIAS[[:space:]]{2,}FAMILY[[:space:]]{2,}CLASS[[:space:]]{2,}TENSORS[[:space:]]{2,}SIZE[[:space:]]{2,}READY$'
+matches "$ROOT/list.out" '^[*-][[:space:]]{2,}deepseek4-v4-flash-selected-embed[[:space:]]{2,}deepseek4[[:space:]]{2,}embed[[:space:]]{2,}[0-9]+[[:space:]]{2,}[0-9]+[[:space:]]{2,}no$'
+! grep '^[*-] deepseek4-v4-flash-selected-embed deepseek4 embed [0-9]' "$ROOT/list.out"
 grep 'status: models-list' "$ROOT/list.out"
+
+"$YVEX_BIN" models list --registry "$REG" --output table > "$ROOT/list-table.out"
+grep 'MODELS  count=1' "$ROOT/list-table.out"
+matches "$ROOT/list-table.out" '^SEL[[:space:]]{2,}ALIAS[[:space:]]{2,}FAMILY[[:space:]]{2,}CLASS[[:space:]]{2,}TENSORS[[:space:]]{2,}SIZE[[:space:]]{2,}READY$'
+grep 'deepseek4-v4-flash-selected-embed' "$ROOT/list-table.out"
+grep 'status: models-list' "$ROOT/list-table.out"
 
 "$YVEX_BIN" models list --registry "$REG" --audit > "$ROOT/list-audit.out"
 grep 'registered_sha256:' "$ROOT/list-audit.out"
@@ -289,8 +304,16 @@ grep 'report: target-decision' "$ROOT/model-target-decision-normal.out"
 grep 'status: target-decision-blocked' "$ROOT/model-target-decision-normal.out"
 grep 'selected: none' "$ROOT/model-target-decision-normal.out"
 grep 'top_blocker: no eligible full-runtime candidate' "$ROOT/model-target-decision-normal.out"
-grep 'next: V010.CLI.18' "$ROOT/model-target-decision-normal.out"
+grep 'next: V010.SOURCE.9' "$ROOT/model-target-decision-normal.out"
+! grep 'next: V010\.CLI\.18' "$ROOT/model-target-decision-normal.out"
 grep 'boundary: report-only; generation unsupported; benchmark not measured' "$ROOT/model-target-decision-normal.out"
+
+"$YVEX_BIN" model-target decision --release v0.1.0 --output table > "$ROOT/model-target-decision-table.out"
+matches "$ROOT/model-target-decision-table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
+matches "$ROOT/model-target-decision-table.out" '^target-decision[[:space:]]{2,}blocked[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}V010\.SOURCE\.9$'
+
+"$YVEX_BIN" model-target decision --release v0.1.0 --output nope > "$ROOT/model-target-decision-bad-output.out" 2> "$ROOT/model-target-decision-bad-output.err" && exit 1 || true
+grep 'model-target decision: unsupported output mode: nope' "$ROOT/model-target-decision-bad-output.err"
 
 "$YVEX_BIN" model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next > "$ROOT/model-target-decision.out"
 grep 'target_decision: v0.1.0' "$ROOT/model-target-decision.out"

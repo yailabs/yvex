@@ -253,6 +253,11 @@ grep 'fullmodel: report' "$ROOT/normal-fullmodel.out"
 grep 'boundary: report-only, no full model execution' "$ROOT/normal-fullmodel.out"
 test "$(wc -l < "$ROOT/normal-fullmodel.out")" -le 8
 
+"$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" --output table > "$ROOT/table-fullmodel.out"
+grep 'fullmodel: report' "$ROOT/table-fullmodel.out"
+grep 'boundary: report-only, no full model execution' "$ROOT/table-fullmodel.out"
+test "$(wc -l < "$ROOT/table-fullmodel.out")" -le 8
+
 "$YVEX_BIN" fullmodel materialization-plan --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" > "$ROOT/normal-fullmodel-plan.out"
 grep 'materialization-plan:' "$ROOT/normal-fullmodel-plan.out"
 grep 'boundary: plan-only, no materialization' "$ROOT/normal-fullmodel-plan.out"
@@ -263,25 +268,50 @@ grep 'report: attention' "$ROOT/normal-attention.out"
 grep 'boundary: report-only, no runtime execution' "$ROOT/normal-attention.out"
 test "$(wc -l < "$ROOT/normal-attention.out")" -le 8
 
+"$YVEX_BIN" attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --output table > "$ROOT/table-attention.out"
+grep 'report: attention' "$ROOT/table-attention.out"
+grep 'boundary: report-only, no runtime execution' "$ROOT/table-attention.out"
+test "$(wc -l < "$ROOT/table-attention.out")" -le 8
+
 "$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --tokens 0,1 > "$ROOT/normal-context.out"
 grep 'report: context' "$ROOT/normal-context.out"
 grep 'boundary: report-only, no runtime execution' "$ROOT/normal-context.out"
 test "$(wc -l < "$ROOT/normal-context.out")" -le 8
+
+"$YVEX_BIN" context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --tokens 0,1 --output table > "$ROOT/table-context.out"
+grep 'report: context' "$ROOT/table-context.out"
+grep 'boundary: report-only, no runtime execution' "$ROOT/table-context.out"
+test "$(wc -l < "$ROOT/table-context.out")" -le 8
 
 "$YVEX_BIN" kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" > "$ROOT/normal-kv.out"
 grep 'report: kv' "$ROOT/normal-kv.out"
 grep 'boundary: report-only, no runtime execution' "$ROOT/normal-kv.out"
 test "$(wc -l < "$ROOT/normal-kv.out")" -le 8
 
+"$YVEX_BIN" kv report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --output table > "$ROOT/table-kv.out"
+grep 'report: kv' "$ROOT/table-kv.out"
+grep 'boundary: report-only, no runtime execution' "$ROOT/table-kv.out"
+test "$(wc -l < "$ROOT/table-kv.out")" -le 8
+
 "$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" > "$ROOT/normal-moe.out"
 grep 'report: moe' "$ROOT/normal-moe.out"
 grep 'boundary: report-only, no runtime execution' "$ROOT/normal-moe.out"
 test "$(wc -l < "$ROOT/normal-moe.out")" -le 8
 
+"$YVEX_BIN" moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --registry "$REG" --output table > "$ROOT/table-moe.out"
+grep 'report: moe' "$ROOT/table-moe.out"
+grep 'boundary: report-only, no runtime execution' "$ROOT/table-moe.out"
+test "$(wc -l < "$ROOT/table-moe.out")" -le 8
+
 "$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection moe --backend cpu --registry "$REG" > "$ROOT/normal-tensor-collection.out"
 grep 'report: tensor-collection' "$ROOT/normal-tensor-collection.out"
 grep 'boundary: report-only, no runtime execution' "$ROOT/normal-tensor-collection.out"
 test "$(wc -l < "$ROOT/normal-tensor-collection.out")" -le 8
+
+"$YVEX_BIN" tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection moe --backend cpu --registry "$REG" --output table > "$ROOT/table-tensor-collection.out"
+grep 'report: tensor-collection' "$ROOT/table-tensor-collection.out"
+grep 'boundary: report-only, no runtime execution' "$ROOT/table-tensor-collection.out"
+test "$(wc -l < "$ROOT/table-tensor-collection.out")" -le 8
 
 "$YVEX_BIN" fullmodel report --model deepseek4-v4-flash-selected-embed --backend cpu --registry "$REG" --output nope > "$ROOT/bad-fullmodel-output.out" 2> "$ROOT/bad-fullmodel-output.err" && exit 1 || true
 grep 'unsupported output mode: nope' "$ROOT/bad-fullmodel-output.err"

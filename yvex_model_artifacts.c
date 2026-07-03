@@ -2540,6 +2540,7 @@ int models_registry_open(yvex_model_registry **registry,
 
 typedef enum {
     YVEX_MODELS_OUTPUT_NORMAL = 0,
+    YVEX_MODELS_OUTPUT_TABLE,
     YVEX_MODELS_OUTPUT_AUDIT
 } yvex_models_output_mode;
 
@@ -2550,6 +2551,10 @@ static int parse_models_output_mode(const char *value, yvex_models_output_mode *
     }
     if (strcmp(value, "normal") == 0) {
         *mode = YVEX_MODELS_OUTPUT_NORMAL;
+        return 1;
+    }
+    if (strcmp(value, "table") == 0) {
+        *mode = YVEX_MODELS_OUTPUT_TABLE;
         return 1;
     }
     if (strcmp(value, "audit") == 0) {
@@ -2595,12 +2600,14 @@ static void print_model_registry_entry_normal(const yvex_model_registry_entry *e
                                               int selected)
 {
     if (!entry) return;
-    printf("%c %s | %s | %s | ready=%s\n",
-           selected ? '*' : '-',
+    printf("%-3s  %-44s  %-10s  %-16s  %7llu  %12llu  %s\n",
+           selected ? "*" : "-",
            entry->alias ? entry->alias : "",
            entry->family ? entry->family : "",
            entry->artifact_class ? entry->artifact_class : "",
-           entry->execution_ready ? "true" : "false");
+           entry->tensor_count,
+           entry->file_size,
+           entry->execution_ready ? "yes" : "no");
 }
 
 static void print_model_registry_scan_entry_cli(const yvex_model_registry_entry *entry)
@@ -2894,7 +2901,7 @@ static int parse_models_registry_output_options(int argc,
             if (output_mode) *output_mode = YVEX_MODELS_OUTPUT_AUDIT;
         } else if (strcmp(argv[i], "--output") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "yvex: models --output requires normal|audit\n");
+                fprintf(stderr, "yvex: models --output requires normal|table|audit\n");
                 return 2;
             }
             if (!output_mode || !parse_models_output_mode(argv[++i], output_mode)) {
@@ -2902,7 +2909,7 @@ static int parse_models_registry_output_options(int argc,
                 return 2;
             }
         } else if (strcmp(argv[i], "--json") == 0) {
-            fprintf(stderr, "yvex: models JSON output is unsupported; use --output normal|audit\n");
+            fprintf(stderr, "yvex: models JSON output is unsupported; use --output normal|table|audit\n");
             return 2;
         } else {
             fprintf(stderr, "yvex: unknown models option: %s\n", argv[i]);
@@ -3790,7 +3797,7 @@ static int parse_models_check_options(int argc,
 static int print_model_check_unsupported(const yvex_cli_models_check_options *options)
 {
     const char *target = options && options->target ? options->target : "";
-    if (options && options->output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+    if (options && options->output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
         printf("model-check: unsupported target=%s level=%s\n",
                target,
                options->level_name ? options->level_name : "quick");
@@ -4285,7 +4292,7 @@ static int model_check_finish(yvex_cli_models_check_options *options,
         report->final_status = "model-check-fail";
         exit_code = exit_for_status(rc);
     }
-    if (options && options->output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+    if (options && options->output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
         model_check_report_print_normal(stdout, report);
     } else {
         model_check_report_print(stdout, report);
@@ -4749,11 +4756,16 @@ static int command_models_list(int argc, char **argv)
         snprintf(selected_alias, sizeof(selected_alias), "%s", selected->alias);
     }
     count = yvex_model_registry_count(registry);
-    printf("models: list\n");
-    if (output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
-        printf("count: %llu\n", count);
-        printf("selected: %s\n", selected_alias[0] ? selected_alias : "none");
-        printf("format: marker alias | family | artifact_class | ready\n");
+    if (output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
+        printf("MODELS  count=%llu\n\n", count);
+        printf("%-3s  %-44s  %-10s  %-16s  %7s  %12s  %s\n",
+               "SEL",
+               "ALIAS",
+               "FAMILY",
+               "CLASS",
+               "TENSORS",
+               "SIZE",
+               "READY");
         for (i = 0; i < count; ++i) {
             const yvex_model_registry_entry *entry = yvex_model_registry_at(registry, i);
             int is_selected = selected_alias[0] && entry && strcmp(selected_alias, entry->alias) == 0;
@@ -4763,6 +4775,7 @@ static int command_models_list(int argc, char **argv)
         yvex_model_registry_close(registry);
         return 0;
     }
+    printf("models: list\n");
     for (i = 0; i < count; ++i) {
         const yvex_model_registry_entry *entry = yvex_model_registry_at(registry, i);
         int is_selected = selected_alias[0] && entry && strcmp(selected_alias, entry->alias) == 0;
@@ -4821,7 +4834,7 @@ static int command_models_current(int argc, char **argv)
     selected = yvex_model_registry_selected(registry);
     printf("models: current\n");
     if (selected) {
-        if (output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+        if (output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
             printf("selected: %s\n", selected->alias);
             printf("path: %s\n", selected->path);
             printf("execution_ready: %s\n", selected->execution_ready ? "true" : "false");
@@ -4850,7 +4863,7 @@ static int command_models_current(int argc, char **argv)
     } else {
         printf("selected: none\n");
         printf("status: models-none\n");
-        if (output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+        if (output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
             printf("hint: use 'yvex models use ALIAS' to select a model\n");
         }
     }
@@ -4963,7 +4976,7 @@ static int command_models_verify(int argc, char **argv)
         status = "models-identity-fail";
     }
 
-    if (output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+    if (output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
         printf("verify: %s alias=%s\n", pass ? "pass" : "fail", entry->alias);
         printf("identity: %s digest: %s metadata: %s\n",
                identity_status, digest_status, metadata_status);
@@ -5105,7 +5118,7 @@ static int command_models_inspect(int argc, char **argv)
         fprintf(stderr, "yvex: model alias not found: %s\n", alias);
         return 2;
     }
-    if (output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+    if (output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
         int selected_slice =
             strcmp(entry->alias, "deepseek4-v4-flash-selected-embed") == 0 ||
             strcmp(entry->alias, "deepseek4-v4-flash-selected-embed-rmsnorm") == 0;
@@ -6843,7 +6856,7 @@ static void fullmodel_print_materialize_report(const yvex_fullmodel_materialize_
 {
     const yvex_cli_fullmodel_options *options = report ? report->options : NULL;
 
-    if (options && options->output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+    if (options && options->output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
         printf("fullmodel-materialize: %s model=%s backend=%s\n",
                report && report->status ? report->status : "fullmodel-materialize-fail",
                options->model ? options->model : "",
@@ -8148,7 +8161,7 @@ static int attention_print_report(const yvex_cli_attention_options *options,
 
     fullmodel_probe_backend_fit(backend, total_tensor_bytes, &fit);
 
-    if (options && options->output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+    if (options && options->output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
         printf("report: attention\n");
         printf("model: %s\n", options->model ? options->model : "");
         printf("family: deepseek backend=%s\n", backend);
@@ -8370,7 +8383,7 @@ int yvex_attention_command(int argc, char **argv)
 
 void yvex_attention_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex attention report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--registry FILE] [--audit | --output normal|audit] [--include-kv] [--include-context] [--include-graph] [--include-blockers]\n");
+    fprintf(fp, "usage: yvex attention report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--registry FILE] [--audit | --output normal|table|audit] [--include-kv] [--include-context] [--include-graph] [--include-blockers]\n");
     fprintf(fp, "\nExamples:\n");
     fprintf(fp, "  yvex attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu\n");
     fprintf(fp, "  yvex attention report --model deepseek4-v4-flash-selected-embed-rmsnorm --family auto --backend cpu --include-kv --include-graph\n");
@@ -8594,7 +8607,7 @@ static void moe_init_report(yvex_moe_class_report *report,
 
 static void moe_print_report(const yvex_moe_class_report *report)
 {
-    if (report && report->output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+    if (report && report->output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
         printf("report: moe\n");
         printf("model: %s\n", report->model ? report->model : "");
         printf("family: %s\n", report->family ? report->family : "unknown");
@@ -8953,7 +8966,7 @@ int yvex_moe_command(int argc, char **argv)
 
 void yvex_moe_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex moe report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--registry FILE] [--audit | --output normal|audit] [--include-tensors] [--include-residency] [--include-blockers]\n");
+    fprintf(fp, "usage: yvex moe report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--registry FILE] [--audit | --output normal|table|audit] [--include-tensors] [--include-residency] [--include-blockers]\n");
     fprintf(fp, "\nExamples:\n");
     fprintf(fp, "  yvex moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --include-tensors --include-blockers\n");
     fprintf(fp, "  yvex moe report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cuda --include-residency\n");
@@ -9241,7 +9254,7 @@ static void tensor_collection_init_report(yvex_tensor_collection_report *report,
 
 static void tensor_collection_print_report(const yvex_tensor_collection_report *report)
 {
-    if (report && report->output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+    if (report && report->output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
         printf("report: tensor-collection\n");
         printf("model: %s\n", report->model ? report->model : "");
         printf("family: %s collection=%s\n",
@@ -9673,7 +9686,7 @@ int yvex_tensor_collection_command(int argc, char **argv)
 
 void yvex_tensor_collection_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex tensor-collection report --model FILE_OR_ALIAS --collection moe [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--registry FILE] [--audit | --output normal|audit] [--include-router] [--include-experts] [--include-shared] [--include-dispatch] [--include-storage] [--include-residency] [--include-blockers]\n");
+    fprintf(fp, "usage: yvex tensor-collection report --model FILE_OR_ALIAS --collection moe [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--registry FILE] [--audit | --output normal|table|audit] [--include-router] [--include-experts] [--include-shared] [--include-dispatch] [--include-storage] [--include-residency] [--include-blockers]\n");
     fprintf(fp, "\nExamples:\n");
     fprintf(fp, "  yvex tensor-collection report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --collection moe --backend cpu --include-router --include-experts --include-blockers\n");
     fprintf(fp, "  yvex tensor-collection report --model glm-5.2-official-safetensors --family glm --collection moe --backend cpu --include-blockers\n");
@@ -10214,7 +10227,7 @@ static int context_print_report(const yvex_cli_context_options *options,
     }
     decode_start = token_count;
 
-    if (options && options->output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+    if (options && options->output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
         printf("report: context\n");
         printf("model: %s\n", options->model ? options->model : "");
         printf("family: deepseek\n");
@@ -10437,7 +10450,7 @@ int yvex_context_command(int argc, char **argv)
 
 void yvex_context_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex context report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--audit | --output normal|audit] [options]\n\n");
+    fprintf(fp, "usage: yvex context report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--audit | --output normal|table|audit] [options]\n\n");
     fprintf(fp, "Examples:\n");
     fprintf(fp, "  yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --tokens 0,1,2,3\n");
     fprintf(fp, "  yvex context report --model deepseek4-v4-flash-selected-embed-rmsnorm --family deepseek --backend cpu --tokens 0,1,2,3 --chunk-size 2\n");
@@ -11633,7 +11646,7 @@ int yvex_fullmodel_command(int argc, char **argv)
         const char *descriptor_role_coverage =
             selected_target ? "partial" :
             strcmp(descriptor_missing_roles, "none") == 0 ? "complete" : "partial";
-        if (options.output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+        if (options.output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
             fullmodel_print_descriptor_normal(&options,
                                               target_id,
                                               target_class,
@@ -11664,7 +11677,7 @@ int yvex_fullmodel_command(int argc, char **argv)
         const char *descriptor_role_coverage =
             selected_target ? "partial" :
             strcmp(descriptor_missing_roles, "none") == 0 ? "complete" : "partial";
-        if (options.output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+        if (options.output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
             fullmodel_print_family_runtime_normal(&options,
                                                   target_id,
                                                   target_class,
@@ -11693,7 +11706,7 @@ int yvex_fullmodel_command(int argc, char **argv)
     }
 
     if (options.command == YVEX_FULLMODEL_COMMAND_MATERIALIZATION_PLAN) {
-        if (options.output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+        if (options.output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
             fullmodel_print_plan_normal(&options,
                                         selected_target ? "blocked" : "partial",
                                         target_class,
@@ -11719,7 +11732,7 @@ int yvex_fullmodel_command(int argc, char **argv)
         return 0;
     }
 
-    if (options.output_mode == YVEX_MODELS_OUTPUT_NORMAL) {
+    if (options.output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
         fullmodel_print_report_normal(&options,
                                       "fullmodel-report",
                                       target_id,
@@ -11794,11 +11807,11 @@ int yvex_fullmodel_command(int argc, char **argv)
 
 void yvex_fullmodel_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex fullmodel report --model FILE_OR_ALIAS [--backend cpu|cuda] [--target TARGET] [--limit-tensors N] [--registry FILE] [--audit | --output normal|audit]\n");
-    fprintf(fp, "usage: yvex fullmodel materialization-plan --model FILE_OR_ALIAS [--backend cpu|cuda] [--residency resident|host-staged|ssd-staged|hybrid] [--target TARGET] [--limit-tensors N] [--registry FILE] [--audit | --output normal|audit]\n");
-    fprintf(fp, "usage: yvex fullmodel materialize --model FILE_OR_ALIAS [--backend cpu|cuda] [--registry FILE] [--dry-run] [--plan-only] [--require-role ROLE] [--require-collection COLLECTION] [--limit-bytes N] [--fail-after-phase PHASE] [--report-dir DIR] [--audit | --output normal|audit]\n");
-    fprintf(fp, "usage: yvex fullmodel descriptor --model FILE_OR_ALIAS [--backend cpu|cuda] [--target TARGET] [--format text] [--limit-tensors N] [--require-role ROLE] [--require-collection COLLECTION] [--include-blockers] [--include-placement] [--include-graph] [--include-kv] [--include-logits] [--audit | --output normal|audit]\n");
-    fprintf(fp, "usage: yvex fullmodel family-runtime --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--include-blockers] [--include-roles] [--include-graph] [--include-kv] [--include-moe] [--include-output] [--audit | --output normal|audit]\n");
+    fprintf(fp, "usage: yvex fullmodel report --model FILE_OR_ALIAS [--backend cpu|cuda] [--target TARGET] [--limit-tensors N] [--registry FILE] [--audit | --output normal|table|audit]\n");
+    fprintf(fp, "usage: yvex fullmodel materialization-plan --model FILE_OR_ALIAS [--backend cpu|cuda] [--residency resident|host-staged|ssd-staged|hybrid] [--target TARGET] [--limit-tensors N] [--registry FILE] [--audit | --output normal|table|audit]\n");
+    fprintf(fp, "usage: yvex fullmodel materialize --model FILE_OR_ALIAS [--backend cpu|cuda] [--registry FILE] [--dry-run] [--plan-only] [--require-role ROLE] [--require-collection COLLECTION] [--limit-bytes N] [--fail-after-phase PHASE] [--report-dir DIR] [--audit | --output normal|table|audit]\n");
+    fprintf(fp, "usage: yvex fullmodel descriptor --model FILE_OR_ALIAS [--backend cpu|cuda] [--target TARGET] [--format text] [--limit-tensors N] [--require-role ROLE] [--require-collection COLLECTION] [--include-blockers] [--include-placement] [--include-graph] [--include-kv] [--include-logits] [--audit | --output normal|table|audit]\n");
+    fprintf(fp, "usage: yvex fullmodel family-runtime --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen] [--backend cpu|cuda] [--include-blockers] [--include-roles] [--include-graph] [--include-kv] [--include-moe] [--include-output] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "alias: yvex fullmodel plan --model FILE_OR_ALIAS [options]\n");
     fprintf(fp, "\nExamples:\n");
     fprintf(fp, "  yvex fullmodel report --model deepseek4-v4-flash-selected-embed --backend cpu\n");
@@ -11878,9 +11891,9 @@ void yvex_models_help(FILE *fp)
     fprintf(fp, "usage: yvex models scan --root DIR [--registry FILE]\n");
     fprintf(fp, "       yvex models add --path FILE [--alias ALIAS] [--support-level LEVEL] [--registry FILE]\n");
     fprintf(fp, "       yvex models prepare TARGET [--overwrite] [--source DIR] [--out FILE | --out-dir DIR] [--models-root DIR] [--registry FILE] [--dry-run] [--no-register] [--no-use]\n");
-    fprintf(fp, "       yvex models check TARGET [--backend cpu|cuda] [--level quick|runtime|full] [--models-root DIR] [--registry FILE] [--report-dir DIR] [--no-materialize] [--no-graph] [--audit | --output normal|audit]\n");
-    fprintf(fp, "       yvex models list|current [--registry FILE] [--audit | --output normal|audit]\n");
-    fprintf(fp, "       yvex models verify|inspect ALIAS [--registry FILE] [--audit | --output normal|audit]\n");
+    fprintf(fp, "       yvex models check TARGET [--backend cpu|cuda] [--level quick|runtime|full] [--models-root DIR] [--registry FILE] [--report-dir DIR] [--no-materialize] [--no-graph] [--audit | --output normal|table|audit]\n");
+    fprintf(fp, "       yvex models list|current [--registry FILE] [--audit | --output normal|table|audit]\n");
+    fprintf(fp, "       yvex models verify|inspect ALIAS [--registry FILE] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex models use|remove ALIAS [--registry FILE]\n");
     fprintf(fp, "\nExamples:\n");
     fprintf(fp, "  yvex models check deepseek4-v4-flash-selected-embed\n");

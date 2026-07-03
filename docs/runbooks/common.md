@@ -9,8 +9,9 @@ Use model-specific runbooks for DeepSeek or GLM work.
 This file does not claim full model generation, provider generation,
 evaluation, or benchmark capability.
 
-Normal output is compact by default. Use `--audit` for row-promotion evidence
-and full diagnostic fields.
+Normal output is compact by default. List-like commands use readable tables by
+default; `--output table` only forces that renderer where it is available. Use
+`--audit` for row-promotion evidence and full diagnostic fields.
 
 ## Lane 0 — Fast regression after a wave
 
@@ -70,19 +71,24 @@ make
 ./yvex paths resolve --family glm --kind source
 ./yvex model-target classes
 ./yvex model-target list
+./yvex model-target list --output table
 ./yvex model-target inspect deepseek4-v4-flash-selected-embed
-./yvex model-target inspect deepseek4-v4-flash-selected-embed --paths
+./yvex model-target inspect deepseek4-v4-flash-selected-embed --paths --audit
 ./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm
-./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths
+./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths --audit
 ./yvex model-target inspect glm-5.2-official-safetensors
-./yvex model-target inspect glm-5.2-official-safetensors --paths
+./yvex model-target inspect glm-5.2-official-safetensors --paths --audit
 ./yvex model-target decision --help
+./yvex model-target decision --release v0.1.0 --output table
 ./yvex model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
 ./yvex model-target candidate --help
+./yvex model-target candidate --release v0.1.0 --output table
 ./yvex model-target candidate --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-next
 ./yvex model-target dense-candidate --help
+./yvex model-target dense-candidate --release v0.1.0 --output table
 ./yvex model-target dense-candidate --release v0.1.0 --audit --include-candidates --include-requirements --include-blockers --include-next
 ./yvex model-target qwen-metal --help
+./yvex model-target qwen-metal --release v0.1.0 --output table
 ./yvex model-target qwen-metal --release v0.1.0 --audit --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next
 ./yvex fullmodel report --model glm-5.2-official-safetensors --backend cpu --audit
 ./yvex fullmodel materialization-plan --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --audit

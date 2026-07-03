@@ -1402,11 +1402,11 @@ static int command_integrity_report(int argc, char **argv)
             audit_output = 1;
         } else if (strcmp(argv[i], "--output") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "yvex: integrity report --output requires normal or audit\n");
+                fprintf(stderr, "yvex: integrity report --output requires normal, table, or audit\n");
                 return 2;
             }
             i += 1;
-            if (strcmp(argv[i], "normal") == 0) {
+            if (strcmp(argv[i], "normal") == 0 || strcmp(argv[i], "table") == 0) {
                 audit_output = 0;
             } else if (strcmp(argv[i], "audit") == 0) {
                 audit_output = 1;
@@ -1859,7 +1859,7 @@ void yvex_inspect_help(FILE *fp)
 void yvex_integrity_help(FILE *fp)
 {
     fprintf(fp, "usage: yvex integrity check --model FILE_OR_ALIAS [--expect-sha256 HASH] [--require-token-embedding] [--partial-token N]\n");
-    fprintf(fp, "       yvex integrity report --model FILE_OR_ALIAS [--backend cpu|cuda] [--expect-sha256 HASH] [--require-token-embedding] [--partial-token N] [--audit | --output normal|audit]\n");
+    fprintf(fp, "       yvex integrity report --model FILE_OR_ALIAS [--backend cpu|cuda] [--expect-sha256 HASH] [--require-token-embedding] [--partial-token N] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "\nIntegrity validates local GGUF structure, tensor accounting, digest identity when supplied, metadata drift, and selected embedding readiness. It is not a supply-chain security audit.\n");
     fprintf(fp, "Default report output is compact. Use --audit for full diagnostic fields.\n");
 }

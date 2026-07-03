@@ -424,7 +424,7 @@ static const char *kv_bool(int value)
 static int kv_parse_output_mode(const char *value, int *audit_output)
 {
     if (!value || !audit_output) return 0;
-    if (strcmp(value, "normal") == 0) {
+    if (strcmp(value, "normal") == 0 || strcmp(value, "table") == 0) {
         *audit_output = 0;
         return 1;
     }
@@ -1084,7 +1084,7 @@ static int command_kv_report(int argc, char **argv)
             options.audit_output = 1;
         } else if (strcmp(argv[i], "--output") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "yvex: kv report --output requires normal or audit\n");
+                fprintf(stderr, "yvex: kv report --output requires normal, table, or audit\n");
                 return 2;
             }
             if (!kv_parse_output_mode(argv[++i], &options.audit_output)) {
@@ -1436,7 +1436,7 @@ int yvex_kv_command(int argc, char **argv)
 void yvex_kv_help(FILE *fp)
 {
     fprintf(fp,
-            "usage: yvex kv report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen|llama] [--backend cpu|cuda] [--audit | --output normal|audit] [options]\n"
+            "usage: yvex kv report --model FILE_OR_ALIAS [--family auto|deepseek|glm|qwen|llama] [--backend cpu|cuda] [--audit | --output normal|table|audit] [options]\n"
             "usage: yvex kv --layers N --heads N --head-dim N --capacity N [--append-demo] [--read-position N]\n\n"
             "kv report:\n"
             "  KV cache class and requirements report over model/family facts.\n"
