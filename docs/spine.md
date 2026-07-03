@@ -28,7 +28,7 @@ Current benchmark status:
   not measured
 
 Active implementation next:
-  V010.SOURCE.9 - Qwen source pressure report
+  V010.CLI.17 - normal output contract and layout baseline
 
 Current release target:
   v0.1.0 - first honest full-runtime path
@@ -39,7 +39,7 @@ Primary pressure targets:
   Qwen/Metal future portability
 
 Main v0.1.0 blocker:
-  Qwen/Metal source facts are still missing before it can become a concrete runtime candidate
+  normal operator output is not separated from diagnostic/audit output yet
 ```
 
 | Field | Current value |
@@ -57,7 +57,7 @@ Main v0.1.0 blocker:
 | Full model generation | unsupported |
 | DeepSeek generation | unsupported |
 | Eval/benchmark | unsupported / not measured |
-| Active next | V010.SOURCE.9 |
+| Active next | V010.CLI.17 |
 
 ## 1. Spine Nomenclature
 
@@ -231,8 +231,9 @@ help/runbook coverage, and clear unsupported boundaries.
 
 The spine records source-tensor doctrine, canonical blocks, v0.1.0 doctrine,
 generation/speculative targets, audit/reconciliation rows, Qwen/Metal pressure
-lane, navigation, and this track-based redesign. These rows are project-control
-work, not runtime capability.
+lane, CLI output UX doctrine and diagnostic-demotion contract, navigation, and
+this track-based redesign. These rows are project-control work, not runtime
+capability.
 
 ### 3.8 Unsupported Boundary Registry
 
@@ -248,6 +249,287 @@ no evaluation, no benchmark, and no throughput claim.
 | huge source/storage | GLM-5.2 official safetensors | source/storage pressure lane | no GLM execution |
 | future portability | Qwen/Metal | report-only pressure lane | no Metal/Qwen runtime |
 | full-runtime model | v0.1.0 selected target | blocked-no-source-backed-candidate | V010.TARGET.7 records Qwen/Metal pressure only; V010.SOURCE.9 must ground source facts |
+
+## CLI Output UX Doctrine
+
+YVEX has two output planes.
+
+Normal operator output:
+  concise, inline-first, result-first, metric-aware, color-aware when TTY-safe,
+  and suitable for humans running commands directly.
+
+Diagnostic/research output:
+  explicit, verbose, boundary-heavy, traceable, and suitable for debugging,
+  audits, row promotion, and research inspection.
+
+The current verbose diagnostic/report output is not final operator UX.
+
+Repeated unsupported fields, readiness fields, blocker lists, tensor tables,
+claim guards, lifecycle internals, and cleanup internals must be demoted from
+normal output into explicit diagnostic, trace, audit, or JSON modes.
+
+Normal CLI output should show only:
+  result
+  compact status
+  essential model/backend identity
+  measured metrics where real
+  top blocker or next action when relevant
+  one boundary line only when needed
+
+Current long outputs are acceptable as diagnostic/audit evidence for parser,
+artifact, tensor, report-only, selected-slice, diagnostic-runtime, boundary,
+cleanup, and claim-guard rows. They are not acceptable as the final operator
+experience.
+
+Future CLI output implementation work should use `V010.CLI.*` rows. Do not
+create new loose `CLI.UX.*` rows unless preserving historical continuity.
+`CLI.UX.*`, `MODEL.LIFECYCLE.*`, and `OPERATOR.FLOW.*` remain historical or
+superseded planning surfaces. New output behavior is canonical under
+`V010.CLI.*`, `V010.DOCTOR.*`, `V010.TRACE.*`, and `V010.CI.*`.
+
+## Inline-First CLI Rule
+
+Default human output should prefer compact inline fields and short sections.
+
+Tables are appropriate when the command naturally returns multiple rows:
+  models list
+  target candidates
+  tensor summaries
+  benchmark result sets
+  eval cases
+  blocker groups
+
+Tables must not become audit dumps.
+
+Color is allowed only for semantic terminal output:
+  pass
+  warn
+  fail
+  unsupported
+  selected/current
+  measured/target
+
+Color must be disabled for:
+  --no-color
+  NO_COLOR
+  non-TTY output
+  JSON/JSONL output
+
+Normal output must not require users to scroll through hundreds of lines to find
+the result, next action, or blocker.
+
+## CLI Print Ownership Policy
+
+Long hardcoded print chains are not the desired final CLI architecture.
+
+A command may temporarily print diagnostic fields directly while a row is being
+proved, but operator-facing commands must converge toward explicit output
+contracts and reusable rendering helpers.
+
+Repeated boundary/status fields should be rendered by shared helpers or
+domain-owned render functions, not copied manually across many command bodies.
+
+Future CLI output waves should reduce:
+  duplicated status lines
+  repeated unsupported fields
+  repeated readiness fields
+  repeated cleanup fields
+  repeated benchmark disclaimers
+  hardcoded wall-output blocks
+
+This policy does not require a source split. It does not create a new CLI
+command forest. It does not move domain behavior into `yvex_cli.c`.
+
+## Output Mode Taxonomy
+
+normal:
+  default human output. Short, inline-first, result-first, no repeated audit fields.
+
+summary:
+  compact report output for target/source/artifact/runtime checks.
+
+table:
+  human table output for multi-row reports.
+
+verbose:
+  expanded human-readable diagnostics.
+
+trace:
+  step-level runtime diagnostics.
+
+audit:
+  row-promotion evidence with all required boundary, readiness, lifecycle,
+  cleanup, and failure fields.
+
+json:
+  structured machine-readable summary output.
+
+jsonl:
+  event or trace stream.
+
+raw:
+  future raw/tensor dump mode; explicitly gated and refused unless implemented.
+
+A command may start life with verbose diagnostic output, but any command that
+becomes operator-facing must eventually define normal output.
+
+## Normal Output Contract
+
+For future real generation:
+
+```text
+yvex generate --model TARGET --prompt TEXT
+```
+
+normal output should be shaped as:
+
+```text
+<generated text>
+
+stats:
+  model:
+  backend:
+  qtype:
+  prompt_tokens:
+  generated_tokens:
+  ttft_ms:
+  decode_tok_s:
+  stop_reason:
+```
+
+For current diagnostic generation normal mode:
+
+```text
+status: diagnostic-generation
+model: <target>
+backend: <backend>
+tokens: <prompt_tokens> -> <generated_diagnostic_tokens>
+stop: <stop_reason>
+boundary: full-model generation unsupported
+hint: use --audit or --trace-level full for diagnostic internals
+```
+
+Do not print these by default in normal mode:
+
+```text
+generation_ready:
+full_model_generation:
+real_deepseek_generation:
+prefill_invoked:
+decode_steps:
+logits_steps:
+sample_steps:
+cleanup_attempted:
+cleanup_status:
+every repeated unsupported boundary
+every repeated readiness false field
+```
+
+Those belong to:
+
+```text
+--audit
+--trace
+--verbose
+--json
+```
+
+## Report Output Contract
+
+Default target/source/report output should be compact.
+
+Default report shape:
+
+```text
+report:
+status:
+decision:
+selected:
+eligible:
+top_blocker:
+next:
+boundary:
+```
+
+Long output requires explicit flags:
+
+```text
+--include-candidates
+--include-blockers
+--include-next
+--include-requirements
+--include-paths
+--include-tensors
+--verbose
+--audit
+--json
+```
+
+The current V010 target/report output may remain verbose until the CLI layout
+wave changes code, but the final operator report UX must be compact by default.
+
+## Metric UX Contract
+
+Normal output may show only real measured values or explicit target values.
+
+Allowed measured labels:
+
+```text
+ttft_ms
+prefill_tok_s
+decode_tok_s
+generation_tok_s
+latency_ms
+prompt_tokens
+generated_tokens
+context_length
+vram_peak_mb
+ram_peak_mb
+stop_reason
+```
+
+Target values must be labeled as targets:
+
+```text
+target_decode_tok_s:
+target_generation_tok_s:
+```
+
+Measured values must be labeled as measured:
+
+```text
+measured_decode_tok_s:
+measured_generation_tok_s:
+```
+
+Until the benchmark harness exists:
+
+```text
+benchmark_status: not-measured
+```
+
+Do not present target metrics as measured metrics.
+
+Do not print success claims such as target throughput success,
+measured-benchmark success, generation-readiness, or inference-readiness unless the
+benchmark/runtime path proves them.
+
+## Reserved CLI Flags
+
+Planned flags:
+
+```text
+--output normal|summary|table|verbose|json
+--trace-level none|tokens|steps|kv|logits|sampling|full
+--audit
+--quiet
+--no-color
+--metrics
+--explain-boundary
+```
+
+These flags are conceptual unless parser, behavior, output contract, tests,
+failure paths, cleanup behavior, and docs/spine row closure exist.
 
 ## 4. Forward Track Matrix
 
@@ -277,7 +559,7 @@ lanes; rows are the delivery units that complete track work.
 | TRACK.TOKENIZER | Tokenizer and stop policy | detokenization, EOS, stop tokens, prompt boundary | partial/planned | tokenizer diagnostics | tokenizer-backed stop behavior | later |
 | TRACK.GENERATION | Generation runtime | decode/logits/sample/append/stop/cleanup | diagnostic-runtime | `yvex generate` | full-runtime generation | later |
 | TRACK.RUNTIME | Runtime lifecycle and trace | lifecycle, cancellation, trace, failure preservation | diagnostic-runtime | generate trace/cancel/cleanup | external interruption/runtime trace | later |
-| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate | final normal path transcript | active |
+| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate and CLI output UX doctrine | normal output contract and layout baseline | active |
 | TRACK.SERVE | Serving | daemon state, provider endpoints, streaming | planned | status shell | runtime-backed generation endpoint | later |
 | TRACK.EVAL | Evaluation | fixture/runtime/generation/capability eval | planned | tests only | eval over generation path | later |
 | TRACK.BENCH | Benchmark/profile | reproducible performance measurement | planned | doctrine only | measured runtime harness | later |
@@ -851,7 +1133,8 @@ Boundary:
 ### TRACK.OPERATOR — Operator CLI
 
 Owns:
-  paths, targets, prepare/check, graph check, doctor, normal command transcript.
+  paths, targets, prepare/check, graph check, doctor, normal command transcript,
+  and normal/diagnostic output layout.
 
 Does not own:
   runtime semantics not implemented below it.
@@ -860,16 +1143,17 @@ Current status:
   partial.
 
 Current evidence:
-  paths/model-target/models prepare/check, graph check, generate help.
+  paths/model-target/models prepare/check, graph check, generate help, and CLI
+  output UX doctrine in the spine.
 
 v0.1.0 rows:
   V010.CLI.*, V010.OPERATOR.*.
 
 Main blockers:
-  final normal path transcript.
+  normal operator output is not separated from diagnostic/audit output.
 
 Next possible row:
-  V010.CLI.*.
+  V010.CLI.17.
 
 Boundary:
   operator presets compose lower behavior only.
@@ -2110,7 +2394,19 @@ V010.CLI.13         structured output mode
 V010.CLI.14         NO_COLOR/non-TTY behavior
 V010.CLI.15         command proof transcript
 V010.CLI.16         v0.1.0 CLI gate
+V010.CLI.17         normal output contract and layout baseline
+V010.CLI.18         diagnostic output demotion
+V010.CLI.19         compact report/table output
+V010.CLI.20         structured JSON output mode
+V010.CLI.21         metric output surface
+V010.CLI.22         audit output surface
+V010.CLI.23         quiet/no-color output policy
+V010.CLI.24         hardcoded print reduction pass
 ```
+
+`V010.CLI.17` is the next implementation interlock before returning to source
+target work. It must make normal operator output usable without deleting
+diagnostic/audit evidence.
 
 Boundary: CLI cannot claim lower runtime behavior that does not exist.
 
@@ -3740,17 +4036,28 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 ## 7. Active Next
 
 ```text
-V010.SOURCE.9 - Qwen source pressure report
+V010.CLI.17 - normal output contract and layout baseline
 ```
 
-`V010.TARGET.9`, `V010.TARGET.2`, `V010.TARGET.3`, and `V010.TARGET.7` are complete as
-report-only implementation rows. The commands `yvex model-target decision
---release v0.1.0`, `yvex model-target candidate --release v0.1.0`, and
-`yvex model-target dense-candidate --release v0.1.0` record the current
-target decision, candidate, and dense-candidate state. `yvex model-target
-qwen-metal --release v0.1.0` records the Qwen/Metal pressure lane.
+`SPINE.OUTPUT.UX.CONTRACT.0` is complete as a docs/control row. It defines the
+normal output plane, diagnostic/audit output plane, output mode taxonomy,
+metric labels, color/no-color rules, and hardcoded print reduction policy
+without changing CLI behavior.
 
 Completed row:
+
+```text
+SPINE.OUTPUT.UX.CONTRACT.0 - CLI output UX contract and diagnostic demotion plan
+```
+
+`V010.TARGET.9`, `V010.TARGET.2`, `V010.TARGET.3`, and `V010.TARGET.7` are also
+complete as report-only implementation rows. The commands `yvex model-target
+decision --release v0.1.0`, `yvex model-target candidate --release v0.1.0`,
+`yvex model-target dense-candidate --release v0.1.0`, and `yvex model-target
+qwen-metal --release v0.1.0` record the current target decision, candidate,
+dense-candidate, and Qwen/Metal pressure lane.
+
+Completed target/source lane row:
 
 ```text
 V010.TARGET.7 - Qwen/Metal pressure target report
@@ -3781,9 +4088,20 @@ close v0.1.0 full-runtime generation. GLM remains source/storage pressure only,
 Qwen/Metal is now command-visible as a reduced-scale Apple Silicon / Metal
 pressure lane, and tiny fixtures remain fixture-only.
 
-Active Next is now `V010.SOURCE.9` because `V010.TARGET.7` confirms the
-Qwen/Metal lane is only report-only pressure until Qwen source target,
-manifest, native inventory, source config, and model-class facts exist.
+Active Next is now `V010.CLI.17` because the current command output is still
+too verbose and diagnostic-heavy for normal operator use. The next code wave
+must make normal output compact while preserving diagnostic/audit evidence
+behind explicit modes.
+
+After the CLI output interlock, the next target/source lane remains:
+
+```text
+V010.SOURCE.9 - Qwen source pressure report
+```
+
+`V010.TARGET.7` remains complete. `V010.SOURCE.9` is still required before the
+Qwen/Metal lane has source target, manifest, native inventory, source config,
+and model-class facts.
 
 ## 8. Historical Delivery Ledger
 
@@ -3875,6 +4193,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | OPERATOR.FLOW.1 | complete | operator | Single-paste operator transcript | runbook contains one copy-paste transcript, full implemented command inventory, inline command style, artifact hygiene, and current/future boundary |
 | OPERATOR.FLOW.2 | complete | operator | Sectorized copy-command operator atlas | runbook is split into model, backend, intake, artifact, integrity, materialization, graph, prefill/KV, daemon, validation, and GLM status lanes with standalone copyable commands |
 | SPINE.OPERATOR.PRESET.0 | complete | docs | Operator preset and path-resolution roadmap | spine defines path configuration, target path resolution, model prepare, model check, graph check, chat UX, and final runbook preset sequence |
+| SPINE.OUTPUT.UX.CONTRACT.0 | complete | docs | CLI output UX contract and diagnostic demotion plan | spine defines normal, summary, table, verbose, trace, audit, JSON, metric, color, and hardcoded-print policies; marks current verbose diagnostic/report output as non-final UX; maps future output work to V010.CLI.*; preserves runtime, generation, benchmark, and release boundaries |
 | OPERATOR.PATHS.0 | complete | operator | Operator model root configuration | `yvex paths configure` stores or resolves operator-local model roots without requiring shell export walls |
 | MODEL.TARGET.PATHS.0 | complete | model | Model target path resolution | `yvex model-target inspect TARGET --paths` reports source, artifact, report, registry, and planned paths without reading model payloads |
 | MODEL.PREPARE.0 | complete | model | DeepSeek selected artifact prepare preset | `yvex models prepare deepseek4-v4-flash-selected-embed` runs the implemented source-to-selected-GGUF and alias registration path without generation claim |
@@ -4147,6 +4466,7 @@ meta-spine rows should not inflate Current Capability as runtime implementation.
 | SPINE.NAVIGATION.0 | complete | navigation | control panel and runtime maps | none | information architecture | docs-only; no runtime implementation |
 | SPINE.REDESIGN.0 | complete | redesign | track-first spine architecture | none | information architecture | docs-only; no runtime implementation |
 | SPINE.METAL.QWEN.0 | complete | pressure-lane doctrine | Qwen/Metal future lane | none | target-pressure | docs-only; no generation claim |
+| SPINE.OUTPUT.UX.CONTRACT.0 | complete | UX doctrine | CLI output UX | none | contract | docs-only; no CLI behavior, runtime implementation, generation, benchmark, or release claim |
 
 
 ## 10. Evidence Crosswalks
@@ -4621,7 +4941,7 @@ readability, and report-only/runtime boundaries.
 
 ### 11.2 Weak Point Ledger
 
-The active weak points are: full-runtime graph path, MoE model-class facts,
+The active weak points are: CLI normal-output layout, full-runtime graph path,
 output-head/tokenizer path, evaluation/benchmark readiness, and source/file/test
 coverage maps.
 
@@ -4634,9 +4954,10 @@ the report-only model-class lane after resolving the docs/meta blocker.
 ### 11.4 Follow-Up Rows
 
 `SPINE.TESTMAP.0` and `SPINE.FILEMAP.0` remain useful non-runtime follow-ups.
-Runtime planning now continues through `V010.SOURCE.9` because the Qwen/Metal
-pressure lane is command-visible but still lacks source target, manifest,
-native inventory, source config, and model-class facts.
+Target/source planning remains queued through `V010.SOURCE.9` after
+`V010.CLI.17` because the Qwen/Metal pressure lane is command-visible but still
+lacks source target, manifest, native inventory, source config, and model-class
+facts.
 
 ### 11.5 Detailed Audit Tables
 
@@ -5031,17 +5352,18 @@ SPINE.FILEMAP.0:
   decision row.
 ```
 
-After V010.TARGET.7 completed with Qwen/Metal recorded as report-only pressure,
-Active Next advances to:
+After `SPINE.OUTPUT.UX.CONTRACT.0` completed as a docs/control row, Active
+Next advances to:
 
 ```text
-V010.SOURCE.9 - Qwen source pressure report
+V010.CLI.17 - normal output contract and layout baseline
 ```
 
 If any P1 finding remains blocking, Active Next becomes the named follow-up row.
 
 | Condition | Active Next |
 | --- | --- |
+| CLI output UX contract complete and diagnostic walls still dominate normal output | V010.CLI.17 |
 | Qwen/Metal pressure report complete and Qwen source facts are missing | V010.SOURCE.9 |
 | dense candidate report complete and no eligible dense full-runtime candidate exists | V010.TARGET.7 |
 | Current Capability still overclaims implementation | SPINE.CAPABILITY.REWRITE.0 |
@@ -5053,14 +5375,14 @@ Current reconciliation result:
 
 ```text
 Active Next:
-  V010.SOURCE.9 - Qwen source pressure report
+  V010.CLI.17 - normal output contract and layout baseline
 
 Reason:
-  V010.TARGET.7 reports Qwen/Metal as a reduced-scale Apple Silicon / Metal
-  pressure lane only. The next blocker is source evidence: Qwen source target,
-  manifest, native inventory, source config, and model-class facts are still
-  missing before artifact, tensor-map, backend, graph/runtime, eval, benchmark,
-  or release rows can advance.
+  Normal operator output is not yet separated from diagnostic/audit output.
+  V010.CLI.17 is the implementation interlock before returning to
+  V010.SOURCE.9. V010.TARGET.7 remains complete; Qwen source target, manifest,
+  native inventory, source config, and model-class facts remain the next
+  target/source blocker after the CLI output layout baseline.
 ```
 
 
