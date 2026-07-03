@@ -70,6 +70,7 @@ make
 ./yvex paths resolve --family deepseek --kind gguf
 ./yvex paths resolve --family glm --kind source
 ./yvex paths resolve --family qwen --kind source
+./yvex paths resolve --family gemma --kind source
 ./yvex model-target classes
 ./yvex model-target list
 ./yvex model-target list --output table
@@ -81,6 +82,8 @@ make
 ./yvex model-target inspect glm-5.2-official-safetensors --paths --audit
 ./yvex model-target inspect qwen-metal-portability
 ./yvex model-target inspect qwen-metal-portability --paths
+./yvex model-target inspect gemma-dense-portability
+./yvex model-target inspect gemma-dense-portability --paths
 ./yvex model-target decision --help
 ./yvex model-target decision --release v0.1.0 --output table
 ./yvex model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
@@ -96,6 +99,9 @@ make
 ./yvex source-manifest report --family qwen --release v0.1.0
 ./yvex source-manifest report --family qwen --release v0.1.0 --output table
 ./yvex source-manifest report --family qwen --release v0.1.0 --audit
+./yvex source-manifest report --family gemma --release v0.1.0
+./yvex source-manifest report --family gemma --release v0.1.0 --output table
+./yvex source-manifest report --family gemma --release v0.1.0 --audit
 ./yvex fullmodel report --model glm-5.2-official-safetensors --backend cpu --audit
 ./yvex fullmodel materialization-plan --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --audit
 ./yvex fullmodel materialize --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --dry-run --audit
@@ -338,7 +344,7 @@ Quant/template/intake manifests:
 - `materialize-gate`: integrity and gate lanes
 - `metadata`: artifact inspection lanes
 - `model-gate`: integrity and gate lanes
-- `model-target`: model lanes, model target path, Qwen source-target profile, target decision, and full-runtime candidate reporting lanes, fast regression lane
+- `model-target`: model lanes, model target path, Qwen/Gemma source-target profiles, target decision, and full-runtime candidate reporting lanes, fast regression lane
 - `models`: artifact registration and selected prepare lanes
 - `native-weights`: source intake lanes
 - `paths`: configure once lane, fast regression lane, path resolution
@@ -350,7 +356,7 @@ Quant/template/intake manifests:
 - `qtype-support`: quant/template/intake manifest lanes
 - `run`: daemon and accepted-only runtime lanes
 - `session`: materialization and runtime attachment lanes
-- `source-manifest`: source intake lanes, Qwen source pressure report-only lane
+- `source-manifest`: source intake lanes, Qwen/Gemma source pressure report-only lanes
 - `tensor-map`: source intake lanes
 - `tokenize`: fast regression lane
 - `tokenizer`: fast regression lane

@@ -102,18 +102,23 @@ The source tensor boundary is read-only. It does not imply conversion, artifact 
 
 Its purpose is to prevent later runtime claims from floating above unexamined model bytes.
 
-## Qwen Source Pressure
+## Qwen And Gemma Source Pressure
 
-Qwen/Metal is a future portability pressure lane, not a supported runtime lane.
-The current command-visible source surface is:
+Qwen/Metal and Gemma are future source-pressure lanes, not supported runtime
+lanes. The current command-visible source surface is:
 
 ```sh
 ./yvex model-target list
 ./yvex model-target inspect qwen-metal-portability
 ./yvex model-target inspect qwen-metal-portability --paths
+./yvex model-target inspect gemma-dense-portability
+./yvex model-target inspect gemma-dense-portability --paths
 ./yvex source-manifest report --family qwen --release v0.1.0
 ./yvex source-manifest report --family qwen --release v0.1.0 --output table
 ./yvex source-manifest report --family qwen --release v0.1.0 --audit
+./yvex source-manifest report --family gemma --release v0.1.0
+./yvex source-manifest report --family gemma --release v0.1.0 --output table
+./yvex source-manifest report --family gemma --release v0.1.0 --audit
 ```
 
 `qwen-metal-portability` is source-target profile only. It is a pressure-target
@@ -122,17 +127,22 @@ path convention, official source tensor expectation, future YVEX-produced GGUF
 artifact class, and Apple Silicon / Metal portability pressure. It is pending
 source/config verification.
 
+`gemma-dense-portability` is source-target profile only. It is a pressure-target
+slot for Gemma family, the `<models_root>/hf/gemma/gemma-dense-portability`
+source path convention, official source tensor expectation, future
+YVEX-produced GGUF artifact class, and dense-candidate-pending-source-config
+pressure. It is pending source/config verification.
+
 The report checks only local source-path pressure facts: concrete target slot,
 configured source path, source path existence, config/tokenizer file visibility,
 top-level safetensors presence, source manifest status, native inventory status,
 blockers, and next rows. It does not download sources, create source manifests,
 emit artifacts, materialize tensors, inspect tensor payloads, implement Metal,
-execute Qwen runtime paths, generate, evaluate, benchmark, or mark a release
-ready.
+execute Qwen or Gemma runtime paths, generate, evaluate, benchmark, or mark a
+release ready.
 
-`OWI.TARGETS.QWEN.0` is complete as the source-target profile row.
-`V010.SOURCE.1` is the next source row for source family/profile fields. It is
-not completed by the target profile.
+Source family/profile fields are command-visible for Qwen and Gemma. The next
+source pressure step is source artifact class reporting.
 
 ## Family Classification
 

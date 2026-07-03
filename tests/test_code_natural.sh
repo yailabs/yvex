@@ -129,6 +129,12 @@ pattern='Qwen runtime imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='Qwen generation imple''mented'
 scan_forbidden_claim "$pattern"
+pattern='Gemma source down''loaded'
+scan_forbidden_claim "$pattern"
+pattern='Gemma runtime imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='Gemma generation imple''mented'
+scan_forbidden_claim "$pattern"
 pattern='Metal support imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='source_rea''dy: true'

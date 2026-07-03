@@ -569,11 +569,134 @@ typedef enum {
 } yvex_source_report_output_mode;
 
 typedef struct {
+    const char *family_key;
+    const char *display_family;
+    const char *report_name;
+    const char *target_id;
+    const char *target_class;
+    const char *model;
+    const char *source_target_status;
+    const char *source_family_profile_status;
+    const char *source_artifact_class;
+    const char *target_artifact_class;
+    const char *pressure_purpose;
+    const char *runtime_shape;
+    const char *hardware_lane;
+    const char *backend_lane;
+    const char *source_class;
+    const char *source_path_blocker;
+    const char *source_manifest_blocker;
+    const char *native_inventory_blocker;
+    const char *source_config_blocker;
+    const char *tokenizer_blocker;
+    const char *model_class_blocker;
+    const char *model_class_next;
+    const char *const *tail_blockers;
+    unsigned long tail_blocker_count;
+} yvex_source_family_profile;
+
+static const char *qwen_source_tail_blockers[] = {
+    "missing-qwen-model-class-profile",
+    "missing-qwen-tensor-map",
+    "missing-qwen-tokenizer-map",
+    "missing-qwen-output-head-map",
+    "missing-qwen-yvex-artifact",
+    "missing-qwen-artifact-identity",
+    "missing-metal-hardware-profile",
+    "missing-metal-backend-feasibility",
+    "missing-unified-memory-residency-plan",
+    "missing-real-prefill",
+    "missing-real-kv-path",
+    "missing-real-decode",
+    "missing-real-output-head-logits",
+    "missing-real-vocabulary-sampling",
+    "missing-generation-loop-over-real-state",
+    "missing-eval-path",
+    "missing-benchmark-path",
+};
+
+static const char *gemma_source_tail_blockers[] = {
+    "missing-gemma-model-class-profile",
+    "missing-gemma-tensor-map",
+    "missing-gemma-tokenizer-map",
+    "missing-gemma-output-head-map",
+    "missing-gemma-yvex-artifact",
+    "missing-gemma-artifact-identity",
+    "missing-gemma-real-prefill",
+    "missing-gemma-real-kv-path",
+    "missing-gemma-real-decode",
+    "missing-gemma-real-output-head-logits",
+    "missing-gemma-real-vocabulary-sampling",
+    "missing-gemma-generation-loop-over-real-state",
+    "missing-gemma-eval-path",
+    "missing-gemma-benchmark-path",
+};
+
+static const yvex_source_family_profile source_family_profiles[] = {
+    {
+        "qwen",
+        "Qwen",
+        "qwen-source-pressure",
+        "qwen-metal-portability",
+        "metal-reduced-full-runtime-pressure",
+        "pending-source-config",
+        "profiled",
+        "present",
+        "official-source-tensors-planned",
+        "future-YVEX-produced-GGUF",
+        "reduced-scale-portability-and-full-runtime-pressure",
+        "dense-or-dense-like-candidate-pending-source-config",
+        "apple-silicon-metal",
+        "metal-planned",
+        "pending source/config verification",
+        "missing-qwen-source-path",
+        "missing-qwen-source-manifest",
+        "missing-qwen-native-inventory",
+        "missing-qwen-source-config",
+        "missing-qwen-tokenizer-files",
+        "missing-qwen-model-class-profile",
+        "MODEL.CLASS.QWEN.0",
+        qwen_source_tail_blockers,
+        sizeof(qwen_source_tail_blockers) / sizeof(qwen_source_tail_blockers[0]),
+    },
+    {
+        "gemma",
+        "Gemma",
+        "gemma-source-pressure",
+        "gemma-dense-portability",
+        "reduced-dense-full-runtime-pressure",
+        "dense-candidate-pending-source-config",
+        "profiled",
+        "present",
+        "official-source-tensors-planned",
+        "future-YVEX-produced-GGUF",
+        "dense-candidate-pending-source-config-pressure",
+        "dense-candidate-pending-source-config",
+        "hardware-lane-unselected",
+        "backend-lane-unselected",
+        "pending source/config verification",
+        "missing-gemma-source-path",
+        "missing-gemma-source-manifest",
+        "missing-gemma-native-inventory",
+        "missing-gemma-source-config",
+        "missing-gemma-tokenizer-files",
+        "missing-gemma-model-class-profile",
+        "MODEL.CLASS.GEMMA.0",
+        gemma_source_tail_blockers,
+        sizeof(gemma_source_tail_blockers) / sizeof(gemma_source_tail_blockers[0]),
+    },
+};
+
+static const unsigned long source_family_profile_count =
+    sizeof(source_family_profiles) / sizeof(source_family_profiles[0]);
+
+typedef struct {
     const char *family;
     const char *release;
     const char *models_root;
     const char *source;
     const char *target;
+    const yvex_source_family_profile *profile;
     int include_files;
     int include_config;
     int include_blockers;
@@ -623,12 +746,33 @@ static int qwen_source_output_mode_parse(const char *value,
     return 0;
 }
 
-static int qwen_source_target_is_supported(const char *target)
+static const yvex_source_family_profile *qwen_source_find_profile(const char *family)
 {
-    return target &&
-           (strcmp(target, "qwen-metal-portability") == 0 ||
-            strcmp(target, "qwen-small") == 0 ||
-            strcmp(target, "qwen-medium") == 0);
+    unsigned long i;
+
+    if (!family) {
+        return NULL;
+    }
+    for (i = 0; i < source_family_profile_count; ++i) {
+        if (strcmp(source_family_profiles[i].family_key, family) == 0) {
+            return &source_family_profiles[i];
+        }
+    }
+    return NULL;
+}
+
+static int qwen_source_target_is_supported(const yvex_source_family_profile *profile,
+                                           const char *target)
+{
+    if (!profile || !target) {
+        return 0;
+    }
+    if (strcmp(profile->family_key, "qwen") == 0) {
+        return strcmp(target, "qwen-metal-portability") == 0 ||
+               strcmp(target, "qwen-small") == 0 ||
+               strcmp(target, "qwen-medium") == 0;
+    }
+    return strcmp(target, profile->target_id) == 0;
 }
 
 static int qwen_source_path_format(char *out, size_t cap, const char *fmt,
@@ -708,6 +852,7 @@ static unsigned long long qwen_source_count_top_safetensors(const char *dir)
 }
 
 static void qwen_source_choose_report_file(char *out, size_t cap,
+                                           const yvex_source_family_profile *profile,
                                            const char *reports_root,
                                            const char *source_path,
                                            const char *target,
@@ -715,11 +860,13 @@ static void qwen_source_choose_report_file(char *out, size_t cap,
                                            int *out_exists)
 {
     char candidate[YVEX_PATH_CAP];
+    char file_name[96];
+    int n;
 
     if (out_exists) {
         *out_exists = 0;
     }
-    if (!out || cap == 0 || !kind) {
+    if (!out || cap == 0 || !profile || !kind) {
         return;
     }
     out[0] = '\0';
@@ -738,11 +885,17 @@ static void qwen_source_choose_report_file(char *out, size_t cap,
     }
 
     if (reports_root && reports_root[0] != '\0') {
-        const char *file_name = strcmp(kind, "manifest") == 0
-                                    ? "qwen-source-manifest.json"
-                                    : "qwen-native-inventory.json";
-        if (qwen_source_path_format(candidate, sizeof(candidate), "%s/qwen/%s",
-                                    reports_root, file_name) &&
+        n = snprintf(file_name, sizeof(file_name), "%s-%s",
+                     profile->family_key,
+                     strcmp(kind, "manifest") == 0
+                         ? "source-manifest.json"
+                         : "native-inventory.json");
+        if (n < 0 || (size_t)n >= sizeof(file_name)) {
+            return;
+        }
+        n = snprintf(candidate, sizeof(candidate), "%s/%s/%s",
+                     reports_root, profile->family_key, file_name);
+        if (n >= 0 && (size_t)n < sizeof(candidate) &&
             qwen_source_stat_kind(candidate, 0)) {
             snprintf(out, cap, "%s", candidate);
             if (out_exists) *out_exists = 1;
@@ -751,8 +904,9 @@ static void qwen_source_choose_report_file(char *out, size_t cap,
         {
             char target_prefix[YVEX_PATH_CAP];
 
-            if (qwen_source_path_format(target_prefix, sizeof(target_prefix),
-                                        "%s/qwen/%s", reports_root, target) &&
+            n = snprintf(target_prefix, sizeof(target_prefix), "%s/%s/%s",
+                         reports_root, profile->family_key, target);
+            if (n >= 0 && (size_t)n < sizeof(target_prefix) &&
                 qwen_source_path_format(candidate, sizeof(candidate), "%s-%s",
                                         target_prefix,
                                         strcmp(kind, "manifest") == 0
@@ -764,7 +918,10 @@ static void qwen_source_choose_report_file(char *out, size_t cap,
                 return;
             }
         }
-        (void)qwen_source_path_format(out, cap, "%s/qwen/%s", reports_root, file_name);
+        n = snprintf(out, cap, "%s/%s/%s", reports_root, profile->family_key, file_name);
+        if (n < 0 || (size_t)n >= cap) {
+            out[cap - 1] = '\0';
+        }
     }
 }
 
@@ -816,8 +973,10 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
     yvex_operator_paths operator_paths;
     yvex_error err;
     int rc;
+    int n;
+    unsigned long i;
 
-    if (!options || !report) {
+    if (!options || !report || !options->profile) {
         return 3;
     }
 
@@ -843,10 +1002,12 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
         snprintf(report->source_path_source, sizeof(report->source_path_source),
                  "%s", "explicit-source");
     } else {
-        if (!qwen_source_path_format(report->source_path, sizeof(report->source_path),
-                                     "%s/hf/qwen/%s",
-                                     operator_paths.models_root,
-                                     options->target)) {
+        n = snprintf(report->source_path, sizeof(report->source_path),
+                     "%s/hf/%s/%s",
+                     operator_paths.models_root,
+                     options->profile->family_key,
+                     options->target);
+        if (n < 0 || (size_t)n >= sizeof(report->source_path)) {
             fprintf(stderr, "source-manifest report: source path is too long\n");
             return 2;
         }
@@ -868,6 +1029,7 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
     }
 
     qwen_source_choose_report_file(report->manifest_path, sizeof(report->manifest_path),
+                                   options->profile,
                                    operator_paths.reports_root,
                                    report->source_path,
                                    options->target,
@@ -875,6 +1037,7 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
                                    &report->manifest_exists);
     qwen_source_choose_report_file(report->native_inventory_path,
                                    sizeof(report->native_inventory_path),
+                                   options->profile,
                                    operator_paths.reports_root,
                                    report->source_path,
                                    options->target,
@@ -884,63 +1047,49 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
     report->source_state = report->source_exists ? "present" : "missing";
     if (!report->source_exists) {
         report->status = "source-target-profiled";
-        report->top_blocker = "missing-qwen-source-path";
-        report->next_row = "V010.SOURCE.1";
+        report->top_blocker = options->profile->source_path_blocker;
+        report->next_row = "V010.SOURCE.2";
     } else if (!report->manifest_exists) {
         report->status = "source-present-report-only";
-        report->top_blocker = "missing-qwen-source-manifest";
-        report->next_row = "V010.SOURCE.0";
+        report->top_blocker = options->profile->source_manifest_blocker;
+        report->next_row = "V010.SOURCE.2";
     } else if (!report->native_inventory_exists) {
         report->status = "source-present-report-only";
-        report->top_blocker = "missing-qwen-native-inventory";
+        report->top_blocker = options->profile->native_inventory_blocker;
         report->next_row = "V010.SOURCE.5";
     } else {
         report->status = "source-profile-incomplete";
-        report->top_blocker = "missing-qwen-model-class-profile";
-        report->next_row = "MODEL.CLASS.QWEN.0";
+        report->top_blocker = options->profile->model_class_blocker;
+        report->next_row = options->profile->model_class_next;
     }
 
     if (!report->source_exists) {
-        qwen_source_add_blocker(report, "missing-qwen-source-path");
+        qwen_source_add_blocker(report, options->profile->source_path_blocker);
     }
     if (!report->manifest_exists) {
-        qwen_source_add_blocker(report, "missing-qwen-source-manifest");
+        qwen_source_add_blocker(report, options->profile->source_manifest_blocker);
     }
     if (!report->native_inventory_exists) {
-        qwen_source_add_blocker(report, "missing-qwen-native-inventory");
+        qwen_source_add_blocker(report, options->profile->native_inventory_blocker);
     }
     if (!report->config_exists) {
-        qwen_source_add_blocker(report, "missing-qwen-source-config");
+        qwen_source_add_blocker(report, options->profile->source_config_blocker);
     }
     if (!(report->tokenizer_json_exists || report->tokenizer_config_exists)) {
-        qwen_source_add_blocker(report, "missing-qwen-tokenizer-files");
+        qwen_source_add_blocker(report, options->profile->tokenizer_blocker);
     }
-    qwen_source_add_blocker(report, "missing-qwen-model-class-profile");
-    qwen_source_add_blocker(report, "missing-qwen-tensor-map");
-    qwen_source_add_blocker(report, "missing-qwen-tokenizer-map");
-    qwen_source_add_blocker(report, "missing-qwen-output-head-map");
-    qwen_source_add_blocker(report, "missing-qwen-yvex-artifact");
-    qwen_source_add_blocker(report, "missing-qwen-artifact-identity");
-    qwen_source_add_blocker(report, "missing-metal-hardware-profile");
-    qwen_source_add_blocker(report, "missing-metal-backend-feasibility");
-    qwen_source_add_blocker(report, "missing-unified-memory-residency-plan");
-    qwen_source_add_blocker(report, "missing-real-prefill");
-    qwen_source_add_blocker(report, "missing-real-kv-path");
-    qwen_source_add_blocker(report, "missing-real-decode");
-    qwen_source_add_blocker(report, "missing-real-output-head-logits");
-    qwen_source_add_blocker(report, "missing-real-vocabulary-sampling");
-    qwen_source_add_blocker(report, "missing-generation-loop-over-real-state");
-    qwen_source_add_blocker(report, "missing-eval-path");
-    qwen_source_add_blocker(report, "missing-benchmark-path");
+    for (i = 0; i < options->profile->tail_blocker_count; ++i) {
+        qwen_source_add_blocker(report, options->profile->tail_blockers[i]);
+    }
     return 0;
 }
 
 static void qwen_source_print_normal(const yvex_qwen_source_report_options *options,
                                      const yvex_qwen_source_pressure_report *report)
 {
-    printf("report: qwen-source-pressure\n");
+    printf("report: %s\n", options->profile->report_name);
     printf("status: %s\n", report->status);
-    printf("family: qwen\n");
+    printf("family: %s\n", options->profile->family_key);
     printf("target: %s\n", options->target);
     printf("source: %s\n", report->source_state);
     printf("top_blocker: %s\n", report->top_blocker);
@@ -955,7 +1104,7 @@ static void qwen_source_print_table(const yvex_qwen_source_report_options *optio
     printf("%-6s  %-24s  %-7s  %-8s  %-9s  %s\n",
            "FAMILY", "TARGET", "SOURCE", "MANIFEST", "INVENTORY", "NEXT");
     printf("%-6s  %-24s  %-7s  %-8s  %-9s  %s\n",
-           "qwen",
+           options->profile->family_key,
            options->target,
            report->source_state,
            qwen_source_manifest_status(report),
@@ -968,16 +1117,27 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
 {
     unsigned long i;
 
-    printf("source-report: qwen\n");
+    printf("source-report: %s\n", options->profile->family_key);
     printf("status: %s\n", report->status);
     printf("release: %s\n", options->release);
-    printf("family: qwen\n");
+    printf("family: %s\n", options->profile->display_family);
+    printf("family_key: %s\n", options->profile->family_key);
+    printf("model: %s\n", options->profile->model);
     printf("target_id: %s\n", options->target);
-    printf("target_class: metal-reduced-full-runtime-pressure\n");
-    printf("source_target_status: profiled\n");
-    printf("source_class: pending source/config verification\n");
+    printf("target_class: %s\n", options->profile->target_class);
+    printf("source_target_status: %s\n", options->profile->source_target_status);
+    printf("source_family_profile_status: %s\n",
+           options->profile->source_family_profile_status);
+    printf("source_artifact_class: %s\n", options->profile->source_artifact_class);
+    printf("target_artifact_class: %s\n", options->profile->target_artifact_class);
+    printf("pressure_purpose: %s\n", options->profile->pressure_purpose);
+    printf("runtime_shape: %s\n", options->profile->runtime_shape);
+    printf("hardware_lane: %s\n", options->profile->hardware_lane);
+    printf("backend_lane: %s\n", options->profile->backend_lane);
+    printf("source_class: %s\n", options->profile->source_class);
     printf("source_path: %s\n", report->source_path);
     printf("source_path_source: %s\n", report->source_path_source);
+    printf("source_path_status: %s\n", report->source_state);
     printf("source_exists: %s\n", report->source_exists ? "true" : "false");
     printf("config_status: %s\n", qwen_source_present_missing(report->config_exists));
     printf("tokenizer_status: %s\n", qwen_source_tokenizer_status(report));
@@ -1009,21 +1169,21 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
 
 static void qwen_source_report_usage(FILE *fp)
 {
-    fprintf(fp, "usage: yvex source-manifest report --family qwen --release v0.1.0 [options]\n");
+    fprintf(fp, "usage: yvex source-manifest report --family qwen|gemma --release v0.1.0 [options]\n");
 }
 
 static void qwen_source_report_help(FILE *fp)
 {
     qwen_source_report_usage(fp);
     fprintf(fp, "\nOptions:\n");
-    fprintf(fp, "  --family qwen\n");
+    fprintf(fp, "  --family qwen|gemma\n");
     fprintf(fp, "  --release v0.1.0\n");
     fprintf(fp, "  --models-root DIR\n");
     fprintf(fp, "  --source DIR\n");
-    fprintf(fp, "  --target qwen-metal-portability|qwen-small|qwen-medium\n");
+    fprintf(fp, "  --target qwen-metal-portability|qwen-small|qwen-medium|gemma-dense-portability\n");
     fprintf(fp, "  --include-files --include-config --include-blockers --include-next\n");
     fprintf(fp, "  --audit | --output normal|table|audit\n\n");
-    fprintf(fp, "The Qwen source pressure report inspects source-path readiness only. It does not download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    fprintf(fp, "The source pressure report inspects source-path readiness only. It does not download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
 }
 
 int yvex_source_manifest_report_command(int argc, char **argv)
@@ -1034,7 +1194,6 @@ int yvex_source_manifest_report_command(int argc, char **argv)
     int rc;
 
     memset(&options, 0, sizeof(options));
-    options.target = "qwen-metal-portability";
     options.output_mode = YVEX_SOURCE_REPORT_OUTPUT_NORMAL;
 
     if (argc == 4 && (strcmp(argv[3], "--help") == 0 || strcmp(argv[3], "-h") == 0)) {
@@ -1048,7 +1207,7 @@ int yvex_source_manifest_report_command(int argc, char **argv)
             return 0;
         } else if (strcmp(argv[i], "--family") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "source-manifest report: --family requires qwen\n");
+                fprintf(stderr, "source-manifest report: --family requires qwen|gemma\n");
                 return 2;
             }
             options.family = argv[++i];
@@ -1109,9 +1268,13 @@ int yvex_source_manifest_report_command(int argc, char **argv)
         qwen_source_report_usage(stderr);
         return 2;
     }
-    if (strcmp(options.family, "qwen") != 0) {
+    options.profile = qwen_source_find_profile(options.family);
+    if (!options.profile) {
         fprintf(stderr, "source-manifest report: unsupported family: %s\n", options.family);
         return 2;
+    }
+    if (!options.target) {
+        options.target = options.profile->target_id;
     }
     if (!options.release || options.release[0] == '\0') {
         fprintf(stderr, "source-manifest report: --release is required\n");
@@ -1122,7 +1285,7 @@ int yvex_source_manifest_report_command(int argc, char **argv)
         fprintf(stderr, "source-manifest report: unsupported release: %s\n", options.release);
         return 2;
     }
-    if (!qwen_source_target_is_supported(options.target)) {
+    if (!qwen_source_target_is_supported(options.profile, options.target)) {
         fprintf(stderr, "source-manifest report: unsupported target: %s\n", options.target);
         return 2;
     }

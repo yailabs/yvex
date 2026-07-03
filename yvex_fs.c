@@ -599,19 +599,23 @@ int yvex_operator_paths_reset(const yvex_paths *paths,
 
 int yvex_operator_paths_create(const yvex_operator_paths *operator_paths, yvex_error *err)
 {
-    const char *dirs[17];
+    const char *dirs[21];
     char family_dir[YVEX_PATH_CAP];
     char glm_dir[YVEX_PATH_CAP];
     char qwen_dir[YVEX_PATH_CAP];
+    char gemma_dir[YVEX_PATH_CAP];
     char gguf_deepseek[YVEX_PATH_CAP];
     char gguf_glm[YVEX_PATH_CAP];
     char gguf_qwen[YVEX_PATH_CAP];
+    char gguf_gemma[YVEX_PATH_CAP];
     char reports_deepseek[YVEX_PATH_CAP];
     char reports_glm[YVEX_PATH_CAP];
     char reports_qwen[YVEX_PATH_CAP];
+    char reports_gemma[YVEX_PATH_CAP];
     char reference_deepseek[YVEX_PATH_CAP];
     char reference_glm[YVEX_PATH_CAP];
     char reference_qwen[YVEX_PATH_CAP];
+    char reference_gemma[YVEX_PATH_CAP];
     int rc;
     int i;
 
@@ -626,11 +630,15 @@ int yvex_operator_paths_create(const yvex_operator_paths *operator_paths, yvex_e
     if (rc != YVEX_OK) return rc;
     rc = yvex_path_format(qwen_dir, sizeof(qwen_dir), err, "operator_paths", "%s/qwen", operator_paths->hf_root);
     if (rc != YVEX_OK) return rc;
+    rc = yvex_path_format(gemma_dir, sizeof(gemma_dir), err, "operator_paths", "%s/gemma", operator_paths->hf_root);
+    if (rc != YVEX_OK) return rc;
     rc = yvex_path_format(gguf_deepseek, sizeof(gguf_deepseek), err, "operator_paths", "%s/deepseek", operator_paths->gguf_root);
     if (rc != YVEX_OK) return rc;
     rc = yvex_path_format(gguf_glm, sizeof(gguf_glm), err, "operator_paths", "%s/glm", operator_paths->gguf_root);
     if (rc != YVEX_OK) return rc;
     rc = yvex_path_format(gguf_qwen, sizeof(gguf_qwen), err, "operator_paths", "%s/qwen", operator_paths->gguf_root);
+    if (rc != YVEX_OK) return rc;
+    rc = yvex_path_format(gguf_gemma, sizeof(gguf_gemma), err, "operator_paths", "%s/gemma", operator_paths->gguf_root);
     if (rc != YVEX_OK) return rc;
     rc = yvex_path_format(reports_deepseek, sizeof(reports_deepseek), err, "operator_paths", "%s/deepseek", operator_paths->reports_root);
     if (rc != YVEX_OK) return rc;
@@ -638,11 +646,15 @@ int yvex_operator_paths_create(const yvex_operator_paths *operator_paths, yvex_e
     if (rc != YVEX_OK) return rc;
     rc = yvex_path_format(reports_qwen, sizeof(reports_qwen), err, "operator_paths", "%s/qwen", operator_paths->reports_root);
     if (rc != YVEX_OK) return rc;
+    rc = yvex_path_format(reports_gemma, sizeof(reports_gemma), err, "operator_paths", "%s/gemma", operator_paths->reports_root);
+    if (rc != YVEX_OK) return rc;
     rc = yvex_path_format(reference_deepseek, sizeof(reference_deepseek), err, "operator_paths", "%s/deepseek", operator_paths->reference_root);
     if (rc != YVEX_OK) return rc;
     rc = yvex_path_format(reference_glm, sizeof(reference_glm), err, "operator_paths", "%s/glm", operator_paths->reference_root);
     if (rc != YVEX_OK) return rc;
     rc = yvex_path_format(reference_qwen, sizeof(reference_qwen), err, "operator_paths", "%s/qwen", operator_paths->reference_root);
+    if (rc != YVEX_OK) return rc;
+    rc = yvex_path_format(reference_gemma, sizeof(reference_gemma), err, "operator_paths", "%s/gemma", operator_paths->reference_root);
     if (rc != YVEX_OK) return rc;
 
     dirs[0] = operator_paths->models_root;
@@ -650,20 +662,24 @@ int yvex_operator_paths_create(const yvex_operator_paths *operator_paths, yvex_e
     dirs[2] = family_dir;
     dirs[3] = glm_dir;
     dirs[4] = qwen_dir;
-    dirs[5] = operator_paths->gguf_root;
-    dirs[6] = gguf_deepseek;
-    dirs[7] = gguf_glm;
-    dirs[8] = gguf_qwen;
-    dirs[9] = operator_paths->reports_root;
-    dirs[10] = reports_deepseek;
-    dirs[11] = reports_glm;
-    dirs[12] = reports_qwen;
-    dirs[13] = operator_paths->reference_root;
-    dirs[14] = reference_deepseek;
-    dirs[15] = reference_glm;
-    dirs[16] = reference_qwen;
+    dirs[5] = gemma_dir;
+    dirs[6] = operator_paths->gguf_root;
+    dirs[7] = gguf_deepseek;
+    dirs[8] = gguf_glm;
+    dirs[9] = gguf_qwen;
+    dirs[10] = gguf_gemma;
+    dirs[11] = operator_paths->reports_root;
+    dirs[12] = reports_deepseek;
+    dirs[13] = reports_glm;
+    dirs[14] = reports_qwen;
+    dirs[15] = reports_gemma;
+    dirs[16] = operator_paths->reference_root;
+    dirs[17] = reference_deepseek;
+    dirs[18] = reference_glm;
+    dirs[19] = reference_qwen;
+    dirs[20] = reference_gemma;
 
-    for (i = 0; i < 17; ++i) {
+    for (i = 0; i < 21; ++i) {
         rc = yvex_mkdir_p(dirs[i], err);
         if (rc != YVEX_OK) {
             return rc;
@@ -690,7 +706,8 @@ int yvex_operator_paths_resolve_target(const yvex_operator_paths *operator_paths
     }
     if (strcmp(family, "deepseek") != 0 &&
         strcmp(family, "glm") != 0 &&
-        strcmp(family, "qwen") != 0) {
+        strcmp(family, "qwen") != 0 &&
+        strcmp(family, "gemma") != 0) {
         yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "operator_paths", "unknown family: %s", family);
         return YVEX_ERR_INVALID_ARG;
     }
@@ -699,11 +716,13 @@ int yvex_operator_paths_resolve_target(const yvex_operator_paths *operator_paths
         rc = yvex_path_format(out, cap, err, "operator_paths", "%s/hf/%s/%s",
                               operator_paths->models_root,
                               family,
-                              strcmp(family, "deepseek") == 0
-                                  ? "DeepSeek-V4-Flash"
-                                  : (strcmp(family, "glm") == 0
-                                         ? "GLM-5.2"
-                                         : "qwen-metal-portability"));
+                                  strcmp(family, "deepseek") == 0
+                                      ? "DeepSeek-V4-Flash"
+                                      : (strcmp(family, "glm") == 0
+                                             ? "GLM-5.2"
+                                             : (strcmp(family, "qwen") == 0
+                                                    ? "qwen-metal-portability"
+                                                    : "gemma-dense-portability")));
     } else if (strcmp(kind, "gguf") == 0) {
         rc = yvex_path_format(out, cap, err, "operator_paths", "%s/gguf/%s", operator_paths->models_root, family);
     } else if (strcmp(kind, "reports") == 0) {
@@ -1193,6 +1212,6 @@ void yvex_paths_help(FILE *fp)
     fprintf(fp, "       yvex paths [--project DIR] --run [--create]\n");
     fprintf(fp, "       yvex paths [--project DIR] configure --models-root DIR [--create]\n");
     fprintf(fp, "       yvex paths [--project DIR] configure --reset\n");
-    fprintf(fp, "       yvex paths [--project DIR] resolve --family deepseek|glm|qwen --kind source|gguf|reports|reference|registry\n\n");
+    fprintf(fp, "       yvex paths [--project DIR] resolve --family deepseek|glm|qwen|gemma --kind source|gguf|reports|reference|registry\n\n");
     fprintf(fp, "Path configuration records operator-local storage only; it does not download models, create artifacts, register aliases, or claim runtime support.\n");
 }
