@@ -69,6 +69,7 @@ make
 ./yvex paths resolve --family deepseek --kind source
 ./yvex paths resolve --family deepseek --kind gguf
 ./yvex paths resolve --family glm --kind source
+./yvex paths resolve --family qwen --kind source
 ./yvex model-target classes
 ./yvex model-target list
 ./yvex model-target list --output table
@@ -78,6 +79,8 @@ make
 ./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths --audit
 ./yvex model-target inspect glm-5.2-official-safetensors
 ./yvex model-target inspect glm-5.2-official-safetensors --paths --audit
+./yvex model-target inspect qwen-metal-portability
+./yvex model-target inspect qwen-metal-portability --paths
 ./yvex model-target decision --help
 ./yvex model-target decision --release v0.1.0 --output table
 ./yvex model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
@@ -335,7 +338,7 @@ Quant/template/intake manifests:
 - `materialize-gate`: integrity and gate lanes
 - `metadata`: artifact inspection lanes
 - `model-gate`: integrity and gate lanes
-- `model-target`: model lanes, model target path, target decision, and full-runtime candidate reporting lanes, fast regression lane
+- `model-target`: model lanes, model target path, Qwen source-target profile, target decision, and full-runtime candidate reporting lanes, fast regression lane
 - `models`: artifact registration and selected prepare lanes
 - `native-weights`: source intake lanes
 - `paths`: configure once lane, fast regression lane, path resolution

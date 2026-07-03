@@ -108,12 +108,21 @@ Qwen/Metal is a future portability pressure lane, not a supported runtime lane.
 The current command-visible source surface is:
 
 ```sh
+./yvex model-target list
+./yvex model-target inspect qwen-metal-portability
+./yvex model-target inspect qwen-metal-portability --paths
 ./yvex source-manifest report --family qwen --release v0.1.0
 ./yvex source-manifest report --family qwen --release v0.1.0 --output table
 ./yvex source-manifest report --family qwen --release v0.1.0 --audit
 ```
 
-The report checks only local source-path pressure facts: candidate target slot,
+`qwen-metal-portability` is source-target profile only. It is a pressure-target
+slot for Qwen family, the `<models_root>/hf/qwen/qwen-metal-portability` source
+path convention, official source tensor expectation, future YVEX-produced GGUF
+artifact class, and Apple Silicon / Metal portability pressure. It is pending
+source/config verification.
+
+The report checks only local source-path pressure facts: concrete target slot,
 configured source path, source path existence, config/tokenizer file visibility,
 top-level safetensors presence, source manifest status, native inventory status,
 blockers, and next rows. It does not download sources, create source manifests,
@@ -121,9 +130,9 @@ emit artifacts, materialize tensors, inspect tensor payloads, implement Metal,
 execute Qwen runtime paths, generate, evaluate, benchmark, or mark a release
 ready.
 
-`OWI.TARGETS.QWEN.0` is the next source-target profile row for making the
-candidate target source-backed. It is not completed by the source pressure
-report.
+`OWI.TARGETS.QWEN.0` is complete as the source-target profile row.
+`V010.SOURCE.1` is the next source row for source family/profile fields. It is
+not completed by the target profile.
 
 ## Family Classification
 

@@ -1163,6 +1163,13 @@ static const yvex_model_target_class_record model_target_classes[] = {
         "official upstream source tensors used to force source manifest, native tensor inventory, model-class profiling, tensor mapping, quantization policy, and future YVEX-produced artifacts",
     },
     {
+        "metal-reduced-full-runtime-pressure",
+        "false",
+        "unsupported",
+        "unsupported",
+        "Qwen source target profile used for Apple Silicon / Metal portability pressure without source download, runtime support, generation, or benchmark claim",
+    },
+    {
         "full-runtime-model",
         "false",
         "planned",
@@ -1241,6 +1248,22 @@ static const yvex_model_target_record model_targets[] = {
         "unsupported",
         "false",
     },
+    {
+        "qwen-metal-portability",
+        "Qwen",
+        "pending-source-config",
+        "metal-reduced-full-runtime-pressure",
+        "official-source-tensors-planned",
+        "future-YVEX-produced-GGUF",
+        "reduced-scale-portability-and-full-runtime-pressure",
+        "pending-source-config",
+        "hf/qwen/qwen-metal-portability",
+        "pending source/config verification",
+        "target profile only; no source download/runtime/generation",
+        "unsupported",
+        "unsupported",
+        "false",
+    },
 };
 
 static const unsigned long model_target_class_count =
@@ -1293,6 +1316,7 @@ typedef struct {
     const char *class_name;
     const char *stage;
     const char *eligibility;
+    const char *source_target_status;
     const char *source_status;
     const char *artifact_status;
     const char *tensor_map_status;
@@ -1393,9 +1417,9 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         0,
     },
     {
-        "qwen-metal-portability-pressure",
+        "qwen-metal-portability",
         "metal-reduced-full-runtime-pressure",
-        "report-only",
+        "source-target-profiled",
         "planned-portability-only",
         "planned",
         "planned",
@@ -1403,9 +1427,10 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0,OWI.TARGETS.QWEN.0",
+        "V010.SOURCE.1,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
+            "missing-qwen-source-path",
             "missing-source-inventory",
             "missing-tensor-map",
             "missing-full-artifact",
@@ -1415,7 +1440,7 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
             "missing-real-logits",
             "missing-real-sampling",
         },
-        9,
+        10,
         1,
         0,
     },
@@ -1578,10 +1603,10 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         0,
     },
     {
-        "qwen-metal-portability-pressure",
+        "qwen-metal-portability",
         "Qwen",
         "metal-reduced-full-runtime-pressure",
-        "report-only",
+        "source-target-profiled",
         "dense-pressure-only",
         "missing-dense-source",
         "missing-dense-artifact",
@@ -1592,9 +1617,10 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,OWI.TARGETS.QWEN.0,COMPUTE.BACKEND.METAL.0",
+        "V010.TARGET.7,V010.SOURCE.1,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
+            "missing-qwen-source-path",
             "missing-dense-source",
             "missing-dense-artifact",
             "missing-source-manifest",
@@ -1617,7 +1643,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
             "missing-eval-path",
             "missing-benchmark-path",
         },
-        22,
+        23,
         1,
         0,
         0,
@@ -1663,7 +1689,7 @@ static const unsigned long dense_candidate_fact_count =
     sizeof(dense_candidate_facts) / sizeof(dense_candidate_facts[0]);
 
 static const char *qwen_metal_blockers[] = {
-    "missing-qwen-source-target",
+    "missing-qwen-source-path",
     "missing-qwen-source-manifest",
     "missing-qwen-native-inventory",
     "missing-qwen-source-config",
@@ -1700,6 +1726,7 @@ static const yvex_qwen_metal_candidate_fact qwen_metal_candidate_facts[] = {
         "metal-reduced-full-runtime-pressure",
         "report-only",
         "pressure-target-only",
+        "pending",
         "missing",
         "missing",
         "missing",
@@ -1708,7 +1735,7 @@ static const yvex_qwen_metal_candidate_fact qwen_metal_candidate_facts[] = {
         "unsupported-full-model",
         "not-measured",
         {
-            "missing-qwen-source-target",
+            "missing-qwen-source-path",
             "missing-qwen-source-manifest",
             "missing-qwen-native-inventory",
             "missing-qwen-model-class-profile",
@@ -1725,6 +1752,7 @@ static const yvex_qwen_metal_candidate_fact qwen_metal_candidate_facts[] = {
         "metal-reduced-full-runtime-pressure",
         "report-only",
         "pressure-target-only",
+        "pending",
         "missing",
         "missing",
         "missing",
@@ -1733,7 +1761,7 @@ static const yvex_qwen_metal_candidate_fact qwen_metal_candidate_facts[] = {
         "unsupported-full-model",
         "not-measured",
         {
-            "missing-qwen-source-target",
+            "missing-qwen-source-path",
             "missing-qwen-source-manifest",
             "missing-qwen-native-inventory",
             "missing-qwen-model-class-profile",
@@ -1749,17 +1777,20 @@ static const yvex_qwen_metal_candidate_fact qwen_metal_candidate_facts[] = {
     {
         "qwen-metal-portability",
         "metal-reduced-full-runtime-pressure",
-        "report-only",
+        "source-target-profiled",
         "pressure-target-only",
-        "planned",
-        "planned",
+        "profiled",
+        "missing",
+        "missing",
         "missing",
         "unsupported",
         "unsupported",
         "unsupported-full-model",
         "not-measured",
         {
-            "missing-qwen-source-target",
+            "missing-qwen-source-path",
+            "missing-qwen-source-manifest",
+            "missing-qwen-native-inventory",
             "missing-qwen-source-config",
             "missing-qwen-model-class-profile",
             "missing-qwen-tokenizer-map",
@@ -1770,7 +1801,7 @@ static const yvex_qwen_metal_candidate_fact qwen_metal_candidate_facts[] = {
             "missing-real-kv-path",
             "missing-generation-loop-over-real-state",
         },
-        10,
+        12,
     },
 };
 
@@ -1929,6 +1960,9 @@ static const char *target_decision_candidate_status(const yvex_model_target_reco
         strcmp(record->target_id, "glm-5.2-official-safetensors") == 0) {
         return "ineligible-source-only";
     }
+    if (strcmp(record->target_class, "metal-reduced-full-runtime-pressure") == 0) {
+        return "ineligible-pressure-target";
+    }
     if (strcmp(record->target_class, "external-GGUF-reference") == 0 ||
         strcmp(record->target_class, "external-runner-reference") == 0) {
         return "ineligible-external-reference";
@@ -1951,6 +1985,9 @@ static const char *target_decision_candidate_reason(const yvex_model_target_reco
     if (strcmp(record->target_id, "glm-5.2-official-safetensors") == 0) {
         return "source-only target has no YVEX-produced artifact/runtime path";
     }
+    if (strcmp(record->target_class, "metal-reduced-full-runtime-pressure") == 0) {
+        return "Qwen source target profile remains pressure-only until source/profile evidence exists";
+    }
     if (strcmp(record->target_class, "external-GGUF-reference") == 0 ||
         strcmp(record->target_class, "external-runner-reference") == 0) {
         return "external reference cannot close YVEX runtime";
@@ -1964,6 +2001,9 @@ static const char *target_decision_candidate_next(const yvex_model_target_record
     if (target_decision_is_full_runtime_candidate(record)) return "class-and-tensor-gates";
     if (strcmp(record->target_id, "glm-5.2-official-safetensors") == 0) {
         return "source/storage pressure";
+    }
+    if (strcmp(record->target_class, "metal-reduced-full-runtime-pressure") == 0) {
+        return "source family/profile fields";
     }
     if (strcmp(record->target_class, "selected-runtime-slice") == 0) return "pressure-only";
     if (strcmp(record->target_class, "external-GGUF-reference") == 0 ||
@@ -2291,7 +2331,7 @@ static int print_model_target_candidate_normal(const char *release,
     printf("candidates: 0 eligible / %lu known (%lu pressure, %lu fixture)\n",
            candidate_count, pressure_count, fixture_count);
     printf("top_blocker: no eligible full-runtime candidate\n");
-    printf("next: OWI.TARGETS.QWEN.0\n");
+    printf("next: V010.SOURCE.1\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
@@ -2413,7 +2453,7 @@ static void print_registered_dense_candidate(unsigned long index,
         printf("dense_candidate_%lu_blocker_11: missing-real-logits\n", index);
     }
     if (include_next) {
-        printf("dense_candidate_%lu_next_required_rows: V010.TARGET.7,OWI.TARGETS.QWEN.0,V010.MAP.*\n", index);
+        printf("dense_candidate_%lu_next_required_rows: V010.TARGET.7,V010.SOURCE.1,V010.MAP.*\n", index);
     }
 }
 
@@ -2617,7 +2657,7 @@ static int print_model_target_dense_candidate_normal(const char *release,
     printf("candidates: %lu eligible / %lu known (%lu dense pressure)\n",
            eligible_count, dense_candidate_count, dense_pressure_count);
     printf("top_blocker: no selected dense full-runtime candidate\n");
-    printf("next: OWI.TARGETS.QWEN.0\n");
+    printf("next: V010.SOURCE.1\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
@@ -2647,6 +2687,7 @@ static void print_qwen_metal_candidate(unsigned long index,
     printf("qwen_candidate_%lu_class: %s\n", index, fact->class_name);
     printf("qwen_candidate_%lu_stage: %s\n", index, fact->stage);
     printf("qwen_candidate_%lu_eligibility: %s\n", index, fact->eligibility);
+    printf("qwen_candidate_%lu_source_target_status: %s\n", index, fact->source_target_status);
     printf("qwen_candidate_%lu_source_status: %s\n", index, fact->source_status);
     printf("qwen_candidate_%lu_artifact_status: %s\n", index, fact->artifact_status);
     printf("qwen_candidate_%lu_tensor_map_status: %s\n", index, fact->tensor_map_status);
@@ -2728,6 +2769,10 @@ static int print_model_target_qwen_metal_report(const char *release,
     printf("target_class: metal-reduced-full-runtime-pressure\n");
     printf("stage: report-only\n");
     printf("eligibility: pressure-target-only\n");
+    printf("candidate_id: qwen-metal-portability\n");
+    printf("candidate_stage: source-target-profiled\n");
+    printf("candidate_eligibility: pressure-target-only\n");
+    printf("source_target_status: profiled\n");
     printf("runtime_shape: dense-or-dense-like-candidate-pending-source-config\n");
     printf("hardware_lane: apple-silicon-metal\n");
     printf("backend_lane: metal-planned\n");
@@ -2767,6 +2812,7 @@ static int print_model_target_qwen_metal_report(const char *release,
     }
     if (include_source) {
         printf("source_family: qwen\n");
+        printf("source_target_status: profiled\n");
         printf("source_manifest_status: missing\n");
         printf("native_tensor_inventory_status: missing\n");
         printf("source_config_status: missing\n");
@@ -2778,7 +2824,7 @@ static int print_model_target_qwen_metal_report(const char *release,
         }
     }
     if (include_next) {
-        printf("next_required_rows: OWI.TARGETS.QWEN.0\n");
+        printf("next_required_rows: V010.SOURCE.1\n");
     }
     return 0;
 }
@@ -2799,9 +2845,12 @@ static int print_model_target_qwen_metal_normal(const char *release,
     printf("status: pressure-target-only\n");
     printf("release: %s\n", release);
     printf("lane: qwen-metal / apple-silicon-metal\n");
+    printf("target: qwen-metal-portability\n");
+    printf("candidate: source-target-profiled pressure-target-only\n");
+    printf("source_target: profiled\n");
     printf("source: missing\n");
     printf("backend: metal unsupported\n");
-    printf("next: OWI.TARGETS.QWEN.0\n");
+    printf("next: V010.SOURCE.1\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     return 0;
 }
@@ -3007,7 +3056,7 @@ static int print_model_target_decision_normal(const char *release,
     printf("eligible: %lu / %lu candidates (%lu ineligible)\n",
            eligible_count, candidate_count, ineligible_count);
     printf("top_blocker: %s\n", selected ? "none" : "no eligible full-runtime candidate");
-    printf("next: OWI.TARGETS.QWEN.0\n");
+    printf("next: V010.SOURCE.1\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     return 0;
 }
@@ -3092,7 +3141,7 @@ static void print_model_target_list_table(void)
     unsigned long i;
 
     printf("MODEL TARGETS  count=%lu\n\n", model_target_count);
-    printf("%-43s  %-8s  %-26s  %-11s  %s\n",
+    printf("%-43s  %-8s  %-40s  %-11s  %s\n",
            "TARGET",
            "FAMILY",
            "CLASS",
@@ -3100,7 +3149,7 @@ static void print_model_target_list_table(void)
            "GENERATION");
     for (i = 0; i < model_target_count; ++i) {
         const yvex_model_target_record *record = &model_targets[i];
-        printf("%-43s  %-8s  %-26s  %-11s  %s\n",
+        printf("%-43s  %-8s  %-40s  %-11s  %s\n",
                record->target_id,
                record->family,
                record->target_class,
@@ -3131,6 +3180,19 @@ static void print_model_target_record(const yvex_model_target_record *record)
 
 static void print_model_target_record_normal(const yvex_model_target_record *record)
 {
+    if (strcmp(record->target_id, "qwen-metal-portability") == 0) {
+        printf("target: %s\n", record->target_id);
+        printf("family: %s  class=%s\n", record->family, record->target_class);
+        printf("source: %s\n", record->source_artifact_class);
+        printf("artifact: %s\n", record->target_artifact_class);
+        printf("runtime: %s\n", record->runtime_execution);
+        printf("generation: %s\n", record->generation);
+        printf("next: V010.SOURCE.1\n");
+        printf("boundary: target profile only; no source download/runtime/generation\n");
+        printf("status: model-target\n");
+        return;
+    }
+
     printf("target: %s\n", record->target_id);
     printf("family: %s class=%s\n", record->family, record->target_class);
     printf("source: %s target=%s\n",
@@ -3163,7 +3225,7 @@ static void print_model_target_report_table(const char *report,
            status ? status : "blocked",
            selected ? selected : "none",
            eligible_count,
-           "OWI.TARGETS.QWEN.0");
+           "V010.SOURCE.1");
 }
 
 static int path_exists(const char *path)
@@ -3227,6 +3289,8 @@ static int print_model_target_paths(const yvex_model_target_record *record,
         family_key = "deepseek";
     } else if (strcmp(record->family, "GLM") == 0) {
         family_key = "glm";
+    } else if (strcmp(record->family, "Qwen") == 0) {
+        family_key = "qwen";
     } else {
         fprintf(stderr, "model-target: no path mapping for family: %s\n", record->family);
         return 2;
@@ -3286,12 +3350,35 @@ static int print_model_target_paths(const yvex_model_target_record *record,
         target_class = "future YVEX-produced GGUF";
         runtime_execution = "unsupported";
         artifact_exists = 0;
+    } else if (strcmp(record->target_id, "qwen-metal-portability") == 0) {
+        rc = format_model_target_artifact_path(
+            artifact_path, sizeof(artifact_path), &operator_paths, "qwen",
+            "qwen-metal-portability");
+        if (rc != 0) {
+            return rc;
+        }
+        registry_alias = "none";
+        source_class = record->source_artifact_class;
+        target_class = record->target_artifact_class;
+        runtime_execution = "unsupported";
+        artifact_exists = path_exists(artifact_path);
     } else {
         fprintf(stderr, "model-target: no path mapping for target: %s\n", record->target_id);
         return 2;
     }
 
     if (!audit_output) {
+        if (strcmp(record->target_id, "qwen-metal-portability") == 0) {
+            printf("target: %s\n", record->target_id);
+            printf("models_root: %s\n", operator_paths.models_root);
+            printf("source: %s  %s\n", source_exists ? "present" : "missing", source_path);
+            printf("artifact: planned  %s\n", artifact_path);
+            printf("reports: %s\n", report_dir);
+            printf("registry: %s\n", registry_dir);
+            printf("boundary: path report only, no runtime execution\n");
+            printf("status: model-target-paths\n");
+            return 0;
+        }
         printf("target: %s\n", record->target_id);
         printf("models_root: %s\n", operator_paths.models_root);
         printf("source: %s exists=%s\n", source_path, source_exists ? "true" : "false");

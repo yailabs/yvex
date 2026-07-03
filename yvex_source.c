@@ -883,9 +883,9 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
 
     report->source_state = report->source_exists ? "present" : "missing";
     if (!report->source_exists) {
-        report->status = "source-missing";
-        report->top_blocker = "missing-qwen-source-target";
-        report->next_row = "OWI.TARGETS.QWEN.0";
+        report->status = "source-target-profiled";
+        report->top_blocker = "missing-qwen-source-path";
+        report->next_row = "V010.SOURCE.1";
     } else if (!report->manifest_exists) {
         report->status = "source-present-report-only";
         report->top_blocker = "missing-qwen-source-manifest";
@@ -901,7 +901,6 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
     }
 
     if (!report->source_exists) {
-        qwen_source_add_blocker(report, "missing-qwen-source-target");
         qwen_source_add_blocker(report, "missing-qwen-source-path");
     }
     if (!report->manifest_exists) {
@@ -974,7 +973,8 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
     printf("release: %s\n", options->release);
     printf("family: qwen\n");
     printf("target_id: %s\n", options->target);
-    printf("target_class: candidate target slot\n");
+    printf("target_class: metal-reduced-full-runtime-pressure\n");
+    printf("source_target_status: profiled\n");
     printf("source_class: pending source/config verification\n");
     printf("source_path: %s\n", report->source_path);
     printf("source_path_source: %s\n", report->source_path_source);
