@@ -1592,7 +1592,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,V010.SOURCE.9,OWI.TARGETS.QWEN.0,COMPUTE.BACKEND.METAL.0",
+        "V010.TARGET.7,OWI.TARGETS.QWEN.0,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-dense-source",
@@ -2291,7 +2291,7 @@ static int print_model_target_candidate_normal(const char *release,
     printf("candidates: 0 eligible / %lu known (%lu pressure, %lu fixture)\n",
            candidate_count, pressure_count, fixture_count);
     printf("top_blocker: no eligible full-runtime candidate\n");
-    printf("next: V010.SOURCE.9\n");
+    printf("next: OWI.TARGETS.QWEN.0\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
@@ -2413,7 +2413,7 @@ static void print_registered_dense_candidate(unsigned long index,
         printf("dense_candidate_%lu_blocker_11: missing-real-logits\n", index);
     }
     if (include_next) {
-        printf("dense_candidate_%lu_next_required_rows: V010.TARGET.7,V010.SOURCE.9,V010.MAP.*\n", index);
+        printf("dense_candidate_%lu_next_required_rows: V010.TARGET.7,OWI.TARGETS.QWEN.0,V010.MAP.*\n", index);
     }
 }
 
@@ -2617,7 +2617,7 @@ static int print_model_target_dense_candidate_normal(const char *release,
     printf("candidates: %lu eligible / %lu known (%lu dense pressure)\n",
            eligible_count, dense_candidate_count, dense_pressure_count);
     printf("top_blocker: no selected dense full-runtime candidate\n");
-    printf("next: V010.SOURCE.9\n");
+    printf("next: OWI.TARGETS.QWEN.0\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
@@ -2778,7 +2778,7 @@ static int print_model_target_qwen_metal_report(const char *release,
         }
     }
     if (include_next) {
-        printf("next_required_rows: V010.SOURCE.9\n");
+        printf("next_required_rows: OWI.TARGETS.QWEN.0\n");
     }
     return 0;
 }
@@ -2801,7 +2801,7 @@ static int print_model_target_qwen_metal_normal(const char *release,
     printf("lane: qwen-metal / apple-silicon-metal\n");
     printf("source: missing\n");
     printf("backend: metal unsupported\n");
-    printf("next: V010.SOURCE.9\n");
+    printf("next: OWI.TARGETS.QWEN.0\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     return 0;
 }
@@ -3007,7 +3007,7 @@ static int print_model_target_decision_normal(const char *release,
     printf("eligible: %lu / %lu candidates (%lu ineligible)\n",
            eligible_count, candidate_count, ineligible_count);
     printf("top_blocker: %s\n", selected ? "none" : "no eligible full-runtime candidate");
-    printf("next: V010.SOURCE.9\n");
+    printf("next: OWI.TARGETS.QWEN.0\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     return 0;
 }
@@ -3163,7 +3163,7 @@ static void print_model_target_report_table(const char *report,
            status ? status : "blocked",
            selected ? selected : "none",
            eligible_count,
-           "V010.SOURCE.9");
+           "OWI.TARGETS.QWEN.0");
 }
 
 static int path_exists(const char *path)

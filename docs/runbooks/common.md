@@ -90,6 +90,9 @@ make
 ./yvex model-target qwen-metal --help
 ./yvex model-target qwen-metal --release v0.1.0 --output table
 ./yvex model-target qwen-metal --release v0.1.0 --audit --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next
+./yvex source-manifest report --family qwen --release v0.1.0
+./yvex source-manifest report --family qwen --release v0.1.0 --output table
+./yvex source-manifest report --family qwen --release v0.1.0 --audit
 ./yvex fullmodel report --model glm-5.2-official-safetensors --backend cpu --audit
 ./yvex fullmodel materialization-plan --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --audit
 ./yvex fullmodel materialize --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --dry-run --audit
@@ -344,7 +347,7 @@ Quant/template/intake manifests:
 - `qtype-support`: quant/template/intake manifest lanes
 - `run`: daemon and accepted-only runtime lanes
 - `session`: materialization and runtime attachment lanes
-- `source-manifest`: source intake lanes
+- `source-manifest`: source intake lanes, Qwen source pressure report-only lane
 - `tensor-map`: source intake lanes
 - `tokenize`: fast regression lane
 - `tokenizer`: fast regression lane

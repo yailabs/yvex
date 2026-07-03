@@ -123,6 +123,20 @@ pattern='GLM inference imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='YVEX supports GLM gener''ation'
 scan_forbidden_claim "$pattern"
+pattern='Qwen source down''loaded'
+scan_forbidden_claim "$pattern"
+pattern='Qwen runtime imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='Qwen generation imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='Metal support imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='source_rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='generation_rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='20 tok/s achie''ved'
+scan_forbidden_claim "$pattern"
 pattern='external GGUF satisfies OW''I'
 scan_forbidden_claim "$pattern"
 pattern='external runner proves YV''EX'

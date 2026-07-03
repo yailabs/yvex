@@ -2130,9 +2130,13 @@ static int command_source_manifest(int argc, char **argv)
     if (argc < 3) {
         fprintf(stderr, "yvex: source-manifest requires a subcommand\n");
         fprintf(stderr, "usage: yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE\n");
+        fprintf(stderr, "       yvex source-manifest report --family qwen --release v0.1.0 [options]\n");
         return 2;
     }
 
+    if (strcmp(argv[2], "report") == 0) {
+        return yvex_source_manifest_report_command(argc, argv);
+    }
     if (strcmp(argv[2], "inspect") == 0) {
         fprintf(stderr, "yvex: source-manifest inspect is not implemented in open-weight intake\n");
         return 5;
@@ -2323,5 +2327,9 @@ void yvex_qtype_support_help(FILE *fp)
 
 void yvex_source_manifest_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE [--license TEXT] [--model-card URL] [--node NAME] [--dry-run-log FILE] [--download-log FILE] [--pid-file FILE] [--download-command TEXT]\n\nSource manifest scans a local official-weight source directory and writes provenance JSON. It does not download, parse safetensors payloads, quantize, emit GGUF, materialize, or infer.\n");
+    fprintf(fp, "usage: yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE [--license TEXT] [--model-card URL] [--node NAME] [--dry-run-log FILE] [--download-log FILE] [--pid-file FILE] [--download-command TEXT]\n");
+    fprintf(fp, "       yvex source-manifest report --family qwen --release v0.1.0 [options]\n\n");
+    fprintf(fp, "Source manifest scans a local official-weight source directory and writes provenance JSON. It does not download, parse safetensors payloads, quantize, emit GGUF, materialize, or infer.\n\n");
+    fprintf(fp, "The Qwen source pressure report inspects source-path readiness only. It does not download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    fprintf(fp, "Report options: --source DIR --models-root DIR --target TARGET --include-files --include-config --include-blockers --include-next --audit --output normal|table|audit\n");
 }

@@ -28,7 +28,7 @@ Current benchmark status:
   not measured
 
 Active implementation next:
-  V010.SOURCE.9 - Qwen source pressure report
+  OWI.TARGETS.QWEN.0 - Qwen source target profile
 
 Current release target:
   v0.1.0 - first honest full-runtime path
@@ -39,7 +39,7 @@ Primary pressure targets:
   Qwen/Metal future portability
 
 Main v0.1.0 blocker:
-  Qwen source pressure facts remain missing
+  Qwen source target profile remains missing
 ```
 
 | Field | Current value |
@@ -57,7 +57,7 @@ Main v0.1.0 blocker:
 | Full model generation | unsupported |
 | DeepSeek generation | unsupported |
 | Eval/benchmark | unsupported / not measured |
-| Active next | V010.SOURCE.9 |
+| Active next | OWI.TARGETS.QWEN.0 |
 
 ## 1. Spine Nomenclature
 
@@ -180,6 +180,7 @@ operator-readable state.
 | fullmodel reports | report-only/selected-slice proof | yes | `yvex fullmodel ...` | not execution |
 | attention/context/KV class | report-only | yes | `yvex attention/kv/context report` | not runtime execution |
 | MoE class | report-only | yes | `yvex moe report` | not router/expert execution |
+| Qwen source pressure report | report-only | yes | `yvex source-manifest report --family qwen --release v0.1.0` | not source download, artifact emission, runtime, Metal, generation, eval, or benchmark |
 | operator paths/presets | operator-preset | yes | paths/model-target/models prepare/check | not extra runtime capability |
 | normal CLI output baseline | operator-output | yes | `info`, `paths`, `models`, `model-target`, and `generate` normal/audit tests | not new runtime capability |
 | compact report/table output baseline | operator-output | yes | `models`, `model-target`, `fullmodel`, integrity, KV, and model-class report normal/table/audit tests | not new runtime capability |
@@ -211,8 +212,9 @@ CLI `yvex generate` over diagnostic state.
 YVEX reports fullmodel inventory/materialization plans/descriptors,
 family-runtime facts, attention class facts, KV class facts, context class
 facts, MoE class facts, v0.1.0 full-runtime candidate facts, v0.1.0 dense
-candidate facts, and Qwen/Metal pressure target facts. Report-only
-capability increases inspection but does not execute runtime semantics.
+candidate facts, Qwen/Metal pressure target facts, and Qwen source pressure
+facts. Report-only capability increases inspection but does not execute runtime
+semantics.
 
 Current report-only target capability:
 
@@ -220,6 +222,7 @@ Current report-only target capability:
 v0.1.0 full-runtime candidate report
 v0.1.0 dense candidate report
 Qwen/Metal pressure target report
+Qwen source pressure report
 ```
 
 ### 3.6 Implemented Operator Capability
@@ -252,7 +255,7 @@ no evaluation, no benchmark, and no throughput claim.
 | selected-runtime-slice | DeepSeek selected embed / embed+RMSNorm | implemented selected-slice proofs | not full runtime |
 | huge source/storage | GLM-5.2 official safetensors | source/storage pressure lane | no GLM execution |
 | future portability | Qwen/Metal | report-only pressure lane | no Metal/Qwen runtime |
-| full-runtime model | v0.1.0 selected target | blocked-no-source-backed-candidate | V010.TARGET.7 records Qwen/Metal pressure only; V010.SOURCE.9 must ground source facts |
+| full-runtime model | v0.1.0 selected target | blocked-no-source-backed-candidate | V010.TARGET.7 records Qwen/Metal pressure only; V010.SOURCE.9 reports source pressure but does not close the source target profile |
 
 ## CLI Output UX Doctrine
 
@@ -542,8 +545,8 @@ lanes; rows are the delivery units that complete track work.
 
 | Track ID | Track name | Owns | Current status | Implemented evidence | Next gap | Active / Later |
 | --- | --- | --- | --- | --- | --- | --- |
-| TRACK.TARGET | Target selection and pressure objects | target classes and release target decision | pressure-lane-reported | target registry, path reports, `yvex model-target decision`, `yvex model-target candidate`, `yvex model-target dense-candidate`, and `yvex model-target qwen-metal` | Qwen source pressure report | active |
-| TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory | Qwen source pressure report and multi-family source profile | active |
+| TRACK.TARGET | Target selection and pressure objects | target classes and release target decision | pressure-lane-reported | target registry, path reports, `yvex model-target decision`, `yvex model-target candidate`, `yvex model-target dense-candidate`, and `yvex model-target qwen-metal` | Qwen source target profile | active |
+| TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory and Qwen source pressure report | Qwen source target profile and multi-family source profile | active |
 | TRACK.ARTIFACT | Artifact production | YVEX-produced GGUF and conversion plan | selected-slice | controlled/selected GGUF emission | full-runtime artifact production | later |
 | TRACK.INTEGRITY | Artifact identity and gates | digest/ranges/corruption/materialization gates | implemented | integrity harness and reports | full-runtime gate coverage | active |
 | TRACK.MODEL | Model class and runtime routing | dense/MoE/source-only/selected-slice class reports | partial/report-only | family-runtime, attention, KV, context, MoE reports | final runtime route and dense/output/tokenizer class gaps | active |
@@ -600,13 +603,13 @@ v0.1.0 rows:
   V010.TARGET.*.
 
 Main blockers:
-  Qwen/Metal is visible as a reduced-scale pressure lane, but source target,
-  source manifest, native inventory, source config, model class, tensor map,
-  artifact, Metal backend, residency, graph/runtime, eval, and benchmark facts
-  are still missing.
+  Qwen/Metal is visible as a reduced-scale pressure lane, and Qwen source
+  pressure is command-visible, but the source target profile, source manifest,
+  native inventory, model class, tensor map, artifact, Metal backend,
+  residency, graph/runtime, eval, and benchmark facts are still missing.
 
 Next possible row:
-  V010.SOURCE.9.
+  OWI.TARGETS.QWEN.0.
 
 Boundary:
   a target is not a capability claim.
@@ -623,16 +626,21 @@ Current status:
   partial.
 
 Current evidence:
-  source-manifest and native-weights commands.
+  source-manifest and native-weights commands, plus
+  `yvex source-manifest report --family qwen --release v0.1.0`.
 
 v0.1.0 rows:
   V010.SOURCE.*, OWI.*.
 
 Main blockers:
-  Qwen source pressure facts and multi-family source profile.
+  Qwen source target profile and multi-family source profile.
 
 Next possible row:
-  V010.SOURCE.9.
+  OWI.TARGETS.QWEN.0.
+
+Note:
+  `OWI.TARGETS.QWEN.0` is the existing Qwen-specific source-target profile row
+  and is mapped under the V010 source lane.
 
 Boundary:
   source inventory is not model execution.
@@ -1156,10 +1164,10 @@ v0.1.0 rows:
   V010.CLI.*, V010.OPERATOR.*.
 
 Main blockers:
-  Qwen source pressure facts remain missing.
+  Qwen source target profile remains missing.
 
 Next possible row:
-  V010.SOURCE.9.
+  OWI.TARGETS.QWEN.0.
 
 Boundary:
   operator presets compose lower behavior only.
@@ -2426,7 +2434,8 @@ model-target, fullmodel, integrity, KV, and model-class report surfaces accept
 tables, stale CLI.18 next-row output is removed from normal reports, and audit
 mode preserves diagnostic evidence.
 `V010.CLI.20` through `V010.CLI.24` remain planned polish rows and do not block
-returning to `V010.SOURCE.9` unless normal CLI output becomes unusable again.
+continuing to `OWI.TARGETS.QWEN.0` unless normal CLI output becomes unusable
+again.
 
 Boundary: CLI cannot claim lower runtime behavior that does not exist.
 
@@ -4029,7 +4038,7 @@ claims are downstream unless explicitly included after real generation exists.
 
 | Step | Track | Gate | Current status | Required evidence | Blocks |
 | --- | --- | --- | --- | --- | --- |
-| 1 | TRACK.TARGET | GATE.SCOPE | complete / pressure-lane-reported | `yvex model-target decision --release v0.1.0`; `yvex model-target candidate --release v0.1.0`; `yvex model-target dense-candidate --release v0.1.0`; `yvex model-target qwen-metal --release v0.1.0`; Qwen source facts missing | all v0.1.0 runtime |
+| 1 | TRACK.TARGET | GATE.SCOPE | complete / pressure-lane-reported | `yvex model-target decision --release v0.1.0`; `yvex model-target candidate --release v0.1.0`; `yvex model-target dense-candidate --release v0.1.0`; `yvex model-target qwen-metal --release v0.1.0`; `yvex source-manifest report --family qwen --release v0.1.0`; Qwen source target profile missing | all v0.1.0 runtime |
 | 2 | TRACK.ARTIFACT | GATE.ARTIFACT | partial | identity/integrity proof | full runtime |
 | 3 | TRACK.MODEL | GATE.CLASS | partial/report-only | class reports | tensor/runtime path |
 | 4 | TRACK.TENSOR | GATE.TENSOR | partial/planned | tensor collection coverage | graph |
@@ -4056,7 +4065,7 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 ## 7. Active Next
 
 ```text
-V010.SOURCE.9 - Qwen source pressure report
+OWI.TARGETS.QWEN.0 - Qwen source target profile
 ```
 
 `SPINE.OUTPUT.UX.CONTRACT.0` is complete as a docs/control row. It defines the
@@ -4146,7 +4155,7 @@ runtime_claim: unsupported
 generation: unsupported-full-model
 benchmark_status: not-measured
 release_ready: false
-next_required_rows: V010.SOURCE.9
+next_required_rows: OWI.TARGETS.QWEN.0
 ```
 
 The current DeepSeek selected artifacts remain pressure targets for parser,
@@ -4155,15 +4164,31 @@ close v0.1.0 full-runtime generation. GLM remains source/storage pressure only,
 Qwen/Metal is now command-visible as a reduced-scale Apple Silicon / Metal
 pressure lane, and tiny fixtures remain fixture-only.
 
-Active Next is now the target/source lane:
+Completed target/source lane row:
 
 ```text
 V010.SOURCE.9 - Qwen source pressure report
 ```
 
-`V010.TARGET.7` remains complete. `V010.SOURCE.9` is still required before the
-Qwen/Metal lane has source target, manifest, native inventory, source config,
-and model-class facts.
+`yvex source-manifest report --family qwen --release v0.1.0` reports Qwen
+source pressure, source path/config/tokenizer/safetensors/manifest/native
+inventory status, blockers, and next rows without download, artifact emission,
+materialization, tensor payload loading, graph/runtime execution, Qwen
+generation, Metal support, evaluation, benchmark, throughput, or release-ready
+claim.
+
+Active Next is now the Qwen-specific source lane:
+
+```text
+OWI.TARGETS.QWEN.0 - Qwen source target profile
+```
+
+`OWI.TARGETS.QWEN.0` is the existing Qwen-specific source-target profile row
+and is mapped under the V010 source lane. It remains planned. `V010.TARGET.7`
+and `V010.SOURCE.9` remain complete report-only rows; Qwen/Metal still lacks a
+source target profile, source manifest, native inventory, model-class facts,
+tensor map, artifact, Metal backend, runtime path, generation path, eval path,
+benchmark path, throughput evidence, and release-ready evidence.
 
 ## 8. Historical Delivery Ledger
 
@@ -4220,6 +4245,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | V010.CLI.17 | complete | operator | Normal output contract and layout baseline | core operator commands default to compact normal output for `info`, `paths`, `models list/current`, target reports, and bounded diagnostic `generate`, while `--audit` / `--output audit` preserves diagnostic fields and row-promotion evidence without adding runtime execution, generation, evaluation, benchmark, throughput, or release readiness |
 | V010.CLI.18 | complete | operator | Diagnostic output demotion | diagnostic-heavy report output is demoted from broader normal operator paths; models inspect/verify/check, integrity report, fullmodel reports, attention/context/KV/MoE reports, and MoE tensor-collection reports default to compact normal output where touched while `--audit` / `--output audit` preserves detailed diagnostic evidence and unsupported runtime/generation/benchmark boundaries |
 | V010.CLI.19 | complete | operator | Compact report/table output | compact report/table output is normalized across core model, model-target, fullmodel, integrity, and model-class report surfaces; table output is available where natural; stale CLI.18 next-row output is removed from normal reports; audit mode preserves diagnostic evidence and unsupported runtime/generation/benchmark boundaries |
+| V010.SOURCE.9 | complete | source | Qwen source pressure report | `yvex source-manifest report --family qwen --release v0.1.0` reports Qwen source pressure, source path/config/tokenizer/safetensors/manifest/native-inventory status, blockers, and next rows without download, artifact emission, materialization, graph/runtime execution, Qwen generation, Metal support, evaluation, benchmark, throughput, or release-ready claim |
 | OWI.HUGE.0 | planned | intake | Huge source tensor inventory | huge safetensors shard sets are inventoried without loading full tensor payloads |
 | OWI.HUGE.1 | planned | intake | Huge safetensors shard index | safetensors shard metadata, tensor placement, offsets, and dtype distribution are indexed |
 | OWI.HUGE.2 | planned | intake | Huge-model qtype and target profile | planned quantization target, qtype policy, per-role qtype classes, and expected storage bytes are reported |
@@ -5019,10 +5045,10 @@ the report-only model-class lane after resolving the docs/meta blocker.
 ### 11.4 Follow-Up Rows
 
 `SPINE.TESTMAP.0` and `SPINE.FILEMAP.0` remain useful non-runtime follow-ups.
-Target/source planning remains queued through `V010.SOURCE.9` after
-`V010.CLI.19` because the Qwen/Metal pressure lane is command-visible but still
-lacks source target, manifest, native inventory, source config, and model-class
-facts after the CLI compact report/table interlock.
+Target/source planning now advances to `OWI.TARGETS.QWEN.0` after
+`V010.SOURCE.9` because the Qwen/Metal pressure lane and Qwen source pressure
+report are command-visible, but the Qwen-specific source target profile,
+manifest, native inventory, model-class profile, and tensor map remain missing.
 
 ### 11.5 Detailed Audit Tables
 
@@ -5420,21 +5446,22 @@ SPINE.FILEMAP.0:
   decision row.
 ```
 
-After `SPINE.OUTPUT.UX.CONTRACT.0`, `V010.CLI.17`, `V010.CLI.18`, and
-`V010.CLI.19` completed, Active Next advances to:
+After `SPINE.OUTPUT.UX.CONTRACT.0`, `V010.CLI.17`, `V010.CLI.18`,
+`V010.CLI.19`, and `V010.SOURCE.9` completed, Active Next advances to:
 
 ```text
-V010.SOURCE.9 - Qwen source pressure report
+OWI.TARGETS.QWEN.0 - Qwen source target profile
 ```
 
 If any P1 finding remains blocking, Active Next becomes the named follow-up row.
 
 | Condition | Active Next |
 | --- | --- |
+| Qwen source pressure report complete and Qwen source target profile is missing | OWI.TARGETS.QWEN.0 |
 | compact report/table output normalized and Qwen source facts are missing | V010.SOURCE.9 |
 | diagnostic output demotion complete and compact report/table output remains inconsistent | V010.CLI.19 |
 | normal output baseline complete and diagnostic walls still dominate broader normal output | V010.CLI.18 |
-| Qwen/Metal pressure report complete and Qwen source facts are missing | V010.SOURCE.9 |
+| Qwen/Metal pressure report complete and Qwen source pressure facts are missing | V010.SOURCE.9 |
 | dense candidate report complete and no eligible dense full-runtime candidate exists | V010.TARGET.7 |
 | Current Capability still overclaims implementation | SPINE.CAPABILITY.REWRITE.0 |
 | command/help boundaries still overclaim | SPINE.COMMAND.AUDIT.0 |
@@ -5445,14 +5472,16 @@ Current reconciliation result:
 
 ```text
 Active Next:
-  V010.SOURCE.9 - Qwen source pressure report
+  OWI.TARGETS.QWEN.0 - Qwen source target profile
 
 Reason:
   The first normal operator output baseline and broader diagnostic output
   demotion are implemented, and compact report/table output is normalized
   across the broader report surfaces touched by V010.CLI.19. V010.TARGET.7
-  remains complete; Qwen source target, manifest, native inventory, source
-  config, and model-class facts are now the next target/source blocker.
+  and V010.SOURCE.9 remain complete report-only rows; the Qwen source target
+  profile is now the next target/source blocker. `OWI.TARGETS.QWEN.0` is the
+  existing Qwen-specific source-target profile row mapped under the V010 source
+  lane.
 ```
 
 
