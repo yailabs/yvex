@@ -1265,6 +1265,29 @@ typedef struct {
     int fixture_target;
 } yvex_full_runtime_candidate_fact;
 
+typedef struct {
+    const char *id;
+    const char *family;
+    const char *class_name;
+    const char *stage;
+    const char *eligibility;
+    const char *source_status;
+    const char *artifact_status;
+    const char *tensor_map_status;
+    const char *tensor_coverage_status;
+    const char *tokenizer_status;
+    const char *output_head_status;
+    const char *runtime_path_status;
+    const char *generation_status;
+    const char *benchmark_status;
+    const char *next_required_rows;
+    const char *blockers[24];
+    unsigned int blocker_count;
+    int dense_pressure_target;
+    int fixture_target;
+    int eligible;
+} yvex_dense_candidate_fact;
+
 static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
     {
         "deepseek4-v4-flash-selected-embed",
@@ -1411,6 +1434,218 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
 static const unsigned long full_runtime_candidate_fact_count =
     sizeof(full_runtime_candidate_facts) / sizeof(full_runtime_candidate_facts[0]);
 
+static const char *dense_candidate_required_roles[] = {
+    "embedding",
+    "normalization",
+    "attention-qkv",
+    "attention-output",
+    "position",
+    "dense-mlp",
+    "output-head",
+    "tokenizer",
+    "kv-runtime",
+};
+
+static const unsigned long dense_candidate_required_role_count =
+    sizeof(dense_candidate_required_roles) / sizeof(dense_candidate_required_roles[0]);
+
+static const yvex_dense_candidate_fact dense_candidate_facts[] = {
+    {
+        "deepseek4-v4-flash-selected-embed",
+        "DeepSeek",
+        "selected-runtime-slice",
+        "selected-slice",
+        "not-dense-target",
+        "official-source-pressure",
+        "selected-artifact-known",
+        "missing-tensor-map",
+        "missing-required-tensor-coverage",
+        "missing-tokenizer-metadata",
+        "missing-output-head",
+        "diagnostic-runtime-only",
+        "unsupported-full-model",
+        "not-measured",
+        "V010.TARGET.7,V010.TARGET.4,V010.MAP.2,V010.FULLMODEL.6",
+        {
+            "not-dense-target",
+            "selected-runtime-slice-only",
+            "missing-required-tensor-coverage",
+            "missing-tokenizer-metadata",
+            "missing-output-head",
+            "missing-attention-qkv",
+            "missing-dense-mlp",
+            "missing-real-kv-path",
+            "missing-real-prefill",
+            "missing-real-decode",
+            "missing-real-logits",
+            "missing-real-sampling",
+            "missing-generation-loop-over-real-state",
+        },
+        13,
+        0,
+        0,
+        0,
+    },
+    {
+        "deepseek4-v4-flash-selected-embed-rmsnorm",
+        "DeepSeek",
+        "selected-runtime-slice",
+        "diagnostic-runtime",
+        "not-dense-target",
+        "official-source-pressure",
+        "selected-segment-artifact-known",
+        "missing-tensor-map",
+        "missing-required-tensor-coverage",
+        "missing-tokenizer-metadata",
+        "missing-output-head",
+        "bounded-diagnostic-runtime-only",
+        "unsupported-full-model",
+        "not-measured",
+        "V010.TARGET.7,V010.TARGET.4,V010.MAP.2,V010.FULLMODEL.6",
+        {
+            "not-dense-target",
+            "selected-runtime-slice-only",
+            "missing-required-tensor-coverage",
+            "missing-tokenizer-metadata",
+            "missing-output-head",
+            "missing-attention-qkv",
+            "missing-dense-mlp",
+            "missing-real-kv-path",
+            "missing-real-prefill",
+            "missing-real-decode",
+            "missing-real-logits",
+            "missing-real-sampling",
+            "missing-generation-loop-over-real-state",
+        },
+        13,
+        0,
+        0,
+        0,
+    },
+    {
+        "glm-5.2-official-safetensors",
+        "GLM",
+        "official-source-huge-model",
+        "report-only",
+        "unsupported",
+        "source-storage-pressure",
+        "missing-dense-artifact",
+        "missing-tensor-map",
+        "missing-required-tensor-coverage",
+        "missing-tokenizer-metadata",
+        "missing-output-head",
+        "unsupported",
+        "unsupported-full-model",
+        "not-measured",
+        "V010.TARGET.7,V010.TARGET.4,OWI.HUGE.0,V010.SOURCE.8,V010.MAP.4",
+        {
+            "moe-target",
+            "source-only-target",
+            "missing-dense-artifact",
+            "missing-source-manifest",
+            "missing-native-inventory",
+            "missing-tensor-map",
+            "missing-required-tensor-coverage",
+            "missing-tokenizer-metadata",
+            "missing-output-head",
+            "missing-dense-mlp",
+            "missing-real-kv-path",
+            "missing-real-prefill",
+            "missing-real-decode",
+            "missing-real-logits",
+            "missing-real-sampling",
+            "missing-generation-loop-over-real-state",
+        },
+        16,
+        0,
+        0,
+        0,
+    },
+    {
+        "qwen-metal-portability-pressure",
+        "Qwen",
+        "metal-reduced-full-runtime-pressure",
+        "report-only",
+        "dense-pressure-only",
+        "missing-dense-source",
+        "missing-dense-artifact",
+        "missing-tensor-map",
+        "missing-required-tensor-coverage",
+        "missing-tokenizer-metadata",
+        "missing-output-head",
+        "unsupported",
+        "unsupported-full-model",
+        "not-measured",
+        "V010.TARGET.7,V010.SOURCE.9,OWI.TARGETS.QWEN.0,COMPUTE.BACKEND.METAL.0",
+        {
+            "planned-portability-only",
+            "missing-dense-source",
+            "missing-dense-artifact",
+            "missing-source-manifest",
+            "missing-native-inventory",
+            "missing-tensor-map",
+            "missing-required-tensor-coverage",
+            "missing-tokenizer-metadata",
+            "missing-output-head",
+            "missing-attention-qkv",
+            "missing-dense-mlp",
+            "missing-materialization-plan",
+            "missing-residency-plan",
+            "missing-integrity-gate",
+            "missing-real-kv-path",
+            "missing-real-prefill",
+            "missing-real-decode",
+            "missing-real-logits",
+            "missing-real-sampling",
+            "missing-generation-loop-over-real-state",
+            "missing-eval-path",
+            "missing-benchmark-path",
+        },
+        22,
+        1,
+        0,
+        0,
+    },
+    {
+        "tests/fixtures/gguf/valid-tokenizer-simple.gguf",
+        "fixture",
+        "fixture-artifact",
+        "fixture",
+        "fixture-only",
+        "fixture-only",
+        "tiny-fixture-present",
+        "fixture-only",
+        "missing-required-tensor-coverage",
+        "fixture-tokenizer-metadata",
+        "missing-output-head",
+        "unsupported",
+        "unsupported-full-model",
+        "not-measured",
+        "V010.TARGET.7",
+        {
+            "fixture-only",
+            "missing-dense-source",
+            "missing-dense-artifact",
+            "missing-required-tensor-coverage",
+            "missing-attention-qkv",
+            "missing-dense-mlp",
+            "missing-output-head",
+            "missing-real-kv-path",
+            "missing-real-prefill",
+            "missing-real-decode",
+            "missing-real-logits",
+            "missing-real-sampling",
+        },
+        12,
+        0,
+        1,
+        0,
+    },
+};
+
+static const unsigned long dense_candidate_fact_count =
+    sizeof(dense_candidate_facts) / sizeof(dense_candidate_facts[0]);
+
 static const yvex_model_target_record *find_model_target(const char *target_id)
 {
     unsigned long i;
@@ -1464,6 +1699,24 @@ static void print_model_target_candidate_help(FILE *fp)
 {
     print_model_target_candidate_usage(fp);
     fprintf(fp, "\nThe candidate report evaluates full-runtime target eligibility for a release. It does not select a ready model, download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+}
+
+static void print_model_target_dense_candidate_usage(FILE *fp)
+{
+    fprintf(fp, "usage: yvex model-target dense-candidate --release v0.1.0 [options]\n");
+    fprintf(fp, "       yvex model-target dense-candidate --help\n");
+    fprintf(fp, "\noptions:\n");
+    fprintf(fp, "  --target TARGET                report one dense or dense-adjacent target\n");
+    fprintf(fp, "  --include-candidates           include dense candidate classification blocks\n");
+    fprintf(fp, "  --include-requirements         include required dense runtime role groups\n");
+    fprintf(fp, "  --include-blockers             include stable blocker fields\n");
+    fprintf(fp, "  --include-next                 include next required row fields\n");
+}
+
+static void print_model_target_dense_candidate_help(FILE *fp)
+{
+    print_model_target_dense_candidate_usage(fp);
+    fprintf(fp, "\nThe dense-candidate report evaluates whether a dense model target can become the first v0.1.0 full-runtime candidate. It does not download weights, emit artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
 }
 
 static int target_decision_is_full_runtime_candidate(const yvex_model_target_record *record)
@@ -1815,6 +2068,285 @@ static int print_model_target_candidate_report(const char *release,
     return 0;
 }
 
+static const yvex_dense_candidate_fact *find_dense_candidate_fact(const char *id)
+{
+    unsigned long i;
+
+    if (!id) return NULL;
+    for (i = 0; i < dense_candidate_fact_count; ++i) {
+        if (strcmp(dense_candidate_facts[i].id, id) == 0) {
+            return &dense_candidate_facts[i];
+        }
+    }
+    return NULL;
+}
+
+static unsigned long dense_candidate_registry_extra_count(const yvex_model_registry *registry)
+{
+    unsigned long long i;
+    unsigned long count = 0;
+
+    if (!registry) return 0;
+    for (i = 0; i < yvex_model_registry_count(registry); ++i) {
+        const yvex_model_registry_entry *entry = yvex_model_registry_at(registry, i);
+        if (!entry || !entry->alias || find_dense_candidate_fact(entry->alias)) continue;
+        count++;
+    }
+    return count;
+}
+
+static void print_dense_candidate_requirements(unsigned long index)
+{
+    unsigned long i;
+
+    for (i = 0; i < dense_candidate_required_role_count; ++i) {
+        printf("dense_candidate_%lu_required_role_%lu: %s\n",
+               index, i, dense_candidate_required_roles[i]);
+    }
+}
+
+static void print_dense_candidate_fact(unsigned long index,
+                                       const yvex_dense_candidate_fact *fact,
+                                       int include_requirements,
+                                       int include_blockers,
+                                       int include_next)
+{
+    unsigned int i;
+
+    if (!fact) return;
+    printf("dense_candidate_%lu_id: %s\n", index, fact->id);
+    printf("dense_candidate_%lu_family: %s\n", index, fact->family);
+    printf("dense_candidate_%lu_class: %s\n", index, fact->class_name);
+    printf("dense_candidate_%lu_stage: %s\n", index, fact->stage);
+    printf("dense_candidate_%lu_eligibility: %s\n", index, fact->eligibility);
+    printf("dense_candidate_%lu_source_status: %s\n", index, fact->source_status);
+    printf("dense_candidate_%lu_artifact_status: %s\n", index, fact->artifact_status);
+    printf("dense_candidate_%lu_tensor_map_status: %s\n", index, fact->tensor_map_status);
+    printf("dense_candidate_%lu_tensor_coverage_status: %s\n", index, fact->tensor_coverage_status);
+    printf("dense_candidate_%lu_tokenizer_status: %s\n", index, fact->tokenizer_status);
+    printf("dense_candidate_%lu_output_head_status: %s\n", index, fact->output_head_status);
+    printf("dense_candidate_%lu_runtime_path_status: %s\n", index, fact->runtime_path_status);
+    printf("dense_candidate_%lu_generation_status: %s\n", index, fact->generation_status);
+    printf("dense_candidate_%lu_benchmark_status: %s\n", index, fact->benchmark_status);
+    printf("dense_candidate_%lu_blocker_count: %u\n", index, fact->blocker_count);
+    if (include_requirements) {
+        print_dense_candidate_requirements(index);
+    }
+    if (include_blockers) {
+        for (i = 0; i < fact->blocker_count; ++i) {
+            printf("dense_candidate_%lu_blocker_%u: %s\n", index, i, fact->blockers[i]);
+        }
+    }
+    if (include_next) {
+        printf("dense_candidate_%lu_next_required_rows: %s\n", index, fact->next_required_rows);
+    }
+}
+
+static void print_registered_dense_candidate(unsigned long index,
+                                             const yvex_model_registry_entry *entry,
+                                             int include_requirements,
+                                             int include_blockers,
+                                             int include_next)
+{
+    const char *alias = entry && entry->alias ? entry->alias : "unknown-registered-alias";
+
+    printf("dense_candidate_%lu_id: %s\n", index, alias);
+    printf("dense_candidate_%lu_family: registered\n", index);
+    printf("dense_candidate_%lu_class: registered-alias\n", index);
+    printf("dense_candidate_%lu_stage: report-only\n", index);
+    printf("dense_candidate_%lu_eligibility: candidate-incomplete\n", index);
+    printf("dense_candidate_%lu_source_status: unknown\n", index);
+    printf("dense_candidate_%lu_artifact_status: registered-artifact-not-inspected\n", index);
+    printf("dense_candidate_%lu_tensor_map_status: missing-tensor-map\n", index);
+    printf("dense_candidate_%lu_tensor_coverage_status: %s\n", index,
+           registered_candidate_tensor_status(entry));
+    printf("dense_candidate_%lu_tokenizer_status: unknown\n", index);
+    printf("dense_candidate_%lu_output_head_status: unknown\n", index);
+    printf("dense_candidate_%lu_runtime_path_status: unsupported\n", index);
+    printf("dense_candidate_%lu_generation_status: unsupported-full-model\n", index);
+    printf("dense_candidate_%lu_benchmark_status: not-measured\n", index);
+    printf("dense_candidate_%lu_blocker_count: 12\n", index);
+    if (include_requirements) {
+        print_dense_candidate_requirements(index);
+    }
+    if (include_blockers) {
+        printf("dense_candidate_%lu_blocker_0: missing-dense-source\n", index);
+        printf("dense_candidate_%lu_blocker_1: missing-dense-artifact\n", index);
+        printf("dense_candidate_%lu_blocker_2: missing-source-manifest\n", index);
+        printf("dense_candidate_%lu_blocker_3: missing-native-inventory\n", index);
+        printf("dense_candidate_%lu_blocker_4: missing-tensor-map\n", index);
+        printf("dense_candidate_%lu_blocker_5: missing-required-tensor-coverage\n", index);
+        printf("dense_candidate_%lu_blocker_6: missing-tokenizer-metadata\n", index);
+        printf("dense_candidate_%lu_blocker_7: missing-output-head\n", index);
+        printf("dense_candidate_%lu_blocker_8: missing-dense-mlp\n", index);
+        printf("dense_candidate_%lu_blocker_9: missing-real-prefill\n", index);
+        printf("dense_candidate_%lu_blocker_10: missing-real-decode\n", index);
+        printf("dense_candidate_%lu_blocker_11: missing-real-logits\n", index);
+    }
+    if (include_next) {
+        printf("dense_candidate_%lu_next_required_rows: V010.TARGET.7,V010.SOURCE.9,V010.MAP.*\n", index);
+    }
+}
+
+static int print_model_target_dense_candidate_missing(const char *release, const char *target)
+{
+    printf("model-target: dense-candidate\n");
+    printf("status: dense-candidate-report-fail\n");
+    printf("release: %s\n", release && release[0] ? release : "v0.1.0");
+    printf("target_requested: %s\n", target && target[0] ? target : "none");
+    printf("decision_state: dense-candidate-missing\n");
+    printf("selected_dense_candidate_id: none\n");
+    printf("dense_candidate_status: missing\n");
+    printf("dense_candidate_count: 0\n");
+    printf("eligible_dense_candidate_count: 0\n");
+    printf("dense_pressure_target_count: 0\n");
+    printf("fixture_target_count: 0\n");
+    printf("global_blocker: no eligible dense full-runtime candidate\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    return 2;
+}
+
+static int print_model_target_dense_candidate_unsupported_release(const char *release)
+{
+    printf("model-target: dense-candidate\n");
+    printf("status: unsupported-release\n");
+    printf("release: %s\n", release && release[0] ? release : "unknown");
+    printf("decision_state: dense-candidate-missing\n");
+    printf("selected_dense_candidate_id: none\n");
+    printf("dense_candidate_status: missing\n");
+    printf("dense_candidate_count: 0\n");
+    printf("eligible_dense_candidate_count: 0\n");
+    printf("dense_pressure_target_count: 0\n");
+    printf("fixture_target_count: 0\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    return 2;
+}
+
+static const char *dense_candidate_status_for_target(const yvex_dense_candidate_fact *fact,
+                                                     const yvex_model_registry_entry *entry)
+{
+    if (entry) return "candidate-incomplete";
+    if (!fact) return "missing";
+    if (fact->eligible) return "candidate-found";
+    if (strcmp(fact->eligibility, "dense-pressure-only") == 0 ||
+        strcmp(fact->eligibility, "candidate-planned") == 0 ||
+        strcmp(fact->eligibility, "candidate-incomplete") == 0) {
+        return "candidate-incomplete";
+    }
+    return "missing";
+}
+
+static int print_model_target_dense_candidate_report(const char *release,
+                                                     const char *target_id,
+                                                     int include_candidates,
+                                                     int include_requirements,
+                                                     int include_blockers,
+                                                     int include_next)
+{
+    const yvex_dense_candidate_fact *target_fact = NULL;
+    const yvex_model_registry_entry *target_entry = NULL;
+    yvex_model_registry *registry = NULL;
+    unsigned long registry_count = 0;
+    unsigned long dense_candidate_count = 0;
+    unsigned long dense_pressure_count = 0;
+    unsigned long fixture_count = 0;
+    unsigned long eligible_count = 0;
+    unsigned long i;
+
+    (void)open_candidate_registry(&registry);
+    registry_count = dense_candidate_registry_extra_count(registry);
+    if (target_id) {
+        target_fact = find_dense_candidate_fact(target_id);
+        if (!target_fact && registry) {
+            target_entry = yvex_model_registry_find(registry, target_id);
+        }
+        if (!target_fact && !target_entry) {
+            yvex_model_registry_close(registry);
+            return print_model_target_dense_candidate_missing(release, target_id);
+        }
+        dense_candidate_count = 1;
+        dense_pressure_count = target_fact && target_fact->dense_pressure_target ? 1 : 0;
+        fixture_count = target_fact && target_fact->fixture_target ? 1 : 0;
+        eligible_count = target_fact && target_fact->eligible ? 1 : 0;
+    } else {
+        dense_candidate_count = dense_candidate_fact_count + registry_count;
+        for (i = 0; i < dense_candidate_fact_count; ++i) {
+            if (dense_candidate_facts[i].dense_pressure_target) dense_pressure_count++;
+            if (dense_candidate_facts[i].fixture_target) fixture_count++;
+            if (dense_candidate_facts[i].eligible) eligible_count++;
+        }
+    }
+
+    printf("model-target: dense-candidate\n");
+    printf("status: dense-candidate-report\n");
+    printf("release: %s\n", release);
+    printf("decision_state: %s\n", eligible_count ? "dense-candidate-found" : "dense-candidate-missing");
+    printf("selected_dense_candidate_id: none\n");
+    printf("dense_candidate_status: %s\n",
+           target_id ? dense_candidate_status_for_target(target_fact, target_entry)
+                     : (eligible_count ? "candidate-found" : "missing"));
+    printf("dense_candidate_count: %lu\n", dense_candidate_count);
+    printf("eligible_dense_candidate_count: %lu\n", eligible_count);
+    printf("dense_pressure_target_count: %lu\n", dense_pressure_count);
+    printf("fixture_target_count: %lu\n", fixture_count);
+    printf("registered_alias_count: %lu\n", target_id ? (target_entry ? 1ul : 0ul) : registry_count);
+    printf("global_blocker: no eligible dense full-runtime candidate\n");
+    if (include_next) {
+        printf("next_required_rows: V010.TARGET.7\n");
+    }
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+
+    if (include_candidates || target_id) {
+        unsigned long out_index = 0;
+        if (target_fact) {
+            print_dense_candidate_fact(out_index, target_fact,
+                                       include_requirements,
+                                       include_blockers,
+                                       include_next);
+        } else if (target_entry) {
+            print_registered_dense_candidate(out_index, target_entry,
+                                             include_requirements,
+                                             include_blockers,
+                                             include_next);
+        } else {
+            for (i = 0; i < dense_candidate_fact_count; ++i) {
+                print_dense_candidate_fact(out_index++,
+                                           &dense_candidate_facts[i],
+                                           include_requirements,
+                                           include_blockers,
+                                           include_next);
+            }
+            if (registry) {
+                unsigned long long ri;
+                for (ri = 0; ri < yvex_model_registry_count(registry); ++ri) {
+                    const yvex_model_registry_entry *entry =
+                        yvex_model_registry_at(registry, ri);
+                    if (!entry || !entry->alias ||
+                        find_dense_candidate_fact(entry->alias)) {
+                        continue;
+                    }
+                    print_registered_dense_candidate(out_index++, entry,
+                                                     include_requirements,
+                                                     include_blockers,
+                                                     include_next);
+                }
+            }
+        }
+    }
+
+    yvex_model_registry_close(registry);
+    return 0;
+}
+
 static int print_model_target_decision_unsupported_release(const char *release)
 {
     const char *value;
@@ -1989,6 +2521,7 @@ static void print_model_target_usage(FILE *fp)
     fprintf(fp, "usage: yvex model-target classes\n");
     fprintf(fp, "       yvex model-target list\n");
     fprintf(fp, "       yvex model-target candidate --release v0.1.0 [options]\n");
+    fprintf(fp, "       yvex model-target dense-candidate --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target decision --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR]\n");
 }
@@ -2004,6 +2537,9 @@ void yvex_model_target_help(FILE *fp)
     fprintf(fp, "\nCandidate report:\n");
     fprintf(fp, "  yvex model-target candidate --release v0.1.0 --include-candidates --include-blockers --include-next\n");
     fprintf(fp, "  The candidate report evaluates full-runtime target eligibility for a release. It does not select a ready model, download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    fprintf(fp, "\nDense candidate report:\n");
+    fprintf(fp, "  yvex model-target dense-candidate --release v0.1.0 --include-candidates --include-requirements --include-blockers --include-next\n");
+    fprintf(fp, "  The dense-candidate report evaluates whether a dense model target can become the first v0.1.0 full-runtime candidate. It does not download weights, emit artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "\nModel targets are pressure objects, not capability claims.\n");
     fprintf(fp, "External GGUFs and external runners are reference evidence only.\n");
     fprintf(fp, "Model-target path reporting does not read model payloads, create artifacts, register aliases, or claim runtime support.\n");
@@ -2298,6 +2834,62 @@ int yvex_model_target_command(int argc, char **argv)
                                                    include_pressure_targets,
                                                    include_blockers,
                                                    include_next);
+    }
+    if (strcmp(argv[2], "dense-candidate") == 0) {
+        const char *release = NULL;
+        const char *target_id = NULL;
+        int include_candidates = 0;
+        int include_requirements = 0;
+        int include_blockers = 0;
+        int include_next = 0;
+
+        for (i = 3; i < argc; ++i) {
+            if (strcmp(argv[i], "--help") == 0) {
+                if (argc != 4) {
+                    print_model_target_dense_candidate_usage(stderr);
+                    return 2;
+                }
+                print_model_target_dense_candidate_help(stdout);
+                return 0;
+            } else if (strcmp(argv[i], "--release") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "model-target dense-candidate: --release requires VERSION\n");
+                    return 2;
+                }
+                release = argv[++i];
+            } else if (strcmp(argv[i], "--target") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "model-target dense-candidate: --target requires TARGET\n");
+                    return 2;
+                }
+                target_id = argv[++i];
+            } else if (strcmp(argv[i], "--include-candidates") == 0) {
+                include_candidates = 1;
+            } else if (strcmp(argv[i], "--include-requirements") == 0) {
+                include_requirements = 1;
+            } else if (strcmp(argv[i], "--include-blockers") == 0) {
+                include_blockers = 1;
+            } else if (strcmp(argv[i], "--include-next") == 0) {
+                include_next = 1;
+            } else {
+                fprintf(stderr, "model-target dense-candidate: unknown option: %s\n", argv[i]);
+                return 2;
+            }
+        }
+        if (!release || release[0] == '\0') {
+            fprintf(stderr, "model-target dense-candidate: --release is required\n");
+            print_model_target_dense_candidate_usage(stderr);
+            return 2;
+        }
+        if (strcmp(release, "v0.1.0") != 0) {
+            return print_model_target_dense_candidate_unsupported_release(release);
+        }
+        return print_model_target_dense_candidate_report(release,
+                                                         target_id,
+                                                         include_candidates,
+                                                         include_requirements,
+                                                         include_blockers,
+                                                         include_next);
     }
     if (strcmp(argv[2], "decision") == 0) {
         const yvex_model_target_record *candidate_filter = NULL;

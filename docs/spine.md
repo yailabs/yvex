@@ -28,7 +28,7 @@ Current benchmark status:
   not measured
 
 Active implementation next:
-  V010.TARGET.3 - dense candidate target report
+  V010.TARGET.7 - Qwen/Metal pressure target report
 
 Current release target:
   v0.1.0 - first honest full-runtime path
@@ -39,7 +39,7 @@ Primary pressure targets:
   Qwen/Metal future portability
 
 Main v0.1.0 blocker:
-  no eligible full-runtime-candidate target yet
+  no eligible dense full-runtime-candidate target yet
 ```
 
 | Field | Current value |
@@ -57,7 +57,7 @@ Main v0.1.0 blocker:
 | Full model generation | unsupported |
 | DeepSeek generation | unsupported |
 | Eval/benchmark | unsupported / not measured |
-| Active next | V010.TARGET.3 |
+| Active next | V010.TARGET.7 |
 
 ## 1. Spine Nomenclature
 
@@ -208,13 +208,15 @@ CLI `yvex generate` over diagnostic state.
 
 YVEX reports fullmodel inventory/materialization plans/descriptors,
 family-runtime facts, attention class facts, KV class facts, context class
-facts, MoE class facts, and v0.1.0 full-runtime candidate facts. Report-only
+facts, MoE class facts, v0.1.0 full-runtime candidate facts, and v0.1.0 dense
+candidate facts. Report-only
 capability increases inspection but does not execute runtime semantics.
 
 Current report-only target capability:
 
 ```text
 v0.1.0 full-runtime candidate report
+v0.1.0 dense candidate report
 ```
 
 ### 3.6 Implemented Operator Capability
@@ -244,7 +246,7 @@ no evaluation, no benchmark, and no throughput claim.
 | selected-runtime-slice | DeepSeek selected embed / embed+RMSNorm | implemented selected-slice proofs | not full runtime |
 | huge source/storage | GLM-5.2 official safetensors | source/storage pressure lane | no GLM execution |
 | future portability | Qwen/Metal | docs/planned | no Metal/Qwen runtime |
-| full-runtime model | v0.1.0 selected target | blocked-no-candidate | V010.TARGET.2 reports no eligible candidate; V010.TARGET.3 must evaluate dense candidates |
+| full-runtime model | v0.1.0 selected target | blocked-no-dense-candidate | V010.TARGET.3 reports no eligible dense candidate; V010.TARGET.7 must ground the Qwen/Metal pressure lane |
 
 ## 4. Forward Track Matrix
 
@@ -253,7 +255,7 @@ lanes; rows are the delivery units that complete track work.
 
 | Track ID | Track name | Owns | Current status | Implemented evidence | Next gap | Active / Later |
 | --- | --- | --- | --- | --- | --- | --- |
-| TRACK.TARGET | Target selection and pressure objects | target classes and release target decision | blocked-no-candidate | target registry, path reports, `yvex model-target decision`, and `yvex model-target candidate` | dense candidate target report | active |
+| TRACK.TARGET | Target selection and pressure objects | target classes and release target decision | blocked-no-dense-candidate | target registry, path reports, `yvex model-target decision`, `yvex model-target candidate`, and `yvex model-target dense-candidate` | Qwen/Metal pressure target report | active |
 | TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory | multi-family huge source profile | active |
 | TRACK.ARTIFACT | Artifact production | YVEX-produced GGUF and conversion plan | selected-slice | controlled/selected GGUF emission | full-runtime artifact production | later |
 | TRACK.INTEGRITY | Artifact identity and gates | digest/ranges/corruption/materialization gates | implemented | integrity harness and reports | full-runtime gate coverage | active |
@@ -299,21 +301,23 @@ Does not own:
   runtime implementation or benchmark evidence.
 
 Current status:
-  blocked-no-candidate.
+  blocked-no-dense-candidate.
 
 Current evidence:
   target registry, path reports, `yvex model-target decision --release v0.1.0`,
-  and `yvex model-target candidate --release v0.1.0`.
+  `yvex model-target candidate --release v0.1.0`, and
+  `yvex model-target dense-candidate --release v0.1.0`.
 
 v0.1.0 rows:
   V010.TARGET.*.
 
 Main blockers:
-  no current selected-slice, source-only, portability-pressure, fixture, or
-  registered alias target is eligible as a v0.1.0 full-runtime candidate.
+  no current selected-slice, source-only, MoE/source-only, portability-pressure,
+  fixture, dense-pressure, or registered alias target is eligible as a v0.1.0
+  dense full-runtime candidate.
 
 Next possible row:
-  V010.TARGET.3.
+  V010.TARGET.7.
 
 Boundary:
   a target is not a capability claim.
@@ -3706,7 +3710,7 @@ claims are downstream unless explicitly included after real generation exists.
 
 | Step | Track | Gate | Current status | Required evidence | Blocks |
 | --- | --- | --- | --- | --- | --- |
-| 1 | TRACK.TARGET | GATE.SCOPE | complete / blocked-no-candidate | `yvex model-target decision --release v0.1.0`; `yvex model-target candidate --release v0.1.0`; full-runtime candidate missing | all v0.1.0 runtime |
+| 1 | TRACK.TARGET | GATE.SCOPE | complete / blocked-no-dense-candidate | `yvex model-target decision --release v0.1.0`; `yvex model-target candidate --release v0.1.0`; `yvex model-target dense-candidate --release v0.1.0`; dense candidate missing | all v0.1.0 runtime |
 | 2 | TRACK.ARTIFACT | GATE.ARTIFACT | partial | identity/integrity proof | full runtime |
 | 3 | TRACK.MODEL | GATE.CLASS | partial/report-only | class reports | tensor/runtime path |
 | 4 | TRACK.TENSOR | GATE.TENSOR | partial/planned | tensor collection coverage | graph |
@@ -3733,45 +3737,48 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 ## 7. Active Next
 
 ```text
-V010.TARGET.3 - dense candidate target report
+V010.TARGET.7 - Qwen/Metal pressure target report
 ```
 
-`V010.TARGET.9` and `V010.TARGET.2` are complete as report-only implementation
-rows. The commands `yvex model-target decision --release v0.1.0` and
-`yvex model-target candidate --release v0.1.0` record:
+`V010.TARGET.9`, `V010.TARGET.2`, and `V010.TARGET.3` are complete as
+report-only implementation rows. The commands `yvex model-target decision
+--release v0.1.0`, `yvex model-target candidate --release v0.1.0`, and
+`yvex model-target dense-candidate --release v0.1.0` record:
 
 Completed row:
 
 ```text
-V010.TARGET.2 - full-runtime-candidate target report
+V010.TARGET.3 - dense candidate target report
 ```
 
 ```text
-decision_state: blocked-no-candidate
-selected_target_id: none
-full_runtime_candidate_status: missing
-eligible_candidate_count: 0
-deepseek_pressure_status: selected-slice-pressure-only
-glm_pressure_status: source-storage-pressure-only
-qwen_metal_pressure_status: planned-portability-pressure-only
+decision_state: dense-candidate-missing
+selected_dense_candidate_id: none
+dense_candidate_status: missing
+eligible_dense_candidate_count: 0
+dense_pressure_target_count: 1
+fixture_target_count: 1
+deepseek selected targets: not-dense-target / selected-runtime-slice-only
+GLM-5.2: moe-target / source-only-target
+Qwen/Metal: dense-pressure-only / planned-portability-only
+tiny fixtures: fixture-only
 runtime_claim: unsupported
 generation: unsupported-full-model
 benchmark_status: not-measured
 release_ready: false
-next_required_rows: V010.TARGET.3
+next_required_rows: V010.TARGET.7
 ```
 
 The current DeepSeek selected artifacts remain pressure targets for parser,
 materialization, graph-slice, diagnostic runtime, and MoE planning. They cannot
 close v0.1.0 full-runtime generation. GLM remains source/storage pressure only,
-Qwen/Metal remains planned portability pressure only, and tiny fixtures remain
-fixture-only.
+Qwen/Metal is the only dense-pressure lane currently visible, and tiny fixtures
+remain fixture-only.
 
-Active Next is now `V010.TARGET.3` because `V010.TARGET.2` confirms no current
-known target can honestly serve as the first full-runtime candidate. The next
-row must evaluate whether a smaller dense target can become the first honest
-v0.1.0 full-runtime candidate before graph/runtime rows, MoE activation,
-serving, evaluation, benchmark, or release rows can advance.
+Active Next is now `V010.TARGET.7` because `V010.TARGET.3` confirms no current
+dense target is eligible as the first full-runtime candidate. The next row must
+ground the Qwen/Metal pressure lane before source, artifact, tensor-map,
+graph/runtime, serving, evaluation, benchmark, or release rows can advance.
 
 ## 8. Historical Delivery Ledger
 
@@ -3821,6 +3828,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | OWI.TARGETS.1 | planned | intake | Multi-family source manifest profile | source manifests distinguish base family, model class, source artifact class, target artifact class, qtype class, and pressure purpose |
 | OWI.TARGETS.2 | planned | intake | Multi-model artifact cards | MODEL_ARTIFACTS records DeepSeek selected targets and GLM source-tensor targets without runtime claim |
 | OWI.TARGETS.3 | planned | intake | Model target command profile | operator command reports target class, source artifact class, target artifact class, qtype class, and unsupported runtime boundary |
+| V010.TARGET.3 | complete | target | Dense candidate target report | `yvex model-target dense-candidate --release v0.1.0` reports dense target eligibility for v0.1.0, classifies known selected-slice, source-only, MoE, fixture, portability, and dense-pressure candidates, prints required roles, blockers, and next rows, and preserves unsupported runtime, generation, evaluation, benchmark, throughput, and release-ready boundaries |
 | V010.TARGET.2 | complete | target | Full-runtime candidate target report | `yvex model-target candidate --release v0.1.0` reports full-runtime candidate eligibility across known target classes, classifies selected-slice/source-only/pressure/fixture targets, prints blockers and next rows, and preserves unsupported runtime, generation, evaluation, benchmark, throughput, and release-ready boundaries |
 | V010.TARGET.9 | complete | target | v0.1.0 target decision record | `yvex model-target decision --release v0.1.0` is command-visible and classifies selected-runtime-slice, source-only, pressure, and full-runtime-candidate eligibility; the current decision is blocked-no-candidate with `V010.TARGET.2` as next required row, while preserving unsupported runtime, generation, eval, benchmark, throughput, and release boundaries |
 | OWI.HUGE.0 | planned | intake | Huge source tensor inventory | huge safetensors shard sets are inventoried without loading full tensor payloads |
@@ -4148,6 +4156,7 @@ indexes, not runtime capability by themselves.
 | `yvex integrity report` | implemented integrity gate | digest/range/shape/dtype checks | supply-chain security beyond checks | INTEGRITY |
 | `yvex model-target decision` | report-only | v0.1.0 target decision state, target eligibility, pressure-lane classification, blockers, and next rows | runtime execution, target implementation, generation, release readiness | TRACK.TARGET |
 | `yvex model-target candidate` | report-only | v0.1.0 full-runtime candidate eligibility, selected-slice/source-only/pressure/fixture classification, blockers, and next rows | target selection, runtime execution, artifact emission, generation, release readiness | TRACK.TARGET |
+| `yvex model-target dense-candidate` | report-only | v0.1.0 dense candidate eligibility, dense role requirements, selected-slice/source-only/MoE/portability/fixture classification, blockers, and next rows | target selection, runtime execution, artifact emission, generation, release readiness | TRACK.TARGET |
 | `yvex graph --execute-op` | fixture-proof | standalone graph primitives | full transformer runtime | TRACK.GRAPH |
 | `yvex prefill` | diagnostic-runtime | segment/chunk diagnostic prefill | real transformer prefill | TRACK.PREFILL |
 | `yvex kv report` | report-only / diagnostic | KV facts and diagnostic KV boundary | real attention KV | TRACK.KV |
@@ -4170,6 +4179,7 @@ indexes, not runtime capability by themselves.
 | CLI tests | operator evidence | command surface, refusal, help, presets | new runtime semantics | OPERATOR |
 | target decision tests | report-only | v0.1.0 decision state, candidate classification, unsupported release, missing candidate, boundary fields | target implementation or runtime capability | TRACK.TARGET |
 | target candidate tests | report-only | full-runtime candidate classification, blockers, next rows, unsupported release, missing target, boundary fields | target selection or runtime capability | TRACK.TARGET |
+| dense candidate tests | report-only | dense candidate classification, required dense roles, blockers, next rows, unsupported release, missing target, boundary fields | target selection or runtime capability | TRACK.TARGET |
 | MoE report tests | report-only | selected-slice MoE class report, GLM source-only refusal, unknown-family and missing-model boundaries | MoE runtime execution | TRACK.MOE |
 | MoE tensor collection tests | report-only | selected-slice MoE tensor collection missing roles, GLM source-only refusal, unsupported family, missing model, invalid collection, CPU/CUDA report surfaces | MoE runtime execution or tensor materialization | TRACK.TENSOR, TRACK.MOE |
 | CUDA tests | backend evidence | CUDA probe/movement/parity subset | model support | BACKEND |
@@ -4544,6 +4554,7 @@ no runtime file change for spine-only rebases
 | `yvex fullmodel descriptor` | report-only | tensor role map, collection map, runtime requirements and blockers | runtime mutation, decode, logits, generation | FULLMODEL.3, V010.CLASS.*, V010.TENSOR.* |
 | `yvex fullmodel family-runtime` | report-only | family adapter roles, attention/KV/MoE/output requirements, next dependencies | model-family runtime support | FAMILY.RUNTIME.0, V010.CLASS.* |
 | `yvex model-target candidate` | report-only | v0.1.0 full-runtime candidate eligibility across known target classes, blockers, and next rows | target implementation, artifact emission, tensor materialization, graph/runtime execution, generation, eval, benchmark, release | V010.TARGET.2 |
+| `yvex model-target dense-candidate` | report-only | v0.1.0 dense candidate eligibility across known target classes, dense role requirements, blockers, and next rows | target implementation, source intake, artifact emission, tensor materialization, graph/runtime execution, generation, eval, benchmark, release | V010.TARGET.3 |
 | `yvex model-target decision` | report-only | v0.1.0 decision state, selected target if any, candidate eligibility, pressure-lane status, blockers, release-critical tracks, and next rows | target implementation, artifact emission, tensor materialization, graph/runtime execution, generation, eval, benchmark, release | V010.TARGET.9 |
 | `yvex models prepare` | operator-preset | implemented selected source-to-GGUF and registry path for supported target | materialization, graph, generation, eval, benchmark | MODEL.PREPARE.*, V010.CLI.6 |
 | `yvex models check` | operator-preset | selected artifact inspect/integrity/materialize/graph composition by level | decode, logits, sampling, generation | MODEL.CHECK.0, V010.CLI.7 |
@@ -4578,6 +4589,7 @@ no runtime file change for spine-only rebases
 | MoE report tests | MoE class/refusal/boundary output in fullmodel/core paths | report-only | no router execution or expert dispatch | MOE.CLASS.0 / V010.TENSOR.14-17 |
 | MoE tensor collection tests | MoE tensor collection selected-slice, GLM source-only, unsupported-family, missing-model, invalid-collection, and CPU/CUDA report paths | report-only | no tensor materialization, router logits, expert activation, dispatch, prefill, decode, or generation | TENSOR.MOE.0 / V010.TENSOR.14-17 |
 | target candidate tests | v0.1.0 full-runtime candidate help/report/refusal output, selected-slice/source-only/portability/fixture classification, blockers and next rows | report-only | no target selection, artifact emission, runtime execution, generation, benchmark, or release | V010.TARGET.2 |
+| dense candidate tests | v0.1.0 dense candidate help/report/refusal output, dense role requirements, selected-slice/source-only/MoE/portability/fixture classification, blockers and next rows | report-only | no target selection, source intake, artifact emission, runtime execution, generation, benchmark, or release | V010.TARGET.3 |
 | target decision tests | v0.1.0 target decision help/report/refusal output, selected-slice/source-only classification, unsupported release, missing candidate | report-only | no target implementation, artifact emission, runtime execution, generation, benchmark, or release | V010.TARGET.9 |
 | fullmodel report/materialize/descriptor/family-runtime tests | fullmodel inventory, refusal, tiny proof, descriptors, family reports | report-only / selected-slice-proof | broad row-to-test mapping still incomplete | SPINE.TESTMAP.0 |
 | operator preset tests | paths, target inspect, prepare/check, model registry | operator-preset | no fully automated row promotion map | SPINE.TESTMAP.0 |
@@ -5010,18 +5022,18 @@ SPINE.FILEMAP.0:
   decision row.
 ```
 
-After V010.TARGET.2 completed with no eligible full-runtime candidate, Active
-Next advances to:
+After V010.TARGET.3 completed with no eligible dense full-runtime candidate,
+Active Next advances to:
 
 ```text
-V010.TARGET.3 - dense candidate target report
+V010.TARGET.7 - Qwen/Metal pressure target report
 ```
 
 If any P1 finding remains blocking, Active Next becomes the named follow-up row.
 
 | Condition | Active Next |
 | --- | --- |
-| candidate report complete and no full-runtime candidate exists | V010.TARGET.3 |
+| dense candidate report complete and no eligible dense full-runtime candidate exists | V010.TARGET.7 |
 | Current Capability still overclaims implementation | SPINE.CAPABILITY.REWRITE.0 |
 | command/help boundaries still overclaim | SPINE.COMMAND.AUDIT.0 |
 | test-to-ledger coverage remains blocking | SPINE.TESTMAP.0 |
@@ -5031,13 +5043,13 @@ Current reconciliation result:
 
 ```text
 Active Next:
-  V010.TARGET.3 - dense candidate target report
+  V010.TARGET.7 - Qwen/Metal pressure target report
 
 Reason:
-  V010.TARGET.2 reports no eligible full-runtime candidate. Current selected
-  DeepSeek slices, GLM source-only pressure, Qwen/Metal planned portability,
-  tiny fixtures, and registered aliases cannot close v0.1.0 full runtime, so
-  TRACK.TARGET must evaluate a dense candidate next.
+  V010.TARGET.3 reports no eligible dense full-runtime candidate. Current
+  selected DeepSeek slices are not dense targets, GLM is MoE/source-only, tiny
+  fixtures remain fixture-only, and Qwen/Metal is only a planned dense-pressure
+  lane. TRACK.TARGET must ground that Qwen/Metal pressure lane next.
 ```
 
 

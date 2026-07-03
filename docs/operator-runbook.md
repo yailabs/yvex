@@ -68,10 +68,12 @@ throughput.
 `yvex model-target decision --release v0.1.0` records the current target
 decision state. `yvex model-target candidate --release v0.1.0` reports
 full-runtime candidate eligibility across selected slices, source-only targets,
-pressure lanes, fixtures, blockers, and next rows. Both are report-only and do
-not download models, emit artifacts, materialize tensors, execute graph work,
-run prefill, decode, logits, sampling, generation, evaluation, benchmarks, or
-mark the release ready.
+pressure lanes, fixtures, blockers, and next rows. `yvex model-target
+dense-candidate --release v0.1.0` reports whether any dense target can become
+the first honest v0.1.0 full-runtime candidate. These commands are report-only
+and do not download models, emit artifacts, materialize tensors, execute graph
+work, run prefill, decode, logits, sampling, generation, evaluation,
+benchmarks, or mark the release ready.
 
 ## Runbook Index
 
@@ -122,7 +124,7 @@ Covers:
 
 - operator storage configuration;
 - fast regression;
-- target decision and full-runtime candidate reporting;
+- target decision, full-runtime candidate, and dense candidate reporting;
 - fullmodel report, materialization-plan, materialize, descriptor, family-runtime, attention, KV, context, MoE, and tensor-collection command-surface checks;
 - graph-only fixture regression;
 - daemon and accepted-only runtime diagnostics;
@@ -138,6 +140,7 @@ Covers:
 ./yvex model-target inspect glm-5.2-official-safetensors --paths
 ./yvex model-target decision --release v0.1.0 --include-candidates --include-blockers --include-next
 ./yvex model-target candidate --release v0.1.0 --include-candidates --include-blockers --include-next
+./yvex model-target dense-candidate --release v0.1.0 --include-candidates --include-requirements --include-blockers --include-next
 ```
 
 Boundary:

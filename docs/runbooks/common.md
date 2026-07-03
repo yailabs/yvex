@@ -13,7 +13,7 @@ evaluation, or benchmark capability.
 
 Purpose:
   Quickly check command discovery, path resolution, model-target reporting,
-  target decision and full-runtime candidate reporting,
+  target decision, full-runtime candidate, and dense candidate reporting,
   fullmodel report/materialization-plan/materialize/descriptor/family-runtime
   help, attention/KV/context/MoE/tensor-collection report help, tokenizer fixture diagnostics, and
   minimal KV diagnostics.
@@ -39,6 +39,7 @@ Boundary:
   no alias refresh
   target decision report only
   full-runtime candidate report only
+  dense candidate report only
   bounded fullmodel proof/refusal, descriptor, family-runtime, attention, KV, context, MoE, and tensor-collection diagnostics only
   no uncontrolled full backend allocation
   no daemon
@@ -74,6 +75,8 @@ make
 ./yvex model-target decision --release v0.1.0 --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
 ./yvex model-target candidate --help
 ./yvex model-target candidate --release v0.1.0 --include-candidates --include-pressure-targets --include-blockers --include-next
+./yvex model-target dense-candidate --help
+./yvex model-target dense-candidate --release v0.1.0 --include-candidates --include-requirements --include-blockers --include-next
 ./yvex fullmodel report --model glm-5.2-official-safetensors --backend cpu
 ./yvex fullmodel materialization-plan --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
 ./yvex fullmodel materialize --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --dry-run
@@ -344,12 +347,13 @@ Use this order before assuming a runtime bug:
 3. `./yvex model-target list`
 4. `./yvex model-target decision --release v0.1.0`
 5. `./yvex model-target candidate --release v0.1.0`
-6. `./yvex models current`
-7. `./yvex models list`
-8. `./yvex inspect <model-or-alias>`
-9. `./yvex tensors <model-or-alias>`
-10. `./yvex integrity check --model <model-or-alias>`
-11. `./yvex backend cpu`
-11. `./yvex cuda-info`
-12. Rerun CPU before CUDA.
-13. Check `git status` before committing.
+6. `./yvex model-target dense-candidate --release v0.1.0`
+7. `./yvex models current`
+8. `./yvex models list`
+9. `./yvex inspect <model-or-alias>`
+10. `./yvex tensors <model-or-alias>`
+11. `./yvex integrity check --model <model-or-alias>`
+12. `./yvex backend cpu`
+13. `./yvex cuda-info`
+14. Rerun CPU before CUDA.
+15. Check `git status` before committing.
