@@ -413,6 +413,47 @@ Boundary:
 ./yvex accounts whoami github --audit
 ```
 
+## Lane 5B - Live source download
+
+Purpose:
+  Keep long source downloads visibly alive while YVEX remains the controller.
+
+Requires:
+  Repository root.
+  Provider CLI and account state as in Lane 5.
+
+Writes:
+  The same source files, stdout/stderr logs, receipt, report, manifest, native
+  inventory, and registry sidecars as Lane 5.
+
+Stop after:
+  `stage: download pass`, `stage: progress-stream pass`, and either
+  `stage: progress-ticks pass` for long runs or `stage: progress-ticks skipped`
+  for fast runs.
+
+Boundary:
+  live progress is based on provider pipe streaming and local source-directory
+  `stat` scans only; it does not load tensor payloads, hash payloads, emit GGUF,
+  materialize tensors, execute runtime work, generate, evaluate, or benchmark.
+
+```sh
+./yvex models download gemma-4-12b-it \
+  --models-root "$HOME/lab/models" \
+  --auth required \
+  --progress live \
+  --tick-seconds 2 \
+  --audit \
+  2>&1 | tee "$HOME/lab/models/logs/yvex-gemma4-12b-it-download.live.log"
+
+./yvex models download gemma-4-31b-it \
+  --models-root "$HOME/lab/models" \
+  --auth required \
+  --progress live \
+  --tick-seconds 2 \
+  --audit \
+  2>&1 | tee "$HOME/lab/models/logs/yvex-gemma4-31b-it-download.live.log"
+```
+
 ## Full Implemented Command Inventory
 
 - `accounts`: local provider account boundary

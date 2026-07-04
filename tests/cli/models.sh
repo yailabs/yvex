@@ -106,6 +106,8 @@ grep 'alias not found: missing' "$ROOT/use-missing.err"
 "$YVEX_BIN" help models > "$ROOT/help.out"
 grep 'yvex models' "$ROOT/help.out"
 grep 'models download TARGET' "$ROOT/help.out"
+grep -- '--auth auto|required|never' "$ROOT/help.out"
+grep -- '--progress auto|live|plain|log|off' "$ROOT/help.out"
 grep 'models prepare TARGET' "$ROOT/help.out"
 grep 'models check TARGET' "$ROOT/help.out"
 
@@ -123,13 +125,65 @@ YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root 
 grep 'status: model-download-pass' "$ROOT/download-gemma.out"
 grep 'stage: source-manifest pass' "$ROOT/download-gemma.out"
 grep 'stage: native-inventory pass' "$ROOT/download-gemma.out"
+grep 'stage: progress-stream pass' "$ROOT/download-gemma.out"
 grep 'hf/gemma/gemma-4-12b-it' "$ROOT/download-gemma.out"
 grep 'gguf_created: false' "$ROOT/download-gemma.out"
+grep 'payload_loaded: false' "$ROOT/download-gemma.out"
+grep 'generation: unsupported' "$ROOT/download-gemma.out"
+grep 'benchmark_status: not-measured' "$ROOT/download-gemma.out"
 test -f "$DOWNLOAD_ROOT/reports/gemma/gemma-4-12b-it.source-manifest.json"
 test -f "$DOWNLOAD_ROOT/reports/gemma/gemma-4-12b-it.native-inventory.json"
 test -f "$DOWNLOAD_ROOT/reports/gemma/gemma-4-12b-it.download-report.json"
 test -f "$DOWNLOAD_ROOT/registry/gemma/gemma-4-12b-it.download.json"
 ! find "$DOWNLOAD_ROOT/gguf" -type f -name '*.gguf' 2>/dev/null | grep .
+
+LIVE_ROOT="$ROOT/download-live"
+YVEX_FAKE_HF_STEP_DELAY=1 YVEX_FAKE_HF_STEPS=3 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$LIVE_ROOT" --auth required --progress plain --tick-seconds 1 --audit > "$ROOT/download-live.out" 2>&1 &
+LIVE_PID=$!
+sleep 1
+grep 'model-download: start target=gemma-4-12b-it' "$ROOT/download-live.out"
+grep 'stage: download running' "$ROOT/download-live.out"
+wait "$LIVE_PID"
+grep 'tick: elapsed=' "$ROOT/download-live.out"
+grep 'files=' "$ROOT/download-live.out"
+grep 'bytes=' "$ROOT/download-live.out"
+grep 'fake-hf: resolving repo' "$ROOT/download-live.out"
+grep 'fake-hf: downloading shard' "$ROOT/download-live.out"
+grep 'progress_mode: plain' "$ROOT/download-live.out"
+grep 'tick_seconds: 1' "$ROOT/download-live.out"
+grep 'stdout_streamed: true' "$ROOT/download-live.out"
+grep 'stderr_streamed: true' "$ROOT/download-live.out"
+grep 'provider_exit_code: 0' "$ROOT/download-live.out"
+test -f "$LIVE_ROOT/logs/gemma-4-12b-it.download.stdout.log"
+test -f "$LIVE_ROOT/logs/gemma-4-12b-it.download.stderr.log"
+grep 'fake-hf: resolving repo' "$LIVE_ROOT/logs/gemma-4-12b-it.download.stdout.log"
+grep 'fake-hf: stderr resolving repo' "$LIVE_ROOT/logs/gemma-4-12b-it.download.stderr.log"
+
+LIVE_FAIL_ROOT="$ROOT/download-live-fail"
+YVEX_FAKE_HF_FAIL_AT_STEP=2 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$LIVE_FAIL_ROOT" --progress plain --tick-seconds 1 --audit > "$ROOT/download-live-fail.out" 2>&1 && exit 1 || true
+grep 'status: model-download-fail' "$ROOT/download-live-fail.out"
+grep 'provider_exit_code: 43' "$ROOT/download-live-fail.out"
+grep 'stdout_log:' "$ROOT/download-live-fail.out"
+grep 'stderr_log:' "$ROOT/download-live-fail.out"
+grep 'top_blocker: provider-download-failed' "$ROOT/download-live-fail.out"
+test -f "$LIVE_FAIL_ROOT/logs/gemma-4-12b-it.download.stdout.log"
+test -f "$LIVE_FAIL_ROOT/logs/gemma-4-12b-it.download.stderr.log"
+grep 'fake-hf: downloading shard 1' "$LIVE_FAIL_ROOT/logs/gemma-4-12b-it.download.stdout.log"
+grep 'fake-hf: failing at step 2' "$LIVE_FAIL_ROOT/logs/gemma-4-12b-it.download.stderr.log"
+
+YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-e2b --models-root "$ROOT/download-off" --no-progress --audit > "$ROOT/download-off.out" 2>&1
+! grep 'model-download: start' "$ROOT/download-off.out"
+! grep 'tick: elapsed=' "$ROOT/download-off.out"
+! grep 'fake-hf: resolving repo' "$ROOT/download-off.out"
+grep 'status: model-download-pass' "$ROOT/download-off.out"
+
+LOG_PROGRESS_ROOT="$ROOT/download-log-progress"
+YVEX_FAKE_HF_STEP_DELAY=1 YVEX_FAKE_HF_STEPS=3 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-e2b-it --models-root "$LOG_PROGRESS_ROOT" --progress log --tick-seconds 1 --audit > "$ROOT/download-log-progress.out" 2>&1
+grep 'tick: elapsed=' "$ROOT/download-log-progress.out"
+! grep 'fake-hf: resolving repo' "$ROOT/download-log-progress.out"
+grep 'progress_mode: log' "$ROOT/download-log-progress.out"
+test -f "$LOG_PROGRESS_ROOT/logs/gemma-4-e2b-it.download.stdout.log"
+grep 'fake-hf: resolving repo' "$LOG_PROGRESS_ROOT/logs/gemma-4-e2b-it.download.stdout.log"
 
 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download qwen3-8b --models-root "$DOWNLOAD_ROOT" --audit > "$ROOT/download-qwen.out"
 grep 'family: qwen' "$ROOT/download-qwen.out"
@@ -159,6 +213,12 @@ grep 'requires --family deepseek|glm|qwen|gemma' "$ROOT/download-bad-family.err"
 grep 'models download --models-root value is empty or invalid' "$ROOT/download-empty-root.err"
 "$YVEX_BIN" models download gemma-4-12b-it --max-workers 0 > "$ROOT/download-bad-workers.out" 2> "$ROOT/download-bad-workers.err" && exit 1 || true
 grep 'requires a positive integer' "$ROOT/download-bad-workers.err"
+"$YVEX_BIN" models download gemma-4-12b-it --auth maybe > "$ROOT/download-bad-auth.out" 2> "$ROOT/download-bad-auth.err" && exit 1 || true
+grep 'auth requires auto|required|never' "$ROOT/download-bad-auth.err"
+"$YVEX_BIN" models download gemma-4-12b-it --progress nope > "$ROOT/download-bad-progress.out" 2> "$ROOT/download-bad-progress.err" && exit 1 || true
+grep 'requires auto|live|plain|log|off' "$ROOT/download-bad-progress.err"
+"$YVEX_BIN" models download gemma-4-12b-it --tick-seconds 0 > "$ROOT/download-bad-tick.out" 2> "$ROOT/download-bad-tick.err" && exit 1 || true
+grep 'tick-seconds requires a positive integer' "$ROOT/download-bad-tick.err"
 "$YVEX_BIN" models download gemma-4-12b-it --source s3 > "$ROOT/download-bad-source.out" 2> "$ROOT/download-bad-source.err" && exit 1 || true
 grep 'supports hf only' "$ROOT/download-bad-source.err"
 "$YVEX_BIN" models download gemma-4-12b-it --surprise > "$ROOT/download-unknown-flag.out" 2> "$ROOT/download-unknown-flag.err" && exit 1 || true

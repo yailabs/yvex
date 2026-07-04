@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <poll.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -3578,6 +3579,14 @@ static const char *const model_download_default_excludes[] = {
     "*.zip"
 };
 
+typedef enum {
+    YVEX_MODEL_DOWNLOAD_PROGRESS_AUTO = 0,
+    YVEX_MODEL_DOWNLOAD_PROGRESS_LIVE,
+    YVEX_MODEL_DOWNLOAD_PROGRESS_PLAIN,
+    YVEX_MODEL_DOWNLOAD_PROGRESS_LOG,
+    YVEX_MODEL_DOWNLOAD_PROGRESS_OFF
+} yvex_model_download_progress_mode;
+
 typedef struct {
     const char *target;
     const char *repo;
@@ -3587,6 +3596,7 @@ typedef struct {
     const char *source;
     const char *models_root;
     const char *token_env;
+    const char *auth_mode;
     const char *include_patterns[YVEX_MODEL_DOWNLOAD_PATTERN_CAP];
     const char *exclude_patterns[YVEX_MODEL_DOWNLOAD_PATTERN_CAP];
     unsigned int include_count;
@@ -3598,6 +3608,8 @@ typedef struct {
     int force_sidecars;
     int yes;
     yvex_models_output_mode output_mode;
+    yvex_model_download_progress_mode progress_mode;
+    unsigned long long tick_seconds;
 } yvex_cli_models_download_options;
 
 typedef struct {
@@ -3642,6 +3654,8 @@ typedef struct {
     char stage_prepare_dirs[16];
     char stage_hf_cli[16];
     char stage_download[16];
+    char stage_progress_stream[16];
+    char stage_progress_ticks[16];
     char stage_source_scan[16];
     char stage_source_manifest[16];
     char stage_native_inventory[16];
@@ -3649,6 +3663,12 @@ typedef struct {
     yvex_model_download_source_scan source_scan;
     yvex_native_weight_summary native_summary;
     int hf_exit_code;
+    int provider_exit_code;
+    int stdout_streamed;
+    int stderr_streamed;
+    unsigned long long stdout_bytes;
+    unsigned long long stderr_bytes;
+    unsigned long long tick_count;
     int source_manifest_written;
     int native_inventory_written;
     int report_written;
@@ -3715,6 +3735,56 @@ static const char *model_download_repo_basename(const char *repo)
     return slash && slash[1] ? slash + 1 : NULL;
 }
 
+static const char *model_download_progress_mode_name(yvex_model_download_progress_mode mode)
+{
+    switch (mode) {
+    case YVEX_MODEL_DOWNLOAD_PROGRESS_AUTO: return "auto";
+    case YVEX_MODEL_DOWNLOAD_PROGRESS_LIVE: return "live";
+    case YVEX_MODEL_DOWNLOAD_PROGRESS_PLAIN: return "plain";
+    case YVEX_MODEL_DOWNLOAD_PROGRESS_LOG: return "log";
+    case YVEX_MODEL_DOWNLOAD_PROGRESS_OFF: return "off";
+    }
+    return "auto";
+}
+
+static int model_download_parse_progress_mode(const char *value,
+                                              yvex_model_download_progress_mode *out)
+{
+    if (!value || !out) return 0;
+    if (strcmp(value, "auto") == 0) {
+        *out = YVEX_MODEL_DOWNLOAD_PROGRESS_AUTO;
+        return 1;
+    }
+    if (strcmp(value, "live") == 0) {
+        *out = YVEX_MODEL_DOWNLOAD_PROGRESS_LIVE;
+        return 1;
+    }
+    if (strcmp(value, "plain") == 0) {
+        *out = YVEX_MODEL_DOWNLOAD_PROGRESS_PLAIN;
+        return 1;
+    }
+    if (strcmp(value, "log") == 0) {
+        *out = YVEX_MODEL_DOWNLOAD_PROGRESS_LOG;
+        return 1;
+    }
+    if (strcmp(value, "off") == 0) {
+        *out = YVEX_MODEL_DOWNLOAD_PROGRESS_OFF;
+        return 1;
+    }
+    return 0;
+}
+
+static yvex_model_download_progress_mode model_download_effective_progress_mode(
+    yvex_model_download_progress_mode mode)
+{
+    if (mode != YVEX_MODEL_DOWNLOAD_PROGRESS_AUTO) {
+        return mode;
+    }
+    return isatty(STDOUT_FILENO) && isatty(STDERR_FILENO)
+        ? YVEX_MODEL_DOWNLOAD_PROGRESS_LIVE
+        : YVEX_MODEL_DOWNLOAD_PROGRESS_PLAIN;
+}
+
 static int parse_models_download_options(int argc,
                                          char **argv,
                                          yvex_cli_models_download_options *options)
@@ -3727,7 +3797,10 @@ static int parse_models_download_options(int argc,
     options->revision = "main";
     options->max_workers = 8ull;
     options->token_env = "HF_TOKEN";
+    options->auth_mode = "auto";
     options->output_mode = YVEX_MODELS_OUTPUT_NORMAL;
+    options->progress_mode = YVEX_MODEL_DOWNLOAD_PROGRESS_AUTO;
+    options->tick_seconds = 2ull;
 
     if (argc >= 4 && (strcmp(argv[3], "--help") == 0 || strcmp(argv[3], "-h") == 0)) {
         return 1;
@@ -3745,6 +3818,9 @@ static int parse_models_download_options(int argc,
             strcmp(argv[i], "--exclude") == 0 ||
             strcmp(argv[i], "--max-workers") == 0 ||
             strcmp(argv[i], "--token-env") == 0 ||
+            strcmp(argv[i], "--auth") == 0 ||
+            strcmp(argv[i], "--progress") == 0 ||
+            strcmp(argv[i], "--tick-seconds") == 0 ||
             strcmp(argv[i], "--output") == 0) {
             const char *flag = argv[i];
             int rc = parse_models_value_option("models download", flag,
@@ -3787,6 +3863,26 @@ static int parse_models_download_options(int argc,
                 options->max_workers = parsed;
             } else if (strcmp(flag, "--token-env") == 0) {
                 options->token_env = value;
+            } else if (strcmp(flag, "--auth") == 0) {
+                if (strcmp(value, "auto") != 0 &&
+                    strcmp(value, "required") != 0 &&
+                    strcmp(value, "never") != 0) {
+                    fprintf(stderr, "yvex: models download --auth requires auto|required|never\n");
+                    return 2;
+                }
+                options->auth_mode = value;
+            } else if (strcmp(flag, "--progress") == 0) {
+                if (!model_download_parse_progress_mode(value, &options->progress_mode)) {
+                    fprintf(stderr, "yvex: models download --progress requires auto|live|plain|log|off\n");
+                    return 2;
+                }
+            } else if (strcmp(flag, "--tick-seconds") == 0) {
+                unsigned long long parsed = 0ull;
+                if (!parse_positive_ull(value, &parsed) || parsed == 0ull) {
+                    fprintf(stderr, "yvex: models download --tick-seconds requires a positive integer\n");
+                    return 2;
+                }
+                options->tick_seconds = parsed;
             } else if (strcmp(flag, "--output") == 0) {
                 if (!parse_models_output_mode(value, &options->output_mode)) {
                     fprintf(stderr, "yvex: models download unsupported output mode: %s\n", value);
@@ -3805,6 +3901,8 @@ static int parse_models_download_options(int argc,
             options->force_sidecars = 1;
         } else if (strcmp(argv[i], "--yes") == 0) {
             options->yes = 1;
+        } else if (strcmp(argv[i], "--no-progress") == 0) {
+            options->progress_mode = YVEX_MODEL_DOWNLOAD_PROGRESS_OFF;
         } else if (strcmp(argv[i], "--json") == 0) {
             fprintf(stderr, "yvex: models download JSON output is unsupported; use --output normal|table|audit\n");
             return 2;
@@ -3891,11 +3989,14 @@ static void model_download_report_init(yvex_model_download_report *report)
     snprintf(report->stage_prepare_dirs, sizeof(report->stage_prepare_dirs), "skipped");
     snprintf(report->stage_hf_cli, sizeof(report->stage_hf_cli), "skipped");
     snprintf(report->stage_download, sizeof(report->stage_download), "skipped");
+    snprintf(report->stage_progress_stream, sizeof(report->stage_progress_stream), "skipped");
+    snprintf(report->stage_progress_ticks, sizeof(report->stage_progress_ticks), "skipped");
     snprintf(report->stage_source_scan, sizeof(report->stage_source_scan), "skipped");
     snprintf(report->stage_source_manifest, sizeof(report->stage_source_manifest), "skipped");
     snprintf(report->stage_native_inventory, sizeof(report->stage_native_inventory), "skipped");
     snprintf(report->stage_sidecar, sizeof(report->stage_sidecar), "skipped");
     report->hf_exit_code = -1;
+    report->provider_exit_code = -1;
 }
 
 static void model_download_timestamp(char *out, size_t cap)
@@ -4069,6 +4170,21 @@ static int model_download_scan_source(const char *root,
     return model_download_scan_dir(root, "", scan, err);
 }
 
+static int model_download_observe_source(const char *root,
+                                         yvex_model_download_source_scan *scan)
+{
+    struct stat st;
+    yvex_error err;
+
+    if (!scan) return 0;
+    memset(scan, 0, sizeof(*scan));
+    if (!root || root[0] == '\0' || stat(root, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        return 0;
+    }
+    yvex_error_clear(&err);
+    return model_download_scan_source(root, scan, &err) == YVEX_OK;
+}
+
 static void write_bool_field(FILE *fp,
                              const char *indent,
                              const char *key,
@@ -4202,7 +4318,17 @@ static int model_download_write_json_sidecar(const char *path,
     model_download_write_pattern_array(fp, "exclude_patterns", options, 0, 1);
     write_field(fp, "  ", "hf_cli_path", report->hf_cli_path, 1);
     fprintf(fp, "  \"hf_exit_code\": %d,\n", report->hf_exit_code);
+    fprintf(fp, "  \"provider_exit_code\": %d,\n", report->provider_exit_code);
+    write_field(fp, "  ", "auth_mode", options->auth_mode, 1);
     write_field(fp, "  ", "auth_state", report->auth_state, 1);
+    write_field(fp, "  ", "progress_mode",
+                model_download_progress_mode_name(options->progress_mode), 1);
+    write_u64_field(fp, "  ", "tick_seconds", options->tick_seconds, 1);
+    write_u64_field(fp, "  ", "tick_count", report->tick_count, 1);
+    write_bool_field(fp, "  ", "stdout_streamed", report->stdout_streamed, 1);
+    write_bool_field(fp, "  ", "stderr_streamed", report->stderr_streamed, 1);
+    write_u64_field(fp, "  ", "stdout_bytes", report->stdout_bytes, 1);
+    write_u64_field(fp, "  ", "stderr_bytes", report->stderr_bytes, 1);
     write_u64_field(fp, "  ", "file_count", report->source_scan.file_count, 1);
     write_u64_field(fp, "  ", "safetensors_count", report->source_scan.safetensors_count, 1);
     write_bool_field(fp, "  ", "config_present", report->source_scan.config_present, 1);
@@ -4345,8 +4471,313 @@ static int model_download_find_hf_cli(char *out,
     return 0;
 }
 
+static int model_download_write_all_fd(int fd, const void *buf, size_t len)
+{
+    const unsigned char *p = (const unsigned char *)buf;
+
+    while (len > 0u) {
+        ssize_t n = write(fd, p, len);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            return 0;
+        }
+        if (n == 0) return 0;
+        p += (size_t)n;
+        len -= (size_t)n;
+    }
+    return 1;
+}
+
+static void model_download_mirror_provider_bytes(int fd,
+                                                 const char *buf,
+                                                 size_t len,
+                                                 int normalize_cr)
+{
+    size_t i;
+
+    if (fd < 0 || !buf || len == 0u) return;
+    if (!normalize_cr) {
+        (void)model_download_write_all_fd(fd, buf, len);
+        return;
+    }
+    for (i = 0; i < len; ++i) {
+        char c = buf[i] == '\r' ? '\n' : buf[i];
+        (void)model_download_write_all_fd(fd, &c, 1u);
+    }
+}
+
+static void model_download_print_start_progress(
+    const yvex_cli_models_download_options *options,
+    const yvex_model_download_report *report,
+    yvex_model_download_progress_mode effective_mode)
+{
+    if (!options || !report || effective_mode == YVEX_MODEL_DOWNLOAD_PROGRESS_OFF) {
+        return;
+    }
+    printf("model-download: start target=%s\n", report->target_id);
+    printf("provider: %s\n", strcmp(report->provider, "hf") == 0 ? "huggingface" : report->provider);
+    printf("repo: %s\n", report->repo_id);
+    printf("source: %s\n", report->local_source_dir);
+    printf("stage: account-provider pass\n");
+    printf("stage: download running\n");
+    fflush(stdout);
+}
+
+static void model_download_print_tick_progress(
+    const char *source_dir,
+    time_t started_at,
+    yvex_model_download_report *report,
+    yvex_model_download_progress_mode effective_mode)
+{
+    yvex_model_download_source_scan scan;
+    time_t now;
+    unsigned long long elapsed = 0ull;
+
+    if (!report || effective_mode == YVEX_MODEL_DOWNLOAD_PROGRESS_OFF) {
+        return;
+    }
+    now = time(NULL);
+    if (now != (time_t)-1 && started_at != (time_t)-1 && now >= started_at) {
+        elapsed = (unsigned long long)(now - started_at);
+    }
+    (void)model_download_observe_source(source_dir, &scan);
+    printf("tick: elapsed=%llus files=%llu safetensors=%llu bytes=%llu largest=%s\n",
+           elapsed,
+           scan.file_count,
+           scan.safetensors_count,
+           scan.total_regular_file_bytes,
+           scan.largest_file_name[0] ? scan.largest_file_name : "none");
+    fflush(stdout);
+    report->tick_count++;
+}
+
+static int yvex_provider_process_run_streaming(const char *const *args,
+                                               const char *stdout_log_path,
+                                               const char *stderr_log_path,
+                                               yvex_model_download_progress_mode effective_mode,
+                                               unsigned long long tick_seconds,
+                                               const char *local_source_dir,
+                                               yvex_model_download_report *report,
+                                               yvex_error *err)
+{
+    int stdout_pipe[2] = { -1, -1 };
+    int stderr_pipe[2] = { -1, -1 };
+    int stdout_log_fd = -1;
+    int stderr_log_fd = -1;
+    int stdout_open = 1;
+    int stderr_open = 1;
+    int child_exited = 0;
+    int child_status = 0;
+    int mirror_provider;
+    int normalize_cr;
+    time_t started_at;
+    time_t next_tick;
+    pid_t pid;
+
+    if (!args || !args[0] || !stdout_log_path || !stderr_log_path || !report) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "provider_process",
+                       "provider argv, log paths, and report are required");
+        return -1;
+    }
+
+    stdout_log_fd = open(stdout_log_path, O_WRONLY | O_CREAT | O_TRUNC, 0664);
+    if (stdout_log_fd < 0) {
+        yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
+                        "cannot open stdout log: %s", stdout_log_path);
+        return -1;
+    }
+    stderr_log_fd = open(stderr_log_path, O_WRONLY | O_CREAT | O_TRUNC, 0664);
+    if (stderr_log_fd < 0) {
+        close(stdout_log_fd);
+        yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
+                        "cannot open stderr log: %s", stderr_log_path);
+        return -1;
+    }
+    if (pipe(stdout_pipe) != 0 || pipe(stderr_pipe) != 0) {
+        if (stdout_pipe[0] >= 0) close(stdout_pipe[0]);
+        if (stdout_pipe[1] >= 0) close(stdout_pipe[1]);
+        if (stderr_pipe[0] >= 0) close(stderr_pipe[0]);
+        if (stderr_pipe[1] >= 0) close(stderr_pipe[1]);
+        close(stdout_log_fd);
+        close(stderr_log_fd);
+        yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
+                        "pipe failed: %s", strerror(errno));
+        return -1;
+    }
+
+    mirror_provider = effective_mode != YVEX_MODEL_DOWNLOAD_PROGRESS_OFF &&
+                      effective_mode != YVEX_MODEL_DOWNLOAD_PROGRESS_LOG;
+    normalize_cr = effective_mode != YVEX_MODEL_DOWNLOAD_PROGRESS_LIVE;
+    started_at = time(NULL);
+    next_tick = started_at == (time_t)-1
+        ? (time_t)-1
+        : started_at + (time_t)(tick_seconds ? tick_seconds : 1ull);
+
+    pid = fork();
+    if (pid < 0) {
+        close(stdout_pipe[0]);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[0]);
+        close(stderr_pipe[1]);
+        close(stdout_log_fd);
+        close(stderr_log_fd);
+        yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
+                        "fork failed: %s", strerror(errno));
+        return -1;
+    }
+    if (pid == 0) {
+        close(stdout_pipe[0]);
+        close(stderr_pipe[0]);
+        if (dup2(stdout_pipe[1], STDOUT_FILENO) < 0) _exit(127);
+        if (dup2(stderr_pipe[1], STDERR_FILENO) < 0) _exit(127);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[1]);
+        close(stdout_log_fd);
+        close(stderr_log_fd);
+        execv(args[0], (char *const *)args);
+        _exit(127);
+    }
+
+    close(stdout_pipe[1]);
+    close(stderr_pipe[1]);
+    stdout_pipe[1] = -1;
+    stderr_pipe[1] = -1;
+
+    while (stdout_open || stderr_open || !child_exited) {
+        struct pollfd fds[2];
+        int which[2];
+        nfds_t nfds = 0;
+        time_t now;
+        int timeout_ms = 1000;
+        int poll_rc;
+        pid_t waited;
+
+        waited = waitpid(pid, &child_status, WNOHANG);
+        if (waited == pid) {
+            child_exited = 1;
+        } else if (waited < 0 && errno != EINTR) {
+            child_exited = 1;
+        }
+
+        now = time(NULL);
+        if (effective_mode != YVEX_MODEL_DOWNLOAD_PROGRESS_OFF &&
+            tick_seconds > 0ull &&
+            now != (time_t)-1 &&
+            next_tick != (time_t)-1 &&
+            now >= next_tick &&
+            !child_exited) {
+            model_download_print_tick_progress(local_source_dir, started_at, report, effective_mode);
+            next_tick = now + (time_t)tick_seconds;
+        }
+        if (effective_mode != YVEX_MODEL_DOWNLOAD_PROGRESS_OFF &&
+            tick_seconds > 0ull &&
+            now != (time_t)-1 &&
+            next_tick != (time_t)-1 &&
+            next_tick > now) {
+            time_t diff = next_tick - now;
+            timeout_ms = diff > 1 ? 1000 : (int)(diff * 1000);
+            if (timeout_ms <= 0) timeout_ms = 100;
+        }
+
+        if (stdout_open) {
+            fds[nfds].fd = stdout_pipe[0];
+            fds[nfds].events = POLLIN | POLLHUP | POLLERR;
+            fds[nfds].revents = 0;
+            which[nfds] = 1;
+            nfds++;
+        }
+        if (stderr_open) {
+            fds[nfds].fd = stderr_pipe[0];
+            fds[nfds].events = POLLIN | POLLHUP | POLLERR;
+            fds[nfds].revents = 0;
+            which[nfds] = 2;
+            nfds++;
+        }
+
+        poll_rc = poll(nfds ? fds : NULL, nfds, timeout_ms);
+        if (poll_rc < 0) {
+            if (errno == EINTR) continue;
+            close(stdout_pipe[0]);
+            close(stderr_pipe[0]);
+            close(stdout_log_fd);
+            close(stderr_log_fd);
+            yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
+                            "poll failed: %s", strerror(errno));
+            return -1;
+        }
+        if (poll_rc > 0) {
+            nfds_t i;
+            for (i = 0; i < nfds; ++i) {
+                char buf[4096];
+                ssize_t got;
+                int stream_kind = which[i];
+                int read_fd = stream_kind == 1 ? stdout_pipe[0] : stderr_pipe[0];
+                int log_fd = stream_kind == 1 ? stdout_log_fd : stderr_log_fd;
+                int mirror_fd = stream_kind == 1 ? STDOUT_FILENO : STDERR_FILENO;
+
+                if ((fds[i].revents & (POLLIN | POLLHUP | POLLERR)) == 0) {
+                    continue;
+                }
+                got = read(read_fd, buf, sizeof(buf));
+                if (got > 0) {
+                    (void)model_download_write_all_fd(log_fd, buf, (size_t)got);
+                    if (stream_kind == 1) {
+                        report->stdout_bytes += (unsigned long long)got;
+                        report->stdout_streamed = 1;
+                    } else {
+                        report->stderr_bytes += (unsigned long long)got;
+                        report->stderr_streamed = 1;
+                    }
+                    if (mirror_provider) {
+                        model_download_mirror_provider_bytes(mirror_fd, buf, (size_t)got, normalize_cr);
+                        if (stream_kind == 1) fflush(stdout);
+                        else fflush(stderr);
+                    }
+                } else if (got == 0) {
+                    if (stream_kind == 1 && stdout_open) {
+                        close(stdout_pipe[0]);
+                        stdout_pipe[0] = -1;
+                        stdout_open = 0;
+                    } else if (stream_kind == 2 && stderr_open) {
+                        close(stderr_pipe[0]);
+                        stderr_pipe[0] = -1;
+                        stderr_open = 0;
+                    }
+                } else if (errno != EINTR && errno != EAGAIN) {
+                    if (stream_kind == 1 && stdout_open) {
+                        close(stdout_pipe[0]);
+                        stdout_pipe[0] = -1;
+                        stdout_open = 0;
+                    } else if (stream_kind == 2 && stderr_open) {
+                        close(stderr_pipe[0]);
+                        stderr_pipe[0] = -1;
+                        stderr_open = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    if (!child_exited) {
+        while (waitpid(pid, &child_status, 0) < 0) {
+            if (errno == EINTR) continue;
+            close(stdout_log_fd);
+            close(stderr_log_fd);
+            yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
+                            "waitpid failed: %s", strerror(errno));
+            return -1;
+        }
+    }
+    close(stdout_log_fd);
+    close(stderr_log_fd);
+
+    if (WIFEXITED(child_status)) return WEXITSTATUS(child_status);
+    if (WIFSIGNALED(child_status)) return 128 + WTERMSIG(child_status);
+    return 1;
+}
+
 static int model_download_run_hf(const yvex_cli_models_download_options *options,
-                                 const yvex_model_download_report *report,
+                                 yvex_model_download_report *report,
                                  const char *token_value,
                                  yvex_error *err)
 {
@@ -4354,27 +4785,11 @@ static int model_download_run_hf(const yvex_cli_models_download_options *options
     char max_workers_buf[32];
     unsigned int i;
     unsigned int n = 0;
-    int stdout_fd;
-    int stderr_fd;
-    int status;
-    pid_t pid;
+    yvex_model_download_progress_mode effective_mode;
 
     if (!options || !report) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "models_download_hf",
                        "download options and report are required");
-        return -1;
-    }
-    stdout_fd = open(report->stdout_log_path, O_WRONLY | O_CREAT | O_TRUNC, 0664);
-    if (stdout_fd < 0) {
-        yvex_error_setf(err, YVEX_ERR_IO, "models_download_hf",
-                        "cannot open stdout log: %s", report->stdout_log_path);
-        return -1;
-    }
-    stderr_fd = open(report->stderr_log_path, O_WRONLY | O_CREAT | O_TRUNC, 0664);
-    if (stderr_fd < 0) {
-        close(stdout_fd);
-        yvex_error_setf(err, YVEX_ERR_IO, "models_download_hf",
-                        "cannot open stderr log: %s", report->stderr_log_path);
         return -1;
     }
 
@@ -4405,33 +4820,16 @@ static int model_download_run_hf(const yvex_cli_models_download_options *options
     }
     args[n] = NULL;
 
-    pid = fork();
-    if (pid < 0) {
-        close(stdout_fd);
-        close(stderr_fd);
-        yvex_error_setf(err, YVEX_ERR_IO, "models_download_hf",
-                        "fork failed: %s", strerror(errno));
-        return -1;
-    }
-    if (pid == 0) {
-        dup2(stdout_fd, STDOUT_FILENO);
-        dup2(stderr_fd, STDERR_FILENO);
-        close(stdout_fd);
-        close(stderr_fd);
-        execv(report->hf_cli_path, (char *const *)args);
-        _exit(127);
-    }
-    close(stdout_fd);
-    close(stderr_fd);
-
-    if (waitpid(pid, &status, 0) < 0) {
-        yvex_error_setf(err, YVEX_ERR_IO, "models_download_hf",
-                        "waitpid failed: %s", strerror(errno));
-        return -1;
-    }
-    if (WIFEXITED(status)) return WEXITSTATUS(status);
-    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
-    return 1;
+    effective_mode = model_download_effective_progress_mode(options->progress_mode);
+    model_download_print_start_progress(options, report, effective_mode);
+    return yvex_provider_process_run_streaming(args,
+                                               report->stdout_log_path,
+                                               report->stderr_log_path,
+                                               effective_mode,
+                                               options->tick_seconds,
+                                               report->local_source_dir,
+                                               report,
+                                               err);
 }
 
 static void model_download_print_audit_patterns(const yvex_cli_models_download_options *options)
@@ -4476,6 +4874,7 @@ static void model_download_print_normal(const yvex_cli_models_download_options *
         printf("family: %s\n", report->family);
         printf("repo: %s\n", report->repo_id);
         printf("source: %s\n", report->local_source_dir);
+        printf("stage: download pass\n");
         printf("files: %llu safetensors=%llu bytes=%llu\n",
                report->source_scan.file_count,
                report->source_scan.safetensors_count,
@@ -4488,15 +4887,32 @@ static void model_download_print_normal(const yvex_cli_models_download_options *
         printf("status: %s\n", report->status);
         return;
     }
+    if (strcmp(report->status, "model-download-interrupted") == 0) {
+        printf("model-download: interrupted target=%s\n", report->target_id);
+        printf("family: %s\n", report->family);
+        printf("repo: %s\n", report->repo_id);
+        printf("source: %s\n", report->local_source_dir);
+        printf("stage: download interrupted\n");
+        printf("cleanup: preserved-partial-source\n");
+        printf("stdout_log: %s\n", report->stdout_log_path);
+        printf("stderr_log: %s\n", report->stderr_log_path);
+        printf("boundary: partial source files may exist; runtime unsupported\n");
+        printf("status: %s\n", report->status);
+        return;
+    }
 
     printf("model-download: fail target=%s\n", report->target_id);
     printf("family: %s\n", report->family);
     printf("repo: %s\n", report->repo_id);
     printf("source: %s\n", report->local_source_dir);
+    printf("stage: download fail\n");
+    printf("provider_exit_code: %d\n", report->provider_exit_code);
     printf("hf_exit_code: %d\n", report->hf_exit_code);
+    printf("stdout_log: %s\n", report->stdout_log_path);
     printf("stderr_log: %s\n", report->stderr_log_path);
+    if (report->top_blocker[0]) printf("top_blocker: %s\n", report->top_blocker);
     if (report->error[0]) printf("reason: %s\n", report->error);
-    printf("boundary: no runtime, no generation, no benchmark\n");
+    printf("boundary: partial source files may exist; runtime unsupported\n");
     printf("status: %s\n", report->status);
     (void)options;
 }
@@ -4530,6 +4946,7 @@ static void model_download_print_audit(const yvex_cli_models_download_options *o
     printf("hf_cli: %s\n", report->hf_cli_path[0] ? report->hf_cli_path : "missing");
     printf("hf_cli_source: %s\n", report->hf_cli_source[0] ? report->hf_cli_source : "none");
     printf("hf_exit_code: %d\n", report->hf_exit_code);
+    printf("auth_mode: %s\n", options->auth_mode);
     printf("auth_state: %s\n", report->auth_state);
     printf("token_env_name: %s\n", report->token_env_name);
     printf("token_value_redacted: %s\n",
@@ -4540,10 +4957,20 @@ static void model_download_print_audit(const yvex_cli_models_download_options *o
     model_stage_print("prepare-dirs", report->stage_prepare_dirs);
     model_stage_print("hf-cli", report->stage_hf_cli);
     model_stage_print("download", report->stage_download);
+    model_stage_print("progress-stream", report->stage_progress_stream);
+    model_stage_print("progress-ticks", report->stage_progress_ticks);
     model_stage_print("source-scan", report->stage_source_scan);
     model_stage_print("source-manifest", report->stage_source_manifest);
     model_stage_print("native-inventory", report->stage_native_inventory);
     model_stage_print("sidecar", report->stage_sidecar);
+    printf("progress_mode: %s\n", model_download_progress_mode_name(options->progress_mode));
+    printf("tick_seconds: %llu\n", options->tick_seconds);
+    printf("tick_count: %llu\n", report->tick_count);
+    printf("stdout_streamed: %s\n", report->stdout_streamed ? "true" : "false");
+    printf("stderr_streamed: %s\n", report->stderr_streamed ? "true" : "false");
+    printf("stdout_bytes: %llu\n", report->stdout_bytes);
+    printf("stderr_bytes: %llu\n", report->stderr_bytes);
+    printf("provider_exit_code: %d\n", report->provider_exit_code);
     printf("source_file_count: %llu\n", report->source_scan.file_count);
     printf("file_count: %llu\n", report->source_scan.file_count);
     printf("safetensors_count: %llu\n", report->source_scan.safetensors_count);
@@ -4674,9 +5101,10 @@ static int command_models_download(int argc, char **argv)
     snprintf(report.local_name, sizeof(report.local_name), "%s", local_name);
     snprintf(report.token_env_name, sizeof(report.token_env_name), "%s", options.token_env);
     token_value = getenv(options.token_env);
-    token_present = token_value && token_value[0];
+    token_present = token_value && token_value[0] && strcmp(options.auth_mode, "never") != 0;
     snprintf(report.auth_state, sizeof(report.auth_state), "%s",
-             token_present ? "token-env-present" : "not-provided");
+             token_present ? "token-env-present" :
+             (strcmp(options.auth_mode, "never") == 0 ? "auth-never" : "not-provided"));
 
     rc = yvex_operator_paths_resolve(&paths, options.models_root, &operator_paths, &err);
     if (rc != YVEX_OK) {
@@ -4781,6 +5209,17 @@ static int command_models_download(int argc, char **argv)
     report.hf_exit_code = model_download_run_hf(&options, &report,
                                                 token_present ? token_value : NULL,
                                                 &err);
+    report.provider_exit_code = report.hf_exit_code;
+    if (model_download_effective_progress_mode(options.progress_mode) ==
+        YVEX_MODEL_DOWNLOAD_PROGRESS_OFF) {
+        snprintf(report.stage_progress_stream, sizeof(report.stage_progress_stream), "skipped");
+        snprintf(report.stage_progress_ticks, sizeof(report.stage_progress_ticks), "skipped");
+    } else {
+        snprintf(report.stage_progress_stream, sizeof(report.stage_progress_stream),
+                 report.hf_exit_code < 0 ? "fail" : "pass");
+        snprintf(report.stage_progress_ticks, sizeof(report.stage_progress_ticks),
+                 report.tick_count > 0ull ? "pass" : "skipped");
+    }
     if (options.dry_run && report.hf_exit_code == 0) {
         snprintf(report.status, sizeof(report.status), "model-download-dry-run");
         snprintf(report.stage_download, sizeof(report.stage_download), "dry-run");
@@ -4791,9 +5230,33 @@ static int command_models_download(int argc, char **argv)
         return model_download_finish(&options, &report);
     }
     if (report.hf_exit_code != 0) {
+        int write_rc;
         snprintf(report.status, sizeof(report.status), "model-download-fail");
-        snprintf(report.stage_download, sizeof(report.stage_download), "fail");
-        snprintf(report.error, sizeof(report.error), "hf download exited nonzero");
+        if (report.hf_exit_code == 130 || report.hf_exit_code == 143) {
+            snprintf(report.status, sizeof(report.status), "model-download-interrupted");
+            snprintf(report.stage_download, sizeof(report.stage_download), "interrupted");
+            snprintf(report.top_blocker, sizeof(report.top_blocker), "provider-download-interrupted");
+            snprintf(report.error, sizeof(report.error), "provider download interrupted");
+        } else {
+            snprintf(report.stage_download, sizeof(report.stage_download), "fail");
+            snprintf(report.top_blocker, sizeof(report.top_blocker), "provider-download-failed");
+            if (report.hf_exit_code < 0 && yvex_error_message(&err)[0]) {
+                snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
+            } else {
+                snprintf(report.error, sizeof(report.error), "hf download exited nonzero");
+            }
+        }
+        write_rc = model_download_write_json_sidecar(report.download_report_path,
+                                                    "yvex.model_download.report.v1",
+                                                    &options,
+                                                    &report,
+                                                    &err);
+        if (write_rc == YVEX_OK) {
+            report.report_written = 1;
+            snprintf(report.stage_sidecar, sizeof(report.stage_sidecar), "pass");
+        } else {
+            snprintf(report.stage_sidecar, sizeof(report.stage_sidecar), "fail");
+        }
         return model_download_finish(&options, &report);
     }
     snprintf(report.stage_download, sizeof(report.stage_download), "pass");
@@ -13268,7 +13731,7 @@ void yvex_models_help(FILE *fp)
 {
     fprintf(fp, "usage: yvex models scan --root DIR [--registry FILE]\n");
     fprintf(fp, "       yvex models add --path FILE [--alias ALIAS] [--support-level LEVEL] [--registry FILE]\n");
-    fprintf(fp, "       yvex models download TARGET [--models-root DIR] [--dry-run] [--audit | --output normal|table|audit]\n");
+    fprintf(fp, "       yvex models download TARGET [--models-root DIR] [--dry-run] [--auth auto|required|never] [--progress auto|live|plain|log|off] [--tick-seconds N] [--no-progress] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex models download --repo OWNER/NAME --family deepseek|glm|qwen|gemma [--name LOCAL_NAME] [--models-root DIR]\n");
     fprintf(fp, "       yvex models prepare TARGET [--overwrite] [--source DIR] [--out FILE | --out-dir DIR] [--models-root DIR] [--registry FILE] [--dry-run] [--no-register] [--no-use]\n");
     fprintf(fp, "       yvex models check TARGET [--backend cpu|cuda] [--level quick|runtime|full] [--models-root DIR] [--registry FILE] [--report-dir DIR] [--no-materialize] [--no-graph] [--audit | --output normal|table|audit]\n");
@@ -13278,6 +13741,7 @@ void yvex_models_help(FILE *fp)
     fprintf(fp, "\nExamples:\n");
     fprintf(fp, "  yvex models check deepseek4-v4-flash-selected-embed\n");
     fprintf(fp, "  yvex models download gemma-4-12b-it --models-root ~/lab/models --dry-run --audit\n");
+    fprintf(fp, "  yvex models download gemma-4-12b-it --models-root ~/lab/models --auth required --progress live --tick-seconds 2 --audit\n");
     fprintf(fp, "  yvex models download qwen3-8b --models-root ~/lab/models --audit\n");
     fprintf(fp, "  yvex models check deepseek4-v4-flash-selected-embed --backend cpu --level runtime\n");
     fprintf(fp, "  yvex models check deepseek4-v4-flash-selected-embed --backend cuda --level runtime --no-graph\n");
