@@ -1,32 +1,36 @@
 # YVEX
 
-YVEX is a native C inference engine for local open-weight models. It is
-**intentionally narrow**: not a generic GGUF loader, not a universal runtime,
-and not a vague local-AI wrapper. Its job is to turn concrete model artifacts
-into **owned, inspectable runtime state** across parsing, descriptor
-construction, backend residency, engine ownership, graph execution, and session
-state.
+YVEX is a native C inference engine for local open-weight models. It is built
+around turning real artifacts into owned runtime state that can be explained at
+each step instead of hidden behind a loaded flag. The engine parses GGUF
+structure, builds descriptors for selected tensors, moves chosen weights onto
+CPU or CUDA, attaches them to engine-owned state and runs the first graph slices
+over those bytes. Right now that means embedding lookup over a real
+`token_embd.weight` followed by RMSNorm using an actual first-layer weight such
+as `blk.0.attn_norm.weight`, with output checked against independent reference
+reads from the same artifact. A small bounded KV store is already there with
+explicit shape, capacity, append, read, clear and overflow behavior. This is
+still diagnostic KV, not the final attention-backed decode state. Full
+transformer blocks, decode, logits and generation are still ahead.
 
-A GGUF file can parse cleanly while tensor ranges are still wrong. A tensor can
-sit in backend memory while no graph path can actually consume it. A daemon can
-answer requests while generation remains a promise. YVEX keeps those states
-separate and reportable. That is **not a loaded flag**.
+The project targets the machines where these models actually become useful:
+high-memory workstations, MacBooks and Mac Studios with unified memory, and
+CUDA systems like DGX Spark class hardware. CPU is the reference lane for
+correctness and diagnostics. CUDA is the current acceleration path. Metal is
+the next target because unified memory and fast local storage change what is
+practical on personal hardware for this size of model. The engine stays narrow
+on purpose. It works with selected artifacts that match the current path rather
+than pretending to be a general GGUF runner.
 
-The current path starts from real artifacts. It parses GGUF structure, builds
-descriptors for selected tensors, moves chosen DeepSeek-class `F16` weights onto
-CPU or CUDA, attaches them to engine-owned state, and runs the first graph
-slices over those bytes. The first slice is token embedding lookup over
-`token_embd.weight`. The next adds RMSNorm using a real first-layer weight such
-as `blk.0.attn_norm.weight`. Both slices are checked against independent
-reference data read directly from the artifact. Session state now includes a
-small bounded KV store with explicit shape, capacity, append, read, clear, byte
-accounting, and overflow behavior. This is still diagnostic KV, not the final
-attention-backed decode state.
-
-The next meaningful runtime step is a transformer block that stays on the same
-owned path: token input, embedding, normalization, attention, MLP, residual
-state, and logits. Generation only becomes useful after that path is executable
-inside the engine.
+The pipeline is kept visible so an operator can follow it from source to
+execution. Tensors can be pulled from Hugging Face or GitHub, manifests and
+inventories built, quantization and tensor selection decided according to the
+specific machine and model family, a matching GGUF emitted, and the result
+materialized and attached without losing the chain. GGUF is used because it
+supplies concrete facts - architecture metadata, tensor directory, storage
+formats, offsets and alignment - that let the runtime build real descriptors
+instead of guessing ranges or layouts. Those descriptors then drive
+materialization and the graph work that follows.
 
 C is the right language here because this layer is mostly about ownership.
 Memory must belong to someone. Tensor ranges must be explicit. Cleanup must be
@@ -37,66 +41,66 @@ which graph consumed them, and which state survived afterward.
 ## Why this project exists
 
 Open-weight inference has moved past the point where simply running a model
-locally is interesting. That bar is now low enough to be ordinary. The harder
+locally is interesting. That bar is low enough now to be ordinary. The harder
 problem is running models large enough to matter while keeping the whole
-machine path understandable and debuggable.
+machine path understandable and debuggable as things get bigger.
 
 Small dense models hide a lot of bad decisions. They fit in RAM easily, move
-quickly, and tolerate sloppy accounting, vague state ownership, and loose
-backend boundaries. Larger open-weight models do not forgive those things.
-Quantization choices start to affect behavior, not just file size. KV state
-becomes one of the dominant memory objects. Tensor placement and backend kernel
-coverage turn into first-class architectural decisions. Long prefill and
-token-by-token decode stress different parts of the system. When something goes
-wrong, you need to know where in the chain the failure happened.
+fast and tolerate sloppy accounting, vague state ownership and loose backend
+boundaries. Larger open-weight models do not forgive those things. Quantization
+starts affecting real behavior, not just file size. KV state becomes one of the
+main memory objects. Tensor placement and backend kernel coverage turn into
+architectural decisions. Long prefill and token-by-token decode stress
+different parts of the system. When something goes wrong you need to know
+exactly where in the chain it broke.
 
-YVEX is built for that pressure. It grows through narrow, executable slices
-rather than jumping from parser straight to generation. Tiny deterministic
-fixtures keep parser, corruption handling, executor, and backend behavior
-exactly checkable. Selected real-tensor artifacts, starting with large
-embedding weights and then embedding plus RMSNorm, put model-scale pressure on
-range math, backend transfer, allocation limits, digest checks, cleanup, and
-reference comparison. Multi-tensor graph segments then add scheduling,
-intermediate memory planning, and another place where execution can be wrong
-before the full transformer path exists.
+YVEX grows through narrow executable slices instead of jumping from parser
+straight to generation. Tiny fixtures keep parser, corruption handling,
+executor and backend behavior exactly checkable. Selected real-tensor artifacts
+put model-scale pressure on range math, transfer, allocation, digest checks and
+reference comparison before the full transformer path exists. Multi-tensor
+segments then add scheduling and intermediate memory without pretending the
+whole model is already there.
 
 Model-building tooling lives close to the runtime for the same reason. Once
-weights have been downloaded, inventoried, mapped, quantized, emitted as GGUF,
-registered, and materialized, the engine needs a traceable record of what
-happened. Source manifests, native tensor inventories, family maps, qtype
-policy, GGUF template validation, integrity reports, and artifact cards are not
-paperwork around the engine. They are the chain that lets the runtime explain
-why a local artifact should be trusted and what it actually contains.
+weights have been downloaded, inventoried, mapped, quantized and emitted as
+GGUF, the engine needs the record of what happened so it can explain later why
+a particular local artifact behaves the way it does. Source manifests, native
+inventories, family maps, qtype policy and integrity reports are not
+decoration. They are the chain that keeps the route from open weights to
+executable state traceable.
 
 Speed numbers and capability tests only become meaningful after that chain
 exists. Without a clear path from source weights to executable state, a
-benchmark is just a number attached to an opaque file.
+benchmark is just a number attached to an opaque file. The project stays
+opportunistic. Right now the selected DeepSeek-class artifacts are the right
+pressure targets because of size, capabilities and how well they survive the
+current quantization and materialization path. If a better open-weight model
+appears for the same memory class, the focus can shift. The constraint stays
+the same: credible local inference on high-end personal machines with real
+ownership and transparency from start to finish.
 
 ## Status
 
-YVEX is still below full text generation.
+YVEX is still below full text generation. The current runtime can parse GGUF
+artifacts and run structural validation, build descriptors for selected
+tensors, materialize chosen DeepSeek-class `F16` weights on CPU or CUDA, attach
+the resident weights to engine-owned state, and run the first graph slices.
+Those slices cover token embedding lookup and embedding plus RMSNorm using a
+real first-layer weight, with output checked against independent reference data
+read from the artifact. A small bounded KV store is already present with
+explicit shape, capacity, append, read, clear, close and byte accounting. This
+is diagnostic KV, not the final attention-backed decode state.
 
-**Current runtime path:**
-
-- Parse GGUF artifacts and perform structural validation.
-- Build descriptors for selected tensors.
-- Materialize selected DeepSeek-class `F16` weights on CPU or CUDA.
-- Attach resident weights to engine-owned state.
-- Run graph slices for token embedding lookup and embedding plus RMSNorm, with
-  independent reference checks.
-- Own a small bounded KV store with explicit lifecycle and byte accounting.
-
-The next runtime block is transformer execution on the same artifact-to-engine
-path. Full-model prefill, decode, logits, sampling, streaming generation, and
-server-backed generation are still ahead.
-
-The project is early. Use tracing and detailed logs when behavior looks off,
-and include full context when reporting issues.
+The next block on the same path is transformer execution. Full-model prefill,
+decode, logits, sampling, streaming generation and server-backed generation are
+still ahead. The project is early. Use tracing and detailed logs when something
+looks off, and include full context when reporting issues.
 
 ## Runtime architecture
 
 YVEX follows one continuous path from source evidence to local execution. Each
-step turns file facts into runtime facts that the next step can depend on.
+step turns file facts into runtime facts the next step can depend on.
 
 ```text
 source weights
@@ -120,13 +124,13 @@ source weights
   -> server and agent surfaces
 ```
 
-The diagram is architecture, not a release checklist. Current implementation
-status lives in the Status section above.
+The diagram is the architecture, not a release checklist. Current
+implementation status lives in the Status section.
 
 ## Model artifacts
 
 Real model weights stay outside git. The repository carries code, public
-headers, documentation, tiny fixtures, and tests. Large artifacts remain
+headers, documentation, tiny fixtures and tests. Large artifacts remain
 operator-local.
 
 YVEX currently works with selected pressure artifacts that sit between tiny
@@ -145,9 +149,9 @@ make
 ```
 
 These commands only report the operator-local storage layout. They do not
-download, create, or register anything.
+download, create or register anything.
 
-A typical selected-artifact registration:
+A typical selected-artifact registration looks like this:
 
 ```sh
 ./yvex models add \
@@ -166,8 +170,8 @@ metadata drift, tensor readiness, and graph admission behind it.
 ## Model-building path
 
 YVEX treats model-building as part of the engine path. A useful local artifact
-is the result of a traceable chain, not just a file with the right extension.
-A local inference engine cannot treat `GGUF` as a file extension only.
+is the result of a traceable chain, not just a file with the right extension. A
+local inference engine cannot treat `GGUF` as a file extension only.
 
 ```text
 official/open weights
@@ -183,7 +187,7 @@ official/open weights
   -> graph execution
 ```
 
-Low-level source-to-selected commands:
+Low-level source-to-selected commands look like this:
 
 ```sh
 ./yvex source-manifest create \
@@ -211,24 +215,37 @@ Low-level source-to-selected commands:
   --overwrite
 ```
 
-Quantization and imatrix work follow the same separation: a qtype can be valid
+Quantization and imatrix work follow the same separation. A qtype can be valid
 for storage before the executor has compute support for it. Manifests record
 the work without turning it into a runtime claim.
 
 ## Backends and machines
 
 Local inference is a machine problem. Memory size, storage speed, backend
-ownership, and kernel coverage decide what the runtime can actually prove.
+ownership and kernel coverage decide what the runtime can actually prove and
+measure.
 
-| Machine class | Backend | Role in current engine | Notes |
-| --- | --- | --- | --- |
-| CPU-only developer machine | CPU | Reference lane for parser, descriptors, token input, integrity, cleanup, KV tests, and small graph correctness. | Always available for diagnostics. |
-| CUDA workstation | CUDA | Acceleration path for selected tensor materialization, fixture parity, embedding, and embedding plus RMSNorm slices. | Primary development target. |
-| DGX Spark / GB10-class | CUDA | Pressure target for larger artifacts, memory behavior, and allocation limits. | Future full-model stress testing. |
-| High-memory MacBook / Mac Studio | Metal | Planned unified-memory lane. | Important for personal high-end machines. |
-| Strix Halo-class | ROCm | Planned AMD unified-memory lane. | Same unified-memory pressure class. |
+The table below shows the current and planned surfaces the way they will be
+benchmarked later: by machine class, backend, artifact type, workload and
+separate prefill versus generation numbers. Generation numbers stay N/A until
+the decode, logits and sampling path exists. No throughput number is implied by
+this table.
+
+| Machine | Backend | Artifact / Slice | Workload | Prefill / Slice | Generation |
+| --- | --- | --- | --- | --- | --- |
+| CPU developer machine | CPU | fixtures + selected embed | partial token / segment | command-visible | N/A |
+| CPU developer machine | CPU | embed + RMSNorm | prefill foundation | command-visible | N/A |
+| CUDA workstation | CUDA | selected embed | partial token | command-visible | N/A |
+| CUDA workstation | CUDA | embed + RMSNorm | prefill foundation | command-visible | N/A |
+| CUDA workstation | CUDA | embed + RMSNorm + KV | KV-backed prefill | command-visible | N/A |
+| DGX Spark / GB10-class | CUDA | larger selected artifacts | memory pressure workloads | future pressure row | N/A |
+| High-memory MacBook / Mac Studio | Metal | future selected GGUF | long prompts | future row | future row |
+| Strix Halo-class | ROCm | future selected GGUF | long prompts | future row | future row |
 
 YVEX currently claims CPU and CUDA only for the surfaces that exist today.
+Metal and ROCm numbers will appear when those backends land and real artifacts
+are measured on them. Generation stays N/A across the board until the full
+decode path is executable on the same owned chain.
 
 ## Larger-model direction
 
@@ -280,7 +297,7 @@ Embedding plus RMSNorm segment:
   --execute-segment --segment embedding-rmsnorm --tokens 0,1 --token-index 0
 ```
 
-Controlled block fixture, an exact F32 world:
+Controlled block fixture (exact F32 world):
 
 ```sh
 ./yvex graph --backend cpu --execute-block --block fixture --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
