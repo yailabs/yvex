@@ -185,6 +185,7 @@ Current source/model-family commands include:
 ./yvex model-target tensor-collection qwen3-8b --audit
 ./yvex model-target inspect gemma-4-12b-it
 ./yvex model-target class-profile gemma-4-12b-it --audit
+./yvex model-target tensor-collection gemma-4-12b-it --audit
 ./yvex source-manifest report --family qwen --release v0.1.0 --audit
 ./yvex source-manifest report --family gemma --release v0.1.0 --audit
 ./yvex models download qwen3-8b --models-root "$HOME/lab/models" --auth auto --audit
@@ -210,14 +211,15 @@ inventory. Its Metal pressure is recorded as backend pressure because Qwen can
 force future unified-memory and backend lowering questions, but Metal is not
 part of the target identity.
 
-`gemma-4-12b-it` names a Gemma source target. It currently carries source target
-facts and a header-metadata-only model-class profile. Its CPU/CUDA baseline
-pressure is recorded as backend pressure because Gemma can force dense runtime
-and artifact-shape questions, but CUDA is not part of the target identity.
+`gemma-4-12b-it` names a Gemma source target. It currently carries source
+target facts, a header-metadata-only model-class profile, and a header-only
+tensor collection inventory. Its CPU/CUDA baseline pressure is recorded as
+backend pressure because Gemma can force dense runtime and artifact-shape
+questions, but CUDA is not part of the target identity.
 
-Both lanes still require Gemma tensor collection inventory, canonical role
-mapping, artifact contracts, runtime descriptors, graph
-lowering, and runtime execution before family support can be claimed.
+Both lanes still require canonical role mapping, artifact contracts, runtime
+descriptors, graph lowering, and runtime execution before family support can be
+claimed.
 
 ## Family Architecture Signature
 
@@ -991,7 +993,7 @@ This table records posture, not support claims.
 | DeepSeek | selected-slice pressure | sparse/MoE | selected embedding and embedding-plus-RMSNorm graph slices | full artifact, tensor role map, MoE runtime, output head, generation |
 | GLM | source/storage pressure | sparse/MoE | huge source/storage pressure reports | source completion, model-class, tensor map, artifact, storage/residency |
 | Qwen | backend-neutral source target | dense candidate / family-dependent | `qwen3-8b` target, Qwen model-class profile, and Qwen tensor collection inventory | tensor role map, artifact, backend/runtime |
-| Gemma | backend-neutral source target | dense candidate | `gemma-4-12b-it` target and Gemma model-class profile | tensor collections, tensor map, artifact, runtime |
+| Gemma | tensor-collection-profiled source target | dense candidate | `gemma-4-12b-it` target, Gemma model-class profile, and Gemma tensor collection inventory | tensor role map, artifact, runtime |
 | Phi/Llama/Mistral | candidate families | dense/sparse depending target | architectural candidates | no current source target |
 
 Current posture vocabulary includes `source-target-profiled`,
@@ -1151,7 +1153,7 @@ This table records families as integration classes, not support claims.
 | DeepSeek | Sparse / MoE | Large sparse runtime, expert routing, KV pressure, high-end local inference | selected-slice-proof |
 | GLM | Sparse / MoE | Huge source inventory, model-class pressure, reasoning/coding target class | source/storage-pressure |
 | Qwen | Dense or Sparse / MoE depending target | Dense/sparse comparison, tokenizer/runtime comparison, portability pressure | tensor-collection-profiled for `qwen3-8b` |
-| Gemma | Dense | Smaller local runtime and device-oriented pressure | model-class-profiled for `gemma-4-12b-it` |
+| Gemma | Dense | Smaller local runtime and device-oriented pressure | tensor-collection-profiled for `gemma-4-12b-it` |
 | Phi | Dense / compact reasoning | Small reasoning under constrained hardware | candidate family |
 | Llama | Dense / sparse / multimodal depending target | Ecosystem baseline and common runtime assumptions | candidate family |
 | Mistral | Dense / sparse depending target | Efficient local/server runtime and smaller sparse baselines | candidate family |

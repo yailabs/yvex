@@ -93,6 +93,9 @@ make
 ./yvex model-target class-profile gemma-4-12b-it
 ./yvex model-target class-profile gemma-4-12b-it --output table
 ./yvex model-target class-profile gemma-4-12b-it --audit
+./yvex model-target tensor-collection gemma-4-12b-it
+./yvex model-target tensor-collection gemma-4-12b-it --output table
+./yvex model-target tensor-collection gemma-4-12b-it --audit
 ./yvex model-target decision --help
 ./yvex model-target decision --release v0.1.0 --output table
 ./yvex model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
@@ -136,12 +139,13 @@ lexical tensor-name patterns from safetensors headers and do not map tensor
 roles, load payloads, execute runtime paths, generate, evaluate, benchmark, or
 mark a release ready.
 
-`model-target tensor-collection qwen3-8b` is a Qwen header-only tensor
-collection inventory. It groups lexical tensor candidates into embedding,
-attention Q/K/V/O, MLP gate/up/down, normalization, output-head, MoE,
-tokenizer-sidecar, and KV-runtime-state buckets without tensor role mapping,
-payload loading, runtime descriptors, graph consumers, generation, evaluation,
-or benchmark claims.
+`model-target tensor-collection qwen3-8b` and `model-target
+tensor-collection gemma-4-12b-it` are header-only tensor collection
+inventories. They group lexical tensor candidates into embedding, attention
+Q/K/V/O, MLP gate/up/down, normalization, output-head, MoE, tokenizer-sidecar,
+and KV-runtime-state buckets without tensor role mapping, payload loading,
+runtime descriptors, graph consumers, generation, evaluation, or benchmark
+claims.
 
 ## Lane 1 — Graph-only regression
 
