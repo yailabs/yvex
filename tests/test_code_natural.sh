@@ -299,6 +299,8 @@ pattern='Metal support imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='provider generation imple''mented'
 scan_forbidden_claim "$pattern"
+pattern='raw_token_stored_by_yvex: tr''ue'
+scan_forbidden_claim "$pattern"
 pattern='streaming generation imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='execution_rea''dy: true'
@@ -329,14 +331,7 @@ pattern='target paths inspect GG''UF'
 scan_forbidden_claim "$pattern"
 
 if awk '
-  /^static int model_download_run_hf\(/ {
-    in_download = 1
-  }
-  in_download && /^}/ {
-    in_download = 0
-    next
-  }
-  !in_download && /\b(system|popen|execl|execv|fork)[[:space:]]*\(/ {
+  /\b(system|popen|execl|execv|fork)[[:space:]]*\(/ {
     print FILENAME ":" FNR ":" $0
     bad = 1
   }
@@ -346,7 +341,12 @@ if awk '
 ' yvex_model_artifacts.c; then
   :
 else
-  echo "models prepare/check must not shell out; only models download may call hf"
+  echo "models command owners must not shell out; provider execution belongs to accounts"
+  exit 1
+fi
+
+if grep -nE '\b(system|popen|execl)[[:space:]]*\(' yvex_accounts.c; then
+  echo "accounts must use bounded exec helpers only"
   exit 1
 fi
 

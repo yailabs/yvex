@@ -55,6 +55,7 @@ CORE_SRCS := \
 	yvex_artifact.c \
 	yvex_artifact_identity.c \
 	yvex_artifact_integrity.c \
+	yvex_accounts.c \
 	yvex_fs.c \
 	gguf/naming.c \
 	gguf/gguf.c \

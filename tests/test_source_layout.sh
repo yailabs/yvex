@@ -19,6 +19,7 @@ test -f yvex_cli.c
 test ! -f yvex_cli_runtime.c
 test -f yvexd.c
 test -f yvex_core.c
+test -f yvex_accounts.c
 test -f yvex_fs.c
 test -f yvex_model_artifacts.c
 test -f yvex_source.c
@@ -209,7 +210,7 @@ fi
 
 root_c_count="$(find . -maxdepth 1 -type f -name 'yvex*.c' | wc -l | tr -d ' ')"
 
-if [ "$root_c_count" -gt 27 ]; then
+if [ "$root_c_count" -gt 28 ]; then
   echo "too many root C files: $root_c_count"
   exit 1
 fi

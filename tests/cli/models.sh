@@ -112,17 +112,23 @@ grep 'models prepare TARGET' "$ROOT/help.out"
 grep 'models check TARGET' "$ROOT/help.out"
 
 FAKE_HF="$PWD/tests/fixtures/bin/fake-hf"
+FAKE_GH="$PWD/tests/fixtures/bin/fake-gh"
 DOWNLOAD_ROOT="$ROOT/download"
+export YVEX_CONFIG_DIR="$ROOT/accounts-config"
 
-YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --dry-run --models-root "$DOWNLOAD_ROOT" --audit > "$ROOT/download-dry-run.out"
+YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --dry-run --models-root "$DOWNLOAD_ROOT" --auth never --audit > "$ROOT/download-dry-run.out"
 grep 'status: model-download-dry-run' "$ROOT/download-dry-run.out"
 grep 'family: gemma' "$ROOT/download-dry-run.out"
+grep 'stage: account-provider skipped' "$ROOT/download-dry-run.out"
 grep 'payload_loaded: false' "$ROOT/download-dry-run.out"
 grep 'gguf_created: false' "$ROOT/download-dry-run.out"
 grep 'generation: unsupported' "$ROOT/download-dry-run.out"
 
-YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$DOWNLOAD_ROOT" --audit > "$ROOT/download-gemma.out"
+YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$DOWNLOAD_ROOT" --auth auto --audit > "$ROOT/download-gemma.out"
 grep 'status: model-download-pass' "$ROOT/download-gemma.out"
+grep 'provider: huggingface' "$ROOT/download-gemma.out"
+grep 'stage: account-provider pass' "$ROOT/download-gemma.out"
+grep 'stage: provider-cli pass' "$ROOT/download-gemma.out"
 grep 'stage: source-manifest pass' "$ROOT/download-gemma.out"
 grep 'stage: native-inventory pass' "$ROOT/download-gemma.out"
 grep 'stage: progress-stream pass' "$ROOT/download-gemma.out"
@@ -138,7 +144,7 @@ test -f "$DOWNLOAD_ROOT/registry/gemma/gemma-4-12b-it.download.json"
 ! find "$DOWNLOAD_ROOT/gguf" -type f -name '*.gguf' 2>/dev/null | grep .
 
 LIVE_ROOT="$ROOT/download-live"
-YVEX_FAKE_HF_STEP_DELAY=1 YVEX_FAKE_HF_STEPS=3 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$LIVE_ROOT" --auth required --progress plain --tick-seconds 1 --audit > "$ROOT/download-live.out" 2>&1 &
+YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_STEP_DELAY=1 YVEX_FAKE_HF_STEPS=3 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$LIVE_ROOT" --auth required --progress plain --tick-seconds 1 --audit > "$ROOT/download-live.out" 2>&1 &
 LIVE_PID=$!
 sleep 1
 grep 'model-download: start target=gemma-4-12b-it' "$ROOT/download-live.out"
@@ -160,7 +166,7 @@ grep 'fake-hf: resolving repo' "$LIVE_ROOT/logs/gemma-4-12b-it.download.stdout.l
 grep 'fake-hf: stderr resolving repo' "$LIVE_ROOT/logs/gemma-4-12b-it.download.stderr.log"
 
 LIVE_FAIL_ROOT="$ROOT/download-live-fail"
-YVEX_FAKE_HF_FAIL_AT_STEP=2 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$LIVE_FAIL_ROOT" --progress plain --tick-seconds 1 --audit > "$ROOT/download-live-fail.out" 2>&1 && exit 1 || true
+YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_FAIL_AT_STEP=2 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$LIVE_FAIL_ROOT" --progress plain --tick-seconds 1 --audit > "$ROOT/download-live-fail.out" 2>&1 && exit 1 || true
 grep 'status: model-download-fail' "$ROOT/download-live-fail.out"
 grep 'provider_exit_code: 43' "$ROOT/download-live-fail.out"
 grep 'stdout_log:' "$ROOT/download-live-fail.out"
@@ -172,7 +178,7 @@ grep 'fake-hf: downloading shard 1' "$LIVE_FAIL_ROOT/logs/gemma-4-12b-it.downloa
 grep 'fake-hf: failing at step 2' "$LIVE_FAIL_ROOT/logs/gemma-4-12b-it.download.stderr.log"
 
 SIGNAL_ROOT="$ROOT/download-signal"
-YVEX_FAKE_HF_STEP_DELAY=5 YVEX_FAKE_HF_STEPS=8 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$SIGNAL_ROOT" --progress plain --tick-seconds 1 --audit > "$ROOT/download-signal.out" 2>&1 &
+YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_STEP_DELAY=5 YVEX_FAKE_HF_STEPS=8 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$SIGNAL_ROOT" --progress plain --tick-seconds 1 --audit > "$ROOT/download-signal.out" 2>&1 &
 SIGNAL_PID=$!
 sleep 1
 kill -INT "$SIGNAL_PID"
@@ -205,37 +211,55 @@ test -f "$SIGNAL_ROOT/hf/gemma/gemma-4-12b-it/config.json"
 grep 'fake-hf: resolving repo' "$SIGNAL_ROOT/logs/gemma-4-12b-it.download.stdout.log"
 grep 'fake-hf: stderr resolving repo' "$SIGNAL_ROOT/logs/gemma-4-12b-it.download.stderr.log"
 
-YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-e2b --models-root "$ROOT/download-off" --no-progress --audit > "$ROOT/download-off.out" 2>&1
+YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-e2b --models-root "$ROOT/download-off" --no-progress --audit > "$ROOT/download-off.out" 2>&1
 ! grep 'model-download: start' "$ROOT/download-off.out"
 ! grep 'tick: elapsed=' "$ROOT/download-off.out"
 ! grep 'fake-hf: resolving repo' "$ROOT/download-off.out"
 grep 'status: model-download-pass' "$ROOT/download-off.out"
 
 LOG_PROGRESS_ROOT="$ROOT/download-log-progress"
-YVEX_FAKE_HF_STEP_DELAY=1 YVEX_FAKE_HF_STEPS=3 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-e2b-it --models-root "$LOG_PROGRESS_ROOT" --progress log --tick-seconds 1 --audit > "$ROOT/download-log-progress.out" 2>&1
+YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_STEP_DELAY=1 YVEX_FAKE_HF_STEPS=3 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-e2b-it --models-root "$LOG_PROGRESS_ROOT" --progress log --tick-seconds 1 --audit > "$ROOT/download-log-progress.out" 2>&1
 grep 'tick: elapsed=' "$ROOT/download-log-progress.out"
 ! grep 'fake-hf: resolving repo' "$ROOT/download-log-progress.out"
 grep 'progress_mode: log' "$ROOT/download-log-progress.out"
 test -f "$LOG_PROGRESS_ROOT/logs/gemma-4-e2b-it.download.stdout.log"
 grep 'fake-hf: resolving repo' "$LOG_PROGRESS_ROOT/logs/gemma-4-e2b-it.download.stdout.log"
 
-YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download qwen3-8b --models-root "$DOWNLOAD_ROOT" --audit > "$ROOT/download-qwen.out"
+YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-e2b --models-root "$DOWNLOAD_ROOT/noauth" --auth never --audit > "$ROOT/download-auth-never.out"
+grep 'stage: account-provider skipped' "$ROOT/download-auth-never.out"
+grep 'status: model-download-pass' "$ROOT/download-auth-never.out"
+
+YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download qwen3-8b --models-root "$DOWNLOAD_ROOT" --auth auto --audit > "$ROOT/download-qwen.out"
 grep 'family: qwen' "$ROOT/download-qwen.out"
 grep 'hf/qwen/qwen3-8b' "$ROOT/download-qwen.out"
 grep 'status: model-download-pass' "$ROOT/download-qwen.out"
 
-YVEX_HF_CLI=/missing/hf "$YVEX_BIN" models download gemma-4-12b-it --models-root "$DOWNLOAD_ROOT/missing" --audit > "$ROOT/download-missing-hf.out" 2> "$ROOT/download-missing-hf.err" && exit 1 || true
+YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$DOWNLOAD_ROOT/required" --auth required --audit > "$ROOT/download-auth-required.out" 2> "$ROOT/download-auth-required.err" && exit 1 || true
+grep 'stage: account-provider blocked' "$ROOT/download-auth-required.out"
+grep 'top_blocker: provider-login-required' "$ROOT/download-auth-required.out"
+
+YVEX_HF_CLI=/missing/hf "$YVEX_BIN" models download gemma-4-12b-it --models-root "$DOWNLOAD_ROOT/missing" --auth auto --audit > "$ROOT/download-missing-hf.out" 2> "$ROOT/download-missing-hf.err" && exit 1 || true
 grep 'status: model-download-blocked' "$ROOT/download-missing-hf.out"
 grep 'top_blocker: missing-huggingface-cli' "$ROOT/download-missing-hf.out"
+grep 'stage: account-provider blocked' "$ROOT/download-missing-hf.out"
 
-YVEX_FAKE_HF_FAIL=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$DOWNLOAD_ROOT/fail" --audit > "$ROOT/download-fail.out" 2> "$ROOT/download-fail.err" && exit 1 || true
+YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_FAIL=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$DOWNLOAD_ROOT/fail" --auth auto --audit > "$ROOT/download-fail.out" 2> "$ROOT/download-fail.err" && exit 1 || true
 grep 'status: model-download-fail' "$ROOT/download-fail.out"
 test -f "$DOWNLOAD_ROOT/fail/logs/gemma-4-12b-it.download.stderr.log"
 
-YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download --repo test-org/test-model --family gemma --name test-model --models-root "$DOWNLOAD_ROOT/direct" --audit > "$ROOT/download-direct.out"
+YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download --repo test-org/test-model --family gemma --name test-model --models-root "$DOWNLOAD_ROOT/direct" --auth auto --audit > "$ROOT/download-direct.out"
 grep 'repo_id: test-org/test-model' "$ROOT/download-direct.out"
 grep 'hf/gemma/test-model' "$ROOT/download-direct.out"
 grep 'status: model-download-pass' "$ROOT/download-direct.out"
+
+YVEX_FAKE_GH_AUTH=1 YVEX_GH_CLI="$FAKE_GH" "$YVEX_BIN" models download --provider github --repo test-org/test-model --release v1 --asset '*.gguf' --models-root "$DOWNLOAD_ROOT/github" --auth auto --audit > "$ROOT/download-github.out"
+grep 'provider: github' "$ROOT/download-github.out"
+grep 'stage: account-provider pass' "$ROOT/download-github.out"
+grep 'stage: download pass' "$ROOT/download-github.out"
+grep 'github/test-org/test-model/v1' "$ROOT/download-github.out"
+grep 'gguf_created: false' "$ROOT/download-github.out"
+grep 'generation: unsupported' "$ROOT/download-github.out"
+test -f "$DOWNLOAD_ROOT/github/github/test-org/test-model/v1/fake-model.gguf"
 
 "$YVEX_BIN" models download --models-root "$DOWNLOAD_ROOT/parser" > "$ROOT/download-missing-target.out" 2> "$ROOT/download-missing-target.err" && exit 1 || true
 grep 'requires TARGET or --repo' "$ROOT/download-missing-target.err"
@@ -255,13 +279,17 @@ grep 'requires auto|live|plain|log|off' "$ROOT/download-bad-progress.err"
 grep 'tick-seconds requires a positive integer' "$ROOT/download-bad-tick.err"
 "$YVEX_BIN" models download gemma-4-12b-it --source s3 > "$ROOT/download-bad-source.out" 2> "$ROOT/download-bad-source.err" && exit 1 || true
 grep 'supports hf only' "$ROOT/download-bad-source.err"
+"$YVEX_BIN" models download gemma-4-12b-it --auth nope > "$ROOT/download-bad-auth.out" 2> "$ROOT/download-bad-auth.err" && exit 1 || true
+grep 'requires auto|required|never' "$ROOT/download-bad-auth.err"
+"$YVEX_BIN" models download --provider github --repo test-org/test-model > "$ROOT/download-github-no-asset.out" 2> "$ROOT/download-github-no-asset.err" && exit 1 || true
+grep 'requires --asset GLOB' "$ROOT/download-github-no-asset.err"
 "$YVEX_BIN" models download gemma-4-12b-it --surprise > "$ROOT/download-unknown-flag.out" 2> "$ROOT/download-unknown-flag.err" && exit 1 || true
 grep 'unknown models download option' "$ROOT/download-unknown-flag.err"
 "$YVEX_BIN" models download gemma-4-12b-it extra > "$ROOT/download-extra-positional.out" 2> "$ROOT/download-extra-positional.err" && exit 1 || true
 grep 'extra positional argument' "$ROOT/download-extra-positional.err"
 
-HF_TOKEN=secret-value YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-e2b --models-root "$DOWNLOAD_ROOT/token" --audit > "$ROOT/download-token.out"
-grep 'auth_state: token-env-present' "$ROOT/download-token.out"
+HF_TOKEN=secret-value YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-e2b --models-root "$DOWNLOAD_ROOT/token" --auth auto --audit > "$ROOT/download-token.out"
+grep 'auth_state: env-token-present' "$ROOT/download-token.out"
 grep 'token_value_redacted: true' "$ROOT/download-token.out"
 ! grep -R 'secret-value' "$ROOT/download-token.out" "$DOWNLOAD_ROOT/token" "$ROOT"
 ! git ls-files '*.safetensors' '*.bin' '*.dat' | grep .
@@ -465,18 +493,18 @@ grep 'model-target class-profile TARGET' "$ROOT/model-target-help.out"
 grep 'This command records the v0.1.0 target decision' "$ROOT/model-target-help.out"
 
 CLASS_MISSING_ROOT="$ROOT/qwen-class-missing-root"
-"$YVEX_BIN" model-target class-profile qwen-metal-portability --models-root "$CLASS_MISSING_ROOT" > "$ROOT/model-class-qwen-missing.out"
+"$YVEX_BIN" model-target class-profile qwen3-8b --models-root "$CLASS_MISSING_ROOT" > "$ROOT/model-class-qwen-missing.out"
 grep 'model-class: qwen' "$ROOT/model-class-qwen-missing.out"
-grep 'target: qwen-metal-portability' "$ROOT/model-class-qwen-missing.out"
+grep 'target: qwen3-8b' "$ROOT/model-class-qwen-missing.out"
 grep 'status: source-missing' "$ROOT/model-class-qwen-missing.out"
 grep 'class: qwen-source-model-class-profile' "$ROOT/model-class-qwen-missing.out"
 grep 'evidence: header-metadata-only' "$ROOT/model-class-qwen-missing.out"
 grep 'patterns: tensors=0 attn=0 mlp=0 norm=0 head=0 moe=0' "$ROOT/model-class-qwen-missing.out"
 grep 'top_blocker: missing-qwen-source-path' "$ROOT/model-class-qwen-missing.out"
-grep 'next: MODEL.CLASS.GEMMA.0' "$ROOT/model-class-qwen-missing.out"
+grep 'next: MODEL.CLASS.QWEN.0' "$ROOT/model-class-qwen-missing.out"
 grep 'no tensor role mapping/runtime/generation' "$ROOT/model-class-qwen-missing.out"
 
-"$YVEX_BIN" model-target class-profile qwen-metal-portability --models-root "$CLASS_MISSING_ROOT" --audit > "$ROOT/model-class-qwen-missing-audit.out"
+"$YVEX_BIN" model-target class-profile qwen3-8b --models-root "$CLASS_MISSING_ROOT" --audit > "$ROOT/model-class-qwen-missing-audit.out"
 grep 'model_class_profile_status: source-missing' "$ROOT/model-class-qwen-missing-audit.out"
 grep 'model_class_source_metadata_status: missing' "$ROOT/model-class-qwen-missing-audit.out"
 grep 'model_class_tensor_count: 0' "$ROOT/model-class-qwen-missing-audit.out"
@@ -486,7 +514,7 @@ grep 'runtime_claim: unsupported' "$ROOT/model-class-qwen-missing-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/model-class-qwen-missing-audit.out"
 grep 'benchmark_status: not-measured' "$ROOT/model-class-qwen-missing-audit.out"
 grep 'release_ready: false' "$ROOT/model-class-qwen-missing-audit.out"
-grep 'next_required_rows: MODEL.CLASS.GEMMA.0' "$ROOT/model-class-qwen-missing-audit.out"
+grep 'next_required_rows: MODEL.CLASS.QWEN.0' "$ROOT/model-class-qwen-missing-audit.out"
 
 QWEN_CLASS_SOURCE="${TMPDIR:-/tmp}/yvex-qwen-class-profile-test-$$"
 rm -rf "$QWEN_CLASS_SOURCE"
@@ -526,17 +554,17 @@ with open(sys.argv[1], "wb") as f:
     f.write(b"x" * offset)
 PY
 
-"$YVEX_BIN" model-target class-profile qwen-metal-portability --source "$QWEN_CLASS_SOURCE" > "$ROOT/model-class-qwen.out"
+"$YVEX_BIN" model-target class-profile qwen3-8b --source "$QWEN_CLASS_SOURCE" > "$ROOT/model-class-qwen.out"
 grep 'status: metadata-profiled' "$ROOT/model-class-qwen.out"
 grep 'patterns: tensors=10 attn=4 mlp=3 norm=2 head=1 moe=0' "$ROOT/model-class-qwen.out"
 grep 'top_blocker: missing-qwen-tensor-role-map' "$ROOT/model-class-qwen.out"
-grep 'next: MODEL.CLASS.GEMMA.0' "$ROOT/model-class-qwen.out"
+grep 'next: MODEL.CLASS.QWEN.0' "$ROOT/model-class-qwen.out"
 
-"$YVEX_BIN" model-target class-profile qwen-metal-portability --source "$QWEN_CLASS_SOURCE" --output table > "$ROOT/model-class-qwen-table.out"
+"$YVEX_BIN" model-target class-profile qwen3-8b --source "$QWEN_CLASS_SOURCE" --output table > "$ROOT/model-class-qwen-table.out"
 grep 'MODEL CLASS PROFILE' "$ROOT/model-class-qwen-table.out"
-matches "$ROOT/model-class-qwen-table.out" '^qwen[[:space:]]{2,}qwen-metal-portability[[:space:]]{2,}metadata-profiled[[:space:]]{2,}10[[:space:]]{2,}4[[:space:]]{2,}3[[:space:]]{2,}2[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}MODEL\.CLASS\.GEMMA\.0$'
+matches "$ROOT/model-class-qwen-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}metadata-profiled[[:space:]]{2,}10[[:space:]]{2,}4[[:space:]]{2,}3[[:space:]]{2,}2[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}MODEL\.CLASS\.QWEN\.0$'
 
-"$YVEX_BIN" model-target class-profile qwen-metal-portability --source "$QWEN_CLASS_SOURCE" --audit > "$ROOT/model-class-qwen-audit.out"
+"$YVEX_BIN" model-target class-profile qwen3-8b --source "$QWEN_CLASS_SOURCE" --audit > "$ROOT/model-class-qwen-audit.out"
 grep 'model_class_profile_status: metadata-profiled' "$ROOT/model-class-qwen-audit.out"
 grep 'model_class_config_status: present' "$ROOT/model-class-qwen-audit.out"
 grep 'model_class_tokenizer_status: present' "$ROOT/model-class-qwen-audit.out"
@@ -565,7 +593,7 @@ grep 'release_ready: false' "$ROOT/model-class-qwen-audit.out"
 QWEN_CLASS_MODELS_ROOT="$ROOT/qwen-class-models-root"
 mkdir -p "$QWEN_CLASS_MODELS_ROOT/hf/qwen"
 cp -R "$QWEN_CLASS_SOURCE" "$QWEN_CLASS_MODELS_ROOT/hf/qwen/qwen3-8b"
-"$YVEX_BIN" model-target class-profile qwen-metal-portability --models-root "$QWEN_CLASS_MODELS_ROOT" --audit > "$ROOT/model-class-qwen-models-root-audit.out"
+"$YVEX_BIN" model-target class-profile qwen3-8b --models-root "$QWEN_CLASS_MODELS_ROOT" --audit > "$ROOT/model-class-qwen-models-root-audit.out"
 grep 'model_class_profile_status: metadata-profiled' "$ROOT/model-class-qwen-models-root-audit.out"
 matches "$ROOT/model-class-qwen-models-root-audit.out" 'source_path: .*/qwen-class-models-root/hf/qwen/qwen3-8b$'
 grep 'model_class_source_metadata_status: header-only' "$ROOT/model-class-qwen-models-root-audit.out"
@@ -584,9 +612,11 @@ expect_rc 2 "$YVEX_BIN" model-target class-profile > "$ROOT/model-class-missing-
 grep 'requires TARGET' "$ROOT/model-class-missing-target.err"
 expect_rc 2 "$YVEX_BIN" model-target class-profile nope > "$ROOT/model-class-bad-target.out" 2> "$ROOT/model-class-bad-target.err"
 grep 'unsupported target: nope' "$ROOT/model-class-bad-target.err"
-expect_rc 2 "$YVEX_BIN" model-target class-profile qwen-metal-portability --output nope > "$ROOT/model-class-bad-output.out" 2> "$ROOT/model-class-bad-output.err"
+expect_rc 2 "$YVEX_BIN" model-target class-profile qwen-metal-portability > "$ROOT/model-class-old-target.out" 2> "$ROOT/model-class-old-target.err"
+grep 'unsupported target: qwen-metal-portability' "$ROOT/model-class-old-target.err"
+expect_rc 2 "$YVEX_BIN" model-target class-profile qwen3-8b --output nope > "$ROOT/model-class-bad-output.out" 2> "$ROOT/model-class-bad-output.err"
 grep 'unsupported output mode: nope' "$ROOT/model-class-bad-output.err"
-expect_rc 2 "$YVEX_BIN" model-target class-profile qwen-metal-portability --source > "$ROOT/model-class-missing-source.out" 2> "$ROOT/model-class-missing-source.err"
+expect_rc 2 "$YVEX_BIN" model-target class-profile qwen3-8b --source > "$ROOT/model-class-missing-source.out" 2> "$ROOT/model-class-missing-source.err"
 grep 'source requires DIR' "$ROOT/model-class-missing-source.err"
 
 "$YVEX_BIN" model-target decision --help > "$ROOT/model-target-decision-help.out"
@@ -598,15 +628,15 @@ grep 'report: target-decision' "$ROOT/model-target-decision-normal.out"
 grep 'status: target-decision-blocked' "$ROOT/model-target-decision-normal.out"
 grep 'selected: none' "$ROOT/model-target-decision-normal.out"
 grep 'top_blocker: no eligible full-runtime candidate' "$ROOT/model-target-decision-normal.out"
-grep 'next: MODEL.CLASS.GEMMA.0' "$ROOT/model-target-decision-normal.out"
+grep 'next: MODEL.CLASS.QWEN.0' "$ROOT/model-target-decision-normal.out"
 ! grep 'next: V010\.CLI\.18' "$ROOT/model-target-decision-normal.out"
 ! grep 'next: V010\.SOURCE\.7' "$ROOT/model-target-decision-normal.out"
-! grep 'next: MODEL\.CLASS\.QWEN\.0' "$ROOT/model-target-decision-normal.out"
+! grep 'next: MODEL\.CLASS\.GEMMA\.0' "$ROOT/model-target-decision-normal.out"
 grep 'boundary: report-only; generation unsupported; benchmark not measured' "$ROOT/model-target-decision-normal.out"
 
 "$YVEX_BIN" model-target decision --release v0.1.0 --output table > "$ROOT/model-target-decision-table.out"
 matches "$ROOT/model-target-decision-table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$ROOT/model-target-decision-table.out" '^target-decision[[:space:]]{2,}blocked[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}MODEL\.CLASS\.GEMMA\.0$'
+matches "$ROOT/model-target-decision-table.out" '^target-decision[[:space:]]{2,}blocked[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}MODEL\.CLASS\.QWEN\.0$'
 
 "$YVEX_BIN" model-target decision --release v0.1.0 --output nope > "$ROOT/model-target-decision-bad-output.out" 2> "$ROOT/model-target-decision-bad-output.err" && exit 1 || true
 grep 'model-target decision: unsupported output mode: nope' "$ROOT/model-target-decision-bad-output.err"
@@ -630,13 +660,13 @@ grep 'candidate.1.reason: selected-runtime-slice missing MoE router/expert tenso
 grep 'candidate.2.id: glm-5.2-official-safetensors' "$ROOT/model-target-decision.out"
 grep 'candidate.2.class: huge-source-pressure' "$ROOT/model-target-decision.out"
 grep 'candidate.2.status: ineligible-source-only' "$ROOT/model-target-decision.out"
-grep 'candidate.3.id: qwen-metal-portability' "$ROOT/model-target-decision.out"
-grep 'candidate.3.class: metal-reduced-full-runtime-pressure' "$ROOT/model-target-decision.out"
-grep 'candidate.3.status: ineligible-pressure-target' "$ROOT/model-target-decision.out"
+grep 'candidate.3.id: qwen3-8b' "$ROOT/model-target-decision.out"
+grep 'candidate.3.class: source-model-candidate' "$ROOT/model-target-decision.out"
+grep 'candidate.3.status: ineligible-source-model-candidate' "$ROOT/model-target-decision.out"
 grep 'candidate.3.next: model-class profile' "$ROOT/model-target-decision.out"
-grep 'candidate.4.id: gemma-dense-portability' "$ROOT/model-target-decision.out"
-grep 'candidate.4.class: reduced-dense-full-runtime-pressure' "$ROOT/model-target-decision.out"
-grep 'candidate.4.status: ineligible-pressure-target' "$ROOT/model-target-decision.out"
+grep 'candidate.4.id: gemma-4-12b-it' "$ROOT/model-target-decision.out"
+grep 'candidate.4.class: source-model-candidate' "$ROOT/model-target-decision.out"
+grep 'candidate.4.status: ineligible-source-model-candidate' "$ROOT/model-target-decision.out"
 grep 'candidate.4.next: model-class profile' "$ROOT/model-target-decision.out"
 grep 'deepseek_pressure_status: selected-slice-pressure-only' "$ROOT/model-target-decision.out"
 grep 'glm_pressure_status: source-storage-pressure-only' "$ROOT/model-target-decision.out"

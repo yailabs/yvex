@@ -20,6 +20,40 @@ mkdir -p "$(dirname "$log_path")"
   done
 } >> "$log_path"
 
+state_path=${YVEX_FAKE_HF_STATE:-build/tests/fake-hf.auth}
+
+if [ "$#" -ge 2 ] && [ "$1" = "auth" ]; then
+  case "$2" in
+    whoami)
+      if [ "${YVEX_FAKE_HF_AUTH:-0}" = "1" ] || [ -f "$state_path" ]; then
+        printf 'fake-hf-user\n'
+        exit 0
+      fi
+      printf 'fake-hf: not logged in\n' >&2
+      exit 1
+      ;;
+    login)
+      if [ "${YVEX_FAKE_HF_LOGIN_FAIL:-0}" = "1" ]; then
+        printf 'fake-hf: login failed\n' >&2
+        exit 41
+      fi
+      if [ "${YVEX_FAKE_HF_LOGIN_OK:-0}" = "1" ]; then
+        mkdir -p "$(dirname "$state_path")"
+        printf 'fake-hf-user\n' > "$state_path"
+        printf 'fake-hf: login ok\n'
+        exit 0
+      fi
+      printf 'fake-hf: login not allowed by test env\n' >&2
+      exit 40
+      ;;
+    logout)
+      rm -f "$state_path"
+      printf 'fake-hf: logout ok\n'
+      exit 0
+      ;;
+  esac
+fi
+
 if [ "${YVEX_FAKE_HF_FAIL:-0}" = "1" ]; then
   printf 'fake-hf: requested failure\n' >&2
   exit 42

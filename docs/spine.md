@@ -28,7 +28,7 @@ Current benchmark status:
   not measured
 
 Active implementation next:
-  MODEL.CLASS.GEMMA.0 - Gemma model-class profile
+  MODEL.CLASS.QWEN.0 - Qwen model-class profile
 
 Current release target:
   v0.1.0 - first honest full-runtime path
@@ -40,7 +40,7 @@ Primary pressure targets:
   Gemma source target profile
 
 Main v0.1.0 blocker:
-  Gemma model-class profile remains missing
+  Qwen model-class profile remains missing
 ```
 
 | Field | Current value |
@@ -58,7 +58,7 @@ Main v0.1.0 blocker:
 | Full model generation | unsupported |
 | DeepSeek generation | unsupported |
 | Eval/benchmark | unsupported / not measured |
-| Active next | MODEL.CLASS.GEMMA.0 |
+| Active next | MODEL.CLASS.QWEN.0 |
 
 ## 1. Spine Nomenclature
 
@@ -121,14 +121,14 @@ official source tensors
 
 | Stage | Purpose | Current stage | Implemented? | Current proof | Next gap |
 | --- | --- | --- | --- | --- | --- |
-| official source tensors | upstream source authority | source-intake/report-only | partial | target records, source manifests, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, source manifest/provenance hardening, `yvex models download` source-intake sidecars, and Qwen model-class profile | Gemma model-class profile |
+| official source tensors | upstream source authority | source-intake/report-only | partial | target records, source manifests, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, source manifest/provenance hardening, `yvex models download` source-intake sidecars, live download progress, provider account preflight, and backend-neutral source target identity | Qwen model-class profile |
 | source manifest | provenance and source footprint | implemented | yes | `yvex source-manifest` | larger source coverage |
 | native tensor inventory | source tensor directory without payload loading | implemented | yes | `yvex native-weights` | huge shard indexing |
 | tensor mapping | map source/artifact tensor names to YVEX roles | partial/report-only | partial | tensor-map and family-runtime reports | final runtime role coverage |
 | artifact production | produce controlled or selected GGUF | selected-slice | partial | controlled/selected GGUF emission | full-runtime artifact production |
 | artifact identity/integrity | digest, range, shape/dtype, corruption refusal | implemented | yes | integrity reports and tests | full-runtime artifact gate |
 | model-family mapping | family adapter facts and blockers | report-only | partial | `yvex fullmodel family-runtime` | dense/output/tokenizer class facts |
-| model class | dense/MoE/source-only/selected-slice routing | report-only | partial | fullmodel descriptor reports, `yvex moe report`, and `yvex model-target class-profile qwen-metal-portability` | Gemma model-class profile / final runtime route |
+| model class | dense/MoE/source-only/selected-slice routing | report-only | partial | fullmodel descriptor reports, `yvex moe report`, and Qwen class-profile surface | Qwen model-class profile closure / final runtime route |
 | tensor collections | embedding/norm/attention/MLP/MoE/output/tokenizer roles | report-only | partial | fullmodel report, descriptor, and `yvex tensor-collection report` | v0.1.0 full-runtime tensor coverage |
 | storage/residency | placement, cache, staging, storage-stream planning | report-only | partial | materialization plans | staged residency proof |
 | backend capability | CPU/CUDA/future backend capability | partial | partial | CPU/CUDA checks and parity | capability matrix hardening |
@@ -183,10 +183,11 @@ operator-readable state.
 | attention/context/KV class | report-only | yes | `yvex attention/kv/context report` | not runtime execution |
 | MoE class | report-only | yes | `yvex moe report` | not router/expert execution |
 | Qwen source pressure report | report-only | yes | `yvex source-manifest report --family qwen --release v0.1.0` | not source download, artifact emission, runtime, Metal, generation, eval, or benchmark |
-| Qwen source target profile | report-only | yes | `yvex model-target inspect qwen-metal-portability` | not source download, source manifest creation, artifact emission, runtime, Metal, generation, eval, or benchmark |
-| Qwen model-class profile | report-only | yes | `yvex model-target class-profile qwen-metal-portability --audit` | not tensor payload loading, tensor role mapping, model-class readiness, artifact emission, runtime, Metal, generation, eval, benchmark, throughput, or release readiness |
+| Backend-neutral source target identity | report-only | yes | `yvex model-target list` exposes `qwen3-8b` and `gemma-4-12b-it` as source model targets with backend pressure fields separated | not backend selection, runtime, generation, eval, benchmark, throughput, or release readiness |
+| Qwen source target profile | report-only | yes | `yvex model-target inspect qwen3-8b` | not source download, source manifest creation, artifact emission, runtime, Metal, generation, eval, or benchmark |
+| Qwen model-class profile surface | report-only | partial | `yvex model-target class-profile qwen3-8b --audit` | not tensor payload loading, tensor role mapping, model-class readiness, artifact emission, runtime, Metal, generation, eval, benchmark, throughput, or release readiness |
 | Gemma source pressure report | report-only | yes | `yvex source-manifest report --family gemma --release v0.1.0` | not source download, artifact emission, runtime, generation, eval, or benchmark |
-| Gemma source target profile | report-only | yes | `yvex model-target inspect gemma-dense-portability` | not source download, source manifest creation, artifact emission, runtime, generation, eval, or benchmark |
+| Gemma source target profile | report-only | yes | `yvex model-target inspect gemma-4-12b-it` | not source download, source manifest creation, artifact emission, runtime, generation, eval, or benchmark |
 | source artifact class fields | report-only | yes | Qwen/Gemma source reports and target inspect/list audit fields | not source download, artifact emission, materialization, runtime, generation, eval, or benchmark |
 | source shard count and footprint report | report-only | yes | Qwen/Gemma source reports count top-level regular files and bytes | not source download, manifest creation, native inventory, tensor metadata inventory, payload loading, hashing, artifact emission, runtime, generation, eval, or benchmark |
 | source provenance fields | report-only | yes | Qwen/Gemma source reports expose origin, authority, revision/tag/commit unknown status, README/license presence, identity/hash/verification status, remote-check boundary, and payload-load boundary | not source download, remote lookup, source verification, hashing, manifest creation, native inventory, payload loading, runtime, generation, eval, or benchmark |
@@ -561,7 +562,7 @@ lanes; rows are the delivery units that complete track work.
 
 | Track ID | Track name | Owns | Current status | Implemented evidence | Next gap | Active / Later |
 | --- | --- | --- | --- | --- | --- | --- |
-| TRACK.TARGET | Target selection and pressure objects | target classes and release target decision | source-target-profiled | target registry, path reports, `yvex model-target decision`, `yvex model-target candidate`, `yvex model-target dense-candidate`, `yvex model-target qwen-metal`, `yvex model-target inspect qwen-metal-portability`, and `yvex model-target inspect gemma-dense-portability` | full-runtime target selection remains blocked | active |
+| TRACK.TARGET | Target selection and pressure objects | target classes and release target decision | source-target-profiled | target registry, path reports, `yvex model-target decision`, `yvex model-target candidate`, `yvex model-target dense-candidate`, `yvex model-target qwen-metal`, `yvex model-target inspect qwen3-8b`, and `yvex model-target inspect gemma-4-12b-it` | full-runtime target selection remains blocked | active |
 | TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory, Qwen/Gemma source pressure reports, Qwen/Gemma source target profiles, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, source manifest/provenance hardening, provider account preflight, Hugging Face/GitHub source auth boundary, and models download source-intake lane | model-class handoff | active |
 | TRACK.ARTIFACT | Artifact production | YVEX-produced GGUF and conversion plan | selected-slice | controlled/selected GGUF emission | full-runtime artifact production | later |
 | TRACK.INTEGRITY | Artifact identity and gates | digest/ranges/corruption/materialization gates | implemented | integrity harness and reports | full-runtime gate coverage | active |
@@ -614,21 +615,21 @@ Current evidence:
   `yvex model-target candidate --release v0.1.0`, and
   `yvex model-target dense-candidate --release v0.1.0`, and
   `yvex model-target qwen-metal --release v0.1.0`, and
-  `yvex model-target inspect qwen-metal-portability`, and
-  `yvex model-target inspect gemma-dense-portability`.
+  `yvex model-target inspect qwen3-8b`, and
+  `yvex model-target inspect gemma-4-12b-it`.
 
 v0.1.0 rows:
   V010.TARGET.*.
 
 Main blockers:
   Qwen/Metal is visible as a reduced-scale pressure lane, Qwen and Gemma source
-  pressure are command-visible, and `qwen-metal-portability` plus
-  `gemma-dense-portability` are concrete source target profiles, but source
-  Gemma model class, tensor map, artifact, Metal backend, residency, graph/runtime,
-  eval, and benchmark facts are still missing.
+  pressure are command-visible, and `qwen3-8b` plus
+  `gemma-4-12b-it` are concrete backend-neutral source target profiles, but
+  Qwen model class, Gemma model class, tensor map, artifact, Metal backend,
+  residency, graph/runtime, eval, and benchmark facts are still missing.
 
 Next possible row:
-  MODEL.CLASS.GEMMA.0.
+  MODEL.CLASS.QWEN.0.
 
 Boundary:
   a target is not a capability claim.
@@ -652,8 +653,8 @@ Current evidence:
   `yvex models download qwen3-8b --models-root DIR --audit`,
   `yvex source-manifest report --family qwen --release v0.1.0`,
   `yvex source-manifest report --family gemma --release v0.1.0`,
-  `yvex model-target inspect qwen-metal-portability`, and
-  `yvex model-target inspect gemma-dense-portability`; source reports expose
+  `yvex model-target inspect qwen3-8b`, and
+  `yvex model-target inspect gemma-4-12b-it`; source reports expose
   manifest expectation/path/status, shallow schema/family/target consistency,
   manifest sub-status fields, and no-create/no-remote/no-hash/no-payload
   boundaries.
@@ -662,10 +663,11 @@ v0.1.0 rows:
   V010.SOURCE.*, OWI.*.
 
 Main blockers:
-  Gemma model-class profile, then tensor-role mapping.
+  Qwen model-class profile, then Gemma model-class profile and tensor-role
+  mapping.
 
 Next possible row:
-  MODEL.CLASS.GEMMA.0.
+  MODEL.CLASS.QWEN.0.
 
 Note:
   `OWI.TARGETS.QWEN.0` is the existing Qwen-specific source-target profile row
@@ -3711,7 +3713,7 @@ huge-model-storage-stream:
   qtype profiling, storage layout, cold/warm access, page/chunk planning, and
   staged residency before runtime execution can be claimed.
 
-metal-reduced-full-runtime-pressure:
+source-model-candidate:
   an Apple Silicon / Metal pressure target using smaller or medium open-weight
   Qwen-family models to force backend portability, unified-memory residency,
   source-to-artifact intake, tensor role mapping, YVEX-produced artifact
@@ -3732,7 +3734,7 @@ Current target assignments:
   GLM-5.2 official safetensors: official-source-huge-model
   GLM-5.2 future YVEX-produced GGUF: huge-model-storage-stream
   External GLM GGUFs: external-GGUF-reference only
-  Qwen small/medium official source tensors: planned metal-reduced-full-runtime-pressure
+  Qwen small/medium official source tensors: planned source-model-candidate
   Qwen future YVEX-produced GGUF: planned YVEX-produced artifact
   Qwen external GGUFs: external-GGUF-reference only
   Qwen external runners: external-runner-reference only
@@ -4087,7 +4089,7 @@ claims are downstream unless explicitly included after real generation exists.
 
 | Step | Track | Gate | Current status | Required evidence | Blocks |
 | --- | --- | --- | --- | --- | --- |
-| 1 | TRACK.TARGET | GATE.SCOPE | complete / source-target-profiled | `yvex model-target decision --release v0.1.0`; `yvex model-target candidate --release v0.1.0`; `yvex model-target dense-candidate --release v0.1.0`; `yvex model-target qwen-metal --release v0.1.0`; `yvex model-target inspect qwen-metal-portability`; `yvex model-target inspect gemma-dense-portability`; `yvex source-manifest report --family qwen --release v0.1.0`; `yvex source-manifest report --family gemma --release v0.1.0`; header-only source tensor metadata inventory | all v0.1.0 runtime |
+| 1 | TRACK.TARGET | GATE.SCOPE | complete / source-target-profiled | `yvex model-target decision --release v0.1.0`; `yvex model-target candidate --release v0.1.0`; `yvex model-target dense-candidate --release v0.1.0`; `yvex model-target qwen-metal --release v0.1.0`; `yvex model-target inspect qwen3-8b`; `yvex model-target inspect gemma-4-12b-it`; `yvex source-manifest report --family qwen --release v0.1.0`; `yvex source-manifest report --family gemma --release v0.1.0`; header-only source tensor metadata inventory | all v0.1.0 runtime |
 | 2 | TRACK.ARTIFACT | GATE.ARTIFACT | partial | identity/integrity proof | full runtime |
 | 3 | TRACK.MODEL | GATE.CLASS | partial/report-only | class reports | tensor/runtime path |
 | 4 | TRACK.TENSOR | GATE.TENSOR | partial/planned | tensor collection coverage | graph |
@@ -4114,7 +4116,7 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 ## 7. Active Next
 
 ```text
-MODEL.CLASS.GEMMA.0 - Gemma model-class profile
+MODEL.CLASS.QWEN.0 - Qwen model-class profile
 ```
 
 `SPINE.OUTPUT.UX.CONTRACT.0` is complete as a docs/control row. It defines the
@@ -4192,7 +4194,7 @@ V010.TARGET.7 - Qwen/Metal pressure target report
 model-target: qwen-metal
 status: qwen-metal-pressure-report
 target_family: qwen
-target_class: metal-reduced-full-runtime-pressure
+target_class: source-model-candidate
 hardware_lane: apple-silicon-metal
 backend_lane: metal-planned
 source_status: missing
@@ -4233,7 +4235,7 @@ Completed target/source lane row:
 OWI.TARGETS.QWEN.0 - Qwen source target profile
 ```
 
-Qwen source target profile is command-visible as `qwen-metal-portability`.
+Qwen source target profile is command-visible as `qwen3-8b`.
 `model-target list`, `model-target inspect`, path reports, and Qwen source
 pressure reports expose family, target class, source path convention, future
 artifact class, pressure purpose, unsupported runtime/generation boundaries,
@@ -4257,7 +4259,7 @@ Completed target/source lane row:
 OWI.TARGETS.GEMMA.0 - Gemma source target profile
 ```
 
-Gemma source target profile is command-visible as `gemma-dense-portability`.
+Gemma source target profile is command-visible as `gemma-4-12b-it`.
 `model-target list`, `model-target inspect`, path reports, and Gemma source
 pressure reports expose family, target class, source path convention, future
 artifact class, pressure purpose, unsupported runtime/generation boundaries,
@@ -4329,25 +4331,32 @@ tools, use MCP/YAI account state, verify source identity, hash payloads, create
 runtime artifacts, materialize tensors, execute runtime paths, generate,
 evaluate, benchmark, claim throughput, or mark a release ready.
 
-Completed model-class row:
+Completed target/source repair row:
+
+```text
+MODEL.TARGET.IDENTITY.0 - Backend-neutral source target identity
+```
+
+`MODEL.TARGET.IDENTITY.0` replaces backend- or pressure-specific source target
+IDs with backend-neutral model/source target IDs. `qwen3-8b` and
+`gemma-4-12b-it` are now the command-visible source targets; backend selection
+and backend pressure are reported as separate fields. Old target IDs are
+refused, source-manifest defaults point to the new IDs, and runtime/generation
+remain unsupported.
+
+Active Next is now the Qwen model-class profile lane:
 
 ```text
 MODEL.CLASS.QWEN.0 - Qwen model-class profile
 ```
 
 `MODEL.CLASS.QWEN.0` adds `yvex model-target class-profile
-qwen-metal-portability` as a header-metadata-only source profile over existing
+qwen3-8b` as a header-metadata-only source profile over existing
 Qwen source evidence. It exposes family, target, model-class status,
 runtime-shape candidate, lexical tensor pattern counters, evidence basis, and
 explicit no-role-map/no-runtime/no-generation/no-benchmark boundaries without
 tensor payload loading, tensor role mapping, model execution, artifact
 emission, generation, eval, throughput, or release-ready claim.
-
-Active Next is now the Gemma model-class profile lane:
-
-```text
-MODEL.CLASS.GEMMA.0 - Gemma model-class profile
-```
 
 Completed CUDA interlock row:
 
@@ -4443,7 +4452,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | MODELS.DOWNLOAD.LIVE.0 | complete | source | Live source download progress | `yvex models download` supports `--progress auto|live|plain|log|off`, `--tick-seconds N`, and `--no-progress`; provider stdout/stderr are streamed while the child process runs, mirrored according to progress mode, written to separate logs, and accompanied by local source-directory stat ticks, with fake-HF tests covering visible start-before-completion, ticks, provider mirroring, logs, provider failure, parser errors, and token redaction without tensor payload loading, payload hashing, conversion, GGUF emission, materialization, runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | MODELS.DOWNLOAD.SIGNAL.0 | complete | source | Lock-safe source download interruption | `yvex models download` runs provider downloads in an owned process group with temporary SIGINT/SIGTERM handlers, forwards operator interrupts to the provider group, drains logs, waits with a bounded shutdown path, preserves partial source files/logs, avoids provider lock deletion, records provider pid/process group/orphan-check fields, and has fake-HF SIGINT coverage proving interrupted status and no surviving provider process group without tensor payload loading, payload hashing, conversion, GGUF emission, materialization, runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | V010.SOURCE.7B / ACCOUNTS.PROVIDER.0 | complete | source | Local provider account lane | `yvex accounts` reports Hugging Face/GitHub provider availability, login, whoami, and ensure state through provider-owned CLIs, writes only non-secret local account observations, and `models download --auth auto|required|never` uses that preflight before Hugging Face or GitHub release asset downloads without raw token storage, MCP/YAI account integration, hosted auth, OAuth implementation, source verification, runtime, generation, eval, benchmark, throughput, or release-ready claim |
-| MODEL.CLASS.QWEN.0 | complete | model | Qwen model-class profile | Qwen model-class profile is command-visible as a header-metadata-only source profile for `qwen-metal-portability`, exposing family, target, model-class status, runtime-shape candidate, lexical tensor pattern counters, evidence basis, and explicit no-role-map/no-runtime/no-generation/no-benchmark boundaries without tensor payload loading, tensor role mapping, model execution, artifact emission, generation, eval, throughput, or release-ready claim |
+| MODEL.TARGET.IDENTITY.0 | complete | model | Backend-neutral source target identity | backend- or pressure-specific source target IDs are replaced by `qwen3-8b` and `gemma-4-12b-it`; backend selection and backend pressure are separate report fields; old target IDs are refused; source-manifest defaults and target path reports use the new IDs without runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | CUDA.KERNEL.0 | complete | cuda | CUDA primitive kernel vertical hardening | existing CUDA primitive kernels are vertically hardened as bounded CUDA compute primitives; MLP and attention no longer rely on one-thread diagnostic bodies, primitive CUDA tests compare against CPU/reference outputs, and CUDA remains a primitive execution surface only without full model runtime, generation, benchmark, throughput, tensor-core optimization, FlashAttention, paged KV, or release-ready claim |
 | OWI.HUGE.0 | planned | intake | Huge source tensor inventory | huge safetensors shard sets are inventoried without loading full tensor payloads |
 | OWI.HUGE.1 | planned | intake | Huge safetensors shard index | safetensors shard metadata, tensor placement, offsets, and dtype distribution are indexed |
@@ -4613,9 +4622,9 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | COMPUTE.BACKEND.METAL.0 | planned | backend | Metal feasibility profile | Metal build/toolchain/device/memory feasibility is reported without backend op support claim |
 | COMPUTE.BACKEND.METAL.1 | planned | backend | Metal allocation and movement boundary | Metal buffer allocation, unified-memory behavior, transfer/visibility rules, failure paths, and cleanup are implemented and tested without model execution claim |
 | GRAPH.METAL.0 | planned | graph | Metal primitive parity baseline | selected primitive graph ops run on Metal with CPU reference comparison, checksum, max-diff, failure paths, and cleanup without transformer or generation claim |
-| OWI.TARGETS.QWEN.0 | complete | intake | Qwen source target profile | Qwen source target profile is command-visible as `qwen-metal-portability`; model-target list/inspect/path reports expose family, target class, source path convention, future artifact class, pressure purpose, runtime/generation unsupported boundaries, and source-manifest Qwen reports now advance past missing source-target status without download, artifact emission, materialization, graph/runtime execution, Qwen generation, Metal support, evaluation, benchmark, throughput, or release-ready claim |
-| OWI.TARGETS.GEMMA.0 | complete | intake | Gemma source target profile | Gemma source target profile is command-visible as `gemma-dense-portability`; model-target list/inspect/path reports expose family, target class, source path convention, future artifact class, pressure purpose, runtime/generation unsupported boundaries, and source-manifest Gemma reports remain report-only without download, artifact emission, materialization, graph/runtime execution, Gemma generation, evaluation, benchmark, throughput, or release-ready claim |
-| MODEL.CLASS.QWEN.0 | complete | model | Qwen model-class profile | Qwen model-class profile is command-visible as a header-metadata-only source profile for `qwen-metal-portability`, exposing lexical tensor pattern counters without tensor role mapping, model-class readiness, runtime, generation, eval, benchmark, throughput, or release-ready claim |
+| OWI.TARGETS.QWEN.0 | complete | intake | Qwen source target profile | Qwen source target profile is command-visible as `qwen3-8b`; model-target list/inspect/path reports expose family, target class, source path convention, future artifact class, pressure purpose, runtime/generation unsupported boundaries, and source-manifest Qwen reports now advance past missing source-target status without download, artifact emission, materialization, graph/runtime execution, Qwen generation, Metal support, evaluation, benchmark, throughput, or release-ready claim |
+| OWI.TARGETS.GEMMA.0 | complete | intake | Gemma source target profile | Gemma source target profile is command-visible as `gemma-4-12b-it`; model-target list/inspect/path reports expose family, target class, source path convention, future artifact class, pressure purpose, runtime/generation unsupported boundaries, and source-manifest Gemma reports remain report-only without download, artifact emission, materialization, graph/runtime execution, Gemma generation, evaluation, benchmark, throughput, or release-ready claim |
+| MODEL.TARGET.IDENTITY.0 | complete | model | Backend-neutral source target identity | backend- or pressure-specific source target IDs are replaced by `qwen3-8b` and `gemma-4-12b-it`; backend selection and backend pressure are separate report fields; old target IDs are refused; source-manifest defaults and target path reports use the new IDs without runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | TENSOR.COLLECTION.QWEN.0 | planned | tensor-collection | Qwen tensor collection inventory | Qwen tensor names map into embedding, normalization, attention, MLP/MoE, output, tokenizer, and KV collection candidates without runtime claim |
 | ARTIFACT.QWEN.0 | planned | artifact | Qwen YVEX-produced artifact identity | Qwen YVEX-produced GGUF identity, digest, tensor byte ranges, qtype summary, and registry metadata are recorded without runtime claim |
 | RESIDENCY.METAL.0 | planned | residency | Metal unified-memory residency plan | Qwen tensor collections are assigned planned Apple unified-memory/host-staged/Metal residency classes with memory pressure and unsupported blockers |
@@ -5654,17 +5663,20 @@ After `SPINE.OUTPUT.UX.CONTRACT.0`, `V010.CLI.17`, `V010.CLI.18`,
 `V010.SOURCE.2`, `V010.SOURCE.3`, `V010.SOURCE.4`, `V010.SOURCE.5`,
 `V010.SOURCE.6`, `OWI.TARGETS.GEMMA.0`, `V010.SOURCE.7`,
 `V010.SOURCE.7A / MODELS.DOWNLOAD.0`,
-`V010.SOURCE.7B / ACCOUNTS.PROVIDER.0`, and `MODEL.CLASS.QWEN.0` completed,
+`MODELS.DOWNLOAD.LIVE.0`,
+`V010.SOURCE.7B / ACCOUNTS.PROVIDER.0`, and `MODEL.TARGET.IDENTITY.0`
+completed,
 Active Next advances to:
 
 ```text
-MODEL.CLASS.GEMMA.0 - Gemma model-class profile
+MODEL.CLASS.QWEN.0 - Qwen model-class profile
 ```
 
 If any P1 finding remains blocking, Active Next becomes the named follow-up row.
 
 | Condition | Active Next |
 | --- | --- |
+| Backend-neutral source target identity complete and Qwen model-class profile is missing | MODEL.CLASS.QWEN.0 |
 | Qwen model-class profile complete and Gemma model-class profile is missing | MODEL.CLASS.GEMMA.0 |
 | Provider account lane complete and Qwen model-class profile is missing | MODEL.CLASS.QWEN.0 |
 | Source download lane complete and Qwen model-class profile is missing | MODEL.CLASS.QWEN.0 |
@@ -5690,7 +5702,7 @@ Current reconciliation result:
 
 ```text
 Active Next:
-  MODEL.CLASS.GEMMA.0 - Gemma model-class profile
+  MODEL.CLASS.QWEN.0 - Qwen model-class profile
 
 Reason:
   The first normal operator output baseline and broader diagnostic output
@@ -5701,9 +5713,10 @@ Reason:
   OWI.TARGETS.GEMMA.0 remain complete report-only rows; V010.SOURCE.7 is now
   complete as report-only source manifest/provenance hardening,
   V010.SOURCE.7A / MODELS.DOWNLOAD.0 is complete as a source-intake download
-  lane, and MODEL.CLASS.QWEN.0 is complete as a header-metadata-only lexical
-  model-class profile. Gemma model-class profile is the next blocker before
-  tensor-collection/runtime-path work.
+  lane, MODELS.DOWNLOAD.LIVE.0 is complete as live source download progress,
+  and MODEL.TARGET.IDENTITY.0 is complete as the backend-neutral source target
+  identity repair. Qwen model-class profile is the next blocker before Gemma
+  model-class, tensor-collection, and runtime-path work.
 ```
 
 
@@ -8291,7 +8304,7 @@ GLM-5.2 target facts:
 Qwen-Metal planned target facts:
   family: Qwen
   source class: official source tensors
-  pressure class: planned metal-reduced-full-runtime-pressure
+  pressure class: planned source-model-candidate
   hardware lane: Apple Silicon / Metal
   immediate YVEX use: spine-only pressure lane
   external GGUF evidence: reference only

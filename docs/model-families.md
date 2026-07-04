@@ -104,18 +104,19 @@ Its purpose is to prevent later runtime claims from floating above unexamined mo
 
 ## Qwen And Gemma Source Pressure
 
-Qwen/Metal and Gemma are future source-pressure lanes, not supported runtime
-lanes. The current command-visible source surface is:
+Qwen and Gemma are backend-neutral source-pressure lanes, not supported runtime
+lanes. Backend pressure is reported separately from model/source target
+identity. The current command-visible source surface is:
 
 ```sh
 ./yvex model-target list
-./yvex model-target inspect qwen-metal-portability
-./yvex model-target inspect qwen-metal-portability --paths
-./yvex model-target class-profile qwen-metal-portability
-./yvex model-target class-profile qwen-metal-portability --output table
-./yvex model-target class-profile qwen-metal-portability --audit
-./yvex model-target inspect gemma-dense-portability
-./yvex model-target inspect gemma-dense-portability --paths
+./yvex model-target inspect qwen3-8b
+./yvex model-target inspect qwen3-8b --paths
+./yvex model-target class-profile qwen3-8b
+./yvex model-target class-profile qwen3-8b --output table
+./yvex model-target class-profile qwen3-8b --audit
+./yvex model-target inspect gemma-4-12b-it
+./yvex model-target inspect gemma-4-12b-it --paths
 ./yvex accounts status --audit
 ./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --dry-run --auth never --audit
 ./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --auth auto --audit
@@ -144,24 +145,25 @@ perform remote identity verification, hash payloads, load tensor payload bytes,
 emit GGUF, register runtime artifacts, materialize tensors, execute runtime
 paths, generate, evaluate, benchmark, or mark a release ready.
 
-`qwen-metal-portability` is source-target profile only. It is a pressure-target
-slot for Qwen family, the `<models_root>/hf/qwen/qwen-metal-portability` source
-path convention, official source tensor expectation, future-YVEX-produced-GGUF
-artifact class, and Apple Silicon / Metal portability pressure. It is pending
-source/config verification. `model-target class-profile
-qwen-metal-portability` adds a header-metadata-only Qwen model-class profile
-over local safetensors source names, preferring a downloaded
-`<models_root>/hf/qwen/qwen3-8b` source when present and otherwise reporting the
-target source slot or explicit `--source`. It exposes lexical pattern counters
-only. It does not map tensor roles, claim model-class readiness, load tensor payloads, emit
-artifacts, materialize tensors, run Qwen, generate, evaluate, benchmark, or mark
-a release ready.
+`qwen3-8b` is a source-target profile only. It names the Qwen model/source
+target, the `<models_root>/hf/qwen/qwen3-8b` source path convention, official
+source tensor expectation, and future-YVEX-produced-GGUF artifact class.
+Backend selection is deferred; Metal pressure is reported separately as
+`backend_pressure: metal-planned`. It is pending source/config verification.
+`model-target class-profile qwen3-8b` reads local safetensors source names,
+preferring a downloaded `<models_root>/hf/qwen/qwen3-8b` source when present
+and otherwise reporting the target source slot or explicit `--source`. It is
+the next Qwen model-understanding surface; it must not be treated as
+tensor-role mapping, model execution, artifact emission, generation,
+evaluation, benchmark, or release readiness.
 
-`gemma-dense-portability` is source-target profile only. It is a pressure-target
-slot for Gemma family, the `<models_root>/hf/gemma/gemma-dense-portability`
-source path convention, official source tensor expectation,
-future-YVEX-produced-GGUF artifact class, and dense-candidate-pending-source-config
-pressure. It is pending source/config verification.
+`gemma-4-12b-it` is a source-target profile only. It names the Gemma
+model/source target, the `<models_root>/hf/gemma/gemma-4-12b-it` source path
+convention, official source tensor expectation, and
+future-YVEX-produced-GGUF artifact class. Backend selection is deferred;
+CPU/CUDA baseline pressure is reported separately as
+`backend_pressure: cpu-cuda-baseline-planned`. It is pending source/config
+verification.
 
 Source artifact class fields are command-visible in normal/table/audit source
 reports and in target audit reports. The stable values used by these pressure
@@ -232,9 +234,9 @@ Source family/profile fields, source artifact class fields, source footprint
 fields, source provenance fields, native safetensors inventory, and source
 tensor metadata inventory are command-visible for Qwen and Gemma. Source
 download sidecars can now provide concrete local manifests and native
-inventories; Qwen model-class profile is now command-visible as lexical
-header-metadata evidence, while Gemma model-class profile and tensor-role
-mapping remain separate future evidence.
+inventories; backend-neutral source target identity is now command-visible for
+Qwen and Gemma, while Qwen model-class profile, Gemma model-class profile, and
+tensor-role mapping remain separate future evidence.
 
 ## Family Classification
 

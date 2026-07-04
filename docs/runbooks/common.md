@@ -80,13 +80,13 @@ make
 ./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths --audit
 ./yvex model-target inspect glm-5.2-official-safetensors
 ./yvex model-target inspect glm-5.2-official-safetensors --paths --audit
-./yvex model-target inspect qwen-metal-portability
-./yvex model-target inspect qwen-metal-portability --paths
-./yvex model-target class-profile qwen-metal-portability
-./yvex model-target class-profile qwen-metal-portability --output table
-./yvex model-target class-profile qwen-metal-portability --audit
-./yvex model-target inspect gemma-dense-portability
-./yvex model-target inspect gemma-dense-portability --paths
+./yvex model-target inspect qwen3-8b
+./yvex model-target inspect qwen3-8b --paths
+./yvex model-target class-profile qwen3-8b
+./yvex model-target class-profile qwen3-8b --output table
+./yvex model-target class-profile qwen3-8b --audit
+./yvex model-target inspect gemma-4-12b-it
+./yvex model-target inspect gemma-4-12b-it --paths
 ./yvex model-target decision --help
 ./yvex model-target decision --release v0.1.0 --output table
 ./yvex model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next

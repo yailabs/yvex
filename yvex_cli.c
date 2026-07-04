@@ -30,6 +30,7 @@ static void command_help_help(FILE *fp);
 static void command_version_help(FILE *fp);
 
 static const yvex_cli_command yvex_commands[] = {
+    { "accounts", "Inspect local provider account status.", yvex_accounts_command, yvex_accounts_help },
     { "attention", "attention class and KV requirement reports.", yvex_attention_command, yvex_attention_help },
     { "backend", "Inspect backend availability.", yvex_backend_command, yvex_backend_help },
     { "chat", "Open the diagnostic console.", yvex_chat_command, yvex_chat_help },

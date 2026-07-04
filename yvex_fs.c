@@ -721,8 +721,8 @@ int yvex_operator_paths_resolve_target(const yvex_operator_paths *operator_paths
                                       : (strcmp(family, "glm") == 0
                                              ? "GLM-5.2"
                                              : (strcmp(family, "qwen") == 0
-                                                    ? "qwen-metal-portability"
-                                                    : "gemma-dense-portability")));
+                                                    ? "qwen3-8b"
+                                                    : "gemma-4-12b-it")));
     } else if (strcmp(kind, "gguf") == 0) {
         rc = yvex_path_format(out, cap, err, "operator_paths", "%s/gguf/%s", operator_paths->models_root, family);
     } else if (strcmp(kind, "reports") == 0) {

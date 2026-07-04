@@ -651,9 +651,9 @@ static const yvex_source_family_profile source_family_profiles[] = {
         "qwen",
         "Qwen",
         "qwen-source-pressure",
-        "qwen-metal-portability",
-        "metal-reduced-full-runtime-pressure",
-        "pending-source-config",
+        "qwen3-8b",
+        "source-model-candidate",
+        "Qwen3-8B",
         "profiled",
         "present",
         "official-source-tensors-planned",
@@ -666,9 +666,9 @@ static const yvex_source_family_profile source_family_profiles[] = {
         "true",
         "false",
         "planned",
-        "reduced-scale-portability-and-full-runtime-pressure",
-        "dense-or-dense-like-candidate-pending-source-config",
-        "apple-silicon-metal",
+        "backend-neutral-qwen-source-model-target",
+        "causal-decoder-candidate-pending-config",
+        "backend-selection-deferred",
         "metal-planned",
         "pending source/config verification",
         "missing-qwen-source-path",
@@ -677,7 +677,7 @@ static const yvex_source_family_profile source_family_profiles[] = {
         "missing-qwen-source-config",
         "missing-qwen-tokenizer-files",
         "missing-qwen-tensor-role-map",
-        "MODEL.CLASS.GEMMA.0",
+        "MODEL.CLASS.QWEN.0",
         qwen_source_tail_blockers,
         sizeof(qwen_source_tail_blockers) / sizeof(qwen_source_tail_blockers[0]),
     },
@@ -685,9 +685,9 @@ static const yvex_source_family_profile source_family_profiles[] = {
         "gemma",
         "Gemma",
         "gemma-source-pressure",
-        "gemma-dense-portability",
-        "reduced-dense-full-runtime-pressure",
-        "dense-candidate-pending-source-config",
+        "gemma-4-12b-it",
+        "source-model-candidate",
+        "Gemma-4-12B-it",
         "profiled",
         "present",
         "official-source-tensors-planned",
@@ -700,10 +700,10 @@ static const yvex_source_family_profile source_family_profiles[] = {
         "true",
         "false",
         "planned",
-        "dense-candidate-pending-source-config-pressure",
+        "backend-neutral-gemma-source-model-target",
         "dense-candidate-pending-source-config",
-        "hardware-lane-unselected",
-        "backend-lane-unselected",
+        "backend-selection-deferred",
+        "cpu-cuda-baseline-planned",
         "pending source/config verification",
         "missing-gemma-source-path",
         "missing-gemma-source-manifest",
@@ -924,7 +924,7 @@ static int qwen_source_target_is_supported(const yvex_source_family_profile *pro
         return 0;
     }
     if (strcmp(profile->family_key, "qwen") == 0) {
-        return strcmp(target, "qwen-metal-portability") == 0 ||
+        return strcmp(target, "qwen3-8b") == 0 ||
                strcmp(target, "qwen-small") == 0 ||
                strcmp(target, "qwen-medium") == 0;
     }
@@ -2639,7 +2639,7 @@ static void qwen_source_report_help(FILE *fp)
     fprintf(fp, "  --release v0.1.0\n");
     fprintf(fp, "  --models-root DIR\n");
     fprintf(fp, "  --source DIR\n");
-    fprintf(fp, "  --target qwen-metal-portability|qwen-small|qwen-medium|gemma-dense-portability\n");
+    fprintf(fp, "  --target qwen3-8b|qwen-small|qwen-medium|gemma-4-12b-it\n");
     fprintf(fp, "  --include-files --include-config --include-blockers --include-next\n");
     fprintf(fp, "  --include-tensors [--tensor-limit N]\n");
     fprintf(fp, "  --audit | --output normal|table|audit\n\n");

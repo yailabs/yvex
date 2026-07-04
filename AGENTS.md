@@ -149,6 +149,9 @@ yvexd.c
 yvex_server.c
   daemon/server behavior and provider boundary
 
+yvex_accounts.c
+  local provider account boundary, provider CLI discovery, login/status/ensure, non-secret account observations
+
 yvex_runtime.c
   runtime coordination and runtime operator commands not owned by more specific modules
 

@@ -488,7 +488,7 @@ run_ok source_manifest_report_missing_source "$YVEX_BIN" source-manifest report 
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "report: qwen-source-pressure"
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "status: source-target-profiled"
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "family: qwen"
-contains "$OUT_DIR/source_manifest_report_missing_source.out" "target: qwen-metal-portability"
+contains "$OUT_DIR/source_manifest_report_missing_source.out" "target: qwen3-8b"
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "source: official-source-tensors-planned  status=missing"
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "artifact: future-YVEX-produced-GGUF  status=planned"
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "files: 0  safetensors: 0  bytes: 0  footprint: missing"
@@ -497,7 +497,7 @@ contains "$OUT_DIR/source_manifest_report_missing_source.out" "native: missing  
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "metadata: missing  tensors=0  dtypes=0  max_rank=0"
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "manifest: missing  consistency=not-checked"
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "top_blocker: missing-qwen-source-manifest"
-contains "$OUT_DIR/source_manifest_report_missing_source.out" "next: MODEL.CLASS.GEMMA.0"
+contains "$OUT_DIR/source_manifest_report_missing_source.out" "next: MODEL.CLASS.QWEN.0"
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "boundary: source report only; no artifact/runtime/generation/benchmark"
 ! grep -F 'missing-qwen-source-target' "$OUT_DIR/source_manifest_report_missing_source.out" >/dev/null
 ! grep -F 'next: OWI.TARGETS.QWEN.0' "$OUT_DIR/source_manifest_report_missing_source.out" >/dev/null
@@ -511,13 +511,13 @@ contains "$OUT_DIR/source_manifest_report_missing_source.out" "boundary: source 
 run_ok source_manifest_report_table "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --models-root "$QWEN_MISSING_ROOT" --output table
 contains "$OUT_DIR/source_manifest_report_table.out" "SOURCE PRESSURE  release=v0.1.0"
 matches "$OUT_DIR/source_manifest_report_table.out" '^FAMILY[[:space:]]{2,}TARGET[[:space:]]{2,}SOURCE[[:space:]]{2,}TENSORS[[:space:]]{2,}MANIFEST[[:space:]]{2,}CONSISTENCY[[:space:]]{2,}NEXT$'
-matches "$OUT_DIR/source_manifest_report_table.out" '^qwen[[:space:]]{2,}qwen-metal-portability[[:space:]]{2,}missing[[:space:]]{2,}0[[:space:]]{2,}missing[[:space:]]{2,}not-checked[[:space:]]{2,}MODEL\.CLASS\.GEMMA\.0$'
+matches "$OUT_DIR/source_manifest_report_table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}missing[[:space:]]{2,}0[[:space:]]{2,}missing[[:space:]]{2,}not-checked[[:space:]]{2,}MODEL\.CLASS\.QWEN\.0$'
 run_ok source_manifest_report_audit "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --models-root "$QWEN_MISSING_ROOT" --audit
 contains "$OUT_DIR/source_manifest_report_audit.out" "source-report: qwen"
 contains "$OUT_DIR/source_manifest_report_audit.out" "family_key: qwen"
-contains "$OUT_DIR/source_manifest_report_audit.out" "model: pending-source-config"
-contains "$OUT_DIR/source_manifest_report_audit.out" "target_id: qwen-metal-portability"
-contains "$OUT_DIR/source_manifest_report_audit.out" "target_class: metal-reduced-full-runtime-pressure"
+contains "$OUT_DIR/source_manifest_report_audit.out" "model: Qwen3-8B"
+contains "$OUT_DIR/source_manifest_report_audit.out" "target_id: qwen3-8b"
+contains "$OUT_DIR/source_manifest_report_audit.out" "target_class: source-model-candidate"
 contains "$OUT_DIR/source_manifest_report_audit.out" "source_target_status: profiled"
 contains "$OUT_DIR/source_manifest_report_audit.out" "source_family_profile_status: present"
 contains "$OUT_DIR/source_manifest_report_audit.out" "source_artifact_class: official-source-tensors-planned"
@@ -564,7 +564,7 @@ contains "$OUT_DIR/source_manifest_report_audit.out" "source_manifest_schema_sta
 contains "$OUT_DIR/source_manifest_report_audit.out" "source_manifest_schema_version: unknown"
 contains "$OUT_DIR/source_manifest_report_audit.out" "source_manifest_family: qwen"
 contains "$OUT_DIR/source_manifest_report_audit.out" "source_manifest_family_status: not-checked"
-contains "$OUT_DIR/source_manifest_report_audit.out" "source_manifest_target_id: qwen-metal-portability"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_manifest_target_id: qwen3-8b"
 contains "$OUT_DIR/source_manifest_report_audit.out" "source_manifest_target_status: not-checked"
 contains "$OUT_DIR/source_manifest_report_audit.out" "source_manifest_source_path_status: missing"
 contains "$OUT_DIR/source_manifest_report_audit.out" "source_manifest_artifact_class_status: not-checked"
@@ -655,7 +655,7 @@ contains "$OUT_DIR/source_manifest_report_audit.out" "generation: unsupported-fu
 contains "$OUT_DIR/source_manifest_report_audit.out" "benchmark_status: not-measured"
 contains "$OUT_DIR/source_manifest_report_audit.out" "release_ready: false"
 contains "$OUT_DIR/source_manifest_report_audit.out" "blocker_0: missing-qwen-source-path"
-contains "$OUT_DIR/source_manifest_report_audit.out" "next_required_rows: MODEL.CLASS.GEMMA.0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "next_required_rows: MODEL.CLASS.QWEN.0"
 
 GEMMA_MISSING_ROOT="$OUT_DIR/gemma-missing-models-root"
 rm -rf "$GEMMA_MISSING_ROOT"
@@ -663,7 +663,7 @@ run_ok source_manifest_report_gemma_missing_source "$YVEX_BIN" source-manifest r
 contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "report: gemma-source-pressure"
 contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "status: source-target-profiled"
 contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "family: gemma"
-contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "target: gemma-dense-portability"
+contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "target: gemma-4-12b-it"
 contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "source: official-source-tensors-planned  status=missing"
 contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "artifact: future-YVEX-produced-GGUF  status=planned"
 contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "files: 0  safetensors: 0  bytes: 0  footprint: missing"
@@ -685,14 +685,14 @@ contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "boundary: s
 ! grep -F 'next: V010.SOURCE.7' "$OUT_DIR/source_manifest_report_gemma_missing_source.out" >/dev/null
 run_ok source_manifest_report_gemma_table "$YVEX_BIN" source-manifest report --family gemma --release v0.1.0 --models-root "$GEMMA_MISSING_ROOT" --output table
 contains "$OUT_DIR/source_manifest_report_gemma_table.out" "SOURCE PRESSURE  release=v0.1.0"
-matches "$OUT_DIR/source_manifest_report_gemma_table.out" '^gemma[[:space:]]{2,}gemma-dense-portability[[:space:]]{2,}missing[[:space:]]{2,}0[[:space:]]{2,}missing[[:space:]]{2,}not-checked[[:space:]]{2,}MODEL\.CLASS\.GEMMA\.0$'
+matches "$OUT_DIR/source_manifest_report_gemma_table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}missing[[:space:]]{2,}0[[:space:]]{2,}missing[[:space:]]{2,}not-checked[[:space:]]{2,}MODEL\.CLASS\.GEMMA\.0$'
 run_ok source_manifest_report_gemma_audit "$YVEX_BIN" source-manifest report --family gemma --release v0.1.0 --models-root "$GEMMA_MISSING_ROOT" --audit
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source-report: gemma"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "family: Gemma"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "family_key: gemma"
-contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "model: dense-candidate-pending-source-config"
-contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "target_id: gemma-dense-portability"
-contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "target_class: reduced-dense-full-runtime-pressure"
+contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "model: Gemma-4-12B-it"
+contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "target_id: gemma-4-12b-it"
+contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "target_class: source-model-candidate"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_family_profile_status: present"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_artifact_class: official-source-tensors-planned"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_artifact_status: missing"
@@ -715,7 +715,7 @@ contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_manifest_stat
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_manifest_schema_status: not-checked"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_manifest_family: gemma"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_manifest_family_status: not-checked"
-contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_manifest_target_id: gemma-dense-portability"
+contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_manifest_target_id: gemma-4-12b-it"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_manifest_target_status: not-checked"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_manifest_consistency_status: not-checked"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_manifest_hardening_status: report-only"
@@ -777,9 +777,9 @@ matches "$OUT_DIR/source_manifest_report_fake_source.out" '^native: header-only[
 contains "$OUT_DIR/source_manifest_report_fake_source.out" "metadata: header-only  tensors=2  dtypes=2  max_rank=2"
 contains "$OUT_DIR/source_manifest_report_fake_source.out" "manifest: missing  consistency=not-checked"
 contains "$OUT_DIR/source_manifest_report_fake_source.out" "top_blocker: missing-qwen-source-manifest"
-contains "$OUT_DIR/source_manifest_report_fake_source.out" "next: MODEL.CLASS.GEMMA.0"
+contains "$OUT_DIR/source_manifest_report_fake_source.out" "next: MODEL.CLASS.QWEN.0"
 run_ok source_manifest_report_fake_source_table "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --source "$QWEN_FAKE_SOURCE" --models-root "$QWEN_FAKE_MODELS" --output table
-matches "$OUT_DIR/source_manifest_report_fake_source_table.out" '^qwen[[:space:]]{2,}qwen-metal-portability[[:space:]]{2,}present[[:space:]]{2,}2[[:space:]]{2,}missing[[:space:]]{2,}not-checked[[:space:]]{2,}MODEL\.CLASS\.GEMMA\.0$'
+matches "$OUT_DIR/source_manifest_report_fake_source_table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}present[[:space:]]{2,}2[[:space:]]{2,}missing[[:space:]]{2,}not-checked[[:space:]]{2,}MODEL\.CLASS\.QWEN\.0$'
 run_ok source_manifest_report_fake_source_tensors "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --source "$QWEN_FAKE_SOURCE" --models-root "$QWEN_FAKE_MODELS" --include-tensors --tensor-limit 2
 contains "$OUT_DIR/source_manifest_report_fake_source_tensors.out" "TENSORS  limit=2"
 matches "$OUT_DIR/source_manifest_report_fake_source_tensors.out" '^NAME[[:space:]]{2,}FILE[[:space:]]{2,}DTYPE[[:space:]]{2,}RANK[[:space:]]{2,}SHAPE[[:space:]]{2,}ELEMENTS[[:space:]]{2,}BYTES$'
@@ -903,7 +903,7 @@ rm -rf "$QWEN_FAKE_MANIFEST_SOURCE" "$QWEN_FAKE_MANIFEST_MODELS"
 mkdir -p "$QWEN_FAKE_MANIFEST_SOURCE"
 printf '{}\n' > "$QWEN_FAKE_MANIFEST_SOURCE/config.json"
 printf '{}\n' > "$QWEN_FAKE_MANIFEST_SOURCE/tokenizer.json"
-printf '{"schema":"yvex.source_manifest.v1","family":"qwen","target":"qwen-metal-portability","source_artifact_class":"official-source-tensors-planned","footprint":{},"provenance":{},"native_inventory":{},"tensor_metadata":{}}\n' > "$QWEN_FAKE_MANIFEST_SOURCE/source_manifest.json"
+printf '{"schema":"yvex.source_manifest.v1","family":"qwen","target":"qwen3-8b","source_artifact_class":"official-source-tensors-planned","footprint":{},"provenance":{},"native_inventory":{},"tensor_metadata":{}}\n' > "$QWEN_FAKE_MANIFEST_SOURCE/source_manifest.json"
 python3 - "$QWEN_FAKE_MANIFEST_SOURCE/model-00001-of-00001.safetensors" <<'PY'
 import json
 import struct
@@ -920,9 +920,9 @@ run_ok source_manifest_report_fake_manifest "$YVEX_BIN" source-manifest report -
 contains "$OUT_DIR/source_manifest_report_fake_manifest.out" "status: source-profile-incomplete"
 contains "$OUT_DIR/source_manifest_report_fake_manifest.out" "manifest: present  consistency=partial"
 contains "$OUT_DIR/source_manifest_report_fake_manifest.out" "top_blocker: missing-qwen-tensor-role-map"
-contains "$OUT_DIR/source_manifest_report_fake_manifest.out" "next: MODEL.CLASS.GEMMA.0"
+contains "$OUT_DIR/source_manifest_report_fake_manifest.out" "next: MODEL.CLASS.QWEN.0"
 run_ok source_manifest_report_fake_manifest_table "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --source "$QWEN_FAKE_MANIFEST_SOURCE" --models-root "$QWEN_FAKE_MANIFEST_MODELS" --output table
-matches "$OUT_DIR/source_manifest_report_fake_manifest_table.out" '^qwen[[:space:]]{2,}qwen-metal-portability[[:space:]]{2,}present[[:space:]]{2,}1[[:space:]]{2,}present[[:space:]]{2,}partial[[:space:]]{2,}MODEL\.CLASS\.GEMMA\.0$'
+matches "$OUT_DIR/source_manifest_report_fake_manifest_table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}present[[:space:]]{2,}1[[:space:]]{2,}present[[:space:]]{2,}partial[[:space:]]{2,}MODEL\.CLASS\.QWEN\.0$'
 run_ok source_manifest_report_fake_manifest_audit "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --source "$QWEN_FAKE_MANIFEST_SOURCE" --models-root "$QWEN_FAKE_MANIFEST_MODELS" --audit
 contains "$OUT_DIR/source_manifest_report_fake_manifest_audit.out" "source_manifest_expected: true"
 contains "$OUT_DIR/source_manifest_report_fake_manifest_audit.out" "source_manifest_status: present"
@@ -930,7 +930,7 @@ contains "$OUT_DIR/source_manifest_report_fake_manifest_audit.out" "source_manif
 contains "$OUT_DIR/source_manifest_report_fake_manifest_audit.out" "source_manifest_schema_version: yvex.source_manifest.v1"
 contains "$OUT_DIR/source_manifest_report_fake_manifest_audit.out" "source_manifest_family: qwen"
 contains "$OUT_DIR/source_manifest_report_fake_manifest_audit.out" "source_manifest_family_status: matched"
-contains "$OUT_DIR/source_manifest_report_fake_manifest_audit.out" "source_manifest_target_id: qwen-metal-portability"
+contains "$OUT_DIR/source_manifest_report_fake_manifest_audit.out" "source_manifest_target_id: qwen3-8b"
 contains "$OUT_DIR/source_manifest_report_fake_manifest_audit.out" "source_manifest_target_status: matched"
 contains "$OUT_DIR/source_manifest_report_fake_manifest_audit.out" "source_manifest_source_path_status: present"
 contains "$OUT_DIR/source_manifest_report_fake_manifest_audit.out" "source_manifest_artifact_class_status: declared"
@@ -961,7 +961,7 @@ run_ok source_manifest_report_broken_safetensors "$YVEX_BIN" source-manifest rep
 contains "$OUT_DIR/source_manifest_report_broken_safetensors.out" "native: header-error  files=1  tensors=0  header_bytes=0"
 contains "$OUT_DIR/source_manifest_report_broken_safetensors.out" "metadata: header-error  tensors=0  dtypes=0  max_rank=0"
 contains "$OUT_DIR/source_manifest_report_broken_safetensors.out" "manifest: missing  consistency=not-checked"
-contains "$OUT_DIR/source_manifest_report_broken_safetensors.out" "next: MODEL.CLASS.GEMMA.0"
+contains "$OUT_DIR/source_manifest_report_broken_safetensors.out" "next: MODEL.CLASS.QWEN.0"
 run_ok source_manifest_report_broken_safetensors_audit "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --source "$QWEN_BROKEN_SOURCE" --models-root "$QWEN_BROKEN_MODELS" --audit
 contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "native_inventory_status: header-error"
 contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "native_safetensors_count: 1"
@@ -983,8 +983,8 @@ run_ok model_target_classes "$YVEX_BIN" model-target classes
 contains "$OUT_DIR/model_target_classes.out" "status: model-target-classes"
 contains "$OUT_DIR/model_target_classes.out" "class: selected-runtime-slice"
 contains "$OUT_DIR/model_target_classes.out" "class: official-source-huge-model"
-contains "$OUT_DIR/model_target_classes.out" "class: metal-reduced-full-runtime-pressure"
-contains "$OUT_DIR/model_target_classes.out" "class: reduced-dense-full-runtime-pressure"
+contains "$OUT_DIR/model_target_classes.out" "class: source-model-candidate"
+contains "$OUT_DIR/model_target_classes.out" "class: source-model-candidate"
 contains "$OUT_DIR/model_target_classes.out" "class: external-GGUF-reference"
 contains "$OUT_DIR/model_target_classes.out" "capability_claim: false"
 contains "$OUT_DIR/model_target_classes.out" "runtime_execution: partial-boundary-only"
@@ -994,23 +994,27 @@ run_ok model_target_list "$YVEX_BIN" model-target list
 contains "$OUT_DIR/model_target_list.out" "MODEL TARGETS  count=5"
 matches "$OUT_DIR/model_target_list.out" '^TARGET[[:space:]]{2,}FAMILY[[:space:]]{2,}CLASS[[:space:]]{2,}RUNTIME[[:space:]]{2,}GENERATION$'
 matches "$OUT_DIR/model_target_list.out" '^deepseek4-v4-flash-selected-embed[[:space:]]{2,}DeepSeek[[:space:]]{2,}selected-runtime-slice[[:space:]]{2,}unsupported[[:space:]]{2,}unsupported$'
-matches "$OUT_DIR/model_target_list.out" '^qwen-metal-portability[[:space:]]{2,}Qwen[[:space:]]{2,}metal-reduced-full-runtime-pressure[[:space:]]{2,}unsupported[[:space:]]{2,}unsupported$'
-matches "$OUT_DIR/model_target_list.out" '^gemma-dense-portability[[:space:]]{2,}Gemma[[:space:]]{2,}reduced-dense-full-runtime-pressure[[:space:]]{2,}unsupported[[:space:]]{2,}unsupported$'
+matches "$OUT_DIR/model_target_list.out" '^qwen3-8b[[:space:]]{2,}Qwen[[:space:]]{2,}source-model-candidate[[:space:]]{2,}unsupported[[:space:]]{2,}unsupported$'
+matches "$OUT_DIR/model_target_list.out" '^gemma-4-12b-it[[:space:]]{2,}Gemma[[:space:]]{2,}source-model-candidate[[:space:]]{2,}unsupported[[:space:]]{2,}unsupported$'
+! grep -F 'qwen-metal-portability' "$OUT_DIR/model_target_list.out" >/dev/null
+! grep -F 'gemma-dense-portability' "$OUT_DIR/model_target_list.out" >/dev/null
 ! grep -F 'deepseek4-v4-flash-selected-embed DeepSeek selected-runtime-slice unsupported unsupported' "$OUT_DIR/model_target_list.out" >/dev/null
 contains "$OUT_DIR/model_target_list.out" "status: model-target-list"
 run_ok model_target_list_table "$YVEX_BIN" model-target list --output table
 contains "$OUT_DIR/model_target_list_table.out" "MODEL TARGETS  count=5"
 matches "$OUT_DIR/model_target_list_table.out" '^TARGET[[:space:]]{2,}FAMILY[[:space:]]{2,}CLASS[[:space:]]{2,}RUNTIME[[:space:]]{2,}GENERATION$'
-matches "$OUT_DIR/model_target_list_table.out" '^qwen-metal-portability[[:space:]]{2,}Qwen[[:space:]]{2,}metal-reduced-full-runtime-pressure[[:space:]]{2,}unsupported[[:space:]]{2,}unsupported$'
-matches "$OUT_DIR/model_target_list_table.out" '^gemma-dense-portability[[:space:]]{2,}Gemma[[:space:]]{2,}reduced-dense-full-runtime-pressure[[:space:]]{2,}unsupported[[:space:]]{2,}unsupported$'
+matches "$OUT_DIR/model_target_list_table.out" '^qwen3-8b[[:space:]]{2,}Qwen[[:space:]]{2,}source-model-candidate[[:space:]]{2,}unsupported[[:space:]]{2,}unsupported$'
+matches "$OUT_DIR/model_target_list_table.out" '^gemma-4-12b-it[[:space:]]{2,}Gemma[[:space:]]{2,}source-model-candidate[[:space:]]{2,}unsupported[[:space:]]{2,}unsupported$'
+! grep -F 'qwen-metal-portability' "$OUT_DIR/model_target_list_table.out" >/dev/null
+! grep -F 'gemma-dense-portability' "$OUT_DIR/model_target_list_table.out" >/dev/null
 contains "$OUT_DIR/model_target_list_table.out" "status: model-target-list"
 run_ok model_target_list_audit "$YVEX_BIN" model-target list --audit
 contains "$OUT_DIR/model_target_list_audit.out" "target: deepseek4-v4-flash-selected-embed"
 contains "$OUT_DIR/model_target_list_audit.out" "target_class: selected-runtime-slice"
-contains "$OUT_DIR/model_target_list_audit.out" "target: qwen-metal-portability"
-contains "$OUT_DIR/model_target_list_audit.out" "target_class: metal-reduced-full-runtime-pressure"
-contains "$OUT_DIR/model_target_list_audit.out" "target: gemma-dense-portability"
-contains "$OUT_DIR/model_target_list_audit.out" "target_class: reduced-dense-full-runtime-pressure"
+contains "$OUT_DIR/model_target_list_audit.out" "target: qwen3-8b"
+contains "$OUT_DIR/model_target_list_audit.out" "target_class: source-model-candidate"
+contains "$OUT_DIR/model_target_list_audit.out" "target: gemma-4-12b-it"
+contains "$OUT_DIR/model_target_list_audit.out" "target_class: source-model-candidate"
 contains "$OUT_DIR/model_target_list_audit.out" "source_provenance_status:"
 contains "$OUT_DIR/model_target_list_audit.out" "source_origin:"
 contains "$OUT_DIR/model_target_list_audit.out" "source_authority:"
@@ -1039,11 +1043,11 @@ contains "$OUT_DIR/model_target_candidate.out" "status: blocked-no-candidate"
 contains "$OUT_DIR/model_target_candidate.out" "release: v0.1.0"
 contains "$OUT_DIR/model_target_candidate.out" "selected: none"
 contains "$OUT_DIR/model_target_candidate.out" "top_blocker: no eligible full-runtime candidate"
-contains "$OUT_DIR/model_target_candidate.out" "next: MODEL.CLASS.GEMMA.0"
+contains "$OUT_DIR/model_target_candidate.out" "next: MODEL.CLASS.QWEN.0"
 contains "$OUT_DIR/model_target_candidate.out" "boundary: report-only; generation unsupported; benchmark not measured"
 run_ok model_target_candidate_table "$YVEX_BIN" model-target candidate --release v0.1.0 --output table
 matches "$OUT_DIR/model_target_candidate_table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$OUT_DIR/model_target_candidate_table.out" '^full-runtime-candidate[[:space:]]{2,}missing[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}MODEL\.CLASS\.GEMMA\.0$'
+matches "$OUT_DIR/model_target_candidate_table.out" '^full-runtime-candidate[[:space:]]{2,}missing[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}MODEL\.CLASS\.QWEN\.0$'
 
 run_ok model_target_candidate_full "$YVEX_BIN" model-target candidate --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-next
 contains "$OUT_DIR/model_target_candidate_full.out" "deepseek_pressure_status: selected-slice-pressure-only"
@@ -1059,10 +1063,10 @@ contains "$OUT_DIR/model_target_candidate_full.out" "candidate_1_stage: diagnost
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_1_eligibility: selected-slice-only"
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_2_id: glm-5.2-official-safetensors"
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_2_eligibility: source-only"
-contains "$OUT_DIR/model_target_candidate_full.out" "candidate_3_id: qwen-metal-portability"
+contains "$OUT_DIR/model_target_candidate_full.out" "candidate_3_id: qwen3-8b"
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_3_stage: source-target-profiled"
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_3_eligibility: planned-portability-only"
-contains "$OUT_DIR/model_target_candidate_full.out" "candidate_4_id: gemma-dense-portability"
+contains "$OUT_DIR/model_target_candidate_full.out" "candidate_4_id: gemma-4-12b-it"
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_4_stage: source-target-profiled"
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_4_eligibility: planned-dense-pressure-only"
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_4_blocker_1: missing-gemma-source-path"
@@ -1104,11 +1108,11 @@ contains "$OUT_DIR/model_target_dense_candidate.out" "status: dense-candidate-mi
 contains "$OUT_DIR/model_target_dense_candidate.out" "release: v0.1.0"
 contains "$OUT_DIR/model_target_dense_candidate.out" "selected: none"
 contains "$OUT_DIR/model_target_dense_candidate.out" "top_blocker: no selected dense full-runtime candidate"
-contains "$OUT_DIR/model_target_dense_candidate.out" "next: MODEL.CLASS.GEMMA.0"
+contains "$OUT_DIR/model_target_dense_candidate.out" "next: MODEL.CLASS.QWEN.0"
 contains "$OUT_DIR/model_target_dense_candidate.out" "boundary: report-only; generation unsupported; benchmark not measured"
 run_ok model_target_dense_candidate_table "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --output table
 matches "$OUT_DIR/model_target_dense_candidate_table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$OUT_DIR/model_target_dense_candidate_table.out" '^dense-candidate[[:space:]]{2,}missing[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}MODEL\.CLASS\.GEMMA\.0$'
+matches "$OUT_DIR/model_target_dense_candidate_table.out" '^dense-candidate[[:space:]]{2,}missing[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}MODEL\.CLASS\.QWEN\.0$'
 
 run_ok model_target_dense_candidate_full "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --audit --include-candidates --include-requirements --include-blockers --include-next
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "next_required_rows: V010.TARGET.7"
@@ -1123,12 +1127,12 @@ contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_1_eli
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_2_id: glm-5.2-official-safetensors"
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_2_blocker_0: moe-target"
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_2_blocker_1: source-only-target"
-contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_3_id: qwen-metal-portability"
+contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_3_id: qwen3-8b"
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_3_stage: source-target-profiled"
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_3_eligibility: dense-pressure-only"
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_3_blocker_0: planned-portability-only"
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_3_blocker_1: missing-qwen-source-path"
-contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_4_id: gemma-dense-portability"
+contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_4_id: gemma-4-12b-it"
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_4_stage: source-target-profiled"
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_4_eligibility: dense-pressure-only"
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_4_blocker_0: planned-dense-pressure-only"
@@ -1145,21 +1149,21 @@ contains "$OUT_DIR/model_target_dense_candidate_rmsnorm.out" "dense_candidate_0_
 contains "$OUT_DIR/model_target_dense_candidate_rmsnorm.out" "dense_candidate_0_blocker_1: selected-runtime-slice-only"
 contains "$OUT_DIR/model_target_dense_candidate_rmsnorm.out" "dense_candidate_0_next_required_rows: V010.TARGET.7,V010.TARGET.4,V010.MAP.2,V010.FULLMODEL.6"
 
-run_ok model_target_dense_candidate_qwen "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --audit --target qwen-metal-portability --include-blockers --include-next
+run_ok model_target_dense_candidate_qwen "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --audit --target qwen3-8b --include-blockers --include-next
 contains "$OUT_DIR/model_target_dense_candidate_qwen.out" "dense_candidate_status: candidate-incomplete"
 contains "$OUT_DIR/model_target_dense_candidate_qwen.out" "dense_candidate_0_stage: source-target-profiled"
 contains "$OUT_DIR/model_target_dense_candidate_qwen.out" "dense_candidate_0_eligibility: dense-pressure-only"
 contains "$OUT_DIR/model_target_dense_candidate_qwen.out" "dense_candidate_0_blocker_0: planned-portability-only"
 contains "$OUT_DIR/model_target_dense_candidate_qwen.out" "dense_candidate_0_blocker_1: missing-qwen-source-path"
-run_ok model_target_dense_candidate_gemma "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --audit --target gemma-dense-portability --include-blockers --include-next
+run_ok model_target_dense_candidate_gemma "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --audit --target gemma-4-12b-it --include-blockers --include-next
 contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_status: candidate-incomplete"
-contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_id: gemma-dense-portability"
-contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_class: reduced-dense-full-runtime-pressure"
+contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_id: gemma-4-12b-it"
+contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_class: source-model-candidate"
 contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_stage: source-target-profiled"
 contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_eligibility: dense-pressure-only"
 contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_blocker_0: planned-dense-pressure-only"
 contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_blocker_1: missing-gemma-source-path"
-contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_next_required_rows: V010.TARGET.7,MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0"
+contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_next_required_rows: V010.TARGET.7,MODEL.CLASS.QWEN.0,MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0"
 
 run_fail_code model_target_dense_candidate_missing_release 2 "$YVEX_BIN" model-target dense-candidate
 contains "$OUT_DIR/model_target_dense_candidate_missing_release.err" "model-target dense-candidate: --release is required"
@@ -1185,21 +1189,21 @@ contains "$OUT_DIR/model_target_qwen_metal.out" "report: model-target qwen-metal
 contains "$OUT_DIR/model_target_qwen_metal.out" "status: pressure-target-only"
 contains "$OUT_DIR/model_target_qwen_metal.out" "release: v0.1.0"
 contains "$OUT_DIR/model_target_qwen_metal.out" "lane: qwen-metal / apple-silicon-metal"
-contains "$OUT_DIR/model_target_qwen_metal.out" "target: qwen-metal-portability"
+contains "$OUT_DIR/model_target_qwen_metal.out" "target: qwen3-8b"
 contains "$OUT_DIR/model_target_qwen_metal.out" "candidate: source-target-profiled pressure-target-only"
 contains "$OUT_DIR/model_target_qwen_metal.out" "source_target: profiled"
 contains "$OUT_DIR/model_target_qwen_metal.out" "source: missing"
 contains "$OUT_DIR/model_target_qwen_metal.out" "backend: metal unsupported"
-contains "$OUT_DIR/model_target_qwen_metal.out" "next: MODEL.CLASS.GEMMA.0"
+contains "$OUT_DIR/model_target_qwen_metal.out" "next: MODEL.CLASS.QWEN.0"
 contains "$OUT_DIR/model_target_qwen_metal.out" "boundary: report-only; generation unsupported; benchmark not measured"
 run_ok model_target_qwen_metal_table "$YVEX_BIN" model-target qwen-metal --release v0.1.0 --output table
 matches "$OUT_DIR/model_target_qwen_metal_table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$OUT_DIR/model_target_qwen_metal_table.out" '^qwen-metal-pressure[[:space:]]{2,}pressure[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}MODEL\.CLASS\.GEMMA\.0$'
+matches "$OUT_DIR/model_target_qwen_metal_table.out" '^qwen-metal-pressure[[:space:]]{2,}pressure[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}MODEL\.CLASS\.QWEN\.0$'
 
 run_ok model_target_qwen_metal_full "$YVEX_BIN" model-target qwen-metal --release v0.1.0 --audit --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_count: 3"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_0_id: qwen-small"
-contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_0_class: metal-reduced-full-runtime-pressure"
+contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_0_class: backend-compatibility-pressure"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_0_stage: report-only"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_0_eligibility: pressure-target-only"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_0_source_target_status: pending"
@@ -1207,10 +1211,10 @@ contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_0_backend_s
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_0_runtime_status: unsupported"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_0_generation_status: unsupported-full-model"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_1_id: qwen-medium"
-contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_2_id: qwen-metal-portability"
+contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_2_id: qwen3-8b"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_2_stage: source-target-profiled"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_2_source_target_status: profiled"
-contains "$OUT_DIR/model_target_qwen_metal_full.out" "candidate_id: qwen-metal-portability"
+contains "$OUT_DIR/model_target_qwen_metal_full.out" "candidate_id: qwen3-8b"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "candidate_stage: source-target-profiled"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "source_target_status: profiled"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "hardware_profile_status: planned"
@@ -1233,7 +1237,7 @@ contains "$OUT_DIR/model_target_qwen_metal_full.out" "blocker_11: missing-metal-
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "blocker_18: missing-real-prefill"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "blocker_21: missing-real-output-head-logits"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "blocker_22: missing-real-vocabulary-sampling"
-contains "$OUT_DIR/model_target_qwen_metal_full.out" "next_required_rows: MODEL.CLASS.GEMMA.0"
+contains "$OUT_DIR/model_target_qwen_metal_full.out" "next_required_rows: MODEL.CLASS.QWEN.0"
 
 run_ok model_target_qwen_metal_small "$YVEX_BIN" model-target qwen-metal --release v0.1.0 --audit --target qwen-small --include-blockers --include-next
 contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_count: 1"
@@ -1242,7 +1246,7 @@ contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_0_source_t
 contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_0_blocker_0: missing-qwen-source-path"
 contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_0_blocker_6: missing-metal-backend-feasibility"
 contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_0_blocker_7: missing-real-prefill"
-contains "$OUT_DIR/model_target_qwen_metal_small.out" "next_required_rows: MODEL.CLASS.GEMMA.0"
+contains "$OUT_DIR/model_target_qwen_metal_small.out" "next_required_rows: MODEL.CLASS.QWEN.0"
 
 run_fail_code model_target_qwen_metal_missing_release 2 "$YVEX_BIN" model-target qwen-metal
 contains "$OUT_DIR/model_target_qwen_metal_missing_release.err" "model-target qwen-metal: --release is required"
@@ -1335,21 +1339,24 @@ contains "$OUT_DIR/model_target_glm_audit.out" "source_tensor_metadata_status: p
 contains "$OUT_DIR/model_target_glm_audit.out" "source_tensor_count: 0"
 contains "$OUT_DIR/model_target_glm_audit.out" "source_tensor_metadata_payload_loaded: false"
 
-run_ok model_target_qwen "$YVEX_BIN" model-target inspect qwen-metal-portability
-contains "$OUT_DIR/model_target_qwen.out" "target: qwen-metal-portability"
-contains "$OUT_DIR/model_target_qwen.out" "family: Qwen  class=metal-reduced-full-runtime-pressure"
+run_ok model_target_qwen "$YVEX_BIN" model-target inspect qwen3-8b
+contains "$OUT_DIR/model_target_qwen.out" "target: qwen3-8b"
+contains "$OUT_DIR/model_target_qwen.out" "family: Qwen  class=source-model-candidate"
 contains "$OUT_DIR/model_target_qwen.out" "source: official-source-tensors-planned  status=missing"
 contains "$OUT_DIR/model_target_qwen.out" "artifact: future-YVEX-produced-GGUF  status=planned"
 contains "$OUT_DIR/model_target_qwen.out" "runtime: unsupported"
 contains "$OUT_DIR/model_target_qwen.out" "generation: unsupported"
-contains "$OUT_DIR/model_target_qwen.out" "next: MODEL.CLASS.GEMMA.0"
+contains "$OUT_DIR/model_target_qwen.out" "next: MODEL.CLASS.QWEN.0"
 contains "$OUT_DIR/model_target_qwen.out" "boundary: target/source profile only; no source download/runtime/generation"
 
-run_ok model_target_qwen_audit "$YVEX_BIN" model-target inspect qwen-metal-portability --audit
-contains "$OUT_DIR/model_target_qwen_audit.out" "target_id: qwen-metal-portability"
+run_fail_code model_target_old_qwen 2 "$YVEX_BIN" model-target inspect qwen-metal-portability
+contains "$OUT_DIR/model_target_old_qwen.err" "unknown target: qwen-metal-portability"
+
+run_ok model_target_qwen_audit "$YVEX_BIN" model-target inspect qwen3-8b --audit
+contains "$OUT_DIR/model_target_qwen_audit.out" "target_id: qwen3-8b"
 contains "$OUT_DIR/model_target_qwen_audit.out" "family: Qwen"
-contains "$OUT_DIR/model_target_qwen_audit.out" "model: pending-source-config"
-contains "$OUT_DIR/model_target_qwen_audit.out" "target_class: metal-reduced-full-runtime-pressure"
+contains "$OUT_DIR/model_target_qwen_audit.out" "model: Qwen3-8B"
+contains "$OUT_DIR/model_target_qwen_audit.out" "target_class: source-model-candidate"
 contains "$OUT_DIR/model_target_qwen_audit.out" "source_artifact_class: official-source-tensors-planned"
 contains "$OUT_DIR/model_target_qwen_audit.out" "source_artifact_status: missing"
 contains "$OUT_DIR/model_target_qwen_audit.out" "source_provenance_status: missing"
@@ -1371,9 +1378,9 @@ contains "$OUT_DIR/model_target_qwen_audit.out" "benchmark_status: not-measured"
 contains "$OUT_DIR/model_target_qwen_audit.out" "runtime_execution: unsupported"
 contains "$OUT_DIR/model_target_qwen_audit.out" "generation: unsupported"
 
-run_ok model_target_gemma "$YVEX_BIN" model-target inspect gemma-dense-portability
-contains "$OUT_DIR/model_target_gemma.out" "target: gemma-dense-portability"
-contains "$OUT_DIR/model_target_gemma.out" "family: Gemma  class=reduced-dense-full-runtime-pressure"
+run_ok model_target_gemma "$YVEX_BIN" model-target inspect gemma-4-12b-it
+contains "$OUT_DIR/model_target_gemma.out" "target: gemma-4-12b-it"
+contains "$OUT_DIR/model_target_gemma.out" "family: Gemma  class=source-model-candidate"
 contains "$OUT_DIR/model_target_gemma.out" "source: official-source-tensors-planned  status=missing"
 contains "$OUT_DIR/model_target_gemma.out" "artifact: future-YVEX-produced-GGUF  status=planned"
 contains "$OUT_DIR/model_target_gemma.out" "runtime: unsupported"
@@ -1381,11 +1388,14 @@ contains "$OUT_DIR/model_target_gemma.out" "generation: unsupported"
 contains "$OUT_DIR/model_target_gemma.out" "next: MODEL.CLASS.GEMMA.0"
 contains "$OUT_DIR/model_target_gemma.out" "boundary: target/source profile only; no source download/runtime/generation"
 
-run_ok model_target_gemma_audit "$YVEX_BIN" model-target inspect gemma-dense-portability --audit
-contains "$OUT_DIR/model_target_gemma_audit.out" "target_id: gemma-dense-portability"
+run_fail_code model_target_old_gemma 2 "$YVEX_BIN" model-target inspect gemma-dense-portability
+contains "$OUT_DIR/model_target_old_gemma.err" "unknown target: gemma-dense-portability"
+
+run_ok model_target_gemma_audit "$YVEX_BIN" model-target inspect gemma-4-12b-it --audit
+contains "$OUT_DIR/model_target_gemma_audit.out" "target_id: gemma-4-12b-it"
 contains "$OUT_DIR/model_target_gemma_audit.out" "family: Gemma"
-contains "$OUT_DIR/model_target_gemma_audit.out" "model: dense-candidate-pending-source-config"
-contains "$OUT_DIR/model_target_gemma_audit.out" "target_class: reduced-dense-full-runtime-pressure"
+contains "$OUT_DIR/model_target_gemma_audit.out" "model: Gemma-4-12B-it"
+contains "$OUT_DIR/model_target_gemma_audit.out" "target_class: source-model-candidate"
 contains "$OUT_DIR/model_target_gemma_audit.out" "source_artifact_class: official-source-tensors-planned"
 contains "$OUT_DIR/model_target_gemma_audit.out" "source_artifact_status: missing"
 contains "$OUT_DIR/model_target_gemma_audit.out" "source_provenance_status: missing"
@@ -1466,21 +1476,21 @@ contains "$OUT_DIR/model_target_paths_glm.out" "target_artifact_status: planned"
 contains "$OUT_DIR/model_target_paths_glm.out" "runtime_execution: unsupported"
 contains "$OUT_DIR/model_target_paths_glm.out" "generation: unsupported"
 
-run_ok model_target_paths_qwen "$YVEX_BIN" model-target inspect qwen-metal-portability --paths --models-root "$MODEL_TARGET_PATHS_DIR/models"
-contains "$OUT_DIR/model_target_paths_qwen.out" "target: qwen-metal-portability"
-contains "$OUT_DIR/model_target_paths_qwen.out" "source: missing  $MODEL_TARGET_MODELS_ROOT/hf/qwen/qwen-metal-portability"
+run_ok model_target_paths_qwen "$YVEX_BIN" model-target inspect qwen3-8b --paths --models-root "$MODEL_TARGET_PATHS_DIR/models"
+contains "$OUT_DIR/model_target_paths_qwen.out" "target: qwen3-8b"
+contains "$OUT_DIR/model_target_paths_qwen.out" "source: missing  $MODEL_TARGET_MODELS_ROOT/hf/qwen/qwen3-8b"
 contains "$OUT_DIR/model_target_paths_qwen.out" "source_class: official-source-tensors-planned"
-contains "$OUT_DIR/model_target_paths_qwen.out" "artifact: planned  $MODEL_TARGET_MODELS_ROOT/gguf/qwen/qwen-metal-portability"
+contains "$OUT_DIR/model_target_paths_qwen.out" "artifact: planned  $MODEL_TARGET_MODELS_ROOT/gguf/qwen/qwen3-8b"
 contains "$OUT_DIR/model_target_paths_qwen.out" "artifact_class: future-YVEX-produced-GGUF"
 contains "$OUT_DIR/model_target_paths_qwen.out" "reports: $MODEL_TARGET_MODELS_ROOT/reports/qwen"
 contains "$OUT_DIR/model_target_paths_qwen.out" "registry: $MODEL_TARGET_MODELS_ROOT/registry"
 contains "$OUT_DIR/model_target_paths_qwen.out" "boundary: path report only, no runtime execution"
 
-run_ok model_target_paths_qwen_audit "$YVEX_BIN" model-target inspect qwen-metal-portability --paths --models-root "$MODEL_TARGET_PATHS_DIR/models" --audit
-contains "$OUT_DIR/model_target_paths_qwen_audit.out" "target_id: qwen-metal-portability"
+run_ok model_target_paths_qwen_audit "$YVEX_BIN" model-target inspect qwen3-8b --paths --models-root "$MODEL_TARGET_PATHS_DIR/models" --audit
+contains "$OUT_DIR/model_target_paths_qwen_audit.out" "target_id: qwen3-8b"
 contains "$OUT_DIR/model_target_paths_qwen_audit.out" "models_root_source: explicit"
-contains "$OUT_DIR/model_target_paths_qwen_audit.out" "source_path: $MODEL_TARGET_MODELS_ROOT/hf/qwen/qwen-metal-portability"
-contains "$OUT_DIR/model_target_paths_qwen_audit.out" "artifact_path: $MODEL_TARGET_MODELS_ROOT/gguf/qwen/qwen-metal-portability"
+contains "$OUT_DIR/model_target_paths_qwen_audit.out" "source_path: $MODEL_TARGET_MODELS_ROOT/hf/qwen/qwen3-8b"
+contains "$OUT_DIR/model_target_paths_qwen_audit.out" "artifact_path: $MODEL_TARGET_MODELS_ROOT/gguf/qwen/qwen3-8b"
 contains "$OUT_DIR/model_target_paths_qwen_audit.out" "report_dir: $MODEL_TARGET_MODELS_ROOT/reports/qwen"
 contains "$OUT_DIR/model_target_paths_qwen_audit.out" "reference_dir: $MODEL_TARGET_MODELS_ROOT/reference/qwen"
 contains "$OUT_DIR/model_target_paths_qwen_audit.out" "registry_dir: $MODEL_TARGET_MODELS_ROOT/registry"
@@ -1493,21 +1503,21 @@ contains "$OUT_DIR/model_target_paths_qwen_audit.out" "yvex_produced_artifact_st
 contains "$OUT_DIR/model_target_paths_qwen_audit.out" "runtime_execution: unsupported"
 contains "$OUT_DIR/model_target_paths_qwen_audit.out" "generation: unsupported"
 
-run_ok model_target_paths_gemma "$YVEX_BIN" model-target inspect gemma-dense-portability --paths --models-root "$MODEL_TARGET_PATHS_DIR/models"
-contains "$OUT_DIR/model_target_paths_gemma.out" "target: gemma-dense-portability"
-contains "$OUT_DIR/model_target_paths_gemma.out" "source: missing  $MODEL_TARGET_MODELS_ROOT/hf/gemma/gemma-dense-portability"
+run_ok model_target_paths_gemma "$YVEX_BIN" model-target inspect gemma-4-12b-it --paths --models-root "$MODEL_TARGET_PATHS_DIR/models"
+contains "$OUT_DIR/model_target_paths_gemma.out" "target: gemma-4-12b-it"
+contains "$OUT_DIR/model_target_paths_gemma.out" "source: missing  $MODEL_TARGET_MODELS_ROOT/hf/gemma/gemma-4-12b-it"
 contains "$OUT_DIR/model_target_paths_gemma.out" "source_class: official-source-tensors-planned"
-contains "$OUT_DIR/model_target_paths_gemma.out" "artifact: planned  $MODEL_TARGET_MODELS_ROOT/gguf/gemma/gemma-dense-portability"
+contains "$OUT_DIR/model_target_paths_gemma.out" "artifact: planned  $MODEL_TARGET_MODELS_ROOT/gguf/gemma/gemma-4-12b-it"
 contains "$OUT_DIR/model_target_paths_gemma.out" "artifact_class: future-YVEX-produced-GGUF"
 contains "$OUT_DIR/model_target_paths_gemma.out" "reports: $MODEL_TARGET_MODELS_ROOT/reports/gemma"
 contains "$OUT_DIR/model_target_paths_gemma.out" "registry: $MODEL_TARGET_MODELS_ROOT/registry"
 contains "$OUT_DIR/model_target_paths_gemma.out" "boundary: path report only, no runtime execution"
 
-run_ok model_target_paths_gemma_audit "$YVEX_BIN" model-target inspect gemma-dense-portability --paths --models-root "$MODEL_TARGET_PATHS_DIR/models" --audit
-contains "$OUT_DIR/model_target_paths_gemma_audit.out" "target_id: gemma-dense-portability"
+run_ok model_target_paths_gemma_audit "$YVEX_BIN" model-target inspect gemma-4-12b-it --paths --models-root "$MODEL_TARGET_PATHS_DIR/models" --audit
+contains "$OUT_DIR/model_target_paths_gemma_audit.out" "target_id: gemma-4-12b-it"
 contains "$OUT_DIR/model_target_paths_gemma_audit.out" "models_root_source: explicit"
-contains "$OUT_DIR/model_target_paths_gemma_audit.out" "source_path: $MODEL_TARGET_MODELS_ROOT/hf/gemma/gemma-dense-portability"
-contains "$OUT_DIR/model_target_paths_gemma_audit.out" "artifact_path: $MODEL_TARGET_MODELS_ROOT/gguf/gemma/gemma-dense-portability"
+contains "$OUT_DIR/model_target_paths_gemma_audit.out" "source_path: $MODEL_TARGET_MODELS_ROOT/hf/gemma/gemma-4-12b-it"
+contains "$OUT_DIR/model_target_paths_gemma_audit.out" "artifact_path: $MODEL_TARGET_MODELS_ROOT/gguf/gemma/gemma-4-12b-it"
 contains "$OUT_DIR/model_target_paths_gemma_audit.out" "report_dir: $MODEL_TARGET_MODELS_ROOT/reports/gemma"
 contains "$OUT_DIR/model_target_paths_gemma_audit.out" "reference_dir: $MODEL_TARGET_MODELS_ROOT/reference/gemma"
 contains "$OUT_DIR/model_target_paths_gemma_audit.out" "registry_dir: $MODEL_TARGET_MODELS_ROOT/registry"

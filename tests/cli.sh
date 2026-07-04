@@ -31,6 +31,7 @@ run_section integrity-report tests/cli/integrity_report.sh
 run_section artifact-corruption tests/cli/artifact_corruption.sh
 run_section artifact-identity tests/cli/artifact_identity.sh
 run_section artifact-metadata tests/cli/artifact_metadata.sh
+run_section accounts tests/cli/accounts.sh
 run_section materialize tests/cli/materialize.sh
 run_section materialize-gate tests/cli/materialize_gate.sh
 run_section materialization-integrity-gate tests/cli/materialization_integrity_gate.sh

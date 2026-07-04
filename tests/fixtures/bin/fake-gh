@@ -1,0 +1,130 @@
+#!/usr/bin/env sh
+set -eu
+
+log_path=${YVEX_FAKE_GH_LOG:-build/tests/fake-gh.log}
+state_path=${YVEX_FAKE_GH_STATE:-build/tests/fake-gh.auth}
+mkdir -p "$(dirname "$log_path")"
+
+{
+  printf 'fake-gh argv:\n'
+  for arg in "$@"; do
+    printf '  %s\n' "$arg"
+  done
+} >> "$log_path"
+
+if [ "$#" -ge 2 ] && [ "$1" = "auth" ]; then
+  case "$2" in
+    status)
+      if [ "${YVEX_FAKE_GH_AUTH:-0}" = "1" ] || [ -f "$state_path" ]; then
+        printf 'github.com account fake-gh-user\n'
+        exit 0
+      fi
+      printf 'fake-gh: not logged in\n' >&2
+      exit 1
+      ;;
+    login)
+      if [ "${YVEX_FAKE_GH_LOGIN_FAIL:-0}" = "1" ]; then
+        printf 'fake-gh: login failed\n' >&2
+        exit 41
+      fi
+      if [ "${YVEX_FAKE_GH_LOGIN_OK:-0}" = "1" ]; then
+        mkdir -p "$(dirname "$state_path")"
+        printf 'fake-gh-user\n' > "$state_path"
+        printf 'fake-gh: login ok\n'
+        exit 0
+      fi
+      printf 'fake-gh: login not allowed by test env\n' >&2
+      exit 40
+      ;;
+    logout)
+      rm -f "$state_path"
+      printf 'fake-gh: logout ok\n'
+      exit 0
+      ;;
+  esac
+fi
+
+if [ "${YVEX_FAKE_GH_FAIL:-0}" = "1" ]; then
+  printf 'fake-gh: requested failure\n' >&2
+  exit 42
+fi
+
+if [ "$#" -lt 3 ] || [ "$1" != "release" ] || [ "$2" != "download" ]; then
+  printf 'fake-gh: expected release download\n' >&2
+  exit 2
+fi
+
+shift 2
+release=latest
+if [ "$#" -gt 0 ] && [ "${1#-}" = "$1" ]; then
+  release=$1
+  shift
+fi
+
+repo=
+pattern=
+dir=
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --repo)
+      [ "$#" -ge 2 ] || exit 2
+      repo=$2
+      shift 2
+      ;;
+    --pattern)
+      [ "$#" -ge 2 ] || exit 2
+      pattern=$2
+      shift 2
+      ;;
+    --dir)
+      [ "$#" -ge 2 ] || exit 2
+      dir=$2
+      shift 2
+      ;;
+    --skip-existing)
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+if [ -z "$repo" ] || [ -z "$pattern" ] || [ -z "$dir" ]; then
+  printf 'fake-gh: --repo, --pattern, and --dir are required\n' >&2
+  exit 2
+fi
+
+mkdir -p "$dir"
+case "$pattern" in
+  *gguf*)
+    printf 'fake gguf asset repo=%s release=%s\n' "$repo" "$release" > "$dir/fake-model.gguf"
+    ;;
+  *safetensors*)
+    python3 - "$dir/model.safetensors" <<'PY'
+import json
+import struct
+import sys
+
+header = {
+    "__metadata__": {"format": "pt"},
+    "embed.weight": {
+        "dtype": "F16",
+        "shape": [1, 2],
+        "data_offsets": [0, 4],
+    },
+}
+blob = json.dumps(header, separators=(",", ":")).encode("utf-8")
+with open(sys.argv[1], "wb") as f:
+    f.write(struct.pack("<Q", len(blob)))
+    f.write(blob)
+    f.write(bytes(4))
+PY
+    ;;
+  *)
+    printf 'fake release asset repo=%s release=%s pattern=%s\n' "$repo" "$release" "$pattern" > "$dir/asset.bin"
+    ;;
+esac
+
+printf 'fake-gh: downloaded repo=%s release=%s dir=%s pattern=%s\n' "$repo" "$release" "$dir" "$pattern"

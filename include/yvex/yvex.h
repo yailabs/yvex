@@ -27,6 +27,7 @@
 #ifndef YVEX_H
 #define YVEX_H
 
+#include <yvex/accounts.h>
 #include <yvex/artifact.h>
 #include <yvex/artifact_identity.h>
 #include <yvex/artifact_integrity.h>
