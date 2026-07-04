@@ -630,7 +630,7 @@ static const char *qwen_source_tail_blockers[] = {
 };
 
 static const char *gemma_source_tail_blockers[] = {
-    "missing-gemma-model-class-profile",
+    "missing-gemma-tensor-role-map",
     "missing-gemma-tensor-map",
     "missing-gemma-tokenizer-map",
     "missing-gemma-output-head-map",
@@ -677,7 +677,7 @@ static const yvex_source_family_profile source_family_profiles[] = {
         "missing-qwen-source-config",
         "missing-qwen-tokenizer-files",
         "missing-qwen-tensor-role-map",
-        "MODEL.CLASS.GEMMA.0",
+        "TENSOR.COLLECTION.QWEN.0",
         qwen_source_tail_blockers,
         sizeof(qwen_source_tail_blockers) / sizeof(qwen_source_tail_blockers[0]),
     },
@@ -710,8 +710,8 @@ static const yvex_source_family_profile source_family_profiles[] = {
         "missing-gemma-native-inventory",
         "missing-gemma-source-config",
         "missing-gemma-tokenizer-files",
-        "missing-gemma-model-class-profile",
-        "MODEL.CLASS.GEMMA.0",
+        "missing-gemma-tensor-role-map",
+        "TENSOR.COLLECTION.QWEN.0",
         gemma_source_tail_blockers,
         sizeof(gemma_source_tail_blockers) / sizeof(gemma_source_tail_blockers[0]),
     },
@@ -2609,7 +2609,8 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
                sample->declared_bytes);
     }
     printf("model_class_profile_status: %s\n",
-           strcmp(options->profile->family_key, "qwen") == 0
+           strcmp(options->profile->family_key, "qwen") == 0 ||
+           strcmp(options->profile->family_key, "gemma") == 0
                ? "command-visible"
                : "missing");
     printf("tensor_map_status: missing\n");

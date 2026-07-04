@@ -87,6 +87,9 @@ make
 ./yvex model-target class-profile qwen3-8b --audit
 ./yvex model-target inspect gemma-4-12b-it
 ./yvex model-target inspect gemma-4-12b-it --paths
+./yvex model-target class-profile gemma-4-12b-it
+./yvex model-target class-profile gemma-4-12b-it --output table
+./yvex model-target class-profile gemma-4-12b-it --audit
 ./yvex model-target decision --help
 ./yvex model-target decision --release v0.1.0 --output table
 ./yvex model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
@@ -124,10 +127,11 @@ make
 ./yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8 --append-demo --read-position 0
 ```
 
-`model-target class-profile qwen3-8b` is header-metadata-only model-class
-evidence. It counts lexical tensor-name patterns from safetensors headers and
-does not map tensor roles, load payloads, execute runtime paths, generate,
-evaluate, benchmark, or mark a release ready.
+`model-target class-profile qwen3-8b` and `model-target class-profile
+gemma-4-12b-it` are header-metadata-only model-class evidence. They count
+lexical tensor-name patterns from safetensors headers and do not map tensor
+roles, load payloads, execute runtime paths, generate, evaluate, benchmark, or
+mark a release ready.
 
 ## Lane 1 — Graph-only regression
 
@@ -547,7 +551,7 @@ Boundary:
 - `materialize-gate`: integrity and gate lanes
 - `metadata`: artifact inspection lanes
 - `model-gate`: integrity and gate lanes
-- `model-target`: model lanes, model target path, Qwen/Gemma source-target profiles, Qwen model-class profile, target decision, and full-runtime candidate reporting lanes, fast regression lane
+- `model-target`: model lanes, model target path, Qwen/Gemma source-target profiles, Qwen/Gemma model-class profiles, target decision, and full-runtime candidate reporting lanes, fast regression lane
 - `models`: source tensor download, artifact registration, and selected prepare lanes
 - `native-weights`: source intake lanes
 - `paths`: configure once lane, fast regression lane, path resolution
