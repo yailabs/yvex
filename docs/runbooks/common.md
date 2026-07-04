@@ -88,6 +88,9 @@ make
 ./yvex model-target tensor-collection qwen3-8b
 ./yvex model-target tensor-collection qwen3-8b --output table
 ./yvex model-target tensor-collection qwen3-8b --audit
+./yvex model-target tensor-map qwen3-8b
+./yvex model-target tensor-map qwen3-8b --output table
+./yvex model-target tensor-map qwen3-8b --audit
 ./yvex model-target inspect gemma-4-12b-it
 ./yvex model-target inspect gemma-4-12b-it --paths
 ./yvex model-target class-profile gemma-4-12b-it
@@ -146,6 +149,12 @@ Q/K/V/O, MLP gate/up/down, normalization, output-head, MoE, tokenizer-sidecar,
 and KV-runtime-state buckets without tensor role mapping, payload loading,
 runtime descriptors, graph consumers, generation, evaluation, or benchmark
 claims.
+
+`model-target tensor-map qwen3-8b` is a header-derived tensor naming map for
+Qwen source tensors. It assigns native names to canonical YVEX role-label
+candidates without payload loading, artifact emission, runtime descriptor
+construction, graph consumption, Metal support, generation, evaluation, or
+benchmark claims.
 
 ## Lane 1 — Graph-only regression
 
@@ -565,7 +574,7 @@ Boundary:
 - `materialize-gate`: integrity and gate lanes
 - `metadata`: artifact inspection lanes
 - `model-gate`: integrity and gate lanes
-- `model-target`: model lanes, model target path, Qwen/Gemma source-target profiles, Qwen/Gemma model-class profiles, target decision, and full-runtime candidate reporting lanes, fast regression lane
+- `model-target`: model lanes, model target path, Qwen/Gemma source-target profiles, Qwen/Gemma model-class profiles, Qwen tensor naming map, target decision, and full-runtime candidate reporting lanes, fast regression lane
 - `models`: source tensor download, artifact registration, and selected prepare lanes
 - `native-weights`: source intake lanes
 - `paths`: configure once lane, fast regression lane, path resolution

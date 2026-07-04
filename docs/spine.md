@@ -31,7 +31,7 @@ Current CUDA state:
   bounded primitive-hardening only; no CUDA full-runtime/generation claim
 
 Active implementation next:
-  V010.MAP.5 - Qwen tensor naming map
+  V010.MAP.1 - dense tensor naming map
 
 Current release target:
   v0.1.0 - first honest full-runtime path
@@ -43,7 +43,7 @@ Primary pressure targets:
   Gemma source/model-class/tensor-collection profile
 
 Main v0.1.0 blocker:
-  Qwen tensor naming map remains missing
+  Dense tensor naming map remains missing
 ```
 
 | Field | Current value |
@@ -62,7 +62,7 @@ Main v0.1.0 blocker:
 | Full model generation | unsupported |
 | DeepSeek generation | unsupported |
 | Eval/benchmark | unsupported / not measured |
-| Active next | V010.MAP.5 |
+| Active next | V010.MAP.1 |
 
 ## 1. Spine Nomenclature
 
@@ -125,10 +125,10 @@ official source tensors
 
 | Stage | Purpose | Current stage | Implemented? | Current proof | Next gap |
 | --- | --- | --- | --- | --- | --- |
-| official source tensors | upstream source authority | source-intake/report-only | partial | target records, source manifests, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, source manifest/provenance hardening, `yvex models download` source-intake sidecars, live download progress, provider account preflight, backend-neutral source target identity, Qwen/Gemma model-class profiles, and Qwen/Gemma header-only tensor collection inventories | tensor role mapping |
+| official source tensors | upstream source authority | source-intake/report-only | partial | target records, source manifests, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, source manifest/provenance hardening, `yvex models download` source-intake sidecars, live download progress, provider account preflight, backend-neutral source target identity, Qwen/Gemma model-class profiles, Qwen/Gemma header-only tensor collection inventories, and Qwen tensor naming map | dense tensor naming map |
 | source manifest | provenance and source footprint | implemented | yes | `yvex source-manifest` | larger source coverage |
 | native tensor inventory | source tensor directory without payload loading | implemented | yes | `yvex native-weights` | huge shard indexing |
-| tensor mapping | map source/artifact tensor names to YVEX roles | partial/report-only | partial | tensor-map and family-runtime reports | Qwen tensor naming map |
+| tensor mapping | map source/artifact tensor names to YVEX roles | partial/report-only | partial | tensor-map, family-runtime reports, and Qwen header-only tensor naming map | dense tensor naming map |
 | artifact production | produce controlled or selected GGUF | selected-slice | partial | controlled/selected GGUF emission | full-runtime artifact production |
 | artifact identity/integrity | digest, range, shape/dtype, corruption refusal | implemented | yes | integrity reports and tests | full-runtime artifact gate |
 | model-family mapping | family adapter facts and blockers | report-only | partial | `yvex fullmodel family-runtime` | dense/output/tokenizer class facts |
@@ -161,7 +161,7 @@ official source tensors
 | MoE | embedding -> norm -> attention -> router -> expert selection -> dispatch -> accumulation -> output head -> logits -> sampling -> generation | report-only complete / runtime planned | v0.1.0 target decision / full-runtime artifact path |
 | source-only | source/intake/storage/model-class only | GLM pressure lane | source inventory / storage stream |
 | selected-runtime-slice | parser/materialization/partial graph/diagnostic runtime only | DeepSeek selected artifacts | does not close full runtime |
-| Metal/Qwen | backend portability lane | report-only pressure lane | V010.MAP.5 Qwen tensor naming map |
+| Metal/Qwen | backend portability lane | report-only pressure lane | Qwen artifact contract and Metal backend feasibility after mapping gates |
 
 ## 3. Current Implementation State
 
@@ -191,6 +191,7 @@ operator-readable state.
 | Qwen source target profile | report-only | yes | `yvex model-target inspect qwen3-8b` | not source download, source manifest creation, artifact emission, runtime, Metal, generation, eval, or benchmark |
 | Qwen model-class profile | report-only | yes | `yvex model-target class-profile qwen3-8b --audit` | not tensor payload loading, tensor role mapping, artifact emission, runtime, Metal, generation, eval, benchmark, throughput, or release readiness |
 | Qwen tensor collection inventory | report-only | yes | `yvex model-target tensor-collection qwen3-8b --audit` | not tensor payload loading, tensor role mapping, artifact emission, runtime descriptor construction, graph consumption, Metal, generation, eval, benchmark, throughput, or release readiness |
+| Qwen tensor naming map | report-only | yes | `yvex model-target tensor-map qwen3-8b --audit` | not tensor payload loading, not complete runtime role coverage, no artifact emission, no runtime descriptor construction, no graph consumption, no Metal support, no generation, eval, benchmark, throughput, or release readiness |
 | Gemma source pressure report | report-only | yes | `yvex source-manifest report --family gemma --release v0.1.0` | not source download, artifact emission, runtime, generation, eval, or benchmark |
 | Gemma source target profile | report-only | yes | `yvex model-target inspect gemma-4-12b-it` | not source download, source manifest creation, artifact emission, runtime, generation, eval, or benchmark |
 | Gemma model-class profile | report-only | yes | `yvex model-target class-profile gemma-4-12b-it --audit` | not tensor payload loading, tensor role mapping, artifact emission, runtime, generation, eval, benchmark, throughput, or release readiness |
@@ -280,7 +281,7 @@ no evaluation, no benchmark, and no throughput claim.
 | selected-runtime-slice | DeepSeek selected embed / embed+RMSNorm | implemented selected-slice proofs | not full runtime |
 | huge source/storage | GLM-5.2 official safetensors | source/storage pressure lane | no GLM execution |
 | future portability | Qwen/Metal | source-target-profiled pressure lane | no Metal/Qwen runtime |
-| full-runtime model | v0.1.0 selected target | blocked-no-source-backed-candidate | Qwen target/profile/source-pressure rows are report-only; source family/profile, manifest, inventory, model-class, tensor-map, artifact, and runtime evidence remain missing |
+| full-runtime model | v0.1.0 selected target | blocked-no-source-backed-candidate | Qwen target/profile/source-pressure/tensor-map rows are report-only; dense tensor map, artifact, and runtime evidence remain missing |
 
 ## CLI Output UX Doctrine
 
@@ -571,11 +572,11 @@ lanes; rows are the delivery units that complete track work.
 | Track ID | Track name | Owns | Current status | Implemented evidence | Next gap | Active / Later |
 | --- | --- | --- | --- | --- | --- | --- |
 | TRACK.TARGET | Target selection and pressure objects | target classes and release target decision | source-target-profiled | target registry, path reports, `yvex model-target decision`, `yvex model-target candidate`, `yvex model-target dense-candidate`, `yvex model-target qwen-metal`, `yvex model-target inspect qwen3-8b`, and `yvex model-target inspect gemma-4-12b-it` | full-runtime target selection remains blocked | active |
-| TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory, Qwen/Gemma source pressure reports, Qwen/Gemma source target profiles, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, source manifest/provenance hardening, provider account preflight, Hugging Face/GitHub source auth boundary, models download source-intake lane, and Qwen/Gemma header-only collection handoff | Qwen tensor naming map handoff | active |
+| TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory, Qwen/Gemma source pressure reports, Qwen/Gemma source target profiles, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, source manifest/provenance hardening, provider account preflight, Hugging Face/GitHub source auth boundary, models download source-intake lane, Qwen/Gemma header-only collection handoff, and Qwen tensor naming map handoff | dense tensor naming map handoff | active |
 | TRACK.ARTIFACT | Artifact production | YVEX-produced GGUF and conversion plan | selected-slice | controlled/selected GGUF emission | full-runtime artifact production | later |
 | TRACK.INTEGRITY | Artifact identity and gates | digest/ranges/corruption/materialization gates | implemented | integrity harness and reports | full-runtime gate coverage | active |
 | TRACK.MODEL | Model class and runtime routing | dense/MoE/source-only/selected-slice class reports | partial/report-only | family-runtime, attention, KV, context, MoE reports | final runtime route and dense/output/tokenizer class gaps | active |
-| TRACK.TENSOR | Tensor collections | embedding, norm, attention, MLP/MoE, output, tokenizer roles | partial/report-only | fullmodel descriptor/report, MoE tensor-collection report, and Qwen/Gemma header-only tensor collection inventories | Qwen tensor naming map / canonical tensor role mapping | active |
+| TRACK.TENSOR | Tensor collections | embedding, norm, attention, MLP/MoE, output, tokenizer roles | partial/report-only | fullmodel descriptor/report, MoE tensor-collection report, Qwen/Gemma header-only tensor collection inventories, and Qwen tensor naming map | dense tensor naming map / canonical tensor role mapping | active |
 | TRACK.STORAGE | Storage stream | shard index, cold/warm reads, byte ranges, cache policy | planned | doctrine/plans | shard and read probes | later |
 | TRACK.RESIDENCY | Residency | resident/staged/hybrid placement and movement | report-only | placement plans | staged residency proof | later |
 | TRACK.BACKEND | Backend capability | CPU/CUDA/future Metal/ROCm operations and memory reports | partial | CPU/CUDA probes, movement, parity tests, and `CUDA.KERNEL.0` primitive hardening | capability matrix | active |
@@ -591,7 +592,7 @@ lanes; rows are the delivery units that complete track work.
 | TRACK.TOKENIZER | Tokenizer and stop policy | detokenization, EOS, stop tokens, prompt boundary | partial/planned | tokenizer diagnostics | tokenizer-backed stop behavior | later |
 | TRACK.GENERATION | Generation runtime | decode/logits/sample/append/stop/cleanup | diagnostic-runtime | `yvex generate` | full-runtime generation | later |
 | TRACK.RUNTIME | Runtime lifecycle and trace | lifecycle, cancellation, trace, failure preservation | diagnostic-runtime | generate trace/cancel/cleanup | external interruption/runtime trace | later |
-| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output UX doctrine, normal/audit baseline, diagnostic output demotion, compact report/table output, and Qwen/Gemma source profile surfaces | V010.CLI.20-24 polish / V010.MAP.5 handoff | active |
+| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output UX doctrine, normal/audit baseline, diagnostic output demotion, compact report/table output, and Qwen/Gemma source profile surfaces | V010.CLI.20-24 polish / V010.MAP.1 handoff | active |
 | TRACK.SERVE | Serving | daemon state, provider endpoints, streaming | planned | status shell | runtime-backed generation endpoint | later |
 | TRACK.EVAL | Evaluation | fixture/runtime/generation/capability eval | planned | tests only | eval over generation path | later |
 | TRACK.BENCH | Benchmark/profile | reproducible performance measurement | planned | doctrine only | measured runtime harness | later |
@@ -633,12 +634,13 @@ Main blockers:
   Qwen/Metal is visible as a reduced-scale pressure lane, Qwen and Gemma source
   pressure are command-visible, and `qwen3-8b` plus
   `gemma-4-12b-it` are concrete backend-neutral source target profiles, and
-  Qwen/Gemma model-class profiles and header-only tensor collection inventories
-  are command-visible; tensor maps, artifacts, backend residency,
-  graph/runtime, eval, and benchmark facts are still missing.
+  Qwen/Gemma model-class profiles, header-only tensor collection inventories,
+  and Qwen tensor naming map are command-visible; dense tensor naming map,
+  artifacts, backend residency, graph/runtime, eval, and benchmark facts are
+  still missing.
 
 Next possible row:
-  V010.MAP.5.
+  V010.MAP.1.
 
 Boundary:
   a target is not a capability claim.
@@ -662,7 +664,8 @@ Current evidence:
   `yvex models download qwen3-8b --models-root DIR --audit`,
   `yvex source-manifest report --family qwen --release v0.1.0`,
   `yvex source-manifest report --family gemma --release v0.1.0`,
-  `yvex model-target inspect qwen3-8b`, and
+  `yvex model-target inspect qwen3-8b`,
+  `yvex model-target tensor-map qwen3-8b --audit`, and
   `yvex model-target inspect gemma-4-12b-it`; source reports expose
   manifest expectation/path/status, shallow schema/family/target consistency,
   manifest sub-status fields, and no-create/no-remote/no-hash/no-payload
@@ -672,10 +675,10 @@ v0.1.0 rows:
   V010.SOURCE.*, OWI.*.
 
 Main blockers:
-  Tensor-role mapping.
+  Dense tensor naming map.
 
 Next possible row:
-  V010.MAP.5.
+  V010.MAP.1.
 
 Note:
   `OWI.TARGETS.QWEN.0` is the existing Qwen-specific source-target profile row
@@ -694,7 +697,8 @@ Note:
   stale-local-state cleanup for source downloads;
   `V010.SOURCE.7B / ACCOUNTS.PROVIDER.0` completed local provider account
   preflight for Hugging Face and GitHub; `TENSOR.COLLECTION.QWEN.0` and
-  `TENSOR.COLLECTION.GEMMA.0` completed header-only collection handoff.
+  `TENSOR.COLLECTION.GEMMA.0` completed header-only collection handoff; and
+  `V010.MAP.5` completed Qwen header-only tensor naming map.
 
 Boundary:
   source inventory is not model execution.
@@ -1225,10 +1229,10 @@ v0.1.0 rows:
   V010.CLI.*, V010.OPERATOR.*.
 
 Main blockers:
-  Qwen tensor naming map remains missing.
+  Dense tensor naming map remains missing.
 
 Next possible row:
-  V010.MAP.5.
+  V010.MAP.1.
 
 Boundary:
   operator presets compose lower behavior only.
@@ -4397,7 +4401,7 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 ## 7. Active Next
 
 ```text
-V010.MAP.5 - Qwen tensor naming map
+V010.MAP.1 - dense tensor naming map
 ```
 
 `SPINE.OUTPUT.UX.CONTRACT.0` is complete as a docs/control row. It defines the
@@ -4487,7 +4491,7 @@ runtime_claim: unsupported
 generation: unsupported-full-model
 benchmark_status: not-measured
 release_ready: false
-next_required_rows: V010.MAP.5
+next_required_rows: V010.MAP.1
 ```
 
 The current DeepSeek selected artifacts remain pressure targets for parser,
@@ -4705,10 +4709,26 @@ artifacts, materialize tensors, execute runtime paths, run CUDA/Metal model
 runtime, generate, evaluate, benchmark, claim throughput, or mark a release
 ready.
 
-Active Next is now the Qwen tensor naming map lane:
+Completed tensor-map row:
 
 ```text
 V010.MAP.5 - Qwen tensor naming map
+```
+
+`V010.MAP.5` adds `yvex model-target tensor-map qwen3-8b` as a
+header-derived Qwen tensor naming map. It assigns native source tensor names to
+canonical YVEX role labels for embedding, attention Q/K/V/O, MLP gate/up/down,
+normalization, output head, and MoE-observed candidates while preserving
+lexical-and-header-only validation, incomplete runtime role coverage, and
+explicit no-artifact/no-runtime-descriptor/no-graph/no-generation/no-benchmark
+boundaries. It does not load tensor payloads, emit artifacts, materialize
+tensors, attach backend residency, feed graph consumers, run Qwen or Metal
+runtime paths, evaluate, benchmark, claim throughput, or mark a release ready.
+
+Active Next is now the dense tensor naming map lane:
+
+```text
+V010.MAP.1 - dense tensor naming map
 ```
 
 Completed CUDA interlock row:
@@ -4984,6 +5004,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | MODEL.CLASS.GEMMA.0 | complete | model | Gemma model-class profile | Gemma model-class profile is command-visible as a header-metadata-only source profile for `gemma-4-12b-it`, exposing family, target, model-class status, dense runtime-shape candidate, lexical tensor pattern counters, evidence basis, backend pressure as a separate deferred field, and explicit no-role-map/no-runtime/no-generation/no-benchmark boundaries without tensor payload loading, tensor role mapping, model execution, artifact emission, generation, eval, throughput, or release-ready claim |
 | TENSOR.COLLECTION.QWEN.0 | complete | tensor-collection | Qwen tensor collection inventory | `yvex model-target tensor-collection qwen3-8b` profiles Qwen source tensor collection candidates from safetensors headers only, grouping embedding, attention Q/K/V/O, MLP gate/up/down, normalization, output-head, MoE, tokenizer-sidecar, and KV runtime-state boundaries without tensor payload loading, tensor role mapping, artifact emission, runtime descriptors, graph consumption, Metal support, generation, eval, benchmark, throughput, or release-ready claim |
 | TENSOR.COLLECTION.GEMMA.0 | complete | tensor-collection | Gemma tensor collection inventory | `yvex model-target tensor-collection gemma-4-12b-it` profiles Gemma source tensor collection candidates from safetensors headers only, grouping embedding, attention Q/K/V/O, MLP gate/up/down, normalization, output-head, MoE, tokenizer-sidecar, and KV runtime-state boundaries without tensor payload loading, tensor role mapping, artifact emission, runtime descriptors, graph consumption, CUDA/Metal model runtime, generation, eval, benchmark, throughput, or release-ready claim |
+| V010.MAP.5 | complete | tensor-map | Qwen tensor naming map | `yvex model-target tensor-map qwen3-8b` maps header-derived Qwen native source tensor names to canonical YVEX role-label candidates for embedding, attention Q/K/V/O, MLP gate/up/down, normalization, output head, and MoE-observed tensors while preserving lexical-and-header-only validation, incomplete runtime role coverage, and explicit no-payload/no-artifact/no-runtime-descriptor/no-graph/no-generation/no-benchmark boundaries |
 | ARTIFACT.QWEN.0 | planned | artifact | Qwen YVEX-produced artifact identity | Qwen YVEX-produced GGUF identity, digest, tensor byte ranges, qtype summary, and registry metadata are recorded without runtime claim |
 | RESIDENCY.METAL.0 | planned | residency | Metal unified-memory residency plan | Qwen tensor collections are assigned planned Apple unified-memory/host-staged/Metal residency classes with memory pressure and unsupported blockers |
 | FULLMODEL.QWEN.0 | planned | model | Qwen full model inventory and placement report | Qwen full artifact tensor inventory, memory budget, collection coverage, backend placement pressure, and runtime blockers are reported without materialization or generation claim |
@@ -6027,19 +6048,20 @@ After `SPINE.OUTPUT.UX.CONTRACT.0`, `V010.CLI.17`, `V010.CLI.18`,
 `MODELS.DOWNLOAD.CONTROL.0`,
 `V010.SOURCE.7B / ACCOUNTS.PROVIDER.0`, `MODEL.TARGET.IDENTITY.0`,
 `MODEL.CLASS.QWEN.0`, `MODEL.CLASS.GEMMA.0`,
-`TENSOR.COLLECTION.QWEN.0`, and `TENSOR.COLLECTION.GEMMA.0`
+`TENSOR.COLLECTION.QWEN.0`, `TENSOR.COLLECTION.GEMMA.0`, and `V010.MAP.5`
 completed,
 Active Next advances to:
 
 ```text
-V010.MAP.5 - Qwen tensor naming map
+V010.MAP.1 - dense tensor naming map
 ```
 
 If any P1 finding remains blocking, Active Next becomes the named follow-up row.
 
 | Condition | Active Next |
 | --- | --- |
-| Qwen and Gemma tensor collection inventories complete while tensor role maps are missing | V010.MAP.5 |
+| Qwen tensor naming map complete while dense tensor naming map is missing | V010.MAP.1 |
+| Qwen and Gemma tensor collection inventories complete while Qwen tensor naming map is missing | V010.MAP.5 |
 | Qwen tensor collection inventory complete while Gemma tensor collection inventory is missing | TENSOR.COLLECTION.GEMMA.0 |
 | Backend-neutral source target identity plus Qwen/Gemma model-class profiles complete while Gemma tensor collection is missing | TENSOR.COLLECTION.GEMMA.0 |
 | Source download/account lanes complete and Qwen tensor collection is complete while Gemma tensor collection is missing | TENSOR.COLLECTION.GEMMA.0 |
@@ -6064,7 +6086,7 @@ Current reconciliation result:
 
 ```text
 Active Next:
-  V010.MAP.5 - Qwen tensor naming map
+  V010.MAP.1 - dense tensor naming map
 
 Reason:
   The first normal operator output baseline and broader diagnostic output
@@ -6082,8 +6104,9 @@ Reason:
   backend-neutral source target identity repair. MODEL.CLASS.QWEN.0 and
   MODEL.CLASS.GEMMA.0 are complete as header-metadata-only model-class
   profiles. TENSOR.COLLECTION.QWEN.0 and TENSOR.COLLECTION.GEMMA.0 are complete
-  as header-only tensor collection inventories; V010.MAP.5 Qwen tensor naming
-  map is the next blocker before artifact and runtime-path work.
+  as header-only tensor collection inventories. V010.MAP.5 is complete as the
+  Qwen header-only tensor naming map; V010.MAP.1 dense tensor naming map is the
+  next blocker before artifact and runtime-path work.
 ```
 
 
@@ -6631,7 +6654,7 @@ It exists to force:
 - Metal backend feasibility;
 - Apple unified-memory residency planning;
 - Qwen source tensor intake;
-- V010.MAP.5 Qwen tensor naming map;
+- completed V010.MAP.5 Qwen tensor naming map;
 - Qwen YVEX-produced artifact identity;
 - selected Qwen materialization;
 - Metal primitive parity;

@@ -183,6 +183,7 @@ Current source/model-family commands include:
 ./yvex model-target inspect qwen3-8b
 ./yvex model-target class-profile qwen3-8b --audit
 ./yvex model-target tensor-collection qwen3-8b --audit
+./yvex model-target tensor-map qwen3-8b --audit
 ./yvex model-target inspect gemma-4-12b-it
 ./yvex model-target class-profile gemma-4-12b-it --audit
 ./yvex model-target tensor-collection gemma-4-12b-it --audit
@@ -207,9 +208,10 @@ families.
 
 `qwen3-8b` names a Qwen source target. It currently carries source target facts,
 a header-metadata-only model-class profile, and a header-only tensor collection
-inventory. Its Metal pressure is recorded as backend pressure because Qwen can
-force future unified-memory and backend lowering questions, but Metal is not
-part of the target identity.
+inventory, plus a header-derived tensor naming map for canonical YVEX role
+label candidates. Its Metal pressure is recorded as backend pressure because
+Qwen can force future unified-memory and backend lowering questions, but Metal
+is not part of the target identity.
 
 `gemma-4-12b-it` names a Gemma source target. It currently carries source
 target facts, a header-metadata-only model-class profile, and a header-only
@@ -217,9 +219,10 @@ tensor collection inventory. Its CPU/CUDA baseline pressure is recorded as
 backend pressure because Gemma can force dense runtime and artifact-shape
 questions, but CUDA is not part of the target identity.
 
-Both lanes still require canonical role mapping, artifact contracts, runtime
+Qwen still requires runtime role validation, artifact contracts, runtime
 descriptors, graph lowering, and runtime execution before family support can be
-claimed.
+claimed. Gemma still requires canonical role mapping before those downstream
+steps can begin.
 
 ## Family Architecture Signature
 
