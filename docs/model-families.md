@@ -1,81 +1,156 @@
 # Model Families
 
-Model-family integration in YVEX is the staged transformation of an upstream tensor set into engine-owned runtime semantics.
+Model-family integration in YVEX is the staged transformation of an upstream
+tensor set into engine-owned runtime semantics.
 
-A family is not a name in a model card. It is an architectural class whose tensors, configuration, tokenizer, attention structure, feed-forward structure, KV semantics, and artifact constraints can be mapped into the YVEX runtime.
+A family is not a name in a model card. It is an architectural class whose
+configuration, tokenizer, tensor names, tensor shapes, attention structure,
+feed-forward structure, KV semantics, and artifact constraints can be mapped
+into YVEX runtime roles. A model family becomes executable only after those
+roles are present in an artifact, admitted by integrity checks, placed by a
+residency plan, consumed by graph lowering, and used by prefill, KV, decode,
+logits, sampling, and generation code.
 
-The central classification is dense versus sparse. Dense and sparse models share the early source and artifact stages, but they diverge at tensor role mapping, graph lowering, residency planning, execution semantics, and promotion criteria. A dense decoder path is fixed for every token. A sparse or MoE path is conditional: routing selects the expert subgraph that participates in each token step.
-
-Operational commands belong in model-specific runbooks. Artifact facts belong in artifact cards. Performance belongs in benchmark records. This file defines the architectural contract that sits before those concrete surfaces.
+This document is the technical architecture contract for family integration. It
+does not record delivery rows, active-next decisions, release gates, command
+proof history, or implementation ledgers. Those belong in the internal spine.
 
 ## Integration Thesis
 
 YVEX integrates models from tensors upward.
 
-The source tensor set is the first architectural boundary. From that boundary, the engine derives inventory, classification, role mapping, artifact constraints, runtime descriptors, residency requirements, graph requirements, and execution state.
-
 ```text
 source tensor set
+  -> source/config/tokenizer evidence
   -> native tensor inventory
-  -> family classification
+  -> family architecture signature
+  -> tensor collection candidates
   -> canonical role mapping
   -> artifact contract
   -> artifact identity and integrity
   -> runtime descriptor
   -> residency plan
-  -> materialization
+  -> backend lowering
   -> graph lowering
-  -> runtime state
-  -> generation path
+  -> prefill and KV
+  -> decode
+  -> logits
+  -> sampling
+  -> generation
 ```
 
-A model is not integrated because the repository knows its name. It is integrated only when YVEX can explain how its native tensors become runtime roles, how those roles become backend-resident objects, how graph execution consumes them, and how the resulting state participates in prefill, KV, decode, logits, sampling, and generation.
+A model is not integrated because YVEX knows its repository name. It is
+integrated only when YVEX can explain how native tensors become canonical
+roles, how those roles become backend-resident objects, how graph execution
+consumes them, and how the resulting state participates in the runtime path.
 
-The promotion path is therefore evidence-based. Every stage must leave behind a checkable artifact: an inventory, a role map, a descriptor, a materialization report, a graph proof, a runtime proof, or a benchmark record.
+Operational transcripts belong in runbooks. Artifact cards describe concrete
+files. Benchmark records describe measurements. This file defines the
+architecture that must be true before any of those surfaces can claim model
+behavior.
 
 ## Architectural Invariants
 
-The following invariants hold for all model families.
-
-| Invariant                          | Meaning                                                                                                    |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Source precedes artifact           | Native tensors and configuration must be understood before a runtime artifact can be trusted.              |
-| Classification precedes mapping    | Dense, sparse, hybrid, multimodal, or source-only class must be known before canonical roles are assigned. |
-| Role mapping precedes descriptor   | A runtime descriptor cannot be valid if native tensors are not mapped to canonical engine roles.           |
-| Artifact contract precedes support | A valid file format is not enough; the artifact must satisfy the family-specific runtime contract.         |
-| Integrity precedes residency       | Tensor ranges, shapes, dtypes, and metadata must be checked before backend allocation or transfer.         |
-| Residency precedes execution       | Graph execution consumes backend-resident state, not abstract tensor names.                                |
-| Graph proof precedes runtime claim | A mapped tensor set is not runtime support until the corresponding graph path executes.                    |
-| KV proof precedes decode           | Decode is not supported until real attention-backed KV state is written and read by the runtime.           |
-| Generation precedes evaluation     | Capability evaluation only has meaning once generation uses the same runtime path users run.               |
-| Benchmark follows measured runtime | Hardware fit, estimated memory, or command shape is not a benchmark.                                       |
-
-These invariants prevent model-family study from turning into unsupported runtime claims.
+| Invariant | Meaning |
+| --- | --- |
+| Source precedes artifact | Native tensors, config, and tokenizer facts must be understood before a runtime artifact can be trusted. |
+| Identity is backend-neutral | A model target names a model/source object, not CUDA, Metal, CPU, hardware, benchmark, or future execution. |
+| Classification precedes mapping | Dense, sparse, MoE, hybrid, multimodal, source-only, or selected-slice class must be known before canonical roles are assigned. |
+| Collection validation precedes role mapping | Lexical tensor names are not enough; layer, shape, dtype, shard, and family rules must be consistent. |
+| Role mapping precedes descriptor | A runtime descriptor cannot be valid if native tensors are not mapped to canonical engine roles. |
+| Artifact contract precedes support | GGUF validity is not enough; the artifact must satisfy family-specific runtime requirements. |
+| Integrity precedes residency | Tensor ranges, shapes, dtypes, qtypes, and metadata must be checked before backend allocation or transfer. |
+| Residency precedes execution | Graph execution consumes resident runtime state, not abstract tensor names. |
+| Graph proof precedes runtime claim | A mapped tensor set is not runtime support until the corresponding graph path executes. |
+| KV proof precedes decode | Decode waits for real attention-backed KV writes and reads, not diagnostic KV alone. |
+| Generation precedes evaluation | Capability evaluation only has meaning once generation uses the same runtime path users run. |
+| Benchmark follows measured runtime | Hardware fit, shape estimates, or primitive tests are not throughput evidence. |
 
 ## Canonical Objects
 
-YVEX separates the architectural objects involved in model integration.
+| Object | Definition |
+| --- | --- |
+| Model family | A repeated architecture pattern: tensor naming, block grammar, tokenizer behavior, attention layout, FFN/MoE structure, KV semantics, and runtime expectations. |
+| Model target | A concrete model/source instance inside a family, with size, source location, revision, tokenizer, config, license, and expected artifact class. |
+| Backend pressure | A field describing which backend questions a target stresses. It is not target identity. |
+| Source tensor set | The upstream tensor collection before YVEX conversion or artifact production. |
+| Native tensor inventory | Header/config-level listing of native names, shapes, dtypes, shards, config facts, and tokenizer files. |
+| Architecture signature | The structured family/target facts required before role mapping and runtime planning can be meaningful. |
+| Tensor collection | A group of native tensors that appear to implement one architectural role family, such as attention, FFN, MoE experts, output, or tokenizer state. |
+| Canonical role map | Mapping from native tensor names into YVEX runtime roles with layer/expert/shape/dtype semantics preserved. |
+| Artifact contract | The metadata, tensor coverage, layout, qtype policy, tokenizer facts, and integrity rules required for a YVEX runtime artifact. |
+| Runtime descriptor | The canonical model description derived from artifact facts and role mapping. |
+| Residency plan | Backend placement for weights, KV, scratch, experts, streamed tensors, output state, and cleanup. |
+| Backend lowering | Translation from canonical roles and graph operations into backend-specific memory, launch, synchronization, and kernel behavior. |
+| Graph lowering | Translation from descriptor facts into executable graph operations. |
+| Runtime support | Execution through the real path: prefill, KV, decode, logits, sampling, and generation. |
 
-| Object                  | Definition                                                                                                                                                         |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Model family            | A repeated architectural pattern: tensor naming, block structure, tokenizer behavior, attention layout, FFN/MoE structure, KV semantics, and runtime expectations. |
-| Model target            | A specific model instance inside a family, with size, source location, revision, tokenizer, config, license, and expected hardware class.                          |
-| Source tensor set       | The upstream tensor collection before YVEX conversion or artifact production.                                                                                      |
-| Native tensor inventory | A checked listing of native names, shapes, dtypes, shards, config facts, and tokenizer files.                                                                      |
-| Family classification   | The architectural class assigned to the target: dense, sparse/MoE, hybrid, multimodal, source-only, selected-slice, or unsupported.                                |
-| Canonical role map      | The mapping from native tensor names into YVEX runtime roles.                                                                                                      |
-| Artifact contract       | The metadata, tensor coverage, layout, qtype policy, tokenizer facts, and integrity rules required for a runtime artifact.                                         |
-| Runtime descriptor      | The canonical model description derived from artifact facts and role mapping.                                                                                      |
-| Residency plan          | The backend placement plan for weights, KV, scratch, experts, streamed tensors, and output state.                                                                  |
-| Materialization proof   | Evidence that required tensors can become backend-resident under the selected placement policy.                                                                    |
-| Graph lowering          | Translation from descriptor facts into executable graph operations.                                                                                                |
-| Runtime support         | Execution through the real path: prefill, KV, decode, logits, sampling, and generation.                                                                            |
+A family may be classified without an artifact. An artifact may exist without
+runtime support. A descriptor may exist without materialization. A selected
+graph slice may execute without full model execution. These are distinct
+architectural states.
 
-A family may be classified without an artifact. An artifact may exist without runtime support. A runtime descriptor may exist without materialization. A selected graph slice may execute without full generation. These are distinct architectural states.
+## Model Identity vs Backend Pressure
+
+Backend is an execution decision, not model identity.
+
+| Layer | Example | Meaning | Not |
+| --- | --- | --- | --- |
+| Family | Qwen | Architecture family | Backend |
+| Target | `qwen3-8b` | Concrete model/source target | Runtime support |
+| Artifact | `qwen3-8b` YVEX GGUF | Produced runtime container | Generation |
+| Backend | CUDA / Metal / CPU | Execution implementation | Model identity |
+| Hardware profile | Spark / Apple Silicon | Machine pressure | Backend support |
+
+A target id must not encode CUDA, Metal, CPU, hardware, runtime, benchmark, or
+future execution path. Backend pressure can be recorded as a field because it
+affects future artifact, qtype, residency, graph, and kernel decisions. It must
+not replace model identity.
+
+Correct split:
+
+```text
+target_id: qwen3-8b
+family: Qwen
+backend_selection: deferred
+backend_pressure: metal-planned
+runtime_claim: unsupported
+generation: unsupported-full-model
+benchmark_status: not-measured
+```
+
+```text
+target_id: gemma-4-12b-it
+family: Gemma
+backend_selection: deferred
+backend_pressure: cpu-cuda-baseline-planned
+runtime_claim: unsupported
+generation: unsupported-full-model
+benchmark_status: not-measured
+```
+
+Qwen can force Metal portability questions. Gemma can force smaller dense
+runtime questions. Neither target id should carry those backend decisions.
+
+## GGUF Artifact Container
+
+GGUF is the runtime artifact container. It is not CUDA identity. It is not
+Metal identity. It is not generation.
+
+A YVEX-produced GGUF should remain backend-neutral where possible. Backend
+feasibility is decided by qtype support, tensor layout, residency, backend op
+coverage, graph lowering, and runtime execution. A backend may impose artifact
+constraints later, but those constraints must be stated as artifact/qtype/layout
+requirements, not as model identity.
+
+A structurally valid GGUF can still fail the model-family artifact contract if
+required roles are missing, qtypes are unsupported, tokenizer metadata is
+incomplete, or graph lowering has no consumer.
 
 ## Source Tensor Boundary
 
-The source tensor boundary records the model before YVEX gives it runtime meaning.
+The source tensor boundary records the model before YVEX gives it runtime
+meaning.
 
 Required source facts include:
 
@@ -98,179 +173,158 @@ MoE configuration when present
 license posture
 ```
 
-The source tensor boundary is read-only. It does not imply conversion, artifact production, materialization, graph execution, or support.
+The source tensor boundary is read-only. It does not imply conversion, artifact
+production, materialization, graph execution, or runtime support. Its purpose is
+to prevent later runtime claims from floating above unexamined model bytes.
 
-Its purpose is to prevent later runtime claims from floating above unexamined model bytes.
+Current source/model-family commands include:
+
+```sh
+./yvex model-target inspect qwen3-8b
+./yvex model-target class-profile qwen3-8b --audit
+./yvex model-target inspect gemma-4-12b-it
+./yvex source-manifest report --family qwen --release v0.1.0 --audit
+./yvex source-manifest report --family gemma --release v0.1.0 --audit
+./yvex models download qwen3-8b --models-root "$HOME/lab/models" --auth auto --audit
+./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --auth auto --audit
+```
+
+Detailed operator flow belongs in runbooks. Model Families owns architecture.
+
+Source download reports, receipts, manifests, and header-only inventories are
+source-intake evidence. They do not verify upstream identity by themselves, hash
+payloads, load tensor payload bytes, emit GGUF, register runtime artifacts,
+materialize tensors, execute runtime paths, generate, evaluate, benchmark, or
+mark a release ready.
 
 ## Qwen And Gemma Source Pressure
 
 Qwen and Gemma are backend-neutral source-pressure lanes, not supported runtime
-lanes. Backend pressure is reported separately from model/source target
-identity. The current command-visible source surface is:
+families.
 
-```sh
-./yvex model-target list
-./yvex model-target inspect qwen3-8b
-./yvex model-target inspect qwen3-8b --paths
-./yvex model-target class-profile qwen3-8b
-./yvex model-target class-profile qwen3-8b --output table
-./yvex model-target class-profile qwen3-8b --audit
-./yvex model-target inspect gemma-4-12b-it
-./yvex model-target inspect gemma-4-12b-it --paths
-./yvex accounts status --audit
-./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --dry-run --auth never --audit
-./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --auth auto --audit
-./yvex models download status gemma-4-12b-it --models-root "$HOME/lab/models" --audit
-./yvex models download stop gemma-4-12b-it --models-root "$HOME/lab/models" --audit
-./yvex models download resume gemma-4-12b-it --models-root "$HOME/lab/models" --auth auto --audit
-./yvex models download cleanup gemma-4-12b-it --models-root "$HOME/lab/models" --stale-locks --dry-run --audit
-./yvex models download qwen3-8b --models-root "$HOME/lab/models" --auth auto --audit
-./yvex models download --provider github --repo OWNER/REPO --release TAG --asset "*.gguf" --models-root "$HOME/lab/models" --auth auto --audit
-./yvex source-manifest report --family qwen --release v0.1.0
-./yvex source-manifest report --family qwen --release v0.1.0 --output table
-./yvex source-manifest report --family qwen --release v0.1.0 --audit
-./yvex source-manifest report --family gemma --release v0.1.0
-./yvex source-manifest report --family gemma --release v0.1.0 --output table
-./yvex source-manifest report --family gemma --release v0.1.0 --audit
-```
+`qwen3-8b` names a Qwen source target. It currently carries source target facts
+and a header-metadata-only model-class profile. Its Metal pressure is recorded
+as backend pressure because Qwen can force future unified-memory and backend
+lowering questions, but Metal is not part of the target identity.
 
-`accounts` is the local provider account boundary. It observes Hugging Face and
-GitHub CLI availability, invokes provider-owned login/status commands, and
-writes only non-secret local account state. `models download` is the
-source-intake lane. It uses that provider preflight with
-`--auth auto|required|never`, then runs the installed Hugging Face CLI for
-catalog/direct Hugging Face sources or the GitHub CLI for release assets. It
-stores source trees under `<models_root>/hf/<family>` or GitHub release assets
-under `<models_root>/github/<owner>/<repo>/<release>`, and writes
-token-redacted receipts, logs, a download report, a download registry sidecar,
-a source manifest, and a header-only native inventory. Catalog rows are routing
-defaults, not upstream identity proof. The lane does not store raw tokens,
-perform remote identity verification, hash payloads, load tensor payload bytes,
-emit GGUF, register runtime artifacts, materialize tensors, execute runtime
-paths, generate, evaluate, benchmark, or mark a release ready.
+`gemma-4-12b-it` names a Gemma source target. It currently carries source target
+facts and the next dense-family profiling pressure. Its CPU/CUDA baseline
+pressure is recorded as backend pressure because Gemma can force dense runtime
+and artifact-shape questions, but CUDA is not part of the target identity.
 
-`models download status|stop|resume|cleanup` is the local control surface for
-that same source-intake lane. Status performs no network access, reports active
-and last receipts, live provider process state, locks, logs, source footprint,
-and header-only safetensors size status. Stop targets YVEX-owned provider
-process groups and preserves partial source files and logs. Resume reuses the
-same source directory and blocks on active provider processes or stale locks
-unless stale-lock cleanup is explicit. Cleanup is explicit and refuses lock
-deletion while a provider process is alive. These commands do not verify source
-identity, hash payloads, load tensor payloads, emit artifacts, materialize
-tensors, execute runtime paths, generate, evaluate, benchmark, or imply Qwen or
-Gemma support.
+Both lanes still require model-class facts, tensor collection validation,
+canonical role mapping, artifact contracts, runtime descriptors, graph
+lowering, and runtime execution before family support can be claimed.
 
-`qwen3-8b` is a source-target profile only. It names the Qwen model/source
-target, the `<models_root>/hf/qwen/qwen3-8b` source path convention, official
-source tensor expectation, and future-YVEX-produced-GGUF artifact class.
-Backend selection is deferred; Metal pressure is reported separately as
-`backend_pressure: metal-planned`. It is pending source/config verification.
-`model-target class-profile qwen3-8b` reads local safetensors source names,
-preferring a downloaded `<models_root>/hf/qwen/qwen3-8b` source when present
-and otherwise reporting the target source slot or explicit `--source`. It is a
-header-metadata-only model-class profile with lexical tensor-name counters; it
-must not be treated as tensor-role mapping, model execution, artifact emission,
-generation, evaluation, benchmark, or release readiness.
+## Family Architecture Signature
 
-`gemma-4-12b-it` is a source-target profile only. It names the Gemma
-model/source target, the `<models_root>/hf/gemma/gemma-4-12b-it` source path
-convention, official source tensor expectation, and
-future-YVEX-produced-GGUF artifact class. Backend selection is deferred;
-CPU/CUDA baseline pressure is reported separately as
-`backend_pressure: cpu-cuda-baseline-planned`. It is pending source/config
-verification.
+A family must expose an architecture signature before YVEX can do meaningful
+runtime work.
 
-Source artifact class fields are command-visible in normal/table/audit source
-reports and in target audit reports. The stable values used by these pressure
-lanes include:
+The signature should include:
 
 ```text
-official-source-tensors-planned
-official-safetensors
-official-safetensors-huge
-official-config-tokenizer-sidecars
-YVEX-produced-selected-GGUF
-future-YVEX-produced-GGUF
-external-GGUF-reference
-external-runner-reference
-unknown-source-artifact
+family name
+target id
+source repository or local source path
+source/config status
+tokenizer status
+architecture class
+decoder class
+dense/sparse/MoE class
+layer count
+hidden size
+intermediate size
+attention type
+number of attention heads
+number of KV heads
+head dimension
+position mechanism
+context length
+normalization type
+MLP type
+MoE presence
+expert count
+active expert count
+shared expert policy
+output head policy
+tokenizer policy
+qtype/dtype constraints
+backend pressure
+runtime blockers
 ```
 
-These values classify evidence only. They do not claim source readiness,
-artifact emission, runtime support, generation, or benchmark readiness.
-
-Source footprint fields are also command-visible for Qwen and Gemma source
-pressure reports. They count only top-level regular files and byte sizes from
-the configured or explicit source directory. The report classifies
-`.safetensors`, `.bin`, `.dat`, JSON/config/tokenizer sidecars, total bytes,
-sidecar bytes, other bytes, largest file, and footprint class without reading
-tensor payloads, parsing safetensors headers, parsing tokenizer JSON, hashing
-files, creating manifests, or proving provenance.
-
-Source provenance fields are command-visible as classification state only. They
-report whether the source is planned official or a local/explicit path, expose
-authority/status vocabulary, keep revision/commit/tag unknown when not known,
-and report README/LICENSE presence without parsing contents. They do not perform
-remote lookup, hash files, verify upstream identity, create manifests, prove
-source identity, or imply source readiness.
-
-Native safetensors inventory fields are command-visible for Qwen and Gemma as
-header-only source evidence. They open top-level `.safetensors` files, read
-header lengths and JSON header bytes, count tensor records, dtype/rank/shape
-summaries, declared data bytes, and malformed headers, and keep payload bytes
-unloaded. Malformed headers are reported as source evidence, not executed or
-treated as runtime readiness.
-
-Source tensor metadata inventory is also header-derived only. It records tensor
-names, file placement, dtype, rank, shape, element counts, declared byte spans,
-largest tensor metadata, dtype/rank distributions, and lexical name-pattern
-summaries without loading tensor payloads. The name-pattern summary is
-lexical-only; it does not map tensors to runtime roles, infer Qwen or Gemma
-model classes, or imply runtime readiness.
-
-Source manifest/provenance hardening is command-visible for Qwen and Gemma
-source pressure reports. It reports manifest expectation, path/status, shallow
-schema/family/target consistency, manifest sub-status fields, and explicit
-no-create/no-remote/no-hash/no-payload boundaries. It does not create
-manifests, perform remote lookup, hash files, load tensor payloads, prove source
-readiness, infer model classes, or imply runtime readiness.
-
-The report checks only local source-path pressure facts: concrete target slot,
-configured source path, source path existence, config/tokenizer file visibility,
-top-level safetensors presence, top-level source footprint, provenance fields,
-native safetensors inventory, source tensor metadata inventory, source manifest
-status, blockers, and next rows.
-It does not download sources, create source manifests, imply source readiness,
-emit artifacts, materialize tensors, load tensor payloads, implement Metal,
-execute Qwen or Gemma runtime paths, generate, evaluate, benchmark, or mark a
-release ready.
-
-Source family/profile fields, source artifact class fields, source footprint
-fields, source provenance fields, native safetensors inventory, and source
-tensor metadata inventory are command-visible for Qwen and Gemma. Source
-download sidecars can now provide concrete local manifests and native
-inventories; backend-neutral source target identity is now command-visible for
-Qwen and Gemma, while Qwen model-class profile, Gemma model-class profile, and
-tensor-role mapping remain separate future evidence.
+The architecture signature is not inferred from the model name alone. It is
+derived from source/config/tokenizer/tensor metadata and becomes reliable only
+after role mapping and artifact validation. An architecture signature is not
+runtime support.
 
 ## Family Classification
 
 Family classification assigns the model to a runtime class.
 
-The primary classes are:
+| Class | Runtime meaning |
+| --- | --- |
+| Dense decoder | Fixed layer path; every token executes the same attention and dense feed-forward structure. |
+| Sparse / MoE decoder | Shared path plus routed expert path; each token selects a subset of experts. |
+| Hybrid | Architecture combines dense and sparse regions or special non-standard blocks. |
+| Multimodal | Runtime requires non-text input towers, projectors, encoders, or cross-modal state. |
+| Source-only | Source facts can be inspected, but no artifact or runtime path exists. |
+| Selected-slice | A narrow real-tensor slice exists for pressure testing, but not full runtime support. |
+| Unsupported | Required facts or runtime structures are absent or intentionally out of scope. |
 
-| Class                | Runtime meaning                                                                             |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| Dense decoder        | Fixed layer path; every token executes the same attention and dense feed-forward structure. |
-| Sparse / MoE decoder | Shared path plus routed expert path; each token selects a subset of experts.                |
-| Hybrid               | Architecture combines dense and sparse regions or special non-standard blocks.              |
-| Multimodal           | Runtime requires non-text input towers, projectors, encoders, or cross-modal state.         |
-| Source-only          | Source facts can be inspected, but no artifact or runtime path exists.                      |
-| Selected-slice       | A narrow real-tensor slice exists for pressure testing, but not full runtime support.       |
-| Unsupported          | Required facts or runtime structures are absent or intentionally out of scope.              |
+Dense and sparse classification must be explicit. A release line may contain
+both dense and MoE variants; those variants must be treated as separate runtime
+classes even if they share branding, tokenizer lineage, or training family.
 
-Dense and sparse classification must be explicit. A family release line may contain both dense and MoE variants; those variants must be treated as separate runtime classes even if they share branding, tokenizer lineage, or training family.
+## Decoder Block Grammar
+
+YVEX sees a model family as a grammar of required operations.
+
+Dense decoder grammar:
+
+```text
+token embedding
+-> attention norm
+-> Q/K/V projection
+-> position transform
+-> attention score path
+-> softmax/value accumulation
+-> O projection
+-> residual
+-> FFN norm
+-> dense MLP gate/up/down or equivalent
+-> activation
+-> residual
+-> final norm
+-> output head
+```
+
+Sparse/MoE decoder grammar:
+
+```text
+token embedding
+-> attention norm
+-> Q/K/V projection
+-> position transform
+-> attention
+-> O projection
+-> residual
+-> MoE norm
+-> router logits
+-> top-k expert selection
+-> expert dispatch
+-> expert compute
+-> expert accumulation
+-> residual
+-> final norm
+-> output head
+```
+
+The grammar is not executable until native tensor names become canonical roles,
+those roles satisfy an artifact contract, the artifact passes integrity,
+residency is planned, backend op coverage exists, and graph lowering consumes
+the roles.
 
 ## Canonical Tensor Role Space
 
@@ -312,51 +366,176 @@ expert activation policy
 expert accumulation policy
 ```
 
-A tensor role map is valid only if it preserves shape, dtype, layer index, expert index, shard position, and family-specific naming semantics.
+A tensor role map is valid only if it preserves shape, dtype, layer index,
+expert index, shard position, tied-weight semantics, and family-specific naming
+rules. Role mapping is the first point where source tensors become
+engine-addressable runtime structure.
 
-Role mapping is not cosmetic. It is the first point where source tensors become engine-addressable runtime structure.
+## Tensor Collection Promotion
+
+Header metadata becomes runtime structure through a promotion chain:
+
+```text
+lexical pattern counters
+-> candidate collection
+-> validated collection
+-> canonical role map
+-> runtime descriptor
+-> graph consumer
+-> runtime-consumed state
+```
+
+Collection states:
+
+```text
+pattern-observed:
+  tensor names match known lexical patterns.
+
+collection-candidate:
+  tensors appear to belong to a structural group, but shape/layer/expert rules are not fully validated.
+
+collection-validated:
+  names, shapes, dtypes, layer indices, and family rules are consistent.
+
+role-mapped:
+  native tensors are mapped to canonical YVEX roles.
+
+graph-consumable:
+  graph lowering has a consumer for the mapped roles.
+
+runtime-consumed:
+  implemented runtime execution consumes the roles.
+```
+
+The current Qwen model-class profile is lexical/header-metadata-only. It does
+not map roles, validate complete tensor collections, or close runtime support.
+
+## Attention Class Contract
+
+A family attention contract must specify:
+
+```text
+attention class: MHA | MQA | GQA | MLA | family-specific
+Q projection tensor rule
+K projection tensor rule
+V projection tensor rule
+O projection tensor rule
+num_heads
+num_kv_heads
+head_dim
+RoPE or position rule
+RoPE base/scale where known
+causal mask rule
+sliding-window or full-context policy
+KV layout requirement
+prefill write behavior
+decode read behavior
+attention dtype/qtype expectation
+backend primitive requirements
+scratch requirements
+```
+
+A standalone attention primitive is not attention support. A Q/K/V
+name-pattern counter is not role mapping. A role map is not execution. An
+attention report is not full transformer attention.
+
+## KV Semantics Contract
+
+KV is model-family dependent runtime state. Required KV facts include:
+
+```text
+layer count
+attention head count
+KV head count
+head dimension
+position indexing rule
+cache layout
+dtype/qtype
+residency
+capacity
+prefill append/write rule
+decode read rule
+clear/reinit behavior
+overflow behavior
+paged/chunked future policy
+```
+
+Diagnostic KV proves ownership, shape, lifecycle, append/read mechanics, and
+cleanup. Real KV support requires attention-backed K/V writes during prefill
+and decode reads from that same state.
+
+## Feed-Forward Contract
+
+Dense FFN contract:
+
+```text
+gate projection
+up projection
+activation
+elementwise combine
+down projection
+residual
+```
+
+MoE FFN contract:
+
+```text
+router
+expert selection
+expert gate/up/down
+routing weight
+expert output accumulation
+shared expert when present
+residual
+```
+
+A routed expert primitive is not MoE support. MoE support requires router
+logits, top-k selection, expert dispatch, expert execution, accumulation, graph
+integration, runtime state, tests, and command proof.
 
 ## Artifact Contract
 
-The artifact contract defines what a runtime artifact must contain before YVEX can treat it as an executable object.
+The artifact contract defines what a runtime artifact must contain before YVEX
+can treat it as an executable object.
 
 A family-specific artifact contract includes:
 
 ```text
+artifact format
 architecture identifier
 model target identity
-required metadata
-layer count
-hidden size
-attention layout
-head count
-KV head count
-context length
-tokenizer facts
-required tensor collections
-tensor role coverage
-shape constraints
-dtype constraints
-qtype policy
-output-head configuration
-dense or sparse block structure
-integrity requirements
+tokenizer metadata
+required global tensors
+required per-layer tensors
+required per-expert tensors
+qtype policy by role
+dtype policy by role
+tensor ordering
+alignment
+byte-range validity
+shape/rank/dtype constraints
+output-head policy
+KV metadata if stored
+RoPE/position metadata
+source manifest link
+identity/digest status
 support level
 ```
 
-A structurally valid GGUF file is not enough.
+Artifact validity is a contract against runtime requirements, not only file
+format validity.
 
-A known alias is not enough.
-
-A tensor table that parses is not enough.
-
-The artifact must satisfy the role coverage and runtime requirements for the stage being entered. Selected artifacts may satisfy a narrow contract. Full-runtime artifacts must satisfy the complete contract for the chosen family class.
+A structurally valid GGUF file is not enough. A known alias is not enough. A
+tensor table that parses is not enough. The artifact must satisfy the role
+coverage and runtime requirements for the stage being entered. Selected
+artifacts may satisfy a narrow contract. Full-runtime artifacts must satisfy the
+complete contract for the chosen family class.
 
 ## Runtime Descriptor
 
-The runtime descriptor is the bridge from artifact facts to execution requirements.
-
-It is derived after artifact integrity and family mapping. It is not inferred from model name alone.
+The runtime descriptor is the bridge from artifact facts to execution
+requirements. It is derived after artifact integrity and family mapping; it is
+not inferred from model name alone.
 
 A descriptor records:
 
@@ -385,263 +564,50 @@ support state
 blockers
 ```
 
-For dense models, the descriptor describes a fixed layer path.
+For dense models, the descriptor describes a fixed layer path. For sparse
+models, the descriptor also describes routing, expert topology, active expert
+policy, shared expert policy, and expert residency requirements.
 
-For sparse models, the descriptor also describes routing, expert topology, active expert policy, shared expert policy, and expert residency requirements.
+The descriptor does not execute the model. It defines the execution contract
+the runtime must satisfy.
 
-The descriptor does not execute the model. It defines the execution contract the runtime must satisfy.
+## Backend Lowering Contract
 
-## Dense Decoder Class
+Backend lowering is the translation from canonical roles and graph operations
+into backend-specific memory, launch, synchronization, and kernel behavior.
 
-A dense decoder model has a fixed execution path per token.
-
-The canonical dense layer is:
-
-```text
-hidden state
-  -> attention norm
-  -> Q/K/V projection
-  -> position operation
-  -> attention
-  -> O projection
-  -> residual
-  -> feed-forward norm
-  -> dense MLP
-  -> residual
-```
-
-The canonical output path is:
+CUDA lowering concerns:
 
 ```text
-last hidden state
-  -> final norm
-  -> output head
-  -> logits
-  -> sampling
+device allocation
+host-to-device transfer
+resident tensor lifetime
+kernel launch shape
+scratch ownership
+memory coalescing
+shared memory use
+register pressure
+tensor-core eligibility
+fallback policy
+cleanup
 ```
 
-Dense integration requires the following collections.
-
-| Collection       | Required roles                                                                     |
-| ---------------- | ---------------------------------------------------------------------------------- |
-| Embedding        | token embedding                                                                    |
-| Attention        | attention norm, Q, K, V, O                                                         |
-| Position         | RoPE or equivalent position metadata                                               |
-| Feed-forward     | FFN norm, gate/up/down or equivalent dense MLP tensors                             |
-| Output           | final norm, output head                                                            |
-| Tokenizer        | tokenizer model, special tokens, prompt format, EOS and stop facts                 |
-| Runtime metadata | layer count, hidden size, head count, KV head count, context length, qtype profile |
-
-Dense models are the cleanest class for proving the first full-runtime path because they avoid router and expert semantics. The runtime still has to solve attention, KV, dense MLP, output-head logits, sampling, and memory placement, but token execution follows a single fixed graph.
-
-## Dense Promotion Path
-
-Dense promotion follows a fixed path.
+Metal lowering concerns:
 
 ```text
-family classification
-  -> source/config profile
-  -> native tensor inventory
-  -> dense role map
-  -> tokenizer contract
-  -> dense artifact contract
-  -> selected artifact
-  -> selected embedding proof
-  -> selected attention or MLP proof
-  -> full dense layer proof
-  -> full dense prefill
-  -> real KV writes
-  -> real decode reads
-  -> output-head logits
-  -> sampling
-  -> generation
-  -> serving
-  -> evaluation
-  -> benchmark
+buffer allocation
+unified-memory visibility
+command buffer lifecycle
+compute pipeline creation
+threadgroup shape
+resource synchronization
+fallback policy
+cleanup
 ```
 
-Dense promotion must not depend on router, expert indexing, expert dispatch, or expert residency. If those concepts are required, the target is not dense.
-
-## Dense Support States
-
-| State                     | Architectural meaning                                             |
-| ------------------------- | ----------------------------------------------------------------- |
-| dense-source-profiled     | Source and config facts are known.                                |
-| dense-tensor-inventoried  | Native tensors are listed with shape, dtype, and shard facts.     |
-| dense-role-mapped         | Dense roles are mapped into canonical YVEX roles.                 |
-| dense-artifact-contracted | Required dense artifact layout is defined.                        |
-| dense-selected-artifact   | A narrow dense artifact exists.                                   |
-| dense-slice-proven        | A selected dense graph slice executes.                            |
-| dense-layer-proven        | A complete dense transformer layer executes.                      |
-| dense-prefill-proven      | Real dense prefill produces runtime state.                        |
-| dense-kv-proven           | Real attention-backed KV writes and reads work.                   |
-| dense-decode-proven       | Decode advances through real dense runtime state.                 |
-| dense-logits-proven       | Output-head logits are produced.                                  |
-| dense-generation-proven   | Sampling and append loop generate text through the dense runtime. |
-| dense-evaluated           | Capability regression uses the dense runtime path.                |
-| dense-benchmarked         | Prefill and generation throughput are measured.                   |
-
-## Sparse and MoE Class
-
-A sparse or MoE model has a conditional execution path.
-
-A token passes through shared structure, then a router selects one or more experts. The selected experts execute, their outputs are weighted or accumulated, and the result returns to the layer stream.
-
-The canonical sparse layer is:
-
-```text
-hidden state
-  -> attention norm
-  -> Q/K/V projection
-  -> position operation
-  -> attention
-  -> O projection
-  -> residual
-  -> MoE norm
-  -> router logits
-  -> expert selection
-  -> selected expert execution
-  -> expert accumulation
-  -> residual
-```
-
-Sparse integration introduces distinctions that dense integration does not need:
-
-```text
-total parameters
-active parameters
-shared parameters
-routed expert parameters
-resident parameters
-streamed parameters
-executed parameters
-```
-
-These quantities must remain separate. Active parameters describe compute. Total parameters describe artifact size. Resident parameters describe memory pressure. Streamed parameters describe movement policy. Executed parameters describe the actual graph path for a token or batch.
-
-A sparse model is not a dense model with a bigger MLP. It requires router semantics, expert topology, expert selection, expert residency, dispatch, accumulation, and sparse-specific failure modes.
-
-## Sparse Tensor Collections
-
-Sparse models require the dense collections plus MoE-specific collections.
-
-| Collection       | Required roles                                                                                                        |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Embedding        | token embedding                                                                                                       |
-| Attention        | attention norm, Q, K, V, O                                                                                            |
-| Position         | RoPE or equivalent position metadata                                                                                  |
-| Router           | router weight, routing dtype, top-k policy, score normalization                                                       |
-| Experts          | expert gate/up/down tensors, layer index, expert index, expert count                                                  |
-| Shared experts   | shared expert tensors when used by the family                                                                         |
-| Accumulation     | routing weights, combine rules, residual integration                                                                  |
-| Output           | final norm, output head                                                                                               |
-| Tokenizer        | tokenizer model, special tokens, prompt format, EOS and stop facts                                                    |
-| Runtime metadata | layer count, hidden size, head count, KV head count, context length, expert count, active expert count, qtype profile |
-
-Sparse role mapping is complete only when YVEX can identify which tensors are shared, which tensors are routed, which expert each tensor belongs to, and how expert selection affects execution.
-
-## Sparse Promotion Path
-
-Sparse promotion is longer than dense promotion.
-
-```text
-family classification
-  -> source/config profile
-  -> native tensor inventory
-  -> sparse role map
-  -> expert inventory
-  -> router contract
-  -> expert contract
-  -> tokenizer contract
-  -> sparse artifact contract
-  -> selected non-expert artifact
-  -> selected expert artifact
-  -> selected embedding proof
-  -> selected attention proof
-  -> router proof
-  -> expert execution proof
-  -> expert dispatch proof
-  -> sparse layer proof
-  -> full sparse prefill
-  -> real KV writes
-  -> real decode reads
-  -> output-head logits
-  -> sampling
-  -> generation
-  -> serving
-  -> evaluation
-  -> benchmark
-```
-
-The sparse path cannot skip router proof.
-
-It cannot skip expert execution proof.
-
-It cannot skip expert residency policy.
-
-It cannot collapse expert tensors into a generic MLP role.
-
-Sparse support begins only when routing and expert execution participate in the actual runtime path.
-
-## Sparse Support States
-
-| State                      | Architectural meaning                                                               |
-| -------------------------- | ----------------------------------------------------------------------------------- |
-| sparse-source-profiled     | Source and config facts are known.                                                  |
-| sparse-tensor-inventoried  | Native tensors are listed with shape, dtype, shard, layer, and expert facts.        |
-| sparse-classified          | The target is confirmed as sparse or MoE.                                           |
-| sparse-role-mapped         | Shared, router, and expert roles are mapped.                                        |
-| expert-inventoried         | Expert count, layer grouping, tensor names, and active expert policy are known.     |
-| router-mapped              | Router tensors and routing behavior are mapped.                                     |
-| sparse-artifact-contracted | Required sparse artifact layout is defined.                                         |
-| sparse-selected-artifact   | A narrow sparse artifact exists.                                                    |
-| router-proven              | Router logits and selection behavior are checked or executed.                       |
-| expert-proven              | At least one selected expert executes correctly.                                    |
-| expert-dispatch-proven     | Runtime can select and dispatch experts from routing output.                        |
-| sparse-layer-proven        | Attention, router, experts, accumulation, and residual form one sparse layer proof. |
-| sparse-prefill-proven      | Real sparse prefill produces runtime state.                                         |
-| sparse-kv-proven           | Real attention-backed KV writes and reads work through the sparse path.             |
-| sparse-decode-proven       | Decode advances through real sparse runtime state.                                  |
-| sparse-logits-proven       | Output-head logits are produced after sparse execution.                             |
-| sparse-generation-proven   | Sampling and append loop generate text through the sparse runtime.                  |
-| sparse-evaluated           | Capability regression uses the sparse runtime path.                                 |
-| sparse-benchmarked         | Prefill and generation throughput are measured.                                     |
-
-## Family Adapter Contract
-
-A family adapter translates family-specific source and artifact facts into YVEX canonical runtime facts.
-
-The adapter owns interpretation, not execution.
-
-It must define:
-
-```text
-architecture class
-layer structure
-native-to-canonical tensor mapping
-required tensor collections
-optional tensor collections
-global tensors
-per-layer tensors
-per-expert tensors
-tied tensors
-position mechanism
-attention layout
-KV layout
-feed-forward class
-router semantics when sparse
-expert topology when sparse
-output-head structure
-tokenizer and prompt constraints
-accepted qtypes
-required backend operations
-residency assumptions
-current blockers
-```
-
-The adapter must expose blockers precisely. If a tensor is mapped but no graph operation can consume it, that is a graph blocker. If a graph operation exists but no backend kernel supports it, that is a backend blocker. If the tensor exists but cannot be placed, that is a residency blocker.
-
-A family adapter does not make a model supported. It makes support or refusal mechanically explainable.
+A backend lowering plan is not backend runtime support. A CUDA primitive is not
+CUDA full runtime. A Metal feasibility lane is not Metal backend
+implementation.
 
 ## Residency Contract
 
@@ -674,20 +640,10 @@ expert dispatch buffers
 expert accumulation buffers
 ```
 
-Residency must be planned before full execution can be claimed. Materializing one selected tensor does not imply full-model residency. Mapping all tensor roles does not imply memory fit. Hardware plausibility does not imply backend support.
-
-The residency contract must separate:
-
-```text
-planned placement
-allocated placement
-resident placement
-streamed placement
-executed placement
-released placement
-```
-
-This separation is especially important for sparse models, where total parameter count and active parameter count do not describe memory behavior by themselves.
+Residency must be planned before full execution can be claimed. Materializing
+one selected tensor does not imply full-model residency. Mapping all tensor
+roles does not imply memory fit. Hardware plausibility does not imply backend
+support.
 
 ## Graph Lowering Contract
 
@@ -722,35 +678,238 @@ expert accumulation
 residual merge
 ```
 
-Graph lowering is valid only when every required role has an executable operation and every operation has backend support or a clear blocker.
+Graph lowering is valid only when every required role has an executable
+operation and every operation has backend support or a clear blocker. A selected
+graph proof may lower only part of the graph. A full-runtime claim requires the
+complete path.
 
-A selected graph proof may lower only part of the graph. A full-runtime claim requires the complete path.
+## Dense Decoder Class
 
-## KV Contract
+A dense decoder model has a fixed execution path per token.
 
-KV is model-family dependent runtime state.
+Dense integration requires these collections:
 
-The family adapter and descriptor must define:
+| Collection | Required roles |
+| --- | --- |
+| Embedding | token embedding |
+| Attention | attention norm, Q, K, V, O |
+| Position | RoPE or equivalent position metadata |
+| Feed-forward | FFN norm, gate/up/down or equivalent dense MLP tensors |
+| Output | final norm, output head |
+| Tokenizer | tokenizer model, special tokens, prompt format, EOS and stop facts |
+| Runtime metadata | layer count, hidden size, head count, KV head count, context length, qtype profile |
+
+Dense models are the cleanest class for proving the first full-runtime path
+because they avoid router and expert semantics. The runtime still has to solve
+attention, KV, dense MLP, output-head logits, sampling, tokenizer behavior, and
+memory placement.
+
+## Dense Promotion Path
 
 ```text
-attention class
-head count
-KV head count
-head dimension
-context length
-sliding or full context policy
-compression policy when present
-KV dtype
-KV layout
-KV residency
-prefill write pattern
-decode read pattern
-save/load semantics
+family classification
+  -> source/config profile
+  -> native tensor inventory
+  -> dense collection validation
+  -> dense role map
+  -> tokenizer contract
+  -> dense artifact contract
+  -> dense runtime descriptor
+  -> dense layer proof
+  -> dense prefill
+  -> real KV writes
+  -> real decode reads
+  -> output-head logits
+  -> sampling
+  -> generation
+  -> evaluation
+  -> benchmark
 ```
 
-Diagnostic KV does not satisfy this contract. It can prove ownership and lifecycle mechanics, but it does not prove attention-backed prefill or decode.
+Dense promotion must not depend on router, expert indexing, expert dispatch, or
+expert residency. If those concepts are required, the target is not dense.
 
-A family is KV-supported only when real attention execution writes KV during prefill and decode reads that KV to advance the model state.
+## Dense Support States
+
+| State | Architectural meaning |
+| --- | --- |
+| dense-source-profiled | Source and config facts are known. |
+| dense-tensor-inventoried | Native tensors are listed with shape, dtype, and shard facts. |
+| dense-role-mapped | Dense roles are mapped into canonical YVEX roles. |
+| dense-artifact-contracted | Required dense artifact layout is defined. |
+| dense-layer-proven | A complete dense transformer layer executes. |
+| dense-prefill-proven | Real dense prefill produces runtime state. |
+| dense-kv-proven | Real attention-backed KV writes and reads work. |
+| dense-decode-proven | Decode advances through real dense runtime state. |
+| dense-logits-proven | Output-head logits are produced. |
+| dense-generation-proven | Sampling and append loop generate text through the dense runtime. |
+| dense-evaluated | Capability regression uses the dense runtime path. |
+| dense-benchmarked | Prefill and generation throughput are measured. |
+
+## Sparse and MoE Class
+
+A sparse or MoE model has a conditional execution path. A token passes through
+shared structure, then a router selects one or more experts. The selected
+experts execute, their outputs are weighted or accumulated, and the result
+returns to the layer stream.
+
+Sparse integration introduces distinctions dense integration does not need:
+
+```text
+total parameters
+active parameters
+shared parameters
+routed expert parameters
+resident parameters
+streamed parameters
+executed parameters
+```
+
+These quantities must remain separate. Active parameters describe compute.
+Total parameters describe artifact size. Resident parameters describe memory
+pressure. Streamed parameters describe movement policy. Executed parameters
+describe the actual graph path for a token or batch.
+
+## Sparse Tensor Collections
+
+Sparse models require the dense collections plus MoE-specific collections.
+
+| Collection | Required roles |
+| --- | --- |
+| Router | router weight, routing dtype, top-k policy, score normalization |
+| Experts | expert gate/up/down tensors, layer index, expert index, expert count |
+| Shared experts | shared expert tensors when used by the family |
+| Accumulation | routing weights, combine rules, residual integration |
+| Runtime metadata | expert count, active expert count, shared expert policy, routing policy |
+
+Sparse role mapping is complete only when YVEX can identify which tensors are
+shared, which tensors are routed, which expert each tensor belongs to, and how
+expert selection affects execution.
+
+## Sparse Promotion Path
+
+```text
+family classification
+  -> source/config profile
+  -> native tensor inventory
+  -> sparse collection validation
+  -> sparse role map
+  -> expert inventory
+  -> router contract
+  -> expert contract
+  -> tokenizer contract
+  -> sparse artifact contract
+  -> sparse runtime descriptor
+  -> router proof
+  -> expert execution proof
+  -> expert dispatch proof
+  -> sparse layer proof
+  -> sparse prefill
+  -> real KV writes
+  -> real decode reads
+  -> output-head logits
+  -> sampling
+  -> generation
+  -> evaluation
+  -> benchmark
+```
+
+The sparse path cannot skip router proof, expert execution proof, expert
+residency policy, or expert dispatch. Sparse support begins only when routing
+and expert execution participate in the actual runtime path.
+
+## Sparse Support States
+
+| State | Architectural meaning |
+| --- | --- |
+| sparse-source-profiled | Source and config facts are known. |
+| sparse-tensor-inventoried | Native tensors are listed with shape, dtype, shard, layer, and expert facts. |
+| sparse-classified | The target is confirmed as sparse or MoE. |
+| sparse-role-mapped | Shared, router, and expert roles are mapped. |
+| expert-inventoried | Expert count, layer grouping, tensor names, and active expert policy are known. |
+| router-mapped | Router tensors and routing behavior are mapped. |
+| sparse-artifact-contracted | Required sparse artifact layout is defined. |
+| router-proven | Router logits and selection behavior are checked or executed. |
+| expert-proven | At least one selected expert executes correctly. |
+| expert-dispatch-proven | Runtime can select and dispatch experts from routing output. |
+| sparse-layer-proven | Attention, router, experts, accumulation, and residual form one sparse layer proof. |
+| sparse-prefill-proven | Real sparse prefill produces runtime state. |
+| sparse-kv-proven | Real attention-backed KV writes and reads work through the sparse path. |
+| sparse-decode-proven | Decode advances through real sparse runtime state. |
+| sparse-logits-proven | Output-head logits are produced after sparse execution. |
+| sparse-generation-proven | Sampling and append loop generate text through the sparse runtime. |
+| sparse-evaluated | Capability regression uses the sparse runtime path. |
+| sparse-benchmarked | Prefill and generation throughput are measured. |
+
+## Family Adapter Contract
+
+A family adapter translates family-specific source and artifact facts into YVEX
+canonical runtime facts. The adapter owns interpretation, not execution.
+
+It must define:
+
+```text
+architecture class
+layer structure
+native-to-canonical tensor mapping
+required tensor collections
+optional tensor collections
+global tensors
+per-layer tensors
+per-expert tensors
+tied tensors
+position mechanism
+attention layout
+KV layout
+feed-forward class
+router semantics when sparse
+expert topology when sparse
+output-head structure
+tokenizer and prompt constraints
+accepted qtypes
+required backend operations
+residency assumptions
+current blockers
+```
+
+The adapter must expose blockers precisely. If a tensor is mapped but no graph
+operation can consume it, that is a graph blocker. If a graph operation exists
+but no backend kernel supports it, that is a backend blocker. If the tensor
+exists but cannot be placed, that is a residency blocker.
+
+A family adapter does not make a model supported. It makes support or refusal
+mechanically explainable.
+
+## Family Adapter Output Contract
+
+Adapter output is explanation, not execution.
+
+```text
+family_profile:
+  family:
+  target:
+  class:
+  source_status:
+  config_status:
+  tokenizer_status:
+  metadata_status:
+  tensor_count:
+  dense_or_sparse:
+  attention_class:
+  ffn_class:
+  moe_status:
+  role_mapping_status:
+  artifact_contract_status:
+  runtime_descriptor_status:
+  backend_selection:
+  backend_pressure:
+  runtime_claim:
+  generation:
+  benchmark_status:
+```
+
+The output should identify the next missing architectural fact without claiming
+the runtime behavior that fact would enable.
 
 ## Decode, Logits, and Sampling Contract
 
@@ -774,43 +933,118 @@ detokenization path
 prompt continuation rules
 ```
 
-A selected segment can prove that real tensors execute. It cannot prove generation quality. Evaluation and benchmark work must wait until decode, logits, sampling, and detokenization use the same runtime path that users run.
+A selected segment can prove that real tensors execute. It cannot prove
+generation quality. Evaluation and benchmark work must wait until decode,
+logits, sampling, and detokenization use the same runtime path that users run.
+
+## Backend Pressure and Family Shape
+
+CUDA and Metal are not model families. They are backend execution environments.
+A family creates backend pressure through tensor shape, layout, dtype/qtype,
+attention mode, KV size, MLP/MoE structure, output-head size, and residency.
+
+YVEX has bounded CUDA primitive hardening. That proves selected primitive
+behavior against references. It does not make any family CUDA-supported.
+
+Metal remains a future backend pressure lane. Qwen can force Metal questions,
+but Qwen identity remains backend-neutral.
+
+## Performance-Relevant Family Facts
+
+Family facts shape runtime cost:
+
+```text
+hidden size
+intermediate size
+layer count
+attention type
+head count
+KV head count
+context length
+vocab size
+output-head size
+expert count
+active expert count
+shared expert policy
+qtype/dtype mix
+tensor shard layout
+residency pressure
+prefill/decode ratio
+```
+
+Two families with similar parameter counts can have very different runtime cost
+because of attention layout, KV shape, output-head size, MoE activation, tensor
+layout, and residency.
+
+Backend performance is chosen after family facts become role-mapped runtime
+facts.
+
+## Current Family Posture
+
+This table records posture, not support claims.
+
+| Family | Current YVEX posture | Runtime class | Current evidence | Missing before runtime |
+| --- | --- | --- | --- | --- |
+| DeepSeek | selected-slice pressure | sparse/MoE | selected embedding and embedding-plus-RMSNorm graph slices | full artifact, tensor role map, MoE runtime, output head, generation |
+| GLM | source/storage pressure | sparse/MoE | huge source/storage pressure reports | source completion, model-class, tensor map, artifact, storage/residency |
+| Qwen | backend-neutral source target | dense candidate / family-dependent | `qwen3-8b` target and Qwen model-class profile | tensor collections, tensor role map, artifact, backend/runtime |
+| Gemma | backend-neutral source target | dense candidate | `gemma-4-12b-it` target profile | model-class, tensor collections, tensor map, artifact, runtime |
+| Phi/Llama/Mistral | candidate families | dense/sparse depending target | architectural candidates | no current source target |
+
+Current posture vocabulary includes `source-target-profiled`,
+`model-class-profiled`, `source/storage-pressure`, `selected-slice-proof`, and
+`runtime-unsupported`.
 
 ## Support-Level Lattice
 
 YVEX uses support levels as a lattice, not as marketing status.
 
+Shared early path:
+
 ```text
 not-studied
-  -> paper-studied
-  -> source-profiled
-  -> tensor-inventoried
-  -> family-classified
-  -> role-mapped
-  -> artifact-contracted
-  -> artifact-produced
-  -> integrity-gated
-  -> residency-planned
-  -> materialization-proven
-  -> graph-slice-proven
-  -> layer-proven
-  -> prefill-proven
-  -> kv-proven
-  -> decode-proven
-  -> logits-proven
-  -> generation-proven
-  -> served
-  -> evaluated
-  -> benchmarked
+-> paper-studied
+-> source-profiled
+-> tensor-inventoried
+-> family-classified
+-> role-mapped
 ```
 
-Dense and sparse families share the early part of the lattice. They diverge after role mapping because their graph and residency obligations differ.
+Dense branch:
+
+```text
+dense-artifact-contracted
+-> dense-layer-proven
+-> dense-prefill-proven
+-> dense-kv-proven
+-> dense-decode-proven
+-> dense-logits-proven
+-> dense-generation-proven
+```
+
+Sparse/MoE branch:
+
+```text
+expert-inventoried
+-> router-mapped
+-> sparse-artifact-contracted
+-> router-proven
+-> expert-proven
+-> expert-dispatch-proven
+-> sparse-layer-proven
+-> sparse-prefill-proven
+-> sparse-kv-proven
+-> sparse-decode-proven
+-> sparse-logits-proven
+-> sparse-generation-proven
+```
 
 A support level must be backed by implementation evidence, not intention.
 
 ## Family-to-Target Promotion
 
-A family becomes a concrete target when the target is specific enough to produce source and artifact facts.
+A family becomes a concrete target when the target is specific enough to
+produce source and artifact facts.
 
 Required target facts:
 
@@ -826,14 +1060,15 @@ configuration facts
 tokenizer facts
 license posture
 expected artifact class
-expected hardware class
+backend pressure
 runtime reason
 first proof target
 ```
 
-A target should be chosen because it closes or stresses a runtime layer: dense transformer path, sparse router path, expert residency, tokenizer behavior, long-context KV, output-head logits, quantization, backend placement, or benchmark measurement.
-
-Popularity alone is not a target-selection rule.
+A target should be chosen because it closes or stresses a runtime layer: dense
+transformer path, sparse router path, expert residency, tokenizer behavior,
+long-context KV, output-head logits, quantization, backend placement, or
+benchmark measurement. Popularity alone is not a target-selection rule.
 
 ## Target-to-Artifact Promotion
 
@@ -856,9 +1091,9 @@ integrity checks
 support level
 ```
 
-Selected artifacts are valid. They are pressure artifacts, not fake artifacts. They let YVEX test real tensor behavior before full-model support exists.
-
-A selected artifact must still declare its support boundary.
+Selected artifacts are valid. They are pressure artifacts, not fake artifacts.
+They let YVEX test real tensor behavior before full-model support exists. A
+selected artifact must still declare its support boundary.
 
 ## Artifact-to-Runtime Promotion
 
@@ -868,83 +1103,81 @@ Dense runtime promotion:
 
 ```text
 artifact integrity
-  -> materialization
-  -> embedding
-  -> attention
-  -> dense MLP
-  -> full dense layer
-  -> full dense prefill
-  -> KV writes
-  -> decode reads
-  -> logits
-  -> sampling
-  -> generation
+-> materialization
+-> embedding
+-> attention
+-> dense MLP
+-> full dense layer
+-> full dense prefill
+-> KV writes
+-> decode reads
+-> logits
+-> sampling
+-> generation
 ```
 
 Sparse runtime promotion:
 
 ```text
 artifact integrity
-  -> materialization
-  -> embedding
-  -> attention
-  -> router
-  -> expert selection
-  -> expert execution
-  -> expert accumulation
-  -> sparse layer
-  -> full sparse prefill
-  -> KV writes
-  -> decode reads
-  -> logits
-  -> sampling
-  -> generation
+-> materialization
+-> embedding
+-> attention
+-> router
+-> expert selection
+-> expert execution
+-> expert accumulation
+-> sparse layer
+-> full sparse prefill
+-> KV writes
+-> decode reads
+-> logits
+-> sampling
+-> generation
 ```
 
-The artifact-to-runtime path is the real support boundary. Everything before it is classification, planning, or selected proof.
+The artifact-to-runtime path is the real support boundary. Everything before it
+is classification, planning, or selected proof.
 
 ## Family Classification Table
 
 This table records families as integration classes, not support claims.
 
-| Family        | Runtime class             | Architectural pressure                                                      | Current posture                |
-| ------------- | ------------------------- | --------------------------------------------------------------------------- | ------------------------------ |
-| DeepSeek      | Sparse / MoE              | Large sparse runtime, expert routing, KV pressure, high-end local inference | Active sparse pressure family  |
-| GLM           | Sparse / MoE              | Huge source inventory, model-class pressure, reasoning/coding target class  | Source/storage pressure family |
-| Qwen dense    | Dense                     | Dense ladder, tokenizer/runtime comparison, smaller full-runtime candidate  | Candidate dense family         |
-| Qwen MoE      | Sparse / MoE              | Dense/sparse comparison inside one release line                             | Candidate sparse family        |
-| Llama dense   | Dense                     | Ecosystem baseline and common runtime assumptions                           | Candidate dense family         |
-| Llama MoE     | Sparse / MoE / multimodal | Sparse and multimodal future pressure                                       | Future sparse family           |
-| Gemma         | Dense / lightweight       | Smaller local runtime and device-oriented pressure                          | Candidate dense family         |
-| Phi           | Dense / compact reasoning | Small reasoning under constrained hardware                                  | Candidate dense family         |
-| Mistral dense | Dense                     | Efficient local/server dense runtime candidate                              | Later dense family             |
-| Mistral MoE   | Sparse / MoE              | Smaller sparse reference class                                              | Later sparse family            |
-
-The table is architectural. It does not imply parsing support, artifact support, runtime support, generation, evaluation, or benchmark results.
+| Family | Runtime class | Architectural pressure | Current posture |
+| --- | --- | --- | --- |
+| DeepSeek | Sparse / MoE | Large sparse runtime, expert routing, KV pressure, high-end local inference | selected-slice-proof |
+| GLM | Sparse / MoE | Huge source inventory, model-class pressure, reasoning/coding target class | source/storage-pressure |
+| Qwen | Dense or Sparse / MoE depending target | Dense/sparse comparison, tokenizer/runtime comparison, portability pressure | model-class-profiled for `qwen3-8b` |
+| Gemma | Dense | Smaller local runtime and device-oriented pressure | source-target-profiled for `gemma-4-12b-it` |
+| Phi | Dense / compact reasoning | Small reasoning under constrained hardware | candidate family |
+| Llama | Dense / sparse / multimodal depending target | Ecosystem baseline and common runtime assumptions | candidate family |
+| Mistral | Dense / sparse depending target | Efficient local/server runtime and smaller sparse baselines | candidate family |
 
 ## Dense Candidate Matrix
 
-| Family        | Candidate scale | Runtime reason                                   | First architectural proof                |
-| ------------- | --------------- | ------------------------------------------------ | ---------------------------------------- |
-| Qwen dense    | small to medium | Fixed dense transformer path and tokenizer study | Source/config profile and dense role map |
-| Gemma         | small to medium | Single-machine dense runtime pressure            | Dense artifact contract                  |
-| Phi           | small           | Compact reasoning under low memory               | Tokenizer report and dense graph slice   |
-| Llama dense   | medium to large | Ecosystem compatibility baseline                 | Dense role map and descriptor            |
-| Mistral dense | small to medium | Efficient local/server runtime                   | Dense prefill target                     |
+| Family | Candidate scale | Runtime reason | First architectural proof |
+| --- | --- | --- | --- |
+| Qwen dense | small to medium | Fixed dense transformer path and tokenizer study | source/config profile and dense role map |
+| Gemma | small to medium | Single-machine dense runtime pressure | model-class profile, then dense artifact contract |
+| Phi | small | Compact reasoning under low memory | tokenizer report and dense graph slice |
+| Llama dense | medium to large | Ecosystem compatibility baseline | dense role map and descriptor |
+| Mistral dense | small to medium | Efficient local/server runtime | dense prefill target |
 
-Dense candidates should close the fixed transformer path before YVEX uses them as benchmark or serving targets.
+Dense candidates should close the fixed transformer path before YVEX uses them
+as benchmark or serving targets.
 
 ## Sparse Candidate Matrix
 
-| Family      | Candidate scale         | Runtime reason                            | First architectural proof                     |
-| ----------- | ----------------------- | ----------------------------------------- | --------------------------------------------- |
-| DeepSeek    | large MoE               | Current sparse pressure target            | MoE tensor collections and sparse layer proof |
-| GLM         | large MoE               | Source and architecture pressure          | Expert inventory and source/config profile    |
-| Qwen MoE    | small to large MoE      | Dense/sparse comparison inside one family | Router and expert role map                    |
-| Llama MoE   | large sparse/multimodal | Future sparse plus multimodal pressure    | Family classification report                  |
-| Mistral MoE | smaller MoE             | Simpler sparse baseline                   | Expert dispatch proof                         |
+| Family | Candidate scale | Runtime reason | First architectural proof |
+| --- | --- | --- | --- |
+| DeepSeek | large MoE | Current sparse pressure target | MoE tensor collections and sparse layer proof |
+| GLM | large MoE | Source and architecture pressure | expert inventory and source/config profile |
+| Qwen MoE | small to large MoE | Dense/sparse comparison inside one family | router and expert role map |
+| Llama MoE | large sparse/multimodal | Future sparse plus multimodal pressure | family classification report |
+| Mistral MoE | smaller MoE | Simpler sparse baseline | expert dispatch proof |
 
-Sparse candidates should close router, expert, sparse residency, and sparse decode behavior before they become user-facing targets.
+Sparse candidates should close router, expert, sparse residency, and sparse
+decode behavior before they become user-facing targets.
 
 ## Hardware Fit
 
@@ -965,21 +1198,55 @@ runtime has been evaluated
 runtime has been benchmarked
 ```
 
-Only the later stages represent user-visible support.
+Only the later stages represent user-visible runtime behavior. Hardware class
+matters because it shapes the residency and backend lowering contracts, not
+because it grants runtime capability.
 
-Hardware class matters because it shapes the residency contract, not because it grants runtime capability.
+## Model-Family Failure Modes
+
+Practical failure modes include:
+
+| Failure mode | Meaning |
+| --- | --- |
+| source exists but config/tokenizer is missing | Source bytes are present, but architecture/tokenization cannot be trusted. |
+| source tensors are present but metadata is malformed | Header evidence cannot produce reliable tensor facts. |
+| tensor names are observed but roles are ambiguous | Lexical patterns are insufficient for canonical role mapping. |
+| family classification is known but role map is incomplete | The architecture class is known, but runtime roles are not. |
+| role map is complete but artifact contract is missing | YVEX knows roles but has no artifact requirements to enforce. |
+| artifact is valid GGUF but qtype is unsupported | File structure is valid, but compute/storage policy blocks execution. |
+| artifact materializes but graph consumer is missing | Tensors become resident, but no graph path consumes them. |
+| graph primitive exists but target tensor layout is unsupported | The operation exists, but family/artifact layout does not match it. |
+| backend supports an op but residency plan fails | Compute is possible, but placement or memory lifecycle is not. |
+| prefill runs but writes no real KV | Runtime state is not attention-backed decode state. |
+| decode exists but has no real KV read path | Decode cannot advance model state from attention history. |
+| output head is missing or unmapped | Hidden states cannot become vocabulary logits. |
+| tokenizer/stop boundary is missing | Token ids may exist, but user-facing text/stop behavior is incomplete. |
+| benchmark is attempted before runtime path exists | Measurement would attach numbers to a non-existent execution path. |
 
 ## Non-Claims
 
 This document does not claim support for any model family.
 
-It does not claim dense runtime support.
+It does not claim dense runtime support. It does not claim sparse or MoE runtime
+support. It does not claim tokenizer support, full artifact support, backend
+support, generation, serving, evaluation, or benchmark performance.
 
-It does not claim sparse or MoE runtime support.
+Family-specific non-claims:
 
-It does not claim tokenizer support, full artifact support, backend support, generation, serving, evaluation, or benchmark performance.
-
-It defines the architectural path by which a model family becomes eligible for support.
+```text
+Qwen model-class profile is not Qwen runtime support.
+Gemma source target profile is not Gemma runtime support.
+A downloaded source tree is not source readiness.
+A source manifest is not model execution.
+A lexical tensor pattern is not a role map.
+A role map is not graph execution.
+A CUDA primitive is not CUDA runtime.
+A Metal feasibility lane is not Metal support.
+A backend pressure lane is not backend support.
+A GGUF artifact is not generation.
+A selected graph slice is not full model execution.
+A benchmark target is not a benchmark result.
+```
 
 The contract is:
 
@@ -991,6 +1258,7 @@ family classification
   -> artifact contract
   -> runtime descriptor
   -> residency plan
+  -> backend lowering
   -> graph lowering
   -> runtime execution
   -> generation
@@ -998,4 +1266,6 @@ family classification
   -> benchmark
 ```
 
-Dense and sparse families share the early path. They diverge at role mapping, residency, graph lowering, and execution semantics. That divergence is the architectural reason this file exists.
+Dense and sparse families share the early path. They diverge at role mapping,
+residency, graph lowering, and execution semantics. That divergence is the
+architectural reason this file exists.
