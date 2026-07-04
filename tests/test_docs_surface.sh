@@ -32,7 +32,7 @@ grep -nF "local open-weight models" README.md >/dev/null || {
   exit 1
 }
 
-grep -nF 'A local inference engine cannot treat `GGUF` as a file extension only.' README.md >/dev/null || {
+grep -nF 'local inference engine cannot treat `GGUF` as a file extension only.' README.md >/dev/null || {
   echo "README must frame GGUF/artifact work as engine infrastructure" >&2
   exit 1
 }

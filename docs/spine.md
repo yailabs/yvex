@@ -27,6 +27,9 @@ Current full DeepSeek generation:
 Current benchmark status:
   not measured
 
+Current CUDA state:
+  bounded primitive-hardening only; no CUDA full-runtime/generation claim
+
 Active implementation next:
   MODEL.CLASS.GEMMA.0 - Gemma model-class profile
 
@@ -50,6 +53,7 @@ Main v0.1.0 blocker:
 | Primary language | C |
 | Primary platform | Linux + CUDA |
 | Current highest runtime stage | bounded diagnostic generation |
+| Current CUDA state | bounded primitive-hardening only |
 | Real transformer prefill | unsupported |
 | Real KV writes/reads | unsupported |
 | Real decode | unsupported |
@@ -131,21 +135,21 @@ official source tensors
 | model class | dense/MoE/source-only/selected-slice routing | report-only | partial | fullmodel descriptor reports, `yvex moe report`, and Qwen model-class profile | Gemma model-class profile / final runtime route |
 | tensor collections | embedding/norm/attention/MLP/MoE/output/tokenizer roles | report-only | partial | fullmodel report, descriptor, and `yvex tensor-collection report` | v0.1.0 full-runtime tensor coverage |
 | storage/residency | placement, cache, staging, storage-stream planning | report-only | partial | materialization plans | staged residency proof |
-| backend capability | CPU/CUDA/future backend capability | partial | partial | CPU/CUDA checks and parity | capability matrix hardening |
-| graph primitives | standalone op proof | fixture-proof | yes | `yvex graph --execute-op` | real transformer graph |
-| real transformer graph | execute real model block/layers | planned | no | none | QKV/O, attention, MLP/MoE over target tensors |
+| backend capability | CPU/CUDA/future backend capability | partial | partial | CPU/CUDA checks, parity, and `CUDA.KERNEL.0` primitive hardening | capability matrix hardening |
+| graph primitives | standalone op proof | fixture-proof | yes | `yvex graph --execute-op` plus bounded CUDA primitive hardening where available | real transformer graph |
+| real transformer graph | execute real model block/layers | planned | no | none; selected-slice and primitive CUDA evidence only | QKV/O, attention, MLP/MoE over target tensors |
 | context planning | requested/active context, chunking, overflow, decode position | report-only | yes | `yvex context report` | connect to full-runtime prefill |
-| real prefill | build runtime state from real transformer path | unsupported | no | none | attention-backed KV writes |
-| KV cache | K/V runtime state | diagnostic/report-only | partial | `yvex kv report`, diagnostic KV | real K/V writes and decode reads |
+| real prefill | build runtime state from real transformer path | unsupported | no | none; CUDA primitives do not skip graph/runtime rows | attention-backed KV writes |
+| KV cache | K/V runtime state | diagnostic/report-only | partial | `yvex kv report`, diagnostic KV | real K/V writes and decode reads, including CUDA residency |
 | decode | advance runtime one token | diagnostic-runtime | partial | `yvex decode` | real decode over real KV |
 | logits | output token scores | diagnostic-runtime | partial | `yvex logits` | real output-head logits |
 | sampling | choose next token | diagnostic-runtime | partial | `yvex sample` | real vocab sampling |
 | tokenizer/stop | tokenizer metadata, detokenization, EOS/stop policy | planned | partial | tokenizer diagnostics | tokenizer-backed stop behavior |
-| generation loop | repeated decode/logits/sample/append | diagnostic-runtime | partial | `yvex generate` | full-runtime generation |
+| generation loop | repeated decode/logits/sample/append | diagnostic-runtime | partial | `yvex generate` | full-runtime generation after real backend/runtime path |
 | CLI generation | operator command over generation path | diagnostic-runtime | partial | `yvex generate` help and runbook | full-runtime normal command |
 | serving | daemon/provider generation surface | planned | no | `yvexd` status shell | runtime-backed provider generation |
 | evaluation | correctness/capability evidence | planned | no | none | runtime eval path |
-| benchmark/profile | measured evidence | planned | no | none | runtime benchmark harness |
+| benchmark/profile | measured evidence | planned | no | none; no CUDA throughput claim | runtime benchmark harness |
 | speculative acceleration | draft/verify/accept acceleration | post-v0.1.0 | no | doctrine only | baseline generation first |
 | release | versioned release gate and transcript | planned | no | v0.1.0 gates | final validation transcript |
 
@@ -571,7 +575,7 @@ lanes; rows are the delivery units that complete track work.
 | TRACK.TENSOR | Tensor collections | embedding, norm, attention, MLP/MoE, output, tokenizer roles | partial/report-only | fullmodel descriptor/report and MoE tensor-collection report | selected artifacts lack full MoE tensor coverage | active |
 | TRACK.STORAGE | Storage stream | shard index, cold/warm reads, byte ranges, cache policy | planned | doctrine/plans | shard and read probes | later |
 | TRACK.RESIDENCY | Residency | resident/staged/hybrid placement and movement | report-only | placement plans | staged residency proof | later |
-| TRACK.BACKEND | Backend capability | CPU/CUDA/future Metal/ROCm operations and memory reports | partial | CPU/CUDA probes and parity | capability matrix | active |
+| TRACK.BACKEND | Backend capability | CPU/CUDA/future Metal/ROCm operations and memory reports | partial | CPU/CUDA probes, movement, parity tests, and `CUDA.KERNEL.0` primitive hardening | capability matrix | active |
 | TRACK.GRAPH | Graph core | primitives, block/layer fixtures, model-backed graph path | partial | graph primitives and selected-slice graph | real transformer graph | later |
 | TRACK.ATTENTION | Attention runtime | Q/K/V/O, masks, position, attention execution | report-only | attention report and primitive proof | target tensor attention | later |
 | TRACK.MOE | MoE runtime path | router, experts, activation, dispatch, accumulation | report-only complete / runtime planned | `yvex moe report`, `yvex tensor-collection report`; routed expert primitive only | target/full artifact decision before activation | active |
@@ -860,19 +864,23 @@ Current status:
   partial.
 
 Current evidence:
-  CPU/CUDA probes, movement, parity tests.
+  CPU/CUDA probes, movement, parity tests, and `CUDA.KERNEL.0` bounded
+  primitive hardening.
 
 v0.1.0 rows:
   V010.BACKEND.*, COMPUTE.BACKEND.*.
 
 Main blockers:
-  capability matrix and memory pressure reports.
+  capability matrix, memory pressure reports, CUDA model-backed graph path,
+  CUDA attention over target tensors, CUDA KV write/read, CUDA decode/logits
+  integration, and measured benchmark path.
 
 Next possible row:
   V010.BACKEND.*.
 
 Boundary:
-  backend capability is not model support.
+  backend capability is not model support. CUDA primitive hardening is backend
+  evidence, not CUDA full-runtime inference.
 
 ### TRACK.GRAPH — Graph Core
 
@@ -886,7 +894,8 @@ Current status:
   partial.
 
 Current evidence:
-  graph op, block, layer, selected-slice commands.
+  graph op, block, layer, selected-slice commands, and backend primitive parity
+  evidence where CPU/CUDA checks exist.
 
 v0.1.0 rows:
   V010.GRAPH.*.
@@ -898,7 +907,8 @@ Next possible row:
   V010.GRAPH.1-21.
 
 Boundary:
-  graph fixtures are not full transformer runtime.
+  graph fixtures are not full transformer runtime. CUDA primitive hardening is
+  backend primitive evidence, not real transformer graph execution.
 
 ### TRACK.ATTENTION — Attention Runtime
 
@@ -918,7 +928,8 @@ v0.1.0 rows:
   V010.ATTN.*.
 
 Main blockers:
-  target tensor Q/K/V/O path.
+  target tensor Q/K/V/O path; CUDA full attention runtime over target Q/K/V/O
+  remains missing.
 
 Next possible row:
   V010.ATTN.*.
@@ -3485,11 +3496,236 @@ The final v0.1.0 release candidate must include a single transcript containing:
 | BLOCK 2 | identity/integrity | V010.INTEGRITY.*, V010.FULLMODEL.* | digest, byte range, corruption, materialization gates | v0.1.0 artifact acceptance gate |
 | BLOCK 3 | class/tensor | V010.CLASS.*, V010.TENSOR.*, V010.MOE.* | family-runtime, attention/KV/context reports | MoE class, output-head/tokenizer class, tensor coverage |
 | BLOCK 4 | storage/residency | V010.STORAGE.*, V010.RESIDENCY.* | residency planning in fullmodel reports | storage stream and expert/output-head residency proof |
-| BLOCK 5 | backend/hardware/build | V010.BACKEND.*, V010.HARDWARE.*, V010.BUILD.* | CPU/CUDA probe/movement/parity subset | full backend matrix and v0.1.0 build profile |
+| BLOCK 5 | backend/hardware/build | V010.BACKEND.*, V010.HARDWARE.*, V010.BUILD.* | CPU/CUDA probe/movement/parity subset and `CUDA.KERNEL.0` primitive hardening | full backend matrix and v0.1.0 build profile |
 | BLOCK 6 | graph | V010.GRAPH.*, V010.ATTN.*, V010.MOE.* | primitives, block/layers fixture, selected graph | real QKV/O, real block/layer over target tensors |
 | BLOCK 7 | runtime | V010.CONTEXT.*, V010.PREFILL.*, V010.KV.*, V010.DECODE.*, V010.LOGITS.*, V010.SAMPLE.*, V010.TOKENIZER.*, V010.GEN.*, V010.RUNTIME.* | diagnostic prefill/KV/decode/logits/sample/generate | real prefill/KV/decode/logits/sampling/generation |
 | BLOCK 8 | operator/serve | V010.CLI.*, V010.DOCTOR.*, V010.PATHS.*, V010.SERVE.* | paths, prepare, check, bounded generate CLI, yvexd status | real generation normal path and doctor/server gates |
 | BLOCK 9 | evidence/release | V010.EVAL.*, V010.BENCH.*, V010.PROFILE.*, V010.DOCS.*, V010.RELEASE.*, V010.CI.* | docs tests, runbooks, guardrails | eval smoke, benchmark harness, release transcript |
+
+### 6.10 CUDA Execution Spine
+
+CUDA is a backend-specific implementation lane consumed by existing V010
+tracks. It is not a separate shortcut around source, artifact, model-class,
+tensor, graph, runtime, generation, evaluation, or benchmark gates.
+
+#### 6.10.1 CUDA Current State
+
+```text
+CUDA current state:
+  implemented:
+    CUDA probe / info
+    CUDA tensor movement
+    selected materialization parity subset
+    standalone primitive kernels
+    bounded CUDA primitive kernel hardening
+    MLP and attention bounded parallel primitive bodies
+    CPU/reference comparison tests
+
+  not implemented:
+    CUDA full model runtime
+    CUDA model-backed transformer block
+    CUDA real QKV/O path
+    CUDA real attention runtime over target tensors
+    CUDA real KV cache write/read
+    CUDA real prefill/decode/logits/sampling path
+    CUDA generation
+    CUDA benchmark/throughput claim
+    FlashAttention
+    tensor-core GEMM claim
+    paged KV
+```
+
+`CUDA.KERNEL.0` moved CUDA MLP and attention from one-thread diagnostic bodies
+to bounded single-block primitive kernels with parallel stage loops and
+CPU/reference comparison tests. It did not create CUDA full-runtime inference.
+
+#### 6.10.2 CUDA Owner Files
+
+```text
+cuda/cuda_backend.c:
+  CUDA backend lifecycle, device/module/function loading, backend integration.
+
+cuda/cuda_tensor.c:
+  CUDA tensor allocation, movement, and release.
+
+cuda/cuda_ops.c:
+  host-side CUDA operation validation and Driver API launches.
+
+cuda/cuda_kernels.cu:
+  CUDA device kernels.
+
+cuda/cuda_kernels.h:
+  kernel symbol declarations / PTX linkage contract.
+
+cuda/cuda_info.c:
+  CUDA device/capability reporting.
+
+cuda/cuda_errors.c:
+  CUDA error/status conversion.
+
+cuda/cuda_internal.h:
+  internal CUDA backend state and Driver API handles.
+```
+
+Host-side launch behavior belongs in `cuda/cuda_ops.c`; device kernels belong
+in `cuda/cuda_kernels.cu`; `yvex_cli.c` must not own CUDA behavior.
+
+#### 6.10.3 CUDA Ladder
+
+| CUDA layer | Owns | Current state | Evidence | Next gap | Does not prove |
+| --- | --- | --- | --- | --- | --- |
+| CUDA build/profile | compile/link/runtime availability | partial | `make cuda`, `make check-cuda`, CUDA info | build/profile matrix | model support |
+| CUDA memory | allocation, transfer, cleanup | partial | CUDA tensor movement/parity tests | residency pressure | graph runtime |
+| CUDA primitive kernels | embedding, RMSNorm, RoPE, matmul, MLP, attention primitive kernels | bounded primitive-hardening | `CUDA.KERNEL.0`, CUDA primitive tests | model-backed graph lowering | full runtime |
+| CUDA graph primitive lowering | connect primitive ops to graph-owned inputs/outputs | partial/fixture | graph primitive CPU/CUDA checks | target tensor roles | transformer block |
+| CUDA model-backed graph | execute real model tensor roles through graph | planned | selected-slice only | Q/K/V/O, norm, MLP, residual | generation |
+| CUDA attention runtime | QKV/O, RoPE, mask, softmax, value accumulation | planned | standalone attention primitive only | target tensor attention | full transformer runtime |
+| CUDA KV runtime | KV allocation/write/read by layer/head/position | planned/diagnostic only | diagnostic KV reports | real prefill writes / decode reads | decode |
+| CUDA prefill/decode/logits | CUDA-backed autoregressive runtime phases | planned | diagnostic runtime only | real model state | generation |
+| CUDA generation | full loop over CUDA runtime state | unsupported | none | prefill/KV/decode/logits/sample | benchmark |
+| CUDA profiling/benchmark | measured performance with reproducibility metadata | unsupported | none | implemented runtime path | capability implementation |
+
+#### 6.10.4 CUDA Dependency Chain
+
+```text
+CUDA primitive kernels
+  -> require tensor roles before model-backed graph use
+
+tensor collections
+  -> provide embedding/norm/attention/MLP/output/KV role groups
+
+tensor map
+  -> maps source tensor names into YVEX runtime roles
+
+artifact layout
+  -> decides emitted tensor layout, dtype/qtype, byte ranges, and registry identity
+
+backend residency
+  -> moves role-bearing tensors into CUDA-owned memory
+
+graph execution
+  -> consumes role-bearing resident tensors
+
+prefill
+  -> executes graph over prompt tokens and writes KV
+
+KV
+  -> stores attention state by layer/head/position
+
+decode
+  -> consumes KV to advance one token
+
+logits
+  -> projects final hidden state to vocabulary
+
+sampling
+  -> selects token
+
+generation
+  -> composes all phases
+```
+
+CUDA cannot skip tensor collections, tensor mapping, artifact layout, graph
+integration, real prefill, real KV, decode, logits, and sampling. CUDA kernels
+become inference only when those runtime rows consume them.
+
+#### 6.10.5 CUDA Row Crosswalk
+
+| Row family | CUDA relationship |
+| --- | --- |
+| `V010.BACKEND.2` | CUDA capability report |
+| `V010.BACKEND.3` | CUDA allocation proof |
+| `V010.BACKEND.4` | CUDA transfer proof |
+| `V010.BACKEND.5` | CUDA op parity subset |
+| `CUDA.KERNEL.0` | CUDA primitive kernel vertical hardening |
+| `V010.GRAPH.PRIM.*` | primitive integration readiness |
+| `V010.GRAPH.*` | real transformer graph path |
+| `V010.ATTN.*` | CUDA attention runtime when backend is CUDA |
+| `V010.KV.*` | CUDA KV allocation/read/write where backend is CUDA |
+| `V010.PREFILL.*` | CUDA prefill when graph/backend path is CUDA |
+| `V010.DECODE.*` | CUDA decode when graph/backend path is CUDA |
+| `V010.LOGITS.*` | CUDA output-head/logits when backend is CUDA |
+| `V010.GEN.*` | generation over selected backend |
+| `V010.BENCH.*` | measured CUDA runtime only after implementation |
+
+CUDA rows are not a separate shortcut around the V010 runtime path. They are
+backend-specific implementations consumed by the same source/artifact/model/
+tensor/graph/runtime gates.
+
+#### 6.10.6 CUDA Performance Doctrine
+
+CUDA performance work must be evidence-driven.
+
+Important dimensions:
+
+```text
+memory traffic
+arithmetic intensity
+occupancy
+instruction-level parallelism
+register pressure
+shared memory usage
+coalescing
+bank conflicts
+tensor-core eligibility
+kernel launch overhead
+shape-specific behavior
+prefill-vs-decode mode
+```
+
+Occupancy is not performance by itself.
+
+A custom kernel is justified only when it removes real runtime cost:
+
+```text
+fuses memory-bound operations
+avoids materializing large intermediates
+improves layout locality
+reduces global memory traffic
+handles shape/runtime mode YVEX controls
+beats or complements library kernels for that exact use case
+```
+
+A custom kernel is not justified just because the operation exists.
+
+For Spark/GB10-class CUDA work, treat memory bandwidth and data movement as
+first-class budgets. Large unified memory capacity does not make global memory
+traffic free.
+
+#### 6.10.7 CUDA Future Implementation Order
+
+CUDA future implementation order:
+
+1. keep `CUDA.KERNEL.0` as primitive baseline;
+2. finish model-class and tensor collection rows;
+3. implement tensor role mapping for selected target;
+4. connect role-bearing tensors to graph primitive lowering;
+5. implement CUDA graph op coverage where CPU reference exists;
+6. implement CUDA attention path only after Q/K/V/O roles exist;
+7. implement CUDA KV allocation/write/read only after real prefill rows can write it;
+8. implement CUDA decode/logits only after KV and output-head roles exist;
+9. implement generation over CUDA only after prefill/KV/decode/logits/sampling are real;
+10. benchmark CUDA only after the same runtime path users run exists.
+
+#### 6.10.8 CUDA Forbidden Claims
+
+CUDA primitive hardening must not be described as:
+
+```text
+CUDA inference + ready
+CUDA generation + ready
+CUDA runtime + ready
+Qwen CUDA runtime + implemented
+Gemma CUDA runtime + implemented
+DeepSeek CUDA generation + implemented
+FlashAttention + implemented
+tensor-core GEMM + implemented
+paged KV + implemented
+benchmark + measured
+throughput + achieved
+release_ready: + true
+generation_ready: + true
+```
 
 ### Planned Row Supersession Map
 
@@ -4525,6 +4761,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | OPERATOR.FLOW.2 | complete | operator | Sectorized copy-command operator atlas | runbook is split into model, backend, intake, artifact, integrity, materialization, graph, prefill/KV, daemon, validation, and GLM status lanes with standalone copyable commands |
 | SPINE.OPERATOR.PRESET.0 | complete | docs | Operator preset and path-resolution roadmap | spine defines path configuration, target path resolution, model prepare, model check, graph check, chat UX, and final runbook preset sequence |
 | SPINE.OUTPUT.UX.CONTRACT.0 | complete | docs | CLI output UX contract and diagnostic demotion plan | spine defines normal, summary, table, verbose, trace, audit, JSON, metric, color, and hardcoded-print policies; marks current verbose diagnostic/report output as non-final UX; maps future output work to V010.CLI.*; preserves runtime, generation, benchmark, and release boundaries |
+| SPINE.CUDA.MAP.0 | complete | docs | CUDA execution spine enrichment | spine adds a CUDA execution crosswalk, owner map, staged CUDA ladder, backend/graph/runtime dependency map, performance doctrine, future implementation order, and forbidden claim boundary without runtime implementation, CUDA generation, benchmark, throughput, FlashAttention, tensor-core GEMM, paged KV, or release-ready claim |
 | OPERATOR.PATHS.0 | complete | operator | Operator model root configuration | `yvex paths configure` stores or resolves operator-local model roots without requiring shell export walls |
 | MODEL.TARGET.PATHS.0 | complete | model | Model target path resolution | `yvex model-target inspect TARGET --paths` reports source, artifact, report, registry, and planned paths without reading model payloads |
 | MODEL.PREPARE.0 | complete | model | DeepSeek selected artifact prepare preset | `yvex models prepare deepseek4-v4-flash-selected-embed` runs the implemented source-to-selected-GGUF and alias registration path without generation claim |
@@ -4800,6 +5037,7 @@ meta-spine rows should not inflate Current Capability as runtime implementation.
 | SPINE.REDESIGN.0 | complete | redesign | track-first spine architecture | none | information architecture | docs-only; no runtime implementation |
 | SPINE.METAL.QWEN.0 | complete | pressure-lane doctrine | Qwen/Metal future lane | none | target-pressure | docs-only; no generation claim |
 | SPINE.OUTPUT.UX.CONTRACT.0 | complete | UX doctrine | CLI output UX | none | contract | docs-only; no CLI behavior, runtime implementation, generation, benchmark, or release claim |
+| SPINE.CUDA.MAP.0 | complete | execution-map / backend doctrine | CUDA execution crosswalk | none | spine crosswalk | docs-only; no CUDA runtime/generation/benchmark implementation |
 
 
 ## 10. Evidence Crosswalks
@@ -5814,6 +6052,7 @@ v0.1.0 release
 | not DeepSeek generation | no DeepSeek V4 Flash real generation |
 | not benchmark | no measured runtime path with reproducibility metadata |
 | external-reference | paper/external runner/external GGUF only |
+| CUDA primitive | CUDA kernel or primitive proof exists, but it is not CUDA full runtime unless graph, prefill, KV, decode, logits, sampling, and generation consume it |
 
 ### 12.3 External Reference Boundaries
 
