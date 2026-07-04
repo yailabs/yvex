@@ -124,6 +124,11 @@ make
 ./yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8 --append-demo --read-position 0
 ```
 
+`model-target class-profile qwen3-8b` is header-metadata-only model-class
+evidence. It counts lexical tensor-name patterns from safetensors headers and
+does not map tensor roles, load payloads, execute runtime paths, generate,
+evaluate, benchmark, or mark a release ready.
+
 ## Lane 1 — Graph-only regression
 
 Purpose:

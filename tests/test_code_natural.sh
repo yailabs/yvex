@@ -127,6 +127,8 @@ pattern='Qwen source down''loaded'
 scan_forbidden_claim "$pattern"
 pattern='Qwen source veri''fied'
 scan_forbidden_claim "$pattern"
+pattern='Qwen suppor''ted'
+scan_forbidden_claim "$pattern"
 pattern='Qwen runtime imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='Qwen generation imple''mented'
@@ -147,7 +149,13 @@ pattern='native_inventory_rea''dy: true'
 scan_forbidden_claim "$pattern"
 pattern='source tensor roles map''ped'
 scan_forbidden_claim "$pattern"
+pattern='tensor roles map''ped'
+scan_forbidden_claim "$pattern"
 pattern='Qwen model class imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='Qwen model class rea''dy'
+scan_forbidden_claim "$pattern"
+pattern='model_class_rea''dy: true'
 scan_forbidden_claim "$pattern"
 pattern='Gemma model class imple''mented'
 scan_forbidden_claim "$pattern"

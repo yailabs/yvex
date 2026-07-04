@@ -152,10 +152,10 @@ Backend selection is deferred; Metal pressure is reported separately as
 `backend_pressure: metal-planned`. It is pending source/config verification.
 `model-target class-profile qwen3-8b` reads local safetensors source names,
 preferring a downloaded `<models_root>/hf/qwen/qwen3-8b` source when present
-and otherwise reporting the target source slot or explicit `--source`. It is
-the next Qwen model-understanding surface; it must not be treated as
-tensor-role mapping, model execution, artifact emission, generation,
-evaluation, benchmark, or release readiness.
+and otherwise reporting the target source slot or explicit `--source`. It is a
+header-metadata-only model-class profile with lexical tensor-name counters; it
+must not be treated as tensor-role mapping, model execution, artifact emission,
+generation, evaluation, benchmark, or release readiness.
 
 `gemma-4-12b-it` is a source-target profile only. It names the Gemma
 model/source target, the `<models_root>/hf/gemma/gemma-4-12b-it` source path

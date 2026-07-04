@@ -1445,7 +1445,7 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "MODEL.CLASS.QWEN.0,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
+        "MODEL.CLASS.GEMMA.0,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
@@ -1473,7 +1473,7 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "MODEL.CLASS.QWEN.0,MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0",
+        "MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0",
         {
             "planned-dense-pressure-only",
             "missing-gemma-source-path",
@@ -1663,7 +1663,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,MODEL.CLASS.QWEN.0,COMPUTE.BACKEND.METAL.0",
+        "V010.TARGET.7,MODEL.CLASS.GEMMA.0,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
@@ -1709,7 +1709,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,MODEL.CLASS.QWEN.0,MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0",
+        "V010.TARGET.7,MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0",
         {
             "planned-dense-pressure-only",
             "missing-gemma-source-path",
@@ -2045,9 +2045,11 @@ typedef struct {
     unsigned long long attention_k_pattern_count;
     unsigned long long attention_v_pattern_count;
     unsigned long long attention_o_pattern_count;
+    unsigned long long attention_self_pattern_count;
     unsigned long long mlp_gate_pattern_count;
     unsigned long long mlp_up_pattern_count;
     unsigned long long mlp_down_pattern_count;
+    unsigned long long mlp_generic_pattern_count;
     unsigned long long norm_pattern_count;
     unsigned long long output_head_pattern_count;
     unsigned long long moe_router_pattern_count;
@@ -2134,6 +2136,8 @@ static void model_class_count_qwen_tensor(yvex_qwen_model_class_profile *profile
                                           const char *name)
 {
     int matched = 0;
+    int has_attention_projection = 0;
+    int has_mlp_projection = 0;
     int has_gate_proj;
 
     if (!profile || !name) {
@@ -2148,29 +2152,45 @@ static void model_class_count_qwen_tensor(yvex_qwen_model_class_profile *profile
     if (model_class_name_contains_ci(name, "q_proj")) {
         profile->attention_q_pattern_count++;
         matched = 1;
+        has_attention_projection = 1;
     }
     if (model_class_name_contains_ci(name, "k_proj")) {
         profile->attention_k_pattern_count++;
         matched = 1;
+        has_attention_projection = 1;
     }
     if (model_class_name_contains_ci(name, "v_proj")) {
         profile->attention_v_pattern_count++;
         matched = 1;
+        has_attention_projection = 1;
     }
     if (model_class_name_contains_ci(name, "o_proj")) {
         profile->attention_o_pattern_count++;
+        matched = 1;
+        has_attention_projection = 1;
+    }
+    if (model_class_name_contains_ci(name, "self_attn") &&
+        !has_attention_projection) {
+        profile->attention_self_pattern_count++;
         matched = 1;
     }
     if (model_class_name_contains_ci(name, "gate_proj")) {
         profile->mlp_gate_pattern_count++;
         matched = 1;
+        has_mlp_projection = 1;
     }
     if (model_class_name_contains_ci(name, "up_proj")) {
         profile->mlp_up_pattern_count++;
         matched = 1;
+        has_mlp_projection = 1;
     }
     if (model_class_name_contains_ci(name, "down_proj")) {
         profile->mlp_down_pattern_count++;
+        matched = 1;
+        has_mlp_projection = 1;
+    }
+    if (model_class_name_contains_ci(name, "mlp") && !has_mlp_projection) {
+        profile->mlp_generic_pattern_count++;
         matched = 1;
     }
     if (model_class_name_contains_ci(name, "input_layernorm")) {
@@ -2218,7 +2238,8 @@ static unsigned long long model_class_profile_attention_count(
     return profile->attention_q_pattern_count +
            profile->attention_k_pattern_count +
            profile->attention_v_pattern_count +
-           profile->attention_o_pattern_count;
+           profile->attention_o_pattern_count +
+           profile->attention_self_pattern_count;
 }
 
 static unsigned long long model_class_profile_mlp_count(
@@ -2229,7 +2250,8 @@ static unsigned long long model_class_profile_mlp_count(
     }
     return profile->mlp_gate_pattern_count +
            profile->mlp_up_pattern_count +
-           profile->mlp_down_pattern_count;
+           profile->mlp_down_pattern_count +
+           profile->mlp_generic_pattern_count;
 }
 
 static unsigned long long model_class_profile_moe_count(
@@ -2390,7 +2412,7 @@ static void print_qwen_model_class_profile_normal(
            profile->output_head_pattern_count,
            model_class_profile_moe_count(profile));
     printf("top_blocker: %s\n", profile->top_blocker);
-    printf("next: MODEL.CLASS.QWEN.0\n");
+    printf("next: MODEL.CLASS.GEMMA.0\n");
     printf("boundary: model-class profile only; no tensor role mapping/runtime/generation\n");
 }
 
@@ -2411,7 +2433,7 @@ static void print_qwen_model_class_profile_table(
            profile->norm_pattern_count,
            profile->output_head_pattern_count,
            model_class_profile_moe_count(profile),
-           "MODEL.CLASS.QWEN.0");
+           "MODEL.CLASS.GEMMA.0");
 }
 
 static void print_qwen_model_class_profile_audit(
@@ -2459,6 +2481,8 @@ static void print_qwen_model_class_profile_audit(
     printf("model_class_pattern_status: lexical-only\n");
     printf("model_class_role_mapping_status: not-implemented\n");
     printf("model_class_runtime_status: unsupported\n");
+    printf("backend_selection: deferred\n");
+    printf("backend_pressure: metal-planned\n");
     printf("runtime_claim: unsupported\n");
     printf("generation: unsupported-full-model\n");
     printf("benchmark_status: not-measured\n");
@@ -2467,7 +2491,7 @@ static void print_qwen_model_class_profile_audit(
     printf("source_path_source: %s\n", profile->source_path_source);
     printf("source_exists: %s\n", profile->source_exists ? "true" : "false");
     printf("top_blocker: %s\n", profile->top_blocker);
-    printf("next_required_rows: MODEL.CLASS.QWEN.0\n");
+    printf("next_required_rows: MODEL.CLASS.GEMMA.0\n");
     printf("boundary: model-class profile only; no tensor role mapping/runtime/generation\n");
 }
 
@@ -2480,8 +2504,11 @@ static void print_qwen_model_class_audit_hint(const yvex_model_target_record *re
     printf("model_class_family: qwen\n");
     printf("model_class_target_id: qwen3-8b\n");
     printf("model_class_name: qwen-source-model-class-profile\n");
+    printf("model_class_runtime_shape: causal-decoder-candidate-pending-config\n");
     printf("model_class_evidence_basis: header-metadata-only\n");
+    printf("model_class_pattern_status: lexical-only\n");
     printf("model_class_role_mapping_status: not-implemented\n");
+    printf("model_class_runtime_status: unsupported\n");
 }
 
 static const char *target_decision_candidate_class(const yvex_model_target_record *record)
@@ -2875,7 +2902,7 @@ static int print_model_target_candidate_normal(const char *release,
     printf("candidates: 0 eligible / %lu known (%lu pressure, %lu fixture)\n",
            candidate_count, pressure_count, fixture_count);
     printf("top_blocker: no eligible full-runtime candidate\n");
-    printf("next: MODEL.CLASS.QWEN.0\n");
+    printf("next: MODEL.CLASS.GEMMA.0\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
@@ -3201,7 +3228,7 @@ static int print_model_target_dense_candidate_normal(const char *release,
     printf("candidates: %lu eligible / %lu known (%lu dense pressure)\n",
            eligible_count, dense_candidate_count, dense_pressure_count);
     printf("top_blocker: no selected dense full-runtime candidate\n");
-    printf("next: MODEL.CLASS.QWEN.0\n");
+    printf("next: MODEL.CLASS.GEMMA.0\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
@@ -3369,7 +3396,7 @@ static int print_model_target_qwen_metal_report(const char *release,
         }
     }
     if (include_next) {
-        printf("next_required_rows: MODEL.CLASS.QWEN.0\n");
+        printf("next_required_rows: MODEL.CLASS.GEMMA.0\n");
     }
     return 0;
 }
@@ -3395,7 +3422,7 @@ static int print_model_target_qwen_metal_normal(const char *release,
     printf("source_target: profiled\n");
     printf("source: missing\n");
     printf("backend: metal unsupported\n");
-    printf("next: MODEL.CLASS.QWEN.0\n");
+    printf("next: MODEL.CLASS.GEMMA.0\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     return 0;
 }
@@ -3601,7 +3628,7 @@ static int print_model_target_decision_normal(const char *release,
     printf("eligible: %lu / %lu candidates (%lu ineligible)\n",
            eligible_count, candidate_count, ineligible_count);
     printf("top_blocker: %s\n", selected ? "none" : "no eligible full-runtime candidate");
-    printf("next: MODEL.CLASS.QWEN.0\n");
+    printf("next: MODEL.CLASS.GEMMA.0\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     return 0;
 }
@@ -4140,10 +4167,7 @@ static void print_model_target_record_normal(const yvex_model_target_record *rec
         printf("backend_pressure: %s\n", model_target_backend_pressure(record));
         printf("runtime: %s\n", record->runtime_execution);
         printf("generation: %s\n", record->generation);
-        printf("next: %s\n",
-               strcmp(record->target_id, "gemma-4-12b-it") == 0
-                   ? "MODEL.CLASS.GEMMA.0"
-                   : "MODEL.CLASS.QWEN.0");
+        printf("next: MODEL.CLASS.GEMMA.0\n");
         printf("boundary: target/source profile only; no source download/runtime/generation\n");
         printf("status: model-target\n");
         return;
@@ -4215,7 +4239,7 @@ static void print_model_target_report_table(const char *report,
            status ? status : "blocked",
            selected ? selected : "none",
            eligible_count,
-           "MODEL.CLASS.QWEN.0");
+           "MODEL.CLASS.GEMMA.0");
 }
 
 static int path_exists(const char *path)

@@ -677,7 +677,7 @@ static const yvex_source_family_profile source_family_profiles[] = {
         "missing-qwen-source-config",
         "missing-qwen-tokenizer-files",
         "missing-qwen-tensor-role-map",
-        "MODEL.CLASS.QWEN.0",
+        "MODEL.CLASS.GEMMA.0",
         qwen_source_tail_blockers,
         sizeof(qwen_source_tail_blockers) / sizeof(qwen_source_tail_blockers[0]),
     },
