@@ -610,7 +610,7 @@ typedef struct {
 } yvex_source_family_profile;
 
 static const char *qwen_source_tail_blockers[] = {
-    "missing-qwen-model-class-profile",
+    "missing-qwen-tensor-role-map",
     "missing-qwen-tensor-map",
     "missing-qwen-tokenizer-map",
     "missing-qwen-output-head-map",
@@ -676,8 +676,8 @@ static const yvex_source_family_profile source_family_profiles[] = {
         "missing-qwen-native-inventory",
         "missing-qwen-source-config",
         "missing-qwen-tokenizer-files",
-        "missing-qwen-model-class-profile",
-        "MODEL.CLASS.QWEN.0",
+        "missing-qwen-tensor-role-map",
+        "MODEL.CLASS.GEMMA.0",
         qwen_source_tail_blockers,
         sizeof(qwen_source_tail_blockers) / sizeof(qwen_source_tail_blockers[0]),
     },
@@ -2608,7 +2608,10 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
                i,
                sample->declared_bytes);
     }
-    printf("model_class_profile_status: missing\n");
+    printf("model_class_profile_status: %s\n",
+           strcmp(options->profile->family_key, "qwen") == 0
+               ? "command-visible"
+               : "missing");
     printf("tensor_map_status: missing\n");
     printf("artifact_status: missing\n");
     printf("runtime_claim: unsupported\n");

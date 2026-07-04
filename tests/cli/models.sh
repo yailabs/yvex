@@ -12,6 +12,16 @@ matches() {
   grep -E -- "$pattern" "$file" >/dev/null
 }
 
+expect_rc() {
+  expected=$1
+  shift
+  set +e
+  "$@"
+  rc=$?
+  set -e
+  test "$rc" -eq "$expected"
+}
+
 rm -rf "$ROOT"
 mkdir -p "$ROOT"
 
@@ -357,7 +367,133 @@ grep 'unsupported output mode: nope' "$ROOT/check-invalid-output.err"
 
 "$YVEX_BIN" help model-target > "$ROOT/model-target-help.out"
 grep 'model-target decision --release v0.1.0' "$ROOT/model-target-help.out"
+grep 'model-target class-profile TARGET' "$ROOT/model-target-help.out"
 grep 'This command records the v0.1.0 target decision' "$ROOT/model-target-help.out"
+
+CLASS_MISSING_ROOT="$ROOT/qwen-class-missing-root"
+"$YVEX_BIN" model-target class-profile qwen-metal-portability --models-root "$CLASS_MISSING_ROOT" > "$ROOT/model-class-qwen-missing.out"
+grep 'model-class: qwen' "$ROOT/model-class-qwen-missing.out"
+grep 'target: qwen-metal-portability' "$ROOT/model-class-qwen-missing.out"
+grep 'status: source-missing' "$ROOT/model-class-qwen-missing.out"
+grep 'class: qwen-source-model-class-profile' "$ROOT/model-class-qwen-missing.out"
+grep 'evidence: header-metadata-only' "$ROOT/model-class-qwen-missing.out"
+grep 'patterns: tensors=0 attn=0 mlp=0 norm=0 head=0 moe=0' "$ROOT/model-class-qwen-missing.out"
+grep 'top_blocker: missing-qwen-source-path' "$ROOT/model-class-qwen-missing.out"
+grep 'next: MODEL.CLASS.GEMMA.0' "$ROOT/model-class-qwen-missing.out"
+grep 'no tensor role mapping/runtime/generation' "$ROOT/model-class-qwen-missing.out"
+
+"$YVEX_BIN" model-target class-profile qwen-metal-portability --models-root "$CLASS_MISSING_ROOT" --audit > "$ROOT/model-class-qwen-missing-audit.out"
+grep 'model_class_profile_status: source-missing' "$ROOT/model-class-qwen-missing-audit.out"
+grep 'model_class_source_metadata_status: missing' "$ROOT/model-class-qwen-missing-audit.out"
+grep 'model_class_tensor_count: 0' "$ROOT/model-class-qwen-missing-audit.out"
+grep 'model_class_pattern_status: lexical-only' "$ROOT/model-class-qwen-missing-audit.out"
+grep 'model_class_role_mapping_status: not-implemented' "$ROOT/model-class-qwen-missing-audit.out"
+grep 'runtime_claim: unsupported' "$ROOT/model-class-qwen-missing-audit.out"
+grep 'generation: unsupported-full-model' "$ROOT/model-class-qwen-missing-audit.out"
+grep 'benchmark_status: not-measured' "$ROOT/model-class-qwen-missing-audit.out"
+grep 'release_ready: false' "$ROOT/model-class-qwen-missing-audit.out"
+grep 'next_required_rows: MODEL.CLASS.GEMMA.0' "$ROOT/model-class-qwen-missing-audit.out"
+
+QWEN_CLASS_SOURCE="${TMPDIR:-/tmp}/yvex-qwen-class-profile-test-$$"
+rm -rf "$QWEN_CLASS_SOURCE"
+mkdir -p "$QWEN_CLASS_SOURCE"
+printf '{}\n' > "$QWEN_CLASS_SOURCE/config.json"
+printf '{}\n' > "$QWEN_CLASS_SOURCE/tokenizer.json"
+python3 - "$QWEN_CLASS_SOURCE/model-00001-of-00001.safetensors" <<'PY'
+import json
+import struct
+import sys
+
+names = [
+    "model.embed_tokens.weight",
+    "model.layers.0.self_attn.q_proj.weight",
+    "model.layers.0.self_attn.k_proj.weight",
+    "model.layers.0.self_attn.v_proj.weight",
+    "model.layers.0.self_attn.o_proj.weight",
+    "model.layers.0.mlp.gate_proj.weight",
+    "model.layers.0.mlp.up_proj.weight",
+    "model.layers.0.mlp.down_proj.weight",
+    "model.layers.0.input_layernorm.weight",
+    "lm_head.weight",
+]
+offset = 0
+header = {}
+for name in names:
+    header[name] = {
+        "dtype": "F32",
+        "shape": [2, 2],
+        "data_offsets": [offset, offset + 16],
+    }
+    offset += 16
+blob = json.dumps(header, separators=(",", ":")).encode("utf-8")
+with open(sys.argv[1], "wb") as f:
+    f.write(struct.pack("<Q", len(blob)))
+    f.write(blob)
+    f.write(b"x" * offset)
+PY
+
+"$YVEX_BIN" model-target class-profile qwen-metal-portability --source "$QWEN_CLASS_SOURCE" > "$ROOT/model-class-qwen.out"
+grep 'status: metadata-profiled' "$ROOT/model-class-qwen.out"
+grep 'patterns: tensors=10 attn=4 mlp=3 norm=2 head=1 moe=0' "$ROOT/model-class-qwen.out"
+grep 'top_blocker: missing-qwen-tensor-role-map' "$ROOT/model-class-qwen.out"
+grep 'next: MODEL.CLASS.GEMMA.0' "$ROOT/model-class-qwen.out"
+
+"$YVEX_BIN" model-target class-profile qwen-metal-portability --source "$QWEN_CLASS_SOURCE" --output table > "$ROOT/model-class-qwen-table.out"
+grep 'MODEL CLASS PROFILE' "$ROOT/model-class-qwen-table.out"
+matches "$ROOT/model-class-qwen-table.out" '^qwen[[:space:]]{2,}qwen-metal-portability[[:space:]]{2,}metadata-profiled[[:space:]]{2,}10[[:space:]]{2,}4[[:space:]]{2,}3[[:space:]]{2,}2[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}MODEL\.CLASS\.GEMMA\.0$'
+
+"$YVEX_BIN" model-target class-profile qwen-metal-portability --source "$QWEN_CLASS_SOURCE" --audit > "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_profile_status: metadata-profiled' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_config_status: present' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_tokenizer_status: present' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_source_metadata_status: header-only' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_tensor_count: 10' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_embedding_pattern_count: 1' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_attention_q_pattern_count: 1' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_attention_k_pattern_count: 1' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_attention_v_pattern_count: 1' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_attention_o_pattern_count: 1' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_mlp_gate_pattern_count: 1' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_mlp_up_pattern_count: 1' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_mlp_down_pattern_count: 1' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_norm_pattern_count: 2' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_output_head_pattern_count: 1' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_moe_router_pattern_count: 0' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_moe_expert_pattern_count: 0' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_other_pattern_count: 0' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_pattern_status: lexical-only' "$ROOT/model-class-qwen-audit.out"
+grep 'model_class_role_mapping_status: not-implemented' "$ROOT/model-class-qwen-audit.out"
+grep 'runtime_claim: unsupported' "$ROOT/model-class-qwen-audit.out"
+grep 'generation: unsupported-full-model' "$ROOT/model-class-qwen-audit.out"
+grep 'benchmark_status: not-measured' "$ROOT/model-class-qwen-audit.out"
+grep 'release_ready: false' "$ROOT/model-class-qwen-audit.out"
+
+QWEN_CLASS_MODELS_ROOT="$ROOT/qwen-class-models-root"
+mkdir -p "$QWEN_CLASS_MODELS_ROOT/hf/qwen"
+cp -R "$QWEN_CLASS_SOURCE" "$QWEN_CLASS_MODELS_ROOT/hf/qwen/qwen3-8b"
+"$YVEX_BIN" model-target class-profile qwen-metal-portability --models-root "$QWEN_CLASS_MODELS_ROOT" --audit > "$ROOT/model-class-qwen-models-root-audit.out"
+grep 'model_class_profile_status: metadata-profiled' "$ROOT/model-class-qwen-models-root-audit.out"
+matches "$ROOT/model-class-qwen-models-root-audit.out" 'source_path: .*/qwen-class-models-root/hf/qwen/qwen3-8b$'
+grep 'model_class_source_metadata_status: header-only' "$ROOT/model-class-qwen-models-root-audit.out"
+
+BAD_RUNTIME_CLAIM='runtime_claim: support''ed'
+BAD_GENERATION_READY='generation_ready: tr''ue'
+BAD_BENCHMARK_MEASURED='benchmark_status: measur''ed'
+BAD_RELEASE_READY='release_ready: tr''ue'
+! grep "$BAD_RUNTIME_CLAIM" "$ROOT/model-class-qwen-audit.out"
+! grep "$BAD_GENERATION_READY" "$ROOT/model-class-qwen-audit.out"
+! grep "$BAD_BENCHMARK_MEASURED" "$ROOT/model-class-qwen-audit.out"
+! grep "$BAD_RELEASE_READY" "$ROOT/model-class-qwen-audit.out"
+rm -rf "$QWEN_CLASS_SOURCE"
+
+expect_rc 2 "$YVEX_BIN" model-target class-profile > "$ROOT/model-class-missing-target.out" 2> "$ROOT/model-class-missing-target.err"
+grep 'requires TARGET' "$ROOT/model-class-missing-target.err"
+expect_rc 2 "$YVEX_BIN" model-target class-profile nope > "$ROOT/model-class-bad-target.out" 2> "$ROOT/model-class-bad-target.err"
+grep 'unsupported target: nope' "$ROOT/model-class-bad-target.err"
+expect_rc 2 "$YVEX_BIN" model-target class-profile qwen-metal-portability --output nope > "$ROOT/model-class-bad-output.out" 2> "$ROOT/model-class-bad-output.err"
+grep 'unsupported output mode: nope' "$ROOT/model-class-bad-output.err"
+expect_rc 2 "$YVEX_BIN" model-target class-profile qwen-metal-portability --source > "$ROOT/model-class-missing-source.out" 2> "$ROOT/model-class-missing-source.err"
+grep 'source requires DIR' "$ROOT/model-class-missing-source.err"
 
 "$YVEX_BIN" model-target decision --help > "$ROOT/model-target-decision-help.out"
 grep 'usage: yvex model-target decision --release v0.1.0' "$ROOT/model-target-decision-help.out"
@@ -368,14 +504,15 @@ grep 'report: target-decision' "$ROOT/model-target-decision-normal.out"
 grep 'status: target-decision-blocked' "$ROOT/model-target-decision-normal.out"
 grep 'selected: none' "$ROOT/model-target-decision-normal.out"
 grep 'top_blocker: no eligible full-runtime candidate' "$ROOT/model-target-decision-normal.out"
-grep 'next: MODEL.CLASS.QWEN.0' "$ROOT/model-target-decision-normal.out"
+grep 'next: MODEL.CLASS.GEMMA.0' "$ROOT/model-target-decision-normal.out"
 ! grep 'next: V010\.CLI\.18' "$ROOT/model-target-decision-normal.out"
 ! grep 'next: V010\.SOURCE\.7' "$ROOT/model-target-decision-normal.out"
+! grep 'next: MODEL\.CLASS\.QWEN\.0' "$ROOT/model-target-decision-normal.out"
 grep 'boundary: report-only; generation unsupported; benchmark not measured' "$ROOT/model-target-decision-normal.out"
 
 "$YVEX_BIN" model-target decision --release v0.1.0 --output table > "$ROOT/model-target-decision-table.out"
 matches "$ROOT/model-target-decision-table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$ROOT/model-target-decision-table.out" '^target-decision[[:space:]]{2,}blocked[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}MODEL\.CLASS\.QWEN\.0$'
+matches "$ROOT/model-target-decision-table.out" '^target-decision[[:space:]]{2,}blocked[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}MODEL\.CLASS\.GEMMA\.0$'
 
 "$YVEX_BIN" model-target decision --release v0.1.0 --output nope > "$ROOT/model-target-decision-bad-output.out" 2> "$ROOT/model-target-decision-bad-output.err" && exit 1 || true
 grep 'model-target decision: unsupported output mode: nope' "$ROOT/model-target-decision-bad-output.err"

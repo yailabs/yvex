@@ -28,7 +28,7 @@ Current benchmark status:
   not measured
 
 Active implementation next:
-  MODEL.CLASS.QWEN.0 - Qwen model-class profile
+  MODEL.CLASS.GEMMA.0 - Gemma model-class profile
 
 Current release target:
   v0.1.0 - first honest full-runtime path
@@ -40,7 +40,7 @@ Primary pressure targets:
   Gemma source target profile
 
 Main v0.1.0 blocker:
-  Qwen model-class profile remains missing
+  Gemma model-class profile remains missing
 ```
 
 | Field | Current value |
@@ -58,7 +58,7 @@ Main v0.1.0 blocker:
 | Full model generation | unsupported |
 | DeepSeek generation | unsupported |
 | Eval/benchmark | unsupported / not measured |
-| Active next | MODEL.CLASS.QWEN.0 |
+| Active next | MODEL.CLASS.GEMMA.0 |
 
 ## 1. Spine Nomenclature
 
@@ -121,14 +121,14 @@ official source tensors
 
 | Stage | Purpose | Current stage | Implemented? | Current proof | Next gap |
 | --- | --- | --- | --- | --- | --- |
-| official source tensors | upstream source authority | source-intake/report-only | partial | target records, source manifests, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, source manifest/provenance hardening, and `yvex models download` source-intake sidecars | model-class profile |
+| official source tensors | upstream source authority | source-intake/report-only | partial | target records, source manifests, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, source manifest/provenance hardening, `yvex models download` source-intake sidecars, and Qwen model-class profile | Gemma model-class profile |
 | source manifest | provenance and source footprint | implemented | yes | `yvex source-manifest` | larger source coverage |
 | native tensor inventory | source tensor directory without payload loading | implemented | yes | `yvex native-weights` | huge shard indexing |
 | tensor mapping | map source/artifact tensor names to YVEX roles | partial/report-only | partial | tensor-map and family-runtime reports | final runtime role coverage |
 | artifact production | produce controlled or selected GGUF | selected-slice | partial | controlled/selected GGUF emission | full-runtime artifact production |
 | artifact identity/integrity | digest, range, shape/dtype, corruption refusal | implemented | yes | integrity reports and tests | full-runtime artifact gate |
 | model-family mapping | family adapter facts and blockers | report-only | partial | `yvex fullmodel family-runtime` | dense/output/tokenizer class facts |
-| model class | dense/MoE/source-only/selected-slice routing | report-only | partial | fullmodel descriptor reports and `yvex moe report` | final runtime route |
+| model class | dense/MoE/source-only/selected-slice routing | report-only | partial | fullmodel descriptor reports, `yvex moe report`, and `yvex model-target class-profile qwen-metal-portability` | Gemma model-class profile / final runtime route |
 | tensor collections | embedding/norm/attention/MLP/MoE/output/tokenizer roles | report-only | partial | fullmodel report, descriptor, and `yvex tensor-collection report` | v0.1.0 full-runtime tensor coverage |
 | storage/residency | placement, cache, staging, storage-stream planning | report-only | partial | materialization plans | staged residency proof |
 | backend capability | CPU/CUDA/future backend capability | partial | partial | CPU/CUDA checks and parity | capability matrix hardening |
@@ -157,7 +157,7 @@ official source tensors
 | MoE | embedding -> norm -> attention -> router -> expert selection -> dispatch -> accumulation -> output head -> logits -> sampling -> generation | report-only complete / runtime planned | v0.1.0 target decision / full-runtime artifact path |
 | source-only | source/intake/storage/model-class only | GLM pressure lane | source inventory / storage stream |
 | selected-runtime-slice | parser/materialization/partial graph/diagnostic runtime only | DeepSeek selected artifacts | does not close full runtime |
-| Metal/Qwen | backend portability lane | report-only pressure lane | Qwen source pressure report |
+| Metal/Qwen | backend portability lane | report-only pressure lane | Qwen tensor-role map after Gemma class profile |
 
 ## 3. Current Implementation State
 
@@ -184,6 +184,7 @@ operator-readable state.
 | MoE class | report-only | yes | `yvex moe report` | not router/expert execution |
 | Qwen source pressure report | report-only | yes | `yvex source-manifest report --family qwen --release v0.1.0` | not source download, artifact emission, runtime, Metal, generation, eval, or benchmark |
 | Qwen source target profile | report-only | yes | `yvex model-target inspect qwen-metal-portability` | not source download, source manifest creation, artifact emission, runtime, Metal, generation, eval, or benchmark |
+| Qwen model-class profile | report-only | yes | `yvex model-target class-profile qwen-metal-portability --audit` | not tensor payload loading, tensor role mapping, model-class readiness, artifact emission, runtime, Metal, generation, eval, benchmark, throughput, or release readiness |
 | Gemma source pressure report | report-only | yes | `yvex source-manifest report --family gemma --release v0.1.0` | not source download, artifact emission, runtime, generation, eval, or benchmark |
 | Gemma source target profile | report-only | yes | `yvex model-target inspect gemma-dense-portability` | not source download, source manifest creation, artifact emission, runtime, generation, eval, or benchmark |
 | source artifact class fields | report-only | yes | Qwen/Gemma source reports and target inspect/list audit fields | not source download, artifact emission, materialization, runtime, generation, eval, or benchmark |
@@ -192,7 +193,8 @@ operator-readable state.
 | native safetensors inventory | report-only | yes | Qwen/Gemma source reports read safetensors headers only to count files, opened headers, header bytes, tensor records, dtype counts, rank/shape summaries, declared data bytes, largest tensor metadata, and malformed-header counts | not source download, remote lookup, hashing, manifest creation, source readiness, tensor payload loading, artifact emission, materialization, runtime, generation, eval, or benchmark |
 | source tensor metadata inventory | report-only | yes | Qwen/Gemma source reports derive tensor names, file placement, dtype, rank, shape, element counts, declared byte spans, largest tensors, dtype/rank distributions, and lexical name-pattern summaries from safetensors headers only | not tensor payload loading, hashing, runtime role mapping, model class inference, artifact emission, materialization, runtime, generation, eval, benchmark, throughput, or release readiness |
 | source manifest/provenance hardening | report-only | yes | Qwen/Gemma source reports expose manifest expectation, path/status, shallow schema/family/target consistency, manifest sub-status fields, and no-create/no-remote/no-hash/no-payload boundaries | not source download, source readiness, remote lookup, hashing, payload loading, artifact emission, runtime, generation, eval, benchmark, throughput, or release readiness |
-| source tensor download lane | source-intake | yes | `yvex models download TARGET --models-root DIR --audit` and `tests/cli/models.sh` fake-HF coverage | not remote identity verification, payload hashing, conversion, GGUF creation, registry runtime artifact registration, materialization, runtime, generation, eval, or benchmark |
+| source tensor download lane | source-intake | yes | `yvex models download TARGET --models-root DIR --auth auto --audit` and `tests/cli/models.sh` fake-HF/fake-GitHub coverage | not remote identity verification, payload hashing, conversion, GGUF creation, registry runtime artifact registration, materialization, runtime, generation, eval, or benchmark |
+| provider account lane | local-provider-boundary | yes | `yvex accounts status/login/whoami/ensure` plus `models download --auth auto|required|never` provider preflight for Hugging Face and GitHub fake CLIs | not YAI account state, MCP, hosted auth, OAuth implementation, raw token storage, source verification, runtime, generation, eval, benchmark, or release readiness |
 | operator paths/presets | operator-preset | yes | paths/model-target/models prepare/check | not extra runtime capability |
 | normal CLI output baseline | operator-output | yes | `info`, `paths`, `models`, `model-target`, and `generate` normal/audit tests | not new runtime capability |
 | compact report/table output baseline | operator-output | yes | `models`, `model-target`, `fullmodel`, integrity, KV, and model-class report normal/table/audit tests | not new runtime capability |
@@ -558,7 +560,7 @@ lanes; rows are the delivery units that complete track work.
 | Track ID | Track name | Owns | Current status | Implemented evidence | Next gap | Active / Later |
 | --- | --- | --- | --- | --- | --- | --- |
 | TRACK.TARGET | Target selection and pressure objects | target classes and release target decision | source-target-profiled | target registry, path reports, `yvex model-target decision`, `yvex model-target candidate`, `yvex model-target dense-candidate`, `yvex model-target qwen-metal`, `yvex model-target inspect qwen-metal-portability`, and `yvex model-target inspect gemma-dense-portability` | full-runtime target selection remains blocked | active |
-| TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory, Qwen/Gemma source pressure reports, Qwen/Gemma source target profiles, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, source manifest/provenance hardening, and models download source-intake lane | model-class handoff | active |
+| TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory, Qwen/Gemma source pressure reports, Qwen/Gemma source target profiles, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, source manifest/provenance hardening, provider account preflight, Hugging Face/GitHub source auth boundary, and models download source-intake lane | model-class handoff | active |
 | TRACK.ARTIFACT | Artifact production | YVEX-produced GGUF and conversion plan | selected-slice | controlled/selected GGUF emission | full-runtime artifact production | later |
 | TRACK.INTEGRITY | Artifact identity and gates | digest/ranges/corruption/materialization gates | implemented | integrity harness and reports | full-runtime gate coverage | active |
 | TRACK.MODEL | Model class and runtime routing | dense/MoE/source-only/selected-slice class reports | partial/report-only | family-runtime, attention, KV, context, MoE reports | final runtime route and dense/output/tokenizer class gaps | active |
@@ -620,11 +622,11 @@ Main blockers:
   Qwen/Metal is visible as a reduced-scale pressure lane, Qwen and Gemma source
   pressure are command-visible, and `qwen-metal-portability` plus
   `gemma-dense-portability` are concrete source target profiles, but source
-  model class, tensor map, artifact, Metal backend, residency, graph/runtime,
+  Gemma model class, tensor map, artifact, Metal backend, residency, graph/runtime,
   eval, and benchmark facts are still missing.
 
 Next possible row:
-  MODEL.CLASS.QWEN.0.
+  MODEL.CLASS.GEMMA.0.
 
 Boundary:
   a target is not a capability claim.
@@ -656,10 +658,10 @@ v0.1.0 rows:
   V010.SOURCE.*, OWI.*.
 
 Main blockers:
-  model-class profile.
+  Gemma model-class profile, then tensor-role mapping.
 
 Next possible row:
-  MODEL.CLASS.QWEN.0.
+  MODEL.CLASS.GEMMA.0.
 
 Note:
   `OWI.TARGETS.QWEN.0` is the existing Qwen-specific source-target profile row
@@ -671,7 +673,9 @@ Note:
   fields; `V010.SOURCE.5` completed native safetensors inventory;
   `V010.SOURCE.6` completed source tensor metadata inventory; `V010.SOURCE.7`
   completed source manifest/provenance hardening; `V010.SOURCE.7A /
-  MODELS.DOWNLOAD.0` completed the foreground source tensor download lane.
+  MODELS.DOWNLOAD.0` completed the foreground source tensor download lane;
+  `V010.SOURCE.7B / ACCOUNTS.PROVIDER.0` completed local provider account
+  preflight for Hugging Face and GitHub.
 
 Boundary:
   source inventory is not model execution.
@@ -1195,10 +1199,10 @@ v0.1.0 rows:
   V010.CLI.*, V010.OPERATOR.*.
 
 Main blockers:
-  Qwen model-class profile remains missing.
+  Gemma model-class profile remains missing.
 
 Next possible row:
-  MODEL.CLASS.QWEN.0.
+  MODEL.CLASS.GEMMA.0.
 
 Boundary:
   operator presets compose lower behavior only.
@@ -4106,7 +4110,7 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 ## 7. Active Next
 
 ```text
-MODEL.CLASS.QWEN.0 - Qwen model-class profile
+MODEL.CLASS.GEMMA.0 - Gemma model-class profile
 ```
 
 `SPINE.OUTPUT.UX.CONTRACT.0` is complete as a docs/control row. It defines the
@@ -4196,7 +4200,7 @@ runtime_claim: unsupported
 generation: unsupported-full-model
 benchmark_status: not-measured
 release_ready: false
-next_required_rows: MODEL.CLASS.QWEN.0
+next_required_rows: MODEL.CLASS.GEMMA.0
 ```
 
 The current DeepSeek selected artifacts remain pressure targets for parser,
@@ -4297,7 +4301,7 @@ V010.SOURCE.7A / MODELS.DOWNLOAD.0 - native source tensor download lane
 
 `V010.SOURCE.7A / MODELS.DOWNLOAD.0` adds `yvex models download` under the
 existing `models` namespace. The command resolves operator paths, routes a
-small catalog or direct `--repo` request to a foreground `hf download`, records
+small catalog or direct `--repo` request to a provider CLI download, records
 stdout/stderr logs and a token-redacted receipt, and writes download registry,
 download report, source manifest, and header-only native inventory sidecars
 after a successful non-dry-run. It does not verify upstream identity, hash
@@ -4305,10 +4309,40 @@ payloads, load tensor payload bytes, emit GGUF, register a runtime artifact,
 materialize tensors, execute runtime paths, generate, evaluate, benchmark,
 claim throughput, or mark a release ready.
 
-Active Next is now the Qwen model-class profile lane:
+Completed source/account lane row:
+
+```text
+V010.SOURCE.7B / ACCOUNTS.PROVIDER.0 - local provider account lane
+```
+
+`V010.SOURCE.7B / ACCOUNTS.PROVIDER.0` adds `yvex accounts` as the local
+provider-account boundary for Hugging Face and GitHub. It discovers provider
+CLIs, reports status, invokes provider-owned login flows, writes only a
+non-secret `accounts.local.json` observation cache, and lets `models download`
+preflight provider auth with `--auth auto|required|never` before source
+acquisition. It does not store raw tokens, implement OAuth, install provider
+tools, use MCP/YAI account state, verify source identity, hash payloads, create
+runtime artifacts, materialize tensors, execute runtime paths, generate,
+evaluate, benchmark, claim throughput, or mark a release ready.
+
+Completed model-class row:
 
 ```text
 MODEL.CLASS.QWEN.0 - Qwen model-class profile
+```
+
+`MODEL.CLASS.QWEN.0` adds `yvex model-target class-profile
+qwen-metal-portability` as a header-metadata-only source profile over existing
+Qwen source evidence. It exposes family, target, model-class status,
+runtime-shape candidate, lexical tensor pattern counters, evidence basis, and
+explicit no-role-map/no-runtime/no-generation/no-benchmark boundaries without
+tensor payload loading, tensor role mapping, model execution, artifact
+emission, generation, eval, throughput, or release-ready claim.
+
+Active Next is now the Gemma model-class profile lane:
+
+```text
+MODEL.CLASS.GEMMA.0 - Gemma model-class profile
 ```
 
 Completed CUDA interlock row:
@@ -4402,6 +4436,8 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | V010.SOURCE.6 | complete | source | Source tensor metadata inventory | source tensor metadata inventory is command-visible for Qwen and Gemma source pressure reports, deriving tensor names, shard file placement, dtype, rank, shape, element counts, declared byte spans, largest tensor metadata, dtype/rank distributions, and lexical name-pattern summaries from safetensors headers only without loading tensor payload bytes, hashing files, mapping tensors to runtime roles, inferring model classes, emitting artifacts, materializing tensors, running graph/runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | V010.SOURCE.7 | complete | source | Source manifest/provenance hardening | source manifest/provenance hardening fields are command-visible for Qwen and Gemma source pressure reports, exposing manifest expectation, manifest path/status, schema/family/target/artifact/footprint/provenance/native-inventory/tensor-metadata consistency status, and explicit no-create/no-remote/no-hash/no-payload boundaries without source download, source readiness claim, artifact emission, materialization, graph/runtime execution, generation, eval, benchmark, throughput, or release-ready claim |
 | V010.SOURCE.7A / MODELS.DOWNLOAD.0 | complete | source | Native source tensor download lane | `yvex models download` routes catalog or direct Hugging Face repo requests through the installed `hf download` CLI, writes token-redacted receipts, stdout/stderr logs, registry/report sidecars, source manifests, and header-only native inventories under the operator models root, with fake-HF CLI tests covering dry-run, success, missing CLI, backend failure, direct repo, parser errors, and token redaction; it does not verify upstream identity, hash payloads, load tensor payload bytes, emit GGUF, register a runtime artifact, materialize tensors, execute graph/runtime, generate, eval, benchmark, throughput, or release-ready claim |
+| V010.SOURCE.7B / ACCOUNTS.PROVIDER.0 | complete | source | Local provider account lane | `yvex accounts` reports Hugging Face/GitHub provider availability, login, whoami, and ensure state through provider-owned CLIs, writes only non-secret local account observations, and `models download --auth auto|required|never` uses that preflight before Hugging Face or GitHub release asset downloads without raw token storage, MCP/YAI account integration, hosted auth, OAuth implementation, source verification, runtime, generation, eval, benchmark, throughput, or release-ready claim |
+| MODEL.CLASS.QWEN.0 | complete | model | Qwen model-class profile | Qwen model-class profile is command-visible as a header-metadata-only source profile for `qwen-metal-portability`, exposing family, target, model-class status, runtime-shape candidate, lexical tensor pattern counters, evidence basis, and explicit no-role-map/no-runtime/no-generation/no-benchmark boundaries without tensor payload loading, tensor role mapping, model execution, artifact emission, generation, eval, throughput, or release-ready claim |
 | CUDA.KERNEL.0 | complete | cuda | CUDA primitive kernel vertical hardening | existing CUDA primitive kernels are vertically hardened as bounded CUDA compute primitives; MLP and attention no longer rely on one-thread diagnostic bodies, primitive CUDA tests compare against CPU/reference outputs, and CUDA remains a primitive execution surface only without full model runtime, generation, benchmark, throughput, tensor-core optimization, FlashAttention, paged KV, or release-ready claim |
 | OWI.HUGE.0 | planned | intake | Huge source tensor inventory | huge safetensors shard sets are inventoried without loading full tensor payloads |
 | OWI.HUGE.1 | planned | intake | Huge safetensors shard index | safetensors shard metadata, tensor placement, offsets, and dtype distribution are indexed |
@@ -4573,7 +4609,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | GRAPH.METAL.0 | planned | graph | Metal primitive parity baseline | selected primitive graph ops run on Metal with CPU reference comparison, checksum, max-diff, failure paths, and cleanup without transformer or generation claim |
 | OWI.TARGETS.QWEN.0 | complete | intake | Qwen source target profile | Qwen source target profile is command-visible as `qwen-metal-portability`; model-target list/inspect/path reports expose family, target class, source path convention, future artifact class, pressure purpose, runtime/generation unsupported boundaries, and source-manifest Qwen reports now advance past missing source-target status without download, artifact emission, materialization, graph/runtime execution, Qwen generation, Metal support, evaluation, benchmark, throughput, or release-ready claim |
 | OWI.TARGETS.GEMMA.0 | complete | intake | Gemma source target profile | Gemma source target profile is command-visible as `gemma-dense-portability`; model-target list/inspect/path reports expose family, target class, source path convention, future artifact class, pressure purpose, runtime/generation unsupported boundaries, and source-manifest Gemma reports remain report-only without download, artifact emission, materialization, graph/runtime execution, Gemma generation, evaluation, benchmark, throughput, or release-ready claim |
-| MODEL.CLASS.QWEN.0 | planned | model | Qwen model-class profile | Qwen architecture, tensor roles, attention/KV requirements, tokenizer requirements, and unsupported runtime blockers are reported |
+| MODEL.CLASS.QWEN.0 | complete | model | Qwen model-class profile | Qwen model-class profile is command-visible as a header-metadata-only source profile for `qwen-metal-portability`, exposing lexical tensor pattern counters without tensor role mapping, model-class readiness, runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | TENSOR.COLLECTION.QWEN.0 | planned | tensor-collection | Qwen tensor collection inventory | Qwen tensor names map into embedding, normalization, attention, MLP/MoE, output, tokenizer, and KV collection candidates without runtime claim |
 | ARTIFACT.QWEN.0 | planned | artifact | Qwen YVEX-produced artifact identity | Qwen YVEX-produced GGUF identity, digest, tensor byte ranges, qtype summary, and registry metadata are recorded without runtime claim |
 | RESIDENCY.METAL.0 | planned | residency | Metal unified-memory residency plan | Qwen tensor collections are assigned planned Apple unified-memory/host-staged/Metal residency classes with memory pressure and unsupported blockers |
@@ -5356,6 +5392,7 @@ should expand this into a full source/header-to-row map.
 | `MODEL_ARTIFACTS.md` | public artifact cards | BLOCK 0/2 | artifact facts and no-claim cards | execution_ready false found | docs surface tests | low | keep |
 | `AGENTS.md` | operating rules | all blocks | repo rules and ownership map | hard no-claims found | not runtime-tested | low | keep |
 | `yvex_cli.c` | source | BLOCK 8 | top-level command lookup/dispatch | command table only; help pointers domain-owned | `tests/cli/core.sh` | low | keep |
+| `yvex_accounts.c` | source | BLOCK 1/8 | local provider account boundary | provider CLI discovery, login/status/ensure, non-secret account observation cache, source download preflight | `tests/cli/accounts.sh`, `tests/cli/models.sh` | low | keep |
 | `yvex_runtime.c` | source | BLOCK 7 | engine/session/run/chat coordination | lifecycle, session, selected graph hooks | runtime/session/CLI tests | medium | source ownership map |
 | `yvex_generation.c` | source | BLOCK 7 | bounded diagnostic generation loop | trace/stop/cancel/cleanup code found | `tests/cli/generation.sh` | low | keep |
 | `yvex_decode.c` | source | BLOCK 7 | bounded diagnostic decode | cleanup/status fields found | CLI/unit decode coverage via generation/core | low | keep |
@@ -5507,6 +5544,7 @@ outside `docs/spine.md`.
 | `yvex_cli.c` | CLI dispatch | top-level help/dispatch only | command table | none | none | CLI.SURFACE.*, V010.CLI | keep thin |
 | `yvex_runtime.c` | runtime coordination | engine/session/run/info | selected graph/session wiring | engine/session | session/KV cleanup | M3, G0, runtime rows | large file; map helpers |
 | `yvex_generation.c` | generation loop | generate command | bounded loop/trace/cancel/stop | generation state | idempotent cleanup | GEN.*, CLI.GEN.0 | no real generation |
+| `yvex_accounts.c` | provider account boundary | accounts command | provider CLI discovery/status/login/ensure, non-secret local account observations | account observation structs | provider process cleanup | ACCOUNTS.PROVIDER.0 | no hosted auth, no token storage, no MCP/YAI |
 | `yvex_graph.c` | graph execution | graph command/help | primitives/block/layers/check/guards | scratch/output buffers | graph cleanup | GRAPH.* | large file; future split not required yet |
 | `yvex_model_artifacts.c` | model/artifact reports | fullmodel/model-target/models prepare/check | descriptors, target registry, reports | registry/materialization reports | selected/tiny release paths | FULLMODEL.*, FAMILY.RUNTIME, operator presets | needs row-to-test map |
 | `yvex_artifact*.c` | artifact IO/integrity | inspect/tensors/materialize/integrity | parse, digest, range, corruption | artifact-owned buffers | materialization cleanup | ARTIFACT.* | keep |
@@ -5608,17 +5646,21 @@ SPINE.FILEMAP.0:
 After `SPINE.OUTPUT.UX.CONTRACT.0`, `V010.CLI.17`, `V010.CLI.18`,
 `V010.CLI.19`, `V010.SOURCE.9`, `OWI.TARGETS.QWEN.0`, `V010.SOURCE.1`,
 `V010.SOURCE.2`, `V010.SOURCE.3`, `V010.SOURCE.4`, `V010.SOURCE.5`,
-`V010.SOURCE.6`, `OWI.TARGETS.GEMMA.0`, `V010.SOURCE.7`, and
-`V010.SOURCE.7A / MODELS.DOWNLOAD.0` completed, Active Next advances to:
+`V010.SOURCE.6`, `OWI.TARGETS.GEMMA.0`, `V010.SOURCE.7`,
+`V010.SOURCE.7A / MODELS.DOWNLOAD.0`,
+`V010.SOURCE.7B / ACCOUNTS.PROVIDER.0`, and `MODEL.CLASS.QWEN.0` completed,
+Active Next advances to:
 
 ```text
-MODEL.CLASS.QWEN.0 - Qwen model-class profile
+MODEL.CLASS.GEMMA.0 - Gemma model-class profile
 ```
 
 If any P1 finding remains blocking, Active Next becomes the named follow-up row.
 
 | Condition | Active Next |
 | --- | --- |
+| Qwen model-class profile complete and Gemma model-class profile is missing | MODEL.CLASS.GEMMA.0 |
+| Provider account lane complete and Qwen model-class profile is missing | MODEL.CLASS.QWEN.0 |
 | Source download lane complete and Qwen model-class profile is missing | MODEL.CLASS.QWEN.0 |
 | Qwen/Gemma source manifest/provenance hardening complete and Qwen model-class profile is missing | MODEL.CLASS.QWEN.0 |
 | Qwen/Gemma source tensor metadata inventory complete and source manifest/provenance hardening is missing | V010.SOURCE.7 |
@@ -5642,7 +5684,7 @@ Current reconciliation result:
 
 ```text
 Active Next:
-  MODEL.CLASS.QWEN.0 - Qwen model-class profile
+  MODEL.CLASS.GEMMA.0 - Gemma model-class profile
 
 Reason:
   The first normal operator output baseline and broader diagnostic output
@@ -5651,9 +5693,10 @@ Reason:
   V010.SOURCE.9, OWI.TARGETS.QWEN.0, V010.SOURCE.1, V010.SOURCE.2,
   V010.SOURCE.3, V010.SOURCE.4, V010.SOURCE.5, V010.SOURCE.6, and
   OWI.TARGETS.GEMMA.0 remain complete report-only rows; V010.SOURCE.7 is now
-  complete as report-only source manifest/provenance hardening, and
+  complete as report-only source manifest/provenance hardening,
   V010.SOURCE.7A / MODELS.DOWNLOAD.0 is complete as a source-intake download
-  lane. Qwen model-class profile is the next blocker before
+  lane, and MODEL.CLASS.QWEN.0 is complete as a header-metadata-only lexical
+  model-class profile. Gemma model-class profile is the next blocker before
   tensor-collection/runtime-path work.
 ```
 

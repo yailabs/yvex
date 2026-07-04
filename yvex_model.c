@@ -10,9 +10,11 @@
 #include <yvex/fs.h>
 #include <yvex/model.h>
 #include <yvex/model_registry.h>
+#include <yvex/native_weights.h>
 #include <yvex/tensor.h>
 #include <yvex/weights.h>
 
+#include <ctype.h>
 #include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -1450,12 +1452,12 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "MODEL.CLASS.QWEN.0,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
+        "MODEL.CLASS.GEMMA.0,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
             "missing-source-inventory",
-            "missing-tensor-map",
+            "missing-qwen-tensor-role-map",
             "missing-full-artifact",
             "missing-integrity-gate",
             "missing-real-prefill",
@@ -1668,7 +1670,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,MODEL.CLASS.QWEN.0,COMPUTE.BACKEND.METAL.0",
+        "V010.TARGET.7,MODEL.CLASS.GEMMA.0,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
@@ -1676,7 +1678,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
             "missing-dense-artifact",
             "missing-source-manifest",
             "missing-native-inventory",
-            "missing-tensor-map",
+            "missing-qwen-tensor-role-map",
             "missing-required-tensor-coverage",
             "missing-tokenizer-metadata",
             "missing-output-head",
@@ -1787,7 +1789,7 @@ static const char *qwen_metal_blockers[] = {
     "missing-qwen-source-manifest",
     "missing-qwen-native-inventory",
     "missing-qwen-source-config",
-    "missing-qwen-model-class-profile",
+    "missing-qwen-tensor-role-map",
     "missing-qwen-tensor-map",
     "missing-qwen-tokenizer-map",
     "missing-qwen-output-head-map",
@@ -1832,7 +1834,7 @@ static const yvex_qwen_metal_candidate_fact qwen_metal_candidate_facts[] = {
             "missing-qwen-source-path",
             "missing-qwen-source-manifest",
             "missing-qwen-native-inventory",
-            "missing-qwen-model-class-profile",
+            "missing-qwen-tensor-role-map",
             "missing-qwen-tensor-map",
             "missing-qwen-yvex-artifact",
             "missing-metal-backend-feasibility",
@@ -1858,7 +1860,7 @@ static const yvex_qwen_metal_candidate_fact qwen_metal_candidate_facts[] = {
             "missing-qwen-source-path",
             "missing-qwen-source-manifest",
             "missing-qwen-native-inventory",
-            "missing-qwen-model-class-profile",
+            "missing-qwen-tensor-role-map",
             "missing-qwen-tensor-map",
             "missing-qwen-yvex-artifact",
             "missing-metal-hardware-profile",
@@ -1886,7 +1888,7 @@ static const yvex_qwen_metal_candidate_fact qwen_metal_candidate_facts[] = {
             "missing-qwen-source-manifest",
             "missing-qwen-native-inventory",
             "missing-qwen-source-config",
-            "missing-qwen-model-class-profile",
+            "missing-qwen-tensor-role-map",
             "missing-qwen-tokenizer-map",
             "missing-qwen-output-head-map",
             "missing-metal-backend-feasibility",
@@ -2032,6 +2034,461 @@ static int parse_model_target_output_mode(const char *value,
         return 1;
     }
     return 0;
+}
+
+typedef struct {
+    const yvex_model_target_record *record;
+    const char *status;
+    const char *source_metadata_status;
+    const char *top_blocker;
+    char source_path[YVEX_PATH_CAP];
+    char source_path_source[32];
+    int source_exists;
+    int config_present;
+    int tokenizer_present;
+    unsigned long long tensor_count;
+    unsigned long long embedding_pattern_count;
+    unsigned long long attention_q_pattern_count;
+    unsigned long long attention_k_pattern_count;
+    unsigned long long attention_v_pattern_count;
+    unsigned long long attention_o_pattern_count;
+    unsigned long long mlp_gate_pattern_count;
+    unsigned long long mlp_up_pattern_count;
+    unsigned long long mlp_down_pattern_count;
+    unsigned long long norm_pattern_count;
+    unsigned long long output_head_pattern_count;
+    unsigned long long moe_router_pattern_count;
+    unsigned long long moe_expert_pattern_count;
+    unsigned long long other_pattern_count;
+} yvex_qwen_model_class_profile;
+
+static int model_class_name_contains_ci(const char *name, const char *needle)
+{
+    size_t needle_len;
+    size_t i;
+
+    if (!name || !needle) {
+        return 0;
+    }
+    needle_len = strlen(needle);
+    if (needle_len == 0) {
+        return 1;
+    }
+    for (i = 0; name[i] != '\0'; ++i) {
+        size_t j;
+        for (j = 0; j < needle_len; ++j) {
+            if (name[i + j] == '\0' ||
+                tolower((unsigned char)name[i + j]) !=
+                    tolower((unsigned char)needle[j])) {
+                break;
+            }
+        }
+        if (j == needle_len) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int model_class_path_join(char *out, size_t cap,
+                                 const char *dir, const char *name)
+{
+    int n;
+
+    if (!out || cap == 0 || !dir || !name) {
+        return 0;
+    }
+    n = snprintf(out, cap, "%s/%s", dir, name);
+    if (n < 0 || (size_t)n >= cap) {
+        return 0;
+    }
+    return 1;
+}
+
+static int model_class_file_present(const char *dir, const char *name)
+{
+    char path[YVEX_PATH_CAP];
+    struct stat st;
+
+    if (!model_class_path_join(path, sizeof(path), dir, name)) {
+        return 0;
+    }
+    return stat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+static int model_class_dir_exists(const char *path)
+{
+    struct stat st;
+
+    return path && path[0] != '\0' &&
+           stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+static int model_class_qwen_download_source(char *out, size_t cap,
+                                            const yvex_operator_paths *operator_paths)
+{
+    int n;
+
+    if (!out || cap == 0 || !operator_paths) {
+        return 0;
+    }
+
+    n = snprintf(out, cap, "%s/hf/qwen/qwen3-8b", operator_paths->models_root);
+    return n >= 0 && (size_t)n < cap;
+}
+
+static void model_class_count_qwen_tensor(yvex_qwen_model_class_profile *profile,
+                                          const char *name)
+{
+    int matched = 0;
+    int has_gate_proj;
+
+    if (!profile || !name) {
+        return;
+    }
+    if (model_class_name_contains_ci(name, "embed_tokens") ||
+        model_class_name_contains_ci(name, "token_embd") ||
+        model_class_name_contains_ci(name, "embeddings")) {
+        profile->embedding_pattern_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "q_proj")) {
+        profile->attention_q_pattern_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "k_proj")) {
+        profile->attention_k_pattern_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "v_proj")) {
+        profile->attention_v_pattern_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "o_proj")) {
+        profile->attention_o_pattern_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "gate_proj")) {
+        profile->mlp_gate_pattern_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "up_proj")) {
+        profile->mlp_up_pattern_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "down_proj")) {
+        profile->mlp_down_pattern_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "input_layernorm")) {
+        profile->norm_pattern_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "post_attention_layernorm")) {
+        profile->norm_pattern_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "norm")) {
+        profile->norm_pattern_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "rms")) {
+        profile->norm_pattern_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "lm_head") ||
+        model_class_name_contains_ci(name, "output")) {
+        profile->output_head_pattern_count++;
+        matched = 1;
+    }
+    has_gate_proj = model_class_name_contains_ci(name, "gate_proj");
+    if (model_class_name_contains_ci(name, "router") ||
+        (model_class_name_contains_ci(name, "gate") && !has_gate_proj)) {
+        profile->moe_router_pattern_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "experts")) {
+        profile->moe_expert_pattern_count++;
+        matched = 1;
+    }
+    if (!matched) {
+        profile->other_pattern_count++;
+    }
+}
+
+static unsigned long long model_class_profile_attention_count(
+    const yvex_qwen_model_class_profile *profile)
+{
+    if (!profile) {
+        return 0;
+    }
+    return profile->attention_q_pattern_count +
+           profile->attention_k_pattern_count +
+           profile->attention_v_pattern_count +
+           profile->attention_o_pattern_count;
+}
+
+static unsigned long long model_class_profile_mlp_count(
+    const yvex_qwen_model_class_profile *profile)
+{
+    if (!profile) {
+        return 0;
+    }
+    return profile->mlp_gate_pattern_count +
+           profile->mlp_up_pattern_count +
+           profile->mlp_down_pattern_count;
+}
+
+static unsigned long long model_class_profile_moe_count(
+    const yvex_qwen_model_class_profile *profile)
+{
+    if (!profile) {
+        return 0;
+    }
+    return profile->moe_router_pattern_count +
+           profile->moe_expert_pattern_count;
+}
+
+static int model_class_resolve_qwen_source(
+    const char *models_root_override,
+    const char *source_override,
+    yvex_qwen_model_class_profile *profile)
+{
+    if (!profile) {
+        return 2;
+    }
+    if (source_override) {
+        int n;
+        n = snprintf(profile->source_path, sizeof(profile->source_path),
+                     "%s", source_override);
+        if (n < 0 || (size_t)n >= sizeof(profile->source_path)) {
+            fprintf(stderr, "model-target class-profile: source path is too long\n");
+            return 2;
+        }
+        snprintf(profile->source_path_source, sizeof(profile->source_path_source),
+                 "%s", "explicit-source");
+        return 0;
+    }
+    {
+        yvex_paths paths;
+        yvex_operator_paths operator_paths;
+        yvex_error err;
+        int exists = 0;
+        int rc;
+
+        memset(&paths, 0, sizeof(paths));
+        yvex_error_clear(&err);
+        rc = yvex_operator_paths_resolve(&paths, models_root_override,
+                                         &operator_paths, &err);
+        if (rc != YVEX_OK) {
+            fprintf(stderr, "yvex: %s: %s\n",
+                    yvex_error_where(&err), yvex_error_message(&err));
+            return rc == YVEX_ERR_INVALID_ARG ? 2 : 3;
+        }
+        rc = yvex_operator_paths_resolve_target(&operator_paths, "qwen", "source",
+                                                profile->source_path,
+                                                sizeof(profile->source_path),
+                                                &exists, &err);
+        if (rc != YVEX_OK) {
+            fprintf(stderr, "yvex: %s: %s\n",
+                    yvex_error_where(&err), yvex_error_message(&err));
+            return rc == YVEX_ERR_INVALID_ARG ? 2 : 3;
+        }
+        (void)exists;
+        {
+            char download_source[YVEX_PATH_CAP];
+
+            if (!model_class_qwen_download_source(download_source,
+                                                  sizeof(download_source),
+                                                  &operator_paths)) {
+                fprintf(stderr, "model-target class-profile: source path is too long\n");
+                return 2;
+            }
+            if (model_class_dir_exists(download_source)) {
+                snprintf(profile->source_path, sizeof(profile->source_path),
+                         "%s", download_source);
+            }
+        }
+        snprintf(profile->source_path_source, sizeof(profile->source_path_source),
+                 "%s", operator_paths.models_root_source);
+    }
+    return 0;
+}
+
+static int model_class_build_qwen_profile(
+    const yvex_model_target_record *record,
+    const char *models_root_override,
+    const char *source_override,
+    yvex_qwen_model_class_profile *profile)
+{
+    yvex_native_weight_table *table = NULL;
+    yvex_native_weight_options options;
+    yvex_error err;
+    unsigned long long i;
+    int rc;
+
+    if (!record || !profile) {
+        return 2;
+    }
+    memset(profile, 0, sizeof(*profile));
+    profile->record = record;
+    profile->status = "source-missing";
+    profile->source_metadata_status = "missing";
+    profile->top_blocker = "missing-qwen-source-path";
+
+    rc = model_class_resolve_qwen_source(models_root_override,
+                                         source_override,
+                                         profile);
+    if (rc != 0) {
+        return rc;
+    }
+
+    profile->source_exists = model_class_dir_exists(profile->source_path);
+    if (!profile->source_exists) {
+        return 0;
+    }
+
+    profile->config_present = model_class_file_present(profile->source_path, "config.json");
+    profile->tokenizer_present =
+        model_class_file_present(profile->source_path, "tokenizer.json") ||
+        model_class_file_present(profile->source_path, "tokenizer_config.json");
+
+    memset(&options, 0, sizeof(options));
+    options.source_dir = profile->source_path;
+    options.recursive = 0;
+    options.include_metadata = 0;
+    yvex_error_clear(&err);
+    rc = yvex_native_weight_table_open(&table, &options, &err);
+    if (rc != YVEX_OK) {
+        profile->status = "metadata-error";
+        profile->source_metadata_status = "header-error";
+        profile->top_blocker = "malformed-qwen-safetensors-header";
+        return rc == YVEX_ERR_NOMEM ? 3 : 0;
+    }
+
+    profile->tensor_count = yvex_native_weight_table_count(table);
+    for (i = 0; i < profile->tensor_count; ++i) {
+        const yvex_native_weight_info *info =
+            yvex_native_weight_table_at(table, i);
+        model_class_count_qwen_tensor(profile, info ? info->name : NULL);
+    }
+    yvex_native_weight_table_close(table);
+
+    profile->status = "metadata-profiled";
+    profile->source_metadata_status =
+        profile->tensor_count > 0 ? "header-only" : "no-safetensors";
+    profile->top_blocker = "missing-qwen-tensor-role-map";
+    return 0;
+}
+
+static void print_qwen_model_class_profile_normal(
+    const yvex_qwen_model_class_profile *profile)
+{
+    printf("model-class: qwen\n");
+    printf("target: %s\n", profile->record->target_id);
+    printf("status: %s\n", profile->status);
+    printf("class: qwen-source-model-class-profile\n");
+    printf("evidence: header-metadata-only\n");
+    printf("patterns: tensors=%llu attn=%llu mlp=%llu norm=%llu head=%llu moe=%llu\n",
+           profile->tensor_count,
+           model_class_profile_attention_count(profile),
+           model_class_profile_mlp_count(profile),
+           profile->norm_pattern_count,
+           profile->output_head_pattern_count,
+           model_class_profile_moe_count(profile));
+    printf("top_blocker: %s\n", profile->top_blocker);
+    printf("next: MODEL.CLASS.GEMMA.0\n");
+    printf("boundary: model-class profile only; no tensor role mapping/runtime/generation\n");
+}
+
+static void print_qwen_model_class_profile_table(
+    const yvex_qwen_model_class_profile *profile)
+{
+    printf("MODEL CLASS PROFILE\n\n");
+    printf("%-6s  %-24s  %-16s  %7s  %4s  %3s  %4s  %4s  %3s  %s\n",
+           "FAMILY", "TARGET", "STATUS", "TENSORS",
+           "ATTN", "MLP", "NORM", "HEAD", "MOE", "NEXT");
+    printf("%-6s  %-24s  %-16s  %7llu  %4llu  %3llu  %4llu  %4llu  %3llu  %s\n",
+           "qwen",
+           profile->record->target_id,
+           profile->status,
+           profile->tensor_count,
+           model_class_profile_attention_count(profile),
+           model_class_profile_mlp_count(profile),
+           profile->norm_pattern_count,
+           profile->output_head_pattern_count,
+           model_class_profile_moe_count(profile),
+           "MODEL.CLASS.GEMMA.0");
+}
+
+static void print_qwen_model_class_profile_audit(
+    const yvex_qwen_model_class_profile *profile)
+{
+    printf("model_class_profile_status: %s\n", profile->status);
+    printf("model_class_family: qwen\n");
+    printf("model_class_target_id: %s\n", profile->record->target_id);
+    printf("model_class_name: qwen-source-model-class-profile\n");
+    printf("model_class_runtime_shape: dense-or-dense-like-candidate-pending-source-config\n");
+    printf("model_class_evidence_basis: header-metadata-only\n");
+    printf("model_class_config_status: %s\n",
+           profile->config_present ? "present" : "missing");
+    printf("model_class_tokenizer_status: %s\n",
+           profile->tokenizer_present ? "present" : "missing");
+    printf("model_class_source_metadata_status: %s\n",
+           profile->source_metadata_status);
+    printf("model_class_tensor_count: %llu\n", profile->tensor_count);
+    printf("model_class_embedding_pattern_count: %llu\n",
+           profile->embedding_pattern_count);
+    printf("model_class_attention_q_pattern_count: %llu\n",
+           profile->attention_q_pattern_count);
+    printf("model_class_attention_k_pattern_count: %llu\n",
+           profile->attention_k_pattern_count);
+    printf("model_class_attention_v_pattern_count: %llu\n",
+           profile->attention_v_pattern_count);
+    printf("model_class_attention_o_pattern_count: %llu\n",
+           profile->attention_o_pattern_count);
+    printf("model_class_mlp_gate_pattern_count: %llu\n",
+           profile->mlp_gate_pattern_count);
+    printf("model_class_mlp_up_pattern_count: %llu\n",
+           profile->mlp_up_pattern_count);
+    printf("model_class_mlp_down_pattern_count: %llu\n",
+           profile->mlp_down_pattern_count);
+    printf("model_class_norm_pattern_count: %llu\n",
+           profile->norm_pattern_count);
+    printf("model_class_output_head_pattern_count: %llu\n",
+           profile->output_head_pattern_count);
+    printf("model_class_moe_router_pattern_count: %llu\n",
+           profile->moe_router_pattern_count);
+    printf("model_class_moe_expert_pattern_count: %llu\n",
+           profile->moe_expert_pattern_count);
+    printf("model_class_other_pattern_count: %llu\n",
+           profile->other_pattern_count);
+    printf("model_class_pattern_status: lexical-only\n");
+    printf("model_class_role_mapping_status: not-implemented\n");
+    printf("model_class_runtime_status: unsupported\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    printf("source_path: %s\n", profile->source_path);
+    printf("source_path_source: %s\n", profile->source_path_source);
+    printf("source_exists: %s\n", profile->source_exists ? "true" : "false");
+    printf("top_blocker: %s\n", profile->top_blocker);
+    printf("next_required_rows: MODEL.CLASS.GEMMA.0\n");
+    printf("boundary: model-class profile only; no tensor role mapping/runtime/generation\n");
+}
+
+static void print_qwen_model_class_audit_hint(const yvex_model_target_record *record)
+{
+    if (!record || strcmp(record->target_id, "qwen-metal-portability") != 0) {
+        return;
+    }
+    printf("model_class_profile_status: command-visible\n");
+    printf("model_class_family: qwen\n");
+    printf("model_class_target_id: qwen-metal-portability\n");
+    printf("model_class_name: qwen-source-model-class-profile\n");
+    printf("model_class_evidence_basis: header-metadata-only\n");
+    printf("model_class_role_mapping_status: not-implemented\n");
 }
 
 static const char *target_decision_candidate_class(const yvex_model_target_record *record)
@@ -2428,7 +2885,7 @@ static int print_model_target_candidate_normal(const char *release,
     printf("candidates: 0 eligible / %lu known (%lu pressure, %lu fixture)\n",
            candidate_count, pressure_count, fixture_count);
     printf("top_blocker: no eligible full-runtime candidate\n");
-    printf("next: MODEL.CLASS.QWEN.0\n");
+    printf("next: MODEL.CLASS.GEMMA.0\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
@@ -2754,7 +3211,7 @@ static int print_model_target_dense_candidate_normal(const char *release,
     printf("candidates: %lu eligible / %lu known (%lu dense pressure)\n",
            eligible_count, dense_candidate_count, dense_pressure_count);
     printf("top_blocker: no selected dense full-runtime candidate\n");
-    printf("next: MODEL.CLASS.QWEN.0\n");
+    printf("next: MODEL.CLASS.GEMMA.0\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
@@ -2913,7 +3370,8 @@ static int print_model_target_qwen_metal_report(const char *release,
         printf("source_manifest_status: missing\n");
         printf("native_tensor_inventory_status: missing\n");
         printf("source_config_status: missing\n");
-        printf("model_class_profile_status: missing\n");
+        printf("model_class_profile_status: command-visible\n");
+        printf("model_class_role_mapping_status: not-implemented\n");
     }
     if (include_blockers) {
         for (i = 0; i < qwen_metal_blocker_count; ++i) {
@@ -2921,7 +3379,7 @@ static int print_model_target_qwen_metal_report(const char *release,
         }
     }
     if (include_next) {
-        printf("next_required_rows: MODEL.CLASS.QWEN.0\n");
+        printf("next_required_rows: MODEL.CLASS.GEMMA.0\n");
     }
     return 0;
 }
@@ -2947,7 +3405,7 @@ static int print_model_target_qwen_metal_normal(const char *release,
     printf("source_target: profiled\n");
     printf("source: missing\n");
     printf("backend: metal unsupported\n");
-    printf("next: MODEL.CLASS.QWEN.0\n");
+    printf("next: MODEL.CLASS.GEMMA.0\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     return 0;
 }
@@ -3153,7 +3611,7 @@ static int print_model_target_decision_normal(const char *release,
     printf("eligible: %lu / %lu candidates (%lu ineligible)\n",
            eligible_count, candidate_count, ineligible_count);
     printf("top_blocker: %s\n", selected ? "none" : "no eligible full-runtime candidate");
-    printf("next: MODEL.CLASS.QWEN.0\n");
+    printf("next: MODEL.CLASS.GEMMA.0\n");
     printf("boundary: report-only; generation unsupported; benchmark not measured\n");
     return 0;
 }
@@ -3166,6 +3624,7 @@ static void print_model_target_usage(FILE *fp)
     fprintf(fp, "       yvex model-target dense-candidate --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target qwen-metal --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target decision --release v0.1.0 [options]\n");
+    fprintf(fp, "       yvex model-target class-profile TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR] [--audit | --output normal|table|audit]\n");
 }
 
@@ -3191,6 +3650,9 @@ void yvex_model_target_help(FILE *fp)
     fprintf(fp, "  yvex model-target qwen-metal --release v0.1.0 --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next\n");
     fprintf(fp, "  The Qwen/Metal pressure report records a planned reduced-scale Apple Silicon / Metal lane for future full-runtime work. It does not download weights, implement Metal, emit Qwen artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "  Default output is compact. Use --audit or --output audit for hardware, backend, source, and blocker detail.\n");
+    fprintf(fp, "\nModel-class profile:\n");
+    fprintf(fp, "  yvex model-target class-profile qwen-metal-portability --audit\n");
+    fprintf(fp, "  The class-profile report reads safetensors headers only and counts lexical Qwen tensor-name patterns. It does not map tensor roles, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "\nDefault output is compact. Use --audit for full diagnostic fields.\n");
     fprintf(fp, "Model targets are pressure objects, not capability claims.\n");
     fprintf(fp, "External GGUFs and external runners are reference evidence only.\n");
@@ -3538,6 +4000,7 @@ static void print_model_target_list(void)
         printf("source_tensor_count: 0\n");
         printf("source_tensor_metadata_payload_loaded: false\n");
         printf("source_tensor_metadata_payload_bytes_read: 0\n");
+        print_qwen_model_class_audit_hint(record);
         printf("runtime_execution: %s\n", record->runtime_execution);
         printf("runtime_claim: unsupported\n");
         printf("generation: %s\n", record->generation);
@@ -3609,6 +4072,7 @@ static void print_model_target_record(const yvex_model_target_record *record)
     printf("source_tensor_count: 0\n");
     printf("source_tensor_metadata_payload_loaded: false\n");
     printf("source_tensor_metadata_payload_bytes_read: 0\n");
+    print_qwen_model_class_audit_hint(record);
     printf("target_artifact_class: %s\n", record->target_artifact_class);
     printf("target_artifact_status: %s\n", model_target_target_artifact_status(record));
     printf("target_artifact_origin: %s\n", model_target_target_artifact_origin(record));
@@ -3648,7 +4112,7 @@ static void print_model_target_record_normal(const yvex_model_target_record *rec
         printf("next: %s\n",
                strcmp(record->target_id, "gemma-dense-portability") == 0
                    ? "MODEL.CLASS.GEMMA.0"
-                   : "MODEL.CLASS.QWEN.0");
+                   : "MODEL.CLASS.GEMMA.0");
         printf("boundary: target/source profile only; no source download/runtime/generation\n");
         printf("status: model-target\n");
         return;
@@ -3720,7 +4184,7 @@ static void print_model_target_report_table(const char *report,
            status ? status : "blocked",
            selected ? selected : "none",
            eligible_count,
-           "MODEL.CLASS.QWEN.0");
+           "MODEL.CLASS.GEMMA.0");
 }
 
 static int path_exists(const char *path)
@@ -4321,6 +4785,70 @@ int yvex_model_target_command(int argc, char **argv)
             return print_model_target_decision_normal(release, candidate_filter);
         }
         return print_model_target_decision_report(release, candidate_filter);
+    }
+    if (strcmp(argv[2], "class-profile") == 0) {
+        const char *target_id = NULL;
+        const char *source = NULL;
+        yvex_qwen_model_class_profile profile;
+        int rc;
+
+        output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
+        if (argc < 4) {
+            fprintf(stderr, "model-target class-profile: requires TARGET\n");
+            return 2;
+        }
+        target_id = argv[3];
+        record = find_model_target(target_id);
+        if (!record || strcmp(target_id, "qwen-metal-portability") != 0) {
+            fprintf(stderr, "model-target class-profile: unsupported target: %s\n",
+                    target_id && target_id[0] ? target_id : "none");
+            return 2;
+        }
+        for (i = 4; i < argc; ++i) {
+            if (strcmp(argv[i], "--audit") == 0) {
+                output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
+            } else if (strcmp(argv[i], "--output") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "model-target class-profile: --output requires normal|table|audit\n");
+                    return 2;
+                }
+                if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
+                    fprintf(stderr, "model-target class-profile: unsupported output mode: %s\n",
+                            argv[i]);
+                    return 2;
+                }
+            } else if (strcmp(argv[i], "--models-root") == 0) {
+                if (i + 1 >= argc || argv[i + 1][0] == '\0') {
+                    fprintf(stderr, "model-target class-profile: --models-root requires DIR\n");
+                    return 2;
+                }
+                models_root = argv[++i];
+            } else if (strcmp(argv[i], "--source") == 0) {
+                if (i + 1 >= argc || argv[i + 1][0] == '\0') {
+                    fprintf(stderr, "model-target class-profile: --source requires DIR\n");
+                    return 2;
+                }
+                source = argv[++i];
+            } else if (strcmp(argv[i], "--json") == 0) {
+                fprintf(stderr, "model-target class-profile: JSON output is unsupported; use --output normal|table|audit\n");
+                return 2;
+            } else {
+                fprintf(stderr, "model-target class-profile: unknown option: %s\n", argv[i]);
+                return 2;
+            }
+        }
+        rc = model_class_build_qwen_profile(record, models_root, source, &profile);
+        if (rc != 0) {
+            return rc;
+        }
+        if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+            print_qwen_model_class_profile_table(&profile);
+        } else if (output_mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+            print_qwen_model_class_profile_audit(&profile);
+        } else {
+            print_qwen_model_class_profile_normal(&profile);
+        }
+        return 0;
     }
     if (strcmp(argv[2], "inspect") == 0) {
         output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;

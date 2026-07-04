@@ -111,11 +111,16 @@ lanes. The current command-visible source surface is:
 ./yvex model-target list
 ./yvex model-target inspect qwen-metal-portability
 ./yvex model-target inspect qwen-metal-portability --paths
+./yvex model-target class-profile qwen-metal-portability
+./yvex model-target class-profile qwen-metal-portability --output table
+./yvex model-target class-profile qwen-metal-portability --audit
 ./yvex model-target inspect gemma-dense-portability
 ./yvex model-target inspect gemma-dense-portability --paths
-./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --dry-run --audit
-./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --audit
-./yvex models download qwen3-8b --models-root "$HOME/lab/models" --audit
+./yvex accounts status --audit
+./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --dry-run --auth never --audit
+./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --auth auto --audit
+./yvex models download qwen3-8b --models-root "$HOME/lab/models" --auth auto --audit
+./yvex models download --provider github --repo OWNER/REPO --release TAG --asset "*.gguf" --models-root "$HOME/lab/models" --auth auto --audit
 ./yvex source-manifest report --family qwen --release v0.1.0
 ./yvex source-manifest report --family qwen --release v0.1.0 --output table
 ./yvex source-manifest report --family qwen --release v0.1.0 --audit
@@ -124,20 +129,33 @@ lanes. The current command-visible source surface is:
 ./yvex source-manifest report --family gemma --release v0.1.0 --audit
 ```
 
-`models download` is the source-intake lane. It runs the installed Hugging Face
-CLI in the foreground, stores source tensors under `<models_root>/hf/<family>`,
-and writes token-redacted receipts, logs, a download report, a download registry
-sidecar, a source manifest, and a header-only native inventory. Catalog rows are
-routing defaults, not upstream identity proof. The lane does not perform remote
-identity verification, hash payloads, load tensor payload bytes, emit GGUF,
-register runtime artifacts, materialize tensors, execute runtime paths,
-generate, evaluate, benchmark, or mark a release ready.
+`accounts` is the local provider account boundary. It observes Hugging Face and
+GitHub CLI availability, invokes provider-owned login/status commands, and
+writes only non-secret local account state. `models download` is the
+source-intake lane. It uses that provider preflight with
+`--auth auto|required|never`, then runs the installed Hugging Face CLI for
+catalog/direct Hugging Face sources or the GitHub CLI for release assets. It
+stores source trees under `<models_root>/hf/<family>` or GitHub release assets
+under `<models_root>/github/<owner>/<repo>/<release>`, and writes
+token-redacted receipts, logs, a download report, a download registry sidecar,
+a source manifest, and a header-only native inventory. Catalog rows are routing
+defaults, not upstream identity proof. The lane does not store raw tokens,
+perform remote identity verification, hash payloads, load tensor payload bytes,
+emit GGUF, register runtime artifacts, materialize tensors, execute runtime
+paths, generate, evaluate, benchmark, or mark a release ready.
 
 `qwen-metal-portability` is source-target profile only. It is a pressure-target
 slot for Qwen family, the `<models_root>/hf/qwen/qwen-metal-portability` source
 path convention, official source tensor expectation, future-YVEX-produced-GGUF
 artifact class, and Apple Silicon / Metal portability pressure. It is pending
-source/config verification.
+source/config verification. `model-target class-profile
+qwen-metal-portability` adds a header-metadata-only Qwen model-class profile
+over local safetensors source names, preferring a downloaded
+`<models_root>/hf/qwen/qwen3-8b` source when present and otherwise reporting the
+target source slot or explicit `--source`. It exposes lexical pattern counters
+only. It does not map tensor roles, claim model-class readiness, load tensor payloads, emit
+artifacts, materialize tensors, run Qwen, generate, evaluate, benchmark, or mark
+a release ready.
 
 `gemma-dense-portability` is source-target profile only. It is a pressure-target
 slot for Gemma family, the `<models_root>/hf/gemma/gemma-dense-portability`
@@ -214,8 +232,9 @@ Source family/profile fields, source artifact class fields, source footprint
 fields, source provenance fields, native safetensors inventory, and source
 tensor metadata inventory are command-visible for Qwen and Gemma. Source
 download sidecars can now provide concrete local manifests and native
-inventories, but model-class profile and tensor-role mapping remain separate
-future evidence.
+inventories; Qwen model-class profile is now command-visible as lexical
+header-metadata evidence, while Gemma model-class profile and tensor-role
+mapping remain separate future evidence.
 
 ## Family Classification
 

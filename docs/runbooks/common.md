@@ -82,6 +82,9 @@ make
 ./yvex model-target inspect glm-5.2-official-safetensors --paths --audit
 ./yvex model-target inspect qwen-metal-portability
 ./yvex model-target inspect qwen-metal-portability --paths
+./yvex model-target class-profile qwen-metal-portability
+./yvex model-target class-profile qwen-metal-portability --output table
+./yvex model-target class-profile qwen-metal-portability --audit
 ./yvex model-target inspect gemma-dense-portability
 ./yvex model-target inspect gemma-dense-portability --paths
 ./yvex model-target decision --help
@@ -329,8 +332,10 @@ Purpose:
 
 Requires:
   Repository root.
+  Provider account status checked with `yvex accounts`.
   Installed Hugging Face CLI as `hf`, or `YVEX_HF_CLI` for tests.
-  Token in `HF_TOKEN` only when the upstream repo requires it.
+  Installed GitHub CLI as `gh`, or `YVEX_GH_CLI` for GitHub release assets.
+  Token in `HF_TOKEN` or `GH_TOKEN` only when the upstream provider requires it.
 
 Writes:
   Source files under `<models_root>/hf/<family>/<target>`.
@@ -361,16 +366,56 @@ Boundary:
   no generation/eval/benchmark claim
 
 ```sh
-./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --dry-run --audit
-./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --audit
-./yvex models download gemma-4-31b-it --models-root "$HOME/lab/models" --audit
-./yvex models download qwen3-8b --models-root "$HOME/lab/models" --audit
+./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --dry-run --auth never --audit
+./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --auth auto --audit
+./yvex models download gemma-4-31b-it --models-root "$HOME/lab/models" --auth auto --audit
+./yvex models download qwen3-8b --models-root "$HOME/lab/models" --auth auto --audit
+./yvex models download --provider github --repo OWNER/REPO --release TAG --asset "*.gguf" --models-root "$HOME/lab/models" --auth auto --audit
 ./yvex source-manifest report --family gemma --release v0.1.0 --audit
 ./yvex source-manifest report --family qwen --release v0.1.0 --audit
 ```
 
+## Lane 5A - Provider accounts
+
+Purpose:
+  Inspect and connect local provider CLIs before source acquisition.
+
+Requires:
+  Repository root.
+  Hugging Face CLI for Hugging Face sources.
+  GitHub CLI for GitHub release assets.
+
+Writes:
+  Non-secret local account observations to `accounts.local.json` under the
+  YVEX config directory.
+
+Safe to rerun:
+  Status and whoami are read-only observations. Login delegates to the provider
+  CLI credential store. Ensure may report blocked in non-interactive shells.
+
+Boundary:
+  local provider account state only
+  no raw token storage by YVEX
+  no hosted auth service
+  no custom OAuth implementation
+  no MCP or YAI account integration
+  no source verification
+  no model execution
+  no materialization
+  no generation/eval/benchmark claim
+
+```sh
+./yvex accounts providers
+./yvex accounts status --audit
+./yvex accounts login huggingface
+./yvex accounts whoami huggingface --audit
+./yvex accounts login github
+./yvex accounts whoami github --audit
+```
+
 ## Full Implemented Command Inventory
 
+- `accounts`: local provider account boundary
 - `backend`: backend lanes
 - `chat`: daemon and accepted-only runtime lanes
 - `commands`: fast regression lane
@@ -392,7 +437,7 @@ Boundary:
 - `materialize-gate`: integrity and gate lanes
 - `metadata`: artifact inspection lanes
 - `model-gate`: integrity and gate lanes
-- `model-target`: model lanes, model target path, Qwen/Gemma source-target profiles, target decision, and full-runtime candidate reporting lanes, fast regression lane
+- `model-target`: model lanes, model target path, Qwen/Gemma source-target profiles, Qwen model-class profile, target decision, and full-runtime candidate reporting lanes, fast regression lane
 - `models`: source tensor download, artifact registration, and selected prepare lanes
 - `native-weights`: source intake lanes
 - `paths`: configure once lane, fast regression lane, path resolution
