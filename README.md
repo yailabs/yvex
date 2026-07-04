@@ -87,6 +87,18 @@ make
 
 The path commands do not download weights, create artifacts, register aliases, or claim runtime support; they make the operator-local storage layout explicit.
 
+Source tensor downloads use the existing models namespace and stay source-only:
+
+```sh
+./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --dry-run --audit
+./yvex models download qwen3-8b --models-root "$HOME/lab/models" --audit
+```
+
+`models download` writes source-intake logs, receipts, manifests, native
+inventories, and reports under the operator models root. It does not emit GGUF,
+register a runtime artifact, materialize tensors, run inference, generate,
+evaluate, or benchmark.
+
 | Artifact class                       | Role                                 | Location                                  | Why it matters                                                                                                                        |
 | ------------------------------------ | ------------------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Native source weights                | Source evidence and tensor inventory | Operator-local storage                    | Preserves original tensor names, shapes, and family-specific facts before GGUF emission.                                              |

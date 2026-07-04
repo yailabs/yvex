@@ -95,8 +95,72 @@ grep 'alias not found: missing' "$ROOT/use-missing.err"
 
 "$YVEX_BIN" help models > "$ROOT/help.out"
 grep 'yvex models' "$ROOT/help.out"
+grep 'models download TARGET' "$ROOT/help.out"
 grep 'models prepare TARGET' "$ROOT/help.out"
 grep 'models check TARGET' "$ROOT/help.out"
+
+FAKE_HF="$PWD/tests/fixtures/bin/fake-hf"
+DOWNLOAD_ROOT="$ROOT/download"
+
+YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --dry-run --models-root "$DOWNLOAD_ROOT" --audit > "$ROOT/download-dry-run.out"
+grep 'status: model-download-dry-run' "$ROOT/download-dry-run.out"
+grep 'family: gemma' "$ROOT/download-dry-run.out"
+grep 'payload_loaded: false' "$ROOT/download-dry-run.out"
+grep 'gguf_created: false' "$ROOT/download-dry-run.out"
+grep 'generation: unsupported' "$ROOT/download-dry-run.out"
+
+YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$DOWNLOAD_ROOT" --audit > "$ROOT/download-gemma.out"
+grep 'status: model-download-pass' "$ROOT/download-gemma.out"
+grep 'stage: source-manifest pass' "$ROOT/download-gemma.out"
+grep 'stage: native-inventory pass' "$ROOT/download-gemma.out"
+grep 'hf/gemma/gemma-4-12b-it' "$ROOT/download-gemma.out"
+grep 'gguf_created: false' "$ROOT/download-gemma.out"
+test -f "$DOWNLOAD_ROOT/reports/gemma/gemma-4-12b-it.source-manifest.json"
+test -f "$DOWNLOAD_ROOT/reports/gemma/gemma-4-12b-it.native-inventory.json"
+test -f "$DOWNLOAD_ROOT/reports/gemma/gemma-4-12b-it.download-report.json"
+test -f "$DOWNLOAD_ROOT/registry/gemma/gemma-4-12b-it.download.json"
+! find "$DOWNLOAD_ROOT/gguf" -type f -name '*.gguf' 2>/dev/null | grep .
+
+YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download qwen3-8b --models-root "$DOWNLOAD_ROOT" --audit > "$ROOT/download-qwen.out"
+grep 'family: qwen' "$ROOT/download-qwen.out"
+grep 'hf/qwen/qwen3-8b' "$ROOT/download-qwen.out"
+grep 'status: model-download-pass' "$ROOT/download-qwen.out"
+
+YVEX_HF_CLI=/missing/hf "$YVEX_BIN" models download gemma-4-12b-it --models-root "$DOWNLOAD_ROOT/missing" --audit > "$ROOT/download-missing-hf.out" 2> "$ROOT/download-missing-hf.err" && exit 1 || true
+grep 'status: model-download-blocked' "$ROOT/download-missing-hf.out"
+grep 'top_blocker: missing-huggingface-cli' "$ROOT/download-missing-hf.out"
+
+YVEX_FAKE_HF_FAIL=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$DOWNLOAD_ROOT/fail" --audit > "$ROOT/download-fail.out" 2> "$ROOT/download-fail.err" && exit 1 || true
+grep 'status: model-download-fail' "$ROOT/download-fail.out"
+test -f "$DOWNLOAD_ROOT/fail/logs/gemma-4-12b-it.download.stderr.log"
+
+YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download --repo test-org/test-model --family gemma --name test-model --models-root "$DOWNLOAD_ROOT/direct" --audit > "$ROOT/download-direct.out"
+grep 'repo_id: test-org/test-model' "$ROOT/download-direct.out"
+grep 'hf/gemma/test-model' "$ROOT/download-direct.out"
+grep 'status: model-download-pass' "$ROOT/download-direct.out"
+
+"$YVEX_BIN" models download --models-root "$DOWNLOAD_ROOT/parser" > "$ROOT/download-missing-target.out" 2> "$ROOT/download-missing-target.err" && exit 1 || true
+grep 'requires TARGET or --repo' "$ROOT/download-missing-target.err"
+"$YVEX_BIN" models download --repo test-org/test-model --models-root "$DOWNLOAD_ROOT/parser" > "$ROOT/download-repo-no-family.out" 2> "$ROOT/download-repo-no-family.err" && exit 1 || true
+grep 'requires --family' "$ROOT/download-repo-no-family.err"
+"$YVEX_BIN" models download --repo test-org/test-model --family llama --models-root "$DOWNLOAD_ROOT/parser" > "$ROOT/download-bad-family.out" 2> "$ROOT/download-bad-family.err" && exit 1 || true
+grep 'requires --family deepseek|glm|qwen|gemma' "$ROOT/download-bad-family.err"
+"$YVEX_BIN" models download gemma-4-12b-it --models-root "" > "$ROOT/download-empty-root.out" 2> "$ROOT/download-empty-root.err" && exit 1 || true
+grep 'models download --models-root value is empty or invalid' "$ROOT/download-empty-root.err"
+"$YVEX_BIN" models download gemma-4-12b-it --max-workers 0 > "$ROOT/download-bad-workers.out" 2> "$ROOT/download-bad-workers.err" && exit 1 || true
+grep 'requires a positive integer' "$ROOT/download-bad-workers.err"
+"$YVEX_BIN" models download gemma-4-12b-it --source s3 > "$ROOT/download-bad-source.out" 2> "$ROOT/download-bad-source.err" && exit 1 || true
+grep 'supports hf only' "$ROOT/download-bad-source.err"
+"$YVEX_BIN" models download gemma-4-12b-it --surprise > "$ROOT/download-unknown-flag.out" 2> "$ROOT/download-unknown-flag.err" && exit 1 || true
+grep 'unknown models download option' "$ROOT/download-unknown-flag.err"
+"$YVEX_BIN" models download gemma-4-12b-it extra > "$ROOT/download-extra-positional.out" 2> "$ROOT/download-extra-positional.err" && exit 1 || true
+grep 'extra positional argument' "$ROOT/download-extra-positional.err"
+
+HF_TOKEN=secret-value YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-e2b --models-root "$DOWNLOAD_ROOT/token" --audit > "$ROOT/download-token.out"
+grep 'auth_state: token-env-present' "$ROOT/download-token.out"
+grep 'token_value_redacted: true' "$ROOT/download-token.out"
+! grep -R 'secret-value' "$ROOT/download-token.out" "$DOWNLOAD_ROOT/token" "$ROOT"
+! git ls-files '*.safetensors' '*.bin' '*.dat' | grep .
 
 PREP="$ROOT/prepare"
 PREP_SOURCE="$PREP/hf/deepseek/DeepSeek-V4-Flash"

@@ -113,6 +113,9 @@ lanes. The current command-visible source surface is:
 ./yvex model-target inspect qwen-metal-portability --paths
 ./yvex model-target inspect gemma-dense-portability
 ./yvex model-target inspect gemma-dense-portability --paths
+./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --dry-run --audit
+./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --audit
+./yvex models download qwen3-8b --models-root "$HOME/lab/models" --audit
 ./yvex source-manifest report --family qwen --release v0.1.0
 ./yvex source-manifest report --family qwen --release v0.1.0 --output table
 ./yvex source-manifest report --family qwen --release v0.1.0 --audit
@@ -120,6 +123,15 @@ lanes. The current command-visible source surface is:
 ./yvex source-manifest report --family gemma --release v0.1.0 --output table
 ./yvex source-manifest report --family gemma --release v0.1.0 --audit
 ```
+
+`models download` is the source-intake lane. It runs the installed Hugging Face
+CLI in the foreground, stores source tensors under `<models_root>/hf/<family>`,
+and writes token-redacted receipts, logs, a download report, a download registry
+sidecar, a source manifest, and a header-only native inventory. Catalog rows are
+routing defaults, not upstream identity proof. The lane does not perform remote
+identity verification, hash payloads, load tensor payload bytes, emit GGUF,
+register runtime artifacts, materialize tensors, execute runtime paths,
+generate, evaluate, benchmark, or mark a release ready.
 
 `qwen-metal-portability` is source-target profile only. It is a pressure-target
 slot for Qwen family, the `<models_root>/hf/qwen/qwen-metal-portability` source
@@ -200,9 +212,10 @@ release ready.
 
 Source family/profile fields, source artifact class fields, source footprint
 fields, source provenance fields, native safetensors inventory, and source
-tensor metadata inventory are command-visible for Qwen and Gemma. The next
-source pressure step is source manifest/provenance hardening without tensor
-payload loading.
+tensor metadata inventory are command-visible for Qwen and Gemma. Source
+download sidecars can now provide concrete local manifests and native
+inventories, but model-class profile and tensor-role mapping remain separate
+future evidence.
 
 ## Family Classification
 

@@ -1,6 +1,6 @@
 # YVEX Inner Delivery Spine
 
-Date: 2026-07-03
+Date: 2026-07-04
 Status: internal roadmap
 Project: YVEX
 Language: C
@@ -121,7 +121,7 @@ official source tensors
 
 | Stage | Purpose | Current stage | Implemented? | Current proof | Next gap |
 | --- | --- | --- | --- | --- | --- |
-| official source tensors | upstream source authority | report-only | partial | target records, source manifests, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, and source manifest/provenance hardening | model-class profile |
+| official source tensors | upstream source authority | source-intake/report-only | partial | target records, source manifests, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, source manifest/provenance hardening, and `yvex models download` source-intake sidecars | model-class profile |
 | source manifest | provenance and source footprint | implemented | yes | `yvex source-manifest` | larger source coverage |
 | native tensor inventory | source tensor directory without payload loading | implemented | yes | `yvex native-weights` | huge shard indexing |
 | tensor mapping | map source/artifact tensor names to YVEX roles | partial/report-only | partial | tensor-map and family-runtime reports | final runtime role coverage |
@@ -192,6 +192,7 @@ operator-readable state.
 | native safetensors inventory | report-only | yes | Qwen/Gemma source reports read safetensors headers only to count files, opened headers, header bytes, tensor records, dtype counts, rank/shape summaries, declared data bytes, largest tensor metadata, and malformed-header counts | not source download, remote lookup, hashing, manifest creation, source readiness, tensor payload loading, artifact emission, materialization, runtime, generation, eval, or benchmark |
 | source tensor metadata inventory | report-only | yes | Qwen/Gemma source reports derive tensor names, file placement, dtype, rank, shape, element counts, declared byte spans, largest tensors, dtype/rank distributions, and lexical name-pattern summaries from safetensors headers only | not tensor payload loading, hashing, runtime role mapping, model class inference, artifact emission, materialization, runtime, generation, eval, benchmark, throughput, or release readiness |
 | source manifest/provenance hardening | report-only | yes | Qwen/Gemma source reports expose manifest expectation, path/status, shallow schema/family/target consistency, manifest sub-status fields, and no-create/no-remote/no-hash/no-payload boundaries | not source download, source readiness, remote lookup, hashing, payload loading, artifact emission, runtime, generation, eval, benchmark, throughput, or release readiness |
+| source tensor download lane | source-intake | yes | `yvex models download TARGET --models-root DIR --audit` and `tests/cli/models.sh` fake-HF coverage | not remote identity verification, payload hashing, conversion, GGUF creation, registry runtime artifact registration, materialization, runtime, generation, eval, or benchmark |
 | operator paths/presets | operator-preset | yes | paths/model-target/models prepare/check | not extra runtime capability |
 | normal CLI output baseline | operator-output | yes | `info`, `paths`, `models`, `model-target`, and `generate` normal/audit tests | not new runtime capability |
 | compact report/table output baseline | operator-output | yes | `models`, `model-target`, `fullmodel`, integrity, KV, and model-class report normal/table/audit tests | not new runtime capability |
@@ -557,7 +558,7 @@ lanes; rows are the delivery units that complete track work.
 | Track ID | Track name | Owns | Current status | Implemented evidence | Next gap | Active / Later |
 | --- | --- | --- | --- | --- | --- | --- |
 | TRACK.TARGET | Target selection and pressure objects | target classes and release target decision | source-target-profiled | target registry, path reports, `yvex model-target decision`, `yvex model-target candidate`, `yvex model-target dense-candidate`, `yvex model-target qwen-metal`, `yvex model-target inspect qwen-metal-portability`, and `yvex model-target inspect gemma-dense-portability` | full-runtime target selection remains blocked | active |
-| TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory, Qwen/Gemma source pressure reports, Qwen/Gemma source target profiles, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, and source manifest/provenance hardening | model-class handoff | active |
+| TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory, Qwen/Gemma source pressure reports, Qwen/Gemma source target profiles, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, source manifest/provenance hardening, and models download source-intake lane | model-class handoff | active |
 | TRACK.ARTIFACT | Artifact production | YVEX-produced GGUF and conversion plan | selected-slice | controlled/selected GGUF emission | full-runtime artifact production | later |
 | TRACK.INTEGRITY | Artifact identity and gates | digest/ranges/corruption/materialization gates | implemented | integrity harness and reports | full-runtime gate coverage | active |
 | TRACK.MODEL | Model class and runtime routing | dense/MoE/source-only/selected-slice class reports | partial/report-only | family-runtime, attention, KV, context, MoE reports | final runtime route and dense/output/tokenizer class gaps | active |
@@ -641,6 +642,8 @@ Current status:
 
 Current evidence:
   source-manifest and native-weights commands, plus
+  `yvex models download gemma-4-12b-it --models-root DIR --audit`,
+  `yvex models download qwen3-8b --models-root DIR --audit`,
   `yvex source-manifest report --family qwen --release v0.1.0`,
   `yvex source-manifest report --family gemma --release v0.1.0`,
   `yvex model-target inspect qwen-metal-portability`, and
@@ -667,7 +670,8 @@ Note:
   shard count/footprint fields; `V010.SOURCE.4` completed source provenance
   fields; `V010.SOURCE.5` completed native safetensors inventory;
   `V010.SOURCE.6` completed source tensor metadata inventory; `V010.SOURCE.7`
-  completed source manifest/provenance hardening.
+  completed source manifest/provenance hardening; `V010.SOURCE.7A /
+  MODELS.DOWNLOAD.0` completed the foreground source tensor download lane.
 
 Boundary:
   source inventory is not model execution.
@@ -1837,6 +1841,7 @@ V010.SOURCE.4       source provenance fields
 V010.SOURCE.5       native safetensors inventory
 V010.SOURCE.6       source tensor metadata inventory
 V010.SOURCE.7       source manifest/provenance hardening
+V010.SOURCE.7A      models download source-intake lane
 V010.SOURCE.8       GLM source pressure report
 V010.SOURCE.9       Qwen source pressure report
 V010.SOURCE.10      v0.1.0 source acceptance gate
@@ -4284,6 +4289,22 @@ map tensor roles, infer model classes, emit artifacts, materialize tensors,
 execute graph/runtime paths, generate, evaluate, benchmark, claim throughput,
 or mark a release ready.
 
+Completed target/source lane row:
+
+```text
+V010.SOURCE.7A / MODELS.DOWNLOAD.0 - native source tensor download lane
+```
+
+`V010.SOURCE.7A / MODELS.DOWNLOAD.0` adds `yvex models download` under the
+existing `models` namespace. The command resolves operator paths, routes a
+small catalog or direct `--repo` request to a foreground `hf download`, records
+stdout/stderr logs and a token-redacted receipt, and writes download registry,
+download report, source manifest, and header-only native inventory sidecars
+after a successful non-dry-run. It does not verify upstream identity, hash
+payloads, load tensor payload bytes, emit GGUF, register a runtime artifact,
+materialize tensors, execute runtime paths, generate, evaluate, benchmark,
+claim throughput, or mark a release ready.
+
 Active Next is now the Qwen model-class profile lane:
 
 ```text
@@ -4380,6 +4401,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | V010.SOURCE.5 | complete | source | Native safetensors inventory | native safetensors inventory is command-visible for Qwen and Gemma source pressure reports, reading safetensors headers only to count files, opened headers, header bytes, tensor records, dtype counts, rank/shape summaries, declared data bytes, largest tensor metadata, and malformed-header counts without loading tensor payload bytes, hashing files, creating manifests, emitting artifacts, materializing tensors, running graph/runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | V010.SOURCE.6 | complete | source | Source tensor metadata inventory | source tensor metadata inventory is command-visible for Qwen and Gemma source pressure reports, deriving tensor names, shard file placement, dtype, rank, shape, element counts, declared byte spans, largest tensor metadata, dtype/rank distributions, and lexical name-pattern summaries from safetensors headers only without loading tensor payload bytes, hashing files, mapping tensors to runtime roles, inferring model classes, emitting artifacts, materializing tensors, running graph/runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | V010.SOURCE.7 | complete | source | Source manifest/provenance hardening | source manifest/provenance hardening fields are command-visible for Qwen and Gemma source pressure reports, exposing manifest expectation, manifest path/status, schema/family/target/artifact/footprint/provenance/native-inventory/tensor-metadata consistency status, and explicit no-create/no-remote/no-hash/no-payload boundaries without source download, source readiness claim, artifact emission, materialization, graph/runtime execution, generation, eval, benchmark, throughput, or release-ready claim |
+| V010.SOURCE.7A / MODELS.DOWNLOAD.0 | complete | source | Native source tensor download lane | `yvex models download` routes catalog or direct Hugging Face repo requests through the installed `hf download` CLI, writes token-redacted receipts, stdout/stderr logs, registry/report sidecars, source manifests, and header-only native inventories under the operator models root, with fake-HF CLI tests covering dry-run, success, missing CLI, backend failure, direct repo, parser errors, and token redaction; it does not verify upstream identity, hash payloads, load tensor payload bytes, emit GGUF, register a runtime artifact, materialize tensors, execute graph/runtime, generate, eval, benchmark, throughput, or release-ready claim |
 | CUDA.KERNEL.0 | complete | cuda | CUDA primitive kernel vertical hardening | existing CUDA primitive kernels are vertically hardened as bounded CUDA compute primitives; MLP and attention no longer rely on one-thread diagnostic bodies, primitive CUDA tests compare against CPU/reference outputs, and CUDA remains a primitive execution surface only without full model runtime, generation, benchmark, throughput, tensor-core optimization, FlashAttention, paged KV, or release-ready claim |
 | OWI.HUGE.0 | planned | intake | Huge source tensor inventory | huge safetensors shard sets are inventoried without loading full tensor payloads |
 | OWI.HUGE.1 | planned | intake | Huge safetensors shard index | safetensors shard metadata, tensor placement, offsets, and dtype distribution are indexed |
@@ -5586,7 +5608,8 @@ SPINE.FILEMAP.0:
 After `SPINE.OUTPUT.UX.CONTRACT.0`, `V010.CLI.17`, `V010.CLI.18`,
 `V010.CLI.19`, `V010.SOURCE.9`, `OWI.TARGETS.QWEN.0`, `V010.SOURCE.1`,
 `V010.SOURCE.2`, `V010.SOURCE.3`, `V010.SOURCE.4`, `V010.SOURCE.5`,
-`V010.SOURCE.6`, `OWI.TARGETS.GEMMA.0`, and `V010.SOURCE.7` completed, Active Next advances to:
+`V010.SOURCE.6`, `OWI.TARGETS.GEMMA.0`, `V010.SOURCE.7`, and
+`V010.SOURCE.7A / MODELS.DOWNLOAD.0` completed, Active Next advances to:
 
 ```text
 MODEL.CLASS.QWEN.0 - Qwen model-class profile
@@ -5596,6 +5619,7 @@ If any P1 finding remains blocking, Active Next becomes the named follow-up row.
 
 | Condition | Active Next |
 | --- | --- |
+| Source download lane complete and Qwen model-class profile is missing | MODEL.CLASS.QWEN.0 |
 | Qwen/Gemma source manifest/provenance hardening complete and Qwen model-class profile is missing | MODEL.CLASS.QWEN.0 |
 | Qwen/Gemma source tensor metadata inventory complete and source manifest/provenance hardening is missing | V010.SOURCE.7 |
 | Qwen/Gemma native safetensors inventory complete and source tensor metadata inventory is missing | V010.SOURCE.6 |
@@ -5627,8 +5651,10 @@ Reason:
   V010.SOURCE.9, OWI.TARGETS.QWEN.0, V010.SOURCE.1, V010.SOURCE.2,
   V010.SOURCE.3, V010.SOURCE.4, V010.SOURCE.5, V010.SOURCE.6, and
   OWI.TARGETS.GEMMA.0 remain complete report-only rows; V010.SOURCE.7 is now
-  complete as report-only source manifest/provenance hardening. Qwen model-class
-  profile is the next blocker before tensor-collection/runtime-path work.
+  complete as report-only source manifest/provenance hardening, and
+  V010.SOURCE.7A / MODELS.DOWNLOAD.0 is complete as a source-intake download
+  lane. Qwen model-class profile is the next blocker before
+  tensor-collection/runtime-path work.
 ```
 
 

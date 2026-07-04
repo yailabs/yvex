@@ -321,6 +321,54 @@ Quant/template/intake manifests:
 ./yvex gguf-template compare --template "$HOME/lab/models/reports/deepseek/template.json" --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash"
 ```
 
+## Lane 5 — Source tensor download
+
+Purpose:
+  Download source tensor trees into the operator models root through the
+  YVEX-owned `models` namespace, then write source-intake sidecars.
+
+Requires:
+  Repository root.
+  Installed Hugging Face CLI as `hf`, or `YVEX_HF_CLI` for tests.
+  Token in `HF_TOKEN` only when the upstream repo requires it.
+
+Writes:
+  Source files under `<models_root>/hf/<family>/<target>`.
+  Logs under `<models_root>/logs`.
+  Receipt, download report, source manifest, and native inventory under
+  `<models_root>/reports/<family>`.
+  Download registry sidecar under `<models_root>/registry/<family>`.
+
+Safe to rerun:
+  Dry-run is safe. Non-dry-run delegates overwrite/resume behavior to
+  `hf download` and rewrites YVEX sidecars.
+
+Stop after:
+  `status: model-download-pass` and source-manifest/native-inventory stages
+  pass, or after `status: model-download-dry-run` confirms the command shape.
+
+Boundary:
+  source tensors only
+  no remote identity verification
+  no payload hashing
+  no tensor payload loading by YVEX inventory
+  no conversion
+  no quantization
+  no GGUF emission
+  no runtime artifact registration
+  no materialization
+  no graph/runtime execution
+  no generation/eval/benchmark claim
+
+```sh
+./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --dry-run --audit
+./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --audit
+./yvex models download gemma-4-31b-it --models-root "$HOME/lab/models" --audit
+./yvex models download qwen3-8b --models-root "$HOME/lab/models" --audit
+./yvex source-manifest report --family gemma --release v0.1.0 --audit
+./yvex source-manifest report --family qwen --release v0.1.0 --audit
+```
+
 ## Full Implemented Command Inventory
 
 - `backend`: backend lanes
@@ -345,7 +393,7 @@ Quant/template/intake manifests:
 - `metadata`: artifact inspection lanes
 - `model-gate`: integrity and gate lanes
 - `model-target`: model lanes, model target path, Qwen/Gemma source-target profiles, target decision, and full-runtime candidate reporting lanes, fast regression lane
-- `models`: artifact registration and selected prepare lanes
+- `models`: source tensor download, artifact registration, and selected prepare lanes
 - `native-weights`: source intake lanes
 - `paths`: configure once lane, fast regression lane, path resolution
 - `plan`: materialization and runtime attachment lanes

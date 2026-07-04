@@ -1,0 +1,115 @@
+#!/usr/bin/env sh
+set -eu
+
+log_path=${YVEX_FAKE_HF_LOG:-build/tests/fake-hf.log}
+mkdir -p "$(dirname "$log_path")"
+
+{
+  printf 'fake-hf argv:\n'
+  redact_next=0
+  for arg in "$@"; do
+    if [ "$redact_next" -eq 1 ]; then
+      printf '  <redacted>\n'
+      redact_next=0
+      continue
+    fi
+    printf '  %s\n' "$arg"
+    if [ "$arg" = "--token" ]; then
+      redact_next=1
+    fi
+  done
+} >> "$log_path"
+
+if [ "${YVEX_FAKE_HF_FAIL:-0}" = "1" ]; then
+  printf 'fake-hf: requested failure\n' >&2
+  exit 42
+fi
+
+if [ "$#" -lt 2 ] || [ "$1" != "download" ]; then
+  printf 'fake-hf: expected download REPO\n' >&2
+  exit 2
+fi
+
+repo=$2
+shift 2
+local_dir=
+dry_run=0
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --local-dir)
+      [ "$#" -ge 2 ] || exit 2
+      local_dir=$2
+      shift 2
+      ;;
+    --dry-run)
+      dry_run=1
+      shift
+      ;;
+    --revision|--include|--exclude|--max-workers|--token)
+      [ "$#" -ge 2 ] || exit 2
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+if [ "$dry_run" -eq 1 ]; then
+  printf 'fake-hf: dry-run repo=%s local_dir=%s\n' "$repo" "$local_dir"
+  exit 0
+fi
+
+if [ -z "$local_dir" ]; then
+  printf 'fake-hf: --local-dir is required\n' >&2
+  exit 2
+fi
+
+mkdir -p "$local_dir"
+printf '{}\n' > "$local_dir/config.json"
+printf '{}\n' > "$local_dir/tokenizer.json"
+printf '{}\n' > "$local_dir/tokenizer_config.json"
+printf '# fake model card\n' > "$local_dir/README.md"
+
+python3 - "$local_dir/model-00001-of-00002.safetensors" "$local_dir/model-00002-of-00002.safetensors" <<'PY'
+import json
+import struct
+import sys
+
+fixtures = [
+    (
+        sys.argv[1],
+        {
+            "__metadata__": {"format": "pt"},
+            "embed.weight": {
+                "dtype": "F16",
+                "shape": [2, 4],
+                "data_offsets": [0, 16],
+            },
+        },
+        16,
+    ),
+    (
+        sys.argv[2],
+        {
+            "__metadata__": {"format": "pt"},
+            "layers.0.attn.q_proj.weight": {
+                "dtype": "F16",
+                "shape": [4, 4],
+                "data_offsets": [0, 32],
+            },
+        },
+        32,
+    ),
+]
+
+for path, header, payload_len in fixtures:
+    blob = json.dumps(header, separators=(",", ":")).encode("utf-8")
+    with open(path, "wb") as f:
+        f.write(struct.pack("<Q", len(blob)))
+        f.write(blob)
+        f.write(bytes(payload_len))
+PY
+
+printf 'fake-hf: downloaded repo=%s local_dir=%s\n' "$repo" "$local_dir"

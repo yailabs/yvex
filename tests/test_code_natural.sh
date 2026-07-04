@@ -328,8 +328,25 @@ scan_forbidden_claim "$pattern"
 pattern='target paths inspect GG''UF'
 scan_forbidden_claim "$pattern"
 
-if grep -nE '\b(system|popen|execl|execv|fork)[[:space:]]*\(' yvex_model_artifacts.c; then
-  echo "models prepare/check must not shell out"
+if awk '
+  /^static int model_download_run_hf\(/ {
+    in_download = 1
+  }
+  in_download && /^}/ {
+    in_download = 0
+    next
+  }
+  !in_download && /\b(system|popen|execl|execv|fork)[[:space:]]*\(/ {
+    print FILENAME ":" FNR ":" $0
+    bad = 1
+  }
+  END {
+    exit bad ? 1 : 0
+  }
+' yvex_model_artifacts.c; then
+  :
+else
+  echo "models prepare/check must not shell out; only models download may call hf"
   exit 1
 fi
 
