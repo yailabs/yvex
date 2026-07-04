@@ -31,7 +31,7 @@ Current CUDA state:
   bounded primitive-hardening only; no CUDA full-runtime/generation claim
 
 Active implementation next:
-  TENSOR.COLLECTION.QWEN.0 - Qwen tensor collection inventory
+  TENSOR.COLLECTION.GEMMA.0 - Gemma tensor collection inventory
 
 Current release target:
   v0.1.0 - first honest full-runtime path
@@ -43,7 +43,7 @@ Primary pressure targets:
   Gemma source/model-class profile
 
 Main v0.1.0 blocker:
-  Qwen tensor collection inventory remains missing
+  Gemma tensor collection inventory remains missing
 ```
 
 | Field | Current value |
@@ -62,7 +62,7 @@ Main v0.1.0 blocker:
 | Full model generation | unsupported |
 | DeepSeek generation | unsupported |
 | Eval/benchmark | unsupported / not measured |
-| Active next | TENSOR.COLLECTION.QWEN.0 |
+| Active next | TENSOR.COLLECTION.GEMMA.0 |
 
 ## 1. Spine Nomenclature
 
@@ -190,6 +190,7 @@ operator-readable state.
 | Backend-neutral source target identity | report-only | yes | `yvex model-target list` exposes `qwen3-8b` and `gemma-4-12b-it` as source model targets with backend pressure fields separated | not backend selection, runtime, generation, eval, benchmark, throughput, or release readiness |
 | Qwen source target profile | report-only | yes | `yvex model-target inspect qwen3-8b` | not source download, source manifest creation, artifact emission, runtime, Metal, generation, eval, or benchmark |
 | Qwen model-class profile | report-only | yes | `yvex model-target class-profile qwen3-8b --audit` | not tensor payload loading, tensor role mapping, artifact emission, runtime, Metal, generation, eval, benchmark, throughput, or release readiness |
+| Qwen tensor collection inventory | report-only | yes | `yvex model-target tensor-collection qwen3-8b --audit` | not tensor payload loading, tensor role mapping, artifact emission, runtime descriptor construction, graph consumption, Metal, generation, eval, benchmark, throughput, or release readiness |
 | Gemma source pressure report | report-only | yes | `yvex source-manifest report --family gemma --release v0.1.0` | not source download, artifact emission, runtime, generation, eval, or benchmark |
 | Gemma source target profile | report-only | yes | `yvex model-target inspect gemma-4-12b-it` | not source download, source manifest creation, artifact emission, runtime, generation, eval, or benchmark |
 | Gemma model-class profile | report-only | yes | `yvex model-target class-profile gemma-4-12b-it --audit` | not tensor payload loading, tensor role mapping, artifact emission, runtime, generation, eval, benchmark, throughput, or release readiness |
@@ -573,7 +574,7 @@ lanes; rows are the delivery units that complete track work.
 | TRACK.ARTIFACT | Artifact production | YVEX-produced GGUF and conversion plan | selected-slice | controlled/selected GGUF emission | full-runtime artifact production | later |
 | TRACK.INTEGRITY | Artifact identity and gates | digest/ranges/corruption/materialization gates | implemented | integrity harness and reports | full-runtime gate coverage | active |
 | TRACK.MODEL | Model class and runtime routing | dense/MoE/source-only/selected-slice class reports | partial/report-only | family-runtime, attention, KV, context, MoE reports | final runtime route and dense/output/tokenizer class gaps | active |
-| TRACK.TENSOR | Tensor collections | embedding, norm, attention, MLP/MoE, output, tokenizer roles | partial/report-only | fullmodel descriptor/report and MoE tensor-collection report | selected artifacts lack full MoE tensor coverage | active |
+| TRACK.TENSOR | Tensor collections | embedding, norm, attention, MLP/MoE, output, tokenizer roles | partial/report-only | fullmodel descriptor/report, MoE tensor-collection report, and Qwen header-only tensor collection inventory | Gemma tensor collection inventory / tensor role mapping | active |
 | TRACK.STORAGE | Storage stream | shard index, cold/warm reads, byte ranges, cache policy | planned | doctrine/plans | shard and read probes | later |
 | TRACK.RESIDENCY | Residency | resident/staged/hybrid placement and movement | report-only | placement plans | staged residency proof | later |
 | TRACK.BACKEND | Backend capability | CPU/CUDA/future Metal/ROCm operations and memory reports | partial | CPU/CUDA probes, movement, parity tests, and `CUDA.KERNEL.0` primitive hardening | capability matrix | active |
@@ -631,12 +632,12 @@ Main blockers:
   Qwen/Metal is visible as a reduced-scale pressure lane, Qwen and Gemma source
   pressure are command-visible, and `qwen3-8b` plus
   `gemma-4-12b-it` are concrete backend-neutral source target profiles, and
-  Qwen/Gemma model-class profiles are command-visible; tensor collections,
-  tensor maps, artifacts, backend residency, graph/runtime, eval, and benchmark
-  facts are still missing.
+  Qwen/Gemma model-class profiles are command-visible and Qwen has a header-only
+  tensor collection inventory; Gemma tensor collection, tensor maps, artifacts,
+  backend residency, graph/runtime, eval, and benchmark facts are still missing.
 
 Next possible row:
-  TENSOR.COLLECTION.QWEN.0.
+  TENSOR.COLLECTION.GEMMA.0.
 
 Boundary:
   a target is not a capability claim.
@@ -670,10 +671,10 @@ v0.1.0 rows:
   V010.SOURCE.*, OWI.*.
 
 Main blockers:
-  tensor collection inventory, then tensor-role mapping.
+  Gemma tensor collection inventory, then tensor-role mapping.
 
 Next possible row:
-  TENSOR.COLLECTION.QWEN.0.
+  TENSOR.COLLECTION.GEMMA.0.
 
 Note:
   `OWI.TARGETS.QWEN.0` is the existing Qwen-specific source-target profile row
@@ -1222,10 +1223,10 @@ v0.1.0 rows:
   V010.CLI.*, V010.OPERATOR.*.
 
 Main blockers:
-  Qwen tensor collection inventory remains missing.
+  Gemma tensor collection inventory remains missing.
 
 Next possible row:
-  TENSOR.COLLECTION.QWEN.0.
+  TENSOR.COLLECTION.GEMMA.0.
 
 Boundary:
   operator presets compose lower behavior only.
@@ -4358,7 +4359,7 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 ## 7. Active Next
 
 ```text
-TENSOR.COLLECTION.QWEN.0 - Qwen tensor collection inventory
+TENSOR.COLLECTION.GEMMA.0 - Gemma tensor collection inventory
 ```
 
 `SPINE.OUTPUT.UX.CONTRACT.0` is complete as a docs/control row. It defines the
@@ -4448,7 +4449,7 @@ runtime_claim: unsupported
 generation: unsupported-full-model
 benchmark_status: not-measured
 release_ready: false
-next_required_rows: TENSOR.COLLECTION.QWEN.0
+next_required_rows: TENSOR.COLLECTION.GEMMA.0
 ```
 
 The current DeepSeek selected artifacts remain pressure targets for parser,
@@ -4635,10 +4636,25 @@ no-role-map/no-runtime/no-generation/no-benchmark boundaries without tensor
 payload loading, tensor role mapping, model execution, artifact emission,
 generation, eval, throughput, or release-ready claim.
 
-Active Next is now the Qwen tensor collection inventory lane:
+Completed tensor-collection row:
 
 ```text
 TENSOR.COLLECTION.QWEN.0 - Qwen tensor collection inventory
+```
+
+`TENSOR.COLLECTION.QWEN.0` adds `yvex model-target tensor-collection
+qwen3-8b` as a header-only tensor collection inventory over Qwen source
+metadata. It groups lexical embedding, attention Q/K/V/O, MLP gate/up/down,
+normalization, output-head, MoE, tokenizer-sidecar, and KV-runtime-state
+candidate facts from safetensors headers only. It does not load tensor payloads,
+map runtime roles, build runtime descriptors, feed graph consumers, emit
+artifacts, materialize tensors, execute runtime paths, support Metal, generate,
+evaluate, benchmark, claim throughput, or mark a release ready.
+
+Active Next is now the Gemma tensor collection inventory lane:
+
+```text
+TENSOR.COLLECTION.GEMMA.0 - Gemma tensor collection inventory
 ```
 
 Completed CUDA interlock row:
@@ -4912,7 +4928,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | MODEL.TARGET.IDENTITY.0 | complete | model | Backend-neutral source target identity | backend- or pressure-specific source target IDs are replaced by `qwen3-8b` and `gemma-4-12b-it`; backend selection and backend pressure are separate report fields; old target IDs are refused; source-manifest defaults and target path reports use the new IDs without runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | MODEL.CLASS.QWEN.0 | complete | model | Qwen model-class profile | Qwen model-class profile is command-visible as a header-metadata-only source profile for `qwen3-8b`, exposing family, target, model-class status, runtime-shape candidate, lexical tensor pattern counters, evidence basis, backend pressure as a separate deferred field, and explicit no-role-map/no-runtime/no-generation/no-benchmark boundaries without tensor payload loading, tensor role mapping, model execution, artifact emission, generation, eval, throughput, or release-ready claim |
 | MODEL.CLASS.GEMMA.0 | complete | model | Gemma model-class profile | Gemma model-class profile is command-visible as a header-metadata-only source profile for `gemma-4-12b-it`, exposing family, target, model-class status, dense runtime-shape candidate, lexical tensor pattern counters, evidence basis, backend pressure as a separate deferred field, and explicit no-role-map/no-runtime/no-generation/no-benchmark boundaries without tensor payload loading, tensor role mapping, model execution, artifact emission, generation, eval, throughput, or release-ready claim |
-| TENSOR.COLLECTION.QWEN.0 | planned | tensor-collection | Qwen tensor collection inventory | Qwen tensor names map into embedding, normalization, attention, MLP/MoE, output, tokenizer, and KV collection candidates without runtime claim |
+| TENSOR.COLLECTION.QWEN.0 | complete | tensor-collection | Qwen tensor collection inventory | `yvex model-target tensor-collection qwen3-8b` profiles Qwen source tensor collection candidates from safetensors headers only, grouping embedding, attention Q/K/V/O, MLP gate/up/down, normalization, output-head, MoE, tokenizer-sidecar, and KV runtime-state boundaries without tensor payload loading, tensor role mapping, artifact emission, runtime descriptors, graph consumption, Metal support, generation, eval, benchmark, throughput, or release-ready claim |
 | ARTIFACT.QWEN.0 | planned | artifact | Qwen YVEX-produced artifact identity | Qwen YVEX-produced GGUF identity, digest, tensor byte ranges, qtype summary, and registry metadata are recorded without runtime claim |
 | RESIDENCY.METAL.0 | planned | residency | Metal unified-memory residency plan | Qwen tensor collections are assigned planned Apple unified-memory/host-staged/Metal residency classes with memory pressure and unsupported blockers |
 | FULLMODEL.QWEN.0 | planned | model | Qwen full model inventory and placement report | Qwen full artifact tensor inventory, memory budget, collection coverage, backend placement pressure, and runtime blockers are reported without materialization or generation claim |
@@ -5955,21 +5971,22 @@ After `SPINE.OUTPUT.UX.CONTRACT.0`, `V010.CLI.17`, `V010.CLI.18`,
 `MODELS.DOWNLOAD.SIGNAL.0`,
 `MODELS.DOWNLOAD.CONTROL.0`,
 `V010.SOURCE.7B / ACCOUNTS.PROVIDER.0`, `MODEL.TARGET.IDENTITY.0`,
-`MODEL.CLASS.QWEN.0`, and `MODEL.CLASS.GEMMA.0`
+`MODEL.CLASS.QWEN.0`, `MODEL.CLASS.GEMMA.0`, and
+`TENSOR.COLLECTION.QWEN.0`
 completed,
 Active Next advances to:
 
 ```text
-TENSOR.COLLECTION.QWEN.0 - Qwen tensor collection inventory
+TENSOR.COLLECTION.GEMMA.0 - Gemma tensor collection inventory
 ```
 
 If any P1 finding remains blocking, Active Next becomes the named follow-up row.
 
 | Condition | Active Next |
 | --- | --- |
-| Qwen and Gemma model-class profiles complete while Qwen tensor collection inventory is missing | TENSOR.COLLECTION.QWEN.0 |
-| Backend-neutral source target identity plus Qwen/Gemma model-class profiles complete while tensor collections are missing | TENSOR.COLLECTION.QWEN.0 |
-| Source download/account lanes complete and model-class profiles are complete while tensor collections are missing | TENSOR.COLLECTION.QWEN.0 |
+| Qwen tensor collection inventory complete while Gemma tensor collection inventory is missing | TENSOR.COLLECTION.GEMMA.0 |
+| Backend-neutral source target identity plus Qwen/Gemma model-class profiles complete while Gemma tensor collection is missing | TENSOR.COLLECTION.GEMMA.0 |
+| Source download/account lanes complete and Qwen tensor collection is complete while Gemma tensor collection is missing | TENSOR.COLLECTION.GEMMA.0 |
 | Qwen/Gemma source tensor metadata inventory complete and source manifest/provenance hardening is missing | V010.SOURCE.7 |
 | Qwen/Gemma native safetensors inventory complete and source tensor metadata inventory is missing | V010.SOURCE.6 |
 | Qwen/Gemma source provenance fields complete and native safetensors inventory is missing | V010.SOURCE.5 |
@@ -5991,7 +6008,7 @@ Current reconciliation result:
 
 ```text
 Active Next:
-  TENSOR.COLLECTION.QWEN.0 - Qwen tensor collection inventory
+  TENSOR.COLLECTION.GEMMA.0 - Gemma tensor collection inventory
 
 Reason:
   The first normal operator output baseline and broader diagnostic output
@@ -6006,9 +6023,11 @@ Reason:
   MODELS.DOWNLOAD.SIGNAL.0 is complete as lock-safe interruption,
   MODELS.DOWNLOAD.CONTROL.0 is complete as local download status/stop/resume
   and cleanup control, and MODEL.TARGET.IDENTITY.0 is complete as the
-  backend-neutral source target identity repair. MODEL.CLASS.QWEN.0 is complete
-  as a header-metadata-only Qwen model-class profile. Gemma model-class profile
-  is the next blocker before tensor-collection and runtime-path work.
+  backend-neutral source target identity repair. MODEL.CLASS.QWEN.0 and
+  MODEL.CLASS.GEMMA.0 are complete as header-metadata-only model-class
+  profiles. TENSOR.COLLECTION.QWEN.0 is complete as a header-only Qwen tensor
+  collection inventory; Gemma tensor collection is the next blocker before
+  tensor-role mapping and runtime-path work.
 ```
 
 

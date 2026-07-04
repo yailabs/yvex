@@ -85,6 +85,9 @@ make
 ./yvex model-target class-profile qwen3-8b
 ./yvex model-target class-profile qwen3-8b --output table
 ./yvex model-target class-profile qwen3-8b --audit
+./yvex model-target tensor-collection qwen3-8b
+./yvex model-target tensor-collection qwen3-8b --output table
+./yvex model-target tensor-collection qwen3-8b --audit
 ./yvex model-target inspect gemma-4-12b-it
 ./yvex model-target inspect gemma-4-12b-it --paths
 ./yvex model-target class-profile gemma-4-12b-it
@@ -132,6 +135,13 @@ gemma-4-12b-it` are header-metadata-only model-class evidence. They count
 lexical tensor-name patterns from safetensors headers and do not map tensor
 roles, load payloads, execute runtime paths, generate, evaluate, benchmark, or
 mark a release ready.
+
+`model-target tensor-collection qwen3-8b` is a Qwen header-only tensor
+collection inventory. It groups lexical tensor candidates into embedding,
+attention Q/K/V/O, MLP gate/up/down, normalization, output-head, MoE,
+tokenizer-sidecar, and KV-runtime-state buckets without tensor role mapping,
+payload loading, runtime descriptors, graph consumers, generation, evaluation,
+or benchmark claims.
 
 ## Lane 1 — Graph-only regression
 

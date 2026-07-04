@@ -15,6 +15,7 @@
 #include <yvex/weights.h>
 
 #include <ctype.h>
+#include <errno.h>
 #include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -1445,7 +1446,7 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "TENSOR.COLLECTION.QWEN.0,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
+        "TENSOR.COLLECTION.GEMMA.0,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
@@ -1473,7 +1474,7 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "TENSOR.COLLECTION.QWEN.0,TENSOR.COLLECTION.GEMMA.0",
+        "TENSOR.COLLECTION.GEMMA.0",
         {
             "planned-dense-pressure-only",
             "missing-gemma-source-path",
@@ -1663,7 +1664,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,TENSOR.COLLECTION.QWEN.0,COMPUTE.BACKEND.METAL.0",
+        "V010.TARGET.7,TENSOR.COLLECTION.GEMMA.0,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
@@ -1709,7 +1710,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,TENSOR.COLLECTION.QWEN.0,TENSOR.COLLECTION.GEMMA.0",
+        "V010.TARGET.7,TENSOR.COLLECTION.GEMMA.0",
         {
             "planned-dense-pressure-only",
             "missing-gemma-source-path",
@@ -2008,7 +2009,9 @@ typedef enum {
     YVEX_MODEL_TARGET_OUTPUT_AUDIT
 } yvex_model_target_output_mode;
 
-#define YVEX_MODEL_CLASS_NEXT_ROW "TENSOR.COLLECTION.QWEN.0"
+#define YVEX_MODEL_CLASS_NEXT_ROW "TENSOR.COLLECTION.GEMMA.0"
+#define YVEX_QWEN_TENSOR_COLLECTION_NEXT_ROW "TENSOR.COLLECTION.GEMMA.0"
+#define YVEX_TENSOR_COLLECTION_LAYER_CAP 512u
 
 static int parse_model_target_output_mode(const char *value,
                                           yvex_model_target_output_mode *mode)
@@ -2099,6 +2102,47 @@ typedef struct {
     unsigned long long moe_expert_pattern_count;
     unsigned long long other_pattern_count;
 } yvex_model_class_profile;
+
+typedef struct {
+    int seen;
+    int q;
+    int k;
+    int v;
+    int o;
+    int gate;
+    int up;
+    int down;
+} yvex_tensor_collection_layer_flags;
+
+typedef struct {
+    const yvex_model_target_record *record;
+    const char *status;
+    const char *source_metadata_status;
+    const char *top_blocker;
+    char source_path[YVEX_PATH_CAP];
+    char source_path_source[32];
+    int source_exists;
+    int config_present;
+    int tokenizer_present;
+    unsigned long long tensor_count;
+    unsigned long long layer_count_observed;
+    unsigned long long embedding_tensor_count;
+    unsigned long long attention_q_count;
+    unsigned long long attention_k_count;
+    unsigned long long attention_v_count;
+    unsigned long long attention_o_count;
+    unsigned long long attention_complete_qkvo_layer_count;
+    unsigned long long mlp_gate_count;
+    unsigned long long mlp_up_count;
+    unsigned long long mlp_down_count;
+    unsigned long long mlp_complete_gud_layer_count;
+    unsigned long long norm_tensor_count;
+    unsigned long long output_head_tensor_count;
+    unsigned long long moe_router_count;
+    unsigned long long moe_expert_count;
+    unsigned long long other_tensor_count;
+    yvex_tensor_collection_layer_flags layers[YVEX_TENSOR_COLLECTION_LAYER_CAP];
+} yvex_qwen_tensor_collection_profile;
 
 static int model_class_name_contains_ci(const char *name, const char *needle)
 {
@@ -2608,6 +2652,440 @@ static void print_model_class_audit_hint(const yvex_model_target_record *record)
     printf("model_class_pattern_status: lexical-only\n");
     printf("model_class_role_mapping_status: not-implemented\n");
     printf("model_class_runtime_status: unsupported\n");
+}
+
+static int qwen_tensor_collection_layer_index(const char *name,
+                                              unsigned long *layer_index)
+{
+    const char *patterns[] = {
+        "model.layers.",
+        "layers.",
+        "blk.",
+    };
+    unsigned long p;
+
+    if (!name || !layer_index) {
+        return 0;
+    }
+    for (p = 0; p < sizeof(patterns) / sizeof(patterns[0]); ++p) {
+        const char *pos = strstr(name, patterns[p]);
+        const char *digits;
+        char *end = NULL;
+        unsigned long value;
+
+        if (!pos) {
+            continue;
+        }
+        digits = pos + strlen(patterns[p]);
+        if (!isdigit((unsigned char)digits[0])) {
+            continue;
+        }
+        errno = 0;
+        value = strtoul(digits, &end, 10);
+        if (errno != 0 || end == digits || !end || *end != '.') {
+            continue;
+        }
+        *layer_index = value;
+        return 1;
+    }
+    return 0;
+}
+
+static void qwen_tensor_collection_note_layer(
+    yvex_qwen_tensor_collection_profile *profile,
+    unsigned long layer_index,
+    const char *kind)
+{
+    yvex_tensor_collection_layer_flags *flags;
+
+    if (!profile || !kind || layer_index >= YVEX_TENSOR_COLLECTION_LAYER_CAP) {
+        return;
+    }
+    flags = &profile->layers[layer_index];
+    if (!flags->seen) {
+        flags->seen = 1;
+        profile->layer_count_observed++;
+    }
+    if (strcmp(kind, "q") == 0) flags->q = 1;
+    else if (strcmp(kind, "k") == 0) flags->k = 1;
+    else if (strcmp(kind, "v") == 0) flags->v = 1;
+    else if (strcmp(kind, "o") == 0) flags->o = 1;
+    else if (strcmp(kind, "gate") == 0) flags->gate = 1;
+    else if (strcmp(kind, "up") == 0) flags->up = 1;
+    else if (strcmp(kind, "down") == 0) flags->down = 1;
+}
+
+static void qwen_tensor_collection_count_tensor(
+    yvex_qwen_tensor_collection_profile *profile,
+    const char *name)
+{
+    int matched = 0;
+    int has_norm_pattern = 0;
+    unsigned long layer_index = 0;
+    int has_layer = 0;
+
+    if (!profile || !name) {
+        return;
+    }
+    has_layer = qwen_tensor_collection_layer_index(name, &layer_index);
+    if (model_class_name_contains_ci(name, "embed_tokens") ||
+        model_class_name_contains_ci(name, "token_embd") ||
+        model_class_name_contains_ci(name, "embeddings")) {
+        profile->embedding_tensor_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "q_proj")) {
+        profile->attention_q_count++;
+        if (has_layer) qwen_tensor_collection_note_layer(profile, layer_index, "q");
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "k_proj")) {
+        profile->attention_k_count++;
+        if (has_layer) qwen_tensor_collection_note_layer(profile, layer_index, "k");
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "v_proj")) {
+        profile->attention_v_count++;
+        if (has_layer) qwen_tensor_collection_note_layer(profile, layer_index, "v");
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "o_proj")) {
+        profile->attention_o_count++;
+        if (has_layer) qwen_tensor_collection_note_layer(profile, layer_index, "o");
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "gate_proj")) {
+        profile->mlp_gate_count++;
+        if (has_layer) qwen_tensor_collection_note_layer(profile, layer_index, "gate");
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "up_proj")) {
+        profile->mlp_up_count++;
+        if (has_layer) qwen_tensor_collection_note_layer(profile, layer_index, "up");
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "down_proj")) {
+        profile->mlp_down_count++;
+        if (has_layer) qwen_tensor_collection_note_layer(profile, layer_index, "down");
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "input_layernorm") ||
+        model_class_name_contains_ci(name, "post_attention_layernorm") ||
+        model_class_name_contains_ci(name, "pre_feedforward_layernorm") ||
+        model_class_name_contains_ci(name, "post_feedforward_layernorm") ||
+        model_class_name_contains_ci(name, "layernorm") ||
+        model_class_name_contains_ci(name, "rms") ||
+        model_class_name_contains_ci(name, "norm")) {
+        has_norm_pattern = 1;
+        matched = 1;
+    }
+    if (has_norm_pattern) {
+        profile->norm_tensor_count++;
+    }
+    if (model_class_name_contains_ci(name, "lm_head") ||
+        model_class_name_contains_ci(name, "output")) {
+        profile->output_head_tensor_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "router")) {
+        profile->moe_router_count++;
+        matched = 1;
+    }
+    if (model_class_name_contains_ci(name, "experts") ||
+        model_class_name_contains_ci(name, "expert")) {
+        profile->moe_expert_count++;
+        matched = 1;
+    }
+    if (!matched) {
+        profile->other_tensor_count++;
+    }
+}
+
+static void qwen_tensor_collection_finalize(
+    yvex_qwen_tensor_collection_profile *profile)
+{
+    unsigned long i;
+
+    if (!profile) {
+        return;
+    }
+    for (i = 0; i < YVEX_TENSOR_COLLECTION_LAYER_CAP; ++i) {
+        yvex_tensor_collection_layer_flags *flags = &profile->layers[i];
+        if (!flags->seen) {
+            continue;
+        }
+        if (flags->q && flags->k && flags->v && flags->o) {
+            profile->attention_complete_qkvo_layer_count++;
+        }
+        if (flags->gate && flags->up && flags->down) {
+            profile->mlp_complete_gud_layer_count++;
+        }
+    }
+}
+
+static const char *qwen_tensor_collection_present_status(unsigned long long count)
+{
+    return count > 0 ? "candidate" : "missing";
+}
+
+static const char *qwen_tensor_collection_attention_status(
+    const yvex_qwen_tensor_collection_profile *profile)
+{
+    if (!profile || (profile->attention_q_count +
+                    profile->attention_k_count +
+                    profile->attention_v_count +
+                    profile->attention_o_count) == 0) {
+        return "missing";
+    }
+    return profile->attention_complete_qkvo_layer_count > 0 ? "candidate" : "incomplete";
+}
+
+static const char *qwen_tensor_collection_mlp_status(
+    const yvex_qwen_tensor_collection_profile *profile)
+{
+    if (!profile || (profile->mlp_gate_count +
+                    profile->mlp_up_count +
+                    profile->mlp_down_count) == 0) {
+        return "missing";
+    }
+    return profile->mlp_complete_gud_layer_count > 0 ? "candidate" : "incomplete";
+}
+
+static int qwen_tensor_collection_has_dense_profile(
+    const yvex_qwen_tensor_collection_profile *profile)
+{
+    return profile &&
+           profile->embedding_tensor_count > 0 &&
+           profile->attention_complete_qkvo_layer_count > 0 &&
+           profile->mlp_complete_gud_layer_count > 0 &&
+           profile->norm_tensor_count > 0 &&
+           profile->output_head_tensor_count > 0;
+}
+
+static int qwen_tensor_collection_has_collection_candidate(
+    const yvex_qwen_tensor_collection_profile *profile)
+{
+    if (!profile) {
+        return 0;
+    }
+    return profile->embedding_tensor_count > 0 &&
+           profile->attention_q_count > 0 &&
+           profile->attention_k_count > 0 &&
+           profile->attention_v_count > 0 &&
+           profile->attention_o_count > 0 &&
+           profile->mlp_gate_count > 0 &&
+           profile->mlp_up_count > 0 &&
+           profile->mlp_down_count > 0 &&
+           profile->norm_tensor_count > 0 &&
+           profile->output_head_tensor_count > 0;
+}
+
+static int build_qwen_tensor_collection_profile(
+    const yvex_model_target_record *record,
+    const char *models_root_override,
+    const char *source_override,
+    yvex_qwen_tensor_collection_profile *profile)
+{
+    const yvex_model_class_profile_spec *spec;
+    yvex_model_class_profile source_profile;
+    yvex_native_weight_table *table = NULL;
+    yvex_native_weight_options options;
+    yvex_error err;
+    unsigned long long i;
+    int rc;
+
+    if (!record || !profile || strcmp(record->target_id, "qwen3-8b") != 0) {
+        return 2;
+    }
+    memset(profile, 0, sizeof(*profile));
+    profile->record = record;
+    profile->status = "source-missing";
+    profile->source_metadata_status = "missing";
+    profile->top_blocker = "missing-qwen-source-path";
+
+    spec = find_model_class_profile_spec(record->target_id);
+    rc = model_class_build_profile(record, spec, models_root_override,
+                                   source_override, &source_profile);
+    if (rc != 0) {
+        return rc;
+    }
+    snprintf(profile->source_path, sizeof(profile->source_path), "%s",
+             source_profile.source_path);
+    snprintf(profile->source_path_source, sizeof(profile->source_path_source), "%s",
+             source_profile.source_path_source);
+    profile->source_exists = source_profile.source_exists;
+    profile->config_present = source_profile.config_present;
+    profile->tokenizer_present = source_profile.tokenizer_present;
+    if (!profile->source_exists) {
+        return 0;
+    }
+
+    memset(&options, 0, sizeof(options));
+    options.source_dir = profile->source_path;
+    options.recursive = 0;
+    options.include_metadata = 0;
+    yvex_error_clear(&err);
+    rc = yvex_native_weight_table_open(&table, &options, &err);
+    if (rc != YVEX_OK) {
+        profile->status = "metadata-missing";
+        profile->source_metadata_status = "header-error";
+        profile->top_blocker = "missing-qwen-header-metadata";
+        return rc == YVEX_ERR_NOMEM ? 3 : 0;
+    }
+    profile->tensor_count = yvex_native_weight_table_count(table);
+    for (i = 0; i < profile->tensor_count; ++i) {
+        const yvex_native_weight_info *info =
+            yvex_native_weight_table_at(table, i);
+        qwen_tensor_collection_count_tensor(profile, info ? info->name : NULL);
+    }
+    yvex_native_weight_table_close(table);
+    qwen_tensor_collection_finalize(profile);
+
+    profile->source_metadata_status =
+        profile->tensor_count > 0 ? "header-only" : "no-safetensors";
+    if (profile->tensor_count == 0) {
+        profile->status = "metadata-missing";
+        profile->top_blocker = "missing-qwen-header-metadata";
+    } else if (qwen_tensor_collection_has_dense_profile(profile)) {
+        profile->status = "collection-profiled";
+        profile->top_blocker = "missing-qwen-tensor-role-map";
+    } else if (qwen_tensor_collection_has_collection_candidate(profile)) {
+        profile->status = "collection-candidate";
+        profile->top_blocker = "missing-qwen-complete-layer-collection";
+    } else {
+        profile->status = "collection-incomplete";
+        profile->top_blocker = "incomplete-qwen-tensor-collection-candidates";
+    }
+    return 0;
+}
+
+static void print_qwen_tensor_collection_normal(
+    const yvex_qwen_tensor_collection_profile *profile)
+{
+    printf("tensor-collection: qwen\n");
+    printf("target: %s\n", profile->record->target_id);
+    printf("status: %s\n", profile->status);
+    printf("stage: header-collection-inventory\n");
+    printf("evidence: header-metadata-only\n");
+    printf("collections: embedding=%llu attention_qkvo=%llu mlp_gud=%llu norm=%llu head=%llu moe=%llu\n",
+           profile->embedding_tensor_count,
+           profile->attention_complete_qkvo_layer_count,
+           profile->mlp_complete_gud_layer_count,
+           profile->norm_tensor_count,
+           profile->output_head_tensor_count,
+           profile->moe_router_count + profile->moe_expert_count);
+    if (profile->source_exists && profile->tensor_count > 0) {
+        printf("layers_observed: %llu\n", profile->layer_count_observed);
+    }
+    printf("top_blocker: %s\n", profile->top_blocker);
+    printf("next: %s\n", YVEX_QWEN_TENSOR_COLLECTION_NEXT_ROW);
+    printf("boundary: tensor collection inventory only; no role mapping/runtime/generation\n");
+}
+
+static void print_qwen_tensor_collection_table(
+    const yvex_qwen_tensor_collection_profile *profile)
+{
+    printf("TENSOR COLLECTION INVENTORY\n\n");
+    printf("%-6s  %-10s  %-19s  %5s  %9s  %7s  %4s  %4s  %3s  %6s  %s\n",
+           "FAMILY", "TARGET", "STATUS", "EMBED", "ATTN_QKVO",
+           "MLP_GUD", "NORM", "HEAD", "MOE", "LAYERS", "NEXT");
+    printf("%-6s  %-10s  %-19s  %5llu  %9llu  %7llu  %4llu  %4llu  %3llu  %6llu  %s\n",
+           "qwen",
+           profile->record->target_id,
+           profile->status,
+           profile->embedding_tensor_count,
+           profile->attention_complete_qkvo_layer_count,
+           profile->mlp_complete_gud_layer_count,
+           profile->norm_tensor_count,
+           profile->output_head_tensor_count,
+           profile->moe_router_count + profile->moe_expert_count,
+           profile->layer_count_observed,
+           YVEX_QWEN_TENSOR_COLLECTION_NEXT_ROW);
+}
+
+static void print_qwen_tensor_collection_audit(
+    const yvex_qwen_tensor_collection_profile *profile)
+{
+    printf("tensor_collection_status: %s\n", profile->status);
+    printf("tensor_collection_family: qwen\n");
+    printf("tensor_collection_target_id: %s\n", profile->record->target_id);
+    printf("tensor_collection_stage: header-collection-inventory\n");
+    printf("tensor_collection_evidence_basis: header-metadata-only\n");
+    printf("tensor_collection_source_status: %s\n",
+           profile->source_exists ? "present" : "missing");
+    printf("tensor_collection_source_path: %s\n", profile->source_path);
+    printf("tensor_collection_manifest_status: not-checked\n");
+    printf("tensor_collection_config_status: %s\n",
+           profile->config_present ? "present" : "missing");
+    printf("tensor_collection_tokenizer_status: %s\n",
+           profile->tokenizer_present ? "present" : "missing");
+    printf("tensor_collection_tensor_count: %llu\n", profile->tensor_count);
+    printf("tensor_collection_layer_count_observed: %llu\n",
+           profile->layer_count_observed);
+    printf("tensor_collection_embedding_status: %s\n",
+           qwen_tensor_collection_present_status(profile->embedding_tensor_count));
+    printf("tensor_collection_embedding_tensor_count: %llu\n",
+           profile->embedding_tensor_count);
+    printf("tensor_collection_attention_status: %s\n",
+           qwen_tensor_collection_attention_status(profile));
+    printf("tensor_collection_attention_q_count: %llu\n", profile->attention_q_count);
+    printf("tensor_collection_attention_k_count: %llu\n", profile->attention_k_count);
+    printf("tensor_collection_attention_v_count: %llu\n", profile->attention_v_count);
+    printf("tensor_collection_attention_o_count: %llu\n", profile->attention_o_count);
+    printf("tensor_collection_attention_complete_qkvo_layer_count: %llu\n",
+           profile->attention_complete_qkvo_layer_count);
+    printf("tensor_collection_mlp_status: %s\n",
+           qwen_tensor_collection_mlp_status(profile));
+    printf("tensor_collection_mlp_gate_count: %llu\n", profile->mlp_gate_count);
+    printf("tensor_collection_mlp_up_count: %llu\n", profile->mlp_up_count);
+    printf("tensor_collection_mlp_down_count: %llu\n", profile->mlp_down_count);
+    printf("tensor_collection_mlp_complete_gud_layer_count: %llu\n",
+           profile->mlp_complete_gud_layer_count);
+    printf("tensor_collection_norm_status: %s\n",
+           qwen_tensor_collection_present_status(profile->norm_tensor_count));
+    printf("tensor_collection_norm_tensor_count: %llu\n",
+           profile->norm_tensor_count);
+    printf("tensor_collection_output_head_status: %s\n",
+           qwen_tensor_collection_present_status(profile->output_head_tensor_count));
+    printf("tensor_collection_output_head_tensor_count: %llu\n",
+           profile->output_head_tensor_count);
+    printf("tensor_collection_moe_status: %s\n",
+           (profile->moe_router_count + profile->moe_expert_count) > 0
+               ? "observed"
+               : "not-observed");
+    printf("tensor_collection_moe_router_count: %llu\n", profile->moe_router_count);
+    printf("tensor_collection_moe_expert_count: %llu\n", profile->moe_expert_count);
+    printf("tensor_collection_tokenizer_collection_status: %s\n",
+           profile->tokenizer_present ? "sidecar-observed" : "missing");
+    printf("tensor_collection_kv_runtime_state_status: runtime-state-required-not-implemented\n");
+    printf("tensor_collection_validation_status: lexical-and-header-only\n");
+    printf("tensor_collection_role_mapping_status: not-implemented\n");
+    printf("tensor_collection_runtime_descriptor_status: not-implemented\n");
+    printf("tensor_collection_graph_consumer_status: not-implemented\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    printf("top_blocker: %s\n", profile->top_blocker);
+    printf("next_required_rows: %s\n", YVEX_QWEN_TENSOR_COLLECTION_NEXT_ROW);
+    printf("boundary: tensor collection inventory only; no role mapping/runtime/generation\n");
+}
+
+static void print_qwen_tensor_collection_audit_hint(
+    const yvex_model_target_record *record)
+{
+    if (!record || strcmp(record->target_id, "qwen3-8b") != 0) {
+        return;
+    }
+    printf("tensor_collection_status: command-visible\n");
+    printf("tensor_collection_family: qwen\n");
+    printf("tensor_collection_target_id: qwen3-8b\n");
+    printf("tensor_collection_stage: header-collection-inventory\n");
+    printf("tensor_collection_evidence_basis: header-metadata-only\n");
+    printf("tensor_collection_validation_status: lexical-and-header-only\n");
+    printf("tensor_collection_role_mapping_status: not-implemented\n");
+    printf("tensor_collection_runtime_descriptor_status: not-implemented\n");
+    printf("tensor_collection_graph_consumer_status: not-implemented\n");
 }
 
 static const char *target_decision_candidate_class(const yvex_model_target_record *record)
@@ -3741,6 +4219,7 @@ static void print_model_target_usage(FILE *fp)
     fprintf(fp, "       yvex model-target qwen-metal --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target decision --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target class-profile TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
+    fprintf(fp, "       yvex model-target tensor-collection TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR] [--audit | --output normal|table|audit]\n");
 }
 
@@ -3770,6 +4249,9 @@ void yvex_model_target_help(FILE *fp)
     fprintf(fp, "  yvex model-target class-profile qwen3-8b --audit\n");
     fprintf(fp, "  yvex model-target class-profile gemma-4-12b-it --audit\n");
     fprintf(fp, "  The class-profile report reads safetensors headers only and counts lexical tensor-name patterns. It does not map tensor roles, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    fprintf(fp, "\nTensor collection inventory:\n");
+    fprintf(fp, "  yvex model-target tensor-collection qwen3-8b --audit\n");
+    fprintf(fp, "  The tensor collection inventory reads safetensors headers only and groups lexical Qwen tensor candidates. It does not map runtime roles, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "\nDefault output is compact. Use --audit for full diagnostic fields.\n");
     fprintf(fp, "Model targets are pressure objects, not capability claims.\n");
     fprintf(fp, "External GGUFs and external runners are reference evidence only.\n");
@@ -4152,6 +4634,7 @@ static void print_model_target_list(void)
         printf("source_tensor_metadata_payload_loaded: false\n");
         printf("source_tensor_metadata_payload_bytes_read: 0\n");
         print_model_class_audit_hint(record);
+        print_qwen_tensor_collection_audit_hint(record);
         printf("runtime_shape: %s\n", model_target_runtime_shape(record));
         printf("backend_selection: %s\n", model_target_backend_selection(record));
         printf("backend_pressure: %s\n", model_target_backend_pressure(record));
@@ -4230,6 +4713,7 @@ static void print_model_target_record(const yvex_model_target_record *record)
     printf("source_tensor_metadata_payload_loaded: false\n");
     printf("source_tensor_metadata_payload_bytes_read: 0\n");
     print_model_class_audit_hint(record);
+    print_qwen_tensor_collection_audit_hint(record);
     printf("target_artifact_class: %s\n", record->target_artifact_class);
     printf("target_artifact_status: %s\n", model_target_target_artifact_status(record));
     printf("target_artifact_origin: %s\n", model_target_target_artifact_origin(record));
@@ -5006,6 +5490,70 @@ int yvex_model_target_command(int argc, char **argv)
             print_model_class_profile_audit(&profile);
         } else {
             print_model_class_profile_normal(&profile);
+        }
+        return 0;
+    }
+    if (strcmp(argv[2], "tensor-collection") == 0) {
+        const char *target_id = NULL;
+        const char *source = NULL;
+        yvex_qwen_tensor_collection_profile profile;
+        int rc;
+
+        output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
+        if (argc < 4) {
+            fprintf(stderr, "model-target tensor-collection: requires TARGET\n");
+            return 2;
+        }
+        target_id = argv[3];
+        record = find_model_target(target_id);
+        if (!record || strcmp(target_id, "qwen3-8b") != 0) {
+            fprintf(stderr, "model-target tensor-collection: unsupported target: %s\n",
+                    target_id && target_id[0] ? target_id : "none");
+            return 2;
+        }
+        for (i = 4; i < argc; ++i) {
+            if (strcmp(argv[i], "--audit") == 0) {
+                output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
+            } else if (strcmp(argv[i], "--output") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "model-target tensor-collection: --output requires normal|table|audit\n");
+                    return 2;
+                }
+                if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
+                    fprintf(stderr, "model-target tensor-collection: unsupported output mode: %s\n",
+                            argv[i]);
+                    return 2;
+                }
+            } else if (strcmp(argv[i], "--models-root") == 0) {
+                if (i + 1 >= argc || argv[i + 1][0] == '\0') {
+                    fprintf(stderr, "model-target tensor-collection: --models-root requires DIR\n");
+                    return 2;
+                }
+                models_root = argv[++i];
+            } else if (strcmp(argv[i], "--source") == 0) {
+                if (i + 1 >= argc || argv[i + 1][0] == '\0') {
+                    fprintf(stderr, "model-target tensor-collection: --source requires DIR\n");
+                    return 2;
+                }
+                source = argv[++i];
+            } else if (strcmp(argv[i], "--json") == 0) {
+                fprintf(stderr, "model-target tensor-collection: JSON output is unsupported; use --output normal|table|audit\n");
+                return 2;
+            } else {
+                fprintf(stderr, "model-target tensor-collection: unknown option: %s\n", argv[i]);
+                return 2;
+            }
+        }
+        rc = build_qwen_tensor_collection_profile(record, models_root, source, &profile);
+        if (rc != 0) {
+            return rc;
+        }
+        if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+            print_qwen_tensor_collection_table(&profile);
+        } else if (output_mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+            print_qwen_tensor_collection_audit(&profile);
+        } else {
+            print_qwen_tensor_collection_normal(&profile);
         }
         return 0;
     }

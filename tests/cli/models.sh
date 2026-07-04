@@ -603,6 +603,7 @@ grep 'unsupported output mode: nope' "$ROOT/check-invalid-output.err"
 "$YVEX_BIN" help model-target > "$ROOT/model-target-help.out"
 grep 'model-target decision --release v0.1.0' "$ROOT/model-target-help.out"
 grep 'model-target class-profile TARGET' "$ROOT/model-target-help.out"
+grep 'model-target tensor-collection TARGET' "$ROOT/model-target-help.out"
 grep 'This command records the v0.1.0 target decision' "$ROOT/model-target-help.out"
 
 CLASS_MISSING_ROOT="$ROOT/qwen-class-missing-root"
@@ -614,7 +615,7 @@ grep 'class: qwen-source-model-class-profile' "$ROOT/model-class-qwen-missing.ou
 grep 'evidence: header-metadata-only' "$ROOT/model-class-qwen-missing.out"
 grep 'patterns: tensors=0 attn=0 mlp=0 norm=0 head=0 moe=0' "$ROOT/model-class-qwen-missing.out"
 grep 'top_blocker: missing-qwen-source-path' "$ROOT/model-class-qwen-missing.out"
-grep 'next: TENSOR.COLLECTION.QWEN.0' "$ROOT/model-class-qwen-missing.out"
+grep 'next: TENSOR.COLLECTION.GEMMA.0' "$ROOT/model-class-qwen-missing.out"
 grep 'no tensor role mapping/runtime/generation' "$ROOT/model-class-qwen-missing.out"
 
 "$YVEX_BIN" model-target class-profile qwen3-8b --models-root "$CLASS_MISSING_ROOT" --audit > "$ROOT/model-class-qwen-missing-audit.out"
@@ -629,7 +630,40 @@ grep 'runtime_claim: unsupported' "$ROOT/model-class-qwen-missing-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/model-class-qwen-missing-audit.out"
 grep 'benchmark_status: not-measured' "$ROOT/model-class-qwen-missing-audit.out"
 grep 'release_ready: false' "$ROOT/model-class-qwen-missing-audit.out"
-grep 'next_required_rows: TENSOR.COLLECTION.QWEN.0' "$ROOT/model-class-qwen-missing-audit.out"
+grep 'next_required_rows: TENSOR.COLLECTION.GEMMA.0' "$ROOT/model-class-qwen-missing-audit.out"
+
+"$YVEX_BIN" model-target tensor-collection qwen3-8b --models-root "$CLASS_MISSING_ROOT" > "$ROOT/tensor-collection-qwen-missing.out"
+grep 'tensor-collection: qwen' "$ROOT/tensor-collection-qwen-missing.out"
+grep 'target: qwen3-8b' "$ROOT/tensor-collection-qwen-missing.out"
+grep 'status: source-missing' "$ROOT/tensor-collection-qwen-missing.out"
+grep 'stage: header-collection-inventory' "$ROOT/tensor-collection-qwen-missing.out"
+grep 'evidence: header-metadata-only' "$ROOT/tensor-collection-qwen-missing.out"
+grep 'collections: embedding=0 attention_qkvo=0 mlp_gud=0 norm=0 head=0 moe=0' "$ROOT/tensor-collection-qwen-missing.out"
+grep 'top_blocker: missing-qwen-source-path' "$ROOT/tensor-collection-qwen-missing.out"
+grep 'next: TENSOR.COLLECTION.GEMMA.0' "$ROOT/tensor-collection-qwen-missing.out"
+grep 'boundary: tensor collection inventory only; no role mapping/runtime/generation' "$ROOT/tensor-collection-qwen-missing.out"
+
+"$YVEX_BIN" model-target tensor-collection qwen3-8b --models-root "$CLASS_MISSING_ROOT" --output table > "$ROOT/tensor-collection-qwen-missing-table.out"
+grep 'TENSOR COLLECTION INVENTORY' "$ROOT/tensor-collection-qwen-missing-table.out"
+matches "$ROOT/tensor-collection-qwen-missing-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}source-missing[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}TENSOR\.COLLECTION\.GEMMA\.0$'
+
+"$YVEX_BIN" model-target tensor-collection qwen3-8b --models-root "$CLASS_MISSING_ROOT" --audit > "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'tensor_collection_status: source-missing' "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'tensor_collection_family: qwen' "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'tensor_collection_target_id: qwen3-8b' "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'tensor_collection_stage: header-collection-inventory' "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'tensor_collection_evidence_basis: header-metadata-only' "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'tensor_collection_source_status: missing' "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'tensor_collection_tensor_count: 0' "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'tensor_collection_embedding_tensor_count: 0' "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'tensor_collection_attention_complete_qkvo_layer_count: 0' "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'tensor_collection_mlp_complete_gud_layer_count: 0' "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'tensor_collection_role_mapping_status: not-implemented' "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'runtime_claim: unsupported' "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'generation: unsupported-full-model' "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'benchmark_status: not-measured' "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'release_ready: false' "$ROOT/tensor-collection-qwen-missing-audit.out"
+grep 'next_required_rows: TENSOR.COLLECTION.GEMMA.0' "$ROOT/tensor-collection-qwen-missing-audit.out"
 
 "$YVEX_BIN" model-target class-profile gemma-4-12b-it --models-root "$CLASS_MISSING_ROOT" > "$ROOT/model-class-gemma-missing.out"
 grep 'model-class: gemma' "$ROOT/model-class-gemma-missing.out"
@@ -639,12 +673,12 @@ grep 'class: gemma-source-model-class-profile' "$ROOT/model-class-gemma-missing.
 grep 'evidence: header-metadata-only' "$ROOT/model-class-gemma-missing.out"
 grep 'patterns: tensors=0 attn=0 mlp=0 norm=0 head=0 moe=0' "$ROOT/model-class-gemma-missing.out"
 grep 'top_blocker: missing-gemma-source-path' "$ROOT/model-class-gemma-missing.out"
-grep 'next: TENSOR.COLLECTION.QWEN.0' "$ROOT/model-class-gemma-missing.out"
+grep 'next: TENSOR.COLLECTION.GEMMA.0' "$ROOT/model-class-gemma-missing.out"
 grep 'no tensor role mapping/runtime/generation' "$ROOT/model-class-gemma-missing.out"
 
 "$YVEX_BIN" model-target class-profile gemma-4-12b-it --models-root "$CLASS_MISSING_ROOT" --output table > "$ROOT/model-class-gemma-missing-table.out"
 grep 'MODEL CLASS PROFILE' "$ROOT/model-class-gemma-missing-table.out"
-matches "$ROOT/model-class-gemma-missing-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}source-missing[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}TENSOR\.COLLECTION\.QWEN\.0$'
+matches "$ROOT/model-class-gemma-missing-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}source-missing[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}TENSOR\.COLLECTION\.GEMMA\.0$'
 
 "$YVEX_BIN" model-target class-profile gemma-4-12b-it --models-root "$CLASS_MISSING_ROOT" --audit > "$ROOT/model-class-gemma-missing-audit.out"
 grep 'model_class_profile_status: source-missing' "$ROOT/model-class-gemma-missing-audit.out"
@@ -663,7 +697,7 @@ grep 'runtime_claim: unsupported' "$ROOT/model-class-gemma-missing-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/model-class-gemma-missing-audit.out"
 grep 'benchmark_status: not-measured' "$ROOT/model-class-gemma-missing-audit.out"
 grep 'release_ready: false' "$ROOT/model-class-gemma-missing-audit.out"
-grep 'next_required_rows: TENSOR.COLLECTION.QWEN.0' "$ROOT/model-class-gemma-missing-audit.out"
+grep 'next_required_rows: TENSOR.COLLECTION.GEMMA.0' "$ROOT/model-class-gemma-missing-audit.out"
 
 QWEN_CLASS_SOURCE="${TMPDIR:-/tmp}/yvex-qwen-class-profile-test-$$"
 rm -rf "$QWEN_CLASS_SOURCE"
@@ -707,11 +741,11 @@ PY
 grep 'status: metadata-profiled' "$ROOT/model-class-qwen.out"
 grep 'patterns: tensors=10 attn=4 mlp=3 norm=2 head=1 moe=0' "$ROOT/model-class-qwen.out"
 grep 'top_blocker: missing-qwen-tensor-role-map' "$ROOT/model-class-qwen.out"
-grep 'next: TENSOR.COLLECTION.QWEN.0' "$ROOT/model-class-qwen.out"
+grep 'next: TENSOR.COLLECTION.GEMMA.0' "$ROOT/model-class-qwen.out"
 
 "$YVEX_BIN" model-target class-profile qwen3-8b --source "$QWEN_CLASS_SOURCE" --output table > "$ROOT/model-class-qwen-table.out"
 grep 'MODEL CLASS PROFILE' "$ROOT/model-class-qwen-table.out"
-matches "$ROOT/model-class-qwen-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}metadata-profiled[[:space:]]{2,}10[[:space:]]{2,}4[[:space:]]{2,}3[[:space:]]{2,}2[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}TENSOR\.COLLECTION\.QWEN\.0$'
+matches "$ROOT/model-class-qwen-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}metadata-profiled[[:space:]]{2,}10[[:space:]]{2,}4[[:space:]]{2,}3[[:space:]]{2,}2[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}TENSOR\.COLLECTION\.GEMMA\.0$'
 
 "$YVEX_BIN" model-target class-profile qwen3-8b --source "$QWEN_CLASS_SOURCE" --audit > "$ROOT/model-class-qwen-audit.out"
 grep 'model_class_profile_status: metadata-profiled' "$ROOT/model-class-qwen-audit.out"
@@ -740,7 +774,7 @@ grep 'runtime_claim: unsupported' "$ROOT/model-class-qwen-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/model-class-qwen-audit.out"
 grep 'benchmark_status: not-measured' "$ROOT/model-class-qwen-audit.out"
 grep 'release_ready: false' "$ROOT/model-class-qwen-audit.out"
-grep 'next_required_rows: TENSOR.COLLECTION.QWEN.0' "$ROOT/model-class-qwen-audit.out"
+grep 'next_required_rows: TENSOR.COLLECTION.GEMMA.0' "$ROOT/model-class-qwen-audit.out"
 
 QWEN_CLASS_MODELS_ROOT="$ROOT/qwen-class-models-root"
 mkdir -p "$QWEN_CLASS_MODELS_ROOT/hf/qwen"
@@ -749,6 +783,109 @@ cp -R "$QWEN_CLASS_SOURCE" "$QWEN_CLASS_MODELS_ROOT/hf/qwen/qwen3-8b"
 grep 'model_class_profile_status: metadata-profiled' "$ROOT/model-class-qwen-models-root-audit.out"
 matches "$ROOT/model-class-qwen-models-root-audit.out" 'source_path: .*/qwen-class-models-root/hf/qwen/qwen3-8b$'
 grep 'model_class_source_metadata_status: header-only' "$ROOT/model-class-qwen-models-root-audit.out"
+
+QWEN_COLLECTION_SOURCE="${TMPDIR:-/tmp}/yvex-qwen-tensor-collection-test-$$"
+rm -rf "$QWEN_COLLECTION_SOURCE"
+mkdir -p "$QWEN_COLLECTION_SOURCE"
+printf '{}\n' > "$QWEN_COLLECTION_SOURCE/config.json"
+printf '{}\n' > "$QWEN_COLLECTION_SOURCE/tokenizer.json"
+python3 - "$QWEN_COLLECTION_SOURCE/model.safetensors" <<'PY'
+import json
+import struct
+import sys
+
+names = [
+    "model.embed_tokens.weight",
+    "model.layers.0.self_attn.q_proj.weight",
+    "model.layers.0.self_attn.k_proj.weight",
+    "model.layers.0.self_attn.v_proj.weight",
+    "model.layers.0.self_attn.o_proj.weight",
+    "model.layers.0.mlp.gate_proj.weight",
+    "model.layers.0.mlp.up_proj.weight",
+    "model.layers.0.mlp.down_proj.weight",
+    "model.layers.0.input_layernorm.weight",
+    "model.layers.0.post_attention_layernorm.weight",
+    "model.norm.weight",
+    "lm_head.weight",
+]
+offset = 0
+header = {}
+for name in names:
+    header[name] = {
+        "dtype": "F32",
+        "shape": [2, 2],
+        "data_offsets": [offset, offset + 16],
+    }
+    offset += 16
+blob = json.dumps(header, separators=(",", ":")).encode("utf-8")
+with open(sys.argv[1], "wb") as f:
+    f.write(struct.pack("<Q", len(blob)))
+    f.write(blob)
+    f.write(b"x" * offset)
+PY
+
+"$YVEX_BIN" model-target tensor-collection qwen3-8b --source "$QWEN_COLLECTION_SOURCE" > "$ROOT/tensor-collection-qwen.out"
+grep 'tensor-collection: qwen' "$ROOT/tensor-collection-qwen.out"
+grep 'target: qwen3-8b' "$ROOT/tensor-collection-qwen.out"
+grep 'status: collection-profiled' "$ROOT/tensor-collection-qwen.out"
+grep 'stage: header-collection-inventory' "$ROOT/tensor-collection-qwen.out"
+grep 'evidence: header-metadata-only' "$ROOT/tensor-collection-qwen.out"
+grep 'collections: embedding=1 attention_qkvo=1 mlp_gud=1 norm=3 head=1 moe=0' "$ROOT/tensor-collection-qwen.out"
+grep 'layers_observed: 1' "$ROOT/tensor-collection-qwen.out"
+grep 'top_blocker: missing-qwen-tensor-role-map' "$ROOT/tensor-collection-qwen.out"
+grep 'next: TENSOR.COLLECTION.GEMMA.0' "$ROOT/tensor-collection-qwen.out"
+grep 'boundary: tensor collection inventory only; no role mapping/runtime/generation' "$ROOT/tensor-collection-qwen.out"
+
+"$YVEX_BIN" model-target tensor-collection qwen3-8b --source "$QWEN_COLLECTION_SOURCE" --output table > "$ROOT/tensor-collection-qwen-table.out"
+grep 'TENSOR COLLECTION INVENTORY' "$ROOT/tensor-collection-qwen-table.out"
+matches "$ROOT/tensor-collection-qwen-table.out" '^FAMILY[[:space:]]{2,}TARGET[[:space:]]{2,}STATUS[[:space:]]{2,}EMBED[[:space:]]{2,}ATTN_QKVO[[:space:]]{2,}MLP_GUD[[:space:]]{2,}NORM[[:space:]]{2,}HEAD[[:space:]]{2,}MOE[[:space:]]{2,}LAYERS[[:space:]]{2,}NEXT$'
+matches "$ROOT/tensor-collection-qwen-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}collection-profiled[[:space:]]{2,}1[[:space:]]{2,}1[[:space:]]{2,}1[[:space:]]{2,}3[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}1[[:space:]]{2,}TENSOR\.COLLECTION\.GEMMA\.0$'
+
+"$YVEX_BIN" model-target tensor-collection qwen3-8b --source "$QWEN_COLLECTION_SOURCE" --audit > "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_status: collection-profiled' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_family: qwen' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_target_id: qwen3-8b' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_stage: header-collection-inventory' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_evidence_basis: header-metadata-only' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_source_status: present' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_manifest_status: not-checked' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_config_status: present' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_tokenizer_status: present' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_tensor_count: 12' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_layer_count_observed: 1' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_embedding_status: candidate' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_embedding_tensor_count: 1' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_attention_status: candidate' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_attention_q_count: 1' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_attention_k_count: 1' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_attention_v_count: 1' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_attention_o_count: 1' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_attention_complete_qkvo_layer_count: 1' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_mlp_status: candidate' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_mlp_gate_count: 1' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_mlp_up_count: 1' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_mlp_down_count: 1' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_mlp_complete_gud_layer_count: 1' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_norm_status: candidate' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_norm_tensor_count: 3' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_output_head_status: candidate' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_output_head_tensor_count: 1' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_moe_status: not-observed' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_moe_router_count: 0' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_moe_expert_count: 0' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_tokenizer_collection_status: sidecar-observed' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_kv_runtime_state_status: runtime-state-required-not-implemented' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_validation_status: lexical-and-header-only' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_role_mapping_status: not-implemented' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_runtime_descriptor_status: not-implemented' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'tensor_collection_graph_consumer_status: not-implemented' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'runtime_claim: unsupported' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'generation: unsupported-full-model' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'benchmark_status: not-measured' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'release_ready: false' "$ROOT/tensor-collection-qwen-audit.out"
+grep 'next_required_rows: TENSOR.COLLECTION.GEMMA.0' "$ROOT/tensor-collection-qwen-audit.out"
+! grep 'generation_ready: tr''ue' "$ROOT/tensor-collection-qwen-audit.out"
+rm -rf "$QWEN_COLLECTION_SOURCE"
 
 BAD_RUNTIME_CLAIM='runtime_claim: support''ed'
 BAD_GENERATION_READY='generation_ready: tr''ue'
@@ -805,11 +942,11 @@ grep 'status: metadata-profiled' "$ROOT/model-class-gemma.out"
 grep 'class: gemma-source-model-class-profile' "$ROOT/model-class-gemma.out"
 grep 'patterns: tensors=12 attn=4 mlp=3 norm=3 head=1 moe=0' "$ROOT/model-class-gemma.out"
 grep 'top_blocker: missing-gemma-tensor-role-map' "$ROOT/model-class-gemma.out"
-grep 'next: TENSOR.COLLECTION.QWEN.0' "$ROOT/model-class-gemma.out"
+grep 'next: TENSOR.COLLECTION.GEMMA.0' "$ROOT/model-class-gemma.out"
 
 "$YVEX_BIN" model-target class-profile gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE" --output table > "$ROOT/model-class-gemma-table.out"
 grep 'MODEL CLASS PROFILE' "$ROOT/model-class-gemma-table.out"
-matches "$ROOT/model-class-gemma-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}metadata-profiled[[:space:]]{2,}12[[:space:]]{2,}4[[:space:]]{2,}3[[:space:]]{2,}3[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}TENSOR\.COLLECTION\.QWEN\.0$'
+matches "$ROOT/model-class-gemma-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}metadata-profiled[[:space:]]{2,}12[[:space:]]{2,}4[[:space:]]{2,}3[[:space:]]{2,}3[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}TENSOR\.COLLECTION\.GEMMA\.0$'
 
 "$YVEX_BIN" model-target class-profile gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE" --audit > "$ROOT/model-class-gemma-audit.out"
 grep 'model_class_profile_status: metadata-profiled' "$ROOT/model-class-gemma-audit.out"
@@ -844,7 +981,7 @@ grep 'runtime_claim: unsupported' "$ROOT/model-class-gemma-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/model-class-gemma-audit.out"
 grep 'benchmark_status: not-measured' "$ROOT/model-class-gemma-audit.out"
 grep 'release_ready: false' "$ROOT/model-class-gemma-audit.out"
-grep 'next_required_rows: TENSOR.COLLECTION.QWEN.0' "$ROOT/model-class-gemma-audit.out"
+grep 'next_required_rows: TENSOR.COLLECTION.GEMMA.0' "$ROOT/model-class-gemma-audit.out"
 
 GEMMA_CLASS_MODELS_ROOT="$ROOT/gemma-class-models-root"
 mkdir -p "$GEMMA_CLASS_MODELS_ROOT/hf/gemma"
@@ -877,6 +1014,19 @@ grep 'unsupported output mode: nope' "$ROOT/model-class-gemma-bad-output.err"
 expect_rc 2 "$YVEX_BIN" model-target class-profile gemma-4-12b-it --source > "$ROOT/model-class-gemma-missing-source.out" 2> "$ROOT/model-class-gemma-missing-source.err"
 grep 'source requires DIR' "$ROOT/model-class-gemma-missing-source.err"
 
+expect_rc 2 "$YVEX_BIN" model-target tensor-collection > "$ROOT/tensor-collection-missing-target.out" 2> "$ROOT/tensor-collection-missing-target.err"
+grep 'requires TARGET' "$ROOT/tensor-collection-missing-target.err"
+expect_rc 2 "$YVEX_BIN" model-target tensor-collection nope > "$ROOT/tensor-collection-bad-target.out" 2> "$ROOT/tensor-collection-bad-target.err"
+grep 'unsupported target: nope' "$ROOT/tensor-collection-bad-target.err"
+expect_rc 2 "$YVEX_BIN" model-target tensor-collection qwen-metal-portability > "$ROOT/tensor-collection-old-target.out" 2> "$ROOT/tensor-collection-old-target.err"
+grep 'unsupported target: qwen-metal-portability' "$ROOT/tensor-collection-old-target.err"
+expect_rc 2 "$YVEX_BIN" model-target tensor-collection qwen3-8b --output nope > "$ROOT/tensor-collection-bad-output.out" 2> "$ROOT/tensor-collection-bad-output.err"
+grep 'unsupported output mode: nope' "$ROOT/tensor-collection-bad-output.err"
+expect_rc 2 "$YVEX_BIN" model-target tensor-collection qwen3-8b --source > "$ROOT/tensor-collection-missing-source.out" 2> "$ROOT/tensor-collection-missing-source.err"
+grep 'source requires DIR' "$ROOT/tensor-collection-missing-source.err"
+expect_rc 2 "$YVEX_BIN" model-target tensor-collection qwen3-8b --models-root > "$ROOT/tensor-collection-missing-models-root.out" 2> "$ROOT/tensor-collection-missing-models-root.err"
+grep 'models-root requires DIR' "$ROOT/tensor-collection-missing-models-root.err"
+
 "$YVEX_BIN" model-target decision --help > "$ROOT/model-target-decision-help.out"
 grep 'usage: yvex model-target decision --release v0.1.0' "$ROOT/model-target-decision-help.out"
 grep 'does not download models, emit artifacts, materialize tensors, execute graph work, run prefill, decode, logits, sampling, generation, evaluation, or benchmarks' "$ROOT/model-target-decision-help.out"
@@ -886,7 +1036,7 @@ grep 'report: target-decision' "$ROOT/model-target-decision-normal.out"
 grep 'status: target-decision-blocked' "$ROOT/model-target-decision-normal.out"
 grep 'selected: none' "$ROOT/model-target-decision-normal.out"
 grep 'top_blocker: no eligible full-runtime candidate' "$ROOT/model-target-decision-normal.out"
-grep 'next: TENSOR.COLLECTION.QWEN.0' "$ROOT/model-target-decision-normal.out"
+grep 'next: TENSOR.COLLECTION.GEMMA.0' "$ROOT/model-target-decision-normal.out"
 ! grep 'next: V010\.CLI\.18' "$ROOT/model-target-decision-normal.out"
 ! grep 'next: V010\.SOURCE\.7' "$ROOT/model-target-decision-normal.out"
 ! grep 'next: MODEL\.CLASS\.QWEN\.0' "$ROOT/model-target-decision-normal.out"
@@ -894,7 +1044,7 @@ grep 'boundary: report-only; generation unsupported; benchmark not measured' "$R
 
 "$YVEX_BIN" model-target decision --release v0.1.0 --output table > "$ROOT/model-target-decision-table.out"
 matches "$ROOT/model-target-decision-table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$ROOT/model-target-decision-table.out" '^target-decision[[:space:]]{2,}blocked[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}TENSOR\.COLLECTION\.QWEN\.0$'
+matches "$ROOT/model-target-decision-table.out" '^target-decision[[:space:]]{2,}blocked[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}TENSOR\.COLLECTION\.GEMMA\.0$'
 
 "$YVEX_BIN" model-target decision --release v0.1.0 --output nope > "$ROOT/model-target-decision-bad-output.out" 2> "$ROOT/model-target-decision-bad-output.err" && exit 1 || true
 grep 'model-target decision: unsupported output mode: nope' "$ROOT/model-target-decision-bad-output.err"
