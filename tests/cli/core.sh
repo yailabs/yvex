@@ -453,6 +453,7 @@ contains "$OUT_DIR/source_manifest_report_help.out" "Report fields include sourc
 contains "$OUT_DIR/source_manifest_report_help.out" "Source footprint reports count top-level regular files and bytes without loading tensor payloads."
 contains "$OUT_DIR/source_manifest_report_help.out" "Source provenance fields classify local/planned state only; they do not verify upstream identity, hash files, or prove source readiness."
 contains "$OUT_DIR/source_manifest_report_help.out" "Native safetensors inventory reads safetensors headers only and never loads tensor payload bytes."
+contains "$OUT_DIR/source_manifest_report_help.out" "Source tensor metadata inventory is derived from safetensors headers only and does not map tensors to runtime roles."
 run_fail_code source_manifest_report_missing 2 "$YVEX_BIN" source-manifest report
 contains "$OUT_DIR/source_manifest_report_missing.err" "source-manifest report: --family is required"
 run_fail_code source_manifest_report_missing_release 2 "$YVEX_BIN" source-manifest report --family qwen
@@ -473,6 +474,10 @@ run_fail_code source_manifest_report_missing_target_value 2 "$YVEX_BIN" source-m
 contains "$OUT_DIR/source_manifest_report_missing_target_value.err" "source-manifest report: --target requires TARGET"
 run_fail_code source_manifest_report_missing_models_root_value 2 "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --models-root
 contains "$OUT_DIR/source_manifest_report_missing_models_root_value.err" "source-manifest report: --models-root requires DIR"
+run_fail_code source_manifest_report_missing_tensor_limit_value 2 "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --tensor-limit
+contains "$OUT_DIR/source_manifest_report_missing_tensor_limit_value.err" "source-manifest report: --tensor-limit requires N"
+run_fail_code source_manifest_report_bad_tensor_limit 2 "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --tensor-limit nope
+contains "$OUT_DIR/source_manifest_report_bad_tensor_limit.err" "source-manifest report: --tensor-limit requires a positive integer"
 run_fail_code source_manifest_report_unknown_flag 2 "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --unknown
 contains "$OUT_DIR/source_manifest_report_unknown_flag.err" "source-manifest report: unknown option: --unknown"
 
@@ -488,8 +493,9 @@ contains "$OUT_DIR/source_manifest_report_missing_source.out" "artifact: future-
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "files: 0  safetensors: 0  bytes: 0  footprint: missing"
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "provenance: planned-official status=missing revision=unknown"
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "native: missing  files=0  tensors=0  header_bytes=0"
+contains "$OUT_DIR/source_manifest_report_missing_source.out" "metadata: missing  tensors=0  dtypes=0  max_rank=0"
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "top_blocker: missing-qwen-source-path"
-contains "$OUT_DIR/source_manifest_report_missing_source.out" "next: V010.SOURCE.6"
+contains "$OUT_DIR/source_manifest_report_missing_source.out" "next: V010.SOURCE.7"
 contains "$OUT_DIR/source_manifest_report_missing_source.out" "boundary: source report only; no artifact/runtime/generation/benchmark"
 ! grep -F 'missing-qwen-source-target' "$OUT_DIR/source_manifest_report_missing_source.out" >/dev/null
 ! grep -F 'next: OWI.TARGETS.QWEN.0' "$OUT_DIR/source_manifest_report_missing_source.out" >/dev/null
@@ -497,10 +503,11 @@ contains "$OUT_DIR/source_manifest_report_missing_source.out" "boundary: source 
 ! grep -F 'next: V010.SOURCE.3' "$OUT_DIR/source_manifest_report_missing_source.out" >/dev/null
 ! grep -F 'next: V010.SOURCE.4' "$OUT_DIR/source_manifest_report_missing_source.out" >/dev/null
 ! grep -F 'next: V010.SOURCE.5' "$OUT_DIR/source_manifest_report_missing_source.out" >/dev/null
+! grep -F 'next: V010.SOURCE.6' "$OUT_DIR/source_manifest_report_missing_source.out" >/dev/null
 run_ok source_manifest_report_table "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --models-root "$QWEN_MISSING_ROOT" --output table
 contains "$OUT_DIR/source_manifest_report_table.out" "SOURCE PRESSURE  release=v0.1.0"
-matches "$OUT_DIR/source_manifest_report_table.out" '^FAMILY[[:space:]]{2,}TARGET[[:space:]]{2,}SOURCE[[:space:]]{2,}FILES[[:space:]]{2,}SAFETENSORS[[:space:]]{2,}TENSORS[[:space:]]{2,}NATIVE[[:space:]]{2,}NEXT$'
-matches "$OUT_DIR/source_manifest_report_table.out" '^qwen[[:space:]]{2,}qwen-metal-portability[[:space:]]{2,}missing[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}missing[[:space:]]{2,}V010\.SOURCE\.6$'
+matches "$OUT_DIR/source_manifest_report_table.out" '^FAMILY[[:space:]]{2,}TARGET[[:space:]]{2,}SOURCE[[:space:]]{2,}SAFETENSORS[[:space:]]{2,}TENSORS[[:space:]]{2,}DTYPES[[:space:]]{2,}MAX_RANK[[:space:]]{2,}METADATA[[:space:]]{2,}NEXT$'
+matches "$OUT_DIR/source_manifest_report_table.out" '^qwen[[:space:]]{2,}qwen-metal-portability[[:space:]]{2,}missing[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}missing[[:space:]]{2,}V010\.SOURCE\.7$'
 run_ok source_manifest_report_audit "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --models-root "$QWEN_MISSING_ROOT" --audit
 contains "$OUT_DIR/source_manifest_report_audit.out" "source-report: qwen"
 contains "$OUT_DIR/source_manifest_report_audit.out" "family_key: qwen"
@@ -594,12 +601,39 @@ contains "$OUT_DIR/source_manifest_report_audit.out" "native_dtype_other_count: 
 contains "$OUT_DIR/source_manifest_report_audit.out" "native_invalid_file_count: 0"
 contains "$OUT_DIR/source_manifest_report_audit.out" "native_inventory_error_count: 0"
 contains "$OUT_DIR/source_manifest_report_audit.out" "native_inventory_report_status: missing"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_metadata_status: missing"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_metadata_scope: safetensors-header"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_metadata_source: not-present"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_metadata_payload_loaded: false"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_metadata_payload_bytes_read: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_count: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_name_count: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_file_count: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_dtype_count: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_rank_count: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_shape_count: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_declared_data_bytes: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_declared_tensor_bytes: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_total_elements: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_max_rank: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_max_elements: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_largest_name: none"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_largest_file: none"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_largest_dtype: none"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_largest_shape: []"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_dtype_f16_count: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_dtype_f32_count: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_rank_2_count: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_name_pattern_status: lexical-only"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_name_embed_count: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_name_lm_head_count: 0"
+contains "$OUT_DIR/source_manifest_report_audit.out" "source_tensor_metadata_error_count: 0"
 contains "$OUT_DIR/source_manifest_report_audit.out" "runtime_claim: unsupported"
 contains "$OUT_DIR/source_manifest_report_audit.out" "generation: unsupported-full-model"
 contains "$OUT_DIR/source_manifest_report_audit.out" "benchmark_status: not-measured"
 contains "$OUT_DIR/source_manifest_report_audit.out" "release_ready: false"
 contains "$OUT_DIR/source_manifest_report_audit.out" "blocker_0: missing-qwen-source-path"
-contains "$OUT_DIR/source_manifest_report_audit.out" "next_required_rows: V010.SOURCE.6"
+contains "$OUT_DIR/source_manifest_report_audit.out" "next_required_rows: V010.SOURCE.7"
 
 GEMMA_MISSING_ROOT="$OUT_DIR/gemma-missing-models-root"
 rm -rf "$GEMMA_MISSING_ROOT"
@@ -613,8 +647,9 @@ contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "artifact: f
 contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "files: 0  safetensors: 0  bytes: 0  footprint: missing"
 contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "provenance: planned-official status=missing revision=unknown"
 contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "native: missing  files=0  tensors=0  header_bytes=0"
+contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "metadata: missing  tensors=0  dtypes=0  max_rank=0"
 contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "top_blocker: missing-gemma-source-path"
-contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "next: V010.SOURCE.6"
+contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "next: V010.SOURCE.7"
 contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "boundary: source report only; no artifact/runtime/generation/benchmark"
 ! grep -F 'missing-gemma-source-target' "$OUT_DIR/source_manifest_report_gemma_missing_source.out" >/dev/null
 ! grep -F 'next: OWI.TARGETS.GEMMA.0' "$OUT_DIR/source_manifest_report_gemma_missing_source.out" >/dev/null
@@ -622,9 +657,10 @@ contains "$OUT_DIR/source_manifest_report_gemma_missing_source.out" "boundary: s
 ! grep -F 'next: V010.SOURCE.3' "$OUT_DIR/source_manifest_report_gemma_missing_source.out" >/dev/null
 ! grep -F 'next: V010.SOURCE.4' "$OUT_DIR/source_manifest_report_gemma_missing_source.out" >/dev/null
 ! grep -F 'next: V010.SOURCE.5' "$OUT_DIR/source_manifest_report_gemma_missing_source.out" >/dev/null
+! grep -F 'next: V010.SOURCE.6' "$OUT_DIR/source_manifest_report_gemma_missing_source.out" >/dev/null
 run_ok source_manifest_report_gemma_table "$YVEX_BIN" source-manifest report --family gemma --release v0.1.0 --models-root "$GEMMA_MISSING_ROOT" --output table
 contains "$OUT_DIR/source_manifest_report_gemma_table.out" "SOURCE PRESSURE  release=v0.1.0"
-matches "$OUT_DIR/source_manifest_report_gemma_table.out" '^gemma[[:space:]]{2,}gemma-dense-portability[[:space:]]{2,}missing[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}missing[[:space:]]{2,}V010\.SOURCE\.6$'
+matches "$OUT_DIR/source_manifest_report_gemma_table.out" '^gemma[[:space:]]{2,}gemma-dense-portability[[:space:]]{2,}missing[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}missing[[:space:]]{2,}V010\.SOURCE\.7$'
 run_ok source_manifest_report_gemma_audit "$YVEX_BIN" source-manifest report --family gemma --release v0.1.0 --models-root "$GEMMA_MISSING_ROOT" --audit
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source-report: gemma"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "family: Gemma"
@@ -657,12 +693,15 @@ contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "native_inventory_sta
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "native_safetensors_payload_loaded: false"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "native_safetensors_payload_bytes_read: 0"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "native_tensor_count: 0"
+contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_tensor_metadata_status: missing"
+contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_tensor_count: 0"
+contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_tensor_metadata_payload_loaded: false"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "largest_source_file_name: none"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "runtime_shape: dense-candidate-pending-source-config"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "source_path_status: missing"
 contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "blocker_0: missing-gemma-source-path"
-contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "blocker_18: missing-gemma-benchmark-path"
-contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "next_required_rows: V010.SOURCE.6"
+contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "blocker_17: missing-gemma-benchmark-path"
+contains "$OUT_DIR/source_manifest_report_gemma_audit.out" "next_required_rows: V010.SOURCE.7"
 
 QWEN_FAKE_SOURCE="${TMPDIR:-/tmp}/yvex-native-safetensors-inventory-test-$$"
 QWEN_FAKE_MODELS="${TMPDIR:-/tmp}/yvex-native-safetensors-inventory-models-$$"
@@ -679,8 +718,8 @@ import struct
 import sys
 
 items = [
-    (sys.argv[1], {"weight_a": {"dtype": "F32", "shape": [1], "data_offsets": [0, 4]}}, b"1234"),
-    (sys.argv[2], {"weight_b": {"dtype": "F16", "shape": [2], "data_offsets": [0, 4]}}, b"5678"),
+    (sys.argv[1], {"token_embd.weight": {"dtype": "F32", "shape": [2, 3], "data_offsets": [0, 24]}}, b"1" * 24),
+    (sys.argv[2], {"output.weight": {"dtype": "F16", "shape": [3, 2], "data_offsets": [0, 12]}}, b"2" * 12),
 ]
 for path, header, payload in items:
     blob = json.dumps(header, separators=(",", ":")).encode("utf-8")
@@ -697,10 +736,16 @@ contains "$OUT_DIR/source_manifest_report_fake_source.out" "files: 7  safetensor
 contains "$OUT_DIR/source_manifest_report_fake_source.out" "footprint: tiny"
 contains "$OUT_DIR/source_manifest_report_fake_source.out" "provenance: local-path status=local-unverified revision=unknown"
 matches "$OUT_DIR/source_manifest_report_fake_source.out" '^native: header-only[[:space:]]{2,}files=2[[:space:]]{2,}tensors=2[[:space:]]{2,}header_bytes=[1-9][0-9]*$'
+contains "$OUT_DIR/source_manifest_report_fake_source.out" "metadata: header-only  tensors=2  dtypes=2  max_rank=2"
 contains "$OUT_DIR/source_manifest_report_fake_source.out" "top_blocker: missing-qwen-source-manifest"
-contains "$OUT_DIR/source_manifest_report_fake_source.out" "next: V010.SOURCE.6"
+contains "$OUT_DIR/source_manifest_report_fake_source.out" "next: V010.SOURCE.7"
 run_ok source_manifest_report_fake_source_table "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --source "$QWEN_FAKE_SOURCE" --models-root "$QWEN_FAKE_MODELS" --output table
-matches "$OUT_DIR/source_manifest_report_fake_source_table.out" '^qwen[[:space:]]{2,}qwen-metal-portability[[:space:]]{2,}present[[:space:]]{2,}7[[:space:]]{2,}2[[:space:]]{2,}2[[:space:]]{2,}header-only[[:space:]]{2,}V010\.SOURCE\.6$'
+matches "$OUT_DIR/source_manifest_report_fake_source_table.out" '^qwen[[:space:]]{2,}qwen-metal-portability[[:space:]]{2,}present[[:space:]]{2,}2[[:space:]]{2,}2[[:space:]]{2,}2[[:space:]]{2,}2[[:space:]]{2,}header-only[[:space:]]{2,}V010\.SOURCE\.7$'
+run_ok source_manifest_report_fake_source_tensors "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --source "$QWEN_FAKE_SOURCE" --models-root "$QWEN_FAKE_MODELS" --include-tensors --tensor-limit 2
+contains "$OUT_DIR/source_manifest_report_fake_source_tensors.out" "TENSORS  limit=2"
+matches "$OUT_DIR/source_manifest_report_fake_source_tensors.out" '^NAME[[:space:]]{2,}FILE[[:space:]]{2,}DTYPE[[:space:]]{2,}RANK[[:space:]]{2,}SHAPE[[:space:]]{2,}ELEMENTS[[:space:]]{2,}BYTES$'
+matches "$OUT_DIR/source_manifest_report_fake_source_tensors.out" '^token_embd\.weight[[:space:]]{2,}model-00001-of-00002\.safetensors[[:space:]]{2,}F32[[:space:]]{2,}2[[:space:]]{2,}\[2,3\][[:space:]]{2,}6[[:space:]]{2,}24$'
+matches "$OUT_DIR/source_manifest_report_fake_source_tensors.out" '^output\.weight[[:space:]]{2,}model-00002-of-00002\.safetensors[[:space:]]{2,}F16[[:space:]]{2,}2[[:space:]]{2,}\[3,2\][[:space:]]{2,}6[[:space:]]{2,}12$'
 run_ok source_manifest_report_fake_source_audit "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --source "$QWEN_FAKE_SOURCE" --models-root "$QWEN_FAKE_MODELS" --audit
 contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_exists: true"
 contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_provenance_status: local-unverified"
@@ -745,16 +790,62 @@ contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_safeten
 contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_tensor_count: 2"
 contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_tensor_metadata_status: header-only"
 contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_tensor_payload_status: not-loaded"
-contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_declared_data_bytes: 8"
-contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_declared_tensor_bytes: 8"
-contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_max_rank: 1"
-contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_max_tensor_elements: 2"
-contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_largest_tensor_name: weight_b"
-contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_largest_tensor_bytes: 4"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_declared_data_bytes: 36"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_declared_tensor_bytes: 36"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_max_rank: 2"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_max_tensor_elements: 6"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_largest_tensor_name: token_embd.weight"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_largest_tensor_bytes: 24"
 contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_dtype_f16_count: 1"
 contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_dtype_f32_count: 1"
 contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_invalid_file_count: 0"
 contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "native_inventory_error_count: 0"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_metadata_status: header-only"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_metadata_scope: safetensors-header"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_metadata_source: source-path"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_metadata_payload_loaded: false"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_metadata_payload_bytes_read: 0"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_count: 2"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_name_count: 2"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_file_count: 2"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_dtype_count: 2"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_rank_count: 1"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_shape_count: 2"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_declared_data_bytes: 36"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_declared_tensor_bytes: 36"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_total_elements: 12"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_max_rank: 2"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_max_elements: 6"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_largest_name: token_embd.weight"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_largest_file: model-00001-of-00002.safetensors"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_largest_dtype: F32"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_largest_rank: 2"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_largest_shape: [2,3]"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_largest_elements: 6"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_largest_declared_bytes: 24"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_dtype_f16_count: 1"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_dtype_f32_count: 1"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_rank_2_count: 2"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_name_pattern_status: lexical-only"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_name_embed_count: 1"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_name_attn_count: 0"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_name_mlp_count: 0"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_name_norm_count: 0"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_name_lm_head_count: 1"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_name_other_count: 0"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_metadata_error_count: 0"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_sample_count: 2"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_0_name: output.weight"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_0_file: model-00002-of-00002.safetensors"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_0_dtype: F16"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_0_rank: 2"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_0_shape: [3,2]"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_0_elements: 6"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_0_declared_bytes: 12"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_1_name: token_embd.weight"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_1_file: model-00001-of-00002.safetensors"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_1_dtype: F32"
+contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "source_tensor_1_shape: [2,3]"
 contains "$OUT_DIR/source_manifest_report_fake_source_audit.out" "blocker_0: missing-qwen-source-manifest"
 rm -rf "$QWEN_FAKE_SOURCE" "$QWEN_FAKE_MODELS"
 
@@ -767,7 +858,8 @@ printf '{}\n' > "$QWEN_BROKEN_SOURCE/tokenizer.json"
 printf 'broken\n' > "$QWEN_BROKEN_SOURCE/broken.safetensors"
 run_ok source_manifest_report_broken_safetensors "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --source "$QWEN_BROKEN_SOURCE" --models-root "$QWEN_BROKEN_MODELS"
 contains "$OUT_DIR/source_manifest_report_broken_safetensors.out" "native: header-error  files=1  tensors=0  header_bytes=0"
-contains "$OUT_DIR/source_manifest_report_broken_safetensors.out" "next: V010.SOURCE.6"
+contains "$OUT_DIR/source_manifest_report_broken_safetensors.out" "metadata: header-error  tensors=0  dtypes=0  max_rank=0"
+contains "$OUT_DIR/source_manifest_report_broken_safetensors.out" "next: V010.SOURCE.7"
 run_ok source_manifest_report_broken_safetensors_audit "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --source "$QWEN_BROKEN_SOURCE" --models-root "$QWEN_BROKEN_MODELS" --audit
 contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "native_inventory_status: header-error"
 contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "native_safetensors_count: 1"
@@ -778,6 +870,11 @@ contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "native_
 contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "native_tensor_count: 0"
 contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "native_invalid_file_count: 1"
 contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "native_inventory_error_count: 1"
+contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "source_tensor_metadata_status: header-error"
+contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "source_tensor_metadata_payload_loaded: false"
+contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "source_tensor_metadata_payload_bytes_read: 0"
+contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "source_tensor_count: 0"
+contains "$OUT_DIR/source_manifest_report_broken_safetensors_audit.out" "source_tensor_metadata_error_count: 1"
 rm -rf "$QWEN_BROKEN_SOURCE" "$QWEN_BROKEN_MODELS"
 
 run_ok model_target_classes "$YVEX_BIN" model-target classes
@@ -822,6 +919,9 @@ contains "$OUT_DIR/model_target_list_audit.out" "source_verification_status: not
 contains "$OUT_DIR/model_target_list_audit.out" "native_inventory_status:"
 contains "$OUT_DIR/model_target_list_audit.out" "native_tensor_count: 0"
 contains "$OUT_DIR/model_target_list_audit.out" "native_safetensors_payload_loaded: false"
+contains "$OUT_DIR/model_target_list_audit.out" "source_tensor_metadata_status:"
+contains "$OUT_DIR/model_target_list_audit.out" "source_tensor_count: 0"
+contains "$OUT_DIR/model_target_list_audit.out" "source_tensor_metadata_payload_loaded: false"
 contains "$OUT_DIR/model_target_list_audit.out" "runtime_execution: unsupported"
 contains "$OUT_DIR/model_target_list_audit.out" "generation: unsupported"
 run_fail_code model_target_list_bad_output 2 "$YVEX_BIN" model-target list --output nope
@@ -837,11 +937,11 @@ contains "$OUT_DIR/model_target_candidate.out" "status: blocked-no-candidate"
 contains "$OUT_DIR/model_target_candidate.out" "release: v0.1.0"
 contains "$OUT_DIR/model_target_candidate.out" "selected: none"
 contains "$OUT_DIR/model_target_candidate.out" "top_blocker: no eligible full-runtime candidate"
-contains "$OUT_DIR/model_target_candidate.out" "next: V010.SOURCE.6"
+contains "$OUT_DIR/model_target_candidate.out" "next: V010.SOURCE.7"
 contains "$OUT_DIR/model_target_candidate.out" "boundary: report-only; generation unsupported; benchmark not measured"
 run_ok model_target_candidate_table "$YVEX_BIN" model-target candidate --release v0.1.0 --output table
 matches "$OUT_DIR/model_target_candidate_table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$OUT_DIR/model_target_candidate_table.out" '^full-runtime-candidate[[:space:]]{2,}missing[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}V010\.SOURCE\.6$'
+matches "$OUT_DIR/model_target_candidate_table.out" '^full-runtime-candidate[[:space:]]{2,}missing[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}V010\.SOURCE\.7$'
 
 run_ok model_target_candidate_full "$YVEX_BIN" model-target candidate --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-next
 contains "$OUT_DIR/model_target_candidate_full.out" "deepseek_pressure_status: selected-slice-pressure-only"
@@ -902,11 +1002,11 @@ contains "$OUT_DIR/model_target_dense_candidate.out" "status: dense-candidate-mi
 contains "$OUT_DIR/model_target_dense_candidate.out" "release: v0.1.0"
 contains "$OUT_DIR/model_target_dense_candidate.out" "selected: none"
 contains "$OUT_DIR/model_target_dense_candidate.out" "top_blocker: no selected dense full-runtime candidate"
-contains "$OUT_DIR/model_target_dense_candidate.out" "next: V010.SOURCE.6"
+contains "$OUT_DIR/model_target_dense_candidate.out" "next: V010.SOURCE.7"
 contains "$OUT_DIR/model_target_dense_candidate.out" "boundary: report-only; generation unsupported; benchmark not measured"
 run_ok model_target_dense_candidate_table "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --output table
 matches "$OUT_DIR/model_target_dense_candidate_table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$OUT_DIR/model_target_dense_candidate_table.out" '^dense-candidate[[:space:]]{2,}missing[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}V010\.SOURCE\.6$'
+matches "$OUT_DIR/model_target_dense_candidate_table.out" '^dense-candidate[[:space:]]{2,}missing[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}V010\.SOURCE\.7$'
 
 run_ok model_target_dense_candidate_full "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --audit --include-candidates --include-requirements --include-blockers --include-next
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "next_required_rows: V010.TARGET.7"
@@ -957,7 +1057,7 @@ contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_st
 contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_eligibility: dense-pressure-only"
 contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_blocker_0: planned-dense-pressure-only"
 contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_blocker_1: missing-gemma-source-path"
-contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_next_required_rows: V010.TARGET.7,V010.SOURCE.6,MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0"
+contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_next_required_rows: V010.TARGET.7,V010.SOURCE.7,MODEL.CLASS.GEMMA.0,TENSOR.COLLECTION.GEMMA.0"
 
 run_fail_code model_target_dense_candidate_missing_release 2 "$YVEX_BIN" model-target dense-candidate
 contains "$OUT_DIR/model_target_dense_candidate_missing_release.err" "model-target dense-candidate: --release is required"
@@ -988,11 +1088,11 @@ contains "$OUT_DIR/model_target_qwen_metal.out" "candidate: source-target-profil
 contains "$OUT_DIR/model_target_qwen_metal.out" "source_target: profiled"
 contains "$OUT_DIR/model_target_qwen_metal.out" "source: missing"
 contains "$OUT_DIR/model_target_qwen_metal.out" "backend: metal unsupported"
-contains "$OUT_DIR/model_target_qwen_metal.out" "next: V010.SOURCE.6"
+contains "$OUT_DIR/model_target_qwen_metal.out" "next: V010.SOURCE.7"
 contains "$OUT_DIR/model_target_qwen_metal.out" "boundary: report-only; generation unsupported; benchmark not measured"
 run_ok model_target_qwen_metal_table "$YVEX_BIN" model-target qwen-metal --release v0.1.0 --output table
 matches "$OUT_DIR/model_target_qwen_metal_table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$OUT_DIR/model_target_qwen_metal_table.out" '^qwen-metal-pressure[[:space:]]{2,}pressure[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}V010\.SOURCE\.6$'
+matches "$OUT_DIR/model_target_qwen_metal_table.out" '^qwen-metal-pressure[[:space:]]{2,}pressure[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}V010\.SOURCE\.7$'
 
 run_ok model_target_qwen_metal_full "$YVEX_BIN" model-target qwen-metal --release v0.1.0 --audit --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_count: 3"
@@ -1031,7 +1131,7 @@ contains "$OUT_DIR/model_target_qwen_metal_full.out" "blocker_11: missing-metal-
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "blocker_18: missing-real-prefill"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "blocker_21: missing-real-output-head-logits"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "blocker_22: missing-real-vocabulary-sampling"
-contains "$OUT_DIR/model_target_qwen_metal_full.out" "next_required_rows: V010.SOURCE.6"
+contains "$OUT_DIR/model_target_qwen_metal_full.out" "next_required_rows: V010.SOURCE.7"
 
 run_ok model_target_qwen_metal_small "$YVEX_BIN" model-target qwen-metal --release v0.1.0 --audit --target qwen-small --include-blockers --include-next
 contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_count: 1"
@@ -1040,7 +1140,7 @@ contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_0_source_t
 contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_0_blocker_0: missing-qwen-source-path"
 contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_0_blocker_6: missing-metal-backend-feasibility"
 contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_0_blocker_7: missing-real-prefill"
-contains "$OUT_DIR/model_target_qwen_metal_small.out" "next_required_rows: V010.SOURCE.6"
+contains "$OUT_DIR/model_target_qwen_metal_small.out" "next_required_rows: V010.SOURCE.7"
 
 run_fail_code model_target_qwen_metal_missing_release 2 "$YVEX_BIN" model-target qwen-metal
 contains "$OUT_DIR/model_target_qwen_metal_missing_release.err" "model-target qwen-metal: --release is required"
@@ -1078,6 +1178,9 @@ contains "$OUT_DIR/model_target_deepseek_embed_audit.out" "source_verification_s
 contains "$OUT_DIR/model_target_deepseek_embed_audit.out" "native_inventory_status: unknown"
 contains "$OUT_DIR/model_target_deepseek_embed_audit.out" "native_tensor_count: 0"
 contains "$OUT_DIR/model_target_deepseek_embed_audit.out" "native_safetensors_payload_loaded: false"
+contains "$OUT_DIR/model_target_deepseek_embed_audit.out" "source_tensor_metadata_status: unknown"
+contains "$OUT_DIR/model_target_deepseek_embed_audit.out" "source_tensor_count: 0"
+contains "$OUT_DIR/model_target_deepseek_embed_audit.out" "source_tensor_metadata_payload_loaded: false"
 
 run_ok model_target_deepseek_rmsnorm "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm
 contains "$OUT_DIR/model_target_deepseek_rmsnorm.out" "target: deepseek4-v4-flash-selected-embed-rmsnorm"
@@ -1100,6 +1203,9 @@ contains "$OUT_DIR/model_target_deepseek_rmsnorm_audit.out" "source_verification
 contains "$OUT_DIR/model_target_deepseek_rmsnorm_audit.out" "native_inventory_status: unknown"
 contains "$OUT_DIR/model_target_deepseek_rmsnorm_audit.out" "native_tensor_count: 0"
 contains "$OUT_DIR/model_target_deepseek_rmsnorm_audit.out" "native_safetensors_payload_loaded: false"
+contains "$OUT_DIR/model_target_deepseek_rmsnorm_audit.out" "source_tensor_metadata_status: unknown"
+contains "$OUT_DIR/model_target_deepseek_rmsnorm_audit.out" "source_tensor_count: 0"
+contains "$OUT_DIR/model_target_deepseek_rmsnorm_audit.out" "source_tensor_metadata_payload_loaded: false"
 
 run_ok model_target_glm "$YVEX_BIN" model-target inspect glm-5.2-official-safetensors
 contains "$OUT_DIR/model_target_glm.out" "target: glm-5.2-official-safetensors"
@@ -1108,7 +1214,7 @@ contains "$OUT_DIR/model_target_glm.out" "source: official-safetensors-huge  sta
 contains "$OUT_DIR/model_target_glm.out" "artifact: future-YVEX-produced-GGUF  status=planned"
 contains "$OUT_DIR/model_target_glm.out" "runtime: unsupported"
 contains "$OUT_DIR/model_target_glm.out" "generation: unsupported"
-contains "$OUT_DIR/model_target_glm.out" "next: V010.SOURCE.6"
+contains "$OUT_DIR/model_target_glm.out" "next: V010.SOURCE.7"
 contains "$OUT_DIR/model_target_glm.out" "boundary: source/storage pressure only; no GLM runtime/generation"
 
 run_ok model_target_glm_audit "$YVEX_BIN" model-target inspect glm-5.2-official-safetensors --audit
@@ -1123,6 +1229,9 @@ contains "$OUT_DIR/model_target_glm_audit.out" "source_verification_status: not-
 contains "$OUT_DIR/model_target_glm_audit.out" "native_inventory_status: planned"
 contains "$OUT_DIR/model_target_glm_audit.out" "native_tensor_count: 0"
 contains "$OUT_DIR/model_target_glm_audit.out" "native_safetensors_payload_loaded: false"
+contains "$OUT_DIR/model_target_glm_audit.out" "source_tensor_metadata_status: planned"
+contains "$OUT_DIR/model_target_glm_audit.out" "source_tensor_count: 0"
+contains "$OUT_DIR/model_target_glm_audit.out" "source_tensor_metadata_payload_loaded: false"
 
 run_ok model_target_qwen "$YVEX_BIN" model-target inspect qwen-metal-portability
 contains "$OUT_DIR/model_target_qwen.out" "target: qwen-metal-portability"
@@ -1131,7 +1240,7 @@ contains "$OUT_DIR/model_target_qwen.out" "source: official-source-tensors-plann
 contains "$OUT_DIR/model_target_qwen.out" "artifact: future-YVEX-produced-GGUF  status=planned"
 contains "$OUT_DIR/model_target_qwen.out" "runtime: unsupported"
 contains "$OUT_DIR/model_target_qwen.out" "generation: unsupported"
-contains "$OUT_DIR/model_target_qwen.out" "next: V010.SOURCE.6"
+contains "$OUT_DIR/model_target_qwen.out" "next: V010.SOURCE.7"
 contains "$OUT_DIR/model_target_qwen.out" "boundary: target/source profile only; no source download/runtime/generation"
 
 run_ok model_target_qwen_audit "$YVEX_BIN" model-target inspect qwen-metal-portability --audit
@@ -1151,6 +1260,9 @@ contains "$OUT_DIR/model_target_qwen_audit.out" "source_verification_status: not
 contains "$OUT_DIR/model_target_qwen_audit.out" "native_inventory_status: missing"
 contains "$OUT_DIR/model_target_qwen_audit.out" "native_tensor_count: 0"
 contains "$OUT_DIR/model_target_qwen_audit.out" "native_safetensors_payload_loaded: false"
+contains "$OUT_DIR/model_target_qwen_audit.out" "source_tensor_metadata_status: missing"
+contains "$OUT_DIR/model_target_qwen_audit.out" "source_tensor_count: 0"
+contains "$OUT_DIR/model_target_qwen_audit.out" "source_tensor_metadata_payload_loaded: false"
 contains "$OUT_DIR/model_target_qwen_audit.out" "target_artifact_class: future-YVEX-produced-GGUF"
 contains "$OUT_DIR/model_target_qwen_audit.out" "target_artifact_status: planned"
 contains "$OUT_DIR/model_target_qwen_audit.out" "benchmark_status: not-measured"
@@ -1164,7 +1276,7 @@ contains "$OUT_DIR/model_target_gemma.out" "source: official-source-tensors-plan
 contains "$OUT_DIR/model_target_gemma.out" "artifact: future-YVEX-produced-GGUF  status=planned"
 contains "$OUT_DIR/model_target_gemma.out" "runtime: unsupported"
 contains "$OUT_DIR/model_target_gemma.out" "generation: unsupported"
-contains "$OUT_DIR/model_target_gemma.out" "next: V010.SOURCE.6"
+contains "$OUT_DIR/model_target_gemma.out" "next: V010.SOURCE.7"
 contains "$OUT_DIR/model_target_gemma.out" "boundary: target/source profile only; no source download/runtime/generation"
 
 run_ok model_target_gemma_audit "$YVEX_BIN" model-target inspect gemma-dense-portability --audit
@@ -1184,6 +1296,9 @@ contains "$OUT_DIR/model_target_gemma_audit.out" "source_verification_status: no
 contains "$OUT_DIR/model_target_gemma_audit.out" "native_inventory_status: missing"
 contains "$OUT_DIR/model_target_gemma_audit.out" "native_tensor_count: 0"
 contains "$OUT_DIR/model_target_gemma_audit.out" "native_safetensors_payload_loaded: false"
+contains "$OUT_DIR/model_target_gemma_audit.out" "source_tensor_metadata_status: missing"
+contains "$OUT_DIR/model_target_gemma_audit.out" "source_tensor_count: 0"
+contains "$OUT_DIR/model_target_gemma_audit.out" "source_tensor_metadata_payload_loaded: false"
 contains "$OUT_DIR/model_target_gemma_audit.out" "target_artifact_class: future-YVEX-produced-GGUF"
 contains "$OUT_DIR/model_target_gemma_audit.out" "target_artifact_status: planned"
 contains "$OUT_DIR/model_target_gemma_audit.out" "benchmark_status: not-measured"

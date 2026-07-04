@@ -145,6 +145,12 @@ pattern='native inventory proves source rea''dy'
 scan_forbidden_claim "$pattern"
 pattern='native_inventory_rea''dy: true'
 scan_forbidden_claim "$pattern"
+pattern='source tensor roles map''ped'
+scan_forbidden_claim "$pattern"
+pattern='Qwen model class imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='Gemma model class imple''mented'
+scan_forbidden_claim "$pattern"
 pattern='Gemma runtime imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='Gemma generation imple''mented'
@@ -164,6 +170,8 @@ scan_forbidden_claim "$pattern"
 pattern='tensor core GEMM imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='source_rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='metadata_rea''dy: true'
 scan_forbidden_claim "$pattern"
 pattern='source_identity_veri''fied: true'
 scan_forbidden_claim "$pattern"

@@ -729,8 +729,23 @@ typedef struct {
     int include_config;
     int include_blockers;
     int include_next;
+    int include_tensors;
+    unsigned long long tensor_limit;
     yvex_source_report_output_mode output_mode;
 } yvex_qwen_source_report_options;
+
+#define YVEX_SOURCE_TENSOR_SAMPLE_CAP 20u
+#define YVEX_SOURCE_TENSOR_SHAPE_CAP 128u
+
+typedef struct {
+    char name[192];
+    char file[192];
+    char dtype[24];
+    char shape[YVEX_SOURCE_TENSOR_SHAPE_CAP];
+    unsigned long long rank;
+    unsigned long long elements;
+    unsigned long long declared_bytes;
+} yvex_source_tensor_sample;
 
 typedef struct {
     const char *status;
@@ -787,6 +802,48 @@ typedef struct {
     unsigned long long native_dtype_other_count;
     unsigned long long native_invalid_file_count;
     unsigned long long native_inventory_error_count;
+    unsigned long long source_tensor_count;
+    unsigned long long source_tensor_name_count;
+    unsigned long long source_tensor_file_count;
+    unsigned long long source_tensor_dtype_count;
+    unsigned long long source_tensor_rank_count;
+    unsigned long long source_tensor_shape_count;
+    unsigned long long source_tensor_declared_data_bytes;
+    unsigned long long source_tensor_declared_tensor_bytes;
+    unsigned long long source_tensor_total_elements;
+    unsigned long long source_tensor_max_rank;
+    unsigned long long source_tensor_max_elements;
+    char source_tensor_largest_name[YVEX_PATH_CAP];
+    char source_tensor_largest_file[YVEX_PATH_CAP];
+    char source_tensor_largest_dtype[24];
+    unsigned long long source_tensor_largest_rank;
+    char source_tensor_largest_shape[YVEX_SOURCE_TENSOR_SHAPE_CAP];
+    unsigned long long source_tensor_largest_elements;
+    unsigned long long source_tensor_largest_declared_bytes;
+    unsigned long long source_tensor_dtype_f16_count;
+    unsigned long long source_tensor_dtype_bf16_count;
+    unsigned long long source_tensor_dtype_f32_count;
+    unsigned long long source_tensor_dtype_i8_count;
+    unsigned long long source_tensor_dtype_i16_count;
+    unsigned long long source_tensor_dtype_i32_count;
+    unsigned long long source_tensor_dtype_i64_count;
+    unsigned long long source_tensor_dtype_u8_count;
+    unsigned long long source_tensor_dtype_other_count;
+    unsigned long long source_tensor_rank_0_count;
+    unsigned long long source_tensor_rank_1_count;
+    unsigned long long source_tensor_rank_2_count;
+    unsigned long long source_tensor_rank_3_count;
+    unsigned long long source_tensor_rank_4_count;
+    unsigned long long source_tensor_rank_other_count;
+    unsigned long long source_tensor_metadata_error_count;
+    unsigned long long source_tensor_name_embed_count;
+    unsigned long long source_tensor_name_attn_count;
+    unsigned long long source_tensor_name_mlp_count;
+    unsigned long long source_tensor_name_norm_count;
+    unsigned long long source_tensor_name_lm_head_count;
+    unsigned long long source_tensor_name_other_count;
+    yvex_source_tensor_sample source_tensor_samples[YVEX_SOURCE_TENSOR_SAMPLE_CAP];
+    unsigned long long source_tensor_sample_count;
     const char *blockers[32];
     unsigned long blocker_count;
 } yvex_qwen_source_pressure_report;
@@ -810,6 +867,23 @@ static int qwen_source_output_mode_parse(const char *value,
         return 1;
     }
     return 0;
+}
+
+static int qwen_source_parse_positive_ull(const char *text, unsigned long long *out)
+{
+    char *end = NULL;
+    unsigned long long value;
+
+    if (!text || !out || text[0] == '\0' || text[0] == '-') {
+        return 0;
+    }
+    errno = 0;
+    value = strtoull(text, &end, 10);
+    if (errno != 0 || !end || *end != '\0' || value == 0) {
+        return 0;
+    }
+    *out = value;
+    return 1;
 }
 
 static const yvex_source_family_profile *qwen_source_find_profile(const char *family)
@@ -1008,6 +1082,74 @@ static unsigned long long qwen_source_native_tensor_elements(
     return elements;
 }
 
+static void qwen_source_tensor_shape_string(const yvex_native_weight_info *info,
+                                            char *out,
+                                            size_t cap)
+{
+    size_t used = 0;
+    unsigned int i;
+
+    if (!out || cap == 0) {
+        return;
+    }
+    out[0] = '\0';
+    if (!info) {
+        snprintf(out, cap, "[]");
+        return;
+    }
+    used += (size_t)snprintf(out + used, cap - used, "[");
+    for (i = 0; i < info->rank && used < cap; ++i) {
+        int n = snprintf(out + used, cap - used, "%s%llu",
+                         i == 0 ? "" : ",",
+                         info->dims[i]);
+        if (n < 0) {
+            break;
+        }
+        if ((size_t)n >= cap - used) {
+            out[cap - 1] = '\0';
+            return;
+        }
+        used += (size_t)n;
+    }
+    if (used < cap) {
+        snprintf(out + used, cap - used, "]");
+    } else {
+        out[cap - 1] = '\0';
+    }
+}
+
+static int qwen_source_tensor_shape_same(const yvex_native_weight_info *a,
+                                         const yvex_native_weight_info *b)
+{
+    unsigned int i;
+
+    if (!a || !b || a->rank != b->rank) {
+        return 0;
+    }
+    for (i = 0; i < a->rank; ++i) {
+        if (a->dims[i] != b->dims[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int qwen_source_tensor_shape_first_seen(const yvex_native_weight_table *table,
+                                               unsigned long long index)
+{
+    unsigned long long i;
+
+    if (!table || index >= table->count) {
+        return 0;
+    }
+    for (i = 0; i < index; ++i) {
+        if (qwen_source_tensor_shape_same(&table->items[i], &table->items[index])) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 static int qwen_source_native_shard_first_seen(const yvex_native_weight_table *table,
                                                unsigned long long index)
 {
@@ -1045,6 +1187,45 @@ static unsigned long long qwen_source_native_shard_max_data_end(
     return max_end;
 }
 
+static int qwen_source_name_contains_ci(const char *name, const char *needle)
+{
+    size_t needle_len;
+    size_t i;
+
+    if (!name || !needle) {
+        return 0;
+    }
+    needle_len = strlen(needle);
+    if (needle_len == 0) {
+        return 1;
+    }
+    for (i = 0; name[i] != '\0'; ++i) {
+        size_t j;
+        for (j = 0; j < needle_len; ++j) {
+            if (name[i + j] == '\0' ||
+                tolower((unsigned char)name[i + j]) !=
+                    tolower((unsigned char)needle[j])) {
+                break;
+            }
+        }
+        if (j == needle_len) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static const char *qwen_source_file_label(const char *path)
+{
+    const char *slash;
+
+    if (!path || path[0] == '\0') {
+        return "unknown";
+    }
+    slash = strrchr(path, '/');
+    return slash && slash[1] != '\0' ? slash + 1 : path;
+}
+
 static void qwen_source_native_count_dtype(yvex_qwen_source_pressure_report *report,
                                            yvex_native_dtype dtype)
 {
@@ -1079,6 +1260,132 @@ static void qwen_source_native_count_dtype(yvex_qwen_source_pressure_report *rep
     }
 }
 
+static void qwen_source_metadata_count_dtype(yvex_qwen_source_pressure_report *report,
+                                             yvex_native_dtype dtype)
+{
+    switch (dtype) {
+    case YVEX_NATIVE_DTYPE_F16:
+        report->source_tensor_dtype_f16_count++;
+        break;
+    case YVEX_NATIVE_DTYPE_BF16:
+        report->source_tensor_dtype_bf16_count++;
+        break;
+    case YVEX_NATIVE_DTYPE_F32:
+        report->source_tensor_dtype_f32_count++;
+        break;
+    case YVEX_NATIVE_DTYPE_I8:
+        report->source_tensor_dtype_i8_count++;
+        break;
+    case YVEX_NATIVE_DTYPE_I16:
+        report->source_tensor_dtype_i16_count++;
+        break;
+    case YVEX_NATIVE_DTYPE_I32:
+        report->source_tensor_dtype_i32_count++;
+        break;
+    case YVEX_NATIVE_DTYPE_I64:
+        report->source_tensor_dtype_i64_count++;
+        break;
+    case YVEX_NATIVE_DTYPE_U8:
+        report->source_tensor_dtype_u8_count++;
+        break;
+    default:
+        report->source_tensor_dtype_other_count++;
+        break;
+    }
+}
+
+static void qwen_source_metadata_count_rank(yvex_qwen_source_pressure_report *report,
+                                            unsigned long long rank)
+{
+    if (rank == 0) report->source_tensor_rank_0_count++;
+    else if (rank == 1) report->source_tensor_rank_1_count++;
+    else if (rank == 2) report->source_tensor_rank_2_count++;
+    else if (rank == 3) report->source_tensor_rank_3_count++;
+    else if (rank == 4) report->source_tensor_rank_4_count++;
+    else report->source_tensor_rank_other_count++;
+}
+
+static void qwen_source_metadata_count_name(yvex_qwen_source_pressure_report *report,
+                                            const char *name)
+{
+    if (qwen_source_name_contains_ci(name, "embed") ||
+        qwen_source_name_contains_ci(name, "embd")) {
+        report->source_tensor_name_embed_count++;
+    } else if (qwen_source_name_contains_ci(name, "attn") ||
+               qwen_source_name_contains_ci(name, "attention")) {
+        report->source_tensor_name_attn_count++;
+    } else if (qwen_source_name_contains_ci(name, "mlp") ||
+               qwen_source_name_contains_ci(name, "ffn") ||
+               qwen_source_name_contains_ci(name, "feed_forward")) {
+        report->source_tensor_name_mlp_count++;
+    } else if (qwen_source_name_contains_ci(name, "norm")) {
+        report->source_tensor_name_norm_count++;
+    } else if (qwen_source_name_contains_ci(name, "lm_head") ||
+               qwen_source_name_contains_ci(name, "output.weight")) {
+        report->source_tensor_name_lm_head_count++;
+    } else {
+        report->source_tensor_name_other_count++;
+    }
+}
+
+static unsigned long long qwen_source_metadata_count_distinct_dtypes(
+    const yvex_qwen_source_pressure_report *report)
+{
+    unsigned long long count = 0;
+
+    if (!report) {
+        return 0;
+    }
+    if (report->source_tensor_dtype_f16_count) count++;
+    if (report->source_tensor_dtype_bf16_count) count++;
+    if (report->source_tensor_dtype_f32_count) count++;
+    if (report->source_tensor_dtype_i8_count) count++;
+    if (report->source_tensor_dtype_i16_count) count++;
+    if (report->source_tensor_dtype_i32_count) count++;
+    if (report->source_tensor_dtype_i64_count) count++;
+    if (report->source_tensor_dtype_u8_count) count++;
+    if (report->source_tensor_dtype_other_count) count++;
+    return count;
+}
+
+static unsigned long long qwen_source_metadata_count_distinct_ranks(
+    const yvex_qwen_source_pressure_report *report)
+{
+    unsigned long long count = 0;
+
+    if (!report) {
+        return 0;
+    }
+    if (report->source_tensor_rank_0_count) count++;
+    if (report->source_tensor_rank_1_count) count++;
+    if (report->source_tensor_rank_2_count) count++;
+    if (report->source_tensor_rank_3_count) count++;
+    if (report->source_tensor_rank_4_count) count++;
+    if (report->source_tensor_rank_other_count) count++;
+    return count;
+}
+
+static void qwen_source_metadata_add_sample(
+    yvex_qwen_source_pressure_report *report,
+    const yvex_native_weight_info *info,
+    unsigned long long elements)
+{
+    yvex_source_tensor_sample *sample;
+
+    if (!report || !info ||
+        report->source_tensor_sample_count >= YVEX_SOURCE_TENSOR_SAMPLE_CAP) {
+        return;
+    }
+    sample = &report->source_tensor_samples[report->source_tensor_sample_count++];
+    snprintf(sample->name, sizeof(sample->name), "%s", info->name ? info->name : "unknown");
+    snprintf(sample->file, sizeof(sample->file), "%s", qwen_source_file_label(info->shard_path));
+    snprintf(sample->dtype, sizeof(sample->dtype), "%s", yvex_native_dtype_name(info->dtype));
+    qwen_source_tensor_shape_string(info, sample->shape, sizeof(sample->shape));
+    sample->rank = info->rank;
+    sample->elements = elements;
+    sample->declared_bytes = info->data_bytes;
+}
+
 static void qwen_source_native_collect_table(
     yvex_qwen_source_pressure_report *report,
     const yvex_native_weight_table *table)
@@ -1095,18 +1402,42 @@ static void qwen_source_native_collect_table(
     report->native_declared_tensor_bytes = table->summary.total_tensor_bytes;
     report->native_invalid_file_count = table->header_error_count;
     report->native_inventory_error_count = table->header_error_count;
+    report->source_tensor_count = table->count;
+    report->source_tensor_name_count = table->count;
+    report->source_tensor_declared_tensor_bytes = table->summary.total_tensor_bytes;
+    report->source_tensor_metadata_error_count = table->header_error_count;
 
     for (i = 0; i < table->count; ++i) {
         const yvex_native_weight_info *info = &table->items[i];
         unsigned long long elements = qwen_source_native_tensor_elements(info);
+        char shape[YVEX_SOURCE_TENSOR_SHAPE_CAP];
 
         qwen_source_native_count_dtype(report, info->dtype);
+        qwen_source_metadata_count_dtype(report, info->dtype);
+        qwen_source_metadata_count_rank(report, info->rank);
+        qwen_source_metadata_count_name(report, info->name);
+        if (elements != ULLONG_MAX &&
+            report->source_tensor_total_elements <= ULLONG_MAX - elements) {
+            report->source_tensor_total_elements += elements;
+        } else {
+            report->source_tensor_total_elements = ULLONG_MAX;
+        }
         if (info->rank > report->native_max_rank) {
             report->native_max_rank = info->rank;
+        }
+        if (info->rank > report->source_tensor_max_rank) {
+            report->source_tensor_max_rank = info->rank;
         }
         if (elements > report->native_max_tensor_elements) {
             report->native_max_tensor_elements = elements;
         }
+        if (elements > report->source_tensor_max_elements) {
+            report->source_tensor_max_elements = elements;
+        }
+        if (qwen_source_tensor_shape_first_seen(table, i)) {
+            report->source_tensor_shape_count++;
+        }
+        qwen_source_metadata_add_sample(report, info, elements);
         if (info->data_bytes > report->native_largest_tensor_bytes) {
             report->native_largest_tensor_bytes = info->data_bytes;
             snprintf(report->native_largest_tensor_name,
@@ -1114,11 +1445,40 @@ static void qwen_source_native_collect_table(
                      "%s",
                      info->name ? info->name : "unknown");
         }
+        if (info->data_bytes > report->source_tensor_largest_declared_bytes) {
+            qwen_source_tensor_shape_string(info, shape, sizeof(shape));
+            report->source_tensor_largest_declared_bytes = info->data_bytes;
+            report->source_tensor_largest_rank = info->rank;
+            report->source_tensor_largest_elements = elements;
+            snprintf(report->source_tensor_largest_name,
+                     sizeof(report->source_tensor_largest_name),
+                     "%s",
+                     info->name ? info->name : "unknown");
+            snprintf(report->source_tensor_largest_file,
+                     sizeof(report->source_tensor_largest_file),
+                     "%s",
+                     qwen_source_file_label(info->shard_path));
+            snprintf(report->source_tensor_largest_dtype,
+                     sizeof(report->source_tensor_largest_dtype),
+                     "%s",
+                     yvex_native_dtype_name(info->dtype));
+            snprintf(report->source_tensor_largest_shape,
+                     sizeof(report->source_tensor_largest_shape),
+                     "%s",
+                     shape);
+        }
         if (qwen_source_native_shard_first_seen(table, i)) {
-            report->native_declared_data_bytes +=
+            unsigned long long shard_bytes =
                 qwen_source_native_shard_max_data_end(table, info->shard_path);
+            report->native_declared_data_bytes += shard_bytes;
+            report->source_tensor_declared_data_bytes += shard_bytes;
+            report->source_tensor_file_count++;
         }
     }
+    report->source_tensor_dtype_count =
+        qwen_source_metadata_count_distinct_dtypes(report);
+    report->source_tensor_rank_count =
+        qwen_source_metadata_count_distinct_ranks(report);
 }
 
 static int qwen_source_scan_native_inventory(const char *dir,
@@ -1185,6 +1545,7 @@ static int qwen_source_scan_native_inventory(const char *dir,
     report->native_safetensors_header_error_count += scan_error_count;
     report->native_invalid_file_count += scan_error_count;
     report->native_inventory_error_count += scan_error_count;
+    report->source_tensor_metadata_error_count += scan_error_count;
     yvex_native_weight_table_close(table);
     return fatal_rc;
 }
@@ -1272,6 +1633,58 @@ static void qwen_source_add_blocker(yvex_qwen_source_pressure_report *report,
     report->blockers[report->blocker_count++] = blocker;
 }
 
+static unsigned long long qwen_source_tensor_print_limit(
+    const yvex_qwen_source_report_options *options,
+    const yvex_qwen_source_pressure_report *report)
+{
+    unsigned long long limit = options && options->tensor_limit
+                                   ? options->tensor_limit
+                                   : 20ull;
+
+    if (!report) {
+        return 0;
+    }
+    if (limit > YVEX_SOURCE_TENSOR_SAMPLE_CAP) {
+        limit = YVEX_SOURCE_TENSOR_SAMPLE_CAP;
+    }
+    if (limit > report->source_tensor_sample_count) {
+        limit = report->source_tensor_sample_count;
+    }
+    return limit;
+}
+
+static void qwen_source_print_tensor_rows(
+    const yvex_qwen_source_report_options *options,
+    const yvex_qwen_source_pressure_report *report)
+{
+    unsigned long long limit;
+    unsigned long long display_limit;
+    unsigned long long i;
+
+    if (!options || !report || !options->include_tensors) {
+        return;
+    }
+    limit = qwen_source_tensor_print_limit(options, report);
+    display_limit = options->tensor_limit ? options->tensor_limit : 20ull;
+    if (display_limit > YVEX_SOURCE_TENSOR_SAMPLE_CAP) {
+        display_limit = YVEX_SOURCE_TENSOR_SAMPLE_CAP;
+    }
+    printf("\nTENSORS  limit=%llu\n\n", display_limit);
+    printf("%-32s  %-32s  %-6s  %4s  %-18s  %8s  %8s\n",
+           "NAME", "FILE", "DTYPE", "RANK", "SHAPE", "ELEMENTS", "BYTES");
+    for (i = 0; i < limit; ++i) {
+        const yvex_source_tensor_sample *sample = &report->source_tensor_samples[i];
+        printf("%-32s  %-32s  %-6s  %4llu  %-18s  %8llu  %8llu\n",
+               sample->name,
+               sample->file,
+               sample->dtype,
+               sample->rank,
+               sample->shape,
+               sample->elements,
+               sample->declared_bytes);
+    }
+}
+
 static const char *qwen_source_present_missing(int present)
 {
     return present ? "present" : "missing";
@@ -1319,6 +1732,31 @@ static const char *qwen_source_native_inventory_status(
 }
 
 static const char *qwen_source_native_inventory_source(
+    const yvex_qwen_source_pressure_report *report)
+{
+    return report && report->source_exists ? "source-path" : "not-present";
+}
+
+static const char *qwen_source_tensor_metadata_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    if (!report || !report->source_exists) {
+        return "missing";
+    }
+    if (report->native_safetensors_count == 0) {
+        return "no-safetensors";
+    }
+    if (report->source_tensor_metadata_error_count > 0) {
+        return "header-error";
+    }
+    if (report->source_tensor_count > 0 ||
+        report->native_safetensors_header_read_count > 0) {
+        return "header-only";
+    }
+    return "unknown";
+}
+
+static const char *qwen_source_tensor_metadata_source(
     const yvex_qwen_source_pressure_report *report)
 {
     return report && report->source_exists ? "source-path" : "not-present";
@@ -1570,19 +2008,15 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
     if (!report->source_exists) {
         report->status = "source-target-profiled";
         report->top_blocker = options->profile->source_path_blocker;
-        report->next_row = "V010.SOURCE.6";
+        report->next_row = "V010.SOURCE.7";
     } else if (!report->manifest_exists) {
         report->status = "source-present-report-only";
         report->top_blocker = options->profile->source_manifest_blocker;
-        report->next_row = "V010.SOURCE.6";
-    } else if (!report->native_inventory_exists) {
-        report->status = "source-present-report-only";
-        report->top_blocker = options->profile->native_inventory_blocker;
-        report->next_row = "V010.SOURCE.6";
+        report->next_row = "V010.SOURCE.7";
     } else {
         report->status = "source-profile-incomplete";
         report->top_blocker = options->profile->model_class_blocker;
-        report->next_row = options->profile->model_class_next;
+        report->next_row = "V010.SOURCE.7";
     }
 
     if (!report->source_exists) {
@@ -1590,9 +2024,6 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
     }
     if (!report->manifest_exists) {
         qwen_source_add_blocker(report, options->profile->source_manifest_blocker);
-    }
-    if (!report->native_inventory_exists) {
-        qwen_source_add_blocker(report, options->profile->native_inventory_blocker);
     }
     if (!report->config_exists) {
         qwen_source_add_blocker(report, options->profile->source_config_blocker);
@@ -1632,27 +2063,35 @@ static void qwen_source_print_normal(const yvex_qwen_source_report_options *opti
            report->native_safetensors_count,
            report->native_tensor_count,
            report->native_safetensors_header_bytes);
+    printf("metadata: %s  tensors=%llu  dtypes=%llu  max_rank=%llu\n",
+           qwen_source_tensor_metadata_status(report),
+           report->source_tensor_count,
+           report->source_tensor_dtype_count,
+           report->source_tensor_max_rank);
     printf("top_blocker: %s\n", report->top_blocker);
     printf("next: %s\n", report->next_row);
     printf("boundary: source report only; no artifact/runtime/generation/benchmark\n");
+    qwen_source_print_tensor_rows(options, report);
 }
 
 static void qwen_source_print_table(const yvex_qwen_source_report_options *options,
                                     const yvex_qwen_source_pressure_report *report)
 {
     printf("SOURCE PRESSURE  release=%s\n\n", options->release);
-    printf("%-6s  %-24s  %-7s  %5s  %11s  %7s  %-11s  %s\n",
-           "FAMILY", "TARGET", "SOURCE", "FILES", "SAFETENSORS",
-           "TENSORS", "NATIVE", "NEXT");
-    printf("%-6s  %-24s  %-7s  %5llu  %11llu  %7llu  %-11s  %s\n",
+    printf("%-6s  %-24s  %-7s  %11s  %7s  %6s  %8s  %-9s  %s\n",
+           "FAMILY", "TARGET", "SOURCE", "SAFETENSORS",
+           "TENSORS", "DTYPES", "MAX_RANK", "METADATA", "NEXT");
+    printf("%-6s  %-24s  %-7s  %11llu  %7llu  %6llu  %8llu  %-9s  %s\n",
            options->profile->family_key,
            options->target,
            report->source_state,
-           report->source_file_count,
            report->safetensors_count,
-           report->native_tensor_count,
-           qwen_source_native_inventory_status(report),
+           report->source_tensor_count,
+           report->source_tensor_dtype_count,
+           report->source_tensor_max_rank,
+           qwen_source_tensor_metadata_status(report),
            report->next_row);
+    qwen_source_print_tensor_rows(options, report);
 }
 
 static void qwen_source_print_audit(const yvex_qwen_source_report_options *options,
@@ -1803,6 +2242,108 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
            qwen_source_native_inventory_report_status(report));
     printf("native_inventory_path: %s\n",
            report->native_inventory_path[0] ? report->native_inventory_path : "unknown");
+    printf("source_tensor_metadata_status: %s\n",
+           qwen_source_tensor_metadata_status(report));
+    printf("source_tensor_metadata_scope: safetensors-header\n");
+    printf("source_tensor_metadata_source: %s\n",
+           qwen_source_tensor_metadata_source(report));
+    printf("source_tensor_metadata_payload_loaded: false\n");
+    printf("source_tensor_metadata_payload_bytes_read: 0\n");
+    printf("source_tensor_count: %llu\n", report->source_tensor_count);
+    printf("source_tensor_name_count: %llu\n", report->source_tensor_name_count);
+    printf("source_tensor_file_count: %llu\n", report->source_tensor_file_count);
+    printf("source_tensor_dtype_count: %llu\n", report->source_tensor_dtype_count);
+    printf("source_tensor_rank_count: %llu\n", report->source_tensor_rank_count);
+    printf("source_tensor_shape_count: %llu\n", report->source_tensor_shape_count);
+    printf("source_tensor_declared_data_bytes: %llu\n",
+           report->source_tensor_declared_data_bytes);
+    printf("source_tensor_declared_tensor_bytes: %llu\n",
+           report->source_tensor_declared_tensor_bytes);
+    printf("source_tensor_total_elements: %llu\n",
+           report->source_tensor_total_elements);
+    printf("source_tensor_max_rank: %llu\n", report->source_tensor_max_rank);
+    printf("source_tensor_max_elements: %llu\n", report->source_tensor_max_elements);
+    printf("source_tensor_largest_name: %s\n",
+           report->source_tensor_largest_name[0]
+               ? report->source_tensor_largest_name
+               : "none");
+    printf("source_tensor_largest_file: %s\n",
+           report->source_tensor_largest_file[0]
+               ? report->source_tensor_largest_file
+               : "none");
+    printf("source_tensor_largest_dtype: %s\n",
+           report->source_tensor_largest_dtype[0]
+               ? report->source_tensor_largest_dtype
+               : "none");
+    printf("source_tensor_largest_rank: %llu\n",
+           report->source_tensor_largest_rank);
+    printf("source_tensor_largest_shape: %s\n",
+           report->source_tensor_largest_shape[0]
+               ? report->source_tensor_largest_shape
+               : "[]");
+    printf("source_tensor_largest_elements: %llu\n",
+           report->source_tensor_largest_elements);
+    printf("source_tensor_largest_declared_bytes: %llu\n",
+           report->source_tensor_largest_declared_bytes);
+    printf("source_tensor_dtype_f16_count: %llu\n",
+           report->source_tensor_dtype_f16_count);
+    printf("source_tensor_dtype_bf16_count: %llu\n",
+           report->source_tensor_dtype_bf16_count);
+    printf("source_tensor_dtype_f32_count: %llu\n",
+           report->source_tensor_dtype_f32_count);
+    printf("source_tensor_dtype_i8_count: %llu\n",
+           report->source_tensor_dtype_i8_count);
+    printf("source_tensor_dtype_i16_count: %llu\n",
+           report->source_tensor_dtype_i16_count);
+    printf("source_tensor_dtype_i32_count: %llu\n",
+           report->source_tensor_dtype_i32_count);
+    printf("source_tensor_dtype_i64_count: %llu\n",
+           report->source_tensor_dtype_i64_count);
+    printf("source_tensor_dtype_u8_count: %llu\n",
+           report->source_tensor_dtype_u8_count);
+    printf("source_tensor_dtype_other_count: %llu\n",
+           report->source_tensor_dtype_other_count);
+    printf("source_tensor_rank_0_count: %llu\n",
+           report->source_tensor_rank_0_count);
+    printf("source_tensor_rank_1_count: %llu\n",
+           report->source_tensor_rank_1_count);
+    printf("source_tensor_rank_2_count: %llu\n",
+           report->source_tensor_rank_2_count);
+    printf("source_tensor_rank_3_count: %llu\n",
+           report->source_tensor_rank_3_count);
+    printf("source_tensor_rank_4_count: %llu\n",
+           report->source_tensor_rank_4_count);
+    printf("source_tensor_rank_other_count: %llu\n",
+           report->source_tensor_rank_other_count);
+    printf("source_tensor_name_pattern_status: lexical-only\n");
+    printf("source_tensor_name_embed_count: %llu\n",
+           report->source_tensor_name_embed_count);
+    printf("source_tensor_name_attn_count: %llu\n",
+           report->source_tensor_name_attn_count);
+    printf("source_tensor_name_mlp_count: %llu\n",
+           report->source_tensor_name_mlp_count);
+    printf("source_tensor_name_norm_count: %llu\n",
+           report->source_tensor_name_norm_count);
+    printf("source_tensor_name_lm_head_count: %llu\n",
+           report->source_tensor_name_lm_head_count);
+    printf("source_tensor_name_other_count: %llu\n",
+           report->source_tensor_name_other_count);
+    printf("source_tensor_metadata_error_count: %llu\n",
+           report->source_tensor_metadata_error_count);
+    printf("source_tensor_sample_count: %llu\n",
+           report->source_tensor_sample_count);
+    for (i = 0; i < report->source_tensor_sample_count; ++i) {
+        const yvex_source_tensor_sample *sample = &report->source_tensor_samples[i];
+        printf("source_tensor_%lu_name: %s\n", i, sample->name);
+        printf("source_tensor_%lu_file: %s\n", i, sample->file);
+        printf("source_tensor_%lu_dtype: %s\n", i, sample->dtype);
+        printf("source_tensor_%lu_rank: %llu\n", i, sample->rank);
+        printf("source_tensor_%lu_shape: %s\n", i, sample->shape);
+        printf("source_tensor_%lu_elements: %llu\n", i, sample->elements);
+        printf("source_tensor_%lu_declared_bytes: %llu\n",
+               i,
+               sample->declared_bytes);
+    }
     printf("model_class_profile_status: missing\n");
     printf("tensor_map_status: missing\n");
     printf("artifact_status: missing\n");
@@ -1833,11 +2374,13 @@ static void qwen_source_report_help(FILE *fp)
     fprintf(fp, "  --source DIR\n");
     fprintf(fp, "  --target qwen-metal-portability|qwen-small|qwen-medium|gemma-dense-portability\n");
     fprintf(fp, "  --include-files --include-config --include-blockers --include-next\n");
+    fprintf(fp, "  --include-tensors [--tensor-limit N]\n");
     fprintf(fp, "  --audit | --output normal|table|audit\n\n");
     fprintf(fp, "Report fields include source artifact class, target artifact class, source footprint, and source provenance evidence.\n");
     fprintf(fp, "Source footprint reports count top-level regular files and bytes without loading tensor payloads.\n");
     fprintf(fp, "Source provenance fields classify local/planned state only; they do not verify upstream identity, hash files, or prove source readiness.\n");
     fprintf(fp, "Native safetensors inventory reads safetensors headers only and never loads tensor payload bytes.\n");
+    fprintf(fp, "Source tensor metadata inventory is derived from safetensors headers only and does not map tensors to runtime roles.\n");
     fprintf(fp, "The source pressure report inspects source-path readiness only. It does not download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
 }
 
@@ -1898,6 +2441,17 @@ int yvex_source_manifest_report_command(int argc, char **argv)
             options.include_blockers = 1;
         } else if (strcmp(argv[i], "--include-next") == 0) {
             options.include_next = 1;
+        } else if (strcmp(argv[i], "--include-tensors") == 0) {
+            options.include_tensors = 1;
+        } else if (strcmp(argv[i], "--tensor-limit") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "source-manifest report: --tensor-limit requires N\n");
+                return 2;
+            }
+            if (!qwen_source_parse_positive_ull(argv[++i], &options.tensor_limit)) {
+                fprintf(stderr, "source-manifest report: --tensor-limit requires a positive integer\n");
+                return 2;
+            }
         } else if (strcmp(argv[i], "--audit") == 0) {
             options.output_mode = YVEX_SOURCE_REPORT_OUTPUT_AUDIT;
         } else if (strcmp(argv[i], "--output") == 0) {

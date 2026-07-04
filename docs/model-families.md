@@ -174,19 +174,28 @@ summaries, declared data bytes, and malformed headers, and keep payload bytes
 unloaded. Malformed headers are reported as source evidence, not executed or
 treated as runtime readiness.
 
+Source tensor metadata inventory is also header-derived only. It records tensor
+names, file placement, dtype, rank, shape, element counts, declared byte spans,
+largest tensor metadata, dtype/rank distributions, and lexical name-pattern
+summaries without loading tensor payloads. The name-pattern summary is
+lexical-only; it does not map tensors to runtime roles, infer Qwen or Gemma
+model classes, or imply runtime readiness.
+
 The report checks only local source-path pressure facts: concrete target slot,
 configured source path, source path existence, config/tokenizer file visibility,
 top-level safetensors presence, top-level source footprint, provenance fields,
-native safetensors inventory, source manifest status, blockers, and next rows.
+native safetensors inventory, source tensor metadata inventory, source manifest
+status, blockers, and next rows.
 It does not download sources, create source manifests, imply source readiness,
 emit artifacts, materialize tensors, load tensor payloads, implement Metal,
 execute Qwen or Gemma runtime paths, generate, evaluate, benchmark, or mark a
 release ready.
 
 Source family/profile fields, source artifact class fields, source footprint
-fields, source provenance fields, and native safetensors inventory are
-command-visible for Qwen and Gemma. The next source pressure step is source
-tensor metadata inventory without tensor payload loading.
+fields, source provenance fields, native safetensors inventory, and source
+tensor metadata inventory are command-visible for Qwen and Gemma. The next
+source pressure step is source manifest/provenance hardening without tensor
+payload loading.
 
 ## Family Classification
 
