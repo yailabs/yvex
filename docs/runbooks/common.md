@@ -429,12 +429,16 @@ Writes:
 Stop after:
   `stage: download pass`, `stage: progress-stream pass`, and either
   `stage: progress-ticks pass` for long runs or `stage: progress-ticks skipped`
-  for fast runs.
+  for fast runs. If the operator interrupts the command, stop after
+  `stage: download interrupted`, `child_signal_forwarded: true`,
+  `orphan_check_status: pass`, and `status: model-download-interrupted`.
 
 Boundary:
   live progress is based on provider pipe streaming and local source-directory
   `stat` scans only; it does not load tensor payloads, hash payloads, emit GGUF,
   materialize tensors, execute runtime work, generate, evaluate, or benchmark.
+  Interrupted runs preserve partial source files and provider logs. They do not
+  delete provider lock files.
 
 ```sh
 ./yvex models download gemma-4-12b-it \

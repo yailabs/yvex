@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <poll.h>
+#include <signal.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -3666,6 +3667,18 @@ typedef struct {
     int provider_exit_code;
     int stdout_streamed;
     int stderr_streamed;
+    int interrupted;
+    int interrupt_signal;
+    int signal_forwarded;
+    int child_terminated;
+    int child_killed_after_timeout;
+    int orphan_check_performed;
+    int partial_source_preserved;
+    int lock_files_deleted;
+    pid_t provider_pid;
+    pid_t provider_process_group;
+    char child_exit_status[32];
+    char orphan_check_status[16];
     unsigned long long stdout_bytes;
     unsigned long long stderr_bytes;
     unsigned long long tick_count;
@@ -3745,6 +3758,17 @@ static const char *model_download_progress_mode_name(yvex_model_download_progres
     case YVEX_MODEL_DOWNLOAD_PROGRESS_OFF: return "off";
     }
     return "auto";
+}
+
+static const char *model_download_signal_name(int signo)
+{
+    switch (signo) {
+    case SIGINT: return "SIGINT";
+    case SIGTERM: return "SIGTERM";
+    case SIGKILL: return "SIGKILL";
+    case 0: return "none";
+    }
+    return "unknown";
 }
 
 static int model_download_parse_progress_mode(const char *value,
@@ -3997,6 +4021,10 @@ static void model_download_report_init(yvex_model_download_report *report)
     snprintf(report->stage_sidecar, sizeof(report->stage_sidecar), "skipped");
     report->hf_exit_code = -1;
     report->provider_exit_code = -1;
+    report->provider_pid = -1;
+    report->provider_process_group = -1;
+    snprintf(report->child_exit_status, sizeof(report->child_exit_status), "unknown");
+    snprintf(report->orphan_check_status, sizeof(report->orphan_check_status), "unknown");
 }
 
 static void model_download_timestamp(char *out, size_t cap)
@@ -4329,6 +4357,23 @@ static int model_download_write_json_sidecar(const char *path,
     write_bool_field(fp, "  ", "stderr_streamed", report->stderr_streamed, 1);
     write_u64_field(fp, "  ", "stdout_bytes", report->stdout_bytes, 1);
     write_u64_field(fp, "  ", "stderr_bytes", report->stderr_bytes, 1);
+    fprintf(fp, "  \"provider_pid\": %lld,\n", (long long)report->provider_pid);
+    fprintf(fp, "  \"provider_process_group\": %lld,\n",
+            (long long)report->provider_process_group);
+    write_bool_field(fp, "  ", "interrupted", report->interrupted, 1);
+    write_field(fp, "  ", "interrupt_signal",
+                model_download_signal_name(report->interrupt_signal), 1);
+    write_bool_field(fp, "  ", "signal_forwarded", report->signal_forwarded, 1);
+    write_bool_field(fp, "  ", "child_terminated", report->child_terminated, 1);
+    write_bool_field(fp, "  ", "child_killed_after_timeout",
+                     report->child_killed_after_timeout, 1);
+    write_field(fp, "  ", "child_exit_status", report->child_exit_status, 1);
+    write_bool_field(fp, "  ", "orphan_check_performed",
+                     report->orphan_check_performed, 1);
+    write_field(fp, "  ", "orphan_check_status", report->orphan_check_status, 1);
+    write_bool_field(fp, "  ", "partial_source_preserved",
+                     report->partial_source_preserved, 1);
+    write_bool_field(fp, "  ", "lock_files_deleted", report->lock_files_deleted, 1);
     write_u64_field(fp, "  ", "file_count", report->source_scan.file_count, 1);
     write_u64_field(fp, "  ", "safetensors_count", report->source_scan.safetensors_count, 1);
     write_bool_field(fp, "  ", "config_present", report->source_scan.config_present, 1);
@@ -4551,6 +4596,149 @@ static void model_download_print_tick_progress(
     report->tick_count++;
 }
 
+enum {
+    YVEX_MODEL_DOWNLOAD_INTERRUPT_TIMEOUT_SECONDS = 5
+};
+
+static volatile sig_atomic_t yvex_model_download_provider_signal_seen = 0;
+
+static void model_download_provider_signal_handler(int signo)
+{
+    if ((signo == SIGINT || signo == SIGTERM) &&
+        yvex_model_download_provider_signal_seen == 0) {
+        yvex_model_download_provider_signal_seen = signo;
+    }
+}
+
+static int model_download_install_provider_signal_handlers(struct sigaction *old_int,
+                                                           struct sigaction *old_term,
+                                                           yvex_error *err)
+{
+    struct sigaction action;
+
+    memset(&action, 0, sizeof(action));
+    action.sa_handler = model_download_provider_signal_handler;
+    sigemptyset(&action.sa_mask);
+
+    yvex_model_download_provider_signal_seen = 0;
+    if (sigaction(SIGINT, &action, old_int) != 0) {
+        yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
+                        "cannot install SIGINT handler: %s", strerror(errno));
+        return 0;
+    }
+    if (sigaction(SIGTERM, &action, old_term) != 0) {
+        (void)sigaction(SIGINT, old_int, NULL);
+        yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
+                        "cannot install SIGTERM handler: %s", strerror(errno));
+        return 0;
+    }
+    return 1;
+}
+
+static void model_download_restore_provider_signal_handlers(const struct sigaction *old_int,
+                                                            const struct sigaction *old_term)
+{
+    if (old_int) (void)sigaction(SIGINT, old_int, NULL);
+    if (old_term) (void)sigaction(SIGTERM, old_term, NULL);
+    yvex_model_download_provider_signal_seen = 0;
+}
+
+static void model_download_reset_child_signal_handlers(void)
+{
+    struct sigaction action;
+
+    memset(&action, 0, sizeof(action));
+    action.sa_handler = SIG_DFL;
+    sigemptyset(&action.sa_mask);
+    (void)sigaction(SIGINT, &action, NULL);
+    (void)sigaction(SIGTERM, &action, NULL);
+}
+
+static int model_download_set_nonblocking(int fd)
+{
+    int flags;
+
+    flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0) return 0;
+    return fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
+}
+
+static void model_download_record_child_exit_status(yvex_model_download_report *report,
+                                                    int child_status)
+{
+    int code;
+    int sig;
+
+    if (!report) return;
+    report->child_terminated = 1;
+    if (WIFEXITED(child_status)) {
+        code = WEXITSTATUS(child_status);
+        if (report->interrupted &&
+            (code == 0 ||
+             (report->interrupt_signal > 0 && code == 128 + report->interrupt_signal))) {
+            snprintf(report->child_exit_status, sizeof(report->child_exit_status),
+                     "interrupted");
+        } else if (code == 0) {
+            snprintf(report->child_exit_status, sizeof(report->child_exit_status),
+                     "exited");
+        } else {
+            snprintf(report->child_exit_status, sizeof(report->child_exit_status),
+                     "terminated");
+        }
+        return;
+    }
+    if (WIFSIGNALED(child_status)) {
+        sig = WTERMSIG(child_status);
+        snprintf(report->child_exit_status, sizeof(report->child_exit_status), "%s",
+                 report->interrupted &&
+                 (sig == report->interrupt_signal || sig == SIGINT || sig == SIGTERM)
+                 ? "interrupted"
+                 : "terminated");
+        return;
+    }
+    snprintf(report->child_exit_status, sizeof(report->child_exit_status), "unknown");
+}
+
+static void model_download_mark_provider_interrupted(yvex_model_download_report *report,
+                                                     int signo,
+                                                     pid_t pgid)
+{
+    int kill_rc;
+
+    if (!report || report->interrupted) return;
+    report->interrupted = 1;
+    report->interrupt_signal = signo;
+    report->partial_source_preserved = 1;
+    report->lock_files_deleted = 0;
+    if (pgid > 0) {
+        kill_rc = kill(-pgid, signo);
+        if (kill_rc == 0 || errno == ESRCH) {
+            report->signal_forwarded = 1;
+        }
+    }
+}
+
+static void model_download_orphan_check(yvex_model_download_report *report)
+{
+    pid_t pgid;
+
+    if (!report) return;
+    report->orphan_check_performed = 1;
+    pgid = report->provider_process_group;
+    if (pgid <= 0) {
+        snprintf(report->orphan_check_status, sizeof(report->orphan_check_status),
+                 "unknown");
+        return;
+    }
+    if (kill(-pgid, 0) == 0) {
+        snprintf(report->orphan_check_status, sizeof(report->orphan_check_status),
+                 "fail");
+        return;
+    }
+    snprintf(report->orphan_check_status, sizeof(report->orphan_check_status), "%s",
+             errno == ESRCH ? "pass" : "unknown");
+}
+
 static int yvex_provider_process_run_streaming(const char *const *args,
                                                const char *stdout_log_path,
                                                const char *stderr_log_path,
@@ -4567,12 +4755,19 @@ static int yvex_provider_process_run_streaming(const char *const *args,
     int stdout_open = 1;
     int stderr_open = 1;
     int child_exited = 0;
+    int shutdown_signal_sent = 0;
+    int kill_signal_sent = 0;
     int child_status = 0;
     int mirror_provider;
     int normalize_cr;
     time_t started_at;
     time_t next_tick;
+    time_t shutdown_deadline = (time_t)-1;
     pid_t pid;
+    pid_t pgid = -1;
+    struct sigaction old_int;
+    struct sigaction old_term;
+    int signal_handlers_installed = 0;
 
     if (!args || !args[0] || !stdout_log_path || !stderr_log_path || !report) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "provider_process",
@@ -4604,6 +4799,19 @@ static int yvex_provider_process_run_streaming(const char *const *args,
                         "pipe failed: %s", strerror(errno));
         return -1;
     }
+    if (!model_download_set_nonblocking(stdout_pipe[0]) ||
+        !model_download_set_nonblocking(stderr_pipe[0])) {
+        close(stdout_pipe[0]);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[0]);
+        close(stderr_pipe[1]);
+        close(stdout_log_fd);
+        close(stderr_log_fd);
+        yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
+                        "cannot make provider pipes nonblocking: %s",
+                        strerror(errno));
+        return -1;
+    }
 
     mirror_provider = effective_mode != YVEX_MODEL_DOWNLOAD_PROGRESS_OFF &&
                       effective_mode != YVEX_MODEL_DOWNLOAD_PROGRESS_LOG;
@@ -4613,8 +4821,20 @@ static int yvex_provider_process_run_streaming(const char *const *args,
         ? (time_t)-1
         : started_at + (time_t)(tick_seconds ? tick_seconds : 1ull);
 
+    if (!model_download_install_provider_signal_handlers(&old_int, &old_term, err)) {
+        close(stdout_pipe[0]);
+        close(stdout_pipe[1]);
+        close(stderr_pipe[0]);
+        close(stderr_pipe[1]);
+        close(stdout_log_fd);
+        close(stderr_log_fd);
+        return -1;
+    }
+    signal_handlers_installed = 1;
+
     pid = fork();
     if (pid < 0) {
+        model_download_restore_provider_signal_handlers(&old_int, &old_term);
         close(stdout_pipe[0]);
         close(stdout_pipe[1]);
         close(stderr_pipe[0]);
@@ -4626,6 +4846,8 @@ static int yvex_provider_process_run_streaming(const char *const *args,
         return -1;
     }
     if (pid == 0) {
+        model_download_reset_child_signal_handlers();
+        if (setpgid(0, 0) != 0) _exit(127);
         close(stdout_pipe[0]);
         close(stderr_pipe[0]);
         if (dup2(stdout_pipe[1], STDOUT_FILENO) < 0) _exit(127);
@@ -4637,6 +4859,12 @@ static int yvex_provider_process_run_streaming(const char *const *args,
         execv(args[0], (char *const *)args);
         _exit(127);
     }
+
+    report->provider_pid = pid;
+    (void)setpgid(pid, pid);
+    pgid = getpgid(pid);
+    if (pgid <= 0) pgid = pid;
+    report->provider_process_group = pgid;
 
     close(stdout_pipe[1]);
     close(stderr_pipe[1]);
@@ -4651,15 +4879,43 @@ static int yvex_provider_process_run_streaming(const char *const *args,
         int timeout_ms = 1000;
         int poll_rc;
         pid_t waited;
+        sig_atomic_t seen_signal;
 
-        waited = waitpid(pid, &child_status, WNOHANG);
-        if (waited == pid) {
-            child_exited = 1;
-        } else if (waited < 0 && errno != EINTR) {
-            child_exited = 1;
+        if (!child_exited) {
+            waited = waitpid(pid, &child_status, WNOHANG);
+            if (waited == pid) {
+                child_exited = 1;
+                model_download_record_child_exit_status(report, child_status);
+            } else if (waited < 0 && errno == ECHILD) {
+                child_exited = 1;
+                snprintf(report->child_exit_status, sizeof(report->child_exit_status),
+                         "unknown");
+            } else if (waited < 0 && errno != EINTR) {
+                child_exited = 1;
+            }
         }
 
         now = time(NULL);
+        seen_signal = yvex_model_download_provider_signal_seen;
+        if (seen_signal != 0 && !report->interrupted && !child_exited) {
+            model_download_mark_provider_interrupted(report, (int)seen_signal, pgid);
+            shutdown_signal_sent = 1;
+            shutdown_deadline = now == (time_t)-1
+                ? (time_t)-1
+                : now + YVEX_MODEL_DOWNLOAD_INTERRUPT_TIMEOUT_SECONDS;
+        }
+        if (report->interrupted &&
+            shutdown_signal_sent &&
+            !kill_signal_sent &&
+            shutdown_deadline != (time_t)-1 &&
+            now != (time_t)-1 &&
+            now >= shutdown_deadline &&
+            (!child_exited || stdout_open || stderr_open)) {
+            if (pgid > 0 && kill(-pgid, SIGKILL) == 0) {
+                report->child_killed_after_timeout = 1;
+            }
+            kill_signal_sent = 1;
+        }
         if (effective_mode != YVEX_MODEL_DOWNLOAD_PROGRESS_OFF &&
             tick_seconds > 0ull &&
             now != (time_t)-1 &&
@@ -4677,6 +4933,9 @@ static int yvex_provider_process_run_streaming(const char *const *args,
             time_t diff = next_tick - now;
             timeout_ms = diff > 1 ? 1000 : (int)(diff * 1000);
             if (timeout_ms <= 0) timeout_ms = 100;
+        }
+        if (report->interrupted && timeout_ms > 100) {
+            timeout_ms = 100;
         }
 
         if (stdout_open) {
@@ -4697,10 +4956,41 @@ static int yvex_provider_process_run_streaming(const char *const *args,
         poll_rc = poll(nfds ? fds : NULL, nfds, timeout_ms);
         if (poll_rc < 0) {
             if (errno == EINTR) continue;
+            if (!child_exited && pgid > 0) {
+                time_t deadline;
+                (void)kill(-pgid, SIGTERM);
+                deadline = time(NULL) + YVEX_MODEL_DOWNLOAD_INTERRUPT_TIMEOUT_SECONDS;
+                while (1) {
+                    waited = waitpid(pid, &child_status, WNOHANG);
+                    if (waited == pid) {
+                        model_download_record_child_exit_status(report, child_status);
+                        child_exited = 1;
+                        break;
+                    }
+                    if (waited < 0 && errno != EINTR) {
+                        child_exited = 1;
+                        break;
+                    }
+                    if (time(NULL) >= deadline) {
+                        (void)kill(-pgid, SIGKILL);
+                        report->child_killed_after_timeout = 1;
+                        while (waitpid(pid, &child_status, 0) < 0 && errno == EINTR) {
+                        }
+                        model_download_record_child_exit_status(report, child_status);
+                        child_exited = 1;
+                        break;
+                    }
+                    (void)poll(NULL, 0, 100);
+                }
+            }
             close(stdout_pipe[0]);
             close(stderr_pipe[0]);
             close(stdout_log_fd);
             close(stderr_log_fd);
+            model_download_orphan_check(report);
+            if (signal_handlers_installed) {
+                model_download_restore_provider_signal_handlers(&old_int, &old_term);
+            }
             yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
                             "poll failed: %s", strerror(errno));
             return -1;
@@ -4743,7 +5033,7 @@ static int yvex_provider_process_run_streaming(const char *const *args,
                         stderr_pipe[0] = -1;
                         stderr_open = 0;
                     }
-                } else if (errno != EINTR && errno != EAGAIN) {
+                } else if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
                     if (stream_kind == 1 && stdout_open) {
                         close(stdout_pipe[0]);
                         stdout_pipe[0] = -1;
@@ -4763,13 +5053,21 @@ static int yvex_provider_process_run_streaming(const char *const *args,
             if (errno == EINTR) continue;
             close(stdout_log_fd);
             close(stderr_log_fd);
+            if (signal_handlers_installed) {
+                model_download_restore_provider_signal_handlers(&old_int, &old_term);
+            }
             yvex_error_setf(err, YVEX_ERR_IO, "provider_process",
                             "waitpid failed: %s", strerror(errno));
             return -1;
         }
+        model_download_record_child_exit_status(report, child_status);
     }
     close(stdout_log_fd);
     close(stderr_log_fd);
+    model_download_orphan_check(report);
+    if (signal_handlers_installed) {
+        model_download_restore_provider_signal_handlers(&old_int, &old_term);
+    }
 
     if (WIFEXITED(child_status)) return WEXITSTATUS(child_status);
     if (WIFSIGNALED(child_status)) return 128 + WTERMSIG(child_status);
@@ -4893,7 +5191,14 @@ static void model_download_print_normal(const yvex_cli_models_download_options *
         printf("repo: %s\n", report->repo_id);
         printf("source: %s\n", report->local_source_dir);
         printf("stage: download interrupted\n");
+        printf("signal: %s\n", model_download_signal_name(report->interrupt_signal));
+        printf("child_signal_forwarded: %s\n", report->signal_forwarded ? "true" : "false");
+        printf("child_exit_status: %s\n", report->child_exit_status);
         printf("cleanup: preserved-partial-source\n");
+        printf("lock_cleanup: not-attempted\n");
+        printf("partial_source_preserved: %s\n",
+               report->partial_source_preserved ? "true" : "false");
+        printf("lock_files_deleted: %s\n", report->lock_files_deleted ? "true" : "false");
         printf("stdout_log: %s\n", report->stdout_log_path);
         printf("stderr_log: %s\n", report->stderr_log_path);
         printf("boundary: partial source files may exist; runtime unsupported\n");
@@ -4971,6 +5276,24 @@ static void model_download_print_audit(const yvex_cli_models_download_options *o
     printf("stdout_bytes: %llu\n", report->stdout_bytes);
     printf("stderr_bytes: %llu\n", report->stderr_bytes);
     printf("provider_exit_code: %d\n", report->provider_exit_code);
+    printf("provider_pid: %lld\n", (long long)report->provider_pid);
+    printf("provider_process_group: %lld\n", (long long)report->provider_process_group);
+    printf("interrupted: %s\n", report->interrupted ? "true" : "false");
+    printf("interrupt_signal: %s\n", model_download_signal_name(report->interrupt_signal));
+    printf("signal: %s\n", model_download_signal_name(report->interrupt_signal));
+    printf("signal_forwarded: %s\n", report->signal_forwarded ? "true" : "false");
+    printf("child_signal_forwarded: %s\n", report->signal_forwarded ? "true" : "false");
+    printf("child_terminated: %s\n", report->child_terminated ? "true" : "false");
+    printf("child_killed_after_timeout: %s\n",
+           report->child_killed_after_timeout ? "true" : "false");
+    printf("child_exit_status: %s\n", report->child_exit_status);
+    printf("orphan_check_performed: %s\n",
+           report->orphan_check_performed ? "true" : "false");
+    printf("orphan_check_status: %s\n", report->orphan_check_status);
+    printf("partial_source_preserved: %s\n",
+           report->partial_source_preserved ? "true" : "false");
+    printf("lock_cleanup: not-attempted\n");
+    printf("lock_files_deleted: %s\n", report->lock_files_deleted ? "true" : "false");
     printf("source_file_count: %llu\n", report->source_scan.file_count);
     printf("file_count: %llu\n", report->source_scan.file_count);
     printf("safetensors_count: %llu\n", report->source_scan.safetensors_count);
@@ -5220,6 +5543,35 @@ static int command_models_download(int argc, char **argv)
         snprintf(report.stage_progress_ticks, sizeof(report.stage_progress_ticks),
                  report.tick_count > 0ull ? "pass" : "skipped");
     }
+    if (report.interrupted || report.hf_exit_code == 130 || report.hf_exit_code == 143) {
+        int write_rc;
+        if (!report.interrupted) {
+            report.interrupted = 1;
+            report.interrupt_signal = report.hf_exit_code == 143 ? SIGTERM : SIGINT;
+            report.partial_source_preserved = 1;
+            report.lock_files_deleted = 0;
+            snprintf(report.child_exit_status, sizeof(report.child_exit_status),
+                     "interrupted");
+        }
+        (void)model_download_observe_source(report.local_source_dir, &report.source_scan);
+        snprintf(report.status, sizeof(report.status), "model-download-interrupted");
+        snprintf(report.stage_download, sizeof(report.stage_download), "interrupted");
+        snprintf(report.stage_source_scan, sizeof(report.stage_source_scan), "partial");
+        snprintf(report.top_blocker, sizeof(report.top_blocker), "provider-download-interrupted");
+        snprintf(report.error, sizeof(report.error), "provider download interrupted");
+        write_rc = model_download_write_json_sidecar(report.download_report_path,
+                                                    "yvex.model_download.report.v1",
+                                                    &options,
+                                                    &report,
+                                                    &err);
+        if (write_rc == YVEX_OK) {
+            report.report_written = 1;
+            snprintf(report.stage_sidecar, sizeof(report.stage_sidecar), "pass");
+        } else {
+            snprintf(report.stage_sidecar, sizeof(report.stage_sidecar), "fail");
+        }
+        return model_download_finish(&options, &report);
+    }
     if (options.dry_run && report.hf_exit_code == 0) {
         snprintf(report.status, sizeof(report.status), "model-download-dry-run");
         snprintf(report.stage_download, sizeof(report.stage_download), "dry-run");
@@ -5232,19 +5584,12 @@ static int command_models_download(int argc, char **argv)
     if (report.hf_exit_code != 0) {
         int write_rc;
         snprintf(report.status, sizeof(report.status), "model-download-fail");
-        if (report.hf_exit_code == 130 || report.hf_exit_code == 143) {
-            snprintf(report.status, sizeof(report.status), "model-download-interrupted");
-            snprintf(report.stage_download, sizeof(report.stage_download), "interrupted");
-            snprintf(report.top_blocker, sizeof(report.top_blocker), "provider-download-interrupted");
-            snprintf(report.error, sizeof(report.error), "provider download interrupted");
+        snprintf(report.stage_download, sizeof(report.stage_download), "fail");
+        snprintf(report.top_blocker, sizeof(report.top_blocker), "provider-download-failed");
+        if (report.hf_exit_code < 0 && yvex_error_message(&err)[0]) {
+            snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
         } else {
-            snprintf(report.stage_download, sizeof(report.stage_download), "fail");
-            snprintf(report.top_blocker, sizeof(report.top_blocker), "provider-download-failed");
-            if (report.hf_exit_code < 0 && yvex_error_message(&err)[0]) {
-                snprintf(report.error, sizeof(report.error), "%s", yvex_error_message(&err));
-            } else {
-                snprintf(report.error, sizeof(report.error), "hf download exited nonzero");
-            }
+            snprintf(report.error, sizeof(report.error), "hf download exited nonzero");
         }
         write_rc = model_download_write_json_sidecar(report.download_report_path,
                                                     "yvex.model_download.report.v1",

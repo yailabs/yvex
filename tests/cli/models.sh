@@ -171,6 +171,40 @@ test -f "$LIVE_FAIL_ROOT/logs/gemma-4-12b-it.download.stderr.log"
 grep 'fake-hf: downloading shard 1' "$LIVE_FAIL_ROOT/logs/gemma-4-12b-it.download.stdout.log"
 grep 'fake-hf: failing at step 2' "$LIVE_FAIL_ROOT/logs/gemma-4-12b-it.download.stderr.log"
 
+SIGNAL_ROOT="$ROOT/download-signal"
+YVEX_FAKE_HF_STEP_DELAY=5 YVEX_FAKE_HF_STEPS=8 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$SIGNAL_ROOT" --progress plain --tick-seconds 1 --audit > "$ROOT/download-signal.out" 2>&1 &
+SIGNAL_PID=$!
+sleep 1
+kill -INT "$SIGNAL_PID"
+set +e
+wait "$SIGNAL_PID"
+SIGNAL_RC=$?
+set -e
+test "$SIGNAL_RC" -ne 0
+grep 'status: model-download-interrupted' "$ROOT/download-signal.out"
+grep 'stage: download interrupted' "$ROOT/download-signal.out"
+grep 'signal: SIGINT' "$ROOT/download-signal.out"
+grep 'child_signal_forwarded: true' "$ROOT/download-signal.out"
+grep 'child_exit_status: interrupted' "$ROOT/download-signal.out"
+grep 'orphan_check_performed: true' "$ROOT/download-signal.out"
+grep 'orphan_check_status: pass' "$ROOT/download-signal.out"
+grep 'partial_source_preserved: true' "$ROOT/download-signal.out"
+grep 'lock_cleanup: not-attempted' "$ROOT/download-signal.out"
+grep 'lock_files_deleted: false' "$ROOT/download-signal.out"
+grep 'provider_pid:' "$ROOT/download-signal.out"
+grep 'provider_process_group:' "$ROOT/download-signal.out"
+PROVIDER_PID=$(awk '/provider_pid:/ { print $2; exit }' "$ROOT/download-signal.out")
+PROVIDER_PGID=$(awk '/provider_process_group:/ { print $2; exit }' "$ROOT/download-signal.out")
+test -n "$PROVIDER_PID"
+test -n "$PROVIDER_PGID"
+! kill -0 "$PROVIDER_PID" 2>/dev/null
+! ps -o pid= -g "$PROVIDER_PGID" | grep .
+test -f "$SIGNAL_ROOT/logs/gemma-4-12b-it.download.stdout.log"
+test -f "$SIGNAL_ROOT/logs/gemma-4-12b-it.download.stderr.log"
+test -f "$SIGNAL_ROOT/hf/gemma/gemma-4-12b-it/config.json"
+grep 'fake-hf: resolving repo' "$SIGNAL_ROOT/logs/gemma-4-12b-it.download.stdout.log"
+grep 'fake-hf: stderr resolving repo' "$SIGNAL_ROOT/logs/gemma-4-12b-it.download.stderr.log"
+
 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-e2b --models-root "$ROOT/download-off" --no-progress --audit > "$ROOT/download-off.out" 2>&1
 ! grep 'model-download: start' "$ROOT/download-off.out"
 ! grep 'tick: elapsed=' "$ROOT/download-off.out"
