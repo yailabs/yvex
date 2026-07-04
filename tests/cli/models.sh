@@ -211,6 +211,119 @@ test -f "$SIGNAL_ROOT/hf/gemma/gemma-4-12b-it/config.json"
 grep 'fake-hf: resolving repo' "$SIGNAL_ROOT/logs/gemma-4-12b-it.download.stdout.log"
 grep 'fake-hf: stderr resolving repo' "$SIGNAL_ROOT/logs/gemma-4-12b-it.download.stderr.log"
 
+CONTROL_ROOT="$ROOT/download-control"
+YVEX_FAKE_HF_AUTH=1 YVEX_FAKE_HF_STEP_DELAY=5 YVEX_FAKE_HF_STEPS=8 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$CONTROL_ROOT" --auth required --progress log --tick-seconds 1 --audit > "$ROOT/download-control-run.out" 2>&1 &
+CONTROL_PID=$!
+i=0
+while [ ! -f "$CONTROL_ROOT/reports/gemma/gemma-4-12b-it.download.active.json" ] && [ "$i" -lt 10 ]; do
+  sleep 1
+  i=$((i + 1))
+done
+test -f "$CONTROL_ROOT/reports/gemma/gemma-4-12b-it.download.active.json"
+
+"$YVEX_BIN" models download status gemma-4-12b-it --models-root "$CONTROL_ROOT" --audit > "$ROOT/download-control-status-running.out"
+grep 'status: model-download-status' "$ROOT/download-control-status-running.out"
+grep 'receipt_status: active' "$ROOT/download-control-status-running.out"
+grep 'provider_process_alive: true' "$ROOT/download-control-status-running.out"
+grep 'stop_available: true' "$ROOT/download-control-status-running.out"
+grep 'resume_available: false' "$ROOT/download-control-status-running.out"
+
+"$YVEX_BIN" models download stop gemma-4-12b-it --models-root "$CONTROL_ROOT" --audit > "$ROOT/download-control-stop.out"
+grep 'status: model-download-stopped' "$ROOT/download-control-stop.out"
+grep 'child_signal_forwarded: true' "$ROOT/download-control-stop.out"
+grep 'cleanup: preserved-partial-source' "$ROOT/download-control-stop.out"
+set +e
+wait "$CONTROL_PID"
+CONTROL_RC=$?
+set -e
+test "$CONTROL_RC" -ne 0
+test -f "$CONTROL_ROOT/hf/gemma/gemma-4-12b-it/config.json"
+
+"$YVEX_BIN" models download status gemma-4-12b-it --models-root "$CONTROL_ROOT" --audit > "$ROOT/download-control-status-stopped.out"
+grep 'provider_process_alive: false' "$ROOT/download-control-status-stopped.out"
+grep 'last_receipt_status: stopped' "$ROOT/download-control-status-stopped.out"
+grep 'resume_available: true' "$ROOT/download-control-status-stopped.out"
+
+YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download resume gemma-4-12b-it --models-root "$CONTROL_ROOT" --auth required --progress log --tick-seconds 1 --audit > "$ROOT/download-control-resume.out" 2>&1
+grep 'status: model-download-resume-pass' "$ROOT/download-control-resume.out"
+grep 'stage: download pass' "$ROOT/download-control-resume.out"
+test -f "$CONTROL_ROOT/reports/gemma/gemma-4-12b-it.download.last.json"
+"$YVEX_BIN" models download status gemma-4-12b-it --models-root "$CONTROL_ROOT" --audit > "$ROOT/download-control-status-resumed.out"
+grep 'last_receipt_status: pass' "$ROOT/download-control-status-resumed.out"
+
+STALE_ROOT="$ROOT/download-control-stale"
+mkdir -p "$STALE_ROOT/reports/gemma" "$STALE_ROOT/hf/gemma/gemma-4-12b-it"
+cat > "$STALE_ROOT/reports/gemma/gemma-4-12b-it.download.active.json" <<EOF
+{
+  "schema": "yvex.model_download.active.v1",
+  "target_id": "gemma-4-12b-it",
+  "family": "gemma",
+  "provider": "huggingface",
+  "repo_id": "google/gemma-4-12B-it",
+  "revision": "main",
+  "local_source_dir": "$STALE_ROOT/hf/gemma/gemma-4-12b-it",
+  "provider_pid": 99999999,
+  "provider_pgid": 99999999,
+  "status": "running"
+}
+EOF
+"$YVEX_BIN" models download status gemma-4-12b-it --models-root "$STALE_ROOT" --audit > "$ROOT/download-control-stale-status.out"
+grep 'receipt_status: stale-active-receipt' "$ROOT/download-control-stale-status.out"
+
+mkdir -p "$STALE_ROOT/hf/gemma/gemma-4-12b-it/.cache/huggingface/download"
+printf 'lock\n' > "$STALE_ROOT/hf/gemma/gemma-4-12b-it/.cache/huggingface/download/model.safetensors.lock"
+YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download resume gemma-4-12b-it --models-root "$STALE_ROOT" --auth required --audit > "$ROOT/download-control-lock-blocked.out" 2>&1 && exit 1 || true
+grep 'status: model-download-resume-blocked' "$ROOT/download-control-lock-blocked.out"
+grep 'top_blocker: stale-lock-candidates' "$ROOT/download-control-lock-blocked.out"
+
+"$YVEX_BIN" models download cleanup gemma-4-12b-it --models-root "$STALE_ROOT" --stale-locks --dry-run --audit > "$ROOT/download-control-cleanup-dry-run.out"
+grep 'status: model-download-cleanup-dry-run' "$ROOT/download-control-cleanup-dry-run.out"
+grep 'stale_locks: 1' "$ROOT/download-control-cleanup-dry-run.out"
+test -f "$STALE_ROOT/hf/gemma/gemma-4-12b-it/.cache/huggingface/download/model.safetensors.lock"
+
+"$YVEX_BIN" models download cleanup gemma-4-12b-it --models-root "$STALE_ROOT" --stale-locks --yes --audit > "$ROOT/download-control-cleanup.out"
+grep 'status: model-download-cleanup' "$ROOT/download-control-cleanup.out"
+grep 'deleted: 1' "$ROOT/download-control-cleanup.out"
+test ! -f "$STALE_ROOT/hf/gemma/gemma-4-12b-it/.cache/huggingface/download/model.safetensors.lock"
+
+printf 'lock\n' > "$STALE_ROOT/hf/gemma/gemma-4-12b-it/.cache/huggingface/download/model.safetensors.lock"
+YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download resume gemma-4-12b-it --models-root "$STALE_ROOT" --auth required --clear-stale-locks --audit > "$ROOT/download-control-lock-clear-resume.out" 2>&1
+grep 'status: model-download-resume-pass' "$ROOT/download-control-lock-clear-resume.out"
+test ! -f "$STALE_ROOT/hf/gemma/gemma-4-12b-it/.cache/huggingface/download/model.safetensors.lock"
+
+SAFE_ROOT="$ROOT/download-control-safe"
+SAFE_SRC="$SAFE_ROOT/hf/gemma/gemma-4-12b-it"
+mkdir -p "$SAFE_SRC"
+python3 - "$SAFE_SRC/model-ok.safetensors" "$SAFE_SRC/model-truncated.safetensors" <<'PY'
+import json
+import struct
+import sys
+
+def write(path, payload_len, actual_len):
+    header = {
+        "__metadata__": {"format": "pt"},
+        "embed.weight": {
+            "dtype": "F16",
+            "shape": [1, max(1, payload_len // 2)],
+            "data_offsets": [0, payload_len],
+        },
+    }
+    blob = json.dumps(header, separators=(",", ":")).encode("utf-8")
+    with open(path, "wb") as f:
+        f.write(struct.pack("<Q", len(blob)))
+        f.write(blob)
+        f.write(bytes(actual_len))
+
+write(sys.argv[1], 16, 16)
+write(sys.argv[2], 32, 8)
+PY
+"$YVEX_BIN" models download status gemma-4-12b-it --models-root "$SAFE_ROOT" --audit > "$ROOT/download-control-safe-truncated.out"
+grep 'safetensors_header_checked: true' "$ROOT/download-control-safe-truncated.out"
+grep 'safetensors_size_status: truncated' "$ROOT/download-control-safe-truncated.out"
+rm -f "$SAFE_SRC/model-truncated.safetensors"
+"$YVEX_BIN" models download status gemma-4-12b-it --models-root "$SAFE_ROOT" --audit > "$ROOT/download-control-safe-ok.out"
+grep 'safetensors_size_status: ok' "$ROOT/download-control-safe-ok.out"
+
 YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-e2b --models-root "$ROOT/download-off" --no-progress --audit > "$ROOT/download-off.out" 2>&1
 ! grep 'model-download: start' "$ROOT/download-off.out"
 ! grep 'tick: elapsed=' "$ROOT/download-off.out"

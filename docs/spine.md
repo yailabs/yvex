@@ -197,6 +197,7 @@ operator-readable state.
 | source tensor download lane | source-intake | yes | `yvex models download TARGET --models-root DIR --auth auto --audit` and `tests/cli/models.sh` fake-HF/fake-GitHub coverage | not remote identity verification, payload hashing, conversion, GGUF creation, registry runtime artifact registration, materialization, runtime, generation, eval, or benchmark |
 | live source download progress | source-intake | yes | `yvex models download TARGET --progress live|plain|log|off --tick-seconds N` with fake-HF streaming/tick/log/failure tests | not remote identity verification, payload hashing, conversion, GGUF creation, registry runtime artifact registration, materialization, runtime, generation, eval, or benchmark |
 | lock-safe source download interruption | source-intake | yes | `yvex models download TARGET --progress plain --audit` with fake-HF SIGINT process-group cancellation test | not provider lock deletion, partial-file cleanup, remote identity verification, payload hashing, conversion, GGUF creation, materialization, runtime, generation, eval, or benchmark |
+| source download control | source-intake | yes | `yvex models download status|stop|resume|cleanup TARGET --models-root DIR --audit` with fake-HF active receipt, stop, resume, stale lock cleanup, and safetensors header-size tests | not provider identity verification, payload hashing, tensor payload loading, conversion, GGUF creation, materialization, runtime, generation, eval, or benchmark |
 | provider account lane | local-provider-boundary | yes | `yvex accounts status/login/whoami/ensure` plus `models download --auth auto|required|never` provider preflight for Hugging Face and GitHub fake CLIs | not YAI account state, MCP, hosted auth, OAuth implementation, raw token storage, source verification, runtime, generation, eval, benchmark, or release readiness |
 | operator paths/presets | operator-preset | yes | paths/model-target/models prepare/check | not extra runtime capability |
 | normal CLI output baseline | operator-output | yes | `info`, `paths`, `models`, `model-target`, and `generate` normal/audit tests | not new runtime capability |
@@ -680,6 +681,10 @@ Note:
   `V010.SOURCE.6` completed source tensor metadata inventory; `V010.SOURCE.7`
   completed source manifest/provenance hardening; `V010.SOURCE.7A /
   MODELS.DOWNLOAD.0` completed the foreground source tensor download lane;
+  `MODELS.DOWNLOAD.LIVE.0` completed live source download progress;
+  `MODELS.DOWNLOAD.SIGNAL.0` completed lock-safe download interruption;
+  `MODELS.DOWNLOAD.CONTROL.0` completed status, stop, resume, and explicit
+  stale-local-state cleanup for source downloads;
   `V010.SOURCE.7B / ACCOUNTS.PROVIDER.0` completed local provider account
   preflight for Hugging Face and GitHub.
 
@@ -4331,6 +4336,25 @@ tools, use MCP/YAI account state, verify source identity, hash payloads, create
 runtime artifacts, materialize tensors, execute runtime paths, generate,
 evaluate, benchmark, claim throughput, or mark a release ready.
 
+Completed target/source control row:
+
+```text
+MODELS.DOWNLOAD.CONTROL.0 - download status, stop, resume, and cleanup
+```
+
+`MODELS.DOWNLOAD.CONTROL.0` keeps download control inside the existing
+`models download` namespace. `status` inspects local receipts, provider
+process state, locks, logs, source footprint, and header-only safetensors size
+status without network access. `stop` targets YVEX-owned provider process
+groups, records a stopped receipt, and preserves partial source files and logs.
+`resume` reuses the same source directory through the provider CLI and refuses
+active provider processes or stale locks unless stale-lock cleanup is explicit.
+`cleanup` deletes only explicitly requested stale downloader state when no
+provider process is alive. It does not delete model payloads, verify source
+identity, hash payloads, load tensor payloads, emit GGUF, materialize tensors,
+execute runtime paths, generate, evaluate, benchmark, claim throughput, or mark
+a release ready.
+
 Completed target/source repair row:
 
 ```text
@@ -4458,6 +4482,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | V010.SOURCE.7A / MODELS.DOWNLOAD.0 | complete | source | Native source tensor download lane | `yvex models download` routes catalog or direct Hugging Face repo requests through the installed `hf download` CLI, writes token-redacted receipts, stdout/stderr logs, registry/report sidecars, source manifests, and header-only native inventories under the operator models root, with fake-HF CLI tests covering dry-run, success, missing CLI, backend failure, direct repo, parser errors, and token redaction; it does not verify upstream identity, hash payloads, load tensor payload bytes, emit GGUF, register a runtime artifact, materialize tensors, execute graph/runtime, generate, eval, benchmark, throughput, or release-ready claim |
 | MODELS.DOWNLOAD.LIVE.0 | complete | source | Live source download progress | `yvex models download` supports `--progress auto|live|plain|log|off`, `--tick-seconds N`, and `--no-progress`; provider stdout/stderr are streamed while the child process runs, mirrored according to progress mode, written to separate logs, and accompanied by local source-directory stat ticks, with fake-HF tests covering visible start-before-completion, ticks, provider mirroring, logs, provider failure, parser errors, and token redaction without tensor payload loading, payload hashing, conversion, GGUF emission, materialization, runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | MODELS.DOWNLOAD.SIGNAL.0 | complete | source | Lock-safe source download interruption | `yvex models download` runs provider downloads in an owned process group with temporary SIGINT/SIGTERM handlers, forwards operator interrupts to the provider group, drains logs, waits with a bounded shutdown path, preserves partial source files/logs, avoids provider lock deletion, records provider pid/process group/orphan-check fields, and has fake-HF SIGINT coverage proving interrupted status and no surviving provider process group without tensor payload loading, payload hashing, conversion, GGUF emission, materialization, runtime, generation, eval, benchmark, throughput, or release-ready claim |
+| MODELS.DOWNLOAD.CONTROL.0 | complete | source | Download status, stop, resume, and cleanup | `yvex models download status|stop|resume|cleanup TARGET` inspects local download receipts/processes/locks/logs/footprint/safetensors header-size state, stops YVEX-owned provider process groups, resumes through the provider CLI over the same source directory, and explicitly cleans stale downloader locks only when no provider process is alive, with fake-HF tests covering active receipts, running status, stop, stopped status, resume, stale active receipts, stale lock block/cleanup, and safetensors ok/truncated checks without network access, source identity verification, payload hashing, tensor payload loading, GGUF emission, materialization, runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | V010.SOURCE.7B / ACCOUNTS.PROVIDER.0 | complete | source | Local provider account lane | `yvex accounts` reports Hugging Face/GitHub provider availability, login, whoami, and ensure state through provider-owned CLIs, writes only non-secret local account observations, and `models download --auth auto|required|never` uses that preflight before Hugging Face or GitHub release asset downloads without raw token storage, MCP/YAI account integration, hosted auth, OAuth implementation, source verification, runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | MODEL.TARGET.IDENTITY.0 | complete | model | Backend-neutral source target identity | backend- or pressure-specific source target IDs are replaced by `qwen3-8b` and `gemma-4-12b-it`; backend selection and backend pressure are separate report fields; old target IDs are refused; source-manifest defaults and target path reports use the new IDs without runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | CUDA.KERNEL.0 | complete | cuda | CUDA primitive kernel vertical hardening | existing CUDA primitive kernels are vertically hardened as bounded CUDA compute primitives; MLP and attention no longer rely on one-thread diagnostic bodies, primitive CUDA tests compare against CPU/reference outputs, and CUDA remains a primitive execution surface only without full model runtime, generation, benchmark, throughput, tensor-core optimization, FlashAttention, paged KV, or release-ready claim |
@@ -5672,6 +5697,8 @@ After `SPINE.OUTPUT.UX.CONTRACT.0`, `V010.CLI.17`, `V010.CLI.18`,
 `V010.SOURCE.6`, `OWI.TARGETS.GEMMA.0`, `V010.SOURCE.7`,
 `V010.SOURCE.7A / MODELS.DOWNLOAD.0`,
 `MODELS.DOWNLOAD.LIVE.0`,
+`MODELS.DOWNLOAD.SIGNAL.0`,
+`MODELS.DOWNLOAD.CONTROL.0`,
 `V010.SOURCE.7B / ACCOUNTS.PROVIDER.0`, `MODEL.TARGET.IDENTITY.0`, and
 `MODEL.CLASS.QWEN.0`
 completed,
@@ -5723,10 +5750,12 @@ Reason:
   complete as report-only source manifest/provenance hardening,
   V010.SOURCE.7A / MODELS.DOWNLOAD.0 is complete as a source-intake download
   lane, MODELS.DOWNLOAD.LIVE.0 is complete as live source download progress,
-  and MODEL.TARGET.IDENTITY.0 is complete as the backend-neutral source target
-  identity repair. MODEL.CLASS.QWEN.0 is complete as a header-metadata-only
-  Qwen model-class profile. Gemma model-class profile is the next blocker
-  before tensor-collection and runtime-path work.
+  MODELS.DOWNLOAD.SIGNAL.0 is complete as lock-safe interruption,
+  MODELS.DOWNLOAD.CONTROL.0 is complete as local download status/stop/resume
+  and cleanup control, and MODEL.TARGET.IDENTITY.0 is complete as the
+  backend-neutral source target identity repair. MODEL.CLASS.QWEN.0 is complete
+  as a header-metadata-only Qwen model-class profile. Gemma model-class profile
+  is the next blocker before tensor-collection and runtime-path work.
 ```
 
 

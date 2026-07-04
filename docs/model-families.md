@@ -120,6 +120,10 @@ identity. The current command-visible source surface is:
 ./yvex accounts status --audit
 ./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --dry-run --auth never --audit
 ./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --auth auto --audit
+./yvex models download status gemma-4-12b-it --models-root "$HOME/lab/models" --audit
+./yvex models download stop gemma-4-12b-it --models-root "$HOME/lab/models" --audit
+./yvex models download resume gemma-4-12b-it --models-root "$HOME/lab/models" --auth auto --audit
+./yvex models download cleanup gemma-4-12b-it --models-root "$HOME/lab/models" --stale-locks --dry-run --audit
 ./yvex models download qwen3-8b --models-root "$HOME/lab/models" --auth auto --audit
 ./yvex models download --provider github --repo OWNER/REPO --release TAG --asset "*.gguf" --models-root "$HOME/lab/models" --auth auto --audit
 ./yvex source-manifest report --family qwen --release v0.1.0
@@ -144,6 +148,18 @@ defaults, not upstream identity proof. The lane does not store raw tokens,
 perform remote identity verification, hash payloads, load tensor payload bytes,
 emit GGUF, register runtime artifacts, materialize tensors, execute runtime
 paths, generate, evaluate, benchmark, or mark a release ready.
+
+`models download status|stop|resume|cleanup` is the local control surface for
+that same source-intake lane. Status performs no network access, reports active
+and last receipts, live provider process state, locks, logs, source footprint,
+and header-only safetensors size status. Stop targets YVEX-owned provider
+process groups and preserves partial source files and logs. Resume reuses the
+same source directory and blocks on active provider processes or stale locks
+unless stale-lock cleanup is explicit. Cleanup is explicit and refuses lock
+deletion while a provider process is alive. These commands do not verify source
+identity, hash payloads, load tensor payloads, emit artifacts, materialize
+tensors, execute runtime paths, generate, evaluate, benchmark, or imply Qwen or
+Gemma support.
 
 `qwen3-8b` is a source-target profile only. It names the Qwen model/source
 target, the `<models_root>/hf/qwen/qwen3-8b` source path convention, official

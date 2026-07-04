@@ -463,6 +463,66 @@ Boundary:
   2>&1 | tee "$HOME/lab/models/logs/yvex-gemma4-31b-it-download.live.log"
 ```
 
+## Lane 5C - Download control
+
+Purpose:
+  Inspect, stop, resume, and explicitly clean local downloader state without
+  leaving the `models download` namespace.
+
+Requires:
+  Repository root.
+  The same provider CLI and account state as Lane 5 for resume.
+
+Writes:
+  `status` writes nothing.
+  `stop` writes a last receipt and preserves partial source files and logs.
+  `resume` writes the same source files and sidecars as Lane 5.
+  `cleanup` writes only when an explicit cleanup flag and `--yes` are present.
+
+Safe to rerun:
+  `status` and cleanup dry-runs are safe. `stop` is safe for a YVEX-owned active
+  provider process. `resume` delegates resume behavior to the provider CLI over
+  the existing source directory.
+
+Stop after:
+  `status: model-download-status`, `status: model-download-stopped`,
+  `status: model-download-resume-pass`, or an explicit blocked status that names
+  the active provider process or stale lock blocker.
+
+Boundary:
+  status is local inspection only and does not contact providers. Stop preserves
+  partial source files, preserves logs, and does not delete provider locks.
+  Resume reuses the existing source directory and refuses active provider
+  processes; stale locks block unless `--clear-stale-locks` is explicit.
+  Cleanup never deletes locks while a provider process is alive. Safetensors
+  size checks are header-only and do not read payload bytes, hash payloads,
+  prove source identity, emit GGUF, materialize tensors, execute runtime paths,
+  generate, evaluate, or benchmark.
+
+```sh
+./yvex models download status gemma-4-12b-it \
+  --models-root "$HOME/lab/models" \
+  --audit
+
+./yvex models download stop gemma-4-12b-it \
+  --models-root "$HOME/lab/models" \
+  --audit
+
+./yvex models download resume gemma-4-12b-it \
+  --models-root "$HOME/lab/models" \
+  --auth required \
+  --progress live \
+  --tick-seconds 2 \
+  --audit \
+  2>&1 | tee "$HOME/lab/models/logs/yvex-gemma4-12b-it-resume.live.log"
+
+./yvex models download cleanup gemma-4-12b-it \
+  --models-root "$HOME/lab/models" \
+  --stale-locks \
+  --dry-run \
+  --audit
+```
+
 ## Full Implemented Command Inventory
 
 - `accounts`: local provider account boundary
