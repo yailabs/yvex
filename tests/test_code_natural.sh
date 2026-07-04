@@ -131,6 +131,8 @@ pattern='Qwen runtime imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='Qwen generation imple''mented'
 scan_forbidden_claim "$pattern"
+pattern='Qwen CUDA runtime imple''mented'
+scan_forbidden_claim "$pattern"
 pattern='Gemma source down''loaded'
 scan_forbidden_claim "$pattern"
 pattern='Gemma source veri''fied'
@@ -147,7 +149,19 @@ pattern='Gemma runtime imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='Gemma generation imple''mented'
 scan_forbidden_claim "$pattern"
+pattern='Gemma CUDA runtime imple''mented'
+scan_forbidden_claim "$pattern"
 pattern='Metal support imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='CUDA inference rea''dy'
+scan_forbidden_claim "$pattern"
+pattern='CUDA generation rea''dy'
+scan_forbidden_claim "$pattern"
+pattern='CUDA runtime rea''dy'
+scan_forbidden_claim "$pattern"
+pattern='FlashAttention imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='tensor core GEMM imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='source_rea''dy: true'
 scan_forbidden_claim "$pattern"
@@ -164,6 +178,8 @@ scan_forbidden_claim "$pattern"
 pattern='generation_rea''dy: true'
 scan_forbidden_claim "$pattern"
 pattern='benchmark_status: measu''red'
+scan_forbidden_claim "$pattern"
+pattern='benchmark mea''sured'
 scan_forbidden_claim "$pattern"
 pattern='release_rea''dy: true'
 scan_forbidden_claim "$pattern"
@@ -214,6 +230,8 @@ scan_forbidden_claim "$pattern"
 pattern='graph check imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='DeepSeek generation imple''mented'
+scan_forbidden_claim "$pattern"
+pattern='DeepSeek CUDA generation imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='prepare material''izes'
 scan_forbidden_claim "$pattern"

@@ -172,6 +172,7 @@ operator-readable state.
 | artifact/integrity | implemented | yes | inspect/integrity/materialize tests | not runtime |
 | selected graph | selected-slice | yes | graph selected/segment commands | not full transformer |
 | graph primitives | fixture-proof | yes | graph op/block/layers commands | not real model runtime |
+| bounded CUDA primitive kernel hardening | primitive-hardening | yes | CUDA primitive tests compare bounded MLP and attention kernels against CPU/reference outputs | not full CUDA runtime, generation, benchmark, throughput, tensor-core GEMM, FlashAttention, or paged KV |
 | prefill | diagnostic-runtime | partial | `yvex prefill` | not real transformer prefill |
 | KV | diagnostic/report-only | partial | `yvex kv report`, diagnostic KV | not real attention KV |
 | decode | diagnostic-runtime | partial | `yvex decode` | not real decode |
@@ -4252,6 +4253,21 @@ Active Next is now the source tensor metadata inventory lane:
 V010.SOURCE.6 - source tensor metadata inventory
 ```
 
+Completed CUDA interlock row:
+
+```text
+CUDA.KERNEL.0 - CUDA primitive kernel vertical hardening
+```
+
+`CUDA.KERNEL.0` hardens the existing CUDA primitive kernel surface without
+changing Active Next. MLP and attention are bounded single-block CUDA
+primitives with parallel stage loops and CPU/reference comparison tests.
+Embedding, RMSNorm, RoPE, and matmul keep their existing primitive semantics
+with defensive kernel-side guards where applicable. This remains primitive
+execution evidence only: no full CUDA runtime, CUDA generation, model-specific
+Qwen/Gemma/DeepSeek runtime path, tensor-core GEMM, FlashAttention, paged KV,
+benchmark, throughput, or release-ready claim is made.
+
 `V010.TARGET.7`, `V010.SOURCE.9`, `OWI.TARGETS.QWEN.0`, `V010.SOURCE.1`, and
 `OWI.TARGETS.GEMMA.0` remain report-only rows. `V010.SOURCE.2` is complete as a
 report-only source artifact class row, and `V010.SOURCE.3` is complete as a
@@ -4323,6 +4339,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | V010.SOURCE.3 | complete | source | Source shard count/footprint report | source shard count and footprint fields are command-visible for Qwen and Gemma source pressure reports, counting top-level regular files, safetensors, JSON/sidecar files, bytes, largest file, and footprint class without loading tensor payloads, hashing files, creating manifests, emitting artifacts, materializing tensors, running graph/runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | V010.SOURCE.4 | complete | source | Source provenance fields | source provenance fields are command-visible for Qwen and Gemma source pressure reports, including source origin, authority, path source, manifest provenance status, revision/tag/commit unknown status, README/license presence, identity/hash/verification status, remote-check boundary, and payload-load boundary without download, remote lookup, hashing, manifest creation, source readiness claim, tensor payload loading, artifact emission, materialization, graph/runtime execution, generation, eval, benchmark, throughput, or release-ready claim |
 | V010.SOURCE.5 | complete | source | Native safetensors inventory | native safetensors inventory is command-visible for Qwen and Gemma source pressure reports, reading safetensors headers only to count files, opened headers, header bytes, tensor records, dtype counts, rank/shape summaries, declared data bytes, largest tensor metadata, and malformed-header counts without loading tensor payload bytes, hashing files, creating manifests, emitting artifacts, materializing tensors, running graph/runtime, generation, eval, benchmark, throughput, or release-ready claim |
+| CUDA.KERNEL.0 | complete | cuda | CUDA primitive kernel vertical hardening | existing CUDA primitive kernels are vertically hardened as bounded CUDA compute primitives; MLP and attention no longer rely on one-thread diagnostic bodies, primitive CUDA tests compare against CPU/reference outputs, and CUDA remains a primitive execution surface only without full model runtime, generation, benchmark, throughput, tensor-core optimization, FlashAttention, paged KV, or release-ready claim |
 | OWI.HUGE.0 | planned | intake | Huge source tensor inventory | huge safetensors shard sets are inventoried without loading full tensor payloads |
 | OWI.HUGE.1 | planned | intake | Huge safetensors shard index | safetensors shard metadata, tensor placement, offsets, and dtype distribution are indexed |
 | OWI.HUGE.2 | planned | intake | Huge-model qtype and target profile | planned quantization target, qtype policy, per-role qtype classes, and expected storage bytes are reported |

@@ -132,6 +132,67 @@ static void mlp_reference(const float *input,
     }
 }
 
+static void attention_reference(const float *query,
+                                const float *keys,
+                                const float *values,
+                                unsigned long long seq_len,
+                                unsigned long long position,
+                                unsigned long long head_dim,
+                                float scale,
+                                int causal,
+                                float *scores,
+                                float *probabilities,
+                                float *out)
+{
+    unsigned long long visible_count = causal ? position + 1ull : seq_len;
+    unsigned long long i;
+    unsigned long long d;
+    double max_score;
+    double sum_exp = 0.0;
+
+    for (i = 0; i < seq_len; ++i) {
+        double score = 0.0;
+        probabilities[i] = 0.0f;
+        if (causal && i > position) {
+            scores[i] = 0.0f;
+            continue;
+        }
+        for (d = 0; d < head_dim; ++d) {
+            score += (double)query[d] * (double)keys[(i * head_dim) + d];
+        }
+        scores[i] = (float)(score * (double)scale);
+    }
+
+    max_score = (double)scores[0];
+    for (i = 1; i < visible_count; ++i) {
+        if ((double)scores[i] > max_score) {
+            max_score = (double)scores[i];
+        }
+    }
+    for (i = 0; i < visible_count; ++i) {
+        double e = test_exp_double((double)scores[i] - max_score);
+        probabilities[i] = (float)e;
+        sum_exp += e;
+    }
+    if (sum_exp != 0.0) {
+        for (i = 0; i < visible_count; ++i) {
+            probabilities[i] = (float)((double)probabilities[i] / sum_exp);
+        }
+    } else {
+        for (i = 0; i < visible_count; ++i) {
+            probabilities[i] = 0.0f;
+        }
+    }
+
+    for (d = 0; d < head_dim; ++d) {
+        double value = 0.0;
+        for (i = 0; i < visible_count; ++i) {
+            value += (double)probabilities[i] * (double)values[(i * head_dim) + d];
+        }
+        out[d] = (float)value;
+    }
+}
+
 static int open_cuda_or_skip(yvex_backend **out)
 {
     yvex_backend_options options;
@@ -196,19 +257,25 @@ int yvex_cuda_test_ops(void)
     float rope_input_data[8] = {0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f};
     float rope_out_data[8];
     float attention_query_data[4] = {0.1f, 0.2f, 0.3f, 0.4f};
-    float attention_key_data[12] = {
+    float attention_key_data[16] = {
         0.2f, 0.1f, 0.0f, 0.3f,
         0.4f, 0.3f, 0.2f, 0.1f,
         0.1f, 0.5f, 0.3f, 0.2f,
+        0.3f, 0.2f, 0.4f, 0.6f,
     };
-    float attention_value_data[12] = {
+    float attention_value_data[16] = {
         1.0f, 2.0f, 3.0f, 4.0f,
         10.0f, 20.0f, 30.0f, 40.0f,
         5.0f, 6.0f, 7.0f, 8.0f,
+        8.0f, 7.0f, 6.0f, 5.0f,
     };
     float attention_out_data[4];
-    float attention_score_data[3];
-    float attention_probability_data[3];
+    float attention_expected[4];
+    float attention_noncausal_expected[4];
+    float attention_score_data[4];
+    float attention_probability_data[4];
+    float attention_reference_scores[4];
+    float attention_reference_probabilities[4];
     float matmul_input_data[8] = {
         1.0f, 2.0f, 3.0f, 4.0f,
         5.0f, 6.0f, 7.0f, 8.0f,
@@ -278,6 +345,16 @@ int yvex_cuda_test_ops(void)
     mlp_reference(mlp_input_data, mlp_routed_gate_data, mlp_routed_up_data,
                   mlp_routed_down_data, 1, 4, 3, 1, 1,
                   mlp_routed_expected_mid, mlp_routed_expected);
+    attention_reference(attention_query_data, attention_key_data,
+                        attention_value_data, 4, 2, 4, 0.5f, 1,
+                        attention_reference_scores,
+                        attention_reference_probabilities,
+                        attention_expected);
+    attention_reference(attention_query_data, attention_key_data,
+                        attention_value_data, 4, 0, 4, 0.5f, 0,
+                        attention_reference_scores,
+                        attention_reference_probabilities,
+                        attention_noncausal_expected);
     memset(&mlp_options, 0, sizeof(mlp_options));
     mlp_options.batch = 1;
     mlp_options.hidden_dim = 4;
@@ -380,24 +457,24 @@ int yvex_cuda_test_ops(void)
                                    attention_query_data, sizeof(attention_query_data), &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda attention query");
 
-    make_desc(&desc, "attention_keys", YVEX_DTYPE_F32, 2, 3, 4, sizeof(attention_key_data));
+    make_desc(&desc, "attention_keys", YVEX_DTYPE_F32, 2, 4, 4, sizeof(attention_key_data));
     rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &attention_keys, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda attention keys");
     rc = yvex_backend_tensor_write(cuda_backend, attention_keys,
                                    attention_key_data, sizeof(attention_key_data), &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda attention keys");
 
-    make_desc(&desc, "attention_values", YVEX_DTYPE_F32, 2, 3, 4, sizeof(attention_value_data));
+    make_desc(&desc, "attention_values", YVEX_DTYPE_F32, 2, 4, 4, sizeof(attention_value_data));
     rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &attention_values, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda attention values");
     rc = yvex_backend_tensor_write(cuda_backend, attention_values,
                                    attention_value_data, sizeof(attention_value_data), &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda attention values");
 
-    make_desc(&desc, "attention_scores", YVEX_DTYPE_F32, 1, 3, 0, sizeof(attention_score_data));
+    make_desc(&desc, "attention_scores", YVEX_DTYPE_F32, 1, 4, 0, sizeof(attention_score_data));
     rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &attention_scores, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda attention scores");
-    make_desc(&desc, "attention_probabilities", YVEX_DTYPE_F32, 1, 3, 0, sizeof(attention_probability_data));
+    make_desc(&desc, "attention_probabilities", YVEX_DTYPE_F32, 1, 4, 0, sizeof(attention_probability_data));
     rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &attention_probabilities, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda attention probabilities");
     make_desc(&desc, "attention_out", YVEX_DTYPE_F32, 1, 4, 0, sizeof(attention_out_data));
@@ -405,7 +482,7 @@ int yvex_cuda_test_ops(void)
     YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda attention output");
 
     rc = yvex_backend_op_attention(cuda_backend, attention_query, attention_keys,
-                                   attention_values, 3, 0, 0.5f, 1,
+                                   attention_values, 4, 0, 0.5f, 1,
                                    attention_scores, attention_probabilities,
                                    attention_out, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "cuda attention position zero succeeds");
@@ -418,21 +495,43 @@ int yvex_cuda_test_ops(void)
     }
 
     rc = yvex_backend_op_attention(cuda_backend, attention_query, attention_keys,
-                                   attention_values, 3, 2, 0.5f, 1,
+                                   attention_values, 4, 2, 0.5f, 1,
                                    attention_scores, attention_probabilities,
                                    attention_out, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "cuda attention full prefix succeeds");
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "cuda attention causal prefix succeeds");
     rc = yvex_backend_tensor_read(cuda_backend, attention_out,
                                   attention_out_data, sizeof(attention_out_data), &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK, "read cuda attention prefix output");
-    YVEX_TEST_ASSERT(!float_close(attention_out_data[0], attention_value_data[0], 0.0001f),
-                     "cuda attention full prefix mixes more than first value");
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read cuda attention causal output");
+    for (i = 0; i < 4u; ++i) {
+        YVEX_TEST_ASSERT(float_close(attention_out_data[i], attention_expected[i], 0.0001f),
+                         "cuda attention causal output matches reference");
+    }
 
     rc = yvex_backend_op_attention(cuda_backend, attention_query, attention_keys,
-                                   attention_values, 3, 3, 0.5f, 1,
+                                   attention_values, 4, 0, 0.5f, 0,
+                                   attention_scores, attention_probabilities,
+                                   attention_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "cuda attention noncausal succeeds");
+    rc = yvex_backend_tensor_read(cuda_backend, attention_out,
+                                  attention_out_data, sizeof(attention_out_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read cuda attention noncausal output");
+    for (i = 0; i < 4u; ++i) {
+        YVEX_TEST_ASSERT(float_close(attention_out_data[i],
+                                     attention_noncausal_expected[i],
+                                     0.0001f),
+                         "cuda attention noncausal output matches reference");
+    }
+
+    rc = yvex_backend_op_attention(cuda_backend, attention_query, attention_keys,
+                                   attention_values, 4, 4, 0.5f, 1,
                                    attention_scores, attention_probabilities,
                                    attention_out, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS, "cuda attention rejects out-of-range position");
+    rc = yvex_backend_op_attention(cuda_backend, attention_query, attention_keys,
+                                   attention_values, 0, 0, 0.5f, 1,
+                                   attention_scores, attention_probabilities,
+                                   attention_out, &err);
+    YVEX_TEST_ASSERT(rc != YVEX_OK, "cuda attention rejects zero seq_len");
 
     make_desc(&desc, "matmul_input", YVEX_DTYPE_F32, 2, 2, 4, sizeof(matmul_input_data));
     rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &matmul_input, &err);
@@ -557,6 +656,10 @@ int yvex_cuda_test_ops(void)
         YVEX_TEST_ASSERT(float_close(mlp_routed_out_data[i], mlp_routed_expected[i], 0.0001f),
                          "cuda routed mlp output matches selected expert reference");
     }
+    mlp_options.hidden_dim = 0;
+    rc = yvex_backend_op_mlp(cuda_backend, mlp_input, mlp_gate, mlp_up, mlp_down,
+                             &mlp_options, mlp_intermediate, mlp_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT, "cuda mlp rejects zero hidden dim");
 
     yvex_backend_tensor_free(cuda_backend, mlp_out);
     yvex_backend_tensor_free(cuda_backend, mlp_intermediate);

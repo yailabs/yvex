@@ -15,11 +15,19 @@ extern "C" __global__ void yvex_embed_f32(const float *embedding,
     unsigned long long idx =
         ((unsigned long long)blockIdx.x * (unsigned long long)blockDim.x) +
         (unsigned long long)threadIdx.x;
-    unsigned long long total = hidden_size * token_count;
+    unsigned long long total;
     unsigned long long token_index;
     unsigned long long dim;
     unsigned int token_id;
+    const unsigned long long max_ull = ~0ull;
 
+    if (!embedding || !token_ids || !out ||
+        hidden_size == 0ull || vocab_size == 0ull || token_count == 0ull ||
+        hidden_size > max_ull / token_count ||
+        hidden_size > max_ull / vocab_size) {
+        return;
+    }
+    total = hidden_size * token_count;
     if (idx >= total) {
         return;
     }
@@ -71,11 +79,19 @@ extern "C" __global__ void yvex_embed_f16_to_f32(const unsigned short *embedding
     unsigned long long idx =
         ((unsigned long long)blockIdx.x * (unsigned long long)blockDim.x) +
         (unsigned long long)threadIdx.x;
-    unsigned long long total = hidden_size * token_count;
+    unsigned long long total;
     unsigned long long token_index;
     unsigned long long dim;
     unsigned int token_id;
+    const unsigned long long max_ull = ~0ull;
 
+    if (!embedding || !token_ids || !out ||
+        hidden_size == 0ull || vocab_size == 0ull || token_count == 0ull ||
+        hidden_size > max_ull / token_count ||
+        hidden_size > max_ull / vocab_size) {
+        return;
+    }
+    total = hidden_size * token_count;
     if (idx >= total) {
         return;
     }
@@ -103,6 +119,9 @@ extern "C" __global__ void yvex_rms_norm_f32_weight_f32(const float *input,
     float sum = 0.0f;
     float inv_rms;
 
+    if (!input || !weight || !out || hidden_size == 0ull || epsilon <= 0.0f) {
+        return;
+    }
     for (i = (unsigned long long)tid; i < hidden_size; i += (unsigned long long)stride) {
         float v = input[i];
         sum += v * v;
@@ -136,6 +155,9 @@ extern "C" __global__ void yvex_rms_norm_f32_weight_f16(const float *input,
     float sum = 0.0f;
     float inv_rms;
 
+    if (!input || !weight || !out || hidden_size == 0ull || epsilon <= 0.0f) {
+        return;
+    }
     for (i = (unsigned long long)tid; i < hidden_size; i += (unsigned long long)stride) {
         float v = input[i];
         sum += v * v;
@@ -176,6 +198,9 @@ extern "C" __global__ void yvex_rope_f32(const float *input,
     float even;
     float odd;
 
+    if (!input || !out || head_dim < 2ull || (head_dim & 1ull) != 0ull) {
+        return;
+    }
     if (pair >= pair_count) {
         return;
     }
@@ -203,12 +228,18 @@ extern "C" __global__ void yvex_matmul_f32(const float *input,
     unsigned long long idx =
         ((unsigned long long)blockIdx.x * (unsigned long long)blockDim.x) +
         (unsigned long long)threadIdx.x;
-    unsigned long long total = m * n;
+    unsigned long long total;
     unsigned long long row;
     unsigned long long col;
     unsigned long long inner;
     float sum = 0.0f;
+    const unsigned long long max_ull = ~0ull;
 
+    if (!input || !weight || !out || m == 0ull || k == 0ull || n == 0ull ||
+        m > max_ull / n || k > max_ull / n) {
+        return;
+    }
+    total = m * n;
     if (idx >= total) {
         return;
     }
@@ -239,14 +270,28 @@ extern "C" __global__ void yvex_mlp_f32(const float *input,
     unsigned long long gate_offset = 0ull;
     unsigned long long up_offset = 0ull;
     unsigned long long down_offset = 0ull;
+    unsigned long long intermediate_total;
+    unsigned long long output_total;
+    unsigned long long index;
+    const unsigned long long max_ull = ~0ull;
 
-    if (threadIdx.x != 0 || blockIdx.x != 0) {
+    if (blockIdx.x != 0) {
+        return;
+    }
+    if (!input || !gate_weight || !up_weight || !down_weight || !intermediate || !out ||
+        batch == 0ull || hidden_dim == 0ull || ffn_dim == 0ull ||
+        batch > max_ull / ffn_dim || batch > max_ull / hidden_dim ||
+        hidden_dim > max_ull / ffn_dim || ffn_dim > max_ull / hidden_dim) {
         return;
     }
     if (routed_expert_mode) {
         unsigned long long up_elements = hidden_dim * ffn_dim;
         unsigned long long down_elements = ffn_dim * hidden_dim;
-        if (expert_count == 0ull || expert_id >= expert_count) {
+        if (expert_count == 0ull || expert_id >= expert_count ||
+            expert_count > max_ull / up_elements ||
+            expert_count > max_ull / down_elements ||
+            expert_id > max_ull / up_elements ||
+            expert_id > max_ull / down_elements) {
             return;
         }
         gate_offset = expert_id * up_elements;
@@ -254,27 +299,39 @@ extern "C" __global__ void yvex_mlp_f32(const float *input,
         down_offset = expert_id * down_elements;
     }
 
-    for (row = 0; row < batch; ++row) {
-        for (j = 0; j < ffn_dim; ++j) {
-            float gate_sum = 0.0f;
-            float up_sum = 0.0f;
-            float silu;
-            for (h = 0; h < hidden_dim; ++h) {
-                float x = input[(row * hidden_dim) + h];
-                gate_sum += x * gate_weight[gate_offset + (h * ffn_dim) + j];
-                up_sum += x * up_weight[up_offset + (h * ffn_dim) + j];
-            }
-            silu = gate_sum / (1.0f + expf(-gate_sum));
-            intermediate[(row * ffn_dim) + j] = silu * up_sum;
-        }
+    intermediate_total = batch * ffn_dim;
+    output_total = batch * hidden_dim;
+    for (index = (unsigned long long)threadIdx.x;
+         index < intermediate_total;
+         index += (unsigned long long)blockDim.x) {
+        float gate_sum = 0.0f;
+        float up_sum = 0.0f;
+        float silu;
+
+        row = index / ffn_dim;
+        j = index % ffn_dim;
         for (h = 0; h < hidden_dim; ++h) {
-            float sum = 0.0f;
-            for (j = 0; j < ffn_dim; ++j) {
-                sum += intermediate[(row * ffn_dim) + j] *
-                       down_weight[down_offset + (j * hidden_dim) + h];
-            }
-            out[(row * hidden_dim) + h] = sum;
+            float x = input[(row * hidden_dim) + h];
+            gate_sum += x * gate_weight[gate_offset + (h * ffn_dim) + j];
+            up_sum += x * up_weight[up_offset + (h * ffn_dim) + j];
         }
+        silu = gate_sum / (1.0f + expf(-gate_sum));
+        intermediate[index] = silu * up_sum;
+    }
+    __syncthreads();
+
+    for (index = (unsigned long long)threadIdx.x;
+         index < output_total;
+         index += (unsigned long long)blockDim.x) {
+        float sum = 0.0f;
+
+        row = index / hidden_dim;
+        h = index % hidden_dim;
+        for (j = 0; j < ffn_dim; ++j) {
+            sum += intermediate[(row * ffn_dim) + j] *
+                   down_weight[down_offset + (j * hidden_dim) + h];
+        }
+        out[index] = sum;
     }
 }
 
@@ -295,13 +352,21 @@ extern "C" __global__ void yvex_attention_f32(const float *query,
     unsigned long long d;
     float max_score = 0.0f;
     float sum_exp = 0.0f;
+    __shared__ int softmax_valid;
 
-    if (threadIdx.x != 0 || blockIdx.x != 0) {
+    if (blockIdx.x != 0) {
+        return;
+    }
+    if (!query || !keys || !values || !score_scratch || !probability_scratch || !out ||
+        seq_len == 0ull || head_dim == 0ull || position >= seq_len ||
+        seq_len > (~0ull) / head_dim) {
         return;
     }
 
     visible_count = causal ? position + 1ull : seq_len;
-    for (i = 0; i < seq_len; ++i) {
+    for (i = (unsigned long long)threadIdx.x;
+         i < seq_len;
+         i += (unsigned long long)blockDim.x) {
         float score = 0.0f;
         if (causal && i > position) {
             score_scratch[i] = 0.0f;
@@ -313,25 +378,43 @@ extern "C" __global__ void yvex_attention_f32(const float *query,
         }
         score *= scale;
         score_scratch[i] = score;
-        if (i == 0ull || score > max_score) {
-            max_score = score;
+    }
+    __syncthreads();
+
+    if (threadIdx.x == 0) {
+        max_score = score_scratch[0];
+        for (i = 1ull; i < visible_count; ++i) {
+            if (score_scratch[i] > max_score) {
+                max_score = score_scratch[i];
+            }
+        }
+        for (i = 0; i < visible_count; ++i) {
+            float e = expf(score_scratch[i] - max_score);
+            probability_scratch[i] = e;
+            sum_exp += e;
+        }
+        if (sum_exp == 0.0f) {
+            softmax_valid = 0;
+            for (i = 0; i < visible_count; ++i) {
+                probability_scratch[i] = 0.0f;
+            }
+        } else {
+            softmax_valid = 1;
+            for (i = 0; i < visible_count; ++i) {
+                probability_scratch[i] = probability_scratch[i] / sum_exp;
+            }
         }
     }
-    for (i = 0; i < visible_count; ++i) {
-        float e = expf(score_scratch[i] - max_score);
-        probability_scratch[i] = e;
-        sum_exp += e;
-    }
-    if (sum_exp == 0.0f) {
-        return;
-    }
-    for (i = 0; i < visible_count; ++i) {
-        probability_scratch[i] = probability_scratch[i] / sum_exp;
-    }
-    for (d = 0; d < head_dim; ++d) {
+    __syncthreads();
+
+    for (d = (unsigned long long)threadIdx.x;
+         d < head_dim;
+         d += (unsigned long long)blockDim.x) {
         float value = 0.0f;
-        for (i = 0; i < visible_count; ++i) {
-            value += probability_scratch[i] * values[(i * head_dim) + d];
+        if (softmax_valid) {
+            for (i = 0; i < visible_count; ++i) {
+                value += probability_scratch[i] * values[(i * head_dim) + d];
+            }
         }
         out[d] = value;
     }

@@ -1191,6 +1191,7 @@ int yvex_cuda_op_mlp(yvex_backend *backend,
     unsigned long long ffn_dim;
     unsigned long long expert_count;
     unsigned long long expert_id;
+    unsigned int block_size = 128u;
     int routed;
     void *params[12];
     int rc;
@@ -1241,7 +1242,7 @@ int yvex_cuda_op_mlp(yvex_backend *backend,
     rc = yvex_cuda_status(&state->driver,
                           state->driver.cuLaunchKernel(state->mlp_function,
                                                        1, 1, 1,
-                                                       1, 1, 1,
+                                                       block_size, 1, 1,
                                                        0, NULL, params, NULL),
                           "cuda.mlp.launch", err);
     if (rc == YVEX_OK) {
@@ -1279,6 +1280,7 @@ int yvex_cuda_op_attention(yvex_backend *backend,
     CUdeviceptr out_ptr;
     unsigned long long head_dim;
     unsigned long long kv_elements;
+    unsigned int block_size = 128u;
     int causal_flag = causal ? 1 : 0;
     void *params[11];
     int rc;
@@ -1332,7 +1334,7 @@ int yvex_cuda_op_attention(yvex_backend *backend,
     rc = yvex_cuda_status(&state->driver,
                           state->driver.cuLaunchKernel(state->attention_function,
                                                        1, 1, 1,
-                                                       1, 1, 1,
+                                                       block_size, 1, 1,
                                                        0, NULL, params, NULL),
                           "cuda.attention.launch", err);
     if (rc == YVEX_OK) {
