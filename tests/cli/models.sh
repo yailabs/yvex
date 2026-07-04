@@ -108,6 +108,7 @@ grep 'yvex models' "$ROOT/help.out"
 grep 'models download TARGET' "$ROOT/help.out"
 grep -- '--auth auto|required|never' "$ROOT/help.out"
 grep -- '--progress auto|live|plain|log|off' "$ROOT/help.out"
+grep 'models download status qwen3-32b' "$ROOT/help.out"
 grep 'models prepare TARGET' "$ROOT/help.out"
 grep 'models check TARGET' "$ROOT/help.out"
 
@@ -346,6 +347,14 @@ YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download qwen3-8b 
 grep 'family: qwen' "$ROOT/download-qwen.out"
 grep 'hf/qwen/qwen3-8b' "$ROOT/download-qwen.out"
 grep 'status: model-download-pass' "$ROOT/download-qwen.out"
+
+QWEN32_STATUS_ROOT="$ROOT/download-qwen32-status"
+"$YVEX_BIN" models download status qwen3-32b --models-root "$QWEN32_STATUS_ROOT" --audit > "$ROOT/download-qwen32-status.out"
+grep 'target_id: qwen3-32b' "$ROOT/download-qwen32-status.out"
+grep 'family: qwen' "$ROOT/download-qwen32-status.out"
+grep 'repo_id: Qwen/Qwen3-32B' "$ROOT/download-qwen32-status.out"
+grep 'hf/qwen/qwen3-32b' "$ROOT/download-qwen32-status.out"
+grep 'status: model-download-status' "$ROOT/download-qwen32-status.out"
 
 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download gemma-4-12b-it --models-root "$DOWNLOAD_ROOT/required" --auth required --audit > "$ROOT/download-auth-required.out" 2> "$ROOT/download-auth-required.err" && exit 1 || true
 grep 'stage: account-provider blocked' "$ROOT/download-auth-required.out"

@@ -3562,7 +3562,9 @@ static const yvex_model_download_catalog_row model_download_catalog[] = {
     { "gemma-4-31b-it", "gemma", "hf", "google/gemma-4-31B-it", "gemma-4-31b-it", "main",
       "official-safetensors", "huggingface-repository", "gemma-4-31b-it", "target-routing-default" },
     { "qwen3-8b", "qwen", "hf", "Qwen/Qwen3-8B", "qwen3-8b", "main",
-      "official-safetensors", "huggingface-repository", "qwen3-8b", "target-routing-default" }
+      "official-safetensors", "huggingface-repository", "qwen3-8b", "target-routing-default" },
+    { "qwen3-32b", "qwen", "hf", "Qwen/Qwen3-32B", "qwen3-32b", "main",
+      "official-safetensors", "huggingface-repository", "qwen3-32b", "source-download-routing-only" }
 };
 
 static const char *const model_download_default_includes[] = {
@@ -3719,6 +3721,14 @@ typedef struct {
     unsigned long long stdout_bytes;
     unsigned long long stderr_bytes;
     unsigned long long tick_count;
+    unsigned long long tick_last_elapsed_seconds;
+    unsigned long long tick_last_file_count;
+    unsigned long long tick_last_safetensors_count;
+    unsigned long long tick_last_partial_file_count;
+    unsigned long long tick_last_cache_file_count;
+    unsigned long long tick_last_total_regular_file_bytes;
+    unsigned long long tick_last_largest_file_bytes;
+    char tick_last_largest_file_name[YVEX_PATH_CAP];
     int source_manifest_written;
     int native_inventory_written;
     int report_written;
@@ -4947,6 +4957,94 @@ static void model_download_print_start_progress(
     fflush(stdout);
 }
 
+static void model_download_format_bytes(char *out,
+                                        size_t cap,
+                                        unsigned long long bytes)
+{
+    static const char *const units[] = { "B", "KiB", "MiB", "GiB", "TiB" };
+    double value = (double)bytes;
+    unsigned int unit = 0u;
+
+    if (!out || cap == 0u) return;
+    while (value >= 1024.0 && unit + 1u < sizeof(units) / sizeof(units[0])) {
+        value /= 1024.0;
+        unit++;
+    }
+    if (unit == 0u) {
+        snprintf(out, cap, "%llu B", bytes);
+    } else if (value >= 100.0) {
+        snprintf(out, cap, "%.0f %s", value, units[unit]);
+    } else {
+        snprintf(out, cap, "%.1f %s", value, units[unit]);
+    }
+}
+
+static void model_download_format_elapsed(char *out,
+                                          size_t cap,
+                                          unsigned long long seconds)
+{
+    unsigned long long hours = seconds / 3600ull;
+    unsigned long long minutes = (seconds / 60ull) % 60ull;
+    unsigned long long secs = seconds % 60ull;
+
+    if (!out || cap == 0u) return;
+    if (hours > 0ull) {
+        snprintf(out, cap, "%lluh%02llum%02llus", hours, minutes, secs);
+    } else if (minutes > 0ull) {
+        snprintf(out, cap, "%llum%02llus", minutes, secs);
+    } else {
+        snprintf(out, cap, "%llus", secs);
+    }
+}
+
+static void model_download_short_file_name(char *out,
+                                           size_t cap,
+                                           const char *path)
+{
+    const char *name;
+    size_t len;
+    size_t head;
+    size_t tail;
+
+    if (!out || cap == 0u) return;
+    if (!path || !path[0]) {
+        snprintf(out, cap, "none");
+        return;
+    }
+    name = strrchr(path, '/');
+    name = name ? name + 1 : path;
+    len = strlen(name);
+    if (len + 1u <= cap && len <= 48u) {
+        snprintf(out, cap, "%s", name);
+        return;
+    }
+    if (cap < 16u) {
+        snprintf(out, cap, "%.*s", (int)(cap - 1u), name);
+        return;
+    }
+    head = 18u;
+    tail = 22u;
+    if (head + tail + 4u > cap) {
+        head = (cap - 4u) / 2u;
+        tail = cap - 4u - head;
+    }
+    if (tail > len) tail = len;
+    snprintf(out, cap, "%.*s...%s", (int)head, name, name + len - tail);
+}
+
+static int model_download_tick_scan_changed(const yvex_model_download_report *report,
+                                            const yvex_model_download_source_scan *scan)
+{
+    if (!report || !scan || report->tick_count == 0ull) return 1;
+    return report->tick_last_file_count != scan->file_count ||
+           report->tick_last_safetensors_count != scan->safetensors_count ||
+           report->tick_last_partial_file_count != scan->partial_file_count ||
+           report->tick_last_cache_file_count != scan->cache_file_count ||
+           report->tick_last_total_regular_file_bytes != scan->total_regular_file_bytes ||
+           report->tick_last_largest_file_bytes != scan->largest_file_bytes ||
+           strcmp(report->tick_last_largest_file_name, scan->largest_file_name) != 0;
+}
+
 static void model_download_print_tick_progress(const char *source_dir,
                                                time_t started_at,
                                                yvex_model_download_report *report,
@@ -4956,6 +5054,13 @@ static void model_download_print_tick_progress(const char *source_dir,
     yvex_error err;
     time_t now;
     unsigned long long elapsed = 0ull;
+    unsigned long long delta_bytes = 0ull;
+    char elapsed_text[32];
+    char total_text[32];
+    char delta_text[32];
+    char largest_text[32];
+    char largest_name[64];
+    const char *delta_sign = "+";
 
     if (!report || effective_mode == YVEX_MODEL_DOWNLOAD_PROGRESS_OFF) {
         return;
@@ -4967,13 +5072,45 @@ static void model_download_print_tick_progress(const char *source_dir,
     if (now != (time_t)-1 && started_at != (time_t)-1 && now >= started_at) {
         elapsed = (unsigned long long)(now - started_at);
     }
-    printf("tick: elapsed=%llus files=%llu safetensors=%llu bytes=%llu largest=%s\n",
-           elapsed,
+    if (!model_download_tick_scan_changed(report, &scan) &&
+        elapsed < report->tick_last_elapsed_seconds + 60ull) {
+        return;
+    }
+    if (report->tick_count > 0ull) {
+        if (scan.total_regular_file_bytes >= report->tick_last_total_regular_file_bytes) {
+            delta_bytes = scan.total_regular_file_bytes - report->tick_last_total_regular_file_bytes;
+        } else {
+            delta_sign = "-";
+            delta_bytes = report->tick_last_total_regular_file_bytes - scan.total_regular_file_bytes;
+        }
+    }
+    model_download_format_elapsed(elapsed_text, sizeof(elapsed_text), elapsed);
+    model_download_format_bytes(total_text, sizeof(total_text), scan.total_regular_file_bytes);
+    model_download_format_bytes(delta_text, sizeof(delta_text), delta_bytes);
+    model_download_format_bytes(largest_text, sizeof(largest_text), scan.largest_file_bytes);
+    model_download_short_file_name(largest_name, sizeof(largest_name),
+                                   scan.largest_file_name[0] ? scan.largest_file_name : "none");
+    printf("tick: elapsed=%s files=%llu partial=%llu safetensors=%llu bytes=%s delta=%s%s largest=%s (%s)\n",
+           elapsed_text,
            scan.file_count,
+           scan.partial_file_count,
            scan.safetensors_count,
-           scan.total_regular_file_bytes,
-           scan.largest_file_name[0] ? scan.largest_file_name : "none");
+           total_text,
+           delta_sign,
+           delta_text,
+           largest_name,
+           largest_text);
     fflush(stdout);
+    report->tick_last_elapsed_seconds = elapsed;
+    report->tick_last_file_count = scan.file_count;
+    report->tick_last_safetensors_count = scan.safetensors_count;
+    report->tick_last_partial_file_count = scan.partial_file_count;
+    report->tick_last_cache_file_count = scan.cache_file_count;
+    report->tick_last_total_regular_file_bytes = scan.total_regular_file_bytes;
+    report->tick_last_largest_file_bytes = scan.largest_file_bytes;
+    snprintf(report->tick_last_largest_file_name,
+             sizeof(report->tick_last_largest_file_name),
+             "%s", scan.largest_file_name);
     report->tick_count++;
 }
 
@@ -5572,6 +5709,10 @@ static void model_download_print_audit_patterns(const yvex_cli_models_download_o
 static void model_download_print_normal(const yvex_cli_models_download_options *options,
                                         const yvex_model_download_report *report)
 {
+    char bytes_text[32];
+    char largest_text[32];
+    char largest_name[64];
+
     if (strcmp(report->status, "model-download-dry-run") == 0) {
         printf("model-download: dry-run target=%s\n", report->target_id);
         printf("family: %s\n", report->family);
@@ -5616,10 +5757,13 @@ static void model_download_print_normal(const yvex_cli_models_download_options *
         printf("repo: %s\n", report->repo_id);
         printf("source: %s\n", report->local_source_dir);
         printf("account_provider: %s\n", report->stage_account_provider);
-        printf("files: %llu safetensors=%llu bytes=%llu\n",
+        model_download_format_bytes(bytes_text, sizeof(bytes_text),
+                                    report->source_scan.total_regular_file_bytes);
+        printf("files: %llu partial=%llu safetensors=%llu bytes=%s\n",
                report->source_scan.file_count,
+               report->source_scan.partial_file_count,
                report->source_scan.safetensors_count,
-               report->source_scan.total_regular_file_bytes);
+               bytes_text);
         printf("manifest: %s\n",
                report->source_manifest_written ? report->manifest_path : "skipped");
         printf("native_inventory: %s\n",
@@ -5637,6 +5781,18 @@ static void model_download_print_normal(const yvex_cli_models_download_options *
         printf("signal: %s\n", model_download_signal_name(report->interrupt_signal));
         printf("child_signal_forwarded: %s\n", report->signal_forwarded ? "true" : "false");
         printf("child_exit_status: %s\n", report->child_exit_status);
+        model_download_format_bytes(bytes_text, sizeof(bytes_text),
+                                    report->source_scan.total_regular_file_bytes);
+        model_download_format_bytes(largest_text, sizeof(largest_text),
+                                    report->source_scan.largest_file_bytes);
+        model_download_short_file_name(largest_name, sizeof(largest_name),
+                                       report->source_scan.largest_file_name);
+        printf("files: %llu partial=%llu safetensors=%llu bytes=%s\n",
+               report->source_scan.file_count,
+               report->source_scan.partial_file_count,
+               report->source_scan.safetensors_count,
+               bytes_text);
+        printf("largest: %s (%s)\n", largest_name, largest_text);
         printf("cleanup: preserved-partial-source\n");
         printf("lock_cleanup: not-attempted\n");
         printf("partial_source_preserved: %s\n",
@@ -5664,16 +5820,21 @@ static void model_download_print_normal(const yvex_cli_models_download_options *
 
 static void model_download_print_table(const yvex_model_download_report *report)
 {
-    printf("TARGET  PROVIDER     FAMILY  ACCOUNT  STATUS  FILES  SAFETENSORS  BYTES\n");
-    printf("%s  %-11s  %s  %-7s  %s  %llu  %llu  %llu\n",
+    char bytes_text[32];
+
+    model_download_format_bytes(bytes_text, sizeof(bytes_text),
+                                report->source_scan.total_regular_file_bytes);
+    printf("TARGET       PROVIDER     FAMILY  ACCOUNT  STATUS                       FILES  PARTIAL  SAFETENSORS  BYTES\n");
+    printf("%-12s %-11s  %-6s  %-7s  %-27s  %5llu  %7llu  %11llu  %s\n",
            report->target_id,
            report->provider,
            report->family,
            report->stage_account_provider,
            report->status,
            report->source_scan.file_count,
+           report->source_scan.partial_file_count,
            report->source_scan.safetensors_count,
-           report->source_scan.total_regular_file_bytes);
+           bytes_text);
     printf("status: %s\n", report->status);
 }
 
@@ -6140,6 +6301,9 @@ static void model_download_print_status_report(
                            strcmp(safe_check->status, "ok") != 0;
     int stop_available = process_alive;
     unsigned long long i;
+    char bytes_text[32];
+    char largest_text[32];
+    char largest_name[64];
 
     if (options && options->output_mode == YVEX_MODELS_OUTPUT_AUDIT) {
         printf("models: download status\n");
@@ -6196,6 +6360,13 @@ static void model_download_print_status_report(
         return;
     }
 
+    model_download_format_bytes(bytes_text, sizeof(bytes_text),
+                                report->source_scan.total_regular_file_bytes);
+    model_download_format_bytes(largest_text, sizeof(largest_text),
+                                report->source_scan.largest_file_bytes);
+    model_download_short_file_name(largest_name, sizeof(largest_name),
+                                   report->source_scan.largest_file_name);
+
     printf("model-download-status: target=%s\n", report->target_id);
     printf("provider: %s\n", report->provider);
     printf("repo: %s\n", report->repo_id);
@@ -6204,11 +6375,13 @@ static void model_download_print_status_report(
     printf("last_status: %s\n",
            last_receipt_present ? (last_receipt_status && last_receipt_status[0]
                                    ? last_receipt_status : "unknown") : "none");
-    printf("locks: %s\n", report->source_scan.lock_count ? "present" : "none");
-    printf("files: %llu safetensors=%llu bytes=%llu\n",
+    printf("locks: %llu\n", report->source_scan.lock_count);
+    printf("files: %llu partial=%llu safetensors=%llu bytes=%s\n",
            report->source_scan.file_count,
+           report->source_scan.partial_file_count,
            report->source_scan.safetensors_count,
-           report->source_scan.total_regular_file_bytes);
+           bytes_text);
+    printf("largest: %s (%s)\n", largest_name, largest_text);
     printf("safetensors_size_status: %s\n", safe_check->status);
     printf("resume: %s\n", resume_available ? "available" : "not-needed");
     printf("stop: %s\n", stop_available ? "available" : "not-needed");
@@ -15355,6 +15528,7 @@ void yvex_models_help(FILE *fp)
     fprintf(fp, "  yvex models download cleanup gemma-4-12b-it --models-root ~/lab/models --stale-locks --dry-run --audit\n");
     fprintf(fp, "  yvex models download gemma-4-12b-it --models-root ~/lab/models --auth required --progress live --tick-seconds 2 --audit\n");
     fprintf(fp, "  yvex models download qwen3-8b --models-root ~/lab/models --auth auto --audit\n");
+    fprintf(fp, "  yvex models download status qwen3-32b --models-root ~/lab/models\n");
     fprintf(fp, "  yvex models download --provider github --repo OWNER/REPO --release TAG --asset \"*.gguf\" --models-root ~/lab/models --auth auto --audit\n");
     fprintf(fp, "  yvex models check deepseek4-v4-flash-selected-embed --backend cpu --level runtime\n");
     fprintf(fp, "  yvex models check deepseek4-v4-flash-selected-embed --backend cuda --level runtime --no-graph\n");
