@@ -171,7 +171,11 @@ pattern='tensor core GEMM imple''mented'
 scan_forbidden_claim "$pattern"
 pattern='source_rea''dy: true'
 scan_forbidden_claim "$pattern"
+pattern='source_manifest_rea''dy: true'
+scan_forbidden_claim "$pattern"
 pattern='metadata_rea''dy: true'
+scan_forbidden_claim "$pattern"
+pattern='source_veri''fied: true'
 scan_forbidden_claim "$pattern"
 pattern='source_identity_veri''fied: true'
 scan_forbidden_claim "$pattern"

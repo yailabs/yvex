@@ -362,6 +362,7 @@ Quant/template/intake manifests:
 - `source-manifest report`: source provenance fields classify local/planned source state only; they do not perform remote lookup, hash files, prove identity, or imply source readiness
 - `source-manifest report`: native safetensors inventory reads safetensors headers only; payload bytes are not loaded, malformed headers are reported, and header inventory is not runtime readiness
 - `source-manifest report`: source tensor metadata inventory derives tensor names, file placement, dtype, rank, shape, byte spans, distributions, and lexical name-pattern summaries from safetensors headers only; it does not load payloads, map runtime roles, infer model classes, or imply runtime readiness
+- `source-manifest report`: source manifest/provenance hardening reports manifest expectation, path/status, shallow schema/family/target consistency, and no-create/no-remote/no-hash/no-payload boundaries; it does not prove source readiness
 - `tensor-map`: source intake lanes
 - `tokenize`: fast regression lane
 - `tokenizer`: fast regression lane

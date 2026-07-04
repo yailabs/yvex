@@ -28,7 +28,7 @@ Current benchmark status:
   not measured
 
 Active implementation next:
-  V010.SOURCE.7 - source manifest/provenance hardening
+  MODEL.CLASS.QWEN.0 - Qwen model-class profile
 
 Current release target:
   v0.1.0 - first honest full-runtime path
@@ -40,7 +40,7 @@ Primary pressure targets:
   Gemma source target profile
 
 Main v0.1.0 blocker:
-  source manifest/provenance hardening remains missing
+  Qwen model-class profile remains missing
 ```
 
 | Field | Current value |
@@ -58,7 +58,7 @@ Main v0.1.0 blocker:
 | Full model generation | unsupported |
 | DeepSeek generation | unsupported |
 | Eval/benchmark | unsupported / not measured |
-| Active next | V010.SOURCE.7 |
+| Active next | MODEL.CLASS.QWEN.0 |
 
 ## 1. Spine Nomenclature
 
@@ -121,7 +121,7 @@ official source tensors
 
 | Stage | Purpose | Current stage | Implemented? | Current proof | Next gap |
 | --- | --- | --- | --- | --- | --- |
-| official source tensors | upstream source authority | report-only | partial | target records, source manifests, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, and source tensor metadata inventory | source manifest/provenance hardening |
+| official source tensors | upstream source authority | report-only | partial | target records, source manifests, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, and source manifest/provenance hardening | model-class profile |
 | source manifest | provenance and source footprint | implemented | yes | `yvex source-manifest` | larger source coverage |
 | native tensor inventory | source tensor directory without payload loading | implemented | yes | `yvex native-weights` | huge shard indexing |
 | tensor mapping | map source/artifact tensor names to YVEX roles | partial/report-only | partial | tensor-map and family-runtime reports | final runtime role coverage |
@@ -191,6 +191,7 @@ operator-readable state.
 | source provenance fields | report-only | yes | Qwen/Gemma source reports expose origin, authority, revision/tag/commit unknown status, README/license presence, identity/hash/verification status, remote-check boundary, and payload-load boundary | not source download, remote lookup, source verification, hashing, manifest creation, native inventory, payload loading, runtime, generation, eval, or benchmark |
 | native safetensors inventory | report-only | yes | Qwen/Gemma source reports read safetensors headers only to count files, opened headers, header bytes, tensor records, dtype counts, rank/shape summaries, declared data bytes, largest tensor metadata, and malformed-header counts | not source download, remote lookup, hashing, manifest creation, source readiness, tensor payload loading, artifact emission, materialization, runtime, generation, eval, or benchmark |
 | source tensor metadata inventory | report-only | yes | Qwen/Gemma source reports derive tensor names, file placement, dtype, rank, shape, element counts, declared byte spans, largest tensors, dtype/rank distributions, and lexical name-pattern summaries from safetensors headers only | not tensor payload loading, hashing, runtime role mapping, model class inference, artifact emission, materialization, runtime, generation, eval, benchmark, throughput, or release readiness |
+| source manifest/provenance hardening | report-only | yes | Qwen/Gemma source reports expose manifest expectation, path/status, shallow schema/family/target consistency, manifest sub-status fields, and no-create/no-remote/no-hash/no-payload boundaries | not source download, source readiness, remote lookup, hashing, payload loading, artifact emission, runtime, generation, eval, benchmark, throughput, or release readiness |
 | operator paths/presets | operator-preset | yes | paths/model-target/models prepare/check | not extra runtime capability |
 | normal CLI output baseline | operator-output | yes | `info`, `paths`, `models`, `model-target`, and `generate` normal/audit tests | not new runtime capability |
 | compact report/table output baseline | operator-output | yes | `models`, `model-target`, `fullmodel`, integrity, KV, and model-class report normal/table/audit tests | not new runtime capability |
@@ -556,7 +557,7 @@ lanes; rows are the delivery units that complete track work.
 | Track ID | Track name | Owns | Current status | Implemented evidence | Next gap | Active / Later |
 | --- | --- | --- | --- | --- | --- | --- |
 | TRACK.TARGET | Target selection and pressure objects | target classes and release target decision | source-target-profiled | target registry, path reports, `yvex model-target decision`, `yvex model-target candidate`, `yvex model-target dense-candidate`, `yvex model-target qwen-metal`, `yvex model-target inspect qwen-metal-portability`, and `yvex model-target inspect gemma-dense-portability` | full-runtime target selection remains blocked | active |
-| TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory, Qwen/Gemma source pressure reports, Qwen/Gemma source target profiles, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, and source tensor metadata inventory | source manifest/provenance hardening | active |
+| TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory, Qwen/Gemma source pressure reports, Qwen/Gemma source target profiles, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, and source manifest/provenance hardening | model-class handoff | active |
 | TRACK.ARTIFACT | Artifact production | YVEX-produced GGUF and conversion plan | selected-slice | controlled/selected GGUF emission | full-runtime artifact production | later |
 | TRACK.INTEGRITY | Artifact identity and gates | digest/ranges/corruption/materialization gates | implemented | integrity harness and reports | full-runtime gate coverage | active |
 | TRACK.MODEL | Model class and runtime routing | dense/MoE/source-only/selected-slice class reports | partial/report-only | family-runtime, attention, KV, context, MoE reports | final runtime route and dense/output/tokenizer class gaps | active |
@@ -618,12 +619,11 @@ Main blockers:
   Qwen/Metal is visible as a reduced-scale pressure lane, Qwen and Gemma source
   pressure are command-visible, and `qwen-metal-portability` plus
   `gemma-dense-portability` are concrete source target profiles, but source
-  manifest/provenance hardening, model class, tensor map,
-  artifact, Metal backend, residency, graph/runtime, eval, and benchmark
-  facts are still missing.
+  model class, tensor map, artifact, Metal backend, residency, graph/runtime,
+  eval, and benchmark facts are still missing.
 
 Next possible row:
-  V010.SOURCE.7.
+  MODEL.CLASS.QWEN.0.
 
 Boundary:
   a target is not a capability claim.
@@ -644,16 +644,19 @@ Current evidence:
   `yvex source-manifest report --family qwen --release v0.1.0`,
   `yvex source-manifest report --family gemma --release v0.1.0`,
   `yvex model-target inspect qwen-metal-portability`, and
-  `yvex model-target inspect gemma-dense-portability`.
+  `yvex model-target inspect gemma-dense-portability`; source reports expose
+  manifest expectation/path/status, shallow schema/family/target consistency,
+  manifest sub-status fields, and no-create/no-remote/no-hash/no-payload
+  boundaries.
 
 v0.1.0 rows:
   V010.SOURCE.*, OWI.*.
 
 Main blockers:
-  source manifest/provenance hardening.
+  model-class profile.
 
 Next possible row:
-  V010.SOURCE.7.
+  MODEL.CLASS.QWEN.0.
 
 Note:
   `OWI.TARGETS.QWEN.0` is the existing Qwen-specific source-target profile row
@@ -663,8 +666,8 @@ Note:
   completed source artifact class fields; `V010.SOURCE.3` completed source
   shard count/footprint fields; `V010.SOURCE.4` completed source provenance
   fields; `V010.SOURCE.5` completed native safetensors inventory;
-  `V010.SOURCE.6` completed source tensor metadata inventory; source
-  manifest/provenance hardening remains next.
+  `V010.SOURCE.6` completed source tensor metadata inventory; `V010.SOURCE.7`
+  completed source manifest/provenance hardening.
 
 Boundary:
   source inventory is not model execution.
@@ -1188,10 +1191,10 @@ v0.1.0 rows:
   V010.CLI.*, V010.OPERATOR.*.
 
 Main blockers:
-  source manifest/provenance hardening remains missing.
+  Qwen model-class profile remains missing.
 
 Next possible row:
-  V010.SOURCE.7.
+  MODEL.CLASS.QWEN.0.
 
 Boundary:
   operator presets compose lower behavior only.
@@ -4098,7 +4101,7 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 ## 7. Active Next
 
 ```text
-V010.SOURCE.7 - source manifest/provenance hardening
+MODEL.CLASS.QWEN.0 - Qwen model-class profile
 ```
 
 `SPINE.OUTPUT.UX.CONTRACT.0` is complete as a docs/control row. It defines the
@@ -4188,7 +4191,7 @@ runtime_claim: unsupported
 generation: unsupported-full-model
 benchmark_status: not-measured
 release_ready: false
-next_required_rows: V010.SOURCE.7
+next_required_rows: MODEL.CLASS.QWEN.0
 ```
 
 The current DeepSeek selected artifacts remain pressure targets for parser,
@@ -4264,10 +4267,27 @@ runtime roles, infer Qwen/Gemma model classes, emit artifacts, materialize
 tensors, execute runtime paths, generate, evaluate, benchmark, claim
 throughput, or mark a release ready.
 
-Active Next is now the source manifest/provenance hardening lane:
+Completed target/source lane row:
 
 ```text
 V010.SOURCE.7 - source manifest/provenance hardening
+```
+
+`V010.SOURCE.7` adds source manifest/provenance hardening fields to Qwen and
+Gemma source pressure reports. It exposes manifest expectation, path/status,
+schema/family/target/artifact/footprint/provenance/native-inventory/tensor-
+metadata consistency status, manifest hardening status, and explicit
+no-create/no-remote/no-hash/no-payload boundaries. It performs only shallow,
+bounded manifest inspection and does not download sources, create manifests,
+claim source readiness, perform remote lookup, hash files, load tensor payloads,
+map tensor roles, infer model classes, emit artifacts, materialize tensors,
+execute graph/runtime paths, generate, evaluate, benchmark, claim throughput,
+or mark a release ready.
+
+Active Next is now the Qwen model-class profile lane:
+
+```text
+MODEL.CLASS.QWEN.0 - Qwen model-class profile
 ```
 
 Completed CUDA interlock row:
@@ -4291,10 +4311,11 @@ report-only source artifact class row, `V010.SOURCE.3` is complete as a
 report-only source shard count/footprint row, `V010.SOURCE.4` is complete as a
 report-only source provenance fields row, `V010.SOURCE.5` is complete as a
 report-only native safetensors inventory row, and `V010.SOURCE.6` is complete
-as a report-only source tensor metadata inventory row. Qwen/Metal and Gemma
-still lack hardened source manifests/provenance, model-class facts, tensor map,
-artifact, runtime path, generation path, eval path, benchmark path, throughput
-evidence, and release-ready evidence.
+as a report-only source tensor metadata inventory row. `V010.SOURCE.7` is
+complete as a report-only source manifest/provenance hardening row. Qwen/Metal
+and Gemma still lack model-class facts, tensor map, artifact, runtime path,
+generation path, eval path, benchmark path, throughput evidence, and
+release-ready evidence.
 
 ## 8. Historical Delivery Ledger
 
@@ -4358,6 +4379,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | V010.SOURCE.4 | complete | source | Source provenance fields | source provenance fields are command-visible for Qwen and Gemma source pressure reports, including source origin, authority, path source, manifest provenance status, revision/tag/commit unknown status, README/license presence, identity/hash/verification status, remote-check boundary, and payload-load boundary without download, remote lookup, hashing, manifest creation, source readiness claim, tensor payload loading, artifact emission, materialization, graph/runtime execution, generation, eval, benchmark, throughput, or release-ready claim |
 | V010.SOURCE.5 | complete | source | Native safetensors inventory | native safetensors inventory is command-visible for Qwen and Gemma source pressure reports, reading safetensors headers only to count files, opened headers, header bytes, tensor records, dtype counts, rank/shape summaries, declared data bytes, largest tensor metadata, and malformed-header counts without loading tensor payload bytes, hashing files, creating manifests, emitting artifacts, materializing tensors, running graph/runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | V010.SOURCE.6 | complete | source | Source tensor metadata inventory | source tensor metadata inventory is command-visible for Qwen and Gemma source pressure reports, deriving tensor names, shard file placement, dtype, rank, shape, element counts, declared byte spans, largest tensor metadata, dtype/rank distributions, and lexical name-pattern summaries from safetensors headers only without loading tensor payload bytes, hashing files, mapping tensors to runtime roles, inferring model classes, emitting artifacts, materializing tensors, running graph/runtime, generation, eval, benchmark, throughput, or release-ready claim |
+| V010.SOURCE.7 | complete | source | Source manifest/provenance hardening | source manifest/provenance hardening fields are command-visible for Qwen and Gemma source pressure reports, exposing manifest expectation, manifest path/status, schema/family/target/artifact/footprint/provenance/native-inventory/tensor-metadata consistency status, and explicit no-create/no-remote/no-hash/no-payload boundaries without source download, source readiness claim, artifact emission, materialization, graph/runtime execution, generation, eval, benchmark, throughput, or release-ready claim |
 | CUDA.KERNEL.0 | complete | cuda | CUDA primitive kernel vertical hardening | existing CUDA primitive kernels are vertically hardened as bounded CUDA compute primitives; MLP and attention no longer rely on one-thread diagnostic bodies, primitive CUDA tests compare against CPU/reference outputs, and CUDA remains a primitive execution surface only without full model runtime, generation, benchmark, throughput, tensor-core optimization, FlashAttention, paged KV, or release-ready claim |
 | OWI.HUGE.0 | planned | intake | Huge source tensor inventory | huge safetensors shard sets are inventoried without loading full tensor payloads |
 | OWI.HUGE.1 | planned | intake | Huge safetensors shard index | safetensors shard metadata, tensor placement, offsets, and dtype distribution are indexed |
@@ -5564,16 +5586,17 @@ SPINE.FILEMAP.0:
 After `SPINE.OUTPUT.UX.CONTRACT.0`, `V010.CLI.17`, `V010.CLI.18`,
 `V010.CLI.19`, `V010.SOURCE.9`, `OWI.TARGETS.QWEN.0`, `V010.SOURCE.1`,
 `V010.SOURCE.2`, `V010.SOURCE.3`, `V010.SOURCE.4`, `V010.SOURCE.5`,
-`V010.SOURCE.6`, and `OWI.TARGETS.GEMMA.0` completed, Active Next advances to:
+`V010.SOURCE.6`, `OWI.TARGETS.GEMMA.0`, and `V010.SOURCE.7` completed, Active Next advances to:
 
 ```text
-V010.SOURCE.7 - source manifest/provenance hardening
+MODEL.CLASS.QWEN.0 - Qwen model-class profile
 ```
 
 If any P1 finding remains blocking, Active Next becomes the named follow-up row.
 
 | Condition | Active Next |
 | --- | --- |
+| Qwen/Gemma source manifest/provenance hardening complete and Qwen model-class profile is missing | MODEL.CLASS.QWEN.0 |
 | Qwen/Gemma source tensor metadata inventory complete and source manifest/provenance hardening is missing | V010.SOURCE.7 |
 | Qwen/Gemma native safetensors inventory complete and source tensor metadata inventory is missing | V010.SOURCE.6 |
 | Qwen/Gemma source provenance fields complete and native safetensors inventory is missing | V010.SOURCE.5 |
@@ -5595,7 +5618,7 @@ Current reconciliation result:
 
 ```text
 Active Next:
-  V010.SOURCE.7 - source manifest/provenance hardening
+  MODEL.CLASS.QWEN.0 - Qwen model-class profile
 
 Reason:
   The first normal operator output baseline and broader diagnostic output
@@ -5603,10 +5626,9 @@ Reason:
   across the broader report surfaces touched by V010.CLI.19. V010.TARGET.7
   V010.SOURCE.9, OWI.TARGETS.QWEN.0, V010.SOURCE.1, V010.SOURCE.2,
   V010.SOURCE.3, V010.SOURCE.4, V010.SOURCE.5, V010.SOURCE.6, and
-  OWI.TARGETS.GEMMA.0 remain complete report-only rows; source
-  manifest/provenance hardening is now the next target/source blocker.
-  `V010.SOURCE.7` is the next source-lane row after concrete Qwen and Gemma
-  source tensor metadata inventory.
+  OWI.TARGETS.GEMMA.0 remain complete report-only rows; V010.SOURCE.7 is now
+  complete as report-only source manifest/provenance hardening. Qwen model-class
+  profile is the next blocker before tensor-collection/runtime-path work.
 ```
 
 

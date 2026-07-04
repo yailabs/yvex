@@ -572,6 +572,8 @@ typedef enum {
     YVEX_SOURCE_REPORT_OUTPUT_AUDIT
 } yvex_source_report_output_mode;
 
+#define YVEX_SOURCE_MANIFEST_PROBE_CAP 8192u
+
 typedef struct {
     const char *family_key;
     const char *display_family;
@@ -764,6 +766,20 @@ typedef struct {
     int readme_exists;
     int license_exists;
     int manifest_exists;
+    int manifest_probe_checked;
+    int manifest_probe_error;
+    int manifest_has_schema;
+    int manifest_schema_matches;
+    int manifest_has_family;
+    int manifest_family_matches;
+    int manifest_has_target;
+    int manifest_target_matches;
+    int manifest_has_artifact_class;
+    int manifest_has_footprint;
+    int manifest_has_provenance;
+    int manifest_has_native_inventory;
+    int manifest_has_tensor_metadata;
+    char manifest_schema_version[64];
     int native_inventory_exists;
     unsigned long long source_file_count;
     unsigned long long source_regular_file_count;
@@ -946,6 +962,26 @@ static int qwen_source_stat_kind(const char *path, int want_dir)
         return 0;
     }
     return want_dir ? S_ISDIR(st.st_mode) : S_ISREG(st.st_mode);
+}
+
+static int qwen_source_manifest_file_exists(char *out,
+                                            size_t cap,
+                                            const char *dir,
+                                            const char *name)
+{
+    char candidate[YVEX_PATH_CAP];
+
+    if (!out || cap == 0 || !dir || dir[0] == '\0' || !name) {
+        return 0;
+    }
+    if (!qwen_source_path_format(candidate, sizeof(candidate), "%s/%s", dir, name)) {
+        return 0;
+    }
+    if (!qwen_source_stat_kind(candidate, 0)) {
+        return 0;
+    }
+    snprintf(out, cap, "%s", candidate);
+    return 1;
 }
 
 static int qwen_source_check_file(const char *dir, const char *name)
@@ -1571,13 +1607,14 @@ static void qwen_source_choose_report_file(char *out, size_t cap,
     out[0] = '\0';
 
     if (source_path && source_path[0] != '\0') {
-        if (qwen_source_path_format(candidate, sizeof(candidate), "%s/%s",
-                                    source_path,
-                                    strcmp(kind, "manifest") == 0
-                                        ? "source-manifest.json"
-                                        : "native-inventory.json") &&
-            qwen_source_stat_kind(candidate, 0)) {
-            snprintf(out, cap, "%s", candidate);
+        if (strcmp(kind, "manifest") == 0 &&
+            (qwen_source_manifest_file_exists(out, cap, source_path, "source_manifest.json") ||
+             qwen_source_manifest_file_exists(out, cap, source_path, "source-manifest.json"))) {
+            if (out_exists) *out_exists = 1;
+            return;
+        }
+        if (strcmp(kind, "manifest") != 0 &&
+            qwen_source_manifest_file_exists(out, cap, source_path, "native-inventory.json")) {
             if (out_exists) *out_exists = 1;
             return;
         }
@@ -1622,6 +1659,90 @@ static void qwen_source_choose_report_file(char *out, size_t cap,
             out[cap - 1] = '\0';
         }
     }
+}
+
+static int qwen_source_manifest_blob_has_field(const char *blob, const char *field)
+{
+    char quoted[96];
+    int n;
+
+    if (!blob || !field) {
+        return 0;
+    }
+    n = snprintf(quoted, sizeof(quoted), "\"%s\"", field);
+    if (n < 0 || (size_t)n >= sizeof(quoted)) {
+        return 0;
+    }
+    return strstr(blob, quoted) != NULL;
+}
+
+static int qwen_source_manifest_blob_has_value(const char *blob, const char *value)
+{
+    return blob && value && value[0] != '\0' && strstr(blob, value) != NULL;
+}
+
+static void qwen_source_probe_manifest(yvex_qwen_source_pressure_report *report,
+                                       const yvex_source_family_profile *profile,
+                                       const char *target)
+{
+    char buf[YVEX_SOURCE_MANIFEST_PROBE_CAP + 1u];
+    FILE *fp;
+    size_t nread;
+
+    if (!report || !profile || !target || !report->manifest_exists ||
+        report->manifest_path[0] == '\0') {
+        return;
+    }
+    fp = fopen(report->manifest_path, "rb");
+    if (!fp) {
+        report->manifest_probe_error = 1;
+        return;
+    }
+    nread = fread(buf, 1, YVEX_SOURCE_MANIFEST_PROBE_CAP, fp);
+    if (ferror(fp)) {
+        report->manifest_probe_error = 1;
+        fclose(fp);
+        return;
+    }
+    fclose(fp);
+    buf[nread] = '\0';
+    report->manifest_probe_checked = 1;
+    report->manifest_has_schema =
+        qwen_source_manifest_blob_has_field(buf, "schema");
+    report->manifest_schema_matches =
+        qwen_source_manifest_blob_has_value(buf, "yvex.source_manifest.v1");
+    snprintf(report->manifest_schema_version,
+             sizeof(report->manifest_schema_version),
+             "%s",
+             report->manifest_schema_matches ? "yvex.source_manifest.v1" : "unknown");
+    report->manifest_has_family =
+        qwen_source_manifest_blob_has_field(buf, "family") ||
+        qwen_source_manifest_blob_has_value(buf, profile->family_key) ||
+        qwen_source_manifest_blob_has_value(buf, profile->display_family);
+    report->manifest_family_matches =
+        qwen_source_manifest_blob_has_value(buf, profile->family_key) ||
+        qwen_source_manifest_blob_has_value(buf, profile->display_family);
+    report->manifest_has_target =
+        qwen_source_manifest_blob_has_field(buf, "target") ||
+        qwen_source_manifest_blob_has_value(buf, target);
+    report->manifest_target_matches =
+        qwen_source_manifest_blob_has_value(buf, target);
+    report->manifest_has_artifact_class =
+        qwen_source_manifest_blob_has_field(buf, "artifact_class") ||
+        qwen_source_manifest_blob_has_field(buf, "source_artifact_class") ||
+        qwen_source_manifest_blob_has_value(buf, profile->source_artifact_class);
+    report->manifest_has_footprint =
+        qwen_source_manifest_blob_has_field(buf, "footprint") ||
+        qwen_source_manifest_blob_has_field(buf, "summary");
+    report->manifest_has_provenance =
+        qwen_source_manifest_blob_has_field(buf, "provenance") ||
+        qwen_source_manifest_blob_has_field(buf, "source");
+    report->manifest_has_native_inventory =
+        qwen_source_manifest_blob_has_field(buf, "native_inventory") ||
+        qwen_source_manifest_blob_has_field(buf, "native");
+    report->manifest_has_tensor_metadata =
+        qwen_source_manifest_blob_has_field(buf, "tensor_metadata") ||
+        qwen_source_manifest_blob_has_field(buf, "tensors");
 }
 
 static void qwen_source_add_blocker(yvex_qwen_source_pressure_report *report,
@@ -1913,6 +2034,118 @@ static const char *qwen_source_manifest_authority(
     return report && report->manifest_exists ? "local-unverified" : "unknown";
 }
 
+static const char *qwen_source_manifest_schema_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    if (!report || !report->manifest_exists) {
+        return "not-checked";
+    }
+    if (report->manifest_probe_error) {
+        return "unreadable";
+    }
+    if (report->manifest_schema_matches) {
+        return "matched";
+    }
+    if (report->manifest_has_schema) {
+        return "present-unrecognized";
+    }
+    return "not-declared";
+}
+
+static const char *qwen_source_manifest_match_status(
+    const yvex_qwen_source_pressure_report *report,
+    int has_field,
+    int matches)
+{
+    if (!report || !report->manifest_exists) {
+        return "not-checked";
+    }
+    if (report->manifest_probe_error) {
+        return "unreadable";
+    }
+    if (matches) {
+        return "matched";
+    }
+    if (has_field) {
+        return "mismatch";
+    }
+    return "not-declared";
+}
+
+static const char *qwen_source_manifest_decl_status(
+    const yvex_qwen_source_pressure_report *report,
+    int present)
+{
+    if (!report || !report->manifest_exists) {
+        return "not-checked";
+    }
+    if (report->manifest_probe_error) {
+        return "unreadable";
+    }
+    return present ? "declared" : "not-declared";
+}
+
+static const char *qwen_source_manifest_family_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    return qwen_source_manifest_match_status(report,
+                                            report ? report->manifest_has_family : 0,
+                                            report ? report->manifest_family_matches : 0);
+}
+
+static const char *qwen_source_manifest_target_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    return qwen_source_manifest_match_status(report,
+                                            report ? report->manifest_has_target : 0,
+                                            report ? report->manifest_target_matches : 0);
+}
+
+static const char *qwen_source_manifest_artifact_class_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    return qwen_source_manifest_decl_status(report,
+                                           report ? report->manifest_has_artifact_class : 0);
+}
+
+static const char *qwen_source_manifest_footprint_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    return qwen_source_manifest_decl_status(report,
+                                           report ? report->manifest_has_footprint : 0);
+}
+
+static const char *qwen_source_manifest_native_inventory_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    return qwen_source_manifest_decl_status(report,
+                                           report ? report->manifest_has_native_inventory : 0);
+}
+
+static const char *qwen_source_manifest_tensor_metadata_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    return qwen_source_manifest_decl_status(report,
+                                           report ? report->manifest_has_tensor_metadata : 0);
+}
+
+static const char *qwen_source_manifest_consistency_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    if (!report || !report->manifest_exists) {
+        return "not-checked";
+    }
+    if (report->manifest_probe_error) {
+        return "report-only";
+    }
+    if (report->manifest_schema_matches &&
+        report->manifest_family_matches &&
+        report->manifest_target_matches) {
+        return "partial";
+    }
+    return "report-only";
+}
+
 static const char *qwen_source_presence_verification_status(int present)
 {
     return present ? "present-unverified" : "not-present";
@@ -2003,20 +2236,21 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
                                    options->target,
                                    "inventory",
                                    &report->native_inventory_exists);
+    qwen_source_probe_manifest(report, options->profile, options->target);
 
     report->source_state = report->source_exists ? "present" : "missing";
     if (!report->source_exists) {
         report->status = "source-target-profiled";
-        report->top_blocker = options->profile->source_path_blocker;
-        report->next_row = "V010.SOURCE.7";
+        report->top_blocker = options->profile->source_manifest_blocker;
+        report->next_row = options->profile->model_class_next;
     } else if (!report->manifest_exists) {
         report->status = "source-present-report-only";
         report->top_blocker = options->profile->source_manifest_blocker;
-        report->next_row = "V010.SOURCE.7";
+        report->next_row = options->profile->model_class_next;
     } else {
         report->status = "source-profile-incomplete";
         report->top_blocker = options->profile->model_class_blocker;
-        report->next_row = "V010.SOURCE.7";
+        report->next_row = options->profile->model_class_next;
     }
 
     if (!report->source_exists) {
@@ -2068,6 +2302,9 @@ static void qwen_source_print_normal(const yvex_qwen_source_report_options *opti
            report->source_tensor_count,
            report->source_tensor_dtype_count,
            report->source_tensor_max_rank);
+    printf("manifest: %s  consistency=%s\n",
+           qwen_source_manifest_status(report),
+           qwen_source_manifest_consistency_status(report));
     printf("top_blocker: %s\n", report->top_blocker);
     printf("next: %s\n", report->next_row);
     printf("boundary: source report only; no artifact/runtime/generation/benchmark\n");
@@ -2078,18 +2315,16 @@ static void qwen_source_print_table(const yvex_qwen_source_report_options *optio
                                     const yvex_qwen_source_pressure_report *report)
 {
     printf("SOURCE PRESSURE  release=%s\n\n", options->release);
-    printf("%-6s  %-24s  %-7s  %11s  %7s  %6s  %8s  %-9s  %s\n",
-           "FAMILY", "TARGET", "SOURCE", "SAFETENSORS",
-           "TENSORS", "DTYPES", "MAX_RANK", "METADATA", "NEXT");
-    printf("%-6s  %-24s  %-7s  %11llu  %7llu  %6llu  %8llu  %-9s  %s\n",
+    printf("%-6s  %-24s  %-7s  %7s  %-8s  %-11s  %s\n",
+           "FAMILY", "TARGET", "SOURCE", "TENSORS", "MANIFEST",
+           "CONSISTENCY", "NEXT");
+    printf("%-6s  %-24s  %-7s  %7llu  %-8s  %-11s  %s\n",
            options->profile->family_key,
            options->target,
            report->source_state,
-           report->safetensors_count,
            report->source_tensor_count,
-           report->source_tensor_dtype_count,
-           report->source_tensor_max_rank,
-           qwen_source_tensor_metadata_status(report),
+           qwen_source_manifest_status(report),
+           qwen_source_manifest_consistency_status(report),
            report->next_row);
     qwen_source_print_tensor_rows(options, report);
 }
@@ -2170,13 +2405,42 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
            qwen_source_present_missing(report->generation_config_exists));
     printf("safetensors_status: %s\n", qwen_source_safetensors_status(report));
     printf("safetensors_count: %llu\n", report->safetensors_count);
+    printf("source_manifest_expected: true\n");
     printf("source_manifest_status: %s\n", qwen_source_manifest_status(report));
     printf("source_manifest_path: %s\n",
            report->manifest_path[0] ? report->manifest_path : "unknown");
+    printf("source_manifest_schema_status: %s\n",
+           qwen_source_manifest_schema_status(report));
+    printf("source_manifest_schema_version: %s\n",
+           report->manifest_schema_version[0]
+               ? report->manifest_schema_version
+               : "unknown");
+    printf("source_manifest_family: %s\n", options->profile->family_key);
+    printf("source_manifest_family_status: %s\n",
+           qwen_source_manifest_family_status(report));
+    printf("source_manifest_target_id: %s\n", options->target);
+    printf("source_manifest_target_status: %s\n",
+           qwen_source_manifest_target_status(report));
+    printf("source_manifest_source_path_status: %s\n", report->source_state);
+    printf("source_manifest_artifact_class_status: %s\n",
+           qwen_source_manifest_artifact_class_status(report));
+    printf("source_manifest_footprint_status: %s\n",
+           qwen_source_manifest_footprint_status(report));
     printf("source_manifest_authority: %s\n",
            qwen_source_manifest_authority(report));
     printf("source_manifest_provenance_status: %s\n",
            qwen_source_manifest_provenance_status(report));
+    printf("source_manifest_native_inventory_status: %s\n",
+           qwen_source_manifest_native_inventory_status(report));
+    printf("source_manifest_tensor_metadata_status: %s\n",
+           qwen_source_manifest_tensor_metadata_status(report));
+    printf("source_manifest_consistency_status: %s\n",
+           qwen_source_manifest_consistency_status(report));
+    printf("source_manifest_hardening_status: report-only\n");
+    printf("source_manifest_creation_performed: false\n");
+    printf("source_manifest_payload_loaded: false\n");
+    printf("source_manifest_remote_checked: false\n");
+    printf("source_manifest_hash_computed: false\n");
     printf("source_revision: unknown\n");
     printf("source_revision_status: unknown\n");
     printf("source_commit: unknown\n");
@@ -2381,6 +2645,7 @@ static void qwen_source_report_help(FILE *fp)
     fprintf(fp, "Source provenance fields classify local/planned state only; they do not verify upstream identity, hash files, or prove source readiness.\n");
     fprintf(fp, "Native safetensors inventory reads safetensors headers only and never loads tensor payload bytes.\n");
     fprintf(fp, "Source tensor metadata inventory is derived from safetensors headers only and does not map tensors to runtime roles.\n");
+    fprintf(fp, "Source manifest hardening is shallow/report-only; it does not create manifests, check remotes, hash files, load payloads, or prove source readiness.\n");
     fprintf(fp, "The source pressure report inspects source-path readiness only. It does not download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
 }
 

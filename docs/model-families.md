@@ -181,6 +181,13 @@ summaries without loading tensor payloads. The name-pattern summary is
 lexical-only; it does not map tensors to runtime roles, infer Qwen or Gemma
 model classes, or imply runtime readiness.
 
+Source manifest/provenance hardening is command-visible for Qwen and Gemma
+source pressure reports. It reports manifest expectation, path/status, shallow
+schema/family/target consistency, manifest sub-status fields, and explicit
+no-create/no-remote/no-hash/no-payload boundaries. It does not create
+manifests, perform remote lookup, hash files, load tensor payloads, prove source
+readiness, infer model classes, or imply runtime readiness.
+
 The report checks only local source-path pressure facts: concrete target slot,
 configured source path, source path existence, config/tokenizer file visibility,
 top-level safetensors presence, top-level source footprint, provenance fields,

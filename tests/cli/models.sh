@@ -304,13 +304,14 @@ grep 'report: target-decision' "$ROOT/model-target-decision-normal.out"
 grep 'status: target-decision-blocked' "$ROOT/model-target-decision-normal.out"
 grep 'selected: none' "$ROOT/model-target-decision-normal.out"
 grep 'top_blocker: no eligible full-runtime candidate' "$ROOT/model-target-decision-normal.out"
-grep 'next: V010.SOURCE.7' "$ROOT/model-target-decision-normal.out"
+grep 'next: MODEL.CLASS.QWEN.0' "$ROOT/model-target-decision-normal.out"
 ! grep 'next: V010\.CLI\.18' "$ROOT/model-target-decision-normal.out"
+! grep 'next: V010\.SOURCE\.7' "$ROOT/model-target-decision-normal.out"
 grep 'boundary: report-only; generation unsupported; benchmark not measured' "$ROOT/model-target-decision-normal.out"
 
 "$YVEX_BIN" model-target decision --release v0.1.0 --output table > "$ROOT/model-target-decision-table.out"
 matches "$ROOT/model-target-decision-table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$ROOT/model-target-decision-table.out" '^target-decision[[:space:]]{2,}blocked[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}V010\.SOURCE\.7$'
+matches "$ROOT/model-target-decision-table.out" '^target-decision[[:space:]]{2,}blocked[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}MODEL\.CLASS\.QWEN\.0$'
 
 "$YVEX_BIN" model-target decision --release v0.1.0 --output nope > "$ROOT/model-target-decision-bad-output.out" 2> "$ROOT/model-target-decision-bad-output.err" && exit 1 || true
 grep 'model-target decision: unsupported output mode: nope' "$ROOT/model-target-decision-bad-output.err"
@@ -337,11 +338,11 @@ grep 'candidate.2.status: ineligible-source-only' "$ROOT/model-target-decision.o
 grep 'candidate.3.id: qwen-metal-portability' "$ROOT/model-target-decision.out"
 grep 'candidate.3.class: metal-reduced-full-runtime-pressure' "$ROOT/model-target-decision.out"
 grep 'candidate.3.status: ineligible-pressure-target' "$ROOT/model-target-decision.out"
-grep 'candidate.3.next: source manifest/provenance hardening' "$ROOT/model-target-decision.out"
+grep 'candidate.3.next: model-class profile' "$ROOT/model-target-decision.out"
 grep 'candidate.4.id: gemma-dense-portability' "$ROOT/model-target-decision.out"
 grep 'candidate.4.class: reduced-dense-full-runtime-pressure' "$ROOT/model-target-decision.out"
 grep 'candidate.4.status: ineligible-pressure-target' "$ROOT/model-target-decision.out"
-grep 'candidate.4.next: source manifest/provenance hardening' "$ROOT/model-target-decision.out"
+grep 'candidate.4.next: model-class profile' "$ROOT/model-target-decision.out"
 grep 'deepseek_pressure_status: selected-slice-pressure-only' "$ROOT/model-target-decision.out"
 grep 'glm_pressure_status: source-storage-pressure-only' "$ROOT/model-target-decision.out"
 grep 'qwen_metal_pressure_status: planned-portability-pressure-only' "$ROOT/model-target-decision.out"
