@@ -191,6 +191,10 @@ Current source/model-family commands include:
 ./yvex source-manifest report --family gemma --release v0.1.0 --audit
 ./yvex models download qwen3-8b --models-root "$HOME/lab/models" --auth auto --audit
 ./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --auth auto --audit
+./yvex models download --repo Qwen/Qwen3.6-35B-A3B --family qwen --name qwen3-6-35b-a3b --models-root "$HOME/lab/models" --auth auto --audit
+./yvex models download status qwen3-6-35b-a3b --models-root "$HOME/lab/models" --audit
+./yvex source-manifest report --family qwen --release v0.1.0 --source "$HOME/lab/models/hf/qwen/qwen3-6-35b-a3b" --models-root "$HOME/lab/models" --audit
+./yvex models prepare qwen3-6-35b-a3b --models-root "$HOME/lab/models" --dry-run --audit
 ```
 
 Detailed operator flow belongs in runbooks. Model Families owns architecture.
@@ -200,6 +204,13 @@ source-intake evidence. They do not verify upstream identity by themselves, hash
 payloads, load tensor payload bytes, emit GGUF, register runtime artifacts,
 materialize tensors, execute runtime paths, generate, evaluate, benchmark, or
 mark a release ready.
+
+Targets downloaded with `--repo ... --name ...` are downstream source targets
+when their download sidecars exist. Status, source reports, and prepare dry-runs
+use the downloaded target id, repository id, source path, source manifest, and
+native inventory sidecars instead of falling back to the static family profile.
+Prepare may still refuse artifact production until tensor mapping, model-class,
+and artifact paths exist.
 
 ## Qwen And Gemma Source Pressure
 
@@ -995,13 +1006,13 @@ This table records posture, not support claims.
 | --- | --- | --- | --- | --- |
 | DeepSeek | selected-slice pressure | sparse/MoE | selected embedding and embedding-plus-RMSNorm graph slices | full artifact, tensor role map, MoE runtime, output head, generation |
 | GLM | source/storage pressure | sparse/MoE | huge source/storage pressure reports | source completion, model-class, tensor map, artifact, storage/residency |
-| Qwen | backend-neutral source target | dense candidate / family-dependent | `qwen3-8b` target, Qwen model-class profile, and Qwen tensor collection inventory | tensor role map, artifact, backend/runtime |
-| Gemma | dense tensor-naming-map-profiled source target | dense candidate | `gemma-4-12b-it` target, Gemma model-class profile, Gemma tensor collection inventory, and dense tensor naming map | output-head mapping, artifact, runtime |
+| Qwen | output-head-map-profiled source target | dense candidate / family-dependent | `qwen3-8b` target, Qwen model-class profile, Qwen tensor collection inventory, Qwen tensor naming map, and output-head tensor mapping | tokenizer metadata map, artifact, backend/runtime |
+| Gemma | dense output-head-map-profiled source target | dense candidate | `gemma-4-12b-it` target, Gemma model-class profile, Gemma tensor collection inventory, dense tensor naming map, and output-head tensor mapping | tokenizer metadata map, artifact, runtime |
 | Phi/Llama/Mistral | candidate families | dense/sparse depending target | architectural candidates | no current source target |
 
 Current posture vocabulary includes `source-target-profiled`,
 `model-class-profiled`, `tensor-collection-profiled`,
-`dense tensor-naming-map-profiled`,
+`dense tensor-naming-map-profiled`, `output-head-map-profiled`,
 `source/storage-pressure`, `selected-slice-proof`, and `runtime-unsupported`.
 
 ## Support-Level Lattice

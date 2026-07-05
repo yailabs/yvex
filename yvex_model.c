@@ -1446,7 +1446,7 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.MAP.6,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
+        "V010.MAP.7,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
@@ -1474,7 +1474,7 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.MAP.6",
+        "V010.MAP.7",
         {
             "planned-dense-pressure-only",
             "missing-gemma-source-path",
@@ -1664,7 +1664,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,V010.MAP.6,COMPUTE.BACKEND.METAL.0",
+        "V010.TARGET.7,V010.MAP.7,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
@@ -1710,7 +1710,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,V010.MAP.6",
+        "V010.TARGET.7,V010.MAP.7",
         {
             "planned-dense-pressure-only",
             "missing-gemma-source-path",
@@ -1721,7 +1721,6 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
             "missing-gemma-tensor-role-map",
             "missing-gemma-tensor-map",
             "missing-gemma-tokenizer-map",
-            "missing-gemma-output-head-map",
             "missing-gemma-yvex-artifact",
             "missing-gemma-artifact-identity",
             "missing-gemma-real-prefill",
@@ -1733,7 +1732,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
             "missing-gemma-eval-path",
             "missing-gemma-benchmark-path",
         },
-        20,
+        19,
         1,
         0,
         0,
@@ -1786,7 +1785,6 @@ static const char *qwen_metal_blockers[] = {
     "missing-qwen-tensor-role-map",
     "missing-qwen-tensor-map",
     "missing-qwen-tokenizer-map",
-    "missing-qwen-output-head-map",
     "missing-qwen-yvex-artifact",
     "missing-qwen-artifact-identity",
     "missing-metal-hardware-profile",
@@ -1884,14 +1882,13 @@ static const yvex_qwen_metal_candidate_fact qwen_metal_candidate_facts[] = {
             "missing-qwen-source-config",
             "missing-qwen-tensor-role-map",
             "missing-qwen-tokenizer-map",
-            "missing-qwen-output-head-map",
             "missing-metal-backend-feasibility",
             "missing-metal-allocation-boundary",
             "missing-metal-graph-primitive-parity",
             "missing-real-kv-path",
             "missing-generation-loop-over-real-state",
         },
-        12,
+        11,
     },
 };
 
@@ -2009,9 +2006,10 @@ typedef enum {
     YVEX_MODEL_TARGET_OUTPUT_AUDIT
 } yvex_model_target_output_mode;
 
-#define YVEX_MODEL_CLASS_NEXT_ROW "V010.MAP.6"
-#define YVEX_TENSOR_COLLECTION_NEXT_ROW "V010.MAP.6"
-#define YVEX_TENSOR_NAMING_NEXT_ROW "V010.MAP.6"
+#define YVEX_MODEL_CLASS_NEXT_ROW "V010.MAP.7"
+#define YVEX_TENSOR_COLLECTION_NEXT_ROW "V010.MAP.7"
+#define YVEX_TENSOR_NAMING_NEXT_ROW "V010.MAP.7"
+#define YVEX_OUTPUT_HEAD_MAP_NEXT_ROW "V010.MAP.7"
 #define YVEX_TENSOR_COLLECTION_LAYER_CAP 512u
 #define YVEX_TENSOR_NAMING_ENTRY_CAP 1024u
 #define YVEX_TENSOR_NAMING_TEXT_CAP 192u
@@ -2197,6 +2195,42 @@ typedef struct {
     yvex_tensor_collection_layer_flags layers[YVEX_TENSOR_COLLECTION_LAYER_CAP];
     yvex_tensor_naming_entry entries[YVEX_TENSOR_NAMING_ENTRY_CAP];
 } yvex_tensor_naming_profile;
+
+typedef struct {
+    int present;
+    char native_name[YVEX_TENSOR_NAMING_TEXT_CAP];
+    char canonical_role[YVEX_TENSOR_NAMING_TEXT_CAP];
+    char dtype[24];
+    char rank[16];
+    char shape[128];
+    char vocab_dim_candidate[32];
+    char hidden_dim_candidate[32];
+    char source_file[YVEX_TENSOR_NAMING_TEXT_CAP];
+    const char *mapping_status;
+} yvex_output_head_map_entry;
+
+typedef struct {
+    const yvex_model_target_record *record;
+    const yvex_model_class_profile_spec *spec;
+    const char *status;
+    const char *source_metadata_status;
+    const char *top_blocker;
+    const char *tie_policy_status;
+    const char *config_tie_word_embeddings_status;
+    const char *shape_relation_status;
+    const char *output_head_missing_status;
+    char source_path[YVEX_PATH_CAP];
+    char source_path_source[32];
+    int source_exists;
+    int config_present;
+    int tokenizer_present;
+    unsigned long long tensor_count;
+    unsigned long long output_head_candidate_count;
+    unsigned long long output_head_ambiguous_count;
+    yvex_output_head_map_entry output_head;
+    yvex_output_head_map_entry embedding;
+    yvex_output_head_map_entry final_norm;
+} yvex_output_head_map_profile;
 
 static int model_class_name_contains_ci(const char *name, const char *needle)
 {
@@ -3765,6 +3799,389 @@ static void print_tensor_map_audit_hint(const yvex_model_target_record *record)
     printf("tensor_map_next: %s\n", YVEX_TENSOR_NAMING_NEXT_ROW);
 }
 
+static void print_output_head_map_audit_hint(const yvex_model_target_record *record)
+{
+    const yvex_model_class_profile_spec *spec;
+
+    if (!record) return;
+    spec = find_model_class_profile_spec(record->target_id);
+    if (!spec) return;
+    printf("output_head_map_status: not-run\n");
+    printf("output_head_map_family: %s\n", spec->family_key);
+    printf("output_head_map_target_id: %s\n", spec->target_id);
+    printf("output_head_map_stage: header-output-head-map\n");
+    printf("output_head_map_evidence_basis: header-metadata-only\n");
+    printf("output_head_map_next: %s\n", YVEX_OUTPUT_HEAD_MAP_NEXT_ROW);
+}
+
+static void output_head_map_entry_init(yvex_output_head_map_entry *entry)
+{
+    if (!entry) return;
+    memset(entry, 0, sizeof(*entry));
+    tensor_naming_copy(entry->native_name, sizeof(entry->native_name), "none");
+    tensor_naming_copy(entry->canonical_role, sizeof(entry->canonical_role), "none");
+    tensor_naming_copy(entry->dtype, sizeof(entry->dtype), "unknown");
+    tensor_naming_copy(entry->rank, sizeof(entry->rank), "unknown");
+    tensor_naming_copy(entry->shape, sizeof(entry->shape), "unknown");
+    tensor_naming_copy(entry->vocab_dim_candidate,
+                       sizeof(entry->vocab_dim_candidate), "unknown");
+    tensor_naming_copy(entry->hidden_dim_candidate,
+                       sizeof(entry->hidden_dim_candidate), "unknown");
+    tensor_naming_copy(entry->source_file, sizeof(entry->source_file), "none");
+    entry->mapping_status = "missing";
+}
+
+static void output_head_map_entry_from_info(
+    yvex_output_head_map_entry *entry,
+    const yvex_native_weight_info *info,
+    const char *canonical_role,
+    const char *mapping_status)
+{
+    if (!entry || !info) return;
+    entry->present = 1;
+    tensor_naming_copy(entry->native_name, sizeof(entry->native_name), info->name);
+    tensor_naming_copy(entry->canonical_role, sizeof(entry->canonical_role),
+                       canonical_role ? canonical_role : "none");
+    tensor_naming_copy(entry->dtype, sizeof(entry->dtype),
+                       info->dtype_name ? info->dtype_name : "unknown");
+    snprintf(entry->rank, sizeof(entry->rank), "%u", info->rank);
+    tensor_naming_shape_string(info, entry->shape, sizeof(entry->shape));
+    tensor_naming_copy(entry->source_file, sizeof(entry->source_file),
+                       info->shard_path ? info->shard_path : "none");
+    if (info->rank >= 1) {
+        snprintf(entry->vocab_dim_candidate,
+                 sizeof(entry->vocab_dim_candidate), "%llu", info->dims[0]);
+    }
+    if (info->rank >= 2) {
+        snprintf(entry->hidden_dim_candidate,
+                 sizeof(entry->hidden_dim_candidate), "%llu", info->dims[1]);
+    }
+    entry->mapping_status = mapping_status ? mapping_status : "mapped-candidate";
+}
+
+static int output_head_map_name_is_output(const char *name)
+{
+    return name &&
+           (strcmp(name, "lm_head.weight") == 0 ||
+            strcmp(name, "model.lm_head.weight") == 0 ||
+            strcmp(name, "output.weight") == 0 ||
+            strcmp(name, "model.output.weight") == 0 ||
+            strcmp(name, "output_head.weight") == 0 ||
+            strcmp(name, "model.output_head.weight") == 0);
+}
+
+static int output_head_map_name_is_embedding(const char *name)
+{
+    return name &&
+           (strcmp(name, "model.embed_tokens.weight") == 0 ||
+            strcmp(name, "embed_tokens.weight") == 0 ||
+            strcmp(name, "token_embd.weight") == 0 ||
+            strcmp(name, "tok_embeddings.weight") == 0 ||
+            strcmp(name, "embeddings.weight") == 0);
+}
+
+static int output_head_map_name_is_final_norm(const char *name)
+{
+    return name &&
+           (strcmp(name, "model.norm.weight") == 0 ||
+            strcmp(name, "norm.weight") == 0 ||
+            strcmp(name, "final_norm.weight") == 0 ||
+            strcmp(name, "model.final_norm.weight") == 0);
+}
+
+static int output_head_map_same_shape(const yvex_output_head_map_entry *a,
+                                      const yvex_output_head_map_entry *b)
+{
+    return a && b && a->present && b->present &&
+           strcmp(a->rank, b->rank) == 0 &&
+           strcmp(a->shape, b->shape) == 0;
+}
+
+static int output_head_map_transposed_shape(
+    const yvex_output_head_map_entry *a,
+    const yvex_output_head_map_entry *b)
+{
+    unsigned long long a0;
+    unsigned long long a1;
+    unsigned long long b0;
+    unsigned long long b1;
+    char extra;
+
+    if (!a || !b || !a->present || !b->present) return 0;
+    if (strcmp(a->rank, "2") != 0 || strcmp(b->rank, "2") != 0) return 0;
+    if (sscanf(a->shape, "%llux%llu%c", &a0, &a1, &extra) != 2) return 0;
+    if (sscanf(b->shape, "%llux%llu%c", &b0, &b1, &extra) != 2) return 0;
+    return a0 == b1 && a1 == b0;
+}
+
+static const char *output_head_map_shape_relation(
+    const yvex_output_head_map_profile *profile)
+{
+    if (!profile || !profile->output_head.present || !profile->embedding.present) {
+        return "unknown";
+    }
+    if (output_head_map_same_shape(&profile->output_head, &profile->embedding)) {
+        return "compatible-same-shape";
+    }
+    if (output_head_map_transposed_shape(&profile->output_head,
+                                         &profile->embedding)) {
+        return "compatible-transposed";
+    }
+    return "mismatch";
+}
+
+static int build_output_head_map_profile(
+    const yvex_model_target_record *record,
+    const char *models_root_override,
+    const char *source_override,
+    yvex_output_head_map_profile *profile)
+{
+    const yvex_model_class_profile_spec *spec;
+    yvex_model_class_profile source_profile;
+    yvex_native_weight_table *table = NULL;
+    yvex_native_weight_options options;
+    yvex_error err;
+    unsigned long long i;
+    int rc;
+
+    if (!record || !profile) return 2;
+    spec = find_model_class_profile_spec(record->target_id);
+    if (!spec) return 2;
+
+    memset(profile, 0, sizeof(*profile));
+    profile->record = record;
+    profile->spec = spec;
+    profile->status = "source-missing";
+    profile->source_metadata_status = "missing";
+    profile->top_blocker = spec->missing_source_blocker;
+    profile->tie_policy_status = "unknown";
+    profile->config_tie_word_embeddings_status = "unknown";
+    profile->shape_relation_status = "unknown";
+    profile->output_head_missing_status = "missing";
+    output_head_map_entry_init(&profile->output_head);
+    output_head_map_entry_init(&profile->embedding);
+    output_head_map_entry_init(&profile->final_norm);
+
+    rc = model_class_build_profile(record, spec, models_root_override,
+                                   source_override, &source_profile);
+    if (rc != 0) return rc;
+    snprintf(profile->source_path, sizeof(profile->source_path), "%s",
+             source_profile.source_path);
+    snprintf(profile->source_path_source, sizeof(profile->source_path_source),
+             "%s", source_profile.source_path_source);
+    profile->source_exists = source_profile.source_exists;
+    profile->config_present = source_profile.config_present;
+    profile->tokenizer_present = source_profile.tokenizer_present;
+    if (!profile->source_exists) return 0;
+
+    memset(&options, 0, sizeof(options));
+    options.source_dir = profile->source_path;
+    options.recursive = 0;
+    options.include_metadata = 0;
+    yvex_error_clear(&err);
+    rc = yvex_native_weight_table_open(&table, &options, &err);
+    if (rc != YVEX_OK) {
+        profile->status = "metadata-missing";
+        profile->source_metadata_status = "header-error";
+        profile->top_blocker = tensor_naming_header_blocker(spec);
+        return rc == YVEX_ERR_NOMEM ? 3 : 0;
+    }
+
+    profile->tensor_count = yvex_native_weight_table_count(table);
+    for (i = 0; i < profile->tensor_count; ++i) {
+        const yvex_native_weight_info *info =
+            yvex_native_weight_table_at(table, i);
+
+        if (!info || !info->name) continue;
+        if (output_head_map_name_is_output(info->name)) {
+            profile->output_head_candidate_count++;
+            if (!profile->output_head.present) {
+                output_head_map_entry_from_info(
+                    &profile->output_head,
+                    info,
+                    "model.output_head.weight",
+                    "mapped-candidate");
+            }
+        } else if (!profile->embedding.present &&
+                   output_head_map_name_is_embedding(info->name)) {
+            output_head_map_entry_from_info(
+                &profile->embedding,
+                info,
+                "model.embedding.token.weight",
+                "mapped-candidate");
+        } else if (!profile->final_norm.present &&
+                   output_head_map_name_is_final_norm(info->name)) {
+            output_head_map_entry_from_info(
+                &profile->final_norm,
+                info,
+                "model.final_norm.weight",
+                "mapped-candidate");
+        }
+    }
+    yvex_native_weight_table_close(table);
+
+    profile->source_metadata_status =
+        profile->tensor_count > 0 ? "header-only" : "no-safetensors";
+    if (profile->tensor_count == 0) {
+        profile->status = "metadata-missing";
+        profile->top_blocker = tensor_naming_header_blocker(spec);
+    } else if (profile->output_head_candidate_count == 0) {
+        profile->status = "output-head-missing";
+        profile->top_blocker = "missing-output-head-tensor";
+        profile->output_head_missing_status = "missing";
+    } else if (profile->output_head_candidate_count > 1) {
+        profile->status = "output-head-ambiguous";
+        profile->top_blocker = "ambiguous-output-head-tensor";
+        profile->output_head_ambiguous_count = 1;
+        profile->output_head.mapping_status = "ambiguous";
+        profile->output_head_missing_status = "ambiguous";
+        profile->shape_relation_status = output_head_map_shape_relation(profile);
+    } else {
+        profile->status = "output-head-profiled";
+        profile->top_blocker = "missing-output-head-runtime-consumer";
+        profile->output_head_missing_status = "present";
+        profile->tie_policy_status = "separate-output-head-candidate";
+        profile->shape_relation_status = output_head_map_shape_relation(profile);
+    }
+    return 0;
+}
+
+static const char *output_head_map_present_label(
+    const yvex_output_head_map_entry *entry)
+{
+    return entry && entry->present ? "yes" : "no";
+}
+
+static const char *output_head_map_normal_role(
+    const yvex_output_head_map_entry *entry)
+{
+    return entry && entry->present ? entry->canonical_role : "missing";
+}
+
+static void print_output_head_map_normal(
+    const yvex_output_head_map_profile *profile)
+{
+    printf("output-head-map: %s\n", profile->spec->family_key);
+    printf("target: %s\n", profile->record->target_id);
+    printf("status: %s\n", profile->status);
+    printf("stage: header-output-head-map\n");
+    printf("evidence: header-metadata-only\n");
+    printf("output_head: %s\n",
+           output_head_map_normal_role(&profile->output_head));
+    if (profile->output_head.present) {
+        printf("native_output_head: %s\n", profile->output_head.native_name);
+    }
+    printf("final_norm: %s\n",
+           output_head_map_normal_role(&profile->final_norm));
+    printf("embedding: %s\n",
+           output_head_map_normal_role(&profile->embedding));
+    printf("tie_policy: %s\n", profile->tie_policy_status);
+    printf("shape_relation: %s\n", profile->shape_relation_status);
+    printf("top_blocker: %s\n", profile->top_blocker);
+    printf("next: %s\n", YVEX_OUTPUT_HEAD_MAP_NEXT_ROW);
+    printf("boundary: output-head tensor mapping only; no logits/runtime/generation\n");
+}
+
+static void print_output_head_map_table(
+    const yvex_output_head_map_profile *profile)
+{
+    printf("OUTPUT HEAD TENSOR MAP\n\n");
+    printf("%-6s  %-15s  %-26s  %-4s  %-10s  %-5s  %-34s  %-24s  %s\n",
+           "FAMILY", "TARGET", "STATUS", "HEAD", "FINAL_NORM", "EMBED",
+           "TIE_POLICY", "SHAPE_RELATION", "NEXT");
+    printf("%-6s  %-15s  %-26s  %-4s  %-10s  %-5s  %-34s  %-24s  %s\n",
+           profile->spec->family_key,
+           profile->record->target_id,
+           profile->status,
+           output_head_map_present_label(&profile->output_head),
+           output_head_map_present_label(&profile->final_norm),
+           output_head_map_present_label(&profile->embedding),
+           profile->tie_policy_status,
+           profile->shape_relation_status,
+           YVEX_OUTPUT_HEAD_MAP_NEXT_ROW);
+}
+
+static void print_output_head_entry_audit(
+    const char *name,
+    const yvex_output_head_map_entry *entry)
+{
+    printf("output_head.entry.%s.native_name: %s\n", name, entry->native_name);
+    printf("output_head.entry.%s.canonical_role: %s\n",
+           name, entry->canonical_role);
+    printf("output_head.entry.%s.mapping_status: %s\n",
+           name, entry->mapping_status);
+    printf("output_head.entry.%s.dtype: %s\n", name, entry->dtype);
+    printf("output_head.entry.%s.rank: %s\n", name, entry->rank);
+    printf("output_head.entry.%s.shape: %s\n", name, entry->shape);
+    printf("output_head.entry.%s.source_file: %s\n", name, entry->source_file);
+}
+
+static void print_output_head_map_audit(
+    const yvex_output_head_map_profile *profile)
+{
+    printf("output_head_map_status: %s\n", profile->status);
+    printf("output_head_map_family: %s\n", profile->spec->family_key);
+    printf("output_head_map_target_id: %s\n", profile->record->target_id);
+    printf("output_head_map_stage: header-output-head-map\n");
+    printf("output_head_map_evidence_basis: header-metadata-only\n");
+    printf("output_head_map_source_status: %s\n",
+           profile->source_exists ? "present" : "missing");
+    printf("output_head_map_source_path: %s\n", profile->source_path);
+    printf("output_head_map_manifest_status: not-checked\n");
+    printf("output_head_map_config_status: %s\n",
+           profile->config_present ? "present" : "missing");
+    printf("output_head_map_tokenizer_status: %s\n",
+           profile->tokenizer_present ? "present" : "missing");
+    printf("output_head_native_name: %s\n", profile->output_head.native_name);
+    printf("output_head_canonical_role: %s\n",
+           profile->output_head.canonical_role);
+    printf("output_head_mapping_status: %s\n",
+           profile->output_head.mapping_status);
+    printf("output_head_candidate_count: %llu\n",
+           profile->output_head_candidate_count);
+    printf("output_head_ambiguous_count: %llu\n",
+           profile->output_head_ambiguous_count);
+    printf("output_head_missing_status: %s\n",
+           profile->output_head_missing_status);
+    printf("output_head_dtype: %s\n", profile->output_head.dtype);
+    printf("output_head_rank: %s\n", profile->output_head.rank);
+    printf("output_head_shape: %s\n", profile->output_head.shape);
+    printf("output_head_vocab_dim_candidate: %s\n",
+           profile->output_head.vocab_dim_candidate);
+    printf("output_head_hidden_dim_candidate: %s\n",
+           profile->output_head.hidden_dim_candidate);
+    printf("embedding_native_name: %s\n", profile->embedding.native_name);
+    printf("embedding_canonical_role: %s\n", profile->embedding.canonical_role);
+    printf("embedding_dtype: %s\n", profile->embedding.dtype);
+    printf("embedding_rank: %s\n", profile->embedding.rank);
+    printf("embedding_shape: %s\n", profile->embedding.shape);
+    printf("final_norm_native_name: %s\n", profile->final_norm.native_name);
+    printf("final_norm_canonical_role: %s\n",
+           profile->final_norm.canonical_role);
+    printf("final_norm_dtype: %s\n", profile->final_norm.dtype);
+    printf("final_norm_rank: %s\n", profile->final_norm.rank);
+    printf("final_norm_shape: %s\n", profile->final_norm.shape);
+    printf("tie_policy_status: %s\n", profile->tie_policy_status);
+    printf("config_tie_word_embeddings_status: %s\n",
+           profile->config_tie_word_embeddings_status);
+    printf("shape_relation_status: %s\n", profile->shape_relation_status);
+    printf("output_head_runtime_consumer_status: not-implemented\n");
+    printf("output_head_logits_status: not-implemented\n");
+    printf("output_head_artifact_contract_status: not-implemented\n");
+    printf("output_head_runtime_descriptor_status: not-implemented\n");
+    printf("output_head_graph_consumer_status: not-implemented\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    printf("top_blocker: %s\n", profile->top_blocker);
+    printf("next_required_rows: %s\n", YVEX_OUTPUT_HEAD_MAP_NEXT_ROW);
+    print_output_head_entry_audit("output", &profile->output_head);
+    print_output_head_entry_audit("embedding", &profile->embedding);
+    print_output_head_entry_audit("final_norm", &profile->final_norm);
+    printf("boundary: output-head tensor mapping only; no logits/runtime/generation\n");
+}
+
 static const char *target_decision_candidate_class(const yvex_model_target_record *record)
 {
     if (!record) return "unknown";
@@ -4897,7 +5314,7 @@ static void print_model_target_usage(FILE *fp)
     fprintf(fp, "       yvex model-target decision --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target class-profile TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target tensor-collection TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
-    fprintf(fp, "       yvex model-target tensor-map TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
+    fprintf(fp, "       yvex model-target tensor-map TARGET [--role output-head] [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR] [--audit | --output normal|table|audit]\n");
 }
 
@@ -4935,6 +5352,10 @@ void yvex_model_target_help(FILE *fp)
     fprintf(fp, "  yvex model-target tensor-map qwen3-8b --audit\n");
     fprintf(fp, "  yvex model-target tensor-map gemma-4-12b-it --audit\n");
     fprintf(fp, "  The tensor naming map reads safetensors headers only and assigns native source tensor names to canonical YVEX role labels. It does not complete runtime role coverage, build runtime descriptors, emit artifacts, materialize tensors, feed graph consumers, execute the model, generate, evaluate, benchmark, or mark a release ready.\n");
+    fprintf(fp, "\nOutput-head tensor map:\n");
+    fprintf(fp, "  yvex model-target tensor-map qwen3-8b --role output-head --audit\n");
+    fprintf(fp, "  yvex model-target tensor-map gemma-4-12b-it --role output-head --audit\n");
+    fprintf(fp, "  The output-head tensor map reads safetensors headers only and identifies output-head, final-norm, and embedding candidates. It does not compute logits, complete runtime descriptors, feed graph consumers, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "\nDefault output is compact. Use --audit for full diagnostic fields.\n");
     fprintf(fp, "Model targets are pressure objects, not capability claims.\n");
     fprintf(fp, "External GGUFs and external runners are reference evidence only.\n");
@@ -5319,6 +5740,7 @@ static void print_model_target_list(void)
         print_model_class_audit_hint(record);
         print_tensor_collection_audit_hint(record);
         print_tensor_map_audit_hint(record);
+        print_output_head_map_audit_hint(record);
         printf("runtime_shape: %s\n", model_target_runtime_shape(record));
         printf("backend_selection: %s\n", model_target_backend_selection(record));
         printf("backend_pressure: %s\n", model_target_backend_pressure(record));
@@ -5399,6 +5821,7 @@ static void print_model_target_record(const yvex_model_target_record *record)
     print_model_class_audit_hint(record);
     print_tensor_collection_audit_hint(record);
     print_tensor_map_audit_hint(record);
+    print_output_head_map_audit_hint(record);
     printf("target_artifact_class: %s\n", record->target_artifact_class);
     printf("target_artifact_status: %s\n", model_target_target_artifact_status(record));
     printf("target_artifact_origin: %s\n", model_target_target_artifact_origin(record));
@@ -6247,8 +6670,10 @@ int yvex_model_target_command(int argc, char **argv)
     if (strcmp(argv[2], "tensor-map") == 0) {
         const char *target_id = NULL;
         const char *source = NULL;
+        const char *role = NULL;
         const yvex_model_class_profile_spec *spec;
         yvex_tensor_naming_profile profile;
+        yvex_output_head_map_profile output_head_profile;
         int rc;
 
         output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
@@ -6291,6 +6716,17 @@ int yvex_model_target_command(int argc, char **argv)
                     return 2;
                 }
                 source = argv[++i];
+            } else if (strcmp(argv[i], "--role") == 0) {
+                if (i + 1 >= argc || argv[i + 1][0] == '\0') {
+                    fprintf(stderr, "model-target tensor-map: --role requires output-head\n");
+                    return 2;
+                }
+                role = argv[++i];
+                if (strcmp(role, "output-head") != 0) {
+                    fprintf(stderr, "model-target tensor-map: unsupported role: %s\n",
+                            role);
+                    return 2;
+                }
             } else if (strcmp(argv[i], "--json") == 0) {
                 fprintf(stderr, "model-target tensor-map: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
@@ -6298,6 +6734,21 @@ int yvex_model_target_command(int argc, char **argv)
                 fprintf(stderr, "model-target tensor-map: unknown option: %s\n", argv[i]);
                 return 2;
             }
+        }
+        if (role && strcmp(role, "output-head") == 0) {
+            rc = build_output_head_map_profile(record, models_root, source,
+                                               &output_head_profile);
+            if (rc != 0) {
+                return rc;
+            }
+            if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+                print_output_head_map_table(&output_head_profile);
+            } else if (output_mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+                print_output_head_map_audit(&output_head_profile);
+            } else {
+                print_output_head_map_normal(&output_head_profile);
+            }
+            return 0;
         }
         rc = build_tensor_naming_profile(record, models_root, source, &profile);
         if (rc != 0) {

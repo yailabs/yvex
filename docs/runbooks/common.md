@@ -91,6 +91,9 @@ make
 ./yvex model-target tensor-map qwen3-8b
 ./yvex model-target tensor-map qwen3-8b --output table
 ./yvex model-target tensor-map qwen3-8b --audit
+./yvex model-target tensor-map qwen3-8b --role output-head
+./yvex model-target tensor-map qwen3-8b --role output-head --output table
+./yvex model-target tensor-map qwen3-8b --role output-head --audit
 ./yvex model-target inspect gemma-4-12b-it
 ./yvex model-target inspect gemma-4-12b-it --paths
 ./yvex model-target class-profile gemma-4-12b-it
@@ -102,6 +105,9 @@ make
 ./yvex model-target tensor-map gemma-4-12b-it
 ./yvex model-target tensor-map gemma-4-12b-it --output table
 ./yvex model-target tensor-map gemma-4-12b-it --audit
+./yvex model-target tensor-map gemma-4-12b-it --role output-head
+./yvex model-target tensor-map gemma-4-12b-it --role output-head --output table
+./yvex model-target tensor-map gemma-4-12b-it --role output-head --audit
 ./yvex model-target decision --help
 ./yvex model-target decision --release v0.1.0 --output table
 ./yvex model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
@@ -164,6 +170,13 @@ naming map for Gemma source tensors. It assigns native names to canonical YVEX
 dense role-label candidates without payload loading, artifact emission, runtime
 descriptor construction, graph consumption, CUDA runtime support, generation,
 evaluation, or benchmark claims.
+
+`model-target tensor-map TARGET --role output-head` is a header-derived
+output-head map for Qwen and Gemma source tensors. It identifies output-head,
+final-norm, and embedding candidates, reports missing or ambiguous output-head
+status, and checks header-shape relation where available. It does not compute
+logits, produce final hidden state, emit artifacts, build runtime descriptors,
+feed graph consumers, generate, evaluate, or benchmark.
 
 ## Lane 1 — Graph-only regression
 
@@ -411,6 +424,10 @@ Boundary:
 ./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --auth auto --audit
 ./yvex models download gemma-4-31b-it --models-root "$HOME/lab/models" --auth auto --audit
 ./yvex models download qwen3-8b --models-root "$HOME/lab/models" --auth auto --audit
+./yvex models download --repo Qwen/Qwen3.6-35B-A3B --family qwen --name qwen3-6-35b-a3b --models-root "$HOME/lab/models" --auth auto --audit
+./yvex models download status qwen3-6-35b-a3b --models-root "$HOME/lab/models" --audit
+./yvex source-manifest report --family qwen --release v0.1.0 --source "$HOME/lab/models/hf/qwen/qwen3-6-35b-a3b" --models-root "$HOME/lab/models" --audit
+./yvex models prepare qwen3-6-35b-a3b --models-root "$HOME/lab/models" --dry-run --audit
 ./yvex models download --provider github --repo OWNER/REPO --release TAG --asset "*.gguf" --models-root "$HOME/lab/models" --auth auto --audit
 ./yvex source-manifest report --family gemma --release v0.1.0 --audit
 ./yvex source-manifest report --family qwen --release v0.1.0 --audit
@@ -602,6 +619,7 @@ Boundary:
 - `source-manifest report`: native safetensors inventory reads safetensors headers only; payload bytes are not loaded, malformed headers are reported, and header inventory is not runtime readiness
 - `source-manifest report`: source tensor metadata inventory derives tensor names, file placement, dtype, rank, shape, byte spans, distributions, and lexical name-pattern summaries from safetensors headers only; it does not load payloads, map runtime roles, infer model classes, or imply runtime readiness
 - `source-manifest report`: source manifest/provenance hardening reports manifest expectation, path/status, shallow schema/family/target consistency, and no-create/no-remote/no-hash/no-payload boundaries; it does not prove source readiness
+- `models download --repo ... --name ...`: downloaded target sidecars become the source identity for `models download status`, `source-manifest report --source`, and `models prepare --dry-run --audit`; this fixes target naming only and does not create GGUF/runtime support
 - `tensor-map`: source intake lanes
 - `tokenize`: fast regression lane
 - `tokenizer`: fast regression lane
