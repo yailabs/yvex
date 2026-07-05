@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 #include <stdint.h>
 #include <limits.h>
+#include <unistd.h>
 
 
 typedef struct {
@@ -723,6 +724,8 @@ typedef struct {
     const char *source;
     const char *target;
     const yvex_source_family_profile *profile;
+    char resolved_target[128];
+    char resolved_model[128];
     int include_files;
     int include_config;
     int include_blockers;
@@ -750,6 +753,24 @@ typedef struct {
     const char *source_state;
     const char *top_blocker;
     const char *next_row;
+    char identity_target_id[128];
+    char identity_model[128];
+    char identity_family[32];
+    char identity_repo_id[256];
+    char identity_revision[128];
+    char identity_local_source_dir[YVEX_PATH_CAP];
+    char download_registry_path[YVEX_PATH_CAP];
+    char download_report_path[YVEX_PATH_CAP];
+    char tensor_map_path[YVEX_PATH_CAP];
+    char output_head_map_path[YVEX_PATH_CAP];
+    int download_registry_exists;
+    int download_report_exists;
+    int tensor_map_exists;
+    int output_head_map_exists;
+    int tensor_map_incomplete;
+    int output_head_map_missing;
+    int source_identity_from_path;
+    int source_identity_from_download_sidecar;
     char source_path[YVEX_PATH_CAP];
     char source_path_source[64];
     char manifest_path[YVEX_PATH_CAP];
@@ -919,6 +940,12 @@ static int qwen_source_target_is_supported(const yvex_source_family_profile *pro
     if (!profile || !target) {
         return 0;
     }
+    if ((strcmp(profile->family_key, "qwen") == 0 &&
+         strncmp(target, "qwen", 4) == 0) ||
+        (strcmp(profile->family_key, "gemma") == 0 &&
+         strncmp(target, "gemma", 5) == 0)) {
+        return 1;
+    }
     if (strcmp(profile->family_key, "qwen") == 0) {
         return strcmp(target, "qwen3-8b") == 0 ||
                strcmp(target, "qwen-small") == 0 ||
@@ -945,6 +972,215 @@ static int qwen_source_path_format(char *out, size_t cap, const char *fmt,
         return 0;
     }
     return 1;
+}
+
+static const char *qwen_source_path_basename(const char *path)
+{
+    const char *slash;
+
+    if (!path || !path[0]) return NULL;
+    slash = strrchr(path, '/');
+    return slash && slash[1] ? slash + 1 : path;
+}
+
+static int qwen_source_target_matches_family_name(const char *family,
+                                                  const char *target)
+{
+    if (!family || !target) return 0;
+    if (strcmp(family, "qwen") == 0) {
+        return strncmp(target, "qwen", 4) == 0;
+    }
+    if (strcmp(family, "gemma") == 0) {
+        return strncmp(target, "gemma", 5) == 0;
+    }
+    return 0;
+}
+
+static int qwen_source_read_small_file(const char *path, char *buf, size_t cap)
+{
+    FILE *fp;
+    size_t got;
+
+    if (!path || !buf || cap == 0u) return 0;
+    buf[0] = '\0';
+    fp = fopen(path, "rb");
+    if (!fp) return 0;
+    got = fread(buf, 1u, cap - 1u, fp);
+    buf[got] = '\0';
+    fclose(fp);
+    return 1;
+}
+
+static int qwen_source_json_string_field(const char *text,
+                                         const char *key,
+                                         char *out,
+                                         size_t cap)
+{
+    char needle[96];
+    const char *p;
+    const char *q;
+    size_t len;
+
+    if (out && cap > 0u) out[0] = '\0';
+    if (!text || !key || !out || cap == 0u) return 0;
+    snprintf(needle, sizeof(needle), "\"%s\"", key);
+    p = strstr(text, needle);
+    if (!p) return 0;
+    p = strchr(p, ':');
+    if (!p) return 0;
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '"') return 0;
+    p++;
+    q = strchr(p, '"');
+    if (!q) return 0;
+    len = (size_t)(q - p);
+    if (len >= cap) len = cap - 1u;
+    memcpy(out, p, len);
+    out[len] = '\0';
+    return 1;
+}
+
+static int qwen_source_json_u64_field(const char *text,
+                                      const char *key,
+                                      unsigned long long *out)
+{
+    char needle[96];
+    const char *p;
+    unsigned long long value = 0;
+    int seen = 0;
+
+    if (out) *out = 0;
+    if (!text || !key || !out) return 0;
+    snprintf(needle, sizeof(needle), "\"%s\"", key);
+    p = strstr(text, needle);
+    if (!p) return 0;
+    p = strchr(p, ':');
+    if (!p) return 0;
+    p++;
+    while (*p && isspace((unsigned char)*p)) p++;
+    while (*p && isdigit((unsigned char)*p)) {
+        value = value * 10ull + (unsigned long long)(*p - '0');
+        seen = 1;
+        p++;
+    }
+    if (!seen) return 0;
+    *out = value;
+    return 1;
+}
+
+static const char *qwen_source_repo_basename(const char *repo)
+{
+    const char *slash = repo ? strrchr(repo, '/') : NULL;
+    return slash && slash[1] ? slash + 1 : repo;
+}
+
+static void qwen_source_copy_model_display(char *out,
+                                           size_t cap,
+                                           const char *family,
+                                           const char *model_name)
+{
+    if (!out || cap == 0u) return;
+    out[0] = '\0';
+    if (!model_name || !model_name[0]) return;
+    snprintf(out, cap, "%s", model_name);
+    if (family && strcmp(family, "gemma") == 0 &&
+        strncmp(out, "gemma-", 6) == 0) {
+        out[0] = 'G';
+    }
+}
+
+static const char *qwen_source_model_name(const yvex_qwen_source_report_options *options,
+                                          const yvex_qwen_source_pressure_report *report)
+{
+    if (report && report->identity_model[0]) return report->identity_model;
+    if (options && options->resolved_model[0]) return options->resolved_model;
+    return options && options->profile ? options->profile->model : "unknown";
+}
+
+static int qwen_source_probe_download_identity_file(
+    const char *path,
+    const char *target,
+    const char *family,
+    yvex_qwen_source_pressure_report *report)
+{
+    char buf[YVEX_SOURCE_MANIFEST_PROBE_CAP + 1u];
+    char parsed_target[128];
+    char parsed_family[32];
+    char repo_id[256];
+    char revision[128];
+    char source_dir[YVEX_PATH_CAP];
+    const char *model_name;
+
+    if (!path || !path[0] || !target || !family || !report) return 0;
+    if (access(path, F_OK) != 0) return 0;
+    if (!qwen_source_read_small_file(path, buf, sizeof(buf))) return 0;
+
+    memset(parsed_target, 0, sizeof(parsed_target));
+    memset(parsed_family, 0, sizeof(parsed_family));
+    memset(repo_id, 0, sizeof(repo_id));
+    memset(revision, 0, sizeof(revision));
+    memset(source_dir, 0, sizeof(source_dir));
+    qwen_source_json_string_field(buf, "target_id", parsed_target,
+                                  sizeof(parsed_target));
+    if (parsed_target[0] && strcmp(parsed_target, target) != 0) return 0;
+    qwen_source_json_string_field(buf, "family", parsed_family,
+                                  sizeof(parsed_family));
+    if (parsed_family[0] && strcmp(parsed_family, family) != 0) return 0;
+    qwen_source_json_string_field(buf, "repo_id", repo_id, sizeof(repo_id));
+    if (!repo_id[0]) {
+        qwen_source_json_string_field(buf, "repo", repo_id, sizeof(repo_id));
+    }
+    qwen_source_json_string_field(buf, "revision", revision, sizeof(revision));
+    qwen_source_json_string_field(buf, "local_source_dir", source_dir,
+                                  sizeof(source_dir));
+    if (!source_dir[0]) {
+        qwen_source_json_string_field(buf, "path", source_dir, sizeof(source_dir));
+    }
+
+    snprintf(report->identity_target_id, sizeof(report->identity_target_id), "%s",
+             parsed_target[0] ? parsed_target : target);
+    snprintf(report->identity_family, sizeof(report->identity_family), "%s",
+             parsed_family[0] ? parsed_family : family);
+    snprintf(report->identity_repo_id, sizeof(report->identity_repo_id), "%s",
+             repo_id[0] ? repo_id : "unknown");
+    snprintf(report->identity_revision, sizeof(report->identity_revision), "%s",
+             revision[0] ? revision : "main");
+    if (source_dir[0]) {
+        snprintf(report->identity_local_source_dir,
+                 sizeof(report->identity_local_source_dir), "%s", source_dir);
+    }
+    model_name = qwen_source_repo_basename(repo_id);
+    if (model_name && model_name[0]) {
+        qwen_source_copy_model_display(report->identity_model,
+                                       sizeof(report->identity_model),
+                                       family,
+                                       model_name);
+    }
+    report->source_identity_from_download_sidecar = 1;
+    return 1;
+}
+
+static void qwen_source_probe_map_sidecars(yvex_qwen_source_pressure_report *report)
+{
+    char buf[YVEX_SOURCE_MANIFEST_PROBE_CAP + 1u];
+    char status[64];
+    unsigned long long unmapped = 0;
+
+    if (!report) return;
+    if (report->tensor_map_exists &&
+        qwen_source_read_small_file(report->tensor_map_path, buf, sizeof(buf)) &&
+        qwen_source_json_u64_field(buf, "unmapped_unknown_count", &unmapped) &&
+        unmapped > 0ull) {
+        report->tensor_map_incomplete = 1;
+    }
+    if (report->output_head_map_exists &&
+        qwen_source_read_small_file(report->output_head_map_path, buf, sizeof(buf)) &&
+        qwen_source_json_string_field(buf, "output_head_status", status,
+                                      sizeof(status)) &&
+        strcmp(status, "present") != 0) {
+        report->output_head_map_missing = 1;
+    }
 }
 
 static int qwen_source_stat_kind(const char *path, int want_dir)
@@ -1617,6 +1853,23 @@ static void qwen_source_choose_report_file(char *out, size_t cap,
     }
 
     if (reports_root && reports_root[0] != '\0') {
+        {
+            char target_prefix[YVEX_PATH_CAP];
+
+            n = snprintf(target_prefix, sizeof(target_prefix), "%s/%s/%s",
+                         reports_root, profile->family_key, target);
+            if (n >= 0 && (size_t)n < sizeof(target_prefix) &&
+                qwen_source_path_format(candidate, sizeof(candidate), "%s.%s",
+                                        target_prefix,
+                                        strcmp(kind, "manifest") == 0
+                                            ? "source-manifest.json"
+                                            : "native-inventory.json") &&
+                qwen_source_stat_kind(candidate, 0)) {
+                snprintf(out, cap, "%s", candidate);
+                if (out_exists) *out_exists = 1;
+                return;
+            }
+        }
         n = snprintf(file_name, sizeof(file_name), "%s-%s",
                      profile->family_key,
                      strcmp(kind, "manifest") == 0
@@ -1633,24 +1886,13 @@ static void qwen_source_choose_report_file(char *out, size_t cap,
             if (out_exists) *out_exists = 1;
             return;
         }
-        {
-            char target_prefix[YVEX_PATH_CAP];
-
-            n = snprintf(target_prefix, sizeof(target_prefix), "%s/%s/%s",
-                         reports_root, profile->family_key, target);
-            if (n >= 0 && (size_t)n < sizeof(target_prefix) &&
-                qwen_source_path_format(candidate, sizeof(candidate), "%s-%s",
-                                        target_prefix,
-                                        strcmp(kind, "manifest") == 0
-                                            ? "source-manifest.json"
-                                            : "native-inventory.json") &&
-                qwen_source_stat_kind(candidate, 0)) {
-                snprintf(out, cap, "%s", candidate);
-                if (out_exists) *out_exists = 1;
-                return;
-            }
-        }
-        n = snprintf(out, cap, "%s/%s/%s", reports_root, profile->family_key, file_name);
+        n = snprintf(out, cap, "%s/%s/%s.%s",
+                     reports_root,
+                     profile->family_key,
+                     target,
+                     strcmp(kind, "manifest") == 0
+                         ? "source-manifest.json"
+                         : "native-inventory.json");
         if (n < 0 || (size_t)n >= cap) {
             out[cap - 1] = '\0';
         }
@@ -1830,6 +2072,34 @@ static const char *qwen_source_native_inventory_report_status(
     return report && report->native_inventory_exists ? "available-report-only" : "missing";
 }
 
+static const char *qwen_source_tensor_map_report_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    if (!report || !report->tensor_map_exists) return "missing";
+    return report->tensor_map_incomplete ? "incomplete-report-only" : "available-report-only";
+}
+
+static const char *qwen_source_tensor_role_map_report_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    if (!report || !report->tensor_map_exists) return "missing";
+    return report->tensor_map_incomplete ? "incomplete-report-only" : "available-report-only";
+}
+
+static const char *qwen_source_output_head_map_report_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    if (!report || !report->output_head_map_exists) return "missing";
+    return report->output_head_map_missing ? "missing-in-report" : "available-report-only";
+}
+
+static int qwen_source_tail_blocker_is_tensor_map(const char *blocker)
+{
+    return blocker &&
+           (strstr(blocker, "tensor-role-map") != NULL ||
+            strstr(blocker, "tensor-map") != NULL);
+}
+
 static const char *qwen_source_native_inventory_status(
     const yvex_qwen_source_pressure_report *report)
 {
@@ -2004,6 +2274,21 @@ static const char *qwen_source_provenance_status(
         return "missing";
     }
     return "local-unverified";
+}
+
+static const char *qwen_source_identity_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    if (!report || !report->source_exists) {
+        return "not-present";
+    }
+    if (report->source_identity_from_download_sidecar) {
+        return "download-sidecar";
+    }
+    if (report->source_identity_from_path) {
+        return "inferred-from-path";
+    }
+    return "not-verified";
 }
 
 static const char *qwen_source_authority(const yvex_qwen_source_pressure_report *report)
@@ -2195,6 +2480,81 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
         snprintf(report->source_path_source, sizeof(report->source_path_source),
                  "%s", operator_paths.models_root_source);
     }
+    snprintf(report->identity_target_id, sizeof(report->identity_target_id),
+             "%s", options->target);
+    snprintf(report->identity_family, sizeof(report->identity_family),
+             "%s", options->profile->family_key);
+    if (options->source) {
+        const char *base = qwen_source_path_basename(report->source_path);
+        if (base && strcmp(base, options->target) == 0 &&
+            qwen_source_target_matches_family_name(options->profile->family_key, base)) {
+            report->source_identity_from_path = 1;
+        }
+    }
+    if (!report->identity_model[0] &&
+        strcmp(options->target, options->profile->target_id) != 0) {
+        snprintf(report->identity_model, sizeof(report->identity_model), "%s",
+                 options->target);
+    }
+    {
+        char registry_family_dir[YVEX_PATH_CAP];
+        char reports_family_dir[YVEX_PATH_CAP];
+        char file_name[192];
+
+        if (qwen_source_path_format(registry_family_dir, sizeof(registry_family_dir),
+                                    "%s/%s",
+                                    operator_paths.registry_root,
+                                    options->profile->family_key) &&
+            qwen_source_path_format(reports_family_dir, sizeof(reports_family_dir),
+                                    "%s/%s",
+                                    operator_paths.reports_root,
+                                    options->profile->family_key)) {
+            snprintf(file_name, sizeof(file_name), "%s.download.json", options->target);
+            (void)qwen_source_path_format(report->download_registry_path,
+                                          sizeof(report->download_registry_path),
+                                          "%s/%s", registry_family_dir, file_name);
+            snprintf(file_name, sizeof(file_name), "%s.download-report.json", options->target);
+            (void)qwen_source_path_format(report->download_report_path,
+                                          sizeof(report->download_report_path),
+                                          "%s/%s", reports_family_dir, file_name);
+            report->download_registry_exists =
+                report->download_registry_path[0] &&
+                access(report->download_registry_path, F_OK) == 0;
+            report->download_report_exists =
+                report->download_report_path[0] &&
+                access(report->download_report_path, F_OK) == 0;
+            snprintf(file_name, sizeof(file_name), "%s.tensor-map.json", options->target);
+            (void)qwen_source_path_format(report->tensor_map_path,
+                                          sizeof(report->tensor_map_path),
+                                          "%s/%s", reports_family_dir, file_name);
+            snprintf(file_name, sizeof(file_name), "%s.output-head-map.json", options->target);
+            (void)qwen_source_path_format(report->output_head_map_path,
+                                          sizeof(report->output_head_map_path),
+                                          "%s/%s", reports_family_dir, file_name);
+            report->tensor_map_exists =
+                report->tensor_map_path[0] &&
+                access(report->tensor_map_path, F_OK) == 0;
+            report->output_head_map_exists =
+                report->output_head_map_path[0] &&
+                access(report->output_head_map_path, F_OK) == 0;
+            qwen_source_probe_map_sidecars(report);
+            if (report->download_registry_exists) {
+                (void)qwen_source_probe_download_identity_file(
+                    report->download_registry_path,
+                    options->target,
+                    options->profile->family_key,
+                    report);
+            }
+            if (!report->source_identity_from_download_sidecar &&
+                report->download_report_exists) {
+                (void)qwen_source_probe_download_identity_file(
+                    report->download_report_path,
+                    options->target,
+                    options->profile->family_key,
+                    report);
+            }
+        }
+    }
 
     report->source_exists = qwen_source_stat_kind(report->source_path, 1);
     if (report->source_exists) {
@@ -2248,6 +2608,14 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
         report->top_blocker = options->profile->model_class_blocker;
         report->next_row = options->profile->model_class_next;
     }
+    if (report->source_exists &&
+        report->tensor_map_exists &&
+        !report->tensor_map_incomplete &&
+        report->output_head_map_exists &&
+        !report->output_head_map_missing) {
+        report->top_blocker = options->profile->tokenizer_blocker;
+        report->next_row = options->profile->model_class_next;
+    }
 
     if (!report->source_exists) {
         qwen_source_add_blocker(report, options->profile->source_path_blocker);
@@ -2262,6 +2630,13 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
         qwen_source_add_blocker(report, options->profile->tokenizer_blocker);
     }
     for (i = 0; i < options->profile->tail_blocker_count; ++i) {
+        if (report->source_exists &&
+            report->tensor_map_exists &&
+            !report->tensor_map_incomplete &&
+            qwen_source_tail_blocker_is_tensor_map(
+                options->profile->tail_blockers[i])) {
+            continue;
+        }
         qwen_source_add_blocker(report, options->profile->tail_blockers[i]);
     }
     return 0;
@@ -2335,7 +2710,7 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
     printf("release: %s\n", options->release);
     printf("family: %s\n", options->profile->display_family);
     printf("family_key: %s\n", options->profile->family_key);
-    printf("model: %s\n", options->profile->model);
+    printf("model: %s\n", qwen_source_model_name(options, report));
     printf("target_id: %s\n", options->target);
     printf("target_class: %s\n", options->profile->target_class);
     printf("source_target_status: %s\n", options->profile->source_target_status);
@@ -2374,6 +2749,18 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
     printf("source_path_source: %s\n", report->source_path_source);
     printf("source_path_status: %s\n", report->source_state);
     printf("source_exists: %s\n", report->source_exists ? "true" : "false");
+    printf("download_registry_path: %s\n",
+           report->download_registry_path[0] ? report->download_registry_path : "unknown");
+    printf("download_registry_status: %s\n",
+           report->download_registry_exists ? "present" : "missing");
+    printf("download_report_path: %s\n",
+           report->download_report_path[0] ? report->download_report_path : "unknown");
+    printf("download_report_status: %s\n",
+           report->download_report_exists ? "present" : "missing");
+    printf("download_repo_id: %s\n",
+           report->identity_repo_id[0] ? report->identity_repo_id : "unknown");
+    printf("download_revision: %s\n",
+           report->identity_revision[0] ? report->identity_revision : "unknown");
     printf("source_file_count: %llu\n", report->source_file_count);
     printf("source_regular_file_count: %llu\n", report->source_regular_file_count);
     printf("source_safetensors_count: %llu\n", report->safetensors_count);
@@ -2448,7 +2835,7 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
     printf("source_readme_status: %s\n",
            qwen_source_presence_verification_status(report->readme_exists));
     printf("source_identity_status: %s\n",
-           report->source_exists ? "not-verified" : "not-present");
+           qwen_source_identity_status(report));
     printf("source_digest_status: not-computed\n");
     printf("source_hash_status: not-computed\n");
     printf("source_verification_status: not-verified\n");
@@ -2609,7 +2996,17 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
            strcmp(options->profile->family_key, "gemma") == 0
                ? "command-visible"
                : "missing");
-    printf("tensor_map_status: missing\n");
+    printf("tensor_map_path: %s\n",
+           report->tensor_map_path[0] ? report->tensor_map_path : "unknown");
+    printf("tensor_map_status: %s\n",
+           qwen_source_tensor_map_report_status(report));
+    printf("tensor_role_map_status: %s\n",
+           qwen_source_tensor_role_map_report_status(report));
+    printf("output_head_map_path: %s\n",
+           report->output_head_map_path[0] ? report->output_head_map_path : "unknown");
+    printf("output_head_map_status: %s\n",
+           qwen_source_output_head_map_report_status(report));
+    printf("tokenizer_map_status: missing\n");
     printf("artifact_status: missing\n");
     printf("runtime_claim: unsupported\n");
     printf("generation: unsupported-full-model\n");
@@ -2747,8 +3144,22 @@ int yvex_source_manifest_report_command(int argc, char **argv)
         fprintf(stderr, "source-manifest report: unsupported family: %s\n", options.family);
         return 2;
     }
+    if (!options.target && options.source) {
+        const char *base = qwen_source_path_basename(options.source);
+        if (base &&
+            qwen_source_target_matches_family_name(options.profile->family_key, base) &&
+            qwen_source_path_format(options.resolved_target,
+                                    sizeof(options.resolved_target),
+                                    "%s", base, NULL)) {
+            options.target = options.resolved_target;
+        }
+    }
     if (!options.target) {
         options.target = options.profile->target_id;
+    } else if (!options.resolved_target[0]) {
+        (void)qwen_source_path_format(options.resolved_target,
+                                      sizeof(options.resolved_target),
+                                      "%s", options.target, NULL);
     }
     if (!options.release || options.release[0] == '\0') {
         fprintf(stderr, "source-manifest report: --release is required\n");

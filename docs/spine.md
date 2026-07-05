@@ -217,6 +217,7 @@ operator-readable state.
 | live source download progress | source-intake | yes | `yvex models download TARGET --progress live|plain|log|off --tick-seconds N` with fake-HF streaming/tick/log/failure tests | not remote identity verification, payload hashing, conversion, GGUF creation, registry runtime artifact registration, materialization, runtime, generation, eval, or benchmark |
 | lock-safe source download interruption | source-intake | yes | `yvex models download TARGET --progress plain --audit` with fake-HF SIGINT process-group cancellation test | not provider lock deletion, partial-file cleanup, remote identity verification, payload hashing, conversion, GGUF creation, materialization, runtime, generation, eval, or benchmark |
 | source download control | source-intake | yes | `yvex models download status|stop|resume|cleanup TARGET --models-root DIR --audit` with fake-HF active receipt, stop, resume, stale lock cleanup, and safetensors header-size tests | not provider identity verification, payload hashing, tensor payload loading, conversion, GGUF creation, materialization, runtime, generation, eval, or benchmark |
+| dynamic downloaded source target identity | source-intake | yes | `yvex models download --repo ... --name TARGET`, `models download status TARGET`, `source-manifest report --source PATH`, and `models prepare TARGET --dry-run --audit` resolve downloaded Qwen/Gemma sidecars with fake-HF coverage | not provider identity verification, payload hashing, tensor payload loading, tensor role mapping, conversion, GGUF creation, materialization, runtime, generation, eval, or benchmark |
 | provider account lane | local-provider-boundary | yes | `yvex accounts status/login/whoami/ensure` plus `models download --auth auto|required|never` provider preflight for Hugging Face and GitHub fake CLIs | not YAI account state, MCP, hosted auth, OAuth implementation, raw token storage, source verification, runtime, generation, eval, benchmark, or release readiness |
 | operator paths/presets | operator-preset | yes | paths/model-target/models prepare/check | not extra runtime capability |
 | normal CLI output baseline | operator-output | yes | `info`, `paths`, `models`, `model-target`, and `generate` normal/audit tests | not new runtime capability |
@@ -676,6 +677,9 @@ Current evidence:
   `yvex models download gemma-4-12b-it --models-root DIR --progress live --tick-seconds 2 --audit`,
   `yvex models download gemma-4-12b-it --models-root DIR --progress plain --audit` interrupted with SIGINT,
   `yvex models download qwen3-8b --models-root DIR --audit`,
+  `yvex models download --repo REPO --family qwen|gemma --name TARGET --models-root DIR --audit`
+  followed by `models download status TARGET`, `source-manifest report --source PATH`, and
+  `models prepare TARGET --dry-run --audit`,
   `yvex source-manifest report --family qwen --release v0.1.0`,
   `yvex source-manifest report --family gemma --release v0.1.0`,
   `yvex model-target inspect qwen3-8b`,
@@ -715,6 +719,13 @@ Note:
   `MODELS.DOWNLOAD.SIGNAL.0` completed lock-safe download interruption;
   `MODELS.DOWNLOAD.CONTROL.0` completed status, stop, resume, and explicit
   stale-local-state cleanup for source downloads;
+  `MODELS.SOURCE.IDENTITY.0` completed downstream identity resolution for
+  downloaded `--repo ... --name` source targets;
+  `MODELS.SOURCE.MAP.HANDOFF.0` completed the dynamic downloaded target map
+  handoff by reusing `V010.MAP.5` for Qwen tensor naming, `V010.MAP.1` for
+  dense/Gemma tensor naming, and `V010.MAP.6` for output-head mapping while
+  keeping `V010.MAP.8` as the next missing-role/report blocker for dynamic
+  downloaded sources;
   `V010.SOURCE.7B / ACCOUNTS.PROVIDER.0` completed local provider account
   preflight for Hugging Face and GitHub; `TENSOR.COLLECTION.QWEN.0` and
   `TENSOR.COLLECTION.GEMMA.0` completed header-only collection handoff; and
@@ -4660,6 +4671,45 @@ a release ready.
 Completed target/source repair row:
 
 ```text
+MODELS.SOURCE.IDENTITY.0 - dynamic downloaded source target identity
+```
+
+`MODELS.SOURCE.IDENTITY.0` makes targets downloaded through
+`yvex models download --repo REPO --family qwen|gemma --name TARGET` visible to
+downstream source commands. `models download status TARGET` resolves the
+download registry/report sidecars, `source-manifest report --source PATH`
+uses the source basename plus sidecar identity instead of the static family
+profile, and `models prepare TARGET --dry-run --audit` refuses unsupported
+artifact production with the downloaded target identity rather than reporting
+an unknown target. It does not verify provider identity, hash payloads, load
+tensor payloads, map tensor roles, emit GGUF, materialize tensors, execute
+runtime paths, generate, evaluate, benchmark, claim throughput, or mark a
+release ready.
+
+Completed target/source repair row:
+
+```text
+MODELS.SOURCE.MAP.HANDOFF.0 - dynamic downloaded target map handoff
+```
+
+`MODELS.SOURCE.MAP.HANDOFF.0` lets downloaded `--repo ... --name TARGET`
+Qwen/Gemma source targets reuse the existing canonical map surfaces without
+creating or completing a new `V010.MAP` row. Dynamic Qwen targets reuse
+`V010.MAP.5` tensor naming behavior, dynamic Gemma targets reuse `V010.MAP.1`
+dense tensor naming behavior, both reuse `V010.MAP.6` output-head mapping, and
+the commands write report-only `TARGET.tensor-map.json` and
+`TARGET.output-head-map.json` sidecars under the operator reports root. Source
+reports and `models prepare --dry-run --audit` consume those sidecars and now
+advance to the `V010.MAP.8` missing-role/report blocker when source identity,
+model class, tensor naming, and output-head mapping are present. It does not
+complete dynamic tokenizer metadata, verify provider identity, hash
+payloads, load tensor payloads, emit GGUF, materialize tensors, execute graph or
+runtime paths, generate, evaluate, benchmark, claim throughput, or mark a
+release ready.
+
+Completed target/source repair row:
+
+```text
 MODEL.TARGET.IDENTITY.0 - Backend-neutral source target identity
 ```
 
@@ -4946,6 +4996,8 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | MODELS.DOWNLOAD.LIVE.0 | complete | source | Live source download progress | `yvex models download` supports `--progress auto|live|plain|log|off`, `--tick-seconds N`, and `--no-progress`; provider stdout/stderr are streamed while the child process runs, mirrored according to progress mode, written to separate logs, and accompanied by local source-directory stat ticks, with fake-HF tests covering visible start-before-completion, ticks, provider mirroring, logs, provider failure, parser errors, and token redaction without tensor payload loading, payload hashing, conversion, GGUF emission, materialization, runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | MODELS.DOWNLOAD.SIGNAL.0 | complete | source | Lock-safe source download interruption | `yvex models download` runs provider downloads in an owned process group with temporary SIGINT/SIGTERM handlers, forwards operator interrupts to the provider group, drains logs, waits with a bounded shutdown path, preserves partial source files/logs, avoids provider lock deletion, records provider pid/process group/orphan-check fields, and has fake-HF SIGINT coverage proving interrupted status and no surviving provider process group without tensor payload loading, payload hashing, conversion, GGUF emission, materialization, runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | MODELS.DOWNLOAD.CONTROL.0 | complete | source | Download status, stop, resume, and cleanup | `yvex models download status|stop|resume|cleanup TARGET` inspects local download receipts/processes/locks/logs/footprint/safetensors header-size state, stops YVEX-owned provider process groups, resumes through the provider CLI over the same source directory, and explicitly cleans stale downloader locks only when no provider process is alive, with fake-HF tests covering active receipts, running status, stop, stopped status, resume, stale active receipts, stale lock block/cleanup, and safetensors ok/truncated checks without network access, source identity verification, payload hashing, tensor payload loading, GGUF emission, materialization, runtime, generation, eval, benchmark, throughput, or release-ready claim |
+| MODELS.SOURCE.IDENTITY.0 | complete | source | Dynamic downloaded source target identity | downloaded `--repo ... --name TARGET` source sidecars are resolved by `models download status TARGET`, `source-manifest report --source PATH`, and `models prepare TARGET --dry-run --audit`, preserving target-specific Qwen/Gemma identity and sidecar paths without provider identity verification, payload hashing, tensor payload loading, tensor role mapping, GGUF emission, materialization, runtime, generation, eval, benchmark, throughput, or release-ready claim |
+| MODELS.SOURCE.MAP.HANDOFF.0 | complete | source | Dynamic downloaded target map handoff | dynamic downloaded Qwen/Gemma source targets resolve through existing Qwen tensor naming, dense/Gemma tensor naming, and output-head mapping command surfaces, write report-only target-specific tensor-map and output-head sidecars, and let source reports plus prepare dry-runs advance to the missing-role/report blocker without completing dynamic tokenizer metadata, loading tensor payloads, emitting GGUF, materializing tensors, executing runtime paths, generation, eval, benchmark, throughput, or release-ready claim |
 | V010.SOURCE.7B / ACCOUNTS.PROVIDER.0 | complete | source | Local provider account lane | `yvex accounts` reports Hugging Face/GitHub provider availability, login, whoami, and ensure state through provider-owned CLIs, writes only non-secret local account observations, and `models download --auth auto|required|never` uses that preflight before Hugging Face or GitHub release asset downloads without raw token storage, MCP/YAI account integration, hosted auth, OAuth implementation, source verification, runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | MODEL.TARGET.IDENTITY.0 | complete | model | Backend-neutral source target identity | backend- or pressure-specific source target IDs are replaced by `qwen3-8b` and `gemma-4-12b-it`; backend selection and backend pressure are separate report fields; old target IDs are refused; source-manifest defaults and target path reports use the new IDs without runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | CUDA.KERNEL.0 | complete | cuda | CUDA primitive kernel vertical hardening | existing CUDA primitive kernels are vertically hardened as bounded CUDA compute primitives; MLP and attention no longer rely on one-thread diagnostic bodies, primitive CUDA tests compare against CPU/reference outputs, and CUDA remains a primitive execution surface only without full model runtime, generation, benchmark, throughput, tensor-core optimization, FlashAttention, paged KV, or release-ready claim |
@@ -6176,7 +6228,7 @@ After `SPINE.OUTPUT.UX.CONTRACT.0`, `V010.CLI.17`, `V010.CLI.18`,
 `MODELS.DOWNLOAD.SIGNAL.0`,
 `MODELS.DOWNLOAD.CONTROL.0`,
 `V010.SOURCE.7B / ACCOUNTS.PROVIDER.0`, `MODEL.TARGET.IDENTITY.0`,
-`MODEL.CLASS.QWEN.0`, `MODEL.CLASS.GEMMA.0`,
+`MODELS.SOURCE.MAP.HANDOFF.0`, `MODEL.CLASS.QWEN.0`, `MODEL.CLASS.GEMMA.0`,
 `TENSOR.COLLECTION.QWEN.0`, `TENSOR.COLLECTION.GEMMA.0`, `V010.MAP.5`,
 `V010.MAP.1`, `V010.MAP.6`, `V010.MAP.7`, `V010.MAP.8`, `V010.MAP.9`, and `V010.QUANT.0`
 completed,
@@ -6244,7 +6296,9 @@ Reason:
   MODELS.DOWNLOAD.SIGNAL.0 is complete as lock-safe interruption,
   MODELS.DOWNLOAD.CONTROL.0 is complete as local download status/stop/resume
   and cleanup control, MODEL.TARGET.IDENTITY.0 is complete as the
-  backend-neutral source target identity repair. MODEL.CLASS.QWEN.0 and
+  backend-neutral source target identity repair, and
+  MODELS.SOURCE.MAP.HANDOFF.0 is complete as the dynamic downloaded target
+  map handoff over existing Qwen/dense/output-head map surfaces. MODEL.CLASS.QWEN.0 and
   MODEL.CLASS.GEMMA.0 are complete as header-metadata-only model-class
   profiles. TENSOR.COLLECTION.QWEN.0 and TENSOR.COLLECTION.GEMMA.0 are complete
   as header-only tensor collection inventories. V010.MAP.5 is complete as the

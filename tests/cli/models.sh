@@ -113,6 +113,45 @@ expect_rc() {
   test "$rc" -eq "$expected"
 }
 
+write_fake_transformer_safetensors() {
+  out=$1
+  mkdir -p "$(dirname "$out")"
+  python3 - "$out" <<'PY'
+import json
+import struct
+import sys
+
+names = [
+    "model.embed_tokens.weight",
+    "model.layers.0.self_attn.q_proj.weight",
+    "model.layers.0.self_attn.k_proj.weight",
+    "model.layers.0.self_attn.v_proj.weight",
+    "model.layers.0.self_attn.o_proj.weight",
+    "model.layers.0.mlp.gate_proj.weight",
+    "model.layers.0.mlp.up_proj.weight",
+    "model.layers.0.mlp.down_proj.weight",
+    "model.layers.0.input_layernorm.weight",
+    "model.layers.0.post_attention_layernorm.weight",
+    "model.norm.weight",
+    "lm_head.weight",
+]
+offset = 0
+header = {}
+for name in names:
+    header[name] = {
+        "dtype": "F32",
+        "shape": [2, 2],
+        "data_offsets": [offset, offset + 16],
+    }
+    offset += 16
+blob = json.dumps(header, separators=(",", ":")).encode("utf-8")
+with open(sys.argv[1], "wb") as f:
+    f.write(struct.pack("<Q", len(blob)))
+    f.write(blob)
+    f.write(b"x" * offset)
+PY
+}
+
 rm -rf "$ROOT"
 mkdir -p "$ROOT"
 
@@ -201,6 +240,7 @@ grep -- '--auth auto|required|never' "$ROOT/help.out"
 grep -- '--progress auto|live|plain|log|off' "$ROOT/help.out"
 grep 'models download status qwen3-32b' "$ROOT/help.out"
 grep 'models prepare TARGET' "$ROOT/help.out"
+grep 'models prepare TARGET .*--audit' "$ROOT/help.out"
 grep 'models check TARGET' "$ROOT/help.out"
 
 FAKE_HF="$PWD/tests/fixtures/bin/fake-hf"
@@ -438,6 +478,170 @@ YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download qwen3-8b 
 grep 'family: qwen' "$ROOT/download-qwen.out"
 grep 'hf/qwen/qwen3-8b' "$ROOT/download-qwen.out"
 grep 'status: model-download-pass' "$ROOT/download-qwen.out"
+
+DYNAMIC_ROOT="$ROOT/download-dynamic-targets"
+YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download --repo Qwen/Qwen3.6-35B-A3B --family qwen --name qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --auth auto --progress off --audit > "$ROOT/download-dynamic-qwen.out"
+grep 'target_id: qwen3-6-35b-a3b' "$ROOT/download-dynamic-qwen.out"
+grep 'repo_id: Qwen/Qwen3.6-35B-A3B' "$ROOT/download-dynamic-qwen.out"
+test -f "$DYNAMIC_ROOT/registry/qwen/qwen3-6-35b-a3b.download.json"
+test -f "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.download-report.json"
+test -f "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.source-manifest.json"
+test -f "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.native-inventory.json"
+"$YVEX_BIN" models download status qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/download-dynamic-qwen-status.out"
+grep 'target_id: qwen3-6-35b-a3b' "$ROOT/download-dynamic-qwen-status.out"
+grep 'family: qwen' "$ROOT/download-dynamic-qwen-status.out"
+grep 'repo_id: Qwen/Qwen3.6-35B-A3B' "$ROOT/download-dynamic-qwen-status.out"
+grep 'safetensors_count: 2' "$ROOT/download-dynamic-qwen-status.out"
+grep 'safetensors_size_status: ok' "$ROOT/download-dynamic-qwen-status.out"
+grep 'status: model-download-status' "$ROOT/download-dynamic-qwen-status.out"
+"$YVEX_BIN" models download cleanup qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --stale-locks --dry-run --audit > "$ROOT/download-dynamic-qwen-cleanup.out"
+grep 'model-download-cleanup: target=qwen3-6-35b-a3b' "$ROOT/download-dynamic-qwen-cleanup.out"
+grep 'status: model-download-cleanup-dry-run' "$ROOT/download-dynamic-qwen-cleanup.out"
+rm -f "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b/"*.safetensors
+write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b/model.safetensors"
+"$YVEX_BIN" model-target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map_status: naming-map-profiled' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map_family: qwen' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map_target_id: qwen3-6-35b-a3b' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.layers.0.self_attn.q_proj.weight -> model.layers.0.attention.q_proj.weight' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'runtime_claim: unsupported' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'generation: unsupported-full-model' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+test -f "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.tensor-map.json"
+grep '"row": "MODELS.SOURCE.MAP.HANDOFF.0"' "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.tensor-map.json"
+"$YVEX_BIN" model-target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role output-head --audit > "$ROOT/output-head-dynamic-qwen-audit.out"
+grep 'output_head_map_status: output-head-profiled' "$ROOT/output-head-dynamic-qwen-audit.out"
+grep 'output_head_map_family: qwen' "$ROOT/output-head-dynamic-qwen-audit.out"
+grep 'output_head_map_target_id: qwen3-6-35b-a3b' "$ROOT/output-head-dynamic-qwen-audit.out"
+grep 'output_head_native_name: lm_head.weight' "$ROOT/output-head-dynamic-qwen-audit.out"
+grep 'runtime_claim: unsupported' "$ROOT/output-head-dynamic-qwen-audit.out"
+grep 'generation: unsupported-full-model' "$ROOT/output-head-dynamic-qwen-audit.out"
+test -f "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.output-head-map.json"
+grep '"row": "MODELS.SOURCE.MAP.HANDOFF.0"' "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.output-head-map.json"
+"$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --source "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b" --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/source-dynamic-qwen-audit.out"
+grep 'target_id: qwen3-6-35b-a3b' "$ROOT/source-dynamic-qwen-audit.out"
+grep 'model: Qwen3.6-35B-A3B' "$ROOT/source-dynamic-qwen-audit.out"
+! grep 'target_id: qwen3-8b' "$ROOT/source-dynamic-qwen-audit.out"
+grep 'source_manifest_path: .*qwen3-6-35b-a3b.source-manifest.json' "$ROOT/source-dynamic-qwen-audit.out"
+grep 'native_inventory_path: .*qwen3-6-35b-a3b.native-inventory.json' "$ROOT/source-dynamic-qwen-audit.out"
+grep 'source_manifest_status: present' "$ROOT/source-dynamic-qwen-audit.out"
+grep 'native_inventory_report_status: available-report-only' "$ROOT/source-dynamic-qwen-audit.out"
+grep 'tensor_map_status: available-report-only' "$ROOT/source-dynamic-qwen-audit.out"
+grep 'tensor_role_map_status: available-report-only' "$ROOT/source-dynamic-qwen-audit.out"
+grep 'output_head_map_status: available-report-only' "$ROOT/source-dynamic-qwen-audit.out"
+grep 'tokenizer_map_status: missing' "$ROOT/source-dynamic-qwen-audit.out"
+grep 'next_required_rows: V010.MAP.8' "$ROOT/source-dynamic-qwen-audit.out"
+! grep 'missing-qwen-tensor-role-map' "$ROOT/source-dynamic-qwen-audit.out"
+! grep 'missing-qwen-tensor-map' "$ROOT/source-dynamic-qwen-audit.out"
+"$YVEX_BIN" models prepare qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --dry-run --audit > "$ROOT/prepare-dynamic-qwen.out" 2>&1 && exit 1 || true
+grep 'target_id: qwen3-6-35b-a3b' "$ROOT/prepare-dynamic-qwen.out"
+grep 'family: qwen' "$ROOT/prepare-dynamic-qwen.out"
+grep 'source_status: present' "$ROOT/prepare-dynamic-qwen.out"
+grep 'model_class_status: present' "$ROOT/prepare-dynamic-qwen.out"
+grep 'tensor_map_status: present-report-only' "$ROOT/prepare-dynamic-qwen.out"
+grep 'output_head_map_status: present-report-only' "$ROOT/prepare-dynamic-qwen.out"
+grep 'tokenizer_map_status: missing' "$ROOT/prepare-dynamic-qwen.out"
+grep 'artifact_status: missing' "$ROOT/prepare-dynamic-qwen.out"
+grep 'reason: tokenizer metadata mapping / artifact path missing' "$ROOT/prepare-dynamic-qwen.out"
+grep 'next: V010.MAP.8' "$ROOT/prepare-dynamic-qwen.out"
+grep 'status: model-prepare-unsupported' "$ROOT/prepare-dynamic-qwen.out"
+! grep 'status: model-prepare-unknown-target' "$ROOT/prepare-dynamic-qwen.out"
+! grep 'reason: missing tensor map / model class / artifact path' "$ROOT/prepare-dynamic-qwen.out"
+
+YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download --repo google/Gemma-4-31B-it --family gemma --name gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --auth auto --progress off --audit > "$ROOT/download-dynamic-gemma.out"
+grep 'target_id: gemma-4-31b-it' "$ROOT/download-dynamic-gemma.out"
+grep 'repo_id: google/Gemma-4-31B-it' "$ROOT/download-dynamic-gemma.out"
+test -f "$DYNAMIC_ROOT/registry/gemma/gemma-4-31b-it.download.json"
+test -f "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.source-manifest.json"
+"$YVEX_BIN" models download status gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/download-dynamic-gemma-status.out"
+grep 'target_id: gemma-4-31b-it' "$ROOT/download-dynamic-gemma-status.out"
+grep 'family: gemma' "$ROOT/download-dynamic-gemma-status.out"
+grep 'repo_id: google/Gemma-4-31B-it' "$ROOT/download-dynamic-gemma-status.out"
+grep 'safetensors_size_status: ok' "$ROOT/download-dynamic-gemma-status.out"
+rm -f "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/"*.safetensors
+write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/model.safetensors"
+"$YVEX_BIN" model-target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-gemma-audit.out"
+grep 'tensor_map_status: naming-map-profiled' "$ROOT/tensor-map-dynamic-gemma-audit.out"
+grep 'tensor_map_family: gemma' "$ROOT/tensor-map-dynamic-gemma-audit.out"
+grep 'tensor_map_target_id: gemma-4-31b-it' "$ROOT/tensor-map-dynamic-gemma-audit.out"
+grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.layers.0.self_attn.q_proj.weight -> model.layers.0.attention.q_proj.weight' "$ROOT/tensor-map-dynamic-gemma-audit.out"
+grep 'runtime_claim: unsupported' "$ROOT/tensor-map-dynamic-gemma-audit.out"
+grep 'generation: unsupported-full-model' "$ROOT/tensor-map-dynamic-gemma-audit.out"
+test -f "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.tensor-map.json"
+grep '"row": "MODELS.SOURCE.MAP.HANDOFF.0"' "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.tensor-map.json"
+"$YVEX_BIN" model-target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role output-head --audit > "$ROOT/output-head-dynamic-gemma-audit.out"
+grep 'output_head_map_status: output-head-profiled' "$ROOT/output-head-dynamic-gemma-audit.out"
+grep 'output_head_map_family: gemma' "$ROOT/output-head-dynamic-gemma-audit.out"
+grep 'output_head_map_target_id: gemma-4-31b-it' "$ROOT/output-head-dynamic-gemma-audit.out"
+grep 'output_head_native_name: lm_head.weight' "$ROOT/output-head-dynamic-gemma-audit.out"
+grep 'runtime_claim: unsupported' "$ROOT/output-head-dynamic-gemma-audit.out"
+grep 'generation: unsupported-full-model' "$ROOT/output-head-dynamic-gemma-audit.out"
+test -f "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.output-head-map.json"
+grep '"row": "MODELS.SOURCE.MAP.HANDOFF.0"' "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.output-head-map.json"
+"$YVEX_BIN" source-manifest report --family gemma --release v0.1.0 --source "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it" --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/source-dynamic-gemma-audit.out"
+grep 'target_id: gemma-4-31b-it' "$ROOT/source-dynamic-gemma-audit.out"
+grep 'model: Gemma-4-31B-it' "$ROOT/source-dynamic-gemma-audit.out"
+! grep 'target_id: gemma-4-12b-it' "$ROOT/source-dynamic-gemma-audit.out"
+grep 'source_manifest_path: .*gemma-4-31b-it.source-manifest.json' "$ROOT/source-dynamic-gemma-audit.out"
+grep 'native_inventory_path: .*gemma-4-31b-it.native-inventory.json' "$ROOT/source-dynamic-gemma-audit.out"
+grep 'tensor_map_status: available-report-only' "$ROOT/source-dynamic-gemma-audit.out"
+grep 'tensor_role_map_status: available-report-only' "$ROOT/source-dynamic-gemma-audit.out"
+grep 'output_head_map_status: available-report-only' "$ROOT/source-dynamic-gemma-audit.out"
+grep 'tokenizer_map_status: missing' "$ROOT/source-dynamic-gemma-audit.out"
+grep 'next_required_rows: V010.MAP.8' "$ROOT/source-dynamic-gemma-audit.out"
+! grep 'missing-gemma-tensor-role-map' "$ROOT/source-dynamic-gemma-audit.out"
+! grep 'missing-gemma-tensor-map' "$ROOT/source-dynamic-gemma-audit.out"
+"$YVEX_BIN" models prepare gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --dry-run --audit > "$ROOT/prepare-dynamic-gemma.out" 2>&1 && exit 1 || true
+grep 'target_id: gemma-4-31b-it' "$ROOT/prepare-dynamic-gemma.out"
+grep 'family: gemma' "$ROOT/prepare-dynamic-gemma.out"
+grep 'source_status: present' "$ROOT/prepare-dynamic-gemma.out"
+grep 'model_class_status: present' "$ROOT/prepare-dynamic-gemma.out"
+grep 'tensor_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma.out"
+grep 'output_head_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma.out"
+grep 'tokenizer_map_status: missing' "$ROOT/prepare-dynamic-gemma.out"
+grep 'artifact_status: missing' "$ROOT/prepare-dynamic-gemma.out"
+grep 'reason: tokenizer metadata mapping / artifact path missing' "$ROOT/prepare-dynamic-gemma.out"
+grep 'next: V010.MAP.8' "$ROOT/prepare-dynamic-gemma.out"
+grep 'status: model-prepare-unsupported' "$ROOT/prepare-dynamic-gemma.out"
+! grep 'status: model-prepare-unknown-target' "$ROOT/prepare-dynamic-gemma.out"
+! grep 'reason: missing tensor map / model class / artifact path' "$ROOT/prepare-dynamic-gemma.out"
+
+cat > "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.tensor-map.json" <<EOF_MAP_INCOMPLETE
+{
+  "schema": "yvex.source.tensor_map.v1",
+  "row": "MODELS.SOURCE.MAP.HANDOFF.0",
+  "status": "present-report-only",
+  "target_id": "gemma-4-31b-it",
+  "family": "gemma",
+  "unmapped_unknown_count": 3,
+  "runtime_claim": "unsupported",
+  "generation": "unsupported-full-model",
+  "benchmark_status": "not-measured"
+}
+EOF_MAP_INCOMPLETE
+cat > "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.output-head-map.json" <<EOF_HEAD_MISSING
+{
+  "schema": "yvex.source.output_head_map.v1",
+  "row": "MODELS.SOURCE.MAP.HANDOFF.0",
+  "status": "present-report-only",
+  "target_id": "gemma-4-31b-it",
+  "family": "gemma",
+  "output_head_status": "missing",
+  "runtime_claim": "unsupported",
+  "generation": "unsupported-full-model",
+  "benchmark_status": "not-measured"
+}
+EOF_HEAD_MISSING
+"$YVEX_BIN" source-manifest report --family gemma --release v0.1.0 --source "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it" --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/source-dynamic-gemma-incomplete-map.out"
+grep 'tensor_map_status: incomplete-report-only' "$ROOT/source-dynamic-gemma-incomplete-map.out"
+grep 'tensor_role_map_status: incomplete-report-only' "$ROOT/source-dynamic-gemma-incomplete-map.out"
+grep 'output_head_map_status: missing-in-report' "$ROOT/source-dynamic-gemma-incomplete-map.out"
+grep 'missing-gemma-tensor-role-map' "$ROOT/source-dynamic-gemma-incomplete-map.out"
+grep 'missing-gemma-tensor-map' "$ROOT/source-dynamic-gemma-incomplete-map.out"
+"$YVEX_BIN" models prepare gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --dry-run --audit > "$ROOT/prepare-dynamic-gemma-incomplete-map.out" 2>&1 && exit 1 || true
+grep 'tensor_map_status: incomplete-report-only' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
+grep 'output_head_map_status: missing-in-report' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
+grep 'reason: incomplete tensor map / tokenizer metadata mapping / artifact path missing' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
+grep 'status: model-prepare-unsupported' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
 
 QWEN32_STATUS_ROOT="$ROOT/download-qwen32-status"
 "$YVEX_BIN" models download status qwen3-32b --models-root "$QWEN32_STATUS_ROOT" --audit > "$ROOT/download-qwen32-status.out"

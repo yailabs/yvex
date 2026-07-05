@@ -2421,6 +2421,490 @@ static const yvex_model_class_profile_spec *find_model_class_profile_spec(
     return NULL;
 }
 
+typedef struct {
+    int found;
+    char target_id[128];
+    char family_key[16];
+    char family_display[32];
+    char model_name[128];
+    char local_path_class[192];
+    char source_path[YVEX_PATH_CAP];
+    char registry_path[YVEX_PATH_CAP];
+    char download_report_path[YVEX_PATH_CAP];
+    char tensor_map_path[YVEX_PATH_CAP];
+    char output_head_map_path[YVEX_PATH_CAP];
+    yvex_model_target_record record;
+    yvex_model_class_profile_spec spec;
+} yvex_dynamic_source_target;
+
+static int model_target_file_exists(const char *path)
+{
+    struct stat st;
+
+    return path && path[0] &&
+           stat(path, &st) == 0 &&
+           S_ISREG(st.st_mode);
+}
+
+static int model_target_path_format(char *out,
+                                    size_t cap,
+                                    const char *fmt,
+                                    const char *a,
+                                    const char *b,
+                                    const char *c)
+{
+    int n;
+
+    if (!out || cap == 0 || !fmt) return 0;
+    n = snprintf(out, cap, fmt, a ? a : "", b ? b : "", c ? c : "");
+    if (n < 0 || (size_t)n >= cap) {
+        if (cap > 0) out[0] = '\0';
+        return 0;
+    }
+    return 1;
+}
+
+static int model_target_read_small_json(const char *path, char **out)
+{
+    FILE *fp;
+    long size;
+    char *buf;
+
+    if (!path || !out) return 0;
+    *out = NULL;
+    fp = fopen(path, "rb");
+    if (!fp) return 0;
+    if (fseek(fp, 0, SEEK_END) != 0) {
+        fclose(fp);
+        return 0;
+    }
+    size = ftell(fp);
+    if (size < 0 || size > 1024L * 1024L) {
+        fclose(fp);
+        return 0;
+    }
+    if (fseek(fp, 0, SEEK_SET) != 0) {
+        fclose(fp);
+        return 0;
+    }
+    buf = (char *)malloc((size_t)size + 1u);
+    if (!buf) {
+        fclose(fp);
+        return 0;
+    }
+    if (fread(buf, 1, (size_t)size, fp) != (size_t)size) {
+        free(buf);
+        fclose(fp);
+        return 0;
+    }
+    fclose(fp);
+    buf[size] = '\0';
+    *out = buf;
+    return 1;
+}
+
+static int model_target_json_string_field(const char *json,
+                                          const char *field,
+                                          char *out,
+                                          size_t cap)
+{
+    char pattern[128];
+    const char *p;
+    const char *q;
+    size_t len;
+
+    if (!json || !field || !out || cap == 0) return 0;
+    out[0] = '\0';
+    if (snprintf(pattern, sizeof(pattern), "\"%s\"", field) < 0) return 0;
+    p = strstr(json, pattern);
+    if (!p) return 0;
+    p += strlen(pattern);
+    while (*p && isspace((unsigned char)*p)) ++p;
+    if (*p != ':') return 0;
+    ++p;
+    while (*p && isspace((unsigned char)*p)) ++p;
+    if (*p != '"') return 0;
+    ++p;
+    q = p;
+    while (*q && *q != '"') {
+        if (*q == '\\' && q[1]) ++q;
+        ++q;
+    }
+    if (*q != '"') return 0;
+    len = (size_t)(q - p);
+    if (len >= cap) len = cap - 1u;
+    memcpy(out, p, len);
+    out[len] = '\0';
+    return 1;
+}
+
+static const char *model_target_repo_basename(const char *repo_id)
+{
+    const char *slash;
+
+    if (!repo_id || !repo_id[0]) return NULL;
+    slash = strrchr(repo_id, '/');
+    return slash && slash[1] ? slash + 1 : repo_id;
+}
+
+static void model_target_copy_dynamic_model_name(yvex_dynamic_source_target *target,
+                                                 const char *model_name)
+{
+    if (!target || !model_name || !model_name[0]) return;
+    snprintf(target->model_name, sizeof(target->model_name), "%s", model_name);
+    if (strcmp(target->family_key, "gemma") == 0 &&
+        strncmp(target->model_name, "gemma-", 6) == 0) {
+        target->model_name[0] = 'G';
+    }
+}
+
+static int model_target_dynamic_family_from_target(const char *target_id,
+                                                   const char **family_key,
+                                                   const char **family_display)
+{
+    if (!target_id || !target_id[0]) return 0;
+    if (strncmp(target_id, "qwen", 4) == 0) {
+        *family_key = "qwen";
+        *family_display = "Qwen";
+        return 1;
+    }
+    if (strncmp(target_id, "gemma", 5) == 0) {
+        *family_key = "gemma";
+        *family_display = "Gemma";
+        return 1;
+    }
+    return 0;
+}
+
+static void model_target_dynamic_seed_spec(yvex_dynamic_source_target *target)
+{
+    int is_gemma;
+
+    if (!target) return;
+    is_gemma = strcmp(target->family_key, "gemma") == 0;
+    target->spec.target_id = target->target_id;
+    target->spec.family_key = target->family_key;
+    target->spec.source_family = target->family_key;
+    target->spec.class_name = is_gemma
+                                  ? "gemma-source-model-class-profile"
+                                  : "qwen-source-model-class-profile";
+    target->spec.runtime_shape = is_gemma
+                                     ? "dense-causal-decoder-candidate-pending-config"
+                                     : "causal-decoder-candidate-pending-config";
+    target->spec.backend_pressure = is_gemma
+                                        ? "cpu-cuda-baseline-planned"
+                                        : "metal-planned";
+    target->spec.missing_source_blocker = is_gemma
+                                              ? "missing-gemma-source-path"
+                                              : "missing-qwen-source-path";
+    target->spec.malformed_header_blocker = is_gemma
+                                                ? "malformed-gemma-safetensors-header"
+                                                : "malformed-qwen-safetensors-header";
+    target->spec.missing_role_map_blocker = is_gemma
+                                                ? "missing-gemma-tensor-role-map"
+                                                : "missing-qwen-tensor-role-map";
+}
+
+static void model_target_dynamic_seed_record(yvex_dynamic_source_target *target)
+{
+    if (!target) return;
+    target->record.target_id = target->target_id;
+    target->record.family = target->family_display;
+    target->record.model = target->model_name[0] ? target->model_name : target->target_id;
+    target->record.target_class = "source-model-candidate";
+    target->record.source_artifact_class = "official-source-tensors-downloaded";
+    target->record.target_artifact_class = "future-YVEX-produced-GGUF";
+    target->record.pressure_purpose = "dynamic-downloaded-source-target";
+    target->record.tensor_set = "source-safetensors-header-map";
+    target->record.local_path_class = target->local_path_class;
+    target->record.source_footprint_class = "downloaded-source-sidecar";
+    target->record.runtime_boundary = "source/map handoff only; no runtime/generation";
+    target->record.runtime_execution = "unsupported";
+    target->record.generation = "unsupported";
+    target->record.external_reference = "false";
+}
+
+static int model_target_probe_download_identity(const char *path,
+                                                yvex_dynamic_source_target *target)
+{
+    char *json = NULL;
+    char value[YVEX_PATH_CAP];
+
+    if (!path || !target || !model_target_read_small_json(path, &json)) {
+        return 0;
+    }
+    if (model_target_json_string_field(json, "target_id", value, sizeof(value)) &&
+        strcmp(value, target->target_id) != 0) {
+        free(json);
+        return 0;
+    }
+    if (model_target_json_string_field(json, "family", value, sizeof(value)) &&
+        strcmp(value, target->family_key) != 0) {
+        free(json);
+        return 0;
+    }
+    if (model_target_json_string_field(json, "repo_id", value, sizeof(value))) {
+        const char *base = model_target_repo_basename(value);
+        if (base && base[0]) {
+            model_target_copy_dynamic_model_name(target, base);
+        }
+    }
+    if (model_target_json_string_field(json, "local_source_dir",
+                                       value, sizeof(value))) {
+        snprintf(target->source_path, sizeof(target->source_path), "%s", value);
+    }
+    free(json);
+    return 1;
+}
+
+static int model_target_resolve_dynamic_source_target(
+    const char *target_id,
+    const char *models_root_override,
+    yvex_dynamic_source_target *target)
+{
+    const char *family_key = NULL;
+    const char *family_display = NULL;
+    yvex_paths paths;
+    yvex_operator_paths operator_paths;
+    yvex_error err;
+    int rc;
+    int has_identity = 0;
+
+    if (!target_id || !target || !model_target_dynamic_family_from_target(
+            target_id, &family_key, &family_display)) {
+        return 0;
+    }
+    memset(target, 0, sizeof(*target));
+    snprintf(target->target_id, sizeof(target->target_id), "%s", target_id);
+    snprintf(target->family_key, sizeof(target->family_key), "%s", family_key);
+    snprintf(target->family_display, sizeof(target->family_display), "%s",
+             family_display);
+
+    yvex_error_clear(&err);
+    rc = yvex_paths_default(&paths, &err);
+    if (rc != YVEX_OK) return 0;
+    rc = yvex_operator_paths_resolve(&paths, models_root_override,
+                                     &operator_paths, &err);
+    if (rc != YVEX_OK) return 0;
+
+    (void)model_target_path_format(target->registry_path,
+                                   sizeof(target->registry_path),
+                                   "%s/%s/%s.download.json",
+                                   operator_paths.registry_root,
+                                   target->family_key,
+                                   target->target_id);
+    (void)model_target_path_format(target->download_report_path,
+                                   sizeof(target->download_report_path),
+                                   "%s/%s/%s.download-report.json",
+                                   operator_paths.reports_root,
+                                   target->family_key,
+                                   target->target_id);
+    (void)model_target_path_format(target->tensor_map_path,
+                                   sizeof(target->tensor_map_path),
+                                   "%s/%s/%s.tensor-map.json",
+                                   operator_paths.reports_root,
+                                   target->family_key,
+                                   target->target_id);
+    (void)model_target_path_format(target->output_head_map_path,
+                                   sizeof(target->output_head_map_path),
+                                   "%s/%s/%s.output-head-map.json",
+                                   operator_paths.reports_root,
+                                   target->family_key,
+                                   target->target_id);
+    (void)model_target_path_format(target->source_path,
+                                   sizeof(target->source_path),
+                                   "%s/hf/%s/%s",
+                                   operator_paths.models_root,
+                                   target->family_key,
+                                   target->target_id);
+    (void)model_target_path_format(target->local_path_class,
+                                   sizeof(target->local_path_class),
+                                   "hf/%s/%s",
+                                   target->family_key,
+                                   target->target_id,
+                                   NULL);
+
+    if (model_target_file_exists(target->registry_path)) {
+        has_identity = model_target_probe_download_identity(target->registry_path,
+                                                           target);
+    }
+    if (!has_identity && model_target_file_exists(target->download_report_path)) {
+        has_identity = model_target_probe_download_identity(target->download_report_path,
+                                                           target);
+    }
+    if (!has_identity) {
+        return 0;
+    }
+
+    target->found = 1;
+    if (!target->model_name[0]) {
+        model_target_copy_dynamic_model_name(target, target->target_id);
+    }
+    model_target_dynamic_seed_spec(target);
+    model_target_dynamic_seed_record(target);
+    return 1;
+}
+
+static int model_target_mkdir_parent(const char *path)
+{
+    char buf[YVEX_PATH_CAP];
+    char *slash;
+    char *p;
+
+    if (!path || strlen(path) >= sizeof(buf)) return 0;
+    strcpy(buf, path);
+    slash = strrchr(buf, '/');
+    if (!slash) return 1;
+    *slash = '\0';
+    if (!buf[0]) return 1;
+    for (p = buf + 1; *p; ++p) {
+        if (*p == '/') {
+            *p = '\0';
+            if (mkdir(buf, 0775) != 0 && errno != EEXIST) return 0;
+            *p = '/';
+        }
+    }
+    return mkdir(buf, 0775) == 0 || errno == EEXIST;
+}
+
+static void model_target_json_write_escaped(FILE *fp, const char *s)
+{
+    if (!s) s = "";
+    fputc('"', fp);
+    while (*s) {
+        unsigned char ch = (unsigned char)*s++;
+        if (ch == '"' || ch == '\\') {
+            fputc('\\', fp);
+            fputc((int)ch, fp);
+        } else if (ch == '\n') {
+            fputs("\\n", fp);
+        } else if (ch == '\r') {
+            fputs("\\r", fp);
+        } else if (ch == '\t') {
+            fputs("\\t", fp);
+        } else {
+            fputc((int)ch, fp);
+        }
+    }
+    fputc('"', fp);
+}
+
+static void model_target_json_field(FILE *fp,
+                                    const char *key,
+                                    const char *value,
+                                    int comma)
+{
+    fprintf(fp, "  \"%s\": ", key);
+    model_target_json_write_escaped(fp, value);
+    fprintf(fp, "%s\n", comma ? "," : "");
+}
+
+static void model_target_json_u64_field(FILE *fp,
+                                        const char *key,
+                                        unsigned long long value,
+                                        int comma)
+{
+    fprintf(fp, "  \"%s\": %llu%s\n", key, value, comma ? "," : "");
+}
+
+static int model_target_json_open_tmp(const char *path,
+                                      char *tmp,
+                                      size_t tmp_cap,
+                                      FILE **out)
+{
+    int n;
+
+    if (!path || !tmp || tmp_cap == 0 || !out) return 0;
+    *out = NULL;
+    if (!model_target_mkdir_parent(path)) return 0;
+    n = snprintf(tmp, tmp_cap, "%s.tmp", path);
+    if (n < 0 || (size_t)n >= tmp_cap) return 0;
+    *out = fopen(tmp, "wb");
+    return *out != NULL;
+}
+
+static int model_target_json_close_tmp(FILE *fp,
+                                       const char *tmp,
+                                       const char *path)
+{
+    if (!fp || !tmp || !path) return 0;
+    if (fclose(fp) != 0) {
+        remove(tmp);
+        return 0;
+    }
+    if (rename(tmp, path) != 0) {
+        remove(tmp);
+        return 0;
+    }
+    return 1;
+}
+
+static int write_tensor_map_sidecar(const char *path,
+                                    const yvex_tensor_naming_profile *profile)
+{
+    char tmp[YVEX_PATH_CAP];
+    FILE *fp;
+
+    if (!path || !path[0] || !profile) return 1;
+    if (!model_target_json_open_tmp(path, tmp, sizeof(tmp), &fp)) return 0;
+    fprintf(fp, "{\n");
+    model_target_json_field(fp, "schema", "yvex.source.tensor_map.v1", 1);
+    model_target_json_field(fp, "row", "MODELS.SOURCE.MAP.HANDOFF.0", 1);
+    model_target_json_field(fp, "status", "present-report-only", 1);
+    model_target_json_field(fp, "target_id", profile->record->target_id, 1);
+    model_target_json_field(fp, "family", profile->spec->family_key, 1);
+    model_target_json_field(fp, "map_kind", "tensor-naming", 1);
+    model_target_json_field(fp, "source_path", profile->source_path, 1);
+    model_target_json_field(fp, "evidence_basis", "header-metadata-only", 1);
+    model_target_json_u64_field(fp, "tensor_count", profile->tensor_count, 1);
+    model_target_json_u64_field(fp, "mapped_total_count",
+                                profile->mapped_total_count, 1);
+    model_target_json_u64_field(fp, "unmapped_unknown_count",
+                                profile->unmapped_unknown_count, 1);
+    model_target_json_u64_field(fp, "output_head_count",
+                                profile->output_head_count, 1);
+    model_target_json_field(fp, "tokenizer_map_status", "missing", 1);
+    model_target_json_field(fp, "runtime_claim", "unsupported", 1);
+    model_target_json_field(fp, "generation", "unsupported-full-model", 1);
+    model_target_json_field(fp, "benchmark_status", "not-measured", 0);
+    fprintf(fp, "}\n");
+    return model_target_json_close_tmp(fp, tmp, path);
+}
+
+static int write_output_head_map_sidecar(
+    const char *path,
+    const yvex_output_head_map_profile *profile)
+{
+    char tmp[YVEX_PATH_CAP];
+    FILE *fp;
+
+    if (!path || !path[0] || !profile) return 1;
+    if (!model_target_json_open_tmp(path, tmp, sizeof(tmp), &fp)) return 0;
+    fprintf(fp, "{\n");
+    model_target_json_field(fp, "schema", "yvex.source.output_head_map.v1", 1);
+    model_target_json_field(fp, "row", "MODELS.SOURCE.MAP.HANDOFF.0", 1);
+    model_target_json_field(fp, "status", "present-report-only", 1);
+    model_target_json_field(fp, "target_id", profile->record->target_id, 1);
+    model_target_json_field(fp, "family", profile->spec->family_key, 1);
+    model_target_json_field(fp, "map_kind", "output-head", 1);
+    model_target_json_field(fp, "source_path", profile->source_path, 1);
+    model_target_json_field(fp, "output_head_status",
+                            profile->output_head.present ? "present" : "missing", 1);
+    model_target_json_field(fp, "output_head_native_name",
+                            profile->output_head.native_name, 1);
+    model_target_json_field(fp, "final_norm_status",
+                            profile->final_norm.present ? "present" : "missing", 1);
+    model_target_json_field(fp, "embedding_status",
+                            profile->embedding.present ? "present" : "missing", 1);
+    model_target_json_field(fp, "shape_relation_status",
+                            profile->shape_relation_status, 1);
+    model_target_json_field(fp, "runtime_claim", "unsupported", 1);
+    model_target_json_field(fp, "generation", "unsupported-full-model", 1);
+    model_target_json_field(fp, "benchmark_status", "not-measured", 0);
+    fprintf(fp, "}\n");
+    return model_target_json_close_tmp(fp, tmp, path);
+}
+
 static int model_class_download_source(
     char *out,
     size_t cap,
@@ -3111,11 +3595,11 @@ static const char *tensor_collection_incomplete_blocker(
 
 static int build_tensor_collection_profile(
     const yvex_model_target_record *record,
+    const yvex_model_class_profile_spec *spec,
     const char *models_root_override,
     const char *source_override,
     yvex_tensor_collection_profile *profile)
 {
-    const yvex_model_class_profile_spec *spec;
     yvex_model_class_profile source_profile;
     yvex_native_weight_table *table = NULL;
     yvex_native_weight_options options;
@@ -3126,7 +3610,6 @@ static int build_tensor_collection_profile(
     if (!record || !profile) {
         return 2;
     }
-    spec = find_model_class_profile_spec(record->target_id);
     if (!spec) {
         return 2;
     }
@@ -3651,11 +4134,11 @@ static const char *tensor_naming_runtime_role_blocker(
 
 static int build_tensor_naming_profile(
     const yvex_model_target_record *record,
+    const yvex_model_class_profile_spec *spec,
     const char *models_root_override,
     const char *source_override,
     yvex_tensor_naming_profile *profile)
 {
-    const yvex_model_class_profile_spec *spec;
     yvex_model_class_profile source_profile;
     yvex_native_weight_table *table = NULL;
     yvex_native_weight_options options;
@@ -3664,7 +4147,6 @@ static int build_tensor_naming_profile(
     int rc;
 
     if (!record || !profile) return 2;
-    spec = find_model_class_profile_spec(record->target_id);
     if (!spec) return 2;
 
     memset(profile, 0, sizeof(*profile));
@@ -4043,11 +4525,11 @@ static const char *output_head_map_shape_relation(
 
 static int build_output_head_map_profile(
     const yvex_model_target_record *record,
+    const yvex_model_class_profile_spec *spec,
     const char *models_root_override,
     const char *source_override,
     yvex_output_head_map_profile *profile)
 {
-    const yvex_model_class_profile_spec *spec;
     yvex_model_class_profile source_profile;
     yvex_native_weight_table *table = NULL;
     yvex_native_weight_options options;
@@ -4056,7 +4538,6 @@ static int build_output_head_map_profile(
     int rc;
 
     if (!record || !profile) return 2;
-    spec = find_model_class_profile_spec(record->target_id);
     if (!spec) return 2;
 
     memset(profile, 0, sizeof(*profile));
@@ -4627,8 +5108,9 @@ static void tokenizer_map_output_head_relation(
     int rc;
 
     if (!profile) return;
-    rc = build_output_head_map_profile(profile->record, models_root_override,
-                                       source_override, &output_profile);
+    rc = build_output_head_map_profile(profile->record, profile->spec,
+                                       models_root_override, source_override,
+                                       &output_profile);
     if (rc != 0) {
         profile->output_head_vocab_relation_status = "unknown";
         return;
@@ -5101,11 +5583,13 @@ static int build_missing_role_report_profile(
     profile->status = "source-missing";
     profile->top_blocker = profile->spec->missing_source_blocker;
 
-    rc = build_tensor_naming_profile(record, models_root_override,
-                                     source_override, &naming_profile);
+    rc = build_tensor_naming_profile(record, profile->spec,
+                                     models_root_override, source_override,
+                                     &naming_profile);
     if (rc != 0) return rc;
-    rc = build_output_head_map_profile(record, models_root_override,
-                                       source_override, &output_profile);
+    rc = build_output_head_map_profile(record, profile->spec,
+                                       models_root_override, source_override,
+                                       &output_profile);
     if (rc != 0) return rc;
     rc = build_tokenizer_map_profile(record, models_root_override,
                                      source_override, &tokenizer_profile);
@@ -5574,14 +6058,14 @@ static int build_tensor_mapping_gate_profile(
     rc = model_class_build_profile(record, spec, models_root_override,
                                    source_override, &profile->model_class);
     if (rc != 0) return rc;
-    rc = build_tensor_collection_profile(record, models_root_override,
+    rc = build_tensor_collection_profile(record, spec, models_root_override,
                                          source_override,
                                          &profile->tensor_collection);
     if (rc != 0) return rc;
-    rc = build_tensor_naming_profile(record, models_root_override,
+    rc = build_tensor_naming_profile(record, spec, models_root_override,
                                      source_override, &profile->tensor_naming);
     if (rc != 0) return rc;
-    rc = build_output_head_map_profile(record, models_root_override,
+    rc = build_output_head_map_profile(record, spec, models_root_override,
                                        source_override, &profile->output_head);
     if (rc != 0) return rc;
     rc = build_tokenizer_map_profile(record, models_root_override,
@@ -8685,6 +9169,7 @@ int yvex_model_target_command(int argc, char **argv)
         const char *target_id = NULL;
         const char *source = NULL;
         const yvex_model_class_profile_spec *spec;
+        yvex_dynamic_source_target dynamic_target;
         yvex_model_class_profile profile;
         int rc;
 
@@ -8694,13 +9179,9 @@ int yvex_model_target_command(int argc, char **argv)
             return 2;
         }
         target_id = argv[3];
-        record = find_model_target(target_id);
-        spec = find_model_class_profile_spec(target_id);
-        if (!record || !spec) {
-            fprintf(stderr, "model-target class-profile: unsupported target: %s\n",
-                    target_id && target_id[0] ? target_id : "none");
-            return 2;
-        }
+        record = NULL;
+        spec = NULL;
+        memset(&dynamic_target, 0, sizeof(dynamic_target));
         for (i = 4; i < argc; ++i) {
             if (strcmp(argv[i], "--audit") == 0) {
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
@@ -8734,6 +9215,21 @@ int yvex_model_target_command(int argc, char **argv)
                 return 2;
             }
         }
+        record = find_model_target(target_id);
+        spec = find_model_class_profile_spec(target_id);
+        if ((!record || !spec) &&
+            model_target_resolve_dynamic_source_target(target_id,
+                                                       models_root,
+                                                       &dynamic_target)) {
+            record = &dynamic_target.record;
+            spec = &dynamic_target.spec;
+            if (!source) source = dynamic_target.source_path;
+        }
+        if (!record || !spec) {
+            fprintf(stderr, "model-target class-profile: unsupported target: %s\n",
+                    target_id && target_id[0] ? target_id : "none");
+            return 2;
+        }
         rc = model_class_build_profile(record, spec, models_root, source, &profile);
         if (rc != 0) {
             return rc;
@@ -8751,6 +9247,7 @@ int yvex_model_target_command(int argc, char **argv)
         const char *target_id = NULL;
         const char *source = NULL;
         const yvex_model_class_profile_spec *spec;
+        yvex_dynamic_source_target dynamic_target;
         yvex_tensor_collection_profile profile;
         int rc;
 
@@ -8760,13 +9257,9 @@ int yvex_model_target_command(int argc, char **argv)
             return 2;
         }
         target_id = argv[3];
-        record = find_model_target(target_id);
-        spec = find_model_class_profile_spec(target_id);
-        if (!record || !spec) {
-            fprintf(stderr, "model-target tensor-collection: unsupported target: %s\n",
-                    target_id && target_id[0] ? target_id : "none");
-            return 2;
-        }
+        record = NULL;
+        spec = NULL;
+        memset(&dynamic_target, 0, sizeof(dynamic_target));
         for (i = 4; i < argc; ++i) {
             if (strcmp(argv[i], "--audit") == 0) {
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
@@ -8800,7 +9293,22 @@ int yvex_model_target_command(int argc, char **argv)
                 return 2;
             }
         }
-        rc = build_tensor_collection_profile(record, models_root, source, &profile);
+        record = find_model_target(target_id);
+        spec = find_model_class_profile_spec(target_id);
+        if ((!record || !spec) &&
+            model_target_resolve_dynamic_source_target(target_id,
+                                                       models_root,
+                                                       &dynamic_target)) {
+            record = &dynamic_target.record;
+            spec = &dynamic_target.spec;
+            if (!source) source = dynamic_target.source_path;
+        }
+        if (!record || !spec) {
+            fprintf(stderr, "model-target tensor-collection: unsupported target: %s\n",
+                    target_id && target_id[0] ? target_id : "none");
+            return 2;
+        }
+        rc = build_tensor_collection_profile(record, spec, models_root, source, &profile);
         if (rc != 0) {
             return rc;
         }
@@ -8819,6 +9327,7 @@ int yvex_model_target_command(int argc, char **argv)
         const char *role = NULL;
         const char *gate = NULL;
         const yvex_model_class_profile_spec *spec;
+        yvex_dynamic_source_target dynamic_target;
         yvex_tensor_naming_profile profile;
         yvex_output_head_map_profile output_head_profile;
         yvex_tokenizer_map_profile tokenizer_profile;
@@ -8832,15 +9341,9 @@ int yvex_model_target_command(int argc, char **argv)
             return 2;
         }
         target_id = argv[3];
-        record = find_model_target(target_id);
-        spec = find_model_class_profile_spec(target_id);
-        if (!record || !spec ||
-            (strcmp(spec->family_key, "qwen") != 0 &&
-             strcmp(spec->family_key, "gemma") != 0)) {
-            fprintf(stderr, "model-target tensor-map: unsupported target: %s\n",
-                    target_id && target_id[0] ? target_id : "none");
-            return 2;
-        }
+        record = NULL;
+        spec = NULL;
+        memset(&dynamic_target, 0, sizeof(dynamic_target));
         for (i = 4; i < argc; ++i) {
             if (strcmp(argv[i], "--audit") == 0) {
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
@@ -8902,6 +9405,23 @@ int yvex_model_target_command(int argc, char **argv)
             fprintf(stderr, "model-target tensor-map: --gate cannot be combined with --role\n");
             return 2;
         }
+        record = find_model_target(target_id);
+        spec = find_model_class_profile_spec(target_id);
+        if ((!record || !spec) &&
+            model_target_resolve_dynamic_source_target(target_id,
+                                                       models_root,
+                                                       &dynamic_target)) {
+            record = &dynamic_target.record;
+            spec = &dynamic_target.spec;
+            if (!source) source = dynamic_target.source_path;
+        }
+        if (!record || !spec ||
+            (strcmp(spec->family_key, "qwen") != 0 &&
+             strcmp(spec->family_key, "gemma") != 0)) {
+            fprintf(stderr, "model-target tensor-map: unsupported target: %s\n",
+                    target_id && target_id[0] ? target_id : "none");
+            return 2;
+        }
         if (gate) {
             rc = build_tensor_mapping_gate_profile(record, models_root, source,
                                                    &gate_profile);
@@ -8918,10 +9438,18 @@ int yvex_model_target_command(int argc, char **argv)
             return 0;
         }
         if (role && strcmp(role, "output-head") == 0) {
-            rc = build_output_head_map_profile(record, models_root, source,
+            rc = build_output_head_map_profile(record, spec, models_root, source,
                                                &output_head_profile);
             if (rc != 0) {
                 return rc;
+            }
+            if (dynamic_target.found &&
+                !write_output_head_map_sidecar(dynamic_target.output_head_map_path,
+                                               &output_head_profile)) {
+                fprintf(stderr,
+                        "model-target tensor-map: cannot write output-head map sidecar: %s\n",
+                        dynamic_target.output_head_map_path);
+                return 3;
             }
             if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
                 print_output_head_map_table(&output_head_profile);
@@ -8962,9 +9490,16 @@ int yvex_model_target_command(int argc, char **argv)
             }
             return 0;
         }
-        rc = build_tensor_naming_profile(record, models_root, source, &profile);
+        rc = build_tensor_naming_profile(record, spec, models_root, source, &profile);
         if (rc != 0) {
             return rc;
+        }
+        if (dynamic_target.found &&
+            !write_tensor_map_sidecar(dynamic_target.tensor_map_path, &profile)) {
+            fprintf(stderr,
+                    "model-target tensor-map: cannot write tensor map sidecar: %s\n",
+                    dynamic_target.tensor_map_path);
+            return 3;
         }
         if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
             print_tensor_naming_table(&profile);
