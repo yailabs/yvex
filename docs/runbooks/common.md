@@ -100,6 +100,8 @@ make
 ./yvex model-target tensor-map qwen3-8b --role missing-roles
 ./yvex model-target tensor-map qwen3-8b --role missing-roles --output table
 ./yvex model-target tensor-map qwen3-8b --role missing-roles --audit
+./yvex model-target tensor-map qwen3-8b --gate v0.1.0
+./yvex model-target tensor-map qwen3-8b --gate v0.1.0 --audit
 ./yvex model-target inspect gemma-4-12b-it
 ./yvex model-target inspect gemma-4-12b-it --paths
 ./yvex model-target class-profile gemma-4-12b-it
@@ -120,6 +122,8 @@ make
 ./yvex model-target tensor-map gemma-4-12b-it --role missing-roles
 ./yvex model-target tensor-map gemma-4-12b-it --role missing-roles --output table
 ./yvex model-target tensor-map gemma-4-12b-it --role missing-roles --audit
+./yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0
+./yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0 --audit
 ./yvex model-target decision --help
 ./yvex model-target decision --release v0.1.0 --output table
 ./yvex model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
@@ -207,6 +211,14 @@ descriptor, graph, tokenizer-runtime, generation, eval, and benchmark blockers.
 It does not load tensor payloads, emit artifacts, materialize tensors, build
 runtime descriptors, execute graph work, compute logits, tokenize, generate,
 evaluate, or benchmark.
+
+`model-target tensor-map TARGET --gate v0.1.0` is the compact mapping-stage
+gate for Qwen and Gemma source trees. It aggregates model-class, collection,
+naming, output-head, tokenizer metadata, and missing-role evidence, then either
+blocks on the remaining mapping issue or hands off to qtype/artifact planning.
+It is not artifact creation, qtype policy completion, runtime descriptor
+construction, graph execution, tokenizer runtime, generation, evaluation, or
+benchmark evidence.
 
 ## Lane 1 — Graph-only regression
 
@@ -651,6 +663,7 @@ Boundary:
 - `source-manifest report`: source manifest/provenance hardening reports manifest expectation, path/status, shallow schema/family/target consistency, and no-create/no-remote/no-hash/no-payload boundaries; it does not prove source readiness
 - `models download --repo ... --name ...`: downloaded target sidecars become the source identity for `models download status`, `source-manifest report --source`, and `models prepare --dry-run --audit`; this fixes target naming only and does not create GGUF/runtime support
 - `tensor-map`: source intake lanes
+- `model-target tensor-map --gate v0.1.0`: report-only mapping gate; pass means qtype/artifact planning can start, not runtime support
 - `tokenize`: fast regression lane
 - `tokenizer`: fast regression lane
 - `tensors`: artifact inspection lanes

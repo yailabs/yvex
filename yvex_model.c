@@ -2009,6 +2009,7 @@ typedef enum {
 #define YVEX_OUTPUT_HEAD_MAP_NEXT_ROW "V010.MAP.8"
 #define YVEX_TOKENIZER_MAP_NEXT_ROW "V010.MAP.8"
 #define YVEX_MISSING_ROLE_REPORT_NEXT_ROW "V010.MAP.9"
+#define YVEX_TENSOR_MAPPING_GATE_NEXT_ROW "V010.QUANT.0"
 #define YVEX_TENSOR_COLLECTION_LAYER_CAP 512u
 #define YVEX_TENSOR_NAMING_ENTRY_CAP 1024u
 #define YVEX_TENSOR_NAMING_TEXT_CAP 192u
@@ -2319,6 +2320,25 @@ typedef struct {
     unsigned long long missing_entry_count;
     yvex_missing_role_entry missing_entries[16];
 } yvex_missing_role_report_profile;
+
+typedef struct {
+    const yvex_model_target_record *record;
+    const yvex_model_class_profile_spec *spec;
+    const char *status;
+    const char *gate_result;
+    const char *top_blocker;
+    const char *next_required_row;
+    char missing_roles[256];
+    char missing_source_roles[192];
+    char missing_metadata_roles[128];
+    char ambiguous_roles[192];
+    yvex_model_class_profile model_class;
+    yvex_tensor_collection_profile tensor_collection;
+    yvex_tensor_naming_profile tensor_naming;
+    yvex_output_head_map_profile output_head;
+    yvex_tokenizer_map_profile tokenizer;
+    yvex_missing_role_report_profile missing_role;
+} yvex_tensor_mapping_gate_profile;
 
 static int model_class_name_contains_ci(const char *name, const char *needle)
 {
@@ -5462,6 +5482,322 @@ static void print_missing_role_report_audit_hint(
            YVEX_MISSING_ROLE_REPORT_NEXT_ROW);
 }
 
+static void tensor_mapping_gate_append_csv(char *out, size_t cap,
+                                           const char *value)
+{
+    size_t len;
+
+    if (!out || cap == 0 || !value || !value[0]) return;
+    len = strlen(out);
+    if (len + 1 >= cap) return;
+    if (len > 0) {
+        snprintf(out + len, cap - len, ",");
+        len = strlen(out);
+    }
+    if (len + 1 >= cap) return;
+    snprintf(out + len, cap - len, "%s", value);
+}
+
+static void tensor_mapping_gate_role_list(
+    const yvex_missing_role_report_profile *profile,
+    const char *status,
+    int metadata_filter,
+    char *out,
+    size_t cap)
+{
+    unsigned long long i;
+
+    if (!out || cap == 0) return;
+    out[0] = '\0';
+    if (!profile || !status) {
+        snprintf(out, cap, "none");
+        return;
+    }
+    for (i = 0; i < profile->missing_entry_count; ++i) {
+        const yvex_missing_role_entry *entry = &profile->missing_entries[i];
+        int is_metadata;
+
+        if (!entry || strcmp(entry->status, status) != 0) continue;
+        is_metadata = strstr(entry->blocker_class, "metadata") != NULL;
+        if (metadata_filter == 0 && is_metadata) continue;
+        if (metadata_filter == 1 && !is_metadata) continue;
+        tensor_mapping_gate_append_csv(out, cap, entry->name);
+    }
+    if (out[0] == '\0') {
+        snprintf(out, cap, "none");
+    }
+}
+
+static int tensor_mapping_gate_source_ready(
+    const yvex_tensor_mapping_gate_profile *profile)
+{
+    return profile &&
+           profile->model_class.source_exists &&
+           profile->tensor_collection.source_exists &&
+           profile->tensor_naming.source_exists &&
+           profile->output_head.source_exists &&
+           profile->tokenizer.source_exists &&
+           profile->missing_role.source_exists;
+}
+
+static int tensor_mapping_gate_tokenizer_ready(
+    const yvex_tokenizer_map_profile *profile)
+{
+    return profile &&
+           strcmp(profile->status, "tokenizer-metadata-profiled") == 0;
+}
+
+static int build_tensor_mapping_gate_profile(
+    const yvex_model_target_record *record,
+    const char *models_root_override,
+    const char *source_override,
+    yvex_tensor_mapping_gate_profile *profile)
+{
+    const yvex_model_class_profile_spec *spec;
+    int rc;
+
+    if (!record || !profile) return 2;
+    spec = find_model_class_profile_spec(record->target_id);
+    if (!spec) return 2;
+
+    memset(profile, 0, sizeof(*profile));
+    profile->record = record;
+    profile->spec = spec;
+    profile->status = "blocked-missing-source";
+    profile->gate_result = "blocked";
+    profile->top_blocker = spec->missing_source_blocker;
+    profile->next_required_row = YVEX_MISSING_ROLE_REPORT_NEXT_ROW;
+
+    rc = model_class_build_profile(record, spec, models_root_override,
+                                   source_override, &profile->model_class);
+    if (rc != 0) return rc;
+    rc = build_tensor_collection_profile(record, models_root_override,
+                                         source_override,
+                                         &profile->tensor_collection);
+    if (rc != 0) return rc;
+    rc = build_tensor_naming_profile(record, models_root_override,
+                                     source_override, &profile->tensor_naming);
+    if (rc != 0) return rc;
+    rc = build_output_head_map_profile(record, models_root_override,
+                                       source_override, &profile->output_head);
+    if (rc != 0) return rc;
+    rc = build_tokenizer_map_profile(record, models_root_override,
+                                     source_override, &profile->tokenizer);
+    if (rc != 0) return rc;
+    rc = build_missing_role_report_profile(record, models_root_override,
+                                           source_override,
+                                           &profile->missing_role);
+    if (rc != 0) return rc;
+
+    tensor_mapping_gate_role_list(&profile->missing_role, "missing", -1,
+                                  profile->missing_roles,
+                                  sizeof(profile->missing_roles));
+    tensor_mapping_gate_role_list(&profile->missing_role, "missing", 0,
+                                  profile->missing_source_roles,
+                                  sizeof(profile->missing_source_roles));
+    tensor_mapping_gate_role_list(&profile->missing_role, "missing", 1,
+                                  profile->missing_metadata_roles,
+                                  sizeof(profile->missing_metadata_roles));
+    tensor_mapping_gate_role_list(&profile->missing_role, "ambiguous", -1,
+                                  profile->ambiguous_roles,
+                                  sizeof(profile->ambiguous_roles));
+
+    if (!tensor_mapping_gate_source_ready(profile)) {
+        profile->status = "blocked-missing-source";
+        profile->top_blocker = spec->missing_source_blocker;
+    } else if (strcmp(profile->tensor_naming.status, "metadata-missing") == 0) {
+        profile->status = "blocked-missing-map";
+        profile->top_blocker = profile->tensor_naming.top_blocker;
+    } else if (strcmp(profile->output_head.status, "output-head-missing") == 0) {
+        profile->status = "blocked-missing-output-head";
+        profile->top_blocker = profile->output_head.top_blocker;
+    } else if (strcmp(profile->output_head.status, "output-head-ambiguous") == 0 ||
+               profile->missing_role.source_role_ambiguous_count > 0) {
+        profile->status = "blocked-ambiguous-output-head";
+        profile->top_blocker = profile->output_head.top_blocker;
+    } else if (!tensor_mapping_gate_tokenizer_ready(&profile->tokenizer) ||
+               profile->missing_role.metadata_missing_count > 0 ||
+               profile->missing_role.metadata_ambiguous_count > 0) {
+        profile->status = "blocked-missing-tokenizer-metadata";
+        profile->top_blocker =
+            profile->missing_role.metadata_ambiguous_count > 0
+                ? profile->missing_role.top_blocker
+                : profile->tokenizer.top_blocker;
+    } else if (profile->missing_role.source_role_missing_count > 0) {
+        profile->status = "blocked-missing-runtime-roles";
+        profile->top_blocker = profile->missing_role.top_blocker;
+    } else if (strcmp(profile->tensor_naming.status, "naming-map-profiled") != 0 &&
+               strcmp(profile->tensor_naming.status, "naming-map-candidate") != 0) {
+        profile->status = "blocked-missing-map";
+        profile->top_blocker = profile->tensor_naming.top_blocker;
+    } else {
+        profile->status = "passed-for-artifact-planning";
+        profile->gate_result = "pass";
+        profile->top_blocker = "missing-qtype-policy-report";
+        profile->next_required_row = YVEX_TENSOR_MAPPING_GATE_NEXT_ROW;
+    }
+
+    return 0;
+}
+
+static void print_tensor_mapping_gate_boundary(void)
+{
+    printf("boundary: V010.MAP.9 is a report-only tensor mapping gate. It does not load tensor payloads, emit artifacts, complete quantization/artifact contract, construct runtime descriptors, attach backend residency, feed graph consumers, execute prefill/decode/logits/tokenizer/sampling/generation, evaluate, benchmark, claim throughput, or mark v0.1.0 release-ready.\n");
+}
+
+static void print_tensor_mapping_gate_normal(
+    const yvex_tensor_mapping_gate_profile *profile)
+{
+    printf("gate: v0.1.0-tensor-mapping\n");
+    printf("status: %s\n", profile->status);
+    printf("target_id: %s\n", profile->record->target_id);
+    printf("family: %s\n", profile->spec->family_key);
+    printf("model_class: %s\n", profile->spec->class_name);
+    printf("source_class: %s\n", profile->record->source_artifact_class);
+    printf("source_status: %s\n",
+           tensor_mapping_gate_source_ready(profile) ? "present" : "missing");
+    printf("tensor_naming_map: %s\n", profile->tensor_naming.status);
+    printf("output_head_map: %s\n", profile->output_head.status);
+    printf("tokenizer_metadata_map: %s\n", profile->tokenizer.status);
+    printf("missing_role_report: %s\n", profile->missing_role.status);
+    printf("source_roles: observed=%llu required=12 missing=%llu ambiguous=%llu\n",
+           profile->missing_role.source_role_observed_count,
+           profile->missing_role.source_role_missing_count,
+           profile->missing_role.source_role_ambiguous_count);
+    printf("metadata_roles: observed=%llu required=4 missing=%llu ambiguous=%llu\n",
+           profile->missing_role.metadata_observed_count,
+           profile->missing_role.metadata_missing_count,
+           profile->missing_role.metadata_ambiguous_count);
+    printf("missing_roles: %s\n", profile->missing_roles);
+    printf("ambiguous_roles: %s\n", profile->ambiguous_roles);
+    printf("gate_result: %s\n", profile->gate_result);
+    printf("top_blocker: %s\n", profile->top_blocker);
+    printf("next: %s\n", profile->next_required_row);
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    print_tensor_mapping_gate_boundary();
+}
+
+static void print_tensor_mapping_gate_table(
+    const yvex_tensor_mapping_gate_profile *profile)
+{
+    printf("TENSOR MAPPING GATE\n\n");
+    printf("%-15s  %-6s  %-21s  %-12s  %-14s  %7s  %9s  %-34s  %s\n",
+           "TARGET", "FAMILY", "GATE", "SOURCE_ROLES", "METADATA_ROLES",
+           "MISSING", "AMBIGUOUS", "STATUS", "NEXT");
+    printf("%-15s  %-6s  %-21s  %2llu/12         %2llu/4          %7llu  %9llu  %-34s  %s\n",
+           profile->record->target_id,
+           profile->spec->family_key,
+           "v0.1.0-tensor-mapping",
+           profile->missing_role.source_role_observed_count,
+           profile->missing_role.metadata_observed_count,
+           profile->missing_role.source_role_missing_count +
+               profile->missing_role.metadata_missing_count,
+           profile->missing_role.source_role_ambiguous_count +
+               profile->missing_role.metadata_ambiguous_count,
+           profile->status,
+           profile->next_required_row);
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+}
+
+static void print_tensor_mapping_gate_audit(
+    const yvex_tensor_mapping_gate_profile *profile)
+{
+    printf("tensor_mapping_gate_status: %s\n", profile->status);
+    printf("tensor_mapping_gate: v0.1.0-tensor-mapping\n");
+    printf("tensor_mapping_gate_result: %s\n", profile->gate_result);
+    printf("tensor_mapping_gate_target_id: %s\n", profile->record->target_id);
+    printf("tensor_mapping_gate_family: %s\n", profile->spec->family_key);
+    printf("tensor_mapping_gate_model_class: %s\n", profile->spec->class_name);
+    printf("tensor_mapping_gate_source_class: %s\n",
+           profile->record->source_artifact_class);
+    printf("tensor_mapping_gate_source_status: %s\n",
+           tensor_mapping_gate_source_ready(profile) ? "present" : "missing");
+    printf("tensor_mapping_gate_source_path: %s\n",
+           profile->missing_role.source_path);
+    printf("tensor_mapping_gate_source_path_source: %s\n",
+           profile->missing_role.source_path_source);
+    printf("tensor_mapping_gate_source_report_path: not-written\n");
+    printf("tensor_mapping_gate_tensor_map_sidecar_path: not-written\n");
+    printf("tensor_mapping_gate_output_head_map_sidecar_path: not-written\n");
+    printf("tensor_mapping_gate_tokenizer_metadata_source_path: %s\n",
+           profile->tokenizer.source_path);
+    printf("tensor_mapping_gate_missing_role_report_sidecar_path: not-written\n");
+    printf("map_source.0: source-tensor-metadata-inventory\n");
+    printf("map_source.1: model-class-profile\n");
+    printf("map_source.2: tensor-collection-inventory\n");
+    printf("map_source.3: tensor-naming-map\n");
+    printf("map_source.4: output-head-tensor-map\n");
+    printf("map_source.5: tokenizer-metadata-map\n");
+    printf("map_source.6: missing-role-blocker-report\n");
+    printf("model_class_profile_status: %s\n", profile->model_class.status);
+    printf("tensor_collection_status: %s\n", profile->tensor_collection.status);
+    printf("tensor_naming_map_status: %s\n", profile->tensor_naming.status);
+    printf("output_head_map_status: %s\n", profile->output_head.status);
+    printf("tokenizer_metadata_map_status: %s\n", profile->tokenizer.status);
+    printf("missing_role_report_status: %s\n", profile->missing_role.status);
+    printf("expected_source_role_count: 12\n");
+    printf("observed_source_role_count: %llu\n",
+           profile->missing_role.source_role_observed_count);
+    printf("missing_source_role_count: %llu\n",
+           profile->missing_role.source_role_missing_count);
+    printf("ambiguous_source_role_count: %llu\n",
+           profile->missing_role.source_role_ambiguous_count);
+    printf("expected_metadata_role_count: 4\n");
+    printf("observed_metadata_role_count: %llu\n",
+           profile->missing_role.metadata_observed_count);
+    printf("missing_metadata_role_count: %llu\n",
+           profile->missing_role.metadata_missing_count);
+    printf("ambiguous_metadata_role_count: %llu\n",
+           profile->missing_role.metadata_ambiguous_count);
+    printf("missing_source_roles: %s\n", profile->missing_source_roles);
+    printf("missing_metadata_roles: %s\n", profile->missing_metadata_roles);
+    printf("missing_roles: %s\n", profile->missing_roles);
+    printf("ambiguous_roles: %s\n", profile->ambiguous_roles);
+    printf("downstream_blockers: artifact_contract=missing qtype_policy=missing runtime_descriptor=missing graph_consumer=missing backend_residency=missing logits_runtime=missing tokenizer_runtime=missing generation_runtime=missing eval_benchmark=missing\n");
+    printf("artifact_contract_status: missing\n");
+    printf("qtype_policy_status: missing\n");
+    printf("runtime_descriptor_status: missing\n");
+    printf("graph_consumer_status: missing\n");
+    printf("backend_residency_status: missing\n");
+    printf("logits_runtime_status: missing\n");
+    printf("tokenizer_runtime_status: missing\n");
+    printf("generation_runtime_status: missing\n");
+    printf("eval_benchmark_status: missing\n");
+    printf("top_blocker: %s\n", profile->top_blocker);
+    printf("next_required_rows: %s\n", profile->next_required_row);
+    printf("payload_bytes_read: false\n");
+    printf("artifact_emitted: false\n");
+    printf("runtime_descriptor_constructed: false\n");
+    printf("graph_consumer_fed: false\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    print_tensor_mapping_gate_boundary();
+}
+
+static void print_tensor_mapping_gate_audit_hint(
+    const yvex_model_target_record *record)
+{
+    const yvex_model_class_profile_spec *spec;
+
+    if (!record) return;
+    spec = find_model_class_profile_spec(record->target_id);
+    if (!spec) return;
+    printf("tensor_mapping_gate_status: not-run\n");
+    printf("tensor_mapping_gate: v0.1.0-tensor-mapping\n");
+    printf("tensor_mapping_gate_family: %s\n", spec->family_key);
+    printf("tensor_mapping_gate_target_id: %s\n", spec->target_id);
+    printf("tensor_mapping_gate_next_required_row: %s\n",
+           YVEX_TENSOR_MAPPING_GATE_NEXT_ROW);
+}
+
 static const char *target_decision_candidate_class(const yvex_model_target_record *record)
 {
     if (!record) return "unknown";
@@ -6594,7 +6930,7 @@ static void print_model_target_usage(FILE *fp)
     fprintf(fp, "       yvex model-target decision --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target class-profile TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target tensor-collection TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
-    fprintf(fp, "       yvex model-target tensor-map TARGET [--role output-head|tokenizer|missing-roles] [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
+    fprintf(fp, "       yvex model-target tensor-map TARGET [--role output-head|tokenizer|missing-roles | --gate v0.1.0] [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR] [--audit | --output normal|table|audit]\n");
 }
 
@@ -6642,6 +6978,10 @@ void yvex_model_target_help(FILE *fp)
     fprintf(fp, "  yvex model-target tensor-map qwen3-8b --role missing-roles --audit\n");
     fprintf(fp, "  yvex model-target tensor-map gemma-4-12b-it --role missing-roles --audit\n");
     fprintf(fp, "  The tokenizer metadata map reads local sidecars only and reports tokenizer/config/special-token metadata candidates. It does not tokenize, detokenize, apply chat templates, stop on EOS, compute logits, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    fprintf(fp, "\nTensor mapping gate:\n");
+    fprintf(fp, "  yvex model-target tensor-map qwen3-8b --gate v0.1.0 --audit\n");
+    fprintf(fp, "  yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0 --audit\n");
+    fprintf(fp, "  The tensor mapping gate aggregates model-class, tensor-collection, tensor naming, output-head, tokenizer metadata, and missing-role reports. It can pass only into artifact/quantization planning; it does not emit artifacts, construct runtime descriptors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "\nDefault output is compact. Use --audit for full diagnostic fields.\n");
     fprintf(fp, "Model targets are pressure objects, not capability claims.\n");
     fprintf(fp, "External GGUFs and external runners are reference evidence only.\n");
@@ -7029,6 +7369,7 @@ static void print_model_target_list(void)
         print_output_head_map_audit_hint(record);
         print_tokenizer_map_audit_hint(record);
         print_missing_role_report_audit_hint(record);
+        print_tensor_mapping_gate_audit_hint(record);
         printf("runtime_shape: %s\n", model_target_runtime_shape(record));
         printf("backend_selection: %s\n", model_target_backend_selection(record));
         printf("backend_pressure: %s\n", model_target_backend_pressure(record));
@@ -7112,6 +7453,7 @@ static void print_model_target_record(const yvex_model_target_record *record)
     print_output_head_map_audit_hint(record);
     print_tokenizer_map_audit_hint(record);
     print_missing_role_report_audit_hint(record);
+    print_tensor_mapping_gate_audit_hint(record);
     printf("target_artifact_class: %s\n", record->target_artifact_class);
     printf("target_artifact_status: %s\n", model_target_target_artifact_status(record));
     printf("target_artifact_origin: %s\n", model_target_target_artifact_origin(record));
@@ -7961,11 +8303,13 @@ int yvex_model_target_command(int argc, char **argv)
         const char *target_id = NULL;
         const char *source = NULL;
         const char *role = NULL;
+        const char *gate = NULL;
         const yvex_model_class_profile_spec *spec;
         yvex_tensor_naming_profile profile;
         yvex_output_head_map_profile output_head_profile;
         yvex_tokenizer_map_profile tokenizer_profile;
         yvex_missing_role_report_profile missing_role_profile;
+        yvex_tensor_mapping_gate_profile gate_profile;
         int rc;
 
         output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
@@ -8021,6 +8365,17 @@ int yvex_model_target_command(int argc, char **argv)
                             role);
                     return 2;
                 }
+            } else if (strcmp(argv[i], "--gate") == 0) {
+                if (i + 1 >= argc || argv[i + 1][0] == '\0') {
+                    fprintf(stderr, "model-target tensor-map: --gate requires v0.1.0\n");
+                    return 2;
+                }
+                gate = argv[++i];
+                if (strcmp(gate, "v0.1.0") != 0) {
+                    fprintf(stderr, "model-target tensor-map: unsupported release: %s\n",
+                            gate);
+                    return 2;
+                }
             } else if (strcmp(argv[i], "--json") == 0) {
                 fprintf(stderr, "model-target tensor-map: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
@@ -8028,6 +8383,25 @@ int yvex_model_target_command(int argc, char **argv)
                 fprintf(stderr, "model-target tensor-map: unknown option: %s\n", argv[i]);
                 return 2;
             }
+        }
+        if (role && gate) {
+            fprintf(stderr, "model-target tensor-map: --gate cannot be combined with --role\n");
+            return 2;
+        }
+        if (gate) {
+            rc = build_tensor_mapping_gate_profile(record, models_root, source,
+                                                   &gate_profile);
+            if (rc != 0) {
+                return rc;
+            }
+            if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+                print_tensor_mapping_gate_table(&gate_profile);
+            } else if (output_mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+                print_tensor_mapping_gate_audit(&gate_profile);
+            } else {
+                print_tensor_mapping_gate_normal(&gate_profile);
+            }
+            return 0;
         }
         if (role && strcmp(role, "output-head") == 0) {
             rc = build_output_head_map_profile(record, models_root, source,
