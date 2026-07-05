@@ -1446,7 +1446,7 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.MAP.1,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
+        "V010.MAP.6,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
@@ -1474,7 +1474,7 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.MAP.1",
+        "V010.MAP.6",
         {
             "planned-dense-pressure-only",
             "missing-gemma-source-path",
@@ -1664,7 +1664,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,V010.MAP.1,COMPUTE.BACKEND.METAL.0",
+        "V010.TARGET.7,V010.MAP.6,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
@@ -1710,7 +1710,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,V010.MAP.1",
+        "V010.TARGET.7,V010.MAP.6",
         {
             "planned-dense-pressure-only",
             "missing-gemma-source-path",
@@ -2009,9 +2009,9 @@ typedef enum {
     YVEX_MODEL_TARGET_OUTPUT_AUDIT
 } yvex_model_target_output_mode;
 
-#define YVEX_MODEL_CLASS_NEXT_ROW "V010.MAP.1"
-#define YVEX_TENSOR_COLLECTION_NEXT_ROW "V010.MAP.1"
-#define YVEX_QWEN_TENSOR_NAMING_NEXT_ROW "V010.MAP.1"
+#define YVEX_MODEL_CLASS_NEXT_ROW "V010.MAP.6"
+#define YVEX_TENSOR_COLLECTION_NEXT_ROW "V010.MAP.6"
+#define YVEX_TENSOR_NAMING_NEXT_ROW "V010.MAP.6"
 #define YVEX_TENSOR_COLLECTION_LAYER_CAP 512u
 #define YVEX_TENSOR_NAMING_ENTRY_CAP 1024u
 #define YVEX_TENSOR_NAMING_TEXT_CAP 192u
@@ -3279,8 +3279,8 @@ static void tensor_naming_set_mapped(yvex_tensor_naming_entry *entry,
     entry->mapping_status = "mapped-candidate";
 }
 
-static void qwen_tensor_naming_map_native(yvex_tensor_naming_entry *entry,
-                                          const char *name)
+static void dense_tensor_naming_map_native(yvex_tensor_naming_entry *entry,
+                                           const char *name)
 {
     unsigned long layer_index = 0;
     unsigned long expert_index = 0;
@@ -3385,6 +3385,18 @@ static void qwen_tensor_naming_map_native(yvex_tensor_naming_entry *entry,
         tensor_naming_set_mapped(entry, "norm", canonical);
         return;
     }
+    if (strstr(name, ".pre_feedforward_layernorm.weight")) {
+        snprintf(canonical, sizeof(canonical),
+                 "model.layers.%lu.mlp.norm.weight", layer_index);
+        tensor_naming_set_mapped(entry, "norm", canonical);
+        return;
+    }
+    if (strstr(name, ".post_feedforward_layernorm.weight")) {
+        snprintf(canonical, sizeof(canonical),
+                 "model.layers.%lu.mlp.norm.weight", layer_index);
+        tensor_naming_set_mapped(entry, "norm", canonical);
+        return;
+    }
     if (strstr(name, ".mlp.gate_proj.weight")) {
         snprintf(canonical, sizeof(canonical),
                  "model.layers.%lu.mlp.gate_proj.weight", layer_index);
@@ -3465,7 +3477,34 @@ static int tensor_naming_required_groups_present(
            profile->output_head_count > 0;
 }
 
-static int build_qwen_tensor_naming_profile(
+static const char *tensor_naming_header_blocker(
+    const yvex_model_class_profile_spec *spec)
+{
+    if (spec && strcmp(spec->family_key, "gemma") == 0) {
+        return "missing-gemma-header-metadata";
+    }
+    return "missing-qwen-header-metadata";
+}
+
+static const char *tensor_naming_incomplete_blocker(
+    const yvex_model_class_profile_spec *spec)
+{
+    if (spec && strcmp(spec->family_key, "gemma") == 0) {
+        return "incomplete-dense-tensor-naming-map";
+    }
+    return "incomplete-qwen-tensor-naming-map";
+}
+
+static const char *tensor_naming_runtime_role_blocker(
+    const yvex_model_class_profile_spec *spec)
+{
+    if (spec && strcmp(spec->family_key, "gemma") == 0) {
+        return "missing-dense-runtime-role-validation";
+    }
+    return "missing-qwen-runtime-role-validation";
+}
+
+static int build_tensor_naming_profile(
     const yvex_model_target_record *record,
     const char *models_root_override,
     const char *source_override,
@@ -3481,7 +3520,7 @@ static int build_qwen_tensor_naming_profile(
 
     if (!record || !profile) return 2;
     spec = find_model_class_profile_spec(record->target_id);
-    if (!spec || strcmp(spec->family_key, "qwen") != 0) return 2;
+    if (!spec) return 2;
 
     memset(profile, 0, sizeof(*profile));
     profile->record = record;
@@ -3511,7 +3550,7 @@ static int build_qwen_tensor_naming_profile(
     if (rc != YVEX_OK) {
         profile->status = "metadata-missing";
         profile->source_metadata_status = "header-error";
-        profile->top_blocker = "missing-qwen-header-metadata";
+        profile->top_blocker = tensor_naming_header_blocker(spec);
         return rc == YVEX_ERR_NOMEM ? 3 : 0;
     }
 
@@ -3542,7 +3581,7 @@ static int build_qwen_tensor_naming_profile(
         tensor_naming_copy(entry->source_file, sizeof(entry->source_file),
                            info->shard_path);
         entry->mapping_status = "unmapped-unknown";
-        qwen_tensor_naming_map_native(entry, info->name);
+        dense_tensor_naming_map_native(entry, info->name);
         tensor_naming_count_entry(profile, entry);
     }
     yvex_native_weight_table_close(table);
@@ -3551,18 +3590,26 @@ static int build_qwen_tensor_naming_profile(
         profile->tensor_count > 0 ? "header-only" : "no-safetensors";
     if (profile->tensor_count == 0) {
         profile->status = "metadata-missing";
-        profile->top_blocker = "missing-qwen-header-metadata";
+        profile->top_blocker = tensor_naming_header_blocker(spec);
     } else if (!tensor_naming_required_groups_present(profile)) {
         profile->status = "naming-map-incomplete";
-        profile->top_blocker = "incomplete-qwen-tensor-naming-map";
+        profile->top_blocker = tensor_naming_incomplete_blocker(spec);
     } else if (profile->unmapped_unknown_count > 0 || profile->ambiguous_count > 0) {
         profile->status = "naming-map-candidate";
-        profile->top_blocker = "missing-qwen-runtime-role-validation";
+        profile->top_blocker = tensor_naming_runtime_role_blocker(spec);
     } else {
         profile->status = "naming-map-profiled";
-        profile->top_blocker = "missing-qwen-runtime-role-validation";
+        profile->top_blocker = tensor_naming_runtime_role_blocker(spec);
     }
     return 0;
+}
+
+static int tensor_naming_is_dense_family(
+    const yvex_tensor_naming_profile *profile)
+{
+    return profile &&
+           profile->spec &&
+           strcmp(profile->spec->family_key, "gemma") == 0;
 }
 
 static unsigned long long tensor_naming_moe_count(
@@ -3575,8 +3622,12 @@ static unsigned long long tensor_naming_moe_count(
 static void print_tensor_naming_normal(
     const yvex_tensor_naming_profile *profile)
 {
-    printf("tensor-map: %s\n", profile->spec->family_key);
+    printf("tensor-map: %s\n",
+           tensor_naming_is_dense_family(profile) ? "dense" : profile->spec->family_key);
     printf("target: %s\n", profile->record->target_id);
+    if (tensor_naming_is_dense_family(profile)) {
+        printf("family: %s\n", profile->spec->family_key);
+    }
     printf("status: %s\n", profile->status);
     printf("stage: header-naming-map\n");
     printf("evidence: header-metadata-only\n");
@@ -3593,18 +3644,19 @@ static void print_tensor_naming_normal(
         printf("layers_observed: %llu\n", profile->layer_count_observed);
     }
     printf("top_blocker: %s\n", profile->top_blocker);
-    printf("next: %s\n", YVEX_QWEN_TENSOR_NAMING_NEXT_ROW);
-    printf("boundary: tensor naming map only; no runtime descriptor/graph/runtime/generation\n");
+    printf("next: %s\n", YVEX_TENSOR_NAMING_NEXT_ROW);
+    printf("boundary: %stensor naming map only; no runtime descriptor/graph/runtime/generation\n",
+           tensor_naming_is_dense_family(profile) ? "dense " : "");
 }
 
 static void print_tensor_naming_table(
     const yvex_tensor_naming_profile *profile)
 {
     printf("TENSOR NAMING MAP\n\n");
-    printf("%-6s  %-10s  %-19s  %5s  %5s  %4s  %3s  %4s  %4s  %3s  %7s  %6s  %s\n",
+    printf("%-6s  %-15s  %-19s  %5s  %5s  %4s  %3s  %4s  %4s  %3s  %7s  %6s  %s\n",
            "FAMILY", "TARGET", "STATUS", "TOTAL", "EMBED", "ATTN",
            "MLP", "NORM", "HEAD", "MOE", "UNKNOWN", "LAYERS", "NEXT");
-    printf("%-6s  %-10s  %-19s  %5llu  %5llu  %4llu  %3llu  %4llu  %4llu  %3llu  %7llu  %6llu  %s\n",
+    printf("%-6s  %-15s  %-19s  %5llu  %5llu  %4llu  %3llu  %4llu  %4llu  %3llu  %7llu  %6llu  %s\n",
            profile->spec->family_key,
            profile->record->target_id,
            profile->status,
@@ -3617,7 +3669,7 @@ static void print_tensor_naming_table(
            tensor_naming_moe_count(profile),
            profile->unmapped_unknown_count,
            profile->layer_count_observed,
-           YVEX_QWEN_TENSOR_NAMING_NEXT_ROW);
+           YVEX_TENSOR_NAMING_NEXT_ROW);
 }
 
 static void print_tensor_naming_audit(
@@ -3674,7 +3726,7 @@ static void print_tensor_naming_audit(
     printf("benchmark_status: not-measured\n");
     printf("release_ready: false\n");
     printf("top_blocker: %s\n", profile->top_blocker);
-    printf("next_required_rows: %s\n", YVEX_QWEN_TENSOR_NAMING_NEXT_ROW);
+    printf("next_required_rows: %s\n", YVEX_TENSOR_NAMING_NEXT_ROW);
     for (i = 0; i < profile->entry_count; ++i) {
         const yvex_tensor_naming_entry *entry = &profile->entries[i];
         printf("tensor_map.entry.%llu.native_name: %s\n", i, entry->native_name);
@@ -3694,20 +3746,23 @@ static void print_tensor_naming_audit(
         printf("tensor_map.entry.%llu.mapping: %s -> %s\n",
                i, entry->native_name, entry->canonical_role);
     }
-    printf("boundary: tensor naming map only; no runtime descriptor/graph/runtime/generation\n");
+    printf("boundary: %stensor naming map only; no runtime descriptor/graph/runtime/generation\n",
+           tensor_naming_is_dense_family(profile) ? "dense " : "");
 }
 
 static void print_tensor_map_audit_hint(const yvex_model_target_record *record)
 {
-    if (!record || strcmp(record->target_id, "qwen3-8b") != 0) {
-        return;
-    }
+    const yvex_model_class_profile_spec *spec;
+
+    if (!record) return;
+    spec = find_model_class_profile_spec(record->target_id);
+    if (!spec) return;
     printf("tensor_map_status: not-run\n");
-    printf("tensor_map_family: qwen\n");
-    printf("tensor_map_target_id: qwen3-8b\n");
+    printf("tensor_map_family: %s\n", spec->family_key);
+    printf("tensor_map_target_id: %s\n", spec->target_id);
     printf("tensor_map_stage: header-naming-map\n");
     printf("tensor_map_evidence_basis: header-metadata-only\n");
-    printf("tensor_map_next: %s\n", YVEX_QWEN_TENSOR_NAMING_NEXT_ROW);
+    printf("tensor_map_next: %s\n", YVEX_TENSOR_NAMING_NEXT_ROW);
 }
 
 static const char *target_decision_candidate_class(const yvex_model_target_record *record)
@@ -4878,7 +4933,8 @@ void yvex_model_target_help(FILE *fp)
     fprintf(fp, "  The tensor collection inventory reads safetensors headers only and groups lexical tensor candidates for the selected source target. It does not map runtime roles, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "\nTensor naming map:\n");
     fprintf(fp, "  yvex model-target tensor-map qwen3-8b --audit\n");
-    fprintf(fp, "  The Qwen tensor naming map reads safetensors headers only and assigns native Qwen tensor names to canonical YVEX role labels. It does not complete runtime role coverage, build runtime descriptors, emit artifacts, materialize tensors, feed graph consumers, execute Qwen, generate, evaluate, benchmark, or mark a release ready.\n");
+    fprintf(fp, "  yvex model-target tensor-map gemma-4-12b-it --audit\n");
+    fprintf(fp, "  The tensor naming map reads safetensors headers only and assigns native source tensor names to canonical YVEX role labels. It does not complete runtime role coverage, build runtime descriptors, emit artifacts, materialize tensors, feed graph consumers, execute the model, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "\nDefault output is compact. Use --audit for full diagnostic fields.\n");
     fprintf(fp, "Model targets are pressure objects, not capability claims.\n");
     fprintf(fp, "External GGUFs and external runners are reference evidence only.\n");
@@ -6203,7 +6259,9 @@ int yvex_model_target_command(int argc, char **argv)
         target_id = argv[3];
         record = find_model_target(target_id);
         spec = find_model_class_profile_spec(target_id);
-        if (!record || !spec || strcmp(spec->family_key, "qwen") != 0) {
+        if (!record || !spec ||
+            (strcmp(spec->family_key, "qwen") != 0 &&
+             strcmp(spec->family_key, "gemma") != 0)) {
             fprintf(stderr, "model-target tensor-map: unsupported target: %s\n",
                     target_id && target_id[0] ? target_id : "none");
             return 2;
@@ -6241,7 +6299,7 @@ int yvex_model_target_command(int argc, char **argv)
                 return 2;
             }
         }
-        rc = build_qwen_tensor_naming_profile(record, models_root, source, &profile);
+        rc = build_tensor_naming_profile(record, models_root, source, &profile);
         if (rc != 0) {
             return rc;
         }

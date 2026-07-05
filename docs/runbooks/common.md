@@ -99,6 +99,9 @@ make
 ./yvex model-target tensor-collection gemma-4-12b-it
 ./yvex model-target tensor-collection gemma-4-12b-it --output table
 ./yvex model-target tensor-collection gemma-4-12b-it --audit
+./yvex model-target tensor-map gemma-4-12b-it
+./yvex model-target tensor-map gemma-4-12b-it --output table
+./yvex model-target tensor-map gemma-4-12b-it --audit
 ./yvex model-target decision --help
 ./yvex model-target decision --release v0.1.0 --output table
 ./yvex model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
@@ -155,6 +158,12 @@ Qwen source tensors. It assigns native names to canonical YVEX role-label
 candidates without payload loading, artifact emission, runtime descriptor
 construction, graph consumption, Metal support, generation, evaluation, or
 benchmark claims.
+
+`model-target tensor-map gemma-4-12b-it` is a header-derived dense tensor
+naming map for Gemma source tensors. It assigns native names to canonical YVEX
+dense role-label candidates without payload loading, artifact emission, runtime
+descriptor construction, graph consumption, CUDA runtime support, generation,
+evaluation, or benchmark claims.
 
 ## Lane 1 — Graph-only regression
 
