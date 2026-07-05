@@ -12,6 +12,97 @@ matches() {
   grep -E -- "$pattern" "$file" >/dev/null
 }
 
+make_missing_role_source() {
+  dir=$1
+  variant=${2:-complete}
+  rm -rf "$dir"
+  mkdir -p "$dir"
+  if [ "$variant" != "missing-metadata" ]; then
+    cat > "$dir/config.json" <<'JSON'
+{
+  "model_type": "qwen",
+  "vocab_size": 16,
+  "hidden_size": 8,
+  "bos_token_id": 1,
+  "eos_token_id": 2,
+  "pad_token_id": 0,
+  "unk_token_id": 3
+}
+JSON
+    cat > "$dir/tokenizer_config.json" <<'JSON'
+{
+  "tokenizer_class": "PreTrainedTokenizerFast",
+  "bos_token_id": 1,
+  "eos_token_id": 2,
+  "pad_token_id": 0,
+  "unk_token_id": 3
+}
+JSON
+    cat > "$dir/special_tokens_map.json" <<'JSON'
+{
+  "bos_token": "<s>",
+  "eos_token": "</s>",
+  "unk_token": "<unk>",
+  "pad_token": "<pad>",
+  "additional_special_tokens": []
+}
+JSON
+    cat > "$dir/generation_config.json" <<'JSON'
+{
+  "bos_token_id": 1,
+  "eos_token_id": 2,
+  "pad_token_id": 0
+}
+JSON
+    printf '{"version":"1.0","model":{"type":"BPE"}}\n' > "$dir/tokenizer.json"
+  fi
+  python3 - "$dir/model.safetensors" "$variant" <<'PY'
+import json
+import struct
+import sys
+
+variant = sys.argv[2]
+items = [
+    ("model.embed_tokens.weight", [16, 8]),
+    ("model.layers.0.self_attn.q_proj.weight", [8, 8]),
+    ("model.layers.0.self_attn.k_proj.weight", [8, 8]),
+    ("model.layers.0.self_attn.v_proj.weight", [8, 8]),
+    ("model.layers.0.self_attn.o_proj.weight", [8, 8]),
+    ("model.layers.0.mlp.gate_proj.weight", [16, 8]),
+    ("model.layers.0.mlp.up_proj.weight", [16, 8]),
+    ("model.layers.0.mlp.down_proj.weight", [8, 16]),
+    ("model.layers.0.input_layernorm.weight", [8]),
+    ("model.layers.0.post_attention_layernorm.weight", [8]),
+    ("model.norm.weight", [8]),
+    ("lm_head.weight", [16, 8]),
+]
+if variant == "missing-attention-k":
+    items = [item for item in items if item[0] != "model.layers.0.self_attn.k_proj.weight"]
+if variant == "missing-output-head":
+    items = [item for item in items if item[0] != "lm_head.weight"]
+if variant == "ambiguous-output-head":
+    items.append(("output.weight", [16, 8]))
+offset = 0
+header = {}
+for name, shape in items:
+    size = 1
+    for dim in shape:
+        size *= dim
+    nbytes = size * 4
+    header[name] = {
+        "dtype": "F32",
+        "shape": shape,
+        "data_offsets": [offset, offset + nbytes],
+    }
+    offset += nbytes
+blob = json.dumps(header, separators=(",", ":")).encode("utf-8")
+with open(sys.argv[1], "wb") as f:
+    f.write(struct.pack("<Q", len(blob)))
+    f.write(blob)
+    f.write(b"x" * offset)
+PY
+}
+
 expect_rc() {
   expected=$1
   shift
@@ -1399,6 +1490,152 @@ grep 'generation: unsupported-full-model' "$ROOT/tokenizer-map-malformed-audit.o
 rm -rf "$TOKENIZER_MALFORMED_SOURCE"
 rm -rf "$TOKENIZER_COMPLETE_SOURCE"
 
+MISSING_ROLE_COMPLETE_SOURCE="${TMPDIR:-/tmp}/yvex-missing-role-complete-test-$$"
+make_missing_role_source "$MISSING_ROLE_COMPLETE_SOURCE" complete
+
+"$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" > "$ROOT/missing-role-qwen.out"
+grep 'missing-role-report: qwen' "$ROOT/missing-role-qwen.out"
+grep 'target: qwen3-8b' "$ROOT/missing-role-qwen.out"
+grep 'status: missing-role-report-blocked' "$ROOT/missing-role-qwen.out"
+grep 'stage: missing-role-blocker-report' "$ROOT/missing-role-qwen.out"
+grep 'evidence: header-and-sidecar-metadata-only' "$ROOT/missing-role-qwen.out"
+grep 'source_roles: observed=12 missing=0 ambiguous=0' "$ROOT/missing-role-qwen.out"
+grep 'metadata_roles: observed=4 missing=0 ambiguous=0' "$ROOT/missing-role-qwen.out"
+grep 'downstream_blockers: artifact_contract=missing runtime_descriptor=missing graph_consumer=missing runtime_path=missing' "$ROOT/missing-role-qwen.out"
+grep 'top_blocker: missing-artifact-contract' "$ROOT/missing-role-qwen.out"
+grep 'next: V010.MAP.9' "$ROOT/missing-role-qwen.out"
+grep 'boundary: missing-role report only; no artifact/runtime descriptor/graph/runtime/generation' "$ROOT/missing-role-qwen.out"
+
+"$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" --output table > "$ROOT/missing-role-qwen-table.out"
+grep 'MISSING ROLE BLOCKER REPORT' "$ROOT/missing-role-qwen-table.out"
+matches "$ROOT/missing-role-qwen-table.out" '^FAMILY[[:space:]]{2,}TARGET[[:space:]]{2,}STATUS[[:space:]]{2,}OBS_SRC[[:space:]]{2,}MISS_SRC[[:space:]]{2,}AMBIG_SRC[[:space:]]{2,}OBS_META[[:space:]]{2,}MISS_META[[:space:]]{2,}TOP_BLOCKER[[:space:]]{2,}NEXT$'
+matches "$ROOT/missing-role-qwen-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}missing-role-report-blocked[[:space:]]{2,}12[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}4[[:space:]]{2,}0[[:space:]]{2,}missing-artifact-contract[[:space:]]{2,}V010\.MAP\.9$'
+
+"$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" --audit > "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_report_status: missing-role-report-blocked' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_report_family: qwen' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_report_target_id: qwen3-8b' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_report_stage: missing-role-blocker-report' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_report_evidence_basis: header-and-sidecar-metadata-only' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_source_role_required_count: 12' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_source_role_observed_count: 12' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_source_role_missing_count: 0' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_metadata_required_count: 4' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_metadata_observed_count: 4' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_metadata_missing_count: 0' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_embedding_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_attention_norm_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_attention_q_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_attention_k_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_attention_v_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_attention_o_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_mlp_norm_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_mlp_gate_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_mlp_up_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_mlp_down_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_final_norm_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_output_head_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_tokenizer_metadata_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_config_metadata_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_generation_metadata_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_special_tokens_status: present' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_artifact_contract_status: missing' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_runtime_descriptor_status: missing' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_graph_consumer_status: missing' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_logits_runtime_status: missing' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_tokenizer_runtime_status: missing' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_top_blocker: missing-artifact-contract' "$ROOT/missing-role-qwen-audit.out"
+grep 'missing_role_next_required_row: V010.MAP.9' "$ROOT/missing-role-qwen-audit.out"
+grep 'runtime_claim: unsupported' "$ROOT/missing-role-qwen-audit.out"
+grep 'generation: unsupported-full-model' "$ROOT/missing-role-qwen-audit.out"
+grep 'benchmark_status: not-measured' "$ROOT/missing-role-qwen-audit.out"
+grep 'release_ready: false' "$ROOT/missing-role-qwen-audit.out"
+
+"$YVEX_BIN" model-target tensor-map gemma-4-12b-it --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" > "$ROOT/missing-role-gemma.out"
+grep 'missing-role-report: gemma' "$ROOT/missing-role-gemma.out"
+grep 'target: gemma-4-12b-it' "$ROOT/missing-role-gemma.out"
+grep 'status: missing-role-report-blocked' "$ROOT/missing-role-gemma.out"
+grep 'source_roles: observed=12 missing=0 ambiguous=0' "$ROOT/missing-role-gemma.out"
+grep 'metadata_roles: observed=4 missing=0 ambiguous=0' "$ROOT/missing-role-gemma.out"
+grep 'top_blocker: missing-artifact-contract' "$ROOT/missing-role-gemma.out"
+grep 'next: V010.MAP.9' "$ROOT/missing-role-gemma.out"
+"$YVEX_BIN" model-target tensor-map gemma-4-12b-it --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" --output table > "$ROOT/missing-role-gemma-table.out"
+matches "$ROOT/missing-role-gemma-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}missing-role-report-blocked[[:space:]]{2,}12[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}4[[:space:]]{2,}0[[:space:]]{2,}missing-artifact-contract[[:space:]]{2,}V010\.MAP\.9$'
+"$YVEX_BIN" model-target tensor-map gemma-4-12b-it --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" --audit > "$ROOT/missing-role-gemma-audit.out"
+grep 'missing_role_report_status: missing-role-report-blocked' "$ROOT/missing-role-gemma-audit.out"
+grep 'missing_role_report_family: gemma' "$ROOT/missing-role-gemma-audit.out"
+grep 'missing_role_source_role_observed_count: 12' "$ROOT/missing-role-gemma-audit.out"
+grep 'missing_role_metadata_observed_count: 4' "$ROOT/missing-role-gemma-audit.out"
+grep 'runtime_claim: unsupported' "$ROOT/missing-role-gemma-audit.out"
+grep 'generation: unsupported-full-model' "$ROOT/missing-role-gemma-audit.out"
+
+MISSING_ROLE_NO_K_SOURCE="${TMPDIR:-/tmp}/yvex-missing-role-no-k-test-$$"
+make_missing_role_source "$MISSING_ROLE_NO_K_SOURCE" missing-attention-k
+"$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_NO_K_SOURCE" > "$ROOT/missing-role-qwen-no-k.out"
+grep 'status: missing-role-report-incomplete' "$ROOT/missing-role-qwen-no-k.out"
+grep 'source_roles: observed=11 missing=1 ambiguous=0' "$ROOT/missing-role-qwen-no-k.out"
+grep 'missing_source_roles: attention_k' "$ROOT/missing-role-qwen-no-k.out"
+grep 'top_blocker: missing-source-role-attention-k' "$ROOT/missing-role-qwen-no-k.out"
+"$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_NO_K_SOURCE" --audit > "$ROOT/missing-role-qwen-no-k-audit.out"
+grep 'missing_role_attention_k_status: missing' "$ROOT/missing-role-qwen-no-k-audit.out"
+grep 'missing_role_top_blocker: missing-source-role-attention-k' "$ROOT/missing-role-qwen-no-k-audit.out"
+grep 'missing_role.entry.0.role: attention_k' "$ROOT/missing-role-qwen-no-k-audit.out"
+grep 'missing_role.entry.0.blocker_class: source-role-missing' "$ROOT/missing-role-qwen-no-k-audit.out"
+
+MISSING_ROLE_NO_HEAD_SOURCE="${TMPDIR:-/tmp}/yvex-missing-role-no-head-test-$$"
+make_missing_role_source "$MISSING_ROLE_NO_HEAD_SOURCE" missing-output-head
+"$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_NO_HEAD_SOURCE" > "$ROOT/missing-role-qwen-no-head.out"
+grep 'status: missing-role-report-incomplete' "$ROOT/missing-role-qwen-no-head.out"
+grep 'missing_source_roles: output_head' "$ROOT/missing-role-qwen-no-head.out"
+grep 'top_blocker: missing-source-role-output-head' "$ROOT/missing-role-qwen-no-head.out"
+"$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_NO_HEAD_SOURCE" --audit > "$ROOT/missing-role-qwen-no-head-audit.out"
+grep 'missing_role_output_head_status: missing' "$ROOT/missing-role-qwen-no-head-audit.out"
+grep 'missing_role_top_blocker: missing-source-role-output-head' "$ROOT/missing-role-qwen-no-head-audit.out"
+
+MISSING_ROLE_NO_METADATA_SOURCE="${TMPDIR:-/tmp}/yvex-missing-role-no-metadata-test-$$"
+make_missing_role_source "$MISSING_ROLE_NO_METADATA_SOURCE" missing-metadata
+"$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_NO_METADATA_SOURCE" > "$ROOT/missing-role-qwen-no-metadata.out"
+grep 'status: missing-role-report-incomplete' "$ROOT/missing-role-qwen-no-metadata.out"
+grep 'source_roles: observed=12 missing=0 ambiguous=0' "$ROOT/missing-role-qwen-no-metadata.out"
+grep 'metadata_roles: observed=0 missing=4 ambiguous=0' "$ROOT/missing-role-qwen-no-metadata.out"
+grep 'missing_metadata_roles: tokenizer_metadata,config_metadata,generation_metadata,special_tokens' "$ROOT/missing-role-qwen-no-metadata.out"
+grep 'top_blocker: missing-tokenizer-metadata' "$ROOT/missing-role-qwen-no-metadata.out"
+"$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_NO_METADATA_SOURCE" --audit > "$ROOT/missing-role-qwen-no-metadata-audit.out"
+grep 'missing_role_tokenizer_metadata_status: missing' "$ROOT/missing-role-qwen-no-metadata-audit.out"
+grep 'missing_role_config_metadata_status: missing' "$ROOT/missing-role-qwen-no-metadata-audit.out"
+grep 'missing_role_generation_metadata_status: missing' "$ROOT/missing-role-qwen-no-metadata-audit.out"
+grep 'missing_role_special_tokens_status: missing' "$ROOT/missing-role-qwen-no-metadata-audit.out"
+grep 'missing_role_top_blocker: missing-tokenizer-metadata' "$ROOT/missing-role-qwen-no-metadata-audit.out"
+
+MISSING_ROLE_AMBIG_SOURCE="${TMPDIR:-/tmp}/yvex-missing-role-ambig-test-$$"
+make_missing_role_source "$MISSING_ROLE_AMBIG_SOURCE" ambiguous-output-head
+"$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_AMBIG_SOURCE" > "$ROOT/missing-role-qwen-ambiguous.out"
+grep 'status: missing-role-report-ambiguous' "$ROOT/missing-role-qwen-ambiguous.out"
+grep 'source_roles: observed=11 missing=0 ambiguous=1' "$ROOT/missing-role-qwen-ambiguous.out"
+grep 'top_blocker: ambiguous-source-role-output-head' "$ROOT/missing-role-qwen-ambiguous.out"
+"$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_AMBIG_SOURCE" --audit > "$ROOT/missing-role-qwen-ambiguous-audit.out"
+grep 'missing_role_output_head_status: ambiguous' "$ROOT/missing-role-qwen-ambiguous-audit.out"
+grep 'missing_role_top_blocker: ambiguous-source-role-output-head' "$ROOT/missing-role-qwen-ambiguous-audit.out"
+grep 'missing_role.entry.0.role: output_head' "$ROOT/missing-role-qwen-ambiguous-audit.out"
+grep 'missing_role.entry.0.blocker_class: source-role-ambiguous' "$ROOT/missing-role-qwen-ambiguous-audit.out"
+
+MISSING_ROLE_MISSING_ROOT="$ROOT/missing-role-missing-root"
+rm -rf "$MISSING_ROLE_MISSING_ROOT"
+"$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --models-root "$MISSING_ROLE_MISSING_ROOT" > "$ROOT/missing-role-qwen-missing-source.out"
+grep 'status: source-missing' "$ROOT/missing-role-qwen-missing-source.out"
+grep 'source_roles: observed=0 missing=12 ambiguous=0' "$ROOT/missing-role-qwen-missing-source.out"
+grep 'metadata_roles: observed=0 missing=4 ambiguous=0' "$ROOT/missing-role-qwen-missing-source.out"
+grep 'top_blocker: missing-qwen-source-path' "$ROOT/missing-role-qwen-missing-source.out"
+grep 'next: V010.MAP.9' "$ROOT/missing-role-qwen-missing-source.out"
+"$YVEX_BIN" model-target tensor-map gemma-4-12b-it --role missing-roles --models-root "$MISSING_ROLE_MISSING_ROOT" > "$ROOT/missing-role-gemma-missing-source.out"
+grep 'status: source-missing' "$ROOT/missing-role-gemma-missing-source.out"
+grep 'top_blocker: missing-gemma-source-path' "$ROOT/missing-role-gemma-missing-source.out"
+grep 'next: V010.MAP.9' "$ROOT/missing-role-gemma-missing-source.out"
+
+rm -rf "$MISSING_ROLE_COMPLETE_SOURCE" "$MISSING_ROLE_NO_K_SOURCE" \
+  "$MISSING_ROLE_NO_HEAD_SOURCE" "$MISSING_ROLE_NO_METADATA_SOURCE" \
+  "$MISSING_ROLE_AMBIG_SOURCE"
+
 QWEN_OUTPUT_HEAD_MISSING_SOURCE="${TMPDIR:-/tmp}/yvex-qwen-output-head-missing-test-$$"
 rm -rf "$QWEN_OUTPUT_HEAD_MISSING_SOURCE"
 mkdir -p "$QWEN_OUTPUT_HEAD_MISSING_SOURCE"
@@ -1980,6 +2217,14 @@ expect_rc 2 "$YVEX_BIN" model-target tensor-map qwen3-8b --role tokenizer --outp
 grep 'unsupported output mode: nope' "$ROOT/tokenizer-bad-output.err"
 expect_rc 2 "$YVEX_BIN" model-target tensor-map qwen3-8b --role tokenizer --source > "$ROOT/tokenizer-missing-source.out" 2> "$ROOT/tokenizer-missing-source.err"
 grep 'source requires DIR' "$ROOT/tokenizer-missing-source.err"
+expect_rc 2 "$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --output nope > "$ROOT/missing-role-bad-output.out" 2> "$ROOT/missing-role-bad-output.err"
+grep 'unsupported output mode: nope' "$ROOT/missing-role-bad-output.err"
+expect_rc 2 "$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --source > "$ROOT/missing-role-missing-source.out" 2> "$ROOT/missing-role-missing-source.err"
+grep 'source requires DIR' "$ROOT/missing-role-missing-source.err"
+expect_rc 2 "$YVEX_BIN" model-target tensor-map qwen-metal-portability --role missing-roles > "$ROOT/missing-role-old-qwen-target.out" 2> "$ROOT/missing-role-old-qwen-target.err"
+grep 'unsupported target: qwen-metal-portability' "$ROOT/missing-role-old-qwen-target.err"
+expect_rc 2 "$YVEX_BIN" model-target tensor-map gemma-dense-portability --role missing-roles > "$ROOT/missing-role-old-gemma-target.out" 2> "$ROOT/missing-role-old-gemma-target.err"
+grep 'unsupported target: gemma-dense-portability' "$ROOT/missing-role-old-gemma-target.err"
 
 "$YVEX_BIN" model-target decision --help > "$ROOT/model-target-decision-help.out"
 grep 'usage: yvex model-target decision --release v0.1.0' "$ROOT/model-target-decision-help.out"

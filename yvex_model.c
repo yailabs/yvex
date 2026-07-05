@@ -2008,6 +2008,7 @@ typedef enum {
 #define YVEX_TENSOR_NAMING_NEXT_ROW "V010.MAP.8"
 #define YVEX_OUTPUT_HEAD_MAP_NEXT_ROW "V010.MAP.8"
 #define YVEX_TOKENIZER_MAP_NEXT_ROW "V010.MAP.8"
+#define YVEX_MISSING_ROLE_REPORT_NEXT_ROW "V010.MAP.9"
 #define YVEX_TENSOR_COLLECTION_LAYER_CAP 512u
 #define YVEX_TENSOR_NAMING_ENTRY_CAP 1024u
 #define YVEX_TENSOR_NAMING_TEXT_CAP 192u
@@ -2277,6 +2278,47 @@ typedef struct {
     const char *chat_template_status;
     const char *chat_template_present;
 } yvex_tokenizer_map_profile;
+
+typedef struct {
+    const char *name;
+    const char *status;
+    const char *blocker_class;
+} yvex_missing_role_entry;
+
+typedef struct {
+    const yvex_model_target_record *record;
+    const yvex_model_class_profile_spec *spec;
+    const char *status;
+    const char *top_blocker;
+    char top_blocker_storage[96];
+    char source_path[YVEX_PATH_CAP];
+    char source_path_source[32];
+    int source_exists;
+    const char *embedding_status;
+    const char *attention_norm_status;
+    const char *attention_q_status;
+    const char *attention_k_status;
+    const char *attention_v_status;
+    const char *attention_o_status;
+    const char *mlp_norm_status;
+    const char *mlp_gate_status;
+    const char *mlp_up_status;
+    const char *mlp_down_status;
+    const char *final_norm_status;
+    const char *output_head_status;
+    const char *tokenizer_metadata_status;
+    const char *config_metadata_status;
+    const char *generation_metadata_status;
+    const char *special_tokens_status;
+    unsigned long long source_role_observed_count;
+    unsigned long long source_role_missing_count;
+    unsigned long long source_role_ambiguous_count;
+    unsigned long long metadata_observed_count;
+    unsigned long long metadata_missing_count;
+    unsigned long long metadata_ambiguous_count;
+    unsigned long long missing_entry_count;
+    yvex_missing_role_entry missing_entries[16];
+} yvex_missing_role_report_profile;
 
 static int model_class_name_contains_ci(const char *name, const char *needle)
 {
@@ -4918,6 +4960,508 @@ static void print_tokenizer_map_audit_hint(const yvex_model_target_record *recor
     printf("tokenizer_map_next: %s\n", YVEX_TOKENIZER_MAP_NEXT_ROW);
 }
 
+static const char *missing_role_many_status(unsigned long long count)
+{
+    return count > 0 ? "present" : "missing";
+}
+
+static const char *missing_role_singleton_status(unsigned long long count)
+{
+    if (count == 0) return "missing";
+    if (count > 1) return "ambiguous";
+    return "present";
+}
+
+static unsigned long long missing_role_count_canonical(
+    const yvex_tensor_naming_profile *profile,
+    const char *needle)
+{
+    unsigned long long i;
+    unsigned long long count = 0;
+
+    if (!profile || !needle) return 0;
+    for (i = 0; i < profile->entry_count; ++i) {
+        const yvex_tensor_naming_entry *entry = &profile->entries[i];
+        if (strcmp(entry->mapping_status, "mapped-candidate") == 0 &&
+            strstr(entry->canonical_role, needle)) {
+            count++;
+        }
+    }
+    return count;
+}
+
+static void missing_role_tally(const char *status,
+                               unsigned long long *observed,
+                               unsigned long long *missing,
+                               unsigned long long *ambiguous)
+{
+    if (!status) return;
+    if (strcmp(status, "present") == 0) {
+        if (observed) (*observed)++;
+    } else if (strcmp(status, "ambiguous") == 0) {
+        if (ambiguous) (*ambiguous)++;
+    } else {
+        if (missing) (*missing)++;
+    }
+}
+
+static const char *missing_role_metadata_status(
+    const yvex_tokenizer_map_sidecar *sidecar)
+{
+    return tokenizer_map_sidecar_present(sidecar) ? "present" : "missing";
+}
+
+static void missing_role_add_entry(yvex_missing_role_report_profile *profile,
+                                   const char *name,
+                                   const char *status,
+                                   const char *blocker_class)
+{
+    yvex_missing_role_entry *entry;
+
+    if (!profile || !name || !status || strcmp(status, "present") == 0) return;
+    if (profile->missing_entry_count >=
+        sizeof(profile->missing_entries) / sizeof(profile->missing_entries[0])) {
+        return;
+    }
+    entry = &profile->missing_entries[profile->missing_entry_count++];
+    entry->name = name;
+    entry->status = status;
+    entry->blocker_class = blocker_class;
+}
+
+static const char *missing_role_first_missing_source(
+    const yvex_missing_role_report_profile *profile)
+{
+    if (!profile) return "unknown";
+    if (strcmp(profile->embedding_status, "missing") == 0) return "embedding";
+    if (strcmp(profile->attention_norm_status, "missing") == 0) return "attention-norm";
+    if (strcmp(profile->attention_q_status, "missing") == 0) return "attention-q";
+    if (strcmp(profile->attention_k_status, "missing") == 0) return "attention-k";
+    if (strcmp(profile->attention_v_status, "missing") == 0) return "attention-v";
+    if (strcmp(profile->attention_o_status, "missing") == 0) return "attention-o";
+    if (strcmp(profile->mlp_norm_status, "missing") == 0) return "mlp-norm";
+    if (strcmp(profile->mlp_gate_status, "missing") == 0) return "mlp-gate";
+    if (strcmp(profile->mlp_up_status, "missing") == 0) return "mlp-up";
+    if (strcmp(profile->mlp_down_status, "missing") == 0) return "mlp-down";
+    if (strcmp(profile->final_norm_status, "missing") == 0) return "final-norm";
+    if (strcmp(profile->output_head_status, "missing") == 0) return "output-head";
+    return "unknown";
+}
+
+static const char *missing_role_first_ambiguous_source(
+    const yvex_missing_role_report_profile *profile)
+{
+    if (!profile) return "unknown";
+    if (strcmp(profile->embedding_status, "ambiguous") == 0) return "embedding";
+    if (strcmp(profile->final_norm_status, "ambiguous") == 0) return "final-norm";
+    if (strcmp(profile->output_head_status, "ambiguous") == 0) return "output-head";
+    return "unknown";
+}
+
+static int build_missing_role_report_profile(
+    const yvex_model_target_record *record,
+    const char *models_root_override,
+    const char *source_override,
+    yvex_missing_role_report_profile *profile)
+{
+    yvex_tensor_naming_profile naming_profile;
+    yvex_output_head_map_profile output_profile;
+    yvex_tokenizer_map_profile tokenizer_profile;
+    const char *first_source;
+    int rc;
+
+    if (!record || !profile) return 2;
+    memset(profile, 0, sizeof(*profile));
+    profile->record = record;
+    profile->spec = find_model_class_profile_spec(record->target_id);
+    if (!profile->spec) return 2;
+    profile->status = "source-missing";
+    profile->top_blocker = profile->spec->missing_source_blocker;
+
+    rc = build_tensor_naming_profile(record, models_root_override,
+                                     source_override, &naming_profile);
+    if (rc != 0) return rc;
+    rc = build_output_head_map_profile(record, models_root_override,
+                                       source_override, &output_profile);
+    if (rc != 0) return rc;
+    rc = build_tokenizer_map_profile(record, models_root_override,
+                                     source_override, &tokenizer_profile);
+    if (rc != 0) return rc;
+
+    snprintf(profile->source_path, sizeof(profile->source_path), "%s",
+             naming_profile.source_path);
+    snprintf(profile->source_path_source, sizeof(profile->source_path_source),
+             "%s", naming_profile.source_path_source);
+    profile->source_exists = naming_profile.source_exists;
+
+    if (!profile->source_exists) {
+        profile->embedding_status = "missing";
+        profile->attention_norm_status = "missing";
+        profile->attention_q_status = "missing";
+        profile->attention_k_status = "missing";
+        profile->attention_v_status = "missing";
+        profile->attention_o_status = "missing";
+        profile->mlp_norm_status = "missing";
+        profile->mlp_gate_status = "missing";
+        profile->mlp_up_status = "missing";
+        profile->mlp_down_status = "missing";
+        profile->final_norm_status = "missing";
+        profile->output_head_status = "missing";
+        profile->tokenizer_metadata_status = "missing";
+        profile->config_metadata_status = "missing";
+        profile->generation_metadata_status = "missing";
+        profile->special_tokens_status = "missing";
+    } else {
+        profile->embedding_status =
+            missing_role_singleton_status(naming_profile.embedding_count);
+        profile->attention_norm_status =
+            missing_role_many_status(missing_role_count_canonical(
+                &naming_profile, ".attention.norm.weight"));
+        profile->attention_q_status =
+            missing_role_many_status(naming_profile.attention_q_count);
+        profile->attention_k_status =
+            missing_role_many_status(naming_profile.attention_k_count);
+        profile->attention_v_status =
+            missing_role_many_status(naming_profile.attention_v_count);
+        profile->attention_o_status =
+            missing_role_many_status(naming_profile.attention_o_count);
+        profile->mlp_norm_status =
+            missing_role_many_status(missing_role_count_canonical(
+                &naming_profile, ".mlp.norm.weight"));
+        profile->mlp_gate_status =
+            missing_role_many_status(naming_profile.mlp_gate_count);
+        profile->mlp_up_status =
+            missing_role_many_status(naming_profile.mlp_up_count);
+        profile->mlp_down_status =
+            missing_role_many_status(naming_profile.mlp_down_count);
+        profile->final_norm_status =
+            missing_role_singleton_status(missing_role_count_canonical(
+                &naming_profile, "model.final_norm.weight"));
+        profile->output_head_status =
+            output_profile.output_head_candidate_count > 1
+                ? "ambiguous"
+                : missing_role_many_status(output_profile.output_head_candidate_count);
+        profile->tokenizer_metadata_status =
+            missing_role_metadata_status(&tokenizer_profile.tokenizer_json);
+        profile->config_metadata_status =
+            missing_role_metadata_status(&tokenizer_profile.config_json);
+        profile->generation_metadata_status =
+            missing_role_metadata_status(&tokenizer_profile.generation_config);
+        profile->special_tokens_status =
+            missing_role_metadata_status(&tokenizer_profile.special_tokens_map);
+        if (strcmp(tokenizer_profile.status, "tokenizer-metadata-ambiguous") == 0) {
+            profile->tokenizer_metadata_status = "ambiguous";
+        }
+    }
+
+    missing_role_tally(profile->embedding_status,
+                       &profile->source_role_observed_count,
+                       &profile->source_role_missing_count,
+                       &profile->source_role_ambiguous_count);
+    missing_role_tally(profile->attention_norm_status,
+                       &profile->source_role_observed_count,
+                       &profile->source_role_missing_count,
+                       &profile->source_role_ambiguous_count);
+    missing_role_tally(profile->attention_q_status,
+                       &profile->source_role_observed_count,
+                       &profile->source_role_missing_count,
+                       &profile->source_role_ambiguous_count);
+    missing_role_tally(profile->attention_k_status,
+                       &profile->source_role_observed_count,
+                       &profile->source_role_missing_count,
+                       &profile->source_role_ambiguous_count);
+    missing_role_tally(profile->attention_v_status,
+                       &profile->source_role_observed_count,
+                       &profile->source_role_missing_count,
+                       &profile->source_role_ambiguous_count);
+    missing_role_tally(profile->attention_o_status,
+                       &profile->source_role_observed_count,
+                       &profile->source_role_missing_count,
+                       &profile->source_role_ambiguous_count);
+    missing_role_tally(profile->mlp_norm_status,
+                       &profile->source_role_observed_count,
+                       &profile->source_role_missing_count,
+                       &profile->source_role_ambiguous_count);
+    missing_role_tally(profile->mlp_gate_status,
+                       &profile->source_role_observed_count,
+                       &profile->source_role_missing_count,
+                       &profile->source_role_ambiguous_count);
+    missing_role_tally(profile->mlp_up_status,
+                       &profile->source_role_observed_count,
+                       &profile->source_role_missing_count,
+                       &profile->source_role_ambiguous_count);
+    missing_role_tally(profile->mlp_down_status,
+                       &profile->source_role_observed_count,
+                       &profile->source_role_missing_count,
+                       &profile->source_role_ambiguous_count);
+    missing_role_tally(profile->final_norm_status,
+                       &profile->source_role_observed_count,
+                       &profile->source_role_missing_count,
+                       &profile->source_role_ambiguous_count);
+    missing_role_tally(profile->output_head_status,
+                       &profile->source_role_observed_count,
+                       &profile->source_role_missing_count,
+                       &profile->source_role_ambiguous_count);
+    missing_role_tally(profile->tokenizer_metadata_status,
+                       &profile->metadata_observed_count,
+                       &profile->metadata_missing_count,
+                       &profile->metadata_ambiguous_count);
+    missing_role_tally(profile->config_metadata_status,
+                       &profile->metadata_observed_count,
+                       &profile->metadata_missing_count,
+                       &profile->metadata_ambiguous_count);
+    missing_role_tally(profile->generation_metadata_status,
+                       &profile->metadata_observed_count,
+                       &profile->metadata_missing_count,
+                       &profile->metadata_ambiguous_count);
+    missing_role_tally(profile->special_tokens_status,
+                       &profile->metadata_observed_count,
+                       &profile->metadata_missing_count,
+                       &profile->metadata_ambiguous_count);
+
+    missing_role_add_entry(profile, "embedding", profile->embedding_status,
+                           strcmp(profile->embedding_status, "ambiguous") == 0
+                               ? "source-role-ambiguous" : "source-role-missing");
+    missing_role_add_entry(profile, "attention_norm",
+                           profile->attention_norm_status,
+                           "source-role-missing");
+    missing_role_add_entry(profile, "attention_q", profile->attention_q_status,
+                           "source-role-missing");
+    missing_role_add_entry(profile, "attention_k", profile->attention_k_status,
+                           "source-role-missing");
+    missing_role_add_entry(profile, "attention_v", profile->attention_v_status,
+                           "source-role-missing");
+    missing_role_add_entry(profile, "attention_o", profile->attention_o_status,
+                           "source-role-missing");
+    missing_role_add_entry(profile, "mlp_norm", profile->mlp_norm_status,
+                           "source-role-missing");
+    missing_role_add_entry(profile, "mlp_gate", profile->mlp_gate_status,
+                           "source-role-missing");
+    missing_role_add_entry(profile, "mlp_up", profile->mlp_up_status,
+                           "source-role-missing");
+    missing_role_add_entry(profile, "mlp_down", profile->mlp_down_status,
+                           "source-role-missing");
+    missing_role_add_entry(profile, "final_norm", profile->final_norm_status,
+                           strcmp(profile->final_norm_status, "ambiguous") == 0
+                               ? "source-role-ambiguous" : "source-role-missing");
+    missing_role_add_entry(profile, "output_head", profile->output_head_status,
+                           strcmp(profile->output_head_status, "ambiguous") == 0
+                               ? "source-role-ambiguous" : "source-role-missing");
+    missing_role_add_entry(profile, "tokenizer_metadata",
+                           profile->tokenizer_metadata_status,
+                           strcmp(profile->tokenizer_metadata_status, "ambiguous") == 0
+                               ? "metadata-ambiguous" : "metadata-incomplete");
+    missing_role_add_entry(profile, "config_metadata",
+                           profile->config_metadata_status,
+                           "metadata-incomplete");
+    missing_role_add_entry(profile, "generation_metadata",
+                           profile->generation_metadata_status,
+                           "metadata-incomplete");
+    missing_role_add_entry(profile, "special_tokens",
+                           profile->special_tokens_status,
+                           "metadata-incomplete");
+
+    if (!profile->source_exists) {
+        profile->status = "source-missing";
+        profile->top_blocker = profile->spec->missing_source_blocker;
+    } else if (profile->source_role_ambiguous_count > 0) {
+        first_source = missing_role_first_ambiguous_source(profile);
+        snprintf(profile->top_blocker_storage,
+                 sizeof(profile->top_blocker_storage),
+                 "ambiguous-source-role-%s", first_source);
+        profile->status = "missing-role-report-ambiguous";
+        profile->top_blocker = profile->top_blocker_storage;
+    } else if (profile->metadata_ambiguous_count > 0) {
+        profile->status = "missing-role-report-ambiguous";
+        profile->top_blocker = "ambiguous-tokenizer-metadata";
+    } else if (profile->source_role_missing_count > 0) {
+        first_source = missing_role_first_missing_source(profile);
+        snprintf(profile->top_blocker_storage,
+                 sizeof(profile->top_blocker_storage),
+                 "missing-source-role-%s", first_source);
+        profile->status = "missing-role-report-incomplete";
+        profile->top_blocker = profile->top_blocker_storage;
+    } else if (profile->metadata_missing_count > 0) {
+        profile->status = "missing-role-report-incomplete";
+        profile->top_blocker = "missing-tokenizer-metadata";
+    } else {
+        profile->status = "missing-role-report-blocked";
+        profile->top_blocker = "missing-artifact-contract";
+    }
+
+    return 0;
+}
+
+static void print_missing_role_list(const char *label,
+                                    const yvex_missing_role_report_profile *profile,
+                                    int metadata)
+{
+    unsigned long long i;
+    int first = 1;
+
+    if (!profile) return;
+    printf("%s: ", label);
+    for (i = 0; i < profile->missing_entry_count; ++i) {
+        const yvex_missing_role_entry *entry = &profile->missing_entries[i];
+        int is_metadata = strstr(entry->blocker_class, "metadata") != NULL;
+        if (metadata != is_metadata || strcmp(entry->status, "missing") != 0) {
+            continue;
+        }
+        printf("%s%s", first ? "" : ",", entry->name);
+        first = 0;
+    }
+    if (first) printf("none");
+    printf("\n");
+}
+
+static void print_missing_role_report_normal(
+    const yvex_missing_role_report_profile *profile)
+{
+    printf("missing-role-report: %s\n", profile->spec->family_key);
+    printf("target: %s\n", profile->record->target_id);
+    printf("status: %s\n", profile->status);
+    printf("stage: missing-role-blocker-report\n");
+    printf("evidence: header-and-sidecar-metadata-only\n");
+    printf("source_roles: observed=%llu missing=%llu ambiguous=%llu\n",
+           profile->source_role_observed_count,
+           profile->source_role_missing_count,
+           profile->source_role_ambiguous_count);
+    printf("metadata_roles: observed=%llu missing=%llu ambiguous=%llu\n",
+           profile->metadata_observed_count,
+           profile->metadata_missing_count,
+           profile->metadata_ambiguous_count);
+    if (profile->source_role_missing_count > 0) {
+        print_missing_role_list("missing_source_roles", profile, 0);
+    }
+    if (profile->metadata_missing_count > 0) {
+        print_missing_role_list("missing_metadata_roles", profile, 1);
+    }
+    printf("downstream_blockers: artifact_contract=missing runtime_descriptor=missing graph_consumer=missing runtime_path=missing\n");
+    printf("top_blocker: %s\n", profile->top_blocker);
+    printf("next: %s\n", YVEX_MISSING_ROLE_REPORT_NEXT_ROW);
+    printf("boundary: missing-role report only; no artifact/runtime descriptor/graph/runtime/generation\n");
+}
+
+static void print_missing_role_report_table(
+    const yvex_missing_role_report_profile *profile)
+{
+    printf("MISSING ROLE BLOCKER REPORT\n\n");
+    printf("%-6s  %-15s  %-29s  %7s  %8s  %9s  %8s  %9s  %-30s  %s\n",
+           "FAMILY", "TARGET", "STATUS", "OBS_SRC", "MISS_SRC",
+           "AMBIG_SRC", "OBS_META", "MISS_META", "TOP_BLOCKER", "NEXT");
+    printf("%-6s  %-15s  %-29s  %7llu  %8llu  %9llu  %8llu  %9llu  %-30s  %s\n",
+           profile->spec->family_key,
+           profile->record->target_id,
+           profile->status,
+           profile->source_role_observed_count,
+           profile->source_role_missing_count,
+           profile->source_role_ambiguous_count,
+           profile->metadata_observed_count,
+           profile->metadata_missing_count,
+           profile->top_blocker,
+           YVEX_MISSING_ROLE_REPORT_NEXT_ROW);
+}
+
+static void print_missing_role_report_audit(
+    const yvex_missing_role_report_profile *profile)
+{
+    unsigned long long i;
+
+    printf("missing_role_report_status: %s\n", profile->status);
+    printf("missing_role_report_family: %s\n", profile->spec->family_key);
+    printf("missing_role_report_target_id: %s\n", profile->record->target_id);
+    printf("missing_role_report_stage: missing-role-blocker-report\n");
+    printf("missing_role_report_evidence_basis: header-and-sidecar-metadata-only\n");
+    printf("missing_role_report_source_status: %s\n",
+           profile->source_exists ? "present" : "missing");
+    printf("missing_role_report_source_path: %s\n", profile->source_path);
+    printf("missing_role_source_role_required_count: 12\n");
+    printf("missing_role_source_role_observed_count: %llu\n",
+           profile->source_role_observed_count);
+    printf("missing_role_source_role_missing_count: %llu\n",
+           profile->source_role_missing_count);
+    printf("missing_role_source_role_ambiguous_count: %llu\n",
+           profile->source_role_ambiguous_count);
+    printf("missing_role_metadata_required_count: 4\n");
+    printf("missing_role_metadata_observed_count: %llu\n",
+           profile->metadata_observed_count);
+    printf("missing_role_metadata_missing_count: %llu\n",
+           profile->metadata_missing_count);
+    printf("missing_role_metadata_ambiguous_count: %llu\n",
+           profile->metadata_ambiguous_count);
+    printf("missing_role_embedding_status: %s\n", profile->embedding_status);
+    printf("missing_role_attention_norm_status: %s\n",
+           profile->attention_norm_status);
+    printf("missing_role_attention_q_status: %s\n",
+           profile->attention_q_status);
+    printf("missing_role_attention_k_status: %s\n",
+           profile->attention_k_status);
+    printf("missing_role_attention_v_status: %s\n",
+           profile->attention_v_status);
+    printf("missing_role_attention_o_status: %s\n",
+           profile->attention_o_status);
+    printf("missing_role_mlp_norm_status: %s\n", profile->mlp_norm_status);
+    printf("missing_role_mlp_gate_status: %s\n", profile->mlp_gate_status);
+    printf("missing_role_mlp_up_status: %s\n", profile->mlp_up_status);
+    printf("missing_role_mlp_down_status: %s\n", profile->mlp_down_status);
+    printf("missing_role_final_norm_status: %s\n", profile->final_norm_status);
+    printf("missing_role_output_head_status: %s\n",
+           profile->output_head_status);
+    printf("missing_role_tokenizer_metadata_status: %s\n",
+           profile->tokenizer_metadata_status);
+    printf("missing_role_config_metadata_status: %s\n",
+           profile->config_metadata_status);
+    printf("missing_role_generation_metadata_status: %s\n",
+           profile->generation_metadata_status);
+    printf("missing_role_special_tokens_status: %s\n",
+           profile->special_tokens_status);
+    printf("missing_role_artifact_contract_status: missing\n");
+    printf("missing_role_runtime_descriptor_status: missing\n");
+    printf("missing_role_graph_consumer_status: missing\n");
+    printf("missing_role_backend_residency_status: missing\n");
+    printf("missing_role_attention_runtime_status: missing\n");
+    printf("missing_role_kv_runtime_state_status: missing\n");
+    printf("missing_role_prefill_runtime_status: missing\n");
+    printf("missing_role_decode_runtime_status: missing\n");
+    printf("missing_role_logits_runtime_status: missing\n");
+    printf("missing_role_tokenizer_runtime_status: missing\n");
+    printf("missing_role_sampling_runtime_status: missing\n");
+    printf("missing_role_generation_runtime_status: missing\n");
+    printf("missing_role_eval_benchmark_status: missing\n");
+    printf("missing_role_top_blocker: %s\n", profile->top_blocker);
+    printf("missing_role_next_required_row: %s\n",
+           YVEX_MISSING_ROLE_REPORT_NEXT_ROW);
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    for (i = 0; i < profile->missing_entry_count; ++i) {
+        const yvex_missing_role_entry *entry = &profile->missing_entries[i];
+        printf("missing_role.entry.%llu.role: %s\n", i, entry->name);
+        printf("missing_role.entry.%llu.blocker_class: %s\n",
+               i, entry->blocker_class);
+        printf("missing_role.entry.%llu.status: %s\n", i, entry->status);
+    }
+    printf("boundary: missing-role report only; no artifact/runtime descriptor/graph/runtime/generation\n");
+}
+
+static void print_missing_role_report_audit_hint(
+    const yvex_model_target_record *record)
+{
+    const yvex_model_class_profile_spec *spec;
+
+    if (!record) return;
+    spec = find_model_class_profile_spec(record->target_id);
+    if (!spec) return;
+    printf("missing_role_report_status: not-run\n");
+    printf("missing_role_report_family: %s\n", spec->family_key);
+    printf("missing_role_report_target_id: %s\n", spec->target_id);
+    printf("missing_role_report_stage: missing-role-blocker-report\n");
+    printf("missing_role_top_blocker: not-run\n");
+    printf("missing_role_next_required_row: %s\n",
+           YVEX_MISSING_ROLE_REPORT_NEXT_ROW);
+}
+
 static const char *target_decision_candidate_class(const yvex_model_target_record *record)
 {
     if (!record) return "unknown";
@@ -6050,7 +6594,7 @@ static void print_model_target_usage(FILE *fp)
     fprintf(fp, "       yvex model-target decision --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target class-profile TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target tensor-collection TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
-    fprintf(fp, "       yvex model-target tensor-map TARGET [--role output-head|tokenizer] [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
+    fprintf(fp, "       yvex model-target tensor-map TARGET [--role output-head|tokenizer|missing-roles] [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR] [--audit | --output normal|table|audit]\n");
 }
 
@@ -6095,6 +6639,8 @@ void yvex_model_target_help(FILE *fp)
     fprintf(fp, "\nTokenizer metadata map:\n");
     fprintf(fp, "  yvex model-target tensor-map qwen3-8b --role tokenizer --audit\n");
     fprintf(fp, "  yvex model-target tensor-map gemma-4-12b-it --role tokenizer --audit\n");
+    fprintf(fp, "  yvex model-target tensor-map qwen3-8b --role missing-roles --audit\n");
+    fprintf(fp, "  yvex model-target tensor-map gemma-4-12b-it --role missing-roles --audit\n");
     fprintf(fp, "  The tokenizer metadata map reads local sidecars only and reports tokenizer/config/special-token metadata candidates. It does not tokenize, detokenize, apply chat templates, stop on EOS, compute logits, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "\nDefault output is compact. Use --audit for full diagnostic fields.\n");
     fprintf(fp, "Model targets are pressure objects, not capability claims.\n");
@@ -6482,6 +7028,7 @@ static void print_model_target_list(void)
         print_tensor_map_audit_hint(record);
         print_output_head_map_audit_hint(record);
         print_tokenizer_map_audit_hint(record);
+        print_missing_role_report_audit_hint(record);
         printf("runtime_shape: %s\n", model_target_runtime_shape(record));
         printf("backend_selection: %s\n", model_target_backend_selection(record));
         printf("backend_pressure: %s\n", model_target_backend_pressure(record));
@@ -6564,6 +7111,7 @@ static void print_model_target_record(const yvex_model_target_record *record)
     print_tensor_map_audit_hint(record);
     print_output_head_map_audit_hint(record);
     print_tokenizer_map_audit_hint(record);
+    print_missing_role_report_audit_hint(record);
     printf("target_artifact_class: %s\n", record->target_artifact_class);
     printf("target_artifact_status: %s\n", model_target_target_artifact_status(record));
     printf("target_artifact_origin: %s\n", model_target_target_artifact_origin(record));
@@ -7417,6 +7965,7 @@ int yvex_model_target_command(int argc, char **argv)
         yvex_tensor_naming_profile profile;
         yvex_output_head_map_profile output_head_profile;
         yvex_tokenizer_map_profile tokenizer_profile;
+        yvex_missing_role_report_profile missing_role_profile;
         int rc;
 
         output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
@@ -7461,12 +8010,13 @@ int yvex_model_target_command(int argc, char **argv)
                 source = argv[++i];
             } else if (strcmp(argv[i], "--role") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    fprintf(stderr, "model-target tensor-map: --role requires output-head|tokenizer\n");
+                    fprintf(stderr, "model-target tensor-map: --role requires output-head|tokenizer|missing-roles\n");
                     return 2;
                 }
                 role = argv[++i];
                 if (strcmp(role, "output-head") != 0 &&
-                    strcmp(role, "tokenizer") != 0) {
+                    strcmp(role, "tokenizer") != 0 &&
+                    strcmp(role, "missing-roles") != 0) {
                     fprintf(stderr, "model-target tensor-map: unsupported role: %s\n",
                             role);
                     return 2;
@@ -7506,6 +8056,21 @@ int yvex_model_target_command(int argc, char **argv)
                 print_tokenizer_map_audit(&tokenizer_profile);
             } else {
                 print_tokenizer_map_normal(&tokenizer_profile);
+            }
+            return 0;
+        }
+        if (role && strcmp(role, "missing-roles") == 0) {
+            rc = build_missing_role_report_profile(record, models_root, source,
+                                                   &missing_role_profile);
+            if (rc != 0) {
+                return rc;
+            }
+            if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+                print_missing_role_report_table(&missing_role_profile);
+            } else if (output_mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+                print_missing_role_report_audit(&missing_role_profile);
+            } else {
+                print_missing_role_report_normal(&missing_role_profile);
             }
             return 0;
         }

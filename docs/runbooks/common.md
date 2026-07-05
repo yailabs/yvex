@@ -97,6 +97,9 @@ make
 ./yvex model-target tensor-map qwen3-8b --role tokenizer
 ./yvex model-target tensor-map qwen3-8b --role tokenizer --output table
 ./yvex model-target tensor-map qwen3-8b --role tokenizer --audit
+./yvex model-target tensor-map qwen3-8b --role missing-roles
+./yvex model-target tensor-map qwen3-8b --role missing-roles --output table
+./yvex model-target tensor-map qwen3-8b --role missing-roles --audit
 ./yvex model-target inspect gemma-4-12b-it
 ./yvex model-target inspect gemma-4-12b-it --paths
 ./yvex model-target class-profile gemma-4-12b-it
@@ -114,6 +117,9 @@ make
 ./yvex model-target tensor-map gemma-4-12b-it --role tokenizer
 ./yvex model-target tensor-map gemma-4-12b-it --role tokenizer --output table
 ./yvex model-target tensor-map gemma-4-12b-it --role tokenizer --audit
+./yvex model-target tensor-map gemma-4-12b-it --role missing-roles
+./yvex model-target tensor-map gemma-4-12b-it --role missing-roles --output table
+./yvex model-target tensor-map gemma-4-12b-it --role missing-roles --audit
 ./yvex model-target decision --help
 ./yvex model-target decision --release v0.1.0 --output table
 ./yvex model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
@@ -191,6 +197,15 @@ vocab size, special token IDs, additional special-token count, chat-template
 presence, and vocab/output-head relation. It does not tokenize, detokenize,
 execute chat templates, implement EOS/stop behavior, compute logits, emit
 artifacts, build runtime descriptors, feed graph consumers, generate,
+evaluate, or benchmark.
+
+`model-target tensor-map TARGET --role missing-roles` is a report-only blocker
+summary for Qwen and Gemma source trees. It aggregates header-derived tensor
+naming, output-head, and tokenizer metadata evidence into observed, missing,
+and ambiguous source/metadata role counts plus downstream artifact, runtime
+descriptor, graph, tokenizer-runtime, generation, eval, and benchmark blockers.
+It does not load tensor payloads, emit artifacts, materialize tensors, build
+runtime descriptors, execute graph work, compute logits, tokenize, generate,
 evaluate, or benchmark.
 
 ## Lane 1 — Graph-only regression

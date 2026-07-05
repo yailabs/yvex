@@ -1006,14 +1006,14 @@ This table records posture, not support claims.
 | --- | --- | --- | --- | --- |
 | DeepSeek | selected-slice pressure | sparse/MoE | selected embedding and embedding-plus-RMSNorm graph slices | full artifact, tensor role map, MoE runtime, output head, generation |
 | GLM | source/storage pressure | sparse/MoE | huge source/storage pressure reports | source completion, model-class, tensor map, artifact, storage/residency |
-| Qwen | tokenizer-metadata-map-profiled source target | dense candidate / family-dependent | `qwen3-8b` target, Qwen model-class profile, Qwen tensor collection inventory, Qwen tensor naming map, output-head tensor mapping, and tokenizer metadata mapping | missing-role blocker report, artifact, backend/runtime |
-| Gemma | dense tokenizer-metadata-map-profiled source target | dense candidate | `gemma-4-12b-it` target, Gemma model-class profile, Gemma tensor collection inventory, dense tensor naming map, output-head tensor mapping, and tokenizer metadata mapping | missing-role blocker report, artifact, runtime |
+| Qwen | missing-role-blocker-report-profiled source target | dense candidate / family-dependent | `qwen3-8b` target, Qwen model-class profile, Qwen tensor collection inventory, Qwen tensor naming map, output-head tensor mapping, tokenizer metadata mapping, and missing-role blocker report | tensor mapping gate, artifact, backend/runtime |
+| Gemma | dense missing-role-blocker-report-profiled source target | dense candidate | `gemma-4-12b-it` target, Gemma model-class profile, Gemma tensor collection inventory, dense tensor naming map, output-head tensor mapping, tokenizer metadata mapping, and missing-role blocker report | tensor mapping gate, artifact, runtime |
 | Phi/Llama/Mistral | candidate families | dense/sparse depending target | architectural candidates | no current source target |
 
 Current posture vocabulary includes `source-target-profiled`,
 `model-class-profiled`, `tensor-collection-profiled`,
 `dense tensor-naming-map-profiled`, `output-head-map-profiled`,
-`tokenizer-metadata-map-profiled`, `source/storage-pressure`,
+`tokenizer-metadata-map-profiled`, `missing-role-blocker-report-profiled`, `source/storage-pressure`,
 `selected-slice-proof`, and `runtime-unsupported`.
 
 ## Support-Level Lattice
