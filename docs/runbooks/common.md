@@ -94,6 +94,9 @@ make
 ./yvex model-target tensor-map qwen3-8b --role output-head
 ./yvex model-target tensor-map qwen3-8b --role output-head --output table
 ./yvex model-target tensor-map qwen3-8b --role output-head --audit
+./yvex model-target tensor-map qwen3-8b --role tokenizer
+./yvex model-target tensor-map qwen3-8b --role tokenizer --output table
+./yvex model-target tensor-map qwen3-8b --role tokenizer --audit
 ./yvex model-target inspect gemma-4-12b-it
 ./yvex model-target inspect gemma-4-12b-it --paths
 ./yvex model-target class-profile gemma-4-12b-it
@@ -108,6 +111,9 @@ make
 ./yvex model-target tensor-map gemma-4-12b-it --role output-head
 ./yvex model-target tensor-map gemma-4-12b-it --role output-head --output table
 ./yvex model-target tensor-map gemma-4-12b-it --role output-head --audit
+./yvex model-target tensor-map gemma-4-12b-it --role tokenizer
+./yvex model-target tensor-map gemma-4-12b-it --role tokenizer --output table
+./yvex model-target tensor-map gemma-4-12b-it --role tokenizer --audit
 ./yvex model-target decision --help
 ./yvex model-target decision --release v0.1.0 --output table
 ./yvex model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
@@ -177,6 +183,15 @@ final-norm, and embedding candidates, reports missing or ambiguous output-head
 status, and checks header-shape relation where available. It does not compute
 logits, produce final hidden state, emit artifacts, build runtime descriptors,
 feed graph consumers, generate, evaluate, or benchmark.
+
+`model-target tensor-map TARGET --role tokenizer` is a sidecar-metadata map for
+Qwen and Gemma source trees. It reports tokenizer/config/special-token and
+generation sidecar presence, bounded parse status, tokenizer class, model type,
+vocab size, special token IDs, additional special-token count, chat-template
+presence, and vocab/output-head relation. It does not tokenize, detokenize,
+execute chat templates, implement EOS/stop behavior, compute logits, emit
+artifacts, build runtime descriptors, feed graph consumers, generate,
+evaluate, or benchmark.
 
 ## Lane 1 — Graph-only regression
 

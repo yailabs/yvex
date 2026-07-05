@@ -612,7 +612,6 @@ typedef struct {
 static const char *qwen_source_tail_blockers[] = {
     "missing-qwen-tensor-role-map",
     "missing-qwen-tensor-map",
-    "missing-qwen-tokenizer-map",
     "missing-qwen-yvex-artifact",
     "missing-qwen-artifact-identity",
     "missing-metal-hardware-profile",
@@ -631,7 +630,6 @@ static const char *qwen_source_tail_blockers[] = {
 static const char *gemma_source_tail_blockers[] = {
     "missing-gemma-tensor-role-map",
     "missing-gemma-tensor-map",
-    "missing-gemma-tokenizer-map",
     "missing-gemma-yvex-artifact",
     "missing-gemma-artifact-identity",
     "missing-gemma-real-prefill",
@@ -675,7 +673,7 @@ static const yvex_source_family_profile source_family_profiles[] = {
         "missing-qwen-source-config",
         "missing-qwen-tokenizer-files",
         "missing-qwen-tensor-role-map",
-        "V010.MAP.7",
+        "V010.MAP.8",
         qwen_source_tail_blockers,
         sizeof(qwen_source_tail_blockers) / sizeof(qwen_source_tail_blockers[0]),
     },
@@ -709,7 +707,7 @@ static const yvex_source_family_profile source_family_profiles[] = {
         "missing-gemma-source-config",
         "missing-gemma-tokenizer-files",
         "missing-gemma-tensor-role-map",
-        "V010.MAP.7",
+        "V010.MAP.8",
         gemma_source_tail_blockers,
         sizeof(gemma_source_tail_blockers) / sizeof(gemma_source_tail_blockers[0]),
     },

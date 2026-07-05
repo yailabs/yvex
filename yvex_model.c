@@ -1446,7 +1446,7 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.MAP.7,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
+        "V010.MAP.8,HARDWARE.PROFILE.MAC.0,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
@@ -1474,7 +1474,7 @@ static const yvex_full_runtime_candidate_fact full_runtime_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.MAP.7",
+        "V010.MAP.8",
         {
             "planned-dense-pressure-only",
             "missing-gemma-source-path",
@@ -1664,7 +1664,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,V010.MAP.7,COMPUTE.BACKEND.METAL.0",
+        "V010.TARGET.7,V010.MAP.8,COMPUTE.BACKEND.METAL.0",
         {
             "planned-portability-only",
             "missing-qwen-source-path",
@@ -1710,7 +1710,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
         "unsupported",
         "unsupported-full-model",
         "not-measured",
-        "V010.TARGET.7,V010.MAP.7",
+        "V010.TARGET.7,V010.MAP.8",
         {
             "planned-dense-pressure-only",
             "missing-gemma-source-path",
@@ -1720,7 +1720,6 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
             "missing-gemma-tokenizer-files",
             "missing-gemma-tensor-role-map",
             "missing-gemma-tensor-map",
-            "missing-gemma-tokenizer-map",
             "missing-gemma-yvex-artifact",
             "missing-gemma-artifact-identity",
             "missing-gemma-real-prefill",
@@ -1732,7 +1731,7 @@ static const yvex_dense_candidate_fact dense_candidate_facts[] = {
             "missing-gemma-eval-path",
             "missing-gemma-benchmark-path",
         },
-        19,
+        18,
         1,
         0,
         0,
@@ -1784,7 +1783,6 @@ static const char *qwen_metal_blockers[] = {
     "missing-qwen-source-config",
     "missing-qwen-tensor-role-map",
     "missing-qwen-tensor-map",
-    "missing-qwen-tokenizer-map",
     "missing-qwen-yvex-artifact",
     "missing-qwen-artifact-identity",
     "missing-metal-hardware-profile",
@@ -1881,14 +1879,13 @@ static const yvex_qwen_metal_candidate_fact qwen_metal_candidate_facts[] = {
             "missing-qwen-native-inventory",
             "missing-qwen-source-config",
             "missing-qwen-tensor-role-map",
-            "missing-qwen-tokenizer-map",
             "missing-metal-backend-feasibility",
             "missing-metal-allocation-boundary",
             "missing-metal-graph-primitive-parity",
             "missing-real-kv-path",
             "missing-generation-loop-over-real-state",
         },
-        11,
+        10,
     },
 };
 
@@ -2006,13 +2003,15 @@ typedef enum {
     YVEX_MODEL_TARGET_OUTPUT_AUDIT
 } yvex_model_target_output_mode;
 
-#define YVEX_MODEL_CLASS_NEXT_ROW "V010.MAP.7"
-#define YVEX_TENSOR_COLLECTION_NEXT_ROW "V010.MAP.7"
-#define YVEX_TENSOR_NAMING_NEXT_ROW "V010.MAP.7"
-#define YVEX_OUTPUT_HEAD_MAP_NEXT_ROW "V010.MAP.7"
+#define YVEX_MODEL_CLASS_NEXT_ROW "V010.MAP.8"
+#define YVEX_TENSOR_COLLECTION_NEXT_ROW "V010.MAP.8"
+#define YVEX_TENSOR_NAMING_NEXT_ROW "V010.MAP.8"
+#define YVEX_OUTPUT_HEAD_MAP_NEXT_ROW "V010.MAP.8"
+#define YVEX_TOKENIZER_MAP_NEXT_ROW "V010.MAP.8"
 #define YVEX_TENSOR_COLLECTION_LAYER_CAP 512u
 #define YVEX_TENSOR_NAMING_ENTRY_CAP 1024u
 #define YVEX_TENSOR_NAMING_TEXT_CAP 192u
+#define YVEX_TOKENIZER_MAP_JSON_CAP 65536u
 
 static int parse_model_target_output_mode(const char *value,
                                           yvex_model_target_output_mode *mode)
@@ -2231,6 +2230,53 @@ typedef struct {
     yvex_output_head_map_entry embedding;
     yvex_output_head_map_entry final_norm;
 } yvex_output_head_map_profile;
+
+typedef struct {
+    const char *file_name;
+    const char *canonical_role;
+    const char *status;
+    char path[YVEX_PATH_CAP];
+} yvex_tokenizer_map_sidecar;
+
+typedef struct {
+    const yvex_model_target_record *record;
+    const yvex_model_class_profile_spec *spec;
+    const char *status;
+    const char *top_blocker;
+    char source_path[YVEX_PATH_CAP];
+    char source_path_source[32];
+    int source_exists;
+    yvex_tokenizer_map_sidecar tokenizer_json;
+    yvex_tokenizer_map_sidecar tokenizer_config;
+    yvex_tokenizer_map_sidecar special_tokens_map;
+    yvex_tokenizer_map_sidecar generation_config;
+    yvex_tokenizer_map_sidecar config_json;
+    yvex_tokenizer_map_sidecar vocab_json;
+    yvex_tokenizer_map_sidecar merges_txt;
+    yvex_tokenizer_map_sidecar tokenizer_model;
+    char tokenizer_class[128];
+    char model_type[64];
+    const char *vocab_size_status;
+    char vocab_size[32];
+    char config_vocab_size[32];
+    char tokenizer_vocab_size[32];
+    char output_head_vocab_dim_candidate[32];
+    const char *output_head_vocab_relation_status;
+    const char *bos_token_id_status;
+    char bos_token_id[32];
+    const char *eos_token_id_status;
+    char eos_token_id[32];
+    const char *pad_token_id_status;
+    char pad_token_id[32];
+    const char *unk_token_id_status;
+    char unk_token_id[32];
+    const char *sep_token_id_status;
+    char sep_token_id[32];
+    const char *additional_special_tokens_status;
+    char additional_special_tokens_count[32];
+    const char *chat_template_status;
+    const char *chat_template_present;
+} yvex_tokenizer_map_profile;
 
 static int model_class_name_contains_ci(const char *name, const char *needle)
 {
@@ -4182,6 +4228,696 @@ static void print_output_head_map_audit(
     printf("boundary: output-head tensor mapping only; no logits/runtime/generation\n");
 }
 
+static void tokenizer_map_sidecar_init(yvex_tokenizer_map_sidecar *sidecar,
+                                       const char *source_path,
+                                       const char *file_name,
+                                       const char *canonical_role)
+{
+    if (!sidecar) return;
+    memset(sidecar, 0, sizeof(*sidecar));
+    sidecar->file_name = file_name;
+    sidecar->canonical_role = canonical_role;
+    sidecar->status = "missing";
+    if (source_path && source_path[0] && file_name) {
+        (void)model_class_path_join(sidecar->path, sizeof(sidecar->path),
+                                    source_path, file_name);
+    } else {
+        snprintf(sidecar->path, sizeof(sidecar->path), "unknown");
+    }
+}
+
+static int tokenizer_map_file_readable(const char *path)
+{
+    FILE *fp;
+
+    if (!path || !path[0]) return 0;
+    fp = fopen(path, "rb");
+    if (!fp) return 0;
+    fclose(fp);
+    return 1;
+}
+
+static int tokenizer_map_read_json(const char *path, char *buf, size_t cap)
+{
+    FILE *fp;
+    long size;
+    size_t nread;
+
+    if (!path || !buf || cap == 0u) return 0;
+    buf[0] = '\0';
+    fp = fopen(path, "rb");
+    if (!fp) return 0;
+    if (fseek(fp, 0, SEEK_END) != 0) {
+        fclose(fp);
+        return 0;
+    }
+    size = ftell(fp);
+    if (size < 0 || (unsigned long)size >= cap) {
+        fclose(fp);
+        return 0;
+    }
+    if (fseek(fp, 0, SEEK_SET) != 0) {
+        fclose(fp);
+        return 0;
+    }
+    nread = fread(buf, 1u, (size_t)size, fp);
+    fclose(fp);
+    if (nread != (size_t)size) return 0;
+    buf[nread] = '\0';
+    return 1;
+}
+
+static int tokenizer_map_json_valid(const char *json)
+{
+    const char *p;
+    const char *end;
+    int depth = 0;
+    int in_string = 0;
+    int escape = 0;
+
+    if (!json) return 0;
+    p = json;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '{') return 0;
+    end = json + strlen(json);
+    while (end > p && isspace((unsigned char)end[-1])) end--;
+    if (end <= p || end[-1] != '}') return 0;
+    for (; *p; ++p) {
+        unsigned char c = (unsigned char)*p;
+        if (in_string) {
+            if (escape) {
+                escape = 0;
+            } else if (c == '\\') {
+                escape = 1;
+            } else if (c == '"') {
+                in_string = 0;
+            }
+            continue;
+        }
+        if (c == '"') {
+            in_string = 1;
+        } else if (c == '{' || c == '[') {
+            depth++;
+        } else if (c == '}' || c == ']') {
+            depth--;
+            if (depth < 0) return 0;
+        }
+    }
+    return depth == 0 && !in_string && !escape;
+}
+
+static const char *tokenizer_map_json_value(const char *json, const char *key)
+{
+    char pattern[96];
+    const char *p;
+    const char *colon;
+    int n;
+
+    if (!json || !key) return NULL;
+    n = snprintf(pattern, sizeof(pattern), "\"%s\"", key);
+    if (n < 0 || (size_t)n >= sizeof(pattern)) return NULL;
+    p = strstr(json, pattern);
+    if (!p) return NULL;
+    colon = strchr(p + strlen(pattern), ':');
+    if (!colon) return NULL;
+    p = colon + 1;
+    while (*p && isspace((unsigned char)*p)) p++;
+    return p;
+}
+
+static int tokenizer_map_json_has_key(const char *json, const char *key)
+{
+    return tokenizer_map_json_value(json, key) != NULL;
+}
+
+static int tokenizer_map_json_string(const char *json,
+                                     const char *key,
+                                     char *out,
+                                     size_t out_cap)
+{
+    const char *p;
+    size_t len = 0u;
+    int escape = 0;
+
+    if (!out || out_cap == 0u) return 0;
+    out[0] = '\0';
+    p = tokenizer_map_json_value(json, key);
+    if (!p || *p != '"') return 0;
+    p++;
+    while (*p) {
+        unsigned char c = (unsigned char)*p++;
+        if (escape) {
+            if (len + 1u < out_cap) out[len++] = (char)c;
+            escape = 0;
+        } else if (c == '\\') {
+            escape = 1;
+        } else if (c == '"') {
+            out[len] = '\0';
+            return 1;
+        } else if (len + 1u < out_cap) {
+            out[len++] = (char)c;
+        }
+    }
+    out[len] = '\0';
+    return 0;
+}
+
+static int tokenizer_map_json_uint(const char *json,
+                                   const char *key,
+                                   char *out,
+                                   size_t out_cap)
+{
+    const char *p;
+    char *end = NULL;
+    unsigned long long value;
+
+    if (!out || out_cap == 0u) return 0;
+    out[0] = '\0';
+    p = tokenizer_map_json_value(json, key);
+    if (!p) return 0;
+    if (*p == '"') p++;
+    if (!isdigit((unsigned char)*p)) return 0;
+    errno = 0;
+    value = strtoull(p, &end, 10);
+    if (errno != 0 || end == p) return 0;
+    snprintf(out, out_cap, "%llu", value);
+    return 1;
+}
+
+static unsigned long tokenizer_map_json_string_array_count(const char *json,
+                                                           const char *key)
+{
+    const char *p;
+    unsigned long count = 0u;
+    int in_string = 0;
+    int escape = 0;
+
+    p = tokenizer_map_json_value(json, key);
+    if (!p) return 0u;
+    while (*p && *p != '[') p++;
+    if (*p != '[') return 0u;
+    p++;
+    for (; *p && *p != ']'; ++p) {
+        unsigned char c = (unsigned char)*p;
+        if (in_string) {
+            if (escape) {
+                escape = 0;
+            } else if (c == '\\') {
+                escape = 1;
+            } else if (c == '"') {
+                in_string = 0;
+                count++;
+            }
+        } else if (c == '"') {
+            in_string = 1;
+        }
+    }
+    return count;
+}
+
+static void tokenizer_map_set_id(char *id,
+                                 size_t id_cap,
+                                 const char **status,
+                                 const char *candidate)
+{
+    if (!id || id_cap == 0u || !status || !candidate || !candidate[0]) return;
+    if (strcmp(*status, "present") == 0) return;
+    snprintf(id, id_cap, "%s", candidate);
+    *status = "present";
+}
+
+static void tokenizer_map_probe_json_sidecar(yvex_tokenizer_map_sidecar *sidecar,
+                                             char *json,
+                                             size_t json_cap)
+{
+    struct stat st;
+
+    if (!sidecar || !json || json_cap == 0u) return;
+    json[0] = '\0';
+    if (stat(sidecar->path, &st) != 0 || !S_ISREG(st.st_mode)) {
+        sidecar->status = "missing";
+        return;
+    }
+    if (!tokenizer_map_read_json(sidecar->path, json, json_cap)) {
+        sidecar->status = tokenizer_map_file_readable(sidecar->path)
+            ? "malformed"
+            : "unreadable";
+        json[0] = '\0';
+        return;
+    }
+    if (!tokenizer_map_json_valid(json)) {
+        sidecar->status = "malformed";
+        json[0] = '\0';
+        return;
+    }
+    sidecar->status = "present";
+}
+
+static void tokenizer_map_probe_plain_sidecar(yvex_tokenizer_map_sidecar *sidecar)
+{
+    struct stat st;
+
+    if (!sidecar) return;
+    if (stat(sidecar->path, &st) != 0 || !S_ISREG(st.st_mode)) {
+        sidecar->status = "missing";
+    } else if (tokenizer_map_file_readable(sidecar->path)) {
+        sidecar->status = "present";
+    } else {
+        sidecar->status = "unreadable";
+    }
+}
+
+static int tokenizer_map_sidecar_present(const yvex_tokenizer_map_sidecar *sidecar)
+{
+    return sidecar && strcmp(sidecar->status, "present") == 0;
+}
+
+static int tokenizer_map_sidecar_malformed(const yvex_tokenizer_map_sidecar *sidecar)
+{
+    return sidecar && strcmp(sidecar->status, "malformed") == 0;
+}
+
+static const char *tokenizer_map_yes_no(const yvex_tokenizer_map_sidecar *sidecar)
+{
+    return tokenizer_map_sidecar_present(sidecar) ? "yes" : "no";
+}
+
+static const char *tokenizer_map_normal_sidecar(
+    const yvex_tokenizer_map_sidecar *sidecar,
+    const char *present_text)
+{
+    if (!sidecar) return "unknown";
+    if (strcmp(sidecar->status, "present") == 0) return present_text;
+    return sidecar->status;
+}
+
+static void tokenizer_map_parse_id_fields(yvex_tokenizer_map_profile *profile,
+                                          const char *json)
+{
+    char value[32];
+
+    if (!profile || !json || !json[0]) return;
+    if (tokenizer_map_json_uint(json, "bos_token_id", value, sizeof(value))) {
+        tokenizer_map_set_id(profile->bos_token_id, sizeof(profile->bos_token_id),
+                             &profile->bos_token_id_status, value);
+    }
+    if (tokenizer_map_json_uint(json, "eos_token_id", value, sizeof(value))) {
+        tokenizer_map_set_id(profile->eos_token_id, sizeof(profile->eos_token_id),
+                             &profile->eos_token_id_status, value);
+    }
+    if (tokenizer_map_json_uint(json, "pad_token_id", value, sizeof(value))) {
+        tokenizer_map_set_id(profile->pad_token_id, sizeof(profile->pad_token_id),
+                             &profile->pad_token_id_status, value);
+    }
+    if (tokenizer_map_json_uint(json, "unk_token_id", value, sizeof(value))) {
+        tokenizer_map_set_id(profile->unk_token_id, sizeof(profile->unk_token_id),
+                             &profile->unk_token_id_status, value);
+    }
+    if (tokenizer_map_json_uint(json, "sep_token_id", value, sizeof(value))) {
+        tokenizer_map_set_id(profile->sep_token_id, sizeof(profile->sep_token_id),
+                             &profile->sep_token_id_status, value);
+    }
+}
+
+static void tokenizer_map_choose_vocab(yvex_tokenizer_map_profile *profile)
+{
+    if (!profile) return;
+    if (strcmp(profile->config_vocab_size, "unknown") != 0) {
+        snprintf(profile->vocab_size, sizeof(profile->vocab_size), "%s",
+                 profile->config_vocab_size);
+        profile->vocab_size_status = "present";
+    } else if (strcmp(profile->tokenizer_vocab_size, "unknown") != 0) {
+        snprintf(profile->vocab_size, sizeof(profile->vocab_size), "%s",
+                 profile->tokenizer_vocab_size);
+        profile->vocab_size_status = "present";
+    }
+}
+
+static void tokenizer_map_output_head_relation(
+    yvex_tokenizer_map_profile *profile,
+    const char *models_root_override,
+    const char *source_override)
+{
+    yvex_output_head_map_profile output_profile;
+    int rc;
+
+    if (!profile) return;
+    rc = build_output_head_map_profile(profile->record, models_root_override,
+                                       source_override, &output_profile);
+    if (rc != 0) {
+        profile->output_head_vocab_relation_status = "unknown";
+        return;
+    }
+    snprintf(profile->output_head_vocab_dim_candidate,
+             sizeof(profile->output_head_vocab_dim_candidate), "%s",
+             output_profile.output_head.vocab_dim_candidate);
+    if (!output_profile.source_exists ||
+        strcmp(profile->vocab_size_status, "present") != 0) {
+        profile->output_head_vocab_relation_status = "unknown";
+    } else if (!output_profile.output_head.present) {
+        profile->output_head_vocab_relation_status = "output-head-missing";
+    } else if (strcmp(output_profile.output_head.vocab_dim_candidate,
+                      profile->vocab_size) == 0) {
+        profile->output_head_vocab_relation_status =
+            "vocab-size-matches-output-head";
+    } else {
+        profile->output_head_vocab_relation_status =
+            "vocab-size-mismatch-output-head";
+    }
+}
+
+static void tokenizer_map_profile_defaults(yvex_tokenizer_map_profile *profile)
+{
+    snprintf(profile->tokenizer_class, sizeof(profile->tokenizer_class), "unknown");
+    snprintf(profile->model_type, sizeof(profile->model_type), "unknown");
+    profile->vocab_size_status = "missing";
+    snprintf(profile->vocab_size, sizeof(profile->vocab_size), "unknown");
+    snprintf(profile->config_vocab_size, sizeof(profile->config_vocab_size), "unknown");
+    snprintf(profile->tokenizer_vocab_size, sizeof(profile->tokenizer_vocab_size), "unknown");
+    snprintf(profile->output_head_vocab_dim_candidate,
+             sizeof(profile->output_head_vocab_dim_candidate), "unknown");
+    profile->output_head_vocab_relation_status = "unknown";
+    profile->bos_token_id_status = "missing";
+    profile->eos_token_id_status = "missing";
+    profile->pad_token_id_status = "missing";
+    profile->unk_token_id_status = "missing";
+    profile->sep_token_id_status = "missing";
+    snprintf(profile->bos_token_id, sizeof(profile->bos_token_id), "unknown");
+    snprintf(profile->eos_token_id, sizeof(profile->eos_token_id), "unknown");
+    snprintf(profile->pad_token_id, sizeof(profile->pad_token_id), "unknown");
+    snprintf(profile->unk_token_id, sizeof(profile->unk_token_id), "unknown");
+    snprintf(profile->sep_token_id, sizeof(profile->sep_token_id), "unknown");
+    profile->additional_special_tokens_status = "missing";
+    snprintf(profile->additional_special_tokens_count,
+             sizeof(profile->additional_special_tokens_count), "0");
+    profile->chat_template_status = "unknown";
+    profile->chat_template_present = "unknown";
+}
+
+static int build_tokenizer_map_profile(
+    const yvex_model_target_record *record,
+    const char *models_root_override,
+    const char *source_override,
+    yvex_tokenizer_map_profile *profile)
+{
+    const yvex_model_class_profile_spec *spec;
+    yvex_model_class_profile source_profile;
+    char json[YVEX_TOKENIZER_MAP_JSON_CAP];
+    int rc;
+    int sidecar_count;
+    int malformed_count;
+
+    if (!record || !profile) return 2;
+    spec = find_model_class_profile_spec(record->target_id);
+    if (!spec) return 2;
+
+    memset(profile, 0, sizeof(*profile));
+    profile->record = record;
+    profile->spec = spec;
+    profile->status = "source-missing";
+    profile->top_blocker = spec->missing_source_blocker;
+    tokenizer_map_profile_defaults(profile);
+
+    memset(&source_profile, 0, sizeof(source_profile));
+    source_profile.record = record;
+    source_profile.spec = spec;
+    rc = model_class_resolve_source(models_root_override, source_override,
+                                    &source_profile);
+    if (rc != 0) return rc;
+    snprintf(profile->source_path, sizeof(profile->source_path), "%s",
+             source_profile.source_path);
+    snprintf(profile->source_path_source, sizeof(profile->source_path_source),
+             "%s", source_profile.source_path_source);
+    profile->source_exists = model_class_dir_exists(profile->source_path);
+
+    tokenizer_map_sidecar_init(&profile->tokenizer_json, profile->source_path,
+                               "tokenizer.json",
+                               "model.tokenizer.sidecar.tokenizer_json");
+    tokenizer_map_sidecar_init(&profile->tokenizer_config, profile->source_path,
+                               "tokenizer_config.json",
+                               "model.tokenizer.sidecar.tokenizer_config");
+    tokenizer_map_sidecar_init(&profile->special_tokens_map, profile->source_path,
+                               "special_tokens_map.json",
+                               "model.tokenizer.sidecar.special_tokens_map");
+    tokenizer_map_sidecar_init(&profile->generation_config, profile->source_path,
+                               "generation_config.json",
+                               "model.tokenizer.sidecar.generation_config");
+    tokenizer_map_sidecar_init(&profile->config_json, profile->source_path,
+                               "config.json",
+                               "model.config.sidecar.config_json");
+    tokenizer_map_sidecar_init(&profile->vocab_json, profile->source_path,
+                               "vocab.json",
+                               "model.tokenizer.sidecar.vocab_json");
+    tokenizer_map_sidecar_init(&profile->merges_txt, profile->source_path,
+                               "merges.txt",
+                               "model.tokenizer.sidecar.merges_txt");
+    tokenizer_map_sidecar_init(&profile->tokenizer_model, profile->source_path,
+                               "tokenizer.model",
+                               "model.tokenizer.sidecar.tokenizer_model");
+
+    if (!profile->source_exists) return 0;
+
+    tokenizer_map_probe_json_sidecar(&profile->config_json, json, sizeof(json));
+    if (tokenizer_map_sidecar_present(&profile->config_json)) {
+        (void)tokenizer_map_json_string(json, "model_type",
+                                        profile->model_type,
+                                        sizeof(profile->model_type));
+        if (tokenizer_map_json_uint(json, "vocab_size",
+                                    profile->config_vocab_size,
+                                    sizeof(profile->config_vocab_size))) {
+            profile->vocab_size_status = "present";
+        }
+        tokenizer_map_parse_id_fields(profile, json);
+    }
+
+    tokenizer_map_probe_json_sidecar(&profile->tokenizer_config, json,
+                                     sizeof(json));
+    if (tokenizer_map_sidecar_present(&profile->tokenizer_config)) {
+        (void)tokenizer_map_json_string(json, "tokenizer_class",
+                                        profile->tokenizer_class,
+                                        sizeof(profile->tokenizer_class));
+        tokenizer_map_parse_id_fields(profile, json);
+        if (tokenizer_map_json_has_key(json, "chat_template")) {
+            profile->chat_template_status = "present";
+            profile->chat_template_present = "true";
+        }
+    }
+
+    tokenizer_map_probe_json_sidecar(&profile->generation_config, json,
+                                     sizeof(json));
+    if (tokenizer_map_sidecar_present(&profile->generation_config)) {
+        tokenizer_map_parse_id_fields(profile, json);
+    }
+
+    tokenizer_map_probe_json_sidecar(&profile->special_tokens_map, json,
+                                     sizeof(json));
+    if (tokenizer_map_sidecar_present(&profile->special_tokens_map)) {
+        unsigned long count =
+            tokenizer_map_json_string_array_count(json,
+                                                  "additional_special_tokens");
+        if (tokenizer_map_json_has_key(json, "additional_special_tokens")) {
+            profile->additional_special_tokens_status = "present";
+            snprintf(profile->additional_special_tokens_count,
+                     sizeof(profile->additional_special_tokens_count),
+                     "%lu", count);
+        }
+    }
+
+    tokenizer_map_probe_json_sidecar(&profile->tokenizer_json, json,
+                                     sizeof(json));
+    if (tokenizer_map_sidecar_present(&profile->tokenizer_json)) {
+        char value[32];
+
+        if (tokenizer_map_json_uint(json, "vocab_size", value, sizeof(value))) {
+            snprintf(profile->tokenizer_vocab_size,
+                     sizeof(profile->tokenizer_vocab_size), "%s", value);
+        }
+    }
+
+    tokenizer_map_probe_json_sidecar(&profile->vocab_json, json, sizeof(json));
+    tokenizer_map_probe_plain_sidecar(&profile->merges_txt);
+    tokenizer_map_probe_plain_sidecar(&profile->tokenizer_model);
+
+    tokenizer_map_choose_vocab(profile);
+    tokenizer_map_output_head_relation(profile, models_root_override,
+                                       source_override);
+
+    sidecar_count =
+        tokenizer_map_sidecar_present(&profile->tokenizer_json) +
+        tokenizer_map_sidecar_present(&profile->tokenizer_config) +
+        tokenizer_map_sidecar_present(&profile->special_tokens_map) +
+        tokenizer_map_sidecar_present(&profile->generation_config) +
+        tokenizer_map_sidecar_present(&profile->config_json) +
+        tokenizer_map_sidecar_present(&profile->vocab_json) +
+        tokenizer_map_sidecar_present(&profile->merges_txt) +
+        tokenizer_map_sidecar_present(&profile->tokenizer_model);
+    malformed_count =
+        tokenizer_map_sidecar_malformed(&profile->tokenizer_json) +
+        tokenizer_map_sidecar_malformed(&profile->tokenizer_config) +
+        tokenizer_map_sidecar_malformed(&profile->special_tokens_map) +
+        tokenizer_map_sidecar_malformed(&profile->generation_config) +
+        tokenizer_map_sidecar_malformed(&profile->config_json) +
+        tokenizer_map_sidecar_malformed(&profile->vocab_json);
+
+    if (malformed_count > 0) {
+        profile->status = "tokenizer-metadata-malformed";
+        profile->top_blocker = "malformed-tokenizer-sidecar";
+    } else if (sidecar_count == 0) {
+        profile->status = "metadata-missing";
+        profile->top_blocker = "missing-tokenizer-sidecars";
+    } else if (strcmp(profile->output_head_vocab_relation_status,
+                      "vocab-size-mismatch-output-head") == 0) {
+        profile->status = "tokenizer-metadata-ambiguous";
+        profile->top_blocker = "tokenizer-vocab-output-head-mismatch";
+    } else if (tokenizer_map_sidecar_present(&profile->tokenizer_json) &&
+               tokenizer_map_sidecar_present(&profile->config_json) &&
+               strcmp(profile->vocab_size_status, "present") == 0 &&
+               strcmp(profile->bos_token_id_status, "present") == 0 &&
+               strcmp(profile->eos_token_id_status, "present") == 0 &&
+               strcmp(profile->pad_token_id_status, "present") == 0 &&
+               strcmp(profile->unk_token_id_status, "present") == 0) {
+        profile->status = "tokenizer-metadata-profiled";
+        profile->top_blocker = "missing-tokenizer-runtime";
+    } else {
+        profile->status = "tokenizer-metadata-incomplete";
+        profile->top_blocker = "incomplete-tokenizer-metadata";
+    }
+    return 0;
+}
+
+static void print_tokenizer_map_normal(
+    const yvex_tokenizer_map_profile *profile)
+{
+    printf("tokenizer-map: %s\n", profile->spec->family_key);
+    printf("target: %s\n", profile->record->target_id);
+    printf("status: %s\n", profile->status);
+    printf("stage: metadata-tokenizer-map\n");
+    printf("evidence: sidecar-metadata-only\n");
+    printf("tokenizer: %s\n",
+           tokenizer_map_normal_sidecar(&profile->tokenizer_json,
+                                        "tokenizer.json present"));
+    printf("config: %s\n",
+           tokenizer_map_normal_sidecar(&profile->config_json,
+                                        "config.json present"));
+    printf("vocab_size: %s\n", profile->vocab_size);
+    printf("special_tokens: bos=%s eos=%s pad=%s unk=%s\n",
+           profile->bos_token_id,
+           profile->eos_token_id,
+           profile->pad_token_id,
+           profile->unk_token_id);
+    printf("chat_template: %s\n", profile->chat_template_present);
+    printf("output_head_relation: %s\n",
+           profile->output_head_vocab_relation_status);
+    printf("top_blocker: %s\n", profile->top_blocker);
+    printf("next: %s\n", YVEX_TOKENIZER_MAP_NEXT_ROW);
+    printf("boundary: tokenizer metadata mapping only; no tokenization/runtime/generation\n");
+}
+
+static void print_tokenizer_map_table(
+    const yvex_tokenizer_map_profile *profile)
+{
+    printf("TOKENIZER METADATA MAP\n\n");
+    printf("%-6s  %-15s  %-27s  %-9s  %-6s  %-7s  %-7s  %-7s  %-13s  %-30s  %s\n",
+           "FAMILY", "TARGET", "STATUS", "TOKENIZER", "CONFIG", "VOCAB",
+           "EOS", "PAD", "CHAT_TEMPLATE", "HEAD_RELATION", "NEXT");
+    printf("%-6s  %-15s  %-27s  %-9s  %-6s  %-7s  %-7s  %-7s  %-13s  %-30s  %s\n",
+           profile->spec->family_key,
+           profile->record->target_id,
+           profile->status,
+           tokenizer_map_yes_no(&profile->tokenizer_json),
+           tokenizer_map_yes_no(&profile->config_json),
+           profile->vocab_size,
+           profile->eos_token_id,
+           profile->pad_token_id,
+           profile->chat_template_present,
+           profile->output_head_vocab_relation_status,
+           YVEX_TOKENIZER_MAP_NEXT_ROW);
+}
+
+static void print_tokenizer_map_audit(
+    const yvex_tokenizer_map_profile *profile)
+{
+    printf("tokenizer_map_status: %s\n", profile->status);
+    printf("tokenizer_map_family: %s\n", profile->spec->family_key);
+    printf("tokenizer_map_target_id: %s\n", profile->record->target_id);
+    printf("tokenizer_map_stage: metadata-tokenizer-map\n");
+    printf("tokenizer_map_evidence_basis: sidecar-metadata-only\n");
+    printf("tokenizer_map_source_status: %s\n",
+           profile->source_exists ? "present" : "missing");
+    printf("tokenizer_map_source_path: %s\n", profile->source_path);
+    printf("tokenizer_json_status: %s\n", profile->tokenizer_json.status);
+    printf("tokenizer_json_path: %s\n", profile->tokenizer_json.path);
+    printf("tokenizer_config_status: %s\n", profile->tokenizer_config.status);
+    printf("tokenizer_config_path: %s\n", profile->tokenizer_config.path);
+    printf("special_tokens_map_status: %s\n",
+           profile->special_tokens_map.status);
+    printf("special_tokens_map_path: %s\n", profile->special_tokens_map.path);
+    printf("generation_config_status: %s\n",
+           profile->generation_config.status);
+    printf("generation_config_path: %s\n", profile->generation_config.path);
+    printf("config_json_status: %s\n", profile->config_json.status);
+    printf("config_json_path: %s\n", profile->config_json.path);
+    printf("vocab_json_status: %s\n", profile->vocab_json.status);
+    printf("merges_txt_status: %s\n", profile->merges_txt.status);
+    printf("tokenizer_model_status: %s\n", profile->tokenizer_model.status);
+    printf("tokenizer_class: %s\n", profile->tokenizer_class);
+    printf("model_type: %s\n", profile->model_type);
+    printf("vocab_size_status: %s\n", profile->vocab_size_status);
+    printf("vocab_size: %s\n", profile->vocab_size);
+    printf("config_vocab_size: %s\n", profile->config_vocab_size);
+    printf("tokenizer_vocab_size: %s\n", profile->tokenizer_vocab_size);
+    printf("output_head_vocab_dim_candidate: %s\n",
+           profile->output_head_vocab_dim_candidate);
+    printf("output_head_vocab_relation_status: %s\n",
+           profile->output_head_vocab_relation_status);
+    printf("bos_token_id_status: %s\n", profile->bos_token_id_status);
+    printf("bos_token_id: %s\n", profile->bos_token_id);
+    printf("eos_token_id_status: %s\n", profile->eos_token_id_status);
+    printf("eos_token_id: %s\n", profile->eos_token_id);
+    printf("pad_token_id_status: %s\n", profile->pad_token_id_status);
+    printf("pad_token_id: %s\n", profile->pad_token_id);
+    printf("unk_token_id_status: %s\n", profile->unk_token_id_status);
+    printf("unk_token_id: %s\n", profile->unk_token_id);
+    printf("sep_token_id_status: %s\n", profile->sep_token_id_status);
+    printf("sep_token_id: %s\n", profile->sep_token_id);
+    printf("additional_special_tokens_status: %s\n",
+           profile->additional_special_tokens_status);
+    printf("additional_special_tokens_count: %s\n",
+           profile->additional_special_tokens_count);
+    printf("chat_template_status: %s\n", profile->chat_template_status);
+    printf("chat_template_present: %s\n", profile->chat_template_present);
+    printf("chat_template_runtime_status: not-implemented\n");
+    printf("tokenizer_runtime_status: not-implemented\n");
+    printf("tokenization_status: not-implemented\n");
+    printf("detokenization_status: not-implemented\n");
+    printf("eos_stop_policy_status: not-implemented\n");
+    printf("stop_token_policy_status: not-implemented\n");
+    printf("prompt_template_runtime_status: not-implemented\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    printf("top_blocker: %s\n", profile->top_blocker);
+    printf("next_required_rows: %s\n", YVEX_TOKENIZER_MAP_NEXT_ROW);
+    printf("boundary: tokenizer metadata mapping only; no tokenization/runtime/generation\n");
+}
+
+static void print_tokenizer_map_audit_hint(const yvex_model_target_record *record)
+{
+    const yvex_model_class_profile_spec *spec;
+
+    if (!record) return;
+    spec = find_model_class_profile_spec(record->target_id);
+    if (!spec) return;
+    printf("tokenizer_map_status: not-run\n");
+    printf("tokenizer_map_family: %s\n", spec->family_key);
+    printf("tokenizer_map_target_id: %s\n", spec->target_id);
+    printf("tokenizer_map_stage: metadata-tokenizer-map\n");
+    printf("tokenizer_map_evidence_basis: sidecar-metadata-only\n");
+    printf("tokenizer_runtime_status: not-implemented\n");
+    printf("tokenizer_map_next: %s\n", YVEX_TOKENIZER_MAP_NEXT_ROW);
+}
+
 static const char *target_decision_candidate_class(const yvex_model_target_record *record)
 {
     if (!record) return "unknown";
@@ -5314,7 +6050,7 @@ static void print_model_target_usage(FILE *fp)
     fprintf(fp, "       yvex model-target decision --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target class-profile TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target tensor-collection TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
-    fprintf(fp, "       yvex model-target tensor-map TARGET [--role output-head] [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
+    fprintf(fp, "       yvex model-target tensor-map TARGET [--role output-head|tokenizer] [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR] [--audit | --output normal|table|audit]\n");
 }
 
@@ -5356,6 +6092,10 @@ void yvex_model_target_help(FILE *fp)
     fprintf(fp, "  yvex model-target tensor-map qwen3-8b --role output-head --audit\n");
     fprintf(fp, "  yvex model-target tensor-map gemma-4-12b-it --role output-head --audit\n");
     fprintf(fp, "  The output-head tensor map reads safetensors headers only and identifies output-head, final-norm, and embedding candidates. It does not compute logits, complete runtime descriptors, feed graph consumers, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    fprintf(fp, "\nTokenizer metadata map:\n");
+    fprintf(fp, "  yvex model-target tensor-map qwen3-8b --role tokenizer --audit\n");
+    fprintf(fp, "  yvex model-target tensor-map gemma-4-12b-it --role tokenizer --audit\n");
+    fprintf(fp, "  The tokenizer metadata map reads local sidecars only and reports tokenizer/config/special-token metadata candidates. It does not tokenize, detokenize, apply chat templates, stop on EOS, compute logits, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "\nDefault output is compact. Use --audit for full diagnostic fields.\n");
     fprintf(fp, "Model targets are pressure objects, not capability claims.\n");
     fprintf(fp, "External GGUFs and external runners are reference evidence only.\n");
@@ -5741,6 +6481,7 @@ static void print_model_target_list(void)
         print_tensor_collection_audit_hint(record);
         print_tensor_map_audit_hint(record);
         print_output_head_map_audit_hint(record);
+        print_tokenizer_map_audit_hint(record);
         printf("runtime_shape: %s\n", model_target_runtime_shape(record));
         printf("backend_selection: %s\n", model_target_backend_selection(record));
         printf("backend_pressure: %s\n", model_target_backend_pressure(record));
@@ -5822,6 +6563,7 @@ static void print_model_target_record(const yvex_model_target_record *record)
     print_tensor_collection_audit_hint(record);
     print_tensor_map_audit_hint(record);
     print_output_head_map_audit_hint(record);
+    print_tokenizer_map_audit_hint(record);
     printf("target_artifact_class: %s\n", record->target_artifact_class);
     printf("target_artifact_status: %s\n", model_target_target_artifact_status(record));
     printf("target_artifact_origin: %s\n", model_target_target_artifact_origin(record));
@@ -6674,6 +7416,7 @@ int yvex_model_target_command(int argc, char **argv)
         const yvex_model_class_profile_spec *spec;
         yvex_tensor_naming_profile profile;
         yvex_output_head_map_profile output_head_profile;
+        yvex_tokenizer_map_profile tokenizer_profile;
         int rc;
 
         output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
@@ -6718,11 +7461,12 @@ int yvex_model_target_command(int argc, char **argv)
                 source = argv[++i];
             } else if (strcmp(argv[i], "--role") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    fprintf(stderr, "model-target tensor-map: --role requires output-head\n");
+                    fprintf(stderr, "model-target tensor-map: --role requires output-head|tokenizer\n");
                     return 2;
                 }
                 role = argv[++i];
-                if (strcmp(role, "output-head") != 0) {
+                if (strcmp(role, "output-head") != 0 &&
+                    strcmp(role, "tokenizer") != 0) {
                     fprintf(stderr, "model-target tensor-map: unsupported role: %s\n",
                             role);
                     return 2;
@@ -6747,6 +7491,21 @@ int yvex_model_target_command(int argc, char **argv)
                 print_output_head_map_audit(&output_head_profile);
             } else {
                 print_output_head_map_normal(&output_head_profile);
+            }
+            return 0;
+        }
+        if (role && strcmp(role, "tokenizer") == 0) {
+            rc = build_tokenizer_map_profile(record, models_root, source,
+                                             &tokenizer_profile);
+            if (rc != 0) {
+                return rc;
+            }
+            if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+                print_tokenizer_map_table(&tokenizer_profile);
+            } else if (output_mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+                print_tokenizer_map_audit(&tokenizer_profile);
+            } else {
+                print_tokenizer_map_normal(&tokenizer_profile);
             }
             return 0;
         }
