@@ -11,6 +11,7 @@
 #include <yvex/model.h>
 #include <yvex/model_registry.h>
 #include <yvex/native_weights.h>
+#include <yvex/qtype_support.h>
 #include <yvex/tensor.h>
 #include <yvex/weights.h>
 
@@ -2010,6 +2011,8 @@ typedef enum {
 #define YVEX_TOKENIZER_MAP_NEXT_ROW "V010.MAP.8"
 #define YVEX_MISSING_ROLE_REPORT_NEXT_ROW "V010.MAP.9"
 #define YVEX_TENSOR_MAPPING_GATE_NEXT_ROW "V010.QUANT.0"
+#define YVEX_QTYPE_POLICY_NEXT_ROW "V010.QUANT.1"
+#define YVEX_QTYPE_POLICY_BACK_ROW "V010.MAP.9"
 #define YVEX_TENSOR_COLLECTION_LAYER_CAP 512u
 #define YVEX_TENSOR_NAMING_ENTRY_CAP 1024u
 #define YVEX_TENSOR_NAMING_TEXT_CAP 192u
@@ -5798,6 +5801,512 @@ static void print_tensor_mapping_gate_audit_hint(
            YVEX_TENSOR_MAPPING_GATE_NEXT_ROW);
 }
 
+typedef struct {
+    const yvex_model_target_record *record;
+    const yvex_model_class_profile_spec *spec;
+    const char *status;
+    const char *mapping_gate_status;
+    const char *policy_basis;
+    const char *source_dtype_profile_status;
+    const char *qtype_policy_status;
+    const char *qtype_policy;
+    const char *preferred_qtype;
+    const char *candidate_qtypes;
+    const char *refused_qtypes;
+    const char *refusal_reasons;
+    const char *calibration_status;
+    const char *imatrix_status;
+    const char *per_role_qtype_status;
+    const char *compute_support_status;
+    const char *artifact_emit_status;
+    const char *top_blocker;
+    const char *next_required_row;
+    char target_id[64];
+    char family[32];
+    char model_class[96];
+    char source_class[96];
+    char target_artifact_class[96];
+    char source_path[YVEX_PATH_CAP];
+    char dtype_profile[192];
+    char dtype_counts[384];
+    unsigned long long source_tensor_count;
+    unsigned long long source_declared_data_bytes;
+    unsigned long long dtype_f32_count;
+    unsigned long long dtype_f16_count;
+    unsigned long long dtype_bf16_count;
+    unsigned long long dtype_f64_count;
+    unsigned long long dtype_i64_count;
+    unsigned long long dtype_i32_count;
+    unsigned long long dtype_i16_count;
+    unsigned long long dtype_i8_count;
+    unsigned long long dtype_u8_count;
+    unsigned long long dtype_bool_count;
+    unsigned long long dtype_f8_e4m3_count;
+    unsigned long long dtype_f8_e5m2_count;
+    unsigned long long dtype_fp4_count;
+    unsigned long long dtype_other_count;
+    unsigned long long dtype_unknown_count;
+    yvex_tensor_mapping_gate_profile gate;
+} yvex_qtype_policy_profile;
+
+static const char *qtype_policy_candidate_qtypes(void)
+{
+    return "F16,BF16,F32";
+}
+
+static const char *qtype_policy_refused_qtypes(void)
+{
+    return "Q8_0,Q4_K,Q2_K,IQ2_XXS";
+}
+
+static const char *qtype_policy_refusal_reasons(void)
+{
+    return "Q8_0:emit-quantize-compute-deferred;Q4_K:storage-or-emitter-missing;Q2_K:storage-or-emitter-missing;IQ2_XXS:storage-or-emitter-missing";
+}
+
+static void qtype_policy_copy(char *dst, size_t cap, const char *src)
+{
+    if (!dst || cap == 0) return;
+    if (!src) src = "";
+    snprintf(dst, cap, "%s", src);
+}
+
+static void qtype_policy_init(yvex_qtype_policy_profile *profile,
+                              const yvex_model_target_record *record,
+                              const yvex_model_class_profile_spec *spec,
+                              const char *target_id)
+{
+    memset(profile, 0, sizeof(*profile));
+    profile->record = record;
+    profile->spec = spec;
+    profile->status = "parser-error";
+    profile->mapping_gate_status = "not-run";
+    profile->policy_basis = "unknown";
+    profile->source_dtype_profile_status = "missing";
+    profile->qtype_policy_status = "missing";
+    profile->qtype_policy = "missing";
+    profile->preferred_qtype = "none";
+    profile->candidate_qtypes = "none";
+    profile->refused_qtypes = "none";
+    profile->refusal_reasons = "none";
+    profile->calibration_status = "deferred";
+    profile->imatrix_status = "deferred";
+    profile->per_role_qtype_status = "deferred-to-V010.QUANT.1";
+    profile->compute_support_status = "runtime-compute-qtype-deferred";
+    profile->artifact_emit_status = "blocked-artifact-emit-not-implemented";
+    profile->top_blocker = "parser-error";
+    profile->next_required_row = YVEX_QTYPE_POLICY_BACK_ROW;
+    qtype_policy_copy(profile->target_id, sizeof(profile->target_id),
+                      target_id ? target_id : (record ? record->target_id : "none"));
+    qtype_policy_copy(profile->family, sizeof(profile->family),
+                      spec ? spec->family_key : (record ? record->family : "unknown"));
+    qtype_policy_copy(profile->model_class, sizeof(profile->model_class),
+                      spec ? spec->class_name : (record ? record->target_class : "unknown"));
+    qtype_policy_copy(profile->source_class, sizeof(profile->source_class),
+                      record ? record->source_artifact_class : "unknown");
+    qtype_policy_copy(profile->target_artifact_class,
+                      sizeof(profile->target_artifact_class),
+                      record ? record->target_artifact_class : "unknown");
+    qtype_policy_copy(profile->source_path, sizeof(profile->source_path), "none");
+    qtype_policy_copy(profile->dtype_profile, sizeof(profile->dtype_profile),
+                      "missing");
+    qtype_policy_copy(profile->dtype_counts, sizeof(profile->dtype_counts),
+                      "none");
+}
+
+static void qtype_policy_count_native_dtype(yvex_qtype_policy_profile *profile,
+                                            yvex_native_dtype dtype)
+{
+    switch (dtype) {
+    case YVEX_NATIVE_DTYPE_F32: profile->dtype_f32_count++; break;
+    case YVEX_NATIVE_DTYPE_F16: profile->dtype_f16_count++; break;
+    case YVEX_NATIVE_DTYPE_BF16: profile->dtype_bf16_count++; break;
+    case YVEX_NATIVE_DTYPE_F64: profile->dtype_f64_count++; break;
+    case YVEX_NATIVE_DTYPE_I64: profile->dtype_i64_count++; break;
+    case YVEX_NATIVE_DTYPE_I32: profile->dtype_i32_count++; break;
+    case YVEX_NATIVE_DTYPE_I16: profile->dtype_i16_count++; break;
+    case YVEX_NATIVE_DTYPE_I8: profile->dtype_i8_count++; break;
+    case YVEX_NATIVE_DTYPE_U8: profile->dtype_u8_count++; break;
+    case YVEX_NATIVE_DTYPE_BOOL: profile->dtype_bool_count++; break;
+    case YVEX_NATIVE_DTYPE_F8_E4M3: profile->dtype_f8_e4m3_count++; break;
+    case YVEX_NATIVE_DTYPE_F8_E5M2: profile->dtype_f8_e5m2_count++; break;
+    case YVEX_NATIVE_DTYPE_FP4: profile->dtype_fp4_count++; break;
+    case YVEX_NATIVE_DTYPE_OTHER: profile->dtype_other_count++; break;
+    case YVEX_NATIVE_DTYPE_UNKNOWN:
+    default:
+        profile->dtype_unknown_count++;
+        break;
+    }
+}
+
+static unsigned long long qtype_policy_unsupported_source_dtype_count(
+    const yvex_qtype_policy_profile *profile)
+{
+    if (!profile) return 0;
+    return profile->dtype_f64_count +
+           profile->dtype_i64_count +
+           profile->dtype_i32_count +
+           profile->dtype_i16_count +
+           profile->dtype_i8_count +
+           profile->dtype_u8_count +
+           profile->dtype_bool_count +
+           profile->dtype_f8_e4m3_count +
+           profile->dtype_f8_e5m2_count +
+           profile->dtype_fp4_count +
+           profile->dtype_other_count +
+           profile->dtype_unknown_count;
+}
+
+static void qtype_policy_format_dtype_profile(
+    yvex_qtype_policy_profile *profile)
+{
+    unsigned long long other_count;
+
+    if (!profile) return;
+    other_count = qtype_policy_unsupported_source_dtype_count(profile);
+    snprintf(profile->dtype_profile, sizeof(profile->dtype_profile),
+             "F32=%llu F16=%llu BF16=%llu other=%llu",
+             profile->dtype_f32_count,
+             profile->dtype_f16_count,
+             profile->dtype_bf16_count,
+             other_count);
+    snprintf(profile->dtype_counts, sizeof(profile->dtype_counts),
+             "F32=%llu,F16=%llu,BF16=%llu,F64=%llu,I64=%llu,I32=%llu,I16=%llu,I8=%llu,U8=%llu,BOOL=%llu,F8_E4M3=%llu,F8_E5M2=%llu,FP4=%llu,OTHER=%llu,UNKNOWN=%llu",
+             profile->dtype_f32_count,
+             profile->dtype_f16_count,
+             profile->dtype_bf16_count,
+             profile->dtype_f64_count,
+             profile->dtype_i64_count,
+             profile->dtype_i32_count,
+             profile->dtype_i16_count,
+             profile->dtype_i8_count,
+             profile->dtype_u8_count,
+             profile->dtype_bool_count,
+             profile->dtype_f8_e4m3_count,
+             profile->dtype_f8_e5m2_count,
+             profile->dtype_fp4_count,
+             profile->dtype_other_count,
+             profile->dtype_unknown_count);
+}
+
+static int qtype_policy_build_source_dtype_profile(
+    yvex_qtype_policy_profile *profile)
+{
+    yvex_native_weight_table *table = NULL;
+    yvex_native_weight_options options;
+    yvex_native_weight_summary summary;
+    yvex_error err;
+    unsigned long long i;
+    int rc;
+
+    if (!profile || !profile->source_path[0] ||
+        strcmp(profile->source_path, "none") == 0) {
+        return 0;
+    }
+
+    memset(&options, 0, sizeof(options));
+    memset(&summary, 0, sizeof(summary));
+    options.source_dir = profile->source_path;
+    options.recursive = 0;
+    options.include_metadata = 0;
+    yvex_error_clear(&err);
+    rc = yvex_native_weight_table_open(&table, &options, &err);
+    if (rc != YVEX_OK) {
+        profile->source_dtype_profile_status = "header-error";
+        profile->top_blocker = "missing-source-dtype-profile";
+        qtype_policy_copy(profile->dtype_profile, sizeof(profile->dtype_profile),
+                          "missing");
+        return rc == YVEX_ERR_NOMEM ? 3 : 0;
+    }
+
+    profile->source_tensor_count = yvex_native_weight_table_count(table);
+    (void)yvex_native_weight_table_summary(table, &summary, &err);
+    profile->source_declared_data_bytes = summary.total_tensor_bytes;
+    for (i = 0; i < profile->source_tensor_count; ++i) {
+        const yvex_native_weight_info *info =
+            yvex_native_weight_table_at(table, i);
+        qtype_policy_count_native_dtype(profile,
+                                        info ? info->dtype
+                                             : YVEX_NATIVE_DTYPE_UNKNOWN);
+    }
+    yvex_native_weight_table_close(table);
+
+    qtype_policy_format_dtype_profile(profile);
+    if (profile->source_tensor_count == 0) {
+        profile->source_dtype_profile_status = "missing";
+    } else if (qtype_policy_unsupported_source_dtype_count(profile) > 0) {
+        profile->source_dtype_profile_status = "unsupported";
+    } else {
+        profile->source_dtype_profile_status = "profiled";
+    }
+    return 0;
+}
+
+static int qtype_policy_has_required_table(void)
+{
+    return yvex_qtype_support_by_name("F16") &&
+           yvex_qtype_support_by_name("BF16") &&
+           yvex_qtype_support_by_name("F32") &&
+           yvex_qtype_support_by_name("Q8_0") &&
+           yvex_qtype_support_by_name("Q4_K") &&
+           yvex_qtype_support_by_name("Q2_K") &&
+           yvex_qtype_support_by_name("IQ2_XXS");
+}
+
+static void qtype_policy_mark_planning_reported(
+    yvex_qtype_policy_profile *profile)
+{
+    profile->status = "policy-reported";
+    profile->policy_basis =
+        "header-only-source-metadata+existing-yvex-policy-table";
+    profile->qtype_policy_status = "reported";
+    profile->qtype_policy = "artifact-planning-storage-policy";
+    profile->preferred_qtype = "F16";
+    profile->candidate_qtypes = qtype_policy_candidate_qtypes();
+    profile->refused_qtypes = qtype_policy_refused_qtypes();
+    profile->refusal_reasons = qtype_policy_refusal_reasons();
+    profile->calibration_status = "deferred-to-V010.QUANT.3";
+    profile->imatrix_status = "deferred-to-V010.QUANT.3";
+    profile->per_role_qtype_status = "deferred-to-V010.QUANT.1";
+    profile->compute_support_status = "deferred-to-V010.QUANT.2";
+    profile->artifact_emit_status = "blocked-until-artifact-emitter";
+    profile->top_blocker = "missing-per-role-qtype-support";
+    profile->next_required_row = YVEX_QTYPE_POLICY_NEXT_ROW;
+}
+
+static int build_qtype_policy_profile(
+    const yvex_model_target_record *record,
+    const char *models_root_override,
+    const char *source_override,
+    yvex_qtype_policy_profile *profile)
+{
+    const yvex_model_class_profile_spec *spec;
+    int rc;
+
+    if (!profile || !record) return 2;
+    spec = find_model_class_profile_spec(record->target_id);
+    qtype_policy_init(profile, record, spec, record->target_id);
+
+    if (!spec) {
+        if (strcmp(record->target_class, "selected-runtime-slice") == 0) {
+            profile->status = "blocked-unsupported-target-class";
+            profile->top_blocker = "unsupported-target-class";
+        } else {
+            profile->status = "unsupported-family";
+            profile->top_blocker = "unsupported-family";
+        }
+        profile->next_required_row = "none";
+        return 0;
+    }
+    if (strcmp(spec->family_key, "qwen") != 0 &&
+        strcmp(spec->family_key, "gemma") != 0) {
+        profile->status = "unsupported-family";
+        profile->top_blocker = "unsupported-family";
+        profile->next_required_row = "none";
+        return 0;
+    }
+    if (strcmp(record->target_class, "source-model-candidate") != 0) {
+        profile->status = "blocked-unsupported-target-class";
+        profile->top_blocker = "unsupported-target-class";
+        profile->next_required_row = "none";
+        return 0;
+    }
+    if (!record->target_artifact_class ||
+        strcmp(record->target_artifact_class, "future-YVEX-produced-GGUF") != 0) {
+        profile->status = "blocked-missing-target-artifact-class";
+        profile->top_blocker = "missing-target-artifact-class";
+        return 0;
+    }
+
+    rc = build_tensor_mapping_gate_profile(record, models_root_override,
+                                           source_override, &profile->gate);
+    if (rc != 0) return rc;
+
+    profile->mapping_gate_status = profile->gate.status;
+    qtype_policy_copy(profile->source_path, sizeof(profile->source_path),
+                      profile->gate.missing_role.source_path);
+
+    if (!tensor_mapping_gate_source_ready(&profile->gate)) {
+        profile->status = "blocked-missing-source";
+        profile->top_blocker = profile->gate.top_blocker;
+        profile->next_required_row = YVEX_QTYPE_POLICY_BACK_ROW;
+        return 0;
+    }
+
+    rc = qtype_policy_build_source_dtype_profile(profile);
+    if (rc != 0) return rc;
+    if (strcmp(profile->source_dtype_profile_status, "missing") == 0 ||
+        strcmp(profile->source_dtype_profile_status, "header-error") == 0) {
+        profile->status = "blocked-missing-source-dtype-profile";
+        profile->top_blocker = "missing-source-dtype-profile";
+        profile->next_required_row = YVEX_QTYPE_POLICY_BACK_ROW;
+        return 0;
+    }
+    if (strcmp(profile->source_dtype_profile_status, "unsupported") == 0) {
+        profile->status = "blocked-unsupported-source-dtype";
+        profile->top_blocker = "unsupported-source-dtype-profile";
+        profile->next_required_row = YVEX_QTYPE_POLICY_BACK_ROW;
+        return 0;
+    }
+    if (strcmp(profile->gate.status, "passed-for-artifact-planning") != 0) {
+        profile->status = "blocked-mapping-gate";
+        profile->top_blocker = profile->gate.top_blocker;
+        profile->next_required_row = YVEX_QTYPE_POLICY_BACK_ROW;
+        return 0;
+    }
+    if (!qtype_policy_has_required_table()) {
+        profile->status = "blocked-missing-qtype-policy";
+        profile->top_blocker = "missing-existing-yvex-qtype-policy-table";
+        profile->next_required_row = YVEX_QTYPE_POLICY_NEXT_ROW;
+        return 0;
+    }
+
+    qtype_policy_mark_planning_reported(profile);
+    return 0;
+}
+
+static void print_qtype_policy_boundary(void)
+{
+    printf("boundary: V010.QUANT.0 is a report-only qtype policy report. It consumes source/header/mapping evidence and reports artifact-planning qtype policy, but it does not load tensor payloads, quantize tensors, emit GGUF, complete per-role qtype support, complete compute/refusal matrix, complete calibration/imatrix policy, create artifact identity, materialize tensors, construct runtime descriptors, attach backend residency, feed graph consumers, execute prefill/decode/logits/tokenizer/sampling/generation, evaluate, benchmark, claim throughput, or mark v0.1.0 release-ready.\n");
+}
+
+static void print_qtype_policy_normal(
+    const yvex_qtype_policy_profile *profile)
+{
+    printf("report: qtype-policy\n");
+    printf("status: %s\n", profile->status);
+    printf("target_id: %s\n", profile->target_id);
+    printf("family: %s\n", profile->family);
+    printf("model_class: %s\n", profile->model_class);
+    printf("source_class: %s\n", profile->source_class);
+    printf("target_artifact_class: %s\n", profile->target_artifact_class);
+    printf("mapping_gate: %s\n", profile->mapping_gate_status);
+    printf("policy_basis: %s\n", profile->policy_basis);
+    printf("source_dtype_profile: %s\n", profile->dtype_profile);
+    printf("qtype_policy: %s\n", profile->qtype_policy);
+    printf("preferred_qtype: %s\n", profile->preferred_qtype);
+    printf("candidate_qtypes: %s\n", profile->candidate_qtypes);
+    printf("refused_qtypes: %s\n", profile->refused_qtypes);
+    printf("calibration_status: %s\n", profile->calibration_status);
+    printf("imatrix_status: %s\n", profile->imatrix_status);
+    printf("per_role_qtype_status: %s\n", profile->per_role_qtype_status);
+    printf("compute_support_status: %s\n", profile->compute_support_status);
+    printf("artifact_emit_status: %s\n", profile->artifact_emit_status);
+    printf("top_blocker: %s\n", profile->top_blocker);
+    printf("next: %s\n", profile->next_required_row);
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    print_qtype_policy_boundary();
+}
+
+static void print_qtype_policy_table(
+    const yvex_qtype_policy_profile *profile)
+{
+    printf("QTYPE POLICY\n\n");
+    printf("%-16s  %-6s  %-28s  %-32s  %-9s  %-14s  %-25s  %-22s  %-38s  %s\n",
+           "TARGET", "FAMILY", "SOURCE_DTYPE", "POLICY", "PREFERRED",
+           "CANDIDATES", "REFUSED", "CALIBRATION", "STATUS", "NEXT");
+    printf("%-16s  %-6s  %-28s  %-32s  %-9s  %-14s  %-25s  %-22s  %-38s  %s\n",
+           profile->target_id,
+           profile->family,
+           profile->dtype_profile,
+           profile->qtype_policy,
+           profile->preferred_qtype,
+           profile->candidate_qtypes,
+           profile->refused_qtypes,
+           profile->calibration_status,
+           profile->status,
+           profile->next_required_row);
+}
+
+static void print_qtype_policy_audit(
+    const yvex_qtype_policy_profile *profile)
+{
+    printf("report: qtype-policy\n");
+    printf("status: %s\n", profile->status);
+    printf("target_id: %s\n", profile->target_id);
+    printf("family: %s\n", profile->family);
+    printf("target_class: %s\n",
+           profile->record ? profile->record->target_class : "unknown");
+    printf("model_class: %s\n", profile->model_class);
+    printf("source_path: %s\n", profile->source_path);
+    printf("source_class: %s\n", profile->source_class);
+    printf("target_artifact_class: %s\n", profile->target_artifact_class);
+    printf("source_metadata_status: %s\n",
+           profile->gate.model_class.source_metadata_status
+               ? profile->gate.model_class.source_metadata_status
+               : "not-run");
+    printf("source_dtype_profile_status: %s\n",
+           profile->source_dtype_profile_status);
+    printf("source_dtype_counts: %s\n", profile->dtype_counts);
+    printf("source_tensor_count: %llu\n", profile->source_tensor_count);
+    printf("source_declared_data_bytes: %llu\n",
+           profile->source_declared_data_bytes);
+    printf("mapping_gate_status: %s\n", profile->mapping_gate_status);
+    printf("mapping_gate_report_path: not-written\n");
+    printf("tensor_map_status: %s\n",
+           profile->gate.tensor_naming.status
+               ? profile->gate.tensor_naming.status
+               : "not-run");
+    printf("output_head_map_status: %s\n",
+           profile->gate.output_head.status
+               ? profile->gate.output_head.status
+               : "not-run");
+    printf("tokenizer_metadata_map_status: %s\n",
+           profile->gate.tokenizer.status
+               ? profile->gate.tokenizer.status
+               : "not-run");
+    printf("missing_role_report_status: %s\n",
+           profile->gate.missing_role.status
+               ? profile->gate.missing_role.status
+               : "not-run");
+    printf("qtype_policy_basis: %s\n", profile->policy_basis);
+    printf("qtype_policy_status: %s\n", profile->qtype_policy_status);
+    printf("preferred_qtype: %s\n", profile->preferred_qtype);
+    printf("candidate_qtypes: %s\n", profile->candidate_qtypes);
+    printf("refused_qtypes: %s\n", profile->refused_qtypes);
+    printf("refusal_reasons: %s\n", profile->refusal_reasons);
+    printf("per_role_qtype_status: %s\n", profile->per_role_qtype_status);
+    printf("compute_support_status: %s\n", profile->compute_support_status);
+    printf("calibration_status: %s\n", profile->calibration_status);
+    printf("imatrix_status: %s\n", profile->imatrix_status);
+    printf("artifact_emit_status: %s\n", profile->artifact_emit_status);
+    printf("artifact_identity_status: missing\n");
+    printf("materialization_status: unsupported\n");
+    printf("runtime_descriptor_status: missing\n");
+    printf("graph_consumer_status: missing\n");
+    printf("backend_residency_status: missing\n");
+    printf("downstream_blockers: per_role_qtype=deferred compute_refusal_matrix=deferred calibration_imatrix=deferred artifact_emit=missing artifact_identity=missing runtime_descriptor=missing graph_consumer=missing backend_residency=missing generation_runtime=missing eval_benchmark=missing\n");
+    printf("next_required_rows: %s\n", profile->next_required_row);
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    print_qtype_policy_boundary();
+}
+
+static int print_qtype_policy_unsupported_target(
+    const char *target_id,
+    yvex_model_target_output_mode output_mode)
+{
+    yvex_qtype_policy_profile profile;
+
+    qtype_policy_init(&profile, NULL, NULL, target_id);
+    profile.status = "unsupported-target";
+    profile.top_blocker = "unsupported-target";
+    profile.next_required_row = "none";
+    if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+        print_qtype_policy_table(&profile);
+    } else if (output_mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+        print_qtype_policy_audit(&profile);
+    } else {
+        print_qtype_policy_normal(&profile);
+    }
+    return 2;
+}
+
 static const char *target_decision_candidate_class(const yvex_model_target_record *record)
 {
     if (!record) return "unknown";
@@ -6931,6 +7440,7 @@ static void print_model_target_usage(FILE *fp)
     fprintf(fp, "       yvex model-target class-profile TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target tensor-collection TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target tensor-map TARGET [--role output-head|tokenizer|missing-roles | --gate v0.1.0] [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
+    fprintf(fp, "       yvex model-target quant-policy TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR] [--audit | --output normal|table|audit]\n");
 }
 
@@ -6982,6 +7492,10 @@ void yvex_model_target_help(FILE *fp)
     fprintf(fp, "  yvex model-target tensor-map qwen3-8b --gate v0.1.0 --audit\n");
     fprintf(fp, "  yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0 --audit\n");
     fprintf(fp, "  The tensor mapping gate aggregates model-class, tensor-collection, tensor naming, output-head, tokenizer metadata, and missing-role reports. It can pass only into artifact/quantization planning; it does not emit artifacts, construct runtime descriptors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    fprintf(fp, "\nQtype policy report:\n");
+    fprintf(fp, "  yvex model-target quant-policy qwen3-8b --audit\n");
+    fprintf(fp, "  yvex model-target quant-policy gemma-4-12b-it --audit\n");
+    fprintf(fp, "  The qtype policy report consumes source/header/mapping evidence and existing YVEX qtype policy rows for artifact planning. It does not load tensor payloads, quantize tensors, emit GGUF, materialize tensors, construct runtime descriptors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "\nDefault output is compact. Use --audit for full diagnostic fields.\n");
     fprintf(fp, "Model targets are pressure objects, not capability claims.\n");
     fprintf(fp, "External GGUFs and external runners are reference evidence only.\n");
@@ -8458,6 +8972,68 @@ int yvex_model_target_command(int argc, char **argv)
             print_tensor_naming_audit(&profile);
         } else {
             print_tensor_naming_normal(&profile);
+        }
+        return 0;
+    }
+    if (strcmp(argv[2], "quant-policy") == 0) {
+        const char *target_id = NULL;
+        const char *source = NULL;
+        yvex_qtype_policy_profile profile;
+        int rc;
+
+        output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
+        if (argc < 4) {
+            fprintf(stderr, "model-target quant-policy: requires TARGET\n");
+            return 2;
+        }
+        target_id = argv[3];
+        for (i = 4; i < argc; ++i) {
+            if (strcmp(argv[i], "--audit") == 0) {
+                output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
+            } else if (strcmp(argv[i], "--output") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "model-target quant-policy: --output requires normal|table|audit\n");
+                    return 2;
+                }
+                if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
+                    fprintf(stderr, "model-target quant-policy: unsupported output mode: %s\n",
+                            argv[i]);
+                    return 2;
+                }
+            } else if (strcmp(argv[i], "--models-root") == 0) {
+                if (i + 1 >= argc || argv[i + 1][0] == '\0') {
+                    fprintf(stderr, "model-target quant-policy: --models-root requires DIR\n");
+                    return 2;
+                }
+                models_root = argv[++i];
+            } else if (strcmp(argv[i], "--source") == 0) {
+                if (i + 1 >= argc || argv[i + 1][0] == '\0') {
+                    fprintf(stderr, "model-target quant-policy: --source requires DIR\n");
+                    return 2;
+                }
+                source = argv[++i];
+            } else if (strcmp(argv[i], "--json") == 0) {
+                fprintf(stderr, "model-target quant-policy: JSON output is unsupported; use --output normal|table|audit\n");
+                return 2;
+            } else {
+                fprintf(stderr, "model-target quant-policy: unknown option: %s\n", argv[i]);
+                return 2;
+            }
+        }
+        record = find_model_target(target_id);
+        if (!record) {
+            return print_qtype_policy_unsupported_target(target_id, output_mode);
+        }
+        rc = build_qtype_policy_profile(record, models_root, source, &profile);
+        if (rc != 0) {
+            return rc;
+        }
+        if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+            print_qtype_policy_table(&profile);
+        } else if (output_mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+            print_qtype_policy_audit(&profile);
+        } else {
+            print_qtype_policy_normal(&profile);
         }
         return 0;
     }

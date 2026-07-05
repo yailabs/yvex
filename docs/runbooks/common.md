@@ -102,6 +102,9 @@ make
 ./yvex model-target tensor-map qwen3-8b --role missing-roles --audit
 ./yvex model-target tensor-map qwen3-8b --gate v0.1.0
 ./yvex model-target tensor-map qwen3-8b --gate v0.1.0 --audit
+./yvex model-target quant-policy qwen3-8b
+./yvex model-target quant-policy qwen3-8b --output table
+./yvex model-target quant-policy qwen3-8b --audit
 ./yvex model-target inspect gemma-4-12b-it
 ./yvex model-target inspect gemma-4-12b-it --paths
 ./yvex model-target class-profile gemma-4-12b-it
@@ -124,6 +127,9 @@ make
 ./yvex model-target tensor-map gemma-4-12b-it --role missing-roles --audit
 ./yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0
 ./yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0 --audit
+./yvex model-target quant-policy gemma-4-12b-it
+./yvex model-target quant-policy gemma-4-12b-it --output table
+./yvex model-target quant-policy gemma-4-12b-it --audit
 ./yvex model-target decision --help
 ./yvex model-target decision --release v0.1.0 --output table
 ./yvex model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
@@ -216,9 +222,18 @@ evaluate, or benchmark.
 gate for Qwen and Gemma source trees. It aggregates model-class, collection,
 naming, output-head, tokenizer metadata, and missing-role evidence, then either
 blocks on the remaining mapping issue or hands off to qtype/artifact planning.
-It is not artifact creation, qtype policy completion, runtime descriptor
+It is not artifact creation, per-role qtype support, runtime descriptor
 construction, graph execution, tokenizer runtime, generation, evaluation, or
 benchmark evidence.
+
+`model-target quant-policy TARGET` is the report-only qtype policy handoff for
+Qwen and Gemma source trees whose mapping gate can pass. It reads source headers
+and existing YVEX qtype support rows to report the source dtype profile,
+preferred artifact-planning qtype, candidate qtypes, refused qtypes, calibration
+and imatrix deferrals, compute-support deferral, and downstream blockers. It
+does not load tensor payloads, quantize tensors, emit GGUF, materialize tensors,
+build runtime descriptors, feed graph consumers, generate, evaluate, or
+benchmark.
 
 ## Lane 1 — Graph-only regression
 
@@ -642,7 +657,7 @@ Boundary:
 - `materialize-gate`: integrity and gate lanes
 - `metadata`: artifact inspection lanes
 - `model-gate`: integrity and gate lanes
-- `model-target`: model lanes, model target path, Qwen/Gemma source-target profiles, Qwen/Gemma model-class profiles, Qwen tensor naming map, target decision, and full-runtime candidate reporting lanes, fast regression lane
+- `model-target`: model lanes, model target path, Qwen/Gemma source-target profiles, Qwen/Gemma model-class profiles, Qwen tensor naming map, qtype policy report, target decision, and full-runtime candidate reporting lanes, fast regression lane
 - `models`: source tensor download, artifact registration, and selected prepare lanes
 - `native-weights`: source intake lanes
 - `paths`: configure once lane, fast regression lane, path resolution
@@ -664,6 +679,7 @@ Boundary:
 - `models download --repo ... --name ...`: downloaded target sidecars become the source identity for `models download status`, `source-manifest report --source`, and `models prepare --dry-run --audit`; this fixes target naming only and does not create GGUF/runtime support
 - `tensor-map`: source intake lanes
 - `model-target tensor-map --gate v0.1.0`: report-only mapping gate; pass means qtype/artifact planning can start, not runtime support
+- `model-target quant-policy`: report-only qtype policy; pass means dtype/qtype support by role can start, not artifact emission or runtime support
 - `tokenize`: fast regression lane
 - `tokenizer`: fast regression lane
 - `tensors`: artifact inspection lanes

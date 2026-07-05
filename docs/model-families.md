@@ -1006,21 +1006,28 @@ This table records posture, not support claims.
 | --- | --- | --- | --- | --- |
 | DeepSeek | selected-slice pressure | sparse/MoE | selected embedding and embedding-plus-RMSNorm graph slices | full artifact, tensor role map, MoE runtime, output head, generation |
 | GLM | source/storage pressure | sparse/MoE | huge source/storage pressure reports | source completion, model-class, tensor map, artifact, storage/residency |
-| Qwen | tensor-mapping-gate-profiled source target | dense candidate / family-dependent | `qwen3-8b` target, Qwen model-class profile, Qwen tensor collection inventory, Qwen tensor naming map, output-head tensor mapping, tokenizer metadata mapping, missing-role blocker report, and report-only tensor mapping gate | qtype policy, artifact, backend/runtime |
-| Gemma | dense tensor-mapping-gate-profiled source target | dense candidate | `gemma-4-12b-it` target, Gemma model-class profile, Gemma tensor collection inventory, dense tensor naming map, output-head tensor mapping, tokenizer metadata mapping, missing-role blocker report, and report-only tensor mapping gate | qtype policy, artifact, runtime |
+| Qwen | qtype-policy-profiled source target | dense candidate / family-dependent | `qwen3-8b` target, Qwen model-class profile, Qwen tensor collection inventory, Qwen tensor naming map, output-head tensor mapping, tokenizer metadata mapping, missing-role blocker report, report-only tensor mapping gate, and report-only qtype policy | dtype/qtype support by role, artifact, backend/runtime |
+| Gemma | dense qtype-policy-profiled source target | dense candidate | `gemma-4-12b-it` target, Gemma model-class profile, Gemma tensor collection inventory, dense tensor naming map, output-head tensor mapping, tokenizer metadata mapping, missing-role blocker report, report-only tensor mapping gate, and report-only qtype policy | dtype/qtype support by role, artifact, runtime |
 | Phi/Llama/Mistral | candidate families | dense/sparse depending target | architectural candidates | no current source target |
 
 Current posture vocabulary includes `source-target-profiled`,
 `model-class-profiled`, `tensor-collection-profiled`,
 `dense tensor-naming-map-profiled`, `output-head-map-profiled`,
 `tokenizer-metadata-map-profiled`, `missing-role-blocker-report-profiled`,
-`tensor-mapping-gate-profiled`, `source/storage-pressure`,
+`tensor-mapping-gate-profiled`, `qtype-policy-profiled`, `source/storage-pressure`,
 `selected-slice-proof`, and `runtime-unsupported`.
 
 Mapping gates are source/header/report gates. They can say the current mapping
 evidence is coherent enough to start qtype and artifact planning, but they do
 not create artifacts, build runtime descriptors, run backend residency, execute
 graphs, tokenize, generate, evaluate, benchmark, or mark a family supported.
+
+Qtype policy reports are still source/header/report gates. They can say the
+source dtype profile is visible, the existing YVEX qtype vocabulary can describe
+artifact-planning choices, and the next work is per-role dtype/qtype support.
+They do not quantize tensors, emit GGUF, prove compute support, run calibration
+or imatrix policy, create artifact identity, materialize tensors, execute
+runtime paths, generate, evaluate, benchmark, or mark a family supported.
 
 ## Support-Level Lattice
 
