@@ -588,6 +588,9 @@ Writes:
   `stop` writes a last receipt and preserves partial source files and logs.
   `resume` writes the same source files and sidecars as Lane 5.
   `cleanup` writes only when an explicit cleanup flag and `--yes` are present.
+  `--failed-partials` removes the target source directory and the matching
+  download receipt, active/last reports, download report, source manifest,
+  native inventory, registry sidecar, and stdout/stderr logs.
 
 Safe to rerun:
   `status` and cleanup dry-runs are safe. `stop` is safe for a YVEX-owned active
@@ -604,10 +607,11 @@ Boundary:
   partial source files, preserves logs, and does not delete provider locks.
   Resume reuses the existing source directory and refuses active provider
   processes; stale locks block unless `--clear-stale-locks` is explicit.
-  Cleanup never deletes locks while a provider process is alive. Safetensors
-  size checks are header-only and do not read payload bytes, hash payloads,
-  prove source identity, emit GGUF, materialize tensors, execute runtime paths,
-  generate, evaluate, or benchmark.
+  Cleanup never deletes source state, sidecars, logs, provider cache, or locks
+  while a provider process is alive. Safetensors size checks are header-only
+  and do not read payload bytes, hash payloads, prove source identity, emit
+  GGUF, materialize tensors, execute runtime paths, generate, evaluate, or
+  benchmark.
 
 ```sh
 ./yvex models download status gemma-4-12b-it \
@@ -631,6 +635,47 @@ Boundary:
   --stale-locks \
   --dry-run \
   --audit
+
+./yvex models download cleanup qwen3-32b \
+  --models-root "$HOME/lab/models" \
+  --failed-partials \
+  --dry-run \
+  --audit
+```
+
+## GGUF Artifact Discovery
+
+`models artifacts` replaces manual `find`, `tree`, and `ls` checks for the
+operator model root. It reads GGUF filenames, target-specific download sidecars,
+reports, manifests, inventories, and map sidecars. It does not hash GGUF files,
+load source tensor payloads, emit artifacts, materialize tensors, execute
+runtime paths, generate, evaluate, or benchmark.
+
+```sh
+./yvex models artifacts list \
+  --models-root "$HOME/lab/models"
+
+./yvex models artifacts list \
+  --models-root "$HOME/lab/models" \
+  --family qwen \
+  --output table
+
+./yvex models artifacts status qwen3-6-35b-a3b \
+  --models-root "$HOME/lab/models" \
+  --audit
+
+./yvex models artifacts status gemma-4-31b-it \
+  --models-root "$HOME/lab/models" \
+  --audit
+```
+
+Expected boundary for downloaded full-source targets before full GGUF emission:
+
+```text
+artifact_class: planned-full-gguf
+artifact_status: missing
+prepare_status: blocked
+boundary: artifact discovery only; no runtime/generation
 ```
 
 ## Full Implemented Command Inventory
@@ -658,7 +703,10 @@ Boundary:
 - `metadata`: artifact inspection lanes
 - `model-gate`: integrity and gate lanes
 - `model-target`: model lanes, model target path, Qwen/Gemma source-target profiles, Qwen/Gemma model-class profiles, Qwen tensor naming map, qtype policy report, target decision, and full-runtime candidate reporting lanes, fast regression lane
-- `models`: source tensor download, artifact registration, and selected prepare lanes
+- `models`: source tensor download, internal GGUF artifact discovery, artifact
+  registration, and selected prepare lanes
+- `models artifacts`: GGUF filename and source-sidecar discovery; reports
+  selected GGUFs that exist and planned full GGUFs that are still missing
 - `native-weights`: source intake lanes
 - `paths`: configure once lane, fast regression lane, path resolution
 - `plan`: materialization and runtime attachment lanes

@@ -1029,6 +1029,14 @@ They do not quantize tensors, emit GGUF, prove compute support, run calibration
 or imatrix policy, create artifact identity, materialize tensors, execute
 runtime paths, generate, evaluate, benchmark, or mark a family supported.
 
+`yvex models artifacts list|status` is the operator GGUF discovery surface for
+this boundary. It shows selected GGUF artifacts already present under the
+operator GGUF root and downloaded Qwen/Gemma full-source targets whose planned
+full GGUF artifacts are still missing or blocked. It reads only filenames and
+small sidecar reports; it does not replace tensor mapping, tokenizer mapping,
+qtype support, artifact emission, materialization, runtime execution, generation,
+evaluation, or benchmark evidence.
+
 ## Support-Level Lattice
 
 YVEX uses support levels as a lattice, not as marketing status.

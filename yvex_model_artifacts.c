@@ -3300,23 +3300,39 @@ static int print_prepare_downloaded_source_unsupported(
     const yvex_operator_paths *operator_paths,
     const yvex_model_download_resolved_target *target)
 {
+    char expected_artifact_path[YVEX_PATH_CAP];
     char tensor_map_path[YVEX_PATH_CAP];
     char output_head_map_path[YVEX_PATH_CAP];
     int source_present = target && target->local_source_dir[0] &&
                          path_exists(target->local_source_dir);
+    int expected_artifact_present = 0;
     int tensor_map_present = 0;
     int output_head_map_present = 0;
     int tensor_map_incomplete = 0;
     int output_head_map_missing = 0;
+    unsigned int blocker_count = 0u;
+    const char *top_blocker = "missing-tokenizer-map";
 
+    expected_artifact_path[0] = '\0';
     tensor_map_path[0] = '\0';
     output_head_map_path[0] = '\0';
     if (operator_paths && target && target->family[0] && target->target_id[0]) {
-        int n = snprintf(tensor_map_path, sizeof(tensor_map_path),
-                         "%s/%s/%s.tensor-map.json",
-                         operator_paths->reports_root,
-                         target->family,
-                         target->target_id);
+        int n;
+        n = snprintf(expected_artifact_path, sizeof(expected_artifact_path),
+                     "%s/%s/%s.gguf",
+                     operator_paths->gguf_root,
+                     target->family,
+                     target->target_id);
+        if (n < 0 || (size_t)n >= sizeof(expected_artifact_path)) {
+            expected_artifact_path[0] = '\0';
+        }
+        expected_artifact_present =
+            expected_artifact_path[0] && path_exists(expected_artifact_path);
+        n = snprintf(tensor_map_path, sizeof(tensor_map_path),
+                     "%s/%s/%s.tensor-map.json",
+                     operator_paths->reports_root,
+                     target->family,
+                     target->target_id);
         if (n < 0 || (size_t)n >= sizeof(tensor_map_path)) {
             tensor_map_path[0] = '\0';
         }
@@ -3335,6 +3351,21 @@ static int print_prepare_downloaded_source_unsupported(
                                          output_head_map_path,
                                          &tensor_map_incomplete,
                                          &output_head_map_missing);
+    }
+    if (!source_present) blocker_count++;
+    if (!tensor_map_present || tensor_map_incomplete) blocker_count++;
+    if (!output_head_map_present || output_head_map_missing) blocker_count++;
+    blocker_count++; /* tokenizer metadata mapping remains required for full GGUF. */
+    if (!expected_artifact_present) blocker_count++;
+    blocker_count++; /* full artifact emitter/identity is not implemented for dynamic source targets. */
+    if (!source_present) {
+        top_blocker = "missing-source";
+    } else if (!output_head_map_present || output_head_map_missing) {
+        top_blocker = "missing-output-head-map";
+    } else if (!tensor_map_present || tensor_map_incomplete) {
+        top_blocker = "incomplete-tensor-map";
+    } else {
+        top_blocker = "missing-tokenizer-map";
     }
 
     printf("models: prepare\n");
@@ -3364,7 +3395,15 @@ static int print_prepare_downloaded_source_unsupported(
                ? (output_head_map_missing ? "missing-in-report" : "present-report-only")
                : "missing");
     printf("tokenizer_map_status: missing\n");
-    printf("artifact_status: missing\n");
+    printf("artifact_status: %s\n", expected_artifact_present ? "present" : "missing");
+    printf("expected_artifact_path: %s\n",
+           expected_artifact_path[0] ? expected_artifact_path : "unknown");
+    printf("artifact_plan_status: planned-full-gguf\n");
+    printf("artifact_emission_status: not-performed\n");
+    printf("artifact_identity_status: %s\n",
+           expected_artifact_present ? "not-checked" : "missing");
+    printf("prepare_blocker_count: %u\n", blocker_count);
+    printf("top_blocker: %s\n", top_blocker);
     if (options && options->output_mode == YVEX_MODELS_OUTPUT_AUDIT) {
         printf("download_registry_path: %s\n",
                target && target->registry_path[0] ? target->registry_path : "unknown");
@@ -6413,6 +6452,761 @@ static int model_download_resolve_downloaded_target(
     return 0;
 }
 
+/* GGUF artifact discovery and prepare preflight UX. */
+
+#define YVEX_MODELS_ARTIFACT_ROWS_CAP 256u
+
+typedef enum {
+    YVEX_ARTIFACTS_OUTPUT_NORMAL = 0,
+    YVEX_ARTIFACTS_OUTPUT_TABLE,
+    YVEX_ARTIFACTS_OUTPUT_AUDIT,
+    YVEX_ARTIFACTS_OUTPUT_JSON
+} yvex_artifacts_output_mode;
+
+typedef struct {
+    const char *action;
+    const char *target;
+    const char *models_root;
+    const char *family;
+    yvex_artifacts_output_mode output_mode;
+} yvex_cli_models_artifacts_options;
+
+typedef struct {
+    char target_id[128];
+    char family[32];
+    char artifact_class[64];
+    char artifact_status[32];
+    char source_status[32];
+    char prepare_status[32];
+    char top_blocker[64];
+    char detail[256];
+    char path[YVEX_PATH_CAP];
+    char expected_path[YVEX_PATH_CAP];
+    char display_path[YVEX_PATH_CAP];
+    char registry_path[YVEX_PATH_CAP];
+    char download_report_path[YVEX_PATH_CAP];
+    char source_manifest_path[YVEX_PATH_CAP];
+    char native_inventory_path[YVEX_PATH_CAP];
+    char tensor_map_path[YVEX_PATH_CAP];
+    char output_head_map_path[YVEX_PATH_CAP];
+    char tokenizer_map_path[YVEX_PATH_CAP];
+    unsigned long long size_bytes;
+    int source_present;
+    int tensor_map_present;
+    int tensor_map_incomplete;
+    int output_head_map_present;
+    int output_head_missing;
+    int tokenizer_map_present;
+    int dynamic_source;
+} yvex_models_artifact_row;
+
+typedef struct {
+    yvex_models_artifact_row rows[YVEX_MODELS_ARTIFACT_ROWS_CAP];
+    unsigned int count;
+} yvex_models_artifact_rows;
+
+static int artifacts_parse_output_mode(const char *value,
+                                       yvex_artifacts_output_mode *mode)
+{
+    if (!value || !mode) return 0;
+    if (strcmp(value, "normal") == 0) {
+        *mode = YVEX_ARTIFACTS_OUTPUT_NORMAL;
+        return 1;
+    }
+    if (strcmp(value, "table") == 0) {
+        *mode = YVEX_ARTIFACTS_OUTPUT_TABLE;
+        return 1;
+    }
+    if (strcmp(value, "audit") == 0) {
+        *mode = YVEX_ARTIFACTS_OUTPUT_AUDIT;
+        return 1;
+    }
+    if (strcmp(value, "json") == 0) {
+        *mode = YVEX_ARTIFACTS_OUTPUT_JSON;
+        return 1;
+    }
+    return 0;
+}
+
+static int parse_models_artifacts_options(int argc,
+                                          char **argv,
+                                          yvex_cli_models_artifacts_options *options)
+{
+    int i;
+
+    memset(options, 0, sizeof(*options));
+    options->output_mode = YVEX_ARTIFACTS_OUTPUT_NORMAL;
+    if (argc < 4) {
+        fprintf(stderr, "yvex: models artifacts requires list or status\n");
+        return 2;
+    }
+    options->action = argv[3];
+    if (strcmp(options->action, "list") != 0 &&
+        strcmp(options->action, "status") != 0) {
+        fprintf(stderr, "yvex: unknown models artifacts action: %s\n", options->action);
+        return 2;
+    }
+    i = 4;
+    if (strcmp(options->action, "status") == 0) {
+        if (i >= argc) {
+            fprintf(stderr, "yvex: models artifacts status requires TARGET\n");
+            return 2;
+        }
+        options->target = argv[i++];
+        if (!cli_arg_value_valid(options->target)) {
+            fprintf(stderr, "yvex: models artifacts status target is empty or invalid\n");
+            return 2;
+        }
+    }
+    for (; i < argc; ++i) {
+        if (strcmp(argv[i], "--audit") == 0) {
+            options->output_mode = YVEX_ARTIFACTS_OUTPUT_AUDIT;
+        } else if (strcmp(argv[i], "--models-root") == 0 ||
+                   strcmp(argv[i], "--family") == 0 ||
+                   strcmp(argv[i], "--output") == 0) {
+            const char *flag = argv[i];
+            const char *value = NULL;
+            int rc = parse_models_value_option("models artifacts", flag,
+                                               argc, argv, &i, &value);
+            if (rc != 0) return rc;
+            if (strcmp(flag, "--models-root") == 0) {
+                options->models_root = value;
+            } else if (strcmp(flag, "--family") == 0) {
+                if (strcmp(value, "deepseek") != 0 &&
+                    strcmp(value, "glm") != 0 &&
+                    strcmp(value, "qwen") != 0 &&
+                    strcmp(value, "gemma") != 0) {
+                    fprintf(stderr, "yvex: models artifacts --family requires deepseek|glm|qwen|gemma\n");
+                    return 2;
+                }
+                options->family = value;
+            } else if (!artifacts_parse_output_mode(value, &options->output_mode)) {
+                fprintf(stderr, "yvex: models artifacts unsupported output mode: %s\n", value);
+                return 2;
+            }
+        } else if (strcmp(argv[i], "--json") == 0) {
+            options->output_mode = YVEX_ARTIFACTS_OUTPUT_JSON;
+        } else {
+            fprintf(stderr, "yvex: unknown models artifacts option: %s\n", argv[i]);
+            return 2;
+        }
+    }
+    return 0;
+}
+
+static int artifacts_family_allowed(const yvex_cli_models_artifacts_options *options,
+                                    const char *family)
+{
+    return !options || !options->family || strcmp(options->family, family) == 0;
+}
+
+static int artifacts_rows_find(yvex_models_artifact_rows *rows,
+                               const char *target,
+                               const char *family)
+{
+    unsigned int i;
+
+    if (!rows || !target || !family) return -1;
+    for (i = 0; i < rows->count; ++i) {
+        if (strcmp(rows->rows[i].target_id, target) == 0 &&
+            strcmp(rows->rows[i].family, family) == 0) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+static yvex_models_artifact_row *artifacts_rows_append(
+    yvex_models_artifact_rows *rows,
+    const char *target,
+    const char *family)
+{
+    yvex_models_artifact_row *row;
+
+    if (!rows || !target || !family || !target[0] || !family[0]) return NULL;
+    if (artifacts_rows_find(rows, target, family) >= 0) {
+        return &rows->rows[artifacts_rows_find(rows, target, family)];
+    }
+    if (rows->count >= YVEX_MODELS_ARTIFACT_ROWS_CAP) return NULL;
+    row = &rows->rows[rows->count++];
+    memset(row, 0, sizeof(*row));
+    snprintf(row->target_id, sizeof(row->target_id), "%s", target);
+    snprintf(row->family, sizeof(row->family), "%s", family);
+    snprintf(row->artifact_status, sizeof(row->artifact_status), "missing");
+    snprintf(row->source_status, sizeof(row->source_status), "not-applicable");
+    snprintf(row->prepare_status, sizeof(row->prepare_status), "unknown");
+    snprintf(row->top_blocker, sizeof(row->top_blocker), "none");
+    snprintf(row->detail, sizeof(row->detail), "artifact discovery only");
+    return row;
+}
+
+static void artifacts_relative_path(const yvex_operator_paths *operator_paths,
+                                    const char *path,
+                                    char *out,
+                                    size_t out_cap)
+{
+    size_t root_len;
+
+    if (!out || out_cap == 0u) return;
+    out[0] = '\0';
+    if (!path || !path[0]) {
+        snprintf(out, out_cap, "-");
+        return;
+    }
+    if (operator_paths && operator_paths->models_root[0]) {
+        root_len = strlen(operator_paths->models_root);
+        if (strncmp(path, operator_paths->models_root, root_len) == 0 &&
+            path[root_len] == '/') {
+            snprintf(out, out_cap, "%s", path + root_len + 1u);
+            return;
+        }
+    }
+    snprintf(out, out_cap, "%s", path);
+}
+
+static void artifacts_strip_suffix(char *text, const char *suffix)
+{
+    size_t text_len;
+    size_t suffix_len;
+
+    if (!text || !suffix) return;
+    text_len = strlen(text);
+    suffix_len = strlen(suffix);
+    if (suffix_len <= text_len &&
+        strcmp(text + text_len - suffix_len, suffix) == 0) {
+        text[text_len - suffix_len] = '\0';
+    }
+}
+
+static void artifacts_target_from_gguf_name(const char *file_name,
+                                            char *out,
+                                            size_t out_cap)
+{
+    if (!out || out_cap == 0u) return;
+    out[0] = '\0';
+    if (!file_name || !file_name[0]) return;
+    snprintf(out, out_cap, "%s", file_name);
+    artifacts_strip_suffix(out, ".gguf");
+    artifacts_strip_suffix(out, "-F16-noimatrix-yvex-v1");
+}
+
+static const char *artifacts_class_from_name(const char *file_name)
+{
+    if (file_name && strstr(file_name, "controlled")) return "yvex-controlled-gguf";
+    if (file_name && strstr(file_name, "selected")) return "yvex-selected-gguf";
+    return "unknown-gguf";
+}
+
+static int artifacts_stat_file(const char *path, unsigned long long *size_out)
+{
+    struct stat st;
+
+    if (size_out) *size_out = 0ull;
+    if (!path || stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return 0;
+    if (size_out) *size_out = (unsigned long long)st.st_size;
+    return 1;
+}
+
+static void artifacts_classify_dynamic_row(const yvex_operator_paths *operator_paths,
+                                           yvex_models_artifact_row *row)
+{
+    int n;
+
+    if (!operator_paths || !row) return;
+    n = snprintf(row->expected_path, sizeof(row->expected_path),
+                 "%s/%s/%s.gguf",
+                 operator_paths->gguf_root,
+                 row->family,
+                 row->target_id);
+    if (n < 0 || (size_t)n >= sizeof(row->expected_path)) row->expected_path[0] = '\0';
+    if (row->expected_path[0] &&
+        artifacts_stat_file(row->expected_path, &row->size_bytes)) {
+        snprintf(row->path, sizeof(row->path), "%s", row->expected_path);
+        snprintf(row->artifact_status, sizeof(row->artifact_status), "present");
+    } else {
+        snprintf(row->artifact_status, sizeof(row->artifact_status), "missing");
+        row->size_bytes = 0ull;
+    }
+    artifacts_relative_path(operator_paths,
+                            row->path[0] ? row->path : row->expected_path,
+                            row->display_path,
+                            sizeof(row->display_path));
+    snprintf(row->artifact_class, sizeof(row->artifact_class), "planned-full-gguf");
+    row->source_present = row->source_status[0] &&
+                          strcmp(row->source_status, "present") == 0;
+    row->tensor_map_present = row->tensor_map_path[0] && path_exists(row->tensor_map_path);
+    row->output_head_map_present =
+        row->output_head_map_path[0] && path_exists(row->output_head_map_path);
+    row->tokenizer_map_present =
+        row->tokenizer_map_path[0] && path_exists(row->tokenizer_map_path);
+    prepare_probe_map_sidecar_status(row->tensor_map_path,
+                                     row->output_head_map_path,
+                                     &row->tensor_map_incomplete,
+                                     &row->output_head_missing);
+    snprintf(row->prepare_status, sizeof(row->prepare_status), "blocked");
+    if (!row->source_present) {
+        snprintf(row->top_blocker, sizeof(row->top_blocker), "missing-source");
+        snprintf(row->detail, sizeof(row->detail), "downloaded source path is missing");
+    } else if (!row->output_head_map_present || row->output_head_missing) {
+        snprintf(row->top_blocker, sizeof(row->top_blocker), "missing-output-head-map");
+        snprintf(row->detail, sizeof(row->detail), "output-head/tokenizer mapping missing; full GGUF emission not performed");
+    } else if (!row->tokenizer_map_present) {
+        snprintf(row->top_blocker, sizeof(row->top_blocker), "missing-tokenizer-map");
+        snprintf(row->detail, sizeof(row->detail), "%s; full GGUF emission not performed",
+                 (!row->tensor_map_present || row->tensor_map_incomplete)
+                     ? "tensor map incomplete"
+                     : "tokenizer metadata mapping missing");
+    } else if (!row->tensor_map_present || row->tensor_map_incomplete) {
+        snprintf(row->top_blocker, sizeof(row->top_blocker), "incomplete-tensor-map");
+        snprintf(row->detail, sizeof(row->detail), "tensor map incomplete; full GGUF emission not performed");
+    } else if (strcmp(row->artifact_status, "missing") == 0) {
+        snprintf(row->top_blocker, sizeof(row->top_blocker), "missing-artifact-emitter");
+        snprintf(row->detail, sizeof(row->detail), "full GGUF artifact emitter has not produced this target");
+    } else {
+        snprintf(row->top_blocker, sizeof(row->top_blocker), "missing-artifact-identity");
+        snprintf(row->detail, sizeof(row->detail), "artifact exists but identity/admission is not checked by this discovery command");
+    }
+}
+
+static void artifacts_add_dynamic_target(
+    const yvex_operator_paths *operator_paths,
+    yvex_models_artifact_rows *rows,
+    const char *target,
+    const char *family,
+    const yvex_model_download_resolved_target *resolved)
+{
+    yvex_models_artifact_row *row;
+    char family_dir[YVEX_PATH_CAP];
+
+    row = artifacts_rows_append(rows, target, family);
+    if (!row || !operator_paths) return;
+    row->dynamic_source = 1;
+    snprintf(row->artifact_class, sizeof(row->artifact_class), "planned-full-gguf");
+    if (resolved) {
+        snprintf(row->registry_path, sizeof(row->registry_path), "%s", resolved->registry_path);
+        snprintf(row->download_report_path, sizeof(row->download_report_path), "%s", resolved->download_report_path);
+        snprintf(row->source_manifest_path, sizeof(row->source_manifest_path), "%s", resolved->manifest_path);
+        snprintf(row->native_inventory_path, sizeof(row->native_inventory_path), "%s", resolved->native_inventory_path);
+        if (resolved->local_source_dir[0] && path_exists(resolved->local_source_dir)) {
+            snprintf(row->source_status, sizeof(row->source_status), "present");
+        } else {
+            snprintf(row->source_status, sizeof(row->source_status), "missing");
+        }
+    }
+    if (!row->source_status[0] || strcmp(row->source_status, "not-applicable") == 0) {
+        snprintf(row->source_status, sizeof(row->source_status), "missing");
+    }
+    if (path_join2(family_dir, sizeof(family_dir), operator_paths->reports_root,
+                   family, NULL, "models_artifacts") == YVEX_OK) {
+        char file_name[256];
+        snprintf(file_name, sizeof(file_name), "%s.tensor-map.json", target);
+        (void)path_join2(row->tensor_map_path, sizeof(row->tensor_map_path),
+                         family_dir, file_name, NULL, "models_artifacts");
+        snprintf(file_name, sizeof(file_name), "%s.output-head-map.json", target);
+        (void)path_join2(row->output_head_map_path, sizeof(row->output_head_map_path),
+                         family_dir, file_name, NULL, "models_artifacts");
+        snprintf(file_name, sizeof(file_name), "%s.tokenizer-map.json", target);
+        (void)path_join2(row->tokenizer_map_path, sizeof(row->tokenizer_map_path),
+                         family_dir, file_name, NULL, "models_artifacts");
+    }
+    artifacts_classify_dynamic_row(operator_paths, row);
+}
+
+static void artifacts_scan_gguf_family(const yvex_operator_paths *operator_paths,
+                                       yvex_models_artifact_rows *rows,
+                                       const char *family)
+{
+    DIR *dir;
+    struct dirent *ent;
+    char family_dir[YVEX_PATH_CAP];
+    yvex_error err;
+
+    yvex_error_clear(&err);
+    if (!operator_paths || !rows || !family) return;
+    if (path_join2(family_dir, sizeof(family_dir), operator_paths->gguf_root,
+                   family, &err, "models_artifacts") != YVEX_OK) {
+        return;
+    }
+    dir = opendir(family_dir);
+    if (!dir) return;
+    while ((ent = readdir(dir)) != NULL) {
+        char path[YVEX_PATH_CAP];
+        char target[128];
+        yvex_models_artifact_row *row;
+
+        if (ent->d_name[0] == '.') continue;
+        if (!model_download_file_name_ends_with(ent->d_name, ".gguf")) continue;
+        if (path_join2(path, sizeof(path), family_dir, ent->d_name, &err,
+                       "models_artifacts") != YVEX_OK) {
+            continue;
+        }
+        if (!artifacts_stat_file(path, NULL)) continue;
+        artifacts_target_from_gguf_name(ent->d_name, target, sizeof(target));
+        row = artifacts_rows_append(rows, target, family);
+        if (!row) continue;
+        snprintf(row->artifact_class, sizeof(row->artifact_class), "%s",
+                 artifacts_class_from_name(ent->d_name));
+        snprintf(row->artifact_status, sizeof(row->artifact_status), "present");
+        snprintf(row->source_status, sizeof(row->source_status), "not-applicable");
+        snprintf(row->prepare_status, sizeof(row->prepare_status), "ready");
+        snprintf(row->top_blocker, sizeof(row->top_blocker), "none");
+        snprintf(row->detail, sizeof(row->detail), "GGUF artifact present");
+        snprintf(row->path, sizeof(row->path), "%s", path);
+        snprintf(row->expected_path, sizeof(row->expected_path), "%s", path);
+        artifacts_stat_file(path, &row->size_bytes);
+        artifacts_relative_path(operator_paths, path, row->display_path,
+                                sizeof(row->display_path));
+    }
+    closedir(dir);
+}
+
+static void artifacts_scan_dynamic_sidecar_dir(
+    const yvex_operator_paths *operator_paths,
+    yvex_models_artifact_rows *rows,
+    const char *family,
+    const char *dir_path,
+    const char *suffix)
+{
+    DIR *dir;
+    struct dirent *ent;
+    yvex_error err;
+
+    if (!operator_paths || !rows || !family || !dir_path || !suffix) return;
+    dir = opendir(dir_path);
+    if (!dir) return;
+    yvex_error_clear(&err);
+    while ((ent = readdir(dir)) != NULL) {
+        char target[128];
+        char path[YVEX_PATH_CAP];
+        yvex_model_download_resolved_target resolved;
+        size_t name_len;
+
+        if (ent->d_name[0] == '.') continue;
+        if (!model_download_file_name_ends_with(ent->d_name, suffix)) continue;
+        name_len = strlen(ent->d_name);
+        if (name_len >= sizeof(target)) continue;
+        memcpy(target, ent->d_name, name_len + 1u);
+        artifacts_strip_suffix(target, suffix);
+        if (!model_download_identity_paths(target, family, operator_paths,
+                                           &resolved, &err)) {
+            yvex_error_clear(&err);
+            continue;
+        }
+        if (path_join2(path, sizeof(path), dir_path, ent->d_name, &err,
+                       "models_artifacts") != YVEX_OK) {
+            yvex_error_clear(&err);
+            continue;
+        }
+        if (model_download_read_identity_file(path, target, family, &resolved) ||
+            model_download_resolve_downloaded_target(target, operator_paths,
+                                                     &resolved, &err)) {
+            artifacts_add_dynamic_target(operator_paths, rows,
+                                         resolved.target_id[0] ? resolved.target_id : target,
+                                         resolved.family[0] ? resolved.family : family,
+                                         &resolved);
+        }
+        yvex_error_clear(&err);
+    }
+    closedir(dir);
+}
+
+static int artifacts_collect(const yvex_cli_models_artifacts_options *options,
+                             const yvex_operator_paths *operator_paths,
+                             yvex_models_artifact_rows *rows,
+                             yvex_error *err)
+{
+    static const char *families[] = { "deepseek", "qwen", "gemma", "glm" };
+    unsigned long i;
+
+    if (!options || !operator_paths || !rows) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "models_artifacts",
+                       "options, operator paths, and rows are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(rows, 0, sizeof(*rows));
+    for (i = 0; i < sizeof(families) / sizeof(families[0]); ++i) {
+        char registry_family_dir[YVEX_PATH_CAP];
+        char reports_family_dir[YVEX_PATH_CAP];
+        const char *family = families[i];
+
+        if (!artifacts_family_allowed(options, family)) continue;
+        artifacts_scan_gguf_family(operator_paths, rows, family);
+        if (path_join2(registry_family_dir, sizeof(registry_family_dir),
+                       operator_paths->registry_root, family, err,
+                       "models_artifacts") == YVEX_OK) {
+            artifacts_scan_dynamic_sidecar_dir(operator_paths, rows, family,
+                                               registry_family_dir,
+                                               ".download.json");
+        }
+        yvex_error_clear(err);
+        if (path_join2(reports_family_dir, sizeof(reports_family_dir),
+                       operator_paths->reports_root, family, err,
+                       "models_artifacts") == YVEX_OK) {
+            artifacts_scan_dynamic_sidecar_dir(operator_paths, rows, family,
+                                               reports_family_dir,
+                                               ".download-report.json");
+            artifacts_scan_dynamic_sidecar_dir(operator_paths, rows, family,
+                                               reports_family_dir,
+                                               ".source-manifest.json");
+        }
+        yvex_error_clear(err);
+    }
+    return YVEX_OK;
+}
+
+static void artifacts_print_table_header(void)
+{
+    printf("artifacts\n\n");
+    printf("%-42s  %-9s  %-18s  %-8s  %-8s  %-8s  %s\n",
+           "TARGET", "FAMILY", "CLASS", "STATUS", "PREPARE", "SIZE", "PATH");
+}
+
+static void artifacts_print_row_table(const yvex_models_artifact_row *row)
+{
+    char size_text[32];
+
+    if (!row) return;
+    if (row->size_bytes > 0ull) {
+        model_download_format_bytes(size_text, sizeof(size_text), row->size_bytes);
+    } else {
+        snprintf(size_text, sizeof(size_text), "-");
+    }
+    printf("%-42s  %-9s  %-18s  %-8s  %-8s  %-8s  %s\n",
+           row->target_id,
+           row->family,
+           row->artifact_class[0] ? row->artifact_class : "unknown-gguf",
+           row->artifact_status,
+           row->prepare_status,
+           size_text,
+           row->display_path[0] ? row->display_path : "-");
+}
+
+static void artifacts_json_string(const char *value)
+{
+    const unsigned char *p = (const unsigned char *)(value ? value : "");
+
+    putchar('"');
+    while (*p) {
+        if (*p == '"' || *p == '\\') {
+            putchar('\\');
+            putchar((int)*p);
+        } else if (*p == '\n') {
+            fputs("\\n", stdout);
+        } else if (*p == '\r') {
+            fputs("\\r", stdout);
+        } else {
+            putchar((int)*p);
+        }
+        p++;
+    }
+    putchar('"');
+}
+
+static void artifacts_print_list(const yvex_cli_models_artifacts_options *options,
+                                 const yvex_operator_paths *operator_paths,
+                                 const yvex_models_artifact_rows *rows)
+{
+    unsigned int i;
+
+    if (options->output_mode == YVEX_ARTIFACTS_OUTPUT_JSON) {
+        printf("{\"status\":\"artifacts-list\",\"artifacts\":[");
+        for (i = 0; i < rows->count; ++i) {
+            const yvex_models_artifact_row *row = &rows->rows[i];
+            if (i) putchar(',');
+            printf("{\"target_id\":");
+            artifacts_json_string(row->target_id);
+            printf(",\"family\":");
+            artifacts_json_string(row->family);
+            printf(",\"artifact_class\":");
+            artifacts_json_string(row->artifact_class);
+            printf(",\"artifact_status\":");
+            artifacts_json_string(row->artifact_status);
+            printf(",\"prepare_status\":");
+            artifacts_json_string(row->prepare_status);
+            printf(",\"top_blocker\":");
+            artifacts_json_string(row->top_blocker);
+            printf(",\"path\":");
+            artifacts_json_string(row->path[0] ? row->path : row->expected_path);
+            printf("}");
+        }
+        printf("]}\n");
+        return;
+    }
+    artifacts_print_table_header();
+    for (i = 0; i < rows->count; ++i) {
+        artifacts_print_row_table(&rows->rows[i]);
+    }
+    if (options->output_mode == YVEX_ARTIFACTS_OUTPUT_AUDIT) {
+        printf("\nmodels_root: %s\n", operator_paths->models_root);
+        printf("gguf_root: %s\n", operator_paths->gguf_root);
+        printf("reports_root: %s\n", operator_paths->reports_root);
+        printf("registry_root: %s\n", operator_paths->registry_root);
+        for (i = 0; i < rows->count; ++i) {
+            const yvex_models_artifact_row *row = &rows->rows[i];
+            printf("artifact.%u.target_id: %s\n", i, row->target_id);
+            printf("artifact.%u.family: %s\n", i, row->family);
+            printf("artifact.%u.source_status: %s\n", i, row->source_status);
+            printf("artifact.%u.expected_artifact_path: %s\n", i,
+                   row->expected_path[0] ? row->expected_path : row->path);
+            printf("artifact.%u.download_registry_path: %s\n", i,
+                   row->registry_path[0] ? row->registry_path : "none");
+            printf("artifact.%u.source_manifest_path: %s\n", i,
+                   row->source_manifest_path[0] ? row->source_manifest_path : "none");
+            printf("artifact.%u.native_inventory_path: %s\n", i,
+                   row->native_inventory_path[0] ? row->native_inventory_path : "none");
+            printf("artifact.%u.tensor_map_path: %s\n", i,
+                   row->tensor_map_path[0] ? row->tensor_map_path : "none");
+            printf("artifact.%u.output_head_map_path: %s\n", i,
+                   row->output_head_map_path[0] ? row->output_head_map_path : "none");
+            printf("artifact.%u.tokenizer_map_path: %s\n", i,
+                   row->tokenizer_map_path[0] ? row->tokenizer_map_path : "none");
+            printf("artifact.%u.top_blocker: %s\n", i, row->top_blocker);
+            printf("artifact.%u.detail: %s\n", i, row->detail);
+        }
+        printf("source_payload_loaded: false\n");
+        printf("hash_performed: false\n");
+        printf("runtime_ready: false\n");
+        printf("generation: unsupported\n");
+        printf("benchmark_status: not-measured\n");
+    }
+    printf("\nstatus: artifacts-list\n");
+}
+
+static const yvex_models_artifact_row *artifacts_find_target(
+    const yvex_models_artifact_rows *rows,
+    const char *target)
+{
+    unsigned int i;
+
+    if (!rows || !target) return NULL;
+    for (i = 0; i < rows->count; ++i) {
+        if (strcmp(rows->rows[i].target_id, target) == 0) {
+            return &rows->rows[i];
+        }
+    }
+    return NULL;
+}
+
+static void artifacts_print_status(const yvex_cli_models_artifacts_options *options,
+                                   const yvex_operator_paths *operator_paths,
+                                   const yvex_models_artifact_row *row)
+{
+    char size_text[32];
+
+    if (!row) return;
+    if (row->size_bytes > 0ull) {
+        model_download_format_bytes(size_text, sizeof(size_text), row->size_bytes);
+    } else {
+        snprintf(size_text, sizeof(size_text), "-");
+    }
+    if (options->output_mode == YVEX_ARTIFACTS_OUTPUT_JSON) {
+        printf("{\"status\":\"artifacts-status\",\"target_id\":");
+        artifacts_json_string(row->target_id);
+        printf(",\"family\":");
+        artifacts_json_string(row->family);
+        printf(",\"source_status\":");
+        artifacts_json_string(row->source_status);
+        printf(",\"artifact_status\":");
+        artifacts_json_string(row->artifact_status);
+        printf(",\"expected_artifact_path\":");
+        artifacts_json_string(row->expected_path[0] ? row->expected_path : row->path);
+        printf(",\"prepare_status\":");
+        artifacts_json_string(row->prepare_status);
+        printf(",\"top_blocker\":");
+        artifacts_json_string(row->top_blocker);
+        printf("}\n");
+        return;
+    }
+    printf("artifact: %s\n", row->target_id);
+    printf("family: %s\n", row->family);
+    printf("source: %s\n", row->source_status);
+    printf("artifact_status: %s\n", row->artifact_status);
+    printf("expected: %s\n", row->expected_path[0] ? row->expected_path : row->path);
+    printf("prepare: %s\n", row->prepare_status);
+    printf("top_blocker: %s\n", row->top_blocker);
+    printf("detail: %s\n", row->detail);
+    printf("boundary: artifact discovery only; no runtime/generation\n");
+    if (options->output_mode == YVEX_ARTIFACTS_OUTPUT_AUDIT) {
+        printf("models_root: %s\n", operator_paths->models_root);
+        printf("gguf_root: %s\n", operator_paths->gguf_root);
+        printf("artifact_class: %s\n", row->artifact_class);
+        printf("artifact_path: %s\n", row->path[0] ? row->path : "missing");
+        printf("artifact_size: %s\n", size_text);
+        printf("source_manifest_path: %s\n",
+               row->source_manifest_path[0] ? row->source_manifest_path : "none");
+        printf("native_inventory_path: %s\n",
+               row->native_inventory_path[0] ? row->native_inventory_path : "none");
+        printf("tensor_map_path: %s\n",
+               row->tensor_map_path[0] ? row->tensor_map_path : "none");
+        printf("tensor_map_status: %s\n",
+               row->tensor_map_present
+                   ? (row->tensor_map_incomplete ? "incomplete-report-only" : "present-report-only")
+                   : "missing");
+        printf("output_head_map_path: %s\n",
+               row->output_head_map_path[0] ? row->output_head_map_path : "none");
+        printf("output_head_map_status: %s\n",
+               row->output_head_map_present
+                   ? (row->output_head_missing ? "missing-in-report" : "present-report-only")
+                   : "missing");
+        printf("tokenizer_map_path: %s\n",
+               row->tokenizer_map_path[0] ? row->tokenizer_map_path : "none");
+        printf("tokenizer_map_status: %s\n",
+               row->tokenizer_map_present ? "present-report-only" : "missing");
+        printf("source_payload_loaded: false\n");
+        printf("hash_performed: false\n");
+        printf("runtime_ready: false\n");
+        printf("generation: unsupported\n");
+        printf("benchmark_status: not-measured\n");
+    }
+    printf("status: artifacts-status\n");
+}
+
+static int command_models_artifacts(int argc, char **argv)
+{
+    yvex_cli_models_artifacts_options options;
+    yvex_paths paths;
+    yvex_operator_paths operator_paths;
+    yvex_models_artifact_rows *rows = NULL;
+    yvex_error err;
+    int rc;
+
+    rc = parse_models_artifacts_options(argc, argv, &options);
+    if (rc != 0) return rc;
+    memset(&paths, 0, sizeof(paths));
+    memset(&operator_paths, 0, sizeof(operator_paths));
+    yvex_error_clear(&err);
+    rc = yvex_operator_paths_resolve(&paths, options.models_root,
+                                     &operator_paths, &err);
+    if (rc != YVEX_OK) return print_yvex_error(&err, exit_for_status(rc));
+    rows = (yvex_models_artifact_rows *)calloc(1u, sizeof(*rows));
+    if (!rows) {
+        yvex_error_set(&err, YVEX_ERR_NOMEM, "models_artifacts",
+                       "artifact row allocation failed");
+        return print_yvex_error(&err, exit_for_status(YVEX_ERR_NOMEM));
+    }
+    rc = artifacts_collect(&options, &operator_paths, rows, &err);
+    if (rc != YVEX_OK) {
+        free(rows);
+        return print_yvex_error(&err, exit_for_status(rc));
+    }
+    if (strcmp(options.action, "list") == 0) {
+        artifacts_print_list(&options, &operator_paths, rows);
+        free(rows);
+        return 0;
+    }
+    {
+        const yvex_models_artifact_row *row = artifacts_find_target(rows, options.target);
+        if (!row) {
+            free(rows);
+            fprintf(stderr, "yvex: unknown models artifact target: %s\n", options.target);
+            return 2;
+        }
+        artifacts_print_status(&options, &operator_paths, row);
+    }
+    free(rows);
+    return 0;
+}
+
 static int model_download_read_receipt_status(const char *path,
                                               char *status,
                                               size_t status_cap)
@@ -6973,6 +7767,7 @@ static int command_models_download_stop(int argc, char **argv)
 static int model_download_delete_lock_paths(const yvex_model_download_report *report,
                                             int dry_run,
                                             int yes,
+                                            unsigned long long *candidate_index,
                                             unsigned long long *deleted_out)
 {
     unsigned long long i;
@@ -6993,13 +7788,165 @@ static int model_download_delete_lock_paths(const yvex_model_download_report *re
                        "models_download_cleanup") != YVEX_OK) {
             continue;
         }
-        printf("delete_candidate.%llu: %s\n", i, abs_lock);
+        printf("delete_candidate.%llu: %s\n",
+               candidate_index ? *candidate_index : i,
+               abs_lock);
+        if (candidate_index) (*candidate_index)++;
         if (!dry_run && yes) {
             if (unlink(abs_lock) == 0) deleted++;
         }
     }
     if (deleted_out) *deleted_out = deleted;
     return 1;
+}
+
+static int model_download_remove_tree_path(const char *path,
+                                           unsigned long long *removed_out)
+{
+    struct stat st;
+    unsigned long long removed = 0ull;
+    int rc = 0;
+
+    if (removed_out) *removed_out = 0ull;
+    if (!path || !path[0]) return -1;
+    if (lstat(path, &st) != 0) {
+        return errno == ENOENT ? 0 : -1;
+    }
+    if (!S_ISDIR(st.st_mode)) {
+        if (unlink(path) != 0) return -1;
+        if (removed_out) *removed_out = 1ull;
+        return 0;
+    }
+    {
+        DIR *dir = opendir(path);
+        struct dirent *ent;
+        if (!dir) return -1;
+        while ((ent = readdir(dir)) != NULL) {
+            char child[YVEX_PATH_CAP];
+            unsigned long long child_removed = 0ull;
+            int n;
+
+            if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) {
+                continue;
+            }
+            n = snprintf(child, sizeof(child), "%s/%s", path, ent->d_name);
+            if (n < 0 || (size_t)n >= sizeof(child)) {
+                rc = -1;
+                continue;
+            }
+            if (model_download_remove_tree_path(child, &child_removed) != 0) {
+                rc = -1;
+            } else {
+                removed += child_removed;
+            }
+        }
+        closedir(dir);
+    }
+    if (rmdir(path) != 0) return -1;
+    removed++;
+    if (removed_out) *removed_out = removed;
+    return rc;
+}
+
+static int model_download_path_exists(const char *path)
+{
+    struct stat st;
+    return path && path[0] && lstat(path, &st) == 0;
+}
+
+static int model_download_delete_path_candidate(const char *path,
+                                                int recursive,
+                                                int dry_run,
+                                                int yes,
+                                                unsigned long long *candidate_index,
+                                                unsigned long long *deleted_out,
+                                                unsigned long long *missing_out)
+{
+    unsigned long long removed = 0ull;
+
+    if (deleted_out) *deleted_out = 0ull;
+    if (missing_out) *missing_out = 0ull;
+    if (!path || !path[0]) return 0;
+    printf("delete_candidate.%llu: %s\n",
+           candidate_index ? *candidate_index : 0ull,
+           path);
+    if (candidate_index) (*candidate_index)++;
+    if (!model_download_path_exists(path)) {
+        if (missing_out) *missing_out = 1ull;
+        return 1;
+    }
+    if (dry_run || !yes) return 1;
+    if (recursive) {
+        if (model_download_remove_tree_path(path, &removed) != 0) return 0;
+    } else {
+        if (unlink(path) != 0) return 0;
+        removed = 1ull;
+    }
+    if (deleted_out) *deleted_out = removed;
+    return 1;
+}
+
+static void model_download_cleanup_sidecars(const yvex_model_download_report *report,
+                                            int dry_run,
+                                            int yes,
+                                            unsigned long long *candidate_index,
+                                            unsigned long long *deleted_inout,
+                                            unsigned long long *missing_inout,
+                                            unsigned long long *failed_inout)
+{
+    const char *paths[7];
+    unsigned long long i;
+
+    if (!report) return;
+    paths[0] = report->receipt_path;
+    paths[1] = report->active_receipt_path;
+    paths[2] = report->last_receipt_path;
+    paths[3] = report->download_report_path;
+    paths[4] = report->manifest_path;
+    paths[5] = report->native_inventory_path;
+    paths[6] = report->registry_path;
+    for (i = 0ull; i < sizeof(paths) / sizeof(paths[0]); ++i) {
+        unsigned long long deleted = 0ull;
+        unsigned long long missing = 0ull;
+
+        if (model_download_delete_path_candidate(paths[i], 0, dry_run, yes,
+                                                 candidate_index, &deleted,
+                                                 &missing)) {
+            if (deleted_inout) *deleted_inout += deleted;
+            if (missing_inout) *missing_inout += missing;
+        } else if (failed_inout) {
+            (*failed_inout)++;
+        }
+    }
+}
+
+static void model_download_cleanup_logs(const yvex_model_download_report *report,
+                                        int dry_run,
+                                        int yes,
+                                        unsigned long long *candidate_index,
+                                        unsigned long long *deleted_inout,
+                                        unsigned long long *missing_inout,
+                                        unsigned long long *failed_inout)
+{
+    const char *paths[2];
+    unsigned long long i;
+
+    if (!report) return;
+    paths[0] = report->stdout_log_path;
+    paths[1] = report->stderr_log_path;
+    for (i = 0ull; i < sizeof(paths) / sizeof(paths[0]); ++i) {
+        unsigned long long deleted = 0ull;
+        unsigned long long missing = 0ull;
+
+        if (model_download_delete_path_candidate(paths[i], 0, dry_run, yes,
+                                                 candidate_index, &deleted,
+                                                 &missing)) {
+            if (deleted_inout) *deleted_inout += deleted;
+            if (missing_inout) *missing_inout += missing;
+        } else if (failed_inout) {
+            (*failed_inout)++;
+        }
+    }
 }
 
 static int command_models_download_cleanup(int argc, char **argv)
@@ -7011,14 +7958,34 @@ static int command_models_download_cleanup(int argc, char **argv)
     yvex_model_download_process_match match;
     yvex_error err;
     unsigned long long deleted = 0ull;
+    unsigned long long candidates = 0ull;
+    unsigned long long missing = 0ull;
+    unsigned long long source_deleted = 0ull;
+    unsigned long long sidecar_deleted = 0ull;
+    unsigned long long log_deleted = 0ull;
+    unsigned long long cache_deleted = 0ull;
+    unsigned long long lock_deleted = 0ull;
+    unsigned long long failed_deletes = 0ull;
+    const char *cleanup_status;
+    int sidecars_requested;
+    int logs_requested;
     int rc;
 
     yvex_error_clear(&err);
     rc = model_download_resolve_for_control(argc, argv, 4, &options, &report,
                                             &operator_paths, &provider_kind, &err);
     if (rc != YVEX_OK) return rc == 2 ? 2 : print_yvex_error(&err, exit_for_status(rc));
-    (void)operator_paths;
     (void)provider_kind;
+    if (!model_download_source_path_allowed(&operator_paths, report.local_source_dir, &report)) {
+        printf("model-download-cleanup: target=%s\n", report.target_id);
+        printf("top_blocker: %s\n",
+               report.top_blocker[0] ? report.top_blocker : "unsafe-source-path");
+        printf("reason: %s\n",
+               report.error[0] ? report.error : "resolved local source path is unsafe");
+        printf("deleted: 0\n");
+        printf("status: model-download-cleanup-blocked\n");
+        return exit_for_status(YVEX_ERR_UNSUPPORTED);
+    }
     yvex_error_clear(&err);
     (void)model_download_scan_source(report.local_source_dir, &report.source_scan, &err);
     model_download_find_provider_processes(report.local_source_dir, &match);
@@ -7029,14 +7996,84 @@ static int command_models_download_cleanup(int argc, char **argv)
         printf("status: model-download-cleanup-blocked\n");
         return exit_for_status(YVEX_ERR_UNSUPPORTED);
     }
+    sidecars_requested = options.cleanup_receipts || options.cleanup_failed_partials;
+    logs_requested = options.cleanup_logs || options.cleanup_failed_partials;
     if (options.cleanup_stale_locks) {
-        (void)model_download_delete_lock_paths(&report, options.dry_run, options.yes, &deleted);
+        (void)model_download_delete_lock_paths(&report, options.dry_run, options.yes,
+                                               &candidates, &lock_deleted);
+        deleted += lock_deleted;
     }
+    if (options.cleanup_all_provider_cache) {
+        char cache_path[YVEX_PATH_CAP];
+        unsigned long long cache_missing = 0ull;
+        yvex_error path_err;
+
+        yvex_error_clear(&path_err);
+        if (path_join2(cache_path, sizeof(cache_path), report.local_source_dir,
+                       ".cache", &path_err, "models_download_cleanup") == YVEX_OK) {
+            if (model_download_delete_path_candidate(cache_path, 1,
+                                                     options.dry_run,
+                                                     options.yes,
+                                                     &candidates,
+                                                     &cache_deleted,
+                                                     &cache_missing)) {
+                deleted += cache_deleted;
+                missing += cache_missing;
+            } else {
+                failed_deletes++;
+            }
+        }
+    }
+    if (options.cleanup_failed_partials) {
+        unsigned long long source_missing = 0ull;
+
+        if (model_download_delete_path_candidate(report.local_source_dir, 1,
+                                                 options.dry_run,
+                                                 options.yes,
+                                                 &candidates,
+                                                 &source_deleted,
+                                                 &source_missing)) {
+            deleted += source_deleted;
+            missing += source_missing;
+        } else {
+            failed_deletes++;
+        }
+    }
+    if (sidecars_requested) {
+        model_download_cleanup_sidecars(&report, options.dry_run, options.yes,
+                                        &candidates, &sidecar_deleted,
+                                        &missing, &failed_deletes);
+        deleted += sidecar_deleted;
+    }
+    if (logs_requested) {
+        model_download_cleanup_logs(&report, options.dry_run, options.yes,
+                                    &candidates, &log_deleted,
+                                    &missing, &failed_deletes);
+        deleted += log_deleted;
+    }
+    cleanup_status = options.dry_run ? "model-download-cleanup-dry-run" :
+                     failed_deletes > 0ull ? "model-download-cleanup-partial" :
+                     "model-download-cleanup";
     printf("stale_locks: %llu\n", report.source_scan.lock_count);
+    printf("cleanup_stale_locks: %s\n", options.cleanup_stale_locks ? "true" : "false");
+    printf("cleanup_failed_partials: %s\n", options.cleanup_failed_partials ? "true" : "false");
+    printf("cleanup_sidecars: %s\n", sidecars_requested ? "true" : "false");
+    printf("cleanup_logs: %s\n", logs_requested ? "true" : "false");
+    printf("cleanup_provider_cache: %s\n", options.cleanup_all_provider_cache ? "true" : "false");
+    printf("delete_candidates: %llu\n", candidates);
+    printf("missing: %llu\n", missing);
+    printf("failed_deletes: %llu\n", failed_deletes);
+    printf("deleted_locks: %llu\n", lock_deleted);
+    printf("deleted_source_entries: %llu\n", source_deleted);
+    printf("deleted_sidecars: %llu\n", sidecar_deleted);
+    printf("deleted_logs: %llu\n", log_deleted);
+    printf("deleted_provider_cache_entries: %llu\n", cache_deleted);
     printf("deleted: %llu\n", deleted);
     printf("dry_run: %s\n", options.dry_run ? "true" : "false");
-    printf("status: %s\n", options.dry_run ? "model-download-cleanup-dry-run" : "model-download-cleanup");
-    return 0;
+    printf("yes: %s\n", options.yes ? "true" : "false");
+    printf("boundary: cleanup removes only target download state under models-root; runtime unsupported\n");
+    printf("status: %s\n", cleanup_status);
+    return failed_deletes > 0ull ? 1 : 0;
 }
 
 static int command_models_download_execute(int argc, char **argv, int start_index, int resume_mode)
@@ -7311,7 +8348,7 @@ static int command_models_download_execute(int argc, char **argv, int start_inde
         }
         if (report.source_scan.lock_count > 0ull && options.clear_stale_locks) {
             unsigned long long deleted = 0ull;
-            (void)model_download_delete_lock_paths(&report, 0, 1, &deleted);
+            (void)model_download_delete_lock_paths(&report, 0, 1, NULL, &deleted);
             report.lock_files_deleted = deleted > 0ull;
             memset(&report.source_scan, 0, sizeof(report.source_scan));
         }
@@ -15934,6 +16971,7 @@ static const yvex_models_subcommand model_subcommands[] = {
     { "scan", command_models_scan },
     { "add", command_models_add },
     { "download", command_models_download },
+    { "artifacts", command_models_artifacts },
     { "prepare", command_models_prepare },
     { "check", command_models_check },
     { "list", command_models_list },
@@ -15953,7 +16991,7 @@ static int command_models(int argc, char **argv)
         return 0;
     }
     if (argc < 3) {
-        fprintf(stderr, "yvex: models requires scan, add, download, prepare, check, list, use, current, verify, inspect, or remove\n");
+        fprintf(stderr, "yvex: models requires scan, add, download, artifacts, prepare, check, list, use, current, verify, inspect, or remove\n");
         return 2;
     }
     for (i = 0; i < sizeof(model_subcommands) / sizeof(model_subcommands[0]); ++i) {
@@ -15981,6 +17019,8 @@ void yvex_models_help(FILE *fp)
     fprintf(fp, "       yvex models download cleanup TARGET [--models-root DIR] [--stale-locks] [--logs] [--receipts] [--failed-partials] [--all-provider-cache] [--dry-run] [--yes] [--audit]\n");
     fprintf(fp, "       yvex models download --repo OWNER/NAME --family deepseek|glm|qwen|gemma [--name LOCAL_NAME] [--models-root DIR] [--auth auto|required|never] [--progress auto|live|plain|log|off]\n");
     fprintf(fp, "       yvex models download --provider github --repo OWNER/NAME [--release TAG] --asset GLOB [--models-root DIR] [--auth auto|required|never] [--progress auto|live|plain|log|off]\n");
+    fprintf(fp, "       yvex models artifacts list [--models-root DIR] [--family deepseek|glm|qwen|gemma] [--output normal|table|audit|json]\n");
+    fprintf(fp, "       yvex models artifacts status TARGET [--models-root DIR] [--audit | --output normal|table|audit|json]\n");
     fprintf(fp, "       yvex models prepare TARGET [--overwrite] [--source DIR] [--out FILE | --out-dir DIR] [--models-root DIR] [--registry FILE] [--dry-run] [--no-register] [--no-use] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex models check TARGET [--backend cpu|cuda] [--level quick|runtime|full] [--models-root DIR] [--registry FILE] [--report-dir DIR] [--no-materialize] [--no-graph] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex models list|current [--registry FILE] [--audit | --output normal|table|audit]\n");
@@ -15996,11 +17036,13 @@ void yvex_models_help(FILE *fp)
     fprintf(fp, "  yvex models download gemma-4-12b-it --models-root ~/lab/models --auth required --progress live --tick-seconds 2 --audit\n");
     fprintf(fp, "  yvex models download qwen3-8b --models-root ~/lab/models --auth auto --audit\n");
     fprintf(fp, "  yvex models download status qwen3-32b --models-root ~/lab/models\n");
+    fprintf(fp, "  yvex models artifacts list --models-root ~/lab/models --output table\n");
+    fprintf(fp, "  yvex models artifacts status qwen3-6-35b-a3b --models-root ~/lab/models --audit\n");
     fprintf(fp, "  yvex models download --provider github --repo OWNER/REPO --release TAG --asset \"*.gguf\" --models-root ~/lab/models --auth auto --audit\n");
     fprintf(fp, "  yvex models check deepseek4-v4-flash-selected-embed --backend cpu --level runtime\n");
     fprintf(fp, "  yvex models check deepseek4-v4-flash-selected-embed --backend cuda --level runtime --no-graph\n");
     fprintf(fp, "  yvex models check deepseek4-v4-flash-selected-embed --level full --report-dir build/reports\n");
-    fprintf(fp, "\nModels manages the local alias registry, source tensor download sidecars, selected artifact preparation, selected artifact checks, digest identity, and metadata drift facts for registered artifacts. Download uses the local accounts/provider preflight for Hugging Face and GitHub provider CLIs, writes source intake reports only, and does not register runtime artifacts. Prepare currently supports deepseek4-v4-flash-selected-embed only and does not materialize, run graph execution, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
+    fprintf(fp, "\nModels manages the local alias registry, source tensor download sidecars, GGUF artifact discovery, selected artifact preparation, selected artifact checks, digest identity, and metadata drift facts for registered artifacts. Download uses the local accounts/provider preflight for Hugging Face and GitHub provider CLIs, writes source intake reports only, and does not register runtime artifacts. Artifacts list/status reads operator paths, GGUF filenames, and source sidecars only; it does not hash files, load tensor payloads, emit GGUF, materialize, execute runtime paths, generate, evaluate, or benchmark. Prepare currently supports deepseek4-v4-flash-selected-embed only and does not materialize, run graph execution, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
     fprintf(fp, "Default report output is compact. Use --audit for full diagnostic fields.\n");
     fprintf(fp, "Check composes implemented artifact, identity, integrity, selected materialization, engine/session, plan, selected graph, and selected gates only; it does not create artifacts, run source conversion, run prefill, decode, produce logits, sample, generate, evaluate, or benchmark.\n");
 }

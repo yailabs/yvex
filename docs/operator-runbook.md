@@ -35,6 +35,10 @@ benchmark, or throughput.
 model-family runtime adapter report. The first concrete report target is
 DeepSeek; GLM remains a source-only refusal until a YVEX-produced GGUF tensor
 inventory exists. This is still a report boundary, not runtime execution.
+`yvex models download cleanup --failed-partials` removes target-local partial
+source trees together with the matching download reports, manifests,
+inventories, registry sidecars, and provider stdout/stderr logs, guarded by the
+same no-live-provider-process boundary as stale lock cleanup.
 `yvex attention report` turns those DeepSeek-family facts into attention class,
 head layout, Q/K/V/O role, RoPE/position, mask, KV, context, graph/backend, and
 blocker reporting. It is report-only: no full transformer attention, no real
