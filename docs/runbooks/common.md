@@ -193,6 +193,12 @@ dense role-label candidates without payload loading, artifact emission, runtime
 descriptor construction, graph consumption, CUDA runtime support, generation,
 evaluation, or benchmark claims.
 
+For tensor-map, output-head, missing-roles, mapping-gate, and quant-policy
+surfaces, normal output is intentionally compact and table output remains
+tabular. Use `--audit` when row-promotion evidence is needed, including
+`tensor_map.entry.*`, output-head diagnostics, missing-role entries, gate
+fields, qtype policy fields, sidecar paths, and unsupported boundary fields.
+
 `model-target tensor-map TARGET --role output-head` is a header-derived
 output-head map for Qwen and Gemma source tensors. It identifies output-head,
 final-norm, and embedding candidates, reports missing or ambiguous output-head

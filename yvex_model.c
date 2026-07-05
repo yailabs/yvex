@@ -4246,19 +4246,33 @@ static unsigned long long tensor_naming_moe_count(
     return profile->moe_router_count + profile->moe_expert_count;
 }
 
+static const char *compact_status_bracket(const char *status)
+{
+    if (!status || !status[0]) return "unknown";
+    if (strstr(status, "pass") ||
+        strstr(status, "profiled") ||
+        strstr(status, "reported")) {
+        return "reported";
+    }
+    if (strstr(status, "blocked") ||
+        strstr(status, "incomplete") ||
+        strstr(status, "missing") ||
+        strstr(status, "ambiguous")) {
+        return "blocked";
+    }
+    if (strstr(status, "unsupported")) return "unsupported";
+    return status;
+}
+
 static void print_tensor_naming_normal(
     const yvex_tensor_naming_profile *profile)
 {
-    printf("tensor-map: %s\n",
-           tensor_naming_is_dense_family(profile) ? "dense" : profile->spec->family_key);
-    printf("target: %s\n", profile->record->target_id);
-    if (tensor_naming_is_dense_family(profile)) {
-        printf("family: %s\n", profile->spec->family_key);
-    }
-    printf("status: %s\n", profile->status);
-    printf("stage: header-naming-map\n");
-    printf("evidence: header-metadata-only\n");
-    printf("mapped: total=%llu embedding=%llu attention=%llu mlp=%llu norm=%llu head=%llu moe=%llu unknown=%llu\n",
+    printf("tensor-map: %s [%s]\n",
+           profile->record->target_id,
+           compact_status_bracket(profile->status));
+    printf("family: %s  stage: header-naming-map  evidence: header-only\n",
+           profile->spec->family_key);
+    printf("roles: total=%llu embedding=%llu attention=%llu mlp=%llu norm=%llu head=%llu moe=%llu unknown=%llu\n",
            profile->mapped_total_count,
            profile->embedding_count,
            profile->attention_count,
@@ -4268,12 +4282,11 @@ static void print_tensor_naming_normal(
            tensor_naming_moe_count(profile),
            profile->unmapped_unknown_count);
     if (profile->source_exists && profile->tensor_count > 0) {
-        printf("layers_observed: %llu\n", profile->layer_count_observed);
+        printf("layers: %llu\n", profile->layer_count_observed);
     }
     printf("top_blocker: %s\n", profile->top_blocker);
     printf("next: %s\n", YVEX_TENSOR_NAMING_NEXT_ROW);
-    printf("boundary: %stensor naming map only; no runtime descriptor/graph/runtime/generation\n",
-           tensor_naming_is_dense_family(profile) ? "dense " : "");
+    printf("boundary: report-only; use --audit for tensor entries\n");
 }
 
 static void print_tensor_naming_table(
@@ -4653,25 +4666,19 @@ static const char *output_head_map_normal_role(
 static void print_output_head_map_normal(
     const yvex_output_head_map_profile *profile)
 {
-    printf("output-head-map: %s\n", profile->spec->family_key);
-    printf("target: %s\n", profile->record->target_id);
-    printf("status: %s\n", profile->status);
-    printf("stage: header-output-head-map\n");
-    printf("evidence: header-metadata-only\n");
-    printf("output_head: %s\n",
-           output_head_map_normal_role(&profile->output_head));
-    if (profile->output_head.present) {
-        printf("native_output_head: %s\n", profile->output_head.native_name);
-    }
-    printf("final_norm: %s\n",
-           output_head_map_normal_role(&profile->final_norm));
-    printf("embedding: %s\n",
-           output_head_map_normal_role(&profile->embedding));
-    printf("tie_policy: %s\n", profile->tie_policy_status);
-    printf("shape_relation: %s\n", profile->shape_relation_status);
+    printf("output-head-map: %s [%s]\n",
+           profile->record->target_id,
+           compact_status_bracket(profile->status));
+    printf("family: %s  evidence: header-only\n", profile->spec->family_key);
+    printf("head: %s  final_norm: %s  embedding: %s  tie: %s\n",
+           output_head_map_normal_role(&profile->output_head),
+           output_head_map_normal_role(&profile->final_norm),
+           output_head_map_normal_role(&profile->embedding),
+           profile->tie_policy_status);
+    printf("shape: %s\n", profile->shape_relation_status);
     printf("top_blocker: %s\n", profile->top_blocker);
     printf("next: %s\n", YVEX_OUTPUT_HEAD_MAP_NEXT_ROW);
-    printf("boundary: output-head tensor mapping only; no logits/runtime/generation\n");
+    printf("boundary: mapping only; no logits/runtime/generation\n");
 }
 
 static void print_output_head_map_table(
@@ -5824,29 +5831,28 @@ static void print_missing_role_list(const char *label,
 static void print_missing_role_report_normal(
     const yvex_missing_role_report_profile *profile)
 {
-    printf("missing-role-report: %s\n", profile->spec->family_key);
-    printf("target: %s\n", profile->record->target_id);
-    printf("status: %s\n", profile->status);
-    printf("stage: missing-role-blocker-report\n");
-    printf("evidence: header-and-sidecar-metadata-only\n");
-    printf("source_roles: observed=%llu missing=%llu ambiguous=%llu\n",
+    printf("missing-roles: %s [%s]\n",
+           profile->record->target_id,
+           compact_status_bracket(profile->status));
+    printf("family: %s  evidence: header+sidecar-only\n",
+           profile->spec->family_key);
+    printf("source_roles: %llu/12 present, %llu missing, %llu ambiguous\n",
            profile->source_role_observed_count,
            profile->source_role_missing_count,
            profile->source_role_ambiguous_count);
-    printf("metadata_roles: observed=%llu missing=%llu ambiguous=%llu\n",
+    printf("metadata_roles: %llu/4 present, %llu missing, %llu ambiguous\n",
            profile->metadata_observed_count,
            profile->metadata_missing_count,
            profile->metadata_ambiguous_count);
     if (profile->source_role_missing_count > 0) {
-        print_missing_role_list("missing_source_roles", profile, 0);
+        print_missing_role_list("missing_source", profile, 0);
     }
     if (profile->metadata_missing_count > 0) {
-        print_missing_role_list("missing_metadata_roles", profile, 1);
+        print_missing_role_list("missing_metadata", profile, 1);
     }
-    printf("downstream_blockers: artifact_contract=missing runtime_descriptor=missing graph_consumer=missing runtime_path=missing\n");
     printf("top_blocker: %s\n", profile->top_blocker);
     printf("next: %s\n", YVEX_MISSING_ROLE_REPORT_NEXT_ROW);
-    printf("boundary: missing-role report only; no artifact/runtime descriptor/graph/runtime/generation\n");
+    printf("boundary: report-only; use --audit for role details\n");
 }
 
 static void print_missing_role_report_table(
@@ -6135,61 +6141,59 @@ static void print_tensor_mapping_gate_boundary(void)
 static void print_tensor_mapping_gate_normal(
     const yvex_tensor_mapping_gate_profile *profile)
 {
-    printf("gate: v0.1.0-tensor-mapping\n");
-    printf("status: %s\n", profile->status);
-    printf("target_id: %s\n", profile->record->target_id);
-    printf("family: %s\n", profile->spec->family_key);
-    printf("model_class: %s\n", profile->spec->class_name);
-    printf("source_class: %s\n", profile->record->source_artifact_class);
-    printf("source_status: %s\n",
-           tensor_mapping_gate_source_ready(profile) ? "present" : "missing");
-    printf("tensor_naming_map: %s\n", profile->tensor_naming.status);
-    printf("output_head_map: %s\n", profile->output_head.status);
-    printf("tokenizer_metadata_map: %s\n", profile->tokenizer.status);
-    printf("missing_role_report: %s\n", profile->missing_role.status);
-    printf("source_roles: observed=%llu required=12 missing=%llu ambiguous=%llu\n",
+    unsigned long long missing_count =
+        profile->missing_role.source_role_missing_count +
+        profile->missing_role.metadata_missing_count;
+    unsigned long long ambiguous_count =
+        profile->missing_role.source_role_ambiguous_count +
+        profile->missing_role.metadata_ambiguous_count;
+
+    printf("tensor-mapping-gate: %s [%s]\n",
+           profile->record->target_id,
+           compact_status_bracket(profile->status));
+    printf("gate: v0.1.0  family: %s\n", profile->spec->family_key);
+    printf("roles: source %llu/12, metadata %llu/4, missing %llu, ambiguous %llu\n",
            profile->missing_role.source_role_observed_count,
-           profile->missing_role.source_role_missing_count,
-           profile->missing_role.source_role_ambiguous_count);
-    printf("metadata_roles: observed=%llu required=4 missing=%llu ambiguous=%llu\n",
            profile->missing_role.metadata_observed_count,
-           profile->missing_role.metadata_missing_count,
-           profile->missing_role.metadata_ambiguous_count);
-    printf("missing_roles: %s\n", profile->missing_roles);
-    printf("ambiguous_roles: %s\n", profile->ambiguous_roles);
-    printf("gate_result: %s\n", profile->gate_result);
+           missing_count,
+           ambiguous_count);
+    if (strcmp(profile->missing_roles, "none") != 0) {
+        printf("missing: %s\n", profile->missing_roles);
+    }
+    if (strcmp(profile->ambiguous_roles, "none") != 0) {
+        printf("ambiguous: %s\n", profile->ambiguous_roles);
+    }
+    printf("result: %s\n", profile->gate_result);
     printf("top_blocker: %s\n", profile->top_blocker);
     printf("next: %s\n", profile->next_required_row);
-    printf("runtime_claim: unsupported\n");
-    printf("generation: unsupported-full-model\n");
-    printf("benchmark_status: not-measured\n");
-    printf("release_ready: false\n");
-    print_tensor_mapping_gate_boundary();
+    printf("boundary: report-only; no artifact/runtime/generation\n");
 }
 
 static void print_tensor_mapping_gate_table(
     const yvex_tensor_mapping_gate_profile *profile)
 {
+    unsigned long long missing_count =
+        profile->missing_role.source_role_missing_count +
+        profile->missing_role.metadata_missing_count;
+    unsigned long long ambiguous_count =
+        profile->missing_role.source_role_ambiguous_count +
+        profile->missing_role.metadata_ambiguous_count;
+
     printf("TENSOR MAPPING GATE\n\n");
-    printf("%-15s  %-6s  %-21s  %-12s  %-14s  %7s  %9s  %-34s  %s\n",
-           "TARGET", "FAMILY", "GATE", "SOURCE_ROLES", "METADATA_ROLES",
-           "MISSING", "AMBIGUOUS", "STATUS", "NEXT");
-    printf("%-15s  %-6s  %-21s  %2llu/12         %2llu/4          %7llu  %9llu  %-34s  %s\n",
+    printf("%-15s  %-6s  %-8s  %-12s  %-10s  %7s  %5s  %-34s  %-30s  %s\n",
+           "TARGET", "FAMILY", "GATE", "SOURCE_ROLES", "META_ROLES",
+           "MISSING", "AMBIG", "TOP_BLOCKER", "STATUS", "NEXT");
+    printf("%-15s  %-6s  %-8s  %2llu/12         %2llu/4       %7llu  %5llu  %-34s  %-30s  %s\n",
            profile->record->target_id,
            profile->spec->family_key,
-           "v0.1.0-tensor-mapping",
+           "v0.1.0",
            profile->missing_role.source_role_observed_count,
            profile->missing_role.metadata_observed_count,
-           profile->missing_role.source_role_missing_count +
-               profile->missing_role.metadata_missing_count,
-           profile->missing_role.source_role_ambiguous_count +
-               profile->missing_role.metadata_ambiguous_count,
+           missing_count,
+           ambiguous_count,
+           profile->top_blocker,
            profile->status,
            profile->next_required_row);
-    printf("runtime_claim: unsupported\n");
-    printf("generation: unsupported-full-model\n");
-    printf("benchmark_status: not-measured\n");
-    printf("release_ready: false\n");
 }
 
 static void print_tensor_mapping_gate_audit(
@@ -6651,37 +6655,31 @@ static int build_qtype_policy_profile(
 
 static void print_qtype_policy_boundary(void)
 {
-    printf("boundary: V010.QUANT.0 is a report-only qtype policy report. It consumes source/header/mapping evidence and reports artifact-planning qtype policy, but it does not load tensor payloads, quantize tensors, emit GGUF, complete per-role qtype support, complete compute/refusal matrix, complete calibration/imatrix policy, create artifact identity, materialize tensors, construct runtime descriptors, attach backend residency, feed graph consumers, execute prefill/decode/logits/tokenizer/sampling/generation, evaluate, benchmark, claim throughput, or mark v0.1.0 release-ready.\n");
+    printf("boundary: report-only; no quantization/artifact/runtime\n");
 }
 
 static void print_qtype_policy_normal(
     const yvex_qtype_policy_profile *profile)
 {
-    printf("report: qtype-policy\n");
-    printf("status: %s\n", profile->status);
-    printf("target_id: %s\n", profile->target_id);
-    printf("family: %s\n", profile->family);
-    printf("model_class: %s\n", profile->model_class);
-    printf("source_class: %s\n", profile->source_class);
-    printf("target_artifact_class: %s\n", profile->target_artifact_class);
-    printf("mapping_gate: %s\n", profile->mapping_gate_status);
-    printf("policy_basis: %s\n", profile->policy_basis);
-    printf("source_dtype_profile: %s\n", profile->dtype_profile);
-    printf("qtype_policy: %s\n", profile->qtype_policy);
-    printf("preferred_qtype: %s\n", profile->preferred_qtype);
-    printf("candidate_qtypes: %s\n", profile->candidate_qtypes);
-    printf("refused_qtypes: %s\n", profile->refused_qtypes);
-    printf("calibration_status: %s\n", profile->calibration_status);
-    printf("imatrix_status: %s\n", profile->imatrix_status);
-    printf("per_role_qtype_status: %s\n", profile->per_role_qtype_status);
-    printf("compute_support_status: %s\n", profile->compute_support_status);
-    printf("artifact_emit_status: %s\n", profile->artifact_emit_status);
+    printf("qtype-policy: %s [%s]\n",
+           profile->target_id,
+           compact_status_bracket(profile->status));
+    printf("family: %s  mapping_gate: %s\n",
+           profile->family,
+           profile->mapping_gate_status);
+    printf("source_dtype: %s\n", profile->dtype_profile);
+    printf("policy: %s\n", profile->qtype_policy);
+    if (strcmp(profile->preferred_qtype, "none") != 0) {
+        printf("preferred: %s\n", profile->preferred_qtype);
+    }
+    if (strcmp(profile->candidate_qtypes, "none") != 0) {
+        printf("candidates: %s\n", profile->candidate_qtypes);
+    }
+    if (strcmp(profile->refused_qtypes, "none") != 0) {
+        printf("refused: %s\n", profile->refused_qtypes);
+    }
     printf("top_blocker: %s\n", profile->top_blocker);
     printf("next: %s\n", profile->next_required_row);
-    printf("runtime_claim: unsupported\n");
-    printf("generation: unsupported-full-model\n");
-    printf("benchmark_status: not-measured\n");
-    printf("release_ready: false\n");
     print_qtype_policy_boundary();
 }
 
@@ -6689,10 +6687,10 @@ static void print_qtype_policy_table(
     const yvex_qtype_policy_profile *profile)
 {
     printf("QTYPE POLICY\n\n");
-    printf("%-16s  %-6s  %-28s  %-32s  %-9s  %-14s  %-25s  %-22s  %-38s  %s\n",
+    printf("%-16s  %-6s  %-28s  %-32s  %-9s  %-14s  %-25s  %-30s  %s\n",
            "TARGET", "FAMILY", "SOURCE_DTYPE", "POLICY", "PREFERRED",
-           "CANDIDATES", "REFUSED", "CALIBRATION", "STATUS", "NEXT");
-    printf("%-16s  %-6s  %-28s  %-32s  %-9s  %-14s  %-25s  %-22s  %-38s  %s\n",
+           "CANDIDATES", "REFUSED", "STATUS", "NEXT");
+    printf("%-16s  %-6s  %-28s  %-32s  %-9s  %-14s  %-25s  %-30s  %s\n",
            profile->target_id,
            profile->family,
            profile->dtype_profile,
@@ -6700,7 +6698,6 @@ static void print_qtype_policy_table(
            profile->preferred_qtype,
            profile->candidate_qtypes,
            profile->refused_qtypes,
-           profile->calibration_status,
            profile->status,
            profile->next_required_row);
 }
