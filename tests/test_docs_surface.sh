@@ -62,7 +62,7 @@ fi
 
 spine_lines="$(wc -l < docs/spine.md | tr -d ' ')"
 if [ "$spine_lines" -gt 1800 ]; then
-  echo "spine must stay under 1800 lines after restoring explicit row labels, got $spine_lines" >&2
+  echo "spine must stay under 1800 lines after restoring explicit row trackmap labels, got $spine_lines" >&2
   exit 1
 fi
 
@@ -140,42 +140,74 @@ grep -nF "V010.QUANT.1        multi-family dtype/qtype support by runtime role" 
   exit 1
 }
 
-grep -nF "### Canonical Row Label Catalog" docs/spine.md >/dev/null || {
-  echo "spine must preserve the active canonical row label catalog" >&2
+grep -nF "### Canonical Row Trackmap" docs/spine.md >/dev/null || {
+  echo "spine must preserve the active canonical row trackmap" >&2
+  exit 1
+}
+
+grep -nF "| Wave | Status | Description |" docs/spine.md >/dev/null || {
+  echo "spine row trackmap must include wave/status/description columns" >&2
   exit 1
 }
 
 for row_label in \
-  "SPINE.ROW.CATALOG.0 complete" \
-  "V010.CLI.TARGET.0 planned" \
-  "V010.CLI.SOURCE.0 planned" \
-  "V010.CLI.GRAPH.0 planned" \
-  "V010.CLI.RUNTIME.0 planned" \
-  "V010.CLI.GENERATE.0 planned" \
-  "V010.CLI.CHAT.0 planned" \
-  "V010.DOCTOR.0 planned" \
-  "V010.SERVE.0 planned" \
-  "V010.EVAL.0 planned" \
-  "V010.BENCH.0 planned" \
-  "V010.RELEASE.0 planned" \
-  "V010.CI.0 planned" \
-  "POST010.QWEN.METAL.0 post-v0.1.0" \
-  "POST010.SPEC.0 post-v0.1.0"; do
+  "SPINE.ROW.CATALOG.0" \
+  "SPINE.ROW.CATALOG.1" \
+  "V010.SOURCE.0" \
+  "V010.SOURCE.10" \
+  "V010.CLI.0" \
+  "V010.CLI.15" \
+  "V010.CLI.28" \
+  "V010.CLI.TARGET.0" \
+  "V010.CLI.SOURCE.0" \
+  "V010.CLI.GRAPH.0" \
+  "V010.CLI.RUNTIME.0" \
+  "V010.CLI.GENERATE.0" \
+  "V010.CLI.CHAT.0" \
+  "V010.DOCTOR.0" \
+  "V010.SERVE.0" \
+  "V010.EVAL.0" \
+  "V010.BENCH.0" \
+  "V010.RELEASE.0" \
+  "V010.CI.0" \
+  "POST010.QWEN.METAL.0" \
+  "POST010.SPEC.0"; do
   grep -nF "$row_label" docs/spine.md >/dev/null || {
-    echo "spine row label catalog missing: $row_label" >&2
+    echo "spine row trackmap missing: $row_label" >&2
     exit 1
   }
 done
 
-grep -nF "V010.CLI.27 planned, not Active Next" docs/spine.md >/dev/null || {
+grep -nF "| V010.CLI.27 | planned, not Active Next | base status and refusal grammar. |" docs/spine.md >/dev/null || {
   echo "spine must keep V010.CLI.27 planned but not Active Next" >&2
   exit 1
 }
+
+if grep -nF "V010.CLI.29" docs/spine.md; then
+  echo "spine must not contain undefined V010.CLI.29" >&2
+  exit 1
+fi
 
 if grep -nE 'V010\.[A-Z.]+\.[0-9]+-[0-9]+|V010\.[A-Z.]+\.\*|POST010\.[A-Z.]+\.\*|[A-Z]+(\.[A-Z]+)+\.\*' docs/spine.md; then
   echo "spine row labels must be explicit, not compressed ranges or wildcards" >&2
   exit 1
 fi
+
+awk '
+  /^### TRACK.SCOPE -/ { in_catalog = 0 }
+  /^### Canonical Row Trackmap/ { in_catalog = 1 }
+  in_catalog && /^\| [A-Z0-9]/ {
+    split($0, fields, "|")
+    if (fields[4] ~ /^[[:space:]]*$/) {
+      print
+      bad = 1
+    }
+  }
+  END { exit bad }
+' docs/spine.md || {
+  echo "spine row trackmap entries must include descriptions" >&2
+  exit 1
+}
 
 grep -nF "generation-capable artifact is not runtime generation" docs/spine.md >/dev/null || {
   echo "spine must keep generation-capable artifact separate from runtime generation" >&2

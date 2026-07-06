@@ -231,722 +231,732 @@ supersession, audit, and sequence archives.
 | TRACK.RELEASE | validation transcript, claim audit, tag readiness | planned | docs/guardrail checks | release gate | no |
 | TRACK.POST010 | portability, serving hardening, speculative, extra families | post-v0.1.0 | doctrine only | post-release selection | no |
 
-### Canonical Row Label Catalog
+### Canonical Row Trackmap
 
-These labels are active wave IDs, not historical ledger entries. They preserve
-the naming grammar for future work without restoring delivery history, audit
-tables, crosswalks, sequence archives, or doctrine dumps.
+These rows are active wave IDs, not historical ledger entries. Every wave
+listed here carries a status and a short ownership description so future work
+can name the exact row without restoring delivery history, audit tables,
+crosswalks, sequence archives, doctrine dumps, compressed ranges, or wildcard
+labels.
 
-#### TRACK.SCOPE Row Labels
+#### TRACK.SCOPE Rows
 
-```text
-SPINE.RETARGET.MULTIFAMILY.0 complete
-SPINE.TRACK.CANON.0 complete
-SPINE.ACTIVE.REWRITE.1 superseded
-SPINE.ROW.CATALOG.0 complete
-V010.SCOPE.0 planned
-V010.SCOPE.1 planned
-V010.SCOPE.2 planned
-V010.SCOPE.3 planned
-V010.SCOPE.4 planned
-V010.SCOPE.5 planned
-V010.SCOPE.6 planned
-V010.SCOPE.7 planned
-V010.TARGET.0 planned
-V010.TARGET.1 complete
-V010.TARGET.2 complete
-V010.TARGET.3 complete
-V010.TARGET.4 planned
-V010.TARGET.5 planned
-V010.TARGET.6 planned
-V010.TARGET.7 complete
-V010.TARGET.8 planned
-V010.TARGET.9 complete
-V010.TARGET.10 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| SPINE.RETARGET.MULTIFAMILY.0 | complete | Lock v0.1.0 to DeepSeek, Qwen, and Gemma as the supported generation-family set. |
+| SPINE.TRACK.CANON.0 | complete | Replace the oversized active spine with the compact track-first map. |
+| SPINE.ACTIVE.REWRITE.1 | superseded | Superseded active-spine rewrite attempt kept only as a naming marker. |
+| SPINE.ROW.CATALOG.0 | complete | Restore explicit active row labels without restoring historical ledger content. |
+| SPINE.ROW.CATALOG.1 | complete | Promote the row-label catalog into a trackmap with status and description columns. |
+| V010.SCOPE.0 | planned | v0.1.0 release doctrine. |
+| V010.SCOPE.1 | planned | v0.1.0 minimum gates. |
+| V010.SCOPE.2 | planned | v0.1.0 non-goals. |
+| V010.SCOPE.3 | planned | v0.1.0 included track map. |
+| V010.SCOPE.4 | planned | v0.1.0 excluded and postponed track map. |
+| V010.SCOPE.5 | planned | v0.1.0 target selection policy. |
+| V010.SCOPE.6 | planned | v0.1.0 release-readiness vocabulary. |
+| V010.SCOPE.7 | planned | v0.1.0 claim boundary map. |
+| V010.TARGET.0 | planned | target class registry refresh. |
+| V010.TARGET.1 | complete | selected-runtime-slice target report. |
+| V010.TARGET.2 | complete | full-runtime-candidate target report. |
+| V010.TARGET.3 | complete | dense candidate target report. |
+| V010.TARGET.4 | planned | MoE candidate target report. |
+| V010.TARGET.5 | planned | DeepSeek pressure target report. |
+| V010.TARGET.6 | planned | GLM source-only pressure target report. |
+| V010.TARGET.7 | complete | Qwen/Metal pressure target report. |
+| V010.TARGET.8 | planned | external reference target report. |
+| V010.TARGET.9 | complete | v0.1.0 target decision record. |
+| V010.TARGET.10 | planned | target decision refusal and rollback policy. |
 
-#### TRACK.SOURCE Row Labels
+#### TRACK.SOURCE Rows
 
-```text
-V010.SOURCE.0 planned
-V010.SOURCE.1 complete
-V010.SOURCE.2 complete
-V010.SOURCE.3 complete
-V010.SOURCE.4 complete
-V010.SOURCE.5 complete
-V010.SOURCE.6 complete
-V010.SOURCE.7 complete
-V010.SOURCE.7A / MODELS.DOWNLOAD.0 complete
-V010.SOURCE.7B / ACCOUNTS.PROVIDER.0 complete
-V010.SOURCE.8 planned
-V010.SOURCE.9 complete
-V010.SOURCE.10 planned
-MODELS.DOWNLOAD.LIVE.0 complete
-MODELS.DOWNLOAD.SIGNAL.0 complete
-MODELS.DOWNLOAD.CONTROL.0 complete
-MODELS.SOURCE.IDENTITY.0 complete
-MODELS.SOURCE.MAP.HANDOFF.0 complete
-MODELS.SOURCE.ROLEMAP.COVERAGE.0 complete
-OWI.TARGETS.QWEN.0 complete
-OWI.TARGETS.GEMMA.0 complete
-MODEL.TARGET.IDENTITY.0 complete
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.SOURCE.0 | planned | source manifest schema refresh. |
+| V010.SOURCE.1 | complete | source family/profile fields. |
+| V010.SOURCE.2 | complete | source artifact class fields. |
+| V010.SOURCE.3 | complete | source shard count and footprint report. |
+| V010.SOURCE.4 | complete | source provenance fields. |
+| V010.SOURCE.5 | complete | native safetensors inventory. |
+| V010.SOURCE.6 | complete | source tensor metadata inventory. |
+| V010.SOURCE.7 | complete | source manifest/provenance hardening. |
+| V010.SOURCE.8 | planned | GLM source pressure report. |
+| V010.SOURCE.9 | complete | Qwen source pressure report. |
+| V010.SOURCE.10 | planned | v0.1.0 source acceptance gate. |
+| V010.SOURCE.7A / MODELS.DOWNLOAD.0 | complete | Add native source tensor download under the models namespace. |
+| V010.SOURCE.7B / ACCOUNTS.PROVIDER.0 | complete | Add local provider account preflight for Hugging Face and GitHub. |
+| MODELS.DOWNLOAD.LIVE.0 | complete | Expose live/plain/log/off source download progress modes. |
+| MODELS.DOWNLOAD.SIGNAL.0 | complete | Preserve partial source state across interrupted downloads. |
+| MODELS.DOWNLOAD.CONTROL.0 | complete | Add download status, stop, resume, and explicit cleanup controls. |
+| MODELS.SOURCE.IDENTITY.0 | complete | Make downloaded source targets visible to downstream source commands. |
+| MODELS.SOURCE.MAP.HANDOFF.0 | complete | Hand downloaded Qwen/Gemma targets into existing map surfaces. |
+| MODELS.SOURCE.ROLEMAP.COVERAGE.0 | complete | Report dynamic downloaded target role coverage from header evidence. |
+| OWI.TARGETS.QWEN.0 | complete | Expose the Qwen source target profile. |
+| OWI.TARGETS.GEMMA.0 | complete | Expose the Gemma source target profile. |
+| MODEL.TARGET.IDENTITY.0 | complete | Use backend-neutral source target IDs for Qwen and Gemma. |
 
-#### TRACK.MAP Row Labels
+#### TRACK.MAP Rows
 
-```text
-V010.MAP.0 planned
-V010.MAP.1 complete
-V010.MAP.2 planned
-V010.MAP.3 planned
-V010.MAP.4 planned
-V010.MAP.5 complete
-V010.MAP.6 complete
-V010.MAP.7 complete
-V010.MAP.8 complete
-V010.MAP.9 complete
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.MAP.0 | planned | tensor mapping schema. |
+| V010.MAP.1 | complete | dense tensor naming map. |
+| V010.MAP.2 | planned | MoE tensor naming map. |
+| V010.MAP.3 | planned | DeepSeek tensor naming map. |
+| V010.MAP.4 | planned | GLM tensor naming map. |
+| V010.MAP.5 | complete | Qwen tensor naming map. |
+| V010.MAP.6 | complete | output-head tensor mapping. |
+| V010.MAP.7 | complete | tokenizer metadata mapping. |
+| V010.MAP.8 | complete | missing-role blocker report. |
+| V010.MAP.9 | complete | v0.1.0 tensor mapping gate. |
 
-#### TRACK.QUANT Row Labels
+#### TRACK.QUANT Rows
 
-```text
-V010.QUANT.0 complete
-V010.QUANT.1 active
-V010.QUANT.2 planned
-V010.QUANT.3 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.QUANT.0 | complete | qtype policy report. |
+| V010.QUANT.1 | active | multi-family dtype/qtype support by runtime role. |
+| V010.QUANT.2 | planned | qtype compute/refusal matrix. |
+| V010.QUANT.3 | planned | calibration/imatrix requirement report. |
 
-#### TRACK.ARTIFACT Row Labels
+#### TRACK.ARTIFACT Rows
 
-```text
-V010.ARTIFACT.EMIT.0 complete
-V010.ARTIFACT.EMIT.1 complete
-V010.ARTIFACT.EMIT.2 planned
-V010.ARTIFACT.EMIT.3 planned
-V010.ARTIFACT.EMIT.4 planned
-V010.ARTIFACT.EMIT.5 planned
-V010.ARTIFACT.EMIT.6 planned
-MODELS.ARTIFACTS.LIST.0 complete
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| MODELS.ARTIFACTS.LIST.0 | complete | List/status local GGUF artifact presence without emitting new artifacts. |
+| V010.ARTIFACT.EMIT.0 | complete | controlled artifact emission. |
+| V010.ARTIFACT.EMIT.1 | complete | selected artifact emission. |
+| V010.ARTIFACT.EMIT.2 | planned | generation-capable quantized artifact emission. |
+| V010.ARTIFACT.EMIT.3 | planned | split artifact plan. |
+| V010.ARTIFACT.EMIT.4 | planned | artifact parse roundtrip. |
+| V010.ARTIFACT.EMIT.5 | planned | artifact registration. |
+| V010.ARTIFACT.EMIT.6 | planned | v0.1.0 artifact production gate. |
 
-#### TRACK.INTEGRITY Row Labels
+#### TRACK.INTEGRITY Rows
 
-```text
-V010.INTEGRITY.0 complete
-V010.INTEGRITY.1 complete
-V010.INTEGRITY.2 complete
-V010.INTEGRITY.3 complete
-V010.INTEGRITY.4 complete
-V010.INTEGRITY.5 complete
-V010.INTEGRITY.6 complete
-V010.INTEGRITY.7 planned
-V010.INTEGRITY.8 complete
-V010.INTEGRITY.9 complete
-V010.INTEGRITY.10 complete
-V010.INTEGRITY.11 planned
-V010.INTEGRITY.12 planned
-V010.INTEGRITY.13 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.INTEGRITY.0 | complete | artifact identity manifest. |
+| V010.INTEGRITY.1 | complete | size/digest gate. |
+| V010.INTEGRITY.2 | complete | metadata parse gate. |
+| V010.INTEGRITY.3 | complete | tensor directory gate. |
+| V010.INTEGRITY.4 | complete | tensor byte-range gate. |
+| V010.INTEGRITY.5 | complete | shape/rank/dtype gate. |
+| V010.INTEGRITY.6 | complete | element count/overflow gate. |
+| V010.INTEGRITY.7 | planned | qtype support gate. |
+| V010.INTEGRITY.8 | complete | registry drift gate. |
+| V010.INTEGRITY.9 | complete | corruption fixture regression. |
+| V010.INTEGRITY.10 | complete | materialization preflight gate. |
+| V010.INTEGRITY.11 | planned | graph integrity gate. |
+| V010.INTEGRITY.12 | planned | runtime integrity gate. |
+| V010.INTEGRITY.13 | planned | v0.1.0 integrity acceptance gate. |
 
-#### TRACK.MODEL Row Labels
+#### TRACK.MODEL Rows
 
-```text
-V010.CLASS.0 planned
-V010.CLASS.1 planned
-V010.CLASS.2 planned
-V010.CLASS.3 complete
-V010.CLASS.4 planned
-V010.CLASS.5 planned
-V010.CLASS.6 complete
-V010.CLASS.7 planned
-V010.CLASS.8 complete
-V010.CLASS.9 complete
-V010.CLASS.10 complete
-V010.CLASS.11 complete
-V010.CLASS.12 planned
-V010.CLASS.13 planned
-V010.CLASS.14 planned
-V010.CLASS.15 planned
-V010.CLASS.16 planned
-MODEL.CLASS.QWEN.0 complete
-MODEL.CLASS.GEMMA.0 complete
-MOE.CLASS.0 complete
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| MODEL.CLASS.QWEN.0 | complete | Profile Qwen model class from header and sidecar metadata. |
+| MODEL.CLASS.GEMMA.0 | complete | Profile Gemma model class from header and sidecar metadata. |
+| MOE.CLASS.0 | complete | Report MoE class facts and runtime blockers. |
+| V010.CLASS.0 | planned | model-class schema finalization. |
+| V010.CLASS.1 | planned | target class detector. |
+| V010.CLASS.2 | planned | dense model-class report. |
+| V010.CLASS.3 | complete | MoE model-class report. |
+| V010.CLASS.4 | planned | source-only class report. |
+| V010.CLASS.5 | planned | selected-slice class report. |
+| V010.CLASS.6 | complete | DeepSeek class report. |
+| V010.CLASS.7 | planned | GLM class/source-only report. |
+| V010.CLASS.8 | complete | Qwen class report. |
+| V010.CLASS.9 | complete | context class integration. |
+| V010.CLASS.10 | complete | attention class integration. |
+| V010.CLASS.11 | complete | KV class integration. |
+| V010.CLASS.12 | planned | output-head class report. |
+| V010.CLASS.13 | planned | tokenizer class report. |
+| V010.CLASS.14 | planned | runtime requirement report. |
+| V010.CLASS.15 | planned | dynamic path selection report. |
+| V010.CLASS.16 | planned | v0.1.0 class acceptance gate. |
 
-#### TRACK.TENSOR Row Labels
+#### TRACK.TENSOR Rows
 
-```text
-V010.TENSOR.0 planned
-V010.TENSOR.1 complete
-V010.TENSOR.2 planned
-V010.TENSOR.3 planned
-V010.TENSOR.4 planned
-V010.TENSOR.5 complete
-V010.TENSOR.6 complete
-V010.TENSOR.7 complete
-V010.TENSOR.8 complete
-V010.TENSOR.9 planned
-V010.TENSOR.10 planned
-V010.TENSOR.11 complete
-V010.TENSOR.12 complete
-V010.TENSOR.13 planned
-V010.TENSOR.14 complete
-V010.TENSOR.15 complete
-V010.TENSOR.16 complete
-V010.TENSOR.17 complete
-V010.TENSOR.18 complete
-V010.TENSOR.19 complete
-V010.TENSOR.20 planned
-V010.TENSOR.21 complete
-V010.TENSOR.22 complete
-V010.TENSOR.23 planned
-TENSOR.COLLECTION.QWEN.0 complete
-TENSOR.COLLECTION.GEMMA.0 complete
-TENSOR.MOE.0 complete
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| TENSOR.COLLECTION.QWEN.0 | complete | Inventory Qwen tensor collections from safetensors headers only. |
+| TENSOR.COLLECTION.GEMMA.0 | complete | Inventory Gemma tensor collections from safetensors headers only. |
+| TENSOR.MOE.0 | complete | Report MoE tensor collection coverage and missing runtime pieces. |
+| V010.TENSOR.0 | planned | tensor collection schema. |
+| V010.TENSOR.1 | complete | embedding collection. |
+| V010.TENSOR.2 | planned | attention norm collection. |
+| V010.TENSOR.3 | planned | post-attention norm collection. |
+| V010.TENSOR.4 | planned | final norm collection. |
+| V010.TENSOR.5 | complete | Q projection collection. |
+| V010.TENSOR.6 | complete | K projection collection. |
+| V010.TENSOR.7 | complete | V projection collection. |
+| V010.TENSOR.8 | complete | O projection collection. |
+| V010.TENSOR.9 | planned | RoPE/position metadata collection. |
+| V010.TENSOR.10 | planned | attention mask/rule collection. |
+| V010.TENSOR.11 | complete | KV runtime-state collection. |
+| V010.TENSOR.12 | complete | dense MLP gate/up/down collection. |
+| V010.TENSOR.13 | planned | dense activation collection. |
+| V010.TENSOR.14 | complete | MoE router collection. |
+| V010.TENSOR.15 | complete | MoE expert gate/up/down collection. |
+| V010.TENSOR.16 | complete | MoE shared expert collection. |
+| V010.TENSOR.17 | complete | MoE dispatch metadata collection. |
+| V010.TENSOR.18 | complete | output-head collection. |
+| V010.TENSOR.19 | complete | tokenizer metadata collection. |
+| V010.TENSOR.20 | planned | runtime input/output token collection. |
+| V010.TENSOR.21 | complete | required tensor coverage report. |
+| V010.TENSOR.22 | complete | missing tensor blocker report. |
+| V010.TENSOR.23 | planned | v0.1.0 tensor collection gate. |
 
-#### TRACK.RESIDENCY Row Labels
+#### TRACK.RESIDENCY Rows
 
-```text
-V010.STORAGE.0 planned
-V010.STORAGE.1 planned
-V010.STORAGE.2 planned
-V010.STORAGE.3 planned
-V010.STORAGE.4 planned
-V010.STORAGE.5 planned
-V010.STORAGE.6 planned
-V010.STORAGE.7 planned
-V010.STORAGE.8 planned
-V010.STORAGE.9 planned
-V010.STORAGE.10 planned
-V010.STORAGE.11 planned
-V010.STORAGE.12 planned
-V010.STORAGE.13 planned
-V010.STORAGE.14 planned
-V010.STORAGE.15 planned
-V010.STORAGE.16 planned
-V010.STORAGE.17 planned
-V010.STORAGE.18 planned
-V010.STORAGE.19 planned
-V010.STORAGE.20 planned
-V010.RESIDENCY.0 planned
-V010.RESIDENCY.1 planned
-V010.RESIDENCY.2 planned
-V010.RESIDENCY.3 planned
-V010.RESIDENCY.4 planned
-V010.RESIDENCY.5 planned
-V010.RESIDENCY.6 planned
-V010.RESIDENCY.7 planned
-V010.RESIDENCY.8 planned
-V010.RESIDENCY.9 planned
-V010.RESIDENCY.10 planned
-V010.RESIDENCY.11 planned
-V010.RESIDENCY.12 planned
-V010.RESIDENCY.13 planned
-V010.RESIDENCY.14 planned
-V010.RESIDENCY.15 planned
-V010.RESIDENCY.16 planned
-V010.RESIDENCY.17 planned
-V010.RESIDENCY.18 planned
-V010.RESIDENCY.19 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.STORAGE.0 | planned | storage-stream doctrine refresh. |
+| V010.STORAGE.1 | planned | storage root and cache layout. |
+| V010.STORAGE.2 | planned | source shard index. |
+| V010.STORAGE.3 | planned | artifact shard index. |
+| V010.STORAGE.4 | planned | tensor byte-range map. |
+| V010.STORAGE.5 | planned | tensor page map. |
+| V010.STORAGE.6 | planned | tensor chunk map. |
+| V010.STORAGE.7 | planned | cold-read probe. |
+| V010.STORAGE.8 | planned | warm-read probe. |
+| V010.STORAGE.9 | planned | repeated-read diagnostics. |
+| V010.STORAGE.10 | planned | staged-read proof. |
+| V010.STORAGE.11 | planned | host cache policy. |
+| V010.STORAGE.12 | planned | eviction policy. |
+| V010.STORAGE.13 | planned | short read failure. |
+| V010.STORAGE.14 | planned | missing shard failure. |
+| V010.STORAGE.15 | planned | digest mismatch failure. |
+| V010.STORAGE.16 | planned | cleanup/release report. |
+| V010.STORAGE.17 | planned | GLM source storage pressure report. |
+| V010.STORAGE.18 | planned | MoE expert storage pressure report. |
+| V010.STORAGE.19 | planned | output-head storage pressure report. |
+| V010.STORAGE.20 | planned | v0.1.0 storage gate. |
+| V010.RESIDENCY.0 | planned | residency class report. |
+| V010.RESIDENCY.1 | planned | resident tensor plan. |
+| V010.RESIDENCY.2 | planned | CPU residency plan. |
+| V010.RESIDENCY.3 | planned | CUDA residency plan. |
+| V010.RESIDENCY.4 | planned | managed-memory report. |
+| V010.RESIDENCY.5 | planned | host-staged residency plan. |
+| V010.RESIDENCY.6 | planned | SSD-staged residency plan. |
+| V010.RESIDENCY.7 | planned | SSD-streamed residency plan. |
+| V010.RESIDENCY.8 | planned | hybrid residency plan. |
+| V010.RESIDENCY.9 | planned | distributed future-only report. |
+| V010.RESIDENCY.10 | planned | embedding residency. |
+| V010.RESIDENCY.11 | planned | attention tensor residency. |
+| V010.RESIDENCY.12 | planned | KV residency. |
+| V010.RESIDENCY.13 | planned | dense MLP residency. |
+| V010.RESIDENCY.14 | planned | MoE expert residency. |
+| V010.RESIDENCY.15 | planned | output-head residency. |
+| V010.RESIDENCY.16 | planned | tokenizer/runtime metadata residency. |
+| V010.RESIDENCY.17 | planned | residency transition proof. |
+| V010.RESIDENCY.18 | planned | residency cleanup/failure report. |
+| V010.RESIDENCY.19 | planned | v0.1.0 residency gate. |
 
-#### TRACK.BACKEND Row Labels
+#### TRACK.BACKEND Rows
 
-```text
-V010.BACKEND.0 planned
-V010.BACKEND.1 complete
-V010.BACKEND.2 complete
-V010.BACKEND.3 complete
-V010.BACKEND.4 complete
-V010.BACKEND.5 complete
-V010.BACKEND.6 planned
-V010.BACKEND.7 planned
-V010.BACKEND.8 planned
-V010.BACKEND.9 planned
-V010.BACKEND.10 planned
-V010.BACKEND.11 planned
-V010.BACKEND.12 planned
-V010.HARDWARE.0 planned
-V010.HARDWARE.1 planned
-V010.HARDWARE.2 planned
-V010.HARDWARE.3 planned
-V010.HARDWARE.4 planned
-V010.HARDWARE.5 planned
-V010.HARDWARE.6 planned
-V010.BUILD.0 planned
-V010.BUILD.1 planned
-V010.BUILD.2 planned
-V010.BUILD.3 planned
-V010.BUILD.4 planned
-V010.BUILD.5 planned
-V010.BUILD.6 planned
-V010.BUILD.7 planned
-CUDA.KERNEL.0 complete
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| CUDA.KERNEL.0 | complete | Harden bounded CUDA primitive kernels without claiming CUDA runtime generation. |
+| V010.BACKEND.0 | planned | backend capability matrix. |
+| V010.BACKEND.1 | complete | CPU baseline capability report. |
+| V010.BACKEND.2 | complete | CUDA capability report. |
+| V010.BACKEND.3 | complete | CUDA allocation proof. |
+| V010.BACKEND.4 | complete | CUDA transfer proof. |
+| V010.BACKEND.5 | complete | CUDA op parity subset. |
+| V010.BACKEND.6 | planned | backend op refusal policy. |
+| V010.BACKEND.7 | planned | backend fallback policy. |
+| V010.BACKEND.8 | planned | backend scratch allocation policy. |
+| V010.BACKEND.9 | planned | backend cleanup/failure report. |
+| V010.BACKEND.10 | planned | future Metal feasibility report. |
+| V010.BACKEND.11 | planned | future ROCm feasibility report. |
+| V010.BACKEND.12 | planned | v0.1.0 backend gate. |
+| V010.HARDWARE.0 | planned | local workstation profile. |
+| V010.HARDWARE.1 | planned | Spark/GB10 profile. |
+| V010.HARDWARE.2 | planned | Mac/Apple Silicon profile. |
+| V010.HARDWARE.3 | planned | Strix Halo/ROCm future profile. |
+| V010.HARDWARE.4 | planned | memory budget report. |
+| V010.HARDWARE.5 | planned | storage bandwidth pressure report. |
+| V010.HARDWARE.6 | planned | reproducibility metadata profile. |
+| V010.BUILD.0 | planned | build profile matrix. |
+| V010.BUILD.1 | planned | CPU debug build. |
+| V010.BUILD.2 | planned | CPU release build. |
+| V010.BUILD.3 | planned | CUDA debug build. |
+| V010.BUILD.4 | planned | CUDA release build. |
+| V010.BUILD.5 | planned | sanitizer build. |
+| V010.BUILD.6 | planned | release artifact hygiene. |
+| V010.BUILD.7 | planned | v0.1.0 build gate. |
 
-#### TRACK.GRAPH Row Labels
+#### TRACK.GRAPH Rows
 
-```text
-V010.GRAPH.PRIM.0 planned
-V010.GRAPH.PRIM.1 planned
-V010.GRAPH.PRIM.2 planned
-V010.GRAPH.PRIM.3 planned
-V010.GRAPH.PRIM.4 planned
-V010.GRAPH.PRIM.5 planned
-V010.GRAPH.PRIM.6 planned
-V010.GRAPH.PRIM.7 planned
-V010.GRAPH.PRIM.8 planned
-V010.GRAPH.PRIM.9 planned
-V010.GRAPH.PRIM.10 planned
-V010.GRAPH.0 planned
-V010.GRAPH.1 planned
-V010.GRAPH.2 planned
-V010.GRAPH.3 planned
-V010.GRAPH.4 planned
-V010.GRAPH.5 planned
-V010.GRAPH.6 planned
-V010.GRAPH.7 planned
-V010.GRAPH.8 planned
-V010.GRAPH.9 planned
-V010.GRAPH.10 planned
-V010.GRAPH.11 planned
-V010.GRAPH.12 planned
-V010.GRAPH.13 planned
-V010.GRAPH.14 planned
-V010.GRAPH.15 planned
-V010.GRAPH.16 planned
-V010.GRAPH.17 planned
-V010.GRAPH.18 planned
-V010.GRAPH.19 planned
-V010.GRAPH.20 planned
-V010.GRAPH.21 planned
-V010.GRAPH.22 complete
-V010.GRAPH.23 planned
-V010.GRAPH.24 planned
-V010.ATTN.0 planned
-V010.ATTN.1 planned
-V010.ATTN.2 planned
-V010.ATTN.3 planned
-V010.ATTN.4 planned
-V010.ATTN.5 planned
-V010.ATTN.6 planned
-V010.ATTN.7 planned
-V010.ATTN.8 planned
-V010.ATTN.9 planned
-V010.ATTN.10 planned
-V010.ATTN.11 planned
-V010.ATTN.12 planned
-V010.ATTN.13 planned
-V010.MOE.0 planned
-V010.MOE.1 planned
-V010.MOE.2 planned
-V010.MOE.3 planned
-V010.MOE.4 planned
-V010.MOE.5 planned
-V010.MOE.6 planned
-V010.MOE.7 planned
-V010.MOE.8 planned
-V010.MOE.9 planned
-V010.MOE.10 planned
-V010.MOE.11 planned
-V010.MOE.12 planned
-V010.MOE.13 planned
-V010.MOE.14 planned
-V010.MOE.15 planned
-V010.MOE.16 planned
-V010.MOE.17 planned
-V010.MOE.18 planned
-V010.MOE.19 planned
-V010.MOE.20 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.GRAPH.PRIM.0 | planned | primitive inventory report. |
+| V010.GRAPH.PRIM.1 | planned | RoPE integration readiness. |
+| V010.GRAPH.PRIM.2 | planned | attention primitive readiness. |
+| V010.GRAPH.PRIM.3 | planned | matmul/projection readiness. |
+| V010.GRAPH.PRIM.4 | planned | MLP primitive readiness. |
+| V010.GRAPH.PRIM.5 | planned | expert-slice primitive readiness. |
+| V010.GRAPH.PRIM.6 | planned | softmax/numerics policy. |
+| V010.GRAPH.PRIM.7 | planned | activation function policy. |
+| V010.GRAPH.PRIM.8 | planned | residual/add policy. |
+| V010.GRAPH.PRIM.9 | planned | normalization policy. |
+| V010.GRAPH.PRIM.10 | planned | graph primitive regression gate. |
+| V010.GRAPH.0 | planned | graph requirement report. |
+| V010.GRAPH.1 | planned | real embedding graph input. |
+| V010.GRAPH.2 | planned | real attention norm. |
+| V010.GRAPH.3 | planned | real Q projection. |
+| V010.GRAPH.4 | planned | real K projection. |
+| V010.GRAPH.5 | planned | real V projection. |
+| V010.GRAPH.6 | planned | real RoPE/position application. |
+| V010.GRAPH.7 | planned | real attention score path. |
+| V010.GRAPH.8 | planned | real causal/mask path. |
+| V010.GRAPH.9 | planned | real softmax path. |
+| V010.GRAPH.10 | planned | real value accumulation. |
+| V010.GRAPH.11 | planned | real O projection. |
+| V010.GRAPH.12 | planned | attention residual path. |
+| V010.GRAPH.13 | planned | post-attention norm. |
+| V010.GRAPH.14 | planned | dense MLP gate/up/down path. |
+| V010.GRAPH.15 | planned | dense MLP residual path. |
+| V010.GRAPH.16 | planned | final norm path. |
+| V010.GRAPH.17 | planned | output hidden state ownership. |
+| V010.GRAPH.18 | planned | graph scratch lifecycle. |
+| V010.GRAPH.19 | planned | graph cleanup/failure report. |
+| V010.GRAPH.20 | planned | first real transformer block. |
+| V010.GRAPH.21 | planned | repeated real layer stack. |
+| V010.GRAPH.22 | complete | selected-slice graph proof. |
+| V010.GRAPH.23 | planned | full-runtime-candidate graph proof. |
+| V010.GRAPH.24 | planned | v0.1.0 graph gate. |
+| V010.ATTN.0 | planned | attention runtime requirement report. |
+| V010.ATTN.1 | planned | Q source validation. |
+| V010.ATTN.2 | planned | K source validation. |
+| V010.ATTN.3 | planned | V source validation. |
+| V010.ATTN.4 | planned | O source validation. |
+| V010.ATTN.5 | planned | head layout validation. |
+| V010.ATTN.6 | planned | RoPE/position runtime rule. |
+| V010.ATTN.7 | planned | mask runtime rule. |
+| V010.ATTN.8 | planned | attention scratch policy. |
+| V010.ATTN.9 | planned | full attention runtime path. |
+| V010.ATTN.10 | planned | GQA/MQA/MLA family rule if required. |
+| V010.ATTN.11 | planned | attention reference comparison. |
+| V010.ATTN.12 | planned | attention cleanup/failure. |
+| V010.ATTN.13 | planned | v0.1.0 attention gate. |
+| V010.MOE.0 | planned | MoE requirement report. |
+| V010.MOE.1 | planned | expert count report. |
+| V010.MOE.2 | planned | active expert count report. |
+| V010.MOE.3 | planned | shared expert report. |
+| V010.MOE.4 | planned | router tensor report. |
+| V010.MOE.5 | planned | router logits boundary. |
+| V010.MOE.6 | planned | routing dtype/top-k policy. |
+| V010.MOE.7 | planned | top-k expert selection. |
+| V010.MOE.8 | planned | expert weight selection. |
+| V010.MOE.9 | planned | expert dispatch plan. |
+| V010.MOE.10 | planned | expert dispatch proof. |
+| V010.MOE.11 | planned | expert compute proof. |
+| V010.MOE.12 | planned | expert accumulation proof. |
+| V010.MOE.13 | planned | shared expert integration. |
+| V010.MOE.14 | planned | MoE residual integration. |
+| V010.MOE.15 | planned | MoE cleanup/failure report. |
+| V010.MOE.16 | planned | MoE selected-slice proof. |
+| V010.MOE.17 | planned | MoE block integration. |
+| V010.MOE.18 | planned | MoE prefill integration. |
+| V010.MOE.19 | planned | MoE decode integration. |
+| V010.MOE.20 | planned | v0.1.0 MoE gate. |
 
-#### TRACK.PREFILL Row Labels
+#### TRACK.PREFILL Rows
 
-```text
-V010.CONTEXT.0 planned
-V010.CONTEXT.1 complete
-V010.CONTEXT.2 complete
-V010.CONTEXT.3 complete
-V010.CONTEXT.4 complete
-V010.CONTEXT.5 complete
-V010.CONTEXT.6 complete
-V010.CONTEXT.7 complete
-V010.CONTEXT.8 planned
-V010.CONTEXT.9 planned
-V010.CONTEXT.10 planned
-V010.PREFILL.0 complete
-V010.PREFILL.1 complete
-V010.PREFILL.2 planned
-V010.PREFILL.3 planned
-V010.PREFILL.4 planned
-V010.PREFILL.5 planned
-V010.PREFILL.6 planned
-V010.PREFILL.7 planned
-V010.PREFILL.8 planned
-V010.PREFILL.9 planned
-V010.PREFILL.10 planned
-V010.PREFILL.11 planned
-V010.PREFILL.12 planned
-V010.PREFILL.13 planned
-V010.PREFILL.14 planned
-V010.PREFILL.15 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.CONTEXT.0 | planned | active context policy. |
+| V010.CONTEXT.1 | complete | model max context report. |
+| V010.CONTEXT.2 | complete | requested context report. |
+| V010.CONTEXT.3 | complete | chunk size policy. |
+| V010.CONTEXT.4 | complete | chunk planner. |
+| V010.CONTEXT.5 | complete | prefill position policy. |
+| V010.CONTEXT.6 | complete | decode position policy. |
+| V010.CONTEXT.7 | complete | overflow refusal behavior. |
+| V010.CONTEXT.8 | planned | context stop behavior. |
+| V010.CONTEXT.9 | planned | context trace. |
+| V010.CONTEXT.10 | planned | v0.1.0 context gate. |
+| V010.PREFILL.0 | complete | prefill requirement report. |
+| V010.PREFILL.1 | complete | token input to prefill planner. |
+| V010.PREFILL.2 | planned | embedding prefill input. |
+| V010.PREFILL.3 | planned | real layer-0 prefill entry. |
+| V010.PREFILL.4 | planned | real attention prefill. |
+| V010.PREFILL.5 | planned | real KV write during prefill. |
+| V010.PREFILL.6 | planned | dense MLP prefill. |
+| V010.PREFILL.7 | planned | MoE router/expert prefill. |
+| V010.PREFILL.8 | planned | repeated layer prefill. |
+| V010.PREFILL.9 | planned | chunked real prefill. |
+| V010.PREFILL.10 | planned | staged/SSD prefill plan. |
+| V010.PREFILL.11 | planned | prefill state ownership. |
+| V010.PREFILL.12 | planned | prefill cleanup/failure. |
+| V010.PREFILL.13 | planned | prefill trace. |
+| V010.PREFILL.14 | planned | prefill regression. |
+| V010.PREFILL.15 | planned | v0.1.0 prefill gate. |
 
-#### TRACK.KV Row Labels
+#### TRACK.KV Rows
 
-```text
-V010.KV.0 complete
-V010.KV.1 complete
-V010.KV.2 planned
-V010.KV.3 complete
-V010.KV.4 planned
-V010.KV.5 planned
-V010.KV.6 planned
-V010.KV.7 planned
-V010.KV.8 planned
-V010.KV.9 planned
-V010.KV.10 planned
-V010.KV.11 planned
-V010.KV.12 planned
-V010.KV.13 planned
-V010.KV.14 complete
-V010.KV.15 planned
-V010.KV.16 planned
-V010.KV.17 planned
-V010.KV.18 planned
-V010.KV.19 planned
-V010.KV.20 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.KV.0 | complete | KV requirement report. |
+| V010.KV.1 | complete | KV shape policy. |
+| V010.KV.2 | planned | KV dtype/qtype policy. |
+| V010.KV.3 | complete | KV capacity estimator. |
+| V010.KV.4 | planned | CPU KV allocation. |
+| V010.KV.5 | planned | CUDA KV allocation. |
+| V010.KV.6 | planned | K write from prefill attention. |
+| V010.KV.7 | planned | V write from prefill attention. |
+| V010.KV.8 | planned | K/V read during decode. |
+| V010.KV.9 | planned | layer/head/position indexing. |
+| V010.KV.10 | planned | token position advancement. |
+| V010.KV.11 | planned | context overflow behavior. |
+| V010.KV.12 | planned | KV clear/reinit. |
+| V010.KV.13 | planned | KV cleanup/failure. |
+| V010.KV.14 | complete | KV trace/inspect. |
+| V010.KV.15 | planned | paged KV plan. |
+| V010.KV.16 | planned | paged KV skeleton. |
+| V010.KV.17 | planned | host spill experiment. |
+| V010.KV.18 | planned | SSD spill experiment. |
+| V010.KV.19 | planned | KV quantization policy. |
+| V010.KV.20 | planned | v0.1.0 KV gate. |
 
-#### TRACK.DECODE Row Labels
+#### TRACK.DECODE Rows
 
-```text
-V010.DECODE.0 complete
-V010.DECODE.1 complete
-V010.DECODE.2 complete
-V010.DECODE.3 planned
-V010.DECODE.4 planned
-V010.DECODE.5 planned
-V010.DECODE.6 planned
-V010.DECODE.7 planned
-V010.DECODE.8 planned
-V010.DECODE.9 planned
-V010.DECODE.10 planned
-V010.DECODE.11 planned
-V010.DECODE.12 planned
-V010.DECODE.13 planned
-V010.DECODE.14 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.DECODE.0 | complete | decode requirement report. |
+| V010.DECODE.1 | complete | decode state ownership. |
+| V010.DECODE.2 | complete | decode position input. |
+| V010.DECODE.3 | planned | decode reads real KV. |
+| V010.DECODE.4 | planned | decode attention step. |
+| V010.DECODE.5 | planned | decode dense MLP path. |
+| V010.DECODE.6 | planned | decode MoE path. |
+| V010.DECODE.7 | planned | decode hidden state output. |
+| V010.DECODE.8 | planned | one real decode step. |
+| V010.DECODE.9 | planned | repeated decode lifecycle. |
+| V010.DECODE.10 | planned | decode interruption/cancel safe point. |
+| V010.DECODE.11 | planned | decode cleanup/failure. |
+| V010.DECODE.12 | planned | decode trace. |
+| V010.DECODE.13 | planned | decode regression. |
+| V010.DECODE.14 | planned | v0.1.0 decode gate. |
 
-#### TRACK.LOGITS Row Labels
+#### TRACK.LOGITS Rows
 
-```text
-V010.LOGITS.0 complete
-V010.LOGITS.1 complete
-V010.LOGITS.2 planned
-V010.LOGITS.3 complete
-V010.LOGITS.4 planned
-V010.LOGITS.5 planned
-V010.LOGITS.6 complete
-V010.LOGITS.7 planned
-V010.LOGITS.8 complete
-V010.LOGITS.9 complete
-V010.LOGITS.10 planned
-V010.LOGITS.11 planned
-V010.LOGITS.12 planned
-V010.LOGITS.13 planned
-V010.LOGITS.14 planned
-V010.LOGITS.15 planned
-V010.LOGITS.16 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.LOGITS.0 | complete | logits requirement report. |
+| V010.LOGITS.1 | complete | final hidden-state ownership. |
+| V010.LOGITS.2 | planned | final norm integration. |
+| V010.LOGITS.3 | complete | output-head tensor mapping. |
+| V010.LOGITS.4 | planned | output-head residency. |
+| V010.LOGITS.5 | planned | output-head projection. |
+| V010.LOGITS.6 | complete | logits buffer allocation. |
+| V010.LOGITS.7 | planned | logits dtype/range report. |
+| V010.LOGITS.8 | complete | logits checksum report. |
+| V010.LOGITS.9 | complete | top-k diagnostics. |
+| V010.LOGITS.10 | planned | logprob diagnostics. |
+| V010.LOGITS.11 | planned | sharded output-head plan. |
+| V010.LOGITS.12 | planned | staged/SSD output-head plan. |
+| V010.LOGITS.13 | planned | logits cleanup/failure. |
+| V010.LOGITS.14 | planned | logits trace. |
+| V010.LOGITS.15 | planned | logits regression. |
+| V010.LOGITS.16 | planned | v0.1.0 logits gate. |
 
-#### TRACK.SAMPLING Row Labels
+#### TRACK.SAMPLING Rows
 
-```text
-V010.SAMPLE.0 complete
-V010.SAMPLE.1 planned
-V010.SAMPLE.2 complete
-V010.SAMPLE.3 complete
-V010.SAMPLE.4 complete
-V010.SAMPLE.5 planned
-V010.SAMPLE.6 planned
-V010.SAMPLE.7 planned
-V010.SAMPLE.8 planned
-V010.SAMPLE.9 planned
-V010.SAMPLE.10 planned
-V010.SAMPLE.11 planned
-V010.SAMPLE.12 planned
-V010.SAMPLE.13 planned
-V010.SAMPLE.14 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.SAMPLE.0 | complete | sampling requirement report. |
+| V010.SAMPLE.1 | planned | greedy over real logits. |
+| V010.SAMPLE.2 | complete | selected token report. |
+| V010.SAMPLE.3 | complete | candidate set report. |
+| V010.SAMPLE.4 | complete | temperature validation. |
+| V010.SAMPLE.5 | planned | top-k sampling. |
+| V010.SAMPLE.6 | planned | top-p sampling. |
+| V010.SAMPLE.7 | planned | min-p sampling. |
+| V010.SAMPLE.8 | planned | typical sampling. |
+| V010.SAMPLE.9 | planned | seeded stochastic sampling. |
+| V010.SAMPLE.10 | planned | deterministic reproducibility report. |
+| V010.SAMPLE.11 | planned | sampling cleanup/failure. |
+| V010.SAMPLE.12 | planned | sampling trace. |
+| V010.SAMPLE.13 | planned | sampling regression. |
+| V010.SAMPLE.14 | planned | v0.1.0 sampling gate. |
 
-#### TRACK.TOKENIZER Row Labels
+#### TRACK.TOKENIZER Rows
 
-```text
-V010.TOKENIZER.0 planned
-V010.TOKENIZER.1 planned
-V010.TOKENIZER.2 complete
-V010.TOKENIZER.3 planned
-V010.TOKENIZER.4 complete
-V010.TOKENIZER.5 planned
-V010.TOKENIZER.6 planned
-V010.TOKENIZER.7 planned
-V010.TOKENIZER.8 planned
-V010.TOKENIZER.9 planned
-V010.TOKENIZER.10 planned
-V010.TOKENIZER.11 planned
-V010.TOKENIZER.12 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.TOKENIZER.0 | planned | tokenizer requirement report. |
+| V010.TOKENIZER.1 | planned | tokenizer metadata loader/report. |
+| V010.TOKENIZER.2 | complete | token ID input contract. |
+| V010.TOKENIZER.3 | planned | token ID output contract. |
+| V010.TOKENIZER.4 | complete | special token report. |
+| V010.TOKENIZER.5 | planned | EOS token policy. |
+| V010.TOKENIZER.6 | planned | stop-token text policy. |
+| V010.TOKENIZER.7 | planned | prompt/template policy. |
+| V010.TOKENIZER.8 | planned | detokenization boundary. |
+| V010.TOKENIZER.9 | planned | tokenizer failure/refusal behavior. |
+| V010.TOKENIZER.10 | planned | tokenizer trace. |
+| V010.TOKENIZER.11 | planned | tokenizer regression. |
+| V010.TOKENIZER.12 | planned | v0.1.0 tokenizer gate. |
 
-#### TRACK.GENERATION Row Labels
+#### TRACK.GENERATION Rows
 
-```text
-V010.GEN.0 complete
-V010.GEN.1 complete
-V010.GEN.2 complete
-V010.GEN.3 complete
-V010.GEN.4 complete
-V010.GEN.5 complete
-V010.GEN.6 complete
-V010.GEN.7 complete
-V010.GEN.8 planned
-V010.GEN.9 planned
-V010.GEN.10 planned
-V010.GEN.11 complete
-V010.GEN.12 complete
-V010.GEN.13 complete
-V010.GEN.14 complete
-V010.GEN.15 complete
-V010.GEN.16 planned
-V010.GEN.17 complete
-V010.GEN.18 planned
-V010.GEN.19 planned
-V010.RUNTIME.0 complete
-V010.RUNTIME.1 planned
-V010.RUNTIME.2 complete
-V010.RUNTIME.3 planned
-V010.RUNTIME.4 complete
-V010.RUNTIME.5 complete
-V010.RUNTIME.6 planned
-V010.RUNTIME.7 planned
-V010.RUNTIME.8 planned
-V010.RUNTIME.9 planned
-V010.RUNTIME.10 planned
-V010.RUNTIME.11 planned
-V010.RUNTIME.12 planned
-V010.RUNTIME.13 planned
-V010.RUNTIME.14 planned
-V010.RUNTIME.15 complete
-V010.RUNTIME.16 planned
-V010.RUNTIME.17 planned
-V010.TRACE.0 planned
-V010.TRACE.1 complete
-V010.TRACE.2 planned
-V010.TRACE.3 planned
-V010.TRACE.4 planned
-V010.TRACE.5 planned
-V010.TRACE.6 planned
-V010.TRACE.7 planned
-V010.TRACE.8 planned
-V010.TRACE.9 planned
-V010.TRACE.10 complete
-V010.TRACE.11 complete
-V010.TRACE.12 planned
-V010.TRACE.13 planned
-V010.TRACE.14 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.GEN.0 | complete | generation requirement report. |
+| V010.GEN.1 | complete | real generation state ownership. |
+| V010.GEN.2 | complete | generation option parser. |
+| V010.GEN.3 | complete | prefill to decode composition. |
+| V010.GEN.4 | complete | decode to logits composition. |
+| V010.GEN.5 | complete | logits to sample composition. |
+| V010.GEN.6 | complete | sample to append composition. |
+| V010.GEN.7 | complete | real token append. |
+| V010.GEN.8 | planned | context stop policy. |
+| V010.GEN.9 | planned | EOS stop policy. |
+| V010.GEN.10 | planned | stop-token policy. |
+| V010.GEN.11 | complete | max-new-tokens policy. |
+| V010.GEN.12 | complete | generation checksum. |
+| V010.GEN.13 | complete | generation trace. |
+| V010.GEN.14 | complete | failure/cancel safe points. |
+| V010.GEN.15 | complete | cleanup/release. |
+| V010.GEN.16 | planned | CLI real generation command. |
+| V010.GEN.17 | complete | generation smoke. |
+| V010.GEN.18 | planned | generation regression. |
+| V010.GEN.19 | planned | v0.1.0 generation gate. |
+| V010.RUNTIME.0 | complete | runtime lifecycle report. |
+| V010.RUNTIME.1 | planned | engine/session ownership finalization. |
+| V010.RUNTIME.2 | complete | runtime state creation. |
+| V010.RUNTIME.3 | planned | runtime state mutation rules. |
+| V010.RUNTIME.4 | complete | runtime cleanup idempotence. |
+| V010.RUNTIME.5 | complete | partial output preservation. |
+| V010.RUNTIME.6 | planned | phase failure vocabulary. |
+| V010.RUNTIME.7 | planned | preflight failure behavior. |
+| V010.RUNTIME.8 | planned | graph failure behavior. |
+| V010.RUNTIME.9 | planned | prefill failure behavior. |
+| V010.RUNTIME.10 | planned | KV failure behavior. |
+| V010.RUNTIME.11 | planned | decode failure behavior. |
+| V010.RUNTIME.12 | planned | logits failure behavior. |
+| V010.RUNTIME.13 | planned | sampling failure behavior. |
+| V010.RUNTIME.14 | planned | append failure behavior. |
+| V010.RUNTIME.15 | complete | cancellation safe points. |
+| V010.RUNTIME.16 | planned | OS signal boundary. |
+| V010.RUNTIME.17 | planned | v0.1.0 runtime lifecycle gate. |
+| V010.TRACE.0 | planned | trace taxonomy refresh. |
+| V010.TRACE.1 | complete | token trace. |
+| V010.TRACE.2 | planned | graph trace. |
+| V010.TRACE.3 | planned | tensor role trace. |
+| V010.TRACE.4 | planned | residency trace. |
+| V010.TRACE.5 | planned | prefill trace. |
+| V010.TRACE.6 | planned | KV trace. |
+| V010.TRACE.7 | planned | decode trace. |
+| V010.TRACE.8 | planned | logits trace. |
+| V010.TRACE.9 | planned | sampling trace. |
+| V010.TRACE.10 | complete | generation trace. |
+| V010.TRACE.11 | complete | cleanup/failure trace. |
+| V010.TRACE.12 | planned | raw tensor dump refusal policy. |
+| V010.TRACE.13 | planned | structured trace output. |
+| V010.TRACE.14 | planned | v0.1.0 trace gate. |
 
-#### TRACK.OPERATOR Row Labels
+#### TRACK.OPERATOR Rows
 
-```text
-V010.PATHS.0 complete
-V010.PATHS.1 complete
-V010.PATHS.2 complete
-V010.PATHS.3 complete
-V010.PATHS.4 planned
-V010.PATHS.5 complete
-V010.PATHS.6 complete
-V010.PATHS.7 complete
-V010.PATHS.8 complete
-V010.CLI.12 planned
-V010.CLI.13 planned
-V010.CLI.17 complete
-V010.CLI.18 complete
-V010.CLI.19 complete
-V010.CLI.20 planned
-V010.CLI.21 planned
-V010.CLI.22 planned
-V010.CLI.23 planned
-V010.CLI.24 complete
-V010.CLI.25 complete
-V010.CLI.26 complete
-V010.CLI.27 planned, not Active Next
-V010.CLI.28 planned
-V010.CLI.29 planned
-V010.CLI.MODELS.0 planned
-V010.CLI.MODELS.1 planned
-V010.CLI.MODELS.2 planned
-V010.CLI.MODELS.3 planned
-V010.CLI.MODELS.4 planned
-V010.CLI.TARGET.0 planned
-V010.CLI.TARGET.1 planned
-V010.CLI.TARGET.2 planned
-V010.CLI.TARGET.3 planned
-V010.CLI.SOURCE.0 planned
-V010.CLI.ACCOUNTS.0 planned
-V010.CLI.PATHS.0 planned
-V010.CLI.GRAPH.0 planned
-V010.CLI.RUNTIME.0 planned
-V010.CLI.GENERATE.0 planned
-V010.CLI.CHAT.0 planned
-V010.DOCTOR.0 planned
-V010.DOCTOR.1 planned
-V010.DOCTOR.2 planned
-V010.DOCTOR.3 planned
-V010.DOCTOR.4 planned
-V010.DOCTOR.5 planned
-V010.DOCTOR.6 planned
-V010.DOCTOR.7 planned
-V010.DOCTOR.8 planned
-V010.DOCTOR.9 planned
-V010.DOCTOR.10 planned
-V010.DOCTOR.11 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| SPINE.OUTPUT.UX.CONTRACT.0 | complete | Define CLI output UX contract and diagnostic demotion plan. |
+| CLI.ARCH.AUDIT.0 | complete | Inventory print/output pressure and porcelain/plumbing doctrine. |
+| SPINE.CLI.REBASE.1 | complete | Rebase Operator CLI track after V010.CLI.26 grammar work. |
+| V010.PATHS.0 | complete | operator root layout report. |
+| V010.PATHS.1 | complete | source/artifact/reference/report/cache separation. |
+| V010.PATHS.2 | complete | registry path layout. |
+| V010.PATHS.3 | complete | report output layout. |
+| V010.PATHS.4 | planned | runtime cache layout. |
+| V010.PATHS.5 | complete | artifact hygiene report. |
+| V010.PATHS.6 | complete | path override precedence. |
+| V010.PATHS.7 | complete | missing path/refusal behavior. |
+| V010.PATHS.8 | complete | v0.1.0 path acceptance gate. |
+| V010.CLI.0 | planned | command inventory refresh. |
+| V010.CLI.1 | planned | help layout refresh. |
+| V010.CLI.2 | planned | normal path first policy. |
+| V010.CLI.3 | planned | advanced diagnostic flags policy. |
+| V010.CLI.12 | planned | refusal wording audit. |
+| V010.CLI.13 | planned | structured output mode. |
+| V010.CLI.15 | planned | command proof transcript. |
+| V010.CLI.16 | planned | v0.1.0 CLI gate. |
+| V010.CLI.17 | complete | normal output contract and layout baseline. |
+| V010.CLI.18 | complete | diagnostic output demotion. |
+| V010.CLI.19 | complete | compact report/table output. |
+| V010.CLI.20 | planned | raw/plumbing JSON foundation. |
+| V010.CLI.21 | planned | metric output surface. |
+| V010.CLI.22 | planned | audit output surface. |
+| V010.CLI.23 | planned | quiet/no-color/non-TTY terminal policy. |
+| V010.CLI.24 | complete | hardcoded print reduction pass. |
+| V010.CLI.25 | complete | renderer ownership foundation. |
+| V010.CLI.26 | complete | base CLI grammar and command catalog. |
+| V010.CLI.27 | planned, not Active Next | base status and refusal grammar. |
+| V010.CLI.28 | planned | error/log/diagnostic surface split. |
+| V010.CLI.MODELS.0 | planned | models namespace grammar. |
+| V010.CLI.MODELS.1 | planned | models list/current/status porcelain. |
+| V010.CLI.MODELS.2 | planned | models prepare/check porcelain. |
+| V010.CLI.MODELS.3 | planned | models download/control porcelain. |
+| V010.CLI.MODELS.4 | planned | models artifacts porcelain. |
+| V010.CLI.TARGET.0 | planned | model-target namespace grammar. |
+| V010.CLI.TARGET.1 | planned | model-target inspect/list porcelain. |
+| V010.CLI.TARGET.2 | planned | model-target tensor-map/missing-roles/gate porcelain. |
+| V010.CLI.TARGET.3 | planned | model-target quant-policy porcelain. |
+| V010.CLI.SOURCE.0 | planned | source-manifest/native-weights porcelain. |
+| V010.CLI.ACCOUNTS.0 | planned | accounts/provider porcelain. |
+| V010.CLI.PATHS.0 | planned | paths porcelain finalization. |
+| V010.CLI.GRAPH.0 | planned | graph check/operator porcelain. |
+| V010.CLI.RUNTIME.0 | planned | runtime diagnostic command grammar. |
+| V010.CLI.GENERATE.0 | planned | diagnostic generate porcelain grammar. |
+| V010.CLI.CHAT.0 | planned | accepted-only chat UX grammar. |
+| V010.DOCTOR.0 | planned | doctor command scope. |
+| V010.DOCTOR.1 | planned | environment checks. |
+| V010.DOCTOR.2 | planned | build/backend checks. |
+| V010.DOCTOR.3 | planned | CUDA checks. |
+| V010.DOCTOR.4 | planned | artifact checks. |
+| V010.DOCTOR.5 | planned | registry checks. |
+| V010.DOCTOR.6 | planned | model target checks. |
+| V010.DOCTOR.7 | planned | graph checks. |
+| V010.DOCTOR.8 | planned | runtime checks. |
+| V010.DOCTOR.9 | planned | generation readiness checks. |
+| V010.DOCTOR.10 | planned | common failure cookbook. |
+| V010.DOCTOR.11 | planned | v0.1.0 doctor gate. |
 
-#### TRACK.SERVE Row Labels
+#### TRACK.SERVE Rows
 
-```text
-V010.SERVE.0 planned
-V010.SERVE.1 planned
-V010.SERVE.2 planned
-V010.SERVE.3 planned
-V010.SERVE.4 planned
-V010.SERVE.5 planned
-V010.SERVE.6 planned
-V010.SERVE.7 planned
-V010.SERVE.8 planned
-V010.SERVE.9 planned
-V010.SERVE.10 planned
-V010.SERVE.11 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.SERVE.0 | planned | serving ownership map. |
+| V010.SERVE.1 | planned | daemon state reflects runtime state. |
+| V010.SERVE.2 | planned | model registry exposed by daemon. |
+| V010.SERVE.3 | planned | runtime readiness endpoint. |
+| V010.SERVE.4 | planned | generate endpoint after CLI generation. |
+| V010.SERVE.5 | planned | streaming endpoint after real generation. |
+| V010.SERVE.6 | planned | cancellation boundary. |
+| V010.SERVE.7 | planned | provider compatibility boundary. |
+| V010.SERVE.8 | planned | OpenAI compatibility after generation. |
+| V010.SERVE.9 | planned | Anthropic compatibility after generation. |
+| V010.SERVE.10 | planned | server observability. |
+| V010.SERVE.11 | planned | v0.1.0 serving decision gate. |
 
-#### TRACK.EVAL Row Labels
+#### TRACK.EVAL Rows
 
-```text
-V010.EVAL.0 planned
-V010.EVAL.1 planned
-V010.EVAL.2 planned
-V010.EVAL.3 planned
-V010.EVAL.4 planned
-V010.EVAL.5 planned
-V010.EVAL.6 planned
-V010.EVAL.7 planned
-V010.EVAL.8 planned
-V010.EVAL.9 planned
-V010.EVAL.10 planned
-V010.EVAL.11 planned
-V010.EVAL.12 planned
-V010.EVAL.13 planned
-V010.EVAL.14 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.EVAL.0 | planned | eval harness structure. |
+| V010.EVAL.1 | planned | fixture graph eval. |
+| V010.EVAL.2 | planned | primitive eval. |
+| V010.EVAL.3 | planned | selected partial graph eval. |
+| V010.EVAL.4 | planned | full-runtime-candidate graph eval. |
+| V010.EVAL.5 | planned | prefill eval. |
+| V010.EVAL.6 | planned | KV eval. |
+| V010.EVAL.7 | planned | decode eval. |
+| V010.EVAL.8 | planned | logits eval. |
+| V010.EVAL.9 | planned | sampling eval. |
+| V010.EVAL.10 | planned | generation smoke eval. |
+| V010.EVAL.11 | planned | tokenizer/stop eval. |
+| V010.EVAL.12 | planned | failure-path eval. |
+| V010.EVAL.13 | planned | capability eval plan. |
+| V010.EVAL.14 | planned | v0.1.0 eval gate. |
 
-#### TRACK.BENCH Row Labels
+#### TRACK.BENCH Rows
 
-```text
-V010.BENCH.0 planned
-V010.BENCH.1 planned
-V010.BENCH.2 planned
-V010.BENCH.3 planned
-V010.BENCH.4 planned
-V010.BENCH.5 planned
-V010.BENCH.6 planned
-V010.BENCH.7 planned
-V010.BENCH.8 planned
-V010.BENCH.9 planned
-V010.BENCH.10 planned
-V010.BENCH.11 planned
-V010.PROFILE.0 planned
-V010.PROFILE.1 planned
-V010.PROFILE.2 planned
-V010.PROFILE.3 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.BENCH.0 | planned | benchmark harness metadata contract. |
+| V010.BENCH.1 | planned | machine profile record. |
+| V010.BENCH.2 | planned | artifact identity record. |
+| V010.BENCH.3 | planned | qtype/context/backend record. |
+| V010.BENCH.4 | planned | run count/reproducibility record. |
+| V010.BENCH.5 | planned | prefill benchmark. |
+| V010.BENCH.6 | planned | decode benchmark. |
+| V010.BENCH.7 | planned | generation benchmark. |
+| V010.BENCH.8 | planned | memory pressure benchmark. |
+| V010.BENCH.9 | planned | server benchmark. |
+| V010.BENCH.10 | planned | DeepSeek benchmark only after DeepSeek generation. |
+| V010.BENCH.11 | planned | v0.1.0 benchmark decision gate. |
+| V010.PROFILE.0 | planned | runtime profile trace. |
+| V010.PROFILE.1 | planned | memory profile trace. |
+| V010.PROFILE.2 | planned | storage profile trace. |
+| V010.PROFILE.3 | planned | backend profile trace. |
 
-#### TRACK.RELEASE Row Labels
+#### TRACK.RELEASE Rows
 
-```text
-V010.VERSION.0 planned
-V010.VERSION.1 planned
-V010.PACKAGE.0 planned
-V010.PACKAGE.1 planned
-V010.PACKAGE.2 planned
-V010.RELEASE.0 planned
-V010.RELEASE.1 planned
-V010.RELEASE.2 planned
-V010.RELEASE.3 planned
-V010.RELEASE.4 planned
-V010.RELEASE.5 planned
-V010.RELEASE.6 planned
-V010.RELEASE.7 planned
-V010.RELEASE.8 planned
-V010.RELEASE.9 planned
-V010.CI.0 planned
-V010.CI.1 planned
-V010.CI.2 planned
-V010.CI.3 planned
-V010.CI.4 complete
-V010.CI.5 complete
-V010.CI.6 complete
-V010.CI.7 complete
-V010.CI.8 planned
-V010.CI.9 planned
-V010.CI.10 planned
-V010.CI.11 planned
-V010.CI.12 planned
-V010.DOCS.INTERNAL.0 planned
-V010.DOCS.RUNBOOK.0 planned
-V010.DOCS.RUNBOOK.1 planned
-V010.DOCS.API.0 planned
-V010.DOCS.CONTRACT.0 planned
-V010.DOCS.README.0 planned
-V010.DOCS.DIAGRAM.0 planned
-V010.DOCS.DIAGRAM.1 planned
-V010.DOCS.DIAGRAM.2 planned
-V010.DOCS.DIAGRAM.3 planned
-V010.DOCS.DIAGRAM.4 planned
-V010.DOCS.PUBLIC.0 planned
-V010.DOCS.PUBLIC.1 planned
-V010.DOCS.PUBLIC.2 planned
-```
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.VERSION.0 | planned | version string policy. |
+| V010.VERSION.1 | planned | v0.1.0 version bump. |
+| V010.PACKAGE.0 | planned | binary packaging policy. |
+| V010.PACKAGE.1 | planned | release build artifact policy. |
+| V010.PACKAGE.2 | planned | no model artifact packaging rule. |
+| V010.RELEASE.0 | planned | scope lock. |
+| V010.RELEASE.1 | planned | target lock. |
+| V010.RELEASE.2 | planned | command proof transcript. |
+| V010.RELEASE.3 | planned | failure proof transcript. |
+| V010.RELEASE.4 | planned | artifact guardrail transcript. |
+| V010.RELEASE.5 | planned | claim audit. |
+| V010.RELEASE.6 | planned | docs audit. |
+| V010.RELEASE.7 | planned | changelog/release notes. |
+| V010.RELEASE.8 | planned | tag readiness report. |
+| V010.RELEASE.9 | planned | v0.1.0 tag. |
+| V010.CI.0 | planned | CI/test matrix refresh. |
+| V010.CI.1 | planned | make check gate. |
+| V010.CI.2 | planned | make smoke gate. |
+| V010.CI.3 | planned | make check-cuda gate where available. |
+| V010.CI.4 | complete | docs surface gate. |
+| V010.CI.5 | complete | source layout gate. |
+| V010.CI.6 | complete | code natural gate. |
+| V010.CI.7 | complete | artifact guardrail. |
+| V010.CI.8 | planned | forbidden claim scan. |
+| V010.CI.9 | planned | public docs leak scan. |
+| V010.CI.10 | planned | command proof transcript gate. |
+| V010.CI.11 | planned | failure-path transcript gate. |
+| V010.CI.12 | planned | v0.1.0 CI acceptance gate. |
+| V010.DOCS.INTERNAL.0 | planned | internal v0.1.0 spine summary. |
+| V010.DOCS.RUNBOOK.0 | planned | operator v0.1.0 runbook. |
+| V010.DOCS.RUNBOOK.1 | planned | model-specific runbooks. |
+| V010.DOCS.API.0 | planned | API docs for implemented surface. |
+| V010.DOCS.CONTRACT.0 | planned | behavior contract update. |
+| V010.DOCS.README.0 | planned | README runtime thesis update. |
+| V010.DOCS.DIAGRAM.0 | planned | artifact-to-runtime diagram. |
+| V010.DOCS.DIAGRAM.1 | planned | runtime ladder diagram. |
+| V010.DOCS.DIAGRAM.2 | planned | evidence/benchmark diagram. |
+| V010.DOCS.DIAGRAM.3 | planned | dense vs MoE path diagram. |
+| V010.DOCS.DIAGRAM.4 | planned | storage/residency diagram. |
+| V010.DOCS.PUBLIC.0 | planned | public claim audit. |
+| V010.DOCS.PUBLIC.1 | planned | internal ID leak audit. |
+| V010.DOCS.PUBLIC.2 | planned | v0.1.0 docs acceptance gate. |
 
-#### TRACK.POST010 Row Labels
+#### TRACK.POST010 Rows
 
-```text
-V010.SPEC.0 planned
-V010.SPEC.1 planned
-V010.SPEC.2 planned
-V010.SPEC.3 planned
-V010.SPEC.4 planned
-V010.SPEC.5 planned
-V010.SPEC.6 planned
-V010.SPEC.7 planned
-V010.SPEC.8 planned
-V010.SPEC.9 planned
-V010.SPEC.10 planned
-V010.SPEC.11 planned
-V010.SPEC.12 planned
-V010.SPEC.13 planned
-POST010.GLM.RUNTIME.0 post-v0.1.0
-POST010.QWEN.METAL.0 post-v0.1.0
-POST010.ROCM.0 post-v0.1.0
-POST010.STORAGE.GEN.0 post-v0.1.0
-POST010.SERVE.PUBLIC.0 post-v0.1.0
-POST010.SPEC.0 post-v0.1.0
-POST010.BENCH.PUBLIC.0 post-v0.1.0
-POST010.EVAL.CAPABILITY.0 post-v0.1.0
-POST010.DOCS.PUBLIC.0 post-v0.1.0
-```
-
+| Wave | Status | Description |
+| --- | --- | --- |
+| V010.SPEC.0 | planned | speculative reference registry. |
+| V010.SPEC.1 | planned | DSpark reference record. |
+| V010.SPEC.2 | planned | DFlash/HyperDFlash reference record. |
+| V010.SPEC.3 | planned | draft source report. |
+| V010.SPEC.4 | planned | token verification semantics. |
+| V010.SPEC.5 | planned | accepted-prefix accounting. |
+| V010.SPEC.6 | planned | rejected-token behavior. |
+| V010.SPEC.7 | planned | KV rollback/reuse policy. |
+| V010.SPEC.8 | planned | dense speculative verification. |
+| V010.SPEC.9 | planned | MoE routing-aware verification report. |
+| V010.SPEC.10 | planned | MoE expert-budget verification. |
+| V010.SPEC.11 | planned | verification-cost utility report. |
+| V010.SPEC.12 | planned | DeepSeek speculative path. |
+| V010.SPEC.13 | planned | speculative benchmark. |
+| POST010.GLM.RUNTIME.0 | post-v0.1.0 | GLM runtime promotion path after v0.1.0. |
+| POST010.QWEN.METAL.0 | post-v0.1.0 | Qwen Metal runtime path after baseline release. |
+| POST010.ROCM.0 | post-v0.1.0 | ROCm/Strix Halo backend path after v0.1.0. |
+| POST010.STORAGE.GEN.0 | post-v0.1.0 | SSD-streamed generation exploration after baseline generation. |
+| POST010.SERVE.PUBLIC.0 | post-v0.1.0 | production serving surface hardening after v0.1.0. |
+| POST010.SPEC.0 | post-v0.1.0 | speculative acceleration program after baseline generation. |
+| POST010.BENCH.PUBLIC.0 | post-v0.1.0 | public benchmark table expansion after measured runtime. |
+| POST010.EVAL.CAPABILITY.0 | post-v0.1.0 | broader capability eval suite after v0.1.0. |
+| POST010.DOCS.PUBLIC.0 | post-v0.1.0 | public evidence expansion after release-safe claims. |
 ### TRACK.SCOPE - Scope And Claims
 
 Owns:
