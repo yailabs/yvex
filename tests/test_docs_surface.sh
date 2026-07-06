@@ -160,6 +160,74 @@ grep -nF "| V010.SCOPE.0 | complete | v0.1.0 release doctrine. |" docs/spine.md 
   exit 1
 }
 
+grep -nF "| V010.SCOPE.1 | complete | v0.1.0 minimum gates. |" docs/spine.md >/dev/null || {
+  echo "spine must mark V010.SCOPE.1 complete" >&2
+  exit 1
+}
+
+grep -nF 'Minimum gate authority: docs/v010-release-doctrine.md, section' docs/spine.md >/dev/null || {
+  echo "spine must reference the release doctrine as the minimum gate authority" >&2
+  exit 1
+}
+
+for minimum_gate_term in \
+  "### Minimum Gate Matrix" \
+  "### Gate Closure Rules" \
+  "Family-scoped gates close separately for DeepSeek, Qwen, and Gemma" \
+  "Release waits for all supported families" \
+  "A gate cannot close by external execution" \
+  "Benchmark gates require measured metadata" \
+  "generation-capable artifact is not runtime generation"; do
+  grep -nF "$minimum_gate_term" docs/v010-release-doctrine.md >/dev/null || {
+    echo "release doctrine missing V010.SCOPE.1 gate term: $minimum_gate_term" >&2
+    exit 1
+  }
+done
+
+for minimum_gate_label in \
+  "GATE.SCOPE" \
+  "GATE.SOURCE" \
+  "GATE.MAP" \
+  "GATE.QUANT" \
+  "GATE.ARTIFACT" \
+  "GATE.INTEGRITY" \
+  "GATE.MODEL" \
+  "GATE.TENSOR" \
+  "GATE.RESIDENCY" \
+  "GATE.BACKEND" \
+  "GATE.GRAPH" \
+  "GATE.PREFILL" \
+  "GATE.KV" \
+  "GATE.DECODE" \
+  "GATE.LOGITS" \
+  "GATE.SAMPLING" \
+  "GATE.TOKENIZER" \
+  "GATE.GENERATION" \
+  "GATE.OPERATOR" \
+  "GATE.EVAL" \
+  "GATE.BENCH" \
+  "GATE.RELEASE"; do
+  grep -nF "$minimum_gate_label" docs/v010-release-doctrine.md >/dev/null || {
+    echo "release doctrine missing minimum gate label: $minimum_gate_label" >&2
+    exit 1
+  }
+done
+
+grep -nF "V010.QUANT.1 - multi-family dtype/qtype support by role" docs/spine.md >/dev/null || {
+  echo "spine must preserve V010.QUANT.1 as Active Next" >&2
+  exit 1
+}
+
+grep -nF "V010.CLI.27" docs/spine.md >/dev/null || {
+  echo "spine must preserve V010.CLI.27 as a planned CLI row" >&2
+  exit 1
+}
+
+grep -nF "planned, not Active Next" docs/spine.md >/dev/null || {
+  echo "spine must keep V010.CLI.27 planned, not Active Next" >&2
+  exit 1
+}
+
 if awk '
   FILENAME == "docs/v010-release-doctrine.md" &&
     /^## 10\. Forbidden Claims/ { skip = 1 }
@@ -169,6 +237,18 @@ if awk '
 ' docs/v010-release-doctrine.md docs/spine.md |
    grep -nE 'single model can close v0\.1\.0|DeepSeek alone closes v0\.1\.0|Qwen/Metal closes v0\.1\.0|GLM closes v0\.1\.0|generation-capable artifact is runtime generation'; then
   echo "release doctrine or spine contains stale positive closure language" >&2
+  exit 1
+fi
+
+if awk '
+  FILENAME == "docs/v010-release-doctrine.md" &&
+    /^## 10\. Forbidden Claims/ { skip = 1 }
+  FILENAME == "docs/v010-release-doctrine.md" &&
+    /^## 11\. Governed Surfaces/ { skip = 0 }
+  !skip { print FILENAME ":" FNR ":" $0 }
+' docs/v010-release-doctrine.md docs/spine.md |
+   grep -nE 'single family closes v0\.1\.0|report-only closes runtime|diagnostic-runtime closes full-runtime|external runner closes runtime|external GGUF closes artifact|benchmark target closes benchmark'; then
+  echo "release doctrine or spine contains stale gate-closure shortcut language" >&2
   exit 1
 fi
 

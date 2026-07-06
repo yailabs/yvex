@@ -301,65 +301,56 @@ External runner:
 
 ## 8. Release Gates
 
-GATE.SCOPE closes when the release target, family set, non-goals, and claim
-boundaries are fixed.
+### Minimum Gate Matrix
 
-GATE.SOURCE closes when every supported family has accepted source identity and
-source evidence.
+| Gate | Owner | Scope | Minimum closure evidence | Cannot close from |
+| --- | --- | --- | --- | --- |
+| GATE.SCOPE | TRACK.SCOPE | release | release doctrine, supported family set, closure rule, non-goals, target class boundaries, readiness vocabulary, forbidden claims | roadmap prose, target pressure, public claims |
+| GATE.SOURCE | TRACK.SOURCE | DeepSeek/Qwen/Gemma | stable target identity, accepted local or acquired source evidence, source manifest, native tensor inventory, source tensor metadata inventory | download receipt alone, provider status, external runner, source URL only |
+| GATE.MAP | TRACK.MAP | DeepSeek/Qwen/Gemma | tensor role mapping, output-head mapping, tokenizer metadata mapping, missing-role closure, map gate | lexical tensor name scan, source inventory, class profile |
+| GATE.QUANT | TRACK.QUANT | DeepSeek/Qwen/Gemma | qtype policy, dtype/qtype support by runtime role, qtype compute/refusal matrix, calibration/imatrix decision where required | qtype policy report alone, storage qtype list, unsupported compute path |
+| GATE.ARTIFACT | TRACK.ARTIFACT | DeepSeek/Qwen/Gemma | YVEX-produced generation-capable quantized artifact, required metadata, tokenizer/output-head coverage, artifact registration | external GGUF, selected slice, artifact discovery report, source files |
+| GATE.INTEGRITY | TRACK.INTEGRITY | DeepSeek/Qwen/Gemma | identity, digest, metadata parse, tensor directory, byte ranges, dtype/qtype, shape/rank, overflow checks, corruption refusal, registry drift guard | file presence, digest only, selected-slice integrity |
+| GATE.MODEL | TRACK.MODEL | DeepSeek/Qwen/Gemma | model class, runtime class requirements, descriptor requirements, dynamic path requirements | family name, source metadata, tokenizer metadata |
+| GATE.TENSOR | TRACK.TENSOR | DeepSeek/Qwen/Gemma | full required tensor coverage for embedding, norms, attention, MLP/MoE, output head, tokenizer/runtime metadata | partial collection inventory, missing-role report |
+| GATE.RESIDENCY | TRACK.RESIDENCY | DeepSeek/Qwen/Gemma | materialization proof, placement plan, residency proof, movement/failure path, cleanup proof | materialization plan, selected-slice residency, memory estimate |
+| GATE.BACKEND | TRACK.BACKEND | backend | required CPU/CUDA operation support or refusal, qtype compute/refusal support, allocation, transfer, scratch, cleanup/failure behavior | backend probe, allocation only, primitive-only proof |
+| GATE.GRAPH | TRACK.GRAPH | DeepSeek/Qwen/Gemma | real transformer graph over supported-family artifacts | primitive proof, fixture proof, selected graph slice |
+| GATE.PREFILL | TRACK.PREFILL | DeepSeek/Qwen/Gemma | real prefill over supported-family artifacts, owned runtime state, failure path, cleanup | diagnostic prefill, context planner, token input |
+| GATE.KV | TRACK.KV | DeepSeek/Qwen/Gemma | real K/V writes during prefill, real K/V reads during decode, indexing, capacity, cleanup/failure behavior | KV shape report, diagnostic KV store, KV trace |
+| GATE.DECODE | TRACK.DECODE | DeepSeek/Qwen/Gemma | one real decode step and repeated decode lifecycle over real runtime state | diagnostic decode, decode option parser, position report |
+| GATE.LOGITS | TRACK.LOGITS | DeepSeek/Qwen/Gemma | final norm and output-head projection produce real vocabulary logits from runtime state | output-head mapping, logits buffer allocation, top-k diagnostics |
+| GATE.SAMPLING | TRACK.SAMPLING | DeepSeek/Qwen/Gemma | token selection over real logits with deterministic proof and failure path | candidate report, temperature validation, diagnostic sampler |
+| GATE.TOKENIZER | TRACK.TOKENIZER | DeepSeek/Qwen/Gemma | token input/output contract, EOS, stop-token, prompt/template or explicit token-ID-only boundary, failure behavior | tokenizer metadata report, special token report |
+| GATE.GENERATION | TRACK.GENERATION | DeepSeek/Qwen/Gemma | runtime loop composes prefill, KV, decode, logits, sampling, append, stop, cleanup over supported-family artifacts | diagnostic generation, generated token append alone, generation trace |
+| GATE.OPERATOR | TRACK.OPERATOR | operator | CLI generation command, status grammar, refusal grammar, normal/audit output, command proof transcript over implemented runtime path | CLI grammar, porcelain cleanup, help text |
+| GATE.EVAL | TRACK.EVAL | DeepSeek/Qwen/Gemma | smoke and regression eval over implemented runtime generation path, including failure-path eval | fixture eval, graph primitive eval, planned eval harness |
+| GATE.BENCH | TRACK.BENCH | DeepSeek/Qwen/Gemma | measured benchmark transcript with machine, artifact, qtype, context, backend, command, run count, timing, memory, reproducibility metadata | benchmark plan, benchmark target, one unrecorded timing run |
+| GATE.RELEASE | TRACK.RELEASE | release | clean checkout, validation transcript, artifact guardrail, family proof, claim audit, docs audit, changelog/release notes, tag readiness | passing tests alone, public claim text, release intent |
 
-GATE.MAP closes when every supported family has tensor roles, output-head
-mapping, tokenizer metadata, and missing-role closure.
+### Gate Closure Rules
 
-GATE.QUANT closes when every supported family has dtype/qtype support,
-compute/refusal state, and calibration/imatrix decisions where required.
+A gate closes only at the lowest true evidence stage.
 
-GATE.ARTIFACT closes when every supported family has a generation-capable
-YVEX-produced artifact.
+A gate cannot close by naming a later row.
 
-GATE.INTEGRITY closes when identity, ranges, qtypes, shapes, corruption
-refusals, and registration checks pass.
+A gate cannot close by public wording.
 
-GATE.MODEL closes when runtime class and descriptor requirements are known.
+A gate cannot close by external execution.
 
-GATE.TENSOR closes when required tensor coverage exists for every supported
-family.
+A gate cannot close by report-only output unless the gate itself is report-only.
 
-GATE.RESIDENCY closes when materialization, placement, movement, pressure, and
-cleanup proof exist.
+Runtime gates require implemented runtime behavior.
 
-GATE.BACKEND closes when required backend operations and qtypes compute or
-refuse cleanly.
+Evidence gates require command proof.
 
-GATE.GRAPH closes when supported artifacts execute through the transformer
-graph path.
+Benchmark gates require measured metadata.
 
-GATE.PREFILL closes when prefill creates owned runtime state.
+Release gates require a clean transcript.
 
-GATE.KV closes when K/V writes and decode reads work.
+Family-scoped gates close separately for DeepSeek, Qwen, and Gemma.
 
-GATE.DECODE closes when decode advances runtime state.
-
-GATE.LOGITS closes when output-head logits are produced from runtime state.
-
-GATE.SAMPLING closes when sampling consumes output-head logits.
-
-GATE.TOKENIZER closes when tokenizer, EOS, stop, and prompt boundaries are
-defined.
-
-GATE.GENERATION closes when runtime generation composes prefill, KV, decode,
-logits, sampling, append, stop, and cleanup.
-
-GATE.OPERATOR closes when CLI generation and refusal/status grammar expose the
-implemented path.
-
-GATE.EVAL closes when smoke and regression eval pass over implemented runtime
-generation paths.
-
-GATE.BENCH closes when measured benchmark metadata exists for implemented
-runtime generation paths.
-
-GATE.RELEASE closes when transcript, claim audit, docs audit, artifact
-guardrail, and tag readiness pass.
+Release waits for all supported families.
 
 ## 9. Readiness Vocabulary
 
@@ -408,14 +399,14 @@ release-ready:
 Forbidden vague readiness language:
 
 ```text
-inference ready
-model ready
-generation ready
-CUDA ready
-Metal ready
-support ready
-mostly ready
-almost supported
+inference-ready
+model-ready
+generation-ready
+CUDA-ready
+Metal-ready
+support-ready
+mostly-ready
+almost-supported
 ```
 
 ## 10. Forbidden Claims
@@ -423,31 +414,31 @@ almost supported
 Forbidden unless explicitly true and gate-backed:
 
 ```text
-DeepSeek generation implemented
-Qwen generation implemented
-Gemma generation implemented
-multi-family generation implemented
-generation-capable artifacts emitted
-qtype role support complete
-quantization complete
-GGUF full artifact emission complete
-artifact identity complete for all supported families
-materialization/residency complete for all supported families
-runtime descriptors complete
-graph route complete for supported families
-real prefill complete
-real KV complete
-real decode complete
-real logits complete
-real sampling complete
-real tokenizer runtime complete
-runtime generation complete
-eval implemented
-benchmark measured
-throughput achieved
+DeepSeek generation: implemented
+Qwen generation: implemented
+Gemma generation: implemented
+multi-family generation: implemented
+generation-capable artifacts: emitted
+qtype role support: complete
+quantization: complete
+GGUF full artifact emission: complete
+artifact identity for all supported families: complete
+materialization/residency for all supported families: complete
+runtime descriptors: complete
+graph route for supported families: complete
+prefill: complete
+KV: complete
+decode: complete
+logits: complete
+sampling: complete
+tokenizer runtime: complete
+runtime generation: complete
+eval: implemented
+benchmark: measured
+throughput: achieved
 release_ready true
 generation_ready true
-inference ready
+inference-ready
 model support
 Qwen support
 Gemma support

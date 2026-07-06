@@ -285,7 +285,7 @@ labels.
 | SPINE.ROW.CATALOG.1 | complete | Promote the row-label catalog into a trackmap with status and description columns. |
 | SPINE.CAPABILITY.MAP.0 | complete | Replace the current snapshot with the v0.1.0 pipeline capability map. |
 | V010.SCOPE.0 | complete | v0.1.0 release doctrine. |
-| V010.SCOPE.1 | planned | v0.1.0 minimum gates. |
+| V010.SCOPE.1 | complete | v0.1.0 minimum gates. |
 | V010.SCOPE.2 | planned | v0.1.0 non-goals. |
 | V010.SCOPE.3 | planned | v0.1.0 included track map. |
 | V010.SCOPE.4 | planned | v0.1.0 excluded and postponed track map. |
@@ -1717,6 +1717,9 @@ Forbidden claims:
   all gates pass.
 
 ## 8. Release Gates
+
+Minimum gate authority: docs/v010-release-doctrine.md, section
+"## 8. Release Gates".
 
 The final v0.1.0 release candidate requires one transcript containing:
 
