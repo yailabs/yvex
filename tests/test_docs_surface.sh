@@ -61,8 +61,8 @@ if [ "$count" -ne 6 ]; then
 fi
 
 spine_lines="$(wc -l < docs/spine.md | tr -d ' ')"
-if [ "$spine_lines" -gt 5000 ]; then
-  echo "spine must stay under 5000 lines, got $spine_lines" >&2
+if [ "$spine_lines" -gt 1800 ]; then
+  echo "spine must stay under 1800 lines after restoring explicit row labels, got $spine_lines" >&2
   exit 1
 fi
 
@@ -139,6 +139,43 @@ grep -nF "V010.QUANT.1        multi-family dtype/qtype support by runtime role" 
   echo "spine must preserve the multi-family quant row title" >&2
   exit 1
 }
+
+grep -nF "### Canonical Row Label Catalog" docs/spine.md >/dev/null || {
+  echo "spine must preserve the active canonical row label catalog" >&2
+  exit 1
+}
+
+for row_label in \
+  "SPINE.ROW.CATALOG.0 complete" \
+  "V010.CLI.TARGET.0 planned" \
+  "V010.CLI.SOURCE.0 planned" \
+  "V010.CLI.GRAPH.0 planned" \
+  "V010.CLI.RUNTIME.0 planned" \
+  "V010.CLI.GENERATE.0 planned" \
+  "V010.CLI.CHAT.0 planned" \
+  "V010.DOCTOR.0 planned" \
+  "V010.SERVE.0 planned" \
+  "V010.EVAL.0 planned" \
+  "V010.BENCH.0 planned" \
+  "V010.RELEASE.0 planned" \
+  "V010.CI.0 planned" \
+  "POST010.QWEN.METAL.0 post-v0.1.0" \
+  "POST010.SPEC.0 post-v0.1.0"; do
+  grep -nF "$row_label" docs/spine.md >/dev/null || {
+    echo "spine row label catalog missing: $row_label" >&2
+    exit 1
+  }
+done
+
+grep -nF "V010.CLI.27 planned, not Active Next" docs/spine.md >/dev/null || {
+  echo "spine must keep V010.CLI.27 planned but not Active Next" >&2
+  exit 1
+}
+
+if grep -nE 'V010\.[A-Z.]+\.[0-9]+-[0-9]+|V010\.[A-Z.]+\.\*|POST010\.[A-Z.]+\.\*|[A-Z]+(\.[A-Z]+)+\.\*' docs/spine.md; then
+  echo "spine row labels must be explicit, not compressed ranges or wildcards" >&2
+  exit 1
+fi
 
 grep -nF "generation-capable artifact is not runtime generation" docs/spine.md >/dev/null || {
   echo "spine must keep generation-capable artifact separate from runtime generation" >&2

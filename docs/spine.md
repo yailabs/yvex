@@ -207,7 +207,7 @@ supersession, audit, and sequence archives.
 | Track | Owns | Current state | Complete rows | Next gate | Active |
 | --- | --- | --- | --- | --- | --- |
 | TRACK.SCOPE | release scope and claim boundaries | active | SPINE.RETARGET.MULTIFAMILY.0, SPINE.TRACK.CANON.0 | scope remains multi-family | no |
-| TRACK.SOURCE | source intake, manifests, provider download controls | implemented/source-intake | V010.SOURCE.1-7, MODELS.DOWNLOAD.*, ACCOUNTS.PROVIDER.0, MODEL.TARGET.IDENTITY.0 | source evidence stays coherent | no |
+| TRACK.SOURCE | source intake, manifests, provider download controls | implemented/source-intake | source-intake rows complete; explicit labels are in the catalog below | source evidence stays coherent | no |
 | TRACK.MAP | family tensor roles and source-to-artifact handoff | partial/report-only | Qwen/Gemma class and tensor-map rows, V010.MAP.1/5/6/7/8/9 | artifact handoff | no |
 | TRACK.QUANT | dtype/qtype policy and compute/refusal coverage | partial/report-only | V010.QUANT.0 | V010.QUANT.1 | yes |
 | TRACK.ARTIFACT | YVEX-produced quantized artifacts | selected-slice only | controlled/selected artifact emission | multi-family generation-capable artifacts | no |
@@ -224,12 +224,728 @@ supersession, audit, and sequence archives.
 | TRACK.SAMPLING | token selection over logits | diagnostic-runtime only | bounded diagnostic sampler | real sampling gate | no |
 | TRACK.TOKENIZER | tokenizer metadata and stop policy | partial/planned | tokenizer diagnostics | tokenizer gate | no |
 | TRACK.GENERATION | decode/logits/sample/append loop | diagnostic-runtime only | bounded diagnostic generation | runtime generation gate | no |
-| TRACK.OPERATOR | CLI grammar, output, porcelain/plumbing commands | implemented/partial | V010.CLI.17-26, CLI.ARCH.AUDIT.0, SPINE.CLI.REBASE.1 | CLI status/refusal grammar | no |
+| TRACK.OPERATOR | CLI grammar, output, porcelain/plumbing commands | implemented/partial | CLI baseline rows complete; explicit labels are in the catalog below | CLI status/refusal grammar | no |
 | TRACK.SERVE | daemon and provider surfaces | planned | status shell | serve runtime gate | no |
 | TRACK.EVAL | correctness and capability evaluation | planned | tests only | eval gate | no |
 | TRACK.BENCH | reproducible performance measurement | planned | none | benchmark gate | no |
 | TRACK.RELEASE | validation transcript, claim audit, tag readiness | planned | docs/guardrail checks | release gate | no |
 | TRACK.POST010 | portability, serving hardening, speculative, extra families | post-v0.1.0 | doctrine only | post-release selection | no |
+
+### Canonical Row Label Catalog
+
+These labels are active wave IDs, not historical ledger entries. They preserve
+the naming grammar for future work without restoring delivery history, audit
+tables, crosswalks, sequence archives, or doctrine dumps.
+
+#### TRACK.SCOPE Row Labels
+
+```text
+SPINE.RETARGET.MULTIFAMILY.0 complete
+SPINE.TRACK.CANON.0 complete
+SPINE.ACTIVE.REWRITE.1 superseded
+SPINE.ROW.CATALOG.0 complete
+V010.SCOPE.0 planned
+V010.SCOPE.1 planned
+V010.SCOPE.2 planned
+V010.SCOPE.3 planned
+V010.SCOPE.4 planned
+V010.SCOPE.5 planned
+V010.SCOPE.6 planned
+V010.SCOPE.7 planned
+V010.TARGET.0 planned
+V010.TARGET.1 complete
+V010.TARGET.2 complete
+V010.TARGET.3 complete
+V010.TARGET.4 planned
+V010.TARGET.5 planned
+V010.TARGET.6 planned
+V010.TARGET.7 complete
+V010.TARGET.8 planned
+V010.TARGET.9 complete
+V010.TARGET.10 planned
+```
+
+#### TRACK.SOURCE Row Labels
+
+```text
+V010.SOURCE.0 planned
+V010.SOURCE.1 complete
+V010.SOURCE.2 complete
+V010.SOURCE.3 complete
+V010.SOURCE.4 complete
+V010.SOURCE.5 complete
+V010.SOURCE.6 complete
+V010.SOURCE.7 complete
+V010.SOURCE.7A / MODELS.DOWNLOAD.0 complete
+V010.SOURCE.7B / ACCOUNTS.PROVIDER.0 complete
+V010.SOURCE.8 planned
+V010.SOURCE.9 complete
+V010.SOURCE.10 planned
+MODELS.DOWNLOAD.LIVE.0 complete
+MODELS.DOWNLOAD.SIGNAL.0 complete
+MODELS.DOWNLOAD.CONTROL.0 complete
+MODELS.SOURCE.IDENTITY.0 complete
+MODELS.SOURCE.MAP.HANDOFF.0 complete
+MODELS.SOURCE.ROLEMAP.COVERAGE.0 complete
+OWI.TARGETS.QWEN.0 complete
+OWI.TARGETS.GEMMA.0 complete
+MODEL.TARGET.IDENTITY.0 complete
+```
+
+#### TRACK.MAP Row Labels
+
+```text
+V010.MAP.0 planned
+V010.MAP.1 complete
+V010.MAP.2 planned
+V010.MAP.3 planned
+V010.MAP.4 planned
+V010.MAP.5 complete
+V010.MAP.6 complete
+V010.MAP.7 complete
+V010.MAP.8 complete
+V010.MAP.9 complete
+```
+
+#### TRACK.QUANT Row Labels
+
+```text
+V010.QUANT.0 complete
+V010.QUANT.1 active
+V010.QUANT.2 planned
+V010.QUANT.3 planned
+```
+
+#### TRACK.ARTIFACT Row Labels
+
+```text
+V010.ARTIFACT.EMIT.0 complete
+V010.ARTIFACT.EMIT.1 complete
+V010.ARTIFACT.EMIT.2 planned
+V010.ARTIFACT.EMIT.3 planned
+V010.ARTIFACT.EMIT.4 planned
+V010.ARTIFACT.EMIT.5 planned
+V010.ARTIFACT.EMIT.6 planned
+MODELS.ARTIFACTS.LIST.0 complete
+```
+
+#### TRACK.INTEGRITY Row Labels
+
+```text
+V010.INTEGRITY.0 complete
+V010.INTEGRITY.1 complete
+V010.INTEGRITY.2 complete
+V010.INTEGRITY.3 complete
+V010.INTEGRITY.4 complete
+V010.INTEGRITY.5 complete
+V010.INTEGRITY.6 complete
+V010.INTEGRITY.7 planned
+V010.INTEGRITY.8 complete
+V010.INTEGRITY.9 complete
+V010.INTEGRITY.10 complete
+V010.INTEGRITY.11 planned
+V010.INTEGRITY.12 planned
+V010.INTEGRITY.13 planned
+```
+
+#### TRACK.MODEL Row Labels
+
+```text
+V010.CLASS.0 planned
+V010.CLASS.1 planned
+V010.CLASS.2 planned
+V010.CLASS.3 complete
+V010.CLASS.4 planned
+V010.CLASS.5 planned
+V010.CLASS.6 complete
+V010.CLASS.7 planned
+V010.CLASS.8 complete
+V010.CLASS.9 complete
+V010.CLASS.10 complete
+V010.CLASS.11 complete
+V010.CLASS.12 planned
+V010.CLASS.13 planned
+V010.CLASS.14 planned
+V010.CLASS.15 planned
+V010.CLASS.16 planned
+MODEL.CLASS.QWEN.0 complete
+MODEL.CLASS.GEMMA.0 complete
+MOE.CLASS.0 complete
+```
+
+#### TRACK.TENSOR Row Labels
+
+```text
+V010.TENSOR.0 planned
+V010.TENSOR.1 complete
+V010.TENSOR.2 planned
+V010.TENSOR.3 planned
+V010.TENSOR.4 planned
+V010.TENSOR.5 complete
+V010.TENSOR.6 complete
+V010.TENSOR.7 complete
+V010.TENSOR.8 complete
+V010.TENSOR.9 planned
+V010.TENSOR.10 planned
+V010.TENSOR.11 complete
+V010.TENSOR.12 complete
+V010.TENSOR.13 planned
+V010.TENSOR.14 complete
+V010.TENSOR.15 complete
+V010.TENSOR.16 complete
+V010.TENSOR.17 complete
+V010.TENSOR.18 complete
+V010.TENSOR.19 complete
+V010.TENSOR.20 planned
+V010.TENSOR.21 complete
+V010.TENSOR.22 complete
+V010.TENSOR.23 planned
+TENSOR.COLLECTION.QWEN.0 complete
+TENSOR.COLLECTION.GEMMA.0 complete
+TENSOR.MOE.0 complete
+```
+
+#### TRACK.RESIDENCY Row Labels
+
+```text
+V010.STORAGE.0 planned
+V010.STORAGE.1 planned
+V010.STORAGE.2 planned
+V010.STORAGE.3 planned
+V010.STORAGE.4 planned
+V010.STORAGE.5 planned
+V010.STORAGE.6 planned
+V010.STORAGE.7 planned
+V010.STORAGE.8 planned
+V010.STORAGE.9 planned
+V010.STORAGE.10 planned
+V010.STORAGE.11 planned
+V010.STORAGE.12 planned
+V010.STORAGE.13 planned
+V010.STORAGE.14 planned
+V010.STORAGE.15 planned
+V010.STORAGE.16 planned
+V010.STORAGE.17 planned
+V010.STORAGE.18 planned
+V010.STORAGE.19 planned
+V010.STORAGE.20 planned
+V010.RESIDENCY.0 planned
+V010.RESIDENCY.1 planned
+V010.RESIDENCY.2 planned
+V010.RESIDENCY.3 planned
+V010.RESIDENCY.4 planned
+V010.RESIDENCY.5 planned
+V010.RESIDENCY.6 planned
+V010.RESIDENCY.7 planned
+V010.RESIDENCY.8 planned
+V010.RESIDENCY.9 planned
+V010.RESIDENCY.10 planned
+V010.RESIDENCY.11 planned
+V010.RESIDENCY.12 planned
+V010.RESIDENCY.13 planned
+V010.RESIDENCY.14 planned
+V010.RESIDENCY.15 planned
+V010.RESIDENCY.16 planned
+V010.RESIDENCY.17 planned
+V010.RESIDENCY.18 planned
+V010.RESIDENCY.19 planned
+```
+
+#### TRACK.BACKEND Row Labels
+
+```text
+V010.BACKEND.0 planned
+V010.BACKEND.1 complete
+V010.BACKEND.2 complete
+V010.BACKEND.3 complete
+V010.BACKEND.4 complete
+V010.BACKEND.5 complete
+V010.BACKEND.6 planned
+V010.BACKEND.7 planned
+V010.BACKEND.8 planned
+V010.BACKEND.9 planned
+V010.BACKEND.10 planned
+V010.BACKEND.11 planned
+V010.BACKEND.12 planned
+V010.HARDWARE.0 planned
+V010.HARDWARE.1 planned
+V010.HARDWARE.2 planned
+V010.HARDWARE.3 planned
+V010.HARDWARE.4 planned
+V010.HARDWARE.5 planned
+V010.HARDWARE.6 planned
+V010.BUILD.0 planned
+V010.BUILD.1 planned
+V010.BUILD.2 planned
+V010.BUILD.3 planned
+V010.BUILD.4 planned
+V010.BUILD.5 planned
+V010.BUILD.6 planned
+V010.BUILD.7 planned
+CUDA.KERNEL.0 complete
+```
+
+#### TRACK.GRAPH Row Labels
+
+```text
+V010.GRAPH.PRIM.0 planned
+V010.GRAPH.PRIM.1 planned
+V010.GRAPH.PRIM.2 planned
+V010.GRAPH.PRIM.3 planned
+V010.GRAPH.PRIM.4 planned
+V010.GRAPH.PRIM.5 planned
+V010.GRAPH.PRIM.6 planned
+V010.GRAPH.PRIM.7 planned
+V010.GRAPH.PRIM.8 planned
+V010.GRAPH.PRIM.9 planned
+V010.GRAPH.PRIM.10 planned
+V010.GRAPH.0 planned
+V010.GRAPH.1 planned
+V010.GRAPH.2 planned
+V010.GRAPH.3 planned
+V010.GRAPH.4 planned
+V010.GRAPH.5 planned
+V010.GRAPH.6 planned
+V010.GRAPH.7 planned
+V010.GRAPH.8 planned
+V010.GRAPH.9 planned
+V010.GRAPH.10 planned
+V010.GRAPH.11 planned
+V010.GRAPH.12 planned
+V010.GRAPH.13 planned
+V010.GRAPH.14 planned
+V010.GRAPH.15 planned
+V010.GRAPH.16 planned
+V010.GRAPH.17 planned
+V010.GRAPH.18 planned
+V010.GRAPH.19 planned
+V010.GRAPH.20 planned
+V010.GRAPH.21 planned
+V010.GRAPH.22 complete
+V010.GRAPH.23 planned
+V010.GRAPH.24 planned
+V010.ATTN.0 planned
+V010.ATTN.1 planned
+V010.ATTN.2 planned
+V010.ATTN.3 planned
+V010.ATTN.4 planned
+V010.ATTN.5 planned
+V010.ATTN.6 planned
+V010.ATTN.7 planned
+V010.ATTN.8 planned
+V010.ATTN.9 planned
+V010.ATTN.10 planned
+V010.ATTN.11 planned
+V010.ATTN.12 planned
+V010.ATTN.13 planned
+V010.MOE.0 planned
+V010.MOE.1 planned
+V010.MOE.2 planned
+V010.MOE.3 planned
+V010.MOE.4 planned
+V010.MOE.5 planned
+V010.MOE.6 planned
+V010.MOE.7 planned
+V010.MOE.8 planned
+V010.MOE.9 planned
+V010.MOE.10 planned
+V010.MOE.11 planned
+V010.MOE.12 planned
+V010.MOE.13 planned
+V010.MOE.14 planned
+V010.MOE.15 planned
+V010.MOE.16 planned
+V010.MOE.17 planned
+V010.MOE.18 planned
+V010.MOE.19 planned
+V010.MOE.20 planned
+```
+
+#### TRACK.PREFILL Row Labels
+
+```text
+V010.CONTEXT.0 planned
+V010.CONTEXT.1 complete
+V010.CONTEXT.2 complete
+V010.CONTEXT.3 complete
+V010.CONTEXT.4 complete
+V010.CONTEXT.5 complete
+V010.CONTEXT.6 complete
+V010.CONTEXT.7 complete
+V010.CONTEXT.8 planned
+V010.CONTEXT.9 planned
+V010.CONTEXT.10 planned
+V010.PREFILL.0 complete
+V010.PREFILL.1 complete
+V010.PREFILL.2 planned
+V010.PREFILL.3 planned
+V010.PREFILL.4 planned
+V010.PREFILL.5 planned
+V010.PREFILL.6 planned
+V010.PREFILL.7 planned
+V010.PREFILL.8 planned
+V010.PREFILL.9 planned
+V010.PREFILL.10 planned
+V010.PREFILL.11 planned
+V010.PREFILL.12 planned
+V010.PREFILL.13 planned
+V010.PREFILL.14 planned
+V010.PREFILL.15 planned
+```
+
+#### TRACK.KV Row Labels
+
+```text
+V010.KV.0 complete
+V010.KV.1 complete
+V010.KV.2 planned
+V010.KV.3 complete
+V010.KV.4 planned
+V010.KV.5 planned
+V010.KV.6 planned
+V010.KV.7 planned
+V010.KV.8 planned
+V010.KV.9 planned
+V010.KV.10 planned
+V010.KV.11 planned
+V010.KV.12 planned
+V010.KV.13 planned
+V010.KV.14 complete
+V010.KV.15 planned
+V010.KV.16 planned
+V010.KV.17 planned
+V010.KV.18 planned
+V010.KV.19 planned
+V010.KV.20 planned
+```
+
+#### TRACK.DECODE Row Labels
+
+```text
+V010.DECODE.0 complete
+V010.DECODE.1 complete
+V010.DECODE.2 complete
+V010.DECODE.3 planned
+V010.DECODE.4 planned
+V010.DECODE.5 planned
+V010.DECODE.6 planned
+V010.DECODE.7 planned
+V010.DECODE.8 planned
+V010.DECODE.9 planned
+V010.DECODE.10 planned
+V010.DECODE.11 planned
+V010.DECODE.12 planned
+V010.DECODE.13 planned
+V010.DECODE.14 planned
+```
+
+#### TRACK.LOGITS Row Labels
+
+```text
+V010.LOGITS.0 complete
+V010.LOGITS.1 complete
+V010.LOGITS.2 planned
+V010.LOGITS.3 complete
+V010.LOGITS.4 planned
+V010.LOGITS.5 planned
+V010.LOGITS.6 complete
+V010.LOGITS.7 planned
+V010.LOGITS.8 complete
+V010.LOGITS.9 complete
+V010.LOGITS.10 planned
+V010.LOGITS.11 planned
+V010.LOGITS.12 planned
+V010.LOGITS.13 planned
+V010.LOGITS.14 planned
+V010.LOGITS.15 planned
+V010.LOGITS.16 planned
+```
+
+#### TRACK.SAMPLING Row Labels
+
+```text
+V010.SAMPLE.0 complete
+V010.SAMPLE.1 planned
+V010.SAMPLE.2 complete
+V010.SAMPLE.3 complete
+V010.SAMPLE.4 complete
+V010.SAMPLE.5 planned
+V010.SAMPLE.6 planned
+V010.SAMPLE.7 planned
+V010.SAMPLE.8 planned
+V010.SAMPLE.9 planned
+V010.SAMPLE.10 planned
+V010.SAMPLE.11 planned
+V010.SAMPLE.12 planned
+V010.SAMPLE.13 planned
+V010.SAMPLE.14 planned
+```
+
+#### TRACK.TOKENIZER Row Labels
+
+```text
+V010.TOKENIZER.0 planned
+V010.TOKENIZER.1 planned
+V010.TOKENIZER.2 complete
+V010.TOKENIZER.3 planned
+V010.TOKENIZER.4 complete
+V010.TOKENIZER.5 planned
+V010.TOKENIZER.6 planned
+V010.TOKENIZER.7 planned
+V010.TOKENIZER.8 planned
+V010.TOKENIZER.9 planned
+V010.TOKENIZER.10 planned
+V010.TOKENIZER.11 planned
+V010.TOKENIZER.12 planned
+```
+
+#### TRACK.GENERATION Row Labels
+
+```text
+V010.GEN.0 complete
+V010.GEN.1 complete
+V010.GEN.2 complete
+V010.GEN.3 complete
+V010.GEN.4 complete
+V010.GEN.5 complete
+V010.GEN.6 complete
+V010.GEN.7 complete
+V010.GEN.8 planned
+V010.GEN.9 planned
+V010.GEN.10 planned
+V010.GEN.11 complete
+V010.GEN.12 complete
+V010.GEN.13 complete
+V010.GEN.14 complete
+V010.GEN.15 complete
+V010.GEN.16 planned
+V010.GEN.17 complete
+V010.GEN.18 planned
+V010.GEN.19 planned
+V010.RUNTIME.0 complete
+V010.RUNTIME.1 planned
+V010.RUNTIME.2 complete
+V010.RUNTIME.3 planned
+V010.RUNTIME.4 complete
+V010.RUNTIME.5 complete
+V010.RUNTIME.6 planned
+V010.RUNTIME.7 planned
+V010.RUNTIME.8 planned
+V010.RUNTIME.9 planned
+V010.RUNTIME.10 planned
+V010.RUNTIME.11 planned
+V010.RUNTIME.12 planned
+V010.RUNTIME.13 planned
+V010.RUNTIME.14 planned
+V010.RUNTIME.15 complete
+V010.RUNTIME.16 planned
+V010.RUNTIME.17 planned
+V010.TRACE.0 planned
+V010.TRACE.1 complete
+V010.TRACE.2 planned
+V010.TRACE.3 planned
+V010.TRACE.4 planned
+V010.TRACE.5 planned
+V010.TRACE.6 planned
+V010.TRACE.7 planned
+V010.TRACE.8 planned
+V010.TRACE.9 planned
+V010.TRACE.10 complete
+V010.TRACE.11 complete
+V010.TRACE.12 planned
+V010.TRACE.13 planned
+V010.TRACE.14 planned
+```
+
+#### TRACK.OPERATOR Row Labels
+
+```text
+V010.PATHS.0 complete
+V010.PATHS.1 complete
+V010.PATHS.2 complete
+V010.PATHS.3 complete
+V010.PATHS.4 planned
+V010.PATHS.5 complete
+V010.PATHS.6 complete
+V010.PATHS.7 complete
+V010.PATHS.8 complete
+V010.CLI.12 planned
+V010.CLI.13 planned
+V010.CLI.17 complete
+V010.CLI.18 complete
+V010.CLI.19 complete
+V010.CLI.20 planned
+V010.CLI.21 planned
+V010.CLI.22 planned
+V010.CLI.23 planned
+V010.CLI.24 complete
+V010.CLI.25 complete
+V010.CLI.26 complete
+V010.CLI.27 planned, not Active Next
+V010.CLI.28 planned
+V010.CLI.29 planned
+V010.CLI.MODELS.0 planned
+V010.CLI.MODELS.1 planned
+V010.CLI.MODELS.2 planned
+V010.CLI.MODELS.3 planned
+V010.CLI.MODELS.4 planned
+V010.CLI.TARGET.0 planned
+V010.CLI.TARGET.1 planned
+V010.CLI.TARGET.2 planned
+V010.CLI.TARGET.3 planned
+V010.CLI.SOURCE.0 planned
+V010.CLI.ACCOUNTS.0 planned
+V010.CLI.PATHS.0 planned
+V010.CLI.GRAPH.0 planned
+V010.CLI.RUNTIME.0 planned
+V010.CLI.GENERATE.0 planned
+V010.CLI.CHAT.0 planned
+V010.DOCTOR.0 planned
+V010.DOCTOR.1 planned
+V010.DOCTOR.2 planned
+V010.DOCTOR.3 planned
+V010.DOCTOR.4 planned
+V010.DOCTOR.5 planned
+V010.DOCTOR.6 planned
+V010.DOCTOR.7 planned
+V010.DOCTOR.8 planned
+V010.DOCTOR.9 planned
+V010.DOCTOR.10 planned
+V010.DOCTOR.11 planned
+```
+
+#### TRACK.SERVE Row Labels
+
+```text
+V010.SERVE.0 planned
+V010.SERVE.1 planned
+V010.SERVE.2 planned
+V010.SERVE.3 planned
+V010.SERVE.4 planned
+V010.SERVE.5 planned
+V010.SERVE.6 planned
+V010.SERVE.7 planned
+V010.SERVE.8 planned
+V010.SERVE.9 planned
+V010.SERVE.10 planned
+V010.SERVE.11 planned
+```
+
+#### TRACK.EVAL Row Labels
+
+```text
+V010.EVAL.0 planned
+V010.EVAL.1 planned
+V010.EVAL.2 planned
+V010.EVAL.3 planned
+V010.EVAL.4 planned
+V010.EVAL.5 planned
+V010.EVAL.6 planned
+V010.EVAL.7 planned
+V010.EVAL.8 planned
+V010.EVAL.9 planned
+V010.EVAL.10 planned
+V010.EVAL.11 planned
+V010.EVAL.12 planned
+V010.EVAL.13 planned
+V010.EVAL.14 planned
+```
+
+#### TRACK.BENCH Row Labels
+
+```text
+V010.BENCH.0 planned
+V010.BENCH.1 planned
+V010.BENCH.2 planned
+V010.BENCH.3 planned
+V010.BENCH.4 planned
+V010.BENCH.5 planned
+V010.BENCH.6 planned
+V010.BENCH.7 planned
+V010.BENCH.8 planned
+V010.BENCH.9 planned
+V010.BENCH.10 planned
+V010.BENCH.11 planned
+V010.PROFILE.0 planned
+V010.PROFILE.1 planned
+V010.PROFILE.2 planned
+V010.PROFILE.3 planned
+```
+
+#### TRACK.RELEASE Row Labels
+
+```text
+V010.VERSION.0 planned
+V010.VERSION.1 planned
+V010.PACKAGE.0 planned
+V010.PACKAGE.1 planned
+V010.PACKAGE.2 planned
+V010.RELEASE.0 planned
+V010.RELEASE.1 planned
+V010.RELEASE.2 planned
+V010.RELEASE.3 planned
+V010.RELEASE.4 planned
+V010.RELEASE.5 planned
+V010.RELEASE.6 planned
+V010.RELEASE.7 planned
+V010.RELEASE.8 planned
+V010.RELEASE.9 planned
+V010.CI.0 planned
+V010.CI.1 planned
+V010.CI.2 planned
+V010.CI.3 planned
+V010.CI.4 complete
+V010.CI.5 complete
+V010.CI.6 complete
+V010.CI.7 complete
+V010.CI.8 planned
+V010.CI.9 planned
+V010.CI.10 planned
+V010.CI.11 planned
+V010.CI.12 planned
+V010.DOCS.INTERNAL.0 planned
+V010.DOCS.RUNBOOK.0 planned
+V010.DOCS.RUNBOOK.1 planned
+V010.DOCS.API.0 planned
+V010.DOCS.CONTRACT.0 planned
+V010.DOCS.README.0 planned
+V010.DOCS.DIAGRAM.0 planned
+V010.DOCS.DIAGRAM.1 planned
+V010.DOCS.DIAGRAM.2 planned
+V010.DOCS.DIAGRAM.3 planned
+V010.DOCS.DIAGRAM.4 planned
+V010.DOCS.PUBLIC.0 planned
+V010.DOCS.PUBLIC.1 planned
+V010.DOCS.PUBLIC.2 planned
+```
+
+#### TRACK.POST010 Row Labels
+
+```text
+V010.SPEC.0 planned
+V010.SPEC.1 planned
+V010.SPEC.2 planned
+V010.SPEC.3 planned
+V010.SPEC.4 planned
+V010.SPEC.5 planned
+V010.SPEC.6 planned
+V010.SPEC.7 planned
+V010.SPEC.8 planned
+V010.SPEC.9 planned
+V010.SPEC.10 planned
+V010.SPEC.11 planned
+V010.SPEC.12 planned
+V010.SPEC.13 planned
+POST010.GLM.RUNTIME.0 post-v0.1.0
+POST010.QWEN.METAL.0 post-v0.1.0
+POST010.ROCM.0 post-v0.1.0
+POST010.STORAGE.GEN.0 post-v0.1.0
+POST010.SERVE.PUBLIC.0 post-v0.1.0
+POST010.SPEC.0 post-v0.1.0
+POST010.BENCH.PUBLIC.0 post-v0.1.0
+POST010.EVAL.CAPABILITY.0 post-v0.1.0
+POST010.DOCS.PUBLIC.0 post-v0.1.0
+```
 
 ### TRACK.SCOPE - Scope And Claims
 
