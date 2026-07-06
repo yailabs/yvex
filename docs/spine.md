@@ -1737,8 +1737,7 @@ Forbidden claims:
 
 ## 8. Release Gates
 
-Minimum gate authority: docs/v010-release-doctrine.md, section
-"## 8. Release Gates".
+Minimum gate authority: docs/v010-release-doctrine.md, section "## 8. Release Gates".
 
 The final v0.1.0 release candidate requires one transcript containing:
 
