@@ -75,6 +75,16 @@ grep -nF "V010.CLI.25         renderer ownership foundation" docs/spine.md >/dev
   exit 1
 }
 
+grep -nF "| V010.CLI.25 | complete | operator | Renderer ownership foundation |" docs/spine.md >/dev/null || {
+  echo "spine must mark V010.CLI.25 complete after renderer foundation implementation" >&2
+  exit 1
+}
+
+grep -nF "V010.CLI.26 - model artifact porcelain migration" docs/spine.md >/dev/null || {
+  echo "spine must keep V010.CLI.26 as the next CLI architecture row" >&2
+  exit 1
+}
+
 grep -nF "## CLI Output Architecture Doctrine" docs/spine.md >/dev/null || {
   echo "spine must use the porcelain/plumbing architecture doctrine heading" >&2
   exit 1
@@ -88,6 +98,11 @@ fi
 
 grep -nF "JSON output is not implemented uniformly in this audit" docs/cli-output-architecture.md >/dev/null || {
   echo "CLI output architecture must not claim uniform JSON output" >&2
+  exit 1
+}
+
+grep -nF "## Renderer Foundation" docs/cli-output-architecture.md >/dev/null || {
+  echo "CLI output architecture must record the implemented renderer foundation" >&2
   exit 1
 }
 

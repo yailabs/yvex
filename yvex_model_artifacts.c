@@ -7,6 +7,7 @@
  */
 
 #include "yvex_console_private.h"
+#include "yvex_render_private.h"
 
 #include <ctype.h>
 #include <dirent.h>
@@ -3295,152 +3296,249 @@ static void prepare_probe_map_sidecar_status(const char *tensor_map_path,
     }
 }
 
-static int print_prepare_downloaded_source_unsupported(
-    const yvex_cli_models_prepare_options *options,
-    const yvex_operator_paths *operator_paths,
-    const yvex_model_download_resolved_target *target)
-{
-    char expected_artifact_path[YVEX_PATH_CAP];
+typedef struct {
+    char target_id[128];
+    char family[32];
+    char provider[32];
+    char repo_id[256];
+    char revision[128];
+    char models_root[YVEX_PATH_CAP];
+    char source_path[YVEX_PATH_CAP];
+    char source_manifest_path[YVEX_PATH_CAP];
+    char native_inventory_path[YVEX_PATH_CAP];
     char tensor_map_path[YVEX_PATH_CAP];
     char output_head_map_path[YVEX_PATH_CAP];
-    int source_present = target && target->local_source_dir[0] &&
-                         path_exists(target->local_source_dir);
+    char expected_artifact_path[YVEX_PATH_CAP];
+    char download_registry_path[YVEX_PATH_CAP];
+    char download_report_path[YVEX_PATH_CAP];
+    const char *source_status;
+    const char *model_class_status;
+    const char *tensor_map_status;
+    const char *output_head_map_status;
+    const char *tokenizer_map_status;
+    const char *artifact_status;
+    const char *artifact_plan_status;
+    const char *artifact_emission_status;
+    const char *artifact_identity_status;
+    unsigned int blocker_count;
+    const char *top_blocker;
+    const char *reason;
+    const char *next;
+    const char *final_status;
+    int downloaded_target_resolved;
+} yvex_models_prepare_source_report;
+
+static void prepare_source_report_build(
+    const yvex_cli_models_prepare_options *options,
+    const yvex_operator_paths *operator_paths,
+    const yvex_model_download_resolved_target *target,
+    yvex_models_prepare_source_report *report)
+{
+    int source_present;
     int expected_artifact_present = 0;
     int tensor_map_present = 0;
     int output_head_map_present = 0;
     int tensor_map_incomplete = 0;
     int output_head_map_missing = 0;
-    unsigned int blocker_count = 0u;
-    const char *top_blocker = "missing-tokenizer-map";
 
-    expected_artifact_path[0] = '\0';
-    tensor_map_path[0] = '\0';
-    output_head_map_path[0] = '\0';
+    memset(report, 0, sizeof(*report));
+    snprintf(report->target_id, sizeof(report->target_id), "%s",
+             target && target->target_id[0]
+                 ? target->target_id
+                 : options && options->target ? options->target : "unknown");
+    snprintf(report->family, sizeof(report->family), "%s",
+             target && target->family[0] ? target->family : "unknown");
+    snprintf(report->provider, sizeof(report->provider), "%s",
+             target && target->provider[0] ? target->provider : "huggingface");
+    snprintf(report->repo_id, sizeof(report->repo_id), "%s",
+             target && target->repo_id[0] ? target->repo_id : "unknown");
+    snprintf(report->revision, sizeof(report->revision), "%s",
+             target && target->revision[0] ? target->revision : "main");
+    snprintf(report->models_root, sizeof(report->models_root), "%s",
+             operator_paths ? operator_paths->models_root : "unknown");
+    snprintf(report->source_path, sizeof(report->source_path), "%s",
+             target && target->local_source_dir[0] ? target->local_source_dir : "unknown");
+    snprintf(report->source_manifest_path, sizeof(report->source_manifest_path), "%s",
+             target && target->manifest_path[0] ? target->manifest_path : "unknown");
+    snprintf(report->native_inventory_path, sizeof(report->native_inventory_path), "%s",
+             target && target->native_inventory_path[0] ? target->native_inventory_path : "unknown");
+    snprintf(report->download_registry_path, sizeof(report->download_registry_path), "%s",
+             target && target->registry_path[0] ? target->registry_path : "unknown");
+    snprintf(report->download_report_path, sizeof(report->download_report_path), "%s",
+             target && target->download_report_path[0] ? target->download_report_path : "unknown");
+
+    source_present = target && target->local_source_dir[0] &&
+                     path_exists(target->local_source_dir);
     if (operator_paths && target && target->family[0] && target->target_id[0]) {
         int n;
-        n = snprintf(expected_artifact_path, sizeof(expected_artifact_path),
+        n = snprintf(report->expected_artifact_path,
+                     sizeof(report->expected_artifact_path),
                      "%s/%s/%s.gguf",
                      operator_paths->gguf_root,
                      target->family,
                      target->target_id);
-        if (n < 0 || (size_t)n >= sizeof(expected_artifact_path)) {
-            expected_artifact_path[0] = '\0';
+        if (n < 0 || (size_t)n >= sizeof(report->expected_artifact_path)) {
+            report->expected_artifact_path[0] = '\0';
         }
-        expected_artifact_present =
-            expected_artifact_path[0] && path_exists(expected_artifact_path);
-        n = snprintf(tensor_map_path, sizeof(tensor_map_path),
+        expected_artifact_present = report->expected_artifact_path[0] &&
+                                    path_exists(report->expected_artifact_path);
+        n = snprintf(report->tensor_map_path,
+                     sizeof(report->tensor_map_path),
                      "%s/%s/%s.tensor-map.json",
                      operator_paths->reports_root,
                      target->family,
                      target->target_id);
-        if (n < 0 || (size_t)n >= sizeof(tensor_map_path)) {
-            tensor_map_path[0] = '\0';
+        if (n < 0 || (size_t)n >= sizeof(report->tensor_map_path)) {
+            report->tensor_map_path[0] = '\0';
         }
-        n = snprintf(output_head_map_path, sizeof(output_head_map_path),
+        n = snprintf(report->output_head_map_path,
+                     sizeof(report->output_head_map_path),
                      "%s/%s/%s.output-head-map.json",
                      operator_paths->reports_root,
                      target->family,
                      target->target_id);
-        if (n < 0 || (size_t)n >= sizeof(output_head_map_path)) {
-            output_head_map_path[0] = '\0';
+        if (n < 0 || (size_t)n >= sizeof(report->output_head_map_path)) {
+            report->output_head_map_path[0] = '\0';
         }
-        tensor_map_present = tensor_map_path[0] && path_exists(tensor_map_path);
-        output_head_map_present =
-            output_head_map_path[0] && path_exists(output_head_map_path);
-        prepare_probe_map_sidecar_status(tensor_map_path,
-                                         output_head_map_path,
+        tensor_map_present = report->tensor_map_path[0] &&
+                             path_exists(report->tensor_map_path);
+        output_head_map_present = report->output_head_map_path[0] &&
+                                  path_exists(report->output_head_map_path);
+        prepare_probe_map_sidecar_status(report->tensor_map_path,
+                                         report->output_head_map_path,
                                          &tensor_map_incomplete,
                                          &output_head_map_missing);
-    }
-    if (!source_present) blocker_count++;
-    if (!tensor_map_present || tensor_map_incomplete) blocker_count++;
-    if (!output_head_map_present || output_head_map_missing) blocker_count++;
-    blocker_count++; /* tokenizer metadata mapping remains required for full GGUF. */
-    if (!expected_artifact_present) blocker_count++;
-    blocker_count++; /* full artifact emitter/identity is not implemented for dynamic source targets. */
-    if (!source_present) {
-        top_blocker = "missing-source";
-    } else if (!output_head_map_present || output_head_map_missing) {
-        top_blocker = "missing-output-head-map";
-    } else if (!tensor_map_present || tensor_map_incomplete) {
-        top_blocker = "incomplete-tensor-map";
     } else {
-        top_blocker = "missing-tokenizer-map";
+        snprintf(report->expected_artifact_path,
+                 sizeof(report->expected_artifact_path), "unknown");
+        snprintf(report->tensor_map_path, sizeof(report->tensor_map_path), "unknown");
+        snprintf(report->output_head_map_path,
+                 sizeof(report->output_head_map_path), "unknown");
     }
 
-    if (!options || options->output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
-        printf("prepare: %s\n",
-               target && target->target_id[0]
-                   ? target->target_id
-                   : options && options->target ? options->target : "unknown");
-        printf("source: %s\n", source_present ? "present" : "missing");
-        printf("artifact: %s\n", expected_artifact_present ? "present" : "missing");
-        printf("expected: %s\n",
-               expected_artifact_path[0] ? expected_artifact_path : "unknown");
-        printf("status: blocked\n");
-        printf("top_blocker: %s\n", top_blocker);
-        printf("next: V010.MAP.8\n");
-        printf("boundary: GGUF not emitted; runtime unsupported\n");
-        return exit_for_status(YVEX_ERR_UNSUPPORTED);
+    if (!source_present) report->blocker_count++;
+    if (!tensor_map_present || tensor_map_incomplete) report->blocker_count++;
+    if (!output_head_map_present || output_head_map_missing) report->blocker_count++;
+    report->blocker_count++; /* tokenizer metadata mapping remains required for full GGUF. */
+    if (!expected_artifact_present) report->blocker_count++;
+    report->blocker_count++; /* full artifact emitter/identity is not implemented for dynamic source targets. */
+
+    report->source_status = source_present ? "present" : "missing";
+    report->model_class_status = source_present ? "present" : "missing";
+    report->tensor_map_status =
+        tensor_map_present
+            ? (tensor_map_incomplete ? "incomplete-report-only" : "present-report-only")
+            : "missing";
+    report->output_head_map_status =
+        output_head_map_present
+            ? (output_head_map_missing ? "missing-in-report" : "present-report-only")
+            : "missing";
+    report->tokenizer_map_status = "missing";
+    report->artifact_status = expected_artifact_present ? "present" : "missing";
+    report->artifact_plan_status = "planned-full-gguf";
+    report->artifact_emission_status = "not-performed";
+    report->artifact_identity_status =
+        expected_artifact_present ? "not-checked" : "missing";
+    report->next = "V010.MAP.8";
+    report->final_status = "model-prepare-unsupported";
+    report->downloaded_target_resolved = 1;
+
+    if (!source_present) {
+        report->top_blocker = "missing-source";
+    } else if (!output_head_map_present || output_head_map_missing) {
+        report->top_blocker = "missing-output-head-map";
+    } else if (!tensor_map_present || tensor_map_incomplete) {
+        report->top_blocker = "incomplete-tensor-map";
+    } else {
+        report->top_blocker = "missing-tokenizer-map";
     }
 
-    printf("models: prepare\n");
-    printf("target_id: %s\n", target && target->target_id[0] ? target->target_id : options->target);
-    printf("family: %s\n", target && target->family[0] ? target->family : "unknown");
-    printf("provider: %s\n", target && target->provider[0] ? target->provider : "huggingface");
-    printf("repo_id: %s\n", target && target->repo_id[0] ? target->repo_id : "unknown");
-    printf("revision: %s\n", target && target->revision[0] ? target->revision : "main");
-    printf("models_root: %s\n", operator_paths ? operator_paths->models_root : "unknown");
-    printf("source_path: %s\n", target && target->local_source_dir[0] ? target->local_source_dir : "unknown");
-    printf("source_status: %s\n", source_present ? "present" : "missing");
-    printf("source_manifest_path: %s\n",
-           target && target->manifest_path[0] ? target->manifest_path : "unknown");
-    printf("native_inventory_path: %s\n",
-           target && target->native_inventory_path[0] ? target->native_inventory_path : "unknown");
-    printf("model_class_status: %s\n", source_present ? "present" : "missing");
-    printf("tensor_map_path: %s\n",
-           tensor_map_path[0] ? tensor_map_path : "unknown");
-    printf("tensor_map_status: %s\n",
-           tensor_map_present
-               ? (tensor_map_incomplete ? "incomplete-report-only" : "present-report-only")
-               : "missing");
-    printf("output_head_map_path: %s\n",
-           output_head_map_path[0] ? output_head_map_path : "unknown");
-    printf("output_head_map_status: %s\n",
-           output_head_map_present
-               ? (output_head_map_missing ? "missing-in-report" : "present-report-only")
-               : "missing");
-    printf("tokenizer_map_status: missing\n");
-    printf("artifact_status: %s\n", expected_artifact_present ? "present" : "missing");
-    printf("expected_artifact_path: %s\n",
-           expected_artifact_path[0] ? expected_artifact_path : "unknown");
-    printf("artifact_plan_status: planned-full-gguf\n");
-    printf("artifact_emission_status: not-performed\n");
-    printf("artifact_identity_status: %s\n",
-           expected_artifact_present ? "not-checked" : "missing");
-    printf("prepare_blocker_count: %u\n", blocker_count);
-    printf("top_blocker: %s\n", top_blocker);
-    if (options && options->output_mode == YVEX_MODELS_OUTPUT_AUDIT) {
-        printf("download_registry_path: %s\n",
-               target && target->registry_path[0] ? target->registry_path : "unknown");
-        printf("download_report_path: %s\n",
-               target && target->download_report_path[0] ? target->download_report_path : "unknown");
-        printf("downloaded_target_resolved: true\n");
-    }
+    report->reason =
+        !tensor_map_present
+            ? "missing tensor map / model class / artifact path"
+            : tensor_map_incomplete
+                  ? "incomplete tensor map / tokenizer metadata mapping / artifact path missing"
+                  : !output_head_map_present
+                        ? "missing output head map / tokenizer metadata mapping / artifact path missing"
+                        : output_head_map_missing
+                              ? "output head mapping missing / tokenizer metadata mapping / artifact path missing"
+                              : "tokenizer metadata mapping / artifact path missing";
+}
+
+static void prepare_source_report_render_porcelain(
+    const yvex_models_prepare_source_report *report)
+{
+    yvex_render_out out;
+
+    yvex_render_out_init(&out, stdout, YVEX_RENDER_MODE_PORCELAIN);
+    yvex_render_report_title(&out, "models prepare", report->target_id, "blocked");
+    yvex_render_fields3(&out,
+                        "family", report->family,
+                        "source", report->source_status,
+                        "artifact", report->artifact_status);
+    yvex_render_fields2(&out,
+                        "plan", "full-gguf planned",
+                        "emission", report->artifact_emission_status);
+    yvex_render_top_blocker(&out, report->top_blocker);
+    yvex_render_next(&out, report->next);
+    yvex_render_boundary(&out,
+                         "prepare dry-run only; no artifact emission/runtime/generation");
+}
+
+static void prepare_source_report_render_audit(
+    const yvex_models_prepare_source_report *report)
+{
+    yvex_render_out out;
+
+    yvex_render_out_init(&out, stdout, YVEX_RENDER_MODE_AUDIT);
+    yvex_render_section(&out, "models: prepare");
+    yvex_render_kv(&out, "target_id", report->target_id);
+    yvex_render_kv(&out, "family", report->family);
+    yvex_render_kv(&out, "provider", report->provider);
+    yvex_render_kv(&out, "repo_id", report->repo_id);
+    yvex_render_kv(&out, "revision", report->revision);
+    yvex_render_kv(&out, "models_root", report->models_root);
+    yvex_render_kv(&out, "source_path", report->source_path);
+    yvex_render_kv(&out, "source_status", report->source_status);
+    yvex_render_kv(&out, "source_manifest_path", report->source_manifest_path);
+    yvex_render_kv(&out, "native_inventory_path", report->native_inventory_path);
+    yvex_render_kv(&out, "model_class_status", report->model_class_status);
+    yvex_render_kv(&out, "tensor_map_path", report->tensor_map_path);
+    yvex_render_kv(&out, "tensor_map_status", report->tensor_map_status);
+    yvex_render_kv(&out, "output_head_map_path", report->output_head_map_path);
+    yvex_render_kv(&out, "output_head_map_status", report->output_head_map_status);
+    yvex_render_kv(&out, "tokenizer_map_status", report->tokenizer_map_status);
+    yvex_render_kv(&out, "artifact_status", report->artifact_status);
+    yvex_render_kv(&out, "expected_artifact_path", report->expected_artifact_path);
+    yvex_render_kv(&out, "artifact_plan_status", report->artifact_plan_status);
+    yvex_render_kv(&out, "artifact_emission_status", report->artifact_emission_status);
+    yvex_render_kv(&out, "artifact_identity_status", report->artifact_identity_status);
+    yvex_render_kv_u(&out, "prepare_blocker_count", report->blocker_count);
+    yvex_render_top_blocker(&out, report->top_blocker);
+    yvex_render_kv(&out, "download_registry_path", report->download_registry_path);
+    yvex_render_kv(&out, "download_report_path", report->download_report_path);
+    yvex_render_kv(&out, "downloaded_target_resolved",
+                   report->downloaded_target_resolved ? "true" : "false");
     model_stage_print("target", "unsupported");
     model_print_runtime_generation("not-performed");
-    printf("reason: %s\n",
-           !tensor_map_present
-               ? "missing tensor map / model class / artifact path"
-               : tensor_map_incomplete
-                     ? "incomplete tensor map / tokenizer metadata mapping / artifact path missing"
-                     : !output_head_map_present
-                           ? "missing output head map / tokenizer metadata mapping / artifact path missing"
-                           : output_head_map_missing
-                                 ? "output head mapping missing / tokenizer metadata mapping / artifact path missing"
-                                 : "tokenizer metadata mapping / artifact path missing");
-    printf("next: V010.MAP.8\n");
-    printf("status: model-prepare-unsupported\n");
+    yvex_render_kv(&out, "reason", report->reason);
+    yvex_render_next(&out, report->next);
+    yvex_render_status(&out, report->final_status);
+}
+
+static int print_prepare_downloaded_source_unsupported(
+    const yvex_cli_models_prepare_options *options,
+    const yvex_operator_paths *operator_paths,
+    const yvex_model_download_resolved_target *target)
+{
+    yvex_models_prepare_source_report report;
+
+    prepare_source_report_build(options, operator_paths, target, &report);
+    if (!options || options->output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
+        prepare_source_report_render_porcelain(&report);
+        return exit_for_status(YVEX_ERR_UNSUPPORTED);
+    }
+    prepare_source_report_render_audit(&report);
     return exit_for_status(YVEX_ERR_UNSUPPORTED);
 }
 

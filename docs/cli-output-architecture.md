@@ -180,17 +180,36 @@ Renderer ownership should move toward this shape:
 `yvex_cli.c` remains top-level dispatch/help only. Domain files may call render
 helpers, but command branches should stop owning full report walls.
 
+## Renderer Foundation
+
+`V010.CLI.25` adds the first private renderer ownership boundary. The
+implementation is header-only in `yvex_render_private.h` so it does not create a
+new root implementation unit or a public API. The primitives cover stream/mode
+setup, report titles, key-value fields, numeric fields, compact status,
+top-blocker, next-row, boundary, short sections, inline field groups, and table
+row/header text.
+
+The pilot migration is `models prepare --dry-run` for downloaded/source-backed
+Qwen/Gemma targets. `yvex_model_artifacts.c` now builds a semantic prepare
+source report, renders compact porcelain output by default, and keeps the full
+diagnostic evidence under `--audit`.
+
+This is only the foundation. It does not remove all print sites, complete
+`yvex_model_artifacts.c`, migrate `yvex_model.c`, implement uniform JSON output,
+remove existing flags, or add runtime, quantization, artifact, generation, eval,
+benchmark, throughput, or release capability.
+
 ## Migration Plan
 
 Phase 0 is complete as `CLI.ARCH.AUDIT.0`: print inventory, flag inventory,
 porcelain/plumbing doctrine, and renderer ownership doctrine.
 
-Phase 1 is planned as `V010.CLI.25`: introduce a narrow internal report/render
-boundary without broad behavior changes, runtime claims, JSON claims, or a new
-command forest.
+Phase 1 is complete as `V010.CLI.25`: introduce a narrow internal report/render
+boundary and one `models prepare --dry-run` pilot without broad behavior
+changes, runtime claims, JSON claims, or a new command forest.
 
-Phase 2 is planned as `V010.CLI.26`: start with
-`yvex_model_artifacts.c`, the largest print owner.
+Phase 2 is planned as `V010.CLI.26`: continue with `yvex_model_artifacts.c`,
+the largest print owner.
 
 Phase 3 is planned as `V010.CLI.27`: migrate `yvex_model.c` model-target
 surfaces while preserving normal/table/audit tests during transition.
@@ -220,8 +239,8 @@ throughput, or mark release readiness.
 
 ## Immediate Next Wave Recommendation
 
-The next implementation wave should be `V010.CLI.25 - renderer ownership
-foundation`, followed by `V010.CLI.26` over `yvex_model_artifacts.c` and
-`V010.CLI.27` over `yvex_model.c`. After the CLI architecture interruption is
-structurally mapped, `V010.QUANT.1 - dtype/qtype support by role` remains the
-functional Active Next.
+The next implementation wave should be `V010.CLI.26 - model artifact porcelain
+migration`, followed by `V010.CLI.27` over `yvex_model.c`. After the CLI
+architecture interruption is no longer blocking operator clarity,
+`V010.QUANT.1 - dtype/qtype support by role` remains the functional runtime
+blocker.

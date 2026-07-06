@@ -31,7 +31,7 @@ Current CUDA state:
   bounded primitive-hardening only; no CUDA full-runtime/generation claim
 
 Active implementation next:
-  V010.QUANT.1 - dtype/qtype support by role
+  V010.CLI.26 - model artifact porcelain migration
 
 Current release target:
   v0.1.0 - first honest full-runtime path
@@ -43,7 +43,8 @@ Primary pressure targets:
   Gemma source/model-class/tensor-collection profile
 
 Main v0.1.0 blocker:
-  dtype/qtype support by role remains missing after report-only qtype policy
+  model artifact report walls still block operator clarity; dtype/qtype support
+  by role remains the functional runtime blocker after report-only qtype policy
 ```
 
 | Field | Current value |
@@ -62,7 +63,7 @@ Main v0.1.0 blocker:
 | Full model generation | unsupported |
 | DeepSeek generation | unsupported |
 | Eval/benchmark | unsupported / not measured |
-| Active next | V010.QUANT.1 |
+| Active next | V010.CLI.26 |
 
 ## 1. Spine Nomenclature
 
@@ -702,7 +703,7 @@ lanes; rows are the delivery units that complete track work.
 | TRACK.TOKENIZER | Tokenizer and stop policy | detokenization, EOS, stop tokens, prompt boundary | partial/planned | tokenizer diagnostics and tokenizer metadata mapping | tokenizer-backed stop behavior | later |
 | TRACK.GENERATION | Generation runtime | decode/logits/sample/append/stop/cleanup | diagnostic-runtime | `yvex generate` | full-runtime generation | later |
 | TRACK.RUNTIME | Runtime lifecycle and trace | lifecycle, cancellation, trace, failure preservation | diagnostic-runtime | generate trace/cancel/cleanup | external interruption/runtime trace | later |
-| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output architecture doctrine, normal/audit baseline, diagnostic output demotion, compact report/table output, hardcoded print reduction for model report surfaces, completed CLI print inventory and porcelain/plumbing doctrine, and Qwen/Gemma source profile/map/gate/qtype policy surfaces | V010.CLI.25 renderer foundation / V010.QUANT.1 handoff | active |
+| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output architecture doctrine, normal/audit baseline, diagnostic output demotion, compact report/table output, hardcoded print reduction for model report surfaces, completed CLI print inventory and porcelain/plumbing doctrine, renderer ownership foundation, and Qwen/Gemma source profile/map/gate/qtype policy surfaces | V010.CLI.26 model artifact porcelain migration / V010.QUANT.1 handoff | active |
 | TRACK.SERVE | Serving | daemon state, provider endpoints, streaming | planned | status shell | runtime-backed generation endpoint | later |
 | TRACK.EVAL | Evaluation | fixture/runtime/generation/capability eval | planned | tests only | eval over generation path | later |
 | TRACK.BENCH | Benchmark/profile | reproducible performance measurement | planned | doctrine only | measured runtime harness | later |
@@ -1361,11 +1362,11 @@ v0.1.0 rows:
   V010.CLI.*, V010.OPERATOR.*.
 
 Main blockers:
-  renderer ownership foundation remains missing before more CLI output patches;
+  model artifact report walls remain the next CLI architecture blocker;
   dtype/qtype support by role remains the functional implementation blocker.
 
 Next possible row:
-  V010.CLI.25 for CLI architecture implementation, otherwise V010.QUANT.1.
+  V010.CLI.26 for CLI architecture implementation, otherwise V010.QUANT.1.
 
 Boundary:
   operator presets compose lower behavior only.
@@ -2684,6 +2685,18 @@ preservation without shell pipelines. Under the current doctrine,
 `--check-output-contract` is diagnostic/internal migration pressure, not a
 future operator UX pattern.
 
+`V010.CLI.25` is complete as the renderer ownership foundation. It adds a tiny
+private header-only rendering substrate in `yvex_render_private.h` with stream,
+mode, title, key-value, status, blocker, next, boundary, section, inline-field,
+and table-row primitives. The pilot migration is `models prepare` for
+downloaded/source-backed `--dry-run` targets in `yvex_model_artifacts.c`: the
+command now builds a semantic prepare source report and renders compact
+porcelain output by default while preserving the detailed audit evidence under
+`--audit`. This row does not add `yvex_render.c`, does not expose a public
+render API, does not implement JSON, does not remove existing flags, does not
+finish the CLI refactor, and does not add source, artifact, quantization,
+runtime, generation, eval, benchmark, throughput, or release capability.
+
 `V010.CLI.20` remains the structured JSON/raw plumbing row. It must not claim
 uniform JSON until each command family has report objects, stable fields, tests,
 and refusal paths.
@@ -2736,7 +2749,7 @@ The migration map is:
 
 ```text
 Phase 0: audit and doctrine
-Phase 1: V010.CLI.25 renderer ownership foundation
+Phase 1: V010.CLI.25 renderer ownership foundation complete
 Phase 2: V010.CLI.26 model artifact porcelain migration
 Phase 3: V010.CLI.27 model target porcelain migration
 Phase 4: V010.CLI.28 graph/runtime diagnostic renderer migration
@@ -2744,10 +2757,11 @@ Phase 5: V010.CLI.20 structured JSON/raw plumbing where report objects exist
 Phase 6: flag demotion after porcelain and JSON cover the command family
 ```
 
-The focused audit report lives in `docs/cli-output-architecture.md`. Active Next
-remains paused on `V010.QUANT.1 - dtype/qtype support by role` only until this
-CLI architecture interruption is structurally mapped enough that future
-implementation rows do not create more output debt.
+The focused audit report lives in `docs/cli-output-architecture.md`. The next
+CLI architecture row is `V010.CLI.26 - model artifact porcelain migration`.
+`V010.QUANT.1 - dtype/qtype support by role` remains the functional runtime
+blocker, but it is paused until the model report owner files are no longer
+blocking operator clarity.
 
 Boundary: CLI cannot claim lower runtime behavior that does not exist.
 
@@ -4612,7 +4626,7 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 ## 7. Active Next
 
 ```text
-V010.QUANT.1 - dtype/qtype support by role
+V010.CLI.26 - model artifact porcelain migration
 ```
 
 `SPINE.OUTPUT.UX.CONTRACT.0` is complete as a docs/control row and has been
@@ -4620,6 +4634,13 @@ reconciled by `CLI.ARCH.AUDIT.0`. The current CLI doctrine is
 porcelain/plumbing/diagnostic/trace-log-error: porcelain is default human output,
 table is a renderer layout, audit is transitional evidence, and JSON is the
 target raw/plumbing surface where implemented and tested command by command.
+
+`V010.CLI.25` completed the first renderer ownership foundation and one
+`models prepare --dry-run` pilot. Active implementation next remains the CLI
+architecture migration sequence because the model artifact owner file still has
+the largest report-wall pressure. `V010.QUANT.1 - dtype/qtype support by role`
+remains the functional runtime blocker after this CLI interruption is no longer
+blocking operator clarity.
 
 Completed row:
 
@@ -4693,6 +4714,28 @@ This is an operator-output improvement only; it does not add source intake,
 mapping semantics, quantization, artifact emission, runtime execution,
 evaluation, benchmark, throughput, or release readiness. `V010.CLI.20` through
 `V010.CLI.23` remain planned.
+
+Completed CLI implementation row:
+
+```text
+V010.CLI.25 - renderer ownership foundation
+```
+
+`V010.CLI.25` introduces the first private renderer ownership boundary through
+`yvex_render_private.h`. The header provides small internal primitives for
+stream/mode setup, report titles, key-value fields, numeric fields, status,
+top blocker, next row, boundary, short sections, inline field groups, and table
+rows without creating a public API, `yvex_render.c`, JSON output, color, or a
+command forest. The pilot migration is `models prepare --dry-run` for
+downloaded/source-backed Qwen/Gemma targets: the command builds a semantic
+prepare report, renders compact porcelain output by default, and preserves
+detailed evidence in `--audit`. This does not remove all print sites, complete
+the CLI refactor, remove output flags, add qtype role support, quantize tensors,
+emit artifacts, create artifact identity, materialize tensors, construct
+runtime descriptors, attach backend residency, feed graph consumers, execute
+prefill/decode/logits/tokenizer/sampling/generation, evaluate, benchmark,
+claim throughput, or mark release readiness. `V010.CLI.26` is the next CLI
+architecture row.
 
 `V010.TARGET.9`, `V010.TARGET.2`, `V010.TARGET.3`, and `V010.TARGET.7` are also
 complete as report-only implementation rows. The commands `yvex model-target
@@ -5114,7 +5157,7 @@ residency, feed graph consumers, execute prefill/decode/logits/tokenizer/
 sampling/generation, evaluate, benchmark, claim throughput, or mark v0.1.0
 release-ready.
 
-Active Next is now dtype/qtype support by role:
+Functional runtime blocker remains dtype/qtype support by role:
 
 ```text
 V010.QUANT.1 - dtype/qtype support by role
@@ -5286,7 +5329,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | CLI.SURFACE.1 | complete | cli | CLI command monolith domain split | private CLI command implementation split into common, graph, models, artifacts, tools, and run domains |
 | CLI.SURFACE.2 | complete | cli/layout | CLI surface compression | only yvex_cli.c remains as CLI-prefixed source; command/proof logic promoted to domain owners |
 | CLI.SURFACE.3 | complete | cli/layout | Domain-owned CLI help and command extraction | yvex_cli.c contains only short command table and dispatch; detailed help and command behavior live in domain owners; command split files are removed |
-| V010.CLI.25 | planned | operator | Renderer ownership foundation | introduce the smallest internal report/render boundary in owner modules without a command forest, runtime behavior, JSON claim, or yvex_cli.c domain behavior |
+| V010.CLI.25 | complete | operator | Renderer ownership foundation | `yvex_render_private.h` introduces a small private header-only render boundary and `models prepare --dry-run` for downloaded/source-backed targets now renders from a semantic prepare report with compact porcelain output and preserved audit evidence, without adding a renderer source file, public API, JSON output, flag removal, runtime behavior, quantization, artifact emission, generation, eval, benchmark, throughput, or release claim |
 | V010.CLI.26 | planned | operator | Model artifact porcelain migration | migrate the highest-pressure `yvex_model_artifacts.c` report walls toward semantic reports plus porcelain/audit render helpers while preserving existing output flags during transition |
 | V010.CLI.27 | planned | operator | Model target porcelain migration | migrate `yvex_model.c` model-target report walls toward semantic reports plus porcelain/audit render helpers while preserving normal/table/audit tests |
 | V010.CLI.28 | planned | operator | Graph/runtime diagnostic renderer migration | separate graph/runtime porcelain, diagnostic, trace, log, and error output in `yvex_graph.c` and `yvex_runtime.c` without changing runtime semantics |
@@ -6460,7 +6503,7 @@ After `SPINE.OUTPUT.UX.CONTRACT.0`, `V010.CLI.17`, `V010.CLI.18`,
 `TENSOR.COLLECTION.QWEN.0`, `TENSOR.COLLECTION.GEMMA.0`, `V010.MAP.5`,
 `V010.MAP.1`, `V010.MAP.6`, `V010.MAP.7`, `V010.MAP.8`, `V010.MAP.9`, and `V010.QUANT.0`
 completed,
-Active Next advances to:
+At that historical point, functional Active Next advanced to:
 
 ```text
 V010.QUANT.1 - dtype/qtype support by role
@@ -6498,10 +6541,10 @@ If any P1 finding remains blocking, Active Next becomes the named follow-up row.
 | test-to-ledger coverage remains blocking | SPINE.TESTMAP.0 |
 | public docs claim risk remains blocking | SPINE.PUBLIC.CLAIM.0 |
 
-Current reconciliation result:
+Historical reconciliation result:
 
 ```text
-Active Next:
+Functional runtime blocker:
   V010.QUANT.1 - dtype/qtype support by role
 
 Reason:
