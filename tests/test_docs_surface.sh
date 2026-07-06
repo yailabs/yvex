@@ -60,8 +60,128 @@ if [ "$count" -ne 6 ]; then
   exit 1
 fi
 
-grep -nF "table = renderer layout, not a long-term user-selected mode" docs/spine.md >/dev/null || {
-  echo "spine must keep table as layout doctrine" >&2
+spine_lines="$(wc -l < docs/spine.md | tr -d ' ')"
+if [ "$spine_lines" -gt 5000 ]; then
+  echo "spine must stay under 5000 lines, got $spine_lines" >&2
+  exit 1
+fi
+
+for heading in \
+  "## 0. Dashboard" \
+  "## 1. Current Capability" \
+  "## 2. Unsupported Boundaries" \
+  "## 3. v0.1.0 Target" \
+  "## 4. Active Next" \
+  "## 5. Tracks" \
+  "## 6. Track Gates" \
+  "## 7. Row Contract Families" \
+  "## 8. Release Gates" \
+  "## 9. Post-v0.1.0" \
+  "## 10. Appendix: Canonical Vocabulary"; do
+  grep -nF "$heading" docs/spine.md >/dev/null || {
+    echo "spine missing canonical heading: $heading" >&2
+    exit 1
+  }
+done
+
+if grep -nE '^## [0-9]+\. ' docs/spine.md |
+   grep -vE '## (0\. Dashboard|1\. Current Capability|2\. Unsupported Boundaries|3\. v0\.1\.0 Target|4\. Active Next|5\. Tracks|6\. Track Gates|7\. Row Contract Families|8\. Release Gates|9\. Post-v0\.1\.0|10\. Appendix: Canonical Vocabulary)$'; then
+  echo "spine must not add extra numbered top-level sections" >&2
+  exit 1
+fi
+
+grep -nF "Current highest implemented runtime stage | bounded diagnostic generation" docs/spine.md >/dev/null || {
+  echo "spine must keep the current highest implemented runtime stage" >&2
+  exit 1
+}
+
+grep -nF "Current full-runtime state | unsupported" docs/spine.md >/dev/null || {
+  echo "spine must keep full-runtime unsupported" >&2
+  exit 1
+}
+
+grep -nF "Generation state | DeepSeek/Qwen/Gemma unsupported" docs/spine.md >/dev/null || {
+  echo "spine must keep family generation unsupported" >&2
+  exit 1
+}
+
+grep -nF "Benchmark state | not measured" docs/spine.md >/dev/null || {
+  echo "spine must keep benchmark state not measured" >&2
+  exit 1
+}
+
+grep -nF "CUDA state | bounded primitive-hardening only" docs/spine.md >/dev/null || {
+  echo "spine must keep CUDA primitive-hardening boundary" >&2
+  exit 1
+}
+
+grep -nF "v0.1.0 - multi-family supported generation over YVEX-produced quantized artifacts" docs/spine.md >/dev/null || {
+  echo "spine must lock the v0.1.0 release target to multi-family generation artifacts" >&2
+  exit 1
+}
+
+grep -nF "The supported v0.1.0 generation family set is DeepSeek, Qwen, and Gemma." docs/spine.md >/dev/null || {
+  echo "spine must name DeepSeek, Qwen, and Gemma as the supported v0.1.0 family set" >&2
+  exit 1
+}
+
+grep -nF "v0.1.0 closes only when every supported v0.1.0 generation family reaches the" docs/spine.md >/dev/null || {
+  echo "spine must keep the multi-family closure rule" >&2
+  exit 1
+}
+
+grep -nF "V010.QUANT.1 - multi-family dtype/qtype support by role" docs/spine.md >/dev/null || {
+  echo "spine must set Active Next to multi-family qtype support by role" >&2
+  exit 1
+}
+
+grep -nF "V010.QUANT.1        multi-family dtype/qtype support by runtime role" docs/spine.md >/dev/null || {
+  echo "spine must preserve the multi-family quant row title" >&2
+  exit 1
+}
+
+grep -nF "generation-capable artifact is not runtime generation" docs/spine.md >/dev/null || {
+  echo "spine must keep generation-capable artifact separate from runtime generation" >&2
+  exit 1
+}
+
+grep -nF "DeepSeek cannot close v0.1.0 alone" docs/spine.md >/dev/null || {
+  echo "spine must prevent DeepSeek-only v0.1.0 closure" >&2
+  exit 1
+}
+
+grep -nF "Qwen is a required v0.1.0 supported generation family" docs/spine.md >/dev/null || {
+  echo "spine must make Qwen a required v0.1.0 family, not only a Metal future lane" >&2
+  exit 1
+}
+
+grep -nF "Gemma is the first required dense-family generation target" docs/spine.md >/dev/null || {
+  echo "spine must make Gemma the required dense-family generation target" >&2
+  exit 1
+}
+
+grep -nF "GLM remains source/storage pressure" docs/spine.md >/dev/null || {
+  echo "spine must keep GLM as source/storage pressure" >&2
+  exit 1
+}
+
+grep -nF "GLM remains huge source/storage pressure" docs/spine.md >/dev/null || {
+  echo "spine must keep GLM as source/storage pressure unless promoted" >&2
+  exit 1
+}
+
+grep -nF "Qwen/Metal remains post-v0.1.0 backend portability" docs/spine.md >/dev/null || {
+  echo "spine must keep Qwen/Metal post-v0.1.0" >&2
+  exit 1
+}
+
+grep -nF "| SPINE.RETARGET.MULTIFAMILY.0 | complete | docs/artifact | v0.1.0 multi-family generation target lock |" docs/spine.md >/dev/null || {
+  echo "spine ledger must mark the multi-family retarget complete" >&2
+  exit 1
+}
+
+grep -nF "| SPINE.TRACK.CANON.0 | complete | docs/spine | oversized spine replaced with active track-first roadmap |" docs/spine.md >/dev/null || {
+  echo "spine must mark the canonical track rewrite complete" >&2
   exit 1
 }
 
@@ -100,56 +220,6 @@ grep -nF "| SPINE.CLI.REBASE.1 | complete | docs/operator | Full Operator CLI tr
   exit 1
 }
 
-grep -nF "v0.1.0 - multi-family supported generation over YVEX-produced quantized artifacts" docs/spine.md >/dev/null || {
-  echo "spine must lock the v0.1.0 release target to multi-family generation artifacts" >&2
-  exit 1
-}
-
-grep -nF "The supported v0.1.0 generation family set is DeepSeek, Qwen, and Gemma." docs/spine.md >/dev/null || {
-  echo "spine must name DeepSeek, Qwen, and Gemma as the supported v0.1.0 family set" >&2
-  exit 1
-}
-
-grep -nF "V010.QUANT.1 - multi-family dtype/qtype support by role" docs/spine.md >/dev/null || {
-  echo "spine must set Active Next to multi-family qtype support by role" >&2
-  exit 1
-}
-
-grep -nF "V010.QUANT.1        multi-family dtype/qtype support by runtime role" docs/spine.md >/dev/null || {
-  echo "spine must preserve the multi-family quant row title" >&2
-  exit 1
-}
-
-grep -nF "generation-capable artifact is not runtime generation" docs/spine.md >/dev/null || {
-  echo "spine must keep generation-capable artifact separate from runtime generation" >&2
-  exit 1
-}
-
-grep -nF "DeepSeek cannot close v0.1.0 alone" docs/spine.md >/dev/null || {
-  echo "spine must prevent DeepSeek-only v0.1.0 closure" >&2
-  exit 1
-}
-
-grep -nF "Qwen is a required v0.1.0 supported generation family" docs/spine.md >/dev/null || {
-  echo "spine must make Qwen a required v0.1.0 family, not only a Metal future lane" >&2
-  exit 1
-}
-
-grep -nF "Gemma is the first required dense-family generation target" docs/spine.md >/dev/null || {
-  echo "spine must make Gemma the required dense-family generation target" >&2
-  exit 1
-}
-
-grep -nF "GLM remains huge source/storage pressure" docs/spine.md >/dev/null || {
-  echo "spine must keep GLM as source/storage pressure unless promoted" >&2
-  exit 1
-}
-
-grep -nF "| SPINE.RETARGET.MULTIFAMILY.0 | complete | docs/artifact | v0.1.0 multi-family generation target lock |" docs/spine.md >/dev/null || {
-  echo "spine ledger must mark the multi-family retarget complete" >&2
-  exit 1
-}
-
 grep -nF "V010.CLI.27 - base status and refusal grammar" docs/spine.md >/dev/null || {
   echo "spine must keep the planned CLI substrate row to base status/refusal grammar" >&2
   exit 1
@@ -180,6 +250,28 @@ if grep -nF "V010.CLI.27         model artifact porcelain migration" docs/spine.
   exit 1
 fi
 
+for removed in \
+  "## Historical Delivery Ledger" \
+  "## Meta-Spine / Rebase / Audit Waves" \
+  "## Evidence Crosswalks" \
+  "## Audit and Reconciliation" \
+  "## Detailed Validation Gate Archive" \
+  "## Planned Row Supersession Map" \
+  "## CLI Research Surface Matrix" \
+  "## Preserved Current Repository and Capability State" \
+  "## Preserved Runtime, Generation, Tensor, and Operator Doctrine" \
+  "## 6.0 Forward Runtime Track Matrix" \
+  "## 6.1 Canonical Runtime Sequences" \
+  "## 6.2 v0.1.0 Master Implementation Spine" \
+  "### 5.31 Detailed V010 Row Inventory and Dependency Maps" \
+  "## Output Mode Taxonomy" \
+  "## CLI Output UX Doctrine"; do
+  if grep -nF "$removed" docs/spine.md; then
+    echo "spine must not restore removed archive heading: $removed" >&2
+    exit 1
+  fi
+done
+
 grep -nF "## Full CLI Track Rebase" docs/cli-output-architecture.md >/dev/null || {
   echo "CLI output architecture must document the full CLI track rebase" >&2
   exit 1
@@ -194,17 +286,6 @@ grep -nF "V010.QUANT.1 - multi-family dtype/qtype support by role" docs/cli-outp
   echo "CLI output architecture must hand immediate Active Next back to multi-family qtype support" >&2
   exit 1
 }
-
-grep -nF "## CLI Output Architecture Doctrine" docs/spine.md >/dev/null || {
-  echo "spine must use the porcelain/plumbing architecture doctrine heading" >&2
-  exit 1
-}
-
-if grep -nF "## Output Mode Taxonomy" docs/spine.md ||
-   grep -nF "## CLI Output UX Doctrine" docs/spine.md; then
-  echo "spine must not restore the old output-mode taxonomy as future doctrine" >&2
-  exit 1
-fi
 
 grep -nF "JSON output is not implemented uniformly in this audit" docs/cli-output-architecture.md >/dev/null || {
   echo "CLI output architecture must not claim uniform JSON output" >&2
