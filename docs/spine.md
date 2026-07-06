@@ -38,49 +38,82 @@ GLM remains source/storage pressure. GLM remains huge source/storage pressure
 unless it is explicitly promoted by a later target decision.
 Qwen/Metal remains post-v0.1.0 backend portability.
 
-## 1. Current Capability
+## 1. Capability Map
 
-Current capability is implementation-backed only. Report rows, source rows, and
-diagnostic rows do not promote runtime readiness.
+This is the v0.1.0 monitoring view from source weights to generated token.
+Current implementation state is one column in the map, not the whole map.
+Report-only, selected-slice, fixture, and diagnostic rows do not promote
+full-runtime generation readiness.
 
-| Capability group | Current state | Main proof | Boundary |
+### 1.1 Pipeline Capability Map
+
+| Capability | Track | v0.1.0 requirement | Current stage | Family scope | Complete anchors | Next row/gate | Boundary |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| source target identity | TRACK.SOURCE | supported family targets have stable local IDs | complete | DeepSeek/Qwen/Gemma | MODEL.TARGET.IDENTITY.0 | V010.SOURCE.10 | target identity is not runtime support |
+| official source acquisition | TRACK.SOURCE | sources can be acquired for supported families | source-intake | DeepSeek/Qwen/Gemma | V010.SOURCE.7A | V010.SOURCE.10 | download is not source verification or generation |
+| source manifest | TRACK.SOURCE | source footprint and provenance are recorded | complete | DeepSeek/Qwen/Gemma | V010.SOURCE.0 | V010.SOURCE.10 | manifest is not payload trust |
+| native tensor inventory | TRACK.SOURCE | native tensor headers are inventoried | complete | DeepSeek/Qwen/Gemma | V010.SOURCE.5 | V010.SOURCE.10 | header inventory is not payload loading |
+| source tensor metadata inventory | TRACK.SOURCE | tensor names, dtype, shape, and spans are recorded | complete | DeepSeek/Qwen/Gemma | V010.SOURCE.6 | V010.SOURCE.10 | metadata is not role mapping |
+| model class profile | TRACK.MODEL | supported families have class profiles | report-only | DeepSeek/Qwen/Gemma | MODEL.CLASS.QWEN.0, MODEL.CLASS.GEMMA.0, MOE.CLASS.0 | V010.CLASS.16 | class profile is not runtime routing |
+| tensor collection inventory | TRACK.TENSOR | required collection groups are visible | report-only | DeepSeek/Qwen/Gemma | TENSOR.COLLECTION.QWEN.0, TENSOR.COLLECTION.GEMMA.0, TENSOR.MOE.0 | V010.TENSOR.23 | collection inventory is not tensor role support |
+| tensor role mapping | TRACK.MAP | native names map to runtime roles | partial | DeepSeek/Qwen/Gemma | V010.MAP.1, V010.MAP.5 | V010.MAP.9 | role map is not artifact emission |
+| output-head mapping | TRACK.MAP | output head and final norm are mapped | report-only | DeepSeek/Qwen/Gemma | V010.MAP.6 | V010.LOGITS.3 | mapping is not logits computation |
+| tokenizer metadata mapping | TRACK.TOKENIZER | tokenizer sidecars are mapped | report-only | DeepSeek/Qwen/Gemma | V010.MAP.7 | V010.TOKENIZER.12 | metadata is not tokenizer runtime |
+| missing-role blocker report | TRACK.MAP | missing runtime roles are visible | complete | DeepSeek/Qwen/Gemma | V010.MAP.8 | V010.MAP.9 | blocker report is not closure |
+| mapping gate | TRACK.MAP | map evidence gates artifact planning | complete | DeepSeek/Qwen/Gemma | V010.MAP.9 | V010.QUANT.1 | gate is report-only |
+| qtype policy | TRACK.QUANT | qtype policy basis is reported | complete | DeepSeek/Qwen/Gemma | V010.QUANT.0 | V010.QUANT.1 | policy is not support |
+| dtype/qtype support by runtime role | TRACK.QUANT | every runtime role has allowed/refused dtype/qtype state | active | DeepSeek/Qwen/Gemma | V010.QUANT.0 | V010.QUANT.1 | support matrix is not quantization or generation |
+| qtype compute/refusal matrix | TRACK.QUANT | compute/refusal state exists across families and backends | blocked | DeepSeek/Qwen/Gemma | none | V010.QUANT.2 | compute matrix is not artifact emission |
+| calibration/imatrix decision | TRACK.QUANT | calibration requirements are explicit | planned | DeepSeek/Qwen/Gemma | none | V010.QUANT.3 | imatrix decision is not quantization |
+| generation-capable artifact emission | TRACK.ARTIFACT | YVEX emits complete quantized artifacts for supported families | blocked | DeepSeek/Qwen/Gemma | V010.ARTIFACT.EMIT.0, V010.ARTIFACT.EMIT.1 | V010.ARTIFACT.EMIT.2 | artifact emission is not runtime generation |
+| artifact identity | TRACK.INTEGRITY | supported-family artifacts have identity manifests | planned | DeepSeek/Qwen/Gemma | selected-slice identity only | V010.INTEGRITY.0 | identity is not execution |
+| artifact integrity | TRACK.INTEGRITY | ranges, dtype, qtype, and corruption gates pass | partial | DeepSeek/Qwen/Gemma | current integrity rows | V010.INTEGRITY.13 | integrity is not generation |
+| artifact registration | TRACK.ARTIFACT | generation-capable artifacts are registered | planned | DeepSeek/Qwen/Gemma | selected registration only | V010.ARTIFACT.EMIT.5 | registration is not readiness |
+| materialization plan | TRACK.RESIDENCY | materialization is planned for supported artifacts | partial | DeepSeek/Qwen/Gemma | current materialization plans | V010.RESIDENCY.19 | plan is not materialization proof |
+| materialization proof | TRACK.RESIDENCY | required tensors materialize under limits | selected-slice-proof | DeepSeek/Qwen/Gemma | selected proof only | V010.RESIDENCY.19 | selected proof is not full runtime |
+| residency plan | TRACK.RESIDENCY | CPU/CUDA residency is planned for required tensors | planned | DeepSeek/Qwen/Gemma | placement reports | V010.RESIDENCY.19 | residency plan is not backend execution |
+| backend capability | TRACK.BACKEND | backend capability is known and refused cleanly | partial | backend | V010.BACKEND.1, V010.BACKEND.2, CUDA.KERNEL.0 | V010.BACKEND.12 | backend capability is not model support |
+| backend qtype compute support | TRACK.BACKEND | required qtypes compute or refuse per backend | blocked | backend | none | V010.QUANT.2 | qtype compute support is not generation |
+| runtime descriptor readiness | TRACK.MODEL | runtime descriptors are ready for supported artifacts | planned | DeepSeek/Qwen/Gemma | descriptor reports only | V010.CLASS.16 | descriptor readiness is not execution |
+| graph primitive readiness | TRACK.GRAPH | primitive graph ops are covered and bounded | fixture-proof | backend | graph primitive proofs, CUDA.KERNEL.0 | V010.GRAPH.PRIM.10 | primitive readiness is not transformer graph |
+| real transformer graph | TRACK.GRAPH | real role-bearing tensors execute through graph | planned | DeepSeek/Qwen/Gemma | selected graph only | V010.GRAPH.24 | graph path is not generation |
+| real prefill | TRACK.PREFILL | transformer prefill writes real state | unsupported | DeepSeek/Qwen/Gemma | diagnostic prefill only | V010.PREFILL.15 | diagnostic prefill is not real prefill |
+| real KV writes | TRACK.KV | prefill writes attention-backed K/V | unsupported | DeepSeek/Qwen/Gemma | diagnostic KV only | V010.KV.6 | KV report is not KV write |
+| real KV reads | TRACK.KV | decode reads attention-backed K/V | unsupported | DeepSeek/Qwen/Gemma | diagnostic KV only | V010.KV.8 | KV read is not implemented |
+| real decode | TRACK.DECODE | decode advances real runtime state | unsupported | DeepSeek/Qwen/Gemma | diagnostic decode only | V010.DECODE.14 | diagnostic decode is not real decode |
+| real output-head logits | TRACK.LOGITS | final hidden state projects to vocab logits | unsupported | DeepSeek/Qwen/Gemma | diagnostic logits only | V010.LOGITS.16 | output-head mapping is not logits |
+| real vocabulary sampling | TRACK.SAMPLING | sampler consumes real logits | unsupported | DeepSeek/Qwen/Gemma | diagnostic sampling only | V010.SAMPLE.14 | diagnostic sampler is not vocab sampling |
+| tokenizer/stop boundary | TRACK.TOKENIZER | stop/EOS/token boundaries are explicit | planned | DeepSeek/Qwen/Gemma | tokenizer metadata reports | V010.TOKENIZER.12 | metadata is not tokenization |
+| runtime generation loop | TRACK.GENERATION | prefill, KV, decode, logits, sample, append, stop compose | unsupported | DeepSeek/Qwen/Gemma | diagnostic generation only | V010.GEN.19 | diagnostic generation is not model generation |
+| CLI generation command | TRACK.OPERATOR | operator command invokes real generation path | planned | operator | diagnostic `generate` | V010.GEN.16 | command surface cannot claim missing runtime |
+| operator refusal/status grammar | TRACK.OPERATOR | shared status/refusal/error grammar exists | planned | operator | V010.CLI.26 | V010.CLI.27 | CLI grammar is not lower runtime |
+| eval smoke/regression | TRACK.EVAL | supported generation paths have smoke/regression eval | planned | DeepSeek/Qwen/Gemma | none | V010.EVAL.14 | eval waits for runtime path |
+| benchmark transcript | TRACK.BENCH | measured transcript records model/artifact/backend/qtype | not-measured | DeepSeek/Qwen/Gemma | none | V010.BENCH.11 | no throughput without benchmark |
+| claim audit | TRACK.RELEASE | claims match implemented evidence | planned | release | docs guardrails | V010.RELEASE.5 | claim audit is not capability |
+| release transcript | TRACK.RELEASE | v0.1.0 proof transcript is complete | planned | release | none | V010.RELEASE.9 | transcript cannot create behavior |
+
+### 1.2 Supported-Family Capability Matrix
+
+| Family | Source | Map | Quant | Artifact | Integrity | Residency | Runtime descriptor | Graph | Generation | Eval | Benchmark | Release role |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| DeepSeek | selected/source pressure partial | map incomplete for full runtime | blocked at V010.QUANT.1 | no generation-capable artifact | selected integrity only | planned | planned | selected/fixture only | unsupported | planned | not measured | required |
+| Qwen | source-intake/report-only | header map partial | blocked at V010.QUANT.1 | no generation-capable artifact | planned | planned | planned | planned | unsupported | planned | not measured | required |
+| Gemma | source-intake/report-only | header map partial | blocked at V010.QUANT.1 | no generation-capable artifact | planned | planned | planned | planned | unsupported | planned | not measured | required |
+
+### 1.3 Implemented Capability Snapshot
+
+| Implemented area | Stage | Proof class | Boundary |
 | --- | --- | --- | --- |
-| artifact parsing and integrity | implemented | GGUF parsing, descriptor construction, integrity reports, corruption refusal, materialization gates | not source verification, not generation |
-| source intake and manifests | implemented/source-intake | source manifests, native header inventories, download receipts, provider logs, stop/resume/cleanup controls | no payload loading, no GGUF emission |
-| Qwen/Gemma source/profile/tensor-map/qtype reports | report-only | source profiles, model-class profiles, tensor collection inventory, qtype policy report | no runtime support, no generation |
+| artifact parsing and integrity | complete | GGUF parsing, descriptor construction, integrity reports, corruption refusal, materialization gates | not source verification, not generation |
+| source intake and manifest/report surfaces | source-intake | source manifests, native header inventories, receipts, provider logs, download controls | no payload loading, no GGUF emission |
+| Qwen/Gemma header-derived profile/map/tokenizer/qtype reports | report-only | source profiles, model-class profiles, tensor collection inventory, qtype policy report | no runtime support, no generation |
 | selected DeepSeek artifact slices | selected-slice-proof | selected embedding and embedding-plus-RMSNorm artifacts | not full DeepSeek runtime |
-| graph primitives and selected graph slices | fixture-proof/selected-slice-proof | RoPE, attention, projection, MLP/routed-expert primitive proofs; selected graph slices | not full transformer execution |
-| diagnostic prefill/KV/decode/logits/sampling/generation | diagnostic-runtime | bounded diagnostic `prefill`, `kv`, `decode`, `logits`, `sample`, `generate` | not full model generation |
-| CUDA primitive hardening | bounded primitive-hardening | CUDA primitive tests for bounded MLP and attention paths against CPU/reference outputs | not CUDA runtime generation |
-| operator CLI baseline | implemented/operator | compact normal output, audit evidence, renderer foundation, base command grammar | not lower runtime capability |
-| provider account/download control | implemented/source-intake | `accounts`, `models download`, live progress, signal-safe interruption, status/stop/resume/cleanup | no source identity verification, no artifact registration |
-| docs/claim guardrails | implemented/docs | docs surface tests, public-doc boundary checks, artifact guardrail checks | no runtime capability |
-
-Key completed implementation rows preserved by the active map:
-
-| Row | Status | Area | Boundary |
-| --- | --- | --- | --- |
-| SPINE.RETARGET.MULTIFAMILY.0 | complete | docs/artifact | v0.1.0 multi-family generation target lock |
-| SPINE.TRACK.CANON.0 | complete | docs/spine | oversized spine replaced with active track-first roadmap |
-| V010.QUANT.0 | complete | quant | multi-family qtype policy report |
-| CLI.ARCH.AUDIT.0 | complete | docs/operator | CLI architecture audit and print ownership map |
-| V010.CLI.25 | complete | operator | Renderer ownership foundation |
-| V010.CLI.26 | complete | operator | Base CLI grammar and command catalog |
-| SPINE.CLI.REBASE.1 | complete | docs/operator | Full Operator CLI track rebase after executed V010.CLI.26 |
-
-Compact row anchors:
-
-```text
-V010.CLI.25         renderer ownership foundation
-V010.CLI.26         base CLI grammar and command catalog
-V010.QUANT.1        multi-family dtype/qtype support by runtime role
-V010.CLI.MODELS.4   models artifacts porcelain
-V010.CLI.RUNTIME.0  runtime diagnostic command grammar
-```
-
-`SPINE.CLI.REBASE.1 - full Operator CLI track rebase after executed V010.CLI.26`
-is complete. `V010.CLI.27 - base status and refusal grammar` is planned, but
-it is not Active Next.
+| graph primitives and selected graph slices | fixture-proof | RoPE, attention, projection, MLP, routed-expert primitive proofs | not full transformer execution |
+| diagnostic prefill/KV/decode/logits/sampling/generation | diagnostic-runtime | bounded diagnostic commands and cleanup/trace paths | not full model generation |
+| CUDA primitive hardening | fixture-proof | bounded CUDA MLP and attention primitives compared to CPU/reference outputs | not CUDA runtime generation |
+| operator CLI baseline | complete | compact normal output, audit evidence, renderer foundation, base command grammar | not lower runtime capability |
+| provider account/download control | source-intake | accounts, live progress, signal-safe interruption, status/stop/resume/cleanup | no source identity verification, no artifact registration |
+| docs/claim guardrails | complete | docs surface tests, public-doc boundary checks, artifact guardrail checks | no runtime capability |
 
 ## 2. Unsupported Boundaries
 
@@ -248,6 +281,7 @@ labels.
 | SPINE.ACTIVE.REWRITE.1 | superseded | Superseded active-spine rewrite attempt kept only as a naming marker. |
 | SPINE.ROW.CATALOG.0 | complete | Restore explicit active row labels without restoring historical ledger content. |
 | SPINE.ROW.CATALOG.1 | complete | Promote the row-label catalog into a trackmap with status and description columns. |
+| SPINE.CAPABILITY.MAP.0 | complete | Replace the current snapshot with the v0.1.0 pipeline capability map. |
 | V010.SCOPE.0 | planned | v0.1.0 release doctrine. |
 | V010.SCOPE.1 | planned | v0.1.0 minimum gates. |
 | V010.SCOPE.2 | planned | v0.1.0 non-goals. |
