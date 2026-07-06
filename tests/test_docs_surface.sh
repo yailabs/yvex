@@ -23,6 +23,52 @@ test ! -e docs/cli-interface-spine.md
 test ! -e docs/cli-runtime.md
 test ! -e docs/runtime-filesystem.md
 
+for agents_heading in \
+  "## 0. Repository Contract" \
+  "## 1. Execution Order" \
+  "## 2. Ownership" \
+  "## 3. C Implementation Rules" \
+  "## 4. CLI Rules" \
+  "## 5. Runtime And Backend Rules" \
+  "## 6. Source, Tensor, And Artifact Rules" \
+  "## 7. Evidence Stages" \
+  "## 8. Claims" \
+  "## 9. Docs" \
+  "## 10. Tests" \
+  "## 11. Validation" \
+  "## 12. Review Failure" \
+  "## 13. Final Rule"; do
+  grep -nF "$agents_heading" AGENTS.md >/dev/null || {
+    echo "AGENTS.md missing canonical heading: $agents_heading" >&2
+    exit 1
+  }
+done
+
+if grep -nE '^## ' AGENTS.md |
+   grep -vE '## (0\. Repository Contract|1\. Execution Order|2\. Ownership|3\. C Implementation Rules|4\. CLI Rules|5\. Runtime And Backend Rules|6\. Source, Tensor, And Artifact Rules|7\. Evidence Stages|8\. Claims|9\. Docs|10\. Tests|11\. Validation|12\. Review Failure|13\. Final Rule)$'; then
+  echo "AGENTS.md must not add extra H2 sections" >&2
+  exit 1
+fi
+
+for agents_term in \
+  "# AGENTS.md" \
+  "YVEX is a native C local inference engine" \
+  "yvex_cli.c owns dispatch only" \
+  "Header-only means header-only" \
+  "Generation-capable artifact is not runtime generation" \
+  "A claim requires implementation, tests, command proof, and documented boundary" \
+  "Make YVEX more real"; do
+  grep -nF "$agents_term" AGENTS.md >/dev/null || {
+    echo "AGENTS.md missing canonical rule: $agents_term" >&2
+    exit 1
+  }
+done
+
+if grep -niE 'aims to|designed to empower|seamless|journey|future-proof|state-of-the-art|robust and scalable|comprehensive solution' AGENTS.md; then
+  echo "AGENTS.md must stay terse and free of marketing/filler language" >&2
+  exit 1
+fi
+
 grep -nF "native C inference engine" README.md >/dev/null || {
   echo "README must open with public inference-engine identity" >&2
   exit 1

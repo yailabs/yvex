@@ -1,73 +1,36 @@
 # AGENTS.md
 
-## Operating Rule
+## 0. Repository Contract
 
 YVEX is a native C local inference engine for open-weight model artifacts.
 
-Every delivery must make the repository more executable, more tested, or more
-internally coherent. Documentation records implemented truth; it must not
-substitute for implementation.
+The repository must become more executable, more tested, or more internally
+coherent after each patch.
 
-Default priority:
+Documentation records implemented truth. Documentation does not replace
+implementation.
 
-```text
-code first
-tests second
-minimal docs after
-```
+A delivery that only changes language is valid only when the language is an
+execution contract needed before code can safely change.
 
-Do not produce roadmap-only, doctrine-only, or report-only work unless the
-current implementation genuinely requires a boundary contract before code can
-safely change.
+## 1. Execution Order
 
-`docs/spine.md` is the internal delivery ledger. It is not permission to write
-doc-heavy patches. Use it to understand the current state and to record
-completed implementation state.
+Default order:
 
-## Implementation Standard
+1. code
+2. tests
+3. docs
 
-A delivery must reduce a concrete implementation debt.
+Docs-only work is allowed only for scope, release doctrine, claim boundaries,
+operator contracts, or explicit user-requested documentation.
 
-Good delivery targets:
+## 2. Ownership
 
-```text
-incomplete kernel
-missing parser behavior
-missing source inventory
-missing tensor metadata
-missing runtime primitive
-missing host/device binding
-missing validation path
-duplicated output logic
-unclear error class
-uncovered edge case
-```
+Find the owner file before editing.
 
-Bad delivery targets:
+Do not create a new root source file unless a new ownership domain exists.
 
-```text
-new terminology without behavior
-roadmap expansion
-status-field proliferation
-duplicate report fields
-new abstraction for imagined future use
-large docs rewrite without executable change
-```
-
-Prefer bounded real implementation over placeholder behavior.
-
-A small, safe, tested implementation is better than a large planned abstraction.
-
-## Existing Owner Files First
-
-Before creating a new file, find the existing owner module.
-
-Do not create new root source files unless there is a real new ownership domain
-and the user explicitly accepts it.
-
-Do not split large root files merely because they are large.
-
-Do not create:
+Forbidden file patterns:
 
 ```text
 *_commands.c
@@ -79,69 +42,11 @@ cuda/*_new.cu
 src/
 ```
 
-A new abstraction is allowed only when it removes existing complexity,
-duplication, or unsafe coupling. It is not allowed merely to prepare for a
-possible future.
-
-## Internal Coherence
-
-Patches must look native to the repository.
-
-Preserve:
-
-```text
-existing C style
-existing naming style
-existing error handling
-existing command grammar
-existing output mode grammar
-existing normal/table/audit split
-existing Driver API CUDA style
-existing owner-module boundaries
-```
-
-Do not introduce a second way to express the same state.
-
-Avoid semantic duplication such as:
-
-```text
-generation: unsupported
-generation_ready: false
-full_model_generation: no
-runtime_generation_status: unsupported
-```
-
-Use the canonical field already used by the owner module unless the delivery
-explicitly removes or consolidates the older form.
-
-## CLI Ownership
-
-`yvex_cli.c` owns only:
-
-```text
-top-level CLI lookup
-short command listing
-top-level help
-argv dispatch
-```
-
-`yvex_cli.c` must not own domain behavior, long usage strings, runtime helpers,
-graph probes, model/artifact logic, materialization reports, source reports,
-eval, or benchmark behavior.
-
-A delivery fails review if it adds substantial command behavior to
-`yvex_cli.c`.
-
-Detailed command help and command behavior must live in the module that owns the
-capability.
-
-## Source Ownership Map
-
-Use the existing owner module before creating anything new.
+Owner map:
 
 ```text
 yvex_cli.c
-  top-level CLI lookup, short help, dispatch only
+  top-level lookup, short help, argv dispatch only
 
 yvexd.c
   daemon entrypoint
@@ -150,58 +55,58 @@ yvex_server.c
   daemon/server behavior and provider boundary
 
 yvex_accounts.c
-  local provider account boundary, provider CLI discovery, login/status/ensure, non-secret account observations
+  local provider account boundary
 
 yvex_runtime.c
-  runtime coordination and runtime operator commands not owned by more specific modules
+  runtime coordination
 
 yvex_graph.c
-  graph construction, graph execution proofs, op probes, graph reports, graph help
+  graph construction, execution proofs, op probes
 
 yvex_backend.c
-  backend abstraction, CPU backend command, backend reports
+  backend abstraction and backend reports
 
 cuda/
-  CUDA backend, CUDA info command, kernels, tensor movement, CUDA op implementations
+  CUDA backend, kernels, tensor movement, CUDA op implementations
 
 cuda/cuda_kernels.cu
   CUDA device kernels
 
 cuda/cuda_ops.c
-  CUDA host-side primitive launches and validation
+  CUDA host launches and validation
 
 yvex_model.c
-  model descriptors, model target registry, model command/help, target reports
+  model descriptors, target registry, model command/help, target reports
 
 yvex_model_artifacts.c
-  model artifact status, model gates, selected/full artifact reports
+  artifact status, artifact gates, selected/full artifact reports
 
 yvex_artifact.c
-  artifact IO, inspect/metadata/tensor command surfaces
+  artifact IO, inspect, metadata, tensor command surfaces
 
 yvex_artifact_identity.c
   artifact identity and digest behavior
 
 yvex_artifact_integrity.c
-  artifact integrity checks, integrity command/help, corruption/refusal reports
+  artifact integrity, corruption/refusal reports
 
 gguf/
-  GGUF parsing, GGUF tooling, conversion, quant/intake internals
+  GGUF parsing, conversion, quant/intake internals
 
 yvex_source.c
-  source manifests, source pressure reports, open-weight source evidence, provenance, footprint, native header inventory
+  source manifests, source pressure, source evidence, native header inventory
 
 yvex_tokenizer.c
-  tokenizer metadata, tokenize/detokenize/prompt command surfaces
+  tokenizer metadata and tokenizer command surfaces
 
 yvex_token_input.c
-  explicit token/prompt input validation and input command
+  token/prompt input validation
 
 yvex_prefill.c
-  prefill state creation, prefill command/help, prefill reports
+  prefill state and prefill reports
 
 yvex_kv.c
-  KV shape, ownership, append/read, lifecycle, capacity diagnostics, KV command/help
+  KV shape, ownership, append/read, lifecycle, capacity diagnostics
 
 yvex_decode.c
   decode step boundary over existing KV-backed transformer state
@@ -210,84 +115,96 @@ yvex_logits.c
   logits buffer ownership and diagnostics
 
 yvex_sampling.c
-  deterministic and stochastic sampling over logits
+  sampling over logits
 
 yvex_generation.c
-  generation loop integrating decode, logits, and sampling
+  generation loop integration
 
 yvex_eval.c
   eval harness after runtime generation exists
 
 yvex_bench.c
-  reproducible runtime benchmark harness after measured paths exists
+  benchmark harness after measured runtime paths exist
 
 yvex_metrics.c
-  metrics and trace/profile counters
+  metrics and counters
 
 yvex_profile.c
-  profile output and runtime profile documents
+  profile output
 
 yvex_chat.c
-  interactive diagnostic console and future runtime-backed REPL shell
+  diagnostic console and future runtime-backed REPL shell
 ```
 
-## Code-First Delivery Shape
+## 3. C Implementation Rules
 
-A delivery should usually contain:
+Keep ownership explicit.
+
+Keep allocation and cleanup in the owner module.
+
+Check allocation failure.
+
+Use existing error style.
+
+Use existing naming style.
+
+Use existing parser/exit-code style.
+
+Do not add global state unless the owner module already owns that state.
+
+Do not introduce a second state field for the same fact.
+
+Do not hide byte-range arithmetic behind vague helpers.
+
+Do not read tensor payload bytes in header-only rows.
+
+Do not treat lexical tensor names as role mapping unless the row owns mapping.
+
+Use precise failure classes:
 
 ```text
-1. implementation in owner files
-2. tests proving the behavior
-3. negative/boundary tests
-4. claim guards when capability text changes
-5. minimal docs update recording the implemented state
+missing-source-path
+unsupported-output-mode
+malformed-safetensors-header
+source-payload-not-loaded
+unsupported-family
+invalid-release
+unsupported-runtime-stage
+unsupported-generation-family
 ```
 
-Documentation-only delivery is allowed only when the user explicitly asks for
-docs or when an implementation would be unsafe without first defining a narrow
-contract.
-
-## Tests Are Implementation
-
-A delivery is incomplete without tests for the new behavior.
-
-For runtime/backend/kernel work, tests must include:
+Do not use vague failures:
 
 ```text
-reference result
-implementation result
-numeric tolerance where needed
-edge case
-failure or refusal path
-no benchmark disguised as test
+failed
+bad input
+not ready
+error
 ```
 
-For source/model work, tests must include:
+## 4. CLI Rules
 
-```text
-missing source
-fake source
-malformed input where relevant
-normal/table/audit preservation
-no payload loading where relevant
-no readiness claim
-```
+yvex_cli.c owns dispatch only.
 
-For CLI work, tests must include:
+Domain behavior lives in the domain owner.
 
-```text
-normal output
-audit output
-parser failure
-exit code
-compactness if output surface is involved
-```
+Normal output is compact.
 
-## Output Rules
+Audit output carries evidence.
 
-Default operator output should be compact.
+Table output is for aligned list-like rows.
 
-Use:
+No audit wall in normal output.
+
+No JSON unless the row owns and tests JSON.
+
+No color unless the row owns and tests color.
+
+No metrics output unless the row owns and tests metrics.
+
+No command may imply lower runtime capability.
+
+Output modes:
 
 ```text
 normal
@@ -295,76 +212,66 @@ table
 audit
 ```
 
-where already supported.
-
-Rules:
+CLI test classes:
 
 ```text
-normal:
-  short human-readable output
-
-table:
-  aligned plain-text rows for list-like commands
-
-audit:
-  complete diagnostic/evidence fields
+normal output
+audit output
+parser failure
+exit code
+unsupported flag
+unsupported output mode
 ```
 
-Do not dump audit fields into normal output.
+## 5. Runtime And Backend Rules
 
-Do not add JSON, color, or metric output unless actually implemented and tested.
+Primitive proof is not runtime support.
 
-## Boundaries and Claims
+Fixture proof is not runtime support.
 
-Never claim a capability without implementation, tests, command proof, and
-documented boundary.
+Selected-slice proof is not full-runtime support.
 
-Forbidden unless actually true:
+Diagnostic runtime is not full runtime.
 
-```text
-full model support
-inference ready
-generation ready
-prefill ready
-decode ready
-CUDA runtime ready
-Metal runtime ready
-Qwen supported
-Gemma supported
-DeepSeek generation implemented
-benchmark measured
-throughput achieved
-release_ready: true
-execution_ready: true
-generation_ready: true
-```
+CUDA primitive hardening is not CUDA generation.
 
-Use precise lower-scope language:
+Backend allocation is not graph execution.
 
-```text
-report-only
-header-only
-diagnostic-runtime
-selected-slice
-bounded primitive
-fixture-proof
-source-pressure
-target-profile
-unsupported
-not-measured
-```
+Graph execution is not generation.
 
-If the implementation is a primitive, call it a primitive.
+Generation requires prefill, KV, decode, logits, sampling, append, stop,
+cleanup.
 
-If it is a report, call it a report.
+Preserve existing CUDA Driver API style.
 
-If it is diagnostic, call it diagnostic.
+A CUDA row must include host binding, reference comparison, failure path,
+cleanup, and claim guard.
 
-## Artifact Guardrail
+Metal and ROCm are future/backend lanes until explicit rows promote them.
 
-Do not commit model artifacts or local operator state.
+No Metal or ROCm support claim without implementation and tests.
 
-Forbidden:
+## 6. Source, Tensor, And Artifact Rules
+
+Header-only means header-only.
+
+Source intake is not source verification.
+
+Source manifest is not payload trust.
+
+Tensor metadata inventory is not tensor role mapping.
+
+Tensor role mapping is not artifact emission.
+
+Qtype policy is not quantization.
+
+Generation-capable artifact is not runtime generation.
+
+External GGUF is not YVEX support evidence.
+
+External runner output is not YVEX runtime proof.
+
+Never commit:
 
 ```text
 *.safetensors
@@ -381,148 +288,191 @@ downloaded model files
 generated PTX/build outputs
 ```
 
-Tracked `.gguf` files must be tiny test fixtures only.
-
-External model artifacts belong outside git and may be documented only as
-operator-local.
-
-Do not publish personal absolute artifact paths in public docs.
-
-## Backend Work
-
-Backend work must be vertical.
-
-A backend delivery should include:
+Allowed:
 
 ```text
-device/kernel implementation
-host launch or binding
-reference test
-edge guard
-claim guard
-minimal docs update
+tiny GGUF fixtures under tests only
 ```
 
-Do not add a backend manifesto before implementation.
+## 7. Evidence Stages
 
-CUDA work must preserve the existing CUDA Driver API style unless the user
-explicitly approves a change.
-
-Metal work should follow the same discipline:
+Canonical stages:
 
 ```text
-Metal primitive
-host path
-reference test
-edge guard
-no runtime/generation claim
+unsupported
+planned
+blocked
+report-only
+header-only
+source-intake
+fixture-proof
+selected-slice-proof
+diagnostic-runtime
+generation-capable-artifact-ready
+full-runtime-candidate
+runtime-generation-ready
+eval-ready
+benchmark-ready
+release-ready
+not-measured
 ```
 
-## Source and Tensor Work
+Use the lowest true stage.
 
-Source/tensor work must preserve the payload boundary unless the row explicitly
-owns payload loading.
+Do not promote stage by wording.
 
-Header-only means header-only.
+Do not invent synonyms.
 
-Do not read tensor payload bytes during source inventory, metadata inventory,
-provenance reporting, or native safetensors header inventory.
+Do not write "ready" without a scoped prefix.
 
-Do not infer runtime roles from lexical tensor names unless the row explicitly
-owns tensor mapping.
+## 8. Claims
 
-Lexical name-pattern summaries are not tensor role mapping.
+A claim requires implementation, tests, command proof, and documented boundary.
 
-Metadata inventory is not model-class proof.
-
-Native inventory is not runtime readiness.
-
-## Error Handling
-
-Prefer precise failure classes over vague errors.
-
-Good:
+Forbidden unless true:
 
 ```text
-missing-source-path
-unsupported-output-mode
-malformed-safetensors-header
-source-payload-not-loaded
-unsupported-family
-invalid-release
+full model support
+inference ready
+model ready
+generation ready
+prefill ready
+decode ready
+CUDA runtime ready
+CUDA generation
+Metal runtime ready
+Metal support
+Qwen supported
+Gemma supported
+DeepSeek supported
+DeepSeek generation implemented
+multi-family generation implemented
+benchmark measured
+throughput achieved
+release_ready: true
+execution_ready: true
+generation_ready: true
 ```
 
-Bad:
+Use lower-scope language:
 
 ```text
-failed
-bad input
-not ready
-error
+report-only
+header-only
+source-intake
+diagnostic-runtime
+selected-slice-proof
+fixture-proof
+bounded primitive
+source-pressure
+target-profile
+unsupported
+not-measured
 ```
 
-Parser failures should return the established parser failure exit code.
+## 9. Docs
 
-Do not silently accept unsupported modes or unknown flags.
+Docs record current truth.
 
-## Documentation Rules
+Docs do not create capability.
 
-Documentation updates must be minimal and implementation-backed.
+Docs changes must be minimal unless the row owns a doctrine/contract boundary.
 
-Update docs only to record:
+Do not duplicate a canonical document.
 
-```text
-what is now true
-how to prove it
-what boundary remains
-what the next real implementation blocker is
-```
+Do not expand roadmap prose.
 
-Do not expand roadmap prose unless needed to reconcile current implementation
-state.
+Do not write marketing copy.
 
-Do not add docs sprawl.
+Do not write AI-style filler.
 
 Canonical docs:
 
 ```text
 docs/spine.md
-docs/runbooks/common.md
+docs/v010-release-doctrine.md
 docs/model-families.md
 docs/api.md
 docs/contract.md
 docs/operator-runbook.md
+docs/cli-output-architecture.md
 MODEL_ARTIFACTS.md
+AGENTS.md
 ```
 
-Do not create duplicate docs for the same concept.
+Docs entry shape:
 
-## Validation
+```text
+what is true
+how to prove it
+what boundary remains
+next blocker
+```
 
-Baseline validation:
+## 10. Tests
+
+Tests are part of implementation.
+
+A behavior without tests is not complete.
+
+A refusal path without tests is not complete.
+
+A command without output tests is not complete.
+
+A docs claim without a guard is not stable.
+
+Runtime/backend tests:
+
+```text
+reference result
+implementation result
+tolerance if numeric
+edge case
+failure/refusal path
+cleanup where relevant
+```
+
+Source/model tests:
+
+```text
+missing source
+fake source
+malformed input where relevant
+normal/table/audit preservation
+no payload loading where relevant
+no readiness claim
+```
+
+CLI tests:
+
+```text
+normal output
+audit output
+parser failure
+exit code
+compactness where output surface changes
+```
+
+## 11. Validation
+
+Baseline:
 
 ```sh
 git diff --check
 make
 make smoke
 make check
+make check-docs
+sh tests/test_docs_surface.sh
+sh tests/test_surface.sh
+sh tests/test_source_layout.sh
+sh tests/test_code_natural.sh
 ```
 
 CUDA-capable hosts:
 
 ```sh
-make cuda
-make test-cuda
 make check-cuda
-```
-
-Surface and hygiene checks:
-
-```sh
-sh tests/test_docs_surface.sh
-sh tests/test_surface.sh
-sh tests/test_source_layout.sh
-sh tests/test_code_natural.sh
 ```
 
 Artifact guardrail:
@@ -532,45 +482,43 @@ git ls-files '*.safetensors' '*.bin' '*.dat'
 git ls-files '*.gguf'
 ```
 
-Expected:
+Expected artifact guardrail:
 
 ```text
 no tracked large model artifacts
 tracked GGUF files are tiny test fixtures only
 ```
 
-## Review Failure Conditions
+## 12. Review Failure
 
-A delivery fails review if it:
+A patch fails review if it:
 
 ```text
-adds behavior to the wrong owner module
-creates new source files without a real ownership need
-adds docs without implementation
+edits the wrong owner module
+adds behavior to yvex_cli.c that belongs elsewhere
+creates new source files without ownership need
+adds docs without implementation or explicit doctrine boundary
 adds capability claims without executable proof
 commits model artifacts or local state
-moves detailed behavior into yvex_cli.c
-adds large hardcoded output walls to normal output
-duplicates existing state fields instead of consolidating them
-introduces a new abstraction that does not remove real complexity
+dumps audit fields into normal output
+duplicates state fields instead of consolidating
+introduces abstraction without removing complexity
 breaks normal/table/audit behavior
-reads tensor payloads in a header-only/source-report row
-claims runtime/generation/benchmark readiness without proof
+reads tensor payloads in header-only/source-report rows
+claims runtime/generation/benchmark/release readiness without proof
 ```
 
-## Final Principle
+## 13. Final Rule
 
-Every patch should leave YVEX more real.
+Make YVEX more real.
 
-```text
-less roadmap
-less placeholder
-less duplicate state
-less doc-driven work
+Less roadmap.
+Less placeholder.
+Less duplicate state.
+Less prose.
 
-more executable code
-more owner-file coherence
-more reference tests
-more bounded primitives
-more honest boundaries
-```
+More executable code.
+More owner-file coherence.
+More reference tests.
+More bounded primitives.
+More honest boundaries.
