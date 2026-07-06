@@ -159,11 +159,38 @@ if variant == "qwen-incomplete":
         "model.layers.0.self_attn.o_proj.weight",
         "model.layers.0.input_layernorm.weight",
         "model.layers.0.post_attention_layernorm.weight",
-        "model.layers.0.linear_attn.in_proj.weight",
         "model.layers.0.mlp.experts.0.gate_proj.weight",
         "model.norm.weight",
         "lm_head.weight",
         "model.unmapped.qwen_probe.weight",
+    ]
+elif variant == "qwen-coverage":
+    names = [
+        "model.language_model.embed_tokens.weight",
+        "model.language_model.layers.0.self_attn.q_proj.weight",
+        "model.language_model.layers.0.self_attn.k_proj.weight",
+        "model.language_model.layers.0.self_attn.v_proj.weight",
+        "model.language_model.layers.0.self_attn.o_proj.weight",
+        "model.language_model.layers.0.self_attn.q_norm.weight",
+        "model.language_model.layers.0.self_attn.k_norm.weight",
+        "model.language_model.layers.0.input_layernorm.weight",
+        "model.language_model.layers.0.post_attention_layernorm.weight",
+        "model.language_model.layers.0.linear_attn.A_log",
+        "model.language_model.layers.0.linear_attn.dt_bias",
+        "model.language_model.layers.0.linear_attn.conv1d.weight",
+        "model.language_model.layers.0.linear_attn.in_proj_a.weight",
+        "model.language_model.layers.0.linear_attn.in_proj_b.weight",
+        "model.language_model.layers.0.linear_attn.norm.weight",
+        "model.language_model.layers.0.mlp.gate.weight",
+        "model.language_model.layers.0.mlp.experts.gate_up_proj",
+        "model.language_model.layers.0.mlp.experts.down_proj",
+        "model.language_model.layers.0.mlp.shared_expert.gate_proj.weight",
+        "model.language_model.layers.0.mlp.shared_expert.up_proj.weight",
+        "model.language_model.layers.0.mlp.shared_expert.down_proj.weight",
+        "model.language_model.layers.0.mlp.shared_expert_gate.weight",
+        "model.language_model.norm.weight",
+        "lm_head.weight",
+        "model.language_model.layers.0.optional_probe.weight",
     ]
 elif variant == "gemma-incomplete-no-head":
     names = [
@@ -178,6 +205,63 @@ elif variant == "gemma-incomplete-no-head":
         "model.layers.0.post_attention_layernorm.weight",
         "model.norm.weight",
         "model.unmapped.gemma_probe.weight",
+    ]
+elif variant == "gemma-language-head":
+    names = [
+        "model.language_model.embed_tokens.weight",
+        "model.language_model.layers.0.self_attn.q_proj.weight",
+        "model.language_model.layers.0.self_attn.k_proj.weight",
+        "model.language_model.layers.0.self_attn.v_proj.weight",
+        "model.language_model.layers.0.self_attn.o_proj.weight",
+        "model.language_model.layers.0.self_attn.q_norm.weight",
+        "model.language_model.layers.0.self_attn.k_norm.weight",
+        "model.language_model.layers.0.mlp.gate_proj.weight",
+        "model.language_model.layers.0.mlp.up_proj.weight",
+        "model.language_model.layers.0.mlp.down_proj.weight",
+        "model.language_model.layers.0.input_layernorm.weight",
+        "model.language_model.layers.0.post_attention_layernorm.weight",
+        "model.language_model.layers.0.pre_feedforward_layernorm.weight",
+        "model.language_model.layers.0.post_feedforward_layernorm.weight",
+        "model.language_model.layers.0.layer_scalar",
+        "model.language_model.norm.weight",
+        "model.language_model.lm_head.weight",
+    ]
+elif variant == "gemma-language-tied":
+    names = [
+        "model.language_model.embed_tokens.weight",
+        "model.language_model.layers.0.self_attn.q_proj.weight",
+        "model.language_model.layers.0.self_attn.k_proj.weight",
+        "model.language_model.layers.0.self_attn.v_proj.weight",
+        "model.language_model.layers.0.self_attn.o_proj.weight",
+        "model.language_model.layers.0.self_attn.q_norm.weight",
+        "model.language_model.layers.0.self_attn.k_norm.weight",
+        "model.language_model.layers.0.mlp.gate_proj.weight",
+        "model.language_model.layers.0.mlp.up_proj.weight",
+        "model.language_model.layers.0.mlp.down_proj.weight",
+        "model.language_model.layers.0.input_layernorm.weight",
+        "model.language_model.layers.0.post_attention_layernorm.weight",
+        "model.language_model.layers.0.pre_feedforward_layernorm.weight",
+        "model.language_model.layers.0.post_feedforward_layernorm.weight",
+        "model.language_model.layers.0.layer_scalar",
+        "model.language_model.norm.weight",
+    ]
+elif variant == "gemma-language-no-head":
+    names = [
+        "model.language_model.embed_tokens.weight",
+        "model.language_model.layers.0.self_attn.q_proj.weight",
+        "model.language_model.layers.0.self_attn.k_proj.weight",
+        "model.language_model.layers.0.self_attn.v_proj.weight",
+        "model.language_model.layers.0.self_attn.o_proj.weight",
+        "model.language_model.layers.0.mlp.gate_proj.weight",
+        "model.language_model.layers.0.mlp.up_proj.weight",
+        "model.language_model.layers.0.mlp.down_proj.weight",
+        "model.language_model.layers.0.input_layernorm.weight",
+        "model.language_model.layers.0.post_attention_layernorm.weight",
+        "model.language_model.layers.0.pre_feedforward_layernorm.weight",
+        "model.language_model.layers.0.post_feedforward_layernorm.weight",
+        "model.language_model.layers.0.layer_scalar",
+        "model.language_model.norm.weight",
+        "model.language_model.layers.0.unmapped_probe.weight",
     ]
 offset = 0
 header = {}
@@ -546,16 +630,27 @@ grep 'status: model-download-status' "$ROOT/download-dynamic-qwen-status.out"
 grep 'model-download-cleanup: target=qwen3-6-35b-a3b' "$ROOT/download-dynamic-qwen-cleanup.out"
 grep 'status: model-download-cleanup-dry-run' "$ROOT/download-dynamic-qwen-cleanup.out"
 rm -f "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b/"*.safetensors
-write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b/model.safetensors"
+write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b/model.safetensors" qwen-coverage
 "$YVEX_BIN" model-target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-qwen-audit.out"
-grep 'tensor_map_status: naming-map-profiled' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map_status: naming-map-candidate' "$ROOT/tensor-map-dynamic-qwen-audit.out"
 grep 'tensor_map_family: qwen' "$ROOT/tensor-map-dynamic-qwen-audit.out"
 grep 'tensor_map_target_id: qwen3-6-35b-a3b' "$ROOT/tensor-map-dynamic-qwen-audit.out"
-grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.layers.0.self_attn.q_proj.weight -> model.layers.0.attention.q_proj.weight' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.embed_tokens.weight -> model.embedding.token.weight' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.layers.0.self_attn.q_proj.weight -> model.layers.0.attention.q_proj.weight' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.layers.0.linear_attn.A_log -> model.layers.0.qwen_linear_attn.A_log' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.layers.0.mlp.gate.weight -> model.layers.0.moe.router.weight' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.layers.0.mlp.experts.gate_up_proj -> model.layers.0.moe.experts.all.gate_up_proj.weight' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.layers.0.mlp.shared_expert.down_proj.weight -> model.layers.0.moe.shared_expert.down_proj.weight' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map_qwen_linear_attn_count: [1-9]' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map_moe_router_count: [1-9]' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map_moe_expert_count: [1-9]' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map_moe_shared_count: [1-9]' "$ROOT/tensor-map-dynamic-qwen-audit.out"
+grep 'tensor_map_required_role_coverage_status: required-groups-present' "$ROOT/tensor-map-dynamic-qwen-audit.out"
 grep 'runtime_claim: unsupported' "$ROOT/tensor-map-dynamic-qwen-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/tensor-map-dynamic-qwen-audit.out"
 test -f "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.tensor-map.json"
 grep '"row": "MODELS.SOURCE.MAP.HANDOFF.0"' "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.tensor-map.json"
+grep '"required_role_coverage_status": "required-groups-present"' "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.tensor-map.json"
 "$YVEX_BIN" model-target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role output-head --audit > "$ROOT/output-head-dynamic-qwen-audit.out"
 grep 'output_head_map_status: output-head-profiled' "$ROOT/output-head-dynamic-qwen-audit.out"
 grep 'output_head_map_family: qwen' "$ROOT/output-head-dynamic-qwen-audit.out"
@@ -580,6 +675,31 @@ grep 'tokenizer_map_status: missing' "$ROOT/source-dynamic-qwen-audit.out"
 grep 'next_required_rows: V010.MAP.8' "$ROOT/source-dynamic-qwen-audit.out"
 ! grep 'missing-qwen-tensor-role-map' "$ROOT/source-dynamic-qwen-audit.out"
 ! grep 'missing-qwen-tensor-map' "$ROOT/source-dynamic-qwen-audit.out"
+"$YVEX_BIN" model-target missing-roles qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" > "$ROOT/missing-roles-dynamic-qwen-coverage.out"
+grep 'missing-roles: qwen3-6-35b-a3b' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
+grep 'top_blocker: missing-tokenizer-map' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
+grep 'qwen-linear-attn.*present' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
+grep 'moe-router.*present' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
+grep 'moe-experts.*present' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
+grep 'shared-expert.*present' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
+grep 'unknown-tensors.*unclassified-header-name' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
+"$YVEX_BIN" model-target missing-roles qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
+grep 'tensor_map_status: present-report-only' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
+grep 'role_group.qwen_linear_attn.status: present' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
+grep 'role_group.moe_router.status: present' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
+grep 'role_group.moe_experts.status: present' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
+grep 'role_group.shared_expert.status: present' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
+grep 'role_group.unknown_tensors.status: unclassified-header-name' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
+grep 'top_blocker: missing-tokenizer-map' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
+"$YVEX_BIN" model-target missing-roles qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --output json > "$ROOT/missing-roles-dynamic-qwen-coverage-json.out"
+grep '"top_blocker":"missing-tokenizer-map"' "$ROOT/missing-roles-dynamic-qwen-coverage-json.out"
+grep '"qwen_linear_attn":"present"' "$ROOT/missing-roles-dynamic-qwen-coverage-json.out"
+grep '"shared_expert":"present"' "$ROOT/missing-roles-dynamic-qwen-coverage-json.out"
+"$YVEX_BIN" models prepare qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --dry-run --audit > "$ROOT/prepare-dynamic-qwen-coverage.out" 2>&1 && exit 1 || true
+grep 'tensor_map_status: present-report-only' "$ROOT/prepare-dynamic-qwen-coverage.out"
+grep 'output_head_map_status: present-report-only' "$ROOT/prepare-dynamic-qwen-coverage.out"
+grep 'top_blocker: missing-tokenizer-map' "$ROOT/prepare-dynamic-qwen-coverage.out"
+grep 'reason: tokenizer metadata mapping / artifact path missing' "$ROOT/prepare-dynamic-qwen-coverage.out"
 write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b/model.safetensors" qwen-incomplete
 "$YVEX_BIN" model-target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-qwen-incomplete-audit.out"
 grep 'tensor_map_status: naming-map-incomplete' "$ROOT/tensor-map-dynamic-qwen-incomplete-audit.out"
@@ -674,12 +794,14 @@ grep 'family: gemma' "$ROOT/download-dynamic-gemma-status.out"
 grep 'repo_id: google/Gemma-4-31B-it' "$ROOT/download-dynamic-gemma-status.out"
 grep 'safetensors_size_status: ok' "$ROOT/download-dynamic-gemma-status.out"
 rm -f "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/"*.safetensors
-write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/model.safetensors"
+write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/model.safetensors" gemma-language-head
 "$YVEX_BIN" model-target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-gemma-audit.out"
 grep 'tensor_map_status: naming-map-profiled' "$ROOT/tensor-map-dynamic-gemma-audit.out"
 grep 'tensor_map_family: gemma' "$ROOT/tensor-map-dynamic-gemma-audit.out"
 grep 'tensor_map_target_id: gemma-4-31b-it' "$ROOT/tensor-map-dynamic-gemma-audit.out"
-grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.layers.0.self_attn.q_proj.weight -> model.layers.0.attention.q_proj.weight' "$ROOT/tensor-map-dynamic-gemma-audit.out"
+grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.embed_tokens.weight -> model.embedding.token.weight' "$ROOT/tensor-map-dynamic-gemma-audit.out"
+grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.layers.0.self_attn.q_proj.weight -> model.layers.0.attention.q_proj.weight' "$ROOT/tensor-map-dynamic-gemma-audit.out"
+grep 'tensor_map.entry.[0-9][0-9]*.mapping: model.language_model.layers.0.layer_scalar -> model.layers.0.layer_scalar' "$ROOT/tensor-map-dynamic-gemma-audit.out"
 grep 'runtime_claim: unsupported' "$ROOT/tensor-map-dynamic-gemma-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/tensor-map-dynamic-gemma-audit.out"
 test -f "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.tensor-map.json"
@@ -688,7 +810,8 @@ grep '"row": "MODELS.SOURCE.MAP.HANDOFF.0"' "$DYNAMIC_ROOT/reports/gemma/gemma-4
 grep 'output_head_map_status: output-head-profiled' "$ROOT/output-head-dynamic-gemma-audit.out"
 grep 'output_head_map_family: gemma' "$ROOT/output-head-dynamic-gemma-audit.out"
 grep 'output_head_map_target_id: gemma-4-31b-it' "$ROOT/output-head-dynamic-gemma-audit.out"
-grep 'output_head_native_name: lm_head.weight' "$ROOT/output-head-dynamic-gemma-audit.out"
+grep 'output_head_native_name: model.language_model.lm_head.weight' "$ROOT/output-head-dynamic-gemma-audit.out"
+grep 'tie_policy_status: separate-output-head-candidate' "$ROOT/output-head-dynamic-gemma-audit.out"
 grep 'runtime_claim: unsupported' "$ROOT/output-head-dynamic-gemma-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/output-head-dynamic-gemma-audit.out"
 test -f "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.output-head-map.json"
@@ -727,15 +850,41 @@ grep 'status: model-prepare-unsupported' "$ROOT/prepare-dynamic-gemma.out"
 ! grep 'status: model-prepare-unknown-target' "$ROOT/prepare-dynamic-gemma.out"
 ! grep 'reason: missing tensor map / model class / artifact path' "$ROOT/prepare-dynamic-gemma.out"
 
-write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/model.safetensors" gemma-incomplete-no-head
+write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/model.safetensors" gemma-language-tied
+printf '{"tie_word_embeddings":true,"vocab_size":2,"bos_token_id":1,"eos_token_id":1,"pad_token_id":0,"unk_token_id":0}\n' > "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/config.json"
+"$YVEX_BIN" model-target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-gemma-tied-audit.out"
+grep 'tensor_map_status: naming-map-profiled' "$ROOT/tensor-map-dynamic-gemma-tied-audit.out"
+grep 'tensor_map_required_role_coverage_status: required-groups-present' "$ROOT/tensor-map-dynamic-gemma-tied-audit.out"
+"$YVEX_BIN" model-target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role output-head --audit > "$ROOT/output-head-dynamic-gemma-tied-audit.out"
+grep 'output_head_map_status: tied-output-head-report-only' "$ROOT/output-head-dynamic-gemma-tied-audit.out"
+grep 'output_head_native_name: model.language_model.embed_tokens.weight' "$ROOT/output-head-dynamic-gemma-tied-audit.out"
+grep 'output_head_canonical_role: model.output_head.tied_embedding' "$ROOT/output-head-dynamic-gemma-tied-audit.out"
+grep 'output_head_mapping_status: tied-to-token-embedding-candidate' "$ROOT/output-head-dynamic-gemma-tied-audit.out"
+grep 'tie_policy_status: tied-output-head-candidate' "$ROOT/output-head-dynamic-gemma-tied-audit.out"
+grep 'config_tie_word_embeddings_status: true' "$ROOT/output-head-dynamic-gemma-tied-audit.out"
+"$YVEX_BIN" model-target missing-roles gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
+grep 'tensor_map_status: present-report-only' "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
+grep 'output_head_map_status: present-report-only' "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
+grep 'role_group.output_head.status: present' "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
+grep 'role_group.tied_head_policy.status: tied-output-head-candidate' "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
+grep 'top_blocker: missing-tokenizer-map' "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
+"$YVEX_BIN" models prepare gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --dry-run --audit > "$ROOT/prepare-dynamic-gemma-tied.out" 2>&1 && exit 1 || true
+grep 'tensor_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma-tied.out"
+grep 'output_head_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma-tied.out"
+grep 'top_blocker: missing-tokenizer-map' "$ROOT/prepare-dynamic-gemma-tied.out"
+
+write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/model.safetensors" gemma-language-no-head
+printf '{"tie_word_embeddings":false}\n' > "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/config.json"
 "$YVEX_BIN" model-target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-gemma-incomplete-audit.out"
-grep 'tensor_map_status: naming-map-incomplete' "$ROOT/tensor-map-dynamic-gemma-incomplete-audit.out"
+grep 'tensor_map_status: naming-map-candidate' "$ROOT/tensor-map-dynamic-gemma-incomplete-audit.out"
 grep 'tensor_map_target_id: gemma-4-31b-it' "$ROOT/tensor-map-dynamic-gemma-incomplete-audit.out"
 grep 'unmapped_unknown_count: [1-9]' "$ROOT/tensor-map-dynamic-gemma-incomplete-audit.out"
 "$YVEX_BIN" model-target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role output-head --audit > "$ROOT/output-head-dynamic-gemma-missing-audit.out"
 grep 'output_head_map_status: output-head-missing' "$ROOT/output-head-dynamic-gemma-missing-audit.out"
 grep 'output_head_map_target_id: gemma-4-31b-it' "$ROOT/output-head-dynamic-gemma-missing-audit.out"
 grep 'output_head_missing_status: missing' "$ROOT/output-head-dynamic-gemma-missing-audit.out"
+grep 'tie_policy_status: not-proven' "$ROOT/output-head-dynamic-gemma-missing-audit.out"
+grep 'config_tie_word_embeddings_status: false' "$ROOT/output-head-dynamic-gemma-missing-audit.out"
 "$YVEX_BIN" model-target missing-roles gemma-4-31b-it --models-root "$DYNAMIC_ROOT" > "$ROOT/missing-roles-dynamic-gemma.out"
 grep 'missing-roles: gemma-4-31b-it' "$ROOT/missing-roles-dynamic-gemma.out"
 grep 'family: gemma' "$ROOT/missing-roles-dynamic-gemma.out"
@@ -743,9 +892,9 @@ grep 'status: blocked' "$ROOT/missing-roles-dynamic-gemma.out"
 grep 'top_blocker: missing-output-head-map' "$ROOT/missing-roles-dynamic-gemma.out"
 grep 'next: V010.MAP.8' "$ROOT/missing-roles-dynamic-gemma.out"
 grep 'output-head.*missing' "$ROOT/missing-roles-dynamic-gemma.out"
-grep 'tied-head-policy.*unknown' "$ROOT/missing-roles-dynamic-gemma.out"
+grep 'tied-head-policy.*not-proven' "$ROOT/missing-roles-dynamic-gemma.out"
 grep 'tokenizer.*missing' "$ROOT/missing-roles-dynamic-gemma.out"
-grep 'unknown-tensors.*incomplete' "$ROOT/missing-roles-dynamic-gemma.out"
+grep 'unknown-tensors.*unclassified-header-name' "$ROOT/missing-roles-dynamic-gemma.out"
 grep 'artifact.*missing' "$ROOT/missing-roles-dynamic-gemma.out"
 "$YVEX_BIN" model-target missing-roles gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/missing-roles-dynamic-gemma-table.out"
 grep 'gemma-4-31b-it.*gemma.*blocked.*missing-output-head-map' "$ROOT/missing-roles-dynamic-gemma-table.out"
@@ -755,7 +904,7 @@ grep 'gemma-4-31b-it.*[[:space:]][1-9][0-9]*[[:space:]]*missing[[:space:]]*missi
 grep 'target_id: gemma-4-31b-it' "$ROOT/missing-roles-dynamic-gemma-audit.out"
 grep 'family: gemma' "$ROOT/missing-roles-dynamic-gemma-audit.out"
 grep 'source_status: present' "$ROOT/missing-roles-dynamic-gemma-audit.out"
-grep 'tensor_map_status: incomplete-report-only' "$ROOT/missing-roles-dynamic-gemma-audit.out"
+grep 'tensor_map_status: present-report-only' "$ROOT/missing-roles-dynamic-gemma-audit.out"
 grep 'output_head_map_status: missing-in-report' "$ROOT/missing-roles-dynamic-gemma-audit.out"
 grep 'tokenizer_map_status: missing' "$ROOT/missing-roles-dynamic-gemma-audit.out"
 grep 'artifact_status: missing' "$ROOT/missing-roles-dynamic-gemma-audit.out"
@@ -763,16 +912,16 @@ grep 'expected_artifact_path: .*gemma-4-31b-it.gguf' "$ROOT/missing-roles-dynami
 grep 'top_blocker: missing-output-head-map' "$ROOT/missing-roles-dynamic-gemma-audit.out"
 grep 'next: V010.MAP.8' "$ROOT/missing-roles-dynamic-gemma-audit.out"
 "$YVEX_BIN" source-manifest report --family gemma --release v0.1.0 --source "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it" --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/source-dynamic-gemma-incomplete-map.out"
-grep 'tensor_map_status: incomplete-report-only' "$ROOT/source-dynamic-gemma-incomplete-map.out"
-grep 'tensor_role_map_status: incomplete-report-only' "$ROOT/source-dynamic-gemma-incomplete-map.out"
+grep 'tensor_map_status: available-report-only' "$ROOT/source-dynamic-gemma-incomplete-map.out"
+grep 'tensor_role_map_status: available-report-only' "$ROOT/source-dynamic-gemma-incomplete-map.out"
 grep 'output_head_map_status: missing-in-report' "$ROOT/source-dynamic-gemma-incomplete-map.out"
-grep 'missing-gemma-tensor-role-map' "$ROOT/source-dynamic-gemma-incomplete-map.out"
-grep 'missing-gemma-tensor-map' "$ROOT/source-dynamic-gemma-incomplete-map.out"
+! grep 'missing-gemma-tensor-role-map' "$ROOT/source-dynamic-gemma-incomplete-map.out"
+! grep 'missing-gemma-tensor-map' "$ROOT/source-dynamic-gemma-incomplete-map.out"
 "$YVEX_BIN" models prepare gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --dry-run --audit > "$ROOT/prepare-dynamic-gemma-incomplete-map.out" 2>&1 && exit 1 || true
-grep 'tensor_map_status: incomplete-report-only' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
+grep 'tensor_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
 grep 'output_head_map_status: missing-in-report' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
 grep 'top_blocker: missing-output-head-map' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
-grep 'reason: incomplete tensor map / tokenizer metadata mapping / artifact path missing' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
+grep 'reason: output head mapping missing / tokenizer metadata mapping / artifact path missing' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
 grep 'status: model-prepare-unsupported' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
 "$YVEX_BIN" models prepare gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --dry-run > "$ROOT/prepare-dynamic-gemma-normal.out" 2>&1 && exit 1 || true
 grep 'models prepare: gemma-4-31b-it \[blocked\]' "$ROOT/prepare-dynamic-gemma-normal.out"
@@ -833,7 +982,7 @@ grep 'expected: .*gemma-4-31b-it.gguf' "$ROOT/artifacts-status-gemma-audit.out"
 grep 'prepare: blocked' "$ROOT/artifacts-status-gemma-audit.out"
 grep 'top_blocker: missing-output-head-map' "$ROOT/artifacts-status-gemma-audit.out"
 grep 'next: V010.MAP.8' "$ROOT/artifacts-status-gemma-audit.out"
-grep 'tensor_map_status: incomplete-report-only' "$ROOT/artifacts-status-gemma-audit.out"
+grep 'tensor_map_status: present-report-only' "$ROOT/artifacts-status-gemma-audit.out"
 grep 'output_head_map_status: missing-in-report' "$ROOT/artifacts-status-gemma-audit.out"
 grep 'source_payload_loaded: false' "$ROOT/artifacts-status-gemma-audit.out"
 grep 'hash_performed: false' "$ROOT/artifacts-status-gemma-audit.out"
@@ -1229,7 +1378,7 @@ grep 'tensor_map_evidence_basis: header-metadata-only' "$ROOT/tensor-map-qwen-mi
 grep 'tensor_map_source_status: missing' "$ROOT/tensor-map-qwen-missing-audit.out"
 grep 'tensor_map_mapped_total_count: 0' "$ROOT/tensor-map-qwen-missing-audit.out"
 grep 'tensor_map_unmapped_unknown_count: 0' "$ROOT/tensor-map-qwen-missing-audit.out"
-grep 'tensor_map_runtime_role_coverage_status: not-complete' "$ROOT/tensor-map-qwen-missing-audit.out"
+grep 'tensor_map_runtime_role_coverage_status: report-only' "$ROOT/tensor-map-qwen-missing-audit.out"
 grep 'tensor_map_artifact_contract_status: not-implemented' "$ROOT/tensor-map-qwen-missing-audit.out"
 grep 'tensor_map_runtime_descriptor_status: not-implemented' "$ROOT/tensor-map-qwen-missing-audit.out"
 grep 'tensor_map_graph_consumer_status: not-implemented' "$ROOT/tensor-map-qwen-missing-audit.out"
@@ -1263,7 +1412,7 @@ grep 'tensor_map_evidence_basis: header-metadata-only' "$ROOT/tensor-map-gemma-m
 grep 'tensor_map_source_status: missing' "$ROOT/tensor-map-gemma-missing-audit.out"
 grep 'tensor_map_mapped_total_count: 0' "$ROOT/tensor-map-gemma-missing-audit.out"
 grep 'tensor_map_unmapped_unknown_count: 0' "$ROOT/tensor-map-gemma-missing-audit.out"
-grep 'tensor_map_runtime_role_coverage_status: not-complete' "$ROOT/tensor-map-gemma-missing-audit.out"
+grep 'tensor_map_runtime_role_coverage_status: report-only' "$ROOT/tensor-map-gemma-missing-audit.out"
 grep 'tensor_map_artifact_contract_status: not-implemented' "$ROOT/tensor-map-gemma-missing-audit.out"
 grep 'tensor_map_runtime_descriptor_status: not-implemented' "$ROOT/tensor-map-gemma-missing-audit.out"
 grep 'tensor_map_graph_consumer_status: not-implemented' "$ROOT/tensor-map-gemma-missing-audit.out"
@@ -1655,7 +1804,7 @@ grep 'tensor_map_moe_router_count: 0' "$ROOT/tensor-map-qwen-audit.out"
 grep 'tensor_map_moe_expert_count: 0' "$ROOT/tensor-map-qwen-audit.out"
 grep 'tensor_map_validation_status: lexical-and-header-only' "$ROOT/tensor-map-qwen-audit.out"
 grep 'tensor_map_canonical_role_status: mapped-candidates' "$ROOT/tensor-map-qwen-audit.out"
-grep 'tensor_map_runtime_role_coverage_status: not-complete' "$ROOT/tensor-map-qwen-audit.out"
+grep 'tensor_map_runtime_role_coverage_status: report-only' "$ROOT/tensor-map-qwen-audit.out"
 grep 'tensor_map_artifact_contract_status: not-implemented' "$ROOT/tensor-map-qwen-audit.out"
 grep 'tensor_map_runtime_descriptor_status: not-implemented' "$ROOT/tensor-map-qwen-audit.out"
 grep 'tensor_map_graph_consumer_status: not-implemented' "$ROOT/tensor-map-qwen-audit.out"
@@ -1705,7 +1854,7 @@ grep 'output_head_missing_status: present' "$ROOT/output-head-qwen-audit.out"
 grep 'embedding_canonical_role: model.embedding.token.weight' "$ROOT/output-head-qwen-audit.out"
 grep 'final_norm_canonical_role: model.final_norm.weight' "$ROOT/output-head-qwen-audit.out"
 grep 'tie_policy_status: separate-output-head-candidate' "$ROOT/output-head-qwen-audit.out"
-grep 'config_tie_word_embeddings_status: unknown' "$ROOT/output-head-qwen-audit.out"
+grep 'config_tie_word_embeddings_status: missing' "$ROOT/output-head-qwen-audit.out"
 grep 'shape_relation_status: compatible-same-shape' "$ROOT/output-head-qwen-audit.out"
 grep 'output_head_runtime_consumer_status: not-implemented' "$ROOT/output-head-qwen-audit.out"
 grep 'output_head_logits_status: not-implemented' "$ROOT/output-head-qwen-audit.out"
@@ -2630,7 +2779,7 @@ grep 'tensor_map_moe_router_count: 0' "$ROOT/tensor-map-gemma-audit.out"
 grep 'tensor_map_moe_expert_count: 0' "$ROOT/tensor-map-gemma-audit.out"
 grep 'tensor_map_validation_status: lexical-and-header-only' "$ROOT/tensor-map-gemma-audit.out"
 grep 'tensor_map_canonical_role_status: mapped-candidates' "$ROOT/tensor-map-gemma-audit.out"
-grep 'tensor_map_runtime_role_coverage_status: not-complete' "$ROOT/tensor-map-gemma-audit.out"
+grep 'tensor_map_runtime_role_coverage_status: report-only' "$ROOT/tensor-map-gemma-audit.out"
 grep 'tensor_map_artifact_contract_status: not-implemented' "$ROOT/tensor-map-gemma-audit.out"
 grep 'tensor_map_runtime_descriptor_status: not-implemented' "$ROOT/tensor-map-gemma-audit.out"
 grep 'tensor_map_graph_consumer_status: not-implemented' "$ROOT/tensor-map-gemma-audit.out"
@@ -2778,7 +2927,7 @@ grep 'roles: total=2 embedding=0 attention=0 mlp=0 norm=2 head=0 moe=0 unknown=0
 grep 'tensor_map_norm_count: 2' "$ROOT/tensor-map-gemma-norm-audit.out"
 grep 'model.layers.0.pre_feedforward_layernorm.weight -> model.layers.0.mlp.norm.weight' "$ROOT/tensor-map-gemma-norm-audit.out"
 grep 'model.layers.0.post_feedforward_layernorm.weight -> model.layers.0.mlp.norm.weight' "$ROOT/tensor-map-gemma-norm-audit.out"
-grep 'tensor_map_runtime_role_coverage_status: not-complete' "$ROOT/tensor-map-gemma-norm-audit.out"
+grep 'tensor_map_runtime_role_coverage_status: report-only' "$ROOT/tensor-map-gemma-norm-audit.out"
 grep 'runtime_claim: unsupported' "$ROOT/tensor-map-gemma-norm-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/tensor-map-gemma-norm-audit.out"
 grep 'release_ready: false' "$ROOT/tensor-map-gemma-norm-audit.out"

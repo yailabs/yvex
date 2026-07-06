@@ -205,11 +205,26 @@ candidates without payload loading, artifact emission, runtime descriptor
 construction, graph consumption, Metal support, generation, evaluation, or
 benchmark claims.
 
+Downloaded Qwen targets created with `--repo ... --name`, such as
+`qwen3-6-35b-a3b`, use the same surface. The mapper now recognizes
+`model.language_model` embedding/final-norm paths, self-attention Q/K/V/O and
+Q/K norm paths, Qwen linear-attention names, MoE router names, expert
+gate-up/down names, and shared-expert names from safetensors headers. Unknown
+header names remain visible in audit output but do not block prepare when the
+required role groups are present.
+
 `model-target tensor-map gemma-4-12b-it` is a header-derived dense tensor
 naming map for Gemma source tensors. It assigns native names to canonical YVEX
 dense role-label candidates without payload loading, artifact emission, runtime
 descriptor construction, graph consumption, CUDA runtime support, generation,
 evaluation, or benchmark claims.
+
+Downloaded Gemma targets created with `--repo ... --name`, such as
+`gemma-4-31b-it`, use the same surface. The mapper now recognizes
+`model.language_model` embedding, attention, dense MLP, pre/post feed-forward
+norm, layer-scalar, final-norm, and separate output-head names. If no separate
+output head exists, bounded config evidence may report a tied-output-head
+candidate; otherwise output-head remains an explicit blocker.
 
 For tensor-map, output-head, missing-roles, mapping-gate, and quant-policy
 surfaces, normal output is intentionally compact and table output remains
@@ -237,9 +252,10 @@ evaluate, or benchmark.
 for Qwen and Gemma source trees, including downloaded `--repo ... --name`
 targets. It aggregates header-derived tensor naming, output-head, tokenizer
 metadata, planned artifact, and sidecar evidence into the current top blocker.
-Use `--audit` for the full diagnostic field set. It does not load tensor
-payloads, emit artifacts, materialize tensors, build runtime descriptors,
-execute graph work, compute logits, tokenize, generate, evaluate, or benchmark.
+Normal, table, audit, and JSON outputs report the same role groups. Use
+`--audit` for the full diagnostic field set. It does not load tensor payloads,
+emit artifacts, materialize tensors, build runtime descriptors, execute graph
+work, compute logits, tokenize, generate, evaluate, or benchmark.
 
 `model-target tensor-map TARGET --gate v0.1.0` is the compact mapping-stage
 gate for Qwen and Gemma source trees. It aggregates model-class, collection,

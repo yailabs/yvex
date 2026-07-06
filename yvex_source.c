@@ -1165,14 +1165,22 @@ static void qwen_source_probe_map_sidecars(yvex_qwen_source_pressure_report *rep
 {
     char buf[YVEX_SOURCE_MANIFEST_PROBE_CAP + 1u];
     char status[64];
+    char coverage[64];
     unsigned long long unmapped = 0;
 
     if (!report) return;
     if (report->tensor_map_exists &&
-        qwen_source_read_small_file(report->tensor_map_path, buf, sizeof(buf)) &&
-        qwen_source_json_u64_field(buf, "unmapped_unknown_count", &unmapped) &&
-        unmapped > 0ull) {
-        report->tensor_map_incomplete = 1;
+        qwen_source_read_small_file(report->tensor_map_path, buf, sizeof(buf))) {
+        if (qwen_source_json_string_field(buf, "required_role_coverage_status",
+                                          coverage, sizeof(coverage))) {
+            if (strcmp(coverage, "required-groups-present") != 0) {
+                report->tensor_map_incomplete = 1;
+            }
+        } else if (qwen_source_json_u64_field(buf, "unmapped_unknown_count",
+                                              &unmapped) &&
+                   unmapped > 0ull) {
+            report->tensor_map_incomplete = 1;
+        }
     }
     if (report->output_head_map_exists &&
         qwen_source_read_small_file(report->output_head_map_path, buf, sizeof(buf)) &&

@@ -236,12 +236,26 @@ label candidates. Its Metal pressure is recorded as backend pressure because
 Qwen can force future unified-memory and backend lowering questions, but Metal
 is not part of the target identity.
 
+Downloaded Qwen source targets, including `qwen3-6-35b-a3b`, reuse the
+backend-neutral Qwen source path. Their current role coverage is still
+header-only, but it maps the `model.language_model` embedding/final norm,
+attention Q/K/V/O and Q/K norms, linear-attention tensors, MoE router,
+expert, and shared-expert names into canonical report candidates before
+artifact planning. This is not Qwen runtime support.
+
 `gemma-4-12b-it` names a Gemma source target. It currently carries source
 target facts, a header-metadata-only model-class profile, and a header-only
 tensor collection inventory, plus a header-derived dense tensor naming map for
 canonical YVEX dense role-label candidates. Its CPU/CUDA baseline pressure is
 recorded as backend pressure because Gemma can force dense runtime and
 artifact-shape questions, but CUDA is not part of the target identity.
+
+Downloaded Gemma source targets, including `gemma-4-31b-it`, reuse the
+backend-neutral Gemma source path. Their current role coverage is header-only
+over `model.language_model` embedding, attention, dense MLP, normalization,
+layer-scalar, final-norm, separate output-head, and config-proven tied
+output-head candidates. A tied head remains report-only until artifact and
+logits rows consume it.
 
 Qwen and Gemma still require runtime role validation, artifact contracts,
 runtime descriptors, graph lowering, and runtime execution before family
@@ -1053,7 +1067,9 @@ evaluation, or benchmark evidence.
 blocker report for Qwen and Gemma source targets, including downloaded dynamic
 targets. It is the operator-facing view of incomplete tensor maps, missing
 output-head or tied-head policy, missing tokenizer metadata, and missing planned
-GGUF artifacts before qtype or artifact emission work can proceed.
+GGUF artifacts before qtype or artifact emission work can proceed. Normal,
+table, audit, and JSON outputs expose the same role groups; audit adds the
+diagnostic fields.
 
 ## Support-Level Lattice
 

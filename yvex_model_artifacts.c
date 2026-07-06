@@ -3277,14 +3277,28 @@ static void prepare_probe_map_sidecar_status(const char *tensor_map_path,
 {
     char buf[16384];
     char status[64];
+    char coverage[64];
     long long unmapped;
 
     if (tensor_map_incomplete) *tensor_map_incomplete = 0;
     if (output_head_map_missing) *output_head_map_missing = 0;
     if (tensor_map_path && tensor_map_path[0] &&
         model_download_read_small_file(tensor_map_path, buf, sizeof(buf))) {
-        unmapped = model_download_json_i64_field(buf, "unmapped_unknown_count");
-        if (unmapped > 0 && tensor_map_incomplete) *tensor_map_incomplete = 1;
+        if (model_download_json_string_field(buf,
+                                             "required_role_coverage_status",
+                                             coverage,
+                                             sizeof(coverage))) {
+            if (strcmp(coverage, "required-groups-present") != 0 &&
+                tensor_map_incomplete) {
+                *tensor_map_incomplete = 1;
+            }
+        } else {
+            unmapped = model_download_json_i64_field(buf,
+                                                     "unmapped_unknown_count");
+            if (unmapped > 0 && tensor_map_incomplete) {
+                *tensor_map_incomplete = 1;
+            }
+        }
     }
     if (output_head_map_path && output_head_map_path[0] &&
         model_download_read_small_file(output_head_map_path, buf, sizeof(buf)) &&

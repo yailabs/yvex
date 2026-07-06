@@ -2211,8 +2211,10 @@ typedef struct {
     unsigned long long mlp_down_count;
     unsigned long long norm_count;
     unsigned long long output_head_count;
+    unsigned long long qwen_linear_attn_count;
     unsigned long long moe_router_count;
     unsigned long long moe_expert_count;
+    unsigned long long moe_shared_count;
     unsigned long long entry_count;
     yvex_tensor_collection_layer_flags layers[YVEX_TENSOR_COLLECTION_LAYER_CAP];
     yvex_tensor_naming_entry entries[YVEX_TENSOR_NAMING_ENTRY_CAP];
@@ -2328,6 +2330,12 @@ typedef struct {
     const char *mlp_down_status;
     const char *final_norm_status;
     const char *output_head_status;
+    const char *tied_head_policy_status;
+    const char *qwen_linear_attn_status;
+    const char *moe_router_status;
+    const char *moe_expert_status;
+    const char *moe_shared_status;
+    const char *unknown_tensor_status;
     const char *tokenizer_metadata_status;
     const char *config_metadata_status;
     const char *generation_metadata_status;
@@ -2341,16 +2349,19 @@ typedef struct {
     unsigned long long mlp_count;
     unsigned long long norm_count;
     unsigned long long output_head_count;
+    unsigned long long qwen_linear_attn_count;
     unsigned long long moe_router_count;
     unsigned long long moe_expert_count;
+    unsigned long long moe_shared_count;
     unsigned long long source_role_observed_count;
     unsigned long long source_role_missing_count;
     unsigned long long source_role_ambiguous_count;
     unsigned long long metadata_observed_count;
     unsigned long long metadata_missing_count;
     unsigned long long metadata_ambiguous_count;
+    int qwen_extra_required;
     unsigned long long missing_entry_count;
-    yvex_missing_role_entry missing_entries[16];
+    yvex_missing_role_entry missing_entries[32];
 } yvex_missing_role_report_profile;
 
 typedef struct {
@@ -2565,6 +2576,33 @@ static int model_target_json_string_field(const char *json,
     memcpy(out, p, len);
     out[len] = '\0';
     return 1;
+}
+
+static int model_target_json_bool_field(const char *json,
+                                        const char *field,
+                                        int *out)
+{
+    char pattern[128];
+    const char *p;
+
+    if (!json || !field || !out) return 0;
+    if (snprintf(pattern, sizeof(pattern), "\"%s\"", field) < 0) return 0;
+    p = strstr(json, pattern);
+    if (!p) return 0;
+    p += strlen(pattern);
+    while (*p && isspace((unsigned char)*p)) ++p;
+    if (*p != ':') return 0;
+    ++p;
+    while (*p && isspace((unsigned char)*p)) ++p;
+    if (strncmp(p, "true", 4) == 0) {
+        *out = 1;
+        return 1;
+    }
+    if (strncmp(p, "false", 5) == 0) {
+        *out = 0;
+        return 1;
+    }
+    return 0;
 }
 
 static const char *model_target_repo_basename(const char *repo_id)
@@ -2868,6 +2906,9 @@ static int model_target_json_close_tmp(FILE *fp,
     return 1;
 }
 
+static int tensor_naming_required_groups_present(
+    const yvex_tensor_naming_profile *profile);
+
 static int write_tensor_map_sidecar(const char *path,
                                     const yvex_tensor_naming_profile *profile)
 {
@@ -2892,6 +2933,18 @@ static int write_tensor_map_sidecar(const char *path,
                                 profile->unmapped_unknown_count, 1);
     model_target_json_u64_field(fp, "output_head_count",
                                 profile->output_head_count, 1);
+    model_target_json_u64_field(fp, "qwen_linear_attn_count",
+                                profile->qwen_linear_attn_count, 1);
+    model_target_json_u64_field(fp, "moe_router_count",
+                                profile->moe_router_count, 1);
+    model_target_json_u64_field(fp, "moe_expert_count",
+                                profile->moe_expert_count, 1);
+    model_target_json_u64_field(fp, "moe_shared_count",
+                                profile->moe_shared_count, 1);
+    model_target_json_field(fp, "required_role_coverage_status",
+                            tensor_naming_required_groups_present(profile)
+                                ? "required-groups-present"
+                                : "required-groups-missing", 1);
     model_target_json_field(fp, "tokenizer_map_status", "missing", 1);
     model_target_json_field(fp, "runtime_claim", "unsupported", 1);
     model_target_json_field(fp, "generation", "unsupported-full-model", 1);
@@ -2917,10 +2970,19 @@ static int write_output_head_map_sidecar(
     model_target_json_field(fp, "family", profile->spec->family_key, 1);
     model_target_json_field(fp, "map_kind", "output-head", 1);
     model_target_json_field(fp, "source_path", profile->source_path, 1);
+    model_target_json_field(fp, "output_head_map_status", profile->status, 1);
     model_target_json_field(fp, "output_head_status",
                             profile->output_head.present ? "present" : "missing", 1);
     model_target_json_field(fp, "output_head_native_name",
                             profile->output_head.native_name, 1);
+    model_target_json_field(fp, "output_head_canonical_role",
+                            profile->output_head.canonical_role, 1);
+    model_target_json_field(fp, "output_head_mapping_status",
+                            profile->output_head.mapping_status, 1);
+    model_target_json_field(fp, "tie_policy_status",
+                            profile->tie_policy_status, 1);
+    model_target_json_field(fp, "config_tie_word_embeddings_status",
+                            profile->config_tie_word_embeddings_status, 1);
     model_target_json_field(fp, "final_norm_status",
                             profile->final_norm.present ? "present" : "missing", 1);
     model_target_json_field(fp, "embedding_status",
@@ -3370,6 +3432,8 @@ static int tensor_collection_layer_index(const char *name,
                                               unsigned long *layer_index)
 {
     const char *patterns[] = {
+        "model.language_model.layers.",
+        "language_model.layers.",
         "model.layers.",
         "layers.",
         "blk.",
@@ -3953,7 +4017,9 @@ static void dense_tensor_naming_map_native(yvex_tensor_naming_entry *entry,
 
     if (!has_layer &&
         (strcmp(name, "model.embed_tokens.weight") == 0 ||
+         strcmp(name, "model.language_model.embed_tokens.weight") == 0 ||
          strcmp(name, "embed_tokens.weight") == 0 ||
+         tensor_naming_ends_with(name, ".embed_tokens.weight") ||
          model_class_name_contains_ci(name, "token_embd"))) {
         tensor_naming_set_mapped(entry, "embedding",
                                  "model.embedding.token.weight");
@@ -3961,12 +4027,18 @@ static void dense_tensor_naming_map_native(yvex_tensor_naming_entry *entry,
     }
     if (!has_layer &&
         (strcmp(name, "model.norm.weight") == 0 ||
+         strcmp(name, "model.language_model.norm.weight") == 0 ||
+         strcmp(name, "model.language_model.final_layernorm.weight") == 0 ||
+         strcmp(name, "final_layernorm.weight") == 0 ||
+         tensor_naming_ends_with(name, ".final_layernorm.weight") ||
          strcmp(name, "norm.weight") == 0)) {
         tensor_naming_set_mapped(entry, "norm", "model.final_norm.weight");
         return;
     }
     if (!has_layer &&
         (strcmp(name, "lm_head.weight") == 0 ||
+         strcmp(name, "model.language_model.lm_head.weight") == 0 ||
+         tensor_naming_ends_with(name, ".lm_head.weight") ||
          strcmp(name, "output.weight") == 0 ||
          tensor_naming_ends_with(name, ".output.weight"))) {
         tensor_naming_set_mapped(entry, "output-head",
@@ -3975,6 +4047,54 @@ static void dense_tensor_naming_map_native(yvex_tensor_naming_entry *entry,
     }
     if (!has_layer) return;
 
+    if (strstr(name, ".mlp.shared_expert_gate.weight")) {
+        snprintf(canonical, sizeof(canonical),
+                 "model.layers.%lu.moe.shared_expert_gate.weight",
+                 layer_index);
+        tensor_naming_set_mapped(entry, "moe", canonical);
+        return;
+    }
+    if (strstr(name, ".mlp.shared_expert.gate_proj.weight") ||
+        strstr(name, ".mlp.shared_expert.up_proj.weight") ||
+        strstr(name, ".mlp.shared_expert.down_proj.weight")) {
+        const char *proj = strstr(name, ".mlp.shared_expert.gate_proj.weight")
+                               ? "gate_proj"
+                               : (strstr(name, ".mlp.shared_expert.up_proj.weight")
+                                      ? "up_proj"
+                                      : "down_proj");
+        snprintf(canonical, sizeof(canonical),
+                 "model.layers.%lu.moe.shared_expert.%s.weight",
+                 layer_index, proj);
+        tensor_naming_set_mapped(entry, "moe", canonical);
+        return;
+    }
+    if (strstr(name, ".mlp.gate.weight")) {
+        snprintf(canonical, sizeof(canonical),
+                 "model.layers.%lu.moe.router.weight", layer_index);
+        tensor_naming_set_mapped(entry, "moe", canonical);
+        return;
+    }
+    if (strstr(name, ".mlp.experts.gate_up_proj") ||
+        strstr(name, ".mlp.experts.down_proj")) {
+        const char *proj = strstr(name, ".mlp.experts.gate_up_proj")
+                               ? "gate_up_proj"
+                               : "down_proj";
+        snprintf(entry->expert_index, sizeof(entry->expert_index), "all");
+        snprintf(canonical, sizeof(canonical),
+                 "model.layers.%lu.moe.experts.all.%s.weight",
+                 layer_index, proj);
+        tensor_naming_set_mapped(entry, "moe", canonical);
+        return;
+    }
+    if (strstr(name, ".linear_attn.")) {
+        const char *suffix = strstr(name, ".linear_attn.");
+        suffix += strlen(".linear_attn.");
+        snprintf(canonical, sizeof(canonical),
+                 "model.layers.%lu.qwen_linear_attn.%s",
+                 layer_index, suffix);
+        tensor_naming_set_mapped(entry, "qwen-linear-attn", canonical);
+        return;
+    }
     if ((strstr(name, ".experts.") || strstr(name, ".expert.")) &&
         tensor_naming_expert_index(name, &expert_index)) {
         const char *proj = NULL;
@@ -4030,9 +4150,31 @@ static void dense_tensor_naming_map_native(yvex_tensor_naming_entry *entry,
         tensor_naming_set_mapped(entry, "attention", canonical);
         return;
     }
+    if (strstr(name, ".self_attn.q_norm.weight") ||
+        strstr(name, ".attention.q_norm.weight") ||
+        strstr(name, ".attn.q_norm.weight")) {
+        snprintf(canonical, sizeof(canonical),
+                 "model.layers.%lu.attention.q_norm.weight", layer_index);
+        tensor_naming_set_mapped(entry, "attention", canonical);
+        return;
+    }
+    if (strstr(name, ".self_attn.k_norm.weight") ||
+        strstr(name, ".attention.k_norm.weight") ||
+        strstr(name, ".attn.k_norm.weight")) {
+        snprintf(canonical, sizeof(canonical),
+                 "model.layers.%lu.attention.k_norm.weight", layer_index);
+        tensor_naming_set_mapped(entry, "attention", canonical);
+        return;
+    }
     if (strstr(name, ".input_layernorm.weight")) {
         snprintf(canonical, sizeof(canonical),
                  "model.layers.%lu.attention.norm.weight", layer_index);
+        tensor_naming_set_mapped(entry, "norm", canonical);
+        return;
+    }
+    if (strstr(name, ".layer_scalar")) {
+        snprintf(canonical, sizeof(canonical),
+                 "model.layers.%lu.layer_scalar", layer_index);
         tensor_naming_set_mapped(entry, "norm", canonical);
         return;
     }
@@ -4100,6 +4242,9 @@ static void tensor_naming_count_entry(yvex_tensor_naming_profile *profile,
         else if (strstr(entry->canonical_role, ".k_proj.weight")) profile->attention_k_count++;
         else if (strstr(entry->canonical_role, ".v_proj.weight")) profile->attention_v_count++;
         else if (strstr(entry->canonical_role, ".o_proj.weight")) profile->attention_o_count++;
+    } else if (strcmp(entry->collection, "qwen-linear-attn") == 0) {
+        profile->attention_count++;
+        profile->qwen_linear_attn_count++;
     } else if (strcmp(entry->collection, "mlp") == 0) {
         profile->mlp_count++;
         if (strstr(entry->canonical_role, ".gate_proj.weight")) profile->mlp_gate_count++;
@@ -4110,28 +4255,71 @@ static void tensor_naming_count_entry(yvex_tensor_naming_profile *profile,
     } else if (strcmp(entry->collection, "output-head") == 0) {
         profile->output_head_count++;
     } else if (strcmp(entry->collection, "moe") == 0) {
+        profile->mlp_count++;
         if (strstr(entry->canonical_role, ".router.weight")) {
             profile->moe_router_count++;
+            profile->mlp_gate_count++;
+        } else if (strstr(entry->canonical_role, ".shared_expert")) {
+            profile->moe_shared_count++;
+            if (strstr(entry->canonical_role, ".gate_proj.weight") ||
+                strstr(entry->canonical_role, "shared_expert_gate.weight")) {
+                profile->mlp_gate_count++;
+            } else if (strstr(entry->canonical_role, ".up_proj.weight")) {
+                profile->mlp_up_count++;
+            } else if (strstr(entry->canonical_role, ".down_proj.weight")) {
+                profile->mlp_down_count++;
+            }
         } else {
             profile->moe_expert_count++;
+            if (strstr(entry->canonical_role, ".gate_up_proj.weight")) {
+                profile->mlp_gate_count++;
+                profile->mlp_up_count++;
+            } else if (strstr(entry->canonical_role, ".gate_proj.weight")) {
+                profile->mlp_gate_count++;
+            } else if (strstr(entry->canonical_role, ".up_proj.weight")) {
+                profile->mlp_up_count++;
+            } else if (strstr(entry->canonical_role, ".down_proj.weight")) {
+                profile->mlp_down_count++;
+            }
         }
     }
+}
+
+static int tensor_naming_requires_qwen_extra_roles(
+    const yvex_tensor_naming_profile *profile)
+{
+    return profile &&
+           profile->spec &&
+           strcmp(profile->spec->family_key, "qwen") == 0 &&
+           ((profile->record && strstr(profile->record->target_id, "a3b")) ||
+            profile->qwen_linear_attn_count > 0 ||
+            profile->moe_router_count > 0 ||
+            profile->moe_expert_count > 0 ||
+            profile->moe_shared_count > 0);
 }
 
 static int tensor_naming_required_groups_present(
     const yvex_tensor_naming_profile *profile)
 {
-    return profile &&
-           profile->embedding_count > 0 &&
-           profile->attention_q_count > 0 &&
-           profile->attention_k_count > 0 &&
-           profile->attention_v_count > 0 &&
-           profile->attention_o_count > 0 &&
-           profile->mlp_gate_count > 0 &&
-           profile->mlp_up_count > 0 &&
-           profile->mlp_down_count > 0 &&
-           profile->norm_count > 0 &&
-           profile->output_head_count > 0;
+    if (!profile ||
+        profile->embedding_count == 0 ||
+        profile->attention_q_count == 0 ||
+        profile->attention_k_count == 0 ||
+        profile->attention_v_count == 0 ||
+        profile->attention_o_count == 0 ||
+        profile->mlp_gate_count == 0 ||
+        profile->mlp_up_count == 0 ||
+        profile->mlp_down_count == 0 ||
+        profile->norm_count == 0) {
+        return 0;
+    }
+    if (tensor_naming_requires_qwen_extra_roles(profile)) {
+        return profile->qwen_linear_attn_count > 0 &&
+               profile->moe_router_count > 0 &&
+               profile->moe_expert_count > 0 &&
+               profile->moe_shared_count > 0;
+    }
+    return 1;
 }
 
 static const char *tensor_naming_header_blocker(
@@ -4272,7 +4460,8 @@ static unsigned long long tensor_naming_moe_count(
     const yvex_tensor_naming_profile *profile)
 {
     if (!profile) return 0;
-    return profile->moe_router_count + profile->moe_expert_count;
+    return profile->moe_router_count + profile->moe_expert_count +
+           profile->moe_shared_count;
 }
 
 static const char *compact_status_bracket(const char *status)
@@ -4378,15 +4567,22 @@ static void print_tensor_naming_audit(
     printf("tensor_map_mlp_down_count: %llu\n", profile->mlp_down_count);
     printf("tensor_map_norm_count: %llu\n", profile->norm_count);
     printf("tensor_map_output_head_count: %llu\n", profile->output_head_count);
+    printf("tensor_map_qwen_linear_attn_count: %llu\n",
+           profile->qwen_linear_attn_count);
     printf("tensor_map_moe_router_count: %llu\n", profile->moe_router_count);
     printf("tensor_map_moe_expert_count: %llu\n", profile->moe_expert_count);
+    printf("tensor_map_moe_shared_count: %llu\n", profile->moe_shared_count);
+    printf("tensor_map_required_role_coverage_status: %s\n",
+           tensor_naming_required_groups_present(profile)
+               ? "required-groups-present"
+               : "required-groups-missing");
     printf("tensor_map_tokenizer_sidecar_status: %s\n",
            profile->tokenizer_present ? "sidecar-observed" : "missing");
     printf("tensor_map_config_sidecar_status: %s\n",
            profile->config_present ? "sidecar-observed" : "missing");
     printf("tensor_map_validation_status: lexical-and-header-only\n");
     printf("tensor_map_canonical_role_status: mapped-candidates\n");
-    printf("tensor_map_runtime_role_coverage_status: not-complete\n");
+    printf("tensor_map_runtime_role_coverage_status: report-only\n");
     printf("tensor_map_artifact_contract_status: not-implemented\n");
     printf("tensor_map_runtime_descriptor_status: not-implemented\n");
     printf("tensor_map_graph_consumer_status: not-implemented\n");
@@ -4499,6 +4695,8 @@ static int output_head_map_name_is_output(const char *name)
     return name &&
            (strcmp(name, "lm_head.weight") == 0 ||
             strcmp(name, "model.lm_head.weight") == 0 ||
+            strcmp(name, "model.language_model.lm_head.weight") == 0 ||
+            tensor_naming_ends_with(name, ".lm_head.weight") ||
             strcmp(name, "output.weight") == 0 ||
             strcmp(name, "model.output.weight") == 0 ||
             strcmp(name, "output_head.weight") == 0 ||
@@ -4509,6 +4707,8 @@ static int output_head_map_name_is_embedding(const char *name)
 {
     return name &&
            (strcmp(name, "model.embed_tokens.weight") == 0 ||
+            strcmp(name, "model.language_model.embed_tokens.weight") == 0 ||
+            tensor_naming_ends_with(name, ".embed_tokens.weight") ||
             strcmp(name, "embed_tokens.weight") == 0 ||
             strcmp(name, "token_embd.weight") == 0 ||
             strcmp(name, "tok_embeddings.weight") == 0 ||
@@ -4519,9 +4719,43 @@ static int output_head_map_name_is_final_norm(const char *name)
 {
     return name &&
            (strcmp(name, "model.norm.weight") == 0 ||
+            strcmp(name, "model.language_model.norm.weight") == 0 ||
+            strcmp(name, "model.language_model.final_layernorm.weight") == 0 ||
+            tensor_naming_ends_with(name, ".final_layernorm.weight") ||
             strcmp(name, "norm.weight") == 0 ||
             strcmp(name, "final_norm.weight") == 0 ||
             strcmp(name, "model.final_norm.weight") == 0);
+}
+
+static void output_head_map_probe_tie_policy(
+    yvex_output_head_map_profile *profile)
+{
+    char path[YVEX_PATH_CAP];
+    char *json = NULL;
+    int tied = 0;
+
+    if (!profile || !profile->source_path[0]) return;
+    if (!model_class_path_join(path, sizeof(path), profile->source_path,
+                               "config.json")) {
+        return;
+    }
+    if (!model_target_read_small_json(path, &json)) {
+        profile->config_tie_word_embeddings_status =
+            profile->config_present ? "unreadable" : "missing";
+        return;
+    }
+    if (model_target_json_bool_field(json, "tie_word_embeddings", &tied)) {
+        profile->config_tie_word_embeddings_status = tied ? "true" : "false";
+        if (tied) {
+            profile->tie_policy_status = "tied-output-head-candidate";
+        } else {
+            profile->tie_policy_status = "not-proven";
+        }
+    } else {
+        profile->config_tie_word_embeddings_status = "missing";
+        profile->tie_policy_status = "not-proven";
+    }
+    free(json);
 }
 
 static int output_head_map_same_shape(const yvex_output_head_map_entry *a,
@@ -4656,13 +4890,33 @@ static int build_output_head_map_profile(
 
     profile->source_metadata_status =
         profile->tensor_count > 0 ? "header-only" : "no-safetensors";
+    output_head_map_probe_tie_policy(profile);
     if (profile->tensor_count == 0) {
         profile->status = "metadata-missing";
         profile->top_blocker = tensor_naming_header_blocker(spec);
     } else if (profile->output_head_candidate_count == 0) {
-        profile->status = "output-head-missing";
-        profile->top_blocker = "missing-output-head-tensor";
-        profile->output_head_missing_status = "missing";
+        if (profile->embedding.present &&
+            strcmp(profile->tie_policy_status,
+                   "tied-output-head-candidate") == 0) {
+            profile->output_head = profile->embedding;
+            tensor_naming_copy(profile->output_head.canonical_role,
+                               sizeof(profile->output_head.canonical_role),
+                               "model.output_head.tied_embedding");
+            profile->output_head.mapping_status =
+                "tied-to-token-embedding-candidate";
+            profile->output_head_candidate_count = 1;
+            profile->status = "tied-output-head-report-only";
+            profile->top_blocker = "missing-output-head-runtime-consumer";
+            profile->output_head_missing_status = "present";
+            profile->shape_relation_status = "tied-to-embedding";
+        } else {
+            profile->status = "output-head-missing";
+            profile->top_blocker = "missing-output-head-tensor";
+            profile->output_head_missing_status = "missing";
+            if (strcmp(profile->tie_policy_status, "unknown") == 0) {
+                profile->tie_policy_status = "not-proven";
+            }
+        }
     } else if (profile->output_head_candidate_count > 1) {
         profile->status = "output-head-ambiguous";
         profile->top_blocker = "ambiguous-output-head-tensor";
@@ -5554,6 +5808,12 @@ static const char *missing_role_metadata_status(
     return tokenizer_map_sidecar_present(sidecar) ? "present" : "missing";
 }
 
+static unsigned int missing_role_source_required_count(
+    const yvex_missing_role_report_profile *profile)
+{
+    return 12u + (profile && profile->qwen_extra_required ? 4u : 0u);
+}
+
 static void missing_role_add_entry(yvex_missing_role_report_profile *profile,
                                    const char *name,
                                    const char *status,
@@ -5587,6 +5847,16 @@ static const char *missing_role_first_missing_source(
     if (strcmp(profile->mlp_up_status, "missing") == 0) return "mlp-up";
     if (strcmp(profile->mlp_down_status, "missing") == 0) return "mlp-down";
     if (strcmp(profile->final_norm_status, "missing") == 0) return "final-norm";
+    if (profile->qwen_extra_required &&
+        strcmp(profile->qwen_linear_attn_status, "missing") == 0) {
+        return "qwen-linear-attn";
+    }
+    if (profile->qwen_extra_required &&
+        strcmp(profile->moe_router_status, "missing") == 0) return "moe-router";
+    if (profile->qwen_extra_required &&
+        strcmp(profile->moe_expert_status, "missing") == 0) return "moe-experts";
+    if (profile->qwen_extra_required &&
+        strcmp(profile->moe_shared_status, "missing") == 0) return "shared-expert";
     if (strcmp(profile->output_head_status, "missing") == 0) return "output-head";
     return "unknown";
 }
@@ -5649,8 +5919,12 @@ static int build_missing_role_report_profile(
     profile->mlp_count = naming_profile.mlp_count;
     profile->norm_count = naming_profile.norm_count;
     profile->output_head_count = output_profile.output_head_candidate_count;
+    profile->qwen_linear_attn_count = naming_profile.qwen_linear_attn_count;
     profile->moe_router_count = naming_profile.moe_router_count;
     profile->moe_expert_count = naming_profile.moe_expert_count;
+    profile->moe_shared_count = naming_profile.moe_shared_count;
+    profile->qwen_extra_required =
+        tensor_naming_requires_qwen_extra_roles(&naming_profile);
 
     if (!profile->source_exists) {
         profile->embedding_status = "missing";
@@ -5665,6 +5939,16 @@ static int build_missing_role_report_profile(
         profile->mlp_down_status = "missing";
         profile->final_norm_status = "missing";
         profile->output_head_status = "missing";
+        profile->tied_head_policy_status = "unknown";
+        profile->qwen_linear_attn_status =
+            profile->qwen_extra_required ? "missing" : "not-required";
+        profile->moe_router_status =
+            profile->qwen_extra_required ? "missing" : "not-required";
+        profile->moe_expert_status =
+            profile->qwen_extra_required ? "missing" : "not-required";
+        profile->moe_shared_status =
+            profile->qwen_extra_required ? "missing" : "not-required";
+        profile->unknown_tensor_status = "none";
         profile->tokenizer_metadata_status = "missing";
         profile->config_metadata_status = "missing";
         profile->generation_metadata_status = "missing";
@@ -5696,9 +5980,30 @@ static int build_missing_role_report_profile(
             missing_role_singleton_status(missing_role_count_canonical(
                 &naming_profile, "model.final_norm.weight"));
         profile->output_head_status =
-            output_profile.output_head_candidate_count > 1
+            output_profile.output_head_ambiguous_count > 0
                 ? "ambiguous"
-                : missing_role_many_status(output_profile.output_head_candidate_count);
+                : (output_profile.output_head.present ? "present" : "missing");
+        profile->tied_head_policy_status = output_profile.tie_policy_status;
+        profile->qwen_linear_attn_status =
+            profile->qwen_extra_required
+                ? missing_role_many_status(naming_profile.qwen_linear_attn_count)
+                : (naming_profile.qwen_linear_attn_count ? "present" : "not-required");
+        profile->moe_router_status =
+            profile->qwen_extra_required
+                ? missing_role_many_status(naming_profile.moe_router_count)
+                : (naming_profile.moe_router_count ? "present" : "not-required");
+        profile->moe_expert_status =
+            profile->qwen_extra_required
+                ? missing_role_many_status(naming_profile.moe_expert_count)
+                : (naming_profile.moe_expert_count ? "present" : "not-required");
+        profile->moe_shared_status =
+            profile->qwen_extra_required
+                ? missing_role_many_status(naming_profile.moe_shared_count)
+                : (naming_profile.moe_shared_count ? "present" : "not-required");
+        profile->unknown_tensor_status =
+            naming_profile.unmapped_unknown_count > 0
+                ? "unclassified-header-name"
+                : "none";
         profile->tokenizer_metadata_status =
             missing_role_metadata_status(&tokenizer_profile.tokenizer_json);
         profile->config_metadata_status =
@@ -5756,6 +6061,24 @@ static int build_missing_role_report_profile(
                        &profile->source_role_observed_count,
                        &profile->source_role_missing_count,
                        &profile->source_role_ambiguous_count);
+    if (profile->qwen_extra_required) {
+        missing_role_tally(profile->qwen_linear_attn_status,
+                           &profile->source_role_observed_count,
+                           &profile->source_role_missing_count,
+                           &profile->source_role_ambiguous_count);
+        missing_role_tally(profile->moe_router_status,
+                           &profile->source_role_observed_count,
+                           &profile->source_role_missing_count,
+                           &profile->source_role_ambiguous_count);
+        missing_role_tally(profile->moe_expert_status,
+                           &profile->source_role_observed_count,
+                           &profile->source_role_missing_count,
+                           &profile->source_role_ambiguous_count);
+        missing_role_tally(profile->moe_shared_status,
+                           &profile->source_role_observed_count,
+                           &profile->source_role_missing_count,
+                           &profile->source_role_ambiguous_count);
+    }
     missing_role_tally(profile->output_head_status,
                        &profile->source_role_observed_count,
                        &profile->source_role_missing_count,
@@ -5802,9 +6125,40 @@ static int build_missing_role_report_profile(
     missing_role_add_entry(profile, "final_norm", profile->final_norm_status,
                            strcmp(profile->final_norm_status, "ambiguous") == 0
                                ? "source-role-ambiguous" : "source-role-missing");
+    if (profile->qwen_extra_required || profile->qwen_linear_attn_count > 0) {
+        missing_role_add_entry(profile, "qwen_linear_attn",
+                               profile->qwen_linear_attn_status,
+                               "source-role-missing");
+    }
+    if (profile->qwen_extra_required || profile->moe_router_count > 0) {
+        missing_role_add_entry(profile, "moe_router",
+                               profile->moe_router_status,
+                               "source-role-missing");
+    }
+    if (profile->qwen_extra_required || profile->moe_expert_count > 0) {
+        missing_role_add_entry(profile, "moe_experts",
+                               profile->moe_expert_status,
+                               "source-role-missing");
+    }
+    if (profile->qwen_extra_required || profile->moe_shared_count > 0) {
+        missing_role_add_entry(profile, "shared_expert",
+                               profile->moe_shared_status,
+                               "source-role-missing");
+    }
     missing_role_add_entry(profile, "output_head", profile->output_head_status,
                            strcmp(profile->output_head_status, "ambiguous") == 0
                                ? "source-role-ambiguous" : "source-role-missing");
+    if (strcmp(profile->spec->family_key, "gemma") == 0 &&
+        strcmp(profile->output_head_status, "present") != 0) {
+        missing_role_add_entry(profile, "tied_head_policy",
+                               profile->tied_head_policy_status,
+                               "source-role-missing");
+    }
+    if (profile->unmapped_unknown_count > 0) {
+        missing_role_add_entry(profile, "unknown_tensors",
+                               profile->unknown_tensor_status,
+                               "unclassified-header-name");
+    }
     missing_role_add_entry(profile, "tokenizer_metadata",
                            profile->tokenizer_metadata_status,
                            strcmp(profile->tokenizer_metadata_status, "ambiguous") == 0
@@ -5880,8 +6234,9 @@ static void print_missing_role_report_normal(
            compact_status_bracket(profile->status));
     printf("family: %s  evidence: header+sidecar-only\n",
            profile->spec->family_key);
-    printf("source_roles: %llu/12 present, %llu missing, %llu ambiguous\n",
+    printf("source_roles: %llu/%u present, %llu missing, %llu ambiguous\n",
            profile->source_role_observed_count,
+           missing_role_source_required_count(profile),
            profile->source_role_missing_count,
            profile->source_role_ambiguous_count);
     printf("metadata_roles: %llu/4 present, %llu missing, %llu ambiguous\n",
@@ -5932,7 +6287,8 @@ static void print_missing_role_report_audit(
     printf("missing_role_report_source_status: %s\n",
            profile->source_exists ? "present" : "missing");
     printf("missing_role_report_source_path: %s\n", profile->source_path);
-    printf("missing_role_source_role_required_count: 12\n");
+    printf("missing_role_source_role_required_count: %u\n",
+           missing_role_source_required_count(profile));
     printf("missing_role_source_role_observed_count: %llu\n",
            profile->source_role_observed_count);
     printf("missing_role_source_role_missing_count: %llu\n",
@@ -5964,6 +6320,28 @@ static void print_missing_role_report_audit(
     printf("missing_role_final_norm_status: %s\n", profile->final_norm_status);
     printf("missing_role_output_head_status: %s\n",
            profile->output_head_status);
+    printf("missing_role_tied_head_policy_status: %s\n",
+           profile->tied_head_policy_status);
+    printf("missing_role_qwen_linear_attn_status: %s\n",
+           profile->qwen_linear_attn_status);
+    printf("missing_role_qwen_linear_attn_count: %llu\n",
+           profile->qwen_linear_attn_count);
+    printf("missing_role_moe_router_status: %s\n",
+           profile->moe_router_status);
+    printf("missing_role_moe_router_count: %llu\n",
+           profile->moe_router_count);
+    printf("missing_role_moe_expert_status: %s\n",
+           profile->moe_expert_status);
+    printf("missing_role_moe_expert_count: %llu\n",
+           profile->moe_expert_count);
+    printf("missing_role_moe_shared_status: %s\n",
+           profile->moe_shared_status);
+    printf("missing_role_moe_shared_count: %llu\n",
+           profile->moe_shared_count);
+    printf("missing_role_unknown_tensor_status: %s\n",
+           profile->unknown_tensor_status);
+    printf("missing_role_unknown_tensor_count: %llu\n",
+           profile->unmapped_unknown_count);
     printf("missing_role_tokenizer_metadata_status: %s\n",
            profile->tokenizer_metadata_status);
     printf("missing_role_config_metadata_status: %s\n",
@@ -6037,10 +6415,27 @@ static int missing_roles_has_incomplete_tensor_map(
     const yvex_missing_role_report_profile *profile)
 {
     if (!profile || !profile->source_exists) return 1;
-    return profile->unmapped_unknown_count > 0 ||
-           profile->source_role_missing_count > 0 ||
-           profile->source_role_ambiguous_count > 0 ||
-           profile->mapped_total_count < profile->tensor_count;
+    if (strcmp(profile->embedding_status, "present") != 0 ||
+        strcmp(profile->attention_norm_status, "present") != 0 ||
+        strcmp(profile->attention_q_status, "present") != 0 ||
+        strcmp(profile->attention_k_status, "present") != 0 ||
+        strcmp(profile->attention_v_status, "present") != 0 ||
+        strcmp(profile->attention_o_status, "present") != 0 ||
+        strcmp(profile->mlp_norm_status, "present") != 0 ||
+        strcmp(profile->mlp_gate_status, "present") != 0 ||
+        strcmp(profile->mlp_up_status, "present") != 0 ||
+        strcmp(profile->mlp_down_status, "present") != 0 ||
+        strcmp(profile->final_norm_status, "present") != 0) {
+        return 1;
+    }
+    if (profile->qwen_extra_required &&
+        (strcmp(profile->qwen_linear_attn_status, "present") != 0 ||
+         strcmp(profile->moe_router_status, "present") != 0 ||
+         strcmp(profile->moe_expert_status, "present") != 0 ||
+         strcmp(profile->moe_shared_status, "present") != 0)) {
+        return 1;
+    }
+    return 0;
 }
 
 static void build_missing_roles_porcelain_context(
@@ -6146,7 +6541,7 @@ static void build_missing_roles_porcelain_context(
 
 static const char *missing_roles_group_status(unsigned long long count)
 {
-    return count > 0 ? "incomplete" : "missing";
+    return count > 0 ? "present" : "missing";
 }
 
 static void print_missing_roles_row(const char *group,
@@ -6186,29 +6581,32 @@ static void print_missing_roles_porcelain_normal(
         print_missing_roles_row("attention",
                                 missing_roles_group_status(profile->attention_count),
                                 profile->attention_count,
-                                "attention subset mapped, runtime coverage incomplete");
+                                "attention roles mapped report-only");
         print_missing_roles_row("dense-mlp",
                                 missing_roles_group_status(profile->mlp_count),
                                 profile->mlp_count,
-                                "MLP subset mapped, runtime coverage incomplete");
+                                "dense MLP roles mapped report-only");
         print_missing_roles_row("norm",
                                 missing_roles_group_status(profile->norm_count),
                                 profile->norm_count,
-                                "norm subset mapped, runtime coverage incomplete");
+                                "norm/scalar roles mapped report-only");
         print_missing_roles_row("output-head",
-                                profile->output_head_count ? "present" : "missing",
+                                profile->output_head_status,
                                 profile->output_head_count,
-                                profile->output_head_count
+                                strcmp(profile->output_head_status, "present") == 0
                                     ? "report-only, runtime consumer not implemented"
                                     : "separate head absent or tied-head policy unknown");
-        print_missing_roles_row("tied-head-policy", "unknown", 0,
-                                "must read config/embedding relation before artifact emission");
+        print_missing_roles_row("tied-head-policy",
+                                profile->tied_head_policy_status,
+                                strcmp(profile->tied_head_policy_status,
+                                       "tied-output-head-candidate") == 0 ? 1 : 0,
+                                "config/header evidence only");
         print_missing_roles_row("tokenizer", "missing", 0,
                                 "tokenizer metadata map missing");
         print_missing_roles_row("unknown-tensors",
-                                profile->unmapped_unknown_count ? "incomplete" : "none",
+                                profile->unknown_tensor_status,
                                 profile->unmapped_unknown_count,
-                                "unmapped tensor names remain");
+                                "unclassified header names remain non-blocking");
         print_missing_roles_row("artifact", "missing", 0,
                                 "GGUF emission blocked");
     } else {
@@ -6221,31 +6619,39 @@ static void print_missing_roles_porcelain_normal(
         print_missing_roles_row("attention",
                                 missing_roles_group_status(profile->attention_count),
                                 profile->attention_count,
-                                "attention subset mapped, but runtime coverage incomplete");
-        print_missing_roles_row("qwen-linear-attn", "missing", 0,
-                                "linear_attn roles not classified as runtime roles");
+                                "attention roles mapped report-only");
+        print_missing_roles_row("qwen-linear-attn",
+                                profile->qwen_linear_attn_status,
+                                profile->qwen_linear_attn_count,
+                                "linear_attn roles mapped report-only");
         print_missing_roles_row("mlp",
                                 missing_roles_group_status(profile->mlp_count),
                                 profile->mlp_count,
-                                "dense/MLP roles not mapped");
+                                "MLP/MoE roles mapped report-only");
         print_missing_roles_row("moe-router",
-                                profile->moe_router_count ? "incomplete" : "missing",
+                                profile->moe_router_status,
                                 profile->moe_router_count,
-                                "router/gate not mapped as runtime role");
+                                "router gate mapped report-only");
         print_missing_roles_row("moe-experts",
-                                profile->moe_expert_count ? "incomplete" : "missing",
+                                profile->moe_expert_status,
                                 profile->moe_expert_count,
-                                "expert tensors not mapped as runtime roles");
-        print_missing_roles_row("shared-expert", "missing", 0,
-                                "shared expert roles not mapped");
+                                "expert tensors mapped report-only");
+        print_missing_roles_row("shared-expert",
+                                profile->moe_shared_status,
+                                profile->moe_shared_count,
+                                "shared expert tensors mapped report-only");
         print_missing_roles_row("output-head",
-                                profile->output_head_count ? "present" : "missing",
+                                profile->output_head_status,
                                 profile->output_head_count,
-                                profile->output_head_count
+                                strcmp(profile->output_head_status, "present") == 0
                                     ? "report-only, runtime consumer not implemented"
                                     : "output head not mapped");
         print_missing_roles_row("tokenizer", "missing", 0,
                                 "tokenizer metadata map missing");
+        print_missing_roles_row("unknown-tensors",
+                                profile->unknown_tensor_status,
+                                profile->unmapped_unknown_count,
+                                "unclassified header names remain non-blocking");
         print_missing_roles_row("artifact", "missing", 0,
                                 "GGUF emission blocked");
     }
@@ -6259,7 +6665,8 @@ static void print_missing_roles_porcelain_table(
     unsigned long long moe_total;
 
     if (!profile || !ctx) return;
-    moe_total = profile->moe_router_count + profile->moe_expert_count;
+    moe_total = profile->moe_router_count + profile->moe_expert_count +
+                profile->moe_shared_count;
     printf("%-18s  %-6s  %-7s  %-24s  %5s  %5s  %5s  %5s  %5s  %3s  %7s  %-9s  %-8s  %s\n",
            "TARGET", "FAMILY", "STATUS", "TOP_BLOCKER", "EMBED", "ATTN",
            "MLP", "NORM", "HEAD", "MOE", "UNKNOWN", "TOKENIZER",
@@ -6297,15 +6704,36 @@ static void print_missing_roles_porcelain_audit(
     printf("tensor_map_mapped_total_count: %llu\n", profile->mapped_total_count);
     printf("tensor_map_unmapped_unknown_count: %llu\n",
            profile->unmapped_unknown_count);
-    printf("tensor_map_role_counts: embed=%llu attention=%llu mlp=%llu norm=%llu head=%llu moe_router=%llu moe_expert=%llu unknown=%llu\n",
+    printf("tensor_map_role_counts: embed=%llu attention=%llu qwen_linear_attn=%llu mlp=%llu norm=%llu head=%llu moe_router=%llu moe_expert=%llu moe_shared=%llu unknown=%llu\n",
            profile->embedding_count,
            profile->attention_count,
+           profile->qwen_linear_attn_count,
            profile->mlp_count,
            profile->norm_count,
            profile->output_head_count,
            profile->moe_router_count,
            profile->moe_expert_count,
+           profile->moe_shared_count,
            profile->unmapped_unknown_count);
+    printf("role_group.embedding.status: %s\n", profile->embedding_status);
+    printf("role_group.attention.status: %s\n",
+           profile->attention_count ? "present" : "missing");
+    printf("role_group.qwen_linear_attn.status: %s\n",
+           profile->qwen_linear_attn_status);
+    printf("role_group.mlp.status: %s\n",
+           profile->mlp_count ? "present" : "missing");
+    printf("role_group.moe_router.status: %s\n",
+           profile->moe_router_status);
+    printf("role_group.moe_experts.status: %s\n",
+           profile->moe_expert_status);
+    printf("role_group.shared_expert.status: %s\n",
+           profile->moe_shared_status);
+    printf("role_group.output_head.status: %s\n",
+           profile->output_head_status);
+    printf("role_group.tied_head_policy.status: %s\n",
+           profile->tied_head_policy_status);
+    printf("role_group.unknown_tensors.status: %s\n",
+           profile->unknown_tensor_status);
     printf("output_head_map_status: %s\n", ctx->output_head_map_status);
     printf("output_head_map_path: %s\n", ctx->output_head_map_path);
     printf("tokenizer_map_status: %s\n", ctx->tokenizer_map_status);
@@ -6343,6 +6771,30 @@ static void print_missing_roles_porcelain_json(
     model_target_json_write_escaped(stdout, ctx->top_blocker);
     printf(",\"next\":\"%s\",\"runtime_execution\":\"not-performed\",",
            YVEX_MISSING_ROLES_PORCELAIN_NEXT_ROW);
+    printf("\"role_groups\":{");
+    printf("\"embedding\":");
+    model_target_json_write_escaped(stdout, profile->embedding_status);
+    printf(",\"attention\":");
+    model_target_json_write_escaped(stdout,
+                                    profile->attention_count ? "present" : "missing");
+    printf(",\"qwen_linear_attn\":");
+    model_target_json_write_escaped(stdout, profile->qwen_linear_attn_status);
+    printf(",\"mlp\":");
+    model_target_json_write_escaped(stdout,
+                                    profile->mlp_count ? "present" : "missing");
+    printf(",\"moe_router\":");
+    model_target_json_write_escaped(stdout, profile->moe_router_status);
+    printf(",\"moe_experts\":");
+    model_target_json_write_escaped(stdout, profile->moe_expert_status);
+    printf(",\"shared_expert\":");
+    model_target_json_write_escaped(stdout, profile->moe_shared_status);
+    printf(",\"output_head\":");
+    model_target_json_write_escaped(stdout, profile->output_head_status);
+    printf(",\"tied_head_policy\":");
+    model_target_json_write_escaped(stdout, profile->tied_head_policy_status);
+    printf(",\"unknown_tensors\":");
+    model_target_json_write_escaped(stdout, profile->unknown_tensor_status);
+    printf("},");
     printf("\"generation\":\"unsupported\",\"benchmark_status\":\"not-measured\"}\n");
 }
 
@@ -10216,6 +10668,8 @@ int yvex_model_target_command(int argc, char **argv)
         const yvex_model_class_profile_spec *spec;
         yvex_dynamic_source_target dynamic_target;
         yvex_missing_role_report_profile profile;
+        yvex_tensor_naming_profile naming_profile;
+        yvex_output_head_map_profile output_head_profile;
         yvex_missing_roles_porcelain_context porcelain;
         yvex_paths paths;
         yvex_operator_paths operator_paths;
@@ -10303,6 +10757,32 @@ int yvex_model_target_command(int argc, char **argv)
                                                &profile);
         if (rc != 0) {
             return rc;
+        }
+        if (dynamic_target.found) {
+            rc = build_tensor_naming_profile(record, spec, models_root, source,
+                                             &naming_profile);
+            if (rc != 0) {
+                return rc;
+            }
+            if (!write_tensor_map_sidecar(dynamic_target.tensor_map_path,
+                                          &naming_profile)) {
+                fprintf(stderr,
+                        "model-target missing-roles: cannot write tensor map sidecar: %s\n",
+                        dynamic_target.tensor_map_path);
+                return 3;
+            }
+            rc = build_output_head_map_profile(record, spec, models_root, source,
+                                               &output_head_profile);
+            if (rc != 0) {
+                return rc;
+            }
+            if (!write_output_head_map_sidecar(dynamic_target.output_head_map_path,
+                                               &output_head_profile)) {
+                fprintf(stderr,
+                        "model-target missing-roles: cannot write output-head map sidecar: %s\n",
+                        dynamic_target.output_head_map_path);
+                return 3;
+            }
         }
         build_missing_roles_porcelain_context(&operator_paths, &profile,
                                               &porcelain);
@@ -10553,6 +11033,20 @@ int yvex_model_target_command(int argc, char **argv)
                     "model-target tensor-map: cannot write tensor map sidecar: %s\n",
                     dynamic_target.tensor_map_path);
             return 3;
+        }
+        if (!check_output_contract && dynamic_target.found) {
+            rc = build_output_head_map_profile(record, spec, models_root, source,
+                                               &output_head_profile);
+            if (rc != 0) {
+                return rc;
+            }
+            if (!write_output_head_map_sidecar(dynamic_target.output_head_map_path,
+                                               &output_head_profile)) {
+                fprintf(stderr,
+                        "model-target tensor-map: cannot write output-head map sidecar: %s\n",
+                        dynamic_target.output_head_map_path);
+                return 3;
+            }
         }
         if (check_output_contract) {
             return output_contract_print_result(
