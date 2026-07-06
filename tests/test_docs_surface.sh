@@ -65,6 +65,27 @@ grep -nF "table = renderer layout, not a long-term user-selected mode" docs/spin
   exit 1
 }
 
+grep -nF "| CLI.ARCH.AUDIT.0 | complete | docs/operator |" docs/spine.md >/dev/null || {
+  echo "CLI architecture audit must be complete as docs/operator doctrine" >&2
+  exit 1
+}
+
+grep -nF "V010.CLI.25         renderer ownership foundation" docs/spine.md >/dev/null || {
+  echo "spine must preserve the renderer foundation migration row" >&2
+  exit 1
+}
+
+grep -nF "## CLI Output Architecture Doctrine" docs/spine.md >/dev/null || {
+  echo "spine must use the porcelain/plumbing architecture doctrine heading" >&2
+  exit 1
+}
+
+if grep -nF "## Output Mode Taxonomy" docs/spine.md ||
+   grep -nF "## CLI Output UX Doctrine" docs/spine.md; then
+  echo "spine must not restore the old output-mode taxonomy as future doctrine" >&2
+  exit 1
+fi
+
 grep -nF "JSON output is not implemented uniformly in this audit" docs/cli-output-architecture.md >/dev/null || {
   echo "CLI output architecture must not claim uniform JSON output" >&2
   exit 1

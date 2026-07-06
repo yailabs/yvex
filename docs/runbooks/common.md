@@ -10,8 +10,9 @@ This file does not claim full model generation, provider generation,
 evaluation, or benchmark capability.
 
 Normal output is compact by default. List-like commands use readable tables by
-default; `--output table` only forces that renderer where it is available. Use
-`--audit` for row-promotion evidence and full diagnostic fields.
+default. `--output table` appears below as a transitional regression check where
+it exists, not as the long-term operator UX. Use `--audit` for row-promotion
+evidence and full diagnostic fields.
 For model report surfaces such as `model-target tensor-map` and
 `model-target quant-policy`, normal/table output must stay compact; detailed
 fields such as `tensor_map.entry.*` remain audit-only evidence.

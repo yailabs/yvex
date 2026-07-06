@@ -203,9 +203,9 @@ Current source/model-family commands include:
 ```
 
 Detailed operator flow belongs in runbooks. Model Families owns architecture.
-For these model-report commands, normal and table output are compact operator
-views; use `--audit` for tensor-entry, mapping-gate, qtype-policy, sidecar, and
-boundary evidence.
+For these model-report commands, normal output is the compact operator view.
+Existing table mode is transitional renderer coverage; use `--audit` for
+tensor-entry, mapping-gate, qtype-policy, sidecar, and boundary evidence.
 
 Source download reports, receipts, manifests, and header-only inventories are
 source-intake evidence. They do not verify upstream identity by themselves, hash

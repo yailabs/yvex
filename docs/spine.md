@@ -297,36 +297,60 @@ no evaluation, no benchmark, and no throughput claim.
 | future portability | Qwen/Metal | source-target-profiled pressure lane | no Metal/Qwen runtime |
 | full-runtime model | v0.1.0 selected target | blocked-no-source-backed-candidate | Qwen/Gemma target/profile/source-pressure/tensor-map rows are report-only; dense tensor map, output-head map, tokenizer metadata map, missing-role blocker report, and tensor mapping gate are report-only; qtype policy, artifact, and runtime evidence remain missing |
 
-## CLI Output UX Doctrine
+## CLI Output Architecture Doctrine
 
-YVEX has two output planes.
+YVEX has four output surfaces.
 
-Normal operator output:
-  concise, inline-first, result-first, metric-aware, color-aware when TTY-safe,
-  and suitable for humans running commands directly.
+porcelain:
+  default human operator output chosen by the command.
 
-Diagnostic/research output:
-  explicit, verbose, boundary-heavy, traceable, and suitable for debugging,
-  audits, row promotion, and research inspection.
+plumbing:
+  explicit raw or machine-readable output. The target surface is `--json`, but
+  JSON must be implemented and tested command by command before it is claimed.
 
-The current verbose diagnostic/report output is not final operator UX.
+diagnostic:
+  explicit audit/evidence output used during migration, row promotion, and
+  research inspection.
 
-Repeated unsupported fields, readiness fields, blocker lists, tensor tables,
-claim guards, lifecycle internals, and cleanup internals must be demoted from
-normal output into explicit diagnostic, trace, audit, or JSON modes.
+trace/log/error:
+  runtime step evidence, daemon/runtime logs, and concise stderr refusals. These
+  are separate from normal command layout.
 
-Normal CLI output should show only:
-  result
-  compact status
-  essential model/backend identity
-  measured metrics where real
-  top blocker or next action when relevant
-  one boundary line only when needed
+Porcelain is the default. It is concise, result-first, metric-aware when real
+metrics exist, and suitable for humans running commands directly. The command
+chooses the layout. If a command naturally returns rows, default porcelain may
+be a table. If it naturally returns one decision or report, default porcelain
+should be a compact report. If it naturally returns a short sequence, default
+porcelain should be a list.
 
-Current long outputs are acceptable as diagnostic/audit evidence for parser,
-artifact, tensor, report-only, selected-slice, diagnostic-runtime, boundary,
-cleanup, and claim-guard rows. They are not acceptable as the final operator
-experience.
+Default porcelain must not require scrolling to find the result. It must not
+contain giant tensor entries, raw diagnostic key-value walls, repeated
+unsupported/runtime/generation/benchmark/release fields, or path walls unless
+paths are the command's purpose.
+
+Normal porcelain output should show only:
+  one result or report name
+  one compact status
+  one essential identity block
+  one top blocker where relevant
+  one next step where relevant
+  one short boundary where relevant
+
+Audit remains a transitional evidence surface. It may be verbose and
+boundary-heavy while structured report objects and raw/plumbing output are
+incomplete. Audit must not leak into default porcelain and must not become the
+permanent answer for operators who need stable data.
+
+Table is a renderer layout, not a strategic output mode. Existing
+`--output table` remains transitional during migration, but future rows should
+not add table flags to compensate for missing renderer ownership. List-like
+commands should print aligned tables by default when that is the clearest human
+layout, and table output must not be followed by diagnostic walls.
+
+Current long outputs remain acceptable only as explicit diagnostic/audit
+evidence for parser, artifact, tensor, report-only, selected-slice,
+diagnostic-runtime, boundary, cleanup, and claim-guard rows. They are not final
+operator UX.
 
 Future CLI output implementation work should use `V010.CLI.*` rows. Do not
 create new loose `CLI.UX.*` rows unless preserving historical continuity.
@@ -334,7 +358,7 @@ create new loose `CLI.UX.*` rows unless preserving historical continuity.
 superseded planning surfaces. New output behavior is canonical under
 `V010.CLI.*`, `V010.DOCTOR.*`, `V010.TRACE.*`, and `V010.CI.*`.
 
-## Inline-First CLI Rule
+## Inline-First Porcelain Rule
 
 Default human output should prefer compact inline fields and short sections.
 
@@ -346,7 +370,8 @@ Tables are appropriate when the command naturally returns multiple rows:
   eval cases
   blocker groups
 
-Tables must not become audit dumps.
+Tables must not become audit dumps. `--output table` is a compatibility and
+migration flag, not the desired final operator interaction.
 
 Color is allowed only for semantic terminal output:
   pass
@@ -365,13 +390,43 @@ Color must be disabled for:
 Normal output must not require users to scroll through hundreds of lines to find
 the result, next action, or blocker.
 
-## CLI Print Ownership Policy
+## Renderer Ownership Policy
 
-Long hardcoded print chains are not the desired final CLI architecture.
+Long hardcoded print chains are not the desired final CLI architecture. Domain
+owners build semantic report/result objects; renderers own layout.
+
+Domain owners:
+  build semantic result/report structs
+  own failure classes
+  own blockers and next-step facts
+  own target identity and source/artifact/runtime boundaries
+  do not own long manual presentation walls
+
+Porcelain renderers:
+  choose human layout automatically
+  own compact reports, tables, lists, and short sections
+
+Plumbing renderers:
+  serialize stable raw fields
+  use JSON as the target raw surface where implemented and tested
+
+Diagnostic renderers:
+  preserve audit/evidence during migration
+  may remain verbose
+
+Error/log helpers:
+  own stderr, refusal, usage, and log surfaces
+  do not pollute normal command output
+
+`yvex_cli.c`:
+  owns only top-level command lookup, short command listing, top-level help, and
+  argv dispatch.
+  owns no semantic behavior, domain report construction, runtime helpers, or
+  large rendering logic.
 
 A command may temporarily print diagnostic fields directly while a row is being
 proved, but operator-facing commands must converge toward explicit output
-contracts and reusable rendering helpers.
+contracts and reusable render helpers.
 
 Repeated boundary/status fields should be rendered by shared helpers or
 domain-owned render functions, not copied manually across many command bodies.
@@ -387,38 +442,41 @@ Future CLI output waves should reduce:
 This policy does not require a source split. It does not create a new CLI
 command forest. It does not move domain behavior into `yvex_cli.c`.
 
-## Output Mode Taxonomy
+## Output Surface Policy
 
-normal:
-  default human output. Short, inline-first, result-first, no repeated audit fields.
+Stable or desired:
+  domain selectors such as `--role`, `--gate`, `--models-root`, `--out-dir`,
+  and `--dry-run`
+  raw/plumbing target `--json`, where implemented and tested command by command
+  runtime trace flags where real trace behavior exists
+  terminal policy flags such as `--no-color` and `--quiet` where implemented
 
-summary:
-  compact report output for target/source/artifact/runtime checks.
+Transitional or migration-only:
+  `--output normal`
+  `--output table`
+  `--output audit`
+  `--include-*`
+  `--check-output-contract`
 
-table:
-  human table output for multi-row reports.
+Diagnostic/evidence:
+  `--audit`
+  `--trace-level`
 
-verbose:
-  expanded human-readable diagnostics.
+Bad direction:
+  adding a new output flag per presentation problem
+  making every command implement its own normal/table/audit grammar
+  making shell grep/wc the proof that output is usable
+  creating a new CLI command forest
+  moving domain behavior into `yvex_cli.c`
 
-trace:
-  step-level runtime diagnostics.
-
-audit:
-  row-promotion evidence with all required boundary, readiness, lifecycle,
-  cleanup, and failure fields.
-
-json:
-  structured machine-readable summary output.
-
-jsonl:
-  event or trace stream.
-
-raw:
-  future raw/tensor dump mode; explicitly gated and refused unless implemented.
+Existing transitional flags must not be removed in a doctrine wave. Future
+implementation rows may demote or remove them only after porcelain and
+raw/plumbing paths exist for the command family and tests preserve the behavior
+that operators still need.
 
 A command may start life with verbose diagnostic output, but any command that
-becomes operator-facing must eventually define normal output.
+becomes operator-facing must eventually define porcelain output and, where
+machine-readable data is needed, plumbing output.
 
 ## Normal Output Contract
 
@@ -478,7 +536,7 @@ Those belong to:
 --audit
 --trace
 --verbose
---json
+--json where implemented and tested
 ```
 
 ## Report Output Contract
@@ -498,7 +556,7 @@ next:
 boundary:
 ```
 
-Long output requires explicit flags:
+Long output currently requires explicit transitional flags:
 
 ```text
 --include-candidates
@@ -509,11 +567,13 @@ Long output requires explicit flags:
 --include-tensors
 --verbose
 --audit
---json
+--json where implemented and tested
 ```
 
-The current V010 target/report output may remain verbose until the CLI layout
-wave changes code, but the final operator report UX must be compact by default.
+The current V010 target/report output may remain verbose until renderer
+migration rows change code, but the final operator report UX must be compact by
+default. `--include-*` flags are migration pressure, not a model for future
+command design.
 
 ## Metric UX Contract
 
@@ -561,12 +621,46 @@ Do not print success claims such as target throughput success,
 measured-benchmark success, generation-readiness, or inference-readiness unless the
 benchmark/runtime path proves them.
 
+## CLI Migration Plan
+
+Phase 0 - audit and doctrine:
+  print inventory
+  flag inventory
+  porcelain/plumbing doctrine
+  renderer ownership doctrine
+
+Phase 1 - renderer foundation:
+  introduce a narrow internal report/render boundary
+  avoid broad behavior changes
+  avoid runtime claims
+  avoid a new command forest
+
+Phase 2 - highest-pressure model surfaces:
+  migrate `yvex_model_artifacts.c`
+  migrate `yvex_model.c`
+  preserve normal/table/audit tests while those flags exist
+
+Phase 3 - graph/runtime surfaces:
+  migrate `yvex_graph.c`
+  migrate `yvex_runtime.c`
+  keep diagnostic trace and runtime evidence separate from porcelain
+
+Phase 4 - raw/plumbing JSON:
+  add `--json` only after report objects exist for a command family
+  test stable raw fields before claiming JSON for that family
+
+Phase 5 - flag demotion:
+  demote `--output table`
+  reduce `--include-*`
+  keep `--audit` only where promotion evidence still requires it
+
 ## Reserved CLI Flags
 
-Planned flags:
+Transitional and planned flags:
 
 ```text
---output normal|summary|table|verbose|json
+--output normal|table|audit
+--json
 --trace-level none|tokens|steps|kv|logits|sampling|full
 --audit
 --quiet
@@ -576,7 +670,9 @@ Planned flags:
 ```
 
 These flags are conceptual unless parser, behavior, output contract, tests,
-failure paths, cleanup behavior, and docs/spine row closure exist.
+failure paths, cleanup behavior, and docs/spine row closure exist. Existing
+instances remain during migration; new instances require explicit row
+justification.
 
 ## 4. Forward Track Matrix
 
@@ -606,7 +702,7 @@ lanes; rows are the delivery units that complete track work.
 | TRACK.TOKENIZER | Tokenizer and stop policy | detokenization, EOS, stop tokens, prompt boundary | partial/planned | tokenizer diagnostics and tokenizer metadata mapping | tokenizer-backed stop behavior | later |
 | TRACK.GENERATION | Generation runtime | decode/logits/sample/append/stop/cleanup | diagnostic-runtime | `yvex generate` | full-runtime generation | later |
 | TRACK.RUNTIME | Runtime lifecycle and trace | lifecycle, cancellation, trace, failure preservation | diagnostic-runtime | generate trace/cancel/cleanup | external interruption/runtime trace | later |
-| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output UX doctrine, normal/audit baseline, diagnostic output demotion, compact report/table output, hardcoded print reduction for model report surfaces, CLI print inventory and porcelain/plumbing doctrine, and Qwen/Gemma source profile/map/gate/qtype policy surfaces | CLI.ARCH.AUDIT.0 follow-up renderer migration / V010.QUANT.1 handoff | active |
+| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output architecture doctrine, normal/audit baseline, diagnostic output demotion, compact report/table output, hardcoded print reduction for model report surfaces, completed CLI print inventory and porcelain/plumbing doctrine, and Qwen/Gemma source profile/map/gate/qtype policy surfaces | V010.CLI.25 renderer foundation / V010.QUANT.1 handoff | active |
 | TRACK.SERVE | Serving | daemon state, provider endpoints, streaming | planned | status shell | runtime-backed generation endpoint | later |
 | TRACK.EVAL | Evaluation | fixture/runtime/generation/capability eval | planned | tests only | eval over generation path | later |
 | TRACK.BENCH | Benchmark/profile | reproducible performance measurement | planned | doctrine only | measured runtime harness | later |
@@ -1255,18 +1351,21 @@ Current status:
 
 Current evidence:
   paths/model-target/models prepare/check, graph check, generate help, CLI
-  output UX doctrine in the spine, and normal/audit output baseline for core
-  operator commands, plus diagnostic output demotion for broader CLI report
-  surfaces and compact report/table output across core report paths.
+  output architecture doctrine in the spine, completed print inventory,
+  porcelain/plumbing doctrine, renderer ownership doctrine, and normal/audit
+  output baseline for core operator commands, plus diagnostic output demotion
+  for broader CLI report surfaces and compact report/table output across core
+  report paths.
 
 v0.1.0 rows:
   V010.CLI.*, V010.OPERATOR.*.
 
 Main blockers:
-  dtype/qtype support by role remains missing.
+  renderer ownership foundation remains missing before more CLI output patches;
+  dtype/qtype support by role remains the functional implementation blocker.
 
 Next possible row:
-  V010.QUANT.1.
+  V010.CLI.25 for CLI architecture implementation, otherwise V010.QUANT.1.
 
 Boundary:
   operator presets compose lower behavior only.
@@ -2552,6 +2651,10 @@ V010.CLI.21         metric output surface
 V010.CLI.22         audit output surface
 V010.CLI.23         quiet/no-color output policy
 V010.CLI.24         hardcoded print reduction pass
+V010.CLI.25         renderer ownership foundation
+V010.CLI.26         model artifact porcelain migration
+V010.CLI.27         model target porcelain migration
+V010.CLI.28         graph/runtime diagnostic renderer migration
 ```
 
 `V010.CLI.17` is complete as the first implementation baseline: core normal
@@ -2568,16 +2671,28 @@ surfaces default to compact normal output where touched, while `--audit` /
 model-target, fullmodel, integrity, KV, and model-class report surfaces accept
 `--output table` where touched, natural row commands use stable plain-text
 tables, stale CLI.18 next-row output is removed from normal reports, and audit
-mode preserves diagnostic evidence.
+mode preserves diagnostic evidence. Under the current doctrine, table is a
+renderer layout and `--output table` is transitional compatibility, not the
+strategic future UX.
 `V010.CLI.24` is complete as a hardcoded print reduction pass for model report
 surfaces. `model-target tensor-map`, output-head maps, missing-role reports,
 mapping gates, and qtype policy reports now keep normal/table output compact
 while audit mode preserves detailed evidence. A follow-up adds
 `--check-output-contract normal|table|audit` to those report surfaces so YVEX
 can natively render and check compact normal/table output and audit evidence
-preservation without shell pipelines. `V010.CLI.20` through `V010.CLI.23`
-remain planned polish rows and do not block continuing to `V010.QUANT.1`
-unless normal CLI output becomes unusable again.
+preservation without shell pipelines. Under the current doctrine,
+`--check-output-contract` is diagnostic/internal migration pressure, not a
+future operator UX pattern.
+
+`V010.CLI.20` remains the structured JSON/raw plumbing row. It must not claim
+uniform JSON until each command family has report objects, stable fields, tests,
+and refusal paths.
+
+`V010.CLI.22` remains the audit output surface row, but audit is now explicitly
+transitional evidence, not the final raw/plumbing interface.
+
+`V010.CLI.23` remains terminal policy work for quiet/no-color/non-TTY behavior,
+not report layout.
 
 Architecture audit interruption:
 
@@ -2585,13 +2700,16 @@ Architecture audit interruption:
 CLI.ARCH.AUDIT.0 - print inventory and porcelain/plumbing doctrine
 ```
 
-`CLI.ARCH.AUDIT.0` is a planned architecture-audit row, not a completed runtime
-or CLI refactor capability. The production print inventory found 7319 manual
-print sites outside tests/build/docs: 6901 in root `yvex_*.c` owner files, 404
-in `gguf/*.c`, 14 in daemon/server files, and none in CUDA files or public
+`CLI.ARCH.AUDIT.0` is complete as a docs/operator architecture-audit row. It is
+not a completed renderer implementation, JSON implementation, global print
+reduction, CLI refactor, runtime behavior, quantization behavior, or release
+capability. The production print inventory found 7319 manual print sites
+outside tests/build/docs: 6901 in root `yvex_*.c` owner files, 404 in
+`gguf/*.c`, 14 in daemon/server files, and none in CUDA files or public
 headers. The top pressure files are `yvex_model_artifacts.c` with 2581 sites,
 `yvex_model.c` with 1409, `yvex_graph.c` with 690, and `yvex_runtime.c` with
-432.
+432. Existing output flag pressure is `--output` 118 strings, `--audit` 112,
+`--json` 23, `--check-output-contract` 4, and `--include-*` 158.
 
 The doctrine is:
 
@@ -2614,12 +2732,22 @@ this row defines the target architecture and does not remove or add flags.
 JSON/raw output is the target plumbing surface, but this row does not implement
 JSON output and does not claim a uniform JSON interface exists.
 
-The focused audit report lives in `docs/cli-output-architecture.md`. The next
-implementation wave should start with the highest-pressure model report owner
-files and migrate one command family at a time toward report objects plus
-porcelain/audit render helpers while preserving normal/table/audit tests. Active
-Next remains paused on `V010.QUANT.1 - dtype/qtype support by role` only until
-this CLI architecture interruption is no longer blocking operator clarity.
+The migration map is:
+
+```text
+Phase 0: audit and doctrine
+Phase 1: V010.CLI.25 renderer ownership foundation
+Phase 2: V010.CLI.26 model artifact porcelain migration
+Phase 3: V010.CLI.27 model target porcelain migration
+Phase 4: V010.CLI.28 graph/runtime diagnostic renderer migration
+Phase 5: V010.CLI.20 structured JSON/raw plumbing where report objects exist
+Phase 6: flag demotion after porcelain and JSON cover the command family
+```
+
+The focused audit report lives in `docs/cli-output-architecture.md`. Active Next
+remains paused on `V010.QUANT.1 - dtype/qtype support by role` only until this
+CLI architecture interruption is structurally mapped enough that future
+implementation rows do not create more output debt.
 
 Boundary: CLI cannot claim lower runtime behavior that does not exist.
 
@@ -4487,10 +4615,11 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 V010.QUANT.1 - dtype/qtype support by role
 ```
 
-`SPINE.OUTPUT.UX.CONTRACT.0` is complete as a docs/control row. It defines the
-normal output plane, diagnostic/audit output plane, output mode taxonomy,
-metric labels, color/no-color rules, and hardcoded print reduction policy
-without changing CLI behavior.
+`SPINE.OUTPUT.UX.CONTRACT.0` is complete as a docs/control row and has been
+reconciled by `CLI.ARCH.AUDIT.0`. The current CLI doctrine is
+porcelain/plumbing/diagnostic/trace-log-error: porcelain is default human output,
+table is a renderer layout, audit is transitional evidence, and JSON is the
+target raw/plumbing surface where implemented and tested command by command.
 
 Completed row:
 
@@ -5132,8 +5261,8 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | OPERATOR.FLOW.1 | complete | operator | Single-paste operator transcript | runbook contains one copy-paste transcript, full implemented command inventory, inline command style, artifact hygiene, and current/future boundary |
 | OPERATOR.FLOW.2 | complete | operator | Sectorized copy-command operator atlas | runbook is split into model, backend, intake, artifact, integrity, materialization, graph, prefill/KV, daemon, validation, and GLM status lanes with standalone copyable commands |
 | SPINE.OPERATOR.PRESET.0 | complete | docs | Operator preset and path-resolution roadmap | spine defines path configuration, target path resolution, model prepare, model check, graph check, chat UX, and final runbook preset sequence |
-| SPINE.OUTPUT.UX.CONTRACT.0 | complete | docs | CLI output UX contract and diagnostic demotion plan | spine defines normal, summary, table, verbose, trace, audit, JSON, metric, color, and hardcoded-print policies; marks current verbose diagnostic/report output as non-final UX; maps future output work to V010.CLI.*; preserves runtime, generation, benchmark, and release boundaries |
-| CLI.ARCH.AUDIT.0 | planned | docs/operator | Print inventory and porcelain/plumbing doctrine | `docs/cli-output-architecture.md` records the 7319-site production print inventory, existing output flag pressure, porcelain/plumbing doctrine, renderer ownership target, staged migration plan, and `V010.QUANT.1` pause boundary without removing print sites, adding renderer source files, implementing JSON, changing CLI behavior, adding runtime, quantization, artifact emission, generation, eval, benchmark, throughput, or release claim |
+| SPINE.OUTPUT.UX.CONTRACT.0 | complete | docs | CLI output UX contract and diagnostic demotion plan | spine defines compact normal output, diagnostic/audit demotion, metric/color policy, and hardcoded-print reduction pressure; later reconciled by `CLI.ARCH.AUDIT.0` into porcelain/plumbing doctrine where table is layout, audit is transitional evidence, and JSON is the raw/plumbing target without runtime, generation, benchmark, or release claim |
+| CLI.ARCH.AUDIT.0 | complete | docs/operator | Print inventory and porcelain/plumbing doctrine | `docs/cli-output-architecture.md` and the spine record the 7319-site production print inventory, output flag pressure, porcelain/plumbing doctrine, renderer ownership rules, staged migration plan, and `V010.QUANT.1` pause boundary without removing print sites, adding renderer source files, implementing JSON, changing CLI behavior, adding runtime, quantization, artifact emission, generation, eval, benchmark, throughput, or release claim |
 | SPINE.CUDA.MAP.0 | complete | docs | CUDA execution spine enrichment | spine adds a CUDA execution crosswalk, owner map, staged CUDA ladder, backend/graph/runtime dependency map, performance doctrine, future implementation order, and forbidden claim boundary without runtime implementation, CUDA generation, benchmark, throughput, FlashAttention, tensor-core GEMM, paged KV, or release-ready claim |
 | OPERATOR.PATHS.0 | complete | operator | Operator model root configuration | `yvex paths configure` stores or resolves operator-local model roots without requiring shell export walls |
 | MODEL.TARGET.PATHS.0 | complete | model | Model target path resolution | `yvex model-target inspect TARGET --paths` reports source, artifact, report, registry, and planned paths without reading model payloads |
@@ -5157,6 +5286,10 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | CLI.SURFACE.1 | complete | cli | CLI command monolith domain split | private CLI command implementation split into common, graph, models, artifacts, tools, and run domains |
 | CLI.SURFACE.2 | complete | cli/layout | CLI surface compression | only yvex_cli.c remains as CLI-prefixed source; command/proof logic promoted to domain owners |
 | CLI.SURFACE.3 | complete | cli/layout | Domain-owned CLI help and command extraction | yvex_cli.c contains only short command table and dispatch; detailed help and command behavior live in domain owners; command split files are removed |
+| V010.CLI.25 | planned | operator | Renderer ownership foundation | introduce the smallest internal report/render boundary in owner modules without a command forest, runtime behavior, JSON claim, or yvex_cli.c domain behavior |
+| V010.CLI.26 | planned | operator | Model artifact porcelain migration | migrate the highest-pressure `yvex_model_artifacts.c` report walls toward semantic reports plus porcelain/audit render helpers while preserving existing output flags during transition |
+| V010.CLI.27 | planned | operator | Model target porcelain migration | migrate `yvex_model.c` model-target report walls toward semantic reports plus porcelain/audit render helpers while preserving normal/table/audit tests |
+| V010.CLI.28 | planned | operator | Graph/runtime diagnostic renderer migration | separate graph/runtime porcelain, diagnostic, trace, log, and error output in `yvex_graph.c` and `yvex_runtime.c` without changing runtime semantics |
 | CLI.MODELS.0 | complete | cli | Local model selection spine | model selection design and registry shape established |
 | CLI.MODELS.1 | complete | cli | Local model registry implementation | local model registry add/list/use/current/remove works |
 | CLI.MODELS.2 | complete | cli | One-shot model alias resolution | model-taking commands resolve aliases or paths |
@@ -5419,6 +5552,7 @@ meta-spine rows should not inflate Current Capability as runtime implementation.
 | SPINE.REDESIGN.0 | complete | redesign | track-first spine architecture | none | information architecture | docs-only; no runtime implementation |
 | SPINE.METAL.QWEN.0 | complete | pressure-lane doctrine | Qwen/Metal future lane | none | target-pressure | docs-only; no generation claim |
 | SPINE.OUTPUT.UX.CONTRACT.0 | complete | UX doctrine | CLI output UX | none | contract | docs-only; no CLI behavior, runtime implementation, generation, benchmark, or release claim |
+| CLI.ARCH.AUDIT.0 | complete | operator architecture audit | CLI print inventory and porcelain/plumbing doctrine | none | audit/doctrine | docs-only; no renderer implementation, JSON implementation, print removal, runtime, generation, benchmark, or release claim |
 | SPINE.CUDA.MAP.0 | complete | execution-map / backend doctrine | CUDA execution crosswalk | none | spine crosswalk | docs-only; no CUDA runtime/generation/benchmark implementation |
 
 

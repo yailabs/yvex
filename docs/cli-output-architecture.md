@@ -1,8 +1,8 @@
 # CLI Output Architecture
 
-This document records the `CLI.ARCH.AUDIT.0` inventory and doctrine. It is an
-architecture audit only: it does not change command behavior, add a renderer,
-remove output flags, or implement JSON output.
+This document records the completed `CLI.ARCH.AUDIT.0` inventory and doctrine.
+It is an architecture audit only: it does not change command behavior, add a
+renderer, remove output flags, or implement JSON output.
 
 The production inventory below counts direct C/CUDA output forms in the source
 tree, excluding `tests/`, `build/`, and documentation. The counted forms are
@@ -148,7 +148,7 @@ residency, tensors, context, attention, and pressure targets. These are useful
 evidence selectors today, but their presence is a symptom that normal output,
 audit output, and raw output are not sharply separated yet.
 
-## Proposed Output Doctrine
+## Output Doctrine
 
 Default output is porcelain: short, human-readable, and selected by the command.
 Normal output should carry one compact status, one top blocker where relevant,
@@ -182,19 +182,31 @@ helpers, but command branches should stop owning full report walls.
 
 ## Migration Plan
 
-1. Keep existing flags while the renderer boundary is introduced. Do not remove
-   `--output table`, `--output normal`, or `--audit` in the audit wave.
-2. Start with the highest-pressure owner files: `yvex_model_artifacts.c`,
-   `yvex_model.c`, `yvex_graph.c`, and `yvex_runtime.c`.
-3. Convert one command family at a time from direct print walls to a semantic
-   report plus porcelain/audit render helpers in the existing owner module.
-4. Preserve normal/table/audit behavior with tests before moving to the next
-   family.
-5. Add JSON only when a report object exists and the raw field contract can be
-   tested.
-6. Once JSON/raw covers a command family, demote or remove transitional
-   `--include-*` and table-mode requirements in a separate behavior row.
-7. Keep `yvex_cli.c` out of domain rendering; it should dispatch only.
+Phase 0 is complete as `CLI.ARCH.AUDIT.0`: print inventory, flag inventory,
+porcelain/plumbing doctrine, and renderer ownership doctrine.
+
+Phase 1 is planned as `V010.CLI.25`: introduce a narrow internal report/render
+boundary without broad behavior changes, runtime claims, JSON claims, or a new
+command forest.
+
+Phase 2 is planned as `V010.CLI.26`: start with
+`yvex_model_artifacts.c`, the largest print owner.
+
+Phase 3 is planned as `V010.CLI.27`: migrate `yvex_model.c` model-target
+surfaces while preserving normal/table/audit tests during transition.
+
+Phase 4 is planned as `V010.CLI.28`: migrate `yvex_graph.c` and
+`yvex_runtime.c` so graph/runtime porcelain, diagnostic, trace, log, and error
+output stop sharing the same print-wall shape.
+
+Phase 5 maps to `V010.CLI.20`: add JSON/raw plumbing only after a report object
+exists and stable raw fields can be tested for a command family.
+
+Phase 6 is flag demotion: once porcelain and JSON/raw cover a command family,
+demote `--output table`, reduce `--include-*`, and keep audit only where
+promotion evidence still needs it.
+
+Existing flags stay in place during migration. `yvex_cli.c` stays dispatch-only.
 
 ## Non-Goals
 
@@ -208,9 +220,8 @@ throughput, or mark release readiness.
 
 ## Immediate Next Wave Recommendation
 
-Resolve the CLI architecture interruption before resuming `V010.QUANT.1` by
-starting a narrow renderer migration in the highest-pressure model surfaces. The
-first implementation wave should reduce hardcoded report walls in
-`yvex_model_artifacts.c` or `yvex_model.c` while preserving normal/table/audit
-tests. After that, `V010.QUANT.1 - dtype/qtype support by role` remains the
+The next implementation wave should be `V010.CLI.25 - renderer ownership
+foundation`, followed by `V010.CLI.26` over `yvex_model_artifacts.c` and
+`V010.CLI.27` over `yvex_model.c`. After the CLI architecture interruption is
+structurally mapped, `V010.QUANT.1 - dtype/qtype support by role` remains the
 functional Active Next.
