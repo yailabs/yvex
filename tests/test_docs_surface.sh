@@ -46,7 +46,7 @@ fi
 if grep -nF "not a full transformer run" README.md ||
    grep -nF "not a complete inference system" README.md ||
    grep -nF "not transformer prefill yet" README.md ||
-   grep -nF "not a real prefill" README.md ||
+   grep -nF "not runtime prefill" README.md ||
    grep -nF "only foundations" README.md ||
    grep -nF "benchmark results: none" README.md; then
   echo "README must frame staged runtime progress as inference-engine vision, not boundary apology" >&2
@@ -110,12 +110,12 @@ for capability_term in \
   "dtype/qtype support by runtime role" \
   "qtype compute/refusal matrix" \
   "generation-capable artifact emission" \
-  "real prefill" \
-  "real KV writes" \
-  "real KV reads" \
-  "real decode" \
-  "real output-head logits" \
-  "real vocabulary sampling" \
+  "transformer prefill" \
+  "KV writes" \
+  "KV reads" \
+  "runtime decode" \
+  "output-head logits" \
+  "vocabulary sampling" \
   "runtime generation loop" \
   "CLI generation command" \
   "eval smoke/regression" \
@@ -128,6 +128,11 @@ for capability_term in \
     exit 1
   }
 done
+
+if grep -nE '\b([Rr]eal|[Aa]ctual)\b' docs/spine.md; then
+  echo "spine must use transformer/runtime wording instead of vague capability adjectives" >&2
+  exit 1
+fi
 
 grep -nF "Current highest implemented runtime stage | bounded diagnostic generation" docs/spine.md >/dev/null || {
   echo "spine must keep the current highest implemented runtime stage" >&2
@@ -444,7 +449,7 @@ if grep -nE 'OPERATOR\.PATHS\.0|MODEL\.TARGET\.PATHS\.0|MODEL\.PREPARE\.0|MODEL\
 fi
 
 if grep -nF "v0.1.0 may close on a feasible dense" docs/spine.md ||
-   grep -nF "close one real full-runtime path first" docs/spine.md ||
+   grep -nF "close one full-runtime path first" docs/spine.md ||
    grep -nF "DeepSeek V4 Flash full generation is not automatically the minimum v0.1.0 release blocker" docs/spine.md ||
    grep -nF "Qwen/Metal future portability" docs/spine.md ||
    grep -nF "Gemma source/model-class/tensor-collection profile" docs/spine.md; then

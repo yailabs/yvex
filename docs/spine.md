@@ -76,16 +76,16 @@ full-runtime generation readiness.
 | backend qtype compute support | TRACK.BACKEND | required qtypes compute or refuse per backend | blocked | backend | none | V010.QUANT.2 | qtype compute support is not generation |
 | runtime descriptor readiness | TRACK.MODEL | runtime descriptors are ready for supported artifacts | planned | DeepSeek/Qwen/Gemma | descriptor reports only | V010.CLASS.16 | descriptor readiness is not execution |
 | graph primitive readiness | TRACK.GRAPH | primitive graph ops are covered and bounded | fixture-proof | backend | graph primitive proofs, CUDA.KERNEL.0 | V010.GRAPH.PRIM.10 | primitive readiness is not transformer graph |
-| real transformer graph | TRACK.GRAPH | real role-bearing tensors execute through graph | planned | DeepSeek/Qwen/Gemma | selected graph only | V010.GRAPH.24 | graph path is not generation |
-| real prefill | TRACK.PREFILL | transformer prefill writes real state | unsupported | DeepSeek/Qwen/Gemma | diagnostic prefill only | V010.PREFILL.15 | diagnostic prefill is not real prefill |
-| real KV writes | TRACK.KV | prefill writes attention-backed K/V | unsupported | DeepSeek/Qwen/Gemma | diagnostic KV only | V010.KV.6 | KV report is not KV write |
-| real KV reads | TRACK.KV | decode reads attention-backed K/V | unsupported | DeepSeek/Qwen/Gemma | diagnostic KV only | V010.KV.8 | KV read is not implemented |
-| real decode | TRACK.DECODE | decode advances real runtime state | unsupported | DeepSeek/Qwen/Gemma | diagnostic decode only | V010.DECODE.14 | diagnostic decode is not real decode |
-| real output-head logits | TRACK.LOGITS | final hidden state projects to vocab logits | unsupported | DeepSeek/Qwen/Gemma | diagnostic logits only | V010.LOGITS.16 | output-head mapping is not logits |
-| real vocabulary sampling | TRACK.SAMPLING | sampler consumes real logits | unsupported | DeepSeek/Qwen/Gemma | diagnostic sampling only | V010.SAMPLE.14 | diagnostic sampler is not vocab sampling |
+| transformer graph | TRACK.GRAPH | role-bearing tensors execute through model graph | planned | DeepSeek/Qwen/Gemma | selected graph only | V010.GRAPH.24 | graph path is not generation |
+| transformer prefill | TRACK.PREFILL | transformer prefill writes runtime state | unsupported | DeepSeek/Qwen/Gemma | diagnostic prefill only | V010.PREFILL.15 | diagnostic prefill is not transformer prefill |
+| KV writes | TRACK.KV | prefill writes attention-backed K/V | unsupported | DeepSeek/Qwen/Gemma | diagnostic KV only | V010.KV.6 | KV report is not KV write |
+| KV reads | TRACK.KV | decode reads attention-backed K/V | unsupported | DeepSeek/Qwen/Gemma | diagnostic KV only | V010.KV.8 | KV read is not implemented |
+| runtime decode | TRACK.DECODE | decode advances model-backed runtime state | unsupported | DeepSeek/Qwen/Gemma | diagnostic decode only | V010.DECODE.14 | diagnostic decode is not runtime decode |
+| output-head logits | TRACK.LOGITS | final hidden state projects to vocab logits | unsupported | DeepSeek/Qwen/Gemma | diagnostic logits only | V010.LOGITS.16 | output-head mapping is not logits |
+| vocabulary sampling | TRACK.SAMPLING | sampler consumes output-head logits | unsupported | DeepSeek/Qwen/Gemma | diagnostic sampling only | V010.SAMPLE.14 | diagnostic sampler is not vocab sampling |
 | tokenizer/stop boundary | TRACK.TOKENIZER | stop/EOS/token boundaries are explicit | planned | DeepSeek/Qwen/Gemma | tokenizer metadata reports | V010.TOKENIZER.12 | metadata is not tokenization |
 | runtime generation loop | TRACK.GENERATION | prefill, KV, decode, logits, sample, append, stop compose | unsupported | DeepSeek/Qwen/Gemma | diagnostic generation only | V010.GEN.19 | diagnostic generation is not model generation |
-| CLI generation command | TRACK.OPERATOR | operator command invokes real generation path | planned | operator | diagnostic `generate` | V010.GEN.16 | command surface cannot claim missing runtime |
+| CLI generation command | TRACK.OPERATOR | operator command invokes runtime generation path | planned | operator | diagnostic `generate` | V010.GEN.16 | command surface cannot claim missing runtime |
 | operator refusal/status grammar | TRACK.OPERATOR | shared status/refusal/error grammar exists | planned | operator | V010.CLI.26 | V010.CLI.27 | CLI grammar is not lower runtime |
 | eval smoke/regression | TRACK.EVAL | supported generation paths have smoke/regression eval | planned | DeepSeek/Qwen/Gemma | none | V010.EVAL.14 | eval waits for runtime path |
 | benchmark transcript | TRACK.BENCH | measured transcript records model/artifact/backend/qtype | not-measured | DeepSeek/Qwen/Gemma | none | V010.BENCH.11 | no throughput without benchmark |
@@ -122,7 +122,7 @@ proof, lifecycle behavior, and claim-safe documentation.
 
 | Group | Unsupported boundaries |
 | --- | --- |
-| Runtime | real transformer prefill, real attention-backed KV, real decode, real output-head logits, real vocabulary sampling, full runtime generation |
+| Runtime | transformer prefill, attention-backed KV, runtime decode, output-head logits, vocabulary sampling, full runtime generation |
 | Families | DeepSeek generation, Qwen generation, Gemma generation, GLM runtime, arbitrary-family runtime |
 | Artifacts | full source-to-GGUF emission for supported v0.1.0 families, generation-capable artifact proof, external GGUF as support evidence |
 | Evidence | evaluation, capability evaluation, benchmark, throughput, release readiness |
@@ -249,12 +249,12 @@ supersession, audit, and sequence archives.
 | TRACK.TENSOR | tensor collections and role coverage | partial/report-only | Qwen/Gemma tensor collection and coverage reports | required runtime tensor coverage | no |
 | TRACK.RESIDENCY | placement, memory pressure, staged residency | planned/report-only | selected materialization plans | residency gate | no |
 | TRACK.BACKEND | CPU/CUDA capability and future backend lanes | partial | CPU/CUDA primitive proofs | backend runtime gate | no |
-| TRACK.GRAPH | primitives, selected slices, real graph path | partial | graph primitives and selected slices | full transformer graph | no |
-| TRACK.PREFILL | real prefill and chunking | diagnostic-runtime only | diagnostic prefill rows | real prefill gate | no |
-| TRACK.KV | KV layout, writes, reads, lifecycle | diagnostic/report-only | diagnostic KV rows | real KV gate | no |
-| TRACK.DECODE | decode over runtime state | diagnostic-runtime only | bounded diagnostic decode | real decode gate | no |
-| TRACK.LOGITS | output head and logits | diagnostic-runtime only | bounded diagnostic logits | real logits gate | no |
-| TRACK.SAMPLING | token selection over logits | diagnostic-runtime only | bounded diagnostic sampler | real sampling gate | no |
+| TRACK.GRAPH | primitives, selected slices, transformer graph path | partial | graph primitives and selected slices | full transformer graph | no |
+| TRACK.PREFILL | transformer prefill and chunking | diagnostic-runtime only | diagnostic prefill rows | prefill gate | no |
+| TRACK.KV | KV layout, writes, reads, lifecycle | diagnostic/report-only | diagnostic KV rows | KV gate | no |
+| TRACK.DECODE | decode over runtime state | diagnostic-runtime only | bounded diagnostic decode | runtime decode gate | no |
+| TRACK.LOGITS | output head and logits | diagnostic-runtime only | bounded diagnostic logits | logits gate | no |
+| TRACK.SAMPLING | token selection over logits | diagnostic-runtime only | bounded diagnostic sampler | sampling gate | no |
 | TRACK.TOKENIZER | tokenizer metadata and stop policy | partial/planned | tokenizer diagnostics | tokenizer gate | no |
 | TRACK.GENERATION | decode/logits/sample/append loop | diagnostic-runtime only | bounded diagnostic generation | runtime generation gate | no |
 | TRACK.OPERATOR | CLI grammar, output, porcelain/plumbing commands | implemented/partial | CLI baseline rows complete; explicit labels are in the catalog below | CLI status/refusal grammar | no |
@@ -538,17 +538,17 @@ labels.
 | V010.GRAPH.PRIM.9 | planned | normalization policy. |
 | V010.GRAPH.PRIM.10 | planned | graph primitive regression gate. |
 | V010.GRAPH.0 | planned | graph requirement report. |
-| V010.GRAPH.1 | planned | real embedding graph input. |
-| V010.GRAPH.2 | planned | real attention norm. |
-| V010.GRAPH.3 | planned | real Q projection. |
-| V010.GRAPH.4 | planned | real K projection. |
-| V010.GRAPH.5 | planned | real V projection. |
-| V010.GRAPH.6 | planned | real RoPE/position application. |
-| V010.GRAPH.7 | planned | real attention score path. |
-| V010.GRAPH.8 | planned | real causal/mask path. |
-| V010.GRAPH.9 | planned | real softmax path. |
-| V010.GRAPH.10 | planned | real value accumulation. |
-| V010.GRAPH.11 | planned | real O projection. |
+| V010.GRAPH.1 | planned | embedding graph input. |
+| V010.GRAPH.2 | planned | attention norm. |
+| V010.GRAPH.3 | planned | Q projection. |
+| V010.GRAPH.4 | planned | K projection. |
+| V010.GRAPH.5 | planned | V projection. |
+| V010.GRAPH.6 | planned | RoPE/position application. |
+| V010.GRAPH.7 | planned | attention score path. |
+| V010.GRAPH.8 | planned | causal/mask path. |
+| V010.GRAPH.9 | planned | softmax path. |
+| V010.GRAPH.10 | planned | value accumulation. |
+| V010.GRAPH.11 | planned | O projection. |
 | V010.GRAPH.12 | planned | attention residual path. |
 | V010.GRAPH.13 | planned | post-attention norm. |
 | V010.GRAPH.14 | planned | dense MLP gate/up/down path. |
@@ -557,8 +557,8 @@ labels.
 | V010.GRAPH.17 | planned | output hidden state ownership. |
 | V010.GRAPH.18 | planned | graph scratch lifecycle. |
 | V010.GRAPH.19 | planned | graph cleanup/failure report. |
-| V010.GRAPH.20 | planned | first real transformer block. |
-| V010.GRAPH.21 | planned | repeated real layer stack. |
+| V010.GRAPH.20 | planned | first transformer block. |
+| V010.GRAPH.21 | planned | repeated layer stack. |
 | V010.GRAPH.22 | complete | selected-slice graph proof. |
 | V010.GRAPH.23 | planned | full-runtime-candidate graph proof. |
 | V010.GRAPH.24 | planned | v0.1.0 graph gate. |
@@ -616,13 +616,13 @@ labels.
 | V010.PREFILL.0 | complete | prefill requirement report. |
 | V010.PREFILL.1 | complete | token input to prefill planner. |
 | V010.PREFILL.2 | planned | embedding prefill input. |
-| V010.PREFILL.3 | planned | real layer-0 prefill entry. |
-| V010.PREFILL.4 | planned | real attention prefill. |
-| V010.PREFILL.5 | planned | real KV write during prefill. |
+| V010.PREFILL.3 | planned | layer-0 prefill entry. |
+| V010.PREFILL.4 | planned | attention prefill. |
+| V010.PREFILL.5 | planned | KV write during prefill. |
 | V010.PREFILL.6 | planned | dense MLP prefill. |
 | V010.PREFILL.7 | planned | MoE router/expert prefill. |
 | V010.PREFILL.8 | planned | repeated layer prefill. |
-| V010.PREFILL.9 | planned | chunked real prefill. |
+| V010.PREFILL.9 | planned | chunked prefill. |
 | V010.PREFILL.10 | planned | staged/SSD prefill plan. |
 | V010.PREFILL.11 | planned | prefill state ownership. |
 | V010.PREFILL.12 | planned | prefill cleanup/failure. |
@@ -663,12 +663,12 @@ labels.
 | V010.DECODE.0 | complete | decode requirement report. |
 | V010.DECODE.1 | complete | decode state ownership. |
 | V010.DECODE.2 | complete | decode position input. |
-| V010.DECODE.3 | planned | decode reads real KV. |
+| V010.DECODE.3 | planned | decode reads KV. |
 | V010.DECODE.4 | planned | decode attention step. |
 | V010.DECODE.5 | planned | decode dense MLP path. |
 | V010.DECODE.6 | planned | decode MoE path. |
 | V010.DECODE.7 | planned | decode hidden state output. |
-| V010.DECODE.8 | planned | one real decode step. |
+| V010.DECODE.8 | planned | one runtime decode step. |
 | V010.DECODE.9 | planned | repeated decode lifecycle. |
 | V010.DECODE.10 | planned | decode interruption/cancel safe point. |
 | V010.DECODE.11 | planned | decode cleanup/failure. |
@@ -703,7 +703,7 @@ labels.
 | Wave | Status | Description |
 | --- | --- | --- |
 | V010.SAMPLE.0 | complete | sampling requirement report. |
-| V010.SAMPLE.1 | planned | greedy over real logits. |
+| V010.SAMPLE.1 | planned | greedy over output-head logits. |
 | V010.SAMPLE.2 | complete | selected token report. |
 | V010.SAMPLE.3 | complete | candidate set report. |
 | V010.SAMPLE.4 | complete | temperature validation. |
@@ -741,13 +741,13 @@ labels.
 | Wave | Status | Description |
 | --- | --- | --- |
 | V010.GEN.0 | complete | generation requirement report. |
-| V010.GEN.1 | complete | real generation state ownership. |
+| V010.GEN.1 | complete | generation state ownership. |
 | V010.GEN.2 | complete | generation option parser. |
 | V010.GEN.3 | complete | prefill to decode composition. |
 | V010.GEN.4 | complete | decode to logits composition. |
 | V010.GEN.5 | complete | logits to sample composition. |
 | V010.GEN.6 | complete | sample to append composition. |
-| V010.GEN.7 | complete | real token append. |
+| V010.GEN.7 | complete | token append. |
 | V010.GEN.8 | planned | context stop policy. |
 | V010.GEN.9 | planned | EOS stop policy. |
 | V010.GEN.10 | planned | stop-token policy. |
@@ -756,7 +756,7 @@ labels.
 | V010.GEN.13 | complete | generation trace. |
 | V010.GEN.14 | complete | failure/cancel safe points. |
 | V010.GEN.15 | complete | cleanup/release. |
-| V010.GEN.16 | planned | CLI real generation command. |
+| V010.GEN.16 | planned | CLI runtime generation command. |
 | V010.GEN.17 | complete | generation smoke. |
 | V010.GEN.18 | planned | generation regression. |
 | V010.GEN.19 | planned | v0.1.0 generation gate. |
@@ -868,7 +868,7 @@ labels.
 | V010.SERVE.2 | planned | model registry exposed by daemon. |
 | V010.SERVE.3 | planned | runtime readiness endpoint. |
 | V010.SERVE.4 | planned | generate endpoint after CLI generation. |
-| V010.SERVE.5 | planned | streaming endpoint after real generation. |
+| V010.SERVE.5 | planned | streaming endpoint after runtime generation. |
 | V010.SERVE.6 | planned | cancellation boundary. |
 | V010.SERVE.7 | planned | provider compatibility boundary. |
 | V010.SERVE.8 | planned | OpenAI compatibility after generation. |
@@ -1219,7 +1219,7 @@ Boundary:
 ### TRACK.GRAPH - Graph Core
 
 Owns:
-  graph primitives, selected graph slices, real transformer graph path.
+  graph primitives, selected graph slices, transformer graph path.
 
 Current state:
   partial.
@@ -1232,7 +1232,7 @@ Active / Next:
   wait for generation-capable artifacts and role/qtype readiness.
 
 Planned gates:
-  real transformer graph over supported family artifacts.
+  transformer graph over supported family artifacts.
 
 Boundary:
   graph proof is not prefill, decode, logits, sampling, or generation.
@@ -1240,7 +1240,7 @@ Boundary:
 ### TRACK.PREFILL - Prefill
 
 Owns:
-  real transformer prefill, chunking, prefill state ownership, KV write
+  transformer prefill, chunking, prefill state ownership, KV write
   boundary.
 
 Current state:
@@ -1253,10 +1253,10 @@ Active / Next:
   wait for graph and KV gates.
 
 Planned gates:
-  real prefill over supported artifacts.
+  transformer prefill over supported artifacts.
 
 Boundary:
-  diagnostic prefill is not real transformer prefill.
+  diagnostic prefill is not transformer prefill.
 
 ### TRACK.KV - KV Runtime
 
@@ -1273,7 +1273,7 @@ Active / Next:
   wait for attention-backed prefill and decode requirements.
 
 Planned gates:
-  real K/V writes during prefill and reads during decode.
+  K/V writes during prefill and reads during decode.
 
 Boundary:
   diagnostic KV is not attention-backed KV.
@@ -1281,7 +1281,7 @@ Boundary:
 ### TRACK.DECODE - Decode
 
 Owns:
-  one-step and repeated decode over real runtime state.
+  one-step and repeated decode over runtime state.
 
 Current state:
   diagnostic-runtime only.
@@ -1290,10 +1290,10 @@ Complete:
   bounded diagnostic decode.
 
 Active / Next:
-  wait for real prefill and KV read/write.
+  wait for transformer prefill and KV read/write.
 
 Planned gates:
-  one real decode step, repeated decode lifecycle.
+  one runtime decode step, repeated decode lifecycle.
 
 Boundary:
   decode is not generation without logits, sampling, append, and stop policy.
@@ -1313,15 +1313,15 @@ Active / Next:
   wait for output-head mapping, residency, graph, and decode state.
 
 Planned gates:
-  real output-head logits for supported families.
+  output-head logits for supported families.
 
 Boundary:
-  diagnostic logits are not real model logits.
+  diagnostic logits are not model logits.
 
 ### TRACK.SAMPLING - Sampling
 
 Owns:
-  greedy and stochastic sampling over real logits.
+  greedy and stochastic sampling over output-head logits.
 
 Current state:
   diagnostic-runtime only.
@@ -1330,10 +1330,10 @@ Complete:
   bounded diagnostic greedy sampler.
 
 Active / Next:
-  wait for real logits.
+  wait for output-head logits.
 
 Planned gates:
-  greedy over real logits, then stochastic strategies and reproducibility.
+  greedy over output-head logits, then stochastic strategies and reproducibility.
 
 Boundary:
   sampling over diagnostic logits is not generation quality.
@@ -1371,7 +1371,7 @@ Complete:
   cleanup.
 
 Active / Next:
-  wait for real prefill, KV, decode, logits, sampling, tokenizer boundary.
+  wait for transformer prefill, KV, decode, logits, sampling, tokenizer boundary.
 
 Planned gates:
   runtime generation for every supported v0.1.0 family.
@@ -1525,12 +1525,12 @@ Boundary:
 | GATE.TENSOR | TRACK.TENSOR | full required tensor coverage |
 | GATE.RESIDENCY | TRACK.RESIDENCY | placement, movement, memory pressure, cleanup proof |
 | GATE.BACKEND | TRACK.BACKEND | CPU/CUDA support/refusal matrix for required ops and qtypes |
-| GATE.GRAPH | TRACK.GRAPH | real transformer graph path over supported artifacts |
-| GATE.PREFILL | TRACK.PREFILL | real prefill and state ownership |
-| GATE.KV | TRACK.KV | real K/V writes and decode reads |
-| GATE.DECODE | TRACK.DECODE | one real decode step and repeat lifecycle |
-| GATE.LOGITS | TRACK.LOGITS | real output-head logits |
-| GATE.SAMPLING | TRACK.SAMPLING | token selection over real logits |
+| GATE.GRAPH | TRACK.GRAPH | transformer graph path over supported artifacts |
+| GATE.PREFILL | TRACK.PREFILL | prefill and state ownership |
+| GATE.KV | TRACK.KV | K/V writes and decode reads |
+| GATE.DECODE | TRACK.DECODE | one runtime decode step and repeat lifecycle |
+| GATE.LOGITS | TRACK.LOGITS | output-head logits |
+| GATE.SAMPLING | TRACK.SAMPLING | token selection over output-head logits |
 | GATE.TOKENIZER | TRACK.TOKENIZER | tokenizer/stop boundary |
 | GATE.GEN | TRACK.GENERATION | runtime generation for DeepSeek, Qwen, and Gemma |
 | GATE.OPERATOR | TRACK.OPERATOR | normal/audit command proof and refusal wording |
@@ -1754,15 +1754,15 @@ Post-v0.1.0 lanes:
 | source tensor | tensor metadata or payload from official upstream source files |
 | YVEX-produced artifact | artifact emitted by YVEX tooling with YVEX-owned metadata and identity |
 | external reference artifact | third-party artifact used only for comparison, never support proof |
-| selected-runtime-slice | bounded subset of a real artifact used for parser/materialization/graph proof |
+| selected-runtime-slice | bounded subset of a model artifact used for parser/materialization/graph proof |
 | supported-generation-family | DeepSeek, Qwen, or Gemma for v0.1.0 |
 | generation-capable artifact | YVEX-produced artifact with required roles, qtypes, metadata, identity, and integrity for generation work |
-| runtime generation | actual prefill/KV/decode/logits/sampling/append/stop/cleanup path over model state |
+| runtime generation | prefill/KV/decode/logits/sampling/append/stop/cleanup path over model state |
 | report-only | command-visible facts without execution |
 | diagnostic-runtime | runtime control flow over bounded diagnostic state |
 | fixture-proof | synthetic controlled proof with reference checks |
-| selected-slice-proof | bounded proof over selected real artifact tensors |
-| full-runtime | real transformer path over a supported generation artifact |
+| selected-slice-proof | bounded proof over selected artifact tensors |
+| full-runtime | transformer path over a supported generation artifact |
 | eval-ready | implemented runtime path has correctness/failure evaluation |
 | benchmark-ready | implemented runtime path has measured benchmark metadata |
 | release-ready | all target, artifact, runtime, eval, benchmark, docs, CI, and claim gates pass |
