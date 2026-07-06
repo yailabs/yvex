@@ -213,8 +213,8 @@ for minimum_gate_label in \
   }
 done
 
-grep -nF "V010.QUANT.1 - multi-family dtype/qtype support by role" docs/spine.md >/dev/null || {
-  echo "spine must preserve V010.QUANT.1 as Active Next" >&2
+grep -nF "V010.QUANT.2 - qtype compute/refusal matrix" docs/spine.md >/dev/null || {
+  echo "spine must preserve V010.QUANT.2 as Active Next" >&2
   exit 1
 }
 
@@ -366,13 +366,18 @@ grep -nF "v0.1.0 closes only when every supported v0.1.0 generation family reach
   exit 1
 }
 
-grep -nF "V010.QUANT.1 - multi-family dtype/qtype support by role" docs/spine.md >/dev/null || {
-  echo "spine must set Active Next to multi-family qtype support by role" >&2
+grep -nF "V010.QUANT.2 - qtype compute/refusal matrix" docs/spine.md >/dev/null || {
+  echo "spine must set Active Next to qtype compute/refusal matrix" >&2
   exit 1
 }
 
-grep -nF "| V010.QUANT.1 | active | multi-family dtype/qtype support by runtime role. |" docs/spine.md >/dev/null || {
-  echo "spine must preserve the multi-family quant row title" >&2
+grep -nF "| V010.QUANT.1 | complete | multi-family dtype/qtype support by runtime role. |" docs/spine.md >/dev/null || {
+  echo "spine must preserve the completed multi-family quant row title" >&2
+  exit 1
+}
+
+grep -nF "| V010.QUANT.2 | active | qtype compute/refusal matrix. |" docs/spine.md >/dev/null || {
+  echo "spine must preserve V010.QUANT.2 as active quant row" >&2
   exit 1
 }
 
@@ -589,8 +594,8 @@ grep -nF "V010.CLI.27 - base status and refusal grammar" docs/cli-output-archite
   exit 1
 }
 
-grep -nF "V010.QUANT.1 - multi-family dtype/qtype support by role" docs/cli-output-architecture.md >/dev/null || {
-  echo "CLI output architecture must hand immediate Active Next back to multi-family qtype support" >&2
+grep -nF "V010.QUANT.2 - qtype compute/refusal matrix" docs/cli-output-architecture.md >/dev/null || {
+  echo "CLI output architecture must hand immediate Active Next to qtype compute/refusal matrix" >&2
   exit 1
 }
 

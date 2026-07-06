@@ -421,7 +421,7 @@ throughput, or mark release readiness.
 substrate row. It should standardize compact status, top blocker, next action,
 boundary, refusal, and error shapes before broad namespace migrations.
 
-After `SPINE.RETARGET.MULTIFAMILY.0`, the immediate Active Next is
-`V010.QUANT.1 - multi-family dtype/qtype support by role`, because the
-v0.1.0 release target is now locked to DeepSeek, Qwen, and Gemma
-generation-capable artifacts before runtime generation can be claimed.
+After `V010.QUANT.1`, the immediate Active Next is
+`V010.QUANT.2 - qtype compute/refusal matrix`, because the role-support report
+now hands artifact planning to backend/family qtype compute and refusal
+decisions before generation-capable artifact emission can be claimed.

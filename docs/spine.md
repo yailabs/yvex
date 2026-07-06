@@ -28,7 +28,7 @@ YVEX is a local-first inference engine, not a chat wrapper.
 | Generation state | DeepSeek/Qwen/Gemma unsupported |
 | Benchmark state | not measured |
 | CUDA state | bounded primitive-hardening only |
-| Active Next | V010.QUANT.1 - multi-family dtype/qtype support by role |
+| Active Next | V010.QUANT.2 - qtype compute/refusal matrix |
 | v0.1.0 target | v0.1.0 - multi-family supported generation over YVEX-produced quantized artifacts |
 | Supported v0.1.0 families | DeepSeek, Qwen, Gemma |
 | Main blocker | multi-family generation-capable artifact chain incomplete |
@@ -62,8 +62,8 @@ full-runtime generation readiness.
 | missing-role blocker report | TRACK.MAP | missing runtime roles are visible | complete | DeepSeek/Qwen/Gemma | V010.MAP.8 | V010.MAP.9 | blocker report is not closure |
 | mapping gate | TRACK.MAP | map evidence gates artifact planning | complete | DeepSeek/Qwen/Gemma | V010.MAP.9 | V010.QUANT.1 | gate is report-only |
 | qtype policy | TRACK.QUANT | qtype policy basis is reported | complete | DeepSeek/Qwen/Gemma | V010.QUANT.0 | V010.QUANT.1 | policy is not support |
-| dtype/qtype support by runtime role | TRACK.QUANT | every runtime role has allowed/refused dtype/qtype state | active | DeepSeek/Qwen/Gemma | V010.QUANT.0 | V010.QUANT.1 | support matrix is not quantization or generation |
-| qtype compute/refusal matrix | TRACK.QUANT | compute/refusal state exists across families and backends | blocked | DeepSeek/Qwen/Gemma | none | V010.QUANT.2 | compute matrix is not artifact emission |
+| dtype/qtype support by runtime role | TRACK.QUANT | every runtime role has allowed/refused dtype/qtype state | complete/report-only | DeepSeek/Qwen/Gemma | V010.QUANT.1 | V010.QUANT.2 | support report is not quantization or generation |
+| qtype compute/refusal matrix | TRACK.QUANT | compute/refusal state exists across families and backends | active | DeepSeek/Qwen/Gemma | V010.QUANT.1 | V010.QUANT.2 | compute matrix is not artifact emission |
 | calibration/imatrix decision | TRACK.QUANT | calibration requirements are explicit | planned | DeepSeek/Qwen/Gemma | none | V010.QUANT.3 | imatrix decision is not quantization |
 | generation-capable artifact emission | TRACK.ARTIFACT | YVEX emits complete quantized artifacts for supported families | blocked | DeepSeek/Qwen/Gemma | V010.ARTIFACT.EMIT.0, V010.ARTIFACT.EMIT.1 | V010.ARTIFACT.EMIT.2 | artifact emission is not runtime generation |
 | artifact identity | TRACK.INTEGRITY | supported-family artifacts have identity manifests | planned | DeepSeek/Qwen/Gemma | selected-slice identity only | V010.INTEGRITY.0 | identity is not execution |
@@ -73,7 +73,7 @@ full-runtime generation readiness.
 | materialization proof | TRACK.RESIDENCY | required tensors materialize under limits | selected-slice-proof | DeepSeek/Qwen/Gemma | selected proof only | V010.RESIDENCY.19 | selected proof is not full runtime |
 | residency plan | TRACK.RESIDENCY | CPU/CUDA residency is planned for required tensors | planned | DeepSeek/Qwen/Gemma | placement reports | V010.RESIDENCY.19 | residency plan is not backend execution |
 | backend capability | TRACK.BACKEND | backend capability is known and refused cleanly | partial | backend | V010.BACKEND.1, V010.BACKEND.2, CUDA.KERNEL.0 | V010.BACKEND.12 | backend capability is not model support |
-| backend qtype compute support | TRACK.BACKEND | required qtypes compute or refuse per backend | blocked | backend | none | V010.QUANT.2 | qtype compute support is not generation |
+| backend qtype compute support | TRACK.BACKEND | required qtypes compute or refuse per backend | active | backend | V010.QUANT.1 | V010.QUANT.2 | qtype compute support is not generation |
 | runtime descriptor readiness | TRACK.MODEL | runtime descriptors are ready for supported artifacts | planned | DeepSeek/Qwen/Gemma | descriptor reports only | V010.CLASS.16 | descriptor readiness is not execution |
 | graph primitive readiness | TRACK.GRAPH | primitive graph ops are covered and bounded | fixture-proof | backend | graph primitive proofs, CUDA.KERNEL.0 | V010.GRAPH.PRIM.10 | primitive readiness is not transformer graph |
 | transformer graph | TRACK.GRAPH | role-bearing tensors execute through model graph | planned | DeepSeek/Qwen/Gemma | selected graph only | V010.GRAPH.24 | graph path is not generation |
@@ -96,9 +96,9 @@ full-runtime generation readiness.
 
 | Family | Source | Map | Quant | Artifact | Integrity | Residency | Runtime descriptor | Graph | Generation | Eval | Benchmark | Release role |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| DeepSeek | selected/source pressure partial | map incomplete for full runtime | blocked at V010.QUANT.1 | no generation-capable artifact | selected integrity only | planned | planned | selected/fixture only | unsupported | planned | not measured | required |
-| Qwen | source-intake/report-only | header map partial | blocked at V010.QUANT.1 | no generation-capable artifact | planned | planned | planned | planned | unsupported | planned | not measured | required |
-| Gemma | source-intake/report-only | header map partial | blocked at V010.QUANT.1 | no generation-capable artifact | planned | planned | planned | planned | unsupported | planned | not measured | required |
+| DeepSeek | selected/source pressure partial | map incomplete for full runtime | blocked at V010.QUANT.2 | no generation-capable artifact | selected integrity only | planned | planned | selected/fixture only | unsupported | planned | not measured | required |
+| Qwen | source-intake/report-only | header map partial | blocked at V010.QUANT.2 | no generation-capable artifact | planned | planned | planned | planned | unsupported | planned | not measured | required |
+| Gemma | source-intake/report-only | header map partial | blocked at V010.QUANT.2 | no generation-capable artifact | planned | planned | planned | planned | unsupported | planned | not measured | required |
 
 ### 1.3 Implemented Capability Snapshot
 
@@ -214,25 +214,42 @@ Two concepts define the target:
 Active Next:
 
 ```text
-V010.QUANT.1 - multi-family dtype/qtype support by role
+V010.QUANT.2 - qtype compute/refusal matrix
 ```
 
 Why this row is next:
 
 ```text
-V010.QUANT.0 is complete as a multi-family qtype policy report.
-DeepSeek, Qwen, and Gemma still lack per-role dtype/qtype support evidence.
-That evidence is required before generation-capable artifact emission can be safe.
+V010.QUANT.1 is complete as a report-only role-support surface.
+DeepSeek, Qwen, and Gemma still lack backend compute/refusal decisions for
+the reported per-role source dtypes and planned artifact qtypes.
+That matrix is required before artifact emission can choose or refuse qtypes.
 ```
 
-Expected next decision after V010.QUANT.1:
+Expected next decision after V010.QUANT.2:
 
 ```text
-V010.QUANT.2 - qtype compute/refusal matrix
+V010.QUANT.3 - calibration/imatrix requirement report
 ```
 
-The exact next artifact-readiness row may change only if V010.QUANT.1 exposes a
+The exact next artifact-readiness row may change only if V010.QUANT.2 exposes a
 more specific blocker.
+
+Completed quant row:
+
+```text
+V010.QUANT.1 - multi-family dtype/qtype support by role
+```
+
+`V010.QUANT.1` adds `model-target quant-policy TARGET --role-support` and
+`model-target quant-policy --gate v0.1.0` as report-only role-support surfaces
+for DeepSeek selected slices and downloaded Qwen/Gemma source targets. The
+reports list runtime role, source dtype, source tensor count, planned artifact
+qtype candidates/refusals, storage status, compute status, calibration/imatrix
+deferral, and artifact-emission blockers without tensor payload loading,
+quantization, GGUF emission, materialization, runtime descriptors, graph
+execution, generation, eval, benchmark, throughput, or release readiness. The
+handoff blocker is now `V010.QUANT.2 - qtype compute/refusal matrix`.
 
 ## 5. Tracks
 
@@ -244,7 +261,7 @@ supersession, audit, and sequence archives.
 | TRACK.SCOPE | release scope and claim boundaries | active | SPINE.RETARGET.MULTIFAMILY.0, SPINE.TRACK.CANON.0 | scope remains multi-family | no |
 | TRACK.SOURCE | source intake, manifests, provider download controls | implemented/source-intake | source-intake rows complete; explicit labels are in the catalog below | source evidence stays coherent | no |
 | TRACK.MAP | family tensor roles and source-to-artifact handoff | partial/report-only | Qwen/Gemma class and tensor-map rows, V010.MAP.1/5/6/7/8/9 | artifact handoff | no |
-| TRACK.QUANT | dtype/qtype policy and compute/refusal coverage | partial/report-only | V010.QUANT.0 | V010.QUANT.1 | yes |
+| TRACK.QUANT | dtype/qtype policy and compute/refusal coverage | partial/report-only | V010.QUANT.0, V010.QUANT.1 | V010.QUANT.2 | yes |
 | TRACK.ARTIFACT | YVEX-produced quantized artifacts | selected-slice only | controlled/selected artifact emission | multi-family generation-capable artifacts | no |
 | TRACK.INTEGRITY | artifact identity, ranges, corruption refusal | implemented for current artifacts | integrity rows and materialization gates | full artifact gates | no |
 | TRACK.MODEL | model class and dynamic routing | partial/report-only | Qwen/Gemma model-class reports, MoE reports | runtime class gates | no |
@@ -351,8 +368,8 @@ labels.
 | Wave | Status | Description |
 | --- | --- | --- |
 | V010.QUANT.0 | complete | qtype policy report. |
-| V010.QUANT.1 | active | multi-family dtype/qtype support by runtime role. |
-| V010.QUANT.2 | planned | qtype compute/refusal matrix. |
+| V010.QUANT.1 | complete | multi-family dtype/qtype support by runtime role. |
+| V010.QUANT.2 | active | qtype compute/refusal matrix. |
 | V010.QUANT.3 | planned | calibration/imatrix requirement report. |
 
 #### TRACK.ARTIFACT Rows
@@ -1078,12 +1095,14 @@ Current state:
 
 Complete:
   V010.QUANT.0.
+  V010.QUANT.1.
 
 Active / Next:
-  V010.QUANT.1 - multi-family dtype/qtype support by role.
+  V010.QUANT.2 - qtype compute/refusal matrix.
 
 Planned gates:
-  V010.QUANT.2 - qtype compute/refusal matrix; artifact qtype readiness gate.
+  V010.QUANT.3 - calibration/imatrix requirement report.
+  artifact qtype readiness gate.
 
 Boundary:
   qtype policy is not artifact emission, kernel support, generation, or

@@ -130,13 +130,21 @@ assert_output_contract_pass() {
 write_fake_transformer_safetensors() {
   out=$1
   variant=${2:-complete}
+  dtype=${3:-F32}
   mkdir -p "$(dirname "$out")"
-  python3 - "$out" "$variant" <<'PY'
+  python3 - "$out" "$variant" "$dtype" <<'PY'
 import json
 import struct
 import sys
 
 variant = sys.argv[2]
+dtype = sys.argv[3]
+element_bytes = {
+    "F32": 4,
+    "F16": 2,
+    "BF16": 2,
+}.get(dtype, 4)
+tensor_bytes = element_bytes * 4
 names = [
     "model.embed_tokens.weight",
     "model.layers.0.self_attn.q_proj.weight",
@@ -267,11 +275,11 @@ offset = 0
 header = {}
 for name in names:
     header[name] = {
-        "dtype": "F32",
+        "dtype": dtype,
         "shape": [2, 2],
-        "data_offsets": [offset, offset + 16],
+        "data_offsets": [offset, offset + tensor_bytes],
     }
-    offset += 16
+    offset += tensor_bytes
 blob = json.dumps(header, separators=(",", ":")).encode("utf-8")
 with open(sys.argv[1], "wb") as f:
     f.write(struct.pack("<Q", len(blob)))
@@ -693,7 +701,7 @@ grep 'status: model-download-status' "$ROOT/download-dynamic-qwen-status.out"
 grep 'model-download-cleanup: target=qwen3-6-35b-a3b' "$ROOT/download-dynamic-qwen-cleanup.out"
 grep 'status: model-download-cleanup-dry-run' "$ROOT/download-dynamic-qwen-cleanup.out"
 rm -f "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b/"*.safetensors
-write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b/model.safetensors" qwen-coverage
+write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b/model.safetensors" qwen-coverage BF16
 "$YVEX_BIN" model-target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-qwen-audit.out"
 grep 'tensor_map_status: naming-map-candidate' "$ROOT/tensor-map-dynamic-qwen-audit.out"
 grep 'tensor_map_family: qwen' "$ROOT/tensor-map-dynamic-qwen-audit.out"
@@ -817,9 +825,44 @@ grep '"tokenizer":"present-report-only"' "$ROOT/missing-roles-dynamic-qwen-cover
 grep 'tensor_map_status: present-report-only' "$ROOT/prepare-dynamic-qwen-coverage.out"
 grep 'output_head_map_status: present-report-only' "$ROOT/prepare-dynamic-qwen-coverage.out"
 grep 'tokenizer_map_status: present-report-only' "$ROOT/prepare-dynamic-qwen-coverage.out"
-grep 'top_blocker: quant-policy-or-artifact-emitter' "$ROOT/prepare-dynamic-qwen-coverage.out"
-grep 'reason: quant policy / artifact emitter missing' "$ROOT/prepare-dynamic-qwen-coverage.out"
-grep 'next: V010.QUANT.1' "$ROOT/prepare-dynamic-qwen-coverage.out"
+grep 'top_blocker: qtype-compute-refusal-matrix-missing' "$ROOT/prepare-dynamic-qwen-coverage.out"
+grep 'reason: qtype compute/refusal matrix missing' "$ROOT/prepare-dynamic-qwen-coverage.out"
+grep 'next: V010.QUANT.2' "$ROOT/prepare-dynamic-qwen-coverage.out"
+"$YVEX_BIN" model-target quant-policy qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role-support > "$ROOT/qtype-role-support-dynamic-qwen.out"
+grep 'qtype-role-support: qwen3-6-35b-a3b' "$ROOT/qtype-role-support-dynamic-qwen.out"
+grep 'family: qwen' "$ROOT/qtype-role-support-dynamic-qwen.out"
+grep 'status: blocked' "$ROOT/qtype-role-support-dynamic-qwen.out"
+grep 'source_dtype: BF16' "$ROOT/qtype-role-support-dynamic-qwen.out"
+grep 'preferred_artifact_qtype: unresolved' "$ROOT/qtype-role-support-dynamic-qwen.out"
+grep 'supported_roles: [1-9][0-9]*' "$ROOT/qtype-role-support-dynamic-qwen.out"
+grep 'blocked_roles: [1-9][0-9]*' "$ROOT/qtype-role-support-dynamic-qwen.out"
+grep 'top_blocker: qtype-compute-refusal-matrix-missing' "$ROOT/qtype-role-support-dynamic-qwen.out"
+grep 'next: V010.QUANT.2' "$ROOT/qtype-role-support-dynamic-qwen.out"
+grep 'boundary: qtype role report only; no quantization/GGUF/runtime/generation' "$ROOT/qtype-role-support-dynamic-qwen.out"
+! grep 'runtime_claim:' "$ROOT/qtype-role-support-dynamic-qwen.out"
+"$YVEX_BIN" model-target quant-policy qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role-support --output table > "$ROOT/qtype-role-support-dynamic-qwen-table.out"
+grep 'QTYPE ROLE SUPPORT' "$ROOT/qtype-role-support-dynamic-qwen-table.out"
+grep 'ROLE[[:space:]][[:space:]]*SRC_DTYPE[[:space:]][[:space:]]*ARTIFACT_QTYPE[[:space:]][[:space:]]*STORAGE[[:space:]][[:space:]]*COMPUTE[[:space:]][[:space:]]*CALIBRATION[[:space:]][[:space:]]*STATUS' "$ROOT/qtype-role-support-dynamic-qwen-table.out"
+grep 'qwen_linear_attn_A_log[[:space:]][[:space:]]*BF16[[:space:]][[:space:]]*unresolved[[:space:]][[:space:]]*header-storage-profiled[[:space:]][[:space:]]*unknown[[:space:]][[:space:]]*deferred[[:space:]][[:space:]]*present' "$ROOT/qtype-role-support-dynamic-qwen-table.out"
+grep 'moe_expert_gate_up[[:space:]][[:space:]]*BF16' "$ROOT/qtype-role-support-dynamic-qwen-table.out"
+"$YVEX_BIN" model-target quant-policy qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role-support --audit > "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+grep 'report: qtype-role-support' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+grep 'target_id: qwen3-6-35b-a3b' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+grep 'source_dtype: BF16' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+grep 'role\.[0-9][0-9]*\.role_name: qwen_linear_attn_A_log' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+grep 'role\.[0-9][0-9]*\.role_name: tokenizer_metadata' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+grep 'role\.[0-9][0-9]*\.source_dtype: BF16' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+grep 'role\.[0-9][0-9]*\.compute_support_status: unknown' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+grep 'role\.[0-9][0-9]*\.artifact_emission_allowed: false' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+grep 'role\.[0-9][0-9]*\.artifact_emission_blocker: qtype-compute-refusal-matrix-missing' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+grep 'payload_bytes_read: false' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+grep 'quantization_performed: false' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+grep 'gguf_emitted: false' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+grep 'runtime_claim: unsupported' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+grep 'generation: unsupported-full-model' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+grep 'benchmark_status: not-measured' "$ROOT/qtype-role-support-dynamic-qwen-audit.out"
+expect_rc 2 "$YVEX_BIN" model-target quant-policy qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role-support --output json > "$ROOT/qtype-role-support-json.out" 2> "$ROOT/qtype-role-support-json.err"
+grep 'JSON output is unsupported' "$ROOT/qtype-role-support-json.err"
 rm -f "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.tokenizer-map.json"
 write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b/model.safetensors" qwen-incomplete
 "$YVEX_BIN" model-target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-qwen-incomplete-audit.out"
@@ -915,7 +958,7 @@ grep 'family: gemma' "$ROOT/download-dynamic-gemma-status.out"
 grep 'repo_id: google/Gemma-4-31B-it' "$ROOT/download-dynamic-gemma-status.out"
 grep 'safetensors_size_status: ok' "$ROOT/download-dynamic-gemma-status.out"
 rm -f "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/"*.safetensors
-write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/model.safetensors" gemma-language-head
+write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/model.safetensors" gemma-language-head BF16
 "$YVEX_BIN" model-target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-gemma-audit.out"
 grep 'tensor_map_status: naming-map-profiled' "$ROOT/tensor-map-dynamic-gemma-audit.out"
 grep 'tensor_map_family: gemma' "$ROOT/tensor-map-dynamic-gemma-audit.out"
@@ -1001,12 +1044,44 @@ grep 'artifact_plan_status: planned-full-gguf' "$ROOT/prepare-dynamic-gemma.out"
 grep 'artifact_emission_status: not-performed' "$ROOT/prepare-dynamic-gemma.out"
 grep 'artifact_identity_status: missing' "$ROOT/prepare-dynamic-gemma.out"
 grep 'prepare_blocker_count:' "$ROOT/prepare-dynamic-gemma.out"
-grep 'top_blocker: quant-policy-or-artifact-emitter' "$ROOT/prepare-dynamic-gemma.out"
-grep 'reason: quant policy / artifact emitter missing' "$ROOT/prepare-dynamic-gemma.out"
-grep 'next: V010.QUANT.1' "$ROOT/prepare-dynamic-gemma.out"
+grep 'top_blocker: qtype-compute-refusal-matrix-missing' "$ROOT/prepare-dynamic-gemma.out"
+grep 'reason: qtype compute/refusal matrix missing' "$ROOT/prepare-dynamic-gemma.out"
+grep 'next: V010.QUANT.2' "$ROOT/prepare-dynamic-gemma.out"
 grep 'status: model-prepare-unsupported' "$ROOT/prepare-dynamic-gemma.out"
 ! grep 'status: model-prepare-unknown-target' "$ROOT/prepare-dynamic-gemma.out"
 ! grep 'reason: missing tensor map / model class / artifact path' "$ROOT/prepare-dynamic-gemma.out"
+"$YVEX_BIN" model-target quant-policy gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role-support > "$ROOT/qtype-role-support-dynamic-gemma.out"
+grep 'qtype-role-support: gemma-4-31b-it' "$ROOT/qtype-role-support-dynamic-gemma.out"
+grep 'family: gemma' "$ROOT/qtype-role-support-dynamic-gemma.out"
+grep 'status: blocked' "$ROOT/qtype-role-support-dynamic-gemma.out"
+grep 'source_dtype: BF16' "$ROOT/qtype-role-support-dynamic-gemma.out"
+grep 'top_blocker: qtype-compute-refusal-matrix-missing' "$ROOT/qtype-role-support-dynamic-gemma.out"
+grep 'next: V010.QUANT.2' "$ROOT/qtype-role-support-dynamic-gemma.out"
+"$YVEX_BIN" model-target quant-policy gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role-support --output table > "$ROOT/qtype-role-support-dynamic-gemma-table.out"
+grep 'attention_q_norm[[:space:]][[:space:]]*BF16' "$ROOT/qtype-role-support-dynamic-gemma-table.out"
+grep 'output_head_tied_embedding[[:space:]][[:space:]]*BF16' "$ROOT/qtype-role-support-dynamic-gemma-table.out"
+"$YVEX_BIN" model-target quant-policy gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role-support --audit > "$ROOT/qtype-role-support-dynamic-gemma-audit.out"
+grep 'role\.[0-9][0-9]*\.role_name: pre_feedforward_layernorm' "$ROOT/qtype-role-support-dynamic-gemma-audit.out"
+grep 'role\.[0-9][0-9]*\.role_name: layer_scalar' "$ROOT/qtype-role-support-dynamic-gemma-audit.out"
+grep 'role\.[0-9][0-9]*\.role_name: tokenizer_metadata' "$ROOT/qtype-role-support-dynamic-gemma-audit.out"
+grep 'role\.[0-9][0-9]*\.compute_support_status: unknown' "$ROOT/qtype-role-support-dynamic-gemma-audit.out"
+grep 'runtime_claim: unsupported' "$ROOT/qtype-role-support-dynamic-gemma-audit.out"
+grep 'generation: unsupported-full-model' "$ROOT/qtype-role-support-dynamic-gemma-audit.out"
+write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b/model.safetensors" qwen-coverage BF16
+write_fake_tokenizer_sidecars "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b" qwen
+"$YVEX_BIN" model-target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-qwen-restored-audit.out"
+"$YVEX_BIN" model-target tokenizer-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" > "$ROOT/tokenizer-map-dynamic-qwen-restored.out"
+"$YVEX_BIN" model-target quant-policy --gate v0.1.0 --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/qtype-role-support-gate-table.out"
+grep 'FAMILY[[:space:]][[:space:]]*TARGET[[:space:]][[:space:]]*STATUS[[:space:]][[:space:]]*ROLES[[:space:]][[:space:]]*BLOCKED[[:space:]][[:space:]]*TOP_BLOCKER[[:space:]][[:space:]]*NEXT' "$ROOT/qtype-role-support-gate-table.out"
+grep 'deepseek[[:space:]][[:space:]]*selected-slice[[:space:]][[:space:]]*blocked[[:space:]][[:space:]]*[1-9][0-9]*[[:space:]][[:space:]]*[1-9][0-9]*[[:space:]][[:space:]]*full-family-artifact-missing[[:space:]][[:space:]]*V010.QUANT.2' "$ROOT/qtype-role-support-gate-table.out"
+grep 'qwen[[:space:]][[:space:]]*qwen3-6-35b-a3b[[:space:]][[:space:]]*blocked[[:space:]][[:space:]]*[1-9][0-9]*[[:space:]][[:space:]]*[1-9][0-9]*[[:space:]][[:space:]]*qtype-compute-refusal-matrix-missing[[:space:]][[:space:]]*V010.QUANT.2' "$ROOT/qtype-role-support-gate-table.out"
+grep 'gemma[[:space:]][[:space:]]*gemma-4-31b-it[[:space:]][[:space:]]*blocked[[:space:]][[:space:]]*[1-9][0-9]*[[:space:]][[:space:]]*[1-9][0-9]*[[:space:]][[:space:]]*qtype-compute-refusal-matrix-missing[[:space:]][[:space:]]*V010.QUANT.2' "$ROOT/qtype-role-support-gate-table.out"
+"$YVEX_BIN" model-target quant-policy --gate v0.1.0 --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/qtype-role-support-gate-audit.out"
+grep 'report: qtype-role-support-gate' "$ROOT/qtype-role-support-gate-audit.out"
+grep 'family.0.top_blocker: full-family-artifact-missing' "$ROOT/qtype-role-support-gate-audit.out"
+grep 'family.1.top_blocker: qtype-compute-refusal-matrix-missing' "$ROOT/qtype-role-support-gate-audit.out"
+grep 'runtime_claim: unsupported' "$ROOT/qtype-role-support-gate-audit.out"
+grep 'generation: unsupported-full-model' "$ROOT/qtype-role-support-gate-audit.out"
 
 write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/model.safetensors" gemma-language-tied
 printf '{"tie_word_embeddings":true,"vocab_size":2,"bos_token_id":1,"eos_token_id":1,"pad_token_id":0,"unk_token_id":0}\n' > "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/config.json"
@@ -1036,7 +1111,7 @@ grep 'next: V010.QUANT.1' "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
 grep 'tensor_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma-tied.out"
 grep 'output_head_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma-tied.out"
 grep 'tokenizer_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma-tied.out"
-grep 'top_blocker: quant-policy-or-artifact-emitter' "$ROOT/prepare-dynamic-gemma-tied.out"
+grep 'top_blocker: qtype-compute-refusal-matrix-missing' "$ROOT/prepare-dynamic-gemma-tied.out"
 
 write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/model.safetensors" gemma-language-no-head
 printf '{"tie_word_embeddings":false}\n' > "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/config.json"
@@ -1136,8 +1211,8 @@ grep 'source: present' "$ROOT/artifacts-status-qwen.out"
 grep 'artifact_status: missing' "$ROOT/artifacts-status-qwen.out"
 grep 'expected: .*qwen3-6-35b-a3b.gguf' "$ROOT/artifacts-status-qwen.out"
 grep 'prepare: blocked' "$ROOT/artifacts-status-qwen.out"
-grep 'top_blocker: incomplete-tensor-map' "$ROOT/artifacts-status-qwen.out"
-grep 'next: V010.MAP.8' "$ROOT/artifacts-status-qwen.out"
+grep 'top_blocker: qtype-compute-refusal-matrix-missing' "$ROOT/artifacts-status-qwen.out"
+grep 'next: V010.QUANT.2' "$ROOT/artifacts-status-qwen.out"
 grep 'boundary: artifact discovery only; no runtime/generation' "$ROOT/artifacts-status-qwen.out"
 "$YVEX_BIN" models artifacts status gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/artifacts-status-gemma-audit.out"
 grep 'artifact: gemma-4-31b-it' "$ROOT/artifacts-status-gemma-audit.out"
@@ -2572,6 +2647,20 @@ grep 'qtype-policy: nope \[unsupported\]' "$ROOT/qtype-policy-unknown-target.out
 "$YVEX_BIN" model-target quant-policy deepseek4-v4-flash-selected-embed > "$ROOT/qtype-policy-unsupported-class.out"
 grep 'qtype-policy: deepseek4-v4-flash-selected-embed \[blocked\]' "$ROOT/qtype-policy-unsupported-class.out"
 grep 'top_blocker: unsupported-target-class' "$ROOT/qtype-policy-unsupported-class.out"
+"$YVEX_BIN" model-target quant-policy deepseek4-v4-flash-selected-embed-rmsnorm --role-support > "$ROOT/qtype-role-support-deepseek-selected.out"
+grep 'qtype-role-support: deepseek4-v4-flash-selected-embed-rmsnorm' "$ROOT/qtype-role-support-deepseek-selected.out"
+grep 'family: deepseek' "$ROOT/qtype-role-support-deepseek-selected.out"
+grep 'status: blocked' "$ROOT/qtype-role-support-deepseek-selected.out"
+grep 'source_dtype: selected-slice' "$ROOT/qtype-role-support-deepseek-selected.out"
+grep 'top_blocker: full-family-artifact-missing' "$ROOT/qtype-role-support-deepseek-selected.out"
+grep 'next: V010.QUANT.2' "$ROOT/qtype-role-support-deepseek-selected.out"
+"$YVEX_BIN" model-target quant-policy deepseek4-v4-flash-selected-embed-rmsnorm --role-support --audit > "$ROOT/qtype-role-support-deepseek-selected-audit.out"
+grep 'selected_slice_evidence_only: true' "$ROOT/qtype-role-support-deepseek-selected-audit.out"
+grep 'full_family_artifact_status: missing' "$ROOT/qtype-role-support-deepseek-selected-audit.out"
+grep 'role\.[0-9][0-9]*\.role_status: selected-slice-evidence-only' "$ROOT/qtype-role-support-deepseek-selected-audit.out"
+grep 'role\.[0-9][0-9]*\.artifact_emission_blocker: full-family-artifact-missing' "$ROOT/qtype-role-support-deepseek-selected-audit.out"
+grep 'runtime_claim: unsupported' "$ROOT/qtype-role-support-deepseek-selected-audit.out"
+grep 'generation: unsupported-full-model' "$ROOT/qtype-role-support-deepseek-selected-audit.out"
 "$YVEX_BIN" model-target quant-policy glm-5.2-official-safetensors > "$ROOT/qtype-policy-unsupported-family.out"
 grep 'qtype-policy: glm-5.2-official-safetensors \[unsupported\]' "$ROOT/qtype-policy-unsupported-family.out"
 grep 'top_blocker: unsupported-family' "$ROOT/qtype-policy-unsupported-family.out"

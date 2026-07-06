@@ -185,12 +185,15 @@ Current source/model-family commands include:
 ./yvex model-target tensor-collection qwen3-8b --audit
 ./yvex model-target tensor-map qwen3-8b --audit
 ./yvex model-target quant-policy qwen3-8b --audit
+./yvex model-target quant-policy qwen3-6-35b-a3b --models-root "$HOME/lab/models" --role-support --audit
 ./yvex model-target tensor-map qwen3-8b --check-output-contract normal
 ./yvex model-target inspect gemma-4-12b-it
 ./yvex model-target class-profile gemma-4-12b-it --audit
 ./yvex model-target tensor-collection gemma-4-12b-it --audit
 ./yvex model-target tensor-map gemma-4-12b-it --audit
 ./yvex model-target quant-policy gemma-4-12b-it --audit
+./yvex model-target quant-policy gemma-4-31b-it --models-root "$HOME/lab/models" --role-support --audit
+./yvex model-target quant-policy --gate v0.1.0 --models-root "$HOME/lab/models" --output table
 ./yvex model-target quant-policy gemma-4-12b-it --check-output-contract normal
 ./yvex source-manifest report --family qwen --release v0.1.0 --audit
 ./yvex source-manifest report --family gemma --release v0.1.0 --audit
@@ -209,6 +212,14 @@ Detailed operator flow belongs in runbooks. Model Families owns architecture.
 For these model-report commands, normal output is the compact operator view.
 Existing table mode is transitional renderer coverage; use `--audit` for
 tensor-entry, mapping-gate, qtype-policy, sidecar, and boundary evidence.
+
+`model-target quant-policy TARGET --role-support` is the current
+multi-family dtype/qtype support-by-role report for downloaded Qwen/Gemma
+targets and selected DeepSeek slices. It is header-and-sidecar metadata only:
+it reports role groups, source dtype, source tensor counts, planned qtype
+candidates/refusals, compute status, calibration/imatrix deferral, and the
+artifact-emission blocker. It does not load tensor payloads, quantize, emit
+GGUF, materialize, run a graph/runtime path, generate, evaluate, or benchmark.
 
 Source download reports, receipts, manifests, and header-only inventories are
 source-intake evidence. They do not verify upstream identity by themselves, hash

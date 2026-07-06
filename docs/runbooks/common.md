@@ -123,6 +123,8 @@ make
 ./yvex model-target quant-policy qwen3-8b
 ./yvex model-target quant-policy qwen3-8b --output table
 ./yvex model-target quant-policy qwen3-8b --audit
+./yvex model-target quant-policy qwen3-6-35b-a3b --models-root "$HOME/lab/models" --role-support
+./yvex model-target quant-policy qwen3-6-35b-a3b --models-root "$HOME/lab/models" --role-support --output table
 ./yvex model-target inspect gemma-4-12b-it
 ./yvex model-target inspect gemma-4-12b-it --paths
 ./yvex model-target class-profile gemma-4-12b-it
@@ -148,6 +150,8 @@ make
 ./yvex model-target quant-policy gemma-4-12b-it
 ./yvex model-target quant-policy gemma-4-12b-it --output table
 ./yvex model-target quant-policy gemma-4-12b-it --audit
+./yvex model-target quant-policy gemma-4-31b-it --models-root "$HOME/lab/models" --role-support
+./yvex model-target quant-policy --gate v0.1.0 --models-root "$HOME/lab/models" --output table
 ./yvex model-target decision --help
 ./yvex model-target decision --release v0.1.0 --output table
 ./yvex model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
@@ -275,6 +279,17 @@ and imatrix deferrals, compute-support deferral, and downstream blockers. It
 does not load tensor payloads, quantize tensors, emit GGUF, materialize tensors,
 build runtime descriptors, feed graph consumers, generate, evaluate, or
 benchmark.
+
+`model-target quant-policy TARGET --role-support` is the V010.QUANT.1
+role-support report. It lists runtime role groups, source dtype, source tensor
+counts, planned artifact qtype candidates/refusals, storage status, compute
+status, calibration/imatrix deferral, and artifact-emission blockers. Dynamic
+downloaded Qwen and Gemma targets use their downloaded source sidecars. DeepSeek
+selected slices report selected-slice evidence only and remain blocked on a full
+family artifact path. `model-target quant-policy --gate v0.1.0` aggregates the
+DeepSeek, Qwen, and Gemma family rows. Both commands are report-only: no tensor
+payload loading, quantization, GGUF emission, materialization, runtime
+descriptor construction, graph execution, generation, eval, or benchmark.
 
 ## Lane 1 — Graph-only regression
 
