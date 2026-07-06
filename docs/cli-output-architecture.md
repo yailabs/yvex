@@ -417,9 +417,11 @@ throughput, or mark release readiness.
 
 ## Immediate Next Wave Recommendation
 
-The next implementation wave should be `V010.CLI.27 - base status and refusal grammar`.
-It should standardize compact status, top blocker, next action, boundary,
-refusal, and error shapes before broad namespace migrations. After the CLI
-architecture interruption is no longer blocking operator clarity,
-`V010.QUANT.1 - dtype/qtype support by role` remains the functional runtime
-blocker.
+`V010.CLI.27 - base status and refusal grammar` remains the next planned CLI
+substrate row. It should standardize compact status, top blocker, next action,
+boundary, refusal, and error shapes before broad namespace migrations.
+
+After `SPINE.RETARGET.MULTIFAMILY.0`, the immediate Active Next is
+`V010.QUANT.1 - multi-family dtype/qtype support by role`, because the
+v0.1.0 release target is now locked to DeepSeek, Qwen, and Gemma
+generation-capable artifacts before runtime generation can be claimed.

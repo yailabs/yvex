@@ -728,12 +728,12 @@ lanes; rows are the delivery units that complete track work.
 
 | Track ID | Track name | Owns | Current status | Implemented evidence | Next gap | Active / Later |
 | --- | --- | --- | --- | --- | --- | --- |
-| TRACK.TARGET | Target selection and pressure objects | target classes and release target decision | source-target-profiled | target registry, path reports, `yvex model-target decision`, `yvex model-target candidate`, `yvex model-target dense-candidate`, `yvex model-target qwen-metal`, `yvex model-target inspect qwen3-8b`, and `yvex model-target inspect gemma-4-12b-it` | full-runtime target selection remains blocked | active |
-| TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory, Qwen/Gemma source pressure reports, Qwen/Gemma source target profiles, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, source manifest/provenance hardening, provider account preflight, Hugging Face/GitHub source auth boundary, models download source-intake lane, Qwen/Gemma header-only collection handoff, Qwen tensor naming map handoff, dense tensor naming map handoff, output-head tensor mapping handoff, tokenizer metadata mapping handoff, missing-role blocker handoff, tensor mapping gate handoff, and qtype policy handoff | dtype/qtype support by role | active |
-| TRACK.ARTIFACT | Artifact production | YVEX-produced GGUF and conversion plan | selected-slice | controlled/selected GGUF emission | full-runtime artifact production | later |
-| TRACK.INTEGRITY | Artifact identity and gates | digest/ranges/corruption/materialization gates | implemented | integrity harness and reports | full-runtime gate coverage | active |
-| TRACK.MODEL | Model class and runtime routing | dense/MoE/source-only/selected-slice class reports | partial/report-only | family-runtime, attention, KV, context, MoE reports | final runtime route and dense/output/tokenizer class gaps | active |
-| TRACK.TENSOR | Tensor collections | embedding, norm, attention, MLP/MoE, output, tokenizer roles | partial/report-only | fullmodel descriptor/report, MoE tensor-collection report, Qwen/Gemma header-only tensor collection inventories, Qwen tensor naming map, dense tensor naming map, output-head tensor mapping, tokenizer metadata mapping, missing-role blocker report, tensor mapping gate, and qtype policy report | dtype/qtype support by role | active |
+| TRACK.TARGET | Target selection and pressure objects | target classes and release target decision | source-target-profiled | target registry, path reports, `yvex model-target decision`, `yvex model-target candidate`, `yvex model-target dense-candidate`, `yvex model-target qwen-metal`, `yvex model-target inspect qwen3-8b`, and `yvex model-target inspect gemma-4-12b-it` | v0.1.0 supported-family set is locked to DeepSeek, Qwen, and Gemma; every family still lacks generation-capable artifact/runtime evidence | active |
+| TRACK.SOURCE | Source intake | official sources, manifests, native inventories | partial | source manifest/native inventory, Qwen/Gemma source pressure reports, Qwen/Gemma source target profiles, source artifact class fields, source shard count/footprint reports, source provenance fields, native safetensors inventory, source tensor metadata inventory, source manifest/provenance hardening, provider account preflight, Hugging Face/GitHub source auth boundary, models download source-intake lane, Qwen/Gemma header-only collection handoff, Qwen tensor naming map handoff, dense tensor naming map handoff, output-head tensor mapping handoff, tokenizer metadata mapping handoff, missing-role blocker handoff, tensor mapping gate handoff, and qtype policy handoff | supported-family source acceptance for DeepSeek, Qwen, and Gemma | active |
+| TRACK.ARTIFACT | Artifact production | YVEX-produced GGUF and conversion plan | selected-slice | controlled/selected GGUF emission | generation-capable quantized YVEX-produced artifacts for DeepSeek, Qwen, and Gemma | active |
+| TRACK.INTEGRITY | Artifact identity and gates | digest/ranges/corruption/materialization gates | implemented | integrity harness and reports | identity/integrity gates for every supported-family artifact | active |
+| TRACK.MODEL | Model class and runtime routing | dense/MoE/source-only/selected-slice class reports | partial/report-only | family-runtime, attention, KV, context, MoE reports | multi-family runtime route: DeepSeek/MoE, Qwen, Gemma/dense | active |
+| TRACK.TENSOR | Tensor collections | embedding, norm, attention, MLP/MoE, output, tokenizer roles | partial/report-only | fullmodel descriptor/report, MoE tensor-collection report, Qwen/Gemma header-only tensor collection inventories, Qwen tensor naming map, dense tensor naming map, output-head tensor mapping, tokenizer metadata mapping, missing-role blocker report, tensor mapping gate, and qtype policy report | multi-family dtype/qtype support by role before generation-capable artifact emission | active |
 | TRACK.STORAGE | Storage stream | shard index, cold/warm reads, byte ranges, cache policy | planned | doctrine/plans | shard and read probes | later |
 | TRACK.RESIDENCY | Residency | resident/staged/hybrid placement and movement | report-only | placement plans | staged residency proof | later |
 | TRACK.BACKEND | Backend capability | CPU/CUDA/future Metal/ROCm operations and memory reports | partial | CPU/CUDA probes, movement, parity tests, and `CUDA.KERNEL.0` primitive hardening | capability matrix | active |
@@ -749,7 +749,7 @@ lanes; rows are the delivery units that complete track work.
 | TRACK.TOKENIZER | Tokenizer and stop policy | detokenization, EOS, stop tokens, prompt boundary | partial/planned | tokenizer diagnostics and tokenizer metadata mapping | tokenizer-backed stop behavior | later |
 | TRACK.GENERATION | Generation runtime | decode/logits/sample/append/stop/cleanup | diagnostic-runtime | `yvex generate` | full-runtime generation | later |
 | TRACK.RUNTIME | Runtime lifecycle and trace | lifecycle, cancellation, trace, failure preservation | diagnostic-runtime | generate trace/cancel/cleanup | external interruption/runtime trace | later |
-| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output architecture doctrine, normal/audit baseline, diagnostic output demotion, compact report/table output, hardcoded print reduction for model report surfaces, completed CLI print inventory and porcelain/plumbing doctrine, renderer ownership foundation, base CLI grammar and command catalog, full Operator CLI track rebase, and Qwen/Gemma source profile/map/gate/qtype policy surfaces | V010.CLI.27 base status and refusal grammar / V010.QUANT.1 handoff | active |
+| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output architecture doctrine, normal/audit baseline, diagnostic output demotion, compact report/table output, hardcoded print reduction for model report surfaces, completed CLI print inventory and porcelain/plumbing doctrine, renderer ownership foundation, base CLI grammar and command catalog, full Operator CLI track rebase, and Qwen/Gemma source profile/map/gate/qtype policy surfaces | V010.QUANT.1 multi-family artifact-readiness handoff; V010.CLI.27 remains planned CLI substrate | active |
 | TRACK.SERVE | Serving | daemon state, provider endpoints, streaming | planned | status shell | runtime-backed generation endpoint | later |
 | TRACK.EVAL | Evaluation | fixture/runtime/generation/capability eval | planned | tests only | eval over generation path | later |
 | TRACK.BENCH | Benchmark/profile | reproducible performance measurement | planned | doctrine only | measured runtime harness | later |
@@ -788,15 +788,13 @@ v0.1.0 rows:
   V010.TARGET.*.
 
 Main blockers:
-  Qwen/Metal is visible as a reduced-scale pressure lane, Qwen and Gemma source
-  pressure are command-visible, and `qwen3-8b` plus
-  `gemma-4-12b-it` are concrete backend-neutral source target profiles, and
-  Qwen/Gemma model-class profiles, header-only tensor collection inventories,
-  Qwen/dense tensor naming maps, output-head tensor mapping, tokenizer
-  metadata mapping, missing-role blocker reports, the report-only tensor
-  mapping gate, and report-only qtype policy are command-visible; per-role
-  dtype/qtype support, artifacts, backend residency, graph/runtime, eval, and
-  benchmark facts are still missing.
+  v0.1.0 target decision is locked to a supported multi-family generation set:
+  DeepSeek, Qwen, and Gemma. Candidate reports may still inspect dense,
+  Qwen/Metal, Gemma, GLM, selected-slice, or external-reference targets, but
+  none of those may satisfy the v0.1.0 release closure alone. Per-role
+  dtype/qtype support, generation-capable artifacts, backend residency,
+  graph/runtime generation, eval, and benchmark facts are still missing across
+  the supported family set.
 
 Next possible row:
   V010.QUANT.1.
@@ -1409,14 +1407,14 @@ v0.1.0 rows:
   V010.CLI.*, V010.OPERATOR.*.
 
 Main blockers:
-  shared status/refusal/error grammar remains the next CLI architecture
-  blocker before broad namespace migrations; dtype/qtype support by role remains
-  the functional implementation blocker.
+  dtype/qtype support by runtime role is the active implementation blocker for
+  the multi-family artifact path. Shared status/refusal/error grammar remains
+  the next planned CLI architecture row before broad namespace migrations.
 
 Next possible row:
-  V010.CLI.27 for CLI architecture implementation, otherwise V010.QUANT.1
-  after the CLI architecture interruption is no longer blocking operator
-  clarity.
+  V010.QUANT.1 for the multi-family artifact-readiness path. V010.CLI.27
+  remains planned CLI substrate work and may resume when operator output again
+  blocks implementation clarity.
 
 Boundary:
   operator presets compose lower behavior only.
@@ -1629,6 +1627,13 @@ Next possible row:
 Boundary:
   post-v0.1.0 tracks cannot block current release unless selected.
 
+v0.2.0 target:
+  Metal/Qwen backend portability, GLM runtime promotion if explicitly selected,
+  ROCm/Strix Halo, speculative acceleration, production serving hardening,
+  broader eval/capability suites, public benchmark expansion, and additional
+  model-family compatibility after DeepSeek, Qwen, and Gemma close the
+  v0.1.0 multi-family generation path.
+
 ### 5.31 Detailed V010 Row Inventory and Dependency Maps
 
 The semantic TRACK.* sheets above are the planning surface. The following preserved row inventory keeps the complete historical V010 detail.
@@ -1798,6 +1803,33 @@ Active forward sequences:
 | G | Evaluation and benchmark path | planned | measurements require reproducibility metadata |
 | H | Speculative and routing-aware acceleration path | planned | starts after baseline generation and benchmark harness exist |
 | I | Documentation and public evidence path | planned | public docs wait for implemented behavior and measured evidence |
+
+#### Sequence MF - Multi-family v0.1.0 Supported Generation Closure
+
+```text
+MF.SCOPE.0       supported family set: DeepSeek, Qwen, Gemma
+MF.MAP.0         full runtime tensor role maps across supported families
+MF.QUANT.0       per-role dtype/qtype support across supported families
+MF.QUANT.1       qtype compute/refusal matrix across supported families
+MF.ARTIFACT.0    generation-capable quantized artifacts across supported families
+MF.INTEGRITY.0   artifact identity/integrity across supported families
+MF.FULLMODEL.0   materialization/residency plan across supported families
+MF.RUNTIME.0     runtime descriptor readiness across supported families
+MF.GRAPH.0       graph route across supported families
+MF.PREFILL.0     real prefill across supported families
+MF.KV.0          real KV across supported families
+MF.DECODE.0      real decode across supported families
+MF.LOGITS.0      real output-head logits across supported families
+MF.SAMPLE.0      real vocabulary sampling across supported families
+MF.GEN.0         CLI generation across supported families
+MF.EVAL.0        eval smoke/regression across supported families
+MF.BENCH.0       benchmark transcript across supported families
+MF.RELEASE.0     v0.1.0 multi-family release gate
+```
+
+The MF sequence maps to existing V010 row families where possible instead of
+inventing new implementation IDs. It is a release closure sequence, not current
+capability.
 
 Model-class dynamic selection:
 
@@ -2101,23 +2133,37 @@ Tensor mapping begins only after tensor collection inventory. It turns native
 source tensor names into canonical YVEX runtime roles while preserving layer
 index, shape, dtype, family semantics, and missing-role blockers.
 
+`V010.MAP.1`, `V010.MAP.3`, `V010.MAP.5`, `V010.MAP.6`, `V010.MAP.7`,
+`V010.MAP.8`, and `V010.MAP.9` must converge into a multi-family runtime
+tensor-role map for DeepSeek, Qwen, and Gemma before artifact emission is
+allowed to claim generation-capable status.
+
 Purpose: before graph/runtime, tensor names must map to roles.
 
 #### TRACK 05 — Quantization and Artifact Production
 
 ```text
 V010.QUANT.0        qtype policy report
-V010.QUANT.1        dtype/qtype support by role
+V010.QUANT.1        multi-family dtype/qtype support by runtime role
 V010.QUANT.2        qtype compute/refusal matrix
 V010.QUANT.3        calibration/imatrix requirement report
 V010.ARTIFACT.EMIT.0 controlled artifact emission
 V010.ARTIFACT.EMIT.1 selected artifact emission
-V010.ARTIFACT.EMIT.2 small full-runtime artifact emission
+V010.ARTIFACT.EMIT.2 generation-capable quantized artifact emission
 V010.ARTIFACT.EMIT.3 split artifact plan
 V010.ARTIFACT.EMIT.4 artifact parse roundtrip
 V010.ARTIFACT.EMIT.5 artifact registration
 V010.ARTIFACT.EMIT.6 v0.1.0 artifact production gate
 ```
+
+`V010.QUANT.1` reports support/refusal for each runtime role across DeepSeek,
+Qwen, and Gemma. `V010.QUANT.2` computes the qtype compute/refusal matrix
+across supported families. `V010.QUANT.3` decides calibration/imatrix
+requirements across supported families. `V010.ARTIFACT.EMIT.2` emits or plans
+generation-capable quantized artifacts for supported families; it is not
+runtime generation. `V010.ARTIFACT.EMIT.6` closes only when every supported
+family has artifact identity, parse roundtrip, required tensor coverage, qtype
+policy, and integrity evidence.
 
 Boundary: artifact emission is not inference.
 
@@ -2834,8 +2880,9 @@ not report layout.
 the executed `V010.CLI.26` grammar row. It reconciles Active Next, marks
 `V010.CLI.26` as the base grammar/catalog row, rebuilds TRACK 28 into the
 layered CLI program above, moves model artifact/model-target/graph-runtime
-migrations into command-family rows, and keeps `V010.QUANT.1` as the functional
-runtime blocker after the CLI architecture interruption. It does not implement
+migrations into command-family rows, and keeps `V010.CLI.27` as planned CLI
+substrate work while `V010.QUANT.1` resumes as the active implementation
+blocker for the multi-family artifact path. It does not implement
 new CLI behavior, change command output, add or remove flags, change
 `yvex_cli.c`, change renderer code, migrate `yvex_model_artifacts.c`, migrate
 `yvex_model.c`, implement JSON, implement color/no-color, implement doctor,
@@ -2899,10 +2946,9 @@ Phase 8: flag demotion after porcelain and JSON cover the command family
 ```
 
 The focused audit report lives in `docs/cli-output-architecture.md`. The next
-CLI architecture row is `V010.CLI.27 - base status and refusal grammar`.
-`V010.QUANT.1 - dtype/qtype support by role` remains the functional runtime
-blocker, but it is not immediate Active Next while shared CLI substrate remains
-unstable.
+planned CLI architecture row remains
+`V010.CLI.27 - base status and refusal grammar`, but the immediate Active Next
+is `V010.QUANT.1 - multi-family dtype/qtype support by role`.
 
 Boundary: CLI cannot claim lower runtime behavior that does not exist.
 
@@ -3096,7 +3142,6 @@ Purpose: v0.1.0 must be mechanically auditable.
 #### TRACK 38 — Post-v0.1.0 Tracks
 
 ```text
-POST010.DEEPSEEK.FULL.0     full DeepSeek generation if not closed in v0.1.0
 POST010.GLM.RUNTIME.0       GLM runtime path
 POST010.QWEN.METAL.0        Qwen Metal runtime path
 POST010.ROCM.0              ROCm/Strix Halo path
@@ -3107,6 +3152,13 @@ POST010.BENCH.PUBLIC.0      public benchmark table
 POST010.EVAL.CAPABILITY.0   capability eval suite
 POST010.DOCS.PUBLIC.0       public evidence expansion
 ```
+
+v0.2.0 target:
+  Metal/Qwen portability, GLM runtime promotion if selected, ROCm/Strix Halo
+  portability, speculative acceleration, production serving hardening, broader
+  eval/capability suites, public benchmark expansion, and additional
+  model-family compatibility after the DeepSeek/Qwen/Gemma v0.1.0
+  multi-family generation closure.
 
 Purpose: make future ambition explicit without letting it contaminate v0.1.0.
 
@@ -3821,34 +3873,36 @@ release blocker:
 ### 6.6 v0.1.0 Track Critical Path
 
 ```text
-V010.TARGET.9 decision record: blocked-no-candidate
--> V010.TARGET.2 full-runtime-candidate target report
--> V010.SOURCE / V010.MAP / V010.ARTIFACT as required
--> V010.INTEGRITY gate
--> V010.FULLMODEL gate
--> V010.CLASS gate
--> V010.TENSOR gate
--> V010.RESIDENCY gate
--> V010.BACKEND gate
--> V010.GRAPH gate
--> V010.CONTEXT gate
--> V010.PREFILL gate
--> V010.KV gate
--> V010.DECODE gate
--> V010.LOGITS gate
--> V010.SAMPLE gate
--> V010.TOKENIZER boundary
--> V010.GEN gate
--> V010.CLI gate
--> V010.EVAL smoke
--> V010.CI gate
--> V010.DOCS public/internal audit
--> V010.RELEASE tag readiness
+V010.SCOPE.MULTIFAMILY.0 supported-family set lock
+-> for each family in {DeepSeek, Qwen, Gemma}:
+   source/target acceptance
+   -> full runtime tensor role map
+   -> output-head/tokenizer metadata map
+   -> dtype/qtype support by role
+   -> qtype compute/refusal matrix
+   -> calibration/imatrix decision where required
+   -> quantized YVEX-produced generation-capable artifact
+   -> artifact identity/integrity gate
+   -> materialization/residency gate
+   -> runtime descriptor readiness
+   -> graph route
+   -> real prefill
+   -> KV
+   -> decode
+   -> logits
+   -> sampling
+   -> tokenizer/stop boundary
+   -> CLI generation proof
+   -> eval smoke/regression
+   -> benchmark transcript
+-> multi-family release transcript
+-> claim audit
+-> v0.1.0 tag readiness
 ```
 
-The critical path may choose dense or MoE runtime depending on the v0.1.0 target
-decision. DeepSeek pressure remains active, but a smaller full-runtime candidate
-may close v0.1.0 if selected honestly.
+The critical path may run family lanes in parallel, but release cannot close
+until every supported family lane passes. DeepSeek cannot close v0.1.0 alone.
+Qwen cannot close v0.1.0 alone. Gemma cannot close v0.1.0 alone.
 
 ### 6.7 v0.1.0 Track Parallelization Rules
 
@@ -4357,7 +4411,24 @@ official-source-huge-model:
 
 full-runtime-model:
   a complete tensor set required for transformer prefill, decode, logits, and
-  generation. This class is planned and not implemented.
+  generation. For v0.1.0, a full-runtime model is not sufficient by itself
+  unless it belongs to the supported-generation-family set and the whole set
+  reaches the required generation/eval/benchmark gates. This class is planned
+  and not implemented.
+
+supported-generation-family:
+  a model family included in the v0.1.0 supported generation set. For v0.1.0
+  this set is DeepSeek, Qwen, and Gemma. Each supported family must have a
+  YVEX-produced quantized generation-capable artifact, artifact identity,
+  materialization/residency plan, runtime descriptor readiness, generation
+  path, eval smoke/regression, and benchmark transcript before v0.1.0 closes.
+  Planned, not implemented.
+
+generation-capable-artifact:
+  a YVEX-produced quantized artifact with complete required tensor set,
+  tokenizer/output-head metadata, qtype policy, artifact identity, tensor
+  directory, and integrity evidence sufficient for a future runtime path to
+  consume. This is not runtime generation by itself.
 
 huge-model-storage-stream:
   a model whose source or target artifact footprint forces shard inventory,
@@ -4389,6 +4460,7 @@ Current target assignments:
   Qwen future YVEX-produced GGUF: planned YVEX-produced artifact
   Qwen external GGUFs: external-GGUF-reference only
   Qwen external runners: external-runner-reference only
+  DeepSeek/Qwen/Gemma v0.1.0 family set: supported-generation-family
 ```
 
 ### Operator-local Artifact Storage
@@ -4760,14 +4832,18 @@ claims are downstream unless explicitly included after real generation exists.
 
 ### 6.2 Critical Path Text
 
-The release-critical chain is target -> artifact -> class -> tensor ->
-residency/backend -> graph -> prefill -> KV -> decode -> logits -> sampling ->
-tokenizer/stop -> generation -> operator proof -> release transcript.
+The release-critical chain is multi-family. DeepSeek, Qwen, and Gemma each
+must pass source/target acceptance, full runtime tensor role mapping, qtype
+support by role, generation-capable quantized artifact production,
+identity/integrity, materialization/residency, runtime descriptor readiness,
+graph, prefill, KV, decode, logits, sampling, tokenizer/stop boundary,
+CLI-visible generation, eval smoke/regression, benchmark transcript, and claim
+audit. No single family can close the release alone.
 
 ## 7. Active Next
 
 ```text
-V010.CLI.27 - base status and refusal grammar
+V010.QUANT.1 - multi-family dtype/qtype support by role
 ```
 
 `SPINE.OUTPUT.UX.CONTRACT.0` is complete as a docs/control row and has been
@@ -4778,11 +4854,26 @@ target raw/plumbing surface where implemented and tested command by command.
 
 `V010.CLI.26` completed the base CLI grammar and grouped command catalog.
 `SPINE.CLI.REBASE.1` reconciles the executed grammar row by rebuilding TRACK 28
-as a layered CLI program. Active implementation next remains in the CLI
-architecture sequence, but the next row is now shared status/refusal grammar,
-not artifact porcelain. `V010.QUANT.1 - dtype/qtype support by
-role` remains the functional runtime blocker after this CLI interruption is no
-longer blocking operator clarity.
+as a layered CLI program. `V010.CLI.27 - base status and refusal grammar`
+remains a planned CLI substrate row, but it is no longer the immediate Active
+Next. The active implementation lane returns to the multi-family artifact path:
+`V010.QUANT.1 - multi-family dtype/qtype support by role`.
+
+Completed docs retarget row:
+
+```text
+SPINE.RETARGET.MULTIFAMILY.0 - v0.1.0 multi-family generation target lock
+```
+
+`SPINE.RETARGET.MULTIFAMILY.0` locks v0.1.0 to the supported generation-family
+set: DeepSeek, Qwen, and Gemma. Each family must reach a YVEX-produced
+generation-capable quantized artifact, identity/integrity, materialization and
+residency readiness, runtime descriptor readiness, graph/prefill/KV/decode/
+logits/sampling/generation proof, eval smoke/regression, and benchmark
+transcript before v0.1.0 can claim supported generation. GLM remains
+source/storage pressure unless explicitly promoted by a future scope-lock row.
+Metal remains post-v0.1.0 portability; Qwen can close v0.1.0 on any implemented
+backend without waiting for Metal.
 
 Completed row:
 
@@ -5338,10 +5429,10 @@ residency, feed graph consumers, execute prefill/decode/logits/tokenizer/
 sampling/generation, evaluate, benchmark, claim throughput, or mark v0.1.0
 release-ready.
 
-Functional runtime blocker remains dtype/qtype support by role:
+Functional runtime blocker is now multi-family dtype/qtype support by role:
 
 ```text
-V010.QUANT.1 - dtype/qtype support by role
+V010.QUANT.1 - multi-family dtype/qtype support by role
 ```
 
 Completed CUDA interlock row:
@@ -5513,7 +5604,8 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | CLI.SURFACE.3 | complete | cli/layout | Domain-owned CLI help and command extraction | yvex_cli.c contains only short command table and dispatch; detailed help and command behavior live in domain owners; command split files are removed |
 | V010.CLI.25 | complete | operator | Renderer ownership foundation | `yvex_render_private.h` introduces a small private header-only render boundary and `models prepare --dry-run` for downloaded/source-backed targets now renders from a semantic prepare report with compact porcelain output and preserved audit evidence, without adding a renderer source file, public API, JSON output, flag removal, runtime behavior, quantization, artifact emission, generation, eval, benchmark, throughput, or release claim |
 | V010.CLI.26 | complete | operator | Base CLI grammar and command catalog | `yvex_cli.c` carries top-level command group, surface class, purpose, usage, example, option-class, and boundary metadata; `yvex help`, `yvex commands`, and `yvex help COMMAND` render grammar-first help/catalog output while preserving domain-owned help and avoiding domain behavior, JSON, flag removal, runtime, quantization, artifact emission, generation, eval, benchmark, throughput, or release claims |
-| SPINE.CLI.REBASE.1 | complete | docs/operator | Full Operator CLI track rebase after executed V010.CLI.26 | TRACK 28 is reconciled into layered CLI substrate, command-family migration, doctor/readiness, and final-gate rows; Active Next moves to shared status/refusal grammar; model artifact, model-target, and graph/runtime migrations are remapped without CLI behavior changes, print-site removal, JSON, flag removal, runtime, quantization, artifact, generation, eval, benchmark, throughput, or release claims |
+| SPINE.CLI.REBASE.1 | complete | docs/operator | Full Operator CLI track rebase after executed V010.CLI.26 | TRACK 28 is reconciled into layered CLI substrate, command-family migration, doctor/readiness, and final-gate rows; shared status/refusal grammar remains planned as `V010.CLI.27`; model artifact, model-target, and graph/runtime migrations are remapped without CLI behavior changes, print-site removal, JSON, flag removal, runtime, quantization, artifact, generation, eval, benchmark, throughput, or release claims |
+| SPINE.RETARGET.MULTIFAMILY.0 | complete | docs/artifact | v0.1.0 multi-family generation target lock | v0.1.0 is locked to DeepSeek, Qwen, and Gemma as the supported generation-family set; Active Next returns to `V010.QUANT.1 - multi-family dtype/qtype support by role`; GLM remains source/storage pressure and Metal remains post-v0.1.0 portability without C changes, artifact emission, runtime descriptors, materialization, generation, eval, benchmark, throughput, or release claim |
 | V010.CLI.27 | planned | operator | Base status and refusal grammar | standardize compact `status`, `top_blocker`, `next`, `boundary`, refusal, and error output before broad namespace migrations while keeping audit/raw diagnostics separate |
 | V010.CLI.28 | planned | operator | Error/log/diagnostic surface split | separate command errors, diagnostic evidence, traces, and daemon/log-like output from normal porcelain without changing runtime semantics |
 | V010.CLI.29 | planned | operator | Terminal policy quiet/no-color/non-TTY | define quiet/no-color/non-TTY behavior after status/refusal grammar exists without adding color or metric claims early |
@@ -6697,14 +6789,14 @@ completed,
 At that historical point, functional Active Next advanced to:
 
 ```text
-V010.QUANT.1 - dtype/qtype support by role
+V010.QUANT.1 - multi-family dtype/qtype support by role
 ```
 
 If any P1 finding remains blocking, Active Next becomes the named follow-up row.
 
 | Condition | Active Next |
 | --- | --- |
-| Qtype policy report command-visible while dtype/qtype support by role is missing | V010.QUANT.1 |
+| Qtype policy report command-visible while multi-family dtype/qtype support by role is missing | V010.QUANT.1 |
 | Tensor mapping gate passed while qtype policy report is missing | V010.QUANT.0 |
 | Missing-role blocker report command-visible while v0.1.0 tensor mapping gate is missing | V010.MAP.9 |
 | Tokenizer metadata mapping command-visible while missing-role blocker report is missing | V010.MAP.8 |
@@ -6736,7 +6828,7 @@ Historical reconciliation result:
 
 ```text
 Functional runtime blocker:
-  V010.QUANT.1 - dtype/qtype support by role
+  V010.QUANT.1 - multi-family dtype/qtype support by role
 
 Reason:
   Qwen and the first dense-family target now have header-only naming maps plus
@@ -6806,6 +6898,13 @@ real vocabulary sampling
 stochastic sampling
 full model generation
 real DeepSeek generation
+real Qwen generation
+real Gemma generation
+multi-family generation
+multi-family generation-capable artifact set
+generation-capable artifact emission
+multi-family eval
+multi-family benchmark
 EOS-backed tokenizer stop
 OS signal cancellation
 server/provider cancellation
@@ -6834,6 +6933,10 @@ v0.1.0 release
 | tensor mapping | native tensor names become canonical YVEX runtime roles; still not graph execution, runtime support, generation, eval, or benchmark |
 | not full model generation | no real full transformer generation path |
 | not DeepSeek generation | no DeepSeek V4 Flash real generation |
+| not Qwen generation | no Qwen real generation path |
+| not Gemma generation | no Gemma real generation path |
+| not multi-family generation | DeepSeek, Qwen, and Gemma have not all reached the same implemented generation/eval/benchmark gates |
+| generation-capable artifact | required artifact class for future runtime consumption; not runtime generation by itself |
 | not benchmark | no measured runtime path with reproducibility metadata |
 | external-reference | paper/external runner/external GGUF only |
 | CUDA primitive | CUDA kernel or primitive proof exists, but it is not CUDA full runtime unless graph, prefill, KV, decode, logits, sampling, and generation consume it |
@@ -6870,9 +6973,10 @@ Primary preserved source: open-weight intake doctrine and source tensor rules.
 Primary preserved source: target classes, DeepSeek/GLM/Qwen pressure targets,
 and external reference boundaries.
 
-### 13.4 Qwen/Metal Pressure Lane Doctrine
+### 13.4 Qwen and Qwen/Metal Doctrine
 
-Primary preserved source: Qwen Metal pressure lane doctrine.
+Primary preserved source: Qwen required-family doctrine and Qwen/Metal
+post-v0.1.0 portability doctrine.
 
 ### 13.5 Storage-Stream Doctrine
 
@@ -7051,10 +7155,11 @@ v0.1.0 is not a marketing release.
 v0.1.0 is not defined by chat UX, provider compatibility, speculative decoding,
 external benchmark comparison, or public speed claims.
 
-v0.1.0 is defined by one honest implemented model execution path:
+v0.1.0 is defined by the supported v0.1.0 generation family set reaching an
+honest implemented model execution path for every supported family:
 
 ```text
-model target
+supported family target
 -> source/artifact identity
 -> YVEX-produced or YVEX-controlled artifact
 -> artifact integrity
@@ -7076,33 +7181,58 @@ model target
 -> release boundary
 ```
 
-v0.1.0 may close on a feasible dense or small/medium model target first if that
-is the fastest honest path to a real end-to-end engine.
+v0.1.0 may not close on a single easiest model. It closes only when every
+v0.1.0 supported generation family reaches the required artifact, runtime,
+generation, eval, and benchmark gates. For the current v0.1.0 scope, the
+supported generation families are DeepSeek, Qwen, and Gemma.
 
-DeepSeek V4 Flash remains the primary semi-frontier pressure target, but
-DeepSeek V4 Flash full generation is not automatically the minimum v0.1.0
-release blocker unless explicitly chosen by a v0.1.0 target decision row.
+A family is not "supported" for v0.1.0 generation until its YVEX-produced
+artifact, tensor roles, qtype policy, runtime path, generation command, eval,
+and benchmark evidence exist.
+
+A report-only family profile is not support.
+
+A generation-capable artifact is necessary but not sufficient for runtime
+generation. generation-capable artifact is not runtime generation.
 
 The rule is:
 
 ```text
-close one real full-runtime path first;
-keep DeepSeek pressure explicit;
+close all supported v0.1.0 generation families, with one honest path per family;
+keep DeepSeek, Qwen, and Gemma required-family boundaries explicit;
 keep GLM source/storage pressure explicit;
-keep Qwen/Metal portability pressure explicit;
+keep Qwen family support separate from Qwen/Metal backend portability pressure;
 never claim a target that did not run through its own implemented path.
 ```
 
 ### v0.1.0 Target Policy
 
-YVEX has multiple target classes:
+v0.1.0 target policy is multi-family.
+
+The supported v0.1.0 generation family set is:
+
+```text
+DeepSeek
+Qwen
+Gemma
+```
+
+The supported v0.1.0 generation family set is DeepSeek, Qwen, and Gemma.
+
+YVEX still has multiple target classes:
 
 ```text
 selected-runtime-slice:
   proves parser/materialization/partial graph/diagnostic runtime boundaries.
 
-full-runtime-candidate:
-  candidate model/artifact small enough to close end-to-end generation.
+supported-generation-family:
+  DeepSeek, Qwen, and Gemma for v0.1.0. Every family in the set must reach the
+  same artifact/runtime/generation/eval/benchmark gates.
+
+generation-capable-artifact:
+  YVEX-produced quantized artifact with complete required tensors, qtype
+  policy, tokenizer/output-head metadata, identity, and integrity sufficient
+  for future runtime consumption. It is not runtime generation.
 
 semi-frontier-pressure:
   DeepSeek V4 Flash path, used to force real architectural pressure.
@@ -7111,20 +7241,35 @@ huge-source-pressure:
   GLM-5.2 official source tensors, used to force source/shard/storage/model-class pressure.
 
 portability-pressure:
-  Qwen/Metal path, used to force backend portability and reduced-scale runtime planning.
+  Metal/Qwen path, used to force backend portability and reduced-scale runtime
+  planning after the Qwen family generation path exists on an implemented
+  v0.1.0 backend.
 
 reference-only:
   external GGUFs, external runners, papers, and public systems.
 ```
 
-v0.1.0 requires at least one full-runtime-candidate to reach honest CLI
-generation.
+v0.1.0 requires DeepSeek, Qwen, and Gemma each to reach honest CLI generation,
+eval smoke/regression, and benchmark transcript over the same YVEX runtime
+path.
 
 A selected-runtime-slice cannot close v0.1.0 full runtime.
 
+A single dense model cannot satisfy the release target.
+
+A single Qwen model cannot satisfy the release target.
+
+A single DeepSeek path cannot satisfy the release target.
+
 A source-only huge model cannot close v0.1.0 full runtime.
 
+A source-only GLM target cannot satisfy the release target unless GLM is
+explicitly promoted to the supported-generation-family set and reaches the same
+artifact/runtime/generation/eval/benchmark gates.
+
 An external runner cannot close v0.1.0 runtime.
+
+External GGUFs and external runners cannot satisfy any supported-family gate.
 
 A public benchmark cannot substitute for YVEX command proof.
 
@@ -7135,44 +7280,49 @@ GATE.SCOPE:
   release target, included tracks, excluded tracks, and post-v0.1.0 tracks are explicit.
 
 GATE.ARTIFACT:
-  artifact identity, digest, tensor ranges, dtype/qtype, shape, registry, and drift checks pass.
+  artifact identity, digest, tensor ranges, dtype/qtype, shape, registry, and
+  drift checks pass for every supported generation family.
 
 GATE.CLASS:
   model class, target class, dense/MoE/source-only/selected-slice path, output-head,
   tokenizer, and runtime blockers are command-visible.
 
 GATE.TENSOR:
-  all required runtime tensor collections for the v0.1.0 target are mapped.
+  all required runtime tensor collections for every supported generation family
+  are mapped.
 
 GATE.RESIDENCY:
-  all required tensor/runtime-state collections have residency decisions or explicit unsupported blockers.
+  all required tensor/runtime-state collections for every supported generation
+  family have residency decisions or explicit unsupported blockers.
 
 GATE.BACKEND:
   CPU baseline and selected backend capability reports exist.
 
 GATE.GRAPH:
-  implemented graph path over selected v0.1.0 target exists with reference/checksum/tolerance/failure reports.
+  implemented graph path exists for every supported generation family with
+  reference/checksum/tolerance/failure reports.
 
 GATE.PREFILL:
-  real prefill path exists for the selected runtime target.
+  real prefill path exists for every supported generation family.
 
 GATE.KV:
-  real KV allocation/write/read/cleanup exists for the selected runtime target.
+  real KV allocation/write/read/cleanup exists for every supported generation family.
 
 GATE.DECODE:
-  real decode step exists over real runtime state.
+  real decode step exists over real runtime state for every supported generation family.
 
 GATE.LOGITS:
-  real output-head logits exist over the selected runtime path.
+  real output-head logits exist over every supported generation family runtime path.
 
 GATE.SAMPLE:
-  at least greedy sampling over real logits exists.
+  at least greedy sampling over real logits exists for every supported generation family.
 
 GATE.TOKENIZER:
   token ID input/output and stop policy boundary are explicit.
 
 GATE.GEN:
-  CLI generation composes real prefill, KV, decode, logits, sampling, append, stop, cleanup.
+  CLI generation composes real prefill, KV, decode, logits, sampling, append,
+  stop, and cleanup for every supported generation family.
 
 GATE.FAILURE:
   failure phases, cleanup, partial state, and refusal behavior are tested.
@@ -7181,7 +7331,8 @@ GATE.OPERATOR:
   short operator commands exist for prepare/check/generate or equivalent v0.1.0 path.
 
 GATE.EVIDENCE:
-  validation transcript exists; benchmark claims remain absent unless measured.
+  eval smoke/regression and benchmark transcript exist for every supported
+  generation family; benchmark claims remain absent unless measured.
 
 GATE.PUBLIC:
   public docs do not expose internal IDs and do not overclaim.
@@ -7192,7 +7343,6 @@ GATE.RELEASE:
 
 ### v0.1.0 Non-Goals
 
-- full DeepSeek V4 Flash generation unless explicitly implemented;
 - DeepSeek >=20 tok/s claim;
 - speculative decoding;
 - DSpark/DFlash/HyperDFlash parity;
@@ -7203,7 +7353,7 @@ GATE.RELEASE:
 - public benchmark table;
 - GLM full runtime;
 - GLM YVEX-produced full GGUF unless implemented;
-- Qwen/Metal runtime unless Metal backend and Qwen path are implemented;
+- Qwen/Metal runtime unless Metal backend and Qwen backend-portability path are implemented;
 - SSD-streamed generation unless storage stream is consumed by runtime;
 - distributed inference;
 - production serving SLA;
@@ -7232,11 +7382,12 @@ Normal operator paths should be short, discoverable, and preset-driven where
 possible. Long flags belong to diagnostics, gates, provenance, and exact CI
 checks. Help should show the short path first and advanced flags later.
 
-DeepSeek selected artifacts are the current live pressure targets. They are
-large enough to force real parser, layout, backend, transfer, cleanup, graph,
-and failure boundaries. They are not the whole system. Runtime code must remain
-model-family-aware, with family mapping and runtime adapters made explicit
-rather than hidden behind generic support claims.
+DeepSeek selected artifacts remain live selected-runtime-slice pressure targets.
+They are large enough to force real parser, layout, backend, transfer, cleanup,
+graph, and failure boundaries. They are not the whole system and cannot close
+v0.1.0 alone. Runtime code must remain model-family-aware, with DeepSeek,
+Qwen, and Gemma family mapping and runtime adapters made explicit rather than
+hidden behind generic support claims.
 
 Open-weight intake doctrine:
 
@@ -7291,33 +7442,48 @@ future YVEX-produced GGUF emission, storage layout, and storage-stream planning.
 GLM-5.2 does not replace DeepSeek. GLM-5.2 does not promote execution,
 prefill, decode, logits, sampling, generation, eval, or benchmark readiness.
 
-Qwen on Apple Silicon / Metal becomes a reduced-scale full-runtime
-portability pressure lane. Qwen-Metal forces backend portability, Metal
-feasibility, unified-memory residency, Qwen model-class mapping, and
-small/medium full-runtime planning. It is not the primary DeepSeek generation
-target and not the huge-MoE source-tensor target.
+Qwen is a required v0.1.0 supported generation family. Qwen/Metal is a later
+backend portability lane that forces Metal feasibility, unified-memory
+residency, and reduced-scale Apple Silicon planning after the Qwen family path
+exists on an implemented backend. Qwen support for v0.1.0 is not blocked on
+Metal.
+
+Gemma is the first required dense-family generation target for v0.1.0. It
+forces the dense runtime path to stand beside the DeepSeek/MoE path and the
+Qwen path instead of letting one model family masquerade as generic support.
+
+GLM remains huge source/storage pressure for v0.1.0. It is not part of the
+supported generation-family set unless a future scope-lock row explicitly
+promotes it and assigns the same artifact/runtime/generation/eval/benchmark
+gates.
 
 Canonical model and hardware pressure relationship:
 
 ```text
 DeepSeek / Spark / CUDA:
-  selected-runtime-slice and future semi-frontier full-generation pressure.
+  required v0.1.0 supported generation family and semi-frontier MoE pressure.
 
 GLM-5.2 / source tensors / storage-stream:
-  huge-MoE source tensor and storage pressure.
+  huge-MoE source tensor and storage pressure, not v0.1.0 generation support.
 
-Qwen / MacBook / Metal:
-  reduced-scale Apple Silicon pressure lane for backend portability,
-  unified-memory residency, source-to-artifact flow, and future small/medium
-  full-runtime generation.
+Qwen / CPU-CUDA now, Metal later:
+  required v0.1.0 supported generation family; Metal portability is post-v0.1.0.
+
+Gemma / dense:
+  required v0.1.0 dense-family generation path.
 
 Strix Halo / ROCm:
   future AMD/ROCm pressure lane using the same staged doctrine.
 ```
 
-### Qwen Metal Pressure Lane Doctrine
+### Qwen and Qwen/Metal Doctrine
 
-Qwen-Metal is a reduced-scale full-runtime pressure lane for Apple Silicon.
+Qwen is a required v0.1.0 supported generation family.
+
+Qwen/Metal is post-v0.1.0 backend portability work. It is a reduced-scale
+runtime pressure lane for Apple Silicon after Qwen source, artifact, mapping,
+qtype, runtime, generation, eval, and benchmark evidence exists on an
+implemented backend.
 
 It exists to force:
 - Metal backend feasibility;
@@ -7325,11 +7491,14 @@ It exists to force:
 - Qwen source tensor intake;
 - completed V010.MAP.5 Qwen tensor naming map;
 - completed V010.MAP.1 dense tensor naming map;
-- Qwen YVEX-produced artifact identity;
+- Qwen YVEX-produced generation-capable artifact identity;
 - selected Qwen materialization;
 - Metal primitive parity;
 - future small/medium model generation over YVEX runtime.
 
+Qwen cannot close v0.1.0 alone.
+Qwen-Metal does not replace Qwen v0.1.0 generation support on implemented
+backends.
 Qwen-Metal does not replace DeepSeek.
 Qwen-Metal does not replace GLM.
 It does not prove Metal support.
@@ -7341,7 +7510,7 @@ External Qwen GGUFs and external Apple/Metal runners are reference evidence
 only. They cannot close YVEX source-to-artifact, backend, runtime, generation,
 eval, or benchmark rows.
 
-Qwen-Metal follows the same YVEX chain:
+Qwen v0.1.0 support follows the same YVEX chain:
 
 ```text
 official source tensors
@@ -7349,12 +7518,13 @@ official source tensors
 -> native tensor inventory
 -> model-class profile
 -> tensor role mapping
--> quantization policy
--> YVEX-produced GGUF
+-> dtype/qtype support by runtime role
+-> quantization policy and calibration/imatrix decision where required
+-> YVEX-produced generation-capable quantized artifact
 -> artifact identity
 -> materialization
 -> residency
--> Metal backend capability
+-> implemented backend capability
 -> graph execution
 -> real transformer prefill
 -> KV
@@ -7362,8 +7532,27 @@ official source tensors
 -> logits
 -> sampling
 -> generation
--> eval/benchmark only after implemented runtime path exists
+-> eval smoke/regression
+-> benchmark transcript
 ```
+
+### Gemma Dense-Family Doctrine
+
+Gemma is the first required dense-family generation target for v0.1.0.
+
+Gemma exists in the v0.1.0 set so YVEX cannot confuse a MoE path, a Qwen path,
+or a selected slice with generic model support. The Gemma lane must reach a
+generation-capable quantized YVEX-produced artifact, dense runtime tensor role
+mapping, output-head/tokenizer metadata, dtype/qtype support by role,
+identity/integrity, materialization/residency, graph, prefill, KV, decode,
+logits, sampling, CLI-visible generation, eval smoke/regression, and benchmark
+transcript before Gemma generation can be claimed.
+
+Gemma cannot close v0.1.0 alone. It closes only with DeepSeek and Qwen under
+the supported-family release gate.
+
+Gemma source/model-class/tensor-collection reports remain report-only until the
+runtime path consumes a generation-capable artifact.
 
 Storage-stream doctrine:
 
@@ -7377,7 +7566,11 @@ runtime generation path reaches decode, logits, sampling, and generation.
 
 DeepSeek generation target doctrine:
 
-DeepSeek V4 Flash is the current internal full-generation pressure target.
+DeepSeek V4 Flash is one required supported family in the v0.1.0 multi-family
+generation target.
+
+DeepSeek cannot close v0.1.0 alone. It must close together with Qwen and Gemma,
+unless the supported family set is changed by a future scope-lock row.
 
 The current selected DeepSeek artifacts remain selected-runtime-slice targets.
 They prove parser, artifact identity, selected materialization, backend
@@ -7390,24 +7583,25 @@ The final DeepSeek V4 Flash target is larger:
 official safetensors
   -> source manifest
   -> native tensor inventory
-  -> family mapping
-  -> tensor collections
-  -> quantization policy
-  -> YVEX-produced GGUF
-  -> artifact identity
+  -> full runtime tensor role map
+  -> output-head/tokenizer metadata map
+  -> dtype/qtype support by runtime role
+  -> quantization policy and calibration/imatrix decision where required
+  -> quantized YVEX-produced generation-capable artifact
+  -> artifact identity and integrity
   -> registry
-  -> materialization
-  -> residency
-  -> graph layers
+  -> materialization/residency
+  -> runtime descriptor readiness
+  -> graph route and layers
   -> real transformer prefill
   -> KV
   -> decode
   -> logits
   -> sampling
-  -> generation
-  -> CLI/server
-  -> benchmark
-  -> speculative acceleration
+  -> CLI-visible generation
+  -> eval smoke/regression
+  -> benchmark transcript
+  -> release gate
 ```
 
 This target is not current capability.
@@ -7595,9 +7789,10 @@ execution.
 Source-only huge models may close source intake, storage, model-class, and
 planning boundaries. They do not close runtime execution.
 
-Qwen/Metal targets use the same staged doctrine through a future
-backend-specific path. They do not imply Metal support, Qwen runtime support,
-or Qwen generation.
+Qwen is a required v0.1.0 supported generation family. Qwen/Metal is a
+post-v0.1.0 backend portability lane and does not imply Metal support, Qwen
+runtime support, or Qwen generation until the implemented path proves those
+claims.
 
 Speculative paths are selected only after baseline generation exists. Dense
 speculative verification and MoE routing-aware verification are separate future

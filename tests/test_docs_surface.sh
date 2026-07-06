@@ -100,8 +100,58 @@ grep -nF "| SPINE.CLI.REBASE.1 | complete | docs/operator | Full Operator CLI tr
   exit 1
 }
 
+grep -nF "v0.1.0 - multi-family supported generation over YVEX-produced quantized artifacts" docs/spine.md >/dev/null || {
+  echo "spine must lock the v0.1.0 release target to multi-family generation artifacts" >&2
+  exit 1
+}
+
+grep -nF "The supported v0.1.0 generation family set is DeepSeek, Qwen, and Gemma." docs/spine.md >/dev/null || {
+  echo "spine must name DeepSeek, Qwen, and Gemma as the supported v0.1.0 family set" >&2
+  exit 1
+}
+
+grep -nF "V010.QUANT.1 - multi-family dtype/qtype support by role" docs/spine.md >/dev/null || {
+  echo "spine must set Active Next to multi-family qtype support by role" >&2
+  exit 1
+}
+
+grep -nF "V010.QUANT.1        multi-family dtype/qtype support by runtime role" docs/spine.md >/dev/null || {
+  echo "spine must preserve the multi-family quant row title" >&2
+  exit 1
+}
+
+grep -nF "generation-capable artifact is not runtime generation" docs/spine.md >/dev/null || {
+  echo "spine must keep generation-capable artifact separate from runtime generation" >&2
+  exit 1
+}
+
+grep -nF "DeepSeek cannot close v0.1.0 alone" docs/spine.md >/dev/null || {
+  echo "spine must prevent DeepSeek-only v0.1.0 closure" >&2
+  exit 1
+}
+
+grep -nF "Qwen is a required v0.1.0 supported generation family" docs/spine.md >/dev/null || {
+  echo "spine must make Qwen a required v0.1.0 family, not only a Metal future lane" >&2
+  exit 1
+}
+
+grep -nF "Gemma is the first required dense-family generation target" docs/spine.md >/dev/null || {
+  echo "spine must make Gemma the required dense-family generation target" >&2
+  exit 1
+}
+
+grep -nF "GLM remains huge source/storage pressure" docs/spine.md >/dev/null || {
+  echo "spine must keep GLM as source/storage pressure unless promoted" >&2
+  exit 1
+}
+
+grep -nF "| SPINE.RETARGET.MULTIFAMILY.0 | complete | docs/artifact | v0.1.0 multi-family generation target lock |" docs/spine.md >/dev/null || {
+  echo "spine ledger must mark the multi-family retarget complete" >&2
+  exit 1
+}
+
 grep -nF "V010.CLI.27 - base status and refusal grammar" docs/spine.md >/dev/null || {
-  echo "spine must set the next CLI substrate row to base status/refusal grammar" >&2
+  echo "spine must keep the planned CLI substrate row to base status/refusal grammar" >&2
   exit 1
 }
 
@@ -136,7 +186,12 @@ grep -nF "## Full CLI Track Rebase" docs/cli-output-architecture.md >/dev/null |
 }
 
 grep -nF "V010.CLI.27 - base status and refusal grammar" docs/cli-output-architecture.md >/dev/null || {
-  echo "CLI output architecture must recommend status/refusal grammar next" >&2
+  echo "CLI output architecture must preserve status/refusal grammar as planned" >&2
+  exit 1
+}
+
+grep -nF "V010.QUANT.1 - multi-family dtype/qtype support by role" docs/cli-output-architecture.md >/dev/null || {
+  echo "CLI output architecture must hand immediate Active Next back to multi-family qtype support" >&2
   exit 1
 }
 
@@ -194,6 +249,15 @@ fi
 
 if grep -nE 'OPERATOR\.PATHS\.0|MODEL\.TARGET\.PATHS\.0|MODEL\.PREPARE\.0|MODEL\.CHECK\.0|SPINE\.GENERATION\.TARGET\.0|DOCS\.RUNBOOKS\.MODEL\.0' docs/operator-runbook.md docs/model-families.md docs/runbooks/*.md; then
   echo "public runbooks must not expose internal delivery IDs" >&2
+  exit 1
+fi
+
+if grep -nF "v0.1.0 may close on a feasible dense" docs/spine.md ||
+   grep -nF "close one real full-runtime path first" docs/spine.md ||
+   grep -nF "DeepSeek V4 Flash full generation is not automatically the minimum v0.1.0 release blocker" docs/spine.md ||
+   grep -nF "Qwen/Metal future portability" docs/spine.md ||
+   grep -nF "Gemma source/model-class/tensor-collection profile" docs/spine.md; then
+  echo "spine must not restore stale single-target or Metal-only retarget language" >&2
   exit 1
 fi
 
