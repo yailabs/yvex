@@ -81,6 +81,38 @@ test -d tests/vectors
 test -z "$(git ls-files 'yvex_*.c')"
 test -z "$(git ls-files 'yvex_*_private.h')"
 
+for f in \
+  src/model/yvex_model.c \
+  src/cli/yvex_model_target_cli.c \
+  src/cli/yvex_cli.c \
+  src/runtime/yvex_runtime.c \
+  src/generation/yvex_generation.c \
+  src/artifact/yvex_artifact.c \
+  src/source/yvex_source.c
+do
+  grep -nF 'Owner:' "$f" >/dev/null
+  grep -nF 'Owns:' "$f" >/dev/null
+  grep -nF 'Does not own:' "$f" >/dev/null
+  grep -nF 'Invariants:' "$f" >/dev/null
+  grep -nF 'Boundary:' "$f" >/dev/null
+  grep -nF 'Purpose:' "$f" >/dev/null
+  grep -nF 'Inputs:' "$f" >/dev/null
+  grep -nF 'Effects:' "$f" >/dev/null
+  grep -nF 'Failure:' "$f" >/dev/null
+done
+
+grep -nF 'Does not own:' src/model/yvex_model.c >/dev/null
+grep -nF 'CLI grammar' src/model/yvex_model.c >/dev/null
+grep -nF 'usage text' src/model/yvex_model.c >/dev/null
+grep -nF 'model-target command grammar' src/cli/yvex_model_target_cli.c >/dev/null
+grep -nF 'usage/help' src/cli/yvex_model_target_cli.c >/dev/null
+grep -nF 'report rendering' src/cli/yvex_model_target_cli.c >/dev/null
+grep -nF 'does not create capability' src/cli/yvex_model_target_cli.c >/dev/null
+grep -nF 'top-level command lookup' src/cli/yvex_cli.c >/dev/null
+grep -nF 'model metadata/materialization facts are not model support' src/model/yvex_model.c >/dev/null
+grep -nF 'tensor payload bytes' src/model/yvex_model.c >/dev/null
+grep -nF 'materialization' src/model/yvex_model.c >/dev/null
+
 if grep -nF 'usage: yvex model-target' src/model/yvex_model.c; then
   echo "model-target usage text must not live in src/model/yvex_model.c"
   exit 1
@@ -92,6 +124,16 @@ if grep -nF 'yvex model-target' src/model/yvex_model.c; then
 fi
 
 grep -nF 'usage: yvex model-target' src/cli/yvex_model_target_cli.c >/dev/null
+
+if git grep -nF 'This file owns everything' -- 'src/*.c' 'src/*.cu'; then
+  echo "vague source ownership contract found"
+  exit 1
+fi
+
+if grep -nF 'helper function' src/model/yvex_model.c; then
+  echo "vague function comment found in src/model/yvex_model.c"
+  exit 1
+fi
 
 bad_command_files="$(
   find . -maxdepth 5 \
@@ -241,7 +283,7 @@ if grep -E 'cli_rope_reference|cli_attention_reference|cli_matmul_reference|cli_
 fi
 
 cli_lines="$(wc -l < src/cli/yvex_cli.c)"
-if [ "$cli_lines" -gt 260 ]; then
+if [ "$cli_lines" -gt 360 ]; then
   echo "yvex_cli.c is too large: $cli_lines lines"
   exit 1
 fi

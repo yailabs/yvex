@@ -1,9 +1,27 @@
 /*
- * yvex_artifact.c - Artifact byte views and operator artifact surfaces.
+ * yvex_artifact.c - artifact byte views and operator artifact surfaces.
  *
- * This file owns file loading, artifact lifetime, checked byte ranges, and
- * descriptor-facing inspect, metadata, tensor, and selected materialization
- * command surfaces. It does not claim model execution.
+ * Owner:
+ *   src/artifact
+ *
+ * Owns:
+ *   artifact IO, artifact lifetime, artifact metadata, checked tensor byte
+ *   ranges, inspect/metadata/tensor command surfaces, and selected
+ *   materialization gates.
+ *
+ * Does not own:
+ *   source verification, model runtime support, graph execution, generation,
+ *   eval, benchmark, throughput, or release decisions.
+ *
+ * Invariants:
+ *   artifact bytes are opened through explicit paths or model references; range
+ *   and integrity checks precede materialization surfaces; artifact parsing
+ *   remains separate from runtime claims.
+ *
+ * Boundary:
+ *   artifact presence, parsing, identity, or selected materialization is not
+ *   runtime generation, eval evidence, benchmark evidence, throughput, or
+ *   release readiness.
  */
 
 #include "yvex_console_private.h"
@@ -41,6 +59,28 @@ static int copy_path(char *dst, const char *src, yvex_error *err)
     return YVEX_OK;
 }
 
+/*
+ * yvex_artifact_open()
+ *
+ * Purpose:
+ *   read an artifact file into an owned in-memory byte view.
+ *
+ * Inputs:
+ *   options is borrowed and must provide a path; out receives owned artifact
+ *   storage.
+ *
+ * Effects:
+ *   opens, seeks, allocates, reads bytes, stores path/size, and closes the host
+ *   file descriptor before returning.
+ *
+ * Failure:
+ *   returns invalid-arg, bounds, IO, or allocation errors and releases partial
+ *   artifact storage.
+ *
+ * Boundary:
+ *   opening artifact bytes is not GGUF validation, runtime support, generation,
+ *   eval evidence, benchmark evidence, or release readiness.
+ */
 int yvex_artifact_open(yvex_artifact **out, const yvex_artifact_options *options, yvex_error *err)
 {
     FILE *fp;
@@ -318,6 +358,28 @@ static void print_metadata_value(const yvex_gguf_value *value)
     }
 }
 
+/*
+ * command_integrity()
+ *
+ * Purpose:
+ *   parse and execute artifact integrity check/report CLI requests.
+ *
+ * Inputs:
+ *   argc/argv are borrowed CLI arguments.
+ *
+ * Effects:
+ *   resolves model references, reads artifact metadata, prints integrity
+ *   reports, and clears model-ref state.
+ *
+ * Failure:
+ *   returns parser failures for invalid options and propagated integrity/model
+ *   reference failures for invalid artifacts.
+ *
+ * Boundary:
+ *   integrity reports are artifact evidence only and not runtime support,
+ *   generation support, eval evidence, benchmark evidence, or release
+ *   readiness.
+ */
 static int command_integrity(int argc, char **argv)
 {
     yvex_artifact_integrity_options options;
@@ -397,6 +459,27 @@ static int command_integrity(int argc, char **argv)
     return 0;
 }
 
+/*
+ * command_inspect()
+ *
+ * Purpose:
+ *   parse and execute descriptor-only artifact inspection.
+ *
+ * Inputs:
+ *   argc/argv are borrowed CLI arguments naming a file or model alias.
+ *
+ * Effects:
+ *   opens artifact/GGUF/model/tensor metadata, prints descriptor facts, and
+ *   closes all owned state before return.
+ *
+ * Failure:
+ *   returns parser failures for invalid usage and propagated artifact/GGUF/model
+ *   metadata errors for malformed inputs.
+ *
+ * Boundary:
+ *   inspection is metadata reporting only and does not materialize full weights,
+ *   execute graph work, generate, evaluate, benchmark, or mark release ready.
+ */
 static int command_inspect(int argc, char **argv)
 {
     yvex_artifact *artifact = NULL;
@@ -688,6 +771,28 @@ static void print_materialization_gate_fields(const char *gate,
     printf("bytes_transferred: %llu\n", bytes_transferred);
 }
 
+/*
+ * command_materialize()
+ *
+ * Purpose:
+ *   parse and execute selected artifact materialization diagnostics.
+ *
+ * Inputs:
+ *   argc/argv are borrowed CLI arguments selecting a model and backend.
+ *
+ * Effects:
+ *   resolves model references, opens artifact/metadata/backend state, transfers
+ *   selected tensor bytes through materialization paths, prints summaries, and
+ *   releases owned state.
+ *
+ * Failure:
+ *   returns parser, model reference, artifact, metadata, backend, or
+ *   materialization failures with cleanup through owned close paths.
+ *
+ * Boundary:
+ *   materialization diagnostics are not graph execution, runtime generation,
+ *   eval evidence, benchmark evidence, throughput, or release readiness.
+ */
 static int command_materialize(int argc, char **argv)
 {
     yvex_cli_tokenizer_context ctx;

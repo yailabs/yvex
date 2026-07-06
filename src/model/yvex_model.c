@@ -1,8 +1,26 @@
 /*
- * yvex_model.c - Dtypes, tensor metadata, descriptors, and weights.
+ * yvex_model.c - model descriptors, tensor tables, and materialized weights.
  *
- * This file owns model-side structures built after GGUF parsing and before
- * runtime execution. It does not execute graph operations.
+ * Owner:
+ *   src/model
+ *
+ * Owns:
+ *   dtype lookup, model descriptors, tensor role classification, tensor tables,
+ *   and materialized weight tables.
+ *
+ * Does not own:
+ *   CLI grammar, usage text, report rendering, model-target command adapters,
+ *   artifact emission, graph execution, generation, eval, benchmark, or release
+ *   decisions.
+ *
+ * Invariants:
+ *   model facts are built from parsed GGUF and tensor metadata; tensor payload
+ *   bytes are read only through explicit materialization paths; domain code
+ *   returns facts and errors, not operator prose.
+ *
+ * Boundary:
+ *   model metadata/materialization facts are not model support, runtime support,
+ *   generation support, eval evidence, benchmark evidence, or release readiness.
  */
 
 #include <yvex/dtype.h>
@@ -97,6 +115,27 @@ const char *yvex_dtype_name(yvex_dtype dtype)
     return yvex_dtype_get_info(dtype)->name;
 }
 
+/*
+ * yvex_dtype_storage_bytes()
+ *
+ * Purpose:
+ *   compute storage bytes for scalar and known block-quantized dtypes.
+ *
+ * Inputs:
+ *   dtype and element count are borrowed; out receives the computed byte count.
+ *
+ * Effects:
+ *   mutates only out and err; performs no IO, allocation, payload reads, or
+ *   backend calls.
+ *
+ * Failure:
+ *   returns invalid-arg, unsupported, or bounds errors for missing output,
+ *   unknown storage formulas, and overflow.
+ *
+ * Boundary:
+ *   storage accounting is not qtype compute support, artifact emission, or
+ *   generation capability.
+ */
 int yvex_dtype_storage_bytes(yvex_dtype dtype,
                              unsigned long long element_count,
                              unsigned long long *out,
@@ -198,6 +237,28 @@ static yvex_arch arch_from_name(const char *name)
     return YVEX_ARCH_UNKNOWN;
 }
 
+/*
+ * yvex_model_descriptor_from_gguf()
+ *
+ * Purpose:
+ *   build a model descriptor from parsed GGUF metadata and tensor-table facts.
+ *
+ * Inputs:
+ *   gguf and tensors are borrowed immutable views; out receives owned
+ *   descriptor storage.
+ *
+ * Effects:
+ *   allocates descriptor/name memory and counts tensor storage/roles; it does
+ *   not print, read tensor payload bytes, or touch backend state.
+ *
+ * Failure:
+ *   returns invalid-arg or allocation failures and releases partial descriptor
+ *   ownership before returning.
+ *
+ * Boundary:
+ *   descriptor metadata is not runtime support, generation support, benchmark
+ *   evidence, or release readiness.
+ */
 int yvex_model_descriptor_from_gguf(yvex_model_descriptor **out,
                                     const yvex_gguf *gguf,
                                     const yvex_tensor_table *tensors,
@@ -385,6 +446,27 @@ static int contains(const char *text, const char *needle)
     return text && needle && strstr(text, needle) != NULL;
 }
 
+/*
+ * yvex_tensor_role_classify()
+ *
+ * Purpose:
+ *   classify known GGUF/native tensor names into YVEX tensor role labels.
+ *
+ * Inputs:
+ *   borrowed architecture/name/shape/dtype metadata; tensor payload bytes are
+ *   never accessed.
+ *
+ * Effects:
+ *   performs pure lexical classification with no allocation, IO, printing, or
+ *   backend mutation.
+ *
+ * Failure:
+ *   returns unknown for missing or unrecognized names.
+ *
+ * Boundary:
+ *   lexical role classification is not full family tensor-map readiness,
+ *   runtime descriptor readiness, or generation support.
+ */
 yvex_tensor_role yvex_tensor_role_classify(const char *architecture,
                                            const char *tensor_name,
                                            unsigned int rank,
@@ -516,6 +598,28 @@ static int product_dims(const yvex_gguf_tensor_info *src, unsigned long long *ou
     return YVEX_OK;
 }
 
+/*
+ * yvex_tensor_table_from_gguf()
+ *
+ * Purpose:
+ *   materialize a tensor metadata table from the parsed GGUF tensor directory.
+ *
+ * Inputs:
+ *   gguf is a borrowed descriptor view; out receives an owned tensor table.
+ *
+ * Effects:
+ *   allocates tensor rows and names, validates shape products, computes storage
+ *   accounting, and assigns lexical roles. It does not read tensor payload
+ *   bytes or allocate backend tensors.
+ *
+ * Failure:
+ *   returns invalid-arg, allocation, format, bounds, or propagated storage
+ *   accounting errors and releases partial tables.
+ *
+ * Boundary:
+ *   tensor directory metadata is not runtime execution, artifact emission, or
+ *   generation-capable artifact proof.
+ */
 int yvex_tensor_table_from_gguf(yvex_tensor_table **out,
                                 const yvex_gguf *gguf,
                                 yvex_error *err)
@@ -831,6 +935,29 @@ static int copy_tensor_dims(yvex_backend_tensor_desc *desc, const yvex_tensor_in
     return 1;
 }
 
+/*
+ * materialize_one()
+ *
+ * Purpose:
+ *   copy one validated artifact tensor range into backend-owned storage.
+ *
+ * Inputs:
+ *   table/backend, artifact, gguf, and tensor metadata are borrowed for the
+ *   duration of the transfer.
+ *
+ * Effects:
+ *   validates the tensor range, allocates a backend tensor, writes bytes from
+ *   the explicit artifact payload range, records residency, and cleans up on
+ *   failure.
+ *
+ * Failure:
+ *   returns validation, backend, allocation, or injected test failures after
+ *   freeing any backend allocation it owns.
+ *
+ * Boundary:
+ *   materialization is storage/residency proof only; it does not execute graph
+ *   work, prefill, decode, logits, sampling, generation, eval, or benchmark.
+ */
 static int materialize_one(yvex_weight_table *table,
                            const yvex_artifact *artifact,
                            const yvex_gguf *gguf,
@@ -940,6 +1067,31 @@ static int materialize_one(yvex_weight_table *table,
     return YVEX_OK;
 }
 
+/*
+ * yvex_weight_table_materialize()
+ *
+ * Purpose:
+ *   build an owned table of backend materialized weights from GGUF tensor
+ *   metadata and checked artifact ranges.
+ *
+ * Inputs:
+ *   artifact, gguf, tensor table, backend, and options are borrowed; out
+ *   receives the owned weight table.
+ *
+ * Effects:
+ *   allocates weight-table rows, validates ranges, transfers explicit tensor
+ *   payload bytes through the backend API, updates materialization summary
+ *   counters, and releases partial state on failure.
+ *
+ * Failure:
+ *   returns invalid-arg, allocation, unsupported dtype, bounds, format, or
+ *   backend errors with cleanup attempted before returning.
+ *
+ * Boundary:
+ *   weight materialization is not graph execution, runtime descriptor
+ *   readiness, generation support, eval evidence, benchmark evidence, or
+ *   release readiness.
+ */
 int yvex_weight_table_materialize(yvex_weight_table **out,
                                   const yvex_artifact *artifact,
                                   const yvex_gguf *gguf,
@@ -1104,6 +1256,27 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
 
 
 
+/*
+ * yvex_weight_table_get_summary()
+ *
+ * Purpose:
+ *   return materialization summary facts for an existing weight table.
+ *
+ * Inputs:
+ *   weights is borrowed; out receives a by-value summary copy.
+ *
+ * Effects:
+ *   copies summary fields and may query backend memory stats; it does not
+ *   allocate, print, write files, or move tensor bytes.
+ *
+ * Failure:
+ *   returns invalid-arg for missing inputs; backend memory-stat failures leave
+ *   the copied summary otherwise intact.
+ *
+ * Boundary:
+ *   summary facts report materialization state only and do not claim model
+ *   execution, generation, eval, benchmark, or release readiness.
+ */
 int yvex_weight_table_get_summary(const yvex_weight_table *weights,
                                   yvex_materialize_summary *out,
                                   yvex_error *err)

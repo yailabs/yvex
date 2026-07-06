@@ -111,6 +111,71 @@ END {
 ' \
   $impl_files
 
+awk '
+FNR == 1 {
+    in_comment = 0
+}
+{
+    line = $0
+    comment_line = 0
+
+    if (in_comment) {
+        comment_line = 1
+        if (line ~ /\*\//) {
+            in_comment = 0
+        }
+    } else if (line ~ /^[[:space:]]*\/\*/) {
+        comment_line = 1
+        if (line !~ /\*\//) {
+            in_comment = 1
+        }
+    } else if (line ~ /^[[:space:]]*\/\//) {
+        comment_line = 1
+    }
+
+    if (!comment_line) {
+        next
+    }
+
+    if (line ~ /handles things|does stuff|helper function|process data|business logic|simple wrapper around everything/) {
+        print FILENAME ":" FNR ": vague source comment text"
+        bad = 1
+    }
+    if (line ~ /magic/ && line !~ /GGUF magic|YVEX_GGUF_MAGIC|bad GGUF magic/) {
+        print FILENAME ":" FNR ": vague source comment text"
+        bad = 1
+    }
+}
+END {
+    exit bad ? 1 : 0
+}
+' \
+  $impl_files
+
+for f in \
+  src/model/yvex_model.c \
+  src/cli/yvex_model_target_cli.c \
+  src/cli/yvex_cli.c \
+  src/runtime/yvex_runtime.c \
+  src/generation/yvex_generation.c \
+  src/artifact/yvex_artifact.c \
+  src/source/yvex_source.c
+do
+  grep -nF 'Purpose:' "$f" >/dev/null
+  grep -nF 'Inputs:' "$f" >/dev/null
+  grep -nF 'Effects:' "$f" >/dev/null
+  grep -nF 'Failure:' "$f" >/dev/null
+  grep -nF 'Boundary:' "$f" >/dev/null
+done
+
+grep -nF 'command grammar' src/cli/yvex_model_target_cli.c >/dev/null
+grep -nF 'usage/help' src/cli/yvex_model_target_cli.c >/dev/null
+grep -nF 'report rendering' src/cli/yvex_model_target_cli.c >/dev/null
+grep -nF 'does not create capability' src/cli/yvex_model_target_cli.c >/dev/null
+grep -nF 'model metadata/materialization facts are not model support' src/model/yvex_model.c >/dev/null
+grep -nF 'tensor payload bytes' src/model/yvex_model.c >/dev/null
+grep -nF 'materialization' src/model/yvex_model.c >/dev/null
+
 if grep -nE 'implemented|ready|supports generation|benchmark result|token/sec|evaluation suite implemented|generation implemented' \
     src/generation/yvex_generation.c src/eval/yvex_eval.c src/bench/yvex_bench.c; then
   echo "future boundary files must not claim runtime readiness"

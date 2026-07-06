@@ -156,7 +156,37 @@ src/cli/yvex_chat.c
   diagnostic console and future runtime-backed REPL shell
 ```
 
-## 3. C Implementation Rules
+## 3. Source File Contracts
+
+Every source file must declare Owner, Owns, Does not own, Invariants, Boundary.
+
+The file header is an executable ownership guard, not decoration.
+
+A file may not grow behavior that violates its header.
+
+If a row needs behavior outside the current file contract, update topology first
+or move the behavior to the owner module.
+
+Every non-trivial function must have a function contract before implementation.
+
+Function comments describe the contract, not the obvious C syntax.
+
+Comments must name allocation, mutation, IO, printing, side effects, failure,
+cleanup, and capability boundary where relevant.
+
+Do not write marketing prose in source comments.
+
+Do not write vague comments such as:
+
+```text
+handles things
+does stuff
+helper
+process data
+run logic
+```
+
+## 4. C Implementation Rules
 
 Keep ownership explicit.
 
@@ -202,7 +232,7 @@ not ready
 error
 ```
 
-## 4. CLI Rules
+## 5. CLI Rules
 
 yvex_cli.c owns dispatch only.
 
@@ -250,7 +280,7 @@ unsupported flag
 unsupported output mode
 ```
 
-## 5. Runtime And Backend Rules
+## 6. Runtime And Backend Rules
 
 Primitive proof is not runtime support.
 
@@ -278,7 +308,7 @@ Metal and ROCm are future/backend lanes until explicit rows promote them.
 
 No Metal or ROCm support claim without implementation and tests.
 
-## 6. Source, Tensor, And Artifact Rules
+## 7. Source, Tensor, And Artifact Rules
 
 Header-only means header-only.
 
@@ -321,7 +351,7 @@ Allowed:
 tiny GGUF fixtures under tests only
 ```
 
-## 7. Evidence Stages
+## 8. Evidence Stages
 
 Canonical stages:
 
@@ -352,7 +382,7 @@ Do not invent synonyms.
 
 Do not write "ready" without a scoped prefix.
 
-## 8. Claims
+## 9. Claims
 
 A claim requires implementation, tests, command proof, and documented boundary.
 
@@ -397,7 +427,7 @@ unsupported
 not-measured
 ```
 
-## 9. Docs
+## 10. Docs
 
 Docs record current truth.
 
@@ -436,7 +466,7 @@ what boundary remains
 next blocker
 ```
 
-## 10. Tests
+## 11. Tests
 
 Tests are part of implementation.
 
@@ -480,7 +510,7 @@ exit code
 compactness where output surface changes
 ```
 
-## 11. Validation
+## 12. Validation
 
 Baseline:
 
@@ -516,7 +546,7 @@ no tracked large model artifacts
 tracked GGUF files are tiny test fixtures only
 ```
 
-## 12. Review Failure
+## 13. Review Failure
 
 A patch fails review if it:
 
@@ -535,7 +565,7 @@ reads tensor payloads in header-only/source-report rows
 claims runtime/generation/benchmark/release readiness without proof
 ```
 
-## 13. Final Rule
+## 14. Final Rule
 
 Make YVEX more real.
 

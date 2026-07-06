@@ -1,10 +1,25 @@
 /*
- * yvex_runtime.c - Engine, session, and runtime operator coordination.
+ * yvex_runtime.c - engine, session, and runtime coordination.
  *
- * This file owns descriptor/runtime coordination, engine/session state, shared
- * operator helpers, and runtime command surfaces that do not have a more
- * specific owner. It does not own graph proof math, provider generation, or
- * benchmark claims.
+ * Owner:
+ *   src/runtime
+ *
+ * Owns:
+ *   runtime coordination, engine/session lifecycle state, runtime summaries,
+ *   and runtime lifecycle command surfaces not owned by narrower modules.
+ *
+ * Does not own:
+ *   graph kernels, tensor mapping, tokenizer metadata, benchmark harness, CLI
+ *   rendering policy, artifact emission, or generation-loop behavior.
+ *
+ * Invariants:
+ *   runtime state is explicit and cleanup is owned; diagnostic runtime states
+ *   must not be promoted into full model runtime claims; command handlers keep
+ *   existing parser/exit-code behavior.
+ *
+ * Boundary:
+ *   diagnostic runtime is not full model runtime, generation support, eval
+ *   evidence, benchmark evidence, throughput, or release readiness.
  */
 
 #include "yvex_console_private.h"
@@ -247,6 +262,30 @@ static int attach_engine_weights(yvex_engine *engine,
     return YVEX_OK;
 }
 
+/*
+ * yvex_engine_open()
+ *
+ * Purpose:
+ *   open an engine descriptor over artifact, GGUF, tensor, model, tokenizer,
+ *   integrity, graph, and optional weight materialization state.
+ *
+ * Inputs:
+ *   options is borrowed; out receives owned engine state on success.
+ *
+ * Effects:
+ *   allocates engine state, opens artifact/GGUF views, builds metadata tables,
+ *   optionally builds a graph descriptor and materializes weights, and releases
+ *   partial ownership on failure.
+ *
+ * Failure:
+ *   returns invalid-arg, allocation, artifact, GGUF, integrity, graph, backend,
+ *   or materialization errors with cleanup before return.
+ *
+ * Boundary:
+ *   an opened engine descriptor is not full runtime execution, generation
+ *   support, eval evidence, benchmark evidence, throughput, or release
+ *   readiness.
+ */
 int yvex_engine_open(yvex_engine **out,
                      const yvex_engine_options *options,
                      yvex_error *err)
@@ -414,6 +453,27 @@ const yvex_graph *yvex_engine_graph(const yvex_engine *engine)
     return engine ? engine->graph : NULL;
 }
 
+/*
+ * yvex_engine_get_summary()
+ *
+ * Purpose:
+ *   copy engine descriptor and materialization summary facts for diagnostics.
+ *
+ * Inputs:
+ *   engine is borrowed; out receives a by-value summary.
+ *
+ * Effects:
+ *   mutates only out/err and may query weight materialization summary state; it
+ *   does not execute graph work or move tensor payload bytes.
+ *
+ * Failure:
+ *   returns invalid-arg for missing inputs and propagates summary failures from
+ *   owned weight state.
+ *
+ * Boundary:
+ *   engine summary facts are not runtime readiness, generation support, eval
+ *   evidence, benchmark evidence, throughput, or release readiness.
+ */
 int yvex_engine_get_summary(const yvex_engine *engine,
                             yvex_engine_summary *out,
                             yvex_error *err)
@@ -1766,6 +1826,28 @@ static yvex_session_state reset_state_for_graph(const yvex_session *session)
     return session->graph_partial ? YVEX_SESSION_STATE_PARTIAL : YVEX_SESSION_STATE_READY;
 }
 
+/*
+ * yvex_session_create()
+ *
+ * Purpose:
+ *   allocate diagnostic session state around an existing engine and backend.
+ *
+ * Inputs:
+ *   engine/backend/options are borrowed; out receives owned session state.
+ *
+ * Effects:
+ *   allocates KV/logits diagnostic buffers where requested, initializes
+ *   counters and graph status, and cleans up partial allocations on failure.
+ *
+ * Failure:
+ *   returns invalid-arg, allocation, KV/logits, or backend-related errors with
+ *   cleanup before returning.
+ *
+ * Boundary:
+ *   session state is diagnostic runtime state and not full model runtime,
+ *   generation support, eval evidence, benchmark evidence, or release
+ *   readiness.
+ */
 int yvex_session_create(yvex_session **out,
                         const yvex_engine *engine,
                         yvex_backend *backend,
@@ -1872,6 +1954,27 @@ unsigned long long yvex_session_context_length(const yvex_session *session)
     return session ? session->context_length : 0;
 }
 
+/*
+ * yvex_session_get_summary()
+ *
+ * Purpose:
+ *   copy diagnostic session, KV, logits, and engine facts into a summary.
+ *
+ * Inputs:
+ *   session is borrowed; out receives by-value report facts.
+ *
+ * Effects:
+ *   mutates only out/err and reads summaries from owned subobjects; it does not
+ *   advance decode state or execute graph work.
+ *
+ * Failure:
+ *   returns invalid-arg for missing inputs and otherwise preserves best-effort
+ *   summary fields when optional sub-summaries are unavailable.
+ *
+ * Boundary:
+ *   session summaries are not runtime generation, eval evidence, benchmark
+ *   evidence, throughput, or release readiness.
+ */
 int yvex_session_get_summary(const yvex_session *session,
                              yvex_session_summary *out,
                              yvex_error *err)
@@ -4496,6 +4599,27 @@ int yvex_chat_command(int argc, char **argv)
     return command_chat(argc, argv);
 }
 
+/*
+ * yvex_engine_command()
+ *
+ * Purpose:
+ *   dispatch engine diagnostic CLI requests to the existing runtime command
+ *   implementation.
+ *
+ * Inputs:
+ *   argc/argv are borrowed command-line arguments.
+ *
+ * Effects:
+ *   may open descriptors and print diagnostic output through the runtime command
+ *   path; it does not implement graph kernels or generation.
+ *
+ * Failure:
+ *   returns parser or runtime-command failure codes from the delegated path.
+ *
+ * Boundary:
+ *   engine diagnostics do not claim full runtime support, generation, eval,
+ *   benchmark, throughput, or release readiness.
+ */
 int yvex_engine_command(int argc, char **argv)
 {
     return command_engine(argc, argv);

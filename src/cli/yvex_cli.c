@@ -1,10 +1,25 @@
 /*
- * yvex_cli.c - Operator CLI entrypoint.
+ * yvex_cli.c - top-level operator CLI dispatch.
  *
- * This file owns only top-level command lookup, command grammar metadata,
- * short command listing, top-level help, and argv dispatch. Command behavior
- * and detailed help are owned by the domain modules that implement each
- * runtime or artifact boundary.
+ * Owner:
+ *   src/cli
+ *
+ * Owns:
+ *   top-level command lookup, short help, grouped command catalog, command
+ *   metadata, and argv dispatch.
+ *
+ * Does not own:
+ *   domain behavior, long command help, model/artifact/runtime logic, report
+ *   building, generation, eval, benchmark, or release decisions.
+ *
+ * Invariants:
+ *   top-level metadata remains short and dispatch-only; detailed usage and
+ *   behavior stay in the owner module for each command; unknown commands return
+ *   parser-style failures.
+ *
+ * Boundary:
+ *   top-level CLI dispatch cannot imply lower-level capability, model support,
+ *   generation, eval, benchmark, throughput, or release readiness.
  */
 
 #include <stdio.h>
@@ -122,6 +137,25 @@ static int command_group_has_entries(const char *group)
     return 0;
 }
 
+/*
+ * print_command_catalog()
+ *
+ * Purpose:
+ *   render the grouped top-level command catalog.
+ *
+ * Inputs:
+ *   fp is a borrowed output stream; command metadata is static.
+ *
+ * Effects:
+ *   prints table output only and does not call domain command handlers.
+ *
+ * Failure:
+ *   no parser failure path; stream errors are left to stdio.
+ *
+ * Boundary:
+ *   catalog rendering is command discovery only and cannot claim runtime,
+ *   generation, eval, benchmark, or release support.
+ */
 static void print_command_catalog(FILE *fp)
 {
     yvex_render_out out;
@@ -148,6 +182,25 @@ static void print_command_catalog(FILE *fp)
     }
 }
 
+/*
+ * print_top_level_help()
+ *
+ * Purpose:
+ *   render compact top-level help and common command shapes.
+ *
+ * Inputs:
+ *   fp is a borrowed output stream.
+ *
+ * Effects:
+ *   prints porcelain help text; it does not run command logic or inspect local
+ *   artifacts.
+ *
+ * Failure:
+ *   no parser failure path; stream errors are left to stdio.
+ *
+ * Boundary:
+ *   top-level help is not evidence of lower-level feature support.
+ */
 static void print_top_level_help(FILE *fp)
 {
     yvex_render_out out;
@@ -173,6 +226,26 @@ static int command_commands(int argc, char **argv)
     return 0;
 }
 
+/*
+ * command_help()
+ *
+ * Purpose:
+ *   route top-level help requests to short metadata and domain-owned help.
+ *
+ * Inputs:
+ *   argc/argv are borrowed CLI arguments.
+ *
+ * Effects:
+ *   prints help text and may call the selected command's help function; it does
+ *   not call command behavior handlers.
+ *
+ * Failure:
+ *   returns parser failure for unknown help topics.
+ *
+ * Boundary:
+ *   delegated help describes command grammar only and does not create runtime
+ *   capability or readiness claims.
+ */
 static int command_help(int argc, char **argv)
 {
     const yvex_cli_command *command;
@@ -224,6 +297,27 @@ static void command_version_help(FILE *fp)
     fprintf(fp, "usage: yvex version\n\nPrints the same version string as yvex --version.\n");
 }
 
+/*
+ * main()
+ *
+ * Purpose:
+ *   dispatch argv to the selected top-level command handler.
+ *
+ * Inputs:
+ *   argc/argv are borrowed from the host process.
+ *
+ * Effects:
+ *   prints top-level help/version or calls exactly one registered command
+ *   handler; it does not implement domain behavior inline.
+ *
+ * Failure:
+ *   returns parser failure for unknown commands and otherwise propagates the
+ *   selected command handler result.
+ *
+ * Boundary:
+ *   argv dispatch is not runtime execution, generation support, eval evidence,
+ *   benchmark evidence, throughput, or release readiness.
+ */
 int main(int argc, char **argv)
 {
     const yvex_cli_command *command;

@@ -1,9 +1,26 @@
 /*
  * yvex_model_target_cli.c - model-target command and report surface.
  *
- * This file owns model-target CLI grammar, output rendering, report-only
- * command adapters, and transitional output contract checks. It does not
- * execute graph or runtime operations.
+ * Owner:
+ *   src/cli
+ *
+ * Owns:
+ *   model-target command grammar, usage/help text, output-mode parsing,
+ *   command dispatch, and model-target report rendering.
+ *
+ * Does not own:
+ *   domain model state, tensor payload reads, artifact emission, runtime graph,
+ *   generation, eval, benchmark, or release decisions.
+ *
+ * Invariants:
+ *   command adapters parse argv and render existing facts; report builders stay
+ *   header/sidecar/report-only unless a future row moves behavior to the owning
+ *   domain module; normal/table/audit output boundaries stay explicit.
+ *
+ * Boundary:
+ *   CLI reports expose existing facts; CLI output does not create capability or
+ *   prove model support, generation, eval, benchmark, throughput, or release
+ *   readiness.
  */
 
 #include <yvex/dtype.h>
@@ -1841,6 +1858,28 @@ static int model_target_json_close_tmp(FILE *fp,
 static int tensor_naming_required_groups_present(
     const yvex_tensor_naming_profile *profile);
 
+/*
+ * write_tensor_map_sidecar()
+ *
+ * Purpose:
+ *   write the report-only tensor naming map sidecar for a dynamic source target.
+ *
+ * Inputs:
+ *   path is the target sidecar path; profile is a borrowed header-derived
+ *   report profile.
+ *
+ * Effects:
+ *   creates parent directories as needed, writes a temporary JSON file, and
+ *   renames it into place; it does not read tensor payload bytes or emit GGUF.
+ *
+ * Failure:
+ *   returns false when directory creation, temporary open, write close, or
+ *   rename fails.
+ *
+ * Boundary:
+ *   a tensor-map sidecar is report evidence only and does not create runtime
+ *   descriptor readiness, artifact readiness, or generation capability.
+ */
 static int write_tensor_map_sidecar(const char *path,
                                     const yvex_tensor_naming_profile *profile)
 {
@@ -2259,6 +2298,29 @@ static int model_class_resolve_source(
     return 0;
 }
 
+/*
+ * model_class_build_profile()
+ *
+ * Purpose:
+ *   build a header-metadata-only model-class profile for a model-target report.
+ *
+ * Inputs:
+ *   record/spec and optional path overrides are borrowed; profile receives
+ *   stack-owned report fields.
+ *
+ * Effects:
+ *   resolves source paths, checks config/tokenizer presence, opens safetensors
+ *   headers through native inventory, and counts lexical patterns. It does not
+ *   load tensor payloads, emit artifacts, or execute model code.
+ *
+ * Failure:
+ *   returns parser-style exit status for invalid arguments or allocation/header
+ *   inventory failures while recording report blockers where possible.
+ *
+ * Boundary:
+ *   model-class profiling is report-only and does not create model support,
+ *   runtime support, generation, eval, benchmark, or release readiness.
+ */
 static int model_class_build_profile(
     const yvex_model_target_record *record,
     const yvex_model_class_profile_spec *spec,
@@ -6156,6 +6218,29 @@ static int tensor_mapping_gate_tokenizer_ready(
            strcmp(profile->status, "present-report-only") == 0;
 }
 
+/*
+ * build_tensor_mapping_gate_profile()
+ *
+ * Purpose:
+ *   aggregate model-class, collection, tensor-map, output-head, tokenizer, and
+ *   missing-role report facts for the v0.1.0 mapping gate.
+ *
+ * Inputs:
+ *   record and optional path overrides are borrowed; profile receives the
+ *   composed report state.
+ *
+ * Effects:
+ *   runs report builders, records blocker strings, and fills summary fields; it
+ *   performs no quantization, GGUF emission, runtime execution, or benchmark.
+ *
+ * Failure:
+ *   propagates the first report-builder failure that cannot be represented as a
+ *   blocked gate profile.
+ *
+ * Boundary:
+ *   mapping-gate reports are control evidence only and do not complete artifact
+ *   contracts, runtime descriptors, graph routes, or generation capability.
+ */
 static int build_tensor_mapping_gate_profile(
     const yvex_model_target_record *record,
     const char *models_root_override,
@@ -9678,6 +9763,26 @@ static const char *model_target_backend_pressure(const yvex_model_target_record 
     return "not-applicable";
 }
 
+/*
+ * print_model_target_list()
+ *
+ * Purpose:
+ *   render compact model-target list output for the model-target command.
+ *
+ * Inputs:
+ *   reads the static model-target registry owned by this CLI quarantine file.
+ *
+ * Effects:
+ *   prints normal operator output to stdout and may include report-only audit
+ *   hints; it does not mutate target state or create artifacts.
+ *
+ * Failure:
+ *   no runtime failure path; output is deterministic over static records.
+ *
+ * Boundary:
+ *   report rendering does not create capability, model support, generation
+ *   support, eval evidence, benchmark evidence, or release readiness.
+ */
 static void print_model_target_list(void)
 {
     unsigned long i;
@@ -10139,6 +10244,32 @@ static int print_model_target_paths(const yvex_model_target_record *record,
     return 0;
 }
 
+/*
+ * yvex_model_target_command()
+ *
+ * Purpose:
+ *   parse and dispatch the model-target command grammar, usage/help, report
+ *   rendering, output-mode selection, and transitional output-contract checks.
+ *
+ * Inputs:
+ *   argc/argv are borrowed CLI arguments; command handlers borrow static target
+ *   registry and local report sidecars as needed.
+ *
+ * Effects:
+ *   prints normal/table/audit/report output, reads header/sidecar evidence for
+ *   report builders, and may write report-only map sidecars for dynamic
+ *   downloaded targets. It does not own domain model state or execute runtime
+ *   graph/generation paths.
+ *
+ * Failure:
+ *   returns parser exit code 2 for invalid grammar/options and command-specific
+ *   failure codes for report builder failures.
+ *
+ * Boundary:
+ *   model-target command grammar and CLI reports expose existing facts and do
+ *   not create capability, quantization, artifact emission, runtime support,
+ *   generation support, eval, benchmark, throughput, or release readiness.
+ */
 int yvex_model_target_command(int argc, char **argv)
 {
     const yvex_model_target_record *record;

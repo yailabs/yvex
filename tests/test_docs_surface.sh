@@ -28,17 +28,18 @@ for agents_heading in \
   "## 0. Repository Contract" \
   "## 1. Execution Order" \
   "## 2. Ownership" \
-  "## 3. C Implementation Rules" \
-  "## 4. CLI Rules" \
-  "## 5. Runtime And Backend Rules" \
-  "## 6. Source, Tensor, And Artifact Rules" \
-  "## 7. Evidence Stages" \
-  "## 8. Claims" \
-  "## 9. Docs" \
-  "## 10. Tests" \
-  "## 11. Validation" \
-  "## 12. Review Failure" \
-  "## 13. Final Rule"; do
+  "## 3. Source File Contracts" \
+  "## 4. C Implementation Rules" \
+  "## 5. CLI Rules" \
+  "## 6. Runtime And Backend Rules" \
+  "## 7. Source, Tensor, And Artifact Rules" \
+  "## 8. Evidence Stages" \
+  "## 9. Claims" \
+  "## 10. Docs" \
+  "## 11. Tests" \
+  "## 12. Validation" \
+  "## 13. Review Failure" \
+  "## 14. Final Rule"; do
   grep -nF "$agents_heading" AGENTS.md >/dev/null || {
     echo "AGENTS.md missing canonical heading: $agents_heading" >&2
     exit 1
@@ -46,7 +47,7 @@ for agents_heading in \
 done
 
 if grep -nE '^## ' AGENTS.md |
-   grep -vE '## (0\. Repository Contract|1\. Execution Order|2\. Ownership|3\. C Implementation Rules|4\. CLI Rules|5\. Runtime And Backend Rules|6\. Source, Tensor, And Artifact Rules|7\. Evidence Stages|8\. Claims|9\. Docs|10\. Tests|11\. Validation|12\. Review Failure|13\. Final Rule)$'; then
+   grep -vE '## (0\. Repository Contract|1\. Execution Order|2\. Ownership|3\. Source File Contracts|4\. C Implementation Rules|5\. CLI Rules|6\. Runtime And Backend Rules|7\. Source, Tensor, And Artifact Rules|8\. Evidence Stages|9\. Claims|10\. Docs|11\. Tests|12\. Validation|13\. Review Failure|14\. Final Rule)$'; then
   echo "AGENTS.md must not add extra H2 sections" >&2
   exit 1
 fi
@@ -56,6 +57,9 @@ for agents_term in \
   "YVEX is a native C local inference engine" \
   "yvex_cli.c owns dispatch only" \
   "C implementation lives under src/." \
+  "Every source file must declare Owner, Owns, Does not own, Invariants, Boundary" \
+  "The file header is an executable ownership guard, not decoration" \
+  "Every non-trivial function must have a function contract before implementation" \
   "CLI command grammar lives under src/cli/." \
   "Domain modules do not own usage text" \
   "Root yvex_*.c files are forbidden after TOPOLOGY.FS.0" \
@@ -224,6 +228,11 @@ grep -nF "V010.QUANT.2 - qtype compute/refusal matrix" docs/spine.md >/dev/null 
 
 grep -nF "| TOPOLOGY.FS.0 | complete | Move C implementation under src modules and quarantine model-target CLI command surface. |" docs/spine.md >/dev/null || {
   echo "spine must mark TOPOLOGY.FS.0 complete" >&2
+  exit 1
+}
+
+grep -nF "| TOPOLOGY.SOURCE.CONTRACT.0 | complete | Add source file and function contract guardrails for module ownership. |" docs/spine.md >/dev/null || {
+  echo "spine must mark TOPOLOGY.SOURCE.CONTRACT.0 complete" >&2
   exit 1
 }
 

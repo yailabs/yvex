@@ -1,9 +1,27 @@
 /*
- * yvex_generation.c - Runtime generation loop boundary.
+ * yvex_generation.c - diagnostic generation loop composition.
  *
- * This file owns the first bounded diagnostic generation loop. It composes
- * prefill, decode, logits, greedy selection, token append, stop checks, and
- * cleanup without claiming full model output quality or server/provider output.
+ * Owner:
+ *   src/generation
+ *
+ * Owns:
+ *   generation loop composition over available prefill, decode, logits,
+ *   sampling, token append, stop, trace, cancel, and cleanup pieces.
+ *
+ * Does not own:
+ *   tensor role mapping, artifact emission, tokenizer training, benchmark,
+ *   command grammar outside this command surface, server/provider generation,
+ *   or release decisions.
+ *
+ * Invariants:
+ *   generated state remains bounded and diagnostic; partial output and cleanup
+ *   behavior are explicit; trace/audit output must not imply supported-family
+ *   runtime generation.
+ *
+ * Boundary:
+ *   diagnostic generation is not runtime generation over supported-family
+ *   artifacts, eval evidence, benchmark evidence, throughput, or release
+ *   readiness.
  */
 
 #include <yvex/yvex.h>
@@ -1076,6 +1094,27 @@ static void generate_emit_cleanup_trace(yvex_generate_summary *summary)
                           summary->cleanup_status ? summary->cleanup_status : "not-needed");
 }
 
+/*
+ * generate_emit_trace()
+ *
+ * Purpose:
+ *   emit the requested diagnostic trace sections for one generation summary.
+ *
+ * Inputs:
+ *   summary is borrowed mutable state containing the recorded trace
+ *   facts and selected trace level.
+ *
+ * Effects:
+ *   prints trace records to stdout and marks the trace as emitted; it does not
+ *   mutate model state, move tensor bytes, or execute decode/logits/sampling.
+ *
+ * Failure:
+ *   no parser failure path; missing trace levels simply suppress sections.
+ *
+ * Boundary:
+ *   trace output is diagnostic evidence only and not runtime generation,
+ *   eval evidence, benchmark evidence, throughput, or release readiness.
+ */
 static void generate_emit_trace(yvex_generate_summary *summary)
 {
     int failed;
@@ -1308,6 +1347,26 @@ static void generate_print_output(yvex_generate_summary *summary,
     generate_print_normal_summary(summary, model_arg, backend_name);
 }
 
+/*
+ * generate_mark_cleanup()
+ *
+ * Purpose:
+ *   record idempotent diagnostic cleanup state for the generation summary.
+ *
+ * Inputs:
+ *   summary is borrowed mutable diagnostic state.
+ *
+ * Effects:
+ *   mutates lifecycle/cleanup flags only; it does not free external model
+ *   ownership or change backend/device allocations.
+ *
+ * Failure:
+ *   no failure path; missing summaries are ignored by callers before use.
+ *
+ * Boundary:
+ *   cleanup accounting is not proof of runtime generation support or release
+ *   readiness.
+ */
 static void generate_mark_cleanup(yvex_generate_summary *summary)
 {
     if (!summary) {
@@ -1701,6 +1760,32 @@ static void generate_print_usage_error(void)
     fprintf(stderr, "Try 'yvex help generate' for examples and boundaries.\n");
 }
 
+/*
+ * yvex_generate_command()
+ *
+ * Purpose:
+ *   parse and execute the bounded diagnostic generation command over existing
+ *   decode/logits/sampling pieces.
+ *
+ * Inputs:
+ *   argc/argv are borrowed CLI arguments; model references and runtime objects
+ *   are opened only for the duration of the command.
+ *
+ * Effects:
+ *   validates token input, may open an engine, optionally attaches KV/logits
+ *   state, runs bounded diagnostic steps, prints normal/audit/trace output, and
+ *   records cleanup/partial-output state.
+ *
+ * Failure:
+ *   returns parser failures for invalid options and runtime-style failures for
+ *   model resolution, engine, prefill, decode, logits, sampling, or append
+ *   errors while preserving diagnostic summary state.
+ *
+ * Boundary:
+ *   this command is diagnostic generation only; it does not implement runtime
+ *   generation over supported-family artifacts, tokenizer stop policy,
+ *   provider generation, eval, benchmark, throughput, or release readiness.
+ */
 int yvex_generate_command(int argc, char **argv)
 {
     yvex_model_ref model_ref;
@@ -2277,6 +2362,26 @@ int yvex_generate_command(int argc, char **argv)
     return 0;
 }
 
+/*
+ * yvex_generate_help()
+ *
+ * Purpose:
+ *   print generation command usage, examples, options, and boundaries.
+ *
+ * Inputs:
+ *   fp is a borrowed output stream.
+ *
+ * Effects:
+ *   prints help text only; it does not parse or run generation.
+ *
+ * Failure:
+ *   no parser failure path; stream errors are left to stdio.
+ *
+ * Boundary:
+ *   help text documents the diagnostic command and does not create generation
+ *   support, eval evidence, benchmark evidence, throughput, or release
+ *   readiness.
+ */
 void yvex_generate_help(FILE *fp)
 {
     fprintf(fp, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [options]\n\n");

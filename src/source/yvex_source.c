@@ -1,8 +1,27 @@
 /*
- * yvex_source.c - Source manifests, native inventory, and safetensors headers.
+ * yvex_source.c - source manifests, pressure reports, and native headers.
  *
- * This file owns source-file manifests and lightweight native-weight metadata.
- * It does not commit or materialize external model artifacts.
+ * Owner:
+ *   src/source
+ *
+ * Owns:
+ *   source manifests, source pressure reports, source evidence, provenance
+ *   summaries, footprint summaries, and native safetensors header inventory.
+ *
+ * Does not own:
+ *   tensor payload loading unless a row explicitly owns it, artifact emission,
+ *   runtime support, generation, eval, benchmark, throughput, or release
+ *   decisions.
+ *
+ * Invariants:
+ *   header-only paths remain header-only; source reports may inspect local
+ *   metadata, sidecars, and safetensors headers but must not verify remotes,
+ *   hash payloads, or infer runtime readiness.
+ *
+ * Boundary:
+ *   source intake is not source verification, artifact emission, model support,
+ *   generation support, eval evidence, benchmark evidence, or release
+ *   readiness.
  */
 
 #include "yvex_console_private.h"
@@ -109,6 +128,27 @@ const char *yvex_source_status_name(yvex_source_status status)
     return "unknown";
 }
 
+/*
+ * yvex_source_manifest_scan_local()
+ *
+ * Purpose:
+ *   summarize a local source directory into source-manifest footprint facts.
+ *
+ * Inputs:
+ *   local_path is borrowed; out receives by-value summary fields.
+ *
+ * Effects:
+ *   scans local directory entries and sizes through manifest file-list helpers;
+ *   it does not hash files, read tensor payloads, or contact remotes.
+ *
+ * Failure:
+ *   returns invalid-arg, IO, allocation, or scan errors from the manifest
+ *   helpers.
+ *
+ * Boundary:
+ *   local footprint scanning is not source verification, artifact emission,
+ *   runtime support, generation, eval, benchmark, or release readiness.
+ */
 int yvex_source_manifest_scan_local(const char *local_path,
                                     yvex_source_manifest_summary *out,
                                     yvex_error *err)
@@ -208,6 +248,27 @@ static void yvex_sm_json_field(FILE *fp, const char *name, const char *value, in
     fputs(comma ? ",\n" : "\n", fp);
 }
 
+/*
+ * yvex_source_manifest_write_json_file()
+ *
+ * Purpose:
+ *   write source manifest summary and file-list facts to JSON.
+ *
+ * Inputs:
+ *   output path, manifest options, and file list are borrowed.
+ *
+ * Effects:
+ *   opens a local JSON file, writes escaped metadata and footprint fields, and
+ *   closes the file; it does not create artifacts or hash tensor payloads.
+ *
+ * Failure:
+ *   returns invalid-arg or IO errors for missing inputs, open/write/close
+ *   failures, and path issues.
+ *
+ * Boundary:
+ *   writing a source manifest is not source verification, artifact emission,
+ *   runtime support, generation, eval, benchmark, or release readiness.
+ */
 int yvex_source_manifest_write_json_file(const char *out_path,
                                          const yvex_source_manifest_options *options,
                                          const yvex_source_manifest_file_list *files,
@@ -3078,6 +3139,28 @@ static void qwen_source_report_help(FILE *fp)
     fprintf(fp, "The source pressure report inspects source-path readiness only. It does not download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
 }
 
+/*
+ * yvex_source_manifest_report_command()
+ *
+ * Purpose:
+ *   parse and render Qwen/Gemma source pressure report commands.
+ *
+ * Inputs:
+ *   argc/argv are borrowed CLI arguments.
+ *
+ * Effects:
+ *   resolves local source/report paths, reads bounded metadata/header evidence,
+ *   builds report-only source facts, and prints normal/table/audit output.
+ *
+ * Failure:
+ *   returns parser failures for invalid options and report-builder failures for
+ *   malformed local source evidence.
+ *
+ * Boundary:
+ *   source pressure reports do not download, verify, hash payloads, emit GGUF,
+ *   materialize tensors, execute runtime paths, generate, evaluate, benchmark,
+ *   or mark release ready.
+ */
 int yvex_source_manifest_report_command(int argc, char **argv)
 {
     yvex_qwen_source_report_options options;
@@ -3452,6 +3535,28 @@ static int nw_scan_dir(const char *root, const char *rel_dir, int recursive,
     return rc;
 }
 
+/*
+ * yvex_native_weight_table_open()
+ *
+ * Purpose:
+ *   build a native safetensors header inventory for a source directory.
+ *
+ * Inputs:
+ *   options is borrowed and must name a source directory; out receives an owned
+ *   native weight table.
+ *
+ * Effects:
+ *   scans source files and reads safetensors headers only, allocating table
+ *   rows for tensor metadata; tensor payload bytes are not loaded.
+ *
+ * Failure:
+ *   returns invalid-arg, IO, allocation, or malformed-header errors with
+ *   partial table cleanup.
+ *
+ * Boundary:
+ *   native header inventory is not tensor payload loading, artifact emission,
+ *   runtime support, generation, eval, benchmark, or release readiness.
+ */
 int yvex_native_weight_table_open(yvex_native_weight_table **out,
                                   const yvex_native_weight_options *options,
                                   yvex_error *err)
@@ -3972,6 +4077,28 @@ static int sj_parse_tensor(st_json *j, const char *name, unsigned long long payl
     return rc;
 }
 
+/*
+ * yvex_safetensors_parse_header()
+ *
+ * Purpose:
+ *   parse safetensors header JSON into native tensor metadata records.
+ *
+ * Inputs:
+ *   json, payload byte count, shard path, and output table are borrowed.
+ *
+ * Effects:
+ *   parses dtype, shape, and data offset metadata, validates declared byte
+ *   ranges against payload size, and appends table rows; it never reads tensor
+ *   payload bytes.
+ *
+ * Failure:
+ *   returns invalid-arg, format, bounds, or allocation errors through the JSON
+ *   parser and native table append path.
+ *
+ * Boundary:
+ *   safetensors header parsing is not source verification, tensor payload
+ *   loading, role mapping, artifact emission, runtime support, or generation.
+ */
 int yvex_safetensors_parse_header(const char *json,
                                   unsigned long long payload_bytes,
                                   const char *shard_path,
