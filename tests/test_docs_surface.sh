@@ -80,8 +80,23 @@ grep -nF "| V010.CLI.25 | complete | operator | Renderer ownership foundation |"
   exit 1
 }
 
-grep -nF "V010.CLI.26 - model artifact porcelain migration" docs/spine.md >/dev/null || {
-  echo "spine must keep V010.CLI.26 as the next CLI architecture row" >&2
+grep -nF "V010.CLI.26         base CLI grammar and command catalog" docs/spine.md >/dev/null || {
+  echo "spine must preserve the base CLI grammar row" >&2
+  exit 1
+}
+
+grep -nF "| V010.CLI.26 | complete | operator | Base CLI grammar and command catalog |" docs/spine.md >/dev/null || {
+  echo "spine must mark V010.CLI.26 complete after command grammar implementation" >&2
+  exit 1
+}
+
+grep -nF "V010.CLI.27 - model artifact porcelain migration" docs/spine.md >/dev/null || {
+  echo "spine must move model artifact porcelain migration to V010.CLI.27" >&2
+  exit 1
+}
+
+grep -nF "V010.CLI.29         graph/runtime diagnostic renderer migration" docs/spine.md >/dev/null || {
+  echo "spine must preserve the shifted graph/runtime migration row" >&2
   exit 1
 }
 
@@ -103,6 +118,11 @@ grep -nF "JSON output is not implemented uniformly in this audit" docs/cli-outpu
 
 grep -nF "## Renderer Foundation" docs/cli-output-architecture.md >/dev/null || {
   echo "CLI output architecture must record the implemented renderer foundation" >&2
+  exit 1
+}
+
+grep -nF "## Base CLI Grammar" docs/cli-output-architecture.md >/dev/null || {
+  echo "CLI output architecture must record the implemented base CLI grammar" >&2
   exit 1
 }
 

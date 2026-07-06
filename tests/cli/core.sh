@@ -95,6 +95,17 @@ matches() {
     grep -E -- "$pattern" "$file" >/dev/null || fail "$file missing pattern: $pattern"
 }
 
+line_before() {
+    file=$1
+    before=$2
+    after=$3
+    before_line=$(grep -nF -- "$before" "$file" | head -n 1 | cut -d: -f1)
+    after_line=$(grep -nF -- "$after" "$file" | head -n 1 | cut -d: -f1)
+    if [ -z "$before_line" ] || [ -z "$after_line" ] || [ "$before_line" -ge "$after_line" ]; then
+        fail "$file order wrong: $before before $after"
+    fi
+}
+
 run_fail() {
     name=$1
     shift
@@ -121,13 +132,25 @@ run_fail_code() {
 }
 
 run_ok no_args "$YVEX_BIN"
-contains "$OUT_DIR/no_args.out" "usage: yvex <command> [options]"
+contains "$OUT_DIR/no_args.out" "yvex - local-first inference engine"
+contains "$OUT_DIR/no_args.out" "usage:"
+contains "$OUT_DIR/no_args.out" "yvex <command> [args]"
+contains "$OUT_DIR/no_args.out" "command shape:"
+contains "$OUT_DIR/no_args.out" "yvex <family> <action> [object] [selectors] [behavior flags] [diagnostic flags]"
+contains "$OUT_DIR/no_args.out" "command groups:"
+contains "$OUT_DIR/no_args.out" "option classes:"
+contains "$OUT_DIR/no_args.out" "raw/evidence:"
+contains "$OUT_DIR/no_args.out" "boundary: full model generation remains unsupported unless a specific command proves otherwise"
 
 run_ok help_long "$YVEX_BIN" --help
-contains "$OUT_DIR/help_long.out" "Implemented commands:"
+contains "$OUT_DIR/help_long.out" "yvex - local-first inference engine"
+contains "$OUT_DIR/help_long.out" "command groups:"
+contains "$OUT_DIR/help_long.out" "raw/evidence:"
 
 run_ok help_short "$YVEX_BIN" -h
-contains "$OUT_DIR/help_short.out" "Implemented commands:"
+contains "$OUT_DIR/help_short.out" "yvex - local-first inference engine"
+contains "$OUT_DIR/help_short.out" "command groups:"
+contains "$OUT_DIR/help_short.out" "raw/evidence:"
 
 run_ok version_option "$YVEX_BIN" --version
 contains "$OUT_DIR/version_option.out" "yvex 0.1.0"
@@ -194,54 +217,29 @@ run_fail_code info_bad_output 2 "$YVEX_BIN" info --output nope
 contains "$OUT_DIR/info_bad_output.err" "yvex info: unsupported output mode: nope"
 
 run_ok commands "$YVEX_BIN" commands
-contains "$OUT_DIR/commands.out" "Implemented commands:"
-contains "$OUT_DIR/commands.out" "  attention"
-contains "$OUT_DIR/commands.out" "attention class and KV requirement reports"
-contains "$OUT_DIR/commands.out" "  backend"
-contains "$OUT_DIR/commands.out" "  chat"
-contains "$OUT_DIR/commands.out" "  commands"
-contains "$OUT_DIR/commands.out" "  context"
-contains "$OUT_DIR/commands.out" "context class and runtime boundary reports"
-contains "$OUT_DIR/commands.out" "  convert"
-contains "$OUT_DIR/commands.out" "  cuda-info"
-contains "$OUT_DIR/commands.out" "  decode"
-contains "$OUT_DIR/commands.out" "  detokenize"
-contains "$OUT_DIR/commands.out" "  engine"
-contains "$OUT_DIR/commands.out" "  graph"
-contains "$OUT_DIR/commands.out" "  generate"
-contains "$OUT_DIR/commands.out" "bounded diagnostic generation loop"
-contains "$OUT_DIR/commands.out" "  gguf-emit"
-contains "$OUT_DIR/commands.out" "  gguf-template"
-contains "$OUT_DIR/commands.out" "  help"
-contains "$OUT_DIR/commands.out" "  imatrix"
-contains "$OUT_DIR/commands.out" "  info"
-contains "$OUT_DIR/commands.out" "  inspect"
-contains "$OUT_DIR/commands.out" "  input"
-contains "$OUT_DIR/commands.out" "  kv"
-contains "$OUT_DIR/commands.out" "KV diagnostics and KV cache class reports"
-contains "$OUT_DIR/commands.out" "  logits"
-contains "$OUT_DIR/commands.out" "  materialize"
-contains "$OUT_DIR/commands.out" "  materialize-gate"
-contains "$OUT_DIR/commands.out" "  metadata"
-contains "$OUT_DIR/commands.out" "  model-gate"
-contains "$OUT_DIR/commands.out" "  model-target"
-contains "$OUT_DIR/commands.out" "  models"
-contains "$OUT_DIR/commands.out" "  native-weights"
-contains "$OUT_DIR/commands.out" "  paths"
-contains "$OUT_DIR/commands.out" "  plan"
-contains "$OUT_DIR/commands.out" "  prompt"
-contains "$OUT_DIR/commands.out" "  quant-job"
-contains "$OUT_DIR/commands.out" "  quant-policy"
-contains "$OUT_DIR/commands.out" "  qtype-support"
-contains "$OUT_DIR/commands.out" "  run"
-contains "$OUT_DIR/commands.out" "  sample"
-contains "$OUT_DIR/commands.out" "  session"
-contains "$OUT_DIR/commands.out" "  source-manifest"
-contains "$OUT_DIR/commands.out" "  tensor-map"
-contains "$OUT_DIR/commands.out" "  tokenize"
-contains "$OUT_DIR/commands.out" "  tokenizer"
-contains "$OUT_DIR/commands.out" "  tensors"
-contains "$OUT_DIR/commands.out" "  version"
+contains "$OUT_DIR/commands.out" "YVEX COMMAND CATALOG"
+contains "$OUT_DIR/commands.out" "COMMAND            GROUP            SURFACE              PURPOSE"
+contains "$OUT_DIR/commands.out" "group: core"
+contains "$OUT_DIR/commands.out" "commands           core             porcelain            Grouped command catalog."
+contains "$OUT_DIR/commands.out" "info               core             porcelain            Build and boundary status."
+contains "$OUT_DIR/commands.out" "group: operator"
+contains "$OUT_DIR/commands.out" "models             operator         mixed-transitional   Local model registry and source lanes."
+contains "$OUT_DIR/commands.out" "paths              operator         porcelain            Operator filesystem paths."
+contains "$OUT_DIR/commands.out" "group: model"
+contains "$OUT_DIR/commands.out" "model-target       model            mixed-transitional   Model pressure target reports."
+contains "$OUT_DIR/commands.out" "fullmodel          model            mixed-transitional   Fullmodel inventory and plan reports."
+contains "$OUT_DIR/commands.out" "group: source"
+contains "$OUT_DIR/commands.out" "source-manifest    source           mixed-transitional   Source provenance reports."
+contains "$OUT_DIR/commands.out" "tensor-map         source           diagnostic           Native tensor role mapping."
+contains "$OUT_DIR/commands.out" "group: artifact"
+contains "$OUT_DIR/commands.out" "integrity          artifact         mixed-transitional   Artifact integrity reports."
+contains "$OUT_DIR/commands.out" "group: graph"
+contains "$OUT_DIR/commands.out" "graph              graph            mixed-transitional   Graph diagnostics and narrow proofs."
+contains "$OUT_DIR/commands.out" "group: runtime"
+contains "$OUT_DIR/commands.out" "generate           runtime          diagnostic           Bounded diagnostic generation loop."
+contains "$OUT_DIR/commands.out" "kv                 runtime          mixed-transitional   KV diagnostics and reports."
+contains "$OUT_DIR/commands.out" "group: diagnostic"
+contains "$OUT_DIR/commands.out" "backend            diagnostic       diagnostic           Backend availability reports."
 
 run_ok help_info "$YVEX_BIN" help info
 contains "$OUT_DIR/help_info.out" "usage: yvex info"
@@ -261,6 +259,12 @@ contains "$OUT_DIR/help_attention.out" "does not benchmark"
 contains "$OUT_DIR/help_attention.out" "not full transformer attention"
 
 run_ok help_context "$YVEX_BIN" help context
+contains "$OUT_DIR/help_context.out" "command: context [diagnostic]"
+contains "$OUT_DIR/help_context.out" "group: runtime"
+contains "$OUT_DIR/help_context.out" "usage: yvex context report --model FILE_OR_ALIAS"
+contains "$OUT_DIR/help_context.out" "option_classes: selector, path, diagnostic, transitional-layout"
+contains "$OUT_DIR/help_context.out" "boundary: report-only; no long-context runtime"
+contains "$OUT_DIR/help_context.out" "domain help:"
 contains "$OUT_DIR/help_context.out" "usage: yvex context report --model FILE_OR_ALIAS"
 contains "$OUT_DIR/help_context.out" "report-only boundary"
 contains "$OUT_DIR/help_context.out" "model/requested/active context"
@@ -298,6 +302,12 @@ contains "$OUT_DIR/help_sample.out" "bounded diagnostic token"
 contains "$OUT_DIR/help_sample.out" "does not run stochastic sampling, append tokens, generate"
 
 run_ok help_generate "$YVEX_BIN" help generate
+contains "$OUT_DIR/help_generate.out" "command: generate [diagnostic]"
+contains "$OUT_DIR/help_generate.out" "group: runtime"
+contains "$OUT_DIR/help_generate.out" "purpose: Bounded diagnostic generation loop."
+contains "$OUT_DIR/help_generate.out" "option_classes: selector, behavior, diagnostic"
+contains "$OUT_DIR/help_generate.out" "boundary: diagnostic generation only; full model generation unsupported"
+contains "$OUT_DIR/help_generate.out" "domain help:"
 contains "$OUT_DIR/help_generate.out" "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [options]"
 contains "$OUT_DIR/help_generate.out" "Normal path:"
 contains "$OUT_DIR/help_generate.out" "./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3"
@@ -335,6 +345,12 @@ run_ok help_input "$YVEX_BIN" help input
 contains "$OUT_DIR/help_input.out" "usage: yvex input tokens"
 
 run_ok help_kv "$YVEX_BIN" help kv
+contains "$OUT_DIR/help_kv.out" "command: kv [mixed-transitional]"
+contains "$OUT_DIR/help_kv.out" "group: runtime"
+contains "$OUT_DIR/help_kv.out" "usage: yvex kv report --model FILE_OR_ALIAS"
+contains "$OUT_DIR/help_kv.out" "option_classes: selector, behavior, diagnostic, transitional-layout"
+contains "$OUT_DIR/help_kv.out" "boundary: diagnostic/report-only KV unless subcommand proves more"
+contains "$OUT_DIR/help_kv.out" "domain help:"
 contains "$OUT_DIR/help_kv.out" "usage: yvex kv report --model FILE_OR_ALIAS"
 contains "$OUT_DIR/help_kv.out" "usage: yvex kv --layers N --heads N --head-dim N --capacity N"
 contains "$OUT_DIR/help_kv.out" "KV cache class and requirements report"
@@ -360,6 +376,13 @@ run_ok help_model_gate "$YVEX_BIN" help model-gate
 contains "$OUT_DIR/help_model_gate.out" "usage: yvex model-gate check"
 
 run_ok help_model_target "$YVEX_BIN" help model-target
+contains "$OUT_DIR/help_model_target.out" "command: model-target [mixed-transitional]"
+contains "$OUT_DIR/help_model_target.out" "group: model"
+contains "$OUT_DIR/help_model_target.out" "usage: yvex model-target <action> [TARGET]"
+contains "$OUT_DIR/help_model_target.out" "option_classes: selector, path, diagnostic, transitional-layout"
+contains "$OUT_DIR/help_model_target.out" "boundary: target reports are not capability claims"
+contains "$OUT_DIR/help_model_target.out" "domain help:"
+line_before "$OUT_DIR/help_model_target.out" "usage: yvex model-target <action> [TARGET]" "option_classes: selector, path, diagnostic, transitional-layout"
 contains "$OUT_DIR/help_model_target.out" "usage: yvex model-target classes"
 contains "$OUT_DIR/help_model_target.out" "       yvex model-target list"
 contains "$OUT_DIR/help_model_target.out" "       yvex model-target candidate --release v0.1.0 [options]"
@@ -380,6 +403,14 @@ contains "$OUT_DIR/help_model_target.out" "External GGUFs and external runners a
 contains "$OUT_DIR/help_model_target.out" "Model-target path reporting does not read model payloads, create artifacts, register aliases, or claim runtime support."
 
 run_ok help_models "$YVEX_BIN" help models
+contains "$OUT_DIR/help_models.out" "command: models [mixed-transitional]"
+contains "$OUT_DIR/help_models.out" "group: operator"
+contains "$OUT_DIR/help_models.out" "usage: yvex models <action> [TARGET]"
+contains "$OUT_DIR/help_models.out" "example: yvex models list"
+contains "$OUT_DIR/help_models.out" "option_classes: selector, path, behavior, diagnostic, transitional-layout"
+contains "$OUT_DIR/help_models.out" "boundary: operator registry/source UX; no runtime claim"
+contains "$OUT_DIR/help_models.out" "domain help:"
+line_before "$OUT_DIR/help_models.out" "usage: yvex models <action> [TARGET]" "option_classes: selector, path, behavior, diagnostic, transitional-layout"
 contains "$OUT_DIR/help_models.out" "usage: yvex models"
 contains "$OUT_DIR/help_models.out" "support-level LEVEL"
 
@@ -401,7 +432,23 @@ contains "$OUT_DIR/help_detokenize.out" "usage: yvex detokenize <path> --ids IDS
 run_ok help_engine "$YVEX_BIN" help engine
 contains "$OUT_DIR/help_engine.out" "usage: yvex engine [--model] FILE_OR_ALIAS [--backend cpu|cuda]"
 
+run_ok help_fullmodel "$YVEX_BIN" help fullmodel
+contains "$OUT_DIR/help_fullmodel.out" "command: fullmodel [mixed-transitional]"
+contains "$OUT_DIR/help_fullmodel.out" "group: model"
+contains "$OUT_DIR/help_fullmodel.out" "usage: yvex fullmodel report --model FILE_OR_ALIAS"
+contains "$OUT_DIR/help_fullmodel.out" "option_classes: selector, path, behavior, diagnostic, transitional-layout"
+contains "$OUT_DIR/help_fullmodel.out" "boundary: report/materialization planning only unless subcommand proves more"
+contains "$OUT_DIR/help_fullmodel.out" "domain help:"
+contains "$OUT_DIR/help_fullmodel.out" "usage: yvex fullmodel report --model FILE_OR_ALIAS"
+
 run_ok help_graph "$YVEX_BIN" help graph
+contains "$OUT_DIR/help_graph.out" "command: graph [mixed-transitional]"
+contains "$OUT_DIR/help_graph.out" "group: graph"
+contains "$OUT_DIR/help_graph.out" "usage: yvex graph [--model] FILE_OR_ALIAS"
+contains "$OUT_DIR/help_graph.out" "example: yvex graph check --suite primitives --backend cpu"
+contains "$OUT_DIR/help_graph.out" "option_classes: selector, behavior, diagnostic"
+contains "$OUT_DIR/help_graph.out" "boundary: graph proof is not generation"
+contains "$OUT_DIR/help_graph.out" "domain help:"
 contains "$OUT_DIR/help_graph.out" "usage: yvex graph [--model] FILE_OR_ALIAS"
 
 run_ok help_gguf_template "$YVEX_BIN" help gguf-template
@@ -1964,6 +2011,12 @@ contains "$OUT_DIR/inspect_bad_magic.out" "format: unknown"
 contains "$OUT_DIR/inspect_bad_magic.out" "status: unsupported"
 
 run_ok help_paths "$YVEX_BIN" help paths
+contains "$OUT_DIR/help_paths.out" "command: paths [porcelain]"
+contains "$OUT_DIR/help_paths.out" "group: operator"
+contains "$OUT_DIR/help_paths.out" "usage: yvex paths [--create]"
+contains "$OUT_DIR/help_paths.out" "option_classes: path, behavior, diagnostic, transitional-layout"
+contains "$OUT_DIR/help_paths.out" "boundary: path reporting only"
+contains "$OUT_DIR/help_paths.out" "domain help:"
 contains "$OUT_DIR/help_paths.out" "usage: yvex paths"
 contains "$OUT_DIR/help_paths.out" "yvex paths [--project DIR] configure --models-root DIR [--create]"
 contains "$OUT_DIR/help_paths.out" "yvex paths [--project DIR] resolve --family deepseek|glm|qwen|gemma --kind source|gguf|reports|reference|registry"

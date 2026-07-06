@@ -9,6 +9,9 @@ Use model-specific runbooks for DeepSeek or GLM work.
 This file does not claim full model generation, provider generation,
 evaluation, or benchmark capability.
 
+`yvex commands` is the grouped command catalog. `yvex help COMMAND` shows the
+top-level command grammar before the domain-owned detailed help.
+
 Normal output is compact by default. List-like commands use readable tables by
 default. `--output table` appears below as a transitional regression check where
 it exists, not as the long-term operator UX. Use `--audit` for row-promotion

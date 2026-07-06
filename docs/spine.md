@@ -31,7 +31,7 @@ Current CUDA state:
   bounded primitive-hardening only; no CUDA full-runtime/generation claim
 
 Active implementation next:
-  V010.CLI.26 - model artifact porcelain migration
+  V010.CLI.27 - model artifact porcelain migration
 
 Current release target:
   v0.1.0 - first honest full-runtime path
@@ -63,7 +63,7 @@ Main v0.1.0 blocker:
 | Full model generation | unsupported |
 | DeepSeek generation | unsupported |
 | Eval/benchmark | unsupported / not measured |
-| Active next | V010.CLI.26 |
+| Active next | V010.CLI.27 |
 
 ## 1. Spine Nomenclature
 
@@ -273,7 +273,10 @@ target decision and candidate reporting,
 selected artifact prepare/check presets, graph check presets, bounded generate
 help/runbook coverage, compact normal output for core operator paths, explicit
 audit output preservation for diagnostic evidence, and clear unsupported
-boundaries.
+boundaries. The top-level CLI catalog now records command group, surface class,
+normal usage, example, option classes, and boundary metadata for every command,
+and `yvex help` / `yvex commands` render the shared command grammar before
+delegating detailed behavior to domain owners.
 
 ### 3.7 Implemented Docs/Meta Capability
 
@@ -703,7 +706,7 @@ lanes; rows are the delivery units that complete track work.
 | TRACK.TOKENIZER | Tokenizer and stop policy | detokenization, EOS, stop tokens, prompt boundary | partial/planned | tokenizer diagnostics and tokenizer metadata mapping | tokenizer-backed stop behavior | later |
 | TRACK.GENERATION | Generation runtime | decode/logits/sample/append/stop/cleanup | diagnostic-runtime | `yvex generate` | full-runtime generation | later |
 | TRACK.RUNTIME | Runtime lifecycle and trace | lifecycle, cancellation, trace, failure preservation | diagnostic-runtime | generate trace/cancel/cleanup | external interruption/runtime trace | later |
-| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output architecture doctrine, normal/audit baseline, diagnostic output demotion, compact report/table output, hardcoded print reduction for model report surfaces, completed CLI print inventory and porcelain/plumbing doctrine, renderer ownership foundation, and Qwen/Gemma source profile/map/gate/qtype policy surfaces | V010.CLI.26 model artifact porcelain migration / V010.QUANT.1 handoff | active |
+| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output architecture doctrine, normal/audit baseline, diagnostic output demotion, compact report/table output, hardcoded print reduction for model report surfaces, completed CLI print inventory and porcelain/plumbing doctrine, renderer ownership foundation, base CLI grammar and command catalog, and Qwen/Gemma source profile/map/gate/qtype policy surfaces | V010.CLI.27 model artifact porcelain migration / V010.QUANT.1 handoff | active |
 | TRACK.SERVE | Serving | daemon state, provider endpoints, streaming | planned | status shell | runtime-backed generation endpoint | later |
 | TRACK.EVAL | Evaluation | fixture/runtime/generation/capability eval | planned | tests only | eval over generation path | later |
 | TRACK.BENCH | Benchmark/profile | reproducible performance measurement | planned | doctrine only | measured runtime harness | later |
@@ -1366,7 +1369,7 @@ Main blockers:
   dtype/qtype support by role remains the functional implementation blocker.
 
 Next possible row:
-  V010.CLI.26 for CLI architecture implementation, otherwise V010.QUANT.1.
+  V010.CLI.27 for CLI architecture implementation, otherwise V010.QUANT.1.
 
 Boundary:
   operator presets compose lower behavior only.
@@ -2653,9 +2656,10 @@ V010.CLI.22         audit output surface
 V010.CLI.23         quiet/no-color output policy
 V010.CLI.24         hardcoded print reduction pass
 V010.CLI.25         renderer ownership foundation
-V010.CLI.26         model artifact porcelain migration
-V010.CLI.27         model target porcelain migration
-V010.CLI.28         graph/runtime diagnostic renderer migration
+V010.CLI.26         base CLI grammar and command catalog
+V010.CLI.27         model artifact porcelain migration
+V010.CLI.28         model target porcelain migration
+V010.CLI.29         graph/runtime diagnostic renderer migration
 ```
 
 `V010.CLI.17` is complete as the first implementation baseline: core normal
@@ -2696,6 +2700,20 @@ porcelain output by default while preserving the detailed audit evidence under
 render API, does not implement JSON, does not remove existing flags, does not
 finish the CLI refactor, and does not add source, artifact, quantization,
 runtime, generation, eval, benchmark, throughput, or release capability.
+
+`V010.CLI.26` is complete as the base CLI grammar and command catalog row.
+`yvex_cli.c` now records command group, surface class, purpose, normal usage,
+common example, option-class summary, and boundary metadata for each top-level
+command. Top-level help prints the YVEX command shape, common commands,
+command groups, option classes, raw/evidence notes, and a generation boundary.
+`yvex commands` prints a grouped command catalog with command, group, surface,
+and purpose columns. `yvex help COMMAND` prints grammar metadata before
+delegating to the domain-owned help text. This keeps `yvex_cli.c` as
+catalog/help/dispatch only; it does not move model/source/artifact/graph/
+runtime behavior into the CLI file, does not migrate every command output,
+does not remove print sites or flags, does not implement uniform JSON, and
+does not add qtype, quantization, artifact, runtime, generation, eval,
+benchmark, throughput, or release capability.
 
 `V010.CLI.20` remains the structured JSON/raw plumbing row. It must not claim
 uniform JSON until each command family has report objects, stable fields, tests,
@@ -2750,15 +2768,16 @@ The migration map is:
 ```text
 Phase 0: audit and doctrine
 Phase 1: V010.CLI.25 renderer ownership foundation complete
-Phase 2: V010.CLI.26 model artifact porcelain migration
-Phase 3: V010.CLI.27 model target porcelain migration
-Phase 4: V010.CLI.28 graph/runtime diagnostic renderer migration
-Phase 5: V010.CLI.20 structured JSON/raw plumbing where report objects exist
-Phase 6: flag demotion after porcelain and JSON cover the command family
+Phase 2: V010.CLI.26 base CLI grammar and command catalog complete
+Phase 3: V010.CLI.27 model artifact porcelain migration
+Phase 4: V010.CLI.28 model target porcelain migration
+Phase 5: V010.CLI.29 graph/runtime diagnostic renderer migration
+Phase 6: V010.CLI.20 structured JSON/raw plumbing where report objects exist
+Phase 7: flag demotion after porcelain and JSON cover the command family
 ```
 
 The focused audit report lives in `docs/cli-output-architecture.md`. The next
-CLI architecture row is `V010.CLI.26 - model artifact porcelain migration`.
+CLI architecture row is `V010.CLI.27 - model artifact porcelain migration`.
 `V010.QUANT.1 - dtype/qtype support by role` remains the functional runtime
 blocker, but it is paused until the model report owner files are no longer
 blocking operator clarity.
@@ -4626,7 +4645,7 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 ## 7. Active Next
 
 ```text
-V010.CLI.26 - model artifact porcelain migration
+V010.CLI.27 - model artifact porcelain migration
 ```
 
 `SPINE.OUTPUT.UX.CONTRACT.0` is complete as a docs/control row and has been
@@ -4635,12 +4654,12 @@ porcelain/plumbing/diagnostic/trace-log-error: porcelain is default human output
 table is a renderer layout, audit is transitional evidence, and JSON is the
 target raw/plumbing surface where implemented and tested command by command.
 
-`V010.CLI.25` completed the first renderer ownership foundation and one
-`models prepare --dry-run` pilot. Active implementation next remains the CLI
-architecture migration sequence because the model artifact owner file still has
-the largest report-wall pressure. `V010.QUANT.1 - dtype/qtype support by role`
-remains the functional runtime blocker after this CLI interruption is no longer
-blocking operator clarity.
+`V010.CLI.26` completed the base CLI grammar and grouped command catalog.
+Active implementation next remains the CLI architecture migration sequence
+because the model artifact owner file still has the largest report-wall
+pressure. `V010.QUANT.1 - dtype/qtype support by role` remains the functional
+runtime blocker after this CLI interruption is no longer blocking operator
+clarity.
 
 Completed row:
 
@@ -4735,7 +4754,30 @@ emit artifacts, create artifact identity, materialize tensors, construct
 runtime descriptors, attach backend residency, feed graph consumers, execute
 prefill/decode/logits/tokenizer/sampling/generation, evaluate, benchmark,
 claim throughput, or mark release readiness. `V010.CLI.26` is the next CLI
-architecture row.
+architecture row in the preserved delivery sequence and is now complete.
+
+Completed CLI implementation row:
+
+```text
+V010.CLI.26 - base CLI grammar and command catalog
+```
+
+`V010.CLI.26` defines and implements the top-level YVEX command grammar.
+`yvex_cli.c` now remains the command grammar/catalog/help owner by carrying
+metadata for group, surface class, purpose, usage, example, option classes, and
+boundary for every top-level command. `yvex help` shows the command shape,
+common commands, command groups, option classes, raw/evidence notes, and the
+full-generation boundary. `yvex commands` now prints grouped command catalog
+sections with `COMMAND`, `GROUP`, `SURFACE`, and `PURPOSE` columns.
+`yvex help COMMAND` presents command grammar metadata before delegating to the
+domain-owned detailed help. This does not move domain behavior into
+`yvex_cli.c`, migrate every command output, remove all print sites, complete
+the CLI refactor, implement uniform JSON, remove flags, add qtype role support,
+quantize tensors, emit artifacts, create artifact identity, materialize
+tensors, construct runtime descriptors, attach backend residency, feed graph
+consumers, execute prefill/decode/logits/tokenizer/sampling/generation,
+evaluate, benchmark, claim throughput, or mark release readiness. `V010.CLI.27`
+is the next CLI architecture row.
 
 `V010.TARGET.9`, `V010.TARGET.2`, `V010.TARGET.3`, and `V010.TARGET.7` are also
 complete as report-only implementation rows. The commands `yvex model-target
@@ -5330,9 +5372,10 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | CLI.SURFACE.2 | complete | cli/layout | CLI surface compression | only yvex_cli.c remains as CLI-prefixed source; command/proof logic promoted to domain owners |
 | CLI.SURFACE.3 | complete | cli/layout | Domain-owned CLI help and command extraction | yvex_cli.c contains only short command table and dispatch; detailed help and command behavior live in domain owners; command split files are removed |
 | V010.CLI.25 | complete | operator | Renderer ownership foundation | `yvex_render_private.h` introduces a small private header-only render boundary and `models prepare --dry-run` for downloaded/source-backed targets now renders from a semantic prepare report with compact porcelain output and preserved audit evidence, without adding a renderer source file, public API, JSON output, flag removal, runtime behavior, quantization, artifact emission, generation, eval, benchmark, throughput, or release claim |
-| V010.CLI.26 | planned | operator | Model artifact porcelain migration | migrate the highest-pressure `yvex_model_artifacts.c` report walls toward semantic reports plus porcelain/audit render helpers while preserving existing output flags during transition |
-| V010.CLI.27 | planned | operator | Model target porcelain migration | migrate `yvex_model.c` model-target report walls toward semantic reports plus porcelain/audit render helpers while preserving normal/table/audit tests |
-| V010.CLI.28 | planned | operator | Graph/runtime diagnostic renderer migration | separate graph/runtime porcelain, diagnostic, trace, log, and error output in `yvex_graph.c` and `yvex_runtime.c` without changing runtime semantics |
+| V010.CLI.26 | complete | operator | Base CLI grammar and command catalog | `yvex_cli.c` carries top-level command group, surface class, purpose, usage, example, option-class, and boundary metadata; `yvex help`, `yvex commands`, and `yvex help COMMAND` render grammar-first help/catalog output while preserving domain-owned help and avoiding domain behavior, JSON, flag removal, runtime, quantization, artifact emission, generation, eval, benchmark, throughput, or release claims |
+| V010.CLI.27 | planned | operator | Model artifact porcelain migration | migrate the highest-pressure `yvex_model_artifacts.c` report walls toward semantic reports plus porcelain/audit render helpers while preserving existing output flags during transition |
+| V010.CLI.28 | planned | operator | Model target porcelain migration | migrate `yvex_model.c` model-target report walls toward semantic reports plus porcelain/audit render helpers while preserving normal/table/audit tests |
+| V010.CLI.29 | planned | operator | Graph/runtime diagnostic renderer migration | separate graph/runtime porcelain, diagnostic, trace, log, and error output in `yvex_graph.c` and `yvex_runtime.c` without changing runtime semantics |
 | CLI.MODELS.0 | complete | cli | Local model selection spine | model selection design and registry shape established |
 | CLI.MODELS.1 | complete | cli | Local model registry implementation | local model registry add/list/use/current/remove works |
 | CLI.MODELS.2 | complete | cli | One-shot model alias resolution | model-taking commands resolve aliases or paths |

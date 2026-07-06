@@ -199,6 +199,141 @@ This is only the foundation. It does not remove all print sites, complete
 remove existing flags, or add runtime, quantization, artifact, generation, eval,
 benchmark, throughput, or release capability.
 
+## Base CLI Grammar
+
+`V010.CLI.26` adds the base command grammar and command catalog. The
+implementation keeps `yvex_cli.c` as the top-level grammar/catalog/dispatch
+owner only: it records command group, surface class, purpose, normal usage,
+common example, option-class summary, and boundary metadata for each top-level
+command. Domain files still own behavior, detailed help, semantic reports, and
+failure classes.
+
+The command shape is:
+
+```text
+yvex <family> <action> [object] [selectors] [behavior flags] [diagnostic flags]
+```
+
+The grammar is conceptual and help-facing. It does not force every command into
+the same number of words. Examples:
+
+```text
+yvex models prepare TARGET
+yvex models check TARGET
+yvex model-target inspect TARGET
+yvex model-target tensor-map TARGET
+yvex graph check --suite primitives
+yvex generate --model TARGET
+```
+
+Top-level command families are:
+
+```text
+core
+operator
+model
+source
+artifact
+graph
+runtime
+diagnostic
+server
+research/future
+```
+
+Known top-level commands are classified as one of:
+
+```text
+porcelain
+diagnostic
+plumbing
+mixed-transitional
+future/planned
+```
+
+The current catalog does not claim a completed plumbing command surface just
+because some commands have ad hoc JSON paths. Uniform JSON remains future work.
+
+Normal output shape:
+
+```text
+<title>: <object> [<status>]
+<identity line>
+<summary line>
+top_blocker: <blocker>
+next: <row-or-action>
+boundary: <short boundary>
+```
+
+List/table output shape:
+
+```text
+<TITLE>
+
+COLUMN  COLUMN  COLUMN
+value   value   value
+```
+
+Status/refusal shapes:
+
+```text
+<thing>: <status>
+scope: <short scope>
+next: <next action>
+boundary: <short boundary>
+```
+
+```text
+error: <class>
+reason: <human reason>
+hint: <short next action, if useful>
+```
+
+Audit remains verbose and stable:
+
+```text
+<stable key>: <value>
+<stable key>: <value>
+boundary: <full evidence boundary>
+```
+
+The base operator status vocabulary is:
+
+```text
+ok
+ready
+selected
+present
+missing
+blocked
+unsupported
+planned
+diagnostic
+report-only
+not-measured
+failed
+```
+
+Top-level help now follows the grammar: thesis, usage, command shape, common
+commands, command groups, option classes, raw/evidence note, and boundary.
+`yvex commands` is the grouped command catalog with command, group, surface,
+and purpose columns. `yvex help COMMAND` prints command grammar metadata before
+the domain-owned help text.
+
+Option classes are:
+
+```text
+selector
+path
+behavior
+diagnostic
+plumbing
+transitional layout
+```
+
+This row does not migrate every command output, remove flags, implement JSON,
+or change domain behavior.
+
 ## Migration Plan
 
 Phase 0 is complete as `CLI.ARCH.AUDIT.0`: print inventory, flag inventory,
@@ -208,20 +343,23 @@ Phase 1 is complete as `V010.CLI.25`: introduce a narrow internal report/render
 boundary and one `models prepare --dry-run` pilot without broad behavior
 changes, runtime claims, JSON claims, or a new command forest.
 
-Phase 2 is planned as `V010.CLI.26`: continue with `yvex_model_artifacts.c`,
+Phase 2 is complete as `V010.CLI.26`: define the base CLI grammar and grouped
+command catalog in `yvex_cli.c` without moving domain behavior there.
+
+Phase 3 is planned as `V010.CLI.27`: continue with `yvex_model_artifacts.c`,
 the largest print owner.
 
-Phase 3 is planned as `V010.CLI.27`: migrate `yvex_model.c` model-target
+Phase 4 is planned as `V010.CLI.28`: migrate `yvex_model.c` model-target
 surfaces while preserving normal/table/audit tests during transition.
 
-Phase 4 is planned as `V010.CLI.28`: migrate `yvex_graph.c` and
+Phase 5 is planned as `V010.CLI.29`: migrate `yvex_graph.c` and
 `yvex_runtime.c` so graph/runtime porcelain, diagnostic, trace, log, and error
 output stop sharing the same print-wall shape.
 
-Phase 5 maps to `V010.CLI.20`: add JSON/raw plumbing only after a report object
+Phase 6 maps to `V010.CLI.20`: add JSON/raw plumbing only after a report object
 exists and stable raw fields can be tested for a command family.
 
-Phase 6 is flag demotion: once porcelain and JSON/raw cover a command family,
+Phase 7 is flag demotion: once porcelain and JSON/raw cover a command family,
 demote `--output table`, reduce `--include-*`, and keep audit only where
 promotion evidence still needs it.
 
@@ -239,8 +377,8 @@ throughput, or mark release readiness.
 
 ## Immediate Next Wave Recommendation
 
-The next implementation wave should be `V010.CLI.26 - model artifact porcelain
-migration`, followed by `V010.CLI.27` over `yvex_model.c`. After the CLI
+The next implementation wave should be `V010.CLI.27 - model artifact porcelain
+migration`, followed by `V010.CLI.28` over `yvex_model.c`. After the CLI
 architecture interruption is no longer blocking operator clarity,
 `V010.QUANT.1 - dtype/qtype support by role` remains the functional runtime
 blocker.
