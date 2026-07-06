@@ -763,10 +763,12 @@ typedef struct {
     char download_report_path[YVEX_PATH_CAP];
     char tensor_map_path[YVEX_PATH_CAP];
     char output_head_map_path[YVEX_PATH_CAP];
+    char tokenizer_map_path[YVEX_PATH_CAP];
     int download_registry_exists;
     int download_report_exists;
     int tensor_map_exists;
     int output_head_map_exists;
+    int tokenizer_map_exists;
     int tensor_map_incomplete;
     int output_head_map_missing;
     int source_identity_from_path;
@@ -2101,6 +2103,13 @@ static const char *qwen_source_output_head_map_report_status(
     return report->output_head_map_missing ? "missing-in-report" : "available-report-only";
 }
 
+static const char *qwen_source_tokenizer_map_report_status(
+    const yvex_qwen_source_pressure_report *report)
+{
+    if (!report || !report->tokenizer_map_exists) return "missing";
+    return "available-report-only";
+}
+
 static int qwen_source_tail_blocker_is_tensor_map(const char *blocker)
 {
     return blocker &&
@@ -2539,12 +2548,19 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
             (void)qwen_source_path_format(report->output_head_map_path,
                                           sizeof(report->output_head_map_path),
                                           "%s/%s", reports_family_dir, file_name);
+            snprintf(file_name, sizeof(file_name), "%s.tokenizer-map.json", options->target);
+            (void)qwen_source_path_format(report->tokenizer_map_path,
+                                          sizeof(report->tokenizer_map_path),
+                                          "%s/%s", reports_family_dir, file_name);
             report->tensor_map_exists =
                 report->tensor_map_path[0] &&
                 access(report->tensor_map_path, F_OK) == 0;
             report->output_head_map_exists =
                 report->output_head_map_path[0] &&
                 access(report->output_head_map_path, F_OK) == 0;
+            report->tokenizer_map_exists =
+                report->tokenizer_map_path[0] &&
+                access(report->tokenizer_map_path, F_OK) == 0;
             qwen_source_probe_map_sidecars(report);
             if (report->download_registry_exists) {
                 (void)qwen_source_probe_download_identity_file(
@@ -2621,8 +2637,13 @@ static int qwen_source_build_report(const yvex_qwen_source_report_options *optio
         !report->tensor_map_incomplete &&
         report->output_head_map_exists &&
         !report->output_head_map_missing) {
-        report->top_blocker = options->profile->tokenizer_blocker;
-        report->next_row = options->profile->model_class_next;
+        if (report->tokenizer_map_exists) {
+            report->top_blocker = "quant-policy-or-artifact-emitter";
+            report->next_row = "V010.QUANT.1";
+        } else {
+            report->top_blocker = options->profile->tokenizer_blocker;
+            report->next_row = "V010.MAP.7";
+        }
     }
 
     if (!report->source_exists) {
@@ -3014,7 +3035,10 @@ static void qwen_source_print_audit(const yvex_qwen_source_report_options *optio
            report->output_head_map_path[0] ? report->output_head_map_path : "unknown");
     printf("output_head_map_status: %s\n",
            qwen_source_output_head_map_report_status(report));
-    printf("tokenizer_map_status: missing\n");
+    printf("tokenizer_map_path: %s\n",
+           report->tokenizer_map_path[0] ? report->tokenizer_map_path : "unknown");
+    printf("tokenizer_map_status: %s\n",
+           qwen_source_tokenizer_map_report_status(report));
     printf("artifact_status: missing\n");
     printf("runtime_claim: unsupported\n");
     printf("generation: unsupported-full-model\n");

@@ -199,6 +199,7 @@ Current source/model-family commands include:
 ./yvex models download --repo Qwen/Qwen3.6-35B-A3B --family qwen --name qwen3-6-35b-a3b --models-root "$HOME/lab/models" --auth auto --audit
 ./yvex models download status qwen3-6-35b-a3b --models-root "$HOME/lab/models" --audit
 ./yvex source-manifest report --family qwen --release v0.1.0 --source "$HOME/lab/models/hf/qwen/qwen3-6-35b-a3b" --models-root "$HOME/lab/models" --audit
+./yvex model-target tokenizer-map qwen3-6-35b-a3b --models-root "$HOME/lab/models" --audit
 ./yvex model-target missing-roles qwen3-6-35b-a3b --models-root "$HOME/lab/models"
 ./yvex model-target missing-roles qwen3-6-35b-a3b --models-root "$HOME/lab/models" --audit
 ./yvex models prepare qwen3-6-35b-a3b --models-root "$HOME/lab/models" --dry-run --audit
@@ -223,6 +224,11 @@ Prepare normal output stays compact for these blocked dynamic targets, while
 `--audit` preserves source, map, output-head, tokenizer, artifact, and blocker
 fields. Prepare may still refuse artifact production until tensor mapping,
 output-head/tied-head policy, tokenizer mapping, and artifact paths exist.
+For dynamic Qwen/Gemma targets, `model-target tokenizer-map TARGET
+--models-root DIR` writes `reports/<family>/<target>.tokenizer-map.json`.
+After tensor naming, output-head, and tokenizer metadata maps are present,
+missing-role and prepare reports hand off to qtype/artifact planning instead of
+claiming runtime readiness.
 
 ## Qwen And Gemma Source Pressure
 
@@ -1062,6 +1068,13 @@ full GGUF artifacts are still missing or blocked. It reads only filenames and
 small sidecar reports; it does not replace tensor mapping, tokenizer mapping,
 qtype support, artifact emission, materialization, runtime execution, generation,
 evaluation, or benchmark evidence.
+
+`yvex model-target tokenizer-map TARGET` is the sidecar tokenizer metadata map
+for Qwen and Gemma source targets. It reads tokenizer/config/special-token and
+generation metadata sidecars, records vocab/merges/chat-template evidence, and
+writes target-specific tokenizer-map sidecars for downloaded dynamic targets.
+It does not tokenize, detokenize, execute chat templates, implement stop policy,
+emit artifacts, build runtime descriptors, generate, evaluate, or benchmark.
 
 `yvex model-target missing-roles TARGET` is the compact source-to-artifact
 blocker report for Qwen and Gemma source targets, including downloaded dynamic

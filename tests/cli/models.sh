@@ -280,6 +280,69 @@ with open(sys.argv[1], "wb") as f:
 PY
 }
 
+write_fake_tokenizer_sidecars() {
+  dir=$1
+  family=$2
+  mkdir -p "$dir"
+  cat > "$dir/config.json" <<JSON
+{
+  "model_type": "$family",
+  "vocab_size": 2,
+  "hidden_size": 2,
+  "bos_token_id": 1,
+  "eos_token_id": 1,
+  "pad_token_id": 0,
+  "unk_token_id": 0,
+  "tie_word_embeddings": false
+}
+JSON
+  cat > "$dir/tokenizer_config.json" <<'JSON'
+{
+  "tokenizer_class": "PreTrainedTokenizerFast",
+  "bos_token": "<s>",
+  "eos_token": "</s>",
+  "unk_token": "<unk>",
+  "pad_token": "<pad>",
+  "bos_token_id": 1,
+  "eos_token_id": 1,
+  "pad_token_id": 0,
+  "unk_token_id": 0,
+  "chat_template": "{{ bos_token }}{{ messages }}"
+}
+JSON
+  cat > "$dir/special_tokens_map.json" <<'JSON'
+{
+  "bos_token": "<s>",
+  "eos_token": "</s>",
+  "unk_token": "<unk>",
+  "pad_token": "<pad>",
+  "additional_special_tokens": ["<start_of_turn>", "<end_of_turn>"]
+}
+JSON
+  cat > "$dir/generation_config.json" <<'JSON'
+{
+  "bos_token_id": 1,
+  "eos_token_id": 1,
+  "pad_token_id": 0
+}
+JSON
+  cat > "$dir/tokenizer.json" <<'JSON'
+{
+  "version": "1.0",
+  "model": {"type": "BPE"},
+  "vocab_size": 2,
+  "added_tokens": [{"id": 1, "content": "</s>"}]
+}
+JSON
+  if [ "$family" = "qwen" ]; then
+    printf '{"<pad>":0,"</s>":1}\n' > "$dir/vocab.json"
+    printf '#version: 0.2\n< p\n' > "$dir/merges.txt"
+    printf '{{ bos_token }}{{ messages }}\n' > "$dir/chat_template.jinja"
+  else
+    rm -f "$dir/vocab.json" "$dir/merges.txt" "$dir/chat_template.jinja"
+  fi
+}
+
 rm -rf "$ROOT"
 mkdir -p "$ROOT"
 
@@ -651,6 +714,10 @@ grep 'generation: unsupported-full-model' "$ROOT/tensor-map-dynamic-qwen-audit.o
 test -f "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.tensor-map.json"
 grep '"row": "MODELS.SOURCE.MAP.HANDOFF.0"' "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.tensor-map.json"
 grep '"required_role_coverage_status": "required-groups-present"' "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.tensor-map.json"
+"$YVEX_BIN" model-target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/tensor-map-dynamic-qwen-table.out"
+grep 'TENSOR NAMING MAP' "$ROOT/tensor-map-dynamic-qwen-table.out"
+grep -F 'FAMILY  TARGET                STATUS                      TOTAL   EMBED    ATTN     MLP    NORM    HEAD     MOE   UNKNOWN   LAYERS  NEXT' "$ROOT/tensor-map-dynamic-qwen-table.out"
+grep -F 'qwen    qwen3-6-35b-a3b       naming-map-candidate' "$ROOT/tensor-map-dynamic-qwen-table.out"
 "$YVEX_BIN" model-target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role output-head --audit > "$ROOT/output-head-dynamic-qwen-audit.out"
 grep 'output_head_map_status: output-head-profiled' "$ROOT/output-head-dynamic-qwen-audit.out"
 grep 'output_head_map_family: qwen' "$ROOT/output-head-dynamic-qwen-audit.out"
@@ -660,6 +727,51 @@ grep 'runtime_claim: unsupported' "$ROOT/output-head-dynamic-qwen-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/output-head-dynamic-qwen-audit.out"
 test -f "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.output-head-map.json"
 grep '"row": "MODELS.SOURCE.MAP.HANDOFF.0"' "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.output-head-map.json"
+"$YVEX_BIN" model-target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role output-head --output table > "$ROOT/output-head-dynamic-qwen-table.out"
+grep 'OUTPUT HEAD TENSOR MAP' "$ROOT/output-head-dynamic-qwen-table.out"
+grep -F 'FAMILY  TARGET                STATUS                           HEAD  FINAL_NORM  EMBED  TIE_POLICY                          SHAPE_RELATION            NEXT' "$ROOT/output-head-dynamic-qwen-table.out"
+grep -F 'qwen    qwen3-6-35b-a3b       output-head-profiled             yes' "$ROOT/output-head-dynamic-qwen-table.out"
+write_fake_tokenizer_sidecars "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b" qwen
+"$YVEX_BIN" model-target tokenizer-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" > "$ROOT/tokenizer-map-dynamic-qwen.out"
+grep 'tokenizer-map: qwen3-6-35b-a3b' "$ROOT/tokenizer-map-dynamic-qwen.out"
+grep 'family: qwen' "$ROOT/tokenizer-map-dynamic-qwen.out"
+grep 'status: present-report-only' "$ROOT/tokenizer-map-dynamic-qwen.out"
+grep 'tokenizer: present' "$ROOT/tokenizer-map-dynamic-qwen.out"
+grep 'vocab: present' "$ROOT/tokenizer-map-dynamic-qwen.out"
+grep 'merges: present' "$ROOT/tokenizer-map-dynamic-qwen.out"
+grep 'chat_template: present' "$ROOT/tokenizer-map-dynamic-qwen.out"
+grep 'specials: present' "$ROOT/tokenizer-map-dynamic-qwen.out"
+grep 'runtime: unsupported' "$ROOT/tokenizer-map-dynamic-qwen.out"
+grep 'next: V010.QUANT.1' "$ROOT/tokenizer-map-dynamic-qwen.out"
+"$YVEX_BIN" model-target tokenizer-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/tokenizer-map-dynamic-qwen-table.out"
+grep 'TOKENIZER METADATA MAP' "$ROOT/tokenizer-map-dynamic-qwen-table.out"
+grep -F 'TARGET                FAMILY  STATUS               TOKENIZER  VOCAB                         MERGES                  CHAT_TEMPLATE  SPECIALS  NEXT' "$ROOT/tokenizer-map-dynamic-qwen-table.out"
+matches "$ROOT/tokenizer-map-dynamic-qwen-table.out" '^qwen3-6-35b-a3b[[:space:]]{2,}qwen[[:space:]]{2,}present-report-only[[:space:]]{2,}yes[[:space:]]{2,}present[[:space:]]{2,}present[[:space:]]{2,}present[[:space:]]{2,}present[[:space:]]{2,}V010\.QUANT\.1$'
+"$YVEX_BIN" model-target tokenizer-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+grep 'tokenizer_map_status: present-report-only' "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+grep 'tokenizer_map_target_id: qwen3-6-35b-a3b' "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+grep 'evidence_basis: sidecar-json-only' "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+grep 'vocab_status: present' "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+grep 'merges_status: present' "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+grep 'tokenizer_backend_type: BPE' "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+grep 'added_tokens_count: 1' "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+grep 'special_tokens_status: present' "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+grep 'stop_token_candidate.0.id: 1' "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+grep 'chat_template_hash_status: not-computed' "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+grep 'prompt_template_status: present-report-only' "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+grep 'tokenizer_runtime_status: not-implemented' "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+grep 'detokenization_status: not-implemented' "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+grep 'gguf_tokenizer_contract_status: planned' "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+grep 'next_required_rows: V010.QUANT.1' "$ROOT/tokenizer-map-dynamic-qwen-audit.out"
+"$YVEX_BIN" model-target tokenizer-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --output json > "$ROOT/tokenizer-map-dynamic-qwen-json.out"
+grep '"status":"present-report-only"' "$ROOT/tokenizer-map-dynamic-qwen-json.out"
+grep '"target_id":"qwen3-6-35b-a3b"' "$ROOT/tokenizer-map-dynamic-qwen-json.out"
+grep '"next":"V010.QUANT.1"' "$ROOT/tokenizer-map-dynamic-qwen-json.out"
+test -f "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.tokenizer-map.json"
+grep '"schema_version": "yvex.source.tokenizer_map.v1"' "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.tokenizer-map.json"
+grep '"tokenizer_map_status": "present-report-only"' "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.tokenizer-map.json"
+"$YVEX_BIN" model-target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role tokenizer --audit > "$ROOT/tokenizer-map-dynamic-qwen-compat-audit.out"
+grep 'tokenizer_map_status: present-report-only' "$ROOT/tokenizer-map-dynamic-qwen-compat-audit.out"
 "$YVEX_BIN" source-manifest report --family qwen --release v0.1.0 --source "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b" --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/source-dynamic-qwen-audit.out"
 grep 'target_id: qwen3-6-35b-a3b' "$ROOT/source-dynamic-qwen-audit.out"
 grep 'model: Qwen3.6-35B-A3B' "$ROOT/source-dynamic-qwen-audit.out"
@@ -671,35 +783,44 @@ grep 'native_inventory_report_status: available-report-only' "$ROOT/source-dynam
 grep 'tensor_map_status: available-report-only' "$ROOT/source-dynamic-qwen-audit.out"
 grep 'tensor_role_map_status: available-report-only' "$ROOT/source-dynamic-qwen-audit.out"
 grep 'output_head_map_status: available-report-only' "$ROOT/source-dynamic-qwen-audit.out"
-grep 'tokenizer_map_status: missing' "$ROOT/source-dynamic-qwen-audit.out"
-grep 'next_required_rows: V010.MAP.8' "$ROOT/source-dynamic-qwen-audit.out"
+grep 'tokenizer_map_path: .*qwen3-6-35b-a3b.tokenizer-map.json' "$ROOT/source-dynamic-qwen-audit.out"
+grep 'tokenizer_map_status: available-report-only' "$ROOT/source-dynamic-qwen-audit.out"
+grep 'next_required_rows: V010.QUANT.1' "$ROOT/source-dynamic-qwen-audit.out"
 ! grep 'missing-qwen-tensor-role-map' "$ROOT/source-dynamic-qwen-audit.out"
 ! grep 'missing-qwen-tensor-map' "$ROOT/source-dynamic-qwen-audit.out"
 "$YVEX_BIN" model-target missing-roles qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" > "$ROOT/missing-roles-dynamic-qwen-coverage.out"
 grep 'missing-roles: qwen3-6-35b-a3b' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
-grep 'top_blocker: missing-tokenizer-map' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
+grep 'top_blocker: quant-policy-or-artifact-emitter' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
+grep 'next: V010.QUANT.1' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
 grep 'qwen-linear-attn.*present' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
 grep 'moe-router.*present' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
 grep 'moe-experts.*present' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
 grep 'shared-expert.*present' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
 grep 'unknown-tensors.*unclassified-header-name' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
+grep 'tokenizer.*present-report-only' "$ROOT/missing-roles-dynamic-qwen-coverage.out"
 "$YVEX_BIN" model-target missing-roles qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
 grep 'tensor_map_status: present-report-only' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
+grep 'tokenizer_map_status: present-report-only' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
 grep 'role_group.qwen_linear_attn.status: present' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
 grep 'role_group.moe_router.status: present' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
 grep 'role_group.moe_experts.status: present' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
 grep 'role_group.shared_expert.status: present' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
 grep 'role_group.unknown_tensors.status: unclassified-header-name' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
-grep 'top_blocker: missing-tokenizer-map' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
+grep 'top_blocker: quant-policy-or-artifact-emitter' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
+grep 'next: V010.QUANT.1' "$ROOT/missing-roles-dynamic-qwen-coverage-audit.out"
 "$YVEX_BIN" model-target missing-roles qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --output json > "$ROOT/missing-roles-dynamic-qwen-coverage-json.out"
-grep '"top_blocker":"missing-tokenizer-map"' "$ROOT/missing-roles-dynamic-qwen-coverage-json.out"
+grep '"top_blocker":"quant-policy-or-artifact-emitter"' "$ROOT/missing-roles-dynamic-qwen-coverage-json.out"
 grep '"qwen_linear_attn":"present"' "$ROOT/missing-roles-dynamic-qwen-coverage-json.out"
 grep '"shared_expert":"present"' "$ROOT/missing-roles-dynamic-qwen-coverage-json.out"
+grep '"tokenizer":"present-report-only"' "$ROOT/missing-roles-dynamic-qwen-coverage-json.out"
 "$YVEX_BIN" models prepare qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --dry-run --audit > "$ROOT/prepare-dynamic-qwen-coverage.out" 2>&1 && exit 1 || true
 grep 'tensor_map_status: present-report-only' "$ROOT/prepare-dynamic-qwen-coverage.out"
 grep 'output_head_map_status: present-report-only' "$ROOT/prepare-dynamic-qwen-coverage.out"
-grep 'top_blocker: missing-tokenizer-map' "$ROOT/prepare-dynamic-qwen-coverage.out"
-grep 'reason: tokenizer metadata mapping / artifact path missing' "$ROOT/prepare-dynamic-qwen-coverage.out"
+grep 'tokenizer_map_status: present-report-only' "$ROOT/prepare-dynamic-qwen-coverage.out"
+grep 'top_blocker: quant-policy-or-artifact-emitter' "$ROOT/prepare-dynamic-qwen-coverage.out"
+grep 'reason: quant policy / artifact emitter missing' "$ROOT/prepare-dynamic-qwen-coverage.out"
+grep 'next: V010.QUANT.1' "$ROOT/prepare-dynamic-qwen-coverage.out"
+rm -f "$DYNAMIC_ROOT/reports/qwen/qwen3-6-35b-a3b.tokenizer-map.json"
 write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b/model.safetensors" qwen-incomplete
 "$YVEX_BIN" model-target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-qwen-incomplete-audit.out"
 grep 'tensor_map_status: naming-map-incomplete' "$ROOT/tensor-map-dynamic-qwen-incomplete-audit.out"
@@ -806,6 +927,10 @@ grep 'runtime_claim: unsupported' "$ROOT/tensor-map-dynamic-gemma-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/tensor-map-dynamic-gemma-audit.out"
 test -f "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.tensor-map.json"
 grep '"row": "MODELS.SOURCE.MAP.HANDOFF.0"' "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.tensor-map.json"
+"$YVEX_BIN" model-target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/tensor-map-dynamic-gemma-table.out"
+grep 'TENSOR NAMING MAP' "$ROOT/tensor-map-dynamic-gemma-table.out"
+grep -F 'FAMILY  TARGET                STATUS                      TOTAL   EMBED    ATTN     MLP    NORM    HEAD     MOE   UNKNOWN   LAYERS  NEXT' "$ROOT/tensor-map-dynamic-gemma-table.out"
+grep -F 'gemma   gemma-4-31b-it        naming-map-profiled' "$ROOT/tensor-map-dynamic-gemma-table.out"
 "$YVEX_BIN" model-target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role output-head --audit > "$ROOT/output-head-dynamic-gemma-audit.out"
 grep 'output_head_map_status: output-head-profiled' "$ROOT/output-head-dynamic-gemma-audit.out"
 grep 'output_head_map_family: gemma' "$ROOT/output-head-dynamic-gemma-audit.out"
@@ -816,6 +941,39 @@ grep 'runtime_claim: unsupported' "$ROOT/output-head-dynamic-gemma-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/output-head-dynamic-gemma-audit.out"
 test -f "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.output-head-map.json"
 grep '"row": "MODELS.SOURCE.MAP.HANDOFF.0"' "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.output-head-map.json"
+"$YVEX_BIN" model-target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role output-head --output table > "$ROOT/output-head-dynamic-gemma-table.out"
+grep 'OUTPUT HEAD TENSOR MAP' "$ROOT/output-head-dynamic-gemma-table.out"
+grep -F 'FAMILY  TARGET                STATUS                           HEAD  FINAL_NORM  EMBED  TIE_POLICY                          SHAPE_RELATION            NEXT' "$ROOT/output-head-dynamic-gemma-table.out"
+grep -F 'gemma   gemma-4-31b-it        output-head-profiled             yes' "$ROOT/output-head-dynamic-gemma-table.out"
+write_fake_tokenizer_sidecars "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it" gemma
+"$YVEX_BIN" model-target tokenizer-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" > "$ROOT/tokenizer-map-dynamic-gemma.out"
+grep 'tokenizer-map: gemma-4-31b-it' "$ROOT/tokenizer-map-dynamic-gemma.out"
+grep 'family: gemma' "$ROOT/tokenizer-map-dynamic-gemma.out"
+grep 'status: present-report-only' "$ROOT/tokenizer-map-dynamic-gemma.out"
+grep 'tokenizer: present' "$ROOT/tokenizer-map-dynamic-gemma.out"
+grep 'vocab: embedded-or-tokenizer-json' "$ROOT/tokenizer-map-dynamic-gemma.out"
+grep 'merges: not-required-or-absent' "$ROOT/tokenizer-map-dynamic-gemma.out"
+grep 'chat_template: present' "$ROOT/tokenizer-map-dynamic-gemma.out"
+grep 'specials: present' "$ROOT/tokenizer-map-dynamic-gemma.out"
+grep 'runtime: unsupported' "$ROOT/tokenizer-map-dynamic-gemma.out"
+grep 'next: V010.QUANT.1' "$ROOT/tokenizer-map-dynamic-gemma.out"
+"$YVEX_BIN" model-target tokenizer-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/tokenizer-map-dynamic-gemma-table.out"
+grep 'TOKENIZER METADATA MAP' "$ROOT/tokenizer-map-dynamic-gemma-table.out"
+matches "$ROOT/tokenizer-map-dynamic-gemma-table.out" '^gemma-4-31b-it[[:space:]]{2,}gemma[[:space:]]{2,}present-report-only[[:space:]]{2,}yes[[:space:]]{2,}embedded-or-tokenizer-json[[:space:]]{2,}not-required-or-absent[[:space:]]{2,}present[[:space:]]{2,}present[[:space:]]{2,}V010\.QUANT\.1$'
+"$YVEX_BIN" model-target tokenizer-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tokenizer-map-dynamic-gemma-audit.out"
+grep 'tokenizer_map_status: present-report-only' "$ROOT/tokenizer-map-dynamic-gemma-audit.out"
+grep 'tokenizer_map_target_id: gemma-4-31b-it' "$ROOT/tokenizer-map-dynamic-gemma-audit.out"
+grep 'vocab_status: embedded-or-tokenizer-json' "$ROOT/tokenizer-map-dynamic-gemma-audit.out"
+grep 'merges_status: not-required-or-absent' "$ROOT/tokenizer-map-dynamic-gemma-audit.out"
+grep 'special_tokens_status: present' "$ROOT/tokenizer-map-dynamic-gemma-audit.out"
+grep 'tokenizer_runtime_status: not-implemented' "$ROOT/tokenizer-map-dynamic-gemma-audit.out"
+grep 'next_required_rows: V010.QUANT.1' "$ROOT/tokenizer-map-dynamic-gemma-audit.out"
+"$YVEX_BIN" model-target tokenizer-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --output json > "$ROOT/tokenizer-map-dynamic-gemma-json.out"
+grep '"target_id":"gemma-4-31b-it"' "$ROOT/tokenizer-map-dynamic-gemma-json.out"
+grep '"vocab_status":"embedded-or-tokenizer-json"' "$ROOT/tokenizer-map-dynamic-gemma-json.out"
+grep '"next":"V010.QUANT.1"' "$ROOT/tokenizer-map-dynamic-gemma-json.out"
+test -f "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.tokenizer-map.json"
+grep '"tokenizer_map_status": "present-report-only"' "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.tokenizer-map.json"
 "$YVEX_BIN" source-manifest report --family gemma --release v0.1.0 --source "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it" --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/source-dynamic-gemma-audit.out"
 grep 'target_id: gemma-4-31b-it' "$ROOT/source-dynamic-gemma-audit.out"
 grep 'model: Gemma-4-31B-it' "$ROOT/source-dynamic-gemma-audit.out"
@@ -825,8 +983,8 @@ grep 'native_inventory_path: .*gemma-4-31b-it.native-inventory.json' "$ROOT/sour
 grep 'tensor_map_status: available-report-only' "$ROOT/source-dynamic-gemma-audit.out"
 grep 'tensor_role_map_status: available-report-only' "$ROOT/source-dynamic-gemma-audit.out"
 grep 'output_head_map_status: available-report-only' "$ROOT/source-dynamic-gemma-audit.out"
-grep 'tokenizer_map_status: missing' "$ROOT/source-dynamic-gemma-audit.out"
-grep 'next_required_rows: V010.MAP.8' "$ROOT/source-dynamic-gemma-audit.out"
+grep 'tokenizer_map_status: available-report-only' "$ROOT/source-dynamic-gemma-audit.out"
+grep 'next_required_rows: V010.QUANT.1' "$ROOT/source-dynamic-gemma-audit.out"
 ! grep 'missing-gemma-tensor-role-map' "$ROOT/source-dynamic-gemma-audit.out"
 ! grep 'missing-gemma-tensor-map' "$ROOT/source-dynamic-gemma-audit.out"
 "$YVEX_BIN" models prepare gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --dry-run --audit > "$ROOT/prepare-dynamic-gemma.out" 2>&1 && exit 1 || true
@@ -836,16 +994,16 @@ grep 'source_status: present' "$ROOT/prepare-dynamic-gemma.out"
 grep 'model_class_status: present' "$ROOT/prepare-dynamic-gemma.out"
 grep 'tensor_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma.out"
 grep 'output_head_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma.out"
-grep 'tokenizer_map_status: missing' "$ROOT/prepare-dynamic-gemma.out"
+grep 'tokenizer_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma.out"
 grep 'artifact_status: missing' "$ROOT/prepare-dynamic-gemma.out"
 grep 'expected_artifact_path: .*gemma-4-31b-it.gguf' "$ROOT/prepare-dynamic-gemma.out"
 grep 'artifact_plan_status: planned-full-gguf' "$ROOT/prepare-dynamic-gemma.out"
 grep 'artifact_emission_status: not-performed' "$ROOT/prepare-dynamic-gemma.out"
 grep 'artifact_identity_status: missing' "$ROOT/prepare-dynamic-gemma.out"
 grep 'prepare_blocker_count:' "$ROOT/prepare-dynamic-gemma.out"
-grep 'top_blocker: missing-tokenizer-map' "$ROOT/prepare-dynamic-gemma.out"
-grep 'reason: tokenizer metadata mapping / artifact path missing' "$ROOT/prepare-dynamic-gemma.out"
-grep 'next: V010.MAP.8' "$ROOT/prepare-dynamic-gemma.out"
+grep 'top_blocker: quant-policy-or-artifact-emitter' "$ROOT/prepare-dynamic-gemma.out"
+grep 'reason: quant policy / artifact emitter missing' "$ROOT/prepare-dynamic-gemma.out"
+grep 'next: V010.QUANT.1' "$ROOT/prepare-dynamic-gemma.out"
 grep 'status: model-prepare-unsupported' "$ROOT/prepare-dynamic-gemma.out"
 ! grep 'status: model-prepare-unknown-target' "$ROOT/prepare-dynamic-gemma.out"
 ! grep 'reason: missing tensor map / model class / artifact path' "$ROOT/prepare-dynamic-gemma.out"
@@ -862,16 +1020,23 @@ grep 'output_head_canonical_role: model.output_head.tied_embedding' "$ROOT/outpu
 grep 'output_head_mapping_status: tied-to-token-embedding-candidate' "$ROOT/output-head-dynamic-gemma-tied-audit.out"
 grep 'tie_policy_status: tied-output-head-candidate' "$ROOT/output-head-dynamic-gemma-tied-audit.out"
 grep 'config_tie_word_embeddings_status: true' "$ROOT/output-head-dynamic-gemma-tied-audit.out"
+"$YVEX_BIN" model-target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role output-head --output table > "$ROOT/output-head-dynamic-gemma-tied-table.out"
+grep 'OUTPUT HEAD TENSOR MAP' "$ROOT/output-head-dynamic-gemma-tied-table.out"
+grep -F 'FAMILY  TARGET                STATUS                           HEAD  FINAL_NORM  EMBED  TIE_POLICY                          SHAPE_RELATION            NEXT' "$ROOT/output-head-dynamic-gemma-tied-table.out"
+grep -F 'gemma   gemma-4-31b-it        tied-output-head-report-only     yes' "$ROOT/output-head-dynamic-gemma-tied-table.out"
 "$YVEX_BIN" model-target missing-roles gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
 grep 'tensor_map_status: present-report-only' "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
 grep 'output_head_map_status: present-report-only' "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
+grep 'tokenizer_map_status: present-report-only' "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
 grep 'role_group.output_head.status: present' "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
 grep 'role_group.tied_head_policy.status: tied-output-head-candidate' "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
-grep 'top_blocker: missing-tokenizer-map' "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
+grep 'top_blocker: quant-policy-or-artifact-emitter' "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
+grep 'next: V010.QUANT.1' "$ROOT/missing-roles-dynamic-gemma-tied-audit.out"
 "$YVEX_BIN" models prepare gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --dry-run --audit > "$ROOT/prepare-dynamic-gemma-tied.out" 2>&1 && exit 1 || true
 grep 'tensor_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma-tied.out"
 grep 'output_head_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma-tied.out"
-grep 'top_blocker: missing-tokenizer-map' "$ROOT/prepare-dynamic-gemma-tied.out"
+grep 'tokenizer_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma-tied.out"
+grep 'top_blocker: quant-policy-or-artifact-emitter' "$ROOT/prepare-dynamic-gemma-tied.out"
 
 write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/model.safetensors" gemma-language-no-head
 printf '{"tie_word_embeddings":false}\n' > "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/config.json"
@@ -893,20 +1058,20 @@ grep 'top_blocker: missing-output-head-map' "$ROOT/missing-roles-dynamic-gemma.o
 grep 'next: V010.MAP.8' "$ROOT/missing-roles-dynamic-gemma.out"
 grep 'output-head.*missing' "$ROOT/missing-roles-dynamic-gemma.out"
 grep 'tied-head-policy.*not-proven' "$ROOT/missing-roles-dynamic-gemma.out"
-grep 'tokenizer.*missing' "$ROOT/missing-roles-dynamic-gemma.out"
+grep 'tokenizer.*present-report-only' "$ROOT/missing-roles-dynamic-gemma.out"
 grep 'unknown-tensors.*unclassified-header-name' "$ROOT/missing-roles-dynamic-gemma.out"
 grep 'artifact.*missing' "$ROOT/missing-roles-dynamic-gemma.out"
 "$YVEX_BIN" model-target missing-roles gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/missing-roles-dynamic-gemma-table.out"
 grep 'gemma-4-31b-it.*gemma.*blocked.*missing-output-head-map' "$ROOT/missing-roles-dynamic-gemma-table.out"
-grep 'gemma-4-31b-it.*missing.*missing.*V010.MAP.8' "$ROOT/missing-roles-dynamic-gemma-table.out"
-grep 'gemma-4-31b-it.*[[:space:]][1-9][0-9]*[[:space:]]*missing[[:space:]]*missing' "$ROOT/missing-roles-dynamic-gemma-table.out"
+grep 'gemma-4-31b-it.*present-report-only.*missing.*V010.MAP.8' "$ROOT/missing-roles-dynamic-gemma-table.out"
+grep 'gemma-4-31b-it.*[[:space:]][1-9][0-9]*[[:space:]]*present-report-only[[:space:]]*missing' "$ROOT/missing-roles-dynamic-gemma-table.out"
 "$YVEX_BIN" model-target missing-roles gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/missing-roles-dynamic-gemma-audit.out"
 grep 'target_id: gemma-4-31b-it' "$ROOT/missing-roles-dynamic-gemma-audit.out"
 grep 'family: gemma' "$ROOT/missing-roles-dynamic-gemma-audit.out"
 grep 'source_status: present' "$ROOT/missing-roles-dynamic-gemma-audit.out"
 grep 'tensor_map_status: present-report-only' "$ROOT/missing-roles-dynamic-gemma-audit.out"
 grep 'output_head_map_status: missing-in-report' "$ROOT/missing-roles-dynamic-gemma-audit.out"
-grep 'tokenizer_map_status: missing' "$ROOT/missing-roles-dynamic-gemma-audit.out"
+grep 'tokenizer_map_status: present-report-only' "$ROOT/missing-roles-dynamic-gemma-audit.out"
 grep 'artifact_status: missing' "$ROOT/missing-roles-dynamic-gemma-audit.out"
 grep 'expected_artifact_path: .*gemma-4-31b-it.gguf' "$ROOT/missing-roles-dynamic-gemma-audit.out"
 grep 'top_blocker: missing-output-head-map' "$ROOT/missing-roles-dynamic-gemma-audit.out"
@@ -920,8 +1085,9 @@ grep 'output_head_map_status: missing-in-report' "$ROOT/source-dynamic-gemma-inc
 "$YVEX_BIN" models prepare gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --dry-run --audit > "$ROOT/prepare-dynamic-gemma-incomplete-map.out" 2>&1 && exit 1 || true
 grep 'tensor_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
 grep 'output_head_map_status: missing-in-report' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
+grep 'tokenizer_map_status: present-report-only' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
 grep 'top_blocker: missing-output-head-map' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
-grep 'reason: output head mapping missing / tokenizer metadata mapping / artifact path missing' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
+grep 'reason: output head mapping missing / artifact path missing' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
 grep 'status: model-prepare-unsupported' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
 "$YVEX_BIN" models prepare gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --dry-run > "$ROOT/prepare-dynamic-gemma-normal.out" 2>&1 && exit 1 || true
 grep 'models prepare: gemma-4-31b-it \[blocked\]' "$ROOT/prepare-dynamic-gemma-normal.out"
@@ -1462,31 +1628,29 @@ grep 'release_ready: false' "$ROOT/output-head-gemma-missing-audit.out"
 grep 'next_required_rows: V010.MAP.8' "$ROOT/output-head-gemma-missing-audit.out"
 
 "$YVEX_BIN" model-target tensor-map qwen3-8b --role tokenizer --models-root "$CLASS_MISSING_ROOT" > "$ROOT/tokenizer-map-qwen-missing.out"
-grep 'tokenizer-map: qwen' "$ROOT/tokenizer-map-qwen-missing.out"
-grep 'target: qwen3-8b' "$ROOT/tokenizer-map-qwen-missing.out"
+grep 'tokenizer-map: qwen3-8b' "$ROOT/tokenizer-map-qwen-missing.out"
+grep 'family: qwen' "$ROOT/tokenizer-map-qwen-missing.out"
 grep 'status: source-missing' "$ROOT/tokenizer-map-qwen-missing.out"
-grep 'stage: metadata-tokenizer-map' "$ROOT/tokenizer-map-qwen-missing.out"
-grep 'evidence: sidecar-metadata-only' "$ROOT/tokenizer-map-qwen-missing.out"
 grep 'tokenizer: missing' "$ROOT/tokenizer-map-qwen-missing.out"
-grep 'config: missing' "$ROOT/tokenizer-map-qwen-missing.out"
-grep 'vocab_size: unknown' "$ROOT/tokenizer-map-qwen-missing.out"
-grep 'special_tokens: bos=unknown eos=unknown pad=unknown unk=unknown' "$ROOT/tokenizer-map-qwen-missing.out"
+grep 'vocab: missing' "$ROOT/tokenizer-map-qwen-missing.out"
+grep 'merges: missing' "$ROOT/tokenizer-map-qwen-missing.out"
 grep 'chat_template: unknown' "$ROOT/tokenizer-map-qwen-missing.out"
-grep 'output_head_relation: unknown' "$ROOT/tokenizer-map-qwen-missing.out"
+grep 'specials: missing' "$ROOT/tokenizer-map-qwen-missing.out"
+grep 'runtime: unsupported' "$ROOT/tokenizer-map-qwen-missing.out"
 grep 'top_blocker: missing-qwen-source-path' "$ROOT/tokenizer-map-qwen-missing.out"
-grep 'next: V010.MAP.8' "$ROOT/tokenizer-map-qwen-missing.out"
-grep 'boundary: tokenizer metadata mapping only; no tokenization/runtime/generation' "$ROOT/tokenizer-map-qwen-missing.out"
+grep 'next: V010.MAP.7' "$ROOT/tokenizer-map-qwen-missing.out"
+grep 'boundary: tokenizer metadata mapping only; no tokenization/detokenization/runtime/generation' "$ROOT/tokenizer-map-qwen-missing.out"
 
 "$YVEX_BIN" model-target tensor-map qwen3-8b --role tokenizer --models-root "$CLASS_MISSING_ROOT" --output table > "$ROOT/tokenizer-map-qwen-missing-table.out"
 grep 'TOKENIZER METADATA MAP' "$ROOT/tokenizer-map-qwen-missing-table.out"
-matches "$ROOT/tokenizer-map-qwen-missing-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}source-missing[[:space:]]{2,}no[[:space:]]{2,}no[[:space:]]{2,}unknown[[:space:]]{2,}unknown[[:space:]]{2,}unknown[[:space:]]{2,}unknown[[:space:]]{2,}unknown[[:space:]]{2,}V010.MAP.8$'
+matches "$ROOT/tokenizer-map-qwen-missing-table.out" '^qwen3-8b[[:space:]]{2,}qwen[[:space:]]{2,}source-missing[[:space:]]{2,}no[[:space:]]{2,}missing[[:space:]]{2,}missing[[:space:]]{2,}unknown[[:space:]]{2,}missing[[:space:]]{2,}V010\.MAP\.7$'
 
 "$YVEX_BIN" model-target tensor-map qwen3-8b --role tokenizer --models-root "$CLASS_MISSING_ROOT" --audit > "$ROOT/tokenizer-map-qwen-missing-audit.out"
 grep 'tokenizer_map_status: source-missing' "$ROOT/tokenizer-map-qwen-missing-audit.out"
 grep 'tokenizer_map_family: qwen' "$ROOT/tokenizer-map-qwen-missing-audit.out"
 grep 'tokenizer_map_target_id: qwen3-8b' "$ROOT/tokenizer-map-qwen-missing-audit.out"
 grep 'tokenizer_map_stage: metadata-tokenizer-map' "$ROOT/tokenizer-map-qwen-missing-audit.out"
-grep 'tokenizer_map_evidence_basis: sidecar-metadata-only' "$ROOT/tokenizer-map-qwen-missing-audit.out"
+grep 'tokenizer_map_evidence_basis: sidecar-json-only' "$ROOT/tokenizer-map-qwen-missing-audit.out"
 grep 'tokenizer_map_source_status: missing' "$ROOT/tokenizer-map-qwen-missing-audit.out"
 grep 'tokenizer_runtime_status: not-implemented' "$ROOT/tokenizer-map-qwen-missing-audit.out"
 grep 'tokenization_status: not-implemented' "$ROOT/tokenizer-map-qwen-missing-audit.out"
@@ -1495,14 +1659,14 @@ grep 'runtime_claim: unsupported' "$ROOT/tokenizer-map-qwen-missing-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/tokenizer-map-qwen-missing-audit.out"
 grep 'benchmark_status: not-measured' "$ROOT/tokenizer-map-qwen-missing-audit.out"
 grep 'release_ready: false' "$ROOT/tokenizer-map-qwen-missing-audit.out"
-grep 'next_required_rows: V010.MAP.8' "$ROOT/tokenizer-map-qwen-missing-audit.out"
+grep 'next_required_rows: V010.MAP.7' "$ROOT/tokenizer-map-qwen-missing-audit.out"
 
 "$YVEX_BIN" model-target tensor-map gemma-4-12b-it --role tokenizer --models-root "$CLASS_MISSING_ROOT" > "$ROOT/tokenizer-map-gemma-missing.out"
-grep 'tokenizer-map: gemma' "$ROOT/tokenizer-map-gemma-missing.out"
-grep 'target: gemma-4-12b-it' "$ROOT/tokenizer-map-gemma-missing.out"
+grep 'tokenizer-map: gemma-4-12b-it' "$ROOT/tokenizer-map-gemma-missing.out"
+grep 'family: gemma' "$ROOT/tokenizer-map-gemma-missing.out"
 grep 'status: source-missing' "$ROOT/tokenizer-map-gemma-missing.out"
 grep 'top_blocker: missing-gemma-source-path' "$ROOT/tokenizer-map-gemma-missing.out"
-grep 'next: V010.MAP.8' "$ROOT/tokenizer-map-gemma-missing.out"
+grep 'next: V010.MAP.7' "$ROOT/tokenizer-map-gemma-missing.out"
 
 "$YVEX_BIN" model-target class-profile gemma-4-12b-it --models-root "$CLASS_MISSING_ROOT" > "$ROOT/model-class-gemma-missing.out"
 grep 'model-class: gemma' "$ROOT/model-class-gemma-missing.out"
@@ -1950,33 +2114,31 @@ with open(sys.argv[1], "wb") as f:
     f.write(b"x" * offset)
 PY
 
-"$YVEX_BIN" model-target tensor-map qwen3-8b --role tokenizer --source "$TOKENIZER_COMPLETE_SOURCE" > "$ROOT/tokenizer-map-qwen.out"
-grep 'tokenizer-map: qwen' "$ROOT/tokenizer-map-qwen.out"
-grep 'target: qwen3-8b' "$ROOT/tokenizer-map-qwen.out"
-grep 'status: tokenizer-metadata-profiled' "$ROOT/tokenizer-map-qwen.out"
-grep 'stage: metadata-tokenizer-map' "$ROOT/tokenizer-map-qwen.out"
-grep 'evidence: sidecar-metadata-only' "$ROOT/tokenizer-map-qwen.out"
-grep 'tokenizer: tokenizer.json present' "$ROOT/tokenizer-map-qwen.out"
-grep 'config: config.json present' "$ROOT/tokenizer-map-qwen.out"
-grep 'vocab_size: 16' "$ROOT/tokenizer-map-qwen.out"
-grep 'special_tokens: bos=1 eos=2 pad=0 unk=3' "$ROOT/tokenizer-map-qwen.out"
-grep 'chat_template: true' "$ROOT/tokenizer-map-qwen.out"
-grep 'output_head_relation: vocab-size-matches-output-head' "$ROOT/tokenizer-map-qwen.out"
-grep 'top_blocker: missing-tokenizer-runtime' "$ROOT/tokenizer-map-qwen.out"
-grep 'next: V010.MAP.8' "$ROOT/tokenizer-map-qwen.out"
-grep 'boundary: tokenizer metadata mapping only; no tokenization/runtime/generation' "$ROOT/tokenizer-map-qwen.out"
+"$YVEX_BIN" model-target tokenizer-map qwen3-8b --source "$TOKENIZER_COMPLETE_SOURCE" > "$ROOT/tokenizer-map-qwen.out"
+grep 'tokenizer-map: qwen3-8b' "$ROOT/tokenizer-map-qwen.out"
+grep 'family: qwen' "$ROOT/tokenizer-map-qwen.out"
+grep 'status: present-report-only' "$ROOT/tokenizer-map-qwen.out"
+grep 'tokenizer: present' "$ROOT/tokenizer-map-qwen.out"
+grep 'vocab: embedded-or-tokenizer-json' "$ROOT/tokenizer-map-qwen.out"
+grep 'chat_template: present' "$ROOT/tokenizer-map-qwen.out"
+grep 'specials: present' "$ROOT/tokenizer-map-qwen.out"
+grep 'runtime: unsupported' "$ROOT/tokenizer-map-qwen.out"
+grep 'top_blocker: quant-policy-or-artifact-emitter' "$ROOT/tokenizer-map-qwen.out"
+grep 'next: V010.QUANT.1' "$ROOT/tokenizer-map-qwen.out"
+grep 'boundary: tokenizer metadata mapping only; no tokenization/detokenization/runtime/generation' "$ROOT/tokenizer-map-qwen.out"
 
-"$YVEX_BIN" model-target tensor-map qwen3-8b --role tokenizer --source "$TOKENIZER_COMPLETE_SOURCE" --output table > "$ROOT/tokenizer-map-qwen-table.out"
+"$YVEX_BIN" model-target tokenizer-map qwen3-8b --source "$TOKENIZER_COMPLETE_SOURCE" --output table > "$ROOT/tokenizer-map-qwen-table.out"
 grep 'TOKENIZER METADATA MAP' "$ROOT/tokenizer-map-qwen-table.out"
-matches "$ROOT/tokenizer-map-qwen-table.out" '^FAMILY[[:space:]]{2,}TARGET[[:space:]]{2,}STATUS[[:space:]]{2,}TOKENIZER[[:space:]]{2,}CONFIG[[:space:]]{2,}VOCAB[[:space:]]{2,}EOS[[:space:]]{2,}PAD[[:space:]]{2,}CHAT_TEMPLATE[[:space:]]{2,}HEAD_RELATION[[:space:]]{2,}NEXT$'
-matches "$ROOT/tokenizer-map-qwen-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}tokenizer-metadata-profiled[[:space:]]{2,}yes[[:space:]]{2,}yes[[:space:]]{2,}16[[:space:]]{2,}2[[:space:]]{2,}0[[:space:]]{2,}true[[:space:]]{2,}vocab-size-matches-output-head[[:space:]]{2,}V010.MAP.8$'
+matches "$ROOT/tokenizer-map-qwen-table.out" '^TARGET[[:space:]]{2,}FAMILY[[:space:]]{2,}STATUS[[:space:]]{2,}TOKENIZER[[:space:]]{2,}VOCAB[[:space:]]{2,}MERGES[[:space:]]{2,}CHAT_TEMPLATE[[:space:]]{2,}SPECIALS[[:space:]]{2,}NEXT$'
+matches "$ROOT/tokenizer-map-qwen-table.out" '^qwen3-8b[[:space:]]{2,}qwen[[:space:]]{2,}present-report-only[[:space:]]{2,}yes[[:space:]]{2,}embedded-or-tokenizer-json[[:space:]]{2,}missing[[:space:]]{2,}present[[:space:]]{2,}present[[:space:]]{2,}V010\.QUANT\.1$'
 
-"$YVEX_BIN" model-target tensor-map qwen3-8b --role tokenizer --source "$TOKENIZER_COMPLETE_SOURCE" --audit > "$ROOT/tokenizer-map-qwen-audit.out"
-grep 'tokenizer_map_status: tokenizer-metadata-profiled' "$ROOT/tokenizer-map-qwen-audit.out"
+"$YVEX_BIN" model-target tokenizer-map qwen3-8b --source "$TOKENIZER_COMPLETE_SOURCE" --audit > "$ROOT/tokenizer-map-qwen-audit.out"
+grep 'schema_version: yvex.source.tokenizer_map.v1' "$ROOT/tokenizer-map-qwen-audit.out"
+grep 'tokenizer_map_status: present-report-only' "$ROOT/tokenizer-map-qwen-audit.out"
 grep 'tokenizer_map_family: qwen' "$ROOT/tokenizer-map-qwen-audit.out"
 grep 'tokenizer_map_target_id: qwen3-8b' "$ROOT/tokenizer-map-qwen-audit.out"
 grep 'tokenizer_map_stage: metadata-tokenizer-map' "$ROOT/tokenizer-map-qwen-audit.out"
-grep 'tokenizer_map_evidence_basis: sidecar-metadata-only' "$ROOT/tokenizer-map-qwen-audit.out"
+grep 'tokenizer_map_evidence_basis: sidecar-json-only' "$ROOT/tokenizer-map-qwen-audit.out"
 grep 'tokenizer_json_status: present' "$ROOT/tokenizer-map-qwen-audit.out"
 grep 'tokenizer_config_status: present' "$ROOT/tokenizer-map-qwen-audit.out"
 grep 'special_tokens_map_status: present' "$ROOT/tokenizer-map-qwen-audit.out"
@@ -2001,6 +2163,8 @@ grep 'additional_special_tokens_status: present' "$ROOT/tokenizer-map-qwen-audit
 grep 'additional_special_tokens_count: 2' "$ROOT/tokenizer-map-qwen-audit.out"
 grep 'chat_template_status: present' "$ROOT/tokenizer-map-qwen-audit.out"
 grep 'chat_template_present: true' "$ROOT/tokenizer-map-qwen-audit.out"
+grep 'chat_template_hash_status: not-computed' "$ROOT/tokenizer-map-qwen-audit.out"
+grep 'gguf_tokenizer_contract_status: planned' "$ROOT/tokenizer-map-qwen-audit.out"
 grep 'tokenizer_runtime_status: not-implemented' "$ROOT/tokenizer-map-qwen-audit.out"
 grep 'tokenization_status: not-implemented' "$ROOT/tokenizer-map-qwen-audit.out"
 grep 'detokenization_status: not-implemented' "$ROOT/tokenizer-map-qwen-audit.out"
@@ -2009,21 +2173,20 @@ grep 'runtime_claim: unsupported' "$ROOT/tokenizer-map-qwen-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/tokenizer-map-qwen-audit.out"
 grep 'benchmark_status: not-measured' "$ROOT/tokenizer-map-qwen-audit.out"
 grep 'release_ready: false' "$ROOT/tokenizer-map-qwen-audit.out"
-grep 'next_required_rows: V010.MAP.8' "$ROOT/tokenizer-map-qwen-audit.out"
+grep 'next_required_rows: V010.QUANT.1' "$ROOT/tokenizer-map-qwen-audit.out"
 
-"$YVEX_BIN" model-target tensor-map gemma-4-12b-it --role tokenizer --source "$TOKENIZER_COMPLETE_SOURCE" > "$ROOT/tokenizer-map-gemma.out"
-grep 'tokenizer-map: gemma' "$ROOT/tokenizer-map-gemma.out"
-grep 'target: gemma-4-12b-it' "$ROOT/tokenizer-map-gemma.out"
-grep 'status: tokenizer-metadata-profiled' "$ROOT/tokenizer-map-gemma.out"
-grep 'output_head_relation: vocab-size-matches-output-head' "$ROOT/tokenizer-map-gemma.out"
-grep 'next: V010.MAP.8' "$ROOT/tokenizer-map-gemma.out"
+"$YVEX_BIN" model-target tokenizer-map gemma-4-12b-it --source "$TOKENIZER_COMPLETE_SOURCE" > "$ROOT/tokenizer-map-gemma.out"
+grep 'tokenizer-map: gemma-4-12b-it' "$ROOT/tokenizer-map-gemma.out"
+grep 'family: gemma' "$ROOT/tokenizer-map-gemma.out"
+grep 'status: present-report-only' "$ROOT/tokenizer-map-gemma.out"
+grep 'next: V010.QUANT.1' "$ROOT/tokenizer-map-gemma.out"
 
-"$YVEX_BIN" model-target tensor-map gemma-4-12b-it --role tokenizer --source "$TOKENIZER_COMPLETE_SOURCE" --output table > "$ROOT/tokenizer-map-gemma-table.out"
+"$YVEX_BIN" model-target tokenizer-map gemma-4-12b-it --source "$TOKENIZER_COMPLETE_SOURCE" --output table > "$ROOT/tokenizer-map-gemma-table.out"
 grep 'TOKENIZER METADATA MAP' "$ROOT/tokenizer-map-gemma-table.out"
-matches "$ROOT/tokenizer-map-gemma-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}tokenizer-metadata-profiled[[:space:]]{2,}yes[[:space:]]{2,}yes[[:space:]]{2,}16[[:space:]]{2,}2[[:space:]]{2,}0[[:space:]]{2,}true[[:space:]]{2,}vocab-size-matches-output-head[[:space:]]{2,}V010.MAP.8$'
+matches "$ROOT/tokenizer-map-gemma-table.out" '^gemma-4-12b-it[[:space:]]{2,}gemma[[:space:]]{2,}present-report-only[[:space:]]{2,}yes[[:space:]]{2,}embedded-or-tokenizer-json[[:space:]]{2,}not-required-or-absent[[:space:]]{2,}present[[:space:]]{2,}present[[:space:]]{2,}V010\.QUANT\.1$'
 
-"$YVEX_BIN" model-target tensor-map gemma-4-12b-it --source "$TOKENIZER_COMPLETE_SOURCE" --role tokenizer --audit > "$ROOT/tokenizer-map-gemma-audit.out"
-grep 'tokenizer_map_status: tokenizer-metadata-profiled' "$ROOT/tokenizer-map-gemma-audit.out"
+"$YVEX_BIN" model-target tokenizer-map gemma-4-12b-it --source "$TOKENIZER_COMPLETE_SOURCE" --audit > "$ROOT/tokenizer-map-gemma-audit.out"
+grep 'tokenizer_map_status: present-report-only' "$ROOT/tokenizer-map-gemma-audit.out"
 grep 'tokenizer_map_family: gemma' "$ROOT/tokenizer-map-gemma-audit.out"
 grep 'tokenizer_map_target_id: gemma-4-12b-it' "$ROOT/tokenizer-map-gemma-audit.out"
 grep 'output_head_vocab_relation_status: vocab-size-matches-output-head' "$ROOT/tokenizer-map-gemma-audit.out"
@@ -2037,6 +2200,7 @@ mkdir -p "$TOKENIZER_MISSING_SOURCE"
 "$YVEX_BIN" model-target tensor-map qwen3-8b --role tokenizer --source "$TOKENIZER_MISSING_SOURCE" --audit > "$ROOT/tokenizer-map-metadata-missing-audit.out"
 grep 'tokenizer_map_status: metadata-missing' "$ROOT/tokenizer-map-metadata-missing-audit.out"
 grep 'top_blocker: missing-tokenizer-sidecars' "$ROOT/tokenizer-map-metadata-missing-audit.out"
+grep 'next_required_rows: V010.MAP.7' "$ROOT/tokenizer-map-metadata-missing-audit.out"
 grep 'runtime_claim: unsupported' "$ROOT/tokenizer-map-metadata-missing-audit.out"
 grep 'generation: unsupported-full-model' "$ROOT/tokenizer-map-metadata-missing-audit.out"
 rm -rf "$TOKENIZER_MISSING_SOURCE"
@@ -2050,6 +2214,7 @@ grep 'tokenizer_map_status: tokenizer-metadata-incomplete' "$ROOT/tokenizer-map-
 grep 'vocab_size: 16' "$ROOT/tokenizer-map-incomplete-audit.out"
 grep 'tokenizer_json_status: missing' "$ROOT/tokenizer-map-incomplete-audit.out"
 grep 'tokenizer_runtime_status: not-implemented' "$ROOT/tokenizer-map-incomplete-audit.out"
+grep 'next_required_rows: V010.MAP.7' "$ROOT/tokenizer-map-incomplete-audit.out"
 rm -rf "$TOKENIZER_INCOMPLETE_SOURCE"
 
 TOKENIZER_MISMATCH_SOURCE="${TMPDIR:-/tmp}/yvex-tokenizer-map-mismatch-test-$$"
@@ -2183,7 +2348,7 @@ grep 'tensor_mapping_gate_result: pass' "$ROOT/tensor-mapping-gate-qwen-audit.ou
 grep 'tensor_mapping_gate_target_id: qwen3-8b' "$ROOT/tensor-mapping-gate-qwen-audit.out"
 grep 'tensor_naming_map_status: naming-map-profiled' "$ROOT/tensor-mapping-gate-qwen-audit.out"
 grep 'output_head_map_status: output-head-profiled' "$ROOT/tensor-mapping-gate-qwen-audit.out"
-grep 'tokenizer_metadata_map_status: tokenizer-metadata-profiled' "$ROOT/tensor-mapping-gate-qwen-audit.out"
+grep 'tokenizer_metadata_map_status: present-report-only' "$ROOT/tensor-mapping-gate-qwen-audit.out"
 grep 'missing_role_report_status: missing-role-report-blocked' "$ROOT/tensor-mapping-gate-qwen-audit.out"
 grep 'expected_source_role_count: 12' "$ROOT/tensor-mapping-gate-qwen-audit.out"
 grep 'observed_source_role_count: 12' "$ROOT/tensor-mapping-gate-qwen-audit.out"
@@ -2344,7 +2509,7 @@ grep 'source_tensor_count: 12' "$ROOT/qtype-policy-qwen-audit.out"
 grep 'mapping_gate_status: passed-for-artifact-planning' "$ROOT/qtype-policy-qwen-audit.out"
 grep 'tensor_map_status: naming-map-profiled' "$ROOT/qtype-policy-qwen-audit.out"
 grep 'output_head_map_status: output-head-profiled' "$ROOT/qtype-policy-qwen-audit.out"
-grep 'tokenizer_metadata_map_status: tokenizer-metadata-profiled' "$ROOT/qtype-policy-qwen-audit.out"
+grep 'tokenizer_metadata_map_status: present-report-only' "$ROOT/qtype-policy-qwen-audit.out"
 grep 'missing_role_report_status: missing-role-report-blocked' "$ROOT/qtype-policy-qwen-audit.out"
 grep 'qtype_policy_basis: header-only-source-metadata+existing-yvex-policy-table' "$ROOT/qtype-policy-qwen-audit.out"
 grep 'qtype_policy_status: reported' "$ROOT/qtype-policy-qwen-audit.out"

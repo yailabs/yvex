@@ -3322,6 +3322,7 @@ typedef struct {
     char native_inventory_path[YVEX_PATH_CAP];
     char tensor_map_path[YVEX_PATH_CAP];
     char output_head_map_path[YVEX_PATH_CAP];
+    char tokenizer_map_path[YVEX_PATH_CAP];
     char expected_artifact_path[YVEX_PATH_CAP];
     char download_registry_path[YVEX_PATH_CAP];
     char download_report_path[YVEX_PATH_CAP];
@@ -3352,6 +3353,7 @@ static void prepare_source_report_build(
     int expected_artifact_present = 0;
     int tensor_map_present = 0;
     int output_head_map_present = 0;
+    int tokenizer_map_present = 0;
     int tensor_map_incomplete = 0;
     int output_head_map_missing = 0;
 
@@ -3414,10 +3416,21 @@ static void prepare_source_report_build(
         if (n < 0 || (size_t)n >= sizeof(report->output_head_map_path)) {
             report->output_head_map_path[0] = '\0';
         }
+        n = snprintf(report->tokenizer_map_path,
+                     sizeof(report->tokenizer_map_path),
+                     "%s/%s/%s.tokenizer-map.json",
+                     operator_paths->reports_root,
+                     target->family,
+                     target->target_id);
+        if (n < 0 || (size_t)n >= sizeof(report->tokenizer_map_path)) {
+            report->tokenizer_map_path[0] = '\0';
+        }
         tensor_map_present = report->tensor_map_path[0] &&
                              path_exists(report->tensor_map_path);
         output_head_map_present = report->output_head_map_path[0] &&
                                   path_exists(report->output_head_map_path);
+        tokenizer_map_present = report->tokenizer_map_path[0] &&
+                                path_exists(report->tokenizer_map_path);
         prepare_probe_map_sidecar_status(report->tensor_map_path,
                                          report->output_head_map_path,
                                          &tensor_map_incomplete,
@@ -3428,12 +3441,14 @@ static void prepare_source_report_build(
         snprintf(report->tensor_map_path, sizeof(report->tensor_map_path), "unknown");
         snprintf(report->output_head_map_path,
                  sizeof(report->output_head_map_path), "unknown");
+        snprintf(report->tokenizer_map_path,
+                 sizeof(report->tokenizer_map_path), "unknown");
     }
 
     if (!source_present) report->blocker_count++;
     if (!tensor_map_present || tensor_map_incomplete) report->blocker_count++;
     if (!output_head_map_present || output_head_map_missing) report->blocker_count++;
-    report->blocker_count++; /* tokenizer metadata mapping remains required for full GGUF. */
+    if (!tokenizer_map_present) report->blocker_count++;
     if (!expected_artifact_present) report->blocker_count++;
     report->blocker_count++; /* full artifact emitter/identity is not implemented for dynamic source targets. */
 
@@ -3447,13 +3462,21 @@ static void prepare_source_report_build(
         output_head_map_present
             ? (output_head_map_missing ? "missing-in-report" : "present-report-only")
             : "missing";
-    report->tokenizer_map_status = "missing";
+    report->tokenizer_map_status =
+        tokenizer_map_present ? "present-report-only" : "missing";
     report->artifact_status = expected_artifact_present ? "present" : "missing";
     report->artifact_plan_status = "planned-full-gguf";
     report->artifact_emission_status = "not-performed";
     report->artifact_identity_status =
         expected_artifact_present ? "not-checked" : "missing";
-    report->next = "V010.MAP.8";
+    if (!tensor_map_present || tensor_map_incomplete ||
+        !output_head_map_present || output_head_map_missing) {
+        report->next = "V010.MAP.8";
+    } else if (!tokenizer_map_present) {
+        report->next = "V010.MAP.7";
+    } else {
+        report->next = "V010.QUANT.1";
+    }
     report->final_status = "model-prepare-unsupported";
     report->downloaded_target_resolved = 1;
 
@@ -3463,20 +3486,30 @@ static void prepare_source_report_build(
         report->top_blocker = "missing-output-head-map";
     } else if (!tensor_map_present || tensor_map_incomplete) {
         report->top_blocker = "incomplete-tensor-map";
-    } else {
+    } else if (!tokenizer_map_present) {
         report->top_blocker = "missing-tokenizer-map";
+    } else {
+        report->top_blocker = "quant-policy-or-artifact-emitter";
     }
 
     report->reason =
         !tensor_map_present
             ? "missing tensor map / model class / artifact path"
             : tensor_map_incomplete
-                  ? "incomplete tensor map / tokenizer metadata mapping / artifact path missing"
+                  ? (!tokenizer_map_present
+                         ? "incomplete tensor map / tokenizer metadata mapping / artifact path missing"
+                         : "incomplete tensor map / artifact path missing")
                   : !output_head_map_present
-                        ? "missing output head map / tokenizer metadata mapping / artifact path missing"
+                        ? (!tokenizer_map_present
+                               ? "missing output head map / tokenizer metadata mapping / artifact path missing"
+                               : "missing output head map / artifact path missing")
                         : output_head_map_missing
-                              ? "output head mapping missing / tokenizer metadata mapping / artifact path missing"
-                              : "tokenizer metadata mapping / artifact path missing";
+                              ? (!tokenizer_map_present
+                                     ? "output head mapping missing / tokenizer metadata mapping / artifact path missing"
+                                     : "output head mapping missing / artifact path missing")
+                              : !tokenizer_map_present
+                                    ? "tokenizer metadata mapping / artifact path missing"
+                                    : "quant policy / artifact emitter missing";
 }
 
 static void prepare_source_report_render_porcelain(
@@ -3521,6 +3554,7 @@ static void prepare_source_report_render_audit(
     yvex_render_kv(&out, "tensor_map_status", report->tensor_map_status);
     yvex_render_kv(&out, "output_head_map_path", report->output_head_map_path);
     yvex_render_kv(&out, "output_head_map_status", report->output_head_map_status);
+    yvex_render_kv(&out, "tokenizer_map_path", report->tokenizer_map_path);
     yvex_render_kv(&out, "tokenizer_map_status", report->tokenizer_map_status);
     yvex_render_kv(&out, "artifact_status", report->artifact_status);
     yvex_render_kv(&out, "expected_artifact_path", report->expected_artifact_path);
@@ -6885,12 +6919,24 @@ static void artifacts_classify_dynamic_row(const yvex_operator_paths *operator_p
         snprintf(row->top_blocker, sizeof(row->top_blocker), "missing-tokenizer-map");
         snprintf(row->detail, sizeof(row->detail), "tokenizer metadata mapping missing; full GGUF emission not performed");
     } else if (strcmp(row->artifact_status, "missing") == 0) {
-        snprintf(row->top_blocker, sizeof(row->top_blocker), "missing-artifact-emitter");
-        snprintf(row->detail, sizeof(row->detail), "full GGUF artifact emitter has not produced this target");
+        snprintf(row->top_blocker, sizeof(row->top_blocker), "quant-policy-or-artifact-emitter");
+        snprintf(row->detail, sizeof(row->detail), "qtype policy or full GGUF artifact emitter has not produced this target");
     } else {
         snprintf(row->top_blocker, sizeof(row->top_blocker), "missing-artifact-identity");
         snprintf(row->detail, sizeof(row->detail), "artifact exists but identity/admission is not checked by this discovery command");
     }
+}
+
+static const char *artifacts_row_next(const yvex_models_artifact_row *row)
+{
+    if (!row || strcmp(row->prepare_status, "blocked") != 0) return "none";
+    if (strcmp(row->top_blocker, "missing-tokenizer-map") == 0) {
+        return "V010.MAP.7";
+    }
+    if (strcmp(row->top_blocker, "quant-policy-or-artifact-emitter") == 0) {
+        return "V010.QUANT.1";
+    }
+    return "V010.MAP.8";
 }
 
 static void artifacts_add_dynamic_target(
@@ -7251,7 +7297,7 @@ static void artifacts_print_status(const yvex_cli_models_artifacts_options *opti
     printf("prepare: %s\n", row->prepare_status);
     printf("top_blocker: %s\n", row->top_blocker);
     if (strcmp(row->prepare_status, "blocked") == 0) {
-        printf("next: V010.MAP.8\n");
+        printf("next: %s\n", artifacts_row_next(row));
     }
     printf("detail: %s\n", row->detail);
     printf("boundary: artifact discovery only; no runtime/generation\n");

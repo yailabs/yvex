@@ -112,9 +112,9 @@ make
 ./yvex model-target tensor-map qwen3-8b --role output-head
 ./yvex model-target tensor-map qwen3-8b --role output-head --output table
 ./yvex model-target tensor-map qwen3-8b --role output-head --audit
-./yvex model-target tensor-map qwen3-8b --role tokenizer
-./yvex model-target tensor-map qwen3-8b --role tokenizer --output table
-./yvex model-target tensor-map qwen3-8b --role tokenizer --audit
+./yvex model-target tokenizer-map qwen3-8b
+./yvex model-target tokenizer-map qwen3-8b --output table
+./yvex model-target tokenizer-map qwen3-8b --audit
 ./yvex model-target missing-roles qwen3-8b
 ./yvex model-target missing-roles qwen3-8b --output table
 ./yvex model-target missing-roles qwen3-8b --audit
@@ -137,9 +137,9 @@ make
 ./yvex model-target tensor-map gemma-4-12b-it --role output-head
 ./yvex model-target tensor-map gemma-4-12b-it --role output-head --output table
 ./yvex model-target tensor-map gemma-4-12b-it --role output-head --audit
-./yvex model-target tensor-map gemma-4-12b-it --role tokenizer
-./yvex model-target tensor-map gemma-4-12b-it --role tokenizer --output table
-./yvex model-target tensor-map gemma-4-12b-it --role tokenizer --audit
+./yvex model-target tokenizer-map gemma-4-12b-it
+./yvex model-target tokenizer-map gemma-4-12b-it --output table
+./yvex model-target tokenizer-map gemma-4-12b-it --audit
 ./yvex model-target missing-roles gemma-4-12b-it
 ./yvex model-target missing-roles gemma-4-12b-it --output table
 ./yvex model-target missing-roles gemma-4-12b-it --audit
@@ -239,14 +239,16 @@ status, and checks header-shape relation where available. It does not compute
 logits, produce final hidden state, emit artifacts, build runtime descriptors,
 feed graph consumers, generate, evaluate, or benchmark.
 
-`model-target tensor-map TARGET --role tokenizer` is a sidecar-metadata map for
-Qwen and Gemma source trees. It reports tokenizer/config/special-token and
-generation sidecar presence, bounded parse status, tokenizer class, model type,
-vocab size, special token IDs, additional special-token count, chat-template
-presence, and vocab/output-head relation. It does not tokenize, detokenize,
-execute chat templates, implement EOS/stop behavior, compute logits, emit
-artifacts, build runtime descriptors, feed graph consumers, generate,
-evaluate, or benchmark.
+`model-target tokenizer-map TARGET` is a sidecar-metadata map for Qwen and
+Gemma source trees. It reports tokenizer/config/special-token and generation
+sidecar presence, bounded parse status, tokenizer class, model type, vocab
+size, special token IDs, additional special-token count, chat-template
+presence, and vocab/output-head relation, then writes
+`reports/<family>/<target>.tokenizer-map.json` for downloaded dynamic targets.
+`model-target tensor-map TARGET --role tokenizer` remains a compatibility
+surface. The map does not tokenize, detokenize, execute chat templates,
+implement EOS/stop behavior, compute logits, emit artifacts, build runtime
+descriptors, feed graph consumers, generate, evaluate, or benchmark.
 
 `model-target missing-roles TARGET` is the compact report-only blocker summary
 for Qwen and Gemma source trees, including downloaded `--repo ... --name`
@@ -523,6 +525,7 @@ Boundary:
 ./yvex models download --repo Qwen/Qwen3.6-35B-A3B --family qwen --name qwen3-6-35b-a3b --models-root "$HOME/lab/models" --auth auto --audit
 ./yvex models download status qwen3-6-35b-a3b --models-root "$HOME/lab/models" --audit
 ./yvex source-manifest report --family qwen --release v0.1.0 --source "$HOME/lab/models/hf/qwen/qwen3-6-35b-a3b" --models-root "$HOME/lab/models" --audit
+./yvex model-target tokenizer-map qwen3-6-35b-a3b --models-root "$HOME/lab/models" --audit
 ./yvex models prepare qwen3-6-35b-a3b --models-root "$HOME/lab/models" --dry-run --audit
 ./yvex models download --provider github --repo OWNER/REPO --release TAG --asset "*.gguf" --models-root "$HOME/lab/models" --auth auto --audit
 ./yvex source-manifest report --family gemma --release v0.1.0 --audit

@@ -2017,7 +2017,8 @@ typedef enum {
 #define YVEX_TENSOR_COLLECTION_NEXT_ROW "V010.MAP.8"
 #define YVEX_TENSOR_NAMING_NEXT_ROW "V010.MAP.8"
 #define YVEX_OUTPUT_HEAD_MAP_NEXT_ROW "V010.MAP.8"
-#define YVEX_TOKENIZER_MAP_NEXT_ROW "V010.MAP.8"
+#define YVEX_TOKENIZER_MISSING_NEXT_ROW "V010.MAP.7"
+#define YVEX_TOKENIZER_MAP_NEXT_ROW "V010.QUANT.1"
 #define YVEX_MISSING_ROLES_PORCELAIN_NEXT_ROW "V010.MAP.8"
 #define YVEX_MISSING_ROLE_REPORT_NEXT_ROW "V010.MAP.9"
 #define YVEX_TENSOR_MAPPING_GATE_NEXT_ROW "V010.QUANT.0"
@@ -2279,8 +2280,10 @@ typedef struct {
     yvex_tokenizer_map_sidecar vocab_json;
     yvex_tokenizer_map_sidecar merges_txt;
     yvex_tokenizer_map_sidecar tokenizer_model;
+    yvex_tokenizer_map_sidecar chat_template_file;
     char tokenizer_class[128];
     char model_type[64];
+    char tokenizer_backend_type[64];
     const char *vocab_size_status;
     char vocab_size[32];
     char config_vocab_size[32];
@@ -2289,18 +2292,37 @@ typedef struct {
     const char *output_head_vocab_relation_status;
     const char *bos_token_id_status;
     char bos_token_id[32];
+    const char *bos_token_status;
+    char bos_token[64];
     const char *eos_token_id_status;
     char eos_token_id[32];
+    const char *eos_token_status;
+    char eos_token[64];
     const char *pad_token_id_status;
     char pad_token_id[32];
+    const char *pad_token_status;
+    char pad_token[64];
     const char *unk_token_id_status;
     char unk_token_id[32];
+    const char *unk_token_status;
+    char unk_token[64];
     const char *sep_token_id_status;
     char sep_token_id[32];
+    const char *sep_token_status;
+    char sep_token[64];
+    const char *added_tokens_status;
+    char added_tokens_count[32];
+    const char *special_tokens_status;
     const char *additional_special_tokens_status;
     char additional_special_tokens_count[32];
+    const char *stop_token_candidate_status;
+    char stop_token_candidate_count[32];
+    char stop_token_candidate_0_id[32];
+    char stop_token_candidate_0_text[64];
     const char *chat_template_status;
     const char *chat_template_present;
+    const char *chat_template_source;
+    const char *prompt_template_status;
 } yvex_tokenizer_map_profile;
 
 typedef struct {
@@ -2473,6 +2495,7 @@ typedef struct {
     char download_report_path[YVEX_PATH_CAP];
     char tensor_map_path[YVEX_PATH_CAP];
     char output_head_map_path[YVEX_PATH_CAP];
+    char tokenizer_map_path[YVEX_PATH_CAP];
     yvex_model_target_record record;
     yvex_model_class_profile_spec spec;
 } yvex_dynamic_source_target;
@@ -2778,6 +2801,12 @@ static int model_target_resolve_dynamic_source_target(
                                    operator_paths.reports_root,
                                    target->family_key,
                                    target->target_id);
+    (void)model_target_path_format(target->tokenizer_map_path,
+                                   sizeof(target->tokenizer_map_path),
+                                   "%s/%s/%s.tokenizer-map.json",
+                                   operator_paths.reports_root,
+                                   target->family_key,
+                                   target->target_id);
     (void)model_target_path_format(target->source_path,
                                    sizeof(target->source_path),
                                    "%s/hf/%s/%s",
@@ -2992,6 +3021,94 @@ static int write_output_head_map_sidecar(
     model_target_json_field(fp, "runtime_claim", "unsupported", 1);
     model_target_json_field(fp, "generation", "unsupported-full-model", 1);
     model_target_json_field(fp, "benchmark_status", "not-measured", 0);
+    fprintf(fp, "}\n");
+    return model_target_json_close_tmp(fp, tmp, path);
+}
+
+static const char *tokenizer_map_next_row(
+    const yvex_tokenizer_map_profile *profile);
+static const char *tokenizer_map_vocab_status(
+    const yvex_tokenizer_map_profile *profile);
+static const char *tokenizer_map_merges_status(
+    const yvex_tokenizer_map_profile *profile);
+
+static int write_tokenizer_map_sidecar(
+    const char *path,
+    const yvex_tokenizer_map_profile *profile)
+{
+    char tmp[YVEX_PATH_CAP];
+    FILE *fp;
+
+    if (!path || !path[0] || !profile) return 1;
+    if (!model_target_json_open_tmp(path, tmp, sizeof(tmp), &fp)) return 0;
+    fprintf(fp, "{\n");
+    model_target_json_field(fp, "schema_version", "yvex.source.tokenizer_map.v1", 1);
+    model_target_json_field(fp, "row", "V010.MAP.7", 1);
+    model_target_json_field(fp, "status", profile->status, 1);
+    model_target_json_field(fp, "target_id", profile->record->target_id, 1);
+    model_target_json_field(fp, "family", profile->spec->family_key, 1);
+    model_target_json_field(fp, "source_path", profile->source_path, 1);
+    model_target_json_field(fp, "tokenizer_map_status", profile->status, 1);
+    model_target_json_field(fp, "evidence_basis", "sidecar-json-only", 1);
+    model_target_json_field(fp, "tokenizer_json_status",
+                            profile->tokenizer_json.status, 1);
+    model_target_json_field(fp, "tokenizer_config_status",
+                            profile->tokenizer_config.status, 1);
+    model_target_json_field(fp, "special_tokens_map_status",
+                            profile->special_tokens_map.status, 1);
+    model_target_json_field(fp, "generation_config_status",
+                            profile->generation_config.status, 1);
+    model_target_json_field(fp, "config_json_status",
+                            profile->config_json.status, 1);
+    model_target_json_field(fp, "vocab_status",
+                            tokenizer_map_vocab_status(profile), 1);
+    model_target_json_field(fp, "merges_status",
+                            tokenizer_map_merges_status(profile), 1);
+    model_target_json_field(fp, "tokenizer_model_type",
+                            profile->model_type, 1);
+    model_target_json_field(fp, "tokenizer_backend_type",
+                            profile->tokenizer_backend_type, 1);
+    model_target_json_field(fp, "vocab_size_status",
+                            profile->vocab_size_status, 1);
+    model_target_json_field(fp, "vocab_size", profile->vocab_size, 1);
+    model_target_json_field(fp, "added_tokens_count",
+                            profile->added_tokens_count, 1);
+    model_target_json_field(fp, "special_tokens_status",
+                            profile->special_tokens_status, 1);
+    model_target_json_field(fp, "bos_token_id", profile->bos_token_id, 1);
+    model_target_json_field(fp, "bos_token", profile->bos_token, 1);
+    model_target_json_field(fp, "eos_token_id", profile->eos_token_id, 1);
+    model_target_json_field(fp, "eos_token", profile->eos_token, 1);
+    model_target_json_field(fp, "pad_token_id", profile->pad_token_id, 1);
+    model_target_json_field(fp, "pad_token", profile->pad_token, 1);
+    model_target_json_field(fp, "unk_token_id", profile->unk_token_id, 1);
+    model_target_json_field(fp, "unk_token", profile->unk_token, 1);
+    model_target_json_field(fp, "additional_special_tokens_count",
+                            profile->additional_special_tokens_count, 1);
+    model_target_json_field(fp, "stop_token_candidate_count",
+                            profile->stop_token_candidate_count, 1);
+    model_target_json_field(fp, "stop_token_candidate.0.id",
+                            profile->stop_token_candidate_0_id, 1);
+    model_target_json_field(fp, "stop_token_candidate.0.text",
+                            profile->stop_token_candidate_0_text, 1);
+    model_target_json_field(fp, "chat_template_status",
+                            profile->chat_template_status, 1);
+    model_target_json_field(fp, "chat_template_source",
+                            profile->chat_template_source, 1);
+    model_target_json_field(fp, "chat_template_hash_status",
+                            "not-computed", 1);
+    model_target_json_field(fp, "prompt_template_status",
+                            profile->prompt_template_status, 1);
+    model_target_json_field(fp, "tokenizer_runtime_status",
+                            "not-implemented", 1);
+    model_target_json_field(fp, "detokenization_status",
+                            "not-implemented", 1);
+    model_target_json_field(fp, "gguf_tokenizer_contract_status",
+                            "planned", 1);
+    model_target_json_field(fp, "runtime_claim", "unsupported", 1);
+    model_target_json_field(fp, "generation", "unsupported-full-model", 1);
+    model_target_json_field(fp, "benchmark_status", "not-measured", 1);
+    model_target_json_field(fp, "next", tokenizer_map_next_row(profile), 0);
     fprintf(fp, "}\n");
     return model_target_json_close_tmp(fp, tmp, path);
 }
@@ -4511,10 +4628,10 @@ static void print_tensor_naming_table(
     const yvex_tensor_naming_profile *profile)
 {
     printf("TENSOR NAMING MAP\n\n");
-    printf("%-6s  %-15s  %-19s  %5s  %5s  %4s  %3s  %4s  %4s  %3s  %7s  %6s  %s\n",
+    printf("%-6s  %-20s  %-24s  %7s  %6s  %6s  %6s  %6s  %6s  %6s  %8s  %7s  %s\n",
            "FAMILY", "TARGET", "STATUS", "TOTAL", "EMBED", "ATTN",
            "MLP", "NORM", "HEAD", "MOE", "UNKNOWN", "LAYERS", "NEXT");
-    printf("%-6s  %-15s  %-19s  %5llu  %5llu  %4llu  %3llu  %4llu  %4llu  %3llu  %7llu  %6llu  %s\n",
+    printf("%-6s  %-20s  %-24s  %7llu  %6llu  %6llu  %6llu  %6llu  %6llu  %6llu  %8llu  %7llu  %s\n",
            profile->spec->family_key,
            profile->record->target_id,
            profile->status,
@@ -4968,10 +5085,10 @@ static void print_output_head_map_table(
     const yvex_output_head_map_profile *profile)
 {
     printf("OUTPUT HEAD TENSOR MAP\n\n");
-    printf("%-6s  %-15s  %-26s  %-4s  %-10s  %-5s  %-34s  %-24s  %s\n",
+    printf("%-6s  %-20s  %-31s  %-4s  %-10s  %-5s  %-34s  %-24s  %s\n",
            "FAMILY", "TARGET", "STATUS", "HEAD", "FINAL_NORM", "EMBED",
            "TIE_POLICY", "SHAPE_RELATION", "NEXT");
-    printf("%-6s  %-15s  %-26s  %-4s  %-10s  %-5s  %-34s  %-24s  %s\n",
+    printf("%-6s  %-20s  %-31s  %-4s  %-10s  %-5s  %-34s  %-24s  %s\n",
            profile->spec->family_key,
            profile->record->target_id,
            profile->status,
@@ -5271,6 +5388,46 @@ static unsigned long tokenizer_map_json_string_array_count(const char *json,
     return count;
 }
 
+static unsigned long tokenizer_map_json_object_array_count(const char *json,
+                                                           const char *key)
+{
+    const char *p;
+    unsigned long count = 0u;
+    int depth = 0;
+    int in_string = 0;
+    int escape = 0;
+
+    p = tokenizer_map_json_value(json, key);
+    if (!p) return 0u;
+    while (*p && *p != '[') p++;
+    if (*p != '[') return 0u;
+    p++;
+    for (; *p; ++p) {
+        unsigned char c = (unsigned char)*p;
+        if (in_string) {
+            if (escape) {
+                escape = 0;
+            } else if (c == '\\') {
+                escape = 1;
+            } else if (c == '"') {
+                in_string = 0;
+            }
+            continue;
+        }
+        if (c == '"') {
+            in_string = 1;
+        } else if (c == '{') {
+            if (depth == 0) count++;
+            depth++;
+        } else if (c == '}') {
+            if (depth > 0) depth--;
+        } else if (c == ']' && depth == 0) {
+            break;
+        }
+    }
+    return count;
+}
+
 static void tokenizer_map_set_id(char *id,
                                  size_t id_cap,
                                  const char **status,
@@ -5279,6 +5436,17 @@ static void tokenizer_map_set_id(char *id,
     if (!id || id_cap == 0u || !status || !candidate || !candidate[0]) return;
     if (strcmp(*status, "present") == 0) return;
     snprintf(id, id_cap, "%s", candidate);
+    *status = "present";
+}
+
+static void tokenizer_map_set_text(char *text,
+                                   size_t text_cap,
+                                   const char **status,
+                                   const char *candidate)
+{
+    if (!text || text_cap == 0u || !status || !candidate || !candidate[0]) return;
+    if (strcmp(*status, "present") == 0) return;
+    snprintf(text, text_cap, "%s", candidate);
     *status = "present";
 }
 
@@ -5375,6 +5543,77 @@ static void tokenizer_map_parse_id_fields(yvex_tokenizer_map_profile *profile,
     }
 }
 
+static void tokenizer_map_parse_text_fields(yvex_tokenizer_map_profile *profile,
+                                            const char *json)
+{
+    char value[64];
+
+    if (!profile || !json || !json[0]) return;
+    if (tokenizer_map_json_string(json, "bos_token", value, sizeof(value))) {
+        tokenizer_map_set_text(profile->bos_token, sizeof(profile->bos_token),
+                               &profile->bos_token_status, value);
+    }
+    if (tokenizer_map_json_string(json, "eos_token", value, sizeof(value))) {
+        tokenizer_map_set_text(profile->eos_token, sizeof(profile->eos_token),
+                               &profile->eos_token_status, value);
+    }
+    if (tokenizer_map_json_string(json, "pad_token", value, sizeof(value))) {
+        tokenizer_map_set_text(profile->pad_token, sizeof(profile->pad_token),
+                               &profile->pad_token_status, value);
+    }
+    if (tokenizer_map_json_string(json, "unk_token", value, sizeof(value))) {
+        tokenizer_map_set_text(profile->unk_token, sizeof(profile->unk_token),
+                               &profile->unk_token_status, value);
+    }
+    if (tokenizer_map_json_string(json, "sep_token", value, sizeof(value))) {
+        tokenizer_map_set_text(profile->sep_token, sizeof(profile->sep_token),
+                               &profile->sep_token_status, value);
+    }
+}
+
+static int tokenizer_map_status_complete(const yvex_tokenizer_map_profile *profile)
+{
+    return profile && strcmp(profile->status, "present-report-only") == 0;
+}
+
+static const char *tokenizer_map_next_row(const yvex_tokenizer_map_profile *profile)
+{
+    return tokenizer_map_status_complete(profile)
+        ? YVEX_TOKENIZER_MAP_NEXT_ROW
+        : YVEX_TOKENIZER_MISSING_NEXT_ROW;
+}
+
+static const char *tokenizer_map_vocab_status(
+    const yvex_tokenizer_map_profile *profile)
+{
+    if (!profile) return "unknown";
+    if (strcmp(profile->vocab_size_status, "present") != 0) return "missing";
+    if (tokenizer_map_sidecar_present(&profile->vocab_json)) return "present";
+    if (tokenizer_map_sidecar_present(&profile->tokenizer_json)) return "embedded-or-tokenizer-json";
+    return "config-only";
+}
+
+static const char *tokenizer_map_merges_status(
+    const yvex_tokenizer_map_profile *profile)
+{
+    if (!profile) return "unknown";
+    if (tokenizer_map_sidecar_present(&profile->merges_txt)) return "present";
+    if (strcmp(profile->spec->family_key, "gemma") == 0) return "not-required-or-absent";
+    return "missing";
+}
+
+static const char *tokenizer_map_specials_status(
+    const yvex_tokenizer_map_profile *profile)
+{
+    if (!profile) return "missing";
+    return strcmp(profile->bos_token_id_status, "present") == 0 &&
+           strcmp(profile->eos_token_id_status, "present") == 0 &&
+           strcmp(profile->pad_token_id_status, "present") == 0 &&
+           strcmp(profile->unk_token_id_status, "present") == 0
+               ? "present"
+               : "missing";
+}
+
 static void tokenizer_map_choose_vocab(yvex_tokenizer_map_profile *profile)
 {
     if (!profile) return;
@@ -5427,6 +5666,8 @@ static void tokenizer_map_profile_defaults(yvex_tokenizer_map_profile *profile)
 {
     snprintf(profile->tokenizer_class, sizeof(profile->tokenizer_class), "unknown");
     snprintf(profile->model_type, sizeof(profile->model_type), "unknown");
+    snprintf(profile->tokenizer_backend_type, sizeof(profile->tokenizer_backend_type),
+             "unknown");
     profile->vocab_size_status = "missing";
     snprintf(profile->vocab_size, sizeof(profile->vocab_size), "unknown");
     snprintf(profile->config_vocab_size, sizeof(profile->config_vocab_size), "unknown");
@@ -5439,16 +5680,38 @@ static void tokenizer_map_profile_defaults(yvex_tokenizer_map_profile *profile)
     profile->pad_token_id_status = "missing";
     profile->unk_token_id_status = "missing";
     profile->sep_token_id_status = "missing";
+    profile->bos_token_status = "missing";
+    profile->eos_token_status = "missing";
+    profile->pad_token_status = "missing";
+    profile->unk_token_status = "missing";
+    profile->sep_token_status = "missing";
     snprintf(profile->bos_token_id, sizeof(profile->bos_token_id), "unknown");
     snprintf(profile->eos_token_id, sizeof(profile->eos_token_id), "unknown");
     snprintf(profile->pad_token_id, sizeof(profile->pad_token_id), "unknown");
     snprintf(profile->unk_token_id, sizeof(profile->unk_token_id), "unknown");
     snprintf(profile->sep_token_id, sizeof(profile->sep_token_id), "unknown");
+    snprintf(profile->bos_token, sizeof(profile->bos_token), "unknown");
+    snprintf(profile->eos_token, sizeof(profile->eos_token), "unknown");
+    snprintf(profile->pad_token, sizeof(profile->pad_token), "unknown");
+    snprintf(profile->unk_token, sizeof(profile->unk_token), "unknown");
+    snprintf(profile->sep_token, sizeof(profile->sep_token), "unknown");
+    profile->added_tokens_status = "missing";
+    snprintf(profile->added_tokens_count, sizeof(profile->added_tokens_count), "0");
+    profile->special_tokens_status = "missing";
     profile->additional_special_tokens_status = "missing";
     snprintf(profile->additional_special_tokens_count,
              sizeof(profile->additional_special_tokens_count), "0");
+    profile->stop_token_candidate_status = "missing";
+    snprintf(profile->stop_token_candidate_count,
+             sizeof(profile->stop_token_candidate_count), "0");
+    snprintf(profile->stop_token_candidate_0_id,
+             sizeof(profile->stop_token_candidate_0_id), "unknown");
+    snprintf(profile->stop_token_candidate_0_text,
+             sizeof(profile->stop_token_candidate_0_text), "unknown");
     profile->chat_template_status = "unknown";
     profile->chat_template_present = "unknown";
+    profile->chat_template_source = "none";
+    profile->prompt_template_status = "missing";
 }
 
 static int build_tokenizer_map_profile(
@@ -5513,6 +5776,9 @@ static int build_tokenizer_map_profile(
     tokenizer_map_sidecar_init(&profile->tokenizer_model, profile->source_path,
                                "tokenizer.model",
                                "model.tokenizer.sidecar.tokenizer_model");
+    tokenizer_map_sidecar_init(&profile->chat_template_file, profile->source_path,
+                               "chat_template.jinja",
+                               "model.tokenizer.sidecar.chat_template");
 
     if (!profile->source_exists) return 0;
 
@@ -5536,9 +5802,12 @@ static int build_tokenizer_map_profile(
                                         profile->tokenizer_class,
                                         sizeof(profile->tokenizer_class));
         tokenizer_map_parse_id_fields(profile, json);
+        tokenizer_map_parse_text_fields(profile, json);
         if (tokenizer_map_json_has_key(json, "chat_template")) {
             profile->chat_template_status = "present";
             profile->chat_template_present = "true";
+            profile->chat_template_source = "tokenizer_config.json";
+            profile->prompt_template_status = "present-report-only";
         }
     }
 
@@ -5554,6 +5823,7 @@ static int build_tokenizer_map_profile(
         unsigned long count =
             tokenizer_map_json_string_array_count(json,
                                                   "additional_special_tokens");
+        tokenizer_map_parse_text_fields(profile, json);
         if (tokenizer_map_json_has_key(json, "additional_special_tokens")) {
             profile->additional_special_tokens_status = "present";
             snprintf(profile->additional_special_tokens_count,
@@ -5571,15 +5841,48 @@ static int build_tokenizer_map_profile(
             snprintf(profile->tokenizer_vocab_size,
                      sizeof(profile->tokenizer_vocab_size), "%s", value);
         }
+        if (tokenizer_map_json_string(json, "type",
+                                      profile->tokenizer_backend_type,
+                                      sizeof(profile->tokenizer_backend_type))) {
+            profile->tokenizer_backend_type[sizeof(profile->tokenizer_backend_type) - 1u] = '\0';
+        }
+        if (tokenizer_map_json_has_key(json, "added_tokens")) {
+            unsigned long count =
+                tokenizer_map_json_object_array_count(json, "added_tokens");
+            profile->added_tokens_status = "present";
+            snprintf(profile->added_tokens_count,
+                     sizeof(profile->added_tokens_count), "%lu", count);
+        }
     }
 
     tokenizer_map_probe_json_sidecar(&profile->vocab_json, json, sizeof(json));
     tokenizer_map_probe_plain_sidecar(&profile->merges_txt);
     tokenizer_map_probe_plain_sidecar(&profile->tokenizer_model);
+    tokenizer_map_probe_plain_sidecar(&profile->chat_template_file);
+    if (tokenizer_map_sidecar_present(&profile->chat_template_file)) {
+        profile->chat_template_status = "present";
+        profile->chat_template_present = "true";
+        profile->chat_template_source = "chat_template.jinja";
+        profile->prompt_template_status = "present-report-only";
+    }
 
     tokenizer_map_choose_vocab(profile);
     tokenizer_map_output_head_relation(profile, models_root_override,
                                        source_override);
+    profile->special_tokens_status = tokenizer_map_specials_status(profile);
+    if (strcmp(profile->eos_token_id_status, "present") == 0) {
+        profile->stop_token_candidate_status = "present";
+        snprintf(profile->stop_token_candidate_count,
+                 sizeof(profile->stop_token_candidate_count), "1");
+        snprintf(profile->stop_token_candidate_0_id,
+                 sizeof(profile->stop_token_candidate_0_id), "%s",
+                 profile->eos_token_id);
+        snprintf(profile->stop_token_candidate_0_text,
+                 sizeof(profile->stop_token_candidate_0_text), "%s",
+                 strcmp(profile->eos_token_status, "present") == 0
+                     ? profile->eos_token
+                     : "unknown");
+    }
 
     sidecar_count =
         tokenizer_map_sidecar_present(&profile->tokenizer_json) +
@@ -5589,7 +5892,8 @@ static int build_tokenizer_map_profile(
         tokenizer_map_sidecar_present(&profile->config_json) +
         tokenizer_map_sidecar_present(&profile->vocab_json) +
         tokenizer_map_sidecar_present(&profile->merges_txt) +
-        tokenizer_map_sidecar_present(&profile->tokenizer_model);
+        tokenizer_map_sidecar_present(&profile->tokenizer_model) +
+        tokenizer_map_sidecar_present(&profile->chat_template_file);
     malformed_count =
         tokenizer_map_sidecar_malformed(&profile->tokenizer_json) +
         tokenizer_map_sidecar_malformed(&profile->tokenizer_config) +
@@ -5615,8 +5919,8 @@ static int build_tokenizer_map_profile(
                strcmp(profile->eos_token_id_status, "present") == 0 &&
                strcmp(profile->pad_token_id_status, "present") == 0 &&
                strcmp(profile->unk_token_id_status, "present") == 0) {
-        profile->status = "tokenizer-metadata-profiled";
-        profile->top_blocker = "missing-tokenizer-runtime";
+        profile->status = "present-report-only";
+        profile->top_blocker = "quant-policy-or-artifact-emitter";
     } else {
         profile->status = "tokenizer-metadata-incomplete";
         profile->top_blocker = "incomplete-tokenizer-metadata";
@@ -5627,63 +5931,61 @@ static int build_tokenizer_map_profile(
 static void print_tokenizer_map_normal(
     const yvex_tokenizer_map_profile *profile)
 {
-    printf("tokenizer-map: %s\n", profile->spec->family_key);
-    printf("target: %s\n", profile->record->target_id);
+    printf("tokenizer-map: %s\n", profile->record->target_id);
+    printf("family: %s\n", profile->spec->family_key);
     printf("status: %s\n", profile->status);
-    printf("stage: metadata-tokenizer-map\n");
-    printf("evidence: sidecar-metadata-only\n");
     printf("tokenizer: %s\n",
-           tokenizer_map_normal_sidecar(&profile->tokenizer_json,
-                                        "tokenizer.json present"));
-    printf("config: %s\n",
-           tokenizer_map_normal_sidecar(&profile->config_json,
-                                        "config.json present"));
-    printf("vocab_size: %s\n", profile->vocab_size);
-    printf("special_tokens: bos=%s eos=%s pad=%s unk=%s\n",
-           profile->bos_token_id,
-           profile->eos_token_id,
-           profile->pad_token_id,
-           profile->unk_token_id);
-    printf("chat_template: %s\n", profile->chat_template_present);
-    printf("output_head_relation: %s\n",
-           profile->output_head_vocab_relation_status);
+           tokenizer_map_normal_sidecar(&profile->tokenizer_json, "present"));
+    printf("vocab: %s\n", tokenizer_map_vocab_status(profile));
+    printf("merges: %s\n", tokenizer_map_merges_status(profile));
+    printf("chat_template: %s\n",
+           strcmp(profile->chat_template_status, "present") == 0
+               ? "present"
+               : profile->chat_template_status);
+    printf("specials: %s\n", profile->special_tokens_status);
+    printf("runtime: unsupported\n");
     printf("top_blocker: %s\n", profile->top_blocker);
-    printf("next: %s\n", YVEX_TOKENIZER_MAP_NEXT_ROW);
-    printf("boundary: tokenizer metadata mapping only; no tokenization/runtime/generation\n");
+    printf("next: %s\n", tokenizer_map_next_row(profile));
+    printf("boundary: tokenizer metadata mapping only; no tokenization/detokenization/runtime/generation\n");
 }
 
 static void print_tokenizer_map_table(
     const yvex_tokenizer_map_profile *profile)
 {
     printf("TOKENIZER METADATA MAP\n\n");
-    printf("%-6s  %-15s  %-27s  %-9s  %-6s  %-7s  %-7s  %-7s  %-13s  %-30s  %s\n",
-           "FAMILY", "TARGET", "STATUS", "TOKENIZER", "CONFIG", "VOCAB",
-           "EOS", "PAD", "CHAT_TEMPLATE", "HEAD_RELATION", "NEXT");
-    printf("%-6s  %-15s  %-27s  %-9s  %-6s  %-7s  %-7s  %-7s  %-13s  %-30s  %s\n",
-           profile->spec->family_key,
+    printf("%-20s  %-6s  %-19s  %-9s  %-28s  %-22s  %-13s  %-8s  %s\n",
+           "TARGET", "FAMILY", "STATUS", "TOKENIZER", "VOCAB", "MERGES",
+           "CHAT_TEMPLATE", "SPECIALS", "NEXT");
+    printf("%-20s  %-6s  %-19s  %-9s  %-28s  %-22s  %-13s  %-8s  %s\n",
            profile->record->target_id,
+           profile->spec->family_key,
            profile->status,
            tokenizer_map_yes_no(&profile->tokenizer_json),
-           tokenizer_map_yes_no(&profile->config_json),
-           profile->vocab_size,
-           profile->eos_token_id,
-           profile->pad_token_id,
-           profile->chat_template_present,
-           profile->output_head_vocab_relation_status,
-           YVEX_TOKENIZER_MAP_NEXT_ROW);
+           tokenizer_map_vocab_status(profile),
+           tokenizer_map_merges_status(profile),
+           strcmp(profile->chat_template_status, "present") == 0
+               ? "present"
+               : profile->chat_template_status,
+           profile->special_tokens_status,
+           tokenizer_map_next_row(profile));
 }
 
 static void print_tokenizer_map_audit(
     const yvex_tokenizer_map_profile *profile)
 {
+    printf("schema_version: yvex.source.tokenizer_map.v1\n");
     printf("tokenizer_map_status: %s\n", profile->status);
     printf("tokenizer_map_family: %s\n", profile->spec->family_key);
     printf("tokenizer_map_target_id: %s\n", profile->record->target_id);
+    printf("target_id: %s\n", profile->record->target_id);
+    printf("family: %s\n", profile->spec->family_key);
     printf("tokenizer_map_stage: metadata-tokenizer-map\n");
-    printf("tokenizer_map_evidence_basis: sidecar-metadata-only\n");
+    printf("tokenizer_map_evidence_basis: sidecar-json-only\n");
+    printf("evidence_basis: sidecar-json-only\n");
     printf("tokenizer_map_source_status: %s\n",
            profile->source_exists ? "present" : "missing");
     printf("tokenizer_map_source_path: %s\n", profile->source_path);
+    printf("source_path: %s\n", profile->source_path);
     printf("tokenizer_json_status: %s\n", profile->tokenizer_json.status);
     printf("tokenizer_json_path: %s\n", profile->tokenizer_json.path);
     printf("tokenizer_config_status: %s\n", profile->tokenizer_config.status);
@@ -5697,10 +5999,16 @@ static void print_tokenizer_map_audit(
     printf("config_json_status: %s\n", profile->config_json.status);
     printf("config_json_path: %s\n", profile->config_json.path);
     printf("vocab_json_status: %s\n", profile->vocab_json.status);
+    printf("vocab_status: %s\n", tokenizer_map_vocab_status(profile));
     printf("merges_txt_status: %s\n", profile->merges_txt.status);
+    printf("merges_status: %s\n", tokenizer_map_merges_status(profile));
     printf("tokenizer_model_status: %s\n", profile->tokenizer_model.status);
+    printf("chat_template_file_status: %s\n",
+           profile->chat_template_file.status);
     printf("tokenizer_class: %s\n", profile->tokenizer_class);
     printf("model_type: %s\n", profile->model_type);
+    printf("tokenizer_model_type: %s\n", profile->model_type);
+    printf("tokenizer_backend_type: %s\n", profile->tokenizer_backend_type);
     printf("vocab_size_status: %s\n", profile->vocab_size_status);
     printf("vocab_size: %s\n", profile->vocab_size);
     printf("config_vocab_size: %s\n", profile->config_vocab_size);
@@ -5711,24 +6019,49 @@ static void print_tokenizer_map_audit(
            profile->output_head_vocab_relation_status);
     printf("bos_token_id_status: %s\n", profile->bos_token_id_status);
     printf("bos_token_id: %s\n", profile->bos_token_id);
+    printf("bos_token_status: %s\n", profile->bos_token_status);
+    printf("bos_token: %s\n", profile->bos_token);
     printf("eos_token_id_status: %s\n", profile->eos_token_id_status);
     printf("eos_token_id: %s\n", profile->eos_token_id);
+    printf("eos_token_status: %s\n", profile->eos_token_status);
+    printf("eos_token: %s\n", profile->eos_token);
     printf("pad_token_id_status: %s\n", profile->pad_token_id_status);
     printf("pad_token_id: %s\n", profile->pad_token_id);
+    printf("pad_token_status: %s\n", profile->pad_token_status);
+    printf("pad_token: %s\n", profile->pad_token);
     printf("unk_token_id_status: %s\n", profile->unk_token_id_status);
     printf("unk_token_id: %s\n", profile->unk_token_id);
+    printf("unk_token_status: %s\n", profile->unk_token_status);
+    printf("unk_token: %s\n", profile->unk_token);
     printf("sep_token_id_status: %s\n", profile->sep_token_id_status);
     printf("sep_token_id: %s\n", profile->sep_token_id);
+    printf("sep_token_status: %s\n", profile->sep_token_status);
+    printf("sep_token: %s\n", profile->sep_token);
+    printf("added_tokens_status: %s\n", profile->added_tokens_status);
+    printf("added_tokens_count: %s\n", profile->added_tokens_count);
+    printf("special_tokens_status: %s\n", profile->special_tokens_status);
     printf("additional_special_tokens_status: %s\n",
            profile->additional_special_tokens_status);
     printf("additional_special_tokens_count: %s\n",
            profile->additional_special_tokens_count);
+    printf("stop_token_candidate_status: %s\n",
+           profile->stop_token_candidate_status);
+    printf("stop_token_candidate_count: %s\n",
+           profile->stop_token_candidate_count);
+    printf("stop_token_candidate.0.id: %s\n",
+           profile->stop_token_candidate_0_id);
+    printf("stop_token_candidate.0.text: %s\n",
+           profile->stop_token_candidate_0_text);
     printf("chat_template_status: %s\n", profile->chat_template_status);
     printf("chat_template_present: %s\n", profile->chat_template_present);
+    printf("chat_template_source: %s\n", profile->chat_template_source);
+    printf("chat_template_hash_status: not-computed\n");
+    printf("prompt_template_status: %s\n", profile->prompt_template_status);
     printf("chat_template_runtime_status: not-implemented\n");
     printf("tokenizer_runtime_status: not-implemented\n");
     printf("tokenization_status: not-implemented\n");
     printf("detokenization_status: not-implemented\n");
+    printf("gguf_tokenizer_contract_status: planned\n");
     printf("eos_stop_policy_status: not-implemented\n");
     printf("stop_token_policy_status: not-implemented\n");
     printf("prompt_template_runtime_status: not-implemented\n");
@@ -5737,8 +6070,39 @@ static void print_tokenizer_map_audit(
     printf("benchmark_status: not-measured\n");
     printf("release_ready: false\n");
     printf("top_blocker: %s\n", profile->top_blocker);
-    printf("next_required_rows: %s\n", YVEX_TOKENIZER_MAP_NEXT_ROW);
+    printf("next_required_rows: %s\n", tokenizer_map_next_row(profile));
     printf("boundary: tokenizer metadata mapping only; no tokenization/runtime/generation\n");
+}
+
+static void print_tokenizer_map_json(
+    const yvex_tokenizer_map_profile *profile)
+{
+    if (!profile) return;
+    printf("{\"schema_version\":\"yvex.source.tokenizer_map.v1\",");
+    printf("\"status\":");
+    model_target_json_write_escaped(stdout, profile->status);
+    printf(",\"target_id\":");
+    model_target_json_write_escaped(stdout, profile->record->target_id);
+    printf(",\"family\":");
+    model_target_json_write_escaped(stdout, profile->spec->family_key);
+    printf(",\"source_path\":");
+    model_target_json_write_escaped(stdout, profile->source_path);
+    printf(",\"tokenizer_json_status\":");
+    model_target_json_write_escaped(stdout, profile->tokenizer_json.status);
+    printf(",\"vocab_status\":");
+    model_target_json_write_escaped(stdout, tokenizer_map_vocab_status(profile));
+    printf(",\"merges_status\":");
+    model_target_json_write_escaped(stdout, tokenizer_map_merges_status(profile));
+    printf(",\"chat_template_status\":");
+    model_target_json_write_escaped(stdout, profile->chat_template_status);
+    printf(",\"special_tokens_status\":");
+    model_target_json_write_escaped(stdout, profile->special_tokens_status);
+    printf(",\"tokenizer_runtime_status\":\"not-implemented\",");
+    printf("\"generation\":\"unsupported-full-model\",");
+    printf("\"benchmark_status\":\"not-measured\",");
+    printf("\"next\":");
+    model_target_json_write_escaped(stdout, tokenizer_map_next_row(profile));
+    printf("}\n");
 }
 
 static void print_tokenizer_map_audit_hint(const yvex_model_target_record *record)
@@ -5754,7 +6118,7 @@ static void print_tokenizer_map_audit_hint(const yvex_model_target_record *recor
     printf("tokenizer_map_stage: metadata-tokenizer-map\n");
     printf("tokenizer_map_evidence_basis: sidecar-metadata-only\n");
     printf("tokenizer_runtime_status: not-implemented\n");
-    printf("tokenizer_map_next: %s\n", YVEX_TOKENIZER_MAP_NEXT_ROW);
+    printf("tokenizer_map_next: %s\n", YVEX_TOKENIZER_MISSING_NEXT_ROW);
 }
 
 static const char *missing_role_many_status(unsigned long long count)
@@ -6532,11 +6896,24 @@ static void build_missing_roles_porcelain_context(
                  "missing-tokenizer-map");
     } else if (!artifact_present) {
         snprintf(ctx->top_blocker, sizeof(ctx->top_blocker),
-                 "missing-artifact-emitter");
+                 "quant-policy-or-artifact-emitter");
     } else {
         snprintf(ctx->top_blocker, sizeof(ctx->top_blocker),
                  "missing-artifact-identity");
     }
+}
+
+static const char *missing_roles_porcelain_next_row(
+    const yvex_missing_roles_porcelain_context *ctx)
+{
+    if (!ctx) return YVEX_MISSING_ROLES_PORCELAIN_NEXT_ROW;
+    if (strcmp(ctx->top_blocker, "missing-tokenizer-map") == 0) {
+        return YVEX_TOKENIZER_MISSING_NEXT_ROW;
+    }
+    if (strcmp(ctx->top_blocker, "quant-policy-or-artifact-emitter") == 0) {
+        return YVEX_TOKENIZER_MAP_NEXT_ROW;
+    }
+    return YVEX_MISSING_ROLES_PORCELAIN_NEXT_ROW;
 }
 
 static const char *missing_roles_group_status(unsigned long long count)
@@ -6568,7 +6945,7 @@ static void print_missing_roles_porcelain_normal(
     printf("family: %s\n", profile->spec->family_key);
     printf("status: blocked\n");
     printf("top_blocker: %s\n", ctx->top_blocker);
-    printf("next: %s\n\n", YVEX_MISSING_ROLES_PORCELAIN_NEXT_ROW);
+    printf("next: %s\n\n", missing_roles_porcelain_next_row(ctx));
     printf("%-16s  %-10s  %5s  %s\n",
            "ROLE GROUP", "STATUS", "FOUND", "DETAIL");
     if (is_gemma) {
@@ -6601,8 +6978,13 @@ static void print_missing_roles_porcelain_normal(
                                 strcmp(profile->tied_head_policy_status,
                                        "tied-output-head-candidate") == 0 ? 1 : 0,
                                 "config/header evidence only");
-        print_missing_roles_row("tokenizer", "missing", 0,
-                                "tokenizer metadata map missing");
+        print_missing_roles_row("tokenizer", ctx->tokenizer_map_status,
+                                strcmp(ctx->tokenizer_map_status,
+                                       "present-report-only") == 0 ? 1 : 0,
+                                strcmp(ctx->tokenizer_map_status,
+                                       "present-report-only") == 0
+                                    ? "tokenizer metadata mapped report-only"
+                                    : "tokenizer metadata map missing");
         print_missing_roles_row("unknown-tensors",
                                 profile->unknown_tensor_status,
                                 profile->unmapped_unknown_count,
@@ -6646,8 +7028,13 @@ static void print_missing_roles_porcelain_normal(
                                 strcmp(profile->output_head_status, "present") == 0
                                     ? "report-only, runtime consumer not implemented"
                                     : "output head not mapped");
-        print_missing_roles_row("tokenizer", "missing", 0,
-                                "tokenizer metadata map missing");
+        print_missing_roles_row("tokenizer", ctx->tokenizer_map_status,
+                                strcmp(ctx->tokenizer_map_status,
+                                       "present-report-only") == 0 ? 1 : 0,
+                                strcmp(ctx->tokenizer_map_status,
+                                       "present-report-only") == 0
+                                    ? "tokenizer metadata mapped report-only"
+                                    : "tokenizer metadata map missing");
         print_missing_roles_row("unknown-tensors",
                                 profile->unknown_tensor_status,
                                 profile->unmapped_unknown_count,
@@ -6683,9 +7070,9 @@ static void print_missing_roles_porcelain_table(
            profile->output_head_count,
            moe_total,
            profile->unmapped_unknown_count,
-           "missing",
+           ctx->tokenizer_map_status,
            ctx->artifact_status,
-           YVEX_MISSING_ROLES_PORCELAIN_NEXT_ROW);
+           missing_roles_porcelain_next_row(ctx));
 }
 
 static void print_missing_roles_porcelain_audit(
@@ -6751,7 +7138,7 @@ static void print_missing_roles_porcelain_audit(
         printf("missing_role.%llu.status: %s\n", i, entry->status);
         printf("missing_role.%llu.detail: %s\n", i, entry->blocker_class);
     }
-    printf("next: %s\n", YVEX_MISSING_ROLES_PORCELAIN_NEXT_ROW);
+    printf("next: %s\n", missing_roles_porcelain_next_row(ctx));
     printf("runtime_execution: not-performed\n");
     printf("generation: unsupported\n");
     printf("benchmark_status: not-measured\n");
@@ -6769,8 +7156,9 @@ static void print_missing_roles_porcelain_json(
     model_target_json_write_escaped(stdout, profile->spec->family_key);
     printf(",\"top_blocker\":");
     model_target_json_write_escaped(stdout, ctx->top_blocker);
-    printf(",\"next\":\"%s\",\"runtime_execution\":\"not-performed\",",
-           YVEX_MISSING_ROLES_PORCELAIN_NEXT_ROW);
+    printf(",\"next\":");
+    model_target_json_write_escaped(stdout, missing_roles_porcelain_next_row(ctx));
+    printf(",\"runtime_execution\":\"not-performed\",");
     printf("\"role_groups\":{");
     printf("\"embedding\":");
     model_target_json_write_escaped(stdout, profile->embedding_status);
@@ -6794,6 +7182,8 @@ static void print_missing_roles_porcelain_json(
     model_target_json_write_escaped(stdout, profile->tied_head_policy_status);
     printf(",\"unknown_tensors\":");
     model_target_json_write_escaped(stdout, profile->unknown_tensor_status);
+    printf(",\"tokenizer\":");
+    model_target_json_write_escaped(stdout, ctx->tokenizer_map_status);
     printf("},");
     printf("\"generation\":\"unsupported\",\"benchmark_status\":\"not-measured\"}\n");
 }
@@ -6860,7 +7250,7 @@ static int tensor_mapping_gate_tokenizer_ready(
     const yvex_tokenizer_map_profile *profile)
 {
     return profile &&
-           strcmp(profile->status, "tokenizer-metadata-profiled") == 0;
+           strcmp(profile->status, "present-report-only") == 0;
 }
 
 static int build_tensor_mapping_gate_profile(
@@ -9262,6 +9652,7 @@ static void print_model_target_usage(FILE *fp)
     fprintf(fp, "       yvex model-target class-profile TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target tensor-collection TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target missing-roles TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit|json]\n");
+    fprintf(fp, "       yvex model-target tokenizer-map TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit|json]\n");
     fprintf(fp, "       yvex model-target tensor-map TARGET [--role output-head|tokenizer|missing-roles | --gate v0.1.0] [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit] [--check-output-contract normal|table|audit]\n");
     fprintf(fp, "       yvex model-target quant-policy TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit] [--check-output-contract normal|table|audit]\n");
     fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR] [--audit | --output normal|table|audit]\n");
@@ -9308,6 +9699,8 @@ void yvex_model_target_help(FILE *fp)
     fprintf(fp, "\nTokenizer metadata map:\n");
     fprintf(fp, "  yvex model-target tensor-map qwen3-8b --role tokenizer --audit\n");
     fprintf(fp, "  yvex model-target tensor-map gemma-4-12b-it --role tokenizer --audit\n");
+    fprintf(fp, "  yvex model-target tokenizer-map qwen3-6-35b-a3b --models-root ~/lab/models --audit\n");
+    fprintf(fp, "  yvex model-target tokenizer-map gemma-4-31b-it --models-root ~/lab/models --output table\n");
     fprintf(fp, "  The tokenizer metadata map reads local sidecars only and reports tokenizer/config/special-token metadata candidates. It does not tokenize, detokenize, apply chat templates, stop on EOS, compute logits, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "\nMissing-role blocker report:\n");
     fprintf(fp, "  yvex model-target missing-roles qwen3-8b --audit\n");
@@ -10797,6 +11190,109 @@ int yvex_model_target_command(int argc, char **argv)
         }
         return 0;
     }
+    if (strcmp(argv[2], "tokenizer-map") == 0) {
+        const char *target_id = NULL;
+        const char *source = NULL;
+        const yvex_model_class_profile_spec *spec;
+        yvex_dynamic_source_target dynamic_target;
+        yvex_tokenizer_map_profile tokenizer_profile;
+        int output_json = 0;
+        int rc;
+
+        output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
+        if (argc < 4) {
+            fprintf(stderr, "model-target tokenizer-map: requires TARGET\n");
+            return 2;
+        }
+        target_id = argv[3];
+        record = NULL;
+        spec = NULL;
+        memset(&dynamic_target, 0, sizeof(dynamic_target));
+        for (i = 4; i < argc; ++i) {
+            if (strcmp(argv[i], "--audit") == 0) {
+                output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
+                output_json = 0;
+            } else if (strcmp(argv[i], "--json") == 0) {
+                output_json = 1;
+            } else if (strcmp(argv[i], "--output") == 0) {
+                const char *value;
+                if (i + 1 >= argc) {
+                    fprintf(stderr,
+                            "model-target tokenizer-map: --output requires normal|table|audit|json\n");
+                    return 2;
+                }
+                value = argv[++i];
+                if (strcmp(value, "json") == 0) {
+                    output_json = 1;
+                } else if (parse_model_target_output_mode(value, &output_mode)) {
+                    output_json = 0;
+                } else {
+                    fprintf(stderr,
+                            "model-target tokenizer-map: unsupported output mode: %s\n",
+                            value);
+                    return 2;
+                }
+            } else if (strcmp(argv[i], "--models-root") == 0) {
+                if (i + 1 >= argc || argv[i + 1][0] == '\0') {
+                    fprintf(stderr,
+                            "model-target tokenizer-map: --models-root requires DIR\n");
+                    return 2;
+                }
+                models_root = argv[++i];
+            } else if (strcmp(argv[i], "--source") == 0) {
+                if (i + 1 >= argc || argv[i + 1][0] == '\0') {
+                    fprintf(stderr,
+                            "model-target tokenizer-map: --source requires DIR\n");
+                    return 2;
+                }
+                source = argv[++i];
+            } else {
+                fprintf(stderr, "model-target tokenizer-map: unknown option: %s\n",
+                        argv[i]);
+                return 2;
+            }
+        }
+        record = find_model_target(target_id);
+        spec = find_model_class_profile_spec(target_id);
+        if ((!record || !spec) &&
+            model_target_resolve_dynamic_source_target(target_id,
+                                                       models_root,
+                                                       &dynamic_target)) {
+            record = &dynamic_target.record;
+            spec = &dynamic_target.spec;
+            if (!source) source = dynamic_target.source_path;
+        }
+        if (!record || !spec ||
+            (strcmp(spec->family_key, "qwen") != 0 &&
+             strcmp(spec->family_key, "gemma") != 0)) {
+            fprintf(stderr, "model-target tokenizer-map: unsupported target: %s\n",
+                    target_id && target_id[0] ? target_id : "none");
+            return 2;
+        }
+        rc = build_tokenizer_map_profile(record, spec, models_root, source,
+                                         &tokenizer_profile);
+        if (rc != 0) {
+            return rc;
+        }
+        if (dynamic_target.found &&
+            !write_tokenizer_map_sidecar(dynamic_target.tokenizer_map_path,
+                                         &tokenizer_profile)) {
+            fprintf(stderr,
+                    "model-target tokenizer-map: cannot write tokenizer map sidecar: %s\n",
+                    dynamic_target.tokenizer_map_path);
+            return 3;
+        }
+        if (output_json) {
+            print_tokenizer_map_json(&tokenizer_profile);
+        } else if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+            print_tokenizer_map_table(&tokenizer_profile);
+        } else if (output_mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+            print_tokenizer_map_audit(&tokenizer_profile);
+        } else {
+            print_tokenizer_map_normal(&tokenizer_profile);
+        }
+        return 0;
+    }
     if (strcmp(argv[2], "tensor-map") == 0) {
         const char *target_id = NULL;
         const char *source = NULL;
@@ -10990,6 +11486,14 @@ int yvex_model_target_command(int argc, char **argv)
                                              &tokenizer_profile);
             if (rc != 0) {
                 return rc;
+            }
+            if (dynamic_target.found &&
+                !write_tokenizer_map_sidecar(dynamic_target.tokenizer_map_path,
+                                             &tokenizer_profile)) {
+                fprintf(stderr,
+                        "model-target tensor-map: cannot write tokenizer map sidecar: %s\n",
+                        dynamic_target.tokenizer_map_path);
+                return 3;
             }
             if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
                 print_tokenizer_map_table(&tokenizer_profile);
