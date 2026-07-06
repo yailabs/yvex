@@ -7,9 +7,9 @@ git grep -n \
   -e 'compressed implementation unit' \
   -e 'inlined yvex_' \
   -e '===== yvex_' \
-  -e '===== gguf/' \
+  -e '===== src/gguf/' \
   -e '===== models/' \
-  -- '*.c' '*.h' cuda gguf && {
+  -- '*.c' '*.h' src && {
     echo "mechanical source markers found"
     exit 1
   } || true
@@ -72,6 +72,20 @@ END {
   $impl_files
 
 test ! -f yvex_internal.h
+test -z "$(git ls-files 'yvex_*.c')"
+test -z "$(git ls-files 'yvex_*_private.h')"
+
+if grep -nF 'usage: yvex model-target' src/model/yvex_model.c; then
+  echo "model-target usage text must not live in src/model/yvex_model.c"
+  exit 1
+fi
+
+if grep -nF 'yvex model-target' src/model/yvex_model.c; then
+  echo "model-target command text must not live in src/model/yvex_model.c"
+  exit 1
+fi
+
+grep -nF 'usage: yvex model-target' src/cli/yvex_model_target_cli.c >/dev/null
 
 awk '
 FNR == 1 {
@@ -98,7 +112,7 @@ END {
   $impl_files
 
 if grep -nE 'implemented|ready|supports generation|benchmark result|token/sec|evaluation suite implemented|generation implemented' \
-    yvex_generation.c yvex_eval.c yvex_bench.c; then
+    src/generation/yvex_generation.c src/eval/yvex_eval.c src/bench/yvex_bench.c; then
   echo "future boundary files must not claim runtime readiness"
   exit 1
 fi
@@ -346,19 +360,19 @@ if awk '
   END {
     exit bad ? 1 : 0
   }
-' yvex_model_artifacts.c; then
+' src/model/yvex_model_artifacts.c; then
   :
 else
   echo "models command owners must not shell out; provider execution belongs to accounts"
   exit 1
 fi
 
-if grep -nE '\b(system|popen|execl)[[:space:]]*\(' yvex_accounts.c; then
+if grep -nE '\b(system|popen|execl)[[:space:]]*\(' src/accounts/yvex_accounts.c; then
   echo "accounts must use bounded exec helpers only"
   exit 1
 fi
 
-runtime_files="$(git ls-files 'yvex_runtime*.c' 'yvex_backend.c' 'yvex_tokenizer.c' 'yvex_token_input.c' 'yvex_kv.c' 'yvex_prefill.c' 'yvex_fs.c' 2>/dev/null || true)"
+runtime_files="$(git ls-files 'src/runtime/yvex_runtime*.c' 'src/backend/yvex_backend.c' 'src/tokenizer/yvex_tokenizer.c' 'src/tokenizer/yvex_token_input.c' 'src/generation/yvex_kv.c' 'src/generation/yvex_prefill.c' 'src/core/yvex_fs.c' 2>/dev/null || true)"
 
 if [ -n "$runtime_files" ] && grep -nE '\b(system|popen|execl|execv|fork)[[:space:]]*\(' $runtime_files; then
   echo "runtime ownership files must not shell out"

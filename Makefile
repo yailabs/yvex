@@ -35,7 +35,7 @@ CUDA_LDFLAGS ?=
 YVEX_CUDA_ARCH ?= auto
 NVCC_AVAILABLE := $(shell command -v $(NVCC) >/dev/null 2>&1 && echo yes || echo no)
 
-CPPFLAGS ?= -D_POSIX_C_SOURCE=200809L -Iinclude -I.
+CPPFLAGS ?= -D_POSIX_C_SOURCE=200809L -Iinclude -I. -Isrc/cli -Isrc/backend -Isrc/backend/cuda -Isrc/runtime -Isrc/server
 CFLAGS ?= -std=c11 -Wall -Wextra -pedantic
 LDFLAGS ?=
 LDLIBS ?= -ldl
@@ -51,52 +51,53 @@ YVEX_BIN := ./yvex
 YVEXD_BIN := ./yvexd
 
 CORE_SRCS := \
-	yvex_core.c \
-	yvex_artifact.c \
-	yvex_artifact_identity.c \
-	yvex_artifact_integrity.c \
-	yvex_accounts.c \
-	yvex_fs.c \
-	gguf/naming.c \
-	gguf/gguf.c \
-	gguf/tools.c \
-	yvex_model.c \
-	yvex_backend.c \
-	yvex_graph.c \
-	yvex_metrics.c \
-	yvex_profile.c \
-	yvex_runtime.c \
-	yvex_prefill.c \
-	yvex_kv.c \
-	yvex_decode.c \
-	yvex_logits.c \
-	yvex_sampling.c \
-	yvex_generation.c \
-	yvex_token_input.c \
-	yvex_tokenizer.c \
-	yvex_chat.c \
-	yvex_server.c \
-	yvex_model_artifacts.c \
-	yvex_eval.c \
-	yvex_bench.c \
-	gguf/conversion.c \
-	gguf/quant.c \
-	yvex_source.c
+	src/core/yvex_core.c \
+	src/artifact/yvex_artifact.c \
+	src/artifact/yvex_artifact_identity.c \
+	src/artifact/yvex_artifact_integrity.c \
+	src/accounts/yvex_accounts.c \
+	src/core/yvex_fs.c \
+	src/gguf/naming.c \
+	src/gguf/gguf.c \
+	src/gguf/tools.c \
+	src/model/yvex_model.c \
+	src/cli/yvex_model_target_cli.c \
+	src/backend/yvex_backend.c \
+	src/graph/yvex_graph.c \
+	src/metrics/yvex_metrics.c \
+	src/metrics/yvex_profile.c \
+	src/runtime/yvex_runtime.c \
+	src/generation/yvex_prefill.c \
+	src/generation/yvex_kv.c \
+	src/generation/yvex_decode.c \
+	src/generation/yvex_logits.c \
+	src/generation/yvex_sampling.c \
+	src/generation/yvex_generation.c \
+	src/tokenizer/yvex_token_input.c \
+	src/tokenizer/yvex_tokenizer.c \
+	src/cli/yvex_chat.c \
+	src/server/yvex_server.c \
+	src/model/yvex_model_artifacts.c \
+	src/eval/yvex_eval.c \
+	src/bench/yvex_bench.c \
+	src/gguf/conversion.c \
+	src/gguf/quant.c \
+	src/source/yvex_source.c
 
 CUDA_SRCS := \
-	cuda/cuda_backend.c \
-	cuda/cuda_tensor.c \
-	cuda/cuda_ops.c \
-	cuda/cuda_info.c \
-	cuda/cuda_errors.c
+	src/backend/cuda/cuda_backend.c \
+	src/backend/cuda/cuda_tensor.c \
+	src/backend/cuda/cuda_ops.c \
+	src/backend/cuda/cuda_info.c \
+	src/backend/cuda/cuda_errors.c
 
 CUDA_CU_SRCS := \
-	cuda/cuda_kernels.cu
+	src/backend/cuda/cuda_kernels.cu
 
 CUDA_ARCH_FLAG := $(if $(filter auto,$(YVEX_CUDA_ARCH)),,-arch=$(YVEX_CUDA_ARCH))
 CUDA_PTX := $(patsubst %.cu,$(OBJ_DIR)/%.ptx,$(CUDA_CU_SRCS))
-CUDA_PTX_C := $(OBJ_DIR)/cuda/cuda_kernels_ptx.c
-CUDA_PTX_OBJ := $(OBJ_DIR)/cuda/cuda_kernels_ptx.o
+CUDA_PTX_C := $(OBJ_DIR)/src/backend/cuda/cuda_kernels_ptx.c
+CUDA_PTX_OBJ := $(OBJ_DIR)/src/backend/cuda/cuda_kernels_ptx.o
 
 CORE_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CORE_SRCS))
 CUDA_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CUDA_SRCS))
@@ -247,10 +248,10 @@ $(OBJ_DIR)/%.ptx: %.cu
 	@mkdir -p $(@D)
 	$(NVCC) $(NVCCFLAGS) $(CUDA_ARCH_FLAG) -ptx $< -o $@
 
-$(CUDA_PTX_C): $(CUDA_PTX) cuda/cuda_kernels.h
+$(CUDA_PTX_C): $(CUDA_PTX) src/backend/cuda/cuda_kernels.h
 	@mkdir -p $(@D)
 	@{ \
-		printf '#include "cuda/cuda_kernels.h"\n'; \
+		printf '#include "cuda_kernels.h"\n'; \
 		printf 'const char yvex_cuda_kernels_ptx[] =\n'; \
 		sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/' $(CUDA_PTX); \
 		printf ';\n'; \
@@ -261,13 +262,13 @@ $(CUDA_PTX_OBJ): $(CUDA_PTX_C)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 YVEX_CLI_SRCS := \
-	yvex_cli.c
+	src/cli/yvex_cli.c
 
 $(YVEX_BIN): $(YVEX_CLI_SRCS) $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(YVEX_CLI_SRCS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
-$(YVEXD_BIN): yvexd.c $(LIBYVEX)
+$(YVEXD_BIN): src/daemon/yvexd.c $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
@@ -322,16 +323,35 @@ check-guardrails:
 	@test ! -d benches
 	@test ! -d examples
 	@test ! -d protocols
-	@test ! -d src
 	@test ! -d cli
 	@test ! -d server
 	@test ! -e tests/README.md
 	@test ! -e include/yvex/sampler.h
 	@test ! -d backends
-	@test -d cuda
-	@test -d gguf
+	@test -d src
+	@test -d src/app
+	@test -d src/cli
+	@test -d src/core
+	@test -d src/accounts
+	@test -d src/artifact
+	@test -d src/backend
+	@test -d src/backend/cuda
+	@test -d src/daemon
+	@test -d src/server
+	@test -d src/gguf
+	@test -d src/model
+	@test -d src/source
+	@test -d src/tokenizer
+	@test -d src/graph
+	@test -d src/runtime
+	@test -d src/generation
+	@test -d src/metrics
+	@test -d src/eval
+	@test -d src/bench
+	@test ! -d cuda
+	@test ! -d gguf
 	@test ! -d models
-	@test -f gguf/families.h
+	@test -f src/gguf/families.h
 	@test -d tests/vectors
 	@test -f tests/vectors/manifest.json
 	@test -f tests/test.c
@@ -341,9 +361,11 @@ check-guardrails:
 	@test "$$(find tests -maxdepth 1 -type f -name 'test_cli*.sh' | wc -l | tr -d ' ')" = "0"
 	@test -f include/yvex/server.h
 	@test ! -d fixtures
-	@test -f yvex_cli.c
-	@test -f yvexd.c
-	@test -f yvex_server.c
+	@test -f src/cli/yvex_cli.c
+	@test -f src/daemon/yvexd.c
+	@test -f src/server/yvex_server.c
+	@test -z "$$(git ls-files 'yvex_*.c')"
+	@test -z "$$(git ls-files 'yvex_*_private.h')"
 	@test ! -d ui
 	@test ! -d app
 	@test ! -d desktop

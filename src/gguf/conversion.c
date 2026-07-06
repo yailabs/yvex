@@ -5,7 +5,7 @@
  * mapping. It does not implement model execution.
  */
 
-#include "gguf/families.h"
+#include "families.h"
 
 #include <yvex/artifact.h>
 #include <yvex/artifact_naming.h>

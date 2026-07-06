@@ -4,7 +4,7 @@
  */
 #include <string.h>
 
-#include "gguf/families.h"
+#include "src/gguf/families.h"
 
 #include "test.h"
 

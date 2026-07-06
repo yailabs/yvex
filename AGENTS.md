@@ -28,7 +28,24 @@ operator contracts, or explicit user-requested documentation.
 
 Find the owner file before editing.
 
-Do not create a new root source file unless a new ownership domain exists.
+Root contains project metadata, public docs, Makefile, tests, include, and
+binaries only.
+
+C implementation lives under src/.
+
+Public headers live under include/yvex/.
+
+Private headers live beside the source module that owns them.
+
+No new root C file.
+
+No new root private header.
+
+No compatibility shell at root.
+
+Root yvex_*.c files are forbidden after TOPOLOGY.FS.0.
+
+Root yvex_*_private.h files are forbidden after TOPOLOGY.FS.0.
 
 Forbidden file patterns:
 
@@ -38,101 +55,104 @@ yvex_cli_*.c
 yvex_output.c
 yvex_render.c
 source_*_new.c
-cuda/*_new.cu
-src/
+src/backend/cuda/*_new.cu
 ```
 
 Owner map:
 
 ```text
-yvex_cli.c
+src/cli/yvex_cli.c
   top-level lookup, short help, argv dispatch only
 
-yvexd.c
+src/cli/yvex_model_target_cli.c
+  model-target CLI grammar, usage/help, output rendering, and report commands
+
+src/daemon/yvexd.c
   daemon entrypoint
 
-yvex_server.c
+src/server/yvex_server.c
   daemon/server behavior and provider boundary
 
-yvex_accounts.c
+src/accounts/yvex_accounts.c
   local provider account boundary
 
-yvex_runtime.c
+src/runtime/yvex_runtime.c
   runtime coordination
 
-yvex_graph.c
+src/graph/yvex_graph.c
   graph construction, execution proofs, op probes
 
-yvex_backend.c
+src/backend/yvex_backend.c
   backend abstraction and backend reports
 
-cuda/
+src/backend/cuda/
   CUDA backend, kernels, tensor movement, CUDA op implementations
 
-cuda/cuda_kernels.cu
+src/backend/cuda/cuda_kernels.cu
   CUDA device kernels
 
-cuda/cuda_ops.c
+src/backend/cuda/cuda_ops.c
   CUDA host launches and validation
 
-yvex_model.c
-  model descriptors, target registry, model command/help, target reports
+src/model/yvex_model.c
+  dtype registry, model descriptors, tensor role names/classification, tensor
+  table, materialized weights
 
-yvex_model_artifacts.c
+src/model/yvex_model_artifacts.c
   artifact status, artifact gates, selected/full artifact reports
 
-yvex_artifact.c
+src/artifact/yvex_artifact.c
   artifact IO, inspect, metadata, tensor command surfaces
 
-yvex_artifact_identity.c
+src/artifact/yvex_artifact_identity.c
   artifact identity and digest behavior
 
-yvex_artifact_integrity.c
+src/artifact/yvex_artifact_integrity.c
   artifact integrity, corruption/refusal reports
 
-gguf/
+src/gguf/
   GGUF parsing, conversion, quant/intake internals
 
-yvex_source.c
+src/source/yvex_source.c
   source manifests, source pressure, source evidence, native header inventory
 
-yvex_tokenizer.c
+src/tokenizer/yvex_tokenizer.c
   tokenizer metadata and tokenizer command surfaces
 
-yvex_token_input.c
+src/tokenizer/yvex_token_input.c
   token/prompt input validation
 
-yvex_prefill.c
+src/generation/yvex_prefill.c
   prefill state and prefill reports
 
-yvex_kv.c
+src/generation/yvex_kv.c
   KV shape, ownership, append/read, lifecycle, capacity diagnostics
 
-yvex_decode.c
+src/generation/yvex_decode.c
   decode step boundary over existing KV-backed transformer state
 
-yvex_logits.c
+src/generation/yvex_logits.c
   logits buffer ownership and diagnostics
 
-yvex_sampling.c
+src/generation/yvex_sampling.c
   sampling over logits
 
-yvex_generation.c
+src/generation/yvex_generation.c
   generation loop integration
 
-yvex_eval.c
+src/eval/yvex_eval.c
   eval harness after runtime generation exists
 
-yvex_bench.c
+src/bench/yvex_bench.c
   benchmark harness after measured runtime paths exist
 
-yvex_metrics.c
+src/metrics/yvex_metrics.c
   metrics and counters
 
-yvex_profile.c
+src/metrics/yvex_profile.c
   profile output
 
-yvex_chat.c
+src/cli/yvex_chat.c
   diagnostic console and future runtime-backed REPL shell
 ```
 
@@ -186,7 +206,14 @@ error
 
 yvex_cli.c owns dispatch only.
 
-Domain behavior lives in the domain owner.
+CLI command grammar lives under src/cli/.
+
+Domain modules do not own usage text, porcelain, plumbing, audit walls, or
+argv parsing.
+
+Domain modules may build facts and return report structs.
+
+Renderers may format report structs.
 
 Normal output is compact.
 

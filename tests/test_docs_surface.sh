@@ -55,6 +55,10 @@ for agents_term in \
   "# AGENTS.md" \
   "YVEX is a native C local inference engine" \
   "yvex_cli.c owns dispatch only" \
+  "C implementation lives under src/." \
+  "CLI command grammar lives under src/cli/." \
+  "Domain modules do not own usage text" \
+  "Root yvex_*.c files are forbidden after TOPOLOGY.FS.0" \
   "Header-only means header-only" \
   "Generation-capable artifact is not runtime generation" \
   "A claim requires implementation, tests, command proof, and documented boundary" \
@@ -215,6 +219,11 @@ done
 
 grep -nF "V010.QUANT.2 - qtype compute/refusal matrix" docs/spine.md >/dev/null || {
   echo "spine must preserve V010.QUANT.2 as Active Next" >&2
+  exit 1
+}
+
+grep -nF "| TOPOLOGY.FS.0 | complete | Move C implementation under src modules and quarantine model-target CLI command surface. |" docs/spine.md >/dev/null || {
+  echo "spine must mark TOPOLOGY.FS.0 complete" >&2
   exit 1
 }
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env sh
 set -eu
 
-test ! -d src
 test ! -d cli
 test ! -d server
 test ! -d backends
@@ -15,49 +14,87 @@ test ! -d executor
 test -x ./yvex
 test -x ./yvexd
 
-test -f yvex_cli.c
-test ! -f yvex_cli_runtime.c
-test -f yvexd.c
-test -f yvex_core.c
-test -f yvex_render_private.h
-test -f yvex_accounts.c
-test -f yvex_fs.c
-test -f yvex_model_artifacts.c
-test -f yvex_source.c
-test -f yvex_prefill.c
-test -f yvex_kv.c
-test -f yvex_decode.c
-test -f yvex_logits.c
-test -f yvex_sampling.c
-test -f yvex_generation.c
-test -f yvex_eval.c
-test -f yvex_bench.c
-test -f yvex_profile.c
-test -f cuda/cuda_backend.c
-test -f cuda/cuda_errors.c
-test -f cuda/cuda_info.c
-test -f cuda/cuda_internal.h
-test -f cuda/cuda_kernels.cu
-test -f cuda/cuda_kernels.h
-test -f cuda/cuda_ops.c
-test -f cuda/cuda_tensor.c
-test -f gguf/gguf.c
-test -f gguf/naming.c
-test -f gguf/tools.c
-test -f gguf/conversion.c
-test -f gguf/families.h
-test -f gguf/quant.c
+test -d src
+test -d src/app
+test -d src/cli
+test -d src/core
+test -d src/accounts
+test -d src/artifact
+test -d src/backend
+test -d src/backend/cuda
+test -d src/daemon
+test -d src/server
+test -d src/gguf
+test -d src/model
+test -d src/source
+test -d src/tokenizer
+test -d src/graph
+test -d src/runtime
+test -d src/generation
+test -d src/metrics
+test -d src/eval
+test -d src/bench
+
+test -f src/cli/yvex_cli.c
+test ! -f src/cli/yvex_cli_runtime.c
+test -f src/cli/yvex_model_target_cli.c
+test -f src/daemon/yvexd.c
+test -f src/core/yvex_core.c
+test -f src/cli/yvex_render_private.h
+test -f src/accounts/yvex_accounts.c
+test -f src/core/yvex_fs.c
+test -f src/model/yvex_model.c
+test -f src/model/yvex_model_artifacts.c
+test -f src/source/yvex_source.c
+test -f src/generation/yvex_prefill.c
+test -f src/generation/yvex_kv.c
+test -f src/generation/yvex_decode.c
+test -f src/generation/yvex_logits.c
+test -f src/generation/yvex_sampling.c
+test -f src/generation/yvex_generation.c
+test -f src/eval/yvex_eval.c
+test -f src/bench/yvex_bench.c
+test -f src/metrics/yvex_profile.c
+test -f src/backend/cuda/cuda_backend.c
+test -f src/backend/cuda/cuda_errors.c
+test -f src/backend/cuda/cuda_info.c
+test -f src/backend/cuda/cuda_internal.h
+test -f src/backend/cuda/cuda_kernels.cu
+test -f src/backend/cuda/cuda_kernels.h
+test -f src/backend/cuda/cuda_ops.c
+test -f src/backend/cuda/cuda_tensor.c
+test -f src/gguf/gguf.c
+test -f src/gguf/naming.c
+test -f src/gguf/tools.c
+test -f src/gguf/conversion.c
+test -f src/gguf/families.h
+test -f src/gguf/quant.c
 
 test -d include/yvex
-test -d cuda
-test -d gguf
+test ! -d cuda
+test ! -d gguf
 test ! -d models
 test -d docs
 test -d tests
 test -d tests/vectors
 
+test -z "$(git ls-files 'yvex_*.c')"
+test -z "$(git ls-files 'yvex_*_private.h')"
+
+if grep -nF 'usage: yvex model-target' src/model/yvex_model.c; then
+  echo "model-target usage text must not live in src/model/yvex_model.c"
+  exit 1
+fi
+
+if grep -nF 'yvex model-target' src/model/yvex_model.c; then
+  echo "model-target command text must not live in src/model/yvex_model.c"
+  exit 1
+fi
+
+grep -nF 'usage: yvex model-target' src/cli/yvex_model_target_cli.c >/dev/null
+
 bad_command_files="$(
-  find . -maxdepth 3 \
+  find . -maxdepth 5 \
     \( -name 'yvex_cli_*.c' \
        -o -name 'yvex_cli_*.h' \
        -o -name 'yvex_*_commands.c' \
@@ -188,31 +225,31 @@ if [ -n "$bad_command_files" ]; then
   exit 1
 fi
 
-if grep -nE 'FILE_OR_ALIAS|--execute-op|--execute-fixture|--execute-partial|--execute-segment|--attach-kv|--expect-sha256|--native-source|standalone F32|standalone RoPE|DeepSeek|GGUF descriptor' yvex_cli.c; then
+if grep -nE 'FILE_OR_ALIAS|--execute-op|--execute-fixture|--execute-partial|--execute-segment|--attach-kv|--expect-sha256|--native-source|standalone F32|standalone RoPE|DeepSeek|GGUF descriptor' src/cli/yvex_cli.c; then
   echo "long command catalog text must not live in yvex_cli.c"
   exit 1
 fi
 
-if grep -nE 'open_artifact_for_gguf|open_model_context|open_tokenizer_context|close_model_context|close_tokenizer_context|print_quoted_bytes|print_tensor_dims|print_native_dims|parse_id_list|parse_positive_ull|parse_ull_allow_zero|parse_uint_allow_zero|parse_dims_csv' yvex_cli.c; then
+if grep -nE 'open_artifact_for_gguf|open_model_context|open_tokenizer_context|close_model_context|close_tokenizer_context|print_quoted_bytes|print_tensor_dims|print_native_dims|parse_id_list|parse_positive_ull|parse_ull_allow_zero|parse_uint_allow_zero|parse_dims_csv' src/cli/yvex_cli.c; then
   echo "shared command helpers must not live in yvex_cli.c"
   exit 1
 fi
 
-if grep -E 'cli_rope_reference|cli_attention_reference|cli_matmul_reference|cli_mlp_reference|command_graph_execute_rope_op|command_graph_execute_attention_op|command_graph_execute_matmul_op|command_graph_execute_mlp_op' yvex_cli.c >/dev/null; then
+if grep -E 'cli_rope_reference|cli_attention_reference|cli_matmul_reference|cli_mlp_reference|command_graph_execute_rope_op|command_graph_execute_attention_op|command_graph_execute_matmul_op|command_graph_execute_mlp_op' src/cli/yvex_cli.c >/dev/null; then
   echo "graph reference/proof implementations must not live in yvex_cli.c"
   exit 1
 fi
 
-cli_lines="$(wc -l < yvex_cli.c)"
+cli_lines="$(wc -l < src/cli/yvex_cli.c)"
 if [ "$cli_lines" -gt 260 ]; then
   echo "yvex_cli.c is too large: $cli_lines lines"
   exit 1
 fi
 
-root_c_count="$(find . -maxdepth 1 -type f -name 'yvex*.c' | wc -l | tr -d ' ')"
-
-if [ "$root_c_count" -gt 28 ]; then
-  echo "too many root C files: $root_c_count"
+root_source_files="$(git ls-files 'yvex_*.c' 'yvex_*_private.h')"
+if [ -n "$root_source_files" ]; then
+  echo "$root_source_files"
+  echo "root yvex source/private header files are forbidden after TOPOLOGY.FS.0"
   exit 1
 fi
 

@@ -820,6 +820,7 @@ labels.
 | SPINE.OUTPUT.UX.CONTRACT.0 | complete | Define CLI output UX contract and diagnostic demotion plan. |
 | CLI.ARCH.AUDIT.0 | complete | Inventory print/output pressure and porcelain/plumbing doctrine. |
 | SPINE.CLI.REBASE.1 | complete | Rebase Operator CLI track after V010.CLI.26 grammar work. |
+| TOPOLOGY.FS.0 | complete | Move C implementation under src modules and quarantine model-target CLI command surface. |
 | V010.PATHS.0 | complete | operator root layout report. |
 | V010.PATHS.1 | complete | source/artifact/reference/report/cache separation. |
 | V010.PATHS.2 | complete | registry path layout. |
