@@ -184,9 +184,14 @@ Current source/model-family commands include:
 ./yvex model-target class-profile qwen3-8b --audit
 ./yvex model-target tensor-collection qwen3-8b --audit
 ./yvex model-target tensor-map qwen3-8b --audit
+./yvex model-target quant-policy qwen3-8b --audit
+./yvex model-target tensor-map qwen3-8b --check-output-contract normal
 ./yvex model-target inspect gemma-4-12b-it
 ./yvex model-target class-profile gemma-4-12b-it --audit
 ./yvex model-target tensor-collection gemma-4-12b-it --audit
+./yvex model-target tensor-map gemma-4-12b-it --audit
+./yvex model-target quant-policy gemma-4-12b-it --audit
+./yvex model-target quant-policy gemma-4-12b-it --check-output-contract normal
 ./yvex source-manifest report --family qwen --release v0.1.0 --audit
 ./yvex source-manifest report --family gemma --release v0.1.0 --audit
 ./yvex models download qwen3-8b --models-root "$HOME/lab/models" --auth auto --audit

@@ -15,6 +15,17 @@ default; `--output table` only forces that renderer where it is available. Use
 For model report surfaces such as `model-target tensor-map` and
 `model-target quant-policy`, normal/table output must stay compact; detailed
 fields such as `tensor_map.entry.*` remain audit-only evidence.
+When changing those renderers, use YVEX's native output-contract check instead
+of shell line-count or grep pipelines.
+
+```sh
+./yvex model-target tensor-map gemma-4-12b-it --check-output-contract normal
+./yvex model-target tensor-map gemma-4-12b-it --check-output-contract audit
+./yvex model-target tensor-map gemma-4-12b-it --role output-head --check-output-contract normal
+./yvex model-target tensor-map gemma-4-12b-it --role missing-roles --check-output-contract normal
+./yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0 --check-output-contract normal
+./yvex model-target quant-policy gemma-4-12b-it --check-output-contract normal
+```
 
 ## Lane 0 — Fast regression after a wave
 

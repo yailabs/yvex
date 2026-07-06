@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 /* Dtype registry */
 
@@ -2004,6 +2005,14 @@ typedef enum {
     YVEX_MODEL_TARGET_OUTPUT_AUDIT
 } yvex_model_target_output_mode;
 
+typedef enum {
+    YVEX_OUTPUT_CONTRACT_TENSOR_MAP = 0,
+    YVEX_OUTPUT_CONTRACT_OUTPUT_HEAD,
+    YVEX_OUTPUT_CONTRACT_MISSING_ROLES,
+    YVEX_OUTPUT_CONTRACT_MAPPING_GATE,
+    YVEX_OUTPUT_CONTRACT_QTYPE_POLICY
+} yvex_output_contract_report;
+
 #define YVEX_MODEL_CLASS_NEXT_ROW "V010.MAP.8"
 #define YVEX_TENSOR_COLLECTION_NEXT_ROW "V010.MAP.8"
 #define YVEX_TENSOR_NAMING_NEXT_ROW "V010.MAP.8"
@@ -2037,6 +2046,14 @@ static int parse_model_target_output_mode(const char *value,
         return 1;
     }
     return 0;
+}
+
+static const char *model_target_output_mode_name(
+    yvex_model_target_output_mode mode)
+{
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) return "table";
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) return "audit";
+    return "normal";
 }
 
 typedef struct {
@@ -6788,6 +6805,524 @@ static int print_qtype_policy_unsupported_target(
     return 2;
 }
 
+typedef struct {
+    yvex_output_contract_report report;
+    yvex_model_target_output_mode mode;
+    const void *profile;
+} yvex_output_contract_render_context;
+
+typedef struct {
+    unsigned long long line_count;
+    unsigned long long audit_prefix_hits;
+    unsigned long long forbidden_hits;
+    unsigned long long detail_dump_hits;
+    unsigned long long table_header_hits;
+    unsigned long long compact_header_hits;
+    unsigned long long top_or_next_hits;
+    unsigned long long audit_a_hits;
+    unsigned long long audit_b_hits;
+    unsigned long long audit_c_hits;
+    unsigned long long runtime_claim_hits;
+    unsigned long long generation_hits;
+    unsigned long long benchmark_hits;
+    unsigned long long release_hits;
+    unsigned long long positive_claim_hits;
+} yvex_output_contract_stats;
+
+static int output_contract_starts_with(const char *line, const char *prefix)
+{
+    size_t n;
+
+    if (!line || !prefix) return 0;
+    n = strlen(prefix);
+    return strncmp(line, prefix, n) == 0;
+}
+
+static const char *output_contract_report_name(
+    yvex_output_contract_report report)
+{
+    if (report == YVEX_OUTPUT_CONTRACT_OUTPUT_HEAD) {
+        return "model-target tensor-map output-head";
+    }
+    if (report == YVEX_OUTPUT_CONTRACT_MISSING_ROLES) {
+        return "model-target tensor-map missing-roles";
+    }
+    if (report == YVEX_OUTPUT_CONTRACT_MAPPING_GATE) {
+        return "model-target tensor-map gate";
+    }
+    if (report == YVEX_OUTPUT_CONTRACT_QTYPE_POLICY) {
+        return "model-target quant-policy";
+    }
+    return "model-target tensor-map";
+}
+
+static const char *output_contract_render_path_name(
+    yvex_model_target_output_mode mode)
+{
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) return "table";
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) return "audit";
+    return "compact";
+}
+
+static unsigned long long output_contract_line_limit(
+    yvex_output_contract_report report,
+    yvex_model_target_output_mode mode)
+{
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) return 0;
+    if (report == YVEX_OUTPUT_CONTRACT_TENSOR_MAP) return 20;
+    if (report == YVEX_OUTPUT_CONTRACT_OUTPUT_HEAD) return 12;
+    if (report == YVEX_OUTPUT_CONTRACT_MISSING_ROLES) {
+        return mode == YVEX_MODEL_TARGET_OUTPUT_TABLE ? 12 : 14;
+    }
+    if (report == YVEX_OUTPUT_CONTRACT_MAPPING_GATE) {
+        return mode == YVEX_MODEL_TARGET_OUTPUT_TABLE ? 12 : 14;
+    }
+    return 12;
+}
+
+static int output_contract_is_table_header(
+    yvex_output_contract_report report,
+    const char *line)
+{
+    if (report == YVEX_OUTPUT_CONTRACT_TENSOR_MAP) {
+        return output_contract_starts_with(line, "TENSOR NAMING MAP");
+    }
+    if (report == YVEX_OUTPUT_CONTRACT_OUTPUT_HEAD) {
+        return output_contract_starts_with(line, "OUTPUT HEAD TENSOR MAP");
+    }
+    if (report == YVEX_OUTPUT_CONTRACT_MISSING_ROLES) {
+        return output_contract_starts_with(line, "MISSING ROLE BLOCKER REPORT");
+    }
+    if (report == YVEX_OUTPUT_CONTRACT_MAPPING_GATE) {
+        return output_contract_starts_with(line, "TENSOR MAPPING GATE");
+    }
+    return output_contract_starts_with(line, "QTYPE POLICY");
+}
+
+static int output_contract_is_compact_header(
+    yvex_output_contract_report report,
+    const char *line)
+{
+    if (report == YVEX_OUTPUT_CONTRACT_TENSOR_MAP) {
+        return output_contract_starts_with(line, "tensor-map:");
+    }
+    if (report == YVEX_OUTPUT_CONTRACT_OUTPUT_HEAD) {
+        return output_contract_starts_with(line, "output-head-map:");
+    }
+    if (report == YVEX_OUTPUT_CONTRACT_MISSING_ROLES) {
+        return output_contract_starts_with(line, "missing-roles:");
+    }
+    if (report == YVEX_OUTPUT_CONTRACT_MAPPING_GATE) {
+        return output_contract_starts_with(line, "tensor-mapping-gate:");
+    }
+    return output_contract_starts_with(line, "qtype-policy:");
+}
+
+static int output_contract_line_has_detail_dump(const char *line)
+{
+    return strstr(line, "tensor_map.entry.") ||
+           strstr(line, "output_head.entry.") ||
+           strstr(line, "missing_role.entry.") ||
+           strstr(line, "map_source.") ||
+           output_contract_starts_with(line, "downstream_blockers:");
+}
+
+static int output_contract_line_has_audit_prefix(
+    yvex_output_contract_report report,
+    const char *line)
+{
+    if (report == YVEX_OUTPUT_CONTRACT_TENSOR_MAP) {
+        return strstr(line, "tensor_map.entry.") != NULL;
+    }
+    if (report == YVEX_OUTPUT_CONTRACT_OUTPUT_HEAD) {
+        return strstr(line, "output_head_map_") ||
+               strstr(line, "output_head.entry.");
+    }
+    if (report == YVEX_OUTPUT_CONTRACT_MISSING_ROLES) {
+        return strstr(line, "missing_role.entry.") ||
+               output_contract_starts_with(line, "missing_role_report_status:");
+    }
+    if (report == YVEX_OUTPUT_CONTRACT_MAPPING_GATE) {
+        return output_contract_starts_with(line, "tensor_mapping_gate_source_path:") ||
+               output_contract_starts_with(line, "tensor_mapping_gate_tensor_map_sidecar_path:") ||
+               strstr(line, "map_source.");
+    }
+    return output_contract_starts_with(line, "qtype_policy_status:") ||
+           output_contract_starts_with(line, "source_declared_data_bytes:") ||
+           output_contract_starts_with(line, "downstream_blockers:");
+}
+
+static int output_contract_line_forbidden(
+    yvex_output_contract_report report,
+    yvex_model_target_output_mode mode,
+    const char *line)
+{
+    if (output_contract_line_has_audit_prefix(report, line)) return 1;
+    if (output_contract_starts_with(line, "runtime_claim:")) return 1;
+    if (output_contract_starts_with(line, "generation:")) return 1;
+    if (output_contract_starts_with(line, "benchmark_status:")) return 1;
+    if (output_contract_starts_with(line, "release_ready:")) return 1;
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_NORMAL &&
+        output_contract_starts_with(line, "next_required_rows:")) {
+        return 1;
+    }
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_TABLE &&
+        output_contract_starts_with(line, "boundary:")) {
+        return 1;
+    }
+    return 0;
+}
+
+static void output_contract_count_audit_requirement(
+    yvex_output_contract_report report,
+    const char *line,
+    yvex_output_contract_stats *stats)
+{
+    if (report == YVEX_OUTPUT_CONTRACT_TENSOR_MAP) {
+        if (strstr(line, "tensor_map.entry.")) stats->audit_a_hits++;
+    } else if (report == YVEX_OUTPUT_CONTRACT_OUTPUT_HEAD) {
+        if (output_contract_starts_with(line, "output_head_map_status:")) {
+            stats->audit_a_hits++;
+        }
+        if (strstr(line, "output_head.entry.")) stats->audit_b_hits++;
+    } else if (report == YVEX_OUTPUT_CONTRACT_MISSING_ROLES) {
+        if (output_contract_starts_with(line, "missing_role_report_status:")) {
+            stats->audit_a_hits++;
+        }
+        if (strstr(line, "missing_role.entry.")) stats->audit_b_hits++;
+    } else if (report == YVEX_OUTPUT_CONTRACT_MAPPING_GATE) {
+        if (output_contract_starts_with(line, "tensor_mapping_gate_status:")) {
+            stats->audit_a_hits++;
+        }
+        if (strstr(line, "map_source.")) stats->audit_b_hits++;
+    } else {
+        if (output_contract_starts_with(line, "qtype_policy_status:")) {
+            stats->audit_a_hits++;
+        }
+        if (output_contract_starts_with(line, "source_dtype_counts:")) {
+            stats->audit_b_hits++;
+        }
+        if (output_contract_starts_with(line, "downstream_blockers:")) {
+            stats->audit_c_hits++;
+        }
+    }
+}
+
+static void output_contract_analyze_line(
+    yvex_output_contract_report report,
+    yvex_model_target_output_mode mode,
+    const char *line,
+    yvex_output_contract_stats *stats)
+{
+    stats->line_count++;
+    if (output_contract_line_has_audit_prefix(report, line)) {
+        stats->audit_prefix_hits++;
+    }
+    if (output_contract_line_forbidden(report, mode, line)) {
+        stats->forbidden_hits++;
+    }
+    if (output_contract_line_has_detail_dump(line)) {
+        stats->detail_dump_hits++;
+    }
+    if (output_contract_is_table_header(report, line)) {
+        stats->table_header_hits++;
+    }
+    if (output_contract_is_compact_header(report, line)) {
+        stats->compact_header_hits++;
+    }
+    if (output_contract_starts_with(line, "top_blocker:") ||
+        output_contract_starts_with(line, "next:")) {
+        stats->top_or_next_hits++;
+    }
+    if (output_contract_starts_with(line, "runtime_claim: unsupported")) {
+        stats->runtime_claim_hits++;
+    }
+    if (output_contract_starts_with(line, "generation: unsupported-full-model")) {
+        stats->generation_hits++;
+    }
+    if (output_contract_starts_with(line, "benchmark_status: not-measured")) {
+        stats->benchmark_hits++;
+    }
+    if (output_contract_starts_with(line, "release_ready: false")) {
+        stats->release_hits++;
+    }
+    if (strstr(line, "generation_ready: " "true") ||
+        strstr(line, "release_ready: " "true") ||
+        strstr(line, "benchmark_status: " "measured") ||
+        strstr(line, "throughput achieved") ||
+        strstr(line, "runtime_claim: " "supported")) {
+        stats->positive_claim_hits++;
+    }
+    output_contract_count_audit_requirement(report, line, stats);
+}
+
+static void output_contract_render_profile(void *opaque)
+{
+    const yvex_output_contract_render_context *ctx =
+        (const yvex_output_contract_render_context *)opaque;
+
+    if (!ctx) return;
+    if (ctx->report == YVEX_OUTPUT_CONTRACT_TENSOR_MAP) {
+        const yvex_tensor_naming_profile *p =
+            (const yvex_tensor_naming_profile *)ctx->profile;
+        if (ctx->mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+            print_tensor_naming_table(p);
+        } else if (ctx->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+            print_tensor_naming_audit(p);
+        } else {
+            print_tensor_naming_normal(p);
+        }
+    } else if (ctx->report == YVEX_OUTPUT_CONTRACT_OUTPUT_HEAD) {
+        const yvex_output_head_map_profile *p =
+            (const yvex_output_head_map_profile *)ctx->profile;
+        if (ctx->mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+            print_output_head_map_table(p);
+        } else if (ctx->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+            print_output_head_map_audit(p);
+        } else {
+            print_output_head_map_normal(p);
+        }
+    } else if (ctx->report == YVEX_OUTPUT_CONTRACT_MISSING_ROLES) {
+        const yvex_missing_role_report_profile *p =
+            (const yvex_missing_role_report_profile *)ctx->profile;
+        if (ctx->mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+            print_missing_role_report_table(p);
+        } else if (ctx->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+            print_missing_role_report_audit(p);
+        } else {
+            print_missing_role_report_normal(p);
+        }
+    } else if (ctx->report == YVEX_OUTPUT_CONTRACT_MAPPING_GATE) {
+        const yvex_tensor_mapping_gate_profile *p =
+            (const yvex_tensor_mapping_gate_profile *)ctx->profile;
+        if (ctx->mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+            print_tensor_mapping_gate_table(p);
+        } else if (ctx->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+            print_tensor_mapping_gate_audit(p);
+        } else {
+            print_tensor_mapping_gate_normal(p);
+        }
+    } else {
+        const yvex_qtype_policy_profile *p =
+            (const yvex_qtype_policy_profile *)ctx->profile;
+        if (ctx->mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+            print_qtype_policy_table(p);
+        } else if (ctx->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+            print_qtype_policy_audit(p);
+        } else {
+            print_qtype_policy_normal(p);
+        }
+    }
+}
+
+static int output_contract_capture_stats(
+    yvex_output_contract_report report,
+    yvex_model_target_output_mode mode,
+    const void *profile,
+    yvex_output_contract_stats *stats)
+{
+    yvex_output_contract_render_context ctx;
+    FILE *tmp;
+    int saved_stdout;
+    char line[8192];
+
+    if (!profile || !stats) return 0;
+    memset(stats, 0, sizeof(*stats));
+    tmp = tmpfile();
+    if (!tmp) return 0;
+    fflush(stdout);
+    saved_stdout = dup(STDOUT_FILENO);
+    if (saved_stdout < 0) {
+        fclose(tmp);
+        return 0;
+    }
+    if (dup2(fileno(tmp), STDOUT_FILENO) < 0) {
+        close(saved_stdout);
+        fclose(tmp);
+        return 0;
+    }
+    ctx.report = report;
+    ctx.mode = mode;
+    ctx.profile = profile;
+    output_contract_render_profile(&ctx);
+    fflush(stdout);
+    (void)dup2(saved_stdout, STDOUT_FILENO);
+    close(saved_stdout);
+    clearerr(stdout);
+
+    rewind(tmp);
+    while (fgets(line, sizeof(line), tmp)) {
+        output_contract_analyze_line(report, mode, line, stats);
+    }
+    fclose(tmp);
+    return 1;
+}
+
+static int output_contract_audit_evidence_required(
+    yvex_output_contract_report report,
+    const void *profile)
+{
+    if (report == YVEX_OUTPUT_CONTRACT_TENSOR_MAP) {
+        const yvex_tensor_naming_profile *p =
+            (const yvex_tensor_naming_profile *)profile;
+        return p && p->entry_count > 0;
+    }
+    if (report == YVEX_OUTPUT_CONTRACT_MISSING_ROLES) {
+        const yvex_missing_role_report_profile *p =
+            (const yvex_missing_role_report_profile *)profile;
+        return p && p->missing_entry_count > 0;
+    }
+    return 1;
+}
+
+static int output_contract_audit_evidence_present(
+    yvex_output_contract_report report,
+    const yvex_output_contract_stats *stats,
+    int required)
+{
+    if (!required) return 1;
+    if (report == YVEX_OUTPUT_CONTRACT_TENSOR_MAP) {
+        return stats->audit_a_hits > 0;
+    }
+    if (report == YVEX_OUTPUT_CONTRACT_OUTPUT_HEAD ||
+        report == YVEX_OUTPUT_CONTRACT_MISSING_ROLES ||
+        report == YVEX_OUTPUT_CONTRACT_MAPPING_GATE) {
+        return stats->audit_a_hits > 0 && stats->audit_b_hits > 0;
+    }
+    return stats->audit_a_hits > 0 &&
+           stats->audit_b_hits > 0 &&
+           stats->audit_c_hits > 0;
+}
+
+static const char *output_contract_status(
+    yvex_output_contract_report report,
+    yvex_model_target_output_mode mode,
+    const yvex_output_contract_stats *stats,
+    unsigned long long limit,
+    int audit_required,
+    int captured)
+{
+    if (!captured) return "fail-render-path";
+    if (stats->positive_claim_hits > 0) return "fail-render-path";
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+        if (!output_contract_audit_evidence_present(report, stats,
+                                                    audit_required)) {
+            return "fail-audit-evidence-missing";
+        }
+        if (stats->runtime_claim_hits == 0 ||
+            stats->generation_hits == 0 ||
+            stats->benchmark_hits == 0 ||
+            stats->release_hits == 0) {
+            return "fail-audit-evidence-missing";
+        }
+        return "pass";
+    }
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+        if (stats->table_header_hits == 0) return "fail-render-path";
+        if (stats->forbidden_hits > 0 || stats->detail_dump_hits > 0) {
+            return "fail-table-wall";
+        }
+        if (limit > 0 && stats->line_count > limit) {
+            return "fail-line-budget";
+        }
+        return "pass";
+    }
+    if (stats->compact_header_hits == 0 || stats->top_or_next_hits == 0) {
+        return "fail-render-path";
+    }
+    if (stats->forbidden_hits > 0 || stats->detail_dump_hits > 0) {
+        return "fail-audit-leak";
+    }
+    if (limit > 0 && stats->line_count > limit) return "fail-line-budget";
+    return "pass";
+}
+
+static int output_contract_print_result(
+    yvex_output_contract_report report,
+    const char *target_id,
+    yvex_model_target_output_mode mode,
+    const void *profile)
+{
+    yvex_output_contract_stats stats;
+    unsigned long long limit;
+    int captured;
+    int audit_required;
+    const char *status;
+    const char *audit_evidence;
+    const char *table_only;
+
+    limit = output_contract_line_limit(report, mode);
+    captured = output_contract_capture_stats(report, mode, profile, &stats);
+    audit_required = output_contract_audit_evidence_required(report, profile);
+    status = output_contract_status(report, mode, &stats, limit,
+                                    audit_required, captured);
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+        audit_evidence =
+            output_contract_audit_evidence_present(report, &stats,
+                                                   audit_required)
+                ? (audit_required ? "present" : "not-required")
+                : "missing";
+    } else {
+        audit_evidence = "not-required";
+    }
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+        table_only = (stats.table_header_hits > 0 &&
+                      stats.forbidden_hits == 0 &&
+                      stats.detail_dump_hits == 0)
+                         ? "true"
+                         : "false";
+    } else {
+        table_only = "not-applicable";
+    }
+
+    printf("output-contract: %s\n", output_contract_report_name(report));
+    printf("target: %s\n", target_id && target_id[0] ? target_id : "none");
+    printf("mode: %s\n", model_target_output_mode_name(mode));
+    printf("status: %s\n", status);
+    printf("render_path: %s\n", output_contract_render_path_name(mode));
+    printf("line_count: %llu\n", stats.line_count);
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+        printf("line_limit: unbounded\n");
+    } else {
+        printf("line_limit: %llu\n", limit);
+    }
+    printf("audit_prefix_hits: %llu\n", stats.audit_prefix_hits);
+    printf("detail_dump: %s\n",
+           stats.detail_dump_hits > 0 ? "present" : "suppressed");
+    printf("table_only: %s\n", table_only);
+    printf("audit_evidence: %s\n", audit_evidence);
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    printf("boundary: output-contract check only; no runtime/generation claim\n");
+    return strcmp(status, "pass") == 0 ? 0 : 1;
+}
+
+static int output_contract_print_refusal(const char *report,
+                                         const char *target_id,
+                                         const char *mode,
+                                         const char *status)
+{
+    printf("output-contract: %s\n", report ? report : "model-target");
+    printf("target: %s\n", target_id && target_id[0] ? target_id : "none");
+    printf("mode: %s\n", mode && mode[0] ? mode : "none");
+    printf("status: %s\n", status);
+    printf("render_path: not-run\n");
+    printf("line_count: 0\n");
+    printf("line_limit: not-run\n");
+    printf("audit_prefix_hits: 0\n");
+    printf("detail_dump: not-run\n");
+    printf("table_only: not-applicable\n");
+    printf("audit_evidence: not-run\n");
+    printf("runtime_claim: unsupported\n");
+    printf("generation: unsupported-full-model\n");
+    printf("benchmark_status: not-measured\n");
+    printf("release_ready: false\n");
+    printf("boundary: output-contract check only; no runtime/generation claim\n");
+    return 2;
+}
+
 static const char *target_decision_candidate_class(const yvex_model_target_record *record)
 {
     if (!record) return "unknown";
@@ -7920,8 +8455,8 @@ static void print_model_target_usage(FILE *fp)
     fprintf(fp, "       yvex model-target decision --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target class-profile TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target tensor-collection TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
-    fprintf(fp, "       yvex model-target tensor-map TARGET [--role output-head|tokenizer|missing-roles | --gate v0.1.0] [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
-    fprintf(fp, "       yvex model-target quant-policy TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
+    fprintf(fp, "       yvex model-target tensor-map TARGET [--role output-head|tokenizer|missing-roles | --gate v0.1.0] [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit] [--check-output-contract normal|table|audit]\n");
+    fprintf(fp, "       yvex model-target quant-policy TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit] [--check-output-contract normal|table|audit]\n");
     fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR] [--audit | --output normal|table|audit]\n");
 }
 
@@ -9330,6 +9865,9 @@ int yvex_model_target_command(int argc, char **argv)
         yvex_tokenizer_map_profile tokenizer_profile;
         yvex_missing_role_report_profile missing_role_profile;
         yvex_tensor_mapping_gate_profile gate_profile;
+        yvex_model_target_output_mode check_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
+        const char *check_mode_text = NULL;
+        int check_output_contract = 0;
         int rc;
 
         output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
@@ -9390,6 +9928,23 @@ int yvex_model_target_command(int argc, char **argv)
                             gate);
                     return 2;
                 }
+            } else if (strcmp(argv[i], "--check-output-contract") == 0) {
+                if (i + 1 >= argc || argv[i + 1][0] == '\0') {
+                    return output_contract_print_refusal(
+                        "model-target tensor-map",
+                        target_id,
+                        "none",
+                        "parser-error");
+                }
+                check_mode_text = argv[++i];
+                if (!parse_model_target_output_mode(check_mode_text, &check_mode)) {
+                    return output_contract_print_refusal(
+                        "model-target tensor-map",
+                        target_id,
+                        check_mode_text,
+                        "unsupported-mode");
+                }
+                check_output_contract = 1;
             } else if (strcmp(argv[i], "--json") == 0) {
                 fprintf(stderr, "model-target tensor-map: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
@@ -9415,6 +9970,13 @@ int yvex_model_target_command(int argc, char **argv)
         if (!record || !spec ||
             (strcmp(spec->family_key, "qwen") != 0 &&
              strcmp(spec->family_key, "gemma") != 0)) {
+            if (check_output_contract) {
+                return output_contract_print_refusal(
+                    "model-target tensor-map",
+                    target_id,
+                    check_mode_text,
+                    "unsupported-target");
+            }
             fprintf(stderr, "model-target tensor-map: unsupported target: %s\n",
                     target_id && target_id[0] ? target_id : "none");
             return 2;
@@ -9424,6 +9986,13 @@ int yvex_model_target_command(int argc, char **argv)
                                                    &gate_profile);
             if (rc != 0) {
                 return rc;
+            }
+            if (check_output_contract) {
+                return output_contract_print_result(
+                    YVEX_OUTPUT_CONTRACT_MAPPING_GATE,
+                    record->target_id,
+                    check_mode,
+                    &gate_profile);
             }
             if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
                 print_tensor_mapping_gate_table(&gate_profile);
@@ -9440,13 +10009,21 @@ int yvex_model_target_command(int argc, char **argv)
             if (rc != 0) {
                 return rc;
             }
-            if (dynamic_target.found &&
+            if (!check_output_contract &&
+                dynamic_target.found &&
                 !write_output_head_map_sidecar(dynamic_target.output_head_map_path,
                                                &output_head_profile)) {
                 fprintf(stderr,
                         "model-target tensor-map: cannot write output-head map sidecar: %s\n",
                         dynamic_target.output_head_map_path);
                 return 3;
+            }
+            if (check_output_contract) {
+                return output_contract_print_result(
+                    YVEX_OUTPUT_CONTRACT_OUTPUT_HEAD,
+                    record->target_id,
+                    check_mode,
+                    &output_head_profile);
             }
             if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
                 print_output_head_map_table(&output_head_profile);
@@ -9458,6 +10035,13 @@ int yvex_model_target_command(int argc, char **argv)
             return 0;
         }
         if (role && strcmp(role, "tokenizer") == 0) {
+            if (check_output_contract) {
+                return output_contract_print_refusal(
+                    "model-target tensor-map tokenizer",
+                    target_id,
+                    check_mode_text,
+                    "unsupported-mode");
+            }
             rc = build_tokenizer_map_profile(record, models_root, source,
                                              &tokenizer_profile);
             if (rc != 0) {
@@ -9478,6 +10062,13 @@ int yvex_model_target_command(int argc, char **argv)
             if (rc != 0) {
                 return rc;
             }
+            if (check_output_contract) {
+                return output_contract_print_result(
+                    YVEX_OUTPUT_CONTRACT_MISSING_ROLES,
+                    record->target_id,
+                    check_mode,
+                    &missing_role_profile);
+            }
             if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
                 print_missing_role_report_table(&missing_role_profile);
             } else if (output_mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
@@ -9491,12 +10082,20 @@ int yvex_model_target_command(int argc, char **argv)
         if (rc != 0) {
             return rc;
         }
-        if (dynamic_target.found &&
+        if (!check_output_contract &&
+            dynamic_target.found &&
             !write_tensor_map_sidecar(dynamic_target.tensor_map_path, &profile)) {
             fprintf(stderr,
                     "model-target tensor-map: cannot write tensor map sidecar: %s\n",
                     dynamic_target.tensor_map_path);
             return 3;
+        }
+        if (check_output_contract) {
+            return output_contract_print_result(
+                YVEX_OUTPUT_CONTRACT_TENSOR_MAP,
+                record->target_id,
+                check_mode,
+                &profile);
         }
         if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
             print_tensor_naming_table(&profile);
@@ -9511,6 +10110,9 @@ int yvex_model_target_command(int argc, char **argv)
         const char *target_id = NULL;
         const char *source = NULL;
         yvex_qtype_policy_profile profile;
+        yvex_model_target_output_mode check_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
+        const char *check_mode_text = NULL;
+        int check_output_contract = 0;
         int rc;
 
         output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
@@ -9544,6 +10146,23 @@ int yvex_model_target_command(int argc, char **argv)
                     return 2;
                 }
                 source = argv[++i];
+            } else if (strcmp(argv[i], "--check-output-contract") == 0) {
+                if (i + 1 >= argc || argv[i + 1][0] == '\0') {
+                    return output_contract_print_refusal(
+                        "model-target quant-policy",
+                        target_id,
+                        "none",
+                        "parser-error");
+                }
+                check_mode_text = argv[++i];
+                if (!parse_model_target_output_mode(check_mode_text, &check_mode)) {
+                    return output_contract_print_refusal(
+                        "model-target quant-policy",
+                        target_id,
+                        check_mode_text,
+                        "unsupported-mode");
+                }
+                check_output_contract = 1;
             } else if (strcmp(argv[i], "--json") == 0) {
                 fprintf(stderr, "model-target quant-policy: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
@@ -9554,11 +10173,25 @@ int yvex_model_target_command(int argc, char **argv)
         }
         record = find_model_target(target_id);
         if (!record) {
+            if (check_output_contract) {
+                return output_contract_print_refusal(
+                    "model-target quant-policy",
+                    target_id,
+                    check_mode_text,
+                    "unsupported-target");
+            }
             return print_qtype_policy_unsupported_target(target_id, output_mode);
         }
         rc = build_qtype_policy_profile(record, models_root, source, &profile);
         if (rc != 0) {
             return rc;
+        }
+        if (check_output_contract) {
+            return output_contract_print_result(
+                YVEX_OUTPUT_CONTRACT_QTYPE_POLICY,
+                record->target_id,
+                check_mode,
+                &profile);
         }
         if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
             print_qtype_policy_table(&profile);
