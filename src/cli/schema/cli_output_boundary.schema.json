@@ -1,0 +1,6 @@
+{
+  "schema": "yvex.cli.output_boundary.v1",
+  "status": "plumbing-foundation-only",
+  "uniform_json_support": false,
+  "boundary": "CLI schema ownership does not imply command JSON support."
+}

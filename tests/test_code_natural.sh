@@ -85,7 +85,73 @@ if grep -nF 'yvex model-target' src/model/yvex_model.c; then
   exit 1
 fi
 
-grep -nF 'usage: yvex model-target' src/cli/yvex_model_target_cli.c >/dev/null
+grep -nF 'usage: yvex model-target' src/cli/commands/yvex_model_target_cli.c >/dev/null
+
+PRINT_HITS="$(
+  git grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|putchar|perror)\s*\(' -- 'src/**/*.c' 'src/**/*.cu' |
+  grep -vE '^src/cli/io/yvex_cli_(out|error|json|table|log)\.c:' |
+  grep -vE '^src/core/yvex_file_writer\.c:'
+)" || true
+
+if test -n "$PRINT_HITS"; then
+  echo "$PRINT_HITS"
+  echo "direct output outside approved writer files"
+  exit 1
+fi
+
+USAGE_HITS="$(
+  git grep -n 'usage: yvex' -- 'src/**/*.c' |
+  grep -vE '^src/cli/'
+)" || true
+
+if test -n "$USAGE_HITS"; then
+  echo "$USAGE_HITS"
+  echo "usage text outside src/cli"
+  exit 1
+fi
+
+OPTION_HITS="$(
+  git grep -nE 'strcmp\(argv\[|--output|--audit|--json|--include-' -- 'src/**/*.c' |
+  grep -vE '^src/cli/'
+)" || true
+
+if test -n "$OPTION_HITS"; then
+  echo "$OPTION_HITS"
+  echo "CLI option parsing outside src/cli"
+  exit 1
+fi
+
+CATALOG_HITS="$(
+  git grep -n 'src/cli/catalog' -- 'src/**/*.c' 'src/**/*.h' |
+  grep -vE '^src/cli/'
+)" || true
+
+if test -n "$CATALOG_HITS"; then
+  echo "$CATALOG_HITS"
+  echo "CLI catalog included outside src/cli"
+  exit 1
+fi
+
+CATALOG_LOGIC_HITS="$(
+  grep -RInE '\b(if|for|while|switch|return)\b|[{}();]|printf|fprintf' src/cli/catalog || true
+)"
+
+if test -n "$CATALOG_LOGIC_HITS"; then
+  echo "$CATALOG_LOGIC_HITS"
+  echo "CLI catalog files must contain lists only"
+  exit 1
+fi
+
+RENDER_HITS="$(
+  git grep -nE '\b(print_.*_(normal|table|audit|json|report)|emit_.*_trace)\b' -- 'src/**/*.c' |
+  grep -vE '^src/cli/'
+)" || true
+
+if test -n "$RENDER_HITS"; then
+  echo "$RENDER_HITS"
+  echo "porcelain/audit renderer outside src/cli"
+  exit 1
+fi
 
 awk '
 FNR == 1 {
@@ -154,12 +220,12 @@ END {
 
 for f in \
   src/model/yvex_model.c \
-  src/cli/yvex_model_target_cli.c \
+  src/cli/commands/yvex_model_target_cli.c \
   src/cli/yvex_cli.c \
-  src/runtime/yvex_runtime.c \
-  src/generation/yvex_generation.c \
-  src/artifact/yvex_artifact.c \
-  src/source/yvex_source.c
+  src/cli/commands/yvex_runtime_cli.c \
+  src/cli/commands/yvex_generate_cli.c \
+  src/cli/commands/yvex_artifact_cli.c \
+  src/cli/commands/yvex_source_cli.c
 do
   grep -nF 'Purpose:' "$f" >/dev/null
   grep -nF 'Inputs:' "$f" >/dev/null
@@ -168,16 +234,16 @@ do
   grep -nF 'Boundary:' "$f" >/dev/null
 done
 
-grep -nF 'command grammar' src/cli/yvex_model_target_cli.c >/dev/null
-grep -nF 'usage/help' src/cli/yvex_model_target_cli.c >/dev/null
-grep -nF 'report rendering' src/cli/yvex_model_target_cli.c >/dev/null
-grep -nF 'does not create capability' src/cli/yvex_model_target_cli.c >/dev/null
+grep -nF 'command grammar' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'usage/help' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'report rendering' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'does not create capability' src/cli/commands/yvex_model_target_cli.c >/dev/null
 grep -nF 'model metadata/materialization facts are not model support' src/model/yvex_model.c >/dev/null
 grep -nF 'tensor payload bytes' src/model/yvex_model.c >/dev/null
 grep -nF 'materialization' src/model/yvex_model.c >/dev/null
 
 if grep -nE 'implemented|ready|supports generation|benchmark result|token/sec|evaluation suite implemented|generation implemented' \
-    src/generation/yvex_generation.c src/eval/yvex_eval.c src/bench/yvex_bench.c; then
+    src/cli/commands/yvex_generate_cli.c src/eval/yvex_eval.c src/bench/yvex_bench.c; then
   echo "future boundary files must not claim runtime readiness"
   exit 1
 fi
@@ -425,19 +491,19 @@ if awk '
   END {
     exit bad ? 1 : 0
   }
-' src/model/yvex_model_artifacts.c; then
+' src/cli/commands/yvex_model_artifacts_cli.c; then
   :
 else
   echo "models command owners must not shell out; provider execution belongs to accounts"
   exit 1
 fi
 
-if grep -nE '\b(system|popen|execl)[[:space:]]*\(' src/accounts/yvex_accounts.c; then
+if grep -nE '\b(system|popen|execl)[[:space:]]*\(' src/cli/commands/yvex_accounts_cli.c; then
   echo "accounts must use bounded exec helpers only"
   exit 1
 fi
 
-runtime_files="$(git ls-files 'src/runtime/yvex_runtime*.c' 'src/backend/yvex_backend.c' 'src/tokenizer/yvex_tokenizer.c' 'src/tokenizer/yvex_token_input.c' 'src/generation/yvex_kv.c' 'src/generation/yvex_prefill.c' 'src/core/yvex_fs.c' 2>/dev/null || true)"
+runtime_files="$(git ls-files 'src/cli/commands/yvex_runtime_cli.c' 'src/cli/commands/yvex_backend_cli.c' 'src/cli/commands/yvex_tokenizer_cli.c' 'src/tokenizer/yvex_token_input.c' 'src/cli/commands/yvex_kv_cli.c' 'src/generation/yvex_prefill.c' 'src/cli/commands/yvex_paths_cli.c' 2>/dev/null || true)"
 
 if [ -n "$runtime_files" ] && grep -nE '\b(system|popen|execl|execv|fork)[[:space:]]*\(' $runtime_files; then
   echo "runtime ownership files must not shell out"

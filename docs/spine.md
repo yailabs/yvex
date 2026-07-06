@@ -822,6 +822,7 @@ labels.
 | SPINE.CLI.REBASE.1 | complete | Rebase Operator CLI track after V010.CLI.26 grammar work. |
 | TOPOLOGY.FS.0 | complete | Move C implementation under src modules and quarantine model-target CLI command surface. |
 | TOPOLOGY.SOURCE.CONTRACT.0 | complete | Add source file and function contract guardrails for module ownership. |
+| TOPOLOGY.CLI.PRINT.ALL.0 | complete | Move production operator printing, help, usage, renderers, and CLI metadata out of domain modules into src/cli. |
 | V010.PATHS.0 | complete | operator root layout report. |
 | V010.PATHS.1 | complete | source/artifact/reference/report/cache separation. |
 | V010.PATHS.2 | complete | registry path layout. |
@@ -1414,7 +1415,8 @@ Current state:
 Complete:
   V010.CLI.17, V010.CLI.18, V010.CLI.19, V010.CLI.20, V010.CLI.21,
   V010.CLI.22, V010.CLI.23, V010.CLI.24, CLI.ARCH.AUDIT.0,
-  V010.CLI.25, V010.CLI.26, SPINE.CLI.REBASE.1.
+  V010.CLI.25, V010.CLI.26, SPINE.CLI.REBASE.1,
+  TOPOLOGY.CLI.PRINT.ALL.0.
 
 Active / Next:
   not Active Next. V010.CLI.27 remains planned.

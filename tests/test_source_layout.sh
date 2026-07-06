@@ -17,44 +17,44 @@ test -x ./yvexd
 test -d src
 test -d src/app
 test -d src/cli
+test -d src/cli/commands
+test -d src/cli/render
+test -d src/cli/io
+test -d src/cli/catalog
+test -d src/cli/schema
 test -d src/core
-test -d src/accounts
 test -d src/artifact
 test -d src/backend
 test -d src/backend/cuda
-test -d src/daemon
 test -d src/server
 test -d src/gguf
 test -d src/model
-test -d src/source
 test -d src/tokenizer
-test -d src/graph
 test -d src/runtime
 test -d src/generation
-test -d src/metrics
 test -d src/eval
 test -d src/bench
 
 test -f src/cli/yvex_cli.c
 test ! -f src/cli/yvex_cli_runtime.c
-test -f src/cli/yvex_model_target_cli.c
-test -f src/daemon/yvexd.c
+test -f src/cli/commands/yvex_model_target_cli.c
+test -f src/cli/commands/yvexd_cli.c
 test -f src/core/yvex_core.c
 test -f src/cli/yvex_render_private.h
-test -f src/accounts/yvex_accounts.c
-test -f src/core/yvex_fs.c
+test -f src/cli/commands/yvex_accounts_cli.c
+test -f src/cli/commands/yvex_paths_cli.c
 test -f src/model/yvex_model.c
-test -f src/model/yvex_model_artifacts.c
-test -f src/source/yvex_source.c
+test -f src/cli/commands/yvex_model_artifacts_cli.c
+test -f src/cli/commands/yvex_source_cli.c
 test -f src/generation/yvex_prefill.c
-test -f src/generation/yvex_kv.c
-test -f src/generation/yvex_decode.c
-test -f src/generation/yvex_logits.c
-test -f src/generation/yvex_sampling.c
-test -f src/generation/yvex_generation.c
+test -f src/cli/commands/yvex_kv_cli.c
+test -f src/cli/commands/yvex_decode_cli.c
+test -f src/cli/commands/yvex_logits_cli.c
+test -f src/cli/commands/yvex_sampling_cli.c
+test -f src/cli/commands/yvex_generate_cli.c
 test -f src/eval/yvex_eval.c
 test -f src/bench/yvex_bench.c
-test -f src/metrics/yvex_profile.c
+test -f src/cli/commands/yvex_profile_cli.c
 test -f src/backend/cuda/cuda_backend.c
 test -f src/backend/cuda/cuda_errors.c
 test -f src/backend/cuda/cuda_info.c
@@ -65,10 +65,15 @@ test -f src/backend/cuda/cuda_ops.c
 test -f src/backend/cuda/cuda_tensor.c
 test -f src/gguf/gguf.c
 test -f src/gguf/naming.c
-test -f src/gguf/tools.c
-test -f src/gguf/conversion.c
+test -f src/cli/commands/yvex_gguf_cli.c
+test -f src/cli/commands/yvex_conversion_cli.c
 test -f src/gguf/families.h
-test -f src/gguf/quant.c
+test -f src/cli/commands/yvex_quant_cli.c
+test -f src/cli/io/yvex_cli_out.c
+test -f src/cli/io/yvex_cli_error.c
+test -f src/cli/io/yvex_cli_json.c
+test -f src/cli/io/yvex_cli_table.c
+test -f src/cli/io/yvex_cli_log.c
 
 test -d include/yvex
 test ! -d cuda
@@ -83,12 +88,12 @@ test -z "$(git ls-files 'yvex_*_private.h')"
 
 for f in \
   src/model/yvex_model.c \
-  src/cli/yvex_model_target_cli.c \
+  src/cli/commands/yvex_model_target_cli.c \
   src/cli/yvex_cli.c \
-  src/runtime/yvex_runtime.c \
-  src/generation/yvex_generation.c \
-  src/artifact/yvex_artifact.c \
-  src/source/yvex_source.c
+  src/cli/commands/yvex_runtime_cli.c \
+  src/cli/commands/yvex_generate_cli.c \
+  src/cli/commands/yvex_artifact_cli.c \
+  src/cli/commands/yvex_source_cli.c
 do
   grep -nF 'Owner:' "$f" >/dev/null
   grep -nF 'Owns:' "$f" >/dev/null
@@ -104,10 +109,10 @@ done
 grep -nF 'Does not own:' src/model/yvex_model.c >/dev/null
 grep -nF 'CLI grammar' src/model/yvex_model.c >/dev/null
 grep -nF 'usage text' src/model/yvex_model.c >/dev/null
-grep -nF 'model-target command grammar' src/cli/yvex_model_target_cli.c >/dev/null
-grep -nF 'usage/help' src/cli/yvex_model_target_cli.c >/dev/null
-grep -nF 'report rendering' src/cli/yvex_model_target_cli.c >/dev/null
-grep -nF 'does not create capability' src/cli/yvex_model_target_cli.c >/dev/null
+grep -nF 'model-target command grammar' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'usage/help' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'report rendering' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'does not create capability' src/cli/commands/yvex_model_target_cli.c >/dev/null
 grep -nF 'top-level command lookup' src/cli/yvex_cli.c >/dev/null
 grep -nF 'model metadata/materialization facts are not model support' src/model/yvex_model.c >/dev/null
 grep -nF 'tensor payload bytes' src/model/yvex_model.c >/dev/null
@@ -123,7 +128,62 @@ if grep -nF 'yvex model-target' src/model/yvex_model.c; then
   exit 1
 fi
 
-grep -nF 'usage: yvex model-target' src/cli/yvex_model_target_cli.c >/dev/null
+grep -nF 'usage: yvex model-target' src/cli/commands/yvex_model_target_cli.c >/dev/null
+
+PRINT_HITS="$(
+  git grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|putchar|perror)\s*\(' -- 'src/**/*.c' 'src/**/*.cu' |
+  grep -vE '^src/cli/io/yvex_cli_(out|error|json|table|log)\.c:' |
+  grep -vE '^src/core/yvex_file_writer\.c:'
+)" || true
+
+if test -n "$PRINT_HITS"; then
+  echo "$PRINT_HITS"
+  echo "direct output outside approved writer files"
+  exit 1
+fi
+
+USAGE_HITS="$(
+  git grep -n 'usage: yvex' -- 'src/**/*.c' |
+  grep -vE '^src/cli/'
+)" || true
+
+if test -n "$USAGE_HITS"; then
+  echo "$USAGE_HITS"
+  echo "usage text outside src/cli"
+  exit 1
+fi
+
+OPTION_HITS="$(
+  git grep -nE 'strcmp\(argv\[|--output|--audit|--json|--include-' -- 'src/**/*.c' |
+  grep -vE '^src/cli/'
+)" || true
+
+if test -n "$OPTION_HITS"; then
+  echo "$OPTION_HITS"
+  echo "CLI option parsing outside src/cli"
+  exit 1
+fi
+
+CATALOG_HITS="$(
+  git grep -n 'src/cli/catalog' -- 'src/**/*.c' 'src/**/*.h' |
+  grep -vE '^src/cli/'
+)" || true
+
+if test -n "$CATALOG_HITS"; then
+  echo "$CATALOG_HITS"
+  echo "CLI catalog included outside src/cli"
+  exit 1
+fi
+
+CATALOG_LOGIC_HITS="$(
+  grep -RInE '\b(if|for|while|switch|return)\b|[{}();]|printf|fprintf' src/cli/catalog || true
+)"
+
+if test -n "$CATALOG_LOGIC_HITS"; then
+  echo "$CATALOG_LOGIC_HITS"
+  echo "CLI catalog files must contain lists only"
+  exit 1
+fi
 
 if git grep -nF 'This file owns everything' -- 'src/*.c' 'src/*.cu'; then
   echo "vague source ownership contract found"
@@ -259,7 +319,8 @@ bad_command_files="$(
        -o -name 'prefill_chunks.c' \
        -o -name 'prefill_layers.c' \
        -o -name 'graph_prefill.c' \) \
-    -print
+    -print |
+  grep -vE '^\./src/cli/io/yvex_cli_(out|error|json|table|log)\.(c|h)$' || true
 )"
 if [ -n "$bad_command_files" ]; then
   echo "$bad_command_files"

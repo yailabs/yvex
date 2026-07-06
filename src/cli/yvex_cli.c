@@ -24,6 +24,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "yvex_cli_out.h"
 
 #include "yvex_console_private.h"
 #include "yvex_render_private.h"
@@ -207,15 +208,15 @@ static void print_top_level_help(FILE *fp)
 
     yvex_render_out_init(&out, fp, YVEX_RENDER_MODE_PORCELAIN);
     yvex_render_section(&out, "yvex - local-first inference engine");
-    fprintf(fp, "\nusage:\n  yvex <command> [args]\n  yvex help <command>\n  yvex commands\n");
-    fprintf(fp, "\ncommand shape:\n  yvex <family> <action> [object] [selectors] [behavior flags] [diagnostic flags]\n");
-    fprintf(fp, "\ncommon:\n  yvex paths\n  yvex models list\n  yvex models prepare TARGET\n  yvex models check TARGET\n  yvex model-target inspect TARGET\n  yvex graph check --suite primitives --backend cpu\n  yvex generate --model TARGET --backend cpu --tokens IDS --max-new-tokens N\n");
-    fprintf(fp, "\ncommand groups:\n  core: help, commands, info, version\n  operator: paths, models, accounts\n  model/source: model-target, fullmodel, source-manifest, native-weights, tensor-map\n  artifact: inspect, metadata, tensors, integrity, materialize, gguf-template, gguf-emit\n  graph: graph, plan\n  runtime: input, engine, session, prefill, kv, decode, logits, sample, generate\n  diagnostics: backend, cuda-info, tokenizer, tokenize, detokenize, prompt, chat, run\n  server: yvexd daemon status surface\n  research/future: documented future lanes only\n");
-    fprintf(fp, "\noption classes:\n  selector: --model, --backend, --role, --gate\n  path: --models-root, --source, --out, --out-dir, --registry\n  behavior: --dry-run, --overwrite, --no-register, --no-use\n  diagnostic: --audit, --trace-level, --include-*\n  plumbing: --json where implemented\n  transitional layout: --output normal|table|audit where implemented\n");
-    fprintf(fp, "\nraw/evidence:\n  --audit shows evidence where implemented\n  --json is the target plumbing surface where implemented\n\n");
+    yvex_cli_out_writef(fp, "\nusage:\n  yvex <command> [args]\n  yvex help <command>\n  yvex commands\n");
+    yvex_cli_out_writef(fp, "\ncommand shape:\n  yvex <family> <action> [object] [selectors] [behavior flags] [diagnostic flags]\n");
+    yvex_cli_out_writef(fp, "\ncommon:\n  yvex paths\n  yvex models list\n  yvex models prepare TARGET\n  yvex models check TARGET\n  yvex model-target inspect TARGET\n  yvex graph check --suite primitives --backend cpu\n  yvex generate --model TARGET --backend cpu --tokens IDS --max-new-tokens N\n");
+    yvex_cli_out_writef(fp, "\ncommand groups:\n  core: help, commands, info, version\n  operator: paths, models, accounts\n  model/source: model-target, fullmodel, source-manifest, native-weights, tensor-map\n  artifact: inspect, metadata, tensors, integrity, materialize, gguf-template, gguf-emit\n  graph: graph, plan\n  runtime: input, engine, session, prefill, kv, decode, logits, sample, generate\n  diagnostics: backend, cuda-info, tokenizer, tokenize, detokenize, prompt, chat, run\n  server: yvexd daemon status surface\n  research/future: documented future lanes only\n");
+    yvex_cli_out_writef(fp, "\noption classes:\n  selector: --model, --backend, --role, --gate\n  path: --models-root, --source, --out, --out-dir, --registry\n  behavior: --dry-run, --overwrite, --no-register, --no-use\n  diagnostic: --audit, --trace-level, --include-*\n  plumbing: --json where implemented\n  transitional layout: --output normal|table|audit where implemented\n");
+    yvex_cli_out_writef(fp, "\nraw/evidence:\n  --audit shows evidence where implemented\n  --json is the target plumbing surface where implemented\n\n");
     yvex_render_boundary(&out,
         "full model generation remains unsupported unless a specific command proves otherwise");
-    fprintf(fp, "\nUse 'yvex commands' for the grouped command catalog.\n");
+    yvex_cli_out_writef(fp, "\nUse 'yvex commands' for the grouped command catalog.\n");
 }
 
 static int command_commands(int argc, char **argv)
@@ -257,8 +258,8 @@ static int command_help(int argc, char **argv)
     }
     command = find_command(argv[2]);
     if (!command) {
-        fprintf(stderr, "yvex: unknown help topic: %s\n", argv[2]);
-        fprintf(stderr, "Try 'yvex commands' for the grouped command catalog.\n");
+        yvex_cli_out_writef(stderr, "yvex: unknown help topic: %s\n", argv[2]);
+        yvex_cli_out_writef(stderr, "Try 'yvex commands' for the grouped command catalog.\n");
         return 2;
     }
     yvex_render_out_init(&out, stdout, YVEX_RENDER_MODE_PORCELAIN);
@@ -269,7 +270,7 @@ static int command_help(int argc, char **argv)
     yvex_render_kv(&out, "example", command->example);
     yvex_render_kv(&out, "option_classes", command->option_classes);
     yvex_render_boundary(&out, command->boundary);
-    fprintf(stdout, "\ndomain help:\n");
+    yvex_cli_out_writef(stdout, "\ndomain help:\n");
     command->help(stdout);
     return 0;
 }
@@ -278,23 +279,23 @@ static int command_version(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    printf("yvex %s\n", yvex_version_string());
+    yvex_cli_out_writef(stdout, "yvex %s\n", yvex_version_string());
     return 0;
 }
 
 static void command_commands_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex commands\n\nPrints the grouped command catalog with command, group, surface class, and purpose.\n");
+    yvex_cli_out_writef(fp, "usage: yvex commands\n\nPrints the grouped command catalog with command, group, surface class, and purpose.\n");
 }
 
 static void command_help_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex help [command]\n\nPrints top-level help or grammar-first help for one implemented command.\n");
+    yvex_cli_out_writef(fp, "usage: yvex help [command]\n\nPrints top-level help or grammar-first help for one implemented command.\n");
 }
 
 static void command_version_help(FILE *fp)
 {
-    fprintf(fp, "usage: yvex version\n\nPrints the same version string as yvex --version.\n");
+    yvex_cli_out_writef(fp, "usage: yvex version\n\nPrints the same version string as yvex --version.\n");
 }
 
 /*
@@ -337,7 +338,7 @@ int main(int argc, char **argv)
     if (command) {
         return command->handler(argc, argv);
     }
-    fprintf(stderr, "yvex: unknown command: %s\n", argv[1]);
-    fprintf(stderr, "Try 'yvex help' for usage.\n");
+    yvex_cli_out_writef(stderr, "yvex: unknown command: %s\n", argv[1]);
+    yvex_cli_out_writef(stderr, "Try 'yvex help' for usage.\n");
     return 2;
 }

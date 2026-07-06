@@ -1,0 +1,4 @@
+"no-payload-hashing"
+"no-gguf-emission"
+"no-materialization"
+"no-runtime-readiness"

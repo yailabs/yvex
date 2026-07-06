@@ -51,7 +51,7 @@ Forbidden file patterns:
 
 ```text
 *_commands.c
-yvex_cli_*.c
+yvex_cli_*.c outside approved src/cli/io writer files
 yvex_output.c
 yvex_render.c
 source_*_new.c
@@ -64,25 +64,45 @@ Owner map:
 src/cli/yvex_cli.c
   top-level lookup, short help, argv dispatch only
 
-src/cli/yvex_model_target_cli.c
+src/cli/commands/*.c
+  CLI command adapters, argv parsing, usage/help, and quarantined command
+  rendering during TOPOLOGY.CLI.PRINT.ALL.0
+
+src/cli/render/*.c
+  normal/table/audit/plumbing renderers for CLI-owned facts
+
+src/cli/io/yvex_cli_out.c
+src/cli/io/yvex_cli_error.c
+src/cli/io/yvex_cli_json.c
+src/cli/io/yvex_cli_table.c
+src/cli/io/yvex_cli_log.c
+  approved direct operator output writer files
+
+src/cli/catalog/*.def
+  option, example, boundary, status, and static command metadata lists only
+
+src/cli/schema/*.json
+  CLI plumbing schemas only, without uniform JSON capability claims
+
+src/cli/commands/yvex_model_target_cli.c
   model-target CLI grammar, usage/help, output rendering, and report commands
 
-src/daemon/yvexd.c
+src/cli/commands/yvexd_cli.c
   daemon entrypoint
 
 src/server/yvex_server.c
   daemon/server behavior and provider boundary
 
-src/accounts/yvex_accounts.c
+src/cli/commands/yvex_accounts_cli.c
   local provider account boundary
 
-src/runtime/yvex_runtime.c
+src/cli/commands/yvex_runtime_cli.c
   runtime coordination
 
-src/graph/yvex_graph.c
+src/cli/commands/yvex_graph_cli.c
   graph construction, execution proofs, op probes
 
-src/backend/yvex_backend.c
+src/cli/commands/yvex_backend_cli.c
   backend abstraction and backend reports
 
 src/backend/cuda/
@@ -98,10 +118,10 @@ src/model/yvex_model.c
   dtype registry, model descriptors, tensor role names/classification, tensor
   table, materialized weights
 
-src/model/yvex_model_artifacts.c
+src/cli/commands/yvex_model_artifacts_cli.c
   artifact status, artifact gates, selected/full artifact reports
 
-src/artifact/yvex_artifact.c
+src/cli/commands/yvex_artifact_cli.c
   artifact IO, inspect, metadata, tensor command surfaces
 
 src/artifact/yvex_artifact_identity.c
@@ -113,10 +133,10 @@ src/artifact/yvex_artifact_integrity.c
 src/gguf/
   GGUF parsing, conversion, quant/intake internals
 
-src/source/yvex_source.c
+src/cli/commands/yvex_source_cli.c
   source manifests, source pressure, source evidence, native header inventory
 
-src/tokenizer/yvex_tokenizer.c
+src/cli/commands/yvex_tokenizer_cli.c
   tokenizer metadata and tokenizer command surfaces
 
 src/tokenizer/yvex_token_input.c
@@ -125,19 +145,19 @@ src/tokenizer/yvex_token_input.c
 src/generation/yvex_prefill.c
   prefill state and prefill reports
 
-src/generation/yvex_kv.c
+src/cli/commands/yvex_kv_cli.c
   KV shape, ownership, append/read, lifecycle, capacity diagnostics
 
-src/generation/yvex_decode.c
+src/cli/commands/yvex_decode_cli.c
   decode step boundary over existing KV-backed transformer state
 
-src/generation/yvex_logits.c
+src/cli/commands/yvex_logits_cli.c
   logits buffer ownership and diagnostics
 
-src/generation/yvex_sampling.c
+src/cli/commands/yvex_sampling_cli.c
   sampling over logits
 
-src/generation/yvex_generation.c
+src/cli/commands/yvex_generate_cli.c
   generation loop integration
 
 src/eval/yvex_eval.c
@@ -146,13 +166,13 @@ src/eval/yvex_eval.c
 src/bench/yvex_bench.c
   benchmark harness after measured runtime paths exist
 
-src/metrics/yvex_metrics.c
+src/cli/commands/yvex_metrics_cli.c
   metrics and counters
 
-src/metrics/yvex_profile.c
+src/cli/commands/yvex_profile_cli.c
   profile output
 
-src/cli/yvex_chat.c
+src/cli/commands/yvex_chat_cli.c
   diagnostic console and future runtime-backed REPL shell
 ```
 
@@ -238,12 +258,45 @@ yvex_cli.c owns dispatch only.
 
 CLI command grammar lives under src/cli/.
 
+Manual operator output belongs to src/cli.
+
+Domain modules must not call:
+
+```text
+printf
+fprintf
+vprintf
+vfprintf
+puts
+fputs
+putchar
+perror
+```
+
 Domain modules do not own usage text, porcelain, plumbing, audit walls, or
 argv parsing.
 
 Domain modules may build facts and return report structs.
 
-Renderers may format report structs.
+CLI command adapters parse argv and call domain APIs.
+
+CLI renderers serialize facts into normal/table/audit/plumbing output.
+
+CLI catalog files own lists of options, examples, boundaries, statuses, and
+static command metadata.
+
+No domain file may include src/cli/catalog files.
+
+No new direct output call may be added outside approved writer files:
+
+```text
+src/cli/io/yvex_cli_out.c
+src/cli/io/yvex_cli_error.c
+src/cli/io/yvex_cli_json.c
+src/cli/io/yvex_cli_table.c
+src/cli/io/yvex_cli_log.c
+src/core/yvex_file_writer.c for non-operator file serialization only
+```
 
 Normal output is compact.
 
@@ -557,6 +610,8 @@ creates new source files without ownership need
 adds docs without implementation or explicit doctrine boundary
 adds capability claims without executable proof
 commits model artifacts or local state
+adds direct operator output outside approved CLI writer files
+adds usage/help text, argv parsing, or CLI catalogs outside src/cli
 dumps audit fields into normal output
 duplicates state fields instead of consolidating
 introduces abstraction without removing complexity

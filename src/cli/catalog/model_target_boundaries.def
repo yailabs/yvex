@@ -1,0 +1,4 @@
+"target-profile-only"
+"header-only-reporting"
+"no-runtime-generation-claim"
+"no-release-readiness-claim"

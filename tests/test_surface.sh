@@ -36,5 +36,10 @@ fi
 
 test -d tests/unit
 test -d tests/unit/cuda
+test -d src/cli/commands
+test -d src/cli/render
+test -d src/cli/io
+test -d src/cli/catalog
+test -d src/cli/schema
 
 echo "test surface: ok"
