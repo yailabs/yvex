@@ -4510,10 +4510,14 @@ surfaces in `yvex_model.c`. `model-target tensor-map`, `--role output-head`,
 default to compact result, blocker, next-row, and boundary lines; table mode
 stays tabular; `--audit` preserves tensor entries, output-head diagnostics,
 missing-role entries, mapping-gate fields, qtype policy fields, and unsupported
-runtime/generation/benchmark boundaries. This is an operator-output improvement
-only; it does not add source intake, mapping semantics, quantization, artifact
-emission, runtime execution, evaluation, benchmark, throughput, or release
-readiness. `V010.CLI.20` through `V010.CLI.23` remain planned.
+runtime/generation/benchmark boundaries. The repair pass adds absence and
+line-count tests so normal/table output cannot append audit fields such as
+`tensor_map.entry.*`, `output_head_map_*`, `missing_role.entry.*`,
+`tensor_mapping_gate_*`, or `qtype_policy_status:` after the compact renderer.
+This is an operator-output improvement only; it does not add source intake,
+mapping semantics, quantization, artifact emission, runtime execution,
+evaluation, benchmark, throughput, or release readiness. `V010.CLI.20` through
+`V010.CLI.23` remain planned.
 
 `V010.TARGET.9`, `V010.TARGET.2`, `V010.TARGET.3`, and `V010.TARGET.7` are also
 complete as report-only implementation rows. The commands `yvex model-target
@@ -5025,7 +5029,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | V010.CLI.17 | complete | operator | Normal output contract and layout baseline | core operator commands default to compact normal output for `info`, `paths`, `models list/current`, target reports, and bounded diagnostic `generate`, while `--audit` / `--output audit` preserves diagnostic fields and row-promotion evidence without adding runtime execution, generation, evaluation, benchmark, throughput, or release readiness |
 | V010.CLI.18 | complete | operator | Diagnostic output demotion | diagnostic-heavy report output is demoted from broader normal operator paths; models inspect/verify/check, integrity report, fullmodel reports, attention/context/KV/MoE reports, and MoE tensor-collection reports default to compact normal output where touched while `--audit` / `--output audit` preserves detailed diagnostic evidence and unsupported runtime/generation/benchmark boundaries |
 | V010.CLI.19 | complete | operator | Compact report/table output | compact report/table output is normalized across core model, model-target, fullmodel, integrity, and model-class report surfaces; table output is available where natural; stale CLI.18 next-row output is removed from normal reports; audit mode preserves diagnostic evidence and unsupported runtime/generation/benchmark boundaries |
-| V010.CLI.24 | complete | operator | Hardcoded print reduction pass for model report surfaces | model-target tensor-map, output-head map, missing-role report, tensor-mapping gate, and quant-policy normal/table outputs are compacted in `yvex_model.c`; audit output preserves detailed row-promotion evidence and unsupported runtime/generation/benchmark boundaries without adding mapping semantics, quantization, artifact emission, runtime, eval, benchmark, throughput, or release readiness |
+| V010.CLI.24 | complete | operator | Hardcoded print reduction pass for model report surfaces | model-target tensor-map, output-head map, missing-role report, tensor-mapping gate, and quant-policy normal/table outputs are compacted in `yvex_model.c`; repair tests enforce normal/table absence of audit prefixes and short normal line counts while audit output preserves detailed row-promotion evidence and unsupported runtime/generation/benchmark boundaries without adding mapping semantics, quantization, artifact emission, runtime, eval, benchmark, throughput, or release readiness |
 | V010.SOURCE.9 | complete | source | Qwen source pressure report | `yvex source-manifest report --family qwen --release v0.1.0` reports Qwen source pressure, source path/config/tokenizer/safetensors/manifest/native-inventory status, blockers, and next rows without download, artifact emission, materialization, graph/runtime execution, Qwen generation, Metal support, evaluation, benchmark, throughput, or release-ready claim |
 | V010.SOURCE.1 | complete | source | Source family/profile fields | source pressure reports now expose family/profile fields for Qwen and Gemma, Qwen reports advance to `V010.SOURCE.2`, Gemma source pressure is command-visible as `yvex source-manifest report --family gemma --release v0.1.0`, and unsupported runtime/generation/benchmark boundaries remain explicit |
 | V010.SOURCE.2 | complete | source | Source artifact class fields | source artifact class fields are command-visible across Qwen, Gemma, and existing target/source reports, distinguishing official source tensors, official safetensors, selected YVEX GGUF, future YVEX GGUF, external-reference-only artifacts, source/target artifact status, source origin/authority, sidecar status, tensor container, payload-read boundary, YVEX-produced artifact status, and unsupported runtime/generation/benchmark boundaries without download, artifact emission, materialization, graph/runtime execution, generation, eval, benchmark, throughput, or release-ready claim |

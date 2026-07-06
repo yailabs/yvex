@@ -12,6 +12,25 @@ matches() {
   grep -E -- "$pattern" "$file" >/dev/null
 }
 
+assert_line_count_le() {
+  file=$1
+  max=$2
+  lines=$(wc -l < "$file" | tr -d ' ')
+  test "$lines" -le "$max"
+}
+
+assert_model_report_normal_compact() {
+  file=$1
+  ! grep -E 'tensor_map\.entry\.|output_head_map_|output_head\.entry\.|missing_role\.entry\.|missing_role_report_status:|tensor_mapping_gate_source_path:|tensor_mapping_gate_tensor_map_sidecar_path:|map_source\.|qtype_policy_status:|source_declared_data_bytes:' "$file"
+  ! grep -E '^downstream_blockers:|^runtime_claim:|^generation:|^benchmark_status:|^release_ready:|^next_required_rows:' "$file"
+}
+
+assert_model_report_table_compact() {
+  file=$1
+  ! grep -E 'tensor_map\.entry\.|output_head_map_|output_head\.entry\.|missing_role\.entry\.|tensor_mapping_gate_|qtype_policy_status:' "$file"
+  ! grep -E '^runtime_claim:|^generation:|^benchmark_status:|^release_ready:|^boundary:' "$file"
+}
+
 make_missing_role_source() {
   dir=$1
   variant=${2:-complete}
@@ -1482,11 +1501,14 @@ grep 'next: V010.MAP.8' "$ROOT/tensor-map-qwen.out"
 grep 'boundary: report-only; use --audit for tensor entries' "$ROOT/tensor-map-qwen.out"
 ! grep 'tensor_map.entry.' "$ROOT/tensor-map-qwen.out"
 ! grep 'runtime_claim:' "$ROOT/tensor-map-qwen.out"
+assert_model_report_normal_compact "$ROOT/tensor-map-qwen.out"
+assert_line_count_le "$ROOT/tensor-map-qwen.out" 12
 
 "$YVEX_BIN" model-target tensor-map qwen3-8b --source "$QWEN_COLLECTION_SOURCE" --output table > "$ROOT/tensor-map-qwen-table.out"
 grep 'TENSOR NAMING MAP' "$ROOT/tensor-map-qwen-table.out"
 matches "$ROOT/tensor-map-qwen-table.out" '^FAMILY[[:space:]]{2,}TARGET[[:space:]]{2,}STATUS[[:space:]]{2,}TOTAL[[:space:]]{2,}EMBED[[:space:]]{2,}ATTN[[:space:]]{2,}MLP[[:space:]]{2,}NORM[[:space:]]{2,}HEAD[[:space:]]{2,}MOE[[:space:]]{2,}UNKNOWN[[:space:]]{2,}LAYERS[[:space:]]{2,}NEXT$'
 matches "$ROOT/tensor-map-qwen-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}naming-map-profiled[[:space:]]{2,}12[[:space:]]{2,}1[[:space:]]{2,}4[[:space:]]{2,}3[[:space:]]{2,}3[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}1[[:space:]]{2,}V010.MAP.8$'
+assert_model_report_table_compact "$ROOT/tensor-map-qwen-table.out"
 
 "$YVEX_BIN" model-target tensor-map qwen3-8b --source "$QWEN_COLLECTION_SOURCE" --audit > "$ROOT/tensor-map-qwen-audit.out"
 grep 'tensor_map_status: naming-map-profiled' "$ROOT/tensor-map-qwen-audit.out"
@@ -1527,6 +1549,7 @@ grep 'generation: unsupported-full-model' "$ROOT/tensor-map-qwen-audit.out"
 grep 'benchmark_status: not-measured' "$ROOT/tensor-map-qwen-audit.out"
 grep 'release_ready: false' "$ROOT/tensor-map-qwen-audit.out"
 grep 'next_required_rows: V010.MAP.8' "$ROOT/tensor-map-qwen-audit.out"
+grep 'tensor_map.entry.' "$ROOT/tensor-map-qwen-audit.out"
 grep 'model.embed_tokens.weight -> model.embedding.token.weight' "$ROOT/tensor-map-qwen-audit.out"
 grep 'model.layers.0.self_attn.q_proj.weight -> model.layers.0.attention.q_proj.weight' "$ROOT/tensor-map-qwen-audit.out"
 grep 'model.layers.0.input_layernorm.weight -> model.layers.0.attention.norm.weight' "$ROOT/tensor-map-qwen-audit.out"
@@ -1544,10 +1567,13 @@ grep 'boundary: mapping only; no logits/runtime/generation' "$ROOT/output-head-q
 ! grep 'output_head_map_' "$ROOT/output-head-qwen.out"
 ! grep 'native_output_head:' "$ROOT/output-head-qwen.out"
 ! grep 'runtime_claim:' "$ROOT/output-head-qwen.out"
+assert_model_report_normal_compact "$ROOT/output-head-qwen.out"
+assert_line_count_le "$ROOT/output-head-qwen.out" 12
 
 "$YVEX_BIN" model-target tensor-map qwen3-8b --role output-head --source "$QWEN_COLLECTION_SOURCE" --output table > "$ROOT/output-head-qwen-table.out"
 grep 'OUTPUT HEAD TENSOR MAP' "$ROOT/output-head-qwen-table.out"
 matches "$ROOT/output-head-qwen-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}output-head-profiled[[:space:]]{2,}yes[[:space:]]{2,}yes[[:space:]]{2,}yes[[:space:]]{2,}separate-output-head-candidate[[:space:]]{2,}compatible-same-shape[[:space:]]{2,}V010.MAP.8$'
+assert_model_report_table_compact "$ROOT/output-head-qwen-table.out"
 
 "$YVEX_BIN" model-target tensor-map qwen3-8b --role output-head --source "$QWEN_COLLECTION_SOURCE" --audit > "$ROOT/output-head-qwen-audit.out"
 grep 'output_head_map_status: output-head-profiled' "$ROOT/output-head-qwen-audit.out"
@@ -1796,11 +1822,14 @@ grep 'next: V010.MAP.9' "$ROOT/missing-role-qwen.out"
 grep 'boundary: report-only; use --audit for role details' "$ROOT/missing-role-qwen.out"
 ! grep 'missing_role.entry.' "$ROOT/missing-role-qwen.out"
 ! grep 'downstream_blockers:' "$ROOT/missing-role-qwen.out"
+assert_model_report_normal_compact "$ROOT/missing-role-qwen.out"
+assert_line_count_le "$ROOT/missing-role-qwen.out" 12
 
 "$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" --output table > "$ROOT/missing-role-qwen-table.out"
 grep 'MISSING ROLE BLOCKER REPORT' "$ROOT/missing-role-qwen-table.out"
 matches "$ROOT/missing-role-qwen-table.out" '^FAMILY[[:space:]]{2,}TARGET[[:space:]]{2,}STATUS[[:space:]]{2,}OBS_SRC[[:space:]]{2,}MISS_SRC[[:space:]]{2,}AMBIG_SRC[[:space:]]{2,}OBS_META[[:space:]]{2,}MISS_META[[:space:]]{2,}TOP_BLOCKER[[:space:]]{2,}NEXT$'
 matches "$ROOT/missing-role-qwen-table.out" '^qwen[[:space:]]{2,}qwen3-8b[[:space:]]{2,}missing-role-report-blocked[[:space:]]{2,}12[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}4[[:space:]]{2,}0[[:space:]]{2,}missing-artifact-contract[[:space:]]{2,}V010\.MAP\.9$'
+assert_model_report_table_compact "$ROOT/missing-role-qwen-table.out"
 
 "$YVEX_BIN" model-target tensor-map qwen3-8b --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" --audit > "$ROOT/missing-role-qwen-audit.out"
 grep 'missing_role_report_status: missing-role-report-blocked' "$ROOT/missing-role-qwen-audit.out"
@@ -1850,8 +1879,11 @@ grep 'metadata_roles: 4/4 present, 0 missing, 0 ambiguous' "$ROOT/missing-role-g
 grep 'top_blocker: missing-artifact-contract' "$ROOT/missing-role-gemma.out"
 grep 'next: V010.MAP.9' "$ROOT/missing-role-gemma.out"
 ! grep 'missing_role.entry.' "$ROOT/missing-role-gemma.out"
+assert_model_report_normal_compact "$ROOT/missing-role-gemma.out"
+assert_line_count_le "$ROOT/missing-role-gemma.out" 12
 "$YVEX_BIN" model-target tensor-map gemma-4-12b-it --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" --output table > "$ROOT/missing-role-gemma-table.out"
 matches "$ROOT/missing-role-gemma-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}missing-role-report-blocked[[:space:]]{2,}12[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}4[[:space:]]{2,}0[[:space:]]{2,}missing-artifact-contract[[:space:]]{2,}V010\.MAP\.9$'
+assert_model_report_table_compact "$ROOT/missing-role-gemma-table.out"
 "$YVEX_BIN" model-target tensor-map gemma-4-12b-it --role missing-roles --source "$MISSING_ROLE_COMPLETE_SOURCE" --audit > "$ROOT/missing-role-gemma-audit.out"
 grep 'missing_role_report_status: missing-role-report-blocked' "$ROOT/missing-role-gemma-audit.out"
 grep 'missing_role_report_family: gemma' "$ROOT/missing-role-gemma-audit.out"
@@ -1870,6 +1902,8 @@ grep 'next: V010.QUANT.0' "$ROOT/tensor-mapping-gate-qwen.out"
 grep 'boundary: report-only; no artifact/runtime/generation' "$ROOT/tensor-mapping-gate-qwen.out"
 ! grep 'tensor_naming_map:' "$ROOT/tensor-mapping-gate-qwen.out"
 ! grep 'runtime_claim:' "$ROOT/tensor-mapping-gate-qwen.out"
+assert_model_report_normal_compact "$ROOT/tensor-mapping-gate-qwen.out"
+assert_line_count_le "$ROOT/tensor-mapping-gate-qwen.out" 12
 
 "$YVEX_BIN" model-target tensor-map qwen3-8b --gate v0.1.0 --source "$MISSING_ROLE_COMPLETE_SOURCE" --output table > "$ROOT/tensor-mapping-gate-qwen-table.out"
 grep 'TENSOR MAPPING GATE' "$ROOT/tensor-mapping-gate-qwen-table.out"
@@ -1877,6 +1911,7 @@ matches "$ROOT/tensor-mapping-gate-qwen-table.out" '^TARGET[[:space:]]{2,}FAMILY
 matches "$ROOT/tensor-mapping-gate-qwen-table.out" '^qwen3-8b[[:space:]]{2,}qwen[[:space:]]{2,}v0\.1\.0[[:space:]]{2,}12/12[[:space:]]{2,}4/4[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}missing-qtype-policy-report[[:space:]]{2,}passed-for-artifact-planning[[:space:]]{2,}V010\.QUANT\.0$'
 ! grep 'runtime_claim:' "$ROOT/tensor-mapping-gate-qwen-table.out"
 ! grep 'release_ready:' "$ROOT/tensor-mapping-gate-qwen-table.out"
+assert_model_report_table_compact "$ROOT/tensor-mapping-gate-qwen-table.out"
 
 "$YVEX_BIN" model-target tensor-map qwen3-8b --gate v0.1.0 --source "$MISSING_ROLE_COMPLETE_SOURCE" --audit > "$ROOT/tensor-mapping-gate-qwen-audit.out"
 grep 'tensor_mapping_gate_status: passed-for-artifact-planning' "$ROOT/tensor-mapping-gate-qwen-audit.out"
@@ -1908,8 +1943,11 @@ grep 'tensor-mapping-gate: gemma-4-12b-it \[reported\]' "$ROOT/tensor-mapping-ga
 grep 'gate: v0.1.0  family: gemma' "$ROOT/tensor-mapping-gate-gemma.out"
 grep 'roles: source 12/12, metadata 4/4, missing 0, ambiguous 0' "$ROOT/tensor-mapping-gate-gemma.out"
 grep 'next: V010.QUANT.0' "$ROOT/tensor-mapping-gate-gemma.out"
+assert_model_report_normal_compact "$ROOT/tensor-mapping-gate-gemma.out"
+assert_line_count_le "$ROOT/tensor-mapping-gate-gemma.out" 12
 "$YVEX_BIN" model-target tensor-map gemma-4-12b-it --gate v0.1.0 --source "$MISSING_ROLE_COMPLETE_SOURCE" --output table > "$ROOT/tensor-mapping-gate-gemma-table.out"
 matches "$ROOT/tensor-mapping-gate-gemma-table.out" '^gemma-4-12b-it[[:space:]]{2,}gemma[[:space:]]{2,}v0\.1\.0[[:space:]]{2,}12/12[[:space:]]{2,}4/4[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}missing-qtype-policy-report[[:space:]]{2,}passed-for-artifact-planning[[:space:]]{2,}V010\.QUANT\.0$'
+assert_model_report_table_compact "$ROOT/tensor-mapping-gate-gemma-table.out"
 "$YVEX_BIN" model-target tensor-map gemma-4-12b-it --gate v0.1.0 --source "$MISSING_ROLE_COMPLETE_SOURCE" --audit > "$ROOT/tensor-mapping-gate-gemma-audit.out"
 grep 'tensor_mapping_gate_status: passed-for-artifact-planning' "$ROOT/tensor-mapping-gate-gemma-audit.out"
 grep 'tensor_mapping_gate_family: gemma' "$ROOT/tensor-mapping-gate-gemma-audit.out"
@@ -2023,6 +2061,8 @@ grep 'boundary: report-only; no quantization/artifact/runtime' "$ROOT/qtype-poli
 ! grep 'qtype_policy_status:' "$ROOT/qtype-policy-qwen.out"
 ! grep 'calibration_status:' "$ROOT/qtype-policy-qwen.out"
 ! grep 'runtime_claim:' "$ROOT/qtype-policy-qwen.out"
+assert_model_report_normal_compact "$ROOT/qtype-policy-qwen.out"
+assert_line_count_le "$ROOT/qtype-policy-qwen.out" 12
 
 "$YVEX_BIN" model-target quant-policy qwen3-8b --source "$MODEL_TARGET_QTYPE_SOURCE" --output table > "$ROOT/qtype-policy-qwen-table.out"
 grep 'QTYPE POLICY' "$ROOT/qtype-policy-qwen-table.out"
@@ -2031,6 +2071,7 @@ matches "$ROOT/qtype-policy-qwen-table.out" '^qwen3-8b[[:space:]]{2,}qwen[[:spac
 ! grep 'CALIBRATION' "$ROOT/qtype-policy-qwen-table.out"
 ! grep 'calibration_status:' "$ROOT/qtype-policy-qwen-table.out"
 ! grep 'runtime_claim:' "$ROOT/qtype-policy-qwen-table.out"
+assert_model_report_table_compact "$ROOT/qtype-policy-qwen-table.out"
 
 "$YVEX_BIN" model-target quant-policy qwen3-8b --source "$MODEL_TARGET_QTYPE_SOURCE" --audit > "$ROOT/qtype-policy-qwen-audit.out"
 grep 'source_dtype_profile_status: profiled' "$ROOT/qtype-policy-qwen-audit.out"
@@ -2061,8 +2102,11 @@ grep 'family: gemma  mapping_gate: passed-for-artifact-planning' "$ROOT/qtype-po
 grep 'source_dtype: F32=12 F16=0 BF16=0 other=0' "$ROOT/qtype-policy-gemma.out"
 grep 'preferred: F16' "$ROOT/qtype-policy-gemma.out"
 grep 'next: V010.QUANT.1' "$ROOT/qtype-policy-gemma.out"
+assert_model_report_normal_compact "$ROOT/qtype-policy-gemma.out"
+assert_line_count_le "$ROOT/qtype-policy-gemma.out" 12
 "$YVEX_BIN" model-target quant-policy gemma-4-12b-it --source "$MODEL_TARGET_QTYPE_SOURCE" --output table > "$ROOT/qtype-policy-gemma-table.out"
 matches "$ROOT/qtype-policy-gemma-table.out" '^gemma-4-12b-it[[:space:]]{2,}gemma[[:space:]]{2,}F32=12 F16=0 BF16=0 other=0[[:space:]]{2,}artifact-planning-storage-policy[[:space:]]{2,}F16[[:space:]]{2,}F16,BF16,F32[[:space:]]{2,}Q8_0,Q4_K,Q2_K,IQ2_XXS[[:space:]]{2,}policy-reported[[:space:]]{2,}V010\.QUANT\.1$'
+assert_model_report_table_compact "$ROOT/qtype-policy-gemma-table.out"
 "$YVEX_BIN" model-target quant-policy gemma-4-12b-it --source "$MODEL_TARGET_QTYPE_SOURCE" --audit > "$ROOT/qtype-policy-gemma-audit.out"
 grep 'mapping_gate_status: passed-for-artifact-planning' "$ROOT/qtype-policy-gemma-audit.out"
 grep 'qtype_policy_status: reported' "$ROOT/qtype-policy-gemma-audit.out"
@@ -2426,11 +2470,14 @@ grep 'next: V010.MAP.8' "$ROOT/tensor-map-gemma.out"
 grep 'boundary: report-only; use --audit for tensor entries' "$ROOT/tensor-map-gemma.out"
 ! grep 'tensor_map.entry.' "$ROOT/tensor-map-gemma.out"
 ! grep 'runtime_claim:' "$ROOT/tensor-map-gemma.out"
+assert_model_report_normal_compact "$ROOT/tensor-map-gemma.out"
+assert_line_count_le "$ROOT/tensor-map-gemma.out" 12
 
 "$YVEX_BIN" model-target tensor-map gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE" --output table > "$ROOT/tensor-map-gemma-table.out"
 grep 'TENSOR NAMING MAP' "$ROOT/tensor-map-gemma-table.out"
 matches "$ROOT/tensor-map-gemma-table.out" '^FAMILY[[:space:]]{2,}TARGET[[:space:]]{2,}STATUS[[:space:]]{2,}TOTAL[[:space:]]{2,}EMBED[[:space:]]{2,}ATTN[[:space:]]{2,}MLP[[:space:]]{2,}NORM[[:space:]]{2,}HEAD[[:space:]]{2,}MOE[[:space:]]{2,}UNKNOWN[[:space:]]{2,}LAYERS[[:space:]]{2,}NEXT$'
 matches "$ROOT/tensor-map-gemma-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}naming-map-profiled[[:space:]]{2,}12[[:space:]]{2,}1[[:space:]]{2,}4[[:space:]]{2,}3[[:space:]]{2,}3[[:space:]]{2,}1[[:space:]]{2,}0[[:space:]]{2,}0[[:space:]]{2,}1[[:space:]]{2,}V010.MAP.8$'
+assert_model_report_table_compact "$ROOT/tensor-map-gemma-table.out"
 
 "$YVEX_BIN" model-target tensor-map gemma-4-12b-it --source "$GEMMA_CLASS_SOURCE" --audit > "$ROOT/tensor-map-gemma-audit.out"
 grep 'tensor_map_status: naming-map-profiled' "$ROOT/tensor-map-gemma-audit.out"
@@ -2471,6 +2518,7 @@ grep 'generation: unsupported-full-model' "$ROOT/tensor-map-gemma-audit.out"
 grep 'benchmark_status: not-measured' "$ROOT/tensor-map-gemma-audit.out"
 grep 'release_ready: false' "$ROOT/tensor-map-gemma-audit.out"
 grep 'next_required_rows: V010.MAP.8' "$ROOT/tensor-map-gemma-audit.out"
+grep 'tensor_map.entry.' "$ROOT/tensor-map-gemma-audit.out"
 grep 'model.embed_tokens.weight -> model.embedding.token.weight' "$ROOT/tensor-map-gemma-audit.out"
 grep 'model.layers.0.self_attn.q_proj.weight -> model.layers.0.attention.q_proj.weight' "$ROOT/tensor-map-gemma-audit.out"
 grep 'model.layers.0.input_layernorm.weight -> model.layers.0.attention.norm.weight' "$ROOT/tensor-map-gemma-audit.out"
@@ -2488,10 +2536,13 @@ grep 'boundary: mapping only; no logits/runtime/generation' "$ROOT/output-head-g
 ! grep 'output_head_map_' "$ROOT/output-head-gemma.out"
 ! grep 'native_output_head:' "$ROOT/output-head-gemma.out"
 ! grep 'runtime_claim:' "$ROOT/output-head-gemma.out"
+assert_model_report_normal_compact "$ROOT/output-head-gemma.out"
+assert_line_count_le "$ROOT/output-head-gemma.out" 12
 
 "$YVEX_BIN" model-target tensor-map gemma-4-12b-it --role output-head --source "$GEMMA_CLASS_SOURCE" --output table > "$ROOT/output-head-gemma-table.out"
 grep 'OUTPUT HEAD TENSOR MAP' "$ROOT/output-head-gemma-table.out"
 matches "$ROOT/output-head-gemma-table.out" '^gemma[[:space:]]{2,}gemma-4-12b-it[[:space:]]{2,}output-head-profiled[[:space:]]{2,}yes[[:space:]]{2,}yes[[:space:]]{2,}yes[[:space:]]{2,}separate-output-head-candidate[[:space:]]{2,}compatible-same-shape[[:space:]]{2,}V010.MAP.8$'
+assert_model_report_table_compact "$ROOT/output-head-gemma-table.out"
 
 "$YVEX_BIN" model-target tensor-map gemma-4-12b-it --role output-head --source "$GEMMA_CLASS_SOURCE" --audit > "$ROOT/output-head-gemma-audit.out"
 grep 'output_head_map_status: output-head-profiled' "$ROOT/output-head-gemma-audit.out"
@@ -2512,6 +2563,8 @@ grep 'generation: unsupported-full-model' "$ROOT/output-head-gemma-audit.out"
 grep 'benchmark_status: not-measured' "$ROOT/output-head-gemma-audit.out"
 grep 'release_ready: false' "$ROOT/output-head-gemma-audit.out"
 grep 'next_required_rows: V010.MAP.8' "$ROOT/output-head-gemma-audit.out"
+grep 'output_head.entry.output.native_name: lm_head.weight' "$ROOT/output-head-gemma-audit.out"
+grep 'output_head.entry.output.canonical_role: model.output_head.weight' "$ROOT/output-head-gemma-audit.out"
 
 GEMMA_TENSOR_MAP_UNKNOWN_SOURCE="${TMPDIR:-/tmp}/yvex-gemma-tensor-map-unknown-test-$$"
 rm -rf "$GEMMA_TENSOR_MAP_UNKNOWN_SOURCE"
