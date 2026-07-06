@@ -606,7 +606,7 @@ lanes; rows are the delivery units that complete track work.
 | TRACK.TOKENIZER | Tokenizer and stop policy | detokenization, EOS, stop tokens, prompt boundary | partial/planned | tokenizer diagnostics and tokenizer metadata mapping | tokenizer-backed stop behavior | later |
 | TRACK.GENERATION | Generation runtime | decode/logits/sample/append/stop/cleanup | diagnostic-runtime | `yvex generate` | full-runtime generation | later |
 | TRACK.RUNTIME | Runtime lifecycle and trace | lifecycle, cancellation, trace, failure preservation | diagnostic-runtime | generate trace/cancel/cleanup | external interruption/runtime trace | later |
-| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output UX doctrine, normal/audit baseline, diagnostic output demotion, compact report/table output, hardcoded print reduction for model report surfaces, and Qwen/Gemma source profile/map/gate/qtype policy surfaces | V010.CLI.20-23 polish / V010.QUANT.1 handoff | active |
+| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output UX doctrine, normal/audit baseline, diagnostic output demotion, compact report/table output, hardcoded print reduction for model report surfaces, CLI print inventory and porcelain/plumbing doctrine, and Qwen/Gemma source profile/map/gate/qtype policy surfaces | CLI.ARCH.AUDIT.0 follow-up renderer migration / V010.QUANT.1 handoff | active |
 | TRACK.SERVE | Serving | daemon state, provider endpoints, streaming | planned | status shell | runtime-backed generation endpoint | later |
 | TRACK.EVAL | Evaluation | fixture/runtime/generation/capability eval | planned | tests only | eval over generation path | later |
 | TRACK.BENCH | Benchmark/profile | reproducible performance measurement | planned | doctrine only | measured runtime harness | later |
@@ -2578,6 +2578,48 @@ can natively render and check compact normal/table output and audit evidence
 preservation without shell pipelines. `V010.CLI.20` through `V010.CLI.23`
 remain planned polish rows and do not block continuing to `V010.QUANT.1`
 unless normal CLI output becomes unusable again.
+
+Architecture audit interruption:
+
+```text
+CLI.ARCH.AUDIT.0 - print inventory and porcelain/plumbing doctrine
+```
+
+`CLI.ARCH.AUDIT.0` is a planned architecture-audit row, not a completed runtime
+or CLI refactor capability. The production print inventory found 7319 manual
+print sites outside tests/build/docs: 6901 in root `yvex_*.c` owner files, 404
+in `gguf/*.c`, 14 in daemon/server files, and none in CUDA files or public
+headers. The top pressure files are `yvex_model_artifacts.c` with 2581 sites,
+`yvex_model.c` with 1409, `yvex_graph.c` with 690, and `yvex_runtime.c` with
+432.
+
+The doctrine is:
+
+```text
+porcelain default = human output chosen by the command
+table = renderer layout, not a long-term user-selected mode
+plumbing/raw = explicit request, target surface --json
+audit = transitional evidence surface until structured raw output exists
+renderer ownership = report structs first, layout second
+yvex_cli.c = top-level dispatch/help only
+```
+
+Normal output should carry one compact status, one top blocker where relevant,
+one next step where relevant, and one short boundary where relevant. It should
+not expose raw diagnostic key-value walls, giant tensor entries, repeated
+unsupported/runtime/generation/benchmark/release fields, or path walls unless
+paths are the command's purpose. Existing `--output normal|table|audit`,
+`--audit`, `--include-*`, and contract-check flags remain during the migration;
+this row defines the target architecture and does not remove or add flags.
+JSON/raw output is the target plumbing surface, but this row does not implement
+JSON output and does not claim a uniform JSON interface exists.
+
+The focused audit report lives in `docs/cli-output-architecture.md`. The next
+implementation wave should start with the highest-pressure model report owner
+files and migrate one command family at a time toward report objects plus
+porcelain/audit render helpers while preserving normal/table/audit tests. Active
+Next remains paused on `V010.QUANT.1 - dtype/qtype support by role` only until
+this CLI architecture interruption is no longer blocking operator clarity.
 
 Boundary: CLI cannot claim lower runtime behavior that does not exist.
 
@@ -5091,6 +5133,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | OPERATOR.FLOW.2 | complete | operator | Sectorized copy-command operator atlas | runbook is split into model, backend, intake, artifact, integrity, materialization, graph, prefill/KV, daemon, validation, and GLM status lanes with standalone copyable commands |
 | SPINE.OPERATOR.PRESET.0 | complete | docs | Operator preset and path-resolution roadmap | spine defines path configuration, target path resolution, model prepare, model check, graph check, chat UX, and final runbook preset sequence |
 | SPINE.OUTPUT.UX.CONTRACT.0 | complete | docs | CLI output UX contract and diagnostic demotion plan | spine defines normal, summary, table, verbose, trace, audit, JSON, metric, color, and hardcoded-print policies; marks current verbose diagnostic/report output as non-final UX; maps future output work to V010.CLI.*; preserves runtime, generation, benchmark, and release boundaries |
+| CLI.ARCH.AUDIT.0 | planned | docs/operator | Print inventory and porcelain/plumbing doctrine | `docs/cli-output-architecture.md` records the 7319-site production print inventory, existing output flag pressure, porcelain/plumbing doctrine, renderer ownership target, staged migration plan, and `V010.QUANT.1` pause boundary without removing print sites, adding renderer source files, implementing JSON, changing CLI behavior, adding runtime, quantization, artifact emission, generation, eval, benchmark, throughput, or release claim |
 | SPINE.CUDA.MAP.0 | complete | docs | CUDA execution spine enrichment | spine adds a CUDA execution crosswalk, owner map, staged CUDA ladder, backend/graph/runtime dependency map, performance doctrine, future implementation order, and forbidden claim boundary without runtime implementation, CUDA generation, benchmark, throughput, FlashAttention, tensor-core GEMM, paged KV, or release-ready claim |
 | OPERATOR.PATHS.0 | complete | operator | Operator model root configuration | `yvex paths configure` stores or resolves operator-local model roots without requiring shell export walls |
 | MODEL.TARGET.PATHS.0 | complete | model | Model target path resolution | `yvex model-target inspect TARGET --paths` reports source, artifact, report, registry, and planned paths without reading model payloads |
@@ -8539,7 +8582,7 @@ multi-family official-source open-weight intake roadmap
 source-tensor-first GLM-5.2 huge-MoE pressure target
 future YVEX-produced GGUF target path
 huge-model storage-stream roadmap
-docs: docs/api.md, docs/contract.md, docs/model-families.md, docs/operator-runbook.md, docs/spine.md
+docs: docs/api.md, docs/contract.md, docs/model-families.md, docs/operator-runbook.md, docs/cli-output-architecture.md, docs/spine.md
 public README: prose-first runtime boundary, public-safe artifact wording
 artifact docs: operator-local paths only, no personal absolute paths
 tests: compact runners, fixtures, vectors, and integrity regression harnesses

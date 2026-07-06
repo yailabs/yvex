@@ -295,13 +295,14 @@ check-docs:
 		! -name contract.md \
 		! -name model-families.md \
 		! -name operator-runbook.md \
+		! -name cli-output-architecture.md \
 		-print | grep .
-	@test "$$(find docs -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')" = "5"
+	@test "$$(find docs -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')" = "6"
 	@grep -F "YVEX Inner Delivery Spine" docs/spine.md >/dev/null
 	@grep -F "internal roadmap" docs/spine.md >/dev/null
 	@grep -F "YVEX is a native C inference engine for local open-weight models." README.md >/dev/null
 	@grep -F "Model selection in canonical REPL" docs/spine.md >/dev/null
-	@grep -F "docs/api.md, docs/contract.md, docs/model-families.md, docs/operator-runbook.md, docs/spine.md" docs/spine.md >/dev/null
+	@grep -F "docs/api.md, docs/contract.md, docs/model-families.md, docs/operator-runbook.md, docs/cli-output-architecture.md, docs/spine.md" docs/spine.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Runtime Contract" docs/contract.md >/dev/null
 	@grep -F "YVEX Operator Runbook" docs/operator-runbook.md >/dev/null

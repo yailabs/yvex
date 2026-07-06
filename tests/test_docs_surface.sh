@@ -8,6 +8,7 @@ test -f docs/api.md
 test -f docs/contract.md
 test -f docs/model-families.md
 test -f docs/operator-runbook.md
+test -f docs/cli-output-architecture.md
 test -d docs/runbooks
 test -f docs/runbooks/README.md
 test -f docs/runbooks/deepseek.md
@@ -53,11 +54,26 @@ if grep -nF "not a full transformer run" README.md ||
 fi
 
 count="$(find docs -maxdepth 1 -type f | wc -l | tr -d ' ')"
-if [ "$count" -ne 5 ]; then
+if [ "$count" -ne 6 ]; then
   echo "unexpected docs file count: $count"
   find docs -maxdepth 1 -type f | sort
   exit 1
 fi
+
+grep -nF "table = renderer layout, not a long-term user-selected mode" docs/spine.md >/dev/null || {
+  echo "spine must keep table as layout doctrine" >&2
+  exit 1
+}
+
+grep -nF "JSON output is not implemented uniformly in this audit" docs/cli-output-architecture.md >/dev/null || {
+  echo "CLI output architecture must not claim uniform JSON output" >&2
+  exit 1
+}
+
+grep -nF "This audit does not remove all print sites" docs/cli-output-architecture.md >/dev/null || {
+  echo "CLI output architecture must preserve the audit-only boundary" >&2
+  exit 1
+}
 
 runbook_count="$(find docs/runbooks -maxdepth 1 -type f | wc -l | tr -d ' ')"
 if [ "$runbook_count" -ne 4 ]; then
