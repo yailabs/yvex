@@ -11,7 +11,7 @@ This file is the active delivery spine. It is not a historical ledger, not a
 roadmap archive, and not a substitute for implementation. Historical delivery
 details remain available through git history.
 
-The active docs set is docs/api.md, docs/contract.md, docs/model-families.md, docs/operator-runbook.md, docs/cli-output-architecture.md, docs/spine.md.
+The active docs set is docs/api.md, docs/contract.md, docs/model-families.md, docs/operator-runbook.md, docs/cli-output-architecture.md, docs/v010-release-doctrine.md, docs/spine.md.
 
 ## 0. Dashboard
 
@@ -172,6 +172,8 @@ v0.1.0 target:
 v0.1.0 - multi-family supported generation over YVEX-produced quantized artifacts
 ```
 
+Canonical release doctrine: docs/v010-release-doctrine.md
+
 v0.1.0 closes only when every supported v0.1.0 generation family reaches the
 required artifact, runtime, generation, eval, and benchmark gates.
 
@@ -282,7 +284,7 @@ labels.
 | SPINE.ROW.CATALOG.0 | complete | Restore explicit active row labels without restoring historical ledger content. |
 | SPINE.ROW.CATALOG.1 | complete | Promote the row-label catalog into a trackmap with status and description columns. |
 | SPINE.CAPABILITY.MAP.0 | complete | Replace the current snapshot with the v0.1.0 pipeline capability map. |
-| V010.SCOPE.0 | planned | v0.1.0 release doctrine. |
+| V010.SCOPE.0 | complete | v0.1.0 release doctrine. |
 | V010.SCOPE.1 | planned | v0.1.0 minimum gates. |
 | V010.SCOPE.2 | planned | v0.1.0 non-goals. |
 | V010.SCOPE.3 | planned | v0.1.0 included track map. |

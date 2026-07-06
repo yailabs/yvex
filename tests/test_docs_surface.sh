@@ -9,6 +9,7 @@ test -f docs/contract.md
 test -f docs/model-families.md
 test -f docs/operator-runbook.md
 test -f docs/cli-output-architecture.md
+test -f docs/v010-release-doctrine.md
 test -d docs/runbooks
 test -f docs/runbooks/README.md
 test -f docs/runbooks/deepseek.md
@@ -100,9 +101,74 @@ if grep -nF "not a full transformer run" README.md ||
 fi
 
 count="$(find docs -maxdepth 1 -type f | wc -l | tr -d ' ')"
-if [ "$count" -ne 6 ]; then
+if [ "$count" -ne 7 ]; then
   echo "unexpected docs file count: $count"
   find docs -maxdepth 1 -type f | sort
+  exit 1
+fi
+
+grep -nF "docs/v010-release-doctrine.md" docs/spine.md >/dev/null || {
+  echo "spine must list v0.1.0 release doctrine in the active docs set" >&2
+  exit 1
+}
+
+for doctrine_heading in \
+  "## 0. Authority" \
+  "## 1. Release Identity" \
+  "## 2. Supported Family Set" \
+  "## 3. Closure Rule" \
+  "## 4. Supported Family Meaning" \
+  "## 5. Artifact Versus Runtime Generation" \
+  "## 6. Non-Closing Evidence" \
+  "## 7. Target Classes" \
+  "## 8. Release Gates" \
+  "## 9. Readiness Vocabulary" \
+  "## 10. Forbidden Claims" \
+  "## 11. Governed Surfaces" \
+  "## 12. Change Control"; do
+  grep -nF "$doctrine_heading" docs/v010-release-doctrine.md >/dev/null || {
+    echo "release doctrine missing canonical heading: $doctrine_heading" >&2
+    exit 1
+  }
+done
+
+if grep -nE '^## ' docs/v010-release-doctrine.md |
+   grep -vE '## (0\. Authority|1\. Release Identity|2\. Supported Family Set|3\. Closure Rule|4\. Supported Family Meaning|5\. Artifact Versus Runtime Generation|6\. Non-Closing Evidence|7\. Target Classes|8\. Release Gates|9\. Readiness Vocabulary|10\. Forbidden Claims|11\. Governed Surfaces|12\. Change Control)$'; then
+  echo "release doctrine must not add extra H2 sections" >&2
+  exit 1
+fi
+
+for doctrine_term in \
+  "# v0.1.0 Release Doctrine" \
+  "v0.1.0 is not the first model that runs" \
+  "every supported generation family in {DeepSeek, Qwen, Gemma}" \
+  "generation-capable artifact is not runtime generation" \
+  "DeepSeek cannot close v0.1.0 alone" \
+  "Qwen cannot close v0.1.0 alone" \
+  "Gemma cannot close v0.1.0 alone" \
+  "Qwen/Metal is post-v0.1.0 backend portability" \
+  "GLM is source/storage pressure unless a later TRACK.SCOPE row promotes it" \
+  "release-ready"; do
+  grep -nF "$doctrine_term" docs/v010-release-doctrine.md >/dev/null || {
+    echo "release doctrine missing required term: $doctrine_term" >&2
+    exit 1
+  }
+done
+
+grep -nF "| V010.SCOPE.0 | complete | v0.1.0 release doctrine. |" docs/spine.md >/dev/null || {
+  echo "spine must mark V010.SCOPE.0 complete" >&2
+  exit 1
+}
+
+if awk '
+  FILENAME == "docs/v010-release-doctrine.md" &&
+    /^## 10\. Forbidden Claims/ { skip = 1 }
+  FILENAME == "docs/v010-release-doctrine.md" &&
+    /^## 11\. Governed Surfaces/ { skip = 0 }
+  !skip { print FILENAME ":" FNR ":" $0 }
+' docs/v010-release-doctrine.md docs/spine.md |
+   grep -nE 'single model can close v0\.1\.0|DeepSeek alone closes v0\.1\.0|Qwen/Metal closes v0\.1\.0|GLM closes v0\.1\.0|generation-capable artifact is runtime generation'; then
+  echo "release doctrine or spine contains stale positive closure language" >&2
   exit 1
 fi
 
