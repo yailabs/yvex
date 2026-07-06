@@ -129,12 +129,14 @@ assert_output_contract_pass() {
 
 write_fake_transformer_safetensors() {
   out=$1
+  variant=${2:-complete}
   mkdir -p "$(dirname "$out")"
-  python3 - "$out" <<'PY'
+  python3 - "$out" "$variant" <<'PY'
 import json
 import struct
 import sys
 
+variant = sys.argv[2]
 names = [
     "model.embed_tokens.weight",
     "model.layers.0.self_attn.q_proj.weight",
@@ -149,6 +151,34 @@ names = [
     "model.norm.weight",
     "lm_head.weight",
 ]
+if variant == "qwen-incomplete":
+    names = [
+        "model.layers.0.self_attn.q_proj.weight",
+        "model.layers.0.self_attn.k_proj.weight",
+        "model.layers.0.self_attn.v_proj.weight",
+        "model.layers.0.self_attn.o_proj.weight",
+        "model.layers.0.input_layernorm.weight",
+        "model.layers.0.post_attention_layernorm.weight",
+        "model.layers.0.linear_attn.in_proj.weight",
+        "model.layers.0.mlp.experts.0.gate_proj.weight",
+        "model.norm.weight",
+        "lm_head.weight",
+        "model.unmapped.qwen_probe.weight",
+    ]
+elif variant == "gemma-incomplete-no-head":
+    names = [
+        "model.layers.0.self_attn.q_proj.weight",
+        "model.layers.0.self_attn.k_proj.weight",
+        "model.layers.0.self_attn.v_proj.weight",
+        "model.layers.0.self_attn.o_proj.weight",
+        "model.layers.0.mlp.gate_proj.weight",
+        "model.layers.0.mlp.up_proj.weight",
+        "model.layers.0.mlp.down_proj.weight",
+        "model.layers.0.input_layernorm.weight",
+        "model.layers.0.post_attention_layernorm.weight",
+        "model.norm.weight",
+        "model.unmapped.gemma_probe.weight",
+    ]
 offset = 0
 header = {}
 for name in names:
@@ -550,12 +580,57 @@ grep 'tokenizer_map_status: missing' "$ROOT/source-dynamic-qwen-audit.out"
 grep 'next_required_rows: V010.MAP.8' "$ROOT/source-dynamic-qwen-audit.out"
 ! grep 'missing-qwen-tensor-role-map' "$ROOT/source-dynamic-qwen-audit.out"
 ! grep 'missing-qwen-tensor-map' "$ROOT/source-dynamic-qwen-audit.out"
+write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/qwen/qwen3-6-35b-a3b/model.safetensors" qwen-incomplete
+"$YVEX_BIN" model-target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-qwen-incomplete-audit.out"
+grep 'tensor_map_status: naming-map-incomplete' "$ROOT/tensor-map-dynamic-qwen-incomplete-audit.out"
+grep 'tensor_map_target_id: qwen3-6-35b-a3b' "$ROOT/tensor-map-dynamic-qwen-incomplete-audit.out"
+grep 'unmapped_unknown_count: [1-9]' "$ROOT/tensor-map-dynamic-qwen-incomplete-audit.out"
+"$YVEX_BIN" model-target tensor-map qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --role output-head --audit > "$ROOT/output-head-dynamic-qwen-incomplete-audit.out"
+grep 'output_head_map_status: output-head-profiled' "$ROOT/output-head-dynamic-qwen-incomplete-audit.out"
+grep 'output_head_map_target_id: qwen3-6-35b-a3b' "$ROOT/output-head-dynamic-qwen-incomplete-audit.out"
+"$YVEX_BIN" model-target missing-roles qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" > "$ROOT/missing-roles-dynamic-qwen.out"
+grep 'missing-roles: qwen3-6-35b-a3b' "$ROOT/missing-roles-dynamic-qwen.out"
+grep 'family: qwen' "$ROOT/missing-roles-dynamic-qwen.out"
+grep 'status: blocked' "$ROOT/missing-roles-dynamic-qwen.out"
+grep 'top_blocker: incomplete-tensor-map' "$ROOT/missing-roles-dynamic-qwen.out"
+grep 'next: V010.MAP.8' "$ROOT/missing-roles-dynamic-qwen.out"
+grep 'qwen-linear-attn.*missing' "$ROOT/missing-roles-dynamic-qwen.out"
+grep 'output-head.*present' "$ROOT/missing-roles-dynamic-qwen.out"
+grep 'tokenizer.*missing' "$ROOT/missing-roles-dynamic-qwen.out"
+grep 'artifact.*missing' "$ROOT/missing-roles-dynamic-qwen.out"
+grep 'boundary: missing-role report only; no GGUF/runtime/generation' "$ROOT/missing-roles-dynamic-qwen.out"
+"$YVEX_BIN" model-target missing-roles qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/missing-roles-dynamic-qwen-table.out"
+grep 'qwen3-6-35b-a3b.*qwen.*blocked.*incomplete-tensor-map' "$ROOT/missing-roles-dynamic-qwen-table.out"
+grep 'qwen3-6-35b-a3b.*missing.*missing.*V010.MAP.8' "$ROOT/missing-roles-dynamic-qwen-table.out"
+grep 'qwen3-6-35b-a3b.*[[:space:]][1-9][0-9]*[[:space:]]*missing[[:space:]]*missing' "$ROOT/missing-roles-dynamic-qwen-table.out"
+"$YVEX_BIN" model-target missing-roles qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'target_id: qwen3-6-35b-a3b' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'family: qwen' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'source_status: present' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'tensor_map_status: incomplete-report-only' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'tensor_map_path: .*qwen3-6-35b-a3b.tensor-map.json' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'tensor_map_unmapped_unknown_count: [1-9]' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'output_head_map_status: present-report-only' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'tokenizer_map_status: missing' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'artifact_status: missing' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'expected_artifact_path: .*qwen3-6-35b-a3b.gguf' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'artifact_emission_status: not-performed' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'artifact_identity_status: missing' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'prepare_blocker_count:' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'top_blocker: incomplete-tensor-map' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'next: V010.MAP.8' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'runtime_execution: not-performed' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'generation: unsupported' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+grep 'benchmark_status: not-measured' "$ROOT/missing-roles-dynamic-qwen-audit.out"
+"$YVEX_BIN" model-target missing-roles qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --output json > "$ROOT/missing-roles-dynamic-qwen-json.out"
+grep '"target_id":"qwen3-6-35b-a3b"' "$ROOT/missing-roles-dynamic-qwen-json.out"
+grep '"top_blocker":"incomplete-tensor-map"' "$ROOT/missing-roles-dynamic-qwen-json.out"
 "$YVEX_BIN" models prepare qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --dry-run --audit > "$ROOT/prepare-dynamic-qwen.out" 2>&1 && exit 1 || true
 grep 'target_id: qwen3-6-35b-a3b' "$ROOT/prepare-dynamic-qwen.out"
 grep 'family: qwen' "$ROOT/prepare-dynamic-qwen.out"
 grep 'source_status: present' "$ROOT/prepare-dynamic-qwen.out"
 grep 'model_class_status: present' "$ROOT/prepare-dynamic-qwen.out"
-grep 'tensor_map_status: present-report-only' "$ROOT/prepare-dynamic-qwen.out"
+grep 'tensor_map_status: incomplete-report-only' "$ROOT/prepare-dynamic-qwen.out"
 grep 'output_head_map_status: present-report-only' "$ROOT/prepare-dynamic-qwen.out"
 grep 'tokenizer_map_status: missing' "$ROOT/prepare-dynamic-qwen.out"
 grep 'artifact_status: missing' "$ROOT/prepare-dynamic-qwen.out"
@@ -564,12 +639,22 @@ grep 'artifact_plan_status: planned-full-gguf' "$ROOT/prepare-dynamic-qwen.out"
 grep 'artifact_emission_status: not-performed' "$ROOT/prepare-dynamic-qwen.out"
 grep 'artifact_identity_status: missing' "$ROOT/prepare-dynamic-qwen.out"
 grep 'prepare_blocker_count:' "$ROOT/prepare-dynamic-qwen.out"
-grep 'top_blocker: missing-tokenizer-map' "$ROOT/prepare-dynamic-qwen.out"
-grep 'reason: tokenizer metadata mapping / artifact path missing' "$ROOT/prepare-dynamic-qwen.out"
+grep 'top_blocker: incomplete-tensor-map' "$ROOT/prepare-dynamic-qwen.out"
+grep 'reason: incomplete tensor map / tokenizer metadata mapping / artifact path missing' "$ROOT/prepare-dynamic-qwen.out"
 grep 'next: V010.MAP.8' "$ROOT/prepare-dynamic-qwen.out"
 grep 'status: model-prepare-unsupported' "$ROOT/prepare-dynamic-qwen.out"
 ! grep 'status: model-prepare-unknown-target' "$ROOT/prepare-dynamic-qwen.out"
 ! grep 'reason: missing tensor map / model class / artifact path' "$ROOT/prepare-dynamic-qwen.out"
+"$YVEX_BIN" models prepare qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" --dry-run > "$ROOT/prepare-dynamic-qwen-normal.out" 2>&1 && exit 1 || true
+grep 'prepare: qwen3-6-35b-a3b' "$ROOT/prepare-dynamic-qwen-normal.out"
+grep 'source: present' "$ROOT/prepare-dynamic-qwen-normal.out"
+grep 'artifact: missing' "$ROOT/prepare-dynamic-qwen-normal.out"
+grep 'expected: .*qwen3-6-35b-a3b.gguf' "$ROOT/prepare-dynamic-qwen-normal.out"
+grep 'status: blocked' "$ROOT/prepare-dynamic-qwen-normal.out"
+grep 'top_blocker: incomplete-tensor-map' "$ROOT/prepare-dynamic-qwen-normal.out"
+grep 'next: V010.MAP.8' "$ROOT/prepare-dynamic-qwen-normal.out"
+grep 'boundary: GGUF not emitted; runtime unsupported' "$ROOT/prepare-dynamic-qwen-normal.out"
+! grep 'source_manifest_path:' "$ROOT/prepare-dynamic-qwen-normal.out"
 
 YVEX_FAKE_HF_AUTH=1 YVEX_HF_CLI="$FAKE_HF" "$YVEX_BIN" models download --repo google/Gemma-4-31B-it --family gemma --name gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --auth auto --progress off --audit > "$ROOT/download-dynamic-gemma.out"
 grep 'target_id: gemma-4-31b-it' "$ROOT/download-dynamic-gemma.out"
@@ -635,32 +720,41 @@ grep 'status: model-prepare-unsupported' "$ROOT/prepare-dynamic-gemma.out"
 ! grep 'status: model-prepare-unknown-target' "$ROOT/prepare-dynamic-gemma.out"
 ! grep 'reason: missing tensor map / model class / artifact path' "$ROOT/prepare-dynamic-gemma.out"
 
-cat > "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.tensor-map.json" <<EOF_MAP_INCOMPLETE
-{
-  "schema": "yvex.source.tensor_map.v1",
-  "row": "MODELS.SOURCE.MAP.HANDOFF.0",
-  "status": "present-report-only",
-  "target_id": "gemma-4-31b-it",
-  "family": "gemma",
-  "unmapped_unknown_count": 3,
-  "runtime_claim": "unsupported",
-  "generation": "unsupported-full-model",
-  "benchmark_status": "not-measured"
-}
-EOF_MAP_INCOMPLETE
-cat > "$DYNAMIC_ROOT/reports/gemma/gemma-4-31b-it.output-head-map.json" <<EOF_HEAD_MISSING
-{
-  "schema": "yvex.source.output_head_map.v1",
-  "row": "MODELS.SOURCE.MAP.HANDOFF.0",
-  "status": "present-report-only",
-  "target_id": "gemma-4-31b-it",
-  "family": "gemma",
-  "output_head_status": "missing",
-  "runtime_claim": "unsupported",
-  "generation": "unsupported-full-model",
-  "benchmark_status": "not-measured"
-}
-EOF_HEAD_MISSING
+write_fake_transformer_safetensors "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it/model.safetensors" gemma-incomplete-no-head
+"$YVEX_BIN" model-target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/tensor-map-dynamic-gemma-incomplete-audit.out"
+grep 'tensor_map_status: naming-map-incomplete' "$ROOT/tensor-map-dynamic-gemma-incomplete-audit.out"
+grep 'tensor_map_target_id: gemma-4-31b-it' "$ROOT/tensor-map-dynamic-gemma-incomplete-audit.out"
+grep 'unmapped_unknown_count: [1-9]' "$ROOT/tensor-map-dynamic-gemma-incomplete-audit.out"
+"$YVEX_BIN" model-target tensor-map gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --role output-head --audit > "$ROOT/output-head-dynamic-gemma-missing-audit.out"
+grep 'output_head_map_status: output-head-missing' "$ROOT/output-head-dynamic-gemma-missing-audit.out"
+grep 'output_head_map_target_id: gemma-4-31b-it' "$ROOT/output-head-dynamic-gemma-missing-audit.out"
+grep 'output_head_missing_status: missing' "$ROOT/output-head-dynamic-gemma-missing-audit.out"
+"$YVEX_BIN" model-target missing-roles gemma-4-31b-it --models-root "$DYNAMIC_ROOT" > "$ROOT/missing-roles-dynamic-gemma.out"
+grep 'missing-roles: gemma-4-31b-it' "$ROOT/missing-roles-dynamic-gemma.out"
+grep 'family: gemma' "$ROOT/missing-roles-dynamic-gemma.out"
+grep 'status: blocked' "$ROOT/missing-roles-dynamic-gemma.out"
+grep 'top_blocker: missing-output-head-map' "$ROOT/missing-roles-dynamic-gemma.out"
+grep 'next: V010.MAP.8' "$ROOT/missing-roles-dynamic-gemma.out"
+grep 'output-head.*missing' "$ROOT/missing-roles-dynamic-gemma.out"
+grep 'tied-head-policy.*unknown' "$ROOT/missing-roles-dynamic-gemma.out"
+grep 'tokenizer.*missing' "$ROOT/missing-roles-dynamic-gemma.out"
+grep 'unknown-tensors.*incomplete' "$ROOT/missing-roles-dynamic-gemma.out"
+grep 'artifact.*missing' "$ROOT/missing-roles-dynamic-gemma.out"
+"$YVEX_BIN" model-target missing-roles gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --output table > "$ROOT/missing-roles-dynamic-gemma-table.out"
+grep 'gemma-4-31b-it.*gemma.*blocked.*missing-output-head-map' "$ROOT/missing-roles-dynamic-gemma-table.out"
+grep 'gemma-4-31b-it.*missing.*missing.*V010.MAP.8' "$ROOT/missing-roles-dynamic-gemma-table.out"
+grep 'gemma-4-31b-it.*[[:space:]][1-9][0-9]*[[:space:]]*missing[[:space:]]*missing' "$ROOT/missing-roles-dynamic-gemma-table.out"
+"$YVEX_BIN" model-target missing-roles gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/missing-roles-dynamic-gemma-audit.out"
+grep 'target_id: gemma-4-31b-it' "$ROOT/missing-roles-dynamic-gemma-audit.out"
+grep 'family: gemma' "$ROOT/missing-roles-dynamic-gemma-audit.out"
+grep 'source_status: present' "$ROOT/missing-roles-dynamic-gemma-audit.out"
+grep 'tensor_map_status: incomplete-report-only' "$ROOT/missing-roles-dynamic-gemma-audit.out"
+grep 'output_head_map_status: missing-in-report' "$ROOT/missing-roles-dynamic-gemma-audit.out"
+grep 'tokenizer_map_status: missing' "$ROOT/missing-roles-dynamic-gemma-audit.out"
+grep 'artifact_status: missing' "$ROOT/missing-roles-dynamic-gemma-audit.out"
+grep 'expected_artifact_path: .*gemma-4-31b-it.gguf' "$ROOT/missing-roles-dynamic-gemma-audit.out"
+grep 'top_blocker: missing-output-head-map' "$ROOT/missing-roles-dynamic-gemma-audit.out"
+grep 'next: V010.MAP.8' "$ROOT/missing-roles-dynamic-gemma-audit.out"
 "$YVEX_BIN" source-manifest report --family gemma --release v0.1.0 --source "$DYNAMIC_ROOT/hf/gemma/gemma-4-31b-it" --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/source-dynamic-gemma-incomplete-map.out"
 grep 'tensor_map_status: incomplete-report-only' "$ROOT/source-dynamic-gemma-incomplete-map.out"
 grep 'tensor_role_map_status: incomplete-report-only' "$ROOT/source-dynamic-gemma-incomplete-map.out"
@@ -673,6 +767,16 @@ grep 'output_head_map_status: missing-in-report' "$ROOT/prepare-dynamic-gemma-in
 grep 'top_blocker: missing-output-head-map' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
 grep 'reason: incomplete tensor map / tokenizer metadata mapping / artifact path missing' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
 grep 'status: model-prepare-unsupported' "$ROOT/prepare-dynamic-gemma-incomplete-map.out"
+"$YVEX_BIN" models prepare gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --dry-run > "$ROOT/prepare-dynamic-gemma-normal.out" 2>&1 && exit 1 || true
+grep 'prepare: gemma-4-31b-it' "$ROOT/prepare-dynamic-gemma-normal.out"
+grep 'source: present' "$ROOT/prepare-dynamic-gemma-normal.out"
+grep 'artifact: missing' "$ROOT/prepare-dynamic-gemma-normal.out"
+grep 'expected: .*gemma-4-31b-it.gguf' "$ROOT/prepare-dynamic-gemma-normal.out"
+grep 'status: blocked' "$ROOT/prepare-dynamic-gemma-normal.out"
+grep 'top_blocker: missing-output-head-map' "$ROOT/prepare-dynamic-gemma-normal.out"
+grep 'next: V010.MAP.8' "$ROOT/prepare-dynamic-gemma-normal.out"
+grep 'boundary: GGUF not emitted; runtime unsupported' "$ROOT/prepare-dynamic-gemma-normal.out"
+! grep 'source_manifest_path:' "$ROOT/prepare-dynamic-gemma-normal.out"
 
 "$YVEX_BIN" models artifacts list --models-root "$DYNAMIC_ROOT" > "$ROOT/artifacts-list.out"
 grep 'deepseek4-v4-flash-selected-embed.*deepseek.*yvex-selected-gguf.*present.*ready' "$ROOT/artifacts-list.out"
@@ -698,19 +802,23 @@ grep '"target_id":"qwen3-6-35b-a3b"' "$ROOT/artifacts-list-json.out"
 "$YVEX_BIN" models artifacts status qwen3-6-35b-a3b --models-root "$DYNAMIC_ROOT" > "$ROOT/artifacts-status-qwen.out"
 grep 'artifact: qwen3-6-35b-a3b' "$ROOT/artifacts-status-qwen.out"
 grep 'family: qwen' "$ROOT/artifacts-status-qwen.out"
+grep 'class: planned-full-gguf' "$ROOT/artifacts-status-qwen.out"
 grep 'source: present' "$ROOT/artifacts-status-qwen.out"
 grep 'artifact_status: missing' "$ROOT/artifacts-status-qwen.out"
 grep 'expected: .*qwen3-6-35b-a3b.gguf' "$ROOT/artifacts-status-qwen.out"
 grep 'prepare: blocked' "$ROOT/artifacts-status-qwen.out"
-grep 'top_blocker: missing-tokenizer-map' "$ROOT/artifacts-status-qwen.out"
+grep 'top_blocker: incomplete-tensor-map' "$ROOT/artifacts-status-qwen.out"
+grep 'next: V010.MAP.8' "$ROOT/artifacts-status-qwen.out"
 grep 'boundary: artifact discovery only; no runtime/generation' "$ROOT/artifacts-status-qwen.out"
 "$YVEX_BIN" models artifacts status gemma-4-31b-it --models-root "$DYNAMIC_ROOT" --audit > "$ROOT/artifacts-status-gemma-audit.out"
 grep 'artifact: gemma-4-31b-it' "$ROOT/artifacts-status-gemma-audit.out"
 grep 'family: gemma' "$ROOT/artifacts-status-gemma-audit.out"
+grep 'class: planned-full-gguf' "$ROOT/artifacts-status-gemma-audit.out"
 grep 'artifact_status: missing' "$ROOT/artifacts-status-gemma-audit.out"
 grep 'expected: .*gemma-4-31b-it.gguf' "$ROOT/artifacts-status-gemma-audit.out"
 grep 'prepare: blocked' "$ROOT/artifacts-status-gemma-audit.out"
 grep 'top_blocker: missing-output-head-map' "$ROOT/artifacts-status-gemma-audit.out"
+grep 'next: V010.MAP.8' "$ROOT/artifacts-status-gemma-audit.out"
 grep 'tensor_map_status: incomplete-report-only' "$ROOT/artifacts-status-gemma-audit.out"
 grep 'output_head_map_status: missing-in-report' "$ROOT/artifacts-status-gemma-audit.out"
 grep 'source_payload_loaded: false' "$ROOT/artifacts-status-gemma-audit.out"
@@ -1022,6 +1130,7 @@ grep 'model-target decision --release v0.1.0' "$ROOT/model-target-help.out"
 grep 'model-target class-profile TARGET' "$ROOT/model-target-help.out"
 grep 'model-target tensor-collection TARGET' "$ROOT/model-target-help.out"
 grep 'model-target tensor-map TARGET' "$ROOT/model-target-help.out"
+grep 'model-target missing-roles TARGET' "$ROOT/model-target-help.out"
 grep 'This command records the v0.1.0 target decision' "$ROOT/model-target-help.out"
 
 CLASS_MISSING_ROOT="$ROOT/qwen-class-missing-root"
@@ -2761,6 +2870,16 @@ expect_rc 2 "$YVEX_BIN" model-target tensor-map qwen-metal-portability --role mi
 grep 'unsupported target: qwen-metal-portability' "$ROOT/missing-role-old-qwen-target.err"
 expect_rc 2 "$YVEX_BIN" model-target tensor-map gemma-dense-portability --role missing-roles > "$ROOT/missing-role-old-gemma-target.out" 2> "$ROOT/missing-role-old-gemma-target.err"
 grep 'unsupported target: gemma-dense-portability' "$ROOT/missing-role-old-gemma-target.err"
+expect_rc 2 "$YVEX_BIN" model-target missing-roles > "$ROOT/missing-roles-direct-missing-target.out" 2> "$ROOT/missing-roles-direct-missing-target.err"
+grep 'requires TARGET' "$ROOT/missing-roles-direct-missing-target.err"
+expect_rc 2 "$YVEX_BIN" model-target missing-roles qwen3-8b --output nope > "$ROOT/missing-roles-direct-bad-output.out" 2> "$ROOT/missing-roles-direct-bad-output.err"
+grep 'unsupported output mode: nope' "$ROOT/missing-roles-direct-bad-output.err"
+expect_rc 2 "$YVEX_BIN" model-target missing-roles qwen3-8b --models-root > "$ROOT/missing-roles-direct-missing-root.out" 2> "$ROOT/missing-roles-direct-missing-root.err"
+grep 'models-root requires DIR' "$ROOT/missing-roles-direct-missing-root.err"
+expect_rc 2 "$YVEX_BIN" model-target missing-roles qwen3-8b --source > "$ROOT/missing-roles-direct-missing-source.out" 2> "$ROOT/missing-roles-direct-missing-source.err"
+grep 'source requires DIR' "$ROOT/missing-roles-direct-missing-source.err"
+expect_rc 2 "$YVEX_BIN" model-target missing-roles qwen-metal-portability > "$ROOT/missing-roles-direct-old-qwen-target.out" 2> "$ROOT/missing-roles-direct-old-qwen-target.err"
+grep 'unsupported target: qwen-metal-portability' "$ROOT/missing-roles-direct-old-qwen-target.err"
 expect_rc 2 "$YVEX_BIN" model-target tensor-map qwen3-8b --gate > "$ROOT/tensor-mapping-gate-missing-value.out" 2> "$ROOT/tensor-mapping-gate-missing-value.err"
 grep 'gate requires v0.1.0' "$ROOT/tensor-mapping-gate-missing-value.err"
 expect_rc 2 "$YVEX_BIN" model-target tensor-map qwen3-8b --gate v9.9.9 > "$ROOT/tensor-mapping-gate-bad-release.out" 2> "$ROOT/tensor-mapping-gate-bad-release.err"

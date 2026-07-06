@@ -3368,6 +3368,22 @@ static int print_prepare_downloaded_source_unsupported(
         top_blocker = "missing-tokenizer-map";
     }
 
+    if (!options || options->output_mode != YVEX_MODELS_OUTPUT_AUDIT) {
+        printf("prepare: %s\n",
+               target && target->target_id[0]
+                   ? target->target_id
+                   : options && options->target ? options->target : "unknown");
+        printf("source: %s\n", source_present ? "present" : "missing");
+        printf("artifact: %s\n", expected_artifact_present ? "present" : "missing");
+        printf("expected: %s\n",
+               expected_artifact_path[0] ? expected_artifact_path : "unknown");
+        printf("status: blocked\n");
+        printf("top_blocker: %s\n", top_blocker);
+        printf("next: V010.MAP.8\n");
+        printf("boundary: GGUF not emitted; runtime unsupported\n");
+        return exit_for_status(YVEX_ERR_UNSUPPORTED);
+    }
+
     printf("models: prepare\n");
     printf("target_id: %s\n", target && target->target_id[0] ? target->target_id : options->target);
     printf("family: %s\n", target && target->family[0] ? target->family : "unknown");
@@ -6750,15 +6766,12 @@ static void artifacts_classify_dynamic_row(const yvex_operator_paths *operator_p
     } else if (!row->output_head_map_present || row->output_head_missing) {
         snprintf(row->top_blocker, sizeof(row->top_blocker), "missing-output-head-map");
         snprintf(row->detail, sizeof(row->detail), "output-head/tokenizer mapping missing; full GGUF emission not performed");
-    } else if (!row->tokenizer_map_present) {
-        snprintf(row->top_blocker, sizeof(row->top_blocker), "missing-tokenizer-map");
-        snprintf(row->detail, sizeof(row->detail), "%s; full GGUF emission not performed",
-                 (!row->tensor_map_present || row->tensor_map_incomplete)
-                     ? "tensor map incomplete"
-                     : "tokenizer metadata mapping missing");
     } else if (!row->tensor_map_present || row->tensor_map_incomplete) {
         snprintf(row->top_blocker, sizeof(row->top_blocker), "incomplete-tensor-map");
         snprintf(row->detail, sizeof(row->detail), "tensor map incomplete; full GGUF emission not performed");
+    } else if (!row->tokenizer_map_present) {
+        snprintf(row->top_blocker, sizeof(row->top_blocker), "missing-tokenizer-map");
+        snprintf(row->detail, sizeof(row->detail), "tokenizer metadata mapping missing; full GGUF emission not performed");
     } else if (strcmp(row->artifact_status, "missing") == 0) {
         snprintf(row->top_blocker, sizeof(row->top_blocker), "missing-artifact-emitter");
         snprintf(row->detail, sizeof(row->detail), "full GGUF artifact emitter has not produced this target");
@@ -7119,11 +7132,15 @@ static void artifacts_print_status(const yvex_cli_models_artifacts_options *opti
     }
     printf("artifact: %s\n", row->target_id);
     printf("family: %s\n", row->family);
+    printf("class: %s\n", row->artifact_class[0] ? row->artifact_class : "unknown-gguf");
     printf("source: %s\n", row->source_status);
     printf("artifact_status: %s\n", row->artifact_status);
     printf("expected: %s\n", row->expected_path[0] ? row->expected_path : row->path);
     printf("prepare: %s\n", row->prepare_status);
     printf("top_blocker: %s\n", row->top_blocker);
+    if (strcmp(row->prepare_status, "blocked") == 0) {
+        printf("next: V010.MAP.8\n");
+    }
     printf("detail: %s\n", row->detail);
     printf("boundary: artifact discovery only; no runtime/generation\n");
     if (options->output_mode == YVEX_ARTIFACTS_OUTPUT_AUDIT) {

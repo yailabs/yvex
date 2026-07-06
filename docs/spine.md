@@ -194,7 +194,7 @@ operator-readable state.
 | Qwen tensor naming map | report-only | yes | `yvex model-target tensor-map qwen3-8b --audit` | not tensor payload loading, not complete runtime role coverage, no artifact emission, no runtime descriptor construction, no graph consumption, no Metal support, no generation, eval, benchmark, throughput, or release readiness |
 | Qwen output-head tensor mapping | report-only | yes | `yvex model-target tensor-map qwen3-8b --role output-head --audit` | not logits computation, not final hidden-state production, not artifact emission, not runtime descriptor construction, not graph consumption, no Metal support, no generation, eval, benchmark, throughput, or release readiness |
 | Qwen tokenizer metadata mapping | report-only | yes | `yvex model-target tensor-map qwen3-8b --role tokenizer --audit` | not tokenization, not detokenization, not chat-template runtime, not EOS/stop behavior, not logits, not artifact emission, not runtime descriptor construction, no Metal support, no generation, eval, benchmark, throughput, or release readiness |
-| Qwen missing-role blocker report | report-only | yes | `yvex model-target tensor-map qwen3-8b --role missing-roles --audit` | not tensor payload loading, not artifact contract completion, not runtime descriptor construction, not graph consumption, no Metal support, no logits computation, no tokenizer runtime, no generation, eval, benchmark, throughput, or release readiness |
+| Qwen missing-role blocker report | report-only | yes | `yvex model-target missing-roles qwen3-8b --audit` and dynamic Qwen source targets | not tensor payload loading, not artifact contract completion, not runtime descriptor construction, not graph consumption, no Metal support, no logits computation, no tokenizer runtime, no generation, eval, benchmark, throughput, or release readiness |
 | Qwen tensor mapping gate | report-only | yes | `yvex model-target tensor-map qwen3-8b --gate v0.1.0 --audit` | not tensor payload loading, not artifact emission, not artifact contract completion, not per-role qtype support completion, not runtime descriptor construction, not graph consumption, no Metal support, no logits computation, no tokenizer runtime, no generation, eval, benchmark, throughput, or release readiness |
 | Qwen qtype policy report | report-only | yes | `yvex model-target quant-policy qwen3-8b --audit` | not tensor payload loading, not quantization, not GGUF emission, not per-role qtype support completion, not compute/refusal matrix completion, not calibration/imatrix completion, not artifact identity, not runtime descriptor construction, not graph consumption, no Metal support, no generation, eval, benchmark, throughput, or release readiness |
 | Gemma source pressure report | report-only | yes | `yvex source-manifest report --family gemma --release v0.1.0` | not source download, artifact emission, runtime, generation, eval, or benchmark |
@@ -204,7 +204,7 @@ operator-readable state.
 | Dense tensor naming map | report-only | yes | `yvex model-target tensor-map gemma-4-12b-it --audit` | not tensor payload loading, not complete runtime role coverage, no artifact emission, no runtime descriptor construction, no graph consumption, no Gemma/CUDA runtime, no generation, eval, benchmark, throughput, or release readiness |
 | Gemma output-head tensor mapping | report-only | yes | `yvex model-target tensor-map gemma-4-12b-it --role output-head --audit` | not logits computation, not final hidden-state production, not artifact emission, not runtime descriptor construction, not graph consumption, no Gemma/CUDA runtime, no generation, eval, benchmark, throughput, or release readiness |
 | Gemma tokenizer metadata mapping | report-only | yes | `yvex model-target tensor-map gemma-4-12b-it --role tokenizer --audit` | not tokenization, not detokenization, not chat-template runtime, not EOS/stop behavior, not logits, not artifact emission, not runtime descriptor construction, no Gemma/CUDA runtime, no generation, eval, benchmark, throughput, or release readiness |
-| Gemma missing-role blocker report | report-only | yes | `yvex model-target tensor-map gemma-4-12b-it --role missing-roles --audit` | not tensor payload loading, not artifact contract completion, not runtime descriptor construction, not graph consumption, no Gemma/CUDA runtime, no logits computation, no tokenizer runtime, no generation, eval, benchmark, throughput, or release readiness |
+| Gemma missing-role blocker report | report-only | yes | `yvex model-target missing-roles gemma-4-12b-it --audit` and dynamic Gemma source targets | not tensor payload loading, not artifact contract completion, not runtime descriptor construction, not graph consumption, no Gemma/CUDA runtime, no logits computation, no tokenizer runtime, no generation, eval, benchmark, throughput, or release readiness |
 | Gemma tensor mapping gate | report-only | yes | `yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0 --audit` | not tensor payload loading, not artifact emission, not artifact contract completion, not per-role qtype support completion, not runtime descriptor construction, not graph consumption, no Gemma/CUDA runtime, no logits computation, no tokenizer runtime, no generation, eval, benchmark, throughput, or release readiness |
 | Gemma qtype policy report | report-only | yes | `yvex model-target quant-policy gemma-4-12b-it --audit` | not tensor payload loading, not quantization, not GGUF emission, not per-role qtype support completion, not compute/refusal matrix completion, not calibration/imatrix completion, not artifact identity, not runtime descriptor construction, not graph consumption, no Gemma/CUDA runtime, no generation, eval, benchmark, throughput, or release readiness |
 | source artifact class fields | report-only | yes | Qwen/Gemma source reports and target inspect/list audit fields | not source download, artifact emission, materialization, runtime, generation, eval, or benchmark |
@@ -4919,13 +4919,13 @@ MODELS.ARTIFACTS.LIST.0 - Internal GGUF artifact discovery and prepare preflight
 The commands read operator paths, existing GGUF filenames, target-specific
 download/report/manifest/inventory/map sidecars, and report whether selected
 GGUF artifacts are present or planned full GGUF artifacts are still missing and
-blocked. `models prepare TARGET --dry-run --audit` also reports expected
-artifact path, artifact plan/emission/identity status, blocker count, and top
-blocker on unsupported downloaded source targets. This is artifact discovery
-and preflight UX only: no source tensor payload loading, no payload hashing, no
-GGUF emission, no quantization, no materialization, no graph execution, no
-runtime readiness, no generation, no eval, no benchmark, no throughput, and no
-release-ready claim.
+blocked. `models prepare TARGET --dry-run` now keeps normal output compact for
+blocked downloaded source targets, while `--audit` preserves expected artifact
+path, artifact plan/emission/identity status, blocker count, and top blocker.
+This is artifact discovery and preflight UX only: no source tensor payload
+loading, no payload hashing, no GGUF emission, no quantization, no
+materialization, no graph execution, no runtime readiness, no generation, no
+eval, no benchmark, no throughput, and no release-ready claim.
 
 Completed target/source repair row:
 
@@ -5063,16 +5063,16 @@ Completed tensor-map row:
 V010.MAP.8 - missing-role blocker report
 ```
 
-`V010.MAP.8` adds a missing-role blocker report for Qwen and Gemma source
-targets. It aggregates header-derived tensor naming, output-head mapping, and
-tokenizer metadata evidence into observed, missing, and ambiguous source and
-metadata role summaries plus downstream artifact, runtime-descriptor,
-graph-consumer, backend-residency, logits, tokenizer-runtime, generation, eval,
-and benchmark blockers. It preserves header-and-sidecar-metadata-only and
-report-only boundaries without tensor payload loading, artifact contract
-completion, runtime descriptor construction, graph consumption, backend
-residency, runtime execution, logits computation, tokenizer runtime,
-generation, eval, benchmark, throughput, or release-ready claim.
+`V010.MAP.8` adds `yvex model-target missing-roles TARGET` as the compact
+missing-role blocker report for Qwen and Gemma source targets, including
+downloaded dynamic targets. It aggregates header-derived tensor naming,
+output-head mapping, tokenizer metadata, planned artifact, and sidecar evidence
+into normal/table/audit/json output with the current top blocker. It preserves
+header-and-sidecar-metadata-only and report-only boundaries without tensor
+payload loading, artifact contract completion, runtime descriptor construction,
+graph consumption, backend residency, runtime execution, logits computation,
+tokenizer runtime, generation, eval, benchmark, throughput, or release-ready
+claim.
 
 Completed tensor-map row:
 
@@ -5408,7 +5408,7 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | V010.MAP.1 | complete | tensor-map | Dense tensor naming map | `yvex model-target tensor-map gemma-4-12b-it` maps header-derived Gemma native source tensor names to canonical YVEX dense role-label candidates for embedding, attention Q/K/V/O, MLP gate/up/down, normalization, output head, and sidecar candidates while preserving lexical-and-header-only validation, incomplete runtime role coverage, and explicit no-payload/no-artifact/no-runtime-descriptor/no-graph/no-generation/no-benchmark boundaries |
 | V010.MAP.6 | complete | tensor-map | Output-head tensor mapping | `yvex model-target tensor-map qwen3-8b --role output-head` and `yvex model-target tensor-map gemma-4-12b-it --role output-head` identify header-derived output-head, final-norm, and embedding candidates, report missing/ambiguous/profiled output-head status, shape relation, tie-policy unknown/separate-candidate status, and explicit no-logits/no-artifact/no-runtime-descriptor/no-graph/no-generation/no-benchmark boundaries without tensor payload loading or runtime support claim |
 | V010.MAP.7 | complete | tensor-map | Tokenizer metadata mapping | `yvex model-target tensor-map qwen3-8b --role tokenizer` and `yvex model-target tensor-map gemma-4-12b-it --role tokenizer` report sidecar tokenizer/config/special-token/generation metadata presence, bounded parse status, tokenizer class/model type, vocab size, special token IDs, additional special-token count, chat-template presence, and vocab/output-head relation without tokenization, detokenization, chat-template runtime, EOS/stop behavior, logits, artifact emission, runtime descriptors, graph consumption, generation, eval, benchmark, throughput, or release-ready claim |
-| V010.MAP.8 | complete | tensor-map | Missing-role blocker report | `yvex model-target tensor-map qwen3-8b --role missing-roles` and `yvex model-target tensor-map gemma-4-12b-it --role missing-roles` aggregate header-derived tensor naming, output-head mapping, and tokenizer metadata evidence into observed, missing, and ambiguous source/metadata role summaries plus downstream artifact, runtime-descriptor, graph-consumer, backend-residency, logits, tokenizer-runtime, generation, eval, and benchmark blockers while preserving header-and-sidecar-metadata-only/report-only boundaries without tensor payload loading, artifact contract completion, runtime descriptor construction, graph consumption, backend residency, runtime execution, logits computation, tokenizer runtime, generation, eval, benchmark, throughput, or release-ready claim |
+| V010.MAP.8 | complete | tensor-map | Missing-role blocker report | `yvex model-target missing-roles TARGET` reports compact normal/table/json and audit missing-role blockers for static and downloaded Qwen/Gemma source targets, combining header-derived tensor naming, output-head mapping, tokenizer metadata, planned artifact, and sidecar evidence into current top blockers while preserving header-and-sidecar-metadata-only/report-only boundaries without tensor payload loading, artifact contract completion, runtime descriptor construction, graph consumption, backend residency, runtime execution, logits computation, tokenizer runtime, generation, eval, benchmark, throughput, or release-ready claim |
 | V010.MAP.9 | complete | tensor-map | v0.1.0 tensor mapping gate | `yvex model-target tensor-map qwen3-8b --gate v0.1.0` and `yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0` aggregate model-class, tensor collection, tensor naming, output-head, tokenizer metadata, and missing-role evidence into a report-only mapping gate with normal/table/audit output, deterministic blocker statuses, and `next: V010.QUANT.0` only when mapping evidence is coherent enough for artifact/quant planning, without tensor payload loading, artifact emission, per-role qtype support completion, runtime descriptors, backend residency, graph consumption, prefill/decode/logits/tokenizer/sampling/generation, eval, benchmark, throughput, or release-ready claim |
 | V010.QUANT.0 | complete | quant | qtype policy report | `yvex model-target quant-policy qwen3-8b` and `yvex model-target quant-policy gemma-4-12b-it` consume source/header/mapping evidence and existing YVEX qtype support rows to report source dtype profile, policy basis, preferred/candidate/refused qtypes, calibration/imatrix deferrals, compute-support deferral, artifact-emission blockers, and downstream runtime blockers with normal/table/audit output and `next: V010.QUANT.1`, without tensor payload loading, quantization, GGUF emission, per-role qtype completion, compute/refusal matrix completion, calibration/imatrix completion, artifact identity, materialization, runtime descriptors, backend residency, graph consumption, generation, eval, benchmark, throughput, or release-ready claim |
 | ARTIFACT.QWEN.0 | planned | artifact | Qwen YVEX-produced artifact identity | Qwen YVEX-produced GGUF identity, digest, tensor byte ranges, qtype summary, and registry metadata are recorded without runtime claim |

@@ -112,9 +112,9 @@ make
 ./yvex model-target tensor-map qwen3-8b --role tokenizer
 ./yvex model-target tensor-map qwen3-8b --role tokenizer --output table
 ./yvex model-target tensor-map qwen3-8b --role tokenizer --audit
-./yvex model-target tensor-map qwen3-8b --role missing-roles
-./yvex model-target tensor-map qwen3-8b --role missing-roles --output table
-./yvex model-target tensor-map qwen3-8b --role missing-roles --audit
+./yvex model-target missing-roles qwen3-8b
+./yvex model-target missing-roles qwen3-8b --output table
+./yvex model-target missing-roles qwen3-8b --audit
 ./yvex model-target tensor-map qwen3-8b --gate v0.1.0
 ./yvex model-target tensor-map qwen3-8b --gate v0.1.0 --audit
 ./yvex model-target quant-policy qwen3-8b
@@ -137,9 +137,9 @@ make
 ./yvex model-target tensor-map gemma-4-12b-it --role tokenizer
 ./yvex model-target tensor-map gemma-4-12b-it --role tokenizer --output table
 ./yvex model-target tensor-map gemma-4-12b-it --role tokenizer --audit
-./yvex model-target tensor-map gemma-4-12b-it --role missing-roles
-./yvex model-target tensor-map gemma-4-12b-it --role missing-roles --output table
-./yvex model-target tensor-map gemma-4-12b-it --role missing-roles --audit
+./yvex model-target missing-roles gemma-4-12b-it
+./yvex model-target missing-roles gemma-4-12b-it --output table
+./yvex model-target missing-roles gemma-4-12b-it --audit
 ./yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0
 ./yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0 --audit
 ./yvex model-target quant-policy gemma-4-12b-it
@@ -230,14 +230,13 @@ execute chat templates, implement EOS/stop behavior, compute logits, emit
 artifacts, build runtime descriptors, feed graph consumers, generate,
 evaluate, or benchmark.
 
-`model-target tensor-map TARGET --role missing-roles` is a report-only blocker
-summary for Qwen and Gemma source trees. It aggregates header-derived tensor
-naming, output-head, and tokenizer metadata evidence into observed, missing,
-and ambiguous source/metadata role counts plus downstream artifact, runtime
-descriptor, graph, tokenizer-runtime, generation, eval, and benchmark blockers.
-It does not load tensor payloads, emit artifacts, materialize tensors, build
-runtime descriptors, execute graph work, compute logits, tokenize, generate,
-evaluate, or benchmark.
+`model-target missing-roles TARGET` is the compact report-only blocker summary
+for Qwen and Gemma source trees, including downloaded `--repo ... --name`
+targets. It aggregates header-derived tensor naming, output-head, tokenizer
+metadata, planned artifact, and sidecar evidence into the current top blocker.
+Use `--audit` for the full diagnostic field set. It does not load tensor
+payloads, emit artifacts, materialize tensors, build runtime descriptors,
+execute graph work, compute logits, tokenize, generate, evaluate, or benchmark.
 
 `model-target tensor-map TARGET --gate v0.1.0` is the compact mapping-stage
 gate for Qwen and Gemma source trees. It aggregates model-class, collection,

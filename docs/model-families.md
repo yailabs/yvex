@@ -199,6 +199,8 @@ Current source/model-family commands include:
 ./yvex models download --repo Qwen/Qwen3.6-35B-A3B --family qwen --name qwen3-6-35b-a3b --models-root "$HOME/lab/models" --auth auto --audit
 ./yvex models download status qwen3-6-35b-a3b --models-root "$HOME/lab/models" --audit
 ./yvex source-manifest report --family qwen --release v0.1.0 --source "$HOME/lab/models/hf/qwen/qwen3-6-35b-a3b" --models-root "$HOME/lab/models" --audit
+./yvex model-target missing-roles qwen3-6-35b-a3b --models-root "$HOME/lab/models"
+./yvex model-target missing-roles qwen3-6-35b-a3b --models-root "$HOME/lab/models" --audit
 ./yvex models prepare qwen3-6-35b-a3b --models-root "$HOME/lab/models" --dry-run --audit
 ```
 
@@ -217,8 +219,10 @@ Targets downloaded with `--repo ... --name ...` are downstream source targets
 when their download sidecars exist. Status, source reports, and prepare dry-runs
 use the downloaded target id, repository id, source path, source manifest, and
 native inventory sidecars instead of falling back to the static family profile.
-Prepare may still refuse artifact production until tensor mapping, model-class,
-and artifact paths exist.
+Prepare normal output stays compact for these blocked dynamic targets, while
+`--audit` preserves source, map, output-head, tokenizer, artifact, and blocker
+fields. Prepare may still refuse artifact production until tensor mapping,
+output-head/tied-head policy, tokenizer mapping, and artifact paths exist.
 
 ## Qwen And Gemma Source Pressure
 
@@ -1044,6 +1048,12 @@ full GGUF artifacts are still missing or blocked. It reads only filenames and
 small sidecar reports; it does not replace tensor mapping, tokenizer mapping,
 qtype support, artifact emission, materialization, runtime execution, generation,
 evaluation, or benchmark evidence.
+
+`yvex model-target missing-roles TARGET` is the compact source-to-artifact
+blocker report for Qwen and Gemma source targets, including downloaded dynamic
+targets. It is the operator-facing view of incomplete tensor maps, missing
+output-head or tied-head policy, missing tokenizer metadata, and missing planned
+GGUF artifacts before qtype or artifact emission work can proceed.
 
 ## Support-Level Lattice
 

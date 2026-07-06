@@ -2018,6 +2018,7 @@ typedef enum {
 #define YVEX_TENSOR_NAMING_NEXT_ROW "V010.MAP.8"
 #define YVEX_OUTPUT_HEAD_MAP_NEXT_ROW "V010.MAP.8"
 #define YVEX_TOKENIZER_MAP_NEXT_ROW "V010.MAP.8"
+#define YVEX_MISSING_ROLES_PORCELAIN_NEXT_ROW "V010.MAP.8"
 #define YVEX_MISSING_ROLE_REPORT_NEXT_ROW "V010.MAP.9"
 #define YVEX_TENSOR_MAPPING_GATE_NEXT_ROW "V010.QUANT.0"
 #define YVEX_QTYPE_POLICY_NEXT_ROW "V010.QUANT.1"
@@ -2331,6 +2332,17 @@ typedef struct {
     const char *config_metadata_status;
     const char *generation_metadata_status;
     const char *special_tokens_status;
+    unsigned long long tensor_count;
+    unsigned long long mapped_total_count;
+    unsigned long long unmapped_unknown_count;
+    unsigned long long layer_count_observed;
+    unsigned long long embedding_count;
+    unsigned long long attention_count;
+    unsigned long long mlp_count;
+    unsigned long long norm_count;
+    unsigned long long output_head_count;
+    unsigned long long moe_router_count;
+    unsigned long long moe_expert_count;
     unsigned long long source_role_observed_count;
     unsigned long long source_role_missing_count;
     unsigned long long source_role_ambiguous_count;
@@ -5187,6 +5199,7 @@ static void tokenizer_map_profile_defaults(yvex_tokenizer_map_profile *profile)
 
 static int build_tokenizer_map_profile(
     const yvex_model_target_record *record,
+    const yvex_model_class_profile_spec *spec_override,
     const char *models_root_override,
     const char *source_override,
     yvex_tokenizer_map_profile *profile)
@@ -5199,7 +5212,8 @@ static int build_tokenizer_map_profile(
     int malformed_count;
 
     if (!record || !profile) return 2;
-    spec = find_model_class_profile_spec(record->target_id);
+    spec = spec_override ? spec_override :
+           find_model_class_profile_spec(record->target_id);
     if (!spec) return 2;
 
     memset(profile, 0, sizeof(*profile));
@@ -5589,6 +5603,7 @@ static const char *missing_role_first_ambiguous_source(
 
 static int build_missing_role_report_profile(
     const yvex_model_target_record *record,
+    const yvex_model_class_profile_spec *spec_override,
     const char *models_root_override,
     const char *source_override,
     yvex_missing_role_report_profile *profile)
@@ -5602,7 +5617,8 @@ static int build_missing_role_report_profile(
     if (!record || !profile) return 2;
     memset(profile, 0, sizeof(*profile));
     profile->record = record;
-    profile->spec = find_model_class_profile_spec(record->target_id);
+    profile->spec = spec_override ? spec_override :
+                    find_model_class_profile_spec(record->target_id);
     if (!profile->spec) return 2;
     profile->status = "source-missing";
     profile->top_blocker = profile->spec->missing_source_blocker;
@@ -5615,7 +5631,7 @@ static int build_missing_role_report_profile(
                                        models_root_override, source_override,
                                        &output_profile);
     if (rc != 0) return rc;
-    rc = build_tokenizer_map_profile(record, models_root_override,
+    rc = build_tokenizer_map_profile(record, profile->spec, models_root_override,
                                      source_override, &tokenizer_profile);
     if (rc != 0) return rc;
 
@@ -5624,6 +5640,17 @@ static int build_missing_role_report_profile(
     snprintf(profile->source_path_source, sizeof(profile->source_path_source),
              "%s", naming_profile.source_path_source);
     profile->source_exists = naming_profile.source_exists;
+    profile->tensor_count = naming_profile.tensor_count;
+    profile->mapped_total_count = naming_profile.mapped_total_count;
+    profile->unmapped_unknown_count = naming_profile.unmapped_unknown_count;
+    profile->layer_count_observed = naming_profile.layer_count_observed;
+    profile->embedding_count = naming_profile.embedding_count;
+    profile->attention_count = naming_profile.attention_count;
+    profile->mlp_count = naming_profile.mlp_count;
+    profile->norm_count = naming_profile.norm_count;
+    profile->output_head_count = output_profile.output_head_candidate_count;
+    profile->moe_router_count = naming_profile.moe_router_count;
+    profile->moe_expert_count = naming_profile.moe_expert_count;
 
     if (!profile->source_exists) {
         profile->embedding_status = "missing";
@@ -5992,6 +6019,333 @@ static void print_missing_role_report_audit_hint(
            YVEX_MISSING_ROLE_REPORT_NEXT_ROW);
 }
 
+typedef struct {
+    char expected_artifact_path[YVEX_PATH_CAP];
+    char tensor_map_path[YVEX_PATH_CAP];
+    char output_head_map_path[YVEX_PATH_CAP];
+    char tokenizer_map_path[YVEX_PATH_CAP];
+    char top_blocker[96];
+    char tensor_map_status[64];
+    char output_head_map_status[64];
+    char tokenizer_map_status[64];
+    char artifact_status[32];
+    char artifact_identity_status[32];
+    unsigned int blocker_count;
+} yvex_missing_roles_porcelain_context;
+
+static int missing_roles_has_incomplete_tensor_map(
+    const yvex_missing_role_report_profile *profile)
+{
+    if (!profile || !profile->source_exists) return 1;
+    return profile->unmapped_unknown_count > 0 ||
+           profile->source_role_missing_count > 0 ||
+           profile->source_role_ambiguous_count > 0 ||
+           profile->mapped_total_count < profile->tensor_count;
+}
+
+static void build_missing_roles_porcelain_context(
+    const yvex_operator_paths *operator_paths,
+    const yvex_missing_role_report_profile *profile,
+    yvex_missing_roles_porcelain_context *ctx)
+{
+    const char *family;
+    const char *target;
+    int tensor_map_present;
+    int output_head_present;
+    int tokenizer_present;
+    int artifact_present;
+    int incomplete_map;
+    int missing_output_head;
+
+    if (!ctx) return;
+    memset(ctx, 0, sizeof(*ctx));
+    snprintf(ctx->top_blocker, sizeof(ctx->top_blocker), "unknown");
+    snprintf(ctx->tensor_map_status, sizeof(ctx->tensor_map_status), "missing");
+    snprintf(ctx->output_head_map_status, sizeof(ctx->output_head_map_status), "missing");
+    snprintf(ctx->tokenizer_map_status, sizeof(ctx->tokenizer_map_status), "missing");
+    snprintf(ctx->artifact_status, sizeof(ctx->artifact_status), "missing");
+    snprintf(ctx->artifact_identity_status, sizeof(ctx->artifact_identity_status), "missing");
+    if (!operator_paths || !profile || !profile->record || !profile->spec) return;
+
+    family = profile->spec->family_key;
+    target = profile->record->target_id;
+    (void)model_target_path_format(ctx->expected_artifact_path,
+                                   sizeof(ctx->expected_artifact_path),
+                                   "%s/%s/%s.gguf",
+                                   operator_paths->gguf_root,
+                                   family,
+                                   target);
+    (void)model_target_path_format(ctx->tensor_map_path,
+                                   sizeof(ctx->tensor_map_path),
+                                   "%s/%s/%s.tensor-map.json",
+                                   operator_paths->reports_root,
+                                   family,
+                                   target);
+    (void)model_target_path_format(ctx->output_head_map_path,
+                                   sizeof(ctx->output_head_map_path),
+                                   "%s/%s/%s.output-head-map.json",
+                                   operator_paths->reports_root,
+                                   family,
+                                   target);
+    (void)model_target_path_format(ctx->tokenizer_map_path,
+                                   sizeof(ctx->tokenizer_map_path),
+                                   "%s/%s/%s.tokenizer-map.json",
+                                   operator_paths->reports_root,
+                                   family,
+                                   target);
+
+    tensor_map_present = model_target_file_exists(ctx->tensor_map_path);
+    output_head_present = model_target_file_exists(ctx->output_head_map_path);
+    tokenizer_present = model_target_file_exists(ctx->tokenizer_map_path);
+    artifact_present = model_target_file_exists(ctx->expected_artifact_path);
+    incomplete_map = missing_roles_has_incomplete_tensor_map(profile);
+    missing_output_head = strcmp(profile->output_head_status, "present") != 0;
+
+    snprintf(ctx->tensor_map_status, sizeof(ctx->tensor_map_status), "%s",
+             tensor_map_present
+                 ? (incomplete_map ? "incomplete-report-only" : "present-report-only")
+                 : (profile->source_exists ? "not-written" : "missing"));
+    snprintf(ctx->output_head_map_status, sizeof(ctx->output_head_map_status), "%s",
+             output_head_present
+                 ? (missing_output_head ? "missing-in-report" : "present-report-only")
+                 : (missing_output_head ? "missing" : "not-written"));
+    snprintf(ctx->tokenizer_map_status, sizeof(ctx->tokenizer_map_status), "%s",
+             tokenizer_present ? "present-report-only" : "missing");
+    snprintf(ctx->artifact_status, sizeof(ctx->artifact_status), "%s",
+             artifact_present ? "present" : "missing");
+    snprintf(ctx->artifact_identity_status, sizeof(ctx->artifact_identity_status), "%s",
+             artifact_present ? "not-checked" : "missing");
+
+    if (!profile->source_exists) ctx->blocker_count++;
+    if (incomplete_map) ctx->blocker_count++;
+    if (missing_output_head) ctx->blocker_count++;
+    if (!tokenizer_present) ctx->blocker_count++;
+    if (!artifact_present) ctx->blocker_count++;
+    ctx->blocker_count++; /* full GGUF emitter/identity remains unsupported. */
+
+    if (!profile->source_exists) {
+        snprintf(ctx->top_blocker, sizeof(ctx->top_blocker), "%s",
+                 profile->spec->missing_source_blocker);
+    } else if (missing_output_head) {
+        snprintf(ctx->top_blocker, sizeof(ctx->top_blocker),
+                 "missing-output-head-map");
+    } else if (incomplete_map) {
+        snprintf(ctx->top_blocker, sizeof(ctx->top_blocker),
+                 "incomplete-tensor-map");
+    } else if (!tokenizer_present) {
+        snprintf(ctx->top_blocker, sizeof(ctx->top_blocker),
+                 "missing-tokenizer-map");
+    } else if (!artifact_present) {
+        snprintf(ctx->top_blocker, sizeof(ctx->top_blocker),
+                 "missing-artifact-emitter");
+    } else {
+        snprintf(ctx->top_blocker, sizeof(ctx->top_blocker),
+                 "missing-artifact-identity");
+    }
+}
+
+static const char *missing_roles_group_status(unsigned long long count)
+{
+    return count > 0 ? "incomplete" : "missing";
+}
+
+static void print_missing_roles_row(const char *group,
+                                    const char *status,
+                                    unsigned long long found,
+                                    const char *detail)
+{
+    printf("%-16s  %-10s  %5llu  %s\n",
+           group,
+           status ? status : "missing",
+           found,
+           detail ? detail : "");
+}
+
+static void print_missing_roles_porcelain_normal(
+    const yvex_missing_role_report_profile *profile,
+    const yvex_missing_roles_porcelain_context *ctx)
+{
+    int is_gemma;
+
+    if (!profile || !ctx) return;
+    is_gemma = strcmp(profile->spec->family_key, "gemma") == 0;
+    printf("missing-roles: %s\n", profile->record->target_id);
+    printf("family: %s\n", profile->spec->family_key);
+    printf("status: blocked\n");
+    printf("top_blocker: %s\n", ctx->top_blocker);
+    printf("next: %s\n\n", YVEX_MISSING_ROLES_PORCELAIN_NEXT_ROW);
+    printf("%-16s  %-10s  %5s  %s\n",
+           "ROLE GROUP", "STATUS", "FOUND", "DETAIL");
+    if (is_gemma) {
+        print_missing_roles_row("embedding",
+                                profile->embedding_count ? "present" : "missing",
+                                profile->embedding_count,
+                                profile->embedding_count
+                                    ? "token embedding mapped report-only"
+                                    : "token embedding not mapped");
+        print_missing_roles_row("attention",
+                                missing_roles_group_status(profile->attention_count),
+                                profile->attention_count,
+                                "attention subset mapped, runtime coverage incomplete");
+        print_missing_roles_row("dense-mlp",
+                                missing_roles_group_status(profile->mlp_count),
+                                profile->mlp_count,
+                                "MLP subset mapped, runtime coverage incomplete");
+        print_missing_roles_row("norm",
+                                missing_roles_group_status(profile->norm_count),
+                                profile->norm_count,
+                                "norm subset mapped, runtime coverage incomplete");
+        print_missing_roles_row("output-head",
+                                profile->output_head_count ? "present" : "missing",
+                                profile->output_head_count,
+                                profile->output_head_count
+                                    ? "report-only, runtime consumer not implemented"
+                                    : "separate head absent or tied-head policy unknown");
+        print_missing_roles_row("tied-head-policy", "unknown", 0,
+                                "must read config/embedding relation before artifact emission");
+        print_missing_roles_row("tokenizer", "missing", 0,
+                                "tokenizer metadata map missing");
+        print_missing_roles_row("unknown-tensors",
+                                profile->unmapped_unknown_count ? "incomplete" : "none",
+                                profile->unmapped_unknown_count,
+                                "unmapped tensor names remain");
+        print_missing_roles_row("artifact", "missing", 0,
+                                "GGUF emission blocked");
+    } else {
+        print_missing_roles_row("embedding",
+                                profile->embedding_count ? "present" : "missing",
+                                profile->embedding_count,
+                                profile->embedding_count
+                                    ? "token embedding mapped report-only"
+                                    : "token embedding not mapped");
+        print_missing_roles_row("attention",
+                                missing_roles_group_status(profile->attention_count),
+                                profile->attention_count,
+                                "attention subset mapped, but runtime coverage incomplete");
+        print_missing_roles_row("qwen-linear-attn", "missing", 0,
+                                "linear_attn roles not classified as runtime roles");
+        print_missing_roles_row("mlp",
+                                missing_roles_group_status(profile->mlp_count),
+                                profile->mlp_count,
+                                "dense/MLP roles not mapped");
+        print_missing_roles_row("moe-router",
+                                profile->moe_router_count ? "incomplete" : "missing",
+                                profile->moe_router_count,
+                                "router/gate not mapped as runtime role");
+        print_missing_roles_row("moe-experts",
+                                profile->moe_expert_count ? "incomplete" : "missing",
+                                profile->moe_expert_count,
+                                "expert tensors not mapped as runtime roles");
+        print_missing_roles_row("shared-expert", "missing", 0,
+                                "shared expert roles not mapped");
+        print_missing_roles_row("output-head",
+                                profile->output_head_count ? "present" : "missing",
+                                profile->output_head_count,
+                                profile->output_head_count
+                                    ? "report-only, runtime consumer not implemented"
+                                    : "output head not mapped");
+        print_missing_roles_row("tokenizer", "missing", 0,
+                                "tokenizer metadata map missing");
+        print_missing_roles_row("artifact", "missing", 0,
+                                "GGUF emission blocked");
+    }
+    printf("\nboundary: missing-role report only; no GGUF/runtime/generation\n");
+}
+
+static void print_missing_roles_porcelain_table(
+    const yvex_missing_role_report_profile *profile,
+    const yvex_missing_roles_porcelain_context *ctx)
+{
+    unsigned long long moe_total;
+
+    if (!profile || !ctx) return;
+    moe_total = profile->moe_router_count + profile->moe_expert_count;
+    printf("%-18s  %-6s  %-7s  %-24s  %5s  %5s  %5s  %5s  %5s  %3s  %7s  %-9s  %-8s  %s\n",
+           "TARGET", "FAMILY", "STATUS", "TOP_BLOCKER", "EMBED", "ATTN",
+           "MLP", "NORM", "HEAD", "MOE", "UNKNOWN", "TOKENIZER",
+           "ARTIFACT", "NEXT");
+    printf("%-18s  %-6s  %-7s  %-24s  %5llu  %5llu  %5llu  %5llu  %5llu  %3llu  %7llu  %-9s  %-8s  %s\n",
+           profile->record->target_id,
+           profile->spec->family_key,
+           "blocked",
+           ctx->top_blocker,
+           profile->embedding_count,
+           profile->attention_count,
+           profile->mlp_count,
+           profile->norm_count,
+           profile->output_head_count,
+           moe_total,
+           profile->unmapped_unknown_count,
+           "missing",
+           ctx->artifact_status,
+           YVEX_MISSING_ROLES_PORCELAIN_NEXT_ROW);
+}
+
+static void print_missing_roles_porcelain_audit(
+    const yvex_missing_role_report_profile *profile,
+    const yvex_missing_roles_porcelain_context *ctx)
+{
+    unsigned long long i;
+
+    if (!profile || !ctx) return;
+    printf("target_id: %s\n", profile->record->target_id);
+    printf("family: %s\n", profile->spec->family_key);
+    printf("source_status: %s\n", profile->source_exists ? "present" : "missing");
+    printf("model_class_status: %s\n", profile->source_exists ? "present" : "missing");
+    printf("tensor_map_status: %s\n", ctx->tensor_map_status);
+    printf("tensor_map_path: %s\n", ctx->tensor_map_path);
+    printf("tensor_map_mapped_total_count: %llu\n", profile->mapped_total_count);
+    printf("tensor_map_unmapped_unknown_count: %llu\n",
+           profile->unmapped_unknown_count);
+    printf("tensor_map_role_counts: embed=%llu attention=%llu mlp=%llu norm=%llu head=%llu moe_router=%llu moe_expert=%llu unknown=%llu\n",
+           profile->embedding_count,
+           profile->attention_count,
+           profile->mlp_count,
+           profile->norm_count,
+           profile->output_head_count,
+           profile->moe_router_count,
+           profile->moe_expert_count,
+           profile->unmapped_unknown_count);
+    printf("output_head_map_status: %s\n", ctx->output_head_map_status);
+    printf("output_head_map_path: %s\n", ctx->output_head_map_path);
+    printf("tokenizer_map_status: %s\n", ctx->tokenizer_map_status);
+    printf("artifact_status: %s\n", ctx->artifact_status);
+    printf("expected_artifact_path: %s\n", ctx->expected_artifact_path);
+    printf("artifact_plan_status: planned-full-gguf\n");
+    printf("artifact_emission_status: not-performed\n");
+    printf("artifact_identity_status: %s\n", ctx->artifact_identity_status);
+    printf("prepare_blocker_count: %u\n", ctx->blocker_count);
+    printf("top_blocker: %s\n", ctx->top_blocker);
+    printf("missing_role_count: %llu\n", profile->missing_entry_count);
+    for (i = 0; i < profile->missing_entry_count; ++i) {
+        const yvex_missing_role_entry *entry = &profile->missing_entries[i];
+        printf("missing_role.%llu.name: %s\n", i, entry->name);
+        printf("missing_role.%llu.status: %s\n", i, entry->status);
+        printf("missing_role.%llu.detail: %s\n", i, entry->blocker_class);
+    }
+    printf("next: %s\n", YVEX_MISSING_ROLES_PORCELAIN_NEXT_ROW);
+    printf("runtime_execution: not-performed\n");
+    printf("generation: unsupported\n");
+    printf("benchmark_status: not-measured\n");
+    printf("boundary: missing-role report only; no GGUF/runtime/generation\n");
+}
+
+static void print_missing_roles_porcelain_json(
+    const yvex_missing_role_report_profile *profile,
+    const yvex_missing_roles_porcelain_context *ctx)
+{
+    if (!profile || !ctx) return;
+    printf("{\"status\":\"blocked\",\"target_id\":");
+    model_target_json_write_escaped(stdout, profile->record->target_id);
+    printf(",\"family\":");
+    model_target_json_write_escaped(stdout, profile->spec->family_key);
+    printf(",\"top_blocker\":");
+    model_target_json_write_escaped(stdout, ctx->top_blocker);
+    printf(",\"next\":\"%s\",\"runtime_execution\":\"not-performed\",",
+           YVEX_MISSING_ROLES_PORCELAIN_NEXT_ROW);
+    printf("\"generation\":\"unsupported\",\"benchmark_status\":\"not-measured\"}\n");
+}
+
 static void tensor_mapping_gate_append_csv(char *out, size_t cap,
                                            const char *value)
 {
@@ -6091,10 +6445,10 @@ static int build_tensor_mapping_gate_profile(
     rc = build_output_head_map_profile(record, spec, models_root_override,
                                        source_override, &profile->output_head);
     if (rc != 0) return rc;
-    rc = build_tokenizer_map_profile(record, models_root_override,
+    rc = build_tokenizer_map_profile(record, spec, models_root_override,
                                      source_override, &profile->tokenizer);
     if (rc != 0) return rc;
-    rc = build_missing_role_report_profile(record, models_root_override,
+    rc = build_missing_role_report_profile(record, spec, models_root_override,
                                            source_override,
                                            &profile->missing_role);
     if (rc != 0) return rc;
@@ -8455,6 +8809,7 @@ static void print_model_target_usage(FILE *fp)
     fprintf(fp, "       yvex model-target decision --release v0.1.0 [options]\n");
     fprintf(fp, "       yvex model-target class-profile TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
     fprintf(fp, "       yvex model-target tensor-collection TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
+    fprintf(fp, "       yvex model-target missing-roles TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit|json]\n");
     fprintf(fp, "       yvex model-target tensor-map TARGET [--role output-head|tokenizer|missing-roles | --gate v0.1.0] [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit] [--check-output-contract normal|table|audit]\n");
     fprintf(fp, "       yvex model-target quant-policy TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit] [--check-output-contract normal|table|audit]\n");
     fprintf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR] [--audit | --output normal|table|audit]\n");
@@ -8501,9 +8856,11 @@ void yvex_model_target_help(FILE *fp)
     fprintf(fp, "\nTokenizer metadata map:\n");
     fprintf(fp, "  yvex model-target tensor-map qwen3-8b --role tokenizer --audit\n");
     fprintf(fp, "  yvex model-target tensor-map gemma-4-12b-it --role tokenizer --audit\n");
-    fprintf(fp, "  yvex model-target tensor-map qwen3-8b --role missing-roles --audit\n");
-    fprintf(fp, "  yvex model-target tensor-map gemma-4-12b-it --role missing-roles --audit\n");
     fprintf(fp, "  The tokenizer metadata map reads local sidecars only and reports tokenizer/config/special-token metadata candidates. It does not tokenize, detokenize, apply chat templates, stop on EOS, compute logits, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    fprintf(fp, "\nMissing-role blocker report:\n");
+    fprintf(fp, "  yvex model-target missing-roles qwen3-8b --audit\n");
+    fprintf(fp, "  yvex model-target missing-roles gemma-4-12b-it --audit\n");
+    fprintf(fp, "  The missing-role report aggregates header-derived tensor naming, output-head, tokenizer metadata, and planned artifact facts into the blocker list that prevents full GGUF emission. It does not load tensor payloads, emit GGUF, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
     fprintf(fp, "\nTensor mapping gate:\n");
     fprintf(fp, "  yvex model-target tensor-map qwen3-8b --gate v0.1.0 --audit\n");
     fprintf(fp, "  yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0 --audit\n");
@@ -9853,6 +10210,113 @@ int yvex_model_target_command(int argc, char **argv)
         }
         return 0;
     }
+    if (strcmp(argv[2], "missing-roles") == 0) {
+        const char *target_id = NULL;
+        const char *source = NULL;
+        const yvex_model_class_profile_spec *spec;
+        yvex_dynamic_source_target dynamic_target;
+        yvex_missing_role_report_profile profile;
+        yvex_missing_roles_porcelain_context porcelain;
+        yvex_paths paths;
+        yvex_operator_paths operator_paths;
+        yvex_error err;
+        int output_json = 0;
+        int rc;
+
+        output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
+        if (argc < 4) {
+            fprintf(stderr, "model-target missing-roles: requires TARGET\n");
+            return 2;
+        }
+        target_id = argv[3];
+        record = NULL;
+        spec = NULL;
+        memset(&dynamic_target, 0, sizeof(dynamic_target));
+        yvex_error_clear(&err);
+        for (i = 4; i < argc; ++i) {
+            if (strcmp(argv[i], "--audit") == 0) {
+                output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
+                output_json = 0;
+            } else if (strcmp(argv[i], "--json") == 0) {
+                output_json = 1;
+            } else if (strcmp(argv[i], "--output") == 0) {
+                const char *value;
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "model-target missing-roles: --output requires normal|table|audit|json\n");
+                    return 2;
+                }
+                value = argv[++i];
+                if (strcmp(value, "json") == 0) {
+                    output_json = 1;
+                } else if (parse_model_target_output_mode(value, &output_mode)) {
+                    output_json = 0;
+                } else {
+                    fprintf(stderr, "model-target missing-roles: unsupported output mode: %s\n",
+                            value);
+                    return 2;
+                }
+            } else if (strcmp(argv[i], "--models-root") == 0) {
+                if (i + 1 >= argc || argv[i + 1][0] == '\0') {
+                    fprintf(stderr, "model-target missing-roles: --models-root requires DIR\n");
+                    return 2;
+                }
+                models_root = argv[++i];
+            } else if (strcmp(argv[i], "--source") == 0) {
+                if (i + 1 >= argc || argv[i + 1][0] == '\0') {
+                    fprintf(stderr, "model-target missing-roles: --source requires DIR\n");
+                    return 2;
+                }
+                source = argv[++i];
+            } else {
+                fprintf(stderr, "model-target missing-roles: unknown option: %s\n",
+                        argv[i]);
+                return 2;
+            }
+        }
+
+        record = find_model_target(target_id);
+        spec = find_model_class_profile_spec(target_id);
+        if ((!record || !spec) &&
+            model_target_resolve_dynamic_source_target(target_id,
+                                                       models_root,
+                                                       &dynamic_target)) {
+            record = &dynamic_target.record;
+            spec = &dynamic_target.spec;
+            if (!source) source = dynamic_target.source_path;
+        }
+        if (!record || !spec ||
+            (strcmp(spec->family_key, "qwen") != 0 &&
+             strcmp(spec->family_key, "gemma") != 0)) {
+            fprintf(stderr, "model-target missing-roles: unsupported target: %s\n",
+                    target_id && target_id[0] ? target_id : "none");
+            return 2;
+        }
+        rc = yvex_paths_default(&paths, &err);
+        if (rc != YVEX_OK ||
+            yvex_operator_paths_resolve(&paths, models_root, &operator_paths,
+                                        &err) != YVEX_OK) {
+            fprintf(stderr, "model-target missing-roles: cannot resolve operator paths: %s\n",
+                    err.message[0] ? err.message : "unknown");
+            return 2;
+        }
+        rc = build_missing_role_report_profile(record, spec, models_root, source,
+                                               &profile);
+        if (rc != 0) {
+            return rc;
+        }
+        build_missing_roles_porcelain_context(&operator_paths, &profile,
+                                              &porcelain);
+        if (output_json) {
+            print_missing_roles_porcelain_json(&profile, &porcelain);
+        } else if (output_mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+            print_missing_roles_porcelain_table(&profile, &porcelain);
+        } else if (output_mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+            print_missing_roles_porcelain_audit(&profile, &porcelain);
+        } else {
+            print_missing_roles_porcelain_normal(&profile, &porcelain);
+        }
+        return 0;
+    }
     if (strcmp(argv[2], "tensor-map") == 0) {
         const char *target_id = NULL;
         const char *source = NULL;
@@ -10042,7 +10506,7 @@ int yvex_model_target_command(int argc, char **argv)
                     check_mode_text,
                     "unsupported-mode");
             }
-            rc = build_tokenizer_map_profile(record, models_root, source,
+            rc = build_tokenizer_map_profile(record, spec, models_root, source,
                                              &tokenizer_profile);
             if (rc != 0) {
                 return rc;
@@ -10057,7 +10521,7 @@ int yvex_model_target_command(int argc, char **argv)
             return 0;
         }
         if (role && strcmp(role, "missing-roles") == 0) {
-            rc = build_missing_role_report_profile(record, models_root, source,
+            rc = build_missing_role_report_profile(record, spec, models_root, source,
                                                    &missing_role_profile);
             if (rc != 0) {
                 return rc;
