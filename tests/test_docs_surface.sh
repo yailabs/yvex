@@ -90,13 +90,53 @@ grep -nF "| V010.CLI.26 | complete | operator | Base CLI grammar and command cat
   exit 1
 }
 
-grep -nF "V010.CLI.27 - model artifact porcelain migration" docs/spine.md >/dev/null || {
-  echo "spine must move model artifact porcelain migration to V010.CLI.27" >&2
+grep -nF "SPINE.CLI.REBASE.1 - full Operator CLI track rebase after executed V010.CLI.26" docs/spine.md >/dev/null || {
+  echo "spine must record the full CLI track rebase after V010.CLI.26" >&2
   exit 1
 }
 
-grep -nF "V010.CLI.29         graph/runtime diagnostic renderer migration" docs/spine.md >/dev/null || {
-  echo "spine must preserve the shifted graph/runtime migration row" >&2
+grep -nF "| SPINE.CLI.REBASE.1 | complete | docs/operator | Full Operator CLI track rebase after executed V010.CLI.26 |" docs/spine.md >/dev/null || {
+  echo "spine ledger must mark SPINE.CLI.REBASE.1 complete" >&2
+  exit 1
+}
+
+grep -nF "V010.CLI.27 - base status and refusal grammar" docs/spine.md >/dev/null || {
+  echo "spine must set the next CLI substrate row to base status/refusal grammar" >&2
+  exit 1
+}
+
+grep -nF "V010.CLI.MODELS.4   models artifacts porcelain" docs/spine.md >/dev/null || {
+  echo "spine must remap model artifact porcelain to the models command-family layer" >&2
+  exit 1
+}
+
+grep -nF "V010.CLI.RUNTIME.0  runtime diagnostic command grammar" docs/spine.md >/dev/null || {
+  echo "spine must remap runtime diagnostic migration to the command-family layer" >&2
+  exit 1
+}
+
+if grep -nF "Active implementation next:" -A1 docs/spine.md | grep -nF "V010.CLI.26 - model artifact porcelain migration"; then
+  echo "spine must not restore stale V010.CLI.26 artifact migration as Active Next" >&2
+  exit 1
+fi
+
+if grep -nF "V010.CLI.27 - model artifact porcelain migration" docs/spine.md; then
+  echo "spine must not restore V010.CLI.27 as the model artifact porcelain migration" >&2
+  exit 1
+fi
+
+if grep -nF "V010.CLI.27         model artifact porcelain migration" docs/spine.md; then
+  echo "spine must not keep the old flat V010.CLI.27 artifact migration row" >&2
+  exit 1
+fi
+
+grep -nF "## Full CLI Track Rebase" docs/cli-output-architecture.md >/dev/null || {
+  echo "CLI output architecture must document the full CLI track rebase" >&2
+  exit 1
+}
+
+grep -nF "V010.CLI.27 - base status and refusal grammar" docs/cli-output-architecture.md >/dev/null || {
+  echo "CLI output architecture must recommend status/refusal grammar next" >&2
   exit 1
 }
 

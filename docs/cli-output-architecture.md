@@ -334,6 +334,43 @@ transitional layout
 This row does not migrate every command output, remove flags, implement JSON,
 or change domain behavior.
 
+## Full CLI Track Rebase
+
+`SPINE.CLI.REBASE.1` reconciles the Operator CLI track after the executed
+`V010.CLI.26` grammar row. The next CLI work is no longer a direct jump into
+one owner file. The track is now layered:
+
+```text
+inventory/doctrine
+-> renderer foundation
+-> base command grammar
+-> shared status/refusal/error grammar
+-> diagnostic/log/error split
+-> command-family porcelain migrations
+-> raw/plumbing JSON where report objects exist
+-> flag demotion
+-> final CLI gate
+```
+
+The immediate missing substrate is status and refusal grammar. YVEX needs one
+shared shape for `status`, `top_blocker`, `next`, `boundary`, refusals, and
+errors before `models`, `model-target`, `graph`, and runtime command families
+are migrated broadly. Otherwise each namespace will keep inventing its own CLI
+language while still using the same renderer primitives.
+
+The old local migrations are preserved as planned command-family work:
+
+```text
+models artifacts porcelain -> V010.CLI.MODELS.4
+model-target porcelain -> V010.CLI.TARGET.*
+graph/runtime diagnostic migration -> V010.CLI.GRAPH.0 and V010.CLI.RUNTIME.0
+```
+
+This rebase does not change command behavior, remove print sites, implement
+JSON, remove existing flags, migrate command families, add runtime behavior, or
+claim qtype, artifact, generation, eval, benchmark, throughput, or release
+readiness.
+
 ## Migration Plan
 
 Phase 0 is complete as `CLI.ARCH.AUDIT.0`: print inventory, flag inventory,
@@ -346,20 +383,23 @@ changes, runtime claims, JSON claims, or a new command forest.
 Phase 2 is complete as `V010.CLI.26`: define the base CLI grammar and grouped
 command catalog in `yvex_cli.c` without moving domain behavior there.
 
-Phase 3 is planned as `V010.CLI.27`: continue with `yvex_model_artifacts.c`,
-the largest print owner.
+Phase 3 is complete as `SPINE.CLI.REBASE.1`: rebuild the Operator CLI track as
+shared substrate plus command-family migrations.
 
-Phase 4 is planned as `V010.CLI.28`: migrate `yvex_model.c` model-target
-surfaces while preserving normal/table/audit tests during transition.
+Phase 4 is planned as `V010.CLI.27`: define base status and refusal grammar
+before broad namespace migrations.
 
-Phase 5 is planned as `V010.CLI.29`: migrate `yvex_graph.c` and
-`yvex_runtime.c` so graph/runtime porcelain, diagnostic, trace, log, and error
-output stop sharing the same print-wall shape.
+Phase 5 is planned as `V010.CLI.28`: split error, log, diagnostic, and trace
+surfaces from normal porcelain.
 
-Phase 6 maps to `V010.CLI.20`: add JSON/raw plumbing only after a report object
+Phase 6 is command-family porcelain: migrate models, model-target, source,
+graph, runtime, generate, chat, and related operator families after shared
+status/refusal/error grammar exists.
+
+Phase 7 maps to `V010.CLI.20`: add JSON/raw plumbing only after a report object
 exists and stable raw fields can be tested for a command family.
 
-Phase 7 is flag demotion: once porcelain and JSON/raw cover a command family,
+Phase 8 is flag demotion: once porcelain and JSON/raw cover a command family,
 demote `--output table`, reduce `--include-*`, and keep audit only where
 promotion evidence still needs it.
 
@@ -377,8 +417,9 @@ throughput, or mark release readiness.
 
 ## Immediate Next Wave Recommendation
 
-The next implementation wave should be `V010.CLI.27 - model artifact porcelain
-migration`, followed by `V010.CLI.28` over `yvex_model.c`. After the CLI
+The next implementation wave should be `V010.CLI.27 - base status and refusal grammar`.
+It should standardize compact status, top blocker, next action, boundary,
+refusal, and error shapes before broad namespace migrations. After the CLI
 architecture interruption is no longer blocking operator clarity,
 `V010.QUANT.1 - dtype/qtype support by role` remains the functional runtime
 blocker.

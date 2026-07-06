@@ -31,7 +31,7 @@ Current CUDA state:
   bounded primitive-hardening only; no CUDA full-runtime/generation claim
 
 Active implementation next:
-  V010.CLI.27 - model artifact porcelain migration
+  V010.CLI.27 - base status and refusal grammar
 
 Current release target:
   v0.1.0 - first honest full-runtime path
@@ -43,8 +43,9 @@ Primary pressure targets:
   Gemma source/model-class/tensor-collection profile
 
 Main v0.1.0 blocker:
-  model artifact report walls still block operator clarity; dtype/qtype support
-  by role remains the functional runtime blocker after report-only qtype policy
+  shared CLI status/refusal/error grammar still blocks coherent command-family
+  migrations; dtype/qtype support by role remains the functional runtime
+  blocker after report-only qtype policy
 ```
 
 | Field | Current value |
@@ -639,21 +640,30 @@ Phase 1 - renderer foundation:
   avoid runtime claims
   avoid a new command forest
 
-Phase 2 - highest-pressure model surfaces:
-  migrate `yvex_model_artifacts.c`
-  migrate `yvex_model.c`
-  preserve normal/table/audit tests while those flags exist
+Phase 2 - base grammar and command catalog:
+  keep `yvex_cli.c` as dispatch/help/catalog only
+  classify command groups, surfaces, option classes, and boundaries
+  avoid moving domain behavior into `yvex_cli.c`
 
-Phase 3 - graph/runtime surfaces:
-  migrate `yvex_graph.c`
-  migrate `yvex_runtime.c`
-  keep diagnostic trace and runtime evidence separate from porcelain
+Phase 3 - full CLI track rebase:
+  rebuild TRACK 28 as layered CLI substrate plus command-family migrations
+  move model artifact porcelain work later in the sequence
+  preserve `V010.QUANT.1` as the functional runtime blocker, not Active Next
 
-Phase 4 - raw/plumbing JSON:
+Phase 4 - shared status/refusal/error grammar:
+  standardize status, top_blocker, next, boundary, refusal, and error shapes
+  keep audit/raw diagnostics separate from normal porcelain
+
+Phase 5 - namespace and command-family porcelain:
+  migrate models, model-target, source, graph, runtime, generate, chat, and
+  related operator families after shared grammar exists
+  preserve normal/table/audit tests while transitional flags exist
+
+Phase 6 - raw/plumbing JSON:
   add `--json` only after report objects exist for a command family
   test stable raw fields before claiming JSON for that family
 
-Phase 5 - flag demotion:
+Phase 7 - flag demotion:
   demote `--output table`
   reduce `--include-*`
   keep `--audit` only where promotion evidence still requires it
@@ -706,7 +716,7 @@ lanes; rows are the delivery units that complete track work.
 | TRACK.TOKENIZER | Tokenizer and stop policy | detokenization, EOS, stop tokens, prompt boundary | partial/planned | tokenizer diagnostics and tokenizer metadata mapping | tokenizer-backed stop behavior | later |
 | TRACK.GENERATION | Generation runtime | decode/logits/sample/append/stop/cleanup | diagnostic-runtime | `yvex generate` | full-runtime generation | later |
 | TRACK.RUNTIME | Runtime lifecycle and trace | lifecycle, cancellation, trace, failure preservation | diagnostic-runtime | generate trace/cancel/cleanup | external interruption/runtime trace | later |
-| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output architecture doctrine, normal/audit baseline, diagnostic output demotion, compact report/table output, hardcoded print reduction for model report surfaces, completed CLI print inventory and porcelain/plumbing doctrine, renderer ownership foundation, base CLI grammar and command catalog, and Qwen/Gemma source profile/map/gate/qtype policy surfaces | V010.CLI.27 model artifact porcelain migration / V010.QUANT.1 handoff | active |
+| TRACK.OPERATOR | Operator CLI | normal commands, presets, doctor, runbook | partial | paths/target/prepare/check/generate, CLI output architecture doctrine, normal/audit baseline, diagnostic output demotion, compact report/table output, hardcoded print reduction for model report surfaces, completed CLI print inventory and porcelain/plumbing doctrine, renderer ownership foundation, base CLI grammar and command catalog, full Operator CLI track rebase, and Qwen/Gemma source profile/map/gate/qtype policy surfaces | V010.CLI.27 base status and refusal grammar / V010.QUANT.1 handoff | active |
 | TRACK.SERVE | Serving | daemon state, provider endpoints, streaming | planned | status shell | runtime-backed generation endpoint | later |
 | TRACK.EVAL | Evaluation | fixture/runtime/generation/capability eval | planned | tests only | eval over generation path | later |
 | TRACK.BENCH | Benchmark/profile | reproducible performance measurement | planned | doctrine only | measured runtime harness | later |
@@ -1359,17 +1369,21 @@ Current evidence:
   porcelain/plumbing doctrine, renderer ownership doctrine, and normal/audit
   output baseline for core operator commands, plus diagnostic output demotion
   for broader CLI report surfaces and compact report/table output across core
-  report paths.
+  report paths, the base CLI grammar/catalog, and the full Operator CLI track
+  rebase after `V010.CLI.26`.
 
 v0.1.0 rows:
   V010.CLI.*, V010.OPERATOR.*.
 
 Main blockers:
-  model artifact report walls remain the next CLI architecture blocker;
-  dtype/qtype support by role remains the functional implementation blocker.
+  shared status/refusal/error grammar remains the next CLI architecture
+  blocker before broad namespace migrations; dtype/qtype support by role remains
+  the functional implementation blocker.
 
 Next possible row:
-  V010.CLI.27 for CLI architecture implementation, otherwise V010.QUANT.1.
+  V010.CLI.27 for CLI architecture implementation, otherwise V010.QUANT.1
+  after the CLI architecture interruption is no longer blocking operator
+  clarity.
 
 Boundary:
   operator presets compose lower behavior only.
@@ -2629,37 +2643,95 @@ Purpose: YVEX is a research engine; runtime must be inspectable.
 
 #### TRACK 28 — Operator CLI
 
+TRACK 28 is the Operator CLI program. It is not a flat list of output polish
+rows. It is layered so YVEX can establish one CLI language before migrating
+individual command families.
+
+Layer 0 - inventory and doctrine:
+
 ```text
 V010.CLI.0          command inventory refresh
 V010.CLI.1          help layout refresh
 V010.CLI.2          normal path first policy
 V010.CLI.3          advanced diagnostic flags policy
-V010.CLI.4          model target inspect final
-V010.CLI.5          paths configure final
-V010.CLI.6          models prepare final
-V010.CLI.7          models check final
-V010.CLI.8          graph check final
-V010.CLI.9          runtime check command
-V010.CLI.10         real generate normal path
-V010.CLI.11         diagnostic generate path
-V010.CLI.12         refusal wording audit
-V010.CLI.13         structured output mode
-V010.CLI.14         NO_COLOR/non-TTY behavior
-V010.CLI.15         command proof transcript
-V010.CLI.16         v0.1.0 CLI gate
+CLI.ARCH.AUDIT.0    print inventory and porcelain/plumbing doctrine
+```
+
+Layer 0 is complete only through the implemented audit/doctrine rows and
+earlier output baselines. It does not by itself migrate command behavior.
+
+Layer 1 - completed base grammar and catalog:
+
+```text
 V010.CLI.17         normal output contract and layout baseline
 V010.CLI.18         diagnostic output demotion
 V010.CLI.19         compact report/table output
-V010.CLI.20         structured JSON output mode
-V010.CLI.21         metric output surface
-V010.CLI.22         audit output surface
-V010.CLI.23         quiet/no-color output policy
 V010.CLI.24         hardcoded print reduction pass
 V010.CLI.25         renderer ownership foundation
 V010.CLI.26         base CLI grammar and command catalog
-V010.CLI.27         model artifact porcelain migration
-V010.CLI.28         model target porcelain migration
-V010.CLI.29         graph/runtime diagnostic renderer migration
+SPINE.CLI.REBASE.1  full Operator CLI track rebase after executed V010.CLI.26
+```
+
+Layer 2 - shared CLI substrate still missing:
+
+```text
+V010.CLI.27         base status and refusal grammar
+V010.CLI.28         error/log/diagnostic surface split
+V010.CLI.23         quiet/no-color/non-TTY terminal policy
+V010.CLI.20         raw/plumbing JSON foundation
+V010.CLI.22         audit output surface
+V010.CLI.12         refusal wording audit, if not absorbed by V010.CLI.27
+V010.CLI.13         structured output mode, if not absorbed by V010.CLI.20
+V010.CLI.21         metric output surface
+```
+
+Layer 2 must precede broad namespace migrations. If status, refusal, error,
+diagnostic, log, terminal, and raw/plumbing rules are not shared, every migrated
+command family will invent a slightly different CLI language.
+
+Layer 3 - operator command families:
+
+```text
+V010.CLI.MODELS.0   models namespace grammar
+V010.CLI.MODELS.1   models list/current/status porcelain
+V010.CLI.MODELS.2   models prepare/check porcelain
+V010.CLI.MODELS.3   models download/control porcelain
+V010.CLI.MODELS.4   models artifacts porcelain
+V010.CLI.TARGET.0   model-target namespace grammar
+V010.CLI.TARGET.1   model-target inspect/list porcelain
+V010.CLI.TARGET.2   model-target tensor-map/missing-roles/gate porcelain
+V010.CLI.TARGET.3   model-target quant-policy porcelain
+V010.CLI.SOURCE.0   source-manifest/native-weights porcelain
+V010.CLI.ACCOUNTS.0 accounts/provider porcelain
+V010.CLI.PATHS.0    paths porcelain finalization
+V010.CLI.GRAPH.0    graph check/operator porcelain
+V010.CLI.RUNTIME.0  runtime diagnostic command grammar
+V010.CLI.GENERATE.0 diagnostic generate porcelain grammar
+V010.CLI.CHAT.0     accepted-only chat UX grammar
+```
+
+The former artifact-porcelain row is remapped to the Layer 3 models-family
+rows, especially `V010.CLI.MODELS.4`. The former model-target porcelain row is
+remapped to `V010.CLI.TARGET.*`. The former graph/runtime diagnostic migration
+is remapped to `V010.CLI.GRAPH.0` and `V010.CLI.RUNTIME.0`. These are planned
+command-family migrations, not immediate Active Next rows.
+
+Layer 4 - doctor and readiness:
+
+```text
+V010.DOCTOR.0-11    doctor command scope and operator readiness checks
+```
+
+CLI owns command grammar and normal operator path. Doctor owns environment,
+artifact, backend, graph, runtime, and readiness diagnosis. Doctor must not
+become a hidden generation-readiness claim; it depends on lower implemented
+checks.
+
+Layer 5 - v0.1.0 CLI gate:
+
+```text
+V010.CLI.15         command proof transcript
+V010.CLI.16         v0.1.0 CLI gate
 ```
 
 `V010.CLI.17` is complete as the first implementation baseline: core normal
@@ -2725,6 +2797,20 @@ transitional evidence, not the final raw/plumbing interface.
 `V010.CLI.23` remains terminal policy work for quiet/no-color/non-TTY behavior,
 not report layout.
 
+`SPINE.CLI.REBASE.1` is complete as a docs/operator architecture rebase after
+the executed `V010.CLI.26` grammar row. It reconciles Active Next, marks
+`V010.CLI.26` as the base grammar/catalog row, rebuilds TRACK 28 into the
+layered CLI program above, moves model artifact/model-target/graph-runtime
+migrations into command-family rows, and keeps `V010.QUANT.1` as the functional
+runtime blocker after the CLI architecture interruption. It does not implement
+new CLI behavior, change command output, add or remove flags, change
+`yvex_cli.c`, change renderer code, migrate `yvex_model_artifacts.c`, migrate
+`yvex_model.c`, implement JSON, implement color/no-color, implement doctor,
+implement runtime check, add qtype role support, quantize tensors, emit
+artifacts, materialize tensors, create runtime descriptors, change graph
+execution, change prefill/decode/logits/tokenizer/sampling/generation, evaluate,
+benchmark, claim throughput, or mark release readiness.
+
 Architecture audit interruption:
 
 ```text
@@ -2769,18 +2855,21 @@ The migration map is:
 Phase 0: audit and doctrine
 Phase 1: V010.CLI.25 renderer ownership foundation complete
 Phase 2: V010.CLI.26 base CLI grammar and command catalog complete
-Phase 3: V010.CLI.27 model artifact porcelain migration
-Phase 4: V010.CLI.28 model target porcelain migration
-Phase 5: V010.CLI.29 graph/runtime diagnostic renderer migration
-Phase 6: V010.CLI.20 structured JSON/raw plumbing where report objects exist
-Phase 7: flag demotion after porcelain and JSON cover the command family
+Phase 3: SPINE.CLI.REBASE.1 full Operator CLI track rebase complete
+Phase 4: V010.CLI.27 base status and refusal grammar
+Phase 5: V010.CLI.28 error/log/diagnostic surface split
+Phase 6: command-family porcelain migrations under V010.CLI.MODELS.*,
+         V010.CLI.TARGET.*, V010.CLI.SOURCE.*, V010.CLI.GRAPH.*,
+         V010.CLI.RUNTIME.*, V010.CLI.GENERATE.*, and V010.CLI.CHAT.*
+Phase 7: V010.CLI.20 structured JSON/raw plumbing where report objects exist
+Phase 8: flag demotion after porcelain and JSON cover the command family
 ```
 
 The focused audit report lives in `docs/cli-output-architecture.md`. The next
-CLI architecture row is `V010.CLI.27 - model artifact porcelain migration`.
+CLI architecture row is `V010.CLI.27 - base status and refusal grammar`.
 `V010.QUANT.1 - dtype/qtype support by role` remains the functional runtime
-blocker, but it is paused until the model report owner files are no longer
-blocking operator clarity.
+blocker, but it is not immediate Active Next while shared CLI substrate remains
+unstable.
 
 Boundary: CLI cannot claim lower runtime behavior that does not exist.
 
@@ -4645,7 +4734,7 @@ tokenizer/stop -> generation -> operator proof -> release transcript.
 ## 7. Active Next
 
 ```text
-V010.CLI.27 - model artifact porcelain migration
+V010.CLI.27 - base status and refusal grammar
 ```
 
 `SPINE.OUTPUT.UX.CONTRACT.0` is complete as a docs/control row and has been
@@ -4655,11 +4744,12 @@ table is a renderer layout, audit is transitional evidence, and JSON is the
 target raw/plumbing surface where implemented and tested command by command.
 
 `V010.CLI.26` completed the base CLI grammar and grouped command catalog.
-Active implementation next remains the CLI architecture migration sequence
-because the model artifact owner file still has the largest report-wall
-pressure. `V010.QUANT.1 - dtype/qtype support by role` remains the functional
-runtime blocker after this CLI interruption is no longer blocking operator
-clarity.
+`SPINE.CLI.REBASE.1` reconciles the executed grammar row by rebuilding TRACK 28
+as a layered CLI program. Active implementation next remains in the CLI
+architecture sequence, but the next row is now shared status/refusal grammar,
+not artifact porcelain. `V010.QUANT.1 - dtype/qtype support by
+role` remains the functional runtime blocker after this CLI interruption is no
+longer blocking operator clarity.
 
 Completed row:
 
@@ -4776,8 +4866,22 @@ the CLI refactor, implement uniform JSON, remove flags, add qtype role support,
 quantize tensors, emit artifacts, create artifact identity, materialize
 tensors, construct runtime descriptors, attach backend residency, feed graph
 consumers, execute prefill/decode/logits/tokenizer/sampling/generation,
-evaluate, benchmark, claim throughput, or mark release readiness. `V010.CLI.27`
-is the next CLI architecture row.
+evaluate, benchmark, claim throughput, or mark release readiness.
+
+Completed docs/operator architecture row:
+
+```text
+SPINE.CLI.REBASE.1 - full Operator CLI track rebase after executed V010.CLI.26
+```
+
+`SPINE.CLI.REBASE.1` reconciles the completed `V010.CLI.26` base grammar row
+with the rest of TRACK 28. It records `V010.CLI.26` as base grammar/catalog,
+splits future CLI work into shared substrate, command-family migrations,
+doctor/readiness, and final gate layers, moves model artifact porcelain work to
+`V010.CLI.MODELS.4`, moves model target porcelain work to `V010.CLI.TARGET.*`,
+and maps graph/runtime migration to `V010.CLI.GRAPH.0` plus
+`V010.CLI.RUNTIME.0`. The next CLI architecture row is
+`V010.CLI.27 - base status and refusal grammar`.
 
 `V010.TARGET.9`, `V010.TARGET.2`, `V010.TARGET.3`, and `V010.TARGET.7` are also
 complete as report-only implementation rows. The commands `yvex model-target
@@ -5373,9 +5477,15 @@ Runtime Track Matrix` and `## 6.2 v0.1.0 Master Implementation Spine`.
 | CLI.SURFACE.3 | complete | cli/layout | Domain-owned CLI help and command extraction | yvex_cli.c contains only short command table and dispatch; detailed help and command behavior live in domain owners; command split files are removed |
 | V010.CLI.25 | complete | operator | Renderer ownership foundation | `yvex_render_private.h` introduces a small private header-only render boundary and `models prepare --dry-run` for downloaded/source-backed targets now renders from a semantic prepare report with compact porcelain output and preserved audit evidence, without adding a renderer source file, public API, JSON output, flag removal, runtime behavior, quantization, artifact emission, generation, eval, benchmark, throughput, or release claim |
 | V010.CLI.26 | complete | operator | Base CLI grammar and command catalog | `yvex_cli.c` carries top-level command group, surface class, purpose, usage, example, option-class, and boundary metadata; `yvex help`, `yvex commands`, and `yvex help COMMAND` render grammar-first help/catalog output while preserving domain-owned help and avoiding domain behavior, JSON, flag removal, runtime, quantization, artifact emission, generation, eval, benchmark, throughput, or release claims |
-| V010.CLI.27 | planned | operator | Model artifact porcelain migration | migrate the highest-pressure `yvex_model_artifacts.c` report walls toward semantic reports plus porcelain/audit render helpers while preserving existing output flags during transition |
-| V010.CLI.28 | planned | operator | Model target porcelain migration | migrate `yvex_model.c` model-target report walls toward semantic reports plus porcelain/audit render helpers while preserving normal/table/audit tests |
-| V010.CLI.29 | planned | operator | Graph/runtime diagnostic renderer migration | separate graph/runtime porcelain, diagnostic, trace, log, and error output in `yvex_graph.c` and `yvex_runtime.c` without changing runtime semantics |
+| SPINE.CLI.REBASE.1 | complete | docs/operator | Full Operator CLI track rebase after executed V010.CLI.26 | TRACK 28 is reconciled into layered CLI substrate, command-family migration, doctor/readiness, and final-gate rows; Active Next moves to shared status/refusal grammar; model artifact, model-target, and graph/runtime migrations are remapped without CLI behavior changes, print-site removal, JSON, flag removal, runtime, quantization, artifact, generation, eval, benchmark, throughput, or release claims |
+| V010.CLI.27 | planned | operator | Base status and refusal grammar | standardize compact `status`, `top_blocker`, `next`, `boundary`, refusal, and error output before broad namespace migrations while keeping audit/raw diagnostics separate |
+| V010.CLI.28 | planned | operator | Error/log/diagnostic surface split | separate command errors, diagnostic evidence, traces, and daemon/log-like output from normal porcelain without changing runtime semantics |
+| V010.CLI.29 | planned | operator | Terminal policy quiet/no-color/non-TTY | define quiet/no-color/non-TTY behavior after status/refusal grammar exists without adding color or metric claims early |
+| V010.CLI.MODELS.4 | planned | operator | Models artifacts porcelain | migrate `models artifacts` and related model-artifact report walls toward semantic reports plus porcelain/audit render helpers after shared status/refusal grammar exists |
+| V010.CLI.TARGET.0 | planned | operator | Model-target namespace grammar | migrate model-target namespace grammar toward shared CLI status/refusal and porcelain/audit rules |
+| V010.CLI.TARGET.2 | planned | operator | Model-target tensor-map and gate porcelain | migrate tensor-map, missing-role, and gate surfaces toward shared CLI grammar without adding mapping, qtype, artifact, runtime, generation, eval, benchmark, throughput, or release claims |
+| V010.CLI.GRAPH.0 | planned | operator | Graph check/operator porcelain | migrate graph operator output after shared error/diagnostic split without changing graph semantics |
+| V010.CLI.RUNTIME.0 | planned | operator | Runtime diagnostic command grammar | migrate runtime diagnostic command grammar after shared error/diagnostic split without changing runtime semantics |
 | CLI.MODELS.0 | complete | cli | Local model selection spine | model selection design and registry shape established |
 | CLI.MODELS.1 | complete | cli | Local model registry implementation | local model registry add/list/use/current/remove works |
 | CLI.MODELS.2 | complete | cli | One-shot model alias resolution | model-taking commands resolve aliases or paths |
@@ -5639,6 +5749,7 @@ meta-spine rows should not inflate Current Capability as runtime implementation.
 | SPINE.METAL.QWEN.0 | complete | pressure-lane doctrine | Qwen/Metal future lane | none | target-pressure | docs-only; no generation claim |
 | SPINE.OUTPUT.UX.CONTRACT.0 | complete | UX doctrine | CLI output UX | none | contract | docs-only; no CLI behavior, runtime implementation, generation, benchmark, or release claim |
 | CLI.ARCH.AUDIT.0 | complete | operator architecture audit | CLI print inventory and porcelain/plumbing doctrine | none | audit/doctrine | docs-only; no renderer implementation, JSON implementation, print removal, runtime, generation, benchmark, or release claim |
+| SPINE.CLI.REBASE.1 | complete | operator architecture rebase | full Operator CLI track after V010.CLI.26 | none | doctrine/rebase | docs-only; no CLI behavior, print removal, JSON implementation, runtime, generation, benchmark, or release claim |
 | SPINE.CUDA.MAP.0 | complete | execution-map / backend doctrine | CUDA execution crosswalk | none | spine crosswalk | docs-only; no CUDA runtime/generation/benchmark implementation |
 
 
