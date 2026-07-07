@@ -82,7 +82,17 @@ test -f src/io/yvex_json_writer.c
 test -f src/io/yvex_json_writer.h
 test -f src/generation/yvex_prefill.c
 test -f src/generation/yvex_kv.c
+test -f src/generation/yvex_kv_report.c
+test -f src/generation/yvex_kv_report.h
+test -f src/generation/yvex_kv_private.h
+test -f src/cli/input/yvex_kv_args.c
+test -f src/cli/input/yvex_kv_args.h
 test -f src/cli/commands/yvex_kv_cli.c
+test -f src/cli/render/yvex_kv_render.c
+test -f src/cli/render/yvex_kv_render.h
+test -f src/cli/catalog/kv_options.def
+test -f src/cli/catalog/kv_fields.def
+test -f src/cli/catalog/kv_boundaries.def
 test -f src/generation/yvex_decode.c
 test -f src/cli/commands/yvex_decode_cli.c
 test -f src/generation/yvex_logits.c
@@ -287,6 +297,82 @@ fi
 generate_adapter_lines="$(wc -l < src/cli/commands/yvex_generate_cli.c | tr -d ' ')"
 if test "$generate_adapter_lines" -gt 350; then
   echo "generate command adapter too large: $generate_adapter_lines"
+  exit 1
+fi
+
+KV_DOMAIN_FILES='src/generation/yvex_kv.c src/generation/yvex_kv_report.c src/generation/yvex_kv_report.h src/generation/yvex_kv_private.h'
+
+BAD_KV_OUTPUT="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' $KV_DOMAIN_FILES || true
+)"
+if test -n "$BAD_KV_OUTPUT"; then
+  echo "$BAD_KV_OUTPUT"
+  echo "KV domain/report must not write operator output"
+  exit 1
+fi
+
+BAD_KV_COMMAND="$(
+  grep -nE 'yvex_kv_command|yvex_kv_help|command_kv|command_kv_report|argc|argv|arg_count|args|usage: yvex|--model|--family|--backend|--output|--audit|--layers|--heads|--capacity' $KV_DOMAIN_FILES || true
+)"
+if test -n "$BAD_KV_COMMAND"; then
+  echo "$BAD_KV_COMMAND"
+  echo "KV command/help/parser code must not live in generation domain"
+  exit 1
+fi
+
+BAD_KV_CLI_INCLUDE="$(
+  grep -nE '#include "yvex_(cli|operator|console)|#include <.*cli.*>' $KV_DOMAIN_FILES || true
+)"
+if test -n "$BAD_KV_CLI_INCLUDE"; then
+  echo "$BAD_KV_CLI_INCLUDE"
+  echo "KV domain/report must not include CLI/operator headers"
+  exit 1
+fi
+
+grep -nF 'const yvex_kv_report *report' src/cli/render/yvex_kv_render.c >/dev/null
+grep -nF 'yvex_kv_render_normal' src/cli/render/yvex_kv_render.c >/dev/null
+grep -nF 'yvex_kv_render_audit' src/cli/render/yvex_kv_render.c >/dev/null
+grep -nF 'yvex_kv_render_help' src/cli/render/yvex_kv_render.c >/dev/null
+
+BAD_KV_RENDER_STDIO="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' src/cli/render/yvex_kv_render.c src/cli/render/yvex_kv_render.h || true
+)"
+if test -n "$BAD_KV_RENDER_STDIO"; then
+  echo "$BAD_KV_RENDER_STDIO"
+  echo "KV renderer must use src/cli/io writers"
+  exit 1
+fi
+
+BAD_KV_RENDER_PLACEHOLDER="$(
+  grep -nE 'const void \*report|not-bound|renderer-only|_render_boundary|boundary anchor' src/cli/render/yvex_kv_render.c src/cli/render/yvex_kv_render.h || true
+)"
+if test -n "$BAD_KV_RENDER_PLACEHOLDER"; then
+  echo "$BAD_KV_RENDER_PLACEHOLDER"
+  echo "KV renderer must be real and typed"
+  exit 1
+fi
+
+kv_adapter_lines="$(wc -l < src/cli/commands/yvex_kv_cli.c | tr -d ' ')"
+if test "$kv_adapter_lines" -gt 350; then
+  echo "src/cli/commands/yvex_kv_cli.c has $kv_adapter_lines lines; adapter must stay <= 350"
+  exit 1
+fi
+
+BAD_KV_INPUT_EXEC="$(
+  grep -nE 'yvex_model_ref_resolve|open_model_context|yvex_kv_cache_create|yvex_kv_cache_append|yvex_kv_cache_read|yvex_kv_report_build|yvex_kv_render|fprintf|printf' src/cli/input/yvex_kv_args.c src/cli/input/yvex_kv_args.h || true
+)"
+if test -n "$BAD_KV_INPUT_EXEC"; then
+  echo "$BAD_KV_INPUT_EXEC"
+  echo "KV input parser must parse only"
+  exit 1
+fi
+
+BAD_KV_COMMAND_DOMAIN="$(
+  grep -nE 'open_model_context|yvex_kv_cache_create_shape|yvex_kv_cache_append_position_f32|yvex_kv_cache_read_position_f32|kv_scan_roles|fprintf|printf' src/cli/commands/yvex_kv_cli.c || true
+)"
+if test -n "$BAD_KV_COMMAND_DOMAIN"; then
+  echo "$BAD_KV_COMMAND_DOMAIN"
+  echo "KV command adapter must dispatch only"
   exit 1
 fi
 

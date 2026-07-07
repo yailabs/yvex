@@ -51,12 +51,15 @@ YVEX_BIN := ./yvex
 YVEXD_BIN := ./yvexd
 
 CLI_COMMAND_SRCS := src/cli/commands/yvex_generate_cli.c \
-	$(sort $(filter-out src/cli/commands/yvex_generate_cli.c,$(wildcard src/cli/commands/*.c)))
+	src/cli/commands/yvex_kv_cli.c \
+	$(sort $(filter-out src/cli/commands/yvex_generate_cli.c src/cli/commands/yvex_kv_cli.c,$(wildcard src/cli/commands/*.c)))
 CLI_INPUT_SRCS := src/cli/input/yvex_generate_args.c \
-	$(sort $(filter-out src/cli/input/yvex_generate_args.c,$(wildcard src/cli/input/*.c)))
+	src/cli/input/yvex_kv_args.c \
+	$(sort $(filter-out src/cli/input/yvex_generate_args.c src/cli/input/yvex_kv_args.c,$(wildcard src/cli/input/*.c)))
 CLI_RENDER_SRCS := src/cli/render/yvex_generate_render.c \
 	src/cli/render/yvex_generate_trace_render.c \
-	$(sort $(filter-out src/cli/render/yvex_generate_render.c src/cli/render/yvex_generate_trace_render.c,$(wildcard src/cli/render/*.c)))
+	src/cli/render/yvex_kv_render.c \
+	$(sort $(filter-out src/cli/render/yvex_generate_render.c src/cli/render/yvex_generate_trace_render.c src/cli/render/yvex_kv_render.c,$(wildcard src/cli/render/*.c)))
 CLI_IO_SRCS := $(sort $(wildcard src/cli/io/*.c))
 
 CORE_SRCS := \
@@ -74,6 +77,7 @@ CORE_SRCS := \
 	src/generation/yvex_generation_report.c \
 	src/generation/yvex_generation_trace.c \
 	src/generation/yvex_kv.c \
+	src/generation/yvex_kv_report.c \
 	src/generation/yvex_logits.c \
 	src/generation/yvex_sampling.c \
 	src/gguf/naming.c \

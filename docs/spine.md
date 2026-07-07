@@ -826,6 +826,8 @@ labels.
 | TOPOLOGY.DOMAIN.RESTORE.0 | complete | Restore domain implementation files after invalid CLI command-file displacement. |
 | TOPOLOGY.CELL.SOURCE.0 | complete | Extract source into domain/report/input/command/render/write cell. |
 | TOPOLOGY.CELL.GENERATION.0 | complete | Extract generate into domain/report/input/command/render/trace cell. |
+| TOPOLOGY.CELL.KV.0 | complete | Extract KV into domain/report/input/command/render cell. |
+| TOPOLOGY.CELL.CLOSURE.0 | planned | Close remaining mixed cells after each owner-specific extraction is proven. |
 | V010.PATHS.0 | complete | operator root layout report. |
 | V010.PATHS.1 | complete | source/artifact/reference/report/cache separation. |
 | V010.PATHS.2 | complete | registry path layout. |

@@ -189,6 +189,70 @@ if grep -nE '\b(printf|fprintf|vfprintf|fputs|fputc|puts|putchar|perror)\s*\(' s
   exit 1
 fi
 
+KV_DOMAIN_FILES='src/generation/yvex_kv.c src/generation/yvex_kv_report.c src/generation/yvex_kv_report.h src/generation/yvex_kv_private.h'
+
+KV_DOMAIN_OUTPUT_HITS="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' $KV_DOMAIN_FILES || true
+)"
+if test -n "$KV_DOMAIN_OUTPUT_HITS"; then
+  echo "$KV_DOMAIN_OUTPUT_HITS"
+  echo "no KV direct output in generation domain"
+  exit 1
+fi
+
+KV_DOMAIN_COMMAND_HITS="$(
+  grep -nE 'yvex_kv_command|yvex_kv_help|command_kv|command_kv_report|argc|argv|arg_count|args|usage: yvex|--model|--family|--backend|--output|--audit|--layers|--heads|--capacity' $KV_DOMAIN_FILES || true
+)"
+if test -n "$KV_DOMAIN_COMMAND_HITS"; then
+  echo "$KV_DOMAIN_COMMAND_HITS"
+  echo "no KV command/help/argv parsing in generation domain"
+  exit 1
+fi
+
+KV_DOMAIN_INCLUDE_HITS="$(
+  grep -nE '#include "yvex_(cli|operator|console)|#include <.*cli.*>' $KV_DOMAIN_FILES || true
+)"
+if test -n "$KV_DOMAIN_INCLUDE_HITS"; then
+  echo "$KV_DOMAIN_INCLUDE_HITS"
+  echo "no KV CLI/operator include in generation domain"
+  exit 1
+fi
+
+grep -nF 'yvex_kv_args_parse' src/cli/input/yvex_kv_args.c >/dev/null
+grep -nF 'yvex_kv_report_build' src/generation/yvex_kv_report.c >/dev/null
+grep -nF 'yvex_kv_ownership_report_build' src/generation/yvex_kv_report.c >/dev/null
+grep -nF 'const yvex_kv_report *report' src/cli/render/yvex_kv_render.c >/dev/null
+grep -nF 'yvex_kv_render_normal' src/cli/render/yvex_kv_render.c >/dev/null
+grep -nF 'yvex_kv_render_audit' src/cli/render/yvex_kv_render.c >/dev/null
+grep -nF 'yvex_kv_render_help' src/cli/render/yvex_kv_render.c >/dev/null
+grep -nF 'yvex_kv_command' src/cli/commands/yvex_kv_cli.c >/dev/null
+grep -nF 'yvex_kv_args_parse' src/cli/commands/yvex_kv_cli.c >/dev/null
+grep -nF 'yvex_kv_report_build' src/cli/commands/yvex_kv_cli.c >/dev/null
+grep -nF 'yvex_kv_render' src/cli/commands/yvex_kv_cli.c >/dev/null
+
+KV_RENDER_STDIO_HITS="$(
+  grep -nE '\b(printf|fprintf|vfprintf|fputs|fputc|puts|putchar|perror)\s*\(' src/cli/render/yvex_kv_render.c src/cli/render/yvex_kv_render.h || true
+)"
+if test -n "$KV_RENDER_STDIO_HITS"; then
+  echo "$KV_RENDER_STDIO_HITS"
+  echo "no KV renderer direct stdio"
+  exit 1
+fi
+
+KV_RENDER_PLACEHOLDER_HITS="$(
+  grep -nE 'const void \*report|not-bound|renderer-only|_render_boundary|boundary anchor' src/cli/render/yvex_kv_render.c src/cli/render/yvex_kv_render.h || true
+)"
+if test -n "$KV_RENDER_PLACEHOLDER_HITS"; then
+  echo "$KV_RENDER_PLACEHOLDER_HITS"
+  echo "no KV placeholder renderer"
+  exit 1
+fi
+
+if grep -nF 'void kv_cli_adapter_file(void)' src/cli/commands/yvex_kv_cli.c; then
+  echo "no empty KV command adapter"
+  exit 1
+fi
+
 if grep -RInE '#include .*src/cli|#include "yvex_(cli|console|render)' src/source; then
   echo "source cell must not include CLI headers"
   exit 1

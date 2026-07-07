@@ -192,6 +192,57 @@ src/runtime/yvex_chat.c
   diagnostic console and future runtime-backed REPL shell
 ```
 
+Canonical cell network:
+
+```text
+CLI entry:
+  src/cli/yvex_cli.c
+
+Input:
+  src/cli/input/yvex_<surface>_args.c
+  parses argc/argv into typed args only.
+
+Command:
+  src/cli/commands/yvex_<surface>_cli.c
+  dispatches only: parse args, build request, call domain/report API, call renderer,
+  return exit code.
+
+Domain:
+  src/<domain>/*.c
+  owns state, algorithms, validation, lifecycle, backend calls, and facts.
+
+Report:
+  src/<domain>/yvex_<surface>_report.c
+  builds typed report structs from domain facts.
+
+Render:
+  src/cli/render/yvex_<surface>_render.c
+  formats typed reports into normal/table/audit/json-compatible output.
+
+CLI IO:
+  src/cli/io/*
+  is the only stdout/stderr byte writer.
+
+File IO:
+  src/io/* or explicit domain writer files
+  writes explicit local files only and never stdout/stderr.
+
+Primitive/reference:
+  backend primitives execute operations.
+  reference primitives compute expected outputs.
+  domain/report compares primitive output and reference output.
+  render only prints the comparison report.
+```
+
+A command adapter that does not call a real input parser, a real domain/report API,
+and a real typed renderer is not a valid cell file.
+
+An empty command adapter is forbidden.
+
+A render file that does not render a typed report is forbidden.
+
+A domain file that prints operator output is forbidden.
+
 ## 3. Source File Contracts
 
 Every source file must declare Owner, Owns, Does not own, Invariants, Boundary.
