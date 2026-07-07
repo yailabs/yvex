@@ -17,7 +17,7 @@
  * Expected:
  *   - exits 0 on success
  */
-#include "yvex_console_private.h"
+#include "yvex_operator_private.h"
 #include "test.h"
 
 int yvex_test_slash_commands(void)

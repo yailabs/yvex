@@ -22,10 +22,15 @@ test -d src/cli/render
 test -d src/cli/io
 test -d src/cli/catalog
 test -d src/cli/schema
+test -d src/accounts
 test -d src/core
 test -d src/artifact
 test -d src/backend
 test -d src/backend/cuda
+test -d src/daemon
+test -d src/graph
+test -d src/metrics
+test -d src/source
 test -d src/server
 test -d src/gguf
 test -d src/model
@@ -38,23 +43,39 @@ test -d src/bench
 test -f src/cli/yvex_cli.c
 test ! -f src/cli/yvex_cli_runtime.c
 test -f src/cli/commands/yvex_model_target_cli.c
-test -f src/cli/commands/yvexd_cli.c
+test ! -f src/cli/commands/yvexd_cli.c
+test -f src/daemon/yvexd.c
 test -f src/core/yvex_core.c
+test -f src/core/yvex_fs.c
+test -f src/core/yvex_operator_private.h
+test -f src/core/yvex_operator_render_private.h
 test -f src/cli/yvex_render_private.h
+test -f src/accounts/yvex_accounts.c
 test -f src/cli/commands/yvex_accounts_cli.c
 test -f src/cli/commands/yvex_paths_cli.c
 test -f src/model/yvex_model.c
+test -f src/model/yvex_model_artifacts.c
+test -f src/runtime/yvex_chat.c
 test -f src/cli/commands/yvex_model_artifacts_cli.c
+test -f src/source/yvex_source.c
 test -f src/cli/commands/yvex_source_cli.c
 test -f src/generation/yvex_prefill.c
+test -f src/generation/yvex_kv.c
 test -f src/cli/commands/yvex_kv_cli.c
+test -f src/generation/yvex_decode.c
 test -f src/cli/commands/yvex_decode_cli.c
+test -f src/generation/yvex_logits.c
 test -f src/cli/commands/yvex_logits_cli.c
+test -f src/generation/yvex_sampling.c
 test -f src/cli/commands/yvex_sampling_cli.c
+test -f src/generation/yvex_generation.c
 test -f src/cli/commands/yvex_generate_cli.c
 test -f src/eval/yvex_eval.c
 test -f src/bench/yvex_bench.c
+test -f src/metrics/yvex_metrics.c
+test -f src/metrics/yvex_profile.c
 test -f src/cli/commands/yvex_profile_cli.c
+test -f src/backend/yvex_backend.c
 test -f src/backend/cuda/cuda_backend.c
 test -f src/backend/cuda/cuda_errors.c
 test -f src/backend/cuda/cuda_info.c
@@ -65,9 +86,12 @@ test -f src/backend/cuda/cuda_ops.c
 test -f src/backend/cuda/cuda_tensor.c
 test -f src/gguf/gguf.c
 test -f src/gguf/naming.c
+test -f src/gguf/tools.c
 test -f src/cli/commands/yvex_gguf_cli.c
+test -f src/gguf/conversion.c
 test -f src/cli/commands/yvex_conversion_cli.c
 test -f src/gguf/families.h
+test -f src/gguf/quant.c
 test -f src/cli/commands/yvex_quant_cli.c
 test -f src/cli/io/yvex_cli_out.c
 test -f src/cli/io/yvex_cli_error.c
@@ -130,21 +154,20 @@ fi
 
 grep -nF 'usage: yvex model-target' src/cli/commands/yvex_model_target_cli.c >/dev/null
 
+DOMAIN_FILES='src/accounts src/artifact src/backend src/core src/daemon src/gguf src/graph src/metrics src/model src/runtime src/source src/tokenizer src/generation'
+
 PRINT_HITS="$(
-  git grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|putchar|perror)\s*\(' -- 'src/**/*.c' 'src/**/*.cu' |
-  grep -vE '^src/cli/io/yvex_cli_(out|error|json|table|log)\.c:' |
-  grep -vE '^src/core/yvex_file_writer\.c:'
-)" || true
+  grep -RInE '\b(printf|vprintf|puts|putchar|perror)\s*\(' $DOMAIN_FILES || true
+)"
 
 if test -n "$PRINT_HITS"; then
   echo "$PRINT_HITS"
-  echo "direct output outside approved writer files"
+  echo "domain files must not use obvious direct operator print helpers"
   exit 1
 fi
 
 USAGE_HITS="$(
-  git grep -n 'usage: yvex' -- 'src/**/*.c' |
-  grep -vE '^src/cli/'
+  grep -RIn 'usage: yvex' $DOMAIN_FILES || true
 )" || true
 
 if test -n "$USAGE_HITS"; then
@@ -154,15 +177,75 @@ if test -n "$USAGE_HITS"; then
 fi
 
 OPTION_HITS="$(
-  git grep -nE 'strcmp\(argv\[|--output|--audit|--json|--include-' -- 'src/**/*.c' |
-  grep -vE '^src/cli/'
+  grep -RInE '\bargc\b|\bargv\b|strcmp\(argv\[|--output|--audit|--json|--include-' $DOMAIN_FILES || true
 )" || true
 
 if test -n "$OPTION_HITS"; then
   echo "$OPTION_HITS"
-  echo "CLI option parsing outside src/cli"
+  echo "domain files must not expose CLI parsing tokens"
   exit 1
 fi
+
+COMMAND_STRUCT_HITS="$(
+  grep -RInE '^(struct yvex_graph|struct yvex_plan|struct yvex_memory_plan|struct yvex_native_weight_table|struct yvex_backend|struct yvex_engine|struct yvex_kv|struct yvex_logits|struct yvex_sampling)' src/cli/commands || true
+)"
+if test -n "$COMMAND_STRUCT_HITS"; then
+  echo "$COMMAND_STRUCT_HITS"
+  echo "domain structs must not live in src/cli/commands"
+  exit 1
+fi
+
+COMMAND_EXPORT_HITS="$(
+  grep -RInE '^(int|void|const char \*) yvex_(account|artifact|backend|engine|graph|kv|logits|sampling|source|native|gguf|conversion|metrics|trace|model_registry|model_ref|tokenizer|prompt|tokens|decode|generation)' src/cli/commands |
+  grep -vE '_(command|help)\(' || true
+)"
+if test -n "$COMMAND_EXPORT_HITS"; then
+  echo "$COMMAND_EXPORT_HITS"
+  echo "domain exported symbols must not live in src/cli/commands"
+  exit 1
+fi
+
+if grep -RIn '\byvex_backend_open\b' src/cli/commands; then
+  echo "CLI command adapters must not open backends directly"
+  exit 1
+fi
+
+if grep -RInE '#include .*src/cli|#include "yvex_(cli|console|render)' $DOMAIN_FILES; then
+  echo "domain files must not include CLI headers"
+  exit 1
+fi
+
+if grep -RIn '_render_boundary' src/cli/render; then
+  echo "fake renderer anchors are forbidden"
+  exit 1
+fi
+
+grep -RIn 'yvex_graph_render_normal' src/cli/render/yvex_graph_render.c >/dev/null
+grep -RIn 'yvex_graph_render_table' src/cli/render/yvex_graph_render.c >/dev/null
+grep -RIn 'yvex_graph_render_audit' src/cli/render/yvex_graph_render.c >/dev/null
+grep -RIn 'yvex_source_render_normal' src/cli/render/yvex_source_render.c >/dev/null
+grep -RIn 'yvex_source_render_table' src/cli/render/yvex_source_render.c >/dev/null
+grep -RIn 'yvex_source_render_audit' src/cli/render/yvex_source_render.c >/dev/null
+grep -RIn 'yvex_backend_render_normal' src/cli/render/yvex_backend_render.c >/dev/null
+grep -RIn 'yvex_backend_render_table' src/cli/render/yvex_backend_render.c >/dev/null
+grep -RIn 'yvex_backend_render_audit' src/cli/render/yvex_backend_render.c >/dev/null
+grep -RIn 'yvex_generate_render_normal' src/cli/render/yvex_generate_render.c >/dev/null
+grep -RIn 'yvex_generate_render_audit' src/cli/render/yvex_generate_render.c >/dev/null
+grep -RIn 'yvex_generate_render_trace' src/cli/render/yvex_generate_render.c >/dev/null
+
+CORE_BLOCK="$(sed -n '/^CORE_SRCS :=/,/^$/p' Makefile)"
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/accounts/yvex_accounts.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/artifact/yvex_artifact.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/backend/yvex_backend.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_graph.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/source/yvex_source.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/generation/yvex_generation.c' >/dev/null
+if printf '%s\n' "$CORE_BLOCK" | grep -F 'src/cli/'; then
+  echo "CORE_SRCS must not include CLI sources"
+  exit 1
+fi
+grep -nF 'CLI_SRCS :=' Makefile >/dev/null
+grep -nF 'src/daemon/yvexd.c' Makefile >/dev/null
 
 CATALOG_HITS="$(
   git grep -n 'src/cli/catalog' -- 'src/**/*.c' 'src/**/*.h' |

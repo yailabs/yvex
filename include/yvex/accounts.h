@@ -93,7 +93,7 @@ typedef struct {
 } yvex_account_observation;
 
 typedef struct {
-    const char *argv[YVEX_ACCOUNT_ARG_CAP];
+    const char *args[YVEX_ACCOUNT_ARG_CAP];
     const char *stdout_path;
     const char *stderr_path;
 } yvex_account_command_options;

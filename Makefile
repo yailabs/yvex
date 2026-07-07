@@ -35,7 +35,7 @@ CUDA_LDFLAGS ?=
 YVEX_CUDA_ARCH ?= auto
 NVCC_AVAILABLE := $(shell command -v $(NVCC) >/dev/null 2>&1 && echo yes || echo no)
 
-CPPFLAGS ?= -D_POSIX_C_SOURCE=200809L -Iinclude -I. -Isrc/cli -Isrc/cli/io -Isrc/backend -Isrc/backend/cuda -Isrc/runtime -Isrc/server -Isrc/gguf
+CPPFLAGS ?= -D_POSIX_C_SOURCE=200809L -Iinclude -I. -Isrc/core -Isrc/cli -Isrc/cli/io -Isrc/backend -Isrc/backend/cuda -Isrc/runtime -Isrc/server -Isrc/gguf
 CFLAGS ?= -std=c11 -Wall -Wextra -pedantic
 LDFLAGS ?=
 LDLIBS ?= -ldl
@@ -50,22 +50,45 @@ LIBYVEX := $(LIB_DIR)/libyvex.a
 YVEX_BIN := ./yvex
 YVEXD_BIN := ./yvexd
 
-CLI_COMMAND_SRCS := $(filter-out src/cli/commands/yvexd_cli.c,$(sort $(wildcard src/cli/commands/*.c)))
+CLI_COMMAND_SRCS := $(sort $(wildcard src/cli/commands/*.c))
 CLI_RENDER_SRCS := $(sort $(wildcard src/cli/render/*.c))
 CLI_IO_SRCS := $(sort $(wildcard src/cli/io/*.c))
 
 CORE_SRCS := \
 	src/core/yvex_core.c \
+	src/core/yvex_fs.c \
+	src/accounts/yvex_accounts.c \
+	src/artifact/yvex_artifact.c \
 	src/artifact/yvex_artifact_identity.c \
 	src/artifact/yvex_artifact_integrity.c \
+	src/backend/yvex_backend.c \
+	src/bench/yvex_bench.c \
+	src/eval/yvex_eval.c \
+	src/generation/yvex_decode.c \
+	src/generation/yvex_generation.c \
+	src/generation/yvex_kv.c \
+	src/generation/yvex_logits.c \
+	src/generation/yvex_sampling.c \
 	src/gguf/naming.c \
 	src/gguf/gguf.c \
+	src/gguf/conversion.c \
+	src/gguf/quant.c \
+	src/gguf/tools.c \
+	src/graph/yvex_graph.c \
+	src/metrics/yvex_metrics.c \
+	src/metrics/yvex_profile.c \
 	src/model/yvex_model.c \
+	src/model/yvex_model_artifacts.c \
+	src/runtime/yvex_chat.c \
+	src/runtime/yvex_runtime.c \
+	src/source/yvex_source.c \
 	src/generation/yvex_prefill.c \
 	src/tokenizer/yvex_token_input.c \
-	src/server/yvex_server.c \
-	src/eval/yvex_eval.c \
-	src/bench/yvex_bench.c \
+	src/tokenizer/yvex_tokenizer.c \
+	src/server/yvex_server.c
+
+CLI_SRCS := \
+	src/cli/yvex_cli.c \
 	$(CLI_COMMAND_SRCS) \
 	$(CLI_RENDER_SRCS) \
 	$(CLI_IO_SRCS)
@@ -247,14 +270,11 @@ $(CUDA_PTX_OBJ): $(CUDA_PTX_C)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-YVEX_CLI_SRCS := \
-	src/cli/yvex_cli.c
-
-$(YVEX_BIN): $(YVEX_CLI_SRCS) $(LIBYVEX)
+$(YVEX_BIN): $(CLI_SRCS) $(LIBYVEX)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(YVEX_CLI_SRCS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(CLI_SRCS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
-$(YVEXD_BIN): src/cli/commands/yvexd_cli.c $(LIBYVEX)
+$(YVEXD_BIN): src/daemon/yvexd.c $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
@@ -348,7 +368,7 @@ check-guardrails:
 	@test -f include/yvex/server.h
 	@test ! -d fixtures
 	@test -f src/cli/yvex_cli.c
-	@test -f src/cli/commands/yvexd_cli.c
+	@test -f src/daemon/yvexd.c
 	@test -f src/server/yvex_server.c
 	@test -z "$$(git ls-files 'yvex_*.c')"
 	@test -z "$$(git ls-files 'yvex_*_private.h')"

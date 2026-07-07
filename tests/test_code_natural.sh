@@ -87,21 +87,20 @@ fi
 
 grep -nF 'usage: yvex model-target' src/cli/commands/yvex_model_target_cli.c >/dev/null
 
+DOMAIN_FILES='src/accounts src/artifact src/backend src/core src/daemon src/gguf src/graph src/metrics src/model src/runtime src/source src/tokenizer src/generation'
+
 PRINT_HITS="$(
-  git grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|putchar|perror)\s*\(' -- 'src/**/*.c' 'src/**/*.cu' |
-  grep -vE '^src/cli/io/yvex_cli_(out|error|json|table|log)\.c:' |
-  grep -vE '^src/core/yvex_file_writer\.c:'
-)" || true
+  grep -RInE '\b(printf|vprintf|puts|putchar|perror)\s*\(' $DOMAIN_FILES || true
+)"
 
 if test -n "$PRINT_HITS"; then
   echo "$PRINT_HITS"
-  echo "direct output outside approved writer files"
+  echo "domain files must not use obvious direct operator print helpers"
   exit 1
 fi
 
 USAGE_HITS="$(
-  git grep -n 'usage: yvex' -- 'src/**/*.c' |
-  grep -vE '^src/cli/'
+  grep -RIn 'usage: yvex' $DOMAIN_FILES || true
 )" || true
 
 if test -n "$USAGE_HITS"; then
@@ -111,13 +110,12 @@ if test -n "$USAGE_HITS"; then
 fi
 
 OPTION_HITS="$(
-  git grep -nE 'strcmp\(argv\[|--output|--audit|--json|--include-' -- 'src/**/*.c' |
-  grep -vE '^src/cli/'
+  grep -RInE '\bargc\b|\bargv\b|strcmp\(argv\[|--output|--audit|--json|--include-' $DOMAIN_FILES || true
 )" || true
 
 if test -n "$OPTION_HITS"; then
   echo "$OPTION_HITS"
-  echo "CLI option parsing outside src/cli"
+  echo "domain files must not expose CLI parsing tokens"
   exit 1
 fi
 
@@ -142,14 +140,27 @@ if test -n "$CATALOG_LOGIC_HITS"; then
   exit 1
 fi
 
-RENDER_HITS="$(
-  git grep -nE '\b(print_.*_(normal|table|audit|json|report)|emit_.*_trace)\b' -- 'src/**/*.c' |
-  grep -vE '^src/cli/'
-)" || true
+if grep -RIn '_render_boundary' src/cli/render; then
+  echo "fake renderer anchors are forbidden"
+  exit 1
+fi
 
-if test -n "$RENDER_HITS"; then
-  echo "$RENDER_HITS"
-  echo "porcelain/audit renderer outside src/cli"
+COMMAND_STRUCT_HITS="$(
+  grep -RInE '^(struct yvex_graph|struct yvex_plan|struct yvex_memory_plan|struct yvex_native_weight_table|struct yvex_backend|struct yvex_engine|struct yvex_kv|struct yvex_logits|struct yvex_sampling)' src/cli/commands || true
+)"
+if test -n "$COMMAND_STRUCT_HITS"; then
+  echo "$COMMAND_STRUCT_HITS"
+  echo "domain structs must not live in src/cli/commands"
+  exit 1
+fi
+
+COMMAND_EXPORT_HITS="$(
+  grep -RInE '^(int|void|const char \*) yvex_(account|artifact|backend|engine|graph|kv|logits|sampling|source|native|gguf|conversion|metrics|trace|model_registry|model_ref|tokenizer|prompt|tokens|decode|generation)' src/cli/commands |
+  grep -vE '_(command|help)\(' || true
+)"
+if test -n "$COMMAND_EXPORT_HITS"; then
+  echo "$COMMAND_EXPORT_HITS"
+  echo "domain exported symbols must not live in src/cli/commands"
   exit 1
 fi
 

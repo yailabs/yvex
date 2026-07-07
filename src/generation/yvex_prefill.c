@@ -7,7 +7,7 @@
  */
 
 #include <yvex/engine.h>
-#include "yvex_console_private.h"
+#include "yvex_operator_private.h"
 #include "yvex_runtime_private.h"
 
 #include <limits.h>

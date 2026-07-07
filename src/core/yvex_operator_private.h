@@ -1,12 +1,12 @@
 /*
- * yvex_console_private.h - Private operator console and command support.
+ * yvex_operator_private.h - Private operator command support.
  *
  * This header exposes shared operator helpers, domain-owned command entrypoint
- * declarations, and diagnostic console state. It is not a command catalog and
- * must not own command help text.
+ * declarations, and diagnostic console state. It is not a CLI command file,
+ * not a renderer, and not a command catalog.
  */
-#ifndef YVEX_CONSOLE_PRIVATE_H
-#define YVEX_CONSOLE_PRIVATE_H
+#ifndef YVEX_OPERATOR_PRIVATE_H
+#define YVEX_OPERATOR_PRIVATE_H
 
 #include <stdio.h>
 
@@ -143,98 +143,98 @@ int yvex_cli_graph_execute_layer_fixture(const yvex_cli_layer_fixture_options *o
                                          yvex_cli_layer_fixture_result *out,
                                          yvex_error *err);
 
-int yvex_accounts_command(int argc, char **argv);
+int yvex_accounts_command(int arg_count, char **args);
 void yvex_accounts_help(FILE *fp);
-int yvex_attention_command(int argc, char **argv);
+int yvex_attention_command(int arg_count, char **args);
 void yvex_attention_help(FILE *fp);
-int yvex_backend_command(int argc, char **argv);
+int yvex_backend_command(int arg_count, char **args);
 void yvex_backend_help(FILE *fp);
-int yvex_chat_command(int argc, char **argv);
+int yvex_chat_command(int arg_count, char **args);
 void yvex_chat_help(FILE *fp);
-int yvex_context_command(int argc, char **argv);
+int yvex_context_command(int arg_count, char **args);
 void yvex_context_help(FILE *fp);
-int yvex_convert_command(int argc, char **argv);
+int yvex_convert_command(int arg_count, char **args);
 void yvex_convert_help(FILE *fp);
-int yvex_cuda_info_command(int argc, char **argv);
+int yvex_cuda_info_command(int arg_count, char **args);
 void yvex_cuda_info_help(FILE *fp);
-int yvex_decode_command(int argc, char **argv);
+int yvex_decode_command(int arg_count, char **args);
 void yvex_decode_help(FILE *fp);
-int yvex_detokenize_command(int argc, char **argv);
+int yvex_detokenize_command(int arg_count, char **args);
 void yvex_detokenize_help(FILE *fp);
-int yvex_engine_command(int argc, char **argv);
+int yvex_engine_command(int arg_count, char **args);
 void yvex_engine_help(FILE *fp);
-int yvex_graph_command(int argc, char **argv);
+int yvex_graph_command(int arg_count, char **args);
 void yvex_graph_help(FILE *fp);
-int yvex_generate_command(int argc, char **argv);
+int yvex_generate_command(int arg_count, char **args);
 void yvex_generate_help(FILE *fp);
-int yvex_fullmodel_command(int argc, char **argv);
+int yvex_fullmodel_command(int arg_count, char **args);
 void yvex_fullmodel_help(FILE *fp);
-int yvex_gguf_template_command(int argc, char **argv);
+int yvex_gguf_template_command(int arg_count, char **args);
 void yvex_gguf_template_help(FILE *fp);
-int yvex_gguf_emit_command(int argc, char **argv);
+int yvex_gguf_emit_command(int arg_count, char **args);
 void yvex_gguf_emit_help(FILE *fp);
-int yvex_imatrix_command(int argc, char **argv);
+int yvex_imatrix_command(int arg_count, char **args);
 void yvex_imatrix_help(FILE *fp);
-int yvex_runtime_info_command(int argc, char **argv);
+int yvex_runtime_info_command(int arg_count, char **args);
 void yvex_runtime_info_help(FILE *fp);
-int yvex_inspect_command(int argc, char **argv);
+int yvex_inspect_command(int arg_count, char **args);
 void yvex_inspect_help(FILE *fp);
-int yvex_input_command(int argc, char **argv);
+int yvex_input_command(int arg_count, char **args);
 void yvex_input_help(FILE *fp);
-int yvex_integrity_command(int argc, char **argv);
+int yvex_integrity_command(int arg_count, char **args);
 void yvex_integrity_help(FILE *fp);
-int yvex_kv_command(int argc, char **argv);
+int yvex_kv_command(int arg_count, char **args);
 void yvex_kv_help(FILE *fp);
-int yvex_logits_command(int argc, char **argv);
+int yvex_logits_command(int arg_count, char **args);
 void yvex_logits_help(FILE *fp);
-int yvex_materialize_command(int argc, char **argv);
+int yvex_materialize_command(int arg_count, char **args);
 void yvex_materialize_help(FILE *fp);
-int yvex_materialize_gate_command(int argc, char **argv);
+int yvex_materialize_gate_command(int arg_count, char **args);
 void yvex_materialize_gate_help(FILE *fp);
-int yvex_metadata_command(int argc, char **argv);
+int yvex_metadata_command(int arg_count, char **args);
 void yvex_metadata_help(FILE *fp);
-int yvex_model_gate_command(int argc, char **argv);
+int yvex_model_gate_command(int arg_count, char **args);
 void yvex_model_gate_help(FILE *fp);
-int yvex_model_target_command(int argc, char **argv);
+int yvex_model_target_command(int arg_count, char **args);
 void yvex_model_target_help(FILE *fp);
-int yvex_moe_command(int argc, char **argv);
+int yvex_moe_command(int arg_count, char **args);
 void yvex_moe_help(FILE *fp);
-int yvex_models_command(int argc, char **argv);
+int yvex_models_command(int arg_count, char **args);
 void yvex_models_help(FILE *fp);
-int yvex_native_weights_command(int argc, char **argv);
+int yvex_native_weights_command(int arg_count, char **args);
 void yvex_native_weights_help(FILE *fp);
-int yvex_paths_command(int argc, char **argv);
+int yvex_paths_command(int arg_count, char **args);
 void yvex_paths_help(FILE *fp);
-int yvex_plan_command(int argc, char **argv);
+int yvex_plan_command(int arg_count, char **args);
 void yvex_plan_help(FILE *fp);
-int yvex_prefill_command(int argc, char **argv);
+int yvex_prefill_command(int arg_count, char **args);
 void yvex_prefill_help(FILE *fp);
-int yvex_prompt_command(int argc, char **argv);
+int yvex_prompt_command(int arg_count, char **args);
 void yvex_prompt_help(FILE *fp);
-int yvex_quant_job_command(int argc, char **argv);
+int yvex_quant_job_command(int arg_count, char **args);
 void yvex_quant_job_help(FILE *fp);
-int yvex_quant_policy_command(int argc, char **argv);
+int yvex_quant_policy_command(int arg_count, char **args);
 void yvex_quant_policy_help(FILE *fp);
-int yvex_qtype_support_command(int argc, char **argv);
+int yvex_qtype_support_command(int arg_count, char **args);
 void yvex_qtype_support_help(FILE *fp);
-int yvex_run_command(int argc, char **argv);
+int yvex_run_command(int arg_count, char **args);
 void yvex_run_help(FILE *fp);
-int yvex_sample_command(int argc, char **argv);
+int yvex_sample_command(int arg_count, char **args);
 void yvex_sample_help(FILE *fp);
-int yvex_session_command(int argc, char **argv);
+int yvex_session_command(int arg_count, char **args);
 void yvex_session_help(FILE *fp);
-int yvex_source_manifest_command(int argc, char **argv);
+int yvex_source_manifest_command(int arg_count, char **args);
 void yvex_source_manifest_help(FILE *fp);
-int yvex_source_manifest_report_command(int argc, char **argv);
-int yvex_tensor_collection_command(int argc, char **argv);
+int yvex_source_manifest_report_command(int arg_count, char **args);
+int yvex_tensor_collection_command(int arg_count, char **args);
 void yvex_tensor_collection_help(FILE *fp);
-int yvex_tensor_map_command(int argc, char **argv);
+int yvex_tensor_map_command(int arg_count, char **args);
 void yvex_tensor_map_help(FILE *fp);
-int yvex_tokenize_command(int argc, char **argv);
+int yvex_tokenize_command(int arg_count, char **args);
 void yvex_tokenize_help(FILE *fp);
-int yvex_tokenizer_command(int argc, char **argv);
+int yvex_tokenizer_command(int arg_count, char **args);
 void yvex_tokenizer_help(FILE *fp);
-int yvex_tensors_command(int argc, char **argv);
+int yvex_tensors_command(int arg_count, char **args);
 void yvex_tensors_help(FILE *fp);
 
 typedef struct {
@@ -308,4 +308,4 @@ typedef enum {
 yvex_slash_command yvex_slash_parse(const char *line);
 const char *yvex_slash_command_name(yvex_slash_command command);
 
-#endif /* YVEX_CONSOLE_PRIVATE_H */
+#endif /* YVEX_OPERATOR_PRIVATE_H */

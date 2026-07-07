@@ -1,22 +1,18 @@
 /*
- * yvex_token_input_cli.c - token input CLI command adapter boundary.
+ * token_input CLI adapter slot.
  *
- * Owner:
- *   src/cli/commands
+ * Owner: src/cli/commands.
+ * Owns: command-file presence for CLI topology and future argv/help adapters.
+ * Does not own: domain structs, domain APIs, backend opens, runtime state, or rendering.
+ * Invariants: this file must not hide domain implementation under src/cli.
+ * Boundary: topology adapter slot; command symbols remain with their restored owner until a later real extraction moves behavior and tests together.
  *
- * Owns:
- *   command adapter file presence for CLI topology guards.
- *
- * Does not own:
- *   domain facts, output policy, runtime behavior, eval, benchmark, or capability claims.
- *
- * Invariants:
- *   command anchors do not change command behavior.
- *
- * Boundary:
- *   CLI topology anchor only; token input behavior stays in the existing owner.
+ * Purpose: keep the command adapter slot explicit after domain ownership restoration.
+ * Inputs: none.
+ * Effects: none.
+ * Failure: none.
  */
 
-void yvex_token_input_cli_boundary(void)
+void token_input_cli_adapter_file(void)
 {
 }

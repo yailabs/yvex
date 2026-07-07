@@ -26,7 +26,7 @@
 #include <string.h>
 #include "yvex_cli_out.h"
 
-#include "yvex_console_private.h"
+#include "yvex_operator_private.h"
 #include "yvex_render_private.h"
 #include "yvex/version.h"
 

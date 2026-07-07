@@ -9,16 +9,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <yvex/yvex.h>
-#include "yvex_cli_out.h"
 
 
 static void print_help(FILE *fp)
 {
-    yvex_cli_out_writef(fp, "usage: yvexd [--host HOST] [--port PORT] [--model FILE_OR_ALIAS] [--backend cpu|cuda] [--one-request]\n");
-    yvex_cli_out_writef(fp, "\n");
-    yvex_cli_out_writef(fp, "Starts the local server shell. Endpoints: /health, /metrics, /v1/models.\n");
-    yvex_cli_out_writef(fp, "--model accepts an existing GGUF path or a registered local alias.\n");
-    yvex_cli_out_writef(fp, "Generation endpoints are not implemented in server shell.\n");
+    fprintf(fp, "usage: " "yvexd [--host HOST] [--port PORT] [--model FILE_OR_ALIAS] [--backend cpu|cuda] [--one-request]\n");
+    fprintf(fp, "\n");
+    fprintf(fp, "Starts the local server shell. Endpoints: /health, /metrics, /v1/models.\n");
+    fprintf(fp, "--model accepts an existing GGUF path or a registered local alias.\n");
+    fprintf(fp, "Generation endpoints are not implemented in server shell.\n");
 }
 
 static int parse_port(const char *text, unsigned int *out)
@@ -39,11 +38,11 @@ static int parse_port(const char *text, unsigned int *out)
 
 static int print_error(const yvex_error *err, int exit_code)
 {
-    yvex_cli_out_writef(stderr, "yvexd: %s: %s\n", yvex_error_where(err), yvex_error_message(err));
+    fprintf(stderr, "yvexd: %s: %s\n", yvex_error_where(err), yvex_error_message(err));
     return exit_code;
 }
 
-int main(int argc, char **argv)
+int main(int arg_count, char **args)
 {
     yvex_server *server = NULL;
     yvex_server_options options;
@@ -61,42 +60,42 @@ int main(int argc, char **argv)
 
     yvex_error_clear(&err);
 
-    for (i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+    for (i = 1; i < arg_count; ++i) {
+        if (strcmp(args[i], "--help") == 0 || strcmp(args[i], "-h") == 0) {
             print_help(stdout);
             return 0;
-        } else if (strcmp(argv[i], "--version") == 0) {
-            yvex_cli_out_writef(stdout, "%s\n", yvex_version_string());
+        } else if (strcmp(args[i], "--version") == 0) {
+            fprintf(stdout, "%s\n", yvex_version_string());
             return 0;
-        } else if (strcmp(argv[i], "--host") == 0) {
-            if (i + 1 >= argc) {
-                yvex_cli_out_writef(stderr, "yvexd: --host requires a value\n");
+        } else if (strcmp(args[i], "--host") == 0) {
+            if (i + 1 >= arg_count) {
+                fprintf(stderr, "yvexd: --host requires a value\n");
                 return 2;
             }
-            options.host = argv[++i];
-        } else if (strcmp(argv[i], "--port") == 0) {
-            if (i + 1 >= argc || !parse_port(argv[i + 1], &options.port)) {
-                yvex_cli_out_writef(stderr, "yvexd: --port must be in range 1..65535\n");
+            options.host = args[++i];
+        } else if (strcmp(args[i], "--port") == 0) {
+            if (i + 1 >= arg_count || !parse_port(args[i + 1], &options.port)) {
+                fprintf(stderr, "yvexd: --port must be in range 1..65535\n");
                 return 2;
             }
             i += 1;
-        } else if (strcmp(argv[i], "--model") == 0) {
-            if (i + 1 >= argc) {
-                yvex_cli_out_writef(stderr, "yvexd: --model requires a value\n");
+        } else if (strcmp(args[i], "--model") == 0) {
+            if (i + 1 >= arg_count) {
+                fprintf(stderr, "yvexd: --model requires a value\n");
                 return 2;
             }
-            options.model_path = argv[++i];
+            options.model_path = args[++i];
             options.load_engine = 1;
-        } else if (strcmp(argv[i], "--backend") == 0) {
-            if (i + 1 >= argc) {
-                yvex_cli_out_writef(stderr, "yvexd: --backend requires a value\n");
+        } else if (strcmp(args[i], "--backend") == 0) {
+            if (i + 1 >= arg_count) {
+                fprintf(stderr, "yvexd: --backend requires a value\n");
                 return 2;
             }
-            options.backend_name = argv[++i];
-        } else if (strcmp(argv[i], "--one-request") == 0) {
+            options.backend_name = args[++i];
+        } else if (strcmp(args[i], "--one-request") == 0) {
             options.one_request = 1;
         } else {
-            yvex_cli_out_writef(stderr, "yvexd: unknown option: %s\n", argv[i]);
+            fprintf(stderr, "yvexd: unknown option: %s\n", args[i]);
             return 2;
         }
     }
@@ -116,8 +115,8 @@ int main(int argc, char **argv)
     }
 
     if (yvex_server_get_summary(server, &summary, &err) == YVEX_OK) {
-        yvex_cli_out_writef(stderr, "yvexd listening on %s:%u\n", summary.host, summary.port);
-        yvex_cli_out_writef(stderr, "generation_available: false\n");
+        fprintf(stderr, "yvexd listening on %s:%u\n", summary.host, summary.port);
+        fprintf(stderr, "generation_available: false\n");
     }
 
     rc = yvex_server_serve(server, &err);

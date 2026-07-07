@@ -21,7 +21,7 @@
  */
 #include <string.h>
 
-#include "yvex_console_private.h"
+#include "yvex_operator_private.h"
 #include "test.h"
 
 static int test_runtime_accept_and_reset(void)

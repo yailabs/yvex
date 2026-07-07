@@ -65,11 +65,11 @@ src/cli/yvex_cli.c
   top-level lookup, short help, argv dispatch only
 
 src/cli/commands/*.c
-  CLI command adapters, argv parsing, usage/help, and quarantined command
-  rendering during TOPOLOGY.CLI.PRINT.ALL.0
+  CLI command adapter slots only; no domain structs, domain APIs, backend
+  opens, runtime state, or artifact/source/model behavior
 
 src/cli/render/*.c
-  normal/table/audit/plumbing renderers for CLI-owned facts
+  normal/table/audit/trace renderers for CLI-owned output shapes
 
 src/cli/io/yvex_cli_out.c
 src/cli/io/yvex_cli_error.c
@@ -87,22 +87,29 @@ src/cli/schema/*.json
 src/cli/commands/yvex_model_target_cli.c
   model-target CLI grammar, usage/help, output rendering, and report commands
 
-src/cli/commands/yvexd_cli.c
+src/core/yvex_operator_private.h
+  private shared operator helper declarations and domain-owned command
+  entrypoint declarations
+
+src/core/yvex_operator_render_private.h
+  private shared operator text rendering helpers for existing domain reports
+
+src/daemon/yvexd.c
   daemon entrypoint
 
 src/server/yvex_server.c
   daemon/server behavior and provider boundary
 
-src/cli/commands/yvex_accounts_cli.c
+src/accounts/yvex_accounts.c
   local provider account boundary
 
-src/cli/commands/yvex_runtime_cli.c
+src/runtime/yvex_runtime.c
   runtime coordination
 
-src/cli/commands/yvex_graph_cli.c
+src/graph/yvex_graph.c
   graph construction, execution proofs, op probes
 
-src/cli/commands/yvex_backend_cli.c
+src/backend/yvex_backend.c
   backend abstraction and backend reports
 
 src/backend/cuda/
@@ -118,10 +125,10 @@ src/model/yvex_model.c
   dtype registry, model descriptors, tensor role names/classification, tensor
   table, materialized weights
 
-src/cli/commands/yvex_model_artifacts_cli.c
+src/model/yvex_model_artifacts.c
   artifact status, artifact gates, selected/full artifact reports
 
-src/cli/commands/yvex_artifact_cli.c
+src/artifact/yvex_artifact.c
   artifact IO, inspect, metadata, tensor command surfaces
 
 src/artifact/yvex_artifact_identity.c
@@ -133,10 +140,19 @@ src/artifact/yvex_artifact_integrity.c
 src/gguf/
   GGUF parsing, conversion, quant/intake internals
 
-src/cli/commands/yvex_source_cli.c
+src/gguf/tools.c
+  GGUF tooling command surfaces
+
+src/gguf/conversion.c
+  selected tensor conversion bridge and mapping helpers
+
+src/gguf/quant.c
+  quantization manifest and policy internals
+
+src/source/yvex_source.c
   source manifests, source pressure, source evidence, native header inventory
 
-src/cli/commands/yvex_tokenizer_cli.c
+src/tokenizer/yvex_tokenizer.c
   tokenizer metadata and tokenizer command surfaces
 
 src/tokenizer/yvex_token_input.c
@@ -145,19 +161,19 @@ src/tokenizer/yvex_token_input.c
 src/generation/yvex_prefill.c
   prefill state and prefill reports
 
-src/cli/commands/yvex_kv_cli.c
+src/generation/yvex_kv.c
   KV shape, ownership, append/read, lifecycle, capacity diagnostics
 
-src/cli/commands/yvex_decode_cli.c
+src/generation/yvex_decode.c
   decode step boundary over existing KV-backed transformer state
 
-src/cli/commands/yvex_logits_cli.c
+src/generation/yvex_logits.c
   logits buffer ownership and diagnostics
 
-src/cli/commands/yvex_sampling_cli.c
+src/generation/yvex_sampling.c
   sampling over logits
 
-src/cli/commands/yvex_generate_cli.c
+src/generation/yvex_generation.c
   generation loop integration
 
 src/eval/yvex_eval.c
@@ -166,13 +182,13 @@ src/eval/yvex_eval.c
 src/bench/yvex_bench.c
   benchmark harness after measured runtime paths exist
 
-src/cli/commands/yvex_metrics_cli.c
+src/metrics/yvex_metrics.c
   metrics and counters
 
-src/cli/commands/yvex_profile_cli.c
+src/metrics/yvex_profile.c
   profile output
 
-src/cli/commands/yvex_chat_cli.c
+src/runtime/yvex_chat.c
   diagnostic console and future runtime-backed REPL shell
 ```
 

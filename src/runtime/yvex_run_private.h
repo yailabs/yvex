@@ -34,8 +34,8 @@ int yvex_run_artifacts_prepare(yvex_run_artifacts *out,
                                const char *profile_out,
                                yvex_error *err);
 int yvex_run_artifacts_write_command(const yvex_run_artifacts *artifacts,
-                                     int argc,
-                                     char **argv,
+                                     int arg_count,
+                                     char **args,
                                      yvex_error *err);
 
 #endif /* YVEX_RUN_PRIVATE_H */
