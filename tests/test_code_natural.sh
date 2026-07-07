@@ -140,8 +140,13 @@ if test -n "$CATALOG_LOGIC_HITS"; then
   exit 1
 fi
 
-if grep -RIn '_render_boundary' src/cli/render; then
-  echo "fake renderer anchors are forbidden"
+PLACEHOLDER_RENDER_HITS="$(
+  git grep -nE 'renderer-only|const void \*report|present/not-bound|not-bound|_render_boundary' -- \
+    'src/cli/render/**' || true
+)"
+if test -n "$PLACEHOLDER_RENDER_HITS"; then
+  echo "$PLACEHOLDER_RENDER_HITS"
+  echo "placeholder renderers are forbidden"
   exit 1
 fi
 

@@ -215,23 +215,15 @@ if grep -RInE '#include .*src/cli|#include "yvex_(cli|console|render)' $DOMAIN_F
   exit 1
 fi
 
-if grep -RIn '_render_boundary' src/cli/render; then
-  echo "fake renderer anchors are forbidden"
+PLACEHOLDER_RENDER_HITS="$(
+  git grep -nE 'renderer-only|const void \*report|present/not-bound|not-bound|_render_boundary' -- \
+    'src/cli/render/**' || true
+)"
+if test -n "$PLACEHOLDER_RENDER_HITS"; then
+  echo "$PLACEHOLDER_RENDER_HITS"
+  echo "placeholder renderers are forbidden"
   exit 1
 fi
-
-grep -RIn 'yvex_graph_render_normal' src/cli/render/yvex_graph_render.c >/dev/null
-grep -RIn 'yvex_graph_render_table' src/cli/render/yvex_graph_render.c >/dev/null
-grep -RIn 'yvex_graph_render_audit' src/cli/render/yvex_graph_render.c >/dev/null
-grep -RIn 'yvex_source_render_normal' src/cli/render/yvex_source_render.c >/dev/null
-grep -RIn 'yvex_source_render_table' src/cli/render/yvex_source_render.c >/dev/null
-grep -RIn 'yvex_source_render_audit' src/cli/render/yvex_source_render.c >/dev/null
-grep -RIn 'yvex_backend_render_normal' src/cli/render/yvex_backend_render.c >/dev/null
-grep -RIn 'yvex_backend_render_table' src/cli/render/yvex_backend_render.c >/dev/null
-grep -RIn 'yvex_backend_render_audit' src/cli/render/yvex_backend_render.c >/dev/null
-grep -RIn 'yvex_generate_render_normal' src/cli/render/yvex_generate_render.c >/dev/null
-grep -RIn 'yvex_generate_render_audit' src/cli/render/yvex_generate_render.c >/dev/null
-grep -RIn 'yvex_generate_render_trace' src/cli/render/yvex_generate_render.c >/dev/null
 
 CORE_BLOCK="$(sed -n '/^CORE_SRCS :=/,/^$/p' Makefile)"
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/accounts/yvex_accounts.c' >/dev/null
