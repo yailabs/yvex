@@ -814,7 +814,6 @@ labels.
 | V010.TRACE.14 | planned | v0.1.0 trace gate. |
 
 #### TRACK.OPERATOR Rows
-
 | Wave | Status | Description |
 | --- | --- | --- |
 | SPINE.OUTPUT.UX.CONTRACT.0 | complete | Define CLI output UX contract and diagnostic demotion plan. |
@@ -827,6 +826,7 @@ labels.
 | TOPOLOGY.CELL.SOURCE.0 | complete | Extract source into domain/report/input/command/render/write cell. |
 | TOPOLOGY.CELL.GENERATION.0 | complete | Extract generate into domain/report/input/command/render/trace cell. |
 | TOPOLOGY.CELL.KV.0 | complete | Extract KV into domain/report/input/command/render cell. |
+| TOPOLOGY.CELL.SAMPLING.0 | complete | Extract sampling into domain/report/input/command/render cell. |
 | TOPOLOGY.CELL.CLOSURE.0 | planned | Close remaining mixed cells after each owner-specific extraction is proven. |
 | V010.PATHS.0 | complete | operator root layout report. |
 | V010.PATHS.1 | complete | source/artifact/reference/report/cache separation. |

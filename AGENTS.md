@@ -171,7 +171,10 @@ src/generation/yvex_logits.c
   logits buffer ownership and diagnostics
 
 src/generation/yvex_sampling.c
-  sampling over logits
+  bounded sampling over logits
+
+src/generation/yvex_sampling_report.c
+  sampling report construction and runtime/report orchestration
 
 src/generation/yvex_generation.c
   generation loop integration

@@ -85,5 +85,16 @@ test -f src/cli/render/yvex_kv_render.h
 test -f src/cli/catalog/kv_options.def
 test -f src/cli/catalog/kv_fields.def
 test -f src/cli/catalog/kv_boundaries.def
+test -f src/generation/yvex_sampling_report.c
+test -f src/generation/yvex_sampling_report.h
+test -f src/generation/yvex_sampling_private.h
+test -f src/cli/input/yvex_sampling_args.c
+test -f src/cli/input/yvex_sampling_args.h
+test -f src/cli/commands/yvex_sampling_cli.c
+test -f src/cli/render/yvex_sampling_render.c
+test -f src/cli/render/yvex_sampling_render.h
+test -f src/cli/catalog/sampling_options.def
+test -f src/cli/catalog/sampling_fields.def
+test -f src/cli/catalog/sampling_boundaries.def
 
 echo "test surface: ok"

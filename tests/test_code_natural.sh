@@ -253,6 +253,66 @@ if grep -nF 'void kv_cli_adapter_file(void)' src/cli/commands/yvex_kv_cli.c; the
   exit 1
 fi
 
+SAMPLING_DOMAIN_FILES='src/generation/yvex_sampling.c src/generation/yvex_sampling_report.c src/generation/yvex_sampling_report.h src/generation/yvex_sampling_private.h'
+
+SAMPLING_OUTPUT_HITS="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' $SAMPLING_DOMAIN_FILES || true
+)"
+if test -n "$SAMPLING_OUTPUT_HITS"; then
+  echo "$SAMPLING_OUTPUT_HITS"
+  echo "no sample direct output in generation domain"
+  exit 1
+fi
+
+SAMPLING_COMMAND_HITS="$(
+  grep -nE 'yvex_sample_command|yvex_sample_help|argc|argv|arg_count|args|usage: yvex|--model|--backend|--segment|--tokens|--strategy|--logits-count|--attach-kv|--layers|--context-length' $SAMPLING_DOMAIN_FILES || true
+)"
+if test -n "$SAMPLING_COMMAND_HITS"; then
+  echo "$SAMPLING_COMMAND_HITS"
+  echo "no sample command/help/argv parsing in generation domain"
+  exit 1
+fi
+
+SAMPLING_INCLUDE_HITS="$(
+  grep -nE '#include "yvex_(cli|operator|console)|#include <.*cli.*>' $SAMPLING_DOMAIN_FILES || true
+)"
+if test -n "$SAMPLING_INCLUDE_HITS"; then
+  echo "$SAMPLING_INCLUDE_HITS"
+  echo "no sample CLI/operator include in generation domain"
+  exit 1
+fi
+
+grep -nF 'const yvex_sampling_report *report' src/cli/render/yvex_sampling_render.c >/dev/null
+grep -nF 'yvex_sampling_render_normal' src/cli/render/yvex_sampling_render.c >/dev/null
+grep -nF 'yvex_sampling_render_audit' src/cli/render/yvex_sampling_render.c >/dev/null
+grep -nF 'yvex_sampling_render_help' src/cli/render/yvex_sampling_render.c >/dev/null
+grep -nF 'yvex_sampling_args_parse' src/cli/commands/yvex_sampling_cli.c >/dev/null
+grep -nF 'yvex_sampling_report_build' src/cli/commands/yvex_sampling_cli.c >/dev/null
+grep -nF 'yvex_sampling_render' src/cli/commands/yvex_sampling_cli.c >/dev/null
+
+SAMPLING_RENDER_STDIO_HITS="$(
+  grep -nE '\b(printf|fprintf|vfprintf|fputs|fputc|puts|putchar|perror)\s*\(' src/cli/render/yvex_sampling_render.c src/cli/render/yvex_sampling_render.h || true
+)"
+if test -n "$SAMPLING_RENDER_STDIO_HITS"; then
+  echo "$SAMPLING_RENDER_STDIO_HITS"
+  echo "no sample renderer direct stdio"
+  exit 1
+fi
+
+SAMPLING_RENDER_PLACEHOLDER_HITS="$(
+  grep -nE 'const void \*report|not-bound|renderer-only|_render_boundary|boundary anchor' src/cli/render/yvex_sampling_render.c src/cli/render/yvex_sampling_render.h || true
+)"
+if test -n "$SAMPLING_RENDER_PLACEHOLDER_HITS"; then
+  echo "$SAMPLING_RENDER_PLACEHOLDER_HITS"
+  echo "no sample placeholder renderer"
+  exit 1
+fi
+
+if grep -nF 'void sampling_cli_adapter_file(void)' src/cli/commands/yvex_sampling_cli.c; then
+  echo "no empty sample command adapter"
+  exit 1
+fi
+
 if grep -RInE '#include .*src/cli|#include "yvex_(cli|console|render)' src/source; then
   echo "source cell must not include CLI headers"
   exit 1

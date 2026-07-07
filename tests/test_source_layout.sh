@@ -98,7 +98,17 @@ test -f src/cli/commands/yvex_decode_cli.c
 test -f src/generation/yvex_logits.c
 test -f src/cli/commands/yvex_logits_cli.c
 test -f src/generation/yvex_sampling.c
+test -f src/generation/yvex_sampling_report.c
+test -f src/generation/yvex_sampling_report.h
+test -f src/generation/yvex_sampling_private.h
+test -f src/cli/input/yvex_sampling_args.c
+test -f src/cli/input/yvex_sampling_args.h
 test -f src/cli/commands/yvex_sampling_cli.c
+test -f src/cli/render/yvex_sampling_render.c
+test -f src/cli/render/yvex_sampling_render.h
+test -f src/cli/catalog/sampling_options.def
+test -f src/cli/catalog/sampling_fields.def
+test -f src/cli/catalog/sampling_boundaries.def
 test -f src/generation/yvex_generation.c
 test -f src/generation/yvex_generation_private.h
 test -f src/generation/yvex_generation_report.c
@@ -373,6 +383,86 @@ BAD_KV_COMMAND_DOMAIN="$(
 if test -n "$BAD_KV_COMMAND_DOMAIN"; then
   echo "$BAD_KV_COMMAND_DOMAIN"
   echo "KV command adapter must dispatch only"
+  exit 1
+fi
+
+SAMPLING_DOMAIN_FILES='src/generation/yvex_sampling.c src/generation/yvex_sampling_report.c src/generation/yvex_sampling_report.h src/generation/yvex_sampling_private.h'
+
+BAD_SAMPLING_OUTPUT="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' $SAMPLING_DOMAIN_FILES || true
+)"
+if test -n "$BAD_SAMPLING_OUTPUT"; then
+  echo "$BAD_SAMPLING_OUTPUT"
+  echo "sampling domain/report must not write operator output"
+  exit 1
+fi
+
+BAD_SAMPLING_COMMAND="$(
+  grep -nE 'yvex_sample_command|yvex_sample_help|argc|argv|arg_count|args|usage: yvex|--model|--backend|--segment|--tokens|--strategy|--logits-count|--attach-kv|--layers|--context-length' $SAMPLING_DOMAIN_FILES || true
+)"
+if test -n "$BAD_SAMPLING_COMMAND"; then
+  echo "$BAD_SAMPLING_COMMAND"
+  echo "sample command/help/parser code must not live in generation domain"
+  exit 1
+fi
+
+BAD_SAMPLING_CLI_INCLUDE="$(
+  grep -nE '#include "yvex_(cli|operator|console)|#include <.*cli.*>' $SAMPLING_DOMAIN_FILES || true
+)"
+if test -n "$BAD_SAMPLING_CLI_INCLUDE"; then
+  echo "$BAD_SAMPLING_CLI_INCLUDE"
+  echo "sampling domain/report must not include CLI/operator headers"
+  exit 1
+fi
+
+grep -nF 'const yvex_sampling_report *report' src/cli/render/yvex_sampling_render.c >/dev/null
+grep -nF 'yvex_sampling_render_normal' src/cli/render/yvex_sampling_render.c >/dev/null
+grep -nF 'yvex_sampling_render_audit' src/cli/render/yvex_sampling_render.c >/dev/null
+grep -nF 'yvex_sampling_render_help' src/cli/render/yvex_sampling_render.c >/dev/null
+
+BAD_SAMPLING_RENDER_STDIO="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' src/cli/render/yvex_sampling_render.c src/cli/render/yvex_sampling_render.h || true
+)"
+if test -n "$BAD_SAMPLING_RENDER_STDIO"; then
+  echo "$BAD_SAMPLING_RENDER_STDIO"
+  echo "sampling renderer must use src/cli/io writers"
+  exit 1
+fi
+
+BAD_SAMPLING_RENDER_PLACEHOLDER="$(
+  grep -nE 'const void \*report|not-bound|renderer-only|_render_boundary|boundary anchor' src/cli/render/yvex_sampling_render.c src/cli/render/yvex_sampling_render.h || true
+)"
+if test -n "$BAD_SAMPLING_RENDER_PLACEHOLDER"; then
+  echo "$BAD_SAMPLING_RENDER_PLACEHOLDER"
+  echo "sampling renderer must be real and typed"
+  exit 1
+fi
+
+sampling_adapter_lines="$(wc -l < src/cli/commands/yvex_sampling_cli.c | tr -d ' ')"
+if test "$sampling_adapter_lines" -gt 350; then
+  echo "src/cli/commands/yvex_sampling_cli.c has $sampling_adapter_lines lines; adapter must stay <= 350"
+  exit 1
+fi
+
+grep -nF 'yvex_sampling_args_parse' src/cli/commands/yvex_sampling_cli.c >/dev/null
+grep -nF 'yvex_sampling_report_build' src/cli/commands/yvex_sampling_cli.c >/dev/null
+grep -nF 'yvex_sampling_render' src/cli/commands/yvex_sampling_cli.c >/dev/null
+
+BAD_SAMPLING_INPUT_EXEC="$(
+  grep -nE 'yvex_model_ref_resolve|enforce_registered_identity|open_model_context|preflight_graph_guard|yvex_engine_open|yvex_engine_sample_token|yvex_sampling_report_build|yvex_sampling_render|fprintf|printf' src/cli/input/yvex_sampling_args.c src/cli/input/yvex_sampling_args.h || true
+)"
+if test -n "$BAD_SAMPLING_INPUT_EXEC"; then
+  echo "$BAD_SAMPLING_INPUT_EXEC"
+  echo "sampling input parser must parse only"
+  exit 1
+fi
+
+BAD_SAMPLING_COMMAND_DOMAIN="$(
+  grep -nE 'yvex_model_ref_resolve|enforce_registered_identity|preflight_graph_guard|yvex_engine_open|yvex_engine_sample_token|yvex_token_input_parse|fprintf|printf' src/cli/commands/yvex_sampling_cli.c || true
+)"
+if test -n "$BAD_SAMPLING_COMMAND_DOMAIN"; then
+  echo "$BAD_SAMPLING_COMMAND_DOMAIN"
+  echo "sampling command adapter must dispatch only"
   exit 1
 fi
 
