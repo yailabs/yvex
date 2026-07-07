@@ -63,5 +63,16 @@ test -f src/cli/render/yvex_source_render.c
 test -f src/cli/render/yvex_source_render.h
 test -f src/io/yvex_json_writer.c
 test -f src/io/yvex_json_writer.h
+test -f src/generation/yvex_generation_report.c
+test -f src/generation/yvex_generation_report.h
+test -f src/generation/yvex_generation_trace.c
+test -f src/generation/yvex_generation_trace.h
+test -f src/generation/yvex_generation_private.h
+test -f src/cli/input/yvex_generate_args.c
+test -f src/cli/input/yvex_generate_args.h
+test -f src/cli/render/yvex_generate_render.c
+test -f src/cli/render/yvex_generate_render.h
+test -f src/cli/render/yvex_generate_trace_render.c
+test -f src/cli/render/yvex_generate_trace_render.h
 
 echo "test surface: ok"

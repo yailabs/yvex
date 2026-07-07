@@ -157,6 +157,38 @@ if grep -nE '\b(printf|fprintf|vfprintf|fputs|fputc|puts|putchar|perror)\s*\(' s
   exit 1
 fi
 
+GENERATION_DOMAIN_FILES='src/generation/yvex_generation.c src/generation/yvex_generation_report.c src/generation/yvex_generation_trace.c src/generation/yvex_generation_private.h src/generation/yvex_generation_report.h src/generation/yvex_generation_trace.h'
+
+GENERATION_OUTPUT_HITS="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' $GENERATION_DOMAIN_FILES || true
+)"
+if test -n "$GENERATION_OUTPUT_HITS"; then
+  echo "$GENERATION_OUTPUT_HITS"
+  echo "generation domain must not print or render"
+  exit 1
+fi
+
+GENERATION_CLI_RESIDUE="$(
+  grep -nE '\bargc\b|\bargv\b|usage: yvex|--output|--audit|--json|yvex_generate_command|yvex_generate_help|generate_parse_|generate_print_|generate_emit_' $GENERATION_DOMAIN_FILES || true
+)"
+if test -n "$GENERATION_CLI_RESIDUE"; then
+  echo "$GENERATION_CLI_RESIDUE"
+  echo "generation domain must not own CLI parsing, help, command, or render functions"
+  exit 1
+fi
+
+grep -nF 'const yvex_generation_report *report' src/cli/render/yvex_generate_render.c >/dev/null
+grep -nF 'const yvex_generation_report *report' src/cli/render/yvex_generate_trace_render.c >/dev/null
+grep -nF 'yvex_generate_render_normal' src/cli/render/yvex_generate_render.c >/dev/null
+grep -nF 'yvex_generate_render_audit' src/cli/render/yvex_generate_render.c >/dev/null
+grep -nF 'yvex_generate_render_trace' src/cli/render/yvex_generate_trace_render.c >/dev/null
+grep -nF 'yvex_cli_out_writef' src/cli/render/yvex_generate_render.c >/dev/null
+grep -nF 'yvex_cli_out_writef' src/cli/render/yvex_generate_trace_render.c >/dev/null
+if grep -nE '\b(printf|fprintf|vfprintf|fputs|fputc|puts|putchar|perror)\s*\(' src/cli/render/yvex_generate_render.c src/cli/render/yvex_generate_trace_render.c; then
+  echo "generate renderers must use src/cli/io writers"
+  exit 1
+fi
+
 if grep -RInE '#include .*src/cli|#include "yvex_(cli|console|render)' src/source; then
   echo "source cell must not include CLI headers"
   exit 1

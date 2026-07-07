@@ -29,6 +29,8 @@ int yvex_cli_out_vwritef(FILE *fp, const char *fmt, va_list ap);
 int yvex_cli_out_puts(FILE *fp, const char *text);
 int yvex_cli_out_fputs(const char *text, FILE *fp);
 int yvex_cli_out_char(FILE *fp, int ch);
+FILE *yvex_cli_out_stdout(void);
+FILE *yvex_cli_out_stderr(void);
 
 void yvex_cli_out_line(FILE *fp, const char *text);
 void yvex_cli_out_blank(FILE *fp);

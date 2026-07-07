@@ -294,6 +294,13 @@ argv parsing.
 
 Domain modules may build facts and return report structs.
 
+A closed cell must not leave its command/help/parser/render/output code in the
+domain module.
+
+Generation cell closure specifically forbids yvex_generate_command,
+yvex_generate_help, argv parsing, usage text, direct stdio, and CLI/operator
+includes under src/generation.
+
 CLI command adapters parse argv and call domain APIs.
 
 CLI renderers serialize facts into normal/table/audit/plumbing output.

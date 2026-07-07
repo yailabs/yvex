@@ -90,7 +90,20 @@ test -f src/cli/commands/yvex_logits_cli.c
 test -f src/generation/yvex_sampling.c
 test -f src/cli/commands/yvex_sampling_cli.c
 test -f src/generation/yvex_generation.c
+test -f src/generation/yvex_generation_private.h
+test -f src/generation/yvex_generation_report.c
+test -f src/generation/yvex_generation_report.h
+test -f src/generation/yvex_generation_trace.c
+test -f src/generation/yvex_generation_trace.h
 test -f src/cli/commands/yvex_generate_cli.c
+test -f src/cli/input/yvex_generate_args.c
+test -f src/cli/input/yvex_generate_args.h
+test -f src/cli/render/yvex_generate_render.c
+test -f src/cli/render/yvex_generate_render.h
+test -f src/cli/render/yvex_generate_trace_render.c
+test -f src/cli/render/yvex_generate_trace_render.h
+test -f src/cli/catalog/generate_fields.def
+test -f src/cli/catalog/generate_trace_fields.def
 test -f src/eval/yvex_eval.c
 test -f src/bench/yvex_bench.c
 test -f src/metrics/yvex_metrics.c
@@ -226,6 +239,54 @@ fi
 
 if grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' src/cli/render/yvex_source_render.c; then
   echo "source renderer must use src/cli/io writers"
+  exit 1
+fi
+
+GENERATION_DOMAIN_FILES='src/generation/yvex_generation.c src/generation/yvex_generation_report.c src/generation/yvex_generation_trace.c src/generation/yvex_generation_private.h src/generation/yvex_generation_report.h src/generation/yvex_generation_trace.h'
+
+GENERATION_OUTPUT_HITS="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' $GENERATION_DOMAIN_FILES || true
+)"
+if test -n "$GENERATION_OUTPUT_HITS"; then
+  echo "$GENERATION_OUTPUT_HITS"
+  echo "generation domain must not print or render"
+  exit 1
+fi
+
+GENERATION_CLI_RESIDUE="$(
+  grep -nE '\bargc\b|\bargv\b|usage: yvex|--output|--audit|--json|yvex_generate_command|yvex_generate_help|generate_parse_|generate_print_|generate_emit_' $GENERATION_DOMAIN_FILES || true
+)"
+if test -n "$GENERATION_CLI_RESIDUE"; then
+  echo "$GENERATION_CLI_RESIDUE"
+  echo "generation domain must not own CLI parsing, help, command, or render functions"
+  exit 1
+fi
+
+if grep -nE '#include .*src/cli|#include "yvex_(cli|operator|console|render)' $GENERATION_DOMAIN_FILES; then
+  echo "generation domain must not include CLI/operator render headers"
+  exit 1
+fi
+
+grep -nF 'const yvex_generation_report *report' src/cli/render/yvex_generate_render.c >/dev/null
+grep -nF 'const yvex_generation_report *report' src/cli/render/yvex_generate_trace_render.c >/dev/null
+grep -nF 'yvex_generate_render_normal' src/cli/render/yvex_generate_render.c >/dev/null
+grep -nF 'yvex_generate_render_audit' src/cli/render/yvex_generate_render.c >/dev/null
+grep -nF 'yvex_generate_render_trace' src/cli/render/yvex_generate_trace_render.c >/dev/null
+grep -nF 'yvex_cli_out_writef' src/cli/render/yvex_generate_render.c >/dev/null
+grep -nF 'yvex_cli_out_writef' src/cli/render/yvex_generate_trace_render.c >/dev/null
+if grep -nE '\b(printf|fprintf|vfprintf|fputs|fputc|puts|putchar|perror)\s*\(' src/cli/render/yvex_generate_render.c src/cli/render/yvex_generate_trace_render.c; then
+  echo "generate renderers must use src/cli/io writers"
+  exit 1
+fi
+
+if grep -nE '\b(yvex_engine_open|yvex_backend_open|yvex_engine_sample_token|yvex_token_input_parse_explicit)\b' src/cli/commands/yvex_generate_cli.c; then
+  echo "generate command adapter must not open runtime/domain state directly"
+  exit 1
+fi
+
+generate_adapter_lines="$(wc -l < src/cli/commands/yvex_generate_cli.c | tr -d ' ')"
+if test "$generate_adapter_lines" -gt 350; then
+  echo "generate command adapter too large: $generate_adapter_lines"
   exit 1
 fi
 

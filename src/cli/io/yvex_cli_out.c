@@ -51,6 +51,16 @@ int yvex_cli_out_char(FILE *fp, int ch)
     return fputc(ch, fp ? fp : stdout);
 }
 
+FILE *yvex_cli_out_stdout(void)
+{
+    return stdout;
+}
+
+FILE *yvex_cli_out_stderr(void)
+{
+    return stderr;
+}
+
 void yvex_cli_out_line(FILE *fp, const char *text)
 {
     (void)yvex_cli_out_puts(fp, text);

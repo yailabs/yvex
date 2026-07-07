@@ -825,6 +825,7 @@ labels.
 | TOPOLOGY.CLI.PRINT.ALL.0 | complete | Move production operator printing, help, usage, renderers, and CLI metadata out of domain modules into src/cli. |
 | TOPOLOGY.DOMAIN.RESTORE.0 | complete | Restore domain implementation files after invalid CLI command-file displacement. |
 | TOPOLOGY.CELL.SOURCE.0 | complete | Extract source into domain/report/input/command/render/write cell. |
+| TOPOLOGY.CELL.GENERATION.0 | complete | Extract generate into domain/report/input/command/render/trace cell. |
 | V010.PATHS.0 | complete | operator root layout report. |
 | V010.PATHS.1 | complete | source/artifact/reference/report/cache separation. |
 | V010.PATHS.2 | complete | registry path layout. |
