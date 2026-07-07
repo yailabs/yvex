@@ -37,9 +37,31 @@ fi
 test -d tests/unit
 test -d tests/unit/cuda
 test -d src/cli/commands
+test -d src/cli/input
 test -d src/cli/render
 test -d src/cli/io
+test -d src/io
 test -d src/cli/catalog
 test -d src/cli/schema
+
+test -f src/source/yvex_source_private.h
+test -f src/source/yvex_source_manifest.c
+test -f src/source/yvex_source_manifest.h
+test -f src/source/yvex_source_scan.c
+test -f src/source/yvex_source_scan.h
+test -f src/source/yvex_native_weights.c
+test -f src/source/yvex_native_weights.h
+test -f src/source/yvex_safetensors_header.c
+test -f src/source/yvex_safetensors_header.h
+test -f src/source/yvex_source_report.c
+test -f src/source/yvex_source_report.h
+test -f src/source/yvex_source_write.c
+test -f src/source/yvex_source_write.h
+test -f src/cli/input/yvex_source_args.c
+test -f src/cli/input/yvex_source_args.h
+test -f src/cli/render/yvex_source_render.c
+test -f src/cli/render/yvex_source_render.h
+test -f src/io/yvex_json_writer.c
+test -f src/io/yvex_json_writer.h
 
 echo "test surface: ok"

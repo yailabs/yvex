@@ -18,10 +18,12 @@ test -d src
 test -d src/app
 test -d src/cli
 test -d src/cli/commands
+test -d src/cli/input
 test -d src/cli/render
 test -d src/cli/io
 test -d src/cli/catalog
 test -d src/cli/schema
+test -d src/io
 test -d src/accounts
 test -d src/core
 test -d src/artifact
@@ -58,7 +60,26 @@ test -f src/model/yvex_model_artifacts.c
 test -f src/runtime/yvex_chat.c
 test -f src/cli/commands/yvex_model_artifacts_cli.c
 test -f src/source/yvex_source.c
+test -f src/source/yvex_source_private.h
+test -f src/source/yvex_source_manifest.c
+test -f src/source/yvex_source_manifest.h
+test -f src/source/yvex_source_scan.c
+test -f src/source/yvex_source_scan.h
+test -f src/source/yvex_native_weights.c
+test -f src/source/yvex_native_weights.h
+test -f src/source/yvex_safetensors_header.c
+test -f src/source/yvex_safetensors_header.h
+test -f src/source/yvex_source_report.c
+test -f src/source/yvex_source_report.h
+test -f src/source/yvex_source_write.c
+test -f src/source/yvex_source_write.h
 test -f src/cli/commands/yvex_source_cli.c
+test -f src/cli/input/yvex_source_args.c
+test -f src/cli/input/yvex_source_args.h
+test -f src/cli/render/yvex_source_render.c
+test -f src/cli/render/yvex_source_render.h
+test -f src/io/yvex_json_writer.c
+test -f src/io/yvex_json_writer.h
 test -f src/generation/yvex_prefill.c
 test -f src/generation/yvex_kv.c
 test -f src/cli/commands/yvex_kv_cli.c
@@ -154,6 +175,60 @@ fi
 
 grep -nF 'usage: yvex model-target' src/cli/commands/yvex_model_target_cli.c >/dev/null
 
+grep -nF 'const yvex_source_report *report' src/cli/render/yvex_source_render.c >/dev/null
+grep -nF 'yvex_source_render_normal' src/cli/render/yvex_source_render.c >/dev/null
+grep -nF 'yvex_cli_out_writef' src/cli/render/yvex_source_render.c >/dev/null
+
+source_adapter_lines="$(wc -l < src/cli/commands/yvex_source_cli.c | tr -d ' ')"
+if test "$source_adapter_lines" -gt 350; then
+  echo "source command adapter too large: $source_adapter_lines"
+  exit 1
+fi
+
+if grep -nE 'command_source_manifest|yvex_source_manifest_(command|help|report_command)|source-manifest requires|unknown source-manifest|source manifest: written' src/gguf/tools.c; then
+  echo "source-manifest command/help/report dispatch must not live in src/gguf/tools.c"
+  exit 1
+fi
+
+SOURCE_OUTPUT_HITS="$(
+  grep -RInE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' src/source |
+  grep -vE '^src/source/yvex_source_write\.c:' || true
+)"
+if test -n "$SOURCE_OUTPUT_HITS"; then
+  echo "$SOURCE_OUTPUT_HITS"
+  echo "source domain output must be isolated to src/source/yvex_source_write.c"
+  exit 1
+fi
+
+if grep -nE '\bstdout\b|\bstderr\b' src/source/yvex_source_write.c src/source/yvex_source_write.h; then
+  echo "source manifest writer must not choose stdout/stderr"
+  exit 1
+fi
+
+if grep -nE '\b(stdout|stderr)\b' src/io/yvex_json_writer.c src/io/yvex_json_writer.h; then
+  echo "generic JSON writer must not choose stdout/stderr"
+  exit 1
+fi
+
+SOURCE_CLI_RESIDUE="$(
+  grep -RInE '\bargc\b|\bargv\b|strcmp\(argv\[|usage: yvex|--family|--release|--output|--audit|--json|--include-|_command\(|_help\(|_usage\(' src/source || true
+)"
+if test -n "$SOURCE_CLI_RESIDUE"; then
+  echo "$SOURCE_CLI_RESIDUE"
+  echo "source cell must not own CLI parsing, help, usage, or command adapters"
+  exit 1
+fi
+
+if grep -RInE '#include .*src/cli|#include "yvex_(cli|operator|console|render)' src/source; then
+  echo "source cell must not include CLI/operator render headers"
+  exit 1
+fi
+
+if grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' src/cli/render/yvex_source_render.c; then
+  echo "source renderer must use src/cli/io writers"
+  exit 1
+fi
+
 DOMAIN_FILES='src/accounts src/artifact src/backend src/core src/daemon src/gguf src/graph src/metrics src/model src/runtime src/source src/tokenizer src/generation'
 
 PRINT_HITS="$(
@@ -237,6 +312,7 @@ if printf '%s\n' "$CORE_BLOCK" | grep -F 'src/cli/'; then
   exit 1
 fi
 grep -nF 'CLI_SRCS :=' Makefile >/dev/null
+grep -nF 'CLI_INPUT_SRCS :=' Makefile >/dev/null
 grep -nF 'src/daemon/yvexd.c' Makefile >/dev/null
 
 CATALOG_HITS="$(

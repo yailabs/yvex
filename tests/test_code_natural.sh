@@ -150,6 +150,18 @@ if test -n "$PLACEHOLDER_RENDER_HITS"; then
   exit 1
 fi
 
+grep -nF 'const yvex_source_report *report' src/cli/render/yvex_source_render.c >/dev/null
+grep -nF 'yvex_cli_out_writef' src/cli/render/yvex_source_render.c >/dev/null
+if grep -nE '\b(printf|fprintf|vfprintf|fputs|fputc|puts|putchar|perror)\s*\(' src/cli/render/yvex_source_render.c; then
+  echo "source renderer must use src/cli/io writers"
+  exit 1
+fi
+
+if grep -RInE '#include .*src/cli|#include "yvex_(cli|console|render)' src/source; then
+  echo "source cell must not include CLI headers"
+  exit 1
+fi
+
 COMMAND_STRUCT_HITS="$(
   grep -RInE '^(struct yvex_graph|struct yvex_plan|struct yvex_memory_plan|struct yvex_native_weight_table|struct yvex_backend|struct yvex_engine|struct yvex_kv|struct yvex_logits|struct yvex_sampling)' src/cli/commands || true
 )"
