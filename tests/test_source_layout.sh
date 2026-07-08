@@ -632,11 +632,36 @@ if test -n "$BAD_MODEL_TARGET_BOUNDARY_SHELL"; then
 fi
 
 BAD_MODEL_TARGET_TEXT_COMPAT="$(
-  grep -nE 'model_target_capture_out|model_target_capture_err|captured report text|raw_output|report_text' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+  grep -nE 'model_target_capture_out|model_target_capture_err|captured report text|raw_output|report_text|captured_text|line_buffer|model_target_sink_out|model_target_sink_err' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
 )"
 if test -n "$BAD_MODEL_TARGET_TEXT_COMPAT"; then
   echo "$BAD_MODEL_TARGET_TEXT_COMPAT"
   echo "model-target report layer must not use captured-output compatibility names"
+  exit 1
+fi
+
+if test -f src/model/target/yvex_model_target_internal.c; then
+  model_target_internal_lines="$(wc -l < src/model/target/yvex_model_target_internal.c | tr -d ' ')"
+  if test "$model_target_internal_lines" -gt 300; then
+    echo "src/model/target/yvex_model_target_internal.c has $model_target_internal_lines lines; internal backend must be dissolved"
+    exit 1
+  fi
+  BAD_MODEL_TARGET_INTERNAL="$(
+    grep -nE 'model_target_sink|model_target_out_writef|model_target_stream_write|fwrite|fprintf|printf|model_target_classes|model_targets|model_class_profile_specs|tensor_collection_profile|tensor_naming_profile|qtype_policy|role_support|safetensors|native_weight' src/model/target/yvex_model_target_internal.c || true
+  )"
+  if test -n "$BAD_MODEL_TARGET_INTERNAL"; then
+    echo "$BAD_MODEL_TARGET_INTERNAL"
+    echo "model-target internal backend must not own report facts or output helpers"
+    exit 1
+  fi
+fi
+
+BAD_MODEL_TARGET_INTERNAL_DELEGATION="$(
+  grep -nE 'yvex_model_target_internal_report|yvex_model_target_internal_.*build|return yvex_model_target_internal_|internal backend|compatibility backend' src/model/target/*.c src/model/target/*.h || true
+)"
+if test -n "$BAD_MODEL_TARGET_INTERNAL_DELEGATION"; then
+  echo "$BAD_MODEL_TARGET_INTERNAL_DELEGATION"
+  echo "model-target modules must not delegate to an internal backend"
   exit 1
 fi
 
@@ -672,7 +697,7 @@ grep -nF 'yvex_model_target_render' src/cli/commands/yvex_model_target_cli.c >/d
 grep -nE 'yvex_model_target_.*build|yvex_.*_report_build' src/cli/commands/yvex_model_target_cli.c >/dev/null
 
 BAD_MODEL_TARGET_OUTPUT="$(
-  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' src/model/target/*.c src/model/target/*.h |
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror|fwrite)\s*\(' src/model/target/*.c src/model/target/*.h |
     grep -vE '^src/model/target/yvex_model_target_sidecar_write\.c:' || true
 )"
 if test -n "$BAD_MODEL_TARGET_OUTPUT"; then

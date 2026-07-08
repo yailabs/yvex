@@ -398,11 +398,36 @@ if test -n "$MODEL_TARGET_COORDINATOR_HITS"; then
 fi
 
 MODEL_TARGET_TEXT_COMPAT_HITS="$(
-  grep -nE 'model_target_capture_out|model_target_capture_err|captured report text|raw_output|report_text' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+  grep -nE 'model_target_capture_out|model_target_capture_err|captured report text|raw_output|report_text|captured_text|line_buffer|model_target_sink_out|model_target_sink_err' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
 )"
 if test -n "$MODEL_TARGET_TEXT_COMPAT_HITS"; then
   echo "$MODEL_TARGET_TEXT_COMPAT_HITS"
   echo "no captured output buffers in model-target report layer"
+  exit 1
+fi
+
+if test -f src/model/target/yvex_model_target_internal.c; then
+  model_target_internal_lines="$(wc -l < src/model/target/yvex_model_target_internal.c | tr -d ' ')"
+  if test "$model_target_internal_lines" -gt 300; then
+    echo "no model-target internal backend over 300 lines"
+    exit 1
+  fi
+  MODEL_TARGET_INTERNAL_HITS="$(
+    grep -nE 'model_target_sink|model_target_out_writef|model_target_stream_write|fwrite|fprintf|printf|model_target_classes|model_targets|model_class_profile_specs|tensor_collection_profile|tensor_naming_profile|qtype_policy|role_support|safetensors|native_weight' src/model/target/yvex_model_target_internal.c || true
+  )"
+  if test -n "$MODEL_TARGET_INTERNAL_HITS"; then
+    echo "$MODEL_TARGET_INTERNAL_HITS"
+    echo "no model-target internal backend report facts or output helpers"
+    exit 1
+  fi
+fi
+
+MODEL_TARGET_INTERNAL_DELEGATION_HITS="$(
+  grep -nE 'yvex_model_target_internal_report|yvex_model_target_internal_.*build|return yvex_model_target_internal_|internal backend|compatibility backend' src/model/target/*.c src/model/target/*.h || true
+)"
+if test -n "$MODEL_TARGET_INTERNAL_DELEGATION_HITS"; then
+  echo "$MODEL_TARGET_INTERNAL_DELEGATION_HITS"
+  echo "no model-target internal backend delegation"
   exit 1
 fi
 
@@ -447,7 +472,7 @@ grep -nF 'yvex_model_target_report_build' src/cli/commands/yvex_model_target_cli
 grep -nF 'yvex_model_target_render' src/cli/commands/yvex_model_target_cli.c >/dev/null
 
 MODEL_TARGET_DOMAIN_OUTPUT_HITS="$(
-  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' src/model/target/*.c src/model/target/*.h |
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror|fwrite)\s*\(' src/model/target/*.c src/model/target/*.h |
     grep -vE '^src/model/target/yvex_model_target_sidecar_write\.c:' || true
 )"
 if test -n "$MODEL_TARGET_DOMAIN_OUTPUT_HITS"; then

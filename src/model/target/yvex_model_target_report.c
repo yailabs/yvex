@@ -86,5 +86,5 @@ void yvex_model_target_report_close(yvex_model_target_report *report)
     if (!report) {
         return;
     }
-    yvex_model_target_internal_report_close(report);
+    yvex_model_target_runner_report_close(report);
 }

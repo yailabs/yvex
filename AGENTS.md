@@ -157,6 +157,12 @@ report-specific ownership must live in the corresponding src/model/target
 module. Boundary typedef shells and captured-output report buffers are
 forbidden.
 
+MODEL_TARGET.2 closure forbids yvex_model_target_internal.c as a compatibility
+backend. Specialized model-target modules must own their own report
+construction. Shared utilities may exist only as small pure helper modules
+without report-specific logic, output buffers, sink streams, sidecar writing, or
+FILE-based output.
+
 src/artifact/yvex_artifact.c
   artifact IO, inspect, metadata, tensor command surfaces
 

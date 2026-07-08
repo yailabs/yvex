@@ -56,7 +56,7 @@ int yvex_qtype_role_support_report_build(
         return qtype_role_support_reject(err);
     }
     qtype_role_support_prepare_report(report);
-    return yvex_model_target_internal_report_build(request, report, err);
+    return yvex_model_target_runner_report_build(request, report, err);
 }
 
 /*

@@ -80,5 +80,5 @@ int yvex_model_target_decision_report_build(
         return model_target_decision_reject(err);
     }
     model_target_decision_prepare_report(report);
-    return yvex_model_target_internal_report_build(request, report, err);
+    return yvex_model_target_runner_report_build(request, report, err);
 }

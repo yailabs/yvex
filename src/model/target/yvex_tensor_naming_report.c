@@ -94,7 +94,7 @@ int yvex_tensor_naming_report_build(
         return tensor_naming_reject(err);
     }
     tensor_naming_prepare_report(report);
-    return yvex_model_target_internal_report_build(request, report, err);
+    return yvex_model_target_runner_report_build(request, report, err);
 }
 
 int yvex_model_target_tensor_route_report_build(

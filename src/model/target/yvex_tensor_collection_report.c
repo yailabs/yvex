@@ -57,7 +57,7 @@ int yvex_tensor_collection_report_build(
         return tensor_collection_reject(err);
     }
     tensor_collection_prepare_report(report);
-    return yvex_model_target_internal_report_build(request, report, err);
+    return yvex_model_target_runner_report_build(request, report, err);
 }
 
 /*

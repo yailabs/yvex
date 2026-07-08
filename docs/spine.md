@@ -8,7 +8,6 @@ Primary interface: CLI
 This file is the active delivery spine. It is not a historical ledger, not a
 roadmap archive, and not a substitute for implementation. Historical delivery
 details remain available through git history.
-
 The active docs set is docs/api.md, docs/contract.md, docs/model-families.md, docs/operator-runbook.md, docs/cli-output-architecture.md, docs/v010-release-doctrine.md, docs/spine.md.
 ## 0. Dashboard
 
@@ -827,6 +826,7 @@ labels.
 | TOPOLOGY.CELL.GRAPH.0 | complete | Extract graph into domain/report/input/command/render cell and separate graph facts from operator output. |
 | TOPOLOGY.CELL.MODEL_TARGET.0 | complete | Extract model-target into catalog/report/input/command/render cell and remove target facts from CLI command adapter. |
 | TOPOLOGY.CELL.MODEL_TARGET.1 | complete | Decompose model-target report monolith into owned target catalog, decision, candidate, map, qtype, and sidecar modules. |
+| TOPOLOGY.CELL.MODEL_TARGET.2 | complete | Dissolve model-target internal compatibility backend into specialized ownership modules. |
 | TOPOLOGY.CELL.CLOSURE.0 | planned | Close remaining mixed cells after each owner-specific extraction is proven. |
 | V010.PATHS.0 | complete | operator root layout report. |
 | V010.PATHS.1 | complete | source/artifact/reference/report/cache separation. |

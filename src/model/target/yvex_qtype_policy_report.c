@@ -73,7 +73,7 @@ int yvex_qtype_policy_report_build(
         return qtype_policy_reject(err);
     }
     qtype_policy_prepare_report(report);
-    return yvex_model_target_internal_report_build(request, report, err);
+    return yvex_model_target_runner_report_build(request, report, err);
 }
 
 int yvex_model_target_quant_route_report_build(

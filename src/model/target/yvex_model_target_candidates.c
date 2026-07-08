@@ -72,7 +72,7 @@ int yvex_model_target_candidate_report_build(
         return model_target_candidate_reject(err);
     }
     model_target_candidate_prepare_report(request, report);
-    return yvex_model_target_internal_report_build(request, report, err);
+    return yvex_model_target_runner_report_build(request, report, err);
 }
 
 /*

@@ -25,10 +25,10 @@
 #include "yvex_model_target_report.h"
 
 /*
- * yvex_model_target_internal_report_build()
+ * yvex_model_target_runner_report_build()
  *
  * Purpose:
- *   execute the shared model-target report backend for a parsed request.
+ *   execute shared model-target report routing for a parsed request.
  *
  * Inputs:
  *   request borrows argc/argv; report receives owned report segments.
@@ -41,20 +41,20 @@
  *   returns yvex errors for invalid arguments, allocation, or local IO.
  *
  * Boundary:
- *   this internal backend preserves existing report behavior and does not
+ *   shared report routing preserves existing report behavior and does not
  *   implement runtime execution, quantization, generation, eval, benchmark, or
  *   release readiness.
  */
-int yvex_model_target_internal_report_build(
+int yvex_model_target_runner_report_build(
     const yvex_model_target_request *request,
     yvex_model_target_report *report,
     yvex_error *err);
 
-int yvex_model_target_internal_help_report_build(
+int yvex_model_target_runner_help_report_build(
     yvex_model_target_report *report,
     yvex_error *err);
 
-void yvex_model_target_internal_report_close(
+void yvex_model_target_runner_report_close(
     yvex_model_target_report *report);
 
 int yvex_model_target_tensor_route_report_build(

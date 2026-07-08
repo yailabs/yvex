@@ -1,12 +1,12 @@
 /*
- * yvex_model_target_report.c - model-target report construction.
+ * yvex_model_target_runner.c - model-target report execution helpers.
  *
  * Owner:
  *   src/model/target
  *
  * Owns:
- *   model-target report construction, target facts, target profiles, map/gate
- *   facts, qtype facts, sidecar report facts, and report line storage.
+ *   shared model-target report execution support used while specialized
+ *   modules own their public report builders.
  *
  * Does not own:
  *   CLI argv parsing ownership, command dispatch, typed CLI rendering,
@@ -14,9 +14,9 @@
  *   release decisions.
  *
  * Invariants:
- *   reports preserve existing model-target behavior while packaging output as
- *   typed report buffers; domain/report code does not include CLI headers or
- *   write directly to process stdout/stderr.
+ *   reports preserve existing model-target behavior while packaging emitted
+ *   fields into owned report segments; domain/report code does not include CLI
+ *   headers or write directly to process stdout/stderr.
  *
  * Boundary:
  *   model-target reports expose existing facts; they do not create capability,
@@ -41,35 +41,73 @@
 #include <limits.h>
 #include <stdarg.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
-static FILE *model_target_sink_out;
-static FILE *model_target_sink_err;
+static char **model_target_primary_slot;
+static size_t *model_target_primary_len;
+static char **model_target_diagnostic_slot;
+static size_t *model_target_diagnostic_len;
 
 static FILE *model_target_out(void)
 {
-    return model_target_sink_out;
+    return (FILE *)(uintptr_t)1;
 }
 
 static FILE *model_target_err(void)
 {
-    return model_target_sink_err;
+    return (FILE *)(uintptr_t)2;
 }
 
-static int model_target_stream_write(FILE *fp, const char *text, size_t len)
+static int model_target_segment_append(char **slot,
+                                       size_t *len_slot,
+                                       const char *text,
+                                       size_t len)
+{
+    char *next;
+
+    if (!slot || !len_slot || !text || len == 0u) {
+        return 0;
+    }
+    if (*len_slot > (size_t)-1 - len - 1u) {
+        return -1;
+    }
+    next = (char *)realloc(*slot, *len_slot + len + 1u);
+    if (!next) {
+        return -1;
+    }
+    memcpy(next + *len_slot, text, len);
+    *len_slot += len;
+    next[*len_slot] = '\0';
+    *slot = next;
+    return (int)len;
+}
+
+static int model_target_text_write(FILE *fp, const char *text, size_t len)
 {
     if (!fp || !text || len == 0u) {
         return 0;
     }
-    return fwrite(text, 1u, len, fp) == len ? (int)len : -1;
+    if (fp == model_target_out()) {
+        return model_target_segment_append(model_target_primary_slot,
+                                           model_target_primary_len,
+                                           text,
+                                           len);
+    }
+    if (fp == model_target_err()) {
+        return model_target_segment_append(model_target_diagnostic_slot,
+                                           model_target_diagnostic_len,
+                                           text,
+                                           len);
+    }
+    return write(fileno(fp), text, len) == (ssize_t)len ? (int)len : -1;
 }
 
-static int model_target_out_fputs(const char *text, FILE *fp)
+static int model_target_text_puts(const char *text, FILE *fp)
 {
     size_t len;
 
@@ -77,17 +115,17 @@ static int model_target_out_fputs(const char *text, FILE *fp)
         text = "";
     }
     len = strlen(text);
-    return model_target_stream_write(fp, text, len);
+    return model_target_text_write(fp, text, len);
 }
 
-static int model_target_file_char(int ch, FILE *fp)
+static int model_target_text_char(int ch, FILE *fp)
 {
     unsigned char c = (unsigned char)ch;
 
-    return model_target_stream_write(fp, (const char *)&c, 1u);
+    return model_target_text_write(fp, (const char *)&c, 1u);
 }
 
-static int model_target_out_writef(FILE *fp, const char *fmt, ...)
+static int model_target_textf(FILE *fp, const char *fmt, ...)
 {
     va_list ap;
     va_list ap_copy;
@@ -123,7 +161,7 @@ static int model_target_out_writef(FILE *fp, const char *fmt, ...)
         }
     }
     va_end(ap_copy);
-    rc = model_target_stream_write(fp, buf, (size_t)needed);
+    rc = model_target_text_write(fp, buf, (size_t)needed);
     free(heap_buf);
     return rc;
 }
@@ -914,84 +952,84 @@ static const yvex_model_target_record *find_model_target(const char *target_id)
 
 static void print_model_target_decision_usage(FILE *fp)
 {
-    model_target_out_writef(fp, "usage: " "yvex model-target decision --release v0.1.0 [options]\n");
-    model_target_out_writef(fp, "       yvex model-target decision --help\n");
-    model_target_out_writef(fp, "\noptions:\n");
-    model_target_out_writef(fp, "  --candidate TARGET             report decision facts for one target\n");
-    model_target_out_writef(fp, "  --include-candidates           include target candidate classifications\n");
-    model_target_out_writef(fp, "  --include-pressure-targets     include pressure-lane status fields\n");
-    model_target_out_writef(fp, "  --include-blockers             include blocker row fields\n");
-    model_target_out_writef(fp, "  --include-critical-path        include release-critical track fields\n");
-    model_target_out_writef(fp, "  --include-next                 include deterministic next row fields\n");
-    model_target_out_writef(fp, "  --strict                       keep invalid usage fatal; honest blocked decisions still pass\n");
-    model_target_out_writef(fp, "  --audit | --output normal|table|audit\n");
+    model_target_textf(fp, "usage: " "yvex model-target decision --release v0.1.0 [options]\n");
+    model_target_textf(fp, "       yvex model-target decision --help\n");
+    model_target_textf(fp, "\noptions:\n");
+    model_target_textf(fp, "  --candidate TARGET             report decision facts for one target\n");
+    model_target_textf(fp, "  --include-candidates           include target candidate classifications\n");
+    model_target_textf(fp, "  --include-pressure-targets     include pressure-lane status fields\n");
+    model_target_textf(fp, "  --include-blockers             include blocker row fields\n");
+    model_target_textf(fp, "  --include-critical-path        include release-critical track fields\n");
+    model_target_textf(fp, "  --include-next                 include deterministic next row fields\n");
+    model_target_textf(fp, "  --strict                       keep invalid usage fatal; honest blocked decisions still pass\n");
+    model_target_textf(fp, "  --audit | --output normal|table|audit\n");
 }
 
 static void print_model_target_decision_help(FILE *fp)
 {
     print_model_target_decision_usage(fp);
-    model_target_out_writef(fp, "\nThis command records the v0.1.0 target decision. It does not download models, emit artifacts, materialize tensors, execute graph work, run prefill, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
-    model_target_out_writef(fp, "v0.1.0 requires an honest full-runtime-candidate target before runtime graph, prefill, KV, decode, logits, sampling, and generation rows can advance.\n");
-    model_target_out_writef(fp, "Selected runtime slices, source-only pressure targets, external references, and fixture-only targets are ineligible for full-runtime closure.\n");
+    model_target_textf(fp, "\nThis command records the v0.1.0 target decision. It does not download models, emit artifacts, materialize tensors, execute graph work, run prefill, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
+    model_target_textf(fp, "v0.1.0 requires an honest full-runtime-candidate target before runtime graph, prefill, KV, decode, logits, sampling, and generation rows can advance.\n");
+    model_target_textf(fp, "Selected runtime slices, source-only pressure targets, external references, and fixture-only targets are ineligible for full-runtime closure.\n");
 }
 
 static void print_model_target_candidate_usage(FILE *fp)
 {
-    model_target_out_writef(fp, "usage: " "yvex model-target candidate --release v0.1.0 [options]\n");
-    model_target_out_writef(fp, "       yvex model-target candidate --help\n");
-    model_target_out_writef(fp, "\noptions:\n");
-    model_target_out_writef(fp, "  --target TARGET                report one candidate target\n");
-    model_target_out_writef(fp, "  --include-candidates           include candidate classification blocks\n");
-    model_target_out_writef(fp, "  --include-pressure-targets     include pressure target count fields\n");
-    model_target_out_writef(fp, "  --include-blockers             include stable blocker fields\n");
-    model_target_out_writef(fp, "  --include-next                 include next required row fields\n");
-    model_target_out_writef(fp, "  --audit | --output normal|table|audit\n");
+    model_target_textf(fp, "usage: " "yvex model-target candidate --release v0.1.0 [options]\n");
+    model_target_textf(fp, "       yvex model-target candidate --help\n");
+    model_target_textf(fp, "\noptions:\n");
+    model_target_textf(fp, "  --target TARGET                report one candidate target\n");
+    model_target_textf(fp, "  --include-candidates           include candidate classification blocks\n");
+    model_target_textf(fp, "  --include-pressure-targets     include pressure target count fields\n");
+    model_target_textf(fp, "  --include-blockers             include stable blocker fields\n");
+    model_target_textf(fp, "  --include-next                 include next required row fields\n");
+    model_target_textf(fp, "  --audit | --output normal|table|audit\n");
 }
 
 static void print_model_target_candidate_help(FILE *fp)
 {
     print_model_target_candidate_usage(fp);
-    model_target_out_writef(fp, "\nThe candidate report evaluates full-runtime target eligibility for a release. It does not select a ready model, download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    model_target_textf(fp, "\nThe candidate report evaluates full-runtime target eligibility for a release. It does not select a ready model, download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
 }
 
 static void print_model_target_dense_candidate_usage(FILE *fp)
 {
-    model_target_out_writef(fp, "usage: " "yvex model-target dense-candidate --release v0.1.0 [options]\n");
-    model_target_out_writef(fp, "       yvex model-target dense-candidate --help\n");
-    model_target_out_writef(fp, "\noptions:\n");
-    model_target_out_writef(fp, "  --target TARGET                report one dense or dense-adjacent target\n");
-    model_target_out_writef(fp, "  --include-candidates           include dense candidate classification blocks\n");
-    model_target_out_writef(fp, "  --include-requirements         include required dense runtime role groups\n");
-    model_target_out_writef(fp, "  --include-blockers             include stable blocker fields\n");
-    model_target_out_writef(fp, "  --include-next                 include next required row fields\n");
-    model_target_out_writef(fp, "  --audit | --output normal|table|audit\n");
+    model_target_textf(fp, "usage: " "yvex model-target dense-candidate --release v0.1.0 [options]\n");
+    model_target_textf(fp, "       yvex model-target dense-candidate --help\n");
+    model_target_textf(fp, "\noptions:\n");
+    model_target_textf(fp, "  --target TARGET                report one dense or dense-adjacent target\n");
+    model_target_textf(fp, "  --include-candidates           include dense candidate classification blocks\n");
+    model_target_textf(fp, "  --include-requirements         include required dense runtime role groups\n");
+    model_target_textf(fp, "  --include-blockers             include stable blocker fields\n");
+    model_target_textf(fp, "  --include-next                 include next required row fields\n");
+    model_target_textf(fp, "  --audit | --output normal|table|audit\n");
 }
 
 static void print_model_target_dense_candidate_help(FILE *fp)
 {
     print_model_target_dense_candidate_usage(fp);
-    model_target_out_writef(fp, "\nThe dense-candidate report evaluates whether a dense model target can become the first v0.1.0 full-runtime candidate. It does not download weights, emit artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    model_target_textf(fp, "\nThe dense-candidate report evaluates whether a dense model target can become the first v0.1.0 full-runtime candidate. It does not download weights, emit artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
 }
 
 static void print_model_target_qwen_metal_usage(FILE *fp)
 {
-    model_target_out_writef(fp, "usage: " "yvex model-target qwen-metal --release v0.1.0 [options]\n");
-    model_target_out_writef(fp, "       yvex model-target qwen-metal --help\n");
-    model_target_out_writef(fp, "\noptions:\n");
-    model_target_out_writef(fp, "  --target TARGET                report one planned Qwen/Metal candidate slot\n");
-    model_target_out_writef(fp, "  --include-candidates           include planned candidate slot blocks\n");
-    model_target_out_writef(fp, "  --include-hardware             include Apple Silicon / Metal hardware pressure fields\n");
-    model_target_out_writef(fp, "  --include-backend              include Metal backend pressure fields\n");
-    model_target_out_writef(fp, "  --include-source               include Qwen source/config pressure fields\n");
-    model_target_out_writef(fp, "  --include-blockers             include stable blocker fields\n");
-    model_target_out_writef(fp, "  --include-next                 include next required row fields\n");
-    model_target_out_writef(fp, "  --audit | --output normal|table|audit\n");
+    model_target_textf(fp, "usage: " "yvex model-target qwen-metal --release v0.1.0 [options]\n");
+    model_target_textf(fp, "       yvex model-target qwen-metal --help\n");
+    model_target_textf(fp, "\noptions:\n");
+    model_target_textf(fp, "  --target TARGET                report one planned Qwen/Metal candidate slot\n");
+    model_target_textf(fp, "  --include-candidates           include planned candidate slot blocks\n");
+    model_target_textf(fp, "  --include-hardware             include Apple Silicon / Metal hardware pressure fields\n");
+    model_target_textf(fp, "  --include-backend              include Metal backend pressure fields\n");
+    model_target_textf(fp, "  --include-source               include Qwen source/config pressure fields\n");
+    model_target_textf(fp, "  --include-blockers             include stable blocker fields\n");
+    model_target_textf(fp, "  --include-next                 include next required row fields\n");
+    model_target_textf(fp, "  --audit | --output normal|table|audit\n");
 }
 
 static void print_model_target_qwen_metal_help(FILE *fp)
 {
     print_model_target_qwen_metal_usage(fp);
-    model_target_out_writef(fp, "\nThe Qwen/Metal pressure report records a planned reduced-scale Apple Silicon / Metal lane for future full-runtime work. It does not download weights, implement Metal, emit Qwen artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    model_target_textf(fp, "\nThe Qwen/Metal pressure report records a planned reduced-scale Apple Silicon / Metal lane for future full-runtime work. It does not download weights, implement Metal, emit Qwen artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
 }
 
 static int target_decision_is_full_runtime_candidate(const yvex_model_target_record *record)
@@ -1864,23 +1902,23 @@ static int model_target_mkdir_parent(const char *path)
 static void model_target_json_write_escaped(FILE *fp, const char *s)
 {
     if (!s) s = "";
-    model_target_file_char('"', fp);
+    model_target_text_char('"', fp);
     while (*s) {
         unsigned char ch = (unsigned char)*s++;
         if (ch == '"' || ch == '\\') {
-            model_target_file_char('\\', fp);
-            model_target_file_char((int)ch, fp);
+            model_target_text_char('\\', fp);
+            model_target_text_char((int)ch, fp);
         } else if (ch == '\n') {
-            model_target_out_fputs("\\n", fp);
+            model_target_text_puts("\\n", fp);
         } else if (ch == '\r') {
-            model_target_out_fputs("\\r", fp);
+            model_target_text_puts("\\r", fp);
         } else if (ch == '\t') {
-            model_target_out_fputs("\\t", fp);
+            model_target_text_puts("\\t", fp);
         } else {
-            model_target_file_char((int)ch, fp);
+            model_target_text_char((int)ch, fp);
         }
     }
-    model_target_file_char('"', fp);
+    model_target_text_char('"', fp);
 }
 
 static void model_target_json_field(FILE *fp,
@@ -1888,9 +1926,9 @@ static void model_target_json_field(FILE *fp,
                                     const char *value,
                                     int comma)
 {
-    model_target_out_writef(fp, "  \"%s\": ", key);
+    model_target_textf(fp, "  \"%s\": ", key);
     model_target_json_write_escaped(fp, value);
-    model_target_out_writef(fp, "%s\n", comma ? "," : "");
+    model_target_textf(fp, "%s\n", comma ? "," : "");
 }
 
 static void model_target_json_u64_field(FILE *fp,
@@ -1898,7 +1936,7 @@ static void model_target_json_u64_field(FILE *fp,
                                         unsigned long long value,
                                         int comma)
 {
-    model_target_out_writef(fp, "  \"%s\": %llu%s\n", key, value, comma ? "," : "");
+    model_target_textf(fp, "  \"%s\": %llu%s\n", key, value, comma ? "," : "");
 }
 
 static int model_target_json_open_tmp(const char *path,
@@ -1966,7 +2004,7 @@ static int write_tensor_map_sidecar(const char *path,
 
     if (!path || !path[0] || !profile) return 1;
     if (!model_target_json_open_tmp(path, tmp, sizeof(tmp), &fp)) return 0;
-    model_target_out_writef(fp, "{\n");
+    model_target_textf(fp, "{\n");
     model_target_json_field(fp, "schema", "yvex.source.tensor_map.v1", 1);
     model_target_json_field(fp, "row", "MODELS.SOURCE.MAP.HANDOFF.0", 1);
     model_target_json_field(fp, "status", "present-report-only", 1);
@@ -1998,7 +2036,7 @@ static int write_tensor_map_sidecar(const char *path,
     model_target_json_field(fp, "runtime_claim", "unsupported", 1);
     model_target_json_field(fp, "generation", "unsupported-full-model", 1);
     model_target_json_field(fp, "benchmark_status", "not-measured", 0);
-    model_target_out_writef(fp, "}\n");
+    model_target_textf(fp, "}\n");
     return model_target_json_close_tmp(fp, tmp, path);
 }
 
@@ -2011,7 +2049,7 @@ static int write_output_head_map_sidecar(
 
     if (!path || !path[0] || !profile) return 1;
     if (!model_target_json_open_tmp(path, tmp, sizeof(tmp), &fp)) return 0;
-    model_target_out_writef(fp, "{\n");
+    model_target_textf(fp, "{\n");
     model_target_json_field(fp, "schema", "yvex.source.output_head_map.v1", 1);
     model_target_json_field(fp, "row", "MODELS.SOURCE.MAP.HANDOFF.0", 1);
     model_target_json_field(fp, "status", "present-report-only", 1);
@@ -2041,7 +2079,7 @@ static int write_output_head_map_sidecar(
     model_target_json_field(fp, "runtime_claim", "unsupported", 1);
     model_target_json_field(fp, "generation", "unsupported-full-model", 1);
     model_target_json_field(fp, "benchmark_status", "not-measured", 0);
-    model_target_out_writef(fp, "}\n");
+    model_target_textf(fp, "}\n");
     return model_target_json_close_tmp(fp, tmp, path);
 }
 
@@ -2061,7 +2099,7 @@ static int write_tokenizer_map_sidecar(
 
     if (!path || !path[0] || !profile) return 1;
     if (!model_target_json_open_tmp(path, tmp, sizeof(tmp), &fp)) return 0;
-    model_target_out_writef(fp, "{\n");
+    model_target_textf(fp, "{\n");
     model_target_json_field(fp, "schema_version", "yvex.source.tokenizer_map.v1", 1);
     model_target_json_field(fp, "row", "V010.MAP.7", 1);
     model_target_json_field(fp, "status", profile->status, 1);
@@ -2129,7 +2167,7 @@ static int write_tokenizer_map_sidecar(
     model_target_json_field(fp, "generation", "unsupported-full-model", 1);
     model_target_json_field(fp, "benchmark_status", "not-measured", 1);
     model_target_json_field(fp, "next", tokenizer_map_next_row(profile), 0);
-    model_target_out_writef(fp, "}\n");
+    model_target_textf(fp, "}\n");
     return model_target_json_close_tmp(fp, tmp, path);
 }
 
@@ -2320,7 +2358,7 @@ static int model_class_resolve_source(
         n = snprintf(profile->source_path, sizeof(profile->source_path),
                      "%s", source_override);
         if (n < 0 || (size_t)n >= sizeof(profile->source_path)) {
-            model_target_out_writef(model_target_err(), "model-target class-profile: source path is too long\n");
+            model_target_textf(model_target_err(), "model-target class-profile: source path is too long\n");
             return 2;
         }
         snprintf(profile->source_path_source, sizeof(profile->source_path_source),
@@ -2339,7 +2377,7 @@ static int model_class_resolve_source(
         rc = yvex_operator_paths_resolve(&paths, models_root_override,
                                          &operator_paths, &err);
         if (rc != YVEX_OK) {
-            model_target_out_writef(model_target_err(), "yvex: %s: %s\n",
+            model_target_textf(model_target_err(), "yvex: %s: %s\n",
                     yvex_error_where(&err), yvex_error_message(&err));
             return rc == YVEX_ERR_INVALID_ARG ? 2 : 3;
         }
@@ -2350,7 +2388,7 @@ static int model_class_resolve_source(
                                                 sizeof(profile->source_path),
                                                 &exists, &err);
         if (rc != YVEX_OK) {
-            model_target_out_writef(model_target_err(), "yvex: %s: %s\n",
+            model_target_textf(model_target_err(), "yvex: %s: %s\n",
                     yvex_error_where(&err), yvex_error_message(&err));
             return rc == YVEX_ERR_INVALID_ARG ? 2 : 3;
         }
@@ -2362,7 +2400,7 @@ static int model_class_resolve_source(
                                              sizeof(download_source),
                                              &operator_paths,
                                              profile->spec)) {
-                model_target_out_writef(model_target_err(), "model-target class-profile: source path is too long\n");
+                model_target_textf(model_target_err(), "model-target class-profile: source path is too long\n");
                 return 2;
             }
             if (model_class_dir_exists(download_source)) {
@@ -2470,31 +2508,31 @@ static int model_class_build_profile(
 static void print_model_class_profile_normal(
     const yvex_model_class_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "model-class: %s\n", profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "target: %s\n", profile->record->target_id);
-    model_target_out_writef(model_target_out(), "status: %s\n", profile->status);
-    model_target_out_writef(model_target_out(), "class: %s\n", profile->spec->class_name);
-    model_target_out_writef(model_target_out(), "evidence: header-metadata-only\n");
-    model_target_out_writef(model_target_out(), "patterns: tensors=%llu attn=%llu mlp=%llu norm=%llu head=%llu moe=%llu\n",
+    model_target_textf(model_target_out(), "model-class: %s\n", profile->spec->family_key);
+    model_target_textf(model_target_out(), "target: %s\n", profile->record->target_id);
+    model_target_textf(model_target_out(), "status: %s\n", profile->status);
+    model_target_textf(model_target_out(), "class: %s\n", profile->spec->class_name);
+    model_target_textf(model_target_out(), "evidence: header-metadata-only\n");
+    model_target_textf(model_target_out(), "patterns: tensors=%llu attn=%llu mlp=%llu norm=%llu head=%llu moe=%llu\n",
            profile->tensor_count,
            model_class_profile_attention_count(profile),
            model_class_profile_mlp_count(profile),
            profile->norm_pattern_count,
            profile->output_head_pattern_count,
            model_class_profile_moe_count(profile));
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
-    model_target_out_writef(model_target_out(), "boundary: model-class profile only; no tensor role mapping/runtime/generation\n");
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
+    model_target_textf(model_target_out(), "boundary: model-class profile only; no tensor role mapping/runtime/generation\n");
 }
 
 static void print_model_class_profile_table(
     const yvex_model_class_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "MODEL CLASS PROFILE\n\n");
-    model_target_out_writef(model_target_out(), "%-6s  %-24s  %-16s  %7s  %4s  %3s  %4s  %4s  %3s  %s\n",
+    model_target_textf(model_target_out(), "MODEL CLASS PROFILE\n\n");
+    model_target_textf(model_target_out(), "%-6s  %-24s  %-16s  %7s  %4s  %3s  %4s  %4s  %3s  %s\n",
            "FAMILY", "TARGET", "STATUS", "TENSORS",
            "ATTN", "MLP", "NORM", "HEAD", "MOE", "NEXT");
-    model_target_out_writef(model_target_out(), "%-6s  %-24s  %-16s  %7llu  %4llu  %3llu  %4llu  %4llu  %3llu  %s\n",
+    model_target_textf(model_target_out(), "%-6s  %-24s  %-16s  %7llu  %4llu  %3llu  %4llu  %4llu  %3llu  %s\n",
            profile->spec->family_key,
            profile->record->target_id,
            profile->status,
@@ -2510,60 +2548,60 @@ static void print_model_class_profile_table(
 static void print_model_class_profile_audit(
     const yvex_model_class_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "model_class_profile_status: %s\n", profile->status);
-    model_target_out_writef(model_target_out(), "model_class_family: %s\n", profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "model_class_target_id: %s\n", profile->record->target_id);
-    model_target_out_writef(model_target_out(), "model_class_name: %s\n", profile->spec->class_name);
-    model_target_out_writef(model_target_out(), "model_class_runtime_shape: %s\n", profile->spec->runtime_shape);
-    model_target_out_writef(model_target_out(), "model_class_evidence_basis: header-metadata-only\n");
-    model_target_out_writef(model_target_out(), "model_class_config_status: %s\n",
+    model_target_textf(model_target_out(), "model_class_profile_status: %s\n", profile->status);
+    model_target_textf(model_target_out(), "model_class_family: %s\n", profile->spec->family_key);
+    model_target_textf(model_target_out(), "model_class_target_id: %s\n", profile->record->target_id);
+    model_target_textf(model_target_out(), "model_class_name: %s\n", profile->spec->class_name);
+    model_target_textf(model_target_out(), "model_class_runtime_shape: %s\n", profile->spec->runtime_shape);
+    model_target_textf(model_target_out(), "model_class_evidence_basis: header-metadata-only\n");
+    model_target_textf(model_target_out(), "model_class_config_status: %s\n",
            profile->config_present ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "model_class_tokenizer_status: %s\n",
+    model_target_textf(model_target_out(), "model_class_tokenizer_status: %s\n",
            profile->tokenizer_present ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "model_class_source_metadata_status: %s\n",
+    model_target_textf(model_target_out(), "model_class_source_metadata_status: %s\n",
            profile->source_metadata_status);
-    model_target_out_writef(model_target_out(), "model_class_tensor_count: %llu\n", profile->tensor_count);
-    model_target_out_writef(model_target_out(), "model_class_embedding_pattern_count: %llu\n",
+    model_target_textf(model_target_out(), "model_class_tensor_count: %llu\n", profile->tensor_count);
+    model_target_textf(model_target_out(), "model_class_embedding_pattern_count: %llu\n",
            profile->embedding_pattern_count);
-    model_target_out_writef(model_target_out(), "model_class_attention_q_pattern_count: %llu\n",
+    model_target_textf(model_target_out(), "model_class_attention_q_pattern_count: %llu\n",
            profile->attention_q_pattern_count);
-    model_target_out_writef(model_target_out(), "model_class_attention_k_pattern_count: %llu\n",
+    model_target_textf(model_target_out(), "model_class_attention_k_pattern_count: %llu\n",
            profile->attention_k_pattern_count);
-    model_target_out_writef(model_target_out(), "model_class_attention_v_pattern_count: %llu\n",
+    model_target_textf(model_target_out(), "model_class_attention_v_pattern_count: %llu\n",
            profile->attention_v_pattern_count);
-    model_target_out_writef(model_target_out(), "model_class_attention_o_pattern_count: %llu\n",
+    model_target_textf(model_target_out(), "model_class_attention_o_pattern_count: %llu\n",
            profile->attention_o_pattern_count);
-    model_target_out_writef(model_target_out(), "model_class_mlp_gate_pattern_count: %llu\n",
+    model_target_textf(model_target_out(), "model_class_mlp_gate_pattern_count: %llu\n",
            profile->mlp_gate_pattern_count);
-    model_target_out_writef(model_target_out(), "model_class_mlp_up_pattern_count: %llu\n",
+    model_target_textf(model_target_out(), "model_class_mlp_up_pattern_count: %llu\n",
            profile->mlp_up_pattern_count);
-    model_target_out_writef(model_target_out(), "model_class_mlp_down_pattern_count: %llu\n",
+    model_target_textf(model_target_out(), "model_class_mlp_down_pattern_count: %llu\n",
            profile->mlp_down_pattern_count);
-    model_target_out_writef(model_target_out(), "model_class_norm_pattern_count: %llu\n",
+    model_target_textf(model_target_out(), "model_class_norm_pattern_count: %llu\n",
            profile->norm_pattern_count);
-    model_target_out_writef(model_target_out(), "model_class_output_head_pattern_count: %llu\n",
+    model_target_textf(model_target_out(), "model_class_output_head_pattern_count: %llu\n",
            profile->output_head_pattern_count);
-    model_target_out_writef(model_target_out(), "model_class_moe_router_pattern_count: %llu\n",
+    model_target_textf(model_target_out(), "model_class_moe_router_pattern_count: %llu\n",
            profile->moe_router_pattern_count);
-    model_target_out_writef(model_target_out(), "model_class_moe_expert_pattern_count: %llu\n",
+    model_target_textf(model_target_out(), "model_class_moe_expert_pattern_count: %llu\n",
            profile->moe_expert_pattern_count);
-    model_target_out_writef(model_target_out(), "model_class_other_pattern_count: %llu\n",
+    model_target_textf(model_target_out(), "model_class_other_pattern_count: %llu\n",
            profile->other_pattern_count);
-    model_target_out_writef(model_target_out(), "model_class_pattern_status: lexical-only\n");
-    model_target_out_writef(model_target_out(), "model_class_role_mapping_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "model_class_runtime_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "backend_selection: deferred\n");
-    model_target_out_writef(model_target_out(), "backend_pressure: %s\n", profile->spec->backend_pressure);
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
-    model_target_out_writef(model_target_out(), "source_path: %s\n", profile->source_path);
-    model_target_out_writef(model_target_out(), "source_path_source: %s\n", profile->source_path_source);
-    model_target_out_writef(model_target_out(), "source_exists: %s\n", profile->source_exists ? "true" : "false");
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next_required_rows: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
-    model_target_out_writef(model_target_out(), "boundary: model-class profile only; no tensor role mapping/runtime/generation\n");
+    model_target_textf(model_target_out(), "model_class_pattern_status: lexical-only\n");
+    model_target_textf(model_target_out(), "model_class_role_mapping_status: not-implemented\n");
+    model_target_textf(model_target_out(), "model_class_runtime_status: unsupported\n");
+    model_target_textf(model_target_out(), "backend_selection: deferred\n");
+    model_target_textf(model_target_out(), "backend_pressure: %s\n", profile->spec->backend_pressure);
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "source_path: %s\n", profile->source_path);
+    model_target_textf(model_target_out(), "source_path_source: %s\n", profile->source_path_source);
+    model_target_textf(model_target_out(), "source_exists: %s\n", profile->source_exists ? "true" : "false");
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next_required_rows: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
+    model_target_textf(model_target_out(), "boundary: model-class profile only; no tensor role mapping/runtime/generation\n");
 }
 
 static void print_model_class_audit_hint(const yvex_model_target_record *record)
@@ -2577,15 +2615,15 @@ static void print_model_class_audit_hint(const yvex_model_target_record *record)
     if (!spec) {
         return;
     }
-    model_target_out_writef(model_target_out(), "model_class_profile_status: command-visible\n");
-    model_target_out_writef(model_target_out(), "model_class_family: %s\n", spec->family_key);
-    model_target_out_writef(model_target_out(), "model_class_target_id: %s\n", spec->target_id);
-    model_target_out_writef(model_target_out(), "model_class_name: %s\n", spec->class_name);
-    model_target_out_writef(model_target_out(), "model_class_runtime_shape: %s\n", spec->runtime_shape);
-    model_target_out_writef(model_target_out(), "model_class_evidence_basis: header-metadata-only\n");
-    model_target_out_writef(model_target_out(), "model_class_pattern_status: lexical-only\n");
-    model_target_out_writef(model_target_out(), "model_class_role_mapping_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "model_class_runtime_status: unsupported\n");
+    model_target_textf(model_target_out(), "model_class_profile_status: command-visible\n");
+    model_target_textf(model_target_out(), "model_class_family: %s\n", spec->family_key);
+    model_target_textf(model_target_out(), "model_class_target_id: %s\n", spec->target_id);
+    model_target_textf(model_target_out(), "model_class_name: %s\n", spec->class_name);
+    model_target_textf(model_target_out(), "model_class_runtime_shape: %s\n", spec->runtime_shape);
+    model_target_textf(model_target_out(), "model_class_evidence_basis: header-metadata-only\n");
+    model_target_textf(model_target_out(), "model_class_pattern_status: lexical-only\n");
+    model_target_textf(model_target_out(), "model_class_role_mapping_status: not-implemented\n");
+    model_target_textf(model_target_out(), "model_class_runtime_status: unsupported\n");
 }
 
 static int tensor_collection_layer_index(const char *name,
@@ -2931,12 +2969,12 @@ static int build_tensor_collection_profile(
 static void print_tensor_collection_normal(
     const yvex_tensor_collection_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "tensor-collection: %s\n", profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "target: %s\n", profile->record->target_id);
-    model_target_out_writef(model_target_out(), "status: %s\n", profile->status);
-    model_target_out_writef(model_target_out(), "stage: header-collection-inventory\n");
-    model_target_out_writef(model_target_out(), "evidence: header-metadata-only\n");
-    model_target_out_writef(model_target_out(), "collections: embedding=%llu attention_qkvo=%llu mlp_gud=%llu norm=%llu head=%llu moe=%llu\n",
+    model_target_textf(model_target_out(), "tensor-collection: %s\n", profile->spec->family_key);
+    model_target_textf(model_target_out(), "target: %s\n", profile->record->target_id);
+    model_target_textf(model_target_out(), "status: %s\n", profile->status);
+    model_target_textf(model_target_out(), "stage: header-collection-inventory\n");
+    model_target_textf(model_target_out(), "evidence: header-metadata-only\n");
+    model_target_textf(model_target_out(), "collections: embedding=%llu attention_qkvo=%llu mlp_gud=%llu norm=%llu head=%llu moe=%llu\n",
            profile->embedding_tensor_count,
            profile->attention_complete_qkvo_layer_count,
            profile->mlp_complete_gud_layer_count,
@@ -2944,21 +2982,21 @@ static void print_tensor_collection_normal(
            profile->output_head_tensor_count,
            profile->moe_router_count + profile->moe_expert_count);
     if (profile->source_exists && profile->tensor_count > 0) {
-        model_target_out_writef(model_target_out(), "layers_observed: %llu\n", profile->layer_count_observed);
+        model_target_textf(model_target_out(), "layers_observed: %llu\n", profile->layer_count_observed);
     }
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next: %s\n", YVEX_TENSOR_COLLECTION_NEXT_ROW);
-    model_target_out_writef(model_target_out(), "boundary: tensor collection inventory only; no role mapping/runtime/generation\n");
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next: %s\n", YVEX_TENSOR_COLLECTION_NEXT_ROW);
+    model_target_textf(model_target_out(), "boundary: tensor collection inventory only; no role mapping/runtime/generation\n");
 }
 
 static void print_tensor_collection_table(
     const yvex_tensor_collection_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "TENSOR COLLECTION INVENTORY\n\n");
-    model_target_out_writef(model_target_out(), "%-6s  %-10s  %-19s  %5s  %9s  %7s  %4s  %4s  %3s  %6s  %s\n",
+    model_target_textf(model_target_out(), "TENSOR COLLECTION INVENTORY\n\n");
+    model_target_textf(model_target_out(), "%-6s  %-10s  %-19s  %5s  %9s  %7s  %4s  %4s  %3s  %6s  %s\n",
            "FAMILY", "TARGET", "STATUS", "EMBED", "ATTN_QKVO",
            "MLP_GUD", "NORM", "HEAD", "MOE", "LAYERS", "NEXT");
-    model_target_out_writef(model_target_out(), "%-6s  %-10s  %-19s  %5llu  %9llu  %7llu  %4llu  %4llu  %3llu  %6llu  %s\n",
+    model_target_textf(model_target_out(), "%-6s  %-10s  %-19s  %5llu  %9llu  %7llu  %4llu  %4llu  %3llu  %6llu  %s\n",
            profile->spec->family_key,
            profile->record->target_id,
            profile->status,
@@ -2975,69 +3013,69 @@ static void print_tensor_collection_table(
 static void print_tensor_collection_audit(
     const yvex_tensor_collection_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "tensor_collection_status: %s\n", profile->status);
-    model_target_out_writef(model_target_out(), "tensor_collection_family: %s\n", profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "tensor_collection_target_id: %s\n", profile->record->target_id);
-    model_target_out_writef(model_target_out(), "tensor_collection_stage: header-collection-inventory\n");
-    model_target_out_writef(model_target_out(), "tensor_collection_evidence_basis: header-metadata-only\n");
-    model_target_out_writef(model_target_out(), "tensor_collection_source_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_collection_status: %s\n", profile->status);
+    model_target_textf(model_target_out(), "tensor_collection_family: %s\n", profile->spec->family_key);
+    model_target_textf(model_target_out(), "tensor_collection_target_id: %s\n", profile->record->target_id);
+    model_target_textf(model_target_out(), "tensor_collection_stage: header-collection-inventory\n");
+    model_target_textf(model_target_out(), "tensor_collection_evidence_basis: header-metadata-only\n");
+    model_target_textf(model_target_out(), "tensor_collection_source_status: %s\n",
            profile->source_exists ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "tensor_collection_source_path: %s\n", profile->source_path);
-    model_target_out_writef(model_target_out(), "tensor_collection_manifest_status: not-checked\n");
-    model_target_out_writef(model_target_out(), "tensor_collection_config_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_collection_source_path: %s\n", profile->source_path);
+    model_target_textf(model_target_out(), "tensor_collection_manifest_status: not-checked\n");
+    model_target_textf(model_target_out(), "tensor_collection_config_status: %s\n",
            profile->config_present ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "tensor_collection_tokenizer_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_collection_tokenizer_status: %s\n",
            profile->tokenizer_present ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "tensor_collection_tensor_count: %llu\n", profile->tensor_count);
-    model_target_out_writef(model_target_out(), "tensor_collection_layer_count_observed: %llu\n",
+    model_target_textf(model_target_out(), "tensor_collection_tensor_count: %llu\n", profile->tensor_count);
+    model_target_textf(model_target_out(), "tensor_collection_layer_count_observed: %llu\n",
            profile->layer_count_observed);
-    model_target_out_writef(model_target_out(), "tensor_collection_embedding_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_collection_embedding_status: %s\n",
            tensor_collection_present_status(profile->embedding_tensor_count));
-    model_target_out_writef(model_target_out(), "tensor_collection_embedding_tensor_count: %llu\n",
+    model_target_textf(model_target_out(), "tensor_collection_embedding_tensor_count: %llu\n",
            profile->embedding_tensor_count);
-    model_target_out_writef(model_target_out(), "tensor_collection_attention_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_collection_attention_status: %s\n",
            tensor_collection_attention_status(profile));
-    model_target_out_writef(model_target_out(), "tensor_collection_attention_q_count: %llu\n", profile->attention_q_count);
-    model_target_out_writef(model_target_out(), "tensor_collection_attention_k_count: %llu\n", profile->attention_k_count);
-    model_target_out_writef(model_target_out(), "tensor_collection_attention_v_count: %llu\n", profile->attention_v_count);
-    model_target_out_writef(model_target_out(), "tensor_collection_attention_o_count: %llu\n", profile->attention_o_count);
-    model_target_out_writef(model_target_out(), "tensor_collection_attention_complete_qkvo_layer_count: %llu\n",
+    model_target_textf(model_target_out(), "tensor_collection_attention_q_count: %llu\n", profile->attention_q_count);
+    model_target_textf(model_target_out(), "tensor_collection_attention_k_count: %llu\n", profile->attention_k_count);
+    model_target_textf(model_target_out(), "tensor_collection_attention_v_count: %llu\n", profile->attention_v_count);
+    model_target_textf(model_target_out(), "tensor_collection_attention_o_count: %llu\n", profile->attention_o_count);
+    model_target_textf(model_target_out(), "tensor_collection_attention_complete_qkvo_layer_count: %llu\n",
            profile->attention_complete_qkvo_layer_count);
-    model_target_out_writef(model_target_out(), "tensor_collection_mlp_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_collection_mlp_status: %s\n",
            tensor_collection_mlp_status(profile));
-    model_target_out_writef(model_target_out(), "tensor_collection_mlp_gate_count: %llu\n", profile->mlp_gate_count);
-    model_target_out_writef(model_target_out(), "tensor_collection_mlp_up_count: %llu\n", profile->mlp_up_count);
-    model_target_out_writef(model_target_out(), "tensor_collection_mlp_down_count: %llu\n", profile->mlp_down_count);
-    model_target_out_writef(model_target_out(), "tensor_collection_mlp_complete_gud_layer_count: %llu\n",
+    model_target_textf(model_target_out(), "tensor_collection_mlp_gate_count: %llu\n", profile->mlp_gate_count);
+    model_target_textf(model_target_out(), "tensor_collection_mlp_up_count: %llu\n", profile->mlp_up_count);
+    model_target_textf(model_target_out(), "tensor_collection_mlp_down_count: %llu\n", profile->mlp_down_count);
+    model_target_textf(model_target_out(), "tensor_collection_mlp_complete_gud_layer_count: %llu\n",
            profile->mlp_complete_gud_layer_count);
-    model_target_out_writef(model_target_out(), "tensor_collection_norm_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_collection_norm_status: %s\n",
            tensor_collection_present_status(profile->norm_tensor_count));
-    model_target_out_writef(model_target_out(), "tensor_collection_norm_tensor_count: %llu\n",
+    model_target_textf(model_target_out(), "tensor_collection_norm_tensor_count: %llu\n",
            profile->norm_tensor_count);
-    model_target_out_writef(model_target_out(), "tensor_collection_output_head_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_collection_output_head_status: %s\n",
            tensor_collection_present_status(profile->output_head_tensor_count));
-    model_target_out_writef(model_target_out(), "tensor_collection_output_head_tensor_count: %llu\n",
+    model_target_textf(model_target_out(), "tensor_collection_output_head_tensor_count: %llu\n",
            profile->output_head_tensor_count);
-    model_target_out_writef(model_target_out(), "tensor_collection_moe_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_collection_moe_status: %s\n",
            (profile->moe_router_count + profile->moe_expert_count) > 0
                ? "observed"
                : "not-observed");
-    model_target_out_writef(model_target_out(), "tensor_collection_moe_router_count: %llu\n", profile->moe_router_count);
-    model_target_out_writef(model_target_out(), "tensor_collection_moe_expert_count: %llu\n", profile->moe_expert_count);
-    model_target_out_writef(model_target_out(), "tensor_collection_tokenizer_collection_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_collection_moe_router_count: %llu\n", profile->moe_router_count);
+    model_target_textf(model_target_out(), "tensor_collection_moe_expert_count: %llu\n", profile->moe_expert_count);
+    model_target_textf(model_target_out(), "tensor_collection_tokenizer_collection_status: %s\n",
            profile->tokenizer_present ? "sidecar-observed" : "missing");
-    model_target_out_writef(model_target_out(), "tensor_collection_kv_runtime_state_status: runtime-state-required-not-implemented\n");
-    model_target_out_writef(model_target_out(), "tensor_collection_validation_status: lexical-and-header-only\n");
-    model_target_out_writef(model_target_out(), "tensor_collection_role_mapping_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "tensor_collection_runtime_descriptor_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "tensor_collection_graph_consumer_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next_required_rows: %s\n", YVEX_TENSOR_COLLECTION_NEXT_ROW);
-    model_target_out_writef(model_target_out(), "boundary: tensor collection inventory only; no role mapping/runtime/generation\n");
+    model_target_textf(model_target_out(), "tensor_collection_kv_runtime_state_status: runtime-state-required-not-implemented\n");
+    model_target_textf(model_target_out(), "tensor_collection_validation_status: lexical-and-header-only\n");
+    model_target_textf(model_target_out(), "tensor_collection_role_mapping_status: not-implemented\n");
+    model_target_textf(model_target_out(), "tensor_collection_runtime_descriptor_status: not-implemented\n");
+    model_target_textf(model_target_out(), "tensor_collection_graph_consumer_status: not-implemented\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next_required_rows: %s\n", YVEX_TENSOR_COLLECTION_NEXT_ROW);
+    model_target_textf(model_target_out(), "boundary: tensor collection inventory only; no role mapping/runtime/generation\n");
 }
 
 static void print_tensor_collection_audit_hint(
@@ -3050,15 +3088,15 @@ static void print_tensor_collection_audit_hint(
     }
     spec = find_model_class_profile_spec(record->target_id);
     if (!spec) return;
-    model_target_out_writef(model_target_out(), "tensor_collection_status: command-visible\n");
-    model_target_out_writef(model_target_out(), "tensor_collection_family: %s\n", spec->family_key);
-    model_target_out_writef(model_target_out(), "tensor_collection_target_id: %s\n", spec->target_id);
-    model_target_out_writef(model_target_out(), "tensor_collection_stage: header-collection-inventory\n");
-    model_target_out_writef(model_target_out(), "tensor_collection_evidence_basis: header-metadata-only\n");
-    model_target_out_writef(model_target_out(), "tensor_collection_validation_status: lexical-and-header-only\n");
-    model_target_out_writef(model_target_out(), "tensor_collection_role_mapping_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "tensor_collection_runtime_descriptor_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "tensor_collection_graph_consumer_status: not-implemented\n");
+    model_target_textf(model_target_out(), "tensor_collection_status: command-visible\n");
+    model_target_textf(model_target_out(), "tensor_collection_family: %s\n", spec->family_key);
+    model_target_textf(model_target_out(), "tensor_collection_target_id: %s\n", spec->target_id);
+    model_target_textf(model_target_out(), "tensor_collection_stage: header-collection-inventory\n");
+    model_target_textf(model_target_out(), "tensor_collection_evidence_basis: header-metadata-only\n");
+    model_target_textf(model_target_out(), "tensor_collection_validation_status: lexical-and-header-only\n");
+    model_target_textf(model_target_out(), "tensor_collection_role_mapping_status: not-implemented\n");
+    model_target_textf(model_target_out(), "tensor_collection_runtime_descriptor_status: not-implemented\n");
+    model_target_textf(model_target_out(), "tensor_collection_graph_consumer_status: not-implemented\n");
 }
 
 static void tensor_naming_copy(char *dst, size_t cap, const char *src)
@@ -3645,12 +3683,12 @@ static const char *compact_status_bracket(const char *status)
 static void print_tensor_naming_normal(
     const yvex_tensor_naming_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "tensor-map: %s [%s]\n",
+    model_target_textf(model_target_out(), "tensor-map: %s [%s]\n",
            profile->record->target_id,
            compact_status_bracket(profile->status));
-    model_target_out_writef(model_target_out(), "family: %s  stage: header-naming-map  evidence: header-only\n",
+    model_target_textf(model_target_out(), "family: %s  stage: header-naming-map  evidence: header-only\n",
            profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "roles: total=%llu embedding=%llu attention=%llu mlp=%llu norm=%llu head=%llu moe=%llu unknown=%llu\n",
+    model_target_textf(model_target_out(), "roles: total=%llu embedding=%llu attention=%llu mlp=%llu norm=%llu head=%llu moe=%llu unknown=%llu\n",
            profile->mapped_total_count,
            profile->embedding_count,
            profile->attention_count,
@@ -3660,21 +3698,21 @@ static void print_tensor_naming_normal(
            tensor_naming_moe_count(profile),
            profile->unmapped_unknown_count);
     if (profile->source_exists && profile->tensor_count > 0) {
-        model_target_out_writef(model_target_out(), "layers: %llu\n", profile->layer_count_observed);
+        model_target_textf(model_target_out(), "layers: %llu\n", profile->layer_count_observed);
     }
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next: %s\n", YVEX_TENSOR_NAMING_NEXT_ROW);
-    model_target_out_writef(model_target_out(), "boundary: report-only; use --audit for tensor entries\n");
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next: %s\n", YVEX_TENSOR_NAMING_NEXT_ROW);
+    model_target_textf(model_target_out(), "boundary: report-only; use --audit for tensor entries\n");
 }
 
 static void print_tensor_naming_table(
     const yvex_tensor_naming_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "TENSOR NAMING MAP\n\n");
-    model_target_out_writef(model_target_out(), "%-6s  %-20s  %-24s  %7s  %6s  %6s  %6s  %6s  %6s  %6s  %8s  %7s  %s\n",
+    model_target_textf(model_target_out(), "TENSOR NAMING MAP\n\n");
+    model_target_textf(model_target_out(), "%-6s  %-20s  %-24s  %7s  %6s  %6s  %6s  %6s  %6s  %6s  %8s  %7s  %s\n",
            "FAMILY", "TARGET", "STATUS", "TOTAL", "EMBED", "ATTN",
            "MLP", "NORM", "HEAD", "MOE", "UNKNOWN", "LAYERS", "NEXT");
-    model_target_out_writef(model_target_out(), "%-6s  %-20s  %-24s  %7llu  %6llu  %6llu  %6llu  %6llu  %6llu  %6llu  %8llu  %7llu  %s\n",
+    model_target_textf(model_target_out(), "%-6s  %-20s  %-24s  %7llu  %6llu  %6llu  %6llu  %6llu  %6llu  %6llu  %8llu  %7llu  %s\n",
            profile->spec->family_key,
            profile->record->target_id,
            profile->status,
@@ -3695,83 +3733,83 @@ static void print_tensor_naming_audit(
 {
     unsigned long long i;
 
-    model_target_out_writef(model_target_out(), "tensor_map_status: %s\n", profile->status);
-    model_target_out_writef(model_target_out(), "tensor_map_family: %s\n", profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "tensor_map_target_id: %s\n", profile->record->target_id);
-    model_target_out_writef(model_target_out(), "tensor_map_stage: header-naming-map\n");
-    model_target_out_writef(model_target_out(), "tensor_map_evidence_basis: header-metadata-only\n");
-    model_target_out_writef(model_target_out(), "tensor_map_source_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_map_status: %s\n", profile->status);
+    model_target_textf(model_target_out(), "tensor_map_family: %s\n", profile->spec->family_key);
+    model_target_textf(model_target_out(), "tensor_map_target_id: %s\n", profile->record->target_id);
+    model_target_textf(model_target_out(), "tensor_map_stage: header-naming-map\n");
+    model_target_textf(model_target_out(), "tensor_map_evidence_basis: header-metadata-only\n");
+    model_target_textf(model_target_out(), "tensor_map_source_status: %s\n",
            profile->source_exists ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "tensor_map_source_path: %s\n", profile->source_path);
-    model_target_out_writef(model_target_out(), "tensor_map_manifest_status: not-checked\n");
-    model_target_out_writef(model_target_out(), "tensor_map_config_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_map_source_path: %s\n", profile->source_path);
+    model_target_textf(model_target_out(), "tensor_map_manifest_status: not-checked\n");
+    model_target_textf(model_target_out(), "tensor_map_config_status: %s\n",
            profile->config_present ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "tensor_map_tokenizer_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_map_tokenizer_status: %s\n",
            profile->tokenizer_present ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "tensor_map_tensor_count: %llu\n", profile->tensor_count);
-    model_target_out_writef(model_target_out(), "tensor_map_mapped_total_count: %llu\n", profile->mapped_total_count);
-    model_target_out_writef(model_target_out(), "tensor_map_unmapped_unknown_count: %llu\n",
+    model_target_textf(model_target_out(), "tensor_map_tensor_count: %llu\n", profile->tensor_count);
+    model_target_textf(model_target_out(), "tensor_map_mapped_total_count: %llu\n", profile->mapped_total_count);
+    model_target_textf(model_target_out(), "tensor_map_unmapped_unknown_count: %llu\n",
            profile->unmapped_unknown_count);
-    model_target_out_writef(model_target_out(), "tensor_map_ambiguous_count: %llu\n", profile->ambiguous_count);
-    model_target_out_writef(model_target_out(), "tensor_map_layer_count_observed: %llu\n",
+    model_target_textf(model_target_out(), "tensor_map_ambiguous_count: %llu\n", profile->ambiguous_count);
+    model_target_textf(model_target_out(), "tensor_map_layer_count_observed: %llu\n",
            profile->layer_count_observed);
-    model_target_out_writef(model_target_out(), "tensor_map_embedding_count: %llu\n", profile->embedding_count);
-    model_target_out_writef(model_target_out(), "tensor_map_attention_count: %llu\n", profile->attention_count);
-    model_target_out_writef(model_target_out(), "tensor_map_attention_q_count: %llu\n", profile->attention_q_count);
-    model_target_out_writef(model_target_out(), "tensor_map_attention_k_count: %llu\n", profile->attention_k_count);
-    model_target_out_writef(model_target_out(), "tensor_map_attention_v_count: %llu\n", profile->attention_v_count);
-    model_target_out_writef(model_target_out(), "tensor_map_attention_o_count: %llu\n", profile->attention_o_count);
-    model_target_out_writef(model_target_out(), "tensor_map_mlp_count: %llu\n", profile->mlp_count);
-    model_target_out_writef(model_target_out(), "tensor_map_mlp_gate_count: %llu\n", profile->mlp_gate_count);
-    model_target_out_writef(model_target_out(), "tensor_map_mlp_up_count: %llu\n", profile->mlp_up_count);
-    model_target_out_writef(model_target_out(), "tensor_map_mlp_down_count: %llu\n", profile->mlp_down_count);
-    model_target_out_writef(model_target_out(), "tensor_map_norm_count: %llu\n", profile->norm_count);
-    model_target_out_writef(model_target_out(), "tensor_map_output_head_count: %llu\n", profile->output_head_count);
-    model_target_out_writef(model_target_out(), "tensor_map_qwen_linear_attn_count: %llu\n",
+    model_target_textf(model_target_out(), "tensor_map_embedding_count: %llu\n", profile->embedding_count);
+    model_target_textf(model_target_out(), "tensor_map_attention_count: %llu\n", profile->attention_count);
+    model_target_textf(model_target_out(), "tensor_map_attention_q_count: %llu\n", profile->attention_q_count);
+    model_target_textf(model_target_out(), "tensor_map_attention_k_count: %llu\n", profile->attention_k_count);
+    model_target_textf(model_target_out(), "tensor_map_attention_v_count: %llu\n", profile->attention_v_count);
+    model_target_textf(model_target_out(), "tensor_map_attention_o_count: %llu\n", profile->attention_o_count);
+    model_target_textf(model_target_out(), "tensor_map_mlp_count: %llu\n", profile->mlp_count);
+    model_target_textf(model_target_out(), "tensor_map_mlp_gate_count: %llu\n", profile->mlp_gate_count);
+    model_target_textf(model_target_out(), "tensor_map_mlp_up_count: %llu\n", profile->mlp_up_count);
+    model_target_textf(model_target_out(), "tensor_map_mlp_down_count: %llu\n", profile->mlp_down_count);
+    model_target_textf(model_target_out(), "tensor_map_norm_count: %llu\n", profile->norm_count);
+    model_target_textf(model_target_out(), "tensor_map_output_head_count: %llu\n", profile->output_head_count);
+    model_target_textf(model_target_out(), "tensor_map_qwen_linear_attn_count: %llu\n",
            profile->qwen_linear_attn_count);
-    model_target_out_writef(model_target_out(), "tensor_map_moe_router_count: %llu\n", profile->moe_router_count);
-    model_target_out_writef(model_target_out(), "tensor_map_moe_expert_count: %llu\n", profile->moe_expert_count);
-    model_target_out_writef(model_target_out(), "tensor_map_moe_shared_count: %llu\n", profile->moe_shared_count);
-    model_target_out_writef(model_target_out(), "tensor_map_required_role_coverage_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_map_moe_router_count: %llu\n", profile->moe_router_count);
+    model_target_textf(model_target_out(), "tensor_map_moe_expert_count: %llu\n", profile->moe_expert_count);
+    model_target_textf(model_target_out(), "tensor_map_moe_shared_count: %llu\n", profile->moe_shared_count);
+    model_target_textf(model_target_out(), "tensor_map_required_role_coverage_status: %s\n",
            tensor_naming_required_groups_present(profile)
                ? "required-groups-present"
                : "required-groups-missing");
-    model_target_out_writef(model_target_out(), "tensor_map_tokenizer_sidecar_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_map_tokenizer_sidecar_status: %s\n",
            profile->tokenizer_present ? "sidecar-observed" : "missing");
-    model_target_out_writef(model_target_out(), "tensor_map_config_sidecar_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_map_config_sidecar_status: %s\n",
            profile->config_present ? "sidecar-observed" : "missing");
-    model_target_out_writef(model_target_out(), "tensor_map_validation_status: lexical-and-header-only\n");
-    model_target_out_writef(model_target_out(), "tensor_map_canonical_role_status: mapped-candidates\n");
-    model_target_out_writef(model_target_out(), "tensor_map_runtime_role_coverage_status: report-only\n");
-    model_target_out_writef(model_target_out(), "tensor_map_artifact_contract_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "tensor_map_runtime_descriptor_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "tensor_map_graph_consumer_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next_required_rows: %s\n", YVEX_TENSOR_NAMING_NEXT_ROW);
+    model_target_textf(model_target_out(), "tensor_map_validation_status: lexical-and-header-only\n");
+    model_target_textf(model_target_out(), "tensor_map_canonical_role_status: mapped-candidates\n");
+    model_target_textf(model_target_out(), "tensor_map_runtime_role_coverage_status: report-only\n");
+    model_target_textf(model_target_out(), "tensor_map_artifact_contract_status: not-implemented\n");
+    model_target_textf(model_target_out(), "tensor_map_runtime_descriptor_status: not-implemented\n");
+    model_target_textf(model_target_out(), "tensor_map_graph_consumer_status: not-implemented\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next_required_rows: %s\n", YVEX_TENSOR_NAMING_NEXT_ROW);
     for (i = 0; i < profile->entry_count; ++i) {
         const yvex_tensor_naming_entry *entry = &profile->entries[i];
-        model_target_out_writef(model_target_out(), "tensor_map.entry.%llu.native_name: %s\n", i, entry->native_name);
-        model_target_out_writef(model_target_out(), "tensor_map.entry.%llu.canonical_role: %s\n", i, entry->canonical_role);
-        model_target_out_writef(model_target_out(), "tensor_map.entry.%llu.family: %s\n", i, entry->family);
-        model_target_out_writef(model_target_out(), "tensor_map.entry.%llu.target_id: %s\n", i, entry->target_id);
-        model_target_out_writef(model_target_out(), "tensor_map.entry.%llu.collection: %s\n", i, entry->collection);
-        model_target_out_writef(model_target_out(), "tensor_map.entry.%llu.layer_index: %s\n", i, entry->layer_index);
-        model_target_out_writef(model_target_out(), "tensor_map.entry.%llu.expert_index: %s\n", i, entry->expert_index);
-        model_target_out_writef(model_target_out(), "tensor_map.entry.%llu.dtype: %s\n", i, entry->dtype);
-        model_target_out_writef(model_target_out(), "tensor_map.entry.%llu.rank: %s\n", i, entry->rank);
-        model_target_out_writef(model_target_out(), "tensor_map.entry.%llu.shape: %s\n", i,
+        model_target_textf(model_target_out(), "tensor_map.entry.%llu.native_name: %s\n", i, entry->native_name);
+        model_target_textf(model_target_out(), "tensor_map.entry.%llu.canonical_role: %s\n", i, entry->canonical_role);
+        model_target_textf(model_target_out(), "tensor_map.entry.%llu.family: %s\n", i, entry->family);
+        model_target_textf(model_target_out(), "tensor_map.entry.%llu.target_id: %s\n", i, entry->target_id);
+        model_target_textf(model_target_out(), "tensor_map.entry.%llu.collection: %s\n", i, entry->collection);
+        model_target_textf(model_target_out(), "tensor_map.entry.%llu.layer_index: %s\n", i, entry->layer_index);
+        model_target_textf(model_target_out(), "tensor_map.entry.%llu.expert_index: %s\n", i, entry->expert_index);
+        model_target_textf(model_target_out(), "tensor_map.entry.%llu.dtype: %s\n", i, entry->dtype);
+        model_target_textf(model_target_out(), "tensor_map.entry.%llu.rank: %s\n", i, entry->rank);
+        model_target_textf(model_target_out(), "tensor_map.entry.%llu.shape: %s\n", i,
                entry->shape[0] ? entry->shape : "unknown");
-        model_target_out_writef(model_target_out(), "tensor_map.entry.%llu.source_file: %s\n", i, entry->source_file);
-        model_target_out_writef(model_target_out(), "tensor_map.entry.%llu.mapping_status: %s\n",
+        model_target_textf(model_target_out(), "tensor_map.entry.%llu.source_file: %s\n", i, entry->source_file);
+        model_target_textf(model_target_out(), "tensor_map.entry.%llu.mapping_status: %s\n",
                i, entry->mapping_status);
-        model_target_out_writef(model_target_out(), "tensor_map.entry.%llu.mapping: %s -> %s\n",
+        model_target_textf(model_target_out(), "tensor_map.entry.%llu.mapping: %s -> %s\n",
                i, entry->native_name, entry->canonical_role);
     }
-    model_target_out_writef(model_target_out(), "boundary: %stensor naming map only; no runtime descriptor/graph/runtime/generation\n",
+    model_target_textf(model_target_out(), "boundary: %stensor naming map only; no runtime descriptor/graph/runtime/generation\n",
            tensor_naming_is_dense_family(profile) ? "dense " : "");
 }
 
@@ -3782,12 +3820,12 @@ static void print_tensor_map_audit_hint(const yvex_model_target_record *record)
     if (!record) return;
     spec = find_model_class_profile_spec(record->target_id);
     if (!spec) return;
-    model_target_out_writef(model_target_out(), "tensor_map_status: not-run\n");
-    model_target_out_writef(model_target_out(), "tensor_map_family: %s\n", spec->family_key);
-    model_target_out_writef(model_target_out(), "tensor_map_target_id: %s\n", spec->target_id);
-    model_target_out_writef(model_target_out(), "tensor_map_stage: header-naming-map\n");
-    model_target_out_writef(model_target_out(), "tensor_map_evidence_basis: header-metadata-only\n");
-    model_target_out_writef(model_target_out(), "tensor_map_next: %s\n", YVEX_TENSOR_NAMING_NEXT_ROW);
+    model_target_textf(model_target_out(), "tensor_map_status: not-run\n");
+    model_target_textf(model_target_out(), "tensor_map_family: %s\n", spec->family_key);
+    model_target_textf(model_target_out(), "tensor_map_target_id: %s\n", spec->target_id);
+    model_target_textf(model_target_out(), "tensor_map_stage: header-naming-map\n");
+    model_target_textf(model_target_out(), "tensor_map_evidence_basis: header-metadata-only\n");
+    model_target_textf(model_target_out(), "tensor_map_next: %s\n", YVEX_TENSOR_NAMING_NEXT_ROW);
 }
 
 static void print_output_head_map_audit_hint(const yvex_model_target_record *record)
@@ -3797,12 +3835,12 @@ static void print_output_head_map_audit_hint(const yvex_model_target_record *rec
     if (!record) return;
     spec = find_model_class_profile_spec(record->target_id);
     if (!spec) return;
-    model_target_out_writef(model_target_out(), "output_head_map_status: not-run\n");
-    model_target_out_writef(model_target_out(), "output_head_map_family: %s\n", spec->family_key);
-    model_target_out_writef(model_target_out(), "output_head_map_target_id: %s\n", spec->target_id);
-    model_target_out_writef(model_target_out(), "output_head_map_stage: header-output-head-map\n");
-    model_target_out_writef(model_target_out(), "output_head_map_evidence_basis: header-metadata-only\n");
-    model_target_out_writef(model_target_out(), "output_head_map_next: %s\n", YVEX_OUTPUT_HEAD_MAP_NEXT_ROW);
+    model_target_textf(model_target_out(), "output_head_map_status: not-run\n");
+    model_target_textf(model_target_out(), "output_head_map_family: %s\n", spec->family_key);
+    model_target_textf(model_target_out(), "output_head_map_target_id: %s\n", spec->target_id);
+    model_target_textf(model_target_out(), "output_head_map_stage: header-output-head-map\n");
+    model_target_textf(model_target_out(), "output_head_map_evidence_basis: header-metadata-only\n");
+    model_target_textf(model_target_out(), "output_head_map_next: %s\n", YVEX_OUTPUT_HEAD_MAP_NEXT_ROW);
 }
 
 static void output_head_map_entry_init(yvex_output_head_map_entry *entry)
@@ -4109,29 +4147,29 @@ static const char *output_head_map_normal_role(
 static void print_output_head_map_normal(
     const yvex_output_head_map_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "output-head-map: %s [%s]\n",
+    model_target_textf(model_target_out(), "output-head-map: %s [%s]\n",
            profile->record->target_id,
            compact_status_bracket(profile->status));
-    model_target_out_writef(model_target_out(), "family: %s  evidence: header-only\n", profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "head: %s  final_norm: %s  embedding: %s  tie: %s\n",
+    model_target_textf(model_target_out(), "family: %s  evidence: header-only\n", profile->spec->family_key);
+    model_target_textf(model_target_out(), "head: %s  final_norm: %s  embedding: %s  tie: %s\n",
            output_head_map_normal_role(&profile->output_head),
            output_head_map_normal_role(&profile->final_norm),
            output_head_map_normal_role(&profile->embedding),
            profile->tie_policy_status);
-    model_target_out_writef(model_target_out(), "shape: %s\n", profile->shape_relation_status);
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next: %s\n", YVEX_OUTPUT_HEAD_MAP_NEXT_ROW);
-    model_target_out_writef(model_target_out(), "boundary: mapping only; no logits/runtime/generation\n");
+    model_target_textf(model_target_out(), "shape: %s\n", profile->shape_relation_status);
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next: %s\n", YVEX_OUTPUT_HEAD_MAP_NEXT_ROW);
+    model_target_textf(model_target_out(), "boundary: mapping only; no logits/runtime/generation\n");
 }
 
 static void print_output_head_map_table(
     const yvex_output_head_map_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "OUTPUT HEAD TENSOR MAP\n\n");
-    model_target_out_writef(model_target_out(), "%-6s  %-20s  %-31s  %-4s  %-10s  %-5s  %-34s  %-24s  %s\n",
+    model_target_textf(model_target_out(), "OUTPUT HEAD TENSOR MAP\n\n");
+    model_target_textf(model_target_out(), "%-6s  %-20s  %-31s  %-4s  %-10s  %-5s  %-34s  %-24s  %s\n",
            "FAMILY", "TARGET", "STATUS", "HEAD", "FINAL_NORM", "EMBED",
            "TIE_POLICY", "SHAPE_RELATION", "NEXT");
-    model_target_out_writef(model_target_out(), "%-6s  %-20s  %-31s  %-4s  %-10s  %-5s  %-34s  %-24s  %s\n",
+    model_target_textf(model_target_out(), "%-6s  %-20s  %-31s  %-4s  %-10s  %-5s  %-34s  %-24s  %s\n",
            profile->spec->family_key,
            profile->record->target_id,
            profile->status,
@@ -4147,81 +4185,81 @@ static void print_output_head_entry_audit(
     const char *name,
     const yvex_output_head_map_entry *entry)
 {
-    model_target_out_writef(model_target_out(), "output_head.entry.%s.native_name: %s\n", name, entry->native_name);
-    model_target_out_writef(model_target_out(), "output_head.entry.%s.canonical_role: %s\n",
+    model_target_textf(model_target_out(), "output_head.entry.%s.native_name: %s\n", name, entry->native_name);
+    model_target_textf(model_target_out(), "output_head.entry.%s.canonical_role: %s\n",
            name, entry->canonical_role);
-    model_target_out_writef(model_target_out(), "output_head.entry.%s.mapping_status: %s\n",
+    model_target_textf(model_target_out(), "output_head.entry.%s.mapping_status: %s\n",
            name, entry->mapping_status);
-    model_target_out_writef(model_target_out(), "output_head.entry.%s.dtype: %s\n", name, entry->dtype);
-    model_target_out_writef(model_target_out(), "output_head.entry.%s.rank: %s\n", name, entry->rank);
-    model_target_out_writef(model_target_out(), "output_head.entry.%s.shape: %s\n", name, entry->shape);
-    model_target_out_writef(model_target_out(), "output_head.entry.%s.source_file: %s\n", name, entry->source_file);
+    model_target_textf(model_target_out(), "output_head.entry.%s.dtype: %s\n", name, entry->dtype);
+    model_target_textf(model_target_out(), "output_head.entry.%s.rank: %s\n", name, entry->rank);
+    model_target_textf(model_target_out(), "output_head.entry.%s.shape: %s\n", name, entry->shape);
+    model_target_textf(model_target_out(), "output_head.entry.%s.source_file: %s\n", name, entry->source_file);
 }
 
 static void print_output_head_map_audit(
     const yvex_output_head_map_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "output_head_map_status: %s\n", profile->status);
-    model_target_out_writef(model_target_out(), "output_head_map_family: %s\n", profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "output_head_map_target_id: %s\n", profile->record->target_id);
-    model_target_out_writef(model_target_out(), "output_head_map_stage: header-output-head-map\n");
-    model_target_out_writef(model_target_out(), "output_head_map_evidence_basis: header-metadata-only\n");
-    model_target_out_writef(model_target_out(), "output_head_map_source_status: %s\n",
+    model_target_textf(model_target_out(), "output_head_map_status: %s\n", profile->status);
+    model_target_textf(model_target_out(), "output_head_map_family: %s\n", profile->spec->family_key);
+    model_target_textf(model_target_out(), "output_head_map_target_id: %s\n", profile->record->target_id);
+    model_target_textf(model_target_out(), "output_head_map_stage: header-output-head-map\n");
+    model_target_textf(model_target_out(), "output_head_map_evidence_basis: header-metadata-only\n");
+    model_target_textf(model_target_out(), "output_head_map_source_status: %s\n",
            profile->source_exists ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "output_head_map_source_path: %s\n", profile->source_path);
-    model_target_out_writef(model_target_out(), "output_head_map_manifest_status: not-checked\n");
-    model_target_out_writef(model_target_out(), "output_head_map_config_status: %s\n",
+    model_target_textf(model_target_out(), "output_head_map_source_path: %s\n", profile->source_path);
+    model_target_textf(model_target_out(), "output_head_map_manifest_status: not-checked\n");
+    model_target_textf(model_target_out(), "output_head_map_config_status: %s\n",
            profile->config_present ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "output_head_map_tokenizer_status: %s\n",
+    model_target_textf(model_target_out(), "output_head_map_tokenizer_status: %s\n",
            profile->tokenizer_present ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "output_head_native_name: %s\n", profile->output_head.native_name);
-    model_target_out_writef(model_target_out(), "output_head_canonical_role: %s\n",
+    model_target_textf(model_target_out(), "output_head_native_name: %s\n", profile->output_head.native_name);
+    model_target_textf(model_target_out(), "output_head_canonical_role: %s\n",
            profile->output_head.canonical_role);
-    model_target_out_writef(model_target_out(), "output_head_mapping_status: %s\n",
+    model_target_textf(model_target_out(), "output_head_mapping_status: %s\n",
            profile->output_head.mapping_status);
-    model_target_out_writef(model_target_out(), "output_head_candidate_count: %llu\n",
+    model_target_textf(model_target_out(), "output_head_candidate_count: %llu\n",
            profile->output_head_candidate_count);
-    model_target_out_writef(model_target_out(), "output_head_ambiguous_count: %llu\n",
+    model_target_textf(model_target_out(), "output_head_ambiguous_count: %llu\n",
            profile->output_head_ambiguous_count);
-    model_target_out_writef(model_target_out(), "output_head_missing_status: %s\n",
+    model_target_textf(model_target_out(), "output_head_missing_status: %s\n",
            profile->output_head_missing_status);
-    model_target_out_writef(model_target_out(), "output_head_dtype: %s\n", profile->output_head.dtype);
-    model_target_out_writef(model_target_out(), "output_head_rank: %s\n", profile->output_head.rank);
-    model_target_out_writef(model_target_out(), "output_head_shape: %s\n", profile->output_head.shape);
-    model_target_out_writef(model_target_out(), "output_head_vocab_dim_candidate: %s\n",
+    model_target_textf(model_target_out(), "output_head_dtype: %s\n", profile->output_head.dtype);
+    model_target_textf(model_target_out(), "output_head_rank: %s\n", profile->output_head.rank);
+    model_target_textf(model_target_out(), "output_head_shape: %s\n", profile->output_head.shape);
+    model_target_textf(model_target_out(), "output_head_vocab_dim_candidate: %s\n",
            profile->output_head.vocab_dim_candidate);
-    model_target_out_writef(model_target_out(), "output_head_hidden_dim_candidate: %s\n",
+    model_target_textf(model_target_out(), "output_head_hidden_dim_candidate: %s\n",
            profile->output_head.hidden_dim_candidate);
-    model_target_out_writef(model_target_out(), "embedding_native_name: %s\n", profile->embedding.native_name);
-    model_target_out_writef(model_target_out(), "embedding_canonical_role: %s\n", profile->embedding.canonical_role);
-    model_target_out_writef(model_target_out(), "embedding_dtype: %s\n", profile->embedding.dtype);
-    model_target_out_writef(model_target_out(), "embedding_rank: %s\n", profile->embedding.rank);
-    model_target_out_writef(model_target_out(), "embedding_shape: %s\n", profile->embedding.shape);
-    model_target_out_writef(model_target_out(), "final_norm_native_name: %s\n", profile->final_norm.native_name);
-    model_target_out_writef(model_target_out(), "final_norm_canonical_role: %s\n",
+    model_target_textf(model_target_out(), "embedding_native_name: %s\n", profile->embedding.native_name);
+    model_target_textf(model_target_out(), "embedding_canonical_role: %s\n", profile->embedding.canonical_role);
+    model_target_textf(model_target_out(), "embedding_dtype: %s\n", profile->embedding.dtype);
+    model_target_textf(model_target_out(), "embedding_rank: %s\n", profile->embedding.rank);
+    model_target_textf(model_target_out(), "embedding_shape: %s\n", profile->embedding.shape);
+    model_target_textf(model_target_out(), "final_norm_native_name: %s\n", profile->final_norm.native_name);
+    model_target_textf(model_target_out(), "final_norm_canonical_role: %s\n",
            profile->final_norm.canonical_role);
-    model_target_out_writef(model_target_out(), "final_norm_dtype: %s\n", profile->final_norm.dtype);
-    model_target_out_writef(model_target_out(), "final_norm_rank: %s\n", profile->final_norm.rank);
-    model_target_out_writef(model_target_out(), "final_norm_shape: %s\n", profile->final_norm.shape);
-    model_target_out_writef(model_target_out(), "tie_policy_status: %s\n", profile->tie_policy_status);
-    model_target_out_writef(model_target_out(), "config_tie_word_embeddings_status: %s\n",
+    model_target_textf(model_target_out(), "final_norm_dtype: %s\n", profile->final_norm.dtype);
+    model_target_textf(model_target_out(), "final_norm_rank: %s\n", profile->final_norm.rank);
+    model_target_textf(model_target_out(), "final_norm_shape: %s\n", profile->final_norm.shape);
+    model_target_textf(model_target_out(), "tie_policy_status: %s\n", profile->tie_policy_status);
+    model_target_textf(model_target_out(), "config_tie_word_embeddings_status: %s\n",
            profile->config_tie_word_embeddings_status);
-    model_target_out_writef(model_target_out(), "shape_relation_status: %s\n", profile->shape_relation_status);
-    model_target_out_writef(model_target_out(), "output_head_runtime_consumer_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "output_head_logits_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "output_head_artifact_contract_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "output_head_runtime_descriptor_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "output_head_graph_consumer_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next_required_rows: %s\n", YVEX_OUTPUT_HEAD_MAP_NEXT_ROW);
+    model_target_textf(model_target_out(), "shape_relation_status: %s\n", profile->shape_relation_status);
+    model_target_textf(model_target_out(), "output_head_runtime_consumer_status: not-implemented\n");
+    model_target_textf(model_target_out(), "output_head_logits_status: not-implemented\n");
+    model_target_textf(model_target_out(), "output_head_artifact_contract_status: not-implemented\n");
+    model_target_textf(model_target_out(), "output_head_runtime_descriptor_status: not-implemented\n");
+    model_target_textf(model_target_out(), "output_head_graph_consumer_status: not-implemented\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next_required_rows: %s\n", YVEX_OUTPUT_HEAD_MAP_NEXT_ROW);
     print_output_head_entry_audit("output", &profile->output_head);
     print_output_head_entry_audit("embedding", &profile->embedding);
     print_output_head_entry_audit("final_norm", &profile->final_norm);
-    model_target_out_writef(model_target_out(), "boundary: output-head tensor mapping only; no logits/runtime/generation\n");
+    model_target_textf(model_target_out(), "boundary: output-head tensor mapping only; no logits/runtime/generation\n");
 }
 
 static void tokenizer_map_sidecar_init(yvex_tokenizer_map_sidecar *sidecar,
@@ -4974,32 +5012,32 @@ static int build_tokenizer_map_profile(
 static void print_tokenizer_map_normal(
     const yvex_tokenizer_map_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "tokenizer-map: %s\n", profile->record->target_id);
-    model_target_out_writef(model_target_out(), "family: %s\n", profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "status: %s\n", profile->status);
-    model_target_out_writef(model_target_out(), "tokenizer: %s\n",
+    model_target_textf(model_target_out(), "tokenizer-map: %s\n", profile->record->target_id);
+    model_target_textf(model_target_out(), "family: %s\n", profile->spec->family_key);
+    model_target_textf(model_target_out(), "status: %s\n", profile->status);
+    model_target_textf(model_target_out(), "tokenizer: %s\n",
            tokenizer_map_normal_sidecar(&profile->tokenizer_json, "present"));
-    model_target_out_writef(model_target_out(), "vocab: %s\n", tokenizer_map_vocab_status(profile));
-    model_target_out_writef(model_target_out(), "merges: %s\n", tokenizer_map_merges_status(profile));
-    model_target_out_writef(model_target_out(), "chat_template: %s\n",
+    model_target_textf(model_target_out(), "vocab: %s\n", tokenizer_map_vocab_status(profile));
+    model_target_textf(model_target_out(), "merges: %s\n", tokenizer_map_merges_status(profile));
+    model_target_textf(model_target_out(), "chat_template: %s\n",
            strcmp(profile->chat_template_status, "present") == 0
                ? "present"
                : profile->chat_template_status);
-    model_target_out_writef(model_target_out(), "specials: %s\n", profile->special_tokens_status);
-    model_target_out_writef(model_target_out(), "runtime: unsupported\n");
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next: %s\n", tokenizer_map_next_row(profile));
-    model_target_out_writef(model_target_out(), "boundary: tokenizer metadata mapping only; no tokenization/detokenization/runtime/generation\n");
+    model_target_textf(model_target_out(), "specials: %s\n", profile->special_tokens_status);
+    model_target_textf(model_target_out(), "runtime: unsupported\n");
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next: %s\n", tokenizer_map_next_row(profile));
+    model_target_textf(model_target_out(), "boundary: tokenizer metadata mapping only; no tokenization/detokenization/runtime/generation\n");
 }
 
 static void print_tokenizer_map_table(
     const yvex_tokenizer_map_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "TOKENIZER METADATA MAP\n\n");
-    model_target_out_writef(model_target_out(), "%-20s  %-6s  %-19s  %-9s  %-28s  %-22s  %-13s  %-8s  %s\n",
+    model_target_textf(model_target_out(), "TOKENIZER METADATA MAP\n\n");
+    model_target_textf(model_target_out(), "%-20s  %-6s  %-19s  %-9s  %-28s  %-22s  %-13s  %-8s  %s\n",
            "TARGET", "FAMILY", "STATUS", "TOKENIZER", "VOCAB", "MERGES",
            "CHAT_TEMPLATE", "SPECIALS", "NEXT");
-    model_target_out_writef(model_target_out(), "%-20s  %-6s  %-19s  %-9s  %-28s  %-22s  %-13s  %-8s  %s\n",
+    model_target_textf(model_target_out(), "%-20s  %-6s  %-19s  %-9s  %-28s  %-22s  %-13s  %-8s  %s\n",
            profile->record->target_id,
            profile->spec->family_key,
            profile->status,
@@ -5016,136 +5054,136 @@ static void print_tokenizer_map_table(
 static void print_tokenizer_map_audit(
     const yvex_tokenizer_map_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "schema_version: yvex.source.tokenizer_map.v1\n");
-    model_target_out_writef(model_target_out(), "tokenizer_map_status: %s\n", profile->status);
-    model_target_out_writef(model_target_out(), "tokenizer_map_family: %s\n", profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "tokenizer_map_target_id: %s\n", profile->record->target_id);
-    model_target_out_writef(model_target_out(), "target_id: %s\n", profile->record->target_id);
-    model_target_out_writef(model_target_out(), "family: %s\n", profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "tokenizer_map_stage: metadata-tokenizer-map\n");
-    model_target_out_writef(model_target_out(), "tokenizer_map_evidence_basis: sidecar-json-only\n");
-    model_target_out_writef(model_target_out(), "evidence_basis: sidecar-json-only\n");
-    model_target_out_writef(model_target_out(), "tokenizer_map_source_status: %s\n",
+    model_target_textf(model_target_out(), "schema_version: yvex.source.tokenizer_map.v1\n");
+    model_target_textf(model_target_out(), "tokenizer_map_status: %s\n", profile->status);
+    model_target_textf(model_target_out(), "tokenizer_map_family: %s\n", profile->spec->family_key);
+    model_target_textf(model_target_out(), "tokenizer_map_target_id: %s\n", profile->record->target_id);
+    model_target_textf(model_target_out(), "target_id: %s\n", profile->record->target_id);
+    model_target_textf(model_target_out(), "family: %s\n", profile->spec->family_key);
+    model_target_textf(model_target_out(), "tokenizer_map_stage: metadata-tokenizer-map\n");
+    model_target_textf(model_target_out(), "tokenizer_map_evidence_basis: sidecar-json-only\n");
+    model_target_textf(model_target_out(), "evidence_basis: sidecar-json-only\n");
+    model_target_textf(model_target_out(), "tokenizer_map_source_status: %s\n",
            profile->source_exists ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "tokenizer_map_source_path: %s\n", profile->source_path);
-    model_target_out_writef(model_target_out(), "source_path: %s\n", profile->source_path);
-    model_target_out_writef(model_target_out(), "tokenizer_json_status: %s\n", profile->tokenizer_json.status);
-    model_target_out_writef(model_target_out(), "tokenizer_json_path: %s\n", profile->tokenizer_json.path);
-    model_target_out_writef(model_target_out(), "tokenizer_config_status: %s\n", profile->tokenizer_config.status);
-    model_target_out_writef(model_target_out(), "tokenizer_config_path: %s\n", profile->tokenizer_config.path);
-    model_target_out_writef(model_target_out(), "special_tokens_map_status: %s\n",
+    model_target_textf(model_target_out(), "tokenizer_map_source_path: %s\n", profile->source_path);
+    model_target_textf(model_target_out(), "source_path: %s\n", profile->source_path);
+    model_target_textf(model_target_out(), "tokenizer_json_status: %s\n", profile->tokenizer_json.status);
+    model_target_textf(model_target_out(), "tokenizer_json_path: %s\n", profile->tokenizer_json.path);
+    model_target_textf(model_target_out(), "tokenizer_config_status: %s\n", profile->tokenizer_config.status);
+    model_target_textf(model_target_out(), "tokenizer_config_path: %s\n", profile->tokenizer_config.path);
+    model_target_textf(model_target_out(), "special_tokens_map_status: %s\n",
            profile->special_tokens_map.status);
-    model_target_out_writef(model_target_out(), "special_tokens_map_path: %s\n", profile->special_tokens_map.path);
-    model_target_out_writef(model_target_out(), "generation_config_status: %s\n",
+    model_target_textf(model_target_out(), "special_tokens_map_path: %s\n", profile->special_tokens_map.path);
+    model_target_textf(model_target_out(), "generation_config_status: %s\n",
            profile->generation_config.status);
-    model_target_out_writef(model_target_out(), "generation_config_path: %s\n", profile->generation_config.path);
-    model_target_out_writef(model_target_out(), "config_json_status: %s\n", profile->config_json.status);
-    model_target_out_writef(model_target_out(), "config_json_path: %s\n", profile->config_json.path);
-    model_target_out_writef(model_target_out(), "vocab_json_status: %s\n", profile->vocab_json.status);
-    model_target_out_writef(model_target_out(), "vocab_status: %s\n", tokenizer_map_vocab_status(profile));
-    model_target_out_writef(model_target_out(), "merges_txt_status: %s\n", profile->merges_txt.status);
-    model_target_out_writef(model_target_out(), "merges_status: %s\n", tokenizer_map_merges_status(profile));
-    model_target_out_writef(model_target_out(), "tokenizer_model_status: %s\n", profile->tokenizer_model.status);
-    model_target_out_writef(model_target_out(), "chat_template_file_status: %s\n",
+    model_target_textf(model_target_out(), "generation_config_path: %s\n", profile->generation_config.path);
+    model_target_textf(model_target_out(), "config_json_status: %s\n", profile->config_json.status);
+    model_target_textf(model_target_out(), "config_json_path: %s\n", profile->config_json.path);
+    model_target_textf(model_target_out(), "vocab_json_status: %s\n", profile->vocab_json.status);
+    model_target_textf(model_target_out(), "vocab_status: %s\n", tokenizer_map_vocab_status(profile));
+    model_target_textf(model_target_out(), "merges_txt_status: %s\n", profile->merges_txt.status);
+    model_target_textf(model_target_out(), "merges_status: %s\n", tokenizer_map_merges_status(profile));
+    model_target_textf(model_target_out(), "tokenizer_model_status: %s\n", profile->tokenizer_model.status);
+    model_target_textf(model_target_out(), "chat_template_file_status: %s\n",
            profile->chat_template_file.status);
-    model_target_out_writef(model_target_out(), "tokenizer_class: %s\n", profile->tokenizer_class);
-    model_target_out_writef(model_target_out(), "model_type: %s\n", profile->model_type);
-    model_target_out_writef(model_target_out(), "tokenizer_model_type: %s\n", profile->model_type);
-    model_target_out_writef(model_target_out(), "tokenizer_backend_type: %s\n", profile->tokenizer_backend_type);
-    model_target_out_writef(model_target_out(), "vocab_size_status: %s\n", profile->vocab_size_status);
-    model_target_out_writef(model_target_out(), "vocab_size: %s\n", profile->vocab_size);
-    model_target_out_writef(model_target_out(), "config_vocab_size: %s\n", profile->config_vocab_size);
-    model_target_out_writef(model_target_out(), "tokenizer_vocab_size: %s\n", profile->tokenizer_vocab_size);
-    model_target_out_writef(model_target_out(), "output_head_vocab_dim_candidate: %s\n",
+    model_target_textf(model_target_out(), "tokenizer_class: %s\n", profile->tokenizer_class);
+    model_target_textf(model_target_out(), "model_type: %s\n", profile->model_type);
+    model_target_textf(model_target_out(), "tokenizer_model_type: %s\n", profile->model_type);
+    model_target_textf(model_target_out(), "tokenizer_backend_type: %s\n", profile->tokenizer_backend_type);
+    model_target_textf(model_target_out(), "vocab_size_status: %s\n", profile->vocab_size_status);
+    model_target_textf(model_target_out(), "vocab_size: %s\n", profile->vocab_size);
+    model_target_textf(model_target_out(), "config_vocab_size: %s\n", profile->config_vocab_size);
+    model_target_textf(model_target_out(), "tokenizer_vocab_size: %s\n", profile->tokenizer_vocab_size);
+    model_target_textf(model_target_out(), "output_head_vocab_dim_candidate: %s\n",
            profile->output_head_vocab_dim_candidate);
-    model_target_out_writef(model_target_out(), "output_head_vocab_relation_status: %s\n",
+    model_target_textf(model_target_out(), "output_head_vocab_relation_status: %s\n",
            profile->output_head_vocab_relation_status);
-    model_target_out_writef(model_target_out(), "bos_token_id_status: %s\n", profile->bos_token_id_status);
-    model_target_out_writef(model_target_out(), "bos_token_id: %s\n", profile->bos_token_id);
-    model_target_out_writef(model_target_out(), "bos_token_status: %s\n", profile->bos_token_status);
-    model_target_out_writef(model_target_out(), "bos_token: %s\n", profile->bos_token);
-    model_target_out_writef(model_target_out(), "eos_token_id_status: %s\n", profile->eos_token_id_status);
-    model_target_out_writef(model_target_out(), "eos_token_id: %s\n", profile->eos_token_id);
-    model_target_out_writef(model_target_out(), "eos_token_status: %s\n", profile->eos_token_status);
-    model_target_out_writef(model_target_out(), "eos_token: %s\n", profile->eos_token);
-    model_target_out_writef(model_target_out(), "pad_token_id_status: %s\n", profile->pad_token_id_status);
-    model_target_out_writef(model_target_out(), "pad_token_id: %s\n", profile->pad_token_id);
-    model_target_out_writef(model_target_out(), "pad_token_status: %s\n", profile->pad_token_status);
-    model_target_out_writef(model_target_out(), "pad_token: %s\n", profile->pad_token);
-    model_target_out_writef(model_target_out(), "unk_token_id_status: %s\n", profile->unk_token_id_status);
-    model_target_out_writef(model_target_out(), "unk_token_id: %s\n", profile->unk_token_id);
-    model_target_out_writef(model_target_out(), "unk_token_status: %s\n", profile->unk_token_status);
-    model_target_out_writef(model_target_out(), "unk_token: %s\n", profile->unk_token);
-    model_target_out_writef(model_target_out(), "sep_token_id_status: %s\n", profile->sep_token_id_status);
-    model_target_out_writef(model_target_out(), "sep_token_id: %s\n", profile->sep_token_id);
-    model_target_out_writef(model_target_out(), "sep_token_status: %s\n", profile->sep_token_status);
-    model_target_out_writef(model_target_out(), "sep_token: %s\n", profile->sep_token);
-    model_target_out_writef(model_target_out(), "added_tokens_status: %s\n", profile->added_tokens_status);
-    model_target_out_writef(model_target_out(), "added_tokens_count: %s\n", profile->added_tokens_count);
-    model_target_out_writef(model_target_out(), "special_tokens_status: %s\n", profile->special_tokens_status);
-    model_target_out_writef(model_target_out(), "additional_special_tokens_status: %s\n",
+    model_target_textf(model_target_out(), "bos_token_id_status: %s\n", profile->bos_token_id_status);
+    model_target_textf(model_target_out(), "bos_token_id: %s\n", profile->bos_token_id);
+    model_target_textf(model_target_out(), "bos_token_status: %s\n", profile->bos_token_status);
+    model_target_textf(model_target_out(), "bos_token: %s\n", profile->bos_token);
+    model_target_textf(model_target_out(), "eos_token_id_status: %s\n", profile->eos_token_id_status);
+    model_target_textf(model_target_out(), "eos_token_id: %s\n", profile->eos_token_id);
+    model_target_textf(model_target_out(), "eos_token_status: %s\n", profile->eos_token_status);
+    model_target_textf(model_target_out(), "eos_token: %s\n", profile->eos_token);
+    model_target_textf(model_target_out(), "pad_token_id_status: %s\n", profile->pad_token_id_status);
+    model_target_textf(model_target_out(), "pad_token_id: %s\n", profile->pad_token_id);
+    model_target_textf(model_target_out(), "pad_token_status: %s\n", profile->pad_token_status);
+    model_target_textf(model_target_out(), "pad_token: %s\n", profile->pad_token);
+    model_target_textf(model_target_out(), "unk_token_id_status: %s\n", profile->unk_token_id_status);
+    model_target_textf(model_target_out(), "unk_token_id: %s\n", profile->unk_token_id);
+    model_target_textf(model_target_out(), "unk_token_status: %s\n", profile->unk_token_status);
+    model_target_textf(model_target_out(), "unk_token: %s\n", profile->unk_token);
+    model_target_textf(model_target_out(), "sep_token_id_status: %s\n", profile->sep_token_id_status);
+    model_target_textf(model_target_out(), "sep_token_id: %s\n", profile->sep_token_id);
+    model_target_textf(model_target_out(), "sep_token_status: %s\n", profile->sep_token_status);
+    model_target_textf(model_target_out(), "sep_token: %s\n", profile->sep_token);
+    model_target_textf(model_target_out(), "added_tokens_status: %s\n", profile->added_tokens_status);
+    model_target_textf(model_target_out(), "added_tokens_count: %s\n", profile->added_tokens_count);
+    model_target_textf(model_target_out(), "special_tokens_status: %s\n", profile->special_tokens_status);
+    model_target_textf(model_target_out(), "additional_special_tokens_status: %s\n",
            profile->additional_special_tokens_status);
-    model_target_out_writef(model_target_out(), "additional_special_tokens_count: %s\n",
+    model_target_textf(model_target_out(), "additional_special_tokens_count: %s\n",
            profile->additional_special_tokens_count);
-    model_target_out_writef(model_target_out(), "stop_token_candidate_status: %s\n",
+    model_target_textf(model_target_out(), "stop_token_candidate_status: %s\n",
            profile->stop_token_candidate_status);
-    model_target_out_writef(model_target_out(), "stop_token_candidate_count: %s\n",
+    model_target_textf(model_target_out(), "stop_token_candidate_count: %s\n",
            profile->stop_token_candidate_count);
-    model_target_out_writef(model_target_out(), "stop_token_candidate.0.id: %s\n",
+    model_target_textf(model_target_out(), "stop_token_candidate.0.id: %s\n",
            profile->stop_token_candidate_0_id);
-    model_target_out_writef(model_target_out(), "stop_token_candidate.0.text: %s\n",
+    model_target_textf(model_target_out(), "stop_token_candidate.0.text: %s\n",
            profile->stop_token_candidate_0_text);
-    model_target_out_writef(model_target_out(), "chat_template_status: %s\n", profile->chat_template_status);
-    model_target_out_writef(model_target_out(), "chat_template_present: %s\n", profile->chat_template_present);
-    model_target_out_writef(model_target_out(), "chat_template_source: %s\n", profile->chat_template_source);
-    model_target_out_writef(model_target_out(), "chat_template_hash_status: not-computed\n");
-    model_target_out_writef(model_target_out(), "prompt_template_status: %s\n", profile->prompt_template_status);
-    model_target_out_writef(model_target_out(), "chat_template_runtime_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "tokenizer_runtime_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "tokenization_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "detokenization_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "gguf_tokenizer_contract_status: planned\n");
-    model_target_out_writef(model_target_out(), "eos_stop_policy_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "stop_token_policy_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "prompt_template_runtime_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next_required_rows: %s\n", tokenizer_map_next_row(profile));
-    model_target_out_writef(model_target_out(), "boundary: tokenizer metadata mapping only; no tokenization/runtime/generation\n");
+    model_target_textf(model_target_out(), "chat_template_status: %s\n", profile->chat_template_status);
+    model_target_textf(model_target_out(), "chat_template_present: %s\n", profile->chat_template_present);
+    model_target_textf(model_target_out(), "chat_template_source: %s\n", profile->chat_template_source);
+    model_target_textf(model_target_out(), "chat_template_hash_status: not-computed\n");
+    model_target_textf(model_target_out(), "prompt_template_status: %s\n", profile->prompt_template_status);
+    model_target_textf(model_target_out(), "chat_template_runtime_status: not-implemented\n");
+    model_target_textf(model_target_out(), "tokenizer_runtime_status: not-implemented\n");
+    model_target_textf(model_target_out(), "tokenization_status: not-implemented\n");
+    model_target_textf(model_target_out(), "detokenization_status: not-implemented\n");
+    model_target_textf(model_target_out(), "gguf_tokenizer_contract_status: planned\n");
+    model_target_textf(model_target_out(), "eos_stop_policy_status: not-implemented\n");
+    model_target_textf(model_target_out(), "stop_token_policy_status: not-implemented\n");
+    model_target_textf(model_target_out(), "prompt_template_runtime_status: not-implemented\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next_required_rows: %s\n", tokenizer_map_next_row(profile));
+    model_target_textf(model_target_out(), "boundary: tokenizer metadata mapping only; no tokenization/runtime/generation\n");
 }
 
 static void print_tokenizer_map_json(
     const yvex_tokenizer_map_profile *profile)
 {
     if (!profile) return;
-    model_target_out_writef(model_target_out(), "{\"schema_version\":\"yvex.source.tokenizer_map.v1\",");
-    model_target_out_writef(model_target_out(), "\"status\":");
+    model_target_textf(model_target_out(), "{\"schema_version\":\"yvex.source.tokenizer_map.v1\",");
+    model_target_textf(model_target_out(), "\"status\":");
     model_target_json_write_escaped(model_target_out(), profile->status);
-    model_target_out_writef(model_target_out(), ",\"target_id\":");
+    model_target_textf(model_target_out(), ",\"target_id\":");
     model_target_json_write_escaped(model_target_out(), profile->record->target_id);
-    model_target_out_writef(model_target_out(), ",\"family\":");
+    model_target_textf(model_target_out(), ",\"family\":");
     model_target_json_write_escaped(model_target_out(), profile->spec->family_key);
-    model_target_out_writef(model_target_out(), ",\"source_path\":");
+    model_target_textf(model_target_out(), ",\"source_path\":");
     model_target_json_write_escaped(model_target_out(), profile->source_path);
-    model_target_out_writef(model_target_out(), ",\"tokenizer_json_status\":");
+    model_target_textf(model_target_out(), ",\"tokenizer_json_status\":");
     model_target_json_write_escaped(model_target_out(), profile->tokenizer_json.status);
-    model_target_out_writef(model_target_out(), ",\"vocab_status\":");
+    model_target_textf(model_target_out(), ",\"vocab_status\":");
     model_target_json_write_escaped(model_target_out(), tokenizer_map_vocab_status(profile));
-    model_target_out_writef(model_target_out(), ",\"merges_status\":");
+    model_target_textf(model_target_out(), ",\"merges_status\":");
     model_target_json_write_escaped(model_target_out(), tokenizer_map_merges_status(profile));
-    model_target_out_writef(model_target_out(), ",\"chat_template_status\":");
+    model_target_textf(model_target_out(), ",\"chat_template_status\":");
     model_target_json_write_escaped(model_target_out(), profile->chat_template_status);
-    model_target_out_writef(model_target_out(), ",\"special_tokens_status\":");
+    model_target_textf(model_target_out(), ",\"special_tokens_status\":");
     model_target_json_write_escaped(model_target_out(), profile->special_tokens_status);
-    model_target_out_writef(model_target_out(), ",\"tokenizer_runtime_status\":\"not-implemented\",");
-    model_target_out_writef(model_target_out(), "\"generation\":\"unsupported-full-model\",");
-    model_target_out_writef(model_target_out(), "\"benchmark_status\":\"not-measured\",");
-    model_target_out_writef(model_target_out(), "\"next\":");
+    model_target_textf(model_target_out(), ",\"tokenizer_runtime_status\":\"not-implemented\",");
+    model_target_textf(model_target_out(), "\"generation\":\"unsupported-full-model\",");
+    model_target_textf(model_target_out(), "\"benchmark_status\":\"not-measured\",");
+    model_target_textf(model_target_out(), "\"next\":");
     model_target_json_write_escaped(model_target_out(), tokenizer_map_next_row(profile));
-    model_target_out_writef(model_target_out(), "}\n");
+    model_target_textf(model_target_out(), "}\n");
 }
 
 static void print_tokenizer_map_audit_hint(const yvex_model_target_record *record)
@@ -5155,13 +5193,13 @@ static void print_tokenizer_map_audit_hint(const yvex_model_target_record *recor
     if (!record) return;
     spec = find_model_class_profile_spec(record->target_id);
     if (!spec) return;
-    model_target_out_writef(model_target_out(), "tokenizer_map_status: not-run\n");
-    model_target_out_writef(model_target_out(), "tokenizer_map_family: %s\n", spec->family_key);
-    model_target_out_writef(model_target_out(), "tokenizer_map_target_id: %s\n", spec->target_id);
-    model_target_out_writef(model_target_out(), "tokenizer_map_stage: metadata-tokenizer-map\n");
-    model_target_out_writef(model_target_out(), "tokenizer_map_evidence_basis: sidecar-metadata-only\n");
-    model_target_out_writef(model_target_out(), "tokenizer_runtime_status: not-implemented\n");
-    model_target_out_writef(model_target_out(), "tokenizer_map_next: %s\n", YVEX_TOKENIZER_MISSING_NEXT_ROW);
+    model_target_textf(model_target_out(), "tokenizer_map_status: not-run\n");
+    model_target_textf(model_target_out(), "tokenizer_map_family: %s\n", spec->family_key);
+    model_target_textf(model_target_out(), "tokenizer_map_target_id: %s\n", spec->target_id);
+    model_target_textf(model_target_out(), "tokenizer_map_stage: metadata-tokenizer-map\n");
+    model_target_textf(model_target_out(), "tokenizer_map_evidence_basis: sidecar-metadata-only\n");
+    model_target_textf(model_target_out(), "tokenizer_runtime_status: not-implemented\n");
+    model_target_textf(model_target_out(), "tokenizer_map_next: %s\n", YVEX_TOKENIZER_MISSING_NEXT_ROW);
 }
 
 static const char *missing_role_many_status(unsigned long long count)
@@ -5619,34 +5657,34 @@ static void print_missing_role_list(const char *label,
     int first = 1;
 
     if (!profile) return;
-    model_target_out_writef(model_target_out(), "%s: ", label);
+    model_target_textf(model_target_out(), "%s: ", label);
     for (i = 0; i < profile->missing_entry_count; ++i) {
         const yvex_missing_role_entry *entry = &profile->missing_entries[i];
         int is_metadata = strstr(entry->blocker_class, "metadata") != NULL;
         if (metadata != is_metadata || strcmp(entry->status, "missing") != 0) {
             continue;
         }
-        model_target_out_writef(model_target_out(), "%s%s", first ? "" : ",", entry->name);
+        model_target_textf(model_target_out(), "%s%s", first ? "" : ",", entry->name);
         first = 0;
     }
-    if (first) model_target_out_writef(model_target_out(), "none");
-    model_target_out_writef(model_target_out(), "\n");
+    if (first) model_target_textf(model_target_out(), "none");
+    model_target_textf(model_target_out(), "\n");
 }
 
 static void print_missing_role_report_normal(
     const yvex_missing_role_report_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "missing-roles: %s [%s]\n",
+    model_target_textf(model_target_out(), "missing-roles: %s [%s]\n",
            profile->record->target_id,
            compact_status_bracket(profile->status));
-    model_target_out_writef(model_target_out(), "family: %s  evidence: header+sidecar-only\n",
+    model_target_textf(model_target_out(), "family: %s  evidence: header+sidecar-only\n",
            profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "source_roles: %llu/%u present, %llu missing, %llu ambiguous\n",
+    model_target_textf(model_target_out(), "source_roles: %llu/%u present, %llu missing, %llu ambiguous\n",
            profile->source_role_observed_count,
            missing_role_source_required_count(profile),
            profile->source_role_missing_count,
            profile->source_role_ambiguous_count);
-    model_target_out_writef(model_target_out(), "metadata_roles: %llu/4 present, %llu missing, %llu ambiguous\n",
+    model_target_textf(model_target_out(), "metadata_roles: %llu/4 present, %llu missing, %llu ambiguous\n",
            profile->metadata_observed_count,
            profile->metadata_missing_count,
            profile->metadata_ambiguous_count);
@@ -5656,19 +5694,19 @@ static void print_missing_role_report_normal(
     if (profile->metadata_missing_count > 0) {
         print_missing_role_list("missing_metadata", profile, 1);
     }
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next: %s\n", YVEX_MISSING_ROLE_REPORT_NEXT_ROW);
-    model_target_out_writef(model_target_out(), "boundary: report-only; use --audit for role details\n");
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next: %s\n", YVEX_MISSING_ROLE_REPORT_NEXT_ROW);
+    model_target_textf(model_target_out(), "boundary: report-only; use --audit for role details\n");
 }
 
 static void print_missing_role_report_table(
     const yvex_missing_role_report_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "MISSING ROLE BLOCKER REPORT\n\n");
-    model_target_out_writef(model_target_out(), "%-6s  %-15s  %-29s  %7s  %8s  %9s  %8s  %9s  %-30s  %s\n",
+    model_target_textf(model_target_out(), "MISSING ROLE BLOCKER REPORT\n\n");
+    model_target_textf(model_target_out(), "%-6s  %-15s  %-29s  %7s  %8s  %9s  %8s  %9s  %-30s  %s\n",
            "FAMILY", "TARGET", "STATUS", "OBS_SRC", "MISS_SRC",
            "AMBIG_SRC", "OBS_META", "MISS_META", "TOP_BLOCKER", "NEXT");
-    model_target_out_writef(model_target_out(), "%-6s  %-15s  %-29s  %7llu  %8llu  %9llu  %8llu  %9llu  %-30s  %s\n",
+    model_target_textf(model_target_out(), "%-6s  %-15s  %-29s  %7llu  %8llu  %9llu  %8llu  %9llu  %-30s  %s\n",
            profile->spec->family_key,
            profile->record->target_id,
            profile->status,
@@ -5686,105 +5724,105 @@ static void print_missing_role_report_audit(
 {
     unsigned long long i;
 
-    model_target_out_writef(model_target_out(), "missing_role_report_status: %s\n", profile->status);
-    model_target_out_writef(model_target_out(), "missing_role_report_family: %s\n", profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "missing_role_report_target_id: %s\n", profile->record->target_id);
-    model_target_out_writef(model_target_out(), "missing_role_report_stage: missing-role-blocker-report\n");
-    model_target_out_writef(model_target_out(), "missing_role_report_evidence_basis: header-and-sidecar-metadata-only\n");
-    model_target_out_writef(model_target_out(), "missing_role_report_source_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_report_status: %s\n", profile->status);
+    model_target_textf(model_target_out(), "missing_role_report_family: %s\n", profile->spec->family_key);
+    model_target_textf(model_target_out(), "missing_role_report_target_id: %s\n", profile->record->target_id);
+    model_target_textf(model_target_out(), "missing_role_report_stage: missing-role-blocker-report\n");
+    model_target_textf(model_target_out(), "missing_role_report_evidence_basis: header-and-sidecar-metadata-only\n");
+    model_target_textf(model_target_out(), "missing_role_report_source_status: %s\n",
            profile->source_exists ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "missing_role_report_source_path: %s\n", profile->source_path);
-    model_target_out_writef(model_target_out(), "missing_role_source_role_required_count: %u\n",
+    model_target_textf(model_target_out(), "missing_role_report_source_path: %s\n", profile->source_path);
+    model_target_textf(model_target_out(), "missing_role_source_role_required_count: %u\n",
            missing_role_source_required_count(profile));
-    model_target_out_writef(model_target_out(), "missing_role_source_role_observed_count: %llu\n",
+    model_target_textf(model_target_out(), "missing_role_source_role_observed_count: %llu\n",
            profile->source_role_observed_count);
-    model_target_out_writef(model_target_out(), "missing_role_source_role_missing_count: %llu\n",
+    model_target_textf(model_target_out(), "missing_role_source_role_missing_count: %llu\n",
            profile->source_role_missing_count);
-    model_target_out_writef(model_target_out(), "missing_role_source_role_ambiguous_count: %llu\n",
+    model_target_textf(model_target_out(), "missing_role_source_role_ambiguous_count: %llu\n",
            profile->source_role_ambiguous_count);
-    model_target_out_writef(model_target_out(), "missing_role_metadata_required_count: 4\n");
-    model_target_out_writef(model_target_out(), "missing_role_metadata_observed_count: %llu\n",
+    model_target_textf(model_target_out(), "missing_role_metadata_required_count: 4\n");
+    model_target_textf(model_target_out(), "missing_role_metadata_observed_count: %llu\n",
            profile->metadata_observed_count);
-    model_target_out_writef(model_target_out(), "missing_role_metadata_missing_count: %llu\n",
+    model_target_textf(model_target_out(), "missing_role_metadata_missing_count: %llu\n",
            profile->metadata_missing_count);
-    model_target_out_writef(model_target_out(), "missing_role_metadata_ambiguous_count: %llu\n",
+    model_target_textf(model_target_out(), "missing_role_metadata_ambiguous_count: %llu\n",
            profile->metadata_ambiguous_count);
-    model_target_out_writef(model_target_out(), "missing_role_embedding_status: %s\n", profile->embedding_status);
-    model_target_out_writef(model_target_out(), "missing_role_attention_norm_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_embedding_status: %s\n", profile->embedding_status);
+    model_target_textf(model_target_out(), "missing_role_attention_norm_status: %s\n",
            profile->attention_norm_status);
-    model_target_out_writef(model_target_out(), "missing_role_attention_q_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_attention_q_status: %s\n",
            profile->attention_q_status);
-    model_target_out_writef(model_target_out(), "missing_role_attention_k_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_attention_k_status: %s\n",
            profile->attention_k_status);
-    model_target_out_writef(model_target_out(), "missing_role_attention_v_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_attention_v_status: %s\n",
            profile->attention_v_status);
-    model_target_out_writef(model_target_out(), "missing_role_attention_o_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_attention_o_status: %s\n",
            profile->attention_o_status);
-    model_target_out_writef(model_target_out(), "missing_role_mlp_norm_status: %s\n", profile->mlp_norm_status);
-    model_target_out_writef(model_target_out(), "missing_role_mlp_gate_status: %s\n", profile->mlp_gate_status);
-    model_target_out_writef(model_target_out(), "missing_role_mlp_up_status: %s\n", profile->mlp_up_status);
-    model_target_out_writef(model_target_out(), "missing_role_mlp_down_status: %s\n", profile->mlp_down_status);
-    model_target_out_writef(model_target_out(), "missing_role_final_norm_status: %s\n", profile->final_norm_status);
-    model_target_out_writef(model_target_out(), "missing_role_output_head_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_mlp_norm_status: %s\n", profile->mlp_norm_status);
+    model_target_textf(model_target_out(), "missing_role_mlp_gate_status: %s\n", profile->mlp_gate_status);
+    model_target_textf(model_target_out(), "missing_role_mlp_up_status: %s\n", profile->mlp_up_status);
+    model_target_textf(model_target_out(), "missing_role_mlp_down_status: %s\n", profile->mlp_down_status);
+    model_target_textf(model_target_out(), "missing_role_final_norm_status: %s\n", profile->final_norm_status);
+    model_target_textf(model_target_out(), "missing_role_output_head_status: %s\n",
            profile->output_head_status);
-    model_target_out_writef(model_target_out(), "missing_role_tied_head_policy_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_tied_head_policy_status: %s\n",
            profile->tied_head_policy_status);
-    model_target_out_writef(model_target_out(), "missing_role_qwen_linear_attn_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_qwen_linear_attn_status: %s\n",
            profile->qwen_linear_attn_status);
-    model_target_out_writef(model_target_out(), "missing_role_qwen_linear_attn_count: %llu\n",
+    model_target_textf(model_target_out(), "missing_role_qwen_linear_attn_count: %llu\n",
            profile->qwen_linear_attn_count);
-    model_target_out_writef(model_target_out(), "missing_role_moe_router_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_moe_router_status: %s\n",
            profile->moe_router_status);
-    model_target_out_writef(model_target_out(), "missing_role_moe_router_count: %llu\n",
+    model_target_textf(model_target_out(), "missing_role_moe_router_count: %llu\n",
            profile->moe_router_count);
-    model_target_out_writef(model_target_out(), "missing_role_moe_expert_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_moe_expert_status: %s\n",
            profile->moe_expert_status);
-    model_target_out_writef(model_target_out(), "missing_role_moe_expert_count: %llu\n",
+    model_target_textf(model_target_out(), "missing_role_moe_expert_count: %llu\n",
            profile->moe_expert_count);
-    model_target_out_writef(model_target_out(), "missing_role_moe_shared_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_moe_shared_status: %s\n",
            profile->moe_shared_status);
-    model_target_out_writef(model_target_out(), "missing_role_moe_shared_count: %llu\n",
+    model_target_textf(model_target_out(), "missing_role_moe_shared_count: %llu\n",
            profile->moe_shared_count);
-    model_target_out_writef(model_target_out(), "missing_role_unknown_tensor_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_unknown_tensor_status: %s\n",
            profile->unknown_tensor_status);
-    model_target_out_writef(model_target_out(), "missing_role_unknown_tensor_count: %llu\n",
+    model_target_textf(model_target_out(), "missing_role_unknown_tensor_count: %llu\n",
            profile->unmapped_unknown_count);
-    model_target_out_writef(model_target_out(), "missing_role_tokenizer_metadata_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_tokenizer_metadata_status: %s\n",
            profile->tokenizer_metadata_status);
-    model_target_out_writef(model_target_out(), "missing_role_config_metadata_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_config_metadata_status: %s\n",
            profile->config_metadata_status);
-    model_target_out_writef(model_target_out(), "missing_role_generation_metadata_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_generation_metadata_status: %s\n",
            profile->generation_metadata_status);
-    model_target_out_writef(model_target_out(), "missing_role_special_tokens_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_special_tokens_status: %s\n",
            profile->special_tokens_status);
-    model_target_out_writef(model_target_out(), "missing_role_artifact_contract_status: missing\n");
-    model_target_out_writef(model_target_out(), "missing_role_runtime_descriptor_status: missing\n");
-    model_target_out_writef(model_target_out(), "missing_role_graph_consumer_status: missing\n");
-    model_target_out_writef(model_target_out(), "missing_role_backend_residency_status: missing\n");
-    model_target_out_writef(model_target_out(), "missing_role_attention_runtime_status: missing\n");
-    model_target_out_writef(model_target_out(), "missing_role_kv_runtime_state_status: missing\n");
-    model_target_out_writef(model_target_out(), "missing_role_prefill_runtime_status: missing\n");
-    model_target_out_writef(model_target_out(), "missing_role_decode_runtime_status: missing\n");
-    model_target_out_writef(model_target_out(), "missing_role_logits_runtime_status: missing\n");
-    model_target_out_writef(model_target_out(), "missing_role_tokenizer_runtime_status: missing\n");
-    model_target_out_writef(model_target_out(), "missing_role_sampling_runtime_status: missing\n");
-    model_target_out_writef(model_target_out(), "missing_role_generation_runtime_status: missing\n");
-    model_target_out_writef(model_target_out(), "missing_role_eval_benchmark_status: missing\n");
-    model_target_out_writef(model_target_out(), "missing_role_top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "missing_role_next_required_row: %s\n",
+    model_target_textf(model_target_out(), "missing_role_artifact_contract_status: missing\n");
+    model_target_textf(model_target_out(), "missing_role_runtime_descriptor_status: missing\n");
+    model_target_textf(model_target_out(), "missing_role_graph_consumer_status: missing\n");
+    model_target_textf(model_target_out(), "missing_role_backend_residency_status: missing\n");
+    model_target_textf(model_target_out(), "missing_role_attention_runtime_status: missing\n");
+    model_target_textf(model_target_out(), "missing_role_kv_runtime_state_status: missing\n");
+    model_target_textf(model_target_out(), "missing_role_prefill_runtime_status: missing\n");
+    model_target_textf(model_target_out(), "missing_role_decode_runtime_status: missing\n");
+    model_target_textf(model_target_out(), "missing_role_logits_runtime_status: missing\n");
+    model_target_textf(model_target_out(), "missing_role_tokenizer_runtime_status: missing\n");
+    model_target_textf(model_target_out(), "missing_role_sampling_runtime_status: missing\n");
+    model_target_textf(model_target_out(), "missing_role_generation_runtime_status: missing\n");
+    model_target_textf(model_target_out(), "missing_role_eval_benchmark_status: missing\n");
+    model_target_textf(model_target_out(), "missing_role_top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "missing_role_next_required_row: %s\n",
            YVEX_MISSING_ROLE_REPORT_NEXT_ROW);
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
     for (i = 0; i < profile->missing_entry_count; ++i) {
         const yvex_missing_role_entry *entry = &profile->missing_entries[i];
-        model_target_out_writef(model_target_out(), "missing_role.entry.%llu.role: %s\n", i, entry->name);
-        model_target_out_writef(model_target_out(), "missing_role.entry.%llu.blocker_class: %s\n",
+        model_target_textf(model_target_out(), "missing_role.entry.%llu.role: %s\n", i, entry->name);
+        model_target_textf(model_target_out(), "missing_role.entry.%llu.blocker_class: %s\n",
                i, entry->blocker_class);
-        model_target_out_writef(model_target_out(), "missing_role.entry.%llu.status: %s\n", i, entry->status);
+        model_target_textf(model_target_out(), "missing_role.entry.%llu.status: %s\n", i, entry->status);
     }
-    model_target_out_writef(model_target_out(), "boundary: missing-role report only; no artifact/runtime descriptor/graph/runtime/generation\n");
+    model_target_textf(model_target_out(), "boundary: missing-role report only; no artifact/runtime descriptor/graph/runtime/generation\n");
 }
 
 static void print_missing_role_report_audit_hint(
@@ -5795,12 +5833,12 @@ static void print_missing_role_report_audit_hint(
     if (!record) return;
     spec = find_model_class_profile_spec(record->target_id);
     if (!spec) return;
-    model_target_out_writef(model_target_out(), "missing_role_report_status: not-run\n");
-    model_target_out_writef(model_target_out(), "missing_role_report_family: %s\n", spec->family_key);
-    model_target_out_writef(model_target_out(), "missing_role_report_target_id: %s\n", spec->target_id);
-    model_target_out_writef(model_target_out(), "missing_role_report_stage: missing-role-blocker-report\n");
-    model_target_out_writef(model_target_out(), "missing_role_top_blocker: not-run\n");
-    model_target_out_writef(model_target_out(), "missing_role_next_required_row: %s\n",
+    model_target_textf(model_target_out(), "missing_role_report_status: not-run\n");
+    model_target_textf(model_target_out(), "missing_role_report_family: %s\n", spec->family_key);
+    model_target_textf(model_target_out(), "missing_role_report_target_id: %s\n", spec->target_id);
+    model_target_textf(model_target_out(), "missing_role_report_stage: missing-role-blocker-report\n");
+    model_target_textf(model_target_out(), "missing_role_top_blocker: not-run\n");
+    model_target_textf(model_target_out(), "missing_role_next_required_row: %s\n",
            YVEX_MISSING_ROLE_REPORT_NEXT_ROW);
 }
 
@@ -5969,7 +6007,7 @@ static void print_missing_roles_row(const char *group,
                                     unsigned long long found,
                                     const char *detail)
 {
-    model_target_out_writef(model_target_out(), "%-16s  %-10s  %5llu  %s\n",
+    model_target_textf(model_target_out(), "%-16s  %-10s  %5llu  %s\n",
            group,
            status ? status : "missing",
            found,
@@ -5984,12 +6022,12 @@ static void print_missing_roles_porcelain_normal(
 
     if (!profile || !ctx) return;
     is_gemma = strcmp(profile->spec->family_key, "gemma") == 0;
-    model_target_out_writef(model_target_out(), "missing-roles: %s\n", profile->record->target_id);
-    model_target_out_writef(model_target_out(), "family: %s\n", profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "status: blocked\n");
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", ctx->top_blocker);
-    model_target_out_writef(model_target_out(), "next: %s\n\n", missing_roles_porcelain_next_row(ctx));
-    model_target_out_writef(model_target_out(), "%-16s  %-10s  %5s  %s\n",
+    model_target_textf(model_target_out(), "missing-roles: %s\n", profile->record->target_id);
+    model_target_textf(model_target_out(), "family: %s\n", profile->spec->family_key);
+    model_target_textf(model_target_out(), "status: blocked\n");
+    model_target_textf(model_target_out(), "top_blocker: %s\n", ctx->top_blocker);
+    model_target_textf(model_target_out(), "next: %s\n\n", missing_roles_porcelain_next_row(ctx));
+    model_target_textf(model_target_out(), "%-16s  %-10s  %5s  %s\n",
            "ROLE GROUP", "STATUS", "FOUND", "DETAIL");
     if (is_gemma) {
         print_missing_roles_row("embedding",
@@ -6085,7 +6123,7 @@ static void print_missing_roles_porcelain_normal(
         print_missing_roles_row("artifact", "missing", 0,
                                 "GGUF emission blocked");
     }
-    model_target_out_writef(model_target_out(), "\nboundary: missing-role report only; no GGUF/runtime/generation\n");
+    model_target_textf(model_target_out(), "\nboundary: missing-role report only; no GGUF/runtime/generation\n");
 }
 
 static void print_missing_roles_porcelain_table(
@@ -6097,11 +6135,11 @@ static void print_missing_roles_porcelain_table(
     if (!profile || !ctx) return;
     moe_total = profile->moe_router_count + profile->moe_expert_count +
                 profile->moe_shared_count;
-    model_target_out_writef(model_target_out(), "%-18s  %-6s  %-7s  %-24s  %5s  %5s  %5s  %5s  %5s  %3s  %7s  %-9s  %-8s  %s\n",
+    model_target_textf(model_target_out(), "%-18s  %-6s  %-7s  %-24s  %5s  %5s  %5s  %5s  %5s  %3s  %7s  %-9s  %-8s  %s\n",
            "TARGET", "FAMILY", "STATUS", "TOP_BLOCKER", "EMBED", "ATTN",
            "MLP", "NORM", "HEAD", "MOE", "UNKNOWN", "TOKENIZER",
            "ARTIFACT", "NEXT");
-    model_target_out_writef(model_target_out(), "%-18s  %-6s  %-7s  %-24s  %5llu  %5llu  %5llu  %5llu  %5llu  %3llu  %7llu  %-9s  %-8s  %s\n",
+    model_target_textf(model_target_out(), "%-18s  %-6s  %-7s  %-24s  %5llu  %5llu  %5llu  %5llu  %5llu  %3llu  %7llu  %-9s  %-8s  %s\n",
            profile->record->target_id,
            profile->spec->family_key,
            "blocked",
@@ -6125,16 +6163,16 @@ static void print_missing_roles_porcelain_audit(
     unsigned long long i;
 
     if (!profile || !ctx) return;
-    model_target_out_writef(model_target_out(), "target_id: %s\n", profile->record->target_id);
-    model_target_out_writef(model_target_out(), "family: %s\n", profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "source_status: %s\n", profile->source_exists ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "model_class_status: %s\n", profile->source_exists ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "tensor_map_status: %s\n", ctx->tensor_map_status);
-    model_target_out_writef(model_target_out(), "tensor_map_path: %s\n", ctx->tensor_map_path);
-    model_target_out_writef(model_target_out(), "tensor_map_mapped_total_count: %llu\n", profile->mapped_total_count);
-    model_target_out_writef(model_target_out(), "tensor_map_unmapped_unknown_count: %llu\n",
+    model_target_textf(model_target_out(), "target_id: %s\n", profile->record->target_id);
+    model_target_textf(model_target_out(), "family: %s\n", profile->spec->family_key);
+    model_target_textf(model_target_out(), "source_status: %s\n", profile->source_exists ? "present" : "missing");
+    model_target_textf(model_target_out(), "model_class_status: %s\n", profile->source_exists ? "present" : "missing");
+    model_target_textf(model_target_out(), "tensor_map_status: %s\n", ctx->tensor_map_status);
+    model_target_textf(model_target_out(), "tensor_map_path: %s\n", ctx->tensor_map_path);
+    model_target_textf(model_target_out(), "tensor_map_mapped_total_count: %llu\n", profile->mapped_total_count);
+    model_target_textf(model_target_out(), "tensor_map_unmapped_unknown_count: %llu\n",
            profile->unmapped_unknown_count);
-    model_target_out_writef(model_target_out(), "tensor_map_role_counts: embed=%llu attention=%llu qwen_linear_attn=%llu mlp=%llu norm=%llu head=%llu moe_router=%llu moe_expert=%llu moe_shared=%llu unknown=%llu\n",
+    model_target_textf(model_target_out(), "tensor_map_role_counts: embed=%llu attention=%llu qwen_linear_attn=%llu mlp=%llu norm=%llu head=%llu moe_router=%llu moe_expert=%llu moe_shared=%llu unknown=%llu\n",
            profile->embedding_count,
            profile->attention_count,
            profile->qwen_linear_attn_count,
@@ -6145,47 +6183,47 @@ static void print_missing_roles_porcelain_audit(
            profile->moe_expert_count,
            profile->moe_shared_count,
            profile->unmapped_unknown_count);
-    model_target_out_writef(model_target_out(), "role_group.embedding.status: %s\n", profile->embedding_status);
-    model_target_out_writef(model_target_out(), "role_group.attention.status: %s\n",
+    model_target_textf(model_target_out(), "role_group.embedding.status: %s\n", profile->embedding_status);
+    model_target_textf(model_target_out(), "role_group.attention.status: %s\n",
            profile->attention_count ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "role_group.qwen_linear_attn.status: %s\n",
+    model_target_textf(model_target_out(), "role_group.qwen_linear_attn.status: %s\n",
            profile->qwen_linear_attn_status);
-    model_target_out_writef(model_target_out(), "role_group.mlp.status: %s\n",
+    model_target_textf(model_target_out(), "role_group.mlp.status: %s\n",
            profile->mlp_count ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "role_group.moe_router.status: %s\n",
+    model_target_textf(model_target_out(), "role_group.moe_router.status: %s\n",
            profile->moe_router_status);
-    model_target_out_writef(model_target_out(), "role_group.moe_experts.status: %s\n",
+    model_target_textf(model_target_out(), "role_group.moe_experts.status: %s\n",
            profile->moe_expert_status);
-    model_target_out_writef(model_target_out(), "role_group.shared_expert.status: %s\n",
+    model_target_textf(model_target_out(), "role_group.shared_expert.status: %s\n",
            profile->moe_shared_status);
-    model_target_out_writef(model_target_out(), "role_group.output_head.status: %s\n",
+    model_target_textf(model_target_out(), "role_group.output_head.status: %s\n",
            profile->output_head_status);
-    model_target_out_writef(model_target_out(), "role_group.tied_head_policy.status: %s\n",
+    model_target_textf(model_target_out(), "role_group.tied_head_policy.status: %s\n",
            profile->tied_head_policy_status);
-    model_target_out_writef(model_target_out(), "role_group.unknown_tensors.status: %s\n",
+    model_target_textf(model_target_out(), "role_group.unknown_tensors.status: %s\n",
            profile->unknown_tensor_status);
-    model_target_out_writef(model_target_out(), "output_head_map_status: %s\n", ctx->output_head_map_status);
-    model_target_out_writef(model_target_out(), "output_head_map_path: %s\n", ctx->output_head_map_path);
-    model_target_out_writef(model_target_out(), "tokenizer_map_status: %s\n", ctx->tokenizer_map_status);
-    model_target_out_writef(model_target_out(), "artifact_status: %s\n", ctx->artifact_status);
-    model_target_out_writef(model_target_out(), "expected_artifact_path: %s\n", ctx->expected_artifact_path);
-    model_target_out_writef(model_target_out(), "artifact_plan_status: planned-full-gguf\n");
-    model_target_out_writef(model_target_out(), "artifact_emission_status: not-performed\n");
-    model_target_out_writef(model_target_out(), "artifact_identity_status: %s\n", ctx->artifact_identity_status);
-    model_target_out_writef(model_target_out(), "prepare_blocker_count: %u\n", ctx->blocker_count);
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", ctx->top_blocker);
-    model_target_out_writef(model_target_out(), "missing_role_count: %llu\n", profile->missing_entry_count);
+    model_target_textf(model_target_out(), "output_head_map_status: %s\n", ctx->output_head_map_status);
+    model_target_textf(model_target_out(), "output_head_map_path: %s\n", ctx->output_head_map_path);
+    model_target_textf(model_target_out(), "tokenizer_map_status: %s\n", ctx->tokenizer_map_status);
+    model_target_textf(model_target_out(), "artifact_status: %s\n", ctx->artifact_status);
+    model_target_textf(model_target_out(), "expected_artifact_path: %s\n", ctx->expected_artifact_path);
+    model_target_textf(model_target_out(), "artifact_plan_status: planned-full-gguf\n");
+    model_target_textf(model_target_out(), "artifact_emission_status: not-performed\n");
+    model_target_textf(model_target_out(), "artifact_identity_status: %s\n", ctx->artifact_identity_status);
+    model_target_textf(model_target_out(), "prepare_blocker_count: %u\n", ctx->blocker_count);
+    model_target_textf(model_target_out(), "top_blocker: %s\n", ctx->top_blocker);
+    model_target_textf(model_target_out(), "missing_role_count: %llu\n", profile->missing_entry_count);
     for (i = 0; i < profile->missing_entry_count; ++i) {
         const yvex_missing_role_entry *entry = &profile->missing_entries[i];
-        model_target_out_writef(model_target_out(), "missing_role.%llu.name: %s\n", i, entry->name);
-        model_target_out_writef(model_target_out(), "missing_role.%llu.status: %s\n", i, entry->status);
-        model_target_out_writef(model_target_out(), "missing_role.%llu.detail: %s\n", i, entry->blocker_class);
+        model_target_textf(model_target_out(), "missing_role.%llu.name: %s\n", i, entry->name);
+        model_target_textf(model_target_out(), "missing_role.%llu.status: %s\n", i, entry->status);
+        model_target_textf(model_target_out(), "missing_role.%llu.detail: %s\n", i, entry->blocker_class);
     }
-    model_target_out_writef(model_target_out(), "next: %s\n", missing_roles_porcelain_next_row(ctx));
-    model_target_out_writef(model_target_out(), "runtime_execution: not-performed\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "boundary: missing-role report only; no GGUF/runtime/generation\n");
+    model_target_textf(model_target_out(), "next: %s\n", missing_roles_porcelain_next_row(ctx));
+    model_target_textf(model_target_out(), "runtime_execution: not-performed\n");
+    model_target_textf(model_target_out(), "generation: unsupported\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "boundary: missing-role report only; no GGUF/runtime/generation\n");
 }
 
 static void print_missing_roles_porcelain_json(
@@ -6193,42 +6231,42 @@ static void print_missing_roles_porcelain_json(
     const yvex_missing_roles_porcelain_context *ctx)
 {
     if (!profile || !ctx) return;
-    model_target_out_writef(model_target_out(), "{\"status\":\"blocked\",\"target_id\":");
+    model_target_textf(model_target_out(), "{\"status\":\"blocked\",\"target_id\":");
     model_target_json_write_escaped(model_target_out(), profile->record->target_id);
-    model_target_out_writef(model_target_out(), ",\"family\":");
+    model_target_textf(model_target_out(), ",\"family\":");
     model_target_json_write_escaped(model_target_out(), profile->spec->family_key);
-    model_target_out_writef(model_target_out(), ",\"top_blocker\":");
+    model_target_textf(model_target_out(), ",\"top_blocker\":");
     model_target_json_write_escaped(model_target_out(), ctx->top_blocker);
-    model_target_out_writef(model_target_out(), ",\"next\":");
+    model_target_textf(model_target_out(), ",\"next\":");
     model_target_json_write_escaped(model_target_out(), missing_roles_porcelain_next_row(ctx));
-    model_target_out_writef(model_target_out(), ",\"runtime_execution\":\"not-performed\",");
-    model_target_out_writef(model_target_out(), "\"role_groups\":{");
-    model_target_out_writef(model_target_out(), "\"embedding\":");
+    model_target_textf(model_target_out(), ",\"runtime_execution\":\"not-performed\",");
+    model_target_textf(model_target_out(), "\"role_groups\":{");
+    model_target_textf(model_target_out(), "\"embedding\":");
     model_target_json_write_escaped(model_target_out(), profile->embedding_status);
-    model_target_out_writef(model_target_out(), ",\"attention\":");
+    model_target_textf(model_target_out(), ",\"attention\":");
     model_target_json_write_escaped(model_target_out(),
                                     profile->attention_count ? "present" : "missing");
-    model_target_out_writef(model_target_out(), ",\"qwen_linear_attn\":");
+    model_target_textf(model_target_out(), ",\"qwen_linear_attn\":");
     model_target_json_write_escaped(model_target_out(), profile->qwen_linear_attn_status);
-    model_target_out_writef(model_target_out(), ",\"mlp\":");
+    model_target_textf(model_target_out(), ",\"mlp\":");
     model_target_json_write_escaped(model_target_out(),
                                     profile->mlp_count ? "present" : "missing");
-    model_target_out_writef(model_target_out(), ",\"moe_router\":");
+    model_target_textf(model_target_out(), ",\"moe_router\":");
     model_target_json_write_escaped(model_target_out(), profile->moe_router_status);
-    model_target_out_writef(model_target_out(), ",\"moe_experts\":");
+    model_target_textf(model_target_out(), ",\"moe_experts\":");
     model_target_json_write_escaped(model_target_out(), profile->moe_expert_status);
-    model_target_out_writef(model_target_out(), ",\"shared_expert\":");
+    model_target_textf(model_target_out(), ",\"shared_expert\":");
     model_target_json_write_escaped(model_target_out(), profile->moe_shared_status);
-    model_target_out_writef(model_target_out(), ",\"output_head\":");
+    model_target_textf(model_target_out(), ",\"output_head\":");
     model_target_json_write_escaped(model_target_out(), profile->output_head_status);
-    model_target_out_writef(model_target_out(), ",\"tied_head_policy\":");
+    model_target_textf(model_target_out(), ",\"tied_head_policy\":");
     model_target_json_write_escaped(model_target_out(), profile->tied_head_policy_status);
-    model_target_out_writef(model_target_out(), ",\"unknown_tensors\":");
+    model_target_textf(model_target_out(), ",\"unknown_tensors\":");
     model_target_json_write_escaped(model_target_out(), profile->unknown_tensor_status);
-    model_target_out_writef(model_target_out(), ",\"tokenizer\":");
+    model_target_textf(model_target_out(), ",\"tokenizer\":");
     model_target_json_write_escaped(model_target_out(), ctx->tokenizer_map_status);
-    model_target_out_writef(model_target_out(), "},");
-    model_target_out_writef(model_target_out(), "\"generation\":\"unsupported\",\"benchmark_status\":\"not-measured\"}\n");
+    model_target_textf(model_target_out(), "},");
+    model_target_textf(model_target_out(), "\"generation\":\"unsupported\",\"benchmark_status\":\"not-measured\"}\n");
 }
 
 static void tensor_mapping_gate_append_csv(char *out, size_t cap,
@@ -6414,7 +6452,7 @@ static int build_tensor_mapping_gate_profile(
 
 static void print_tensor_mapping_gate_boundary(void)
 {
-    model_target_out_writef(model_target_out(), "boundary: V010.MAP.9 is a report-only tensor mapping gate. It does not load tensor payloads, emit artifacts, complete quantization/artifact contract, construct runtime descriptors, attach backend residency, feed graph consumers, execute prefill/decode/logits/tokenizer/sampling/generation, evaluate, benchmark, claim throughput, or mark v0.1.0 release-ready.\n");
+    model_target_textf(model_target_out(), "boundary: V010.MAP.9 is a report-only tensor mapping gate. It does not load tensor payloads, emit artifacts, complete quantization/artifact contract, construct runtime descriptors, attach backend residency, feed graph consumers, execute prefill/decode/logits/tokenizer/sampling/generation, evaluate, benchmark, claim throughput, or mark v0.1.0 release-ready.\n");
 }
 
 static void print_tensor_mapping_gate_normal(
@@ -6427,25 +6465,25 @@ static void print_tensor_mapping_gate_normal(
         profile->missing_role.source_role_ambiguous_count +
         profile->missing_role.metadata_ambiguous_count;
 
-    model_target_out_writef(model_target_out(), "tensor-mapping-gate: %s [%s]\n",
+    model_target_textf(model_target_out(), "tensor-mapping-gate: %s [%s]\n",
            profile->record->target_id,
            compact_status_bracket(profile->status));
-    model_target_out_writef(model_target_out(), "gate: v0.1.0  family: %s\n", profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "roles: source %llu/12, metadata %llu/4, missing %llu, ambiguous %llu\n",
+    model_target_textf(model_target_out(), "gate: v0.1.0  family: %s\n", profile->spec->family_key);
+    model_target_textf(model_target_out(), "roles: source %llu/12, metadata %llu/4, missing %llu, ambiguous %llu\n",
            profile->missing_role.source_role_observed_count,
            profile->missing_role.metadata_observed_count,
            missing_count,
            ambiguous_count);
     if (strcmp(profile->missing_roles, "none") != 0) {
-        model_target_out_writef(model_target_out(), "missing: %s\n", profile->missing_roles);
+        model_target_textf(model_target_out(), "missing: %s\n", profile->missing_roles);
     }
     if (strcmp(profile->ambiguous_roles, "none") != 0) {
-        model_target_out_writef(model_target_out(), "ambiguous: %s\n", profile->ambiguous_roles);
+        model_target_textf(model_target_out(), "ambiguous: %s\n", profile->ambiguous_roles);
     }
-    model_target_out_writef(model_target_out(), "result: %s\n", profile->gate_result);
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next: %s\n", profile->next_required_row);
-    model_target_out_writef(model_target_out(), "boundary: report-only; no artifact/runtime/generation\n");
+    model_target_textf(model_target_out(), "result: %s\n", profile->gate_result);
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next: %s\n", profile->next_required_row);
+    model_target_textf(model_target_out(), "boundary: report-only; no artifact/runtime/generation\n");
 }
 
 static void print_tensor_mapping_gate_table(
@@ -6458,11 +6496,11 @@ static void print_tensor_mapping_gate_table(
         profile->missing_role.source_role_ambiguous_count +
         profile->missing_role.metadata_ambiguous_count;
 
-    model_target_out_writef(model_target_out(), "TENSOR MAPPING GATE\n\n");
-    model_target_out_writef(model_target_out(), "%-15s  %-6s  %-8s  %-12s  %-10s  %7s  %5s  %-34s  %-30s  %s\n",
+    model_target_textf(model_target_out(), "TENSOR MAPPING GATE\n\n");
+    model_target_textf(model_target_out(), "%-15s  %-6s  %-8s  %-12s  %-10s  %7s  %5s  %-34s  %-30s  %s\n",
            "TARGET", "FAMILY", "GATE", "SOURCE_ROLES", "META_ROLES",
            "MISSING", "AMBIG", "TOP_BLOCKER", "STATUS", "NEXT");
-    model_target_out_writef(model_target_out(), "%-15s  %-6s  %-8s  %2llu/12         %2llu/4       %7llu  %5llu  %-34s  %-30s  %s\n",
+    model_target_textf(model_target_out(), "%-15s  %-6s  %-8s  %2llu/12         %2llu/4       %7llu  %5llu  %-34s  %-30s  %s\n",
            profile->record->target_id,
            profile->spec->family_key,
            "v0.1.0",
@@ -6478,77 +6516,77 @@ static void print_tensor_mapping_gate_table(
 static void print_tensor_mapping_gate_audit(
     const yvex_tensor_mapping_gate_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_status: %s\n", profile->status);
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate: v0.1.0-tensor-mapping\n");
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_result: %s\n", profile->gate_result);
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_target_id: %s\n", profile->record->target_id);
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_family: %s\n", profile->spec->family_key);
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_model_class: %s\n", profile->spec->class_name);
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_source_class: %s\n",
+    model_target_textf(model_target_out(), "tensor_mapping_gate_status: %s\n", profile->status);
+    model_target_textf(model_target_out(), "tensor_mapping_gate: v0.1.0-tensor-mapping\n");
+    model_target_textf(model_target_out(), "tensor_mapping_gate_result: %s\n", profile->gate_result);
+    model_target_textf(model_target_out(), "tensor_mapping_gate_target_id: %s\n", profile->record->target_id);
+    model_target_textf(model_target_out(), "tensor_mapping_gate_family: %s\n", profile->spec->family_key);
+    model_target_textf(model_target_out(), "tensor_mapping_gate_model_class: %s\n", profile->spec->class_name);
+    model_target_textf(model_target_out(), "tensor_mapping_gate_source_class: %s\n",
            profile->record->source_artifact_class);
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_source_status: %s\n",
+    model_target_textf(model_target_out(), "tensor_mapping_gate_source_status: %s\n",
            tensor_mapping_gate_source_ready(profile) ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_source_path: %s\n",
+    model_target_textf(model_target_out(), "tensor_mapping_gate_source_path: %s\n",
            profile->missing_role.source_path);
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_source_path_source: %s\n",
+    model_target_textf(model_target_out(), "tensor_mapping_gate_source_path_source: %s\n",
            profile->missing_role.source_path_source);
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_source_report_path: not-written\n");
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_tensor_map_sidecar_path: not-written\n");
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_output_head_map_sidecar_path: not-written\n");
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_tokenizer_metadata_source_path: %s\n",
+    model_target_textf(model_target_out(), "tensor_mapping_gate_source_report_path: not-written\n");
+    model_target_textf(model_target_out(), "tensor_mapping_gate_tensor_map_sidecar_path: not-written\n");
+    model_target_textf(model_target_out(), "tensor_mapping_gate_output_head_map_sidecar_path: not-written\n");
+    model_target_textf(model_target_out(), "tensor_mapping_gate_tokenizer_metadata_source_path: %s\n",
            profile->tokenizer.source_path);
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_missing_role_report_sidecar_path: not-written\n");
-    model_target_out_writef(model_target_out(), "map_source.0: source-tensor-metadata-inventory\n");
-    model_target_out_writef(model_target_out(), "map_source.1: model-class-profile\n");
-    model_target_out_writef(model_target_out(), "map_source.2: tensor-collection-inventory\n");
-    model_target_out_writef(model_target_out(), "map_source.3: tensor-naming-map\n");
-    model_target_out_writef(model_target_out(), "map_source.4: output-head-tensor-map\n");
-    model_target_out_writef(model_target_out(), "map_source.5: tokenizer-metadata-map\n");
-    model_target_out_writef(model_target_out(), "map_source.6: missing-role-blocker-report\n");
-    model_target_out_writef(model_target_out(), "model_class_profile_status: %s\n", profile->model_class.status);
-    model_target_out_writef(model_target_out(), "tensor_collection_status: %s\n", profile->tensor_collection.status);
-    model_target_out_writef(model_target_out(), "tensor_naming_map_status: %s\n", profile->tensor_naming.status);
-    model_target_out_writef(model_target_out(), "output_head_map_status: %s\n", profile->output_head.status);
-    model_target_out_writef(model_target_out(), "tokenizer_metadata_map_status: %s\n", profile->tokenizer.status);
-    model_target_out_writef(model_target_out(), "missing_role_report_status: %s\n", profile->missing_role.status);
-    model_target_out_writef(model_target_out(), "expected_source_role_count: 12\n");
-    model_target_out_writef(model_target_out(), "observed_source_role_count: %llu\n",
+    model_target_textf(model_target_out(), "tensor_mapping_gate_missing_role_report_sidecar_path: not-written\n");
+    model_target_textf(model_target_out(), "map_source.0: source-tensor-metadata-inventory\n");
+    model_target_textf(model_target_out(), "map_source.1: model-class-profile\n");
+    model_target_textf(model_target_out(), "map_source.2: tensor-collection-inventory\n");
+    model_target_textf(model_target_out(), "map_source.3: tensor-naming-map\n");
+    model_target_textf(model_target_out(), "map_source.4: output-head-tensor-map\n");
+    model_target_textf(model_target_out(), "map_source.5: tokenizer-metadata-map\n");
+    model_target_textf(model_target_out(), "map_source.6: missing-role-blocker-report\n");
+    model_target_textf(model_target_out(), "model_class_profile_status: %s\n", profile->model_class.status);
+    model_target_textf(model_target_out(), "tensor_collection_status: %s\n", profile->tensor_collection.status);
+    model_target_textf(model_target_out(), "tensor_naming_map_status: %s\n", profile->tensor_naming.status);
+    model_target_textf(model_target_out(), "output_head_map_status: %s\n", profile->output_head.status);
+    model_target_textf(model_target_out(), "tokenizer_metadata_map_status: %s\n", profile->tokenizer.status);
+    model_target_textf(model_target_out(), "missing_role_report_status: %s\n", profile->missing_role.status);
+    model_target_textf(model_target_out(), "expected_source_role_count: 12\n");
+    model_target_textf(model_target_out(), "observed_source_role_count: %llu\n",
            profile->missing_role.source_role_observed_count);
-    model_target_out_writef(model_target_out(), "missing_source_role_count: %llu\n",
+    model_target_textf(model_target_out(), "missing_source_role_count: %llu\n",
            profile->missing_role.source_role_missing_count);
-    model_target_out_writef(model_target_out(), "ambiguous_source_role_count: %llu\n",
+    model_target_textf(model_target_out(), "ambiguous_source_role_count: %llu\n",
            profile->missing_role.source_role_ambiguous_count);
-    model_target_out_writef(model_target_out(), "expected_metadata_role_count: 4\n");
-    model_target_out_writef(model_target_out(), "observed_metadata_role_count: %llu\n",
+    model_target_textf(model_target_out(), "expected_metadata_role_count: 4\n");
+    model_target_textf(model_target_out(), "observed_metadata_role_count: %llu\n",
            profile->missing_role.metadata_observed_count);
-    model_target_out_writef(model_target_out(), "missing_metadata_role_count: %llu\n",
+    model_target_textf(model_target_out(), "missing_metadata_role_count: %llu\n",
            profile->missing_role.metadata_missing_count);
-    model_target_out_writef(model_target_out(), "ambiguous_metadata_role_count: %llu\n",
+    model_target_textf(model_target_out(), "ambiguous_metadata_role_count: %llu\n",
            profile->missing_role.metadata_ambiguous_count);
-    model_target_out_writef(model_target_out(), "missing_source_roles: %s\n", profile->missing_source_roles);
-    model_target_out_writef(model_target_out(), "missing_metadata_roles: %s\n", profile->missing_metadata_roles);
-    model_target_out_writef(model_target_out(), "missing_roles: %s\n", profile->missing_roles);
-    model_target_out_writef(model_target_out(), "ambiguous_roles: %s\n", profile->ambiguous_roles);
-    model_target_out_writef(model_target_out(), "downstream_blockers: artifact_contract=missing qtype_policy=missing runtime_descriptor=missing graph_consumer=missing backend_residency=missing logits_runtime=missing tokenizer_runtime=missing generation_runtime=missing eval_benchmark=missing\n");
-    model_target_out_writef(model_target_out(), "artifact_contract_status: missing\n");
-    model_target_out_writef(model_target_out(), "qtype_policy_status: missing\n");
-    model_target_out_writef(model_target_out(), "runtime_descriptor_status: missing\n");
-    model_target_out_writef(model_target_out(), "graph_consumer_status: missing\n");
-    model_target_out_writef(model_target_out(), "backend_residency_status: missing\n");
-    model_target_out_writef(model_target_out(), "logits_runtime_status: missing\n");
-    model_target_out_writef(model_target_out(), "tokenizer_runtime_status: missing\n");
-    model_target_out_writef(model_target_out(), "generation_runtime_status: missing\n");
-    model_target_out_writef(model_target_out(), "eval_benchmark_status: missing\n");
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next_required_rows: %s\n", profile->next_required_row);
-    model_target_out_writef(model_target_out(), "payload_bytes_read: false\n");
-    model_target_out_writef(model_target_out(), "artifact_emitted: false\n");
-    model_target_out_writef(model_target_out(), "runtime_descriptor_constructed: false\n");
-    model_target_out_writef(model_target_out(), "graph_consumer_fed: false\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "missing_source_roles: %s\n", profile->missing_source_roles);
+    model_target_textf(model_target_out(), "missing_metadata_roles: %s\n", profile->missing_metadata_roles);
+    model_target_textf(model_target_out(), "missing_roles: %s\n", profile->missing_roles);
+    model_target_textf(model_target_out(), "ambiguous_roles: %s\n", profile->ambiguous_roles);
+    model_target_textf(model_target_out(), "downstream_blockers: artifact_contract=missing qtype_policy=missing runtime_descriptor=missing graph_consumer=missing backend_residency=missing logits_runtime=missing tokenizer_runtime=missing generation_runtime=missing eval_benchmark=missing\n");
+    model_target_textf(model_target_out(), "artifact_contract_status: missing\n");
+    model_target_textf(model_target_out(), "qtype_policy_status: missing\n");
+    model_target_textf(model_target_out(), "runtime_descriptor_status: missing\n");
+    model_target_textf(model_target_out(), "graph_consumer_status: missing\n");
+    model_target_textf(model_target_out(), "backend_residency_status: missing\n");
+    model_target_textf(model_target_out(), "logits_runtime_status: missing\n");
+    model_target_textf(model_target_out(), "tokenizer_runtime_status: missing\n");
+    model_target_textf(model_target_out(), "generation_runtime_status: missing\n");
+    model_target_textf(model_target_out(), "eval_benchmark_status: missing\n");
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next_required_rows: %s\n", profile->next_required_row);
+    model_target_textf(model_target_out(), "payload_bytes_read: false\n");
+    model_target_textf(model_target_out(), "artifact_emitted: false\n");
+    model_target_textf(model_target_out(), "runtime_descriptor_constructed: false\n");
+    model_target_textf(model_target_out(), "graph_consumer_fed: false\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
     print_tensor_mapping_gate_boundary();
 }
 
@@ -6560,11 +6598,11 @@ static void print_tensor_mapping_gate_audit_hint(
     if (!record) return;
     spec = find_model_class_profile_spec(record->target_id);
     if (!spec) return;
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_status: not-run\n");
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate: v0.1.0-tensor-mapping\n");
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_family: %s\n", spec->family_key);
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_target_id: %s\n", spec->target_id);
-    model_target_out_writef(model_target_out(), "tensor_mapping_gate_next_required_row: %s\n",
+    model_target_textf(model_target_out(), "tensor_mapping_gate_status: not-run\n");
+    model_target_textf(model_target_out(), "tensor_mapping_gate: v0.1.0-tensor-mapping\n");
+    model_target_textf(model_target_out(), "tensor_mapping_gate_family: %s\n", spec->family_key);
+    model_target_textf(model_target_out(), "tensor_mapping_gate_target_id: %s\n", spec->target_id);
+    model_target_textf(model_target_out(), "tensor_mapping_gate_next_required_row: %s\n",
            YVEX_TENSOR_MAPPING_GATE_NEXT_ROW);
 }
 
@@ -6934,42 +6972,42 @@ static int build_qtype_policy_profile(
 
 static void print_qtype_policy_boundary(void)
 {
-    model_target_out_writef(model_target_out(), "boundary: report-only; no quantization/artifact/runtime\n");
+    model_target_textf(model_target_out(), "boundary: report-only; no quantization/artifact/runtime\n");
 }
 
 static void print_qtype_policy_normal(
     const yvex_qtype_policy_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "qtype-policy: %s [%s]\n",
+    model_target_textf(model_target_out(), "qtype-policy: %s [%s]\n",
            profile->target_id,
            compact_status_bracket(profile->status));
-    model_target_out_writef(model_target_out(), "family: %s  mapping_gate: %s\n",
+    model_target_textf(model_target_out(), "family: %s  mapping_gate: %s\n",
            profile->family,
            profile->mapping_gate_status);
-    model_target_out_writef(model_target_out(), "source_dtype: %s\n", profile->dtype_profile);
-    model_target_out_writef(model_target_out(), "policy: %s\n", profile->qtype_policy);
+    model_target_textf(model_target_out(), "source_dtype: %s\n", profile->dtype_profile);
+    model_target_textf(model_target_out(), "policy: %s\n", profile->qtype_policy);
     if (strcmp(profile->preferred_qtype, "none") != 0) {
-        model_target_out_writef(model_target_out(), "preferred: %s\n", profile->preferred_qtype);
+        model_target_textf(model_target_out(), "preferred: %s\n", profile->preferred_qtype);
     }
     if (strcmp(profile->candidate_qtypes, "none") != 0) {
-        model_target_out_writef(model_target_out(), "candidates: %s\n", profile->candidate_qtypes);
+        model_target_textf(model_target_out(), "candidates: %s\n", profile->candidate_qtypes);
     }
     if (strcmp(profile->refused_qtypes, "none") != 0) {
-        model_target_out_writef(model_target_out(), "refused: %s\n", profile->refused_qtypes);
+        model_target_textf(model_target_out(), "refused: %s\n", profile->refused_qtypes);
     }
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next: %s\n", profile->next_required_row);
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next: %s\n", profile->next_required_row);
     print_qtype_policy_boundary();
 }
 
 static void print_qtype_policy_table(
     const yvex_qtype_policy_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "QTYPE POLICY\n\n");
-    model_target_out_writef(model_target_out(), "%-16s  %-6s  %-28s  %-32s  %-9s  %-14s  %-25s  %-30s  %s\n",
+    model_target_textf(model_target_out(), "QTYPE POLICY\n\n");
+    model_target_textf(model_target_out(), "%-16s  %-6s  %-28s  %-32s  %-9s  %-14s  %-25s  %-30s  %s\n",
            "TARGET", "FAMILY", "SOURCE_DTYPE", "POLICY", "PREFERRED",
            "CANDIDATES", "REFUSED", "STATUS", "NEXT");
-    model_target_out_writef(model_target_out(), "%-16s  %-6s  %-28s  %-32s  %-9s  %-14s  %-25s  %-30s  %s\n",
+    model_target_textf(model_target_out(), "%-16s  %-6s  %-28s  %-32s  %-9s  %-14s  %-25s  %-30s  %s\n",
            profile->target_id,
            profile->family,
            profile->dtype_profile,
@@ -6984,66 +7022,66 @@ static void print_qtype_policy_table(
 static void print_qtype_policy_audit(
     const yvex_qtype_policy_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "report: qtype-policy\n");
-    model_target_out_writef(model_target_out(), "status: %s\n", profile->status);
-    model_target_out_writef(model_target_out(), "target_id: %s\n", profile->target_id);
-    model_target_out_writef(model_target_out(), "family: %s\n", profile->family);
-    model_target_out_writef(model_target_out(), "target_class: %s\n",
+    model_target_textf(model_target_out(), "report: qtype-policy\n");
+    model_target_textf(model_target_out(), "status: %s\n", profile->status);
+    model_target_textf(model_target_out(), "target_id: %s\n", profile->target_id);
+    model_target_textf(model_target_out(), "family: %s\n", profile->family);
+    model_target_textf(model_target_out(), "target_class: %s\n",
            profile->record ? profile->record->target_class : "unknown");
-    model_target_out_writef(model_target_out(), "model_class: %s\n", profile->model_class);
-    model_target_out_writef(model_target_out(), "source_path: %s\n", profile->source_path);
-    model_target_out_writef(model_target_out(), "source_class: %s\n", profile->source_class);
-    model_target_out_writef(model_target_out(), "target_artifact_class: %s\n", profile->target_artifact_class);
-    model_target_out_writef(model_target_out(), "source_metadata_status: %s\n",
+    model_target_textf(model_target_out(), "model_class: %s\n", profile->model_class);
+    model_target_textf(model_target_out(), "source_path: %s\n", profile->source_path);
+    model_target_textf(model_target_out(), "source_class: %s\n", profile->source_class);
+    model_target_textf(model_target_out(), "target_artifact_class: %s\n", profile->target_artifact_class);
+    model_target_textf(model_target_out(), "source_metadata_status: %s\n",
            profile->gate.model_class.source_metadata_status
                ? profile->gate.model_class.source_metadata_status
                : "not-run");
-    model_target_out_writef(model_target_out(), "source_dtype_profile_status: %s\n",
+    model_target_textf(model_target_out(), "source_dtype_profile_status: %s\n",
            profile->source_dtype_profile_status);
-    model_target_out_writef(model_target_out(), "source_dtype_counts: %s\n", profile->dtype_counts);
-    model_target_out_writef(model_target_out(), "source_tensor_count: %llu\n", profile->source_tensor_count);
-    model_target_out_writef(model_target_out(), "source_declared_data_bytes: %llu\n",
+    model_target_textf(model_target_out(), "source_dtype_counts: %s\n", profile->dtype_counts);
+    model_target_textf(model_target_out(), "source_tensor_count: %llu\n", profile->source_tensor_count);
+    model_target_textf(model_target_out(), "source_declared_data_bytes: %llu\n",
            profile->source_declared_data_bytes);
-    model_target_out_writef(model_target_out(), "mapping_gate_status: %s\n", profile->mapping_gate_status);
-    model_target_out_writef(model_target_out(), "mapping_gate_report_path: not-written\n");
-    model_target_out_writef(model_target_out(), "tensor_map_status: %s\n",
+    model_target_textf(model_target_out(), "mapping_gate_status: %s\n", profile->mapping_gate_status);
+    model_target_textf(model_target_out(), "mapping_gate_report_path: not-written\n");
+    model_target_textf(model_target_out(), "tensor_map_status: %s\n",
            profile->gate.tensor_naming.status
                ? profile->gate.tensor_naming.status
                : "not-run");
-    model_target_out_writef(model_target_out(), "output_head_map_status: %s\n",
+    model_target_textf(model_target_out(), "output_head_map_status: %s\n",
            profile->gate.output_head.status
                ? profile->gate.output_head.status
                : "not-run");
-    model_target_out_writef(model_target_out(), "tokenizer_metadata_map_status: %s\n",
+    model_target_textf(model_target_out(), "tokenizer_metadata_map_status: %s\n",
            profile->gate.tokenizer.status
                ? profile->gate.tokenizer.status
                : "not-run");
-    model_target_out_writef(model_target_out(), "missing_role_report_status: %s\n",
+    model_target_textf(model_target_out(), "missing_role_report_status: %s\n",
            profile->gate.missing_role.status
                ? profile->gate.missing_role.status
                : "not-run");
-    model_target_out_writef(model_target_out(), "qtype_policy_basis: %s\n", profile->policy_basis);
-    model_target_out_writef(model_target_out(), "qtype_policy_status: %s\n", profile->qtype_policy_status);
-    model_target_out_writef(model_target_out(), "preferred_qtype: %s\n", profile->preferred_qtype);
-    model_target_out_writef(model_target_out(), "candidate_qtypes: %s\n", profile->candidate_qtypes);
-    model_target_out_writef(model_target_out(), "refused_qtypes: %s\n", profile->refused_qtypes);
-    model_target_out_writef(model_target_out(), "refusal_reasons: %s\n", profile->refusal_reasons);
-    model_target_out_writef(model_target_out(), "per_role_qtype_status: %s\n", profile->per_role_qtype_status);
-    model_target_out_writef(model_target_out(), "compute_support_status: %s\n", profile->compute_support_status);
-    model_target_out_writef(model_target_out(), "calibration_status: %s\n", profile->calibration_status);
-    model_target_out_writef(model_target_out(), "imatrix_status: %s\n", profile->imatrix_status);
-    model_target_out_writef(model_target_out(), "artifact_emit_status: %s\n", profile->artifact_emit_status);
-    model_target_out_writef(model_target_out(), "artifact_identity_status: missing\n");
-    model_target_out_writef(model_target_out(), "materialization_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "runtime_descriptor_status: missing\n");
-    model_target_out_writef(model_target_out(), "graph_consumer_status: missing\n");
-    model_target_out_writef(model_target_out(), "backend_residency_status: missing\n");
-    model_target_out_writef(model_target_out(), "downstream_blockers: per_role_qtype=deferred compute_refusal_matrix=deferred calibration_imatrix=deferred artifact_emit=missing artifact_identity=missing runtime_descriptor=missing graph_consumer=missing backend_residency=missing generation_runtime=missing eval_benchmark=missing\n");
-    model_target_out_writef(model_target_out(), "next_required_rows: %s\n", profile->next_required_row);
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "qtype_policy_basis: %s\n", profile->policy_basis);
+    model_target_textf(model_target_out(), "qtype_policy_status: %s\n", profile->qtype_policy_status);
+    model_target_textf(model_target_out(), "preferred_qtype: %s\n", profile->preferred_qtype);
+    model_target_textf(model_target_out(), "candidate_qtypes: %s\n", profile->candidate_qtypes);
+    model_target_textf(model_target_out(), "refused_qtypes: %s\n", profile->refused_qtypes);
+    model_target_textf(model_target_out(), "refusal_reasons: %s\n", profile->refusal_reasons);
+    model_target_textf(model_target_out(), "per_role_qtype_status: %s\n", profile->per_role_qtype_status);
+    model_target_textf(model_target_out(), "compute_support_status: %s\n", profile->compute_support_status);
+    model_target_textf(model_target_out(), "calibration_status: %s\n", profile->calibration_status);
+    model_target_textf(model_target_out(), "imatrix_status: %s\n", profile->imatrix_status);
+    model_target_textf(model_target_out(), "artifact_emit_status: %s\n", profile->artifact_emit_status);
+    model_target_textf(model_target_out(), "artifact_identity_status: missing\n");
+    model_target_textf(model_target_out(), "materialization_status: unsupported\n");
+    model_target_textf(model_target_out(), "runtime_descriptor_status: missing\n");
+    model_target_textf(model_target_out(), "graph_consumer_status: missing\n");
+    model_target_textf(model_target_out(), "backend_residency_status: missing\n");
+    model_target_textf(model_target_out(), "downstream_blockers: per_role_qtype=deferred compute_refusal_matrix=deferred calibration_imatrix=deferred artifact_emit=missing artifact_identity=missing runtime_descriptor=missing graph_consumer=missing backend_residency=missing generation_runtime=missing eval_benchmark=missing\n");
+    model_target_textf(model_target_out(), "next_required_rows: %s\n", profile->next_required_row);
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
     print_qtype_policy_boundary();
 }
 
@@ -7531,21 +7569,21 @@ static int build_qtype_role_support_profile(
 
 static void print_qtype_role_support_boundary(void)
 {
-    model_target_out_writef(model_target_out(), "boundary: qtype role report only; no quantization/GGUF/runtime/generation\n");
+    model_target_textf(model_target_out(), "boundary: qtype role report only; no quantization/GGUF/runtime/generation\n");
 }
 
 static void print_qtype_role_support_normal(
     const yvex_qtype_role_support_profile *profile)
 {
-    model_target_out_writef(model_target_out(), "qtype-role-support: %s\n", profile->target_id);
-    model_target_out_writef(model_target_out(), "family: %s\n", profile->family);
-    model_target_out_writef(model_target_out(), "status: %s\n", profile->status);
-    model_target_out_writef(model_target_out(), "source_dtype: %s\n", profile->source_dtype);
-    model_target_out_writef(model_target_out(), "preferred_artifact_qtype: unresolved\n");
-    model_target_out_writef(model_target_out(), "supported_roles: %llu\n", profile->supported_role_count);
-    model_target_out_writef(model_target_out(), "blocked_roles: %llu\n", profile->blocked_role_count);
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next: %s\n", profile->next_required_row);
+    model_target_textf(model_target_out(), "qtype-role-support: %s\n", profile->target_id);
+    model_target_textf(model_target_out(), "family: %s\n", profile->family);
+    model_target_textf(model_target_out(), "status: %s\n", profile->status);
+    model_target_textf(model_target_out(), "source_dtype: %s\n", profile->source_dtype);
+    model_target_textf(model_target_out(), "preferred_artifact_qtype: unresolved\n");
+    model_target_textf(model_target_out(), "supported_roles: %llu\n", profile->supported_role_count);
+    model_target_textf(model_target_out(), "blocked_roles: %llu\n", profile->blocked_role_count);
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next: %s\n", profile->next_required_row);
     print_qtype_role_support_boundary();
 }
 
@@ -7554,13 +7592,13 @@ static void print_qtype_role_support_table(
 {
     unsigned long long i;
 
-    model_target_out_writef(model_target_out(), "QTYPE ROLE SUPPORT\n\n");
-    model_target_out_writef(model_target_out(), "%-32s  %-10s  %-14s  %-22s  %-8s  %-11s  %s\n",
+    model_target_textf(model_target_out(), "QTYPE ROLE SUPPORT\n\n");
+    model_target_textf(model_target_out(), "%-32s  %-10s  %-14s  %-22s  %-8s  %-11s  %s\n",
            "ROLE", "SRC_DTYPE", "ARTIFACT_QTYPE", "STORAGE",
            "COMPUTE", "CALIBRATION", "STATUS");
     for (i = 0; i < profile->role_count; ++i) {
         const yvex_qtype_role_support_entry *entry = &profile->roles[i];
-        model_target_out_writef(model_target_out(), "%-32s  %-10s  %-14s  %-22s  %-8s  %-11s  %s\n",
+        model_target_textf(model_target_out(), "%-32s  %-10s  %-14s  %-22s  %-8s  %-11s  %s\n",
                entry->role_name,
                entry->source_dtype,
                entry->preferred_artifact_qtype,
@@ -7576,65 +7614,65 @@ static void print_qtype_role_support_audit(
 {
     unsigned long long i;
 
-    model_target_out_writef(model_target_out(), "report: qtype-role-support\n");
-    model_target_out_writef(model_target_out(), "status: %s\n", profile->status);
-    model_target_out_writef(model_target_out(), "target_id: %s\n", profile->target_id);
-    model_target_out_writef(model_target_out(), "family: %s\n", profile->family);
-    model_target_out_writef(model_target_out(), "target_class: %s\n",
+    model_target_textf(model_target_out(), "report: qtype-role-support\n");
+    model_target_textf(model_target_out(), "status: %s\n", profile->status);
+    model_target_textf(model_target_out(), "target_id: %s\n", profile->target_id);
+    model_target_textf(model_target_out(), "family: %s\n", profile->family);
+    model_target_textf(model_target_out(), "target_class: %s\n",
            profile->record ? profile->record->target_class : "unknown");
-    model_target_out_writef(model_target_out(), "source_path: %s\n", profile->source_path);
-    model_target_out_writef(model_target_out(), "source_dtype: %s\n", profile->source_dtype);
-    model_target_out_writef(model_target_out(), "source_tensor_count: %llu\n", profile->source_tensor_count);
-    model_target_out_writef(model_target_out(), "role_count: %llu\n", profile->role_count);
-    model_target_out_writef(model_target_out(), "supported_role_count: %llu\n", profile->supported_role_count);
-    model_target_out_writef(model_target_out(), "blocked_role_count: %llu\n", profile->blocked_role_count);
-    model_target_out_writef(model_target_out(), "evidence_basis: %s\n", profile->evidence_basis);
-    model_target_out_writef(model_target_out(), "selected_slice_evidence_only: %s\n",
+    model_target_textf(model_target_out(), "source_path: %s\n", profile->source_path);
+    model_target_textf(model_target_out(), "source_dtype: %s\n", profile->source_dtype);
+    model_target_textf(model_target_out(), "source_tensor_count: %llu\n", profile->source_tensor_count);
+    model_target_textf(model_target_out(), "role_count: %llu\n", profile->role_count);
+    model_target_textf(model_target_out(), "supported_role_count: %llu\n", profile->supported_role_count);
+    model_target_textf(model_target_out(), "blocked_role_count: %llu\n", profile->blocked_role_count);
+    model_target_textf(model_target_out(), "evidence_basis: %s\n", profile->evidence_basis);
+    model_target_textf(model_target_out(), "selected_slice_evidence_only: %s\n",
            profile->selected_slice_evidence_only ? "true" : "false");
-    model_target_out_writef(model_target_out(), "full_family_artifact_status: %s\n",
+    model_target_textf(model_target_out(), "full_family_artifact_status: %s\n",
            profile->full_family_artifact_status);
     for (i = 0; i < profile->role_count; ++i) {
         const yvex_qtype_role_support_entry *entry = &profile->roles[i];
-        model_target_out_writef(model_target_out(), "role.%llu.target_id: %s\n", i, profile->target_id);
-        model_target_out_writef(model_target_out(), "role.%llu.family: %s\n", i, profile->family);
-        model_target_out_writef(model_target_out(), "role.%llu.role_name: %s\n", i, entry->role_name);
-        model_target_out_writef(model_target_out(), "role.%llu.role_status: %s\n", i, entry->role_status);
-        model_target_out_writef(model_target_out(), "role.%llu.source_dtype: %s\n", i, entry->source_dtype);
-        model_target_out_writef(model_target_out(), "role.%llu.source_dtype_status: %s\n", i,
+        model_target_textf(model_target_out(), "role.%llu.target_id: %s\n", i, profile->target_id);
+        model_target_textf(model_target_out(), "role.%llu.family: %s\n", i, profile->family);
+        model_target_textf(model_target_out(), "role.%llu.role_name: %s\n", i, entry->role_name);
+        model_target_textf(model_target_out(), "role.%llu.role_status: %s\n", i, entry->role_status);
+        model_target_textf(model_target_out(), "role.%llu.source_dtype: %s\n", i, entry->source_dtype);
+        model_target_textf(model_target_out(), "role.%llu.source_dtype_status: %s\n", i,
                entry->source_dtype_status);
-        model_target_out_writef(model_target_out(), "role.%llu.source_tensor_count: %llu\n", i,
+        model_target_textf(model_target_out(), "role.%llu.source_tensor_count: %llu\n", i,
                entry->source_tensor_count);
-        model_target_out_writef(model_target_out(), "role.%llu.preferred_artifact_qtype: %s\n", i,
+        model_target_textf(model_target_out(), "role.%llu.preferred_artifact_qtype: %s\n", i,
                entry->preferred_artifact_qtype);
-        model_target_out_writef(model_target_out(), "role.%llu.candidate_artifact_qtypes: %s\n", i,
+        model_target_textf(model_target_out(), "role.%llu.candidate_artifact_qtypes: %s\n", i,
                entry->candidate_artifact_qtypes);
-        model_target_out_writef(model_target_out(), "role.%llu.refused_artifact_qtypes: %s\n", i,
+        model_target_textf(model_target_out(), "role.%llu.refused_artifact_qtypes: %s\n", i,
                entry->refused_artifact_qtypes);
-        model_target_out_writef(model_target_out(), "role.%llu.qtype_policy_status: %s\n", i,
+        model_target_textf(model_target_out(), "role.%llu.qtype_policy_status: %s\n", i,
                entry->qtype_policy_status);
-        model_target_out_writef(model_target_out(), "role.%llu.storage_support_status: %s\n", i,
+        model_target_textf(model_target_out(), "role.%llu.storage_support_status: %s\n", i,
                entry->storage_support_status);
-        model_target_out_writef(model_target_out(), "role.%llu.compute_support_status: %s\n", i,
+        model_target_textf(model_target_out(), "role.%llu.compute_support_status: %s\n", i,
                entry->compute_support_status);
-        model_target_out_writef(model_target_out(), "role.%llu.calibration_required: %s\n", i,
+        model_target_textf(model_target_out(), "role.%llu.calibration_required: %s\n", i,
                entry->calibration_required);
-        model_target_out_writef(model_target_out(), "role.%llu.imatrix_required: %s\n", i,
+        model_target_textf(model_target_out(), "role.%llu.imatrix_required: %s\n", i,
                entry->imatrix_required);
-        model_target_out_writef(model_target_out(), "role.%llu.artifact_emission_allowed: %s\n", i,
+        model_target_textf(model_target_out(), "role.%llu.artifact_emission_allowed: %s\n", i,
                entry->artifact_emission_allowed);
-        model_target_out_writef(model_target_out(), "role.%llu.artifact_emission_blocker: %s\n", i,
+        model_target_textf(model_target_out(), "role.%llu.artifact_emission_blocker: %s\n", i,
                entry->artifact_emission_blocker);
     }
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
-    model_target_out_writef(model_target_out(), "next_required_rows: %s\n", profile->next_required_row);
-    model_target_out_writef(model_target_out(), "payload_bytes_read: false\n");
-    model_target_out_writef(model_target_out(), "quantization_performed: false\n");
-    model_target_out_writef(model_target_out(), "gguf_emitted: false\n");
-    model_target_out_writef(model_target_out(), "materialization_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "top_blocker: %s\n", profile->top_blocker);
+    model_target_textf(model_target_out(), "next_required_rows: %s\n", profile->next_required_row);
+    model_target_textf(model_target_out(), "payload_bytes_read: false\n");
+    model_target_textf(model_target_out(), "quantization_performed: false\n");
+    model_target_textf(model_target_out(), "gguf_emitted: false\n");
+    model_target_textf(model_target_out(), "materialization_status: unsupported\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
     print_qtype_role_support_boundary();
 }
 
@@ -7724,12 +7762,12 @@ static void print_qtype_role_support_gate_table(
 {
     unsigned long long i;
 
-    model_target_out_writef(model_target_out(), "%-9s  %-29s  %-7s  %-5s  %-7s  %-39s  %s\n",
+    model_target_textf(model_target_out(), "%-9s  %-29s  %-7s  %-5s  %-7s  %-39s  %s\n",
            "FAMILY", "TARGET", "STATUS", "ROLES", "BLOCKED",
            "TOP_BLOCKER", "NEXT");
     for (i = 0; i < gate->row_count; ++i) {
         const yvex_qtype_role_support_gate_row *row = &gate->rows[i];
-        model_target_out_writef(model_target_out(), "%-9s  %-29s  %-7s  %-5llu  %-7llu  %-39s  %s\n",
+        model_target_textf(model_target_out(), "%-9s  %-29s  %-7s  %-5llu  %-7llu  %-39s  %s\n",
                row->family,
                row->target_id,
                row->status,
@@ -7743,11 +7781,11 @@ static void print_qtype_role_support_gate_table(
 static void print_qtype_role_support_gate_normal(
     const yvex_qtype_role_support_gate_profile *gate)
 {
-    model_target_out_writef(model_target_out(), "qtype-role-support-gate: v0.1.0\n");
-    model_target_out_writef(model_target_out(), "status: %s\n", gate->status);
+    model_target_textf(model_target_out(), "qtype-role-support-gate: v0.1.0\n");
+    model_target_textf(model_target_out(), "status: %s\n", gate->status);
     print_qtype_role_support_gate_table(gate);
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", gate->top_blocker);
-    model_target_out_writef(model_target_out(), "next: %s\n", gate->next_required_row);
+    model_target_textf(model_target_out(), "top_blocker: %s\n", gate->top_blocker);
+    model_target_textf(model_target_out(), "next: %s\n", gate->next_required_row);
     print_qtype_role_support_boundary();
 }
 
@@ -7756,31 +7794,31 @@ static void print_qtype_role_support_gate_audit(
 {
     unsigned long long i;
 
-    model_target_out_writef(model_target_out(), "report: qtype-role-support-gate\n");
-    model_target_out_writef(model_target_out(), "status: %s\n", gate->status);
-    model_target_out_writef(model_target_out(), "gate: v0.1.0\n");
-    model_target_out_writef(model_target_out(), "family_count: %llu\n", gate->row_count);
+    model_target_textf(model_target_out(), "report: qtype-role-support-gate\n");
+    model_target_textf(model_target_out(), "status: %s\n", gate->status);
+    model_target_textf(model_target_out(), "gate: v0.1.0\n");
+    model_target_textf(model_target_out(), "family_count: %llu\n", gate->row_count);
     for (i = 0; i < gate->row_count; ++i) {
         const yvex_qtype_role_support_gate_row *row = &gate->rows[i];
-        model_target_out_writef(model_target_out(), "family.%llu.family: %s\n", i, row->family);
-        model_target_out_writef(model_target_out(), "family.%llu.target_id: %s\n", i, row->target_id);
-        model_target_out_writef(model_target_out(), "family.%llu.status: %s\n", i, row->status);
-        model_target_out_writef(model_target_out(), "family.%llu.role_count: %llu\n", i, row->role_count);
-        model_target_out_writef(model_target_out(), "family.%llu.blocked_role_count: %llu\n", i,
+        model_target_textf(model_target_out(), "family.%llu.family: %s\n", i, row->family);
+        model_target_textf(model_target_out(), "family.%llu.target_id: %s\n", i, row->target_id);
+        model_target_textf(model_target_out(), "family.%llu.status: %s\n", i, row->status);
+        model_target_textf(model_target_out(), "family.%llu.role_count: %llu\n", i, row->role_count);
+        model_target_textf(model_target_out(), "family.%llu.blocked_role_count: %llu\n", i,
                row->blocked_role_count);
-        model_target_out_writef(model_target_out(), "family.%llu.top_blocker: %s\n", i, row->top_blocker);
-        model_target_out_writef(model_target_out(), "family.%llu.next_required_rows: %s\n", i,
+        model_target_textf(model_target_out(), "family.%llu.top_blocker: %s\n", i, row->top_blocker);
+        model_target_textf(model_target_out(), "family.%llu.next_required_rows: %s\n", i,
                row->next_required_row);
     }
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", gate->top_blocker);
-    model_target_out_writef(model_target_out(), "next_required_rows: %s\n", gate->next_required_row);
-    model_target_out_writef(model_target_out(), "payload_bytes_read: false\n");
-    model_target_out_writef(model_target_out(), "quantization_performed: false\n");
-    model_target_out_writef(model_target_out(), "gguf_emitted: false\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "top_blocker: %s\n", gate->top_blocker);
+    model_target_textf(model_target_out(), "next_required_rows: %s\n", gate->next_required_row);
+    model_target_textf(model_target_out(), "payload_bytes_read: false\n");
+    model_target_textf(model_target_out(), "quantization_performed: false\n");
+    model_target_textf(model_target_out(), "gguf_emitted: false\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
     print_qtype_role_support_boundary();
 }
 
@@ -8101,28 +8139,45 @@ static int output_contract_measure_stats(
     yvex_output_contract_stats *stats)
 {
     yvex_output_contract_render_context ctx;
-    FILE *tmp;
+    char *tmp_text = NULL;
+    size_t tmp_len = 0u;
+    size_t pos = 0u;
     char line[8192];
-    FILE *previous_out;
+    char **previous_primary_slot;
+    size_t *previous_primary_len;
 
     if (!profile || !stats) return 0;
     memset(stats, 0, sizeof(*stats));
-    tmp = tmpfile();
-    if (!tmp) return 0;
-    previous_out = model_target_sink_out;
-    model_target_sink_out = tmp;
+    previous_primary_slot = model_target_primary_slot;
+    previous_primary_len = model_target_primary_len;
+    model_target_primary_slot = &tmp_text;
+    model_target_primary_len = &tmp_len;
     ctx.report = report;
     ctx.mode = mode;
     ctx.profile = profile;
     output_contract_render_profile(&ctx);
-    fflush(tmp);
-    model_target_sink_out = previous_out;
+    model_target_primary_slot = previous_primary_slot;
+    model_target_primary_len = previous_primary_len;
 
-    rewind(tmp);
-    while (fgets(line, sizeof(line), tmp)) {
+    while (tmp_text && pos < tmp_len) {
+        size_t start = pos;
+        size_t n;
+
+        while (pos < tmp_len && tmp_text[pos] != '\n') {
+            pos++;
+        }
+        if (pos < tmp_len && tmp_text[pos] == '\n') {
+            pos++;
+        }
+        n = pos - start;
+        if (n >= sizeof(line)) {
+            n = sizeof(line) - 1u;
+        }
+        memcpy(line, tmp_text + start, n);
+        line[n] = '\0';
         output_contract_analyze_line(report, mode, line, stats);
     }
-    fclose(tmp);
+    free(tmp_text);
     return 1;
 }
 
@@ -8243,27 +8298,27 @@ static int output_contract_print_result(
         table_only = "not-applicable";
     }
 
-    model_target_out_writef(model_target_out(), "output-contract: %s\n", output_contract_report_name(report));
-    model_target_out_writef(model_target_out(), "target: %s\n", target_id && target_id[0] ? target_id : "none");
-    model_target_out_writef(model_target_out(), "mode: %s\n", model_target_output_mode_name(mode));
-    model_target_out_writef(model_target_out(), "status: %s\n", status);
-    model_target_out_writef(model_target_out(), "render_path: %s\n", output_contract_render_path_name(mode));
-    model_target_out_writef(model_target_out(), "line_count: %llu\n", stats.line_count);
+    model_target_textf(model_target_out(), "output-contract: %s\n", output_contract_report_name(report));
+    model_target_textf(model_target_out(), "target: %s\n", target_id && target_id[0] ? target_id : "none");
+    model_target_textf(model_target_out(), "mode: %s\n", model_target_output_mode_name(mode));
+    model_target_textf(model_target_out(), "status: %s\n", status);
+    model_target_textf(model_target_out(), "render_path: %s\n", output_contract_render_path_name(mode));
+    model_target_textf(model_target_out(), "line_count: %llu\n", stats.line_count);
     if (mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
-        model_target_out_writef(model_target_out(), "line_limit: unbounded\n");
+        model_target_textf(model_target_out(), "line_limit: unbounded\n");
     } else {
-        model_target_out_writef(model_target_out(), "line_limit: %llu\n", limit);
+        model_target_textf(model_target_out(), "line_limit: %llu\n", limit);
     }
-    model_target_out_writef(model_target_out(), "audit_prefix_hits: %llu\n", stats.audit_prefix_hits);
-    model_target_out_writef(model_target_out(), "detail_dump: %s\n",
+    model_target_textf(model_target_out(), "audit_prefix_hits: %llu\n", stats.audit_prefix_hits);
+    model_target_textf(model_target_out(), "detail_dump: %s\n",
            stats.detail_dump_hits > 0 ? "present" : "suppressed");
-    model_target_out_writef(model_target_out(), "table_only: %s\n", table_only);
-    model_target_out_writef(model_target_out(), "audit_evidence: %s\n", audit_evidence);
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
-    model_target_out_writef(model_target_out(), "boundary: output-contract check only; no runtime/generation claim\n");
+    model_target_textf(model_target_out(), "table_only: %s\n", table_only);
+    model_target_textf(model_target_out(), "audit_evidence: %s\n", audit_evidence);
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "boundary: output-contract check only; no runtime/generation claim\n");
     return strcmp(status, "pass") == 0 ? 0 : 1;
 }
 
@@ -8272,22 +8327,22 @@ static int output_contract_print_refusal(const char *report,
                                          const char *mode,
                                          const char *status)
 {
-    model_target_out_writef(model_target_out(), "output-contract: %s\n", report ? report : "model-target");
-    model_target_out_writef(model_target_out(), "target: %s\n", target_id && target_id[0] ? target_id : "none");
-    model_target_out_writef(model_target_out(), "mode: %s\n", mode && mode[0] ? mode : "none");
-    model_target_out_writef(model_target_out(), "status: %s\n", status);
-    model_target_out_writef(model_target_out(), "render_path: not-run\n");
-    model_target_out_writef(model_target_out(), "line_count: 0\n");
-    model_target_out_writef(model_target_out(), "line_limit: not-run\n");
-    model_target_out_writef(model_target_out(), "audit_prefix_hits: 0\n");
-    model_target_out_writef(model_target_out(), "detail_dump: not-run\n");
-    model_target_out_writef(model_target_out(), "table_only: not-applicable\n");
-    model_target_out_writef(model_target_out(), "audit_evidence: not-run\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
-    model_target_out_writef(model_target_out(), "boundary: output-contract check only; no runtime/generation claim\n");
+    model_target_textf(model_target_out(), "output-contract: %s\n", report ? report : "model-target");
+    model_target_textf(model_target_out(), "target: %s\n", target_id && target_id[0] ? target_id : "none");
+    model_target_textf(model_target_out(), "mode: %s\n", mode && mode[0] ? mode : "none");
+    model_target_textf(model_target_out(), "status: %s\n", status);
+    model_target_textf(model_target_out(), "render_path: not-run\n");
+    model_target_textf(model_target_out(), "line_count: 0\n");
+    model_target_textf(model_target_out(), "line_limit: not-run\n");
+    model_target_textf(model_target_out(), "audit_prefix_hits: 0\n");
+    model_target_textf(model_target_out(), "detail_dump: not-run\n");
+    model_target_textf(model_target_out(), "table_only: not-applicable\n");
+    model_target_textf(model_target_out(), "audit_evidence: not-run\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "boundary: output-contract check only; no runtime/generation claim\n");
     return 2;
 }
 
@@ -8370,31 +8425,31 @@ static void print_model_target_decision_candidate(unsigned long index,
     const char *status;
 
     status = target_decision_candidate_status(record);
-    model_target_out_writef(model_target_out(), "candidate.%lu.id: %s\n", index, record->target_id);
-    model_target_out_writef(model_target_out(), "candidate.%lu.class: %s\n", index, target_decision_candidate_class(record));
-    model_target_out_writef(model_target_out(), "candidate.%lu.family: %s\n", index, record->family);
-    model_target_out_writef(model_target_out(), "candidate.%lu.model: %s\n", index, record->model);
-    model_target_out_writef(model_target_out(), "candidate.%lu.source_class: %s\n", index, record->source_artifact_class);
-    model_target_out_writef(model_target_out(), "candidate.%lu.artifact_class: %s\n", index, record->target_artifact_class);
-    model_target_out_writef(model_target_out(), "candidate.%lu.status: %s\n", index, status);
-    model_target_out_writef(model_target_out(), "candidate.%lu.eligible_for_v010: %s\n", index,
+    model_target_textf(model_target_out(), "candidate.%lu.id: %s\n", index, record->target_id);
+    model_target_textf(model_target_out(), "candidate.%lu.class: %s\n", index, target_decision_candidate_class(record));
+    model_target_textf(model_target_out(), "candidate.%lu.family: %s\n", index, record->family);
+    model_target_textf(model_target_out(), "candidate.%lu.model: %s\n", index, record->model);
+    model_target_textf(model_target_out(), "candidate.%lu.source_class: %s\n", index, record->source_artifact_class);
+    model_target_textf(model_target_out(), "candidate.%lu.artifact_class: %s\n", index, record->target_artifact_class);
+    model_target_textf(model_target_out(), "candidate.%lu.status: %s\n", index, status);
+    model_target_textf(model_target_out(), "candidate.%lu.eligible_for_v010: %s\n", index,
            strcmp(status, "eligible") == 0 ? "true" : "false");
-    model_target_out_writef(model_target_out(), "candidate.%lu.reason: %s\n", index, target_decision_candidate_reason(record));
-    model_target_out_writef(model_target_out(), "candidate.%lu.next: %s\n", index, target_decision_candidate_next(record));
+    model_target_textf(model_target_out(), "candidate.%lu.reason: %s\n", index, target_decision_candidate_reason(record));
+    model_target_textf(model_target_out(), "candidate.%lu.next: %s\n", index, target_decision_candidate_next(record));
 }
 
 static void print_target_decision_constant_tail(void)
 {
-    model_target_out_writef(model_target_out(), "release_critical_tracks: TRACK.TARGET,TRACK.SOURCE,TRACK.ARTIFACT,TRACK.INTEGRITY,TRACK.MODEL,TRACK.TENSOR,TRACK.RESIDENCY,TRACK.BACKEND,TRACK.GRAPH,TRACK.PREFILL,TRACK.KV,TRACK.DECODE,TRACK.LOGITS,TRACK.SAMPLING,TRACK.TOKENIZER,TRACK.GENERATION,TRACK.OPERATOR,TRACK.CI,TRACK.RELEASE\n");
-    model_target_out_writef(model_target_out(), "blocked_tracks: TRACK.TARGET,TRACK.ARTIFACT,TRACK.MODEL,TRACK.TENSOR,TRACK.GRAPH,TRACK.PREFILL,TRACK.KV,TRACK.DECODE,TRACK.LOGITS,TRACK.SAMPLING,TRACK.GENERATION\n");
-    model_target_out_writef(model_target_out(), "excluded_tracks: TRACK.SERVE,TRACK.EVAL,TRACK.BENCH,TRACK.SPEC\n");
-    model_target_out_writef(model_target_out(), "post010_tracks: TRACK.SERVE,TRACK.BENCH,TRACK.SPEC,TRACK.POST010\n");
-    model_target_out_writef(model_target_out(), "blocking_rows: V010.TARGET.2,V010.TARGET.3,V010.TARGET.4,V010.MAP.2,V010.ARTIFACT.EMIT.2,V010.FULLMODEL.6\n");
-    model_target_out_writef(model_target_out(), "next_required_rows: V010.TARGET.2\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "release_critical_tracks: TRACK.TARGET,TRACK.SOURCE,TRACK.ARTIFACT,TRACK.INTEGRITY,TRACK.MODEL,TRACK.TENSOR,TRACK.RESIDENCY,TRACK.BACKEND,TRACK.GRAPH,TRACK.PREFILL,TRACK.KV,TRACK.DECODE,TRACK.LOGITS,TRACK.SAMPLING,TRACK.TOKENIZER,TRACK.GENERATION,TRACK.OPERATOR,TRACK.CI,TRACK.RELEASE\n");
+    model_target_textf(model_target_out(), "blocked_tracks: TRACK.TARGET,TRACK.ARTIFACT,TRACK.MODEL,TRACK.TENSOR,TRACK.GRAPH,TRACK.PREFILL,TRACK.KV,TRACK.DECODE,TRACK.LOGITS,TRACK.SAMPLING,TRACK.GENERATION\n");
+    model_target_textf(model_target_out(), "excluded_tracks: TRACK.SERVE,TRACK.EVAL,TRACK.BENCH,TRACK.SPEC\n");
+    model_target_textf(model_target_out(), "post010_tracks: TRACK.SERVE,TRACK.BENCH,TRACK.SPEC,TRACK.POST010\n");
+    model_target_textf(model_target_out(), "blocking_rows: V010.TARGET.2,V010.TARGET.3,V010.TARGET.4,V010.MAP.2,V010.ARTIFACT.EMIT.2,V010.FULLMODEL.6\n");
+    model_target_textf(model_target_out(), "next_required_rows: V010.TARGET.2\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
 }
 
 static const yvex_full_runtime_candidate_fact *find_full_runtime_candidate_fact(const char *id)
@@ -8451,24 +8506,24 @@ static void print_full_runtime_candidate_fact(unsigned long index,
     unsigned int i;
 
     if (!fact) return;
-    model_target_out_writef(model_target_out(), "candidate_%lu_id: %s\n", index, fact->id);
-    model_target_out_writef(model_target_out(), "candidate_%lu_class: %s\n", index, fact->class_name);
-    model_target_out_writef(model_target_out(), "candidate_%lu_stage: %s\n", index, fact->stage);
-    model_target_out_writef(model_target_out(), "candidate_%lu_eligibility: %s\n", index, fact->eligibility);
-    model_target_out_writef(model_target_out(), "candidate_%lu_artifact_status: %s\n", index, fact->artifact_status);
-    model_target_out_writef(model_target_out(), "candidate_%lu_source_status: %s\n", index, fact->source_status);
-    model_target_out_writef(model_target_out(), "candidate_%lu_tensor_coverage_status: %s\n", index, fact->tensor_coverage_status);
-    model_target_out_writef(model_target_out(), "candidate_%lu_runtime_path_status: %s\n", index, fact->runtime_path_status);
-    model_target_out_writef(model_target_out(), "candidate_%lu_generation_status: %s\n", index, fact->generation_status);
-    model_target_out_writef(model_target_out(), "candidate_%lu_benchmark_status: %s\n", index, fact->benchmark_status);
-    model_target_out_writef(model_target_out(), "candidate_%lu_blocker_count: %u\n", index, fact->blocker_count);
+    model_target_textf(model_target_out(), "candidate_%lu_id: %s\n", index, fact->id);
+    model_target_textf(model_target_out(), "candidate_%lu_class: %s\n", index, fact->class_name);
+    model_target_textf(model_target_out(), "candidate_%lu_stage: %s\n", index, fact->stage);
+    model_target_textf(model_target_out(), "candidate_%lu_eligibility: %s\n", index, fact->eligibility);
+    model_target_textf(model_target_out(), "candidate_%lu_artifact_status: %s\n", index, fact->artifact_status);
+    model_target_textf(model_target_out(), "candidate_%lu_source_status: %s\n", index, fact->source_status);
+    model_target_textf(model_target_out(), "candidate_%lu_tensor_coverage_status: %s\n", index, fact->tensor_coverage_status);
+    model_target_textf(model_target_out(), "candidate_%lu_runtime_path_status: %s\n", index, fact->runtime_path_status);
+    model_target_textf(model_target_out(), "candidate_%lu_generation_status: %s\n", index, fact->generation_status);
+    model_target_textf(model_target_out(), "candidate_%lu_benchmark_status: %s\n", index, fact->benchmark_status);
+    model_target_textf(model_target_out(), "candidate_%lu_blocker_count: %u\n", index, fact->blocker_count);
     if (include_blockers) {
         for (i = 0; i < fact->blocker_count; ++i) {
-            model_target_out_writef(model_target_out(), "candidate_%lu_blocker_%u: %s\n", index, i, fact->blockers[i]);
+            model_target_textf(model_target_out(), "candidate_%lu_blocker_%u: %s\n", index, i, fact->blockers[i]);
         }
     }
     if (include_next) {
-        model_target_out_writef(model_target_out(), "candidate_%lu_next_required_rows: %s\n", index, fact->next_required_rows);
+        model_target_textf(model_target_out(), "candidate_%lu_next_required_rows: %s\n", index, fact->next_required_rows);
     }
 }
 
@@ -8479,70 +8534,70 @@ static void print_registered_candidate(unsigned long index,
 {
     const char *alias = entry && entry->alias ? entry->alias : "unknown-registered-alias";
 
-    model_target_out_writef(model_target_out(), "candidate_%lu_id: %s\n", index, alias);
-    model_target_out_writef(model_target_out(), "candidate_%lu_class: registered-alias\n", index);
-    model_target_out_writef(model_target_out(), "candidate_%lu_stage: report-only\n", index);
-    model_target_out_writef(model_target_out(), "candidate_%lu_eligibility: candidate-incomplete\n", index);
-    model_target_out_writef(model_target_out(), "candidate_%lu_artifact_status: registered-artifact-not-inspected\n", index);
-    model_target_out_writef(model_target_out(), "candidate_%lu_source_status: unknown\n", index);
-    model_target_out_writef(model_target_out(), "candidate_%lu_tensor_coverage_status: %s\n", index,
+    model_target_textf(model_target_out(), "candidate_%lu_id: %s\n", index, alias);
+    model_target_textf(model_target_out(), "candidate_%lu_class: registered-alias\n", index);
+    model_target_textf(model_target_out(), "candidate_%lu_stage: report-only\n", index);
+    model_target_textf(model_target_out(), "candidate_%lu_eligibility: candidate-incomplete\n", index);
+    model_target_textf(model_target_out(), "candidate_%lu_artifact_status: registered-artifact-not-inspected\n", index);
+    model_target_textf(model_target_out(), "candidate_%lu_source_status: unknown\n", index);
+    model_target_textf(model_target_out(), "candidate_%lu_tensor_coverage_status: %s\n", index,
            registered_candidate_tensor_status(entry));
-    model_target_out_writef(model_target_out(), "candidate_%lu_runtime_path_status: unsupported\n", index);
-    model_target_out_writef(model_target_out(), "candidate_%lu_generation_status: unsupported-full-model\n", index);
-    model_target_out_writef(model_target_out(), "candidate_%lu_benchmark_status: not-measured\n", index);
-    model_target_out_writef(model_target_out(), "candidate_%lu_blocker_count: 8\n", index);
+    model_target_textf(model_target_out(), "candidate_%lu_runtime_path_status: unsupported\n", index);
+    model_target_textf(model_target_out(), "candidate_%lu_generation_status: unsupported-full-model\n", index);
+    model_target_textf(model_target_out(), "candidate_%lu_benchmark_status: not-measured\n", index);
+    model_target_textf(model_target_out(), "candidate_%lu_blocker_count: 8\n", index);
     if (include_blockers) {
-        model_target_out_writef(model_target_out(), "candidate_%lu_blocker_0: missing-source-inventory\n", index);
-        model_target_out_writef(model_target_out(), "candidate_%lu_blocker_1: missing-tensor-map\n", index);
-        model_target_out_writef(model_target_out(), "candidate_%lu_blocker_2: missing-required-tensor-coverage\n", index);
-        model_target_out_writef(model_target_out(), "candidate_%lu_blocker_3: missing-tokenizer-metadata\n", index);
-        model_target_out_writef(model_target_out(), "candidate_%lu_blocker_4: missing-output-head\n", index);
-        model_target_out_writef(model_target_out(), "candidate_%lu_blocker_5: missing-real-prefill\n", index);
-        model_target_out_writef(model_target_out(), "candidate_%lu_blocker_6: missing-real-decode\n", index);
-        model_target_out_writef(model_target_out(), "candidate_%lu_blocker_7: missing-real-logits\n", index);
+        model_target_textf(model_target_out(), "candidate_%lu_blocker_0: missing-source-inventory\n", index);
+        model_target_textf(model_target_out(), "candidate_%lu_blocker_1: missing-tensor-map\n", index);
+        model_target_textf(model_target_out(), "candidate_%lu_blocker_2: missing-required-tensor-coverage\n", index);
+        model_target_textf(model_target_out(), "candidate_%lu_blocker_3: missing-tokenizer-metadata\n", index);
+        model_target_textf(model_target_out(), "candidate_%lu_blocker_4: missing-output-head\n", index);
+        model_target_textf(model_target_out(), "candidate_%lu_blocker_5: missing-real-prefill\n", index);
+        model_target_textf(model_target_out(), "candidate_%lu_blocker_6: missing-real-decode\n", index);
+        model_target_textf(model_target_out(), "candidate_%lu_blocker_7: missing-real-logits\n", index);
     }
     if (include_next) {
-        model_target_out_writef(model_target_out(), "candidate_%lu_next_required_rows: V010.TARGET.3,V010.MAP.*,V010.FULLMODEL.*\n", index);
+        model_target_textf(model_target_out(), "candidate_%lu_next_required_rows: V010.TARGET.3,V010.MAP.*,V010.FULLMODEL.*\n", index);
     }
 }
 
 static int print_model_target_candidate_missing(const char *release, const char *target)
 {
-    model_target_out_writef(model_target_out(), "model-target: candidate\n");
-    model_target_out_writef(model_target_out(), "status: full-runtime-candidate-report-fail\n");
-    model_target_out_writef(model_target_out(), "release: %s\n", release && release[0] ? release : "v0.1.0");
-    model_target_out_writef(model_target_out(), "target_requested: %s\n", target && target[0] ? target : "none");
-    model_target_out_writef(model_target_out(), "decision_state: blocked-no-candidate\n");
-    model_target_out_writef(model_target_out(), "selected_target_id: none\n");
-    model_target_out_writef(model_target_out(), "full_runtime_candidate_status: missing\n");
-    model_target_out_writef(model_target_out(), "candidate_count: 0\n");
-    model_target_out_writef(model_target_out(), "eligible_candidate_count: 0\n");
-    model_target_out_writef(model_target_out(), "pressure_target_count: 0\n");
-    model_target_out_writef(model_target_out(), "fixture_target_count: 0\n");
-    model_target_out_writef(model_target_out(), "global_blocker: no eligible full-runtime candidate\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "model-target: candidate\n");
+    model_target_textf(model_target_out(), "status: full-runtime-candidate-report-fail\n");
+    model_target_textf(model_target_out(), "release: %s\n", release && release[0] ? release : "v0.1.0");
+    model_target_textf(model_target_out(), "target_requested: %s\n", target && target[0] ? target : "none");
+    model_target_textf(model_target_out(), "decision_state: blocked-no-candidate\n");
+    model_target_textf(model_target_out(), "selected_target_id: none\n");
+    model_target_textf(model_target_out(), "full_runtime_candidate_status: missing\n");
+    model_target_textf(model_target_out(), "candidate_count: 0\n");
+    model_target_textf(model_target_out(), "eligible_candidate_count: 0\n");
+    model_target_textf(model_target_out(), "pressure_target_count: 0\n");
+    model_target_textf(model_target_out(), "fixture_target_count: 0\n");
+    model_target_textf(model_target_out(), "global_blocker: no eligible full-runtime candidate\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
     return 2;
 }
 
 static int print_model_target_candidate_unsupported_release(const char *release)
 {
-    model_target_out_writef(model_target_out(), "model-target: candidate\n");
-    model_target_out_writef(model_target_out(), "status: unsupported-release\n");
-    model_target_out_writef(model_target_out(), "release: %s\n", release && release[0] ? release : "unknown");
-    model_target_out_writef(model_target_out(), "decision_state: blocked-no-candidate\n");
-    model_target_out_writef(model_target_out(), "selected_target_id: none\n");
-    model_target_out_writef(model_target_out(), "full_runtime_candidate_status: missing\n");
-    model_target_out_writef(model_target_out(), "candidate_count: 0\n");
-    model_target_out_writef(model_target_out(), "eligible_candidate_count: 0\n");
-    model_target_out_writef(model_target_out(), "pressure_target_count: 0\n");
-    model_target_out_writef(model_target_out(), "fixture_target_count: 0\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "model-target: candidate\n");
+    model_target_textf(model_target_out(), "status: unsupported-release\n");
+    model_target_textf(model_target_out(), "release: %s\n", release && release[0] ? release : "unknown");
+    model_target_textf(model_target_out(), "decision_state: blocked-no-candidate\n");
+    model_target_textf(model_target_out(), "selected_target_id: none\n");
+    model_target_textf(model_target_out(), "full_runtime_candidate_status: missing\n");
+    model_target_textf(model_target_out(), "candidate_count: 0\n");
+    model_target_textf(model_target_out(), "eligible_candidate_count: 0\n");
+    model_target_textf(model_target_out(), "pressure_target_count: 0\n");
+    model_target_textf(model_target_out(), "fixture_target_count: 0\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
     return 2;
 }
 
@@ -8584,30 +8639,30 @@ static int print_model_target_candidate_report(const char *release,
         }
     }
 
-    model_target_out_writef(model_target_out(), "model-target: candidate\n");
-    model_target_out_writef(model_target_out(), "status: full-runtime-candidate-report\n");
-    model_target_out_writef(model_target_out(), "release: %s\n", release);
-    model_target_out_writef(model_target_out(), "decision_state: blocked-no-candidate\n");
-    model_target_out_writef(model_target_out(), "selected_target_id: none\n");
-    model_target_out_writef(model_target_out(), "full_runtime_candidate_status: missing\n");
-    model_target_out_writef(model_target_out(), "candidate_count: %lu\n", candidate_count);
-    model_target_out_writef(model_target_out(), "eligible_candidate_count: 0\n");
-    model_target_out_writef(model_target_out(), "pressure_target_count: %lu\n", pressure_count);
-    model_target_out_writef(model_target_out(), "fixture_target_count: %lu\n", fixture_count);
-    model_target_out_writef(model_target_out(), "registered_alias_count: %lu\n", target_id ? (target_entry ? 1ul : 0ul) : registry_count);
+    model_target_textf(model_target_out(), "model-target: candidate\n");
+    model_target_textf(model_target_out(), "status: full-runtime-candidate-report\n");
+    model_target_textf(model_target_out(), "release: %s\n", release);
+    model_target_textf(model_target_out(), "decision_state: blocked-no-candidate\n");
+    model_target_textf(model_target_out(), "selected_target_id: none\n");
+    model_target_textf(model_target_out(), "full_runtime_candidate_status: missing\n");
+    model_target_textf(model_target_out(), "candidate_count: %lu\n", candidate_count);
+    model_target_textf(model_target_out(), "eligible_candidate_count: 0\n");
+    model_target_textf(model_target_out(), "pressure_target_count: %lu\n", pressure_count);
+    model_target_textf(model_target_out(), "fixture_target_count: %lu\n", fixture_count);
+    model_target_textf(model_target_out(), "registered_alias_count: %lu\n", target_id ? (target_entry ? 1ul : 0ul) : registry_count);
     if (include_pressure_targets) {
-        model_target_out_writef(model_target_out(), "deepseek_pressure_status: selected-slice-pressure-only\n");
-        model_target_out_writef(model_target_out(), "glm_pressure_status: source-storage-pressure-only\n");
-        model_target_out_writef(model_target_out(), "qwen_metal_pressure_status: planned-portability-pressure-only\n");
+        model_target_textf(model_target_out(), "deepseek_pressure_status: selected-slice-pressure-only\n");
+        model_target_textf(model_target_out(), "glm_pressure_status: source-storage-pressure-only\n");
+        model_target_textf(model_target_out(), "qwen_metal_pressure_status: planned-portability-pressure-only\n");
     }
-    model_target_out_writef(model_target_out(), "global_blocker: no eligible full-runtime candidate\n");
+    model_target_textf(model_target_out(), "global_blocker: no eligible full-runtime candidate\n");
     if (include_next) {
-        model_target_out_writef(model_target_out(), "next_required_rows: V010.TARGET.3\n");
+        model_target_textf(model_target_out(), "next_required_rows: V010.TARGET.3\n");
     }
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
 
     if (include_candidates || target_id) {
         unsigned long out_index = 0;
@@ -8675,15 +8730,15 @@ static int print_model_target_candidate_normal(const char *release,
         }
     }
 
-    model_target_out_writef(model_target_out(), "report: model-target candidate\n");
-    model_target_out_writef(model_target_out(), "status: blocked-no-candidate\n");
-    model_target_out_writef(model_target_out(), "release: %s\n", release);
-    model_target_out_writef(model_target_out(), "selected: none\n");
-    model_target_out_writef(model_target_out(), "candidates: 0 eligible / %lu known (%lu pressure, %lu fixture)\n",
+    model_target_textf(model_target_out(), "report: model-target candidate\n");
+    model_target_textf(model_target_out(), "status: blocked-no-candidate\n");
+    model_target_textf(model_target_out(), "release: %s\n", release);
+    model_target_textf(model_target_out(), "selected: none\n");
+    model_target_textf(model_target_out(), "candidates: 0 eligible / %lu known (%lu pressure, %lu fixture)\n",
            candidate_count, pressure_count, fixture_count);
-    model_target_out_writef(model_target_out(), "top_blocker: no eligible full-runtime candidate\n");
-    model_target_out_writef(model_target_out(), "next: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
-    model_target_out_writef(model_target_out(), "boundary: report-only; generation unsupported; benchmark not measured\n");
+    model_target_textf(model_target_out(), "top_blocker: no eligible full-runtime candidate\n");
+    model_target_textf(model_target_out(), "next: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
+    model_target_textf(model_target_out(), "boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
 }
@@ -8720,7 +8775,7 @@ static void print_dense_candidate_requirements(unsigned long index)
     unsigned long i;
 
     for (i = 0; i < dense_candidate_required_role_count; ++i) {
-        model_target_out_writef(model_target_out(), "dense_candidate_%lu_required_role_%lu: %s\n",
+        model_target_textf(model_target_out(), "dense_candidate_%lu_required_role_%lu: %s\n",
                index, i, dense_candidate_required_roles[i]);
     }
 }
@@ -8734,31 +8789,31 @@ static void print_dense_candidate_fact(unsigned long index,
     unsigned int i;
 
     if (!fact) return;
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_id: %s\n", index, fact->id);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_family: %s\n", index, fact->family);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_class: %s\n", index, fact->class_name);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_stage: %s\n", index, fact->stage);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_eligibility: %s\n", index, fact->eligibility);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_source_status: %s\n", index, fact->source_status);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_artifact_status: %s\n", index, fact->artifact_status);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_tensor_map_status: %s\n", index, fact->tensor_map_status);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_tensor_coverage_status: %s\n", index, fact->tensor_coverage_status);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_tokenizer_status: %s\n", index, fact->tokenizer_status);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_output_head_status: %s\n", index, fact->output_head_status);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_runtime_path_status: %s\n", index, fact->runtime_path_status);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_generation_status: %s\n", index, fact->generation_status);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_benchmark_status: %s\n", index, fact->benchmark_status);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_blocker_count: %u\n", index, fact->blocker_count);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_id: %s\n", index, fact->id);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_family: %s\n", index, fact->family);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_class: %s\n", index, fact->class_name);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_stage: %s\n", index, fact->stage);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_eligibility: %s\n", index, fact->eligibility);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_source_status: %s\n", index, fact->source_status);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_artifact_status: %s\n", index, fact->artifact_status);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_tensor_map_status: %s\n", index, fact->tensor_map_status);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_tensor_coverage_status: %s\n", index, fact->tensor_coverage_status);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_tokenizer_status: %s\n", index, fact->tokenizer_status);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_output_head_status: %s\n", index, fact->output_head_status);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_runtime_path_status: %s\n", index, fact->runtime_path_status);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_generation_status: %s\n", index, fact->generation_status);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_benchmark_status: %s\n", index, fact->benchmark_status);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_blocker_count: %u\n", index, fact->blocker_count);
     if (include_requirements) {
         print_dense_candidate_requirements(index);
     }
     if (include_blockers) {
         for (i = 0; i < fact->blocker_count; ++i) {
-            model_target_out_writef(model_target_out(), "dense_candidate_%lu_blocker_%u: %s\n", index, i, fact->blockers[i]);
+            model_target_textf(model_target_out(), "dense_candidate_%lu_blocker_%u: %s\n", index, i, fact->blockers[i]);
         }
     }
     if (include_next) {
-        model_target_out_writef(model_target_out(), "dense_candidate_%lu_next_required_rows: %s\n", index, fact->next_required_rows);
+        model_target_textf(model_target_out(), "dense_candidate_%lu_next_required_rows: %s\n", index, fact->next_required_rows);
     }
 }
 
@@ -8770,81 +8825,81 @@ static void print_registered_dense_candidate(unsigned long index,
 {
     const char *alias = entry && entry->alias ? entry->alias : "unknown-registered-alias";
 
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_id: %s\n", index, alias);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_family: registered\n", index);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_class: registered-alias\n", index);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_stage: report-only\n", index);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_eligibility: candidate-incomplete\n", index);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_source_status: unknown\n", index);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_artifact_status: registered-artifact-not-inspected\n", index);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_tensor_map_status: missing-tensor-map\n", index);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_tensor_coverage_status: %s\n", index,
+    model_target_textf(model_target_out(), "dense_candidate_%lu_id: %s\n", index, alias);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_family: registered\n", index);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_class: registered-alias\n", index);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_stage: report-only\n", index);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_eligibility: candidate-incomplete\n", index);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_source_status: unknown\n", index);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_artifact_status: registered-artifact-not-inspected\n", index);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_tensor_map_status: missing-tensor-map\n", index);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_tensor_coverage_status: %s\n", index,
            registered_candidate_tensor_status(entry));
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_tokenizer_status: unknown\n", index);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_output_head_status: unknown\n", index);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_runtime_path_status: unsupported\n", index);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_generation_status: unsupported-full-model\n", index);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_benchmark_status: not-measured\n", index);
-    model_target_out_writef(model_target_out(), "dense_candidate_%lu_blocker_count: 12\n", index);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_tokenizer_status: unknown\n", index);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_output_head_status: unknown\n", index);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_runtime_path_status: unsupported\n", index);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_generation_status: unsupported-full-model\n", index);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_benchmark_status: not-measured\n", index);
+    model_target_textf(model_target_out(), "dense_candidate_%lu_blocker_count: 12\n", index);
     if (include_requirements) {
         print_dense_candidate_requirements(index);
     }
     if (include_blockers) {
-        model_target_out_writef(model_target_out(), "dense_candidate_%lu_blocker_0: missing-dense-source\n", index);
-        model_target_out_writef(model_target_out(), "dense_candidate_%lu_blocker_1: missing-dense-artifact\n", index);
-        model_target_out_writef(model_target_out(), "dense_candidate_%lu_blocker_2: missing-source-manifest\n", index);
-        model_target_out_writef(model_target_out(), "dense_candidate_%lu_blocker_3: missing-native-inventory\n", index);
-        model_target_out_writef(model_target_out(), "dense_candidate_%lu_blocker_4: missing-tensor-map\n", index);
-        model_target_out_writef(model_target_out(), "dense_candidate_%lu_blocker_5: missing-required-tensor-coverage\n", index);
-        model_target_out_writef(model_target_out(), "dense_candidate_%lu_blocker_6: missing-tokenizer-metadata\n", index);
-        model_target_out_writef(model_target_out(), "dense_candidate_%lu_blocker_7: missing-output-head\n", index);
-        model_target_out_writef(model_target_out(), "dense_candidate_%lu_blocker_8: missing-dense-mlp\n", index);
-        model_target_out_writef(model_target_out(), "dense_candidate_%lu_blocker_9: missing-real-prefill\n", index);
-        model_target_out_writef(model_target_out(), "dense_candidate_%lu_blocker_10: missing-real-decode\n", index);
-        model_target_out_writef(model_target_out(), "dense_candidate_%lu_blocker_11: missing-real-logits\n", index);
+        model_target_textf(model_target_out(), "dense_candidate_%lu_blocker_0: missing-dense-source\n", index);
+        model_target_textf(model_target_out(), "dense_candidate_%lu_blocker_1: missing-dense-artifact\n", index);
+        model_target_textf(model_target_out(), "dense_candidate_%lu_blocker_2: missing-source-manifest\n", index);
+        model_target_textf(model_target_out(), "dense_candidate_%lu_blocker_3: missing-native-inventory\n", index);
+        model_target_textf(model_target_out(), "dense_candidate_%lu_blocker_4: missing-tensor-map\n", index);
+        model_target_textf(model_target_out(), "dense_candidate_%lu_blocker_5: missing-required-tensor-coverage\n", index);
+        model_target_textf(model_target_out(), "dense_candidate_%lu_blocker_6: missing-tokenizer-metadata\n", index);
+        model_target_textf(model_target_out(), "dense_candidate_%lu_blocker_7: missing-output-head\n", index);
+        model_target_textf(model_target_out(), "dense_candidate_%lu_blocker_8: missing-dense-mlp\n", index);
+        model_target_textf(model_target_out(), "dense_candidate_%lu_blocker_9: missing-real-prefill\n", index);
+        model_target_textf(model_target_out(), "dense_candidate_%lu_blocker_10: missing-real-decode\n", index);
+        model_target_textf(model_target_out(), "dense_candidate_%lu_blocker_11: missing-real-logits\n", index);
     }
     if (include_next) {
-        model_target_out_writef(model_target_out(), "dense_candidate_%lu_next_required_rows: V010.TARGET.7,V010.MAP.*\n", index);
+        model_target_textf(model_target_out(), "dense_candidate_%lu_next_required_rows: V010.TARGET.7,V010.MAP.*\n", index);
     }
 }
 
 static int print_model_target_dense_candidate_missing(const char *release, const char *target)
 {
-    model_target_out_writef(model_target_out(), "model-target: dense-candidate\n");
-    model_target_out_writef(model_target_out(), "status: dense-candidate-report-fail\n");
-    model_target_out_writef(model_target_out(), "release: %s\n", release && release[0] ? release : "v0.1.0");
-    model_target_out_writef(model_target_out(), "target_requested: %s\n", target && target[0] ? target : "none");
-    model_target_out_writef(model_target_out(), "decision_state: dense-candidate-missing\n");
-    model_target_out_writef(model_target_out(), "selected_dense_candidate_id: none\n");
-    model_target_out_writef(model_target_out(), "dense_candidate_status: missing\n");
-    model_target_out_writef(model_target_out(), "dense_candidate_count: 0\n");
-    model_target_out_writef(model_target_out(), "eligible_dense_candidate_count: 0\n");
-    model_target_out_writef(model_target_out(), "dense_pressure_target_count: 0\n");
-    model_target_out_writef(model_target_out(), "fixture_target_count: 0\n");
-    model_target_out_writef(model_target_out(), "global_blocker: no eligible dense full-runtime candidate\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "model-target: dense-candidate\n");
+    model_target_textf(model_target_out(), "status: dense-candidate-report-fail\n");
+    model_target_textf(model_target_out(), "release: %s\n", release && release[0] ? release : "v0.1.0");
+    model_target_textf(model_target_out(), "target_requested: %s\n", target && target[0] ? target : "none");
+    model_target_textf(model_target_out(), "decision_state: dense-candidate-missing\n");
+    model_target_textf(model_target_out(), "selected_dense_candidate_id: none\n");
+    model_target_textf(model_target_out(), "dense_candidate_status: missing\n");
+    model_target_textf(model_target_out(), "dense_candidate_count: 0\n");
+    model_target_textf(model_target_out(), "eligible_dense_candidate_count: 0\n");
+    model_target_textf(model_target_out(), "dense_pressure_target_count: 0\n");
+    model_target_textf(model_target_out(), "fixture_target_count: 0\n");
+    model_target_textf(model_target_out(), "global_blocker: no eligible dense full-runtime candidate\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
     return 2;
 }
 
 static int print_model_target_dense_candidate_unsupported_release(const char *release)
 {
-    model_target_out_writef(model_target_out(), "model-target: dense-candidate\n");
-    model_target_out_writef(model_target_out(), "status: unsupported-release\n");
-    model_target_out_writef(model_target_out(), "release: %s\n", release && release[0] ? release : "unknown");
-    model_target_out_writef(model_target_out(), "decision_state: dense-candidate-missing\n");
-    model_target_out_writef(model_target_out(), "selected_dense_candidate_id: none\n");
-    model_target_out_writef(model_target_out(), "dense_candidate_status: missing\n");
-    model_target_out_writef(model_target_out(), "dense_candidate_count: 0\n");
-    model_target_out_writef(model_target_out(), "eligible_dense_candidate_count: 0\n");
-    model_target_out_writef(model_target_out(), "dense_pressure_target_count: 0\n");
-    model_target_out_writef(model_target_out(), "fixture_target_count: 0\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "model-target: dense-candidate\n");
+    model_target_textf(model_target_out(), "status: unsupported-release\n");
+    model_target_textf(model_target_out(), "release: %s\n", release && release[0] ? release : "unknown");
+    model_target_textf(model_target_out(), "decision_state: dense-candidate-missing\n");
+    model_target_textf(model_target_out(), "selected_dense_candidate_id: none\n");
+    model_target_textf(model_target_out(), "dense_candidate_status: missing\n");
+    model_target_textf(model_target_out(), "dense_candidate_count: 0\n");
+    model_target_textf(model_target_out(), "eligible_dense_candidate_count: 0\n");
+    model_target_textf(model_target_out(), "dense_pressure_target_count: 0\n");
+    model_target_textf(model_target_out(), "fixture_target_count: 0\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
     return 2;
 }
 
@@ -8903,27 +8958,27 @@ static int print_model_target_dense_candidate_report(const char *release,
         }
     }
 
-    model_target_out_writef(model_target_out(), "model-target: dense-candidate\n");
-    model_target_out_writef(model_target_out(), "status: dense-candidate-report\n");
-    model_target_out_writef(model_target_out(), "release: %s\n", release);
-    model_target_out_writef(model_target_out(), "decision_state: %s\n", eligible_count ? "dense-candidate-found" : "dense-candidate-missing");
-    model_target_out_writef(model_target_out(), "selected_dense_candidate_id: none\n");
-    model_target_out_writef(model_target_out(), "dense_candidate_status: %s\n",
+    model_target_textf(model_target_out(), "model-target: dense-candidate\n");
+    model_target_textf(model_target_out(), "status: dense-candidate-report\n");
+    model_target_textf(model_target_out(), "release: %s\n", release);
+    model_target_textf(model_target_out(), "decision_state: %s\n", eligible_count ? "dense-candidate-found" : "dense-candidate-missing");
+    model_target_textf(model_target_out(), "selected_dense_candidate_id: none\n");
+    model_target_textf(model_target_out(), "dense_candidate_status: %s\n",
            target_id ? dense_candidate_status_for_target(target_fact, target_entry)
                      : (eligible_count ? "candidate-found" : "missing"));
-    model_target_out_writef(model_target_out(), "dense_candidate_count: %lu\n", dense_candidate_count);
-    model_target_out_writef(model_target_out(), "eligible_dense_candidate_count: %lu\n", eligible_count);
-    model_target_out_writef(model_target_out(), "dense_pressure_target_count: %lu\n", dense_pressure_count);
-    model_target_out_writef(model_target_out(), "fixture_target_count: %lu\n", fixture_count);
-    model_target_out_writef(model_target_out(), "registered_alias_count: %lu\n", target_id ? (target_entry ? 1ul : 0ul) : registry_count);
-    model_target_out_writef(model_target_out(), "global_blocker: no eligible dense full-runtime candidate\n");
+    model_target_textf(model_target_out(), "dense_candidate_count: %lu\n", dense_candidate_count);
+    model_target_textf(model_target_out(), "eligible_dense_candidate_count: %lu\n", eligible_count);
+    model_target_textf(model_target_out(), "dense_pressure_target_count: %lu\n", dense_pressure_count);
+    model_target_textf(model_target_out(), "fixture_target_count: %lu\n", fixture_count);
+    model_target_textf(model_target_out(), "registered_alias_count: %lu\n", target_id ? (target_entry ? 1ul : 0ul) : registry_count);
+    model_target_textf(model_target_out(), "global_blocker: no eligible dense full-runtime candidate\n");
     if (include_next) {
-        model_target_out_writef(model_target_out(), "next_required_rows: V010.TARGET.7\n");
+        model_target_textf(model_target_out(), "next_required_rows: V010.TARGET.7\n");
     }
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
 
     if (include_candidates || target_id) {
         unsigned long out_index = 0;
@@ -9001,15 +9056,15 @@ static int print_model_target_dense_candidate_normal(const char *release,
         }
     }
 
-    model_target_out_writef(model_target_out(), "report: model-target dense-candidate\n");
-    model_target_out_writef(model_target_out(), "status: %s\n", eligible_count ? "dense-candidate-found" : "dense-candidate-missing");
-    model_target_out_writef(model_target_out(), "release: %s\n", release);
-    model_target_out_writef(model_target_out(), "selected: none\n");
-    model_target_out_writef(model_target_out(), "candidates: %lu eligible / %lu known (%lu dense pressure)\n",
+    model_target_textf(model_target_out(), "report: model-target dense-candidate\n");
+    model_target_textf(model_target_out(), "status: %s\n", eligible_count ? "dense-candidate-found" : "dense-candidate-missing");
+    model_target_textf(model_target_out(), "release: %s\n", release);
+    model_target_textf(model_target_out(), "selected: none\n");
+    model_target_textf(model_target_out(), "candidates: %lu eligible / %lu known (%lu dense pressure)\n",
            eligible_count, dense_candidate_count, dense_pressure_count);
-    model_target_out_writef(model_target_out(), "top_blocker: no selected dense full-runtime candidate\n");
-    model_target_out_writef(model_target_out(), "next: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
-    model_target_out_writef(model_target_out(), "boundary: report-only; generation unsupported; benchmark not measured\n");
+    model_target_textf(model_target_out(), "top_blocker: no selected dense full-runtime candidate\n");
+    model_target_textf(model_target_out(), "next: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
+    model_target_textf(model_target_out(), "boundary: report-only; generation unsupported; benchmark not measured\n");
     yvex_model_registry_close(registry);
     return 0;
 }
@@ -9034,62 +9089,62 @@ static void print_qwen_metal_candidate(unsigned long index,
     unsigned int i;
 
     if (!fact) return;
-    model_target_out_writef(model_target_out(), "qwen_candidate_%lu_id: %s\n", index, fact->id);
-    model_target_out_writef(model_target_out(), "qwen_candidate_%lu_class: %s\n", index, fact->class_name);
-    model_target_out_writef(model_target_out(), "qwen_candidate_%lu_stage: %s\n", index, fact->stage);
-    model_target_out_writef(model_target_out(), "qwen_candidate_%lu_eligibility: %s\n", index, fact->eligibility);
-    model_target_out_writef(model_target_out(), "qwen_candidate_%lu_source_target_status: %s\n", index, fact->source_target_status);
-    model_target_out_writef(model_target_out(), "qwen_candidate_%lu_source_status: %s\n", index, fact->source_status);
-    model_target_out_writef(model_target_out(), "qwen_candidate_%lu_artifact_status: %s\n", index, fact->artifact_status);
-    model_target_out_writef(model_target_out(), "qwen_candidate_%lu_tensor_map_status: %s\n", index, fact->tensor_map_status);
-    model_target_out_writef(model_target_out(), "qwen_candidate_%lu_backend_status: %s\n", index, fact->backend_status);
-    model_target_out_writef(model_target_out(), "qwen_candidate_%lu_runtime_status: %s\n", index, fact->runtime_status);
-    model_target_out_writef(model_target_out(), "qwen_candidate_%lu_generation_status: %s\n", index, fact->generation_status);
-    model_target_out_writef(model_target_out(), "qwen_candidate_%lu_benchmark_status: %s\n", index, fact->benchmark_status);
-    model_target_out_writef(model_target_out(), "qwen_candidate_%lu_blocker_count: %u\n", index, fact->blocker_count);
+    model_target_textf(model_target_out(), "qwen_candidate_%lu_id: %s\n", index, fact->id);
+    model_target_textf(model_target_out(), "qwen_candidate_%lu_class: %s\n", index, fact->class_name);
+    model_target_textf(model_target_out(), "qwen_candidate_%lu_stage: %s\n", index, fact->stage);
+    model_target_textf(model_target_out(), "qwen_candidate_%lu_eligibility: %s\n", index, fact->eligibility);
+    model_target_textf(model_target_out(), "qwen_candidate_%lu_source_target_status: %s\n", index, fact->source_target_status);
+    model_target_textf(model_target_out(), "qwen_candidate_%lu_source_status: %s\n", index, fact->source_status);
+    model_target_textf(model_target_out(), "qwen_candidate_%lu_artifact_status: %s\n", index, fact->artifact_status);
+    model_target_textf(model_target_out(), "qwen_candidate_%lu_tensor_map_status: %s\n", index, fact->tensor_map_status);
+    model_target_textf(model_target_out(), "qwen_candidate_%lu_backend_status: %s\n", index, fact->backend_status);
+    model_target_textf(model_target_out(), "qwen_candidate_%lu_runtime_status: %s\n", index, fact->runtime_status);
+    model_target_textf(model_target_out(), "qwen_candidate_%lu_generation_status: %s\n", index, fact->generation_status);
+    model_target_textf(model_target_out(), "qwen_candidate_%lu_benchmark_status: %s\n", index, fact->benchmark_status);
+    model_target_textf(model_target_out(), "qwen_candidate_%lu_blocker_count: %u\n", index, fact->blocker_count);
     if (include_blockers) {
         for (i = 0; i < fact->blocker_count; ++i) {
-            model_target_out_writef(model_target_out(), "qwen_candidate_%lu_blocker_%u: %s\n", index, i, fact->blockers[i]);
+            model_target_textf(model_target_out(), "qwen_candidate_%lu_blocker_%u: %s\n", index, i, fact->blockers[i]);
         }
     }
 }
 
 static int print_model_target_qwen_metal_missing(const char *release, const char *target)
 {
-    model_target_out_writef(model_target_out(), "model-target: qwen-metal\n");
-    model_target_out_writef(model_target_out(), "status: qwen-metal-pressure-report-fail\n");
-    model_target_out_writef(model_target_out(), "release: %s\n", release && release[0] ? release : "v0.1.0");
-    model_target_out_writef(model_target_out(), "target_requested: %s\n", target && target[0] ? target : "none");
-    model_target_out_writef(model_target_out(), "lane_id: qwen-metal\n");
-    model_target_out_writef(model_target_out(), "target_family: qwen\n");
-    model_target_out_writef(model_target_out(), "target_class: source-model-candidate\n");
-    model_target_out_writef(model_target_out(), "runtime_shape: dense-or-dense-like-candidate-pending-source-config\n");
-    model_target_out_writef(model_target_out(), "hardware_lane: apple-silicon-metal\n");
-    model_target_out_writef(model_target_out(), "backend_lane: metal-planned\n");
-    model_target_out_writef(model_target_out(), "full_runtime_candidate_status: candidate-planned\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "model-target: qwen-metal\n");
+    model_target_textf(model_target_out(), "status: qwen-metal-pressure-report-fail\n");
+    model_target_textf(model_target_out(), "release: %s\n", release && release[0] ? release : "v0.1.0");
+    model_target_textf(model_target_out(), "target_requested: %s\n", target && target[0] ? target : "none");
+    model_target_textf(model_target_out(), "lane_id: qwen-metal\n");
+    model_target_textf(model_target_out(), "target_family: qwen\n");
+    model_target_textf(model_target_out(), "target_class: source-model-candidate\n");
+    model_target_textf(model_target_out(), "runtime_shape: dense-or-dense-like-candidate-pending-source-config\n");
+    model_target_textf(model_target_out(), "hardware_lane: apple-silicon-metal\n");
+    model_target_textf(model_target_out(), "backend_lane: metal-planned\n");
+    model_target_textf(model_target_out(), "full_runtime_candidate_status: candidate-planned\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
     return 2;
 }
 
 static int print_model_target_qwen_metal_unsupported_release(const char *release)
 {
-    model_target_out_writef(model_target_out(), "model-target: qwen-metal\n");
-    model_target_out_writef(model_target_out(), "status: unsupported-release\n");
-    model_target_out_writef(model_target_out(), "release: %s\n", release && release[0] ? release : "unknown");
-    model_target_out_writef(model_target_out(), "lane_id: qwen-metal\n");
-    model_target_out_writef(model_target_out(), "target_family: qwen\n");
-    model_target_out_writef(model_target_out(), "target_class: source-model-candidate\n");
-    model_target_out_writef(model_target_out(), "runtime_shape: dense-or-dense-like-candidate-pending-source-config\n");
-    model_target_out_writef(model_target_out(), "hardware_lane: apple-silicon-metal\n");
-    model_target_out_writef(model_target_out(), "backend_lane: metal-planned\n");
-    model_target_out_writef(model_target_out(), "full_runtime_candidate_status: missing\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "model-target: qwen-metal\n");
+    model_target_textf(model_target_out(), "status: unsupported-release\n");
+    model_target_textf(model_target_out(), "release: %s\n", release && release[0] ? release : "unknown");
+    model_target_textf(model_target_out(), "lane_id: qwen-metal\n");
+    model_target_textf(model_target_out(), "target_family: qwen\n");
+    model_target_textf(model_target_out(), "target_class: source-model-candidate\n");
+    model_target_textf(model_target_out(), "runtime_shape: dense-or-dense-like-candidate-pending-source-config\n");
+    model_target_textf(model_target_out(), "hardware_lane: apple-silicon-metal\n");
+    model_target_textf(model_target_out(), "backend_lane: metal-planned\n");
+    model_target_textf(model_target_out(), "full_runtime_candidate_status: missing\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
     return 2;
 }
 
@@ -9112,37 +9167,37 @@ static int print_model_target_qwen_metal_report(const char *release,
         }
     }
 
-    model_target_out_writef(model_target_out(), "model-target: qwen-metal\n");
-    model_target_out_writef(model_target_out(), "status: qwen-metal-pressure-report\n");
-    model_target_out_writef(model_target_out(), "release: %s\n", release);
-    model_target_out_writef(model_target_out(), "lane_id: qwen-metal\n");
-    model_target_out_writef(model_target_out(), "target_family: qwen\n");
-    model_target_out_writef(model_target_out(), "target_class: source-model-candidate\n");
-    model_target_out_writef(model_target_out(), "stage: report-only\n");
-    model_target_out_writef(model_target_out(), "eligibility: pressure-target-only\n");
-    model_target_out_writef(model_target_out(), "candidate_id: qwen3-8b\n");
-    model_target_out_writef(model_target_out(), "candidate_stage: source-target-profiled\n");
-    model_target_out_writef(model_target_out(), "candidate_eligibility: pressure-target-only\n");
-    model_target_out_writef(model_target_out(), "source_target_status: profiled\n");
-    model_target_out_writef(model_target_out(), "runtime_shape: dense-or-dense-like-candidate-pending-source-config\n");
-    model_target_out_writef(model_target_out(), "hardware_lane: apple-silicon-metal\n");
-    model_target_out_writef(model_target_out(), "backend_lane: metal-planned\n");
-    model_target_out_writef(model_target_out(), "source_status: missing\n");
-    model_target_out_writef(model_target_out(), "artifact_status: missing\n");
-    model_target_out_writef(model_target_out(), "metal_backend_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "qwen_runtime_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "full_runtime_candidate_status: candidate-planned\n");
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: unsupported-full-model\n");
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "model-target: qwen-metal\n");
+    model_target_textf(model_target_out(), "status: qwen-metal-pressure-report\n");
+    model_target_textf(model_target_out(), "release: %s\n", release);
+    model_target_textf(model_target_out(), "lane_id: qwen-metal\n");
+    model_target_textf(model_target_out(), "target_family: qwen\n");
+    model_target_textf(model_target_out(), "target_class: source-model-candidate\n");
+    model_target_textf(model_target_out(), "stage: report-only\n");
+    model_target_textf(model_target_out(), "eligibility: pressure-target-only\n");
+    model_target_textf(model_target_out(), "candidate_id: qwen3-8b\n");
+    model_target_textf(model_target_out(), "candidate_stage: source-target-profiled\n");
+    model_target_textf(model_target_out(), "candidate_eligibility: pressure-target-only\n");
+    model_target_textf(model_target_out(), "source_target_status: profiled\n");
+    model_target_textf(model_target_out(), "runtime_shape: dense-or-dense-like-candidate-pending-source-config\n");
+    model_target_textf(model_target_out(), "hardware_lane: apple-silicon-metal\n");
+    model_target_textf(model_target_out(), "backend_lane: metal-planned\n");
+    model_target_textf(model_target_out(), "source_status: missing\n");
+    model_target_textf(model_target_out(), "artifact_status: missing\n");
+    model_target_textf(model_target_out(), "metal_backend_status: unsupported\n");
+    model_target_textf(model_target_out(), "qwen_runtime_status: unsupported\n");
+    model_target_textf(model_target_out(), "full_runtime_candidate_status: candidate-planned\n");
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: unsupported-full-model\n");
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
 
     if (include_candidates || target_id) {
         if (target_fact) {
-            model_target_out_writef(model_target_out(), "qwen_candidate_count: 1\n");
+            model_target_textf(model_target_out(), "qwen_candidate_count: 1\n");
             print_qwen_metal_candidate(0, target_fact, include_blockers);
         } else {
-            model_target_out_writef(model_target_out(), "qwen_candidate_count: %lu\n", qwen_metal_candidate_fact_count);
+            model_target_textf(model_target_out(), "qwen_candidate_count: %lu\n", qwen_metal_candidate_fact_count);
             for (i = 0; i < qwen_metal_candidate_fact_count; ++i) {
                 print_qwen_metal_candidate(i, &qwen_metal_candidate_facts[i], include_blockers);
             }
@@ -9150,33 +9205,33 @@ static int print_model_target_qwen_metal_report(const char *release,
     }
 
     if (include_hardware) {
-        model_target_out_writef(model_target_out(), "hardware_profile_status: planned\n");
-        model_target_out_writef(model_target_out(), "machine_profile_required: true\n");
-        model_target_out_writef(model_target_out(), "unified_memory_report_required: true\n");
-        model_target_out_writef(model_target_out(), "metal_device_report_required: true\n");
+        model_target_textf(model_target_out(), "hardware_profile_status: planned\n");
+        model_target_textf(model_target_out(), "machine_profile_required: true\n");
+        model_target_textf(model_target_out(), "unified_memory_report_required: true\n");
+        model_target_textf(model_target_out(), "metal_device_report_required: true\n");
     }
     if (include_backend) {
-        model_target_out_writef(model_target_out(), "metal_feasibility_status: missing\n");
-        model_target_out_writef(model_target_out(), "metal_allocation_status: unsupported\n");
-        model_target_out_writef(model_target_out(), "metal_graph_primitive_status: unsupported\n");
-        model_target_out_writef(model_target_out(), "cuda_lane_independent: true\n");
+        model_target_textf(model_target_out(), "metal_feasibility_status: missing\n");
+        model_target_textf(model_target_out(), "metal_allocation_status: unsupported\n");
+        model_target_textf(model_target_out(), "metal_graph_primitive_status: unsupported\n");
+        model_target_textf(model_target_out(), "cuda_lane_independent: true\n");
     }
     if (include_source) {
-        model_target_out_writef(model_target_out(), "source_family: qwen\n");
-        model_target_out_writef(model_target_out(), "source_target_status: profiled\n");
-        model_target_out_writef(model_target_out(), "source_manifest_status: missing\n");
-        model_target_out_writef(model_target_out(), "native_tensor_inventory_status: missing\n");
-        model_target_out_writef(model_target_out(), "source_config_status: missing\n");
-        model_target_out_writef(model_target_out(), "model_class_profile_status: command-visible\n");
-        model_target_out_writef(model_target_out(), "model_class_role_mapping_status: not-implemented\n");
+        model_target_textf(model_target_out(), "source_family: qwen\n");
+        model_target_textf(model_target_out(), "source_target_status: profiled\n");
+        model_target_textf(model_target_out(), "source_manifest_status: missing\n");
+        model_target_textf(model_target_out(), "native_tensor_inventory_status: missing\n");
+        model_target_textf(model_target_out(), "source_config_status: missing\n");
+        model_target_textf(model_target_out(), "model_class_profile_status: command-visible\n");
+        model_target_textf(model_target_out(), "model_class_role_mapping_status: not-implemented\n");
     }
     if (include_blockers) {
         for (i = 0; i < qwen_metal_blocker_count; ++i) {
-            model_target_out_writef(model_target_out(), "blocker_%lu: %s\n", i, qwen_metal_blockers[i]);
+            model_target_textf(model_target_out(), "blocker_%lu: %s\n", i, qwen_metal_blockers[i]);
         }
     }
     if (include_next) {
-        model_target_out_writef(model_target_out(), "next_required_rows: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
+        model_target_textf(model_target_out(), "next_required_rows: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
     }
     return 0;
 }
@@ -9193,17 +9248,17 @@ static int print_model_target_qwen_metal_normal(const char *release,
         }
     }
 
-    model_target_out_writef(model_target_out(), "report: model-target qwen-metal\n");
-    model_target_out_writef(model_target_out(), "status: pressure-target-only\n");
-    model_target_out_writef(model_target_out(), "release: %s\n", release);
-    model_target_out_writef(model_target_out(), "lane: qwen-metal / apple-silicon-metal\n");
-    model_target_out_writef(model_target_out(), "target: qwen3-8b\n");
-    model_target_out_writef(model_target_out(), "candidate: source-target-profiled pressure-target-only\n");
-    model_target_out_writef(model_target_out(), "source_target: profiled\n");
-    model_target_out_writef(model_target_out(), "source: missing\n");
-    model_target_out_writef(model_target_out(), "backend: metal unsupported\n");
-    model_target_out_writef(model_target_out(), "next: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
-    model_target_out_writef(model_target_out(), "boundary: report-only; generation unsupported; benchmark not measured\n");
+    model_target_textf(model_target_out(), "report: model-target qwen-metal\n");
+    model_target_textf(model_target_out(), "status: pressure-target-only\n");
+    model_target_textf(model_target_out(), "release: %s\n", release);
+    model_target_textf(model_target_out(), "lane: qwen-metal / apple-silicon-metal\n");
+    model_target_textf(model_target_out(), "target: qwen3-8b\n");
+    model_target_textf(model_target_out(), "candidate: source-target-profiled pressure-target-only\n");
+    model_target_textf(model_target_out(), "source_target: profiled\n");
+    model_target_textf(model_target_out(), "source: missing\n");
+    model_target_textf(model_target_out(), "backend: metal unsupported\n");
+    model_target_textf(model_target_out(), "next: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
+    model_target_textf(model_target_out(), "boundary: report-only; generation unsupported; benchmark not measured\n");
     return 0;
 }
 
@@ -9212,42 +9267,42 @@ static int print_model_target_decision_unsupported_release(const char *release)
     const char *value;
 
     value = release && release[0] ? release : "unknown";
-    model_target_out_writef(model_target_out(), "target_decision: %s\n", value);
-    model_target_out_writef(model_target_out(), "status: unsupported-release\n");
-    model_target_out_writef(model_target_out(), "release: %s\n", value);
-    model_target_out_writef(model_target_out(), "decision_state: deferred\n");
-    model_target_out_writef(model_target_out(), "selected_target_id: none\n");
-    model_target_out_writef(model_target_out(), "selected_target_class: none\n");
-    model_target_out_writef(model_target_out(), "selected_family: none\n");
-    model_target_out_writef(model_target_out(), "selected_model: none\n");
-    model_target_out_writef(model_target_out(), "selected_source_class: none\n");
-    model_target_out_writef(model_target_out(), "selected_artifact_class: none\n");
-    model_target_out_writef(model_target_out(), "selected_backend_policy: none\n");
-    model_target_out_writef(model_target_out(), "selected_reason: unsupported release target decision vocabulary\n");
-    model_target_out_writef(model_target_out(), "full_runtime_candidate_status: unknown\n");
-    model_target_out_writef(model_target_out(), "candidate_count: 0\n");
-    model_target_out_writef(model_target_out(), "eligible_candidate_count: 0\n");
-    model_target_out_writef(model_target_out(), "ineligible_candidate_count: 0\n");
-    model_target_out_writef(model_target_out(), "selected_runtime_slice_eligible: false\n");
-    model_target_out_writef(model_target_out(), "source_only_eligible: false\n");
-    model_target_out_writef(model_target_out(), "external_reference_eligible: false\n");
-    model_target_out_writef(model_target_out(), "fixture_only_eligible: false\n");
-    model_target_out_writef(model_target_out(), "deepseek_pressure_status: unknown\n");
-    model_target_out_writef(model_target_out(), "glm_pressure_status: unknown\n");
-    model_target_out_writef(model_target_out(), "qwen_metal_pressure_status: unknown\n");
-    model_target_out_writef(model_target_out(), "dense_candidate_status: unknown\n");
-    model_target_out_writef(model_target_out(), "moe_candidate_status: unknown\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_tensor_coverage: none\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_artifact_status: none\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_integrity_status: none\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_backend_status: none\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_graph_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_prefill_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_kv_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_decode_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_logits_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_sampling_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_generation_status: unsupported\n");
+    model_target_textf(model_target_out(), "target_decision: %s\n", value);
+    model_target_textf(model_target_out(), "status: unsupported-release\n");
+    model_target_textf(model_target_out(), "release: %s\n", value);
+    model_target_textf(model_target_out(), "decision_state: deferred\n");
+    model_target_textf(model_target_out(), "selected_target_id: none\n");
+    model_target_textf(model_target_out(), "selected_target_class: none\n");
+    model_target_textf(model_target_out(), "selected_family: none\n");
+    model_target_textf(model_target_out(), "selected_model: none\n");
+    model_target_textf(model_target_out(), "selected_source_class: none\n");
+    model_target_textf(model_target_out(), "selected_artifact_class: none\n");
+    model_target_textf(model_target_out(), "selected_backend_policy: none\n");
+    model_target_textf(model_target_out(), "selected_reason: unsupported release target decision vocabulary\n");
+    model_target_textf(model_target_out(), "full_runtime_candidate_status: unknown\n");
+    model_target_textf(model_target_out(), "candidate_count: 0\n");
+    model_target_textf(model_target_out(), "eligible_candidate_count: 0\n");
+    model_target_textf(model_target_out(), "ineligible_candidate_count: 0\n");
+    model_target_textf(model_target_out(), "selected_runtime_slice_eligible: false\n");
+    model_target_textf(model_target_out(), "source_only_eligible: false\n");
+    model_target_textf(model_target_out(), "external_reference_eligible: false\n");
+    model_target_textf(model_target_out(), "fixture_only_eligible: false\n");
+    model_target_textf(model_target_out(), "deepseek_pressure_status: unknown\n");
+    model_target_textf(model_target_out(), "glm_pressure_status: unknown\n");
+    model_target_textf(model_target_out(), "qwen_metal_pressure_status: unknown\n");
+    model_target_textf(model_target_out(), "dense_candidate_status: unknown\n");
+    model_target_textf(model_target_out(), "moe_candidate_status: unknown\n");
+    model_target_textf(model_target_out(), "selected_candidate_tensor_coverage: none\n");
+    model_target_textf(model_target_out(), "selected_candidate_artifact_status: none\n");
+    model_target_textf(model_target_out(), "selected_candidate_integrity_status: none\n");
+    model_target_textf(model_target_out(), "selected_candidate_backend_status: none\n");
+    model_target_textf(model_target_out(), "selected_candidate_graph_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_prefill_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_kv_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_decode_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_logits_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_sampling_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_generation_status: unsupported\n");
     print_target_decision_constant_tail();
     return 2;
 }
@@ -9260,43 +9315,43 @@ static int print_model_target_decision_missing_candidate(const char *release,
 
     release_value = release && release[0] ? release : "v0.1.0";
     candidate_value = candidate && candidate[0] ? candidate : "none";
-    model_target_out_writef(model_target_out(), "target_decision: %s\n", release_value);
-    model_target_out_writef(model_target_out(), "status: missing-candidate\n");
-    model_target_out_writef(model_target_out(), "release: %s\n", release_value);
-    model_target_out_writef(model_target_out(), "candidate_requested: %s\n", candidate_value);
-    model_target_out_writef(model_target_out(), "decision_state: blocked-no-candidate\n");
-    model_target_out_writef(model_target_out(), "selected_target_id: none\n");
-    model_target_out_writef(model_target_out(), "selected_target_class: none\n");
-    model_target_out_writef(model_target_out(), "selected_family: none\n");
-    model_target_out_writef(model_target_out(), "selected_model: none\n");
-    model_target_out_writef(model_target_out(), "selected_source_class: none\n");
-    model_target_out_writef(model_target_out(), "selected_artifact_class: none\n");
-    model_target_out_writef(model_target_out(), "selected_backend_policy: none\n");
-    model_target_out_writef(model_target_out(), "selected_reason: requested candidate is not registered\n");
-    model_target_out_writef(model_target_out(), "full_runtime_candidate_status: missing\n");
-    model_target_out_writef(model_target_out(), "candidate_count: 0\n");
-    model_target_out_writef(model_target_out(), "eligible_candidate_count: 0\n");
-    model_target_out_writef(model_target_out(), "ineligible_candidate_count: 0\n");
-    model_target_out_writef(model_target_out(), "selected_runtime_slice_eligible: false\n");
-    model_target_out_writef(model_target_out(), "source_only_eligible: false\n");
-    model_target_out_writef(model_target_out(), "external_reference_eligible: false\n");
-    model_target_out_writef(model_target_out(), "fixture_only_eligible: false\n");
-    model_target_out_writef(model_target_out(), "deepseek_pressure_status: selected-slice-pressure-only\n");
-    model_target_out_writef(model_target_out(), "glm_pressure_status: source-storage-pressure-only\n");
-    model_target_out_writef(model_target_out(), "qwen_metal_pressure_status: planned-portability-pressure-only\n");
-    model_target_out_writef(model_target_out(), "dense_candidate_status: missing\n");
-    model_target_out_writef(model_target_out(), "moe_candidate_status: blocked-missing-tensor-map\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_tensor_coverage: none\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_artifact_status: none\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_integrity_status: none\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_backend_status: none\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_graph_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_prefill_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_kv_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_decode_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_logits_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_sampling_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_generation_status: unsupported\n");
+    model_target_textf(model_target_out(), "target_decision: %s\n", release_value);
+    model_target_textf(model_target_out(), "status: missing-candidate\n");
+    model_target_textf(model_target_out(), "release: %s\n", release_value);
+    model_target_textf(model_target_out(), "candidate_requested: %s\n", candidate_value);
+    model_target_textf(model_target_out(), "decision_state: blocked-no-candidate\n");
+    model_target_textf(model_target_out(), "selected_target_id: none\n");
+    model_target_textf(model_target_out(), "selected_target_class: none\n");
+    model_target_textf(model_target_out(), "selected_family: none\n");
+    model_target_textf(model_target_out(), "selected_model: none\n");
+    model_target_textf(model_target_out(), "selected_source_class: none\n");
+    model_target_textf(model_target_out(), "selected_artifact_class: none\n");
+    model_target_textf(model_target_out(), "selected_backend_policy: none\n");
+    model_target_textf(model_target_out(), "selected_reason: requested candidate is not registered\n");
+    model_target_textf(model_target_out(), "full_runtime_candidate_status: missing\n");
+    model_target_textf(model_target_out(), "candidate_count: 0\n");
+    model_target_textf(model_target_out(), "eligible_candidate_count: 0\n");
+    model_target_textf(model_target_out(), "ineligible_candidate_count: 0\n");
+    model_target_textf(model_target_out(), "selected_runtime_slice_eligible: false\n");
+    model_target_textf(model_target_out(), "source_only_eligible: false\n");
+    model_target_textf(model_target_out(), "external_reference_eligible: false\n");
+    model_target_textf(model_target_out(), "fixture_only_eligible: false\n");
+    model_target_textf(model_target_out(), "deepseek_pressure_status: selected-slice-pressure-only\n");
+    model_target_textf(model_target_out(), "glm_pressure_status: source-storage-pressure-only\n");
+    model_target_textf(model_target_out(), "qwen_metal_pressure_status: planned-portability-pressure-only\n");
+    model_target_textf(model_target_out(), "dense_candidate_status: missing\n");
+    model_target_textf(model_target_out(), "moe_candidate_status: blocked-missing-tensor-map\n");
+    model_target_textf(model_target_out(), "selected_candidate_tensor_coverage: none\n");
+    model_target_textf(model_target_out(), "selected_candidate_artifact_status: none\n");
+    model_target_textf(model_target_out(), "selected_candidate_integrity_status: none\n");
+    model_target_textf(model_target_out(), "selected_candidate_backend_status: none\n");
+    model_target_textf(model_target_out(), "selected_candidate_graph_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_prefill_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_kv_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_decode_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_logits_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_sampling_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_generation_status: unsupported\n");
     print_target_decision_constant_tail();
     return 2;
 }
@@ -9327,50 +9382,50 @@ static int print_model_target_decision_report(const char *release,
         }
     }
 
-    model_target_out_writef(model_target_out(), "target_decision: %s\n", release);
-    model_target_out_writef(model_target_out(), "status: %s\n", selected ? "target-decision-selected" : "target-decision-blocked");
-    model_target_out_writef(model_target_out(), "release: %s\n", release);
-    model_target_out_writef(model_target_out(), "decision_state: %s\n", selected ? "selected" : "blocked-no-candidate");
-    model_target_out_writef(model_target_out(), "selected_target_id: %s\n", selected ? selected->target_id : "none");
-    model_target_out_writef(model_target_out(), "selected_target_class: %s\n", selected ? target_decision_candidate_class(selected) : "none");
-    model_target_out_writef(model_target_out(), "selected_family: %s\n", selected ? selected->family : "none");
-    model_target_out_writef(model_target_out(), "selected_model: %s\n", selected ? selected->model : "none");
-    model_target_out_writef(model_target_out(), "selected_source_class: %s\n", selected ? selected->source_artifact_class : "none");
-    model_target_out_writef(model_target_out(), "selected_artifact_class: %s\n", selected ? selected->target_artifact_class : "none");
-    model_target_out_writef(model_target_out(), "selected_backend_policy: %s\n", selected ? "cpu-cuda-capability-required" : "none");
-    model_target_out_writef(model_target_out(), "selected_reason: %s\n", selected
+    model_target_textf(model_target_out(), "target_decision: %s\n", release);
+    model_target_textf(model_target_out(), "status: %s\n", selected ? "target-decision-selected" : "target-decision-blocked");
+    model_target_textf(model_target_out(), "release: %s\n", release);
+    model_target_textf(model_target_out(), "decision_state: %s\n", selected ? "selected" : "blocked-no-candidate");
+    model_target_textf(model_target_out(), "selected_target_id: %s\n", selected ? selected->target_id : "none");
+    model_target_textf(model_target_out(), "selected_target_class: %s\n", selected ? target_decision_candidate_class(selected) : "none");
+    model_target_textf(model_target_out(), "selected_family: %s\n", selected ? selected->family : "none");
+    model_target_textf(model_target_out(), "selected_model: %s\n", selected ? selected->model : "none");
+    model_target_textf(model_target_out(), "selected_source_class: %s\n", selected ? selected->source_artifact_class : "none");
+    model_target_textf(model_target_out(), "selected_artifact_class: %s\n", selected ? selected->target_artifact_class : "none");
+    model_target_textf(model_target_out(), "selected_backend_policy: %s\n", selected ? "cpu-cuda-capability-required" : "none");
+    model_target_textf(model_target_out(), "selected_reason: %s\n", selected
            ? "registered full-runtime candidate selected for v0.1.0 planning"
            : "no current full-runtime-candidate target is eligible for v0.1.0");
-    model_target_out_writef(model_target_out(), "full_runtime_candidate_status: %s\n", eligible_count ? "present" : "missing");
-    model_target_out_writef(model_target_out(), "candidate_count: %lu\n", candidate_count);
-    model_target_out_writef(model_target_out(), "eligible_candidate_count: %lu\n", eligible_count);
-    model_target_out_writef(model_target_out(), "ineligible_candidate_count: %lu\n", ineligible_count);
-    model_target_out_writef(model_target_out(), "selected_runtime_slice_eligible: false\n");
-    model_target_out_writef(model_target_out(), "source_only_eligible: false\n");
-    model_target_out_writef(model_target_out(), "external_reference_eligible: false\n");
-    model_target_out_writef(model_target_out(), "fixture_only_eligible: false\n");
-    model_target_out_writef(model_target_out(), "deepseek_pressure_status: selected-slice-pressure-only\n");
-    model_target_out_writef(model_target_out(), "glm_pressure_status: source-storage-pressure-only\n");
-    model_target_out_writef(model_target_out(), "qwen_metal_pressure_status: planned-portability-pressure-only\n");
-    model_target_out_writef(model_target_out(), "dense_candidate_status: %s\n", selected ? "selected" : "missing");
-    model_target_out_writef(model_target_out(), "moe_candidate_status: %s\n", selected ? "target-dependent" : "blocked-missing-tensor-map");
-    model_target_out_writef(model_target_out(), "selected_candidate_tensor_coverage: %s\n", selected ? "requires-report" : "none");
-    model_target_out_writef(model_target_out(), "selected_candidate_artifact_status: %s\n", selected ? "requires-integrity-gate" : "none");
-    model_target_out_writef(model_target_out(), "selected_candidate_integrity_status: %s\n", selected ? "requires-integrity-gate" : "none");
-    model_target_out_writef(model_target_out(), "selected_candidate_backend_status: %s\n", selected ? "requires-backend-gate" : "none");
-    model_target_out_writef(model_target_out(), "selected_candidate_graph_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_prefill_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_kv_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_decode_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_logits_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_sampling_status: unsupported\n");
-    model_target_out_writef(model_target_out(), "selected_candidate_generation_status: unsupported\n");
+    model_target_textf(model_target_out(), "full_runtime_candidate_status: %s\n", eligible_count ? "present" : "missing");
+    model_target_textf(model_target_out(), "candidate_count: %lu\n", candidate_count);
+    model_target_textf(model_target_out(), "eligible_candidate_count: %lu\n", eligible_count);
+    model_target_textf(model_target_out(), "ineligible_candidate_count: %lu\n", ineligible_count);
+    model_target_textf(model_target_out(), "selected_runtime_slice_eligible: false\n");
+    model_target_textf(model_target_out(), "source_only_eligible: false\n");
+    model_target_textf(model_target_out(), "external_reference_eligible: false\n");
+    model_target_textf(model_target_out(), "fixture_only_eligible: false\n");
+    model_target_textf(model_target_out(), "deepseek_pressure_status: selected-slice-pressure-only\n");
+    model_target_textf(model_target_out(), "glm_pressure_status: source-storage-pressure-only\n");
+    model_target_textf(model_target_out(), "qwen_metal_pressure_status: planned-portability-pressure-only\n");
+    model_target_textf(model_target_out(), "dense_candidate_status: %s\n", selected ? "selected" : "missing");
+    model_target_textf(model_target_out(), "moe_candidate_status: %s\n", selected ? "target-dependent" : "blocked-missing-tensor-map");
+    model_target_textf(model_target_out(), "selected_candidate_tensor_coverage: %s\n", selected ? "requires-report" : "none");
+    model_target_textf(model_target_out(), "selected_candidate_artifact_status: %s\n", selected ? "requires-integrity-gate" : "none");
+    model_target_textf(model_target_out(), "selected_candidate_integrity_status: %s\n", selected ? "requires-integrity-gate" : "none");
+    model_target_textf(model_target_out(), "selected_candidate_backend_status: %s\n", selected ? "requires-backend-gate" : "none");
+    model_target_textf(model_target_out(), "selected_candidate_graph_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_prefill_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_kv_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_decode_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_logits_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_sampling_status: unsupported\n");
+    model_target_textf(model_target_out(), "selected_candidate_generation_status: unsupported\n");
     print_target_decision_constant_tail();
 
     for (i = 0; i < model_target_count; ++i) {
         const yvex_model_target_record *record = &model_targets[i];
         if (candidate_filter && record != candidate_filter) continue;
-        model_target_out_writef(model_target_out(), "\n");
+        model_target_textf(model_target_out(), "\n");
         print_model_target_decision_candidate(out_index++, record);
     }
     return 0;
@@ -9401,114 +9456,114 @@ static int print_model_target_decision_normal(const char *release,
         }
     }
 
-    model_target_out_writef(model_target_out(), "report: target-decision\n");
-    model_target_out_writef(model_target_out(), "status: %s\n", selected ? "target-decision-selected" : "target-decision-blocked");
-    model_target_out_writef(model_target_out(), "release: %s\n", release);
-    model_target_out_writef(model_target_out(), "selected: %s\n", selected ? selected->target_id : "none");
-    model_target_out_writef(model_target_out(), "eligible: %lu / %lu candidates (%lu ineligible)\n",
+    model_target_textf(model_target_out(), "report: target-decision\n");
+    model_target_textf(model_target_out(), "status: %s\n", selected ? "target-decision-selected" : "target-decision-blocked");
+    model_target_textf(model_target_out(), "release: %s\n", release);
+    model_target_textf(model_target_out(), "selected: %s\n", selected ? selected->target_id : "none");
+    model_target_textf(model_target_out(), "eligible: %lu / %lu candidates (%lu ineligible)\n",
            eligible_count, candidate_count, ineligible_count);
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n", selected ? "none" : "no eligible full-runtime candidate");
-    model_target_out_writef(model_target_out(), "next: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
-    model_target_out_writef(model_target_out(), "boundary: report-only; generation unsupported; benchmark not measured\n");
+    model_target_textf(model_target_out(), "top_blocker: %s\n", selected ? "none" : "no eligible full-runtime candidate");
+    model_target_textf(model_target_out(), "next: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
+    model_target_textf(model_target_out(), "boundary: report-only; generation unsupported; benchmark not measured\n");
     return 0;
 }
 
 static void print_model_target_usage(FILE *fp)
 {
-    model_target_out_writef(fp, "usage: " "yvex model-target classes\n");
-    model_target_out_writef(fp, "       yvex model-target list [--audit | --output normal|table|audit]\n");
-    model_target_out_writef(fp, "       yvex model-target candidate --release v0.1.0 [options]\n");
-    model_target_out_writef(fp, "       yvex model-target dense-candidate --release v0.1.0 [options]\n");
-    model_target_out_writef(fp, "       yvex model-target qwen-metal --release v0.1.0 [options]\n");
-    model_target_out_writef(fp, "       yvex model-target decision --release v0.1.0 [options]\n");
-    model_target_out_writef(fp, "       yvex model-target class-profile TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
-    model_target_out_writef(fp, "       yvex model-target tensor-collection TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
-    model_target_out_writef(fp, "       yvex model-target missing-roles TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit|json]\n");
-    model_target_out_writef(fp, "       yvex model-target tokenizer-map TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit|json]\n");
-    model_target_out_writef(fp, "       yvex model-target tensor-map TARGET [--role output-head|tokenizer|missing-roles | --gate v0.1.0] [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit] [--check-output-contract normal|table|audit]\n");
-    model_target_out_writef(fp, "       yvex model-target quant-policy TARGET [--models-root DIR] [--source DIR] [--role-support] [--audit | --output normal|table|audit] [--check-output-contract normal|table|audit]\n");
-    model_target_out_writef(fp, "       yvex model-target quant-policy --gate v0.1.0 [--models-root DIR] [--audit | --output normal|table|audit]\n");
-    model_target_out_writef(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR] [--audit | --output normal|table|audit]\n");
+    model_target_textf(fp, "usage: " "yvex model-target classes\n");
+    model_target_textf(fp, "       yvex model-target list [--audit | --output normal|table|audit]\n");
+    model_target_textf(fp, "       yvex model-target candidate --release v0.1.0 [options]\n");
+    model_target_textf(fp, "       yvex model-target dense-candidate --release v0.1.0 [options]\n");
+    model_target_textf(fp, "       yvex model-target qwen-metal --release v0.1.0 [options]\n");
+    model_target_textf(fp, "       yvex model-target decision --release v0.1.0 [options]\n");
+    model_target_textf(fp, "       yvex model-target class-profile TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
+    model_target_textf(fp, "       yvex model-target tensor-collection TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit]\n");
+    model_target_textf(fp, "       yvex model-target missing-roles TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit|json]\n");
+    model_target_textf(fp, "       yvex model-target tokenizer-map TARGET [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit|json]\n");
+    model_target_textf(fp, "       yvex model-target tensor-map TARGET [--role output-head|tokenizer|missing-roles | --gate v0.1.0] [--models-root DIR] [--source DIR] [--audit | --output normal|table|audit] [--check-output-contract normal|table|audit]\n");
+    model_target_textf(fp, "       yvex model-target quant-policy TARGET [--models-root DIR] [--source DIR] [--role-support] [--audit | --output normal|table|audit] [--check-output-contract normal|table|audit]\n");
+    model_target_textf(fp, "       yvex model-target quant-policy --gate v0.1.0 [--models-root DIR] [--audit | --output normal|table|audit]\n");
+    model_target_textf(fp, "       yvex model-target inspect TARGET [--paths] [--models-root DIR] [--audit | --output normal|table|audit]\n");
 }
 
 static void model_target_legacy_help(FILE *fp)
 {
     print_model_target_usage(fp);
-    model_target_out_writef(fp, "\n--paths           show expected operator-local source, artifact, report, reference, and registry paths\n");
-    model_target_out_writef(fp, "--models-root DIR override configured operator model root for this command only\n");
-    model_target_out_writef(fp, "--audit | --output normal|table|audit\n");
-    model_target_out_writef(fp, "\nDecision report:\n");
-    model_target_out_writef(fp, "  yvex model-target decision --release v0.1.0 --include-candidates --include-blockers --include-next\n");
-    model_target_out_writef(fp, "  This command records the v0.1.0 target decision. It does not download models, emit artifacts, materialize tensors, execute graph work, run prefill, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
-    model_target_out_writef(fp, "  Default output is compact. Use --audit or --output audit for full row-promotion fields.\n");
-    model_target_out_writef(fp, "\nCandidate report:\n");
-    model_target_out_writef(fp, "  yvex model-target candidate --release v0.1.0 --include-candidates --include-blockers --include-next\n");
-    model_target_out_writef(fp, "  The candidate report evaluates full-runtime target eligibility for a release. It does not select a ready model, download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
-    model_target_out_writef(fp, "  Default output is compact. Use --audit or --output audit for candidate lists, blockers, and next-row evidence.\n");
-    model_target_out_writef(fp, "\nDense candidate report:\n");
-    model_target_out_writef(fp, "  yvex model-target dense-candidate --release v0.1.0 --include-candidates --include-requirements --include-blockers --include-next\n");
-    model_target_out_writef(fp, "  The dense-candidate report evaluates whether a dense model target can become the first v0.1.0 full-runtime candidate. It does not download weights, emit artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
-    model_target_out_writef(fp, "  Default output is compact. Use --audit or --output audit for requirements and blocker detail.\n");
-    model_target_out_writef(fp, "\nQwen/Metal pressure report:\n");
-    model_target_out_writef(fp, "  yvex model-target qwen-metal --release v0.1.0 --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next\n");
-    model_target_out_writef(fp, "  The Qwen/Metal pressure report records a planned reduced-scale Apple Silicon / Metal lane for future full-runtime work. It does not download weights, implement Metal, emit Qwen artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
-    model_target_out_writef(fp, "  Default output is compact. Use --audit or --output audit for hardware, backend, source, and blocker detail.\n");
-    model_target_out_writef(fp, "\nModel-class profile:\n");
-    model_target_out_writef(fp, "  yvex model-target class-profile qwen3-8b --audit\n");
-    model_target_out_writef(fp, "  yvex model-target class-profile gemma-4-12b-it --audit\n");
-    model_target_out_writef(fp, "  The class-profile report reads safetensors headers only and counts lexical tensor-name patterns. It does not map tensor roles, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
-    model_target_out_writef(fp, "\nTensor collection inventory:\n");
-    model_target_out_writef(fp, "  yvex model-target tensor-collection qwen3-8b --audit\n");
-    model_target_out_writef(fp, "  yvex model-target tensor-collection gemma-4-12b-it --audit\n");
-    model_target_out_writef(fp, "  The tensor collection inventory reads safetensors headers only and groups lexical tensor candidates for the selected source target. It does not map runtime roles, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
-    model_target_out_writef(fp, "\nTensor naming map:\n");
-    model_target_out_writef(fp, "  yvex model-target tensor-map qwen3-8b --audit\n");
-    model_target_out_writef(fp, "  yvex model-target tensor-map gemma-4-12b-it --audit\n");
-    model_target_out_writef(fp, "  The tensor naming map reads safetensors headers only and assigns native source tensor names to canonical YVEX role labels. It does not complete runtime role coverage, build runtime descriptors, emit artifacts, materialize tensors, feed graph consumers, execute the model, generate, evaluate, benchmark, or mark a release ready.\n");
-    model_target_out_writef(fp, "\nOutput-head tensor map:\n");
-    model_target_out_writef(fp, "  yvex model-target tensor-map qwen3-8b --role output-head --audit\n");
-    model_target_out_writef(fp, "  yvex model-target tensor-map gemma-4-12b-it --role output-head --audit\n");
-    model_target_out_writef(fp, "  The output-head tensor map reads safetensors headers only and identifies output-head, final-norm, and embedding candidates. It does not compute logits, complete runtime descriptors, feed graph consumers, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
-    model_target_out_writef(fp, "\nTokenizer metadata map:\n");
-    model_target_out_writef(fp, "  yvex model-target tensor-map qwen3-8b --role tokenizer --audit\n");
-    model_target_out_writef(fp, "  yvex model-target tensor-map gemma-4-12b-it --role tokenizer --audit\n");
-    model_target_out_writef(fp, "  yvex model-target tokenizer-map qwen3-6-35b-a3b --models-root ~/lab/models --audit\n");
-    model_target_out_writef(fp, "  yvex model-target tokenizer-map gemma-4-31b-it --models-root ~/lab/models --output table\n");
-    model_target_out_writef(fp, "  The tokenizer metadata map reads local sidecars only and reports tokenizer/config/special-token metadata candidates. It does not tokenize, detokenize, apply chat templates, stop on EOS, compute logits, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
-    model_target_out_writef(fp, "\nMissing-role blocker report:\n");
-    model_target_out_writef(fp, "  yvex model-target missing-roles qwen3-8b --audit\n");
-    model_target_out_writef(fp, "  yvex model-target missing-roles gemma-4-12b-it --audit\n");
-    model_target_out_writef(fp, "  The missing-role report aggregates header-derived tensor naming, output-head, tokenizer metadata, and planned artifact facts into the blocker list that prevents full GGUF emission. It does not load tensor payloads, emit GGUF, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
-    model_target_out_writef(fp, "\nTensor mapping gate:\n");
-    model_target_out_writef(fp, "  yvex model-target tensor-map qwen3-8b --gate v0.1.0 --audit\n");
-    model_target_out_writef(fp, "  yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0 --audit\n");
-    model_target_out_writef(fp, "  The tensor mapping gate aggregates model-class, tensor-collection, tensor naming, output-head, tokenizer metadata, and missing-role reports. It can pass only into artifact/quantization planning; it does not emit artifacts, construct runtime descriptors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
-    model_target_out_writef(fp, "\nQtype policy report:\n");
-    model_target_out_writef(fp, "  yvex model-target quant-policy qwen3-8b --audit\n");
-    model_target_out_writef(fp, "  yvex model-target quant-policy gemma-4-12b-it --audit\n");
-    model_target_out_writef(fp, "  yvex model-target quant-policy qwen3-6-35b-a3b --role-support --models-root ~/lab/models\n");
-    model_target_out_writef(fp, "  yvex model-target quant-policy --gate v0.1.0 --models-root ~/lab/models --output table\n");
-    model_target_out_writef(fp, "  The qtype policy report consumes source/header/mapping evidence and existing YVEX qtype policy rows for artifact planning. It does not load tensor payloads, quantize tensors, emit GGUF, materialize tensors, construct runtime descriptors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
-    model_target_out_writef(fp, "\nDefault output is compact. Use --audit for full diagnostic fields.\n");
-    model_target_out_writef(fp, "Model targets are pressure objects, not capability claims.\n");
-    model_target_out_writef(fp, "External GGUFs and external runners are reference evidence only.\n");
-    model_target_out_writef(fp, "Model-target path reporting does not read model payloads, create artifacts, register aliases, or claim runtime support.\n");
+    model_target_textf(fp, "\n--paths           show expected operator-local source, artifact, report, reference, and registry paths\n");
+    model_target_textf(fp, "--models-root DIR override configured operator model root for this command only\n");
+    model_target_textf(fp, "--audit | --output normal|table|audit\n");
+    model_target_textf(fp, "\nDecision report:\n");
+    model_target_textf(fp, "  yvex model-target decision --release v0.1.0 --include-candidates --include-blockers --include-next\n");
+    model_target_textf(fp, "  This command records the v0.1.0 target decision. It does not download models, emit artifacts, materialize tensors, execute graph work, run prefill, decode, logits, sampling, generation, evaluation, or benchmarks.\n");
+    model_target_textf(fp, "  Default output is compact. Use --audit or --output audit for full row-promotion fields.\n");
+    model_target_textf(fp, "\nCandidate report:\n");
+    model_target_textf(fp, "  yvex model-target candidate --release v0.1.0 --include-candidates --include-blockers --include-next\n");
+    model_target_textf(fp, "  The candidate report evaluates full-runtime target eligibility for a release. It does not select a ready model, download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    model_target_textf(fp, "  Default output is compact. Use --audit or --output audit for candidate lists, blockers, and next-row evidence.\n");
+    model_target_textf(fp, "\nDense candidate report:\n");
+    model_target_textf(fp, "  yvex model-target dense-candidate --release v0.1.0 --include-candidates --include-requirements --include-blockers --include-next\n");
+    model_target_textf(fp, "  The dense-candidate report evaluates whether a dense model target can become the first v0.1.0 full-runtime candidate. It does not download weights, emit artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    model_target_textf(fp, "  Default output is compact. Use --audit or --output audit for requirements and blocker detail.\n");
+    model_target_textf(fp, "\nQwen/Metal pressure report:\n");
+    model_target_textf(fp, "  yvex model-target qwen-metal --release v0.1.0 --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next\n");
+    model_target_textf(fp, "  The Qwen/Metal pressure report records a planned reduced-scale Apple Silicon / Metal lane for future full-runtime work. It does not download weights, implement Metal, emit Qwen artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    model_target_textf(fp, "  Default output is compact. Use --audit or --output audit for hardware, backend, source, and blocker detail.\n");
+    model_target_textf(fp, "\nModel-class profile:\n");
+    model_target_textf(fp, "  yvex model-target class-profile qwen3-8b --audit\n");
+    model_target_textf(fp, "  yvex model-target class-profile gemma-4-12b-it --audit\n");
+    model_target_textf(fp, "  The class-profile report reads safetensors headers only and counts lexical tensor-name patterns. It does not map tensor roles, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    model_target_textf(fp, "\nTensor collection inventory:\n");
+    model_target_textf(fp, "  yvex model-target tensor-collection qwen3-8b --audit\n");
+    model_target_textf(fp, "  yvex model-target tensor-collection gemma-4-12b-it --audit\n");
+    model_target_textf(fp, "  The tensor collection inventory reads safetensors headers only and groups lexical tensor candidates for the selected source target. It does not map runtime roles, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    model_target_textf(fp, "\nTensor naming map:\n");
+    model_target_textf(fp, "  yvex model-target tensor-map qwen3-8b --audit\n");
+    model_target_textf(fp, "  yvex model-target tensor-map gemma-4-12b-it --audit\n");
+    model_target_textf(fp, "  The tensor naming map reads safetensors headers only and assigns native source tensor names to canonical YVEX role labels. It does not complete runtime role coverage, build runtime descriptors, emit artifacts, materialize tensors, feed graph consumers, execute the model, generate, evaluate, benchmark, or mark a release ready.\n");
+    model_target_textf(fp, "\nOutput-head tensor map:\n");
+    model_target_textf(fp, "  yvex model-target tensor-map qwen3-8b --role output-head --audit\n");
+    model_target_textf(fp, "  yvex model-target tensor-map gemma-4-12b-it --role output-head --audit\n");
+    model_target_textf(fp, "  The output-head tensor map reads safetensors headers only and identifies output-head, final-norm, and embedding candidates. It does not compute logits, complete runtime descriptors, feed graph consumers, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    model_target_textf(fp, "\nTokenizer metadata map:\n");
+    model_target_textf(fp, "  yvex model-target tensor-map qwen3-8b --role tokenizer --audit\n");
+    model_target_textf(fp, "  yvex model-target tensor-map gemma-4-12b-it --role tokenizer --audit\n");
+    model_target_textf(fp, "  yvex model-target tokenizer-map qwen3-6-35b-a3b --models-root ~/lab/models --audit\n");
+    model_target_textf(fp, "  yvex model-target tokenizer-map gemma-4-31b-it --models-root ~/lab/models --output table\n");
+    model_target_textf(fp, "  The tokenizer metadata map reads local sidecars only and reports tokenizer/config/special-token metadata candidates. It does not tokenize, detokenize, apply chat templates, stop on EOS, compute logits, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    model_target_textf(fp, "\nMissing-role blocker report:\n");
+    model_target_textf(fp, "  yvex model-target missing-roles qwen3-8b --audit\n");
+    model_target_textf(fp, "  yvex model-target missing-roles gemma-4-12b-it --audit\n");
+    model_target_textf(fp, "  The missing-role report aggregates header-derived tensor naming, output-head, tokenizer metadata, and planned artifact facts into the blocker list that prevents full GGUF emission. It does not load tensor payloads, emit GGUF, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    model_target_textf(fp, "\nTensor mapping gate:\n");
+    model_target_textf(fp, "  yvex model-target tensor-map qwen3-8b --gate v0.1.0 --audit\n");
+    model_target_textf(fp, "  yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0 --audit\n");
+    model_target_textf(fp, "  The tensor mapping gate aggregates model-class, tensor-collection, tensor naming, output-head, tokenizer metadata, and missing-role reports. It can pass only into artifact/quantization planning; it does not emit artifacts, construct runtime descriptors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    model_target_textf(fp, "\nQtype policy report:\n");
+    model_target_textf(fp, "  yvex model-target quant-policy qwen3-8b --audit\n");
+    model_target_textf(fp, "  yvex model-target quant-policy gemma-4-12b-it --audit\n");
+    model_target_textf(fp, "  yvex model-target quant-policy qwen3-6-35b-a3b --role-support --models-root ~/lab/models\n");
+    model_target_textf(fp, "  yvex model-target quant-policy --gate v0.1.0 --models-root ~/lab/models --output table\n");
+    model_target_textf(fp, "  The qtype policy report consumes source/header/mapping evidence and existing YVEX qtype policy rows for artifact planning. It does not load tensor payloads, quantize tensors, emit GGUF, materialize tensors, construct runtime descriptors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
+    model_target_textf(fp, "\nDefault output is compact. Use --audit for full diagnostic fields.\n");
+    model_target_textf(fp, "Model targets are pressure objects, not capability claims.\n");
+    model_target_textf(fp, "External GGUFs and external runners are reference evidence only.\n");
+    model_target_textf(fp, "Model-target path reporting does not read model payloads, create artifacts, register aliases, or claim runtime support.\n");
 }
 
 static void print_model_target_classes(void)
 {
     unsigned long i;
 
-    model_target_out_writef(model_target_out(), "status: model-target-classes\n");
+    model_target_textf(model_target_out(), "status: model-target-classes\n");
     for (i = 0; i < model_target_class_count; ++i) {
         const yvex_model_target_class_record *record = &model_target_classes[i];
-        model_target_out_writef(model_target_out(), "class: %s\n", record->class_id);
-        model_target_out_writef(model_target_out(), "capability_claim: %s\n", record->capability_claim);
-        model_target_out_writef(model_target_out(), "runtime_execution: %s\n", record->runtime_execution);
-        model_target_out_writef(model_target_out(), "generation: %s\n", record->generation);
-        model_target_out_writef(model_target_out(), "description: %s\n", record->description);
+        model_target_textf(model_target_out(), "class: %s\n", record->class_id);
+        model_target_textf(model_target_out(), "capability_claim: %s\n", record->capability_claim);
+        model_target_textf(model_target_out(), "runtime_execution: %s\n", record->runtime_execution);
+        model_target_textf(model_target_out(), "generation: %s\n", record->generation);
+        model_target_textf(model_target_out(), "description: %s\n", record->description);
         if (i + 1 < model_target_class_count) {
-            model_target_out_writef(model_target_out(), "\n");
+            model_target_textf(model_target_out(), "\n");
         }
     }
 }
@@ -9854,42 +9909,42 @@ static void print_model_target_list(void)
 {
     unsigned long i;
 
-    model_target_out_writef(model_target_out(), "status: model-target-list\n");
+    model_target_textf(model_target_out(), "status: model-target-list\n");
     for (i = 0; i < model_target_count; ++i) {
         const yvex_model_target_record *record = &model_targets[i];
-        model_target_out_writef(model_target_out(), "target: %s\n", record->target_id);
-        model_target_out_writef(model_target_out(), "family: %s\n", record->family);
-        model_target_out_writef(model_target_out(), "target_class: %s\n", record->target_class);
-        model_target_out_writef(model_target_out(), "source_artifact_class: %s\n", record->source_artifact_class);
-        model_target_out_writef(model_target_out(), "source_artifact_status: %s\n",
+        model_target_textf(model_target_out(), "target: %s\n", record->target_id);
+        model_target_textf(model_target_out(), "family: %s\n", record->family);
+        model_target_textf(model_target_out(), "target_class: %s\n", record->target_class);
+        model_target_textf(model_target_out(), "source_artifact_class: %s\n", record->source_artifact_class);
+        model_target_textf(model_target_out(), "source_artifact_status: %s\n",
                model_target_source_artifact_status(record));
-        model_target_out_writef(model_target_out(), "target_artifact_class: %s\n", record->target_artifact_class);
-        model_target_out_writef(model_target_out(), "target_artifact_status: %s\n",
+        model_target_textf(model_target_out(), "target_artifact_class: %s\n", record->target_artifact_class);
+        model_target_textf(model_target_out(), "target_artifact_status: %s\n",
                model_target_target_artifact_status(record));
-        model_target_out_writef(model_target_out(), "source_artifact_origin: %s\n",
+        model_target_textf(model_target_out(), "source_artifact_origin: %s\n",
                model_target_source_artifact_origin(record));
-        model_target_out_writef(model_target_out(), "target_artifact_origin: %s\n",
+        model_target_textf(model_target_out(), "target_artifact_origin: %s\n",
                model_target_target_artifact_origin(record));
-        model_target_out_writef(model_target_out(), "source_provenance_status: %s\n",
+        model_target_textf(model_target_out(), "source_provenance_status: %s\n",
                model_target_source_provenance_status(record));
-        model_target_out_writef(model_target_out(), "source_origin: %s\n", model_target_source_origin(record));
-        model_target_out_writef(model_target_out(), "source_authority: %s\n", model_target_source_authority(record));
-        model_target_out_writef(model_target_out(), "source_revision_status: %s\n",
+        model_target_textf(model_target_out(), "source_origin: %s\n", model_target_source_origin(record));
+        model_target_textf(model_target_out(), "source_authority: %s\n", model_target_source_authority(record));
+        model_target_textf(model_target_out(), "source_revision_status: %s\n",
                model_target_source_revision_status(record));
-        model_target_out_writef(model_target_out(), "source_identity_status: %s\n",
+        model_target_textf(model_target_out(), "source_identity_status: %s\n",
                model_target_source_identity_status(record));
-        model_target_out_writef(model_target_out(), "source_hash_status: %s\n", model_target_source_hash_status(record));
-        model_target_out_writef(model_target_out(), "source_verification_status: %s\n",
+        model_target_textf(model_target_out(), "source_hash_status: %s\n", model_target_source_hash_status(record));
+        model_target_textf(model_target_out(), "source_verification_status: %s\n",
                model_target_source_verification_status(record));
-        model_target_out_writef(model_target_out(), "native_inventory_status: %s\n",
+        model_target_textf(model_target_out(), "native_inventory_status: %s\n",
                model_target_native_inventory_status(record));
-        model_target_out_writef(model_target_out(), "native_tensor_count: 0\n");
-        model_target_out_writef(model_target_out(), "native_safetensors_payload_loaded: false\n");
-        model_target_out_writef(model_target_out(), "source_tensor_metadata_status: %s\n",
+        model_target_textf(model_target_out(), "native_tensor_count: 0\n");
+        model_target_textf(model_target_out(), "native_safetensors_payload_loaded: false\n");
+        model_target_textf(model_target_out(), "source_tensor_metadata_status: %s\n",
                model_target_source_tensor_metadata_status(record));
-        model_target_out_writef(model_target_out(), "source_tensor_count: 0\n");
-        model_target_out_writef(model_target_out(), "source_tensor_metadata_payload_loaded: false\n");
-        model_target_out_writef(model_target_out(), "source_tensor_metadata_payload_bytes_read: 0\n");
+        model_target_textf(model_target_out(), "source_tensor_count: 0\n");
+        model_target_textf(model_target_out(), "source_tensor_metadata_payload_loaded: false\n");
+        model_target_textf(model_target_out(), "source_tensor_metadata_payload_bytes_read: 0\n");
         print_model_class_audit_hint(record);
         print_tensor_collection_audit_hint(record);
         print_tensor_map_audit_hint(record);
@@ -9897,16 +9952,16 @@ static void print_model_target_list(void)
         print_tokenizer_map_audit_hint(record);
         print_missing_role_report_audit_hint(record);
         print_tensor_mapping_gate_audit_hint(record);
-        model_target_out_writef(model_target_out(), "runtime_shape: %s\n", model_target_runtime_shape(record));
-        model_target_out_writef(model_target_out(), "backend_selection: %s\n", model_target_backend_selection(record));
-        model_target_out_writef(model_target_out(), "backend_pressure: %s\n", model_target_backend_pressure(record));
-        model_target_out_writef(model_target_out(), "runtime_execution: %s\n", record->runtime_execution);
-        model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-        model_target_out_writef(model_target_out(), "generation: %s\n", record->generation);
-        model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-        model_target_out_writef(model_target_out(), "release_ready: false\n");
+        model_target_textf(model_target_out(), "runtime_shape: %s\n", model_target_runtime_shape(record));
+        model_target_textf(model_target_out(), "backend_selection: %s\n", model_target_backend_selection(record));
+        model_target_textf(model_target_out(), "backend_pressure: %s\n", model_target_backend_pressure(record));
+        model_target_textf(model_target_out(), "runtime_execution: %s\n", record->runtime_execution);
+        model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+        model_target_textf(model_target_out(), "generation: %s\n", record->generation);
+        model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+        model_target_textf(model_target_out(), "release_ready: false\n");
         if (i + 1 < model_target_count) {
-            model_target_out_writef(model_target_out(), "\n");
+            model_target_textf(model_target_out(), "\n");
         }
     }
 }
@@ -9915,8 +9970,8 @@ static void print_model_target_list_table(void)
 {
     unsigned long i;
 
-    model_target_out_writef(model_target_out(), "MODEL TARGETS  count=%lu\n\n", model_target_count);
-    model_target_out_writef(model_target_out(), "%-43s  %-8s  %-40s  %-11s  %s\n",
+    model_target_textf(model_target_out(), "MODEL TARGETS  count=%lu\n\n", model_target_count);
+    model_target_textf(model_target_out(), "%-43s  %-8s  %-40s  %-11s  %s\n",
            "TARGET",
            "FAMILY",
            "CLASS",
@@ -9924,56 +9979,56 @@ static void print_model_target_list_table(void)
            "GENERATION");
     for (i = 0; i < model_target_count; ++i) {
         const yvex_model_target_record *record = &model_targets[i];
-        model_target_out_writef(model_target_out(), "%-43s  %-8s  %-40s  %-11s  %s\n",
+        model_target_textf(model_target_out(), "%-43s  %-8s  %-40s  %-11s  %s\n",
                record->target_id,
                record->family,
                record->target_class,
                record->runtime_execution,
                record->generation);
     }
-    model_target_out_writef(model_target_out(), "status: model-target-list\n");
+    model_target_textf(model_target_out(), "status: model-target-list\n");
 }
 
 static void print_model_target_record(const yvex_model_target_record *record)
 {
-    model_target_out_writef(model_target_out(), "status: model-target\n");
-    model_target_out_writef(model_target_out(), "target_id: %s\n", record->target_id);
-    model_target_out_writef(model_target_out(), "family: %s\n", record->family);
-    model_target_out_writef(model_target_out(), "model: %s\n", record->model);
-    model_target_out_writef(model_target_out(), "target_class: %s\n", record->target_class);
-    model_target_out_writef(model_target_out(), "runtime_shape: %s\n", model_target_runtime_shape(record));
-    model_target_out_writef(model_target_out(), "backend_selection: %s\n", model_target_backend_selection(record));
-    model_target_out_writef(model_target_out(), "backend_pressure: %s\n", model_target_backend_pressure(record));
-    model_target_out_writef(model_target_out(), "source_artifact_class: %s\n", record->source_artifact_class);
-    model_target_out_writef(model_target_out(), "source_artifact_status: %s\n", model_target_source_artifact_status(record));
-    model_target_out_writef(model_target_out(), "source_artifact_format: %s\n", model_target_source_artifact_format(record));
-    model_target_out_writef(model_target_out(), "source_artifact_origin: %s\n", model_target_source_artifact_origin(record));
-    model_target_out_writef(model_target_out(), "source_artifact_authority: %s\n",
+    model_target_textf(model_target_out(), "status: model-target\n");
+    model_target_textf(model_target_out(), "target_id: %s\n", record->target_id);
+    model_target_textf(model_target_out(), "family: %s\n", record->family);
+    model_target_textf(model_target_out(), "model: %s\n", record->model);
+    model_target_textf(model_target_out(), "target_class: %s\n", record->target_class);
+    model_target_textf(model_target_out(), "runtime_shape: %s\n", model_target_runtime_shape(record));
+    model_target_textf(model_target_out(), "backend_selection: %s\n", model_target_backend_selection(record));
+    model_target_textf(model_target_out(), "backend_pressure: %s\n", model_target_backend_pressure(record));
+    model_target_textf(model_target_out(), "source_artifact_class: %s\n", record->source_artifact_class);
+    model_target_textf(model_target_out(), "source_artifact_status: %s\n", model_target_source_artifact_status(record));
+    model_target_textf(model_target_out(), "source_artifact_format: %s\n", model_target_source_artifact_format(record));
+    model_target_textf(model_target_out(), "source_artifact_origin: %s\n", model_target_source_artifact_origin(record));
+    model_target_textf(model_target_out(), "source_artifact_authority: %s\n",
            model_target_source_artifact_authority(record));
-    model_target_out_writef(model_target_out(), "source_sidecar_status: %s\n", model_target_source_sidecar_status(record));
-    model_target_out_writef(model_target_out(), "source_tensor_container: %s\n", model_target_source_tensor_container(record));
-    model_target_out_writef(model_target_out(), "source_tensor_payload_status: %s\n",
+    model_target_textf(model_target_out(), "source_sidecar_status: %s\n", model_target_source_sidecar_status(record));
+    model_target_textf(model_target_out(), "source_tensor_container: %s\n", model_target_source_tensor_container(record));
+    model_target_textf(model_target_out(), "source_tensor_payload_status: %s\n",
            model_target_source_tensor_payload_status(record));
-    model_target_out_writef(model_target_out(), "source_provenance_status: %s\n",
+    model_target_textf(model_target_out(), "source_provenance_status: %s\n",
            model_target_source_provenance_status(record));
-    model_target_out_writef(model_target_out(), "source_origin: %s\n", model_target_source_origin(record));
-    model_target_out_writef(model_target_out(), "source_authority: %s\n", model_target_source_authority(record));
-    model_target_out_writef(model_target_out(), "source_revision_status: %s\n",
+    model_target_textf(model_target_out(), "source_origin: %s\n", model_target_source_origin(record));
+    model_target_textf(model_target_out(), "source_authority: %s\n", model_target_source_authority(record));
+    model_target_textf(model_target_out(), "source_revision_status: %s\n",
            model_target_source_revision_status(record));
-    model_target_out_writef(model_target_out(), "source_identity_status: %s\n",
+    model_target_textf(model_target_out(), "source_identity_status: %s\n",
            model_target_source_identity_status(record));
-    model_target_out_writef(model_target_out(), "source_hash_status: %s\n", model_target_source_hash_status(record));
-    model_target_out_writef(model_target_out(), "source_verification_status: %s\n",
+    model_target_textf(model_target_out(), "source_hash_status: %s\n", model_target_source_hash_status(record));
+    model_target_textf(model_target_out(), "source_verification_status: %s\n",
            model_target_source_verification_status(record));
-    model_target_out_writef(model_target_out(), "native_inventory_status: %s\n",
+    model_target_textf(model_target_out(), "native_inventory_status: %s\n",
            model_target_native_inventory_status(record));
-    model_target_out_writef(model_target_out(), "native_tensor_count: 0\n");
-    model_target_out_writef(model_target_out(), "native_safetensors_payload_loaded: false\n");
-    model_target_out_writef(model_target_out(), "source_tensor_metadata_status: %s\n",
+    model_target_textf(model_target_out(), "native_tensor_count: 0\n");
+    model_target_textf(model_target_out(), "native_safetensors_payload_loaded: false\n");
+    model_target_textf(model_target_out(), "source_tensor_metadata_status: %s\n",
            model_target_source_tensor_metadata_status(record));
-    model_target_out_writef(model_target_out(), "source_tensor_count: 0\n");
-    model_target_out_writef(model_target_out(), "source_tensor_metadata_payload_loaded: false\n");
-    model_target_out_writef(model_target_out(), "source_tensor_metadata_payload_bytes_read: 0\n");
+    model_target_textf(model_target_out(), "source_tensor_count: 0\n");
+    model_target_textf(model_target_out(), "source_tensor_metadata_payload_loaded: false\n");
+    model_target_textf(model_target_out(), "source_tensor_metadata_payload_bytes_read: 0\n");
     print_model_class_audit_hint(record);
     print_tensor_collection_audit_hint(record);
     print_tensor_map_audit_hint(record);
@@ -9981,97 +10036,97 @@ static void print_model_target_record(const yvex_model_target_record *record)
     print_tokenizer_map_audit_hint(record);
     print_missing_role_report_audit_hint(record);
     print_tensor_mapping_gate_audit_hint(record);
-    model_target_out_writef(model_target_out(), "target_artifact_class: %s\n", record->target_artifact_class);
-    model_target_out_writef(model_target_out(), "target_artifact_status: %s\n", model_target_target_artifact_status(record));
-    model_target_out_writef(model_target_out(), "target_artifact_origin: %s\n", model_target_target_artifact_origin(record));
-    model_target_out_writef(model_target_out(), "target_artifact_required: %s\n",
+    model_target_textf(model_target_out(), "target_artifact_class: %s\n", record->target_artifact_class);
+    model_target_textf(model_target_out(), "target_artifact_status: %s\n", model_target_target_artifact_status(record));
+    model_target_textf(model_target_out(), "target_artifact_origin: %s\n", model_target_target_artifact_origin(record));
+    model_target_textf(model_target_out(), "target_artifact_required: %s\n",
            model_target_target_artifact_required(record));
-    model_target_out_writef(model_target_out(), "external_reference_status: %s\n",
+    model_target_textf(model_target_out(), "external_reference_status: %s\n",
            model_target_external_reference_status(record));
-    model_target_out_writef(model_target_out(), "yvex_produced_artifact_status: %s\n",
+    model_target_textf(model_target_out(), "yvex_produced_artifact_status: %s\n",
            model_target_yvex_produced_artifact_status(record));
-    model_target_out_writef(model_target_out(), "pressure_purpose: %s\n", record->pressure_purpose);
-    model_target_out_writef(model_target_out(), "tensor_set: %s\n", record->tensor_set);
-    model_target_out_writef(model_target_out(), "local_path_class: %s\n", record->local_path_class);
-    model_target_out_writef(model_target_out(), "source_footprint_class: %s\n", record->source_footprint_class);
-    model_target_out_writef(model_target_out(), "runtime_boundary: %s\n", record->runtime_boundary);
-    model_target_out_writef(model_target_out(), "runtime_execution: %s\n", record->runtime_execution);
-    model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-    model_target_out_writef(model_target_out(), "generation: %s\n", record->generation);
-    model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-    model_target_out_writef(model_target_out(), "release_ready: false\n");
-    model_target_out_writef(model_target_out(), "external_reference: %s\n", record->external_reference);
+    model_target_textf(model_target_out(), "pressure_purpose: %s\n", record->pressure_purpose);
+    model_target_textf(model_target_out(), "tensor_set: %s\n", record->tensor_set);
+    model_target_textf(model_target_out(), "local_path_class: %s\n", record->local_path_class);
+    model_target_textf(model_target_out(), "source_footprint_class: %s\n", record->source_footprint_class);
+    model_target_textf(model_target_out(), "runtime_boundary: %s\n", record->runtime_boundary);
+    model_target_textf(model_target_out(), "runtime_execution: %s\n", record->runtime_execution);
+    model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+    model_target_textf(model_target_out(), "generation: %s\n", record->generation);
+    model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+    model_target_textf(model_target_out(), "release_ready: false\n");
+    model_target_textf(model_target_out(), "external_reference: %s\n", record->external_reference);
 }
 
 static void print_model_target_record_normal(const yvex_model_target_record *record)
 {
     if (model_target_is_source_model_candidate(record)) {
-        model_target_out_writef(model_target_out(), "target: %s\n", record->target_id);
-        model_target_out_writef(model_target_out(), "family: %s  class=%s\n", record->family, record->target_class);
-        model_target_out_writef(model_target_out(), "source: %s  status=%s\n",
+        model_target_textf(model_target_out(), "target: %s\n", record->target_id);
+        model_target_textf(model_target_out(), "family: %s  class=%s\n", record->family, record->target_class);
+        model_target_textf(model_target_out(), "source: %s  status=%s\n",
                record->source_artifact_class,
                model_target_source_artifact_status(record));
-        model_target_out_writef(model_target_out(), "artifact: %s  status=%s\n",
+        model_target_textf(model_target_out(), "artifact: %s  status=%s\n",
                record->target_artifact_class,
                model_target_target_artifact_status(record));
-        model_target_out_writef(model_target_out(), "backend_selection: %s\n", model_target_backend_selection(record));
-        model_target_out_writef(model_target_out(), "backend_pressure: %s\n", model_target_backend_pressure(record));
-        model_target_out_writef(model_target_out(), "runtime: %s\n", record->runtime_execution);
-        model_target_out_writef(model_target_out(), "generation: %s\n", record->generation);
-        model_target_out_writef(model_target_out(), "next: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
-        model_target_out_writef(model_target_out(), "boundary: target/source profile only; no source download/runtime/generation\n");
-        model_target_out_writef(model_target_out(), "status: model-target\n");
+        model_target_textf(model_target_out(), "backend_selection: %s\n", model_target_backend_selection(record));
+        model_target_textf(model_target_out(), "backend_pressure: %s\n", model_target_backend_pressure(record));
+        model_target_textf(model_target_out(), "runtime: %s\n", record->runtime_execution);
+        model_target_textf(model_target_out(), "generation: %s\n", record->generation);
+        model_target_textf(model_target_out(), "next: %s\n", YVEX_MODEL_CLASS_NEXT_ROW);
+        model_target_textf(model_target_out(), "boundary: target/source profile only; no source download/runtime/generation\n");
+        model_target_textf(model_target_out(), "status: model-target\n");
         return;
     }
     if (strcmp(record->target_id, "glm-5.2-official-safetensors") == 0) {
-        model_target_out_writef(model_target_out(), "target: %s\n", record->target_id);
-        model_target_out_writef(model_target_out(), "family: %s  class=%s\n", record->family, record->target_class);
-        model_target_out_writef(model_target_out(), "source: %s  status=%s\n",
+        model_target_textf(model_target_out(), "target: %s\n", record->target_id);
+        model_target_textf(model_target_out(), "family: %s  class=%s\n", record->family, record->target_class);
+        model_target_textf(model_target_out(), "source: %s  status=%s\n",
                record->source_artifact_class,
                model_target_source_artifact_status(record));
-        model_target_out_writef(model_target_out(), "artifact: %s  status=%s\n",
+        model_target_textf(model_target_out(), "artifact: %s  status=%s\n",
                record->target_artifact_class,
                model_target_target_artifact_status(record));
-        model_target_out_writef(model_target_out(), "runtime: %s\n", record->runtime_execution);
-        model_target_out_writef(model_target_out(), "generation: %s\n", record->generation);
-        model_target_out_writef(model_target_out(), "next: V010.SOURCE.8\n");
-        model_target_out_writef(model_target_out(), "boundary: source/storage pressure only; no GLM runtime/generation\n");
-        model_target_out_writef(model_target_out(), "status: model-target\n");
+        model_target_textf(model_target_out(), "runtime: %s\n", record->runtime_execution);
+        model_target_textf(model_target_out(), "generation: %s\n", record->generation);
+        model_target_textf(model_target_out(), "next: V010.SOURCE.8\n");
+        model_target_textf(model_target_out(), "boundary: source/storage pressure only; no GLM runtime/generation\n");
+        model_target_textf(model_target_out(), "status: model-target\n");
         return;
     }
     if (model_target_is_selected_slice(record)) {
-        model_target_out_writef(model_target_out(), "target: %s\n", record->target_id);
-        model_target_out_writef(model_target_out(), "family: %s  class=%s\n", record->family, record->target_class);
-        model_target_out_writef(model_target_out(), "source: %s  status=%s\n",
+        model_target_textf(model_target_out(), "target: %s\n", record->target_id);
+        model_target_textf(model_target_out(), "family: %s  class=%s\n", record->family, record->target_class);
+        model_target_textf(model_target_out(), "source: %s  status=%s\n",
                record->source_artifact_class,
                model_target_source_artifact_status(record));
-        model_target_out_writef(model_target_out(), "artifact: %s  status=%s\n",
+        model_target_textf(model_target_out(), "artifact: %s  status=%s\n",
                record->target_artifact_class,
                model_target_target_artifact_status(record));
-        model_target_out_writef(model_target_out(), "runtime: %s\n", model_target_runtime_display(record));
-        model_target_out_writef(model_target_out(), "generation: %s\n", record->generation);
-        model_target_out_writef(model_target_out(), "boundary: selected-slice only; no full-runtime generation\n");
-        model_target_out_writef(model_target_out(), "status: model-target\n");
+        model_target_textf(model_target_out(), "runtime: %s\n", model_target_runtime_display(record));
+        model_target_textf(model_target_out(), "generation: %s\n", record->generation);
+        model_target_textf(model_target_out(), "boundary: selected-slice only; no full-runtime generation\n");
+        model_target_textf(model_target_out(), "status: model-target\n");
         return;
     }
 
-    model_target_out_writef(model_target_out(), "target: %s\n", record->target_id);
-    model_target_out_writef(model_target_out(), "family: %s class=%s\n", record->family, record->target_class);
-    model_target_out_writef(model_target_out(), "source: %s  status=%s\n",
+    model_target_textf(model_target_out(), "target: %s\n", record->target_id);
+    model_target_textf(model_target_out(), "family: %s class=%s\n", record->family, record->target_class);
+    model_target_textf(model_target_out(), "source: %s  status=%s\n",
            record->source_artifact_class,
            model_target_source_artifact_status(record));
-    model_target_out_writef(model_target_out(), "artifact: %s  status=%s\n",
+    model_target_textf(model_target_out(), "artifact: %s  status=%s\n",
            record->target_artifact_class,
            model_target_target_artifact_status(record));
-    model_target_out_writef(model_target_out(), "runtime: %s generation=%s\n",
+    model_target_textf(model_target_out(), "runtime: %s generation=%s\n",
            record->runtime_execution,
            record->generation);
-    model_target_out_writef(model_target_out(), "top_blocker: %s\n",
+    model_target_textf(model_target_out(), "top_blocker: %s\n",
            strcmp(record->runtime_execution, "unsupported") == 0
                ? "full-runtime target facts incomplete"
                : "full-runtime execution unsupported");
-    model_target_out_writef(model_target_out(), "boundary: target report only, no runtime execution\n");
-    model_target_out_writef(model_target_out(), "status: model-target\n");
+    model_target_textf(model_target_out(), "boundary: target report only, no runtime execution\n");
+    model_target_textf(model_target_out(), "status: model-target\n");
 }
 
 static void print_model_target_report_table(const char *report,
@@ -10079,13 +10134,13 @@ static void print_model_target_report_table(const char *report,
                                             const char *selected,
                                             unsigned long eligible_count)
 {
-    model_target_out_writef(model_target_out(), "%-24s  %-8s  %-8s  %8s  %s\n",
+    model_target_textf(model_target_out(), "%-24s  %-8s  %-8s  %8s  %s\n",
            "REPORT",
            "STATUS",
            "SELECTED",
            "ELIGIBLE",
            "NEXT");
-    model_target_out_writef(model_target_out(), "%-24s  %-8s  %-8s  %8lu  %s\n",
+    model_target_textf(model_target_out(), "%-24s  %-8s  %-8s  %8lu  %s\n",
            report ? report : "report",
            status ? status : "blocked",
            selected ? selected : "none",
@@ -10106,12 +10161,12 @@ static int format_model_target_artifact_path(char *out, size_t cap,
     int n;
 
     if (!out || cap == 0 || !operator_paths || !family || !filename) {
-        model_target_out_writef(model_target_err(), "model-target: artifact path fields are required\n");
+        model_target_textf(model_target_err(), "model-target: artifact path fields are required\n");
         return 2;
     }
     n = snprintf(out, cap, "%s/%s/%s", operator_paths->gguf_root, family, filename);
     if (n < 0 || (size_t)n >= cap) {
-        model_target_out_writef(model_target_err(), "model-target: artifact path is too long\n");
+        model_target_textf(model_target_err(), "model-target: artifact path is too long\n");
         return 2;
     }
     return 0;
@@ -10146,7 +10201,7 @@ static int print_model_target_paths(const yvex_model_target_record *record,
 
     rc = yvex_operator_paths_resolve(&paths, models_root_override, &operator_paths, &err);
     if (rc != YVEX_OK) {
-        model_target_out_writef(model_target_err(), "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
+        model_target_textf(model_target_err(), "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
         return rc == YVEX_ERR_INVALID_ARG ? 2 : 3;
     }
 
@@ -10159,32 +10214,32 @@ static int print_model_target_paths(const yvex_model_target_record *record,
     } else if (strcmp(record->family, "Gemma") == 0) {
         family_key = "gemma";
     } else {
-        model_target_out_writef(model_target_err(), "model-target: no path mapping for family: %s\n", record->family);
+        model_target_textf(model_target_err(), "model-target: no path mapping for family: %s\n", record->family);
         return 2;
     }
 
     rc = yvex_operator_paths_resolve_target(&operator_paths, family_key, "source",
                                             source_path, sizeof(source_path), &source_exists, &err);
     if (rc != YVEX_OK) {
-        model_target_out_writef(model_target_err(), "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
+        model_target_textf(model_target_err(), "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
         return rc == YVEX_ERR_INVALID_ARG ? 2 : 3;
     }
     rc = yvex_operator_paths_resolve_target(&operator_paths, family_key, "reports",
                                             report_dir, sizeof(report_dir), &report_exists, &err);
     if (rc != YVEX_OK) {
-        model_target_out_writef(model_target_err(), "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
+        model_target_textf(model_target_err(), "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
         return rc == YVEX_ERR_INVALID_ARG ? 2 : 3;
     }
     rc = yvex_operator_paths_resolve_target(&operator_paths, family_key, "reference",
                                             reference_dir, sizeof(reference_dir), &reference_exists, &err);
     if (rc != YVEX_OK) {
-        model_target_out_writef(model_target_err(), "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
+        model_target_textf(model_target_err(), "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
         return rc == YVEX_ERR_INVALID_ARG ? 2 : 3;
     }
     rc = yvex_operator_paths_resolve_target(&operator_paths, family_key, "registry",
                                             registry_dir, sizeof(registry_dir), &registry_exists, &err);
     if (rc != YVEX_OK) {
-        model_target_out_writef(model_target_err(), "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
+        model_target_textf(model_target_err(), "yvex: %s: %s\n", yvex_error_where(&err), yvex_error_message(&err));
         return rc == YVEX_ERR_INVALID_ARG ? 2 : 3;
     }
 
@@ -10230,83 +10285,83 @@ static int print_model_target_paths(const yvex_model_target_record *record,
         runtime_execution = "unsupported";
         artifact_exists = path_exists(artifact_path);
     } else {
-        model_target_out_writef(model_target_err(), "model-target: no path mapping for target: %s\n", record->target_id);
+        model_target_textf(model_target_err(), "model-target: no path mapping for target: %s\n", record->target_id);
         return 2;
     }
 
     if (!audit_output) {
         if (model_target_is_source_model_candidate(record)) {
-            model_target_out_writef(model_target_out(), "target: %s\n", record->target_id);
-            model_target_out_writef(model_target_out(), "source: %s  %s\n", source_exists ? "present" : "missing", source_path);
-            model_target_out_writef(model_target_out(), "source_class: %s\n", source_class);
-            model_target_out_writef(model_target_out(), "artifact: planned  %s\n", artifact_path);
-            model_target_out_writef(model_target_out(), "artifact_class: %s\n", target_class);
-            model_target_out_writef(model_target_out(), "backend_selection: %s\n", model_target_backend_selection(record));
-            model_target_out_writef(model_target_out(), "backend_pressure: %s\n", model_target_backend_pressure(record));
-            model_target_out_writef(model_target_out(), "reports: %s\n", report_dir);
-            model_target_out_writef(model_target_out(), "registry: %s\n", registry_dir);
-            model_target_out_writef(model_target_out(), "boundary: path report only, no runtime execution\n");
-            model_target_out_writef(model_target_out(), "status: model-target-paths\n");
+            model_target_textf(model_target_out(), "target: %s\n", record->target_id);
+            model_target_textf(model_target_out(), "source: %s  %s\n", source_exists ? "present" : "missing", source_path);
+            model_target_textf(model_target_out(), "source_class: %s\n", source_class);
+            model_target_textf(model_target_out(), "artifact: planned  %s\n", artifact_path);
+            model_target_textf(model_target_out(), "artifact_class: %s\n", target_class);
+            model_target_textf(model_target_out(), "backend_selection: %s\n", model_target_backend_selection(record));
+            model_target_textf(model_target_out(), "backend_pressure: %s\n", model_target_backend_pressure(record));
+            model_target_textf(model_target_out(), "reports: %s\n", report_dir);
+            model_target_textf(model_target_out(), "registry: %s\n", registry_dir);
+            model_target_textf(model_target_out(), "boundary: path report only, no runtime execution\n");
+            model_target_textf(model_target_out(), "status: model-target-paths\n");
             return 0;
         }
-        model_target_out_writef(model_target_out(), "target: %s\n", record->target_id);
-        model_target_out_writef(model_target_out(), "models_root: %s\n", operator_paths.models_root);
-        model_target_out_writef(model_target_out(), "source: %s exists=%s\n", source_path, source_exists ? "true" : "false");
-        model_target_out_writef(model_target_out(), "source_class: %s\n", source_class);
-        model_target_out_writef(model_target_out(), "artifact: %s exists=%s\n", artifact_path, artifact_exists ? "true" : "false");
-        model_target_out_writef(model_target_out(), "artifact_class: %s\n", target_class);
-        model_target_out_writef(model_target_out(), "registry_alias: %s\n", registry_alias);
-        model_target_out_writef(model_target_out(), "boundary: path report only, no payload read or runtime execution\n");
-        model_target_out_writef(model_target_out(), "status: model-target-paths\n");
+        model_target_textf(model_target_out(), "target: %s\n", record->target_id);
+        model_target_textf(model_target_out(), "models_root: %s\n", operator_paths.models_root);
+        model_target_textf(model_target_out(), "source: %s exists=%s\n", source_path, source_exists ? "true" : "false");
+        model_target_textf(model_target_out(), "source_class: %s\n", source_class);
+        model_target_textf(model_target_out(), "artifact: %s exists=%s\n", artifact_path, artifact_exists ? "true" : "false");
+        model_target_textf(model_target_out(), "artifact_class: %s\n", target_class);
+        model_target_textf(model_target_out(), "registry_alias: %s\n", registry_alias);
+        model_target_textf(model_target_out(), "boundary: path report only, no payload read or runtime execution\n");
+        model_target_textf(model_target_out(), "status: model-target-paths\n");
     } else {
-        model_target_out_writef(model_target_out(), "models_root_source: %s\n", operator_paths.models_root_source);
-        model_target_out_writef(model_target_out(), "models_root: %s\n", operator_paths.models_root);
-        model_target_out_writef(model_target_out(), "source_path: %s\n", source_path);
-        model_target_out_writef(model_target_out(), "source_exists: %s\n", source_exists ? "true" : "false");
-        model_target_out_writef(model_target_out(), "artifact_path: %s\n", artifact_path);
-        model_target_out_writef(model_target_out(), "artifact_exists: %s\n", artifact_exists ? "true" : "false");
-        model_target_out_writef(model_target_out(), "report_dir: %s\n", report_dir);
-        model_target_out_writef(model_target_out(), "report_dir_exists: %s\n", report_exists ? "true" : "false");
-        model_target_out_writef(model_target_out(), "reference_dir: %s\n", reference_dir);
-        model_target_out_writef(model_target_out(), "reference_dir_exists: %s\n", reference_exists ? "true" : "false");
-        model_target_out_writef(model_target_out(), "registry_dir: %s\n", registry_dir);
-        model_target_out_writef(model_target_out(), "registry_dir_exists: %s\n", registry_exists ? "true" : "false");
-        model_target_out_writef(model_target_out(), "registry_alias: %s\n", registry_alias);
-        model_target_out_writef(model_target_out(), "source_artifact_class: %s\n", source_class);
-        model_target_out_writef(model_target_out(), "source_artifact_status: %s\n",
+        model_target_textf(model_target_out(), "models_root_source: %s\n", operator_paths.models_root_source);
+        model_target_textf(model_target_out(), "models_root: %s\n", operator_paths.models_root);
+        model_target_textf(model_target_out(), "source_path: %s\n", source_path);
+        model_target_textf(model_target_out(), "source_exists: %s\n", source_exists ? "true" : "false");
+        model_target_textf(model_target_out(), "artifact_path: %s\n", artifact_path);
+        model_target_textf(model_target_out(), "artifact_exists: %s\n", artifact_exists ? "true" : "false");
+        model_target_textf(model_target_out(), "report_dir: %s\n", report_dir);
+        model_target_textf(model_target_out(), "report_dir_exists: %s\n", report_exists ? "true" : "false");
+        model_target_textf(model_target_out(), "reference_dir: %s\n", reference_dir);
+        model_target_textf(model_target_out(), "reference_dir_exists: %s\n", reference_exists ? "true" : "false");
+        model_target_textf(model_target_out(), "registry_dir: %s\n", registry_dir);
+        model_target_textf(model_target_out(), "registry_dir_exists: %s\n", registry_exists ? "true" : "false");
+        model_target_textf(model_target_out(), "registry_alias: %s\n", registry_alias);
+        model_target_textf(model_target_out(), "source_artifact_class: %s\n", source_class);
+        model_target_textf(model_target_out(), "source_artifact_status: %s\n",
                source_exists ? "present" : model_target_source_artifact_status(record));
-        model_target_out_writef(model_target_out(), "source_artifact_format: %s\n",
+        model_target_textf(model_target_out(), "source_artifact_format: %s\n",
                model_target_source_artifact_format(record));
-        model_target_out_writef(model_target_out(), "source_artifact_origin: %s\n",
+        model_target_textf(model_target_out(), "source_artifact_origin: %s\n",
                model_target_source_artifact_origin(record));
-        model_target_out_writef(model_target_out(), "source_artifact_authority: %s\n",
+        model_target_textf(model_target_out(), "source_artifact_authority: %s\n",
                model_target_source_artifact_authority(record));
-        model_target_out_writef(model_target_out(), "source_sidecar_status: %s\n",
+        model_target_textf(model_target_out(), "source_sidecar_status: %s\n",
                model_target_source_sidecar_status(record));
-        model_target_out_writef(model_target_out(), "source_tensor_container: %s\n",
+        model_target_textf(model_target_out(), "source_tensor_container: %s\n",
                model_target_source_tensor_container(record));
-        model_target_out_writef(model_target_out(), "source_tensor_payload_status: %s\n",
+        model_target_textf(model_target_out(), "source_tensor_payload_status: %s\n",
                source_exists ? "present-not-loaded"
                              : model_target_source_tensor_payload_status(record));
-        model_target_out_writef(model_target_out(), "target_artifact_class: %s\n", target_class);
-        model_target_out_writef(model_target_out(), "target_artifact_status: %s\n",
+        model_target_textf(model_target_out(), "target_artifact_class: %s\n", target_class);
+        model_target_textf(model_target_out(), "target_artifact_status: %s\n",
                artifact_exists ? "present" : model_target_target_artifact_status(record));
-        model_target_out_writef(model_target_out(), "target_artifact_origin: %s\n",
+        model_target_textf(model_target_out(), "target_artifact_origin: %s\n",
                model_target_target_artifact_origin(record));
-        model_target_out_writef(model_target_out(), "target_artifact_required: %s\n",
+        model_target_textf(model_target_out(), "target_artifact_required: %s\n",
                model_target_target_artifact_required(record));
-        model_target_out_writef(model_target_out(), "backend_selection: %s\n", model_target_backend_selection(record));
-        model_target_out_writef(model_target_out(), "backend_pressure: %s\n", model_target_backend_pressure(record));
-        model_target_out_writef(model_target_out(), "external_reference_status: %s\n",
+        model_target_textf(model_target_out(), "backend_selection: %s\n", model_target_backend_selection(record));
+        model_target_textf(model_target_out(), "backend_pressure: %s\n", model_target_backend_pressure(record));
+        model_target_textf(model_target_out(), "external_reference_status: %s\n",
                model_target_external_reference_status(record));
-        model_target_out_writef(model_target_out(), "yvex_produced_artifact_status: %s\n",
+        model_target_textf(model_target_out(), "yvex_produced_artifact_status: %s\n",
                model_target_yvex_produced_artifact_status(record));
-        model_target_out_writef(model_target_out(), "runtime_execution: %s\n", runtime_execution);
-        model_target_out_writef(model_target_out(), "runtime_claim: unsupported\n");
-        model_target_out_writef(model_target_out(), "generation: unsupported\n");
-        model_target_out_writef(model_target_out(), "benchmark_status: not-measured\n");
-        model_target_out_writef(model_target_out(), "release_ready: false\n");
-        model_target_out_writef(model_target_out(), "status: model-target-paths\n");
+        model_target_textf(model_target_out(), "runtime_execution: %s\n", runtime_execution);
+        model_target_textf(model_target_out(), "runtime_claim: unsupported\n");
+        model_target_textf(model_target_out(), "generation: unsupported\n");
+        model_target_textf(model_target_out(), "benchmark_status: not-measured\n");
+        model_target_textf(model_target_out(), "release_ready: false\n");
+        model_target_textf(model_target_out(), "status: model-target-paths\n");
     }
     return 0;
 }
@@ -10372,15 +10427,15 @@ static int model_target_legacy_command(int argc, char **argv)
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
             } else if (strcmp(argv[i], "--output") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target list: --output requires normal|table|audit\n");
+                    model_target_textf(model_target_err(), "model-target list: --output requires normal|table|audit\n");
                     return 2;
                 }
                 if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
-                    model_target_out_writef(model_target_err(), "model-target list: unsupported output mode: %s\n", argv[i]);
+                    model_target_textf(model_target_err(), "model-target list: unsupported output mode: %s\n", argv[i]);
                     return 2;
                 }
             } else {
-                model_target_out_writef(model_target_err(), "model-target list: unknown option: %s\n", argv[i]);
+                model_target_textf(model_target_err(), "model-target list: unknown option: %s\n", argv[i]);
                 return 2;
             }
         }
@@ -10410,13 +10465,13 @@ static int model_target_legacy_command(int argc, char **argv)
                 return 0;
             } else if (strcmp(argv[i], "--release") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target candidate: --release requires VERSION\n");
+                    model_target_textf(model_target_err(), "model-target candidate: --release requires VERSION\n");
                     return 2;
                 }
                 release = argv[++i];
             } else if (strcmp(argv[i], "--target") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target candidate: --target requires TARGET\n");
+                    model_target_textf(model_target_err(), "model-target candidate: --target requires TARGET\n");
                     return 2;
                 }
                 target_id = argv[++i];
@@ -10432,23 +10487,23 @@ static int model_target_legacy_command(int argc, char **argv)
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
             } else if (strcmp(argv[i], "--output") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target candidate: --output requires normal|table|audit\n");
+                    model_target_textf(model_target_err(), "model-target candidate: --output requires normal|table|audit\n");
                     return 2;
                 }
                 if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
-                    model_target_out_writef(model_target_err(), "model-target candidate: unsupported output mode: %s\n", argv[i]);
+                    model_target_textf(model_target_err(), "model-target candidate: unsupported output mode: %s\n", argv[i]);
                     return 2;
                 }
             } else if (strcmp(argv[i], "--json") == 0) {
-                model_target_out_writef(model_target_err(), "model-target candidate: JSON output is unsupported; use --output normal|table|audit\n");
+                model_target_textf(model_target_err(), "model-target candidate: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
             } else {
-                model_target_out_writef(model_target_err(), "model-target candidate: unknown option: %s\n", argv[i]);
+                model_target_textf(model_target_err(), "model-target candidate: unknown option: %s\n", argv[i]);
                 return 2;
             }
         }
         if (!release || release[0] == '\0') {
-            model_target_out_writef(model_target_err(), "model-target candidate: --release is required\n");
+            model_target_textf(model_target_err(), "model-target candidate: --release is required\n");
             print_model_target_candidate_usage(model_target_err());
             return 2;
         }
@@ -10491,13 +10546,13 @@ static int model_target_legacy_command(int argc, char **argv)
                 return 0;
             } else if (strcmp(argv[i], "--release") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target dense-candidate: --release requires VERSION\n");
+                    model_target_textf(model_target_err(), "model-target dense-candidate: --release requires VERSION\n");
                     return 2;
                 }
                 release = argv[++i];
             } else if (strcmp(argv[i], "--target") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target dense-candidate: --target requires TARGET\n");
+                    model_target_textf(model_target_err(), "model-target dense-candidate: --target requires TARGET\n");
                     return 2;
                 }
                 target_id = argv[++i];
@@ -10513,23 +10568,23 @@ static int model_target_legacy_command(int argc, char **argv)
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
             } else if (strcmp(argv[i], "--output") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target dense-candidate: --output requires normal|table|audit\n");
+                    model_target_textf(model_target_err(), "model-target dense-candidate: --output requires normal|table|audit\n");
                     return 2;
                 }
                 if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
-                    model_target_out_writef(model_target_err(), "model-target dense-candidate: unsupported output mode: %s\n", argv[i]);
+                    model_target_textf(model_target_err(), "model-target dense-candidate: unsupported output mode: %s\n", argv[i]);
                     return 2;
                 }
             } else if (strcmp(argv[i], "--json") == 0) {
-                model_target_out_writef(model_target_err(), "model-target dense-candidate: JSON output is unsupported; use --output normal|table|audit\n");
+                model_target_textf(model_target_err(), "model-target dense-candidate: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
             } else {
-                model_target_out_writef(model_target_err(), "model-target dense-candidate: unknown option: %s\n", argv[i]);
+                model_target_textf(model_target_err(), "model-target dense-candidate: unknown option: %s\n", argv[i]);
                 return 2;
             }
         }
         if (!release || release[0] == '\0') {
-            model_target_out_writef(model_target_err(), "model-target dense-candidate: --release is required\n");
+            model_target_textf(model_target_err(), "model-target dense-candidate: --release is required\n");
             print_model_target_dense_candidate_usage(model_target_err());
             return 2;
         }
@@ -10574,13 +10629,13 @@ static int model_target_legacy_command(int argc, char **argv)
                 return 0;
             } else if (strcmp(argv[i], "--release") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target qwen-metal: --release requires VERSION\n");
+                    model_target_textf(model_target_err(), "model-target qwen-metal: --release requires VERSION\n");
                     return 2;
                 }
                 release = argv[++i];
             } else if (strcmp(argv[i], "--target") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target qwen-metal: --target requires TARGET\n");
+                    model_target_textf(model_target_err(), "model-target qwen-metal: --target requires TARGET\n");
                     return 2;
                 }
                 target_id = argv[++i];
@@ -10600,23 +10655,23 @@ static int model_target_legacy_command(int argc, char **argv)
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
             } else if (strcmp(argv[i], "--output") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target qwen-metal: --output requires normal|table|audit\n");
+                    model_target_textf(model_target_err(), "model-target qwen-metal: --output requires normal|table|audit\n");
                     return 2;
                 }
                 if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
-                    model_target_out_writef(model_target_err(), "model-target qwen-metal: unsupported output mode: %s\n", argv[i]);
+                    model_target_textf(model_target_err(), "model-target qwen-metal: unsupported output mode: %s\n", argv[i]);
                     return 2;
                 }
             } else if (strcmp(argv[i], "--json") == 0) {
-                model_target_out_writef(model_target_err(), "model-target qwen-metal: JSON output is unsupported; use --output normal|table|audit\n");
+                model_target_textf(model_target_err(), "model-target qwen-metal: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
             } else {
-                model_target_out_writef(model_target_err(), "model-target qwen-metal: unknown option: %s\n", argv[i]);
+                model_target_textf(model_target_err(), "model-target qwen-metal: unknown option: %s\n", argv[i]);
                 return 2;
             }
         }
         if (!release || release[0] == '\0') {
-            model_target_out_writef(model_target_err(), "model-target qwen-metal: --release is required\n");
+            model_target_textf(model_target_err(), "model-target qwen-metal: --release is required\n");
             print_model_target_qwen_metal_usage(model_target_err());
             return 2;
         }
@@ -10658,13 +10713,13 @@ static int model_target_legacy_command(int argc, char **argv)
                 return 0;
             } else if (strcmp(argv[i], "--release") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target decision: --release requires VERSION\n");
+                    model_target_textf(model_target_err(), "model-target decision: --release requires VERSION\n");
                     return 2;
                 }
                 release = argv[++i];
             } else if (strcmp(argv[i], "--candidate") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target decision: --candidate requires TARGET\n");
+                    model_target_textf(model_target_err(), "model-target decision: --candidate requires TARGET\n");
                     return 2;
                 }
                 candidate_id = argv[++i];
@@ -10679,23 +10734,23 @@ static int model_target_legacy_command(int argc, char **argv)
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
             } else if (strcmp(argv[i], "--output") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target decision: --output requires normal|table|audit\n");
+                    model_target_textf(model_target_err(), "model-target decision: --output requires normal|table|audit\n");
                     return 2;
                 }
                 if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
-                    model_target_out_writef(model_target_err(), "model-target decision: unsupported output mode: %s\n", argv[i]);
+                    model_target_textf(model_target_err(), "model-target decision: unsupported output mode: %s\n", argv[i]);
                     return 2;
                 }
             } else if (strcmp(argv[i], "--json") == 0) {
-                model_target_out_writef(model_target_err(), "model-target decision: JSON output is unsupported; use --output normal|table|audit\n");
+                model_target_textf(model_target_err(), "model-target decision: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
             } else {
-                model_target_out_writef(model_target_err(), "model-target decision: unknown option: %s\n", argv[i]);
+                model_target_textf(model_target_err(), "model-target decision: unknown option: %s\n", argv[i]);
                 return 2;
             }
         }
         if (!release || release[0] == '\0') {
-            model_target_out_writef(model_target_err(), "model-target decision: --release is required\n");
+            model_target_textf(model_target_err(), "model-target decision: --release is required\n");
             print_model_target_decision_usage(model_target_err());
             return 2;
         }
@@ -10730,7 +10785,7 @@ static int model_target_legacy_command(int argc, char **argv)
 
         output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
         if (argc < 4) {
-            model_target_out_writef(model_target_err(), "model-target class-profile: requires TARGET\n");
+            model_target_textf(model_target_err(), "model-target class-profile: requires TARGET\n");
             return 2;
         }
         target_id = argv[3];
@@ -10742,31 +10797,31 @@ static int model_target_legacy_command(int argc, char **argv)
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
             } else if (strcmp(argv[i], "--output") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target class-profile: --output requires normal|table|audit\n");
+                    model_target_textf(model_target_err(), "model-target class-profile: --output requires normal|table|audit\n");
                     return 2;
                 }
                 if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
-                    model_target_out_writef(model_target_err(), "model-target class-profile: unsupported output mode: %s\n",
+                    model_target_textf(model_target_err(), "model-target class-profile: unsupported output mode: %s\n",
                             argv[i]);
                     return 2;
                 }
             } else if (strcmp(argv[i], "--models-root") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    model_target_out_writef(model_target_err(), "model-target class-profile: --models-root requires DIR\n");
+                    model_target_textf(model_target_err(), "model-target class-profile: --models-root requires DIR\n");
                     return 2;
                 }
                 models_root = argv[++i];
             } else if (strcmp(argv[i], "--source") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    model_target_out_writef(model_target_err(), "model-target class-profile: --source requires DIR\n");
+                    model_target_textf(model_target_err(), "model-target class-profile: --source requires DIR\n");
                     return 2;
                 }
                 source = argv[++i];
             } else if (strcmp(argv[i], "--json") == 0) {
-                model_target_out_writef(model_target_err(), "model-target class-profile: JSON output is unsupported; use --output normal|table|audit\n");
+                model_target_textf(model_target_err(), "model-target class-profile: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
             } else {
-                model_target_out_writef(model_target_err(), "model-target class-profile: unknown option: %s\n", argv[i]);
+                model_target_textf(model_target_err(), "model-target class-profile: unknown option: %s\n", argv[i]);
                 return 2;
             }
         }
@@ -10781,7 +10836,7 @@ static int model_target_legacy_command(int argc, char **argv)
             if (!source) source = dynamic_target.source_path;
         }
         if (!record || !spec) {
-            model_target_out_writef(model_target_err(), "model-target class-profile: unsupported target: %s\n",
+            model_target_textf(model_target_err(), "model-target class-profile: unsupported target: %s\n",
                     target_id && target_id[0] ? target_id : "none");
             return 2;
         }
@@ -10808,7 +10863,7 @@ static int model_target_legacy_command(int argc, char **argv)
 
         output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
         if (argc < 4) {
-            model_target_out_writef(model_target_err(), "model-target tensor-collection: requires TARGET\n");
+            model_target_textf(model_target_err(), "model-target tensor-collection: requires TARGET\n");
             return 2;
         }
         target_id = argv[3];
@@ -10820,31 +10875,31 @@ static int model_target_legacy_command(int argc, char **argv)
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
             } else if (strcmp(argv[i], "--output") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target tensor-collection: --output requires normal|table|audit\n");
+                    model_target_textf(model_target_err(), "model-target tensor-collection: --output requires normal|table|audit\n");
                     return 2;
                 }
                 if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
-                    model_target_out_writef(model_target_err(), "model-target tensor-collection: unsupported output mode: %s\n",
+                    model_target_textf(model_target_err(), "model-target tensor-collection: unsupported output mode: %s\n",
                             argv[i]);
                     return 2;
                 }
             } else if (strcmp(argv[i], "--models-root") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    model_target_out_writef(model_target_err(), "model-target tensor-collection: --models-root requires DIR\n");
+                    model_target_textf(model_target_err(), "model-target tensor-collection: --models-root requires DIR\n");
                     return 2;
                 }
                 models_root = argv[++i];
             } else if (strcmp(argv[i], "--source") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    model_target_out_writef(model_target_err(), "model-target tensor-collection: --source requires DIR\n");
+                    model_target_textf(model_target_err(), "model-target tensor-collection: --source requires DIR\n");
                     return 2;
                 }
                 source = argv[++i];
             } else if (strcmp(argv[i], "--json") == 0) {
-                model_target_out_writef(model_target_err(), "model-target tensor-collection: JSON output is unsupported; use --output normal|table|audit\n");
+                model_target_textf(model_target_err(), "model-target tensor-collection: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
             } else {
-                model_target_out_writef(model_target_err(), "model-target tensor-collection: unknown option: %s\n", argv[i]);
+                model_target_textf(model_target_err(), "model-target tensor-collection: unknown option: %s\n", argv[i]);
                 return 2;
             }
         }
@@ -10859,7 +10914,7 @@ static int model_target_legacy_command(int argc, char **argv)
             if (!source) source = dynamic_target.source_path;
         }
         if (!record || !spec) {
-            model_target_out_writef(model_target_err(), "model-target tensor-collection: unsupported target: %s\n",
+            model_target_textf(model_target_err(), "model-target tensor-collection: unsupported target: %s\n",
                     target_id && target_id[0] ? target_id : "none");
             return 2;
         }
@@ -10893,7 +10948,7 @@ static int model_target_legacy_command(int argc, char **argv)
 
         output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
         if (argc < 4) {
-            model_target_out_writef(model_target_err(), "model-target missing-roles: requires TARGET\n");
+            model_target_textf(model_target_err(), "model-target missing-roles: requires TARGET\n");
             return 2;
         }
         target_id = argv[3];
@@ -10910,7 +10965,7 @@ static int model_target_legacy_command(int argc, char **argv)
             } else if (strcmp(argv[i], "--output") == 0) {
                 const char *value;
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target missing-roles: --output requires normal|table|audit|json\n");
+                    model_target_textf(model_target_err(), "model-target missing-roles: --output requires normal|table|audit|json\n");
                     return 2;
                 }
                 value = argv[++i];
@@ -10919,24 +10974,24 @@ static int model_target_legacy_command(int argc, char **argv)
                 } else if (parse_model_target_output_mode(value, &output_mode)) {
                     output_json = 0;
                 } else {
-                    model_target_out_writef(model_target_err(), "model-target missing-roles: unsupported output mode: %s\n",
+                    model_target_textf(model_target_err(), "model-target missing-roles: unsupported output mode: %s\n",
                             value);
                     return 2;
                 }
             } else if (strcmp(argv[i], "--models-root") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    model_target_out_writef(model_target_err(), "model-target missing-roles: --models-root requires DIR\n");
+                    model_target_textf(model_target_err(), "model-target missing-roles: --models-root requires DIR\n");
                     return 2;
                 }
                 models_root = argv[++i];
             } else if (strcmp(argv[i], "--source") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    model_target_out_writef(model_target_err(), "model-target missing-roles: --source requires DIR\n");
+                    model_target_textf(model_target_err(), "model-target missing-roles: --source requires DIR\n");
                     return 2;
                 }
                 source = argv[++i];
             } else {
-                model_target_out_writef(model_target_err(), "model-target missing-roles: unknown option: %s\n",
+                model_target_textf(model_target_err(), "model-target missing-roles: unknown option: %s\n",
                         argv[i]);
                 return 2;
             }
@@ -10955,7 +11010,7 @@ static int model_target_legacy_command(int argc, char **argv)
         if (!record || !spec ||
             (strcmp(spec->family_key, "qwen") != 0 &&
              strcmp(spec->family_key, "gemma") != 0)) {
-            model_target_out_writef(model_target_err(), "model-target missing-roles: unsupported target: %s\n",
+            model_target_textf(model_target_err(), "model-target missing-roles: unsupported target: %s\n",
                     target_id && target_id[0] ? target_id : "none");
             return 2;
         }
@@ -10963,7 +11018,7 @@ static int model_target_legacy_command(int argc, char **argv)
         if (rc != YVEX_OK ||
             yvex_operator_paths_resolve(&paths, models_root, &operator_paths,
                                         &err) != YVEX_OK) {
-            model_target_out_writef(model_target_err(), "model-target missing-roles: cannot resolve operator paths: %s\n",
+            model_target_textf(model_target_err(), "model-target missing-roles: cannot resolve operator paths: %s\n",
                     err.message[0] ? err.message : "unknown");
             return 2;
         }
@@ -10980,7 +11035,7 @@ static int model_target_legacy_command(int argc, char **argv)
             }
             if (!write_tensor_map_sidecar(dynamic_target.tensor_map_path,
                                           &naming_profile)) {
-                model_target_out_writef(model_target_err(),
+                model_target_textf(model_target_err(),
                         "model-target missing-roles: cannot write tensor map sidecar: %s\n",
                         dynamic_target.tensor_map_path);
                 return 3;
@@ -10992,7 +11047,7 @@ static int model_target_legacy_command(int argc, char **argv)
             }
             if (!write_output_head_map_sidecar(dynamic_target.output_head_map_path,
                                                &output_head_profile)) {
-                model_target_out_writef(model_target_err(),
+                model_target_textf(model_target_err(),
                         "model-target missing-roles: cannot write output-head map sidecar: %s\n",
                         dynamic_target.output_head_map_path);
                 return 3;
@@ -11022,7 +11077,7 @@ static int model_target_legacy_command(int argc, char **argv)
 
         output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
         if (argc < 4) {
-            model_target_out_writef(model_target_err(), "model-target tokenizer-map: requires TARGET\n");
+            model_target_textf(model_target_err(), "model-target tokenizer-map: requires TARGET\n");
             return 2;
         }
         target_id = argv[3];
@@ -11038,7 +11093,7 @@ static int model_target_legacy_command(int argc, char **argv)
             } else if (strcmp(argv[i], "--output") == 0) {
                 const char *value;
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(),
+                    model_target_textf(model_target_err(),
                             "model-target tokenizer-map: --output requires normal|table|audit|json\n");
                     return 2;
                 }
@@ -11048,27 +11103,27 @@ static int model_target_legacy_command(int argc, char **argv)
                 } else if (parse_model_target_output_mode(value, &output_mode)) {
                     output_json = 0;
                 } else {
-                    model_target_out_writef(model_target_err(),
+                    model_target_textf(model_target_err(),
                             "model-target tokenizer-map: unsupported output mode: %s\n",
                             value);
                     return 2;
                 }
             } else if (strcmp(argv[i], "--models-root") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    model_target_out_writef(model_target_err(),
+                    model_target_textf(model_target_err(),
                             "model-target tokenizer-map: --models-root requires DIR\n");
                     return 2;
                 }
                 models_root = argv[++i];
             } else if (strcmp(argv[i], "--source") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    model_target_out_writef(model_target_err(),
+                    model_target_textf(model_target_err(),
                             "model-target tokenizer-map: --source requires DIR\n");
                     return 2;
                 }
                 source = argv[++i];
             } else {
-                model_target_out_writef(model_target_err(), "model-target tokenizer-map: unknown option: %s\n",
+                model_target_textf(model_target_err(), "model-target tokenizer-map: unknown option: %s\n",
                         argv[i]);
                 return 2;
             }
@@ -11086,7 +11141,7 @@ static int model_target_legacy_command(int argc, char **argv)
         if (!record || !spec ||
             (strcmp(spec->family_key, "qwen") != 0 &&
              strcmp(spec->family_key, "gemma") != 0)) {
-            model_target_out_writef(model_target_err(), "model-target tokenizer-map: unsupported target: %s\n",
+            model_target_textf(model_target_err(), "model-target tokenizer-map: unsupported target: %s\n",
                     target_id && target_id[0] ? target_id : "none");
             return 2;
         }
@@ -11098,7 +11153,7 @@ static int model_target_legacy_command(int argc, char **argv)
         if (dynamic_target.found &&
             !write_tokenizer_map_sidecar(dynamic_target.tokenizer_map_path,
                                          &tokenizer_profile)) {
-            model_target_out_writef(model_target_err(),
+            model_target_textf(model_target_err(),
                     "model-target tokenizer-map: cannot write tokenizer map sidecar: %s\n",
                     dynamic_target.tokenizer_map_path);
             return 3;
@@ -11133,7 +11188,7 @@ static int model_target_legacy_command(int argc, char **argv)
 
         output_mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
         if (argc < 4) {
-            model_target_out_writef(model_target_err(), "model-target tensor-map: requires TARGET\n");
+            model_target_textf(model_target_err(), "model-target tensor-map: requires TARGET\n");
             return 2;
         }
         target_id = argv[3];
@@ -11145,47 +11200,47 @@ static int model_target_legacy_command(int argc, char **argv)
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
             } else if (strcmp(argv[i], "--output") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target tensor-map: --output requires normal|table|audit\n");
+                    model_target_textf(model_target_err(), "model-target tensor-map: --output requires normal|table|audit\n");
                     return 2;
                 }
                 if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
-                    model_target_out_writef(model_target_err(), "model-target tensor-map: unsupported output mode: %s\n",
+                    model_target_textf(model_target_err(), "model-target tensor-map: unsupported output mode: %s\n",
                             argv[i]);
                     return 2;
                 }
             } else if (strcmp(argv[i], "--models-root") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    model_target_out_writef(model_target_err(), "model-target tensor-map: --models-root requires DIR\n");
+                    model_target_textf(model_target_err(), "model-target tensor-map: --models-root requires DIR\n");
                     return 2;
                 }
                 models_root = argv[++i];
             } else if (strcmp(argv[i], "--source") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    model_target_out_writef(model_target_err(), "model-target tensor-map: --source requires DIR\n");
+                    model_target_textf(model_target_err(), "model-target tensor-map: --source requires DIR\n");
                     return 2;
                 }
                 source = argv[++i];
             } else if (strcmp(argv[i], "--role") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    model_target_out_writef(model_target_err(), "model-target tensor-map: --role requires output-head|tokenizer|missing-roles\n");
+                    model_target_textf(model_target_err(), "model-target tensor-map: --role requires output-head|tokenizer|missing-roles\n");
                     return 2;
                 }
                 role = argv[++i];
                 if (strcmp(role, "output-head") != 0 &&
                     strcmp(role, "tokenizer") != 0 &&
                     strcmp(role, "missing-roles") != 0) {
-                    model_target_out_writef(model_target_err(), "model-target tensor-map: unsupported role: %s\n",
+                    model_target_textf(model_target_err(), "model-target tensor-map: unsupported role: %s\n",
                             role);
                     return 2;
                 }
             } else if (strcmp(argv[i], "--gate") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    model_target_out_writef(model_target_err(), "model-target tensor-map: --gate requires v0.1.0\n");
+                    model_target_textf(model_target_err(), "model-target tensor-map: --gate requires v0.1.0\n");
                     return 2;
                 }
                 gate = argv[++i];
                 if (strcmp(gate, "v0.1.0") != 0) {
-                    model_target_out_writef(model_target_err(), "model-target tensor-map: unsupported release: %s\n",
+                    model_target_textf(model_target_err(), "model-target tensor-map: unsupported release: %s\n",
                             gate);
                     return 2;
                 }
@@ -11207,15 +11262,15 @@ static int model_target_legacy_command(int argc, char **argv)
                 }
                 check_output_contract = 1;
             } else if (strcmp(argv[i], "--json") == 0) {
-                model_target_out_writef(model_target_err(), "model-target tensor-map: JSON output is unsupported; use --output normal|table|audit\n");
+                model_target_textf(model_target_err(), "model-target tensor-map: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
             } else {
-                model_target_out_writef(model_target_err(), "model-target tensor-map: unknown option: %s\n", argv[i]);
+                model_target_textf(model_target_err(), "model-target tensor-map: unknown option: %s\n", argv[i]);
                 return 2;
             }
         }
         if (role && gate) {
-            model_target_out_writef(model_target_err(), "model-target tensor-map: --gate cannot be combined with --role\n");
+            model_target_textf(model_target_err(), "model-target tensor-map: --gate cannot be combined with --role\n");
             return 2;
         }
         record = find_model_target(target_id);
@@ -11238,7 +11293,7 @@ static int model_target_legacy_command(int argc, char **argv)
                     check_mode_text,
                     "unsupported-target");
             }
-            model_target_out_writef(model_target_err(), "model-target tensor-map: unsupported target: %s\n",
+            model_target_textf(model_target_err(), "model-target tensor-map: unsupported target: %s\n",
                     target_id && target_id[0] ? target_id : "none");
             return 2;
         }
@@ -11274,7 +11329,7 @@ static int model_target_legacy_command(int argc, char **argv)
                 dynamic_target.found &&
                 !write_output_head_map_sidecar(dynamic_target.output_head_map_path,
                                                &output_head_profile)) {
-                model_target_out_writef(model_target_err(),
+                model_target_textf(model_target_err(),
                         "model-target tensor-map: cannot write output-head map sidecar: %s\n",
                         dynamic_target.output_head_map_path);
                 return 3;
@@ -11311,7 +11366,7 @@ static int model_target_legacy_command(int argc, char **argv)
             if (dynamic_target.found &&
                 !write_tokenizer_map_sidecar(dynamic_target.tokenizer_map_path,
                                              &tokenizer_profile)) {
-                model_target_out_writef(model_target_err(),
+                model_target_textf(model_target_err(),
                         "model-target tensor-map: cannot write tokenizer map sidecar: %s\n",
                         dynamic_target.tokenizer_map_path);
                 return 3;
@@ -11354,7 +11409,7 @@ static int model_target_legacy_command(int argc, char **argv)
         if (!check_output_contract &&
             dynamic_target.found &&
             !write_tensor_map_sidecar(dynamic_target.tensor_map_path, &profile)) {
-            model_target_out_writef(model_target_err(),
+            model_target_textf(model_target_err(),
                     "model-target tensor-map: cannot write tensor map sidecar: %s\n",
                     dynamic_target.tensor_map_path);
             return 3;
@@ -11367,7 +11422,7 @@ static int model_target_legacy_command(int argc, char **argv)
             }
             if (!write_output_head_map_sidecar(dynamic_target.output_head_map_path,
                                                &output_head_profile)) {
-                model_target_out_writef(model_target_err(),
+                model_target_textf(model_target_err(),
                         "model-target tensor-map: cannot write output-head map sidecar: %s\n",
                         dynamic_target.output_head_map_path);
                 return 3;
@@ -11420,39 +11475,39 @@ static int model_target_legacy_command(int argc, char **argv)
                 role_support = 1;
             } else if (strcmp(argv[i], "--gate") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    model_target_out_writef(model_target_err(), "model-target quant-policy: --gate requires v0.1.0\n");
+                    model_target_textf(model_target_err(), "model-target quant-policy: --gate requires v0.1.0\n");
                     return 2;
                 }
                 gate = argv[++i];
                 if (strcmp(gate, "v0.1.0") != 0) {
-                    model_target_out_writef(model_target_err(), "model-target quant-policy: unsupported gate: %s\n",
+                    model_target_textf(model_target_err(), "model-target quant-policy: unsupported gate: %s\n",
                             gate);
                     return 2;
                 }
             } else if (strcmp(argv[i], "--output") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target quant-policy: --output requires normal|table|audit\n");
+                    model_target_textf(model_target_err(), "model-target quant-policy: --output requires normal|table|audit\n");
                     return 2;
                 }
                 ++i;
                 if (strcmp(argv[i], "json") == 0) {
-                    model_target_out_writef(model_target_err(), "model-target quant-policy: JSON output is unsupported; use --output normal|table|audit\n");
+                    model_target_textf(model_target_err(), "model-target quant-policy: JSON output is unsupported; use --output normal|table|audit\n");
                     return 2;
                 }
                 if (!parse_model_target_output_mode(argv[i], &output_mode)) {
-                    model_target_out_writef(model_target_err(), "model-target quant-policy: unsupported output mode: %s\n",
+                    model_target_textf(model_target_err(), "model-target quant-policy: unsupported output mode: %s\n",
                             argv[i]);
                     return 2;
                 }
             } else if (strcmp(argv[i], "--models-root") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    model_target_out_writef(model_target_err(), "model-target quant-policy: --models-root requires DIR\n");
+                    model_target_textf(model_target_err(), "model-target quant-policy: --models-root requires DIR\n");
                     return 2;
                 }
                 models_root = argv[++i];
             } else if (strcmp(argv[i], "--source") == 0) {
                 if (i + 1 >= argc || argv[i + 1][0] == '\0') {
-                    model_target_out_writef(model_target_err(), "model-target quant-policy: --source requires DIR\n");
+                    model_target_textf(model_target_err(), "model-target quant-policy: --source requires DIR\n");
                     return 2;
                 }
                 source = argv[++i];
@@ -11474,20 +11529,20 @@ static int model_target_legacy_command(int argc, char **argv)
                 }
                 check_output_contract = 1;
             } else if (strcmp(argv[i], "--json") == 0) {
-                model_target_out_writef(model_target_err(), "model-target quant-policy: JSON output is unsupported; use --output normal|table|audit\n");
+                model_target_textf(model_target_err(), "model-target quant-policy: JSON output is unsupported; use --output normal|table|audit\n");
                 return 2;
             } else {
-                model_target_out_writef(model_target_err(), "model-target quant-policy: unknown option: %s\n", argv[i]);
+                model_target_textf(model_target_err(), "model-target quant-policy: unknown option: %s\n", argv[i]);
                 return 2;
             }
         }
         if (gate) {
             if (target_id) {
-                model_target_out_writef(model_target_err(), "model-target quant-policy: --gate v0.1.0 is an aggregate report and does not take TARGET\n");
+                model_target_textf(model_target_err(), "model-target quant-policy: --gate v0.1.0 is an aggregate report and does not take TARGET\n");
                 return 2;
             }
             if (check_output_contract) {
-                model_target_out_writef(model_target_err(), "model-target quant-policy: --check-output-contract is unsupported for --gate\n");
+                model_target_textf(model_target_err(), "model-target quant-policy: --check-output-contract is unsupported for --gate\n");
                 return 2;
             }
             rc = build_qtype_role_support_gate_profile(models_root, &gate_profile);
@@ -11503,7 +11558,7 @@ static int model_target_legacy_command(int argc, char **argv)
             return 0;
         }
         if (!target_id) {
-            model_target_out_writef(model_target_err(), "model-target quant-policy: requires TARGET\n");
+            model_target_textf(model_target_err(), "model-target quant-policy: requires TARGET\n");
             return 2;
         }
         memset(&dynamic_target, 0, sizeof(dynamic_target));
@@ -11528,7 +11583,7 @@ static int model_target_legacy_command(int argc, char **argv)
         }
         if (role_support) {
             if (check_output_contract) {
-                model_target_out_writef(model_target_err(), "model-target quant-policy: --check-output-contract is unsupported for --role-support\n");
+                model_target_textf(model_target_err(), "model-target quant-policy: --check-output-contract is unsupported for --role-support\n");
                 return 2;
             }
             rc = build_qtype_role_support_profile(record, spec, models_root,
@@ -11571,7 +11626,7 @@ static int model_target_legacy_command(int argc, char **argv)
         }
         record = find_model_target(argv[3]);
         if (!record) {
-            model_target_out_writef(model_target_err(), "model-target: unknown target: %s\n", argv[3]);
+            model_target_textf(model_target_err(), "model-target: unknown target: %s\n", argv[3]);
             return 2;
         }
         for (i = 4; i < argc; ++i) {
@@ -11581,26 +11636,26 @@ static int model_target_legacy_command(int argc, char **argv)
                 output_mode = YVEX_MODEL_TARGET_OUTPUT_AUDIT;
             } else if (strcmp(argv[i], "--output") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target inspect: --output requires normal|table|audit\n");
+                    model_target_textf(model_target_err(), "model-target inspect: --output requires normal|table|audit\n");
                     return 2;
                 }
                 if (!parse_model_target_output_mode(argv[++i], &output_mode)) {
-                    model_target_out_writef(model_target_err(), "model-target inspect: unsupported output mode: %s\n", argv[i]);
+                    model_target_textf(model_target_err(), "model-target inspect: unsupported output mode: %s\n", argv[i]);
                     return 2;
                 }
             } else if (strcmp(argv[i], "--models-root") == 0) {
                 if (i + 1 >= argc) {
-                    model_target_out_writef(model_target_err(), "model-target: --models-root requires DIR\n");
+                    model_target_textf(model_target_err(), "model-target: --models-root requires DIR\n");
                     return 2;
                 }
                 models_root = argv[++i];
             } else {
-                model_target_out_writef(model_target_err(), "model-target: unknown inspect option: %s\n", argv[i]);
+                model_target_textf(model_target_err(), "model-target: unknown inspect option: %s\n", argv[i]);
                 return 2;
             }
         }
         if (models_root && !want_paths) {
-            model_target_out_writef(model_target_err(), "model-target: --models-root requires --paths\n");
+            model_target_textf(model_target_err(), "model-target: --models-root requires --paths\n");
             return 2;
         }
         if (want_paths) {
@@ -11619,8 +11674,8 @@ static int model_target_legacy_command(int argc, char **argv)
         return 0;
     }
 
-    model_target_out_writef(model_target_err(), "model-target: unknown subcommand: %s\n", argv[2]);
-    model_target_out_writef(model_target_err(), "Try 'yvex help model-target' for usage.\n");
+    model_target_textf(model_target_err(), "model-target: unknown subcommand: %s\n", argv[2]);
+    model_target_textf(model_target_err(), "Try 'yvex help model-target' for usage.\n");
     return 2;
 }
 
@@ -11642,7 +11697,7 @@ static int model_target_legacy_command(int argc, char **argv)
  * Boundary:
  *   report cleanup does not write output or change model-target facts.
  */
-void yvex_model_target_internal_report_close(yvex_model_target_report *report)
+void yvex_model_target_runner_report_close(yvex_model_target_report *report)
 {
     if (!report) {
         return;
@@ -11652,92 +11707,27 @@ void yvex_model_target_internal_report_close(yvex_model_target_report *report)
     memset(report, 0, sizeof(*report));
 }
 
-static int model_target_report_sink_begin(FILE **out_fp,
-                                             char **out_text,
-                                             size_t *out_len,
-                                             FILE **err_fp,
-                                             char **err_text,
-                                             size_t *err_len,
-                                             yvex_error *err)
-{
-    *out_text = NULL;
-    *err_text = NULL;
-    *out_len = 0u;
-    *err_len = 0u;
-    *out_fp = open_memstream(out_text, out_len);
-    if (!*out_fp) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "model_target_report",
-                       "failed to allocate output sink");
-        return YVEX_ERR_NOMEM;
-    }
-    *err_fp = open_memstream(err_text, err_len);
-    if (!*err_fp) {
-        fclose(*out_fp);
-        free(*out_text);
-        *out_fp = NULL;
-        *out_text = NULL;
-        yvex_error_set(err, YVEX_ERR_NOMEM, "model_target_report",
-                       "failed to allocate diagnostic sink");
-        return YVEX_ERR_NOMEM;
-    }
-    return YVEX_OK;
-}
-
-static int model_target_report_sink_finish(FILE *out_fp,
-                                              FILE *err_fp,
-                                              char **out_text,
-                                              char **err_text,
-                                              yvex_error *err)
-{
-    int failed = 0;
-
-    if (out_fp && fclose(out_fp) != 0) {
-        failed = 1;
-    }
-    if (err_fp && fclose(err_fp) != 0) {
-        failed = 1;
-    }
-    if (failed) {
-        free(*out_text);
-        free(*err_text);
-        *out_text = NULL;
-        *err_text = NULL;
-        yvex_error_set(err, YVEX_ERR_IO, "model_target_report",
-                       "failed to close report output sink");
-        return YVEX_ERR_IO;
-    }
-    return YVEX_OK;
-}
-
-static int model_target_internal_run(
+static int model_target_runner_run(
     const yvex_model_target_request *request,
     yvex_model_target_report *report,
     yvex_error *err)
 {
-    FILE *out_fp = NULL;
-    FILE *err_fp = NULL;
     char *out_text = NULL;
     char *err_text = NULL;
     size_t out_len = 0u;
     size_t err_len = 0u;
     int exit_code;
-    int rc;
 
-    rc = model_target_report_sink_begin(&out_fp, &out_text, &out_len,
-                                           &err_fp, &err_text, &err_len, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-    model_target_sink_out = out_fp;
-    model_target_sink_err = err_fp;
+    (void)err;
+    model_target_primary_slot = &out_text;
+    model_target_primary_len = &out_len;
+    model_target_diagnostic_slot = &err_text;
+    model_target_diagnostic_len = &err_len;
     exit_code = model_target_legacy_command(request->argc, request->argv);
-    model_target_sink_out = NULL;
-    model_target_sink_err = NULL;
-    rc = model_target_report_sink_finish(out_fp, err_fp, &out_text,
-                                            &err_text, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
+    model_target_primary_slot = NULL;
+    model_target_primary_len = NULL;
+    model_target_diagnostic_slot = NULL;
+    model_target_diagnostic_len = NULL;
     report->kind = request->kind;
     report->mode = request->mode;
     report->status = exit_code == 0 ? "complete" : "failed";
@@ -11751,7 +11741,7 @@ static int model_target_internal_run(
 }
 
 /*
- * yvex_model_target_internal_report_build()
+ * yvex_model_target_runner_report_build()
  *
  * Purpose:
  *   build a typed model-target report from parsed command arguments.
@@ -11772,7 +11762,7 @@ static int model_target_internal_run(
  *   implement quantization, artifact emission, runtime execution, generation,
  *   eval, benchmark, or release readiness.
  */
-int yvex_model_target_internal_report_build(const yvex_model_target_request *request,
+int yvex_model_target_runner_report_build(const yvex_model_target_request *request,
                                    yvex_model_target_report *report,
                                    yvex_error *err)
 {
@@ -11782,11 +11772,11 @@ int yvex_model_target_internal_report_build(const yvex_model_target_request *req
         return YVEX_ERR_INVALID_ARG;
     }
     memset(report, 0, sizeof(*report));
-    return model_target_internal_run(request, report, err);
+    return model_target_runner_run(request, report, err);
 }
 
 /*
- * yvex_model_target_internal_help_report_build()
+ * yvex_model_target_runner_help_report_build()
  *
  * Purpose:
  *   build the model-target help report for callers that do not own argv.
@@ -11805,16 +11795,13 @@ int yvex_model_target_internal_report_build(const yvex_model_target_request *req
  *   help output describes existing report surfaces only and creates no runtime
  *   or generation capability.
  */
-int yvex_model_target_internal_help_report_build(yvex_model_target_report *report,
+int yvex_model_target_runner_help_report_build(yvex_model_target_report *report,
                                         yvex_error *err)
 {
-    FILE *out_fp = NULL;
-    FILE *err_fp = NULL;
     char *out_text = NULL;
     char *err_text = NULL;
     size_t out_len = 0u;
     size_t err_len = 0u;
-    int rc;
 
     if (!report) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_target_report",
@@ -11822,21 +11809,15 @@ int yvex_model_target_internal_help_report_build(yvex_model_target_report *repor
         return YVEX_ERR_INVALID_ARG;
     }
     memset(report, 0, sizeof(*report));
-    rc = model_target_report_sink_begin(&out_fp, &out_text, &out_len,
-                                           &err_fp, &err_text, &err_len, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-    model_target_sink_out = out_fp;
-    model_target_sink_err = err_fp;
+    model_target_primary_slot = &out_text;
+    model_target_primary_len = &out_len;
+    model_target_diagnostic_slot = &err_text;
+    model_target_diagnostic_len = &err_len;
     model_target_legacy_help(model_target_out());
-    model_target_sink_out = NULL;
-    model_target_sink_err = NULL;
-    rc = model_target_report_sink_finish(out_fp, err_fp, &out_text,
-                                            &err_text, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
+    model_target_primary_slot = NULL;
+    model_target_primary_len = NULL;
+    model_target_diagnostic_slot = NULL;
+    model_target_diagnostic_len = NULL;
     report->kind = YVEX_MODEL_TARGET_COMMAND_HELP;
     report->mode = YVEX_MODEL_TARGET_OUTPUT_NORMAL;
     report->status = "complete";

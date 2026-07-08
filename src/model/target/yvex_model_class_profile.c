@@ -55,15 +55,14 @@ int yvex_model_class_profile_report_build(
         return model_class_profile_reject(err);
     }
     model_class_profile_prepare_report(report);
-    return yvex_model_target_internal_report_build(request, report, err);
+    return yvex_model_target_runner_report_build(request, report, err);
 }
 
 /*
  * Ownership note:
  *   Model-class source/config/tokenizer presence facts are routed through this
- *   module. The current implementation delegates to the shared backend so the
- *   extraction preserves output byte-for-byte. Future internal decomposition of
- *   class profile structs should land here, not in the coordinator.
+ *   module. Further decomposition of class profile structs should land here,
+ *   not in the coordinator.
  *
  * Report boundary:
  *   Source sidecar presence and model-class metadata are intake facts. They do
@@ -77,4 +76,5 @@ int yvex_model_class_profile_report_build(
  * Runtime boundary:
  *   Class profile facts do not execute graph, backend, decode, logits, or
  *   sampling paths.
+ *   This module allocates no runtime state.
  */

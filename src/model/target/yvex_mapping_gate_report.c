@@ -53,7 +53,7 @@ int yvex_mapping_gate_report_build(
         return mapping_gate_reject(err);
     }
     mapping_gate_prepare_report(report);
-    return yvex_model_target_internal_report_build(request, report, err);
+    return yvex_model_target_runner_report_build(request, report, err);
 }
 
 /*

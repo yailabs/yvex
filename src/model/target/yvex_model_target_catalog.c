@@ -274,7 +274,7 @@ int yvex_model_target_catalog_report_build(
         return model_target_catalog_reject(err);
     }
     model_target_catalog_prepare_report(request, report);
-    return yvex_model_target_internal_report_build(request, report, err);
+    return yvex_model_target_runner_report_build(request, report, err);
 }
 
 int yvex_model_target_catalog_help_report_build(
@@ -285,5 +285,5 @@ int yvex_model_target_catalog_help_report_build(
         report->kind = YVEX_MODEL_TARGET_COMMAND_HELP;
         report->status = "model-target-help";
     }
-    return yvex_model_target_internal_help_report_build(report, err);
+    return yvex_model_target_runner_help_report_build(report, err);
 }

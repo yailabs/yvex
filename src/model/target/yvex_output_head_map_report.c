@@ -54,7 +54,7 @@ int yvex_output_head_map_report_build(
         return output_head_reject(err);
     }
     output_head_prepare_report(report);
-    return yvex_model_target_internal_report_build(request, report, err);
+    return yvex_model_target_runner_report_build(request, report, err);
 }
 
 /*
