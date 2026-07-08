@@ -208,7 +208,6 @@ Two concepts define the target:
 ## 4. Active Next
 
 Active Next:
-
 ```text
 V010.QUANT.2 - qtype compute/refusal matrix
 ```
@@ -828,6 +827,7 @@ labels.
 | TOPOLOGY.CELL.MODEL_TARGET.1 | complete | Decompose model-target report monolith into owned target catalog, decision, candidate, map, qtype, and sidecar modules. |
 | TOPOLOGY.CELL.MODEL_TARGET.2 | complete | Dissolve model-target internal compatibility backend into specialized ownership modules. |
 | TOPOLOGY.CELL.MODEL_TARGET.3 | complete | Remove model-target runner, CLI-shaped report request, and text-buffer report API. |
+| TOPOLOGY.CELL.CLOSURE.1 | complete | Audit remaining topology residue after source, generation, KV, sampling, graph, and model-target cell extraction. |
 | TOPOLOGY.CELL.CLOSURE.0 | planned | Close remaining mixed cells after each owner-specific extraction is proven. |
 | V010.PATHS.0 | complete | operator root layout report. |
 | V010.PATHS.1 | complete | source/artifact/reference/report/cache separation. |

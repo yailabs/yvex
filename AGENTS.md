@@ -169,6 +169,13 @@ report APIs, and pre-rendered report text buffers. Model-target report modules
 must own typed facts directly, and CLI renderers must render typed reports
 rather than captured command output.
 
+TOPOLOGY.CELL.CLOSURE.1 is audit-only. It must inventory residual
+control-plane/domain drift before cleanup. Audit findings must distinguish
+allowed CLI IO, allowed explicit file writers, legacy pending residue, and hard
+violations. Closure cannot be claimed while direct output, CLI-shaped input,
+renderer/domain leakage, compatibility shells, or libyvex CLI leakage remain
+unresolved.
+
 src/artifact/yvex_artifact.c
   artifact IO, inspect, metadata, tensor command surfaces
 

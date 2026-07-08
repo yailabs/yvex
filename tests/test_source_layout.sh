@@ -14,6 +14,9 @@ test ! -d executor
 test -x ./yvex
 test -x ./yvexd
 
+test -f docs/topology-closure-audit.md
+test -x tests/test_topology_closure_audit.sh
+
 test -d src
 test -d src/app
 test -d src/cli

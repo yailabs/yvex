@@ -10,6 +10,7 @@ test -f docs/model-families.md
 test -f docs/operator-runbook.md
 test -f docs/cli-output-architecture.md
 test -f docs/v010-release-doctrine.md
+test -f docs/topology-closure-audit.md
 test -d docs/runbooks
 test -f docs/runbooks/README.md
 test -f docs/runbooks/deepseek.md
@@ -109,7 +110,7 @@ if grep -nF "not a full transformer run" README.md ||
 fi
 
 count="$(find docs -maxdepth 1 -type f | wc -l | tr -d ' ')"
-if [ "$count" -ne 7 ]; then
+if [ "$count" -ne 8 ]; then
   echo "unexpected docs file count: $count"
   find docs -maxdepth 1 -type f | sort
   exit 1

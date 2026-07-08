@@ -178,7 +178,8 @@ CLI_TEST := tests/cli.sh
 
 CURRENT_DOCS := README.md AGENTS.md MODEL_ARTIFACTS.md NOTICE.md \
 	docs/api.md docs/contract.md docs/model-families.md \
-	docs/operator-runbook.md docs/v010-release-doctrine.md docs/spine.md
+	docs/operator-runbook.md docs/v010-release-doctrine.md \
+	docs/topology-closure-audit.md docs/spine.md
 
 info:
 	@echo "yvex: C local inference engine"
@@ -345,6 +346,7 @@ check-docs:
 	@test -f docs/model-families.md
 	@test -f docs/operator-runbook.md
 	@test -f docs/v010-release-doctrine.md
+	@test -f docs/topology-closure-audit.md
 	@! find docs -maxdepth 1 -type f -name '*.md' \
 		! -name spine.md \
 		! -name api.md \
@@ -353,8 +355,9 @@ check-docs:
 		! -name operator-runbook.md \
 		! -name cli-output-architecture.md \
 		! -name v010-release-doctrine.md \
+		! -name topology-closure-audit.md \
 		-print | grep .
-	@test "$$(find docs -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')" = "7"
+	@test "$$(find docs -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')" = "8"
 	@grep -F "YVEX Inner Delivery Spine" docs/spine.md >/dev/null
 	@grep -F "internal roadmap" docs/spine.md >/dev/null
 	@grep -F "native C inference engine for local open-weight models" README.md >/dev/null
