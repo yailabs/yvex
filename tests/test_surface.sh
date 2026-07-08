@@ -96,5 +96,24 @@ test -f src/cli/render/yvex_sampling_render.h
 test -f src/cli/catalog/sampling_options.def
 test -f src/cli/catalog/sampling_fields.def
 test -f src/cli/catalog/sampling_boundaries.def
+test -f src/graph/yvex_graph_report.c
+test -f src/graph/yvex_graph_report.h
+test -f src/graph/yvex_graph_private.h
+test -f src/graph/yvex_memory_plan.c
+test -f src/graph/yvex_memory_plan.h
+test -f src/graph/yvex_graph_plan.c
+test -f src/graph/yvex_graph_plan.h
+test -f src/graph/yvex_graph_guard.c
+test -f src/graph/yvex_graph_guard.h
+test -f src/graph/yvex_graph_primitive.c
+test -f src/graph/yvex_graph_primitive.h
+test -f src/cli/input/yvex_graph_args.c
+test -f src/cli/input/yvex_graph_args.h
+test -f src/cli/commands/yvex_graph_cli.c
+test -f src/cli/render/yvex_graph_render.c
+test -f src/cli/render/yvex_graph_render.h
+test -f src/cli/catalog/graph_options.def
+test -f src/cli/catalog/graph_fields.def
+test -f src/cli/catalog/graph_boundaries.def
 
 echo "test surface: ok"

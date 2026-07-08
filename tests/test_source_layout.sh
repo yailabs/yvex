@@ -109,6 +109,25 @@ test -f src/cli/render/yvex_sampling_render.h
 test -f src/cli/catalog/sampling_options.def
 test -f src/cli/catalog/sampling_fields.def
 test -f src/cli/catalog/sampling_boundaries.def
+test -f src/graph/yvex_graph_report.c
+test -f src/graph/yvex_graph_report.h
+test -f src/graph/yvex_graph_private.h
+test -f src/graph/yvex_memory_plan.c
+test -f src/graph/yvex_memory_plan.h
+test -f src/graph/yvex_graph_plan.c
+test -f src/graph/yvex_graph_plan.h
+test -f src/graph/yvex_graph_guard.c
+test -f src/graph/yvex_graph_guard.h
+test -f src/graph/yvex_graph_primitive.c
+test -f src/graph/yvex_graph_primitive.h
+test -f src/cli/input/yvex_graph_args.c
+test -f src/cli/input/yvex_graph_args.h
+test -f src/cli/commands/yvex_graph_cli.c
+test -f src/cli/render/yvex_graph_render.c
+test -f src/cli/render/yvex_graph_render.h
+test -f src/cli/catalog/graph_options.def
+test -f src/cli/catalog/graph_fields.def
+test -f src/cli/catalog/graph_boundaries.def
 test -f src/generation/yvex_generation.c
 test -f src/generation/yvex_generation_private.h
 test -f src/generation/yvex_generation_report.c
@@ -466,6 +485,86 @@ if test -n "$BAD_SAMPLING_COMMAND_DOMAIN"; then
   exit 1
 fi
 
+GRAPH_DOMAIN_FILES='src/graph/*.c src/graph/*.h'
+
+BAD_GRAPH_OUTPUT="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' $GRAPH_DOMAIN_FILES || true
+)"
+if test -n "$BAD_GRAPH_OUTPUT"; then
+  echo "$BAD_GRAPH_OUTPUT"
+  echo "graph domain/report must not write operator output"
+  exit 1
+fi
+
+BAD_GRAPH_COMMAND="$(
+  grep -nE 'yvex_graph_command|yvex_graph_help|argc|argv|arg_count|args|usage: yvex|--model|--backend|--output|--audit|--graph|--plan|--primitive' $GRAPH_DOMAIN_FILES || true
+)"
+if test -n "$BAD_GRAPH_COMMAND"; then
+  echo "$BAD_GRAPH_COMMAND"
+  echo "graph command/help/parser code must not live in graph domain"
+  exit 1
+fi
+
+BAD_GRAPH_CLI_INCLUDE="$(
+  grep -nE '#include "yvex_(cli|operator|console)|#include <.*cli.*>' $GRAPH_DOMAIN_FILES || true
+)"
+if test -n "$BAD_GRAPH_CLI_INCLUDE"; then
+  echo "$BAD_GRAPH_CLI_INCLUDE"
+  echo "graph domain/report must not include CLI/operator headers"
+  exit 1
+fi
+
+grep -nF 'const yvex_graph_report *report' src/cli/render/yvex_graph_render.c >/dev/null
+grep -nF 'yvex_graph_render_normal' src/cli/render/yvex_graph_render.c >/dev/null
+grep -nF 'yvex_graph_render_audit' src/cli/render/yvex_graph_render.c >/dev/null
+grep -nF 'yvex_graph_render_help' src/cli/render/yvex_graph_render.c >/dev/null
+
+BAD_GRAPH_RENDER_STDIO="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' src/cli/render/yvex_graph_render.c src/cli/render/yvex_graph_render.h || true
+)"
+if test -n "$BAD_GRAPH_RENDER_STDIO"; then
+  echo "$BAD_GRAPH_RENDER_STDIO"
+  echo "graph renderer must use src/cli/io writers"
+  exit 1
+fi
+
+BAD_GRAPH_RENDER_PLACEHOLDER="$(
+  grep -nE 'const void \*report|not-bound|renderer-only|_render_boundary|boundary anchor' src/cli/render/yvex_graph_render.c src/cli/render/yvex_graph_render.h || true
+)"
+if test -n "$BAD_GRAPH_RENDER_PLACEHOLDER"; then
+  echo "$BAD_GRAPH_RENDER_PLACEHOLDER"
+  echo "graph renderer must be real and typed"
+  exit 1
+fi
+
+graph_adapter_lines="$(wc -l < src/cli/commands/yvex_graph_cli.c | tr -d ' ')"
+if test "$graph_adapter_lines" -gt 350; then
+  echo "src/cli/commands/yvex_graph_cli.c has $graph_adapter_lines lines; adapter must stay <= 350"
+  exit 1
+fi
+
+grep -nF 'yvex_graph_args_parse' src/cli/commands/yvex_graph_cli.c >/dev/null
+grep -nF 'yvex_graph_render' src/cli/commands/yvex_graph_cli.c >/dev/null
+grep -nE 'yvex_graph_.*report_build|yvex_graph_report_build' src/cli/commands/yvex_graph_cli.c >/dev/null
+
+BAD_GRAPH_INPUT_EXEC="$(
+  grep -nE 'yvex_model_ref_resolve|yvex_plan_create|yvex_graph_build_for_model|yvex_memory_plan_from_graph|yvex_backend_open|yvex_graph_report_build|yvex_graph_render|fprintf|printf' src/cli/input/yvex_graph_args.c src/cli/input/yvex_graph_args.h || true
+)"
+if test -n "$BAD_GRAPH_INPUT_EXEC"; then
+  echo "$BAD_GRAPH_INPUT_EXEC"
+  echo "graph input parser must parse only"
+  exit 1
+fi
+
+BAD_GRAPH_COMMAND_DOMAIN="$(
+  grep -nE 'yvex_model_ref_resolve|yvex_plan_create|yvex_graph_build_for_model|yvex_memory_plan_from_graph|yvex_backend_open|fprintf|printf' src/cli/commands/yvex_graph_cli.c || true
+)"
+if test -n "$BAD_GRAPH_COMMAND_DOMAIN"; then
+  echo "$BAD_GRAPH_COMMAND_DOMAIN"
+  echo "graph command adapter must dispatch only"
+  exit 1
+fi
+
 DOMAIN_FILES='src/accounts src/artifact src/backend src/core src/daemon src/gguf src/graph src/metrics src/model src/runtime src/source src/tokenizer src/generation'
 
 PRINT_HITS="$(
@@ -592,9 +691,7 @@ bad_command_files="$(
        -o -name 'yvex_command_private.h' \
        -o -name 'yvex_graph_block.c' \
        -o -name 'yvex_graph_commands.c' \
-       -o -name 'yvex_graph_guard.c' \
        -o -name 'yvex_graph_primitives.c' \
-       -o -name 'yvex_graph_private.h' \
        -o -name 'yvex_graph_reference.c' \
        -o -name 'yvex_graph_layers.c' \
        -o -name 'yvex_graph_scheduler.c' \

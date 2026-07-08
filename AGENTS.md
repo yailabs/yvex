@@ -107,7 +107,22 @@ src/runtime/yvex_runtime.c
   runtime coordination
 
 src/graph/yvex_graph.c
-  graph construction, execution proofs, op probes
+  graph construction and graph state only
+
+src/graph/yvex_memory_plan.c
+  graph memory plan construction and memory facts
+
+src/graph/yvex_graph_plan.c
+  graph execution plan construction and backend capability facts
+
+src/graph/yvex_graph_report.c
+  graph report construction and explicit FILE dump compatibility
+
+src/graph/yvex_graph_guard.c
+  graph guard facts for selected graph slices
+
+src/graph/yvex_graph_primitive.c
+  graph primitive fixture/proof facts and reference comparisons
 
 src/backend/yvex_backend.c
   backend abstraction and backend reports
@@ -236,6 +251,11 @@ Primitive/reference:
   domain/report compares primitive output and reference output.
   render only prints the comparison report.
 ```
+
+Graph primitive proof is a domain/report fact, not CLI output. Backend primitive
+output and reference output must be compared below the render layer. CLI render
+may print checksum, tolerance, status, and boundary, but must not execute
+primitives or compute references.
 
 A command adapter that does not call a real input parser, a real domain/report API,
 and a real typed renderer is not a valid cell file.

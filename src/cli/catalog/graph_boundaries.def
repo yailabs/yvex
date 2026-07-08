@@ -1,0 +1,6 @@
+graph construction is not transformer execution
+primitive proof is not full graph runtime
+selected graph slice is not full model runtime
+backend capability is not generation readiness
+plan-only is not execution readiness
+CUDA primitive proof is not CUDA runtime generation

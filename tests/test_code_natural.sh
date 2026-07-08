@@ -313,6 +313,66 @@ if grep -nF 'void sampling_cli_adapter_file(void)' src/cli/commands/yvex_samplin
   exit 1
 fi
 
+GRAPH_DOMAIN_FILES='src/graph/*.c src/graph/*.h'
+
+GRAPH_OUTPUT_HITS="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' $GRAPH_DOMAIN_FILES || true
+)"
+if test -n "$GRAPH_OUTPUT_HITS"; then
+  echo "$GRAPH_OUTPUT_HITS"
+  echo "no graph direct output in graph domain"
+  exit 1
+fi
+
+GRAPH_COMMAND_HITS="$(
+  grep -nE 'yvex_graph_command|yvex_graph_help|argc|argv|arg_count|args|usage: yvex|--model|--backend|--output|--audit|--graph|--plan|--primitive' $GRAPH_DOMAIN_FILES || true
+)"
+if test -n "$GRAPH_COMMAND_HITS"; then
+  echo "$GRAPH_COMMAND_HITS"
+  echo "no graph command/help/argv parsing in graph domain"
+  exit 1
+fi
+
+GRAPH_INCLUDE_HITS="$(
+  grep -nE '#include "yvex_(cli|operator|console)|#include <.*cli.*>' $GRAPH_DOMAIN_FILES || true
+)"
+if test -n "$GRAPH_INCLUDE_HITS"; then
+  echo "$GRAPH_INCLUDE_HITS"
+  echo "no graph CLI/operator include in graph domain"
+  exit 1
+fi
+
+grep -nF 'const yvex_graph_report *report' src/cli/render/yvex_graph_render.c >/dev/null
+grep -nF 'yvex_graph_render_normal' src/cli/render/yvex_graph_render.c >/dev/null
+grep -nF 'yvex_graph_render_audit' src/cli/render/yvex_graph_render.c >/dev/null
+grep -nF 'yvex_graph_render_help' src/cli/render/yvex_graph_render.c >/dev/null
+grep -nF 'yvex_graph_args_parse' src/cli/commands/yvex_graph_cli.c >/dev/null
+grep -nE 'yvex_graph_.*report_build|yvex_graph_report_build' src/cli/commands/yvex_graph_cli.c >/dev/null
+grep -nF 'yvex_graph_render' src/cli/commands/yvex_graph_cli.c >/dev/null
+
+GRAPH_RENDER_STDIO_HITS="$(
+  grep -nE '\b(printf|fprintf|vfprintf|fputs|fputc|puts|putchar|perror)\s*\(' src/cli/render/yvex_graph_render.c src/cli/render/yvex_graph_render.h || true
+)"
+if test -n "$GRAPH_RENDER_STDIO_HITS"; then
+  echo "$GRAPH_RENDER_STDIO_HITS"
+  echo "no graph renderer direct stdio"
+  exit 1
+fi
+
+GRAPH_RENDER_PLACEHOLDER_HITS="$(
+  grep -nE 'const void \*report|not-bound|renderer-only|_render_boundary|boundary anchor' src/cli/render/yvex_graph_render.c src/cli/render/yvex_graph_render.h || true
+)"
+if test -n "$GRAPH_RENDER_PLACEHOLDER_HITS"; then
+  echo "$GRAPH_RENDER_PLACEHOLDER_HITS"
+  echo "no graph placeholder renderer"
+  exit 1
+fi
+
+if grep -nF 'void graph_cli_adapter_file(void)' src/cli/commands/yvex_graph_cli.c; then
+  echo "no empty graph command adapter"
+  exit 1
+fi
+
 if grep -RInE '#include .*src/cli|#include "yvex_(cli|console|render)' src/source; then
   echo "source cell must not include CLI headers"
   exit 1

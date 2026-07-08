@@ -35,7 +35,7 @@ CUDA_LDFLAGS ?=
 YVEX_CUDA_ARCH ?= auto
 NVCC_AVAILABLE := $(shell command -v $(NVCC) >/dev/null 2>&1 && echo yes || echo no)
 
-CPPFLAGS ?= -D_POSIX_C_SOURCE=200809L -Iinclude -I. -Isrc/core -Isrc/cli -Isrc/cli/input -Isrc/cli/io -Isrc/cli/render -Isrc/source -Isrc/io -Isrc/backend -Isrc/backend/cuda -Isrc/runtime -Isrc/server -Isrc/gguf -Isrc/generation
+CPPFLAGS ?= -D_POSIX_C_SOURCE=200809L -Iinclude -I. -Isrc/core -Isrc/cli -Isrc/cli/input -Isrc/cli/io -Isrc/cli/render -Isrc/source -Isrc/io -Isrc/backend -Isrc/backend/cuda -Isrc/runtime -Isrc/server -Isrc/gguf -Isrc/generation -Isrc/graph
 CFLAGS ?= -std=c11 -Wall -Wextra -pedantic
 LDFLAGS ?=
 LDLIBS ?= -ldl
@@ -51,18 +51,21 @@ YVEX_BIN := ./yvex
 YVEXD_BIN := ./yvexd
 
 CLI_COMMAND_SRCS := src/cli/commands/yvex_generate_cli.c \
+	src/cli/commands/yvex_graph_cli.c \
 	src/cli/commands/yvex_kv_cli.c \
 	src/cli/commands/yvex_sampling_cli.c \
-	$(sort $(filter-out src/cli/commands/yvex_generate_cli.c src/cli/commands/yvex_kv_cli.c src/cli/commands/yvex_sampling_cli.c,$(wildcard src/cli/commands/*.c)))
+	$(sort $(filter-out src/cli/commands/yvex_generate_cli.c src/cli/commands/yvex_graph_cli.c src/cli/commands/yvex_kv_cli.c src/cli/commands/yvex_sampling_cli.c,$(wildcard src/cli/commands/*.c)))
 CLI_INPUT_SRCS := src/cli/input/yvex_generate_args.c \
+	src/cli/input/yvex_graph_args.c \
 	src/cli/input/yvex_kv_args.c \
 	src/cli/input/yvex_sampling_args.c \
-	$(sort $(filter-out src/cli/input/yvex_generate_args.c src/cli/input/yvex_kv_args.c src/cli/input/yvex_sampling_args.c,$(wildcard src/cli/input/*.c)))
+	$(sort $(filter-out src/cli/input/yvex_generate_args.c src/cli/input/yvex_graph_args.c src/cli/input/yvex_kv_args.c src/cli/input/yvex_sampling_args.c,$(wildcard src/cli/input/*.c)))
 CLI_RENDER_SRCS := src/cli/render/yvex_generate_render.c \
 	src/cli/render/yvex_generate_trace_render.c \
+	src/cli/render/yvex_graph_render.c \
 	src/cli/render/yvex_kv_render.c \
 	src/cli/render/yvex_sampling_render.c \
-	$(sort $(filter-out src/cli/render/yvex_generate_render.c src/cli/render/yvex_generate_trace_render.c src/cli/render/yvex_kv_render.c src/cli/render/yvex_sampling_render.c,$(wildcard src/cli/render/*.c)))
+	$(sort $(filter-out src/cli/render/yvex_generate_render.c src/cli/render/yvex_generate_trace_render.c src/cli/render/yvex_graph_render.c src/cli/render/yvex_kv_render.c src/cli/render/yvex_sampling_render.c,$(wildcard src/cli/render/*.c)))
 CLI_IO_SRCS := $(sort $(wildcard src/cli/io/*.c))
 
 CORE_SRCS := \
@@ -90,6 +93,11 @@ CORE_SRCS := \
 	src/gguf/quant.c \
 	src/gguf/tools.c \
 	src/graph/yvex_graph.c \
+	src/graph/yvex_graph_guard.c \
+	src/graph/yvex_graph_plan.c \
+	src/graph/yvex_graph_primitive.c \
+	src/graph/yvex_graph_report.c \
+	src/graph/yvex_memory_plan.c \
 	src/io/yvex_json_writer.c \
 	src/metrics/yvex_metrics.c \
 	src/metrics/yvex_profile.c \

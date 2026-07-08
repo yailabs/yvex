@@ -1,5 +1,4 @@
 # YVEX Inner Delivery Spine
-
 Date: 2026-07-06
 Status: internal roadmap
 Project: YVEX
@@ -827,6 +826,7 @@ labels.
 | TOPOLOGY.CELL.GENERATION.0 | complete | Extract generate into domain/report/input/command/render/trace cell. |
 | TOPOLOGY.CELL.KV.0 | complete | Extract KV into domain/report/input/command/render cell. |
 | TOPOLOGY.CELL.SAMPLING.0 | complete | Extract sampling into domain/report/input/command/render cell. |
+| TOPOLOGY.CELL.GRAPH.0 | complete | Extract graph into domain/report/input/command/render cell and separate graph facts from operator output. |
 | TOPOLOGY.CELL.CLOSURE.0 | planned | Close remaining mixed cells after each owner-specific extraction is proven. |
 | V010.PATHS.0 | complete | operator root layout report. |
 | V010.PATHS.1 | complete | source/artifact/reference/report/cache separation. |
