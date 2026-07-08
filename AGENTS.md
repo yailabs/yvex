@@ -163,6 +163,12 @@ construction. Shared utilities may exist only as small pure helper modules
 without report-specific logic, output buffers, sink streams, sidecar writing, or
 FILE-based output.
 
+MODEL_TARGET.3 is the hard model-target closure row. It forbids shared
+runner/internal/compatibility backends, CLI-shaped request fields in domain
+report APIs, and pre-rendered report text buffers. Model-target report modules
+must own typed facts directly, and CLI renderers must render typed reports
+rather than captured command output.
+
 src/artifact/yvex_artifact.c
   artifact IO, inspect, metadata, tensor command surfaces
 

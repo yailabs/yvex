@@ -8,12 +8,13 @@
  *   model-target report request and report value contracts.
  *
  * Does not own:
- *   CLI argv parsing, command dispatch, CLI rendering, stdout/stderr writing,
- *   runtime execution, generation, eval, benchmark, or release decisions.
+ *   CLI argument parsing, command dispatch, CLI rendering, stdout/stderr
+ *   writing, runtime execution, generation, eval, benchmark, or release
+ *   decisions.
  *
  * Invariants:
- *   reports package existing model-target facts as typed values; owned text
- *   segments are released with the report close helper.
+ *   reports package existing model-target facts as typed rows and fields; they
+ *   do not carry pre-rendered command-output blobs.
  *
  * Boundary:
  *   model-target reports are report-only facts and do not create quantization,
@@ -26,12 +27,17 @@
 
 #include <yvex/error.h>
 
+#define YVEX_MODEL_TARGET_TEXT_CAP 512u
+#define YVEX_MODEL_TARGET_ROW_CAP 384u
+#define YVEX_MODEL_TARGET_TABLE_COL_CAP 8u
+#define YVEX_MODEL_TARGET_TABLE_ROW_CAP 128u
+
 typedef enum {
     YVEX_MODEL_TARGET_OUTPUT_NORMAL = 0,
     YVEX_MODEL_TARGET_OUTPUT_TABLE,
     YVEX_MODEL_TARGET_OUTPUT_AUDIT,
     YVEX_MODEL_TARGET_OUTPUT_JSON
-} yvex_model_target_output_mode;
+} yvex_model_target_render_mode;
 
 typedef enum {
     YVEX_MODEL_TARGET_COMMAND_HELP = 0,
@@ -52,22 +58,91 @@ typedef enum {
 } yvex_model_target_command_kind;
 
 typedef struct {
+    char value[YVEX_MODEL_TARGET_TEXT_CAP];
+} yvex_model_target_text_value;
+
+typedef struct {
+    unsigned int column_count;
+    char columns[YVEX_MODEL_TARGET_TABLE_COL_CAP][YVEX_MODEL_TARGET_TEXT_CAP];
+} yvex_model_target_table_row;
+
+typedef struct {
     yvex_model_target_command_kind kind;
-    yvex_model_target_output_mode mode;
-    int argc;
-    char **argv;
+    yvex_model_target_render_mode mode;
+    int help_requested;
+    char target_id[128];
+    char release[64];
+    char family[32];
+    char models_root[512];
+    char source_path[512];
+    char role[64];
+    char gate[64];
+    char candidate_kind[64];
+    char output_contract[32];
+    int include_hardware;
+    int include_backend;
+    int include_source;
+    int include_blockers;
+    int include_next;
+    int include_examples;
+    int include_candidates;
+    int include_pressure_targets;
+    int include_critical_path;
+    int include_requirements;
+    int include_paths;
+    int output_json;
+    int strict;
+    int write_sidecar;
+    char sidecar_path[512];
 } yvex_model_target_request;
 
 typedef struct {
     yvex_model_target_command_kind kind;
-    yvex_model_target_output_mode mode;
+    yvex_model_target_render_mode mode;
     const char *status;
-    char *primary_text;
-    char *diagnostic_text;
-    size_t primary_len;
-    size_t diagnostic_len;
+    char target_id[128];
+    char family[32];
+    char model[128];
+    char target_class[128];
+    char stage[128];
+    char eligibility[128];
+    char source_status[128];
+    char artifact_status[128];
+    char tensor_map_status[128];
+    char qtype_policy_status[128];
+    char runtime_status[128];
+    char generation_status[128];
+    char benchmark_status[128];
+    char next_row[128];
+    char boundary[256];
+    char reason[256];
+    yvex_model_target_text_value rows[YVEX_MODEL_TARGET_ROW_CAP];
+    unsigned long row_count;
+    yvex_model_target_text_value error_rows[64];
+    unsigned long error_row_count;
+    yvex_model_target_table_row table_rows[YVEX_MODEL_TARGET_TABLE_ROW_CAP];
+    unsigned long table_row_count;
     int exit_code;
 } yvex_model_target_report;
+
+int yvex_model_target_report_add_row(yvex_model_target_report *report,
+                                     const char *fmt,
+                                     ...);
+
+int yvex_model_target_report_add_error(yvex_model_target_report *report,
+                                       const char *fmt,
+                                       ...);
+
+int yvex_model_target_report_add_table_row(yvex_model_target_report *report,
+                                           unsigned int column_count,
+                                           const char *c0,
+                                           const char *c1,
+                                           const char *c2,
+                                           const char *c3,
+                                           const char *c4,
+                                           const char *c5,
+                                           const char *c6,
+                                           const char *c7);
 
 int yvex_model_target_report_build(const yvex_model_target_request *request,
                                    yvex_model_target_report *report,

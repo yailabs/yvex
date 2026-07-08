@@ -112,7 +112,6 @@ CORE_SRCS := \
 	src/model/target/yvex_model_target_candidates.c \
 	src/model/target/yvex_model_target_catalog.c \
 	src/model/target/yvex_model_target_decision.c \
-	src/model/target/yvex_model_target_runner.c \
 	src/model/target/yvex_model_target_report.c \
 	src/model/target/yvex_model_target_sidecar_write.c \
 	src/model/target/yvex_output_head_map_report.c \

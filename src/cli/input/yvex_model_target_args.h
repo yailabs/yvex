@@ -13,7 +13,7 @@
  *   decisions.
  *
  * Invariants:
- *   parser output is a typed request over borrowed argv storage.
+ *   parser output is a typed request over copied scalar option values.
  *
  * Boundary:
  *   input parsing does not inspect model/source artifacts or create capability.
@@ -28,6 +28,8 @@
 typedef struct {
     yvex_model_target_request request;
     int help_requested;
+    int parse_failed;
+    char error_message[256];
 } yvex_model_target_args;
 
 int yvex_model_target_args_parse(int argc,

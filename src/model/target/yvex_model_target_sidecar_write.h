@@ -12,4 +12,20 @@
 
 int yvex_model_target_sidecar_writer_available(void);
 
+int yvex_model_target_write_tensor_map_sidecar(const char *path,
+                                               const char *target_id,
+                                               const char *family,
+                                               const char *status,
+                                               const char *coverage);
+
+int yvex_model_target_write_output_head_sidecar(const char *path,
+                                                const char *target_id,
+                                                const char *family,
+                                                const char *status);
+
+int yvex_model_target_write_tokenizer_sidecar(const char *path,
+                                              const char *target_id,
+                                              const char *family,
+                                              const char *status);
+
 #endif

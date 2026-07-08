@@ -614,7 +614,7 @@ if test "$model_target_report_lines" -gt 800; then
 fi
 
 BAD_MODEL_TARGET_COORDINATOR="$(
-  grep -nE 'model_target_classes|model_targets|model_class_profile_specs|tensor_collection_profile|tensor_naming_profile|output_head_map_profile|tokenizer_map|missing_role|mapping_gate|qtype_policy|role_support|native_weight|safetensors|source_path|model_target_capture_out|model_target_capture_err|model_target_out_writef|model_target_file_char|captured report text' src/model/target/yvex_model_target_report.c || true
+  grep -nE 'model_target_classes|model_targets|model_class_profile_specs|tensor_collection_profile|tensor_naming_profile|output_head_map_profile|native_weight|safetensors|source_path|model_target_capture_out|model_target_capture_err|model_target_out_writef|model_target_file_char|captured report text' src/model/target/yvex_model_target_report.c || true
 )"
 if test -n "$BAD_MODEL_TARGET_COORDINATOR"; then
   echo "$BAD_MODEL_TARGET_COORDINATOR"
@@ -632,11 +632,47 @@ if test -n "$BAD_MODEL_TARGET_BOUNDARY_SHELL"; then
 fi
 
 BAD_MODEL_TARGET_TEXT_COMPAT="$(
-  grep -nE 'model_target_capture_out|model_target_capture_err|captured report text|raw_output|report_text|captured_text|line_buffer|model_target_sink_out|model_target_sink_err' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+  grep -nE 'primary_text|diagnostic_text|primary_len|diagnostic_len|model_target_capture_out|model_target_capture_err|captured report text|raw_output|report_text|captured_text|line_buffer|model_target_sink_out|model_target_sink_err' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
 )"
 if test -n "$BAD_MODEL_TARGET_TEXT_COMPAT"; then
   echo "$BAD_MODEL_TARGET_TEXT_COMPAT"
   echo "model-target report layer must not use captured-output compatibility names"
+  exit 1
+fi
+
+BAD_MODEL_TARGET_RUNNER_FILES="$(
+  find src/model/target -maxdepth 1 -type f \( -name '*runner*' -o -name '*internal*' -o -name '*compat*' -o -name '*backend*' -o -name '*bridge*' -o -name '*shim*' \) -print
+)"
+if test -n "$BAD_MODEL_TARGET_RUNNER_FILES"; then
+  echo "$BAD_MODEL_TARGET_RUNNER_FILES"
+  echo "model-target must not keep shared execution compatibility files"
+  exit 1
+fi
+
+BAD_MODEL_TARGET_RUNNER_SYMBOLS="$(
+  grep -nE 'yvex_model_target_runner|runner_report_build|_runner|\brunner\b|compatibility backend|internal backend|shared report execution|report execution support' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+)"
+if test -n "$BAD_MODEL_TARGET_RUNNER_SYMBOLS"; then
+  echo "$BAD_MODEL_TARGET_RUNNER_SYMBOLS"
+  echo "model-target must not keep shared execution runner symbols"
+  exit 1
+fi
+
+BAD_MODEL_TARGET_CLI_SHAPED_REQUEST="$(
+  grep -nE '\b(argc|argv)\b' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+)"
+if test -n "$BAD_MODEL_TARGET_CLI_SHAPED_REQUEST"; then
+  echo "$BAD_MODEL_TARGET_CLI_SHAPED_REQUEST"
+  echo "model-target domain and render layers must not carry CLI-shaped request fields"
+  exit 1
+fi
+
+BAD_MODEL_TARGET_FAKE_FILE="$(
+  grep -nE '\(FILE \*\)\(uintptr_t\)|model_target_text_write|model_target_segment_append|model_target_out_writef|model_target_out|model_target_err|model_target_file_char|model_target_sink' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+)"
+if test -n "$BAD_MODEL_TARGET_FAKE_FILE"; then
+  echo "$BAD_MODEL_TARGET_FAKE_FILE"
+  echo "model-target must not use fake FILE or sink-based report output"
   exit 1
 fi
 
@@ -686,6 +722,27 @@ do
   grep -nE '[_a-zA-Z0-9]+_build[[:space:]]*\(' "$module" >/dev/null
 done
 
+for source_file in src/model/target/*.c
+do
+  source_lines="$(wc -l < "$source_file" | tr -d ' ')"
+  if test "$source_lines" -gt 2500; then
+    echo "$source_file has $source_lines lines; model-target files must not become monoliths"
+    exit 1
+  fi
+done
+
+grep -nF 'yvex_model_target_decision_report_build' src/model/target/yvex_model_target_decision.c >/dev/null
+grep -nF 'yvex_model_target_candidate_report_build' src/model/target/yvex_model_target_candidates.c >/dev/null
+grep -nF 'yvex_model_class_profile_report_build' src/model/target/yvex_model_class_profile.c >/dev/null
+grep -nF 'yvex_tensor_collection_report_build' src/model/target/yvex_tensor_collection_report.c >/dev/null
+grep -nF 'yvex_tensor_naming_report_build' src/model/target/yvex_tensor_naming_report.c >/dev/null
+grep -nF 'yvex_output_head_map_report_build' src/model/target/yvex_output_head_map_report.c >/dev/null
+grep -nF 'yvex_tokenizer_map_report_build' src/model/target/yvex_tokenizer_map_report.c >/dev/null
+grep -nF 'yvex_missing_role_report_build' src/model/target/yvex_missing_role_report.c >/dev/null
+grep -nF 'yvex_mapping_gate_report_build' src/model/target/yvex_mapping_gate_report.c >/dev/null
+grep -nF 'yvex_qtype_policy_report_build' src/model/target/yvex_qtype_policy_report.c >/dev/null
+grep -nF 'yvex_qtype_role_support_report_build' src/model/target/yvex_qtype_role_support_report.c >/dev/null
+
 model_target_adapter_lines="$(wc -l < src/cli/commands/yvex_model_target_cli.c | tr -d ' ')"
 if test "$model_target_adapter_lines" -gt 350; then
   echo "src/cli/commands/yvex_model_target_cli.c has $model_target_adapter_lines lines; adapter must stay <= 350"
@@ -725,7 +782,7 @@ if test -n "$BAD_MODEL_TARGET_CLI_INCLUDE"; then
 fi
 
 BAD_MODEL_TARGET_INPUT_EXEC="$(
-  grep -nE 'native_weight|safetensors|yvex_model_ref_resolve|yvex_model_target_.*build|yvex_.*_report_build|yvex_model_target_render|fopen|fprintf|printf' src/cli/input/yvex_model_target_args.c src/cli/input/yvex_model_target_args.h || true
+  grep -nE 'native_weight|safetensors|yvex_model_ref_resolve|yvex_model_target_.*build|yvex_.*_report_build|yvex_model_target_render[[:space:]]*\(|fopen|\b(fprintf|printf)\s*\(' src/cli/input/yvex_model_target_args.c src/cli/input/yvex_model_target_args.h || true
 )"
 if test -n "$BAD_MODEL_TARGET_INPUT_EXEC"; then
   echo "$BAD_MODEL_TARGET_INPUT_EXEC"

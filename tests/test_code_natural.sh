@@ -1,7 +1,14 @@
 #!/usr/bin/env sh
 set -eu
 
-impl_files="$(git ls-files '*.c' '*.cu' | grep -v '^tests/' | grep -v '^build/' || true)"
+impl_files="$(
+  git ls-files '*.c' '*.cu' |
+    grep -v '^tests/' |
+    grep -v '^build/' |
+    while IFS= read -r path; do
+      test -f "$path" && printf '%s\n' "$path"
+    done || true
+)"
 
 git grep -n \
   -e 'compressed implementation unit' \
@@ -389,7 +396,7 @@ if test "$model_target_report_lines" -gt 800; then
 fi
 
 MODEL_TARGET_COORDINATOR_HITS="$(
-  grep -nE 'model_target_classes|model_targets|model_class_profile_specs|tensor_collection_profile|tensor_naming_profile|output_head_map_profile|tokenizer_map|missing_role|mapping_gate|qtype_policy|role_support|native_weight|safetensors|source_path|model_target_capture_out|model_target_capture_err|model_target_out_writef|captured report text' src/model/target/yvex_model_target_report.c || true
+  grep -nE 'model_target_classes|model_targets|model_class_profile_specs|tensor_collection_profile|tensor_naming_profile|output_head_map_profile|native_weight|safetensors|source_path|model_target_capture_out|model_target_capture_err|model_target_out_writef|captured report text' src/model/target/yvex_model_target_report.c || true
 )"
 if test -n "$MODEL_TARGET_COORDINATOR_HITS"; then
   echo "$MODEL_TARGET_COORDINATOR_HITS"
@@ -398,11 +405,47 @@ if test -n "$MODEL_TARGET_COORDINATOR_HITS"; then
 fi
 
 MODEL_TARGET_TEXT_COMPAT_HITS="$(
-  grep -nE 'model_target_capture_out|model_target_capture_err|captured report text|raw_output|report_text|captured_text|line_buffer|model_target_sink_out|model_target_sink_err' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+  grep -nE 'primary_text|diagnostic_text|primary_len|diagnostic_len|model_target_capture_out|model_target_capture_err|captured report text|raw_output|report_text|captured_text|line_buffer|model_target_sink_out|model_target_sink_err' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
 )"
 if test -n "$MODEL_TARGET_TEXT_COMPAT_HITS"; then
   echo "$MODEL_TARGET_TEXT_COMPAT_HITS"
   echo "no captured output buffers in model-target report layer"
+  exit 1
+fi
+
+MODEL_TARGET_RUNNER_FILES="$(
+  find src/model/target -maxdepth 1 -type f \( -name '*runner*' -o -name '*internal*' -o -name '*compat*' -o -name '*backend*' -o -name '*bridge*' -o -name '*shim*' \) -print
+)"
+if test -n "$MODEL_TARGET_RUNNER_FILES"; then
+  echo "$MODEL_TARGET_RUNNER_FILES"
+  echo "no model-target shared execution compatibility files"
+  exit 1
+fi
+
+MODEL_TARGET_RUNNER_SYMBOL_HITS="$(
+  grep -nE 'yvex_model_target_runner|runner_report_build|_runner|\brunner\b|compatibility backend|internal backend|shared report execution|report execution support' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+)"
+if test -n "$MODEL_TARGET_RUNNER_SYMBOL_HITS"; then
+  echo "$MODEL_TARGET_RUNNER_SYMBOL_HITS"
+  echo "no model-target shared execution runner symbols"
+  exit 1
+fi
+
+MODEL_TARGET_CLI_SHAPED_REQUEST_HITS="$(
+  grep -nE '\b(argc|argv)\b' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+)"
+if test -n "$MODEL_TARGET_CLI_SHAPED_REQUEST_HITS"; then
+  echo "$MODEL_TARGET_CLI_SHAPED_REQUEST_HITS"
+  echo "no argc/argv in model-target domain or renderer"
+  exit 1
+fi
+
+MODEL_TARGET_FAKE_FILE_HITS="$(
+  grep -nE '\(FILE \*\)\(uintptr_t\)|model_target_text_write|model_target_segment_append|model_target_out_writef|model_target_out|model_target_err|model_target_file_char|model_target_sink' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+)"
+if test -n "$MODEL_TARGET_FAKE_FILE_HITS"; then
+  echo "$MODEL_TARGET_FAKE_FILE_HITS"
+  echo "no model-target fake FILE or sink output"
   exit 1
 fi
 
@@ -460,6 +503,27 @@ do
   fi
   grep -nE '[_a-zA-Z0-9]+_build[[:space:]]*\(' "$module" >/dev/null
 done
+
+for source_file in src/model/target/*.c
+do
+  source_lines="$(wc -l < "$source_file" | tr -d ' ')"
+  if test "$source_lines" -gt 2500; then
+    echo "no model-target source file over 2500 lines"
+    exit 1
+  fi
+done
+
+grep -nF 'yvex_model_target_decision_report_build' src/model/target/yvex_model_target_decision.c >/dev/null
+grep -nF 'yvex_model_target_candidate_report_build' src/model/target/yvex_model_target_candidates.c >/dev/null
+grep -nF 'yvex_model_class_profile_report_build' src/model/target/yvex_model_class_profile.c >/dev/null
+grep -nF 'yvex_tensor_collection_report_build' src/model/target/yvex_tensor_collection_report.c >/dev/null
+grep -nF 'yvex_tensor_naming_report_build' src/model/target/yvex_tensor_naming_report.c >/dev/null
+grep -nF 'yvex_output_head_map_report_build' src/model/target/yvex_output_head_map_report.c >/dev/null
+grep -nF 'yvex_tokenizer_map_report_build' src/model/target/yvex_tokenizer_map_report.c >/dev/null
+grep -nF 'yvex_missing_role_report_build' src/model/target/yvex_missing_role_report.c >/dev/null
+grep -nF 'yvex_mapping_gate_report_build' src/model/target/yvex_mapping_gate_report.c >/dev/null
+grep -nF 'yvex_qtype_policy_report_build' src/model/target/yvex_qtype_policy_report.c >/dev/null
+grep -nF 'yvex_qtype_role_support_report_build' src/model/target/yvex_qtype_role_support_report.c >/dev/null
 
 model_target_adapter_lines="$(wc -l < src/cli/commands/yvex_model_target_cli.c | tr -d ' ')"
 if test "$model_target_adapter_lines" -gt 350; then

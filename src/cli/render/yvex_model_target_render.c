@@ -8,13 +8,13 @@
  *   normal/table/audit/help rendering for typed model-target reports.
  *
  * Does not own:
- *   argv parsing, command dispatch, target catalogs, report construction,
- *   sidecar writing, runtime execution, generation, eval, benchmark, or release
- *   decisions.
+ *   CLI argument parsing, command dispatch, target catalogs, report
+ *   construction, sidecar writing, runtime execution, generation, eval,
+ *   benchmark, or release decisions.
  *
  * Invariants:
- *   this file writes only through src/cli/io helpers and never formats domain
- *   facts from raw state.
+ *   this typed renderer writes only through src/cli/io helpers and renders
+ *   typed report rows supplied by model-target report builders.
  *
  * Boundary:
  *   model-target rendering serializes existing report-only facts and does not
@@ -25,23 +25,60 @@
 
 #include "yvex_cli_out.h"
 
-static int model_target_render_text(FILE *fp, const char *text)
+static int model_target_render_rows(FILE *fp,
+                                    const yvex_model_target_text_value *rows,
+                                    unsigned long count)
 {
-    return yvex_cli_out_writef(fp, "%s", text ? text : "");
+    unsigned long i;
+    int rc = 0;
+
+    for (i = 0; i < count; ++i) {
+        rc = yvex_cli_out_writef(fp, "%s\n", rows[i].value);
+        if (rc < 0) {
+            return rc;
+        }
+    }
+    return rc;
+}
+
+static int model_target_render_table_rows(FILE *fp,
+                                          const yvex_model_target_report *report)
+{
+    unsigned long r;
+    int rc = 0;
+
+    for (r = 0; r < report->table_row_count; ++r) {
+        const yvex_model_target_table_row *row = &report->table_rows[r];
+        unsigned int c;
+
+        for (c = 0; c < row->column_count; ++c) {
+            rc = yvex_cli_out_writef(fp, "%s%s",
+                                     c == 0 ? "" : "  ",
+                                     row->columns[c]);
+            if (rc < 0) {
+                return rc;
+            }
+        }
+        rc = yvex_cli_out_writef(fp, "\n");
+        if (rc < 0) {
+            return rc;
+        }
+    }
+    return rc;
 }
 
 /*
  * yvex_model_target_render()
  *
  * Purpose:
- *   render the primary typed model-target text segment.
+ *   render typed model-target report rows.
  *
  * Inputs:
- *   fp is an explicit output stream; mode is retained for typed renderer
- *   dispatch; report is borrowed.
+ *   fp is an explicit output stream; mode selects normal/table/audit handling;
+ *   report is borrowed.
  *
  * Effects:
- *   writes report primary text through CLI IO helpers.
+ *   writes report rows through CLI IO helpers.
  *
  * Failure:
  *   returns CLI writer status.
@@ -51,14 +88,21 @@ static int model_target_render_text(FILE *fp, const char *text)
  *   create capability claims.
  */
 int yvex_model_target_render(FILE *fp,
-                             yvex_model_target_output_mode mode,
+                             yvex_model_target_render_mode mode,
                              const yvex_model_target_report *report)
 {
-    (void)mode;
+    int rc;
+
     if (!report) {
         return 0;
     }
-    return model_target_render_text(fp, report->primary_text);
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_TABLE && report->table_row_count > 0) {
+        rc = model_target_render_table_rows(fp, report);
+        if (rc < 0) {
+            return rc;
+        }
+    }
+    return model_target_render_rows(fp, report->rows, report->row_count);
 }
 
 int yvex_model_target_render_errors(FILE *fp,
@@ -67,7 +111,8 @@ int yvex_model_target_render_errors(FILE *fp,
     if (!report) {
         return 0;
     }
-    return model_target_render_text(fp, report->diagnostic_text);
+    return model_target_render_rows(fp, report->error_rows,
+                                    report->error_row_count);
 }
 
 /*

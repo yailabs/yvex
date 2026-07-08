@@ -41,8 +41,7 @@
  *
  * Effects:
  *   parses model-target args, builds one typed model-target report, renders
- *   primary/diagnostic report segments through CLI renderers, and returns the
- *   report exit code.
+ *   report rows through CLI renderers, and returns the report exit code.
  *
  * Failure:
  *   returns parser/report failure codes while preserving existing report output.
@@ -64,6 +63,13 @@ int yvex_model_target_command(int argc, char **argv)
 
     rc = yvex_model_target_args_parse(argc, argv, &args, &err);
     if (rc != YVEX_OK) {
+        return 2;
+    }
+    if (args.parse_failed) {
+        yvex_cli_out_writef(yvex_cli_out_stderr(), "%s\n",
+                            args.error_message[0]
+                                ? args.error_message
+                                : "model-target: invalid arguments");
         return 2;
     }
 

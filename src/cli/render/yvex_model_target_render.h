@@ -8,9 +8,9 @@
  *   typed model-target report rendering declarations.
  *
  * Does not own:
- *   argv parsing, command dispatch, target catalogs, report construction,
- *   sidecar writing, runtime execution, generation, eval, benchmark, or release
- *   decisions.
+ *   CLI argument parsing, command dispatch, target catalogs, report
+ *   construction, sidecar writing, runtime execution, generation, eval,
+ *   benchmark, or release decisions.
  *
  * Invariants:
  *   renderers accept typed model-target reports and serialize them through
@@ -28,7 +28,7 @@
 #include <yvex_model_target_report.h>
 
 int yvex_model_target_render(FILE *fp,
-                             yvex_model_target_output_mode mode,
+                             yvex_model_target_render_mode mode,
                              const yvex_model_target_report *report);
 
 int yvex_model_target_render_errors(FILE *fp,

@@ -1,70 +1,35 @@
 /*
- * yvex_model_target_private.h - private model-target cell boundary.
+ * yvex_model_target_private.h - private model-target helpers.
  *
  * Owner:
  *   src/model/target
  *
  * Owns:
- *   private declarations shared by model-target catalog/report modules.
+ *   small private declarations shared by model-target report modules.
  *
  * Does not own:
- *   CLI argv parsing, command dispatch, rendering, stdout/stderr writing,
- *   runtime execution, generation, eval, benchmark, or release decisions.
+ *   CLI parsing, command dispatch, rendering, stdout/stderr writing, runtime
+ *   execution, generation, eval, benchmark, or release decisions.
  *
  * Invariants:
- *   private model-target declarations stay under src/model/target and do not
- *   depend on CLI/operator headers.
+ *   shared declarations expose typed report facts only; specialized modules
+ *   own their own report construction.
  *
  * Boundary:
- *   model-target private helpers support report-only facts and do not create
- *   runtime, generation, benchmark, or release capability.
+ *   private helpers support report-only facts and do not create runtime,
+ *   generation, benchmark, or release capability.
  */
 #ifndef YVEX_MODEL_TARGET_PRIVATE_H
 #define YVEX_MODEL_TARGET_PRIVATE_H
 
-#include "yvex_model_target_report.h"
+#include "yvex_model_target_catalog.h"
 
-/*
- * yvex_model_target_runner_report_build()
- *
- * Purpose:
- *   execute shared model-target report routing for a parsed request.
- *
- * Inputs:
- *   request borrows argc/argv; report receives owned report segments.
- *
- * Effects:
- *   builds report-only model-target output in owned memory and may write
- *   explicit local sidecar files through model-target sidecar paths.
- *
- * Failure:
- *   returns yvex errors for invalid arguments, allocation, or local IO.
- *
- * Boundary:
- *   shared report routing preserves existing report behavior and does not
- *   implement runtime execution, quantization, generation, eval, benchmark, or
- *   release readiness.
- */
-int yvex_model_target_runner_report_build(
-    const yvex_model_target_request *request,
-    yvex_model_target_report *report,
-    yvex_error *err);
-
-int yvex_model_target_runner_help_report_build(
-    yvex_model_target_report *report,
-    yvex_error *err);
-
-void yvex_model_target_runner_report_close(
-    yvex_model_target_report *report);
-
-int yvex_model_target_tensor_route_report_build(
-    const yvex_model_target_request *request,
-    yvex_model_target_report *report,
-    yvex_error *err);
-
-int yvex_model_target_quant_route_report_build(
-    const yvex_model_target_request *request,
-    yvex_model_target_report *report,
-    yvex_error *err);
+const char *yvex_model_target_family_key(const char *target_id);
+const char *yvex_model_target_family_display(const char *target_id);
+int yvex_model_target_supported_source_target(const char *target_id);
+void yvex_model_target_report_common_tail(yvex_model_target_report *report);
+void yvex_model_target_report_add_output_contract(yvex_model_target_report *report,
+                                                  const char *report_name,
+                                                  const char *mode);
 
 #endif
