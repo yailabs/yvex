@@ -11,7 +11,6 @@ roadmap archive, and not a substitute for implementation. Historical delivery
 details remain available through git history.
 
 The active docs set is docs/api.md, docs/contract.md, docs/model-families.md, docs/operator-runbook.md, docs/cli-output-architecture.md, docs/v010-release-doctrine.md, docs/spine.md.
-
 ## 0. Dashboard
 
 YVEX is a local-first inference engine, not a chat wrapper.
@@ -827,6 +826,7 @@ labels.
 | TOPOLOGY.CELL.KV.0 | complete | Extract KV into domain/report/input/command/render cell. |
 | TOPOLOGY.CELL.SAMPLING.0 | complete | Extract sampling into domain/report/input/command/render cell. |
 | TOPOLOGY.CELL.GRAPH.0 | complete | Extract graph into domain/report/input/command/render cell and separate graph facts from operator output. |
+| TOPOLOGY.CELL.MODEL_TARGET.0 | complete | Extract model-target into catalog/report/input/command/render cell and remove target facts from CLI command adapter. |
 | TOPOLOGY.CELL.CLOSURE.0 | planned | Close remaining mixed cells after each owner-specific extraction is proven. |
 | V010.PATHS.0 | complete | operator root layout report. |
 | V010.PATHS.1 | complete | source/artifact/reference/report/cache separation. |

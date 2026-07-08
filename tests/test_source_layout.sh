@@ -57,6 +57,40 @@ test -f src/cli/commands/yvex_accounts_cli.c
 test -f src/cli/commands/yvex_paths_cli.c
 test -f src/model/yvex_model.c
 test -f src/model/yvex_model_artifacts.c
+test -f src/model/target/yvex_model_target_catalog.c
+test -f src/model/target/yvex_model_target_catalog.h
+test -f src/model/target/yvex_model_target_decision.c
+test -f src/model/target/yvex_model_target_decision.h
+test -f src/model/target/yvex_model_target_candidates.c
+test -f src/model/target/yvex_model_target_candidates.h
+test -f src/model/target/yvex_model_class_profile.c
+test -f src/model/target/yvex_model_class_profile.h
+test -f src/model/target/yvex_tensor_collection_report.c
+test -f src/model/target/yvex_tensor_collection_report.h
+test -f src/model/target/yvex_tensor_naming_report.c
+test -f src/model/target/yvex_tensor_naming_report.h
+test -f src/model/target/yvex_output_head_map_report.c
+test -f src/model/target/yvex_output_head_map_report.h
+test -f src/model/target/yvex_tokenizer_map_report.c
+test -f src/model/target/yvex_tokenizer_map_report.h
+test -f src/model/target/yvex_missing_role_report.c
+test -f src/model/target/yvex_missing_role_report.h
+test -f src/model/target/yvex_mapping_gate_report.c
+test -f src/model/target/yvex_mapping_gate_report.h
+test -f src/model/target/yvex_qtype_policy_report.c
+test -f src/model/target/yvex_qtype_policy_report.h
+test -f src/model/target/yvex_qtype_role_support_report.c
+test -f src/model/target/yvex_qtype_role_support_report.h
+test -f src/model/target/yvex_model_target_sidecar_write.c
+test -f src/model/target/yvex_model_target_sidecar_write.h
+test -f src/model/target/yvex_model_target_private.h
+test -f src/model/target/yvex_model_target_report.c
+test -f src/model/target/yvex_model_target_report.h
+test -f src/cli/input/yvex_model_target_args.c
+test -f src/cli/input/yvex_model_target_args.h
+test -f src/cli/render/yvex_model_target_render.c
+test -f src/cli/render/yvex_model_target_render.h
+test -f src/cli/catalog/model_target_fields.def
 test -f src/runtime/yvex_chat.c
 test -f src/cli/commands/yvex_model_artifacts_cli.c
 test -f src/source/yvex_source.c
@@ -206,9 +240,8 @@ done
 grep -nF 'Does not own:' src/model/yvex_model.c >/dev/null
 grep -nF 'CLI grammar' src/model/yvex_model.c >/dev/null
 grep -nF 'usage text' src/model/yvex_model.c >/dev/null
-grep -nF 'model-target command grammar' src/cli/commands/yvex_model_target_cli.c >/dev/null
-grep -nF 'usage/help' src/cli/commands/yvex_model_target_cli.c >/dev/null
-grep -nF 'report rendering' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'model-target command dispatch only' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'parse argv, build typed report, render typed report' src/cli/commands/yvex_model_target_cli.c >/dev/null
 grep -nF 'does not create capability' src/cli/commands/yvex_model_target_cli.c >/dev/null
 grep -nF 'top-level command lookup' src/cli/yvex_cli.c >/dev/null
 grep -nF 'model metadata/materialization facts are not model support' src/model/yvex_model.c >/dev/null
@@ -225,7 +258,7 @@ if grep -nF 'yvex model-target' src/model/yvex_model.c; then
   exit 1
 fi
 
-grep -nF 'usage: yvex model-target' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'yvex_model_target_render_help' src/cli/render/yvex_model_target_render.c >/dev/null
 
 grep -nF 'const yvex_source_report *report' src/cli/render/yvex_source_render.c >/dev/null
 grep -nF 'yvex_source_render_normal' src/cli/render/yvex_source_render.c >/dev/null
@@ -565,7 +598,84 @@ if test -n "$BAD_GRAPH_COMMAND_DOMAIN"; then
   exit 1
 fi
 
-DOMAIN_FILES='src/accounts src/artifact src/backend src/core src/daemon src/gguf src/graph src/metrics src/model src/runtime src/source src/tokenizer src/generation'
+BAD_MODEL_TARGET_CLI_DOMAIN="$(
+  grep -nE 'model_target_classes|model_targets|full_runtime_candidate|dense_candidate|qwen_metal|model_class_profile_specs|tensor_collection_profile|tensor_naming_profile|output_head_map_profile|tokenizer_map|qtype_policy|role_support|native_weight|safetensors|source_path' src/cli/commands/yvex_model_target_cli.c || true
+)"
+if test -n "$BAD_MODEL_TARGET_CLI_DOMAIN"; then
+  echo "$BAD_MODEL_TARGET_CLI_DOMAIN"
+  echo "model-target domain/report facts must not live in CLI command adapter"
+  exit 1
+fi
+
+model_target_adapter_lines="$(wc -l < src/cli/commands/yvex_model_target_cli.c | tr -d ' ')"
+if test "$model_target_adapter_lines" -gt 350; then
+  echo "src/cli/commands/yvex_model_target_cli.c has $model_target_adapter_lines lines; adapter must stay <= 350"
+  exit 1
+fi
+
+grep -nF 'yvex_model_target_args_parse' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'yvex_model_target_render' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nE 'yvex_model_target_.*build|yvex_.*_report_build' src/cli/commands/yvex_model_target_cli.c >/dev/null
+
+BAD_MODEL_TARGET_OUTPUT="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' src/model/target/*.c src/model/target/*.h |
+    grep -vE '^src/model/target/yvex_model_target_sidecar_write\.c:' || true
+)"
+if test -n "$BAD_MODEL_TARGET_OUTPUT"; then
+  echo "$BAD_MODEL_TARGET_OUTPUT"
+  echo "model-target domain/report must not write operator output"
+  exit 1
+fi
+
+BAD_MODEL_TARGET_WRITER_STDIO="$(
+  grep -nE 'stdout|stderr' src/model/target/yvex_model_target_sidecar_write.c src/model/target/yvex_model_target_sidecar_write.h || true
+)"
+if test -n "$BAD_MODEL_TARGET_WRITER_STDIO"; then
+  echo "$BAD_MODEL_TARGET_WRITER_STDIO"
+  echo "model-target sidecar writer must not write stdout/stderr"
+  exit 1
+fi
+
+BAD_MODEL_TARGET_CLI_INCLUDE="$(
+  grep -nE '#include "yvex_(cli|operator|console)|#include <.*cli.*>' src/model/target/*.c src/model/target/*.h || true
+)"
+if test -n "$BAD_MODEL_TARGET_CLI_INCLUDE"; then
+  echo "$BAD_MODEL_TARGET_CLI_INCLUDE"
+  echo "model-target domain/report must not include CLI/operator headers"
+  exit 1
+fi
+
+BAD_MODEL_TARGET_INPUT_EXEC="$(
+  grep -nE 'native_weight|safetensors|yvex_model_ref_resolve|yvex_model_target_.*build|yvex_.*_report_build|yvex_model_target_render|fopen|fprintf|printf' src/cli/input/yvex_model_target_args.c src/cli/input/yvex_model_target_args.h || true
+)"
+if test -n "$BAD_MODEL_TARGET_INPUT_EXEC"; then
+  echo "$BAD_MODEL_TARGET_INPUT_EXEC"
+  echo "model-target input parser must parse only"
+  exit 1
+fi
+
+grep -nF 'yvex_model_target_render' src/cli/render/yvex_model_target_render.c >/dev/null
+grep -nE 'const yvex_.*report \*report|const yvex_model_target_.* \*report' src/cli/render/yvex_model_target_render.c >/dev/null
+
+BAD_MODEL_TARGET_RENDER_STDIO="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+)"
+if test -n "$BAD_MODEL_TARGET_RENDER_STDIO"; then
+  echo "$BAD_MODEL_TARGET_RENDER_STDIO"
+  echo "model-target renderer must use src/cli/io writers"
+  exit 1
+fi
+
+BAD_MODEL_TARGET_RENDER_PLACEHOLDER="$(
+  grep -nE 'const void \*report|not-bound|renderer-only|_render_boundary|boundary anchor' src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+)"
+if test -n "$BAD_MODEL_TARGET_RENDER_PLACEHOLDER"; then
+  echo "$BAD_MODEL_TARGET_RENDER_PLACEHOLDER"
+  echo "model-target renderer must be real and typed"
+  exit 1
+fi
+
+DOMAIN_FILES='src/accounts src/artifact src/backend src/core src/daemon src/gguf src/graph src/metrics src/model/yvex_model.c src/model/yvex_model_artifacts.c src/runtime src/source src/tokenizer src/generation'
 
 PRINT_HITS="$(
   grep -RInE '\b(printf|vprintf|puts|putchar|perror)\s*\(' $DOMAIN_FILES || true

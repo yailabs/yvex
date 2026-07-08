@@ -85,7 +85,8 @@ src/cli/schema/*.json
   CLI plumbing schemas only, without uniform JSON capability claims
 
 src/cli/commands/yvex_model_target_cli.c
-  model-target CLI grammar, usage/help, output rendering, and report commands
+  model-target command dispatch only; no target facts, profile specs, tensor
+  maps, qtype policy, sidecar writing, or report construction
 
 src/core/yvex_operator_private.h
   private shared operator helper declarations and domain-owned command
@@ -142,6 +143,13 @@ src/model/yvex_model.c
 
 src/model/yvex_model_artifacts.c
   artifact status, artifact gates, selected/full artifact reports
+
+src/model/target/
+  model-target catalogs, target decisions, candidate facts, model-class
+  profiles, tensor collection reports, tensor naming reports, output-head maps,
+  tokenizer maps, missing-role reports, mapping gates, qtype policy reports,
+  qtype role-support reports, model-target report construction, and explicit
+  sidecar file writing
 
 src/artifact/yvex_artifact.c
   artifact IO, inspect, metadata, tensor command surfaces
@@ -256,6 +264,13 @@ Graph primitive proof is a domain/report fact, not CLI output. Backend primitive
 output and reference output must be compared below the render layer. CLI render
 may print checksum, tolerance, status, and boundary, but must not execute
 primitives or compute references.
+
+Model-target cell closure requires target catalogs, target decisions,
+model-class profiles, tensor collection reports, tensor naming reports,
+output-head maps, tokenizer maps, missing-role reports, mapping gates, qtype
+policy reports, role-support reports, and sidecar writing to live under
+src/model/target. The CLI command adapter may only parse, dispatch, render, and
+return exit codes through typed APIs.
 
 A command adapter that does not call a real input parser, a real domain/report API,
 and a real typed renderer is not a valid cell file.

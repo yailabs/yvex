@@ -85,9 +85,9 @@ if grep -nF 'yvex model-target' src/model/yvex_model.c; then
   exit 1
 fi
 
-grep -nF 'usage: yvex model-target' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'yvex_model_target_render_help' src/cli/render/yvex_model_target_render.c >/dev/null
 
-DOMAIN_FILES='src/accounts src/artifact src/backend src/core src/daemon src/gguf src/graph src/metrics src/model src/runtime src/source src/tokenizer src/generation'
+DOMAIN_FILES='src/accounts src/artifact src/backend src/core src/daemon src/gguf src/graph src/metrics src/model/yvex_model.c src/model/yvex_model_artifacts.c src/runtime src/source src/tokenizer src/generation'
 
 PRINT_HITS="$(
   grep -RInE '\b(printf|vprintf|puts|putchar|perror)\s*\(' $DOMAIN_FILES || true
@@ -373,6 +373,62 @@ if grep -nF 'void graph_cli_adapter_file(void)' src/cli/commands/yvex_graph_cli.
   exit 1
 fi
 
+MODEL_TARGET_CLI_DOMAIN_HITS="$(
+  grep -nE 'model_target_classes|model_targets|full_runtime_candidate|dense_candidate|qwen_metal|model_class_profile_specs|tensor_collection_profile|tensor_naming_profile|output_head_map_profile|tokenizer_map|qtype_policy|role_support|native_weight|safetensors|source_path' src/cli/commands/yvex_model_target_cli.c || true
+)"
+if test -n "$MODEL_TARGET_CLI_DOMAIN_HITS"; then
+  echo "$MODEL_TARGET_CLI_DOMAIN_HITS"
+  echo "no model-target domain facts in CLI command adapter"
+  exit 1
+fi
+
+model_target_adapter_lines="$(wc -l < src/cli/commands/yvex_model_target_cli.c | tr -d ' ')"
+if test "$model_target_adapter_lines" -gt 350; then
+  echo "no empty model-target command adapter"
+  exit 1
+fi
+
+grep -nF 'yvex_model_target_args_parse' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'yvex_model_target_report_build' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'yvex_model_target_render' src/cli/commands/yvex_model_target_cli.c >/dev/null
+
+MODEL_TARGET_DOMAIN_OUTPUT_HITS="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' src/model/target/*.c src/model/target/*.h |
+    grep -vE '^src/model/target/yvex_model_target_sidecar_write\.c:' || true
+)"
+if test -n "$MODEL_TARGET_DOMAIN_OUTPUT_HITS"; then
+  echo "$MODEL_TARGET_DOMAIN_OUTPUT_HITS"
+  echo "no model-target direct output in domain/report"
+  exit 1
+fi
+
+MODEL_TARGET_DOMAIN_INCLUDE_HITS="$(
+  grep -nE '#include "yvex_(cli|operator|console)|#include <.*cli.*>' src/model/target/*.c src/model/target/*.h || true
+)"
+if test -n "$MODEL_TARGET_DOMAIN_INCLUDE_HITS"; then
+  echo "$MODEL_TARGET_DOMAIN_INCLUDE_HITS"
+  echo "no model-target CLI/operator include in domain/report"
+  exit 1
+fi
+
+MODEL_TARGET_RENDER_STDIO_HITS="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror)\s*\(' src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+)"
+if test -n "$MODEL_TARGET_RENDER_STDIO_HITS"; then
+  echo "$MODEL_TARGET_RENDER_STDIO_HITS"
+  echo "no model-target renderer direct stdio"
+  exit 1
+fi
+
+MODEL_TARGET_RENDER_PLACEHOLDER_HITS="$(
+  grep -nE 'const void \*report|not-bound|renderer-only|_render_boundary|boundary anchor' src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+)"
+if test -n "$MODEL_TARGET_RENDER_PLACEHOLDER_HITS"; then
+  echo "$MODEL_TARGET_RENDER_PLACEHOLDER_HITS"
+  echo "no model-target placeholder renderer"
+  exit 1
+fi
+
 if grep -RInE '#include .*src/cli|#include "yvex_(cli|console|render)' src/source; then
   echo "source cell must not include CLI headers"
   exit 1
@@ -478,9 +534,9 @@ do
   grep -nF 'Boundary:' "$f" >/dev/null
 done
 
-grep -nF 'command grammar' src/cli/commands/yvex_model_target_cli.c >/dev/null
-grep -nF 'usage/help' src/cli/commands/yvex_model_target_cli.c >/dev/null
-grep -nF 'report rendering' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'command dispatch only' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'typed report' src/cli/commands/yvex_model_target_cli.c >/dev/null
+grep -nF 'typed renderer' src/cli/render/yvex_model_target_render.c >/dev/null
 grep -nF 'does not create capability' src/cli/commands/yvex_model_target_cli.c >/dev/null
 grep -nF 'model metadata/materialization facts are not model support' src/model/yvex_model.c >/dev/null
 grep -nF 'tensor payload bytes' src/model/yvex_model.c >/dev/null

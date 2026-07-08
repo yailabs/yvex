@@ -115,5 +115,16 @@ test -f src/cli/render/yvex_graph_render.h
 test -f src/cli/catalog/graph_options.def
 test -f src/cli/catalog/graph_fields.def
 test -f src/cli/catalog/graph_boundaries.def
+test -f src/model/target/yvex_model_target_report.c
+test -f src/model/target/yvex_model_target_report.h
+test -f src/model/target/yvex_model_target_catalog.c
+test -f src/model/target/yvex_model_target_catalog.h
+test -f src/model/target/yvex_model_target_private.h
+test -f src/cli/input/yvex_model_target_args.c
+test -f src/cli/input/yvex_model_target_args.h
+test -f src/cli/commands/yvex_model_target_cli.c
+test -f src/cli/render/yvex_model_target_render.c
+test -f src/cli/render/yvex_model_target_render.h
+test -f src/cli/catalog/model_target_fields.def
 
 echo "test surface: ok"
