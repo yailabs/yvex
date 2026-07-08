@@ -20,6 +20,8 @@
 #ifndef YVEX_MODEL_TARGET_CATALOG_H
 #define YVEX_MODEL_TARGET_CATALOG_H
 
+#include "yvex_model_target_report.h"
+
 typedef struct {
     const char *class_id;
     const char *capability_claim;
@@ -51,5 +53,14 @@ unsigned long yvex_model_target_count(void);
 const yvex_model_target_record *yvex_model_target_at(unsigned long index);
 unsigned long yvex_model_target_class_count(void);
 const yvex_model_target_class_record *yvex_model_target_class_at(unsigned long index);
+
+int yvex_model_target_catalog_report_build(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report,
+    yvex_error *err);
+
+int yvex_model_target_catalog_help_report_build(
+    yvex_model_target_report *report,
+    yvex_error *err);
 
 #endif

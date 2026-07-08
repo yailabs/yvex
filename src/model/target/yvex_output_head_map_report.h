@@ -9,4 +9,12 @@
  */
 #ifndef YVEX_OUTPUT_HEAD_MAP_REPORT_H
 #define YVEX_OUTPUT_HEAD_MAP_REPORT_H
+
+#include "yvex_model_target_report.h"
+
+int yvex_output_head_map_report_build(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report,
+    yvex_error *err);
+
 #endif

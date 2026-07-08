@@ -382,6 +382,60 @@ if test -n "$MODEL_TARGET_CLI_DOMAIN_HITS"; then
   exit 1
 fi
 
+model_target_report_lines="$(wc -l < src/model/target/yvex_model_target_report.c | tr -d ' ')"
+if test "$model_target_report_lines" -gt 800; then
+  echo "no model-target monolith report coordinator"
+  exit 1
+fi
+
+MODEL_TARGET_COORDINATOR_HITS="$(
+  grep -nE 'model_target_classes|model_targets|model_class_profile_specs|tensor_collection_profile|tensor_naming_profile|output_head_map_profile|tokenizer_map|missing_role|mapping_gate|qtype_policy|role_support|native_weight|safetensors|source_path|model_target_capture_out|model_target_capture_err|model_target_out_writef|captured report text' src/model/target/yvex_model_target_report.c || true
+)"
+if test -n "$MODEL_TARGET_COORDINATOR_HITS"; then
+  echo "$MODEL_TARGET_COORDINATOR_HITS"
+  echo "no model-target monolith report coordinator"
+  exit 1
+fi
+
+MODEL_TARGET_TEXT_COMPAT_HITS="$(
+  grep -nE 'model_target_capture_out|model_target_capture_err|captured report text|raw_output|report_text' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+)"
+if test -n "$MODEL_TARGET_TEXT_COMPAT_HITS"; then
+  echo "$MODEL_TARGET_TEXT_COMPAT_HITS"
+  echo "no captured output buffers in model-target report layer"
+  exit 1
+fi
+
+MODEL_TARGET_BOUNDARY_SHELL_HITS="$(
+  grep -nE 'typedef int yvex_.*_file_boundary' src/model/target/*.c || true
+)"
+if test -n "$MODEL_TARGET_BOUNDARY_SHELL_HITS"; then
+  echo "$MODEL_TARGET_BOUNDARY_SHELL_HITS"
+  echo "no boundary typedef shells in model-target report modules"
+  exit 1
+fi
+
+for module in \
+  src/model/target/yvex_model_class_profile.c \
+  src/model/target/yvex_tensor_collection_report.c \
+  src/model/target/yvex_tensor_naming_report.c \
+  src/model/target/yvex_output_head_map_report.c \
+  src/model/target/yvex_tokenizer_map_report.c \
+  src/model/target/yvex_missing_role_report.c \
+  src/model/target/yvex_mapping_gate_report.c \
+  src/model/target/yvex_qtype_policy_report.c \
+  src/model/target/yvex_qtype_role_support_report.c \
+  src/model/target/yvex_model_target_candidates.c \
+  src/model/target/yvex_model_target_decision.c
+do
+  module_lines="$(wc -l < "$module" | tr -d ' ')"
+  if test "$module_lines" -lt 80; then
+    echo "no model-target report module under 80 lines unless explicitly a header"
+    exit 1
+  fi
+  grep -nE '[_a-zA-Z0-9]+_build[[:space:]]*\(' "$module" >/dev/null
+done
+
 model_target_adapter_lines="$(wc -l < src/cli/commands/yvex_model_target_cli.c | tr -d ' ')"
 if test "$model_target_adapter_lines" -gt 350; then
   echo "no empty model-target command adapter"
@@ -421,7 +475,7 @@ if test -n "$MODEL_TARGET_RENDER_STDIO_HITS"; then
 fi
 
 MODEL_TARGET_RENDER_PLACEHOLDER_HITS="$(
-  grep -nE 'const void \*report|not-bound|renderer-only|_render_boundary|boundary anchor' src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+  grep -nE 'captured_text|report_text|raw_output|const void \*report|not-bound|renderer-only|_render_boundary|boundary anchor' src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
 )"
 if test -n "$MODEL_TARGET_RENDER_PLACEHOLDER_HITS"; then
   echo "$MODEL_TARGET_RENDER_PLACEHOLDER_HITS"

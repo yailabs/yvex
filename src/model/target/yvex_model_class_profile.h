@@ -9,4 +9,12 @@
  */
 #ifndef YVEX_MODEL_CLASS_PROFILE_H
 #define YVEX_MODEL_CLASS_PROFILE_H
+
+#include "yvex_model_target_report.h"
+
+int yvex_model_class_profile_report_build(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report,
+    yvex_error *err);
+
 #endif

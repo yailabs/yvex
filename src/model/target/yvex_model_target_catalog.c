@@ -20,6 +20,8 @@
  */
 #include "yvex_model_target_catalog.h"
 
+#include "yvex_model_target_private.h"
+
 #include <string.h>
 
 static const yvex_model_target_class_record catalog_model_target_classes[] = {
@@ -203,4 +205,85 @@ const yvex_model_target_class_record *yvex_model_target_class_at(unsigned long i
     return index < yvex_model_target_class_count()
                ? &catalog_model_target_classes[index]
                : NULL;
+}
+
+static int model_target_catalog_kind_allowed(
+    const yvex_model_target_request *request)
+{
+    if (!request) {
+        return 0;
+    }
+    return request->kind == YVEX_MODEL_TARGET_COMMAND_CLASSES ||
+           request->kind == YVEX_MODEL_TARGET_COMMAND_LIST ||
+           request->kind == YVEX_MODEL_TARGET_COMMAND_INSPECT ||
+           request->kind == YVEX_MODEL_TARGET_COMMAND_UNKNOWN;
+}
+
+static int model_target_catalog_reject(yvex_error *err)
+{
+    yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_target_catalog",
+                   "catalog report requires classes, list, or inspect command kind");
+    return YVEX_ERR_INVALID_ARG;
+}
+
+static void model_target_catalog_prepare_report(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report)
+{
+    if (!request || !report) {
+        return;
+    }
+    report->kind = request->kind;
+    if (request->kind == YVEX_MODEL_TARGET_COMMAND_CLASSES) {
+        report->status = "model-target-classes";
+    } else if (request->kind == YVEX_MODEL_TARGET_COMMAND_LIST) {
+        report->status = "model-target-list";
+    } else if (request->kind == YVEX_MODEL_TARGET_COMMAND_INSPECT) {
+        report->status = "model-target-inspect";
+    } else {
+        report->status = "model-target";
+    }
+}
+
+/*
+ * yvex_model_target_catalog_report_build()
+ *
+ * Purpose:
+ *   build catalog-facing model-target reports such as classes, list, and
+ *   inspect.
+ *
+ * Inputs:
+ *   request borrows parsed argv; report receives owned report segments.
+ *
+ * Effects:
+ *   delegates existing report behavior to the shared model-target backend.
+ *
+ * Failure:
+ *   returns invalid-arg for non-catalog request kinds or backend errors.
+ *
+ * Boundary:
+ *   catalog reporting is report-only and does not create runtime support,
+ *   artifact emission, generation, benchmark, or release readiness.
+ */
+int yvex_model_target_catalog_report_build(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report,
+    yvex_error *err)
+{
+    if (!model_target_catalog_kind_allowed(request)) {
+        return model_target_catalog_reject(err);
+    }
+    model_target_catalog_prepare_report(request, report);
+    return yvex_model_target_internal_report_build(request, report, err);
+}
+
+int yvex_model_target_catalog_help_report_build(
+    yvex_model_target_report *report,
+    yvex_error *err)
+{
+    if (report) {
+        report->kind = YVEX_MODEL_TARGET_COMMAND_HELP;
+        report->status = "model-target-help";
+    }
+    return yvex_model_target_internal_help_report_build(report, err);
 }

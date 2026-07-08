@@ -607,6 +607,60 @@ if test -n "$BAD_MODEL_TARGET_CLI_DOMAIN"; then
   exit 1
 fi
 
+model_target_report_lines="$(wc -l < src/model/target/yvex_model_target_report.c | tr -d ' ')"
+if test "$model_target_report_lines" -gt 800; then
+  echo "src/model/target/yvex_model_target_report.c has $model_target_report_lines lines; coordinator must stay <= 800"
+  exit 1
+fi
+
+BAD_MODEL_TARGET_COORDINATOR="$(
+  grep -nE 'model_target_classes|model_targets|model_class_profile_specs|tensor_collection_profile|tensor_naming_profile|output_head_map_profile|tokenizer_map|missing_role|mapping_gate|qtype_policy|role_support|native_weight|safetensors|source_path|model_target_capture_out|model_target_capture_err|model_target_out_writef|model_target_file_char|captured report text' src/model/target/yvex_model_target_report.c || true
+)"
+if test -n "$BAD_MODEL_TARGET_COORDINATOR"; then
+  echo "$BAD_MODEL_TARGET_COORDINATOR"
+  echo "model-target report coordinator must not own report-specific internals"
+  exit 1
+fi
+
+BAD_MODEL_TARGET_BOUNDARY_SHELL="$(
+  grep -nE 'typedef int yvex_.*_file_boundary' src/model/target/*.c || true
+)"
+if test -n "$BAD_MODEL_TARGET_BOUNDARY_SHELL"; then
+  echo "$BAD_MODEL_TARGET_BOUNDARY_SHELL"
+  echo "model-target report modules must not be boundary typedef shells"
+  exit 1
+fi
+
+BAD_MODEL_TARGET_TEXT_COMPAT="$(
+  grep -nE 'model_target_capture_out|model_target_capture_err|captured report text|raw_output|report_text' src/model/target/*.c src/model/target/*.h src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+)"
+if test -n "$BAD_MODEL_TARGET_TEXT_COMPAT"; then
+  echo "$BAD_MODEL_TARGET_TEXT_COMPAT"
+  echo "model-target report layer must not use captured-output compatibility names"
+  exit 1
+fi
+
+for module in \
+  src/model/target/yvex_model_class_profile.c \
+  src/model/target/yvex_tensor_collection_report.c \
+  src/model/target/yvex_tensor_naming_report.c \
+  src/model/target/yvex_output_head_map_report.c \
+  src/model/target/yvex_tokenizer_map_report.c \
+  src/model/target/yvex_missing_role_report.c \
+  src/model/target/yvex_mapping_gate_report.c \
+  src/model/target/yvex_qtype_policy_report.c \
+  src/model/target/yvex_qtype_role_support_report.c \
+  src/model/target/yvex_model_target_candidates.c \
+  src/model/target/yvex_model_target_decision.c
+do
+  module_lines="$(wc -l < "$module" | tr -d ' ')"
+  if test "$module_lines" -lt 80; then
+    echo "$module has $module_lines lines; model-target report module must be a real ownership file"
+    exit 1
+  fi
+  grep -nE '[_a-zA-Z0-9]+_build[[:space:]]*\(' "$module" >/dev/null
+done
+
 model_target_adapter_lines="$(wc -l < src/cli/commands/yvex_model_target_cli.c | tr -d ' ')"
 if test "$model_target_adapter_lines" -gt 350; then
   echo "src/cli/commands/yvex_model_target_cli.c has $model_target_adapter_lines lines; adapter must stay <= 350"
@@ -667,7 +721,7 @@ if test -n "$BAD_MODEL_TARGET_RENDER_STDIO"; then
 fi
 
 BAD_MODEL_TARGET_RENDER_PLACEHOLDER="$(
-  grep -nE 'const void \*report|not-bound|renderer-only|_render_boundary|boundary anchor' src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
+  grep -nE 'captured_text|report_text|raw_output|const void \*report|not-bound|renderer-only|_render_boundary|boundary anchor' src/cli/render/yvex_model_target_render.c src/cli/render/yvex_model_target_render.h || true
 )"
 if test -n "$BAD_MODEL_TARGET_RENDER_PLACEHOLDER"; then
   echo "$BAD_MODEL_TARGET_RENDER_PLACEHOLDER"

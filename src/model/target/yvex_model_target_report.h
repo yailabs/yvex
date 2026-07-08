@@ -12,8 +12,8 @@
  *   runtime execution, generation, eval, benchmark, or release decisions.
  *
  * Invariants:
- *   reports package existing model-target facts as typed values; text buffers
- *   are owned by the report and must be released with the report close helper.
+ *   reports package existing model-target facts as typed values; owned text
+ *   segments are released with the report close helper.
  *
  * Boundary:
  *   model-target reports are report-only facts and do not create quantization,
@@ -62,10 +62,10 @@ typedef struct {
     yvex_model_target_command_kind kind;
     yvex_model_target_output_mode mode;
     const char *status;
-    char *stdout_text;
-    char *stderr_text;
-    size_t stdout_len;
-    size_t stderr_len;
+    char *primary_text;
+    char *diagnostic_text;
+    size_t primary_len;
+    size_t diagnostic_len;
     int exit_code;
 } yvex_model_target_report;
 

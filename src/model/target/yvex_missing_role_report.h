@@ -9,4 +9,12 @@
  */
 #ifndef YVEX_MISSING_ROLE_REPORT_H
 #define YVEX_MISSING_ROLE_REPORT_H
+
+#include "yvex_model_target_report.h"
+
+int yvex_missing_role_report_build(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report,
+    yvex_error *err);
+
 #endif

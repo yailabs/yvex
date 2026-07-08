@@ -9,4 +9,7 @@
  */
 #ifndef YVEX_MODEL_TARGET_SIDECAR_WRITE_H
 #define YVEX_MODEL_TARGET_SIDECAR_WRITE_H
+
+int yvex_model_target_sidecar_writer_available(void);
+
 #endif

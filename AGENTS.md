@@ -151,6 +151,12 @@ src/model/target/
   qtype role-support reports, model-target report construction, and explicit
   sidecar file writing
 
+MODEL_TARGET.1 closure forbids using yvex_model_target_report.c as a
+compatibility monolith. The coordinator may route request kinds, but
+report-specific ownership must live in the corresponding src/model/target
+module. Boundary typedef shells and captured-output report buffers are
+forbidden.
+
 src/artifact/yvex_artifact.c
   artifact IO, inspect, metadata, tensor command surfaces
 

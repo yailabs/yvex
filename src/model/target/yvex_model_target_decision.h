@@ -9,4 +9,12 @@
  */
 #ifndef YVEX_MODEL_TARGET_DECISION_H
 #define YVEX_MODEL_TARGET_DECISION_H
+
+#include "yvex_model_target_report.h"
+
+int yvex_model_target_decision_report_build(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report,
+    yvex_error *err);
+
 #endif

@@ -41,8 +41,8 @@
  *
  * Effects:
  *   parses model-target args, builds one typed model-target report, renders
- *   captured stdout/stderr through CLI renderers, and returns the report exit
- *   code.
+ *   primary/diagnostic report segments through CLI renderers, and returns the
+ *   report exit code.
  *
  * Failure:
  *   returns parser/report failure codes while preserving existing report output.

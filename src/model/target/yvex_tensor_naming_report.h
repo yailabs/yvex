@@ -9,4 +9,12 @@
  */
 #ifndef YVEX_TENSOR_NAMING_REPORT_H
 #define YVEX_TENSOR_NAMING_REPORT_H
+
+#include "yvex_model_target_report.h"
+
+int yvex_tensor_naming_report_build(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report,
+    yvex_error *err);
+
 #endif

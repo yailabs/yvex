@@ -34,14 +34,14 @@ static int model_target_render_text(FILE *fp, const char *text)
  * yvex_model_target_render()
  *
  * Purpose:
- *   render captured typed model-target stdout text.
+ *   render the primary typed model-target text segment.
  *
  * Inputs:
  *   fp is an explicit output stream; mode is retained for typed renderer
  *   dispatch; report is borrowed.
  *
  * Effects:
- *   writes report stdout text through CLI IO helpers.
+ *   writes report primary text through CLI IO helpers.
  *
  * Failure:
  *   returns CLI writer status.
@@ -58,7 +58,7 @@ int yvex_model_target_render(FILE *fp,
     if (!report) {
         return 0;
     }
-    return model_target_render_text(fp, report->stdout_text);
+    return model_target_render_text(fp, report->primary_text);
 }
 
 int yvex_model_target_render_errors(FILE *fp,
@@ -67,7 +67,7 @@ int yvex_model_target_render_errors(FILE *fp,
     if (!report) {
         return 0;
     }
-    return model_target_render_text(fp, report->stderr_text);
+    return model_target_render_text(fp, report->diagnostic_text);
 }
 
 /*
