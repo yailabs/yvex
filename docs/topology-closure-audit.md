@@ -282,3 +282,29 @@ operator output and CLI-shaped command/report ownership in `src/model`,
 `src/runtime`, `src/artifact`, `src/gguf`, `src/backend`, `src/tokenizer`, and
 provider/account modules. The next cleanup pass should use this audit as the
 cleanup map before returning to `V010.QUANT.2`.
+
+## Follow-up: TOPOLOGY.CELL.MODEL_ARTIFACTS.0
+
+Previous `src/model/yvex_model_artifacts.c` direct-output count: 2558.
+New `src/model/yvex_model_artifacts.c` direct-output count: 0.
+
+Previous `src/model/yvex_model_artifacts.c` line count: 17223.
+New `src/model/yvex_model_artifacts.c` line count: 28.
+
+CLI include status: cleared from `src/model/yvex_model_artifacts.c` and
+`src/model/artifacts/*`; command-surface includes now live under
+`src/cli/commands/yvex_model_artifacts_cli.c`.
+
+CLI-shaped input status: cleared from `src/model/yvex_model_artifacts.c`,
+`src/model/artifacts/*`, and the model-artifacts renderer. CLI-shaped parsing
+residue now lives under CLI command/input ownership.
+
+Remaining residue: the historical `models`, `fullmodel`, `attention`,
+`context`, `moe`, and `tensor-collection` command bodies were moved out of the
+model domain to preserve command compatibility, but they still need a later
+focused command/input/render decomposition. This follow-up closes the critical
+model-domain monolith and direct-output pressure, not global topology closure.
+
+Next recommended row: split the moved model-artifacts command surface into
+thin command adapters and typed render/report modules, or continue with the next
+largest audit residue after rerunning the closure audit.

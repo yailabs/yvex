@@ -1,4 +1,5 @@
-"no-payload-hashing"
-"no-gguf-emission"
-"no-materialization"
-"no-runtime-readiness"
+model artifact registry is not artifact emission
+model reference resolution is not runtime support
+model gate evidence is not generation readiness
+materialization gate evidence is not release readiness
+model artifact report is not benchmark evidence

@@ -941,6 +941,52 @@ else
   exit 1
 fi
 
+model_artifacts_root_lines="$(wc -l < src/model/yvex_model_artifacts.c | tr -d ' ')"
+if test "$model_artifacts_root_lines" -gt 500; then
+  echo "no model-artifacts root monolith"
+  exit 1
+fi
+
+if grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror|fwrite)\s*\(' src/model/yvex_model_artifacts.c; then
+  echo "no direct output in model-artifacts root"
+  exit 1
+fi
+
+if grep -nE '#include "yvex_(cli|operator|console)|yvex_operator_render|#include <.*cli.*>|src/cli' src/model/yvex_model_artifacts.c src/model/artifacts/*.c src/model/artifacts/*.h; then
+  echo "no CLI/operator include in model-artifacts domain"
+  exit 1
+fi
+
+if grep -nE '\b(argc|argv)\b|usage:|--help|--output|--audit' src/model/yvex_model_artifacts.c src/model/artifacts/*.c src/model/artifacts/*.h; then
+  echo "no CLI-shaped input in model-artifacts domain"
+  exit 1
+fi
+
+if grep -nE '\b(argc|argv)\b' src/cli/render/yvex_model_artifacts_render.c src/cli/render/yvex_model_artifacts_render.h; then
+  echo "no CLI-shaped input in model-artifacts domain/render"
+  exit 1
+fi
+
+BAD_MODEL_ARTIFACTS_OUTPUT="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror|fwrite)\s*\(' src/model/artifacts/*.c src/model/artifacts/*.h |
+    grep -vE '^src/model/artifacts/yvex_model_artifact_write\.c:' || true
+)"
+if test -n "$BAD_MODEL_ARTIFACTS_OUTPUT"; then
+  echo "$BAD_MODEL_ARTIFACTS_OUTPUT"
+  echo "no direct output in model-artifacts domain/report"
+  exit 1
+fi
+
+if grep -nE 'stdout|stderr' src/model/artifacts/yvex_model_artifact_write.c src/model/artifacts/yvex_model_artifact_write.h; then
+  echo "model-artifacts writer must not write stdout/stderr"
+  exit 1
+fi
+
+if grep -nE 'primary_text|diagnostic_text|raw_output|report_text|captured_text|line_buffer' src/model/artifacts/*.c src/model/artifacts/*.h src/cli/render/yvex_model_artifacts_render.c src/cli/render/yvex_model_artifacts_render.h; then
+  echo "no model-artifacts text-buffer report debt"
+  exit 1
+fi
+
 if grep -nE '\b(system|popen|execl)[[:space:]]*\(' src/cli/commands/yvex_accounts_cli.c; then
   echo "accounts must use bounded exec helpers only"
   exit 1

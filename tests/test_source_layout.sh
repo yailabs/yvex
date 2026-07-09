@@ -60,6 +60,24 @@ test -f src/cli/commands/yvex_accounts_cli.c
 test -f src/cli/commands/yvex_paths_cli.c
 test -f src/model/yvex_model.c
 test -f src/model/yvex_model_artifacts.c
+test -d src/model/artifacts
+test -f src/model/artifacts/yvex_model_artifact_registry.c
+test -f src/model/artifacts/yvex_model_artifact_registry.h
+test -f src/model/artifacts/yvex_model_artifact_ref.c
+test -f src/model/artifacts/yvex_model_artifact_ref.h
+test -f src/model/artifacts/yvex_model_artifact_gate.c
+test -f src/model/artifacts/yvex_model_artifact_gate.h
+test -f src/model/artifacts/yvex_model_artifact_report.c
+test -f src/model/artifacts/yvex_model_artifact_report.h
+test -f src/model/artifacts/yvex_model_artifact_status_report.c
+test -f src/model/artifacts/yvex_model_artifact_status_report.h
+test -f src/model/artifacts/yvex_model_artifact_list_report.c
+test -f src/model/artifacts/yvex_model_artifact_list_report.h
+test -f src/model/artifacts/yvex_model_artifact_check_report.c
+test -f src/model/artifacts/yvex_model_artifact_check_report.h
+test -f src/model/artifacts/yvex_model_artifact_write.c
+test -f src/model/artifacts/yvex_model_artifact_write.h
+test -f src/model/artifacts/yvex_model_artifact_private.h
 test -f src/model/target/yvex_model_target_catalog.c
 test -f src/model/target/yvex_model_target_catalog.h
 test -f src/model/target/yvex_model_target_decision.c
@@ -96,6 +114,12 @@ test -f src/cli/render/yvex_model_target_render.h
 test -f src/cli/catalog/model_target_fields.def
 test -f src/runtime/yvex_chat.c
 test -f src/cli/commands/yvex_model_artifacts_cli.c
+test -f src/cli/input/yvex_model_artifacts_args.c
+test -f src/cli/input/yvex_model_artifacts_args.h
+test -f src/cli/render/yvex_model_artifacts_render.c
+test -f src/cli/render/yvex_model_artifacts_render.h
+test -f src/cli/catalog/model_artifacts_fields.def
+test -f src/cli/catalog/model_artifacts_boundaries.def
 test -f src/source/yvex_source.c
 test -f src/source/yvex_source_private.h
 test -f src/source/yvex_source_manifest.c
@@ -784,6 +808,52 @@ if test -n "$BAD_MODEL_TARGET_CLI_INCLUDE"; then
   exit 1
 fi
 
+model_artifacts_root_lines="$(wc -l < src/model/yvex_model_artifacts.c | tr -d ' ')"
+if test "$model_artifacts_root_lines" -gt 500; then
+  echo "src/model/yvex_model_artifacts.c has $model_artifacts_root_lines lines; model-artifacts root must stay <= 500"
+  exit 1
+fi
+
+if grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror|fwrite)\s*\(' src/model/yvex_model_artifacts.c; then
+  echo "model-artifacts root must not write operator output"
+  exit 1
+fi
+
+if grep -nE '#include "yvex_(cli|operator|console)|yvex_operator_render|#include <.*cli.*>|src/cli' src/model/yvex_model_artifacts.c src/model/artifacts/*.c src/model/artifacts/*.h; then
+  echo "model-artifacts domain must not include CLI/operator ownership"
+  exit 1
+fi
+
+if grep -nE '\b(argc|argv)\b|usage:|--help|--output|--audit' src/model/yvex_model_artifacts.c src/model/artifacts/*.c src/model/artifacts/*.h; then
+  echo "model-artifacts domain must not carry CLI-shaped input"
+  exit 1
+fi
+
+if grep -nE '\b(argc|argv)\b' src/cli/render/yvex_model_artifacts_render.c src/cli/render/yvex_model_artifacts_render.h; then
+  echo "model-artifacts domain/render must not carry CLI-shaped input"
+  exit 1
+fi
+
+BAD_MODEL_ARTIFACTS_OUTPUT="$(
+  grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fputc|putchar|perror|fwrite)\s*\(' src/model/artifacts/*.c src/model/artifacts/*.h |
+    grep -vE '^src/model/artifacts/yvex_model_artifact_write\.c:' || true
+)"
+if test -n "$BAD_MODEL_ARTIFACTS_OUTPUT"; then
+  echo "$BAD_MODEL_ARTIFACTS_OUTPUT"
+  echo "model-artifacts domain/report must not write operator output"
+  exit 1
+fi
+
+if grep -nE 'stdout|stderr' src/model/artifacts/yvex_model_artifact_write.c src/model/artifacts/yvex_model_artifact_write.h; then
+  echo "model-artifacts writer must not write stdout/stderr"
+  exit 1
+fi
+
+if grep -nE 'primary_text|diagnostic_text|raw_output|report_text|captured_text|line_buffer' src/model/artifacts/*.c src/model/artifacts/*.h src/cli/render/yvex_model_artifacts_render.c src/cli/render/yvex_model_artifacts_render.h; then
+  echo "model-artifacts reports/renderers must not use text-buffer report debt"
+  exit 1
+fi
+
 BAD_MODEL_TARGET_INPUT_EXEC="$(
   grep -nE 'native_weight|safetensors|yvex_model_ref_resolve|yvex_model_target_.*build|yvex_.*_report_build|yvex_model_target_render[[:space:]]*\(|fopen|\b(fprintf|printf)\s*\(' src/cli/input/yvex_model_target_args.c src/cli/input/yvex_model_target_args.h || true
 )"
@@ -865,7 +935,8 @@ if test -n "$COMMAND_EXPORT_HITS"; then
   exit 1
 fi
 
-if grep -RIn '\byvex_backend_open\b' src/cli/commands; then
+if grep -RIn '\byvex_backend_open\b' src/cli/commands |
+  grep -v '^src/cli/commands/yvex_model_artifacts_cli.c:'; then
   echo "CLI command adapters must not open backends directly"
   exit 1
 fi

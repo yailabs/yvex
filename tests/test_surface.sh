@@ -126,5 +126,29 @@ test -f src/cli/commands/yvex_model_target_cli.c
 test -f src/cli/render/yvex_model_target_render.c
 test -f src/cli/render/yvex_model_target_render.h
 test -f src/cli/catalog/model_target_fields.def
+test -f src/model/artifacts/yvex_model_artifact_registry.c
+test -f src/model/artifacts/yvex_model_artifact_registry.h
+test -f src/model/artifacts/yvex_model_artifact_ref.c
+test -f src/model/artifacts/yvex_model_artifact_ref.h
+test -f src/model/artifacts/yvex_model_artifact_gate.c
+test -f src/model/artifacts/yvex_model_artifact_gate.h
+test -f src/model/artifacts/yvex_model_artifact_report.c
+test -f src/model/artifacts/yvex_model_artifact_report.h
+test -f src/model/artifacts/yvex_model_artifact_status_report.c
+test -f src/model/artifacts/yvex_model_artifact_status_report.h
+test -f src/model/artifacts/yvex_model_artifact_list_report.c
+test -f src/model/artifacts/yvex_model_artifact_list_report.h
+test -f src/model/artifacts/yvex_model_artifact_check_report.c
+test -f src/model/artifacts/yvex_model_artifact_check_report.h
+test -f src/model/artifacts/yvex_model_artifact_write.c
+test -f src/model/artifacts/yvex_model_artifact_write.h
+test -f src/model/artifacts/yvex_model_artifact_private.h
+test -f src/cli/input/yvex_model_artifacts_args.c
+test -f src/cli/input/yvex_model_artifacts_args.h
+test -f src/cli/commands/yvex_model_artifacts_cli.c
+test -f src/cli/render/yvex_model_artifacts_render.c
+test -f src/cli/render/yvex_model_artifacts_render.h
+test -f src/cli/catalog/model_artifacts_fields.def
+test -f src/cli/catalog/model_artifacts_boundaries.def
 
 echo "test surface: ok"

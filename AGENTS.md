@@ -142,7 +142,13 @@ src/model/yvex_model.c
   table, materialized weights
 
 src/model/yvex_model_artifacts.c
-  artifact status, artifact gates, selected/full artifact reports
+  compatibility anchor only after MODEL_ARTIFACTS.0; no command, render,
+  registry, reference, gate, or writer ownership
+
+src/model/artifacts/
+  model artifact registry storage, model reference resolution, model gates,
+  typed model artifact reports, status/list/check report builders, and explicit
+  local registry/report file writing
 
 src/model/target/
   model-target catalogs, target decisions, candidate facts, model-class
@@ -175,6 +181,12 @@ allowed CLI IO, allowed explicit file writers, legacy pending residue, and hard
 violations. Closure cannot be claimed while direct output, CLI-shaped input,
 renderer/domain leakage, compatibility shells, or libyvex CLI leakage remain
 unresolved.
+
+MODEL_ARTIFACTS.0 closes the critical model-artifacts topology residue. Model
+artifact registry, references, gates, reports, explicit file writing, CLI input,
+command dispatch, and rendering must live in separate ownership modules.
+src/model/yvex_model_artifacts.c may not contain operator output, CLI parsing,
+CLI/operator includes, rendering, or broad command-surface ownership.
 
 src/artifact/yvex_artifact.c
   artifact IO, inspect, metadata, tensor command surfaces

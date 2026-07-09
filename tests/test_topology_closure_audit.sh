@@ -47,6 +47,7 @@ allowed_direct="$(
     /^src\/cli\/io\// { allowed++ ; next }
     /^src\/io\// { allowed++ ; next }
     /^src\/model\/target\/yvex_model_target_sidecar_write\.c:/ { allowed++ ; next }
+    /^src\/model\/artifacts\/yvex_model_artifact_write\.c:/ { allowed++ ; next }
     /^src\/core\/yvex_file_writer\.c:/ { allowed++ ; next }
     END { print allowed + 0 }
   ' "$tmp/direct-output.txt"
@@ -57,6 +58,7 @@ direct_other="$(
     !($1 ~ /^src\/cli\/io\// ||
       $1 ~ /^src\/io\// ||
       $1 == "src/model/target/yvex_model_target_sidecar_write.c" ||
+      $1 == "src/model/artifacts/yvex_model_artifact_write.c" ||
       $1 == "src/core/yvex_file_writer.c") { other++ }
     END { print other + 0 }
   ' "$tmp/direct-output.txt"
@@ -143,3 +145,45 @@ if git grep -nE '#include "yvex_(cli|operator|console)|#include <.*cli.*>' -- \
 fi
 
 echo "topology closure audit: model-target hard guards ok"
+
+model_artifacts_root_lines="$(wc -l < src/model/yvex_model_artifacts.c | tr -d ' ')"
+if test "$model_artifacts_root_lines" -gt 500; then
+  echo "model-artifacts root remains a monolith"
+  exit 1
+fi
+
+if git grep -nE '#include "yvex_(cli|operator|console)|yvex_operator_render|#include <.*cli.*>' -- \
+    src/model/yvex_model_artifacts.c \
+    src/model/artifacts/*.c \
+    src/model/artifacts/*.h; then
+  echo "model-artifacts domain/report must not include CLI/operator headers"
+  exit 1
+fi
+
+if git grep -nE '\b(argc|argv)\b' -- \
+    src/model/yvex_model_artifacts.c \
+    src/model/artifacts/*.c \
+    src/model/artifacts/*.h \
+    src/cli/render/yvex_model_artifacts_render.c \
+    src/cli/render/yvex_model_artifacts_render.h; then
+  echo "model-artifacts domain/render must not carry CLI-shaped input"
+  exit 1
+fi
+
+if git grep -nE 'usage:|--help|--output|--audit' -- \
+    src/model/yvex_model_artifacts.c \
+    src/model/artifacts/*.c \
+    src/model/artifacts/*.h; then
+  echo "model-artifacts domain/report must not carry command grammar"
+  exit 1
+fi
+
+if git grep -nE 'primary_text|diagnostic_text|raw_output|report_text|captured_text|line_buffer' -- \
+    src/model/artifacts \
+    src/cli/render/yvex_model_artifacts_render.c \
+    src/cli/render/yvex_model_artifacts_render.h; then
+  echo "model-artifacts reports/renderers must not use text-buffer report debt"
+  exit 1
+fi
+
+echo "topology closure audit: model-artifacts hard guards ok"
