@@ -310,6 +310,8 @@ test -f src/gguf/yvex_gguf_layout_map.c
 test -f src/gguf/yvex_gguf_descriptor.c
 test -f src/gguf/yvex_gguf_report.c
 test -x tests/test_gguf_artifact_abi.sh
+test -f tests/unit/gguf_qtype_abi.c
+test -x tests/test_gguf_qtype_abi.sh
 test -f src/cli/commands/yvex_quant_cli.c
 test -f src/cli/io/yvex_cli_out.c
 test -f src/cli/io/yvex_cli_error.c

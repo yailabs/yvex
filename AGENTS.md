@@ -230,6 +230,13 @@ quantization, roundtrip completion, generation-capable artifact emission,
 materialization proof, runtime descriptor readiness, graph execution, or
 generation.
 
+V010.GGUF.QTYPE.ABI.0 closes only GGUF qtype byte geometry: qtype id,
+canonical name, storage class, block size, bytes per block, storage-size
+calculation, and explicit refusal for unknown or ambiguous qtypes. It must not
+claim backend arithmetic capability, CUDA arithmetic capability, qtype policy
+selection, quantization, writer completion, roundtrip, artifact emission,
+materialization, runtime descriptor readiness, graph execution, or generation.
+
 src/artifact/yvex_artifact.c
   artifact IO, inspect, metadata, tensor command surfaces
 

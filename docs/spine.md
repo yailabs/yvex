@@ -21,7 +21,7 @@ YVEX is a local-first inference engine, not a chat wrapper.
 | Generation state | DeepSeek/Qwen/Gemma unsupported |
 | Benchmark state | not measured |
 | CUDA state | bounded primitive-hardening only |
-| Active Next | V010.GGUF.QTYPE.ABI.0 - GGUF qtype byte geometry and refusal ABI |
+| Active Next | V010.QUANT.2 - qtype compute/refusal matrix |
 | v0.1.0 target | v0.1.0 - multi-family supported generation over YVEX-produced quantized artifacts |
 | Supported v0.1.0 families | DeepSeek, Qwen, Gemma |
 | Main blocker | multi-family generation-capable artifact chain incomplete |
@@ -65,7 +65,7 @@ full-runtime generation readiness.
 | GGUF artifact ABI | TRACK.ARTIFACT | container, metadata, tensor_info, and range ABI are fixed | complete/report-only + fixture-proof | DeepSeek/Qwen/Gemma | V010.GGUF.ARTIFACT.ABI.0 | V010.GGUF.QTYPE.ABI.0 | ABI is not writer or materialization |
 | qtype policy | TRACK.QUANT | qtype policy basis is reported | complete | DeepSeek/Qwen/Gemma | V010.QUANT.0 | V010.QUANT.1 | policy is not support |
 | dtype/qtype support by runtime role | TRACK.QUANT | every runtime role has allowed/refused dtype/qtype state | complete/report-only | DeepSeek/Qwen/Gemma | V010.QUANT.1 | V010.QUANT.2 | support report is not quantization or generation |
-| GGUF qtype ABI | TRACK.QUANT | qtype byte geometry is fixed for emitted artifacts | planned | DeepSeek/Qwen/Gemma | qtype reports only | V010.GGUF.QTYPE.ABI.0 | qtype ABI is not compute support |
+| GGUF qtype ABI | TRACK.QUANT | qtype byte geometry is fixed for emitted artifacts | complete/report-only + fixture-proof | DeepSeek/Qwen/Gemma | V010.GGUF.QTYPE.ABI.0 | V010.QUANT.2 | qtype ABI is not backend arithmetic |
 | qtype compute/refusal matrix | TRACK.QUANT | compute/refusal state exists across families and backends | active | DeepSeek/Qwen/Gemma | V010.QUANT.1 | V010.QUANT.2 | compute matrix is not artifact emission |
 | calibration/imatrix decision | TRACK.QUANT | calibration requirements are explicit | planned | DeepSeek/Qwen/Gemma | none | V010.QUANT.3 | imatrix decision is not quantization |
 | GGUF writer | TRACK.ARTIFACT | writer emits concrete GGUF artifact bytes | planned | DeepSeek/Qwen/Gemma | selected writer only | V010.GGUF.WRITER.0 | writer is not roundtrip or generation |
@@ -78,7 +78,7 @@ full-runtime generation readiness.
 | materialization proof | TRACK.RESIDENCY | required tensors materialize under limits | selected-slice-proof | DeepSeek/Qwen/Gemma | selected proof only | V010.RESIDENCY.19 | selected proof is not full runtime |
 | residency plan | TRACK.RESIDENCY | CPU/CUDA residency is planned for required tensors | planned | DeepSeek/Qwen/Gemma | placement reports | V010.RESIDENCY.19 | residency plan is not backend execution |
 | backend capability | TRACK.BACKEND | backend capability is known and refused cleanly | partial | backend | V010.BACKEND.1, V010.BACKEND.2, CUDA.KERNEL.0 | V010.BACKEND.12 | backend capability is not model support |
-| backend qtype compute support | TRACK.BACKEND | required qtypes compute or refuse per backend | active | backend | V010.QUANT.1 | V010.QUANT.2 | qtype compute support is not generation |
+| backend qtype compute/refusal | TRACK.BACKEND | required qtypes compute or refuse per backend | active | backend | V010.QUANT.1 | V010.QUANT.2 | qtype backend matrix is not generation |
 | runtime descriptor projection | TRACK.MODEL | GGUF artifact facts project to runtime descriptors | planned | DeepSeek/Qwen/Gemma | descriptor reports only | V010.RUNTIME.DESCRIPTOR.GGUF.0 | descriptor projection is not execution |
 | graph primitive readiness | TRACK.GRAPH | primitive graph ops are covered and bounded | fixture-proof | backend | graph primitive proofs, CUDA.KERNEL.0 | V010.GRAPH.PRIM.10 | primitive readiness is not transformer graph |
 | transformer graph | TRACK.GRAPH | role-bearing tensors execute through model graph | planned | DeepSeek/Qwen/Gemma | selected graph only | V010.GRAPH.24 | graph path is not generation |
@@ -101,9 +101,9 @@ full-runtime generation readiness.
 
 | Family | Source intake | Role map | GGUF name/layout | Qtype matrix | Writer | Roundtrip | Materialization | Runtime descriptor | Graph | Generation | Eval | Benchmark |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| DeepSeek | selected/source-intake | incomplete full-runtime map | planned | blocked at V010.GGUF.QTYPE.ABI.0/V010.QUANT.2 | selected artifact path only | planned | selected-slice-proof only | planned | selected/fixture only | unsupported | planned | not-measured |
-| Qwen | source-intake/report-only | header map partial | planned | blocked at V010.GGUF.QTYPE.ABI.0/V010.QUANT.2 | artifact emission candidate | planned | planned | planned | planned | unsupported | planned | not-measured |
-| Gemma | source-intake/report-only | header map partial | planned | blocked at V010.GGUF.QTYPE.ABI.0/V010.QUANT.2 | artifact emission candidate | planned | planned | planned | planned | unsupported | planned | not-measured |
+| DeepSeek | selected/source-intake | incomplete full-runtime map | planned | blocked at V010.QUANT.2 | selected artifact path only | planned | selected-slice-proof only | planned | selected/fixture only | unsupported | planned | not-measured |
+| Qwen | source-intake/report-only | header map partial | planned | blocked at V010.QUANT.2 | artifact emission candidate | planned | planned | planned | planned | unsupported | planned | not-measured |
+| Gemma | source-intake/report-only | header map partial | planned | blocked at V010.QUANT.2 | artifact emission candidate | planned | planned | planned | planned | unsupported | planned | not-measured |
 
 ### 1.3 Implemented Capability Snapshot
 
@@ -215,8 +215,8 @@ Two concepts define the target:
 `generation-capable artifact is not runtime generation` is a hard boundary.
 
 ## 4. Active Next
-Active Next: `V010.GGUF.QTYPE.ABI.0 - GGUF qtype byte geometry and refusal ABI`.
-Why this row is next: GGUF container, metadata, tensor_info, and ABI-visible range facts are closed at report-only + fixture-proof; qtype byte geometry is the next artifact ABI blocker before quant/refusal policy can proceed.
+Active Next: `V010.QUANT.2 - qtype compute/refusal matrix`.
+Why this row is next: GGUF container, metadata, tensor_info, range, and qtype byte geometry facts are closed at report-only + fixture-proof; backend/family compute-refusal state is the next blocker before writer and artifact emission rows can proceed.
 Implementation-facing sequence: `SPINE.SYSTEM.TARGET.0 -> V010.GGUF.ARTIFACT.ABI.0 -> V010.GGUF.QTYPE.ABI.0 -> V010.QUANT.2 -> V010.GGUF.WRITER.0 -> V010.MAP.GGUF.NAMES.0 -> V010.MAP.GGUF.LAYOUT.0 -> V010.GGUF.ROUNDTRIP.0 -> V010.ARTIFACT.EMIT.2 -> V010.ARTIFACT.MATERIALIZE.0 -> V010.RUNTIME.DESCRIPTOR.GGUF.0`.
 Completed quant row: `V010.QUANT.1 - multi-family dtype/qtype support by role`.
 `V010.QUANT.1` adds `model-target quant-policy TARGET --role-support` and
@@ -227,7 +227,7 @@ qtype candidates/refusals, storage status, compute status, calibration/imatrix
 deferral, and artifact-emission blockers without tensor payload loading,
 quantization, GGUF emission, materialization, runtime descriptors, graph
 execution, generation, eval, benchmark, performance-rate evidence, or release readiness. The
-handoff blocker is now `V010.QUANT.2 - qtype compute/refusal matrix`.
+handoff blocker remains `V010.QUANT.2 - qtype compute/refusal matrix`.
 ### 4.1 Extra Scope - Normalize The Rest Of The Active Spine
 `SPINE.REBASE.GGUF.0` normalized the active spine, not only appended GGUF rows; the pass covers Dashboard, Pipeline Capability Map, Supported-Family Capability Matrix, Implemented Capability Snapshot, Unsupported Boundaries, Active Next, Tracks table, Canonical Row Trackmap, individual tracks, Track Gates, Row Contract Families, and Canonical Vocabulary.
 Allowed stage/status vocabulary: `doctrine-only`, `docs/control`, `report-only`, `source-intake`, `fixture-proof`, `selected-slice-proof`, `diagnostic-runtime`, `artifact-ready`, `materialization-proof`, `runtime-descriptor-ready`, `full-runtime`, `eval-ready`, `benchmark-ready`, `release readiness`, `planned`, `active`, `complete`, `unsupported`, `not-measured`, `post-v0.1.0`; loose readiness phrases must be rewritten to the lowest true stage.
@@ -246,7 +246,7 @@ supersession, audit, and sequence archives.
 | TRACK.SCOPE | release scope and claim boundaries | active | SPINE.RETARGET.MULTIFAMILY.0, SPINE.TRACK.CANON.0 | scope remains multi-family | no |
 | TRACK.SOURCE | source intake, manifests, provider download controls | implemented/source-intake | source-intake rows complete; explicit labels are in the catalog below | source evidence stays coherent | no |
 | TRACK.MAP | family tensor roles and source/artifact/GGUF mapping | partial/report-only | Qwen/Gemma class and tensor-map rows, V010.MAP.1/5/6/7/8/9 | V010.MAP.GGUF.NAMES.0 | no |
-| TRACK.QUANT | dtype/qtype policy, ABI, and compute/refusal coverage | partial/report-only | V010.QUANT.0, V010.QUANT.1 | V010.GGUF.QTYPE.ABI.0 | yes |
+| TRACK.QUANT | dtype/qtype policy, ABI, and compute/refusal coverage | partial/report-only with qtype ABI fixture-proof | V010.QUANT.0, V010.QUANT.1, V010.GGUF.QTYPE.ABI.0 | V010.QUANT.2 | yes |
 | TRACK.ARTIFACT | YVEX-produced GGUF bytes, writer, parse, roundtrip, registration | selected-slice plus GGUF ABI fixture-proof | V010.GGUF.ARTIFACT.ABI.0, controlled/selected artifact emission | V010.GGUF.WRITER.0 | no |
 | TRACK.INTEGRITY | artifact identity, ranges, corruption refusal | implemented for current artifacts | integrity rows and materialization gates | full artifact gates | no |
 | TRACK.MODEL | model class facts and runtime descriptor projection | partial/report-only | Qwen/Gemma model-class reports, MoE reports | V010.RUNTIME.DESCRIPTOR.GGUF.0 | no |
@@ -356,8 +356,8 @@ labels.
 | --- | --- | --- |
 | V010.QUANT.0 | complete | qtype policy report. |
 | V010.QUANT.1 | complete | multi-family dtype/qtype support by runtime role. |
-| V010.GGUF.QTYPE.ABI.0 | active | GGUF qtype byte geometry and refusal ABI. |
-| V010.QUANT.2 | planned | qtype compute/refusal matrix. |
+| V010.GGUF.QTYPE.ABI.0 | complete/report-only + fixture-proof | GGUF qtype byte geometry and refusal ABI. |
+| V010.QUANT.2 | active | qtype compute/refusal matrix. |
 | V010.QUANT.3 | planned | calibration/imatrix requirement report. |
 
 #### TRACK.ARTIFACT Rows
@@ -1108,16 +1108,17 @@ Current state:
 Complete:
   V010.QUANT.0.
   V010.QUANT.1.
+  V010.GGUF.QTYPE.ABI.0.
 
 Active / Next:
-  V010.GGUF.QTYPE.ABI.0 before V010.QUANT.2.
+  V010.QUANT.2 - qtype compute/refusal matrix.
 
 Planned gates:
   V010.QUANT.3 - calibration/imatrix requirement report.
   artifact qtype readiness gate.
 
 Boundary:
-  qtype ABI/policy is not artifact emission, kernel support, generation, or benchmark evidence.
+  qtype ABI/policy is not artifact emission, backend arithmetic, generation, or benchmark evidence.
 
 ### TRACK.ARTIFACT - Artifact Production
 
@@ -1125,13 +1126,13 @@ Owns:
   YVEX-produced GGUF bytes, writer ABI, parse/roundtrip, registration, and family-specific conversion.
 
 Current state:
-  selected-slice plus GGUF container/metadata/tensor_info ABI fixture-proof.
+  selected-slice plus GGUF container/metadata/tensor_info/qtype ABI fixture-proof.
 
 Complete:
-  V010.GGUF.ARTIFACT.ABI.0 as report-only + fixture-proof, controlled tiny artifact emission, and selected DeepSeek slice emission.
+  V010.GGUF.ARTIFACT.ABI.0 and V010.GGUF.QTYPE.ABI.0 as report-only + fixture-proof, controlled tiny artifact emission, and selected DeepSeek slice emission.
 
 Active / Next:
-  V010.GGUF.WRITER.0 and V010.GGUF.ROUNDTRIP.0 after qtype ABI and quant gates.
+  V010.GGUF.WRITER.0 and V010.GGUF.ROUNDTRIP.0 after quant gates.
 
 Planned gates:
   generation-capable artifact for each supported v0.1.0 family after ABI, writer, roundtrip, map, and qtype gates.
@@ -1425,7 +1426,7 @@ Complete:
   TOPOLOGY.CLI.PRINT.ALL.0, TOPOLOGY.DOMAIN.RESTORE.0.
 
 Active / Next:
-  V010.GGUF.QTYPE.ABI.0 is the next implementation row; V010.CLI.27 remains planned.
+  V010.QUANT.2 is the next implementation row; V010.CLI.27 remains planned.
 
 Planned gates:
   V010.CLI.27 - base status and refusal grammar; V010.CLI.MODELS.4 models
@@ -1555,7 +1556,7 @@ Boundary:
 | GATE.MODEL | TRACK.MODEL | class/routing requirements for supported families |
 | GATE.TENSOR | TRACK.TENSOR | full required tensor coverage |
 | GATE.RESIDENCY | TRACK.RESIDENCY | placement, movement, memory pressure, cleanup proof |
-| GATE.BACKEND | TRACK.BACKEND | CPU/CUDA support/refusal matrix for required ops and qtypes |
+| GATE.BACKEND | TRACK.BACKEND | CPU/CUDA capability/refusal matrix for required ops and qtypes |
 | GATE.GRAPH | TRACK.GRAPH | transformer graph path over supported artifacts |
 | GATE.PREFILL | TRACK.PREFILL | prefill and state ownership |
 | GATE.KV | TRACK.KV | K/V writes and decode reads |
@@ -1689,7 +1690,7 @@ Stage target:
   fixture-proof, selected-slice-proof, diagnostic-runtime, or full-runtime.
 
 Required proof:
-  reference comparison, shape/dtype validation, backend support/refusal,
+  reference comparison, shape/dtype validation, backend capability/refusal,
   cleanup/lifecycle behavior, command tests.
 
 Failure paths:
@@ -1763,7 +1764,6 @@ The final v0.1.0 release candidate requires one transcript containing:
 11. tag readiness report.
 
 No v0.1.0 tag is valid before every release gate passes.
-
 ## 9. Post-v0.1.0
 
 Post-v0.1.0 lanes:

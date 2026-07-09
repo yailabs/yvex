@@ -1183,6 +1183,11 @@ grep -nF 'yvex_gguf_range_fact_from_gguf' src/gguf/yvex_gguf_range_map.c >/dev/n
 grep -nF 'yvex_gguf_reader_classify_error' src/gguf/yvex_gguf_reader.c >/dev/null
 grep -nF 'yvex_gguf_descriptor_abi_from_sections' src/gguf/yvex_gguf_descriptor.c >/dev/null
 grep -nF 'yvex_gguf_artifact_abi_report_build' src/gguf/yvex_gguf_report.c >/dev/null
+grep -nF 'yvex_gguf_qtype_geometry_find' src/gguf/yvex_gguf_qtype.c >/dev/null
+grep -nF 'yvex_gguf_qtype_storage_bytes' src/gguf/yvex_gguf_qtype.c >/dev/null
+grep -nF 'yvex_gguf_qtype_validate_tensor_storage' src/gguf/yvex_gguf_qtype.c >/dev/null
+grep -nF 'yvex_gguf_qtype_refusal_reason' src/gguf/yvex_gguf_qtype.c >/dev/null
+grep -nF 'yvex_gguf_qtype_abi_from_gguf' src/gguf/yvex_gguf_qtype.c >/dev/null
 grep -nF 'yvex_gguf_writer_supported' src/gguf/yvex_gguf_writer.c >/dev/null
 grep -nF 'yvex_gguf_roundtrip_supported' src/gguf/yvex_gguf_roundtrip.c >/dev/null
 
@@ -1196,6 +1201,12 @@ fi
 gguf_claim_pattern='generation-rea''dy|inference-rea''dy|release-rea''dy|writer com''plete|roundtrip com''plete|generation-capable artifact emit''ted|runtime descriptor rea''dy|benchmark meas''ured|through''put'
 if git grep -nE "$gguf_claim_pattern" -- src/gguf docs/system-target.md docs/spine.md; then
   echo "GGUF ABI row must not introduce runtime, writer, generation, benchmark, or release claims"
+  exit 1
+fi
+
+gguf_qtype_claim_pattern='compute supp''ort|backend supp''ort|CUDA supp''ort|matmul supp''ort|qtype policy selection com''plete|quantization implementation|writer com''plete|roundtrip com''plete|materialization com''plete'
+if git grep -nE "$gguf_qtype_claim_pattern" -- src/gguf/yvex_gguf_qtype.c src/gguf/yvex_gguf_private.h; then
+  echo "GGUF qtype ABI owner must stay byte-geometry-only"
   exit 1
 fi
 

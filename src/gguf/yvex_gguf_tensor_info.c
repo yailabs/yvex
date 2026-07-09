@@ -5,7 +5,8 @@
  *   src/gguf
  *
  * Owns:
- *   tensor_info rank/name/dtype/shape boundary facts and rank refusal state.
+ *   tensor_info rank/name/raw qtype id/shape boundary facts and rank refusal
+ *   state.
  *
  * Does not own:
  *   runtime role mapping, qtype byte geometry, concrete materialization,
@@ -45,6 +46,8 @@ void yvex_gguf_tensor_info_abi_init(yvex_gguf_tensor_info_abi *abi)
     abi->max_rank = 0u;
     abi->rank_one_tensor_count = 0ull;
     abi->named_tensor_count = 0ull;
+    abi->qtype_known_tensor_count = 0ull;
+    abi->qtype_refused_tensor_count = 0ull;
     abi->reason = "GGUF tensor_info ABI not evaluated";
 }
 
@@ -107,6 +110,12 @@ int yvex_gguf_tensor_info_abi_from_gguf(const yvex_gguf *gguf,
         }
         if (tensor->rank == 1u) {
             abi->rank_one_tensor_count += 1ull;
+        }
+
+        if (yvex_gguf_qtype_supported_for_storage(tensor->ggml_type, NULL)) {
+            abi->qtype_known_tensor_count += 1ull;
+        } else {
+            abi->qtype_refused_tensor_count += 1ull;
         }
     }
 

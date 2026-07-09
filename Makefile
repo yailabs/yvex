@@ -24,7 +24,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-gguf-artifact-abi test-layout test-code-natural test-docs-surface test-surface smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-gguf-artifact-abi test-gguf-qtype-abi test-layout test-code-natural test-docs-surface test-surface smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -309,6 +309,9 @@ test: test-core test-cli
 test-gguf-artifact-abi: $(TEST_RUNNER) tests/test_gguf_artifact_abi.sh
 	sh tests/test_gguf_artifact_abi.sh
 
+test-gguf-qtype-abi: $(TEST_RUNNER) tests/test_gguf_qtype_abi.sh
+	sh tests/test_gguf_qtype_abi.sh
+
 test-layout: tests/test_source_layout.sh
 	sh tests/test_source_layout.sh
 
@@ -323,7 +326,7 @@ test-surface: tests/test_surface.sh
 
 smoke: test-cli
 
-check: check-docs check-guardrails lib cli server test test-gguf-artifact-abi test-layout test-code-natural test-docs-surface test-surface smoke
+check: check-docs check-guardrails lib cli server test test-gguf-artifact-abi test-gguf-qtype-abi test-layout test-code-natural test-docs-surface test-surface smoke
 	@echo "yvex check: ok"
 
 $(LIBYVEX): $(CORE_OBJS)

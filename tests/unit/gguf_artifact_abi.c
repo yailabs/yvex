@@ -80,7 +80,7 @@ static int test_invalid_magic(void)
                      "bad magic report builds");
     YVEX_TEST_ASSERT(report.container.status == YVEX_GGUF_ABI_SECTION_MALFORMED,
                      "bad magic marks container malformed");
-    YVEX_TEST_ASSERT(strstr(report.failure_reason, "magic") != NULL,
+    YVEX_TEST_ASSERT(strstr(report.container.reason, "magic") != NULL,
                      "bad magic reason names magic");
     return 0;
 }

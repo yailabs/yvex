@@ -67,6 +67,7 @@ void yvex_gguf_abi_report_init(yvex_gguf_abi_report *report, const char *path)
     yvex_gguf_container_abi_init(&report->container);
     yvex_gguf_metadata_abi_init(&report->metadata);
     yvex_gguf_tensor_info_abi_init(&report->tensor_info);
+    yvex_gguf_qtype_abi_init(&report->qtype);
     yvex_gguf_range_fact_init(&report->range);
     report->descriptor.status = YVEX_GGUF_ABI_SECTION_NOT_EVALUATED;
     report->descriptor.reason = "GGUF descriptor not evaluated";
@@ -139,6 +140,7 @@ int yvex_gguf_artifact_abi_report_build(const char *path,
         yvex_gguf_descriptor_abi_from_sections(&report->container,
                                                &report->metadata,
                                                &report->tensor_info,
+                                               &report->qtype,
                                                &report->range,
                                                &report->descriptor);
         yvex_gguf_close(gguf);
@@ -152,6 +154,21 @@ int yvex_gguf_artifact_abi_report_build(const char *path,
         yvex_gguf_descriptor_abi_from_sections(&report->container,
                                                &report->metadata,
                                                &report->tensor_info,
+                                               &report->qtype,
+                                               &report->range,
+                                               &report->descriptor);
+        yvex_gguf_close(gguf);
+        yvex_artifact_close(artifact);
+        return YVEX_OK;
+    }
+
+    if (!yvex_gguf_qtype_abi_from_gguf(gguf, &report->qtype, &reason)) {
+        report->status = report->qtype.status;
+        copy_text(report->failure_reason, sizeof(report->failure_reason), reason);
+        yvex_gguf_descriptor_abi_from_sections(&report->container,
+                                               &report->metadata,
+                                               &report->tensor_info,
+                                               &report->qtype,
                                                &report->range,
                                                &report->descriptor);
         yvex_gguf_close(gguf);
@@ -165,6 +182,7 @@ int yvex_gguf_artifact_abi_report_build(const char *path,
         yvex_gguf_descriptor_abi_from_sections(&report->container,
                                                &report->metadata,
                                                &report->tensor_info,
+                                               &report->qtype,
                                                &report->range,
                                                &report->descriptor);
         yvex_gguf_close(gguf);
@@ -175,6 +193,7 @@ int yvex_gguf_artifact_abi_report_build(const char *path,
     yvex_gguf_descriptor_abi_from_sections(&report->container,
                                            &report->metadata,
                                            &report->tensor_info,
+                                           &report->qtype,
                                            &report->range,
                                            &report->descriptor);
     report->status = YVEX_GGUF_ABI_SECTION_REPORT_ONLY;

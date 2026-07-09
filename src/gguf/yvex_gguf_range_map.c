@@ -21,7 +21,35 @@
  */
 #include "yvex_gguf_private.h"
 
+#include <limits.h>
 #include <stddef.h>
+
+static int range_tensor_element_count(const yvex_gguf_tensor_info *tensor,
+                                      unsigned long long *out,
+                                      const char **reason)
+{
+    unsigned long long elements = 1ull;
+    unsigned int i;
+
+    if (!tensor || !out) {
+        if (reason) *reason = "GGUF tensor_info row is required for range qtype bytes";
+        return 0;
+    }
+    for (i = 0u; i < tensor->rank; ++i) {
+        if (tensor->dims[i] == 0ull) {
+            if (reason) *reason = "GGUF tensor dimension is zero";
+            return 0;
+        }
+        if (elements > ULLONG_MAX / tensor->dims[i]) {
+            if (reason) *reason = "GGUF tensor element count overflows";
+            return 0;
+        }
+        elements *= tensor->dims[i];
+    }
+    *out = elements;
+    if (reason) *reason = "GGUF tensor element count accepted";
+    return 1;
+}
 
 /* Contract: validates a single absolute tensor byte range without file IO. */
 int yvex_gguf_range_map_validate(unsigned long long offset,
@@ -61,11 +89,15 @@ void yvex_gguf_range_fact_init(yvex_gguf_range_fact *fact)
     fact->checked_tensor_count = 0ull;
     fact->tensor_data_offset = 0ull;
     fact->file_size = 0ull;
+    fact->total_expected_storage_bytes = 0ull;
+    fact->first_expected_storage_bytes = 0ull;
+    fact->first_actual_available_bytes = 0ull;
+    fact->qtype_checked_tensor_count = 0ull;
     fact->alignment = 0u;
     fact->reason = "GGUF range map not evaluated";
 }
 
-/* Contract: validates parser-visible absolute offsets and alignment only. */
+/* Contract: validates parser-visible offsets plus qtype-derived storage spans. */
 int yvex_gguf_range_fact_from_gguf(const yvex_artifact *artifact,
                                    const yvex_gguf *gguf,
                                    yvex_gguf_range_fact *fact,
@@ -89,7 +121,7 @@ int yvex_gguf_range_fact_from_gguf(const yvex_artifact *artifact,
                                       fact->file_size,
                                       fact->alignment ? fact->alignment : 1u,
                                       reason)) {
-        fact->status = YVEX_GGUF_ABI_SECTION_MALFORMED;
+        fact->status = YVEX_GGUF_ABI_SECTION_REFUSED;
         fact->reason = reason ? *reason : "GGUF tensor data offset refused";
         return 0;
     }
@@ -97,6 +129,9 @@ int yvex_gguf_range_fact_from_gguf(const yvex_artifact *artifact,
     count = yvex_gguf_tensor_count(gguf);
     for (i = 0ull; i < count; ++i) {
         const yvex_gguf_tensor_info *tensor = yvex_gguf_tensor_at(gguf, i);
+        unsigned long long elements = 0ull;
+        unsigned long long expected_storage_bytes = 0ull;
+        unsigned long long available_bytes = 0ull;
         if (!tensor) {
             fact->status = YVEX_GGUF_ABI_SECTION_MALFORMED;
             fact->reason = "GGUF tensor range row is missing";
@@ -108,10 +143,45 @@ int yvex_gguf_range_fact_from_gguf(const yvex_artifact *artifact,
                                           fact->file_size,
                                           fact->alignment ? fact->alignment : 1u,
                                           reason)) {
-            fact->status = YVEX_GGUF_ABI_SECTION_MALFORMED;
+            fact->status = YVEX_GGUF_ABI_SECTION_REFUSED;
             fact->reason = reason ? *reason : "GGUF tensor absolute offset refused";
             return 0;
         }
+
+        if (!range_tensor_element_count(tensor, &elements, reason) ||
+            !yvex_gguf_qtype_storage_bytes(tensor->ggml_type,
+                                           elements,
+                                           &expected_storage_bytes,
+                                           reason)) {
+            fact->status = YVEX_GGUF_ABI_SECTION_REFUSED;
+            fact->reason = reason ? *reason : "GGUF qtype storage span refused";
+            return 0;
+        }
+
+        if (tensor->absolute_offset <= fact->file_size) {
+            available_bytes = fact->file_size - tensor->absolute_offset;
+        }
+        if (fact->qtype_checked_tensor_count == 0ull) {
+            fact->first_expected_storage_bytes = expected_storage_bytes;
+            fact->first_actual_available_bytes = available_bytes;
+        }
+        if (!yvex_gguf_range_map_validate(tensor->absolute_offset,
+                                          expected_storage_bytes,
+                                          fact->file_size,
+                                          fact->alignment ? fact->alignment : 1u,
+                                          reason)) {
+            fact->status = YVEX_GGUF_ABI_SECTION_REFUSED;
+            fact->reason = reason ? *reason : "GGUF qtype storage span exceeds artifact range";
+            return 0;
+        }
+        if (fact->total_expected_storage_bytes > ULLONG_MAX - expected_storage_bytes) {
+            fact->status = YVEX_GGUF_ABI_SECTION_REFUSED;
+            fact->reason = "GGUF expected tensor storage total overflows";
+            if (reason) *reason = fact->reason;
+            return 0;
+        }
+        fact->total_expected_storage_bytes += expected_storage_bytes;
+        fact->qtype_checked_tensor_count += 1ull;
         fact->checked_tensor_count += 1ull;
     }
 

@@ -44,8 +44,8 @@ domain algorithms. No writer owns command output.
 | Area | Current state | Target state | Next row |
 | --- | --- | --- | --- |
 | GGUF ABI | complete/report-only + fixture-proof | container/metadata/tensor_info ABI closed | V010.GGUF.QTYPE.ABI.0 |
-| GGUF qtype | report-only policy and geometry seeds | byte geometry and qtype matrix aligned | V010.GGUF.QTYPE.ABI.0 |
-| Quant | qtype role reports | compute/refusal matrix | V010.QUANT.2 |
+| GGUF qtype | complete/report-only + fixture-proof | byte geometry and storage-size refusal facts closed | V010.QUANT.2 |
+| Quant | qtype role reports plus GGUF byte geometry | compute/refusal matrix | V010.QUANT.2 |
 | GGUF writer | explicit refusal | concrete emitted bytes | V010.GGUF.WRITER.0 |
 | GGUF names | planned emitted-name owner | role to GGUF name map | V010.MAP.GGUF.NAMES.0 |
 | GGUF layout | planned layout owner | role to range/qtype layout map | V010.MAP.GGUF.LAYOUT.0 |
@@ -129,7 +129,7 @@ domain algorithms. No writer owns command output.
 | `src/backend/yvex_backend_tensor.c` | backend tensor allocation/bind boundary |
 | `src/backend/yvex_backend_qtype.c` | backend qtype compute/refusal matrix |
 | `src/backend/yvex_backend_report.c` | typed backend capability reports |
-| `src/backend/cuda/cuda_qtype.c` | CUDA qtype support/refusal facts |
+| `src/backend/cuda/cuda_qtype.c` | CUDA qtype capability/refusal facts |
 
 ## CLI Target Map
 
@@ -162,8 +162,15 @@ SPINE.SYSTEM.TARGET.0
 
 `V010.GGUF.ARTIFACT.ABI.0` closed the GGUF container, metadata,
 tensor_info, and ABI-visible range boundary using typed facts and tiny fixture
-proof. The writer, qtype ABI, writer-reader roundtrip, artifact
-materialization, and runtime descriptor projection remain planned.
+proof. The writer, writer-reader roundtrip, artifact materialization, and
+runtime descriptor projection remain planned.
+
+## Follow-Up: V010.GGUF.QTYPE.ABI.0
+
+`V010.GGUF.QTYPE.ABI.0` closed GGUF qtype byte geometry and storage-size
+refusal facts. Backend compute/refusal, qtype selection, source tensor
+conversion, writer, writer-reader roundtrip, and artifact emission remain
+planned.
 
 ## Forbidden Claims
 

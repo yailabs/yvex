@@ -28,7 +28,8 @@
 #include <yvex/error.h>
 #include <yvex/gguf.h>
 
-#define YVEX_GGUF_ABI_NEXT_ROW "V010.GGUF.QTYPE.ABI.0"
+#define YVEX_GGUF_ABI_NEXT_ROW "V010.QUANT.2"
+#define YVEX_GGUF_QTYPE_ABI_NEXT_ROW "V010.QUANT.2"
 
 typedef enum {
     YVEX_GGUF_BOUNDARY_REPORT_ONLY = 0,
@@ -46,6 +47,21 @@ typedef enum {
     YVEX_GGUF_ABI_SECTION_NOT_PRESENT = 6
 } yvex_gguf_abi_section_status;
 
+typedef enum {
+    YVEX_GGUF_QTYPE_STORAGE_UNKNOWN = 0,
+    YVEX_GGUF_QTYPE_STORAGE_SCALAR_FLOAT = 1,
+    YVEX_GGUF_QTYPE_STORAGE_SCALAR_INTEGER = 2,
+    YVEX_GGUF_QTYPE_STORAGE_BLOCK_QUANTIZED = 3,
+    YVEX_GGUF_QTYPE_STORAGE_REFUSED = 4
+} yvex_gguf_qtype_storage_class;
+
+typedef enum {
+    YVEX_GGUF_QTYPE_STATUS_KNOWN = 0,
+    YVEX_GGUF_QTYPE_STATUS_REFUSED = 1,
+    YVEX_GGUF_QTYPE_STATUS_UNSUPPORTED = 2,
+    YVEX_GGUF_QTYPE_STATUS_INVALID = 3
+} yvex_gguf_qtype_status;
+
 typedef struct {
     const char *owner;
     const char *stage;
@@ -57,10 +73,26 @@ typedef struct {
 typedef struct {
     unsigned int qtype;
     const char *name;
+    yvex_gguf_qtype_storage_class storage_class;
     unsigned int block_size;
     unsigned int bytes_per_block;
-    yvex_gguf_boundary_status status;
+    unsigned int scalar_width;
+    yvex_gguf_qtype_status status;
+    const char *reason;
 } yvex_gguf_qtype_geometry;
+
+typedef struct {
+    unsigned int qtype;
+    const char *name;
+    const char *storage_class;
+    unsigned int block_size;
+    unsigned int bytes_per_block;
+    unsigned int scalar_width;
+    const char *status;
+    unsigned long long expected_storage_bytes;
+    const char *reason;
+    const char *next_row;
+} yvex_gguf_qtype_report_row;
 
 typedef struct {
     yvex_gguf_abi_section_status status;
@@ -86,14 +118,31 @@ typedef struct {
     unsigned int max_rank;
     unsigned long long rank_one_tensor_count;
     unsigned long long named_tensor_count;
+    unsigned long long qtype_known_tensor_count;
+    unsigned long long qtype_refused_tensor_count;
     const char *reason;
 } yvex_gguf_tensor_info_abi;
 
 typedef struct {
     yvex_gguf_abi_section_status status;
     unsigned long long checked_tensor_count;
+    unsigned long long known_tensor_count;
+    unsigned long long refused_tensor_count;
+    unsigned long long total_storage_bytes;
+    unsigned int first_refused_qtype;
+    const char *reason;
+    const char *next_row;
+} yvex_gguf_qtype_abi;
+
+typedef struct {
+    yvex_gguf_abi_section_status status;
+    unsigned long long checked_tensor_count;
     unsigned long long tensor_data_offset;
     unsigned long long file_size;
+    unsigned long long total_expected_storage_bytes;
+    unsigned long long first_expected_storage_bytes;
+    unsigned long long first_actual_available_bytes;
+    unsigned long long qtype_checked_tensor_count;
     unsigned int alignment;
     const char *reason;
 } yvex_gguf_range_fact;
@@ -109,6 +158,7 @@ typedef struct {
     yvex_gguf_container_abi container;
     yvex_gguf_metadata_abi metadata;
     yvex_gguf_tensor_info_abi tensor_info;
+    yvex_gguf_qtype_abi qtype;
     yvex_gguf_range_fact range;
     yvex_gguf_descriptor_abi descriptor;
     int parser_status;
@@ -154,6 +204,27 @@ int yvex_gguf_tensor_info_abi_from_gguf(const yvex_gguf *gguf,
 const yvex_gguf_qtype_geometry *yvex_gguf_qtype_geometry_at(size_t index);
 size_t yvex_gguf_qtype_geometry_count(void);
 const yvex_gguf_qtype_geometry *yvex_gguf_qtype_geometry_find(unsigned int qtype);
+const char *yvex_gguf_qtype_name(unsigned int qtype);
+const char *yvex_gguf_qtype_storage_class_name(yvex_gguf_qtype_storage_class storage_class);
+const char *yvex_gguf_qtype_status_name(yvex_gguf_qtype_status status);
+int yvex_gguf_qtype_supported_for_storage(unsigned int qtype, const char **reason);
+int yvex_gguf_qtype_storage_bytes(unsigned int qtype,
+                                  unsigned long long element_count,
+                                  unsigned long long *out,
+                                  const char **reason);
+int yvex_gguf_qtype_validate_tensor_storage(unsigned int qtype,
+                                            unsigned long long element_count,
+                                            unsigned long long actual_storage_bytes,
+                                            unsigned long long *expected_storage_bytes,
+                                            const char **reason);
+const char *yvex_gguf_qtype_refusal_reason(unsigned int qtype);
+void yvex_gguf_qtype_abi_init(yvex_gguf_qtype_abi *abi);
+int yvex_gguf_qtype_abi_from_gguf(const yvex_gguf *gguf,
+                                  yvex_gguf_qtype_abi *abi,
+                                  const char **reason);
+void yvex_gguf_qtype_report_row_from_geometry(const yvex_gguf_qtype_geometry *geometry,
+                                              unsigned long long element_count,
+                                              yvex_gguf_qtype_report_row *row);
 
 int yvex_gguf_range_map_validate(unsigned long long offset,
                                  unsigned long long size,
@@ -186,6 +257,7 @@ int yvex_gguf_descriptor_accepts_abi(int container_ok,
 void yvex_gguf_descriptor_abi_from_sections(const yvex_gguf_container_abi *container,
                                             const yvex_gguf_metadata_abi *metadata,
                                             const yvex_gguf_tensor_info_abi *tensor_info,
+                                            const yvex_gguf_qtype_abi *qtype,
                                             const yvex_gguf_range_fact *range,
                                             yvex_gguf_descriptor_abi *descriptor);
 

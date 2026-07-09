@@ -13,7 +13,8 @@
  *   graph binding, or generation.
  *
  * Invariants:
- *   descriptor acceptance requires container, metadata, and tensor_info facts.
+ *   descriptor acceptance requires container, metadata, tensor_info, qtype,
+ *   and range facts.
  *
  * Boundary:
  *   a GGUF descriptor is not a runtime descriptor or execution plan.
@@ -24,8 +25,8 @@ static const yvex_gguf_boundary_fact descriptor_boundary = {
     "src/gguf/yvex_gguf_descriptor.c",
     "GGUF descriptor",
     YVEX_GGUF_BOUNDARY_REPORT_ONLY,
-    "descriptor facts are projected from container, metadata, tensor_info, and range ABI",
-    "V010.GGUF.QTYPE.ABI.0"
+    "descriptor facts are projected from container, metadata, tensor_info, qtype, and range ABI",
+    "V010.QUANT.2"
 };
 
 /* Contract: exposes descriptor boundary facts without allocation or IO. */
@@ -52,6 +53,7 @@ int yvex_gguf_descriptor_accepts_abi(int container_ok,
 void yvex_gguf_descriptor_abi_from_sections(const yvex_gguf_container_abi *container,
                                             const yvex_gguf_metadata_abi *metadata,
                                             const yvex_gguf_tensor_info_abi *tensor_info,
+                                            const yvex_gguf_qtype_abi *qtype,
                                             const yvex_gguf_range_fact *range,
                                             yvex_gguf_descriptor_abi *descriptor)
 {
@@ -59,7 +61,7 @@ void yvex_gguf_descriptor_abi_from_sections(const yvex_gguf_container_abi *conta
     descriptor->status = YVEX_GGUF_ABI_SECTION_NOT_EVALUATED;
     descriptor->reason = "GGUF descriptor not evaluated";
 
-    if (!container || !metadata || !tensor_info || !range) {
+    if (!container || !metadata || !tensor_info || !qtype || !range) {
         descriptor->status = YVEX_GGUF_ABI_SECTION_NOT_PRESENT;
         descriptor->reason = "GGUF descriptor requires all ABI sections";
         return;
@@ -78,6 +80,11 @@ void yvex_gguf_descriptor_abi_from_sections(const yvex_gguf_container_abi *conta
     if (tensor_info->status != YVEX_GGUF_ABI_SECTION_OK) {
         descriptor->status = tensor_info->status;
         descriptor->reason = "GGUF descriptor blocked by tensor_info ABI";
+        return;
+    }
+    if (qtype->status != YVEX_GGUF_ABI_SECTION_OK) {
+        descriptor->status = qtype->status;
+        descriptor->reason = "GGUF descriptor blocked by qtype byte geometry ABI";
         return;
     }
     if (range->status != YVEX_GGUF_ABI_SECTION_OK) {
