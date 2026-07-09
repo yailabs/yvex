@@ -214,6 +214,14 @@ owners, but they may not format normal/table/audit/help/JSON output, parse argv
 manually, or own domain facts. Historical output compatibility belongs under
 src/cli/render until each family is converted to typed report facts.
 
+SPINE.SYSTEM.TARGET.0 defines the target filesystem as an enforceable
+architecture contract. Missing target owner files may be installed only with
+real owner contracts, typed boundary/refusal behavior, and no capability
+claims. Empty placeholders, compile-only anchors, runner/internal compatibility
+backends, and broad monolithic replacement files are forbidden. GGUF ABI, qtype
+geometry, writer, roundtrip, artifact descriptor, materialization, runtime
+descriptor, graph bind, and backend qtype owners must remain distinct.
+
 src/artifact/yvex_artifact.c
   artifact IO, inspect, metadata, tensor command surfaces
 
@@ -675,6 +683,7 @@ Canonical docs:
 
 ```text
 docs/spine.md
+docs/system-target.md
 docs/v010-release-doctrine.md
 docs/model-families.md
 docs/api.md

@@ -78,6 +78,18 @@ test -f src/model/artifacts/yvex_model_artifact_check_report.h
 test -f src/model/artifacts/yvex_model_artifact_write.c
 test -f src/model/artifacts/yvex_model_artifact_write.h
 test -f src/model/artifacts/yvex_model_artifact_private.h
+test -f src/artifact/yvex_artifact_descriptor.c
+test -f src/artifact/yvex_artifact_descriptor.h
+test -f src/artifact/yvex_artifact_materialize.c
+test -f src/artifact/yvex_artifact_materialize.h
+test -f src/artifact/yvex_artifact_roundtrip_gate.c
+test -f src/artifact/yvex_artifact_roundtrip_gate.h
+test -f src/artifact/yvex_artifact_report.c
+test -f src/artifact/yvex_artifact_report.h
+test -f src/model/yvex_runtime_descriptor.c
+test -f src/model/yvex_runtime_descriptor.h
+test -f src/model/yvex_runtime_descriptor_report.c
+test -f src/model/yvex_runtime_descriptor_report.h
 test -f src/model/target/yvex_model_target_catalog.c
 test -f src/model/target/yvex_model_target_catalog.h
 test -f src/model/target/yvex_model_target_decision.c
@@ -227,6 +239,10 @@ test -f src/graph/yvex_graph_guard.c
 test -f src/graph/yvex_graph_guard.h
 test -f src/graph/yvex_graph_primitive.c
 test -f src/graph/yvex_graph_primitive.h
+test -f src/graph/yvex_graph_bind.c
+test -f src/graph/yvex_graph_bind.h
+test -f src/graph/yvex_graph_execute.c
+test -f src/graph/yvex_graph_execute.h
 test -f src/cli/input/yvex_graph_args.c
 test -f src/cli/input/yvex_graph_args.h
 test -f src/cli/commands/yvex_graph_cli.c
@@ -264,6 +280,14 @@ test -f src/backend/cuda/cuda_kernels.cu
 test -f src/backend/cuda/cuda_kernels.h
 test -f src/backend/cuda/cuda_ops.c
 test -f src/backend/cuda/cuda_tensor.c
+test -f src/backend/cuda/cuda_qtype.c
+test -f src/backend/cuda/cuda_qtype.h
+test -f src/backend/yvex_backend_tensor.c
+test -f src/backend/yvex_backend_tensor.h
+test -f src/backend/yvex_backend_qtype.c
+test -f src/backend/yvex_backend_qtype.h
+test -f src/backend/yvex_backend_report.c
+test -f src/backend/yvex_backend_report.h
 test -f src/gguf/gguf.c
 test -f src/gguf/naming.c
 test -f src/gguf/tools.c
@@ -272,6 +296,19 @@ test -f src/gguf/conversion.c
 test -f src/cli/commands/yvex_conversion_cli.c
 test -f src/gguf/families.h
 test -f src/gguf/quant.c
+test -f src/gguf/yvex_gguf_private.h
+test -f src/gguf/yvex_gguf_container.c
+test -f src/gguf/yvex_gguf_metadata.c
+test -f src/gguf/yvex_gguf_tensor_info.c
+test -f src/gguf/yvex_gguf_qtype.c
+test -f src/gguf/yvex_gguf_range_map.c
+test -f src/gguf/yvex_gguf_reader.c
+test -f src/gguf/yvex_gguf_writer.c
+test -f src/gguf/yvex_gguf_roundtrip.c
+test -f src/gguf/yvex_gguf_name_map.c
+test -f src/gguf/yvex_gguf_layout_map.c
+test -f src/gguf/yvex_gguf_descriptor.c
+test -f src/gguf/yvex_gguf_report.c
 test -f src/cli/commands/yvex_quant_cli.c
 test -f src/cli/io/yvex_cli_out.c
 test -f src/cli/io/yvex_cli_error.c
@@ -1053,14 +1090,25 @@ fi
 CORE_BLOCK="$(sed -n '/^CORE_SRCS :=/,/^$/p' Makefile)"
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/accounts/yvex_accounts.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/artifact/yvex_artifact.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/artifact/yvex_artifact_descriptor.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/artifact/yvex_artifact_materialize.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/artifact/yvex_artifact_roundtrip_gate.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/backend/yvex_backend.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/backend/yvex_backend_qtype.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/backend/yvex_backend_tensor.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_graph.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_graph_bind.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_graph_execute.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/gguf/yvex_gguf_container.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/gguf/yvex_gguf_qtype.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/source/yvex_source.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/generation/yvex_generation.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/model/yvex_runtime_descriptor.c' >/dev/null
 if printf '%s\n' "$CORE_BLOCK" | grep -F 'src/cli/'; then
   echo "CORE_SRCS must not include CLI sources"
   exit 1
 fi
+grep -nF 'src/backend/cuda/cuda_qtype.c' Makefile >/dev/null
 grep -nF 'CLI_SRCS :=' Makefile >/dev/null
 grep -nF 'CLI_INPUT_SRCS :=' Makefile >/dev/null
 grep -nF 'src/daemon/yvexd.c' Makefile >/dev/null

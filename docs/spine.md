@@ -7,7 +7,7 @@ Primary platform: Linux + CUDA first
 Primary interface: CLI
 This file is the active delivery spine. It is not a historical ledger, not a roadmap archive, and not a substitute for implementation. Historical delivery
 details remain available through git history.
-The active docs set is docs/api.md, docs/contract.md, docs/model-families.md, docs/operator-runbook.md, docs/cli-output-architecture.md, docs/v010-release-doctrine.md, docs/spine.md.
+The active docs set is docs/api.md, docs/contract.md, docs/model-families.md, docs/operator-runbook.md, docs/cli-output-architecture.md, docs/v010-release-doctrine.md, docs/spine.md, docs/system-target.md.
 ## 0. Dashboard
 YVEX is a local-first inference engine, not a chat wrapper.
 | Field | Current value |
@@ -21,7 +21,7 @@ YVEX is a local-first inference engine, not a chat wrapper.
 | Generation state | DeepSeek/Qwen/Gemma unsupported |
 | Benchmark state | not measured |
 | CUDA state | bounded primitive-hardening only |
-| Active Next | SPINE.REBASE.GGUF.0 - normalize GGUF/artifact ABI spine |
+| Active Next | V010.GGUF.ARTIFACT.ABI.0 - GGUF container/metadata/tensor_info ABI boundary |
 | v0.1.0 target | v0.1.0 - multi-family supported generation over YVEX-produced quantized artifacts |
 | Supported v0.1.0 families | DeepSeek, Qwen, Gemma |
 | Main blocker | multi-family generation-capable artifact chain incomplete |
@@ -30,6 +30,12 @@ The supported v0.1.0 generation family set is DeepSeek, Qwen, and Gemma.
 GLM remains source/storage pressure. GLM remains huge source/storage pressure
 unless it is explicitly promoted by a later target decision.
 Qwen/Metal remains post-v0.1.0 backend portability.
+
+## System Target
+Canonical filesystem target: `docs/system-target.md`; it owns detailed file placement, owner boundaries, forbidden placements, and next-row sequence.
+
+Sequence:
+`SPINE.SYSTEM.TARGET.0 -> V010.GGUF.ARTIFACT.ABI.0 -> V010.GGUF.QTYPE.ABI.0 -> V010.QUANT.2 -> V010.GGUF.WRITER.0 -> V010.MAP.GGUF.NAMES.0 -> V010.MAP.GGUF.LAYOUT.0 -> V010.GGUF.ROUNDTRIP.0 -> V010.ARTIFACT.EMIT.2 -> V010.ARTIFACT.MATERIALIZE.0 -> V010.RUNTIME.DESCRIPTOR.GGUF.0`.
 
 ## 1. Capability Map
 
@@ -209,17 +215,10 @@ Two concepts define the target:
 `generation-capable artifact is not runtime generation` is a hard boundary.
 
 ## 4. Active Next
-Active Next: `SPINE.REBASE.GGUF.0 - normalize GGUF/artifact ABI spine`.
-Why this row is next:
-The spine must put GGUF/artifact ABI, qtype ABI, writer, roundtrip,
-materialization, and runtime descriptor rows in the critical path before
-V010.QUANT.2 can safely resume.
-Expected next decision after SPINE.REBASE.GGUF.0:
-`V010.GGUF.ARTIFACT.ABI.0 - GGUF container/metadata/tensor_info ABI boundary`.
-Implementation-facing sequence:
-`SPINE.REBASE.GGUF.0 -> V010.GGUF.ARTIFACT.ABI.0 -> V010.GGUF.QTYPE.ABI.0 -> V010.QUANT.2 -> V010.GGUF.WRITER.0 -> V010.MAP.GGUF.NAMES.0 -> V010.MAP.GGUF.LAYOUT.0 -> V010.GGUF.ROUNDTRIP.0 -> V010.ARTIFACT.EMIT.2 -> V010.ARTIFACT.MATERIALIZE.0 -> V010.RUNTIME.DESCRIPTOR.GGUF.0`.
-Completed quant row:
-`V010.QUANT.1 - multi-family dtype/qtype support by role`.
+Active Next: `V010.GGUF.ARTIFACT.ABI.0 - GGUF container/metadata/tensor_info ABI boundary`.
+Why this row is next: the spine and filesystem target now put GGUF/artifact ABI, qtype ABI, writer, roundtrip, materialization, and runtime descriptor rows in the critical path; the next implementation row is the GGUF container/metadata/tensor_info ABI boundary.
+Implementation-facing sequence: `SPINE.SYSTEM.TARGET.0 -> V010.GGUF.ARTIFACT.ABI.0 -> V010.GGUF.QTYPE.ABI.0 -> V010.QUANT.2 -> V010.GGUF.WRITER.0 -> V010.MAP.GGUF.NAMES.0 -> V010.MAP.GGUF.LAYOUT.0 -> V010.GGUF.ROUNDTRIP.0 -> V010.ARTIFACT.EMIT.2 -> V010.ARTIFACT.MATERIALIZE.0 -> V010.RUNTIME.DESCRIPTOR.GGUF.0`.
+Completed quant row: `V010.QUANT.1 - multi-family dtype/qtype support by role`.
 `V010.QUANT.1` adds `model-target quant-policy TARGET --role-support` and
 `model-target quant-policy --gate v0.1.0` as report-only role-support surfaces
 for DeepSeek selected slices and downloaded Qwen/Gemma source targets. The
@@ -230,7 +229,7 @@ quantization, GGUF emission, materialization, runtime descriptors, graph
 execution, generation, eval, benchmark, throughput, or release readiness. The
 handoff blocker is now `V010.QUANT.2 - qtype compute/refusal matrix`.
 ### 4.1 Extra Scope - Normalize The Rest Of The Active Spine
-`SPINE.REBASE.GGUF.0` must normalize the active spine, not only append GGUF rows; the pass covers Dashboard, Pipeline Capability Map, Supported-Family Capability Matrix, Implemented Capability Snapshot, Unsupported Boundaries, Active Next, Tracks table, Canonical Row Trackmap, individual tracks, Track Gates, Row Contract Families, and Canonical Vocabulary.
+`SPINE.REBASE.GGUF.0` normalized the active spine, not only appended GGUF rows; the pass covers Dashboard, Pipeline Capability Map, Supported-Family Capability Matrix, Implemented Capability Snapshot, Unsupported Boundaries, Active Next, Tracks table, Canonical Row Trackmap, individual tracks, Track Gates, Row Contract Families, and Canonical Vocabulary.
 Allowed stage/status vocabulary: `doctrine-only`, `docs/control`, `report-only`, `source-intake`, `fixture-proof`, `selected-slice-proof`, `diagnostic-runtime`, `artifact-ready`, `materialization-proof`, `runtime-descriptor-ready`, `full-runtime`, `eval-ready`, `benchmark-ready`, `release-ready`, `planned`, `active`, `complete`, `unsupported`, `not-measured`, `post-v0.1.0`; loose readiness phrases must be rewritten to the lowest true stage.
 Primary ownership must be explicit: SOURCE owns upstream sources/header inventories; MAP owns source/runtime/artifact role mapping; QUANT owns dtype/qtype materialization/compute/refusal state; ARTIFACT owns YVEX artifact bytes, writer, parse, roundtrip, registration; INTEGRITY owns structure/range/corruption/refusal gates; RESIDENCY owns placement, mmap, staged reads, movement, cleanup; MODEL owns class facts and runtime descriptor projection; TENSOR owns required collection coverage; GRAPH/PREFILL/KV/DECODE/LOGITS/SAMPLING/TOKENIZER/GENERATION own their named runtime boundaries; OPERATOR owns command grammar/output only; EVAL/BENCH/RELEASE own eval, measurement, and claim audit.
 Model Artifacts and GGUF language must distinguish listing from production, parse from roundtrip, roundtrip from generation-capable emission, registration from runtime descriptor readiness, materialization from backend execution, artifact-ready from full-runtime, and the separate GGUF container ABI, metadata ABI, tensor_info ABI, qtype byte geometry, absolute range map, YVEX artifact descriptor, runtime descriptor, residency/materialization plan, backend tensor binding, and graph role binding.
@@ -262,7 +261,7 @@ supersession, audit, and sequence archives.
 | TRACK.SAMPLING | token selection over logits | diagnostic-runtime only | bounded diagnostic sampler | sampling gate | no |
 | TRACK.TOKENIZER | tokenizer metadata and stop policy | partial/planned | tokenizer diagnostics | tokenizer gate | no |
 | TRACK.GENERATION | decode/logits/sample/append loop | diagnostic-runtime only | bounded diagnostic generation | runtime generation gate | no |
-| TRACK.OPERATOR | CLI grammar, output, porcelain/plumbing commands | implemented/partial | CLI baseline rows complete; explicit labels are in the catalog below | SPINE.REBASE.GGUF.0 | yes |
+| TRACK.OPERATOR | CLI grammar, output, porcelain/plumbing commands | implemented/partial | CLI baseline rows complete; explicit labels are in the catalog below | V010.GGUF.ARTIFACT.ABI.0 | no |
 | TRACK.SERVE | daemon and provider surfaces | planned | status shell | serve runtime gate | no |
 | TRACK.EVAL | correctness and capability evaluation | planned | tests only | eval gate | no |
 | TRACK.BENCH | reproducible performance measurement | planned | none | benchmark gate | no |
@@ -830,7 +829,8 @@ labels.
 | TOPOLOGY.CELL.MODEL_ARTIFACTS.1 | complete | Split transitional model-artifacts CLI command surface into thin adapter and CLI-only surface ownership. |
 | TOPOLOGY.CELL.MODEL_ARTIFACTS.2 | complete | Decompose transitional model-artifacts CLI surface into command-family surface owners and remove the 14k-line surface monolith. |
 | TOPOLOGY.CELL.MODEL_ARTIFACTS.3 | complete | Move model-artifacts surface output and parser residue into input/render owners. |
-| SPINE.REBASE.GGUF.0 | active | Normalize active spine around GGUF/artifact ABI, writer, roundtrip, materialization, and runtime descriptor rows. |
+| SPINE.REBASE.GGUF.0 | complete | Normalize active spine around GGUF/artifact ABI, writer, roundtrip, materialization, and runtime descriptor rows. |
+| SPINE.SYSTEM.TARGET.0 | complete | Codify target filesystem map and install GGUF/artifact/runtime descriptor/graph/backend owner files. |
 | TOPOLOGY.CELL.CLOSURE.0 | planned | Close remaining mixed cells after each owner-specific extraction is proven. |
 | V010.PATHS.0 | complete | operator root layout report. |
 | V010.PATHS.1 | complete | source/artifact/reference/report/cache separation. |
@@ -1425,7 +1425,7 @@ Complete:
   TOPOLOGY.CLI.PRINT.ALL.0, TOPOLOGY.DOMAIN.RESTORE.0.
 
 Active / Next:
-  SPINE.REBASE.GGUF.0 owns this docs/control normalization; V010.CLI.27 remains planned.
+  V010.GGUF.ARTIFACT.ABI.0 is the next implementation row; V010.CLI.27 remains planned.
 
 Planned gates:
   V010.CLI.27 - base status and refusal grammar; V010.CLI.MODELS.4 models

@@ -110,7 +110,7 @@ if grep -nF "not a full transformer run" README.md ||
 fi
 
 count="$(find docs -maxdepth 1 -type f | wc -l | tr -d ' ')"
-if [ "$count" -ne 8 ]; then
+if [ "$count" -ne 9 ]; then
   echo "unexpected docs file count: $count"
   find docs -maxdepth 1 -type f | sort
   exit 1
@@ -120,6 +120,13 @@ grep -nF "docs/v010-release-doctrine.md" docs/spine.md >/dev/null || {
   echo "spine must list v0.1.0 release doctrine in the active docs set" >&2
   exit 1
 }
+
+grep -nF "docs/system-target.md" docs/spine.md >/dev/null || {
+  echo "spine must list the system target in the active docs set" >&2
+  exit 1
+}
+
+test -f docs/system-target.md
 
 for doctrine_heading in \
   "## 0. Authority" \
@@ -222,8 +229,13 @@ for minimum_gate_label in \
   }
 done
 
+grep -nF "Active Next: \`V010.GGUF.ARTIFACT.ABI.0 - GGUF container/metadata/tensor_info ABI boundary\`" docs/spine.md >/dev/null || {
+  echo "spine must set Active Next to the GGUF artifact ABI boundary" >&2
+  exit 1
+}
+
 grep -nF "V010.QUANT.2 - qtype compute/refusal matrix" docs/spine.md >/dev/null || {
-  echo "spine must preserve V010.QUANT.2 as Active Next" >&2
+  echo "spine must preserve V010.QUANT.2 in the implementation sequence" >&2
   exit 1
 }
 
@@ -278,6 +290,7 @@ if [ "$spine_lines" -gt 1800 ]; then
 fi
 
 for heading in \
+  "## System Target" \
   "## 0. Dashboard" \
   "## 1. Capability Map" \
   "## 2. Unsupported Boundaries" \
@@ -385,8 +398,8 @@ grep -nF "v0.1.0 closes only when every supported v0.1.0 generation family reach
   exit 1
 }
 
-grep -nF "V010.QUANT.2 - qtype compute/refusal matrix" docs/spine.md >/dev/null || {
-  echo "spine must set Active Next to qtype compute/refusal matrix" >&2
+grep -nF "Active Next: \`V010.GGUF.ARTIFACT.ABI.0 - GGUF container/metadata/tensor_info ABI boundary\`" docs/spine.md >/dev/null || {
+  echo "spine must keep the active implementation row on GGUF artifact ABI" >&2
   exit 1
 }
 

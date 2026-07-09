@@ -80,9 +80,16 @@ CORE_SRCS := \
 	src/core/yvex_fs.c \
 	src/accounts/yvex_accounts.c \
 	src/artifact/yvex_artifact.c \
+	src/artifact/yvex_artifact_descriptor.c \
 	src/artifact/yvex_artifact_identity.c \
 	src/artifact/yvex_artifact_integrity.c \
+	src/artifact/yvex_artifact_materialize.c \
+	src/artifact/yvex_artifact_report.c \
+	src/artifact/yvex_artifact_roundtrip_gate.c \
 	src/backend/yvex_backend.c \
+	src/backend/yvex_backend_qtype.c \
+	src/backend/yvex_backend_report.c \
+	src/backend/yvex_backend_tensor.c \
 	src/bench/yvex_bench.c \
 	src/eval/yvex_eval.c \
 	src/generation/yvex_decode.c \
@@ -99,7 +106,21 @@ CORE_SRCS := \
 	src/gguf/conversion.c \
 	src/gguf/quant.c \
 	src/gguf/tools.c \
+	src/gguf/yvex_gguf_container.c \
+	src/gguf/yvex_gguf_descriptor.c \
+	src/gguf/yvex_gguf_layout_map.c \
+	src/gguf/yvex_gguf_metadata.c \
+	src/gguf/yvex_gguf_name_map.c \
+	src/gguf/yvex_gguf_qtype.c \
+	src/gguf/yvex_gguf_range_map.c \
+	src/gguf/yvex_gguf_reader.c \
+	src/gguf/yvex_gguf_report.c \
+	src/gguf/yvex_gguf_roundtrip.c \
+	src/gguf/yvex_gguf_tensor_info.c \
+	src/gguf/yvex_gguf_writer.c \
+	src/graph/yvex_graph_bind.c \
 	src/graph/yvex_graph.c \
+	src/graph/yvex_graph_execute.c \
 	src/graph/yvex_graph_guard.c \
 	src/graph/yvex_graph_plan.c \
 	src/graph/yvex_graph_primitive.c \
@@ -110,6 +131,8 @@ CORE_SRCS := \
 	src/metrics/yvex_profile.c \
 	src/model/yvex_model.c \
 	src/model/yvex_model_artifacts.c \
+	src/model/yvex_runtime_descriptor.c \
+	src/model/yvex_runtime_descriptor_report.c \
 	src/model/artifacts/yvex_model_artifact_check_report.c \
 	src/model/artifacts/yvex_model_artifact_gate.c \
 	src/model/artifacts/yvex_model_artifact_list_report.c \
@@ -159,6 +182,7 @@ CUDA_SRCS := \
 	src/backend/cuda/cuda_tensor.c \
 	src/backend/cuda/cuda_ops.c \
 	src/backend/cuda/cuda_info.c \
+	src/backend/cuda/cuda_qtype.c \
 	src/backend/cuda/cuda_errors.c
 
 CUDA_CU_SRCS := \
@@ -192,7 +216,7 @@ CLI_TEST := tests/cli.sh
 CURRENT_DOCS := README.md AGENTS.md MODEL_ARTIFACTS.md NOTICE.md \
 	docs/api.md docs/contract.md docs/model-families.md \
 	docs/operator-runbook.md docs/v010-release-doctrine.md \
-	docs/topology-closure-audit.md docs/spine.md
+	docs/topology-closure-audit.md docs/spine.md docs/system-target.md
 
 info:
 	@echo "yvex: C local inference engine"
@@ -369,13 +393,15 @@ check-docs:
 		! -name cli-output-architecture.md \
 		! -name v010-release-doctrine.md \
 		! -name topology-closure-audit.md \
+		! -name system-target.md \
 		-print | grep .
-	@test "$$(find docs -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')" = "8"
+	@test "$$(find docs -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')" = "9"
 	@grep -F "YVEX Inner Delivery Spine" docs/spine.md >/dev/null
 	@grep -F "internal roadmap" docs/spine.md >/dev/null
 	@grep -F "native C inference engine for local open-weight models" README.md >/dev/null
 	@grep -F "Model selection in canonical REPL" docs/spine.md >/dev/null
-	@grep -F "docs/api.md, docs/contract.md, docs/model-families.md, docs/operator-runbook.md, docs/cli-output-architecture.md, docs/v010-release-doctrine.md, docs/spine.md" docs/spine.md >/dev/null
+	@grep -F "docs/api.md, docs/contract.md, docs/model-families.md, docs/operator-runbook.md, docs/cli-output-architecture.md, docs/v010-release-doctrine.md, docs/spine.md, docs/system-target.md" docs/spine.md >/dev/null
+	@grep -F "YVEX System Target" docs/system-target.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Runtime Contract" docs/contract.md >/dev/null
 	@grep -F "YVEX Operator Runbook" docs/operator-runbook.md >/dev/null

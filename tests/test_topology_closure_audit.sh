@@ -263,4 +263,92 @@ else
   exit 1
 fi
 
+system_target_files="
+src/gguf/yvex_gguf_private.h
+src/gguf/yvex_gguf_container.c
+src/gguf/yvex_gguf_metadata.c
+src/gguf/yvex_gguf_tensor_info.c
+src/gguf/yvex_gguf_qtype.c
+src/gguf/yvex_gguf_range_map.c
+src/gguf/yvex_gguf_reader.c
+src/gguf/yvex_gguf_writer.c
+src/gguf/yvex_gguf_roundtrip.c
+src/gguf/yvex_gguf_name_map.c
+src/gguf/yvex_gguf_layout_map.c
+src/gguf/yvex_gguf_descriptor.c
+src/gguf/yvex_gguf_report.c
+src/artifact/yvex_artifact_descriptor.c
+src/artifact/yvex_artifact_descriptor.h
+src/artifact/yvex_artifact_materialize.c
+src/artifact/yvex_artifact_materialize.h
+src/artifact/yvex_artifact_roundtrip_gate.c
+src/artifact/yvex_artifact_roundtrip_gate.h
+src/artifact/yvex_artifact_report.c
+src/artifact/yvex_artifact_report.h
+src/model/yvex_runtime_descriptor.c
+src/model/yvex_runtime_descriptor.h
+src/model/yvex_runtime_descriptor_report.c
+src/model/yvex_runtime_descriptor_report.h
+src/graph/yvex_graph_bind.c
+src/graph/yvex_graph_bind.h
+src/graph/yvex_graph_execute.c
+src/graph/yvex_graph_execute.h
+src/backend/yvex_backend_tensor.c
+src/backend/yvex_backend_tensor.h
+src/backend/yvex_backend_qtype.c
+src/backend/yvex_backend_qtype.h
+src/backend/yvex_backend_report.c
+src/backend/yvex_backend_report.h
+src/backend/cuda/cuda_qtype.c
+src/backend/cuda/cuda_qtype.h
+"
+
+for f in $system_target_files; do
+  test -f "$f"
+  for token in Owner Owns "Does not own" Invariants Boundary; do
+    grep -nF "$token" "$f" >/dev/null || {
+      echo "system target owner contract missing $token in $f"
+      exit 1
+    }
+  done
+done
+
+if git grep -nE 'placeholder|stub|not-bound|renderer-only|adapter slot|boundary anchor|typedef int' -- \
+    src/gguf \
+    src/artifact \
+    src/model/yvex_runtime_descriptor* \
+    src/graph/yvex_graph_bind* \
+    src/graph/yvex_graph_execute* \
+    src/backend/yvex_backend_tensor* \
+    src/backend/yvex_backend_qtype* \
+    src/backend/yvex_backend_report* \
+    src/backend/cuda/cuda_qtype*; then
+  echo "system target files must not be placeholders or compile-only anchors"
+  exit 1
+fi
+
+if git grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fwrite)\s*\(|stdout|stderr' -- \
+    src/gguf/yvex_gguf_*.c \
+    src/artifact/yvex_artifact_descriptor.c \
+    src/artifact/yvex_artifact_materialize.c \
+    src/artifact/yvex_artifact_roundtrip_gate.c \
+    src/artifact/yvex_artifact_report.c \
+    src/model/yvex_runtime_descriptor*.c \
+    src/graph/yvex_graph_bind.c \
+    src/graph/yvex_graph_execute.c \
+    src/backend/yvex_backend_tensor.c \
+    src/backend/yvex_backend_qtype.c \
+    src/backend/yvex_backend_report.c \
+    src/backend/cuda/cuda_qtype.c; then
+  echo "system target owner files must not write operator output"
+  exit 1
+fi
+
+system_target_claim_pattern='writer com''plete|roundtrip com''plete|generation-capable artifact com''plete|materialization com''plete|runtime descriptor rea''dy|graph execution com''plete|qtype compute com''plete|backend runtime generation rea''dy'
+if git grep -nE "$system_target_claim_pattern" -- $system_target_files; then
+  echo "system target owner files must not introduce capability completion claims"
+  exit 1
+fi
+
+echo "topology closure audit: system target guards ok"
 echo "topology closure audit: model-artifacts CLI surface guards ok"
