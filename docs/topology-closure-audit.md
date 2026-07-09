@@ -308,3 +308,33 @@ model-domain monolith and direct-output pressure, not global topology closure.
 Next recommended row: split the moved model-artifacts command surface into
 thin command adapters and typed render/report modules, or continue with the next
 largest audit residue after rerunning the closure audit.
+
+## Follow-up: TOPOLOGY.CELL.MODEL_ARTIFACTS.1
+
+Previous `src/cli/commands/yvex_model_artifacts_cli.c` line count: 14723.
+New `src/cli/commands/yvex_model_artifacts_cli.c` line count: 142.
+
+Parsing ownership: public command symbols now route through the model-artifacts
+input/report/render contract and a CLI-only transitional surface. Full lexical
+parsing for the historical `models`, `fullmodel`, `attention`, `context`,
+`moe`, and `tensor-collection` surfaces still needs a later typed migration.
+
+Rendering ownership: the public command adapter no longer owns field, table, or
+JSON helper functions. Historical rendering remains in
+`src/cli/model_artifacts/yvex_model_artifacts_surface.c`, not in the domain or
+`libyvex.a`.
+
+Remaining model-artifacts command residue:
+`src/cli/model_artifacts/yvex_model_artifacts_surface.c` is still a large
+transitional CLI surface at 14724 lines. It preserves current command behavior
+while the adapter is locked down; it is not global closure.
+
+Direct output status: no new model-artifacts domain output sites were added.
+
+CLI-shaped input status: model-artifacts domain/render remain free of raw
+`argc`/`argv`; raw command vectors remain only in CLI-owned files.
+
+Next recommended row: decompose
+`src/cli/model_artifacts/yvex_model_artifacts_surface.c` by surface into typed
+input/report/render ownership, starting with `models download` and
+`fullmodel`.

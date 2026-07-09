@@ -941,6 +941,21 @@ else
   exit 1
 fi
 
+model_artifacts_command_lines="$(wc -l < src/cli/commands/yvex_model_artifacts_cli.c | tr -d ' ')"
+if test "$model_artifacts_command_lines" -gt 350; then
+  echo "model-artifacts command adapter exceeds 350 lines"
+  exit 1
+fi
+
+grep -nF 'yvex_model_artifacts_args_parse' src/cli/commands/yvex_model_artifacts_cli.c >/dev/null
+grep -nF 'yvex_model_artifact_report_build' src/cli/commands/yvex_model_artifacts_cli.c >/dev/null
+grep -nF 'yvex_model_artifacts_render' src/cli/commands/yvex_model_artifacts_cli.c >/dev/null
+
+if grep -nE 'yvex_operator_private|yvex_operator_render_private|write_escaped|write_field|write_u64_field|model_artifacts_cli_strdup|path_exists|is_path_like_reference|set_path_ref|yvex_model_registry|yvex_model_ref|yvex_model_gate|yvex_artifact|yvex_backend|yvex_weight_table|native_weight|safetensors|mkdir|access\(|opendir|readdir|poll|waitpid|signal|printf|fprintf|fwrite' src/cli/commands/yvex_model_artifacts_cli.c; then
+  echo "no model-artifacts domain/path/render helpers in command adapter"
+  exit 1
+fi
+
 model_artifacts_root_lines="$(wc -l < src/model/yvex_model_artifacts.c | tr -d ' ')"
 if test "$model_artifacts_root_lines" -gt 500; then
   echo "no model-artifacts root monolith"

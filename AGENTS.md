@@ -68,6 +68,11 @@ src/cli/commands/*.c
   CLI command adapter slots only; no domain structs, domain APIs, backend
   opens, runtime state, or artifact/source/model behavior
 
+src/cli/model_artifacts/
+  transitional historical models/fullmodel/attention/context/moe and
+  tensor-collection CLI surface implementation after MODEL_ARTIFACTS.1; CLI-only,
+  not libyvex, and must keep moving toward typed input/report/render ownership
+
 src/cli/render/*.c
   normal/table/audit/trace renderers for CLI-owned output shapes
 
@@ -187,6 +192,13 @@ artifact registry, references, gates, reports, explicit file writing, CLI input,
 command dispatch, and rendering must live in separate ownership modules.
 src/model/yvex_model_artifacts.c may not contain operator output, CLI parsing,
 CLI/operator includes, rendering, or broad command-surface ownership.
+
+MODEL_ARTIFACTS.1 forbids using
+src/cli/commands/yvex_model_artifacts_cli.c as a command-surface monolith.
+Model-artifacts public command symbols must stay thin adapters. Historical
+models/fullmodel/attention/context/moe and tensor-collection surface code may
+live only under src/cli/model_artifacts as CLI-only transitional residue until
+typed input/report/render ownership is completed; it must not enter libyvex.a.
 
 src/artifact/yvex_artifact.c
   artifact IO, inspect, metadata, tensor command surfaces

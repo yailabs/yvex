@@ -114,6 +114,8 @@ test -f src/cli/render/yvex_model_target_render.h
 test -f src/cli/catalog/model_target_fields.def
 test -f src/runtime/yvex_chat.c
 test -f src/cli/commands/yvex_model_artifacts_cli.c
+test -f src/cli/model_artifacts/yvex_model_artifacts_surface.c
+test -f src/cli/model_artifacts/yvex_model_artifacts_surface.h
 test -f src/cli/input/yvex_model_artifacts_args.c
 test -f src/cli/input/yvex_model_artifacts_args.h
 test -f src/cli/render/yvex_model_artifacts_render.c
@@ -854,6 +856,25 @@ if grep -nE 'primary_text|diagnostic_text|raw_output|report_text|captured_text|l
   exit 1
 fi
 
+model_artifacts_command_lines="$(wc -l < src/cli/commands/yvex_model_artifacts_cli.c | tr -d ' ')"
+if test "$model_artifacts_command_lines" -gt 350; then
+  echo "src/cli/commands/yvex_model_artifacts_cli.c has $model_artifacts_command_lines lines; adapter must stay <= 350"
+  exit 1
+fi
+
+grep -nF 'yvex_model_artifacts_args_parse' src/cli/commands/yvex_model_artifacts_cli.c >/dev/null
+grep -nF 'yvex_model_artifact_report_build' src/cli/commands/yvex_model_artifacts_cli.c >/dev/null
+grep -nF 'yvex_model_artifacts_render' src/cli/commands/yvex_model_artifacts_cli.c >/dev/null
+
+BAD_MODEL_ARTIFACTS_COMMAND="$(
+  grep -nE 'yvex_operator_private|yvex_operator_render_private|write_escaped|write_field|write_u64_field|model_artifacts_cli_strdup|path_exists|is_path_like_reference|set_path_ref|yvex_model_registry|yvex_model_ref|yvex_model_gate|yvex_artifact|yvex_backend|yvex_weight_table|native_weight|safetensors|mkdir|access\(|opendir|readdir|poll|waitpid|signal|printf|fprintf|fwrite' src/cli/commands/yvex_model_artifacts_cli.c || true
+)"
+if test -n "$BAD_MODEL_ARTIFACTS_COMMAND"; then
+  echo "$BAD_MODEL_ARTIFACTS_COMMAND"
+  echo "model-artifacts command adapter must stay thin"
+  exit 1
+fi
+
 BAD_MODEL_TARGET_INPUT_EXEC="$(
   grep -nE 'native_weight|safetensors|yvex_model_ref_resolve|yvex_model_target_.*build|yvex_.*_report_build|yvex_model_target_render[[:space:]]*\(|fopen|\b(fprintf|printf)\s*\(' src/cli/input/yvex_model_target_args.c src/cli/input/yvex_model_target_args.h || true
 )"
@@ -935,8 +956,7 @@ if test -n "$COMMAND_EXPORT_HITS"; then
   exit 1
 fi
 
-if grep -RIn '\byvex_backend_open\b' src/cli/commands |
-  grep -v '^src/cli/commands/yvex_model_artifacts_cli.c:'; then
+if grep -RIn '\byvex_backend_open\b' src/cli/commands; then
   echo "CLI command adapters must not open backends directly"
   exit 1
 fi

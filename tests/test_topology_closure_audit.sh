@@ -40,7 +40,7 @@ run_grep "$tmp/compat-shell.txt" \
   -- src include
 
 find src -name '*.c' -print0 | xargs -0 wc -l | sort -n > "$tmp/large-files.txt"
-grep -nE 'src/cli/(input|commands|render|io)' Makefile > "$tmp/makefile-cli.txt" || true
+grep -nE 'src/cli/(input|commands|model_artifacts|render|io)' Makefile > "$tmp/makefile-cli.txt" || true
 
 allowed_direct="$(
   awk -F: '
@@ -68,6 +68,7 @@ cli_input_other="$(
   awk -F: '
     !($1 ~ /^src\/cli\/input\// ||
       $1 ~ /^src\/cli\/commands\// ||
+      $1 ~ /^src\/cli\/model_artifacts\// ||
       $1 ~ /^src\/cli\/catalog\// ||
       $1 == "src/cli/yvex_cli.c") { other++ }
     END { print other + 0 }
@@ -97,7 +98,7 @@ lib_cli_leak="$(
   awk '
     /^CORE_SRCS :=/ { in_core = 1 }
     /^CUDA_CU_SRCS :=/ { in_core = 0 }
-    in_core && /src\/cli\/(input|commands|render|io)/ { c++ }
+    in_core && /src\/cli\/(input|commands|model_artifacts|render|io)/ { c++ }
     END { print c + 0 }
   ' Makefile
 )"
@@ -183,6 +184,22 @@ if git grep -nE 'primary_text|diagnostic_text|raw_output|report_text|captured_te
     src/cli/render/yvex_model_artifacts_render.c \
     src/cli/render/yvex_model_artifacts_render.h; then
   echo "model-artifacts reports/renderers must not use text-buffer report debt"
+  exit 1
+fi
+
+model_artifacts_command_lines="$(wc -l < src/cli/commands/yvex_model_artifacts_cli.c | tr -d ' ')"
+if test "$model_artifacts_command_lines" -gt 350; then
+  echo "model-artifacts command adapter remains too large"
+  exit 1
+fi
+
+grep -nF 'yvex_model_artifacts_args_parse' src/cli/commands/yvex_model_artifacts_cli.c >/dev/null
+grep -nF 'yvex_model_artifact_report_build' src/cli/commands/yvex_model_artifacts_cli.c >/dev/null
+grep -nF 'yvex_model_artifacts_render' src/cli/commands/yvex_model_artifacts_cli.c >/dev/null
+
+if git grep -nE 'yvex_operator_private|yvex_operator_render_private|write_escaped|write_field|write_u64_field|model_artifacts_cli_strdup|path_exists|is_path_like_reference|set_path_ref|yvex_model_registry|yvex_model_ref|yvex_model_gate|yvex_artifact|yvex_backend|yvex_weight_table|native_weight|safetensors|mkdir|access\(|opendir|readdir|poll|waitpid|signal|printf|fprintf|fwrite' -- \
+    src/cli/commands/yvex_model_artifacts_cli.c; then
+  echo "model-artifacts command adapter must stay thin"
   exit 1
 fi
 
