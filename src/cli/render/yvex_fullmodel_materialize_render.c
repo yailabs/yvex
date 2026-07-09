@@ -1,6 +1,6 @@
 /*
  * yvex_fullmodel_materialize_surface.c - fullmodel materialize command surface.
- * Owner: src/cli/model_artifacts
+ * Owner: src/cli/render
  * Owns: existing fullmodel materialization-plan/materialize diagnostic command behavior.
  * Does not own: artifact emission capability, runtime generation, eval, benchmark, or release claims.
  * Invariants: CLI-only and excluded from libyvex.a; preserves existing refusal/report behavior.
@@ -1015,7 +1015,7 @@ static int fullmodel_materialize_command_run(const yvex_cli_fullmodel_options *o
     return 0;
 }
 
-int yvex_model_artifacts_surface_fullmodel_command(int arg_count, char **args)
+int yvex_fullmodel_render_command(int arg_count, char **args)
 {
     yvex_cli_fullmodel_options options;
     yvex_model_ref_options ref_options;
@@ -1349,7 +1349,7 @@ int yvex_model_artifacts_surface_fullmodel_command(int arg_count, char **args)
     return 0;
 }
 
-void yvex_model_artifacts_surface_fullmodel_help(FILE *fp)
+void yvex_fullmodel_render_help(FILE *fp)
 {
     yvex_cli_out_writef(fp, "usage: " "yvex fullmodel report --model FILE_OR_ALIAS [--backend cpu|cuda] [--target TARGET] [--limit-tensors N] [--registry FILE] [--" "audit | --" "output normal|table|audit]\n");
     yvex_cli_out_writef(fp, "usage: " "yvex fullmodel materialization-plan --model FILE_OR_ALIAS [--backend cpu|cuda] [--residency resident|host-staged|ssd-staged|hybrid] [--target TARGET] [--limit-tensors N] [--registry FILE] [--" "audit | --" "output normal|table|audit]\n");

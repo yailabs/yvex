@@ -1,6 +1,6 @@
 /*
  * yvex_models_download_process_surface.c - models download provider process surface.
- * Owner: src/cli/model_artifacts
+ * Owner: src/cli/render
  * Owns: provider CLI process orchestration for the models download command family.
  * Does not own: provider account domain, model registry storage, runtime generation, artifact emission, eval, benchmark, or release claims.
  * Invariants: CLI-only and excluded from libyvex.a; preserves existing provider CLI behavior.

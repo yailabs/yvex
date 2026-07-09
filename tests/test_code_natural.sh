@@ -1025,6 +1025,34 @@ else
   exit 1
 fi
 
+if grep -nE 'yvex_cli_out_writef|yvex_cli_out_fputs|yvex_cli_out_line|yvex_cli_out_char|yvex_cli_out_kv_|yvex_cli_table_|yvex_cli_json_|printf|fprintf|fwrite|write_escaped|write_field|write_u64_field|print_' src/cli/model_artifacts/*.c; then
+  echo "model-artifacts surface files must not format operator output"
+  exit 1
+fi
+
+if grep -nE 'parse_models_prepare_options|parse_models_output_mode|parse_.*_options|strcmp\(args\[|strcmp\(argv\[|for .*arg_count|for .*argc' src/cli/model_artifacts/*.c; then
+  echo "model-artifacts surface files must not own parser-heavy argv scans"
+  exit 1
+fi
+
+if find src/cli/model_artifacts -name '*.c' -print0 |
+    xargs -0 wc -l |
+    awk '$1 ~ /^[0-9]+$/ && $2 != "total" && $1 > 1500 { print; bad=1 } END { exit bad ? 1 : 0 }'; then
+  :
+else
+  echo "model-artifacts surface file exceeds 1500 lines"
+  exit 1
+fi
+
+test -f src/cli/render/yvex_models_render.c
+test -f src/cli/render/yvex_models_download_render.c
+test -f src/cli/render/yvex_models_prepare_render.c
+test -f src/cli/render/yvex_fullmodel_render.c
+test -f src/cli/render/yvex_attention_render.c
+test -f src/cli/render/yvex_context_render.c
+test -f src/cli/render/yvex_moe_render.c
+test -f src/cli/render/yvex_tensor_collection_render.c
+
 if git grep -n 'src/cli/model_artifacts' -- Makefile | grep CORE_SRCS; then
   echo "model-artifacts CLI surfaces must not enter CORE_SRCS"
   exit 1

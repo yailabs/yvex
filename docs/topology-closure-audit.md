@@ -373,3 +373,39 @@ input/report/render ownership without re-opening the domain boundary.
 Next recommended row: rerun the closure audit and select the next largest
 remaining residue, or continue with a focused typed-renderer cleanup for the
 largest model-artifacts command family.
+
+## Follow-up: TOPOLOGY.CELL.MODEL_ARTIFACTS.3
+
+Previous direct output/formatting matches in `src/cli/model_artifacts`: 3326.
+
+Final direct output/formatting matches in `src/cli/model_artifacts/*.c`: 0.
+
+Previous parser-residue matches in `src/cli/model_artifacts`: 235.
+
+Final parser-residue matches in `src/cli/model_artifacts/*.c`: 0.
+
+New render files: `yvex_models_render.c`,
+`yvex_models_artifacts_render.c`, `yvex_models_download_render.c`,
+`yvex_models_download_control_render.c`,
+`yvex_models_download_process_render.c`,
+`yvex_models_download_write_render.c`, `yvex_models_prepare_render.c`,
+`yvex_fullmodel_render.c`, `yvex_fullmodel_report_render.c`,
+`yvex_fullmodel_materialize_render.c`, `yvex_attention_render.c`,
+`yvex_context_render.c`, `yvex_moe_render.c`,
+`yvex_tensor_collection_render.c`, and
+`yvex_model_artifacts_render_common.c`.
+
+Largest remaining surface file:
+`src/cli/model_artifacts/yvex_model_artifacts_surface_common.c` at 21 lines.
+
+Largest new render file:
+`src/cli/render/yvex_models_prepare_render.c` at 1837 lines.
+
+Remaining exceptions: the new render files still preserve historical command
+logic as compatibility rendering code. The surface-routing boundary is closed,
+but a later row should migrate the render owners from legacy command-shaped
+facts to typed model-artifacts report facts.
+
+Next recommended row: decompose model-artifacts render owners into typed
+report/render APIs, starting with `models prepare/check` because it is the
+largest remaining render file.

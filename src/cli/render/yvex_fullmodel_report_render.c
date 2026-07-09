@@ -1,6 +1,6 @@
 /*
  * yvex_fullmodel_report_surface.c - fullmodel report CLI surface.
- * Owner: src/cli/model_artifacts
+ * Owner: src/cli/render
  * Owns: fullmodel report-family formatting for existing command behavior.
  * Does not own: runtime generation, graph execution, artifact emission, eval, benchmark, or release claims.
  * Invariants: CLI-only and excluded from libyvex.a; preserves existing output fields.

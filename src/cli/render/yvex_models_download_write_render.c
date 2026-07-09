@@ -1,6 +1,6 @@
 /*
  * yvex_models_download_write_surface.c - models download CLI file/progress writers.
- * Owner: src/cli/model_artifacts
+ * Owner: src/cli/render
  * Owns: CLI-only download receipts, sidecar JSON text, log mirroring, and progress helpers.
  * Does not own: domain artifact emission, runtime generation, registry storage, eval, benchmark, or release claims.
  * Invariants: writes explicit files/progress for existing CLI behavior only; CLI-only and excluded from libyvex.a.

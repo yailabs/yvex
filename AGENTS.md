@@ -208,6 +208,12 @@ fullmodel, attention, context, MoE, and tensor-collection command families must
 be split into command-family surface owners. Shared CLI-only helpers must remain
 small and may not become a compatibility backend.
 
+MODEL_ARTIFACTS.3 makes src/cli/model_artifacts a surface-routing layer only.
+Model-artifacts command-family surfaces may route commands and call render
+owners, but they may not format normal/table/audit/help/JSON output, parse argv
+manually, or own domain facts. Historical output compatibility belongs under
+src/cli/render until each family is converted to typed report facts.
+
 src/artifact/yvex_artifact.c
   artifact IO, inspect, metadata, tensor command surfaces
 

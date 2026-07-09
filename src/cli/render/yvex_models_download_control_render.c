@@ -1,13 +1,13 @@
 /*
  * yvex_models_download_control_surface.c - models download control surface.
- * Owner: src/cli/model_artifacts
+ * Owner: src/cli/render
  * Owns: download status/stop/resume/cleanup command routing.
  * Does not own: domain registry storage, artifact emission, runtime generation, eval, benchmark, or release claims.
  * Invariants: CLI-only and excluded from libyvex.a; preserves existing control command behavior.
  * Boundary: download control state is not runtime support.
  */
 #include "yvex_models_download_surface.h"
-#include "yvex_models_surface.h"
+#include "yvex_models_render.h"
 
 static int model_download_read_receipt_status(const char *path,
                                               char *status,
@@ -427,7 +427,7 @@ static int command_models_download_status(int arg_count, char **args)
     rc = model_download_resolve_for_control(arg_count, args, 4, &options, &report,
                                             &operator_paths, &provider_kind, &err);
     if (rc == 1) {
-        yvex_model_artifacts_surface_models_help(stdout);
+        yvex_models_render_help(stdout);
         return 0;
     }
     if (rc != YVEX_OK) return rc == 2 ? 2 : print_yvex_error(&err, exit_for_status(rc));
@@ -907,7 +907,7 @@ static int command_models_download_execute(int arg_count, char **args, int start
 
     rc = parse_models_download_options_from(arg_count, args, start_index, &options);
     if (rc == 1) {
-        yvex_model_artifacts_surface_models_help(stdout);
+        yvex_models_render_help(stdout);
         return 0;
     }
     if (rc != 0) return rc;
@@ -1408,7 +1408,7 @@ static int command_models_download_execute(int arg_count, char **args, int start
     return model_download_finish(&options, &report);
 }
 
-int yvex_models_download_surface_command(int arg_count, char **args)
+int yvex_models_download_render_command(int arg_count, char **args)
 {
     if (arg_count >= 4) {
         if (strcmp(args[3], "status") == 0) {
