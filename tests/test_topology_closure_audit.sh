@@ -204,3 +204,33 @@ if git grep -nE 'yvex_operator_private|yvex_operator_render_private|write_escape
 fi
 
 echo "topology closure audit: model-artifacts hard guards ok"
+
+if test -f src/cli/model_artifacts/yvex_model_artifacts_surface.c; then
+  root_surface_lines="$(wc -l < src/cli/model_artifacts/yvex_model_artifacts_surface.c | tr -d ' ')"
+  if test "$root_surface_lines" -gt 350; then
+    echo "model-artifacts root CLI surface remains too large"
+    exit 1
+  fi
+fi
+
+common_surface_lines="$(wc -l < src/cli/model_artifacts/yvex_model_artifacts_surface_common.c | tr -d ' ')"
+if test "$common_surface_lines" -gt 500; then
+  echo "model-artifacts common CLI helper remains too large"
+  exit 1
+fi
+
+if find src/cli/model_artifacts -name '*.c' -print0 |
+    xargs -0 wc -l |
+    awk '$1 ~ /^[0-9]+$/ && $2 != "total" && $1 > 2500 { print; bad=1 } END { exit bad ? 1 : 0 }'; then
+  :
+else
+  echo "model-artifacts CLI surface file exceeds 2500 lines"
+  exit 1
+fi
+
+if git grep -n 'src/cli/model_artifacts' -- Makefile | grep CORE_SRCS; then
+  echo "model-artifacts CLI surfaces must not enter CORE_SRCS"
+  exit 1
+fi
+
+echo "topology closure audit: model-artifacts CLI surface guards ok"

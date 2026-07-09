@@ -11,7 +11,6 @@ details remain available through git history.
 The active docs set is docs/api.md, docs/contract.md, docs/model-families.md, docs/operator-runbook.md, docs/cli-output-architecture.md, docs/v010-release-doctrine.md, docs/spine.md.
 ## 0. Dashboard
 YVEX is a local-first inference engine, not a chat wrapper.
-
 | Field | Current value |
 | --- | --- |
 | Project | YVEX |
@@ -828,6 +827,7 @@ labels.
 | TOPOLOGY.CELL.CLOSURE.1 | complete | Audit remaining topology residue after source, generation, KV, sampling, graph, and model-target cell extraction. |
 | TOPOLOGY.CELL.MODEL_ARTIFACTS.0 | complete | Extract model-artifacts monolith into registry/ref/gate/report/input/command/render/write ownership. |
 | TOPOLOGY.CELL.MODEL_ARTIFACTS.1 | complete | Split transitional model-artifacts CLI command surface into thin adapter and CLI-only surface ownership. |
+| TOPOLOGY.CELL.MODEL_ARTIFACTS.2 | complete | Decompose transitional model-artifacts CLI surface into command-family surface owners and remove the 14k-line surface monolith. |
 | TOPOLOGY.CELL.CLOSURE.0 | planned | Close remaining mixed cells after each owner-specific extraction is proven. |
 | V010.PATHS.0 | complete | operator root layout report. |
 | V010.PATHS.1 | complete | source/artifact/reference/report/cache separation. |

@@ -1002,6 +1002,34 @@ if grep -nE 'primary_text|diagnostic_text|raw_output|report_text|captured_text|l
   exit 1
 fi
 
+if test -f src/cli/model_artifacts/yvex_model_artifacts_surface.c; then
+  model_artifacts_surface_lines="$(wc -l < src/cli/model_artifacts/yvex_model_artifacts_surface.c | tr -d ' ')"
+  if test "$model_artifacts_surface_lines" -gt 350; then
+    echo "no model-artifacts root CLI surface monolith"
+    exit 1
+  fi
+fi
+
+model_artifacts_common_lines="$(wc -l < src/cli/model_artifacts/yvex_model_artifacts_surface_common.c | tr -d ' ')"
+if test "$model_artifacts_common_lines" -gt 500; then
+  echo "no hidden model-artifacts common monolith"
+  exit 1
+fi
+
+if find src/cli/model_artifacts -name '*.c' -print0 |
+    xargs -0 wc -l |
+    awk '$1 ~ /^[0-9]+$/ && $2 != "total" && $1 > 2500 { print; bad=1 } END { exit bad ? 1 : 0 }'; then
+  :
+else
+  echo "no giant model-artifacts CLI surface file"
+  exit 1
+fi
+
+if git grep -n 'src/cli/model_artifacts' -- Makefile | grep CORE_SRCS; then
+  echo "model-artifacts CLI surfaces must not enter CORE_SRCS"
+  exit 1
+fi
+
 if grep -nE '\b(system|popen|execl)[[:space:]]*\(' src/cli/commands/yvex_accounts_cli.c; then
   echo "accounts must use bounded exec helpers only"
   exit 1

@@ -114,8 +114,32 @@ test -f src/cli/render/yvex_model_target_render.h
 test -f src/cli/catalog/model_target_fields.def
 test -f src/runtime/yvex_chat.c
 test -f src/cli/commands/yvex_model_artifacts_cli.c
-test -f src/cli/model_artifacts/yvex_model_artifacts_surface.c
 test -f src/cli/model_artifacts/yvex_model_artifacts_surface.h
+test -f src/cli/model_artifacts/yvex_model_artifacts_surface_common.c
+test -f src/cli/model_artifacts/yvex_model_artifacts_surface_common.h
+test -f src/cli/model_artifacts/yvex_models_surface.c
+test -f src/cli/model_artifacts/yvex_models_surface.h
+test -f src/cli/model_artifacts/yvex_models_download_surface.c
+test -f src/cli/model_artifacts/yvex_models_download_surface.h
+test -f src/cli/model_artifacts/yvex_models_download_write_surface.c
+test -f src/cli/model_artifacts/yvex_models_download_process_surface.c
+test -f src/cli/model_artifacts/yvex_models_download_control_surface.c
+test -f src/cli/model_artifacts/yvex_models_prepare_surface.c
+test -f src/cli/model_artifacts/yvex_models_prepare_surface.h
+test -f src/cli/model_artifacts/yvex_models_artifacts_surface.c
+test -f src/cli/model_artifacts/yvex_models_artifacts_surface.h
+test -f src/cli/model_artifacts/yvex_fullmodel_surface.c
+test -f src/cli/model_artifacts/yvex_fullmodel_surface.h
+test -f src/cli/model_artifacts/yvex_fullmodel_report_surface.c
+test -f src/cli/model_artifacts/yvex_fullmodel_materialize_surface.c
+test -f src/cli/model_artifacts/yvex_attention_surface.c
+test -f src/cli/model_artifacts/yvex_attention_surface.h
+test -f src/cli/model_artifacts/yvex_context_surface.c
+test -f src/cli/model_artifacts/yvex_context_surface.h
+test -f src/cli/model_artifacts/yvex_moe_surface.c
+test -f src/cli/model_artifacts/yvex_moe_surface.h
+test -f src/cli/model_artifacts/yvex_tensor_collection_surface.c
+test -f src/cli/model_artifacts/yvex_tensor_collection_surface.h
 test -f src/cli/input/yvex_model_artifacts_args.c
 test -f src/cli/input/yvex_model_artifacts_args.h
 test -f src/cli/render/yvex_model_artifacts_render.c
@@ -872,6 +896,36 @@ BAD_MODEL_ARTIFACTS_COMMAND="$(
 if test -n "$BAD_MODEL_ARTIFACTS_COMMAND"; then
   echo "$BAD_MODEL_ARTIFACTS_COMMAND"
   echo "model-artifacts command adapter must stay thin"
+  exit 1
+fi
+
+if test -f src/cli/model_artifacts/yvex_model_artifacts_surface.c; then
+  model_artifacts_surface_lines="$(wc -l < src/cli/model_artifacts/yvex_model_artifacts_surface.c | tr -d ' ')"
+  if test "$model_artifacts_surface_lines" -gt 350; then
+    echo "src/cli/model_artifacts/yvex_model_artifacts_surface.c has $model_artifacts_surface_lines lines; root surface must stay <= 350"
+    exit 1
+  fi
+fi
+
+model_artifacts_common_lines="$(wc -l < src/cli/model_artifacts/yvex_model_artifacts_surface_common.c | tr -d ' ')"
+if test "$model_artifacts_common_lines" -gt 500; then
+  echo "src/cli/model_artifacts/yvex_model_artifacts_surface_common.c has $model_artifacts_common_lines lines; common helper must stay <= 500"
+  exit 1
+fi
+
+BAD_MODEL_ARTIFACTS_SURFACE_SIZE="$(
+  find src/cli/model_artifacts -name '*.c' -print0 |
+    xargs -0 wc -l |
+    awk '$1 ~ /^[0-9]+$/ && $2 != "total" && $1 > 2500 { print }' || true
+)"
+if test -n "$BAD_MODEL_ARTIFACTS_SURFACE_SIZE"; then
+  echo "$BAD_MODEL_ARTIFACTS_SURFACE_SIZE"
+  echo "model-artifacts CLI command-family surfaces must stay <= 2500 lines"
+  exit 1
+fi
+
+if git grep -n 'src/cli/model_artifacts' -- Makefile | grep CORE_SRCS; then
+  echo "src/cli/model_artifacts must stay out of CORE_SRCS"
   exit 1
 fi
 

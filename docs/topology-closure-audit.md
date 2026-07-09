@@ -338,3 +338,38 @@ Next recommended row: decompose
 `src/cli/model_artifacts/yvex_model_artifacts_surface.c` by surface into typed
 input/report/render ownership, starting with `models download` and
 `fullmodel`.
+
+## Follow-up: TOPOLOGY.CELL.MODEL_ARTIFACTS.2
+
+Previous `src/cli/model_artifacts/yvex_model_artifacts_surface.c` line count:
+14724.
+
+Final root surface status: deleted.
+
+Final root surface line count: 0.
+
+New command-family surface files:
+`yvex_models_surface.c`, `yvex_models_download_surface.c`,
+`yvex_models_download_write_surface.c`,
+`yvex_models_download_process_surface.c`,
+`yvex_models_download_control_surface.c`,
+`yvex_models_prepare_surface.c`,
+`yvex_models_artifacts_surface.c`, `yvex_fullmodel_surface.c`,
+`yvex_fullmodel_report_surface.c`, `yvex_fullmodel_materialize_surface.c`,
+`yvex_attention_surface.c`, `yvex_context_surface.c`, `yvex_moe_surface.c`,
+and `yvex_tensor_collection_surface.c`.
+
+Largest remaining `src/cli/model_artifacts/*.c` file:
+`src/cli/model_artifacts/yvex_models_prepare_surface.c` at 1838 lines.
+
+No `src/cli/model_artifacts/*.c` file is over 2500 lines.
+
+Remaining surface residue: command-family files are still CLI-only transitional
+surfaces and contain legacy parsing/output for compatibility. The debt is now
+bounded by command family instead of concentrated in one historical 14k-line
+surface. Later cleanup can migrate each family into stricter typed
+input/report/render ownership without re-opening the domain boundary.
+
+Next recommended row: rerun the closure audit and select the next largest
+remaining residue, or continue with a focused typed-renderer cleanup for the
+largest model-artifacts command family.

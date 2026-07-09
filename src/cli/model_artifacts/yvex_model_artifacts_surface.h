@@ -1,13 +1,12 @@
 /*
- * yvex_model_artifacts_surface.h - transitional model-artifacts CLI surfaces.
+ * yvex_model_artifacts_surface.h - model-artifacts surface declarations.
  *
  * Owner:
  *   src/cli/model_artifacts
  *
  * Owns:
- *   declarations for historical models/fullmodel/attention/context/moe and
- *   tensor-collection CLI surfaces while they are split away from the public
- *   command adapter.
+ *   declarations for the historical command-family surface entrypoints that
+ *   are implemented in family-owned CLI-only files.
  *
  * Does not own:
  *   domain registry storage, model reference ownership, model gate algorithms,
@@ -18,8 +17,8 @@
  *   exported functions preserve existing CLI syntax and behavior only.
  *
  * Boundary:
- *   transitional CLI surfaces are not domain ownership and do not enter
- *   libyvex.a.
+ *   these declarations preserve router compatibility; implementation
+ *   ownership is per command family and never libyvex.a.
  */
 #ifndef YVEX_MODEL_ARTIFACTS_SURFACE_H
 #define YVEX_MODEL_ARTIFACTS_SURFACE_H

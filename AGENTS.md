@@ -69,9 +69,10 @@ src/cli/commands/*.c
   opens, runtime state, or artifact/source/model behavior
 
 src/cli/model_artifacts/
-  transitional historical models/fullmodel/attention/context/moe and
-  tensor-collection CLI surface implementation after MODEL_ARTIFACTS.1; CLI-only,
-  not libyvex, and must keep moving toward typed input/report/render ownership
+  CLI-only command-family surface owners for historical models, download,
+  prepare/check, fullmodel, attention, context, MoE, and tensor-collection
+  behavior while the model-artifacts command surface continues moving toward
+  fully typed input/report/render ownership; never libyvex ownership
 
 src/cli/render/*.c
   normal/table/audit/trace renderers for CLI-owned output shapes
@@ -199,6 +200,13 @@ Model-artifacts public command symbols must stay thin adapters. Historical
 models/fullmodel/attention/context/moe and tensor-collection surface code may
 live only under src/cli/model_artifacts as CLI-only transitional residue until
 typed input/report/render ownership is completed; it must not enter libyvex.a.
+
+MODEL_ARTIFACTS.2 forbids
+src/cli/model_artifacts/yvex_model_artifacts_surface.c from acting as a
+historical CLI surface monolith. Historical models, download, prepare/check,
+fullmodel, attention, context, MoE, and tensor-collection command families must
+be split into command-family surface owners. Shared CLI-only helpers must remain
+small and may not become a compatibility backend.
 
 src/artifact/yvex_artifact.c
   artifact IO, inspect, metadata, tensor command surfaces
