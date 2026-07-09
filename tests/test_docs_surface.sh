@@ -229,8 +229,8 @@ for minimum_gate_label in \
   }
 done
 
-grep -nF "Active Next: \`V010.GGUF.ARTIFACT.ABI.0 - GGUF container/metadata/tensor_info ABI boundary\`" docs/spine.md >/dev/null || {
-  echo "spine must set Active Next to the GGUF artifact ABI boundary" >&2
+grep -nF "Active Next: \`V010.GGUF.QTYPE.ABI.0 - GGUF qtype byte geometry and refusal ABI\`" docs/spine.md >/dev/null || {
+  echo "spine must set Active Next to the GGUF qtype ABI boundary" >&2
   exit 1
 }
 
@@ -398,8 +398,8 @@ grep -nF "v0.1.0 closes only when every supported v0.1.0 generation family reach
   exit 1
 }
 
-grep -nF "Active Next: \`V010.GGUF.ARTIFACT.ABI.0 - GGUF container/metadata/tensor_info ABI boundary\`" docs/spine.md >/dev/null || {
-  echo "spine must keep the active implementation row on GGUF artifact ABI" >&2
+grep -nF "Active Next: \`V010.GGUF.QTYPE.ABI.0 - GGUF qtype byte geometry and refusal ABI\`" docs/spine.md >/dev/null || {
+  echo "spine must keep the active implementation row on GGUF qtype ABI" >&2
   exit 1
 }
 
@@ -408,8 +408,13 @@ grep -nF "| V010.QUANT.1 | complete | multi-family dtype/qtype support by runtim
   exit 1
 }
 
-grep -nF "| V010.QUANT.2 | active | qtype compute/refusal matrix. |" docs/spine.md >/dev/null || {
-  echo "spine must preserve V010.QUANT.2 as active quant row" >&2
+grep -nF "| V010.GGUF.QTYPE.ABI.0 | active | GGUF qtype byte geometry and refusal ABI. |" docs/spine.md >/dev/null || {
+  echo "spine must preserve V010.GGUF.QTYPE.ABI.0 as active quant row" >&2
+  exit 1
+}
+
+grep -nF "| V010.QUANT.2 | planned | qtype compute/refusal matrix. |" docs/spine.md >/dev/null || {
+  echo "spine must keep V010.QUANT.2 planned after qtype ABI" >&2
   exit 1
 }
 

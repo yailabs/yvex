@@ -43,7 +43,7 @@ domain algorithms. No writer owns command output.
 
 | Area | Current state | Target state | Next row |
 | --- | --- | --- | --- |
-| GGUF ABI | parser fixtures and owner seeds | container/metadata/tensor_info ABI closed | V010.GGUF.ARTIFACT.ABI.0 |
+| GGUF ABI | complete/report-only + fixture-proof | container/metadata/tensor_info ABI closed | V010.GGUF.QTYPE.ABI.0 |
 | GGUF qtype | report-only policy and geometry seeds | byte geometry and qtype matrix aligned | V010.GGUF.QTYPE.ABI.0 |
 | Quant | qtype role reports | compute/refusal matrix | V010.QUANT.2 |
 | GGUF writer | explicit refusal | concrete emitted bytes | V010.GGUF.WRITER.0 |
@@ -158,6 +158,13 @@ SPINE.SYSTEM.TARGET.0
 -> V010.RUNTIME.DESCRIPTOR.GGUF.0
 ```
 
+## Follow-Up: V010.GGUF.ARTIFACT.ABI.0
+
+`V010.GGUF.ARTIFACT.ABI.0` closed the GGUF container, metadata,
+tensor_info, and ABI-visible range boundary using typed facts and tiny fixture
+proof. The writer, qtype ABI, writer-reader roundtrip, artifact
+materialization, and runtime descriptor projection remain planned.
+
 ## Forbidden Claims
 
 This target does not claim any completed implementation state for:
@@ -170,4 +177,4 @@ This target does not claim any completed implementation state for:
 - executable runtime descriptors
 - graph execution
 - real prefill, attention-backed KV, decode, logits, sampling, or generation
-- eval, benchmark, throughput, or release readiness
+- eval, benchmark, performance-rate evidence, or release readiness

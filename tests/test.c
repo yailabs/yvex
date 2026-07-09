@@ -14,6 +14,7 @@ int yvex_test_fs(void);
 int yvex_test_artifact(void);
 int yvex_test_artifact_integrity(void);
 int yvex_test_gguf(void);
+int yvex_test_gguf_artifact_abi(void);
 int yvex_test_artifact_naming(void);
 int yvex_test_source_manifest(void);
 int yvex_test_native_weights(void);
@@ -90,6 +91,7 @@ static int run_filesystem_artifacts_gguf(void)
     if (run_test("artifact", yvex_test_artifact) != 0) return 1;
     if (run_test("artifact_integrity", yvex_test_artifact_integrity) != 0) return 1;
     if (run_test("gguf", yvex_test_gguf) != 0) return 1;
+    if (run_test("gguf_artifact_abi", yvex_test_gguf_artifact_abi) != 0) return 1;
     if (run_test("artifact_naming", yvex_test_artifact_naming) != 0) return 1;
     if (run_test("source_manifest", yvex_test_source_manifest) != 0) return 1;
     if (run_test("native_weights", yvex_test_native_weights) != 0) return 1;

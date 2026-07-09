@@ -222,6 +222,14 @@ backends, and broad monolithic replacement files are forbidden. GGUF ABI, qtype
 geometry, writer, roundtrip, artifact descriptor, materialization, runtime
 descriptor, graph bind, and backend qtype owners must remain distinct.
 
+V010.GGUF.ARTIFACT.ABI.0 closes only the GGUF container, metadata,
+tensor_info, and ABI-visible range boundary. It may validate magic, version,
+metadata key/value ABI, tensor_info ABI, and byte-range safety using tiny
+fixtures. It must not implement writer completion, qtype compute support,
+quantization, roundtrip completion, generation-capable artifact emission,
+materialization proof, runtime descriptor readiness, graph execution, or
+generation.
+
 src/artifact/yvex_artifact.c
   artifact IO, inspect, metadata, tensor command surfaces
 

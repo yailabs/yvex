@@ -350,5 +350,17 @@ if git grep -nE "$system_target_claim_pattern" -- $system_target_files; then
   exit 1
 fi
 
+test -x tests/test_gguf_artifact_abi.sh
+grep -nF 'yvex_gguf_artifact_abi_report_build' src/gguf/yvex_gguf_report.c >/dev/null
+grep -nF 'yvex_gguf_metadata_abi_from_gguf' src/gguf/yvex_gguf_metadata.c >/dev/null
+grep -nF 'yvex_gguf_tensor_info_abi_from_gguf' src/gguf/yvex_gguf_tensor_info.c >/dev/null
+grep -nF 'yvex_gguf_range_fact_from_gguf' src/gguf/yvex_gguf_range_map.c >/dev/null
+
+gguf_claim_pattern='generation-rea''dy|inference-rea''dy|release-rea''dy|writer com''plete|roundtrip com''plete|generation-capable artifact emit''ted|runtime descriptor rea''dy|benchmark meas''ured|through''put'
+if git grep -nE "$gguf_claim_pattern" -- src/gguf docs/system-target.md docs/spine.md; then
+  echo "GGUF ABI row must not introduce runtime, writer, generation, benchmark, or release claims"
+  exit 1
+fi
+
 echo "topology closure audit: system target guards ok"
 echo "topology closure audit: model-artifacts CLI surface guards ok"

@@ -1176,4 +1176,27 @@ if git grep -nE "$system_target_claim_pattern" -- $system_target_files; then
   exit 1
 fi
 
+grep -nF 'yvex_gguf_container_abi_from_header' src/gguf/yvex_gguf_container.c >/dev/null
+grep -nF 'yvex_gguf_metadata_abi_from_gguf' src/gguf/yvex_gguf_metadata.c >/dev/null
+grep -nF 'yvex_gguf_tensor_info_abi_from_gguf' src/gguf/yvex_gguf_tensor_info.c >/dev/null
+grep -nF 'yvex_gguf_range_fact_from_gguf' src/gguf/yvex_gguf_range_map.c >/dev/null
+grep -nF 'yvex_gguf_reader_classify_error' src/gguf/yvex_gguf_reader.c >/dev/null
+grep -nF 'yvex_gguf_descriptor_abi_from_sections' src/gguf/yvex_gguf_descriptor.c >/dev/null
+grep -nF 'yvex_gguf_artifact_abi_report_build' src/gguf/yvex_gguf_report.c >/dev/null
+grep -nF 'yvex_gguf_writer_supported' src/gguf/yvex_gguf_writer.c >/dev/null
+grep -nF 'yvex_gguf_roundtrip_supported' src/gguf/yvex_gguf_roundtrip.c >/dev/null
+
+if git grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fwrite)\s*\(|stdout|stderr' -- \
+    src/gguf/yvex_gguf_*.c \
+    src/gguf/yvex_gguf_private.h; then
+  echo "GGUF ABI owner files must not write operator output"
+  exit 1
+fi
+
+gguf_claim_pattern='generation-rea''dy|inference-rea''dy|release-rea''dy|writer com''plete|roundtrip com''plete|generation-capable artifact emit''ted|runtime descriptor rea''dy|benchmark meas''ured|through''put'
+if git grep -nE "$gguf_claim_pattern" -- src/gguf docs/system-target.md docs/spine.md; then
+  echo "GGUF ABI row must not introduce runtime, writer, generation, benchmark, or release claims"
+  exit 1
+fi
+
 echo "code naturalness: ok"

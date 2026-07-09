@@ -20,6 +20,8 @@
  */
 #include "yvex_gguf_private.h"
 
+#include <stddef.h>
+
 static const yvex_gguf_boundary_fact tensor_info_boundary = {
     "src/gguf/yvex_gguf_tensor_info.c",
     "GGUF tensor_info ABI",
@@ -34,6 +36,18 @@ const yvex_gguf_boundary_fact *yvex_gguf_tensor_info_boundary(void)
     return &tensor_info_boundary;
 }
 
+/* Contract: initializes tensor_info ABI facts to fail-closed not-evaluated state. */
+void yvex_gguf_tensor_info_abi_init(yvex_gguf_tensor_info_abi *abi)
+{
+    if (!abi) return;
+    abi->status = YVEX_GGUF_ABI_SECTION_NOT_EVALUATED;
+    abi->tensor_count = 0ull;
+    abi->max_rank = 0u;
+    abi->rank_one_tensor_count = 0ull;
+    abi->named_tensor_count = 0ull;
+    abi->reason = "GGUF tensor_info ABI not evaluated";
+}
+
 /* Contract: validates GGUF tensor rank limits only, not semantic role mapping. */
 int yvex_gguf_tensor_info_rank_supported(unsigned int rank, const char **reason)
 {
@@ -43,4 +57,61 @@ int yvex_gguf_tensor_info_rank_supported(unsigned int rank, const char **reason)
     }
     if (reason) *reason = "unsupported GGUF tensor_info rank";
     return 0;
+}
+
+/* Contract: validates parsed tensor_info rows as ABI facts, not runtime roles. */
+int yvex_gguf_tensor_info_abi_from_gguf(const yvex_gguf *gguf,
+                                        yvex_gguf_tensor_info_abi *abi,
+                                        const char **reason)
+{
+    unsigned long long i;
+    unsigned long long count;
+
+    yvex_gguf_tensor_info_abi_init(abi);
+    if (!gguf || !abi) {
+        if (reason) *reason = "GGUF tensor_info requires a parsed GGUF view";
+        return 0;
+    }
+
+    count = yvex_gguf_tensor_count(gguf);
+    abi->tensor_count = count;
+
+    for (i = 0ull; i < count; ++i) {
+        const yvex_gguf_tensor_info *tensor = yvex_gguf_tensor_at(gguf, i);
+        unsigned int d;
+
+        if (!tensor || !tensor->name || tensor->name[0] == '\0') {
+            abi->status = YVEX_GGUF_ABI_SECTION_MALFORMED;
+            abi->reason = "tensor_info entry is missing a tensor name";
+            if (reason) *reason = abi->reason;
+            return 0;
+        }
+        abi->named_tensor_count += 1ull;
+
+        if (!yvex_gguf_tensor_info_rank_supported(tensor->rank, reason)) {
+            abi->status = YVEX_GGUF_ABI_SECTION_MALFORMED;
+            abi->reason = reason ? *reason : "tensor_info rank unsupported";
+            return 0;
+        }
+        if (tensor->rank > abi->max_rank) {
+            abi->max_rank = tensor->rank;
+        }
+
+        for (d = 0u; d < tensor->rank; ++d) {
+            if (tensor->dims[d] == 0ull) {
+                abi->status = YVEX_GGUF_ABI_SECTION_MALFORMED;
+                abi->reason = "tensor_info dimension is zero";
+                if (reason) *reason = abi->reason;
+                return 0;
+            }
+        }
+        if (tensor->rank == 1u) {
+            abi->rank_one_tensor_count += 1ull;
+        }
+    }
+
+    abi->status = YVEX_GGUF_ABI_SECTION_OK;
+    abi->reason = "GGUF tensor_info ABI accepted";
+    if (reason) *reason = abi->reason;
+    return 1;
 }

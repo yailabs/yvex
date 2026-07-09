@@ -309,6 +309,7 @@ test -f src/gguf/yvex_gguf_name_map.c
 test -f src/gguf/yvex_gguf_layout_map.c
 test -f src/gguf/yvex_gguf_descriptor.c
 test -f src/gguf/yvex_gguf_report.c
+test -x tests/test_gguf_artifact_abi.sh
 test -f src/cli/commands/yvex_quant_cli.c
 test -f src/cli/io/yvex_cli_out.c
 test -f src/cli/io/yvex_cli_error.c
@@ -1100,6 +1101,11 @@ printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_graph.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_graph_bind.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/graph/yvex_graph_execute.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/gguf/yvex_gguf_container.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/gguf/yvex_gguf_metadata.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/gguf/yvex_gguf_tensor_info.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/gguf/yvex_gguf_range_map.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/gguf/yvex_gguf_reader.c' >/dev/null
+printf '%s\n' "$CORE_BLOCK" | grep -F 'src/gguf/yvex_gguf_report.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/gguf/yvex_gguf_qtype.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/source/yvex_source.c' >/dev/null
 printf '%s\n' "$CORE_BLOCK" | grep -F 'src/generation/yvex_generation.c' >/dev/null
