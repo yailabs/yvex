@@ -242,23 +242,17 @@ paths. `CORE_SRCS` does not include `src/cli/input`, `src/cli/commands`,
 
 ## Spine Alignment
 
-Required rows present:
+This audit remains the normative inventory of control-plane/domain ownership
+residue. It is not a product progress map and its historical topology row IDs
+do not belong in the compact main spine.
 
-- `TOPOLOGY.CELL.SOURCE.0`
-- `TOPOLOGY.CELL.GENERATION.0`
-- `TOPOLOGY.CELL.KV.0`
-- `TOPOLOGY.CELL.SAMPLING.0`
-- `TOPOLOGY.CELL.GRAPH.0`
-- `TOPOLOGY.CELL.MODEL_TARGET.0`
-- `TOPOLOGY.CELL.MODEL_TARGET.1`
-- `TOPOLOGY.CELL.MODEL_TARGET.2`
-- `TOPOLOGY.CELL.MODEL_TARGET.3`
-- `TOPOLOGY.CELL.CLOSURE.1`
+The priority-blocking sequence is now owned by
+`docs/repair/v010-foundation-closure.md`. That sequence starts with the completed
+documentation refoundation and makes `V010.REBASE.DEEPSEEK.0` Active Next.
+Topology findings remain valid inputs to the owning repair or decommission row,
+but they do not advance artifact or runtime gates.
 
-`TOPOLOGY.CELL.CLOSURE.0` remains planned/open. `V010.QUANT.2` remains open.
-This audit does not change Active Next.
-
-## Recommended Cleanup Rows
+## Retained Cleanup Findings
 
 | Row | Purpose |
 | --- | --- |
@@ -280,8 +274,8 @@ major source/generation/KV/sampling/graph/model-target mixed-cell surfaces, but
 global topology closure is still blocked. The highest-risk residue is direct
 operator output and CLI-shaped command/report ownership in `src/model`,
 `src/runtime`, `src/artifact`, `src/gguf`, `src/backend`, `src/tokenizer`, and
-provider/account modules. The next cleanup pass should use this audit as the
-cleanup map before returning to `V010.QUANT.2`.
+provider/account modules. The active repair spine decides when each finding is
+removed or absorbed; this audit does not set Active Next.
 
 ## Follow-up: TOPOLOGY.CELL.MODEL_ARTIFACTS.0
 

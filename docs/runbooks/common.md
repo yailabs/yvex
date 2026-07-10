@@ -1,811 +1,190 @@
 # Common Operator Runbook
 
-## What This File Is
+Date: 2026-07-10
+Status: repository validation and hygiene
 
-This runbook contains model-independent YVEX operator lanes.
+## Purpose
 
-Use model-specific runbooks for DeepSeek or GLM work.
+This runbook covers repository-wide build, test, claim, topology, and artifact
+hygiene. It deliberately excludes selected model execution, diagnostic runtime
+command atlases, and future command syntax.
 
-This file does not claim full model generation, provider generation,
-evaluation, or benchmark capability.
+Validation proves only the behavior exercised by each test. It does not make
+the DeepSeek target, a complete model artifact, CUDA generation, evaluation,
+benchmark, or release supported.
 
-`yvex commands` is the grouped command catalog. `yvex help COMMAND` shows the
-top-level command grammar before the domain-owned detailed help.
-
-Normal output is compact by default. List-like commands use readable tables by
-default. `--output table` appears below as a transitional regression check where
-it exists, not as the long-term operator UX. Use `--audit` for row-promotion
-evidence and full diagnostic fields.
-For model report surfaces such as `model-target tensor-map` and
-`model-target quant-policy`, normal/table output must stay compact; detailed
-fields such as `tensor_map.entry.*` remain audit-only evidence.
-When changing those renderers, use YVEX's native output-contract check instead
-of shell line-count or grep pipelines.
-
-```sh
-./yvex model-target tensor-map gemma-4-12b-it --check-output-contract normal
-./yvex model-target tensor-map gemma-4-12b-it --check-output-contract audit
-./yvex model-target tensor-map gemma-4-12b-it --role output-head --check-output-contract normal
-./yvex model-target tensor-map gemma-4-12b-it --role missing-roles --check-output-contract normal
-./yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0 --check-output-contract normal
-./yvex model-target quant-policy gemma-4-12b-it --check-output-contract normal
-```
-
-## Lane 0 — Fast regression after a wave
-
-Purpose:
-  Quickly check command discovery, path resolution, model-target reporting,
-  target decision, full-runtime candidate, and dense candidate reporting,
-  Qwen/Metal pressure reporting, fullmodel report/materialization-plan/
-  materialize/descriptor/family-runtime help, attention/KV/context/MoE/
-  tensor-collection report help, tokenizer fixture diagnostics, and minimal KV
-  diagnostics.
+## Fast Build Check
 
 Requires:
-  Repository root.
-  Configured model root is useful but not mandatory.
-  No real model artifact required.
+  repository root and the normal C toolchain.
 
 Writes:
-  No real model artifact.
-  May touch normal runtime/test output produced by existing commands.
+  ignored files under `build/` and generated root binaries.
 
 Safe to rerun:
-  yes
+  yes.
 
 Stop after:
-  minimal KV diagnostics pass and no model payload path is required.
+  build and smoke tests pass.
 
 Boundary:
-  read/diagnostic command surface only
-  no source conversion
-  no alias refresh
-  target decision report only
-  full-runtime candidate report only
-  dense candidate report only
-  Qwen/Metal pressure target report only
-  bounded fullmodel proof/refusal, descriptor, family-runtime, attention, KV, context, MoE, and tensor-collection diagnostics only
-  no uncontrolled full backend allocation
-  no daemon
-  no generation claim
+  build and existing CLI regression only.
 
 ```sh
 make
-./yvex version
-./yvex --version
-./yvex commands
-./yvex info
-./yvex help generate
-./yvex help fullmodel
-./yvex help attention
-./yvex help kv
-./yvex help context
-./yvex help moe
-./yvex help tensor-collection
-./yvexd --help
-./yvex paths
-./yvex paths resolve --family deepseek --kind source
-./yvex paths resolve --family deepseek --kind gguf
-./yvex paths resolve --family glm --kind source
-./yvex paths resolve --family qwen --kind source
-./yvex paths resolve --family gemma --kind source
-./yvex model-target classes
-./yvex model-target list
-./yvex model-target list --output table
-./yvex model-target inspect deepseek4-v4-flash-selected-embed
-./yvex model-target inspect deepseek4-v4-flash-selected-embed --paths --audit
-./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm
-./yvex model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths --audit
-./yvex model-target inspect glm-5.2-official-safetensors
-./yvex model-target inspect glm-5.2-official-safetensors --paths --audit
-./yvex model-target inspect qwen3-8b
-./yvex model-target inspect qwen3-8b --paths
-./yvex model-target class-profile qwen3-8b
-./yvex model-target class-profile qwen3-8b --output table
-./yvex model-target class-profile qwen3-8b --audit
-./yvex model-target tensor-collection qwen3-8b
-./yvex model-target tensor-collection qwen3-8b --output table
-./yvex model-target tensor-collection qwen3-8b --audit
-./yvex model-target tensor-map qwen3-8b
-./yvex model-target tensor-map qwen3-8b --output table
-./yvex model-target tensor-map qwen3-8b --audit
-./yvex model-target tensor-map qwen3-8b --role output-head
-./yvex model-target tensor-map qwen3-8b --role output-head --output table
-./yvex model-target tensor-map qwen3-8b --role output-head --audit
-./yvex model-target tokenizer-map qwen3-8b
-./yvex model-target tokenizer-map qwen3-8b --output table
-./yvex model-target tokenizer-map qwen3-8b --audit
-./yvex model-target missing-roles qwen3-8b
-./yvex model-target missing-roles qwen3-8b --output table
-./yvex model-target missing-roles qwen3-8b --audit
-./yvex model-target tensor-map qwen3-8b --gate v0.1.0
-./yvex model-target tensor-map qwen3-8b --gate v0.1.0 --audit
-./yvex model-target quant-policy qwen3-8b
-./yvex model-target quant-policy qwen3-8b --output table
-./yvex model-target quant-policy qwen3-8b --audit
-./yvex model-target quant-policy qwen3-6-35b-a3b --models-root "$HOME/lab/models" --role-support
-./yvex model-target quant-policy qwen3-6-35b-a3b --models-root "$HOME/lab/models" --role-support --output table
-./yvex model-target inspect gemma-4-12b-it
-./yvex model-target inspect gemma-4-12b-it --paths
-./yvex model-target class-profile gemma-4-12b-it
-./yvex model-target class-profile gemma-4-12b-it --output table
-./yvex model-target class-profile gemma-4-12b-it --audit
-./yvex model-target tensor-collection gemma-4-12b-it
-./yvex model-target tensor-collection gemma-4-12b-it --output table
-./yvex model-target tensor-collection gemma-4-12b-it --audit
-./yvex model-target tensor-map gemma-4-12b-it
-./yvex model-target tensor-map gemma-4-12b-it --output table
-./yvex model-target tensor-map gemma-4-12b-it --audit
-./yvex model-target tensor-map gemma-4-12b-it --role output-head
-./yvex model-target tensor-map gemma-4-12b-it --role output-head --output table
-./yvex model-target tensor-map gemma-4-12b-it --role output-head --audit
-./yvex model-target tokenizer-map gemma-4-12b-it
-./yvex model-target tokenizer-map gemma-4-12b-it --output table
-./yvex model-target tokenizer-map gemma-4-12b-it --audit
-./yvex model-target missing-roles gemma-4-12b-it
-./yvex model-target missing-roles gemma-4-12b-it --output table
-./yvex model-target missing-roles gemma-4-12b-it --audit
-./yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0
-./yvex model-target tensor-map gemma-4-12b-it --gate v0.1.0 --audit
-./yvex model-target quant-policy gemma-4-12b-it
-./yvex model-target quant-policy gemma-4-12b-it --output table
-./yvex model-target quant-policy gemma-4-12b-it --audit
-./yvex model-target quant-policy gemma-4-31b-it --models-root "$HOME/lab/models" --role-support
-./yvex model-target quant-policy --gate v0.1.0 --models-root "$HOME/lab/models" --output table
-./yvex model-target decision --help
-./yvex model-target decision --release v0.1.0 --output table
-./yvex model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next
-./yvex model-target candidate --help
-./yvex model-target candidate --release v0.1.0 --output table
-./yvex model-target candidate --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-next
-./yvex model-target dense-candidate --help
-./yvex model-target dense-candidate --release v0.1.0 --output table
-./yvex model-target dense-candidate --release v0.1.0 --audit --include-candidates --include-requirements --include-blockers --include-next
-./yvex model-target qwen-metal --help
-./yvex model-target qwen-metal --release v0.1.0 --output table
-./yvex model-target qwen-metal --release v0.1.0 --audit --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next
-./yvex source-manifest report --family qwen --release v0.1.0
-./yvex source-manifest report --family qwen --release v0.1.0 --output table
-./yvex source-manifest report --family qwen --release v0.1.0 --audit
-./yvex source-manifest report --family gemma --release v0.1.0
-./yvex source-manifest report --family gemma --release v0.1.0 --output table
-./yvex source-manifest report --family gemma --release v0.1.0 --audit
-./yvex fullmodel report --model glm-5.2-official-safetensors --backend cpu --audit
-./yvex fullmodel materialization-plan --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --audit
-./yvex fullmodel materialize --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --dry-run --audit
-./yvex fullmodel descriptor --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --audit
-./yvex attention report --model glm-5.2-official-safetensors --family glm --backend cpu --audit
-./yvex kv report --model glm-5.2-official-safetensors --family glm --backend cpu --audit
-./yvex context report --model glm-5.2-official-safetensors --family glm --backend cpu --audit
-./yvex moe report --model glm-5.2-official-safetensors --family glm --backend cpu --include-blockers --audit
-./yvex tensor-collection report --model glm-5.2-official-safetensors --family glm --collection moe --backend cpu --include-blockers --audit
-./yvex backend cpu
-./yvex tokenizer tests/fixtures/gguf/valid-tokenizer-simple.gguf
-./yvex tokenize tests/fixtures/gguf/valid-tokenizer-simple.gguf --text "hello"
-./yvex detokenize tests/fixtures/gguf/valid-tokenizer-simple.gguf --ids 0,1
-./yvex prompt tests/fixtures/gguf/valid-tokenizer-simple.gguf --user "hello" --tokens
-./yvex input prompt --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --text "hello"
-./yvex input tokens --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --tokens 0,1
-./yvex kv --layers 1 --heads 2 --head-dim 4 --capacity 8 --append-demo --read-position 0
+make smoke
 ```
 
-`model-target class-profile qwen3-8b` and `model-target class-profile
-gemma-4-12b-it` are header-metadata-only model-class evidence. They count
-lexical tensor-name patterns from safetensors headers and do not map tensor
-roles, load payloads, execute runtime paths, generate, evaluate, benchmark, or
-mark a release ready.
-
-`model-target tensor-collection qwen3-8b` and `model-target
-tensor-collection gemma-4-12b-it` are header-only tensor collection
-inventories. They group lexical tensor candidates into embedding, attention
-Q/K/V/O, MLP gate/up/down, normalization, output-head, MoE, tokenizer-sidecar,
-and KV-runtime-state buckets without tensor role mapping, payload loading,
-runtime descriptors, graph consumers, generation, evaluation, or benchmark
-claims.
-
-`model-target tensor-map qwen3-8b` is a header-derived tensor naming map for
-Qwen source tensors. It assigns native names to canonical YVEX role-label
-candidates without payload loading, artifact emission, runtime descriptor
-construction, graph consumption, Metal support, generation, evaluation, or
-benchmark claims.
-
-Downloaded Qwen targets created with `--repo ... --name`, such as
-`qwen3-6-35b-a3b`, use the same surface. The mapper now recognizes
-`model.language_model` embedding/final-norm paths, self-attention Q/K/V/O and
-Q/K norm paths, Qwen linear-attention names, MoE router names, expert
-gate-up/down names, and shared-expert names from safetensors headers. Unknown
-header names remain visible in audit output but do not block prepare when the
-required role groups are present.
-
-`model-target tensor-map gemma-4-12b-it` is a header-derived dense tensor
-naming map for Gemma source tensors. It assigns native names to canonical YVEX
-dense role-label candidates without payload loading, artifact emission, runtime
-descriptor construction, graph consumption, CUDA runtime support, generation,
-evaluation, or benchmark claims.
-
-Downloaded Gemma targets created with `--repo ... --name`, such as
-`gemma-4-31b-it`, use the same surface. The mapper now recognizes
-`model.language_model` embedding, attention, dense MLP, pre/post feed-forward
-norm, layer-scalar, final-norm, and separate output-head names. If no separate
-output head exists, bounded config evidence may report a tied-output-head
-candidate; otherwise output-head remains an explicit blocker.
-
-For tensor-map, output-head, missing-roles, mapping-gate, and quant-policy
-surfaces, normal output is intentionally compact and table output remains
-tabular. Use `--audit` when row-promotion evidence is needed, including
-`tensor_map.entry.*`, output-head diagnostics, missing-role entries, gate
-fields, qtype policy fields, sidecar paths, and unsupported boundary fields.
-
-`model-target tensor-map TARGET --role output-head` is a header-derived
-output-head map for Qwen and Gemma source tensors. It identifies output-head,
-final-norm, and embedding candidates, reports missing or ambiguous output-head
-status, and checks header-shape relation where available. It does not compute
-logits, produce final hidden state, emit artifacts, build runtime descriptors,
-feed graph consumers, generate, evaluate, or benchmark.
-
-`model-target tokenizer-map TARGET` is a sidecar-metadata map for Qwen and
-Gemma source trees. It reports tokenizer/config/special-token and generation
-sidecar presence, bounded parse status, tokenizer class, model type, vocab
-size, special token IDs, additional special-token count, chat-template
-presence, and vocab/output-head relation, then writes
-`reports/<family>/<target>.tokenizer-map.json` for downloaded dynamic targets.
-`model-target tensor-map TARGET --role tokenizer` remains a compatibility
-surface. The map does not tokenize, detokenize, execute chat templates,
-implement EOS/stop behavior, compute logits, emit artifacts, build runtime
-descriptors, feed graph consumers, generate, evaluate, or benchmark.
-
-`model-target missing-roles TARGET` is the compact report-only blocker summary
-for Qwen and Gemma source trees, including downloaded `--repo ... --name`
-targets. It aggregates header-derived tensor naming, output-head, tokenizer
-metadata, planned artifact, and sidecar evidence into the current top blocker.
-Normal, table, audit, and JSON outputs report the same role groups. Use
-`--audit` for the full diagnostic field set. It does not load tensor payloads,
-emit artifacts, materialize tensors, build runtime descriptors, execute graph
-work, compute logits, tokenize, generate, evaluate, or benchmark.
-
-`model-target tensor-map TARGET --gate v0.1.0` is the compact mapping-stage
-gate for Qwen and Gemma source trees. It aggregates model-class, collection,
-naming, output-head, tokenizer metadata, and missing-role evidence, then either
-blocks on the remaining mapping issue or hands off to qtype/artifact planning.
-It is not artifact creation, per-role qtype support, runtime descriptor
-construction, graph execution, tokenizer runtime, generation, evaluation, or
-benchmark evidence.
-
-`model-target quant-policy TARGET` is the report-only qtype policy handoff for
-Qwen and Gemma source trees whose mapping gate can pass. It reads source headers
-and existing YVEX qtype support rows to report the source dtype profile,
-preferred artifact-planning qtype, candidate qtypes, refused qtypes, calibration
-and imatrix deferrals, compute-support deferral, and downstream blockers. It
-does not load tensor payloads, quantize tensors, emit GGUF, materialize tensors,
-build runtime descriptors, feed graph consumers, generate, evaluate, or
-benchmark.
-
-`model-target quant-policy TARGET --role-support` is the V010.QUANT.1
-role-support report. It lists runtime role groups, source dtype, source tensor
-counts, planned artifact qtype candidates/refusals, storage status, compute
-status, calibration/imatrix deferral, and artifact-emission blockers. Dynamic
-downloaded Qwen and Gemma targets use their downloaded source sidecars. DeepSeek
-selected slices report selected-slice evidence only and remain blocked on a full
-family artifact path. `model-target quant-policy --gate v0.1.0` aggregates the
-DeepSeek, Qwen, and Gemma family rows. Both commands are report-only: no tensor
-payload loading, quantization, GGUF emission, materialization, runtime
-descriptor construction, graph execution, generation, eval, or benchmark.
-
-## Lane 1 — Graph-only regression
-
-Purpose:
-  Exercise standalone graph primitives, controlled fixture graph, and
-  controlled transformer block fixture.
+## Focused Documentation Check
 
 Requires:
-  No real model artifact.
+  repository root.
 
 Writes:
-  controlled tiny GGUF fixture under operator-local model storage
+  nothing.
 
 Safe to rerun:
-  yes, but it overwrites the controlled tiny fixture.
+  yes.
 
 Stop after:
-  controlled transformer block fixture executes.
+  the compact spine, repair transition, exact target, unsupported boundaries,
+  and canonical terminology guards pass.
 
 Boundary:
-  controlled graph proofs only
-  standalone primitives only
-  controlled block fixture only
-  not real transformer block over model weights
-  not layer scheduling
-  not full transformer prefill
-  not decode/logits/sampling/generation
+  documentation/claim consistency only.
 
 ```sh
-./yvex graph --backend cpu --execute-op --op rope --position 7 --head-dim 8
-./yvex graph --backend cpu --execute-op --op attention --seq-len 4 --position 3 --head-dim 8 --causal
-./yvex graph --backend cpu --execute-op --op matmul --m 1 --k 8 --n 8
-./yvex graph --backend cpu --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated
-./yvex graph --backend cpu --execute-op --op mlp --hidden-dim 8 --ffn-dim 16 --activation silu --gated --experts 2 --expert-id 1
-./yvex gguf-emit controlled --out "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf" --model-name yvex-controlled-fixture --arch deepseek --overwrite
-./yvex inspect "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf"
-./yvex tensors "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf"
-./yvex graph --model "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf" --backend cpu --execute-fixture --fixture-token 0
-./yvex graph --model "$HOME/lab/models/gguf/deepseek/deepseek4-v4-flash-fixture-embed-F32-noimatrix-yvex-v1.gguf" --backend cpu --execute-fixture --fixture-token 1
-./yvex graph --backend cpu --execute-block --block fixture --seq-len 4 --position 3 --hidden-dim 8 --head-dim 8 --ffn-dim 16
+make check-docs
+sh tests/test_docs_surface.sh
 ```
 
-## Lane 2 — Daemon and accepted-only diagnostics
-
-Purpose:
-  Check daemon status surface and accepted-only diagnostic chat/run commands.
+## Full Repository Validation
 
 Requires:
-  Tokenizer fixture for chat/run diagnostics.
+  repository root and build dependencies.
 
 Writes:
-  No model artifacts.
+  ignored build/test output.
 
 Safe to rerun:
-  yes
+  yes.
 
 Stop after:
-  daemon one-request commands and accepted-only diagnostics complete.
+  every required non-CUDA validation command passes.
 
 Boundary:
-  daemon status only
-  accepted-only diagnostic path
-  not provider completion
-  not streaming
-  not generation
-
-```sh
-./yvexd --host 127.0.0.1 --port 18081 --one-request
-./yvexd --host 127.0.0.1 --port 18082 --one-request
-./yvex chat --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu
-./yvex run --model tests/fixtures/gguf/valid-tokenizer-simple.gguf --backend cpu --prompt "hello"
-```
-
-## Lane 3 — Full repository validation and hygiene
-
-Purpose:
-  Run repository validation, CUDA validation, and artifact guardrails before
-  commit.
-
-Requires:
-  Repository root.
-  CUDA validation requires CUDA-capable host.
-
-Writes:
-  No model artifact.
-  May create normal build/test output.
-
-Safe to rerun:
-  yes
-
-Stop after:
-  validation commands pass and artifact guardrails show no tracked real model
-  artifacts.
-
-Boundary:
-  validation only
-  no model capability claim
-  no benchmark claim
-  no artifact commit
+  implementation and architecture regression for existing behavior; no
+  capability promotion.
 
 ```sh
 git diff --check
-make check
+make
 make smoke
+make check
+make check-docs
 sh tests/test_docs_surface.sh
 sh tests/test_surface.sh
 sh tests/test_source_layout.sh
 sh tests/test_code_natural.sh
+sh tests/test_topology_closure_audit.sh
+```
+
+## CUDA Validation
+
+Requires:
+  a CUDA-capable host with the repository CUDA dependencies.
+
+Writes:
+  ignored CUDA build/test output.
+
+Safe to rerun:
+  yes.
+
+Stop after:
+  CUDA build, unit, smoke, refusal, and reference checks pass.
+
+Boundary:
+  bounded CUDA evidence only. The open fail-closed repair remains a blocker
+  until `V010.CUDA.FAILCLOSED.0` closes.
+
+```sh
 make check-cuda
+```
+
+## Artifact Guardrail
+
+Requires:
+  repository root.
+
+Writes:
+  nothing.
+
+Safe to rerun:
+  yes.
+
+Stop after:
+  no model payloads are tracked and every tracked GGUF is a tiny test fixture.
+
+Boundary:
+  repository hygiene only.
+
+```sh
+git ls-files '*.safetensors' '*.bin' '*.dat'
+git ls-files '*.gguf'
+```
+
+Expected result:
+
+- the first command prints nothing;
+- the second command lists only tiny files under `tests/fixtures/gguf/`.
+
+## Claim Scan
+
+Requires:
+  repository root.
+
+Writes:
+  nothing.
+
+Safe to rerun:
+  yes.
+
+Stop after:
+  permanent naturalness and documentation guards pass, and changed canonical
+  documents contain no unsupported positive claim.
+
+Boundary:
+  claim drift detection only; negative boundary statements remain valid.
+
+```sh
+sh tests/test_code_natural.sh
+sh tests/test_docs_surface.sh
+git diff -- docs MODEL_ARTIFACTS.md AGENTS.md
+```
+
+## Operator-Local Cleanup
+
+Never add source weights, emitted artifacts, registries, logs, pid files,
+reports, caches, partial downloads, or generated backend outputs to git.
+
+Before committing:
+
+```sh
 git status --short
-git ls-files "*.safetensors" "*.bin" "*.dat"
-git ls-files "*.gguf"
+git diff --check
 ```
 
-## Lane 4 — Low-level command atlas
+Inspect every staged path explicitly when the worktree already contains user
+changes. Do not use an all-files stage operation in a mixed worktree.
 
-Purpose:
-  Provide compact low-level reference commands without becoming the primary
-  workflow.
+## Current Product Boundary
 
-Requires:
-  Repository root.
-  Relevant local artifact or manifest paths for artifact-specific commands.
+The exact v0.1.0 target, release gates, and active repair are owned by:
 
-Writes:
-  Depends on the command group selected.
+- `../spine.md`;
+- `../repair/v010-foundation-closure.md`;
+- `../v010-release-doctrine.md`;
+- `deepseek.md`.
 
-Safe to rerun:
-  depends on the command group selected.
-
-Stop after:
-  the specific diagnostic or low-level command family answers the question.
-
-Boundary:
-  reference only
-  not a replacement for model-specific runbooks
-  no model check claim
-  no graph check claim
-  no generation claim
-
-Full help:
-
-```sh
-./yvex help backend
-./yvex help attention
-./yvex help chat
-./yvex help commands
-./yvex help convert
-./yvex help cuda-info
-./yvex help detokenize
-./yvex help engine
-./yvex help fullmodel
-./yvex help graph
-./yvex help gguf-template
-./yvex help gguf-emit
-./yvex help help
-./yvex help imatrix
-./yvex help info
-./yvex help inspect
-./yvex help input
-./yvex help integrity
-./yvex help kv
-./yvex help materialize
-./yvex help materialize-gate
-./yvex help metadata
-./yvex help model-gate
-./yvex help model-target
-./yvex help models
-./yvex help native-weights
-./yvex help paths
-./yvex help plan
-./yvex help prefill
-./yvex help prompt
-./yvex help quant-job
-./yvex help quant-policy
-./yvex help qtype-support
-./yvex help run
-./yvex help session
-./yvex help source-manifest
-./yvex help tensor-map
-./yvex help tokenize
-./yvex help tokenizer
-./yvex help tensors
-./yvex help version
-```
-
-Quant/template/intake manifests:
-
-```sh
-./yvex qtype-support
-./yvex quant-policy inspect --policy "$HOME/lab/models/reports/deepseek/policy.json"
-./yvex quant-policy validate --policy "$HOME/lab/models/reports/deepseek/policy.json"
-./yvex quant-job inspect --manifest "$HOME/lab/models/reports/deepseek/quant-job.json"
-./yvex quant-job validate --manifest "$HOME/lab/models/reports/deepseek/quant-job.json"
-./yvex imatrix inspect --manifest "$HOME/lab/models/reports/deepseek/imatrix.json"
-./yvex imatrix validate --manifest "$HOME/lab/models/reports/deepseek/imatrix.json"
-./yvex gguf-template inspect --template "$HOME/lab/models/reports/deepseek/template.json"
-./yvex gguf-template validate --template "$HOME/lab/models/reports/deepseek/template.json"
-./yvex gguf-template compare --template "$HOME/lab/models/reports/deepseek/template.json" --native-source "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash"
-```
-
-## Lane 5 — Source tensor download
-
-Purpose:
-  Download source tensor trees into the operator models root through the
-  YVEX-owned `models` namespace, then write source-intake sidecars.
-
-Requires:
-  Repository root.
-  Provider account status checked with `yvex accounts`.
-  Installed Hugging Face CLI as `hf`, or `YVEX_HF_CLI` for tests.
-  Installed GitHub CLI as `gh`, or `YVEX_GH_CLI` for GitHub release assets.
-  Token in `HF_TOKEN` or `GH_TOKEN` only when the upstream provider requires it.
-
-Writes:
-  Source files under `<models_root>/hf/<family>/<target>`.
-  Logs under `<models_root>/logs`.
-  Receipt, download report, source manifest, and native inventory under
-  `<models_root>/reports/<family>`.
-  Download registry sidecar under `<models_root>/registry/<family>`.
-
-Safe to rerun:
-  Dry-run is safe. Non-dry-run delegates overwrite/resume behavior to
-  `hf download` and rewrites YVEX sidecars.
-
-Stop after:
-  `status: model-download-pass` and source-manifest/native-inventory stages
-  pass, or after `status: model-download-dry-run` confirms the command shape.
-
-Boundary:
-  source tensors only
-  no remote identity verification
-  no payload hashing
-  no tensor payload loading by YVEX inventory
-  no conversion
-  no quantization
-  no GGUF emission
-  no runtime artifact registration
-  no materialization
-  no graph/runtime execution
-  no generation/eval/benchmark claim
-
-```sh
-./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --dry-run --auth never --audit
-./yvex models download gemma-4-12b-it --models-root "$HOME/lab/models" --auth auto --audit
-./yvex models download gemma-4-31b-it --models-root "$HOME/lab/models" --auth auto --audit
-./yvex models download qwen3-8b --models-root "$HOME/lab/models" --auth auto --audit
-./yvex models download --repo Qwen/Qwen3.6-35B-A3B --family qwen --name qwen3-6-35b-a3b --models-root "$HOME/lab/models" --auth auto --audit
-./yvex models download status qwen3-6-35b-a3b --models-root "$HOME/lab/models" --audit
-./yvex source-manifest report --family qwen --release v0.1.0 --source "$HOME/lab/models/hf/qwen/qwen3-6-35b-a3b" --models-root "$HOME/lab/models" --audit
-./yvex model-target tokenizer-map qwen3-6-35b-a3b --models-root "$HOME/lab/models" --audit
-./yvex models prepare qwen3-6-35b-a3b --models-root "$HOME/lab/models" --dry-run --audit
-./yvex models download --provider github --repo OWNER/REPO --release TAG --asset "*.gguf" --models-root "$HOME/lab/models" --auth auto --audit
-./yvex source-manifest report --family gemma --release v0.1.0 --audit
-./yvex source-manifest report --family qwen --release v0.1.0 --audit
-```
-
-## Lane 5A - Provider accounts
-
-Purpose:
-  Inspect and connect local provider CLIs before source acquisition.
-
-Requires:
-  Repository root.
-  Hugging Face CLI for Hugging Face sources.
-  GitHub CLI for GitHub release assets.
-
-Writes:
-  Non-secret local account observations to `accounts.local.json` under the
-  YVEX config directory.
-
-Safe to rerun:
-  Status and whoami are read-only observations. Login delegates to the provider
-  CLI credential store. Ensure may report blocked in non-interactive shells.
-
-Boundary:
-  local provider account state only
-  no raw token storage by YVEX
-  no hosted auth service
-  no custom OAuth implementation
-  no MCP or YAI account integration
-  no source verification
-  no model execution
-  no materialization
-  no generation/eval/benchmark claim
-
-```sh
-./yvex accounts providers
-./yvex accounts status --audit
-./yvex accounts login huggingface
-./yvex accounts whoami huggingface --audit
-./yvex accounts login github
-./yvex accounts whoami github --audit
-```
-
-## Lane 5B - Live source download
-
-Purpose:
-  Keep long source downloads visibly alive while YVEX remains the controller.
-
-Requires:
-  Repository root.
-  Provider CLI and account state as in Lane 5.
-
-Writes:
-  The same source files, stdout/stderr logs, receipt, report, manifest, native
-  inventory, and registry sidecars as Lane 5.
-
-Stop after:
-  `stage: download pass`, `stage: progress-stream pass`, and either
-  `stage: progress-ticks pass` for long runs or `stage: progress-ticks skipped`
-  for fast runs. If the operator interrupts the command, stop after
-  `stage: download interrupted`, `child_signal_forwarded: true`,
-  `orphan_check_status: pass`, and `status: model-download-interrupted`.
-
-Boundary:
-  live progress is based on provider pipe streaming and local source-directory
-  `stat` scans only; it does not load tensor payloads, hash payloads, emit GGUF,
-  materialize tensors, execute runtime work, generate, evaluate, or benchmark.
-  Interrupted runs preserve partial source files and provider logs. They do not
-  delete provider lock files.
-
-```sh
-./yvex models download gemma-4-12b-it \
-  --models-root "$HOME/lab/models" \
-  --auth required \
-  --progress live \
-  --tick-seconds 2 \
-  --audit \
-  2>&1 | tee "$HOME/lab/models/logs/yvex-gemma4-12b-it-download.live.log"
-
-./yvex models download gemma-4-31b-it \
-  --models-root "$HOME/lab/models" \
-  --auth required \
-  --progress live \
-  --tick-seconds 2 \
-  --audit \
-  2>&1 | tee "$HOME/lab/models/logs/yvex-gemma4-31b-it-download.live.log"
-```
-
-## Lane 5C - Download control
-
-Purpose:
-  Inspect, stop, resume, and explicitly clean local downloader state without
-  leaving the `models download` namespace.
-
-Requires:
-  Repository root.
-  The same provider CLI and account state as Lane 5 for resume.
-
-Writes:
-  `status` writes nothing.
-  `stop` writes a last receipt and preserves partial source files and logs.
-  `resume` writes the same source files and sidecars as Lane 5.
-  `cleanup` writes only when an explicit cleanup flag and `--yes` are present.
-  `--failed-partials` removes the target source directory and the matching
-  download receipt, active/last reports, download report, source manifest,
-  native inventory, registry sidecar, and stdout/stderr logs.
-
-Safe to rerun:
-  `status` and cleanup dry-runs are safe. `stop` is safe for a YVEX-owned active
-  provider process. `resume` delegates resume behavior to the provider CLI over
-  the existing source directory.
-
-Stop after:
-  `status: model-download-status`, `status: model-download-stopped`,
-  `status: model-download-resume-pass`, or an explicit blocked status that names
-  the active provider process or stale lock blocker.
-
-Boundary:
-  status is local inspection only and does not contact providers. Stop preserves
-  partial source files, preserves logs, and does not delete provider locks.
-  Resume reuses the existing source directory and refuses active provider
-  processes; stale locks block unless `--clear-stale-locks` is explicit.
-  Cleanup never deletes source state, sidecars, logs, provider cache, or locks
-  while a provider process is alive. Safetensors size checks are header-only
-  and do not read payload bytes, hash payloads, prove source identity, emit
-  GGUF, materialize tensors, execute runtime paths, generate, evaluate, or
-  benchmark.
-
-```sh
-./yvex models download status gemma-4-12b-it \
-  --models-root "$HOME/lab/models" \
-  --audit
-
-./yvex models download stop gemma-4-12b-it \
-  --models-root "$HOME/lab/models" \
-  --audit
-
-./yvex models download resume gemma-4-12b-it \
-  --models-root "$HOME/lab/models" \
-  --auth required \
-  --progress live \
-  --tick-seconds 2 \
-  --audit \
-  2>&1 | tee "$HOME/lab/models/logs/yvex-gemma4-12b-it-resume.live.log"
-
-./yvex models download cleanup gemma-4-12b-it \
-  --models-root "$HOME/lab/models" \
-  --stale-locks \
-  --dry-run \
-  --audit
-
-./yvex models download cleanup qwen3-32b \
-  --models-root "$HOME/lab/models" \
-  --failed-partials \
-  --dry-run \
-  --audit
-```
-
-## GGUF Artifact Discovery
-
-`models artifacts` replaces manual `find`, `tree`, and `ls` checks for the
-operator model root. It reads GGUF filenames, target-specific download sidecars,
-reports, manifests, inventories, and map sidecars. It does not hash GGUF files,
-load source tensor payloads, emit artifacts, materialize tensors, execute
-runtime paths, generate, evaluate, or benchmark.
-
-```sh
-./yvex models artifacts list \
-  --models-root "$HOME/lab/models"
-
-./yvex models artifacts list \
-  --models-root "$HOME/lab/models" \
-  --family qwen \
-  --output table
-
-./yvex models artifacts status qwen3-6-35b-a3b \
-  --models-root "$HOME/lab/models" \
-  --audit
-
-./yvex models artifacts status gemma-4-31b-it \
-  --models-root "$HOME/lab/models" \
-  --audit
-```
-
-Expected boundary for downloaded full-source targets before full GGUF emission:
-
-```text
-artifact_class: planned-full-gguf
-artifact_status: missing
-prepare_status: blocked
-boundary: artifact discovery only; no runtime/generation
-```
-
-## Full Implemented Command Inventory
-
-- `accounts`: local provider account boundary
-- `backend`: backend lanes
-- `chat`: daemon and accepted-only runtime lanes
-- `commands`: fast regression lane
-- `convert`: source intake lanes
-- `cuda-info`: backend lanes
-- `detokenize`: fast regression lane
-- `engine`: materialization and runtime attachment lanes
-- `graph`: graph lanes
-- `gguf-template`: quant/template/intake manifest lanes
-- `gguf-emit`: graph lanes
-- `help`: full help lane
-- `imatrix`: quant/template/intake manifest lanes
-- `info`: fast regression lane
-- `inspect`: artifact inspection lanes
-- `input`: fast regression lane, prefill and KV lanes
-- `integrity`: integrity and gate lanes
-- `kv`: prefill and KV lanes
-- `materialize`: materialization and runtime attachment lanes
-- `materialize-gate`: integrity and gate lanes
-- `metadata`: artifact inspection lanes
-- `model-gate`: integrity and gate lanes
-- `model-target`: model lanes, model target path, Qwen/Gemma source-target profiles, Qwen/Gemma model-class profiles, Qwen tensor naming map, qtype policy report, target decision, and full-runtime candidate reporting lanes, fast regression lane
-- `models`: source tensor download, internal GGUF artifact discovery, artifact
-  registration, and selected prepare lanes
-- `models artifacts`: GGUF filename and source-sidecar discovery; reports
-  selected GGUFs that exist and planned full GGUFs that are still missing
-- `native-weights`: source intake lanes
-- `paths`: configure once lane, fast regression lane, path resolution
-- `plan`: materialization and runtime attachment lanes
-- `prefill`: prefill and KV lanes
-- `prompt`: fast regression lane
-- `quant-job`: quant/template/intake manifest lanes
-- `quant-policy`: quant/template/intake manifest lanes
-- `qtype-support`: quant/template/intake manifest lanes
-- `run`: daemon and accepted-only runtime lanes
-- `session`: materialization and runtime attachment lanes
-- `source-manifest`: source intake lanes, Qwen/Gemma source pressure report-only lanes
-- `source-manifest report --audit`: source artifact class/status, target artifact class/status, origin/authority, provenance, sidecar, tensor container, source footprint, native safetensors header inventory, source tensor metadata inventory, and payload-read boundary fields
-- `source-manifest report`: source footprint counts top-level regular files and bytes only; it does not load tensor payloads, create manifests, or imply source readiness
-- `source-manifest report`: source provenance fields classify local/planned source state only; they do not perform remote lookup, hash files, prove identity, or imply source readiness
-- `source-manifest report`: native safetensors inventory reads safetensors headers only; payload bytes are not loaded, malformed headers are reported, and header inventory is not runtime readiness
-- `source-manifest report`: source tensor metadata inventory derives tensor names, file placement, dtype, rank, shape, byte spans, distributions, and lexical name-pattern summaries from safetensors headers only; it does not load payloads, map runtime roles, infer model classes, or imply runtime readiness
-- `source-manifest report`: source manifest/provenance hardening reports manifest expectation, path/status, shallow schema/family/target consistency, and no-create/no-remote/no-hash/no-payload boundaries; it does not prove source readiness
-- `models download --repo ... --name ...`: downloaded target sidecars become the source identity for `models download status`, `source-manifest report --source`, and `models prepare --dry-run --audit`; this fixes target naming only and does not create GGUF/runtime support
-- `tensor-map`: source intake lanes
-- `model-target tensor-map --gate v0.1.0`: report-only mapping gate; pass means qtype/artifact planning can start, not runtime support
-- `model-target quant-policy`: report-only qtype policy; pass means dtype/qtype support by role can start, not artifact emission or runtime support
-- `tokenize`: fast regression lane
-- `tokenizer`: fast regression lane
-- `tensors`: artifact inspection lanes
-- `version`: fast regression lane
-
-## Manual Debug Fallback
-
-Use this order before assuming a runtime bug:
-
-1. `./yvex commands`
-2. `./yvex help <command>`
-3. `./yvex model-target list`
-4. `./yvex model-target decision --release v0.1.0`
-5. `./yvex model-target candidate --release v0.1.0`
-6. `./yvex model-target dense-candidate --release v0.1.0`
-7. `./yvex models current`
-8. `./yvex models list`
-9. `./yvex inspect <model-or-alias>`
-10. `./yvex tensors <model-or-alias>`
-11. `./yvex integrity check --model <model-or-alias>`
-12. `./yvex backend cpu`
-13. `./yvex cuda-info`
-14. Rerun CPU before CUDA.
-15. Check `git status` before committing.
+This common runbook contains no model run because the full target remains
+unsupported.

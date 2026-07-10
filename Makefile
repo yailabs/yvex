@@ -216,7 +216,8 @@ CLI_TEST := tests/cli.sh
 CURRENT_DOCS := README.md AGENTS.md MODEL_ARTIFACTS.md NOTICE.md \
 	docs/api.md docs/contract.md docs/model-families.md \
 	docs/operator-runbook.md docs/v010-release-doctrine.md \
-	docs/topology-closure-audit.md docs/spine.md docs/system-target.md
+	docs/topology-closure-audit.md docs/spine.md docs/system-target.md \
+	docs/repair/v010-foundation-closure.md
 
 info:
 	@echo "yvex: C local inference engine"
@@ -390,6 +391,8 @@ check-docs:
 	@test -f docs/operator-runbook.md
 	@test -f docs/v010-release-doctrine.md
 	@test -f docs/topology-closure-audit.md
+	@test -f docs/system-target.md
+	@test -f docs/repair/v010-foundation-closure.md
 	@! find docs -maxdepth 1 -type f -name '*.md' \
 		! -name spine.md \
 		! -name api.md \
@@ -402,11 +405,11 @@ check-docs:
 		! -name system-target.md \
 		-print | grep .
 	@test "$$(find docs -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')" = "9"
-	@grep -F "YVEX Inner Delivery Spine" docs/spine.md >/dev/null
-	@grep -F "internal roadmap" docs/spine.md >/dev/null
+	@grep -F "YVEX v0.1.0 Execution Spine" docs/spine.md >/dev/null
+	@test "$$(wc -l < docs/spine.md | tr -d ' ')" -le 350
 	@grep -F "native C inference engine for local open-weight models" README.md >/dev/null
-	@grep -F "Model selection in canonical REPL" docs/spine.md >/dev/null
-	@grep -F "docs/api.md, docs/contract.md, docs/model-families.md, docs/operator-runbook.md, docs/cli-output-architecture.md, docs/v010-release-doctrine.md, docs/spine.md, docs/system-target.md" docs/spine.md >/dev/null
+	@grep -F 'Active Next: V010.REBASE.DEEPSEEK.0' docs/spine.md >/dev/null
+	@grep -F 'Status: priority-blocking' docs/repair/v010-foundation-closure.md >/dev/null
 	@grep -F "YVEX System Target" docs/system-target.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Runtime Contract" docs/contract.md >/dev/null

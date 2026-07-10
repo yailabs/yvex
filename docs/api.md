@@ -88,11 +88,11 @@ The runtime path has distinct ownership layers:
 ```text
 artifact path
   -> parsed artifact and tensor facts
-  -> runtime descriptor
-  -> selected backend tensor
-  -> engine-attached weight table
-  -> session-visible runtime state
-  -> graph result or prefill summary
+  -> bounded proof descriptor
+  -> backend tensor proof
+  -> engine-attached proof weight table
+  -> session-visible diagnostic state
+  -> primitive result or proof summary
 ```
 
 Each layer has its own lifetime. The API should preserve that structure. A
@@ -101,26 +101,29 @@ weights does not free them. A copied report does not keep the graph alive. A
 materialization summary does not transfer backend tensor ownership to the
 caller.
 
-Model artifacts remain operator-local. The API can open, identify, register,
-validate, and report on local artifacts, while real weights stay outside the
-repository.
+Complete model artifacts remain operator-local. The API can open, identify,
+register, validate, and report on local artifact files, while model weights stay
+outside the repository. A one-tensor or bounded-subset file is a tensor proof
+artifact, not a complete or supported model artifact.
 
 ## Public Surface Map
 
-The public API is organized by runtime boundary rather than by implementation
-milestone.
+The public API is organized by ownership boundary rather than by delivery
+milestone. Several current surfaces are legacy bounded proofs pending the
+decommission map in `docs/repair/v010-foundation-closure.md`; they are API facts,
+not product runtime capability.
 
 | Boundary | Public surface |
 | --- | --- |
 | Artifact facts | Local artifact opening, GGUF metadata, tensor directory parsing, naming, identity, and integrity reports. |
-| Tensor interpretation | Dtype facts, tensor descriptors, shape accounting, range validation, selected embedding readiness, and model descriptors. |
+| Tensor interpretation | Dtype facts, tensor descriptors, shape accounting, range validation, bounded embedding facts, and proof descriptors. |
 | Model references | Local registry entries, alias-or-path resolution, model references, model gates, and materialization gates. |
-| Backend residency | Backend discovery, selected tensor allocation, transfer, release, and materialization summaries. |
-| Engine ownership | Engine creation, selected weight attachment, engine-owned lifetime, and graph execution entry points. |
+| Backend transfer proof | Backend discovery, bounded tensor allocation, transfer, release, and materialization summaries. |
+| Engine ownership proof | Engine creation, bounded weight attachment, engine-owned lifetime, and graph proof entry points. |
 | Session visibility | Session reports over engine-attached runtime state and minimal session-owned KV state. |
-| Graph execution | Controlled fixture graph results, selected embedding graph results, embedding-plus-RMSNorm segment results, standalone RoPE, attention, matmul/projection, and MLP/feed-forward op reports, graph guards, checksums, and max-diff reports. |
+| Graph proofs | Controlled fixture results, bounded embedding/segment results, standalone RoPE, attention, matmul/projection, and MLP/feed-forward comparisons, graph guards, checksums, and max-diff reports. |
 | Token input | Bounded explicit token lists, token validation, token selection, and prompt-to-token boundaries through tokenizer paths. |
-| Prefill state | Segment-summary prefill reports over validated token sequences, with optional minimal session-owned KV binding. |
+| Diagnostic sequence state | Segment-summary reports over validated token sequences, with optional minimal session-owned KV storage. |
 | Runtime reporting | Metrics, traces, profiles, integrity reports, materialization reports, graph reports, and failure phases. |
 | Server status | Daemon health, metrics, model listing, model reference resolution, and generation availability reports. |
 
@@ -140,9 +143,10 @@ A digest match means the current local bytes match a recorded or expected local
 value. This is useful for registry drift detection, repeatable local runs, and
 gate checks.
 
-Registry entries may carry bounded metadata summaries: support level, format,
+Registry entries may carry bounded metadata summaries: legacy support field, format,
 architecture, tensor count, known tensor bytes, primary tensor name, role,
-dtype, rank, dimensions, byte count, and selected embedding readiness facts.
+dtype, rank, dimensions, byte count, and bounded embedding proof facts. These
+fields do not establish model support.
 
 `yvex_model_registry_compare_metadata` compares a registered summary with
 current artifact facts and fills a caller-owned
@@ -203,8 +207,8 @@ memory is read, copied, or compared.
 
 ## Materialization
 
-Materialization moves selected tensor bytes from artifact storage into
-backend-owned runtime storage.
+Current materialization APIs move bounded tensor proof bytes from artifact
+storage into backend-owned storage.
 
 The public materialization reports include gate status, failure phase, integrity
 status, shape and range status, backend status, allocation attempt, transfer
@@ -215,9 +219,9 @@ These fields are copied report facts. Backend tensor lifetime remains
 controlled by backend tensor objects, selected-weight tables, and engine close
 paths.
 
-Materialization is the residency boundary. It tells a caller that selected
-bytes reached backend-owned memory with visible accounting and lifecycle
-behavior.
+This is a transfer and ownership proof. It tells a caller that the named bytes
+reached backend-owned memory with visible accounting and lifecycle behavior; it
+does not establish full model residency.
 
 ## Engine and Session
 
@@ -229,10 +233,10 @@ that selected weights are attached and visible while the engine retains
 ownership. This keeps the lifetime model clear: the engine owns the weight
 table, and the session observes the runtime state it is attached to.
 
-As KV-backed prefill, decode, logits, sampling, and generation become runtime
-states, their API surfaces should follow the same pattern. The object that owns
-memory owns cleanup. The report that summarizes state is copied. The
-session-level relationship must stay visible.
+The persistent ownership rule is that the object owning memory owns cleanup,
+copied reports do not own runtime storage, and session relationships remain
+visible. Future product APIs must satisfy that rule before they are documented
+here as implemented surfaces.
 
 ## Minimal KV Ownership
 
@@ -264,11 +268,9 @@ Sessions can create and own this minimal KV store by setting
 `yvex_session_kv_clear` delegate to the session-owned KV store while preserving
 session lifecycle checks. The session summary mirrors the copied KV facts.
 
-This boundary gives prefill a real ownership target. The prefill API can bind
-processed token positions into this minimal F32 store for diagnostic state
-continuity. The store still does not run attention, does not contain real
-attention K/V projections, and does not make decode, logits, sampling,
-generation, or provider generation-ready state.
+This boundary gives diagnostic sequence code an owned storage target. The store
+does not run attention, does not contain model K/V projections, and does not
+promote prefill, decode, logits, sampling, generation, or provider state.
 
 ## Graph Execution
 
@@ -276,7 +278,7 @@ generation, or provider generation-ready state.
 `yvex_engine` and returns a copied output summary. Backend pointers remain
 inside the engine/backend path.
 
-The partial graph surface covers the selected token-embedding path over
+The partial graph surface is a tensor proof over
 `token_embd.weight`. The result reports graph guard status, selected tensor
 facts, backend status, output shape, output checksum, reference checksum, max
 diff, sample values, and boundary readiness fields.
@@ -338,9 +340,9 @@ dispatch, allocation, cleanup, checksum, and max-diff fields. This API surface
 does not project Q/K/V from model tensors, execute a transformer block, schedule
 layers, run prefill/decode, produce logits, sample, or generate text.
 
-The graph API grows by adding explicit op, block, layer, prefill, decode,
-logits, and generation boundaries. Each new boundary should add its own report
-fields, ownership rules, and failure phases.
+These graph APIs remain bounded proof contracts. Full layer, prefill, decode,
+logits, and generation APIs are not documented as implemented because they do
+not exist.
 
 ## Token Input
 
@@ -362,7 +364,7 @@ prefill state.
 `yvex_engine_create_prefill_state` consumes a validated `yvex_token_input` and
 returns a copied `yvex_prefill_state_summary`.
 
-The summary is built by running the selected `embedding-rmsnorm` segment
+The diagnostic summary is built by running the bounded `embedding-rmsnorm` segment
 independently for each token in order. It reports token count, processed
 positions, segment execution count, output bytes, scratch bytes, aggregate
 checksum, final-token checksum, max diff, cleanup status, and readiness fields
@@ -376,16 +378,10 @@ token, reads back position zero, and copies KV binding facts into
 written, append/read counts, readback checksum, sample values, overflow status,
 and cleanup status.
 
-This is the first public surface where a token sequence becomes runtime state.
-It now has a minimal KV-backed binding mode: processed positions can be attached
-to session-owned KV storage without claiming attention execution. The stored
-values are diagnostic and deterministic, derived from the implemented segment
-result, not real transformer attention keys and values.
-
-Full transformer prefill extends this path later by computing real attention
-K/V projections through implemented graph operations and layer scheduling.
-Decode, logits, sampling, and generation build on top of that same state chain
-as their API surfaces mature.
+This is a diagnostic sequence-state surface, not transformer prefill. Processed
+positions can be attached to session-owned proof storage, but the values are
+deterministic derivatives of the bounded segment rather than model attention
+keys and values. No runtime generation capability follows from this API.
 
 ## Operator Integrity Report
 

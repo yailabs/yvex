@@ -13,7 +13,8 @@ logits, sampling, and generation code.
 
 This document is the technical architecture contract for family integration. It
 does not record delivery rows, active-next decisions, release gates, command
-proof history, or implementation ledgers. Those belong in the internal spine.
+proof history, implementation ledgers, or diagnostic progress. Product scope
+and current truth belong in `docs/spine.md`.
 
 ## Integration Thesis
 
@@ -55,7 +56,7 @@ behavior.
 | --- | --- |
 | Source precedes artifact | Native tensors, config, and tokenizer facts must be understood before a runtime artifact can be trusted. |
 | Identity is backend-neutral | A model target names a model/source object, not CUDA, Metal, CPU, hardware, benchmark, or future execution. |
-| Classification precedes mapping | Dense, sparse, MoE, hybrid, multimodal, source-only, or selected-slice class must be known before canonical roles are assigned. |
+| Classification precedes mapping | Dense, sparse, MoE, hybrid, multimodal, or source-only class must be known before canonical roles are assigned; a bounded proof scope is not a model class. |
 | Collection validation precedes role mapping | Lexical tensor names are not enough; layer, shape, dtype, shard, and family rules must be consistent. |
 | Role mapping precedes descriptor | A runtime descriptor cannot be valid if native tensors are not mapped to canonical engine roles. |
 | Artifact contract precedes support | GGUF validity is not enough; the artifact must satisfy family-specific runtime requirements. |
@@ -78,17 +79,20 @@ behavior.
 | Architecture signature | The structured family/target facts required before role mapping and runtime planning can be meaningful. |
 | Tensor collection | A group of native tensors that appear to implement one architectural role family, such as attention, FFN, MoE experts, output, or tokenizer state. |
 | Canonical role map | Mapping from native tensor names into YVEX runtime roles with layer/expert/shape/dtype semantics preserved. |
-| Artifact contract | The metadata, tensor coverage, layout, qtype policy, tokenizer facts, and integrity rules required for a YVEX runtime artifact. |
+| Tensor proof artifact | One tensor or a bounded tensor subset used only for a named lower-level proof. |
+| Complete model artifact | Every tensor and metadata item required to execute the exact model. |
+| Supported model artifact | A complete model artifact that passes integrity, materialization, runtime, generation, evaluation, benchmark, and release gates. |
+| Artifact contract | The metadata, complete tensor coverage, layout, qtype policy, tokenizer facts, and integrity rules required for a complete YVEX model artifact. |
 | Runtime descriptor | The canonical model description derived from artifact facts and role mapping. |
 | Residency plan | Backend placement for weights, KV, scratch, experts, streamed tensors, output state, and cleanup. |
 | Backend lowering | Translation from canonical roles and graph operations into backend-specific memory, launch, synchronization, and kernel behavior. |
 | Graph lowering | Translation from descriptor facts into executable graph operations. |
 | Runtime support | Execution through the real path: prefill, KV, decode, logits, sampling, and generation. |
 
-A family may be classified without an artifact. An artifact may exist without
-runtime support. A descriptor may exist without materialization. A selected
-graph slice may execute without full model execution. These are distinct
-architectural states.
+A family may be classified without a complete model artifact. A complete model
+artifact may exist without runtime support. A descriptor may exist without
+materialization. A tensor proof or primitive may execute without full model
+execution. These are distinct architectural states.
 
 ## Model Identity vs Backend Pressure
 
@@ -557,8 +561,8 @@ integration, runtime state, tests, and command proof.
 
 ## Artifact Contract
 
-The artifact contract defines what a runtime artifact must contain before YVEX
-can treat it as an executable object.
+The artifact contract defines what a complete model artifact must contain before
+YVEX can treat it as an executable object.
 
 A family-specific artifact contract includes:
 
@@ -588,10 +592,10 @@ Artifact validity is a contract against runtime requirements, not only file
 format validity.
 
 A structurally valid GGUF file is not enough. A known alias is not enough. A
-tensor table that parses is not enough. The artifact must satisfy the role
-coverage and runtime requirements for the stage being entered. Selected
-artifacts may satisfy a narrow contract. Full-runtime artifacts must satisfy the
-complete contract for the chosen family class.
+tensor table that parses is not enough. A complete model artifact must satisfy
+every role and metadata requirement for the exact target. A tensor proof
+artifact can satisfy only its explicitly named lower-level proof contract and is
+not a model-support state.
 
 ## Runtime Descriptor
 
@@ -1043,57 +1047,19 @@ facts.
 
 ## Current Family Posture
 
-This table records posture, not support claims.
+This table records architectural scope, not delivery progress.
 
-| Family | Current YVEX posture | Runtime class | Current evidence | Missing before runtime |
-| --- | --- | --- | --- | --- |
-| DeepSeek | selected-slice pressure | sparse/MoE | selected embedding and embedding-plus-RMSNorm graph slices | full artifact, tensor role map, MoE runtime, output head, generation |
-| GLM | source/storage pressure | sparse/MoE | huge source/storage pressure reports | source completion, model-class, tensor map, artifact, storage/residency |
-| Qwen | qtype-policy-profiled source target | dense candidate / family-dependent | `qwen3-8b` target, Qwen model-class profile, Qwen tensor collection inventory, Qwen tensor naming map, output-head tensor mapping, tokenizer metadata mapping, missing-role blocker report, report-only tensor mapping gate, and report-only qtype policy | dtype/qtype support by role, artifact, backend/runtime |
-| Gemma | dense qtype-policy-profiled source target | dense candidate | `gemma-4-12b-it` target, Gemma model-class profile, Gemma tensor collection inventory, dense tensor naming map, output-head tensor mapping, tokenizer metadata mapping, missing-role blocker report, report-only tensor mapping gate, and report-only qtype policy | dtype/qtype support by role, artifact, runtime |
-| Phi/Llama/Mistral | candidate families | dense/sparse depending target | architectural candidates | no current source target |
+| Family | v0.1.0 relation | Runtime class | Current support truth |
+| --- | --- | --- | --- |
+| DeepSeek-V4-Flash | exact release target at `$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash`; future target id `deepseek4-v4-flash` | sparse/MoE | unsupported; no complete model artifact or runtime path |
+| Qwen | outside v0.1.0 | target-dependent dense or sparse/MoE | unsupported; existing source/report facts do not enter the release path |
+| Gemma | outside v0.1.0 | dense | unsupported; existing source/report facts do not enter the release path |
+| GLM | outside v0.1.0 source-pressure work | sparse/MoE | unsupported; source evidence is not runtime support |
+| Phi/Llama/Mistral | unscoped architecture examples | target-dependent | unsupported; no current release target |
 
-Current posture vocabulary includes `source-target-profiled`,
-`model-class-profiled`, `tensor-collection-profiled`,
-`dense tensor-naming-map-profiled`, `output-head-map-profiled`,
-`tokenizer-metadata-map-profiled`, `missing-role-blocker-report-profiled`,
-`tensor-mapping-gate-profiled`, `qtype-policy-profiled`, `source/storage-pressure`,
-`selected-slice-proof`, and `runtime-unsupported`.
-
-Mapping gates are source/header/report gates. They can say the current mapping
-evidence is coherent enough to start qtype and artifact planning, but they do
-not create artifacts, build runtime descriptors, run backend residency, execute
-graphs, tokenize, generate, evaluate, benchmark, or mark a family supported.
-
-Qtype policy reports are still source/header/report gates. They can say the
-source dtype profile is visible, the existing YVEX qtype vocabulary can describe
-artifact-planning choices, and the next work is per-role dtype/qtype support.
-They do not quantize tensors, emit GGUF, prove compute support, run calibration
-or imatrix policy, create artifact identity, materialize tensors, execute
-runtime paths, generate, evaluate, benchmark, or mark a family supported.
-
-`yvex models artifacts list|status` is the operator GGUF discovery surface for
-this boundary. It shows selected GGUF artifacts already present under the
-operator GGUF root and downloaded Qwen/Gemma full-source targets whose planned
-full GGUF artifacts are still missing or blocked. It reads only filenames and
-small sidecar reports; it does not replace tensor mapping, tokenizer mapping,
-qtype support, artifact emission, materialization, runtime execution, generation,
-evaluation, or benchmark evidence.
-
-`yvex model-target tokenizer-map TARGET` is the sidecar tokenizer metadata map
-for Qwen and Gemma source targets. It reads tokenizer/config/special-token and
-generation metadata sidecars, records vocab/merges/chat-template evidence, and
-writes target-specific tokenizer-map sidecars for downloaded dynamic targets.
-It does not tokenize, detokenize, execute chat templates, implement stop policy,
-emit artifacts, build runtime descriptors, generate, evaluate, or benchmark.
-
-`yvex model-target missing-roles TARGET` is the compact source-to-artifact
-blocker report for Qwen and Gemma source targets, including downloaded dynamic
-targets. It is the operator-facing view of incomplete tensor maps, missing
-output-head or tied-head policy, missing tokenizer metadata, and missing planned
-GGUF artifacts before qtype or artifact emission work can proceed. Normal,
-table, audit, and JSON outputs expose the same role groups; audit adds the
-diagnostic fields.
+Legacy bounded DeepSeek proof code and Qwen/Gemma report surfaces may remain
+until their owning rows remove or absorb them. They do not define family posture
+and do not advance the v0.1.0 critical path.
 
 ## Support-Level Lattice
 
@@ -1191,9 +1157,9 @@ integrity checks
 support level
 ```
 
-Selected artifacts are valid. They are pressure artifacts, not fake artifacts.
-They let YVEX test real tensor behavior before full-model support exists. A
-selected artifact must still declare its support boundary.
+A bounded tensor subset may be retained as a tensor proof artifact. It must name
+the exact lower-level property it proves and cannot carry a model support level.
+A complete model artifact requires the full tensor and metadata contract.
 
 ## Artifact-to-Runtime Promotion
 
@@ -1245,10 +1211,10 @@ This table records families as integration classes, not support claims.
 
 | Family | Runtime class | Architectural pressure | Current posture |
 | --- | --- | --- | --- |
-| DeepSeek | Sparse / MoE | Large sparse runtime, expert routing, KV pressure, high-end local inference | selected-slice-proof |
-| GLM | Sparse / MoE | Huge source inventory, model-class pressure, reasoning/coding target class | source/storage-pressure |
-| Qwen | Dense or Sparse / MoE depending target | Dense/sparse comparison, tokenizer/runtime comparison, portability pressure | tensor-collection-profiled for `qwen3-8b` |
-| Gemma | Dense | Smaller local runtime and device-oriented pressure | dense tensor-naming-map-profiled for `gemma-4-12b-it` |
+| DeepSeek | Sparse / MoE | Large sparse runtime, expert routing, KV pressure, high-end local inference | exact v0.1.0 target; unsupported |
+| GLM | Sparse / MoE | Huge source inventory and architecture pressure | outside v0.1.0; unsupported |
+| Qwen | Dense or Sparse / MoE depending target | Dense/sparse comparison, tokenizer/runtime comparison, portability pressure | outside v0.1.0; unsupported |
+| Gemma | Dense | Smaller local runtime and device-oriented pressure | outside v0.1.0; unsupported |
 | Phi | Dense / compact reasoning | Small reasoning under constrained hardware | candidate family |
 | Llama | Dense / sparse / multimodal depending target | Ecosystem baseline and common runtime assumptions | candidate family |
 | Mistral | Dense / sparse depending target | Efficient local/server runtime and smaller sparse baselines | candidate family |
@@ -1344,8 +1310,8 @@ A role map is not graph execution.
 A CUDA primitive is not CUDA runtime.
 A Metal feasibility lane is not Metal support.
 A backend pressure lane is not backend support.
-A GGUF artifact is not generation.
-A selected graph slice is not full model execution.
+  A structurally valid GGUF is not a supported model artifact.
+  A tensor proof or bounded graph slice is not full model execution.
 A benchmark target is not a benchmark result.
 ```
 

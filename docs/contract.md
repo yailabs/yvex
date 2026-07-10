@@ -15,7 +15,8 @@ execution stopped when a boundary refuses to advance.
 
 ## Scope
 
-YVEX is a CLI-first local runtime for open-weight model artifacts.
+YVEX is a CLI-first local runtime intended to execute complete open-weight
+model artifacts. The exact v0.1.0 target is currently unsupported.
 
 The repository provides:
 
@@ -106,17 +107,17 @@ build/      generated build and test output
 ./yvexd     generated root binary
 ```
 
-Model artifacts stay outside the repository. Local registries may contain
+Complete model artifacts stay outside the repository. Local registries may contain
 absolute paths because they are machine-local operator state. They must remain
 untracked.
 
 Tracked GGUF files are reserved for tiny fixtures under `tests/`. Real model
-weights, generated model artifacts, local reports, local logs, cache files, and
+weights, generated complete model artifacts, local reports, local logs, cache files, and
 machine-specific registries stay outside git.
 
 The repository may contain compact fixtures, structural corruption fixtures,
-small vectors, and regression data when they are small enough to be source
-artifacts rather than model artifacts.
+small vectors, and regression data. A one-tensor or bounded-subset file is a
+tensor proof artifact, not a complete or supported model artifact.
 
 ## Model Registry Contract
 
@@ -133,9 +134,10 @@ YVEX_MODELS_REGISTRY
 ```
 
 Registry aliases are local convenience references. They resolve to external
-artifact paths. A registry entry may record file identity, support level,
-format, architecture, tensor count, known tensor bytes, primary tensor facts,
-and selected readiness facts.
+artifact paths. A registry entry may record file identity, format,
+architecture, tensor count, known tensor bytes, primary tensor facts, and
+legacy selected-proof fields. Those fields do not make the referenced file a
+complete or supported model artifact.
 
 Alias identity is local evidence. It helps the runtime detect drift between the
 artifact originally registered and the artifact currently present at the same
@@ -152,8 +154,10 @@ checks when provided. They do not require registry metadata.
 
 ## Backend Contract
 
-CPU is the reference and diagnostics backend. CUDA is the current acceleration
-backend for implemented selected materialization and selected graph paths.
+CPU is the reference backend for bounded proofs. CUDA has implemented bounded
+materialization and primitive paths, but it is not a supported model backend.
+`V010.CUDA.FAILCLOSED.0` remains priority-blocking because the non-nvcc fallback
+can expose no-op kernel entry points.
 
 CUDA implementation lives under `cuda/`. CUDA host bridge code stays in C
 translation units. CUDA device kernels live in `.cu` translation units. CUDA
@@ -164,10 +168,10 @@ Backend failures must remain distinguishable. A caller or operator should be
 able to tell whether failure came from backend discovery, allocation, transfer,
 operation support, dispatch, output readback, or cleanup.
 
-Materialization is the residency boundary. It moves selected tensor bytes from
-artifact storage into backend-owned runtime storage. It proves allocation,
-transfer, byte accounting, and cleanup behavior for selected tensors. Graph
-execution begins after that boundary.
+Materialization is the residency boundary. Current bounded paths move tensor
+proof bytes into backend-owned storage and prove only allocation, transfer,
+byte accounting, and cleanup for that subset. Full model residency requires
+every tensor in the complete model artifact.
 
 Engine attachment is the ownership boundary above materialization. The engine
 owns attached selected materialized weights. Sessions may observe engine state
@@ -185,36 +189,37 @@ state depending on the runtime layer. Minimal KV state is session-owned. Future
 KV-backed prefill, decode, logits, sampling, and generation objects must follow
 the same pattern: the owner of the memory owns the cleanup path.
 
-The implemented runtime states are:
+The implemented proof and ownership surfaces are:
 
-| Runtime state | Current contract |
+| Surface | Current contract |
 | --- | --- |
 | Artifact facts | Parsed from local artifact paths and reported through GGUF/model/tensor surfaces. |
-| Descriptor state | Built from parsed artifact facts and selected tensor roles. |
-| Backend residency | Created by selected materialization on CPU or CUDA. |
-| Engine attachment | Selected backend-resident weights attached to engine-owned state. |
+| Descriptor proof | Built from parsed artifact facts and bounded tensor roles; not execution-complete. |
+| Backend transfer proof | Created by bounded tensor materialization on CPU or CUDA; not full residency. |
+| Engine attachment proof | Bounded backend-resident weights attached to engine-owned state. |
 | Session visibility | Sessions can observe engine attachment summaries. |
 | Controlled graph result | Deterministic fixture graph execution over tiny F32 fixtures. |
-| Selected graph result | Real selected embedding execution over F16 `token_embd.weight`. |
-| Selected segment result | Embedding-plus-RMSNorm execution over selected real tensors. |
+| Tensor graph proof | Bounded embedding execution over F16 `token_embd.weight`. |
+| Segment graph proof | Embedding-plus-RMSNorm execution over bounded source tensors. |
 | Token input | Bounded explicit token sequences with validation and token-index selection. |
-| Prefill state summary | Segment-summary state over validated explicit token input. |
-| Minimal KV state | Session-owned F32 KV storage with shape, append/read, clear, overflow, and cleanup reports. |
-| Minimal KV-backed prefill binding | Optional prefill mode that writes one diagnostic KV position per processed token into session-owned KV storage. |
+| Prefill proof summary | Segment-summary diagnostic state over validated explicit token input; not transformer prefill. |
+| KV storage proof | Session-owned F32 storage with shape, append/read, clear, overflow, and cleanup reports; not attention-backed KV. |
+| Diagnostic KV binding | Writes one deterministic proof position per processed token; not model K/V. |
 | Standalone RoPE op | Position-dependent F32 graph op over a bounded deterministic vector, checked against an independent reference. |
 | Standalone attention op | Explicit F32 Q/K/V scaled dot-product attention primitive with bounded causal mask, scratch, output, cleanup, and reference comparison. |
 | Standalone matmul op | Explicit F32 row-major `input=[m,k]`, `weight=[k,n]`, `output=[m,n]` primitive with projection-shape reporting, output cleanup, and reference comparison. |
-| Standalone MLP op | Explicit F32 gated SiLU feed-forward primitive over deterministic dense weights or one selected routed expert slice, with intermediate/output cleanup and reference comparison. |
+| Standalone MLP op | Explicit F32 gated SiLU feed-forward primitive over deterministic dense weights or one bounded routed expert slice, with intermediate/output cleanup and reference comparison. |
 
-The runtime path after minimal KV ownership proceeds through minimal KV-backed
-prefill binding, full transformer prefill, decode, logits, sampling,
-generation, CLI generation, and provider generation. Each layer enters the
-contract when code, tests, report shape, command proof, and cleanup behavior
-exist.
+These are implementation facts, not a runtime progress ladder. None closes
+complete artifact, materialization, executable descriptor, transformer,
+generation, evaluation, benchmark, or release gates. The product runtime path
+is defined only by `docs/spine.md`.
 
 ## Graph Execution Contract
 
-Graph execution is admitted through preflight.
+Graph execution is admitted through preflight. The bounded and primitive paths
+described below are retained technical contracts pending the decommission map;
+they are not product runtime capability.
 
 A graph path must know which artifact it reads from, which tensor ranges are
 valid, which backend owns the selected weights, which operation is supported,
@@ -294,11 +299,11 @@ vocabulary facts when available. Implemented graph paths can consume a selected
 token from that validated sequence with `--tokens IDS --token-index N`.
 
 Prompt text becomes token input only through an executable tokenizer path for
-the selected artifact. When tokenizer metadata is missing, the command reports
+the bounded proof input. When tokenizer metadata is missing, the command reports
 the tokenizer boundary instead of treating prompt text as executable input.
 
-Prefill state is the first state boundary above explicit token input. The
-current prefill state summary runs the implemented selected
+The current prefill proof summary is a diagnostic state boundary above explicit
+token input. It runs the bounded
 embedding-plus-RMSNorm segment over each token in order. It records token count,
 processed positions, segment execution count, output byte accounting, aggregate
 checksum, final-token checksum, max diff, and cleanup status.
@@ -311,11 +316,9 @@ processed token, reads back position zero, reports KV shape/byte/readback
 facts, and cleans up on failure. Capacity smaller than token count fails before
 ambiguous state.
 
-The minimal KV binding values are not real attention keys and values. They are
-diagnostic state derived from the implemented segment result. Current prefill
-summary readiness fields must report the state of the next layers accurately:
-minimal KV binding may exist while full transformer prefill, decode, logits,
-sampling, and generation remain not ready.
+The minimal KV binding values are not attention keys and values. They are
+deterministic diagnostic state derived from the bounded segment result. Their
+existence does not promote prefill, KV, decode, logits, sampling, or generation.
 
 ## Minimal KV Contract
 
@@ -503,8 +506,8 @@ git ls-files '*.safetensors' '*.bin' '*.dat'
 git ls-files '*.gguf'
 ```
 
-Expected artifact state: no tracked large model artifacts. Tracked GGUF files
-are tiny fixtures only.
+Expected artifact state: no tracked model payloads or complete model artifacts.
+Tracked GGUF files are tiny fixtures only.
 
 Runtime changes should include command-visible proof, tests, failure-path
 coverage, cleanup/lifecycle behavior, and explicit boundary documentation.
@@ -517,18 +520,15 @@ A runtime claim can be promoted only when implementation, tests, command proof,
 failure behavior, cleanup behavior, and documentation exist for the matching
 boundary.
 
-Selected materialization promotes residency for selected tensors. Engine
-attachment promotes engine-owned selected weight state. Fixture graph execution
-promotes deterministic graph execution over controlled fixtures. Selected
-embedding execution promotes real selected tensor participation in scheduled
-graph work. Embedding-plus-RMSNorm promotes the first multi-op selected real
-graph segment. Token input promotes explicit token sequence handling. Prefill
-state summary promotes the first sequence-state foundation.
+Tensor proof materialization, fixture execution, primitive comparison, bounded
+segments, token parsing, diagnostic KV storage, reports, and command grammar
+promote only their exact lower-level contracts. They do not promote model
+residency, transformer execution, runtime generation, provider behavior,
+evaluation, benchmark, or release state.
 
-KV, decode, logits, sampling, generation, provider generation,
-OpenAI-compatible generation, Anthropic-compatible generation, benchmark
-performance, and capability evaluation each need their own implementation and
-proof path.
+Every product gate in `docs/spine.md` and `docs/v010-release-doctrine.md` needs
+its own implementation, reference or acceptance result, refusal path, cleanup,
+operator proof, and focused guard.
 
 Benchmark numbers require the measured runtime path, model/artifact identity,
 backend, qtype, context length, machine, command, and reproducibility notes.

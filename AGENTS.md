@@ -694,6 +694,31 @@ Do not write marketing copy.
 
 Do not write AI-style filler.
 
+`docs/spine.md` is the compact product execution spine. It contains product
+dependencies, release gates, current hard truth, and explicit non-claims; it
+does not contain historical row databases, command inventories, or diagnostic
+proof catalogues.
+
+Temporary priority-blocking repair spines live under `docs/repair/`. They are
+not product roadmaps. After closure, durable evidence is folded into the main
+spine and the temporary repair detail is removed; Git history is the archive.
+
+Canonical artifact terminology:
+
+```text
+tensor proof artifact
+  one tensor or a bounded tensor subset
+
+complete model artifact
+  every tensor and metadata item required to execute the exact model
+
+supported model artifact
+  complete artifact that passes integrity, materialization, runtime,
+  generation, evaluation, benchmark, and release gates
+```
+
+Do not use unqualified "model artifact" for a selected-tensor proof file.
+
 Canonical docs:
 
 ```text

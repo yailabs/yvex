@@ -1,8 +1,9 @@
 # YVEX System Target
 
-Date: 2026-07-09
-Status: docs/control + filesystem ownership seed
-Authority: docs/spine.md
+Date: 2026-07-10
+Status: filesystem and module ownership contract
+Authority: `docs/spine.md`; temporary repair ordering in
+`docs/repair/v010-foundation-closure.md`
 
 This document records the target filesystem architecture for the execution-core
 and control-plane boundary. It is an implementation contract, not a capability
@@ -22,7 +23,7 @@ src/gguf/                GGUF parser plus target ABI/writer/roundtrip owners
 src/artifact/            artifact IO, identity, integrity, descriptor gates
 src/graph/               graph construction, plans, bind/execute target owners
 src/backend/             backend abstraction, tensor/qtype/report ownership
-src/generation/          diagnostic generation cells and future runtime path
+src/generation/          legacy proof cells and future runtime implementation owners
 ```
 
 ## Target Tree Summary
@@ -43,17 +44,20 @@ domain algorithms. No writer owns command output.
 
 | Area | Current state | Target state | Next row |
 | --- | --- | --- | --- |
-| GGUF ABI | complete/report-only + fixture-proof | container/metadata/tensor_info ABI closed | V010.GGUF.QTYPE.ABI.0 |
-| GGUF qtype | complete/report-only + fixture-proof | byte geometry and storage-size refusal facts closed | V010.QUANT.2 |
-| Quant | qtype role reports plus GGUF byte geometry | compute/refusal matrix | V010.QUANT.2 |
-| GGUF writer | explicit refusal | concrete emitted bytes | V010.GGUF.WRITER.0 |
-| GGUF names | planned emitted-name owner | role to GGUF name map | V010.MAP.GGUF.NAMES.0 |
-| GGUF layout | planned layout owner | role to range/qtype layout map | V010.MAP.GGUF.LAYOUT.0 |
-| GGUF roundtrip | explicit refusal | emitted bytes parse back | V010.GGUF.ROUNDTRIP.0 |
-| Artifact emission | selected/report-only | generation-capable artifact bytes | V010.ARTIFACT.EMIT.2 |
-| Materialization | selected proof only | required tensor byte materialization | V010.ARTIFACT.MATERIALIZE.0 |
-| Runtime descriptor | target owner seed | GGUF facts project to runtime descriptor | V010.RUNTIME.DESCRIPTOR.GGUF.0 |
-| Graph/backend | primitive/report-only | backend-bound graph path | V010.GRAPH.24 |
+| GGUF artifact ABI | `.0` reopened; tiny-fixture evidence only | complete DeepSeek container/metadata/tensor-info ABI | V010.GGUF.ARTIFACT.ABI.1 |
+| GGUF qtype ABI | `.0` reopened; bounded byte geometry only | exact required geometry and refusal ABI | V010.GGUF.QTYPE.ABI.1 |
+| GGUF layout integrity | bounded range fixtures | complete-artifact global layout and corruption refusal | V010.GGUF.LAYOUT.INTEGRITY.1 |
+| CUDA truth | fallback PTX can expose no-op entry points | fail-closed advertised capability with reference parity | V010.CUDA.FAILCLOSED.0 |
+| Architecture IR | profile/report facts only | typed execution-complete DeepSeek specification | V010.MODEL.ARCH.IR.0 |
+| GGUF names/layout | partial and planned maps | complete DeepSeek role/name/layout map | V010.MAP.GGUF.DEEPSEEK.0 |
+| Source payload | header-only inventory | bounded payload streaming across source shards | V010.SOURCE.PAYLOAD.STREAM.0 |
+| Quantization | policy and geometry facts | role-correct quantization or explicit refusal | V010.QUANT.2 |
+| GGUF writer | explicit refusal | complete deterministic emitted bytes | V010.GGUF.WRITER.1 |
+| Artifact emission | tensor proof files only | complete YVEX-produced DeepSeek GGUF | V010.ARTIFACT.EMIT.DEEPSEEK.0 |
+| GGUF roundtrip | explicit refusal/bounded fixtures | complete artifact writer-reader equivalence | V010.GGUF.ROUNDTRIP.1 |
+| Materialization | tensor proof only | every required tensor resident with cleanup | main path after repair closure |
+| Runtime descriptor | target owner seed and reports | executable DeepSeek runtime descriptor | main path after materialization |
+| Graph/backend | primitive and bounded proof residue | backend-bound complete transformer path | main path after descriptor |
 
 ## Owner Rules
 
@@ -142,35 +146,41 @@ domain algorithms. No writer owns command output.
 | Render | `src/cli/render/yvex_<surface>_render.c` |
 | Operator IO | `src/cli/io/*` |
 
-## Next Row Sequence
+## Active Repair Sequence
 
 ```text
-SPINE.SYSTEM.TARGET.0
--> V010.GGUF.ARTIFACT.ABI.0
--> V010.GGUF.QTYPE.ABI.0
+V010.DOCS.REFOUNDATION.0
+-> V010.REBASE.DEEPSEEK.0
+-> V010.GGUF.QTYPE.ABI.1
+-> V010.GGUF.ARTIFACT.ABI.1
+-> V010.GGUF.LAYOUT.INTEGRITY.1
+-> V010.CUDA.FAILCLOSED.0
+-> V010.MODEL.ARCH.IR.0
+-> V010.MAP.GGUF.DEEPSEEK.0
+-> V010.SOURCE.PAYLOAD.STREAM.0
 -> V010.QUANT.2
--> V010.GGUF.WRITER.0
--> V010.MAP.GGUF.NAMES.0
--> V010.MAP.GGUF.LAYOUT.0
--> V010.GGUF.ROUNDTRIP.0
--> V010.ARTIFACT.EMIT.2
--> V010.ARTIFACT.MATERIALIZE.0
--> V010.RUNTIME.DESCRIPTOR.GGUF.0
+-> V010.GGUF.WRITER.1
+-> V010.ARTIFACT.EMIT.DEEPSEEK.0
+-> V010.GGUF.ROUNDTRIP.1
 ```
 
-## Follow-Up: V010.GGUF.ARTIFACT.ABI.0
+`V010.DOCS.REFOUNDATION.0` is complete at documentation/claim refoundation
+only. `V010.REBASE.DEEPSEEK.0` is Active Next. The main materialization/runtime
+sequence cannot advance until the repair spine closes.
 
-`V010.GGUF.ARTIFACT.ABI.0` closed the GGUF container, metadata,
-tensor_info, and ABI-visible range boundary using typed facts and tiny fixture
-proof. The writer, writer-reader roundtrip, artifact materialization, and
-runtime descriptor projection remain planned.
+## Reopened: V010.GGUF.ARTIFACT.ABI.0
 
-## Follow-Up: V010.GGUF.QTYPE.ABI.0
+`V010.GGUF.ARTIFACT.ABI.0` produced useful typed facts and tiny fixture proof,
+but it did not establish the complete DeepSeek metadata and tensor-directory
+contract. It is not a valid completed foundation for full artifact work.
+`V010.GGUF.ARTIFACT.ABI.1` owns the replacement gate.
 
-`V010.GGUF.QTYPE.ABI.0` closed GGUF qtype byte geometry and storage-size
-refusal facts. Backend compute/refusal, qtype selection, source tensor
-conversion, writer, writer-reader roundtrip, and artifact emission remain
-planned.
+## Reopened: V010.GGUF.QTYPE.ABI.0
+
+`V010.GGUF.QTYPE.ABI.0` produced useful bounded byte-geometry and refusal facts,
+but it did not establish the exact required qtype contract for the complete
+DeepSeek artifact path. It is not a valid completed foundation.
+`V010.GGUF.QTYPE.ABI.1` owns the replacement gate.
 
 ## Forbidden Claims
 
@@ -179,9 +189,9 @@ This target does not claim any completed implementation state for:
 - quantization
 - the GGUF writer
 - GGUF writer-to-reader equivalence
-- generation-capable artifact bytes
+- a complete or supported model artifact
 - artifact materialization
 - executable runtime descriptors
 - graph execution
-- real prefill, attention-backed KV, decode, logits, sampling, or generation
+- full prefill, attention-backed KV, MoE, decode, logits, sampling, or generation
 - eval, benchmark, performance-rate evidence, or release readiness

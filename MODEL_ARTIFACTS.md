@@ -1,89 +1,92 @@
 # YVEX Model Artifacts
 
-Model artifacts are external operator assets. They are not committed to this
-repository.
+Date: 2026-07-10
+Status: artifact policy
 
-Artifact paths are intentionally described as operator-local. The repository
-records artifact identity, tensor facts, validation posture, and support
-boundary, but not a developer workstation filesystem path.
+Complete and supported model artifacts are external operator assets. They are
+never committed to this repository. The repository may contain only tiny GGUF
+fixtures under `tests/`.
 
-## Policy
+## Terminology
 
-```text
-full model support: no
-full inference: no
-generation: no
-execution_ready: false
-```
+| Term | Meaning |
+| --- | --- |
+| Tensor proof artifact | A file containing one tensor or a bounded tensor subset, used only to prove a named parser, range, materialization, primitive, or reference property. |
+| Complete model artifact | A file containing every tensor and metadata item required to execute one exact model. |
+| Supported model artifact | A complete model artifact that passes integrity, materialization, runtime, generation, evaluation, benchmark, and release gates. |
 
-YVEX currently validates selected tensor GGUF artifacts, materializes selected
-weights on CPU/CUDA, attaches them to engine/session state, and executes bounded
-selected embedding and selected embedding-plus-RMSNorm graph proofs. Full model
-GGUF emission, full materialization, prefill, decode, logits, sampling, and
-generation are outside the current artifact cards.
+The unqualified term "model artifact" does not refer to a selected-tensor proof
+file. A structurally valid GGUF is not necessarily complete or supported.
 
-## Active Artifact
+## v0.1.0 Target
 
-DeepSeek V4 Flash selected embedding GGUF:
+Exact source:
 
 ```text
-local_path: operator-local, outside repository
-sha256: 5d797fceccb9450be32a452a55c524358089b3a7ab94a8b38a7d72fdb45399ab
-file_bytes: 1059062080
-format: GGUF v3
-tensor_count: 1
-tensor: token_embd.weight
-rank: 2
-dims: [4096,129280]
-dtype: F16
-tensor_bytes: 1059061760
-support: selected-tensor-materialized
-CPU: pass
-CUDA: pass
-execution_ready: false
+$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash
 ```
 
-Proof:
+Future canonical full target:
+
+```text
+deepseek4-v4-flash
+```
+
+Required artifact outcome:
+
+```text
+a complete GGUF for DeepSeek-V4-Flash produced by YVEX
+```
+
+No such complete model artifact currently exists. The target, artifact,
+materialization, runtime, generation, evaluation, benchmark, and release states
+remain unsupported or blocked as recorded in `docs/spine.md`.
+
+## Admission Contract
+
+A complete model artifact must record or prove:
+
+- exact source and target identity;
+- architecture and tokenizer metadata;
+- every required global, layer, attention, position, KV, MoE, expert, norm, and
+  output-head tensor role;
+- exact qtype, shape, layout, offset, alignment, range, and byte accounting;
+- deterministic writer output and writer-reader equivalence;
+- artifact identity and corruption refusal;
+- materialization and runtime descriptor compatibility.
+
+A supported model artifact additionally requires the runtime, generation,
+evaluation, benchmark, and release gates in `docs/v010-release-doctrine.md`.
+
+## Existing Proof Files
+
+Legacy selected DeepSeek files and aliases may still exist outside the
+repository while their owning decommission rows are pending. They are tensor
+proof artifacts only. Their digest, range, materialization, or primitive
+evidence must be named by the specific proof and must not be promoted to model
+support.
+
+The canonical decommission ownership is recorded in
+`docs/repair/v010-foundation-closure.md`. This policy does not retain an
+artifact card or historical validation catalogue for those files.
+
+## Repository Guardrail
 
 ```sh
-./yvex inspect deepseek4-v4-flash-selected-embed
-./yvex tensors deepseek4-v4-flash-selected-embed
-./yvex integrity report --model deepseek4-v4-flash-selected-embed --backend cpu --require-token-embedding --partial-token 0
-./yvex materialize --model deepseek4-v4-flash-selected-embed --backend cuda
-./yvex graph --model deepseek4-v4-flash-selected-embed --backend cpu --execute-partial --partial-token 0
+git ls-files '*.safetensors' '*.bin' '*.dat'
+git ls-files '*.gguf'
 ```
 
-## Historical Validation Artifact
+Expected result:
 
-Qwen3-8B selected embedding GGUF:
+- no tracked safetensors, bin, or dat model payloads;
+- tracked GGUF files are tiny test fixtures only;
+- no local registries, reports, source downloads, emitted artifacts, logs, or
+  generated backend outputs are tracked.
 
-```text
-local_path: operator-local, outside repository
-sha256: 7a07929f6b357d293011a8224d9fa5bc4a7eb37daed1ca1cd5dfc9278b987cb9
-file_bytes: 1244660000
-format: GGUF v3
-tensor_count: 1
-tensor: token_embd.weight
-rank: 2
-dims: [4096,151936]
-dtype: F16
-tensor_bytes: 1244659712
-support: selected-tensor-materialized
-CPU: pass
-CUDA: pass
-execution_ready: false
-```
+## Non-Claims
 
-This artifact remains historical validation evidence only. DeepSeek is the
-active live model target.
-
-## Unsupported
-
-```text
-Full DeepSeek V4 Flash GGUF: not produced by YVEX yet
-Full DeepSeek materialization: not attempted
-Full Qwen3-8B GGUF: not active
-Full inference path: not available
-Generation: not available
-Benchmarks: none
-```
+This policy does not claim complete GGUF emission, qtype coverage,
+quantization, writer completion, roundtrip completion, full materialization,
+runtime execution, DeepSeek generation, CUDA generation, evaluation evidence,
+benchmark measurement, or release readiness.

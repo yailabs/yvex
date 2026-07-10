@@ -415,13 +415,18 @@ attach backend residency, feed graph consumers, execute
 prefill/decode/logits/tokenizer/sampling/generation, evaluate, benchmark, claim
 throughput, or mark release readiness.
 
-## Immediate Next Wave Recommendation
+## Current Sequencing Boundary
 
-`V010.CLI.27 - base status and refusal grammar` remains the next planned CLI
-substrate row. It should standardize compact status, top blocker, next action,
-boundary, refusal, and error shapes before broad namespace migrations.
+CLI output cleanup is not the current product blocker. The priority-blocking
+Active Next is:
 
-After `V010.QUANT.1`, the immediate Active Next is
-`V010.QUANT.2 - qtype compute/refusal matrix`, because the role-support report
-now hands artifact planning to backend/family qtype compute and refusal
-decisions before generation-capable artifact emission can be claimed.
+```text
+V010.REBASE.DEEPSEEK.0
+```
+
+The ordered foundation sequence lives in
+`docs/repair/v010-foundation-closure.md`. `V010.CLI.27 - base status and refusal
+grammar` remains a deferred CLI substrate row, not an active product row. CLI
+migrations resume only when an owning repair or runtime row needs the
+corresponding command contract. Output architecture work cannot promote
+artifact or runtime capability.
