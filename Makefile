@@ -213,10 +213,10 @@ CUDA_TEST_UNIT_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CUDA_TEST_UNIT_SRCS))
 
 CLI_TEST := tests/cli.sh
 
-CURRENT_DOCS := README.md AGENTS.md MODEL_ARTIFACTS.md NOTICE.md \
+CURRENT_DOCS := README.md AGENTS.md PROJECT.md MODEL_ARTIFACTS.md NOTICE.md \
 	docs/api.md docs/contract.md docs/model-families.md \
 	docs/operator-runbook.md docs/v010-release-doctrine.md \
-	docs/topology-closure-audit.md docs/spine.md docs/system-target.md \
+	docs/topology-closure-audit.md docs/system-target.md \
 	docs/repair/v010-foundation-closure.md
 
 info:
@@ -383,8 +383,9 @@ check-docs:
 	@test -f README.md
 	@test -f NOTICE.md
 	@test -f AGENTS.md
+	@test -f PROJECT.md
 	@test -f MODEL_ARTIFACTS.md
-	@test -f docs/spine.md
+	@test ! -e docs/spine.md
 	@test -f docs/api.md
 	@test -f docs/contract.md
 	@test -f docs/model-families.md
@@ -394,7 +395,6 @@ check-docs:
 	@test -f docs/system-target.md
 	@test -f docs/repair/v010-foundation-closure.md
 	@! find docs -maxdepth 1 -type f -name '*.md' \
-		! -name spine.md \
 		! -name api.md \
 		! -name contract.md \
 		! -name model-families.md \
@@ -404,11 +404,12 @@ check-docs:
 		! -name topology-closure-audit.md \
 		! -name system-target.md \
 		-print | grep .
-	@test "$$(find docs -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')" = "9"
-	@grep -F "YVEX v0.1.0 Execution Spine" docs/spine.md >/dev/null
-	@test "$$(wc -l < docs/spine.md | tr -d ' ')" -le 350
+	@grep -F "YVEX Project Control" PROJECT.md >/dev/null
+	@grep -F "### Primary Release Tracks" PROJECT.md >/dev/null
+	@grep -F "### Supporting Architectural Tracks" PROJECT.md >/dev/null
+	@grep -F "### Future Tracks" PROJECT.md >/dev/null
 	@grep -F "native C inference engine for local open-weight models" README.md >/dev/null
-	@grep -F 'Active Next: V010.REBASE.DEEPSEEK.0' docs/spine.md >/dev/null
+	@grep -F 'Active Next: V010.DOCS.ARCHITECTURE.0' PROJECT.md >/dev/null
 	@grep -F 'Status: priority-blocking' docs/repair/v010-foundation-closure.md >/dev/null
 	@grep -F "YVEX System Target" docs/system-target.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
@@ -416,6 +417,7 @@ check-docs:
 	@grep -F "YVEX Operator Runbook" docs/operator-runbook.md >/dev/null
 
 check-guardrails:
+	@test ! -e docs/spine.md
 	@test ! -d docs/spines
 	@test ! -d docs/integration
 	@test ! -d docs/benchmark

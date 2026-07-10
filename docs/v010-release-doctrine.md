@@ -5,8 +5,8 @@ Status: normative release contract
 
 ## Authority
 
-`docs/spine.md` owns the v0.1.0 product target and active execution sequence.
-This document owns the meaning and closure rules of the release gates. The two
+`PROJECT.md` owns the v0.1.0 product target and active execution sequence. This
+document owns the meaning and closure rules of the release gates. The two
 documents must change together when release scope changes.
 
 Documentation records implementation truth. It cannot create capability.
@@ -111,11 +111,12 @@ the complete-artifact contracts before later artifact work can proceed.
 
 The priority-blocking sequence is owned by
 `docs/repair/v010-foundation-closure.md`. `V010.DOCS.REFOUNDATION.0` is complete
-at documentation/claim refoundation only. `V010.REBASE.DEEPSEEK.0` is Active
-Next.
+at documentation/claim refoundation only. `V010.PROJECT.RECOVERY.0` is complete
+at the same proof stage. `V010.DOCS.ARCHITECTURE.0` is Active Next, and
+`V010.REBASE.DEEPSEEK.0` is blocked by documentation architecture.
 
 No artifact, materialization, descriptor, transformer, generation, evaluation,
-benchmark, or release gate is promoted by this documentation row.
+benchmark, or release gate is promoted by these documentation rows.
 
 ## Evidence Rules
 
@@ -150,6 +151,6 @@ artifacts in the v0.1.0 release transcript.
 
 Changing the exact source, full target, DGX Spark CUDA backend, generation
 definition, or required gates requires an explicit scope row plus coordinated
-changes to the main spine, this doctrine, focused guards, target facts, and
+changes to `PROJECT.md`, this doctrine, focused guards, target facts, and
 operator acceptance. A report, command, candidate table, or public claim cannot
 change release scope implicitly.

@@ -2,7 +2,7 @@
 
 Date: 2026-07-10
 Status: filesystem and module ownership contract
-Authority: `docs/spine.md`; temporary repair ordering in
+Authority: `PROJECT.md`; temporary repair ordering in
 `docs/repair/v010-foundation-closure.md`
 
 This document records the target filesystem architecture for the execution-core
@@ -150,6 +150,8 @@ domain algorithms. No writer owns command output.
 
 ```text
 V010.DOCS.REFOUNDATION.0
+-> V010.PROJECT.RECOVERY.0
+-> V010.DOCS.ARCHITECTURE.0
 -> V010.REBASE.DEEPSEEK.0
 -> V010.GGUF.QTYPE.ABI.1
 -> V010.GGUF.ARTIFACT.ABI.1
@@ -164,9 +166,11 @@ V010.DOCS.REFOUNDATION.0
 -> V010.GGUF.ROUNDTRIP.1
 ```
 
-`V010.DOCS.REFOUNDATION.0` is complete at documentation/claim refoundation
-only. `V010.REBASE.DEEPSEEK.0` is Active Next. The main materialization/runtime
-sequence cannot advance until the repair spine closes.
+`V010.DOCS.REFOUNDATION.0` and `V010.PROJECT.RECOVERY.0` are complete at
+documentation/claim refoundation only. `V010.DOCS.ARCHITECTURE.0` is Active
+Next. `V010.REBASE.DEEPSEEK.0` is blocked by documentation architecture. The
+main materialization/runtime sequence cannot advance until the repair spine
+closes.
 
 ## Reopened: V010.GGUF.ARTIFACT.ABI.0
 

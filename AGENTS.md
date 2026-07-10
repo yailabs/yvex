@@ -694,14 +694,27 @@ Do not write marketing copy.
 
 Do not write AI-style filler.
 
-`docs/spine.md` is the compact product execution spine. It contains product
-dependencies, release gates, current hard truth, and explicit non-claims; it
-does not contain historical row databases, command inventories, or diagnostic
-proof catalogues.
+`PROJECT.md` is the single living engineering control file. Agents update it at
+every milestone that changes executable state, closes a hard dependency, or
+changes the truthful project-control contract. It owns the product target,
+current hard truth, architecture map, track registry, milestone state,
+dependencies, evidence classification, release gates, and Active Next.
+
+The project control file has no arbitrary line or heading-count limit. Control
+comes from explicit ownership, traceable architecture responsibilities,
+conclusive milestones, current usefulness, and non-duplication.
+
+Tracks are architecture ownership lanes. Diagnostic commands, reports,
+fixtures, selected tensor proofs, audits, and transcripts are evidence attached
+to an owning milestone; they are not tracks or independent product milestones.
+A milestone closes only a complete architectural/functional slice or an
+explicit hard governance dependency. Documentation-only closure never promotes
+artifact, runtime, generation, evaluation, benchmark, or release capability.
 
 Temporary priority-blocking repair spines live under `docs/repair/`. They are
-not product roadmaps. After closure, durable evidence is folded into the main
-spine and the temporary repair detail is removed; Git history is the archive.
+not product roadmaps. After closure, durable state and evidence are folded into
+`PROJECT.md` and the temporary repair detail is removed; Git history is the
+archive.
 
 Canonical artifact terminology:
 
@@ -722,7 +735,7 @@ Do not use unqualified "model artifact" for a selected-tensor proof file.
 Canonical docs:
 
 ```text
-docs/spine.md
+PROJECT.md
 docs/system-target.md
 docs/v010-release-doctrine.md
 docs/model-families.md

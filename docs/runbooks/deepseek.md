@@ -43,14 +43,17 @@ There is no supported DeepSeek generation command to run yet.
 
 ## Active Blocker
 
-`V010.DOCS.REFOUNDATION.0` is complete at documentation/claim refoundation
-only.
+`V010.DOCS.REFOUNDATION.0` and `V010.PROJECT.RECOVERY.0` are complete at
+documentation/claim refoundation only.
 
 Active Next:
 
 ```text
-V010.REBASE.DEEPSEEK.0
+V010.DOCS.ARCHITECTURE.0
 ```
+
+`V010.REBASE.DEEPSEEK.0` is the next implementation row and is blocked by
+documentation architecture.
 
 The main runtime path is blocked until the ordered foundation repair spine
 closes through `V010.GGUF.ROUNDTRIP.1` over a complete YVEX-produced artifact.
@@ -70,7 +73,7 @@ test -f "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash/tokenizer.json"
 
 ## Canonical Control
 
-- Main product spine: `../spine.md`
+- Project control: `../../PROJECT.md`
 - Priority-blocking repair spine: `../repair/v010-foundation-closure.md`
 - Release gates: `../v010-release-doctrine.md`
 - Filesystem ownership: `../system-target.md`

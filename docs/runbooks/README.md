@@ -12,8 +12,8 @@ not record delivery progress or create capability.
 - `glm.md` records source acquisition/status procedures for a non-v0.1.0
   source-pressure target. It does not describe model execution.
 
-Normative family architecture lives in `../model-families.md`. Product
-execution and repair ordering live in `../spine.md` and
+Normative family architecture lives in `../model-families.md`. Project control
+and repair ordering live in `../../PROJECT.md` and
 `../repair/v010-foundation-closure.md`.
 
 ## Rules

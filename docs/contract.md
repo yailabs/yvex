@@ -213,7 +213,7 @@ The implemented proof and ownership surfaces are:
 These are implementation facts, not a runtime progress ladder. None closes
 complete artifact, materialization, executable descriptor, transformer,
 generation, evaluation, benchmark, or release gates. The product runtime path
-is defined only by `docs/spine.md`.
+is defined only by `PROJECT.md`.
 
 ## Graph Execution Contract
 
@@ -512,7 +512,7 @@ Tracked GGUF files are tiny fixtures only.
 Runtime changes should include command-visible proof, tests, failure-path
 coverage, cleanup/lifecycle behavior, and explicit boundary documentation.
 Public docs should reflect the implemented boundary without exposing internal
-delivery IDs outside `docs/spine.md`.
+delivery IDs outside `PROJECT.md` and the active repair owner.
 
 ## Claim Promotion Contract
 
@@ -526,7 +526,7 @@ promote only their exact lower-level contracts. They do not promote model
 residency, transformer execution, runtime generation, provider behavior,
 evaluation, benchmark, or release state.
 
-Every product gate in `docs/spine.md` and `docs/v010-release-doctrine.md` needs
+Every product gate in `PROJECT.md` and `docs/v010-release-doctrine.md` needs
 its own implementation, reference or acceptance result, refusal path, cleanup,
 operator proof, and focused guard.
 

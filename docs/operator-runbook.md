@@ -27,8 +27,9 @@ There is no supported model generation procedure today.
 | `runbooks/glm.md` | Existing GLM source acquisition and status procedure outside v0.1.0 | source evidence only; no GLM runtime |
 
 Model-family architecture is defined in `model-families.md`. Release gates are
-defined in `v010-release-doctrine.md`. The active product and repair sequences
-are defined in `spine.md` and `repair/v010-foundation-closure.md`.
+defined in `v010-release-doctrine.md`. Project state and the active repair
+sequence are defined in `../PROJECT.md` and
+`repair/v010-foundation-closure.md`.
 
 ## Current Entry
 
@@ -37,11 +38,14 @@ runbook for repository validation. Do not substitute selected aliases,
 diagnostic commands, fixture output, or report-only surfaces for a full-target
 operator run.
 
-The next implementation row is:
+Active Next is the documentation architecture contract:
 
 ```text
-V010.REBASE.DEEPSEEK.0
+V010.DOCS.ARCHITECTURE.0
 ```
+
+The next implementation row, `V010.REBASE.DEEPSEEK.0`, remains blocked by that
+contract.
 
 Until the repair spine closes, the supported operator action is validation and
 explicit refusal, not DeepSeek generation.

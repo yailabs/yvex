@@ -13,8 +13,8 @@ logits, sampling, and generation code.
 
 This document is the technical architecture contract for family integration. It
 does not record delivery rows, active-next decisions, release gates, command
-proof history, implementation ledgers, or diagnostic progress. Product scope
-and current truth belong in `docs/spine.md`.
+proof history, implementation ledgers, or diagnostic progress. Product scope,
+track state, and current truth belong in `PROJECT.md`.
 
 ## Integration Thesis
 

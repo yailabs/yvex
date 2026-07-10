@@ -181,7 +181,7 @@ changes. Do not use an all-files stage operation in a mixed worktree.
 
 The exact v0.1.0 target, release gates, and active repair are owned by:
 
-- `../spine.md`;
+- `../../PROJECT.md`;
 - `../repair/v010-foundation-closure.md`;
 - `../v010-release-doctrine.md`;
 - `deepseek.md`.

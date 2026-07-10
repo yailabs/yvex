@@ -40,7 +40,7 @@ a complete GGUF for DeepSeek-V4-Flash produced by YVEX
 
 No such complete model artifact currently exists. The target, artifact,
 materialization, runtime, generation, evaluation, benchmark, and release states
-remain unsupported or blocked as recorded in `docs/spine.md`.
+remain unsupported or blocked as recorded in `PROJECT.md`.
 
 ## Admission Contract
 

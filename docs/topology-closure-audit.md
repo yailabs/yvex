@@ -240,17 +240,19 @@ paths. `CORE_SRCS` does not include `src/cli/input`, `src/cli/commands`,
 
 `libyvex.a` CLI leakage: 0.
 
-## Spine Alignment
+## Project Alignment
 
 This audit remains the normative inventory of control-plane/domain ownership
-residue. It is not a product progress map and its historical topology row IDs
-do not belong in the compact main spine.
+residue. It is not a product progress map. Its historical topology row IDs are
+supporting architecture evidence in `PROJECT.md`, not primary release tracks.
 
 The priority-blocking sequence is now owned by
 `docs/repair/v010-foundation-closure.md`. That sequence starts with the completed
-documentation refoundation and makes `V010.REBASE.DEEPSEEK.0` Active Next.
-Topology findings remain valid inputs to the owning repair or decommission row,
-but they do not advance artifact or runtime gates.
+documentation refoundation and project recovery, and makes
+`V010.DOCS.ARCHITECTURE.0` Active Next. `V010.REBASE.DEEPSEEK.0` remains the
+next implementation row and is blocked by documentation architecture. Topology
+findings remain valid inputs to the owning repair or decommission row, but they
+do not advance artifact or runtime gates.
 
 ## Retained Cleanup Findings
 

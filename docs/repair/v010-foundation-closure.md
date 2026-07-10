@@ -3,19 +3,21 @@
 Date: 2026-07-10
 Status: priority-blocking
 Authority: temporary foundation repair sequence
-Product spine: `../spine.md`
+Project control: `../../PROJECT.md`
 
 This is not a second product roadmap. It owns the ordered repairs required
 before the DeepSeek runtime path can advance truthfully. While this spine is
 active, the main critical path is blocked.
 
-After closure, durable results are folded into `docs/spine.md` and this active
+After closure, durable results are folded into `PROJECT.md` and this active
 detail is removed. Git history is the archive; no compatibility copy is kept.
 
 ## Transition
 
 ```text
 V010.DOCS.REFOUNDATION.0
+-> V010.PROJECT.RECOVERY.0
+-> V010.DOCS.ARCHITECTURE.0
 -> V010.REBASE.DEEPSEEK.0
 -> V010.GGUF.QTYPE.ABI.1
 -> V010.GGUF.ARTIFACT.ABI.1
@@ -32,9 +34,10 @@ V010.DOCS.REFOUNDATION.0
 
 | Field | Current value |
 | --- | --- |
-| Completed row | `V010.DOCS.REFOUNDATION.0` |
+| Completed rows | `V010.DOCS.REFOUNDATION.0`, `V010.PROJECT.RECOVERY.0` |
 | Completed proof stage | documentation/claim refoundation only |
-| Active Next | `V010.REBASE.DEEPSEEK.0` |
+| Active Next | `V010.DOCS.ARCHITECTURE.0` |
+| Next implementation row | `V010.REBASE.DEEPSEEK.0`, blocked by documentation architecture |
 | Main-path state | blocked until this repair sequence closes |
 | Runtime/artifact promotion | none |
 
@@ -42,8 +45,10 @@ V010.DOCS.REFOUNDATION.0
 
 | Row / status | Owner | Concrete defect or missing capability | Required outcome | Acceptance gate | Dependency / next row |
 | --- | --- | --- | --- | --- | --- |
-| `V010.DOCS.REFOUNDATION.0` / complete | `docs/spine.md`, this file, canonical claim docs, `tests/test_docs_surface.sh` | The primary spine treated diagnostic and report evidence as product progress and targeted multiple families. | Compact DeepSeek-only execution spine, separate repair spine, corrected artifact terms, explicit unsupported truth, and permanent focused guards. | Main spine is at most 350 lines; exact target and source are locked; ABI `.0` rows are reopened; no runtime claim is promoted; docs guard passes. | Foundation row; next `V010.REBASE.DEEPSEEK.0`. |
-| `V010.REBASE.DEEPSEEK.0` / active | `src/model/target/`, source-target reports, target CLI renderers and tests | Target catalogs and release decisions still center selected aliases and multi-family candidates; the full target is not canonical in code. | Install `deepseek4-v4-flash` as the exact unsupported v0.1.0 target bound to the canonical local source; demote old candidates from release selection. | Typed target/list/decision reports and CLI tests expose the full target and source, refuse support, and name the next qtype ABI repair. | Depends on docs refoundation; next `V010.GGUF.QTYPE.ABI.1`. |
+| `V010.DOCS.REFOUNDATION.0` / complete | Current claim docs, project-control history, `tests/test_docs_surface.sh` | The old project landscape treated diagnostic and report evidence as product progress and targeted multiple release families. | DeepSeek-only release truth, separate repair ownership, corrected artifact terms, reopened ABI boundaries, explicit unsupported states, and permanent claim guards. | Exact target/source and unsupported gates remain locked; ABI `.0` rows remain reopened; no runtime claim is promoted. The former size/heading mechanics are superseded by project recovery. | Foundation row; next `V010.PROJECT.RECOVERY.0`. |
+| `V010.PROJECT.RECOVERY.0` / complete | `PROJECT.md`, this file, direct project-control consumers, structural docs guards | Refoundation removed the track registry, implementation history, milestone dependencies, and living project-control function. | Root project authority with recovered architectural tracks, conclusive milestone contract, traceable history, evidence demotion, reference baseline, and no compatibility spine. | `PROJECT.md` is canonical; all 24 old track responsibilities are accounted for; diagnostic lanes are evidence; hard truth is unchanged; guards reject a recreated `docs/spine.md`; no source behavior changes. | Depends on docs refoundation; next `V010.DOCS.ARCHITECTURE.0`. |
+| `V010.DOCS.ARCHITECTURE.0` / active | Canonical documentation taxonomy and guards, with `PROJECT.md` retaining project state | Current canonical docs mix architecture, operator, API, evidence, and historical ownership; the verified vLLM, SGLang/DS4, ggml/llama.cpp, TensorRT-LLM/NVIDIA, and DeepSeek reference baseline is not mapped to YVEX owners. | Standardize document ownership, reference/paper taxonomy, architecture descriptions, current DS4 terminology, and migration rules without changing runtime capability. | One non-duplicated documentation system maps external reference concepts to YVEX owners, preserves claim truth, passes permanent guards, and leaves implementation gates unsupported. | Depends on project recovery; next `V010.REBASE.DEEPSEEK.0`. |
+| `V010.REBASE.DEEPSEEK.0` / blocked | `src/model/target/`, source-target reports, target CLI renderers and tests | Target catalogs and release decisions still center selected aliases and multi-family candidates; the full target is not canonical in code. | Install `deepseek4-v4-flash` as the exact unsupported v0.1.0 target bound to the canonical local source; demote old candidates from release selection. | Typed target/list/decision reports and CLI tests expose the full target and source, refuse support, and name the next qtype ABI repair. | Depends on documentation architecture; next `V010.GGUF.QTYPE.ABI.1`. |
 | `V010.GGUF.QTYPE.ABI.1` / blocked | `src/gguf/yvex_gguf_qtype.c` and GGUF qtype tests | `.0` proves bounded byte geometry but does not establish the exact DeepSeek qtype set and refusal contract required by the complete artifact path. | Define exact GGUF qtype identifiers, block geometry, storage sizing, ambiguity refusal, and DeepSeek-required coverage without claiming backend arithmetic. | Reference geometry tests cover required, unknown, ambiguous, overflow, and malformed cases; `.1` evidence supersedes `.0`. | Depends on DeepSeek rebase; next `V010.GGUF.ARTIFACT.ABI.1`. |
 | `V010.GGUF.ARTIFACT.ABI.1` / blocked | `src/gguf/yvex_gguf_container.c`, `yvex_gguf_metadata.c`, `yvex_gguf_tensor_info.c`, `yvex_gguf_reader.c` | `.0` closes tiny-fixture parsing only and is insufficient for the metadata and tensor directory required by the exact complete model. | Define and validate the complete DeepSeek container, metadata, tensor-info, and failure ABI without reading payload bytes in header-only validation. | DeepSeek-shaped fixtures cover required metadata, tensor counts, ranks, types, malformed values, overflow, truncation, and explicit refusal; `.1` supersedes `.0`. | Depends on qtype ABI `.1`; next `V010.GGUF.LAYOUT.INTEGRITY.1`. |
 | `V010.GGUF.LAYOUT.INTEGRITY.1` / blocked | `src/gguf/yvex_gguf_range_map.c`, `yvex_gguf_layout_map.c`, `src/artifact/yvex_artifact_integrity.c` | Global offsets, alignment, qtype-sized ranges, overlap, truncation, and aggregate overflow are not proven for a complete artifact layout. | Produce typed global layout facts and fail closed on every invalid range before payload access or materialization. | Reference fixtures cover overlap, aliasing, misalignment, out-of-file ranges, aggregate overflow, qtype size mismatch, and valid multi-tensor layout. | Depends on artifact ABI `.1`; next `V010.CUDA.FAILCLOSED.0`. |
@@ -55,6 +60,41 @@ V010.DOCS.REFOUNDATION.0
 | `V010.GGUF.WRITER.1` / blocked | `src/gguf/yvex_gguf_writer.c` and explicit file-writer tests | The writer owner currently refuses and cannot serialize a complete artifact safely. | Serialize metadata, tensor-info, alignment, qtype-sized data, offsets, and payloads through explicit local-file IO with atomic failure cleanup. | Deterministic multi-tensor fixtures match independent expectations; short write, overflow, collision, cancellation, partial-file cleanup, and overwrite policy are tested. | Depends on quantization; next `V010.ARTIFACT.EMIT.DEEPSEEK.0`. |
 | `V010.ARTIFACT.EMIT.DEEPSEEK.0` / blocked | `src/artifact/` emission coordinator with GGUF writer and model-target facts | No complete DeepSeek-V4-Flash artifact is produced by YVEX. | Emit one complete model artifact for `deepseek4-v4-flash` from the canonical source with identity and manifest facts, without claiming runtime support. | Required tensor/metadata counts and bytes match the typed spec and map; no missing roles; emitted identity is stable; failure leaves no admitted artifact. | Depends on writer `.1`; next `V010.GGUF.ROUNDTRIP.1`. |
 | `V010.GGUF.ROUNDTRIP.1` / blocked | `src/gguf/yvex_gguf_roundtrip.c`, `src/artifact/yvex_artifact_roundtrip_gate.c` | `.0` does not prove writer-reader equivalence for a complete YVEX-produced artifact. | Reopen the emitted file through YVEX and compare metadata, tensor directory, qtypes, shapes, offsets, ranges, payload identity samples, and aggregate identity. | Complete artifact roundtrip passes deterministic equivalence; mutation, truncation, reordered/duplicate metadata, range drift, and payload corruption refuse. | Depends on complete emission; closes repair spine and hands off to full materialization/residency. |
+
+## Track Recovery Map
+
+The count below is the number of current conclusive milestones that directly
+own the old lane, not the number of historic row labels. Shared milestones are
+counted in every lane whose architecture responsibility they close. Historic
+reports, fixtures, selected slices, and diagnostic loops remain traceable in
+`PROJECT.md` as evidence.
+
+| Original track | Resulting project track / owner | Restored conclusive milestone count | Merged or demoted diagnostic work | Removed duplication | Remaining capability gap |
+| --- | --- | ---: | --- | --- | --- |
+| `TRACK.SCOPE` | `TRACK.PROJECT`, `TRACK.CLAIMS`, `TRACK.RELEASE` | 3 | Target reports and claim maps are evidence for project/release decisions. | Multi-family scope and repeated spine-control rows are superseded. | Documentation architecture, exact target rebase, and release closure. |
+| `TRACK.SOURCE` | `TRACK.SOURCE` | 2 | Manifests, downloads, header inventories, and role-coverage reports are source evidence. | Per-report acceptance rows merge into verification and streaming. | Exact source verification and payload trust/streaming. |
+| `TRACK.MAP` | `TRACK.MAP` | 1 | Naming, output-head, tokenizer, missing-role, and gate reports become map evidence. | Family/report micro-rows merge into one exact DeepSeek map. | Complete source-role-GGUF-layout mapping. |
+| `TRACK.QUANT` | `TRACK.QUANT` | 2 | Policy and role-support reports plus `.0` fixtures remain evidence. | Calibration and matrix reports become acceptance subtasks. | Reopened qtype ABI and role-correct quantization/compute refusal. |
+| `TRACK.ARTIFACT` | `TRACK.ARTIFACT` | 5 | Listing, tiny emission, and selected files become fixture/tensor-proof evidence. | Writer/parse/register micro-rows merge into ABI, writer, emission, roundtrip, and support cutover. | Complete YVEX GGUF and truthful admission. |
+| `TRACK.INTEGRITY` | `TRACK.INTEGRITY` | 1 | Existing identity, range, corruption, drift, and preflight checks feed complete-layout tests. | Repeated gate reports merge into one global layout/admission closure. | Complete qtype-sized multi-tensor integrity. |
+| `TRACK.MODEL` | `TRACK.ARCHITECTURE` | 2 | Class, context, attention, KV, and requirement reports become architecture evidence. | Family-class/report rows merge into architecture IR and runtime descriptor. | Execution-complete DS4 IR and descriptor. |
+| `TRACK.TENSOR` | `TRACK.TENSOR`, consumed by `TRACK.MAP` | 1 | Collection inventories and missing-role reports remain header evidence. | Per-role collection rows merge into complete mapping coverage. | Every required tensor mapped with shape/layout constraints. |
+| `TRACK.RESIDENCY` | `TRACK.RESIDENCY` | 1 | Placement and selected materialization reports remain lower-level evidence. | Forty-two storage/residency micro-rows merge into streaming and full materialization acceptance. | Complete DGX Spark materialization, placement, movement, and cleanup. |
+| `TRACK.BACKEND` | `TRACK.BACKEND` | 1 | CPU/CUDA probes, allocation, transfer, and bounded parity remain primitive evidence. | Hardware/build/report rows become acceptance metadata or future scope. | Fail-closed CUDA plus required real operations. |
+| `TRACK.GRAPH` | `TRACK.EXECUTION` | 2 | Primitive and selected graph proofs remain reference evidence. | Seventy-one primitive/attention/MoE/layer micro-rows merge into MoE and complete transformer milestones. | Family-correct attention, MoE, repeated layers, and final norm. |
+| `TRACK.PREFILL` | `TRACK.PREFILL` | 1 | Context reports, chunk plans, and diagnostic summaries remain tests/subtasks. | Context/prefill report rows merge into real attention/KV prefill. | Full transformer prefill writing model KV. |
+| `TRACK.KV` | `TRACK.KV`, closed with `TRACK.PREFILL` | 1 | Bounded store, shape, capacity, append/read, and lifecycle remain unit evidence. | Diagnostic KV rows merge into one attention-backed KV slice. | Family-correct writes, decode reads, reuse, and cleanup. |
+| `TRACK.DECODE` | `TRACK.DECODE` | 1 | State, position, summary, and trace surfaces remain evidence. | Step/report rows merge into one repeated model-backed decode milestone. | Decode over transformer state and prior KV. |
+| `TRACK.LOGITS` | `TRACK.LOGITS` | 1 | Buffer, checksum, top-k, and synthetic logits remain fixtures. | Report/staged-output micro-rows merge into output-head vocabulary logits. | Real final norm and output projection. |
+| `TRACK.SAMPLING` | `TRACK.SAMPLING`, closed with `TRACK.LOGITS` | 1 | Candidate, selection, temperature, and seeded vectors remain internal fixtures. | Strategy/report rows merge into sampling over real logits. | Truthful deterministic/stochastic model sampling. |
+| `TRACK.TOKENIZER` | `TRACK.TOKENIZER` | 1 | Token-ID and special-token diagnostics remain fixtures. | Metadata, stop, trace, and report rows merge into exact tokenizer I/O. | Prompt encoding, EOS/stop, and detokenization. |
+| `TRACK.GENERATION` | `TRACK.GENERATION` | 1 | Bounded composition, trace, cancellation, append, and cleanup remain lifecycle evidence. | Fifty-three runtime/generation/trace micro-rows merge into one autoregressive milestone. | Multiple model-backed tokens and detokenized text. |
+| `TRACK.OPERATOR` | `TRACK.OPERATOR`, with `TRACK.TOPOLOGY` history | 1 | CLI grammar, renderers, audits, diagnostic commands, and transcripts remain operator evidence. | Command-family and doctor/report rows merge into final release-path operator acceptance. | One truthful command over real generation. |
+| `TRACK.SERVE` | `TRACK.SERVE` | 0 | Daemon status shell remains supporting evidence only. | Planned endpoint/protocol micro-rows move to future scope. | Runtime-backed serving is post-v0.1.0. |
+| `TRACK.EVAL` | `TRACK.EVAL` | 1 | Lower-level fixture and primitive tests stay with their owning milestones. | Per-stage eval rows merge into one release-path evaluation milestone. | Generation-backed correctness/capability evidence. |
+| `TRACK.BENCH` | `TRACK.BENCH` | 1 | Machine/artifact/qtype/context fields become one benchmark contract. | Per-metric report rows merge into one measured acceptance milestone. | No measurements exist. |
+| `TRACK.RELEASE` | `TRACK.RELEASE`, supported by `TRACK.CLAIMS` | 1 | Existing docs/layout/natural/artifact guards are release evidence. | CI/docs/transcript/tag micro-rows merge into one release milestone. | All product gates, measurement, transcript, and tag remain blocked. |
+| `TRACK.POST010` | `TRACK.SERVE`, `TRACK.DISTRIBUTED`, `TRACK.PORTABILITY`, `TRACK.MODELS`, `TRACK.ACCELERATION`, `TRACK.POST010` | 0 | Speculative reports and pressure targets remain research input only. | Duplicate speculative/post-release row sets collapse into explicit future tracks. | No post-v0.1 scope is active. |
 
 ## Decommission Map
 

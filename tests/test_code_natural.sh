@@ -1199,7 +1199,7 @@ if git grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fwrite)\s*\(|stdo
 fi
 
 gguf_claim_pattern='generation-rea''dy|inference-rea''dy|release-rea''dy|writer com''plete|roundtrip com''plete|generation-capable artifact emit''ted|runtime descriptor rea''dy|benchmark meas''ured|through''put'
-if git grep -nE "$gguf_claim_pattern" -- src/gguf docs/system-target.md docs/spine.md; then
+if git grep -nE "$gguf_claim_pattern" -- src/gguf docs/system-target.md PROJECT.md; then
   echo "GGUF ABI row must not introduce runtime, writer, generation, benchmark, or release claims"
   exit 1
 fi
