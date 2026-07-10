@@ -184,6 +184,8 @@ test -f src/source/yvex_source_manifest.c
 test -f src/source/yvex_source_manifest.h
 test -f src/source/yvex_source_scan.c
 test -f src/source/yvex_source_scan.h
+test -f src/source/yvex_source_verify.c
+test -f src/source/yvex_source_verify.h
 test -f src/source/yvex_native_weights.c
 test -f src/source/yvex_native_weights.h
 test -f src/source/yvex_safetensors_header.c

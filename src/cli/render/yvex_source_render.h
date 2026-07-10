@@ -10,7 +10,8 @@
 typedef enum {
     YVEX_SOURCE_RENDER_NORMAL = 0,
     YVEX_SOURCE_RENDER_TABLE,
-    YVEX_SOURCE_RENDER_AUDIT
+    YVEX_SOURCE_RENDER_AUDIT,
+    YVEX_SOURCE_RENDER_JSON
 } yvex_source_render_mode;
 
 int yvex_source_render(FILE *fp,
@@ -19,6 +20,7 @@ int yvex_source_render(FILE *fp,
 int yvex_source_render_normal(FILE *fp, const yvex_source_report *report);
 int yvex_source_render_table(FILE *fp, const yvex_source_report *report);
 int yvex_source_render_audit(FILE *fp, const yvex_source_report *report);
+int yvex_source_render_json(FILE *fp, const yvex_source_report *report);
 void yvex_source_render_help(FILE *fp);
 
 #endif

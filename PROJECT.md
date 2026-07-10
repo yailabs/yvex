@@ -166,7 +166,7 @@ The unqualified term "model artifact" never means a selected-tensor proof file.
 | Boundary | Current truth |
 | --- | --- |
 | Project control | The 24-track, 631-ID historical ledger is recovered and ranked here; project recovery is complete. |
-| Source | Multi-family intake/header tooling exists. Exact DeepSeek identity, revision, tokenizer, shard set, and payload trust have not closed. |
+| Source | The canonical DeepSeek target, repository, resolved commit, model/tokenizer/generation configs, 46 source shards, and all 46 safetensors headers are now inspected through structured metadata. The local source is still blocked because `model.safetensors.index.json` is absent and its source manifest remains `in-progress`; tensor payload trust remains owned by `V010.SOURCE.PAYLOAD.STREAM.0`. |
 | Family profiles | Qwen, Gemma, dense/MoE, and bounded DeepSeek facts exist. No execution-complete DeepSeek architecture IR exists. |
 | Tensor coverage | Qwen/Gemma and common collection evidence exists. Complete DeepSeek required-role coverage is blocked. |
 | Mapping | Dense/Qwen and output/tokenizer mapping evidence exists. Complete DeepSeek source-to-role-to-GGUF mapping does not. |
@@ -196,6 +196,18 @@ Active Next: V010.REBASE.DEEPSEEK.0
 The documentation ownership cutover is complete. The product path now resumes
 at exact DeepSeek source and target verification; no artifact or runtime gate
 was promoted by the documentation work.
+
+Current read-only source proof resolves
+`deepseek-ai/DeepSeek-V4-Flash` at commit
+`60d8d70770c6776ff598c94bb586a859a38244f1`, validates the exact model,
+tokenizer, and generation config structure, and reads 69,187 tensor records
+from 46/46 safetensors headers without loading payload bytes. Header dtype
+facts are 433 BF16, 417
+F32, 3 I64, 33,792 I8, 375 F8_E4M3, and 34,167 F8_E8M0 tensors. Strict
+verification remains blocked by the absent shard index and the `in-progress`
+manifest. Therefore
+`V010.REBASE.DEEPSEEK.0` remains active and the qtype ABI successor remains
+blocked.
 
 ```text
 V010.REBASE.DEEPSEEK.0

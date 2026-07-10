@@ -358,12 +358,7 @@ int yvex_generate_render_help(FILE *fp)
 {
     yvex_cli_out_writef(fp, "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [options]\n\n");
     yvex_cli_out_writef(fp, "Bounded diagnostic generation loop over the existing prefill, decode, bounded logits, greedy sample, token append, stop, trace, cancel, and cleanup path.\n\n");
-    yvex_cli_out_writef(fp, "Normal path:\n");
-    yvex_cli_out_writef(fp, "  ./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3\n\n");
-    yvex_cli_out_writef(fp, "Examples:\n");
-    yvex_cli_out_writef(fp, "  ./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 2 --trace-level full\n");
-    yvex_cli_out_writef(fp, "  ./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --cancel-after-steps 1\n");
-    yvex_cli_out_writef(fp, "  ./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3 --context-length 5\n\n");
+    yvex_cli_out_writef(fp, "Model-backed DeepSeek generation is unsupported. This command has no product-generation example until the full runtime path exists.\n\n");
     yvex_cli_out_writef(fp, "Required arguments:\n");
     yvex_cli_out_writef(fp, "  --model FILE_OR_ALIAS      selected segment artifact path or registry alias\n");
     yvex_cli_out_writef(fp, "  --backend cpu|cuda         backend used by the bounded diagnostic path\n");

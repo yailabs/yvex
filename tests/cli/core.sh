@@ -309,11 +309,9 @@ contains "$OUT_DIR/help_generate.out" "option_classes: selector, behavior, diagn
 contains "$OUT_DIR/help_generate.out" "boundary: diagnostic generation only; full model generation unsupported"
 contains "$OUT_DIR/help_generate.out" "domain help:"
 contains "$OUT_DIR/help_generate.out" "usage: yvex generate --model FILE_OR_ALIAS --backend cpu|cuda --segment embedding-rmsnorm --tokens IDS --max-new-tokens N [options]"
-contains "$OUT_DIR/help_generate.out" "Normal path:"
-contains "$OUT_DIR/help_generate.out" "./yvex generate --model deepseek4-v4-flash-selected-embed-rmsnorm --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 3"
-contains "$OUT_DIR/help_generate.out" "--max-new-tokens 2 --trace-level full"
-contains "$OUT_DIR/help_generate.out" "--cancel-after-steps 1"
-contains "$OUT_DIR/help_generate.out" "--context-length 5"
+contains "$OUT_DIR/help_generate.out" "Model-backed DeepSeek generation is unsupported."
+contains "$OUT_DIR/help_generate.out" "no product-generation example"
+! grep -F 'deepseek4-v4-flash-selected-embed' "$OUT_DIR/help_generate.out"
 contains "$OUT_DIR/help_generate.out" "Required arguments:"
 contains "$OUT_DIR/help_generate.out" "Diagnostic options:"
 contains "$OUT_DIR/help_generate.out" "Trace options:"
@@ -393,12 +391,12 @@ contains "$OUT_DIR/help_model_target.out" "--gate v0.1.0"
 contains "$OUT_DIR/help_model_target.out" "       yvex model-target inspect TARGET [--paths] [--models-root DIR]"
 contains "$OUT_DIR/help_model_target.out" "--paths           show expected operator-local source, artifact, report, reference, and registry paths"
 contains "$OUT_DIR/help_model_target.out" "--models-root DIR override configured operator model root for this command only"
-contains "$OUT_DIR/help_model_target.out" "The candidate report evaluates full-runtime target eligibility for a release."
-contains "$OUT_DIR/help_model_target.out" "The dense-candidate report evaluates whether a dense model target can become the first v0.1.0 full-runtime candidate."
+contains "$OUT_DIR/help_model_target.out" "The candidate report shows the selected DeepSeek release source and subordinate non-release engineering evidence."
+contains "$OUT_DIR/help_model_target.out" "The dense-candidate report preserves Qwen and Gemma engineering evidence without offering an alternate v0.1.0 release target."
 contains "$OUT_DIR/help_model_target.out" "The Qwen/Metal pressure report records a planned reduced-scale Apple Silicon / Metal lane for future full-runtime work."
 contains "$OUT_DIR/help_model_target.out" "The tensor naming map reads safetensors headers only"
 contains "$OUT_DIR/help_model_target.out" "The tensor mapping gate aggregates model-class, tensor-collection, tensor naming, output-head, tokenizer metadata, and missing-role reports."
-contains "$OUT_DIR/help_model_target.out" "Model targets are pressure objects, not capability claims."
+contains "$OUT_DIR/help_model_target.out" "Release-target selection and engineering target evidence are not model-support claims."
 contains "$OUT_DIR/help_model_target.out" "External GGUFs and external runners are reference evidence only."
 contains "$OUT_DIR/help_model_target.out" "Model-target path reporting does not read model payloads, create artifacts, register aliases, or claim runtime support."
 
@@ -492,20 +490,21 @@ contains "$OUT_DIR/help_session.out" "usage: yvex session FILE_OR_ALIAS [--backe
 
 run_ok help_source_manifest "$YVEX_BIN" help source-manifest
 contains "$OUT_DIR/help_source_manifest.out" "usage: yvex source-manifest create"
-contains "$OUT_DIR/help_source_manifest.out" "source-manifest report --family qwen --release v0.1.0 [options]"
-contains "$OUT_DIR/help_source_manifest.out" "does not download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready"
+contains "$OUT_DIR/help_source_manifest.out" "source-manifest report --family deepseek|qwen|gemma --release v0.1.0 [options]"
+contains "$OUT_DIR/help_source_manifest.out" "No report emits artifacts, executes runtime paths, generates, evaluates, benchmarks, or marks a release ready."
 
 run_ok source_manifest_report_help "$YVEX_BIN" source-manifest report --help
-contains "$OUT_DIR/source_manifest_report_help.out" "usage: yvex source-manifest report --family qwen|gemma --release v0.1.0 [options]"
-contains "$OUT_DIR/source_manifest_report_help.out" "--family qwen|gemma"
-contains "$OUT_DIR/source_manifest_report_help.out" "--output normal|table|audit"
+contains "$OUT_DIR/source_manifest_report_help.out" "usage: yvex source-manifest report --family deepseek|qwen|gemma --release v0.1.0 [options]"
+contains "$OUT_DIR/source_manifest_report_help.out" "--family deepseek|qwen|gemma"
+contains "$OUT_DIR/source_manifest_report_help.out" "--strict"
+contains "$OUT_DIR/source_manifest_report_help.out" "--output normal|table|audit|json"
 contains "$OUT_DIR/source_manifest_report_help.out" "--audit"
 contains "$OUT_DIR/source_manifest_report_help.out" "Report fields include source artifact class, target artifact class, source footprint, and source provenance evidence."
-contains "$OUT_DIR/source_manifest_report_help.out" "Source footprint reports count top-level regular files and bytes without loading tensor payloads."
-contains "$OUT_DIR/source_manifest_report_help.out" "Source provenance fields classify local/planned state only; they do not verify upstream identity, hash files, or prove source readiness."
+contains "$OUT_DIR/source_manifest_report_help.out" "Source footprint uses checked byte accounting without loading tensor payloads."
+contains "$OUT_DIR/source_manifest_report_help.out" "DeepSeek strict verification checks structured repository, revision, model/tokenizer/generation config, index, shard, dtype, and header facts."
 contains "$OUT_DIR/source_manifest_report_help.out" "Native safetensors inventory reads safetensors headers only and never loads tensor payload bytes."
 contains "$OUT_DIR/source_manifest_report_help.out" "Source tensor metadata inventory is derived from safetensors headers only and does not map tensors to runtime roles."
-contains "$OUT_DIR/source_manifest_report_help.out" "Source manifest hardening is shallow/report-only; it does not create manifests, check remotes, hash files, load payloads, or prove source readiness."
+contains "$OUT_DIR/source_manifest_report_help.out" "Verification does not create manifests, check remotes, hash payload files, or load tensor payloads."
 run_fail_code source_manifest_report_missing 2 "$YVEX_BIN" source-manifest report
 contains "$OUT_DIR/source_manifest_report_missing.err" "source-manifest report: --family is required"
 run_fail_code source_manifest_report_missing_release 2 "$YVEX_BIN" source-manifest report --family qwen
@@ -1042,8 +1041,9 @@ contains "$OUT_DIR/model_target_classes.out" "runtime_execution: partial-boundar
 contains "$OUT_DIR/model_target_classes.out" "generation: unsupported"
 
 run_ok model_target_list "$YVEX_BIN" model-target list
-contains "$OUT_DIR/model_target_list.out" "MODEL TARGETS  count=5"
+contains "$OUT_DIR/model_target_list.out" "MODEL TARGETS  count=6"
 matches "$OUT_DIR/model_target_list.out" '^TARGET[[:space:]]{2,}FAMILY[[:space:]]{2,}CLASS[[:space:]]{2,}RUNTIME[[:space:]]{2,}GENERATION$'
+matches "$OUT_DIR/model_target_list.out" '^deepseek4-v4-flash[[:space:]]{2,}DeepSeek[[:space:]]{2,}release-source-target[[:space:]]{2,}unsupported[[:space:]]{2,}unsupported$'
 matches "$OUT_DIR/model_target_list.out" '^deepseek4-v4-flash-selected-embed[[:space:]]{2,}DeepSeek[[:space:]]{2,}selected-runtime-slice[[:space:]]{2,}unsupported[[:space:]]{2,}unsupported$'
 matches "$OUT_DIR/model_target_list.out" '^qwen3-8b[[:space:]]{2,}Qwen[[:space:]]{2,}source-model-candidate[[:space:]]{2,}unsupported[[:space:]]{2,}unsupported$'
 matches "$OUT_DIR/model_target_list.out" '^gemma-4-12b-it[[:space:]]{2,}Gemma[[:space:]]{2,}source-model-candidate[[:space:]]{2,}unsupported[[:space:]]{2,}unsupported$'
@@ -1052,14 +1052,19 @@ matches "$OUT_DIR/model_target_list.out" '^gemma-4-12b-it[[:space:]]{2,}Gemma[[:
 ! grep -F 'deepseek4-v4-flash-selected-embed DeepSeek selected-runtime-slice unsupported unsupported' "$OUT_DIR/model_target_list.out" >/dev/null
 contains "$OUT_DIR/model_target_list.out" "status: model-target-list"
 run_ok model_target_list_table "$YVEX_BIN" model-target list --output table
-contains "$OUT_DIR/model_target_list_table.out" "MODEL TARGETS  count=5"
+contains "$OUT_DIR/model_target_list_table.out" "MODEL TARGETS  count=6"
 matches "$OUT_DIR/model_target_list_table.out" '^TARGET[[:space:]]{2,}FAMILY[[:space:]]{2,}CLASS[[:space:]]{2,}RUNTIME[[:space:]]{2,}GENERATION$'
 matches "$OUT_DIR/model_target_list_table.out" '^qwen3-8b[[:space:]]{2,}Qwen[[:space:]]{2,}source-model-candidate[[:space:]]{2,}unsupported[[:space:]]{2,}unsupported$'
 matches "$OUT_DIR/model_target_list_table.out" '^gemma-4-12b-it[[:space:]]{2,}Gemma[[:space:]]{2,}source-model-candidate[[:space:]]{2,}unsupported[[:space:]]{2,}unsupported$'
 ! grep -F 'qwen-metal-portability' "$OUT_DIR/model_target_list_table.out" >/dev/null
 ! grep -F 'gemma-dense-portability' "$OUT_DIR/model_target_list_table.out" >/dev/null
 contains "$OUT_DIR/model_target_list_table.out" "status: model-target-list"
+run_ok model_target_list_json "$YVEX_BIN" model-target list --output json
+jq -e '.status == "model-target-list" and ([.targets[] | select(.target_id == "deepseek4-v4-flash" and .release_selected == true and .runtime == "unsupported" and .generation == "unsupported")] | length == 1)' "$OUT_DIR/model_target_list_json.out" >/dev/null
+jq -e '([.targets[] | select((.target_id == "qwen3-8b" or .target_id == "gemma-4-12b-it") and .release_selected == false)] | length == 2)' "$OUT_DIR/model_target_list_json.out" >/dev/null
 run_ok model_target_list_audit "$YVEX_BIN" model-target list --audit
+contains "$OUT_DIR/model_target_list_audit.out" "target: deepseek4-v4-flash"
+contains "$OUT_DIR/model_target_list_audit.out" "target_class: release-source-target"
 contains "$OUT_DIR/model_target_list_audit.out" "target: deepseek4-v4-flash-selected-embed"
 contains "$OUT_DIR/model_target_list_audit.out" "target_class: selected-runtime-slice"
 contains "$OUT_DIR/model_target_list_audit.out" "target: qwen3-8b"
@@ -1119,26 +1124,26 @@ run_fail_code model_target_list_bad_output 2 "$YVEX_BIN" model-target list --out
 contains "$OUT_DIR/model_target_list_bad_output.err" "model-target list: unsupported output mode: nope"
 run_ok model_target_candidate_help "$YVEX_BIN" model-target candidate --help
 contains "$OUT_DIR/model_target_candidate_help.out" "usage: yvex model-target candidate --release v0.1.0 [options]"
-contains "$OUT_DIR/model_target_candidate_help.out" "The candidate report evaluates full-runtime target eligibility for a release."
-contains "$OUT_DIR/model_target_candidate_help.out" "does not select a ready model"
+contains "$OUT_DIR/model_target_candidate_help.out" "selected DeepSeek release source"
+contains "$OUT_DIR/model_target_candidate_help.out" "target selection does not select a ready model"
 
 run_ok model_target_candidate "$YVEX_BIN" model-target candidate --release v0.1.0
 contains "$OUT_DIR/model_target_candidate.out" "report: model-target candidate"
-contains "$OUT_DIR/model_target_candidate.out" "status: blocked-no-candidate"
+contains "$OUT_DIR/model_target_candidate.out" "status: selected-source-verification-required"
 contains "$OUT_DIR/model_target_candidate.out" "release: v0.1.0"
-contains "$OUT_DIR/model_target_candidate.out" "selected: none"
-contains "$OUT_DIR/model_target_candidate.out" "top_blocker: no eligible full-runtime candidate"
-contains "$OUT_DIR/model_target_candidate.out" "next: V010.MAP.8"
-contains "$OUT_DIR/model_target_candidate.out" "boundary: report-only; generation unsupported; benchmark not measured"
+contains "$OUT_DIR/model_target_candidate.out" "selected: deepseek4-v4-flash"
+contains "$OUT_DIR/model_target_candidate.out" "top_blocker: exact source verification"
+contains "$OUT_DIR/model_target_candidate.out" "next: V010.REBASE.DEEPSEEK.0"
+contains "$OUT_DIR/model_target_candidate.out" "boundary: target selected; artifact/runtime/generation unsupported; benchmark not measured"
 run_ok model_target_candidate_table "$YVEX_BIN" model-target candidate --release v0.1.0 --output table
 matches "$OUT_DIR/model_target_candidate_table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$OUT_DIR/model_target_candidate_table.out" '^full-runtime-candidate[[:space:]]{2,}missing[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}V010\.MAP\.8$'
+matches "$OUT_DIR/model_target_candidate_table.out" '^full-runtime-candidate[[:space:]]{2,}source-verification-required[[:space:]]{2,}deepseek4-v4-flash[[:space:]]{2,}0[[:space:]]{2,}V010\.REBASE\.DEEPSEEK\.0$'
 
 run_ok model_target_candidate_full "$YVEX_BIN" model-target candidate --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-next
-contains "$OUT_DIR/model_target_candidate_full.out" "deepseek_pressure_status: selected-slice-pressure-only"
-contains "$OUT_DIR/model_target_candidate_full.out" "glm_pressure_status: source-storage-pressure-only"
-contains "$OUT_DIR/model_target_candidate_full.out" "qwen_metal_pressure_status: planned-portability-pressure-only"
-contains "$OUT_DIR/model_target_candidate_full.out" "next_required_rows: V010.TARGET.3"
+contains "$OUT_DIR/model_target_candidate_full.out" "selected_release_target: deepseek4-v4-flash"
+contains "$OUT_DIR/model_target_candidate_full.out" "other_candidate_scope: non-release-engineering-evidence"
+contains "$OUT_DIR/model_target_candidate_full.out" "next_required_rows: V010.REBASE.DEEPSEEK.0"
+contains "$OUT_DIR/model_target_candidate_full.out" "post_verification_next: V010.GGUF.QTYPE.ABI.1"
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_0_id: deepseek4-v4-flash-selected-embed"
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_0_stage: selected-slice"
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_0_eligibility: selected-slice-only"
@@ -1164,7 +1169,7 @@ contains "$OUT_DIR/model_target_candidate_rmsnorm.out" "candidate_0_id: deepseek
 contains "$OUT_DIR/model_target_candidate_rmsnorm.out" "candidate_0_stage: diagnostic-runtime"
 contains "$OUT_DIR/model_target_candidate_rmsnorm.out" "candidate_0_eligibility: selected-slice-only"
 contains "$OUT_DIR/model_target_candidate_rmsnorm.out" "candidate_0_blocker_0: selected-runtime-slice-only"
-contains "$OUT_DIR/model_target_candidate_rmsnorm.out" "candidate_0_next_required_rows: V010.TARGET.3,V010.TARGET.4,V010.MAP.2,V010.FULLMODEL.6"
+contains "$OUT_DIR/model_target_candidate_rmsnorm.out" "candidate_0_next_required_rows: V010.GRAPH.DEEPSEEK.TRANSFORMER.0"
 
 run_fail_code model_target_candidate_missing_release 2 "$YVEX_BIN" model-target candidate
 contains "$OUT_DIR/model_target_candidate_missing_release.err" "model-target candidate: --release is required"
@@ -1184,7 +1189,7 @@ contains "$OUT_DIR/model_target_candidate_unknown_target.out" "target_requested:
 
 run_ok model_target_dense_candidate_help "$YVEX_BIN" model-target dense-candidate --help
 contains "$OUT_DIR/model_target_dense_candidate_help.out" "usage: yvex model-target dense-candidate --release v0.1.0 [options]"
-contains "$OUT_DIR/model_target_dense_candidate_help.out" "The dense-candidate report evaluates whether a dense model target can become the first v0.1.0 full-runtime candidate."
+contains "$OUT_DIR/model_target_dense_candidate_help.out" "The dense-candidate report preserves Qwen and Gemma engineering evidence without offering an alternate v0.1.0 release target."
 contains "$OUT_DIR/model_target_dense_candidate_help.out" "does not download weights, emit artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready"
 
 run_ok model_target_dense_candidate "$YVEX_BIN" model-target dense-candidate --release v0.1.0
@@ -1193,14 +1198,14 @@ contains "$OUT_DIR/model_target_dense_candidate.out" "status: dense-candidate-mi
 contains "$OUT_DIR/model_target_dense_candidate.out" "release: v0.1.0"
 contains "$OUT_DIR/model_target_dense_candidate.out" "selected: none"
 contains "$OUT_DIR/model_target_dense_candidate.out" "top_blocker: no selected dense full-runtime candidate"
-contains "$OUT_DIR/model_target_dense_candidate.out" "next: V010.MAP.8"
+contains "$OUT_DIR/model_target_dense_candidate.out" "next: V010.MODEL.ARCH.IR.0"
 contains "$OUT_DIR/model_target_dense_candidate.out" "boundary: report-only; generation unsupported; benchmark not measured"
 run_ok model_target_dense_candidate_table "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --output table
 matches "$OUT_DIR/model_target_dense_candidate_table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$OUT_DIR/model_target_dense_candidate_table.out" '^dense-candidate[[:space:]]{2,}missing[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}V010\.MAP\.8$'
+matches "$OUT_DIR/model_target_dense_candidate_table.out" '^dense-candidate[[:space:]]{2,}missing[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}V010\.MODEL\.ARCH\.IR\.0$'
 
 run_ok model_target_dense_candidate_full "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --audit --include-candidates --include-requirements --include-blockers --include-next
-contains "$OUT_DIR/model_target_dense_candidate_full.out" "next_required_rows: V010.TARGET.7"
+contains "$OUT_DIR/model_target_dense_candidate_full.out" "next_required_rows: V010.MODEL.ARCH.IR.0"
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_0_id: deepseek4-v4-flash-selected-embed"
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_0_stage: selected-slice"
 contains "$OUT_DIR/model_target_dense_candidate_full.out" "dense_candidate_0_eligibility: not-dense-target"
@@ -1232,7 +1237,7 @@ contains "$OUT_DIR/model_target_dense_candidate_rmsnorm.out" "dense_candidate_0_
 contains "$OUT_DIR/model_target_dense_candidate_rmsnorm.out" "dense_candidate_0_eligibility: not-dense-target"
 contains "$OUT_DIR/model_target_dense_candidate_rmsnorm.out" "dense_candidate_0_blocker_0: not-dense-target"
 contains "$OUT_DIR/model_target_dense_candidate_rmsnorm.out" "dense_candidate_0_blocker_1: selected-runtime-slice-only"
-contains "$OUT_DIR/model_target_dense_candidate_rmsnorm.out" "dense_candidate_0_next_required_rows: V010.TARGET.7,V010.TARGET.4,V010.MAP.2,V010.FULLMODEL.6"
+contains "$OUT_DIR/model_target_dense_candidate_rmsnorm.out" "dense_candidate_0_next_required_rows: V010.GRAPH.DEEPSEEK.TRANSFORMER.0"
 
 run_ok model_target_dense_candidate_qwen "$YVEX_BIN" model-target dense-candidate --release v0.1.0 --audit --target qwen3-8b --include-blockers --include-next
 contains "$OUT_DIR/model_target_dense_candidate_qwen.out" "dense_candidate_status: candidate-incomplete"
@@ -1248,7 +1253,7 @@ contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_st
 contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_eligibility: dense-pressure-only"
 contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_blocker_0: planned-dense-pressure-only"
 contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_blocker_1: missing-gemma-source-path"
-contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_next_required_rows: V010.TARGET.7,V010.MAP.8"
+contains "$OUT_DIR/model_target_dense_candidate_gemma.out" "dense_candidate_0_next_required_rows: V010.MODEL.ARCH.IR.0"
 
 run_fail_code model_target_dense_candidate_missing_release 2 "$YVEX_BIN" model-target dense-candidate
 contains "$OUT_DIR/model_target_dense_candidate_missing_release.err" "model-target dense-candidate: --release is required"
@@ -1279,11 +1284,11 @@ contains "$OUT_DIR/model_target_qwen_metal.out" "candidate: source-target-profil
 contains "$OUT_DIR/model_target_qwen_metal.out" "source_target: profiled"
 contains "$OUT_DIR/model_target_qwen_metal.out" "source: missing"
 contains "$OUT_DIR/model_target_qwen_metal.out" "backend: metal unsupported"
-contains "$OUT_DIR/model_target_qwen_metal.out" "next: V010.MAP.8"
+contains "$OUT_DIR/model_target_qwen_metal.out" "next: POST010.QWEN.METAL.0"
 contains "$OUT_DIR/model_target_qwen_metal.out" "boundary: report-only; generation unsupported; benchmark not measured"
 run_ok model_target_qwen_metal_table "$YVEX_BIN" model-target qwen-metal --release v0.1.0 --output table
 matches "$OUT_DIR/model_target_qwen_metal_table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$OUT_DIR/model_target_qwen_metal_table.out" '^qwen-metal-pressure[[:space:]]{2,}pressure[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}V010\.MAP\.8$'
+matches "$OUT_DIR/model_target_qwen_metal_table.out" '^qwen-metal-pressure[[:space:]]{2,}pressure[[:space:]]{2,}none[[:space:]]{2,}0[[:space:]]{2,}POST010\.QWEN\.METAL\.0$'
 
 run_ok model_target_qwen_metal_full "$YVEX_BIN" model-target qwen-metal --release v0.1.0 --audit --include-candidates --include-hardware --include-backend --include-source --include-blockers --include-next
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "qwen_candidate_count: 3"
@@ -1322,7 +1327,7 @@ contains "$OUT_DIR/model_target_qwen_metal_full.out" "blocker_9: missing-metal-b
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "blocker_16: missing-real-prefill"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "blocker_19: missing-real-output-head-logits"
 contains "$OUT_DIR/model_target_qwen_metal_full.out" "blocker_20: missing-real-vocabulary-sampling"
-contains "$OUT_DIR/model_target_qwen_metal_full.out" "next_required_rows: V010.MAP.8"
+contains "$OUT_DIR/model_target_qwen_metal_full.out" "next_required_rows: POST010.QWEN.METAL.0"
 
 run_ok model_target_qwen_metal_small "$YVEX_BIN" model-target qwen-metal --release v0.1.0 --audit --target qwen-small --include-blockers --include-next
 contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_count: 1"
@@ -1331,7 +1336,7 @@ contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_0_source_t
 contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_0_blocker_0: missing-qwen-source-path"
 contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_0_blocker_6: missing-metal-backend-feasibility"
 contains "$OUT_DIR/model_target_qwen_metal_small.out" "qwen_candidate_0_blocker_7: missing-real-prefill"
-contains "$OUT_DIR/model_target_qwen_metal_small.out" "next_required_rows: V010.MAP.8"
+contains "$OUT_DIR/model_target_qwen_metal_small.out" "next_required_rows: POST010.QWEN.METAL.0"
 
 run_fail_code model_target_qwen_metal_missing_release 2 "$YVEX_BIN" model-target qwen-metal
 contains "$OUT_DIR/model_target_qwen_metal_missing_release.err" "model-target qwen-metal: --release is required"
@@ -1346,6 +1351,25 @@ contains "$OUT_DIR/model_target_qwen_metal_missing_target_value.err" "model-targ
 run_fail_code model_target_qwen_metal_unknown_target 2 "$YVEX_BIN" model-target qwen-metal --release v0.1.0 --target missing-target
 contains "$OUT_DIR/model_target_qwen_metal_unknown_target.out" "status: qwen-metal-pressure-report-fail"
 contains "$OUT_DIR/model_target_qwen_metal_unknown_target.out" "target_requested: missing-target"
+
+run_ok model_target_deepseek "$YVEX_BIN" model-target inspect deepseek4-v4-flash
+contains "$OUT_DIR/model_target_deepseek.out" "target: deepseek4-v4-flash"
+contains "$OUT_DIR/model_target_deepseek.out" "family: DeepSeek  class=release-source-target"
+contains "$OUT_DIR/model_target_deepseek.out" "source: official-safetensors  status=verification-required"
+contains "$OUT_DIR/model_target_deepseek.out" "artifact: complete-YVEX-GGUF-not-produced  status=not-produced"
+contains "$OUT_DIR/model_target_deepseek.out" "runtime: unsupported"
+contains "$OUT_DIR/model_target_deepseek.out" "generation: unsupported"
+contains "$OUT_DIR/model_target_deepseek.out" "next: V010.REBASE.DEEPSEEK.0"
+
+run_ok model_target_deepseek_audit "$YVEX_BIN" model-target inspect deepseek4-v4-flash --audit
+contains "$OUT_DIR/model_target_deepseek_audit.out" "release_selected: true"
+contains "$OUT_DIR/model_target_deepseek_audit.out" "upstream_repository: deepseek-ai/DeepSeek-V4-Flash"
+contains "$OUT_DIR/model_target_deepseek_audit.out" "source_directory_leaf: DeepSeek-V4-Flash"
+contains "$OUT_DIR/model_target_deepseek_audit.out" "config_model_type: deepseek_v4"
+contains "$OUT_DIR/model_target_deepseek_audit.out" "config_architecture: DeepseekV4ForCausalLM"
+contains "$OUT_DIR/model_target_deepseek_audit.out" "post_source_verification_next: V010.GGUF.QTYPE.ABI.1"
+run_ok model_target_deepseek_json "$YVEX_BIN" model-target inspect deepseek4-v4-flash --output json
+jq -e '.target_id == "deepseek4-v4-flash" and .release_selected == true and .upstream_repository == "deepseek-ai/DeepSeek-V4-Flash" and .artifact_status == "not-produced" and .runtime == "unsupported" and .generation == "unsupported"' "$OUT_DIR/model_target_deepseek_json.out" >/dev/null
 
 run_ok model_target_deepseek_embed "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed
 contains "$OUT_DIR/model_target_deepseek_embed.out" "status: model-target"
@@ -1569,7 +1593,7 @@ contains "$OUT_DIR/model_target_gemma_audit.out" "runtime_execution: unsupported
 contains "$OUT_DIR/model_target_gemma_audit.out" "generation: unsupported"
 
 run_ok model_target_help_subcommand "$YVEX_BIN" model-target help
-contains "$OUT_DIR/model_target_help_subcommand.out" "Model targets are pressure objects, not capability claims."
+contains "$OUT_DIR/model_target_help_subcommand.out" "Release-target selection and engineering target evidence are not model-support claims."
 
 MODEL_TARGET_PATHS_DIR="$OUT_DIR/model-target-paths"
 MODEL_TARGET_MODELS_ROOT="$(pwd)/$MODEL_TARGET_PATHS_DIR/models"
@@ -1599,6 +1623,16 @@ contains "$OUT_DIR/model_target_paths_embed.out" "source_artifact_class: officia
 contains "$OUT_DIR/model_target_paths_embed.out" "target_artifact_class: YVEX-produced-selected-GGUF"
 contains "$OUT_DIR/model_target_paths_embed.out" "runtime_execution: selected-boundary-only"
 contains "$OUT_DIR/model_target_paths_embed.out" "generation: unsupported"
+
+run_ok model_target_paths_deepseek "$YVEX_BIN" model-target inspect deepseek4-v4-flash --paths --models-root "$MODEL_TARGET_PATHS_DIR/models" --audit
+contains "$OUT_DIR/model_target_paths_deepseek.out" "target_id: deepseek4-v4-flash"
+contains "$OUT_DIR/model_target_paths_deepseek.out" "source_path: $MODEL_TARGET_MODELS_ROOT/hf/deepseek/DeepSeek-V4-Flash"
+contains "$OUT_DIR/model_target_paths_deepseek.out" "artifact_path: not-selected"
+contains "$OUT_DIR/model_target_paths_deepseek.out" "artifact_exists: false"
+contains "$OUT_DIR/model_target_paths_deepseek.out" "registry_alias: none"
+contains "$OUT_DIR/model_target_paths_deepseek.out" "target_artifact_status: not-produced"
+contains "$OUT_DIR/model_target_paths_deepseek.out" "runtime_execution: unsupported"
+contains "$OUT_DIR/model_target_paths_deepseek.out" "generation: unsupported"
 
 run_ok model_target_paths_rmsnorm "$YVEX_BIN" model-target inspect deepseek4-v4-flash-selected-embed-rmsnorm --paths --models-root "$MODEL_TARGET_PATHS_DIR/models" --audit
 contains "$OUT_DIR/model_target_paths_rmsnorm.out" "target_id: deepseek4-v4-flash-selected-embed-rmsnorm"

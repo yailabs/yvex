@@ -12,6 +12,7 @@
 #include "yvex_source_private.h"
 
 #include <dirent.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -179,6 +180,16 @@ int yvex_native_weight_table_add(yvex_native_weight_table *table,
     row->data_start = data_start;
     row->data_end = data_end;
     row->data_bytes = data_end - data_start;
+    if (table->count == ULLONG_MAX || table->summary.tensor_count == ULLONG_MAX ||
+        ULLONG_MAX - table->summary.total_tensor_bytes < row->data_bytes) {
+        free((char *)row->name);
+        free((char *)row->shard_path);
+        free((char *)row->dtype_name);
+        memset(row, 0, sizeof(*row));
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "native_weight_add",
+                       "native tensor inventory overflow");
+        return YVEX_ERR_BOUNDS;
+    }
     table->count++;
     table->summary.tensor_count++;
     table->summary.total_tensor_bytes += row->data_bytes;

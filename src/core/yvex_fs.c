@@ -1,14 +1,29 @@
 /*
  * yvex_fs.c - Runtime path resolution and run directories.
  *
- * This file owns local filesystem paths, run identifiers, and run directory
- * creation. It does not own model artifacts.
+ * Owner:
+ *   src/core
+ *
+ * Owns:
+ *   local filesystem paths, run identifiers, and run directory creation.
+ *
+ * Does not own:
+ *   model target identity, source verification, model artifacts, runtime
+ *   execution, or generation.
+ *
+ * Invariants:
+ *   target-specific path facts are consumed from their canonical owner and
+ *   path construction performs checked capacity handling.
+ *
+ * Boundary:
+ *   resolving a local path does not verify the source or support a model.
  */
 
 #define _POSIX_C_SOURCE 200809L
 
 #include <yvex/fs.h>
 #include "yvex_operator_private.h"
+#include "yvex_model_target_catalog.h"
 
 #include <errno.h>
 #include <stdarg.h>
@@ -689,6 +704,13 @@ int yvex_operator_paths_create(const yvex_operator_paths *operator_paths, yvex_e
     return yvex_mkdir_p(operator_paths->registry_root, err);
 }
 
+/*
+ * yvex_operator_paths_resolve_target()
+ *
+ * Resolves one family/kind path without allocation or filesystem mutation.
+ * DeepSeek source identity is consumed from the model-target owner. The
+ * function records existence only; it performs no source or artifact IO.
+ */
 int yvex_operator_paths_resolve_target(const yvex_operator_paths *operator_paths,
                                        const char *family,
                                        const char *kind,
@@ -713,16 +735,25 @@ int yvex_operator_paths_resolve_target(const yvex_operator_paths *operator_paths
     }
 
     if (strcmp(kind, "source") == 0) {
-        rc = yvex_path_format(out, cap, err, "operator_paths", "%s/hf/%s/%s",
-                              operator_paths->models_root,
-                              family,
-                                  strcmp(family, "deepseek") == 0
-                                      ? "DeepSeek-V4-Flash"
-                                      : (strcmp(family, "glm") == 0
-                                             ? "GLM-5.2"
-                                             : (strcmp(family, "qwen") == 0
-                                                    ? "qwen3-8b"
-                                                    : "gemma-4-12b-it")));
+        if (strcmp(family, "deepseek") == 0) {
+            if (!yvex_model_target_source_path(
+                    out, cap, operator_paths->models_root,
+                    yvex_model_target_release_identity())) {
+                yvex_error_set(err, YVEX_ERR_BOUNDS, "operator_paths",
+                               "DeepSeek source path exceeds output capacity");
+                return YVEX_ERR_BOUNDS;
+            }
+            rc = YVEX_OK;
+        } else {
+            rc = yvex_path_format(out, cap, err, "operator_paths",
+                                  "%s/hf/%s/%s",
+                                  operator_paths->models_root, family,
+                                  strcmp(family, "glm") == 0
+                                      ? "GLM-5.2"
+                                      : (strcmp(family, "qwen") == 0
+                                             ? "qwen3-8b"
+                                             : "gemma-4-12b-it"));
+        }
     } else if (strcmp(kind, "gguf") == 0) {
         rc = yvex_path_format(out, cap, err, "operator_paths", "%s/gguf/%s", operator_paths->models_root, family);
     } else if (strcmp(kind, "reports") == 0) {

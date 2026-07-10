@@ -5,15 +5,16 @@
  *   src/model/target
  *
  * Owns:
- *   static model-target and target-class catalog facts plus catalog reports.
+ *   canonical release-target identity, static model-target and target-class
+ *   catalog facts, source-path projection, and catalog reports.
  *
  * Does not own:
  *   CLI parsing, command dispatch, rendering, sidecar writing, runtime
  *   execution, generation, eval, benchmark, or release decisions.
  *
  * Invariants:
- *   catalog facts remain report-only pressure objects and do not claim runtime
- *   or generation support.
+ *   the exact v0.1.0 identity is defined once and remains distinct from model
+ *   support; catalog facts do not claim runtime or generation support.
  *
  * Boundary:
  *   target catalog entries are not capability claims.
@@ -27,7 +28,31 @@
 #include <string.h>
 #include <unistd.h>
 
+const char yvex_deepseek_v4_target_id[] = "deepseek4-v4-flash";
+const char yvex_deepseek_v4_family_key[] = "deepseek";
+const char yvex_deepseek_v4_family_display[] = "DeepSeek";
+const char yvex_deepseek_v4_model_name[] = "DeepSeek-V4-Flash";
+const char yvex_deepseek_v4_upstream_repo_id[] =
+    "deepseek-ai/DeepSeek-V4-Flash";
+const char yvex_deepseek_v4_source_dir_leaf[] = "DeepSeek-V4-Flash";
+const char yvex_deepseek_v4_config_model_type[] = "deepseek_v4";
+const char yvex_deepseek_v4_config_architecture[] =
+    "DeepseekV4ForCausalLM";
+
+static const yvex_model_target_identity release_target_identity = {
+    yvex_deepseek_v4_target_id,
+    yvex_deepseek_v4_family_key,
+    yvex_deepseek_v4_family_display,
+    yvex_deepseek_v4_model_name,
+    yvex_deepseek_v4_upstream_repo_id,
+    yvex_deepseek_v4_source_dir_leaf,
+    yvex_deepseek_v4_config_model_type,
+    yvex_deepseek_v4_config_architecture,
+};
+
 static const yvex_model_target_class_record catalog_model_target_classes[] = {
+    {"release-source-target", "false", "unsupported", "unsupported",
+     "exact selected v0.1.0 source target; selection and source verification do not imply artifact or runtime support"},
     {"selected-runtime-slice", "false", "partial-boundary-only", "unsupported",
      "selected real artifact slice used to prove parser, materialization, backend, graph, reference, and cleanup boundaries"},
     {"official-source-huge-model", "false", "unsupported", "unsupported",
@@ -45,14 +70,23 @@ static const yvex_model_target_class_record catalog_model_target_classes[] = {
 };
 
 static const yvex_model_target_record catalog_model_targets[] = {
-    {"deepseek4-v4-flash-selected-embed", "DeepSeek", "DeepSeek-V4-Flash",
+    {yvex_deepseek_v4_target_id, yvex_deepseek_v4_family_display,
+     yvex_deepseek_v4_model_name, "release-source-target",
+     "official-safetensors", "complete-YVEX-GGUF-not-produced",
+     "exact-v0.1.0-release-source", "complete-model-tensor-set-required",
+     "canonical-release-source", "verification-required",
+     "source verification only; artifact/runtime/generation unsupported",
+     "unsupported", "unsupported", "false"},
+    {"deepseek4-v4-flash-selected-embed", yvex_deepseek_v4_family_display,
+     yvex_deepseek_v4_model_name,
      "selected-runtime-slice", "official-safetensors",
      "YVEX-produced-selected-GGUF", "selected-token-embedding-materialization",
      "token_embd.weight", "none", "none",
      "selected materialization and selected graph slice only", "unsupported",
      "unsupported", "false"},
-    {"deepseek4-v4-flash-selected-embed-rmsnorm", "DeepSeek",
-     "DeepSeek-V4-Flash", "selected-runtime-slice", "official-safetensors",
+    {"deepseek4-v4-flash-selected-embed-rmsnorm",
+     yvex_deepseek_v4_family_display, yvex_deepseek_v4_model_name,
+     "selected-runtime-slice", "official-safetensors",
      "YVEX-produced-selected-GGUF", "selected-embedding-plus-rmsnorm-segment",
      "token_embd.weight,blk.0.attn_norm.weight", "none", "none",
      "selected segment execution only", "unsupported", "unsupported", "false"},
@@ -76,6 +110,32 @@ static const yvex_model_target_record catalog_model_targets[] = {
      "target profile only; no source download/runtime/generation", "unsupported",
      "unsupported", "false"},
 };
+
+const yvex_model_target_identity *yvex_model_target_release_identity(void)
+{
+    return &release_target_identity;
+}
+
+int yvex_model_target_is_release_target(const char *target_id)
+{
+    return target_id && strcmp(target_id, release_target_identity.target_id) == 0;
+}
+
+int yvex_model_target_source_path(char *out,
+                                  size_t cap,
+                                  const char *models_root,
+                                  const yvex_model_target_identity *identity)
+{
+    int n;
+
+    if (!out || cap == 0u || !models_root || !models_root[0] || !identity ||
+        !identity->family_key || !identity->source_dir_leaf) {
+        return 0;
+    }
+    n = snprintf(out, cap, "%s/hf/%s/%s", models_root,
+                 identity->family_key, identity->source_dir_leaf);
+    return n >= 0 && (size_t)n < cap;
+}
 
 const yvex_model_target_record *yvex_model_target_find(const char *target_id)
 {
@@ -154,7 +214,8 @@ const char *yvex_model_target_family_display(const char *target_id)
 int yvex_model_target_supported_source_target(const char *target_id)
 {
     return target_id && !strstr(target_id, "portability") &&
-           (strcmp(target_id, "qwen3-8b") == 0 ||
+           (yvex_model_target_is_release_target(target_id) ||
+            strcmp(target_id, "qwen3-8b") == 0 ||
             strcmp(target_id, "gemma-4-12b-it") == 0 ||
             strncmp(target_id, "qwen", 4) == 0 ||
             strncmp(target_id, "gemma", 5) == 0);
@@ -215,6 +276,9 @@ static const char *catalog_source_leaf(const yvex_model_target_record *record)
     const char *slash;
 
     if (!record) return "unknown";
+    if (yvex_model_target_is_release_target(record->target_id)) {
+        return yvex_model_target_release_identity()->source_dir_leaf;
+    }
     if (record->local_path_class && strcmp(record->local_path_class, "none") != 0) {
         slash = strrchr(record->local_path_class, '/');
         return slash && slash[1] ? slash + 1 : record->local_path_class;
@@ -254,11 +318,23 @@ static void catalog_path_report(const yvex_model_target_request *request,
     char registry_dir[1024];
     int artifact_planned_only =
         strcmp(record->target_class, "official-source-huge-model") == 0;
+    int artifact_unselected = yvex_model_target_is_release_target(record->target_id);
 
     catalog_absolute_path(root_abs, sizeof(root_abs), root);
-    (void)snprintf(source_path, sizeof(source_path), "%s/hf/%s/%s",
-                   root_abs, family, catalog_source_leaf(record));
-    if (artifact_planned_only) {
+    if (artifact_unselected) {
+        if (!yvex_model_target_source_path(
+                source_path, sizeof(source_path), root_abs,
+                yvex_model_target_release_identity())) {
+            (void)snprintf(source_path, sizeof(source_path), "%s",
+                           "path-overflow");
+        }
+    } else {
+        (void)snprintf(source_path, sizeof(source_path), "%s/hf/%s/%s",
+                       root_abs, family, catalog_source_leaf(record));
+    }
+    if (artifact_unselected) {
+        (void)snprintf(artifact_path, sizeof(artifact_path), "not-selected");
+    } else if (artifact_planned_only) {
         (void)snprintf(artifact_path, sizeof(artifact_path), "planned");
     } else if (strcmp(family, "deepseek") == 0) {
         (void)snprintf(artifact_path, sizeof(artifact_path),
@@ -282,7 +358,7 @@ static void catalog_path_report(const yvex_model_target_request *request,
                                          catalog_exists_name(source_path));
         yvex_model_target_report_add_row(report, "artifact_path: %s", artifact_path);
         yvex_model_target_report_add_row(report, "artifact_exists: %s",
-                                         artifact_planned_only
+                                         artifact_planned_only || artifact_unselected
                                              ? "false"
                                              : catalog_exists_name(artifact_path));
         yvex_model_target_report_add_row(report, "report_dir: %s", report_dir);
@@ -310,9 +386,17 @@ static void catalog_path_report(const yvex_model_target_request *request,
         yvex_model_target_report_add_row(report, "generation: unsupported");
     } else {
         yvex_model_target_report_add_row(report, "target: %s", record->target_id);
-        yvex_model_target_report_add_row(report, "source: missing  %s", source_path);
+        yvex_model_target_report_add_row(report, "source: %s  %s",
+                                         access(source_path, F_OK) == 0
+                                             ? "present-unverified"
+                                             : "missing",
+                                         source_path);
         yvex_model_target_report_add_row(report, "source_class: %s", record->source_artifact_class);
-        yvex_model_target_report_add_row(report, "artifact: planned  %s", artifact_path);
+        yvex_model_target_report_add_row(report, "artifact: %s  %s",
+                                         artifact_unselected
+                                             ? "not-produced"
+                                             : "planned",
+                                         artifact_path);
         yvex_model_target_report_add_row(report, "artifact_class: %s", record->target_artifact_class);
         yvex_model_target_report_add_row(report, "reports: %s", report_dir);
         yvex_model_target_report_add_row(report, "registry: %s", registry_dir);
@@ -331,6 +415,9 @@ static int catalog_unknown_subcommand(const yvex_model_target_request *request,
 
 static const char *catalog_source_status(const yvex_model_target_record *rec)
 {
+    if (yvex_model_target_is_release_target(rec->target_id)) {
+        return "verification-required";
+    }
     if (strcmp(rec->target_class, "selected-runtime-slice") == 0) {
         return "unknown";
     }
@@ -342,6 +429,9 @@ static const char *catalog_source_status(const yvex_model_target_record *rec)
 
 static const char *catalog_artifact_status(const yvex_model_target_record *rec)
 {
+    if (yvex_model_target_is_release_target(rec->target_id)) {
+        return "not-produced";
+    }
     return strcmp(rec->target_class, "selected-runtime-slice") == 0
                ? "present"
                : "planned";
@@ -360,6 +450,9 @@ static const char *catalog_runtime_status(const yvex_model_target_record *rec)
 
 static const char *catalog_next_row(const yvex_model_target_record *rec)
 {
+    if (yvex_model_target_is_release_target(rec->target_id)) {
+        return "V010.REBASE.DEEPSEEK.0";
+    }
     if (strcmp(rec->target_class, "official-source-huge-model") == 0) {
         return "V010.SOURCE.8";
     }
@@ -371,6 +464,9 @@ static const char *catalog_next_row(const yvex_model_target_record *rec)
 
 static const char *catalog_boundary(const yvex_model_target_record *rec)
 {
+    if (yvex_model_target_is_release_target(rec->target_id)) {
+        return "selected release source only; artifact, runtime, and generation unsupported";
+    }
     if (strcmp(rec->target_class, "selected-runtime-slice") == 0) {
         return "selected-slice only; no full-runtime generation";
     }
@@ -382,6 +478,9 @@ static const char *catalog_boundary(const yvex_model_target_record *rec)
 
 static const char *catalog_runtime_shape(const yvex_model_target_record *rec)
 {
+    if (yvex_model_target_is_release_target(rec->target_id)) {
+        return "raw-deepseek-v4-config-facts-only";
+    }
     if (strcmp(yvex_model_target_family_key(rec->target_id), "gemma") == 0) {
         return "dense-causal-decoder-candidate-pending-config";
     }
@@ -402,6 +501,21 @@ static void catalog_emit_inspect_audit(const yvex_model_target_record *rec,
     yvex_model_target_report_add_row(report, "family: %s", rec->family);
     yvex_model_target_report_add_row(report, "model: %s", rec->model);
     yvex_model_target_report_add_row(report, "target_class: %s", rec->target_class);
+    if (yvex_model_target_is_release_target(rec->target_id)) {
+        const yvex_model_target_identity *identity =
+            yvex_model_target_release_identity();
+        yvex_model_target_report_add_row(report, "release_selected: true");
+        yvex_model_target_report_add_row(report, "upstream_repository: %s",
+                                         identity->upstream_repo_id);
+        yvex_model_target_report_add_row(report, "source_directory_leaf: %s",
+                                         identity->source_dir_leaf);
+        yvex_model_target_report_add_row(report, "config_model_type: %s",
+                                         identity->config_model_type);
+        yvex_model_target_report_add_row(report, "config_architecture: %s",
+                                         identity->config_architecture);
+        yvex_model_target_report_add_row(report,
+                                         "post_source_verification_next: V010.GGUF.QTYPE.ABI.1");
+    }
     yvex_model_target_report_add_row(report, "source_artifact_class: %s",
                                      rec->source_artifact_class);
     yvex_model_target_report_add_row(report, "source_artifact_status: %s",
@@ -448,7 +562,10 @@ static void catalog_emit_inspect_audit(const yvex_model_target_record *rec,
     yvex_model_target_report_add_row(report, "output_head_map_target_id: %s",
                                      rec->target_id);
     yvex_model_target_report_add_row(report, "output_head_map_stage: header-output-head-map");
-    yvex_model_target_report_add_row(report, "output_head_map_next: V010.MAP.8");
+    yvex_model_target_report_add_row(report, "output_head_map_next: %s",
+                                     yvex_model_target_is_release_target(rec->target_id)
+                                         ? "V010.MAP.GGUF.DEEPSEEK.0"
+                                         : "V010.MAP.8");
     yvex_model_target_report_add_row(report, "tokenizer_map_status: not-run");
     yvex_model_target_report_add_row(report, "tokenizer_map_family: %s",
                                      yvex_model_target_family_key(rec->target_id));
@@ -456,13 +573,24 @@ static void catalog_emit_inspect_audit(const yvex_model_target_record *rec,
                                      rec->target_id);
     yvex_model_target_report_add_row(report, "tokenizer_map_stage: metadata-tokenizer-map");
     yvex_model_target_report_add_row(report, "tokenizer_runtime_status: not-implemented");
-    yvex_model_target_report_add_row(report, "tokenizer_map_next: V010.MAP.7");
+    yvex_model_target_report_add_row(report, "tokenizer_map_next: %s",
+                                     yvex_model_target_is_release_target(rec->target_id)
+                                         ? "V010.MODEL.ARCH.IR.0"
+                                         : "V010.MAP.7");
     yvex_model_target_report_add_row(report, "missing_role_report_status: not-run");
     yvex_model_target_report_add_row(report, "missing_role_report_stage: missing-role-blocker-report");
-    yvex_model_target_report_add_row(report, "missing_role_next_required_row: V010.MAP.9");
+    yvex_model_target_report_add_row(
+        report, "missing_role_next_required_row: %s",
+        yvex_model_target_is_release_target(rec->target_id)
+            ? "V010.TENSOR.COVERAGE.DEEPSEEK.0"
+            : "V010.MAP.9");
     yvex_model_target_report_add_row(report, "tensor_mapping_gate_status: not-run");
     yvex_model_target_report_add_row(report, "tensor_mapping_gate: v0.1.0-tensor-mapping");
-    yvex_model_target_report_add_row(report, "tensor_mapping_gate_next_required_row: V010.QUANT.0");
+    yvex_model_target_report_add_row(
+        report, "tensor_mapping_gate_next_required_row: %s",
+        yvex_model_target_is_release_target(rec->target_id)
+            ? "V010.MAP.GGUF.DEEPSEEK.0"
+            : "V010.QUANT.0");
     yvex_model_target_report_add_row(report, "target_artifact_class: %s",
                                      rec->target_artifact_class);
     yvex_model_target_report_add_row(report, "target_artifact_status: %s",
@@ -502,7 +630,26 @@ int yvex_model_target_catalog_report_build(
     }
     if (request->kind == YVEX_MODEL_TARGET_COMMAND_LIST) {
         report->status = "model-target-list";
-        yvex_model_target_report_add_row(report, "MODEL TARGETS  count=5");
+        if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
+            yvex_model_target_report_add_row(report,
+                                             "{\"status\":\"model-target-list\",\"targets\":[");
+            for (i = 0; i < yvex_model_target_count(); ++i) {
+                const yvex_model_target_record *rec = yvex_model_target_at(i);
+                yvex_model_target_report_add_row(
+                    report,
+                    "%s{\"target_id\":\"%s\",\"family\":\"%s\",\"class\":\"%s\",\"release_selected\":%s,\"runtime\":\"%s\",\"generation\":\"%s\"}",
+                    i ? "," : "", rec->target_id, rec->family,
+                    rec->target_class,
+                    yvex_model_target_is_release_target(rec->target_id)
+                        ? "true"
+                        : "false",
+                    rec->runtime_execution, rec->generation);
+            }
+            yvex_model_target_report_add_row(report, "]}");
+            return YVEX_OK;
+        }
+        yvex_model_target_report_add_row(report, "MODEL TARGETS  count=%lu",
+                                         yvex_model_target_count());
         yvex_model_target_report_add_row(report, "TARGET  FAMILY  CLASS  RUNTIME  GENERATION");
         for (i = 0; i < yvex_model_target_count(); ++i) {
             const yvex_model_target_record *rec = yvex_model_target_at(i);
@@ -532,18 +679,34 @@ int yvex_model_target_catalog_report_build(
                 yvex_model_target_report_add_row(report, "output_head_map_status: not-run");
                 yvex_model_target_report_add_row(report, "output_head_map_family: %s", yvex_model_target_family_key(rec->target_id));
                 yvex_model_target_report_add_row(report, "output_head_map_target_id: %s", rec->target_id);
-                yvex_model_target_report_add_row(report, "output_head_map_next: V010.MAP.8");
+                yvex_model_target_report_add_row(
+                    report, "output_head_map_next: %s",
+                    yvex_model_target_is_release_target(rec->target_id)
+                        ? "V010.MAP.GGUF.DEEPSEEK.0"
+                        : "V010.MAP.8");
                 yvex_model_target_report_add_row(report, "tokenizer_map_status: not-run");
                 yvex_model_target_report_add_row(report, "tokenizer_map_family: %s", yvex_model_target_family_key(rec->target_id));
                 yvex_model_target_report_add_row(report, "tokenizer_map_target_id: %s", rec->target_id);
                 yvex_model_target_report_add_row(report, "tokenizer_runtime_status: not-implemented");
-                yvex_model_target_report_add_row(report, "tokenizer_map_next: V010.MAP.7");
+                yvex_model_target_report_add_row(
+                    report, "tokenizer_map_next: %s",
+                    yvex_model_target_is_release_target(rec->target_id)
+                        ? "V010.MODEL.ARCH.IR.0"
+                        : "V010.MAP.7");
                 yvex_model_target_report_add_row(report, "missing_role_report_status: not-run");
                 yvex_model_target_report_add_row(report, "missing_role_report_target_id: %s", rec->target_id);
-                yvex_model_target_report_add_row(report, "missing_role_next_required_row: V010.MAP.9");
+                yvex_model_target_report_add_row(
+                    report, "missing_role_next_required_row: %s",
+                    yvex_model_target_is_release_target(rec->target_id)
+                        ? "V010.TENSOR.COVERAGE.DEEPSEEK.0"
+                        : "V010.MAP.9");
                 yvex_model_target_report_add_row(report, "tensor_mapping_gate_status: not-run");
                 yvex_model_target_report_add_row(report, "tensor_mapping_gate_target_id: %s", rec->target_id);
-                yvex_model_target_report_add_row(report, "tensor_mapping_gate_next_required_row: V010.QUANT.0");
+                yvex_model_target_report_add_row(
+                    report, "tensor_mapping_gate_next_required_row: %s",
+                    yvex_model_target_is_release_target(rec->target_id)
+                        ? "V010.MAP.GGUF.DEEPSEEK.0"
+                        : "V010.QUANT.0");
             }
             yvex_model_target_report_add_row(report, "source_provenance_status:");
             yvex_model_target_report_add_row(report, "source_origin:");
@@ -574,6 +737,22 @@ int yvex_model_target_catalog_report_build(
         if (!rec) {
             report->exit_code = 2;
             yvex_model_target_report_add_error(report, "model-target: unknown target: %s", request->target_id);
+            return YVEX_OK;
+        }
+        if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
+            const yvex_model_target_identity *identity =
+                yvex_model_target_is_release_target(rec->target_id)
+                    ? yvex_model_target_release_identity()
+                    : NULL;
+            yvex_model_target_report_add_row(
+                report,
+                "{\"status\":\"model-target\",\"target_id\":\"%s\",\"family\":\"%s\",\"class\":\"%s\",\"release_selected\":%s,\"upstream_repository\":%s%s%s,\"source_status\":\"%s\",\"artifact_status\":\"%s\",\"runtime\":\"%s\",\"generation\":\"%s\",\"next\":\"%s\"}",
+                rec->target_id, rec->family, rec->target_class,
+                identity ? "true" : "false",
+                identity ? "\"" : "", identity ? identity->upstream_repo_id : "null",
+                identity ? "\"" : "", catalog_source_status(rec),
+                catalog_artifact_status(rec), catalog_runtime_status(rec),
+                rec->generation, catalog_next_row(rec));
             return YVEX_OK;
         }
         if (request->include_paths) {
@@ -639,13 +818,13 @@ int yvex_model_target_catalog_help_report_build(
     yvex_model_target_report_add_row(report, "--paths           show expected operator-local source, artifact, report, reference, and registry paths");
     yvex_model_target_report_add_row(report, "--models-root DIR override configured operator model root for this command only");
     yvex_model_target_report_add_row(report, "option_classes: selector, path, diagnostic, transitional-layout");
-    yvex_model_target_report_add_row(report, "The candidate report evaluates full-runtime target eligibility for a release.");
-    yvex_model_target_report_add_row(report, "The dense-candidate report evaluates whether a dense model target can become the first v0.1.0 full-runtime candidate.");
+    yvex_model_target_report_add_row(report, "The candidate report shows the selected DeepSeek release source and subordinate non-release engineering evidence.");
+    yvex_model_target_report_add_row(report, "The dense-candidate report preserves Qwen and Gemma engineering evidence without offering an alternate v0.1.0 release target.");
     yvex_model_target_report_add_row(report, "The Qwen/Metal pressure report records a planned reduced-scale Apple Silicon / Metal lane for future full-runtime work.");
     yvex_model_target_report_add_row(report, "This command records the v0.1.0 target decision without promoting runtime support.");
     yvex_model_target_report_add_row(report, "The tensor naming map reads safetensors headers only");
     yvex_model_target_report_add_row(report, "The tensor mapping gate aggregates model-class, tensor-collection, tensor naming, output-head, tokenizer metadata, and missing-role reports.");
-    yvex_model_target_report_add_row(report, "Model targets are pressure objects, not capability claims.");
+    yvex_model_target_report_add_row(report, "Release-target selection and engineering target evidence are not model-support claims.");
     yvex_model_target_report_add_row(report,
                                      "External GGUFs and external %s%s are reference evidence only.",
                                      "run", "ners");

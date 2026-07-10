@@ -15,6 +15,8 @@
 #include <yvex/fs.h>
 #include <yvex/native_weights.h>
 
+#include "yvex_source_verify.h"
+
 typedef struct {
     const char *family_key;
     const char *display_family;
@@ -64,6 +66,7 @@ typedef struct {
     int include_blockers;
     int include_next;
     int include_tensors;
+    int strict;
     unsigned long long tensor_limit;
 } yvex_source_report_request;
 
@@ -215,6 +218,8 @@ typedef struct {
     unsigned long long source_tensor_sample_count;
     const char *blockers[32];
     unsigned long blocker_count;
+    yvex_source_verification verification;
+    int exit_code;
 } yvex_source_report;
 
 const yvex_source_family_profile *yvex_source_report_find_profile(const char *family);

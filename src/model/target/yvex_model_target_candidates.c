@@ -42,25 +42,25 @@ static const candidate_fact candidate_facts[] = {
     {"deepseek4-v4-flash-selected-embed", "selected-runtime-slice",
      "selected-slice", "selected-slice-only", "ineligible-selected-slice",
      "selected-runtime-slice missing full model tensor coverage",
-     "V010.TARGET.3,V010.TARGET.4,V010.MAP.2,V010.FULLMODEL.6"},
+     "V010.GRAPH.DEEPSEEK.TRANSFORMER.0"},
     {"deepseek4-v4-flash-selected-embed-rmsnorm", "selected-runtime-slice",
      "diagnostic-runtime", "selected-slice-only", "ineligible-selected-slice",
      "selected-runtime-slice missing MoE router/expert tensor coverage",
-     "V010.TARGET.3,V010.TARGET.4,V010.MAP.2,V010.FULLMODEL.6"},
+     "V010.GRAPH.DEEPSEEK.TRANSFORMER.0"},
     {"glm-5.2-official-safetensors", "huge-source-pressure", "report-only",
      "source-only", "ineligible-source-only", "source-only target",
-     "OWI.HUGE.0,V010.SOURCE.8,V010.MAP.4,V010.ARTIFACT.EMIT.2"},
+     "POST010.GLM.RUNTIME.0"},
     {"qwen3-8b", "source-model-candidate", "source-target-profiled",
      "planned-portability-only", "ineligible-source-model-candidate",
      "source model candidate requires tensor role mapping",
-     "tensor role mapping"},
+     "V010.MODEL.ARCH.IR.0"},
     {"gemma-4-12b-it", "source-model-candidate", "source-target-profiled",
      "planned-dense-pressure-only", "ineligible-source-model-candidate",
      "source model candidate requires tensor role mapping",
-     "tensor role mapping"},
+     "V010.MODEL.ARCH.IR.0"},
     {"tests/fixtures/gguf/valid-tokenizer-simple.gguf", "fixture-artifact",
      "fixture", "fixture-only", "ineligible-fixture-only", "fixture only",
-     "V010.TARGET.3"},
+     "V010.GGUF.ARTIFACT.ABI.1"},
 };
 
 static unsigned long candidate_fact_count(void)
@@ -148,14 +148,14 @@ static const char *candidate_next_for_prefix(const candidate_fact *fact,
                                              const char *prefix)
 {
     if (!fact || strcmp(prefix, "dense_candidate") != 0) {
-        return fact ? fact->next : "V010.TARGET.3";
+        return fact ? fact->next : "V010.REBASE.DEEPSEEK.0";
     }
     if (strncmp(fact->id, "deepseek", 8) == 0) {
-        return "V010.TARGET.7,V010.TARGET.4,V010.MAP.2,V010.FULLMODEL.6";
+        return "V010.GRAPH.DEEPSEEK.TRANSFORMER.0";
     }
     if (strncmp(fact->id, "qwen", 4) == 0 ||
         strncmp(fact->id, "gemma", 5) == 0) {
-        return "V010.TARGET.7,V010.MAP.8";
+        return "V010.MODEL.ARCH.IR.0";
     }
     return fact->next;
 }
@@ -179,7 +179,7 @@ static int candidate_emit_help(const yvex_model_target_request *request,
 {
     if (request->kind == YVEX_MODEL_TARGET_COMMAND_DENSE_CANDIDATE) {
         yvex_model_target_report_add_row(report, "usage: yvex model-target dense-candidate --release v0.1.0 [options]");
-        yvex_model_target_report_add_row(report, "The dense-candidate report evaluates whether a dense model target can become the first v0.1.0 full-runtime candidate.");
+        yvex_model_target_report_add_row(report, "The dense-candidate report preserves Qwen and Gemma engineering evidence without offering an alternate v0.1.0 release target.");
         yvex_model_target_report_add_row(report, "does not download weights, emit artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready");
     } else if (request->kind == YVEX_MODEL_TARGET_COMMAND_QWEN_METAL) {
         yvex_model_target_report_add_row(report, "usage: yvex model-target qwen-metal --release v0.1.0 [options]");
@@ -187,8 +187,8 @@ static int candidate_emit_help(const yvex_model_target_request *request,
         yvex_model_target_report_add_row(report, "does not download weights, implement Metal, emit Qwen artifacts, materialize tensors, execute graph/runtime paths, generate, evaluate, benchmark, or mark a release ready");
     } else {
         yvex_model_target_report_add_row(report, "usage: yvex model-target candidate --release v0.1.0 [options]");
-        yvex_model_target_report_add_row(report, "The candidate report evaluates full-runtime target eligibility for a release.");
-        yvex_model_target_report_add_row(report, "does not select a ready model");
+        yvex_model_target_report_add_row(report, "The candidate report shows the selected DeepSeek release source and keeps other families or selected slices as non-release engineering evidence.");
+        yvex_model_target_report_add_row(report, "target selection does not select a ready model");
     }
     return YVEX_OK;
 }
@@ -213,7 +213,7 @@ static void candidate_emit_common_normal(yvex_model_target_report *report,
     yvex_model_target_report_add_row(report, "release: v0.1.0");
     yvex_model_target_report_add_row(report, "selected: none");
     yvex_model_target_report_add_row(report, "top_blocker: %s", blocker);
-    yvex_model_target_report_add_row(report, "next: V010.MAP.8");
+    yvex_model_target_report_add_row(report, "next: V010.MODEL.ARCH.IR.0");
     yvex_model_target_report_add_row(report, "boundary: report-only; generation unsupported; benchmark not measured");
 }
 
@@ -300,20 +300,32 @@ static int candidate_report_build(const yvex_model_target_request *request,
                                              request->target_id);
     }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
-        candidate_emit_table(report, "full-runtime-candidate", "missing", "V010.MAP.8");
+        yvex_model_target_report_add_row(report,
+                                         "REPORT  STATUS  SELECTED  ELIGIBLE  NEXT");
+        yvex_model_target_report_add_row(report,
+                                         "full-runtime-candidate  source-verification-required  %s  0  V010.REBASE.DEEPSEEK.0",
+                                         yvex_deepseek_v4_target_id);
         return YVEX_OK;
     }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
-        yvex_model_target_report_add_row(report, "deepseek_pressure_status: selected-slice-pressure-only");
-        yvex_model_target_report_add_row(report, "glm_pressure_status: source-storage-pressure-only");
-        yvex_model_target_report_add_row(report, "qwen_metal_pressure_status: planned-portability-pressure-only");
-        yvex_model_target_report_add_row(report, "next_required_rows: V010.TARGET.3");
+        yvex_model_target_report_add_row(report,
+                                         "selected_release_target: %s",
+                                         yvex_deepseek_v4_target_id);
+        yvex_model_target_report_add_row(report, "other_candidate_scope: non-release-engineering-evidence");
+        yvex_model_target_report_add_row(report, "next_required_rows: V010.REBASE.DEEPSEEK.0");
+        yvex_model_target_report_add_row(report, "post_verification_next: V010.GGUF.QTYPE.ABI.1");
         candidate_emit_full_audit(report, "candidate", request->target_id);
         yvex_model_target_report_common_tail(report);
         return YVEX_OK;
     }
-    candidate_emit_common_normal(report, "candidate", "blocked-no-candidate",
-                                 "no eligible full-runtime candidate");
+    yvex_model_target_report_add_row(report, "report: model-target candidate");
+    yvex_model_target_report_add_row(report, "status: selected-source-verification-required");
+    yvex_model_target_report_add_row(report, "release: v0.1.0");
+    yvex_model_target_report_add_row(report, "selected: %s",
+                                     yvex_deepseek_v4_target_id);
+    yvex_model_target_report_add_row(report, "top_blocker: exact source verification");
+    yvex_model_target_report_add_row(report, "next: V010.REBASE.DEEPSEEK.0");
+    yvex_model_target_report_add_row(report, "boundary: target selected; artifact/runtime/generation unsupported; benchmark not measured");
     return YVEX_OK;
 }
 
@@ -330,12 +342,14 @@ static int dense_candidate_report_build(const yvex_model_target_request *request
                                              request->target_id);
     }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
-        candidate_emit_table(report, "dense-candidate", "missing", "V010.MAP.8");
+        candidate_emit_table(report, "dense-candidate", "missing",
+                             "V010.MODEL.ARCH.IR.0");
         return YVEX_OK;
     }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
         yvex_model_target_report_add_row(report, "dense_candidate_status: candidate-incomplete");
-        yvex_model_target_report_add_row(report, "next_required_rows: V010.TARGET.7");
+        yvex_model_target_report_add_row(report,
+                                         "next_required_rows: V010.MODEL.ARCH.IR.0");
         candidate_emit_full_audit(report, "dense_candidate", request->target_id);
         yvex_model_target_report_common_tail(report);
         return YVEX_OK;
@@ -363,7 +377,8 @@ static int qwen_metal_report_build(const yvex_model_target_request *request,
         return YVEX_OK;
     }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
-        candidate_emit_table(report, "qwen-metal-pressure", "pressure", "V010.MAP.8");
+        candidate_emit_table(report, "qwen-metal-pressure", "pressure",
+                             "POST010.QWEN.METAL.0");
         return YVEX_OK;
     }
     yvex_model_target_report_add_row(report, "report: model-target qwen-metal");
@@ -376,7 +391,7 @@ static int qwen_metal_report_build(const yvex_model_target_request *request,
     yvex_model_target_report_add_row(report, "source_target: profiled");
     yvex_model_target_report_add_row(report, "source: missing");
     yvex_model_target_report_add_row(report, "backend: metal unsupported");
-    yvex_model_target_report_add_row(report, "next: V010.MAP.8");
+    yvex_model_target_report_add_row(report, "next: POST010.QWEN.METAL.0");
     yvex_model_target_report_add_row(report, "boundary: report-only; generation unsupported; benchmark not measured");
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
         if (strcmp(target, "qwen-small") == 0 ||
@@ -430,7 +445,8 @@ static int qwen_metal_report_build(const yvex_model_target_request *request,
         yvex_model_target_report_add_row(report, "blocker_16: missing-real-prefill");
         yvex_model_target_report_add_row(report, "blocker_19: missing-real-output-head-logits");
         yvex_model_target_report_add_row(report, "blocker_20: missing-real-vocabulary-sampling");
-        yvex_model_target_report_add_row(report, "next_required_rows: V010.MAP.8");
+        yvex_model_target_report_add_row(report,
+                                         "next_required_rows: POST010.QWEN.METAL.0");
     }
     return YVEX_OK;
 }

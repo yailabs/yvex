@@ -186,10 +186,10 @@ int yvex_source_manifest_command(int argc, char **argv)
 void yvex_source_manifest_help(FILE *fp)
 {
     yvex_cli_out_writef(fp, "usage: " "yvex source-manifest create --hf-repo REPO --revision REV --local-path DIR --status STATUS --out FILE [--license TEXT] [--model-card URL] [--node NAME] [--dry-run-log FILE] [--download-log FILE] [--pid-file FILE] [--download-command TEXT]\n");
-    yvex_cli_out_writef(fp, "       yvex source-manifest report --family qwen --release v0.1.0 [options]\n\n");
+    yvex_cli_out_writef(fp, "       yvex source-manifest report --family deepseek|qwen|gemma --release v0.1.0 [options]\n\n");
     yvex_cli_out_writef(fp, "Source manifest scans a local official-weight source directory and writes provenance JSON. It does not download, parse safetensors payloads, quantize, emit GGUF, materialize, or infer.\n\n");
-    yvex_cli_out_writef(fp, "The Qwen source pressure report inspects source-path readiness only. It does not download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
-    yvex_cli_out_writef(fp, "Report options: --source DIR --models-root DIR --target TARGET --" "include-files --" "include-config --" "include-blockers --" "include-next --" "audit --" "output normal|table|audit\n");
+    yvex_cli_out_writef(fp, "The DeepSeek report verifies exact source identity and metadata without reading tensor payloads. Qwen and Gemma remain bounded engineering reports. No report emits artifacts, executes runtime paths, generates, evaluates, benchmarks, or marks a release ready.\n");
+    yvex_cli_out_writef(fp, "Report options: --source DIR --models-root DIR --target TARGET --" "include-files --" "include-config --" "include-blockers --" "include-next --strict --" "audit --json --" "output normal|table|audit|json\n");
 }
 
 int yvex_source_manifest_report_command(int argc, char **argv)

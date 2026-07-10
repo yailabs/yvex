@@ -261,6 +261,12 @@ src/gguf/quant.c
 src/source/yvex_source.c
   source manifests, source pressure, source evidence, native header inventory
 
+src/source/yvex_source_verify.c
+  exact release-source identity, revision, structured model/tokenizer/generation
+  config, shard-index, root-shard, raw dtype, header-only tensor inventory, and
+  checked footprint verification; never tensor payload reads or model-support
+  promotion
+
 src/tokenizer/yvex_tokenizer.c
   tokenizer metadata and tokenizer command surfaces
 

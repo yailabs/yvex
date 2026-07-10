@@ -163,6 +163,7 @@ CORE_SRCS := \
 	src/source/yvex_source_manifest.c \
 	src/source/yvex_source_report.c \
 	src/source/yvex_source_scan.c \
+	src/source/yvex_source_verify.c \
 	src/source/yvex_source_write.c \
 	src/generation/yvex_prefill.c \
 	src/tokenizer/yvex_token_input.c \

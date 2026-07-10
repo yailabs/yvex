@@ -48,18 +48,28 @@ Current milestone state, dependencies, gates, and Active Next live only in
 `../../PROJECT.md`. This runbook records the executable operator boundary and
 does not reproduce the project sequence.
 
-## Safe Current Checks
+## Source Verification
 
-These checks inspect repository or filesystem state only. They do not prove
-source identity, artifact support, or runtime capability.
+The strict source command resolves the canonical target independently from its
+source directory name, parses structured provenance, model/tokenizer/generation
+config and index facts, and reads safetensors headers only:
 
 ```sh
-test -d "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash"
-find "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash" \
-  -maxdepth 1 -type f -name '*.safetensors' | sort
-test -f "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash/config.json"
-test -f "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash/tokenizer.json"
+./yvex source-manifest report \
+  --release v0.1.0 \
+  --family deepseek \
+  --target deepseek4-v4-flash \
+  --models-root "$HOME/lab/models" \
+  --audit \
+  --strict
 ```
+
+Strict mode exits non-zero for missing or contradictory provenance, malformed
+config/tokenizer/index metadata, inconsistent token sidecars, missing or
+unexpected shards, invalid headers, or checked-footprint overflow. The command
+never reads tensor payload bytes and does not prove artifact or runtime support.
+Current milestone state and the authoritative blocker remain in
+`../../PROJECT.md`.
 
 ## Canonical Control
 

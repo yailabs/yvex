@@ -14,6 +14,7 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -158,6 +159,16 @@ static int yvex_sm_append_file(yvex_source_manifest_file_list *list,
     list->items[list->count].kind = kind;
     list->count++;
 
+    if (list->summary.file_count == ULLONG_MAX ||
+        ULLONG_MAX - list->summary.total_size_bytes < size_bytes) {
+        free(list->items[list->count - 1u].path);
+        memset(&list->items[list->count - 1u], 0,
+               sizeof(list->items[0]));
+        list->count--;
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "source_manifest_scan",
+                       "source footprint overflow");
+        return YVEX_ERR_BOUNDS;
+    }
     list->summary.file_count++;
     list->summary.total_size_bytes += size_bytes;
     if (strcmp(kind, "safetensors") == 0) {
@@ -203,10 +214,21 @@ static int yvex_sm_scan_dir(const char *root,
         return YVEX_ERR_IO;
     }
 
-    while ((ent = readdir(dir)) != NULL) {
+    for (;;) {
         char *rel_path;
         char *abs_path;
         struct stat st;
+
+        errno = 0;
+        ent = readdir(dir);
+        if (!ent) {
+            if (errno != 0 && rc == YVEX_OK) {
+                yvex_error_setf(err, YVEX_ERR_IO, "source_manifest_scan",
+                                "cannot read directory: %s", abs_dir);
+                rc = YVEX_ERR_IO;
+            }
+            break;
+        }
 
         if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) {
             continue;
@@ -252,7 +274,11 @@ static int yvex_sm_scan_dir(const char *root,
         }
     }
 
-    closedir(dir);
+    if (closedir(dir) != 0 && rc == YVEX_OK) {
+        yvex_error_setf(err, YVEX_ERR_IO, "source_manifest_scan",
+                        "cannot close directory: %s", abs_dir);
+        rc = YVEX_ERR_IO;
+    }
     free(abs_dir);
     return rc;
 }

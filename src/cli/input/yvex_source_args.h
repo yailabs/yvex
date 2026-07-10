@@ -18,6 +18,7 @@ typedef struct {
     int include_blockers;
     int include_next;
     int include_tensors;
+    int strict;
     unsigned long long tensor_limit;
     yvex_source_render_mode render_mode;
     int help;

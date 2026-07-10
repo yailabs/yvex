@@ -32,6 +32,10 @@ static int source_output_mode_parse(const char *value,
         *mode = YVEX_SOURCE_RENDER_AUDIT;
         return 1;
     }
+    if (strcmp(value, "json") == 0) {
+        *mode = YVEX_SOURCE_RENDER_JSON;
+        return 1;
+    }
     return 0;
 }
 
@@ -99,7 +103,7 @@ int yvex_source_args_parse(int argc,
             return YVEX_OK;
         } else if (strcmp(argv[i], "--family") == 0) {
             if (i + 1 >= argc) {
-                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: --family requires qwen|gemma");
+                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: --family requires deepseek|qwen|gemma");
                 return YVEX_ERR_INVALID_ARG;
             }
             out->family = argv[++i];
@@ -137,6 +141,8 @@ int yvex_source_args_parse(int argc,
             out->include_next = 1;
         } else if (strcmp(argv[i], "--include-tensors") == 0) {
             out->include_tensors = 1;
+        } else if (strcmp(argv[i], "--strict") == 0) {
+            out->strict = 1;
         } else if (strcmp(argv[i], "--tensor-limit") == 0) {
             if (i + 1 >= argc) {
                 yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: --tensor-limit requires N");
@@ -150,7 +156,7 @@ int yvex_source_args_parse(int argc,
             out->render_mode = YVEX_SOURCE_RENDER_AUDIT;
         } else if (strcmp(argv[i], "--output") == 0) {
             if (i + 1 >= argc) {
-                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: --output requires normal|table|audit");
+                yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: --output requires normal|table|audit|json");
                 return YVEX_ERR_INVALID_ARG;
             }
             if (!source_output_mode_parse(argv[++i], &out->render_mode)) {
@@ -158,8 +164,7 @@ int yvex_source_args_parse(int argc,
                 return YVEX_ERR_INVALID_ARG;
             }
         } else if (strcmp(argv[i], "--json") == 0) {
-            yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: JSON output is unsupported; use --output normal|table|audit");
-            return YVEX_ERR_INVALID_ARG;
+            out->render_mode = YVEX_SOURCE_RENDER_JSON;
         } else {
             yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: unknown option: %s", argv[i]);
             return YVEX_ERR_INVALID_ARG;
@@ -182,6 +187,11 @@ int yvex_source_args_parse(int argc,
         yvex_error_setf(err, YVEX_ERR_INVALID_ARG, "source_args_parse", "source-manifest report: unsupported release: %s", out->release);
         return YVEX_ERR_INVALID_ARG;
     }
+    if (out->strict && strcmp(out->family, "deepseek") != 0) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_args_parse",
+                       "source-manifest report: --strict is available only for the canonical DeepSeek target");
+        return YVEX_ERR_INVALID_ARG;
+    }
     return YVEX_OK;
 }
 
@@ -202,6 +212,7 @@ void yvex_source_report_request_from_parsed(yvex_source_report_request *request,
     request->include_blockers = args->include_blockers;
     request->include_next = args->include_next;
     request->include_tensors = args->include_tensors;
+    request->strict = args->strict;
     request->tensor_limit = args->tensor_limit;
     request->profile = yvex_source_report_find_profile(args->family);
     if (!request->target && request->source) {

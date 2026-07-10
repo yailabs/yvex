@@ -2,7 +2,8 @@
  * yvex_source_report.c - source pressure report builder.
  *
  * Owner: src/source.
- * Owns: Qwen/Gemma source report fact construction from local metadata and headers.
+ * Owns: DeepSeek exact-source verification reports and Qwen/Gemma source
+ * pressure report facts from local metadata and headers.
  * Does not own: CLI parsing, help, operator rendering, runtime, generation, eval, or benchmark.
  * Invariants: report building is header-only and never loads tensor payload bytes.
  * Boundary: source report facts are not artifact emission or runtime readiness.
@@ -54,7 +55,51 @@ static const char *gemma_source_tail_blockers[] = {
     "missing-gemma-benchmark-path",
 };
 
+static const char *deepseek_source_tail_blockers[] = {
+    "missing-deepseek-architecture-ir",
+    "reopened-gguf-qtype-abi",
+    "missing-deepseek-tensor-role-map",
+    "missing-complete-deepseek-gguf",
+    "unsupported-deepseek-runtime",
+    "unsupported-deepseek-generation",
+};
+
 static const yvex_source_family_profile source_family_profiles[] = {
+    {
+        yvex_deepseek_v4_family_key,
+        yvex_deepseek_v4_family_display,
+        "deepseek-source-verification",
+        yvex_deepseek_v4_target_id,
+        "release-source-target",
+        yvex_deepseek_v4_model_name,
+        "selected-unverified",
+        "registered",
+        "official-safetensors",
+        "safetensors+structured-sidecars",
+        "official",
+        "upstream-official",
+        "safetensors",
+        "complete-YVEX-GGUF-not-produced",
+        "not-produced",
+        "true",
+        "false",
+        "not-produced",
+        "exact-v0.1.0-release-source",
+        "raw-config-facts-only",
+        "dgx-spark",
+        "cuda-release-lane-unsupported",
+        "verification-required",
+        "missing-source-path",
+        "missing-source-manifest",
+        "invalid-safetensors-header",
+        "missing-source-config",
+        "missing-tokenizer-json",
+        "missing-deepseek-architecture-ir",
+        "V010.GGUF.QTYPE.ABI.1",
+        deepseek_source_tail_blockers,
+        sizeof(deepseek_source_tail_blockers) /
+            sizeof(deepseek_source_tail_blockers[0]),
+    },
     {
         "qwen",
         "Qwen",
@@ -149,6 +194,9 @@ int yvex_source_report_target_is_supported(const yvex_source_family_profile *pro
 {
     if (!profile || !target) {
         return 0;
+    }
+    if (strcmp(profile->family_key, "deepseek") == 0) {
+        return yvex_model_target_is_release_target(target);
     }
     if ((strcmp(profile->family_key, "qwen") == 0 &&
          strncmp(target, "qwen", 4) == 0) ||
@@ -1226,6 +1274,93 @@ static int qwen_source_tail_blocker_is_tensor_map(const char *blocker)
             strstr(blocker, "tensor-map") != NULL);
 }
 
+/*
+ * source_report_apply_deepseek_verification()
+ *
+ * Projects exact source-verifier facts into the existing typed source report.
+ * It allocates nothing, performs no IO, and does not promote artifact or
+ * runtime capability.
+ */
+static void source_report_apply_deepseek_verification(
+    yvex_source_report *report)
+{
+    const yvex_source_verification *verification = &report->verification;
+
+    if (verification->repository_id[0]) {
+        snprintf(report->identity_repo_id, sizeof(report->identity_repo_id), "%s",
+                 verification->repository_id);
+    }
+    if (verification->revision[0]) {
+        snprintf(report->identity_revision, sizeof(report->identity_revision), "%s",
+                 verification->revision);
+    }
+    snprintf(report->identity_local_source_dir,
+             sizeof(report->identity_local_source_dir), "%s",
+             verification->resolved_source_path);
+    snprintf(report->manifest_path, sizeof(report->manifest_path), "%s",
+             verification->manifest_path);
+    report->manifest_exists = verification->manifest_path[0] != '\0';
+    report->source_identity_from_path = verification->path_verified;
+    report->config_exists = verification->config_valid;
+    report->tokenizer_json_exists = verification->tokenizer_json_valid;
+    report->tokenizer_config_exists = verification->tokenizer_config_valid;
+    report->source_file_count = verification->source_file_count;
+    report->source_regular_file_count = verification->source_file_count;
+    report->safetensors_count = verification->shard_count;
+    report->total_size_bytes = verification->source_total_bytes;
+    report->safetensors_size_bytes = verification->shard_bytes;
+    report->sidecar_size_bytes = verification->source_total_bytes >=
+                                         verification->shard_bytes
+                                     ? verification->source_total_bytes -
+                                           verification->shard_bytes
+                                     : 0u;
+    report->native_safetensors_count = verification->shard_count;
+    report->native_safetensors_opened = verification->shard_count;
+    report->native_safetensors_header_read_count =
+        verification->header_shard_count;
+    report->native_safetensors_header_error_count =
+        verification->header_shard_count <= verification->shard_count
+            ? verification->shard_count - verification->header_shard_count
+            : 0u;
+    report->native_safetensors_header_bytes = verification->header_bytes;
+    report->native_tensor_count = verification->header_tensor_count;
+    report->native_declared_tensor_bytes = verification->declared_tensor_bytes;
+    report->native_max_rank = verification->max_tensor_rank;
+    report->native_dtype_f16_count = verification->dtype_f16_count;
+    report->native_dtype_bf16_count = verification->dtype_bf16_count;
+    report->native_dtype_f32_count = verification->dtype_f32_count;
+    report->native_dtype_i64_count = verification->dtype_i64_count;
+    report->native_dtype_i8_count = verification->dtype_i8_count;
+    report->native_dtype_other_count = verification->dtype_fp4_count +
+                                       verification->dtype_f8_count +
+                                       verification->dtype_f8_e8m0_count +
+                                       verification->dtype_other_count;
+    report->source_tensor_count = verification->header_tensor_count;
+    report->source_tensor_name_count = verification->header_tensor_count;
+    report->source_tensor_file_count = verification->header_shard_count;
+    report->source_tensor_declared_tensor_bytes =
+        verification->declared_tensor_bytes;
+    report->source_tensor_max_rank = verification->max_tensor_rank;
+    report->source_tensor_dtype_f16_count = verification->dtype_f16_count;
+    report->source_tensor_dtype_bf16_count = verification->dtype_bf16_count;
+    report->source_tensor_dtype_f32_count = verification->dtype_f32_count;
+    report->source_tensor_dtype_i64_count = verification->dtype_i64_count;
+    report->source_tensor_dtype_i8_count = verification->dtype_i8_count;
+    report->source_tensor_dtype_other_count =
+        verification->dtype_fp4_count + verification->dtype_f8_count +
+        verification->dtype_f8_e8m0_count + verification->dtype_other_count;
+    report->source_tensor_dtype_count =
+        (verification->dtype_f16_count ? 1u : 0u) +
+        (verification->dtype_bf16_count ? 1u : 0u) +
+        (verification->dtype_f32_count ? 1u : 0u) +
+        (verification->dtype_i64_count ? 1u : 0u) +
+        (verification->dtype_i8_count ? 1u : 0u) +
+        (verification->dtype_fp4_count ? 1u : 0u) +
+        (verification->dtype_f8_count ? 1u : 0u) +
+        (verification->dtype_f8_e8m0_count ? 1u : 0u) +
+        (verification->dtype_other_count ? 1u : 0u);
+}
+
 int yvex_source_report_build(const yvex_source_report_request *request,
                              yvex_source_report *report,
                              yvex_error *err)
@@ -1234,6 +1369,7 @@ int yvex_source_report_build(const yvex_source_report_request *request,
     yvex_operator_paths operator_paths;
     int rc;
     int n;
+    int deepseek;
     unsigned long i;
 
     const yvex_source_report_request *options = request;
@@ -1250,6 +1386,7 @@ int yvex_source_report_build(const yvex_source_report_request *request,
                         options->target ? options->target : "");
         return YVEX_ERR_INVALID_ARG;
     }
+    deepseek = yvex_model_target_is_release_target(options->target);
 
     memset(report, 0, sizeof(*report));
     report->profile = options->profile;
@@ -1277,12 +1414,19 @@ int yvex_source_report_build(const yvex_source_report_request *request,
         snprintf(report->source_path_source, sizeof(report->source_path_source),
                  "%s", "explicit-source");
     } else {
-        n = snprintf(report->source_path, sizeof(report->source_path),
-                     "%s/hf/%s/%s",
-                     operator_paths.models_root,
-                     options->profile->family_key,
-                     options->target);
-        if (n < 0 || (size_t)n >= sizeof(report->source_path)) {
+        if (deepseek) {
+            n = yvex_model_target_source_path(
+                report->source_path, sizeof(report->source_path),
+                operator_paths.models_root,
+                yvex_model_target_release_identity()) ? 0 : -1;
+        } else {
+            n = snprintf(report->source_path, sizeof(report->source_path),
+                         "%s/hf/%s/%s",
+                         operator_paths.models_root,
+                         options->profile->family_key,
+                         options->target);
+        }
+        if (n < 0 || (!deepseek && (size_t)n >= sizeof(report->source_path))) {
             yvex_error_set(err, YVEX_ERR_BOUNDS, "source_report_build",
                            "source path is too long");
             return YVEX_ERR_BOUNDS;
@@ -1294,6 +1438,15 @@ int yvex_source_report_build(const yvex_source_report_request *request,
              "%s", options->target);
     snprintf(report->identity_family, sizeof(report->identity_family),
              "%s", options->profile->family_key);
+    if (deepseek) {
+        const yvex_model_target_identity *identity =
+            yvex_model_target_release_identity();
+
+        snprintf(report->identity_model, sizeof(report->identity_model), "%s",
+                 identity->model_name);
+        snprintf(report->identity_repo_id, sizeof(report->identity_repo_id), "%s",
+                 identity->upstream_repo_id);
+    }
     if (options->source) {
         const char *base = qwen_source_path_basename(report->source_path);
         if (base && strcmp(base, options->target) == 0 &&
@@ -1355,14 +1508,14 @@ int yvex_source_report_build(const yvex_source_report_request *request,
                 report->tokenizer_map_path[0] &&
                 access(report->tokenizer_map_path, F_OK) == 0;
             qwen_source_probe_map_sidecars(report);
-            if (report->download_registry_exists) {
+            if (!deepseek && report->download_registry_exists) {
                 (void)qwen_source_probe_download_identity_file(
                     report->download_registry_path,
                     options->target,
                     options->profile->family_key,
                     report);
             }
-            if (!report->source_identity_from_download_sidecar &&
+            if (!deepseek && !report->source_identity_from_download_sidecar &&
                 report->download_report_exists) {
                 (void)qwen_source_probe_download_identity_file(
                     report->download_report_path,
@@ -1387,31 +1540,81 @@ int yvex_source_report_build(const yvex_source_report_request *request,
             qwen_source_check_file(report->source_path, "LICENSE") ||
             qwen_source_check_file(report->source_path, "LICENSE.txt") ||
             qwen_source_check_file(report->source_path, "COPYING");
-        qwen_source_scan_top_footprint(report->source_path, report);
-        rc = qwen_source_scan_native_inventory(report->source_path, report);
-        if (rc != YVEX_OK) {
-            return rc;
+        if (deepseek) {
+            yvex_source_verify_options verify_options;
+
+            memset(&verify_options, 0, sizeof(verify_options));
+            verify_options.identity = yvex_model_target_release_identity();
+            verify_options.source_path = report->source_path;
+            verify_options.models_root = operator_paths.models_root;
+            rc = yvex_source_verify(&verify_options, &report->verification, err);
+            if (rc != YVEX_OK) return rc;
+            source_report_apply_deepseek_verification(report);
+        } else {
+            qwen_source_scan_top_footprint(report->source_path, report);
+            rc = qwen_source_scan_native_inventory(report->source_path, report);
+            if (rc != YVEX_OK) {
+                return rc;
+            }
         }
     }
+    if (deepseek && !report->source_exists) {
+        yvex_source_verify_options verify_options;
 
-    qwen_source_choose_report_file(report->manifest_path, sizeof(report->manifest_path),
-                                   options->profile,
-                                   operator_paths.reports_root,
-                                   report->source_path,
-                                   options->target,
-                                   "manifest",
-                                   &report->manifest_exists);
-    qwen_source_choose_report_file(report->native_inventory_path,
-                                   sizeof(report->native_inventory_path),
-                                   options->profile,
-                                   operator_paths.reports_root,
-                                   report->source_path,
-                                   options->target,
-                                   "inventory",
-                                   &report->native_inventory_exists);
-    qwen_source_probe_manifest(report, options->profile, options->target);
+        memset(&verify_options, 0, sizeof(verify_options));
+        verify_options.identity = yvex_model_target_release_identity();
+        verify_options.source_path = report->source_path;
+        verify_options.models_root = operator_paths.models_root;
+        rc = yvex_source_verify(&verify_options, &report->verification, err);
+        if (rc != YVEX_OK) return rc;
+        source_report_apply_deepseek_verification(report);
+    }
+
+    if (!deepseek) {
+        qwen_source_choose_report_file(report->manifest_path,
+                                       sizeof(report->manifest_path),
+                                       options->profile,
+                                       operator_paths.reports_root,
+                                       report->source_path,
+                                       options->target,
+                                       "manifest",
+                                       &report->manifest_exists);
+        qwen_source_choose_report_file(report->native_inventory_path,
+                                       sizeof(report->native_inventory_path),
+                                       options->profile,
+                                       operator_paths.reports_root,
+                                       report->source_path,
+                                       options->target,
+                                       "inventory",
+                                       &report->native_inventory_exists);
+        qwen_source_probe_manifest(report, options->profile, options->target);
+    }
 
     report->source_state = report->source_exists ? "present" : "missing";
+    if (deepseek) {
+        report->status = report->verification.verified
+                             ? "exact-source-verified"
+                             : "exact-source-blocked";
+        report->top_blocker = report->verification.blocker_count
+                                  ? report->verification.blockers[0]
+                                  : "none";
+        report->next_row = report->verification.verified
+                               ? "V010.GGUF.QTYPE.ABI.1"
+                               : "V010.REBASE.DEEPSEEK.0";
+        for (i = 0; i < report->verification.blocker_count; ++i) {
+            qwen_source_add_blocker(report,
+                                    report->verification.blockers[i]);
+        }
+        for (i = 0; i < options->profile->tail_blocker_count; ++i) {
+            qwen_source_add_blocker(report,
+                                    options->profile->tail_blockers[i]);
+        }
+        report->exit_code = options->strict && !report->verification.verified
+                                ? 5
+                                : 0;
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
     if (!report->source_exists) {
         report->status = "source-target-profiled";
         report->top_blocker = options->profile->source_manifest_blocker;

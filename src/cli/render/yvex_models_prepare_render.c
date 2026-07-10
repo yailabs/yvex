@@ -8,6 +8,7 @@
  * Boundary: prepare/check reports do not promote generation or release readiness.
  */
 #include "yvex_models_prepare_surface.h"
+#include "yvex_model_target_catalog.h"
 
 typedef struct {
     const char *target;
@@ -667,7 +668,7 @@ int yvex_models_prepare_render_command(int arg_count, char **args)
 
     memset(&manifest_options, 0, sizeof(manifest_options));
     memset(&manifest_summary, 0, sizeof(manifest_summary));
-    manifest_options.repo = "deepseek-ai/DeepSeek-V4-Flash";
+    manifest_options.repo = yvex_deepseek_v4_upstream_repo_id;
     manifest_options.revision = "main";
     manifest_options.local_path = source_path;
     manifest_options.status = YVEX_SOURCE_STATUS_IN_PROGRESS;

@@ -5,7 +5,7 @@
  *   src/model/target
  *
  * Owns:
- *   v0.1.0 target-decision facts, refusal facts, candidate rows, and next-row
+ *   the sole v0.1.0 release-target selection, refusal facts, and source-gate
  *   handoff facts.
  *
  * Does not own:
@@ -14,8 +14,8 @@
  *   generation, eval, benchmark, or release decisions.
  *
  * Invariants:
- *   target-decision reports preserve v0.1.0 decision semantics and remain
- *   report-only.
+ *   the release decision selects exactly one canonical target while source
+ *   verification and model support remain separate gates.
  *
  * Boundary:
  *   target-decision facts do not select a runtime-ready model and do not imply
@@ -23,6 +23,8 @@
  *   readiness.
  */
 #include "yvex_model_target_decision.h"
+
+#include "yvex_model_target_catalog.h"
 
 #include <string.h>
 
@@ -35,21 +37,10 @@ typedef struct {
 } decision_candidate;
 
 static const decision_candidate decision_candidates[] = {
-    {"deepseek4-v4-flash-selected-embed", "selected-runtime-slice",
-     "ineligible-selected-slice", "selected-runtime-slice missing full tensor coverage",
-     "selected-slice boundary"},
-    {"deepseek4-v4-flash-selected-embed-rmsnorm", "selected-runtime-slice",
-     "ineligible-selected-slice",
-     "selected-runtime-slice missing MoE router/expert tensor coverage",
-     "selected-slice boundary"},
-    {"glm-5.2-official-safetensors", "huge-source-pressure",
-     "ineligible-source-only", "source-only target", "source inventory"},
-    {"qwen3-8b", "source-model-candidate",
-     "ineligible-source-model-candidate", "tensor role map missing",
-     "tensor role mapping"},
-    {"gemma-4-12b-it", "source-model-candidate",
-     "ineligible-source-model-candidate", "tensor role map missing",
-     "tensor role mapping"},
+    {yvex_deepseek_v4_target_id, "release-source-target",
+     "selected-source-verification-required",
+     "sole v0.1.0 target; support remains blocked by exact source and downstream gates",
+     "V010.REBASE.DEEPSEEK.0"},
 };
 
 static unsigned long decision_candidate_count(void)
@@ -72,6 +63,8 @@ static const decision_candidate *decision_find(const char *id)
 
 static void decision_common_tail(yvex_model_target_report *report)
 {
+    yvex_model_target_report_add_row(report, "release_qtype: unselected");
+    yvex_model_target_report_add_row(report, "artifact_status: not-produced");
     yvex_model_target_report_add_row(report, "runtime_claim: unsupported");
     yvex_model_target_report_add_row(report, "generation: unsupported-full-model");
     yvex_model_target_report_add_row(report, "benchmark_status: not-measured");
@@ -82,7 +75,7 @@ static int decision_help(yvex_model_target_report *report)
 {
     yvex_model_target_report_add_row(report, "usage: yvex model-target decision --release v0.1.0 [options]");
     yvex_model_target_report_add_row(report, "does not download models, emit artifacts, materialize tensors, execute graph work, run prefill, decode, logits, sampling, generation, evaluation, or benchmarks");
-    yvex_model_target_report_add_row(report, "Selected runtime slices, source-only pressure targets, external references, and fixture-only targets are ineligible for full-runtime closure.");
+    yvex_model_target_report_add_row(report, "DeepSeek-V4-Flash is the sole release target. Qwen, Gemma, selected slices, source pressure targets, external references, and fixtures are engineering evidence, not alternate release choices.");
     return YVEX_OK;
 }
 
@@ -132,9 +125,14 @@ static int decision_audit(const yvex_model_target_request *request,
     unsigned long i;
 
     yvex_model_target_report_add_row(report, "target_decision: v0.1.0");
-    yvex_model_target_report_add_row(report, "status: target-decision-blocked");
-    yvex_model_target_report_add_row(report, "decision_state: blocked-no-candidate");
-    yvex_model_target_report_add_row(report, "full_runtime_candidate_status: missing");
+    yvex_model_target_report_add_row(report, "status: target-selected-source-verification-required");
+    yvex_model_target_report_add_row(report, "decision_state: selected");
+    yvex_model_target_report_add_row(report, "selected_target_id: %s",
+                                     yvex_deepseek_v4_target_id);
+    yvex_model_target_report_add_row(report, "upstream_repository: %s",
+                                     yvex_deepseek_v4_upstream_repo_id);
+    yvex_model_target_report_add_row(report, "source_verification_status: required");
+    yvex_model_target_report_add_row(report, "full_runtime_candidate_status: unsupported");
     yvex_model_target_report_add_row(report, "selected_runtime_slice_eligible: false");
     yvex_model_target_report_add_row(report, "source_only_eligible: false");
     yvex_model_target_report_add_row(report, "external_reference_eligible: false");
@@ -151,10 +149,11 @@ static int decision_audit(const yvex_model_target_request *request,
             decision_emit_candidate(report, i, &decision_candidates[i]);
         }
     }
-    yvex_model_target_report_add_row(report, "deepseek_pressure_status: selected-slice-pressure-only");
-    yvex_model_target_report_add_row(report, "glm_pressure_status: source-storage-pressure-only");
-    yvex_model_target_report_add_row(report, "qwen_metal_pressure_status: planned-portability-pressure-only");
-    yvex_model_target_report_add_row(report, "next_required_rows: V010.TARGET.2");
+    yvex_model_target_report_add_row(report, "qwen_engineering_scope: preserved-non-release");
+    yvex_model_target_report_add_row(report, "gemma_engineering_scope: preserved-non-release");
+    yvex_model_target_report_add_row(report, "selected_slice_scope: bounded-evidence-only");
+    yvex_model_target_report_add_row(report, "next_required_rows: V010.REBASE.DEEPSEEK.0");
+    yvex_model_target_report_add_row(report, "post_verification_next: V010.GGUF.QTYPE.ABI.1");
     return YVEX_OK;
 }
 
@@ -177,9 +176,19 @@ int yvex_model_target_decision_report_build(
     if (strcmp(request->release, "v0.1.0") != 0) {
         return decision_unsupported_release(request, report);
     }
+    if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
+        yvex_model_target_report_add_row(
+            report,
+            "{\"status\":\"target-selected-source-verification-required\",\"release\":\"v0.1.0\",\"selected_target_id\":\"%s\",\"upstream_repository\":\"%s\",\"source_verification\":\"required\",\"release_qtype\":null,\"artifact_status\":\"not-produced\",\"runtime\":\"unsupported\",\"generation\":\"unsupported\",\"evaluation\":\"not-run\",\"benchmark\":\"not-measured\",\"next\":\"V010.REBASE.DEEPSEEK.0\",\"post_verification_next\":\"V010.GGUF.QTYPE.ABI.1\"}",
+            yvex_deepseek_v4_target_id,
+            yvex_deepseek_v4_upstream_repo_id);
+        return YVEX_OK;
+    }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
         yvex_model_target_report_add_row(report, "REPORT  STATUS  SELECTED  ELIGIBLE  NEXT");
-        yvex_model_target_report_add_row(report, "target-decision  blocked  none  0  V010.MAP.8");
+        yvex_model_target_report_add_row(report,
+                                         "target-decision  selected-source-verification-required  %s  0  V010.REBASE.DEEPSEEK.0",
+                                         yvex_deepseek_v4_target_id);
         return YVEX_OK;
     }
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT ||
@@ -187,10 +196,12 @@ int yvex_model_target_decision_report_build(
         return decision_audit(request, report);
     }
     yvex_model_target_report_add_row(report, "report: target-decision");
-    yvex_model_target_report_add_row(report, "status: target-decision-blocked");
-    yvex_model_target_report_add_row(report, "selected: none");
-    yvex_model_target_report_add_row(report, "top_blocker: no eligible full-runtime candidate");
-    yvex_model_target_report_add_row(report, "next: V010.MAP.8");
-    yvex_model_target_report_add_row(report, "boundary: report-only; generation unsupported; benchmark not measured");
+    yvex_model_target_report_add_row(report, "status: target-selected-source-verification-required");
+    yvex_model_target_report_add_row(report, "selected: %s",
+                                     yvex_deepseek_v4_target_id);
+    yvex_model_target_report_add_row(report, "top_blocker: exact source verification");
+    yvex_model_target_report_add_row(report, "next: V010.REBASE.DEEPSEEK.0");
+    yvex_model_target_report_add_row(report, "post_verification_next: V010.GGUF.QTYPE.ABI.1");
+    yvex_model_target_report_add_row(report, "boundary: release target selected; artifact/runtime/generation unsupported; benchmark not measured");
     return YVEX_OK;
 }
