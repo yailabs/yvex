@@ -512,7 +512,7 @@ Tracked GGUF files are tiny fixtures only.
 Runtime changes should include command-visible proof, tests, failure-path
 coverage, cleanup/lifecycle behavior, and explicit boundary documentation.
 Public docs should reflect the implemented boundary without exposing internal
-delivery IDs outside `PROJECT.md` and the active repair owner.
+delivery IDs outside `PROJECT.md`.
 
 ## Claim Promotion Contract
 

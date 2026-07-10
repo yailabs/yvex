@@ -109,9 +109,9 @@ artifact, not a complete or supported model artifact.
 ## Public Surface Map
 
 The public API is organized by ownership boundary rather than by delivery
-milestone. Several current surfaces are legacy bounded proofs pending the
-decommission map in `docs/repair/v010-foundation-closure.md`; they are API facts,
-not product runtime capability.
+milestone. Several current surfaces are legacy bounded proofs governed by the
+decommission obligations in `PROJECT.md`; they are API facts, not product
+runtime capability.
 
 | Boundary | Public surface |
 | --- | --- |

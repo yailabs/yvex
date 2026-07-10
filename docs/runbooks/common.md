@@ -47,8 +47,8 @@ Safe to rerun:
   yes.
 
 Stop after:
-  the compact spine, repair transition, exact target, unsupported boundaries,
-  and canonical terminology guards pass.
+  the project ledger, documentation ownership, exact target, unsupported
+  boundaries, and canonical terminology guards pass.
 
 Boundary:
   documentation/claim consistency only.
@@ -104,8 +104,8 @@ Stop after:
   CUDA build, unit, smoke, refusal, and reference checks pass.
 
 Boundary:
-  bounded CUDA evidence only. The open fail-closed repair remains a blocker
-  until `V010.CUDA.FAILCLOSED.0` closes.
+  bounded CUDA evidence only. CUDA capability remains below the fail-closed
+  runtime boundary.
 
 ```sh
 make check-cuda
@@ -179,12 +179,9 @@ changes. Do not use an all-files stage operation in a mixed worktree.
 
 ## Current Product Boundary
 
-The exact v0.1.0 target, release gates, and active repair are owned by:
-
-- `../../PROJECT.md`;
-- `../repair/v010-foundation-closure.md`;
-- `../v010-release-doctrine.md`;
-- `deepseek.md`.
+`../../PROJECT.md` alone owns current project state and sequencing.
+`../v010-release-doctrine.md` defines gate semantics, while `deepseek.md`
+defines the current operator boundary.
 
 This common runbook contains no model run because the full target remains
 unsupported.

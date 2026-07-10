@@ -22,14 +22,12 @@ There is no supported model generation procedure today.
 
 | Runbook | Current purpose | Capability boundary |
 | --- | --- | --- |
-| `runbooks/deepseek.md` | Exact v0.1.0 source/target status, active blocker, and safe filesystem checks | no complete artifact or runtime procedure |
+| `runbooks/deepseek.md` | Exact v0.1.0 source/target boundary and safe filesystem checks | no complete artifact or runtime procedure |
 | `runbooks/common.md` | Build, validation, documentation guards, artifact hygiene, and operator-local cleanup | validation does not create runtime capability |
-| `runbooks/glm.md` | Existing GLM source acquisition and status procedure outside v0.1.0 | source evidence only; no GLM runtime |
 
 Model-family architecture is defined in `model-families.md`. Release gates are
-defined in `v010-release-doctrine.md`. Project state and the active repair
-sequence are defined in `../PROJECT.md` and
-`repair/v010-foundation-closure.md`.
+defined in `v010-release-doctrine.md`. Current project state, dependencies, and
+Active Next are defined only in `../PROJECT.md`.
 
 ## Current Entry
 
@@ -38,17 +36,10 @@ runbook for repository validation. Do not substitute selected aliases,
 diagnostic commands, fixture output, or report-only surfaces for a full-target
 operator run.
 
-Active Next is the documentation architecture contract:
-
-```text
-V010.DOCS.ARCHITECTURE.0
-```
-
-The next implementation row, `V010.REBASE.DEEPSEEK.0`, remains blocked by that
-contract.
-
-Until the repair spine closes, the supported operator action is validation and
-explicit refusal, not DeepSeek generation.
+Consult `../PROJECT.md` before selecting work. This runbook does not mirror the
+current milestone. Until a supported generation procedure is documented here,
+the valid operator action is validation and explicit refusal, not DeepSeek
+generation.
 
 ## Operator-Local State
 

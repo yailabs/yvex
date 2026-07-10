@@ -215,9 +215,9 @@ CLI_TEST := tests/cli.sh
 
 CURRENT_DOCS := README.md AGENTS.md PROJECT.md MODEL_ARTIFACTS.md NOTICE.md \
 	docs/api.md docs/contract.md docs/model-families.md \
-	docs/operator-runbook.md docs/v010-release-doctrine.md \
-	docs/topology-closure-audit.md docs/system-target.md \
-	docs/repair/v010-foundation-closure.md
+	docs/operator-runbook.md docs/cli-output-architecture.md \
+	docs/reference-architecture.md docs/v010-release-doctrine.md \
+	docs/topology-closure-audit.md docs/system-target.md
 
 info:
 	@echo "yvex: C local inference engine"
@@ -396,7 +396,8 @@ check-docs:
 	@test -f docs/v010-release-doctrine.md
 	@test -f docs/topology-closure-audit.md
 	@test -f docs/system-target.md
-	@test -f docs/repair/v010-foundation-closure.md
+	@test -f docs/reference-architecture.md
+	@test -z "$$(find docs -maxdepth 1 -type d -name repair -print -quit)"
 	@! find docs -maxdepth 1 -type f -name '*.md' \
 		! -name api.md \
 		! -name contract.md \
@@ -406,16 +407,16 @@ check-docs:
 		! -name v010-release-doctrine.md \
 		! -name topology-closure-audit.md \
 		! -name system-target.md \
+		! -name reference-architecture.md \
 		-print | grep .
 	@grep -F "YVEX Project Control" PROJECT.md >/dev/null
 	@grep -F "## 7. Track Registry And Dashboard" PROJECT.md >/dev/null
 	@grep -F "## 8. First-Class Milestone Roadmap" PROJECT.md >/dev/null
 	@grep -F "## 9. Complete Track/Wave Ledger" PROJECT.md >/dev/null
 	@grep -F "native C inference engine for local open-weight models" README.md >/dev/null
-	@grep -F 'Active Next: V010.DOCS.ARCHITECTURE.0' PROJECT.md >/dev/null
 	@sh tests/test_project_ledger.sh >/dev/null
-	@grep -F 'Status: priority-blocking' docs/repair/v010-foundation-closure.md >/dev/null
 	@grep -F "YVEX System Target" docs/system-target.md >/dev/null
+	@grep -F "YVEX Reference Architecture Map" docs/reference-architecture.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null
 	@grep -F "YVEX Runtime Contract" docs/contract.md >/dev/null
 	@grep -F "YVEX Operator Runbook" docs/operator-runbook.md >/dev/null

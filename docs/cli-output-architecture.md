@@ -415,19 +415,8 @@ attach backend residency, feed graph consumers, execute
 prefill/decode/logits/tokenizer/sampling/generation, evaluate, benchmark, claim
 throughput, or mark release readiness.
 
-## Current Sequencing Boundary
+## Project State Ownership
 
-CLI output cleanup is not the current product blocker. The priority-blocking
-Active Next is:
-
-```text
-V010.DOCS.ARCHITECTURE.0
-```
-
-The ordered foundation sequence lives in
-`docs/repair/v010-foundation-closure.md`. `V010.REBASE.DEEPSEEK.0` is the next
-implementation row and remains blocked by documentation architecture.
-`V010.CLI.27 - base status and refusal grammar` remains a deferred CLI substrate
-row, not an active product row. CLI migrations resume only when an owning
-repair or runtime row needs the corresponding command contract. Output
-architecture work cannot promote artifact or runtime capability.
+Current milestone state, dependency order, and Active Next live only in
+`PROJECT.md`. CLI migration rows are scheduled there through a conclusive owner;
+this output contract cannot promote artifact or runtime capability.

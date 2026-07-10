@@ -37,27 +37,16 @@ full transformer and MoE stack, or generate DeepSeek text.
 Do not use selected aliases, bounded graph segments, diagnostic runtime
 commands, report-only fullmodel surfaces, fixture logits, or printed token IDs
 as a DeepSeek operator lane. Those implementation surfaces remain temporary
-proof residue and are owned by the decommission map in the repair spine.
+proof residue; their required dispositions and consuming milestones are owned
+by the decommission obligations in `../../PROJECT.md`.
 
 There is no supported DeepSeek generation command to run yet.
 
-## Active Blocker
+## Project State
 
-`V010.DOCS.REFOUNDATION.0` is complete at documentation/claim refoundation
-only. `V010.PROJECT.RECOVERY.0` is partial and
-`V010.PROJECT.RECOVERY.1` completes project-ledger recovery only.
-
-Active Next:
-
-```text
-V010.DOCS.ARCHITECTURE.0
-```
-
-`V010.REBASE.DEEPSEEK.0` is the next implementation row and is blocked by
-documentation architecture.
-
-The main runtime path is blocked until the ordered foundation repair spine
-closes through `V010.GGUF.ROUNDTRIP.1` over a complete YVEX-produced artifact.
+Current milestone state, dependencies, gates, and Active Next live only in
+`../../PROJECT.md`. This runbook records the executable operator boundary and
+does not reproduce the project sequence.
 
 ## Safe Current Checks
 
@@ -75,7 +64,6 @@ test -f "$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash/tokenizer.json"
 ## Canonical Control
 
 - Project control: `../../PROJECT.md`
-- Priority-blocking repair spine: `../repair/v010-foundation-closure.md`
 - Release gates: `../v010-release-doctrine.md`
 - Filesystem ownership: `../system-target.md`
 - Artifact terminology: `../../MODEL_ARTIFACTS.md`

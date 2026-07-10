@@ -4,11 +4,16 @@ set -eu
 project=PROJECT.md
 tmp_base="${TMPDIR:-/tmp}/yvex-project-ledger.$$"
 rows="${tmp_base}.rows"
+all_ids="${tmp_base}.all-ids"
+new_ids="${tmp_base}.new-ids"
+recovered_ids="${tmp_base}.recovered-ids"
 tracks="${tmp_base}.tracks"
 expected_tracks="${tmp_base}.expected-tracks"
-counts="${tmp_base}.counts"
-expected_counts="${tmp_base}.expected-counts"
-trap 'rm -f "$rows" "$tracks" "$expected_tracks" "$counts" "$expected_counts"' EXIT
+declared_global="${tmp_base}.declared-global"
+actual_global="${tmp_base}.actual-global"
+declared_dashboard="${tmp_base}.declared-dashboard"
+actual_dashboard="${tmp_base}.actual-dashboard"
+trap 'rm -f "${tmp_base}."*' EXIT
 
 fail() {
   printf 'project ledger: %s\n' "$1" >&2
@@ -17,6 +22,8 @@ fail() {
 
 test -f "$project" || fail "missing $project"
 test ! -e docs/spine.md || fail "shadow project authority exists: docs/spine.md"
+test -z "$(find docs -maxdepth 1 -type d -name repair -print -quit)" ||
+  fail "temporary project-control directory still exists"
 
 awk -F '|' '
 function trim(value) {
@@ -75,25 +82,72 @@ function uncode(value) {
 row_count=$(wc -l < "$rows" | tr -d ' ')
 test "$row_count" -eq 665 || fail "expected 665 canonical IDs, found $row_count"
 
-unique_count=$(cut -f 2 "$rows" | LC_ALL=C sort -u | wc -l | tr -d ' ')
-test "$unique_count" -eq 665 || fail "canonical IDs are not unique: $unique_count/665"
+cut -f 2 "$rows" | LC_ALL=C sort > "$all_ids"
+unique_count=$(uniq "$all_ids" | wc -l | tr -d ' ')
+test "$unique_count" -eq "$row_count" ||
+  fail "canonical IDs are not unique: $unique_count/$row_count"
 
-duplicate=$(cut -f 2 "$rows" | LC_ALL=C sort | uniq -d | head -n 1 || true)
+duplicate=$(uniq -d "$all_ids" | head -n 1 || true)
 test -z "$duplicate" || fail "duplicate canonical ID: $duplicate"
 
-id_hash=$(cut -f 2 "$rows" | LC_ALL=C sort | sha256sum | awk '{ print $1 }')
+id_hash=$(sha256sum "$all_ids" | awk '{ print $1 }')
 expected_id_hash=2bfe65bb296ca7d02e276a427ddee765c917a2601d31310758d5dbcb49b623a8
 test "$id_hash" = "$expected_id_hash" ||
-  fail "canonical ID set changed without an explicit ledger-guard update: $id_hash"
+  fail "canonical ID set changed without an explicit migration: $id_hash"
 
-summary_hash=$(awk '
-  /^### 7\.1 Per-Track Counts$/ { in_summary = 1; next }
-  /^### 7\.2 Stable Track Names$/ { in_summary = 0 }
-  in_summary && /^\| `TRACK\./ { print }
-' "$project" | sha256sum | awk '{ print $1 }')
-expected_summary_hash=2a49f1c1a58e8d1cdb0ba1ed8b0557be21ed9b45936adec7609ae9cf2c66df92
-test "$summary_hash" = "$expected_summary_hash" ||
-  fail "per-track dashboard changed without a calculated-count update: $summary_hash"
+cat > "$new_ids" <<'EOF'
+V010.DOCS.REFOUNDATION.0
+V010.PROJECT.RECOVERY.0
+V010.PROJECT.RECOVERY.1
+V010.DOCS.ARCHITECTURE.0
+V010.REBASE.DEEPSEEK.0
+V010.SOURCE.PAYLOAD.STREAM.0
+V010.MAP.GGUF.DEEPSEEK.0
+V010.GGUF.QTYPE.ABI.1
+V010.GGUF.ARTIFACT.ABI.1
+V010.GGUF.WRITER.1
+V010.ARTIFACT.EMIT.DEEPSEEK.0
+V010.GGUF.ROUNDTRIP.1
+V010.ARTIFACT.SUPPORT.CUTOVER.0
+V010.GGUF.LAYOUT.INTEGRITY.1
+V010.MODEL.ARCH.IR.0
+V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0
+V010.TENSOR.COVERAGE.DEEPSEEK.0
+V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0
+V010.CUDA.FAILCLOSED.0
+V010.GRAPH.DEEPSEEK.ATTENTION.0
+V010.RUNTIME.DEEPSEEK.MOE.0
+V010.GRAPH.DEEPSEEK.TRANSFORMER.0
+V010.RUNTIME.DEEPSEEK.PREFILL.0
+V010.RUNTIME.DEEPSEEK.KV.0
+V010.RUNTIME.DEEPSEEK.DECODE.0
+V010.RUNTIME.DEEPSEEK.LOGITS.0
+V010.RUNTIME.SAMPLING.0
+V010.RUNTIME.DEEPSEEK.TOKENIZER.0
+V010.RUNTIME.DEEPSEEK.GENERATION.0
+V010.CLI.DEEPSEEK.GENERATE.0
+V010.EVAL.DEEPSEEK.0
+V010.BENCH.DEEPSEEK.0
+V010.RUNTIME.DEEPSEEK.ATTENTION.KV.0
+V010.RUNTIME.DEEPSEEK.LOGITS.SAMPLING.0
+EOF
+
+LC_ALL=C sort -u "$new_ids" -o "$new_ids"
+new_count=$(wc -l < "$new_ids" | tr -d ' ')
+test "$new_count" -eq 34 || fail "expected 34 explicit new IDs, found $new_count"
+
+missing_new=$(comm -23 "$new_ids" "$all_ids" | head -n 1 || true)
+test -z "$missing_new" || fail "explicit new ID is absent: $missing_new"
+
+comm -23 "$all_ids" "$new_ids" > "$recovered_ids"
+recovered_count=$(wc -l < "$recovered_ids" | tr -d ' ')
+test "$recovered_count" -eq 631 ||
+  fail "expected 631 recovered IDs, found $recovered_count"
+
+recovered_hash=$(sha256sum "$recovered_ids" | awk '{ print $1 }')
+expected_recovered_hash=bac12219a65a8f9aa73f694160c418016bad55aece941d366b00f52ceaa2b9c4
+test "$recovered_hash" = "$expected_recovered_hash" ||
+  fail "recovered ID baseline changed without an explicit migration: $recovered_hash"
 
 awk -F '\t' '
 BEGIN { ok = 1 }
@@ -105,10 +159,7 @@ $4 !~ /^(complete|active|partial|blocked|planned|reopened|not-measured|deferred|
   printf "project ledger: invalid state for %s: %s\n", $2, $4 > "/dev/stderr"
   ok = 0
 }
-$3 == "milestone" && $4 !~ /^(complete|active|partial|blocked|planned|not-measured)$/ {
-  printf "project ledger: invalid milestone state for %s: %s\n", $2, $4 > "/dev/stderr"
-  ok = 0
-}
+$3 == "milestone" && $4 !~ /^(complete|active|partial|blocked|planned|not-measured)$/ { ok = 0 }
 $3 == "capability" && $4 != "complete" { ok = 0 }
 $3 == "evidence" && $4 !~ /^(complete|reopened)$/ { ok = 0 }
 $3 == "subtask" && $4 != "planned" { ok = 0 }
@@ -118,38 +169,88 @@ $4 == "active" && $3 != "milestone" { ok = 0 }
 END { exit ok ? 0 : 1 }
 ' "$rows" || fail "rank/state contract violation"
 
-state_count() {
-  awk -F '\t' -v wanted="$1" '$4 == wanted { count++ } END { print count + 0 }' "$rows"
-}
-
-for expected in \
-  complete:176 \
-  active:1 \
-  partial:1 \
-  blocked:31 \
-  planned:434 \
-  reopened:2 \
-  deferred:9 \
-  superseded:10 \
-  not-measured:1
-do
-  state=${expected%%:*}
-  count=${expected##*:}
-  actual=$(state_count "$state")
-  test "$actual" -eq "$count" || fail "state $state expected $count, found $actual"
-done
-
 milestone_count=$(awk -F '\t' '$3 == "milestone" { count++ } END { print count + 0 }' "$rows")
-test "$milestone_count" -eq 37 || fail "expected 37 milestones, found $milestone_count"
-
-active_id=$(awk -F '\t' '$4 == "active" { print $2 }' "$rows")
-test "$active_id" = V010.DOCS.ARCHITECTURE.0 || fail "unexpected active milestone: $active_id"
+active_count=$(awk -F '\t' '$3 == "milestone" && $4 == "active" { count++ } END { print count + 0 }' "$rows")
+test "$active_count" -eq 1 || fail "expected one active milestone, found $active_count"
+active_id=$(awk -F '\t' '$3 == "milestone" && $4 == "active" { print $2 }' "$rows")
 
 active_lines=$(grep -c '^Active Next: ' "$project")
 test "$active_lines" -eq 1 || fail "expected one machine-readable Active Next, found $active_lines"
 project_active=$(sed -n 's/^Active Next: \([^[:space:]]*\)$/\1/p' "$project")
 test "$project_active" = "$active_id" ||
   fail "Active Next does not match active milestone: $project_active/$active_id"
+
+awk -F '|' '
+function trim(value) {
+  gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+  return value
+}
+/^### 7\.1 Global Counts$/ { in_counts = 1; next }
+/^### 7\.2 Per-Track Counts$/ { in_counts = 0 }
+in_counts && /^\| (Recovered IDs|Explicit new IDs|Canonical IDs|First-class milestones|State: [a-z-]+) \|/ {
+  print trim($2) "\t" trim($3)
+}
+' "$project" | LC_ALL=C sort > "$declared_global"
+
+{
+  printf 'Recovered IDs\t%s\n' "$recovered_count"
+  printf 'Explicit new IDs\t%s\n' "$new_count"
+  printf 'Canonical IDs\t%s\n' "$row_count"
+  printf 'First-class milestones\t%s\n' "$milestone_count"
+  for state in complete active partial blocked planned reopened deferred superseded not-measured; do
+    count=$(awk -F '\t' -v wanted="$state" '$4 == wanted { count++ } END { print count + 0 }' "$rows")
+    printf 'State: %s\t%s\n' "$state" "$count"
+  done
+} | LC_ALL=C sort > "$actual_global"
+
+cmp -s "$declared_global" "$actual_global" || {
+  diff -u "$declared_global" "$actual_global" >&2 || true
+  fail "declared global counts do not match the ledger"
+}
+
+awk -F '|' '
+function trim(value) {
+  gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+  return value
+}
+function uncode(value) {
+  value = trim(value)
+  gsub(/^`|`$/, "", value)
+  return value
+}
+/^### 7\.2 Per-Track Counts$/ { in_dashboard = 1; next }
+/^### 7\.3 Stable Track Names$/ { in_dashboard = 0 }
+in_dashboard && /^\| `TRACK\./ {
+  print uncode($2) "\t" trim($3) "\t" trim($4) "\t" trim($5) "\t" trim($6) "\t" trim($7) "\t" trim($8)
+}
+' "$project" | LC_ALL=C sort > "$declared_dashboard"
+
+awk -F '\t' '
+FNR == NR { explicit_new[$1] = 1; next }
+{
+  track = $1
+  id = $2
+  rank = $3
+  state = $4
+  canonical[track]++
+  if (!(id in explicit_new)) recovered[track]++
+  if (rank == "milestone") milestone[track, state]++
+  else if (state == "complete") complete_support[track]++
+  else if (state == "planned" || state == "reopened") open_support[track]++
+  else if (state == "superseded" || state == "deferred") retired[track]++
+}
+END {
+  for (track in canonical) {
+    vector = (milestone[track, "complete"] + 0) "/" (milestone[track, "active"] + 0) "/" (milestone[track, "partial"] + 0) "/" (milestone[track, "planned"] + 0) "/" (milestone[track, "blocked"] + 0) "/" (milestone[track, "not-measured"] + 0)
+    print track "\t" recovered[track] + 0 "\t" canonical[track] + 0 "\t" vector "\t" complete_support[track] + 0 "\t" open_support[track] + 0 "\t" retired[track] + 0
+  }
+}
+' "$new_ids" "$rows" | LC_ALL=C sort > "$actual_dashboard"
+
+cmp -s "$declared_dashboard" "$actual_dashboard" || {
+  diff -u "$declared_dashboard" "$actual_dashboard" >&2 || true
+  fail "per-track dashboard counts do not match the ledger"
+}
 
 grep '^### 9\.[0-9][0-9]* TRACK\.' "$project" |
   sed 's/^### 9\.[0-9][0-9]* //' > "$tracks"
@@ -183,38 +284,6 @@ EOF
 
 cmp -s "$tracks" "$expected_tracks" || fail "stable 24-track order changed"
 
-awk -F '\t' '{ count[$1]++ } END { for (track in count) print track, count[track] }' "$rows" |
-  LC_ALL=C sort > "$counts"
-
-cat > "$expected_counts" <<'EOF'
-TRACK.ARTIFACT 16
-TRACK.BACKEND 30
-TRACK.BENCH 17
-TRACK.DECODE 16
-TRACK.EVAL 16
-TRACK.GENERATION 54
-TRACK.GRAPH 75
-TRACK.INTEGRITY 15
-TRACK.KV 22
-TRACK.LOGITS 19
-TRACK.MAP 13
-TRACK.MODEL 23
-TRACK.OPERATOR 82
-TRACK.POST010 23
-TRACK.PREFILL 28
-TRACK.QUANT 6
-TRACK.RELEASE 42
-TRACK.RESIDENCY 43
-TRACK.SAMPLING 16
-TRACK.SCOPE 29
-TRACK.SERVE 12
-TRACK.SOURCE 26
-TRACK.TENSOR 28
-TRACK.TOKENIZER 14
-EOF
-
-cmp -s "$counts" "$expected_counts" || fail "per-track canonical counts changed"
-
 for required_id in \
   MODEL.CLASS.QWEN.0 \
   MODEL.CLASS.GEMMA.0 \
@@ -235,7 +304,5 @@ grep -F 'Qwen, Gemma, and dense/common work already implemented remains active' 
   fail "multi-family engineering scope is missing"
 grep -F 'DeepSeek-V4-Flash is the only model whose complete source-to-text chain closes' "$project" >/dev/null ||
   fail "exclusive v0.1 release target is missing"
-grep -F 'total canonical IDs: **665**' "$project" >/dev/null ||
-  fail "declared global ledger total is missing"
 
-echo "project ledger: ok (tracks=24 recovered=631 ids=665 milestones=37 active=$active_id)"
+echo "project ledger: ok (tracks=24 recovered=$recovered_count ids=$row_count milestones=$milestone_count active=$active_id)"

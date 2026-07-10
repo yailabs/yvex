@@ -101,23 +101,16 @@ artifact identity, backend, and operator path.
 Gate closure is monotonic only while its evidence remains valid. A reopened
 dependency reopens every downstream gate that relies on it.
 
-## Current State
+## Gate State Ownership
 
-Current release state is blocked and unsupported.
+`PROJECT.md` is the sole owner of current gate state, milestone state,
+dependencies, and Active Next. This doctrine defines what evidence closes each
+gate but does not reproduce the live sequence.
 
-`V010.GGUF.QTYPE.ABI.0` and `V010.GGUF.ARTIFACT.ABI.0` are reopened. Their
-bounded fixture evidence remains useful, but `.1` repair rows must establish
-the complete-artifact contracts before later artifact work can proceed.
-
-The priority-blocking sequence is owned by
-`docs/repair/v010-foundation-closure.md`. `V010.DOCS.REFOUNDATION.0` is complete
-at documentation/claim refoundation only. `V010.PROJECT.RECOVERY.0` is partial;
-`V010.PROJECT.RECOVERY.1` completes the ranked track/wave ledger without
-promoting runtime capability. `V010.DOCS.ARCHITECTURE.0` is Active Next, and
-`V010.REBASE.DEEPSEEK.0` is blocked by documentation architecture.
-
-No artifact, materialization, descriptor, transformer, generation, evaluation,
-benchmark, or release gate is promoted by these documentation rows.
+Bounded fixture evidence remains valid only for its named scope. If project
+control reopens a dependency, every downstream gate that relies on it reopens;
+documentation work alone cannot promote artifact, materialization, descriptor,
+transformer, generation, evaluation, benchmark, or release capability.
 
 ## Evidence Rules
 

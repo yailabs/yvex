@@ -66,9 +66,9 @@ proof artifacts only. Their digest, range, materialization, or primitive
 evidence must be named by the specific proof and must not be promoted to model
 support.
 
-The canonical decommission ownership is recorded in
-`docs/repair/v010-foundation-closure.md`. This policy does not retain an
-artifact card or historical validation catalogue for those files.
+The canonical decommission obligations and consuming milestones are recorded in
+`PROJECT.md`. This policy does not retain an artifact card or historical
+validation catalogue for those files.
 
 ## Repository Guardrail
 

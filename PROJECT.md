@@ -5,7 +5,7 @@ Status: living engineering control
 Authority: product target, architecture tracks, complete wave ledger, milestone
 state, dependencies, evidence rank, family scope, release gates, and Active Next
 Recovery baseline: pre-refoundation `docs/spine.md` at commit `10ad6c3`
-Current proof stage: documentation/project-control reconstruction complete
+Current proof stage: documentation architecture/ownership only
 
 ## 1. Authority And Update Contract
 
@@ -28,10 +28,10 @@ Git history is recovery evidence, not a substitute for current project state.
 No row may silently disappear, change owner, change ID, or be merged. Record an
 explicit migration or successor when project structure changes.
 
-`docs/spine.md` must not exist as a second authority, compatibility copy,
-redirect, or shadow ledger. Technical contracts, API references, runbooks, and
-temporary repair detail may live elsewhere, but none owns the track registry,
-wave state, Active Next, family matrix, critical path, or release truth.
+No second authority, compatibility copy, redirect, archive, or shadow ledger
+may exist. Technical contracts, API references, runbooks, and point-in-time
+audits may live elsewhere, but none owns the track registry, wave state, Active
+Next, family matrix, critical path, or release truth.
 
 ### 1.1 Atomic Update Rule
 
@@ -43,8 +43,7 @@ At milestone start and closure, update in one patch:
 4. evidence added, completed, absorbed, reopened, or superseded;
 5. affected model-family scopes;
 6. release gates and non-claims;
-7. the single Active Next;
-8. the temporary repair owner when that sequence is active.
+7. the single Active Next.
 
 A new row has exactly one stable ID and one owning track. Only a `milestone`
 row may become Active Next.
@@ -190,16 +189,16 @@ The unqualified term "model artifact" never means a selected-tensor proof file.
 V010.DOCS.REFOUNDATION.0: complete (documentation/claim only)
 V010.PROJECT.RECOVERY.0: partial
 V010.PROJECT.RECOVERY.1: complete
-Active Next: V010.DOCS.ARCHITECTURE.0
+V010.DOCS.ARCHITECTURE.0: complete (documentation architecture/ownership only)
+Active Next: V010.REBASE.DEEPSEEK.0
 ```
 
-The product path remains blocked while the documentation architecture row
-normalizes durable technical documentation and its reference/paper ownership
-map. It does not implement or promote runtime behavior.
+The documentation ownership cutover is complete. The product path now resumes
+at exact DeepSeek source and target verification; no artifact or runtime gate
+was promoted by the documentation work.
 
 ```text
-V010.DOCS.ARCHITECTURE.0
--> V010.REBASE.DEEPSEEK.0
+V010.REBASE.DEEPSEEK.0
 -> V010.GGUF.QTYPE.ABI.1
 -> V010.GGUF.ARTIFACT.ABI.1
 -> V010.GGUF.LAYOUT.INTEGRITY.1
@@ -255,20 +254,31 @@ rows held paired IDs; those are expanded into 631 unique recovered IDs. Thirty-
 two new milestone IDs and two explicit migration markers produce 665 unique
 canonical IDs.
 
-Global ledger snapshot after `V010.PROJECT.RECOVERY.1` closure:
+### 7.1 Global Counts
 
-- recovered unique IDs: **631**
-- new control/milestone/migration IDs: **34**
-- total canonical IDs: **665**
-- first-class milestones: **37**
-- state totals: **176 complete**, **1 active**, **1 partial**, **31 blocked**,
-  **434 planned**, **2 reopened**, **9 deferred**, **10 superseded**, and
-  **1 not-measured**
+These declarations are checked against the canonical ledger. State counts are
+calculated from rows rather than protected by a summary hash.
+
+| Metric | Count |
+| --- | ---: |
+| Recovered IDs | 631 |
+| Explicit new IDs | 34 |
+| Canonical IDs | 665 |
+| First-class milestones | 37 |
+| State: complete | 177 |
+| State: active | 1 |
+| State: partial | 1 |
+| State: blocked | 30 |
+| State: planned | 434 |
+| State: reopened | 2 |
+| State: deferred | 9 |
+| State: superseded | 10 |
+| State: not-measured | 1 |
 
 | Track | Owns | Current truth | Conclusive handoff |
 | --- | --- | --- | --- |
-| `TRACK.SCOPE` | Project control, release scope, family/release distinction, claim boundary, version policy, and documentation-control transitions. | complete ledger recovery closes in this row; documentation architecture is active | One truthful project map and one explicit release contract. |
-| `TRACK.SOURCE` | Source identity, revision, provider intake, manifests, shards, sidecars, header inventory, payload trust, and bounded payload access. | multi-family intake exists; exact DeepSeek verification remains open | Verified source facts and readable payload ranges. |
+| `TRACK.SCOPE` | Project control, release scope, family/release distinction, claim boundary, version policy, and documentation-control transitions. | ledger recovery and documentation ownership are complete | One truthful project map and one explicit release contract. |
+| `TRACK.SOURCE` | Source identity, revision, provider intake, manifests, shards, sidecars, header inventory, payload trust, and bounded payload access. | multi-family intake exists; exact DeepSeek verification is active | Verified source facts and readable payload ranges. |
 | `TRACK.MAP` | Family source names, canonical runtime roles, GGUF names, transforms, layouts, ambiguity refusal, and complete mapping coverage. | dense/Qwen and report evidence exist; complete DeepSeek map is blocked | Every required source tensor maps exactly once to a runtime role and emitted layout. |
 | `TRACK.QUANT` | Dtype/qtype ABI, storage geometry, role policy, conversion, quantization, reference dequantization, compute truth, and refusal. | policy and fixture proof exist; ABI is reopened | Every emitted role has truthful storage and compute behavior. |
 | `TRACK.ARTIFACT` | GGUF container ABI, native writer, conversion coordination, complete emission, identity, registration, and writer-reader roundtrip. | bounded proof emission exists; complete artifact is unsupported | A complete YVEX-produced GGUF reopens identically through YVEX. |
@@ -292,40 +302,40 @@ Global ledger snapshot after `V010.PROJECT.RECOVERY.1` closure:
 | `TRACK.RELEASE` | Validation, artifact guardrail, claim audit, operator transcript, packaging, versioning, release record, and tag. | blocked | Every release gate passes in one traceable transcript. |
 | `TRACK.POST010` | Explicitly deferred portability, serving hardening, speculative execution, extra-family runtime promotion, and later product scope. | deferred | No work enters the active path without a new version-scope decision. |
 
-### 7.1 Per-Track Counts
+### 7.2 Per-Track Counts
 
 First-class count order is `complete / active / partial / planned / blocked /
 not-measured`. "Complete support" records bounded capability/evidence, not track
 closure.
 
-| Track | Recovered IDs | First-class C/A/Pa/P/B/NM | Complete support | Open support | Superseded/deferred | Next milestone |
-| --- | ---: | --- | ---: | ---: | ---: | --- |
-| `TRACK.SCOPE` | 25 | 2/1/1/0/0/0 | 7 | 12 | 6 | `V010.DOCS.ARCHITECTURE.0` |
-| `TRACK.SOURCE` | 24 | 0/0/0/0/2/0 | 21 | 3 | 0 | `V010.REBASE.DEEPSEEK.0` |
-| `TRACK.MAP` | 12 | 0/0/0/0/1/0 | 6 | 6 | 0 | `V010.MAP.GGUF.DEEPSEEK.0` |
-| `TRACK.QUANT` | 5 | 0/0/0/0/2/0 | 2 | 2 | 0 | `V010.GGUF.QTYPE.ABI.1` |
-| `TRACK.ARTIFACT` | 11 | 0/0/0/0/5/0 | 3 | 6 | 2 | `V010.GGUF.ARTIFACT.ABI.1` |
-| `TRACK.INTEGRITY` | 14 | 0/0/0/0/1/0 | 10 | 4 | 0 | `V010.GGUF.LAYOUT.INTEGRITY.1` |
-| `TRACK.MODEL` | 21 | 0/0/0/0/3/0 | 9 | 11 | 0 | `V010.MODEL.ARCH.IR.0` |
-| `TRACK.TENSOR` | 27 | 0/0/0/0/1/0 | 18 | 9 | 0 | `V010.TENSOR.COVERAGE.DEEPSEEK.0` |
-| `TRACK.RESIDENCY` | 42 | 0/0/0/0/2/0 | 0 | 41 | 0 | `V010.ARTIFACT.MATERIALIZE.0` |
-| `TRACK.BACKEND` | 29 | 0/0/0/0/1/0 | 6 | 23 | 0 | `V010.CUDA.FAILCLOSED.0` |
-| `TRACK.GRAPH` | 71 | 0/0/0/0/3/0 | 1 | 70 | 1 | `V010.GRAPH.DEEPSEEK.ATTENTION.0` |
-| `TRACK.PREFILL` | 27 | 0/0/0/0/1/0 | 9 | 18 | 0 | `V010.RUNTIME.DEEPSEEK.PREFILL.0` |
-| `TRACK.KV` | 21 | 0/0/0/0/1/0 | 4 | 17 | 0 | `V010.RUNTIME.DEEPSEEK.KV.0` |
-| `TRACK.DECODE` | 15 | 0/0/0/0/1/0 | 3 | 12 | 0 | `V010.RUNTIME.DEEPSEEK.DECODE.0` |
-| `TRACK.LOGITS` | 17 | 0/0/0/0/1/0 | 6 | 11 | 1 | `V010.RUNTIME.DEEPSEEK.LOGITS.0` |
-| `TRACK.SAMPLING` | 15 | 0/0/0/0/1/0 | 4 | 11 | 0 | `V010.RUNTIME.SAMPLING.0` |
-| `TRACK.TOKENIZER` | 13 | 0/0/0/0/1/0 | 2 | 11 | 0 | `V010.RUNTIME.DEEPSEEK.TOKENIZER.0` |
-| `TRACK.GENERATION` | 53 | 0/0/0/0/1/0 | 22 | 31 | 0 | `V010.RUNTIME.DEEPSEEK.GENERATION.0` |
-| `TRACK.OPERATOR` | 81 | 0/0/0/1/1/0 | 37 | 43 | 0 | `V010.CLI.DEEPSEEK.GENERATE.0` |
-| `TRACK.SERVE` | 12 | 0/0/0/0/0/0 | 0 | 12 | 0 | `future scope decision` |
-| `TRACK.EVAL` | 15 | 0/0/0/0/1/0 | 0 | 15 | 0 | `V010.EVAL.DEEPSEEK.0` |
-| `TRACK.BENCH` | 16 | 0/0/0/0/0/1 | 0 | 16 | 0 | `V010.BENCH.DEEPSEEK.0` |
-| `TRACK.RELEASE` | 42 | 0/0/0/0/1/0 | 4 | 37 | 0 | `V010.RELEASE.0` |
-| `TRACK.POST010` | 23 | 0/0/0/0/0/0 | 0 | 14 | 9 | `future scope decision` |
+| Track | Recovered IDs | Canonical IDs | First-class C/A/Pa/P/B/NM | Complete support | Open support | Superseded/deferred |
+| --- | ---: | ---: | --- | ---: | ---: | ---: |
+| `TRACK.SCOPE` | 25 | 29 | 3/0/1/0/0/0 | 7 | 12 | 6 |
+| `TRACK.SOURCE` | 24 | 26 | 0/1/0/0/1/0 | 21 | 3 | 0 |
+| `TRACK.MAP` | 12 | 13 | 0/0/0/0/1/0 | 6 | 6 | 0 |
+| `TRACK.QUANT` | 5 | 6 | 0/0/0/0/2/0 | 2 | 2 | 0 |
+| `TRACK.ARTIFACT` | 11 | 16 | 0/0/0/0/5/0 | 3 | 6 | 2 |
+| `TRACK.INTEGRITY` | 14 | 15 | 0/0/0/0/1/0 | 10 | 4 | 0 |
+| `TRACK.MODEL` | 21 | 23 | 0/0/0/0/3/0 | 9 | 11 | 0 |
+| `TRACK.TENSOR` | 27 | 28 | 0/0/0/0/1/0 | 18 | 9 | 0 |
+| `TRACK.RESIDENCY` | 42 | 43 | 0/0/0/0/2/0 | 0 | 41 | 0 |
+| `TRACK.BACKEND` | 29 | 30 | 0/0/0/0/1/0 | 6 | 23 | 0 |
+| `TRACK.GRAPH` | 71 | 75 | 0/0/0/0/3/0 | 1 | 70 | 1 |
+| `TRACK.PREFILL` | 27 | 28 | 0/0/0/0/1/0 | 9 | 18 | 0 |
+| `TRACK.KV` | 21 | 22 | 0/0/0/0/1/0 | 4 | 17 | 0 |
+| `TRACK.DECODE` | 15 | 16 | 0/0/0/0/1/0 | 3 | 12 | 0 |
+| `TRACK.LOGITS` | 17 | 19 | 0/0/0/0/1/0 | 6 | 11 | 1 |
+| `TRACK.SAMPLING` | 15 | 16 | 0/0/0/0/1/0 | 4 | 11 | 0 |
+| `TRACK.TOKENIZER` | 13 | 14 | 0/0/0/0/1/0 | 2 | 11 | 0 |
+| `TRACK.GENERATION` | 53 | 54 | 0/0/0/0/1/0 | 22 | 31 | 0 |
+| `TRACK.OPERATOR` | 81 | 82 | 0/0/0/1/1/0 | 37 | 43 | 0 |
+| `TRACK.SERVE` | 12 | 12 | 0/0/0/0/0/0 | 0 | 12 | 0 |
+| `TRACK.EVAL` | 15 | 16 | 0/0/0/0/1/0 | 0 | 15 | 0 |
+| `TRACK.BENCH` | 16 | 17 | 0/0/0/0/0/1 | 0 | 16 | 0 |
+| `TRACK.RELEASE` | 42 | 42 | 0/0/0/0/1/0 | 4 | 37 | 0 |
+| `TRACK.POST010` | 23 | 23 | 0/0/0/0/0/0 | 0 | 14 | 9 |
 
-### 7.2 Stable Track Names
+### 7.3 Stable Track Names
 
 The attempted compact recovery introduced replacement lanes that hid stable
 ownership. The complete ledger restores the original names:
@@ -349,8 +359,8 @@ written after inspection of owner code, consumers, tests, and current contracts.
 | 1 | `V010.DOCS.REFOUNDATION.0` | `TRACK.SCOPE` | project | `complete` | Established the exact DeepSeek v0.1.0 claim boundary and non-claims; its over-deletion is corrected by project recovery. | - |
 | 2 | `V010.PROJECT.RECOVERY.0` | `TRACK.SCOPE` | project | `partial` | Recovered product doctrine and a short milestone map but did not restore the per-track wave ledger or multi-family engineering scope. | V010.DOCS.REFOUNDATION.0 |
 | 3 | `V010.PROJECT.RECOVERY.1` | `TRACK.SCOPE` | project | `complete` | Installed PROJECT.md as the sole authority, recovered every old wave at a truthful rank, restored counts, and preserved Qwen/Gemma/common work. | V010.PROJECT.RECOVERY.0 |
-| 4 | `V010.DOCS.ARCHITECTURE.0` | `TRACK.SCOPE` | project | `active` | Standardize documentation taxonomy and recover durable architecture/artifact material without creating a second roadmap. | V010.PROJECT.RECOVERY.1 |
-| 5 | `V010.REBASE.DEEPSEEK.0` | `TRACK.SOURCE` | DeepSeek | `blocked` | Verify the exact DeepSeek-V4-Flash source identity, revision, config, tokenizer, shard inventory, footprint, and architecture facts. | V010.DOCS.ARCHITECTURE.0 |
+| 4 | `V010.DOCS.ARCHITECTURE.0` | `TRACK.SCOPE` | project | `complete` | Established non-overlapping documentation owners, absorbed repair obligations, removed duplicate project state, and installed dynamic ledger guards. | V010.PROJECT.RECOVERY.1 |
+| 5 | `V010.REBASE.DEEPSEEK.0` | `TRACK.SOURCE` | DeepSeek | `active` | Verify the exact DeepSeek-V4-Flash source identity, revision, config, tokenizer, shard inventory, footprint, and architecture facts. | V010.DOCS.ARCHITECTURE.0 |
 | 6 | `V010.GGUF.QTYPE.ABI.1` | `TRACK.QUANT` | common | `blocked` | Close canonical overflow-safe row-aware qtype geometry, byte calculation, storage identity, and explicit refusal. | V010.REBASE.DEEPSEEK.0 |
 | 7 | `V010.GGUF.ARTIFACT.ABI.1` | `TRACK.ARTIFACT` | common | `blocked` | Close native GGUF container, metadata, tensor-info, range, lifetime, and stable failure ABI beyond tiny fixtures. | V010.GGUF.QTYPE.ABI.1 |
 | 8 | `V010.GGUF.LAYOUT.INTEGRITY.1` | `TRACK.INTEGRITY` | common | `blocked` | Validate global tensor order, padded offsets, qtype-sized ranges, alignment, overlap, truncation, and aggregate overflow. | V010.GGUF.ARTIFACT.ABI.1 |
@@ -395,7 +405,7 @@ the row's use.
 
 **Owner:** Project control, release scope, family/release distinction, claim boundary, version policy, and documentation-control transitions.
 
-**Current truth:** complete ledger recovery closes in this row; documentation architecture is active
+**Current truth:** ledger recovery and documentation ownership are complete
 
 **Ledger summary:** 25 recovered IDs; 4 first-class milestones; 7 complete support rows; 12 open support rows; 6 superseded/deferred rows.
 
@@ -406,7 +416,7 @@ the row's use.
 | `V010.DOCS.REFOUNDATION.0` | project | `complete` | Established the exact DeepSeek v0.1.0 claim boundary and non-claims; its over-deletion is corrected by project recovery. | - | current |
 | `V010.PROJECT.RECOVERY.0` | project | `partial` | Recovered product doctrine and a short milestone map but did not restore the per-track wave ledger or multi-family engineering scope. | V010.DOCS.REFOUNDATION.0 | current |
 | `V010.PROJECT.RECOVERY.1` | project | `complete` | Installed PROJECT.md as the sole authority, recovered every old wave at a truthful rank, restored counts, and preserved Qwen/Gemma/common work. | V010.PROJECT.RECOVERY.0 | current |
-| `V010.DOCS.ARCHITECTURE.0` | project | `active` | Standardize documentation taxonomy and recover durable architecture/artifact material without creating a second roadmap. | V010.PROJECT.RECOVERY.1 | current |
+| `V010.DOCS.ARCHITECTURE.0` | project | `complete` | Established non-overlapping documentation owners, absorbed repair obligations, removed duplicate project state, and installed dynamic ledger guards. | V010.PROJECT.RECOVERY.1 | current |
 
 #### Recovered And Subordinate Rows
 
@@ -451,7 +461,7 @@ the row's use.
 
 | Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
 | --- | --- | --- | --- | --- | --- |
-| `V010.REBASE.DEEPSEEK.0` | DeepSeek | `blocked` | Verify the exact DeepSeek-V4-Flash source identity, revision, config, tokenizer, shard inventory, footprint, and architecture facts. | V010.DOCS.ARCHITECTURE.0 | current |
+| `V010.REBASE.DEEPSEEK.0` | DeepSeek | `active` | Verify the exact DeepSeek-V4-Flash source identity, revision, config, tokenizer, shard inventory, footprint, and architecture facts. | V010.DOCS.ARCHITECTURE.0 | current |
 | `V010.SOURCE.PAYLOAD.STREAM.0` | common | `blocked` | Read bounded source payload ranges from indexed shards with identity checks, short-read refusal, owned lifecycle, and cleanup. | V010.MAP.GGUF.DEEPSEEK.0 | current |
 
 #### Recovered And Subordinate Rows
@@ -1528,12 +1538,30 @@ Evidence may be removed only when the behavior itself is intentionally removed
 and the owning milestone records the decision. Demotion from first-class status
 is not authorization to delete code, tests, or family work.
 
+### 10.1 Decommission Obligations
+
+These are project-owned cutover obligations for implemented residue. Each
+surface remains available at its current evidence rank until its consuming
+milestone removes, replaces, retains, or absorbs it and passes the stated
+acceptance boundary.
+
+| Surface | Code-grounded locations | Required disposition | Consuming milestone and acceptance boundary |
+| --- | --- | --- | --- |
+| Selected embedding and segment commands | `src/cli/input/yvex_graph_args.c`, `src/cli/render/yvex_graph_render.c`, selected modes in `src/graph/yvex_graph_primitive.c`, `tests/cli/partial_graph.sh`, `tests/cli/segment_graph.sh` | Absorb valid backend/reference comparisons into internal proofs; remove selected product commands and aliases. | `V010.GRAPH.DEEPSEEK.TRANSFORMER.0`: full transformer tests own public graph proof and selected command discovery is gone. |
+| Bounded diagnostic prefill and KV | `src/generation/yvex_prefill.c`, `src/generation/yvex_kv.c`, `src/generation/yvex_kv_report.c`, KV/prefill CLI adapters and tests | Replace with family-correct prefill and attention-backed KV; retain only valid low-level storage math. | `V010.GRAPH.DEEPSEEK.ATTENTION.0`, `V010.RUNTIME.DEEPSEEK.KV.0`, `V010.RUNTIME.DEEPSEEK.PREFILL.0`: prefill writes model K/V and decode reads the same owned state. |
+| Diagnostic decode | Command/help and summary advancement in `src/generation/yvex_decode.c`, plus CLI tests | Replace with model-backed decode, then remove summary-only command behavior. | `V010.RUNTIME.DEEPSEEK.DECODE.0`: decode consumes the executable descriptor and attention-backed KV. |
+| Fixture logits and sampling | `src/generation/yvex_logits.c`, `src/generation/yvex_sampling.c`, `src/generation/yvex_sampling_report.c`, logits/sampling CLI surfaces and tests | Retain numeric cases only as internal fixtures; replace public behavior with final-norm/output-head logits and real sampling. | `V010.RUNTIME.DEEPSEEK.LOGITS.0`, `V010.RUNTIME.SAMPLING.0`: sampled IDs derive from full-vocabulary model logits. |
+| Bounded diagnostic generation | `src/generation/yvex_generation*.c`, `src/cli/commands/yvex_generate_cli.c`, generation input/render/catalog owners, `tests/cli/generation.sh` | Replace with the tokenizer/prefill/KV/decode/logits/sample/append/stop chain; remove diagnostic token printing. | `V010.RUNTIME.DEEPSEEK.GENERATION.0`: multiple detokenized autoregressive tokens pass release-path tests. |
+| Selected-artifact support levels | `include/yvex/model_gate.h`, `src/model/artifacts/yvex_model_artifact_gate.c`, registry/report owners, prepare renderers, model gate/registry tests | Remove selected states from model support; any retained subset becomes a tensor proof artifact with a named proof gate. | `V010.ARTIFACT.SUPPORT.CUTOVER.0`: only complete artifacts enter supported model-artifact gates. |
+| Report-only fullmodel surfaces | `src/cli/model_artifacts/yvex_fullmodel_surface.c`, `src/cli/render/yvex_fullmodel*.c`, `tests/cli/fullmodel.sh` | Replace useful descriptor/materialization facts with typed full-target APIs; remove reports that only restate missing runtime behavior. | `V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0`: one typed executable descriptor boundary remains and obsolete report commands are gone. |
+| Stale target, help, and claim tests | `src/model/target/yvex_model_target_{catalog,decision,candidates}.c`, `src/cli/yvex_cli.c`, generation examples/help, `tests/cli/core.sh`, `tests/cli/models.sh`, `tests/cli/generation.sh` | Remove multi-family/selected release choices and stale examples; first expose exact full-target refusal, then the real generation command. | `V010.REBASE.DEEPSEEK.0` owns target truth; `V010.CLI.DEEPSEEK.GENERATE.0` owns final command/help proof. |
+
 ## 11. Release Gates
 
 | Gate | Required executable evidence | Current state | Owning milestone |
 | --- | --- | --- | --- |
 | Project control | One authority, complete ranked ledger, unique IDs, calculated counts, one Active Next, no shadow spine | complete | `V010.PROJECT.RECOVERY.1` |
-| Documentation architecture | Standard taxonomy, durable-content ownership, no duplicate roadmap, reference/paper map | active | `V010.DOCS.ARCHITECTURE.0` |
+| Documentation architecture | Standard taxonomy, durable-content ownership, no duplicate roadmap, reference/paper map | complete | `V010.DOCS.ARCHITECTURE.0` |
 | Source | Exact local identity, revision, config, tokenizer, shard inventory, headers, and payload trust | blocked | `V010.REBASE.DEEPSEEK.0` and `V010.SOURCE.PAYLOAD.STREAM.0` |
 | Architecture | Typed execution-complete DeepSeek specification | blocked | `V010.MODEL.ARCH.IR.0` |
 | Tensor coverage | Complete required-role set with no unresolved role | blocked | `V010.TENSOR.COVERAGE.DEEPSEEK.0` |
@@ -1555,23 +1583,14 @@ A gate changes state only through its owning milestone and executable proof.
 Documentation can correct claims and dependency control; it cannot promote an
 artifact, runtime, generation, evaluation, benchmark, or release capability.
 
-## 12. Reference Engineering Baseline
+## 12. Reference Engineering Ownership
 
-YVEX studies current primary implementations for proven ownership boundaries
-and exact DeepSeek-V4 engineering facts. They are research inputs, not
-dependencies, API commitments, support claims, or permission to copy another
-runtime topology.
-
-| Reference | YVEX studies | YVEX does not inherit |
-| --- | --- | --- |
-| [vLLM architecture](https://docs.vllm.ai/en/stable/design/arch_overview/) and [DeepSeek-V4 engineering](https://github.com/vllm-project/vllm-project.github.io/blob/main/_posts/2026-04-24-deepseek-v4.md) | engine/worker/model-runner ownership, memory/KV boundaries, backend selection, current DS4 integration | Python APIs, scheduler policy, process topology, serving scope, or support claims |
-| [SGLang runtime](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt) and [DeepSeek-V4 model](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/models/deepseek_v4.py) | scheduler/model-runner/model-loader separation; DS4 attention, KV, MoE, kernels, prefill/decode integration | SGLang APIs, distributed topology, Python runtime, or automatic compatibility |
-| [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md), [ggml](https://github.com/ggml-org/ggml), and [llama.cpp](https://github.com/ggml-org/llama.cpp) | GGUF semantics, qtype geometry, conversion/quantization references, native loading, C/C++ ownership | support claims beyond YVEX-tested behavior |
-| [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) and [CUTLASS](https://github.com/NVIDIA/cutlass) | NVIDIA/Blackwell execution, fused operations, MoE, memory, and kernel specialization | TensorRT engine format, deployment topology, Python APIs, or automatic backend support |
-| [DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash) and [FlashMLA](https://github.com/deepseek-ai/FlashMLA) | exact config/tokenizer/model facts, hybrid attention, compressed KV, MoE/mHC behavior, and reference kernels | unverified assumptions, external-runner proof, or direct support promotion |
-
-`V010.DOCS.ARCHITECTURE.0` turns this baseline into a paper/reference-to-YVEX
-ownership map tied to actual modules and tests.
+`docs/reference-architecture.md` is the sole owner of the external
+paper/specification/implementation map. It connects primary vLLM, SGLang,
+GGUF/ggml/llama.cpp, TensorRT-LLM/CUTLASS, and DeepSeek sources to concrete YVEX
+owners and milestones. References inform design and independent comparison;
+they do not confer API compatibility, runtime topology, backend support, or
+model support.
 
 ## 13. Explicit Non-Claims
 
@@ -1615,7 +1634,6 @@ The version sequence records intended dependency order, not current support.
 | --- | --- |
 | `PROJECT.md` | Product/release target, engineering scope, track registry, complete wave ledger, milestone state, dependencies, family matrix, gates, and Active Next |
 | `AGENTS.md` | Persistent repository ownership, implementation, testing, validation, claim, and project-update invariants |
-| `docs/repair/v010-foundation-closure.md` | Temporary repair delivery detail and decommission work; never a second project map |
 | `docs/v010-release-doctrine.md` | Release meaning and gate-closure semantics |
 | `docs/system-target.md` | Filesystem and module ownership |
 | `docs/model-families.md` | Normative family-integration architecture and implemented family profiles, not progress state |
@@ -1625,6 +1643,7 @@ The version sequence records intended dependency order, not current support.
 | `docs/operator-runbook.md` | Current implemented operator workflows, refusals, and recovery |
 | `docs/runbooks/deepseek.md` | Exact current DeepSeek operator boundary |
 | `docs/topology-closure-audit.md` | Point-in-time topology evidence, not project state |
+| `docs/reference-architecture.md` | External papers, specifications, implementations, and their YVEX owner/milestone mapping |
 
 ## 16. Agent Start Checklist
 

@@ -6,15 +6,12 @@ not record delivery progress or create capability.
 ## Files
 
 - `deepseek.md` records the exact v0.1.0 source and future full target, current
-  unsupported boundary, active repair blocker, and safe filesystem checks.
+  unsupported boundary, and safe filesystem checks.
 - `common.md` records repository validation, claim checks, artifact guardrails,
   and operator-local cleanup boundaries.
-- `glm.md` records source acquisition/status procedures for a non-v0.1.0
-  source-pressure target. It does not describe model execution.
 
 Normative family architecture lives in `../model-families.md`. Project control
-and repair ordering live in `../../PROJECT.md` and
-`../repair/v010-foundation-closure.md`.
+and current sequencing live only in `../../PROJECT.md`.
 
 ## Rules
 

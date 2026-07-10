@@ -1,9 +1,6 @@
 #!/usr/bin/env sh
 set -eu
 
-tmp="${TMPDIR:-/tmp}/yvex-docs-surface.$$"
-trap 'rm -f "$tmp"' EXIT
-
 fail() {
   printf 'docs surface: %s\n' "$1" >&2
   exit 1
@@ -11,10 +8,6 @@ fail() {
 
 require_file() {
   test -f "$1" || fail "missing file: $1"
-}
-
-require_dir() {
-  test -d "$1" || fail "missing directory: $1"
 }
 
 require_text() {
@@ -32,49 +25,35 @@ reject_text() {
   fi
 }
 
-assert_ordered() {
-  file=$1
-  shift
-  previous=0
-  for value in "$@"; do
-    hit=$(grep -nF "$value" "$file" | head -n 1 || true)
-    test -n "$hit" || fail "$file missing ordered value: $value"
-    line=${hit%%:*}
-    test "$line" -gt "$previous" ||
-      fail "$file has out-of-order value: $value"
-    previous=$line
-  done
-}
-
 for file in \
   README.md \
   AGENTS.md \
   PROJECT.md \
   MODEL_ARTIFACTS.md \
+  NOTICE.md \
   docs/api.md \
   docs/contract.md \
   docs/model-families.md \
   docs/operator-runbook.md \
   docs/cli-output-architecture.md \
+  docs/reference-architecture.md \
   docs/v010-release-doctrine.md \
   docs/topology-closure-audit.md \
   docs/system-target.md \
-  docs/repair/v010-foundation-closure.md \
   docs/runbooks/README.md \
   docs/runbooks/deepseek.md \
-  docs/runbooks/glm.md \
   docs/runbooks/common.md
 do
   require_file "$file"
 done
 
-require_dir docs/repair
-require_dir docs/runbooks
-
-test ! -e docs/spine.md || fail "obsolete project-control path exists: docs/spine.md"
+test -d docs/runbooks || fail "missing directory: docs/runbooks"
+test ! -e docs/spine.md || fail "obsolete project-control path exists"
+test -z "$(find docs -maxdepth 1 -type d -name repair -print -quit)" ||
+  fail "temporary project-control directory exists"
+test ! -e docs/runbooks/glm.md || fail "unsupported GLM runbook remains"
 
 archive_path=docs/arc""hive
-
 for path in \
   docs/README.md \
   docs/backend-contract.md \
@@ -89,11 +68,21 @@ do
   test ! -e "$path" || fail "obsolete or archive path exists: $path"
 done
 
-repair_doc_count=$(find docs/repair -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')
-test "$repair_doc_count" -eq 1 || fail "unexpected repair docs count: $repair_doc_count"
-
 runbook_count=$(find docs/runbooks -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')
-test "$runbook_count" -eq 4 || fail "unexpected runbook count: $runbook_count"
+test "$runbook_count" -eq 3 || fail "unexpected runbook count: $runbook_count"
+
+unexpected_doc=$(find docs -maxdepth 1 -type f -name '*.md' \
+  ! -name api.md \
+  ! -name contract.md \
+  ! -name model-families.md \
+  ! -name operator-runbook.md \
+  ! -name cli-output-architecture.md \
+  ! -name reference-architecture.md \
+  ! -name v010-release-doctrine.md \
+  ! -name topology-closure-audit.md \
+  ! -name system-target.md \
+  -print -quit)
+test -z "$unexpected_doc" || fail "unexpected canonical document: $unexpected_doc"
 
 for heading in \
   "## 0. Repository Contract" \
@@ -116,26 +105,23 @@ do
 done
 
 require_text AGENTS.md '`PROJECT.md` is the single living engineering control file.'
-require_text AGENTS.md 'The project control file has no arbitrary line or heading-count limit.'
-require_text AGENTS.md 'Git history is recovery evidence, not a substitute for the current ledger.'
 require_text AGENTS.md 'Only a `milestone` row may become Active Next'
+require_text AGENTS.md 'Temporary or parallel project-control spines are forbidden.'
+require_text AGENTS.md 'Permanent technical documents may link to'
+require_text AGENTS.md 'but may not repeat its current state.'
 require_text AGENTS.md 'DeepSeek-V4-Flash is the sole v0.1.0 release target.'
-require_text AGENTS.md 'It is not the sole'
-require_text AGENTS.md 'engineering scope.'
-require_text AGENTS.md 'they are not tracks or independent product milestones.'
-require_text AGENTS.md 'Temporary priority-blocking repair spines live under `docs/repair/`.'
+require_text AGENTS.md 'Existing Qwen, Gemma, dense/common, MoE, fixture, topology,'
+require_text AGENTS.md 'docs/reference-architecture.md'
 require_text AGENTS.md 'tensor proof artifact'
 require_text AGENTS.md 'complete model artifact'
 require_text AGENTS.md 'supported model artifact'
-require_text AGENTS.md 'Do not use unqualified "model artifact" for a selected-tensor proof file.'
 
 require_text README.md 'native C inference engine'
 require_text README.md 'local open-weight models'
 
-project=PROJECT.md
-
 sh tests/test_project_ledger.sh
 
+project=PROJECT.md
 for heading in \
   "## 1. Authority And Update Contract" \
   "## 2. Rank, State, And Proof Semantics" \
@@ -147,8 +133,9 @@ for heading in \
   "## 8. First-Class Milestone Roadmap" \
   "## 9. Complete Track/Wave Ledger" \
   "## 10. Evidence Lanes" \
+  "### 10.1 Decommission Obligations" \
   "## 11. Release Gates" \
-  "## 12. Reference Engineering Baseline" \
+  "## 12. Reference Engineering Ownership" \
   "## 13. Explicit Non-Claims" \
   "## 14. Version Sequence" \
   "## 15. Documentation Ownership And Cutover" \
@@ -158,21 +145,30 @@ do
 done
 
 require_text "$project" '`PROJECT.md` is the single project-control authority for YVEX.'
-require_text "$project" 'Git history is recovery evidence, not a substitute for current project state.'
-require_text "$project" 'Only a `milestone`'
+require_text "$project" 'Current proof stage: documentation architecture/ownership only'
 require_text "$project" 'YVEX generates real text with DeepSeek-V4-Flash on the DGX Spark CUDA backend'
 require_text "$project" '$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash'
 require_text "$project" 'deepseek4-v4-flash'
-require_text "$project" 'DeepSeek-V4-Flash is the only model whose complete source-to-text chain closes'
 require_text "$project" 'Qwen, Gemma, and dense/common work already implemented remains active'
 require_text "$project" 'No execution-complete DeepSeek architecture IR exists.'
 require_text "$project" 'a no-op fallback can be advertised as support'
-require_text "$project" 'Active Next: V010.DOCS.ARCHITECTURE.0'
-require_text "$project" 'V010.PROJECT.RECOVERY.0: partial'
-require_text "$project" 'V010.PROJECT.RECOVERY.1: complete'
-require_text "$project" 'recovered unique IDs: **631**'
-require_text "$project" 'total canonical IDs: **665**'
-require_text "$project" 'first-class milestones: **37**'
+require_text "$project" '| Recovered IDs | 631 |'
+require_text "$project" '| Canonical IDs | 665 |'
+require_text "$project" '| First-class milestones | 37 |'
+
+for category in \
+  "Selected embedding and segment commands" \
+  "Bounded diagnostic prefill and KV" \
+  "Diagnostic decode" \
+  "Fixture logits and sampling" \
+  "Bounded diagnostic generation" \
+  "Selected-artifact support levels" \
+  "Report-only fullmodel surfaces" \
+  "Stale target, help, and claim tests"
+do
+  require_text "$project" "$category"
+done
+reject_text "$project" 'decide later'
 
 for term in \
   "Tensor proof artifact" \
@@ -190,147 +186,84 @@ if grep -nE '^### 9\.[0-9]+ TRACK\.(ARCHITECTURE|EXECUTION|MODELS|PROJECT|CLAIMS
   fail "attempted recovery track name became canonical"
 fi
 
-for reference in \
+reference=docs/reference-architecture.md
+require_text "$reference" 'This document owns the external engineering baseline.'
+require_text "$reference" 'It does not own project'
+require_text "$reference" 'state, milestone state, dependency order, capability claims, or Active Next;'
+for source in \
   'vLLM architecture' \
-  'DeepSeek-V4 engineering' \
+  'vllm/model_executor/models/deepseek_v4.py' \
   'SGLang runtime' \
-  'DeepSeek-V4 model' \
+  'python/sglang/srt/models/deepseek_v4.py' \
   'GGUF specification' \
-  'TensorRT-LLM' \
-  'DeepSeek-V4-Flash'
+  'convert_hf_to_gguf.py' \
+  'tools/quantize/quantize.cpp' \
+  'TensorRT-LLM architecture' \
+  'NVIDIA/cutlass' \
+  'DeepSeek [V4 technical report]' \
+  'DeepSeek-V4-Flash/blob/main/config.json' \
+  'deepseek-ai/FlashMLA'
 do
-  require_text "$project" "$reference"
+  require_text "$reference" "$source"
 done
-
-repair=docs/repair/v010-foundation-closure.md
-require_text "$repair" 'Status: priority-blocking'
-require_text "$repair" 'Project control: `../../PROJECT.md`'
-require_text "$repair" 'This is not a second product roadmap.'
-require_text "$repair" 'the main critical path is blocked.'
-require_text "$repair" 'Git history is the archive; no compatibility copy is kept.'
-require_text "$repair" '| Row / status | Owner | Concrete defect or missing capability | Required outcome | Acceptance gate | Dependency / next row |'
-require_text "$repair" '| Active Next | `V010.DOCS.ARCHITECTURE.0` |'
-require_text "$repair" '| Partial rows | `V010.PROJECT.RECOVERY.0` |'
-require_text "$repair" '| `V010.PROJECT.RECOVERY.0` / partial |'
-require_text "$repair" '| `V010.PROJECT.RECOVERY.1` / complete |'
-require_text "$repair" '| `V010.DOCS.ARCHITECTURE.0` / active |'
-require_text "$repair" '| `V010.REBASE.DEEPSEEK.0` / blocked |'
-require_text "$repair" '## Ledger Recovery Evidence'
-reject_text "$repair" '## Track Recovery Map'
-
-project_active=$(sed -n 's/^Active Next: \([^[:space:]]*\)$/\1/p' "$project")
-repair_active=$(sed -n 's/^| Active Next | `\([^`]*\)` |$/\1/p' "$repair")
-test -n "$project_active" || fail "PROJECT.md has no machine-readable Active Next"
-test -n "$repair_active" || fail "repair spine has no machine-readable Active Next"
-test "$project_active" = "$repair_active" ||
-  fail "Active Next drift: PROJECT=$project_active repair=$repair_active"
-
-assert_ordered "$repair" \
-  "V010.DOCS.REFOUNDATION.0" \
-  "V010.PROJECT.RECOVERY.0" \
-  "V010.PROJECT.RECOVERY.1" \
-  "V010.DOCS.ARCHITECTURE.0" \
-  "V010.REBASE.DEEPSEEK.0" \
-  "V010.GGUF.QTYPE.ABI.1" \
-  "V010.GGUF.ARTIFACT.ABI.1" \
-  "V010.GGUF.LAYOUT.INTEGRITY.1" \
-  "V010.CUDA.FAILCLOSED.0" \
-  "V010.MODEL.ARCH.IR.0" \
-  "V010.TENSOR.COVERAGE.DEEPSEEK.0" \
-  "V010.MAP.GGUF.DEEPSEEK.0" \
-  "V010.SOURCE.PAYLOAD.STREAM.0" \
-  "V010.QUANT.2" \
-  "V010.GGUF.WRITER.1" \
-  "V010.ARTIFACT.EMIT.DEEPSEEK.0" \
-  "V010.GGUF.ROUNDTRIP.1"
-
-for category in \
-  "Selected embedding and selected segment commands" \
-  "Bounded diagnostic prefill and KV" \
-  "Diagnostic decode" \
-  "Fixture logits and sampling" \
-  "Bounded diagnostic generation" \
-  "Selected-artifact support levels" \
-  "Report-only fullmodel surfaces" \
-  "Stale target, help, and claim tests"
-do
-  require_text "$repair" "$category"
-done
-
-if grep -niF 'decide later' "$repair" >/dev/null; then
-  fail "repair decommission map contains decide-later disposition"
-fi
-
-for row in \
-  V010.REBASE.DEEPSEEK.0 \
-  V010.GGUF.QTYPE.ABI.1 \
-  V010.GGUF.ARTIFACT.ABI.1 \
-  V010.GGUF.LAYOUT.INTEGRITY.1 \
-  V010.CUDA.FAILCLOSED.0 \
-  V010.MODEL.ARCH.IR.0 \
-  V010.TENSOR.COVERAGE.DEEPSEEK.0 \
-  V010.MAP.GGUF.DEEPSEEK.0 \
-  V010.SOURCE.PAYLOAD.STREAM.0 \
-  V010.QUANT.2 \
-  V010.GGUF.WRITER.1 \
-  V010.ARTIFACT.EMIT.DEEPSEEK.0 \
-  V010.GGUF.ROUNDTRIP.1
-do
-  require_text "$repair" "| \`$row\` / blocked |"
-done
+require_text "$reference" 'src/backend/cuda/'
+require_text "$reference" 'V010.REBASE.DEEPSEEK.0'
+require_text "$reference" 'V010.GGUF.ARTIFACT.ABI.1'
+require_text "$reference" 'V010.RUNTIME.DEEPSEEK.MOE.0'
 
 doctrine=docs/v010-release-doctrine.md
 require_text "$doctrine" '`PROJECT.md` owns the v0.1.0 product target and active execution sequence.'
-require_text "$doctrine" 'YVEX generates real text with'
-require_text "$doctrine" '$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash'
-require_text "$doctrine" 'deepseek4-v4-flash'
+require_text "$doctrine" '## Gate State Ownership'
+require_text "$doctrine" '`PROJECT.md` is the sole owner of current gate state, milestone state,'
 require_text "$doctrine" 'The target is currently unsupported.'
-require_text "$doctrine" 'An unqualified model artifact is never a selected-tensor proof file.'
-require_text "$doctrine" '`V010.GGUF.QTYPE.ABI.0` and `V010.GGUF.ARTIFACT.ABI.0` are reopened.'
-require_text "$doctrine" '`V010.DOCS.ARCHITECTURE.0` is Active Next'
-reject_text "$doctrine" 'every supported generation family in {DeepSeek, Qwen, Gemma}'
-reject_text "$doctrine" 'No single family can close v0.1.0.'
+reject_text "$doctrine" '## Current State'
 
 require_text MODEL_ARTIFACTS.md 'Tensor proof artifact'
 require_text MODEL_ARTIFACTS.md 'Complete model artifact'
 require_text MODEL_ARTIFACTS.md 'Supported model artifact'
 require_text MODEL_ARTIFACTS.md 'No such complete model artifact currently exists.'
-require_text MODEL_ARTIFACTS.md 'recorded in `PROJECT.md`.'
-reject_text MODEL_ARTIFACTS.md '## Active Artifact'
-reject_text MODEL_ARTIFACTS.md '## Historical Validation Artifact'
-reject_text MODEL_ARTIFACTS.md 'deepseek4-v4-flash-selected-embed'
+require_text MODEL_ARTIFACTS.md 'decommission obligations and consuming milestones are recorded in'
 
 deepseek_lines=$(wc -l < docs/runbooks/deepseek.md | tr -d ' ')
 test "$deepseek_lines" -le 100 || fail "DeepSeek runbook is not short: $deepseek_lines"
 require_text docs/runbooks/deepseek.md '$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash'
 require_text docs/runbooks/deepseek.md 'deepseek4-v4-flash'
 require_text docs/runbooks/deepseek.md 'There is no supported DeepSeek generation command to run yet.'
-require_text docs/runbooks/deepseek.md 'V010.DOCS.ARCHITECTURE.0'
-require_text docs/runbooks/deepseek.md 'V010.REBASE.DEEPSEEK.0'
-require_text docs/runbooks/deepseek.md '../../PROJECT.md'
-require_text docs/runbooks/deepseek.md '../repair/v010-foundation-closure.md'
+require_text docs/runbooks/deepseek.md 'Current milestone state, dependencies, gates, and Active Next live only in'
 if grep -nE '\./yvex (generate|prefill|decode|logits|sample|graph|fullmodel|materialize)' docs/runbooks/deepseek.md; then
   fail "DeepSeek runbook retains a selected or diagnostic execution lane"
 fi
 
-require_text docs/system-target.md 'Authority: `PROJECT.md`'
-require_text docs/system-target.md 'V010.DOCS.ARCHITECTURE.0` is Active'
-require_text docs/system-target.md 'V010.REBASE.DEEPSEEK.0` is blocked by documentation architecture.'
-require_text docs/system-target.md '## Reopened: V010.GGUF.ARTIFACT.ABI.0'
-require_text docs/system-target.md '## Reopened: V010.GGUF.QTYPE.ABI.0'
-require_text docs/topology-closure-audit.md 'docs/repair/v010-foundation-closure.md'
-require_text docs/topology-closure-audit.md 'this audit does not set Active Next.'
-require_text docs/topology-closure-audit.md 'V010.DOCS.ARCHITECTURE.0` Active Next.'
-require_text docs/cli-output-architecture.md 'V010.DOCS.ARCHITECTURE.0'
-require_text docs/cli-output-architecture.md 'CLI output cleanup is not the current product blocker.'
-
+require_text docs/system-target.md 'Authority: filesystem and module topology; current project state belongs only'
+require_text docs/system-target.md '## GGUF Container ABI Boundary'
+require_text docs/system-target.md '## GGUF Qtype ABI Boundary'
+require_text docs/topology-closure-audit.md 'point-in-time inventory'
+require_text docs/topology-closure-audit.md '`PROJECT.md` owns when each finding is removed or'
+require_text docs/cli-output-architecture.md '## Project State Ownership'
 require_text docs/model-families.md 'exact v0.1.0 target'
 require_text docs/model-families.md 'unsupported; no complete model artifact or runtime path'
-require_text docs/model-families.md 'belong in `PROJECT.md`.'
-require_text docs/contract.md 'The implemented proof and ownership surfaces are:'
 require_text docs/contract.md 'These are implementation facts, not a runtime progress ladder.'
 require_text docs/contract.md 'defined only by `PROJECT.md`.'
-require_text docs/api.md 'Several current surfaces are legacy bounded proofs pending the'
-require_text docs/api.md 'not product runtime capability.'
+require_text docs/api.md 'decommission obligations in `PROJECT.md`'
 
-echo "docs surface: ok (project_control=PROJECT.md active_next=$project_active)"
+repair_path=$(printf 'docs/%s' repair)
+if rg -nF "$repair_path" AGENTS.md PROJECT.md MODEL_ARTIFACTS.md docs tests Makefile; then
+  fail "obsolete temporary project-control path is still referenced"
+fi
+
+repair_word=repair
+spine_word=spine
+repair_phrase="$repair_word $spine_word"
+if rg -niF "$repair_phrase" AGENTS.md PROJECT.md MODEL_ARTIFACTS.md docs tests Makefile; then
+  fail "obsolete temporary project-control document is still referenced"
+fi
+
+if rg -n '^Active Next:' AGENTS.md MODEL_ARTIFACTS.md docs Makefile; then
+  fail "project state is duplicated outside PROJECT.md"
+fi
+
+if rg -nF 'Active Next: V010.' Makefile tests/test_project_ledger.sh; then
+  fail "current milestone is hard-coded in a generic guard"
+fi
+
+echo "docs surface: ok (project_control=PROJECT.md taxonomy=owned)"

@@ -2,8 +2,8 @@
 
 Date: 2026-07-10
 Status: filesystem and module ownership contract
-Authority: `PROJECT.md`; temporary repair ordering in
-`docs/repair/v010-foundation-closure.md`
+Authority: filesystem and module topology; current project state belongs only
+to `PROJECT.md`
 
 This document records the target filesystem architecture for the execution-core
 and control-plane boundary. It is an implementation contract, not a capability
@@ -146,47 +146,19 @@ domain algorithms. No writer owns command output.
 | Render | `src/cli/render/yvex_<surface>_render.c` |
 | Operator IO | `src/cli/io/*` |
 
-## Active Repair Sequence
+## GGUF Container ABI Boundary
 
-```text
-V010.DOCS.REFOUNDATION.0
--> V010.PROJECT.RECOVERY.0
--> V010.PROJECT.RECOVERY.1
--> V010.DOCS.ARCHITECTURE.0
--> V010.REBASE.DEEPSEEK.0
--> V010.GGUF.QTYPE.ABI.1
--> V010.GGUF.ARTIFACT.ABI.1
--> V010.GGUF.LAYOUT.INTEGRITY.1
--> V010.CUDA.FAILCLOSED.0
--> V010.MODEL.ARCH.IR.0
--> V010.MAP.GGUF.DEEPSEEK.0
--> V010.SOURCE.PAYLOAD.STREAM.0
--> V010.QUANT.2
--> V010.GGUF.WRITER.1
--> V010.ARTIFACT.EMIT.DEEPSEEK.0
--> V010.GGUF.ROUNDTRIP.1
-```
+The container, metadata, tensor-info, and reader owners may expose bounded
+typed facts and tiny-fixture validation. That proof does not establish the
+complete DeepSeek metadata, tensor-directory, global layout, writer, or
+roundtrip contract. Current milestone state belongs only to `PROJECT.md`.
 
-`V010.DOCS.REFOUNDATION.0` is complete at documentation/claim refoundation
-only. `V010.PROJECT.RECOVERY.0` is partial and
-`V010.PROJECT.RECOVERY.1` completes project-ledger recovery without changing
-filesystem or runtime capability. `V010.DOCS.ARCHITECTURE.0` is Active Next.
-`V010.REBASE.DEEPSEEK.0` is blocked by documentation architecture. The main
-materialization/runtime sequence cannot advance until the repair spine closes.
+## GGUF Qtype ABI Boundary
 
-## Reopened: V010.GGUF.ARTIFACT.ABI.0
-
-`V010.GGUF.ARTIFACT.ABI.0` produced useful typed facts and tiny fixture proof,
-but it did not establish the complete DeepSeek metadata and tensor-directory
-contract. It is not a valid completed foundation for full artifact work.
-`V010.GGUF.ARTIFACT.ABI.1` owns the replacement gate.
-
-## Reopened: V010.GGUF.QTYPE.ABI.0
-
-`V010.GGUF.QTYPE.ABI.0` produced useful bounded byte-geometry and refusal facts,
-but it did not establish the exact required qtype contract for the complete
-DeepSeek artifact path. It is not a valid completed foundation.
-`V010.GGUF.QTYPE.ABI.1` owns the replacement gate.
+The qtype owner separates storage identity and row-aware byte geometry from
+quantization and backend arithmetic. Bounded geometry/refusal evidence does not
+establish the qtype set or compute matrix required by a complete artifact.
+Current milestone state belongs only to `PROJECT.md`.
 
 ## Forbidden Claims
 

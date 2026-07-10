@@ -242,18 +242,11 @@ paths. `CORE_SRCS` does not include `src/cli/input`, `src/cli/commands`,
 
 ## Project Alignment
 
-This audit remains the normative inventory of control-plane/domain ownership
-residue. It is not a product progress map. Its historical topology row IDs are
-supporting architecture evidence in `PROJECT.md`, not primary release tracks.
-
-The priority-blocking sequence is now owned by
-`docs/repair/v010-foundation-closure.md`. Documentation refoundation is
-complete, the first project recovery is partial, and
-`V010.PROJECT.RECOVERY.1` completes the canonical ledger. The sequence makes
-`V010.DOCS.ARCHITECTURE.0` Active Next. `V010.REBASE.DEEPSEEK.0` remains the
-next implementation row and is blocked by documentation architecture. Topology
-findings remain valid inputs to the owning repair or decommission row, but they
-do not advance artifact or runtime gates.
+This audit remains the point-in-time inventory of control-plane/domain
+ownership residue. It is not a product progress map. Its historical topology
+row IDs are supporting architecture evidence in `PROJECT.md`, not primary
+release tracks. Current state and consuming milestones are owned only by that
+project ledger; these findings do not advance artifact or runtime gates.
 
 ## Retained Cleanup Findings
 
@@ -277,8 +270,8 @@ major source/generation/KV/sampling/graph/model-target mixed-cell surfaces, but
 global topology closure is still blocked. The highest-risk residue is direct
 operator output and CLI-shaped command/report ownership in `src/model`,
 `src/runtime`, `src/artifact`, `src/gguf`, `src/backend`, `src/tokenizer`, and
-provider/account modules. The active repair spine decides when each finding is
-removed or absorbed; this audit does not set Active Next.
+provider/account modules. `PROJECT.md` owns when each finding is removed or
+absorbed; this audit does not set Active Next.
 
 ## Follow-up: TOPOLOGY.CELL.MODEL_ARTIFACTS.0
 

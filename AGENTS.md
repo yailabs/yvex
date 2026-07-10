@@ -730,10 +730,10 @@ Common source, map, qtype, GGUF, integrity, materialization, descriptor,
 backend, operator, evaluation, and release owners must remain family-aware and
 must not hard-code the release target.
 
-Temporary priority-blocking repair spines live under `docs/repair/`. They are
-not product roadmaps. After closure, durable state and evidence are folded into
-`PROJECT.md` and the temporary repair detail is removed; Git history is the
-archive.
+Temporary or parallel project-control spines are forbidden. Put milestone
+state, dependency order, decommission obligations, calculated counts, and
+Active Next only in `PROJECT.md`. Permanent technical documents may link to
+that authority but may not repeat its current state.
 
 Canonical artifact terminology:
 
@@ -762,8 +762,37 @@ docs/api.md
 docs/contract.md
 docs/operator-runbook.md
 docs/cli-output-architecture.md
+docs/reference-architecture.md
 MODEL_ARTIFACTS.md
 AGENTS.md
+```
+
+Documentation ownership is non-overlapping:
+
+```text
+PROJECT.md
+  project state and complete ledger
+
+docs/system-target.md
+  filesystem and module topology
+
+docs/model-families.md
+  family integration architecture
+
+MODEL_ARTIFACTS.md
+  GGUF and artifact terminology, admission, and lifecycle
+
+docs/api.md and docs/contract.md
+  public API and implemented behavior contracts
+
+docs/operator-runbook.md and docs/runbooks/
+  executable operator procedures
+
+docs/topology-closure-audit.md
+  point-in-time evidence
+
+docs/reference-architecture.md
+  papers, specifications, external implementations, and YVEX owner mapping
 ```
 
 Docs entry shape:
