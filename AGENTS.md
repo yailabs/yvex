@@ -697,12 +697,24 @@ Do not write AI-style filler.
 `PROJECT.md` is the single living engineering control file. Agents update it at
 every milestone that changes executable state, closes a hard dependency, or
 changes the truthful project-control contract. It owns the product target,
-current hard truth, architecture map, track registry, milestone state,
-dependencies, evidence classification, release gates, and Active Next.
+current hard truth, stable architecture-track registry, complete wave ledger,
+milestone state, dependencies, family scope, evidence classification, release
+gates, calculated counts, and Active Next.
 
 The project control file has no arbitrary line or heading-count limit. Control
 comes from explicit ownership, traceable architecture responsibilities,
 conclusive milestones, current usefulness, and non-duplication.
+
+Git history is recovery evidence, not a substitute for the current ledger. A
+wave ID may not silently disappear, change owner, change rank, or be merged.
+Record an explicit migration and successor. Project-control guards must verify
+unique IDs, valid rank/state vocabulary, per-track coverage, and exactly one
+active milestone.
+
+Rank and state are separate. Only a `milestone` row may become Active Next or
+close its explicitly owned gate. `capability`, `evidence`, `subtask`,
+`migration`, and `future` rows remain visible under their stable track and must
+name the conclusive consumer or future scope decision that owns them.
 
 Tracks are architecture ownership lanes. Diagnostic commands, reports,
 fixtures, selected tensor proofs, audits, and transcripts are evidence attached
@@ -710,6 +722,13 @@ to an owning milestone; they are not tracks or independent product milestones.
 A milestone closes only a complete architectural/functional slice or an
 explicit hard governance dependency. Documentation-only closure never promotes
 artifact, runtime, generation, evaluation, benchmark, or release capability.
+
+DeepSeek-V4-Flash is the sole v0.1.0 release target. It is not the sole
+engineering scope. Existing Qwen, Gemma, dense/common, MoE, fixture, topology,
+and selected-proof work remains in the project ledger at its lowest true rank.
+Common source, map, qtype, GGUF, integrity, materialization, descriptor,
+backend, operator, evaluation, and release owners must remain family-aware and
+must not hard-code the release target.
 
 Temporary priority-blocking repair spines live under `docs/repair/`. They are
 not product roadmaps. After closure, durable state and evidence are folded into

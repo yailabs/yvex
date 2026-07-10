@@ -43,8 +43,9 @@ There is no supported DeepSeek generation command to run yet.
 
 ## Active Blocker
 
-`V010.DOCS.REFOUNDATION.0` and `V010.PROJECT.RECOVERY.0` are complete at
-documentation/claim refoundation only.
+`V010.DOCS.REFOUNDATION.0` is complete at documentation/claim refoundation
+only. `V010.PROJECT.RECOVERY.0` is partial and
+`V010.PROJECT.RECOVERY.1` completes project-ledger recovery only.
 
 Active Next:
 

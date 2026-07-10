@@ -2,53 +2,90 @@
 
 Date: 2026-07-10
 Status: living engineering control
-Authority: product target, architecture tracks, milestone state, dependencies,
-evidence classification, repair ordering, and release gates
-Current proof stage: documentation/claim refoundation only
+Authority: product target, architecture tracks, complete wave ledger, milestone
+state, dependencies, evidence rank, family scope, release gates, and Active Next
+Recovery baseline: pre-refoundation `docs/spine.md` at commit `10ad6c3`
+Current proof stage: documentation/project-control reconstruction complete
 
-## Authority And Update Contract
+## 1. Authority And Update Contract
 
-`PROJECT.md` is the single project-control authority for YVEX. Agents update it
-at every milestone that changes executable state, closes a hard dependency, or
-changes the truthful project-control contract. It is neither a public roadmap
-nor a catalogue of every command, report, fixture, or historical row.
+`PROJECT.md` is the single project-control authority for YVEX. It is the map
+used by maintainers and agents to answer, without consulting Git history:
 
-This file owns:
+- what YVEX is building;
+- which target closes the current release;
+- which model-family and common engineering work already exists;
+- which stable architecture track owns a change;
+- which conclusive milestone is active;
+- which wave IDs are complete, planned, blocked, reopened, deferred, partial,
+  superseded, or not measured;
+- which report, fixture, selected proof, CLI, topology, and diagnostic rows
+  remain useful;
+- which milestone consumes each subordinate row;
+- which dependency and release gate a milestone closes.
 
-- the exact product and release target;
-- current hard truth and unsupported boundaries;
-- the architecture and critical path;
-- primary, supporting, and future track registries;
-- the current milestone and dependency transition;
-- conclusive planned and completed milestones;
-- implementation evidence and its owning milestone;
-- release gates and the version sequence.
+Git history is recovery evidence, not a substitute for current project state.
+No row may silently disappear, change owner, change ID, or be merged. Record an
+explicit migration or successor when project structure changes.
 
-The project file has no arbitrary line limit or fixed heading count. Its size is
-controlled by ownership, traceability, current usefulness, and non-duplication.
-Git history preserves superseded detail. A permanent row-by-row migration
-database, copied project control file, or compatibility spine is not an active
-documentation owner.
+`docs/spine.md` must not exist as a second authority, compatibility copy,
+redirect, or shadow ledger. Technical contracts, API references, runbooks, and
+temporary repair detail may live elsewhere, but none owns the track registry,
+wave state, Active Next, family matrix, critical path, or release truth.
 
-While `docs/repair/v010-foundation-closure.md` is active, that file owns the
-priority-blocking repair detail and this file owns its state and product-path
-effect. `docs/system-target.md` owns filesystem and module placement.
-`docs/v010-release-doctrine.md` owns release-gate semantics.
+### 1.1 Atomic Update Rule
 
-At milestone start and closure, update the owning track, current state, evidence,
-dependency transition, gates affected, and Active Next. During an active repair
-sequence, `PROJECT.md` and the repair owner must name the same Active Next.
+At milestone start and closure, update in one patch:
 
-## Product Outcome
+1. milestone state and exact before/after capability;
+2. owning track summary and calculated counts;
+3. dependencies and newly unblocked successor;
+4. evidence added, completed, absorbed, reopened, or superseded;
+5. affected model-family scopes;
+6. release gates and non-claims;
+7. the single Active Next;
+8. the temporary repair owner when that sequence is active.
+
+A new row has exactly one stable ID and one owning track. Only a `milestone`
+row may become Active Next.
+
+## 2. Rank, State, And Proof Semantics
+
+Rank states what a row can prove. State says what happened to that exact row.
+They are independent: a complete report remains evidence, not a milestone.
+
+| Rank | Meaning | Independently schedulable | May close a product gate |
+| --- | --- | --- | --- |
+| `milestone` | Conclusive architectural or functional after-state with one owner, a real downstream consumer, hard acceptance, tests, and a dependency transition | yes, when Active Next | only its owned gate |
+| `capability` | Durable implemented behavior below a product gate | no | no by itself |
+| `evidence` | Report, fixture, selected proof, diagnostic state, reference comparison, trace, audit, checksum, or bounded fact | no | no |
+| `subtask` | Retained requirement assigned to a conclusive milestone | no | no |
+| `migration` | Superseded project structure or naming marker with an explicit successor | no | no |
+| `future` | Deferred post-v0.1 work requiring a later scope decision | no | no |
+
+| State | Exact meaning |
+| --- | --- |
+| `complete` | The row outcome is implemented and validated at its declared rank and proof stage |
+| `active` | The single current first-class milestone |
+| `partial` | Useful work landed, but the stated milestone outcome did not close |
+| `blocked` | A milestone has unmet predecessors |
+| `planned` | A retained requirement or non-active supporting milestone |
+| `reopened` | Earlier evidence was narrower than the claimed boundary |
+| `not-measured` | Benchmark evidence does not exist |
+| `deferred` | Explicitly outside the active release |
+| `superseded` | Replaced and retained only for traceability |
+
+A row is not milestone-complete merely because it adds a report, CLI command,
+structured output, fixture, selected tensor, wrapper, source move, plan, or
+documentation. Those are evidence or subtasks unless the same row implements
+and tests a conclusive downstream-consumed after-state.
+
+## 3. Product, Release, And Engineering Scope
+
+### 3.1 v0.1.0 Product Outcome
 
 YVEX generates real text with DeepSeek-V4-Flash on the DGX Spark CUDA backend
 from a complete GGUF artifact produced by YVEX.
-
-This is the exclusive v0.1.0 product target. Qwen, Gemma, GLM, additional
-DeepSeek variants, Metal, ROCm, serving, and distributed execution do not close
-v0.1.0.
-
-### Exact Release Contract
 
 Canonical source:
 
@@ -62,386 +99,1481 @@ Future canonical full target:
 deepseek4-v4-flash
 ```
 
-Release machine and backend:
-
-```text
-CUDA on DGX Spark
-```
-
-The future full target is unsupported. The existing aliases remain bounded
-legacy proof surfaces until their owning replacement or removal milestones:
+The existing aliases remain bounded proof surfaces until an owning milestone
+absorbs or removes them:
 
 ```text
 deepseek4-v4-flash-selected-embed
 deepseek4-v4-flash-selected-embed-rmsnorm
 ```
 
-They are not supported targets and are not stages of the product critical path.
+They are not supported targets, complete model artifacts, or release-path
+stages. The v0.1.0 release qtype remains unselected until `V010.QUANT.2`
+provides measured memory, numerical, and CUDA-compute evidence.
 
-Real generation is the complete chain:
+DeepSeek-V4-Flash is the only model whose complete source-to-text chain closes
+v0.1.0. This release decision does not make DeepSeek the only engineering
+scope.
+
+### 3.2 Multi-Family Engineering Scope
+
+Source intake, tensor mapping, qtypes, GGUF, integrity, materialization,
+residency, descriptor projection, backend operation, operator, evaluation, and
+release owners remain reusable and family-aware.
+
+Qwen, Gemma, and dense/common work already implemented remains active project
+state at its truthful rank. It supplies real regression evidence and prevents
+DeepSeek-specific behavior from leaking into common owners. It does not claim
+Qwen or Gemma runtime generation. GLM remains planned and does not require a
+canonical runbook until implementation starts.
+
+Family-specific architecture, tokenizer, attention, position, KV, MoE, and
+execution behavior enter through typed profiles and explicit milestones. Common
+owners must not branch on ad hoc target strings when a typed family boundary is
+required.
+
+### 3.3 Real Generation Contract
 
 ```text
 prompt text
--> real tokenizer
+-> exact tokenizer
 -> full prefill
--> family-correct attention and MoE
+-> family-correct attention, position handling and MoE
 -> real KV writes
--> output head and vocabulary logits
+-> repeated decode that reads prior KV
+-> final norm and complete output head
+-> vocabulary logits
 -> sampling
--> decode that reads the KV state
--> multiple autoregressive tokens
+-> token append and stop policy
 -> detokenized text
 ```
 
-The chain must execute over the complete YVEX-produced GGUF for the exact
-target. CLI acceptance, printed fixture tokens, synthetic logits, selected
-segments, report generation, and bounded diagnostic loops do not satisfy it.
+The complete chain must execute over the complete YVEX-produced GGUF for the
+exact target. CLI acceptance, selected tensors, synthetic logits, reports,
+printed fixture tokens, and bounded diagnostic loops do not satisfy it.
 
-### Artifact Terminology
+### 3.4 Artifact Terminology
 
 | Term | Canonical meaning |
 | --- | --- |
-| Tensor proof artifact | Contains one tensor or a bounded tensor subset and proves only the named lower-level property. |
-| Complete model artifact | Contains every tensor and metadata item required to execute the exact model. |
-| Supported model artifact | A complete model artifact that passes integrity, materialization, runtime, generation, evaluation, benchmark, and release gates. |
+| Tensor proof artifact | One tensor or a bounded subset used to prove only a named parser, layout, materialization, primitive, or lifecycle property |
+| Complete model artifact | Every tensor and metadata item required to execute one exact model target |
+| Supported model artifact | A complete artifact that passes integrity, materialization, runtime, generation, evaluation, benchmark, and release gates |
 
-The unqualified term "model artifact" does not name a selected-tensor proof
-file.
+The unqualified term "model artifact" never means a selected-tensor proof file.
 
-## Current Hard Truth
+## 4. Current Hard Truth
 
 | Boundary | Current truth |
 | --- | --- |
-| Source | The canonical local path exists, but exact source identity, revision, architecture, tokenizer, shard, and payload verification have not closed. |
-| Full target | `deepseek4-v4-flash` is the future canonical target and is unsupported. |
-| Architecture | No execution-complete typed DeepSeek-V4-Flash architecture specification exists. |
-| Mapping | No complete tensor role, layout, tokenizer, output-head, attention, position, KV, or MoE map exists. |
-| Artifact | YVEX has not produced a complete DeepSeek-V4-Flash GGUF. |
-| GGUF foundations | `V010.GGUF.QTYPE.ABI.0` and `V010.GGUF.ARTIFACT.ABI.0` are reopened; fixture-bounded evidence does not close either complete-artifact boundary. |
-| Quantization | Required qtypes, conversion, reference dequantization, and quantization are incomplete. |
-| Materialization | Full model materialization and CUDA residency are unsupported. |
-| Runtime descriptor | No execution-complete descriptor exists for the full target. |
-| CUDA | A fallback PTX path can advertise no-op kernels as supported; CUDA must become fail-closed before runtime work advances. |
-| Transformer | Family-correct attention, position handling, KV, MoE routing, expert execution, and the complete stack are unsupported. |
-| Text path | The real tokenizer-to-detokenized-text autoregressive chain is unsupported. |
-| Evaluation | No v0.1.0 generation evaluation exists. |
+| Project control | The 24-track, 631-ID historical ledger is recovered and ranked here; project recovery is complete. |
+| Source | Multi-family intake/header tooling exists. Exact DeepSeek identity, revision, tokenizer, shard set, and payload trust have not closed. |
+| Family profiles | Qwen, Gemma, dense/MoE, and bounded DeepSeek facts exist. No execution-complete DeepSeek architecture IR exists. |
+| Tensor coverage | Qwen/Gemma and common collection evidence exists. Complete DeepSeek required-role coverage is blocked. |
+| Mapping | Dense/Qwen and output/tokenizer mapping evidence exists. Complete DeepSeek source-to-role-to-GGUF mapping does not. |
+| GGUF foundations | `V010.GGUF.QTYPE.ABI.0` and `V010.GGUF.ARTIFACT.ABI.0` are reopened; their bounded fixture evidence does not close either complete ABI. |
+| Qtype | Policy and fixture geometry exist. The complete qtype ABI and required compute matrix remain reopened or blocked. |
+| Artifact | Controlled and selected proof emission exists. YVEX has not produced a complete DeepSeek-V4-Flash GGUF. |
+| Integrity | Bounded identity/range/corruption validators exist. Complete global layout and artifact admission have not closed. |
+| Materialization | Selected proof behavior exists. Family-neutral complete materialization and full DeepSeek DGX Spark residency are unsupported. |
+| Runtime descriptor | Header/report facts exist. No execution-complete common or DeepSeek runtime descriptor exists. |
+| CUDA | Bounded primitive evidence exists, but a no-op fallback can be advertised as support; CUDA must become fail-closed. |
+| Transformer | Family-correct DeepSeek attention, positions, KV, MoE, repeated layers, and final norm are unsupported. |
+| Text path | Exact tokenizer-backed autoregressive DeepSeek text generation is unsupported. |
+| Evaluation | No release-path generation evaluation exists. |
 | Benchmark | Not measured. |
 | Release | Blocked. |
 
-Implemented source reports, selected tensor paths, graph primitives, bounded
-runtime state, diagnostic loops, CLI cells, and topology closures remain useful
-evidence. None promotes the current product state beyond the lowest true stage.
-
-## Architecture Map
-
-YVEX owns a native path from source bytes to text. Facts move downstream only
-after the owning layer validates them and exposes a typed boundary.
+## 5. Active Work And Critical Path
 
 ```text
-operator and project control
-        |
-verified source -> architecture IR -> tensor roles and layouts
-        -> qtype/conversion -> GGUF writer -> integrity and admission
-        -> materialization/residency -> runtime descriptor
-        -> CUDA/backend operations -> transformer execution
-        -> prefill and KV -> decode -> output head/logits -> sampling
-        -> tokenizer/stop/detokenization -> autoregressive generation
-        -> evaluation -> benchmark -> release
-```
-
-The path preserves distinct owners for source intake, architecture, mapping,
-qtypes, writer, integrity, materialization, descriptor projection, backend
-capability, graph execution, runtime state, text I/O, evaluation, and release.
-An upstream report cannot substitute for a downstream implementation.
-
-### Main Critical Path
-
-The product dependency path is:
-
-```text
-verified DeepSeek source
--> typed architecture specification
--> complete tensor role and layout map
--> complete YVEX-produced GGUF
--> full materialization and residency
--> executable runtime descriptor
--> family-correct attention, position handling and KV
--> MoE routing and expert execution
--> complete transformer stack
--> tokenizer, output head, logits and sampling
--> autoregressive generation
--> evaluation and benchmark
--> v0.1.0 release
-```
-
-Dependencies are strict. External GGUF files, external runners, later-node
-evidence, and pressure targets cannot close an earlier YVEX gate.
-
-## Track Model
-
-Tracks are stable architecture ownership lanes. Milestones are conclusive
-changes inside those lanes. Evidence is attached to milestones and is not a
-track.
-
-### Primary Release Tracks
-
-Primary tracks lie on the direct source-to-generation or release path.
-
-| Track | Owns | Current state | Conclusive handoff |
-| --- | --- | --- | --- |
-| `TRACK.SOURCE` | Exact source identity, revision, config, tokenizer, shards, header inventory, payload trust, and bounded payload streaming | source-intake and header evidence only | Verified exact source and readable mapped payloads to architecture/mapping/conversion |
-| `TRACK.ARCHITECTURE` | Typed DeepSeek architecture facts: layer topology, hybrid attention, position rules, KV geometry, mHC/residual behavior, MoE topology, norms, output head, and tokenizer requirements | unsupported | Validated execution-complete architecture IR to mapping and runtime descriptor owners |
-| `TRACK.MAP` | Complete source tensor role map, GGUF names, shapes, transforms, layouts, expert indices, and ambiguity refusal | partial report evidence | Every required source tensor maps exactly once to an execution role and emitted layout |
-| `TRACK.TENSOR` | Required runtime tensor collections and complete role coverage across global, layer, attention, MoE, norm, position, tokenizer, and output paths | partial header/report evidence | No unresolved required tensor collection or runtime role |
-| `TRACK.QUANT` | Qtype ABI, role policy, quantization, dequantization reference, numeric bounds, and compute/refusal truth | reopened and blocked | Every emitted role has truthful storage and compute behavior |
-| `TRACK.ARTIFACT` | GGUF ABI, writer, conversion coordination, complete emission, identity, registration, and roundtrip | selected proof and reopened ABI evidence only | Complete YVEX-produced GGUF reopens identically through YVEX |
-| `TRACK.INTEGRITY` | Container, metadata, tensor directory, range, alignment, qtype-sized layout, corruption, drift, and admission gates | bounded fixture/selected evidence | Complete artifact passes all pre-payload and pre-runtime integrity gates |
-| `TRACK.RESIDENCY` | Streaming reads, materialization, placement, memory plan, CUDA residency, movement, ownership, failure cleanup, and release | selected proof and planning evidence only | Every required tensor is resident or staged under an accepted DGX Spark plan |
-| `TRACK.BACKEND` | Backend capability, qtype operations, host binding, reference parity, refusal, scratch, fallback, synchronization, and cleanup | bounded CPU/CUDA primitive evidence; CUDA blocker open | Required DGX Spark CUDA operations are real and fail closed |
-| `TRACK.EXECUTION` | Graph binding, attention, position handling, MoE routing and experts, residual paths, repeated layers, final norm, scratch, and full transformer execution | primitive and selected-slice evidence only | Complete transformer stack consumes the full runtime descriptor |
-| `TRACK.PREFILL` | Prompt token execution, chunking, transformer prefill, state ownership, and KV write integration | diagnostic-runtime evidence only | Full prefill executes every required layer and writes real attention state |
-| `TRACK.KV` | Family-correct KV geometry, allocation, indexing, append/read, capacity, lifecycle, reuse, and cleanup | bounded diagnostic storage only | Prefill writes and decode reads the same owned model KV state |
-| `TRACK.DECODE` | One-step and repeated model-backed decode over descriptor, position, KV, transformer, cancellation, and cleanup | diagnostic-runtime evidence only | Repeated decode produces real hidden states while consuming prior KV |
-| `TRACK.LOGITS` | Final hidden-state ownership, final norm, output-head residency/projection, vocabulary logits, numeric checks, and buffer cleanup | fixture/report evidence only | Real vocabulary logits derive from full model state |
-| `TRACK.SAMPLING` | Deterministic and stochastic selection over real vocabulary logits, seeded reproducibility, and refusal | bounded fixture sampling only | Sampled token IDs derive from real output-head logits |
-| `TRACK.TOKENIZER` | Exact tokenizer load, prompt encoding, special/EOS/stop policy, token append boundary, and detokenization | metadata and token-ID evidence only | Prompt text and generated IDs roundtrip through the exact tokenizer contract |
-| `TRACK.GENERATION` | Composition of tokenizer, prefill, KV, decode, logits, sampling, append, stop, cancellation, partial output, and cleanup | bounded diagnostic control flow only | Multiple real autoregressive tokens become detokenized text |
-| `TRACK.EVAL` | Release-path correctness, regression, failure, tokenizer, long-context, and capability evaluation | blocked | Repeatable evaluation passes over real generation |
-| `TRACK.BENCH` | Reproducible machine, artifact, qtype, context, prefill, decode, generation, timing, and memory measurements | not-measured | Accepted DGX Spark benchmark record over the release path |
-| `TRACK.RELEASE` | Scope lock, validation, artifact guardrail, claim audit, operator transcript, packaging, versioning, and tag | blocked | Every release gate passes in one traceable transcript |
-
-### Supporting Architectural Tracks
-
-Supporting tracks can block the release path but cannot promote a lower runtime
-capability merely by changing control or documentation surfaces.
-
-| Track | Owns | Current state | Boundary |
-| --- | --- | --- | --- |
-| `TRACK.PROJECT` | Project control, scope, milestone state, dependency transitions, documentation architecture, and control-file truth | recovery complete; documentation architecture active | A docs/control milestone may close a governance dependency only; it does not close a product gate. |
-| `TRACK.CLAIMS` | Evidence stages, API/contract language, release doctrine, public/internal claim audits, and unsupported-state consistency | refounded for the DeepSeek target | Claim accuracy records implementation truth; it does not create implementation. |
-| `TRACK.TOPOLOGY` | Filesystem ownership, domain/report/input/command/render cells, source contracts, and architecture guards | substantial owner separation implemented; residual audit remains | Moving or wrapping code is not capability closure unless the downstream owner consumes it. |
-| `TRACK.OPERATOR` | CLI grammar, typed input, dispatch, rendering, refusal, control-plane integration, runbooks, and final operator acceptance | substantial diagnostic/control surface implemented | A command is evidence for an implemented domain path, never the path itself. |
-
-### Future Tracks
-
-Future tracks remain outside v0.1.0 and do not block it unless an explicit scope
-milestone changes the release contract.
-
-| Track | Scope | Entry condition |
-| --- | --- | --- |
-| `TRACK.SERVE` | Runtime-backed daemon generation, streaming, cancellation, observability, and protocol compatibility | Real CLI/runtime generation is stable and accepted. |
-| `TRACK.DISTRIBUTED` | Multi-device and multi-node scheduling, worker coordination, expert/tensor/pipeline parallelism, and distributed KV | A separately scoped target and measured single-machine baseline exist. |
-| `TRACK.PORTABILITY` | Metal, ROCm, additional CUDA profiles, and non-DGX-Spark backend work | v0.1.0 CUDA path is released or scope explicitly changes. |
-| `TRACK.MODELS` | Qwen, Gemma, GLM, additional DeepSeek targets, and arbitrary-family integration | Each target receives its own complete source-to-release gates. |
-| `TRACK.ACCELERATION` | Speculative decoding, storage streaming during generation, advanced caching, and post-baseline kernel programs | Correct baseline generation and benchmark evidence exist. |
-| `TRACK.POST010` | Broader evaluation, public benchmark expansion, production serving hardening, and later product scope | v0.1.0 is released and the next scope is explicit. |
-
-### Evidence Lanes
-
-Diagnostic/report/fixture/selected work is evidence, not a primary track.
-Evidence must name its owning track, the property it proves, the lowest true
-stage, and the capability it does not prove.
-
-| Evidence lane | Current examples | Valid use | Non-claim |
-| --- | --- | --- | --- |
-| Source and architecture reports | manifests, shard/header inventories, class profiles, tensor maps, missing-role and qtype reports | Inspect facts and test refusal before payload/runtime work | Reports are not verified source, complete mapping, or runtime support. |
-| GGUF fixtures and proof artifacts | tiny GGUF fixtures, controlled emission, selected embedding and embedding-plus-RMSNorm files | Prove parser, geometry, range, writer fragments, materialization, or primitive consumption at named scope | A tensor proof artifact is not a complete or supported model artifact. |
-| Primitive and selected graph proofs | CPU/reference comparisons, CUDA bounded ops, selected segments | Prove one operation, transfer, cleanup, or selected composition | A primitive or selected slice is not transformer execution. |
-| Diagnostic runtime state | prefill summaries, bounded KV, decode summaries, synthetic logits/sampling, bounded generation loops | Prove ownership, lifecycle, refusal, cancellation, and composition mechanics | Diagnostic runtime is not real prefill, KV, decode, logits, sampling, or generation. |
-| Operator and audit evidence | CLI commands, normal/audit rendering, help, transcripts, topology and claim audits | Prove discoverability, typed boundaries, refusal propagation, and repository structure | A command, report, audit, or transcript cannot create lower capability. |
-| Internal test fixtures | deterministic vectors, corrupt files, synthetic tokens/logits, allocation and cleanup failures | Retain repeatable regression coverage below public product surfaces | Fixture success is not model quality or product support. |
-
-## Milestone Contract
-
-A milestone is a complete architectural or functional slice that changes the
-executable state of YVEX or closes a hard dependency needed before executable
-work can proceed. It has exactly one owning track and a downstream consumer.
-
-Every milestone must record:
-
-1. the owning track and concrete before/after capability;
-2. the real downstream owner that consumes the implementation or contract;
-3. explicit failure, refusal, allocation, mutation, cleanup, and lifecycle
-   behavior where applicable;
-4. focused executable tests, including reference comparison where numeric;
-5. the full repository validation required by `AGENTS.md`;
-6. the lowest truthful proof stage and unchanged higher-stage non-claims;
-7. the dependency it closes and the next dependency it activates;
-8. implementation evidence attached as evidence, not promoted into a track.
-
-A doctrine or project-control milestone is valid only when it closes an explicit
-governance dependency before code can safely change. Its proof stage remains
-documentation/claim-only and it cannot promote artifact, runtime, generation,
-evaluation, benchmark, or release state.
-
-A row is not milestone-complete merely because it:
-
-- adds a report, CLI command, help entry, or structured output;
-- prints or serializes typed facts;
-- creates a fixture or tensor proof artifact;
-- exposes a selected tensor, graph segment, or bounded diagnostic loop;
-- renames or moves code, or wraps an existing monolith;
-- records a plan, audit, checklist, or documentation update.
-
-These can be required subtasks or acceptance evidence inside the owning
-milestone. They do not independently close architectural capability.
-
-## Delivery State
-
-### Current Milestone
-
-```text
-V010.DOCS.REFOUNDATION.0: complete
-proof stage: documentation/claim refoundation only
-
-V010.PROJECT.RECOVERY.0: complete
-proof stage: documentation/claim refoundation only
-
+V010.DOCS.REFOUNDATION.0: complete (documentation/claim only)
+V010.PROJECT.RECOVERY.0: partial
+V010.PROJECT.RECOVERY.1: complete
 Active Next: V010.DOCS.ARCHITECTURE.0
-V010.REBASE.DEEPSEEK.0: blocked by documentation architecture
 ```
 
-No artifact, materialization, runtime, generation, evaluation, benchmark, or
-release capability is promoted by either completed documentation milestone.
-
-### Priority-Blocking Foundation Sequence
-
-The detailed owner, defect, outcome, acceptance, dependency, recovery map, and
-decommission map live in `docs/repair/v010-foundation-closure.md`.
+The product path remains blocked while the documentation architecture row
+normalizes durable technical documentation and its reference/paper ownership
+map. It does not implement or promote runtime behavior.
 
 ```text
-V010.DOCS.REFOUNDATION.0
--> V010.PROJECT.RECOVERY.0
--> V010.DOCS.ARCHITECTURE.0
+V010.DOCS.ARCHITECTURE.0
 -> V010.REBASE.DEEPSEEK.0
 -> V010.GGUF.QTYPE.ABI.1
 -> V010.GGUF.ARTIFACT.ABI.1
 -> V010.GGUF.LAYOUT.INTEGRITY.1
 -> V010.CUDA.FAILCLOSED.0
 -> V010.MODEL.ARCH.IR.0
+-> V010.TENSOR.COVERAGE.DEEPSEEK.0
 -> V010.MAP.GGUF.DEEPSEEK.0
 -> V010.SOURCE.PAYLOAD.STREAM.0
 -> V010.QUANT.2
 -> V010.GGUF.WRITER.1
 -> V010.ARTIFACT.EMIT.DEEPSEEK.0
 -> V010.GGUF.ROUNDTRIP.1
+-> V010.ARTIFACT.SUPPORT.CUTOVER.0
+-> V010.ARTIFACT.MATERIALIZE.0
+-> V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0
+-> V010.RUNTIME.DESCRIPTOR.GGUF.0
+-> V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0
+-> V010.GRAPH.DEEPSEEK.ATTENTION.0
+-> V010.RUNTIME.DEEPSEEK.KV.0
+-> V010.RUNTIME.DEEPSEEK.PREFILL.0
+-> V010.RUNTIME.DEEPSEEK.MOE.0
+-> V010.GRAPH.DEEPSEEK.TRANSFORMER.0
+-> V010.RUNTIME.DEEPSEEK.DECODE.0
+-> V010.RUNTIME.DEEPSEEK.LOGITS.0
+-> V010.RUNTIME.SAMPLING.0
+-> V010.RUNTIME.DEEPSEEK.TOKENIZER.0
+-> V010.RUNTIME.DEEPSEEK.GENERATION.0
+-> V010.CLI.DEEPSEEK.GENERATE.0
+-> V010.EVAL.DEEPSEEK.0
+-> V010.BENCH.DEEPSEEK.0
+-> V010.RELEASE.0
 ```
 
-The main runtime path cannot advance while this sequence is active.
+Common capability milestones may use Qwen, Gemma, dense fixtures, and other
+admitted inputs. They must close their typed common boundary and must not claim
+another supported model.
 
-### Conclusive Main-Path Milestones
+## 6. Family Capability Matrix
 
-These milestones preserve the original architecture responsibilities while
-merging diagnostic-scale rows into complete slices. Their exact implementation
-contracts are written only when each becomes Active Next.
+| Family/scope | Source/profile truth | Tensor/map truth | Artifact/materialization truth | Runtime truth | Project role |
+| --- | --- | --- | --- | --- | --- |
+| DeepSeek-V4-Flash | Canonical path designated; exact verification and execution IR blocked | Bounded class/report evidence; complete role and GGUF map blocked | No complete artifact; full materialization unsupported | generation unsupported | sole v0.1.0 release target |
+| Qwen | Source target/profile, header inventory, naming-map, and role-coverage work exists | Implemented at bounded source/header/report stages | No complete supported artifact or full materialization claim | generation unsupported | active multi-family/common architecture evidence |
+| Gemma | Source target/profile and header tensor-collection work exists | Dense/common mapping can be reused; exact complete family gate not claimed | No complete supported artifact or full materialization claim | generation unsupported | active dense/common architecture evidence |
+| Dense/common | Common naming, collections, proof artifacts, validators, and primitive evidence exist | Partial reusable capability | Family-neutral materialization is a real planned milestone | no supported full-model runtime | common engine architecture and regression surface |
+| GLM | No canonical implemented target contract | planned only | unsupported | unsupported | parked pending an implementation milestone |
+| Other families/backends | uncommitted | uncommitted | unsupported | unsupported | require an explicit future scope decision |
 
-| Order | Milestone | Owning track | Conclusive after-state | State |
-| --- | --- | --- | --- | --- |
-| 1 | `V010.ARTIFACT.SUPPORT.CUTOVER.0` | `TRACK.ARTIFACT` | Only complete artifacts may enter model support gates; retained subsets are named tensor proof artifacts. | blocked by complete roundtrip |
-| 2 | `V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0` | `TRACK.RESIDENCY` | Every required tensor is streamed, materialized, placed, owned, and released under the DGX Spark plan. | blocked |
-| 3 | `V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0` | `TRACK.ARCHITECTURE` | The admitted complete artifact projects to one execution-complete DeepSeek descriptor. | blocked |
-| 4 | `V010.RUNTIME.DEEPSEEK.ATTENTION.KV.0` | `TRACK.PREFILL` | Family-correct prefill and attention write KV that decode can read, including position and capacity behavior. | blocked |
-| 5 | `V010.RUNTIME.DEEPSEEK.MOE.0` | `TRACK.EXECUTION` | Real router logits select experts, expert weights execute, outputs accumulate, and failures clean up. | blocked |
-| 6 | `V010.GRAPH.DEEPSEEK.TRANSFORMER.0` | `TRACK.EXECUTION` | Embedding through repeated attention/MoE layers and final norm executes over the full descriptor. | blocked |
-| 7 | `V010.RUNTIME.DEEPSEEK.DECODE.0` | `TRACK.DECODE` | Repeated model-backed decode consumes prior KV and produces the next hidden state with cancellation and cleanup. | blocked |
-| 8 | `V010.RUNTIME.DEEPSEEK.LOGITS.SAMPLING.0` | `TRACK.LOGITS` | Output-head vocabulary logits and selected tokens derive from real transformer state. | blocked |
-| 9 | `V010.RUNTIME.DEEPSEEK.TOKENIZER.0` | `TRACK.TOKENIZER` | Exact prompt encoding, special/stop behavior, and detokenization are implemented and tested. | blocked |
-| 10 | `V010.RUNTIME.DEEPSEEK.GENERATION.0` | `TRACK.GENERATION` | Multiple autoregressive tokens traverse the entire release chain and become detokenized text. | blocked |
-| 11 | `V010.CLI.DEEPSEEK.GENERATE.0` | `TRACK.OPERATOR` | One operator command invokes the accepted runtime path and preserves truthful refusal and cleanup. | blocked |
-| 12 | `V010.EVAL.DEEPSEEK.0` | `TRACK.EVAL` | Repeatable correctness, regression, refusal, and release-path evaluations pass. | blocked |
-| 13 | `V010.BENCH.DEEPSEEK.0` | `TRACK.BENCH` | Reproducible DGX Spark prefill, decode, generation, timing, and memory evidence is measured. | not-measured |
-| 14 | `V010.RELEASE.0` | `TRACK.RELEASE` | The complete validation, artifact, claim, operator, evaluation, benchmark, and version transcript passes. | blocked |
+## 7. Track Registry And Dashboard
 
-## Recovered Implementation History
+The recovery baseline contained 629 table entries across 24 tracks. Two source
+rows held paired IDs; those are expanded into 631 unique recovered IDs. Thirty-
+two new milestone IDs and two explicit migration markers produce 665 unique
+canonical IDs.
 
-Recovery compared `10ad6c3:docs/spine.md`, which contains the architectural
-tracks and row history, with `690d1b18:docs/spine.md` and its repair owner, which
-contain the corrected DeepSeek target and hard claim boundaries. Neither source
-is independently authoritative. The entries below retain substantive
-implemented history at the owning-track level. A historic `complete` label is
-reclassified as evidence when its after-state was a report, fixture, selected
-slice, diagnostic path, or control surface rather than a conclusive product
-milestone.
+Global ledger snapshot after `V010.PROJECT.RECOVERY.1` closure:
 
-| Historic responsibility | Traceable completed anchors | Durable implemented fact | Current classification |
+- recovered unique IDs: **631**
+- new control/milestone/migration IDs: **34**
+- total canonical IDs: **665**
+- first-class milestones: **37**
+- state totals: **176 complete**, **1 active**, **1 partial**, **31 blocked**,
+  **434 planned**, **2 reopened**, **9 deferred**, **10 superseded**, and
+  **1 not-measured**
+
+| Track | Owns | Current truth | Conclusive handoff |
 | --- | --- | --- | --- |
-| Scope and target control | `V010.SCOPE.0-.1`, `V010.TARGET.1-.3`, `.7`, `.9`, `SPINE.*` control rows | Release doctrine, gates, target reports, and prior project-control mechanics were implemented. | DeepSeek-only doctrine retained; multi-family and obsolete spine rewrites superseded, not restored as milestones. |
-| Source intake | `V010.SOURCE.1-.7`, `.9`, `V010.SOURCE.7A/7B`, `MODELS.DOWNLOAD.*`, `MODELS.SOURCE.*`, `OWI.TARGETS.*`, `MODEL.TARGET.IDENTITY.0` | Manifests, header inventories, provider preflight, download lifecycle, target identity, and role-coverage handoff exist. | Evidence and reusable implementation under `TRACK.SOURCE`; exact-source verification and payload trust remain open. |
-| Tensor mapping | `V010.MAP.1`, `.5-.9` | Dense/Qwen names, output-head and tokenizer maps, missing-role reports, and a report gate exist. | Merged evidence under the complete DeepSeek map milestone; no complete map claim. |
-| Qtype and dtype | `V010.QUANT.0-.1`, `V010.GGUF.QTYPE.ABI.0` | Policy, role-support reports, and bounded qtype byte geometry/refusal tests exist. | Evidence retained; `.0` is reopened and `.1` is a blocking repair. |
-| Artifact production | `MODELS.ARTIFACTS.LIST.0`, `V010.GGUF.ARTIFACT.ABI.0`, `V010.ARTIFACT.EMIT.0-.1` | Artifact listing, tiny container parsing, controlled emission, and selected emission exist. | Fixture/tensor-proof evidence; artifact ABI is reopened and no complete artifact exists. |
-| Artifact integrity | `V010.INTEGRITY.0-.6`, `.8-.10` | Identity, digest, metadata, directory, range, shape/dtype, overflow, drift, corruption, and selected preflight checks exist. | Bounded evidence merged into complete-layout and complete-artifact admission milestones. |
-| Model architecture reports | `MODEL.CLASS.QWEN.0`, `MODEL.CLASS.GEMMA.0`, `MOE.CLASS.0`, `V010.CLASS.3`, `.6`, `.8-.11` | Header-derived dense/MoE, attention, context, and KV class facts exist. | Evidence under `TRACK.ARCHITECTURE`; no execution-complete DeepSeek IR or descriptor. |
-| Tensor collections | `TENSOR.COLLECTION.QWEN.0`, `TENSOR.COLLECTION.GEMMA.0`, `TENSOR.MOE.0`, `V010.TENSOR.1`, `.5-.8`, `.11-.12`, `.14-.19`, `.21-.22` | Required collection categories and missing-role facts are inspectable. | Header/report evidence under `TRACK.TENSOR`; no complete execution coverage. |
-| Residency and materialization | Selected materialization and placement surfaces referenced by the old track; no conclusive residency row closed | Bounded descriptor, range, placement, movement, and cleanup behavior exists for selected proofs. | Evidence only; the 42 storage/residency micro-rows merge into payload streaming and full materialization milestones. |
-| Backend capability | `CUDA.KERNEL.0`, `V010.BACKEND.1-.5` | CPU baseline, CUDA probe/allocation/transfer, and bounded parity checks exist. | Primitive evidence; CUDA support is blocked by `V010.CUDA.FAILCLOSED.0`. |
-| Graph execution | `V010.GRAPH.22` plus implemented primitive/reference tests | Selected graph composition and bounded primitives consume admitted bytes and compare outputs. | Selected/fixture evidence merged into attention, MoE, and complete transformer milestones. |
-| Prefill and context | `V010.CONTEXT.1-.7`, `V010.PREFILL.0-.1` | Context bounds, chunk planning, positions, overflow refusal, and diagnostic prefill input/summary exist. | Diagnostic evidence under real prefill/attention/KV milestone. |
-| KV runtime | `V010.KV.0-.1`, `.3`, `.14` | Bounded KV ownership, shape/capacity, lifecycle, and diagnostic binding exist. | Diagnostic storage evidence; not attention-backed KV. |
-| Decode | `V010.DECODE.0-.2` | Requirement, state ownership, and position input surfaces exist. | Diagnostic evidence under one model-backed decode milestone. |
-| Output head and logits | `V010.LOGITS.0-.1`, `.3`, `.6`, `.8-.9` | Hidden-state ownership, map/report, buffer, checksum, and synthetic top-k diagnostics exist. | Fixture/report evidence under real output-head logits milestone. |
-| Sampling | `V010.SAMPLE.0`, `.2-.4` | Sampling requirements, candidate/selection facts, and temperature validation exist. | Internal fixture evidence under sampling over real logits. |
-| Tokenizer and stop | `V010.TOKENIZER.2`, `.4` plus tokenizer metadata map | Token-ID input and special-token diagnostic facts exist. | Evidence under exact tokenizer/stop/detokenization milestone. |
-| Generation lifecycle | `V010.GEN.0-.7`, `.11-.15`, `.17`, `V010.RUNTIME.0`, `.2`, `.4-.5`, `.15`, `V010.TRACE.1`, `.10-.11` | Bounded composition, append, limits, trace, cancellation, partial output, cleanup, and smoke mechanics exist. | Diagnostic evidence under real autoregressive generation; not generation capability. |
-| Operator and topology | `TOPOLOGY.FS.0`, `TOPOLOGY.SOURCE.CONTRACT.0`, `TOPOLOGY.CLI.PRINT.ALL.0`, `TOPOLOGY.DOMAIN.RESTORE.0`, `TOPOLOGY.CELL.SOURCE.0`, `.GENERATION.0`, `.KV.0`, `.SAMPLING.0`, `.GRAPH.0`, `TOPOLOGY.CELL.MODEL_TARGET.0-.3`, `TOPOLOGY.CELL.MODEL_ARTIFACTS.0-.3`, `SPINE.SYSTEM.TARGET.0`, `V010.PATHS.*`, `V010.CLI.17-.19`, `.24-.26` | Source ownership, cell separation, model-target/model-artifact decomposition, path policy, CLI grammar, and render ownership were materially implemented. | Restored as supporting architecture history; remaining cleanup must close owner-specific behavior, not wrapper rows. |
-| CI and release guards | `V010.CI.4-.7` | Docs, source-layout, natural-code, and artifact guardrails exist. | Supporting release evidence; no release readiness. |
-| Serving, evaluation, benchmark, post-v0.1 | No conclusive runtime milestone completed in the old spine | Status shells and lower-level tests exist, but no generation-backed serve/eval/benchmark path. | Planned micro-rows merged into future serving scope and one conclusive eval, benchmark, or release milestone. |
+| `TRACK.SCOPE` | Project control, release scope, family/release distinction, claim boundary, version policy, and documentation-control transitions. | complete ledger recovery closes in this row; documentation architecture is active | One truthful project map and one explicit release contract. |
+| `TRACK.SOURCE` | Source identity, revision, provider intake, manifests, shards, sidecars, header inventory, payload trust, and bounded payload access. | multi-family intake exists; exact DeepSeek verification remains open | Verified source facts and readable payload ranges. |
+| `TRACK.MAP` | Family source names, canonical runtime roles, GGUF names, transforms, layouts, ambiguity refusal, and complete mapping coverage. | dense/Qwen and report evidence exist; complete DeepSeek map is blocked | Every required source tensor maps exactly once to a runtime role and emitted layout. |
+| `TRACK.QUANT` | Dtype/qtype ABI, storage geometry, role policy, conversion, quantization, reference dequantization, compute truth, and refusal. | policy and fixture proof exist; ABI is reopened | Every emitted role has truthful storage and compute behavior. |
+| `TRACK.ARTIFACT` | GGUF container ABI, native writer, conversion coordination, complete emission, identity, registration, and writer-reader roundtrip. | bounded proof emission exists; complete artifact is unsupported | A complete YVEX-produced GGUF reopens identically through YVEX. |
+| `TRACK.INTEGRITY` | Container, metadata, tensor directory, offsets, alignment, qtype-sized ranges, corruption, drift, and artifact admission. | bounded validators exist; complete-layout closure is blocked | A complete artifact passes every pre-payload and pre-runtime integrity gate. |
+| `TRACK.MODEL` | Family architecture profiles, typed architecture IR, layer topology, attention/position/KV/MoE rules, and runtime descriptor projection. | Qwen/Gemma/DeepSeek header-derived profiles exist; execution-complete DeepSeek IR does not | A family-correct typed model specification and executable runtime descriptor. |
+| `TRACK.TENSOR` | Canonical tensor collections, role requirements, global/layer/attention/MoE/norm/output/tokenizer coverage, and missing-role truth. | multi-family header inventories exist; complete DeepSeek execution coverage is blocked | No unresolved required tensor collection or runtime role. |
+| `TRACK.RESIDENCY` | Payload streaming, materialization, placement, memory planning, CUDA residency, movement, ownership, cleanup, and release. | selected planning/proof evidence only | Any admitted tensor map can materialize; the complete DeepSeek artifact has an accepted DGX Spark residency plan. |
+| `TRACK.BACKEND` | Hardware/build profiles, CPU/CUDA capability, qtype operations, reference parity, scratch, fallback, synchronization, refusal, and cleanup. | bounded primitive evidence exists; CUDA support is not fail-closed | Every required DGX Spark CUDA operation is real, reference-compared, and fail-closed. |
+| `TRACK.GRAPH` | Primitive contracts, graph construction/planning, attention, position handling, MoE routing/experts, residuals, layers, scratch, and transformer execution. | selected graph and primitive evidence only | The complete transformer stack consumes the full runtime descriptor. |
+| `TRACK.PREFILL` | Prompt token execution, chunking, transformer prefill, state ownership, position progression, KV write integration, and cleanup. | planner and diagnostic evidence only | Full prefill executes every required layer and writes model-derived state. |
+| `TRACK.KV` | Family-correct KV geometry, allocation, indexing, append/read, capacity, reuse, lifecycle, and cleanup. | bounded diagnostic storage only | Prefill writes and decode reads the same owned model KV state. |
+| `TRACK.DECODE` | One-step and repeated model-backed decode over descriptor, positions, KV, transformer state, cancellation, and cleanup. | diagnostic lifecycle evidence only | Repeated decode produces real hidden states while consuming prior KV. |
+| `TRACK.LOGITS` | Final hidden-state ownership, final norm, output-head placement/projection, vocabulary logits, numeric checks, and buffer lifecycle. | synthetic/report evidence only | Real vocabulary logits derive from the complete model state. |
+| `TRACK.SAMPLING` | Deterministic and stochastic token selection over real vocabulary logits, seeding, reproducibility, validation, and refusal. | bounded fixture sampling only | Selected token IDs derive from real output-head logits. |
+| `TRACK.TOKENIZER` | Exact tokenizer loading, prompt encoding, templates, special/EOS/stop policy, append boundary, detokenization, and failure behavior. | metadata and token-ID contract evidence only | Prompt text and generated IDs traverse the exact tokenizer contract. |
+| `TRACK.GENERATION` | Tokenizer/prefill/KV/decode/logits/sampling composition, append, stop, cancellation, partial output, trace, cleanup, and autoregression. | bounded diagnostic control flow only | Multiple real autoregressive tokens become detokenized text. |
+| `TRACK.OPERATOR` | CLI grammar, command adaptation, typed input, dispatch, rendering, refusal, control-plane integration, topology guards, and operator acceptance. | substantial control-plane/topology work exists; release command is unsupported | One truthful command invokes the accepted runtime path without owning domain behavior. |
+| `TRACK.SERVE` | Runtime-backed daemon generation, streaming, cancellation, observability, and protocol compatibility. | deferred outside v0.1.0 | Defined only after real local generation is stable and separately scoped. |
+| `TRACK.EVAL` | Release-path correctness, regression, failure, tokenizer, context, and capability evaluation. | blocked by real generation | Repeatable evaluation passes over the release path. |
+| `TRACK.BENCH` | Reproducible machine, artifact, qtype, context, prefill, decode, generation, timing, throughput, and memory measurements. | not measured | Accepted DGX Spark benchmark evidence over the release path. |
+| `TRACK.RELEASE` | Validation, artifact guardrail, claim audit, operator transcript, packaging, versioning, release record, and tag. | blocked | Every release gate passes in one traceable transcript. |
+| `TRACK.POST010` | Explicitly deferred portability, serving hardening, speculative execution, extra-family runtime promotion, and later product scope. | deferred | No work enters the active path without a new version-scope decision. |
 
-The track-level disposition and counts used for this recovery are recorded in
-the active repair owner. Git history retains the old row descriptions without
-making them current project structure.
+### 7.1 Per-Track Counts
 
-## Reference Baseline
+First-class count order is `complete / active / partial / planned / blocked /
+not-measured`. "Complete support" records bounded capability/evidence, not track
+closure.
 
-YVEX studies current primary implementations to understand proven ownership
-boundaries. This baseline is research input, not a dependency, compatibility
-claim, public API commitment, Python process model, serving design, or
-distributed-scope commitment.
+| Track | Recovered IDs | First-class C/A/Pa/P/B/NM | Complete support | Open support | Superseded/deferred | Next milestone |
+| --- | ---: | --- | ---: | ---: | ---: | --- |
+| `TRACK.SCOPE` | 25 | 2/1/1/0/0/0 | 7 | 12 | 6 | `V010.DOCS.ARCHITECTURE.0` |
+| `TRACK.SOURCE` | 24 | 0/0/0/0/2/0 | 21 | 3 | 0 | `V010.REBASE.DEEPSEEK.0` |
+| `TRACK.MAP` | 12 | 0/0/0/0/1/0 | 6 | 6 | 0 | `V010.MAP.GGUF.DEEPSEEK.0` |
+| `TRACK.QUANT` | 5 | 0/0/0/0/2/0 | 2 | 2 | 0 | `V010.GGUF.QTYPE.ABI.1` |
+| `TRACK.ARTIFACT` | 11 | 0/0/0/0/5/0 | 3 | 6 | 2 | `V010.GGUF.ARTIFACT.ABI.1` |
+| `TRACK.INTEGRITY` | 14 | 0/0/0/0/1/0 | 10 | 4 | 0 | `V010.GGUF.LAYOUT.INTEGRITY.1` |
+| `TRACK.MODEL` | 21 | 0/0/0/0/3/0 | 9 | 11 | 0 | `V010.MODEL.ARCH.IR.0` |
+| `TRACK.TENSOR` | 27 | 0/0/0/0/1/0 | 18 | 9 | 0 | `V010.TENSOR.COVERAGE.DEEPSEEK.0` |
+| `TRACK.RESIDENCY` | 42 | 0/0/0/0/2/0 | 0 | 41 | 0 | `V010.ARTIFACT.MATERIALIZE.0` |
+| `TRACK.BACKEND` | 29 | 0/0/0/0/1/0 | 6 | 23 | 0 | `V010.CUDA.FAILCLOSED.0` |
+| `TRACK.GRAPH` | 71 | 0/0/0/0/3/0 | 1 | 70 | 1 | `V010.GRAPH.DEEPSEEK.ATTENTION.0` |
+| `TRACK.PREFILL` | 27 | 0/0/0/0/1/0 | 9 | 18 | 0 | `V010.RUNTIME.DEEPSEEK.PREFILL.0` |
+| `TRACK.KV` | 21 | 0/0/0/0/1/0 | 4 | 17 | 0 | `V010.RUNTIME.DEEPSEEK.KV.0` |
+| `TRACK.DECODE` | 15 | 0/0/0/0/1/0 | 3 | 12 | 0 | `V010.RUNTIME.DEEPSEEK.DECODE.0` |
+| `TRACK.LOGITS` | 17 | 0/0/0/0/1/0 | 6 | 11 | 1 | `V010.RUNTIME.DEEPSEEK.LOGITS.0` |
+| `TRACK.SAMPLING` | 15 | 0/0/0/0/1/0 | 4 | 11 | 0 | `V010.RUNTIME.SAMPLING.0` |
+| `TRACK.TOKENIZER` | 13 | 0/0/0/0/1/0 | 2 | 11 | 0 | `V010.RUNTIME.DEEPSEEK.TOKENIZER.0` |
+| `TRACK.GENERATION` | 53 | 0/0/0/0/1/0 | 22 | 31 | 0 | `V010.RUNTIME.DEEPSEEK.GENERATION.0` |
+| `TRACK.OPERATOR` | 81 | 0/0/0/1/1/0 | 37 | 43 | 0 | `V010.CLI.DEEPSEEK.GENERATE.0` |
+| `TRACK.SERVE` | 12 | 0/0/0/0/0/0 | 0 | 12 | 0 | `future scope decision` |
+| `TRACK.EVAL` | 15 | 0/0/0/0/1/0 | 0 | 15 | 0 | `V010.EVAL.DEEPSEEK.0` |
+| `TRACK.BENCH` | 16 | 0/0/0/0/0/1 | 0 | 16 | 0 | `V010.BENCH.DEEPSEEK.0` |
+| `TRACK.RELEASE` | 42 | 0/0/0/0/1/0 | 4 | 37 | 0 | `V010.RELEASE.0` |
+| `TRACK.POST010` | 23 | 0/0/0/0/0/0 | 0 | 14 | 9 | `future scope decision` |
 
-| Reference | What YVEX studies | What YVEX does not inherit |
-| --- | --- | --- |
-| [vLLM architecture overview](https://docs.vllm.ai/en/stable/design/arch_overview/) | Engine lifecycle, scheduler/KV separation, worker ownership, model runners, memory management, and backend interfaces | vLLM public APIs, process topology, scheduler policy, or serving scope |
-| [SGLang runtime](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt) and [DeepSeek-V4 implementation](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/models/deepseek_v4.py) | Runtime decomposition and current DS4 model, attention, KV-memory, MoE, kernel, and prefill/decode integration boundaries | SGLang APIs, Python runtime, distributed design, or support claims |
-| [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md), [ggml](https://github.com/ggml-org/ggml), and [llama.cpp](https://github.com/ggml-org/llama.cpp) | GGUF container semantics, qtype geometry, quantization references, native artifact loading, and C/C++ ownership patterns | Binary compatibility beyond YVEX-tested ABI or llama.cpp model/backend support |
-| [TensorRT-LLM architecture](https://nvidia.github.io/TensorRT-LLM/architecture/overview.html), [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM), and [CUTLASS](https://github.com/NVIDIA/cutlass) | NVIDIA runtime/worker/backend separation, Blackwell execution patterns, fused operations, MoE, and kernel specialization | TensorRT engines, Python APIs, deployment topology, or automatic backend support |
-| [DeepSeek-V4-Flash model card and report](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash) and [FlashMLA](https://github.com/deepseek-ai/FlashMLA) | Exact DS4 architecture, tokenizer/config facts, hybrid attention, compressed KV behavior, MoE, mHC, and reference kernels | Unverified assumptions, external-runner proof, or direct support promotion |
+### 7.2 Stable Track Names
 
-`V010.DOCS.ARCHITECTURE.0` owns the detailed documentation taxonomy and the
-paper/reference-to-YVEX implementation map. This section only establishes the
-baseline that row must verify and specialize.
+The attempted compact recovery introduced replacement lanes that hid stable
+ownership. The complete ledger restores the original names:
 
-## Release Gates
-
-| Gate | Required evidence | Current state |
-| --- | --- | --- |
-| Source | Exact local source identity, revision, config, tokenizer, shard inventory, and payload-readable tensor index | blocked |
-| Architecture | Typed DeepSeek-V4-Flash specification covering attention, position rules, KV, mHC, MoE, norms, output head, and tokenizer | blocked |
-| Mapping | Complete source-to-runtime role map and GGUF name/layout map with no unresolved required role | blocked |
-| Artifact | Complete YVEX-produced GGUF with required metadata, qtypes, global layout integrity, identity, and writer-reader equivalence | blocked |
-| Materialization | Every required tensor admitted, materialized, placed, and released under an explicit DGX Spark residency plan | unsupported |
-| Descriptor | Artifact facts project to an execution-complete, family-correct runtime descriptor | unsupported |
-| CUDA | Every required operation is truthful, fail-closed, reference-compared, and free of advertised no-op fallback | unsupported |
-| Transformer | Full prefill, attention, position, KV writes/reads, MoE routing, experts, repeated layers, and final norm execute | unsupported |
-| Text generation | Tokenizer, output head, vocabulary logits, sampling, autoregressive decode, stop policy, and detokenization compose | unsupported |
-| Evaluation | Repeatable quality, correctness, regression, and refusal cases run over the release path | blocked |
-| Benchmark | Reproducible measurements name machine, artifact identity, qtype, prompt/context, run count, timing, and memory | not-measured |
-| Operator | One truthful command invokes the release path and exposes precise refusal, cancellation, partial-output, and cleanup behavior | blocked |
-| Release | Full validation, artifact guardrail, claim audit, operator transcript, version record, and every prior gate pass | blocked |
-
-A gate changes state only through its owning conclusive milestone and executable
-proof. A report, command, fixture, selected slice, or documentation change
-cannot promote it.
-
-## Version Sequence
-
-| Version | Contract |
+| Attempted name | Canonical disposition |
 | --- | --- |
-| v0.1.0 | DeepSeek-V4-Flash text generation from a complete YVEX-produced GGUF on DGX Spark CUDA. |
-| v0.1.x | Correctness and operational hardening of the same supported path; no implicit family or backend expansion. |
-| v0.2.0 | Additional model or backend scope only after an explicit target decision and complete gates for that scope. |
-| Later | Serving, portability, distributed execution, acceleration, and broader family work remain uncommitted until separately scoped. |
+| `TRACK.ARCHITECTURE` | Use `TRACK.MODEL`; it owns family architecture IR and runtime descriptor projection. |
+| `TRACK.EXECUTION` | Use `TRACK.GRAPH`; it owns graph, attention, MoE, layers, and transformer composition. |
+| `TRACK.MODELS` | Removed as a future bucket. Family is a scope dimension across source/model/tensor/map/artifact/residency/runtime tracks. |
+| `TRACK.PROJECT` | Project-control work remains under `TRACK.SCOPE`; `PROJECT.md` is the authority, not a parallel track. |
+| `TRACK.CLAIMS` | Claim boundary remains under `TRACK.SCOPE` and release auditing under `TRACK.RELEASE`. |
+| `TRACK.TOPOLOGY` | Existing topology rows remain under `TRACK.OPERATOR` until `TOPOLOGY.CELL.CLOSURE.0` proves a justified split. |
 
-## Explicit Non-Claims
+## 8. First-Class Milestone Roadmap
+
+These rows alone are independently schedulable. Detailed delivery prompts are
+written after inspection of owner code, consumers, tests, and current contracts.
+
+| Order | Milestone | Track | Scope | State | Conclusive after-state | Depends on |
+| ---: | --- | --- | --- | --- | --- | --- |
+| 1 | `V010.DOCS.REFOUNDATION.0` | `TRACK.SCOPE` | project | `complete` | Established the exact DeepSeek v0.1.0 claim boundary and non-claims; its over-deletion is corrected by project recovery. | - |
+| 2 | `V010.PROJECT.RECOVERY.0` | `TRACK.SCOPE` | project | `partial` | Recovered product doctrine and a short milestone map but did not restore the per-track wave ledger or multi-family engineering scope. | V010.DOCS.REFOUNDATION.0 |
+| 3 | `V010.PROJECT.RECOVERY.1` | `TRACK.SCOPE` | project | `complete` | Installed PROJECT.md as the sole authority, recovered every old wave at a truthful rank, restored counts, and preserved Qwen/Gemma/common work. | V010.PROJECT.RECOVERY.0 |
+| 4 | `V010.DOCS.ARCHITECTURE.0` | `TRACK.SCOPE` | project | `active` | Standardize documentation taxonomy and recover durable architecture/artifact material without creating a second roadmap. | V010.PROJECT.RECOVERY.1 |
+| 5 | `V010.REBASE.DEEPSEEK.0` | `TRACK.SOURCE` | DeepSeek | `blocked` | Verify the exact DeepSeek-V4-Flash source identity, revision, config, tokenizer, shard inventory, footprint, and architecture facts. | V010.DOCS.ARCHITECTURE.0 |
+| 6 | `V010.GGUF.QTYPE.ABI.1` | `TRACK.QUANT` | common | `blocked` | Close canonical overflow-safe row-aware qtype geometry, byte calculation, storage identity, and explicit refusal. | V010.REBASE.DEEPSEEK.0 |
+| 7 | `V010.GGUF.ARTIFACT.ABI.1` | `TRACK.ARTIFACT` | common | `blocked` | Close native GGUF container, metadata, tensor-info, range, lifetime, and stable failure ABI beyond tiny fixtures. | V010.GGUF.QTYPE.ABI.1 |
+| 8 | `V010.GGUF.LAYOUT.INTEGRITY.1` | `TRACK.INTEGRITY` | common | `blocked` | Validate global tensor order, padded offsets, qtype-sized ranges, alignment, overlap, truncation, and aggregate overflow. | V010.GGUF.ARTIFACT.ABI.1 |
+| 9 | `V010.CUDA.FAILCLOSED.0` | `TRACK.BACKEND` | DGX Spark | `blocked` | Remove advertised no-op fallback support and make every claimed CUDA operation real, reference-compared, or explicitly unsupported. | V010.GGUF.LAYOUT.INTEGRITY.1 |
+| 10 | `V010.MODEL.ARCH.IR.0` | `TRACK.MODEL` | DeepSeek | `blocked` | Create the execution-complete typed DeepSeek-V4-Flash architecture IR covering attention, positions, KV, mHC, MoE, norms, output, and tokenizer. | V010.CUDA.FAILCLOSED.0 |
+| 11 | `V010.TENSOR.COVERAGE.DEEPSEEK.0` | `TRACK.TENSOR` | DeepSeek | `blocked` | Derive the complete required DeepSeek tensor set from the architecture IR and refuse missing, duplicate, ambiguous, or unsupported roles. | V010.MODEL.ARCH.IR.0 |
+| 12 | `V010.MAP.GGUF.DEEPSEEK.0` | `TRACK.MAP` | DeepSeek | `blocked` | Map every required DeepSeek source tensor to one role, GGUF name, transform, shape, expert index, and emitted layout. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| 13 | `V010.SOURCE.PAYLOAD.STREAM.0` | `TRACK.SOURCE` | common | `blocked` | Read bounded source payload ranges from indexed shards with identity checks, short-read refusal, owned lifecycle, and cleanup. | V010.MAP.GGUF.DEEPSEEK.0 |
+| 14 | `V010.QUANT.2` | `TRACK.QUANT` | common + DeepSeek roles | `blocked` | Implement the role/qtype quantization, compute, reference-dequantization, numeric-bound, and refusal matrix required by the release artifact. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| 15 | `V010.GGUF.WRITER.1` | `TRACK.ARTIFACT` | common | `blocked` | Emit concrete GGUF bytes from canonical metadata and tensor descriptors with checked offsets, alignment, atomic publication, failure cleanup, and deterministic order. | V010.QUANT.2 |
+| 16 | `V010.ARTIFACT.EMIT.DEEPSEEK.0` | `TRACK.ARTIFACT` | DeepSeek | `blocked` | Produce complete reference and selected-release-qtype DeepSeek-V4-Flash GGUF artifacts from verified sources without promoting runtime support. | V010.GGUF.WRITER.1 |
+| 17 | `V010.GGUF.ROUNDTRIP.1` | `TRACK.ARTIFACT` | common + DeepSeek artifact | `blocked` | Prove writer-reader equivalence through YVEX and an official GGUF reader for metadata, tensor inventory, layout, payload facts, determinism, and cleanup. | V010.ARTIFACT.EMIT.DEEPSEEK.0 |
+| 18 | `V010.ARTIFACT.SUPPORT.CUTOVER.0` | `TRACK.ARTIFACT` | common | `blocked` | Admit only complete artifacts into model-support gates and retain bounded files explicitly as tensor proof artifacts. | V010.GGUF.ROUNDTRIP.1 |
+| 19 | `V010.ARTIFACT.MATERIALIZE.0` | `TRACK.RESIDENCY` | common | `blocked` | Materialize tensors from any admitted tensor map through a family-neutral descriptor with layout/qtype checks, ownership, failure cleanup, and release. | V010.ARTIFACT.SUPPORT.CUTOVER.0 |
+| 20 | `V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0` | `TRACK.RESIDENCY` | DeepSeek / DGX Spark | `blocked` | Stream, materialize, place, own, and release every required DeepSeek tensor under an explicit DGX Spark memory plan. | V010.ARTIFACT.MATERIALIZE.0 |
+| 21 | `V010.RUNTIME.DESCRIPTOR.GGUF.0` | `TRACK.MODEL` | common | `blocked` | Project admitted artifact and materialization facts into one canonical family-neutral runtime descriptor. | V010.ARTIFACT.MATERIALIZE.0 |
+| 22 | `V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0` | `TRACK.MODEL` | DeepSeek | `blocked` | Specialize the canonical descriptor into one execution-complete, family-correct DeepSeek descriptor. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 + V010.RUNTIME.DESCRIPTOR.GGUF.0 |
+| 23 | `V010.GRAPH.DEEPSEEK.ATTENTION.0` | `TRACK.GRAPH` | DeepSeek | `blocked` | Execute family-correct DeepSeek attention and position behavior against the descriptor with independent reference comparison and closed failures. | V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0 |
+| 24 | `V010.RUNTIME.DEEPSEEK.KV.0` | `TRACK.KV` | DeepSeek | `blocked` | Allocate, index, write, read, advance, bound, clear, and release the exact DeepSeek KV state used by attention and decode. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| 25 | `V010.RUNTIME.DEEPSEEK.PREFILL.0` | `TRACK.PREFILL` | DeepSeek | `blocked` | Execute full prompt prefill through every required layer and write real attention-derived KV state. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| 26 | `V010.RUNTIME.DEEPSEEK.MOE.0` | `TRACK.GRAPH` | DeepSeek | `blocked` | Compute router logits, select experts, execute real expert weights, combine outputs, integrate shared experts, and clean up failures. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| 27 | `V010.GRAPH.DEEPSEEK.TRANSFORMER.0` | `TRACK.GRAPH` | DeepSeek | `blocked` | Execute embedding through repeated attention/MoE layers, residual paths, and final norm over the complete descriptor. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| 28 | `V010.RUNTIME.DEEPSEEK.DECODE.0` | `TRACK.DECODE` | DeepSeek | `blocked` | Run repeated model-backed decode steps that consume prior KV, advance positions, preserve cancellation, and produce real hidden state. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| 29 | `V010.RUNTIME.DEEPSEEK.LOGITS.0` | `TRACK.LOGITS` | DeepSeek | `blocked` | Apply final norm and the complete output head to real transformer state and produce vocabulary logits with numeric proof. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| 30 | `V010.RUNTIME.SAMPLING.0` | `TRACK.SAMPLING` | common | `blocked` | Select token IDs from real vocabulary logits with deterministic greedy behavior, seeded stochastic policies, validation, and refusal. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| 31 | `V010.RUNTIME.DEEPSEEK.TOKENIZER.0` | `TRACK.TOKENIZER` | DeepSeek | `blocked` | Load the exact tokenizer, encode prompts, apply template/special/EOS/stop rules, and detokenize generated IDs. | V010.RUNTIME.SAMPLING.0 |
+| 32 | `V010.RUNTIME.DEEPSEEK.GENERATION.0` | `TRACK.GENERATION` | DeepSeek | `blocked` | Compose tokenizer, prefill, KV, decode, logits, sampling, append, stop, cancellation, partial-output, and cleanup for multiple real tokens. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+| 33 | `V010.CLI.DEEPSEEK.GENERATE.0` | `TRACK.OPERATOR` | DeepSeek | `blocked` | Expose one operator command that invokes the accepted generation path and reports precise refusal, cancellation, partial output, and cleanup. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| 34 | `V010.EVAL.DEEPSEEK.0` | `TRACK.EVAL` | DeepSeek | `blocked` | Run repeatable correctness, tokenizer, regression, long-context, refusal, and release-path generation evaluations. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| 35 | `V010.BENCH.DEEPSEEK.0` | `TRACK.BENCH` | DeepSeek / DGX Spark | `not-measured` | Record reproducible artifact, qtype, prompt/context, prefill, decode, generation, timing, throughput, and memory evidence. | V010.EVAL.DEEPSEEK.0 |
+| 36 | `V010.RELEASE.0` | `TRACK.RELEASE` | DeepSeek v0.1.0 | `blocked` | Close every source, architecture, mapping, artifact, materialization, backend, transformer, generation, evaluation, benchmark, validation, claim, operator, packaging, and version gate. | V010.BENCH.DEEPSEEK.0 |
+| 37 | `TOPOLOGY.CELL.CLOSURE.0` | `TRACK.OPERATOR` | common | `planned` | Close residual mixed ownership only where concrete behavior still crosses domain/report/input/command/render/write boundaries. | V010.DOCS.ARCHITECTURE.0; supporting, not a product-stage promotion |
+
+## 9. Complete Track/Wave Ledger
+
+This is the canonical expansion of every track. Every ID appears exactly once
+in this section. First-class milestones are separated from recovered subordinate
+rows. "Consumer" names the conclusive milestone or future decision that owns
+the row's use.
+
+### 9.1 TRACK.SCOPE
+
+**Owner:** Project control, release scope, family/release distinction, claim boundary, version policy, and documentation-control transitions.
+
+**Current truth:** complete ledger recovery closes in this row; documentation architecture is active
+
+**Ledger summary:** 25 recovered IDs; 4 first-class milestones; 7 complete support rows; 12 open support rows; 6 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.DOCS.REFOUNDATION.0` | project | `complete` | Established the exact DeepSeek v0.1.0 claim boundary and non-claims; its over-deletion is corrected by project recovery. | - | current |
+| `V010.PROJECT.RECOVERY.0` | project | `partial` | Recovered product doctrine and a short milestone map but did not restore the per-track wave ledger or multi-family engineering scope. | V010.DOCS.REFOUNDATION.0 | current |
+| `V010.PROJECT.RECOVERY.1` | project | `complete` | Installed PROJECT.md as the sole authority, recovered every old wave at a truthful rank, restored counts, and preserved Qwen/Gemma/common work. | V010.PROJECT.RECOVERY.0 | current |
+| `V010.DOCS.ARCHITECTURE.0` | project | `active` | Standardize documentation taxonomy and recover durable architecture/artifact material without creating a second roadmap. | V010.PROJECT.RECOVERY.1 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `SPINE.RETARGET.MULTIFAMILY.0` | `migration` | multi-family | `superseded` | Former multi-family v0.1 release lock. Superseded only as a release contract; its Qwen/Gemma engineering work remains active. | V010.PROJECT.RECOVERY.1 |
+| `SPINE.TRACK.CANON.0` | `migration` | project/release | `superseded` | Replace the oversized active spine with the compact track-first map. Superseded by the complete ranked PROJECT.md ledger. | V010.PROJECT.RECOVERY.1 |
+| `SPINE.ACTIVE.REWRITE.1` | `migration` | project/release | `superseded` | Superseded active-spine rewrite attempt kept only as a naming marker. Superseded by the complete ranked PROJECT.md ledger. | V010.PROJECT.RECOVERY.1 |
+| `SPINE.ROW.CATALOG.0` | `migration` | project/release | `superseded` | Restore explicit active row labels without restoring historical ledger content. Superseded by the complete ranked PROJECT.md ledger. | V010.PROJECT.RECOVERY.1 |
+| `SPINE.ROW.CATALOG.1` | `migration` | project/release | `superseded` | Promote the row-label catalog into a trackmap with status and description columns. Superseded by the complete ranked PROJECT.md ledger. | V010.PROJECT.RECOVERY.1 |
+| `SPINE.CAPABILITY.MAP.0` | `migration` | project/release | `superseded` | Replace the current snapshot with the v0.1.0 pipeline capability map. Superseded by the complete ranked PROJECT.md ledger. | V010.PROJECT.RECOVERY.1 |
+| `V010.SCOPE.0` | `capability` | project/release | `complete` | v0.1.0 release doctrine. | V010.RELEASE.0 |
+| `V010.SCOPE.1` | `capability` | project/release | `complete` | v0.1.0 minimum gates. | V010.RELEASE.0 |
+| `V010.SCOPE.2` | `subtask` | project/release | `planned` | v0.1.0 non-goals. | V010.RELEASE.0 |
+| `V010.SCOPE.3` | `subtask` | project/release | `planned` | v0.1.0 included track map. | V010.RELEASE.0 |
+| `V010.SCOPE.4` | `subtask` | project/release | `planned` | v0.1.0 excluded and postponed track map. | V010.RELEASE.0 |
+| `V010.SCOPE.5` | `subtask` | project/release | `planned` | v0.1.0 target selection policy. | V010.RELEASE.0 |
+| `V010.SCOPE.6` | `subtask` | project/release | `planned` | v0.1.0 release-readiness vocabulary. | V010.RELEASE.0 |
+| `V010.SCOPE.7` | `subtask` | project/release | `planned` | v0.1.0 claim boundary map. | V010.RELEASE.0 |
+| `V010.TARGET.0` | `subtask` | project/release | `planned` | target class registry refresh. | V010.REBASE.DEEPSEEK.0 |
+| `V010.TARGET.1` | `evidence` | project/release | `complete` | selected-runtime-slice target report. | V010.REBASE.DEEPSEEK.0 |
+| `V010.TARGET.2` | `evidence` | project/release | `complete` | full-runtime-candidate target report. | V010.REBASE.DEEPSEEK.0 |
+| `V010.TARGET.3` | `evidence` | dense/common | `complete` | dense candidate target report. | V010.REBASE.DEEPSEEK.0 |
+| `V010.TARGET.4` | `subtask` | MoE/common | `planned` | MoE candidate target report. | V010.REBASE.DEEPSEEK.0 |
+| `V010.TARGET.5` | `subtask` | DeepSeek | `planned` | DeepSeek pressure target report. | V010.REBASE.DEEPSEEK.0 |
+| `V010.TARGET.6` | `subtask` | GLM | `planned` | GLM source-only pressure target report. | V010.REBASE.DEEPSEEK.0 |
+| `V010.TARGET.7` | `evidence` | Qwen / Metal | `complete` | Qwen/Metal pressure target report. | V010.REBASE.DEEPSEEK.0 |
+| `V010.TARGET.8` | `subtask` | project/release | `planned` | external reference target report. | V010.REBASE.DEEPSEEK.0 |
+| `V010.TARGET.9` | `capability` | project/release | `complete` | v0.1.0 target decision record. | V010.REBASE.DEEPSEEK.0 |
+| `V010.TARGET.10` | `subtask` | project/release | `planned` | target decision refusal and rollback policy. | V010.REBASE.DEEPSEEK.0 |
+
+
+### 9.2 TRACK.SOURCE
+
+**Owner:** Source identity, revision, provider intake, manifests, shards, sidecars, header inventory, payload trust, and bounded payload access.
+
+**Current truth:** multi-family intake exists; exact DeepSeek verification remains open
+
+**Ledger summary:** 24 recovered IDs; 2 first-class milestones; 21 complete support rows; 3 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.REBASE.DEEPSEEK.0` | DeepSeek | `blocked` | Verify the exact DeepSeek-V4-Flash source identity, revision, config, tokenizer, shard inventory, footprint, and architecture facts. | V010.DOCS.ARCHITECTURE.0 | current |
+| `V010.SOURCE.PAYLOAD.STREAM.0` | common | `blocked` | Read bounded source payload ranges from indexed shards with identity checks, short-read refusal, owned lifecycle, and cleanup. | V010.MAP.GGUF.DEEPSEEK.0 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.SOURCE.0` | `subtask` | common | `planned` | source manifest schema refresh. | V010.REBASE.DEEPSEEK.0 |
+| `V010.SOURCE.1` | `evidence` | common | `complete` | source family/profile fields. | V010.REBASE.DEEPSEEK.0 |
+| `V010.SOURCE.2` | `capability` | common | `complete` | source artifact class fields. | V010.REBASE.DEEPSEEK.0 |
+| `V010.SOURCE.3` | `evidence` | common | `complete` | source shard count and footprint report. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.SOURCE.4` | `capability` | common | `complete` | source provenance fields. | V010.REBASE.DEEPSEEK.0 |
+| `V010.SOURCE.5` | `evidence` | common | `complete` | native safetensors inventory. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.SOURCE.6` | `evidence` | common | `complete` | source tensor metadata inventory. | V010.REBASE.DEEPSEEK.0 |
+| `V010.SOURCE.7` | `capability` | common | `complete` | source manifest/provenance hardening. | V010.REBASE.DEEPSEEK.0 |
+| `V010.SOURCE.8` | `subtask` | GLM | `planned` | GLM source pressure report. | V010.REBASE.DEEPSEEK.0 |
+| `V010.SOURCE.9` | `evidence` | Qwen | `complete` | Qwen source pressure report. | V010.REBASE.DEEPSEEK.0 |
+| `V010.SOURCE.10` | `subtask` | common | `planned` | v0.1.0 source acceptance gate. | V010.REBASE.DEEPSEEK.0 |
+| `V010.SOURCE.7A` | `capability` | common | `complete` | Add native source tensor download under the models namespace. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `MODELS.DOWNLOAD.0` | `capability` | common | `complete` | Add native source tensor download under the models namespace. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.SOURCE.7B` | `capability` | common | `complete` | Add local provider account preflight for Hugging Face and GitHub. | V010.REBASE.DEEPSEEK.0 |
+| `ACCOUNTS.PROVIDER.0` | `capability` | common | `complete` | Add local provider account preflight for Hugging Face and GitHub. | V010.REBASE.DEEPSEEK.0 |
+| `MODELS.DOWNLOAD.LIVE.0` | `capability` | common | `complete` | Expose live/plain/log/off source download progress modes. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `MODELS.DOWNLOAD.SIGNAL.0` | `capability` | common | `complete` | Preserve partial source state across interrupted downloads. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `MODELS.DOWNLOAD.CONTROL.0` | `evidence` | common | `complete` | Add download status, stop, resume, and explicit cleanup controls. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `MODELS.SOURCE.IDENTITY.0` | `capability` | common | `complete` | Make downloaded source targets visible to downstream source commands. | V010.REBASE.DEEPSEEK.0 |
+| `MODELS.SOURCE.MAP.HANDOFF.0` | `capability` | common | `complete` | Hand downloaded Qwen/Gemma targets into existing map surfaces. | V010.REBASE.DEEPSEEK.0 |
+| `MODELS.SOURCE.ROLEMAP.COVERAGE.0` | `evidence` | common | `complete` | Report dynamic downloaded target role coverage from header evidence. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `OWI.TARGETS.QWEN.0` | `evidence` | Qwen | `complete` | Expose the Qwen source target profile. | V010.REBASE.DEEPSEEK.0 |
+| `OWI.TARGETS.GEMMA.0` | `evidence` | Gemma | `complete` | Expose the Gemma source target profile. | V010.REBASE.DEEPSEEK.0 |
+| `MODEL.TARGET.IDENTITY.0` | `capability` | common | `complete` | Use backend-neutral source target IDs for Qwen and Gemma. | V010.REBASE.DEEPSEEK.0 |
+
+
+### 9.3 TRACK.MAP
+
+**Owner:** Family source names, canonical runtime roles, GGUF names, transforms, layouts, ambiguity refusal, and complete mapping coverage.
+
+**Current truth:** dense/Qwen and report evidence exist; complete DeepSeek map is blocked
+
+**Ledger summary:** 12 recovered IDs; 1 first-class milestones; 6 complete support rows; 6 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.MAP.GGUF.DEEPSEEK.0` | DeepSeek | `blocked` | Map every required DeepSeek source tensor to one role, GGUF name, transform, shape, expert index, and emitted layout. | V010.TENSOR.COVERAGE.DEEPSEEK.0 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.MAP.0` | `subtask` | common | `planned` | tensor mapping schema. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.1` | `capability` | dense/common | `complete` | dense tensor naming map. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.2` | `subtask` | MoE/common | `planned` | MoE tensor naming map. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.3` | `subtask` | DeepSeek | `planned` | DeepSeek tensor naming map. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.4` | `subtask` | GLM | `planned` | GLM tensor naming map. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.5` | `capability` | Qwen | `complete` | Qwen tensor naming map. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.6` | `capability` | common | `complete` | output-head tensor mapping. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.7` | `capability` | common | `complete` | tokenizer metadata mapping. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.8` | `evidence` | common | `complete` | missing-role blocker report. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.9` | `evidence` | common | `complete` | Legacy bounded tensor-mapping report gate; it does not close complete DeepSeek mapping. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.GGUF.NAMES.0` | `subtask` | common | `planned` | GGUF emitted tensor-name map by runtime role. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.GGUF.LAYOUT.0` | `subtask` | common | `planned` | GGUF emitted tensor layout/range map by runtime role. | V010.MAP.GGUF.DEEPSEEK.0 |
+
+
+### 9.4 TRACK.QUANT
+
+**Owner:** Dtype/qtype ABI, storage geometry, role policy, conversion, quantization, reference dequantization, compute truth, and refusal.
+
+**Current truth:** policy and fixture proof exist; ABI is reopened
+
+**Ledger summary:** 5 recovered IDs; 2 first-class milestones; 2 complete support rows; 2 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.GGUF.QTYPE.ABI.1` | common | `blocked` | Close canonical overflow-safe row-aware qtype geometry, byte calculation, storage identity, and explicit refusal. | V010.REBASE.DEEPSEEK.0 | current |
+| `V010.QUANT.2` | common + DeepSeek roles | `blocked` | Implement the role/qtype quantization, compute, reference-dequantization, numeric-bound, and refusal matrix required by the release artifact. | V010.SOURCE.PAYLOAD.STREAM.0 | recovered/promoted |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.QUANT.0` | `evidence` | common | `complete` | qtype policy report. | V010.QUANT.2 |
+| `V010.QUANT.1` | `evidence` | common | `complete` | multi-family dtype/qtype support by runtime role. | V010.QUANT.2 |
+| `V010.GGUF.QTYPE.ABI.0` | `evidence` | common | `reopened` | GGUF qtype byte geometry and refusal ABI. Fixture-bounded evidence only; reopened because it does not close the complete ABI. | V010.GGUF.QTYPE.ABI.1 |
+| `V010.QUANT.3` | `subtask` | common | `planned` | calibration/imatrix requirement report. | V010.QUANT.2 |
+
+
+### 9.5 TRACK.ARTIFACT
+
+**Owner:** GGUF container ABI, native writer, conversion coordination, complete emission, identity, registration, and writer-reader roundtrip.
+
+**Current truth:** bounded proof emission exists; complete artifact is unsupported
+
+**Ledger summary:** 11 recovered IDs; 5 first-class milestones; 3 complete support rows; 6 open support rows; 2 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.GGUF.ARTIFACT.ABI.1` | common | `blocked` | Close native GGUF container, metadata, tensor-info, range, lifetime, and stable failure ABI beyond tiny fixtures. | V010.GGUF.QTYPE.ABI.1 | current |
+| `V010.GGUF.WRITER.1` | common | `blocked` | Emit concrete GGUF bytes from canonical metadata and tensor descriptors with checked offsets, alignment, atomic publication, failure cleanup, and deterministic order. | V010.QUANT.2 | current |
+| `V010.ARTIFACT.EMIT.DEEPSEEK.0` | DeepSeek | `blocked` | Produce complete reference and selected-release-qtype DeepSeek-V4-Flash GGUF artifacts from verified sources without promoting runtime support. | V010.GGUF.WRITER.1 | current |
+| `V010.GGUF.ROUNDTRIP.1` | common + DeepSeek artifact | `blocked` | Prove writer-reader equivalence through YVEX and an official GGUF reader for metadata, tensor inventory, layout, payload facts, determinism, and cleanup. | V010.ARTIFACT.EMIT.DEEPSEEK.0 | current |
+| `V010.ARTIFACT.SUPPORT.CUTOVER.0` | common | `blocked` | Admit only complete artifacts into model-support gates and retain bounded files explicitly as tensor proof artifacts. | V010.GGUF.ROUNDTRIP.1 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `MODELS.ARTIFACTS.LIST.0` | `evidence` | common | `complete` | List/status local GGUF artifact presence without emitting new artifacts. | V010.ARTIFACT.SUPPORT.CUTOVER.0 |
+| `V010.GGUF.ARTIFACT.ABI.0` | `evidence` | common | `reopened` | GGUF container, metadata, tensor_info, and absolute range ABI boundary. Fixture-bounded evidence only; reopened because it does not close the complete ABI. | V010.GGUF.ARTIFACT.ABI.1 |
+| `V010.GGUF.WRITER.0` | `migration` | common | `superseded` | Initial writer row replaced by V010.GGUF.WRITER.1 after ABI refoundation. | V010.GGUF.WRITER.1 |
+| `V010.GGUF.ROUNDTRIP.0` | `migration` | common | `superseded` | Initial roundtrip row replaced by V010.GGUF.ROUNDTRIP.1 after ABI refoundation. | V010.GGUF.ROUNDTRIP.1 |
+| `V010.ARTIFACT.EMIT.0` | `capability` | common | `complete` | Controlled bounded artifact emission; not complete model emission. | V010.ARTIFACT.EMIT.DEEPSEEK.0 |
+| `V010.ARTIFACT.EMIT.1` | `evidence` | common | `complete` | Selected tensor proof artifact emission; not complete model emission. | V010.ARTIFACT.EMIT.DEEPSEEK.0 |
+| `V010.ARTIFACT.EMIT.2` | `subtask` | common | `planned` | generation-capable quantized artifact emission. | V010.ARTIFACT.EMIT.DEEPSEEK.0 |
+| `V010.ARTIFACT.EMIT.3` | `subtask` | common | `planned` | split artifact plan. | V010.ARTIFACT.EMIT.DEEPSEEK.0 |
+| `V010.ARTIFACT.EMIT.4` | `subtask` | common | `planned` | artifact parse roundtrip. | V010.ARTIFACT.EMIT.DEEPSEEK.0 |
+| `V010.ARTIFACT.EMIT.5` | `subtask` | common | `planned` | artifact registration. | V010.ARTIFACT.EMIT.DEEPSEEK.0 |
+| `V010.ARTIFACT.EMIT.6` | `subtask` | common | `planned` | v0.1.0 artifact production gate. | V010.ARTIFACT.EMIT.DEEPSEEK.0 |
+
+
+### 9.6 TRACK.INTEGRITY
+
+**Owner:** Container, metadata, tensor directory, offsets, alignment, qtype-sized ranges, corruption, drift, and artifact admission.
+
+**Current truth:** bounded validators exist; complete-layout closure is blocked
+
+**Ledger summary:** 14 recovered IDs; 1 first-class milestones; 10 complete support rows; 4 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.GGUF.LAYOUT.INTEGRITY.1` | common | `blocked` | Validate global tensor order, padded offsets, qtype-sized ranges, alignment, overlap, truncation, and aggregate overflow. | V010.GGUF.ARTIFACT.ABI.1 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.INTEGRITY.0` | `capability` | common | `complete` | artifact identity manifest. | V010.GGUF.LAYOUT.INTEGRITY.1 |
+| `V010.INTEGRITY.1` | `capability` | common | `complete` | size/digest gate. | V010.GGUF.LAYOUT.INTEGRITY.1 |
+| `V010.INTEGRITY.2` | `capability` | common | `complete` | metadata parse gate. | V010.GGUF.LAYOUT.INTEGRITY.1 |
+| `V010.INTEGRITY.3` | `capability` | common | `complete` | tensor directory gate. | V010.GGUF.LAYOUT.INTEGRITY.1 |
+| `V010.INTEGRITY.4` | `capability` | common | `complete` | tensor byte-range gate. | V010.GGUF.LAYOUT.INTEGRITY.1 |
+| `V010.INTEGRITY.5` | `capability` | common | `complete` | shape/rank/dtype gate. | V010.GGUF.LAYOUT.INTEGRITY.1 |
+| `V010.INTEGRITY.6` | `capability` | common | `complete` | element count/overflow gate. | V010.GGUF.LAYOUT.INTEGRITY.1 |
+| `V010.INTEGRITY.7` | `subtask` | common | `planned` | qtype support gate. | V010.ARTIFACT.SUPPORT.CUTOVER.0 |
+| `V010.INTEGRITY.8` | `capability` | common | `complete` | registry drift gate. | V010.GGUF.LAYOUT.INTEGRITY.1 |
+| `V010.INTEGRITY.9` | `capability` | common | `complete` | corruption fixture regression. | V010.GGUF.LAYOUT.INTEGRITY.1 |
+| `V010.INTEGRITY.10` | `capability` | common | `complete` | materialization preflight gate. | V010.ARTIFACT.SUPPORT.CUTOVER.0 |
+| `V010.INTEGRITY.11` | `subtask` | common | `planned` | graph integrity gate. | V010.ARTIFACT.SUPPORT.CUTOVER.0 |
+| `V010.INTEGRITY.12` | `subtask` | common | `planned` | runtime integrity gate. | V010.ARTIFACT.SUPPORT.CUTOVER.0 |
+| `V010.INTEGRITY.13` | `subtask` | common | `planned` | v0.1.0 integrity acceptance gate. | V010.GGUF.LAYOUT.INTEGRITY.1 |
+
+
+### 9.7 TRACK.MODEL
+
+**Owner:** Family architecture profiles, typed architecture IR, layer topology, attention/position/KV/MoE rules, and runtime descriptor projection.
+
+**Current truth:** Qwen/Gemma/DeepSeek header-derived profiles exist; execution-complete DeepSeek IR does not
+
+**Ledger summary:** 21 recovered IDs; 3 first-class milestones; 9 complete support rows; 11 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.MODEL.ARCH.IR.0` | DeepSeek | `blocked` | Create the execution-complete typed DeepSeek-V4-Flash architecture IR covering attention, positions, KV, mHC, MoE, norms, output, and tokenizer. | V010.CUDA.FAILCLOSED.0 | current |
+| `V010.RUNTIME.DESCRIPTOR.GGUF.0` | common | `blocked` | Project admitted artifact and materialization facts into one canonical family-neutral runtime descriptor. | V010.ARTIFACT.MATERIALIZE.0 | recovered/promoted |
+| `V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0` | DeepSeek | `blocked` | Specialize the canonical descriptor into one execution-complete, family-correct DeepSeek descriptor. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 + V010.RUNTIME.DESCRIPTOR.GGUF.0 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `MODEL.CLASS.QWEN.0` | `evidence` | Qwen | `complete` | Profile Qwen model class from header and sidecar metadata. | V010.MODEL.ARCH.IR.0 |
+| `MODEL.CLASS.GEMMA.0` | `evidence` | Gemma | `complete` | Profile Gemma model class from header and sidecar metadata. | V010.MODEL.ARCH.IR.0 |
+| `MOE.CLASS.0` | `evidence` | MoE/common | `complete` | Report MoE class facts and runtime blockers. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.0` | `subtask` | common | `planned` | model-class schema finalization. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.1` | `subtask` | common | `planned` | target class detector. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.2` | `subtask` | dense/common | `planned` | dense model-class report. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.3` | `evidence` | MoE/common | `complete` | MoE model-class report. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.4` | `subtask` | common | `planned` | source-only class report. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.5` | `subtask` | common | `planned` | selected-slice class report. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.6` | `evidence` | DeepSeek | `complete` | DeepSeek class report. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.7` | `subtask` | GLM | `planned` | GLM class/source-only report. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.8` | `evidence` | Qwen | `complete` | Qwen class report. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.9` | `evidence` | common | `complete` | context class integration. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.10` | `evidence` | common | `complete` | attention class integration. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.11` | `evidence` | common | `complete` | KV class integration. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.12` | `subtask` | common | `planned` | output-head class report. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.13` | `subtask` | common | `planned` | tokenizer class report. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.14` | `subtask` | common | `planned` | runtime requirement report. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.15` | `subtask` | common | `planned` | dynamic path selection report. | V010.MODEL.ARCH.IR.0 |
+| `V010.CLASS.16` | `subtask` | common | `planned` | v0.1.0 class acceptance gate. | V010.MODEL.ARCH.IR.0 |
+
+
+### 9.8 TRACK.TENSOR
+
+**Owner:** Canonical tensor collections, role requirements, global/layer/attention/MoE/norm/output/tokenizer coverage, and missing-role truth.
+
+**Current truth:** multi-family header inventories exist; complete DeepSeek execution coverage is blocked
+
+**Ledger summary:** 27 recovered IDs; 1 first-class milestones; 18 complete support rows; 9 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.TENSOR.COVERAGE.DEEPSEEK.0` | DeepSeek | `blocked` | Derive the complete required DeepSeek tensor set from the architecture IR and refuse missing, duplicate, ambiguous, or unsupported roles. | V010.MODEL.ARCH.IR.0 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `TENSOR.COLLECTION.QWEN.0` | `evidence` | Qwen | `complete` | Inventory Qwen tensor collections from safetensors headers only. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `TENSOR.COLLECTION.GEMMA.0` | `evidence` | Gemma | `complete` | Inventory Gemma tensor collections from safetensors headers only. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `TENSOR.MOE.0` | `evidence` | MoE/common | `complete` | Report MoE tensor collection coverage and missing runtime pieces. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.0` | `subtask` | common | `planned` | tensor collection schema. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.1` | `evidence` | common | `complete` | embedding collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.2` | `subtask` | common | `planned` | attention norm collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.3` | `subtask` | common | `planned` | post-attention norm collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.4` | `subtask` | common | `planned` | final norm collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.5` | `evidence` | common | `complete` | Q projection collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.6` | `evidence` | common | `complete` | K projection collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.7` | `evidence` | common | `complete` | V projection collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.8` | `evidence` | common | `complete` | O projection collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.9` | `subtask` | common | `planned` | RoPE/position metadata collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.10` | `subtask` | common | `planned` | attention mask/rule collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.11` | `evidence` | common | `complete` | KV runtime-state collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.12` | `evidence` | dense/common | `complete` | dense MLP gate/up/down collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.13` | `subtask` | dense/common | `planned` | dense activation collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.14` | `evidence` | MoE/common | `complete` | MoE router collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.15` | `evidence` | MoE/common | `complete` | MoE expert gate/up/down collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.16` | `evidence` | MoE/common | `complete` | MoE shared expert collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.17` | `evidence` | MoE/common | `complete` | MoE dispatch metadata collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.18` | `evidence` | common | `complete` | output-head collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.19` | `evidence` | common | `complete` | tokenizer metadata collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.20` | `subtask` | common | `planned` | runtime input/output token collection. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.21` | `evidence` | common | `complete` | required tensor coverage report. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.22` | `evidence` | common | `complete` | missing tensor blocker report. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| `V010.TENSOR.23` | `subtask` | common | `planned` | v0.1.0 tensor collection gate. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+
+
+### 9.9 TRACK.RESIDENCY
+
+**Owner:** Payload streaming, materialization, placement, memory planning, CUDA residency, movement, ownership, cleanup, and release.
+
+**Current truth:** selected planning/proof evidence only
+
+**Ledger summary:** 42 recovered IDs; 2 first-class milestones; 0 complete support rows; 41 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.ARTIFACT.MATERIALIZE.0` | common | `blocked` | Materialize tensors from any admitted tensor map through a family-neutral descriptor with layout/qtype checks, ownership, failure cleanup, and release. | V010.ARTIFACT.SUPPORT.CUTOVER.0 | recovered/promoted |
+| `V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0` | DeepSeek / DGX Spark | `blocked` | Stream, materialize, place, own, and release every required DeepSeek tensor under an explicit DGX Spark memory plan. | V010.ARTIFACT.MATERIALIZE.0 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.STORAGE.0` | `subtask` | common | `planned` | storage-stream doctrine refresh. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.1` | `subtask` | common | `planned` | storage root and cache layout. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.2` | `subtask` | common | `planned` | source shard index. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.3` | `subtask` | common | `planned` | artifact shard index. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.4` | `subtask` | common | `planned` | tensor byte-range map. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.5` | `subtask` | common | `planned` | tensor page map. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.6` | `subtask` | common | `planned` | tensor chunk map. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.7` | `subtask` | common | `planned` | cold-read probe. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.8` | `subtask` | common | `planned` | warm-read probe. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.9` | `subtask` | common | `planned` | repeated-read diagnostics. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.10` | `subtask` | common | `planned` | staged-read proof. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.11` | `subtask` | common | `planned` | host cache policy. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.12` | `subtask` | common | `planned` | eviction policy. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.13` | `subtask` | common | `planned` | short read failure. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.14` | `subtask` | common | `planned` | missing shard failure. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.15` | `subtask` | common | `planned` | digest mismatch failure. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.16` | `subtask` | common | `planned` | cleanup/release report. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.17` | `subtask` | common | `planned` | GLM source storage pressure report. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.18` | `subtask` | MoE/common | `planned` | MoE expert storage pressure report. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.19` | `subtask` | common | `planned` | output-head storage pressure report. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.STORAGE.20` | `subtask` | common | `planned` | v0.1.0 storage gate. | V010.SOURCE.PAYLOAD.STREAM.0 |
+| `V010.RESIDENCY.0` | `subtask` | common | `planned` | residency class report. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.1` | `subtask` | common | `planned` | resident tensor plan. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.2` | `subtask` | common | `planned` | CPU residency plan. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.3` | `subtask` | CUDA / DGX Spark | `planned` | CUDA residency plan. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.4` | `subtask` | common | `planned` | managed-memory report. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.5` | `subtask` | common | `planned` | host-staged residency plan. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.6` | `subtask` | common | `planned` | SSD-staged residency plan. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.7` | `subtask` | common | `planned` | SSD-streamed residency plan. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.8` | `subtask` | common | `planned` | hybrid residency plan. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.9` | `subtask` | common | `planned` | distributed future-only report. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.10` | `subtask` | common | `planned` | embedding residency. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.11` | `subtask` | common | `planned` | attention tensor residency. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.12` | `subtask` | common | `planned` | KV residency. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.13` | `subtask` | dense/common | `planned` | dense MLP residency. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.14` | `subtask` | MoE/common | `planned` | MoE expert residency. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.15` | `subtask` | common | `planned` | output-head residency. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.16` | `subtask` | common | `planned` | tokenizer/runtime metadata residency. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.17` | `subtask` | common | `planned` | residency transition proof. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.18` | `subtask` | common | `planned` | residency cleanup/failure report. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+| `V010.RESIDENCY.19` | `subtask` | common | `planned` | v0.1.0 residency gate. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 |
+
+
+### 9.10 TRACK.BACKEND
+
+**Owner:** Hardware/build profiles, CPU/CUDA capability, qtype operations, reference parity, scratch, fallback, synchronization, refusal, and cleanup.
+
+**Current truth:** bounded primitive evidence exists; CUDA support is not fail-closed
+
+**Ledger summary:** 29 recovered IDs; 1 first-class milestones; 6 complete support rows; 23 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.CUDA.FAILCLOSED.0` | DGX Spark | `blocked` | Remove advertised no-op fallback support and make every claimed CUDA operation real, reference-compared, or explicitly unsupported. | V010.GGUF.LAYOUT.INTEGRITY.1 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `CUDA.KERNEL.0` | `capability` | CUDA / DGX Spark | `complete` | Harden bounded CUDA primitive kernels without claiming CUDA runtime generation. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.0` | `subtask` | common | `planned` | backend capability matrix. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.1` | `evidence` | common | `complete` | CPU baseline capability report. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.2` | `evidence` | CUDA / DGX Spark | `complete` | CUDA capability report. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.3` | `capability` | CUDA / DGX Spark | `complete` | CUDA allocation proof. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.4` | `capability` | CUDA / DGX Spark | `complete` | CUDA transfer proof. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.5` | `capability` | CUDA / DGX Spark | `complete` | CUDA op parity subset. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.6` | `subtask` | common | `planned` | backend op refusal policy. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.7` | `subtask` | common | `planned` | backend fallback policy. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.8` | `subtask` | common | `planned` | backend scratch allocation policy. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.9` | `subtask` | common | `planned` | backend cleanup/failure report. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.10` | `subtask` | common | `planned` | future Metal feasibility report. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.11` | `subtask` | common | `planned` | future ROCm feasibility report. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.12` | `subtask` | common | `planned` | v0.1.0 backend gate. | V010.CUDA.FAILCLOSED.0 |
+| `V010.HARDWARE.0` | `subtask` | common | `planned` | local workstation profile. | V010.RELEASE.0 |
+| `V010.HARDWARE.1` | `subtask` | common | `planned` | Spark/GB10 profile. | V010.RELEASE.0 |
+| `V010.HARDWARE.2` | `subtask` | common | `planned` | Mac/Apple Silicon profile. | V010.RELEASE.0 |
+| `V010.HARDWARE.3` | `subtask` | common | `planned` | Strix Halo/ROCm future profile. | V010.RELEASE.0 |
+| `V010.HARDWARE.4` | `subtask` | common | `planned` | memory budget report. | V010.RELEASE.0 |
+| `V010.HARDWARE.5` | `subtask` | common | `planned` | storage bandwidth pressure report. | V010.RELEASE.0 |
+| `V010.HARDWARE.6` | `subtask` | common | `planned` | reproducibility metadata profile. | V010.RELEASE.0 |
+| `V010.BUILD.0` | `subtask` | common | `planned` | build profile matrix. | V010.RELEASE.0 |
+| `V010.BUILD.1` | `subtask` | common | `planned` | CPU debug build. | V010.RELEASE.0 |
+| `V010.BUILD.2` | `subtask` | common | `planned` | CPU release build. | V010.RELEASE.0 |
+| `V010.BUILD.3` | `subtask` | CUDA / DGX Spark | `planned` | CUDA debug build. | V010.RELEASE.0 |
+| `V010.BUILD.4` | `subtask` | CUDA / DGX Spark | `planned` | CUDA release build. | V010.RELEASE.0 |
+| `V010.BUILD.5` | `subtask` | common | `planned` | sanitizer build. | V010.RELEASE.0 |
+| `V010.BUILD.6` | `subtask` | common | `planned` | release artifact hygiene. | V010.RELEASE.0 |
+| `V010.BUILD.7` | `subtask` | common | `planned` | v0.1.0 build gate. | V010.RELEASE.0 |
+
+
+### 9.11 TRACK.GRAPH
+
+**Owner:** Primitive contracts, graph construction/planning, attention, position handling, MoE routing/experts, residuals, layers, scratch, and transformer execution.
+
+**Current truth:** selected graph and primitive evidence only
+
+**Ledger summary:** 71 recovered IDs; 3 first-class milestones; 1 complete support rows; 70 open support rows; 1 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.GRAPH.DEEPSEEK.ATTENTION.0` | DeepSeek | `blocked` | Execute family-correct DeepSeek attention and position behavior against the descriptor with independent reference comparison and closed failures. | V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0 | current |
+| `V010.RUNTIME.DEEPSEEK.MOE.0` | DeepSeek | `blocked` | Compute router logits, select experts, execute real expert weights, combine outputs, integrate shared experts, and clean up failures. | V010.RUNTIME.DEEPSEEK.PREFILL.0 | current |
+| `V010.GRAPH.DEEPSEEK.TRANSFORMER.0` | DeepSeek | `blocked` | Execute embedding through repeated attention/MoE layers, residual paths, and final norm over the complete descriptor. | V010.RUNTIME.DEEPSEEK.MOE.0 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.GRAPH.PRIM.0` | `subtask` | common | `planned` | primitive inventory report. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.PRIM.1` | `subtask` | common | `planned` | RoPE integration readiness. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.PRIM.2` | `subtask` | common | `planned` | attention primitive readiness. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.PRIM.3` | `subtask` | common | `planned` | matmul/projection readiness. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.PRIM.4` | `subtask` | common | `planned` | MLP primitive readiness. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.PRIM.5` | `subtask` | MoE/common | `planned` | expert-slice primitive readiness. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.PRIM.6` | `subtask` | common | `planned` | softmax/numerics policy. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.PRIM.7` | `subtask` | common | `planned` | activation function policy. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.PRIM.8` | `subtask` | common | `planned` | residual/add policy. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.PRIM.9` | `subtask` | common | `planned` | normalization policy. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.PRIM.10` | `subtask` | common | `planned` | graph primitive regression gate. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.0` | `subtask` | common | `planned` | graph requirement report. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.1` | `subtask` | common | `planned` | embedding graph input. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.2` | `subtask` | common | `planned` | attention norm. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.3` | `subtask` | common | `planned` | Q projection. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.4` | `subtask` | common | `planned` | K projection. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.5` | `subtask` | common | `planned` | V projection. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.6` | `subtask` | common | `planned` | RoPE/position application. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.7` | `subtask` | common | `planned` | attention score path. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.8` | `subtask` | common | `planned` | causal/mask path. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.9` | `subtask` | common | `planned` | softmax path. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.10` | `subtask` | common | `planned` | value accumulation. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.11` | `subtask` | common | `planned` | O projection. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.12` | `subtask` | common | `planned` | attention residual path. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.13` | `subtask` | common | `planned` | post-attention norm. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.14` | `subtask` | dense/common | `planned` | dense MLP gate/up/down path. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.15` | `subtask` | dense/common | `planned` | dense MLP residual path. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.16` | `subtask` | common | `planned` | final norm path. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.17` | `subtask` | common | `planned` | output hidden state ownership. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.18` | `subtask` | common | `planned` | graph scratch lifecycle. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.19` | `subtask` | common | `planned` | graph cleanup/failure report. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.20` | `subtask` | common | `planned` | first transformer block. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.21` | `subtask` | common | `planned` | repeated layer stack. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.22` | `evidence` | common | `complete` | Selected-slice graph proof; not full attention or transformer execution. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.23` | `subtask` | common | `planned` | full-runtime-candidate graph proof. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.GRAPH.24` | `subtask` | common | `planned` | v0.1.0 graph gate. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
+| `V010.ATTN.0` | `subtask` | common | `planned` | attention runtime requirement report. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| `V010.ATTN.1` | `subtask` | common | `planned` | Q source validation. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| `V010.ATTN.2` | `subtask` | common | `planned` | K source validation. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| `V010.ATTN.3` | `subtask` | common | `planned` | V source validation. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| `V010.ATTN.4` | `subtask` | common | `planned` | O source validation. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| `V010.ATTN.5` | `subtask` | common | `planned` | head layout validation. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| `V010.ATTN.6` | `subtask` | common | `planned` | RoPE/position runtime rule. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| `V010.ATTN.7` | `subtask` | common | `planned` | mask runtime rule. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| `V010.ATTN.8` | `subtask` | common | `planned` | attention scratch policy. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| `V010.ATTN.9` | `subtask` | common | `planned` | full attention runtime path. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| `V010.ATTN.10` | `subtask` | common | `planned` | GQA/MQA/MLA family rule if required. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| `V010.ATTN.11` | `subtask` | common | `planned` | attention reference comparison. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| `V010.ATTN.12` | `subtask` | common | `planned` | attention cleanup/failure. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| `V010.ATTN.13` | `subtask` | common | `planned` | v0.1.0 attention gate. | V010.GRAPH.DEEPSEEK.ATTENTION.0 |
+| `V010.MOE.0` | `subtask` | MoE/common | `planned` | MoE requirement report. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.1` | `subtask` | MoE/common | `planned` | expert count report. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.2` | `subtask` | MoE/common | `planned` | active expert count report. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.3` | `subtask` | MoE/common | `planned` | shared expert report. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.4` | `subtask` | MoE/common | `planned` | router tensor report. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.5` | `subtask` | MoE/common | `planned` | router logits boundary. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.6` | `subtask` | MoE/common | `planned` | routing dtype/top-k policy. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.7` | `subtask` | MoE/common | `planned` | top-k expert selection. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.8` | `subtask` | MoE/common | `planned` | expert weight selection. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.9` | `subtask` | MoE/common | `planned` | expert dispatch plan. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.10` | `subtask` | MoE/common | `planned` | expert dispatch proof. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.11` | `subtask` | MoE/common | `planned` | expert compute proof. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.12` | `subtask` | MoE/common | `planned` | expert accumulation proof. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.13` | `subtask` | MoE/common | `planned` | shared expert integration. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.14` | `subtask` | MoE/common | `planned` | MoE residual integration. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.15` | `subtask` | MoE/common | `planned` | MoE cleanup/failure report. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.16` | `subtask` | MoE/common | `planned` | MoE selected-slice proof. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.17` | `subtask` | MoE/common | `planned` | MoE block integration. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.18` | `subtask` | MoE/common | `planned` | MoE prefill integration. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.19` | `subtask` | MoE/common | `planned` | MoE decode integration. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.MOE.20` | `subtask` | MoE/common | `planned` | v0.1.0 MoE gate. | V010.RUNTIME.DEEPSEEK.MOE.0 |
+| `V010.RUNTIME.DEEPSEEK.ATTENTION.KV.0` | `migration` | DeepSeek | `superseded` | Attempted recovery milestone split into real owner milestones for attention, KV, and prefill; no implementation was lost. | V010.GRAPH.DEEPSEEK.ATTENTION.0 + V010.RUNTIME.DEEPSEEK.KV.0 + V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+
+
+### 9.12 TRACK.PREFILL
+
+**Owner:** Prompt token execution, chunking, transformer prefill, state ownership, position progression, KV write integration, and cleanup.
+
+**Current truth:** planner and diagnostic evidence only
+
+**Ledger summary:** 27 recovered IDs; 1 first-class milestones; 9 complete support rows; 18 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.RUNTIME.DEEPSEEK.PREFILL.0` | DeepSeek | `blocked` | Execute full prompt prefill through every required layer and write real attention-derived KV state. | V010.RUNTIME.DEEPSEEK.KV.0 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.CONTEXT.0` | `subtask` | common | `planned` | active context policy. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.CONTEXT.1` | `evidence` | common | `complete` | model max context report. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.CONTEXT.2` | `evidence` | common | `complete` | requested context report. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.CONTEXT.3` | `evidence` | common | `complete` | chunk size policy. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.CONTEXT.4` | `evidence` | common | `complete` | chunk planner. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.CONTEXT.5` | `evidence` | common | `complete` | prefill position policy. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.CONTEXT.6` | `evidence` | common | `complete` | decode position policy. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.CONTEXT.7` | `evidence` | common | `complete` | overflow refusal behavior. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.CONTEXT.8` | `subtask` | common | `planned` | context stop behavior. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.CONTEXT.9` | `subtask` | common | `planned` | context trace. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.CONTEXT.10` | `subtask` | common | `planned` | v0.1.0 context gate. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.0` | `evidence` | common | `complete` | prefill requirement report. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.1` | `evidence` | common | `complete` | token input to prefill planner. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.2` | `subtask` | common | `planned` | embedding prefill input. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.3` | `subtask` | common | `planned` | layer-0 prefill entry. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.4` | `subtask` | common | `planned` | attention prefill. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.5` | `subtask` | common | `planned` | KV write during prefill. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.6` | `subtask` | dense/common | `planned` | dense MLP prefill. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.7` | `subtask` | MoE/common | `planned` | MoE router/expert prefill. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.8` | `subtask` | common | `planned` | repeated layer prefill. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.9` | `subtask` | common | `planned` | chunked prefill. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.10` | `subtask` | common | `planned` | staged/SSD prefill plan. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.11` | `subtask` | common | `planned` | prefill state ownership. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.12` | `subtask` | common | `planned` | prefill cleanup/failure. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.13` | `subtask` | common | `planned` | prefill trace. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.14` | `subtask` | common | `planned` | prefill regression. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+| `V010.PREFILL.15` | `subtask` | common | `planned` | v0.1.0 prefill gate. | V010.RUNTIME.DEEPSEEK.PREFILL.0 |
+
+
+### 9.13 TRACK.KV
+
+**Owner:** Family-correct KV geometry, allocation, indexing, append/read, capacity, reuse, lifecycle, and cleanup.
+
+**Current truth:** bounded diagnostic storage only
+
+**Ledger summary:** 21 recovered IDs; 1 first-class milestones; 4 complete support rows; 17 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.RUNTIME.DEEPSEEK.KV.0` | DeepSeek | `blocked` | Allocate, index, write, read, advance, bound, clear, and release the exact DeepSeek KV state used by attention and decode. | V010.GRAPH.DEEPSEEK.ATTENTION.0 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.KV.0` | `evidence` | common | `complete` | KV requirement report. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.1` | `evidence` | common | `complete` | KV shape policy. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.2` | `subtask` | common | `planned` | KV dtype/qtype policy. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.3` | `evidence` | common | `complete` | KV capacity estimator. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.4` | `subtask` | common | `planned` | CPU KV allocation. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.5` | `subtask` | CUDA / DGX Spark | `planned` | CUDA KV allocation. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.6` | `subtask` | common | `planned` | K write from prefill attention. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.7` | `subtask` | common | `planned` | V write from prefill attention. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.8` | `subtask` | common | `planned` | K/V read during decode. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.9` | `subtask` | common | `planned` | layer/head/position indexing. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.10` | `subtask` | common | `planned` | token position advancement. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.11` | `subtask` | common | `planned` | context overflow behavior. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.12` | `subtask` | common | `planned` | KV clear/reinit. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.13` | `subtask` | common | `planned` | KV cleanup/failure. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.14` | `evidence` | common | `complete` | KV trace/inspect. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.15` | `subtask` | common | `planned` | paged KV plan. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.16` | `subtask` | common | `planned` | paged KV skeleton. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.17` | `subtask` | common | `planned` | host spill experiment. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.18` | `subtask` | common | `planned` | SSD spill experiment. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.19` | `subtask` | common | `planned` | KV quantization policy. | V010.RUNTIME.DEEPSEEK.KV.0 |
+| `V010.KV.20` | `subtask` | common | `planned` | v0.1.0 KV gate. | V010.RUNTIME.DEEPSEEK.KV.0 |
+
+
+### 9.14 TRACK.DECODE
+
+**Owner:** One-step and repeated model-backed decode over descriptor, positions, KV, transformer state, cancellation, and cleanup.
+
+**Current truth:** diagnostic lifecycle evidence only
+
+**Ledger summary:** 15 recovered IDs; 1 first-class milestones; 3 complete support rows; 12 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.RUNTIME.DEEPSEEK.DECODE.0` | DeepSeek | `blocked` | Run repeated model-backed decode steps that consume prior KV, advance positions, preserve cancellation, and produce real hidden state. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.DECODE.0` | `evidence` | common | `complete` | decode requirement report. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| `V010.DECODE.1` | `evidence` | common | `complete` | decode state ownership. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| `V010.DECODE.2` | `evidence` | common | `complete` | decode position input. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| `V010.DECODE.3` | `subtask` | common | `planned` | decode reads KV. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| `V010.DECODE.4` | `subtask` | common | `planned` | decode attention step. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| `V010.DECODE.5` | `subtask` | dense/common | `planned` | decode dense MLP path. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| `V010.DECODE.6` | `subtask` | MoE/common | `planned` | decode MoE path. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| `V010.DECODE.7` | `subtask` | common | `planned` | decode hidden state output. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| `V010.DECODE.8` | `subtask` | common | `planned` | one runtime decode step. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| `V010.DECODE.9` | `subtask` | common | `planned` | repeated decode lifecycle. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| `V010.DECODE.10` | `subtask` | common | `planned` | decode interruption/cancel safe point. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| `V010.DECODE.11` | `subtask` | common | `planned` | decode cleanup/failure. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| `V010.DECODE.12` | `subtask` | common | `planned` | decode trace. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| `V010.DECODE.13` | `subtask` | common | `planned` | decode regression. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+| `V010.DECODE.14` | `subtask` | common | `planned` | v0.1.0 decode gate. | V010.RUNTIME.DEEPSEEK.DECODE.0 |
+
+
+### 9.15 TRACK.LOGITS
+
+**Owner:** Final hidden-state ownership, final norm, output-head placement/projection, vocabulary logits, numeric checks, and buffer lifecycle.
+
+**Current truth:** synthetic/report evidence only
+
+**Ledger summary:** 17 recovered IDs; 1 first-class milestones; 6 complete support rows; 11 open support rows; 1 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.RUNTIME.DEEPSEEK.LOGITS.0` | DeepSeek | `blocked` | Apply final norm and the complete output head to real transformer state and produce vocabulary logits with numeric proof. | V010.RUNTIME.DEEPSEEK.DECODE.0 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.LOGITS.0` | `evidence` | common | `complete` | logits requirement report. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.1` | `evidence` | common | `complete` | final hidden-state ownership. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.2` | `subtask` | common | `planned` | final norm integration. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.3` | `evidence` | common | `complete` | output-head tensor mapping. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.4` | `subtask` | common | `planned` | output-head residency. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.5` | `subtask` | common | `planned` | output-head projection. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.6` | `evidence` | common | `complete` | logits buffer allocation. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.7` | `subtask` | common | `planned` | logits dtype/range report. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.8` | `evidence` | common | `complete` | logits checksum report. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.9` | `evidence` | common | `complete` | top-k diagnostics. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.10` | `subtask` | common | `planned` | logprob diagnostics. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.11` | `subtask` | common | `planned` | sharded output-head plan. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.12` | `subtask` | common | `planned` | staged/SSD output-head plan. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.13` | `subtask` | common | `planned` | logits cleanup/failure. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.14` | `subtask` | common | `planned` | logits trace. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.15` | `subtask` | common | `planned` | logits regression. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.LOGITS.16` | `subtask` | common | `planned` | v0.1.0 logits gate. | V010.RUNTIME.DEEPSEEK.LOGITS.0 |
+| `V010.RUNTIME.DEEPSEEK.LOGITS.SAMPLING.0` | `migration` | DeepSeek/common | `superseded` | Attempted recovery milestone split so output-head/logits and sampling retain distinct owners. | V010.RUNTIME.DEEPSEEK.LOGITS.0 + V010.RUNTIME.SAMPLING.0 |
+
+
+### 9.16 TRACK.SAMPLING
+
+**Owner:** Deterministic and stochastic token selection over real vocabulary logits, seeding, reproducibility, validation, and refusal.
+
+**Current truth:** bounded fixture sampling only
+
+**Ledger summary:** 15 recovered IDs; 1 first-class milestones; 4 complete support rows; 11 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.RUNTIME.SAMPLING.0` | common | `blocked` | Select token IDs from real vocabulary logits with deterministic greedy behavior, seeded stochastic policies, validation, and refusal. | V010.RUNTIME.DEEPSEEK.LOGITS.0 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.SAMPLE.0` | `evidence` | common | `complete` | sampling requirement report. | V010.RUNTIME.SAMPLING.0 |
+| `V010.SAMPLE.1` | `subtask` | common | `planned` | greedy over output-head logits. | V010.RUNTIME.SAMPLING.0 |
+| `V010.SAMPLE.2` | `evidence` | common | `complete` | selected token report. | V010.RUNTIME.SAMPLING.0 |
+| `V010.SAMPLE.3` | `evidence` | common | `complete` | candidate set report. | V010.RUNTIME.SAMPLING.0 |
+| `V010.SAMPLE.4` | `evidence` | common | `complete` | temperature validation. | V010.RUNTIME.SAMPLING.0 |
+| `V010.SAMPLE.5` | `subtask` | common | `planned` | top-k sampling. | V010.RUNTIME.SAMPLING.0 |
+| `V010.SAMPLE.6` | `subtask` | common | `planned` | top-p sampling. | V010.RUNTIME.SAMPLING.0 |
+| `V010.SAMPLE.7` | `subtask` | common | `planned` | min-p sampling. | V010.RUNTIME.SAMPLING.0 |
+| `V010.SAMPLE.8` | `subtask` | common | `planned` | typical sampling. | V010.RUNTIME.SAMPLING.0 |
+| `V010.SAMPLE.9` | `subtask` | common | `planned` | seeded stochastic sampling. | V010.RUNTIME.SAMPLING.0 |
+| `V010.SAMPLE.10` | `subtask` | common | `planned` | deterministic reproducibility report. | V010.RUNTIME.SAMPLING.0 |
+| `V010.SAMPLE.11` | `subtask` | common | `planned` | sampling cleanup/failure. | V010.RUNTIME.SAMPLING.0 |
+| `V010.SAMPLE.12` | `subtask` | common | `planned` | sampling trace. | V010.RUNTIME.SAMPLING.0 |
+| `V010.SAMPLE.13` | `subtask` | common | `planned` | sampling regression. | V010.RUNTIME.SAMPLING.0 |
+| `V010.SAMPLE.14` | `subtask` | common | `planned` | v0.1.0 sampling gate. | V010.RUNTIME.SAMPLING.0 |
+
+
+### 9.17 TRACK.TOKENIZER
+
+**Owner:** Exact tokenizer loading, prompt encoding, templates, special/EOS/stop policy, append boundary, detokenization, and failure behavior.
+
+**Current truth:** metadata and token-ID contract evidence only
+
+**Ledger summary:** 13 recovered IDs; 1 first-class milestones; 2 complete support rows; 11 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.RUNTIME.DEEPSEEK.TOKENIZER.0` | DeepSeek | `blocked` | Load the exact tokenizer, encode prompts, apply template/special/EOS/stop rules, and detokenize generated IDs. | V010.RUNTIME.SAMPLING.0 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.TOKENIZER.0` | `subtask` | common | `planned` | tokenizer requirement report. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+| `V010.TOKENIZER.1` | `subtask` | common | `planned` | tokenizer metadata loader/report. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+| `V010.TOKENIZER.2` | `evidence` | common | `complete` | token ID input contract. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+| `V010.TOKENIZER.3` | `subtask` | common | `planned` | token ID output contract. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+| `V010.TOKENIZER.4` | `evidence` | common | `complete` | special token report. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+| `V010.TOKENIZER.5` | `subtask` | common | `planned` | EOS token policy. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+| `V010.TOKENIZER.6` | `subtask` | common | `planned` | stop-token text policy. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+| `V010.TOKENIZER.7` | `subtask` | common | `planned` | prompt/template policy. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+| `V010.TOKENIZER.8` | `subtask` | common | `planned` | detokenization boundary. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+| `V010.TOKENIZER.9` | `subtask` | common | `planned` | tokenizer failure/refusal behavior. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+| `V010.TOKENIZER.10` | `subtask` | common | `planned` | tokenizer trace. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+| `V010.TOKENIZER.11` | `subtask` | common | `planned` | tokenizer regression. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+| `V010.TOKENIZER.12` | `subtask` | common | `planned` | v0.1.0 tokenizer gate. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 |
+
+
+### 9.18 TRACK.GENERATION
+
+**Owner:** Tokenizer/prefill/KV/decode/logits/sampling composition, append, stop, cancellation, partial output, trace, cleanup, and autoregression.
+
+**Current truth:** bounded diagnostic control flow only
+
+**Ledger summary:** 53 recovered IDs; 1 first-class milestones; 22 complete support rows; 31 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.RUNTIME.DEEPSEEK.GENERATION.0` | DeepSeek | `blocked` | Compose tokenizer, prefill, KV, decode, logits, sampling, append, stop, cancellation, partial-output, and cleanup for multiple real tokens. | V010.RUNTIME.DEEPSEEK.TOKENIZER.0 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.GEN.0` | `evidence` | common | `complete` | generation requirement report. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.1` | `evidence` | common | `complete` | generation state ownership. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.2` | `evidence` | common | `complete` | generation option parser. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.3` | `evidence` | common | `complete` | prefill to decode composition. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.4` | `evidence` | common | `complete` | decode to logits composition. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.5` | `evidence` | common | `complete` | logits to sample composition. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.6` | `evidence` | common | `complete` | sample to append composition. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.7` | `evidence` | common | `complete` | token append. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.8` | `subtask` | common | `planned` | context stop policy. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.9` | `subtask` | common | `planned` | EOS stop policy. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.10` | `subtask` | common | `planned` | stop-token policy. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.11` | `evidence` | common | `complete` | max-new-tokens policy. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.12` | `evidence` | common | `complete` | generation checksum. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.13` | `evidence` | common | `complete` | generation trace. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.14` | `evidence` | common | `complete` | failure/cancel safe points. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.15` | `evidence` | common | `complete` | cleanup/release. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.16` | `subtask` | common | `planned` | CLI runtime generation command. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.17` | `evidence` | common | `complete` | Bounded diagnostic generation smoke; not model-backed autoregressive generation. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.18` | `subtask` | common | `planned` | generation regression. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.GEN.19` | `subtask` | common | `planned` | v0.1.0 generation gate. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.0` | `evidence` | common | `complete` | runtime lifecycle report. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.1` | `subtask` | common | `planned` | engine/session ownership finalization. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.2` | `evidence` | common | `complete` | runtime state creation. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.3` | `subtask` | common | `planned` | runtime state mutation rules. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.4` | `evidence` | common | `complete` | runtime cleanup idempotence. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.5` | `evidence` | common | `complete` | partial output preservation. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.6` | `subtask` | common | `planned` | phase failure vocabulary. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.7` | `subtask` | common | `planned` | preflight failure behavior. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.8` | `subtask` | common | `planned` | graph failure behavior. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.9` | `subtask` | common | `planned` | prefill failure behavior. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.10` | `subtask` | common | `planned` | KV failure behavior. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.11` | `subtask` | common | `planned` | decode failure behavior. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.12` | `subtask` | common | `planned` | logits failure behavior. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.13` | `subtask` | common | `planned` | sampling failure behavior. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.14` | `subtask` | common | `planned` | append failure behavior. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.15` | `evidence` | common | `complete` | cancellation safe points. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.16` | `subtask` | common | `planned` | OS signal boundary. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.RUNTIME.17` | `subtask` | common | `planned` | v0.1.0 runtime lifecycle gate. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.TRACE.0` | `subtask` | common | `planned` | trace taxonomy refresh. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.TRACE.1` | `evidence` | common | `complete` | token trace. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.TRACE.2` | `subtask` | common | `planned` | graph trace. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.TRACE.3` | `subtask` | common | `planned` | tensor role trace. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.TRACE.4` | `subtask` | common | `planned` | residency trace. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.TRACE.5` | `subtask` | common | `planned` | prefill trace. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.TRACE.6` | `subtask` | common | `planned` | KV trace. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.TRACE.7` | `subtask` | common | `planned` | decode trace. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.TRACE.8` | `subtask` | common | `planned` | logits trace. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.TRACE.9` | `subtask` | common | `planned` | sampling trace. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.TRACE.10` | `evidence` | common | `complete` | generation trace. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.TRACE.11` | `evidence` | common | `complete` | cleanup/failure trace. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.TRACE.12` | `subtask` | common | `planned` | raw tensor dump refusal policy. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.TRACE.13` | `subtask` | common | `planned` | structured trace output. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+| `V010.TRACE.14` | `subtask` | common | `planned` | v0.1.0 trace gate. | V010.RUNTIME.DEEPSEEK.GENERATION.0 |
+
+
+### 9.19 TRACK.OPERATOR
+
+**Owner:** CLI grammar, command adaptation, typed input, dispatch, rendering, refusal, control-plane integration, topology guards, and operator acceptance.
+
+**Current truth:** substantial control-plane/topology work exists; release command is unsupported
+
+**Ledger summary:** 81 recovered IDs; 2 first-class milestones; 37 complete support rows; 43 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.CLI.DEEPSEEK.GENERATE.0` | DeepSeek | `blocked` | Expose one operator command that invokes the accepted generation path and reports precise refusal, cancellation, partial output, and cleanup. | V010.RUNTIME.DEEPSEEK.GENERATION.0 | current |
+| `TOPOLOGY.CELL.CLOSURE.0` | common | `planned` | Close residual mixed ownership only where concrete behavior still crosses domain/report/input/command/render/write boundaries. | V010.DOCS.ARCHITECTURE.0; supporting, not a product-stage promotion | recovered/promoted |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `SPINE.OUTPUT.UX.CONTRACT.0` | `evidence` | common | `complete` | Define CLI output UX contract and diagnostic demotion plan. | V010.PROJECT.RECOVERY.1 |
+| `CLI.ARCH.AUDIT.0` | `evidence` | common | `complete` | Inventory print/output pressure and porcelain/plumbing doctrine. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `SPINE.CLI.REBASE.1` | `capability` | common | `complete` | Rebase Operator CLI track after V010.CLI.26 grammar work. | V010.PROJECT.RECOVERY.1 |
+| `TOPOLOGY.FS.0` | `capability` | common | `complete` | Move C implementation under src modules and quarantine model-target CLI command surface. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.SOURCE.CONTRACT.0` | `capability` | common | `complete` | Add source file and function contract guardrails for module ownership. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.CLI.PRINT.ALL.0` | `capability` | common | `complete` | Move production operator printing, help, usage, renderers, and CLI metadata out of domain modules into src/cli. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.DOMAIN.RESTORE.0` | `capability` | common | `complete` | Restore domain implementation files after invalid CLI command-file displacement. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.CELL.SOURCE.0` | `capability` | common | `complete` | Extract source into domain/report/input/command/render/write cell. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.CELL.GENERATION.0` | `capability` | common | `complete` | Extract generate into domain/report/input/command/render/trace cell. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.CELL.KV.0` | `capability` | common | `complete` | Extract KV into domain/report/input/command/render cell. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.CELL.SAMPLING.0` | `capability` | common | `complete` | Extract sampling into domain/report/input/command/render cell. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.CELL.GRAPH.0` | `capability` | common | `complete` | Extract graph into domain/report/input/command/render cell and separate graph facts from operator output. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.CELL.MODEL_TARGET.0` | `capability` | common | `complete` | Extract model-target into catalog/report/input/command/render cell and remove target facts from CLI command adapter. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.CELL.MODEL_TARGET.1` | `capability` | common | `complete` | Decompose model-target report monolith into owned target catalog, decision, candidate, map, qtype, and sidecar modules. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.CELL.MODEL_TARGET.2` | `capability` | common | `complete` | Dissolve model-target internal compatibility backend into specialized ownership modules. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.CELL.MODEL_TARGET.3` | `capability` | common | `complete` | Remove model-target runner, CLI-shaped report request, and text-buffer report API. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.CELL.CLOSURE.1` | `capability` | common | `complete` | Audit remaining topology residue after source, generation, KV, sampling, graph, and model-target cell extraction. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.CELL.MODEL_ARTIFACTS.0` | `capability` | common | `complete` | Extract model-artifacts monolith into registry/ref/gate/report/input/command/render/write ownership. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.CELL.MODEL_ARTIFACTS.1` | `capability` | common | `complete` | Split transitional model-artifacts CLI command surface into thin adapter and CLI-only surface ownership. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.CELL.MODEL_ARTIFACTS.2` | `capability` | common | `complete` | Decompose transitional model-artifacts CLI surface into command-family surface owners and remove the 14k-line surface monolith. | TOPOLOGY.CELL.CLOSURE.0 |
+| `TOPOLOGY.CELL.MODEL_ARTIFACTS.3` | `capability` | common | `complete` | Move model-artifacts surface output and parser residue into input/render owners. | TOPOLOGY.CELL.CLOSURE.0 |
+| `SPINE.REBASE.GGUF.0` | `capability` | common | `complete` | Normalize active spine around GGUF/artifact ABI, writer, roundtrip, materialization, and runtime descriptor rows. | V010.PROJECT.RECOVERY.1 |
+| `SPINE.SYSTEM.TARGET.0` | `capability` | common | `complete` | Codify target filesystem map and install GGUF/artifact/runtime descriptor/graph/backend owner files. | V010.PROJECT.RECOVERY.1 |
+| `V010.PATHS.0` | `evidence` | common | `complete` | operator root layout report. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.PATHS.1` | `evidence` | common | `complete` | source/artifact/reference/report/cache separation. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.PATHS.2` | `capability` | common | `complete` | registry path layout. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.PATHS.3` | `evidence` | common | `complete` | report output layout. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.PATHS.4` | `subtask` | common | `planned` | runtime cache layout. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.PATHS.5` | `evidence` | common | `complete` | artifact hygiene report. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.PATHS.6` | `capability` | common | `complete` | path override precedence. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.PATHS.7` | `capability` | common | `complete` | missing path/refusal behavior. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.PATHS.8` | `capability` | common | `complete` | v0.1.0 path acceptance gate. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.0` | `subtask` | common | `planned` | command inventory refresh. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.1` | `subtask` | common | `planned` | help layout refresh. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.2` | `subtask` | common | `planned` | normal path first policy. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.3` | `subtask` | common | `planned` | advanced diagnostic flags policy. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.12` | `subtask` | common | `planned` | refusal wording audit. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.13` | `subtask` | common | `planned` | structured output mode. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.15` | `subtask` | common | `planned` | command proof transcript. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.16` | `subtask` | common | `planned` | v0.1.0 CLI gate. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.17` | `capability` | common | `complete` | normal output contract and layout baseline. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.18` | `evidence` | common | `complete` | diagnostic output demotion. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.19` | `evidence` | common | `complete` | compact report/table output. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.20` | `subtask` | common | `planned` | raw/plumbing JSON foundation. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.21` | `subtask` | common | `planned` | metric output surface. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.22` | `subtask` | common | `planned` | audit output surface. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.23` | `subtask` | common | `planned` | quiet/no-color/non-TTY terminal policy. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.24` | `capability` | common | `complete` | hardcoded print reduction pass. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.25` | `capability` | common | `complete` | renderer ownership foundation. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.26` | `capability` | common | `complete` | base CLI grammar and command catalog. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.27` | `subtask` | common | `planned` | base status and refusal grammar. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.28` | `subtask` | common | `planned` | error/log/diagnostic surface split. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.MODELS.0` | `subtask` | common | `planned` | models namespace grammar. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.MODELS.1` | `subtask` | common | `planned` | models list/current/status porcelain. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.MODELS.2` | `subtask` | common | `planned` | models prepare/check porcelain. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.MODELS.3` | `subtask` | common | `planned` | models download/control porcelain. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.MODELS.4` | `subtask` | common | `planned` | models artifacts porcelain. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.TARGET.0` | `subtask` | common | `planned` | model-target namespace grammar. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.TARGET.1` | `subtask` | common | `planned` | model-target inspect/list porcelain. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.TARGET.2` | `subtask` | common | `planned` | model-target tensor-map/missing-roles/gate porcelain. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.TARGET.3` | `subtask` | common | `planned` | model-target quant-policy porcelain. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.SOURCE.0` | `subtask` | common | `planned` | source-manifest/native-weights porcelain. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.ACCOUNTS.0` | `subtask` | common | `planned` | accounts/provider porcelain. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.PATHS.0` | `subtask` | common | `planned` | paths porcelain finalization. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.GRAPH.0` | `subtask` | common | `planned` | graph check/operator porcelain. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.RUNTIME.0` | `subtask` | common | `planned` | runtime diagnostic command grammar. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.GENERATE.0` | `subtask` | common | `planned` | diagnostic generate porcelain grammar. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.CLI.CHAT.0` | `subtask` | common | `planned` | accepted-only chat UX grammar. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.DOCTOR.0` | `subtask` | common | `planned` | doctor command scope. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.DOCTOR.1` | `subtask` | common | `planned` | environment checks. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.DOCTOR.2` | `subtask` | common | `planned` | build/backend checks. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.DOCTOR.3` | `subtask` | CUDA / DGX Spark | `planned` | CUDA checks. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.DOCTOR.4` | `subtask` | common | `planned` | artifact checks. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.DOCTOR.5` | `subtask` | common | `planned` | registry checks. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.DOCTOR.6` | `subtask` | common | `planned` | model target checks. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.DOCTOR.7` | `subtask` | common | `planned` | graph checks. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.DOCTOR.8` | `subtask` | common | `planned` | runtime checks. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.DOCTOR.9` | `subtask` | common | `planned` | generation readiness checks. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.DOCTOR.10` | `subtask` | common | `planned` | common failure cookbook. | V010.CLI.DEEPSEEK.GENERATE.0 |
+| `V010.DOCTOR.11` | `subtask` | common | `planned` | v0.1.0 doctor gate. | V010.CLI.DEEPSEEK.GENERATE.0 |
+
+
+### 9.20 TRACK.SERVE
+
+**Owner:** Runtime-backed daemon generation, streaming, cancellation, observability, and protocol compatibility.
+
+**Current truth:** deferred outside v0.1.0
+
+**Ledger summary:** 12 recovered IDs; 0 first-class milestones; 0 complete support rows; 12 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+No first-class milestone is committed in the active v0.1.0 path. Retained rows remain subordinate or future scope.
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.SERVE.0` | `subtask` | post-v0.1 | `planned` | serving ownership map. | future scope decision |
+| `V010.SERVE.1` | `subtask` | post-v0.1 | `planned` | daemon state reflects runtime state. | future scope decision |
+| `V010.SERVE.2` | `subtask` | post-v0.1 | `planned` | model registry exposed by daemon. | future scope decision |
+| `V010.SERVE.3` | `subtask` | post-v0.1 | `planned` | runtime readiness endpoint. | future scope decision |
+| `V010.SERVE.4` | `subtask` | post-v0.1 | `planned` | generate endpoint after CLI generation. | future scope decision |
+| `V010.SERVE.5` | `subtask` | post-v0.1 | `planned` | streaming endpoint after runtime generation. | future scope decision |
+| `V010.SERVE.6` | `subtask` | post-v0.1 | `planned` | cancellation boundary. | future scope decision |
+| `V010.SERVE.7` | `subtask` | post-v0.1 | `planned` | provider compatibility boundary. | future scope decision |
+| `V010.SERVE.8` | `subtask` | post-v0.1 | `planned` | OpenAI compatibility after generation. | future scope decision |
+| `V010.SERVE.9` | `subtask` | post-v0.1 | `planned` | Anthropic compatibility after generation. | future scope decision |
+| `V010.SERVE.10` | `subtask` | post-v0.1 | `planned` | server observability. | future scope decision |
+| `V010.SERVE.11` | `subtask` | post-v0.1 | `planned` | v0.1.0 serving decision gate. | future scope decision |
+
+
+### 9.21 TRACK.EVAL
+
+**Owner:** Release-path correctness, regression, failure, tokenizer, context, and capability evaluation.
+
+**Current truth:** blocked by real generation
+
+**Ledger summary:** 15 recovered IDs; 1 first-class milestones; 0 complete support rows; 15 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.EVAL.DEEPSEEK.0` | DeepSeek | `blocked` | Run repeatable correctness, tokenizer, regression, long-context, refusal, and release-path generation evaluations. | V010.CLI.DEEPSEEK.GENERATE.0 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.EVAL.0` | `subtask` | common | `planned` | eval harness structure. | V010.EVAL.DEEPSEEK.0 |
+| `V010.EVAL.1` | `subtask` | common | `planned` | fixture graph eval. | V010.EVAL.DEEPSEEK.0 |
+| `V010.EVAL.2` | `subtask` | common | `planned` | primitive eval. | V010.EVAL.DEEPSEEK.0 |
+| `V010.EVAL.3` | `subtask` | common | `planned` | selected partial graph eval. | V010.EVAL.DEEPSEEK.0 |
+| `V010.EVAL.4` | `subtask` | common | `planned` | full-runtime-candidate graph eval. | V010.EVAL.DEEPSEEK.0 |
+| `V010.EVAL.5` | `subtask` | common | `planned` | prefill eval. | V010.EVAL.DEEPSEEK.0 |
+| `V010.EVAL.6` | `subtask` | common | `planned` | KV eval. | V010.EVAL.DEEPSEEK.0 |
+| `V010.EVAL.7` | `subtask` | common | `planned` | decode eval. | V010.EVAL.DEEPSEEK.0 |
+| `V010.EVAL.8` | `subtask` | common | `planned` | logits eval. | V010.EVAL.DEEPSEEK.0 |
+| `V010.EVAL.9` | `subtask` | common | `planned` | sampling eval. | V010.EVAL.DEEPSEEK.0 |
+| `V010.EVAL.10` | `subtask` | common | `planned` | generation smoke eval. | V010.EVAL.DEEPSEEK.0 |
+| `V010.EVAL.11` | `subtask` | common | `planned` | tokenizer/stop eval. | V010.EVAL.DEEPSEEK.0 |
+| `V010.EVAL.12` | `subtask` | common | `planned` | failure-path eval. | V010.EVAL.DEEPSEEK.0 |
+| `V010.EVAL.13` | `subtask` | common | `planned` | capability eval plan. | V010.EVAL.DEEPSEEK.0 |
+| `V010.EVAL.14` | `subtask` | common | `planned` | v0.1.0 eval gate. | V010.EVAL.DEEPSEEK.0 |
+
+
+### 9.22 TRACK.BENCH
+
+**Owner:** Reproducible machine, artifact, qtype, context, prefill, decode, generation, timing, throughput, and memory measurements.
+
+**Current truth:** not measured
+
+**Ledger summary:** 16 recovered IDs; 1 first-class milestones; 0 complete support rows; 16 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.BENCH.DEEPSEEK.0` | DeepSeek / DGX Spark | `not-measured` | Record reproducible artifact, qtype, prompt/context, prefill, decode, generation, timing, throughput, and memory evidence. | V010.EVAL.DEEPSEEK.0 | current |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.BENCH.0` | `subtask` | common | `planned` | benchmark harness metadata contract. | V010.BENCH.DEEPSEEK.0 |
+| `V010.BENCH.1` | `subtask` | common | `planned` | machine profile record. | V010.BENCH.DEEPSEEK.0 |
+| `V010.BENCH.2` | `subtask` | common | `planned` | artifact identity record. | V010.BENCH.DEEPSEEK.0 |
+| `V010.BENCH.3` | `subtask` | common | `planned` | qtype/context/backend record. | V010.BENCH.DEEPSEEK.0 |
+| `V010.BENCH.4` | `subtask` | common | `planned` | run count/reproducibility record. | V010.BENCH.DEEPSEEK.0 |
+| `V010.BENCH.5` | `subtask` | common | `planned` | prefill benchmark. | V010.BENCH.DEEPSEEK.0 |
+| `V010.BENCH.6` | `subtask` | common | `planned` | decode benchmark. | V010.BENCH.DEEPSEEK.0 |
+| `V010.BENCH.7` | `subtask` | common | `planned` | generation benchmark. | V010.BENCH.DEEPSEEK.0 |
+| `V010.BENCH.8` | `subtask` | common | `planned` | memory pressure benchmark. | V010.BENCH.DEEPSEEK.0 |
+| `V010.BENCH.9` | `subtask` | common | `planned` | server benchmark. | V010.BENCH.DEEPSEEK.0 |
+| `V010.BENCH.10` | `subtask` | DeepSeek | `planned` | DeepSeek benchmark only after DeepSeek generation. | V010.BENCH.DEEPSEEK.0 |
+| `V010.BENCH.11` | `subtask` | common | `planned` | v0.1.0 benchmark decision gate. | V010.BENCH.DEEPSEEK.0 |
+| `V010.PROFILE.0` | `subtask` | common | `planned` | runtime profile trace. | V010.BENCH.DEEPSEEK.0 |
+| `V010.PROFILE.1` | `subtask` | common | `planned` | memory profile trace. | V010.BENCH.DEEPSEEK.0 |
+| `V010.PROFILE.2` | `subtask` | common | `planned` | storage profile trace. | V010.BENCH.DEEPSEEK.0 |
+| `V010.PROFILE.3` | `subtask` | common | `planned` | backend profile trace. | V010.BENCH.DEEPSEEK.0 |
+
+
+### 9.23 TRACK.RELEASE
+
+**Owner:** Validation, artifact guardrail, claim audit, operator transcript, packaging, versioning, release record, and tag.
+
+**Current truth:** blocked
+
+**Ledger summary:** 42 recovered IDs; 1 first-class milestones; 4 complete support rows; 37 open support rows; 0 superseded/deferred rows.
+
+#### First-Class Milestones
+
+| Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
+| --- | --- | --- | --- | --- | --- |
+| `V010.RELEASE.0` | DeepSeek v0.1.0 | `blocked` | Close every source, architecture, mapping, artifact, materialization, backend, transformer, generation, evaluation, benchmark, validation, claim, operator, packaging, and version gate. | V010.BENCH.DEEPSEEK.0 | recovered/promoted |
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.VERSION.0` | `subtask` | project/release | `planned` | version string policy. | V010.RELEASE.0 |
+| `V010.VERSION.1` | `subtask` | project/release | `planned` | v0.1.0 version bump. | V010.RELEASE.0 |
+| `V010.PACKAGE.0` | `subtask` | project/release | `planned` | binary packaging policy. | V010.RELEASE.0 |
+| `V010.PACKAGE.1` | `subtask` | project/release | `planned` | release build artifact policy. | V010.RELEASE.0 |
+| `V010.PACKAGE.2` | `subtask` | project/release | `planned` | no model artifact packaging rule. | V010.RELEASE.0 |
+| `V010.RELEASE.1` | `subtask` | project/release | `planned` | target lock. | V010.RELEASE.0 |
+| `V010.RELEASE.2` | `subtask` | project/release | `planned` | command proof transcript. | V010.RELEASE.0 |
+| `V010.RELEASE.3` | `subtask` | project/release | `planned` | failure proof transcript. | V010.RELEASE.0 |
+| `V010.RELEASE.4` | `subtask` | project/release | `planned` | artifact guardrail transcript. | V010.RELEASE.0 |
+| `V010.RELEASE.5` | `subtask` | project/release | `planned` | claim audit. | V010.RELEASE.0 |
+| `V010.RELEASE.6` | `subtask` | project/release | `planned` | docs audit. | V010.RELEASE.0 |
+| `V010.RELEASE.7` | `subtask` | project/release | `planned` | changelog/release notes. | V010.RELEASE.0 |
+| `V010.RELEASE.8` | `subtask` | project/release | `planned` | tag readiness report. | V010.RELEASE.0 |
+| `V010.RELEASE.9` | `subtask` | project/release | `planned` | v0.1.0 tag. | V010.RELEASE.0 |
+| `V010.CI.0` | `subtask` | project/release | `planned` | CI/test matrix refresh. | V010.RELEASE.0 |
+| `V010.CI.1` | `subtask` | project/release | `planned` | make check gate. | V010.RELEASE.0 |
+| `V010.CI.2` | `subtask` | project/release | `planned` | make smoke gate. | V010.RELEASE.0 |
+| `V010.CI.3` | `subtask` | CUDA / DGX Spark | `planned` | make check-cuda gate where available. | V010.RELEASE.0 |
+| `V010.CI.4` | `capability` | project/release | `complete` | docs surface gate. | V010.RELEASE.0 |
+| `V010.CI.5` | `capability` | project/release | `complete` | source layout gate. | V010.RELEASE.0 |
+| `V010.CI.6` | `capability` | project/release | `complete` | code natural gate. | V010.RELEASE.0 |
+| `V010.CI.7` | `capability` | project/release | `complete` | artifact guardrail. | V010.RELEASE.0 |
+| `V010.CI.8` | `subtask` | project/release | `planned` | forbidden claim scan. | V010.RELEASE.0 |
+| `V010.CI.9` | `subtask` | project/release | `planned` | public docs leak scan. | V010.RELEASE.0 |
+| `V010.CI.10` | `subtask` | project/release | `planned` | command proof transcript gate. | V010.RELEASE.0 |
+| `V010.CI.11` | `subtask` | project/release | `planned` | failure-path transcript gate. | V010.RELEASE.0 |
+| `V010.CI.12` | `subtask` | project/release | `planned` | v0.1.0 CI acceptance gate. | V010.RELEASE.0 |
+| `V010.DOCS.INTERNAL.0` | `subtask` | project/release | `planned` | internal v0.1.0 spine summary. | V010.RELEASE.0 |
+| `V010.DOCS.RUNBOOK.0` | `subtask` | project/release | `planned` | operator v0.1.0 runbook. | V010.RELEASE.0 |
+| `V010.DOCS.RUNBOOK.1` | `subtask` | project/release | `planned` | model-specific runbooks. | V010.RELEASE.0 |
+| `V010.DOCS.API.0` | `subtask` | project/release | `planned` | API docs for implemented surface. | V010.RELEASE.0 |
+| `V010.DOCS.CONTRACT.0` | `subtask` | project/release | `planned` | behavior contract update. | V010.RELEASE.0 |
+| `V010.DOCS.README.0` | `subtask` | project/release | `planned` | README runtime thesis update. | V010.RELEASE.0 |
+| `V010.DOCS.DIAGRAM.0` | `subtask` | project/release | `planned` | artifact-to-runtime diagram. | V010.RELEASE.0 |
+| `V010.DOCS.DIAGRAM.1` | `subtask` | project/release | `planned` | runtime ladder diagram. | V010.RELEASE.0 |
+| `V010.DOCS.DIAGRAM.2` | `subtask` | project/release | `planned` | evidence/benchmark diagram. | V010.RELEASE.0 |
+| `V010.DOCS.DIAGRAM.3` | `subtask` | MoE/common | `planned` | dense vs MoE path diagram. | V010.RELEASE.0 |
+| `V010.DOCS.DIAGRAM.4` | `subtask` | project/release | `planned` | storage/residency diagram. | V010.RELEASE.0 |
+| `V010.DOCS.PUBLIC.0` | `subtask` | project/release | `planned` | public claim audit. | V010.RELEASE.0 |
+| `V010.DOCS.PUBLIC.1` | `subtask` | project/release | `planned` | internal ID leak audit. | V010.RELEASE.0 |
+| `V010.DOCS.PUBLIC.2` | `subtask` | project/release | `planned` | v0.1.0 docs acceptance gate. | V010.RELEASE.0 |
+
+
+### 9.24 TRACK.POST010
+
+**Owner:** Explicitly deferred portability, serving hardening, speculative execution, extra-family runtime promotion, and later product scope.
+
+**Current truth:** deferred
+
+**Ledger summary:** 23 recovered IDs; 0 first-class milestones; 0 complete support rows; 14 open support rows; 9 superseded/deferred rows.
+
+#### First-Class Milestones
+
+No first-class milestone is committed in the active v0.1.0 path. Retained rows remain subordinate or future scope.
+
+#### Recovered And Subordinate Rows
+
+| Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
+| --- | --- | --- | --- | --- | --- |
+| `V010.SPEC.0` | `subtask` | post-v0.1 | `planned` | speculative reference registry. | future scope decision |
+| `V010.SPEC.1` | `subtask` | post-v0.1 | `planned` | DSpark reference record. | future scope decision |
+| `V010.SPEC.2` | `subtask` | post-v0.1 | `planned` | DFlash/HyperDFlash reference record. | future scope decision |
+| `V010.SPEC.3` | `subtask` | post-v0.1 | `planned` | draft source report. | future scope decision |
+| `V010.SPEC.4` | `subtask` | post-v0.1 | `planned` | token verification semantics. | future scope decision |
+| `V010.SPEC.5` | `subtask` | post-v0.1 | `planned` | accepted-prefix accounting. | future scope decision |
+| `V010.SPEC.6` | `subtask` | post-v0.1 | `planned` | rejected-token behavior. | future scope decision |
+| `V010.SPEC.7` | `subtask` | post-v0.1 | `planned` | KV rollback/reuse policy. | future scope decision |
+| `V010.SPEC.8` | `subtask` | post-v0.1 | `planned` | dense speculative verification. | future scope decision |
+| `V010.SPEC.9` | `subtask` | post-v0.1 | `planned` | MoE routing-aware verification report. | future scope decision |
+| `V010.SPEC.10` | `subtask` | post-v0.1 | `planned` | MoE expert-budget verification. | future scope decision |
+| `V010.SPEC.11` | `subtask` | post-v0.1 | `planned` | verification-cost utility report. | future scope decision |
+| `V010.SPEC.12` | `subtask` | post-v0.1 | `planned` | DeepSeek speculative path. | future scope decision |
+| `V010.SPEC.13` | `subtask` | post-v0.1 | `planned` | speculative benchmark. | future scope decision |
+| `POST010.GLM.RUNTIME.0` | `future` | post-v0.1 | `deferred` | GLM runtime promotion path after v0.1.0. | future scope decision |
+| `POST010.QWEN.METAL.0` | `future` | post-v0.1 | `deferred` | Qwen Metal runtime path after baseline release. | future scope decision |
+| `POST010.ROCM.0` | `future` | post-v0.1 | `deferred` | ROCm/Strix Halo backend path after v0.1.0. | future scope decision |
+| `POST010.STORAGE.GEN.0` | `future` | post-v0.1 | `deferred` | SSD-streamed generation exploration after baseline generation. | future scope decision |
+| `POST010.SERVE.PUBLIC.0` | `future` | post-v0.1 | `deferred` | production serving surface hardening after v0.1.0. | future scope decision |
+| `POST010.SPEC.0` | `future` | post-v0.1 | `deferred` | speculative acceleration program after baseline generation. | future scope decision |
+| `POST010.BENCH.PUBLIC.0` | `future` | post-v0.1 | `deferred` | public benchmark table expansion after measured runtime. | future scope decision |
+| `POST010.EVAL.CAPABILITY.0` | `future` | post-v0.1 | `deferred` | broader capability eval suite after v0.1.0. | future scope decision |
+| `POST010.DOCS.PUBLIC.0` | `future` | post-v0.1 | `deferred` | public evidence expansion after release-safe claims. | future scope decision |
+
+## 10. Evidence Lanes
+
+Diagnostic, report, fixture, selected, CLI, topology, and audit work stays
+visible because it contains real implementation and prevents repeated work.
+Its rank limits the claim it may support.
+
+| Evidence lane | Valid use | Non-claim |
+| --- | --- | --- |
+| Source/model reports | Inspect facts, exercise typed boundaries, test refusal, and seed complete architecture/map work | not verified complete source, mapping, artifact, or runtime support |
+| GGUF fixtures/tensor proofs | Parser, geometry, range, writer-fragment, materialization, and primitive regression | not a complete or supported model artifact |
+| Primitive/selected graph proofs | One operation, transfer, cleanup, tolerance, or bounded composition | not full attention, transformer execution, or generation |
+| Diagnostic runtime state | Lifecycle, refusal, cancellation, ownership, transition, and cleanup regression | not model-backed prefill, KV, decode, logits, sampling, or generation |
+| Operator/topology evidence | Discoverability, ownership enforcement, refusal propagation, and transcript regression | cannot create a lower domain capability |
+| Internal fixtures | Deterministic vectors, corrupt files, synthetic tokens/logits, and allocation failures | not model quality, benchmark, or release proof |
+
+Evidence may be removed only when the behavior itself is intentionally removed
+and the owning milestone records the decision. Demotion from first-class status
+is not authorization to delete code, tests, or family work.
+
+## 11. Release Gates
+
+| Gate | Required executable evidence | Current state | Owning milestone |
+| --- | --- | --- | --- |
+| Project control | One authority, complete ranked ledger, unique IDs, calculated counts, one Active Next, no shadow spine | complete | `V010.PROJECT.RECOVERY.1` |
+| Documentation architecture | Standard taxonomy, durable-content ownership, no duplicate roadmap, reference/paper map | active | `V010.DOCS.ARCHITECTURE.0` |
+| Source | Exact local identity, revision, config, tokenizer, shard inventory, headers, and payload trust | blocked | `V010.REBASE.DEEPSEEK.0` and `V010.SOURCE.PAYLOAD.STREAM.0` |
+| Architecture | Typed execution-complete DeepSeek specification | blocked | `V010.MODEL.ARCH.IR.0` |
+| Tensor coverage | Complete required-role set with no unresolved role | blocked | `V010.TENSOR.COVERAGE.DEEPSEEK.0` |
+| Mapping | Complete source-role-GGUF map with transforms/layouts and ambiguity refusal | blocked | `V010.MAP.GGUF.DEEPSEEK.0` |
+| Qtype/quantization | Closed row-aware ABI, reference dequantization, conversion/quantization, compute/refusal truth | blocked | `V010.GGUF.QTYPE.ABI.1` and `V010.QUANT.2` |
+| Artifact | Complete YVEX-produced GGUF with native and official reader equivalence | blocked | `V010.GGUF.ARTIFACT.ABI.1` through `V010.GGUF.ROUNDTRIP.1` |
+| Integrity/admission | Complete layout, range, corruption, identity, and support admission | blocked | `V010.GGUF.LAYOUT.INTEGRITY.1` and `V010.ARTIFACT.SUPPORT.CUTOVER.0` |
+| Materialization | Family-neutral materializer plus full DeepSeek DGX Spark placement/cleanup | unsupported | materialization milestones |
+| Descriptor | Canonical common descriptor and execution-complete DeepSeek specialization | unsupported | descriptor milestones |
+| CUDA | Every required op real, fail-closed, reference-compared, synchronized, and cleaned up | unsupported | `V010.CUDA.FAILCLOSED.0` plus operation proofs |
+| Transformer | Attention, positions, KV, MoE, experts, repeated layers, residuals, and final norm | unsupported | attention/KV/prefill/MoE/transformer milestones |
+| Text generation | Exact tokenizer, output head, logits, sampling, repeated decode, stop, detokenization | unsupported | logits/sampling/tokenizer/generation milestones |
+| Operator | One truthful command invokes the release path | blocked | `V010.CLI.DEEPSEEK.GENERATE.0` |
+| Evaluation | Repeatable release-path quality, regression, context, and refusal cases | blocked | `V010.EVAL.DEEPSEEK.0` |
+| Benchmark | Reproducible DGX Spark runtime and memory measurements | not-measured | `V010.BENCH.DEEPSEEK.0` |
+| Release | Full validation, artifact guardrail, claim audit, transcript, packaging, version, and tag | blocked | `V010.RELEASE.0` |
+
+A gate changes state only through its owning milestone and executable proof.
+Documentation can correct claims and dependency control; it cannot promote an
+artifact, runtime, generation, evaluation, benchmark, or release capability.
+
+## 12. Reference Engineering Baseline
+
+YVEX studies current primary implementations for proven ownership boundaries
+and exact DeepSeek-V4 engineering facts. They are research inputs, not
+dependencies, API commitments, support claims, or permission to copy another
+runtime topology.
+
+| Reference | YVEX studies | YVEX does not inherit |
+| --- | --- | --- |
+| [vLLM architecture](https://docs.vllm.ai/en/stable/design/arch_overview/) and [DeepSeek-V4 engineering](https://github.com/vllm-project/vllm-project.github.io/blob/main/_posts/2026-04-24-deepseek-v4.md) | engine/worker/model-runner ownership, memory/KV boundaries, backend selection, current DS4 integration | Python APIs, scheduler policy, process topology, serving scope, or support claims |
+| [SGLang runtime](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt) and [DeepSeek-V4 model](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/models/deepseek_v4.py) | scheduler/model-runner/model-loader separation; DS4 attention, KV, MoE, kernels, prefill/decode integration | SGLang APIs, distributed topology, Python runtime, or automatic compatibility |
+| [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md), [ggml](https://github.com/ggml-org/ggml), and [llama.cpp](https://github.com/ggml-org/llama.cpp) | GGUF semantics, qtype geometry, conversion/quantization references, native loading, C/C++ ownership | support claims beyond YVEX-tested behavior |
+| [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) and [CUTLASS](https://github.com/NVIDIA/cutlass) | NVIDIA/Blackwell execution, fused operations, MoE, memory, and kernel specialization | TensorRT engine format, deployment topology, Python APIs, or automatic backend support |
+| [DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash) and [FlashMLA](https://github.com/deepseek-ai/FlashMLA) | exact config/tokenizer/model facts, hybrid attention, compressed KV, MoE/mHC behavior, and reference kernels | unverified assumptions, external-runner proof, or direct support promotion |
+
+`V010.DOCS.ARCHITECTURE.0` turns this baseline into a paper/reference-to-YVEX
+ownership map tied to actual modules and tests.
+
+## 13. Explicit Non-Claims
 
 YVEX does not currently claim:
 
@@ -449,38 +1581,71 @@ YVEX does not currently claim:
 - a complete or supported DeepSeek-V4-Flash model artifact;
 - complete GGUF artifact or qtype ABI closure;
 - source payload conversion or quantization completion;
-- full materialization or residency;
-- an executable DeepSeek runtime descriptor;
+- full family-neutral materialization or full DeepSeek DGX Spark residency;
+- an execution-complete common or DeepSeek runtime descriptor;
 - complete transformer execution;
 - attention-backed KV prefill or decode;
 - output-head vocabulary logits or model-backed sampling;
-- autoregressive DeepSeek text generation;
+- exact tokenizer-backed autoregressive DeepSeek text generation;
 - CUDA model generation;
-- evaluation readiness;
-- measured benchmark results;
-- release readiness;
-- support for another model family or backend in v0.1.0.
+- evaluation readiness, measured benchmarks, or release readiness;
+- Qwen, Gemma, GLM, or another model as a supported generation target;
+- Metal, ROCm, server, distributed, or speculative support.
 
-Proof artifacts, primitive comparisons, CLI grammar, reports, help text,
-fixtures, external GGUF files, and external runner output remain non-closing
-evidence.
+Qwen/Gemma profiles, mappings, inventories, proof artifacts, primitive
+comparisons, CLI grammar, reports, fixtures, and external runner output remain
+real project evidence at their named stage. They are neither deleted nor
+promoted into unsupported claims.
 
-## Documentation Ownership
+## 14. Version Sequence
 
-| Document | Owner contract |
+| Version | Contract |
 | --- | --- |
-| `PROJECT.md` | Living project control: target, truth, architecture, tracks, milestones, evidence, dependencies, gates, and Active Next. |
-| `AGENTS.md` | Persistent repository, ownership, implementation, testing, validation, claim, and project-control invariants. |
-| `docs/repair/v010-foundation-closure.md` | Temporary priority-blocking foundation sequence, recovery disposition, and decommission map. |
-| `docs/v010-release-doctrine.md` | Exact release meaning and gate-closure semantics. |
-| `docs/system-target.md` | Filesystem architecture and module ownership. |
-| `docs/model-families.md` | Normative family-integration architecture, not delivery progress. |
-| `docs/contract.md` | Runtime, CLI, lifecycle, and claim contracts for implemented surfaces. |
-| `docs/api.md` | Public C API facts and lifetime boundaries. |
-| `MODEL_ARTIFACTS.md` | Canonical artifact admission and terminology contract. |
-| `docs/operator-runbook.md` | Current implemented operator workflows and refusals. |
-| `docs/runbooks/deepseek.md` | Short current-state boundary for the exact DeepSeek target. |
-| `docs/topology-closure-audit.md` | Point-in-time topology evidence; it does not set project state. |
+| v0.1.0 | DeepSeek-V4-Flash text generation from a complete YVEX-produced GGUF on DGX Spark CUDA |
+| v0.1.x | Correctness, reliability, extra qtypes, streaming, performance, and memory hardening of the same path |
+| v0.2.0 | Qwen dense full generation over the same family-aware common engine, subject to explicit complete gates |
+| v0.3.0 | Gemma full generation, subject to explicit complete gates |
+| v0.4.0 | Multi-family/multi-qtype matrix and backend portability after explicit scope decisions |
 
-No other document owns project milestones, Active Next, the track registry, or
-release-path capability state.
+The version sequence records intended dependency order, not current support.
+
+## 15. Documentation Ownership And Cutover
+
+| Document | Sole responsibility |
+| --- | --- |
+| `PROJECT.md` | Product/release target, engineering scope, track registry, complete wave ledger, milestone state, dependencies, family matrix, gates, and Active Next |
+| `AGENTS.md` | Persistent repository ownership, implementation, testing, validation, claim, and project-update invariants |
+| `docs/repair/v010-foundation-closure.md` | Temporary repair delivery detail and decommission work; never a second project map |
+| `docs/v010-release-doctrine.md` | Release meaning and gate-closure semantics |
+| `docs/system-target.md` | Filesystem and module ownership |
+| `docs/model-families.md` | Normative family-integration architecture and implemented family profiles, not progress state |
+| `docs/contract.md` | Runtime, CLI, lifecycle, failure, and ownership contracts for implemented surfaces |
+| `docs/api.md` | Public C API facts and lifetime boundaries |
+| `MODEL_ARTIFACTS.md` | Artifact terminology, admission, integrity, writer/reader, materialization, and support contract |
+| `docs/operator-runbook.md` | Current implemented operator workflows, refusals, and recovery |
+| `docs/runbooks/deepseek.md` | Exact current DeepSeek operator boundary |
+| `docs/topology-closure-audit.md` | Point-in-time topology evidence, not project state |
+
+## 16. Agent Start Checklist
+
+Before proposing or implementing a delivery:
+
+1. Read `AGENTS.md`, `PROJECT.md`, the owning contract, implementation,
+   direct consumers, and focused tests.
+2. Confirm the single Active Next and its predecessors.
+3. Confirm the row is rank `milestone`; never schedule a subordinate row as a
+   standalone delivery.
+4. Inspect existing types, registries, APIs, fixtures, and guards before
+   proposing files or symbols.
+5. State exact before/after capability, owner, consumer, family scope, failure
+   behavior, proof stage, and higher-stage non-claims.
+6. Reuse common infrastructure; do not hard-code DeepSeek behavior into
+   family-neutral artifact, materialization, descriptor, or backend owners.
+7. Preserve Qwen, Gemma, dense/common, fixture, diagnostic, and topology work at
+   its truthful rank.
+8. Run focused tests and complete repository validation.
+9. Update this map atomically with implementation result and next dependency.
+
+The complete current ledger remains in this file. Future refinement may improve
+rank, descriptions, or milestone grouping, but it must preserve every ID or
+record an explicit migration.

@@ -111,8 +111,9 @@ the complete-artifact contracts before later artifact work can proceed.
 
 The priority-blocking sequence is owned by
 `docs/repair/v010-foundation-closure.md`. `V010.DOCS.REFOUNDATION.0` is complete
-at documentation/claim refoundation only. `V010.PROJECT.RECOVERY.0` is complete
-at the same proof stage. `V010.DOCS.ARCHITECTURE.0` is Active Next, and
+at documentation/claim refoundation only. `V010.PROJECT.RECOVERY.0` is partial;
+`V010.PROJECT.RECOVERY.1` completes the ranked track/wave ledger without
+promoting runtime capability. `V010.DOCS.ARCHITECTURE.0` is Active Next, and
 `V010.REBASE.DEEPSEEK.0` is blocked by documentation architecture.
 
 No artifact, materialization, descriptor, transformer, generation, evaluation,

@@ -24,7 +24,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-gguf-artifact-abi test-gguf-qtype-abi test-layout test-code-natural test-docs-surface test-surface smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-gguf-artifact-abi test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -319,6 +319,9 @@ test-layout: tests/test_source_layout.sh
 test-code-natural: tests/test_code_natural.sh
 	sh tests/test_code_natural.sh
 
+test-project-ledger: tests/test_project_ledger.sh PROJECT.md
+	sh tests/test_project_ledger.sh
+
 test-docs-surface: tests/test_docs_surface.sh
 	sh tests/test_docs_surface.sh
 
@@ -327,7 +330,7 @@ test-surface: tests/test_surface.sh
 
 smoke: test-cli
 
-check: check-docs check-guardrails lib cli server test test-gguf-artifact-abi test-gguf-qtype-abi test-layout test-code-natural test-docs-surface test-surface smoke
+check: check-docs check-guardrails lib cli server test test-gguf-artifact-abi test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke
 	@echo "yvex check: ok"
 
 $(LIBYVEX): $(CORE_OBJS)
@@ -405,11 +408,12 @@ check-docs:
 		! -name system-target.md \
 		-print | grep .
 	@grep -F "YVEX Project Control" PROJECT.md >/dev/null
-	@grep -F "### Primary Release Tracks" PROJECT.md >/dev/null
-	@grep -F "### Supporting Architectural Tracks" PROJECT.md >/dev/null
-	@grep -F "### Future Tracks" PROJECT.md >/dev/null
+	@grep -F "## 7. Track Registry And Dashboard" PROJECT.md >/dev/null
+	@grep -F "## 8. First-Class Milestone Roadmap" PROJECT.md >/dev/null
+	@grep -F "## 9. Complete Track/Wave Ledger" PROJECT.md >/dev/null
 	@grep -F "native C inference engine for local open-weight models" README.md >/dev/null
 	@grep -F 'Active Next: V010.DOCS.ARCHITECTURE.0' PROJECT.md >/dev/null
+	@sh tests/test_project_ledger.sh >/dev/null
 	@grep -F 'Status: priority-blocking' docs/repair/v010-foundation-closure.md >/dev/null
 	@grep -F "YVEX System Target" docs/system-target.md >/dev/null
 	@grep -F "YVEX API" docs/api.md >/dev/null

@@ -247,8 +247,9 @@ residue. It is not a product progress map. Its historical topology row IDs are
 supporting architecture evidence in `PROJECT.md`, not primary release tracks.
 
 The priority-blocking sequence is now owned by
-`docs/repair/v010-foundation-closure.md`. That sequence starts with the completed
-documentation refoundation and project recovery, and makes
+`docs/repair/v010-foundation-closure.md`. Documentation refoundation is
+complete, the first project recovery is partial, and
+`V010.PROJECT.RECOVERY.1` completes the canonical ledger. The sequence makes
 `V010.DOCS.ARCHITECTURE.0` Active Next. `V010.REBASE.DEEPSEEK.0` remains the
 next implementation row and is blocked by documentation architecture. Topology
 findings remain valid inputs to the owning repair or decommission row, but they
