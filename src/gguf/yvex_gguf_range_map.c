@@ -24,33 +24,6 @@
 #include <limits.h>
 #include <stddef.h>
 
-static int range_tensor_element_count(const yvex_gguf_tensor_info *tensor,
-                                      unsigned long long *out,
-                                      const char **reason)
-{
-    unsigned long long elements = 1ull;
-    unsigned int i;
-
-    if (!tensor || !out) {
-        if (reason) *reason = "GGUF tensor_info row is required for range qtype bytes";
-        return 0;
-    }
-    for (i = 0u; i < tensor->rank; ++i) {
-        if (tensor->dims[i] == 0ull) {
-            if (reason) *reason = "GGUF tensor dimension is zero";
-            return 0;
-        }
-        if (elements > ULLONG_MAX / tensor->dims[i]) {
-            if (reason) *reason = "GGUF tensor element count overflows";
-            return 0;
-        }
-        elements *= tensor->dims[i];
-    }
-    *out = elements;
-    if (reason) *reason = "GGUF tensor element count accepted";
-    return 1;
-}
-
 /* Contract: validates a single absolute tensor byte range without file IO. */
 int yvex_gguf_range_map_validate(unsigned long long offset,
                                  unsigned long long size,
@@ -129,7 +102,7 @@ int yvex_gguf_range_fact_from_gguf(const yvex_artifact *artifact,
     count = yvex_gguf_tensor_count(gguf);
     for (i = 0ull; i < count; ++i) {
         const yvex_gguf_tensor_info *tensor = yvex_gguf_tensor_at(gguf, i);
-        unsigned long long elements = 0ull;
+        yvex_gguf_qtype_storage_result storage;
         unsigned long long expected_storage_bytes = 0ull;
         unsigned long long available_bytes = 0ull;
         if (!tensor) {
@@ -148,15 +121,16 @@ int yvex_gguf_range_fact_from_gguf(const yvex_artifact *artifact,
             return 0;
         }
 
-        if (!range_tensor_element_count(tensor, &elements, reason) ||
-            !yvex_gguf_qtype_storage_bytes(tensor->ggml_type,
-                                           elements,
-                                           &expected_storage_bytes,
-                                           reason)) {
+        if (yvex_gguf_qtype_tensor_storage(tensor->ggml_type,
+                                           tensor->dims,
+                                           tensor->rank,
+                                           &storage) != YVEX_GGUF_QTYPE_STORAGE_OK) {
             fact->status = YVEX_GGUF_ABI_SECTION_REFUSED;
-            fact->reason = reason ? *reason : "GGUF qtype storage span refused";
+            fact->reason = storage.reason;
+            if (reason) *reason = fact->reason;
             return 0;
         }
+        expected_storage_bytes = storage.total_bytes;
 
         if (tensor->absolute_offset <= fact->file_size) {
             available_bytes = fact->file_size - tensor->absolute_offset;

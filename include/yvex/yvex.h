@@ -41,6 +41,7 @@
 #include <yvex/fs.h>
 #include <yvex/gguf.h>
 #include <yvex/gguf_emit.h>
+#include <yvex/gguf_qtype.h>
 #include <yvex/gguf_template.h>
 #include <yvex/graph.h>
 #include <yvex/imatrix.h>

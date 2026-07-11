@@ -1184,6 +1184,7 @@ grep -nF 'yvex_gguf_reader_classify_error' src/gguf/yvex_gguf_reader.c >/dev/nul
 grep -nF 'yvex_gguf_descriptor_abi_from_sections' src/gguf/yvex_gguf_descriptor.c >/dev/null
 grep -nF 'yvex_gguf_artifact_abi_report_build' src/gguf/yvex_gguf_report.c >/dev/null
 grep -nF 'yvex_gguf_qtype_geometry_find' src/gguf/yvex_gguf_qtype.c >/dev/null
+grep -nF 'yvex_gguf_qtype_tensor_storage' src/gguf/yvex_gguf_qtype.c >/dev/null
 grep -nF 'yvex_gguf_qtype_storage_bytes' src/gguf/yvex_gguf_qtype.c >/dev/null
 grep -nF 'yvex_gguf_qtype_validate_tensor_storage' src/gguf/yvex_gguf_qtype.c >/dev/null
 grep -nF 'yvex_gguf_qtype_refusal_reason' src/gguf/yvex_gguf_qtype.c >/dev/null

@@ -10,6 +10,7 @@
 #include <yvex/artifact.h>
 #include <yvex/gguf.h>
 #include <yvex/gguf_emit.h>
+#include <yvex/gguf_qtype.h>
 #include <yvex/gguf_template.h>
 #include <yvex/model.h>
 #include <yvex/native_weights.h>
@@ -70,8 +71,6 @@ void yvex_gguf_template_print_summary(const yvex_gguf_template *tmpl,
 #define YVEX_GGUF_EMIT_NATIVE_ROWS 8u
 #define YVEX_GGUF_EMIT_NATIVE_COLS 4u
 #define YVEX_GGUF_EMIT_TENSOR_FLOATS 32u
-#define YVEX_GGUF_EMIT_PAYLOAD_F32_BYTES 128ull
-#define YVEX_GGUF_EMIT_PAYLOAD_F16_BYTES 64ull
 
 typedef struct {
     const char *out_path;
@@ -144,17 +143,16 @@ static int controlled_qtype_to_plan(const char *qtype,
                                     unsigned int *ggml_type,
                                     unsigned long long *scalar_bytes)
 {
-    if (!qtype || strcmp(qtype, "F32") == 0) {
-        *ggml_type = 0u;
-        *scalar_bytes = 4ull;
-        return 1;
-    }
-    if (strcmp(qtype, "F16") == 0) {
-        *ggml_type = 1u;
-        *scalar_bytes = 2ull;
-        return 1;
-    }
-    return 0;
+    const yvex_gguf_qtype_geometry *geometry =
+        yvex_gguf_qtype_geometry_find_by_name(qtype ? qtype : "F32");
+
+    if (!geometry || !yvex_gguf_qtype_supported_for_storage(geometry->qtype, NULL) ||
+        geometry->scalar_width == 0u ||
+        (geometry->qtype != YVEX_GGUF_QTYPE_F32 &&
+         geometry->qtype != YVEX_GGUF_QTYPE_F16)) return 0;
+    *ggml_type = geometry->qtype;
+    *scalar_bytes = geometry->scalar_width;
+    return 1;
 }
 
 static long file_size(FILE *fp)
@@ -564,7 +562,7 @@ int yvex_gguf_emit_write_tensor_payload(FILE *fp,
     if (plan->transpose_2d) {
         for (col = 0; col < YVEX_GGUF_EMIT_NATIVE_COLS; ++col) {
             for (row = 0; row < YVEX_GGUF_EMIT_NATIVE_ROWS; ++row) {
-                if (plan->ggml_type == 1u) {
+                if (plan->ggml_type == YVEX_GGUF_QTYPE_F16) {
                     if (yvex_gguf_emit_write_u16(fp, controlled_float_to_f16_bits(native[row][col]), err, "tensor payload") != YVEX_OK) {
                         return YVEX_ERR_IO;
                     }
@@ -576,7 +574,7 @@ int yvex_gguf_emit_write_tensor_payload(FILE *fp,
     } else {
         for (row = 0; row < YVEX_GGUF_EMIT_NATIVE_ROWS; ++row) {
             for (col = 0; col < YVEX_GGUF_EMIT_NATIVE_COLS; ++col) {
-                if (plan->ggml_type == 1u) {
+                if (plan->ggml_type == YVEX_GGUF_QTYPE_F16) {
                     if (yvex_gguf_emit_write_u16(fp, controlled_float_to_f16_bits(native[row][col]), err, "tensor payload") != YVEX_OK) {
                         return YVEX_ERR_IO;
                     }
@@ -1245,11 +1243,13 @@ static int command_qtype_support(int arg_count, char **args)
     for (i = 0; i < yvex_qtype_support_count(); ++i) {
         const yvex_qtype_support_info *row = yvex_qtype_support_at(i);
         fprintf(stdout, "  %s policy=%s storage=%s emit=%s quantize=%s compute=%s notes=%s\n",
-               row->qtype,
+               yvex_qtype_support_name(row),
                row->policy_supported ? "yes" : "no",
-               row->storage_supported ? "yes" : "no",
+               yvex_qtype_support_storage_supported(row) ? "yes" : "no",
                row->emit_supported ? "yes" : "no",
-               strcmp(row->qtype, "F32") == 0 ? "n/a" : (row->quantize_supported ? "yes" : "no"),
+               row->ggml_type == YVEX_GGUF_QTYPE_F32
+                   ? "n/a"
+                   : (row->quantize_supported ? "yes" : "no"),
                row->compute_supported ? "partial" : "no",
                row->notes ? row->notes : "");
     }

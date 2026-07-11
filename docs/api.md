@@ -35,7 +35,7 @@ The umbrella header collects the supported public header groups.
 | Area | Headers | Purpose |
 | --- | --- | --- |
 | Core | `version.h`, `status.h`, `error.h`, `log.h` | Version values, status codes, bounded error reports, and logging contracts. |
-| Artifacts and GGUF | `artifact.h`, `artifact_identity.h`, `artifact_integrity.h`, `artifact_naming.h`, `gguf.h`, `gguf_emit.h`, `gguf_template.h` | Local artifact handling, GGUF parsing, controlled emission, identity evidence, and integrity reports. |
+| Artifacts and GGUF | `artifact.h`, `artifact_identity.h`, `artifact_integrity.h`, `artifact_naming.h`, `gguf.h`, `gguf_qtype.h`, `gguf_emit.h`, `gguf_template.h` | Local artifact handling, GGUF parsing, canonical qtype storage geometry, controlled emission, identity evidence, and integrity reports. |
 | Model and tensors | `dtype.h`, `tensor.h`, `model.h`, `weights.h` | Dtype facts, tensor descriptors, model descriptors, selected weights, and backend-resident weight tables. |
 | Tokenizer and input | `tokenizer.h`, `token_input.h`, `prompt.h` | Tokenizer diagnostics, explicit token input objects, prompt rendering, and input normalization boundaries. |
 | Graph and planning | `graph.h`, `op.h`, `planner.h`, `memory_plan.h` | Graph reports, operation boundaries, planning structures, and memory planning summaries. |
@@ -183,16 +183,24 @@ stage trusts inconsistent artifact facts.
 
 ## Tensor Accounting and Range Validation
 
-`yvex_tensor_shape_accounting_validate` is the canonical shape and dtype
-accounting step. It reports rank, dimensions, element count, storage byte
-accounting, storage support, and the narrow compute-support flags used by
-current graph paths.
+`yvex_gguf_qtype_tensor_storage` is the canonical GGUF qtype storage-accounting
+step. It uses `dims[0]` as the logical row width, requires exact block
+divisibility for block qtypes, derives row count from the remaining dimensions,
+and reports typed admission and overflow failures. Storage admission and
+reference-decoder availability are separate facts; neither implies
+quantization, emission, materialization, or backend compute support.
+
+`yvex_tensor_shape_accounting_validate` projects that canonical geometry into
+the existing tensor accounting report. It reports rank, dimensions, element
+count, row-aware storage bytes, storage support, and the narrow compute-support
+flags used by current graph paths.
 
 `yvex_tensor_range_validate` is the canonical byte-range calculation for a
-parsed tensor directory row. It computes element count, dtype size, tensor byte
-count, `tensor_data_offset + tensor_relative_offset`, absolute start, absolute
-end, file bounds, and alignment status before payload-reading paths access
-tensor bytes.
+parsed tensor directory row. It consumes the row-aware qtype result, then
+computes `tensor_data_offset + tensor_relative_offset`, absolute start,
+absolute end, file bounds, and alignment status before payload-reading paths
+access tensor bytes. A flattened element count cannot admit a multidimensional
+block-quantized tensor.
 
 `yvex_selected_embedding_shape_validate` interprets `token_embd.weight` as
 `dims[0] = hidden_size` and `dims[1] = vocab_size`. It validates a token id and

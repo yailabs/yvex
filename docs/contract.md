@@ -363,18 +363,21 @@ tensor directory consistency, tensor name uniqueness, supported rank/dims/dtype
 accounting, checked byte-count math, tensor offset/range bounds, and required
 selected readiness facts for the implemented graph paths.
 
-Tensor byte ranges are validated through a canonical calculation before payload
-reads. The calculation checks element count, dtype size, tensor byte count,
+Tensor byte ranges are validated through the canonical GGUF qtype storage
+calculation before payload reads. The calculation treats `dims[0]` as the row
+width, requires exact block divisibility, derives row count from the remaining
+dimensions, and checks row, element, and total-byte arithmetic before computing
 `tensor_data_offset + tensor_relative_offset`, end offset, file bounds, and
 alignment where applicable. Materialization uses that validated range before
 allocation and copy. Real graph paths validate selected token-slice ranges
 before raw reference extraction.
 
 Shape and dtype accounting runs before byte-range validation and runtime payload
-reads. YVEX rejects unsupported rank, zero dimensions, element-count overflow,
-dtype-size ambiguity, tensor byte-count overflow, and selected embedding
-shape/dtype mismatch for the implemented paths. Storage recognition and compute
-support remain separate facts.
+reads. YVEX rejects unsupported rank, zero dimensions, row-width/block
+mismatch, element-count overflow, row-byte overflow, row-count overflow,
+total-byte overflow, and selected embedding shape/dtype mismatch for the
+implemented paths. Storage admission, reference decoding, quantization,
+emission, and backend compute support remain separate facts.
 
 The integrity fixture suite uses tiny GGUF corruption fixtures. It exercises
 parser, integrity, materialization, and graph-entry refusal paths before tensor

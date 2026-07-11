@@ -26,6 +26,7 @@
 #include <yvex/dtype.h>
 #include <yvex/artifact_integrity.h>
 #include <yvex/fs.h>
+#include <yvex/gguf_qtype.h>
 #include <yvex/model.h>
 #include <yvex/model_registry.h>
 #include <yvex/native_weights.h>
@@ -47,39 +48,39 @@
 /* Dtype registry */
 
 static const yvex_dtype_info dtype_table[] = {
-    {YVEX_DTYPE_UNKNOWN, "UNKNOWN",  UINT_MAX, 0,   0,   0, 0, 0},
-    {YVEX_DTYPE_F32,     "F32",      0,        0,   0,   4, 0, 1},
-    {YVEX_DTYPE_F16,     "F16",      1,        0,   0,   2, 0, 1},
-    {YVEX_DTYPE_BF16,    "BF16",     30,       0,   0,   2, 0, 1},
-    {YVEX_DTYPE_F64,     "F64",      28,       0,   0,   8, 0, 1},
-    {YVEX_DTYPE_I8,      "I8",       24,       0,   0,   1, 0, 1},
-    {YVEX_DTYPE_I16,     "I16",      25,       0,   0,   2, 0, 1},
-    {YVEX_DTYPE_I32,     "I32",      26,       0,   0,   4, 0, 1},
-    {YVEX_DTYPE_I64,     "I64",      27,       0,   0,   8, 0, 1},
-    {YVEX_DTYPE_Q4_0,    "Q4_0",     2,        32,  18,  0, 1, 1},
-    {YVEX_DTYPE_Q4_1,    "Q4_1",     3,        32,  20,  0, 1, 0},
-    {YVEX_DTYPE_Q5_0,    "Q5_0",     6,        32,  22,  0, 1, 0},
-    {YVEX_DTYPE_Q5_1,    "Q5_1",     7,        32,  24,  0, 1, 0},
-    {YVEX_DTYPE_Q8_0,    "Q8_0",     8,        32,  34,  0, 1, 1},
-    {YVEX_DTYPE_Q8_1,    "Q8_1",     9,        32,  40,  0, 1, 0},
-    {YVEX_DTYPE_Q2_K,    "Q2_K",     10,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_Q3_K,    "Q3_K",     11,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_Q4_K,    "Q4_K",     12,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_Q5_K,    "Q5_K",     13,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_Q6_K,    "Q6_K",     14,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_Q8_K,    "Q8_K",     15,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_IQ2_XXS, "IQ2_XXS",  16,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_IQ2_XS,  "IQ2_XS",   17,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_IQ3_XXS, "IQ3_XXS",  18,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_IQ1_S,   "IQ1_S",    19,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_IQ4_NL,  "IQ4_NL",   20,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_IQ3_S,   "IQ3_S",    21,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_IQ2_S,   "IQ2_S",    22,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_IQ4_XS,  "IQ4_XS",   23,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_IQ1_M,   "IQ1_M",    29,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_TQ1_0,   "TQ1_0",    34,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_TQ2_0,   "TQ2_0",    35,       0,   0,   0, 1, 0},
-    {YVEX_DTYPE_MXFP4,   "MXFP4",    39,       0,   0,   0, 1, 0},
+    {YVEX_DTYPE_UNKNOWN, UINT_MAX},
+    {YVEX_DTYPE_F32, YVEX_GGUF_QTYPE_F32},
+    {YVEX_DTYPE_F16, YVEX_GGUF_QTYPE_F16},
+    {YVEX_DTYPE_BF16, YVEX_GGUF_QTYPE_BF16},
+    {YVEX_DTYPE_F64, YVEX_GGUF_QTYPE_F64},
+    {YVEX_DTYPE_I8, YVEX_GGUF_QTYPE_I8},
+    {YVEX_DTYPE_I16, YVEX_GGUF_QTYPE_I16},
+    {YVEX_DTYPE_I32, YVEX_GGUF_QTYPE_I32},
+    {YVEX_DTYPE_I64, YVEX_GGUF_QTYPE_I64},
+    {YVEX_DTYPE_Q4_0, YVEX_GGUF_QTYPE_Q4_0},
+    {YVEX_DTYPE_Q4_1, YVEX_GGUF_QTYPE_Q4_1},
+    {YVEX_DTYPE_Q5_0, YVEX_GGUF_QTYPE_Q5_0},
+    {YVEX_DTYPE_Q5_1, YVEX_GGUF_QTYPE_Q5_1},
+    {YVEX_DTYPE_Q8_0, YVEX_GGUF_QTYPE_Q8_0},
+    {YVEX_DTYPE_Q8_1, YVEX_GGUF_QTYPE_Q8_1},
+    {YVEX_DTYPE_Q2_K, YVEX_GGUF_QTYPE_Q2_K},
+    {YVEX_DTYPE_Q3_K, YVEX_GGUF_QTYPE_Q3_K},
+    {YVEX_DTYPE_Q4_K, YVEX_GGUF_QTYPE_Q4_K},
+    {YVEX_DTYPE_Q5_K, YVEX_GGUF_QTYPE_Q5_K},
+    {YVEX_DTYPE_Q6_K, YVEX_GGUF_QTYPE_Q6_K},
+    {YVEX_DTYPE_Q8_K, YVEX_GGUF_QTYPE_Q8_K},
+    {YVEX_DTYPE_IQ2_XXS, YVEX_GGUF_QTYPE_IQ2_XXS},
+    {YVEX_DTYPE_IQ2_XS, YVEX_GGUF_QTYPE_IQ2_XS},
+    {YVEX_DTYPE_IQ3_XXS, YVEX_GGUF_QTYPE_IQ3_XXS},
+    {YVEX_DTYPE_IQ1_S, YVEX_GGUF_QTYPE_IQ1_S},
+    {YVEX_DTYPE_IQ4_NL, YVEX_GGUF_QTYPE_IQ4_NL},
+    {YVEX_DTYPE_IQ3_S, YVEX_GGUF_QTYPE_IQ3_S},
+    {YVEX_DTYPE_IQ2_S, YVEX_GGUF_QTYPE_IQ2_S},
+    {YVEX_DTYPE_IQ4_XS, YVEX_GGUF_QTYPE_IQ4_XS},
+    {YVEX_DTYPE_IQ1_M, YVEX_GGUF_QTYPE_IQ1_M},
+    {YVEX_DTYPE_TQ1_0, YVEX_GGUF_QTYPE_TQ1_0},
+    {YVEX_DTYPE_TQ2_0, YVEX_GGUF_QTYPE_TQ2_0},
+    {YVEX_DTYPE_MXFP4, YVEX_GGUF_QTYPE_MXFP4},
 };
 
 static const unsigned long dtype_table_count = sizeof(dtype_table) / sizeof(dtype_table[0]);
@@ -112,81 +113,115 @@ const yvex_dtype_info *yvex_dtype_from_ggml_type(unsigned int ggml_type)
 
 const char *yvex_dtype_name(yvex_dtype dtype)
 {
-    return yvex_dtype_get_info(dtype)->name;
+    const yvex_dtype_info *info = yvex_dtype_get_info(dtype);
+
+    return info->dtype == YVEX_DTYPE_UNKNOWN
+        ? "UNKNOWN"
+        : yvex_gguf_qtype_name(info->ggml_type);
+}
+
+/* Contract: projects quantized identity from the canonical GGUF registry. */
+int yvex_dtype_is_quantized(yvex_dtype dtype)
+{
+    const yvex_dtype_info *info = yvex_dtype_get_info(dtype);
+    const yvex_gguf_qtype_geometry *geometry =
+        yvex_gguf_qtype_geometry_find(info->ggml_type);
+
+    return geometry &&
+        geometry->storage_class == YVEX_GGUF_QTYPE_STORAGE_BLOCK_QUANTIZED;
+}
+
+/* Contract: projects on-disk storage admission from the canonical registry. */
+int yvex_dtype_storage_supported(yvex_dtype dtype)
+{
+    const yvex_dtype_info *info = yvex_dtype_get_info(dtype);
+
+    return info->dtype != YVEX_DTYPE_UNKNOWN &&
+        yvex_gguf_qtype_supported_for_storage(info->ggml_type, NULL);
+}
+
+static int dtype_storage_error_code(yvex_gguf_qtype_storage_status status)
+{
+    switch (status) {
+    case YVEX_GGUF_QTYPE_STORAGE_OK:
+        return YVEX_OK;
+    case YVEX_GGUF_QTYPE_STORAGE_INVALID_ARGUMENT:
+        return YVEX_ERR_INVALID_ARG;
+    case YVEX_GGUF_QTYPE_STORAGE_INVALID_RANK:
+    case YVEX_GGUF_QTYPE_STORAGE_INVALID_DIMENSION:
+    case YVEX_GGUF_QTYPE_STORAGE_ROW_BLOCK_MISMATCH:
+    case YVEX_GGUF_QTYPE_STORAGE_EXPECTED_ACTUAL_MISMATCH:
+        return YVEX_ERR_FORMAT;
+    case YVEX_GGUF_QTYPE_STORAGE_ELEMENT_COUNT_OVERFLOW:
+    case YVEX_GGUF_QTYPE_STORAGE_ROW_BYTE_OVERFLOW:
+    case YVEX_GGUF_QTYPE_STORAGE_ROW_COUNT_OVERFLOW:
+    case YVEX_GGUF_QTYPE_STORAGE_TOTAL_BYTE_OVERFLOW:
+        return YVEX_ERR_BOUNDS;
+    case YVEX_GGUF_QTYPE_STORAGE_UNKNOWN_ID:
+    case YVEX_GGUF_QTYPE_STORAGE_REMOVED_ID:
+    case YVEX_GGUF_QTYPE_STORAGE_RESERVED_ID:
+    case YVEX_GGUF_QTYPE_STORAGE_OUTSIDE_BASELINE:
+    case YVEX_GGUF_QTYPE_STORAGE_GEOMETRY_UNAVAILABLE:
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    return YVEX_ERR_UNSUPPORTED;
 }
 
 /*
- * yvex_dtype_storage_bytes()
- *
- * Purpose:
- *   compute storage bytes for scalar and known block-quantized dtypes.
- *
- * Inputs:
- *   dtype and element count are borrowed; out receives the computed byte count.
- *
- * Effects:
- *   mutates only out and err; performs no IO, allocation, payload reads, or
- *   backend calls.
- *
- * Failure:
- *   returns invalid-arg, unsupported, or bounds errors for missing output,
- *   unknown storage formulas, and overflow.
- *
- * Boundary:
- *   storage accounting is not qtype compute support, artifact emission, or
- *   generation capability.
+ * Contract: projects a complete borrowed shape to the GGUF owner. It mutates
+ * only out and err and performs no allocation, IO, payload access, or compute.
  */
+int yvex_dtype_tensor_storage_bytes(yvex_dtype dtype,
+                                    const unsigned long long *dims,
+                                    unsigned int rank,
+                                    unsigned long long *out,
+                                    yvex_error *err)
+{
+    const yvex_dtype_info *info;
+    yvex_gguf_qtype_storage_result result;
+    yvex_gguf_qtype_storage_status status;
+    int rc;
+
+    if (!out || !dims) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG,
+                       "yvex_dtype_tensor_storage_bytes",
+                       "dims and out are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    *out = 0ull;
+    info = yvex_dtype_get_info(dtype);
+    if (info->dtype == YVEX_DTYPE_UNKNOWN) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED,
+                       "yvex_dtype_tensor_storage_bytes",
+                       "unknown dtype has no GGUF storage identity");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    status = yvex_gguf_qtype_tensor_storage(info->ggml_type, dims, rank, &result);
+    rc = dtype_storage_error_code(status);
+    if (rc != YVEX_OK) {
+        yvex_error_setf(err, rc, "yvex_dtype_tensor_storage_bytes",
+                        "%s: %s",
+                        yvex_gguf_qtype_storage_status_name(status),
+                        result.reason ? result.reason : "qtype storage refused");
+        return rc;
+    }
+    *out = result.total_bytes;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+/* Contract: compatibility storage query for one logical row only. */
 int yvex_dtype_storage_bytes(yvex_dtype dtype,
-                             unsigned long long element_count,
+                             unsigned long long row_element_count,
                              unsigned long long *out,
                              yvex_error *err)
 {
-    const yvex_dtype_info *info;
-    unsigned long long blocks;
-
     if (!out) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_dtype_storage_bytes", "out is required");
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG,
+                       "yvex_dtype_storage_bytes", "out is required");
         return YVEX_ERR_INVALID_ARG;
     }
-    *out = 0;
-
-    info = yvex_dtype_get_info(dtype);
-    if (!info || info->dtype == YVEX_DTYPE_UNKNOWN || !info->is_supported_for_storage_accounting) {
-        yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_dtype_storage_bytes",
-                        "storage accounting unsupported for dtype %s", yvex_dtype_name(dtype));
-        return YVEX_ERR_UNSUPPORTED;
-    }
-
-    if (info->scalar_bytes > 0) {
-        if (element_count > ULLONG_MAX / info->scalar_bytes) {
-            yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_dtype_storage_bytes",
-                            "storage byte overflow for dtype %s", info->name);
-            return YVEX_ERR_BOUNDS;
-        }
-        *out = element_count * info->scalar_bytes;
-        yvex_error_clear(err);
-        return YVEX_OK;
-    }
-
-    if (info->block_elems == 0 || info->block_bytes == 0) {
-        yvex_error_setf(err, YVEX_ERR_UNSUPPORTED, "yvex_dtype_storage_bytes",
-                        "block formula missing for dtype %s", info->name);
-        return YVEX_ERR_UNSUPPORTED;
-    }
-
-    blocks = element_count / info->block_elems;
-    if ((element_count % info->block_elems) != 0) {
-        blocks += 1;
-    }
-    if (blocks > ULLONG_MAX / info->block_bytes) {
-        yvex_error_setf(err, YVEX_ERR_BOUNDS, "yvex_dtype_storage_bytes",
-                        "block storage byte overflow for dtype %s", info->name);
-        return YVEX_ERR_BOUNDS;
-    }
-
-    *out = blocks * info->block_bytes;
-    yvex_error_clear(err);
-    return YVEX_OK;
+    return yvex_dtype_tensor_storage_bytes(dtype, &row_element_count, 1u, out, err);
 }
 
 
@@ -688,7 +723,11 @@ int yvex_tensor_table_from_gguf(yvex_tensor_table **out,
             return rc;
         }
 
-        rc = yvex_dtype_storage_bytes(dst->dtype, dst->element_count, &dst->storage_bytes, err);
+        rc = yvex_dtype_tensor_storage_bytes(dst->dtype,
+                                             dst->dims,
+                                             dst->rank,
+                                             &dst->storage_bytes,
+                                             err);
         if (rc == YVEX_ERR_UNSUPPORTED) {
             dst->storage_bytes = 0;
             yvex_error_clear(err);

@@ -252,7 +252,7 @@ exercise_structural_case zero-dimension \
 exercise_structural_case huge-dimension-overflow \
     tests/fixtures/gguf/tensor-dim-overflow.gguf element-count-overflow
 exercise_structural_case byte-count-overflow \
-    "$GEN_DIR/tensor-byte-count-overflow.gguf" tensor-byte-count-overflow
+    "$GEN_DIR/tensor-byte-count-overflow.gguf" row-byte-overflow
 exercise_structural_case unknown-dtype \
     "$GEN_DIR/unknown-dtype.gguf" unknown-dtype
 exercise_structural_case tensor-offset-out-of-file \

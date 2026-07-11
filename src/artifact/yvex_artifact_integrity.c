@@ -9,6 +9,7 @@
 #include <yvex/artifact_integrity.h>
 #include <yvex/artifact_identity.h>
 #include <yvex/dtype.h>
+#include <yvex/gguf_qtype.h>
 #include <yvex/model.h>
 
 #include <limits.h>
@@ -213,22 +214,6 @@ static int tensor_element_count(const yvex_tensor_info *tensor,
     return 1;
 }
 
-static unsigned long long dtype_scalar_or_block_size(yvex_dtype dtype)
-{
-    const yvex_dtype_info *info = yvex_dtype_get_info(dtype);
-
-    if (!info) {
-        return 0ull;
-    }
-    if (info->scalar_bytes > 0u) {
-        return (unsigned long long)info->scalar_bytes;
-    }
-    if (info->block_elems > 0u && info->block_bytes > 0u) {
-        return (unsigned long long)info->block_bytes;
-    }
-    return 0ull;
-}
-
 int yvex_tensor_shape_accounting_validate(
     const yvex_tensor_info *tensor,
     yvex_tensor_shape_accounting *out,
@@ -237,6 +222,7 @@ int yvex_tensor_shape_accounting_validate(
     yvex_tensor_shape_accounting local;
     yvex_tensor_shape_accounting *accounting = out ? out : &local;
     const yvex_dtype_info *dtype_info;
+    const yvex_gguf_qtype_geometry *geometry;
     unsigned long long element_count = 0ull;
     unsigned long long storage_byte_count = 0ull;
     unsigned int i;
@@ -295,26 +281,30 @@ int yvex_tensor_shape_accounting_validate(
     }
     accounting->dtype_known = 1;
     accounting->dtype_valid = 1;
-    accounting->storage_supported = dtype_info->is_supported_for_storage_accounting ? 1 : 0;
-    accounting->storage_unit_bytes = dtype_scalar_or_block_size(tensor->dtype);
+    geometry = yvex_gguf_qtype_geometry_find(dtype_info->ggml_type);
+    accounting->storage_supported = yvex_dtype_storage_supported(tensor->dtype);
+    if (geometry) {
+        accounting->storage_unit_bytes = geometry->scalar_width > 0u
+            ? (unsigned long long)geometry->scalar_width
+            : (unsigned long long)geometry->bytes_per_block;
+    }
     accounting->compute_supported_for_selected_embedding =
         tensor->dtype == YVEX_DTYPE_F16 ? 1 : 0;
     accounting->compute_supported_for_fixture_embedding =
         tensor->dtype == YVEX_DTYPE_F32 ? 1 : 0;
 
-    rc = yvex_dtype_storage_bytes(tensor->dtype, element_count, &storage_byte_count, err);
+    rc = yvex_dtype_tensor_storage_bytes(tensor->dtype,
+                                         tensor->dims,
+                                         tensor->rank,
+                                         &storage_byte_count,
+                                         err);
     if (rc == YVEX_ERR_UNSUPPORTED) {
         yvex_error_setf(err, YVEX_ERR_UNSUPPORTED,
                         "yvex_tensor_shape_accounting_validate",
                         "tensor-dtype-size-unknown: %s", tensor->name);
         return rc;
     }
-    if (rc != YVEX_OK) {
-        yvex_error_setf(err, YVEX_ERR_BOUNDS,
-                        "yvex_tensor_shape_accounting_validate",
-                        "tensor-byte-count-overflow: %s", tensor->name);
-        return rc;
-    }
+    if (rc != YVEX_OK) return rc;
     if (storage_byte_count == 0ull) {
         yvex_error_setf(err, YVEX_ERR_BOUNDS,
                         "yvex_tensor_shape_accounting_validate",
@@ -713,6 +703,14 @@ static void map_parse_error_to_report(const yvex_error *source,
         code = "zero-dimension";
     } else if (strstr(message, "dimension product overflow")) {
         code = "element-count-overflow";
+    } else if (strstr(message, "row-block-mismatch")) {
+        code = "row-block-mismatch";
+    } else if (strstr(message, "row-byte-overflow")) {
+        code = "row-byte-overflow";
+    } else if (strstr(message, "row-count-overflow")) {
+        code = "row-count-overflow";
+    } else if (strstr(message, "total-byte-overflow")) {
+        code = "total-byte-overflow";
     } else if (strstr(message, "storage byte overflow") ||
                strstr(message, "block storage byte overflow")) {
         code = "tensor-byte-count-overflow";

@@ -47,18 +47,17 @@ static int compute_activation_peak(const yvex_graph *graph,
 
     for (i = 0; i < yvex_graph_value_count(graph); ++i) {
         const yvex_graph_value_info *value = yvex_graph_value_at(graph, i);
-        unsigned long long elements;
         unsigned long long bytes;
         int rc;
 
         if (!value || value->kind != YVEX_VALUE_ACTIVATION) {
             continue;
         }
-        rc = yvex_shape_product(value->dims, value->rank, &elements, err);
-        if (rc != YVEX_OK) {
-            return rc;
-        }
-        rc = yvex_dtype_storage_bytes(value->dtype, elements, &bytes, err);
+        rc = yvex_dtype_tensor_storage_bytes(value->dtype,
+                                             value->dims,
+                                             value->rank,
+                                             &bytes,
+                                             err);
         if (rc == YVEX_ERR_UNSUPPORTED) {
             yvex_error_clear(err);
             continue;

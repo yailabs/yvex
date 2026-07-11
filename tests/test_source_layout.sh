@@ -307,6 +307,7 @@ test -f src/gguf/conversion.c
 test -f src/cli/commands/yvex_conversion_cli.c
 test -f src/gguf/families.h
 test -f src/gguf/quant.c
+test -f include/yvex/gguf_qtype.h
 test -f src/gguf/yvex_gguf_private.h
 test -f src/gguf/yvex_gguf_container.c
 test -f src/gguf/yvex_gguf_metadata.c

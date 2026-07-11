@@ -237,6 +237,16 @@ claim backend arithmetic capability, CUDA arithmetic capability, qtype policy
 selection, quantization, writer completion, roundtrip, artifact emission,
 materialization, runtime descriptor readiness, graph execution, or generation.
 
+V010.GGUF.QTYPE.ABI.1 makes `include/yvex/gguf_qtype.h` and
+`src/gguf/yvex_gguf_qtype.c` the sole GGUF qtype identity and storage-geometry
+owner. Block storage is calculated from the complete shape: `ne[0]` is the row
+width, every row must divide exactly by the canonical block width, and the
+remaining dimensions form the checked row count. Dtype, parser, range,
+integrity, conversion, and memory-plan code may project these facts but may not
+copy IDs, names, block widths, or block bytes. Storage admission remains
+independent from reference decoding, quantization, emission, backend compute,
+materialization, and runtime support.
+
 src/artifact/yvex_artifact.c
   artifact IO, inspect, metadata, tensor command surfaces
 

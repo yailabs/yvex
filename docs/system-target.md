@@ -1,6 +1,6 @@
 # YVEX System Target
 
-Date: 2026-07-10
+Date: 2026-07-11
 Status: filesystem and module ownership contract
 Authority: filesystem and module topology; current project state belongs only
 to `PROJECT.md`
@@ -45,7 +45,7 @@ domain algorithms. No writer owns command output.
 | Area | Current state | Target state | Next row |
 | --- | --- | --- | --- |
 | GGUF artifact ABI | `.0` reopened; tiny-fixture evidence only | complete DeepSeek container/metadata/tensor-info ABI | V010.GGUF.ARTIFACT.ABI.1 |
-| GGUF qtype ABI | `.0` reopened; bounded byte geometry only | exact required geometry and refusal ABI | V010.GGUF.QTYPE.ABI.1 |
+| GGUF qtype storage | pinned IDs 0-39, exact row geometry, and typed refusal are canonical | preserve storage independently from decoder, quantizer, emitter, and compute support | see `PROJECT.md` |
 | GGUF layout integrity | bounded range fixtures | complete-artifact global layout and corruption refusal | V010.GGUF.LAYOUT.INTEGRITY.1 |
 | CUDA truth | fallback PTX can expose no-op entry points | fail-closed advertised capability with reference parity | V010.CUDA.FAILCLOSED.0 |
 | Architecture IR | profile/report facts only | typed execution-complete DeepSeek specification | V010.MODEL.ARCH.IR.0 |
@@ -79,7 +79,8 @@ domain algorithms. No writer owns command output.
 - Model target owns target catalogs, maps, gates, and qtype reports.
 - Model artifacts own registry, references, gates, typed artifact reports, and
   explicit file writers.
-- GGUF owns container ABI, metadata ABI, tensor_info ABI, qtype geometry,
+- GGUF owns container ABI, metadata ABI, tensor_info ABI, canonical qtype
+  identity and row-aware storage geometry,
   ranges, reader, writer, roundtrip, emitted names, emitted layout, descriptor,
   and GGUF reports.
 - Artifact owns YVEX artifact descriptors, materialization boundary, roundtrip
@@ -103,10 +104,11 @@ domain algorithms. No writer owns command output.
 
 | Owner | Boundary |
 | --- | --- |
+| `include/yvex/gguf_qtype.h` | public qtype identity, admission, and typed storage result |
 | `src/gguf/yvex_gguf_container.c` | magic/version/container ABI |
 | `src/gguf/yvex_gguf_metadata.c` | metadata key/value ABI |
 | `src/gguf/yvex_gguf_tensor_info.c` | tensor_info name/rank/type/shape ABI |
-| `src/gguf/yvex_gguf_qtype.c` | qtype byte geometry |
+| `src/gguf/yvex_gguf_qtype.c` | pinned qtype registry and row-aware tensor storage |
 | `src/gguf/yvex_gguf_range_map.c` | absolute range/alignment checks |
 | `src/gguf/yvex_gguf_reader.c` | parser-result reader facts |
 | `src/gguf/yvex_gguf_writer.c` | writer refusal until writer row |
@@ -163,10 +165,13 @@ roundtrip contract. Current milestone state belongs only to `PROJECT.md`.
 
 ## GGUF Qtype ABI Boundary
 
-The qtype owner separates storage identity and row-aware byte geometry from
-quantization and backend arithmetic. Bounded geometry/refusal evidence does not
-establish the qtype set or compute matrix required by a complete artifact.
-Current milestone state belongs only to `PROJECT.md`.
+The qtype owner admits the pinned GGUF on-disk range, accounts removed and
+outside-baseline identities, and derives bytes from the complete shape with
+`ne[0]` as row width. Dtype, range, integrity, conversion, and memory-plan
+owners project these facts instead of copying geometry. This boundary does not
+provide reference dequantization, quantization, emission, backend arithmetic,
+artifact completion, or runtime support. Current milestone state belongs only
+to `PROJECT.md`.
 
 ## Forbidden Claims
 

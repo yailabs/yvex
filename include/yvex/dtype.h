@@ -14,7 +14,7 @@
  *   - yvex_dtype_info
  *   - yvex_dtype_get_info
  *   - yvex_dtype_from_ggml_type
- *   - yvex_dtype_storage_bytes
+ *   - projection to canonical GGUF qtype storage facts
  *
  * Does not own:
  *   - backend kernels
@@ -83,21 +83,24 @@ typedef enum {
 
 typedef struct {
     yvex_dtype dtype;
-    const char *name;
     unsigned int ggml_type;
-    unsigned int block_elems;
-    unsigned int block_bytes;
-    unsigned int scalar_bytes;
-    int is_quantized;
-    int is_supported_for_storage_accounting;
 } yvex_dtype_info;
 
 const yvex_dtype_info *yvex_dtype_get_info(yvex_dtype dtype);
 const yvex_dtype_info *yvex_dtype_from_ggml_type(unsigned int ggml_type);
 const char *yvex_dtype_name(yvex_dtype dtype);
+int yvex_dtype_is_quantized(yvex_dtype dtype);
+int yvex_dtype_storage_supported(yvex_dtype dtype);
 
+int yvex_dtype_tensor_storage_bytes(yvex_dtype dtype,
+                                    const unsigned long long *dims,
+                                    unsigned int rank,
+                                    unsigned long long *out,
+                                    yvex_error *err);
+
+/* Compatibility boundary: element_count describes one logical row only. */
 int yvex_dtype_storage_bytes(yvex_dtype dtype,
-                             unsigned long long element_count,
+                             unsigned long long row_element_count,
                              unsigned long long *out,
                              yvex_error *err);
 

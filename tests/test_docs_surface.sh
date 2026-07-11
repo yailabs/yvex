@@ -145,7 +145,7 @@ do
 done
 
 require_text "$project" '`PROJECT.md` is the single project-control authority for YVEX.'
-require_text "$project" 'Current proof stage: documentation architecture/ownership only'
+require_text "$project" 'Current proof stage:'
 require_text "$project" 'YVEX generates real text with DeepSeek-V4-Flash on the DGX Spark CUDA backend'
 require_text "$project" '$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash'
 require_text "$project" 'deepseek4-v4-flash'

@@ -12,6 +12,7 @@
 #include <yvex/backend.h>
 #include <yvex/conversion.h>
 #include <yvex/gguf.h>
+#include <yvex/gguf_qtype.h>
 #include <yvex/native_weights.h>
 #include <yvex/qtype_support.h>
 #include <yvex/tensor.h>
@@ -175,21 +176,6 @@ int yvex_conversion_suggest_artifact_name(char *out,
                                       err);
 }
 
-static int qtype_to_ggml(const char *qtype, unsigned int *ggml, unsigned int *scalar)
-{
-    if (!qtype) return 0;
-    if (strcmp(qtype, "F32") == 0) {
-        *ggml = 0u; *scalar = 4u; return 1;
-    }
-    if (strcmp(qtype, "F16") == 0) {
-        *ggml = 1u; *scalar = 2u; return 1;
-    }
-    if (strcmp(qtype, "BF16") == 0) {
-        *ggml = 30u; *scalar = 2u; return 1;
-    }
-    return 0;
-}
-
 int yvex_conversion_map_tensor(const char *arch,
                                const yvex_native_weight_info *native,
                                const char *target_qtype,
@@ -197,6 +183,7 @@ int yvex_conversion_map_tensor(const char *arch,
                                yvex_error *err)
 {
     yvex_weight_mapping_issue_kind issue = YVEX_WEIGHT_MAPPING_ISSUE_NONE;
+    const yvex_gguf_qtype_geometry *geometry;
     int mapped;
     const yvex_qtype_support_info *support;
 
@@ -232,17 +219,21 @@ int yvex_conversion_map_tensor(const char *arch,
         out->transform = YVEX_CONVERT_TRANSFORM_UNSUPPORTED;
         return YVEX_OK;
     }
-    if (!qtype_to_ggml(out->target_qtype, &out->ggml_type, &out->target_scalar_bytes)) {
+    geometry = yvex_gguf_qtype_geometry_find(support->ggml_type);
+    if (!geometry || !yvex_qtype_support_storage_supported(support) ||
+        geometry->scalar_width == 0u) {
         out->status = YVEX_CONVERT_TENSOR_STATUS_UNSUPPORTED_QTYPE;
         out->transform = YVEX_CONVERT_TRANSFORM_UNSUPPORTED;
         return YVEX_OK;
     }
+    out->ggml_type = geometry->qtype;
+    out->target_scalar_bytes = geometry->scalar_width;
 
     out->status = YVEX_CONVERT_TENSOR_STATUS_READY;
     out->transform = YVEX_CONVERT_TRANSFORM_DTYPE_CAST;
-    if ((strcmp(out->target_qtype, "F16") == 0 && native->dtype == YVEX_NATIVE_DTYPE_F16) ||
-        (strcmp(out->target_qtype, "BF16") == 0 && native->dtype == YVEX_NATIVE_DTYPE_BF16) ||
-        (strcmp(out->target_qtype, "F32") == 0 && native->dtype == YVEX_NATIVE_DTYPE_F32)) {
+    if ((out->ggml_type == YVEX_GGUF_QTYPE_F16 && native->dtype == YVEX_NATIVE_DTYPE_F16) ||
+        (out->ggml_type == YVEX_GGUF_QTYPE_BF16 && native->dtype == YVEX_NATIVE_DTYPE_BF16) ||
+        (out->ggml_type == YVEX_GGUF_QTYPE_F32 && native->dtype == YVEX_NATIVE_DTYPE_F32)) {
         out->transform = YVEX_CONVERT_TRANSFORM_NONE;
     }
     return YVEX_OK;
@@ -1645,13 +1636,13 @@ int yvex_qwen_adapter_map_name(const char *native_name,
 
 
 static const yvex_qtype_support_info qtype_rows[] = {
-    {"F32",      1, 1, 1, 0, 1, "scalar emit supported; CPU/CUDA materialization only"},
-    {"F16",      1, 1, 1, 1, 0, "scalar emit and cast supported; no compute claim"},
-    {"BF16",     1, 1, 1, 1, 0, "scalar emit and cast supported; no compute claim"},
-    {"Q8_0",     1, 1, 0, 0, 0, "storage known; quantizer/emitter not enabled in open-weight intake"},
-    {"Q4_K",     1, 0, 0, 0, 0, "policy vocabulary only; no emitter"},
-    {"Q2_K",     1, 0, 0, 0, 0, "policy vocabulary only; no emitter"},
-    {"IQ2_XXS",  1, 0, 0, 0, 0, "policy vocabulary only; no emitter"},
+    {YVEX_GGUF_QTYPE_F32, 1, 1, 0, 1, "scalar emit supported; CPU/CUDA materialization only"},
+    {YVEX_GGUF_QTYPE_F16, 1, 1, 1, 0, "scalar emit and cast supported; no compute claim"},
+    {YVEX_GGUF_QTYPE_BF16, 1, 1, 1, 0, "scalar emit and cast supported; no compute claim"},
+    {YVEX_GGUF_QTYPE_Q8_0, 1, 0, 0, 0, "storage known; quantizer/emitter not enabled in open-weight intake"},
+    {YVEX_GGUF_QTYPE_Q4_K, 1, 0, 0, 0, "policy vocabulary only; no emitter"},
+    {YVEX_GGUF_QTYPE_Q2_K, 1, 0, 0, 0, "policy vocabulary only; no emitter"},
+    {YVEX_GGUF_QTYPE_IQ2_XXS, 1, 0, 0, 0, "policy vocabulary only; no emitter"},
 };
 
 const yvex_qtype_support_info *yvex_qtype_support_by_name(const char *qtype)
@@ -1659,7 +1650,7 @@ const yvex_qtype_support_info *yvex_qtype_support_by_name(const char *qtype)
     unsigned long long i;
     if (!qtype) return NULL;
     for (i = 0; i < yvex_qtype_support_count(); ++i) {
-        if (strcmp(qtype_rows[i].qtype, qtype) == 0) {
+        if (strcmp(yvex_qtype_support_name(&qtype_rows[i]), qtype) == 0) {
             return &qtype_rows[i];
         }
     }
@@ -1675,4 +1666,14 @@ const yvex_qtype_support_info *yvex_qtype_support_at(unsigned long long index)
 {
     if (index >= yvex_qtype_support_count()) return NULL;
     return &qtype_rows[index];
+}
+
+const char *yvex_qtype_support_name(const yvex_qtype_support_info *info)
+{
+    return info ? yvex_gguf_qtype_name(info->ggml_type) : "UNKNOWN";
+}
+
+int yvex_qtype_support_storage_supported(const yvex_qtype_support_info *info)
+{
+    return info && yvex_gguf_qtype_supported_for_storage(info->ggml_type, NULL);
 }

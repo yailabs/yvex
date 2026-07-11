@@ -433,6 +433,39 @@ static int test_duplicate_tensor_name_fails(void)
     return 0;
 }
 
+static int test_qtype_rows_use_complete_shape(void)
+{
+    yvex_tensor_info tensor;
+    yvex_tensor_shape_accounting accounting;
+    yvex_error err;
+    int rc;
+
+    memset(&tensor, 0, sizeof(tensor));
+    tensor.name = "q4.weight";
+    tensor.dtype = YVEX_DTYPE_Q4_0;
+    tensor.ggml_type = YVEX_GGUF_QTYPE_Q4_0;
+    tensor.rank = 2u;
+    tensor.dims[0] = 32ull;
+    tensor.dims[1] = 2ull;
+    tensor.storage_bytes = 36ull;
+
+    yvex_error_clear(&err);
+    rc = yvex_tensor_shape_accounting_validate(&tensor, &accounting, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "integrity accepts complete Q4_0 rows");
+    YVEX_TEST_ASSERT(accounting.storage_byte_count == 36ull,
+                     "integrity consumes canonical row bytes");
+
+    tensor.dims[0] = 16ull;
+    tensor.storage_bytes = 0ull;
+    rc = yvex_tensor_shape_accounting_validate(&tensor, &accounting, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT,
+                     "integrity refuses flattened-only block alignment");
+    YVEX_TEST_ASSERT(strstr(yvex_error_message(&err),
+                            "row-width-block-mismatch") != NULL,
+                     "integrity preserves typed row refusal");
+    return 0;
+}
+
 int yvex_test_artifact_integrity(void)
 {
     if (test_valid_fixture_passes() != 0) return 1;
@@ -445,5 +478,6 @@ int yvex_test_artifact_integrity(void)
     if (test_required_tensor_missing_fails() != 0) return 1;
     if (test_token_out_of_range_fails() != 0) return 1;
     if (test_duplicate_tensor_name_fails() != 0) return 1;
+    if (test_qtype_rows_use_complete_shape() != 0) return 1;
     return 0;
 }

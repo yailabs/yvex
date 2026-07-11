@@ -1,6 +1,6 @@
 # YVEX Model Artifacts
 
-Date: 2026-07-10
+Date: 2026-07-11
 Status: artifact policy
 
 Complete and supported model artifacts are external operator assets. They are
@@ -17,6 +17,12 @@ fixtures under `tests/`.
 
 The unqualified term "model artifact" does not refer to a selected-tensor proof
 file. A structurally valid GGUF is not necessarily complete or supported.
+
+Tensor byte accounting consumes the canonical row-aware GGUF qtype owner.
+Block-quantized shapes require `ne[0]` to divide exactly by the block width;
+flattened element-count alignment and partial-row padding are not admitted.
+Known storage geometry does not imply a decoder, quantizer, emitter, compute
+kernel, complete artifact, or supported artifact.
 
 ## v0.1.0 Target
 
@@ -86,7 +92,7 @@ Expected result:
 
 ## Non-Claims
 
-This policy does not claim complete GGUF emission, qtype coverage,
-quantization, writer completion, roundtrip completion, full materialization,
+This policy does not claim complete GGUF emission, qtype compute or
+quantization coverage, writer completion, roundtrip completion, full materialization,
 runtime execution, DeepSeek generation, CUDA generation, evaluation evidence,
 benchmark measurement, or release readiness.

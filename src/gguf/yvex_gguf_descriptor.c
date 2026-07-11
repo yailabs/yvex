@@ -26,7 +26,7 @@ static const yvex_gguf_boundary_fact descriptor_boundary = {
     "GGUF descriptor",
     YVEX_GGUF_BOUNDARY_REPORT_ONLY,
     "descriptor facts are projected from container, metadata, tensor_info, qtype, and range ABI",
-    "V010.QUANT.2"
+    "V010.GGUF.ARTIFACT.ABI.1"
 };
 
 /* Contract: exposes descriptor boundary facts without allocation or IO. */

@@ -27,6 +27,7 @@
 #include <yvex/yvex.h>
 
 #include "test.h"
+#include "yvex_graph_private.h"
 
 typedef struct {
     yvex_artifact *artifact;
@@ -128,9 +129,55 @@ static int test_memory_plan_dump(void)
     return 0;
 }
 
+static yvex_graph_value_info *activation_value(yvex_graph *graph)
+{
+    unsigned long long i;
+
+    for (i = 0ull; graph && i < graph->value_count; ++i) {
+        if (graph->values[i].kind == YVEX_VALUE_ACTIVATION) return &graph->values[i];
+    }
+    return NULL;
+}
+
+static int test_memory_plan_uses_row_geometry(void)
+{
+    memory_fixture fixture;
+    yvex_graph_value_info *value;
+    yvex_memory_plan *plan = NULL;
+    yvex_memory_plan_summary summary;
+    yvex_error err;
+    int rc;
+
+    YVEX_TEST_ASSERT(open_fixture(&fixture) == 0, "open row-aware memory fixture");
+    value = activation_value(fixture.graph);
+    YVEX_TEST_ASSERT(value != NULL, "memory fixture activation exists");
+    value->dtype = YVEX_DTYPE_Q4_0;
+    value->rank = 2u;
+    value->dims[0] = 32ull;
+    value->dims[1] = 2ull;
+
+    rc = yvex_memory_plan_from_graph(&plan, fixture.graph, fixture.table, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "memory plan accepts complete Q4_0 rows");
+    rc = yvex_memory_plan_get_summary(plan, &summary, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "row-aware memory summary succeeds");
+    YVEX_TEST_ASSERT(summary.activation_peak_bytes == 36ull,
+                     "memory plan consumes canonical row bytes");
+    yvex_memory_plan_close(plan);
+    plan = NULL;
+
+    value->dims[0] = 16ull;
+    rc = yvex_memory_plan_from_graph(&plan, fixture.graph, fixture.table, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT,
+                     "memory plan refuses flattened-only block alignment");
+    YVEX_TEST_ASSERT(plan == NULL, "failed memory plan releases partial state");
+    close_fixture(&fixture);
+    return 0;
+}
+
 int yvex_test_memory_plan(void)
 {
     if (test_memory_plan_summary() != 0) return 1;
     if (test_memory_plan_dump() != 0) return 1;
+    if (test_memory_plan_uses_row_geometry() != 0) return 1;
     return 0;
 }

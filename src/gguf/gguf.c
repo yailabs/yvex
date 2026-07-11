@@ -6,6 +6,7 @@
  */
 
 #include <yvex/gguf.h>
+#include <yvex/gguf_qtype.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -516,45 +517,6 @@ static int derive_alignment(yvex_gguf *gguf, yvex_error *err)
     return YVEX_OK;
 }
 
-static const char *ggml_type_name(unsigned int type)
-{
-    switch (type) {
-    case 0: return "F32";
-    case 1: return "F16";
-    case 2: return "Q4_0";
-    case 3: return "Q4_1";
-    case 6: return "Q5_0";
-    case 7: return "Q5_1";
-    case 8: return "Q8_0";
-    case 9: return "Q8_1";
-    case 10: return "Q2_K";
-    case 11: return "Q3_K";
-    case 12: return "Q4_K";
-    case 13: return "Q5_K";
-    case 14: return "Q6_K";
-    case 15: return "Q8_K";
-    case 16: return "IQ2_XXS";
-    case 17: return "IQ2_XS";
-    case 18: return "IQ3_XXS";
-    case 19: return "IQ1_S";
-    case 20: return "IQ4_NL";
-    case 21: return "IQ3_S";
-    case 22: return "IQ2_S";
-    case 23: return "IQ4_XS";
-    case 24: return "I8";
-    case 25: return "I16";
-    case 26: return "I32";
-    case 27: return "I64";
-    case 28: return "F64";
-    case 29: return "IQ1_M";
-    case 30: return "BF16";
-    case 34: return "TQ1_0";
-    case 35: return "TQ2_0";
-    case 39: return "MXFP4";
-    default: return "UNKNOWN";
-    }
-}
-
 static int parse_tensors(yvex_gguf *gguf, yvex_byte_cursor *cur, yvex_error *err)
 {
     unsigned long long i;
@@ -626,7 +588,7 @@ static int parse_tensors(yvex_gguf *gguf, yvex_byte_cursor *cur, yvex_error *err
             return rc;
         }
         tensor->ggml_type = type;
-        tensor->ggml_type_name = ggml_type_name(type);
+        tensor->ggml_type_name = yvex_gguf_qtype_name(type);
 
         rc = cursor_read_u64le(cur, &tensor->relative_offset, err, "gguf.tensor.offset", "tensor offset");
         if (rc != YVEX_OK) {

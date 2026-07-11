@@ -8,6 +8,7 @@
 #include <yvex/artifact.h>
 #include <yvex/dtype.h>
 #include <yvex/gguf.h>
+#include <yvex/gguf_qtype.h>
 #include <yvex/imatrix.h>
 #include <yvex/quant_job.h>
 #include <yvex/quant_policy.h>
@@ -1418,43 +1419,24 @@ char *yvex_quant_policy_strdup(const char *s)
 
 const char *yvex_quant_qtype_name(yvex_quant_qtype qtype)
 {
-    switch (qtype) {
-    case YVEX_QUANT_QTYPE_UNKNOWN: return "UNKNOWN";
-    case YVEX_QUANT_QTYPE_F32: return "F32";
-    case YVEX_QUANT_QTYPE_F16: return "F16";
-    case YVEX_QUANT_QTYPE_BF16: return "BF16";
-    case YVEX_QUANT_QTYPE_Q8_0: return "Q8_0";
-    case YVEX_QUANT_QTYPE_Q4_0: return "Q4_0";
-    case YVEX_QUANT_QTYPE_Q4_K: return "Q4_K";
-    case YVEX_QUANT_QTYPE_Q5_K: return "Q5_K";
-    case YVEX_QUANT_QTYPE_Q6_K: return "Q6_K";
-    case YVEX_QUANT_QTYPE_Q2_K: return "Q2_K";
-    case YVEX_QUANT_QTYPE_IQ2_XXS: return "IQ2_XXS";
-    case YVEX_QUANT_QTYPE_IQ2_XS: return "IQ2_XS";
-    case YVEX_QUANT_QTYPE_IQ3_XXS: return "IQ3_XXS";
-    case YVEX_QUANT_QTYPE_IQ4_NL: return "IQ4_NL";
-    case YVEX_QUANT_QTYPE_OTHER: return "OTHER";
-    }
-    return "UNKNOWN";
+    yvex_dtype dtype;
+
+    if (qtype == YVEX_QUANT_QTYPE_OTHER) return "OTHER";
+    dtype = yvex_quant_qtype_to_dtype(qtype);
+    return dtype == YVEX_DTYPE_UNKNOWN ? "UNKNOWN" : yvex_dtype_name(dtype);
 }
 
 yvex_quant_qtype yvex_quant_qtype_from_name(const char *name)
 {
+    yvex_quant_qtype qtype;
+
     if (!name) return YVEX_QUANT_QTYPE_UNKNOWN;
-    if (strcmp(name, "F32") == 0) return YVEX_QUANT_QTYPE_F32;
-    if (strcmp(name, "F16") == 0) return YVEX_QUANT_QTYPE_F16;
-    if (strcmp(name, "BF16") == 0) return YVEX_QUANT_QTYPE_BF16;
-    if (strcmp(name, "Q8_0") == 0) return YVEX_QUANT_QTYPE_Q8_0;
-    if (strcmp(name, "Q4_0") == 0) return YVEX_QUANT_QTYPE_Q4_0;
-    if (strcmp(name, "Q4_K") == 0) return YVEX_QUANT_QTYPE_Q4_K;
-    if (strcmp(name, "Q5_K") == 0) return YVEX_QUANT_QTYPE_Q5_K;
-    if (strcmp(name, "Q6_K") == 0) return YVEX_QUANT_QTYPE_Q6_K;
-    if (strcmp(name, "Q2_K") == 0) return YVEX_QUANT_QTYPE_Q2_K;
-    if (strcmp(name, "IQ2_XXS") == 0) return YVEX_QUANT_QTYPE_IQ2_XXS;
-    if (strcmp(name, "IQ2_XS") == 0) return YVEX_QUANT_QTYPE_IQ2_XS;
-    if (strcmp(name, "IQ3_XXS") == 0) return YVEX_QUANT_QTYPE_IQ3_XXS;
-    if (strcmp(name, "IQ4_NL") == 0) return YVEX_QUANT_QTYPE_IQ4_NL;
     if (strcmp(name, "OTHER") == 0) return YVEX_QUANT_QTYPE_OTHER;
+    for (qtype = YVEX_QUANT_QTYPE_F32;
+         qtype < YVEX_QUANT_QTYPE_OTHER;
+         qtype = (yvex_quant_qtype)(qtype + 1)) {
+        if (strcmp(name, yvex_quant_qtype_name(qtype)) == 0) return qtype;
+    }
     return YVEX_QUANT_QTYPE_UNKNOWN;
 }
 
@@ -1538,8 +1520,7 @@ yvex_dtype yvex_quant_qtype_to_dtype(yvex_quant_qtype qtype)
 
 int yvex_quant_qtype_storage_supported(yvex_quant_qtype qtype)
 {
-    const yvex_dtype_info *info = yvex_dtype_get_info(yvex_quant_qtype_to_dtype(qtype));
-    return info && info->is_supported_for_storage_accounting;
+    return yvex_dtype_storage_supported(yvex_quant_qtype_to_dtype(qtype));
 }
 
 int yvex_quant_qtype_compute_supported(yvex_quant_qtype qtype)
@@ -2344,22 +2325,7 @@ void yvex_quant_policy_print_summary(const yvex_quant_policy *policy,
 
 static yvex_quant_qtype yvex_quant_policy_validate_qtype_from_dtype(yvex_dtype dtype)
 {
-    switch (dtype) {
-    case YVEX_DTYPE_F32: return YVEX_QUANT_QTYPE_F32;
-    case YVEX_DTYPE_F16: return YVEX_QUANT_QTYPE_F16;
-    case YVEX_DTYPE_BF16: return YVEX_QUANT_QTYPE_BF16;
-    case YVEX_DTYPE_Q8_0: return YVEX_QUANT_QTYPE_Q8_0;
-    case YVEX_DTYPE_Q4_0: return YVEX_QUANT_QTYPE_Q4_0;
-    case YVEX_DTYPE_Q4_K: return YVEX_QUANT_QTYPE_Q4_K;
-    case YVEX_DTYPE_Q5_K: return YVEX_QUANT_QTYPE_Q5_K;
-    case YVEX_DTYPE_Q6_K: return YVEX_QUANT_QTYPE_Q6_K;
-    case YVEX_DTYPE_Q2_K: return YVEX_QUANT_QTYPE_Q2_K;
-    case YVEX_DTYPE_IQ2_XXS: return YVEX_QUANT_QTYPE_IQ2_XXS;
-    case YVEX_DTYPE_IQ2_XS: return YVEX_QUANT_QTYPE_IQ2_XS;
-    case YVEX_DTYPE_IQ3_XXS: return YVEX_QUANT_QTYPE_IQ3_XXS;
-    case YVEX_DTYPE_IQ4_NL: return YVEX_QUANT_QTYPE_IQ4_NL;
-    default: return YVEX_QUANT_QTYPE_OTHER;
-    }
+    return yvex_quant_policy_template_qtype_from_dtype(dtype);
 }
 
 static void qp_set_summary(yvex_quant_policy *policy,
