@@ -1,6 +1,6 @@
 # DeepSeek Operator Runbook
 
-Date: 2026-07-10
+Date: 2026-07-11
 Status: unsupported current-state boundary
 
 ## Current Target
@@ -11,7 +11,7 @@ Canonical source:
 $HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash
 ```
 
-Future canonical full target:
+Canonical v0.1.0 release target:
 
 ```text
 deepseek4-v4-flash
@@ -24,9 +24,13 @@ DGX Spark
 CUDA
 ```
 
-The local source path is present at the time of this refoundation, but the
-source verification gate has not closed. The full target is not yet a supported
-target in YVEX.
+The local source has passed exact metadata and header verification against
+`deepseek-ai/DeepSeek-V4-Flash` at commit
+`60d8d70770c6776ff598c94bb586a859a38244f1`. The authoritative inventory is the
+upstream `model.safetensors.index.json`: 46 of 46 shard headers parse and expose
+69,187 unique tensor records. The verified local footprint is 159,629,046,930
+bytes after admission of the pinned index and its provider metadata. Tensor
+payload bytes remain unread and untrusted. The target remains unsupported.
 
 ## Current Boundary
 
@@ -52,7 +56,7 @@ does not reproduce the project sequence.
 
 The strict source command resolves the canonical target independently from its
 source directory name, parses structured provenance, model/tokenizer/generation
-config and index facts, and reads safetensors headers only:
+config and pinned index facts, and performs one safetensors-header pass:
 
 ```sh
 ./yvex source-manifest report \
@@ -67,9 +71,11 @@ config and index facts, and reads safetensors headers only:
 Strict mode exits non-zero for missing or contradictory provenance, malformed
 config/tokenizer/index metadata, inconsistent token sidecars, missing or
 unexpected shards, invalid headers, or checked-footprint overflow. The command
-never reads tensor payload bytes and does not prove artifact or runtime support.
-Current milestone state and the authoritative blocker remain in
-`../../PROJECT.md`.
+may atomically promote a complete verifier-owned manifest under the YVEX model
+registry only after those facts pass and the manifest reopens consistently. A
+user-provided status cannot perform that transition. The command never reads
+tensor payload bytes and does not prove artifact or runtime support. Current
+milestone state remains in `../../PROJECT.md`.
 
 ## Canonical Control
 

@@ -261,11 +261,27 @@ src/gguf/quant.c
 src/source/yvex_source.c
   source manifests, source pressure, source evidence, native header inventory
 
+src/source/yvex_source_json.c
+  bounded structured JSON primitives only; no source policy
+
+src/source/yvex_source_deepseek.c
+  raw DeepSeek config, tokenizer, and generation sidecar facts
+
+src/source/yvex_source_provenance.c
+  pinned repository/revision, provider metadata, and source-manifest facts
+
+src/source/yvex_source_inventory.c
+  upstream-indexed or explicitly header-derived shard inventory and the single
+  canonical safetensors header pass
+
 src/source/yvex_source_verify.c
-  exact release-source identity, revision, structured model/tokenizer/generation
-  config, shard-index, root-shard, raw dtype, header-only tensor inventory, and
-  checked footprint verification; never tensor payload reads or model-support
-  promotion
+  exact release-source verification coordination, final policy, blockers, and
+  verifier-controlled manifest promotion; never JSON, shard/header, rendering,
+  serialization, tensor payload, or model-support ownership
+
+src/source/yvex_source_write.c
+  explicit source sidecar serialization and atomic verified-manifest or
+  header-derived-inventory publication; never verification policy or operator IO
 
 src/tokenizer/yvex_tokenizer.c
   tokenizer metadata and tokenizer command surfaces

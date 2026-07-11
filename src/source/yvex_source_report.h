@@ -84,6 +84,61 @@ typedef struct {
 } yvex_source_tensor_sample;
 
 typedef struct {
+    const char *verification_status;
+    const char *repository_status;
+    const char *revision_status;
+    const char *config_identity_status;
+    const char *tokenizer_verification_status;
+    const char *generation_config_status;
+    const char *shard_index_status;
+    const char *inventory_authority;
+    const char *upstream_index_identity_status;
+    int tokenizer_verified;
+    const char *model_name;
+    const char *config_presence;
+    const char *generation_config_presence;
+    const char *tokenizer_json_presence;
+    const char *tokenizer_config_presence;
+    const char *tokenizer_status;
+    const char *safetensors_status;
+    const char *manifest_status;
+    const char *native_inventory_report_status;
+    const char *tensor_map_report_status;
+    const char *tensor_role_map_report_status;
+    const char *output_head_map_report_status;
+    const char *tokenizer_map_report_status;
+    const char *native_inventory_status;
+    const char *native_inventory_source;
+    const char *tensor_metadata_status;
+    const char *tensor_metadata_source;
+    const char *native_tensor_metadata_status;
+    const char *native_tensor_payload_status;
+    const char *sidecar_status;
+    const char *tensor_payload_status;
+    const char *target_artifact_status;
+    const char *footprint_class;
+    const char *footprint_status;
+    const char *provenance_origin_normal;
+    const char *provenance_origin_audit;
+    const char *provenance_status;
+    const char *identity_status;
+    const char *authority;
+    const char *authority_status;
+    const char *manifest_provenance_status;
+    const char *manifest_authority;
+    const char *manifest_schema_status;
+    const char *manifest_family_status;
+    const char *manifest_target_status;
+    const char *manifest_artifact_class_status;
+    const char *manifest_footprint_status;
+    const char *manifest_native_inventory_status;
+    const char *manifest_tensor_metadata_status;
+    const char *manifest_consistency_status;
+    const char *manifest_hardening_status;
+    int manifest_creation_performed;
+} yvex_source_report_semantics;
+
+typedef struct {
     const yvex_source_family_profile *profile;
     yvex_source_report_request request;
     const char *status;
@@ -219,6 +274,7 @@ typedef struct {
     const char *blockers[32];
     unsigned long blocker_count;
     yvex_source_verification verification;
+    yvex_source_report_semantics semantics;
     int exit_code;
 } yvex_source_report;
 

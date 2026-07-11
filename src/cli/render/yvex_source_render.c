@@ -14,7 +14,7 @@
 
 #include <string.h>
 
-static unsigned long long qwen_source_tensor_print_limit(
+static unsigned long long source_render_tensor_print_limit(
     const yvex_source_report_request *options,
     const yvex_source_report *report)
 {
@@ -46,7 +46,7 @@ static void yvex_source_render_tensor_rows(
     if (!options || !report || !options->include_tensors) {
         return;
     }
-    limit = qwen_source_tensor_print_limit(options, report);
+    limit = source_render_tensor_print_limit(options, report);
     display_limit = options->tensor_limit ? options->tensor_limit : 20ull;
     if (display_limit > YVEX_SOURCE_TENSOR_SAMPLE_CAP) {
         display_limit = YVEX_SOURCE_TENSOR_SAMPLE_CAP;
@@ -68,442 +68,223 @@ static void yvex_source_render_tensor_rows(
 }
 
 
-static const char *qwen_source_model_name(const yvex_source_report_request *options,
+static const char *source_render_model_name(const yvex_source_report_request *options,
                                           const yvex_source_report *report)
 {
-    if (report && report->identity_model[0]) return report->identity_model;
-    if (options && options->resolved_model[0]) return options->resolved_model;
-    return options && options->profile ? options->profile->model : "unknown";
+    (void)options;
+    return report && report->semantics.model_name
+               ? report->semantics.model_name : "unknown";
 }
 
-static const char *qwen_source_present_missing(int present)
+static const char *source_render_present_missing(int present)
 {
     return present ? "present" : "missing";
 }
 
-static const char *qwen_source_tokenizer_status(const yvex_source_report *report)
+static const char *source_render_tokenizer_status(const yvex_source_report *report)
 {
-    return report && (report->tokenizer_json_exists || report->tokenizer_config_exists)
-               ? "present"
-               : "missing";
+    return report->semantics.tokenizer_status;
 }
 
-static const char *qwen_source_safetensors_status(const yvex_source_report *report)
+static const char *source_render_safetensors_status(const yvex_source_report *report)
 {
-    return report && report->safetensors_count > 0 ? "present" : "missing";
+    return report->semantics.safetensors_status;
 }
 
-static const char *qwen_source_manifest_status(const yvex_source_report *report)
+static const char *source_render_manifest_status(const yvex_source_report *report)
 {
-    return report && report->manifest_exists ? "present" : "missing";
+    return report->semantics.manifest_status;
 }
 
-static const char *qwen_source_native_inventory_report_status(
+static const char *source_render_native_inventory_report_status(
     const yvex_source_report *report)
 {
-    return report && report->native_inventory_exists ? "available-report-only" : "missing";
+    return report->semantics.native_inventory_report_status;
 }
 
-static const char *qwen_source_tensor_map_report_status(
+static const char *source_render_tensor_map_report_status(
     const yvex_source_report *report)
 {
-    if (!report || !report->tensor_map_exists) return "missing";
-    return report->tensor_map_incomplete ? "incomplete-report-only" : "available-report-only";
+    return report->semantics.tensor_map_report_status;
 }
 
-static const char *qwen_source_tensor_role_map_report_status(
+static const char *source_render_tensor_role_map_report_status(
     const yvex_source_report *report)
 {
-    if (!report || !report->tensor_map_exists) return "missing";
-    return report->tensor_map_incomplete ? "incomplete-report-only" : "available-report-only";
+    return report->semantics.tensor_role_map_report_status;
 }
 
-static const char *qwen_source_output_head_map_report_status(
+static const char *source_render_output_head_map_report_status(
     const yvex_source_report *report)
 {
-    if (!report || !report->output_head_map_exists) return "missing";
-    return report->output_head_map_missing ? "missing-in-report" : "available-report-only";
+    return report->semantics.output_head_map_report_status;
 }
 
-static const char *qwen_source_tokenizer_map_report_status(
+static const char *source_render_tokenizer_map_report_status(
     const yvex_source_report *report)
 {
-    if (!report || !report->tokenizer_map_exists) return "missing";
-    return "available-report-only";
+    return report->semantics.tokenizer_map_report_status;
 }
 
-static const char *qwen_source_native_inventory_status(
+static const char *source_render_native_inventory_status(
     const yvex_source_report *report)
 {
-    if (!report || !report->source_exists) {
-        return "missing";
-    }
-    if (report->native_safetensors_count == 0) {
-        return "no-safetensors";
-    }
-    if (report->native_safetensors_header_error_count > 0) {
-        return "header-error";
-    }
-    if (report->native_safetensors_header_read_count > 0) {
-        return "header-only";
-    }
-    return "unknown";
+    return report->semantics.native_inventory_status;
 }
 
-static const char *qwen_source_native_inventory_source(
+static const char *source_render_native_inventory_source(
     const yvex_source_report *report)
 {
-    return report && report->source_exists ? "source-path" : "not-present";
+    return report->semantics.native_inventory_source;
 }
 
-static const char *qwen_source_tensor_metadata_status(
+static const char *source_render_tensor_metadata_status(
     const yvex_source_report *report)
 {
-    if (!report || !report->source_exists) {
-        return "missing";
-    }
-    if (report->native_safetensors_count == 0) {
-        return "no-safetensors";
-    }
-    if (report->source_tensor_metadata_error_count > 0) {
-        return "header-error";
-    }
-    if (report->source_tensor_count > 0 ||
-        report->native_safetensors_header_read_count > 0) {
-        return "header-only";
-    }
-    return "unknown";
+    return report->semantics.tensor_metadata_status;
 }
 
-static const char *qwen_source_tensor_metadata_source(
+static const char *source_render_tensor_metadata_source(
     const yvex_source_report *report)
 {
-    return report && report->source_exists ? "source-path" : "not-present";
+    return report->semantics.tensor_metadata_source;
 }
 
-static const char *qwen_source_native_tensor_metadata_status(
+static const char *source_render_native_tensor_metadata_status(
     const yvex_source_report *report)
 {
-    const char *status = qwen_source_native_inventory_status(report);
-
-    if (strcmp(status, "header-only") == 0) {
-        return "header-only";
-    }
-    if (strcmp(status, "header-error") == 0) {
-        return report && report->native_tensor_count > 0
-                   ? "partial-header-only"
-                   : "header-error";
-    }
-    if (strcmp(status, "missing") == 0 ||
-        strcmp(status, "no-safetensors") == 0) {
-        return "not-present";
-    }
-    return "unknown";
+    return report->semantics.native_tensor_metadata_status;
 }
 
-static const char *qwen_source_native_tensor_payload_status(
+static const char *source_render_native_tensor_payload_status(
     const yvex_source_report *report)
 {
-    const char *status = qwen_source_native_inventory_status(report);
-
-    if (strcmp(status, "missing") == 0 ||
-        strcmp(status, "no-safetensors") == 0) {
-        return "not-present";
-    }
-    return "not-loaded";
+    return report->semantics.native_tensor_payload_status;
 }
 
-static const char *qwen_source_sidecar_status(const yvex_source_report *report)
+static const char *source_render_sidecar_status(const yvex_source_report *report)
 {
-    int has_config;
-    int has_tokenizer;
-
-    if (!report || !report->source_exists) {
-        return "missing";
-    }
-    has_config = report->config_exists || report->generation_config_exists;
-    has_tokenizer = report->tokenizer_json_exists || report->tokenizer_config_exists;
-    if (has_config && has_tokenizer) {
-        return "present";
-    }
-    if (has_config || has_tokenizer) {
-        return "partial";
-    }
-    return "missing";
+    return report->semantics.sidecar_status;
 }
 
-static const char *qwen_source_tensor_payload_status(const yvex_source_report *report)
+static const char *source_render_tensor_payload_status(const yvex_source_report *report)
 {
-    if (!report || !report->source_exists || report->safetensors_count == 0) {
-        return "not-present";
-    }
-    return "present-not-loaded";
+    return report->semantics.tensor_payload_status;
 }
 
-static const char *qwen_source_target_artifact_status(const yvex_source_family_profile *profile)
+static const char *source_render_target_artifact_status(const yvex_source_family_profile *profile)
 {
     return profile && profile->yvex_produced_artifact_status
-               ? profile->yvex_produced_artifact_status
-               : "planned";
+               ? profile->yvex_produced_artifact_status : "planned";
 }
 
-static const char *qwen_source_footprint_class(const yvex_source_report *report)
+static const char *source_render_footprint_class(const yvex_source_report *report)
 {
-    const unsigned long long mib = 1024ULL * 1024ULL;
-    const unsigned long long gib = 1024ULL * mib;
-
-    if (!report || !report->source_exists) {
-        return "missing";
-    }
-    if (report->source_regular_file_count == 0) {
-        return "empty";
-    }
-    if (report->total_size_bytes < 100ULL * mib) {
-        return "tiny";
-    }
-    if (report->total_size_bytes < 5ULL * gib) {
-        return "small";
-    }
-    if (report->total_size_bytes < 30ULL * gib) {
-        return "medium";
-    }
-    if (report->total_size_bytes < 200ULL * gib) {
-        return "large";
-    }
-    return "huge";
+    return report->semantics.footprint_class;
 }
 
-static const char *qwen_source_footprint_status(const yvex_source_report *report)
+static const char *source_render_footprint_status(const yvex_source_report *report)
 {
-    if (!report || !report->source_exists) {
-        return "missing";
-    }
-    if (report->profile &&
-        strcmp(report->profile->family_key, "deepseek") == 0) {
-        return report->verification.footprint_overflow
-                   ? "overflow"
-                   : "metadata-verified";
-    }
-    return "report-only";
+    return report->semantics.footprint_status;
 }
 
-static const char *qwen_source_provenance_origin_normal(
+static const char *source_render_provenance_origin_normal(
     const yvex_source_report *report)
 {
-    return report && report->source_exists ? "local-path" : "planned-official";
+    return report->semantics.provenance_origin_normal;
 }
 
-static const char *qwen_source_provenance_origin_audit(
+static const char *source_render_provenance_origin_audit(
     const yvex_source_report_request *options,
     const yvex_source_report *report)
 {
-    if (!report || !report->source_exists) {
-        return "planned-official";
-    }
-    if (options && options->source) {
-        return "explicit-source-path";
-    }
-    return "configured-models-root";
+    (void)options;
+    return report->semantics.provenance_origin_audit;
 }
 
-static const char *qwen_source_provenance_status(
+static const char *source_render_provenance_status(
     const yvex_source_report *report)
 {
-    if (!report || !report->source_exists) {
-        return "missing";
-    }
-    if (report->profile &&
-        strcmp(report->profile->family_key, "deepseek") == 0) {
-        return yvex_source_verification_status(&report->verification);
-    }
-    return "local-unverified";
+    return report->semantics.provenance_status;
 }
 
-static const char *qwen_source_identity_status(
+static const char *source_render_identity_status(
     const yvex_source_report *report)
 {
-    if (!report || !report->source_exists) {
-        return "not-present";
-    }
-    if (report->profile &&
-        strcmp(report->profile->family_key, "deepseek") == 0) {
-        return report->verification.repository_verified &&
-                       report->verification.revision_verified
-                   ? "verified"
-                   : "not-verified";
-    }
-    if (report->source_identity_from_download_sidecar) {
-        return "download-sidecar";
-    }
-    if (report->source_identity_from_path) {
-        return "inferred-from-path";
-    }
-    return "not-verified";
+    return report->semantics.identity_status;
 }
 
-static const char *qwen_source_authority(const yvex_source_report *report)
+static const char *source_render_authority(const yvex_source_report *report)
 {
-    if (report && report->profile &&
-        strcmp(report->profile->family_key, "deepseek") == 0) {
-        return report->verification.repository_verified
-                   ? "upstream-repository-manifest"
-                   : "unverified";
-    }
-    return report && report->source_exists
-               ? "local-unverified"
-               : "upstream-official-planned";
+    return report->semantics.authority;
 }
 
-static const char *qwen_source_authority_status(const yvex_source_report *report)
+static const char *source_render_authority_status(const yvex_source_report *report)
 {
-    if (report && report->profile &&
-        strcmp(report->profile->family_key, "deepseek") == 0) {
-        return report->verification.repository_verified ? "verified" : "blocked";
-    }
-    return report && report->source_exists ? "local-unverified" : "planned";
+    return report->semantics.authority_status;
 }
 
-static const char *qwen_source_manifest_provenance_status(
+static const char *source_render_manifest_provenance_status(
     const yvex_source_report *report)
 {
-    return report && report->manifest_exists ? "manifest-present" : "manifest-missing";
+    return report->semantics.manifest_provenance_status;
 }
 
-static const char *qwen_source_manifest_authority(
+static const char *source_render_manifest_authority(
     const yvex_source_report *report)
 {
-    return report && report->manifest_exists ? "local-unverified" : "unknown";
+    return report->semantics.manifest_authority;
 }
 
-static const char *qwen_source_manifest_schema_status(
+static const char *source_render_manifest_schema_status(
     const yvex_source_report *report)
 {
-    if (!report || !report->manifest_exists) {
-        return "not-checked";
-    }
-    if (report->profile &&
-        strcmp(report->profile->family_key, "deepseek") == 0) {
-        return report->verification.repository_verified &&
-                       report->verification.revision_verified &&
-                       report->verification.path_verified
-                   ? "verified"
-                   : "blocked";
-    }
-    if (report->manifest_probe_error) {
-        return "unreadable";
-    }
-    if (report->manifest_schema_matches) {
-        return "matched";
-    }
-    if (report->manifest_has_schema) {
-        return "present-unrecognized";
-    }
-    return "not-declared";
+    return report->semantics.manifest_schema_status;
 }
 
-static const char *qwen_source_manifest_match_status(
-    const yvex_source_report *report,
-    int has_field,
-    int matches)
-{
-    if (!report || !report->manifest_exists) {
-        return "not-checked";
-    }
-    if (report->manifest_probe_error) {
-        return "unreadable";
-    }
-    if (matches) {
-        return "matched";
-    }
-    if (has_field) {
-        return "mismatch";
-    }
-    return "not-declared";
-}
-
-static const char *qwen_source_manifest_decl_status(
-    const yvex_source_report *report,
-    int present)
-{
-    if (!report || !report->manifest_exists) {
-        return "not-checked";
-    }
-    if (report->manifest_probe_error) {
-        return "unreadable";
-    }
-    return present ? "declared" : "not-declared";
-}
-
-static const char *qwen_source_manifest_family_status(
+static const char *source_render_manifest_family_status(
     const yvex_source_report *report)
 {
-    return qwen_source_manifest_match_status(report,
-                                            report ? report->manifest_has_family : 0,
-                                            report ? report->manifest_family_matches : 0);
+    return report->semantics.manifest_family_status;
 }
 
-static const char *qwen_source_manifest_target_status(
+static const char *source_render_manifest_target_status(
     const yvex_source_report *report)
 {
-    return qwen_source_manifest_match_status(report,
-                                            report ? report->manifest_has_target : 0,
-                                            report ? report->manifest_target_matches : 0);
+    return report->semantics.manifest_target_status;
 }
 
-static const char *qwen_source_manifest_artifact_class_status(
+static const char *source_render_manifest_artifact_class_status(
     const yvex_source_report *report)
 {
-    return qwen_source_manifest_decl_status(report,
-                                           report ? report->manifest_has_artifact_class : 0);
+    return report->semantics.manifest_artifact_class_status;
 }
 
-static const char *qwen_source_manifest_footprint_status(
+static const char *source_render_manifest_footprint_status(
     const yvex_source_report *report)
 {
-    return qwen_source_manifest_decl_status(report,
-                                           report ? report->manifest_has_footprint : 0);
+    return report->semantics.manifest_footprint_status;
 }
 
-static const char *qwen_source_manifest_native_inventory_status(
+static const char *source_render_manifest_native_inventory_status(
     const yvex_source_report *report)
 {
-    return qwen_source_manifest_decl_status(report,
-                                           report ? report->manifest_has_native_inventory : 0);
+    return report->semantics.manifest_native_inventory_status;
 }
 
-static const char *qwen_source_manifest_tensor_metadata_status(
+static const char *source_render_manifest_tensor_metadata_status(
     const yvex_source_report *report)
 {
-    return qwen_source_manifest_decl_status(report,
-                                           report ? report->manifest_has_tensor_metadata : 0);
+    return report->semantics.manifest_tensor_metadata_status;
 }
 
-static const char *qwen_source_manifest_consistency_status(
+static const char *source_render_manifest_consistency_status(
     const yvex_source_report *report)
 {
-    if (!report || !report->manifest_exists) {
-        return "not-checked";
-    }
-    if (report->profile &&
-        strcmp(report->profile->family_key, "deepseek") == 0) {
-        return report->verification.repository_verified &&
-                       report->verification.revision_verified &&
-                       report->verification.path_verified
-                   ? "verified"
-                   : "blocked";
-    }
-    if (report->manifest_probe_error) {
-        return "report-only";
-    }
-    if (report->manifest_schema_matches &&
-        report->manifest_family_matches &&
-        report->manifest_target_matches) {
-        return "partial";
-    }
-    return "report-only";
+    return report->semantics.manifest_consistency_status;
 }
 
-static const char *qwen_source_presence_verification_status(int present)
+static const char *source_render_presence_verification_status(int present)
 {
     return present ? "present-unverified" : "not-present";
 }
@@ -523,52 +304,53 @@ int yvex_source_render_normal(FILE *fp, const yvex_source_report *report)
            report->source_state);
     yvex_cli_out_writef(fp, "artifact: %s  status=%s\n",
            options->profile->target_artifact_class,
-           qwen_source_target_artifact_status(options->profile));
+           source_render_target_artifact_status(options->profile));
     yvex_cli_out_writef(fp, "files: %llu  safetensors: %llu  bytes: %llu  footprint: %s\n",
            report->source_file_count,
            report->safetensors_count,
            report->total_size_bytes,
-           qwen_source_footprint_class(report));
+           source_render_footprint_class(report));
     yvex_cli_out_writef(fp, "provenance: %s status=%s revision=%s\n",
-           qwen_source_provenance_origin_normal(report),
-           deepseek ? yvex_source_verification_status(&report->verification)
-                    : qwen_source_provenance_status(report),
+           source_render_provenance_origin_normal(report),
+           deepseek ? report->semantics.verification_status
+                    : source_render_provenance_status(report),
            report->identity_revision[0] ? report->identity_revision : "unknown");
     yvex_cli_out_writef(fp, "native: %s  files=%llu  tensors=%llu  header_bytes=%llu\n",
-           qwen_source_native_inventory_status(report),
+           source_render_native_inventory_status(report),
            report->native_safetensors_count,
            report->native_tensor_count,
            report->native_safetensors_header_bytes);
     yvex_cli_out_writef(fp, "metadata: %s  tensors=%llu  dtypes=%llu  max_rank=%llu\n",
-           qwen_source_tensor_metadata_status(report),
+           source_render_tensor_metadata_status(report),
            report->source_tensor_count,
            report->source_tensor_dtype_count,
            report->source_tensor_max_rank);
     yvex_cli_out_writef(fp, "manifest: %s  consistency=%s\n",
-           qwen_source_manifest_status(report),
-           qwen_source_manifest_consistency_status(report));
+           source_render_manifest_status(report),
+           source_render_manifest_consistency_status(report));
     if (deepseek) {
-        yvex_cli_out_writef(fp, "repository: %s  verified=%s\n",
+        yvex_cli_out_writef(fp, "repository: %s  status=%s\n",
                            report->identity_repo_id[0]
                                ? report->identity_repo_id
                                : "unknown",
-                           report->verification.repository_verified
-                               ? "true"
-                               : "false");
+                           report->semantics.repository_status);
         yvex_cli_out_writef(fp,
                            "verification: %s  config=%s  tokenizer=%s  generation_config=%s  index=%s  headers=%llu/%llu\n",
-                           yvex_source_verification_status(&report->verification),
-                           report->verification.config_valid ? "valid" : "blocked",
-                           report->verification.tokenizer_json_valid &&
-                                   report->verification.tokenizer_config_valid
-                               ? "valid"
-                               : "blocked",
-                           report->verification.generation_config_valid
-                               ? "valid"
-                               : "blocked",
-                           report->verification.shard_index_valid ? "valid" : "blocked",
+                           report->semantics.verification_status,
+                           report->semantics.config_identity_status,
+                           report->semantics.tokenizer_verification_status,
+                           report->semantics.generation_config_status,
+                           report->semantics.shard_index_status,
                            report->verification.header_shard_count,
                            report->verification.shard_count);
+        yvex_cli_out_writef(
+            fp,
+            "inventory: %s  upstream_identity=%s  tensors=%llu  source_bytes=%llu  header_scans=%llu\n",
+            report->semantics.inventory_authority,
+            report->semantics.upstream_index_identity_status,
+            report->verification.header_tensor_count,
+            report->verification.source_total_bytes,
+            report->verification.header_scan_count);
     }
     yvex_cli_out_writef(fp, "top_blocker: %s\n", report->top_blocker);
     yvex_cli_out_writef(fp, "next: %s\n", report->next_row);
@@ -586,15 +368,18 @@ int yvex_source_render_table(FILE *fp, const yvex_source_report *report)
     if (deepseek) {
         yvex_cli_out_writef(fp, "SOURCE VERIFY  release=%s\n\n", options->release);
         yvex_cli_out_writef(fp,
-                           "%-8s  %-24s  %-8s  %7s  %6s  %-40s  %s\n",
-                           "FAMILY", "TARGET", "VERIFY", "TENSORS", "SHARDS",
-                           "REVISION", "NEXT");
+                           "%-8s  %-24s  %-8s  %-14s  %7s  %6s  %13s  %-40s  %s\n",
+                           "FAMILY", "TARGET", "VERIFY", "INVENTORY",
+                           "TENSORS", "SHARDS", "SOURCE_BYTES", "REVISION",
+                           "NEXT");
         yvex_cli_out_writef(fp,
-                           "%-8s  %-24s  %-8s  %7llu  %6llu  %-40s  %s\n",
+                           "%-8s  %-24s  %-8s  %-14s  %7llu  %6llu  %13llu  %-40s  %s\n",
                            options->profile->family_key, options->target,
-                           yvex_source_verification_status(&report->verification),
+                           report->semantics.verification_status,
+                           report->semantics.inventory_authority,
                            report->verification.header_tensor_count,
                            report->verification.shard_count,
+                           report->verification.source_total_bytes,
                            report->identity_revision[0]
                                ? report->identity_revision
                                : "missing",
@@ -611,8 +396,8 @@ int yvex_source_render_table(FILE *fp, const yvex_source_report *report)
            options->target,
            report->source_state,
            report->source_tensor_count,
-           qwen_source_manifest_status(report),
-           qwen_source_manifest_consistency_status(report),
+           source_render_manifest_status(report),
+           source_render_manifest_consistency_status(report),
            report->next_row);
     yvex_source_render_tensor_rows(fp, options, report);
     return report->exit_code;
@@ -628,7 +413,7 @@ int yvex_source_render_audit(FILE *fp, const yvex_source_report *report)
     yvex_cli_out_writef(fp, "release: %s\n", options->release);
     yvex_cli_out_writef(fp, "family: %s\n", options->profile->display_family);
     yvex_cli_out_writef(fp, "family_key: %s\n", options->profile->family_key);
-    yvex_cli_out_writef(fp, "model: %s\n", qwen_source_model_name(options, report));
+    yvex_cli_out_writef(fp, "model: %s\n", source_render_model_name(options, report));
     yvex_cli_out_writef(fp, "target_id: %s\n", options->target);
     if (strcmp(options->profile->family_key, "deepseek") == 0) {
         const yvex_source_verification *verification = &report->verification;
@@ -644,13 +429,13 @@ int yvex_source_render_audit(FILE *fp, const yvex_source_report *report)
                                ? verification->resolved_source_path
                                : report->source_path);
         yvex_cli_out_writef(fp, "source_verification_status: %s\n",
-                           yvex_source_verification_status(verification));
+                           report->semantics.verification_status);
         yvex_cli_out_writef(fp, "repository_verified: %s\n",
                            verification->repository_verified ? "true" : "false");
         yvex_cli_out_writef(fp, "revision_verified: %s\n",
                            verification->revision_verified ? "true" : "false");
         yvex_cli_out_writef(fp, "config_identity_status: %s\n",
-                           verification->config_valid ? "verified" : "blocked");
+                           report->semantics.config_identity_status);
         yvex_cli_out_writef(fp, "config_model_type: %s\n",
                            verification->model_type[0]
                                ? verification->model_type
@@ -785,10 +570,7 @@ int yvex_source_render_audit(FILE *fp, const yvex_source_report *report)
                            verification->quant_block_rows,
                            verification->quant_block_columns);
         yvex_cli_out_writef(fp, "tokenizer_status: %s\n",
-                           verification->tokenizer_json_valid &&
-                                   verification->tokenizer_config_valid
-                               ? "verified"
-                               : "blocked");
+                           report->semantics.tokenizer_verification_status);
         yvex_cli_out_writef(fp, "tokenizer_class: %s\n",
                            verification->tokenizer_class[0]
                                ? verification->tokenizer_class
@@ -800,9 +582,7 @@ int yvex_source_render_audit(FILE *fp, const yvex_source_report *report)
         yvex_cli_out_writef(fp, "tokenizer_model_max_length: %llu\n",
                            verification->tokenizer_model_max_length);
         yvex_cli_out_writef(fp, "generation_config_status: %s\n",
-                           verification->generation_config_valid
-                               ? "verified"
-                               : "blocked");
+                           report->semantics.generation_config_status);
         yvex_cli_out_writef(fp, "generation_config_from_model: %s\n",
                            verification->generation_from_model_config
                                ? "true"
@@ -828,11 +608,7 @@ int yvex_source_render_audit(FILE *fp, const yvex_source_report *report)
                                ? verification->generation_transformers_version
                                : "missing");
         yvex_cli_out_writef(fp, "shard_index_status: %s\n",
-                           verification->shard_index_valid
-                               ? "verified"
-                               : verification->shard_index_present
-                                     ? "malformed"
-                                     : "missing");
+                           report->semantics.shard_index_status);
         yvex_cli_out_writef(fp, "indexed_tensor_count: %llu\n",
                            verification->indexed_tensor_count);
         yvex_cli_out_writef(fp, "referenced_shard_count: %llu\n",
@@ -841,6 +617,33 @@ int yvex_source_render_audit(FILE *fp, const yvex_source_report *report)
                            verification->shard_index_headers_match
                                ? "true"
                                : "false");
+        yvex_cli_out_writef(fp, "inventory_authority: %s\n",
+                           report->semantics.inventory_authority);
+        yvex_cli_out_writef(fp, "upstream_index_oid: %s\n",
+                           verification->upstream_index_oid[0]
+                               ? verification->upstream_index_oid
+                               : "not-applicable");
+        yvex_cli_out_writef(fp, "local_index_oid: %s\n",
+                           verification->local_index_oid[0]
+                               ? verification->local_index_oid
+                               : "not-applicable");
+        yvex_cli_out_writef(fp, "upstream_index_identity_verified: %s\n",
+                           verification->upstream_index_identity_verified
+                               ? "true" : "false");
+        yvex_cli_out_writef(fp, "header_scan_count: %llu\n",
+                           verification->header_scan_count);
+        yvex_cli_out_writef(fp, "manifest_schema: %s\n",
+                           verification->manifest_schema[0]
+                               ? verification->manifest_schema : "missing");
+        yvex_cli_out_writef(fp, "manifest_verification_stage: %s\n",
+                           verification->verification_stage[0]
+                               ? verification->verification_stage : "missing");
+        yvex_cli_out_writef(fp, "manifest_verified: %s\n",
+                           verification->manifest_verified ? "true" : "false");
+        yvex_cli_out_writef(fp, "manifest_published: %s\n",
+                           verification->manifest_published ? "true" : "false");
+        yvex_cli_out_writef(fp, "manifest_reopened: %s\n",
+                           verification->manifest_reopened ? "true" : "false");
         yvex_cli_out_writef(fp, "source_manifest_status: %s\n",
                            verification->manifest_status[0]
                                ? verification->manifest_status
@@ -924,13 +727,13 @@ int yvex_source_render_audit(FILE *fp, const yvex_source_report *report)
     yvex_cli_out_writef(fp, "source_artifact_origin: %s\n", options->profile->source_artifact_origin);
     yvex_cli_out_writef(fp, "source_artifact_authority: %s\n",
            options->profile->source_artifact_authority);
-    yvex_cli_out_writef(fp, "source_sidecar_status: %s\n", qwen_source_sidecar_status(report));
+    yvex_cli_out_writef(fp, "source_sidecar_status: %s\n", source_render_sidecar_status(report));
     yvex_cli_out_writef(fp, "source_tensor_container: %s\n", options->profile->source_tensor_container);
     yvex_cli_out_writef(fp, "source_tensor_payload_status: %s\n",
-           qwen_source_tensor_payload_status(report));
+           source_render_tensor_payload_status(report));
     yvex_cli_out_writef(fp, "target_artifact_class: %s\n", options->profile->target_artifact_class);
     yvex_cli_out_writef(fp, "target_artifact_status: %s\n",
-           qwen_source_target_artifact_status(options->profile));
+           source_render_target_artifact_status(options->profile));
     yvex_cli_out_writef(fp, "target_artifact_origin: %s\n", options->profile->target_artifact_origin);
     yvex_cli_out_writef(fp, "target_artifact_required: %s\n",
            options->profile->target_artifact_required);
@@ -943,10 +746,10 @@ int yvex_source_render_audit(FILE *fp, const yvex_source_report *report)
     yvex_cli_out_writef(fp, "hardware_lane: %s\n", options->profile->hardware_lane);
     yvex_cli_out_writef(fp, "backend_lane: %s\n", options->profile->backend_lane);
     yvex_cli_out_writef(fp, "source_class: %s\n", options->profile->source_class);
-    yvex_cli_out_writef(fp, "source_provenance_status: %s\n", qwen_source_provenance_status(report));
-    yvex_cli_out_writef(fp, "source_origin: %s\n", qwen_source_provenance_origin_audit(options, report));
-    yvex_cli_out_writef(fp, "source_authority: %s\n", qwen_source_authority(report));
-    yvex_cli_out_writef(fp, "source_authority_status: %s\n", qwen_source_authority_status(report));
+    yvex_cli_out_writef(fp, "source_provenance_status: %s\n", source_render_provenance_status(report));
+    yvex_cli_out_writef(fp, "source_origin: %s\n", source_render_provenance_origin_audit(options, report));
+    yvex_cli_out_writef(fp, "source_authority: %s\n", source_render_authority(report));
+    yvex_cli_out_writef(fp, "source_authority_status: %s\n", source_render_authority_status(report));
     yvex_cli_out_writef(fp, "source_path: %s\n", report->source_path);
     yvex_cli_out_writef(fp, "source_path_source: %s\n", report->source_path_source);
     yvex_cli_out_writef(fp, "source_path_status: %s\n", report->source_state);
@@ -975,8 +778,8 @@ int yvex_source_render_audit(FILE *fp, const yvex_source_report *report)
     yvex_cli_out_writef(fp, "source_safetensors_size_bytes: %llu\n", report->safetensors_size_bytes);
     yvex_cli_out_writef(fp, "source_sidecar_size_bytes: %llu\n", report->sidecar_size_bytes);
     yvex_cli_out_writef(fp, "source_other_size_bytes: %llu\n", report->other_size_bytes);
-    yvex_cli_out_writef(fp, "source_footprint_class: %s\n", qwen_source_footprint_class(report));
-    yvex_cli_out_writef(fp, "source_footprint_status: %s\n", qwen_source_footprint_status(report));
+    yvex_cli_out_writef(fp, "source_footprint_class: %s\n", source_render_footprint_class(report));
+    yvex_cli_out_writef(fp, "source_footprint_status: %s\n", source_render_footprint_status(report));
     yvex_cli_out_writef(fp, "source_count_scope: top-level-regular-files\n");
     yvex_cli_out_writef(fp, "source_payload_loaded: false\n");
     yvex_cli_out_writef(fp, "largest_source_file_bytes: %llu\n", report->largest_source_file_bytes);
@@ -984,45 +787,48 @@ int yvex_source_render_audit(FILE *fp, const yvex_source_report *report)
            report->largest_source_file_name[0]
                ? report->largest_source_file_name
                : "none");
-    yvex_cli_out_writef(fp, "config_status: %s\n", qwen_source_present_missing(report->config_exists));
-    yvex_cli_out_writef(fp, "tokenizer_status: %s\n", qwen_source_tokenizer_status(report));
+    yvex_cli_out_writef(fp, "config_status: %s\n", source_render_present_missing(report->config_exists));
+    yvex_cli_out_writef(fp, "tokenizer_status: %s\n", source_render_tokenizer_status(report));
     yvex_cli_out_writef(fp, "generation_config_status: %s\n",
-           qwen_source_present_missing(report->generation_config_exists));
-    yvex_cli_out_writef(fp, "safetensors_status: %s\n", qwen_source_safetensors_status(report));
+           source_render_present_missing(report->generation_config_exists));
+    yvex_cli_out_writef(fp, "safetensors_status: %s\n", source_render_safetensors_status(report));
     yvex_cli_out_writef(fp, "safetensors_count: %llu\n", report->safetensors_count);
     yvex_cli_out_writef(fp, "source_manifest_expected: true\n");
-    yvex_cli_out_writef(fp, "source_manifest_status: %s\n", qwen_source_manifest_status(report));
+    yvex_cli_out_writef(fp, "source_manifest_status: %s\n", source_render_manifest_status(report));
     yvex_cli_out_writef(fp, "source_manifest_path: %s\n",
            report->manifest_path[0] ? report->manifest_path : "unknown");
     yvex_cli_out_writef(fp, "source_manifest_schema_status: %s\n",
-           qwen_source_manifest_schema_status(report));
+           source_render_manifest_schema_status(report));
     yvex_cli_out_writef(fp, "source_manifest_schema_version: %s\n",
            report->manifest_schema_version[0]
                ? report->manifest_schema_version
                : "unknown");
     yvex_cli_out_writef(fp, "source_manifest_family: %s\n", options->profile->family_key);
     yvex_cli_out_writef(fp, "source_manifest_family_status: %s\n",
-           qwen_source_manifest_family_status(report));
+           source_render_manifest_family_status(report));
     yvex_cli_out_writef(fp, "source_manifest_target_id: %s\n", options->target);
     yvex_cli_out_writef(fp, "source_manifest_target_status: %s\n",
-           qwen_source_manifest_target_status(report));
+           source_render_manifest_target_status(report));
     yvex_cli_out_writef(fp, "source_manifest_source_path_status: %s\n", report->source_state);
     yvex_cli_out_writef(fp, "source_manifest_artifact_class_status: %s\n",
-           qwen_source_manifest_artifact_class_status(report));
+           source_render_manifest_artifact_class_status(report));
     yvex_cli_out_writef(fp, "source_manifest_footprint_status: %s\n",
-           qwen_source_manifest_footprint_status(report));
+           source_render_manifest_footprint_status(report));
     yvex_cli_out_writef(fp, "source_manifest_authority: %s\n",
-           qwen_source_manifest_authority(report));
+           source_render_manifest_authority(report));
     yvex_cli_out_writef(fp, "source_manifest_provenance_status: %s\n",
-           qwen_source_manifest_provenance_status(report));
+           source_render_manifest_provenance_status(report));
     yvex_cli_out_writef(fp, "source_manifest_native_inventory_status: %s\n",
-           qwen_source_manifest_native_inventory_status(report));
+           source_render_manifest_native_inventory_status(report));
     yvex_cli_out_writef(fp, "source_manifest_tensor_metadata_status: %s\n",
-           qwen_source_manifest_tensor_metadata_status(report));
+           source_render_manifest_tensor_metadata_status(report));
     yvex_cli_out_writef(fp, "source_manifest_consistency_status: %s\n",
-           qwen_source_manifest_consistency_status(report));
-    yvex_cli_out_writef(fp, "source_manifest_hardening_status: report-only\n");
-    yvex_cli_out_writef(fp, "source_manifest_creation_performed: false\n");
+           source_render_manifest_consistency_status(report));
+    yvex_cli_out_writef(fp, "source_manifest_hardening_status: %s\n",
+                       report->semantics.manifest_hardening_status);
+    yvex_cli_out_writef(fp, "source_manifest_creation_performed: %s\n",
+                       report->semantics.manifest_creation_performed
+                           ? "true" : "false");
     yvex_cli_out_writef(fp, "source_manifest_payload_loaded: false\n");
     yvex_cli_out_writef(fp, "source_manifest_remote_checked: false\n");
     yvex_cli_out_writef(fp, "source_manifest_hash_computed: false\n");
@@ -1031,25 +837,21 @@ int yvex_source_render_audit(FILE *fp, const yvex_source_report *report)
                            ? report->identity_revision
                            : "unknown");
     yvex_cli_out_writef(fp, "source_revision_status: %s\n",
-                       report->verification.revision_verified
-                           ? "verified"
-                           : "unknown");
+                       report->semantics.revision_status);
     yvex_cli_out_writef(fp, "source_commit: %s\n",
                        report->identity_revision[0]
                            ? report->identity_revision
                            : "unknown");
     yvex_cli_out_writef(fp, "source_commit_status: %s\n",
-                       report->verification.revision_verified
-                           ? "verified"
-                           : "unknown");
+                       report->semantics.revision_status);
     yvex_cli_out_writef(fp, "source_tag: unknown\n");
     yvex_cli_out_writef(fp, "source_tag_status: unknown\n");
     yvex_cli_out_writef(fp, "source_license_status: %s\n",
-           qwen_source_presence_verification_status(report->license_exists));
+           source_render_presence_verification_status(report->license_exists));
     yvex_cli_out_writef(fp, "source_readme_status: %s\n",
-           qwen_source_presence_verification_status(report->readme_exists));
+           source_render_presence_verification_status(report->readme_exists));
     yvex_cli_out_writef(fp, "source_identity_status: %s\n",
-           qwen_source_identity_status(report));
+           source_render_identity_status(report));
     yvex_cli_out_writef(fp, "source_digest_status: not-computed\n");
     yvex_cli_out_writef(fp, "source_hash_status: not-computed\n");
     if (strcmp(options->profile->family_key, "deepseek") != 0) {
@@ -1057,10 +859,10 @@ int yvex_source_render_audit(FILE *fp, const yvex_source_report *report)
     }
     yvex_cli_out_writef(fp, "source_remote_checked: false\n");
     yvex_cli_out_writef(fp, "native_inventory_status: %s\n",
-           qwen_source_native_inventory_status(report));
+           source_render_native_inventory_status(report));
     yvex_cli_out_writef(fp, "native_inventory_scope: top-level-safetensors-headers\n");
     yvex_cli_out_writef(fp, "native_inventory_source: %s\n",
-           qwen_source_native_inventory_source(report));
+           source_render_native_inventory_source(report));
     yvex_cli_out_writef(fp, "native_safetensors_count: %llu\n", report->native_safetensors_count);
     yvex_cli_out_writef(fp, "native_safetensors_opened: %llu\n", report->native_safetensors_opened);
     yvex_cli_out_writef(fp, "native_safetensors_header_read_count: %llu\n",
@@ -1073,9 +875,9 @@ int yvex_source_render_audit(FILE *fp, const yvex_source_report *report)
     yvex_cli_out_writef(fp, "native_safetensors_payload_bytes_read: 0\n");
     yvex_cli_out_writef(fp, "native_tensor_count: %llu\n", report->native_tensor_count);
     yvex_cli_out_writef(fp, "native_tensor_metadata_status: %s\n",
-           qwen_source_native_tensor_metadata_status(report));
+           source_render_native_tensor_metadata_status(report));
     yvex_cli_out_writef(fp, "native_tensor_payload_status: %s\n",
-           qwen_source_native_tensor_payload_status(report));
+           source_render_native_tensor_payload_status(report));
     yvex_cli_out_writef(fp, "native_declared_data_bytes: %llu\n",
            report->native_declared_data_bytes);
     yvex_cli_out_writef(fp, "native_declared_tensor_bytes: %llu\n",
@@ -1102,14 +904,14 @@ int yvex_source_render_audit(FILE *fp, const yvex_source_report *report)
     yvex_cli_out_writef(fp, "native_inventory_error_count: %llu\n",
            report->native_inventory_error_count);
     yvex_cli_out_writef(fp, "native_inventory_report_status: %s\n",
-           qwen_source_native_inventory_report_status(report));
+           source_render_native_inventory_report_status(report));
     yvex_cli_out_writef(fp, "native_inventory_path: %s\n",
            report->native_inventory_path[0] ? report->native_inventory_path : "unknown");
     yvex_cli_out_writef(fp, "source_tensor_metadata_status: %s\n",
-           qwen_source_tensor_metadata_status(report));
+           source_render_tensor_metadata_status(report));
     yvex_cli_out_writef(fp, "source_tensor_metadata_scope: safetensors-header\n");
     yvex_cli_out_writef(fp, "source_tensor_metadata_source: %s\n",
-           qwen_source_tensor_metadata_source(report));
+           source_render_tensor_metadata_source(report));
     yvex_cli_out_writef(fp, "source_tensor_metadata_payload_loaded: false\n");
     yvex_cli_out_writef(fp, "source_tensor_metadata_payload_bytes_read: 0\n");
     yvex_cli_out_writef(fp, "source_tensor_count: %llu\n", report->source_tensor_count);
@@ -1215,17 +1017,17 @@ int yvex_source_render_audit(FILE *fp, const yvex_source_report *report)
     yvex_cli_out_writef(fp, "tensor_map_path: %s\n",
            report->tensor_map_path[0] ? report->tensor_map_path : "unknown");
     yvex_cli_out_writef(fp, "tensor_map_status: %s\n",
-           qwen_source_tensor_map_report_status(report));
+           source_render_tensor_map_report_status(report));
     yvex_cli_out_writef(fp, "tensor_role_map_status: %s\n",
-           qwen_source_tensor_role_map_report_status(report));
+           source_render_tensor_role_map_report_status(report));
     yvex_cli_out_writef(fp, "output_head_map_path: %s\n",
            report->output_head_map_path[0] ? report->output_head_map_path : "unknown");
     yvex_cli_out_writef(fp, "output_head_map_status: %s\n",
-           qwen_source_output_head_map_report_status(report));
+           source_render_output_head_map_report_status(report));
     yvex_cli_out_writef(fp, "tokenizer_map_path: %s\n",
            report->tokenizer_map_path[0] ? report->tokenizer_map_path : "unknown");
     yvex_cli_out_writef(fp, "tokenizer_map_status: %s\n",
-           qwen_source_tokenizer_map_report_status(report));
+           source_render_tokenizer_map_report_status(report));
     yvex_cli_out_writef(fp, "artifact_status: missing\n");
     yvex_cli_out_writef(fp, "runtime_claim: unsupported\n");
     yvex_cli_out_writef(fp, "generation: unsupported-full-model\n");
@@ -1248,9 +1050,7 @@ int yvex_source_render_json(FILE *fp, const yvex_source_report *report)
     unsigned long i;
 
     if (!report || !options || !options->profile) return 3;
-    verification_status = strcmp(options->profile->family_key, "deepseek") == 0
-                              ? yvex_source_verification_status(&report->verification)
-                              : "not-verified";
+    verification_status = report->semantics.verification_status;
     yvex_cli_json_begin(fp);
     yvex_cli_json_field_str(fp, "status", report->status, 1);
     yvex_cli_json_field_str(fp, "family", options->profile->family_key, 1);
@@ -1261,6 +1061,23 @@ int yvex_source_render_json(FILE *fp, const yvex_source_report *report)
     yvex_cli_json_field_str(fp, "revision", report->identity_revision, 1);
     yvex_cli_json_field_str(fp, "source_path", report->source_path, 1);
     yvex_cli_json_field_str(fp, "verification", verification_status, 1);
+    yvex_cli_json_field_str(fp, "inventory_authority",
+                            report->verification.inventory_authority, 1);
+    yvex_cli_json_field_str(fp, "upstream_index_oid",
+                            report->verification.upstream_index_oid, 1);
+    yvex_cli_json_field_bool(fp, "upstream_index_identity_verified",
+                             report->verification.upstream_index_identity_verified,
+                             1);
+    yvex_cli_json_field_u64(fp, "header_scan_count",
+                            report->verification.header_scan_count, 1);
+    yvex_cli_json_field_str(fp, "manifest_schema",
+                            report->verification.manifest_schema, 1);
+    yvex_cli_json_field_str(fp, "manifest_state",
+                            report->verification.manifest_status, 1);
+    yvex_cli_json_field_str(fp, "manifest_verification_stage",
+                            report->verification.verification_stage, 1);
+    yvex_cli_json_field_bool(fp, "manifest_verified",
+                             report->verification.manifest_verified, 1);
     yvex_cli_json_field_str(fp, "top_blocker", report->top_blocker, 1);
     yvex_cli_json_field_u64(fp, "source_verification_blocker_count",
                             report->verification.blocker_count, 1);
@@ -1292,8 +1109,7 @@ int yvex_source_render_json(FILE *fp, const yvex_source_report *report)
     yvex_cli_json_field_bool(fp, "config_valid",
                              report->verification.config_valid, 1);
     yvex_cli_json_field_bool(fp, "tokenizer_valid",
-                             report->verification.tokenizer_json_valid &&
-                                 report->verification.tokenizer_config_valid,
+                             report->semantics.tokenizer_verified,
                              1);
     yvex_cli_json_field_bool(fp, "generation_config_valid",
                              report->verification.generation_config_valid, 1);
@@ -1301,7 +1117,7 @@ int yvex_source_render_json(FILE *fp, const yvex_source_report *report)
                              report->verification.shard_index_valid, 1);
     yvex_cli_json_field_bool(fp, "tensor_payload_loaded", 0, 1);
     yvex_cli_json_field_str(fp, "artifact_status",
-                            qwen_source_target_artifact_status(options->profile), 1);
+                            source_render_target_artifact_status(options->profile), 1);
     yvex_cli_json_field_str(fp, "runtime", "unsupported", 1);
     yvex_cli_json_field_str(fp, "generation", "unsupported", 1);
     yvex_cli_json_field_str(fp, "benchmark", "not-measured", 0);
@@ -1332,7 +1148,8 @@ void yvex_source_render_help(FILE *fp)
     yvex_cli_out_writef(fp, "DeepSeek strict verification checks structured repository, revision, model/tokenizer/generation config, index, shard, dtype, and header facts. Qwen and Gemma retain their bounded report behavior.\n");
     yvex_cli_out_writef(fp, "Native safetensors inventory reads safetensors headers only and never loads tensor payload bytes.\n");
     yvex_cli_out_writef(fp, "Source tensor metadata inventory is derived from safetensors headers only and does not map tensors to runtime roles.\n");
-    yvex_cli_out_writef(fp, "Verification does not create manifests, check remotes, hash payload files, or load tensor payloads.\n");
+    yvex_cli_out_writef(fp, "Strict DeepSeek verification may atomically promote and reopen the canonical YVEX manifest after all metadata/header checks pass; it never writes inside the official source tree.\n");
+    yvex_cli_out_writef(fp, "Verification does not hash weight payloads or load tensor payload bytes.\n");
     yvex_cli_out_writef(fp, "The source pressure report inspects source-path readiness only. It does not download weights, emit artifacts, materialize tensors, execute runtime paths, generate, evaluate, benchmark, or mark a release ready.\n");
 }
 

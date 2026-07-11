@@ -504,7 +504,8 @@ contains "$OUT_DIR/source_manifest_report_help.out" "Source footprint uses check
 contains "$OUT_DIR/source_manifest_report_help.out" "DeepSeek strict verification checks structured repository, revision, model/tokenizer/generation config, index, shard, dtype, and header facts."
 contains "$OUT_DIR/source_manifest_report_help.out" "Native safetensors inventory reads safetensors headers only and never loads tensor payload bytes."
 contains "$OUT_DIR/source_manifest_report_help.out" "Source tensor metadata inventory is derived from safetensors headers only and does not map tensors to runtime roles."
-contains "$OUT_DIR/source_manifest_report_help.out" "Verification does not create manifests, check remotes, hash payload files, or load tensor payloads."
+contains "$OUT_DIR/source_manifest_report_help.out" "Strict DeepSeek verification may atomically promote and reopen the canonical YVEX manifest after all metadata/header checks pass; it never writes inside the official source tree."
+contains "$OUT_DIR/source_manifest_report_help.out" "Verification does not hash weight payloads or load tensor payload bytes."
 run_fail_code source_manifest_report_missing 2 "$YVEX_BIN" source-manifest report
 contains "$OUT_DIR/source_manifest_report_missing.err" "source-manifest report: --family is required"
 run_fail_code source_manifest_report_missing_release 2 "$YVEX_BIN" source-manifest report --family qwen

@@ -160,7 +160,11 @@ CORE_SRCS := \
 	src/source/yvex_native_weights.c \
 	src/source/yvex_safetensors_header.c \
 	src/source/yvex_source.c \
+	src/source/yvex_source_deepseek.c \
+	src/source/yvex_source_inventory.c \
+	src/source/yvex_source_json.c \
 	src/source/yvex_source_manifest.c \
+	src/source/yvex_source_provenance.c \
 	src/source/yvex_source_report.c \
 	src/source/yvex_source_scan.c \
 	src/source/yvex_source_verify.c \

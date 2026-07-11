@@ -56,6 +56,11 @@ typedef struct {
     const char *model_name;
     const char *upstream_repo_id;
     const char *source_dir_leaf;
+    const char *upstream_revision;
+    const char *upstream_index_path;
+    const char *upstream_index_oid;
+    unsigned long long upstream_index_size;
+    const char *upstream_inventory_authority;
     const char *config_model_type;
     const char *config_architecture;
 } yvex_model_target_identity;
@@ -66,6 +71,11 @@ extern const char yvex_deepseek_v4_family_display[];
 extern const char yvex_deepseek_v4_model_name[];
 extern const char yvex_deepseek_v4_upstream_repo_id[];
 extern const char yvex_deepseek_v4_source_dir_leaf[];
+extern const char yvex_deepseek_v4_upstream_revision[];
+extern const char yvex_deepseek_v4_upstream_index_path[];
+extern const char yvex_deepseek_v4_upstream_index_oid[];
+extern const unsigned long long yvex_deepseek_v4_upstream_index_size;
+extern const char yvex_deepseek_v4_upstream_inventory_authority[];
 extern const char yvex_deepseek_v4_config_model_type[];
 extern const char yvex_deepseek_v4_config_architecture[];
 

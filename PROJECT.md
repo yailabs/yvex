@@ -166,7 +166,7 @@ The unqualified term "model artifact" never means a selected-tensor proof file.
 | Boundary | Current truth |
 | --- | --- |
 | Project control | The 24-track, 631-ID historical ledger is recovered and ranked here; project recovery is complete. |
-| Source | The canonical DeepSeek target, repository, resolved commit, model/tokenizer/generation configs, 46 source shards, and all 46 safetensors headers are now inspected through structured metadata. The local source is still blocked because `model.safetensors.index.json` is absent and its source manifest remains `in-progress`; tensor payload trust remains owned by `V010.SOURCE.PAYLOAD.STREAM.0`. |
+| Source | The canonical DeepSeek target is verified against `deepseek-ai/DeepSeek-V4-Flash` at commit `60d8d70770c6776ff598c94bb586a859a38244f1`. The pinned upstream index, structured configs, tokenizer assets, 46/46 safetensors headers, 69,187 unique tensor records, and verifier-owned complete manifest agree. Tensor payload bytes remain unread and payload trust remains owned by `V010.SOURCE.PAYLOAD.STREAM.0`. |
 | Family profiles | Qwen, Gemma, dense/MoE, and bounded DeepSeek facts exist. No execution-complete DeepSeek architecture IR exists. |
 | Tensor coverage | Qwen/Gemma and common collection evidence exists. Complete DeepSeek required-role coverage is blocked. |
 | Mapping | Dense/Qwen and output/tokenizer mapping evidence exists. Complete DeepSeek source-to-role-to-GGUF mapping does not. |
@@ -190,28 +190,22 @@ V010.DOCS.REFOUNDATION.0: complete (documentation/claim only)
 V010.PROJECT.RECOVERY.0: partial
 V010.PROJECT.RECOVERY.1: complete
 V010.DOCS.ARCHITECTURE.0: complete (documentation architecture/ownership only)
-Active Next: V010.REBASE.DEEPSEEK.0
+V010.REBASE.DEEPSEEK.0: complete (exact source identity/config/index/header verification)
+Active Next: V010.GGUF.QTYPE.ABI.1
 ```
 
-The documentation ownership cutover is complete. The product path now resumes
-at exact DeepSeek source and target verification; no artifact or runtime gate
-was promoted by the documentation work.
-
-Current read-only source proof resolves
-`deepseek-ai/DeepSeek-V4-Flash` at commit
-`60d8d70770c6776ff598c94bb586a859a38244f1`, validates the exact model,
-tokenizer, and generation config structure, and reads 69,187 tensor records
-from 46/46 safetensors headers without loading payload bytes. Header dtype
-facts are 433 BF16, 417
-F32, 3 I64, 33,792 I8, 375 F8_E4M3, and 34,167 F8_E8M0 tensors. Strict
-verification remains blocked by the absent shard index and the `in-progress`
-manifest. Therefore
-`V010.REBASE.DEEPSEEK.0` remains active and the qtype ABI successor remains
-blocked.
+Strict source proof consumes the pinned upstream index with Git OID
+`84692cbe7af556a01e2e5353341100079c387aee`, validates the exact model,
+tokenizer, and generation config structure, and reads 69,187 unique tensor
+records from 46/46 safetensors headers in one canonical pass. The verified
+local footprint is 159,629,046,930 bytes after admission of the index and its
+provider metadata. A verifier-owned complete manifest was atomically published
+and reopened; tensor payload bytes and payload digests remain unread. Exact
+source verification is complete, while payload trust remains blocked on
+`V010.SOURCE.PAYLOAD.STREAM.0`.
 
 ```text
-V010.REBASE.DEEPSEEK.0
--> V010.GGUF.QTYPE.ABI.1
+V010.GGUF.QTYPE.ABI.1
 -> V010.GGUF.ARTIFACT.ABI.1
 -> V010.GGUF.LAYOUT.INTEGRITY.1
 -> V010.CUDA.FAILCLOSED.0
@@ -277,22 +271,22 @@ calculated from rows rather than protected by a summary hash.
 | Explicit new IDs | 34 |
 | Canonical IDs | 665 |
 | First-class milestones | 37 |
-| State: complete | 177 |
+| State: complete | 182 |
 | State: active | 1 |
 | State: partial | 1 |
-| State: blocked | 30 |
-| State: planned | 434 |
+| State: blocked | 29 |
+| State: planned | 429 |
 | State: reopened | 2 |
 | State: deferred | 9 |
-| State: superseded | 10 |
+| State: superseded | 11 |
 | State: not-measured | 1 |
 
 | Track | Owns | Current truth | Conclusive handoff |
 | --- | --- | --- | --- |
 | `TRACK.SCOPE` | Project control, release scope, family/release distinction, claim boundary, version policy, and documentation-control transitions. | ledger recovery and documentation ownership are complete | One truthful project map and one explicit release contract. |
-| `TRACK.SOURCE` | Source identity, revision, provider intake, manifests, shards, sidecars, header inventory, payload trust, and bounded payload access. | multi-family intake exists; exact DeepSeek verification is active | Verified source facts and readable payload ranges. |
+| `TRACK.SOURCE` | Source identity, revision, provider intake, manifests, shards, sidecars, header inventory, payload trust, and bounded payload access. | exact DeepSeek metadata/header verification is complete; payload trust remains blocked | Verified source facts and readable payload ranges. |
 | `TRACK.MAP` | Family source names, canonical runtime roles, GGUF names, transforms, layouts, ambiguity refusal, and complete mapping coverage. | dense/Qwen and report evidence exist; complete DeepSeek map is blocked | Every required source tensor maps exactly once to a runtime role and emitted layout. |
-| `TRACK.QUANT` | Dtype/qtype ABI, storage geometry, role policy, conversion, quantization, reference dequantization, compute truth, and refusal. | policy and fixture proof exist; ABI is reopened | Every emitted role has truthful storage and compute behavior. |
+| `TRACK.QUANT` | Dtype/qtype ABI, storage geometry, role policy, conversion, quantization, reference dequantization, compute truth, and refusal. | qtype ABI closure is active; policy and fixture proof remain bounded evidence | Every emitted role has truthful storage and compute behavior. |
 | `TRACK.ARTIFACT` | GGUF container ABI, native writer, conversion coordination, complete emission, identity, registration, and writer-reader roundtrip. | bounded proof emission exists; complete artifact is unsupported | A complete YVEX-produced GGUF reopens identically through YVEX. |
 | `TRACK.INTEGRITY` | Container, metadata, tensor directory, offsets, alignment, qtype-sized ranges, corruption, drift, and artifact admission. | bounded validators exist; complete-layout closure is blocked | A complete artifact passes every pre-payload and pre-runtime integrity gate. |
 | `TRACK.MODEL` | Family architecture profiles, typed architecture IR, layer topology, attention/position/KV/MoE rules, and runtime descriptor projection. | Qwen/Gemma/DeepSeek header-derived profiles exist; execution-complete DeepSeek IR does not | A family-correct typed model specification and executable runtime descriptor. |
@@ -322,10 +316,10 @@ closure.
 
 | Track | Recovered IDs | Canonical IDs | First-class C/A/Pa/P/B/NM | Complete support | Open support | Superseded/deferred |
 | --- | ---: | ---: | --- | ---: | ---: | ---: |
-| `TRACK.SCOPE` | 25 | 29 | 3/0/1/0/0/0 | 7 | 12 | 6 |
-| `TRACK.SOURCE` | 24 | 26 | 0/1/0/0/1/0 | 21 | 3 | 0 |
+| `TRACK.SCOPE` | 25 | 29 | 3/0/1/0/0/0 | 9 | 9 | 7 |
+| `TRACK.SOURCE` | 24 | 26 | 1/0/0/0/1/0 | 23 | 1 | 0 |
 | `TRACK.MAP` | 12 | 13 | 0/0/0/0/1/0 | 6 | 6 | 0 |
-| `TRACK.QUANT` | 5 | 6 | 0/0/0/0/2/0 | 2 | 2 | 0 |
+| `TRACK.QUANT` | 5 | 6 | 0/1/0/0/1/0 | 2 | 2 | 0 |
 | `TRACK.ARTIFACT` | 11 | 16 | 0/0/0/0/5/0 | 3 | 6 | 2 |
 | `TRACK.INTEGRITY` | 14 | 15 | 0/0/0/0/1/0 | 10 | 4 | 0 |
 | `TRACK.MODEL` | 21 | 23 | 0/0/0/0/3/0 | 9 | 11 | 0 |
@@ -372,8 +366,8 @@ written after inspection of owner code, consumers, tests, and current contracts.
 | 2 | `V010.PROJECT.RECOVERY.0` | `TRACK.SCOPE` | project | `partial` | Recovered product doctrine and a short milestone map but did not restore the per-track wave ledger or multi-family engineering scope. | V010.DOCS.REFOUNDATION.0 |
 | 3 | `V010.PROJECT.RECOVERY.1` | `TRACK.SCOPE` | project | `complete` | Installed PROJECT.md as the sole authority, recovered every old wave at a truthful rank, restored counts, and preserved Qwen/Gemma/common work. | V010.PROJECT.RECOVERY.0 |
 | 4 | `V010.DOCS.ARCHITECTURE.0` | `TRACK.SCOPE` | project | `complete` | Established non-overlapping documentation owners, absorbed repair obligations, removed duplicate project state, and installed dynamic ledger guards. | V010.PROJECT.RECOVERY.1 |
-| 5 | `V010.REBASE.DEEPSEEK.0` | `TRACK.SOURCE` | DeepSeek | `active` | Verify the exact DeepSeek-V4-Flash source identity, revision, config, tokenizer, shard inventory, footprint, and architecture facts. | V010.DOCS.ARCHITECTURE.0 |
-| 6 | `V010.GGUF.QTYPE.ABI.1` | `TRACK.QUANT` | common | `blocked` | Close canonical overflow-safe row-aware qtype geometry, byte calculation, storage identity, and explicit refusal. | V010.REBASE.DEEPSEEK.0 |
+| 5 | `V010.REBASE.DEEPSEEK.0` | `TRACK.SOURCE` | DeepSeek | `complete` | Verify the exact DeepSeek-V4-Flash source identity, revision, config, tokenizer, shard inventory, footprint, and architecture facts. | V010.DOCS.ARCHITECTURE.0 |
+| 6 | `V010.GGUF.QTYPE.ABI.1` | `TRACK.QUANT` | common | `active` | Close canonical overflow-safe row-aware qtype geometry, byte calculation, storage identity, and explicit refusal. | V010.REBASE.DEEPSEEK.0 |
 | 7 | `V010.GGUF.ARTIFACT.ABI.1` | `TRACK.ARTIFACT` | common | `blocked` | Close native GGUF container, metadata, tensor-info, range, lifetime, and stable failure ABI beyond tiny fixtures. | V010.GGUF.QTYPE.ABI.1 |
 | 8 | `V010.GGUF.LAYOUT.INTEGRITY.1` | `TRACK.INTEGRITY` | common | `blocked` | Validate global tensor order, padded offsets, qtype-sized ranges, alignment, overlap, truncation, and aggregate overflow. | V010.GGUF.ARTIFACT.ABI.1 |
 | 9 | `V010.CUDA.FAILCLOSED.0` | `TRACK.BACKEND` | DGX Spark | `blocked` | Remove advertised no-op fallback support and make every claimed CUDA operation real, reference-compared, or explicitly unsupported. | V010.GGUF.LAYOUT.INTEGRITY.1 |
@@ -448,39 +442,39 @@ the row's use.
 | `V010.SCOPE.5` | `subtask` | project/release | `planned` | v0.1.0 target selection policy. | V010.RELEASE.0 |
 | `V010.SCOPE.6` | `subtask` | project/release | `planned` | v0.1.0 release-readiness vocabulary. | V010.RELEASE.0 |
 | `V010.SCOPE.7` | `subtask` | project/release | `planned` | v0.1.0 claim boundary map. | V010.RELEASE.0 |
-| `V010.TARGET.0` | `subtask` | project/release | `planned` | target class registry refresh. | V010.REBASE.DEEPSEEK.0 |
+| `V010.TARGET.0` | `capability` | project/release | `complete` | Canonical target registry now separates target ID, repository, revision, source leaf, and inventory authority. | V010.REBASE.DEEPSEEK.0 |
 | `V010.TARGET.1` | `evidence` | project/release | `complete` | selected-runtime-slice target report. | V010.REBASE.DEEPSEEK.0 |
 | `V010.TARGET.2` | `evidence` | project/release | `complete` | full-runtime-candidate target report. | V010.REBASE.DEEPSEEK.0 |
 | `V010.TARGET.3` | `evidence` | dense/common | `complete` | dense candidate target report. | V010.REBASE.DEEPSEEK.0 |
 | `V010.TARGET.4` | `subtask` | MoE/common | `planned` | MoE candidate target report. | V010.REBASE.DEEPSEEK.0 |
-| `V010.TARGET.5` | `subtask` | DeepSeek | `planned` | DeepSeek pressure target report. | V010.REBASE.DEEPSEEK.0 |
+| `V010.TARGET.5` | `migration` | DeepSeek | `superseded` | DeepSeek pressure-target framing was absorbed by exact canonical target selection and verification. | V010.REBASE.DEEPSEEK.0 |
 | `V010.TARGET.6` | `subtask` | GLM | `planned` | GLM source-only pressure target report. | V010.REBASE.DEEPSEEK.0 |
 | `V010.TARGET.7` | `evidence` | Qwen / Metal | `complete` | Qwen/Metal pressure target report. | V010.REBASE.DEEPSEEK.0 |
 | `V010.TARGET.8` | `subtask` | project/release | `planned` | external reference target report. | V010.REBASE.DEEPSEEK.0 |
 | `V010.TARGET.9` | `capability` | project/release | `complete` | v0.1.0 target decision record. | V010.REBASE.DEEPSEEK.0 |
-| `V010.TARGET.10` | `subtask` | project/release | `planned` | target decision refusal and rollback policy. | V010.REBASE.DEEPSEEK.0 |
+| `V010.TARGET.10` | `capability` | project/release | `complete` | Target selection remains distinct from artifact, runtime, and generation support with typed refusal. | V010.REBASE.DEEPSEEK.0 |
 
 
 ### 9.2 TRACK.SOURCE
 
 **Owner:** Source identity, revision, provider intake, manifests, shards, sidecars, header inventory, payload trust, and bounded payload access.
 
-**Current truth:** multi-family intake exists; exact DeepSeek verification remains open
+**Current truth:** exact DeepSeek identity, pinned index, structured sidecars, manifest, and 46/46 headers are verified; payload trust remains blocked
 
-**Ledger summary:** 24 recovered IDs; 2 first-class milestones; 21 complete support rows; 3 open support rows; 0 superseded/deferred rows.
+**Ledger summary:** 24 recovered IDs; 2 first-class milestones; 23 complete support rows; 1 open support row; 0 superseded/deferred rows.
 
 #### First-Class Milestones
 
 | Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
 | --- | --- | --- | --- | --- | --- |
-| `V010.REBASE.DEEPSEEK.0` | DeepSeek | `active` | Verify the exact DeepSeek-V4-Flash source identity, revision, config, tokenizer, shard inventory, footprint, and architecture facts. | V010.DOCS.ARCHITECTURE.0 | current |
+| `V010.REBASE.DEEPSEEK.0` | DeepSeek | `complete` | Verify the exact DeepSeek-V4-Flash source identity, revision, config, tokenizer, shard inventory, footprint, and architecture facts. | V010.DOCS.ARCHITECTURE.0 | current |
 | `V010.SOURCE.PAYLOAD.STREAM.0` | common | `blocked` | Read bounded source payload ranges from indexed shards with identity checks, short-read refusal, owned lifecycle, and cleanup. | V010.MAP.GGUF.DEEPSEEK.0 | current |
 
 #### Recovered And Subordinate Rows
 
 | Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
 | --- | --- | --- | --- | --- | --- |
-| `V010.SOURCE.0` | `subtask` | common | `planned` | source manifest schema refresh. | V010.REBASE.DEEPSEEK.0 |
+| `V010.SOURCE.0` | `capability` | common | `complete` | Verifier-owned v2 source manifest records exact identity, stage, inventory authority, header facts, and payload non-trust. | V010.REBASE.DEEPSEEK.0 |
 | `V010.SOURCE.1` | `evidence` | common | `complete` | source family/profile fields. | V010.REBASE.DEEPSEEK.0 |
 | `V010.SOURCE.2` | `capability` | common | `complete` | source artifact class fields. | V010.REBASE.DEEPSEEK.0 |
 | `V010.SOURCE.3` | `evidence` | common | `complete` | source shard count and footprint report. | V010.SOURCE.PAYLOAD.STREAM.0 |
@@ -490,7 +484,7 @@ the row's use.
 | `V010.SOURCE.7` | `capability` | common | `complete` | source manifest/provenance hardening. | V010.REBASE.DEEPSEEK.0 |
 | `V010.SOURCE.8` | `subtask` | GLM | `planned` | GLM source pressure report. | V010.REBASE.DEEPSEEK.0 |
 | `V010.SOURCE.9` | `evidence` | Qwen | `complete` | Qwen source pressure report. | V010.REBASE.DEEPSEEK.0 |
-| `V010.SOURCE.10` | `subtask` | common | `planned` | v0.1.0 source acceptance gate. | V010.REBASE.DEEPSEEK.0 |
+| `V010.SOURCE.10` | `evidence` | common | `complete` | Exact metadata/index/header acceptance closes; payload trust remains a separate blocked gate. | V010.SOURCE.PAYLOAD.STREAM.0 |
 | `V010.SOURCE.7A` | `capability` | common | `complete` | Add native source tensor download under the models namespace. | V010.SOURCE.PAYLOAD.STREAM.0 |
 | `MODELS.DOWNLOAD.0` | `capability` | common | `complete` | Add native source tensor download under the models namespace. | V010.SOURCE.PAYLOAD.STREAM.0 |
 | `V010.SOURCE.7B` | `capability` | common | `complete` | Add local provider account preflight for Hugging Face and GitHub. | V010.REBASE.DEEPSEEK.0 |
@@ -550,7 +544,7 @@ the row's use.
 
 | Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
 | --- | --- | --- | --- | --- | --- |
-| `V010.GGUF.QTYPE.ABI.1` | common | `blocked` | Close canonical overflow-safe row-aware qtype geometry, byte calculation, storage identity, and explicit refusal. | V010.REBASE.DEEPSEEK.0 | current |
+| `V010.GGUF.QTYPE.ABI.1` | common | `active` | Close canonical overflow-safe row-aware qtype geometry, byte calculation, storage identity, and explicit refusal. | V010.REBASE.DEEPSEEK.0 | current |
 | `V010.QUANT.2` | common + DeepSeek roles | `blocked` | Implement the role/qtype quantization, compute, reference-dequantization, numeric-bound, and refusal matrix required by the release artifact. | V010.SOURCE.PAYLOAD.STREAM.0 | recovered/promoted |
 
 #### Recovered And Subordinate Rows

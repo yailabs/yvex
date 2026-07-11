@@ -15,7 +15,7 @@ Current core areas:
 
 ```text
 src/cli/                 CLI dispatch, input, surfaces, render, IO
-src/source/              source manifests, scans, native weight headers
+src/source/              source manifests, provenance, sidecars, inventory, headers
 src/model/target/        model-target catalogs, maps, gates, qtype reports
 src/model/artifacts/     model registry/ref/gate/report/write ownership
 src/model/               dtype/model tables and runtime descriptor target
@@ -67,7 +67,15 @@ domain algorithms. No writer owns command output.
 - CLI renderers format typed facts.
 - CLI IO writes operator bytes.
 - Explicit writer modules write local files only.
-- Source owns source files and header inventories.
+- Source JSON owns bounded structured parsing primitives, without source policy.
+- Source provenance owns pinned repository/revision and manifest facts.
+- Source family adapters own raw configuration and tokenizer sidecar facts.
+- Source inventory owns indexed or explicitly header-derived shard inventory
+  and the single canonical safetensors header pass.
+- Source verification coordinates those owners and decides blockers; it does
+  not parse JSON, rescan headers, render, serialize, or read tensor payloads.
+- Source writers atomically publish verifier-approved manifests and explicit
+  derived inventory outside official model source trees.
 - Model target owns target catalogs, maps, gates, and qtype reports.
 - Model artifacts own registry, references, gates, typed artifact reports, and
   explicit file writers.

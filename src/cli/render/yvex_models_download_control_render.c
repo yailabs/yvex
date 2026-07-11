@@ -1338,7 +1338,7 @@ static int command_models_download_execute(int arg_count, char **args, int start
         manifest_options.download_command = provider_kind == YVEX_ACCOUNT_PROVIDER_GITHUB
             ? "gh release download (see receipt; token redacted)"
             : "hf download (see receipt; token redacted)";
-        manifest_options.status = YVEX_SOURCE_STATUS_COMPLETE;
+        manifest_options.status = YVEX_SOURCE_STATUS_IN_PROGRESS;
         manifest_options.include_files = 1;
         rc = yvex_source_manifest_write_json(report.manifest_path,
                                              &manifest_options,

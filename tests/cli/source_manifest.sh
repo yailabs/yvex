@@ -44,6 +44,18 @@ grep '"status": "in-progress"' "$MANIFEST" >/dev/null || fail "missing status"
 grep 'model-00001.safetensors' "$MANIFEST" >/dev/null || fail "missing safetensors file"
 grep 'status: source-manifest-written' "$OUT_DIR/create.out" >/dev/null || fail "missing CLI status"
 
+if "$YVEX_BIN" source-manifest create \
+  --hf-repo test-org/test-model \
+  --revision test-rev \
+  --local-path "$MODEL_DIR" \
+  --status complete \
+  --out "$OUT_DIR/unchecked-complete.json" \
+  > "$OUT_DIR/create-complete.out" 2> "$OUT_DIR/create-complete.err"; then
+  fail "unchecked CLI status promoted a complete manifest"
+fi
+grep 'complete is verifier-owned' "$OUT_DIR/create-complete.err" >/dev/null || fail "complete refusal is not explicit"
+test ! -e "$OUT_DIR/unchecked-complete.json" || fail "complete refusal wrote a manifest"
+
 "$YVEX_BIN" source-manifest report --family deepseek --release v0.1.0 \
   --models-root "$OUT_DIR/models" > "$OUT_DIR/deepseek.out"
 grep 'target: deepseek4-v4-flash' "$OUT_DIR/deepseek.out" >/dev/null || fail "missing canonical DeepSeek target"
@@ -77,6 +89,7 @@ test "$strict_rc" -eq 5 || fail "strict verification returned $strict_rc instead
 VERIFIED_MODELS="$OUT_DIR/verified-models"
 VERIFIED_SOURCE="$VERIFIED_MODELS/hf/deepseek/DeepSeek-V4-Flash"
 python3 - "$VERIFIED_SOURCE" <<'PY'
+import hashlib
 import json
 import struct
 import sys
@@ -84,7 +97,7 @@ from pathlib import Path
 
 root = Path(sys.argv[1]).resolve()
 root.mkdir(parents=True, exist_ok=True)
-revision = "0123456789abcdef0123456789abcdef01234567"
+revision = "60d8d70770c6776ff598c94bb586a859a38244f1"
 config = {
     "architectures": ["DeepseekV4ForCausalLM"],
     "model_type": "deepseek_v4",
@@ -173,7 +186,7 @@ index = {
 }
 manifest = {
     "schema": "yvex.source_manifest.v1",
-    "status": "complete",
+    "status": "in-progress",
     "source": {
         "kind": "huggingface",
         "repo": "deepseek-ai/DeepSeek-V4-Flash",
@@ -205,34 +218,45 @@ metadata_root.mkdir(parents=True, exist_ok=True)
 for name in ("config.json", "tokenizer.json", "tokenizer_config.json",
              "generation_config.json",
              "model.safetensors.index.json", shard_name):
+    data = (root / name).read_bytes()
+    oid = hashlib.sha1(
+        f"blob {len(data)}\0".encode() + data
+    ).hexdigest()
     (metadata_root / f"{name}.metadata").write_text(
-        f"{revision}\nblob-id\n0\n", encoding="utf-8")
+        f"{revision}\n{oid}\n0\n", encoding="utf-8")
 PY
 
 "$YVEX_BIN" source-manifest report --family deepseek --release v0.1.0 \
-  --models-root "$VERIFIED_MODELS" --strict > "$OUT_DIR/deepseek-verified.out"
-grep 'status: exact-source-verified' "$OUT_DIR/deepseek-verified.out" >/dev/null || fail "valid source did not verify"
-grep 'verification: verified' "$OUT_DIR/deepseek-verified.out" >/dev/null || fail "normal output lost verified state"
-grep 'next: V010.GGUF.QTYPE.ABI.1' "$OUT_DIR/deepseek-verified.out" >/dev/null || fail "verified handoff is wrong"
+  --models-root "$VERIFIED_MODELS" > "$OUT_DIR/deepseek-fixture.out"
+grep 'status: exact-source-blocked' "$OUT_DIR/deepseek-fixture.out" >/dev/null || fail "non-upstream index fixture was promoted"
+grep 'inventory: upstream-index' "$OUT_DIR/deepseek-fixture.out" >/dev/null || fail "normal output lost inventory authority"
+grep 'top_blocker: upstream-index-identity-mismatch' "$OUT_DIR/deepseek-fixture.out" >/dev/null || fail "normal output lost upstream identity refusal"
+grep 'next: V010.REBASE.DEEPSEEK.0' "$OUT_DIR/deepseek-fixture.out" >/dev/null || fail "blocked fixture handoff is wrong"
 
 "$YVEX_BIN" source-manifest report --family deepseek --release v0.1.0 \
-  --models-root "$VERIFIED_MODELS" --output table --strict > "$OUT_DIR/deepseek-verified-table.out"
-grep 'verified' "$OUT_DIR/deepseek-verified-table.out" >/dev/null || fail "table output lost verified state"
-grep 'top_blocker: none' "$OUT_DIR/deepseek-verified-table.out" >/dev/null || fail "verified table output invented a blocker"
-grep 'V010.GGUF.QTYPE.ABI.1' "$OUT_DIR/deepseek-verified-table.out" >/dev/null || fail "table handoff is wrong"
+  --models-root "$VERIFIED_MODELS" --output table > "$OUT_DIR/deepseek-fixture-table.out"
+grep 'upstream-index' "$OUT_DIR/deepseek-fixture-table.out" >/dev/null || fail "table output lost inventory authority"
+grep 'top_blocker: upstream-index-identity-mismatch' "$OUT_DIR/deepseek-fixture-table.out" >/dev/null || fail "table output lost upstream identity refusal"
 
 "$YVEX_BIN" source-manifest report --family deepseek --release v0.1.0 \
-  --models-root "$VERIFIED_MODELS" --audit --strict > "$OUT_DIR/deepseek-verified-audit.out"
-grep 'source_verification_status: verified' "$OUT_DIR/deepseek-verified-audit.out" >/dev/null || fail "audit output lost verified state"
-grep 'config_compress_ratio_count: 44' "$OUT_DIR/deepseek-verified-audit.out" >/dev/null || fail "audit output lost raw architecture facts"
-grep 'tokenizer_model_type: BPE' "$OUT_DIR/deepseek-verified-audit.out" >/dev/null || fail "audit output lost tokenizer structure"
-grep 'generation_config_status: verified' "$OUT_DIR/deepseek-verified-audit.out" >/dev/null || fail "audit output lost generation sidecar structure"
-grep 'release_qtype: unselected' "$OUT_DIR/deepseek-verified-audit.out" >/dev/null || fail "source verification selected a qtype"
-grep 'generation: unsupported-full-model' "$OUT_DIR/deepseek-verified-audit.out" >/dev/null || fail "source verification promoted generation"
+  --models-root "$VERIFIED_MODELS" --audit > "$OUT_DIR/deepseek-fixture-audit.out"
+grep 'source_verification_status: blocked' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "audit output promoted the fixture"
+grep 'inventory_authority: upstream-index' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "audit output lost inventory authority"
+grep 'upstream_index_identity_verified: false' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "audit output lost upstream identity status"
+grep 'header_scan_count: 1' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "audit output lost canonical header scan"
+grep 'release_qtype: unselected' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "source verification selected a qtype"
+grep 'generation: unsupported-full-model' "$OUT_DIR/deepseek-fixture-audit.out" >/dev/null || fail "source verification promoted generation"
 
 "$YVEX_BIN" source-manifest report --family deepseek --release v0.1.0 \
-  --models-root "$VERIFIED_MODELS" --output json --strict > "$OUT_DIR/deepseek-verified.json"
-jq -e '.verification == "verified" and .source_kind == "huggingface" and .source_verification_blocker_count == 0 and .blocker_count == 6 and .blocker_0 == "missing-deepseek-architecture-ir" and .next == "V010.GGUF.QTYPE.ABI.1" and .shard_count == 1 and .header_shard_count == 1 and .header_tensor_count == 1 and .config_valid == true and .tokenizer_valid == true and .generation_config_valid == true and .shard_index_valid == true and .artifact_status == "not-produced" and .runtime == "unsupported" and .generation == "unsupported"' "$OUT_DIR/deepseek-verified.json" >/dev/null || fail "verified JSON source facts disagree"
+  --models-root "$VERIFIED_MODELS" --output json > "$OUT_DIR/deepseek-fixture.json"
+jq -e '.verification == "blocked" and .inventory_authority == "upstream-index" and .upstream_index_identity_verified == false and .header_scan_count == 1 and .top_blocker == "upstream-index-identity-mismatch" and .next == "V010.REBASE.DEEPSEEK.0" and .shard_count == 1 and .header_shard_count == 1 and .header_tensor_count == 1 and .config_valid == true and .tokenizer_valid == true and .generation_config_valid == true and .shard_index_valid == true and .artifact_status == "not-produced" and .runtime == "unsupported" and .generation == "unsupported"' "$OUT_DIR/deepseek-fixture.json" >/dev/null || fail "blocked JSON source facts disagree"
+
+set +e
+"$YVEX_BIN" source-manifest report --family deepseek --release v0.1.0 \
+  --models-root "$VERIFIED_MODELS" --strict > "$OUT_DIR/deepseek-fixture-strict.out"
+fixture_strict_rc=$?
+set -e
+test "$fixture_strict_rc" -eq 5 || fail "non-upstream index fixture passed strict verification"
 
 if "$YVEX_BIN" source-manifest report --family deepseek --release v0.1.0 \
   --target deepseek4-v4-flash-selected-embed --models-root "$VERIFIED_MODELS" \

@@ -184,8 +184,17 @@ test -f src/source/yvex_source_manifest.c
 test -f src/source/yvex_source_manifest.h
 test -f src/source/yvex_source_scan.c
 test -f src/source/yvex_source_scan.h
+test -f src/source/yvex_source_json.c
+test -f src/source/yvex_source_json.h
+test -f src/source/yvex_source_deepseek.c
+test -f src/source/yvex_source_deepseek.h
+test -f src/source/yvex_source_provenance.c
+test -f src/source/yvex_source_provenance.h
+test -f src/source/yvex_source_inventory.c
+test -f src/source/yvex_source_inventory.h
 test -f src/source/yvex_source_verify.c
 test -f src/source/yvex_source_verify.h
+test -f src/source/yvex_source_verify_internal.h
 test -f src/source/yvex_native_weights.c
 test -f src/source/yvex_native_weights.h
 test -f src/source/yvex_safetensors_header.c
@@ -409,6 +418,39 @@ if grep -nE '\b(stdout|stderr)\b' src/io/yvex_json_writer.c src/io/yvex_json_wri
   echo "generic JSON writer must not choose stdout/stderr"
   exit 1
 fi
+
+SOURCE_VERIFY_RESIDUE="$(
+  grep -nE '\b(opendir|readdir|fopen|fprintf|fwrite|rename|fsync)\s*\(|yvex_safetensors_header_read|source_json_(string|u64|skip_value|object)' src/source/yvex_source_verify.c || true
+)"
+if test -n "$SOURCE_VERIFY_RESIDUE"; then
+  echo "$SOURCE_VERIFY_RESIDUE"
+  echo "source verification coordinator must not own JSON, shard/header, or writer implementation"
+  exit 1
+fi
+
+for consumed_owner in \
+  yvex_source_deepseek_parse_sidecar \
+  yvex_source_provenance_manifest_read \
+  yvex_source_inventory_verify \
+  yvex_source_manifest_publish_verified
+do
+  grep -nF "$consumed_owner" src/source/yvex_source_verify.c >/dev/null || {
+    echo "source verification coordinator does not consume $consumed_owner"
+    exit 1
+  }
+done
+
+SOURCE_RENDER_POLICY="$(
+  grep -nE 'tokenizer_json_valid|manifest_schema_matches|manifest_family_matches|manifest_target_matches|repository_verified[[:space:]]*&&|revision_verified[[:space:]]*&&|source_manifest_hardening_status: report-only' src/cli/render/yvex_source_render.c || true
+)"
+if test -n "$SOURCE_RENDER_POLICY"; then
+  echo "$SOURCE_RENDER_POLICY"
+  echo "source renderer must consume typed semantic decisions"
+  exit 1
+fi
+
+grep -nF 'complete manifests are published only by exact source verification' src/source/yvex_source_write.c >/dev/null
+grep -nF 'source status complete is verifier-owned' src/cli/commands/yvex_source_cli.c >/dev/null
 
 SOURCE_CLI_RESIDUE="$(
   grep -RInE '\bargc\b|\bargv\b|strcmp\(argv\[|usage: yvex|--family|--release|--output|--audit|--json|--include-|_command\(|_help\(|_usage\(' src/source || true

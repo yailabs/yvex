@@ -7,6 +7,7 @@
 #include "test.h"
 
 #include "yvex_model_target_catalog.h"
+#include "yvex_source_provenance.h"
 #include "yvex_source_verify.h"
 
 #include <errno.h>
@@ -18,7 +19,7 @@
 #include <unistd.h>
 
 static const char source_verify_revision[] =
-    "0123456789abcdef0123456789abcdef01234567";
+    "60d8d70770c6776ff598c94bb586a859a38244f1";
 
 static int source_verify_make_dir(const char *path)
 {
@@ -139,19 +140,35 @@ static int source_verify_write_manifest(const char *root, const char *kind,
            source_verify_write_text(path, json);
 }
 
-static int source_verify_write_metadata(const char *root, const char *name)
+static int source_verify_write_metadata_revision(const char *root,
+                                                 const char *name,
+                                                 const char *revision)
 {
     char path[768];
+    char source_path[768];
     char text[256];
+    char oid[41];
+    yvex_error err;
     int n;
 
+    n = snprintf(source_path, sizeof(source_path), "%s/%s", root, name);
+    if (n < 0 || (size_t)n >= sizeof(source_path)) return 0;
+    yvex_error_clear(&err);
+    if (yvex_source_git_blob_oid_file(source_path, oid, &err) != YVEX_OK) {
+        return 0;
+    }
     n = snprintf(path, sizeof(path),
                  "%s/.cache/huggingface/download/%s.metadata", root, name);
     if (n < 0 || (size_t)n >= sizeof(path)) return 0;
-    n = snprintf(text, sizeof(text), "%s\nblob-id\n0\n",
-                 source_verify_revision);
+    n = snprintf(text, sizeof(text), "%s\n%s\n0\n", revision, oid);
     return n >= 0 && (size_t)n < sizeof(text) &&
            source_verify_write_text(path, text);
+}
+
+static int source_verify_write_metadata(const char *root, const char *name)
+{
+    return source_verify_write_metadata_revision(root, name,
+                                                 source_verify_revision);
 }
 
 static int source_verify_make_valid(const char *root)
@@ -169,7 +186,7 @@ static int source_verify_make_valid(const char *root)
     if (!source_verify_make_dir(path)) return 0;
     if (!source_verify_write_manifest(root, "huggingface",
                                       yvex_deepseek_v4_upstream_repo_id,
-                                      "complete", source_verify_revision) ||
+                                      "in-progress", source_verify_revision) ||
         !source_verify_write_config(root,
                                     yvex_deepseek_v4_config_model_type,
                                     yvex_deepseek_v4_config_architecture)) return 0;
@@ -220,17 +237,110 @@ static int source_verify_has_blocker(const yvex_source_verification *result,
     return 0;
 }
 
+static int source_verify_run_mode(const char *root,
+                                  int promote_manifest,
+                                  yvex_source_verification *result,
+                                  yvex_error *err)
+{
+    yvex_source_verify_options options;
+    yvex_model_target_identity identity;
+    char manifest_path[512];
+    char index_path[512];
+    char index_oid[41];
+    struct stat st;
+
+    memset(&options, 0, sizeof(options));
+    identity = *yvex_model_target_release_identity();
+    snprintf(index_path, sizeof(index_path),
+             "%s/model.safetensors.index.json", root);
+    yvex_error_clear(err);
+    if (stat(index_path, &st) != 0 ||
+        yvex_source_git_blob_oid_file(index_path, index_oid, err) != YVEX_OK) {
+        return yvex_error_code(err) == YVEX_OK ? YVEX_ERR_IO
+                                                : yvex_error_code(err);
+    }
+    identity.upstream_index_oid = index_oid;
+    identity.upstream_index_size = (unsigned long long)st.st_size;
+    snprintf(manifest_path, sizeof(manifest_path), "%s/source-manifest.json",
+             root);
+    options.identity = &identity;
+    options.source_path = root;
+    options.models_root = "build/tests";
+    options.manifest_path = manifest_path;
+    options.promote_manifest = promote_manifest;
+    return yvex_source_verify(&options, result, err);
+}
+
 static int source_verify_run(const char *root,
                              yvex_source_verification *result,
                              yvex_error *err)
 {
+    return source_verify_run_mode(root, 0, result, err);
+}
+
+static int source_verify_run_identity(
+    const char *root,
+    const yvex_model_target_identity *identity,
+    const char *upstream_inventory_path,
+    const char *derived_inventory_path,
+    int promote_manifest,
+    yvex_source_verification *result,
+    yvex_error *err)
+{
     yvex_source_verify_options options;
+    char manifest_path[512];
 
     memset(&options, 0, sizeof(options));
-    options.identity = yvex_model_target_release_identity();
+    snprintf(manifest_path, sizeof(manifest_path), "%s/source-manifest.json",
+             root);
+    options.identity = identity;
     options.source_path = root;
     options.models_root = "build/tests";
+    options.manifest_path = manifest_path;
+    options.upstream_inventory_path = upstream_inventory_path;
+    options.derived_inventory_path = derived_inventory_path;
+    options.promote_manifest = promote_manifest;
     return yvex_source_verify(&options, result, err);
+}
+
+static int source_verify_write_upstream_inventory(const char *path,
+                                                  const char *repo,
+                                                  const char *revision,
+                                                  const char *shard,
+                                                  unsigned long long size)
+{
+    char json[2048];
+    int n = snprintf(
+        json, sizeof(json),
+        "{\"schema\":\"yvex.source_upstream_inventory.v1\","
+        "\"repository\":\"%s\",\"revision\":\"%s\","
+        "\"files\":[{\"path\":\"%s\",\"size_bytes\":%llu}]}",
+        repo, revision, shard, size);
+
+    return n >= 0 && (size_t)n < sizeof(json) &&
+           source_verify_write_text(path, json);
+}
+
+static int source_verify_write_upstream_inventory_two(
+    const char *path,
+    const char *repo,
+    const char *revision,
+    const char *first,
+    unsigned long long first_size,
+    const char *second,
+    unsigned long long second_size)
+{
+    char json[4096];
+    int n = snprintf(
+        json, sizeof(json),
+        "{\"schema\":\"yvex.source_upstream_inventory.v1\","
+        "\"repository\":\"%s\",\"revision\":\"%s\","
+        "\"files\":[{\"path\":\"%s\",\"size_bytes\":%llu},"
+        "{\"path\":\"%s\",\"size_bytes\":%llu}]}",
+        repo, revision, first, first_size, second, second_size);
+
+    return n >= 0 && (size_t)n < sizeof(json) &&
+           source_verify_write_text(path, json);
 }
 
 int yvex_test_source_verify(void)
@@ -244,9 +354,12 @@ int yvex_test_source_verify(void)
 
     system("rm -rf build/tests/source-verify");
     YVEX_TEST_ASSERT(source_verify_make_valid(root), "create valid source fixture");
-    rc = source_verify_run(root, &result, &err);
+    rc = source_verify_run_mode(root, 1, &result, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && result.verified,
                      "valid exact source verifies");
+    YVEX_TEST_ASSERT(result.manifest_verified && result.manifest_published &&
+                     result.manifest_reopened && result.header_scan_count == 1,
+                     "verifier promotes, reopens, and scans headers once");
     YVEX_TEST_ASSERT_STREQ(result.repository_id,
                            yvex_deepseek_v4_upstream_repo_id,
                            "repository identity matches");
@@ -270,6 +383,80 @@ int yvex_test_source_verify(void)
                      strcmp(result.scoring_func, "sqrtsoftplus") == 0 &&
                      strcmp(result.tokenizer_model_type, "BPE") == 0,
                      "execution-affecting config and tokenizer facts are preserved");
+
+    {
+        yvex_model_target_identity indexless =
+            *yvex_model_target_release_identity();
+        char upstream_path[512];
+        char derived_path[512];
+        char shard_path[512];
+        char index_path[512];
+        char index_metadata_path[768];
+        struct stat shard_stat;
+        FILE *fp;
+        char first[4096];
+        char second[4096];
+        size_t first_size;
+        size_t second_size;
+
+        snprintf(index_path, sizeof(index_path),
+                 "%s/model.safetensors.index.json", root);
+        snprintf(index_metadata_path, sizeof(index_metadata_path),
+                 "%s/.cache/huggingface/download/model.safetensors.index.json.metadata",
+                 root);
+        YVEX_TEST_ASSERT(unlink(index_path) == 0 &&
+                         unlink(index_metadata_path) == 0,
+                         "remove index for official indexless fixture");
+        snprintf(shard_path, sizeof(shard_path),
+                 "%s/model-00001-of-00001.safetensors", root);
+        YVEX_TEST_ASSERT(stat(shard_path, &shard_stat) == 0,
+                         "stat indexless shard");
+        snprintf(upstream_path, sizeof(upstream_path),
+                 "%s-upstream.json", root);
+        snprintf(derived_path, sizeof(derived_path),
+                 "%s-derived.json", root);
+        unlink(upstream_path);
+        unlink(derived_path);
+        YVEX_TEST_ASSERT(source_verify_write_manifest(
+                             root, "huggingface",
+                             yvex_deepseek_v4_upstream_repo_id,
+                             "in-progress", source_verify_revision) &&
+                         source_verify_write_upstream_inventory(
+                             upstream_path,
+                             yvex_deepseek_v4_upstream_repo_id,
+                             source_verify_revision,
+                             "model-00001-of-00001.safetensors",
+                             (unsigned long long)shard_stat.st_size),
+                         "write official indexless snapshot fixture");
+        indexless.upstream_index_path = NULL;
+        indexless.upstream_index_oid = "not-applicable";
+        indexless.upstream_index_size = 0u;
+        indexless.upstream_inventory_authority = "header-derived";
+        YVEX_TEST_ASSERT(
+            source_verify_run_identity(root, &indexless, upstream_path,
+                                       derived_path, 1, &result, &err) == YVEX_OK &&
+                result.verified &&
+                strcmp(result.inventory_authority, "header-derived") == 0 &&
+                access(derived_path, F_OK) == 0,
+            "official indexless source derives deterministic inventory");
+        fp = fopen(derived_path, "rb");
+        YVEX_TEST_ASSERT(fp != NULL, "open first derived inventory");
+        first_size = fread(first, 1u, sizeof(first), fp);
+        YVEX_TEST_ASSERT(!ferror(fp) && fclose(fp) == 0,
+                         "read first derived inventory");
+        YVEX_TEST_ASSERT(
+            source_verify_run_identity(root, &indexless, upstream_path,
+                                       derived_path, 1, &result, &err) == YVEX_OK &&
+                result.verified,
+            "repeat indexless verification");
+        fp = fopen(derived_path, "rb");
+        YVEX_TEST_ASSERT(fp != NULL, "open repeated derived inventory");
+        second_size = fread(second, 1u, sizeof(second), fp);
+        YVEX_TEST_ASSERT(!ferror(fp) && fclose(fp) == 0 &&
+                         first_size == second_size &&
+                         memcmp(first, second, first_size) == 0,
+                         "derived inventory is deterministic");
+    }
 
     system("rm -rf build/tests/source-verify");
     YVEX_TEST_ASSERT(source_verify_make_valid(root), "recreate wrong repo fixture");
@@ -372,6 +559,133 @@ int yvex_test_source_verify(void)
                      source_verify_has_blocker(
                          &result, "generation-config-token-mismatch"),
                      "generation token identity must match model config");
+
+    system("rm -rf build/tests/source-verify");
+    YVEX_TEST_ASSERT(source_verify_make_valid(root),
+                     "recreate stale revision fixture");
+    YVEX_TEST_ASSERT(source_verify_write_metadata_revision(
+                         root, "config.json",
+                         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+                     "write stale config revision metadata");
+    YVEX_TEST_ASSERT(source_verify_run(root, &result, &err) == YVEX_OK &&
+                     source_verify_has_blocker(&result,
+                                               "stale-source-revision") &&
+                     source_verify_has_blocker(
+                         &result, "inconsistent-source-revision"),
+                     "stale provider metadata fails provenance");
+
+    system("rm -rf build/tests/source-verify");
+    YVEX_TEST_ASSERT(source_verify_make_valid(root),
+                     "recreate manifest promotion refusal fixture");
+    YVEX_TEST_ASSERT(source_verify_write_config(
+                         root, "not_deepseek_v4",
+                         yvex_deepseek_v4_config_architecture),
+                     "invalidate config before manifest promotion");
+    YVEX_TEST_ASSERT(source_verify_run_mode(root, 1, &result, &err) == YVEX_OK &&
+                     !result.verified && !result.manifest_published &&
+                     source_verify_has_blocker(&result,
+                                               "wrong-source-model-type"),
+                     "invalid verifier facts cannot promote manifest");
+
+    system("rm -rf build/tests/source-verify");
+    YVEX_TEST_ASSERT(source_verify_make_valid(root),
+                     "recreate atomic publication fixture");
+    YVEX_TEST_ASSERT(setenv("YVEX_TEST_FAIL_SOURCE_PUBLISH_AFTER_WRITE",
+                           "1", 1) == 0,
+                     "enable manifest publication failure injection");
+    YVEX_TEST_ASSERT(source_verify_run_mode(root, 1, &result, &err) == YVEX_OK &&
+                     source_verify_has_blocker(
+                         &result, "source-manifest-publish-failed") &&
+                     !result.manifest_published,
+                     "atomic manifest publication fails closed");
+    YVEX_TEST_ASSERT(unsetenv("YVEX_TEST_FAIL_SOURCE_PUBLISH_AFTER_WRITE") == 0,
+                     "disable manifest publication failure injection");
+    snprintf(path, sizeof(path), "%s/source-manifest.json.tmp.%ld", root,
+             (long)getpid());
+    YVEX_TEST_ASSERT(access(path, F_OK) != 0,
+                     "failed publication removes temporary output");
+
+    system("rm -rf build/tests/source-verify");
+    YVEX_TEST_ASSERT(source_verify_make_valid(root),
+                     "recreate missing upstream index fixture");
+    snprintf(path, sizeof(path), "%s/model.safetensors.index.json", root);
+    YVEX_TEST_ASSERT(unlink(path) == 0, "remove required upstream index");
+    YVEX_TEST_ASSERT(source_verify_run_identity(
+                         root, yvex_model_target_release_identity(), NULL,
+                         NULL, 0, &result, &err) == YVEX_OK &&
+                     source_verify_has_blocker(&result,
+                                               "missing-shard-index"),
+                     "upstream index claim requires the exact local file");
+
+    {
+        yvex_model_target_identity indexless =
+            *yvex_model_target_release_identity();
+        char upstream_path[512];
+        char derived_path[512];
+        char first_path[512];
+        char second_path[512];
+        char old_path[512];
+        char index_metadata_path[768];
+        struct stat first_stat;
+        struct stat second_stat;
+
+        indexless.upstream_index_path = NULL;
+        indexless.upstream_index_oid = "not-applicable";
+        indexless.upstream_index_size = 0u;
+        indexless.upstream_inventory_authority = "header-derived";
+        snprintf(upstream_path, sizeof(upstream_path), "%s-upstream.json", root);
+        snprintf(derived_path, sizeof(derived_path), "%s-derived.json", root);
+        snprintf(old_path, sizeof(old_path),
+                 "%s/model-00001-of-00001.safetensors", root);
+        YVEX_TEST_ASSERT(stat(old_path, &first_stat) == 0 &&
+                         source_verify_write_upstream_inventory(
+                             upstream_path,
+                             yvex_deepseek_v4_upstream_repo_id,
+                             source_verify_revision,
+                             "model-00001-of-00001.safetensors",
+                             (unsigned long long)first_stat.st_size + 1u),
+                         "write drifting upstream snapshot");
+        YVEX_TEST_ASSERT(source_verify_run_identity(
+                             root, &indexless, upstream_path, derived_path, 0,
+                             &result, &err) == YVEX_OK &&
+                         source_verify_has_blocker(
+                             &result, "upstream-local-inventory-drift"),
+                         "upstream and local file metadata drift fails closed");
+
+        snprintf(first_path, sizeof(first_path),
+                 "%s/model-00001-of-00002.safetensors", root);
+        snprintf(second_path, sizeof(second_path),
+                 "%s/model-00002-of-00002.safetensors", root);
+        YVEX_TEST_ASSERT(unlink(old_path) == 0 &&
+                         source_verify_write_safetensors(first_path) &&
+                         source_verify_write_safetensors(second_path) &&
+                         source_verify_write_metadata(
+                             root, "model-00001-of-00002.safetensors") &&
+                         source_verify_write_metadata(
+                             root, "model-00002-of-00002.safetensors") &&
+                         stat(first_path, &first_stat) == 0 &&
+                         stat(second_path, &second_stat) == 0,
+                         "create duplicate tensor headers across two shards");
+        snprintf(index_metadata_path, sizeof(index_metadata_path),
+                 "%s/.cache/huggingface/download/model-00001-of-00001.safetensors.metadata",
+                 root);
+        unlink(index_metadata_path);
+        YVEX_TEST_ASSERT(source_verify_write_upstream_inventory_two(
+                             upstream_path,
+                             yvex_deepseek_v4_upstream_repo_id,
+                             source_verify_revision,
+                             "model-00001-of-00002.safetensors",
+                             (unsigned long long)first_stat.st_size,
+                             "model-00002-of-00002.safetensors",
+                             (unsigned long long)second_stat.st_size),
+                         "write two-shard upstream snapshot");
+        YVEX_TEST_ASSERT(source_verify_run_identity(
+                             root, &indexless, upstream_path, derived_path, 0,
+                             &result, &err) == YVEX_OK &&
+                         source_verify_has_blocker(
+                             &result, "duplicate-header-tensor"),
+                         "duplicate tensor names across headers fail closed");
+    }
 
     system("rm -rf build/tests/source-verify");
     YVEX_TEST_ASSERT(source_verify_make_valid(root), "recreate index fixture");

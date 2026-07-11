@@ -35,6 +35,14 @@ const char yvex_deepseek_v4_model_name[] = "DeepSeek-V4-Flash";
 const char yvex_deepseek_v4_upstream_repo_id[] =
     "deepseek-ai/DeepSeek-V4-Flash";
 const char yvex_deepseek_v4_source_dir_leaf[] = "DeepSeek-V4-Flash";
+const char yvex_deepseek_v4_upstream_revision[] =
+    "60d8d70770c6776ff598c94bb586a859a38244f1";
+const char yvex_deepseek_v4_upstream_index_path[] =
+    "model.safetensors.index.json";
+const char yvex_deepseek_v4_upstream_index_oid[] =
+    "84692cbe7af556a01e2e5353341100079c387aee";
+const unsigned long long yvex_deepseek_v4_upstream_index_size = 5371381ull;
+const char yvex_deepseek_v4_upstream_inventory_authority[] = "upstream-index";
 const char yvex_deepseek_v4_config_model_type[] = "deepseek_v4";
 const char yvex_deepseek_v4_config_architecture[] =
     "DeepseekV4ForCausalLM";
@@ -46,6 +54,11 @@ static const yvex_model_target_identity release_target_identity = {
     yvex_deepseek_v4_model_name,
     yvex_deepseek_v4_upstream_repo_id,
     yvex_deepseek_v4_source_dir_leaf,
+    yvex_deepseek_v4_upstream_revision,
+    yvex_deepseek_v4_upstream_index_path,
+    yvex_deepseek_v4_upstream_index_oid,
+    yvex_deepseek_v4_upstream_index_size,
+    yvex_deepseek_v4_upstream_inventory_authority,
     yvex_deepseek_v4_config_model_type,
     yvex_deepseek_v4_config_architecture,
 };

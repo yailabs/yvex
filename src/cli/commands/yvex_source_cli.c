@@ -112,6 +112,12 @@ static int source_cli_create_manifest(int argc, char **argv)
                 yvex_cli_out_writef(stderr, "yvex: unknown source status: %s\n", value);
                 return 2;
             }
+            if (options.status == YVEX_SOURCE_STATUS_COMPLETE) {
+                yvex_cli_out_writef(
+                    stderr,
+                    "yvex: source status complete is verifier-owned; run strict exact-source verification\n");
+                return 2;
+            }
         } else if (strcmp(name, "--dry-run-log") == 0) {
             options.dry_run_log = value;
         } else if (strcmp(name, "--download-log") == 0) {
