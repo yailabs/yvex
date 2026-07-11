@@ -133,9 +133,12 @@ explicit metadata, tensor, array, string, and owned-byte budgets rather than by
 the artifact file size. A report may render a typed rejection, but successful
 report construction is not parser acceptance.
 
-The reader does not admit global tensor ordering, padding, overlap, aggregate
-range integrity, complete artifacts, materialization, or runtime execution.
-Those boundaries remain assigned to their consuming milestones in `PROJECT.md`.
+The reader does not itself admit global tensor ordering or padding. The
+canonical layout validator consumes the reader view and opened artifact,
+requires power-of-two alignment and exact directory-order padded continuation,
+checks all required padding for zero bytes, validates the exact aggregate file
+span, and detects snapshot drift. It reads no tensor payload bytes. This layout
+result is still not complete-artifact, materialization, or runtime support.
 
 ## Model Registry Contract
 
@@ -376,10 +379,12 @@ sampling, generation, or provider generation-ready state.
 Artifact integrity is local correctness and corruption safety for runtime entry.
 
 Before runtime paths read tensor payloads, YVEX validates the artifact structure
-needed by that path. The integrity layer checks file size, GGUF parseability,
-tensor directory consistency, tensor name uniqueness, supported rank/dims/dtype
-accounting, checked byte-count math, tensor offset/range bounds, and required
-selected readiness facts for the implemented graph paths.
+needed by that path. The integrity layer consumes the canonical global layout
+result, including ordered qtype-sized spans, exact padded continuation, zero
+padding, truncation/tail policy, and snapshot stability. It adds optional
+explicit digest policy and subordinate selected readiness facts for implemented
+graph paths. It does not hash the complete file unless identity policy requests
+a digest.
 
 Tensor byte ranges are validated through the canonical GGUF qtype storage
 calculation before payload reads. The calculation treats `dims[0]` as the row
@@ -405,7 +410,7 @@ payloads are trusted. It is regression coverage for implemented boundaries.
 
 Materialization is gated by artifact integrity and backend readiness.
 
-Before backend allocation, YVEX checks structural integrity, local identity when
+Before backend allocation, YVEX checks canonical global layout, local identity when
 available, registry metadata drift when aliases are used, shape/dtype
 accounting, tensor byte ranges, selected tensor readiness, and backend
 availability. Preflight failure stops before backend allocation.

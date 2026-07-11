@@ -1,19 +1,21 @@
 /*
- * yvex_gguf_range_map.c - GGUF absolute range map facts.
+ * yvex_gguf_range_map.c - GGUF local range and canonical layout projections.
  *
  * Owner:
  *   src/gguf
  *
  * Owns:
- *   absolute byte range validation, tensor span overflow checks, and alignment
- *   refusal facts.
+ *   bounded single-range arithmetic and projection of an accepted canonical
+ *   layout into legacy GGUF range facts.
  *
  * Does not own:
- *   file reading, payload materialization, residency, backend tensor binding,
- *   or runtime execution.
+ *   global tensor order, padding admission, overlap policy, file reading,
+ *   payload materialization, residency, backend tensor binding, or runtime
+ *   execution.
  *
  * Invariants:
- *   range checks are pure arithmetic and never read tensor payload bytes.
+ *   local range checks are pure arithmetic; global facts are copied only from
+ *   the canonical layout result and never reconstructed here.
  *
  * Boundary:
  *   a valid range map is not materialization, residency, graph binding, or
@@ -70,86 +72,30 @@ void yvex_gguf_range_fact_init(yvex_gguf_range_fact *fact)
     fact->reason = "GGUF range map not evaluated";
 }
 
-/* Contract: validates parser-visible offsets plus qtype-derived storage spans. */
-int yvex_gguf_range_fact_from_gguf(const yvex_gguf *gguf,
-                                   yvex_gguf_range_fact *fact,
-                                   const char **reason)
+/* Contract: projects accepted canonical layout facts without recalculation. */
+int yvex_gguf_range_fact_from_layout(const yvex_gguf_layout_result *layout,
+                                     yvex_gguf_range_fact *fact,
+                                     const char **reason)
 {
-    unsigned long long i;
-    unsigned long long count;
-
     yvex_gguf_range_fact_init(fact);
-    if (!gguf || !fact) {
-        if (reason) *reason = "GGUF range map requires a parsed GGUF view";
+    if (!layout || !fact) {
+        if (reason) *reason = "GGUF range projection requires a layout result";
         return 0;
     }
-
-    fact->tensor_data_offset = yvex_gguf_tensor_data_offset(gguf);
-    fact->file_size = yvex_gguf_file_size(gguf);
-    fact->alignment = yvex_gguf_alignment(gguf);
-
-    if (!yvex_gguf_range_map_validate(fact->tensor_data_offset,
-                                      0ull,
-                                      fact->file_size,
-                                      fact->alignment ? fact->alignment : 1u,
-                                      reason)) {
+    fact->tensor_data_offset = layout->tensor_data_offset;
+    fact->file_size = layout->actual_file_size;
+    fact->alignment = layout->alignment;
+    fact->checked_tensor_count = layout->tensors_validated;
+    fact->qtype_checked_tensor_count = layout->tensors_validated;
+    fact->total_expected_storage_bytes = layout->raw_tensor_bytes;
+    if (!layout->accepted || layout->code != YVEX_GGUF_LAYOUT_OK) {
         fact->status = YVEX_GGUF_ABI_SECTION_REFUSED;
-        fact->reason = reason ? *reason : "GGUF tensor data offset refused";
+        fact->reason = layout->reason;
+        if (reason) *reason = fact->reason;
         return 0;
     }
-
-    count = yvex_gguf_tensor_count(gguf);
-    for (i = 0ull; i < count; ++i) {
-        const yvex_gguf_tensor_info *tensor = yvex_gguf_tensor_at(gguf, i);
-        unsigned long long expected_storage_bytes;
-        unsigned long long available_bytes = 0ull;
-        if (!tensor) {
-            fact->status = YVEX_GGUF_ABI_SECTION_MALFORMED;
-            fact->reason = "GGUF tensor range row is missing";
-            if (reason) *reason = fact->reason;
-            return 0;
-        }
-        if (!yvex_gguf_range_map_validate(tensor->absolute_offset,
-                                          0ull,
-                                          fact->file_size,
-                                          fact->alignment ? fact->alignment : 1u,
-                                          reason)) {
-            fact->status = YVEX_GGUF_ABI_SECTION_REFUSED;
-            fact->reason = reason ? *reason : "GGUF tensor absolute offset refused";
-            return 0;
-        }
-
-        expected_storage_bytes = tensor->storage_bytes;
-
-        if (tensor->absolute_offset <= fact->file_size) {
-            available_bytes = fact->file_size - tensor->absolute_offset;
-        }
-        if (fact->qtype_checked_tensor_count == 0ull) {
-            fact->first_expected_storage_bytes = expected_storage_bytes;
-            fact->first_actual_available_bytes = available_bytes;
-        }
-        if (!yvex_gguf_range_map_validate(tensor->absolute_offset,
-                                          expected_storage_bytes,
-                                          fact->file_size,
-                                          fact->alignment ? fact->alignment : 1u,
-                                          reason)) {
-            fact->status = YVEX_GGUF_ABI_SECTION_REFUSED;
-            fact->reason = reason ? *reason : "GGUF qtype storage span exceeds artifact range";
-            return 0;
-        }
-        if (fact->total_expected_storage_bytes > ULLONG_MAX - expected_storage_bytes) {
-            fact->status = YVEX_GGUF_ABI_SECTION_REFUSED;
-            fact->reason = "GGUF expected tensor storage total overflows";
-            if (reason) *reason = fact->reason;
-            return 0;
-        }
-        fact->total_expected_storage_bytes += expected_storage_bytes;
-        fact->qtype_checked_tensor_count += 1ull;
-        fact->checked_tensor_count += 1ull;
-    }
-
     fact->status = YVEX_GGUF_ABI_SECTION_OK;
-    fact->reason = "GGUF ABI-visible ranges accepted";
+    fact->reason = "GGUF ranges project the canonical global layout result";
     if (reason) *reason = fact->reason;
     return 1;
 }

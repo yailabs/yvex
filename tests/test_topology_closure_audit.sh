@@ -274,6 +274,8 @@ src/gguf/yvex_gguf_reader.c
 src/gguf/yvex_gguf_writer.c
 src/gguf/yvex_gguf_roundtrip.c
 src/gguf/yvex_gguf_name_map.c
+src/gguf/yvex_gguf_layout_integrity.c
+src/gguf/yvex_gguf_layout_integrity.h
 src/gguf/yvex_gguf_layout_map.c
 src/gguf/yvex_gguf_descriptor.c
 src/gguf/yvex_gguf_report.c
@@ -355,7 +357,7 @@ test -x tests/test_gguf_qtype_abi.sh
 grep -nF 'yvex_gguf_artifact_abi_report_build' src/gguf/yvex_gguf_report.c >/dev/null
 grep -nF 'yvex_gguf_metadata_abi_from_gguf' src/gguf/yvex_gguf_metadata.c >/dev/null
 grep -nF 'yvex_gguf_tensor_info_abi_from_gguf' src/gguf/yvex_gguf_tensor_info.c >/dev/null
-grep -nF 'yvex_gguf_range_fact_from_gguf' src/gguf/yvex_gguf_range_map.c >/dev/null
+grep -nF 'yvex_gguf_range_fact_from_layout' src/gguf/yvex_gguf_range_map.c >/dev/null
 grep -nF 'yvex_gguf_qtype_geometry_find' src/gguf/yvex_gguf_qtype.c >/dev/null
 grep -nF 'yvex_gguf_qtype_tensor_storage' src/gguf/yvex_gguf_qtype.c >/dev/null
 grep -nF 'yvex_gguf_qtype_storage_bytes' src/gguf/yvex_gguf_qtype.c >/dev/null

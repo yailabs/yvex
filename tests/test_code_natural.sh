@@ -1100,6 +1100,8 @@ src/gguf/yvex_gguf_reader.c
 src/gguf/yvex_gguf_writer.c
 src/gguf/yvex_gguf_roundtrip.c
 src/gguf/yvex_gguf_name_map.c
+src/gguf/yvex_gguf_layout_integrity.c
+src/gguf/yvex_gguf_layout_integrity.h
 src/gguf/yvex_gguf_layout_map.c
 src/gguf/yvex_gguf_descriptor.c
 src/gguf/yvex_gguf_report.c
@@ -1179,7 +1181,7 @@ fi
 grep -nF 'yvex_gguf_container_abi_from_header' src/gguf/yvex_gguf_container.c >/dev/null
 grep -nF 'yvex_gguf_metadata_abi_from_gguf' src/gguf/yvex_gguf_metadata.c >/dev/null
 grep -nF 'yvex_gguf_tensor_info_abi_from_gguf' src/gguf/yvex_gguf_tensor_info.c >/dev/null
-grep -nF 'yvex_gguf_range_fact_from_gguf' src/gguf/yvex_gguf_range_map.c >/dev/null
+grep -nF 'yvex_gguf_range_fact_from_layout' src/gguf/yvex_gguf_range_map.c >/dev/null
 grep -nF 'yvex_gguf_reader_classify_error' src/gguf/yvex_gguf_reader.c >/dev/null
 grep -nF 'yvex_gguf_descriptor_abi_from_sections' src/gguf/yvex_gguf_descriptor.c >/dev/null
 grep -nF 'yvex_gguf_artifact_abi_report_build' src/gguf/yvex_gguf_report.c >/dev/null

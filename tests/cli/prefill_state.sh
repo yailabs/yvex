@@ -78,7 +78,7 @@ def file_bytes(metadata, tensors, payload, alignment=32):
     data = u32(magic) + u32(version) + u64(len(tensors)) + u64(len(metadata))
     data += b"".join(metadata) + b"".join(tensors)
     data += b"\0" * ((-len(data)) % alignment)
-    return data + payload
+    return data + payload + (b"\0" * ((-len(payload)) % alignment))
 
 metadata = [
     kv_string("general.architecture", "deepseek"),

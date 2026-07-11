@@ -9,10 +9,11 @@ trap 'rm -f "$out"' EXIT
 build/tests/test >"$out" 2>&1
 grep -nF 'test: gguf_artifact_abi' "$out" >/dev/null
 
-# The operational reader owns one typed, file-backed parse and hands off only
-# to global layout integrity. Reports and structural consumers may not restore
-# whole-file parsing or string-derived failure policy.
-grep -nF '#define YVEX_GGUF_ABI_NEXT_ROW "V010.GGUF.LAYOUT.INTEGRITY.1"' \
+# The operational reader owns one typed, file-backed parse; the completed
+# layout owner now hands the foundation sequence to CUDA fail-closed repair.
+# Reports and consumers may not restore whole-file parsing or string-derived
+# failure policy.
+grep -nF '#define YVEX_GGUF_ABI_NEXT_ROW "V010.CUDA.FAILCLOSED.0"' \
   src/gguf/yvex_gguf_private.h >/dev/null
 grep -nF 'int yvex_artifact_read_at(' include/yvex/artifact.h >/dev/null
 grep -nF 'int yvex_gguf_open_ex(' include/yvex/gguf.h >/dev/null

@@ -63,9 +63,13 @@ non-success results. Normal, table, audit, and integrity projections consume
 that operational result; building a report cannot convert a rejection into an
 accepted artifact.
 
-Addressable tensor range facts are not global layout admission. Tensor order,
-padding, overlap, truncation across the complete data section, and aggregate
-layout integrity remain blocked on `V010.GGUF.LAYOUT.INTEGRITY.1`.
+The canonical global layout validator consumes the immutable reader view and
+same opened artifact snapshot. It requires nonzero power-of-two alignment, the
+first tensor at relative offset zero, exact directory-order padded
+continuation, zero directory/tensor padding, an exact aggregate data span, and
+no trailing bytes. It reads only padding intervals and reports zero tensor
+payload bytes read. Typed layout acceptance is a container property, not a
+complete-model or supported-artifact claim.
 
 ## Admission Contract
 

@@ -224,7 +224,8 @@ not_contains "$OUT_DIR/graph-drift.out" "real_partial_graph_executed: true"
 
 "$YVEX_BIN" integrity check --model "$MODEL" \
   >"$OUT_DIR/integrity-raw.out" 2>"$OUT_DIR/integrity-raw.err"
-contains "$OUT_DIR/integrity-raw.out" "digest_status: unregistered"
+contains "$OUT_DIR/integrity-raw.out" "digest_status: not-requested"
+contains "$OUT_DIR/integrity-raw.out" "sha256: unavailable"
 contains "$OUT_DIR/integrity-raw.out" "integrity_status: pass"
 contains "$OUT_DIR/integrity-raw.out" "status: artifact-integrity-pass"
 

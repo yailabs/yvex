@@ -118,7 +118,8 @@ header += b"".join(metadata)
 header += tensor("token_embd.weight", [4, 32], ggml_f16, 0)
 header += tensor("blk.0.attn_norm.weight", [4], ggml_f16, len(embed_payload))
 header += b"\0" * ((-len(header)) % 32)
-path.write_bytes(header + embed_payload + rms_payload)
+payload = embed_payload + rms_payload
+path.write_bytes(header + payload + (b"\0" * ((-len(payload)) % 32)))
 PY
 
 run_ok max_one_normal "$YVEX_BIN" generate --model "$SEGMENT_MODEL" --backend cpu --segment embedding-rmsnorm --tokens 0,1,2,3 --max-new-tokens 1

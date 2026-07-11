@@ -26,6 +26,7 @@
 #include <yvex/dtype.h>
 #include <yvex/artifact_integrity.h>
 #include <yvex/fs.h>
+#include <yvex/gguf_layout.h>
 #include <yvex/gguf_qtype.h>
 #include <yvex/model.h>
 #include <yvex/model_registry.h>
@@ -1142,7 +1143,8 @@ static int materialize_one(yvex_weight_table *table,
  *   receives the owned weight table.
  *
  * Effects:
- *   allocates weight-table rows, validates ranges, transfers explicit tensor
+ *   validates the canonical global layout before allocation, allocates
+ *   weight-table rows, validates selected ranges, transfers explicit tensor
  *   payload bytes through the backend API, updates materialization summary
  *   counters, and releases partial state on failure.
  *
@@ -1165,6 +1167,7 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
 {
     yvex_weight_table *table;
     yvex_backend_memory_stats stats;
+    yvex_gguf_layout_result layout;
     unsigned long long tensor_count;
     unsigned long long i;
     int require_all = 0;
@@ -1181,6 +1184,11 @@ int yvex_weight_table_materialize(yvex_weight_table **out,
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_weight_table_materialize",
                        "artifact, gguf, tensors and backend are required");
         return YVEX_ERR_INVALID_ARG;
+    }
+
+    rc = yvex_gguf_layout_validate(artifact, gguf, &layout, err);
+    if (rc != YVEX_OK) {
+        return rc;
     }
     if (options) {
         require_all = options->require_all_tensors;

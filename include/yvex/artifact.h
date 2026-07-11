@@ -12,8 +12,10 @@
  * Owns:
  *   - yvex_artifact
  *   - yvex_artifact_options
+ *   - yvex_artifact_snapshot
  *   - yvex_artifact_open
  *   - yvex_artifact_close
+ *   - opened-file identity validation
  *   - yvex_range_check
  *
  * Does not own:
@@ -54,6 +56,16 @@ typedef struct {
     int map;
 } yvex_artifact_options;
 
+typedef struct {
+    unsigned long long device;
+    unsigned long long inode;
+    unsigned long long size;
+    long long mtime_seconds;
+    long long mtime_nanoseconds;
+    long long ctime_seconds;
+    long long ctime_nanoseconds;
+} yvex_artifact_snapshot;
+
 int yvex_artifact_open(yvex_artifact **out, const yvex_artifact_options *options, yvex_error *err);
 void yvex_artifact_close(yvex_artifact *artifact);
 
@@ -68,6 +80,14 @@ int yvex_artifact_read_at(const yvex_artifact *artifact,
                           void *dst,
                           size_t len,
                           yvex_error *err);
+/* Copies the immutable identity captured when the file handle was opened. */
+int yvex_artifact_snapshot_get(const yvex_artifact *artifact,
+                               yvex_artifact_snapshot *out,
+                               yvex_error *err);
+/* Fails if either the open file or its path no longer names that snapshot. */
+int yvex_artifact_snapshot_validate(const yvex_artifact *artifact,
+                                    yvex_artifact_snapshot *current,
+                                    yvex_error *err);
 
 int yvex_range_check(unsigned long long file_size,
                      unsigned long long offset,

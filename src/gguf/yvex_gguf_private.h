@@ -27,9 +27,10 @@
 
 #include <yvex/error.h>
 #include <yvex/gguf.h>
+#include <yvex/gguf_layout.h>
 #include <yvex/gguf_qtype.h>
 
-#define YVEX_GGUF_ABI_NEXT_ROW "V010.GGUF.LAYOUT.INTEGRITY.1"
+#define YVEX_GGUF_ABI_NEXT_ROW "V010.CUDA.FAILCLOSED.0"
 #define YVEX_GGUF_QTYPE_ABI_NEXT_ROW "V010.GGUF.ARTIFACT.ABI.1"
 
 typedef enum {
@@ -136,6 +137,7 @@ typedef struct {
     yvex_gguf_metadata_abi metadata;
     yvex_gguf_tensor_info_abi tensor_info;
     yvex_gguf_qtype_abi qtype;
+    yvex_gguf_layout_result layout;
     yvex_gguf_range_fact range;
     yvex_gguf_descriptor_abi descriptor;
     int parser_status;
@@ -195,9 +197,9 @@ int yvex_gguf_range_map_validate(unsigned long long offset,
                                  unsigned long long alignment,
                                  const char **reason);
 void yvex_gguf_range_fact_init(yvex_gguf_range_fact *fact);
-int yvex_gguf_range_fact_from_gguf(const yvex_gguf *gguf,
-                                   yvex_gguf_range_fact *fact,
-                                   const char **reason);
+int yvex_gguf_range_fact_from_layout(const yvex_gguf_layout_result *layout,
+                                     yvex_gguf_range_fact *fact,
+                                     const char **reason);
 
 const yvex_gguf_boundary_fact *yvex_gguf_reader_boundary(void);
 int yvex_gguf_reader_parse_refusal(int parse_rc, const char **reason);

@@ -24,7 +24,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-gguf-artifact-abi test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -108,6 +108,7 @@ CORE_SRCS := \
 	src/gguf/tools.c \
 	src/gguf/yvex_gguf_container.c \
 	src/gguf/yvex_gguf_descriptor.c \
+	src/gguf/yvex_gguf_layout_integrity.c \
 	src/gguf/yvex_gguf_layout_map.c \
 	src/gguf/yvex_gguf_metadata.c \
 	src/gguf/yvex_gguf_name_map.c \
@@ -315,6 +316,9 @@ test: test-core test-cli
 test-gguf-artifact-abi: $(TEST_RUNNER) tests/test_gguf_artifact_abi.sh
 	sh tests/test_gguf_artifact_abi.sh
 
+test-gguf-layout-integrity: $(TEST_RUNNER) tests/test_gguf_layout_integrity.sh
+	sh tests/test_gguf_layout_integrity.sh
+
 test-gguf-qtype-abi: $(TEST_RUNNER) tests/test_gguf_qtype_abi.sh
 	sh tests/test_gguf_qtype_abi.sh
 
@@ -335,7 +339,7 @@ test-surface: tests/test_surface.sh
 
 smoke: test-cli
 
-check: check-docs check-guardrails lib cli server test test-gguf-artifact-abi test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke
+check: check-docs check-guardrails lib cli server test test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke
 	@echo "yvex check: ok"
 
 $(LIBYVEX): $(CORE_OBJS)

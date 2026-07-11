@@ -348,7 +348,7 @@ payload = b"".join(f16(i) for i in range(32)) + b"".join(f16(1) for _ in range(4
 data = u32(magic) + u32(version) + u64(len(tensors)) + u64(len(metadata))
 data += b"".join(metadata) + b"".join(tensors)
 data += b"\0" * ((-len(data)) % 32)
-path.write_bytes(data + payload)
+path.write_bytes(data + payload + (b"\0" * ((-len(payload)) % 32)))
 PY
 
 "$YVEX_BIN" graph --model "$SEGMENT" --backend cuda \

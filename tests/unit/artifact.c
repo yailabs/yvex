@@ -49,7 +49,7 @@ int yvex_test_artifact(void)
     YVEX_TEST_ASSERT(rc == YVEX_OK, "open valid artifact");
     YVEX_TEST_ASSERT(artifact != NULL, "artifact non-null");
     YVEX_TEST_ASSERT_STREQ(yvex_artifact_path(artifact), fixture, "artifact path");
-    YVEX_TEST_ASSERT(yvex_artifact_size(artifact) == 24, "artifact size");
+    YVEX_TEST_ASSERT(yvex_artifact_size(artifact) == 32, "artifact size");
     YVEX_TEST_ASSERT(yvex_artifact_is_mapped(artifact) == 1, "artifact mapping explicit");
     YVEX_TEST_ASSERT(yvex_artifact_data(artifact) != NULL, "artifact data");
     yvex_artifact_close(artifact);

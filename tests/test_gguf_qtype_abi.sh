@@ -14,7 +14,9 @@ grep -nF 'af97976c7810cdabb1863172f31c432dab767de7' \
   include/yvex/gguf_qtype.h docs/reference-architecture.md >/dev/null
 grep -nF 'yvex_gguf_qtype_tensor_storage' src/gguf/yvex_gguf_qtype.c >/dev/null
 grep -nF 'yvex_gguf_qtype_tensor_storage' src/gguf/gguf.c >/dev/null
-grep -nF 'tensor->storage_bytes' src/gguf/yvex_gguf_range_map.c >/dev/null
+grep -nF 'yvex_gguf_qtype_tensor_storage' \
+  src/gguf/yvex_gguf_layout_integrity.c >/dev/null
+grep -nF 'layout->raw_tensor_bytes' src/gguf/yvex_gguf_range_map.c >/dev/null
 if grep -nF 'yvex_gguf_qtype_tensor_storage' src/gguf/yvex_gguf_range_map.c >/dev/null; then
   echo 'range projection must consume canonical reader storage facts once' >&2
   exit 1

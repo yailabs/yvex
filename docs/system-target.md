@@ -44,9 +44,9 @@ domain algorithms. No writer owns command output.
 
 | Area | Current state | Target state | Next row |
 | --- | --- | --- | --- |
-| GGUF artifact ABI | scalable file-backed v3 reader, typed refusal, target-scale budgets, immutable view, and zero payload reads | preserve the structural reader as input to global layout validation | see `PROJECT.md` |
+| GGUF artifact ABI | scalable file-backed v3 reader, typed refusal, target-scale budgets, immutable view, and zero payload reads | preserve the structural reader as input to canonical layout and later artifact admission | see `PROJECT.md` |
 | GGUF qtype storage | pinned IDs 0-39, exact row geometry, and typed refusal are canonical | preserve storage independently from decoder, quantizer, emitter, and compute support | see `PROJECT.md` |
-| GGUF layout integrity | bounded range fixtures | complete-artifact global layout and corruption refusal | V010.GGUF.LAYOUT.INTEGRITY.1 |
+| GGUF layout integrity | canonical directory-order spans, power-of-two alignment, zero padding, truncation/tail refusal, and snapshot drift checks | preserve global layout as input to complete-model artifact admission | see `PROJECT.md` |
 | CUDA truth | fallback PTX can expose no-op entry points | fail-closed advertised capability with reference parity | V010.CUDA.FAILCLOSED.0 |
 | Architecture IR | profile/report facts only | typed execution-complete DeepSeek specification | V010.MODEL.ARCH.IR.0 |
 | GGUF names/layout | partial and planned maps | complete DeepSeek role/name/layout map | V010.MAP.GGUF.DEEPSEEK.0 |
@@ -107,12 +107,14 @@ domain algorithms. No writer owns command output.
 | `include/yvex/gguf_qtype.h` | public qtype identity, admission, and typed storage result |
 | `include/yvex/artifact.h` | read-only file handle, optional explicit mapping, and exact positioned reads |
 | `include/yvex/gguf.h` | public reader budgets, typed parse result, immutable view, metrics, and accessors |
+| `include/yvex/gguf_layout.h` | public typed global layout result, failure categories, byte totals, and IO metrics |
 | `src/gguf/gguf.c` | file-backed GGUF v3 decoding and owned metadata/tensor view |
 | `src/gguf/yvex_gguf_container.c` | magic/version/container ABI |
 | `src/gguf/yvex_gguf_metadata.c` | metadata key/value ABI |
 | `src/gguf/yvex_gguf_tensor_info.c` | tensor_info name/rank/type/shape ABI |
 | `src/gguf/yvex_gguf_qtype.c` | pinned qtype registry and row-aware tensor storage |
-| `src/gguf/yvex_gguf_range_map.c` | absolute range/alignment checks |
+| `src/gguf/yvex_gguf_layout_integrity.c` | canonical ordered layout, padding, aggregate span, tail, and drift admission |
+| `src/gguf/yvex_gguf_range_map.c` | bounded local range arithmetic and canonical layout projection |
 | `src/gguf/yvex_gguf_reader.c` | reader policy, resource defaults, typed failure ABI, and report projection |
 | `src/gguf/yvex_gguf_writer.c` | writer refusal until writer row |
 | `src/gguf/yvex_gguf_roundtrip.c` | writer-reader equivalence boundary |
@@ -166,8 +168,11 @@ only when a payload consumer explicitly requests `map`. The GGUF reader uses
 exact positioned reads for the variable-size header, metadata, and tensor
 directory, then owns copied length-aware values and names until close. Reader
 metrics distinguish structural and payload bytes; structural open always
-reports zero payload bytes. Local tensor spans are represented, but cross-tensor
-order, padding, overlap, and aggregate layout admission remain separate.
+reports zero payload bytes. The separate canonical layout owner borrows the
+opened artifact and parsed view, enforces power-of-two alignment and exact
+directory-order padded continuation, validates zero padding and the complete
+file span, and detects snapshot drift. It reads padding only and reports zero
+tensor payload bytes. Complete-model artifact admission remains separate.
 
 ## GGUF Qtype ABI Boundary
 

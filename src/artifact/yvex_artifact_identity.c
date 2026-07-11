@@ -287,6 +287,64 @@ int yvex_artifact_identity_read(const char *path,
     return YVEX_OK;
 }
 
+/*
+ * Contract: hashes the exact borrowed artifact handle, validates its open-time
+ * identity before and after IO, owns no file handle, and leaves output empty on
+ * failure.
+ */
+int yvex_artifact_identity_read_open(const yvex_artifact *artifact,
+                                     yvex_artifact_file_identity *out,
+                                     yvex_error *err)
+{
+    yvex_sha256_ctx ctx;
+    unsigned char digest[32];
+    unsigned char buf[65536];
+    unsigned long long offset = 0ull;
+    unsigned long long size;
+    int n;
+    int rc;
+
+    if (!artifact || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_artifact_identity_read_open",
+                       "artifact and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(out, 0, sizeof(*out));
+    rc = yvex_artifact_snapshot_validate(artifact, NULL, err);
+    if (rc != YVEX_OK) return rc;
+
+    n = snprintf(out->path, sizeof(out->path), "%s", yvex_artifact_path(artifact));
+    if (n < 0 || (unsigned int)n >= sizeof(out->path)) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_artifact_identity_read_open",
+                       "artifact path too long");
+        return YVEX_ERR_BOUNDS;
+    }
+    size = yvex_artifact_size(artifact);
+    sha256_init(&ctx);
+    while (offset < size) {
+        unsigned long long remaining = size - offset;
+        size_t take = remaining > (unsigned long long)sizeof(buf)
+                          ? sizeof(buf) : (size_t)remaining;
+        rc = yvex_artifact_read_at(artifact, offset, buf, take, err);
+        if (rc != YVEX_OK) {
+            memset(out, 0, sizeof(*out));
+            return rc;
+        }
+        sha256_update(&ctx, buf, (unsigned long long)take);
+        offset += (unsigned long long)take;
+    }
+    rc = yvex_artifact_snapshot_validate(artifact, NULL, err);
+    if (rc != YVEX_OK) {
+        memset(out, 0, sizeof(*out));
+        return rc;
+    }
+    sha256_final(&ctx, digest);
+    digest_to_hex(digest, out->sha256);
+    out->file_size = size;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 int yvex_sha256_hex_is_valid(const char *hex)
 {
     unsigned int i;

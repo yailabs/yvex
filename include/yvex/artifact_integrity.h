@@ -5,16 +5,17 @@
  * Layer: public artifact API
  *
  * Purpose:
- *   Defines the baseline GGUF artifact integrity validator. The validator
- *   checks structural bounds, tensor byte ranges, dtype/shape accounting, and
- *   selected embedding readiness before runtime paths trust tensor payloads.
+ *   Defines artifact integrity facts projected from the canonical global GGUF
+ *   layout result, optional explicit digest policy, and subordinate selected
+ *   tensor proofs before payload consumers proceed.
  *
  * Does not own:
  *   - supply-chain security
- *   - digest enforcement
+ *   - implicit digest enforcement
  *   - registry drift detection
  *   - malware detection
  *   - sandboxing
+ *   - model completeness or runtime support
  */
 #ifndef YVEX_ARTIFACT_INTEGRITY_H
 #define YVEX_ARTIFACT_INTEGRITY_H
@@ -22,6 +23,7 @@
 #include <yvex/artifact.h>
 #include <yvex/error.h>
 #include <yvex/gguf.h>
+#include <yvex/gguf_layout.h>
 #include <yvex/tensor.h>
 
 #ifdef __cplusplus
@@ -131,6 +133,8 @@ typedef struct {
     char expected_sha256[YVEX_INTEGRITY_SHA256_CAP];
     char digest_status[YVEX_INTEGRITY_DIGEST_STATUS_CAP];
     unsigned long long tensor_count;
+    int layout_checked;
+    yvex_gguf_layout_result layout;
     unsigned long long known_tensor_bytes;
     unsigned long long tensor_ranges_checked;
     unsigned long long tensor_ranges_valid;

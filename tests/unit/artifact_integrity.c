@@ -130,6 +130,24 @@ static int write_one_byte_short_range_fixture(const char *path)
     return 1;
 }
 
+static int write_canonical_zero_tensor_fixture(const char *path)
+{
+    unsigned char buf[32] = {0};
+    size_t len = 0u;
+    FILE *fp;
+    append_bytes(buf, &len, "GGUF", 4u);
+    append_u32(buf, &len, 3u);
+    append_u64(buf, &len, 0ull);
+    append_u64(buf, &len, 0ull);
+    fp = fopen(path, "wb");
+    if (!fp) return 0;
+    if (fwrite(buf, 1u, sizeof(buf), fp) != sizeof(buf)) {
+        fclose(fp);
+        return 0;
+    }
+    return fclose(fp) == 0;
+}
+
 static int test_valid_fixture_passes(void)
 {
     yvex_artifact_integrity_report report;
@@ -188,7 +206,7 @@ static int test_range_out_of_file_fails(void)
                                             &report,
                                             &err);
     YVEX_TEST_ASSERT(rc != YVEX_OK, "range out of file fails");
-    YVEX_TEST_ASSERT(first_issue_is(&report, "tensor-range-out-of-file"), "range code");
+    YVEX_TEST_ASSERT(first_issue_is(&report, "first-offset-not-zero"), "global offset code");
     return 0;
 }
 
@@ -207,7 +225,7 @@ static int test_one_byte_short_range_reports_range_fields(void)
     yvex_error_clear(&err);
     rc = yvex_artifact_integrity_check_path(path, NULL, &report, &err);
     YVEX_TEST_ASSERT(rc != YVEX_OK, "one-byte short range fails");
-    YVEX_TEST_ASSERT(first_issue_is(&report, "tensor-range-out-of-file"),
+    YVEX_TEST_ASSERT(first_issue_is(&report, "tensor-payload-truncated"),
                      "one-byte short range code");
     YVEX_TEST_ASSERT(report.tensor_ranges_checked == 1, "range checked count");
     YVEX_TEST_ASSERT(report.tensor_ranges_invalid == 1, "range invalid count");
@@ -363,6 +381,7 @@ static int test_zero_dimension_fails(void)
 
 static int test_required_tensor_missing_fails(void)
 {
+    const char *path = "build/tests/artifact-integrity/canonical-zero.gguf";
     yvex_artifact_integrity_options options;
     yvex_artifact_integrity_report report;
     yvex_error err;
@@ -370,13 +389,20 @@ static int test_required_tensor_missing_fails(void)
 
     memset(&options, 0, sizeof(options));
     options.require_token_embedding = 1;
+    (void)mkdir("build", 0777);
+    (void)mkdir("build/tests", 0777);
+    (void)mkdir("build/tests/artifact-integrity", 0777);
+    remove(path);
+    YVEX_TEST_ASSERT(write_canonical_zero_tensor_fixture(path),
+                     "write canonical zero tensor fixture");
     yvex_error_clear(&err);
-    rc = yvex_artifact_integrity_check_path("tests/fixtures/gguf/valid-minimal.gguf",
+    rc = yvex_artifact_integrity_check_path(path,
                                             &options,
                                             &report,
                                             &err);
     YVEX_TEST_ASSERT(rc != YVEX_OK, "missing required tensor fails");
     YVEX_TEST_ASSERT(first_issue_is(&report, "required-tensor-missing"), "missing tensor code");
+    remove(path);
     return 0;
 }
 

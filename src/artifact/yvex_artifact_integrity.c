@@ -1,9 +1,24 @@
 /*
- * yvex_artifact_integrity.c - Local artifact integrity and refusal reports.
+ * yvex_artifact_integrity.c - Canonical layout projection and integrity facts.
  *
- * This file owns structural GGUF validation, tensor range validation, shape,
- * dtype, and byte-count checks, file identity diagnostics, and integrity report
- * construction. It does not claim supply-chain security.
+ * Owner:
+ *   src/artifact integrity preflight
+ *
+ * Owns:
+ *   projection of the canonical GGUF layout result, optional explicit digest
+ *   comparison, subordinate selected-tensor proof, and typed integrity reports.
+ *
+ * Does not own:
+ *   GGUF parsing, global offset/padding policy, qtype storage geometry, implicit
+ *   full-file hashing, model completeness, materialization, or runtime support.
+ *
+ * Invariants:
+ *   global layout is validated once through src/gguf; a digest is calculated
+ *   only when identity policy explicitly requests one; selected proofs cannot
+ *   turn a rejected global layout into an accepted artifact.
+ *
+ * Boundary:
+ *   an accepted integrity preflight is not complete-model or runtime support.
  */
 
 #include <yvex/artifact_integrity.h>
@@ -43,6 +58,13 @@ static int add_range_error(yvex_artifact_integrity_report *report,
                            const char *tensor,
                            const char *reason,
                            const yvex_tensor_range *range);
+
+static int digest_requested(const yvex_artifact_integrity_options *options)
+{
+    return options &&
+           ((options->expect_sha256 && options->expect_sha256[0]) ||
+            (options->registered_sha256 && options->registered_sha256[0]));
+}
 
 static void apply_identity_digest(const yvex_artifact_file_identity *identity,
                                   const yvex_artifact_integrity_options *options,
@@ -160,6 +182,78 @@ static int add_range_error(yvex_artifact_integrity_report *report,
         issue->has_range = 1;
     }
     return rc;
+}
+
+/* Contract: projects one canonical layout refusal into the bounded report. */
+static int add_layout_error(yvex_artifact_integrity_report *report,
+                            const yvex_gguf_layout_result *layout)
+{
+    unsigned int before;
+    int rc;
+    if (!report || !layout) return YVEX_ERR_INVALID_ARG;
+    before = report->issue_count;
+    rc = add_error(report, yvex_gguf_layout_code_name(layout->code),
+                   layout->tensor_name, layout->reason);
+    if (rc == YVEX_OK && report->issue_count > before) {
+        yvex_integrity_issue *issue = &report->issues[before];
+        issue->relative_offset = layout->declared_relative_offset;
+        issue->absolute_offset = layout->failure_absolute_offset;
+        issue->tensor_bytes = layout->tensor_raw_size;
+        issue->file_size = layout->actual_file_size;
+        issue->has_range = 1;
+    }
+    return rc;
+}
+
+/*
+ * Contract: hashes only when explicit digest policy exists, through the same
+ * borrowed open handle used for parse/layout, and records drift or comparison
+ * failure without opening a second path.
+ */
+static int apply_requested_digest(const yvex_artifact *artifact,
+                                  const yvex_artifact_integrity_options *options,
+                                  yvex_artifact_integrity_report *report,
+                                  yvex_error *err)
+{
+    yvex_artifact_file_identity identity;
+    int rc;
+
+    if (!digest_requested(options)) {
+        integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP,
+                       "not-requested");
+        return YVEX_OK;
+    }
+    if (options->expect_sha256 && options->expect_sha256[0] &&
+        !yvex_sha256_hex_is_valid(options->expect_sha256)) {
+        integrity_copy(report->expected_sha256, YVEX_INTEGRITY_SHA256_CAP,
+                       options->expect_sha256);
+        integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP, "fail");
+        return add_error(report, "digest-invalid", "",
+                         "expected SHA-256 must be 64 hex characters");
+    }
+    if ((!options->expect_sha256 || !options->expect_sha256[0]) &&
+        options->registered_sha256 && options->registered_sha256[0] &&
+        !yvex_sha256_hex_is_valid(options->registered_sha256)) {
+        integrity_copy(report->registered_sha256, YVEX_INTEGRITY_SHA256_CAP,
+                       options->registered_sha256);
+        integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP, "missing");
+        return add_error(report, "digest-missing", "",
+                         "registered alias lacks valid SHA-256 identity");
+    }
+
+    rc = yvex_artifact_identity_read_open(artifact, &identity, err);
+    if (rc != YVEX_OK) {
+        yvex_error drift_error;
+        yvex_error_clear(&drift_error);
+        integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP, "fail");
+        if (yvex_artifact_snapshot_validate(artifact, NULL, &drift_error) != YVEX_OK) {
+            return add_error(report, "file-identity-drift", "",
+                             "artifact identity changed during digest validation");
+        }
+        return add_error(report, "digest-read-failed", "", yvex_error_message(err));
+    }
+    apply_identity_digest(&identity, options, report);
+    return YVEX_OK;
 }
 
 static int checked_mul_ull(unsigned long long a,
@@ -613,6 +707,8 @@ static void set_basic_report(const yvex_artifact *artifact,
     memset(report, 0, sizeof(*report));
     report->checked = 1;
     integrity_copy(report->format, YVEX_INTEGRITY_FORMAT_CAP, "gguf");
+    integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP,
+                   "not-requested");
 
     if (artifact) {
         integrity_copy(report->path, YVEX_ARTIFACT_PATH_CAP, yvex_artifact_path(artifact));
@@ -639,36 +735,6 @@ static void set_basic_report(const yvex_artifact *artifact,
     if (tensors) {
         report->tensor_count = yvex_tensor_table_count(tensors);
     }
-}
-
-static const char *range_error_code(const yvex_error *err)
-{
-    const char *message = yvex_error_message(err);
-
-    if (!message) return "tensor-range-invalid";
-    if (strstr(message, "tensor-rank-invalid")) return "tensor-rank-invalid";
-    if (strstr(message, "tensor-dim-zero")) return "tensor-dim-zero";
-    if (strstr(message, "tensor-element-count-overflow")) return "tensor-element-count-overflow";
-    if (strstr(message, "tensor-dtype-unknown")) return "tensor-dtype-unknown";
-    if (strstr(message, "tensor-dtype-size-unknown")) return "tensor-dtype-size-unknown";
-    if (strstr(message, "tensor-byte-count-overflow")) return "tensor-byte-count-overflow";
-    if (strstr(message, "selected-embedding-rank-invalid")) return "selected-embedding-rank-invalid";
-    if (strstr(message, "selected-embedding-dtype-invalid")) return "selected-embedding-dtype-invalid";
-    if (strstr(message, "selected-embedding-output-byte-count-overflow")) return "selected-embedding-output-byte-count-overflow";
-    if (strstr(message, "selected-embedding-slice-byte-count-overflow")) return "selected-embedding-slice-byte-count-overflow";
-    if (strstr(message, "tensor-relative-offset-overflow")) return "tensor-relative-offset-overflow";
-    if (strstr(message, "tensor-absolute-offset-overflow")) return "tensor-absolute-offset-overflow";
-    if (strstr(message, "tensor-offset-before-data")) return "tensor-offset-before-data";
-    if (strstr(message, "tensor-offset-out-of-file")) return "tensor-offset-out-of-file";
-    if (strstr(message, "tensor-end-offset-overflow")) return "tensor-end-offset-overflow";
-    if (strstr(message, "tensor-range-out-of-file")) return "tensor-range-out-of-file";
-    if (strstr(message, "tensor-alignment-invalid")) return "tensor-alignment-invalid";
-    if (strstr(message, "token-out-of-range")) return "token-out-of-range";
-    if (strstr(message, "token-slice-offset-overflow")) return "token-slice-offset-overflow";
-    if (strstr(message, "token-slice-end-overflow")) return "token-slice-end-overflow";
-    if (strstr(message, "token-slice-range-out-of-tensor")) return "token-slice-range-out-of-tensor";
-    if (strstr(message, "tensor name is empty")) return "empty-tensor-name";
-    return "tensor-range-invalid";
 }
 
 static void map_parse_result_to_report(const yvex_gguf_parse_result *result,
@@ -782,7 +848,8 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
 {
     yvex_artifact_integrity_report local;
     yvex_artifact_integrity_report *report = out ? out : &local;
-    unsigned long long i;
+    unsigned long long tensor_count;
+    int layout_rc;
 
     if (!artifact || !gguf || !tensors) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_artifact_integrity_validate",
@@ -791,96 +858,34 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
     }
 
     set_basic_report(artifact, gguf, tensors, report);
-
-    for (i = 0; i < yvex_tensor_table_count(tensors); ++i) {
-        const yvex_tensor_info *tensor = yvex_tensor_table_at(tensors, i);
-        yvex_tensor_shape_accounting accounting;
-        yvex_tensor_range range;
-        int rc;
-
-        if (!tensor) {
-            (void)add_error(report, "tensor-directory-parse-failed", "",
-                            "tensor table row is unavailable");
-            continue;
-        }
-        if (!tensor->name || tensor->name[0] == '\0') {
-            (void)add_error(report, "empty-tensor-name", "", "tensor name is empty");
-        }
-        memset(&accounting, 0, sizeof(accounting));
-        report->tensor_shapes_checked += 1ull;
-        report->tensor_dtypes_checked += 1ull;
-        report->tensor_byte_counts_checked += 1ull;
-        rc = yvex_tensor_shape_accounting_validate(tensor, &accounting, err);
-        if (rc == YVEX_OK) {
-            report->tensor_shapes_valid += 1ull;
-            report->tensor_dtypes_valid += 1ull;
-            if (!checked_add_ull(report->known_tensor_bytes,
-                                 accounting.storage_byte_count,
-                                 &report->known_tensor_bytes)) {
-                (void)add_error(report, "tensor-byte-count-overflow", tensor->name,
-                                "known tensor byte sum overflows");
-            }
-        } else {
-            const char *code = range_error_code(err);
-            const char *public_code = code;
-            const char *reason = yvex_error_message(err);
-
-            if (strcmp(code, "tensor-rank-invalid") == 0) {
-                report->tensor_shapes_invalid += 1ull;
-                public_code = "rank-out-of-range";
-            } else if (strcmp(code, "tensor-dim-zero") == 0) {
-                report->tensor_shapes_invalid += 1ull;
-                public_code = "zero-dimension";
-            } else if (strcmp(code, "tensor-element-count-overflow") == 0) {
-                report->tensor_shapes_invalid += 1ull;
-                public_code = "element-count-overflow";
-            } else if (strcmp(code, "tensor-dtype-unknown") == 0) {
-                report->tensor_shapes_valid += 1ull;
-                report->tensor_dtypes_invalid += 1ull;
-                public_code = "unknown-dtype";
-            } else if (strcmp(code, "tensor-dtype-size-unknown") == 0) {
-                report->tensor_shapes_valid += 1ull;
-                report->tensor_dtypes_invalid += 1ull;
-                public_code = "dtype-size-unknown";
-            } else if (strcmp(code, "tensor-byte-count-overflow") == 0) {
-                report->tensor_shapes_valid += 1ull;
-                report->tensor_dtypes_valid += 1ull;
-                report->tensor_byte_counts_invalid += 1ull;
-            } else {
-                report->tensor_shapes_invalid += 1ull;
-            }
-            (void)add_error(report, public_code, tensor->name, reason);
-            yvex_error_clear(err);
-            continue;
-        }
-        memset(&range, 0, sizeof(range));
-        report->tensor_ranges_checked += 1ull;
-        rc = yvex_tensor_range_validate(artifact, gguf, tensor, &range, err);
-        if (rc == YVEX_OK) {
-            report->tensor_ranges_valid += 1ull;
-        } else {
-            const char *code = range_error_code(err);
-            const char *public_code = code;
-            const char *reason = yvex_error_message(err);
-
-            report->tensor_ranges_invalid += 1ull;
-            if (strcmp(code, "tensor-dim-zero") == 0) {
-                public_code = "zero-dimension";
-            } else if (strcmp(code, "tensor-element-count-overflow") == 0) {
-                public_code = "element-count-overflow";
-            } else if (strcmp(code, "tensor-dtype-unknown") == 0) {
-                public_code = "unknown-dtype";
-            } else if (strcmp(code, "tensor-dtype-size-unknown") == 0) {
-                public_code = "dtype-size-unknown";
-            } else if (strcmp(code, "tensor-rank-invalid") == 0) {
-                public_code = "rank-out-of-range";
-            } else if (strcmp(code, "tensor-offset-out-of-file") == 0) {
-                public_code = "tensor-range-out-of-file";
-            }
-            (void)add_range_error(report, public_code, tensor->name, reason, &range);
-            yvex_error_clear(err);
-        }
+    if (digest_requested(options)) {
+        integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP,
+                       "not-checked");
     }
+
+    report->layout_checked = 1;
+    layout_rc = yvex_gguf_layout_validate(artifact, gguf, &report->layout, err);
+    report->tensor_ranges_checked = report->layout.tensor_count;
+    report->tensor_ranges_valid = report->layout.tensors_validated;
+    if (layout_rc != YVEX_OK) {
+        report->tensor_ranges_invalid = 1ull;
+        (void)add_layout_error(report, &report->layout);
+        report->passed = 0;
+        set_integrity_error(err, report);
+        return YVEX_ERR_FORMAT;
+    }
+
+    tensor_count = yvex_tensor_table_count(tensors);
+    if (tensor_count != report->layout.tensor_count) {
+        (void)add_error(report, "tensor-table-count-mismatch", "",
+                        "tensor table count differs from the canonical parsed layout");
+    }
+    report->known_tensor_bytes = report->layout.raw_tensor_bytes;
+    report->tensor_shapes_checked = tensor_count;
+    report->tensor_shapes_valid = tensor_count;
+    report->tensor_dtypes_checked = tensor_count;
+    report->tensor_dtypes_valid = tensor_count;
+    report->tensor_byte_counts_checked = tensor_count;
 
     if (options && options->require_token_embedding) {
         const yvex_tensor_info *tensor = yvex_tensor_table_find(tensors, "token_embd.weight");
@@ -890,13 +895,32 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
                             "required tensor not found: token_embd.weight");
         } else {
             yvex_selected_embedding_shape selected_shape;
-            int shape_rc;
+            int shape_rc = YVEX_OK;
 
             memset(&selected_shape, 0, sizeof(selected_shape));
-            shape_rc = yvex_selected_embedding_shape_validate(tensor,
-                                                              options->token_id,
-                                                              &selected_shape,
-                                                              err);
+            if (tensor->rank != 2u) {
+                shape_rc = YVEX_ERR_FORMAT;
+                (void)add_error(report, "required-tensor-rank-invalid", tensor->name,
+                                "selected embedding requires a rank-2 tensor");
+            } else if (tensor->dtype != YVEX_DTYPE_F16) {
+                shape_rc = YVEX_ERR_UNSUPPORTED;
+                (void)add_error(report, "required-tensor-dtype-invalid", tensor->name,
+                                "selected embedding requires F16 storage");
+            } else if ((unsigned long long)options->token_id >= tensor->dims[1]) {
+                shape_rc = YVEX_ERR_BOUNDS;
+                (void)add_error(report, "token-out-of-range", tensor->name,
+                                "partial token id is outside embedding range");
+            } else {
+                shape_rc = yvex_selected_embedding_shape_validate(tensor,
+                                                                  options->token_id,
+                                                                  &selected_shape,
+                                                                  err);
+                if (shape_rc != YVEX_OK) {
+                    (void)add_error(report, "selected-embedding-shape-invalid", tensor->name,
+                                    yvex_error_message(err));
+                    yvex_error_clear(err);
+                }
+            }
             if (shape_rc == YVEX_OK) {
                 yvex_tensor_range range;
                 yvex_tensor_slice_range slice;
@@ -921,39 +945,15 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
                                                                     err);
                 }
                 if (rc != YVEX_OK) {
-                    const char *code = range_error_code(err);
-                    if (strcmp(code, "token-out-of-range") == 0) {
-                        (void)add_range_error(report, "token-out-of-range", tensor->name,
-                                              "partial token id is outside embedding range",
-                                              &range);
-                    } else {
-                        (void)add_range_error(report, code, tensor->name,
-                                              yvex_error_message(err), &range);
-                    }
+                    (void)add_range_error(report, "selected-embedding-range-invalid",
+                                          tensor->name, yvex_error_message(err), &range);
                     yvex_error_clear(err);
                 }
-            } else {
-                const char *code = range_error_code(err);
-                const char *public_code = code;
-                if (strcmp(code, "selected-embedding-dtype-invalid") == 0) {
-                    public_code = "required-tensor-dtype-invalid";
-                } else if (strcmp(code, "selected-embedding-rank-invalid") == 0) {
-                    public_code = "required-tensor-rank-invalid";
-                } else if (strcmp(code, "token-out-of-range") == 0) {
-                    public_code = "token-out-of-range";
-                } else if (strcmp(code, "tensor-dim-zero") == 0) {
-                    public_code = "zero-dimension";
-                } else if (strcmp(code, "tensor-element-count-overflow") == 0) {
-                    public_code = "element-count-overflow";
-                } else if (strcmp(code, "tensor-dtype-unknown") == 0) {
-                    public_code = "unknown-dtype";
-                }
-                (void)add_error(report, public_code, tensor->name,
-                                yvex_error_message(err));
-                yvex_error_clear(err);
             }
         }
     }
+
+    (void)apply_requested_digest(artifact, options, report, err);
 
     report->passed = report->error_count == 0u ? 1 : 0;
     if (!report->passed) {
@@ -971,7 +971,6 @@ int yvex_artifact_integrity_check_path(const char *path,
                                        yvex_error *err)
 {
     yvex_artifact_options artifact_options;
-    yvex_artifact_file_identity identity;
     yvex_artifact *artifact = NULL;
     yvex_gguf *gguf = NULL;
     yvex_tensor_table *tensors = NULL;
@@ -985,7 +984,8 @@ int yvex_artifact_integrity_check_path(const char *path,
     report->checked = 1;
     integrity_copy(report->path, YVEX_ARTIFACT_PATH_CAP, path);
     integrity_copy(report->format, YVEX_INTEGRITY_FORMAT_CAP, "unknown");
-    integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP, "unknown");
+    integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP,
+                   digest_requested(options) ? "not-checked" : "not-requested");
 
     if (!path || path[0] == '\0') {
         (void)add_error(report, "file-open-failed", "", "model path is required");
@@ -993,19 +993,11 @@ int yvex_artifact_integrity_check_path(const char *path,
         return YVEX_ERR_INVALID_ARG;
     }
 
-    rc = yvex_artifact_identity_read(path, &identity, err);
-    if (rc != YVEX_OK) {
-        (void)add_error(report, "file-open-failed", "", yvex_error_message(err));
-        set_integrity_error(err, report);
-        return rc;
-    }
-
     artifact_options.path = path;
     artifact_options.readonly = 1;
     rc = yvex_artifact_open(&artifact, &artifact_options, err);
     if (rc != YVEX_OK) {
         map_parse_result_to_report(NULL, err, report);
-        apply_identity_digest(&identity, options, report);
         set_integrity_error(err, report);
         return rc;
     }
@@ -1020,7 +1012,8 @@ int yvex_artifact_integrity_check_path(const char *path,
             set_basic_report(artifact, gguf, tensors, report);
         }
         map_parse_result_to_report(&parse_result, err, report);
-        apply_identity_digest(&identity, options, report);
+        integrity_copy(report->digest_status, YVEX_INTEGRITY_DIGEST_STATUS_CAP,
+                       digest_requested(options) ? "not-checked" : "not-requested");
         yvex_tensor_table_close(tensors);
         yvex_gguf_close(gguf);
         yvex_artifact_close(artifact);
@@ -1029,7 +1022,6 @@ int yvex_artifact_integrity_check_path(const char *path,
     }
 
     rc = yvex_artifact_integrity_validate(artifact, gguf, tensors, options, report, err);
-    apply_identity_digest(&identity, options, report);
     report->passed = report->error_count == 0u ? 1 : 0;
     yvex_tensor_table_close(tensors);
     yvex_gguf_close(gguf);

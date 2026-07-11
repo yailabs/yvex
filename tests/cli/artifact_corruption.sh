@@ -256,11 +256,11 @@ exercise_structural_case byte-count-overflow \
 exercise_structural_case unknown-dtype \
     "$GEN_DIR/unknown-dtype.gguf" unknown-dtype
 exercise_structural_case tensor-offset-out-of-file \
-    tests/fixtures/gguf/tensor-offset-out-of-bounds.gguf tensor-range-out-of-file
+    tests/fixtures/gguf/tensor-offset-out-of-bounds.gguf first-offset-not-zero
 exercise_structural_case tensor-range-out-of-file \
-    "$GEN_DIR/tensor-range-out-of-file.gguf" tensor-range-out-of-file
+    "$GEN_DIR/tensor-range-out-of-file.gguf" tensor-payload-truncated
 exercise_structural_case tensor-range-one-byte-short \
-    "$GEN_DIR/tensor-range-one-byte-short.gguf" tensor-range-out-of-file
+    "$GEN_DIR/tensor-range-one-byte-short.gguf" tensor-payload-truncated
 exercise_structural_case tensor-absolute-offset-overflow \
     "$GEN_DIR/tensor-absolute-offset-overflow.gguf" tensor-absolute-offset-overflow
 exercise_structural_case misaligned-tensor-offset \

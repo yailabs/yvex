@@ -176,6 +176,25 @@ static int build_report(const char *path, yvex_gguf_abi_report *report)
     return rc;
 }
 
+static int expect_layout_refusal(const char *path, yvex_gguf_layout_code code)
+{
+    yvex_artifact *artifact = NULL;
+    yvex_gguf *gguf = NULL;
+    yvex_gguf_parse_result parse_result;
+    yvex_gguf_layout_result layout;
+    yvex_error err;
+    int rc;
+    memset(&layout, 0, sizeof(layout));
+    rc = open_reader(path, NULL, &artifact, &gguf, &parse_result);
+    if (rc == YVEX_OK) {
+        yvex_error_clear(&err);
+        rc = yvex_gguf_layout_validate(artifact, gguf, &layout, &err);
+    }
+    yvex_gguf_close(gguf);
+    yvex_artifact_close(artifact);
+    return rc != YVEX_OK && layout.code == code;
+}
+
 static int test_valid_fixture(void)
 {
     yvex_gguf_abi_report report;
@@ -204,7 +223,7 @@ static int test_valid_fixture(void)
                      "report reader reads no payload bytes");
     YVEX_TEST_ASSERT(report.reader_stats.structural_bytes_read > 0ull,
                      "report reader records structural bytes");
-    YVEX_TEST_ASSERT_STREQ(report.next_row, YVEX_GGUF_ABI_NEXT_ROW, "next row");
+    YVEX_TEST_ASSERT_STREQ(report.next_row, "V010.CUDA.FAILCLOSED.0", "next row");
     return 0;
 }
 
@@ -719,10 +738,9 @@ static int test_typed_tensor_and_range_refusals(void)
     YVEX_TEST_ASSERT(write_alignment_fixture(alignment_path,
                                               YVEX_GGUF_VALUE_UINT32, 12u),
                      "write invalid alignment fixture");
-    YVEX_TEST_ASSERT(expect_typed_refusal(alignment_path,
-                                          YVEX_GGUF_PARSE_INVALID_ALIGNMENT,
-                                          YVEX_GGUF_PARSE_SECTION_METADATA),
-                     "invalid alignment is typed");
+    YVEX_TEST_ASSERT(expect_layout_refusal(
+                         alignment_path, YVEX_GGUF_LAYOUT_ALIGNMENT_NOT_POWER_OF_TWO),
+                     "non-power-of-two alignment is layout-typed");
     YVEX_TEST_ASSERT(write_alignment_fixture(alignment_type_path,
                                               YVEX_GGUF_VALUE_UINT64, 32u),
                      "write invalid alignment type fixture");
@@ -738,11 +756,16 @@ static int test_typed_tensor_and_range_refusals(void)
         yvex_gguf *gguf = NULL;
         yvex_gguf_parse_result result;
         int rc = open_reader(alignment_24_path, NULL, &artifact, &gguf, &result);
-        YVEX_TEST_ASSERT(rc == YVEX_OK, "multiple-of-eight alignment parses");
+        yvex_gguf_layout_result layout;
+        yvex_error err;
+        YVEX_TEST_ASSERT(rc == YVEX_OK, "structural reader preserves alignment value");
         YVEX_TEST_ASSERT(yvex_gguf_alignment(gguf) == 24u,
                          "non-power-of-two alignment preserved");
-        YVEX_TEST_ASSERT((yvex_gguf_tensor_data_offset(gguf) % 24ull) == 0ull,
-                         "metadata-only data boundary is aligned");
+        yvex_error_clear(&err);
+        rc = yvex_gguf_layout_validate(artifact, gguf, &layout, &err);
+        YVEX_TEST_ASSERT(rc != YVEX_OK &&
+                         layout.code == YVEX_GGUF_LAYOUT_ALIGNMENT_NOT_POWER_OF_TWO,
+                         "alignment 24 is refused by global admission");
         yvex_gguf_close(gguf);
         yvex_artifact_close(artifact);
     }

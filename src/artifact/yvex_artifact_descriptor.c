@@ -31,12 +31,12 @@ const char *yvex_artifact_descriptor_status_name(yvex_artifact_descriptor_status
     return "refused";
 }
 
-/* Contract: refuses descriptor projection until global GGUF layout admission closes. */
+/* Contract: refuses descriptor support until complete-artifact admission closes. */
 void yvex_artifact_descriptor_refuse_missing_gguf(yvex_artifact_descriptor_fact *fact)
 {
     if (!fact) return;
     fact->status = YVEX_ARTIFACT_DESCRIPTOR_REFUSED;
     fact->format = "gguf";
-    fact->reason = "artifact descriptor requires closed global GGUF layout integrity";
-    fact->next_row = "V010.GGUF.LAYOUT.INTEGRITY.1";
+    fact->reason = "artifact descriptor support requires complete-artifact admission";
+    fact->next_row = "V010.ARTIFACT.SUPPORT.CUTOVER.0";
 }

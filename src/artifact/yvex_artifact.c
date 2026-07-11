@@ -42,10 +42,39 @@
 struct yvex_artifact {
     char path[YVEX_ARTIFACT_PATH_CAP];
     unsigned long long size;
+    yvex_artifact_snapshot snapshot;
     int fd;
     unsigned char *mapping;
     size_t mapping_len;
 };
+
+/* Contract: projects regular-file stat identity without allocation or IO. */
+static void snapshot_from_stat(const struct stat *st, yvex_artifact_snapshot *out)
+{
+    if (!st || !out) return;
+    memset(out, 0, sizeof(*out));
+    out->device = (unsigned long long)st->st_dev;
+    out->inode = (unsigned long long)st->st_ino;
+    out->size = (unsigned long long)st->st_size;
+    out->mtime_seconds = (long long)st->st_mtim.tv_sec;
+    out->mtime_nanoseconds = (long long)st->st_mtim.tv_nsec;
+    out->ctime_seconds = (long long)st->st_ctim.tv_sec;
+    out->ctime_nanoseconds = (long long)st->st_ctim.tv_nsec;
+}
+
+/* Contract: compares every captured identity field without filesystem IO. */
+static int snapshot_equal(const yvex_artifact_snapshot *a,
+                          const yvex_artifact_snapshot *b)
+{
+    return a && b &&
+           a->device == b->device &&
+           a->inode == b->inode &&
+           a->size == b->size &&
+           a->mtime_seconds == b->mtime_seconds &&
+           a->mtime_nanoseconds == b->mtime_nanoseconds &&
+           a->ctime_seconds == b->ctime_seconds &&
+           a->ctime_nanoseconds == b->ctime_nanoseconds;
+}
 
 static int copy_path(char *dst, const char *src, yvex_error *err)
 {
@@ -147,6 +176,7 @@ int yvex_artifact_open(yvex_artifact **out, const yvex_artifact_options *options
         return YVEX_ERR_FORMAT;
     }
     artifact->size = (unsigned long long)st.st_size;
+    snapshot_from_stat(&st, &artifact->snapshot);
 
     if (options->map && artifact->size > 0ull) {
         if (artifact->size > (unsigned long long)SIZE_MAX) {
@@ -284,6 +314,66 @@ int yvex_artifact_read_at(const yvex_artifact *artifact,
         done += (size_t)n;
     }
 
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+/* Contract: copies open-time identity and performs no IO or allocation. */
+int yvex_artifact_snapshot_get(const yvex_artifact *artifact,
+                               yvex_artifact_snapshot *out,
+                               yvex_error *err)
+{
+    if (!artifact || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_artifact_snapshot_get",
+                       "artifact and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    *out = artifact->snapshot;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+/*
+ * Contract: stats both the borrowed open descriptor and its path, mutates no
+ * state, and fails closed when either identity differs from open time.
+ */
+int yvex_artifact_snapshot_validate(const yvex_artifact *artifact,
+                                    yvex_artifact_snapshot *current,
+                                    yvex_error *err)
+{
+    struct stat open_st;
+    struct stat path_st;
+    yvex_artifact_snapshot open_snapshot;
+    yvex_artifact_snapshot path_snapshot;
+
+    if (!artifact) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_artifact_snapshot_validate",
+                       "artifact is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (fstat(artifact->fd, &open_st) != 0 || !S_ISREG(open_st.st_mode)) {
+        yvex_error_set(err, YVEX_ERR_IO, "yvex_artifact_snapshot_validate",
+                       "artifact-identity-drift: opened file cannot be restated");
+        return YVEX_ERR_IO;
+    }
+    snapshot_from_stat(&open_st, &open_snapshot);
+    if (current) *current = open_snapshot;
+    if (!snapshot_equal(&artifact->snapshot, &open_snapshot)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_artifact_snapshot_validate",
+                       "artifact-identity-drift: opened file changed after admission");
+        return YVEX_ERR_FORMAT;
+    }
+    if (stat(artifact->path, &path_st) != 0 || !S_ISREG(path_st.st_mode)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_artifact_snapshot_validate",
+                       "artifact-identity-drift: artifact path no longer names the opened file");
+        return YVEX_ERR_FORMAT;
+    }
+    snapshot_from_stat(&path_st, &path_snapshot);
+    if (!snapshot_equal(&artifact->snapshot, &path_snapshot)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_artifact_snapshot_validate",
+                       "artifact-identity-drift: artifact path identity changed");
+        return YVEX_ERR_FORMAT;
+    }
     yvex_error_clear(err);
     return YVEX_OK;
 }

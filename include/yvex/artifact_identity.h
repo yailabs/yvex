@@ -35,6 +35,11 @@ int yvex_artifact_identity_read(const char *path,
                                 yvex_artifact_file_identity *out,
                                 yvex_error *err);
 
+/* Hashes the exact already-opened artifact snapshot through positioned reads. */
+int yvex_artifact_identity_read_open(const yvex_artifact *artifact,
+                                     yvex_artifact_file_identity *out,
+                                     yvex_error *err);
+
 int yvex_artifact_sha256_hex_bytes(const unsigned char *data,
                                    unsigned long long len,
                                    char out_hex[YVEX_SHA256_HEX_CAP],

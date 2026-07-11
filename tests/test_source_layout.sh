@@ -308,6 +308,7 @@ test -f src/cli/commands/yvex_conversion_cli.c
 test -f src/gguf/families.h
 test -f src/gguf/quant.c
 test -f include/yvex/gguf_qtype.h
+test -f include/yvex/gguf_layout.h
 test -f src/gguf/yvex_gguf_private.h
 test -f src/gguf/yvex_gguf_container.c
 test -f src/gguf/yvex_gguf_metadata.c
@@ -320,6 +321,8 @@ test -f src/gguf/yvex_gguf_roundtrip.c
 test -f src/gguf/yvex_gguf_name_map.c
 test -f src/gguf/yvex_gguf_layout_map.c
 test -f src/gguf/yvex_gguf_descriptor.c
+test -f src/gguf/yvex_gguf_layout_integrity.c
+test -f src/gguf/yvex_gguf_layout_integrity.h
 test -f src/gguf/yvex_gguf_report.c
 test -x tests/test_gguf_artifact_abi.sh
 test -f tests/unit/gguf_qtype_abi.c

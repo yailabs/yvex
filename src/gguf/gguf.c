@@ -726,7 +726,7 @@ static int parse_metadata(yvex_gguf *gguf, yvex_file_cursor *cur)
     return YVEX_OK;
 }
 
-/* Contract: derives and validates local alignment policy from parsed metadata. */
+/* Contract: decodes alignment type/value; global admission is layout-owned. */
 static int derive_alignment(yvex_gguf *gguf, yvex_file_cursor *cur)
 {
     const yvex_gguf_value *value;
@@ -736,13 +736,12 @@ static int derive_alignment(yvex_gguf *gguf, yvex_file_cursor *cur)
     if (!value) return YVEX_OK;
     if (yvex_gguf_value_type_of(value) != YVEX_GGUF_VALUE_UINT32 ||
         yvex_gguf_value_as_u64(value, &alignment) != YVEX_OK ||
-        alignment == 0ull || alignment > (unsigned long long)UINT_MAX ||
-        (alignment % 8ull) != 0ull) {
+        alignment == 0ull || alignment > (unsigned long long)UINT_MAX) {
         cur->section = YVEX_GGUF_PARSE_SECTION_METADATA;
         return cursor_fail(cur, YVEX_GGUF_PARSE_INVALID_ALIGNMENT,
                            YVEX_GGUF_PARSE_SECTION_METADATA,
                            "gguf.metadata.alignment",
-                           "general.alignment must be uint32 and a nonzero multiple of eight");
+                           "general.alignment must be uint32 and nonzero");
     }
     gguf->alignment = (unsigned int)alignment;
     return YVEX_OK;
@@ -867,7 +866,7 @@ static int parse_tensors(yvex_gguf *gguf, yvex_file_cursor *cur)
         rc = cursor_read_u64le(cur, &tensor->relative_offset, "gguf.tensor.offset",
                                "truncated GGUF tensor relative offset");
         if (rc != YVEX_OK) return rc;
-        if ((tensor->relative_offset & ((unsigned long long)gguf->alignment - 1ull)) != 0ull) {
+        if ((tensor->relative_offset % (unsigned long long)gguf->alignment) != 0ull) {
             return cursor_fail(cur, YVEX_GGUF_PARSE_INVALID_ALIGNMENT,
                                YVEX_GGUF_PARSE_SECTION_TENSOR_INFO,
                                "gguf.tensor.offset", "GGUF tensor relative offset is misaligned");

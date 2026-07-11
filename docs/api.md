@@ -35,7 +35,7 @@ The umbrella header collects the supported public header groups.
 | Area | Headers | Purpose |
 | --- | --- | --- |
 | Core | `version.h`, `status.h`, `error.h`, `log.h` | Version values, status codes, bounded error reports, and logging contracts. |
-| Artifacts and GGUF | `artifact.h`, `artifact_identity.h`, `artifact_integrity.h`, `artifact_naming.h`, `gguf.h`, `gguf_qtype.h`, `gguf_emit.h`, `gguf_template.h` | Local artifact handling, GGUF parsing, canonical qtype storage geometry, controlled emission, identity evidence, and integrity reports. |
+| Artifacts and GGUF | `artifact.h`, `artifact_identity.h`, `artifact_integrity.h`, `artifact_naming.h`, `gguf.h`, `gguf_layout.h`, `gguf_qtype.h`, `gguf_emit.h`, `gguf_template.h` | Local artifact handling, GGUF parsing, canonical global layout and qtype storage geometry, controlled emission, identity evidence, and integrity reports. |
 | Model and tensors | `dtype.h`, `tensor.h`, `model.h`, `weights.h` | Dtype facts, tensor descriptors, model descriptors, selected weights, and backend-resident weight tables. |
 | Tokenizer and input | `tokenizer.h`, `token_input.h`, `prompt.h` | Tokenizer diagnostics, explicit token input objects, prompt rendering, and input normalization boundaries. |
 | Graph and planning | `graph.h`, `op.h`, `planner.h`, `memory_plan.h` | Graph reports, operation boundaries, planning structures, and memory planning summaries. |
@@ -112,8 +112,11 @@ until `yvex_gguf_close`.
 The structural reader accepts configurable count, string, array, depth,
 owned-memory, and structural-byte budgets. Its typed result identifies code,
 section, byte offset, and record index. A successful structural parse reads no
-tensor payload bytes and does not prove global layout integrity or artifact
-support.
+tensor payload bytes. `yvex_gguf_layout_validate` then borrows the same opened
+artifact and parsed view to validate power-of-two alignment, exact
+directory-order padded offsets, zero padding, aggregate file span, canonical
+tail policy, and file snapshot stability. It reads zero tensor payload bytes.
+Neither parse nor layout acceptance proves complete model-artifact support.
 
 Complete model artifacts remain operator-local. The API can open, identify,
 register, validate, and report on local artifact files, while model weights stay
@@ -215,6 +218,12 @@ computes `tensor_data_offset + tensor_relative_offset`, absolute start,
 absolute end, file bounds, and alignment status before payload-reading paths
 access tensor bytes. A flattened element count cannot admit a multidimensional
 block-quantized tensor.
+
+`yvex_gguf_layout_validate` is the canonical global admission step. It validates
+directory order without sorting, exact padded continuation, required zero
+padding, aggregate raw and padded spans, truncation, noncanonical trailing
+bytes, and artifact snapshot drift in one linear pass. Its owned result remains
+valid after the borrowed artifact and GGUF view are closed.
 
 `yvex_selected_embedding_shape_validate` interprets `token_embd.weight` as
 `dims[0] = hidden_size` and `dims[1] = vocab_size`. It validates a token id and

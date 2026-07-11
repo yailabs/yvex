@@ -117,6 +117,7 @@ static int write_q4_fixture(const char *path, unsigned long long row_width)
     while ((len % 32u) != 0u) buf[len++] = 0u;
     memset(buf + len, 0, 36u);
     len += 36u;
+    while ((len % 32u) != 0u) buf[len++] = 0u;
 
     fp = fopen(path, "wb");
     if (!fp) return 0;
@@ -314,7 +315,7 @@ static int test_report_integration(void)
                      "qtype report total storage bytes");
     YVEX_TEST_ASSERT(report.range.total_expected_storage_bytes == 128ull,
                      "range owner consumes canonical bytes");
-    YVEX_TEST_ASSERT_STREQ(report.next_row, YVEX_GGUF_ABI_NEXT_ROW,
+    YVEX_TEST_ASSERT_STREQ(report.next_row, "V010.CUDA.FAILCLOSED.0",
                            "artifact reader next row");
 
     geometry = yvex_gguf_qtype_geometry_find(YVEX_GGUF_QTYPE_Q4_0);

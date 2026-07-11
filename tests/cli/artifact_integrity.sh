@@ -122,7 +122,7 @@ contains "$OUT_DIR/truncated.out" "error_0_code: file-too-small"
 "$YVEX_BIN" integrity check --model "$RANGE_SHORT" \
   >"$OUT_DIR/range.out" 2>"$OUT_DIR/range.err" && fail "range-bad file passed" || true
 contains "$OUT_DIR/range.out" "integrity_status: fail"
-contains "$OUT_DIR/range.out" "error_0_code: tensor-range-out-of-file"
+contains "$OUT_DIR/range.out" "error_0_code: tensor-payload-truncated"
 contains "$OUT_DIR/range.out" "tensor_ranges_checked: 1"
 contains "$OUT_DIR/range.out" "tensor_ranges_invalid: 1"
 contains "$OUT_DIR/range.out" "error_0_relative_offset:"
@@ -152,12 +152,12 @@ contains "$OUT_DIR/token-range.out" "error_0_code: token-out-of-range"
 
 "$YVEX_BIN" materialize --model tests/fixtures/gguf/tensor-offset-out-of-bounds.gguf --backend cpu \
   >"$OUT_DIR/materialize-range.out" 2>"$OUT_DIR/materialize-range.err" && fail "materialize corrupt range passed" || true
-contains "$OUT_DIR/materialize-range.err" "absolute offset"
+contains "$OUT_DIR/materialize-range.err" "first-offset-not-zero"
 not_contains "$OUT_DIR/materialize-range.out" "status: weights-materialized"
 
 "$YVEX_BIN" graph --model tests/fixtures/gguf/tensor-offset-out-of-bounds.gguf --backend cpu --execute-partial --partial-token 0 \
   >"$OUT_DIR/graph-range.out" 2>"$OUT_DIR/graph-range.err" && fail "graph corrupt range passed" || true
-contains "$OUT_DIR/graph-range.err" "absolute offset"
+contains "$OUT_DIR/graph-range.err" "first-offset-not-zero"
 not_contains "$OUT_DIR/graph-range.out" "status: real-partial-graph-executed"
 
 echo "cli artifact integrity: ok"

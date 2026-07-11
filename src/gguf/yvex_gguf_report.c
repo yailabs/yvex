@@ -10,11 +10,12 @@
  *
  * Does not own:
  *   GGUF parsing, failure classification, CLI rendering, file writing, global
- *   layout integrity, runtime generation, eval, benchmark, or release claims.
+ *   layout policy, runtime generation, eval, benchmark, or release claims.
  *
  * Invariants:
  *   report construction never turns a rejected parse into successful artifact
- *   validity; accepted sections project the same immutable parsed view.
+ *   validity; accepted sections project the same immutable parsed view and
+ *   canonical layout result.
  *
  * Boundary:
  *   a successful structural report is not complete artifact integrity,
@@ -57,6 +58,7 @@ void yvex_gguf_abi_report_init(yvex_gguf_abi_report *report, const char *path)
     yvex_gguf_metadata_abi_init(&report->metadata);
     yvex_gguf_tensor_info_abi_init(&report->tensor_info);
     yvex_gguf_qtype_abi_init(&report->qtype);
+    report->layout.code = YVEX_GGUF_LAYOUT_INVALID_ARGUMENT;
     yvex_gguf_range_fact_init(&report->range);
     report->descriptor.status = YVEX_GGUF_ABI_SECTION_NOT_EVALUATED;
     report->descriptor.reason = "GGUF structural descriptor not evaluated";
@@ -157,7 +159,15 @@ int yvex_gguf_artifact_abi_report_build(const char *path,
                                 "gguf.qtype", reason, active_err);
         goto done;
     }
-    if (!yvex_gguf_range_fact_from_gguf(gguf, &report->range, &reason)) {
+    rc = yvex_gguf_layout_validate(artifact, gguf, &report->layout, active_err);
+    if (rc != YVEX_OK) {
+        report->range.status = YVEX_GGUF_ABI_SECTION_REFUSED;
+        report->range.reason = report->layout.reason;
+        rc = projection_failure(report, YVEX_GGUF_ABI_SECTION_REFUSED,
+                                "gguf.layout", report->layout.reason, active_err);
+        goto done;
+    }
+    if (!yvex_gguf_range_fact_from_layout(&report->layout, &report->range, &reason)) {
         rc = projection_failure(report, report->range.status,
                                 "gguf.range", reason, active_err);
         goto done;
@@ -178,7 +188,7 @@ int yvex_gguf_artifact_abi_report_build(const char *path,
     report->parser_status = YVEX_OK;
     copy_text(report->failure_where, sizeof(report->failure_where), "");
     copy_text(report->failure_reason, sizeof(report->failure_reason),
-              "GGUF structural reader accepted input; global layout integrity remains blocked");
+              "GGUF structural reader and canonical global layout accepted input");
     yvex_error_clear(active_err);
     rc = YVEX_OK;
 

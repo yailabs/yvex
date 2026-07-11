@@ -256,6 +256,17 @@ tensors, and integrity preflight project that view; they may not reparse or
 classify failures from error text. Global tensor order, padding, overlap, and
 aggregate layout admission remain owned by V010.GGUF.LAYOUT.INTEGRITY.1.
 
+V010.GGUF.LAYOUT.INTEGRITY.1 makes `include/yvex/gguf_layout.h` and
+`src/gguf/yvex_gguf_layout_integrity.c` the sole global GGUF layout-admission
+owner. Alignment must be nonzero and power-of-two. Directory order must equal
+physical order, the first relative tensor offset must be zero, and every next
+offset must equal the preceding qtype-sized padded end. Required directory and
+tensor padding must be zero. Integrity, materialization, graph, runtime, and
+report owners consume the typed result; they may not independently sort,
+recalculate, or infer global layout from local ranges. Layout validation reads
+padding only and zero tensor payload bytes. Layout admission is not complete
+model-artifact support, payload trust, materialization, or runtime support.
+
 src/artifact/yvex_artifact.c
   read-only file handles, explicit mapping, positioned artifact IO, inspect,
   metadata, and tensor command surfaces
