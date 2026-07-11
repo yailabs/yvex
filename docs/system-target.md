@@ -44,7 +44,7 @@ domain algorithms. No writer owns command output.
 
 | Area | Current state | Target state | Next row |
 | --- | --- | --- | --- |
-| GGUF artifact ABI | `.0` reopened; tiny-fixture evidence only | complete DeepSeek container/metadata/tensor-info ABI | V010.GGUF.ARTIFACT.ABI.1 |
+| GGUF artifact ABI | scalable file-backed v3 reader, typed refusal, target-scale budgets, immutable view, and zero payload reads | preserve the structural reader as input to global layout validation | see `PROJECT.md` |
 | GGUF qtype storage | pinned IDs 0-39, exact row geometry, and typed refusal are canonical | preserve storage independently from decoder, quantizer, emitter, and compute support | see `PROJECT.md` |
 | GGUF layout integrity | bounded range fixtures | complete-artifact global layout and corruption refusal | V010.GGUF.LAYOUT.INTEGRITY.1 |
 | CUDA truth | fallback PTX can expose no-op entry points | fail-closed advertised capability with reference parity | V010.CUDA.FAILCLOSED.0 |
@@ -105,12 +105,15 @@ domain algorithms. No writer owns command output.
 | Owner | Boundary |
 | --- | --- |
 | `include/yvex/gguf_qtype.h` | public qtype identity, admission, and typed storage result |
+| `include/yvex/artifact.h` | read-only file handle, optional explicit mapping, and exact positioned reads |
+| `include/yvex/gguf.h` | public reader budgets, typed parse result, immutable view, metrics, and accessors |
+| `src/gguf/gguf.c` | file-backed GGUF v3 decoding and owned metadata/tensor view |
 | `src/gguf/yvex_gguf_container.c` | magic/version/container ABI |
 | `src/gguf/yvex_gguf_metadata.c` | metadata key/value ABI |
 | `src/gguf/yvex_gguf_tensor_info.c` | tensor_info name/rank/type/shape ABI |
 | `src/gguf/yvex_gguf_qtype.c` | pinned qtype registry and row-aware tensor storage |
 | `src/gguf/yvex_gguf_range_map.c` | absolute range/alignment checks |
-| `src/gguf/yvex_gguf_reader.c` | parser-result reader facts |
+| `src/gguf/yvex_gguf_reader.c` | reader policy, resource defaults, typed failure ABI, and report projection |
 | `src/gguf/yvex_gguf_writer.c` | writer refusal until writer row |
 | `src/gguf/yvex_gguf_roundtrip.c` | writer-reader equivalence boundary |
 | `src/gguf/yvex_gguf_name_map.c` | emitted GGUF tensor names |
@@ -156,12 +159,15 @@ domain algorithms. No writer owns command output.
 | Render | `src/cli/render/yvex_<surface>_render.c` |
 | Operator IO | `src/cli/io/*` |
 
-## GGUF Container ABI Boundary
+## GGUF Structural Reader Boundary
 
-The container, metadata, tensor-info, and reader owners may expose bounded
-typed facts and tiny-fixture validation. That proof does not establish the
-complete DeepSeek metadata, tensor-directory, global layout, writer, or
-roundtrip contract. Current milestone state belongs only to `PROJECT.md`.
+The artifact handle keeps a read-only file descriptor and maps the full file
+only when a payload consumer explicitly requests `map`. The GGUF reader uses
+exact positioned reads for the variable-size header, metadata, and tensor
+directory, then owns copied length-aware values and names until close. Reader
+metrics distinguish structural and payload bytes; structural open always
+reports zero payload bytes. Local tensor spans are represented, but cross-tensor
+order, padding, overlap, and aggregate layout admission remain separate.
 
 ## GGUF Qtype ABI Boundary
 

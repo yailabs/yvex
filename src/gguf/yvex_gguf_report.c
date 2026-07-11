@@ -1,50 +1,38 @@
 /*
- * yvex_gguf_report.c - typed GGUF report facts.
+ * yvex_gguf_report.c - typed projection of canonical GGUF reader facts.
  *
  * Owner:
- *   src/gguf
+ *   src/gguf report projection
  *
  * Owns:
- *   typed GGUF report construction for ABI/report-only and unsupported
- *   writer/roundtrip/materialization states.
+ *   report construction from one operational reader result and explicit
+ *   unsupported writer/roundtrip/materialization states.
  *
  * Does not own:
- *   CLI rendering, operator byte output, file writing, runtime generation,
- *   eval, benchmark, or release claims.
+ *   GGUF parsing, failure classification, CLI rendering, file writing, global
+ *   layout integrity, runtime generation, eval, benchmark, or release claims.
  *
  * Invariants:
- *   reports carry facts only and do not serialize user-visible output.
+ *   report construction never turns a rejected parse into successful artifact
+ *   validity; accepted sections project the same immutable parsed view.
  *
  * Boundary:
- *   GGUF reports do not imply writer, roundtrip, materialization, or runtime
- *   capability.
+ *   a successful structural report is not complete artifact integrity,
+ *   materialization, or runtime capability.
  */
 #include "yvex_gguf_private.h"
 
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 
 static void copy_text(char *dst, size_t cap, const char *text)
 {
     if (!dst || cap == 0u) return;
-    if (!text) text = "";
-    (void)snprintf(dst, cap, "%s", text);
+    (void)snprintf(dst, cap, "%s", text ? text : "");
 }
 
-static unsigned int read_magic_hint(const yvex_artifact *artifact)
-{
-    const unsigned char *data;
-
-    if (!artifact || yvex_artifact_size(artifact) < 4ull) return 0u;
-    data = yvex_artifact_data(artifact);
-    if (!data) return 0u;
-    return ((unsigned int)data[0]) |
-           ((unsigned int)data[1] << 8) |
-           ((unsigned int)data[2] << 16) |
-           ((unsigned int)data[3] << 24);
-}
-
-/* Contract: initializes a GGUF report fact without allocation or rendering. */
+/* Contract: initializes one generic GGUF capability report without IO. */
 void yvex_gguf_report_fact_init(yvex_gguf_report_fact *report,
                                 const char *kind,
                                 const char *status,
@@ -55,13 +43,14 @@ void yvex_gguf_report_fact_init(yvex_gguf_report_fact *report,
     report->kind = kind ? kind : "gguf";
     report->status = status ? status : "unsupported";
     report->reason = reason ? reason : "GGUF capability is future-owned";
-    report->next_row = next_row ? next_row : "V010.GGUF.ARTIFACT.ABI.0";
+    report->next_row = next_row ? next_row : YVEX_GGUF_ABI_NEXT_ROW;
 }
 
-/* Contract: initializes a typed GGUF ABI report with no rendering or IO. */
+/* Contract: initializes a fail-closed ABI report with no parsing or rendering. */
 void yvex_gguf_abi_report_init(yvex_gguf_abi_report *report, const char *path)
 {
     if (!report) return;
+    memset(report, 0, sizeof(*report));
     report->path = path;
     report->status = YVEX_GGUF_ABI_SECTION_NOT_EVALUATED;
     yvex_gguf_container_abi_init(&report->container);
@@ -70,124 +59,108 @@ void yvex_gguf_abi_report_init(yvex_gguf_abi_report *report, const char *path)
     yvex_gguf_qtype_abi_init(&report->qtype);
     yvex_gguf_range_fact_init(&report->range);
     report->descriptor.status = YVEX_GGUF_ABI_SECTION_NOT_EVALUATED;
-    report->descriptor.reason = "GGUF descriptor not evaluated";
+    report->descriptor.reason = "GGUF structural descriptor not evaluated";
     report->parser_status = YVEX_OK;
-    report->failure_where[0] = '\0';
-    report->failure_reason[0] = '\0';
+    yvex_gguf_parse_result_reset(&report->parse_result);
     report->next_row = YVEX_GGUF_ABI_NEXT_ROW;
 }
 
-/* Contract: builds a typed report for GGUF container/metadata/tensor_info ABI. */
+static int projection_failure(yvex_gguf_abi_report *report,
+                              yvex_gguf_abi_section_status status,
+                              const char *where,
+                              const char *reason,
+                              yvex_error *err)
+{
+    report->status = status;
+    report->parser_status = YVEX_ERR_FORMAT;
+    copy_text(report->failure_where, sizeof(report->failure_where), where);
+    copy_text(report->failure_reason, sizeof(report->failure_reason), reason);
+    yvex_error_set(err, YVEX_ERR_FORMAT, where, reason);
+    return YVEX_ERR_FORMAT;
+}
+
+/*
+ * Contract: opens one file-backed reader view, projects every structural
+ * section once, and returns the operational parse status to the caller.
+ */
 int yvex_gguf_artifact_abi_report_build(const char *path,
                                         yvex_gguf_abi_report *report,
                                         yvex_error *err)
 {
-    yvex_artifact_options options;
+    yvex_artifact_options artifact_options;
     yvex_artifact *artifact = NULL;
     yvex_gguf *gguf = NULL;
-    yvex_gguf_header header;
     yvex_error local_err;
-    yvex_error *parse_err;
+    yvex_error *active_err = err ? err : &local_err;
+    yvex_gguf_parse_result parse_result;
+    const yvex_gguf_header *header;
+    const yvex_gguf_reader_stats *stats;
     const char *reason = NULL;
     int rc;
 
     if (!report) {
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_gguf_artifact_abi_report_build", "report is required");
+        yvex_error_set(active_err, YVEX_ERR_INVALID_ARG,
+                       "yvex_gguf_artifact_abi_report_build", "report is required");
         return YVEX_ERR_INVALID_ARG;
     }
     yvex_gguf_abi_report_init(report, path);
     if (!path || path[0] == '\0') {
-        report->status = YVEX_GGUF_ABI_SECTION_NOT_PRESENT;
-        report->container.status = YVEX_GGUF_ABI_SECTION_NOT_PRESENT;
-        report->container.reason = "GGUF path is required";
-        return YVEX_OK;
+        yvex_gguf_reader_fail(&report->parse_result,
+                              YVEX_GGUF_PARSE_INVALID_ARGUMENT,
+                              YVEX_GGUF_PARSE_SECTION_FILE,
+                              0ull, ULLONG_MAX, active_err,
+                              "yvex_gguf_artifact_abi_report_build",
+                              "GGUF path is required");
+        yvex_gguf_reader_classify_error(YVEX_ERR_INVALID_ARG,
+                                        &report->parse_result, active_err, report);
+        return YVEX_ERR_INVALID_ARG;
     }
 
-    parse_err = err ? err : &local_err;
-    yvex_error_clear(parse_err);
-    memset(&header, 0, sizeof(header));
-
-    memset(&options, 0, sizeof(options));
-    options.path = path;
-    options.readonly = 1;
-
-    rc = yvex_artifact_open(&artifact, &options, parse_err);
+    memset(&artifact_options, 0, sizeof(artifact_options));
+    artifact_options.path = path;
+    artifact_options.readonly = 1;
+    rc = yvex_artifact_open(&artifact, &artifact_options, active_err);
     if (rc != YVEX_OK) {
-        yvex_gguf_reader_classify_error(rc, parse_err, report);
-        return YVEX_OK;
+        yvex_gguf_parse_result_reset(&parse_result);
+        yvex_gguf_reader_fail(&parse_result, YVEX_GGUF_PARSE_FILE_UNREADABLE,
+                              YVEX_GGUF_PARSE_SECTION_FILE, 0ull, ULLONG_MAX,
+                              active_err, "gguf.file", "GGUF file is missing or unreadable");
+        yvex_gguf_reader_classify_error(rc, &parse_result, active_err, report);
+        return rc;
     }
 
-    report->container.magic = read_magic_hint(artifact);
-    rc = yvex_gguf_read_header(artifact, &header, parse_err);
+    rc = yvex_gguf_open_ex(&gguf, artifact, NULL, &parse_result, active_err);
     if (rc != YVEX_OK) {
-        report->container.version = header.version;
-        yvex_gguf_reader_classify_error(rc, parse_err, report);
+        yvex_gguf_reader_classify_error(rc, &parse_result, active_err, report);
         yvex_artifact_close(artifact);
-        return YVEX_OK;
+        return rc;
     }
-
-    yvex_gguf_container_abi_from_header(&header, &report->container);
-    rc = yvex_gguf_open(&gguf, artifact, parse_err);
-    if (rc != YVEX_OK) {
-        yvex_gguf_reader_classify_error(rc, parse_err, report);
-        yvex_artifact_close(artifact);
-        return YVEX_OK;
-    }
+    report->parse_result = parse_result;
+    header = yvex_gguf_header_view(gguf);
+    stats = yvex_gguf_reader_stats_view(gguf);
+    if (stats) report->reader_stats = *stats;
+    yvex_gguf_container_abi_from_header(header, &report->container);
+    report->container.magic = YVEX_GGUF_MAGIC;
 
     if (!yvex_gguf_metadata_abi_from_gguf(gguf, &report->metadata, &reason)) {
-        report->status = report->metadata.status;
-        copy_text(report->failure_reason, sizeof(report->failure_reason), reason);
-        yvex_gguf_descriptor_abi_from_sections(&report->container,
-                                               &report->metadata,
-                                               &report->tensor_info,
-                                               &report->qtype,
-                                               &report->range,
-                                               &report->descriptor);
-        yvex_gguf_close(gguf);
-        yvex_artifact_close(artifact);
-        return YVEX_OK;
+        rc = projection_failure(report, report->metadata.status,
+                                "gguf.metadata", reason, active_err);
+        goto done;
     }
-
     if (!yvex_gguf_tensor_info_abi_from_gguf(gguf, &report->tensor_info, &reason)) {
-        report->status = report->tensor_info.status;
-        copy_text(report->failure_reason, sizeof(report->failure_reason), reason);
-        yvex_gguf_descriptor_abi_from_sections(&report->container,
-                                               &report->metadata,
-                                               &report->tensor_info,
-                                               &report->qtype,
-                                               &report->range,
-                                               &report->descriptor);
-        yvex_gguf_close(gguf);
-        yvex_artifact_close(artifact);
-        return YVEX_OK;
+        rc = projection_failure(report, report->tensor_info.status,
+                                "gguf.tensor-info", reason, active_err);
+        goto done;
     }
-
     if (!yvex_gguf_qtype_abi_from_gguf(gguf, &report->qtype, &reason)) {
-        report->status = report->qtype.status;
-        copy_text(report->failure_reason, sizeof(report->failure_reason), reason);
-        yvex_gguf_descriptor_abi_from_sections(&report->container,
-                                               &report->metadata,
-                                               &report->tensor_info,
-                                               &report->qtype,
-                                               &report->range,
-                                               &report->descriptor);
-        yvex_gguf_close(gguf);
-        yvex_artifact_close(artifact);
-        return YVEX_OK;
+        rc = projection_failure(report, report->qtype.status,
+                                "gguf.qtype", reason, active_err);
+        goto done;
     }
-
-    if (!yvex_gguf_range_fact_from_gguf(artifact, gguf, &report->range, &reason)) {
-        report->status = report->range.status;
-        copy_text(report->failure_reason, sizeof(report->failure_reason), reason);
-        yvex_gguf_descriptor_abi_from_sections(&report->container,
-                                               &report->metadata,
-                                               &report->tensor_info,
-                                               &report->qtype,
-                                               &report->range,
-                                               &report->descriptor);
-        yvex_gguf_close(gguf);
-        yvex_artifact_close(artifact);
-        return YVEX_OK;
+    if (!yvex_gguf_range_fact_from_gguf(gguf, &report->range, &reason)) {
+        rc = projection_failure(report, report->range.status,
+                                "gguf.range", reason, active_err);
+        goto done;
     }
 
     yvex_gguf_descriptor_abi_from_sections(&report->container,
@@ -196,13 +169,29 @@ int yvex_gguf_artifact_abi_report_build(const char *path,
                                            &report->qtype,
                                            &report->range,
                                            &report->descriptor);
-    report->status = YVEX_GGUF_ABI_SECTION_REPORT_ONLY;
+    if (report->descriptor.status != YVEX_GGUF_ABI_SECTION_OK) {
+        rc = projection_failure(report, report->descriptor.status,
+                                "gguf.descriptor", report->descriptor.reason, active_err);
+        goto done;
+    }
+    report->status = YVEX_GGUF_ABI_SECTION_OK;
     report->parser_status = YVEX_OK;
     copy_text(report->failure_where, sizeof(report->failure_where), "");
-    copy_text(report->failure_reason, sizeof(report->failure_reason), "GGUF artifact ABI accepted at report-only boundary");
+    copy_text(report->failure_reason, sizeof(report->failure_reason),
+              "GGUF structural reader accepted input; global layout integrity remains blocked");
+    yvex_error_clear(active_err);
+    rc = YVEX_OK;
 
+done:
+    if (rc != YVEX_OK) {
+        yvex_gguf_descriptor_abi_from_sections(&report->container,
+                                               &report->metadata,
+                                               &report->tensor_info,
+                                               &report->qtype,
+                                               &report->range,
+                                               &report->descriptor);
+    }
     yvex_gguf_close(gguf);
     yvex_artifact_close(artifact);
-    yvex_error_clear(parse_err);
-    return YVEX_OK;
+    return rc;
 }

@@ -671,57 +671,86 @@ static const char *range_error_code(const yvex_error *err)
     return "tensor-range-invalid";
 }
 
-static void map_parse_error_to_report(const yvex_error *source,
-                                      yvex_artifact_integrity_report *report)
+static void map_parse_result_to_report(const yvex_gguf_parse_result *result,
+                                       const yvex_error *source,
+                                       yvex_artifact_integrity_report *report)
 {
-    const char *where = yvex_error_where(source);
     const char *message = yvex_error_message(source);
     const char *code = "tensor-directory-parse-failed";
-    yvex_status status = yvex_error_code(source);
 
-    if (status == YVEX_ERR_IO) {
-        code = "file-open-failed";
-    } else if ((strstr(message, "requires") && strstr(message, "header")) ||
-               strstr(message, "magic out of bounds")) {
-        code = "file-too-small";
-    } else if (strstr(message, "bad GGUF magic")) {
-        code = "bad-magic";
-    } else if (strstr(message, "unsupported GGUF version")) {
-        code = "unsupported-version";
-    } else if (strstr(message, "string out of bounds")) {
-        code = "malformed-string";
-    } else if (strstr(message, "tensor name out of bounds")) {
-        code = "tensor-directory-parse-failed";
-    } else if (strstr(message, "metadata")) {
-        code = "metadata-parse-failed";
-    } else if (strstr(message, "empty tensor name") ||
-               strstr(message, "tensor name is empty")) {
-        code = "empty-tensor-name";
-    } else if (strstr(message, "tensor rank")) {
-        code = "rank-out-of-range";
-    } else if (strstr(message, "zero tensor dimension")) {
-        code = "zero-dimension";
-    } else if (strstr(message, "dimension product overflow")) {
-        code = "element-count-overflow";
-    } else if (strstr(message, "row-block-mismatch")) {
-        code = "row-block-mismatch";
-    } else if (strstr(message, "row-byte-overflow")) {
-        code = "row-byte-overflow";
-    } else if (strstr(message, "row-count-overflow")) {
-        code = "row-count-overflow";
-    } else if (strstr(message, "total-byte-overflow")) {
-        code = "total-byte-overflow";
-    } else if (strstr(message, "storage byte overflow") ||
-               strstr(message, "block storage byte overflow")) {
-        code = "tensor-byte-count-overflow";
-    } else if (strstr(message, "not aligned")) {
-        code = "tensor-alignment-invalid";
-    } else if (strstr(message, "absolute offset overflow")) {
-        code = "tensor-absolute-offset-overflow";
-    } else if (strstr(message, "offset") || strstr(message, "out of bounds")) {
-        code = "tensor-range-out-of-file";
-    } else if (where && strstr(where, "metadata")) {
-        code = "metadata-parse-failed";
+    if (!result) {
+        code = yvex_error_code(source) == YVEX_ERR_IO
+                   ? "file-open-failed" : code;
+    } else {
+        switch (result->code) {
+        case YVEX_GGUF_PARSE_SHORT_READ:
+            code = result->section == YVEX_GGUF_PARSE_SECTION_CONTAINER
+                       ? "file-too-small" :
+                   result->section == YVEX_GGUF_PARSE_SECTION_METADATA
+                       ? "metadata-parse-failed" : "tensor-directory-parse-failed";
+            break;
+        case YVEX_GGUF_PARSE_INVALID_MAGIC:
+            code = "bad-magic";
+            break;
+        case YVEX_GGUF_PARSE_UNSUPPORTED_VERSION:
+            code = "unsupported-version";
+            break;
+        case YVEX_GGUF_PARSE_MALFORMED_KEY:
+        case YVEX_GGUF_PARSE_EMPTY_METADATA_KEY:
+        case YVEX_GGUF_PARSE_DUPLICATE_METADATA_KEY:
+        case YVEX_GGUF_PARSE_UNSUPPORTED_METADATA_TYPE:
+        case YVEX_GGUF_PARSE_MALFORMED_VALUE:
+        case YVEX_GGUF_PARSE_MALFORMED_ARRAY:
+            code = "metadata-parse-failed";
+            break;
+        case YVEX_GGUF_PARSE_MALFORMED_STRING:
+            code = "malformed-string";
+            break;
+        case YVEX_GGUF_PARSE_INVALID_RANK:
+            code = "rank-out-of-range";
+            break;
+        case YVEX_GGUF_PARSE_INVALID_DIMENSION:
+            code = "zero-dimension";
+            break;
+        case YVEX_GGUF_PARSE_INVALID_ALIGNMENT:
+            code = "tensor-alignment-invalid";
+            break;
+        case YVEX_GGUF_PARSE_MALFORMED_TENSOR_NAME:
+            code = "tensor-directory-parse-failed";
+            break;
+        case YVEX_GGUF_PARSE_EMPTY_TENSOR_NAME:
+            code = "empty-tensor-name";
+            break;
+        case YVEX_GGUF_PARSE_DUPLICATE_TENSOR_NAME:
+            code = "duplicate-tensor-name";
+            break;
+        case YVEX_GGUF_PARSE_OFFSET_OVERFLOW:
+            code = "tensor-absolute-offset-overflow";
+            break;
+        case YVEX_GGUF_PARSE_ELEMENT_COUNT_OVERFLOW:
+        case YVEX_GGUF_PARSE_ROW_COUNT_OVERFLOW:
+            code = "element-count-overflow";
+            break;
+        case YVEX_GGUF_PARSE_ROW_BYTE_OVERFLOW:
+            code = "row-byte-overflow";
+            break;
+        case YVEX_GGUF_PARSE_TOTAL_BYTE_OVERFLOW:
+            code = "tensor-byte-count-overflow";
+            break;
+        case YVEX_GGUF_PARSE_INCOMPLETE_DIRECTORY:
+            code = "tensor-range-out-of-file";
+            break;
+        case YVEX_GGUF_PARSE_REFUSED_QTYPE:
+            code = "unknown-dtype";
+            break;
+        case YVEX_GGUF_PARSE_RESOURCE_LIMIT:
+        case YVEX_GGUF_PARSE_INVALID_COUNT:
+        case YVEX_GGUF_PARSE_ALLOCATION_FAILURE:
+            code = "parser-resource-refused";
+            break;
+        default:
+            break;
+        }
     }
 
     (void)add_error(report, code, "", message);
@@ -765,8 +794,6 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
 
     for (i = 0; i < yvex_tensor_table_count(tensors); ++i) {
         const yvex_tensor_info *tensor = yvex_tensor_table_at(tensors, i);
-        unsigned long long j;
-        int duplicate = 0;
         yvex_tensor_shape_accounting accounting;
         yvex_tensor_range range;
         int rc;
@@ -778,17 +805,6 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
         }
         if (!tensor->name || tensor->name[0] == '\0') {
             (void)add_error(report, "empty-tensor-name", "", "tensor name is empty");
-        }
-        for (j = 0; j < i; ++j) {
-            const yvex_tensor_info *prev = yvex_tensor_table_at(tensors, j);
-            if (prev && prev->name && tensor->name && strcmp(prev->name, tensor->name) == 0) {
-                duplicate = 1;
-                break;
-            }
-        }
-        if (duplicate) {
-            (void)add_error(report, "duplicate-tensor-name", tensor->name,
-                            "duplicate tensor name in tensor directory");
         }
         memset(&accounting, 0, sizeof(accounting));
         report->tensor_shapes_checked += 1ull;
@@ -858,6 +874,8 @@ int yvex_artifact_integrity_validate(const yvex_artifact *artifact,
                 public_code = "dtype-size-unknown";
             } else if (strcmp(code, "tensor-rank-invalid") == 0) {
                 public_code = "rank-out-of-range";
+            } else if (strcmp(code, "tensor-offset-out-of-file") == 0) {
+                public_code = "tensor-range-out-of-file";
             }
             (void)add_range_error(report, public_code, tensor->name, reason, &range);
             yvex_error_clear(err);
@@ -957,6 +975,7 @@ int yvex_artifact_integrity_check_path(const char *path,
     yvex_artifact *artifact = NULL;
     yvex_gguf *gguf = NULL;
     yvex_tensor_table *tensors = NULL;
+    yvex_gguf_parse_result parse_result;
     yvex_artifact_integrity_report local;
     yvex_artifact_integrity_report *report = out ? out : &local;
     int rc;
@@ -983,17 +1002,16 @@ int yvex_artifact_integrity_check_path(const char *path,
 
     artifact_options.path = path;
     artifact_options.readonly = 1;
-    artifact_options.map = 1;
     rc = yvex_artifact_open(&artifact, &artifact_options, err);
     if (rc != YVEX_OK) {
-        map_parse_error_to_report(err, report);
+        map_parse_result_to_report(NULL, err, report);
         apply_identity_digest(&identity, options, report);
         set_integrity_error(err, report);
         return rc;
     }
     report->file_size = yvex_artifact_size(artifact);
 
-    rc = yvex_gguf_open(&gguf, artifact, err);
+    rc = yvex_gguf_open_ex(&gguf, artifact, NULL, &parse_result, err);
     if (rc == YVEX_OK) {
         rc = yvex_tensor_table_from_gguf(&tensors, gguf, err);
     }
@@ -1001,7 +1019,7 @@ int yvex_artifact_integrity_check_path(const char *path,
         if (gguf) {
             set_basic_report(artifact, gguf, tensors, report);
         }
-        map_parse_error_to_report(err, report);
+        map_parse_result_to_report(&parse_result, err, report);
         apply_identity_digest(&identity, options, report);
         yvex_tensor_table_close(tensors);
         yvex_gguf_close(gguf);

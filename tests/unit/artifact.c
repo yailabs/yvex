@@ -50,8 +50,30 @@ int yvex_test_artifact(void)
     YVEX_TEST_ASSERT(artifact != NULL, "artifact non-null");
     YVEX_TEST_ASSERT_STREQ(yvex_artifact_path(artifact), fixture, "artifact path");
     YVEX_TEST_ASSERT(yvex_artifact_size(artifact) == 24, "artifact size");
+    YVEX_TEST_ASSERT(yvex_artifact_is_mapped(artifact) == 1, "artifact mapping explicit");
     YVEX_TEST_ASSERT(yvex_artifact_data(artifact) != NULL, "artifact data");
     yvex_artifact_close(artifact);
+
+    artifact = NULL;
+    options.map = 0;
+    rc = yvex_artifact_open(&artifact, &options, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "open file-backed artifact");
+    YVEX_TEST_ASSERT(yvex_artifact_is_mapped(artifact) == 0, "file-backed artifact not mapped");
+    YVEX_TEST_ASSERT(yvex_artifact_data(artifact) == NULL, "unmapped artifact has no payload pointer");
+    {
+        unsigned char magic[4];
+        rc = yvex_artifact_read_at(artifact, 0ull, magic, sizeof(magic), &err);
+        YVEX_TEST_ASSERT(rc == YVEX_OK, "positioned artifact read");
+        YVEX_TEST_ASSERT(memcmp(magic, "GGUF", sizeof(magic)) == 0, "positioned bytes");
+    }
+    yvex_artifact_close(artifact);
+
+    artifact = NULL;
+    options.readonly = 0;
+    rc = yvex_artifact_open(&artifact, &options, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_UNSUPPORTED, "writable artifact mode refused");
+    YVEX_TEST_ASSERT(artifact == NULL, "writable refusal leaves artifact null");
+    options.readonly = 1;
 
     artifact = NULL;
     options.path = "tests/fixtures/gguf/missing.gguf";

@@ -314,8 +314,8 @@ static int test_report_integration(void)
                      "qtype report total storage bytes");
     YVEX_TEST_ASSERT(report.range.total_expected_storage_bytes == 128ull,
                      "range owner consumes canonical bytes");
-    YVEX_TEST_ASSERT_STREQ(report.next_row, YVEX_GGUF_QTYPE_ABI_NEXT_ROW,
-                           "qtype ABI next row");
+    YVEX_TEST_ASSERT_STREQ(report.next_row, YVEX_GGUF_ABI_NEXT_ROW,
+                           "artifact reader next row");
 
     geometry = yvex_gguf_qtype_geometry_find(YVEX_GGUF_QTYPE_Q4_0);
     yvex_gguf_qtype_report_row_from_geometry(geometry, dims, 2u, &row);
@@ -354,8 +354,8 @@ static int test_gguf_and_range_consumers_preserve_rows(void)
 
     yvex_error_clear(&err);
     rc = yvex_gguf_artifact_abi_report_build(invalid_path, &report, &err);
-    YVEX_TEST_ASSERT(rc == YVEX_OK,
-                     "GGUF report returns typed refusal facts");
+    YVEX_TEST_ASSERT(rc != YVEX_OK,
+                     "GGUF report propagates typed refusal facts");
     YVEX_TEST_ASSERT(report.qtype.status == YVEX_GGUF_ABI_SECTION_REFUSED,
                      "GGUF owner refuses flattened-only Q4_0 alignment");
     YVEX_TEST_ASSERT(strstr(report.qtype.reason, "row width") != NULL,

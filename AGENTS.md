@@ -247,8 +247,18 @@ copy IDs, names, block widths, or block bytes. Storage admission remains
 independent from reference decoding, quantization, emission, backend compute,
 materialization, and runtime support.
 
+V010.GGUF.ARTIFACT.ABI.1 makes the read-only artifact handle and native GGUF
+v3 reader the structural authority. Structural parsing uses bounded positioned
+reads, 64-bit file offsets, configured resource budgets, indexed duplicate
+detection, typed section/code/offset/index failures, and an immutable owned
+view. It must read zero tensor payload bytes. Reports, inspect, metadata,
+tensors, and integrity preflight project that view; they may not reparse or
+classify failures from error text. Global tensor order, padding, overlap, and
+aggregate layout admission remain owned by V010.GGUF.LAYOUT.INTEGRITY.1.
+
 src/artifact/yvex_artifact.c
-  artifact IO, inspect, metadata, tensor command surfaces
+  read-only file handles, explicit mapping, positioned artifact IO, inspect,
+  metadata, and tensor command surfaces
 
 src/artifact/yvex_artifact_identity.c
   artifact identity and digest behavior
@@ -257,7 +267,8 @@ src/artifact/yvex_artifact_integrity.c
   artifact integrity, corruption/refusal reports
 
 src/gguf/
-  GGUF parsing, conversion, quant/intake internals
+  file-backed GGUF structural parsing, typed reader failures and budgets,
+  immutable parsed views, conversion, and quant/intake internals
 
 src/gguf/tools.c
   GGUF tooling command surfaces

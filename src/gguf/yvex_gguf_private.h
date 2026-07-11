@@ -29,13 +29,14 @@
 #include <yvex/gguf.h>
 #include <yvex/gguf_qtype.h>
 
-#define YVEX_GGUF_ABI_NEXT_ROW "V010.GGUF.ARTIFACT.ABI.1"
+#define YVEX_GGUF_ABI_NEXT_ROW "V010.GGUF.LAYOUT.INTEGRITY.1"
 #define YVEX_GGUF_QTYPE_ABI_NEXT_ROW "V010.GGUF.ARTIFACT.ABI.1"
 
 typedef enum {
-    YVEX_GGUF_BOUNDARY_REPORT_ONLY = 0,
-    YVEX_GGUF_BOUNDARY_UNSUPPORTED = 1,
-    YVEX_GGUF_BOUNDARY_REFUSED = 2
+    YVEX_GGUF_BOUNDARY_OPERATIONAL = 0,
+    YVEX_GGUF_BOUNDARY_REPORT_ONLY = 1,
+    YVEX_GGUF_BOUNDARY_UNSUPPORTED = 2,
+    YVEX_GGUF_BOUNDARY_REFUSED = 3
 } yvex_gguf_boundary_status;
 
 typedef enum {
@@ -85,7 +86,6 @@ typedef struct {
     unsigned long long entry_count;
     unsigned long long string_value_count;
     unsigned long long array_value_count;
-    unsigned long long required_key_count;
     const char *reason;
 } yvex_gguf_metadata_abi;
 
@@ -139,6 +139,8 @@ typedef struct {
     yvex_gguf_range_fact range;
     yvex_gguf_descriptor_abi descriptor;
     int parser_status;
+    yvex_gguf_parse_result parse_result;
+    yvex_gguf_reader_stats reader_stats;
     char failure_where[YVEX_ERROR_WHERE_CAP];
     char failure_reason[YVEX_ERROR_MESSAGE_CAP];
     const char *next_row;
@@ -193,14 +195,23 @@ int yvex_gguf_range_map_validate(unsigned long long offset,
                                  unsigned long long alignment,
                                  const char **reason);
 void yvex_gguf_range_fact_init(yvex_gguf_range_fact *fact);
-int yvex_gguf_range_fact_from_gguf(const yvex_artifact *artifact,
-                                   const yvex_gguf *gguf,
+int yvex_gguf_range_fact_from_gguf(const yvex_gguf *gguf,
                                    yvex_gguf_range_fact *fact,
                                    const char **reason);
 
 const yvex_gguf_boundary_fact *yvex_gguf_reader_boundary(void);
 int yvex_gguf_reader_parse_refusal(int parse_rc, const char **reason);
+void yvex_gguf_parse_result_reset(yvex_gguf_parse_result *result);
+int yvex_gguf_reader_fail(yvex_gguf_parse_result *result,
+                          yvex_gguf_parse_code code,
+                          yvex_gguf_parse_section section,
+                          unsigned long long byte_offset,
+                          unsigned long long record_index,
+                          yvex_error *err,
+                          const char *where,
+                          const char *reason);
 void yvex_gguf_reader_classify_error(int parse_rc,
+                                     const yvex_gguf_parse_result *result,
                                      const yvex_error *err,
                                      yvex_gguf_abi_report *report);
 

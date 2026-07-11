@@ -21,38 +21,11 @@
  */
 #include "yvex_gguf_private.h"
 
-#include <stddef.h>
-
-typedef struct {
-    unsigned int type_id;
-    const char *name;
-} yvex_gguf_metadata_type_fact;
-
-static const yvex_gguf_metadata_type_fact metadata_types[] = {
-    {0u, "uint8"},
-    {1u, "int8"},
-    {2u, "uint16"},
-    {3u, "int16"},
-    {4u, "uint32"},
-    {5u, "int32"},
-    {6u, "float32"},
-    {7u, "bool"},
-    {8u, "string"},
-    {9u, "array"},
-    {10u, "uint64"},
-    {11u, "int64"},
-    {12u, "float64"}
-};
-
-/* Contract: maps GGUF metadata ABI type IDs to stable names without allocation. */
+/* Contract: projects the parser-owned canonical metadata type name. */
 const char *yvex_gguf_metadata_type_name(unsigned int type)
 {
-    size_t i;
-
-    for (i = 0u; i < sizeof(metadata_types) / sizeof(metadata_types[0]); ++i) {
-        if (metadata_types[i].type_id == type) return metadata_types[i].name;
-    }
-    return "unknown";
+    if (type > (unsigned int)YVEX_GGUF_VALUE_FLOAT64) return "unknown";
+    return yvex_gguf_value_type_name((yvex_gguf_value_type)type);
 }
 
 /* Contract: refuses unsupported metadata value type IDs with a precise reason. */
@@ -74,7 +47,6 @@ void yvex_gguf_metadata_abi_init(yvex_gguf_metadata_abi *abi)
     abi->entry_count = 0ull;
     abi->string_value_count = 0ull;
     abi->array_value_count = 0ull;
-    abi->required_key_count = 0ull;
     abi->reason = "GGUF metadata ABI not evaluated";
 }
 
@@ -140,9 +112,6 @@ int yvex_gguf_metadata_abi_from_gguf(const yvex_gguf *gguf,
             abi->array_value_count += 1ull;
         }
 
-        if (key && (key[0] == 'g' || key[0] == 't')) {
-            abi->required_key_count += 1ull;
-        }
     }
 
     abi->status = YVEX_GGUF_ABI_SECTION_OK;

@@ -101,6 +101,20 @@ weights does not free them. A copied report does not keep the graph alive. A
 materialization summary does not transfer backend tensor ownership to the
 caller.
 
+`yvex_artifact_open` owns a read-only file descriptor until
+`yvex_artifact_close`. `map=0` leaves `yvex_artifact_data` null and supports
+bounded `yvex_artifact_read_at`; `map=1` exposes a read-only mapping valid only
+until artifact close. `yvex_gguf_open_ex` borrows the artifact during the open
+call and owns its decoded metadata, names, arrays, tensor directory, indexes,
+and reader metrics afterward. All borrowed GGUF accessor results remain valid
+until `yvex_gguf_close`.
+
+The structural reader accepts configurable count, string, array, depth,
+owned-memory, and structural-byte budgets. Its typed result identifies code,
+section, byte offset, and record index. A successful structural parse reads no
+tensor payload bytes and does not prove global layout integrity or artifact
+support.
+
 Complete model artifacts remain operator-local. The API can open, identify,
 register, validate, and report on local artifact files, while model weights stay
 outside the repository. A one-tensor or bounded-subset file is a tensor proof
@@ -115,7 +129,7 @@ runtime capability.
 
 | Boundary | Public surface |
 | --- | --- |
-| Artifact facts | Local artifact opening, GGUF metadata, tensor directory parsing, naming, identity, and integrity reports. |
+| Artifact facts | Read-only file handles, optional explicit payload mapping, exact positioned reads, file-backed GGUF v3 metadata/tensor parsing, typed refusal, naming, identity, and integrity reports. |
 | Tensor interpretation | Dtype facts, tensor descriptors, shape accounting, range validation, bounded embedding facts, and proof descriptors. |
 | Model references | Local registry entries, alias-or-path resolution, model references, model gates, and materialization gates. |
 | Backend transfer proof | Backend discovery, bounded tensor allocation, transfer, release, and materialization summaries. |

@@ -169,6 +169,7 @@ int yvex_model_gate_check(const yvex_model_gate_options *options,
     memset(&artifact_options, 0, sizeof(artifact_options));
     artifact_options.path = options->model_path;
     artifact_options.readonly = 1;
+    artifact_options.map = 1;
     rc = yvex_artifact_open(&artifact, &artifact_options, err);
     if (rc != YVEX_OK) {
         summary.status = YVEX_MODEL_GATE_BLOCKED;
@@ -625,6 +626,7 @@ int yvex_materialize_gate_check(const yvex_materialize_gate_options *options,
     memset(&artifact_options, 0, sizeof(artifact_options));
     artifact_options.path = options->model_path;
     artifact_options.readonly = 1;
+    artifact_options.map = 1;
     rc = yvex_artifact_open(&artifact, &artifact_options, err);
     if (rc != YVEX_OK) {
         summary.status = YVEX_MATERIALIZE_GATE_BLOCKED;

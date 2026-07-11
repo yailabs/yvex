@@ -24,9 +24,9 @@
 static const yvex_gguf_boundary_fact descriptor_boundary = {
     "src/gguf/yvex_gguf_descriptor.c",
     "GGUF descriptor",
-    YVEX_GGUF_BOUNDARY_REPORT_ONLY,
-    "descriptor facts are projected from container, metadata, tensor_info, qtype, and range ABI",
-    "V010.GGUF.ARTIFACT.ABI.1"
+    YVEX_GGUF_BOUNDARY_OPERATIONAL,
+    "structural descriptor facts project the canonical parsed view without runtime promotion",
+    YVEX_GGUF_ABI_NEXT_ROW
 };
 
 /* Contract: exposes descriptor boundary facts without allocation or IO. */
@@ -93,6 +93,6 @@ void yvex_gguf_descriptor_abi_from_sections(const yvex_gguf_container_abi *conta
         return;
     }
 
-    descriptor->status = YVEX_GGUF_ABI_SECTION_REPORT_ONLY;
-    descriptor->reason = "GGUF descriptor facts are file-contained and report-only";
+    descriptor->status = YVEX_GGUF_ABI_SECTION_OK;
+    descriptor->reason = "GGUF structural descriptor accepted; complete artifact integrity remains blocked";
 }

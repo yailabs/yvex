@@ -19,6 +19,7 @@ static int open_fixture(yvex_artifact **artifact,
     memset(&options, 0, sizeof(options));
     options.path = "tests/fixtures/gguf/valid-tokenizer-simple.gguf";
     options.readonly = 1;
+    options.map = 1;
 
     rc = yvex_artifact_open(artifact, &options, &err);
     if (rc != YVEX_OK) {

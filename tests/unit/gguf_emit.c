@@ -22,6 +22,7 @@ static int open_emitted(const char *path,
     yvex_error_clear(&err);
     artifact_options.path = path;
     artifact_options.readonly = 1;
+    artifact_options.map = 1;
 
     rc = yvex_artifact_open(artifact, &artifact_options, &err);
     if (rc == YVEX_OK) rc = yvex_gguf_open(gguf, *artifact, &err);

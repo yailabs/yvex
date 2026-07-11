@@ -30,5 +30,5 @@ void yvex_artifact_report_fact_init(yvex_artifact_report_fact *fact,
     fact->kind = kind ? kind : "artifact";
     fact->status = status ? status : "unsupported";
     fact->reason = reason ? reason : "artifact capability is future-owned";
-    fact->next_row = next_row ? next_row : "V010.GGUF.ARTIFACT.ABI.0";
+    fact->next_row = next_row ? next_row : "V010.GGUF.LAYOUT.INTEGRITY.1";
 }

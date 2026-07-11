@@ -71,8 +71,7 @@ void yvex_gguf_range_fact_init(yvex_gguf_range_fact *fact)
 }
 
 /* Contract: validates parser-visible offsets plus qtype-derived storage spans. */
-int yvex_gguf_range_fact_from_gguf(const yvex_artifact *artifact,
-                                   const yvex_gguf *gguf,
+int yvex_gguf_range_fact_from_gguf(const yvex_gguf *gguf,
                                    yvex_gguf_range_fact *fact,
                                    const char **reason)
 {
@@ -80,13 +79,13 @@ int yvex_gguf_range_fact_from_gguf(const yvex_artifact *artifact,
     unsigned long long count;
 
     yvex_gguf_range_fact_init(fact);
-    if (!artifact || !gguf || !fact) {
-        if (reason) *reason = "GGUF range map requires artifact bytes and a parsed GGUF view";
+    if (!gguf || !fact) {
+        if (reason) *reason = "GGUF range map requires a parsed GGUF view";
         return 0;
     }
 
     fact->tensor_data_offset = yvex_gguf_tensor_data_offset(gguf);
-    fact->file_size = yvex_artifact_size(artifact);
+    fact->file_size = yvex_gguf_file_size(gguf);
     fact->alignment = yvex_gguf_alignment(gguf);
 
     if (!yvex_gguf_range_map_validate(fact->tensor_data_offset,
@@ -102,8 +101,7 @@ int yvex_gguf_range_fact_from_gguf(const yvex_artifact *artifact,
     count = yvex_gguf_tensor_count(gguf);
     for (i = 0ull; i < count; ++i) {
         const yvex_gguf_tensor_info *tensor = yvex_gguf_tensor_at(gguf, i);
-        yvex_gguf_qtype_storage_result storage;
-        unsigned long long expected_storage_bytes = 0ull;
+        unsigned long long expected_storage_bytes;
         unsigned long long available_bytes = 0ull;
         if (!tensor) {
             fact->status = YVEX_GGUF_ABI_SECTION_MALFORMED;
@@ -121,16 +119,7 @@ int yvex_gguf_range_fact_from_gguf(const yvex_artifact *artifact,
             return 0;
         }
 
-        if (yvex_gguf_qtype_tensor_storage(tensor->ggml_type,
-                                           tensor->dims,
-                                           tensor->rank,
-                                           &storage) != YVEX_GGUF_QTYPE_STORAGE_OK) {
-            fact->status = YVEX_GGUF_ABI_SECTION_REFUSED;
-            fact->reason = storage.reason;
-            if (reason) *reason = fact->reason;
-            return 0;
-        }
-        expected_storage_bytes = storage.total_bytes;
+        expected_storage_bytes = tensor->storage_bytes;
 
         if (tensor->absolute_offset <= fact->file_size) {
             available_bytes = fact->file_size - tensor->absolute_offset;

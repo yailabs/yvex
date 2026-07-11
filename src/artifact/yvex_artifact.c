@@ -28,16 +28,23 @@
 #include <stdint.h>
 #include <yvex/artifact.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 
 
 struct yvex_artifact {
     char path[YVEX_ARTIFACT_PATH_CAP];
     unsigned long long size;
-    unsigned char *data;
+    int fd;
+    unsigned char *mapping;
+    size_t mapping_len;
 };
 
 static int copy_path(char *dst, const char *src, yvex_error *err)
@@ -63,15 +70,16 @@ static int copy_path(char *dst, const char *src, yvex_error *err)
  * yvex_artifact_open()
  *
  * Purpose:
- *   read an artifact file into an owned in-memory byte view.
+ *   open a read-only artifact handle and optionally map it for explicit payload
+ *   access.
  *
  * Inputs:
  *   options is borrowed and must provide a path; out receives owned artifact
  *   storage.
  *
  * Effects:
- *   opens, seeks, allocates, reads bytes, stores path/size, and closes the host
- *   file descriptor before returning.
+ *   opens a file descriptor, reads filesystem metadata, and optionally creates
+ *   a private read-only mapping. No file bytes are copied.
  *
  * Failure:
  *   returns invalid-arg, bounds, IO, or allocation errors and releases partial
@@ -83,9 +91,7 @@ static int copy_path(char *dst, const char *src, yvex_error *err)
  */
 int yvex_artifact_open(yvex_artifact **out, const yvex_artifact_options *options, yvex_error *err)
 {
-    FILE *fp;
-    long end_pos;
-    size_t read_n;
+    struct stat st;
     yvex_artifact *artifact;
     int rc;
 
@@ -106,68 +112,65 @@ int yvex_artifact_open(yvex_artifact **out, const yvex_artifact_options *options
         return YVEX_ERR_NOMEM;
     }
 
+    artifact->fd = -1;
     rc = copy_path(artifact->path, options->path, err);
     if (rc != YVEX_OK) {
         free(artifact);
         return rc;
     }
 
-    (void)options->readonly;
-    (void)options->map;
+    if (!options->readonly) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_artifact_open",
+                       "artifact opens require readonly mode");
+        free(artifact);
+        return YVEX_ERR_UNSUPPORTED;
+    }
 
-    fp = fopen(options->path, "rb");
-    if (!fp) {
+    artifact->fd = open(options->path, O_RDONLY | O_CLOEXEC);
+    if (artifact->fd < 0) {
         yvex_error_setf(err, YVEX_ERR_IO, "yvex_artifact_open",
                         "failed to open %s: %s", options->path, strerror(errno));
         free(artifact);
         return YVEX_ERR_IO;
     }
 
-    if (fseek(fp, 0, SEEK_END) != 0) {
+    if (fstat(artifact->fd, &st) != 0) {
         yvex_error_setf(err, YVEX_ERR_IO, "yvex_artifact_open",
-                        "failed to seek %s: %s", options->path, strerror(errno));
-        fclose(fp);
-        free(artifact);
-        return YVEX_ERR_IO;
-    }
-
-    end_pos = ftell(fp);
-    if (end_pos < 0) {
-        yvex_error_setf(err, YVEX_ERR_IO, "yvex_artifact_open",
-                        "failed to determine size for %s: %s", options->path, strerror(errno));
-        fclose(fp);
-        free(artifact);
-        return YVEX_ERR_IO;
-    }
-    artifact->size = (unsigned long long)end_pos;
-
-    if (fseek(fp, 0, SEEK_SET) != 0) {
-        yvex_error_setf(err, YVEX_ERR_IO, "yvex_artifact_open",
-                        "failed to rewind %s: %s", options->path, strerror(errno));
-        fclose(fp);
-        free(artifact);
-        return YVEX_ERR_IO;
-    }
-
-    artifact->data = (unsigned char *)malloc((size_t)(artifact->size ? artifact->size : 1));
-    if (!artifact->data) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_artifact_open", "failed to allocate artifact data");
-        fclose(fp);
-        free(artifact);
-        return YVEX_ERR_NOMEM;
-    }
-
-    read_n = fread(artifact->data, 1, (size_t)artifact->size, fp);
-    if (read_n != (size_t)artifact->size) {
-        yvex_error_setf(err, YVEX_ERR_IO, "yvex_artifact_open",
-                        "short read for %s: expected %llu bytes, read %lu",
-                        options->path, artifact->size, (unsigned long)read_n);
-        fclose(fp);
+                        "failed to stat %s: %s", options->path, strerror(errno));
         yvex_artifact_close(artifact);
         return YVEX_ERR_IO;
     }
+    if (!S_ISREG(st.st_mode) || st.st_size < 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_artifact_open",
+                       "artifact path must name a regular file");
+        yvex_artifact_close(artifact);
+        return YVEX_ERR_FORMAT;
+    }
+    artifact->size = (unsigned long long)st.st_size;
 
-    fclose(fp);
+    if (options->map && artifact->size > 0ull) {
+        if (artifact->size > (unsigned long long)SIZE_MAX) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_artifact_open",
+                           "artifact is too large for this address space mapping");
+            yvex_artifact_close(artifact);
+            return YVEX_ERR_BOUNDS;
+        }
+        artifact->mapping_len = (size_t)artifact->size;
+        artifact->mapping = (unsigned char *)mmap(NULL,
+                                                  artifact->mapping_len,
+                                                  PROT_READ,
+                                                  MAP_PRIVATE,
+                                                  artifact->fd,
+                                                  0);
+        if (artifact->mapping == MAP_FAILED) {
+            artifact->mapping = NULL;
+            artifact->mapping_len = 0u;
+            yvex_error_setf(err, YVEX_ERR_IO, "yvex_artifact_open",
+                            "failed to map %s: %s", options->path, strerror(errno));
+            yvex_artifact_close(artifact);
+            return YVEX_ERR_IO;
+        }
+    }
     *out = artifact;
     yvex_error_clear(err);
     return YVEX_OK;
@@ -179,8 +182,15 @@ void yvex_artifact_close(yvex_artifact *artifact)
         return;
     }
 
-    free(artifact->data);
-    artifact->data = NULL;
+    if (artifact->mapping) {
+        (void)munmap(artifact->mapping, artifact->mapping_len);
+        artifact->mapping = NULL;
+        artifact->mapping_len = 0u;
+    }
+    if (artifact->fd >= 0) {
+        (void)close(artifact->fd);
+        artifact->fd = -1;
+    }
     free(artifact);
 }
 
@@ -200,12 +210,82 @@ unsigned long long yvex_artifact_size(const yvex_artifact *artifact)
     return artifact->size;
 }
 
+int yvex_artifact_is_mapped(const yvex_artifact *artifact)
+{
+    return artifact && artifact->mapping ? 1 : 0;
+}
+
 const unsigned char *yvex_artifact_data(const yvex_artifact *artifact)
 {
     if (!artifact) {
         return NULL;
     }
-    return artifact->data;
+    return artifact->mapping;
+}
+
+/*
+ * yvex_artifact_read_at()
+ *
+ * Purpose:
+ *   read one exact bounded file range without changing shared file position.
+ *
+ * Inputs:
+ *   artifact is borrowed; dst receives len bytes and may be null only for a
+ *   zero-length read.
+ *
+ * Effects:
+ *   performs positioned read IO only; it does not map, allocate, or retain dst.
+ *
+ * Failure:
+ *   returns invalid-arg, bounds, or IO and leaves artifact ownership unchanged.
+ *
+ * Boundary:
+ *   reading a requested range is not GGUF parsing or payload trust.
+ */
+int yvex_artifact_read_at(const yvex_artifact *artifact,
+                          unsigned long long offset,
+                          void *dst,
+                          size_t len,
+                          yvex_error *err)
+{
+    unsigned char *out = (unsigned char *)dst;
+    size_t done = 0u;
+
+    if (!artifact || (!dst && len != 0u)) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_artifact_read_at",
+                       "artifact and destination are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (yvex_range_check(artifact->size, offset, (unsigned long long)len, err) != YVEX_OK) {
+        return YVEX_ERR_BOUNDS;
+    }
+
+    while (done < len) {
+        unsigned long long current = offset + (unsigned long long)done;
+        ssize_t n;
+        if (current > (unsigned long long)INT64_MAX) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_artifact_read_at",
+                           "artifact offset exceeds positioned IO range");
+            return YVEX_ERR_BOUNDS;
+        }
+        n = pread(artifact->fd, out + done, len - done, (off_t)current);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            yvex_error_setf(err, YVEX_ERR_IO, "yvex_artifact_read_at",
+                            "positioned read failed at offset %llu: %s",
+                            current, strerror(errno));
+            return YVEX_ERR_IO;
+        }
+        if (n == 0) {
+            yvex_error_setf(err, YVEX_ERR_IO, "yvex_artifact_read_at",
+                            "short read at offset %llu", current);
+            return YVEX_ERR_IO;
+        }
+        done += (size_t)n;
+    }
+
+    yvex_error_clear(err);
+    return YVEX_OK;
 }
 
 int yvex_range_check(unsigned long long file_size,
@@ -354,6 +434,9 @@ static void print_metadata_value(const yvex_gguf_value *value)
         if (yvex_gguf_value_array_info(value, &array) == YVEX_OK) {
             fprintf(stdout, "array<%s>[%llu]", yvex_gguf_value_type_name(array.element_type), array.count);
         }
+        break;
+    case YVEX_GGUF_VALUE_INVALID:
+        fputs("<invalid>", stdout);
         break;
     }
 }

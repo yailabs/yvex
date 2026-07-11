@@ -48,6 +48,25 @@ No such complete model artifact currently exists. The target, artifact,
 materialization, runtime, generation, evaluation, benchmark, and release states
 remain unsupported or blocked as recorded in `PROJECT.md`.
 
+## Native Structural Reader
+
+The canonical native reader parses GGUF v3 container, metadata, and tensor
+directory records through bounded positioned reads. Its immutable parsed view
+owns decoded strings, arrays, tensor facts, and lookup indexes. Structural
+inspection neither maps nor copies the complete artifact and reads zero tensor
+payload bytes.
+
+Parser budgets bound hostile counts and declared strings or arrays while
+admitting the known DeepSeek-scale directory. Duplicate identifiers, malformed
+records, refused qtypes, arithmetic failures, and short reads produce typed
+non-success results. Normal, table, audit, and integrity projections consume
+that operational result; building a report cannot convert a rejection into an
+accepted artifact.
+
+Addressable tensor range facts are not global layout admission. Tensor order,
+padding, overlap, truncation across the complete data section, and aggregate
+layout integrity remain blocked on `V010.GGUF.LAYOUT.INTEGRITY.1`.
+
 ## Admission Contract
 
 A complete model artifact must record or prove:

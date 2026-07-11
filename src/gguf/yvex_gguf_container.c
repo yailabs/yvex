@@ -27,15 +27,17 @@
 static const yvex_gguf_boundary_fact gguf_container_boundary = {
     "src/gguf/yvex_gguf_container.c",
     "GGUF container ABI",
-    YVEX_GGUF_BOUNDARY_REPORT_ONLY,
-    "container facts are separated from metadata and tensor_info ownership",
-    "V010.GGUF.ARTIFACT.ABI.0"
+    YVEX_GGUF_BOUNDARY_OPERATIONAL,
+    "container facts are consumed by the canonical structural reader",
+    YVEX_GGUF_ABI_NEXT_ROW
 };
 
 /* Contract: returns a stable name for internal GGUF boundary status values. */
 const char *yvex_gguf_boundary_status_name(yvex_gguf_boundary_status status)
 {
     switch (status) {
+        case YVEX_GGUF_BOUNDARY_OPERATIONAL:
+            return "operational";
         case YVEX_GGUF_BOUNDARY_REPORT_ONLY:
             return "report-only";
         case YVEX_GGUF_BOUNDARY_UNSUPPORTED:

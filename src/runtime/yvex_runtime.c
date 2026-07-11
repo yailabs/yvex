@@ -2294,7 +2294,6 @@ int open_artifact_for_gguf(const char *path, yvex_artifact **artifact, yvex_erro
     }
     options.path = ref.path;
     options.readonly = 1;
-    options.map = 1;
 
     rc = yvex_artifact_open(artifact, &options, err);
     yvex_model_ref_clear(&ref);

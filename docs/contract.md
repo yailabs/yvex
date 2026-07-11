@@ -119,6 +119,24 @@ The repository may contain compact fixtures, structural corruption fixtures,
 small vectors, and regression data. A one-tensor or bounded-subset file is a
 tensor proof artifact, not a complete or supported model artifact.
 
+### Native GGUF Reader Contract
+
+The canonical GGUF v3 structural reader uses bounded positioned file reads. It
+owns its decoded container, metadata, names, tensor directory, indexes, qtype
+projection, and addressable range facts; callers may close the artifact handle
+after a successful open. Borrowed accessor results remain valid only until the
+parsed GGUF view is closed.
+
+Structural parsing stops at the aligned tensor-data boundary. Reader statistics
+must report zero tensor payload bytes read, and parser memory is bounded by
+explicit metadata, tensor, array, string, and owned-byte budgets rather than by
+the artifact file size. A report may render a typed rejection, but successful
+report construction is not parser acceptance.
+
+The reader does not admit global tensor ordering, padding, overlap, aggregate
+range integrity, complete artifacts, materialization, or runtime execution.
+Those boundaries remain assigned to their consuming milestones in `PROJECT.md`.
+
 ## Model Registry Contract
 
 The default local model registry is:

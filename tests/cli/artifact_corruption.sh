@@ -250,7 +250,7 @@ exercise_structural_case invalid-rank \
 exercise_structural_case zero-dimension \
     tests/fixtures/gguf/tensor-dim-zero.gguf zero-dimension
 exercise_structural_case huge-dimension-overflow \
-    tests/fixtures/gguf/tensor-dim-overflow.gguf element-count-overflow
+    tests/fixtures/gguf/tensor-dim-overflow.gguf row-byte-overflow
 exercise_structural_case byte-count-overflow \
     "$GEN_DIR/tensor-byte-count-overflow.gguf" row-byte-overflow
 exercise_structural_case unknown-dtype \

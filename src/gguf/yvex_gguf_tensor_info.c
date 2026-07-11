@@ -26,9 +26,9 @@
 static const yvex_gguf_boundary_fact tensor_info_boundary = {
     "src/gguf/yvex_gguf_tensor_info.c",
     "GGUF tensor_info ABI",
-    YVEX_GGUF_BOUNDARY_REPORT_ONLY,
-    "tensor_info facts are structural only",
-    "V010.GGUF.ARTIFACT.ABI.0"
+    YVEX_GGUF_BOUNDARY_OPERATIONAL,
+    "tensor_info facts are owned by the canonical structural reader",
+    YVEX_GGUF_ABI_NEXT_ROW
 };
 
 /* Contract: exposes tensor_info ownership facts without mutation or IO. */

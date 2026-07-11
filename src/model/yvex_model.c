@@ -1008,6 +1008,7 @@ static int materialize_one(yvex_weight_table *table,
     yvex_materialized_weight *weight;
     yvex_tensor_range range;
     const unsigned char *data;
+    unsigned char *owned_payload = NULL;
     int rc;
 
     if (!table || !artifact || !gguf || !tensor) {
@@ -1053,21 +1054,44 @@ static int materialize_one(yvex_weight_table *table,
 
     data = yvex_artifact_data(artifact);
     if (!data) {
-        yvex_backend_tensor_free(table->backend, device_tensor);
-        table->summary.cleanup_attempted = 1;
-        table->summary.cleanup_status = "pass";
-        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_weight_table_materialize",
-                       "artifact data is unavailable");
-        return YVEX_ERR_INVALID_ARG;
+        if (range.tensor_bytes > (unsigned long long)SIZE_MAX) {
+            yvex_backend_tensor_free(table->backend, device_tensor);
+            table->summary.cleanup_attempted = 1;
+            table->summary.cleanup_status = "pass";
+            yvex_error_set(err, YVEX_ERR_BOUNDS, "yvex_weight_table_materialize",
+                           "tensor payload exceeds host staging address space");
+            return YVEX_ERR_BOUNDS;
+        }
+        owned_payload = (unsigned char *)malloc((size_t)range.tensor_bytes);
+        if (!owned_payload) {
+            yvex_backend_tensor_free(table->backend, device_tensor);
+            table->summary.cleanup_attempted = 1;
+            table->summary.cleanup_status = "pass";
+            yvex_error_set(err, YVEX_ERR_NOMEM, "yvex_weight_table_materialize",
+                           "failed to allocate tensor payload staging buffer");
+            return YVEX_ERR_NOMEM;
+        }
+        rc = yvex_artifact_read_at(artifact, range.tensor_absolute_offset,
+                                   owned_payload, (size_t)range.tensor_bytes, err);
+        if (rc != YVEX_OK) {
+            free(owned_payload);
+            yvex_backend_tensor_free(table->backend, device_tensor);
+            table->summary.cleanup_attempted = 1;
+            table->summary.cleanup_status = "pass";
+            return rc;
+        }
+        data = owned_payload;
     }
 
     table->summary.materialization_phase = "transfer";
     table->summary.transfer_attempted = 1;
     rc = yvex_backend_tensor_write(table->backend,
                                    device_tensor,
-                                   data + range.tensor_absolute_offset,
+                                   owned_payload ? data : data + range.tensor_absolute_offset,
                                    range.tensor_bytes,
                                    err);
+    free(owned_payload);
+    owned_payload = NULL;
     if (rc != YVEX_OK) {
         yvex_backend_tensor_free(table->backend, device_tensor);
         table->summary.cleanup_attempted = 1;

@@ -95,6 +95,8 @@ static int test_valid_minimal(void)
     YVEX_TEST_ASSERT(rc == YVEX_OK, "valid minimal directory parses");
     YVEX_TEST_ASSERT(yvex_gguf_metadata_count(gguf) == 0, "minimal metadata count");
     YVEX_TEST_ASSERT(yvex_gguf_tensor_count(gguf) == 0, "minimal tensor count");
+    YVEX_TEST_ASSERT(yvex_gguf_tensor_data_offset(gguf) == 32ull,
+                     "minimal tensor-data boundary uses default alignment");
 
     yvex_gguf_close(gguf);
     yvex_artifact_close(artifact);
@@ -226,9 +228,9 @@ static int test_valid_metadata_and_tensors(void)
 static int test_malformed_metadata(void)
 {
     YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-unknown-type.gguf", YVEX_ERR_UNSUPPORTED) == 0, "unknown metadata type fails");
-    YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-string-out-of-bounds.gguf", YVEX_ERR_BOUNDS) == 0, "metadata string out of bounds fails");
+    YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-string-out-of-bounds.gguf", YVEX_ERR_FORMAT) == 0, "metadata string out of bounds fails");
     YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-array-out-of-bounds.gguf", YVEX_ERR_BOUNDS) == 0, "metadata array out of bounds fails");
-    YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-nested-array-unsupported.gguf", YVEX_ERR_UNSUPPORTED) == 0, "nested array unsupported");
+    YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-nested-array-unsupported.gguf", YVEX_ERR_BOUNDS) == 0, "truncated nested array fails");
     YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-bool-invalid.gguf", YVEX_ERR_FORMAT) == 0, "invalid bool fails");
     YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/metadata-empty-key.gguf", YVEX_ERR_FORMAT) == 0, "empty key fails");
     return 0;
@@ -242,7 +244,27 @@ static int test_malformed_tensors(void)
     YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/tensor-dim-zero.gguf", YVEX_ERR_FORMAT) == 0, "tensor dim zero fails");
     YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/tensor-dim-overflow.gguf", YVEX_ERR_BOUNDS) == 0, "tensor dim overflow fails");
     YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/tensor-offset-misaligned.gguf", YVEX_ERR_FORMAT) == 0, "tensor offset misaligned fails");
-    YVEX_TEST_ASSERT(expect_gguf_open_status("tests/fixtures/gguf/tensor-offset-out-of-bounds.gguf", YVEX_ERR_BOUNDS) == 0, "tensor offset out of bounds fails");
+    return 0;
+}
+
+static int test_nonaddressable_tensor_range_is_exposed(void)
+{
+    yvex_artifact *artifact = NULL;
+    yvex_gguf *gguf = NULL;
+    const yvex_gguf_tensor_info *tensor;
+    yvex_error err;
+    int rc;
+
+    YVEX_TEST_ASSERT(open_fixture("tests/fixtures/gguf/tensor-offset-out-of-bounds.gguf",
+                                  &artifact) == 0,
+                     "open nonaddressable tensor fixture");
+    rc = yvex_gguf_open(&gguf, artifact, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "structural reader exposes nonaddressable range fact");
+    tensor = yvex_gguf_tensor_at(gguf, 0ull);
+    YVEX_TEST_ASSERT(tensor != NULL, "nonaddressable tensor exists");
+    YVEX_TEST_ASSERT(tensor->range_addressable == 0, "tensor range is explicitly nonaddressable");
+    yvex_gguf_close(gguf);
+    yvex_artifact_close(artifact);
     return 0;
 }
 
@@ -267,6 +289,9 @@ int yvex_test_gguf(void)
         return 1;
     }
     if (test_malformed_tensors() != 0) {
+        return 1;
+    }
+    if (test_nonaddressable_tensor_range_is_exposed() != 0) {
         return 1;
     }
     return 0;

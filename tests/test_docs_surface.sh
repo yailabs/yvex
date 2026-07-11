@@ -235,7 +235,7 @@ if grep -nE '\./yvex (generate|prefill|decode|logits|sample|graph|fullmodel|mate
 fi
 
 require_text docs/system-target.md 'Authority: filesystem and module topology; current project state belongs only'
-require_text docs/system-target.md '## GGUF Container ABI Boundary'
+require_text docs/system-target.md '## GGUF Structural Reader Boundary'
 require_text docs/system-target.md '## GGUF Qtype ABI Boundary'
 require_text docs/topology-closure-audit.md 'point-in-time inventory'
 require_text docs/topology-closure-audit.md '`PROJECT.md` owns when each finding is removed or'
