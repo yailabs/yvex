@@ -1,14 +1,20 @@
 /*
- * yvex_backend.c - Backend dispatch and CPU backend implementation.
+ * yvex_backend.c - backend dispatch and CPU reference implementation.
  *
- * This file owns the backend vtable boundary and CPU tensor behavior. CUDA
- * implementation details live under cuda/.
+ * Owner: src/backend.
+ * Owns: backend lifecycle dispatch, exact public capability projection, tensor
+ * lifetime API, and CPU reference tensor/primitive behavior.
+ * Does not own: CLI parsing/rendering/output, CUDA module admission, graph
+ * semantics, model-family behavior, qtype compute, or runtime generation.
+ * Invariants: coarse capability APIs project exact variants; failed checked
+ * release preserves caller ownership; no operator bytes are written here.
+ * Boundary: bounded backend primitives are not model runtime support.
  */
 
 #include "yvex_backend_private.h"
-#include "yvex_operator_private.h"
 
 #include <limits.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,8 +51,60 @@ const char *yvex_backend_status_name(yvex_backend_status status)
 {
     switch (status) {
     case YVEX_BACKEND_STATUS_READY: return "ready";
+    case YVEX_BACKEND_STATUS_CONTEXT_READY: return "context-ready";
     case YVEX_BACKEND_STATUS_UNSUPPORTED: return "unsupported";
     case YVEX_BACKEND_STATUS_FAILED: return "failed";
+    }
+    return "unknown";
+}
+
+const char *yvex_backend_operation_variant_name(yvex_backend_operation_variant variant)
+{
+    switch (variant) {
+    case YVEX_BACKEND_VARIANT_TENSOR_ALLOC: return "tensor-alloc";
+    case YVEX_BACKEND_VARIANT_TENSOR_ZERO: return "tensor-zero";
+    case YVEX_BACKEND_VARIANT_TENSOR_WRITE: return "tensor-write";
+    case YVEX_BACKEND_VARIANT_TENSOR_READ: return "tensor-read";
+    case YVEX_BACKEND_VARIANT_TENSOR_COPY: return "tensor-copy";
+    case YVEX_BACKEND_VARIANT_EMBED_F32_TO_F32: return "embed-f32-to-f32";
+    case YVEX_BACKEND_VARIANT_EMBED_F16_TO_F32: return "embed-f16-to-f32";
+    case YVEX_BACKEND_VARIANT_RMS_NORM_F32_WEIGHT_F32: return "rms-norm-f32-weight-f32";
+    case YVEX_BACKEND_VARIANT_RMS_NORM_F32_WEIGHT_F16: return "rms-norm-f32-weight-f16";
+    case YVEX_BACKEND_VARIANT_ROPE_F32: return "rope-f32";
+    case YVEX_BACKEND_VARIANT_MATMUL_F32: return "matmul-f32";
+    case YVEX_BACKEND_VARIANT_MLP_DENSE_F32: return "mlp-dense-f32";
+    case YVEX_BACKEND_VARIANT_MLP_ROUTED_F32: return "mlp-routed-f32";
+    case YVEX_BACKEND_VARIANT_ATTENTION_CAUSAL_F32: return "attention-causal-f32";
+    case YVEX_BACKEND_VARIANT_ATTENTION_NONCAUSAL_F32: return "attention-noncausal-f32";
+    case YVEX_BACKEND_VARIANT_COUNT: break;
+    }
+    return "unknown";
+}
+
+const char *yvex_backend_capability_state_name(yvex_backend_capability_state state)
+{
+    switch (state) {
+    case YVEX_BACKEND_CAPABILITY_UNSUPPORTED: return "unsupported";
+    case YVEX_BACKEND_CAPABILITY_SUPPORTED: return "supported";
+    case YVEX_BACKEND_CAPABILITY_FAILED: return "failed";
+    }
+    return "unknown";
+}
+
+const char *yvex_backend_capability_reason_name(yvex_backend_capability_reason reason)
+{
+    switch (reason) {
+    case YVEX_BACKEND_CAPABILITY_REASON_NONE: return "none";
+    case YVEX_BACKEND_CAPABILITY_REASON_DRIVER_UNAVAILABLE: return "driver-unavailable";
+    case YVEX_BACKEND_CAPABILITY_REASON_DEVICE_UNAVAILABLE: return "device-unavailable";
+    case YVEX_BACKEND_CAPABILITY_REASON_CONTEXT_UNAVAILABLE: return "context-unavailable";
+    case YVEX_BACKEND_CAPABILITY_REASON_KERNEL_BUNDLE_ABSENT: return "kernel-bundle-absent";
+    case YVEX_BACKEND_CAPABILITY_REASON_KERNEL_BUNDLE_REJECTED: return "kernel-bundle-rejected";
+    case YVEX_BACKEND_CAPABILITY_REASON_FUNCTION_MISSING: return "required-function-missing";
+    case YVEX_BACKEND_CAPABILITY_REASON_VARIANT_UNSUPPORTED: return "variant-unsupported";
+    case YVEX_BACKEND_CAPABILITY_REASON_LAUNCH_FAILED: return "launch-failed";
+    case YVEX_BACKEND_CAPABILITY_REASON_SYNCHRONIZATION_FAILED: return "synchronization-failed";
+    case YVEX_BACKEND_CAPABILITY_REASON_CLEANUP_FAILED: return "cleanup-failed";
     }
     return "unknown";
 }
@@ -108,7 +166,7 @@ int yvex_backend_open_cpu(yvex_backend **out, yvex_error *err)
     return yvex_backend_open(out, &options, err);
 }
 
-int yvex_backend_cuda_available(void)
+int yvex_backend_cuda_context_available(void)
 {
     yvex_backend *backend = NULL;
     yvex_backend_options options;
@@ -121,6 +179,11 @@ int yvex_backend_cuda_available(void)
     rc = yvex_backend_open(&backend, &options, &err);
     yvex_backend_close(backend);
     return rc == YVEX_OK;
+}
+
+int yvex_backend_cuda_available(void)
+{
+    return yvex_backend_cuda_context_available();
 }
 
 void yvex_backend_close(yvex_backend *backend)
@@ -212,10 +275,34 @@ int yvex_backend_tensor_alloc(yvex_backend *backend,
 void yvex_backend_tensor_free(yvex_backend *backend,
                               yvex_device_tensor *tensor)
 {
-    if (!backend || !tensor || !backend->vtable || !backend->vtable->tensor_free) {
-        return;
+    yvex_device_tensor *owned = tensor;
+    yvex_error err;
+
+    yvex_error_clear(&err);
+    (void)yvex_backend_tensor_release(backend, &owned, &err);
+}
+
+int yvex_backend_tensor_release(yvex_backend *backend,
+                                yvex_device_tensor **tensor,
+                                yvex_error *err)
+{
+    int rc;
+
+    if (!backend || !tensor || !*tensor) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_tensor_release",
+                       "backend and tensor are required");
+        return YVEX_ERR_INVALID_ARG;
     }
-    backend->vtable->tensor_free(backend, tensor);
+    if (!backend->vtable || !backend->vtable->tensor_free) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_tensor_release",
+                       "backend does not support tensor release");
+        return YVEX_ERR_UNSUPPORTED;
+    }
+    rc = backend->vtable->tensor_free(backend, *tensor, err);
+    if (rc == YVEX_OK) {
+        *tensor = NULL;
+    }
+    return rc;
 }
 
 const char *yvex_device_tensor_name(const yvex_device_tensor *tensor)
@@ -241,6 +328,11 @@ const unsigned long long *yvex_device_tensor_dims(const yvex_device_tensor *tens
 unsigned long long yvex_device_tensor_bytes(const yvex_device_tensor *tensor)
 {
     return tensor ? tensor->bytes : 0;
+}
+
+int yvex_device_tensor_is_written(const yvex_device_tensor *tensor)
+{
+    return tensor ? tensor->is_written != 0 : 0;
 }
 
 int yvex_backend_tensor_write(yvex_backend *backend,
@@ -313,13 +405,120 @@ int yvex_backend_sync(yvex_backend *backend, yvex_error *err)
     return backend->vtable->sync(backend, err);
 }
 
+static void backend_variant_dtypes(yvex_backend_capability_result *out)
+{
+    switch (out->variant) {
+    case YVEX_BACKEND_VARIANT_EMBED_F32_TO_F32:
+    case YVEX_BACKEND_VARIANT_RMS_NORM_F32_WEIGHT_F32:
+    case YVEX_BACKEND_VARIANT_ROPE_F32:
+    case YVEX_BACKEND_VARIANT_MATMUL_F32:
+    case YVEX_BACKEND_VARIANT_MLP_DENSE_F32:
+    case YVEX_BACKEND_VARIANT_MLP_ROUTED_F32:
+    case YVEX_BACKEND_VARIANT_ATTENTION_CAUSAL_F32:
+    case YVEX_BACKEND_VARIANT_ATTENTION_NONCAUSAL_F32:
+        out->input_dtype = YVEX_DTYPE_F32;
+        out->weight_dtype = YVEX_DTYPE_F32;
+        out->output_dtype = YVEX_DTYPE_F32;
+        break;
+    case YVEX_BACKEND_VARIANT_EMBED_F16_TO_F32:
+        out->input_dtype = YVEX_DTYPE_F16;
+        out->weight_dtype = YVEX_DTYPE_F16;
+        out->output_dtype = YVEX_DTYPE_F32;
+        break;
+    case YVEX_BACKEND_VARIANT_RMS_NORM_F32_WEIGHT_F16:
+        out->input_dtype = YVEX_DTYPE_F32;
+        out->weight_dtype = YVEX_DTYPE_F16;
+        out->output_dtype = YVEX_DTYPE_F32;
+        break;
+    case YVEX_BACKEND_VARIANT_TENSOR_ALLOC:
+    case YVEX_BACKEND_VARIANT_TENSOR_ZERO:
+    case YVEX_BACKEND_VARIANT_TENSOR_WRITE:
+    case YVEX_BACKEND_VARIANT_TENSOR_READ:
+    case YVEX_BACKEND_VARIANT_TENSOR_COPY:
+    case YVEX_BACKEND_VARIANT_COUNT:
+        break;
+    }
+}
+
+int yvex_backend_query_capability(const yvex_backend *backend,
+                                  yvex_backend_operation_variant variant,
+                                  yvex_backend_capability_result *out,
+                                  yvex_error *err)
+{
+    int rc;
+
+    if (!backend || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_query_capability",
+                       "backend and out are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (variant < 0 || variant >= YVEX_BACKEND_VARIANT_COUNT) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_query_capability",
+                       "operation variant is out of range");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(out, 0, sizeof(*out));
+    out->backend_kind = backend->kind;
+    out->variant = variant;
+    out->state = YVEX_BACKEND_CAPABILITY_UNSUPPORTED;
+    out->reason = YVEX_BACKEND_CAPABILITY_REASON_VARIANT_UNSUPPORTED;
+    backend_variant_dtypes(out);
+    if (!backend->vtable || !backend->vtable->query_capability) {
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+    rc = backend->vtable->query_capability(backend, variant, out, err);
+    if (rc == YVEX_OK) {
+        out->backend_kind = backend->kind;
+        out->variant = variant;
+        backend_variant_dtypes(out);
+    }
+    return rc;
+}
+
+static int backend_variant_supported(const yvex_backend *backend,
+                                     yvex_backend_operation_variant variant)
+{
+    yvex_backend_capability_result result;
+    yvex_error err;
+
+    yvex_error_clear(&err);
+    return yvex_backend_query_capability(backend, variant, &result, &err) == YVEX_OK &&
+           result.state == YVEX_BACKEND_CAPABILITY_SUPPORTED;
+}
+
 int yvex_backend_supports(const yvex_backend *backend,
                           yvex_backend_capability capability)
 {
-    if (!backend || !backend->vtable || !backend->vtable->supports) {
+    if (!backend) {
         return 0;
     }
-    return backend->vtable->supports(backend, capability);
+    switch (capability) {
+    case YVEX_BACKEND_CAP_TENSOR_ALLOC:
+        return backend_variant_supported(backend, YVEX_BACKEND_VARIANT_TENSOR_ALLOC) &&
+               backend_variant_supported(backend, YVEX_BACKEND_VARIANT_TENSOR_ZERO);
+    case YVEX_BACKEND_CAP_TENSOR_READ_WRITE:
+        return backend_variant_supported(backend, YVEX_BACKEND_VARIANT_TENSOR_WRITE) &&
+               backend_variant_supported(backend, YVEX_BACKEND_VARIANT_TENSOR_READ) &&
+               backend_variant_supported(backend, YVEX_BACKEND_VARIANT_TENSOR_COPY);
+    case YVEX_BACKEND_CAP_OP_EMBED:
+        return backend_variant_supported(backend, YVEX_BACKEND_VARIANT_EMBED_F32_TO_F32) ||
+               backend_variant_supported(backend, YVEX_BACKEND_VARIANT_EMBED_F16_TO_F32);
+    case YVEX_BACKEND_CAP_OP_MATMUL:
+        return backend_variant_supported(backend, YVEX_BACKEND_VARIANT_MATMUL_F32);
+    case YVEX_BACKEND_CAP_OP_MLP:
+        return backend_variant_supported(backend, YVEX_BACKEND_VARIANT_MLP_DENSE_F32) ||
+               backend_variant_supported(backend, YVEX_BACKEND_VARIANT_MLP_ROUTED_F32);
+    case YVEX_BACKEND_CAP_OP_RMS_NORM:
+        return backend_variant_supported(backend, YVEX_BACKEND_VARIANT_RMS_NORM_F32_WEIGHT_F32) ||
+               backend_variant_supported(backend, YVEX_BACKEND_VARIANT_RMS_NORM_F32_WEIGHT_F16);
+    case YVEX_BACKEND_CAP_OP_ROPE:
+        return backend_variant_supported(backend, YVEX_BACKEND_VARIANT_ROPE_F32);
+    case YVEX_BACKEND_CAP_OP_ATTENTION:
+        return backend_variant_supported(backend, YVEX_BACKEND_VARIANT_ATTENTION_CAUSAL_F32) ||
+               backend_variant_supported(backend, YVEX_BACKEND_VARIANT_ATTENTION_NONCAUSAL_F32);
+    }
+    return 0;
 }
 
 int yvex_backend_op_embed(yvex_backend *backend,
@@ -354,9 +553,9 @@ int yvex_backend_op_rms_norm(yvex_backend *backend,
                        "backend, input, weight, and output are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (epsilon <= 0.0f) {
+    if (!isfinite(epsilon) || epsilon <= 0.0f) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rms_norm",
-                       "epsilon must be positive");
+                       "epsilon must be finite and positive");
         return YVEX_ERR_INVALID_ARG;
     }
     if (!backend->vtable || !backend->vtable->op_rms_norm) {
@@ -379,9 +578,9 @@ int yvex_backend_op_rope(yvex_backend *backend,
                        "backend, input, and output are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (rope_base <= 1.0f) {
+    if (!isfinite(rope_base) || rope_base <= 1.0f) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rope",
-                       "rope_base must be greater than 1");
+                       "rope_base must be finite and greater than 1");
         return YVEX_ERR_INVALID_ARG;
     }
     (void)position;
@@ -466,9 +665,9 @@ int yvex_backend_op_attention(yvex_backend *backend,
                        "position-out-of-range");
         return YVEX_ERR_BOUNDS;
     }
-    if (scale <= 0.0f) {
+    if (!isfinite(scale) || scale <= 0.0f) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_attention",
-                       "scale must be positive");
+                       "scale must be finite and positive");
         return YVEX_ERR_INVALID_ARG;
     }
     (void)causal;
@@ -488,7 +687,9 @@ int yvex_cpu_tensor_alloc(yvex_backend *backend,
                           const yvex_backend_tensor_desc *desc,
                           yvex_device_tensor **out,
                           yvex_error *err);
-void yvex_cpu_tensor_free(yvex_backend *backend, yvex_device_tensor *tensor);
+int yvex_cpu_tensor_free(yvex_backend *backend,
+                         yvex_device_tensor *tensor,
+                         yvex_error *err);
 int yvex_cpu_tensor_write(yvex_backend *backend,
                           yvex_device_tensor *tensor,
                           const void *src,
@@ -594,23 +795,27 @@ static int cpu_sync(yvex_backend *backend, yvex_error *err)
     return YVEX_OK;
 }
 
-static int cpu_supports(const yvex_backend *backend, yvex_backend_capability capability)
+static int cpu_query_capability(const yvex_backend *backend,
+                                yvex_backend_operation_variant variant,
+                                yvex_backend_capability_result *out,
+                                yvex_error *err)
 {
-    if (!backend) {
-        return 0;
+    if (!backend || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "cpu.query_capability",
+                       "backend and out are required");
+        return YVEX_ERR_INVALID_ARG;
     }
-    switch (capability) {
-    case YVEX_BACKEND_CAP_TENSOR_ALLOC:
-    case YVEX_BACKEND_CAP_TENSOR_READ_WRITE:
-    case YVEX_BACKEND_CAP_OP_EMBED:
-    case YVEX_BACKEND_CAP_OP_MATMUL:
-    case YVEX_BACKEND_CAP_OP_MLP:
-    case YVEX_BACKEND_CAP_OP_RMS_NORM:
-    case YVEX_BACKEND_CAP_OP_ROPE:
-    case YVEX_BACKEND_CAP_OP_ATTENTION:
-        return 1;
+    if (variant < 0 || variant >= YVEX_BACKEND_VARIANT_COUNT) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "cpu.query_capability",
+                       "operation variant is out of range");
+        return YVEX_ERR_INVALID_ARG;
     }
-    return 0;
+    out->state = YVEX_BACKEND_CAPABILITY_SUPPORTED;
+    out->reason = YVEX_BACKEND_CAPABILITY_REASON_NONE;
+    out->context_available = 1;
+    out->function_available = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
 }
 
 static const yvex_backend_vtable cpu_vtable = {
@@ -623,7 +828,7 @@ static const yvex_backend_vtable cpu_vtable = {
     yvex_cpu_tensor_read,
     yvex_cpu_tensor_copy,
     cpu_sync,
-    cpu_supports,
+    cpu_query_capability,
     yvex_cpu_op_embed,
     yvex_cpu_op_rms_norm,
     yvex_cpu_op_rope,
@@ -1351,9 +1556,9 @@ int yvex_cpu_op_attention(yvex_backend *backend,
     double sum_exp = 0.0;
     int rc;
 
-    if (scale <= 0.0f) {
+    if (!isfinite(scale) || scale <= 0.0f) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_attention",
-                       "scale must be positive");
+                       "scale must be finite and positive");
         return YVEX_ERR_INVALID_ARG;
     }
     rc = backend_attention_validate(backend, query, keys, values, seq_len, position,
@@ -1559,9 +1764,9 @@ int yvex_cpu_op_rope(yvex_backend *backend,
                        "RoPE output shape must match input shape");
         return YVEX_ERR_FORMAT;
     }
-    if (rope_base <= 1.0f) {
+    if (!isfinite(rope_base) || rope_base <= 1.0f) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rope",
-                       "rope_base must be greater than 1");
+                       "rope_base must be finite and greater than 1");
         return YVEX_ERR_INVALID_ARG;
     }
     rc = backend_rope_head_dim(input, &head_dim, err);
@@ -1629,9 +1834,9 @@ int yvex_cpu_op_rms_norm(yvex_backend *backend,
                        "CPU RMSNorm supports F32 input/output with F16 or F32 weight");
         return YVEX_ERR_UNSUPPORTED;
     }
-    if (epsilon <= 0.0f) {
+    if (!isfinite(epsilon) || epsilon <= 0.0f) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rms_norm",
-                       "epsilon must be positive");
+                       "epsilon must be finite and positive");
         return YVEX_ERR_INVALID_ARG;
     }
     if (input->rank == 2 && input->dims[0] == 1) {
@@ -1832,10 +2037,14 @@ int yvex_cpu_tensor_alloc(yvex_backend *backend,
     return YVEX_OK;
 }
 
-void yvex_cpu_tensor_free(yvex_backend *backend, yvex_device_tensor *tensor)
+int yvex_cpu_tensor_free(yvex_backend *backend,
+                         yvex_device_tensor *tensor,
+                         yvex_error *err)
 {
     if (!backend || !tensor || !yvex_backend_tensor_owner_is(backend, tensor)) {
-        return;
+        yvex_error_set(err, YVEX_ERR_STATE, "cpu.tensor_free",
+                       "tensor does not belong to this backend");
+        return YVEX_ERR_STATE;
     }
     if (backend->stats.allocated_bytes >= tensor->bytes) {
         backend->stats.allocated_bytes -= tensor->bytes;
@@ -1850,6 +2059,8 @@ void yvex_cpu_tensor_free(yvex_backend *backend, yvex_device_tensor *tensor)
     free(tensor->data);
     free(tensor->name);
     free(tensor);
+    yvex_error_clear(err);
+    return YVEX_OK;
 }
 
 static int check_tensor_rw(const char *where,
@@ -1923,181 +2134,4 @@ int yvex_cpu_tensor_copy(yvex_backend *backend,
     dst->is_written = src->is_written;
     yvex_error_clear(err);
     return YVEX_OK;
-}
-
-/* Domain-owned command surface moved out of yvex_runtime.c. */
-
-static void print_backend_capability(const yvex_backend *backend, yvex_backend_capability capability)
-{
-    fprintf(stdout, "  %s: %s\n",
-           yvex_backend_capability_name(capability),
-           yvex_backend_supports(backend, capability) ? "yes" : "no");
-}
-
-static const char *yes_no(int value)
-{
-    return value ? "yes" : "no";
-}
-
-static int command_backend(int arg_count, char **args)
-{
-    yvex_backend *backend = NULL;
-    yvex_backend_options options;
-    yvex_backend_memory_stats stats;
-    yvex_backend_device_info device_info;
-    yvex_error err;
-    int rc;
-
-    yvex_error_clear(&err);
-    memset(&options, 0, sizeof(options));
-
-    if (arg_count != 3 || strcmp(args[2], "--help") == 0 || strcmp(args[2], "-h") == 0) {
-        if (arg_count == 3) {
-            yvex_backend_help(stdout);
-            return 0;
-        }
-        fprintf(stderr, "yvex: backend requires cpu or cuda\n");
-        fprintf(stderr, "usage: " "yvex backend cpu|cuda\n");
-        return 2;
-    }
-
-    if (strcmp(args[2], "cpu") == 0) {
-        options.kind = YVEX_BACKEND_KIND_CPU;
-    } else if (strcmp(args[2], "cuda") == 0) {
-        options.kind = YVEX_BACKEND_KIND_CUDA;
-    } else {
-        fprintf(stderr, "yvex: unknown backend kind: %s\n", args[2]);
-        fprintf(stderr, "Try '" "yvex help backend' for usage.\n");
-        return 2;
-    }
-
-    rc = yvex_backend_open(&backend, &options, &err);
-    if (rc == YVEX_ERR_UNSUPPORTED) {
-        fprintf(stdout, "backend: %s\n", args[2]);
-        fprintf(stdout, "status: unsupported\n");
-        fprintf(stdout, "reason: %s\n", yvex_error_message(&err));
-        fprintf(stdout, "status: backend-unsupported\n");
-        return 5;
-    }
-    if (rc != YVEX_OK) {
-        return print_yvex_error(&err, exit_for_status(rc));
-    }
-
-    rc = yvex_backend_get_memory_stats(backend, &stats, &err);
-    if (rc != YVEX_OK) {
-        yvex_backend_close(backend);
-        return print_yvex_error(&err, exit_for_status(rc));
-    }
-
-    fprintf(stdout, "backend: %s\n", yvex_backend_kind_name(yvex_backend_kind_of(backend)));
-    fprintf(stdout, "status: %s\n", yvex_backend_status_name(yvex_backend_status_of(backend)));
-    if (yvex_backend_get_device_info(backend, &device_info, &err) == YVEX_OK &&
-        yvex_backend_kind_of(backend) == YVEX_BACKEND_KIND_CUDA) {
-        fprintf(stdout, "device: %d\n", device_info.device_index);
-        fprintf(stdout, "name: %s\n", device_info.name ? device_info.name : "");
-        fprintf(stdout, "compute_capability: %d.%d\n",
-               device_info.compute_capability_major,
-               device_info.compute_capability_minor);
-        fprintf(stdout, "memory:\n");
-        fprintf(stdout, "  free_bytes: %llu\n", device_info.free_memory_bytes);
-        fprintf(stdout, "  total_bytes: %llu\n", device_info.total_memory_bytes);
-        fprintf(stdout, "  allocated_bytes: %llu\n", stats.allocated_bytes);
-        fprintf(stdout, "  allocation_count: %llu\n", stats.allocation_count);
-        fprintf(stdout, "  peak_allocated_bytes: %llu\n", stats.peak_allocated_bytes);
-    } else {
-        fprintf(stdout, "memory:\n");
-        fprintf(stdout, "  allocated_bytes: %llu\n", stats.allocated_bytes);
-        fprintf(stdout, "  allocation_count: %llu\n", stats.allocation_count);
-        fprintf(stdout, "  peak_allocated_bytes: %llu\n", stats.peak_allocated_bytes);
-    }
-    fprintf(stdout, "capabilities:\n");
-    print_backend_capability(backend, YVEX_BACKEND_CAP_TENSOR_ALLOC);
-    print_backend_capability(backend, YVEX_BACKEND_CAP_TENSOR_READ_WRITE);
-    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_EMBED);
-    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_MATMUL);
-    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_MLP);
-    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_RMS_NORM);
-    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_ROPE);
-    print_backend_capability(backend, YVEX_BACKEND_CAP_OP_ATTENTION);
-    fprintf(stdout, "status: backend-ready\n");
-
-    yvex_backend_close(backend);
-    return 0;
-}
-
-static int command_cuda_info(int arg_count, char **args)
-{
-    yvex_backend *backend = NULL;
-    yvex_backend_options options;
-    yvex_backend_device_info info;
-    yvex_error err;
-    int rc;
-
-    if (arg_count != 2 && !(arg_count == 3 && (strcmp(args[2], "--help") == 0 ||
-                                    strcmp(args[2], "-h") == 0))) {
-        fprintf(stderr, "usage: " "yvex cuda-info\n");
-        return 2;
-    }
-    if (arg_count == 3) {
-        yvex_cuda_info_help(stdout);
-        return 0;
-    }
-
-    yvex_error_clear(&err);
-    memset(&options, 0, sizeof(options));
-    options.kind = YVEX_BACKEND_KIND_CUDA;
-    rc = yvex_backend_open(&backend, &options, &err);
-    if (rc == YVEX_ERR_UNSUPPORTED) {
-        fprintf(stdout, "cuda: unavailable\n");
-        fprintf(stdout, "reason: %s\n", yvex_error_message(&err));
-        fprintf(stdout, "status: cuda-unavailable\n");
-        return 5;
-    }
-    if (rc != YVEX_OK) {
-        return print_yvex_error(&err, exit_for_status(rc));
-    }
-
-    rc = yvex_backend_get_device_info(backend, &info, &err);
-    if (rc != YVEX_OK) {
-        yvex_backend_close(backend);
-        return print_yvex_error(&err, exit_for_status(rc));
-    }
-
-    fprintf(stdout, "cuda: available\n");
-    fprintf(stdout, "device_count: >=1\n");
-    fprintf(stdout, "\n");
-    fprintf(stdout, "device %d:\n", info.device_index);
-    fprintf(stdout, "  name: %s\n", info.name ? info.name : "");
-    fprintf(stdout, "  compute_capability: %d.%d\n",
-           info.compute_capability_major,
-           info.compute_capability_minor);
-    fprintf(stdout, "  global_memory_bytes: %llu\n", info.global_memory_bytes);
-    fprintf(stdout, "  free_memory_bytes: %llu\n", info.free_memory_bytes);
-    fprintf(stdout, "  total_memory_bytes: %llu\n", info.total_memory_bytes);
-    fprintf(stdout, "  unified_addressing: %s\n", yes_no(info.unified_addressing));
-    fprintf(stdout, "  managed_memory: %s\n", yes_no(info.managed_memory));
-    fprintf(stdout, "\n");
-    fprintf(stdout, "status: cuda-info\n");
-    yvex_backend_close(backend);
-    return 0;
-}
-
-int yvex_backend_command(int arg_count, char **args)
-{
-    return command_backend(arg_count, args);
-}
-
-int yvex_cuda_info_command(int arg_count, char **args)
-{
-    return command_cuda_info(arg_count, args);
-}
-
-void yvex_backend_help(FILE *fp)
-{
-    fprintf(fp, "usage: " "yvex backend cpu|cuda\n\nReports backend status and implemented capabilities.\n");
-}
-
-void yvex_cuda_info_help(FILE *fp)
-{
-    fprintf(fp, "usage: " "yvex cuda-info\n\nReports CUDA driver and device facts when available.\n");
 }

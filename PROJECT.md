@@ -1,11 +1,11 @@
 # YVEX Project Control
 
-Date: 2026-07-11
+Date: 2026-07-12
 Status: living engineering control
 Authority: product target, architecture tracks, complete wave ledger, milestone
 state, dependencies, evidence rank, family scope, release gates, and Active Next
 Recovery baseline: pre-refoundation `docs/spine.md` at commit `10ad6c3`
-Current proof stage: canonical common global GGUF layout admission
+Current proof stage: bounded fail-closed CUDA primitive proof
 
 ## 1. Authority And Update Contract
 
@@ -176,7 +176,7 @@ The unqualified term "model artifact" never means a selected-tensor proof file.
 | Integrity | Canonical power-of-two alignment, directory order, exact padded continuation, zero padding, aggregate span, truncation, tail, and snapshot drift admission are closed. Complete-model identity, tensor-role coverage, payload trust, and artifact support remain blocked. |
 | Materialization | Selected proof behavior exists. Family-neutral complete materialization and full DeepSeek DGX Spark residency are unsupported. |
 | Runtime descriptor | Header/report facts exist. No execution-complete common or DeepSeek runtime descriptor exists. |
-| CUDA | Bounded primitive evidence exists, but a no-op fallback can be advertised as support; CUDA must become fail-closed. |
+| CUDA | Production C contains no fallback PTX. Context, Driver API memory operations, generated-bundle admission, resolved functions, and exact primitive variants are distinct typed facts. A no-`nvcc` build refuses every kernel before dispatch; the admitted generated bundle passes bounded GB10 reference proofs. The DeepSeek/v0.1 required-operation gate remains unsupported. |
 | Transformer | Family-correct DeepSeek attention, positions, KV, MoE, repeated layers, and final norm are unsupported. |
 | Text path | Exact tokenizer-backed autoregressive DeepSeek text generation is unsupported. |
 | Evaluation | No release-path generation evaluation exists. |
@@ -194,7 +194,8 @@ V010.REBASE.DEEPSEEK.0: complete (exact source identity/config/index/header veri
 V010.GGUF.QTYPE.ABI.1: complete (canonical common GGUF qtype storage ABI)
 V010.GGUF.ARTIFACT.ABI.1: complete (scalable common native GGUF structural reader ABI)
 V010.GGUF.LAYOUT.INTEGRITY.1: complete (canonical common global GGUF layout admission)
-Active Next: V010.CUDA.FAILCLOSED.0
+V010.CUDA.FAILCLOSED.0: complete (bounded fail-closed CUDA primitive proof)
+Active Next: V010.MODEL.ARCH.IR.0
 ```
 
 Strict source proof consumes the pinned upstream index with Git OID
@@ -215,9 +216,26 @@ snapshot-safe. The 69,187-tensor scale proof is linear and reads zero tensor
 payload bytes. Layout admission remains a container property, not complete
 model-artifact support.
 
+CUDA capability admission now consumes only the generated
+`cuda_kernels.cu` bundle. A baseline build without `nvcc` keeps context and
+proven Driver API memory/transfer facts while refusing all kernel variants
+before dispatch. On NVIDIA GB10, F32/F16 embedding, F32 RMSNorm with F32/F16
+weights, F32 RoPE/matmul, bounded dense/routed F32 MLP, and bounded
+causal/non-causal F32 attention resolve atomically and pass independent
+reference comparisons. Module/function rollback, launch/sync failure, output
+state, temporary allocation, and checked cleanup fail closed. This completes
+CUDA capability truthfulness, not the v0.1.0 DeepSeek backend gate.
+
+Recovered `V010.BACKEND.0`, `.6`, `.7`, `.8`, and `.9` are promoted from
+planned subtasks to completed bounded capabilities because the exact matrix,
+refusal, no-bundle fallback, scratch ownership, and failure/cleanup contracts
+now have consumed implementation and tests. Metal `.10` and ROCm `.11` are
+reclassified as deferred future scope. `V010.BACKEND.12` remains planned until
+the Architecture IR and later runtime rows define and prove the complete
+release operation set.
+
 ```text
-V010.CUDA.FAILCLOSED.0
--> V010.MODEL.ARCH.IR.0
+V010.MODEL.ARCH.IR.0
 -> V010.TENSOR.COVERAGE.DEEPSEEK.0
 -> V010.MAP.GGUF.DEEPSEEK.0
 -> V010.SOURCE.PAYLOAD.STREAM.0
@@ -254,7 +272,7 @@ another supported model.
 
 | Family/scope | Source/profile truth | Tensor/map truth | Artifact/materialization truth | Runtime truth | Project role |
 | --- | --- | --- | --- | --- | --- |
-| DeepSeek-V4-Flash | Canonical path designated; exact verification and execution IR blocked | Bounded class/report evidence; complete role and GGUF map blocked | No complete artifact; full materialization unsupported | generation unsupported | sole v0.1.0 release target |
+| DeepSeek-V4-Flash | Exact source metadata/header verification complete; execution IR active | Bounded class/report evidence; complete role and GGUF map blocked | No complete artifact; full materialization unsupported | generation unsupported | sole v0.1.0 release target |
 | Qwen | Source target/profile, header inventory, naming-map, and role-coverage work exists | Implemented at bounded source/header/report stages | No complete supported artifact or full materialization claim | generation unsupported | active multi-family/common architecture evidence |
 | Gemma | Source target/profile and header tensor-collection work exists | Dense/common mapping can be reused; exact complete family gate not claimed | No complete supported artifact or full materialization claim | generation unsupported | active dense/common architecture evidence |
 | Dense/common | Common naming, collections, proof artifacts, validators, and primitive evidence exist | Partial reusable capability | Family-neutral materialization is a real planned milestone | no supported full-model runtime | common engine architecture and regression surface |
@@ -279,13 +297,13 @@ calculated from rows rather than protected by a summary hash.
 | Explicit new IDs | 34 |
 | Canonical IDs | 665 |
 | First-class milestones | 37 |
-| State: complete | 185 |
+| State: complete | 191 |
 | State: active | 1 |
 | State: partial | 1 |
-| State: blocked | 26 |
-| State: planned | 429 |
+| State: blocked | 25 |
+| State: planned | 422 |
 | State: reopened | 2 |
-| State: deferred | 9 |
+| State: deferred | 11 |
 | State: superseded | 11 |
 | State: not-measured | 1 |
 
@@ -297,10 +315,10 @@ calculated from rows rather than protected by a summary hash.
 | `TRACK.QUANT` | Dtype/qtype ABI, storage geometry, role policy, conversion, quantization, reference dequantization, compute truth, and refusal. | canonical row-aware storage ABI is complete; quantization, decoding, emission, and compute remain blocked | Every emitted role has truthful storage and compute behavior. |
 | `TRACK.ARTIFACT` | GGUF container ABI, native writer, conversion coordination, complete emission, identity, registration, and writer-reader roundtrip. | scalable file-backed structural reader ABI is complete; writer and complete emission remain blocked | A complete YVEX-produced GGUF reopens identically through YVEX. |
 | `TRACK.INTEGRITY` | Container, metadata, tensor directory, offsets, alignment, qtype-sized ranges, corruption, drift, and artifact admission. | canonical common global layout admission is complete; complete-artifact support admission remains blocked | A complete artifact passes every pre-payload and pre-runtime integrity gate. |
-| `TRACK.MODEL` | Family architecture profiles, typed architecture IR, layer topology, attention/position/KV/MoE rules, and runtime descriptor projection. | Qwen/Gemma/DeepSeek header-derived profiles exist; execution-complete DeepSeek IR does not | A family-correct typed model specification and executable runtime descriptor. |
+| `TRACK.MODEL` | Family architecture profiles, typed architecture IR, layer topology, attention/position/KV/MoE rules, and runtime descriptor projection. | Qwen/Gemma/DeepSeek header-derived profiles exist; execution-complete DeepSeek IR is active | A family-correct typed model specification and executable runtime descriptor. |
 | `TRACK.TENSOR` | Canonical tensor collections, role requirements, global/layer/attention/MoE/norm/output/tokenizer coverage, and missing-role truth. | multi-family header inventories exist; complete DeepSeek execution coverage is blocked | No unresolved required tensor collection or runtime role. |
 | `TRACK.RESIDENCY` | Payload streaming, materialization, placement, memory planning, CUDA residency, movement, ownership, cleanup, and release. | selected planning/proof evidence only | Any admitted tensor map can materialize; the complete DeepSeek artifact has an accepted DGX Spark residency plan. |
-| `TRACK.BACKEND` | Hardware/build profiles, CPU/CUDA capability, qtype operations, reference parity, scratch, fallback, synchronization, refusal, and cleanup. | fail-closed CUDA repair is active; bounded primitive evidence does not establish runtime support | Every required DGX Spark CUDA operation is real, reference-compared, and fail-closed. |
+| `TRACK.BACKEND` | Hardware/build profiles, CPU/CUDA capability, qtype operations, reference parity, scratch, fallback, synchronization, refusal, and cleanup. | CUDA context/bundle/variant truth is fail-closed with bounded GB10 proof; required DeepSeek operations remain undefined | Every required DGX Spark CUDA operation is real, reference-compared, and fail-closed. |
 | `TRACK.GRAPH` | Primitive contracts, graph construction/planning, attention, position handling, MoE routing/experts, residuals, layers, scratch, and transformer execution. | selected graph and primitive evidence only | The complete transformer stack consumes the full runtime descriptor. |
 | `TRACK.PREFILL` | Prompt token execution, chunking, transformer prefill, state ownership, position progression, KV write integration, and cleanup. | planner and diagnostic evidence only | Full prefill executes every required layer and writes model-derived state. |
 | `TRACK.KV` | Family-correct KV geometry, allocation, indexing, append/read, capacity, reuse, lifecycle, and cleanup. | bounded diagnostic storage only | Prefill writes and decode reads the same owned model KV state. |
@@ -330,10 +348,10 @@ closure.
 | `TRACK.QUANT` | 5 | 6 | 1/0/0/0/1/0 | 2 | 2 | 0 |
 | `TRACK.ARTIFACT` | 11 | 16 | 1/0/0/0/4/0 | 3 | 6 | 2 |
 | `TRACK.INTEGRITY` | 14 | 15 | 1/0/0/0/0/0 | 10 | 4 | 0 |
-| `TRACK.MODEL` | 21 | 23 | 0/0/0/0/3/0 | 9 | 11 | 0 |
+| `TRACK.MODEL` | 21 | 23 | 0/1/0/0/2/0 | 9 | 11 | 0 |
 | `TRACK.TENSOR` | 27 | 28 | 0/0/0/0/1/0 | 18 | 9 | 0 |
 | `TRACK.RESIDENCY` | 42 | 43 | 0/0/0/0/2/0 | 0 | 41 | 0 |
-| `TRACK.BACKEND` | 29 | 30 | 0/1/0/0/0/0 | 6 | 23 | 0 |
+| `TRACK.BACKEND` | 29 | 30 | 1/0/0/0/0/0 | 11 | 16 | 2 |
 | `TRACK.GRAPH` | 71 | 75 | 0/0/0/0/3/0 | 1 | 70 | 1 |
 | `TRACK.PREFILL` | 27 | 28 | 0/0/0/0/1/0 | 9 | 18 | 0 |
 | `TRACK.KV` | 21 | 22 | 0/0/0/0/1/0 | 4 | 17 | 0 |
@@ -378,8 +396,8 @@ written after inspection of owner code, consumers, tests, and current contracts.
 | 6 | `V010.GGUF.QTYPE.ABI.1` | `TRACK.QUANT` | common | `complete` | Closed the pinned GGUF on-disk identity set, exact scalar/block geometry, overflow-safe row-aware byte calculation, typed refusal, and canonical consumer projection. | V010.REBASE.DEEPSEEK.0 |
 | 7 | `V010.GGUF.ARTIFACT.ABI.1` | `TRACK.ARTIFACT` | common | `complete` | Closed the file-backed GGUF v3 container, metadata, tensor-directory, qtype/range, resource-budget, immutable-lifetime, typed-refusal, and zero-payload-read ABI at target scale. | V010.GGUF.QTYPE.ABI.1 |
 | 8 | `V010.GGUF.LAYOUT.INTEGRITY.1` | `TRACK.INTEGRITY` | common | `complete` | Closed power-of-two alignment, directory-order offsets, qtype-sized raw spans, exact padded continuation, zero padding, aggregate span, truncation, tail, and snapshot-drift admission. | V010.GGUF.ARTIFACT.ABI.1 |
-| 9 | `V010.CUDA.FAILCLOSED.0` | `TRACK.BACKEND` | DGX Spark | `active` | Remove advertised no-op fallback support and make every claimed CUDA operation real, reference-compared, or explicitly unsupported. | V010.GGUF.LAYOUT.INTEGRITY.1 |
-| 10 | `V010.MODEL.ARCH.IR.0` | `TRACK.MODEL` | DeepSeek | `blocked` | Create the execution-complete typed DeepSeek-V4-Flash architecture IR covering attention, positions, KV, mHC, MoE, norms, output, and tokenizer. | V010.CUDA.FAILCLOSED.0 |
+| 9 | `V010.CUDA.FAILCLOSED.0` | `TRACK.BACKEND` | DGX Spark | `complete` | Removed production fallback PTX; separated context, memory, generated bundle, function, and exact variant facts; proved admitted bounded variants and fail-closed rollback/cleanup on GB10. | V010.GGUF.LAYOUT.INTEGRITY.1 |
+| 10 | `V010.MODEL.ARCH.IR.0` | `TRACK.MODEL` | DeepSeek | `active` | Create the execution-complete typed DeepSeek-V4-Flash architecture IR covering attention, positions, KV, mHC, MoE, norms, output, and tokenizer. | V010.CUDA.FAILCLOSED.0 |
 | 11 | `V010.TENSOR.COVERAGE.DEEPSEEK.0` | `TRACK.TENSOR` | DeepSeek | `blocked` | Derive the complete required DeepSeek tensor set from the architecture IR and refuse missing, duplicate, ambiguous, or unsupported roles. | V010.MODEL.ARCH.IR.0 |
 | 12 | `V010.MAP.GGUF.DEEPSEEK.0` | `TRACK.MAP` | DeepSeek | `blocked` | Map every required DeepSeek source tensor to one role, GGUF name, transform, shape, expert index, and emitted layout. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
 | 13 | `V010.SOURCE.PAYLOAD.STREAM.0` | `TRACK.SOURCE` | common | `blocked` | Read bounded source payload ranges from indexed shards with identity checks, short-read refusal, owned lifecycle, and cleanup. | V010.MAP.GGUF.DEEPSEEK.0 |
@@ -638,7 +656,7 @@ the row's use.
 
 **Owner:** Family architecture profiles, typed architecture IR, layer topology, attention/position/KV/MoE rules, and runtime descriptor projection.
 
-**Current truth:** Qwen/Gemma/DeepSeek header-derived profiles exist; execution-complete DeepSeek IR does not
+**Current truth:** Qwen/Gemma/DeepSeek header-derived profiles exist; execution-complete DeepSeek IR is active
 
 **Ledger summary:** 21 recovered IDs; 3 first-class milestones; 9 complete support rows; 11 open support rows; 0 superseded/deferred rows.
 
@@ -646,7 +664,7 @@ the row's use.
 
 | Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
 | --- | --- | --- | --- | --- | --- |
-| `V010.MODEL.ARCH.IR.0` | DeepSeek | `blocked` | Create the execution-complete typed DeepSeek-V4-Flash architecture IR covering attention, positions, KV, mHC, MoE, norms, output, and tokenizer. | V010.CUDA.FAILCLOSED.0 | current |
+| `V010.MODEL.ARCH.IR.0` | DeepSeek | `active` | Create the execution-complete typed DeepSeek-V4-Flash architecture IR covering attention, positions, KV, mHC, MoE, norms, output, and tokenizer. | V010.CUDA.FAILCLOSED.0 | current |
 | `V010.RUNTIME.DESCRIPTOR.GGUF.0` | common | `blocked` | Project admitted artifact and materialization facts into one canonical family-neutral runtime descriptor. | V010.ARTIFACT.MATERIALIZE.0 | recovered/promoted |
 | `V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0` | DeepSeek | `blocked` | Specialize the canonical descriptor into one execution-complete, family-correct DeepSeek descriptor. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 + V010.RUNTIME.DESCRIPTOR.GGUF.0 | current |
 
@@ -789,34 +807,34 @@ the row's use.
 
 **Owner:** Hardware/build profiles, CPU/CUDA capability, qtype operations, reference parity, scratch, fallback, synchronization, refusal, and cleanup.
 
-**Current truth:** fail-closed CUDA repair is active; bounded primitive evidence does not establish runtime support
+**Current truth:** CUDA capability admission is fail-closed and bounded variants have GB10 proof; DeepSeek runtime support remains undefined
 
-**Ledger summary:** 29 recovered IDs; 1 first-class milestones; 6 complete support rows; 23 open support rows; 0 superseded/deferred rows.
+**Ledger summary:** 29 recovered IDs; 1 first-class milestones; 11 complete support rows; 16 open support rows; 2 superseded/deferred rows.
 
 #### First-Class Milestones
 
 | Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
 | --- | --- | --- | --- | --- | --- |
-| `V010.CUDA.FAILCLOSED.0` | DGX Spark | `active` | Remove advertised no-op fallback support and make every claimed CUDA operation real, reference-compared, or explicitly unsupported. | V010.GGUF.LAYOUT.INTEGRITY.1 | current |
+| `V010.CUDA.FAILCLOSED.0` | DGX Spark | `complete` | Remove advertised no-op fallback support and make every claimed CUDA operation real, reference-compared, or explicitly unsupported. | V010.GGUF.LAYOUT.INTEGRITY.1 | current |
 
 #### Recovered And Subordinate Rows
 
 | Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
 | --- | --- | --- | --- | --- | --- |
 | `CUDA.KERNEL.0` | `capability` | CUDA / DGX Spark | `complete` | Harden bounded CUDA primitive kernels without claiming CUDA runtime generation. | V010.CUDA.FAILCLOSED.0 |
-| `V010.BACKEND.0` | `subtask` | common | `planned` | backend capability matrix. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.0` | `capability` | common | `complete` | Exact typed context, memory, generated-bundle, function, dtype/variant, and failure capability matrix. | V010.CUDA.FAILCLOSED.0 |
 | `V010.BACKEND.1` | `evidence` | common | `complete` | CPU baseline capability report. | V010.CUDA.FAILCLOSED.0 |
 | `V010.BACKEND.2` | `evidence` | CUDA / DGX Spark | `complete` | CUDA capability report. | V010.CUDA.FAILCLOSED.0 |
 | `V010.BACKEND.3` | `capability` | CUDA / DGX Spark | `complete` | CUDA allocation proof. | V010.CUDA.FAILCLOSED.0 |
 | `V010.BACKEND.4` | `capability` | CUDA / DGX Spark | `complete` | CUDA transfer proof. | V010.CUDA.FAILCLOSED.0 |
 | `V010.BACKEND.5` | `capability` | CUDA / DGX Spark | `complete` | CUDA op parity subset. | V010.CUDA.FAILCLOSED.0 |
-| `V010.BACKEND.6` | `subtask` | common | `planned` | backend op refusal policy. | V010.CUDA.FAILCLOSED.0 |
-| `V010.BACKEND.7` | `subtask` | common | `planned` | backend fallback policy. | V010.CUDA.FAILCLOSED.0 |
-| `V010.BACKEND.8` | `subtask` | common | `planned` | backend scratch allocation policy. | V010.CUDA.FAILCLOSED.0 |
-| `V010.BACKEND.9` | `subtask` | common | `planned` | backend cleanup/failure report. | V010.CUDA.FAILCLOSED.0 |
-| `V010.BACKEND.10` | `subtask` | common | `planned` | future Metal feasibility report. | V010.CUDA.FAILCLOSED.0 |
-| `V010.BACKEND.11` | `subtask` | common | `planned` | future ROCm feasibility report. | V010.CUDA.FAILCLOSED.0 |
-| `V010.BACKEND.12` | `subtask` | common | `planned` | v0.1.0 backend gate. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.6` | `capability` | common | `complete` | Exact unsupported/failed variants refuse before dispatch with typed reasons. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.7` | `capability` | common | `complete` | A build without the generated kernel bundle retains only proven Driver API memory operations and refuses kernels. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.8` | `capability` | common | `complete` | Current bounded primitive scratch is explicit caller-owned tensor storage or checked temporary CUDA allocation. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.9` | `capability` | common | `complete` | Module/function rollback, launch/sync demotion, output state, checked release, and truthful allocation accounting are tested. | V010.CUDA.FAILCLOSED.0 |
+| `V010.BACKEND.10` | `future` | Metal | `deferred` | Metal feasibility and implementation require a post-v0.1 scope decision. | post-v0.1 scope decision |
+| `V010.BACKEND.11` | `future` | ROCm | `deferred` | ROCm feasibility and implementation require a post-v0.1 scope decision. | post-v0.1 scope decision |
+| `V010.BACKEND.12` | `subtask` | DeepSeek / DGX Spark | `planned` | Close the v0.1.0 required-operation set only after Architecture IR and runtime proofs define and execute it. | V010.GRAPH.DEEPSEEK.TRANSFORMER.0 |
 | `V010.HARDWARE.0` | `subtask` | common | `planned` | local workstation profile. | V010.RELEASE.0 |
 | `V010.HARDWARE.1` | `subtask` | common | `planned` | Spark/GB10 profile. | V010.RELEASE.0 |
 | `V010.HARDWARE.2` | `subtask` | common | `planned` | Mac/Apple Silicon profile. | V010.RELEASE.0 |
@@ -1585,7 +1603,7 @@ acceptance boundary.
 | Integrity/admission | Canonical global layout is complete; complete-model identity, role coverage, payload trust, and support admission remain | blocked | `V010.GGUF.LAYOUT.INTEGRITY.1` and `V010.ARTIFACT.SUPPORT.CUTOVER.0` |
 | Materialization | Family-neutral materializer plus full DeepSeek DGX Spark placement/cleanup | unsupported | materialization milestones |
 | Descriptor | Canonical common descriptor and execution-complete DeepSeek specialization | unsupported | descriptor milestones |
-| CUDA | Every required op real, fail-closed, reference-compared, synchronized, and cleaned up | unsupported | `V010.CUDA.FAILCLOSED.0` plus operation proofs |
+| CUDA | Capability admission is fail-closed with bounded GB10 proof; every architecture-required DeepSeek op must still be defined, executed, reference-compared, synchronized, and cleaned up | unsupported | Architecture IR plus later exact runtime-operation proofs |
 | Transformer | Attention, positions, KV, MoE, experts, repeated layers, residuals, and final norm | unsupported | attention/KV/prefill/MoE/transformer milestones |
 | Text generation | Exact tokenizer, output head, logits, sampling, repeated decode, stop, detokenization | unsupported | logits/sampling/tokenizer/generation milestones |
 | Operator | One truthful command invokes the release path | blocked | `V010.CLI.DEEPSEEK.GENERATE.0` |

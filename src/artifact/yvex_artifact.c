@@ -1820,9 +1820,19 @@ static int command_integrity_report(int arg_count, char **args)
                                        : YVEX_BACKEND_KIND_CPU;
             rc = yvex_backend_open(&backend, &backend_options, &err);
             if (rc == YVEX_OK) {
-                backend_status = "ready";
-                materialization_preflight = "pass";
-                materialization_gate = "pass";
+                backend_status = yvex_backend_status_name(
+                    yvex_backend_status_of(backend));
+                if (yvex_backend_supports(backend,
+                                          YVEX_BACKEND_CAP_TENSOR_ALLOC) &&
+                    yvex_backend_supports(backend,
+                                          YVEX_BACKEND_CAP_TENSOR_READ_WRITE)) {
+                    materialization_preflight = "pass";
+                    materialization_gate = "pass";
+                } else {
+                    materialization_preflight = "fail";
+                    materialization_gate = "fail";
+                    hard_fail = 1;
+                }
                 yvex_backend_close(backend);
                 backend = NULL;
             } else {

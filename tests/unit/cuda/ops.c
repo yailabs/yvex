@@ -8,7 +8,9 @@
  *   Proves that CUDA backend CUDA supports the same minimal F32 embedding op as the backend layer
  *   CPU reference backend. Returns 77 when CUDA is unavailable.
  */
+#include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <yvex/yvex.h>
@@ -214,8 +216,11 @@ int yvex_cuda_test_ops(void)
 {
     yvex_backend *cuda_backend = NULL;
     yvex_device_tensor *embedding = NULL;
+    yvex_device_tensor *embedding_f16 = NULL;
+    yvex_device_tensor *out_f16 = NULL;
     yvex_device_tensor *rms_input = NULL;
     yvex_device_tensor *rms_weight = NULL;
+    yvex_device_tensor *rms_weight_f32 = NULL;
     yvex_device_tensor *rms_out = NULL;
     yvex_device_tensor *rope_input = NULL;
     yvex_device_tensor *rope_out = NULL;
@@ -236,6 +241,7 @@ int yvex_cuda_test_ops(void)
     yvex_device_tensor *mlp_out = NULL;
     yvex_device_tensor *out = NULL;
     yvex_backend_tensor_desc desc;
+    yvex_backend_capability_result capability;
     yvex_mlp_options mlp_options;
     yvex_error err;
     float embedding_data[12] = {
@@ -249,8 +255,21 @@ int yvex_cuda_test_ops(void)
         20.0f, 21.0f, 22.0f, 23.0f,
     };
     unsigned int token_ids[2] = {0, 2};
+    unsigned int token_zero[1] = {0};
     unsigned int bad_ids[1] = {9};
+    unsigned char embedding_f16_data[12];
+    unsigned int embedding_f16_bits[6] = {
+        0x0000u, 0x8000u, 0x3c00u, 0xbc00u, 0x0001u, 0x7bffu,
+    };
+    float embedding_f16_out[6];
+    float embedding_f16_expected[6] = {
+        0.0f, -0.0f, 1.0f, -1.0f, 5.9604645e-8f, 65504.0f,
+    };
+    float embedding_f16_sentinel[6] = {
+        -91.0f, -92.0f, -93.0f, -94.0f, -95.0f, -96.0f,
+    };
     float rms_input_data[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    float rms_weight_f32_data[4] = {1.0f, 2.0f, 3.0f, 4.0f};
     unsigned char rms_weight_data[8];
     float rms_out_data[4];
     float rms_expected[4] = {0.9999995f, 1.9999990f, 2.9999985f, 3.9999980f};
@@ -324,6 +343,9 @@ int yvex_cuda_test_ops(void)
 
     for (i = 0; i < 4u; ++i) {
         write_u16le(rms_weight_data + (i * 2u), rms_half_values[i]);
+    }
+    for (i = 0; i < 6u; ++i) {
+        write_u16le(embedding_f16_data + (i * 2u), embedding_f16_bits[i]);
     }
     for (row = 0; row < 2u; ++row) {
         for (col = 0; col < 3u; ++col) {
@@ -401,11 +423,54 @@ int yvex_cuda_test_ops(void)
     rc = yvex_backend_op_embed(cuda_backend, embedding, bad_ids, 1, out, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_BOUNDS, "bad token id fails");
 
+    make_desc(&desc, "embedding_f16", YVEX_DTYPE_F16, 2, 6, 1,
+              sizeof(embedding_f16_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &embedding_f16, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate F16 CUDA embedding");
+    rc = yvex_backend_tensor_write(cuda_backend, embedding_f16,
+                                   embedding_f16_data,
+                                   sizeof(embedding_f16_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write F16 CUDA embedding");
+    make_desc(&desc, "embedding_f16_out", YVEX_DTYPE_F32, 2, 1, 6,
+              sizeof(embedding_f16_out));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &out_f16, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate F16 embedding output");
+    rc = yvex_backend_tensor_write(cuda_backend, out_f16,
+                                   embedding_f16_sentinel,
+                                   sizeof(embedding_f16_sentinel), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "seed F16 embedding output sentinel");
+    rc = yvex_backend_op_embed(cuda_backend, embedding_f16, token_zero, 1,
+                               out_f16, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "F16-to-F32 CUDA embedding succeeds");
+    rc = yvex_backend_tensor_read(cuda_backend, out_f16, embedding_f16_out,
+                                  sizeof(embedding_f16_out), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read F16-to-F32 embedding output");
+    YVEX_TEST_ASSERT(memcmp(embedding_f16_out, embedding_f16_sentinel,
+                            sizeof(embedding_f16_out)) != 0,
+                     "F16 embedding kernel changed sentinel output");
+    YVEX_TEST_ASSERT(memcmp(embedding_f16_out, embedding_f16_expected,
+                            sizeof(embedding_f16_out)) == 0,
+                     "F16 embedding preserves exact representative conversions");
+    for (i = 0; i < 6u; ++i) {
+        YVEX_TEST_ASSERT(float_close(embedding_f16_out[i],
+                                     embedding_f16_expected[i], 0.000001f),
+                         "F16 embedding covers signed, subnormal, and boundary values");
+    }
+
     make_desc(&desc, "rms_input", YVEX_DTYPE_F32, 2, 1, 4, sizeof(rms_input_data));
     rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &rms_input, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda rms input");
     rc = yvex_backend_tensor_write(cuda_backend, rms_input, rms_input_data, sizeof(rms_input_data), &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "write cuda rms input");
+
+    make_desc(&desc, "rms_weight_f32", YVEX_DTYPE_F32, 1, 4, 0,
+              sizeof(rms_weight_f32_data));
+    rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &rms_weight_f32, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate F32 CUDA rms weight");
+    rc = yvex_backend_tensor_write(cuda_backend, rms_weight_f32,
+                                   rms_weight_f32_data,
+                                   sizeof(rms_weight_f32_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "write F32 CUDA rms weight");
 
     make_desc(&desc, "rms_weight", YVEX_DTYPE_F16, 1, 4, 0, sizeof(rms_weight_data));
     rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &rms_weight, &err);
@@ -416,6 +481,16 @@ int yvex_cuda_test_ops(void)
     make_desc(&desc, "rms_out", YVEX_DTYPE_F32, 2, 1, 4, sizeof(rms_out_data));
     rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &rms_out, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "allocate cuda rms output");
+    rc = yvex_backend_op_rms_norm(cuda_backend, rms_input, rms_weight_f32,
+                                  0.000001f, rms_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "CUDA RMSNorm F32 weight succeeds");
+    rc = yvex_backend_tensor_read(cuda_backend, rms_out, rms_out_data,
+                                  sizeof(rms_out_data), &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK, "read CUDA RMSNorm F32 output");
+    for (i = 0; i < 4u; ++i) {
+        YVEX_TEST_ASSERT(float_close(rms_out_data[i], rms_expected[i], 0.0001f),
+                         "CUDA RMSNorm F32 output matches reference");
+    }
     rc = yvex_backend_op_rms_norm(cuda_backend, rms_input, rms_weight, 0.000001f, rms_out, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK, "cuda rms norm succeeds");
     rc = yvex_backend_tensor_read(cuda_backend, rms_out, rms_out_data, sizeof(rms_out_data), &err);
@@ -424,6 +499,10 @@ int yvex_cuda_test_ops(void)
         YVEX_TEST_ASSERT(float_close(rms_out_data[i], rms_expected[i], 0.0001f),
                          "cuda rms output matches expected");
     }
+    rc = yvex_backend_op_rms_norm(cuda_backend, rms_input, rms_weight,
+                                  NAN, rms_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_INVALID_ARG,
+                     "CUDA RMSNorm rejects non-finite epsilon");
 
     make_desc(&desc, "rope_input", YVEX_DTYPE_F32, 1, 8, 0, sizeof(rope_input_data));
     rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &rope_input, &err);
@@ -449,6 +528,10 @@ int yvex_cuda_test_ops(void)
     YVEX_TEST_ASSERT(rc == YVEX_OK, "read cuda rope output");
     YVEX_TEST_ASSERT(!float_close(rope_out_data[0], rope_input_data[0], 0.0001f),
                      "cuda rope non-zero position changes first pair");
+    rc = yvex_backend_op_rope(cuda_backend, rope_input, 7, INFINITY,
+                              rope_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_INVALID_ARG,
+                     "CUDA RoPE rejects non-finite base");
 
     make_desc(&desc, "attention_query", YVEX_DTYPE_F32, 1, 4, 0, sizeof(attention_query_data));
     rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &attention_query, &err);
@@ -532,6 +615,12 @@ int yvex_cuda_test_ops(void)
                                    attention_scores, attention_probabilities,
                                    attention_out, &err);
     YVEX_TEST_ASSERT(rc != YVEX_OK, "cuda attention rejects zero seq_len");
+    rc = yvex_backend_op_attention(cuda_backend, attention_query, attention_keys,
+                                   attention_values, 4, 0, NAN, 1,
+                                   attention_scores, attention_probabilities,
+                                   attention_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_INVALID_ARG,
+                     "CUDA attention rejects non-finite scale");
 
     make_desc(&desc, "matmul_input", YVEX_DTYPE_F32, 2, 2, 4, sizeof(matmul_input_data));
     rc = yvex_backend_tensor_alloc(cuda_backend, &desc, &matmul_input, &err);
@@ -661,6 +750,43 @@ int yvex_cuda_test_ops(void)
                              &mlp_options, mlp_intermediate, mlp_out, &err);
     YVEX_TEST_ASSERT(rc == YVEX_ERR_FORMAT, "cuda mlp rejects zero hidden dim");
 
+    YVEX_TEST_ASSERT(setenv("YVEX_TEST_CUDA_LAUNCH_FAILURE", "matmul-f32", 1) == 0,
+                     "set CUDA launch failure injection");
+    rc = yvex_backend_op_matmul(cuda_backend, matmul_input, matmul_weight,
+                                matmul_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_BACKEND,
+                     "CUDA launch failure returns backend error");
+    YVEX_TEST_ASSERT(!yvex_device_tensor_is_written(matmul_out),
+                     "launch failure leaves output unwritten");
+    rc = yvex_backend_query_capability(cuda_backend,
+                                       YVEX_BACKEND_VARIANT_MATMUL_F32,
+                                       &capability, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK &&
+                     capability.state == YVEX_BACKEND_CAPABILITY_FAILED &&
+                     capability.reason == YVEX_BACKEND_CAPABILITY_REASON_LAUNCH_FAILED,
+                     "launch failure demotes exact variant");
+    YVEX_TEST_ASSERT(unsetenv("YVEX_TEST_CUDA_LAUNCH_FAILURE") == 0,
+                     "clear CUDA launch failure injection");
+
+    YVEX_TEST_ASSERT(setenv("YVEX_TEST_CUDA_SYNC_FAILURE", "rope-f32", 1) == 0,
+                     "set CUDA op synchronization failure injection");
+    rc = yvex_backend_op_rope(cuda_backend, rope_input, 7, 10000.0f,
+                              rope_out, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_ERR_BACKEND,
+                     "CUDA op synchronization failure returns backend error");
+    YVEX_TEST_ASSERT(!yvex_device_tensor_is_written(rope_out),
+                     "synchronization failure leaves output unwritten");
+    rc = yvex_backend_query_capability(cuda_backend,
+                                       YVEX_BACKEND_VARIANT_ROPE_F32,
+                                       &capability, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK &&
+                     capability.state == YVEX_BACKEND_CAPABILITY_FAILED &&
+                     capability.reason ==
+                         YVEX_BACKEND_CAPABILITY_REASON_SYNCHRONIZATION_FAILED,
+                     "synchronization failure demotes exact variant");
+    YVEX_TEST_ASSERT(unsetenv("YVEX_TEST_CUDA_SYNC_FAILURE") == 0,
+                     "clear CUDA op synchronization failure injection");
+
     yvex_backend_tensor_free(cuda_backend, mlp_out);
     yvex_backend_tensor_free(cuda_backend, mlp_intermediate);
     yvex_backend_tensor_free(cuda_backend, mlp_down);
@@ -680,7 +806,10 @@ int yvex_cuda_test_ops(void)
     yvex_backend_tensor_free(cuda_backend, rope_input);
     yvex_backend_tensor_free(cuda_backend, rms_out);
     yvex_backend_tensor_free(cuda_backend, rms_weight);
+    yvex_backend_tensor_free(cuda_backend, rms_weight_f32);
     yvex_backend_tensor_free(cuda_backend, rms_input);
+    yvex_backend_tensor_free(cuda_backend, out_f16);
+    yvex_backend_tensor_free(cuda_backend, embedding_f16);
     yvex_backend_tensor_free(cuda_backend, out);
     yvex_backend_tensor_free(cuda_backend, embedding);
     yvex_backend_close(cuda_backend);

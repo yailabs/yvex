@@ -40,6 +40,19 @@ yvex_backend_kind yvex_graph_backend_kind_from_name(const char *name)
     return strcmp(name, "cuda") == 0 ? YVEX_BACKEND_KIND_CUDA : YVEX_BACKEND_KIND_CPU;
 }
 
+/* Contract: projects one exact planned primitive variant without dispatch. */
+static int plan_variant_supported(const yvex_backend *backend,
+                                  yvex_backend_operation_variant variant)
+{
+    yvex_backend_capability_result result;
+    yvex_error err;
+
+    yvex_error_clear(&err);
+    return yvex_backend_query_capability(backend, variant, &result, &err) ==
+               YVEX_OK &&
+           result.state == YVEX_BACKEND_CAPABILITY_SUPPORTED;
+}
+
 static int fill_backend_status(yvex_plan *plan, const char *backend_name, yvex_error *err)
 {
     yvex_backend *backend = NULL;
@@ -58,15 +71,28 @@ static int fill_backend_status(yvex_plan *plan, const char *backend_name, yvex_e
         if (rc != YVEX_OK) {
             return rc;
         }
-        plan->backend_status = yvex_graph_strdup("available");
-        plan->backend_tensor_alloc = yvex_backend_supports(backend, YVEX_BACKEND_CAP_TENSOR_ALLOC);
-        plan->backend_tensor_read_write = yvex_backend_supports(backend, YVEX_BACKEND_CAP_TENSOR_READ_WRITE);
-        plan->backend_op_embed = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_EMBED);
-        plan->backend_op_matmul = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MATMUL);
-        plan->backend_op_mlp = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MLP);
-        plan->backend_op_rms_norm = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_RMS_NORM);
-        plan->backend_op_rope = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ROPE);
-        plan->backend_op_attention = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ATTENTION);
+        plan->backend_status = yvex_graph_strdup(
+            yvex_backend_status_of(backend) == YVEX_BACKEND_STATUS_CONTEXT_READY
+                ? "context-available" : "available");
+        plan->backend_tensor_alloc =
+            plan_variant_supported(backend, YVEX_BACKEND_VARIANT_TENSOR_ALLOC) &&
+            plan_variant_supported(backend, YVEX_BACKEND_VARIANT_TENSOR_ZERO);
+        plan->backend_tensor_read_write =
+            plan_variant_supported(backend, YVEX_BACKEND_VARIANT_TENSOR_WRITE) &&
+            plan_variant_supported(backend, YVEX_BACKEND_VARIANT_TENSOR_READ) &&
+            plan_variant_supported(backend, YVEX_BACKEND_VARIANT_TENSOR_COPY);
+        plan->backend_op_embed = plan_variant_supported(
+            backend, YVEX_BACKEND_VARIANT_EMBED_F32_TO_F32);
+        plan->backend_op_matmul = plan_variant_supported(
+            backend, YVEX_BACKEND_VARIANT_MATMUL_F32);
+        plan->backend_op_mlp = plan_variant_supported(
+            backend, YVEX_BACKEND_VARIANT_MLP_DENSE_F32);
+        plan->backend_op_rms_norm = plan_variant_supported(
+            backend, YVEX_BACKEND_VARIANT_RMS_NORM_F32_WEIGHT_F32);
+        plan->backend_op_rope = plan_variant_supported(
+            backend, YVEX_BACKEND_VARIANT_ROPE_F32);
+        plan->backend_op_attention = plan_variant_supported(
+            backend, YVEX_BACKEND_VARIANT_ATTENTION_CAUSAL_F32);
         yvex_backend_close(backend);
     } else {
         plan->backend_status = yvex_graph_strdup("not-selected");

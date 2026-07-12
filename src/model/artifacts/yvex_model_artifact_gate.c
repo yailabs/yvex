@@ -447,7 +447,19 @@ static int materialize_repeated(const yvex_artifact *artifact,
         *failure_class = classify_materialize_failure(rc, err);
         return rc;
     }
-    if (gate_summary) gate_summary->backend_status = "ready";
+    if (gate_summary) {
+        gate_summary->backend_status =
+            yvex_backend_status_name(yvex_backend_status_of(backend));
+    }
+
+    if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_TENSOR_ALLOC) ||
+        !yvex_backend_supports(backend, YVEX_BACKEND_CAP_TENSOR_READ_WRITE)) {
+        *backend_status = YVEX_MATERIALIZE_BACKEND_UNAVAILABLE;
+        if (gate_summary) gate_summary->backend_status = "memory-unsupported";
+        *failure_class = YVEX_MATERIALIZE_FAILURE_BACKEND_UNAVAILABLE;
+        yvex_backend_close(backend);
+        return YVEX_OK;
+    }
 
     if (check_cleanup &&
         yvex_backend_get_memory_stats(backend, &before_stats, err) == YVEX_OK) {

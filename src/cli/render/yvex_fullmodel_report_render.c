@@ -568,7 +568,7 @@ int print_fullmodel_source_only_report(const char *target,
     yvex_cli_out_writef(stdout, "backend_placement_status: not-performed\n");
     yvex_cli_out_writef(stdout, "cpu_placement: unsupported-source-only\n");
     yvex_cli_out_writef(stdout, "cuda_placement: unsupported-source-only\n");
-    yvex_cli_out_writef(stdout, "cuda_available: %s\n", yvex_backend_cuda_available() ? "true" : "false");
+    yvex_cli_out_writef(stdout, "cuda_context_available: %s\n", yvex_backend_cuda_context_available() ? "true" : "false");
     yvex_cli_out_writef(stdout, "cuda_memory_status: unavailable\n");
     yvex_cli_out_writef(stdout, "residency_plan: future-YVEX-produced-artifact-required\n");
     yvex_cli_out_writef(stdout, "tensor_collections_status: not-performed\n");
@@ -1092,7 +1092,7 @@ int print_fullmodel_missing_report(const yvex_cli_fullmodel_options *options,
     yvex_cli_out_writef(stdout, "backend_placement_status: failed-missing-artifact\n");
     yvex_cli_out_writef(stdout, "cpu_placement: unavailable\n");
     yvex_cli_out_writef(stdout, "cuda_placement: unavailable\n");
-    yvex_cli_out_writef(stdout, "cuda_available: %s\n", yvex_backend_cuda_available() ? "true" : "false");
+    yvex_cli_out_writef(stdout, "cuda_context_available: %s\n", yvex_backend_cuda_context_available() ? "true" : "false");
     yvex_cli_out_writef(stdout, "cuda_memory_status: unavailable\n");
     yvex_cli_out_writef(stdout, "residency_plan: unavailable\n");
     yvex_cli_out_writef(stdout, "tensor_collections_status: unavailable\n");
@@ -1276,7 +1276,7 @@ int print_fullmodel_parse_failure_report(const yvex_cli_fullmodel_options *optio
     yvex_cli_out_writef(stdout, "backend_placement_status: failed-parse\n");
     yvex_cli_out_writef(stdout, "cpu_placement: unavailable\n");
     yvex_cli_out_writef(stdout, "cuda_placement: unavailable\n");
-    yvex_cli_out_writef(stdout, "cuda_available: %s\n", yvex_backend_cuda_available() ? "true" : "false");
+    yvex_cli_out_writef(stdout, "cuda_context_available: %s\n", yvex_backend_cuda_context_available() ? "true" : "false");
     yvex_cli_out_writef(stdout, "cuda_memory_status: unavailable\n");
     yvex_cli_out_writef(stdout, "residency_plan: unavailable\n");
     yvex_cli_out_writef(stdout, "tensor_collections_status: failed\n");

@@ -1,166 +1,21 @@
 /*
- * cuda/cuda_ops.c - CUDA host launch wrappers for backend ops.
+ * cuda/cuda_ops.c - CUDA host launch bindings for admitted primitives.
  *
- * This file validates backend tensors and launches CUDA kernels. It does not
- * expose CUDA syntax to the plain C runtime.
+ * Owner: src/backend/cuda.
+ * Owns: exact dtype/shape/parameter validation, Driver API launch parameters,
+ * bounded grid arithmetic, synchronization, and output-written transitions.
+ * Does not own: bundle admission, device kernel source, CPU references, graph
+ * semantics, model-family behavior, CLI output, qtype compute, or generation.
+ * Invariants: every op requires an exact admitted variant; launch and final
+ * synchronization must succeed before any output is marked written.
+ * Boundary: bounded primitive execution is not transformer or model runtime.
  */
 
 #include "cuda_internal.h"
 #include <limits.h>
+#include <math.h>
 #include <stdint.h>
 #include <string.h>
-#include "cuda_kernels.h"
-
-
-#ifdef YVEX_HAVE_CUDA_KERNEL_PTX
-#else
-/*
- * Fallback embedded PTX.
- *
- * The canonical kernel source is cuda_kernels.cu. This fallback keeps the
- * baseline build usable on hosts without nvcc.
- */
-static const char yvex_cuda_kernels_ptx[] =
-".version 6.4\n"
-".target sm_30\n"
-".address_size 64\n"
-".visible .entry yvex_embed_f32(\n"
-"    .param .u64 p_embedding,\n"
-"    .param .u64 p_token_ids,\n"
-"    .param .u64 p_out,\n"
-"    .param .u64 p_hidden_size,\n"
-"    .param .u64 p_vocab_size,\n"
-"    .param .u64 p_token_count\n"
-")\n"
-"{\n"
-"    .reg .pred %p<3>;\n"
-"    .reg .b32 %r<6>;\n"
-"    .reg .b64 %rd<24>;\n"
-"    .reg .f32 %f<2>;\n"
-"\n"
-"    ld.param.u64 %rd1, [p_embedding];\n"
-"    ld.param.u64 %rd2, [p_token_ids];\n"
-"    ld.param.u64 %rd3, [p_out];\n"
-"    ld.param.u64 %rd4, [p_hidden_size];\n"
-"    ld.param.u64 %rd5, [p_vocab_size];\n"
-"    ld.param.u64 %rd6, [p_token_count];\n"
-"\n"
-"    mov.u32 %r1, %tid.x;\n"
-"    mov.u32 %r2, %ctaid.x;\n"
-"    mov.u32 %r3, %ntid.x;\n"
-"    mad.lo.u32 %r4, %r2, %r3, %r1;\n"
-"    cvt.u64.u32 %rd7, %r4;\n"
-"    mul.lo.u64 %rd8, %rd4, %rd6;\n"
-"    setp.ge.u64 %p1, %rd7, %rd8;\n"
-"    @%p1 bra DONE;\n"
-"\n"
-"    div.u64 %rd9, %rd7, %rd4;\n"
-"    rem.u64 %rd10, %rd7, %rd4;\n"
-"    mul.lo.u64 %rd11, %rd9, 4;\n"
-"    add.u64 %rd12, %rd2, %rd11;\n"
-"    ld.global.u32 %r5, [%rd12];\n"
-"    cvt.u64.u32 %rd13, %r5;\n"
-"    setp.ge.u64 %p2, %rd13, %rd5;\n"
-"    @%p2 bra DONE;\n"
-"\n"
-"    mul.lo.u64 %rd14, %rd13, %rd4;\n"
-"    add.u64 %rd15, %rd14, %rd10;\n"
-"    mul.lo.u64 %rd16, %rd15, 4;\n"
-"    add.u64 %rd17, %rd1, %rd16;\n"
-"    ld.global.f32 %f1, [%rd17];\n"
-"    mul.lo.u64 %rd18, %rd7, 4;\n"
-"    add.u64 %rd19, %rd3, %rd18;\n"
-"    st.global.f32 [%rd19], %f1;\n"
-"\n"
-"DONE:\n"
-"    ret;\n"
-"}\n"
-".visible .entry yvex_embed_f16_to_f32(\n"
-"    .param .u64 p_embedding,\n"
-"    .param .u64 p_token_ids,\n"
-"    .param .u64 p_out,\n"
-"    .param .u64 p_hidden_size,\n"
-"    .param .u64 p_vocab_size,\n"
-"    .param .u64 p_token_count\n"
-")\n"
-"{\n"
-"    ret;\n"
-"}\n"
-".visible .entry yvex_rms_norm_f32_weight_f32(\n"
-"    .param .u64 p_input,\n"
-"    .param .u64 p_weight,\n"
-"    .param .u64 p_out,\n"
-"    .param .u64 p_hidden_size,\n"
-"    .param .f32 p_epsilon\n"
-")\n"
-"{\n"
-"    ret;\n"
-"}\n"
-".visible .entry yvex_rms_norm_f32_weight_f16(\n"
-"    .param .u64 p_input,\n"
-"    .param .u64 p_weight,\n"
-"    .param .u64 p_out,\n"
-"    .param .u64 p_hidden_size,\n"
-"    .param .f32 p_epsilon\n"
-")\n"
-"{\n"
-"    ret;\n"
-"}\n"
-".visible .entry yvex_rope_f32(\n"
-"    .param .u64 p_input,\n"
-"    .param .u64 p_out,\n"
-"    .param .u64 p_head_dim,\n"
-"    .param .u64 p_position,\n"
-"    .param .f32 p_inverse_root\n"
-")\n"
-"{\n"
-"    ret;\n"
-"}\n"
-".visible .entry yvex_matmul_f32(\n"
-"    .param .u64 p_input,\n"
-"    .param .u64 p_weight,\n"
-"    .param .u64 p_out,\n"
-"    .param .u64 p_m,\n"
-"    .param .u64 p_k,\n"
-"    .param .u64 p_n\n"
-")\n"
-"{\n"
-"    ret;\n"
-"}\n"
-".visible .entry yvex_mlp_f32(\n"
-"    .param .u64 p_input,\n"
-"    .param .u64 p_gate_weight,\n"
-"    .param .u64 p_up_weight,\n"
-"    .param .u64 p_down_weight,\n"
-"    .param .u64 p_intermediate,\n"
-"    .param .u64 p_out,\n"
-"    .param .u64 p_batch,\n"
-"    .param .u64 p_hidden_dim,\n"
-"    .param .u64 p_ffn_dim,\n"
-"    .param .u64 p_expert_count,\n"
-"    .param .u64 p_expert_id,\n"
-"    .param .u32 p_routed_expert_mode\n"
-")\n"
-"{\n"
-"    ret;\n"
-"}\n"
-".visible .entry yvex_attention_f32(\n"
-"    .param .u64 p_query,\n"
-"    .param .u64 p_keys,\n"
-"    .param .u64 p_values,\n"
-"    .param .u64 p_score_scratch,\n"
-"    .param .u64 p_probability_scratch,\n"
-"    .param .u64 p_out,\n"
-"    .param .u64 p_seq_len,\n"
-"    .param .u64 p_position,\n"
-"    .param .u64 p_head_dim,\n"
-"    .param .f32 p_scale,\n"
-"    .param .u32 p_causal\n"
-")\n"
-"{\n"
-"    ret;\n"
-"}\n";
-#endif
 
 static int tensor_is_f32_bytes(const yvex_device_tensor *tensor,
                                unsigned long long elements)
@@ -174,6 +29,30 @@ static int tensor_is_f16_bytes(const yvex_device_tensor *tensor,
 {
     return elements <= (unsigned long long)(UINT64_MAX / 2ull) &&
            tensor->bytes == elements * 2ull;
+}
+
+/* Contract: converts a non-zero one-dimensional launch extent without truncation. */
+static int cuda_grid_1d(unsigned long long elements,
+                        unsigned int block_size,
+                        unsigned int *out,
+                        const char *where,
+                        yvex_error *err)
+{
+    unsigned long long blocks;
+
+    if (!out || block_size == 0u || elements == 0ull) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, where,
+                       "CUDA launch extent and block size must be non-zero");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    blocks = ((elements - 1ull) / (unsigned long long)block_size) + 1ull;
+    if (blocks > (unsigned long long)UINT_MAX) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, where,
+                       "CUDA grid dimension exceeds Driver API range");
+        return YVEX_ERR_BOUNDS;
+    }
+    *out = (unsigned int)blocks;
+    return YVEX_OK;
 }
 
 static double cuda_nth_root_double(double x, unsigned long long n)
@@ -562,183 +441,6 @@ static int cuda_mlp_validate(const yvex_backend *backend,
     return YVEX_OK;
 }
 
-static int ensure_kernel_module(yvex_cuda_backend_state *state, const char *where, yvex_error *err)
-{
-    int rc;
-
-    if (state->module_loaded) {
-        return YVEX_OK;
-    }
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuModuleLoadData(&state->module,
-                                                         yvex_cuda_kernels_ptx),
-                          where, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-    state->module_loaded = 1;
-    return YVEX_OK;
-}
-
-static int ensure_embed_kernel(yvex_cuda_backend_state *state, yvex_error *err)
-{
-    int rc;
-
-    rc = ensure_kernel_module(state, "cuda.kernels.load_module", err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-    if (state->embed_function && state->embed_f16_function) {
-        return YVEX_OK;
-    }
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuModuleGetFunction(&state->embed_function,
-                                                            state->module,
-                                                            "yvex_embed_f32"),
-                          "cuda.embed.load_function", err);
-    if (rc != YVEX_OK) {
-        (void)state->driver.cuModuleUnload(state->module);
-        state->module = NULL;
-        return rc;
-    }
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuModuleGetFunction(&state->embed_f16_function,
-                                                            state->module,
-                                                            "yvex_embed_f16_to_f32"),
-                          "cuda.embed.load_f16_function", err);
-    if (rc != YVEX_OK) {
-        (void)state->driver.cuModuleUnload(state->module);
-        state->module = NULL;
-        state->embed_function = NULL;
-        return rc;
-    }
-    return YVEX_OK;
-}
-
-static int ensure_rms_norm_kernel(yvex_cuda_backend_state *state, yvex_error *err)
-{
-    int rc;
-
-    rc = ensure_kernel_module(state, "cuda.kernels.load_module", err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-    if (state->rms_norm_f32_function && state->rms_norm_f16_function) {
-        return YVEX_OK;
-    }
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuModuleGetFunction(&state->rms_norm_f32_function,
-                                                            state->module,
-                                                            "yvex_rms_norm_f32_weight_f32"),
-                          "cuda.rms_norm.load_f32_function", err);
-    if (rc != YVEX_OK) {
-        state->rms_norm_f32_function = NULL;
-        return rc;
-    }
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuModuleGetFunction(&state->rms_norm_f16_function,
-                                                            state->module,
-                                                            "yvex_rms_norm_f32_weight_f16"),
-                          "cuda.rms_norm.load_f16_function", err);
-    if (rc != YVEX_OK) {
-        state->rms_norm_f16_function = NULL;
-        return rc;
-    }
-    return YVEX_OK;
-}
-
-static int ensure_rope_kernel(yvex_cuda_backend_state *state, yvex_error *err)
-{
-    int rc;
-
-    rc = ensure_kernel_module(state, "cuda.kernels.load_module", err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-    if (state->rope_function) {
-        return YVEX_OK;
-    }
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuModuleGetFunction(&state->rope_function,
-                                                            state->module,
-                                                            "yvex_rope_f32"),
-                          "cuda.rope.load_function", err);
-    if (rc != YVEX_OK) {
-        state->rope_function = NULL;
-        return rc;
-    }
-    return YVEX_OK;
-}
-
-static int ensure_matmul_kernel(yvex_cuda_backend_state *state, yvex_error *err)
-{
-    int rc;
-
-    rc = ensure_kernel_module(state, "cuda.kernels.load_module", err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-    if (state->matmul_function) {
-        return YVEX_OK;
-    }
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuModuleGetFunction(&state->matmul_function,
-                                                            state->module,
-                                                            "yvex_matmul_f32"),
-                          "cuda.matmul.load_function", err);
-    if (rc != YVEX_OK) {
-        state->matmul_function = NULL;
-        return rc;
-    }
-    return YVEX_OK;
-}
-
-static int ensure_mlp_kernel(yvex_cuda_backend_state *state, yvex_error *err)
-{
-    int rc;
-
-    rc = ensure_kernel_module(state, "cuda.kernels.load_module", err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-    if (state->mlp_function) {
-        return YVEX_OK;
-    }
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuModuleGetFunction(&state->mlp_function,
-                                                            state->module,
-                                                            "yvex_mlp_f32"),
-                          "cuda.mlp.load_function", err);
-    if (rc != YVEX_OK) {
-        state->mlp_function = NULL;
-        return rc;
-    }
-    return YVEX_OK;
-}
-
-static int ensure_attention_kernel(yvex_cuda_backend_state *state, yvex_error *err)
-{
-    int rc;
-
-    rc = ensure_kernel_module(state, "cuda.kernels.load_module", err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-    if (state->attention_function) {
-        return YVEX_OK;
-    }
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuModuleGetFunction(&state->attention_function,
-                                                            state->module,
-                                                            "yvex_attention_f32"),
-                          "cuda.attention.load_function", err);
-    if (rc != YVEX_OK) {
-        state->attention_function = NULL;
-        return rc;
-    }
-    return YVEX_OK;
-}
-
 int yvex_cuda_op_embed(yvex_backend *backend,
                        const yvex_device_tensor *embedding,
                        const unsigned int *token_ids,
@@ -757,6 +459,9 @@ int yvex_cuda_op_embed(yvex_backend *backend,
     unsigned int block_size = 128;
     unsigned int grid_size;
     void *params[6];
+    yvex_backend_operation_variant variant;
+    yvex_error cleanup_error;
+    int cleanup_rc;
     int rc;
     unsigned long long i;
 
@@ -776,6 +481,15 @@ int yvex_cuda_op_embed(yvex_backend *backend,
         yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_backend_op_embed",
                        "CUDA backend embed supports F32 and F16 embeddings with F32 output");
         return YVEX_ERR_UNSUPPORTED;
+    }
+    variant = embedding->dtype == YVEX_DTYPE_F16
+                  ? YVEX_BACKEND_VARIANT_EMBED_F16_TO_F32
+                  : YVEX_BACKEND_VARIANT_EMBED_F32_TO_F32;
+    out->is_written = 0;
+    rc = yvex_cuda_require_capability(backend, variant,
+                                      "yvex_backend_op_embed", err);
+    if (rc != YVEX_OK) {
+        return rc;
     }
     if (embedding->rank != 2) {
         yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_embed",
@@ -834,11 +548,6 @@ int yvex_cuda_op_embed(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
-    rc = ensure_embed_kernel(state, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-
     token_bytes = (size_t)(token_count * sizeof(unsigned int));
     rc = yvex_cuda_status(&state->driver,
                           state->driver.cuMemAlloc_v2(&token_ids_device, token_bytes),
@@ -852,11 +561,34 @@ int yvex_cuda_op_embed(yvex_backend *backend,
                                                          token_bytes),
                           "cuda.embed.token_copy", err);
     if (rc != YVEX_OK) {
-        (void)state->driver.cuMemFree_v2(token_ids_device);
+        yvex_error_clear(&cleanup_error);
+        cleanup_rc = yvex_cuda_temporary_free(backend, variant, token_ids_device,
+                                              "cuda.embed.token_cleanup",
+                                              &cleanup_error);
+        if (cleanup_rc != YVEX_OK) {
+            if (err) {
+                *err = cleanup_error;
+            }
+            return cleanup_rc;
+        }
         return rc;
     }
 
-    grid_size = (unsigned int)((total_elements + block_size - 1u) / block_size);
+    rc = cuda_grid_1d(total_elements, block_size, &grid_size,
+                      "cuda.embed.grid", err);
+    if (rc != YVEX_OK) {
+        yvex_error_clear(&cleanup_error);
+        cleanup_rc = yvex_cuda_temporary_free(backend, variant, token_ids_device,
+                                              "cuda.embed.token_cleanup",
+                                              &cleanup_error);
+        if (cleanup_rc != YVEX_OK) {
+            if (err) {
+                *err = cleanup_error;
+            }
+            return cleanup_rc;
+        }
+        return rc;
+    }
     embedding_ptr = yvex_cuda_tensor_ptr(embedding);
     out_ptr = yvex_cuda_tensor_ptr(out);
     params[0] = &embedding_ptr;
@@ -865,19 +597,24 @@ int yvex_cuda_op_embed(yvex_backend *backend,
     params[3] = &hidden_size;
     params[4] = &vocab_size;
     params[5] = &token_count;
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuLaunchKernel(embedding->dtype == YVEX_DTYPE_F16
-                                                           ? state->embed_f16_function
-                                                           : state->embed_function,
-                                                       grid_size, 1, 1,
-                                                       block_size, 1, 1,
-                                                       0, NULL, params, NULL),
+    rc = yvex_cuda_launch(backend, variant,
+                          embedding->dtype == YVEX_DTYPE_F16
+                              ? state->embed_f16_function : state->embed_function,
+                          grid_size, block_size, 0, params,
                           "cuda.embed.launch", err);
     if (rc == YVEX_OK) {
-        rc = yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
-                              "cuda.embed.sync", err);
+        rc = yvex_cuda_synchronize(backend, variant, "cuda.embed.sync", err);
     }
-    (void)state->driver.cuMemFree_v2(token_ids_device);
+    yvex_error_clear(&cleanup_error);
+    cleanup_rc = yvex_cuda_temporary_free(backend, variant, token_ids_device,
+                                          "cuda.embed.token_cleanup",
+                                          &cleanup_error);
+    if (cleanup_rc != YVEX_OK) {
+        if (err) {
+            *err = cleanup_error;
+        }
+        return cleanup_rc;
+    }
     if (rc != YVEX_OK) {
         return rc;
     }
@@ -901,6 +638,7 @@ int yvex_cuda_op_rms_norm(yvex_backend *backend,
     unsigned int block_size = 256u;
     unsigned int shared_bytes = block_size * (unsigned int)sizeof(float);
     void *params[5];
+    yvex_backend_operation_variant variant;
     int rc;
 
     if (!state) {
@@ -921,9 +659,18 @@ int yvex_cuda_op_rms_norm(yvex_backend *backend,
                        "CUDA RMSNorm supports F32 input/output with F16 or F32 weight");
         return YVEX_ERR_UNSUPPORTED;
     }
-    if (epsilon <= 0.0f) {
+    variant = weight->dtype == YVEX_DTYPE_F16
+                  ? YVEX_BACKEND_VARIANT_RMS_NORM_F32_WEIGHT_F16
+                  : YVEX_BACKEND_VARIANT_RMS_NORM_F32_WEIGHT_F32;
+    out->is_written = 0;
+    rc = yvex_cuda_require_capability(backend, variant,
+                                      "yvex_backend_op_rms_norm", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    if (!isfinite(epsilon) || epsilon <= 0.0f) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rms_norm",
-                       "epsilon must be positive");
+                       "epsilon must be finite and positive");
         return YVEX_ERR_INVALID_ARG;
     }
     if (input->rank == 2 && input->dims[0] == 1) {
@@ -972,11 +719,6 @@ int yvex_cuda_op_rms_norm(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
-    rc = ensure_rms_norm_kernel(state, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-
     input_ptr = yvex_cuda_tensor_ptr(input);
     weight_ptr = yvex_cuda_tensor_ptr(weight);
     out_ptr = yvex_cuda_tensor_ptr(out);
@@ -986,17 +728,14 @@ int yvex_cuda_op_rms_norm(yvex_backend *backend,
     params[3] = &hidden_size;
     params[4] = &epsilon;
 
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuLaunchKernel(weight->dtype == YVEX_DTYPE_F16
-                                                           ? state->rms_norm_f16_function
-                                                           : state->rms_norm_f32_function,
-                                                       1, 1, 1,
-                                                       block_size, 1, 1,
-                                                       shared_bytes, NULL, params, NULL),
+    rc = yvex_cuda_launch(backend, variant,
+                          weight->dtype == YVEX_DTYPE_F16
+                              ? state->rms_norm_f16_function
+                              : state->rms_norm_f32_function,
+                          1, block_size, shared_bytes, params,
                           "cuda.rms_norm.launch", err);
     if (rc == YVEX_OK) {
-        rc = yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
-                              "cuda.rms_norm.sync", err);
+        rc = yvex_cuda_synchronize(backend, variant, "cuda.rms_norm.sync", err);
     }
     if (rc != YVEX_OK) {
         return rc;
@@ -1040,14 +779,20 @@ int yvex_cuda_op_rope(yvex_backend *backend,
                        "CUDA RoPE supports F32 input/output");
         return YVEX_ERR_UNSUPPORTED;
     }
+    out->is_written = 0;
+    rc = yvex_cuda_require_capability(backend, YVEX_BACKEND_VARIANT_ROPE_F32,
+                                      "yvex_backend_op_rope", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
     if (!yvex_backend_tensor_same_shape(input, out)) {
         yvex_error_set(err, YVEX_ERR_FORMAT, "yvex_backend_op_rope",
                        "RoPE output shape must match input shape");
         return YVEX_ERR_FORMAT;
     }
-    if (rope_base <= 1.0f) {
+    if (!isfinite(rope_base) || rope_base <= 1.0f) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_rope",
-                       "rope_base must be greater than 1");
+                       "rope_base must be finite and greater than 1");
         return YVEX_ERR_INVALID_ARG;
     }
     rc = cuda_rope_head_dim(input, &head_dim, err);
@@ -1064,15 +809,12 @@ int yvex_cuda_op_rope(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
-    rc = ensure_rope_kernel(state, err);
+    pair_count = head_dim / 2ull;
+    inverse_root = (float)(1.0 / cuda_nth_root_double((double)rope_base, pair_count));
+    rc = cuda_grid_1d(pair_count, block_size, &grid_size, "cuda.rope.grid", err);
     if (rc != YVEX_OK) {
         return rc;
     }
-
-    pair_count = head_dim / 2ull;
-    inverse_root = (float)(1.0 / cuda_nth_root_double((double)rope_base, pair_count));
-    grid_size = (unsigned int)((pair_count + (unsigned long long)block_size - 1ull) /
-                               (unsigned long long)block_size);
     input_ptr = yvex_cuda_tensor_ptr(input);
     out_ptr = yvex_cuda_tensor_ptr(out);
     params[0] = &input_ptr;
@@ -1081,15 +823,12 @@ int yvex_cuda_op_rope(yvex_backend *backend,
     params[3] = &position;
     params[4] = &inverse_root;
 
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuLaunchKernel(state->rope_function,
-                                                       grid_size, 1, 1,
-                                                       block_size, 1, 1,
-                                                       0, NULL, params, NULL),
-                          "cuda.rope.launch", err);
+    rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_ROPE_F32,
+                          state->rope_function, grid_size, block_size, 0,
+                          params, "cuda.rope.launch", err);
     if (rc == YVEX_OK) {
-        rc = yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
-                              "cuda.rope.sync", err);
+        rc = yvex_cuda_synchronize(backend, YVEX_BACKEND_VARIANT_ROPE_F32,
+                                   "cuda.rope.sync", err);
     }
     if (rc != YVEX_OK) {
         return rc;
@@ -1128,19 +867,23 @@ int yvex_cuda_op_matmul(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
+    out->is_written = 0;
+    rc = yvex_cuda_require_capability(backend, YVEX_BACKEND_VARIANT_MATMUL_F32,
+                                      "yvex_backend_op_matmul", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
 
     rc = yvex_cuda_set_current(backend, "yvex_backend_op_matmul", err);
     if (rc != YVEX_OK) {
         return rc;
     }
-    rc = ensure_matmul_kernel(state, err);
+    output_elements = m * n;
+    rc = cuda_grid_1d(output_elements, block_size, &grid_size,
+                      "cuda.matmul.grid", err);
     if (rc != YVEX_OK) {
         return rc;
     }
-
-    output_elements = m * n;
-    grid_size = (unsigned int)((output_elements + (unsigned long long)block_size - 1ull) /
-                               (unsigned long long)block_size);
     input_ptr = yvex_cuda_tensor_ptr(input);
     weight_ptr = yvex_cuda_tensor_ptr(weight);
     out_ptr = yvex_cuda_tensor_ptr(out);
@@ -1151,15 +894,12 @@ int yvex_cuda_op_matmul(yvex_backend *backend,
     params[4] = &k;
     params[5] = &n;
 
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuLaunchKernel(state->matmul_function,
-                                                       grid_size, 1, 1,
-                                                       block_size, 1, 1,
-                                                       0, NULL, params, NULL),
-                          "cuda.matmul.launch", err);
+    rc = yvex_cuda_launch(backend, YVEX_BACKEND_VARIANT_MATMUL_F32,
+                          state->matmul_function, grid_size, block_size, 0,
+                          params, "cuda.matmul.launch", err);
     if (rc == YVEX_OK) {
-        rc = yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
-                              "cuda.matmul.sync", err);
+        rc = yvex_cuda_synchronize(backend, YVEX_BACKEND_VARIANT_MATMUL_F32,
+                                   "cuda.matmul.sync", err);
     }
     if (rc != YVEX_OK) {
         return rc;
@@ -1194,6 +934,7 @@ int yvex_cuda_op_mlp(yvex_backend *backend,
     unsigned int block_size = 128u;
     int routed;
     void *params[12];
+    yvex_backend_operation_variant variant;
     int rc;
 
     if (!state) {
@@ -1207,16 +948,21 @@ int yvex_cuda_op_mlp(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
+    variant = options->routed_expert_mode
+                  ? YVEX_BACKEND_VARIANT_MLP_ROUTED_F32
+                  : YVEX_BACKEND_VARIANT_MLP_DENSE_F32;
+    intermediate->is_written = 0;
+    out->is_written = 0;
+    rc = yvex_cuda_require_capability(backend, variant,
+                                      "yvex_backend_op_mlp", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
 
     rc = yvex_cuda_set_current(backend, "yvex_backend_op_mlp", err);
     if (rc != YVEX_OK) {
         return rc;
     }
-    rc = ensure_mlp_kernel(state, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-
     input_ptr = yvex_cuda_tensor_ptr(input);
     gate_ptr = yvex_cuda_tensor_ptr(gate_weight);
     up_ptr = yvex_cuda_tensor_ptr(up_weight);
@@ -1239,15 +985,10 @@ int yvex_cuda_op_mlp(yvex_backend *backend,
     params[10] = &expert_id;
     params[11] = &routed;
 
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuLaunchKernel(state->mlp_function,
-                                                       1, 1, 1,
-                                                       block_size, 1, 1,
-                                                       0, NULL, params, NULL),
-                          "cuda.mlp.launch", err);
+    rc = yvex_cuda_launch(backend, variant, state->mlp_function,
+                          1, block_size, 0, params, "cuda.mlp.launch", err);
     if (rc == YVEX_OK) {
-        rc = yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
-                              "cuda.mlp.sync", err);
+        rc = yvex_cuda_synchronize(backend, variant, "cuda.mlp.sync", err);
     }
     if (rc != YVEX_OK) {
         return rc;
@@ -1283,6 +1024,7 @@ int yvex_cuda_op_attention(yvex_backend *backend,
     unsigned int block_size = 128u;
     int causal_flag = causal ? 1 : 0;
     void *params[11];
+    yvex_backend_operation_variant variant;
     int rc;
 
     if (!state) {
@@ -1290,9 +1032,9 @@ int yvex_cuda_op_attention(yvex_backend *backend,
                        "CUDA backend state is missing");
         return YVEX_ERR_STATE;
     }
-    if (scale <= 0.0f) {
+    if (!isfinite(scale) || scale <= 0.0f) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_backend_op_attention",
-                       "scale must be positive");
+                       "scale must be finite and positive");
         return YVEX_ERR_INVALID_ARG;
     }
     rc = cuda_attention_validate(backend, query, keys, values, seq_len, position,
@@ -1303,16 +1045,21 @@ int yvex_cuda_op_attention(yvex_backend *backend,
         return rc;
     }
     (void)kv_elements;
+    variant = causal ? YVEX_BACKEND_VARIANT_ATTENTION_CAUSAL_F32
+                     : YVEX_BACKEND_VARIANT_ATTENTION_NONCAUSAL_F32;
+    score_scratch->is_written = 0;
+    probability_scratch->is_written = 0;
+    out->is_written = 0;
+    rc = yvex_cuda_require_capability(backend, variant,
+                                      "yvex_backend_op_attention", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
 
     rc = yvex_cuda_set_current(backend, "yvex_backend_op_attention", err);
     if (rc != YVEX_OK) {
         return rc;
     }
-    rc = ensure_attention_kernel(state, err);
-    if (rc != YVEX_OK) {
-        return rc;
-    }
-
     query_ptr = yvex_cuda_tensor_ptr(query);
     keys_ptr = yvex_cuda_tensor_ptr(keys);
     values_ptr = yvex_cuda_tensor_ptr(values);
@@ -1331,15 +1078,11 @@ int yvex_cuda_op_attention(yvex_backend *backend,
     params[9] = &scale;
     params[10] = &causal_flag;
 
-    rc = yvex_cuda_status(&state->driver,
-                          state->driver.cuLaunchKernel(state->attention_function,
-                                                       1, 1, 1,
-                                                       block_size, 1, 1,
-                                                       0, NULL, params, NULL),
+    rc = yvex_cuda_launch(backend, variant, state->attention_function,
+                          1, block_size, 0, params,
                           "cuda.attention.launch", err);
     if (rc == YVEX_OK) {
-        rc = yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
-                              "cuda.attention.sync", err);
+        rc = yvex_cuda_synchronize(backend, variant, "cuda.attention.sync", err);
     }
     if (rc != YVEX_OK) {
         return rc;

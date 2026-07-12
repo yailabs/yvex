@@ -24,7 +24,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda smoke-cuda check-cuda test test-core test-cli test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -41,14 +41,14 @@ LDFLAGS ?=
 LDLIBS ?= -ldl
 TEST_CPPFLAGS := $(CPPFLAGS) -Itests
 
-BUILD_DIR := build
-OBJ_DIR := $(BUILD_DIR)/obj
-LIB_DIR := $(BUILD_DIR)/lib
-TEST_DIR := $(BUILD_DIR)/tests
+BUILD_DIR ?= build
+OBJ_DIR ?= $(BUILD_DIR)/obj
+LIB_DIR ?= $(BUILD_DIR)/lib
+TEST_DIR ?= $(BUILD_DIR)/tests
 
-LIBYVEX := $(LIB_DIR)/libyvex.a
-YVEX_BIN := ./yvex
-YVEXD_BIN := ./yvexd
+LIBYVEX ?= $(LIB_DIR)/libyvex.a
+YVEX_BIN ?= ./yvex
+YVEXD_BIN ?= ./yvexd
 
 CLI_COMMAND_SRCS := src/cli/commands/yvex_generate_cli.c \
 	src/cli/commands/yvex_graph_cli.c \
@@ -185,6 +185,7 @@ CLI_SRCS := \
 
 CUDA_SRCS := \
 	src/backend/cuda/cuda_backend.c \
+	src/backend/cuda/cuda_capability.c \
 	src/backend/cuda/cuda_tensor.c \
 	src/backend/cuda/cuda_ops.c \
 	src/backend/cuda/cuda_info.c \
@@ -305,6 +306,13 @@ smoke-cuda: cuda
 check-cuda: cuda-info test-cuda smoke-cuda
 	@echo "yvex check-cuda: ok"
 
+test-cuda-no-nvcc: tests/test_cuda_failclosed.sh
+	$(MAKE) BUILD_DIR=build/no-nvcc \
+		YVEX_BIN=build/no-nvcc/yvex \
+		YVEXD_BIN=build/no-nvcc/yvexd \
+		NVCC=__yvex_nvcc_unavailable__ all
+	YVEX_BIN=build/no-nvcc/yvex sh tests/test_cuda_failclosed.sh
+
 test-core: $(TEST_RUNNER)
 	$(TEST_RUNNER)
 
@@ -339,7 +347,7 @@ test-surface: tests/test_surface.sh
 
 smoke: test-cli
 
-check: check-docs check-guardrails lib cli server test test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke
+check: check-docs check-guardrails lib cli server test test-cuda-no-nvcc test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke
 	@echo "yvex check: ok"
 
 $(LIBYVEX): $(CORE_OBJS)

@@ -1304,7 +1304,8 @@ static int controlled_block_execute_fixture(
         exit_code = yvex_graph_exit_for_status(rc);
         goto cleanup;
     }
-    result->backend_status = "ready";
+    result->backend_status = yvex_backend_status_name(
+        yvex_backend_status_of(device.backend));
     if (!yvex_backend_supports(device.backend, YVEX_BACKEND_CAP_OP_RMS_NORM) ||
         !yvex_backend_supports(device.backend, YVEX_BACKEND_CAP_OP_MATMUL) ||
         !yvex_backend_supports(device.backend, YVEX_BACKEND_CAP_OP_ROPE) ||
@@ -2258,6 +2259,20 @@ static void graph_append_check_summary(yvex_graph_report *report,
     yvex_graph_report_appendf(report, "status: %s\n", result->final_status);
 }
 
+/* Contract: returns one exact capability state without executing a primitive. */
+static int graph_backend_variant_supported(
+    const yvex_backend *backend,
+    yvex_backend_operation_variant variant)
+{
+    yvex_backend_capability_result result;
+    yvex_error err;
+
+    yvex_error_clear(&err);
+    return yvex_backend_query_capability(backend, variant, &result, &err) ==
+               YVEX_OK &&
+           result.state == YVEX_BACKEND_CAPABILITY_SUPPORTED;
+}
+
 static int graph_check_backend_supported(const char *backend_name,
                                          const char **backend_status)
 {
@@ -2276,11 +2291,16 @@ static int graph_check_backend_supported(const char *backend_name,
         yvex_error_clear(&err);
         return 0;
     }
-    supported = yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ROPE) &&
-                yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ATTENTION) &&
-                yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MATMUL) &&
-                yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_RMS_NORM) &&
-                yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MLP);
+    supported = graph_backend_variant_supported(
+                    backend, YVEX_BACKEND_VARIANT_ROPE_F32) &&
+                graph_backend_variant_supported(
+                    backend, YVEX_BACKEND_VARIANT_ATTENTION_CAUSAL_F32) &&
+                graph_backend_variant_supported(
+                    backend, YVEX_BACKEND_VARIANT_MATMUL_F32) &&
+                graph_backend_variant_supported(
+                    backend, YVEX_BACKEND_VARIANT_RMS_NORM_F32_WEIGHT_F32) &&
+                graph_backend_variant_supported(
+                    backend, YVEX_BACKEND_VARIANT_MLP_DENSE_F32);
     yvex_backend_close(backend);
     *backend_status = supported ? "ready" : "unsupported";
     return supported;
@@ -2420,7 +2440,7 @@ static int graph_primitive_execute_rope_op(yvex_graph_report *report,
         free(input_values);
         return yvex_graph_exit_for_status(rc);
     }
-    guard.backend_status = "ready";
+    guard.backend_status = yvex_backend_status_name(yvex_backend_status_of(backend));
     if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ROPE)) {
         guard.backend_op_status = "unsupported";
         graph_append_guard_report(report, &guard);
@@ -2818,7 +2838,7 @@ static int graph_primitive_execute_attention_op(yvex_graph_report *report,
         exit_code = yvex_graph_exit_for_status(rc);
         goto cleanup_host;
     }
-    guard.backend_status = "ready";
+    guard.backend_status = yvex_backend_status_name(yvex_backend_status_of(backend));
     if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_ATTENTION)) {
         guard.backend_op_status = "unsupported";
         graph_append_guard_report(report, &guard);
@@ -3183,7 +3203,7 @@ static int graph_primitive_execute_matmul_op(yvex_graph_report *report,
         exit_code = yvex_graph_exit_for_status(rc);
         goto cleanup_host;
     }
-    guard.backend_status = "ready";
+    guard.backend_status = yvex_backend_status_name(yvex_backend_status_of(backend));
     if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MATMUL) ||
         graph_test_env_enabled("YVEX_TEST_MATMUL_BACKEND_OP_UNSUPPORTED")) {
         guard.backend_op_status = "unsupported";
@@ -3586,7 +3606,7 @@ static int graph_primitive_execute_mlp_op(yvex_graph_report *report,
         exit_code = yvex_graph_exit_for_status(rc);
         goto cleanup_host;
     }
-    guard.backend_status = "ready";
+    guard.backend_status = yvex_backend_status_name(yvex_backend_status_of(backend));
     if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_MLP) ||
         graph_test_env_enabled("YVEX_TEST_MLP_BACKEND_OP_UNSUPPORTED")) {
         guard.backend_op_status = "unsupported";

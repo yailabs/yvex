@@ -986,7 +986,8 @@ int yvex_engine_execute_fixture_graph(yvex_engine *engine,
         return YVEX_ERR_STATE;
     }
     out->backend_name = yvex_backend_kind_name(yvex_backend_kind_of(engine->weight_backend));
-    out->backend_status = "ready";
+    out->backend_status = yvex_backend_status_name(
+        yvex_backend_status_of(engine->weight_backend));
 
     weight = yvex_weight_table_find(engine->weights, "token_embd.weight");
     if (!weight) {
@@ -1165,7 +1166,8 @@ int yvex_engine_execute_partial_graph(yvex_engine *engine,
         return YVEX_ERR_STATE;
     }
     out->backend_name = yvex_backend_kind_name(yvex_backend_kind_of(engine->weight_backend));
-    out->backend_status = "ready";
+    out->backend_status = yvex_backend_status_name(
+        yvex_backend_status_of(engine->weight_backend));
 
     weight = yvex_weight_table_find(engine->weights, "token_embd.weight");
     if (!weight) {
@@ -1448,7 +1450,8 @@ int yvex_engine_execute_segment_graph(yvex_engine *engine,
         return YVEX_ERR_STATE;
     }
     out->backend_name = yvex_backend_kind_name(yvex_backend_kind_of(engine->weight_backend));
-    out->backend_status = "ready";
+    out->backend_status = yvex_backend_status_name(
+        yvex_backend_status_of(engine->weight_backend));
 
     for (i = 0; i < yvex_graph_op_count(engine->graph); ++i) {
         const yvex_graph_op_info *candidate = yvex_graph_op_at(engine->graph, i);
@@ -1869,8 +1872,10 @@ int yvex_session_create(yvex_session **out,
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "yvex_session_create", "engine and backend are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (yvex_backend_status_of(backend) != YVEX_BACKEND_STATUS_READY) {
-        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_session_create", "backend is not ready for engine/session layer sessions");
+    if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_TENSOR_ALLOC) ||
+        !yvex_backend_supports(backend, YVEX_BACKEND_CAP_TENSOR_READ_WRITE)) {
+        yvex_error_set(err, YVEX_ERR_UNSUPPORTED, "yvex_session_create",
+                       "backend lacks exact tensor allocation/transfer capabilities");
         return YVEX_ERR_UNSUPPORTED;
     }
 

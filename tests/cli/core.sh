@@ -1961,7 +1961,7 @@ contains "$OUT_DIR/backend_cpu.out" "op_matmul: yes"
 contains "$OUT_DIR/backend_cpu.out" "op_mlp: yes"
 contains "$OUT_DIR/backend_cpu.out" "op_rope: yes"
 contains "$OUT_DIR/backend_cpu.out" "op_attention: yes"
-contains "$OUT_DIR/backend_cpu.out" "status: backend-ready"
+contains "$OUT_DIR/backend_cpu.out" "status: backend-capabilities"
 
 set +e
 "$YVEX_BIN" backend cuda >"$OUT_DIR/backend_cuda.out" 2>"$OUT_DIR/backend_cuda.err"
@@ -1977,7 +1977,9 @@ if [ "$rc" -eq 0 ]; then
     contains "$OUT_DIR/backend_cuda.out" "op_mlp: yes"
     contains "$OUT_DIR/backend_cuda.out" "op_rope: yes"
     contains "$OUT_DIR/backend_cuda.out" "op_attention: yes"
-    contains "$OUT_DIR/backend_cuda.out" "status: backend-ready"
+    contains "$OUT_DIR/backend_cuda.out" "context_available: yes"
+    contains "$OUT_DIR/backend_cuda.out" "kernel_bundle: admitted"
+    contains "$OUT_DIR/backend_cuda.out" "status: backend-capabilities"
 elif [ "$rc" -eq 5 ]; then
     contains "$OUT_DIR/backend_cuda.out" "status: unsupported"
     contains "$OUT_DIR/backend_cuda.out" "status: backend-unsupported"

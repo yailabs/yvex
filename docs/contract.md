@@ -177,17 +177,31 @@ checks when provided. They do not require registry metadata.
 
 CPU is the reference backend for bounded proofs. CUDA has implemented bounded
 materialization and primitive paths, but it is not a supported model backend.
-`V010.CUDA.FAILCLOSED.0` remains priority-blocking because the non-nvcc fallback
-can expose no-op kernel entry points.
+CUDA driver, device, context, memory operations, generated kernel-bundle
+admission, resolved functions, and exact primitive variants are separate typed
+facts. Context creation alone does not establish kernel support.
 
 CUDA implementation lives under `cuda/`. CUDA host bridge code stays in C
 translation units. CUDA device kernels live in `.cu` translation units. CUDA
 availability is optional for baseline validation and required for CUDA
-validation.
+validation. A build without `nvcc` may retain proven Driver API allocation and
+transfer operations, but every kernel variant refuses before dispatch. A CUDA
+build admits only the generated bundle built from `cuda_kernels.cu`; production
+C sources contain no fallback kernel bundle.
+
+The currently admitted kernel variants are bounded F32/F16 embedding, F32
+RMSNorm with F32 or F16 weights, F32 RoPE and matmul, bounded dense/routed F32
+MLP, and bounded causal/non-causal F32 attention. These exact variants have
+independent reference tests on GB10. Their existence does not establish the
+DeepSeek required-operation set, qtype compute, transformer execution, or CUDA
+generation.
 
 Backend failures must remain distinguishable. A caller or operator should be
 able to tell whether failure came from backend discovery, allocation, transfer,
-operation support, dispatch, output readback, or cleanup.
+bundle admission, function resolution, exact operation support, dispatch,
+synchronization, output readback, or cleanup. Output-written state changes only
+after final synchronization succeeds; checked tensor release preserves ownership
+and accounting when device cleanup fails.
 
 Materialization is the residency boundary. Current bounded paths move tensor
 proof bytes into backend-owned storage and prove only allocation, transfer,

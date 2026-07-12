@@ -1167,7 +1167,7 @@ int yvex_fullmodel_render_command(int arg_count, char **args)
     backend_placement_status = selected_target ? "selected-tensor-plan-only" : "report-only";
     cpu_placement = selected_target ? "selected-tensors-only" : "planned-full-model";
     cuda_placement = strcmp(options.backend, "cuda") == 0
-                         ? (yvex_backend_cuda_available() ? "selected-or-candidate-tensors-only" : "unavailable")
+                         ? (yvex_backend_cuda_context_available() ? "selected-or-candidate-tensors-only" : "unavailable")
                          : "not-requested";
 
     if (options.command == YVEX_FULLMODEL_COMMAND_MATERIALIZE) {
@@ -1320,8 +1320,8 @@ int yvex_fullmodel_render_command(int arg_count, char **args)
     yvex_cli_out_writef(stdout, "backend_placement_status: %s\n", backend_placement_status);
     yvex_cli_out_writef(stdout, "cpu_placement: %s\n", cpu_placement);
     yvex_cli_out_writef(stdout, "cuda_placement: %s\n", cuda_placement);
-    yvex_cli_out_writef(stdout, "cuda_available: %s\n", yvex_backend_cuda_available() ? "true" : "false");
-    yvex_cli_out_writef(stdout, "cuda_memory_status: %s\n", yvex_backend_cuda_available() ? "probe-available-no-allocation" : "unavailable");
+    yvex_cli_out_writef(stdout, "cuda_context_available: %s\n", yvex_backend_cuda_context_available() ? "true" : "false");
+    yvex_cli_out_writef(stdout, "cuda_memory_status: %s\n", yvex_backend_cuda_context_available() ? "context-available-no-allocation" : "unavailable");
     yvex_cli_out_writef(stdout, "residency_plan: report-only-no-allocation\n");
     yvex_cli_out_writef(stdout, "tensor_collections_status: %s\n", role_coverage);
     yvex_cli_out_writef(stdout, "collection_detected: %s\n", tensor_count > 0ull ? "yes" : "no");

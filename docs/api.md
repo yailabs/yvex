@@ -79,8 +79,10 @@ YVEX uses explicit ownership.
 Public option structs borrow caller-provided pointers for the duration of the
 call. Returned opaque handles are owned by the caller and must be released with
 the matching close or free function. Registry and resolver objects own copied
-strings until they are cleared or closed. Backend tensors are released through
-backend or selected-weight close paths. Engine-attached weights are released by
+strings until they are cleared or closed. Backend tensors have a checked
+`yvex_backend_tensor_release` path; failed release leaves the caller's pointer,
+ownership, and allocation accounting intact. The legacy void free is a
+best-effort compatibility projection. Engine-attached weights are released by
 engine close. Sessions observe engine state through defined session reports.
 
 The runtime path has distinct ownership layers:
@@ -135,7 +137,7 @@ runtime capability.
 | Artifact facts | Read-only file handles, optional explicit payload mapping, exact positioned reads, file-backed GGUF v3 metadata/tensor parsing, typed refusal, naming, identity, and integrity reports. |
 | Tensor interpretation | Dtype facts, tensor descriptors, shape accounting, range validation, bounded embedding facts, and proof descriptors. |
 | Model references | Local registry entries, alias-or-path resolution, model references, model gates, and materialization gates. |
-| Backend transfer proof | Backend discovery, bounded tensor allocation, transfer, release, and materialization summaries. |
+| Backend transfer proof | Driver/device/context discovery, exact typed capability queries, bounded tensor allocation/transfer/checked release, generated CUDA bundle admission, and materialization summaries. |
 | Engine ownership proof | Engine creation, bounded weight attachment, engine-owned lifetime, and graph proof entry points. |
 | Session visibility | Session reports over engine-attached runtime state and minimal session-owned KV state. |
 | Graph proofs | Controlled fixture results, bounded embedding/segment results, standalone RoPE, attention, matmul/projection, and MLP/feed-forward comparisons, graph guards, checksums, and max-diff reports. |
@@ -253,6 +255,20 @@ paths.
 This is a transfer and ownership proof. It tells a caller that the named bytes
 reached backend-owned memory with visible accounting and lifecycle behavior; it
 does not establish full model residency.
+
+## Backend Capability Queries
+
+`yvex_backend_query_capability` is the operational capability authority. It
+returns an exact variant, dtype projection, state, refusal reason, context fact,
+kernel-bundle fact, and resolved-function fact. `yvex_backend_supports` remains a
+coarse compatibility projection over those exact results; it does not define
+support independently.
+
+`yvex_backend_cuda_context_available` reports context discovery only. The legacy
+`yvex_backend_cuda_available` name projects the same narrow fact and must not be
+used as operation or model-runtime readiness. Launch or synchronization failure
+demotes the affected exact variant, and `yvex_device_tensor_is_written` remains
+false until its final synchronization succeeds.
 
 ## Engine and Session
 

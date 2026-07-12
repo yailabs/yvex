@@ -17,6 +17,12 @@ typedef void *CUmodule;
 typedef void *CUfunction;
 typedef unsigned long long CUdeviceptr;
 
+typedef enum {
+    YVEX_CUDA_KERNEL_BUNDLE_ABSENT = 0,
+    YVEX_CUDA_KERNEL_BUNDLE_ADMITTED,
+    YVEX_CUDA_KERNEL_BUNDLE_REJECTED
+} yvex_cuda_kernel_bundle_state;
+
 #define YVEX_CUDA_SUCCESS 0
 #define YVEX_CUDA_ERROR_INVALID_VALUE 1
 #define YVEX_CUDA_ERROR_OUT_OF_MEMORY 2
@@ -82,6 +88,11 @@ typedef struct {
     CUfunction mlp_function;
     CUfunction attention_function;
     int module_loaded;
+    yvex_cuda_kernel_bundle_state kernel_bundle_state;
+    yvex_backend_capability_reason kernel_bundle_reason;
+    yvex_backend_operation_variant kernel_bundle_failure_variant;
+    yvex_backend_capability_reason backend_failure_reason;
+    yvex_backend_capability_reason variant_failures[YVEX_BACKEND_VARIANT_COUNT];
 } yvex_cuda_backend_state;
 
 int yvex_cuda_driver_load(yvex_cuda_driver *driver, yvex_error *err);
@@ -97,11 +108,45 @@ int yvex_cuda_set_current(const yvex_backend *backend, const char *where, yvex_e
 int yvex_cuda_refresh_memory_info(yvex_backend *backend, yvex_error *err);
 CUdeviceptr yvex_cuda_tensor_ptr(const yvex_device_tensor *tensor);
 
+int yvex_cuda_kernel_bundle_admit(yvex_backend *backend, yvex_error *err);
+int yvex_cuda_kernel_bundle_close(yvex_backend *backend, yvex_error *err);
+int yvex_cuda_query_capability(const yvex_backend *backend,
+                               yvex_backend_operation_variant variant,
+                               yvex_backend_capability_result *out,
+                               yvex_error *err);
+int yvex_cuda_require_capability(yvex_backend *backend,
+                                 yvex_backend_operation_variant variant,
+                                 const char *where,
+                                 yvex_error *err);
+void yvex_cuda_capability_fail(yvex_backend *backend,
+                               yvex_backend_operation_variant variant,
+                               yvex_backend_capability_reason reason);
+int yvex_cuda_launch(yvex_backend *backend,
+                     yvex_backend_operation_variant variant,
+                     CUfunction function,
+                     unsigned int grid_x,
+                     unsigned int block_x,
+                     unsigned int shared_bytes,
+                     void **params,
+                     const char *where,
+                     yvex_error *err);
+int yvex_cuda_synchronize(yvex_backend *backend,
+                          yvex_backend_operation_variant variant,
+                          const char *where,
+                          yvex_error *err);
+int yvex_cuda_temporary_free(yvex_backend *backend,
+                             yvex_backend_operation_variant variant,
+                             CUdeviceptr ptr,
+                             const char *where,
+                             yvex_error *err);
+
 int yvex_cuda_tensor_alloc(yvex_backend *backend,
                            const yvex_backend_tensor_desc *desc,
                            yvex_device_tensor **out,
                            yvex_error *err);
-void yvex_cuda_tensor_free(yvex_backend *backend, yvex_device_tensor *tensor);
+int yvex_cuda_tensor_free(yvex_backend *backend,
+                          yvex_device_tensor *tensor,
+                          yvex_error *err);
 int yvex_cuda_tensor_write(yvex_backend *backend,
                            yvex_device_tensor *tensor,
                            const void *src,

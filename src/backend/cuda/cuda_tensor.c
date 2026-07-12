@@ -1,8 +1,14 @@
 /*
  * cuda/cuda_tensor.c - CUDA backend tensor storage.
  *
- * This file owns CUDA tensor allocation, host/device transfer, and device copy
- * through the CUDA Driver API.
+ * Owner: src/backend/cuda.
+ * Owns: CUDA tensor allocation, zeroing, host/device transfer, device copy,
+ * output-written state, checked device release, and allocation accounting.
+ * Does not own: kernel bundles, primitive kernels, graph/model semantics, CLI
+ * output, materialization policy, qtype compute, or runtime generation.
+ * Invariants: writes become visible only after synchronization; failed release
+ * preserves tensor ownership and counters; unpublished allocations are cleaned.
+ * Boundary: tensor movement is not CUDA graph or generation support.
  */
 
 #include "cuda_internal.h"
@@ -32,6 +38,28 @@ static int cuda_memory_can_add(const yvex_backend *backend,
     return YVEX_OK;
 }
 
+/* Contract: releases an unpublished allocation and gives cleanup failure precedence. */
+static int cuda_failed_allocation_cleanup(yvex_backend *backend,
+                                          CUdeviceptr ptr,
+                                          int primary_rc,
+                                          yvex_error *err)
+{
+    yvex_error cleanup_error;
+    int cleanup_rc;
+
+    yvex_error_clear(&cleanup_error);
+    cleanup_rc = yvex_cuda_temporary_free(backend, YVEX_BACKEND_VARIANT_TENSOR_ALLOC,
+                                          ptr, "cuda.tensor_alloc.cleanup",
+                                          &cleanup_error);
+    if (cleanup_rc != YVEX_OK) {
+        if (err) {
+            *err = cleanup_error;
+        }
+        return cleanup_rc;
+    }
+    return primary_rc;
+}
+
 int yvex_cuda_tensor_alloc(yvex_backend *backend,
                            const yvex_backend_tensor_desc *desc,
                            yvex_device_tensor **out,
@@ -50,6 +78,15 @@ int yvex_cuda_tensor_alloc(yvex_backend *backend,
     }
     *out = NULL;
 
+    rc = yvex_cuda_require_capability(backend, YVEX_BACKEND_VARIANT_TENSOR_ALLOC,
+                                      "cuda.tensor_alloc", err);
+    if (rc == YVEX_OK) {
+        rc = yvex_cuda_require_capability(backend, YVEX_BACKEND_VARIANT_TENSOR_ZERO,
+                                          "cuda.tensor_alloc", err);
+    }
+    if (rc != YVEX_OK) {
+        return rc;
+    }
     rc = cuda_memory_can_add(backend, desc->bytes, err);
     if (rc != YVEX_OK) {
         return rc;
@@ -68,24 +105,26 @@ int yvex_cuda_tensor_alloc(yvex_backend *backend,
                           state->driver.cuMemsetD8_v2(ptr, 0, (size_t)desc->bytes),
                           "cuda.tensor_alloc", err);
     if (rc != YVEX_OK) {
-        (void)state->driver.cuMemFree_v2(ptr);
-        return rc;
+        return cuda_failed_allocation_cleanup(backend, ptr, rc, err);
+    }
+    rc = yvex_cuda_synchronize(backend, YVEX_BACKEND_VARIANT_TENSOR_ZERO,
+                               "cuda.tensor_alloc.zero_sync", err);
+    if (rc != YVEX_OK) {
+        return cuda_failed_allocation_cleanup(backend, ptr, rc, err);
     }
 
     tensor = (yvex_device_tensor *)calloc(1, sizeof(*tensor));
     if (!tensor) {
-        (void)state->driver.cuMemFree_v2(ptr);
         yvex_error_set(err, YVEX_ERR_NOMEM, "cuda.tensor_alloc",
                        "failed to allocate CUDA tensor object");
-        return YVEX_ERR_NOMEM;
+        return cuda_failed_allocation_cleanup(backend, ptr, YVEX_ERR_NOMEM, err);
     }
     tensor->name = yvex_backend_strdup(desc->name);
     if (!tensor->name) {
         free(tensor);
-        (void)state->driver.cuMemFree_v2(ptr);
         yvex_error_set(err, YVEX_ERR_NOMEM, "cuda.tensor_alloc",
                        "failed to copy CUDA tensor name");
-        return YVEX_ERR_NOMEM;
+        return cuda_failed_allocation_cleanup(backend, ptr, YVEX_ERR_NOMEM, err);
     }
 
     tensor->owner = backend;
@@ -110,15 +149,28 @@ int yvex_cuda_tensor_alloc(yvex_backend *backend,
     return YVEX_OK;
 }
 
-void yvex_cuda_tensor_free(yvex_backend *backend, yvex_device_tensor *tensor)
+int yvex_cuda_tensor_free(yvex_backend *backend,
+                          yvex_device_tensor *tensor,
+                          yvex_error *err)
 {
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
+    int rc;
 
     if (!backend || !state || !tensor || !yvex_backend_tensor_owner_is(backend, tensor)) {
-        return;
+        yvex_error_set(err, YVEX_ERR_STATE, "cuda.tensor_free",
+                       "tensor does not belong to this backend");
+        return YVEX_ERR_STATE;
     }
-    (void)yvex_cuda_set_current(backend, "cuda.tensor_free", NULL);
-    (void)state->driver.cuMemFree_v2(yvex_cuda_tensor_ptr(tensor));
+    rc = yvex_cuda_set_current(backend, "cuda.tensor_free", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    rc = yvex_cuda_temporary_free(backend, YVEX_BACKEND_VARIANT_TENSOR_ALLOC,
+                                  yvex_cuda_tensor_ptr(tensor),
+                                  "cuda.tensor_free", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
     if (backend->stats.allocated_bytes >= tensor->bytes) {
         backend->stats.allocated_bytes -= tensor->bytes;
     } else {
@@ -131,6 +183,8 @@ void yvex_cuda_tensor_free(yvex_backend *backend, yvex_device_tensor *tensor)
     tensor->owner_id = 0;
     free(tensor->name);
     free(tensor);
+    yvex_error_clear(err);
+    return YVEX_OK;
 }
 
 static int cuda_check_rw(const char *where,
@@ -163,6 +217,12 @@ int yvex_cuda_tensor_write(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
+    rc = yvex_cuda_require_capability(backend, YVEX_BACKEND_VARIANT_TENSOR_WRITE,
+                                      "yvex_backend_tensor_write", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    tensor->is_written = 0;
     rc = yvex_cuda_set_current(backend, "yvex_backend_tensor_write", err);
     if (rc != YVEX_OK) {
         return rc;
@@ -174,9 +234,13 @@ int yvex_cuda_tensor_write(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
+    rc = yvex_cuda_synchronize(backend, YVEX_BACKEND_VARIANT_TENSOR_WRITE,
+                               "yvex_backend_tensor_write", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
     tensor->is_written = 1;
-    return yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
-                            "yvex_backend_tensor_write", err);
+    return YVEX_OK;
 }
 
 int yvex_cuda_tensor_read(yvex_backend *backend,
@@ -191,6 +255,11 @@ int yvex_cuda_tensor_read(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
+    rc = yvex_cuda_require_capability(backend, YVEX_BACKEND_VARIANT_TENSOR_READ,
+                                      "yvex_backend_tensor_read", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
     rc = yvex_cuda_set_current(backend, "yvex_backend_tensor_read", err);
     if (rc != YVEX_OK) {
         return rc;
@@ -202,8 +271,8 @@ int yvex_cuda_tensor_read(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
-    return yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
-                            "yvex_backend_tensor_read", err);
+    return yvex_cuda_synchronize(backend, YVEX_BACKEND_VARIANT_TENSOR_READ,
+                                 "yvex_backend_tensor_read", err);
 }
 
 int yvex_cuda_tensor_copy(yvex_backend *backend,
@@ -225,6 +294,12 @@ int yvex_cuda_tensor_copy(yvex_backend *backend,
                        "source and destination tensor descriptors differ");
         return YVEX_ERR_BOUNDS;
     }
+    rc = yvex_cuda_require_capability(backend, YVEX_BACKEND_VARIANT_TENSOR_COPY,
+                                      "yvex_backend_tensor_copy", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
+    dst->is_written = 0;
     rc = yvex_cuda_set_current(backend, "yvex_backend_tensor_copy", err);
     if (rc != YVEX_OK) {
         return rc;
@@ -237,7 +312,11 @@ int yvex_cuda_tensor_copy(yvex_backend *backend,
     if (rc != YVEX_OK) {
         return rc;
     }
+    rc = yvex_cuda_synchronize(backend, YVEX_BACKEND_VARIANT_TENSOR_COPY,
+                               "yvex_backend_tensor_copy", err);
+    if (rc != YVEX_OK) {
+        return rc;
+    }
     dst->is_written = src->is_written;
-    return yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(),
-                            "yvex_backend_tensor_copy", err);
+    return YVEX_OK;
 }

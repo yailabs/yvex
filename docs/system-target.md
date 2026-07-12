@@ -47,7 +47,7 @@ domain algorithms. No writer owns command output.
 | GGUF artifact ABI | scalable file-backed v3 reader, typed refusal, target-scale budgets, immutable view, and zero payload reads | preserve the structural reader as input to canonical layout and later artifact admission | see `PROJECT.md` |
 | GGUF qtype storage | pinned IDs 0-39, exact row geometry, and typed refusal are canonical | preserve storage independently from decoder, quantizer, emitter, and compute support | see `PROJECT.md` |
 | GGUF layout integrity | canonical directory-order spans, power-of-two alignment, zero padding, truncation/tail refusal, and snapshot drift checks | preserve global layout as input to complete-model artifact admission | see `PROJECT.md` |
-| CUDA truth | fallback PTX can expose no-op entry points | fail-closed advertised capability with reference parity | V010.CUDA.FAILCLOSED.0 |
+| CUDA truth | context, bundle, functions, and exact variants are typed; no-bundle builds refuse kernels and generated-bundle variants have GB10 reference proof | preserve fail-closed admission while later architecture/runtime rows define and prove the DeepSeek operation set | see `PROJECT.md` |
 | Architecture IR | profile/report facts only | typed execution-complete DeepSeek specification | V010.MODEL.ARCH.IR.0 |
 | GGUF names/layout | partial and planned maps | complete DeepSeek role/name/layout map | V010.MAP.GGUF.DEEPSEEK.0 |
 | Source payload | header-only inventory | bounded payload streaming across source shards | V010.SOURCE.PAYLOAD.STREAM.0 |
@@ -87,7 +87,8 @@ domain algorithms. No writer owns command output.
   gates, identity, integrity, and artifact reports.
 - Model owns runtime descriptor projection.
 - Graph owns bind plans and graph execution boundary.
-- Backend owns tensor and qtype support/refusal facts.
+- Backend owns exact tensor, primitive, bundle, failure, cleanup, and qtype
+  support/refusal facts.
 
 ## Forbidden Placements
 
@@ -147,7 +148,10 @@ domain algorithms. No writer owns command output.
 | `src/graph/yvex_graph_execute.c` | future graph execution refusal |
 | `src/backend/yvex_backend_tensor.c` | backend tensor allocation/bind boundary |
 | `src/backend/yvex_backend_qtype.c` | backend qtype compute/refusal matrix |
-| `src/backend/yvex_backend_report.c` | typed backend capability reports |
+| `src/backend/yvex_backend_report.c` | typed device, context, bundle, exact-variant, and memory reports |
+| `src/backend/cuda/cuda_capability.c` | atomic generated-bundle admission, exact CUDA capability, launch/sync demotion, and cleanup failure |
+| `src/backend/cuda/cuda_ops.c` | validated host launch binding for admitted exact variants |
+| `src/backend/cuda/cuda_kernels.cu` | canonical bounded device kernels; generated bundle remains build output |
 | `src/backend/cuda/cuda_qtype.c` | CUDA qtype capability/refusal facts |
 
 ## CLI Target Map

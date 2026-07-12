@@ -1,8 +1,14 @@
 /*
  * cuda/cuda_backend.c - CUDA backend object lifecycle.
  *
- * This file attaches CUDA to the backend ABI. Device kernels remain in
- * cuda_kernels.cu.
+ * Owner: src/backend/cuda.
+ * Owns: Driver API discovery, device/context lifetime, backend status, vtable
+ * attachment, and coordinated context/module close.
+ * Does not own: generated bundle contents, symbol policy, op geometry, CLI
+ * output, graph semantics, qtype compute, or runtime generation.
+ * Invariants: context creation yields context-ready only; ready requires atomic
+ * canonical bundle admission; close clears every owned Driver API handle.
+ * Boundary: an open CUDA context is not primitive or model runtime support.
  */
 
 #include "cuda_internal.h"
@@ -45,23 +51,42 @@ static int cuda_close(yvex_backend *backend, yvex_error *err)
 {
     yvex_cuda_backend_state *state = yvex_cuda_state(backend);
     yvex_cuda_driver *driver;
+    yvex_error cleanup_error;
+    int first_rc = YVEX_OK;
+    int rc;
 
     if (!backend || !state) {
         yvex_error_clear(err);
         return YVEX_OK;
     }
     driver = &state->driver;
-    if (state->module_loaded && driver->cuModuleUnload) {
-        (void)driver->cuModuleUnload(state->module);
+    yvex_error_clear(&cleanup_error);
+    rc = yvex_cuda_kernel_bundle_close(backend, &cleanup_error);
+    if (rc != YVEX_OK) {
+        first_rc = rc;
+        if (err) {
+            *err = cleanup_error;
+        }
     }
     if (state->context && driver->cuCtxDestroy_v2) {
-        (void)driver->cuCtxDestroy_v2(state->context);
+        yvex_error_clear(&cleanup_error);
+        rc = yvex_cuda_status(driver, driver->cuCtxDestroy_v2(state->context),
+                              "cuda.context.destroy", &cleanup_error);
+        if (rc != YVEX_OK && first_rc == YVEX_OK) {
+            first_rc = rc;
+            if (err) {
+                *err = cleanup_error;
+            }
+        }
+        state->context = NULL;
     }
     yvex_cuda_driver_unload(driver);
     free(state);
     backend->impl = NULL;
-    yvex_error_clear(err);
-    return YVEX_OK;
+    if (first_rc == YVEX_OK) {
+        yvex_error_clear(err);
+    }
+    return first_rc;
 }
 
 static int cuda_memory_stats(const yvex_backend *backend,
@@ -114,25 +139,6 @@ static int cuda_sync(yvex_backend *backend, yvex_error *err)
     return yvex_cuda_status(&state->driver, state->driver.cuCtxSynchronize(), "cuda.sync", err);
 }
 
-static int cuda_supports(const yvex_backend *backend, yvex_backend_capability capability)
-{
-    if (!backend) {
-        return 0;
-    }
-    switch (capability) {
-    case YVEX_BACKEND_CAP_TENSOR_ALLOC:
-    case YVEX_BACKEND_CAP_TENSOR_READ_WRITE:
-    case YVEX_BACKEND_CAP_OP_EMBED:
-    case YVEX_BACKEND_CAP_OP_MATMUL:
-    case YVEX_BACKEND_CAP_OP_MLP:
-    case YVEX_BACKEND_CAP_OP_RMS_NORM:
-    case YVEX_BACKEND_CAP_OP_ROPE:
-    case YVEX_BACKEND_CAP_OP_ATTENTION:
-        return 1;
-    }
-    return 0;
-}
-
 static const yvex_backend_vtable cuda_vtable = {
     cuda_close,
     cuda_memory_stats,
@@ -143,7 +149,7 @@ static const yvex_backend_vtable cuda_vtable = {
     yvex_cuda_tensor_read,
     yvex_cuda_tensor_copy,
     cuda_sync,
-    cuda_supports,
+    yvex_cuda_query_capability,
     yvex_cuda_op_embed,
     yvex_cuda_op_rms_norm,
     yvex_cuda_op_rope,
@@ -256,7 +262,7 @@ int yvex_backend_open_cuda_impl(yvex_backend **out,
                                              state->device);
 
     backend->kind = YVEX_BACKEND_KIND_CUDA;
-    backend->status = YVEX_BACKEND_STATUS_READY;
+    backend->status = YVEX_BACKEND_STATUS_CONTEXT_READY;
     backend->vtable = &cuda_vtable;
     backend->impl = state;
     backend->stats.memory_limit_bytes = memory_limit_bytes;
@@ -268,6 +274,14 @@ int yvex_backend_open_cuda_impl(yvex_backend **out,
     backend->device_info.unified_addressing = unified != 0;
     backend->device_info.managed_memory = managed != 0;
     (void)yvex_cuda_refresh_memory_info(backend, err);
+
+    rc = yvex_cuda_kernel_bundle_admit(backend, err);
+    if (rc == YVEX_OK) {
+        backend->status = YVEX_BACKEND_STATUS_READY;
+    } else {
+        backend->status = YVEX_BACKEND_STATUS_CONTEXT_READY;
+        yvex_error_clear(err);
+    }
 
     *out = backend;
     yvex_error_clear(err);

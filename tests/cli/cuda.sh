@@ -33,6 +33,9 @@ if [ "$rc" -ne 0 ]; then
     fail "cuda-info exit code was $rc"
 fi
 contains "$OUT_DIR/cuda_info.out" "cuda: available"
+contains "$OUT_DIR/cuda_info.out" "context_available: yes"
+contains "$OUT_DIR/cuda_info.out" "kernel_bundle: admitted"
+contains "$OUT_DIR/cuda_info.out" "kernel_bundle_reason: none"
 contains "$OUT_DIR/cuda_info.out" "status: cuda-info"
 
 "$YVEX_BIN" backend cuda >"$OUT_DIR/backend_cuda_ready.out" 2>"$OUT_DIR/backend_cuda_ready.err"
@@ -50,7 +53,11 @@ contains "$OUT_DIR/backend_cuda_ready.out" "op_rope: yes"
 contains "$OUT_DIR/backend_cuda_ready.out" "op_attention: yes"
 contains "$OUT_DIR/backend_cuda_ready.out" "op_matmul: yes"
 contains "$OUT_DIR/backend_cuda_ready.out" "op_mlp: yes"
-contains "$OUT_DIR/backend_cuda_ready.out" "status: backend-ready"
+contains "$OUT_DIR/backend_cuda_ready.out" "context_available: yes"
+contains "$OUT_DIR/backend_cuda_ready.out" "kernel_bundle: admitted"
+contains "$OUT_DIR/backend_cuda_ready.out" "embed-f16-to-f32: supported (none)"
+contains "$OUT_DIR/backend_cuda_ready.out" "attention-noncausal-f32: supported (none)"
+contains "$OUT_DIR/backend_cuda_ready.out" "status: backend-capabilities"
 
 "$YVEX_BIN" plan "$FIXTURE" --backend cuda >"$OUT_DIR/plan_cuda_ready.out" 2>"$OUT_DIR/plan_cuda_ready.err"
 rc=$?

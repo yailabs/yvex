@@ -52,6 +52,7 @@ typedef enum {
 
 typedef enum {
     YVEX_BACKEND_STATUS_READY = 0,
+    YVEX_BACKEND_STATUS_CONTEXT_READY,
     YVEX_BACKEND_STATUS_UNSUPPORTED,
     YVEX_BACKEND_STATUS_FAILED
 } yvex_backend_status;
@@ -101,6 +102,58 @@ typedef enum {
     YVEX_BACKEND_CAP_OP_ATTENTION
 } yvex_backend_capability;
 
+typedef enum {
+    YVEX_BACKEND_VARIANT_TENSOR_ALLOC = 0,
+    YVEX_BACKEND_VARIANT_TENSOR_ZERO,
+    YVEX_BACKEND_VARIANT_TENSOR_WRITE,
+    YVEX_BACKEND_VARIANT_TENSOR_READ,
+    YVEX_BACKEND_VARIANT_TENSOR_COPY,
+    YVEX_BACKEND_VARIANT_EMBED_F32_TO_F32,
+    YVEX_BACKEND_VARIANT_EMBED_F16_TO_F32,
+    YVEX_BACKEND_VARIANT_RMS_NORM_F32_WEIGHT_F32,
+    YVEX_BACKEND_VARIANT_RMS_NORM_F32_WEIGHT_F16,
+    YVEX_BACKEND_VARIANT_ROPE_F32,
+    YVEX_BACKEND_VARIANT_MATMUL_F32,
+    YVEX_BACKEND_VARIANT_MLP_DENSE_F32,
+    YVEX_BACKEND_VARIANT_MLP_ROUTED_F32,
+    YVEX_BACKEND_VARIANT_ATTENTION_CAUSAL_F32,
+    YVEX_BACKEND_VARIANT_ATTENTION_NONCAUSAL_F32,
+    YVEX_BACKEND_VARIANT_COUNT
+} yvex_backend_operation_variant;
+
+typedef enum {
+    YVEX_BACKEND_CAPABILITY_UNSUPPORTED = 0,
+    YVEX_BACKEND_CAPABILITY_SUPPORTED,
+    YVEX_BACKEND_CAPABILITY_FAILED
+} yvex_backend_capability_state;
+
+typedef enum {
+    YVEX_BACKEND_CAPABILITY_REASON_NONE = 0,
+    YVEX_BACKEND_CAPABILITY_REASON_DRIVER_UNAVAILABLE,
+    YVEX_BACKEND_CAPABILITY_REASON_DEVICE_UNAVAILABLE,
+    YVEX_BACKEND_CAPABILITY_REASON_CONTEXT_UNAVAILABLE,
+    YVEX_BACKEND_CAPABILITY_REASON_KERNEL_BUNDLE_ABSENT,
+    YVEX_BACKEND_CAPABILITY_REASON_KERNEL_BUNDLE_REJECTED,
+    YVEX_BACKEND_CAPABILITY_REASON_FUNCTION_MISSING,
+    YVEX_BACKEND_CAPABILITY_REASON_VARIANT_UNSUPPORTED,
+    YVEX_BACKEND_CAPABILITY_REASON_LAUNCH_FAILED,
+    YVEX_BACKEND_CAPABILITY_REASON_SYNCHRONIZATION_FAILED,
+    YVEX_BACKEND_CAPABILITY_REASON_CLEANUP_FAILED
+} yvex_backend_capability_reason;
+
+typedef struct {
+    yvex_backend_kind backend_kind;
+    yvex_backend_operation_variant variant;
+    yvex_backend_capability_state state;
+    yvex_backend_capability_reason reason;
+    yvex_dtype input_dtype;
+    yvex_dtype weight_dtype;
+    yvex_dtype output_dtype;
+    int context_available;
+    int kernel_bundle_available;
+    int function_available;
+} yvex_backend_capability_result;
+
 typedef struct {
     unsigned long long batch;
     unsigned long long hidden_dim;
@@ -116,6 +169,7 @@ int yvex_backend_open(yvex_backend **out,
                       const yvex_backend_options *options,
                       yvex_error *err);
 int yvex_backend_open_cpu(yvex_backend **out, yvex_error *err);
+int yvex_backend_cuda_context_available(void);
 int yvex_backend_cuda_available(void);
 void yvex_backend_close(yvex_backend *backend);
 
@@ -137,12 +191,16 @@ int yvex_backend_tensor_alloc(yvex_backend *backend,
                               yvex_error *err);
 void yvex_backend_tensor_free(yvex_backend *backend,
                               yvex_device_tensor *tensor);
+int yvex_backend_tensor_release(yvex_backend *backend,
+                                yvex_device_tensor **tensor,
+                                yvex_error *err);
 
 const char *yvex_device_tensor_name(const yvex_device_tensor *tensor);
 yvex_dtype yvex_device_tensor_dtype(const yvex_device_tensor *tensor);
 unsigned int yvex_device_tensor_rank(const yvex_device_tensor *tensor);
 const unsigned long long *yvex_device_tensor_dims(const yvex_device_tensor *tensor);
 unsigned long long yvex_device_tensor_bytes(const yvex_device_tensor *tensor);
+int yvex_device_tensor_is_written(const yvex_device_tensor *tensor);
 
 int yvex_backend_tensor_write(yvex_backend *backend,
                               yvex_device_tensor *tensor,
@@ -163,6 +221,13 @@ int yvex_backend_sync(yvex_backend *backend, yvex_error *err);
 int yvex_backend_supports(const yvex_backend *backend,
                           yvex_backend_capability capability);
 const char *yvex_backend_capability_name(yvex_backend_capability capability);
+int yvex_backend_query_capability(const yvex_backend *backend,
+                                  yvex_backend_operation_variant variant,
+                                  yvex_backend_capability_result *out,
+                                  yvex_error *err);
+const char *yvex_backend_operation_variant_name(yvex_backend_operation_variant variant);
+const char *yvex_backend_capability_state_name(yvex_backend_capability_state state);
+const char *yvex_backend_capability_reason_name(yvex_backend_capability_reason reason);
 
 int yvex_backend_op_embed(yvex_backend *backend,
                           const yvex_device_tensor *embedding,

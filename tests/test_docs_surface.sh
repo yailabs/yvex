@@ -151,7 +151,9 @@ require_text "$project" '$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash'
 require_text "$project" 'deepseek4-v4-flash'
 require_text "$project" 'Qwen, Gemma, and dense/common work already implemented remains active'
 require_text "$project" 'No execution-complete DeepSeek architecture IR exists.'
-require_text "$project" 'a no-op fallback can be advertised as support'
+require_text "$project" 'Production C contains no fallback PTX.'
+require_text "$project" 'A no-`nvcc` build refuses every kernel before dispatch'
+require_text "$project" 'The DeepSeek/v0.1 required-operation gate remains unsupported.'
 require_text "$project" '| Recovered IDs | 631 |'
 require_text "$project" '| Canonical IDs | 665 |'
 require_text "$project" '| First-class milestones | 37 |'
@@ -200,6 +202,8 @@ for source in \
   'tools/quantize/quantize.cpp' \
   'TensorRT-LLM architecture' \
   'NVIDIA/cutlass' \
+  'Driver API module management' \
+  'execution control' \
   'DeepSeek [V4 technical report]' \
   'DeepSeek-V4-Flash/blob/main/config.json' \
   'deepseek-ai/FlashMLA'

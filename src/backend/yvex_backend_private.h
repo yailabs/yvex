@@ -20,7 +20,9 @@ typedef struct yvex_backend_vtable {
                         const yvex_backend_tensor_desc *desc,
                         yvex_device_tensor **out,
                         yvex_error *err);
-    void (*tensor_free)(yvex_backend *backend, yvex_device_tensor *tensor);
+    int (*tensor_free)(yvex_backend *backend,
+                       yvex_device_tensor *tensor,
+                       yvex_error *err);
     int (*tensor_write)(yvex_backend *backend,
                         yvex_device_tensor *tensor,
                         const void *src,
@@ -36,7 +38,10 @@ typedef struct yvex_backend_vtable {
                        const yvex_device_tensor *src,
                        yvex_error *err);
     int (*sync)(yvex_backend *backend, yvex_error *err);
-    int (*supports)(const yvex_backend *backend, yvex_backend_capability capability);
+    int (*query_capability)(const yvex_backend *backend,
+                            yvex_backend_operation_variant variant,
+                            yvex_backend_capability_result *out,
+                            yvex_error *err);
     int (*op_embed)(yvex_backend *backend,
                     const yvex_device_tensor *embedding,
                     const unsigned int *token_ids,

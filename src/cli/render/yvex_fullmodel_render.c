@@ -1125,7 +1125,7 @@ void fullmodel_print_descriptor_report(const yvex_cli_fullmodel_options *options
 
     yvex_cli_out_writef(stdout, "backend_requirements_status: %s\n", fit.available ? "planned" : "unsupported");
     yvex_cli_out_writef(stdout, "backend.cpu.available: true\n");
-    yvex_cli_out_writef(stdout, "backend.cuda.available: %s\n", yvex_backend_cuda_available() ? "true" : "false");
+    yvex_cli_out_writef(stdout, "backend.cuda.context_available: %s\n", yvex_backend_cuda_context_available() ? "true" : "false");
     yvex_cli_out_writef(stdout, "backend.memory_known: %s\n", fit.memory_known ? "true" : "false");
     yvex_cli_out_writef(stdout, "backend.required_bytes: %llu\n", fit.required_bytes);
     yvex_cli_out_writef(stdout, "backend.fit_status: %s\n", fit.fit_status);

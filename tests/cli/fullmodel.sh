@@ -896,7 +896,7 @@ grep 'full_model_materialization: planned' "$ROOT/fullish.out"
 
 "$YVEX_BIN" fullmodel report --model "$FULLISH" --target deepseek4-v4-flash --backend cuda --audit > "$ROOT/fullish-cuda.out"
 grep 'backend: cuda' "$ROOT/fullish-cuda.out"
-grep 'cuda_available:' "$ROOT/fullish-cuda.out"
+grep 'cuda_context_available:' "$ROOT/fullish-cuda.out"
 grep 'cuda_memory_status:' "$ROOT/fullish-cuda.out"
 grep 'cuda_placement:' "$ROOT/fullish-cuda.out"
 grep 'residency_plan: report-only-no-allocation' "$ROOT/fullish-cuda.out"
@@ -979,7 +979,7 @@ grep 'benchmark_status: not-measured' "$ROOT/fullish-attention.out"
 
 "$YVEX_BIN" fullmodel descriptor --model "$FULLISH" --target deepseek4-v4-flash --backend cuda --audit > "$ROOT/fullish-descriptor-cuda.out"
 grep 'backend: cuda' "$ROOT/fullish-descriptor-cuda.out"
-grep 'backend.cuda.available:' "$ROOT/fullish-descriptor-cuda.out"
+grep 'backend.cuda.context_available:' "$ROOT/fullish-descriptor-cuda.out"
 grep 'backend.full_transformer_integration: unsupported' "$ROOT/fullish-descriptor-cuda.out"
 grep 'backend_allocation_attempted: false' "$ROOT/fullish-descriptor-cuda.out"
 

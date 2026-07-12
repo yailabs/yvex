@@ -317,7 +317,7 @@ int preflight_graph_guard(const yvex_model_ref *model_ref,
         close_model_context(&ctx);
         return rc;
     }
-    report->backend_status = "ready";
+    report->backend_status = yvex_backend_status_name(yvex_backend_status_of(backend));
     if (!yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_EMBED) ||
         (execute_segment && !yvex_backend_supports(backend, YVEX_BACKEND_CAP_OP_RMS_NORM)) ||
         cli_test_env_enabled("YVEX_TEST_GRAPH_BACKEND_OP_UNSUPPORTED")) {
