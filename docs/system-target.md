@@ -1,6 +1,6 @@
 # YVEX System Target
 
-Date: 2026-07-11
+Date: 2026-07-12
 Status: filesystem and module ownership contract
 Authority: filesystem and module topology; current project state belongs only
 to `PROJECT.md`
@@ -17,6 +17,7 @@ Current core areas:
 src/cli/                 CLI dispatch, input, surfaces, render, IO
 src/source/              source manifests, provenance, sidecars, inventory, headers
 src/model/target/        model-target catalogs, maps, gates, qtype reports
+src/model/architecture/  immutable typed family architecture specifications
 src/model/artifacts/     model registry/ref/gate/report/write ownership
 src/model/               dtype/model tables and runtime descriptor target
 src/gguf/                GGUF parser plus target ABI/writer/roundtrip owners
@@ -48,7 +49,7 @@ domain algorithms. No writer owns command output.
 | GGUF qtype storage | pinned IDs 0-39, exact row geometry, and typed refusal are canonical | preserve storage independently from decoder, quantizer, emitter, and compute support | see `PROJECT.md` |
 | GGUF layout integrity | canonical directory-order spans, power-of-two alignment, zero padding, truncation/tail refusal, and snapshot drift checks | preserve global layout as input to complete-model artifact admission | see `PROJECT.md` |
 | CUDA truth | context, bundle, functions, and exact variants are typed; no-bundle builds refuse kernels and generated-bundle variants have GB10 reference proof | preserve fail-closed admission while later architecture/runtime rows define and prove the DeepSeek operation set | see `PROJECT.md` |
-| Architecture IR | profile/report facts only | typed execution-complete DeepSeek specification | V010.MODEL.ARCH.IR.0 |
+| Architecture IR | immutable typed DeepSeek-V4-Flash model, 43 main-layer, and MTP topology consumed by release-target profiling | preserve the source-to-IR boundary and feed complete tensor-role derivation without source reparsing | see `PROJECT.md` |
 | GGUF names/layout | partial and planned maps | complete DeepSeek role/name/layout map | V010.MAP.GGUF.DEEPSEEK.0 |
 | Source payload | header-only inventory | bounded payload streaming across source shards | V010.SOURCE.PAYLOAD.STREAM.0 |
 | Quantization | policy and geometry facts | role-correct quantization or explicit refusal | V010.QUANT.2 |
@@ -77,6 +78,9 @@ domain algorithms. No writer owns command output.
 - Source writers atomically publish verifier-approved manifests and explicit
   derived inventory outside official model source trees.
 - Model target owns target catalogs, maps, gates, and qtype reports.
+- Model architecture owns immutable normalized topology built from successful
+  strict source verification. It does not reopen source files, classify tensor
+  names, map roles, or infer runtime support.
 - Model artifacts own registry, references, gates, typed artifact reports, and
   explicit file writers.
 - GGUF owns container ABI, metadata ABI, tensor_info ABI, canonical qtype
@@ -139,6 +143,15 @@ domain algorithms. No writer owns command output.
 | --- | --- |
 | `src/model/yvex_runtime_descriptor.c` | artifact descriptor to runtime descriptor projection |
 | `src/model/yvex_runtime_descriptor_report.c` | descriptor blocker report facts |
+
+## Model Architecture Target Map
+
+| Owner | Boundary |
+| --- | --- |
+| `src/model/architecture/yvex_deepseek_v4_ir.h` | private typed model, layer, attention, position, KV, mHC, MoE, output, tokenizer, source-constraint, failure, and borrowed-accessor ABI |
+| `src/model/architecture/yvex_deepseek_v4_ir.c` | exact-source admission, cross-field validation, normalized topology derivation, immutable allocation, and cleanup |
+| `src/model/target/yvex_model_class_profile.c` | strict source-verification coordination and report ownership for the canonical release target; Qwen/Gemma lexical evidence remains separate |
+| `src/cli/render/yvex_model_target_render.c` | presentation of typed IR facts without architecture decisions |
 
 ## Graph And Backend Target Map
 

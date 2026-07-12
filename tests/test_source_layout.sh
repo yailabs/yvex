@@ -98,6 +98,8 @@ test -f src/model/target/yvex_model_target_candidates.c
 test -f src/model/target/yvex_model_target_candidates.h
 test -f src/model/target/yvex_model_class_profile.c
 test -f src/model/target/yvex_model_class_profile.h
+test -f src/model/architecture/yvex_deepseek_v4_ir.c
+test -f src/model/architecture/yvex_deepseek_v4_ir.h
 test -f src/model/target/yvex_tensor_collection_report.c
 test -f src/model/target/yvex_tensor_collection_report.h
 test -f src/model/target/yvex_tensor_naming_report.c
@@ -895,6 +897,36 @@ done
 grep -nF 'yvex_model_target_decision_report_build' src/model/target/yvex_model_target_decision.c >/dev/null
 grep -nF 'yvex_model_target_candidate_report_build' src/model/target/yvex_model_target_candidates.c >/dev/null
 grep -nF 'yvex_model_class_profile_report_build' src/model/target/yvex_model_class_profile.c >/dev/null
+grep -nF 'yvex_deepseek_v4_ir_build' src/model/target/yvex_model_class_profile.c >/dev/null
+grep -nF 'yvex_deepseek_v4_ir_model' src/cli/render/yvex_model_target_render.c >/dev/null
+grep -nF 'yvex_deepseek_v4_ir_layer_at' src/cli/render/yvex_model_target_render.c >/dev/null
+
+BAD_DEEPSEEK_ARCH_IR_IO="$(
+  grep -nE '\b(fopen|fread|opendir|readdir|stat|lstat|realpath)\s*\(|yvex_source_json_|yvex_source_verify\(|yvex_native_weight|yvex_safetensors_header' \
+    src/model/architecture/yvex_deepseek_v4_ir.c \
+    src/model/architecture/yvex_deepseek_v4_ir.h || true
+)"
+if test -n "$BAD_DEEPSEEK_ARCH_IR_IO"; then
+  echo "$BAD_DEEPSEEK_ARCH_IR_IO"
+  echo "DeepSeek architecture IR must consume verified facts without source IO or reparsing"
+  exit 1
+fi
+
+BAD_DEEPSEEK_ARCH_IR_LEXICAL="$(
+  grep -nE 'strstr\(|q_proj|k_proj|v_proj|gate_proj|yvex_native_weight' \
+    src/model/architecture/yvex_deepseek_v4_ir.c \
+    src/model/architecture/yvex_deepseek_v4_ir.h || true
+)"
+if test -n "$BAD_DEEPSEEK_ARCH_IR_LEXICAL"; then
+  echo "$BAD_DEEPSEEK_ARCH_IR_LEXICAL"
+  echo "DeepSeek architecture truth must not regress to lexical tensor profiling"
+  exit 1
+fi
+
+grep -nF 'source_payload_bytes_read = 0u' \
+  src/model/architecture/yvex_deepseek_v4_ir.c >/dev/null
+grep -nF 'V010.TENSOR.COVERAGE.DEEPSEEK.0' \
+  src/model/target/yvex_model_class_profile.c >/dev/null
 grep -nF 'yvex_tensor_collection_report_build' src/model/target/yvex_tensor_collection_report.c >/dev/null
 grep -nF 'yvex_tensor_naming_report_build' src/model/target/yvex_tensor_naming_report.c >/dev/null
 grep -nF 'yvex_output_head_map_report_build' src/model/target/yvex_output_head_map_report.c >/dev/null

@@ -12,6 +12,7 @@
 #include "yvex_source_json.h"
 #include "yvex_source_verify_internal.h"
 
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -122,7 +123,7 @@ static int source_parse_rope_scaling(yvex_source_json *json,
         yvex_source_json_space(json);
         if (json->cursor < json->end && *json->cursor == '}') {
             json->cursor++;
-            return seen == 7u;
+            return seen == 31u;
         }
         if (!yvex_source_json_string(json, key, sizeof(key))) return 0;
         yvex_source_json_space(json);
@@ -140,6 +141,14 @@ static int source_parse_rope_scaling(yvex_source_json *json,
             if ((seen & 4u) || !yvex_source_json_u64(
                     json, &out->rope_original_context)) return 0;
             seen |= 4u;
+        } else if (strcmp(key, "beta_fast") == 0) {
+            if ((seen & 8u) || !yvex_source_json_u64(
+                    json, &out->rope_beta_fast)) return 0;
+            seen |= 8u;
+        } else if (strcmp(key, "beta_slow") == 0) {
+            if ((seen & 16u) || !yvex_source_json_u64(
+                    json, &out->rope_beta_slow)) return 0;
+            seen |= 16u;
         } else if (!yvex_source_json_skip_value(json)) {
             return 0;
         }
@@ -163,7 +172,7 @@ static int source_parse_quantization(yvex_source_json *json,
         yvex_source_json_space(json);
         if (json->cursor < json->end && *json->cursor == '}') {
             json->cursor++;
-            return seen == 7u;
+            return seen == 31u;
         }
         if (!yvex_source_json_string(json, key, sizeof(key))) return 0;
         yvex_source_json_space(json);
@@ -187,6 +196,16 @@ static int source_parse_quantization(yvex_source_json *json,
             yvex_source_json_space(json);
             if (json->cursor >= json->end || *json->cursor++ != ']') return 0;
             seen |= 4u;
+        } else if (strcmp(key, "activation_scheme") == 0) {
+            if ((seen & 8u) || !yvex_source_json_string(
+                    json, out->quant_activation_scheme,
+                    sizeof(out->quant_activation_scheme))) return 0;
+            seen |= 8u;
+        } else if (strcmp(key, "scale_fmt") == 0) {
+            if ((seen & 16u) || !yvex_source_json_string(
+                    json, out->quant_scale_format,
+                    sizeof(out->quant_scale_format))) return 0;
+            seen |= 16u;
         } else if (!yvex_source_json_skip_value(json)) {
             return 0;
         }
@@ -495,6 +514,114 @@ static int source_parse_generation_config(const char *data,
     return yvex_source_json_complete(&json) && seen == 127u;
 }
 
+/* Records one tokenizer id while preserving checked effective-vocabulary facts. */
+static int source_tokenizer_record_id(yvex_source_verification *out,
+                                      unsigned long long token_id)
+{
+    if (!out || token_id == ULLONG_MAX) return 0;
+    if (out->tokenizer_base_vocab_count == 0u &&
+        out->tokenizer_added_token_count == 0u) {
+        out->tokenizer_max_token_id = token_id;
+    } else if (token_id > out->tokenizer_max_token_id) {
+        out->tokenizer_max_token_id = token_id;
+    }
+    return 1;
+}
+
+/* Parses the tokenizer vocabulary object and its numeric id range. */
+static int source_parse_tokenizer_vocab(yvex_source_json *json,
+                                        yvex_source_verification *out)
+{
+    char token[YVEX_SOURCE_JSON_KEY_CAP];
+
+    yvex_source_json_space(json);
+    if (!json || !out || json->cursor >= json->end ||
+        *json->cursor++ != '{') return 0;
+    yvex_source_json_space(json);
+    if (json->cursor < json->end && *json->cursor == '}') {
+        json->cursor++;
+        return 1;
+    }
+    for (;;) {
+        unsigned long long token_id;
+
+        if (!yvex_source_json_string(json, token, sizeof(token))) return 0;
+        yvex_source_json_space(json);
+        if (json->cursor >= json->end || *json->cursor++ != ':' ||
+            !yvex_source_json_u64(json, &token_id) ||
+            out->tokenizer_base_vocab_count == ULLONG_MAX ||
+            !source_tokenizer_record_id(out, token_id)) return 0;
+        out->tokenizer_base_vocab_count++;
+        yvex_source_json_space(json);
+        if (json->cursor >= json->end) return 0;
+        if (*json->cursor == '}') {
+            json->cursor++;
+            return 1;
+        }
+        if (*json->cursor++ != ',') return 0;
+    }
+}
+
+/* Parses one added-token object and requires exactly one numeric id. */
+static int source_parse_added_token(yvex_source_json *json,
+                                    yvex_source_verification *out)
+{
+    char key[YVEX_SOURCE_JSON_KEY_CAP];
+    int saw_id = 0;
+
+    yvex_source_json_space(json);
+    if (!json || !out || json->cursor >= json->end ||
+        *json->cursor++ != '{') return 0;
+    for (;;) {
+        yvex_source_json_space(json);
+        if (json->cursor < json->end && *json->cursor == '}') {
+            json->cursor++;
+            return saw_id;
+        }
+        if (!yvex_source_json_string(json, key, sizeof(key))) return 0;
+        yvex_source_json_space(json);
+        if (json->cursor >= json->end || *json->cursor++ != ':') return 0;
+        if (strcmp(key, "id") == 0) {
+            unsigned long long token_id;
+            if (saw_id || !yvex_source_json_u64(json, &token_id) ||
+                !source_tokenizer_record_id(out, token_id)) return 0;
+            saw_id = 1;
+        } else if (!yvex_source_json_skip_value(json)) {
+            return 0;
+        }
+        yvex_source_json_space(json);
+        if (json->cursor >= json->end) return 0;
+        if (*json->cursor == '}') continue;
+        if (*json->cursor++ != ',') return 0;
+    }
+}
+
+/* Parses the added-token array without materializing token strings. */
+static int source_parse_added_tokens(yvex_source_json *json,
+                                     yvex_source_verification *out)
+{
+    yvex_source_json_space(json);
+    if (!json || !out || json->cursor >= json->end ||
+        *json->cursor++ != '[') return 0;
+    yvex_source_json_space(json);
+    if (json->cursor < json->end && *json->cursor == ']') {
+        json->cursor++;
+        return 1;
+    }
+    for (;;) {
+        if (!source_parse_added_token(json, out) ||
+            out->tokenizer_added_token_count == ULLONG_MAX) return 0;
+        out->tokenizer_added_token_count++;
+        yvex_source_json_space(json);
+        if (json->cursor >= json->end) return 0;
+        if (*json->cursor == ']') {
+            json->cursor++;
+            return 1;
+        }
+        if (*json->cursor++ != ',') return 0;
+    }
+}
+
 /* Parses tokenizer model type and requires a structured vocabulary object. */
 static int source_parse_tokenizer_model(yvex_source_json *json,
                                         yvex_source_verification *out)
@@ -519,7 +646,8 @@ static int source_parse_tokenizer_model(yvex_source_json *json,
                     sizeof(out->tokenizer_model_type))) return 0;
             seen |= 1u;
         } else if (strcmp(key, "vocab") == 0) {
-            if ((seen & 2u) || !yvex_source_json_skip_object(json)) return 0;
+            if ((seen & 2u) ||
+                !source_parse_tokenizer_vocab(json, out)) return 0;
             seen |= 2u;
         } else if (!yvex_source_json_skip_value(json)) {
             return 0;
@@ -559,7 +687,8 @@ static int source_parse_tokenizer_json(const char *data,
                 strcmp(version, "1.0") != 0) return 0;
             seen |= 1u;
         } else if (strcmp(key, "added_tokens") == 0) {
-            if ((seen & 2u) || !yvex_source_json_skip_array(&json)) return 0;
+            if ((seen & 2u) ||
+                !source_parse_added_tokens(&json, out)) return 0;
             seen |= 2u;
         } else if (strcmp(key, "normalizer") == 0) {
             if ((seen & 4u) || !yvex_source_json_skip_value(&json)) return 0;
@@ -584,8 +713,13 @@ static int source_parse_tokenizer_json(const char *data,
         if (*json.cursor == '}') continue;
         if (*json.cursor++ != ',') return 0;
     }
-    return yvex_source_json_complete(&json) && seen == 127u &&
-           out->tokenizer_model_type[0] != '\0';
+    if (!yvex_source_json_complete(&json) || seen != 127u ||
+        out->tokenizer_model_type[0] == '\0' ||
+        (out->tokenizer_base_vocab_count == 0u &&
+         out->tokenizer_added_token_count == 0u) ||
+        out->tokenizer_max_token_id == ULLONG_MAX) return 0;
+    out->tokenizer_effective_vocab_size = out->tokenizer_max_token_id + 1u;
+    return 1;
 }
 
 int yvex_source_deepseek_parse_sidecar(

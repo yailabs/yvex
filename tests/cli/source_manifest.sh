@@ -147,21 +147,25 @@ config = {
         "type": "yarn",
         "factor": 16,
         "original_max_position_embeddings": 65536,
+        "beta_fast": 32,
+        "beta_slow": 1,
     },
     "quantization_config": {
         "quant_method": "fp8",
         "fmt": "e4m3",
+        "activation_scheme": "dynamic",
+        "scale_fmt": "ue8m0",
         "weight_block_size": [128, 128],
     },
 }
 tokenizer = {
     "version": "1.0",
-    "added_tokens": [],
+    "added_tokens": [{"id": 129279, "content": "<extra>"}],
     "normalizer": None,
     "pre_tokenizer": {},
     "post_processor": {},
     "decoder": {},
-    "model": {"type": "BPE", "vocab": {}},
+    "model": {"type": "BPE", "vocab": {"base": 127999}},
 }
 tokenizer_config = {
     "tokenizer_class": "PreTrainedTokenizerFast",

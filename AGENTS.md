@@ -163,6 +163,20 @@ src/model/target/
   qtype role-support reports, model-target report construction, and explicit
   sidecar file writing
 
+src/model/architecture/
+  immutable typed family architecture specifications constructed from verified
+  source facts; no source parsing, tensor-name discovery, mapping, artifact,
+  runtime, or rendering ownership
+
+V010.MODEL.ARCH.IR.0 makes
+src/model/architecture/yvex_deepseek_v4_ir.[ch] the sole owner of the exact
+DeepSeek-V4-Flash model, main-layer, auxiliary/MTP, attention, position, KV,
+mHC, MoE, output, tokenizer, and source-constraint specification. It consumes
+one successful strict source-verification result without reopening source
+files or rescanning headers. The immutable IR defines required semantics for
+tensor coverage and later runtime work; it is not tensor mapping, artifact
+support, materialization, execution, or generation.
+
 MODEL_TARGET.1 closure forbids using yvex_model_target_report.c as a
 compatibility monolith. The coordinator may route request kinds, but
 report-specific ownership must live in the corresponding src/model/target

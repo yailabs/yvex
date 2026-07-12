@@ -464,7 +464,7 @@ static const char *catalog_runtime_status(const yvex_model_target_record *rec)
 static const char *catalog_next_row(const yvex_model_target_record *rec)
 {
     if (yvex_model_target_is_release_target(rec->target_id)) {
-        return "V010.REBASE.DEEPSEEK.0";
+        return "V010.TENSOR.COVERAGE.DEEPSEEK.0";
     }
     if (strcmp(rec->target_class, "official-source-huge-model") == 0) {
         return "V010.SOURCE.8";
@@ -492,7 +492,7 @@ static const char *catalog_boundary(const yvex_model_target_record *rec)
 static const char *catalog_runtime_shape(const yvex_model_target_record *rec)
 {
     if (yvex_model_target_is_release_target(rec->target_id)) {
-        return "raw-deepseek-v4-config-facts-only";
+        return "typed-deepseek-v4-architecture-ir";
     }
     if (strcmp(yvex_model_target_family_key(rec->target_id), "gemma") == 0) {
         return "dense-causal-decoder-candidate-pending-config";
@@ -527,7 +527,9 @@ static void catalog_emit_inspect_audit(const yvex_model_target_record *rec,
         yvex_model_target_report_add_row(report, "config_architecture: %s",
                                          identity->config_architecture);
         yvex_model_target_report_add_row(report,
-                                         "post_source_verification_next: V010.GGUF.QTYPE.ABI.1");
+                                         "architecture_ir_owner: src/model/architecture/yvex_deepseek_v4_ir.c");
+        yvex_model_target_report_add_row(report,
+                                         "architecture_ir_next: V010.TENSOR.COVERAGE.DEEPSEEK.0");
     }
     yvex_model_target_report_add_row(report, "source_artifact_class: %s",
                                      rec->source_artifact_class);
@@ -550,12 +552,24 @@ static void catalog_emit_inspect_audit(const yvex_model_target_record *rec,
                                      source_status);
     yvex_model_target_report_add_row(report, "source_tensor_count: 0");
     yvex_model_target_report_add_row(report, "source_tensor_metadata_payload_loaded: false");
-    yvex_model_target_report_add_row(report, "model_class_profile_status: command-visible");
+    yvex_model_target_report_add_row(
+        report, "model_class_profile_status: %s",
+        yvex_model_target_is_release_target(rec->target_id)
+            ? "typed-architecture-ir"
+            : "command-visible");
     yvex_model_target_report_add_row(report, "model_class_target_id: %s", rec->target_id);
     yvex_model_target_report_add_row(report, "model_class_runtime_shape: %s",
                                      catalog_runtime_shape(rec));
-    yvex_model_target_report_add_row(report, "model_class_evidence_basis: header-metadata-only");
-    yvex_model_target_report_add_row(report, "model_class_pattern_status: lexical-only");
+    yvex_model_target_report_add_row(
+        report, "model_class_evidence_basis: %s",
+        yvex_model_target_is_release_target(rec->target_id)
+            ? "strict-source-verification-to-typed-ir"
+            : "header-metadata-only");
+    yvex_model_target_report_add_row(
+        report, "model_class_pattern_status: %s",
+        yvex_model_target_is_release_target(rec->target_id)
+            ? "not-used-for-release-architecture"
+            : "lexical-only");
     yvex_model_target_report_add_row(report, "model_class_role_mapping_status: not-implemented");
     yvex_model_target_report_add_row(report, "model_class_runtime_status: unsupported");
     yvex_model_target_report_add_row(report, "tensor_collection_status: command-visible");
@@ -588,7 +602,7 @@ static void catalog_emit_inspect_audit(const yvex_model_target_record *rec,
     yvex_model_target_report_add_row(report, "tokenizer_runtime_status: not-implemented");
     yvex_model_target_report_add_row(report, "tokenizer_map_next: %s",
                                      yvex_model_target_is_release_target(rec->target_id)
-                                         ? "V010.MODEL.ARCH.IR.0"
+                                         ? "V010.TENSOR.COVERAGE.DEEPSEEK.0"
                                          : "V010.MAP.7");
     yvex_model_target_report_add_row(report, "missing_role_report_status: not-run");
     yvex_model_target_report_add_row(report, "missing_role_report_stage: missing-role-blocker-report");
@@ -678,10 +692,22 @@ int yvex_model_target_catalog_report_build(
                 const yvex_model_target_record *rec = yvex_model_target_at(i);
                 yvex_model_target_report_add_row(report, "target: %s", rec->target_id);
                 yvex_model_target_report_add_row(report, "target_class: %s", rec->target_class);
-                yvex_model_target_report_add_row(report, "model_class_profile_status: command-visible");
+                yvex_model_target_report_add_row(
+                    report, "model_class_profile_status: %s",
+                    yvex_model_target_is_release_target(rec->target_id)
+                        ? "typed-architecture-ir"
+                        : "command-visible");
                 yvex_model_target_report_add_row(report, "model_class_target_id: %s", rec->target_id);
-                yvex_model_target_report_add_row(report, "model_class_evidence_basis: header-metadata-only");
-                yvex_model_target_report_add_row(report, "model_class_pattern_status: lexical-only");
+                yvex_model_target_report_add_row(
+                    report, "model_class_evidence_basis: %s",
+                    yvex_model_target_is_release_target(rec->target_id)
+                        ? "strict-source-verification-to-typed-ir"
+                        : "header-metadata-only");
+                yvex_model_target_report_add_row(
+                    report, "model_class_pattern_status: %s",
+                    yvex_model_target_is_release_target(rec->target_id)
+                        ? "not-used-for-release-architecture"
+                        : "lexical-only");
                 yvex_model_target_report_add_row(report, "model_class_role_mapping_status: not-implemented");
                 yvex_model_target_report_add_row(report, "tensor_collection_status: command-visible");
                 yvex_model_target_report_add_row(report, "tensor_collection_family: %s", yvex_model_target_family_key(rec->target_id));
@@ -704,7 +730,7 @@ int yvex_model_target_catalog_report_build(
                 yvex_model_target_report_add_row(
                     report, "tokenizer_map_next: %s",
                     yvex_model_target_is_release_target(rec->target_id)
-                        ? "V010.MODEL.ARCH.IR.0"
+                        ? "V010.TENSOR.COVERAGE.DEEPSEEK.0"
                         : "V010.MAP.7");
                 yvex_model_target_report_add_row(report, "missing_role_report_status: not-run");
                 yvex_model_target_report_add_row(report, "missing_role_report_target_id: %s", rec->target_id);

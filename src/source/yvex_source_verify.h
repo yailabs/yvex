@@ -41,7 +41,7 @@ typedef struct {
     int promote_manifest;
 } yvex_source_verify_options;
 
-typedef struct {
+typedef struct yvex_source_verification {
     int verified;
     char resolved_source_path[YVEX_PATH_CAP];
     char manifest_path[YVEX_PATH_CAP];
@@ -128,8 +128,16 @@ typedef struct {
     int use_cache;
     unsigned long long rope_scaling_factor;
     unsigned long long rope_original_context;
+    unsigned long long rope_beta_fast;
+    unsigned long long rope_beta_slow;
+    char quant_activation_scheme[32];
+    char quant_scale_format[32];
     unsigned long long quant_block_rows;
     unsigned long long quant_block_columns;
+    unsigned long long tokenizer_base_vocab_count;
+    unsigned long long tokenizer_added_token_count;
+    unsigned long long tokenizer_max_token_id;
+    unsigned long long tokenizer_effective_vocab_size;
     unsigned long long tokenizer_model_max_length;
     unsigned long long generation_bos_token_id;
     unsigned long long generation_eos_token_id;

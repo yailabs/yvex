@@ -17,4 +17,10 @@ int yvex_model_class_profile_report_build(
     yvex_model_target_report *report,
     yvex_error *err);
 
+int yvex_model_class_profile_deepseek_from_verification(
+    const yvex_model_target_request *request,
+    const struct yvex_source_verification *verification,
+    yvex_model_target_report *report,
+    yvex_error *err);
+
 #endif

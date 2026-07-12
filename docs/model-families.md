@@ -282,6 +282,45 @@ Qwen and Gemma still require runtime role validation, artifact contracts,
 runtime descriptors, graph lowering, and runtime execution before family
 support can be claimed.
 
+## DeepSeek-V4-Flash Architecture Specification
+
+The canonical DeepSeek release profile is constructed from one successful
+strict verification of `deepseek-ai/DeepSeek-V4-Flash` at revision
+`60d8d70770c6776ff598c94bb586a859a38244f1`. The model owner consumes those
+typed source facts directly; it does not reopen `config.json`, tokenize tensor
+names, or rescan the 46 safetensors headers. The resulting immutable IR remains
+valid after the verification request and source handles are released.
+
+The normalized model contains 43 main transformer descriptors and one distinct
+MTP descriptor. Main layers 0 and 1 use sliding-window attention. Layers 2
+through 42 alternate 21 compressed sparse-attention layers at ratio 4 with 20
+heavy-compression layers at ratio 128; the auxiliary layer uses the explicit
+uncompressed class rather than being truncated from the 44-entry source
+schedule. Every descriptor carries its own partial-RoPE geometry, YaRN context
+extension, attention state class, compressed-core/tail requirements, and CSA
+indexer requirements.
+
+mHC is represented as a residual transformation, not a feature bit. Four
+4096-wide streams form a 16,384-wide state; each transition records the 24 by
+16,384 mixing geometry, 20 Sinkhorn iterations, pre/post attention and deferred
+feed-forward transitions, and the final post/head collapse before the final
+RMS normalization. This contract determines later tensor and graph
+requirements without asserting that those transitions execute today.
+
+All 43 main layers carry one shared and 256 routed experts with top-6
+selection. The first three layers require token-ID hash routing; the remaining
+40 require hidden-state routing, correction bias, and the configured
+sqrt-softplus/no-aux policy. The IR separately records the untied 129,280-entry
+output head, the 128,000-entry base tokenizer plus 1,283 added-token records,
+the one-million-token context contract, BF16 base weights, FP4 experts, and
+dynamic FP8 E4M3/UE8M0 source constraints. These source constraints do not
+select a GGUF qtype or imply quantization or backend compute support.
+
+`src/model/architecture/yvex_deepseek_v4_ir.[ch]` owns this specification.
+Tensor coverage consumes it next to derive required roles. Artifact admission,
+materialization, executable descriptors, tokenizer execution, CUDA lowering,
+and generation remain separate owners and separate support boundaries.
+
 ## Family Architecture Signature
 
 A family must expose an architecture signature before YVEX can do meaningful
@@ -1051,7 +1090,7 @@ This table records architectural scope, not delivery progress.
 
 | Family | v0.1.0 relation | Runtime class | Current support truth |
 | --- | --- | --- | --- |
-| DeepSeek-V4-Flash | exact release target at `$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash`; future target id `deepseek4-v4-flash` | sparse/MoE | unsupported; no complete model artifact or runtime path |
+| DeepSeek-V4-Flash | exact release target at `$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash`; canonical target id `deepseek4-v4-flash` | hybrid SWA/CSA/HCA decoder with mHC and MoE | typed architecture specification exists; no complete tensor coverage, model artifact, or runtime path |
 | Qwen | outside v0.1.0 | target-dependent dense or sparse/MoE | unsupported; existing source/report facts do not enter the release path |
 | Gemma | outside v0.1.0 | dense | unsupported; existing source/report facts do not enter the release path |
 | GLM | outside v0.1.0 source-pressure work | sparse/MoE | unsupported; source evidence is not runtime support |

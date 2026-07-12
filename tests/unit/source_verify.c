@@ -7,6 +7,7 @@
 #include "test.h"
 
 #include "yvex_model_target_catalog.h"
+#include "src/model/architecture/yvex_deepseek_v4_ir.h"
 #include "yvex_source_provenance.h"
 #include "yvex_source_verify.h"
 
@@ -101,9 +102,12 @@ static int source_verify_write_config(const char *root,
         "\"topk_method\":\"noaux_tc\",\"norm_topk_prob\":true,"
         "\"swiglu_limit\":10.0,\"use_cache\":true,\"rope_scaling\":{"
         "\"type\":\"yarn\",\"factor\":16,"
-        "\"original_max_position_embeddings\":65536},"
+        "\"original_max_position_embeddings\":65536,"
+        "\"beta_fast\":32,\"beta_slow\":1},"
         "\"quantization_config\":{\"quant_method\":\"fp8\","
-        "\"fmt\":\"e4m3\",\"weight_block_size\":[128,128]}}",
+        "\"fmt\":\"e4m3\",\"activation_scheme\":\"dynamic\","
+        "\"scale_fmt\":\"ue8m0\","
+        "\"weight_block_size\":[128,128]}}",
         architecture, model_type);
     return n >= 0 && (size_t)n < sizeof(json) &&
            source_verify_write_text(path, json);
@@ -192,10 +196,10 @@ static int source_verify_make_valid(const char *root)
                                     yvex_deepseek_v4_config_architecture)) return 0;
     snprintf(path, sizeof(path), "%s/tokenizer.json", root);
     if (!source_verify_write_text(path,
-                                  "{\"version\":\"1.0\",\"added_tokens\":[],"
+                                  "{\"version\":\"1.0\",\"added_tokens\":[{\"id\":129279,\"content\":\"<extra>\"}],"
                                   "\"normalizer\":null,\"pre_tokenizer\":{},"
                                   "\"post_processor\":{},\"decoder\":{},"
-                                  "\"model\":{\"type\":\"BPE\",\"vocab\":{}}}")) return 0;
+                                  "\"model\":{\"type\":\"BPE\",\"vocab\":{\"base\":127999}}}")) return 0;
     snprintf(path, sizeof(path), "%s/tokenizer_config.json", root);
     if (!source_verify_write_text(
             path,
@@ -381,8 +385,26 @@ int yvex_test_source_verify(void)
     YVEX_TEST_ASSERT(result.compress_ratio_count == 44 &&
                      result.index_topk == 512 &&
                      strcmp(result.scoring_func, "sqrtsoftplus") == 0 &&
-                     strcmp(result.tokenizer_model_type, "BPE") == 0,
+                     strcmp(result.tokenizer_model_type, "BPE") == 0 &&
+                     result.tokenizer_effective_vocab_size == 129280 &&
+                     result.rope_beta_fast == 32 &&
+                     result.rope_beta_slow == 1 &&
+                     strcmp(result.quant_scale_format, "ue8m0") == 0,
                      "execution-affecting config and tokenizer facts are preserved");
+    {
+        yvex_deepseek_v4_ir *ir = NULL;
+        yvex_deepseek_v4_ir_failure failure;
+
+        yvex_error_clear(&err);
+        YVEX_TEST_ASSERT(yvex_deepseek_v4_ir_build(
+                             &ir, &result, &failure, &err) == YVEX_OK && ir,
+                         "strict verified fixture feeds architecture IR");
+        YVEX_TEST_ASSERT(result.header_scan_count == 1 &&
+                         yvex_deepseek_v4_ir_model(ir)->
+                                 source_payload_bytes_read == 0,
+                         "architecture construction performs no rescan or payload read");
+        yvex_deepseek_v4_ir_close(ir);
+    }
 
     {
         yvex_model_target_identity indexless =

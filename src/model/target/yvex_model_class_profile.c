@@ -23,7 +23,10 @@
 
 #include "yvex_model_target_private.h"
 
+#include "../../source/yvex_source_verify.h"
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -39,6 +42,208 @@ typedef struct {
     unsigned long long head;
     unsigned long long moe;
 } model_class_profile_scan;
+
+static int class_profile_path_suffix(const char *path, const char *suffix)
+{
+    size_t path_length;
+    size_t suffix_length;
+
+    if (!path || !suffix) return 0;
+    path_length = strlen(path);
+    suffix_length = strlen(suffix);
+    return path_length >= suffix_length &&
+           strcmp(path + path_length - suffix_length, suffix) == 0;
+}
+
+/* Resolves the canonical models root without treating target id as a path leaf. */
+static int class_profile_deepseek_models_root(
+    const yvex_model_target_request *request,
+    char *out,
+    size_t cap)
+{
+    static const char suffix[] = "/hf/deepseek/DeepSeek-V4-Flash";
+    const char *environment;
+    size_t source_length;
+    size_t suffix_length = sizeof(suffix) - 1u;
+
+    int n;
+
+    if (!request || !out || cap == 0u) return 0;
+    out[0] = '\0';
+    if (request->models_root[0]) {
+        n = snprintf(out, cap, "%s", request->models_root);
+        return n >= 0 && (size_t)n < cap;
+    }
+    environment = getenv("YVEX_MODELS_ROOT");
+    if (environment && environment[0]) {
+        n = snprintf(out, cap, "%s", environment);
+        return n >= 0 && (size_t)n < cap;
+    }
+    source_length = strlen(request->source_path);
+    if (class_profile_path_suffix(request->source_path, suffix) &&
+        source_length > suffix_length &&
+        source_length - suffix_length < cap) {
+        memcpy(out, request->source_path, source_length - suffix_length);
+        out[source_length - suffix_length] = '\0';
+        return 1;
+    }
+    n = snprintf(out, cap, "%s", "models");
+    return n >= 0 && (size_t)n < cap;
+}
+
+/* Resolves the exact release source from the canonical identity mapping. */
+static int class_profile_deepseek_source(
+    const yvex_model_target_request *request,
+    const char *models_root,
+    char *out,
+    size_t cap)
+{
+    if (!out || cap == 0u) return 0;
+    if (request->source_path[0]) {
+        int n = snprintf(out, cap, "%s", request->source_path);
+        return n >= 0 && (size_t)n < cap;
+    }
+    return yvex_model_target_source_path(
+        out, cap, models_root, yvex_model_target_release_identity());
+}
+
+/* Projects a typed IR construction refusal without converting it to support. */
+static void class_profile_deepseek_ir_refusal(
+    const yvex_deepseek_v4_ir_failure *failure,
+    yvex_model_target_report *report)
+{
+    report->status = "architecture-ir-refused";
+    report->exit_code = 5;
+    yvex_model_target_report_add_error(
+        report,
+        "model-target class-profile: architecture IR refused: %s:%s field=%s layer=%llu",
+        yvex_deepseek_v4_ir_component_name(failure->component),
+        yvex_deepseek_v4_ir_failure_name(failure->code),
+        failure->field ? failure->field : "none", failure->layer_index);
+}
+
+/* Builds the report-owned IR from an already verified result for real consumers and tests. */
+int yvex_model_class_profile_deepseek_from_verification(
+    const yvex_model_target_request *request,
+    const struct yvex_source_verification *verification,
+    yvex_model_target_report *report,
+    yvex_error *err)
+{
+    yvex_deepseek_v4_ir_failure failure;
+    int rc;
+
+    if (!request || !verification || !report ||
+        !yvex_model_target_is_release_target(request->target_id)) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG,
+                       "deepseek_architecture_profile",
+                       "canonical target, verification, and report are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    rc = yvex_deepseek_v4_ir_build(&report->deepseek_architecture_ir,
+                                   verification, &failure, err);
+    if (rc != YVEX_OK) {
+        class_profile_deepseek_ir_refusal(&failure, report);
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+    report->status = "typed-architecture-specified";
+    (void)snprintf(report->target_id, sizeof(report->target_id), "%s",
+                   request->target_id);
+    (void)snprintf(report->family, sizeof(report->family), "%s", "deepseek");
+    (void)snprintf(report->stage, sizeof(report->stage), "%s",
+                   "typed-architecture-specification");
+    (void)snprintf(report->runtime_status, sizeof(report->runtime_status),
+                   "%s", "unsupported");
+    (void)snprintf(report->generation_status,
+                   sizeof(report->generation_status), "%s", "unsupported");
+    (void)snprintf(report->next_row, sizeof(report->next_row), "%s",
+                   "V010.TENSOR.COVERAGE.DEEPSEEK.0");
+    (void)snprintf(report->boundary, sizeof(report->boundary), "%s",
+                   "typed architecture only; no tensor coverage, artifact, runtime, or generation");
+    report->exit_code = 0;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+/* Verifies the exact source once and transfers only typed facts into the IR owner. */
+static int class_profile_deepseek_report_build(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report,
+    yvex_error *err)
+{
+    yvex_source_verify_options options;
+    yvex_source_verification verification;
+    char models_root[512];
+    char source_path[512];
+    int rc;
+
+    if (!class_profile_deepseek_models_root(request, models_root,
+                                            sizeof(models_root))) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "deepseek_architecture_profile",
+                       "canonical models root exceeds profile bounds");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (!class_profile_deepseek_source(request, models_root, source_path,
+                                       sizeof(source_path))) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "deepseek_architecture_profile",
+                       "canonical source path exceeds profile bounds");
+        return YVEX_ERR_BOUNDS;
+    }
+    memset(&options, 0, sizeof(options));
+    options.identity = yvex_model_target_release_identity();
+    options.source_path = source_path;
+    options.models_root = models_root;
+    options.promote_manifest = 0;
+    rc = yvex_source_verify(&options, &verification, err);
+    if (rc != YVEX_OK) return rc;
+    if (!verification.verified) {
+        const char *blocker = verification.blocker_count
+                                  ? verification.blockers[0]
+                                  : "source-verification-incomplete";
+        report->status = "architecture-ir-blocked";
+        report->exit_code = 5;
+        if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
+            yvex_model_target_report_add_row(
+                report,
+                "{\"status\":\"architecture-ir-blocked\",\"target_id\":\"%s\",\"source_verification\":\"blocked\",\"reason\":\"%s\",\"runtime\":\"unsupported\",\"generation\":\"unsupported\"}",
+                request->target_id, blocker);
+        } else if (request->mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+            yvex_model_target_report_add_table_row(
+                report, 4u, "TARGET", "SOURCE", "IR", "REASON",
+                NULL, NULL, NULL, NULL);
+            yvex_model_target_report_add_table_row(
+                report, 4u, request->target_id, "blocked", "not-built",
+                blocker, NULL, NULL, NULL, NULL);
+        } else if (request->mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+            yvex_model_target_report_add_row(
+                report, "architecture_ir_status: blocked");
+            yvex_model_target_report_add_row(report, "target_id: %s",
+                                             request->target_id);
+            yvex_model_target_report_add_row(
+                report, "source_path: %s", source_path);
+            yvex_model_target_report_add_row(
+                report, "source_verification_status: blocked");
+            yvex_model_target_report_add_row(report, "reason: %s", blocker);
+            yvex_model_target_report_add_row(
+                report, "runtime_execution: unsupported");
+            yvex_model_target_report_add_row(report,
+                                             "generation: unsupported");
+        } else {
+            yvex_model_target_report_add_row(report,
+                                             "model-class: deepseek");
+            yvex_model_target_report_add_row(report, "target: %s",
+                                             request->target_id);
+            yvex_model_target_report_add_row(
+                report, "status: architecture-ir-blocked");
+            yvex_model_target_report_add_row(report, "reason: %s", blocker);
+            yvex_model_target_report_add_row(
+                report, "boundary: source verification required; runtime/generation unsupported");
+        }
+        return YVEX_OK;
+    }
+    return yvex_model_class_profile_deepseek_from_verification(
+        request, &verification, report, err);
+}
 
 static int class_profile_validate(const yvex_model_target_request *request,
                                   yvex_model_target_report *report)
@@ -210,6 +415,9 @@ int yvex_model_class_profile_report_build(
     }
     if (!class_profile_validate(request, report)) {
         return YVEX_OK;
+    }
+    if (yvex_model_target_is_release_target(request->target_id)) {
+        return class_profile_deepseek_report_build(request, report, err);
     }
     family = yvex_model_target_family_key(request->target_id);
     class_profile_family_facts(family, &class_name, &runtime_shape,

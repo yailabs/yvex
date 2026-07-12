@@ -132,6 +132,7 @@ CORE_SRCS := \
 	src/metrics/yvex_profile.c \
 	src/model/yvex_model.c \
 	src/model/yvex_model_artifacts.c \
+	src/model/architecture/yvex_deepseek_v4_ir.c \
 	src/model/yvex_runtime_descriptor.c \
 	src/model/yvex_runtime_descriptor_report.c \
 	src/model/artifacts/yvex_model_artifact_check_report.c \

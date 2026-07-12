@@ -27,6 +27,8 @@
 
 #include <yvex/error.h>
 
+#include "../architecture/yvex_deepseek_v4_ir.h"
+
 #define YVEX_MODEL_TARGET_TEXT_CAP 512u
 #define YVEX_MODEL_TARGET_ROW_CAP 384u
 #define YVEX_MODEL_TARGET_TABLE_COL_CAP 8u
@@ -122,6 +124,7 @@ typedef struct {
     unsigned long error_row_count;
     yvex_model_target_table_row table_rows[YVEX_MODEL_TARGET_TABLE_ROW_CAP];
     unsigned long table_row_count;
+    yvex_deepseek_v4_ir *deepseek_architecture_ir;
     int exit_code;
 } yvex_model_target_report;
 

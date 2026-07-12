@@ -254,5 +254,6 @@ void yvex_model_target_report_close(yvex_model_target_report *report)
     if (!report) {
         return;
     }
+    yvex_deepseek_v4_ir_close(report->deepseek_architecture_ir);
     memset(report, 0, sizeof(*report));
 }

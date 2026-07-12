@@ -150,7 +150,8 @@ require_text "$project" 'YVEX generates real text with DeepSeek-V4-Flash on the 
 require_text "$project" '$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash'
 require_text "$project" 'deepseek4-v4-flash'
 require_text "$project" 'Qwen, Gemma, and dense/common work already implemented remains active'
-require_text "$project" 'No execution-complete DeepSeek architecture IR exists.'
+require_text "$project" 'The exact DeepSeek-V4-Flash source now projects to one immutable typed IR'
+require_text "$project" 'Complete DeepSeek required-role coverage is now the active blocker.'
 require_text "$project" 'Production C contains no fallback PTX.'
 require_text "$project" 'A no-`nvcc` build refuses every kernel before dispatch'
 require_text "$project" 'The DeepSeek/v0.1 required-operation gate remains unsupported.'
@@ -195,7 +196,7 @@ require_text "$reference" 'state, milestone state, dependency order, capability 
 for source in \
   'vLLM architecture' \
   'vllm/model_executor/models/deepseek_v4.py' \
-  'SGLang runtime' \
+  '96a04cb13f9c3ed86028e090784a9eb059cf5318' \
   'python/sglang/srt/models/deepseek_v4.py' \
   'GGUF specification' \
   'convert_hf_to_gguf.py' \
@@ -204,13 +205,15 @@ for source in \
   'NVIDIA/cutlass' \
   'Driver API module management' \
   'execution control' \
-  'DeepSeek [V4 technical report]' \
-  'DeepSeek-V4-Flash/blob/main/config.json' \
+  'DeepSeek [V4 technical report v1]' \
+  '60d8d70770c6776ff598c94bb586a859a38244f1' \
   'deepseek-ai/FlashMLA'
 do
   require_text "$reference" "$source"
 done
 require_text "$reference" 'src/backend/cuda/'
+require_text "$reference" 'src/model/architecture/'
+require_text "$reference" '8df14cfc8c8a09b4e57f082e59593a3abce4ffb3'
 require_text "$reference" 'V010.REBASE.DEEPSEEK.0'
 require_text "$reference" 'V010.GGUF.ARTIFACT.ABI.1'
 require_text "$reference" 'V010.RUNTIME.DEEPSEEK.MOE.0'
@@ -245,7 +248,7 @@ require_text docs/topology-closure-audit.md 'point-in-time inventory'
 require_text docs/topology-closure-audit.md '`PROJECT.md` owns when each finding is removed or'
 require_text docs/cli-output-architecture.md '## Project State Ownership'
 require_text docs/model-families.md 'exact v0.1.0 target'
-require_text docs/model-families.md 'unsupported; no complete model artifact or runtime path'
+require_text docs/model-families.md 'typed architecture specification exists; no complete tensor coverage, model artifact, or runtime path'
 require_text docs/contract.md 'These are implementation facts, not a runtime progress ladder.'
 require_text docs/contract.md 'defined only by `PROJECT.md`.'
 require_text docs/api.md 'decommission obligations in `PROJECT.md`'

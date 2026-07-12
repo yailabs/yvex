@@ -67,6 +67,241 @@ static int model_target_render_table_rows(FILE *fp,
     return rc;
 }
 
+/* Formats the compact architecture view from the immutable typed IR. */
+static int model_target_render_deepseek_normal(
+    FILE *fp,
+    const yvex_model_target_report *report,
+    const yvex_deepseek_v4_ir *ir,
+    const yvex_deepseek_v4_model_spec *model)
+{
+    const yvex_deepseek_v4_layer_spec *first =
+        yvex_deepseek_v4_ir_layer_at(ir, 0u);
+    int rc = 0;
+
+    rc |= yvex_cli_out_writef(fp, "model-class: deepseek-v4-flash\n");
+    rc |= yvex_cli_out_writef(fp, "target: %s\n", model->target_id);
+    rc |= yvex_cli_out_writef(fp, "status: %s\n", report->status);
+    rc |= yvex_cli_out_writef(
+        fp, "topology: layers=%llu mtp=%llu hidden=%llu vocab=%llu context=%llu\n",
+        model->main_layer_count, model->auxiliary_layer_count,
+        model->hidden_size, model->vocabulary_size, model->maximum_context);
+    rc |= yvex_cli_out_writef(
+        fp, "attention: swa=%llu csa=%llu hca=%llu heads=%llu kv_heads=%llu head_dim=%llu rope_dim=%llu\n",
+        model->swa_layer_count, model->csa_layer_count,
+        model->hca_layer_count, first->query_heads, first->kv_heads,
+        first->head_dimension, first->rope_head_dimension);
+    rc |= yvex_cli_out_writef(
+        fp, "routing: hash=%llu learned=%llu experts=%llu topk=%llu shared=%llu\n",
+        model->hash_router_layer_count, model->learned_router_layer_count,
+        first->moe.routed_experts, first->moe.experts_per_token,
+        first->moe.shared_experts);
+    rc |= yvex_cli_out_writef(
+        fp, "mhc: streams=%llu expanded=%llu mixing_rows=%llu sinkhorn=%llu\n",
+        model->final_mhc.residual_streams, model->final_mhc.expanded_width,
+        model->final_mhc.mixing_rows, model->final_mhc.sinkhorn_iterations);
+    rc |= yvex_cli_out_writef(fp, "next: %s\n", report->next_row);
+    rc |= yvex_cli_out_writef(fp, "boundary: %s\n", report->boundary);
+    return rc < 0 ? rc : 0;
+}
+
+/* Formats one table row without deriving architecture state in the renderer. */
+static int model_target_render_deepseek_table(
+    FILE *fp,
+    const yvex_model_target_report *report,
+    const yvex_deepseek_v4_model_spec *model)
+{
+    int rc = 0;
+
+    rc |= yvex_cli_out_writef(
+        fp, "TARGET  STATUS  LAYERS  MTP  SWA  CSA  HCA  HASH  LEARNED  NEXT\n");
+    rc |= yvex_cli_out_writef(
+        fp, "%s  %s  %llu  %llu  %llu  %llu  %llu  %llu  %llu  %s\n",
+        model->target_id, report->status, model->main_layer_count,
+        model->auxiliary_layer_count, model->swa_layer_count,
+        model->csa_layer_count, model->hca_layer_count,
+        model->hash_router_layer_count, model->learned_router_layer_count,
+        report->next_row);
+    return rc < 0 ? rc : 0;
+}
+
+/* Formats complete audit evidence while preserving the IR as semantic owner. */
+static int model_target_render_deepseek_audit(
+    FILE *fp,
+    const yvex_model_target_report *report,
+    const yvex_deepseek_v4_ir *ir,
+    const yvex_deepseek_v4_model_spec *model)
+{
+    unsigned long long i;
+    int rc = 0;
+
+    rc |= yvex_cli_out_writef(fp, "architecture_ir_status: %s\n",
+                              report->status);
+    rc |= yvex_cli_out_writef(fp, "target_id: %s\n", model->target_id);
+    rc |= yvex_cli_out_writef(fp, "family: %s\n", model->family);
+    rc |= yvex_cli_out_writef(fp, "architecture: %s\n",
+                              model->architecture);
+    rc |= yvex_cli_out_writef(fp, "repository: %s\n", model->repository);
+    rc |= yvex_cli_out_writef(fp, "revision: %s\n", model->revision);
+    rc |= yvex_cli_out_writef(fp, "verification_stage: %s\n",
+                              model->verification_stage);
+    rc |= yvex_cli_out_writef(fp, "paper_revision: %s\n",
+                              model->paper_revision);
+    rc |= yvex_cli_out_writef(fp, "sglang_revision: %s\n",
+                              model->sglang_revision);
+    rc |= yvex_cli_out_writef(fp, "vllm_revision: %s\n",
+                              model->vllm_revision);
+    rc |= yvex_cli_out_writef(fp, "hidden_size: %llu\n", model->hidden_size);
+    rc |= yvex_cli_out_writef(fp, "vocabulary_size: %llu\n",
+                              model->vocabulary_size);
+    rc |= yvex_cli_out_writef(fp, "maximum_context: %llu\n",
+                              model->maximum_context);
+    rc |= yvex_cli_out_writef(fp, "main_layer_count: %llu\n",
+                              model->main_layer_count);
+    rc |= yvex_cli_out_writef(fp, "auxiliary_layer_count: %llu\n",
+                              model->auxiliary_layer_count);
+    rc |= yvex_cli_out_writef(fp, "swa_layer_count: %llu\n",
+                              model->swa_layer_count);
+    rc |= yvex_cli_out_writef(fp, "csa_layer_count: %llu\n",
+                              model->csa_layer_count);
+    rc |= yvex_cli_out_writef(fp, "hca_layer_count: %llu\n",
+                              model->hca_layer_count);
+    rc |= yvex_cli_out_writef(fp, "hash_router_layer_count: %llu\n",
+                              model->hash_router_layer_count);
+    rc |= yvex_cli_out_writef(fp, "learned_router_layer_count: %llu\n",
+                              model->learned_router_layer_count);
+    rc |= yvex_cli_out_writef(fp, "mhc_residual_streams: %llu\n",
+                              model->final_mhc.residual_streams);
+    rc |= yvex_cli_out_writef(fp, "mhc_expanded_width: %llu\n",
+                              model->final_mhc.expanded_width);
+    rc |= yvex_cli_out_writef(fp, "mhc_mixing_rows: %llu\n",
+                              model->final_mhc.mixing_rows);
+    rc |= yvex_cli_out_writef(fp, "mhc_mixing_columns: %llu\n",
+                              model->final_mhc.mixing_columns);
+    rc |= yvex_cli_out_writef(fp, "mhc_sinkhorn_iterations: %llu\n",
+                              model->final_mhc.sinkhorn_iterations);
+    rc |= yvex_cli_out_writef(fp, "final_mhc_post_required: %s\n",
+                              model->final_mhc_post_required ? "true" : "false");
+    rc |= yvex_cli_out_writef(fp, "final_mhc_head_required: %s\n",
+                              model->final_mhc_head_required ? "true" : "false");
+    rc |= yvex_cli_out_writef(fp, "final_norm_after_mhc_head: %s\n",
+                              model->final_norm_after_mhc_head ? "true" : "false");
+    rc |= yvex_cli_out_writef(fp, "tokenizer_class: %s\n",
+                              model->tokenizer.tokenizer_class);
+    rc |= yvex_cli_out_writef(fp, "tokenizer_model_type: %s\n",
+                              model->tokenizer.model_type);
+    rc |= yvex_cli_out_writef(fp, "tokenizer_vocabulary_size: %llu\n",
+                              model->tokenizer.vocabulary_size);
+    rc |= yvex_cli_out_writef(fp, "tokenizer_base_vocab_entries: %llu\n",
+                              model->tokenizer.base_vocab_entries);
+    rc |= yvex_cli_out_writef(fp, "tokenizer_added_token_entries: %llu\n",
+                              model->tokenizer.added_token_entries);
+    rc |= yvex_cli_out_writef(fp, "bos_token_id: %llu\n",
+                              model->tokenizer.bos_token_id);
+    rc |= yvex_cli_out_writef(fp, "eos_token_id: %llu\n",
+                              model->tokenizer.eos_token_id);
+    rc |= yvex_cli_out_writef(fp, "output_head_required: %s\n",
+                              model->output.required ? "true" : "false");
+    rc |= yvex_cli_out_writef(fp, "output_head_tied: %s\n",
+                              model->output.tied_to_embedding ? "true" : "false");
+    rc |= yvex_cli_out_writef(
+        fp, "source_weight_dtype: %s\n",
+        yvex_deepseek_v4_source_weight_dtype_name(
+            model->source_constraint.weight_dtype));
+    rc |= yvex_cli_out_writef(
+        fp, "source_expert_dtype: %s\n",
+        yvex_deepseek_v4_source_expert_dtype_name(
+            model->source_constraint.expert_dtype));
+    rc |= yvex_cli_out_writef(
+        fp, "source_quantization: %s block=%llux%llu\n",
+        yvex_deepseek_v4_source_quantization_name(
+            model->source_constraint.quantization),
+        model->source_constraint.quant_block_rows,
+        model->source_constraint.quant_block_columns);
+    rc |= yvex_cli_out_writef(fp, "source_header_scan_count: %llu\n",
+                              model->source_header_scan_count);
+    rc |= yvex_cli_out_writef(fp, "source_header_tensor_count: %llu\n",
+                              model->source_header_tensor_count);
+    rc |= yvex_cli_out_writef(fp, "source_payload_bytes_read: %llu\n",
+                              model->source_payload_bytes_read);
+    for (i = 0u; i < yvex_deepseek_v4_ir_layer_count(ir); ++i) {
+        const yvex_deepseek_v4_layer_spec *layer =
+            yvex_deepseek_v4_ir_layer_at(ir, i);
+        rc |= yvex_cli_out_writef(
+            fp,
+            "layer_%llu: attention=%s ratio=%llu kv=%s router=%s mhc_entry=%s\n",
+            layer->layer_index,
+            yvex_deepseek_v4_attention_name(layer->attention_class),
+            layer->compression_ratio,
+            yvex_deepseek_v4_kv_name(layer->kv.class_id),
+            yvex_deepseek_v4_router_name(layer->moe.router_class),
+            layer->mhc.entry == YVEX_DEEPSEEK_V4_MHC_STANDALONE_PRE
+                ? "standalone-pre"
+                : "fused-prior-post-pre");
+    }
+    for (i = 0u; i < yvex_deepseek_v4_ir_auxiliary_count(ir); ++i) {
+        const yvex_deepseek_v4_auxiliary_spec *aux =
+            yvex_deepseek_v4_ir_auxiliary_at(ir, i);
+        rc |= yvex_cli_out_writef(
+            fp,
+            "mtp_%llu: layer=%llu attention=%s ratio=%llu router=%s previous_hidden_width=%llu shared_head=%s\n",
+            aux->predictor_index, aux->layer.layer_index,
+            yvex_deepseek_v4_attention_name(aux->layer.attention_class),
+            aux->layer.compression_ratio,
+            yvex_deepseek_v4_router_name(aux->layer.moe.router_class),
+            aux->previous_hidden_width,
+            aux->shares_output_head ? "true" : "false");
+    }
+    rc |= yvex_cli_out_writef(fp, "runtime_execution: unsupported\n");
+    rc |= yvex_cli_out_writef(fp, "generation: unsupported\n");
+    rc |= yvex_cli_out_writef(fp, "next_required_row: %s\n",
+                              report->next_row);
+    rc |= yvex_cli_out_writef(fp, "boundary: %s\n", report->boundary);
+    return rc < 0 ? rc : 0;
+}
+
+/* Formats the machine-readable summary from already-decided typed fields. */
+static int model_target_render_deepseek_json(
+    FILE *fp,
+    const yvex_model_target_report *report,
+    const yvex_deepseek_v4_model_spec *model)
+{
+    return yvex_cli_out_writef(
+        fp,
+        "{\"status\":\"%s\",\"target_id\":\"%s\",\"repository\":\"%s\",\"revision\":\"%s\",\"layers\":%llu,\"mtp_layers\":%llu,\"hidden_size\":%llu,\"vocabulary_size\":%llu,\"context\":%llu,\"attention\":{\"swa\":%llu,\"csa\":%llu,\"hca\":%llu},\"routing\":{\"hash\":%llu,\"learned\":%llu},\"mhc_streams\":%llu,\"payload_bytes_read\":%llu,\"runtime\":\"unsupported\",\"generation\":\"unsupported\",\"next\":\"%s\"}\n",
+        report->status, model->target_id, model->repository, model->revision,
+        model->main_layer_count, model->auxiliary_layer_count,
+        model->hidden_size, model->vocabulary_size, model->maximum_context,
+        model->swa_layer_count, model->csa_layer_count,
+        model->hca_layer_count, model->hash_router_layer_count,
+        model->learned_router_layer_count,
+        model->final_mhc.residual_streams, model->source_payload_bytes_read,
+        report->next_row);
+}
+
+/* Selects presentation only; the model owner has already decided every fact. */
+static int model_target_render_deepseek_ir(
+    FILE *fp,
+    yvex_model_target_render_mode mode,
+    const yvex_model_target_report *report)
+{
+    const yvex_deepseek_v4_model_spec *model =
+        yvex_deepseek_v4_ir_model(report->deepseek_architecture_ir);
+
+    if (!model) return 0;
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+        return model_target_render_deepseek_table(fp, report, model);
+    }
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+        return model_target_render_deepseek_audit(
+            fp, report, report->deepseek_architecture_ir, model);
+    }
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
+        return model_target_render_deepseek_json(fp, report, model);
+    }
+    return model_target_render_deepseek_normal(
+        fp, report, report->deepseek_architecture_ir, model);
+}
+
 /*
  * yvex_model_target_render()
  *
@@ -95,6 +330,9 @@ int yvex_model_target_render(FILE *fp,
 
     if (!report) {
         return 0;
+    }
+    if (report->deepseek_architecture_ir) {
+        return model_target_render_deepseek_ir(fp, mode, report);
     }
     if (mode == YVEX_MODEL_TARGET_OUTPUT_TABLE && report->table_row_count > 0) {
         rc = model_target_render_table_rows(fp, report);
