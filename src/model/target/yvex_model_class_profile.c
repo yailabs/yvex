@@ -157,9 +157,9 @@ int yvex_model_class_profile_deepseek_from_verification(
     (void)snprintf(report->generation_status,
                    sizeof(report->generation_status), "%s", "unsupported");
     (void)snprintf(report->next_row, sizeof(report->next_row), "%s",
-                   "V010.TENSOR.COVERAGE.DEEPSEEK.0");
+                   "V010.SOURCE.PAYLOAD.STREAM.0");
     (void)snprintf(report->boundary, sizeof(report->boundary), "%s",
-                   "typed architecture only; no tensor coverage, artifact, runtime, or generation");
+                   "typed architecture specification; mapping is owned by the canonical map plan and payload/runtime remain separate");
     report->exit_code = 0;
     yvex_error_clear(err);
     return YVEX_OK;

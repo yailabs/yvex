@@ -64,6 +64,10 @@ typedef struct {
     unsigned long long shared_intermediate_size;
     unsigned long long output_heads_per_group;
     unsigned long long output_group_input_width;
+    unsigned long long query_width;
+    unsigned long long grouped_output_width;
+    unsigned long long csa_indexer_rows;
+    unsigned long long indexer_query_width;
 } deepseek_v4_derived_geometry;
 
 static void *deepseek_v4_default_allocate(size_t size, void *context)
@@ -283,6 +287,22 @@ static int deepseek_v4_validate_geometry(
             failure, YVEX_DEEPSEEK_V4_IR_FAILURE_ARITHMETIC_OVERFLOW,
             YVEX_DEEPSEEK_V4_IR_COMPONENT_ATTENTION,
             "output-group-input-width", YVEX_DEEPSEEK_V4_IR_NO_LAYER,
+            0u, 0u, err);
+    }
+    if (!deepseek_v4_checked_mul(source->num_attention_heads,
+                                 source->head_dim,
+                                 &geometry->query_width) ||
+        !deepseek_v4_checked_mul(source->o_lora_rank, source->o_groups,
+                                 &geometry->grouped_output_width) ||
+        !deepseek_v4_checked_mul(4u, source->index_n_heads,
+                                 &geometry->csa_indexer_rows) ||
+        !deepseek_v4_checked_mul(source->index_n_heads,
+                                 source->index_head_dim,
+                                 &geometry->indexer_query_width)) {
+        return deepseek_v4_reject(
+            failure, YVEX_DEEPSEEK_V4_IR_FAILURE_ARITHMETIC_OVERFLOW,
+            YVEX_DEEPSEEK_V4_IR_COMPONENT_ATTENTION,
+            "attention-derived-width", YVEX_DEEPSEEK_V4_IR_NO_LAYER,
             0u, 0u, err);
     }
     if (source->sliding_window == 0u ||
@@ -513,11 +533,6 @@ static void deepseek_v4_fill_layer(
     int auxiliary)
 {
     unsigned long long ratio = source->compress_ratios[layer_index];
-    unsigned long long query_width = source->num_attention_heads *
-                                     source->head_dim;
-    unsigned long long grouped_output = source->o_lora_rank *
-                                        source->o_groups;
-
     memset(layer, 0, sizeof(*layer));
     layer->layer_index = layer_index;
     layer->compression_ratio = ratio;
@@ -544,14 +559,14 @@ static void deepseek_v4_fill_layer(
     layer->post_attention_ffn_norm.width = source->hidden_size;
     layer->tensors.q_a_rows = source->q_lora_rank;
     layer->tensors.q_a_columns = source->hidden_size;
-    layer->tensors.q_b_rows = query_width;
+    layer->tensors.q_b_rows = geometry->query_width;
     layer->tensors.q_b_columns = source->q_lora_rank;
     layer->tensors.kv_rows = source->head_dim;
     layer->tensors.kv_columns = source->hidden_size;
-    layer->tensors.o_a_rows = grouped_output;
+    layer->tensors.o_a_rows = geometry->grouped_output_width;
     layer->tensors.o_a_columns = source->hidden_size;
     layer->tensors.o_b_rows = source->hidden_size;
-    layer->tensors.o_b_columns = grouped_output;
+    layer->tensors.o_b_columns = geometry->grouped_output_width;
     layer->position.rope_dimension = source->qk_rope_head_dim;
     layer->position.theta = ratio == 0u ? source->rope_theta
                                        : source->compress_rope_theta;
@@ -585,13 +600,13 @@ static void deepseek_v4_fill_layer(
         layer->tensors.compressor_projection_rows = source->q_lora_rank;
         layer->tensors.compressor_projection_columns = source->hidden_size;
         layer->tensors.indexer_ape_rows = ratio;
-        layer->tensors.indexer_ape_columns = ratio * source->index_n_heads;
+        layer->tensors.indexer_ape_columns = geometry->csa_indexer_rows;
         layer->tensors.indexer_norm_width = source->index_head_dim;
         layer->tensors.indexer_projection_rows =
-            ratio * source->index_n_heads;
+            geometry->csa_indexer_rows;
         layer->tensors.indexer_projection_columns = source->hidden_size;
         layer->tensors.indexer_query_rows =
-            source->index_n_heads * source->index_head_dim;
+            geometry->indexer_query_width;
         layer->tensors.indexer_query_columns = source->q_lora_rank;
         layer->tensors.indexer_weight_rows = source->index_n_heads;
         layer->tensors.indexer_weight_columns = source->hidden_size;

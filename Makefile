@@ -144,6 +144,7 @@ CORE_SRCS := \
 	src/model/artifacts/yvex_model_artifact_status_report.c \
 	src/model/artifacts/yvex_model_artifact_write.c \
 	src/model/target/yvex_mapping_gate_report.c \
+	src/model/target/yvex_deepseek_gguf_map.c \
 	src/model/target/yvex_deepseek_tensor_coverage.c \
 	src/model/target/yvex_missing_role_report.c \
 	src/model/target/yvex_model_class_profile.c \

@@ -3341,31 +3341,33 @@ grep 'does not download models, emit artifacts, materialize tensors, execute gra
 
 "$YVEX_BIN" model-target decision --release v0.1.0 > "$ROOT/model-target-decision-normal.out"
 grep 'report: target-decision' "$ROOT/model-target-decision-normal.out"
-grep 'status: target-selected-architecture-specified' "$ROOT/model-target-decision-normal.out"
+grep 'status: target-selected-mapping-specified' "$ROOT/model-target-decision-normal.out"
 grep 'selected: deepseek4-v4-flash' "$ROOT/model-target-decision-normal.out"
-grep 'top_blocker: complete tensor role coverage' "$ROOT/model-target-decision-normal.out"
-grep 'next: V010.TENSOR.COVERAGE.DEEPSEEK.0' "$ROOT/model-target-decision-normal.out"
+grep 'top_blocker: source payload trust' "$ROOT/model-target-decision-normal.out"
+grep 'next: V010.SOURCE.PAYLOAD.STREAM.0' "$ROOT/model-target-decision-normal.out"
 grep 'boundary: release target selected; artifact/runtime/generation unsupported; benchmark not measured' "$ROOT/model-target-decision-normal.out"
 ! grep 'deepseek4-v4-flash-selected' "$ROOT/model-target-decision-normal.out"
 
 "$YVEX_BIN" model-target decision --release v0.1.0 --output table > "$ROOT/model-target-decision-table.out"
 matches "$ROOT/model-target-decision-table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$ROOT/model-target-decision-table.out" '^target-decision[[:space:]]{2,}selected-architecture-specified[[:space:]]{2,}deepseek4-v4-flash[[:space:]]{2,}0[[:space:]]{2,}V010\.TENSOR\.COVERAGE\.DEEPSEEK\.0$'
+matches "$ROOT/model-target-decision-table.out" '^target-decision[[:space:]]{2,}selected-mapping-specified[[:space:]]{2,}deepseek4-v4-flash[[:space:]]{2,}0[[:space:]]{2,}V010\.SOURCE\.PAYLOAD\.STREAM\.0$'
 
 "$YVEX_BIN" model-target decision --release v0.1.0 --output json > "$ROOT/model-target-decision-json.out"
-jq -e '.selected_target_id == "deepseek4-v4-flash" and .upstream_repository == "deepseek-ai/DeepSeek-V4-Flash" and .source_verification == "complete" and .architecture_ir == "complete" and .artifact_status == "not-produced" and .runtime == "unsupported" and .generation == "unsupported" and .next == "V010.TENSOR.COVERAGE.DEEPSEEK.0"' "$ROOT/model-target-decision-json.out" >/dev/null
+jq -e '.selected_target_id == "deepseek4-v4-flash" and .upstream_repository == "deepseek-ai/DeepSeek-V4-Flash" and .source_verification == "complete" and .architecture_ir == "complete" and .tensor_coverage == "complete" and .gguf_mapping == "complete" and .artifact_status == "not-produced" and .runtime == "unsupported" and .generation == "unsupported" and .next == "V010.SOURCE.PAYLOAD.STREAM.0"' "$ROOT/model-target-decision-json.out" >/dev/null
 
 "$YVEX_BIN" model-target decision --release v0.1.0 --output nope > "$ROOT/model-target-decision-bad-output.out" 2> "$ROOT/model-target-decision-bad-output.err" && exit 1 || true
 grep 'model-target decision: unsupported output mode: nope' "$ROOT/model-target-decision-bad-output.err"
 
 "$YVEX_BIN" model-target decision --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-critical-path --include-next > "$ROOT/model-target-decision.out"
 grep 'target_decision: v0.1.0' "$ROOT/model-target-decision.out"
-grep 'status: target-selected-architecture-specified' "$ROOT/model-target-decision.out"
+grep 'status: target-selected-mapping-specified' "$ROOT/model-target-decision.out"
 grep 'decision_state: selected' "$ROOT/model-target-decision.out"
 grep 'selected_target_id: deepseek4-v4-flash' "$ROOT/model-target-decision.out"
 grep 'upstream_repository: deepseek-ai/DeepSeek-V4-Flash' "$ROOT/model-target-decision.out"
 grep 'source_verification_status: complete' "$ROOT/model-target-decision.out"
 grep 'architecture_ir_status: complete' "$ROOT/model-target-decision.out"
+grep 'tensor_coverage_status: complete' "$ROOT/model-target-decision.out"
+grep 'gguf_mapping_status: complete' "$ROOT/model-target-decision.out"
 grep 'full_runtime_candidate_status: unsupported' "$ROOT/model-target-decision.out"
 grep 'selected_runtime_slice_eligible: false' "$ROOT/model-target-decision.out"
 grep 'source_only_eligible: false' "$ROOT/model-target-decision.out"
@@ -3376,17 +3378,17 @@ grep 'benchmark_status: not-measured' "$ROOT/model-target-decision.out"
 grep 'release_ready: false' "$ROOT/model-target-decision.out"
 grep 'candidate.0.id: deepseek4-v4-flash' "$ROOT/model-target-decision.out"
 grep 'candidate.0.class: release-source-target' "$ROOT/model-target-decision.out"
-grep 'candidate.0.status: selected-architecture-specified' "$ROOT/model-target-decision.out"
+grep 'candidate.0.status: selected-mapping-specified' "$ROOT/model-target-decision.out"
 grep 'qwen_engineering_scope: preserved-non-release' "$ROOT/model-target-decision.out"
 grep 'gemma_engineering_scope: preserved-non-release' "$ROOT/model-target-decision.out"
 grep 'selected_slice_scope: bounded-evidence-only' "$ROOT/model-target-decision.out"
-grep 'next_required_rows: V010.TENSOR.COVERAGE.DEEPSEEK.0' "$ROOT/model-target-decision.out"
+grep 'next_required_rows: V010.SOURCE.PAYLOAD.STREAM.0' "$ROOT/model-target-decision.out"
 ! grep 'candidate.*deepseek4-v4-flash-selected' "$ROOT/model-target-decision.out"
 
 "$YVEX_BIN" model-target decision --release v0.1.0 --audit --candidate deepseek4-v4-flash --include-blockers --include-next > "$ROOT/model-target-decision-deepseek.out"
 grep 'candidate_count: 1' "$ROOT/model-target-decision-deepseek.out"
 grep 'candidate.0.id: deepseek4-v4-flash' "$ROOT/model-target-decision-deepseek.out"
-grep 'candidate.0.status: selected-architecture-specified' "$ROOT/model-target-decision-deepseek.out"
+grep 'candidate.0.status: selected-mapping-specified' "$ROOT/model-target-decision-deepseek.out"
 grep 'generation: unsupported-full-model' "$ROOT/model-target-decision-deepseek.out"
 
 expect_rc 2 "$YVEX_BIN" model-target decision --release v0.1.0 --audit --candidate deepseek4-v4-flash-selected-embed-rmsnorm --include-blockers --include-next > "$ROOT/model-target-decision-rmsnorm.out" 2> "$ROOT/model-target-decision-rmsnorm.err"

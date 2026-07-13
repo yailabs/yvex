@@ -91,9 +91,9 @@ static int missing_role_deepseek_build(
     (void)snprintf(report->generation_status,
                    sizeof(report->generation_status), "%s", "unsupported");
     (void)snprintf(report->next_row, sizeof(report->next_row), "%s",
-                   "V010.MAP.GGUF.DEEPSEEK.0");
+                   "V010.SOURCE.PAYLOAD.STREAM.0");
     (void)snprintf(report->boundary, sizeof(report->boundary), "%s",
-                   "zero missing source requirements; GGUF mapping and all higher capabilities remain blocked");
+                   "zero missing source requirements and mapping is complete; payload and all higher capabilities remain blocked");
     return YVEX_OK;
 }
 

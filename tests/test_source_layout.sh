@@ -102,6 +102,8 @@ test -f src/model/architecture/yvex_deepseek_v4_ir.c
 test -f src/model/architecture/yvex_deepseek_v4_ir.h
 test -f src/model/target/yvex_deepseek_tensor_coverage.c
 test -f src/model/target/yvex_deepseek_tensor_coverage.h
+test -f src/model/target/yvex_deepseek_gguf_map.c
+test -f src/model/target/yvex_deepseek_gguf_map.h
 test -f src/model/target/yvex_tensor_collection_report.c
 test -f src/model/target/yvex_tensor_collection_report.h
 test -f src/model/target/yvex_tensor_naming_report.c
@@ -961,8 +963,7 @@ done
 
 for coverage_consumer in \
   src/model/target/yvex_tensor_collection_report.c \
-  src/model/target/yvex_missing_role_report.c \
-  src/model/target/yvex_mapping_gate_report.c
+  src/model/target/yvex_missing_role_report.c
 do
   grep -nF 'yvex_deepseek_tensor_coverage_open_verified_source' \
     "$coverage_consumer" >/dev/null || {
@@ -971,7 +972,24 @@ do
   }
 done
 
-grep -nF 'V010.TENSOR.COVERAGE.DEEPSEEK.0' \
+grep -nF 'yvex_deepseek_gguf_map_open_verified_source' \
+  src/model/target/yvex_mapping_gate_report.c >/dev/null || {
+  echo "DeepSeek mapping gate does not consume the canonical logical GGUF plan"
+  exit 1
+}
+for map_owner_call in \
+  yvex_deepseek_tensor_coverage_build \
+  yvex_deepseek_tensor_coverage_find \
+  yvex_deepseek_tensor_coverage_find_index
+do
+  grep -nF "$map_owner_call" \
+    src/model/target/yvex_deepseek_gguf_map.c >/dev/null || {
+    echo "DeepSeek GGUF map does not consume $map_owner_call"
+    exit 1
+  }
+done
+
+grep -nF 'V010.SOURCE.PAYLOAD.STREAM.0' \
   src/model/target/yvex_model_class_profile.c >/dev/null
 grep -nF 'yvex_tensor_collection_report_build' src/model/target/yvex_tensor_collection_report.c >/dev/null
 grep -nF 'yvex_tensor_naming_report_build' src/model/target/yvex_tensor_naming_report.c >/dev/null

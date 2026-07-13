@@ -95,7 +95,7 @@ static const yvex_source_family_profile source_family_profiles[] = {
         "missing-source-config",
         "missing-tokenizer-json",
         "missing-deepseek-architecture-ir",
-        "V010.GGUF.QTYPE.ABI.1",
+        "V010.SOURCE.PAYLOAD.STREAM.0",
         deepseek_source_tail_blockers,
         sizeof(deepseek_source_tail_blockers) /
             sizeof(deepseek_source_tail_blockers[0]),
@@ -1888,7 +1888,7 @@ int yvex_source_report_build(const yvex_source_report_request *request,
                                   ? report->verification.blockers[0]
                                   : "none";
         report->next_row = report->verification.verified
-                               ? "V010.GGUF.QTYPE.ABI.1"
+                               ? "V010.SOURCE.PAYLOAD.STREAM.0"
                                : "V010.REBASE.DEEPSEEK.0";
         for (i = 0; i < report->verification.blocker_count; ++i) {
             source_report_add_blocker(report,

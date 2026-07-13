@@ -5,15 +5,17 @@
  *   src/model/target
  *
  * Owns:
- *   v0.1.0 tensor mapping gate facts, blockers, and handoff rows.
+ *   typed projection of canonical DeepSeek mapping-plan facts plus legacy
+ *   bounded Qwen/Gemma mapping-gate facts, blockers, and handoff rows.
  *
  * Does not own:
  *   CLI parsing, rendering, artifact emission, quantization execution,
  *   runtime execution, generation, eval, benchmark, or release decisions.
  *
  * Invariants:
- *   mapping gates aggregate header/sidecar report-only facts and never mark a
- *   quantized artifact, runtime path, or generation path ready.
+ *   the DeepSeek release path consumes the canonical immutable map; legacy
+ *   family gates remain header/sidecar evidence. Neither path marks payload,
+ *   artifact, runtime, or generation behavior ready.
  *
  * Boundary:
  *   mapping gate status is not quantization, artifact emission, runtime
@@ -22,7 +24,7 @@
 #include "yvex_mapping_gate_report.h"
 
 #include "yvex_model_target_private.h"
-#include "yvex_deepseek_tensor_coverage.h"
+#include "yvex_deepseek_gguf_map.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,13 +50,38 @@ typedef struct {
     const char *result;
 } mapping_gate_state;
 
-static int mapping_gate_deepseek_build(
+/*
+ * yvex_deepseek_mapping_plan_report_build()
+ *
+ * Purpose:
+ *   verify the exact release source once, build its IR and coverage, then
+ *   attach the canonical immutable logical GGUF plan to the typed report.
+ *
+ * Inputs:
+ *   request and err are borrowed; report receives owned coverage/map objects.
+ *
+ * Effects:
+ *   performs source metadata/header IO through the source verifier and reads
+ *   zero tensor payload bytes; it does not print or write files.
+ *
+ * Failure:
+ *   mapping refusal becomes a typed blocked report with exit code 5; path
+ *   construction failures return an error without publishing partial owners.
+ *
+ * Cleanup:
+ *   report close releases every successfully attached owner.
+ *
+ * Boundary:
+ *   a complete logical plan is not payload conversion, physical GGUF
+ *   emission, artifact support, materialization, or runtime execution.
+ */
+int yvex_deepseek_mapping_plan_report_build(
     const yvex_model_target_request *request,
     yvex_model_target_report *report,
     yvex_error *err)
 {
     yvex_source_verification verification;
-    yvex_deepseek_tensor_coverage_failure failure;
+    yvex_deepseek_gguf_map_failure failure;
     char models_root[512];
     char source_path[512];
     int rc;
@@ -66,35 +93,36 @@ static int mapping_gate_deepseek_build(
                        "DeepSeek source path exceeds report bounds");
         return YVEX_ERR_BOUNDS;
     }
-    rc = yvex_deepseek_tensor_coverage_open_verified_source(
-        &report->deepseek_tensor_coverage, &verification, source_path,
-        models_root, &failure, err);
+    rc = yvex_deepseek_gguf_map_open_verified_source(
+        &report->deepseek_gguf_map, &report->deepseek_tensor_coverage,
+        &verification, source_path, models_root, &failure, err);
     if (rc != YVEX_OK) {
-        report->status = "pre-mapping-coverage-blocked";
+        report->status = "mapping-plan-blocked";
         report->exit_code = 5;
         yvex_model_target_report_add_error(
             report,
-            "model-target mapping-gate: DeepSeek coverage refused: %s tensor=%s",
-            yvex_deepseek_tensor_coverage_failure_name(failure.code),
-            failure.tensor_name[0] ? failure.tensor_name : "none");
+            "model-target mapping-gate: DeepSeek mapping refused: %s source=%s emitted=%s",
+            yvex_deepseek_gguf_map_failure_name(failure.code),
+            failure.source_name[0] ? failure.source_name : "none",
+            failure.emitted_name[0] ? failure.emitted_name : "none");
         yvex_error_clear(err);
         return YVEX_OK;
     }
-    report->status = "pre-mapping-source-coverage-admitted";
+    report->status = "deepseek-gguf-mapping-complete";
     (void)snprintf(report->target_id, sizeof(report->target_id), "%s",
                    request->target_id);
     (void)snprintf(report->family, sizeof(report->family), "%s", "deepseek");
     (void)snprintf(report->stage, sizeof(report->stage), "%s", "header-only");
     (void)snprintf(report->tensor_map_status,
-                   sizeof(report->tensor_map_status), "%s", "blocked");
+                   sizeof(report->tensor_map_status), "%s", "complete");
     (void)snprintf(report->runtime_status, sizeof(report->runtime_status),
                    "%s", "unsupported");
     (void)snprintf(report->generation_status,
                    sizeof(report->generation_status), "%s", "unsupported");
     (void)snprintf(report->next_row, sizeof(report->next_row), "%s",
-                   "V010.MAP.GGUF.DEEPSEEK.0");
+                   "V010.SOURCE.PAYLOAD.STREAM.0");
     (void)snprintf(report->boundary, sizeof(report->boundary), "%s",
-                   "source coverage admitted for mapping; no GGUF name, transform, layout, or runtime claim");
+                   "logical GGUF names, shapes, source contributions, transforms, and metadata are complete; no payload, writer, artifact, or runtime claim");
     return YVEX_OK;
 }
 
@@ -584,13 +612,13 @@ int yvex_mapping_gate_report_build(const yvex_model_target_request *request,
     }
     if (yvex_model_target_is_release_target(request->target_id)) {
         memset(&state, 0, sizeof(state));
-        state.status = "pre-mapping-coverage-check";
+        state.status = "mapping-plan-check";
         state.result = "block";
-        state.next_row = "V010.MAP.GGUF.DEEPSEEK.0";
-        state.top_blocker = "tensor-coverage-not-evaluated";
+        state.next_row = "V010.SOURCE.PAYLOAD.STREAM.0";
+        state.top_blocker = "mapping-plan-not-evaluated";
         mapping_gate_prepare(request, &state, report);
         if (mapping_gate_validate(request, report)) return YVEX_OK;
-        return mapping_gate_deepseek_build(request, report, err);
+        return yvex_deepseek_mapping_plan_report_build(request, report, err);
     }
     family = yvex_model_target_family_key(
         request->target_id[0] ? request->target_id : "qwen3-8b");

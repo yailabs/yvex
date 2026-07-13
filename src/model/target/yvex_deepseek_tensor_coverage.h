@@ -59,10 +59,8 @@ typedef enum {
     YVEX_DEEPSEEK_COVERAGE_FAILURE_INVENTORY_DRIFT,
     YVEX_DEEPSEEK_COVERAGE_FAILURE_ARCHITECTURE_INCOMPLETE,
     YVEX_DEEPSEEK_COVERAGE_FAILURE_MISSING_REQUIREMENT,
-    YVEX_DEEPSEEK_COVERAGE_FAILURE_DUPLICATE_SOURCE,
     YVEX_DEEPSEEK_COVERAGE_FAILURE_AMBIGUOUS_MATCH,
     YVEX_DEEPSEEK_COVERAGE_FAILURE_UNEXPECTED_SOURCE,
-    YVEX_DEEPSEEK_COVERAGE_FAILURE_UNSUPPORTED_COLLECTION,
     YVEX_DEEPSEEK_COVERAGE_FAILURE_INVALID_INDEX,
     YVEX_DEEPSEEK_COVERAGE_FAILURE_RANK_MISMATCH,
     YVEX_DEEPSEEK_COVERAGE_FAILURE_SHAPE_MISMATCH,
@@ -100,10 +98,8 @@ typedef struct {
     unsigned long long required_tensor_count;
     unsigned long long matched_tensor_count;
     unsigned long long missing_count;
-    unsigned long long duplicate_count;
     unsigned long long ambiguous_count;
     unsigned long long unexpected_count;
-    unsigned long long unsupported_count;
     unsigned long long collection_counts[YVEX_DEEPSEEK_TENSOR_COLLECTION_COUNT];
     unsigned long long main_layer_count;
     unsigned long long auxiliary_layer_count;
@@ -163,6 +159,10 @@ const yvex_deepseek_tensor_coverage_row *
 yvex_deepseek_tensor_coverage_find(
     const yvex_deepseek_tensor_coverage *coverage,
     const char *source_name);
+int yvex_deepseek_tensor_coverage_find_index(
+    const yvex_deepseek_tensor_coverage *coverage,
+    const char *source_name,
+    unsigned long long *row_index);
 const char *yvex_deepseek_tensor_collection_name(
     yvex_deepseek_tensor_collection collection);
 const char *yvex_deepseek_tensor_coverage_failure_name(

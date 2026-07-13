@@ -152,7 +152,8 @@ require_text "$project" 'deepseek4-v4-flash'
 require_text "$project" 'Qwen, Gemma, and dense/common work already implemented remains active'
 require_text "$project" 'The exact DeepSeek-V4-Flash source now projects to one immutable typed IR'
 require_text "$project" 'One immutable IR-derived requirement set reconciles exactly against all 69,187 tensors'
-require_text "$project" 'Complete DeepSeek source-to-role-to-GGUF mapping is the active blocker.'
+require_text "$project" 'The exact 69,187-entry DeepSeek source inventory projects to 1,360 immutable logical GGUF descriptors'
+require_text "$project" 'Tensor payload bytes remain unread and payload trust remains owned by `V010.SOURCE.PAYLOAD.STREAM.0`.'
 require_text "$project" 'Production C contains no fallback PTX.'
 require_text "$project" 'A no-`nvcc` build refuses every kernel before dispatch'
 require_text "$project" 'The DeepSeek/v0.1 required-operation gate remains unsupported.'
@@ -200,8 +201,9 @@ for source in \
   '96a04cb13f9c3ed86028e090784a9eb059cf5318' \
   'python/sglang/srt/models/deepseek_v4.py' \
   'GGUF specification' \
-  'convert_hf_to_gguf.py' \
-  'tools/quantize/quantize.cpp' \
+  'e920c523e3b8a0163fe498af5bf90df35ff51d25' \
+  'conversion/deepseek.py' \
+  'src/models/deepseek4.cpp' \
   'TensorRT-LLM architecture' \
   'NVIDIA/cutlass' \
   'Driver API module management' \
@@ -249,7 +251,7 @@ require_text docs/topology-closure-audit.md 'point-in-time inventory'
 require_text docs/topology-closure-audit.md '`PROJECT.md` owns when each finding is removed or'
 require_text docs/cli-output-architecture.md '## Project State Ownership'
 require_text docs/model-families.md 'exact v0.1.0 target'
-require_text docs/model-families.md 'typed architecture and exact 69,187-entry source coverage exist; no GGUF mapping, complete model artifact, or runtime path'
+require_text docs/model-families.md 'typed architecture, exact 69,187-entry source coverage, and canonical logical GGUF mapping exist; no payload conversion, complete model artifact, or runtime path'
 require_text docs/contract.md 'These are implementation facts, not a runtime progress ladder.'
 require_text docs/contract.md 'defined only by `PROJECT.md`.'
 require_text docs/api.md 'decommission obligations in `PROJECT.md`'

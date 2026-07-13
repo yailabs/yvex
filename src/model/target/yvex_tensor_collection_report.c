@@ -89,9 +89,9 @@ static int collection_deepseek_build(
     (void)snprintf(report->generation_status,
                    sizeof(report->generation_status), "%s", "unsupported");
     (void)snprintf(report->next_row, sizeof(report->next_row), "%s",
-                   "V010.MAP.GGUF.DEEPSEEK.0");
+                   "V010.SOURCE.PAYLOAD.STREAM.0");
     (void)snprintf(report->boundary, sizeof(report->boundary), "%s",
-                   "exact source coverage only; GGUF mapping, payload, artifact, runtime, and generation remain blocked");
+                   "exact source coverage consumed by the canonical map; payload, artifact, runtime, and generation remain blocked");
     report->exit_code = 0;
     return YVEX_OK;
 }

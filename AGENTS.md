@@ -188,6 +188,18 @@ source files, rescan headers, define GGUF names/transforms, read payloads, or
 promote artifact/runtime support. Tensor collection, missing-role, and mapping
 gate reports project this result rather than reclassifying DeepSeek names.
 
+V010.MAP.GGUF.DEEPSEEK.0 makes
+src/model/target/yvex_deepseek_gguf_map.[ch] the sole owner of the immutable
+DeepSeek source-to-GGUF logical emission plan. It consumes the architecture IR
+and complete retained coverage without source reparsing, assigns all 69,187
+source contributions once to 1,360 indexed descriptors, and owns typed roles,
+contribution kinds, transforms, logical axes, metadata prerequisites, naming
+provenance, and deterministic identity. `src/gguf/yvex_gguf_name_map.c` owns
+the pinned llama.cpp `e920c523` trunk names; MTP remains a versioned YVEX v1
+extension because that converter discards `mtp.*`. The plan reads no payload,
+selects no release qtype except source-forced storage transforms, emits no
+bytes, and promotes no artifact, materialization, runtime, or generation gate.
+
 MODEL_TARGET.1 closure forbids using yvex_model_target_report.c as a
 compatibility monolith. The coordinator may route request kinds, but
 report-specific ownership must live in the corresponding src/model/target

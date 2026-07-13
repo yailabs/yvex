@@ -324,6 +324,25 @@ scales. GGUF naming and transforms, payload access, artifact admission,
 materialization, executable descriptors, tokenizer execution, CUDA lowering,
 and generation remain separate owners and separate support boundaries.
 
+### DeepSeek Logical GGUF Mapping
+
+The canonical map consumes that IR and the complete retained coverage directly;
+it neither reopens source files nor classifies tensor names lexically. The
+69,187 verified source rows become 1,360 immutable logical descriptors: 1,328
+trunk descriptors agree with llama.cpp commit `e920c523e3b8a0163fe498af5bf90df35ff51d25`,
+while all 32 MTP descriptors remain under the collision-free
+`yvex.mtp.v1` namespace because the pinned converter deliberately excludes
+`mtp.*`.
+
+Each descriptor owns its typed role and scope, ordered source contributions,
+logical GGML axes, transformation requirement, emitted name, and naming
+provenance. FP8 weights retain their E8M0 companion; each routed projection
+aggregates 256 ordered FP4/E8M0 expert pairs into the source-forced MXFP4
+storage shape; hash routing records checked I64-to-I32 conversion. These are
+payload instructions, not executed conversions. Physical offsets, release
+qtype policy, writer publication, artifact support, materialization, runtime,
+and MTP execution remain separate blocked boundaries.
+
 ## Family Architecture Signature
 
 A family must expose an architecture signature before YVEX can do meaningful
@@ -1093,7 +1112,7 @@ This table records architectural scope, not delivery progress.
 
 | Family | v0.1.0 relation | Runtime class | Current support truth |
 | --- | --- | --- | --- |
-| DeepSeek-V4-Flash | exact release target at `$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash`; canonical target id `deepseek4-v4-flash` | hybrid SWA/CSA/HCA decoder with mHC and MoE | typed architecture and exact 69,187-entry source coverage exist; no GGUF mapping, complete model artifact, or runtime path |
+| DeepSeek-V4-Flash | exact release target at `$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash`; canonical target id `deepseek4-v4-flash` | hybrid SWA/CSA/HCA decoder with mHC and MoE | typed architecture, exact 69,187-entry source coverage, and canonical logical GGUF mapping exist; no payload conversion, complete model artifact, or runtime path |
 | Qwen | outside v0.1.0 | target-dependent dense or sparse/MoE | unsupported; existing source/report facts do not enter the release path |
 | Gemma | outside v0.1.0 | dense | unsupported; existing source/report facts do not enter the release path |
 | GLM | outside v0.1.0 source-pressure work | sparse/MoE | unsupported; source evidence is not runtime support |

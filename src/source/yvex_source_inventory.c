@@ -54,6 +54,11 @@ typedef struct {
 typedef struct {
     char *name;
     unsigned long long size;
+} source_shard_sort_row;
+
+typedef struct {
+    char *name;
+    unsigned long long size;
 } source_upstream_file;
 
 typedef struct {
@@ -512,38 +517,51 @@ static int source_shard_name_parse(const char *name,
 
 static int source_shard_compare(const void *left, const void *right)
 {
-    const char *const *a = (const char *const *)left;
-    const char *const *b = (const char *const *)right;
-    return strcmp(*a, *b);
+    const source_shard_sort_row *a = (const source_shard_sort_row *)left;
+    const source_shard_sort_row *b = (const source_shard_sort_row *)right;
+    return strcmp(a->name, b->name);
 }
 
 /* Sorts shard names and keeps their corresponding byte sizes paired. */
-static void source_shards_sort(source_shards *shards)
+static int source_shards_sort(source_shards *shards, yvex_error *err)
 {
+    source_shard_sort_row *rows;
     size_t i;
-    size_t j;
 
-    for (i = 0u; i < shards->count; ++i) {
-        for (j = i + 1u; j < shards->count; ++j) {
-            if (source_shard_compare(&shards->names[i],
-                                     &shards->names[j]) > 0) {
-                char *name = shards->names[i];
-                unsigned long long size = shards->sizes[i];
-                shards->names[i] = shards->names[j];
-                shards->sizes[i] = shards->sizes[j];
-                shards->names[j] = name;
-                shards->sizes[j] = size;
-            }
-        }
+    if (shards->count < 2u) return YVEX_OK;
+    rows = (source_shard_sort_row *)calloc(shards->count, sizeof(*rows));
+    if (!rows) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "source_shards_sort",
+                       "shard sort allocation failed");
+        return YVEX_ERR_NOMEM;
     }
+    for (i = 0u; i < shards->count; ++i) {
+        rows[i].name = shards->names[i];
+        rows[i].size = shards->sizes[i];
+    }
+    qsort(rows, shards->count, sizeof(*rows), source_shard_compare);
+    for (i = 0u; i < shards->count; ++i) {
+        shards->names[i] = rows[i].name;
+        shards->sizes[i] = rows[i].size;
+    }
+    free(rows);
+    return YVEX_OK;
 }
 
+/* Binary-searches the canonical sorted shard table. */
 static long source_shards_find(const source_shards *shards, const char *name)
 {
-    size_t i;
+    size_t lower = 0u;
+    size_t upper;
 
-    for (i = 0; shards && i < shards->count; ++i) {
-        if (strcmp(shards->names[i], name) == 0) return (long)i;
+    if (!shards || !name) return -1;
+    upper = shards->count;
+    while (lower < upper) {
+        size_t middle = lower + (upper - lower) / 2u;
+        int order = strcmp(shards->names[middle], name);
+        if (order == 0) return (long)middle;
+        if (order < 0) lower = middle + 1u;
+        else upper = middle;
     }
     return -1;
 }
@@ -568,7 +586,6 @@ static int source_scan_root(const char *source_path,
         struct stat st;
         unsigned int shard_index = 0u;
         unsigned int shard_total = 0u;
-        size_t i;
         int rc;
 
         errno = 0;
@@ -607,14 +624,6 @@ static int source_scan_root(const char *source_path,
             yvex_source_verification_add_blocker(out,
                                                  "inconsistent-shard-set");
         }
-        for (i = 0; i < shards->count; ++i) {
-            unsigned int prior_index = 0u;
-            if (source_shard_name_parse(shards->names[i], &prior_index, NULL) &&
-                prior_index == shard_index) {
-                yvex_source_verification_add_blocker(
-                    out, "duplicate-source-shard");
-            }
-        }
         rc = source_shards_append(shards, entry->d_name,
                                   (unsigned long long)st.st_size, err);
         if (rc != YVEX_OK) {
@@ -632,7 +641,10 @@ static int source_scan_root(const char *source_path,
         yvex_source_verification_add_blocker(out,
                                              "source-directory-close-failed");
     }
-    source_shards_sort(shards);
+    {
+        int rc = source_shards_sort(shards, err);
+        if (rc != YVEX_OK) return rc;
+    }
     out->shard_count = (unsigned long long)shards->count;
     if (!shards->count) {
         yvex_source_verification_add_blocker(out, "missing-source-shards");
@@ -643,6 +655,14 @@ static int source_scan_root(const char *source_path,
     }
     for (size_t i = 0u; i < shards->count; ++i) {
         unsigned int index = 0u;
+        unsigned int prior_index = 0u;
+        if (i > 0u &&
+            source_shard_name_parse(shards->names[i - 1u], &prior_index, NULL) &&
+            source_shard_name_parse(shards->names[i], &index, NULL) &&
+            prior_index == index) {
+            yvex_source_verification_add_blocker(out,
+                                                 "duplicate-source-shard");
+        }
         if (!source_shard_name_parse(shards->names[i], &index, NULL) ||
             index != i + 1u) {
             yvex_source_verification_add_blocker(out,
@@ -858,39 +878,35 @@ static void source_verify_index_shards(source_index *index,
                                        const source_shards *shards,
                                        yvex_source_verification *out)
 {
+    unsigned char *referenced;
     size_t i;
     unsigned long long unique = 0u;
 
     if (!out->shard_index_valid) return;
+    referenced = (unsigned char *)calloc(shards->count ? shards->count : 1u,
+                                         sizeof(*referenced));
+    if (!referenced) {
+        yvex_source_verification_add_blocker(out,
+                                             "shard-reference-allocation-failed");
+        return;
+    }
     for (i = 0; i < index->count; ++i) {
-        size_t j;
-        int first = 1;
-        if (source_shards_find(shards, index->items[i].shard) < 0) {
+        long shard_index = source_shards_find(shards, index->items[i].shard);
+        if (shard_index < 0) {
             yvex_source_verification_add_blocker(out,
                                                  "missing-referenced-shard");
+        } else if (!referenced[(size_t)shard_index]) {
+            referenced[(size_t)shard_index] = 1u;
+            unique++;
         }
-        for (j = 0; j < i; ++j) {
-            if (strcmp(index->items[j].shard, index->items[i].shard) == 0) {
-                first = 0;
-                break;
-            }
-        }
-        if (first) unique++;
     }
     out->referenced_shard_count = unique;
     for (i = 0; i < shards->count; ++i) {
-        size_t j;
-        int found = 0;
-        for (j = 0; j < index->count; ++j) {
-            if (strcmp(shards->names[i], index->items[j].shard) == 0) {
-                found = 1;
-                break;
-            }
-        }
-        if (!found) {
+        if (!referenced[i]) {
             yvex_source_verification_add_blocker(out, "unexpected-shard");
         }
     }
+    free(referenced);
 }
 
 /* Verifies a deliberately indexless official snapshot before deriving a map. */

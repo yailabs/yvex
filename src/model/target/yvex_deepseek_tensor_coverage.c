@@ -163,14 +163,6 @@ static int coverage_require(coverage_builder *builder,
     unsigned int dimension;
     unsigned long long row_index = coverage->summary.required_tensor_count;
 
-    if (row_index >= coverage->summary.source_tensor_count) {
-        return coverage_reject(
-            builder->failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_RESOURCE_LIMIT,
-            collection, scope, name, layer, expert,
-            YVEX_DEEPSEEK_TENSOR_NO_INDEX,
-            coverage->summary.source_tensor_count, row_index + 1u,
-            builder->err);
-    }
     if (!yvex_source_tensor_snapshot_find_index(
             coverage->snapshot, name, &source_index)) {
         coverage->summary.missing_count++;
@@ -178,6 +170,14 @@ static int coverage_require(coverage_builder *builder,
             builder->failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_MISSING_REQUIREMENT,
             collection, scope, name, layer, expert,
             YVEX_DEEPSEEK_TENSOR_NO_INDEX, 1u, 0u, builder->err);
+    }
+    if (row_index >= coverage->summary.source_tensor_count) {
+        return coverage_reject(
+            builder->failure, YVEX_DEEPSEEK_COVERAGE_FAILURE_RESOURCE_LIMIT,
+            collection, scope, name, layer, expert,
+            YVEX_DEEPSEEK_TENSOR_NO_INDEX,
+            coverage->summary.source_tensor_count, row_index + 1u,
+            builder->err);
     }
     source = yvex_source_tensor_snapshot_at(coverage->snapshot, source_index);
     if (builder->matched[source_index]) {
@@ -1264,6 +1264,25 @@ yvex_deepseek_tensor_coverage_find(
     return coverage->row_by_source[index];
 }
 
+/* Resolves a source name to its deterministic requirement-row index. */
+int yvex_deepseek_tensor_coverage_find_index(
+    const yvex_deepseek_tensor_coverage *coverage,
+    const char *source_name,
+    unsigned long long *row_index)
+{
+    unsigned long long source_index;
+    const yvex_deepseek_tensor_coverage_row *row;
+
+    if (!coverage || !source_name || !row_index || !coverage->rows ||
+        !yvex_source_tensor_snapshot_find_index(coverage->snapshot,
+                                                source_name, &source_index))
+        return 0;
+    row = coverage->row_by_source[source_index];
+    if (!row) return 0;
+    *row_index = (unsigned long long)(row - coverage->rows);
+    return 1;
+}
+
 const char *yvex_deepseek_tensor_collection_name(
     yvex_deepseek_tensor_collection collection)
 {
@@ -1282,9 +1301,9 @@ const char *yvex_deepseek_tensor_coverage_failure_name(
     static const char *names[] = {
         "none", "invalid-argument", "wrong-source-identity",
         "invalid-inventory-authority", "inventory-drift",
-        "architecture-incomplete", "missing-requirement", "duplicate-source",
-        "ambiguous-match", "unexpected-source", "unsupported-collection",
-        "invalid-index", "rank-mismatch", "shape-mismatch", "dtype-mismatch",
+        "architecture-incomplete", "missing-requirement", "ambiguous-match",
+        "unexpected-source", "invalid-index", "rank-mismatch",
+        "shape-mismatch", "dtype-mismatch",
         "scale-companion-mismatch", "arithmetic-overflow", "resource-limit",
         "allocation-failure"
     };

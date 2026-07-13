@@ -148,7 +148,7 @@ static const char *candidate_next_for_prefix(const candidate_fact *fact,
                                              const char *prefix)
 {
     if (!fact || strcmp(prefix, "dense_candidate") != 0) {
-        return fact ? fact->next : "V010.TENSOR.COVERAGE.DEEPSEEK.0";
+        return fact ? fact->next : "V010.SOURCE.PAYLOAD.STREAM.0";
     }
     if (strncmp(fact->id, "deepseek", 8) == 0) {
         return "V010.GRAPH.DEEPSEEK.TRANSFORMER.0";
@@ -303,7 +303,7 @@ static int candidate_report_build(const yvex_model_target_request *request,
         yvex_model_target_report_add_row(report,
                                          "REPORT  STATUS  SELECTED  ELIGIBLE  NEXT");
         yvex_model_target_report_add_row(report,
-                                         "full-runtime-candidate  architecture-specified  %s  0  V010.TENSOR.COVERAGE.DEEPSEEK.0",
+                                         "full-runtime-candidate  mapping-specified  %s  0  V010.SOURCE.PAYLOAD.STREAM.0",
                                          yvex_deepseek_v4_target_id);
         return YVEX_OK;
     }
@@ -313,19 +313,19 @@ static int candidate_report_build(const yvex_model_target_request *request,
                                          yvex_deepseek_v4_target_id);
         yvex_model_target_report_add_row(report, "other_candidate_scope: non-release-engineering-evidence");
         yvex_model_target_report_add_row(
-            report, "next_required_rows: V010.TENSOR.COVERAGE.DEEPSEEK.0");
+            report, "next_required_rows: V010.SOURCE.PAYLOAD.STREAM.0");
         candidate_emit_full_audit(report, "candidate", request->target_id);
         yvex_model_target_report_common_tail(report);
         return YVEX_OK;
     }
     yvex_model_target_report_add_row(report, "report: model-target candidate");
-    yvex_model_target_report_add_row(report, "status: selected-architecture-specified");
+    yvex_model_target_report_add_row(report, "status: selected-mapping-specified");
     yvex_model_target_report_add_row(report, "release: v0.1.0");
     yvex_model_target_report_add_row(report, "selected: %s",
                                      yvex_deepseek_v4_target_id);
-    yvex_model_target_report_add_row(report, "top_blocker: complete tensor role coverage");
+    yvex_model_target_report_add_row(report, "top_blocker: source payload trust");
     yvex_model_target_report_add_row(
-        report, "next: V010.TENSOR.COVERAGE.DEEPSEEK.0");
+        report, "next: V010.SOURCE.PAYLOAD.STREAM.0");
     yvex_model_target_report_add_row(report, "boundary: target selected; artifact/runtime/generation unsupported; benchmark not measured");
     return YVEX_OK;
 }

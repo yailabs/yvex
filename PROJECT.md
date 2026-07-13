@@ -5,7 +5,7 @@ Status: living engineering control
 Authority: product target, architecture tracks, complete wave ledger, milestone
 state, dependencies, evidence rank, family scope, release gates, and Active Next
 Recovery baseline: pre-refoundation `docs/spine.md` at commit `10ad6c3`
-Current proof stage: exact DeepSeek-V4-Flash source tensor coverage
+Current proof stage: canonical DeepSeek-V4-Flash logical GGUF mapping plan
 
 ## 1. Authority And Update Contract
 
@@ -169,7 +169,7 @@ The unqualified term "model artifact" never means a selected-tensor proof file.
 | Source | The canonical DeepSeek target is verified against `deepseek-ai/DeepSeek-V4-Flash` at commit `60d8d70770c6776ff598c94bb586a859a38244f1`. The pinned upstream index, structured configs, tokenizer assets, 46/46 safetensors headers, 69,187 unique tensor records, and verifier-owned complete manifest agree. Tensor payload bytes remain unread and payload trust remains owned by `V010.SOURCE.PAYLOAD.STREAM.0`. |
 | Family profiles | The exact DeepSeek-V4-Flash source now projects to one immutable typed IR with 43 main layers, one MTP layer, explicit SWA/CSA/HCA, mHC, MoE, position/KV, output, tokenizer, and source constraints. Qwen, Gemma, and dense/MoE evidence remains at its prior rank. |
 | Tensor coverage | One immutable IR-derived requirement set reconciles exactly against all 69,187 tensors in the verified DeepSeek snapshot: every entry is assigned once, with zero missing, duplicate, ambiguous, unsupported, or unexpected tensors and zero payload reads. Qwen/Gemma evidence remains at its prior rank. |
-| Mapping | Dense/Qwen and output/tokenizer mapping evidence exists. Complete DeepSeek source-to-role-to-GGUF mapping is the active blocker. |
+| Mapping | The exact 69,187-entry DeepSeek source inventory projects to 1,360 immutable logical GGUF descriptors: 1,328 pinned-standard trunk descriptors and 32 explicit YVEX MTP extension descriptors. Payload conversion and physical emission remain blocked. |
 | GGUF foundations | The canonical row-aware qtype storage ABI, scalable native GGUF v3 structural reader ABI, and global directory-order layout admission are closed. `V010.GGUF.ARTIFACT.ABI.0` remains reopened as bounded historical evidence. |
 | Qtype | Pinned GGUF IDs 0-39, removed/outside-baseline identity, exact scalar/block geometry, and shape-aware storage accounting are canonical. Reference dequantization, quantization, emission, and backend compute remain blocked or unsupported. |
 | Artifact | File-backed structural inspection and global layout admission own typed container, metadata, tensor-directory, qtype, ordered range, padding, budget, and lifetime facts without reading tensor payload bytes. Controlled proof emission exists; YVEX has not produced a complete DeepSeek-V4-Flash GGUF. |
@@ -197,7 +197,8 @@ V010.GGUF.LAYOUT.INTEGRITY.1: complete (canonical common global GGUF layout admi
 V010.CUDA.FAILCLOSED.0: complete (bounded fail-closed CUDA primitive proof)
 V010.MODEL.ARCH.IR.0: complete (typed DeepSeek-V4-Flash architecture specification)
 V010.TENSOR.COVERAGE.DEEPSEEK.0: complete (exact source tensor coverage)
-Active Next: V010.MAP.GGUF.DEEPSEEK.0
+V010.MAP.GGUF.DEEPSEEK.0: complete (canonical logical GGUF mapping plan)
+Active Next: V010.SOURCE.PAYLOAD.STREAM.0
 ```
 
 Strict source proof consumes the pinned upstream index with Git OID
@@ -250,6 +251,15 @@ deterministic iteration make the pass linear at target scale; the live proof
 performs one header scan and reads zero payload bytes. Coverage does not choose
 GGUF names, transformations, emitted layouts, or payload policy.
 
+The canonical DeepSeek GGUF map consumes that retained coverage without
+reopening source metadata. It assigns all 69,187 source tensors to 1,360
+logical outputs: 1,328 standard trunk descriptors and 32 namespaced MTP
+extension descriptors. The plan records direct copies, FP8 weight/scale pairs,
+256-expert MXFP4 aggregation, I64-to-I32 hash-router conversion, logical shapes,
+qtypes, metadata, and deterministic source/emitted/role indexes. The live proof
+uses one header scan and reads zero payload bytes; mapping is complete while
+payload conversion, writer bytes, artifact support, and runtime remain blocked.
+
 Recovered `V010.BACKEND.0`, `.6`, `.7`, `.8`, and `.9` are promoted from
 planned subtasks to completed bounded capabilities because the exact matrix,
 refusal, no-bundle fallback, scratch ownership, and failure/cleanup contracts
@@ -259,8 +269,7 @@ later runtime rows lower and prove the complete architecture-required release
 operation set.
 
 ```text
-V010.MAP.GGUF.DEEPSEEK.0
--> V010.SOURCE.PAYLOAD.STREAM.0
+V010.SOURCE.PAYLOAD.STREAM.0
 -> V010.QUANT.2
 -> V010.GGUF.WRITER.1
 -> V010.ARTIFACT.EMIT.DEEPSEEK.0
@@ -294,7 +303,7 @@ another supported model.
 
 | Family/scope | Source/profile truth | Tensor/map truth | Artifact/materialization truth | Runtime truth | Project role |
 | --- | --- | --- | --- | --- | --- |
-| DeepSeek-V4-Flash | Exact source metadata/header verification and typed architecture IR complete | Exact 69,187-entry source coverage complete; GGUF mapping active | No complete artifact; full materialization unsupported | generation unsupported | sole v0.1.0 release target |
+| DeepSeek-V4-Flash | Exact source metadata/header verification and typed architecture IR complete | Exact 69,187-entry source coverage and 1,360-descriptor logical GGUF map complete | No complete artifact; full materialization unsupported | generation unsupported | sole v0.1.0 release target |
 | Qwen | Source target/profile, header inventory, naming-map, and role-coverage work exists | Implemented at bounded source/header/report stages | No complete supported artifact or full materialization claim | generation unsupported | active multi-family/common architecture evidence |
 | Gemma | Source target/profile and header tensor-collection work exists | Dense/common mapping can be reused; exact complete family gate not claimed | No complete supported artifact or full materialization claim | generation unsupported | active dense/common architecture evidence |
 | Dense/common | Common naming, collections, proof artifacts, validators, and primitive evidence exist | Partial reusable capability | Family-neutral materialization is a real planned milestone | no supported full-model runtime | common engine architecture and regression surface |
@@ -319,11 +328,11 @@ calculated from rows rather than protected by a summary hash.
 | Explicit new IDs | 34 |
 | Canonical IDs | 665 |
 | First-class milestones | 37 |
-| State: complete | 193 |
+| State: complete | 199 |
 | State: active | 1 |
 | State: partial | 1 |
-| State: blocked | 23 |
-| State: planned | 422 |
+| State: blocked | 22 |
+| State: planned | 417 |
 | State: reopened | 2 |
 | State: deferred | 11 |
 | State: superseded | 11 |
@@ -332,8 +341,8 @@ calculated from rows rather than protected by a summary hash.
 | Track | Owns | Current truth | Conclusive handoff |
 | --- | --- | --- | --- |
 | `TRACK.SCOPE` | Project control, release scope, family/release distinction, claim boundary, version policy, and documentation-control transitions. | ledger recovery and documentation ownership are complete | One truthful project map and one explicit release contract. |
-| `TRACK.SOURCE` | Source identity, revision, provider intake, manifests, shards, sidecars, header inventory, payload trust, and bounded payload access. | exact DeepSeek metadata/header verification is complete; payload trust remains blocked | Verified source facts and readable payload ranges. |
-| `TRACK.MAP` | Family source names, canonical runtime roles, GGUF names, transforms, layouts, ambiguity refusal, and complete mapping coverage. | dense/Qwen and report evidence exist; complete DeepSeek map is active | Every required source tensor maps exactly once to a runtime role and emitted layout. |
+| `TRACK.SOURCE` | Source identity, revision, provider intake, manifests, shards, sidecars, header inventory, payload trust, and bounded payload access. | exact metadata/header verification is complete; bounded payload trust is active | Verified source facts and readable payload ranges. |
+| `TRACK.MAP` | Family source names, canonical runtime roles, GGUF names, transforms, layouts, ambiguity refusal, and complete mapping coverage. | canonical DeepSeek logical GGUF mapping is complete | Every required source tensor maps exactly once to a runtime role and emitted layout. |
 | `TRACK.QUANT` | Dtype/qtype ABI, storage geometry, role policy, conversion, quantization, reference dequantization, compute truth, and refusal. | canonical row-aware storage ABI is complete; quantization, decoding, emission, and compute remain blocked | Every emitted role has truthful storage and compute behavior. |
 | `TRACK.ARTIFACT` | GGUF container ABI, native writer, conversion coordination, complete emission, identity, registration, and writer-reader roundtrip. | scalable file-backed structural reader ABI is complete; writer and complete emission remain blocked | A complete YVEX-produced GGUF reopens identically through YVEX. |
 | `TRACK.INTEGRITY` | Container, metadata, tensor directory, offsets, alignment, qtype-sized ranges, corruption, drift, and artifact admission. | canonical common global layout admission is complete; complete-artifact support admission remains blocked | A complete artifact passes every pre-payload and pre-runtime integrity gate. |
@@ -365,8 +374,8 @@ closure.
 | Track | Recovered IDs | Canonical IDs | First-class C/A/Pa/P/B/NM | Complete support | Open support | Superseded/deferred |
 | --- | ---: | ---: | --- | ---: | ---: | ---: |
 | `TRACK.SCOPE` | 25 | 29 | 3/0/1/0/0/0 | 9 | 9 | 7 |
-| `TRACK.SOURCE` | 24 | 26 | 1/0/0/0/1/0 | 23 | 1 | 0 |
-| `TRACK.MAP` | 12 | 13 | 0/1/0/0/0/0 | 6 | 6 | 0 |
+| `TRACK.SOURCE` | 24 | 26 | 1/1/0/0/0/0 | 23 | 1 | 0 |
+| `TRACK.MAP` | 12 | 13 | 1/0/0/0/0/0 | 11 | 1 | 0 |
 | `TRACK.QUANT` | 5 | 6 | 1/0/0/0/1/0 | 2 | 2 | 0 |
 | `TRACK.ARTIFACT` | 11 | 16 | 1/0/0/0/4/0 | 3 | 6 | 2 |
 | `TRACK.INTEGRITY` | 14 | 15 | 1/0/0/0/0/0 | 10 | 4 | 0 |
@@ -421,8 +430,8 @@ written after inspection of owner code, consumers, tests, and current contracts.
 | 9 | `V010.CUDA.FAILCLOSED.0` | `TRACK.BACKEND` | DGX Spark | `complete` | Removed production fallback PTX; separated context, memory, generated bundle, function, and exact variant facts; proved admitted bounded variants and fail-closed rollback/cleanup on GB10. | V010.GGUF.LAYOUT.INTEGRITY.1 |
 | 10 | `V010.MODEL.ARCH.IR.0` | `TRACK.MODEL` | DeepSeek | `complete` | Create the execution-complete typed DeepSeek-V4-Flash architecture IR covering attention, positions, KV, mHC, MoE, norms, output, and tokenizer. | V010.CUDA.FAILCLOSED.0 |
 | 11 | `V010.TENSOR.COVERAGE.DEEPSEEK.0` | `TRACK.TENSOR` | DeepSeek | `complete` | Derived and reconciled all 69,187 DeepSeek source requirements exactly from the architecture IR against one verified immutable snapshot, with typed refusal and no payload reads. | V010.MODEL.ARCH.IR.0 |
-| 12 | `V010.MAP.GGUF.DEEPSEEK.0` | `TRACK.MAP` | DeepSeek | `active` | Map every required DeepSeek source tensor to one role, GGUF name, transform, shape, expert index, and emitted layout. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
-| 13 | `V010.SOURCE.PAYLOAD.STREAM.0` | `TRACK.SOURCE` | common | `blocked` | Read bounded source payload ranges from indexed shards with identity checks, short-read refusal, owned lifecycle, and cleanup. | V010.MAP.GGUF.DEEPSEEK.0 |
+| 12 | `V010.MAP.GGUF.DEEPSEEK.0` | `TRACK.MAP` | DeepSeek | `complete` | Map every required DeepSeek source tensor to one role, GGUF name, transform, shape, expert index, and emitted layout. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
+| 13 | `V010.SOURCE.PAYLOAD.STREAM.0` | `TRACK.SOURCE` | common | `active` | Read bounded source payload ranges from indexed shards with identity checks, short-read refusal, owned lifecycle, and cleanup. | V010.MAP.GGUF.DEEPSEEK.0 |
 | 14 | `V010.QUANT.2` | `TRACK.QUANT` | common + DeepSeek roles | `blocked` | Implement the role/qtype quantization, compute, reference-dequantization, numeric-bound, and refusal matrix required by the release artifact. | V010.SOURCE.PAYLOAD.STREAM.0 |
 | 15 | `V010.GGUF.WRITER.1` | `TRACK.ARTIFACT` | common | `blocked` | Emit concrete GGUF bytes from canonical metadata and tensor descriptors with checked offsets, alignment, atomic publication, failure cleanup, and deterministic order. | V010.QUANT.2 |
 | 16 | `V010.ARTIFACT.EMIT.DEEPSEEK.0` | `TRACK.ARTIFACT` | DeepSeek | `blocked` | Produce complete reference and selected-release-qtype DeepSeek-V4-Flash GGUF artifacts from verified sources without promoting runtime support. | V010.GGUF.WRITER.1 |
@@ -507,7 +516,7 @@ the row's use.
 
 **Owner:** Source identity, revision, provider intake, manifests, shards, sidecars, header inventory, payload trust, and bounded payload access.
 
-**Current truth:** exact DeepSeek identity, pinned index, structured sidecars, manifest, and 46/46 headers are verified; payload trust remains blocked
+**Current truth:** exact DeepSeek identity, pinned index, structured sidecars, manifest, and 46/46 headers are verified; bounded payload trust is active
 
 **Ledger summary:** 24 recovered IDs; 2 first-class milestones; 23 complete support rows; 1 open support row; 0 superseded/deferred rows.
 
@@ -516,7 +525,7 @@ the row's use.
 | Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
 | --- | --- | --- | --- | --- | --- |
 | `V010.REBASE.DEEPSEEK.0` | DeepSeek | `complete` | Verify the exact DeepSeek-V4-Flash source identity, revision, config, tokenizer, shard inventory, footprint, and architecture facts. | V010.DOCS.ARCHITECTURE.0 | current |
-| `V010.SOURCE.PAYLOAD.STREAM.0` | common | `blocked` | Read bounded source payload ranges from indexed shards with identity checks, short-read refusal, owned lifecycle, and cleanup. | V010.MAP.GGUF.DEEPSEEK.0 | current |
+| `V010.SOURCE.PAYLOAD.STREAM.0` | common | `active` | Read bounded source payload ranges from indexed shards with identity checks, short-read refusal, owned lifecycle, and cleanup. | V010.MAP.GGUF.DEEPSEEK.0 | current |
 
 #### Recovered And Subordinate Rows
 
@@ -552,32 +561,32 @@ the row's use.
 
 **Owner:** Family source names, canonical runtime roles, GGUF names, transforms, layouts, ambiguity refusal, and complete mapping coverage.
 
-**Current truth:** dense/Qwen and report evidence exist; complete DeepSeek mapping is active
+**Current truth:** exact DeepSeek source-to-role-to-GGUF mapping and logical emission planning are complete; payload conversion and physical emission remain blocked
 
-**Ledger summary:** 12 recovered IDs; 1 first-class milestones; 6 complete support rows; 6 open support rows; 0 superseded/deferred rows.
+**Ledger summary:** 12 recovered IDs; 1 first-class milestone; 11 complete support rows; 1 open support row; 0 superseded/deferred rows.
 
 #### First-Class Milestones
 
 | Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
 | --- | --- | --- | --- | --- | --- |
-| `V010.MAP.GGUF.DEEPSEEK.0` | DeepSeek | `active` | Map every required DeepSeek source tensor to one role, GGUF name, transform, shape, expert index, and emitted layout. | V010.TENSOR.COVERAGE.DEEPSEEK.0 | current |
+| `V010.MAP.GGUF.DEEPSEEK.0` | DeepSeek | `complete` | Map every required DeepSeek source tensor to one role, GGUF name, transform, shape, expert index, and emitted layout. | V010.TENSOR.COVERAGE.DEEPSEEK.0 | current |
 
 #### Recovered And Subordinate Rows
 
 | Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
 | --- | --- | --- | --- | --- | --- |
-| `V010.MAP.0` | `subtask` | common | `planned` | tensor mapping schema. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.0` | `capability` | common | `complete` | Canonical typed mapping schema is absorbed by the immutable DeepSeek logical GGUF plan. | V010.MAP.GGUF.DEEPSEEK.0 |
 | `V010.MAP.1` | `capability` | dense/common | `complete` | dense tensor naming map. | V010.MAP.GGUF.DEEPSEEK.0 |
-| `V010.MAP.2` | `subtask` | MoE/common | `planned` | MoE tensor naming map. | V010.MAP.GGUF.DEEPSEEK.0 |
-| `V010.MAP.3` | `subtask` | DeepSeek | `planned` | DeepSeek tensor naming map. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.2` | `capability` | MoE/common | `complete` | Routed/shared expert roles, aggregation axes, source contributions, and emitted names are absorbed by the canonical DeepSeek plan. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.3` | `capability` | DeepSeek | `complete` | Every verified DeepSeek source tensor maps exactly once into the canonical logical GGUF plan. | V010.MAP.GGUF.DEEPSEEK.0 |
 | `V010.MAP.4` | `subtask` | GLM | `planned` | GLM tensor naming map. | V010.MAP.GGUF.DEEPSEEK.0 |
 | `V010.MAP.5` | `capability` | Qwen | `complete` | Qwen tensor naming map. | V010.MAP.GGUF.DEEPSEEK.0 |
 | `V010.MAP.6` | `capability` | common | `complete` | output-head tensor mapping. | V010.MAP.GGUF.DEEPSEEK.0 |
 | `V010.MAP.7` | `capability` | common | `complete` | tokenizer metadata mapping. | V010.MAP.GGUF.DEEPSEEK.0 |
 | `V010.MAP.8` | `evidence` | common | `complete` | missing-role blocker report. | V010.MAP.GGUF.DEEPSEEK.0 |
 | `V010.MAP.9` | `evidence` | common | `complete` | Legacy bounded tensor-mapping report gate; it does not close complete DeepSeek mapping. | V010.MAP.GGUF.DEEPSEEK.0 |
-| `V010.MAP.GGUF.NAMES.0` | `subtask` | common | `planned` | GGUF emitted tensor-name map by runtime role. | V010.MAP.GGUF.DEEPSEEK.0 |
-| `V010.MAP.GGUF.LAYOUT.0` | `subtask` | common | `planned` | GGUF emitted tensor layout/range map by runtime role. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.GGUF.NAMES.0` | `capability` | common | `complete` | Typed runtime roles project to pinned-standard or explicit extension GGUF names without lexical fallback. | V010.MAP.GGUF.DEEPSEEK.0 |
+| `V010.MAP.GGUF.LAYOUT.0` | `capability` | common | `complete` | Logical shapes, qtypes, transforms, source contributions, and aggregation axes are absorbed by the canonical plan; byte layout remains writer-owned. | V010.MAP.GGUF.DEEPSEEK.0 |
 
 
 ### 9.4 TRACK.QUANT
@@ -1619,7 +1628,7 @@ acceptance boundary.
 | Source | Exact local identity, revision, config, tokenizer, shard inventory, headers, and payload trust | blocked | `V010.REBASE.DEEPSEEK.0` and `V010.SOURCE.PAYLOAD.STREAM.0` |
 | Architecture | Typed execution-complete DeepSeek specification | complete | `V010.MODEL.ARCH.IR.0` |
 | Tensor coverage | Complete required-role set with no unresolved role | complete | `V010.TENSOR.COVERAGE.DEEPSEEK.0` |
-| Mapping | Complete source-role-GGUF map with transforms/layouts and ambiguity refusal | blocked | `V010.MAP.GGUF.DEEPSEEK.0` |
+| Mapping | Complete source-role-GGUF map with transforms/layouts and ambiguity refusal | complete | `V010.MAP.GGUF.DEEPSEEK.0` |
 | Qtype/quantization | Row-aware storage ABI is complete; reference dequantization, conversion/quantization, and compute/refusal truth remain | blocked | `V010.QUANT.2` |
 | Artifact | Complete YVEX-produced GGUF with native and official reader equivalence | blocked | `V010.GGUF.ARTIFACT.ABI.1` through `V010.GGUF.ROUNDTRIP.1` |
 | Integrity/admission | Canonical global layout is complete; complete-model identity, role coverage, payload trust, and support admission remain | blocked | `V010.GGUF.LAYOUT.INTEGRITY.1` and `V010.ARTIFACT.SUPPORT.CUTOVER.0` |

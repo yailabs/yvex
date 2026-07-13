@@ -552,7 +552,7 @@ static int test_arch_ir_report_consumer_and_family_preservation(void)
             report.deepseek_architecture_ir != NULL &&
             strcmp(report.status, "typed-architecture-specified") == 0 &&
             strcmp(report.next_row,
-                   "V010.TENSOR.COVERAGE.DEEPSEEK.0") == 0,
+                   "V010.SOURCE.PAYLOAD.STREAM.0") == 0,
         "release class profile consumes canonical IR");
     YVEX_TEST_ASSERT(source.header_scan_count == 1,
                      "IR consumer does not rescan source headers");

@@ -24,6 +24,7 @@
 #include "yvex_model_target_render.h"
 
 #include "yvex_cli_out.h"
+#include "../../model/target/yvex_deepseek_gguf_map.h"
 #include "../../model/target/yvex_deepseek_tensor_coverage.h"
 
 static int model_target_render_rows(FILE *fp,
@@ -68,6 +69,103 @@ static int model_target_render_table_rows(FILE *fp,
     return rc;
 }
 
+/* Serializes the immutable logical emission plan without deriving map policy. */
+static int model_target_render_deepseek_map(
+    FILE *fp,
+    yvex_model_target_render_mode mode,
+    const yvex_model_target_report *report)
+{
+    const yvex_deepseek_gguf_map_summary *summary =
+        yvex_deepseek_gguf_map_summary_get(report->deepseek_gguf_map);
+    int rc = 0;
+
+    if (!summary) return 0;
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
+        return yvex_cli_out_writef(
+            fp,
+            "{\"status\":\"%s\",\"target_id\":\"%s\",\"source_contributions\":%llu,\"descriptors\":%llu,\"trunk_descriptors\":%llu,\"mtp_descriptors\":%llu,\"pinned_standard_names\":%llu,\"extension_names\":%llu,\"metadata\":%llu,\"header_scans\":%llu,\"payload_bytes_read\":%llu,\"mapping_identity\":\"%016llx\",\"artifact\":\"not-produced\",\"runtime\":\"unsupported\",\"generation\":\"unsupported\",\"next\":\"%s\"}\n",
+            report->status, report->target_id,
+            summary->source_contribution_count, summary->descriptor_count,
+            summary->trunk_descriptor_count, summary->mtp_descriptor_count,
+            summary->pinned_standard_count, summary->extension_count,
+            summary->metadata_count, summary->header_scan_count,
+            summary->payload_bytes_read, summary->mapping_identity,
+            report->next_row);
+    }
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+        rc |= yvex_cli_out_writef(
+            fp, "TARGET  STATUS  SOURCES  GGUF  TRUNK  MTP  METADATA  PAYLOAD  NEXT\n");
+        rc |= yvex_cli_out_writef(
+            fp, "%s  %s  %llu  %llu  %llu  %llu  %llu  %llu  %s\n",
+            report->target_id, report->status,
+            summary->source_contribution_count, summary->descriptor_count,
+            summary->trunk_descriptor_count, summary->mtp_descriptor_count,
+            summary->metadata_count, summary->payload_bytes_read,
+            report->next_row);
+        return rc < 0 ? rc : 0;
+    }
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+        unsigned int collection;
+        rc |= yvex_cli_out_writef(fp, "mapping_status: %s\n", report->status);
+        rc |= yvex_cli_out_writef(fp, "target_id: %s\n", report->target_id);
+        rc |= yvex_cli_out_writef(fp, "source_contribution_count: %llu\n",
+                                  summary->source_contribution_count);
+        rc |= yvex_cli_out_writef(fp, "descriptor_count: %llu\n",
+                                  summary->descriptor_count);
+        rc |= yvex_cli_out_writef(fp, "trunk_descriptor_count: %llu\n",
+                                  summary->trunk_descriptor_count);
+        rc |= yvex_cli_out_writef(fp, "mtp_descriptor_count: %llu\n",
+                                  summary->mtp_descriptor_count);
+        rc |= yvex_cli_out_writef(fp, "pinned_standard_name_count: %llu\n",
+                                  summary->pinned_standard_count);
+        rc |= yvex_cli_out_writef(fp, "semantic_standard_name_count: %llu\n",
+                                  summary->semantic_standard_count);
+        rc |= yvex_cli_out_writef(fp, "extension_name_count: %llu\n",
+                                  summary->extension_count);
+        for (collection = 0u;
+             collection < YVEX_DEEPSEEK_TENSOR_COLLECTION_COUNT;
+             ++collection) {
+            rc |= yvex_cli_out_writef(
+                fp, "collection_%u_count: %llu\n", collection,
+                summary->collection_counts[collection]);
+        }
+        rc |= yvex_cli_out_writef(fp, "metadata_count: %llu\n",
+                                  summary->metadata_count);
+        rc |= yvex_cli_out_writef(fp, "header_scan_count: %llu\n",
+                                  summary->header_scan_count);
+        rc |= yvex_cli_out_writef(fp, "payload_bytes_read: %llu\n",
+                                  summary->payload_bytes_read);
+        rc |= yvex_cli_out_writef(fp, "source_identity: %016llx\n",
+                                  summary->source_identity);
+        rc |= yvex_cli_out_writef(fp, "coverage_identity: %016llx\n",
+                                  summary->coverage_identity);
+        rc |= yvex_cli_out_writef(fp, "mapping_identity: %016llx\n",
+                                  summary->mapping_identity);
+        rc |= yvex_cli_out_writef(fp, "artifact_status: not-produced\n");
+        rc |= yvex_cli_out_writef(fp, "runtime_status: %s\n",
+                                  report->runtime_status);
+        rc |= yvex_cli_out_writef(fp, "generation_status: %s\n",
+                                  report->generation_status);
+        rc |= yvex_cli_out_writef(fp, "next: %s\n", report->next_row);
+        rc |= yvex_cli_out_writef(fp, "boundary: %s\n", report->boundary);
+        return rc < 0 ? rc : 0;
+    }
+    rc |= yvex_cli_out_writef(fp, "deepseek-gguf-map: %s [%s]\n",
+                              report->target_id, report->status);
+    rc |= yvex_cli_out_writef(
+        fp, "plan: sources=%llu gguf=%llu trunk=%llu mtp=%llu metadata=%llu\n",
+        summary->source_contribution_count, summary->descriptor_count,
+        summary->trunk_descriptor_count, summary->mtp_descriptor_count,
+        summary->metadata_count);
+    rc |= yvex_cli_out_writef(
+        fp, "evidence: header-scans=%llu payload-bytes=%llu identity=%016llx\n",
+        summary->header_scan_count, summary->payload_bytes_read,
+        summary->mapping_identity);
+    rc |= yvex_cli_out_writef(fp, "next: %s\n", report->next_row);
+    rc |= yvex_cli_out_writef(fp, "boundary: %s\n", report->boundary);
+    return rc < 0 ? rc : 0;
+}
+
 /* Serializes an already admitted one-to-one tensor coverage result. */
 static int model_target_render_deepseek_coverage(
     FILE *fp,
@@ -83,11 +181,11 @@ static int model_target_render_deepseek_coverage(
     if (mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
         return yvex_cli_out_writef(
             fp,
-            "{\"status\":\"%s\",\"target_id\":\"%s\",\"source_tensors\":%llu,\"required_tensors\":%llu,\"matched_tensors\":%llu,\"missing\":%llu,\"duplicate\":%llu,\"ambiguous\":%llu,\"unexpected\":%llu,\"header_scans\":%llu,\"payload_bytes_read\":%llu,\"coverage_identity\":\"%016llx\",\"mapping\":\"blocked\",\"runtime\":\"unsupported\",\"generation\":\"unsupported\",\"next\":\"%s\"}\n",
+            "{\"status\":\"%s\",\"target_id\":\"%s\",\"source_tensors\":%llu,\"required_tensors\":%llu,\"matched_tensors\":%llu,\"missing\":%llu,\"ambiguous\":%llu,\"unexpected\":%llu,\"header_scans\":%llu,\"payload_bytes_read\":%llu,\"coverage_identity\":\"%016llx\",\"mapping\":\"blocked\",\"runtime\":\"unsupported\",\"generation\":\"unsupported\",\"next\":\"%s\"}\n",
             report->status, report->target_id, summary->source_tensor_count,
             summary->required_tensor_count, summary->matched_tensor_count,
-            summary->missing_count, summary->duplicate_count,
-            summary->ambiguous_count, summary->unexpected_count,
+            summary->missing_count, summary->ambiguous_count,
+            summary->unexpected_count,
             summary->header_scan_count, summary->payload_bytes_read,
             summary->coverage_identity, report->next_row);
     }
@@ -115,8 +213,6 @@ static int model_target_render_deepseek_coverage(
                                   summary->matched_tensor_count);
         rc |= yvex_cli_out_writef(fp, "missing_tensor_count: %llu\n",
                                   summary->missing_count);
-        rc |= yvex_cli_out_writef(fp, "duplicate_tensor_count: %llu\n",
-                                  summary->duplicate_count);
         rc |= yvex_cli_out_writef(fp, "ambiguous_tensor_count: %llu\n",
                                   summary->ambiguous_count);
         rc |= yvex_cli_out_writef(fp, "unexpected_tensor_count: %llu\n",
@@ -430,6 +526,9 @@ int yvex_model_target_render(FILE *fp,
 
     if (!report) {
         return 0;
+    }
+    if (report->deepseek_gguf_map) {
+        return model_target_render_deepseek_map(fp, mode, report);
     }
     if (report->deepseek_tensor_coverage) {
         return model_target_render_deepseek_coverage(fp, mode, report);

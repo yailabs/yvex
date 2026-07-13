@@ -236,7 +236,7 @@ struct yvex_model_descriptor {
     unsigned long long tensor_count;
     unsigned long long total_storage_bytes;
     unsigned long long unsupported_tensor_accounting_count;
-    unsigned long long role_counts[YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN + 1];
+    unsigned long long role_counts[YVEX_TENSOR_ROLE_COUNT];
 };
 
 static char *copy_bytes_string(const char *data, unsigned long long len)
@@ -356,7 +356,7 @@ int yvex_model_descriptor_from_gguf(yvex_model_descriptor **out,
         } else {
             model->total_storage_bytes += tensor->storage_bytes;
         }
-        if (tensor->role <= YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN) {
+        if (tensor->role < YVEX_TENSOR_ROLE_COUNT) {
             model->role_counts[tensor->role] += 1;
         }
     }
@@ -425,7 +425,7 @@ unsigned long long yvex_model_unsupported_tensor_accounting_count(const yvex_mod
 
 unsigned long long yvex_model_role_count(const yvex_model_descriptor *model, yvex_tensor_role role)
 {
-    if (!model || role > YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN) {
+    if (!model || role >= YVEX_TENSOR_ROLE_COUNT) {
         return 0;
     }
     return model->role_counts[role];
@@ -455,6 +455,44 @@ const char *yvex_tensor_role_name(yvex_tensor_role role)
     case YVEX_TENSOR_ROLE_MOE_EXPERT_GATE: return "moe_expert_gate";
     case YVEX_TENSOR_ROLE_MOE_EXPERT_UP: return "moe_expert_up";
     case YVEX_TENSOR_ROLE_MOE_EXPERT_DOWN: return "moe_expert_down";
+    case YVEX_TENSOR_ROLE_HC_HEAD_FUNCTION: return "hc_head_function";
+    case YVEX_TENSOR_ROLE_HC_HEAD_BASE: return "hc_head_base";
+    case YVEX_TENSOR_ROLE_HC_HEAD_SCALE: return "hc_head_scale";
+    case YVEX_TENSOR_ROLE_ATTENTION_SINKS: return "attention_sinks";
+    case YVEX_TENSOR_ROLE_ATTENTION_Q_A: return "attention_q_a";
+    case YVEX_TENSOR_ROLE_ATTENTION_Q_B: return "attention_q_b";
+    case YVEX_TENSOR_ROLE_ATTENTION_Q_A_NORM: return "attention_q_a_norm";
+    case YVEX_TENSOR_ROLE_ATTENTION_KV: return "attention_kv";
+    case YVEX_TENSOR_ROLE_ATTENTION_KV_NORM: return "attention_kv_norm";
+    case YVEX_TENSOR_ROLE_ATTENTION_OUT_A: return "attention_out_a";
+    case YVEX_TENSOR_ROLE_ATTENTION_OUT_B: return "attention_out_b";
+    case YVEX_TENSOR_ROLE_HC_ATTENTION_FUNCTION: return "hc_attention_function";
+    case YVEX_TENSOR_ROLE_HC_ATTENTION_BASE: return "hc_attention_base";
+    case YVEX_TENSOR_ROLE_HC_ATTENTION_SCALE: return "hc_attention_scale";
+    case YVEX_TENSOR_ROLE_HC_FFN_FUNCTION: return "hc_ffn_function";
+    case YVEX_TENSOR_ROLE_HC_FFN_BASE: return "hc_ffn_base";
+    case YVEX_TENSOR_ROLE_HC_FFN_SCALE: return "hc_ffn_scale";
+    case YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_KV: return "attention_compressor_kv";
+    case YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_GATE: return "attention_compressor_gate";
+    case YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_APE: return "attention_compressor_ape";
+    case YVEX_TENSOR_ROLE_ATTENTION_COMPRESSOR_NORM: return "attention_compressor_norm";
+    case YVEX_TENSOR_ROLE_INDEXER_PROJECTION: return "indexer_projection";
+    case YVEX_TENSOR_ROLE_INDEXER_ATTENTION_Q_B: return "indexer_attention_q_b";
+    case YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_KV: return "indexer_compressor_kv";
+    case YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_GATE: return "indexer_compressor_gate";
+    case YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_APE: return "indexer_compressor_ape";
+    case YVEX_TENSOR_ROLE_INDEXER_COMPRESSOR_NORM: return "indexer_compressor_norm";
+    case YVEX_TENSOR_ROLE_MOE_ROUTER_BIAS: return "moe_router_bias";
+    case YVEX_TENSOR_ROLE_MOE_ROUTER_TABLE: return "moe_router_table";
+    case YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_GATE: return "moe_shared_expert_gate";
+    case YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_UP: return "moe_shared_expert_up";
+    case YVEX_TENSOR_ROLE_MOE_SHARED_EXPERT_DOWN: return "moe_shared_expert_down";
+    case YVEX_TENSOR_ROLE_MTP_EMBEDDING_PROJECTION: return "mtp_embedding_projection";
+    case YVEX_TENSOR_ROLE_MTP_HIDDEN_PROJECTION: return "mtp_hidden_projection";
+    case YVEX_TENSOR_ROLE_MTP_EMBEDDING_NORM: return "mtp_embedding_norm";
+    case YVEX_TENSOR_ROLE_MTP_HIDDEN_NORM: return "mtp_hidden_norm";
+    case YVEX_TENSOR_ROLE_MTP_OUTPUT_NORM: return "mtp_output_norm";
+    case YVEX_TENSOR_ROLE_COUNT: break;
     }
     return "unknown";
 }

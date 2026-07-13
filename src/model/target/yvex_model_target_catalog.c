@@ -492,7 +492,7 @@ static const char *catalog_runtime_status(const yvex_model_target_record *rec)
 static const char *catalog_next_row(const yvex_model_target_record *rec)
 {
     if (yvex_model_target_is_release_target(rec->target_id)) {
-        return "V010.TENSOR.COVERAGE.DEEPSEEK.0";
+        return "V010.SOURCE.PAYLOAD.STREAM.0";
     }
     if (strcmp(rec->target_class, "official-source-huge-model") == 0) {
         return "V010.SOURCE.8";
@@ -557,7 +557,9 @@ static void catalog_emit_inspect_audit(const yvex_model_target_record *rec,
         yvex_model_target_report_add_row(report,
                                          "architecture_ir_owner: src/model/architecture/yvex_deepseek_v4_ir.c");
         yvex_model_target_report_add_row(report,
-                                         "architecture_ir_next: V010.TENSOR.COVERAGE.DEEPSEEK.0");
+                                         "architecture_ir_consumer: canonical-deepseek-gguf-map");
+        yvex_model_target_report_add_row(report,
+                                         "release_target_next: V010.SOURCE.PAYLOAD.STREAM.0");
     }
     yvex_model_target_report_add_row(report, "source_artifact_class: %s",
                                      rec->source_artifact_class);
@@ -598,7 +600,11 @@ static void catalog_emit_inspect_audit(const yvex_model_target_record *rec,
         yvex_model_target_is_release_target(rec->target_id)
             ? "not-used-for-release-architecture"
             : "lexical-only");
-    yvex_model_target_report_add_row(report, "model_class_role_mapping_status: not-implemented");
+    yvex_model_target_report_add_row(
+        report, "model_class_role_mapping_status: %s",
+        yvex_model_target_is_release_target(rec->target_id)
+            ? "canonical-logical-map-complete"
+            : "not-implemented");
     yvex_model_target_report_add_row(report, "model_class_runtime_status: unsupported");
     yvex_model_target_report_add_row(report, "tensor_collection_status: command-visible");
     yvex_model_target_report_add_row(report, "tensor_collection_family: %s",
@@ -608,10 +614,18 @@ static void catalog_emit_inspect_audit(const yvex_model_target_record *rec,
     yvex_model_target_report_add_row(report, "tensor_collection_stage: header-collection-inventory");
     yvex_model_target_report_add_row(report, "tensor_collection_evidence_basis: header-metadata-only");
     yvex_model_target_report_add_row(report, "tensor_collection_validation_status: lexical-and-header-only");
-    yvex_model_target_report_add_row(report, "tensor_collection_role_mapping_status: not-implemented");
+    yvex_model_target_report_add_row(
+        report, "tensor_collection_role_mapping_status: %s",
+        yvex_model_target_is_release_target(rec->target_id)
+            ? "canonical-logical-map-complete"
+            : "not-implemented");
     yvex_model_target_report_add_row(report, "tensor_collection_runtime_descriptor_status: not-implemented");
     yvex_model_target_report_add_row(report, "tensor_collection_graph_consumer_status: not-implemented");
-    yvex_model_target_report_add_row(report, "output_head_map_status: not-run");
+    yvex_model_target_report_add_row(
+        report, "output_head_map_status: %s",
+        yvex_model_target_is_release_target(rec->target_id)
+            ? "mapped-logical-plan"
+            : "not-run");
     yvex_model_target_report_add_row(report, "output_head_map_family: %s",
                                      yvex_model_target_family_key(rec->target_id));
     yvex_model_target_report_add_row(report, "output_head_map_target_id: %s",
@@ -619,9 +633,13 @@ static void catalog_emit_inspect_audit(const yvex_model_target_record *rec,
     yvex_model_target_report_add_row(report, "output_head_map_stage: header-output-head-map");
     yvex_model_target_report_add_row(report, "output_head_map_next: %s",
                                      yvex_model_target_is_release_target(rec->target_id)
-                                         ? "V010.MAP.GGUF.DEEPSEEK.0"
+                                         ? "V010.SOURCE.PAYLOAD.STREAM.0"
                                          : "V010.MAP.8");
-    yvex_model_target_report_add_row(report, "tokenizer_map_status: not-run");
+    yvex_model_target_report_add_row(
+        report, "tokenizer_map_status: %s",
+        yvex_model_target_is_release_target(rec->target_id)
+            ? "mapped-logical-plan"
+            : "not-run");
     yvex_model_target_report_add_row(report, "tokenizer_map_family: %s",
                                      yvex_model_target_family_key(rec->target_id));
     yvex_model_target_report_add_row(report, "tokenizer_map_target_id: %s",
@@ -630,21 +648,25 @@ static void catalog_emit_inspect_audit(const yvex_model_target_record *rec,
     yvex_model_target_report_add_row(report, "tokenizer_runtime_status: not-implemented");
     yvex_model_target_report_add_row(report, "tokenizer_map_next: %s",
                                      yvex_model_target_is_release_target(rec->target_id)
-                                         ? "V010.TENSOR.COVERAGE.DEEPSEEK.0"
+                                         ? "V010.SOURCE.PAYLOAD.STREAM.0"
                                          : "V010.MAP.7");
     yvex_model_target_report_add_row(report, "missing_role_report_status: not-run");
     yvex_model_target_report_add_row(report, "missing_role_report_stage: missing-role-blocker-report");
     yvex_model_target_report_add_row(
         report, "missing_role_next_required_row: %s",
         yvex_model_target_is_release_target(rec->target_id)
-            ? "V010.TENSOR.COVERAGE.DEEPSEEK.0"
+            ? "V010.SOURCE.PAYLOAD.STREAM.0"
             : "V010.MAP.9");
-    yvex_model_target_report_add_row(report, "tensor_mapping_gate_status: not-run");
+    yvex_model_target_report_add_row(
+        report, "tensor_mapping_gate_status: %s",
+        yvex_model_target_is_release_target(rec->target_id)
+            ? "complete-logical-plan"
+            : "not-run");
     yvex_model_target_report_add_row(report, "tensor_mapping_gate: v0.1.0-tensor-mapping");
     yvex_model_target_report_add_row(
         report, "tensor_mapping_gate_next_required_row: %s",
         yvex_model_target_is_release_target(rec->target_id)
-            ? "V010.MAP.GGUF.DEEPSEEK.0"
+            ? "V010.SOURCE.PAYLOAD.STREAM.0"
             : "V010.QUANT.0");
     yvex_model_target_report_add_row(report, "target_artifact_class: %s",
                                      rec->target_artifact_class);
@@ -736,43 +758,63 @@ int yvex_model_target_catalog_report_build(
                     yvex_model_target_is_release_target(rec->target_id)
                         ? "not-used-for-release-architecture"
                         : "lexical-only");
-                yvex_model_target_report_add_row(report, "model_class_role_mapping_status: not-implemented");
+                yvex_model_target_report_add_row(
+                    report, "model_class_role_mapping_status: %s",
+                    yvex_model_target_is_release_target(rec->target_id)
+                        ? "canonical-logical-map-complete"
+                        : "not-implemented");
                 yvex_model_target_report_add_row(report, "tensor_collection_status: command-visible");
                 yvex_model_target_report_add_row(report, "tensor_collection_family: %s", yvex_model_target_family_key(rec->target_id));
                 yvex_model_target_report_add_row(report, "tensor_collection_target_id: %s", rec->target_id);
                 yvex_model_target_report_add_row(report, "tensor_collection_stage: header-collection-inventory");
                 yvex_model_target_report_add_row(report, "tensor_collection_validation_status: lexical-and-header-only");
-                yvex_model_target_report_add_row(report, "tensor_collection_role_mapping_status: not-implemented");
-                yvex_model_target_report_add_row(report, "output_head_map_status: not-run");
+                yvex_model_target_report_add_row(
+                    report, "tensor_collection_role_mapping_status: %s",
+                    yvex_model_target_is_release_target(rec->target_id)
+                        ? "canonical-logical-map-complete"
+                        : "not-implemented");
+                yvex_model_target_report_add_row(
+                    report, "output_head_map_status: %s",
+                    yvex_model_target_is_release_target(rec->target_id)
+                        ? "mapped-logical-plan"
+                        : "not-run");
                 yvex_model_target_report_add_row(report, "output_head_map_family: %s", yvex_model_target_family_key(rec->target_id));
                 yvex_model_target_report_add_row(report, "output_head_map_target_id: %s", rec->target_id);
                 yvex_model_target_report_add_row(
                     report, "output_head_map_next: %s",
                     yvex_model_target_is_release_target(rec->target_id)
-                        ? "V010.MAP.GGUF.DEEPSEEK.0"
+                        ? "V010.SOURCE.PAYLOAD.STREAM.0"
                         : "V010.MAP.8");
-                yvex_model_target_report_add_row(report, "tokenizer_map_status: not-run");
+                yvex_model_target_report_add_row(
+                    report, "tokenizer_map_status: %s",
+                    yvex_model_target_is_release_target(rec->target_id)
+                        ? "mapped-logical-plan"
+                        : "not-run");
                 yvex_model_target_report_add_row(report, "tokenizer_map_family: %s", yvex_model_target_family_key(rec->target_id));
                 yvex_model_target_report_add_row(report, "tokenizer_map_target_id: %s", rec->target_id);
                 yvex_model_target_report_add_row(report, "tokenizer_runtime_status: not-implemented");
                 yvex_model_target_report_add_row(
                     report, "tokenizer_map_next: %s",
                     yvex_model_target_is_release_target(rec->target_id)
-                        ? "V010.TENSOR.COVERAGE.DEEPSEEK.0"
+                        ? "V010.SOURCE.PAYLOAD.STREAM.0"
                         : "V010.MAP.7");
                 yvex_model_target_report_add_row(report, "missing_role_report_status: not-run");
                 yvex_model_target_report_add_row(report, "missing_role_report_target_id: %s", rec->target_id);
                 yvex_model_target_report_add_row(
                     report, "missing_role_next_required_row: %s",
                     yvex_model_target_is_release_target(rec->target_id)
-                        ? "V010.TENSOR.COVERAGE.DEEPSEEK.0"
+                        ? "V010.SOURCE.PAYLOAD.STREAM.0"
                         : "V010.MAP.9");
-                yvex_model_target_report_add_row(report, "tensor_mapping_gate_status: not-run");
+                yvex_model_target_report_add_row(
+                    report, "tensor_mapping_gate_status: %s",
+                    yvex_model_target_is_release_target(rec->target_id)
+                        ? "complete-logical-plan"
+                        : "not-run");
                 yvex_model_target_report_add_row(report, "tensor_mapping_gate_target_id: %s", rec->target_id);
                 yvex_model_target_report_add_row(
                     report, "tensor_mapping_gate_next_required_row: %s",
                     yvex_model_target_is_release_target(rec->target_id)
-                        ? "V010.MAP.GGUF.DEEPSEEK.0"
+                        ? "V010.SOURCE.PAYLOAD.STREAM.0"
                         : "V010.QUANT.0");
             }
             yvex_model_target_report_add_row(report, "source_provenance_status:");

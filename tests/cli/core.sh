@@ -1130,20 +1130,20 @@ contains "$OUT_DIR/model_target_candidate_help.out" "target selection does not s
 
 run_ok model_target_candidate "$YVEX_BIN" model-target candidate --release v0.1.0
 contains "$OUT_DIR/model_target_candidate.out" "report: model-target candidate"
-contains "$OUT_DIR/model_target_candidate.out" "status: selected-architecture-specified"
+contains "$OUT_DIR/model_target_candidate.out" "status: selected-mapping-specified"
 contains "$OUT_DIR/model_target_candidate.out" "release: v0.1.0"
 contains "$OUT_DIR/model_target_candidate.out" "selected: deepseek4-v4-flash"
-contains "$OUT_DIR/model_target_candidate.out" "top_blocker: complete tensor role coverage"
-contains "$OUT_DIR/model_target_candidate.out" "next: V010.TENSOR.COVERAGE.DEEPSEEK.0"
+contains "$OUT_DIR/model_target_candidate.out" "top_blocker: source payload trust"
+contains "$OUT_DIR/model_target_candidate.out" "next: V010.SOURCE.PAYLOAD.STREAM.0"
 contains "$OUT_DIR/model_target_candidate.out" "boundary: target selected; artifact/runtime/generation unsupported; benchmark not measured"
 run_ok model_target_candidate_table "$YVEX_BIN" model-target candidate --release v0.1.0 --output table
 matches "$OUT_DIR/model_target_candidate_table.out" '^REPORT[[:space:]]{2,}STATUS[[:space:]]{2,}SELECTED[[:space:]]{2,}ELIGIBLE[[:space:]]{2,}NEXT$'
-matches "$OUT_DIR/model_target_candidate_table.out" '^full-runtime-candidate[[:space:]]{2,}architecture-specified[[:space:]]{2,}deepseek4-v4-flash[[:space:]]{2,}0[[:space:]]{2,}V010\.TENSOR\.COVERAGE\.DEEPSEEK\.0$'
+matches "$OUT_DIR/model_target_candidate_table.out" '^full-runtime-candidate[[:space:]]{2,}mapping-specified[[:space:]]{2,}deepseek4-v4-flash[[:space:]]{2,}0[[:space:]]{2,}V010\.SOURCE\.PAYLOAD\.STREAM\.0$'
 
 run_ok model_target_candidate_full "$YVEX_BIN" model-target candidate --release v0.1.0 --audit --include-candidates --include-pressure-targets --include-blockers --include-next
 contains "$OUT_DIR/model_target_candidate_full.out" "selected_release_target: deepseek4-v4-flash"
 contains "$OUT_DIR/model_target_candidate_full.out" "other_candidate_scope: non-release-engineering-evidence"
-contains "$OUT_DIR/model_target_candidate_full.out" "next_required_rows: V010.TENSOR.COVERAGE.DEEPSEEK.0"
+contains "$OUT_DIR/model_target_candidate_full.out" "next_required_rows: V010.SOURCE.PAYLOAD.STREAM.0"
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_0_id: deepseek4-v4-flash-selected-embed"
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_0_stage: selected-slice"
 contains "$OUT_DIR/model_target_candidate_full.out" "candidate_0_eligibility: selected-slice-only"
@@ -1359,7 +1359,7 @@ contains "$OUT_DIR/model_target_deepseek.out" "source: official-safetensors  sta
 contains "$OUT_DIR/model_target_deepseek.out" "artifact: complete-YVEX-GGUF-not-produced  status=not-produced"
 contains "$OUT_DIR/model_target_deepseek.out" "runtime: unsupported"
 contains "$OUT_DIR/model_target_deepseek.out" "generation: unsupported"
-contains "$OUT_DIR/model_target_deepseek.out" "next: V010.TENSOR.COVERAGE.DEEPSEEK.0"
+contains "$OUT_DIR/model_target_deepseek.out" "next: V010.SOURCE.PAYLOAD.STREAM.0"
 
 run_ok model_target_deepseek_audit "$YVEX_BIN" model-target inspect deepseek4-v4-flash --audit
 contains "$OUT_DIR/model_target_deepseek_audit.out" "release_selected: true"
@@ -1368,7 +1368,9 @@ contains "$OUT_DIR/model_target_deepseek_audit.out" "source_directory_leaf: Deep
 contains "$OUT_DIR/model_target_deepseek_audit.out" "config_model_type: deepseek_v4"
 contains "$OUT_DIR/model_target_deepseek_audit.out" "config_architecture: DeepseekV4ForCausalLM"
 contains "$OUT_DIR/model_target_deepseek_audit.out" "architecture_ir_owner: src/model/architecture/yvex_deepseek_v4_ir.c"
-contains "$OUT_DIR/model_target_deepseek_audit.out" "architecture_ir_next: V010.TENSOR.COVERAGE.DEEPSEEK.0"
+contains "$OUT_DIR/model_target_deepseek_audit.out" "architecture_ir_consumer: canonical-deepseek-gguf-map"
+contains "$OUT_DIR/model_target_deepseek_audit.out" "release_target_next: V010.SOURCE.PAYLOAD.STREAM.0"
+contains "$OUT_DIR/model_target_deepseek_audit.out" "tensor_mapping_gate_status: complete-logical-plan"
 contains "$OUT_DIR/model_target_deepseek_audit.out" "model_class_profile_status: typed-architecture-ir"
 contains "$OUT_DIR/model_target_deepseek_audit.out" "model_class_evidence_basis: strict-source-verification-to-typed-ir"
 contains "$OUT_DIR/model_target_deepseek_audit.out" "model_class_pattern_status: not-used-for-release-architecture"

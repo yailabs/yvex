@@ -13,9 +13,9 @@
  *   execution, generation, eval, benchmark, or release decisions.
  *
  * Invariants:
- *   naming reports use native tensor names and header metadata only; lexical
- *   naming facts do not become runtime role mapping unless a mapping row owns
- *   that promotion.
+ *   the DeepSeek release target projects the canonical IR/coverage-derived
+ *   GGUF map. Qwen/Gemma naming reports remain bounded lexical header facts
+ *   and do not become runtime-role mappings.
  *
  * Boundary:
  *   tensor naming is not artifact emission, runtime support, generation
@@ -25,6 +25,7 @@
 
 #include "yvex_model_target_private.h"
 #include "yvex_model_target_sidecar_write.h"
+#include "yvex_mapping_gate_report.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -531,6 +532,9 @@ int yvex_tensor_naming_report_build(
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "tensor_naming_report",
                        "tensor naming report requires tensor-map command kind");
         return YVEX_ERR_INVALID_ARG;
+    }
+    if (strcmp(request->target_id, "deepseek4-v4-flash") == 0) {
+        return yvex_deepseek_mapping_plan_report_build(request, report, err);
     }
     if (!naming_validate(request, report)) {
         return YVEX_OK;

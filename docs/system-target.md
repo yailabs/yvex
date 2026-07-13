@@ -51,7 +51,7 @@ domain algorithms. No writer owns command output.
 | CUDA truth | context, bundle, functions, and exact variants are typed; no-bundle builds refuse kernels and generated-bundle variants have GB10 reference proof | preserve fail-closed admission while later architecture/runtime rows define and prove the DeepSeek operation set | see `PROJECT.md` |
 | Architecture IR | immutable typed DeepSeek-V4-Flash model, 43 main-layer, and MTP topology consumed by release-target profiling | preserve the source-to-IR boundary and feed complete tensor-role derivation without source reparsing | see `PROJECT.md` |
 | Tensor coverage | the IR-derived 69,187-slot DeepSeek requirement set reconciles exactly against one retained verified header snapshot | preserve one-to-one source coverage as the admission input to GGUF mapping | see `PROJECT.md` |
-| GGUF names/layout | partial and planned maps | complete DeepSeek role/name/layout map | V010.MAP.GGUF.DEEPSEEK.0 |
+| GGUF names/layout | immutable 69,187-contribution to 1,360-descriptor DeepSeek logical emission plan | preserve the plan as payload-streaming and writer input without physical offsets or emission claims | see `PROJECT.md` |
 | Source payload | header-only inventory | bounded payload streaming across source shards | V010.SOURCE.PAYLOAD.STREAM.0 |
 | Quantization | policy and geometry facts | role-correct quantization or explicit refusal | V010.QUANT.2 |
 | GGUF writer | explicit refusal | complete deterministic emitted bytes | V010.GGUF.WRITER.1 |
@@ -78,6 +78,11 @@ domain algorithms. No writer owns command output.
 - Model-target coverage owns IR-derived source requirements and exact snapshot
   reconciliation; it does not own source IO, GGUF naming, transforms, or
   payload access.
+- The DeepSeek mapping owner composes IR and complete coverage into indexed
+  source contributions, typed transforms, canonical GGUF names, logical GGML
+  shapes, metadata prerequisites, and deterministic identity. GGUF name/layout
+  primitives remain their format owners; neither side reads payloads or emits
+  physical file bytes.
 - Source verification coordinates those owners and decides blockers; it does
   not parse JSON, rescan headers, render, serialize, or read tensor payloads.
 - Source writers atomically publish verifier-approved manifests and explicit
@@ -157,9 +162,10 @@ domain algorithms. No writer owns command output.
 | `src/model/architecture/yvex_deepseek_v4_ir.c` | exact-source admission, cross-field validation, normalized topology derivation, immutable allocation, and cleanup |
 | `src/source/yvex_source_inventory.[ch]` | retained immutable source tensor snapshot, deterministic identity, indexed lookup, one-header-pass and zero-payload-read accounting |
 | `src/model/target/yvex_deepseek_tensor_coverage.[ch]` | complete IR-derived DeepSeek requirement construction, exact source reconciliation, typed refusal, deterministic coverage identity, and immutable lifetime |
+| `src/model/target/yvex_deepseek_gguf_map.[ch]` | canonical indexed DeepSeek contribution/descriptor/metadata plan, source-forced transforms, naming provenance, deterministic identity, and typed refusal |
 | `src/model/target/yvex_tensor_collection_report.c` | release-target collection projection from canonical coverage; Qwen/Gemma evidence remains separate |
 | `src/model/target/yvex_missing_role_report.c` | release-target missing-role projection from canonical coverage |
-| `src/model/target/yvex_mapping_gate_report.c` | pre-mapping admission from the same coverage result; GGUF mapping remains a later owner |
+| `src/model/target/yvex_mapping_gate_report.c` | operational projection of the canonical mapping plan and payload-streaming handoff |
 | `src/model/target/yvex_model_class_profile.c` | strict source-verification coordination and report ownership for the canonical release target; Qwen/Gemma lexical evidence remains separate |
 | `src/cli/render/yvex_model_target_render.c` | presentation of typed IR facts without architecture decisions |
 

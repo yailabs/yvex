@@ -6,7 +6,7 @@
  *
  * Owns:
  *   the sole v0.1.0 release-target selection, refusal facts, and current
- *   architecture-to-tensor-coverage handoff facts.
+ *   source-to-mapping closure and payload-streaming handoff facts.
  *
  * Does not own:
  *   CLI parsing, command dispatch, rendering, target catalog storage,
@@ -38,9 +38,9 @@ typedef struct {
 
 static const decision_candidate decision_candidates[] = {
     {yvex_deepseek_v4_target_id, "release-source-target",
-     "selected-architecture-specified",
-     "sole v0.1.0 target; support remains blocked by tensor coverage and downstream gates",
-     "V010.TENSOR.COVERAGE.DEEPSEEK.0"},
+     "selected-mapping-specified",
+     "sole v0.1.0 target; support remains blocked by payload trust and downstream gates",
+     "V010.SOURCE.PAYLOAD.STREAM.0"},
 };
 
 static unsigned long decision_candidate_count(void)
@@ -125,7 +125,7 @@ static int decision_audit(const yvex_model_target_request *request,
     unsigned long i;
 
     yvex_model_target_report_add_row(report, "target_decision: v0.1.0");
-    yvex_model_target_report_add_row(report, "status: target-selected-architecture-specified");
+    yvex_model_target_report_add_row(report, "status: target-selected-mapping-specified");
     yvex_model_target_report_add_row(report, "decision_state: selected");
     yvex_model_target_report_add_row(report, "selected_target_id: %s",
                                      yvex_deepseek_v4_target_id);
@@ -133,6 +133,8 @@ static int decision_audit(const yvex_model_target_request *request,
                                      yvex_deepseek_v4_upstream_repo_id);
     yvex_model_target_report_add_row(report, "source_verification_status: complete");
     yvex_model_target_report_add_row(report, "architecture_ir_status: complete");
+    yvex_model_target_report_add_row(report, "tensor_coverage_status: complete");
+    yvex_model_target_report_add_row(report, "gguf_mapping_status: complete");
     yvex_model_target_report_add_row(report, "full_runtime_candidate_status: unsupported");
     yvex_model_target_report_add_row(report, "selected_runtime_slice_eligible: false");
     yvex_model_target_report_add_row(report, "source_only_eligible: false");
@@ -154,7 +156,7 @@ static int decision_audit(const yvex_model_target_request *request,
     yvex_model_target_report_add_row(report, "gemma_engineering_scope: preserved-non-release");
     yvex_model_target_report_add_row(report, "selected_slice_scope: bounded-evidence-only");
     yvex_model_target_report_add_row(report,
-                                     "next_required_rows: V010.TENSOR.COVERAGE.DEEPSEEK.0");
+                                     "next_required_rows: V010.SOURCE.PAYLOAD.STREAM.0");
     return YVEX_OK;
 }
 
@@ -180,7 +182,7 @@ int yvex_model_target_decision_report_build(
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
         yvex_model_target_report_add_row(
             report,
-            "{\"status\":\"target-selected-architecture-specified\",\"release\":\"v0.1.0\",\"selected_target_id\":\"%s\",\"upstream_repository\":\"%s\",\"source_verification\":\"complete\",\"architecture_ir\":\"complete\",\"release_qtype\":null,\"artifact_status\":\"not-produced\",\"runtime\":\"unsupported\",\"generation\":\"unsupported\",\"evaluation\":\"not-run\",\"benchmark\":\"not-measured\",\"next\":\"V010.TENSOR.COVERAGE.DEEPSEEK.0\"}",
+            "{\"status\":\"target-selected-mapping-specified\",\"release\":\"v0.1.0\",\"selected_target_id\":\"%s\",\"upstream_repository\":\"%s\",\"source_verification\":\"complete\",\"architecture_ir\":\"complete\",\"tensor_coverage\":\"complete\",\"gguf_mapping\":\"complete\",\"release_qtype\":null,\"artifact_status\":\"not-produced\",\"runtime\":\"unsupported\",\"generation\":\"unsupported\",\"evaluation\":\"not-run\",\"benchmark\":\"not-measured\",\"next\":\"V010.SOURCE.PAYLOAD.STREAM.0\"}",
             yvex_deepseek_v4_target_id,
             yvex_deepseek_v4_upstream_repo_id);
         return YVEX_OK;
@@ -188,7 +190,7 @@ int yvex_model_target_decision_report_build(
     if (request->mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
         yvex_model_target_report_add_row(report, "REPORT  STATUS  SELECTED  ELIGIBLE  NEXT");
         yvex_model_target_report_add_row(report,
-                                         "target-decision  selected-architecture-specified  %s  0  V010.TENSOR.COVERAGE.DEEPSEEK.0",
+                                         "target-decision  selected-mapping-specified  %s  0  V010.SOURCE.PAYLOAD.STREAM.0",
                                          yvex_deepseek_v4_target_id);
         return YVEX_OK;
     }
@@ -197,12 +199,12 @@ int yvex_model_target_decision_report_build(
         return decision_audit(request, report);
     }
     yvex_model_target_report_add_row(report, "report: target-decision");
-    yvex_model_target_report_add_row(report, "status: target-selected-architecture-specified");
+    yvex_model_target_report_add_row(report, "status: target-selected-mapping-specified");
     yvex_model_target_report_add_row(report, "selected: %s",
                                      yvex_deepseek_v4_target_id);
-    yvex_model_target_report_add_row(report, "top_blocker: complete tensor role coverage");
+    yvex_model_target_report_add_row(report, "top_blocker: source payload trust");
     yvex_model_target_report_add_row(report,
-                                     "next: V010.TENSOR.COVERAGE.DEEPSEEK.0");
+                                     "next: V010.SOURCE.PAYLOAD.STREAM.0");
     yvex_model_target_report_add_row(report, "boundary: release target selected; artifact/runtime/generation unsupported; benchmark not measured");
     return YVEX_OK;
 }
