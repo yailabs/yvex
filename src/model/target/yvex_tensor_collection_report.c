@@ -23,6 +23,7 @@
 #include "yvex_tensor_collection_report.h"
 
 #include "yvex_model_target_private.h"
+#include "yvex_deepseek_tensor_coverage.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -42,6 +43,58 @@ typedef struct {
     unsigned long long moe;
     unsigned long long layers;
 } tensor_collection_scan;
+
+static int collection_deepseek_build(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report,
+    yvex_error *err)
+{
+    yvex_source_verification verification;
+    yvex_deepseek_tensor_coverage_failure failure;
+    char models_root[512];
+    char source_path[512];
+    int rc;
+
+    if (!yvex_model_target_release_source_paths(
+            request, models_root, sizeof(models_root), source_path,
+            sizeof(source_path))) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "tensor_collection",
+                       "DeepSeek source path exceeds report bounds");
+        return YVEX_ERR_BOUNDS;
+    }
+    rc = yvex_deepseek_tensor_coverage_open_verified_source(
+        &report->deepseek_tensor_coverage, &verification, source_path,
+        models_root, &failure, err);
+    if (rc != YVEX_OK) {
+        report->status = "tensor-coverage-blocked";
+        report->exit_code = 5;
+        yvex_model_target_report_add_error(
+            report,
+            "model-target tensor-collection: DeepSeek coverage refused: %s tensor=%s",
+            yvex_deepseek_tensor_coverage_failure_name(failure.code),
+            failure.tensor_name[0] ? failure.tensor_name : "none");
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+    report->status = "exact-source-tensor-covered";
+    (void)snprintf(report->target_id, sizeof(report->target_id), "%s",
+                   request->target_id);
+    (void)snprintf(report->family, sizeof(report->family), "%s", "deepseek");
+    (void)snprintf(report->stage, sizeof(report->stage), "%s",
+                   "header-only");
+    (void)snprintf(report->tensor_map_status,
+                   sizeof(report->tensor_map_status), "%s", "blocked");
+    (void)snprintf(report->runtime_status, sizeof(report->runtime_status),
+                   "%s", "unsupported");
+    (void)snprintf(report->generation_status,
+                   sizeof(report->generation_status), "%s", "unsupported");
+    (void)snprintf(report->next_row, sizeof(report->next_row), "%s",
+                   "V010.MAP.GGUF.DEEPSEEK.0");
+    (void)snprintf(report->boundary, sizeof(report->boundary), "%s",
+                   "exact source coverage only; GGUF mapping, payload, artifact, runtime, and generation remain blocked");
+    report->exit_code = 0;
+    return YVEX_OK;
+}
 
 static int collection_validate(const yvex_model_target_request *request,
                                yvex_model_target_report *report)
@@ -249,6 +302,9 @@ int yvex_tensor_collection_report_build(
     }
     if (!collection_validate(request, report)) {
         return YVEX_OK;
+    }
+    if (yvex_model_target_is_release_target(request->target_id)) {
+        return collection_deepseek_build(request, report, err);
     }
     family = yvex_model_target_family_key(request->target_id);
     collection_family_facts(family, &top_blocker, &source_blocker);

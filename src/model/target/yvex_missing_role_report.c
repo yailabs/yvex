@@ -22,6 +22,7 @@
 #include "yvex_missing_role_report.h"
 
 #include "yvex_model_target_private.h"
+#include "yvex_deepseek_tensor_coverage.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -45,6 +46,56 @@ typedef struct {
     int output_head_map_missing;
     int output_head_map_tied;
 } missing_role_state;
+
+static int missing_role_deepseek_build(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report,
+    yvex_error *err)
+{
+    yvex_source_verification verification;
+    yvex_deepseek_tensor_coverage_failure failure;
+    char models_root[512];
+    char source_path[512];
+    int rc;
+
+    if (!yvex_model_target_release_source_paths(
+            request, models_root, sizeof(models_root), source_path,
+            sizeof(source_path))) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "missing_role_report",
+                       "DeepSeek source path exceeds report bounds");
+        return YVEX_ERR_BOUNDS;
+    }
+    rc = yvex_deepseek_tensor_coverage_open_verified_source(
+        &report->deepseek_tensor_coverage, &verification, source_path,
+        models_root, &failure, err);
+    if (rc != YVEX_OK) {
+        report->status = "tensor-coverage-blocked";
+        report->exit_code = 5;
+        yvex_model_target_report_add_error(
+            report,
+            "model-target missing-roles: DeepSeek coverage refused: %s tensor=%s",
+            yvex_deepseek_tensor_coverage_failure_name(failure.code),
+            failure.tensor_name[0] ? failure.tensor_name : "none");
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+    report->status = "no-missing-source-tensor-requirements";
+    (void)snprintf(report->target_id, sizeof(report->target_id), "%s",
+                   request->target_id);
+    (void)snprintf(report->family, sizeof(report->family), "%s", "deepseek");
+    (void)snprintf(report->stage, sizeof(report->stage), "%s", "header-only");
+    (void)snprintf(report->tensor_map_status,
+                   sizeof(report->tensor_map_status), "%s", "blocked");
+    (void)snprintf(report->runtime_status, sizeof(report->runtime_status),
+                   "%s", "unsupported");
+    (void)snprintf(report->generation_status,
+                   sizeof(report->generation_status), "%s", "unsupported");
+    (void)snprintf(report->next_row, sizeof(report->next_row), "%s",
+                   "V010.MAP.GGUF.DEEPSEEK.0");
+    (void)snprintf(report->boundary, sizeof(report->boundary), "%s",
+                   "zero missing source requirements; GGUF mapping and all higher capabilities remain blocked");
+    return YVEX_OK;
+}
 
 static const missing_role_fact qwen_missing_roles[] = {
     {"token_embedding", "covered-report-only", "none"},
@@ -697,6 +748,9 @@ int yvex_missing_role_report_build(const yvex_model_target_request *request,
     missing_role_prepare(request, report);
     if (missing_role_validate(request, report)) {
         return YVEX_OK;
+    }
+    if (yvex_model_target_is_release_target(request->target_id)) {
+        return missing_role_deepseek_build(request, report, err);
     }
     family = report->family[0] ? report->family : "qwen";
     missing_role_build_state(request, family, &state);

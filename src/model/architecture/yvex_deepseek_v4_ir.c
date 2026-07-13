@@ -209,12 +209,18 @@ static int deepseek_v4_validate_source(
     }
     if (strcmp(verification->verification_stage,
                "exact-source-metadata-header-verified") != 0 ||
-        (strcmp(verification->inventory_authority, "upstream-index") != 0 &&
-         strcmp(verification->inventory_authority, "header-derived") != 0)) {
+        strcmp(verification->inventory_authority, "upstream-index") != 0 ||
+        !verification->shard_index_present ||
+        !verification->shard_index_valid ||
+        !verification->upstream_index_identity_verified ||
+        strcmp(verification->upstream_index_oid,
+               identity->upstream_index_oid) != 0 ||
+        strcmp(verification->local_index_oid,
+               identity->upstream_index_oid) != 0) {
         return deepseek_v4_reject(
             failure, YVEX_DEEPSEEK_V4_IR_FAILURE_SOURCE_FACT_MISSING,
             YVEX_DEEPSEEK_V4_IR_COMPONENT_SOURCE,
-            "verification-stage-or-inventory-authority",
+            "verification-stage-or-pinned-index-authority",
             YVEX_DEEPSEEK_V4_IR_NO_LAYER, 1u, 0u, err);
     }
     return YVEX_OK;
@@ -385,8 +391,8 @@ static int deepseek_v4_validate_geometry(
         strcmp(source->quant_format, "e4m3") != 0 ||
         strcmp(source->quant_scale_format, "ue8m0") != 0 ||
         strcmp(source->quant_activation_scheme, "dynamic") != 0 ||
-        source->quant_block_rows == 0u ||
-        source->quant_block_columns == 0u) {
+        source->quant_block_rows != 128u ||
+        source->quant_block_columns != 128u) {
         return deepseek_v4_reject(
             failure,
             YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_SOURCE_CONSTRAINT,
@@ -507,6 +513,10 @@ static void deepseek_v4_fill_layer(
     int auxiliary)
 {
     unsigned long long ratio = source->compress_ratios[layer_index];
+    unsigned long long query_width = source->num_attention_heads *
+                                     source->head_dim;
+    unsigned long long grouped_output = source->o_lora_rank *
+                                        source->o_groups;
 
     memset(layer, 0, sizeof(*layer));
     layer->layer_index = layer_index;
@@ -528,6 +538,20 @@ static void deepseek_v4_fill_layer(
     layer->attention_bias = source->attention_bias;
     layer->query_norm_required = 1;
     layer->kv_norm_required = 1;
+    layer->attention_input_norm.required = 1;
+    layer->attention_input_norm.width = source->hidden_size;
+    layer->post_attention_ffn_norm.required = 1;
+    layer->post_attention_ffn_norm.width = source->hidden_size;
+    layer->tensors.q_a_rows = source->q_lora_rank;
+    layer->tensors.q_a_columns = source->hidden_size;
+    layer->tensors.q_b_rows = query_width;
+    layer->tensors.q_b_columns = source->q_lora_rank;
+    layer->tensors.kv_rows = source->head_dim;
+    layer->tensors.kv_columns = source->hidden_size;
+    layer->tensors.o_a_rows = grouped_output;
+    layer->tensors.o_a_columns = source->hidden_size;
+    layer->tensors.o_b_rows = source->hidden_size;
+    layer->tensors.o_b_columns = grouped_output;
     layer->position.rope_dimension = source->qk_rope_head_dim;
     layer->position.theta = ratio == 0u ? source->rope_theta
                                        : source->compress_rope_theta;
@@ -555,12 +579,33 @@ static void deepseek_v4_fill_layer(
         layer->kv.requires_uncompressed_tail = 1;
         layer->kv.requires_compressed_core = 1;
         layer->kv.requires_indexer_cache = 1;
+        layer->tensors.compressor_ape_rows = ratio;
+        layer->tensors.compressor_ape_columns = source->q_lora_rank;
+        layer->tensors.compressor_norm_width = source->head_dim;
+        layer->tensors.compressor_projection_rows = source->q_lora_rank;
+        layer->tensors.compressor_projection_columns = source->hidden_size;
+        layer->tensors.indexer_ape_rows = ratio;
+        layer->tensors.indexer_ape_columns = ratio * source->index_n_heads;
+        layer->tensors.indexer_norm_width = source->index_head_dim;
+        layer->tensors.indexer_projection_rows =
+            ratio * source->index_n_heads;
+        layer->tensors.indexer_projection_columns = source->hidden_size;
+        layer->tensors.indexer_query_rows =
+            source->index_n_heads * source->index_head_dim;
+        layer->tensors.indexer_query_columns = source->q_lora_rank;
+        layer->tensors.indexer_weight_rows = source->index_n_heads;
+        layer->tensors.indexer_weight_columns = source->hidden_size;
     } else {
         layer->attention_class = YVEX_DEEPSEEK_V4_ATTENTION_HCA;
         layer->kv.class_id = YVEX_DEEPSEEK_V4_KV_HCA;
         layer->compressor_required = 1;
         layer->kv.requires_uncompressed_tail = 1;
         layer->kv.requires_compressed_core = 1;
+        layer->tensors.compressor_ape_rows = ratio;
+        layer->tensors.compressor_ape_columns = source->head_dim;
+        layer->tensors.compressor_norm_width = source->head_dim;
+        layer->tensors.compressor_projection_rows = source->head_dim;
+        layer->tensors.compressor_projection_columns = source->hidden_size;
     }
     deepseek_v4_fill_mhc(
         &layer->mhc, source, geometry,
@@ -638,12 +683,21 @@ static void deepseek_v4_fill_model(
     model->source_constraint.quant_block_rows = source->quant_block_rows;
     model->source_constraint.quant_block_columns =
         source->quant_block_columns;
+    model->source_constraint.fp4_packing_factor = 2u;
+    model->source_constraint.fp4_scale_group_width = 32u;
+    model->source_constraint.fp4_physical_dtype = YVEX_NATIVE_DTYPE_I8;
+    model->source_constraint.scale_dtype = YVEX_NATIVE_DTYPE_F8_E8M0;
     deepseek_v4_fill_mhc(&model->final_mhc, source, geometry,
                          YVEX_DEEPSEEK_V4_MHC_FUSED_PRIOR_POST_PRE);
     model->final_norm_epsilon = geometry->rms_norm_epsilon;
     model->use_cache = source->use_cache;
     model->final_mhc_post_required = 1;
     model->final_mhc_head_required = 1;
+    model->final_mhc_head.required = 1;
+    model->final_mhc_head.function_rows = source->hc_mult;
+    model->final_mhc_head.function_columns = geometry->expanded_width;
+    model->final_mhc_head.base_width = source->hc_mult;
+    model->final_mhc_head.scale_width = 1u;
     model->final_norm_after_mhc_head = 1;
 }
 
@@ -744,6 +798,11 @@ static int deepseek_v4_construct(
         aux->requires_embedding_norm = 1;
         aux->requires_hidden_norm = 1;
         aux->requires_separate_mhc_head = 1;
+        aux->mhc_head.required = 1;
+        aux->mhc_head.function_rows = source->hc_mult;
+        aux->mhc_head.function_columns = geometry->expanded_width;
+        aux->mhc_head.base_width = source->hc_mult;
+        aux->mhc_head.scale_width = 1u;
         aux->shares_output_head = 1;
         aux->shares_final_norm = 1;
     }

@@ -24,6 +24,7 @@
 #include "yvex_model_target_render.h"
 
 #include "yvex_cli_out.h"
+#include "../../model/target/yvex_deepseek_tensor_coverage.h"
 
 static int model_target_render_rows(FILE *fp,
                                     const yvex_model_target_text_value *rows,
@@ -65,6 +66,105 @@ static int model_target_render_table_rows(FILE *fp,
         }
     }
     return rc;
+}
+
+/* Serializes an already admitted one-to-one tensor coverage result. */
+static int model_target_render_deepseek_coverage(
+    FILE *fp,
+    yvex_model_target_render_mode mode,
+    const yvex_model_target_report *report)
+{
+    const yvex_deepseek_tensor_coverage_summary *summary =
+        yvex_deepseek_tensor_coverage_summary_get(
+            report->deepseek_tensor_coverage);
+    int rc = 0;
+
+    if (!summary) return 0;
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_JSON) {
+        return yvex_cli_out_writef(
+            fp,
+            "{\"status\":\"%s\",\"target_id\":\"%s\",\"source_tensors\":%llu,\"required_tensors\":%llu,\"matched_tensors\":%llu,\"missing\":%llu,\"duplicate\":%llu,\"ambiguous\":%llu,\"unexpected\":%llu,\"header_scans\":%llu,\"payload_bytes_read\":%llu,\"coverage_identity\":\"%016llx\",\"mapping\":\"blocked\",\"runtime\":\"unsupported\",\"generation\":\"unsupported\",\"next\":\"%s\"}\n",
+            report->status, report->target_id, summary->source_tensor_count,
+            summary->required_tensor_count, summary->matched_tensor_count,
+            summary->missing_count, summary->duplicate_count,
+            summary->ambiguous_count, summary->unexpected_count,
+            summary->header_scan_count, summary->payload_bytes_read,
+            summary->coverage_identity, report->next_row);
+    }
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_TABLE) {
+        rc |= yvex_cli_out_writef(
+            fp, "TARGET  STATUS  SOURCE  REQUIRED  MATCHED  MISSING  UNEXPECTED  NEXT\n");
+        rc |= yvex_cli_out_writef(
+            fp, "%s  %s  %llu  %llu  %llu  %llu  %llu  %s\n",
+            report->target_id, report->status, summary->source_tensor_count,
+            summary->required_tensor_count, summary->matched_tensor_count,
+            summary->missing_count, summary->unexpected_count,
+            report->next_row);
+        return rc < 0 ? rc : 0;
+    }
+    if (mode == YVEX_MODEL_TARGET_OUTPUT_AUDIT) {
+        unsigned int collection;
+        rc |= yvex_cli_out_writef(fp, "tensor_coverage_status: %s\n",
+                                  report->status);
+        rc |= yvex_cli_out_writef(fp, "target_id: %s\n", report->target_id);
+        rc |= yvex_cli_out_writef(fp, "source_tensor_count: %llu\n",
+                                  summary->source_tensor_count);
+        rc |= yvex_cli_out_writef(fp, "required_tensor_count: %llu\n",
+                                  summary->required_tensor_count);
+        rc |= yvex_cli_out_writef(fp, "matched_tensor_count: %llu\n",
+                                  summary->matched_tensor_count);
+        rc |= yvex_cli_out_writef(fp, "missing_tensor_count: %llu\n",
+                                  summary->missing_count);
+        rc |= yvex_cli_out_writef(fp, "duplicate_tensor_count: %llu\n",
+                                  summary->duplicate_count);
+        rc |= yvex_cli_out_writef(fp, "ambiguous_tensor_count: %llu\n",
+                                  summary->ambiguous_count);
+        rc |= yvex_cli_out_writef(fp, "unexpected_tensor_count: %llu\n",
+                                  summary->unexpected_count);
+        for (collection = 0u;
+             collection < YVEX_DEEPSEEK_TENSOR_COLLECTION_COUNT;
+             ++collection) {
+            rc |= yvex_cli_out_writef(
+                fp, "collection_%s_count: %llu\n",
+                yvex_deepseek_tensor_collection_name(
+                    (yvex_deepseek_tensor_collection)collection),
+                summary->collection_counts[collection]);
+        }
+        rc |= yvex_cli_out_writef(fp, "header_scan_count: %llu\n",
+                                  summary->header_scan_count);
+        rc |= yvex_cli_out_writef(fp, "payload_bytes_read: %llu\n",
+                                  summary->payload_bytes_read);
+        rc |= yvex_cli_out_writef(fp, "source_lookup_count: %llu\n",
+                                  summary->source_lookup_count);
+        rc |= yvex_cli_out_writef(fp, "source_collision_count: %llu\n",
+                                  summary->source_collision_count);
+        rc |= yvex_cli_out_writef(fp, "source_maximum_probe: %llu\n",
+                                  summary->source_maximum_probe);
+        rc |= yvex_cli_out_writef(fp, "source_identity: %016llx\n",
+                                  summary->source_identity);
+        rc |= yvex_cli_out_writef(fp, "coverage_identity: %016llx\n",
+                                  summary->coverage_identity);
+        rc |= yvex_cli_out_writef(fp, "mapping: blocked\n");
+        rc |= yvex_cli_out_writef(fp, "runtime_execution: unsupported\n");
+        rc |= yvex_cli_out_writef(fp, "generation: unsupported\n");
+        rc |= yvex_cli_out_writef(fp, "next_required_row: %s\n",
+                                  report->next_row);
+        rc |= yvex_cli_out_writef(fp, "boundary: %s\n", report->boundary);
+        return rc < 0 ? rc : 0;
+    }
+    rc |= yvex_cli_out_writef(fp, "tensor-coverage: deepseek-v4-flash\n");
+    rc |= yvex_cli_out_writef(fp, "target: %s\n", report->target_id);
+    rc |= yvex_cli_out_writef(fp, "status: %s\n", report->status);
+    rc |= yvex_cli_out_writef(
+        fp, "coverage: source=%llu required=%llu matched=%llu missing=%llu unexpected=%llu\n",
+        summary->source_tensor_count, summary->required_tensor_count,
+        summary->matched_tensor_count, summary->missing_count,
+        summary->unexpected_count);
+    rc |= yvex_cli_out_writef(fp, "identity: %016llx\n",
+                              summary->coverage_identity);
+    rc |= yvex_cli_out_writef(fp, "next: %s\n", report->next_row);
+    rc |= yvex_cli_out_writef(fp, "boundary: %s\n", report->boundary);
+    return rc < 0 ? rc : 0;
 }
 
 /* Formats the compact architecture view from the immutable typed IR. */
@@ -330,6 +430,9 @@ int yvex_model_target_render(FILE *fp,
 
     if (!report) {
         return 0;
+    }
+    if (report->deepseek_tensor_coverage) {
+        return model_target_render_deepseek_coverage(fp, mode, report);
     }
     if (report->deepseek_architecture_ir) {
         return model_target_render_deepseek_ir(fp, mode, report);

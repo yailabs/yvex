@@ -36,6 +36,12 @@ struct yvex_native_weight_table {
     unsigned long long header_read_count;
     unsigned long long header_error_count;
     unsigned long long header_bytes;
+    unsigned long long *name_slots;
+    size_t name_slot_count;
+    unsigned long long lookup_count;
+    unsigned long long collision_count;
+    unsigned long long maximum_probe;
+    int finalized;
 };
 
 void yvex_source_manifest_file_list_init(yvex_source_manifest_file_list *list);
@@ -60,6 +66,9 @@ int yvex_native_weight_table_add(yvex_native_weight_table *table,
                                  unsigned long long data_start,
                                  unsigned long long data_end,
                                  yvex_error *err);
+
+int yvex_native_weight_table_finalize(yvex_native_weight_table *table,
+                                      yvex_error *err);
 
 int yvex_safetensors_read_header_file(const char *abs_path,
                                       const char *shard_path,

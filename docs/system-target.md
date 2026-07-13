@@ -1,6 +1,6 @@
 # YVEX System Target
 
-Date: 2026-07-12
+Date: 2026-07-13
 Status: filesystem and module ownership contract
 Authority: filesystem and module topology; current project state belongs only
 to `PROJECT.md`
@@ -16,7 +16,7 @@ Current core areas:
 ```text
 src/cli/                 CLI dispatch, input, surfaces, render, IO
 src/source/              source manifests, provenance, sidecars, inventory, headers
-src/model/target/        model-target catalogs, maps, gates, qtype reports
+src/model/target/        model-target catalogs, exact coverage, maps, gates, qtype reports
 src/model/architecture/  immutable typed family architecture specifications
 src/model/artifacts/     model registry/ref/gate/report/write ownership
 src/model/               dtype/model tables and runtime descriptor target
@@ -50,6 +50,7 @@ domain algorithms. No writer owns command output.
 | GGUF layout integrity | canonical directory-order spans, power-of-two alignment, zero padding, truncation/tail refusal, and snapshot drift checks | preserve global layout as input to complete-model artifact admission | see `PROJECT.md` |
 | CUDA truth | context, bundle, functions, and exact variants are typed; no-bundle builds refuse kernels and generated-bundle variants have GB10 reference proof | preserve fail-closed admission while later architecture/runtime rows define and prove the DeepSeek operation set | see `PROJECT.md` |
 | Architecture IR | immutable typed DeepSeek-V4-Flash model, 43 main-layer, and MTP topology consumed by release-target profiling | preserve the source-to-IR boundary and feed complete tensor-role derivation without source reparsing | see `PROJECT.md` |
+| Tensor coverage | the IR-derived 69,187-slot DeepSeek requirement set reconciles exactly against one retained verified header snapshot | preserve one-to-one source coverage as the admission input to GGUF mapping | see `PROJECT.md` |
 | GGUF names/layout | partial and planned maps | complete DeepSeek role/name/layout map | V010.MAP.GGUF.DEEPSEEK.0 |
 | Source payload | header-only inventory | bounded payload streaming across source shards | V010.SOURCE.PAYLOAD.STREAM.0 |
 | Quantization | policy and geometry facts | role-correct quantization or explicit refusal | V010.QUANT.2 |
@@ -72,7 +73,11 @@ domain algorithms. No writer owns command output.
 - Source provenance owns pinned repository/revision and manifest facts.
 - Source family adapters own raw configuration and tokenizer sidecar facts.
 - Source inventory owns indexed or explicitly header-derived shard inventory
-  and the single canonical safetensors header pass.
+  and the single canonical safetensors header pass. Its retained immutable
+  snapshot carries deterministic tensor identity and lookup facts to consumers.
+- Model-target coverage owns IR-derived source requirements and exact snapshot
+  reconciliation; it does not own source IO, GGUF naming, transforms, or
+  payload access.
 - Source verification coordinates those owners and decides blockers; it does
   not parse JSON, rescan headers, render, serialize, or read tensor payloads.
 - Source writers atomically publish verifier-approved manifests and explicit
@@ -150,6 +155,11 @@ domain algorithms. No writer owns command output.
 | --- | --- |
 | `src/model/architecture/yvex_deepseek_v4_ir.h` | private typed model, layer, attention, position, KV, mHC, MoE, output, tokenizer, source-constraint, failure, and borrowed-accessor ABI |
 | `src/model/architecture/yvex_deepseek_v4_ir.c` | exact-source admission, cross-field validation, normalized topology derivation, immutable allocation, and cleanup |
+| `src/source/yvex_source_inventory.[ch]` | retained immutable source tensor snapshot, deterministic identity, indexed lookup, one-header-pass and zero-payload-read accounting |
+| `src/model/target/yvex_deepseek_tensor_coverage.[ch]` | complete IR-derived DeepSeek requirement construction, exact source reconciliation, typed refusal, deterministic coverage identity, and immutable lifetime |
+| `src/model/target/yvex_tensor_collection_report.c` | release-target collection projection from canonical coverage; Qwen/Gemma evidence remains separate |
+| `src/model/target/yvex_missing_role_report.c` | release-target missing-role projection from canonical coverage |
+| `src/model/target/yvex_mapping_gate_report.c` | pre-mapping admission from the same coverage result; GGUF mapping remains a later owner |
 | `src/model/target/yvex_model_class_profile.c` | strict source-verification coordination and report ownership for the canonical release target; Qwen/Gemma lexical evidence remains separate |
 | `src/cli/render/yvex_model_target_render.c` | presentation of typed IR facts without architecture decisions |
 

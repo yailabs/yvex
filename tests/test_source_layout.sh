@@ -100,6 +100,8 @@ test -f src/model/target/yvex_model_class_profile.c
 test -f src/model/target/yvex_model_class_profile.h
 test -f src/model/architecture/yvex_deepseek_v4_ir.c
 test -f src/model/architecture/yvex_deepseek_v4_ir.h
+test -f src/model/target/yvex_deepseek_tensor_coverage.c
+test -f src/model/target/yvex_deepseek_tensor_coverage.h
 test -f src/model/target/yvex_tensor_collection_report.c
 test -f src/model/target/yvex_tensor_collection_report.h
 test -f src/model/target/yvex_tensor_naming_report.c
@@ -925,6 +927,50 @@ fi
 
 grep -nF 'source_payload_bytes_read = 0u' \
   src/model/architecture/yvex_deepseek_v4_ir.c >/dev/null
+
+BAD_DEEPSEEK_COVERAGE_IO="$(
+  grep -nE '\b(fopen|fread|opendir|readdir|stat|lstat|realpath)\s*\(|yvex_source_json_|yvex_safetensors_header_read|yvex_native_weight_table_open' \
+    src/model/target/yvex_deepseek_tensor_coverage.c \
+    src/model/target/yvex_deepseek_tensor_coverage.h || true
+)"
+if test -n "$BAD_DEEPSEEK_COVERAGE_IO"; then
+  echo "$BAD_DEEPSEEK_COVERAGE_IO"
+  echo "DeepSeek tensor coverage must consume the verified snapshot without source IO or header rescans"
+  exit 1
+fi
+
+inventory_verify_calls="$(
+  grep -cF 'yvex_source_inventory_verify(' src/source/yvex_source_verify.c
+)"
+if test "$inventory_verify_calls" -ne 1; then
+  echo "source verification must perform exactly one canonical inventory/header pass"
+  exit 1
+fi
+
+for coverage_owner_call in \
+  yvex_source_tensor_snapshot_find_index \
+  yvex_deepseek_v4_ir_layer_at \
+  yvex_deepseek_v4_ir_auxiliary_at
+do
+  grep -nF "$coverage_owner_call" \
+    src/model/target/yvex_deepseek_tensor_coverage.c >/dev/null || {
+    echo "DeepSeek tensor coverage does not consume $coverage_owner_call"
+    exit 1
+  }
+done
+
+for coverage_consumer in \
+  src/model/target/yvex_tensor_collection_report.c \
+  src/model/target/yvex_missing_role_report.c \
+  src/model/target/yvex_mapping_gate_report.c
+do
+  grep -nF 'yvex_deepseek_tensor_coverage_open_verified_source' \
+    "$coverage_consumer" >/dev/null || {
+    echo "$coverage_consumer does not consume canonical DeepSeek coverage"
+    exit 1
+  }
+done
+
 grep -nF 'V010.TENSOR.COVERAGE.DEEPSEEK.0' \
   src/model/target/yvex_model_class_profile.c >/dev/null
 grep -nF 'yvex_tensor_collection_report_build' src/model/target/yvex_tensor_collection_report.c >/dev/null

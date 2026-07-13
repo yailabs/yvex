@@ -29,6 +29,8 @@
 
 #include "../architecture/yvex_deepseek_v4_ir.h"
 
+typedef struct yvex_deepseek_tensor_coverage yvex_deepseek_tensor_coverage;
+
 #define YVEX_MODEL_TARGET_TEXT_CAP 512u
 #define YVEX_MODEL_TARGET_ROW_CAP 384u
 #define YVEX_MODEL_TARGET_TABLE_COL_CAP 8u
@@ -125,6 +127,7 @@ typedef struct {
     yvex_model_target_table_row table_rows[YVEX_MODEL_TARGET_TABLE_ROW_CAP];
     unsigned long table_row_count;
     yvex_deepseek_v4_ir *deepseek_architecture_ir;
+    yvex_deepseek_tensor_coverage *deepseek_tensor_coverage;
     int exit_code;
 } yvex_model_target_report;
 

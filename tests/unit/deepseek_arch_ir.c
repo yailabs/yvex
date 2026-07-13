@@ -61,6 +61,12 @@ static void arch_ir_verification_fixture(yvex_source_verification *source)
                  "exact-source-metadata-header-verified");
     arch_ir_copy(source->inventory_authority,
                  sizeof(source->inventory_authority), "upstream-index");
+    arch_ir_copy(source->upstream_index_oid,
+                 sizeof(source->upstream_index_oid),
+                 yvex_deepseek_v4_upstream_index_oid);
+    arch_ir_copy(source->local_index_oid,
+                 sizeof(source->local_index_oid),
+                 yvex_deepseek_v4_upstream_index_oid);
     arch_ir_copy(source->source_kind, sizeof(source->source_kind),
                  "huggingface");
     arch_ir_copy(source->repository_id, sizeof(source->repository_id),
@@ -213,7 +219,11 @@ static int test_arch_ir_golden_topology(void)
                      "mHC dimensions and iteration policy are explicit");
     YVEX_TEST_ASSERT(model->final_mhc_post_required &&
                      model->final_mhc_head_required &&
-                     model->final_norm_after_mhc_head,
+                     model->final_norm_after_mhc_head &&
+                     model->final_mhc_head.function_rows == 4 &&
+                     model->final_mhc_head.function_columns == 16384 &&
+                     model->final_mhc_head.base_width == 4 &&
+                     model->final_mhc_head.scale_width == 1,
                      "final mHC collapse precedes final norm");
     YVEX_TEST_ASSERT(model->embedding.required && model->output.required &&
                      !model->output.tied_to_embedding &&
@@ -223,6 +233,12 @@ static int test_arch_ir_golden_topology(void)
                      "embedding output and tokenizer requirements agree");
     YVEX_TEST_ASSERT(model->source_constraint.quant_block_rows == 128 &&
                      model->source_constraint.quant_block_columns == 128 &&
+                     model->source_constraint.fp4_packing_factor == 2 &&
+                     model->source_constraint.fp4_scale_group_width == 32 &&
+                     model->source_constraint.fp4_physical_dtype ==
+                         YVEX_NATIVE_DTYPE_I8 &&
+                     model->source_constraint.scale_dtype ==
+                         YVEX_NATIVE_DTYPE_F8_E8M0 &&
                      model->source_payload_bytes_read == 0 &&
                      model->source_header_scan_count == 1,
                      "source constraints remain typed without payload reads");
@@ -260,6 +276,15 @@ static int test_arch_ir_golden_topology(void)
                      csa->indexer_topk == 512 &&
                      csa->kv.requires_indexer_cache,
                      "CSA compressor indexer and KV state are explicit");
+    YVEX_TEST_ASSERT(csa->attention_input_norm.required &&
+                     csa->attention_input_norm.width == 4096 &&
+                     csa->post_attention_ffn_norm.required &&
+                     csa->post_attention_ffn_norm.width == 4096 &&
+                     csa->tensors.compressor_ape_rows == 4 &&
+                     csa->tensors.compressor_ape_columns == 1024 &&
+                     csa->tensors.indexer_query_rows == 8192 &&
+                     csa->tensors.indexer_weight_rows == 64,
+                     "norm and compressed-attention tensor geometry is explicit");
     YVEX_TEST_ASSERT(hca->compressor_required && !hca->indexer_required &&
                      hca->kv.requires_compressed_core &&
                      !hca->kv.requires_indexer_cache,
@@ -287,6 +312,8 @@ static int test_arch_ir_golden_topology(void)
                      mtp->requires_token_embedding &&
                      mtp->requires_previous_hidden_state &&
                      mtp->requires_separate_mhc_head &&
+                     mtp->mhc_head.function_rows == 4 &&
+                     mtp->mhc_head.function_columns == 16384 &&
                      mtp->shares_output_head && mtp->shares_final_norm,
                      "MTP topology is separate from the 43 main layers");
     YVEX_TEST_ASSERT(yvex_deepseek_v4_ir_layer_at(ir, 43) == NULL &&
@@ -397,6 +424,19 @@ static int test_arch_ir_refusal_matrix(void)
     if (arch_ir_expect_failure(&source,
             YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_SOURCE_CONSTRAINT,
             "unknown source quantization refuses") != 0) return 1;
+
+    arch_ir_verification_fixture(&source);
+    arch_ir_copy(source.inventory_authority,
+                 sizeof(source.inventory_authority), "header-derived");
+    if (arch_ir_expect_failure(&source,
+            YVEX_DEEPSEEK_V4_IR_FAILURE_SOURCE_FACT_MISSING,
+            "header-derived inventory cannot admit release IR") != 0) return 1;
+
+    arch_ir_verification_fixture(&source);
+    source.quant_block_rows = 64;
+    if (arch_ir_expect_failure(&source,
+            YVEX_DEEPSEEK_V4_IR_FAILURE_UNSUPPORTED_SOURCE_CONSTRAINT,
+            "non-pinned quant block geometry refuses") != 0) return 1;
 
     arch_ir_verification_fixture(&source);
     arch_ir_copy(source.rms_norm_eps, sizeof(source.rms_norm_eps), "nan");

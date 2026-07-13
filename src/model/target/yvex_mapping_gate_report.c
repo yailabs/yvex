@@ -22,6 +22,7 @@
 #include "yvex_mapping_gate_report.h"
 
 #include "yvex_model_target_private.h"
+#include "yvex_deepseek_tensor_coverage.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,6 +47,56 @@ typedef struct {
     const char *status;
     const char *result;
 } mapping_gate_state;
+
+static int mapping_gate_deepseek_build(
+    const yvex_model_target_request *request,
+    yvex_model_target_report *report,
+    yvex_error *err)
+{
+    yvex_source_verification verification;
+    yvex_deepseek_tensor_coverage_failure failure;
+    char models_root[512];
+    char source_path[512];
+    int rc;
+
+    if (!yvex_model_target_release_source_paths(
+            request, models_root, sizeof(models_root), source_path,
+            sizeof(source_path))) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "mapping_gate_report",
+                       "DeepSeek source path exceeds report bounds");
+        return YVEX_ERR_BOUNDS;
+    }
+    rc = yvex_deepseek_tensor_coverage_open_verified_source(
+        &report->deepseek_tensor_coverage, &verification, source_path,
+        models_root, &failure, err);
+    if (rc != YVEX_OK) {
+        report->status = "pre-mapping-coverage-blocked";
+        report->exit_code = 5;
+        yvex_model_target_report_add_error(
+            report,
+            "model-target mapping-gate: DeepSeek coverage refused: %s tensor=%s",
+            yvex_deepseek_tensor_coverage_failure_name(failure.code),
+            failure.tensor_name[0] ? failure.tensor_name : "none");
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+    report->status = "pre-mapping-source-coverage-admitted";
+    (void)snprintf(report->target_id, sizeof(report->target_id), "%s",
+                   request->target_id);
+    (void)snprintf(report->family, sizeof(report->family), "%s", "deepseek");
+    (void)snprintf(report->stage, sizeof(report->stage), "%s", "header-only");
+    (void)snprintf(report->tensor_map_status,
+                   sizeof(report->tensor_map_status), "%s", "blocked");
+    (void)snprintf(report->runtime_status, sizeof(report->runtime_status),
+                   "%s", "unsupported");
+    (void)snprintf(report->generation_status,
+                   sizeof(report->generation_status), "%s", "unsupported");
+    (void)snprintf(report->next_row, sizeof(report->next_row), "%s",
+                   "V010.MAP.GGUF.DEEPSEEK.0");
+    (void)snprintf(report->boundary, sizeof(report->boundary), "%s",
+                   "source coverage admitted for mapping; no GGUF name, transform, layout, or runtime claim");
+    return YVEX_OK;
+}
 
 /*
  * mapping_gate_file_exists()
@@ -530,6 +581,16 @@ int yvex_mapping_gate_report_build(const yvex_model_target_request *request,
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "mapping_gate_report",
                        "request and report are required");
         return YVEX_ERR_INVALID_ARG;
+    }
+    if (yvex_model_target_is_release_target(request->target_id)) {
+        memset(&state, 0, sizeof(state));
+        state.status = "pre-mapping-coverage-check";
+        state.result = "block";
+        state.next_row = "V010.MAP.GGUF.DEEPSEEK.0";
+        state.top_blocker = "tensor-coverage-not-evaluated";
+        mapping_gate_prepare(request, &state, report);
+        if (mapping_gate_validate(request, report)) return YVEX_OK;
+        return mapping_gate_deepseek_build(request, report, err);
     }
     family = yvex_model_target_family_key(
         request->target_id[0] ? request->target_id : "qwen3-8b");

@@ -13,6 +13,7 @@
 
 #include <dirent.h>
 #include <limits.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -97,6 +98,8 @@ const char *yvex_native_dtype_name(yvex_native_dtype dtype)
         return "F8_E4M3";
     case YVEX_NATIVE_DTYPE_F8_E5M2:
         return "F8_E5M2";
+    case YVEX_NATIVE_DTYPE_F8_E8M0:
+        return "F8_E8M0";
     case YVEX_NATIVE_DTYPE_FP4:
         return "FP4";
     case YVEX_NATIVE_DTYPE_OTHER:
@@ -122,8 +125,117 @@ static yvex_native_dtype nw_dtype_from_name(const char *name)
     if (strcmp(name, "BOOL") == 0) return YVEX_NATIVE_DTYPE_BOOL;
     if (strcmp(name, "F8_E4M3") == 0 || strcmp(name, "F8_E4M3FN") == 0) return YVEX_NATIVE_DTYPE_F8_E4M3;
     if (strcmp(name, "F8_E5M2") == 0) return YVEX_NATIVE_DTYPE_F8_E5M2;
+    if (strcmp(name, "F8_E8M0") == 0 || strcmp(name, "F8_E8M0FNU") == 0 ||
+        strcmp(name, "F8_E8M0FNUZ") == 0) return YVEX_NATIVE_DTYPE_F8_E8M0;
     if (strcmp(name, "FP4") == 0 || strcmp(name, "F4") == 0) return YVEX_NATIVE_DTYPE_FP4;
     return YVEX_NATIVE_DTYPE_OTHER;
+}
+
+static uint64_t nw_name_hash(const char *name)
+{
+    uint64_t hash = UINT64_C(1469598103934665603);
+
+    while (name && *name) {
+        hash ^= (unsigned char)*name++;
+        hash *= UINT64_C(1099511628211);
+    }
+    return hash;
+}
+
+static int nw_index_rebuild(yvex_native_weight_table *table,
+                            size_t requested,
+                            yvex_error *err)
+{
+    unsigned long long *slots;
+    size_t cap = 128u;
+    unsigned long long i;
+
+    if (requested > SIZE_MAX / 2u) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "native_weight_index",
+                       "native tensor name index capacity overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    while (cap < requested * 2u) {
+        if (cap > SIZE_MAX / 2u) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, "native_weight_index",
+                           "native tensor name index capacity overflow");
+            return YVEX_ERR_BOUNDS;
+        }
+        cap *= 2u;
+    }
+    slots = (unsigned long long *)calloc(cap, sizeof(slots[0]));
+    if (!slots) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "native_weight_index",
+                       "native tensor name index allocation failed");
+        return YVEX_ERR_NOMEM;
+    }
+    for (i = 0u; i < table->count; ++i) {
+        size_t slot = (size_t)(nw_name_hash(table->items[i].name) & (cap - 1u));
+        unsigned long long probe = 0u;
+        while (slots[slot] != 0u) {
+            slot = (slot + 1u) & (cap - 1u);
+            probe++;
+        }
+        slots[slot] = i + 1u;
+        if (probe > table->maximum_probe) table->maximum_probe = probe;
+    }
+    free(table->name_slots);
+    table->name_slots = slots;
+    table->name_slot_count = cap;
+    return YVEX_OK;
+}
+
+static long long nw_index_find(const yvex_native_weight_table *table,
+                               const char *name)
+{
+    size_t slot;
+    size_t visited = 0u;
+
+    if (!table || !name || !table->name_slots || !table->name_slot_count)
+        return -1;
+    ((yvex_native_weight_table *)table)->lookup_count++;
+    slot = (size_t)(nw_name_hash(name) & (table->name_slot_count - 1u));
+    while (visited++ < table->name_slot_count && table->name_slots[slot] != 0u) {
+        unsigned long long index = table->name_slots[slot] - 1u;
+        if (strcmp(table->items[index].name, name) == 0)
+            return (long long)index;
+        ((yvex_native_weight_table *)table)->collision_count++;
+        slot = (slot + 1u) & (table->name_slot_count - 1u);
+    }
+    return -1;
+}
+
+static int nw_row_compare(const void *left, const void *right)
+{
+    const yvex_native_weight_info *a = (const yvex_native_weight_info *)left;
+    const yvex_native_weight_info *b = (const yvex_native_weight_info *)right;
+    int result = strcmp(a->name, b->name);
+
+    return result ? result : strcmp(a->shard_path, b->shard_path);
+}
+
+int yvex_native_weight_table_finalize(yvex_native_weight_table *table,
+                                      yvex_error *err)
+{
+    if (!table) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "native_weight_finalize",
+                       "native tensor table is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (table->finalized) return YVEX_OK;
+    if (table->count > (unsigned long long)SIZE_MAX) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "native_weight_finalize",
+                       "native tensor count exceeds addressable memory");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (table->count > 1u)
+        qsort(table->items, (size_t)table->count, sizeof(table->items[0]),
+              nw_row_compare);
+    table->maximum_probe = 0u;
+    if (nw_index_rebuild(table, (size_t)table->count + 1u, err) != YVEX_OK)
+        return yvex_error_code(err);
+    table->finalized = 1;
+    return YVEX_OK;
 }
 
 int yvex_native_weight_table_add(yvex_native_weight_table *table,
@@ -145,12 +257,36 @@ int yvex_native_weight_table_add(yvex_native_weight_table *table,
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "native_weight_add", "invalid native tensor row");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (yvex_native_weight_table_find(table, name)) {
+    if (table->finalized) {
+        yvex_error_set(err, YVEX_ERR_STATE, "native_weight_add",
+                       "cannot mutate a finalized native tensor table");
+        return YVEX_ERR_STATE;
+    }
+    if (table->count >= (unsigned long long)SIZE_MAX ||
+        table->count == ULLONG_MAX) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "native_weight_add",
+                       "native tensor count exceeds addressable memory");
+        return YVEX_ERR_BOUNDS;
+    }
+    if (!table->name_slots ||
+        (size_t)table->count + 1u >= table->name_slot_count / 2u) {
+        int index_rc = nw_index_rebuild(table, (size_t)table->count + 1u, err);
+        if (index_rc != YVEX_OK) return index_rc;
+    }
+    if (nw_index_find(table, name) >= 0) {
         yvex_error_setf(err, YVEX_ERR_FORMAT, "native_weight_add", "duplicate tensor name: %s", name);
         return YVEX_ERR_FORMAT;
     }
     if (table->count == table->cap) {
-        unsigned long long cap = table->cap == 0 ? 64u : table->cap * 2u;
+        unsigned long long cap;
+        if (table->cap > (unsigned long long)(SIZE_MAX /
+                                              (2u * sizeof(table->items[0]))) ||
+            table->cap > ULLONG_MAX / 2u) {
+            yvex_error_set(err, YVEX_ERR_BOUNDS, "native_weight_add",
+                           "native tensor table capacity overflow");
+            return YVEX_ERR_BOUNDS;
+        }
+        cap = table->cap == 0 ? 64u : table->cap * 2u;
         next = (yvex_native_weight_info *)realloc(table->items, (size_t)cap * sizeof(table->items[0]));
         if (!next) {
             yvex_error_set(err, YVEX_ERR_NOMEM, "native_weight_add", "native tensor table allocation failed");
@@ -195,6 +331,17 @@ int yvex_native_weight_table_add(yvex_native_weight_table *table,
     table->summary.total_tensor_bytes += row->data_bytes;
     if (row->dtype == YVEX_NATIVE_DTYPE_UNKNOWN || row->dtype == YVEX_NATIVE_DTYPE_OTHER) {
         table->summary.unknown_dtype_count++;
+    }
+    {
+        size_t slot = (size_t)(nw_name_hash(row->name) &
+                               (table->name_slot_count - 1u));
+        unsigned long long probe = 0u;
+        while (table->name_slots[slot] != 0u) {
+            slot = (slot + 1u) & (table->name_slot_count - 1u);
+            probe++;
+        }
+        table->name_slots[slot] = table->count;
+        if (probe > table->maximum_probe) table->maximum_probe = probe;
     }
     return YVEX_OK;
 }
@@ -303,6 +450,11 @@ int yvex_native_weight_table_open(yvex_native_weight_table **out,
         yvex_native_weight_table_close(table);
         return rc;
     }
+    rc = yvex_native_weight_table_finalize(table, err);
+    if (rc != YVEX_OK) {
+        yvex_native_weight_table_close(table);
+        return rc;
+    }
     *out = table;
     return YVEX_OK;
 }
@@ -320,6 +472,7 @@ void yvex_native_weight_table_close(yvex_native_weight_table *table)
         free((char *)table->items[i].dtype_name);
     }
     free(table->items);
+    free(table->name_slots);
     free(table);
 }
 
@@ -340,17 +493,13 @@ const yvex_native_weight_info *yvex_native_weight_table_at(const yvex_native_wei
 const yvex_native_weight_info *yvex_native_weight_table_find(const yvex_native_weight_table *table,
                                                              const char *name)
 {
-    unsigned long long i;
-
     if (!table || !name) {
         return NULL;
     }
-    for (i = 0; i < table->count; ++i) {
-        if (strcmp(table->items[i].name, name) == 0) {
-            return &table->items[i];
-        }
+    {
+        long long index = nw_index_find(table, name);
+        return index >= 0 ? &table->items[index] : NULL;
     }
-    return NULL;
 }
 
 int yvex_native_weight_table_summary(const yvex_native_weight_table *table,

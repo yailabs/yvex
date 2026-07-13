@@ -270,12 +270,15 @@ const char *yvex_source_verification_status(
 }
 
 /* Coordinates exact source owners, promotes verified facts, and returns typed blockers. */
-int yvex_source_verify(const yvex_source_verify_options *options,
-                       yvex_source_verification *out,
-                       yvex_error *err)
+int yvex_source_verify_with_snapshot(
+    const yvex_source_verify_options *options,
+    yvex_source_verification *out,
+    yvex_source_tensor_snapshot **snapshot,
+    yvex_error *err)
 {
     struct stat st;
     yvex_source_derived_inventory derived;
+    yvex_source_tensor_snapshot *candidate_snapshot = NULL;
     int rc;
     unsigned int kind;
 
@@ -285,6 +288,7 @@ int yvex_source_verify(const yvex_source_verify_options *options,
         return YVEX_ERR_INVALID_ARG;
     }
     memset(out, 0, sizeof(*out));
+    if (snapshot) *snapshot = NULL;
     memset(&derived, 0, sizeof(derived));
     yvex_error_clear(err);
 
@@ -314,7 +318,8 @@ int yvex_source_verify(const yvex_source_verify_options *options,
     }
     rc = source_verify_footprint(options->source_path, out, err);
     if (rc != YVEX_OK) goto cleanup;
-    rc = yvex_source_inventory_verify(options, out, &derived, err);
+    rc = yvex_source_inventory_verify(options, out, &derived,
+                                      &candidate_snapshot, err);
     if (rc != YVEX_OK) goto cleanup;
     yvex_source_provenance_finalize(options, out);
 
@@ -354,9 +359,25 @@ int yvex_source_verify(const yvex_source_verify_options *options,
                     out->header_scan_count == 1u && out->manifest_verified &&
                     (strcmp(out->inventory_authority, "header-derived") == 0 ||
                      out->upstream_index_identity_verified);
+    if (out->verified && snapshot) {
+        *snapshot = candidate_snapshot;
+        candidate_snapshot = NULL;
+    }
     rc = YVEX_OK;
 cleanup:
+    yvex_source_tensor_snapshot_release(candidate_snapshot);
     yvex_source_derived_inventory_free(&derived);
     if (rc == YVEX_OK) yvex_error_clear(err);
+    return rc;
+}
+
+int yvex_source_verify(const yvex_source_verify_options *options,
+                       yvex_source_verification *out,
+                       yvex_error *err)
+{
+    yvex_source_tensor_snapshot *snapshot = NULL;
+    int rc = yvex_source_verify_with_snapshot(options, out, &snapshot, err);
+
+    yvex_source_tensor_snapshot_release(snapshot);
     return rc;
 }

@@ -177,6 +177,17 @@ files or rescanning headers. The immutable IR defines required semantics for
 tensor coverage and later runtime work; it is not tensor mapping, artifact
 support, materialization, execution, or generation.
 
+V010.TENSOR.COVERAGE.DEEPSEEK.0 makes
+src/model/target/yvex_deepseek_tensor_coverage.[ch] the sole owner of the exact
+DeepSeek source tensor requirement set and one-to-one coverage result. It
+consumes the immutable architecture IR and the retained verified source tensor
+snapshot, validates name, collection, scope, layer/expert identity, rank,
+shape, dtype, and quantization companions, and refuses every missing,
+duplicate, ambiguous, unsupported, or unexpected entry. It may not reopen
+source files, rescan headers, define GGUF names/transforms, read payloads, or
+promote artifact/runtime support. Tensor collection, missing-role, and mapping
+gate reports project this result rather than reclassifying DeepSeek names.
+
 MODEL_TARGET.1 closure forbids using yvex_model_target_report.c as a
 compatibility monolith. The coordinator may route request kinds, but
 report-specific ownership must live in the corresponding src/model/target
@@ -318,7 +329,8 @@ src/source/yvex_source_provenance.c
 
 src/source/yvex_source_inventory.c
   upstream-indexed or explicitly header-derived shard inventory and the single
-  canonical safetensors header pass
+  canonical safetensors header pass; it publishes the retained immutable tensor
+  snapshot consumed by model-target coverage without source rescanning
 
 src/source/yvex_source_verify.c
   exact release-source verification coordination, final policy, blockers, and

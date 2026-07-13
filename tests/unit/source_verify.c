@@ -8,6 +8,7 @@
 
 #include "yvex_model_target_catalog.h"
 #include "src/model/architecture/yvex_deepseek_v4_ir.h"
+#include "yvex_source_inventory.h"
 #include "yvex_source_provenance.h"
 #include "yvex_source_verify.h"
 
@@ -241,10 +242,12 @@ static int source_verify_has_blocker(const yvex_source_verification *result,
     return 0;
 }
 
-static int source_verify_run_mode(const char *root,
-                                  int promote_manifest,
-                                  yvex_source_verification *result,
-                                  yvex_error *err)
+static int source_verify_run_mode_snapshot(
+    const char *root,
+    int promote_manifest,
+    yvex_source_verification *result,
+    yvex_source_tensor_snapshot **snapshot,
+    yvex_error *err)
 {
     yvex_source_verify_options options;
     yvex_model_target_identity identity;
@@ -272,7 +275,16 @@ static int source_verify_run_mode(const char *root,
     options.models_root = "build/tests";
     options.manifest_path = manifest_path;
     options.promote_manifest = promote_manifest;
-    return yvex_source_verify(&options, result, err);
+    return yvex_source_verify_with_snapshot(&options, result, snapshot, err);
+}
+
+static int source_verify_run_mode(const char *root,
+                                  int promote_manifest,
+                                  yvex_source_verification *result,
+                                  yvex_error *err)
+{
+    return source_verify_run_mode_snapshot(root, promote_manifest, result,
+                                           NULL, err);
 }
 
 static int source_verify_run(const char *root,
@@ -351,6 +363,8 @@ int yvex_test_source_verify(void)
 {
     const char *root = "build/tests/source-verify";
     yvex_source_verification result;
+    yvex_source_tensor_snapshot *snapshot = NULL;
+    yvex_source_tensor_snapshot_facts snapshot_facts;
     yvex_error err;
     unsigned long long total;
     char path[512];
@@ -358,7 +372,7 @@ int yvex_test_source_verify(void)
 
     system("rm -rf build/tests/source-verify");
     YVEX_TEST_ASSERT(source_verify_make_valid(root), "create valid source fixture");
-    rc = source_verify_run_mode(root, 1, &result, &err);
+    rc = source_verify_run_mode_snapshot(root, 1, &result, &snapshot, &err);
     YVEX_TEST_ASSERT(rc == YVEX_OK && result.verified,
                      "valid exact source verifies");
     YVEX_TEST_ASSERT(result.manifest_verified && result.manifest_published &&
@@ -373,6 +387,19 @@ int yvex_test_source_verify(void)
                      result.header_tensor_count == 3 &&
                      result.shard_index_headers_match,
                      "index and header inventory agree");
+    YVEX_TEST_ASSERT(snapshot &&
+                         yvex_source_tensor_snapshot_facts_get(
+                             snapshot, &snapshot_facts, &err) == YVEX_OK &&
+                         snapshot_facts.tensor_count == 3u &&
+                         snapshot_facts.shard_count == 1u &&
+                         snapshot_facts.header_scan_count == 1u &&
+                         snapshot_facts.payload_bytes_read == 0u,
+                     "strict verification publishes its immutable one-pass snapshot");
+    YVEX_TEST_ASSERT(yvex_source_tensor_snapshot_find(
+                         snapshot, "model.embed_tokens.weight") != NULL,
+                     "published snapshot retains header tensor facts");
+    yvex_source_tensor_snapshot_release(snapshot);
+    snapshot = NULL;
     YVEX_TEST_ASSERT(result.dtype_bf16_count == 1 &&
                      result.dtype_f8_e8m0_count == 1 &&
                      result.dtype_i8_count == 1 &&
@@ -397,12 +424,12 @@ int yvex_test_source_verify(void)
 
         yvex_error_clear(&err);
         YVEX_TEST_ASSERT(yvex_deepseek_v4_ir_build(
-                             &ir, &result, &failure, &err) == YVEX_OK && ir,
-                         "strict verified fixture feeds architecture IR");
-        YVEX_TEST_ASSERT(result.header_scan_count == 1 &&
-                         yvex_deepseek_v4_ir_model(ir)->
-                                 source_payload_bytes_read == 0,
-                         "architecture construction performs no rescan or payload read");
+                             &ir, &result, &failure, &err) != YVEX_OK && !ir &&
+                         failure.code ==
+                             YVEX_DEEPSEEK_V4_IR_FAILURE_SOURCE_FACT_MISSING,
+                         "fixture index identity cannot impersonate pinned release IR");
+        YVEX_TEST_ASSERT(result.header_scan_count == 1,
+                         "rejected architecture construction performs no rescan");
         yvex_deepseek_v4_ir_close(ir);
     }
 

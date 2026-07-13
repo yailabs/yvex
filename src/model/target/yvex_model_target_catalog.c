@@ -150,6 +150,34 @@ int yvex_model_target_source_path(char *out,
     return n >= 0 && (size_t)n < cap;
 }
 
+int yvex_model_target_release_source_paths(
+    const yvex_model_target_request *request,
+    char *models_root,
+    size_t models_root_cap,
+    char *source_path,
+    size_t source_path_cap)
+{
+    const char *environment;
+    const char *root;
+    int n;
+
+    if (!request || !models_root || !models_root_cap || !source_path ||
+        !source_path_cap) return 0;
+    environment = getenv("YVEX_MODELS_ROOT");
+    root = request->models_root[0]
+               ? request->models_root
+               : (environment && environment[0] ? environment : "models");
+    n = snprintf(models_root, models_root_cap, "%s", root);
+    if (n < 0 || (size_t)n >= models_root_cap) return 0;
+    if (request->source_path[0]) {
+        n = snprintf(source_path, source_path_cap, "%s", request->source_path);
+        return n >= 0 && (size_t)n < source_path_cap;
+    }
+    return yvex_model_target_source_path(
+        source_path, source_path_cap, models_root,
+        yvex_model_target_release_identity());
+}
+
 const yvex_model_target_record *yvex_model_target_find(const char *target_id)
 {
     unsigned long i;

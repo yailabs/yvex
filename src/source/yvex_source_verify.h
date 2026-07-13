@@ -24,6 +24,8 @@
 #include <stddef.h>
 
 #include <yvex/error.h>
+
+struct yvex_source_tensor_snapshot;
 #include <yvex/fs.h>
 
 #include "yvex_model_target_catalog.h"
@@ -180,6 +182,12 @@ int yvex_source_checked_add_u64(unsigned long long *total,
 int yvex_source_verify(const yvex_source_verify_options *options,
                        yvex_source_verification *out,
                        yvex_error *err);
+
+int yvex_source_verify_with_snapshot(
+    const yvex_source_verify_options *options,
+    yvex_source_verification *out,
+    struct yvex_source_tensor_snapshot **snapshot,
+    yvex_error *err);
 
 const char *yvex_source_verification_status(
     const yvex_source_verification *verification);

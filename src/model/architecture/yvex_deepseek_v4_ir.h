@@ -29,6 +29,7 @@
 #include <stddef.h>
 
 #include <yvex/error.h>
+#include <yvex/native_weights.h>
 
 struct yvex_source_verification;
 
@@ -166,6 +167,46 @@ typedef struct {
 } yvex_deepseek_v4_mhc_spec;
 
 typedef struct {
+    int required;
+    unsigned long long width;
+} yvex_deepseek_v4_norm_spec;
+
+typedef struct {
+    int required;
+    unsigned long long function_rows;
+    unsigned long long function_columns;
+    unsigned long long base_width;
+    unsigned long long scale_width;
+} yvex_deepseek_v4_mhc_head_spec;
+
+typedef struct {
+    unsigned long long q_a_rows;
+    unsigned long long q_a_columns;
+    unsigned long long q_b_rows;
+    unsigned long long q_b_columns;
+    unsigned long long kv_rows;
+    unsigned long long kv_columns;
+    unsigned long long o_a_rows;
+    unsigned long long o_a_columns;
+    unsigned long long o_b_rows;
+    unsigned long long o_b_columns;
+    unsigned long long compressor_ape_rows;
+    unsigned long long compressor_ape_columns;
+    unsigned long long compressor_norm_width;
+    unsigned long long compressor_projection_rows;
+    unsigned long long compressor_projection_columns;
+    unsigned long long indexer_ape_rows;
+    unsigned long long indexer_ape_columns;
+    unsigned long long indexer_norm_width;
+    unsigned long long indexer_projection_rows;
+    unsigned long long indexer_projection_columns;
+    unsigned long long indexer_query_rows;
+    unsigned long long indexer_query_columns;
+    unsigned long long indexer_weight_rows;
+    unsigned long long indexer_weight_columns;
+} yvex_deepseek_v4_attention_tensor_spec;
+
+typedef struct {
     yvex_deepseek_v4_router_class router_class;
     yvex_deepseek_v4_scoring_policy scoring;
     yvex_deepseek_v4_topk_policy topk_policy;
@@ -215,6 +256,9 @@ typedef struct {
     yvex_deepseek_v4_kv_spec kv;
     yvex_deepseek_v4_mhc_spec mhc;
     yvex_deepseek_v4_moe_spec moe;
+    yvex_deepseek_v4_norm_spec attention_input_norm;
+    yvex_deepseek_v4_norm_spec post_attention_ffn_norm;
+    yvex_deepseek_v4_attention_tensor_spec tensors;
     double rms_norm_epsilon;
 } yvex_deepseek_v4_layer_spec;
 
@@ -231,6 +275,7 @@ typedef struct {
     int requires_embedding_norm;
     int requires_hidden_norm;
     int requires_separate_mhc_head;
+    yvex_deepseek_v4_mhc_head_spec mhc_head;
     int shares_output_head;
     int shares_final_norm;
 } yvex_deepseek_v4_auxiliary_spec;
@@ -268,6 +313,10 @@ typedef struct {
     yvex_deepseek_v4_source_quantization quantization;
     unsigned long long quant_block_rows;
     unsigned long long quant_block_columns;
+    unsigned long long fp4_packing_factor;
+    unsigned long long fp4_scale_group_width;
+    yvex_native_dtype fp4_physical_dtype;
+    yvex_native_dtype scale_dtype;
 } yvex_deepseek_v4_source_constraint;
 
 typedef struct {
@@ -298,6 +347,7 @@ typedef struct {
     yvex_deepseek_v4_tokenizer_spec tokenizer;
     yvex_deepseek_v4_source_constraint source_constraint;
     yvex_deepseek_v4_mhc_spec final_mhc;
+    yvex_deepseek_v4_mhc_head_spec final_mhc_head;
     double final_norm_epsilon;
     int use_cache;
     int final_mhc_post_required;

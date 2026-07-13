@@ -317,7 +317,10 @@ dynamic FP8 E4M3/UE8M0 source constraints. These source constraints do not
 select a GGUF qtype or imply quantization or backend compute support.
 
 `src/model/architecture/yvex_deepseek_v4_ir.[ch]` owns this specification.
-Tensor coverage consumes it next to derive required roles. Artifact admission,
+The tensor-coverage owner consumes it with the retained verified source
+snapshot and reconciles all 69,187 requirements exactly, including distinct
+attention/FFN norms, final and MTP mHC heads, FP4 weights, and FP8 companion
+scales. GGUF naming and transforms, payload access, artifact admission,
 materialization, executable descriptors, tokenizer execution, CUDA lowering,
 and generation remain separate owners and separate support boundaries.
 
@@ -1090,7 +1093,7 @@ This table records architectural scope, not delivery progress.
 
 | Family | v0.1.0 relation | Runtime class | Current support truth |
 | --- | --- | --- | --- |
-| DeepSeek-V4-Flash | exact release target at `$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash`; canonical target id `deepseek4-v4-flash` | hybrid SWA/CSA/HCA decoder with mHC and MoE | typed architecture specification exists; no complete tensor coverage, model artifact, or runtime path |
+| DeepSeek-V4-Flash | exact release target at `$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash`; canonical target id `deepseek4-v4-flash` | hybrid SWA/CSA/HCA decoder with mHC and MoE | typed architecture and exact 69,187-entry source coverage exist; no GGUF mapping, complete model artifact, or runtime path |
 | Qwen | outside v0.1.0 | target-dependent dense or sparse/MoE | unsupported; existing source/report facts do not enter the release path |
 | Gemma | outside v0.1.0 | dense | unsupported; existing source/report facts do not enter the release path |
 | GLM | outside v0.1.0 source-pressure work | sparse/MoE | unsupported; source evidence is not runtime support |

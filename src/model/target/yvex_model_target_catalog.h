@@ -85,6 +85,12 @@ int yvex_model_target_source_path(char *out,
                                   size_t cap,
                                   const char *models_root,
                                   const yvex_model_target_identity *identity);
+int yvex_model_target_release_source_paths(
+    const yvex_model_target_request *request,
+    char *models_root,
+    size_t models_root_cap,
+    char *source_path,
+    size_t source_path_cap);
 
 const yvex_model_target_record *yvex_model_target_find(const char *target_id);
 const yvex_model_target_class_record *yvex_model_target_class_find(const char *class_id);

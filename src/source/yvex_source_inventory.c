@@ -18,6 +18,7 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,6 +63,168 @@ typedef struct {
     char repo[256];
     char revision[128];
 } source_upstream_inventory;
+
+struct yvex_source_tensor_snapshot {
+    yvex_native_weight_table *table;
+    unsigned long long shard_count;
+    unsigned long long header_scan_count;
+    unsigned long long payload_bytes_read;
+    unsigned long long identity;
+    unsigned int references;
+};
+
+static unsigned long long source_snapshot_hash_bytes(
+    unsigned long long hash,
+    const void *data,
+    size_t length)
+{
+    const unsigned char *bytes = (const unsigned char *)data;
+    size_t i;
+
+    for (i = 0u; i < length; ++i) {
+        hash ^= bytes[i];
+        hash *= 1099511628211ull;
+    }
+    return hash;
+}
+
+static unsigned long long source_snapshot_hash_u64(unsigned long long hash,
+                                                   unsigned long long value)
+{
+    unsigned char bytes[8];
+    unsigned int i;
+
+    for (i = 0u; i < sizeof(bytes); ++i)
+        bytes[i] = (unsigned char)((value >> (i * 8u)) & 0xffu);
+    return source_snapshot_hash_bytes(hash, bytes, sizeof(bytes));
+}
+
+static unsigned long long source_snapshot_identity(
+    const yvex_native_weight_table *table)
+{
+    unsigned long long hash = 1469598103934665603ull;
+    unsigned long long i;
+
+    for (i = 0u; table && i < table->count; ++i) {
+        const yvex_native_weight_info *item = &table->items[i];
+        hash = source_snapshot_hash_bytes(hash, item->name,
+                                          strlen(item->name) + 1u);
+        hash = source_snapshot_hash_bytes(hash, item->shard_path,
+                                          strlen(item->shard_path) + 1u);
+        hash = source_snapshot_hash_bytes(
+            hash, yvex_native_dtype_name(item->dtype),
+            strlen(yvex_native_dtype_name(item->dtype)) + 1u);
+        hash = source_snapshot_hash_u64(hash, item->rank);
+        {
+            unsigned int dimension;
+            for (dimension = 0u; dimension < item->rank; ++dimension)
+                hash = source_snapshot_hash_u64(hash,
+                                                item->dims[dimension]);
+        }
+        hash = source_snapshot_hash_u64(hash, item->data_start);
+        hash = source_snapshot_hash_u64(hash, item->data_end);
+    }
+    return hash;
+}
+
+/* Transfers a finalized native table into one immutable retained snapshot. */
+int yvex_source_tensor_snapshot_take_table(
+    yvex_source_tensor_snapshot **out,
+    yvex_native_weight_table **table,
+    unsigned long long shard_count,
+    unsigned long long header_scan_count,
+    yvex_error *err)
+{
+    yvex_source_tensor_snapshot *snapshot;
+    int rc;
+
+    if (!out || !table || !*table) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_tensor_snapshot",
+                       "output and native tensor table are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    *out = NULL;
+    rc = yvex_native_weight_table_finalize(*table, err);
+    if (rc != YVEX_OK) return rc;
+    snapshot = (yvex_source_tensor_snapshot *)calloc(1u, sizeof(*snapshot));
+    if (!snapshot) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "source_tensor_snapshot",
+                       "source tensor snapshot allocation failed");
+        return YVEX_ERR_NOMEM;
+    }
+    snapshot->table = *table;
+    snapshot->shard_count = shard_count;
+    snapshot->header_scan_count = header_scan_count;
+    snapshot->identity = source_snapshot_identity(*table);
+    snapshot->references = 1u;
+    *table = NULL;
+    *out = snapshot;
+    return YVEX_OK;
+}
+
+void yvex_source_tensor_snapshot_retain(yvex_source_tensor_snapshot *snapshot)
+{
+    if (snapshot && snapshot->references < UINT_MAX) snapshot->references++;
+}
+
+void yvex_source_tensor_snapshot_release(yvex_source_tensor_snapshot *snapshot)
+{
+    if (!snapshot || snapshot->references == 0u) return;
+    snapshot->references--;
+    if (snapshot->references != 0u) return;
+    yvex_native_weight_table_close(snapshot->table);
+    free(snapshot);
+}
+
+const yvex_native_weight_info *yvex_source_tensor_snapshot_at(
+    const yvex_source_tensor_snapshot *snapshot,
+    unsigned long long index)
+{
+    return snapshot ? yvex_native_weight_table_at(snapshot->table, index) : NULL;
+}
+
+const yvex_native_weight_info *yvex_source_tensor_snapshot_find(
+    const yvex_source_tensor_snapshot *snapshot,
+    const char *name)
+{
+    return snapshot ? yvex_native_weight_table_find(snapshot->table, name) : NULL;
+}
+
+int yvex_source_tensor_snapshot_find_index(
+    const yvex_source_tensor_snapshot *snapshot,
+    const char *name,
+    unsigned long long *index)
+{
+    const yvex_native_weight_info *item;
+
+    if (!snapshot || !name || !index) return 0;
+    item = yvex_native_weight_table_find(snapshot->table, name);
+    if (!item) return 0;
+    *index = (unsigned long long)(item - snapshot->table->items);
+    return 1;
+}
+
+int yvex_source_tensor_snapshot_facts_get(
+    const yvex_source_tensor_snapshot *snapshot,
+    yvex_source_tensor_snapshot_facts *out,
+    yvex_error *err)
+{
+    if (!snapshot || !out) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_tensor_snapshot",
+                       "snapshot and facts output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(out, 0, sizeof(*out));
+    out->tensor_count = snapshot->table->count;
+    out->shard_count = snapshot->shard_count;
+    out->header_scan_count = snapshot->header_scan_count;
+    out->payload_bytes_read = snapshot->payload_bytes_read;
+    out->lookup_count = snapshot->table->lookup_count;
+    out->collision_count = snapshot->table->collision_count;
+    out->maximum_probe = snapshot->table->maximum_probe;
+    out->identity = snapshot->identity;
+    return YVEX_OK;
+}
 
 static char *source_inventory_strdup(const char *text)
 {
@@ -852,10 +1015,10 @@ static int source_verify_headers(
     source_index *index,
     yvex_source_verification *out,
     yvex_source_derived_inventory *derived,
+    yvex_source_tensor_snapshot **snapshot,
     yvex_error *err)
 {
     yvex_native_weight_table *table;
-    const yvex_native_weight_info **sorted = NULL;
     size_t i;
     int mismatch = 0;
     int indexed = strcmp(out->inventory_authority, "upstream-index") == 0;
@@ -917,24 +1080,8 @@ static int source_verify_headers(
             }
         }
     }
-    sorted = (const yvex_native_weight_info **)calloc(
-        (size_t)table->count, sizeof(sorted[0]));
-    if (!sorted) {
-        yvex_error_set(err, YVEX_ERR_NOMEM, "source_verify_headers",
-                       "header uniqueness allocation failed");
-        rc = YVEX_ERR_NOMEM;
-        goto cleanup;
-    }
-    for (i = 0u; i < (size_t)table->count; ++i) sorted[i] = &table->items[i];
-    qsort(sorted, (size_t)table->count, sizeof(sorted[0]),
-          source_native_info_compare);
-    for (i = 1u; i < (size_t)table->count; ++i) {
-        if (strcmp(sorted[i - 1u]->name, sorted[i]->name) == 0) {
-            yvex_source_verification_add_blocker(out,
-                                                 "duplicate-header-tensor");
-            mismatch = 1;
-        }
-    }
+    rc = yvex_native_weight_table_finalize(table, err);
+    if (rc != YVEX_OK) goto cleanup;
     if (indexed) {
         for (i = 0; i < index->count; ++i) {
             if (!index->items[i].seen_in_header) mismatch = 1;
@@ -964,12 +1111,11 @@ static int source_verify_headers(
         case YVEX_NATIVE_DTYPE_FP4: out->dtype_fp4_count++; break;
         case YVEX_NATIVE_DTYPE_F8_E4M3:
         case YVEX_NATIVE_DTYPE_F8_E5M2: out->dtype_f8_count++; break;
+        case YVEX_NATIVE_DTYPE_F8_E8M0:
+            out->dtype_f8_e8m0_count++;
+            break;
         default:
-            if (strcmp(info->dtype_name, "F8_E8M0") == 0) {
-                out->dtype_f8_e8m0_count++;
-            } else {
-                out->dtype_other_count++;
-            }
+            out->dtype_other_count++;
             break;
         }
     }
@@ -982,9 +1128,14 @@ static int source_verify_headers(
         yvex_source_verification_add_blocker(out,
                                              "shard-index-size-mismatch");
     }
+    if (snapshot) {
+        rc = yvex_source_tensor_snapshot_take_table(
+            snapshot, &table, (unsigned long long)shards->count,
+            out->header_scan_count, err);
+        if (rc != YVEX_OK) goto cleanup;
+    }
     rc = YVEX_OK;
 cleanup:
-    free(sorted);
     yvex_native_weight_table_close(table);
     return rc;
 }
@@ -1008,6 +1159,7 @@ int yvex_source_inventory_verify(
     const yvex_source_verify_options *options,
     yvex_source_verification *out,
     yvex_source_derived_inventory *derived,
+    yvex_source_tensor_snapshot **snapshot,
     yvex_error *err)
 {
     source_shards shards;
@@ -1022,6 +1174,7 @@ int yvex_source_inventory_verify(
     memset(&shards, 0, sizeof(shards));
     memset(&index, 0, sizeof(index));
     if (derived) memset(derived, 0, sizeof(*derived));
+    if (snapshot) *snapshot = NULL;
     rc = source_scan_root(options->source_path, &shards, out, err);
     if (rc != YVEX_OK) goto cleanup;
     if (strcmp(options->identity->upstream_inventory_authority,
@@ -1037,7 +1190,8 @@ int yvex_source_inventory_verify(
         yvex_source_verification_add_blocker(out,
                                              "unsupported-inventory-authority");
     }
-    rc = source_verify_headers(options, &shards, &index, out, derived, err);
+    rc = source_verify_headers(options, &shards, &index, out, derived,
+                               snapshot, err);
 cleanup:
     source_index_free(&index);
     source_shards_free(&shards);

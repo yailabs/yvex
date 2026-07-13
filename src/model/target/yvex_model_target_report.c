@@ -32,6 +32,7 @@
 #include "yvex_model_target_catalog.h"
 #include "yvex_model_target_decision.h"
 #include "yvex_tensor_collection_report.h"
+#include "yvex_deepseek_tensor_coverage.h"
 
 #include "yvex_mapping_gate_report.h"
 #include "yvex_missing_role_report.h"
@@ -254,6 +255,7 @@ void yvex_model_target_report_close(yvex_model_target_report *report)
     if (!report) {
         return;
     }
+    yvex_deepseek_tensor_coverage_close(report->deepseek_tensor_coverage);
     yvex_deepseek_v4_ir_close(report->deepseek_architecture_ir);
     memset(report, 0, sizeof(*report));
 }
