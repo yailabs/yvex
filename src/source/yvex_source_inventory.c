@@ -71,12 +71,50 @@ typedef struct {
 
 struct yvex_source_tensor_snapshot {
     yvex_native_weight_table *table;
+    yvex_source_shard_snapshot *shards;
     unsigned long long shard_count;
     unsigned long long header_scan_count;
     unsigned long long payload_bytes_read;
     unsigned long long identity;
     unsigned int references;
 };
+
+static char *source_inventory_strdup(const char *text);
+
+/* Copies a canonical shard catalog into snapshot-owned immutable storage. */
+static int source_snapshot_copy_shards(
+    yvex_source_tensor_snapshot *snapshot,
+    const yvex_source_shard_snapshot *shards,
+    unsigned long long shard_count,
+    yvex_error *err)
+{
+    unsigned long long index;
+
+    if (!shards || shard_count == 0u) return YVEX_OK;
+    if (shard_count > (unsigned long long)(SIZE_MAX / sizeof(shards[0]))) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "source_tensor_snapshot",
+                       "source shard catalog allocation overflow");
+        return YVEX_ERR_BOUNDS;
+    }
+    snapshot->shards = (yvex_source_shard_snapshot *)calloc(
+        (size_t)shard_count, sizeof(snapshot->shards[0]));
+    if (!snapshot->shards) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "source_tensor_snapshot",
+                       "source shard catalog allocation failed");
+        return YVEX_ERR_NOMEM;
+    }
+    for (index = 0u; index < shard_count; ++index) {
+        char *name = source_inventory_strdup(shards[index].canonical_name);
+        if (!name) {
+            yvex_error_set(err, YVEX_ERR_NOMEM, "source_tensor_snapshot",
+                           "source shard name allocation failed");
+            return YVEX_ERR_NOMEM;
+        }
+        snapshot->shards[index] = shards[index];
+        snapshot->shards[index].canonical_name = name;
+    }
+    return YVEX_OK;
+}
 
 static unsigned long long source_snapshot_hash_bytes(
     unsigned long long hash,
@@ -167,6 +205,46 @@ int yvex_source_tensor_snapshot_take_table(
     return YVEX_OK;
 }
 
+/* Transfers a finalized tensor table and copies its one-pass shard geometry. */
+int yvex_source_tensor_snapshot_take_table_with_shards(
+    yvex_source_tensor_snapshot **out,
+    yvex_native_weight_table **table,
+    const yvex_source_shard_snapshot *shards,
+    unsigned long long shard_count,
+    unsigned long long header_scan_count,
+    yvex_error *err)
+{
+    yvex_source_tensor_snapshot *snapshot = NULL;
+    unsigned long long index;
+    int rc;
+
+    if (!shards || shard_count == 0u) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_tensor_snapshot",
+                       "a nonempty canonical shard catalog is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    for (index = 0u; index < shard_count; ++index) {
+        if (!shards[index].canonical_name ||
+            shards[index].canonical_id != index ||
+            (index && strcmp(shards[index - 1u].canonical_name,
+                             shards[index].canonical_name) >= 0)) {
+            yvex_error_set(err, YVEX_ERR_FORMAT, "source_tensor_snapshot",
+                           "source shard catalog is not canonical and unique");
+            return YVEX_ERR_FORMAT;
+        }
+    }
+    rc = yvex_source_tensor_snapshot_take_table(
+        &snapshot, table, shard_count, header_scan_count, err);
+    if (rc != YVEX_OK) return rc;
+    rc = source_snapshot_copy_shards(snapshot, shards, shard_count, err);
+    if (rc != YVEX_OK) {
+        yvex_source_tensor_snapshot_release(snapshot);
+        return rc;
+    }
+    *out = snapshot;
+    return YVEX_OK;
+}
+
 void yvex_source_tensor_snapshot_retain(yvex_source_tensor_snapshot *snapshot)
 {
     if (snapshot && snapshot->references < UINT_MAX) snapshot->references++;
@@ -174,11 +252,53 @@ void yvex_source_tensor_snapshot_retain(yvex_source_tensor_snapshot *snapshot)
 
 void yvex_source_tensor_snapshot_release(yvex_source_tensor_snapshot *snapshot)
 {
+    unsigned long long index;
+
     if (!snapshot || snapshot->references == 0u) return;
     snapshot->references--;
     if (snapshot->references != 0u) return;
+    for (index = 0u; snapshot->shards && index < snapshot->shard_count; ++index)
+        free((char *)snapshot->shards[index].canonical_name);
+    free(snapshot->shards);
     yvex_native_weight_table_close(snapshot->table);
     free(snapshot);
+}
+
+/* Returns one borrowed immutable shard fact in canonical order. */
+const yvex_source_shard_snapshot *yvex_source_tensor_snapshot_shard_at(
+    const yvex_source_tensor_snapshot *snapshot,
+    unsigned long long index)
+{
+    return snapshot && snapshot->shards && index < snapshot->shard_count
+               ? &snapshot->shards[index] : NULL;
+}
+
+/* Binary-searches the immutable canonical shard catalog without allocation. */
+const yvex_source_shard_snapshot *yvex_source_tensor_snapshot_shard_find(
+    const yvex_source_tensor_snapshot *snapshot,
+    const char *canonical_name)
+{
+    unsigned long long lower = 0u;
+    unsigned long long upper;
+
+    if (!snapshot || !snapshot->shards || !canonical_name) return NULL;
+    upper = snapshot->shard_count;
+    while (lower < upper) {
+        unsigned long long middle = lower + (upper - lower) / 2u;
+        int order = strcmp(snapshot->shards[middle].canonical_name,
+                           canonical_name);
+        if (order == 0) return &snapshot->shards[middle];
+        if (order < 0) lower = middle + 1u;
+        else upper = middle;
+    }
+    return NULL;
+}
+
+/* Reports whether geometry came from the canonical retained header pass. */
+int yvex_source_tensor_snapshot_has_shard_catalog(
+    const yvex_source_tensor_snapshot *snapshot)
+{
+    return snapshot && snapshot->shards && snapshot->shard_count != 0u;
 }
 
 const yvex_native_weight_info *yvex_source_tensor_snapshot_at(
@@ -1035,8 +1155,10 @@ static int source_verify_headers(
     yvex_error *err)
 {
     yvex_native_weight_table *table;
+    yvex_source_shard_snapshot *shard_facts = NULL;
     size_t i;
     int mismatch = 0;
+    int shard_catalog_complete = 1;
     int indexed = strcmp(out->inventory_authority, "upstream-index") == 0;
     int rc = YVEX_OK;
 
@@ -1046,10 +1168,21 @@ static int source_verify_headers(
                        "native header table allocation failed");
         return YVEX_ERR_NOMEM;
     }
+    if (snapshot) {
+        shard_facts = (yvex_source_shard_snapshot *)calloc(
+            shards->count, sizeof(shard_facts[0]));
+        if (!shard_facts) {
+            yvex_native_weight_table_close(table);
+            yvex_error_set(err, YVEX_ERR_NOMEM, "source_verify_headers",
+                           "retained shard geometry allocation failed");
+            return YVEX_ERR_NOMEM;
+        }
+    }
     out->header_scan_count++;
     for (i = 0; i < shards->count; ++i) {
         char path[YVEX_PATH_CAP];
         yvex_error header_error;
+        yvex_safetensors_file_facts file_facts;
         unsigned long long before = table->count;
         unsigned long long row;
 
@@ -1060,11 +1193,13 @@ static int source_verify_headers(
                                    shards->names[i])) {
             yvex_source_verification_add_blocker(
                 out, "invalid-safetensors-header");
+            shard_catalog_complete = 0;
             continue;
         }
         yvex_error_clear(&header_error);
-        rc = yvex_safetensors_read_header_file(path, shards->names[i], table,
-                                               &header_error);
+        memset(&file_facts, 0, sizeof(file_facts));
+        rc = yvex_safetensors_read_header_file_with_facts(
+            path, shards->names[i], table, &file_facts, &header_error);
         if (rc == YVEX_ERR_NOMEM) {
             yvex_error_set(err, YVEX_ERR_NOMEM, "source_verify_headers",
                            "native header inventory allocation failed");
@@ -1083,8 +1218,16 @@ static int source_verify_headers(
                 yvex_source_verification_add_blocker(
                     out, "invalid-safetensors-header");
             }
+            shard_catalog_complete = 0;
             rc = YVEX_OK;
             continue;
+        }
+        if (shard_facts) {
+            shard_facts[i].canonical_id = (unsigned long long)i;
+            shard_facts[i].canonical_name = shards->names[i];
+            shard_facts[i].file_bytes = file_facts.file_bytes;
+            shard_facts[i].data_region_offset = file_facts.data_region_offset;
+            shard_facts[i].payload_bytes = file_facts.payload_bytes;
         }
         for (row = before; row < table->count && indexed; ++row) {
             source_index_entry *entry = source_index_find(
@@ -1144,14 +1287,15 @@ static int source_verify_headers(
         yvex_source_verification_add_blocker(out,
                                              "shard-index-size-mismatch");
     }
-    if (snapshot) {
-        rc = yvex_source_tensor_snapshot_take_table(
-            snapshot, &table, (unsigned long long)shards->count,
-            out->header_scan_count, err);
+    if (snapshot && shard_catalog_complete) {
+        rc = yvex_source_tensor_snapshot_take_table_with_shards(
+            snapshot, &table, shard_facts,
+            (unsigned long long)shards->count, out->header_scan_count, err);
         if (rc != YVEX_OK) goto cleanup;
     }
     rc = YVEX_OK;
 cleanup:
+    free(shard_facts);
     yvex_native_weight_table_close(table);
     return rc;
 }

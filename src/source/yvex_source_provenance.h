@@ -32,4 +32,18 @@ int yvex_source_git_blob_oid_file(const char *path,
                                   char out_hex[41],
                                   yvex_error *err);
 
+typedef struct {
+    int available;
+    int revision_matches;
+    char algorithm[24];
+    char authority[40];
+    char expected_digest[65];
+} yvex_source_payload_digest_fact;
+
+int yvex_source_provenance_payload_digest(
+    const yvex_source_verification *verification,
+    const char *canonical_name,
+    yvex_source_payload_digest_fact *out,
+    yvex_error *err);
+
 #endif

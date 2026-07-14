@@ -1,6 +1,6 @@
 # YVEX System Target
 
-Date: 2026-07-13
+Date: 2026-07-14
 Status: filesystem and module ownership contract
 Authority: filesystem and module topology; current project state belongs only
 to `PROJECT.md`
@@ -15,7 +15,7 @@ Current core areas:
 
 ```text
 src/cli/                 CLI dispatch, input, surfaces, render, IO
-src/source/              source manifests, provenance, sidecars, inventory, headers
+src/source/              source manifests, provenance, inventory, payload trust/streaming
 src/model/target/        model-target catalogs, exact coverage, maps, gates, qtype reports
 src/model/architecture/  immutable typed family architecture specifications
 src/model/artifacts/     model registry/ref/gate/report/write ownership
@@ -52,7 +52,7 @@ domain algorithms. No writer owns command output.
 | Architecture IR | immutable typed DeepSeek-V4-Flash model, 43 main-layer, and MTP topology consumed by release-target profiling | preserve the source-to-IR boundary and feed complete tensor-role derivation without source reparsing | see `PROJECT.md` |
 | Tensor coverage | the IR-derived 69,187-slot DeepSeek requirement set reconciles exactly against one retained verified header snapshot | preserve one-to-one source coverage as the admission input to GGUF mapping | see `PROJECT.md` |
 | GGUF names/layout | immutable 69,187-contribution to 1,360-descriptor DeepSeek logical emission plan | preserve the plan as payload-streaming and writer input without physical offsets or emission claims | see `PROJECT.md` |
-| Source payload | header-only inventory | bounded payload streaming across source shards | V010.SOURCE.PAYLOAD.STREAM.0 |
+| Source payload | verified snapshot-bound shard/range indexes, payload trust, and bounded transactional streaming | preserve as exact quantizer input without decoding or transformation | see `PROJECT.md` |
 | Quantization | policy and geometry facts | role-correct quantization or explicit refusal | V010.QUANT.2 |
 | GGUF writer | explicit refusal | complete deterministic emitted bytes | V010.GGUF.WRITER.1 |
 | Artifact emission | tensor proof files only | complete YVEX-produced DeepSeek GGUF | V010.ARTIFACT.EMIT.DEEPSEEK.0 |
@@ -69,12 +69,20 @@ domain algorithms. No writer owns command output.
 - CLI renderers format typed facts.
 - CLI IO writes operator bytes.
 - Explicit writer modules write local files only.
+- Core shard-index foundation owns allocation-free canonical key admission and
+  deterministic lookup over caller-owned entries. Source payload consumes it;
+  future artifact shard owners may reuse it without inheriting source policy or
+  implying an artifact payload reader.
 - Source JSON owns bounded structured parsing primitives, without source policy.
 - Source provenance owns pinned repository/revision and manifest facts.
 - Source family adapters own raw configuration and tokenizer sidecar facts.
 - Source inventory owns indexed or explicitly header-derived shard inventory
   and the single canonical safetensors header pass. Its retained immutable
   snapshot carries deterministic tensor identity and lookup facts to consumers.
+- Source payload owns snapshot-bound shard and tensor-range indexes, payload
+  trust identity, bounded page/chunk plans, secure read-only handle admission,
+  exact positioned reads, resource budgets, and transactional consumer
+  delivery. It consumes the retained snapshot and never reparses headers.
 - Model-target coverage owns IR-derived source requirements and exact snapshot
   reconciliation; it does not own source IO, GGUF naming, transforms, or
   payload access.
@@ -83,10 +91,16 @@ domain algorithms. No writer owns command output.
   shapes, metadata prerequisites, and deterministic identity. GGUF name/layout
   primitives remain their format owners; neither side reads payloads or emits
   physical file bytes.
+- The DeepSeek payload handoff owner binds every canonical mapping contribution
+  to the common source payload index and plan. It proves coverage and pressure
+  facts but performs no source transform, quantization, or artifact emission.
 - Source verification coordinates those owners and decides blockers; it does
-  not parse JSON, rescan headers, render, serialize, or read tensor payloads.
+  not parse JSON, rescan headers, render, serialize, or independently read
+  tensor payloads.
 - Source writers atomically publish verifier-approved manifests and explicit
-  derived inventory outside official model source trees.
+  derived inventory outside official model source trees. Payload trust is
+  published only after complete digest verification or explicitly local
+  sealing; partial trust state is never published.
 - Model target owns target catalogs, maps, gates, and qtype reports.
 - Model architecture owns immutable normalized topology built from successful
   strict source verification. It does not reopen source files, classify tensor

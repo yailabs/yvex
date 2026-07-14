@@ -75,6 +75,20 @@ int yvex_safetensors_read_header_file(const char *abs_path,
                                       yvex_native_weight_table *table,
                                       yvex_error *err);
 
+typedef struct {
+    unsigned long long file_bytes;
+    unsigned long long header_json_bytes;
+    unsigned long long data_region_offset;
+    unsigned long long payload_bytes;
+} yvex_safetensors_file_facts;
+
+int yvex_safetensors_read_header_file_with_facts(
+    const char *abs_path,
+    const char *shard_path,
+    yvex_native_weight_table *table,
+    yvex_safetensors_file_facts *facts,
+    yvex_error *err);
+
 int yvex_safetensors_parse_header(const char *json,
                                   unsigned long long payload_bytes,
                                   const char *shard_path,

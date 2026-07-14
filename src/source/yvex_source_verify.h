@@ -162,6 +162,7 @@ typedef struct yvex_source_verification {
     unsigned long long header_tensor_count;
     unsigned long long header_bytes;
     unsigned long long declared_tensor_bytes;
+    unsigned long long source_snapshot_identity;
     unsigned long long max_tensor_rank;
     unsigned long long dtype_f16_count;
     unsigned long long dtype_bf16_count;
@@ -172,6 +173,15 @@ typedef struct yvex_source_verification {
     unsigned long long dtype_f8_count;
     unsigned long long dtype_f8_e8m0_count;
     unsigned long long dtype_other_count;
+    char manifest_payload_identity[65];
+    char manifest_payload_trust_class[40];
+    char manifest_payload_digest_algorithm[24];
+    unsigned long long manifest_payload_shard_count;
+    unsigned long long manifest_payload_bytes;
+    unsigned long long manifest_payload_source_snapshot_identity;
+    unsigned long long manifest_payload_tensor_count;
+    unsigned long long manifest_payload_logical_tensor_bytes;
+    int manifest_payload_trusted;
     const char *blockers[YVEX_SOURCE_VERIFY_BLOCKER_CAP];
     unsigned int blocker_count;
 } yvex_source_verification;

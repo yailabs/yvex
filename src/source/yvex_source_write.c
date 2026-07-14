@@ -9,6 +9,7 @@
  */
 #include "yvex_source_write.h"
 #include "yvex_source_private.h"
+#include "yvex_source_payload_internal.h"
 #include "yvex_json_writer.h"
 
 #include <stdio.h>
@@ -301,6 +302,137 @@ int yvex_source_manifest_publish_verified(
     context.options = options;
     context.verification = verification;
     return source_publish_atomic(out_path, source_write_verified_manifest,
+                                 &context, err);
+}
+
+typedef struct {
+    const yvex_source_verification *verification;
+    const yvex_source_payload_session *session;
+} source_payload_manifest_context;
+
+/* Serializes a fully trusted payload set; raw payload bytes never enter output. */
+static int source_write_payload_manifest(FILE *fp, const void *opaque)
+{
+    const source_payload_manifest_context *context =
+        (const source_payload_manifest_context *)opaque;
+    const yvex_source_verification *verification = context->verification;
+    const yvex_source_payload_session *session = context->session;
+    unsigned long long index;
+
+    if (fprintf(fp, "{\n  \"schema\": \"yvex.source_manifest.v3\",\n"
+                    "  \"status\": \"complete\",\n"
+                    "  \"target\": {\"id\": ") < 0) return 0;
+    yvex_file_json_write_string(fp, session->target_id);
+    if (fprintf(fp, ", \"family\": ") < 0) return 0;
+    yvex_file_json_write_string(fp, session->family_key);
+    if (fprintf(fp, "},\n  \"source\": {\"kind\": \"huggingface\", \"repo\": ") < 0)
+        return 0;
+    yvex_file_json_write_string(fp, session->repository_id);
+    if (fprintf(fp, ", \"revision\": ") < 0) return 0;
+    yvex_file_json_write_string(fp, verification->revision);
+    if (fprintf(fp, "},\n  \"local\": {\"path\": ") < 0) return 0;
+    yvex_file_json_write_string(fp, verification->resolved_source_path);
+    if (fprintf(fp,
+                "},\n  \"verification\": {\n"
+                "    \"stage\": \"exact-source-payload-verified\",\n"
+                "    \"inventory_authority\": ") < 0) return 0;
+    yvex_file_json_write_string(fp, verification->inventory_authority);
+    if (fprintf(fp, ",\n    \"upstream_index_oid\": ") < 0) return 0;
+    yvex_file_json_write_string(
+        fp, verification->upstream_index_oid[0]
+                ? verification->upstream_index_oid : "not-applicable");
+    if (fprintf(fp,
+                ",\n    \"source_file_count\": %llu,\n"
+                "    \"source_total_bytes\": %llu,\n"
+                "    \"shard_count\": %llu,\n"
+                "    \"shard_bytes\": %llu,\n"
+                "    \"header_tensor_count\": %llu,\n"
+                "    \"config_status\": \"verified\",\n"
+                "    \"tokenizer_status\": \"verified\",\n"
+                "    \"payload_digest_status\": ",
+                verification->source_file_count,
+                verification->source_total_bytes,
+                verification->shard_count,
+                verification->shard_bytes,
+                verification->header_tensor_count) < 0) return 0;
+    yvex_file_json_write_string(
+        fp, yvex_source_payload_trust_class_name(session->facts.trust_class));
+    if (fprintf(fp,
+                "\n  },\n  \"payload\": {\n"
+                "    \"identity\": ") < 0) return 0;
+    yvex_file_json_write_string(fp, session->facts.payload_identity);
+    if (fprintf(fp, ",\n    \"trust_class\": ") < 0) return 0;
+    yvex_file_json_write_string(
+        fp, yvex_source_payload_trust_class_name(session->facts.trust_class));
+    if (fprintf(fp,
+                ",\n    \"digest_algorithm\": \"sha256\",\n"
+                "    \"source_snapshot_identity\": %llu,\n"
+                "    \"shard_count\": %llu,\n"
+                "    \"shard_file_bytes\": %llu,\n"
+                "    \"tensor_count\": %llu,\n"
+                "    \"logical_tensor_bytes\": %llu,\n"
+                "    \"shards\": [\n",
+                session->facts.source_snapshot_identity,
+                session->facts.shard_count,
+                verification->shard_bytes,
+                session->facts.tensor_count,
+                session->facts.logical_tensor_bytes) < 0) return 0;
+    for (index = 0u; index < session->shard_count; ++index) {
+        const yvex_source_payload_owned_shard *shard = &session->shards[index];
+
+        if (fprintf(fp, "      {\"id\": %llu, \"name\": ", index) < 0)
+            return 0;
+        yvex_file_json_write_string(fp, shard->name);
+        if (fprintf(fp,
+                    ", \"file_bytes\": %llu, \"data_region_offset\": %llu, "
+                    "\"payload_bytes\": %llu, \"digest_algorithm\": ",
+                    shard->public_fact.file_bytes,
+                    shard->public_fact.data_region_offset,
+                    shard->public_fact.payload_bytes) < 0) return 0;
+        yvex_file_json_write_string(fp, shard->digest_algorithm);
+        if (fprintf(fp, ", \"digest_authority\": ") < 0) return 0;
+        yvex_file_json_write_string(fp, shard->digest_authority);
+        if (fprintf(fp, ", \"expected_digest\": ") < 0) return 0;
+        if (shard->expected_digest[0])
+            yvex_file_json_write_string(fp, shard->expected_digest);
+        else if (fprintf(fp, "null") < 0)
+            return 0;
+        if (fprintf(fp, ", \"observed_digest\": ") < 0) return 0;
+        yvex_file_json_write_string(fp, shard->observed_digest);
+        if (fprintf(fp, ", \"trust_class\": ") < 0) return 0;
+        yvex_file_json_write_string(
+            fp, yvex_source_payload_trust_class_name(
+                    shard->public_fact.trust_class));
+        if (fprintf(fp, "}%s\n",
+                    index + 1u == session->shard_count ? "" : ",") < 0)
+            return 0;
+    }
+    return fprintf(fp, "    ]\n  }\n}\n") >= 0;
+}
+
+/* Publishes v3 only after all digests and aggregate identity have completed. */
+int yvex_source_manifest_publish_payload(
+    const char *out_path,
+    const yvex_source_verification *verification,
+    const yvex_source_payload_session *session,
+    yvex_error *err)
+{
+    source_payload_manifest_context context;
+
+    if (!out_path || !verification ||
+        !verification->verified || !session ||
+        session->state != YVEX_SOURCE_PAYLOAD_STATE_VERIFYING ||
+        session->facts.trust_class == YVEX_SOURCE_PAYLOAD_TRUST_NONE ||
+        session->facts.trusted_shard_count != session->shard_count ||
+        !session->facts.payload_identity[0]) {
+        yvex_error_set(err, YVEX_ERR_STATE,
+                       "source_manifest_publish_payload",
+                       "only complete trusted payload facts may publish a v3 manifest");
+        return YVEX_ERR_STATE;
+    }
+    context.verification = verification;
+    context.session = session;
+    return source_publish_atomic(out_path, source_write_payload_manifest,
                                  &context, err);
 }
 

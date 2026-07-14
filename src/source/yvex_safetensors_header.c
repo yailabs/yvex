@@ -7,14 +7,17 @@
  * Invariants: validates declared tensor metadata against payload size without reading payload bytes.
  * Boundary: header parsing is not source verification, role mapping, or runtime readiness.
  */
+#define _GNU_SOURCE
 #include "yvex_safetensors_header.h"
 #include "yvex_source_private.h"
 
 #include <ctype.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <stdio.h>
+#include <unistd.h>
 
 static unsigned long long st_le64(const unsigned char b[8])
 {
@@ -28,12 +31,16 @@ static unsigned long long st_le64(const unsigned char b[8])
            ((unsigned long long)b[7] << 56);
 }
 
-int yvex_safetensors_read_header_file(const char *abs_path,
-                                      const char *shard_path,
-                                      yvex_native_weight_table *table,
-                                      yvex_error *err)
+/* Reads exactly one bounded header and returns immutable file geometry facts. */
+int yvex_safetensors_read_header_file_with_facts(
+    const char *abs_path,
+    const char *shard_path,
+    yvex_native_weight_table *table,
+    yvex_safetensors_file_facts *facts,
+    yvex_error *err)
 {
     FILE *fp;
+    int fd;
     struct stat st;
     unsigned char len_bytes[8];
     unsigned long long header_len;
@@ -42,19 +49,24 @@ int yvex_safetensors_read_header_file(const char *abs_path,
     char *json;
     int rc;
 
-    if (!abs_path || !shard_path || !table) {
+    if (!abs_path || !shard_path || !table || !facts) {
         yvex_error_set(err, YVEX_ERR_INVALID_ARG, "safetensors_header", "path, shard, and table are required");
         return YVEX_ERR_INVALID_ARG;
     }
-    if (stat(abs_path, &st) != 0 || st.st_size < 8) {
+    fd = open(abs_path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0 || fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) ||
+        st.st_size < 8) {
+        if (fd >= 0) close(fd);
         yvex_error_setf(err, YVEX_ERR_FORMAT, "safetensors_header", "short safetensors file: %s", shard_path);
         table->summary.malformed_shard_count++;
         table->header_error_count++;
         return YVEX_ERR_FORMAT;
     }
+    memset(facts, 0, sizeof(*facts));
     file_size = (unsigned long long)st.st_size;
-    fp = fopen(abs_path, "rb");
+    fp = fdopen(fd, "rb");
     if (!fp) {
+        close(fd);
         yvex_error_setf(err, YVEX_ERR_IO, "safetensors_header", "cannot open safetensors file: %s", shard_path);
         return YVEX_ERR_IO;
     }
@@ -97,8 +109,26 @@ int yvex_safetensors_read_header_file(const char *abs_path,
         table->summary.malformed_shard_count++;
         table->header_error_count++;
     }
+    if (rc == YVEX_OK) {
+        facts->file_bytes = file_size;
+        facts->header_json_bytes = header_len;
+        facts->data_region_offset = 8u + header_len;
+        facts->payload_bytes = payload_bytes;
+    }
     free(json);
     return rc;
+}
+
+/* Preserves the legacy header-only ABI while discarding returned geometry. */
+int yvex_safetensors_read_header_file(const char *abs_path,
+                                      const char *shard_path,
+                                      yvex_native_weight_table *table,
+                                      yvex_error *err)
+{
+    yvex_safetensors_file_facts facts;
+
+    return yvex_safetensors_read_header_file_with_facts(
+        abs_path, shard_path, table, &facts, err);
 }
 
 

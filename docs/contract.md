@@ -140,6 +140,63 @@ checks all required padding for zero bytes, validates the exact aggregate file
 span, and detects snapshot drift. It reads no tensor payload bytes. This layout
 result is still not complete-artifact, materialization, or runtime support.
 
+### Verified Source Payload Contract
+
+The source payload session is an internal construction boundary. It may be
+created only from one successful exact source-verification result and that
+result's retained immutable safetensors snapshot; a directory path alone is
+not admission. The session builds immutable shard and tensor-range indexes
+without reopening or reparsing any header. Every range remains bound to the
+source snapshot identity, payload identity, shard identity, dtype, rank, shape,
+data-region base, and checked absolute file interval.
+
+Shard paths are canonical relative names resolved beneath the admitted source
+root. Linux admission uses read-only directory-relative opens, rejects path
+escape and symlinks, requires regular files, checks exact size and file
+identity, and revalidates identity after relevant reads. Evicted handles are
+reopened through the same admission path. Replacement or drift poisons the
+session, prevents later silent success, and never commits partially delivered
+bytes.
+
+Payload trust has separate typed states. `upstream_payload_verified` means an
+authoritative pinned provider SHA-256 exists and matches the incrementally
+observed complete shard digest. `local_payload_snapshot_sealed` means no such
+upstream digest was available and records only a cryptographic identity of the
+local snapshot. Metadata/header verification, current readability, and drift
+are distinct facts. The aggregate payload identity includes stable target,
+revision, schema, ordered shard name/size/digest, and trust-class facts; it
+excludes absolute paths and execution time.
+
+The verifier-owned source manifest is versioned and atomically replaced only
+after every shard reaches one complete explicit trust state and the aggregate
+identity is complete. Unsupported versions, malformed or internally
+inconsistent trust, digest mismatch, publication failure, and reopen mismatch
+refuse promotion and preserve the previous valid manifest. A set containing
+both authoritative shard digests and local seals is conservatively classified
+as `local_payload_snapshot_sealed` at aggregate scope.
+
+Page/chunk plans are deterministic, preserve tensor identity, group ranges by
+shard and physical order, and never read outside a requested tensor range.
+Configurable budgets cap shard handles, active streams, chunk bytes, in-flight
+host bytes, plan entries, and index entries. The handle cache pins active
+descriptors and uses deterministic LRU eviction; the payload policy retains no
+whole tensor and no materialization cache.
+
+Streaming is a synchronous, non-reentrant transaction on caller-owned callback
+context: `begin`, zero or more borrowed bounded chunks, then exactly one
+`commit` or `abort`. A chunk buffer is valid only for the callback invocation
+and may not be retained. Commit requires exact byte completion plus post-read
+identity validation. Cancellation, consumer refusal, short read, IO failure,
+digest failure, drift, or budget exhaustion aborts with exact delivered-byte
+accounting and deterministic handle/buffer cleanup. Immutable indexes support
+concurrent offset-independent reads; close refuses while plans or streams are
+active, and release is idempotent after a successful close.
+
+This source boundary supplies exact bytes to later conversion and
+quantization. It does not decode BF16, FP8, E8M0, MXFP4, or I64 data; aggregate
+experts; choose qtypes; encode GGUF; emit a complete artifact; materialize a
+model; upload CUDA data; execute a graph; or establish generation support.
+
 ## Model Registry Contract
 
 The default local model registry is:

@@ -1,6 +1,6 @@
 # YVEX Model Artifacts
 
-Date: 2026-07-11
+Date: 2026-07-14
 Status: artifact policy
 
 Complete and supported model artifacts are external operator assets. They are
@@ -47,6 +47,27 @@ a complete GGUF for DeepSeek-V4-Flash produced by YVEX
 No such complete model artifact currently exists. The target, artifact,
 materialization, runtime, generation, evaluation, benchmark, and release states
 remain unsupported or blocked as recorded in `PROJECT.md`.
+
+## Source Payload Handoff
+
+The canonical source payload session is construction input, not an artifact.
+It consumes one exact verifier result and its retained header snapshot, binds
+each source tensor to a securely admitted shard and checked absolute byte
+range, and delivers deterministic bounded chunks through a transactional sink.
+It neither reparses source headers nor retains whole tensors.
+
+For the pinned DeepSeek source, authoritative Hugging Face Git LFS SHA-256
+values establish `upstream_payload_verified` only after every complete shard
+digest matches. If an equivalent provider has no authoritative payload digest,
+the distinct `local_payload_snapshot_sealed` class may identify the local byte
+snapshot but may not claim upstream verification. The ordered aggregate
+payload identity and per-shard trust facts are published atomically in the
+canonical source manifest outside the repository.
+
+This handoff makes exact source bytes available to later quantization. It does
+not perform datatype conversion, expert aggregation, qtype selection,
+quantization, GGUF encoding, complete-artifact emission, materialization, or
+runtime execution.
 
 ## Native Structural Reader
 

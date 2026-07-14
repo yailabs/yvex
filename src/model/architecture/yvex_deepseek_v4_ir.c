@@ -211,8 +211,11 @@ static int deepseek_v4_validate_source(
             YVEX_DEEPSEEK_V4_IR_COMPONENT_IDENTITY, "canonical-target",
             YVEX_DEEPSEEK_V4_IR_NO_LAYER, 1u, 0u, err);
     }
-    if (strcmp(verification->verification_stage,
-               "exact-source-metadata-header-verified") != 0 ||
+    if ((strcmp(verification->verification_stage,
+                "exact-source-metadata-header-verified") != 0 &&
+         (strcmp(verification->verification_stage,
+                 "exact-source-payload-verified") != 0 ||
+          !verification->manifest_payload_trusted)) ||
         strcmp(verification->inventory_authority, "upstream-index") != 0 ||
         !verification->shard_index_present ||
         !verification->shard_index_valid ||

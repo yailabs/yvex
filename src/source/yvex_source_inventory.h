@@ -28,6 +28,14 @@ typedef struct {
 typedef struct yvex_source_tensor_snapshot yvex_source_tensor_snapshot;
 
 typedef struct {
+    unsigned long long canonical_id;
+    const char *canonical_name;
+    unsigned long long file_bytes;
+    unsigned long long data_region_offset;
+    unsigned long long payload_bytes;
+} yvex_source_shard_snapshot;
+
+typedef struct {
     unsigned long long tensor_count;
     unsigned long long shard_count;
     unsigned long long header_scan_count;
@@ -69,5 +77,20 @@ int yvex_source_tensor_snapshot_take_table(
     unsigned long long shard_count,
     unsigned long long header_scan_count,
     yvex_error *err);
+int yvex_source_tensor_snapshot_take_table_with_shards(
+    yvex_source_tensor_snapshot **out,
+    yvex_native_weight_table **table,
+    const yvex_source_shard_snapshot *shards,
+    unsigned long long shard_count,
+    unsigned long long header_scan_count,
+    yvex_error *err);
+const yvex_source_shard_snapshot *yvex_source_tensor_snapshot_shard_at(
+    const yvex_source_tensor_snapshot *snapshot,
+    unsigned long long index);
+const yvex_source_shard_snapshot *yvex_source_tensor_snapshot_shard_find(
+    const yvex_source_tensor_snapshot *snapshot,
+    const char *canonical_name);
+int yvex_source_tensor_snapshot_has_shard_catalog(
+    const yvex_source_tensor_snapshot *snapshot);
 
 #endif

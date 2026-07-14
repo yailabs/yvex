@@ -446,6 +446,30 @@ static int test_arch_ir_refusal_matrix(void)
     return 0;
 }
 
+/* Admits the stronger v3 payload stage only when its parsed trust fact is set. */
+static int test_arch_ir_payload_manifest_stage(void)
+{
+    yvex_source_verification source;
+    yvex_deepseek_v4_ir *ir = NULL;
+    yvex_deepseek_v4_ir_failure failure;
+
+    arch_ir_verification_fixture(&source);
+    arch_ir_copy(source.verification_stage,
+                 sizeof(source.verification_stage),
+                 "exact-source-payload-verified");
+    source.manifest_payload_trusted = 1;
+    YVEX_TEST_ASSERT(arch_ir_build(&source, &ir, &failure) == YVEX_OK && ir,
+                     "trusted v3 payload manifest remains strict IR input");
+    yvex_deepseek_v4_ir_close(ir);
+
+    source.manifest_payload_trusted = 0;
+    if (arch_ir_expect_failure(
+            &source, YVEX_DEEPSEEK_V4_IR_FAILURE_SOURCE_FACT_MISSING,
+            "untrusted payload-stage label cannot bypass source admission") !=
+        0) return 1;
+    return 0;
+}
+
 typedef struct {
     unsigned int call_count;
     unsigned int fail_call;
@@ -591,6 +615,7 @@ int yvex_test_deepseek_arch_ir(void)
 {
     if (test_arch_ir_golden_topology() != 0) return 1;
     if (test_arch_ir_refusal_matrix() != 0) return 1;
+    if (test_arch_ir_payload_manifest_stage() != 0) return 1;
     if (test_arch_ir_lifetime_and_allocation() != 0) return 1;
     if (test_arch_ir_report_consumer_and_family_preservation() != 0) return 1;
     return 0;

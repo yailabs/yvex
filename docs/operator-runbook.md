@@ -1,6 +1,6 @@
 # YVEX Operator Runbook
 
-Date: 2026-07-10
+Date: 2026-07-14
 Status: runbook index and repository operation boundary
 
 ## Purpose
@@ -22,7 +22,7 @@ There is no supported model generation procedure today.
 
 | Runbook | Current purpose | Capability boundary |
 | --- | --- | --- |
-| `runbooks/deepseek.md` | Exact v0.1.0 source/target boundary and safe filesystem checks | no complete artifact or runtime procedure |
+| `runbooks/deepseek.md` | Exact v0.1.0 source boundary, metadata verification, and read-only exhaustive payload trust procedure | no transform, complete artifact, or runtime procedure |
 | `runbooks/common.md` | Build, validation, documentation guards, artifact hygiene, and operator-local cleanup | validation does not create runtime capability |
 
 Model-family architecture is defined in `model-families.md`. Release gates are
@@ -31,8 +31,8 @@ Active Next are defined only in `../PROJECT.md`.
 
 ## Current Entry
 
-Use the DeepSeek runbook to inspect the exact source boundary. Use the common
-runbook for repository validation. Do not substitute selected aliases,
+Use the DeepSeek runbook to inspect and verify the exact source boundary. Use
+the common runbook for repository validation. Do not substitute selected aliases,
 diagnostic commands, fixture output, or report-only surfaces for a full-target
 operator run.
 

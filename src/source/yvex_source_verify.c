@@ -321,6 +321,13 @@ int yvex_source_verify_with_snapshot(
     rc = yvex_source_inventory_verify(options, out, &derived,
                                       &candidate_snapshot, err);
     if (rc != YVEX_OK) goto cleanup;
+    if (candidate_snapshot) {
+        yvex_source_tensor_snapshot_facts snapshot_facts;
+        rc = yvex_source_tensor_snapshot_facts_get(
+            candidate_snapshot, &snapshot_facts, err);
+        if (rc != YVEX_OK) goto cleanup;
+        out->source_snapshot_identity = snapshot_facts.identity;
+    }
     yvex_source_provenance_finalize(options, out);
 
     if (strcmp(out->inventory_authority, "header-derived") == 0 &&
@@ -341,6 +348,13 @@ int yvex_source_verify_with_snapshot(
     if (out->blocker_count == 0u && source_manifest_is_current(options, out)) {
         out->manifest_verified = 1;
         out->manifest_reopened = 1;
+        out->manifest_payload_trusted =
+            strcmp(out->manifest_schema, "yvex.source_manifest.v3") == 0;
+    } else if (out->blocker_count == 0u &&
+               strcmp(out->manifest_schema, "yvex.source_manifest.v3") == 0 &&
+               out->manifest_payload_identity[0]) {
+        yvex_source_verification_add_blocker(out,
+                                             "payload-snapshot-drift");
     } else if (out->blocker_count == 0u && options->promote_manifest) {
         rc = source_promote_manifest(options, out, err);
         if (rc != YVEX_OK) goto cleanup;

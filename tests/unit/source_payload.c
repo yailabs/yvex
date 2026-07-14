@@ -1,0 +1,1924 @@
+#define _XOPEN_SOURCE 700
+/*
+ * source_payload.c - verified source payload unit and fault-injection tests.
+ *
+ * Owner: tests/unit.
+ * Owns: tiny payload fixtures, sinks, concurrency probes, and syscall faults.
+ * Does not own: production source policy, external model files, or capability claims.
+ * Invariants: fixtures are generated under build and raw bytes are never printed.
+ * Boundary: fixture proof is not DeepSeek live payload trust.
+ */
+#include "test.h"
+
+#include "src/core/yvex_sha256.h"
+#include "src/core/yvex_shard_index.h"
+#include "src/source/yvex_source_payload_internal.h"
+#include "src/source/yvex_source_provenance.h"
+#include "src/source/yvex_source_private.h"
+#include "src/model/target/yvex_model_target_catalog.h"
+
+#include <yvex/artifact_identity.h>
+
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+typedef struct {
+    char root[512];
+    char manifest[640];
+    yvex_source_verify_options verify_options;
+    yvex_source_verification verification;
+    yvex_source_tensor_snapshot *snapshot;
+    yvex_source_payload_session *session;
+} payload_fixture;
+
+typedef struct {
+    yvex_sha256 hash;
+    unsigned long long bytes;
+    unsigned long long chunks;
+    unsigned long long aborts;
+    unsigned long long commits;
+    unsigned long long fail_after_chunks;
+    yvex_source_payload_session *cancel_session;
+    unsigned long long cancel_after_chunks;
+} payload_sink_state;
+
+typedef struct {
+    unsigned long long pread_calls;
+    unsigned long long eintr_at;
+    unsigned long long eof_at;
+    unsigned long long io_at;
+    size_t partial_limit;
+    unsigned long long open_calls;
+    unsigned long long open_fail_at;
+    unsigned long long fstat_calls;
+    unsigned long long fstat_fail_at;
+    unsigned long long close_calls;
+    unsigned long long close_fail_at;
+    unsigned long long allocation_calls;
+    unsigned long long allocation_fail_at;
+    long long live_allocations;
+} payload_fault_state;
+
+typedef struct {
+    pthread_mutex_t mutex;
+    pthread_cond_t condition;
+    unsigned int arrived;
+    int released;
+} payload_stream_gate;
+
+typedef struct {
+    payload_sink_state base;
+    payload_stream_gate *gate;
+    int waited;
+} payload_blocking_sink;
+
+typedef struct {
+    yvex_source_payload_session *session;
+    const yvex_source_payload_plan *plan;
+    yvex_source_payload_sink sink;
+    yvex_source_payload_stream_result result;
+    yvex_source_payload_failure failure;
+    yvex_error error;
+    int rc;
+    int verify;
+} payload_stream_thread;
+
+static payload_fault_state payload_fault;
+
+/* Proves the allocation-free common source/artifact shard-index foundation. */
+static int test_storage_shard_index_foundation(void)
+{
+    yvex_shard_index_entry entries[] = {
+        {0u, "artifact-00001"},
+        {1u, "artifact-00002"},
+        {2u, "artifact-00003"}
+    };
+    yvex_shard_index index;
+    unsigned long long comparisons;
+
+    YVEX_TEST_ASSERT(yvex_shard_index_init(
+                         &index, entries, 3u, 3u) == YVEX_SHARD_INDEX_OK,
+                     "common shard index admits canonical entries");
+    YVEX_TEST_ASSERT(yvex_shard_index_at(&index, 1u) == &entries[1] &&
+                         yvex_shard_index_find(
+                             &index, "artifact-00003", &comparisons) ==
+                             &entries[2] && comparisons <= 2u,
+                     "common shard index provides bounded deterministic lookup");
+    YVEX_TEST_ASSERT(yvex_shard_index_init(
+                         &index, entries, 3u, 2u) == YVEX_SHARD_INDEX_BUDGET,
+                     "common shard index enforces entry budget");
+    entries[2].canonical_key = entries[1].canonical_key;
+    YVEX_TEST_ASSERT(yvex_shard_index_init(
+                         &index, entries, 3u, 3u) ==
+                         YVEX_SHARD_INDEX_DUPLICATE_KEY,
+                     "common shard index refuses duplicate ownership");
+    entries[2].canonical_key = "artifact-00003";
+    entries[2].canonical_id = 1u;
+    YVEX_TEST_ASSERT(yvex_shard_index_init(
+                         &index, entries, 3u, 3u) ==
+                         YVEX_SHARD_INDEX_DUPLICATE_ID,
+                     "common shard index refuses duplicate canonical IDs");
+    yvex_shard_index_reset(&index);
+    return 0;
+}
+
+static int payload_test_mkdir(const char *path)
+{
+    return mkdir(path, 0777) == 0 || errno == EEXIST;
+}
+
+static int payload_test_write_bytes(const char *path,
+                                    size_t prefix,
+                                    size_t payload,
+                                    unsigned int seed)
+{
+    FILE *file = fopen(path, "wb");
+    size_t index;
+
+    if (!file) return 0;
+    for (index = 0u; index < prefix + payload; ++index) {
+        unsigned char byte = index < prefix
+            ? (unsigned char)(0xa0u + (index & 15u))
+            : (unsigned char)((index + seed * 17u) & 0xffu);
+        if (fwrite(&byte, 1u, 1u, file) != 1u) {
+            fclose(file);
+            return 0;
+        }
+    }
+    return fclose(file) == 0;
+}
+
+static int payload_test_write_text(const char *path, const char *text)
+{
+    FILE *file = fopen(path, "wb");
+
+    if (!file) return 0;
+    if (fputs(text, file) < 0) {
+        fclose(file);
+        return 0;
+    }
+    return fclose(file) == 0;
+}
+
+static int payload_test_read_text(const char *path, char *text, size_t cap)
+{
+    FILE *file = fopen(path, "rb");
+    size_t got;
+
+    if (!file || cap == 0u) {
+        if (file) fclose(file);
+        return 0;
+    }
+    got = fread(text, 1u, cap - 1u, file);
+    text[got] = '\0';
+    return fclose(file) == 0;
+}
+
+static int payload_test_metadata(const char *root,
+                                 const char *name,
+                                 const char *digest)
+{
+    char path[768];
+    char text[512];
+    int count;
+
+    count = snprintf(path, sizeof(path),
+                     "%s/.cache/huggingface/download/%s.metadata",
+                     root, name);
+    if (count < 0 || (size_t)count >= sizeof(path)) return 0;
+    count = snprintf(text, sizeof(text),
+        "60d8d70770c6776ff598c94bb586a859a38244f1\n%s\n0\n", digest);
+    return count >= 0 && (size_t)count < sizeof(text) &&
+           payload_test_write_text(path, text);
+}
+
+static int payload_fixture_create(payload_fixture *fixture,
+                                  const char *suffix,
+                                  int second_digest,
+                                  int bad_digest,
+                                  unsigned int handles,
+                                  const yvex_source_payload_ops *ops,
+                                  yvex_source_payload_failure *failure,
+                                  yvex_error *err)
+{
+    static const char *const shard_names[] = {
+        "model-00001-of-00002.safetensors",
+        "model-00002-of-00002.safetensors"
+    };
+    yvex_native_weight_table *table = NULL;
+    yvex_source_shard_snapshot shards[2];
+    yvex_source_tensor_snapshot_facts snapshot_facts;
+    yvex_source_payload_open_options open_options;
+    yvex_source_payload_budget budget;
+    unsigned long long dims[1];
+    char path[768];
+    char digest[65];
+    unsigned int index;
+    int rc;
+
+    memset(fixture, 0, sizeof(*fixture));
+    snprintf(fixture->root, sizeof(fixture->root),
+             "build/tests/source-payload-%s", suffix);
+    snprintf(fixture->manifest, sizeof(fixture->manifest),
+             "%s/manifest.json", fixture->root);
+    snprintf(path, sizeof(path), "rm -rf %s", fixture->root);
+    (void)system(path);
+    YVEX_TEST_ASSERT(payload_test_mkdir("build"), "payload fixture build dir");
+    YVEX_TEST_ASSERT(payload_test_mkdir("build/tests"), "payload fixture tests dir");
+    YVEX_TEST_ASSERT(payload_test_mkdir(fixture->root), "payload fixture root");
+    snprintf(path, sizeof(path), "%s/.cache", fixture->root);
+    YVEX_TEST_ASSERT(payload_test_mkdir(path), "payload fixture cache");
+    snprintf(path, sizeof(path), "%s/.cache/huggingface", fixture->root);
+    YVEX_TEST_ASSERT(payload_test_mkdir(path), "payload fixture provider cache");
+    snprintf(path, sizeof(path), "%s/.cache/huggingface/download", fixture->root);
+    YVEX_TEST_ASSERT(payload_test_mkdir(path), "payload fixture metadata cache");
+
+    table = (yvex_native_weight_table *)calloc(1u, sizeof(*table));
+    YVEX_TEST_ASSERT(table != NULL, "payload fixture tensor table");
+    dims[0] = 4096u;
+    YVEX_TEST_ASSERT(yvex_native_weight_table_add(
+        table, "alpha.weight", shard_names[0], "BF16", 1u, dims,
+        0u, 8192u, err) == YVEX_OK, "payload alpha tensor");
+    dims[0] = 6000u;
+    YVEX_TEST_ASSERT(yvex_native_weight_table_add(
+        table, "beta.weight", shard_names[0], "I8", 1u, dims,
+        8192u, 14192u, err) == YVEX_OK, "payload beta tensor");
+    dims[0] = 2048u;
+    YVEX_TEST_ASSERT(yvex_native_weight_table_add(
+        table, "gamma.weight", shard_names[1], "F32", 1u, dims,
+        4096u, 12288u, err) == YVEX_OK, "payload gamma tensor");
+    memset(shards, 0, sizeof(shards));
+    for (index = 0u; index < 2u; ++index) {
+        shards[index].canonical_id = index;
+        shards[index].canonical_name = shard_names[index];
+        shards[index].file_bytes = 16400u;
+        shards[index].data_region_offset = 16u;
+        shards[index].payload_bytes = 16384u;
+        snprintf(path, sizeof(path), "%s/%s", fixture->root,
+                 shard_names[index]);
+        YVEX_TEST_ASSERT(payload_test_write_bytes(path, 16u, 16384u,
+                                                  index + 1u),
+                         "payload fixture shard bytes");
+        YVEX_TEST_ASSERT(yvex_artifact_compute_sha256(path, digest, err) ==
+                             YVEX_OK,
+                         "payload fixture reference digest");
+        if (bad_digest && index == 0u)
+            memset(digest, '0', 64u), digest[64] = '\0';
+        if (index == 0u || second_digest)
+            YVEX_TEST_ASSERT(payload_test_metadata(
+                                 fixture->root, shard_names[index], digest),
+                             "payload fixture LFS metadata");
+    }
+    YVEX_TEST_ASSERT(yvex_source_tensor_snapshot_take_table_with_shards(
+                         &fixture->snapshot, &table, shards, 2u, 1u, err) ==
+                         YVEX_OK,
+                     "payload retained snapshot");
+    YVEX_TEST_ASSERT(yvex_source_tensor_snapshot_facts_get(
+                         fixture->snapshot, &snapshot_facts, err) == YVEX_OK,
+                     "payload retained snapshot facts");
+    memset(&fixture->verification, 0, sizeof(fixture->verification));
+    fixture->verification.verified = 1;
+    fixture->verification.manifest_verified = 1;
+    fixture->verification.header_scan_count = 1u;
+    fixture->verification.header_tensor_count = 3u;
+    fixture->verification.shard_count = 2u;
+    fixture->verification.shard_bytes = 32800u;
+    fixture->verification.source_file_count = 2u;
+    fixture->verification.source_total_bytes = 32800u;
+    fixture->verification.declared_tensor_bytes = 22384u;
+    fixture->verification.source_snapshot_identity = snapshot_facts.identity;
+    fixture->verification.path_verified = 1;
+    fixture->verification.repository_verified = 1;
+    fixture->verification.revision_verified = 1;
+    fixture->verification.shard_index_headers_match = 1;
+    snprintf(fixture->verification.revision,
+             sizeof(fixture->verification.revision), "%s",
+             "60d8d70770c6776ff598c94bb586a859a38244f1");
+    snprintf(fixture->verification.repository_id,
+             sizeof(fixture->verification.repository_id), "%s",
+             "deepseek-ai/DeepSeek-V4-Flash");
+    snprintf(fixture->verification.inventory_authority,
+             sizeof(fixture->verification.inventory_authority), "%s",
+             "upstream-index");
+    snprintf(fixture->verification.upstream_index_oid,
+             sizeof(fixture->verification.upstream_index_oid), "%s",
+             "84692cbe7af556a01e2e5353341100079c387aee");
+    YVEX_TEST_ASSERT(realpath(fixture->root,
+                             fixture->verification.resolved_source_path) != NULL,
+                     "payload fixture canonical root");
+    snprintf(fixture->verification.manifest_path,
+             sizeof(fixture->verification.manifest_path), "%s",
+             fixture->manifest);
+    memset(&fixture->verify_options, 0, sizeof(fixture->verify_options));
+    fixture->verify_options.identity = yvex_model_target_release_identity();
+    fixture->verify_options.source_path = fixture->root;
+    fixture->verify_options.models_root = "build/tests";
+    fixture->verify_options.manifest_path = fixture->manifest;
+    yvex_source_payload_budget_default(&budget);
+    budget.maximum_open_handles = handles;
+    budget.chunk_bytes = 4096u;
+    budget.maximum_inflight_host_bytes = 4096u * 4u;
+    budget.allow_local_snapshot_seal = 1;
+    memset(&open_options, 0, sizeof(open_options));
+    open_options.verification_options = &fixture->verify_options;
+    open_options.verification = &fixture->verification;
+    open_options.snapshot = fixture->snapshot;
+    open_options.budget = budget;
+    open_options.manifest_path = fixture->manifest;
+    rc = yvex_source_payload_session_open_with_ops(
+        &fixture->session, &open_options, ops, failure, err);
+    if (rc != YVEX_OK) return rc;
+    return YVEX_OK;
+}
+
+static void payload_fixture_close(payload_fixture *fixture)
+{
+    char command[768];
+
+    if (!fixture) return;
+    (void)yvex_source_payload_session_release(&fixture->session, NULL, NULL);
+    yvex_source_tensor_snapshot_release(fixture->snapshot);
+    fixture->snapshot = NULL;
+    snprintf(command, sizeof(command), "rm -rf %s", fixture->root);
+    (void)system(command);
+}
+
+/* Reopens a fixture through the production admission boundary after path mutation. */
+static int payload_fixture_reopen_policy(payload_fixture *fixture,
+                                         unsigned int handles,
+                                         int allow_local_seal,
+                                         const yvex_source_payload_ops *ops,
+                                         yvex_source_payload_failure *failure,
+                                         yvex_error *err)
+{
+    yvex_source_payload_open_options open_options;
+    yvex_source_payload_budget budget;
+
+    memset(&open_options, 0, sizeof(open_options));
+    yvex_source_payload_budget_default(&budget);
+    budget.maximum_open_handles = handles;
+    budget.chunk_bytes = 4096u;
+    budget.maximum_inflight_host_bytes = 4096u * 4u;
+    budget.allow_local_snapshot_seal = allow_local_seal;
+    open_options.verification_options = &fixture->verify_options;
+    open_options.verification = &fixture->verification;
+    open_options.snapshot = fixture->snapshot;
+    open_options.budget = budget;
+    open_options.manifest_path = fixture->manifest;
+    return yvex_source_payload_session_open_with_ops(
+        &fixture->session, &open_options, ops, failure, err);
+}
+
+/* Reopens with the fixture's normal local-seal policy. */
+static int payload_fixture_reopen(payload_fixture *fixture,
+                                  unsigned int handles,
+                                  const yvex_source_payload_ops *ops,
+                                  yvex_source_payload_failure *failure,
+                                  yvex_error *err)
+{
+    return payload_fixture_reopen_policy(
+        fixture, handles, 1, ops, failure, err);
+}
+
+/* Replaces retained truth with one configurable row for range admission tests. */
+static int payload_fixture_replace_snapshot_facts(
+    payload_fixture *fixture,
+    const char *tensor_shard_name,
+    const char *catalog_shard_name,
+    const char *dtype,
+    unsigned long long dimension,
+    unsigned long long data_start,
+    unsigned long long data_end,
+    unsigned long long data_region_offset,
+    unsigned long long payload_bytes,
+    yvex_error *err)
+{
+    yvex_native_weight_table *table;
+    yvex_source_shard_snapshot shard;
+    yvex_source_tensor_snapshot_facts facts;
+    unsigned long long dims[1];
+    int rc;
+
+    table = (yvex_native_weight_table *)calloc(1u, sizeof(*table));
+    if (!table) return 0;
+    dims[0] = dimension;
+    rc = yvex_native_weight_table_add(
+        table, "probe.weight", tensor_shard_name, dtype, 1u, dims,
+        data_start, data_end, err);
+    if (rc != YVEX_OK) {
+        yvex_native_weight_table_close(table);
+        return 0;
+    }
+    memset(&shard, 0, sizeof(shard));
+    shard.canonical_name = catalog_shard_name;
+    shard.file_bytes = 16400u;
+    shard.data_region_offset = data_region_offset;
+    shard.payload_bytes = payload_bytes;
+    yvex_source_tensor_snapshot_release(fixture->snapshot);
+    fixture->snapshot = NULL;
+    rc = yvex_source_tensor_snapshot_take_table_with_shards(
+        &fixture->snapshot, &table, &shard, 1u, 1u, err);
+    if (rc != YVEX_OK) {
+        yvex_native_weight_table_close(table);
+        return 0;
+    }
+    if (yvex_source_tensor_snapshot_facts_get(
+            fixture->snapshot, &facts, err) != YVEX_OK) return 0;
+    fixture->verification.source_snapshot_identity = facts.identity;
+    fixture->verification.shard_count = 1u;
+    fixture->verification.header_shard_count = 1u;
+    fixture->verification.header_tensor_count = 1u;
+    fixture->verification.declared_tensor_bytes = data_end - data_start;
+    return 1;
+}
+
+/* Preserves the ordinary one-row fixture shape for path and data-region tests. */
+static int payload_fixture_replace_snapshot(payload_fixture *fixture,
+                                            const char *shard_name,
+                                            unsigned long long data_end,
+                                            yvex_error *err)
+{
+    return payload_fixture_replace_snapshot_facts(
+        fixture, shard_name, shard_name, "I8", data_end, 0u, data_end,
+        16u, 16384u, err);
+}
+
+static int payload_sink_begin(void *context,
+                              const yvex_source_payload_plan_summary *summary)
+{
+    payload_sink_state *state = (payload_sink_state *)context;
+
+    if (!state || !summary || summary->logical_bytes == 0u) return 1;
+    yvex_sha256_init(&state->hash);
+    return 0;
+}
+
+static int payload_sink_chunk(void *context,
+                              const yvex_source_payload_chunk *chunk,
+                              const unsigned char *bytes)
+{
+    payload_sink_state *state = (payload_sink_state *)context;
+
+    if (!state || !chunk || !bytes) return 1;
+    if (state->fail_after_chunks != 0u &&
+        state->chunks == state->fail_after_chunks) return 1;
+    if (!yvex_sha256_update(&state->hash, bytes, chunk->byte_length)) return 1;
+    state->bytes += chunk->byte_length;
+    state->chunks++;
+    if (state->cancel_session && state->cancel_after_chunks != 0u &&
+        state->chunks == state->cancel_after_chunks)
+        (void)yvex_source_payload_session_cancel(
+            state->cancel_session, NULL, NULL);
+    return 0;
+}
+
+static int payload_sink_commit(void *context,
+                               const yvex_source_payload_stream_result *result)
+{
+    payload_sink_state *state = (payload_sink_state *)context;
+    unsigned char digest[32];
+
+    if (!state || !result || !result->complete ||
+        !yvex_sha256_final(&state->hash, digest)) return 1;
+    state->commits++;
+    return 0;
+}
+
+static void payload_sink_abort(void *context,
+                               const yvex_source_payload_failure *failure,
+                               const yvex_source_payload_stream_result *result)
+{
+    payload_sink_state *state = (payload_sink_state *)context;
+
+    (void)failure;
+    (void)result;
+    if (state) state->aborts++;
+}
+
+static void payload_sink_make(yvex_source_payload_sink *sink,
+                              payload_sink_state *state)
+{
+    memset(sink, 0, sizeof(*sink));
+    sink->begin = payload_sink_begin;
+    sink->chunk = payload_sink_chunk;
+    sink->commit = payload_sink_commit;
+    sink->abort = payload_sink_abort;
+    sink->context = state;
+}
+
+/* Blocks one accepted chunk at a deterministic synchronization point. */
+static int payload_blocking_chunk(
+    void *context,
+    const yvex_source_payload_chunk *chunk,
+    const unsigned char *bytes)
+{
+    payload_blocking_sink *state = (payload_blocking_sink *)context;
+
+    if (!state || payload_sink_chunk(&state->base, chunk, bytes) != 0) return 1;
+    if (!state->waited) {
+        state->waited = 1;
+        pthread_mutex_lock(&state->gate->mutex);
+        state->gate->arrived++;
+        pthread_cond_broadcast(&state->gate->condition);
+        while (!state->gate->released)
+            pthread_cond_wait(&state->gate->condition, &state->gate->mutex);
+        pthread_mutex_unlock(&state->gate->mutex);
+    }
+    return 0;
+}
+
+/* Adapts the ordinary sink transaction to a blocking chunk callback. */
+static void payload_blocking_sink_make(yvex_source_payload_sink *sink,
+                                       payload_blocking_sink *state,
+                                       payload_stream_gate *gate)
+{
+    memset(state, 0, sizeof(*state));
+    state->gate = gate;
+    payload_sink_make(sink, &state->base);
+    sink->chunk = payload_blocking_chunk;
+    sink->context = state;
+}
+
+/* Runs one stream in a worker and retains its typed result for the parent. */
+static void *payload_stream_thread_run(void *opaque)
+{
+    payload_stream_thread *thread = (payload_stream_thread *)opaque;
+
+    yvex_error_clear(&thread->error);
+    thread->rc = thread->verify
+        ? yvex_source_payload_session_verify(
+              thread->session, thread->plan, &thread->sink, &thread->result,
+              &thread->failure, &thread->error)
+        : yvex_source_payload_session_stream(
+              thread->session, thread->plan, &thread->sink, &thread->result,
+              &thread->failure, &thread->error);
+    return NULL;
+}
+
+/* Waits until a required number of callbacks are concurrently inside the gate. */
+static void payload_gate_wait(payload_stream_gate *gate, unsigned int count)
+{
+    pthread_mutex_lock(&gate->mutex);
+    while (gate->arrived < count)
+        pthread_cond_wait(&gate->condition, &gate->mutex);
+    pthread_mutex_unlock(&gate->mutex);
+}
+
+/* Releases every callback waiting in one test-owned gate. */
+static void payload_gate_release(payload_stream_gate *gate)
+{
+    pthread_mutex_lock(&gate->mutex);
+    gate->released = 1;
+    pthread_cond_broadcast(&gate->condition);
+    pthread_mutex_unlock(&gate->mutex);
+}
+
+static int payload_has_blocker(const yvex_source_verification *verification,
+                               const char *blocker)
+{
+    unsigned int index;
+
+    for (index = 0u; verification && index < verification->blocker_count;
+         ++index) {
+        if (strcmp(verification->blockers[index], blocker) == 0) return 1;
+    }
+    return 0;
+}
+
+static int payload_fault_openat(int directory, const char *name, int flags)
+{
+    unsigned long long call = payload_fault.open_calls++;
+    if (call == payload_fault.open_fail_at) {
+        errno = EMFILE;
+        return -1;
+    }
+    return openat(directory, name, flags);
+}
+
+static int payload_fault_fstat(int fd, struct stat *status)
+{
+    unsigned long long call = payload_fault.fstat_calls++;
+    if (call == payload_fault.fstat_fail_at) {
+        errno = EIO;
+        return -1;
+    }
+    return fstat(fd, status);
+}
+
+static int payload_fault_fstatat(int directory, const char *name,
+                                 struct stat *status, int flags)
+{
+    return fstatat(directory, name, status, flags);
+}
+
+static int payload_fault_close(int fd)
+{
+    unsigned long long call = payload_fault.close_calls++;
+    int rc = close(fd);
+
+    if (call == payload_fault.close_fail_at && rc == 0) {
+        errno = EIO;
+        return -1;
+    }
+    return rc;
+}
+
+static ssize_t payload_fault_pread(int fd, void *buffer,
+                                   size_t length, off_t offset)
+{
+    unsigned long long call = payload_fault.pread_calls++;
+
+    if (call == payload_fault.eintr_at) {
+        errno = EINTR;
+        return -1;
+    }
+    if (call == payload_fault.eof_at) return 0;
+    if (call == payload_fault.io_at) {
+        errno = EIO;
+        return -1;
+    }
+    if (payload_fault.partial_limit != 0u &&
+        length > payload_fault.partial_limit)
+        length = payload_fault.partial_limit;
+    return pread(fd, buffer, length, offset);
+}
+
+static void *payload_fault_malloc(size_t size)
+{
+    unsigned long long call = payload_fault.allocation_calls++;
+    void *allocation;
+
+    if (call == payload_fault.allocation_fail_at) return NULL;
+    allocation = malloc(size);
+    if (allocation) payload_fault.live_allocations++;
+    return allocation;
+}
+
+static void *payload_fault_calloc(size_t count, size_t size)
+{
+    unsigned long long call = payload_fault.allocation_calls++;
+    void *allocation;
+
+    if (call == payload_fault.allocation_fail_at) return NULL;
+    allocation = calloc(count, size);
+    if (allocation) payload_fault.live_allocations++;
+    return allocation;
+}
+
+static void payload_fault_free(void *allocation)
+{
+    if (!allocation) return;
+    payload_fault.live_allocations--;
+    free(allocation);
+}
+
+static void payload_fault_ops(yvex_source_payload_ops *ops)
+{
+    yvex_source_payload_default_ops(ops);
+    ops->openat_fn = payload_fault_openat;
+    ops->fstat_fn = payload_fault_fstat;
+    ops->fstatat_fn = payload_fault_fstatat;
+    ops->pread_fn = payload_fault_pread;
+    ops->close_fn = payload_fault_close;
+    ops->malloc_fn = payload_fault_malloc;
+    ops->calloc_fn = payload_fault_calloc;
+    ops->free_fn = payload_fault_free;
+}
+
+static void payload_fault_reset(void)
+{
+    memset(&payload_fault, 0, sizeof(payload_fault));
+    payload_fault.eintr_at = ULLONG_MAX;
+    payload_fault.eof_at = ULLONG_MAX;
+    payload_fault.io_at = ULLONG_MAX;
+    payload_fault.open_fail_at = ULLONG_MAX;
+    payload_fault.fstat_fail_at = ULLONG_MAX;
+    payload_fault.close_fail_at = ULLONG_MAX;
+    payload_fault.allocation_fail_at = ULLONG_MAX;
+}
+
+static int test_sha256_primitive(void)
+{
+    static const char expected_empty[] =
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    static const char expected_abc[] =
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+    static const char expected_long[] =
+        "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1";
+    static const char long_text[] =
+        "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+    static const char expected_million_a[] =
+        "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0";
+    char block[1000];
+    unsigned int block_index;
+    yvex_sha256 hash;
+    unsigned char digest[32];
+    char hex[65];
+
+    yvex_sha256_init(&hash);
+    YVEX_TEST_ASSERT(yvex_sha256_update(&hash, NULL, 0u),
+                     "SHA-256 accepts zero-length update");
+    YVEX_TEST_ASSERT(yvex_sha256_final(&hash, digest), "SHA-256 empty final");
+    yvex_sha256_hex(digest, hex);
+    YVEX_TEST_ASSERT_STREQ(hex, expected_empty, "SHA-256 empty known answer");
+    yvex_sha256_init(&hash);
+    YVEX_TEST_ASSERT(yvex_sha256_update(&hash, "a", 1u) &&
+                     yvex_sha256_update(&hash, "bc", 2u) &&
+                     yvex_sha256_final(&hash, digest),
+                     "SHA-256 incremental update");
+    yvex_sha256_hex(digest, hex);
+    YVEX_TEST_ASSERT_STREQ(hex, expected_abc, "SHA-256 abc known answer");
+    yvex_sha256_init(&hash);
+    YVEX_TEST_ASSERT(yvex_sha256_update(&hash, long_text, strlen(long_text)) &&
+                     yvex_sha256_final(&hash, digest),
+                     "SHA-256 multi-block update");
+    yvex_sha256_hex(digest, hex);
+    YVEX_TEST_ASSERT_STREQ(hex, expected_long, "SHA-256 multi-block known answer");
+    YVEX_TEST_ASSERT(!yvex_sha256_update(&hash, "x", 1u),
+                     "SHA-256 refuses update after final");
+    memset(block, 'a', sizeof(block));
+    yvex_sha256_init(&hash);
+    for (block_index = 0u; block_index < 1000u; ++block_index)
+        YVEX_TEST_ASSERT(yvex_sha256_update(&hash, block, sizeof(block)),
+                         "SHA-256 large incremental stream");
+    YVEX_TEST_ASSERT(yvex_sha256_final(&hash, digest),
+                     "SHA-256 million-a final");
+    yvex_sha256_hex(digest, hex);
+    YVEX_TEST_ASSERT_STREQ(hex, expected_million_a,
+                           "SHA-256 million-a known answer");
+    return 0;
+}
+
+static int test_payload_happy_path(void)
+{
+    payload_fixture fixture;
+    yvex_source_payload_failure failure;
+    yvex_source_payload_plan *plan = NULL;
+    yvex_source_payload_plan *single = NULL;
+    yvex_source_payload_sink sink;
+    payload_sink_state sink_state;
+    yvex_source_payload_stream_result result;
+    yvex_source_payload_session_facts facts;
+    yvex_source_verification parsed;
+    yvex_source_payload_probe_result probe;
+    yvex_error err;
+    unsigned long long alpha;
+    unsigned long long duplicate_selection[2];
+    const yvex_source_payload_plan_summary *summary;
+    char manifest_text[8192];
+    char malformed_text[8192];
+    char *schema_version;
+    char *field;
+    int rc;
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "happy", 1, 0, 1u, NULL,
+                         &failure, &err) == YVEX_OK,
+                     "payload fixture session opens");
+    YVEX_TEST_ASSERT(yvex_source_tensor_snapshot_find_index(
+                         fixture.snapshot, "alpha.weight", &alpha),
+                     "payload alpha index");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build_all(
+                         &plan, fixture.session, 4096u, 4096u,
+                         &failure, &err) == YVEX_OK,
+                     "payload exhaustive chunk plan");
+    summary = yvex_source_payload_plan_summary_get(plan);
+    YVEX_TEST_ASSERT(summary && summary->range_count == 3u &&
+                         summary->chunk_count == 6u &&
+                         summary->logical_bytes == 22384u,
+                     "payload plan exact accounting");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build(
+                         &single, fixture.session, &alpha, 1u, 4096u, 4096u,
+                         &failure, &err) == YVEX_OK,
+                     "payload single tensor plan");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_summary_get(single)->chunk_count ==
+                         2u &&
+                     yvex_source_payload_plan_chunk_at(single, 0u)->first_page ==
+                         0u &&
+                     yvex_source_payload_plan_chunk_at(single, 1u)->last_page ==
+                         2u,
+                     "payload page and chunk boundaries");
+    yvex_source_payload_plan_close(single);
+    single = NULL;
+    duplicate_selection[0] = alpha;
+    duplicate_selection[1] = alpha;
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build(
+                         &single, fixture.session, duplicate_selection, 2u,
+                         4096u, 4096u, &failure, &err) == YVEX_ERR_FORMAT &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_DUPLICATE_TENSOR,
+                     "payload plan rejects duplicate tensor ownership");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build(
+                         &single, fixture.session, &alpha, 1u,
+                         128u, 4096u, &failure, &err) == YVEX_ERR_BOUNDS &&
+                         failure.code == YVEX_SOURCE_PAYLOAD_FAILURE_INVALID_CHUNK,
+                     "payload plan rejects undersized chunk configuration");
+    {
+        unsigned long long absent = ULLONG_MAX;
+
+        YVEX_TEST_ASSERT(yvex_source_payload_plan_build(
+                             &single, fixture.session, &absent, 1u,
+                             4096u, 4096u, &failure, &err) ==
+                             YVEX_ERR_BOUNDS &&
+                             failure.code ==
+                                 YVEX_SOURCE_PAYLOAD_FAILURE_TENSOR_NOT_INDEXED,
+                         "payload plan rejects an absent tensor index");
+    }
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build(
+                         &single, fixture.session, &alpha, 1u,
+                         4096u, 4096u, &failure, &err) == YVEX_OK,
+                     "payload single tensor plan rebuilds after refusals");
+    YVEX_TEST_ASSERT(yvex_source_payload_session_close(
+                         fixture.session, &failure, &err) == YVEX_ERR_STATE &&
+                         failure.code == YVEX_SOURCE_PAYLOAD_FAILURE_CLOSE_BUSY,
+                     "payload close refuses registered plans before IO");
+    memset(&sink_state, 0, sizeof(sink_state));
+    payload_sink_make(&sink, &sink_state);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_stream(
+                         fixture.session, plan, &sink, &result,
+                         &failure, &err) == YVEX_ERR_STATE &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_PAYLOAD_NOT_TRUSTED &&
+                         !result.committed && !result.aborted,
+                     "ordinary stream refuses an untrusted payload session");
+    memset(&sink_state, 0, sizeof(sink_state));
+    rc = yvex_source_payload_session_verify(
+        fixture.session, plan, &sink, &result, &failure, &err);
+    YVEX_TEST_ASSERT(rc == YVEX_OK && result.complete && result.committed &&
+                         !result.aborted,
+                     "payload trust stream commits exactly");
+    YVEX_TEST_ASSERT(result.trust_bytes_read == 32800u &&
+                         result.physical_bytes_read == 32800u &&
+                         result.delivered_logical_bytes == 22384u &&
+                         result.chunks_completed == 6u &&
+                         sink_state.commits == 1u && sink_state.aborts == 0u,
+                     "payload trust and consumer accounting separate");
+    YVEX_TEST_ASSERT(yvex_source_payload_session_facts_get(
+                         fixture.session, &facts, &err) == YVEX_OK &&
+                         facts.state == YVEX_SOURCE_PAYLOAD_STATE_READY &&
+                         facts.trust_class ==
+                             YVEX_SOURCE_PAYLOAD_TRUST_UPSTREAM_VERIFIED &&
+                         facts.trusted_shard_count == 2u &&
+                         strlen(facts.payload_identity) == 64u &&
+                         facts.peak_inflight_host_bytes == 4096u &&
+                         facts.peak_open_handles == 1u &&
+                         facts.handle_evictions != 0u,
+                     "payload session publishes trust and enforced resource facts");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_range_at(plan, 0u) &&
+                         yvex_source_payload_plan_range_at(plan, 0u)->trust_class ==
+                             YVEX_SOURCE_PAYLOAD_TRUST_UPSTREAM_VERIFIED &&
+                         strcmp(yvex_source_payload_plan_range_at(
+                                    plan, 0u)->payload_identity,
+                                facts.payload_identity) == 0,
+                     "pre-trust plan projects the committed range trust binding");
+    memset(&parsed, 0, sizeof(parsed));
+    snprintf(parsed.resolved_source_path,
+             sizeof(parsed.resolved_source_path), "%s",
+             fixture.verification.resolved_source_path);
+    YVEX_TEST_ASSERT(yvex_source_provenance_manifest_read(
+                         &fixture.verify_options, &parsed, &err) == YVEX_OK &&
+                         strcmp(parsed.manifest_schema,
+                                "yvex.source_manifest.v3") == 0 &&
+                         strcmp(parsed.manifest_payload_identity,
+                                facts.payload_identity) == 0 &&
+                         parsed.manifest_payload_shard_count == 2u &&
+                         !payload_has_blocker(
+                             &parsed, "malformed-source-manifest"),
+                     "payload manifest parser roundtrip");
+    YVEX_TEST_ASSERT(payload_test_read_text(
+                         fixture.manifest, manifest_text,
+                         sizeof(manifest_text)),
+                     "read payload manifest for version refusal");
+    snprintf(malformed_text, sizeof(malformed_text), "%s", manifest_text);
+    field = strstr(malformed_text, "\"observed_digest\": \"");
+    YVEX_TEST_ASSERT(field != NULL, "payload observed digest is present");
+    field += strlen("\"observed_digest\": \"");
+    *field = *field == '0' ? '1' : '0';
+    YVEX_TEST_ASSERT(payload_test_write_text(
+                         fixture.manifest, malformed_text),
+                     "write inconsistent payload digest manifest");
+    memset(&parsed, 0, sizeof(parsed));
+    snprintf(parsed.resolved_source_path,
+             sizeof(parsed.resolved_source_path), "%s",
+             fixture.verification.resolved_source_path);
+    YVEX_TEST_ASSERT(yvex_source_provenance_manifest_read(
+                         &fixture.verify_options, &parsed, &err) == YVEX_OK &&
+                         payload_has_blocker(
+                             &parsed, "malformed-source-manifest"),
+                     "payload manifest parser refuses unequal trusted digests");
+    YVEX_TEST_ASSERT(payload_test_write_text(
+                         fixture.manifest, manifest_text),
+                     "restore canonical payload manifest");
+    schema_version = strstr(manifest_text, "yvex.source_manifest.v3");
+    YVEX_TEST_ASSERT(schema_version != NULL,
+                     "payload manifest schema is present");
+    schema_version[strlen("yvex.source_manifest.v") ] = '9';
+    YVEX_TEST_ASSERT(payload_test_write_text(
+                         fixture.manifest, manifest_text),
+                     "write unsupported payload manifest version");
+    memset(&parsed, 0, sizeof(parsed));
+    snprintf(parsed.resolved_source_path,
+             sizeof(parsed.resolved_source_path), "%s",
+             fixture.verification.resolved_source_path);
+    YVEX_TEST_ASSERT(yvex_source_provenance_manifest_read(
+                         &fixture.verify_options, &parsed, &err) == YVEX_OK &&
+                         payload_has_blocker(
+                             &parsed, "unsupported-source-manifest-version"),
+                     "payload manifest parser refuses unsupported version");
+    memset(&sink_state, 0, sizeof(sink_state));
+    payload_sink_make(&sink, &sink_state);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_stream(
+                         fixture.session, single, &sink, &result,
+                         &failure, &err) == YVEX_OK && result.committed &&
+                         result.physical_bytes_read == 8192u,
+                     "trusted exact repeated range stream");
+    YVEX_TEST_ASSERT(yvex_source_payload_probe(
+                         fixture.session, single,
+                         YVEX_SOURCE_PAYLOAD_PROBE_COLD_ADVISORY, 1u, &probe,
+                         &failure, &err) == YVEX_OK &&
+                         probe.page_cache_advice_requested &&
+                         probe.logical_bytes == 8192u &&
+                         probe.physical_bytes == 8192u,
+                     "cold-advisory probe reports real advice and IO facts");
+    YVEX_TEST_ASSERT(yvex_source_payload_probe(
+                         fixture.session, single,
+                         YVEX_SOURCE_PAYLOAD_PROBE_WARM, 1u, &probe,
+                         &failure, &err) == YVEX_OK &&
+                         probe.logical_bytes == 8192u &&
+                         probe.physical_bytes == 8192u &&
+                         probe.buffer_reuses == 1u,
+                     "warm diagnostic probe accounts actual buffer reuse");
+    YVEX_TEST_ASSERT(yvex_source_payload_probe(
+                         fixture.session, single,
+                         YVEX_SOURCE_PAYLOAD_PROBE_REPEATED, 2u, &probe,
+                         &failure, &err) == YVEX_OK &&
+                         probe.logical_bytes == 16384u &&
+                         probe.physical_bytes == 16384u &&
+                         probe.buffer_reuses == 2u,
+                     "repeated diagnostic probe accounts both exact reads");
+    YVEX_TEST_ASSERT(yvex_source_payload_probe(
+                         fixture.session, plan,
+                         YVEX_SOURCE_PAYLOAD_PROBE_STAGED, 1u, &probe,
+                         &failure, &err) == YVEX_OK &&
+                         probe.logical_bytes == 22384u &&
+                         probe.physical_bytes == 22384u &&
+                         probe.chunks == 6u && probe.buffer_reuses == 3u,
+                     "staged probe performs one bounded transaction per range");
+    yvex_source_payload_plan_close(single);
+    yvex_source_payload_plan_close(plan);
+    payload_fixture_close(&fixture);
+    return 0;
+}
+
+static int test_payload_local_seal_and_digest_failure(void)
+{
+    payload_fixture fixture;
+    yvex_source_payload_failure failure;
+    yvex_source_payload_plan *plan = NULL;
+    yvex_source_payload_sink sink;
+    payload_sink_state state;
+    yvex_source_payload_stream_result result;
+    yvex_source_payload_session_facts facts;
+    yvex_source_verification parsed;
+    yvex_error err;
+    char invalid_digest[65];
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "seal", 0, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK,
+                     "local seal fixture opens");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build_all(
+                         &plan, fixture.session, 4096u, 4096u,
+                         &failure, &err) == YVEX_OK,
+                     "local seal plan");
+    memset(&state, 0, sizeof(state));
+    payload_sink_make(&sink, &state);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_verify(
+                         fixture.session, plan, &sink, &result,
+                         &failure, &err) == YVEX_OK,
+                     "local payload seal completes");
+    YVEX_TEST_ASSERT(yvex_source_payload_session_facts_get(
+                         fixture.session, &facts, &err) == YVEX_OK &&
+                         facts.trust_class ==
+                             YVEX_SOURCE_PAYLOAD_TRUST_LOCAL_SNAPSHOT_SEALED,
+                     "local seal is not promoted to upstream verification");
+    memset(&parsed, 0, sizeof(parsed));
+    snprintf(parsed.resolved_source_path,
+             sizeof(parsed.resolved_source_path), "%s",
+             fixture.verification.resolved_source_path);
+    YVEX_TEST_ASSERT(yvex_source_provenance_manifest_read(
+                         &fixture.verify_options, &parsed, &err) == YVEX_OK &&
+                         strcmp(parsed.manifest_payload_trust_class,
+                                "local_payload_snapshot_sealed") == 0 &&
+                         !payload_has_blocker(
+                             &parsed, "malformed-source-manifest"),
+                     "mixed-authority local seal manifest reopens exactly");
+    yvex_source_payload_plan_close(plan);
+    plan = NULL;
+    YVEX_TEST_ASSERT(yvex_source_payload_session_release(
+                         &fixture.session, &failure, &err) == YVEX_OK &&
+                         payload_fixture_reopen_policy(
+                             &fixture, 2u, 0, NULL, &failure, &err) ==
+                             YVEX_ERR_UNSUPPORTED &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_EXPECTED_DIGEST_UNAVAILABLE,
+                     "missing upstream digest refuses when local sealing is disabled");
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "digest-syntax", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_session_release(
+                             &fixture.session, &failure, &err) == YVEX_OK,
+                     "digest syntax fixture closes admitted session");
+    memset(invalid_digest, 'g', 64u);
+    invalid_digest[64] = '\0';
+    YVEX_TEST_ASSERT(payload_test_metadata(
+                         fixture.root,
+                         "model-00001-of-00002.safetensors",
+                         invalid_digest) &&
+                         payload_fixture_reopen(
+                             &fixture, 2u, NULL, &failure, &err) ==
+                             YVEX_ERR_FORMAT &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_DIGEST_ALGORITHM_UNSUPPORTED,
+                     "non-SHA provider digest syntax is refused");
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "identity-mismatch", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK,
+                     "prior payload identity fixture opens");
+    fixture.session->verification.manifest_payload_trusted = 1;
+    memset(fixture.session->verification.manifest_payload_identity,
+           '0', 64u);
+    fixture.session->verification.manifest_payload_identity[64] = '\0';
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build_all(
+                         &plan, fixture.session, 4096u, 4096u,
+                         &failure, &err) == YVEX_OK,
+                     "prior payload identity plan");
+    memset(&state, 0, sizeof(state));
+    payload_sink_make(&sink, &state);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_verify(
+                         fixture.session, plan, &sink, &result,
+                         &failure, &err) != YVEX_OK &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_PAYLOAD_IDENTITY_MISMATCH &&
+                         result.aborted && !result.committed,
+                     "published payload identity mismatch poisons without reseal");
+    yvex_source_payload_plan_close(plan);
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "digest-mismatch", 1, 1, 2u, NULL,
+                         &failure, &err) == YVEX_OK,
+                     "digest mismatch fixture opens before trust");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build_all(
+                         &plan, fixture.session, 4096u, 4096u,
+                         &failure, &err) == YVEX_OK,
+                     "digest mismatch plan");
+    memset(&state, 0, sizeof(state));
+    payload_sink_make(&sink, &state);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_verify(
+                         fixture.session, plan, &sink, &result,
+                         &failure, &err) != YVEX_OK &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_DIGEST_MISMATCH &&
+                         result.aborted && !result.committed && state.aborts == 1u,
+                     "digest mismatch aborts provisional delivery");
+    YVEX_TEST_ASSERT(yvex_source_payload_session_facts_get(
+                         fixture.session, &facts, &err) == YVEX_OK &&
+                         facts.state == YVEX_SOURCE_PAYLOAD_STATE_POISONED &&
+                         facts.digest_mismatches == 1u,
+                     "digest mismatch poisons session without trust publication");
+    yvex_source_payload_plan_close(plan);
+    payload_fixture_close(&fixture);
+    return 0;
+}
+
+static int test_payload_exact_read_faults(void)
+{
+    payload_fixture fixture;
+    yvex_source_payload_ops ops;
+    yvex_source_payload_failure failure;
+    yvex_source_payload_plan *plan = NULL;
+    yvex_source_payload_sink sink;
+    payload_sink_state state;
+    yvex_source_payload_stream_result result;
+    yvex_error err;
+
+    payload_fault_reset();
+    payload_fault.eintr_at = 0u;
+    payload_fault.partial_limit = 37u;
+    payload_fault_ops(&ops);
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "partial", 1, 0, 2u, &ops,
+                         &failure, &err) == YVEX_OK,
+                     "partial/EINTR fixture opens");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build_all(
+                         &plan, fixture.session, 4096u, 4096u,
+                         &failure, &err) == YVEX_OK,
+                     "partial/EINTR plan");
+    memset(&state, 0, sizeof(state));
+    payload_sink_make(&sink, &state);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_verify(
+                         fixture.session, plan, &sink, &result,
+                         &failure, &err) == YVEX_OK && result.committed &&
+                         payload_fault.pread_calls > 800u,
+                     "EINTR and repeated partial reads complete exactly");
+    yvex_source_payload_plan_close(plan);
+    payload_fixture_close(&fixture);
+    YVEX_TEST_ASSERT(payload_fault.live_allocations == 0,
+                     "partial-read fixture releases injected allocations");
+
+    payload_fault_reset();
+    payload_fault.eof_at = 2u;
+    payload_fault_ops(&ops);
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "short", 1, 0, 2u, &ops,
+                         &failure, &err) == YVEX_OK,
+                     "short-read fixture opens");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build_all(
+                         &plan, fixture.session, 4096u, 4096u,
+                         &failure, &err) == YVEX_OK,
+                     "short-read plan");
+    memset(&state, 0, sizeof(state));
+    payload_sink_make(&sink, &state);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_verify(
+                         fixture.session, plan, &sink, &result,
+                         &failure, &err) != YVEX_OK &&
+                         failure.code == YVEX_SOURCE_PAYLOAD_FAILURE_SHORT_READ &&
+                         result.aborted && !result.committed,
+                     "premature EOF is typed short-read abort");
+    yvex_source_payload_plan_close(plan);
+    payload_fixture_close(&fixture);
+    YVEX_TEST_ASSERT(payload_fault.live_allocations == 0,
+                     "short-read fixture releases injected allocations");
+
+    payload_fault_reset();
+    payload_fault.io_at = 1u;
+    payload_fault_ops(&ops);
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "hard-io", 1, 0, 2u, &ops,
+                         &failure, &err) == YVEX_OK,
+                     "hard IO fixture opens");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build_all(
+                         &plan, fixture.session, 4096u, 4096u,
+                         &failure, &err) == YVEX_OK,
+                     "hard IO plan");
+    memset(&state, 0, sizeof(state));
+    payload_sink_make(&sink, &state);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_verify(
+                         fixture.session, plan, &sink, &result,
+                         &failure, &err) == YVEX_ERR_IO &&
+                         failure.code == YVEX_SOURCE_PAYLOAD_FAILURE_IO &&
+                         result.aborted && !result.committed,
+                     "hard positioned-read failure aborts transaction");
+    yvex_source_payload_plan_close(plan);
+    payload_fixture_close(&fixture);
+    YVEX_TEST_ASSERT(payload_fault.live_allocations == 0,
+                     "hard IO fixture releases injected allocations");
+    return 0;
+}
+
+static int test_payload_consumer_cancel_and_publication_failure(void)
+{
+    payload_fixture fixture;
+    yvex_source_payload_failure failure;
+    yvex_source_payload_plan *plan = NULL;
+    yvex_source_payload_sink sink;
+    payload_sink_state state;
+    yvex_source_payload_stream_result result;
+    yvex_source_payload_session_facts facts;
+    yvex_error err;
+    char manifest[256];
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "consumer", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK,
+                     "consumer refusal fixture opens");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build_all(
+                         &plan, fixture.session, 4096u, 4096u,
+                         &failure, &err) == YVEX_OK,
+                     "consumer refusal plan");
+    memset(&state, 0, sizeof(state));
+    state.fail_after_chunks = 2u;
+    payload_sink_make(&sink, &state);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_verify(
+                         fixture.session, plan, &sink, &result,
+                         &failure, &err) != YVEX_OK &&
+                         failure.code == YVEX_SOURCE_PAYLOAD_FAILURE_CONSUMER &&
+                         result.delivered_logical_bytes == 8192u &&
+                         result.aborted && state.aborts == 1u,
+                     "consumer refusal aborts with exact delivered count");
+    yvex_source_payload_plan_close(plan);
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "cancel", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK,
+                     "cancellation fixture opens");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build_all(
+                         &plan, fixture.session, 4096u, 4096u,
+                         &failure, &err) == YVEX_OK,
+                     "cancellation plan");
+    memset(&state, 0, sizeof(state));
+    state.cancel_session = fixture.session;
+    state.cancel_after_chunks = 1u;
+    payload_sink_make(&sink, &state);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_verify(
+                         fixture.session, plan, &sink, &result,
+                         &failure, &err) == YVEX_ERR_CANCELLED &&
+                         failure.code == YVEX_SOURCE_PAYLOAD_FAILURE_CANCELLED &&
+                         result.delivered_logical_bytes == 4096u &&
+                         result.aborted,
+                     "cancellation aborts between bounded chunks");
+    YVEX_TEST_ASSERT(yvex_source_payload_session_reset_cancel(
+                         fixture.session, &failure, &err) == YVEX_OK,
+                     "idle untrusted session cancellation resets explicitly");
+    yvex_source_payload_plan_close(plan);
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "publish", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK,
+                     "publication failure fixture opens");
+    YVEX_TEST_ASSERT(payload_test_write_text(
+                         fixture.manifest, "previous-valid-manifest\n"),
+                     "publication prior manifest");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build_all(
+                         &plan, fixture.session, 4096u, 4096u,
+                         &failure, &err) == YVEX_OK,
+                     "publication failure plan");
+    memset(&state, 0, sizeof(state));
+    payload_sink_make(&sink, &state);
+    YVEX_TEST_ASSERT(setenv("YVEX_TEST_FAIL_SOURCE_PUBLISH_AFTER_WRITE",
+                            "1", 1) == 0,
+                     "publication failure seam enabled");
+    YVEX_TEST_ASSERT(yvex_source_payload_session_verify(
+                         fixture.session, plan, &sink, &result,
+                         &failure, &err) != YVEX_OK && result.aborted &&
+                         !result.committed,
+                     "atomic publication failure aborts trust stream");
+    unsetenv("YVEX_TEST_FAIL_SOURCE_PUBLISH_AFTER_WRITE");
+    YVEX_TEST_ASSERT(payload_test_read_text(
+                         fixture.manifest, manifest, sizeof(manifest)) &&
+                         strcmp(manifest, "previous-valid-manifest\n") == 0,
+                     "atomic failure preserves prior manifest");
+    YVEX_TEST_ASSERT(yvex_source_payload_session_facts_get(
+                         fixture.session, &facts, &err) == YVEX_OK &&
+                         facts.state == YVEX_SOURCE_PAYLOAD_STATE_UNTRUSTED,
+                     "publication failure publishes no partial trust state");
+    YVEX_TEST_ASSERT(facts.trust_class == YVEX_SOURCE_PAYLOAD_TRUST_NONE &&
+                         facts.trusted_shard_count == 0u &&
+                         facts.payload_identity[0] == '\0',
+                     "publication failure rolls back every aggregate trust fact");
+    yvex_source_payload_plan_close(plan);
+    payload_fixture_close(&fixture);
+    return 0;
+}
+
+/* Exercises construction failures and proves every owned allocation unwinds. */
+static int test_payload_construction_faults(void)
+{
+    payload_fixture fixture;
+    yvex_source_payload_ops ops;
+    yvex_source_payload_failure failure;
+    yvex_error err;
+    unsigned long long allocation;
+    unsigned int plan_allocation;
+    int reached_success = 0;
+
+    yvex_error_clear(&err);
+    payload_fault_reset();
+    payload_fault.open_fail_at = 0u;
+    payload_fault_ops(&ops);
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "open-failure", 1, 0, 2u, &ops,
+                         &failure, &err) == YVEX_ERR_IO &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_SHARD_OPEN,
+                     "source root open failure is typed");
+    payload_fixture_close(&fixture);
+    YVEX_TEST_ASSERT(payload_fault.live_allocations == 0,
+                     "root open failure unwinds all allocations");
+
+    payload_fault_reset();
+    payload_fault.fstat_fail_at = 0u;
+    payload_fault_ops(&ops);
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "fstat-failure", 1, 0, 2u, &ops,
+                         &failure, &err) == YVEX_ERR_IO &&
+                         failure.code == YVEX_SOURCE_PAYLOAD_FAILURE_STAT,
+                     "source shard fstat failure is typed");
+    payload_fixture_close(&fixture);
+    YVEX_TEST_ASSERT(payload_fault.live_allocations == 0,
+                     "fstat failure unwinds all allocations");
+
+    for (allocation = 0u; allocation < 32u; ++allocation) {
+        int rc;
+
+        payload_fault_reset();
+        payload_fault.allocation_fail_at = allocation;
+        payload_fault_ops(&ops);
+        rc = payload_fixture_create(
+            &fixture, "allocation-failure", 1, 0, 2u, &ops,
+            &failure, &err);
+        if (rc == YVEX_OK) reached_success = 1;
+        else
+            YVEX_TEST_ASSERT(
+                rc == YVEX_ERR_NOMEM &&
+                    failure.code == YVEX_SOURCE_PAYLOAD_FAILURE_ALLOCATION,
+                "session construction allocation failure is typed");
+        payload_fixture_close(&fixture);
+        YVEX_TEST_ASSERT(payload_fault.live_allocations == 0,
+                         "session construction allocation failure has no leak");
+        if (reached_success) break;
+    }
+    YVEX_TEST_ASSERT(reached_success,
+                     "allocation sweep crosses every session ownership transition");
+
+    for (plan_allocation = 0u; plan_allocation < 3u; ++plan_allocation) {
+        yvex_source_payload_plan *plan = NULL;
+        unsigned long long next;
+
+        payload_fault_reset();
+        payload_fault_ops(&ops);
+        YVEX_TEST_ASSERT(payload_fixture_create(
+                             &fixture, "plan-allocation", 1, 0, 2u, &ops,
+                             &failure, &err) == YVEX_OK,
+                         "plan allocation fixture opens");
+        next = payload_fault.allocation_calls + plan_allocation;
+        payload_fault.allocation_fail_at = next;
+        YVEX_TEST_ASSERT(yvex_source_payload_plan_build_all(
+                             &plan, fixture.session, 4096u, 4096u,
+                             &failure, &err) == YVEX_ERR_NOMEM &&
+                             failure.code ==
+                                 YVEX_SOURCE_PAYLOAD_FAILURE_ALLOCATION,
+                         "plan ownership allocation failure is typed");
+        payload_fixture_close(&fixture);
+        YVEX_TEST_ASSERT(payload_fault.live_allocations == 0,
+                         "plan allocation failure has no leak");
+    }
+    {
+        yvex_source_payload_plan *plan = NULL;
+        yvex_source_payload_sink sink;
+        payload_sink_state state;
+        yvex_source_payload_stream_result result;
+
+        payload_fault_reset();
+        payload_fault_ops(&ops);
+        YVEX_TEST_ASSERT(payload_fixture_create(
+                             &fixture, "stream-allocation", 1, 0, 2u, &ops,
+                             &failure, &err) == YVEX_OK &&
+                             yvex_source_payload_plan_build_all(
+                                 &plan, fixture.session, 4096u, 4096u,
+                                 &failure, &err) == YVEX_OK,
+                         "stream allocation fixture and plan");
+        payload_fault.allocation_fail_at = payload_fault.allocation_calls;
+        memset(&state, 0, sizeof(state));
+        payload_sink_make(&sink, &state);
+        YVEX_TEST_ASSERT(yvex_source_payload_session_verify(
+                             fixture.session, plan, &sink, &result,
+                             &failure, &err) == YVEX_ERR_NOMEM &&
+                             failure.code ==
+                                 YVEX_SOURCE_PAYLOAD_FAILURE_ALLOCATION &&
+                             !result.committed && !result.aborted,
+                         "pre-begin stream buffer allocation failure is typed");
+        yvex_source_payload_plan_close(plan);
+        payload_fixture_close(&fixture);
+        YVEX_TEST_ASSERT(payload_fault.live_allocations == 0,
+                         "stream buffer allocation failure has no leak");
+    }
+    payload_fault_reset();
+    payload_fault_ops(&ops);
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "cleanup-failure", 1, 0, 2u, &ops,
+                         &failure, &err) == YVEX_OK,
+                     "cleanup failure fixture opens");
+    payload_fault.close_fail_at = payload_fault.close_calls;
+    YVEX_TEST_ASSERT(yvex_source_payload_session_close(
+                         fixture.session, &failure, &err) == YVEX_ERR_IO &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_CLEANUP,
+                     "descriptor cleanup failure remains typed after close");
+    YVEX_TEST_ASSERT(yvex_source_payload_session_release(
+                         &fixture.session, &failure, &err) == YVEX_OK,
+                     "closed session releases memory after cleanup refusal");
+    payload_fixture_close(&fixture);
+    YVEX_TEST_ASSERT(payload_fault.live_allocations == 0,
+                     "cleanup failure releases every owned allocation");
+    return 0;
+}
+
+/* Refuses missing, symlinked, non-regular, and size-drifted shard paths. */
+static int test_payload_path_admission(void)
+{
+    payload_fixture fixture;
+    yvex_source_payload_failure failure;
+    yvex_error err;
+    char shard[768];
+    char replacement[800];
+    FILE *file;
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "missing-shard", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_session_release(
+                             &fixture.session, &failure, &err) == YVEX_OK,
+                     "missing shard fixture closes admitted session");
+    snprintf(shard, sizeof(shard), "%s/model-00002-of-00002.safetensors",
+             fixture.root);
+    YVEX_TEST_ASSERT(unlink(shard) == 0 &&
+                         payload_fixture_reopen(
+                             &fixture, 2u, NULL, &failure, &err) == YVEX_ERR_IO &&
+                         failure.code == YVEX_SOURCE_PAYLOAD_FAILURE_SHARD_OPEN,
+                     "missing indexed shard is refused on admission");
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "symlink-shard", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_session_release(
+                             &fixture.session, &failure, &err) == YVEX_OK,
+                     "symlink fixture closes admitted session");
+    snprintf(shard, sizeof(shard), "%s/model-00001-of-00002.safetensors",
+             fixture.root);
+    snprintf(replacement, sizeof(replacement), "%s.real", shard);
+    YVEX_TEST_ASSERT(rename(shard, replacement) == 0 &&
+                         symlink("model-00001-of-00002.safetensors.real",
+                                 shard) == 0 &&
+                         payload_fixture_reopen(
+                             &fixture, 2u, NULL, &failure, &err) == YVEX_ERR_IO &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_SYMLINK_REFUSED,
+                     "unexpected source shard symlink is refused");
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "size-drift", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_session_release(
+                             &fixture.session, &failure, &err) == YVEX_OK,
+                     "size drift fixture closes admitted session");
+    snprintf(shard, sizeof(shard), "%s/model-00001-of-00002.safetensors",
+             fixture.root);
+    file = fopen(shard, "ab");
+    YVEX_TEST_ASSERT(file != NULL && fputc(0, file) != EOF && fclose(file) == 0 &&
+                         payload_fixture_reopen(
+                             &fixture, 2u, NULL, &failure, &err) ==
+                             YVEX_ERR_FORMAT &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_SHARD_SIZE_MISMATCH,
+                     "source shard size drift is refused");
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "non-regular", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_session_release(
+                             &fixture.session, &failure, &err) == YVEX_OK,
+                     "non-regular fixture closes admitted session");
+    snprintf(shard, sizeof(shard), "%s/model-00001-of-00002.safetensors",
+             fixture.root);
+    YVEX_TEST_ASSERT(unlink(shard) == 0 && mkdir(shard, 0777) == 0 &&
+                         payload_fixture_reopen(
+                             &fixture, 2u, NULL, &failure, &err) ==
+                             YVEX_ERR_FORMAT &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_NON_REGULAR_SHARD,
+                     "non-regular source shard is refused");
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "path-escape", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_session_release(
+                             &fixture.session, &failure, &err) == YVEX_OK &&
+                         payload_fixture_replace_snapshot(
+                             &fixture, "../outside.safetensors", 8u, &err) &&
+                         payload_fixture_reopen(
+                             &fixture, 2u, NULL, &failure, &err) ==
+                             YVEX_ERR_FORMAT &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_PATH_ESCAPE,
+                     "root-relative shard traversal is refused before open");
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "range-outside", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_session_release(
+                             &fixture.session, &failure, &err) == YVEX_OK &&
+                         payload_fixture_replace_snapshot(
+                             &fixture,
+                             "model-00001-of-00002.safetensors",
+                             20000u, &err) &&
+                         payload_fixture_reopen(
+                             &fixture, 2u, NULL, &failure, &err) ==
+                             YVEX_ERR_BOUNDS &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_RANGE_OUTSIDE_DATA_REGION,
+                     "tensor range outside retained data region is refused");
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "missing-owner", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_session_release(
+                             &fixture.session, &failure, &err) == YVEX_OK &&
+                         payload_fixture_replace_snapshot_facts(
+                             &fixture, "absent.safetensors",
+                             "model-00001-of-00002.safetensors", "I8",
+                             8u, 0u, 8u, 16u, 16384u, &err) &&
+                         payload_fixture_reopen(
+                             &fixture, 2u, NULL, &failure, &err) ==
+                             YVEX_ERR_FORMAT &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_SHARD_NOT_INDEXED,
+                     "tensor ownership by an absent shard is refused");
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "range-file", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_session_release(
+                             &fixture.session, &failure, &err) == YVEX_OK &&
+                         payload_fixture_replace_snapshot_facts(
+                             &fixture,
+                             "model-00001-of-00002.safetensors",
+                             "model-00001-of-00002.safetensors", "I8",
+                             8u, 0u, 8u, 16399u, 16384u, &err) &&
+                         payload_fixture_reopen(
+                             &fixture, 2u, NULL, &failure, &err) ==
+                             YVEX_ERR_BOUNDS &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_RANGE_OUTSIDE_FILE,
+                     "checked absolute tensor range cannot exceed EOF");
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "range-overflow", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_session_release(
+                             &fixture.session, &failure, &err) == YVEX_OK &&
+                         payload_fixture_replace_snapshot_facts(
+                             &fixture,
+                             "model-00001-of-00002.safetensors",
+                             "model-00001-of-00002.safetensors", "I8",
+                             8u, 0u, 8u, ULLONG_MAX - 4u, 16384u, &err) &&
+                         payload_fixture_reopen(
+                             &fixture, 2u, NULL, &failure, &err) ==
+                             YVEX_ERR_BOUNDS &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_RANGE_OVERFLOW,
+                     "checked tensor absolute offset addition refuses overflow");
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "length-mismatch", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_session_release(
+                             &fixture.session, &failure, &err) == YVEX_OK &&
+                         payload_fixture_replace_snapshot_facts(
+                             &fixture,
+                             "model-00001-of-00002.safetensors",
+                             "model-00001-of-00002.safetensors", "I8",
+                             7u, 0u, 8u, 16u, 16384u, &err) &&
+                         payload_fixture_reopen(
+                             &fixture, 2u, NULL, &failure, &err) ==
+                             YVEX_ERR_FORMAT &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_TENSOR_LENGTH_MISMATCH,
+                     "dtype and shape byte-length inconsistency is refused");
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "metadata-gate", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_session_release(
+                             &fixture.session, &failure, &err) == YVEX_OK,
+                     "metadata gate fixture closes admitted session");
+    fixture.verification.verified = 0;
+    YVEX_TEST_ASSERT(payload_fixture_reopen(
+                         &fixture, 2u, NULL, &failure, &err) ==
+                         YVEX_ERR_STATE &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_METADATA_NOT_VERIFIED,
+                     "directory plus snapshot cannot bypass metadata verification");
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "identity-gate", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_session_release(
+                             &fixture.session, &failure, &err) == YVEX_OK,
+                     "source identity fixture closes admitted session");
+    fixture.verification.repository_id[0] = 'x';
+    YVEX_TEST_ASSERT(payload_fixture_reopen(
+                         &fixture, 2u, NULL, &failure, &err) ==
+                         YVEX_ERR_FORMAT &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_SOURCE_IDENTITY_MISMATCH,
+                     "session refuses verification bound to another source identity");
+    payload_fixture_close(&fixture);
+    return 0;
+}
+
+/* Proves active-stream refusal, bounded contention, and concurrent positioned reads. */
+static int test_payload_concurrency_and_contention(void)
+{
+    payload_fixture fixture;
+    yvex_source_payload_failure failure;
+    yvex_source_payload_plan *all = NULL;
+    yvex_source_payload_plan *alpha_plan = NULL;
+    yvex_source_payload_plan *gamma_plan = NULL;
+    yvex_source_payload_sink sink;
+    payload_sink_state state;
+    yvex_source_payload_stream_result result;
+    yvex_source_payload_session_facts facts;
+    payload_stream_gate gate;
+    payload_blocking_sink blocking;
+    payload_stream_thread first;
+    payload_stream_thread second;
+    pthread_t first_thread;
+    pthread_t second_thread;
+    unsigned long long alpha;
+    unsigned long long gamma;
+    int pinned_fd;
+    yvex_error err;
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "contention", 1, 0, 1u, NULL,
+                         &failure, &err) == YVEX_OK,
+                     "contention fixture opens");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build_all(
+                         &all, fixture.session, 4096u, 4096u,
+                         &failure, &err) == YVEX_OK,
+                     "contention trust plan");
+    memset(&state, 0, sizeof(state));
+    payload_sink_make(&sink, &state);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_verify(
+                         fixture.session, all, &sink, &result,
+                         &failure, &err) == YVEX_OK,
+                     "contention fixture becomes trusted");
+    yvex_source_payload_plan_close(all);
+    all = NULL;
+    YVEX_TEST_ASSERT(yvex_source_tensor_snapshot_find_index(
+                         fixture.snapshot, "alpha.weight", &alpha) &&
+                         yvex_source_tensor_snapshot_find_index(
+                             fixture.snapshot, "gamma.weight", &gamma),
+                     "contention tensor indexes");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build(
+                         &alpha_plan, fixture.session, &alpha, 1u,
+                         4096u, 4096u, &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_plan_build(
+                             &gamma_plan, fixture.session, &gamma, 1u,
+                             4096u, 4096u, &failure, &err) == YVEX_OK,
+                     "contention single-range plans");
+    fixture.session->budget.maximum_streams = 1u;
+    memset(&gate, 0, sizeof(gate));
+    pthread_mutex_init(&gate.mutex, NULL);
+    pthread_cond_init(&gate.condition, NULL);
+    memset(&first, 0, sizeof(first));
+    first.session = fixture.session;
+    first.plan = alpha_plan;
+    payload_blocking_sink_make(&first.sink, &blocking, &gate);
+    YVEX_TEST_ASSERT(pthread_create(
+                         &first_thread, NULL, payload_stream_thread_run,
+                         &first) == 0,
+                     "start blocked payload stream");
+    payload_gate_wait(&gate, 1u);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_close(
+                         fixture.session, &failure, &err) == YVEX_ERR_STATE &&
+                         failure.code == YVEX_SOURCE_PAYLOAD_FAILURE_CLOSE_BUSY,
+                     "session close refuses an active stream");
+    memset(&state, 0, sizeof(state));
+    payload_sink_make(&sink, &state);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_stream(
+                         fixture.session, gamma_plan, &sink, &result,
+                         &failure, &err) == YVEX_ERR_BOUNDS &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_RESOURCE_BUDGET,
+                     "maximum stream budget refuses contention");
+    YVEX_TEST_ASSERT(yvex_source_payload_handle_acquire(
+                         fixture.session, gamma_plan->ranges[0].shard_index,
+                         &pinned_fd, &failure, &err) == YVEX_ERR_STATE &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_HANDLE_CACHE_EXHAUSTED,
+                     "pinned handle cannot be evicted under low FD budget");
+    payload_gate_release(&gate);
+    pthread_join(first_thread, NULL);
+    YVEX_TEST_ASSERT(first.rc == YVEX_OK && first.result.committed,
+                     "blocked stream resumes and commits exactly");
+    pthread_cond_destroy(&gate.condition);
+    pthread_mutex_destroy(&gate.mutex);
+    yvex_source_payload_plan_close(gamma_plan);
+    yvex_source_payload_plan_close(alpha_plan);
+    payload_fixture_close(&fixture);
+
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "concurrent", 1, 0, 2u, NULL,
+                         &failure, &err) == YVEX_OK,
+                     "concurrent fixture opens");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build_all(
+                         &all, fixture.session, 4096u, 4096u,
+                         &failure, &err) == YVEX_OK,
+                     "concurrent trust plan");
+    memset(&gate, 0, sizeof(gate));
+    pthread_mutex_init(&gate.mutex, NULL);
+    pthread_cond_init(&gate.condition, NULL);
+    memset(&first, 0, sizeof(first));
+    first.session = fixture.session;
+    first.plan = all;
+    first.verify = 1;
+    payload_blocking_sink_make(&first.sink, &blocking, &gate);
+    YVEX_TEST_ASSERT(pthread_create(
+                         &first_thread, NULL, payload_stream_thread_run,
+                         &first) == 0,
+                     "start atomic payload verification transition");
+    payload_gate_wait(&gate, 1u);
+    memset(&state, 0, sizeof(state));
+    payload_sink_make(&sink, &state);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_verify(
+                         fixture.session, all, &sink, &result,
+                         &failure, &err) == YVEX_ERR_STATE &&
+                         failure.code ==
+                             YVEX_SOURCE_PAYLOAD_FAILURE_INVALID_STATE,
+                     "second verifier cannot enter a VERIFYING session");
+    payload_gate_release(&gate);
+    pthread_join(first_thread, NULL);
+    YVEX_TEST_ASSERT(first.rc == YVEX_OK && first.result.committed,
+                     "single admitted verifier commits after contention");
+    pthread_cond_destroy(&gate.condition);
+    pthread_mutex_destroy(&gate.mutex);
+    yvex_source_payload_plan_close(all);
+    YVEX_TEST_ASSERT(yvex_source_tensor_snapshot_find_index(
+                         fixture.snapshot, "alpha.weight", &alpha) &&
+                         yvex_source_tensor_snapshot_find_index(
+                             fixture.snapshot, "gamma.weight", &gamma) &&
+                         yvex_source_payload_plan_build(
+                             &alpha_plan, fixture.session, &alpha, 1u,
+                             4096u, 4096u, &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_plan_build(
+                             &gamma_plan, fixture.session, &gamma, 1u,
+                             4096u, 4096u, &failure, &err) == YVEX_OK,
+                     "concurrent range plans");
+    memset(&gate, 0, sizeof(gate));
+    pthread_mutex_init(&gate.mutex, NULL);
+    pthread_cond_init(&gate.condition, NULL);
+    memset(&first, 0, sizeof(first));
+    memset(&second, 0, sizeof(second));
+    first.session = second.session = fixture.session;
+    first.plan = alpha_plan;
+    second.plan = gamma_plan;
+    {
+        static payload_blocking_sink first_blocking;
+        static payload_blocking_sink second_blocking;
+        payload_blocking_sink_make(&first.sink, &first_blocking, &gate);
+        payload_blocking_sink_make(&second.sink, &second_blocking, &gate);
+    }
+    YVEX_TEST_ASSERT(pthread_create(
+                         &first_thread, NULL, payload_stream_thread_run,
+                         &first) == 0 &&
+                         pthread_create(
+                             &second_thread, NULL, payload_stream_thread_run,
+                             &second) == 0,
+                     "start two concurrent range streams");
+    payload_gate_wait(&gate, 2u);
+    payload_gate_release(&gate);
+    pthread_join(first_thread, NULL);
+    pthread_join(second_thread, NULL);
+    YVEX_TEST_ASSERT(first.rc == YVEX_OK && second.rc == YVEX_OK &&
+                         first.result.committed && second.result.committed,
+                     "different-shard positioned reads commit concurrently");
+    YVEX_TEST_ASSERT(yvex_source_payload_session_facts_get(
+                         fixture.session, &facts, &err) == YVEX_OK &&
+                         facts.peak_active_streams >= 2u,
+                     "concurrent stream accounting observes overlap");
+    pthread_cond_destroy(&gate.condition);
+    pthread_mutex_destroy(&gate.mutex);
+
+    memset(&gate, 0, sizeof(gate));
+    pthread_mutex_init(&gate.mutex, NULL);
+    pthread_cond_init(&gate.condition, NULL);
+    memset(&first, 0, sizeof(first));
+    memset(&second, 0, sizeof(second));
+    first.session = second.session = fixture.session;
+    first.plan = second.plan = alpha_plan;
+    {
+        static payload_blocking_sink first_repeat;
+        static payload_blocking_sink second_repeat;
+        payload_blocking_sink_make(&first.sink, &first_repeat, &gate);
+        payload_blocking_sink_make(&second.sink, &second_repeat, &gate);
+    }
+    YVEX_TEST_ASSERT(pthread_create(
+                         &first_thread, NULL, payload_stream_thread_run,
+                         &first) == 0 &&
+                         pthread_create(
+                             &second_thread, NULL, payload_stream_thread_run,
+                             &second) == 0,
+                     "start concurrent repeated-range streams");
+    payload_gate_wait(&gate, 2u);
+    payload_gate_release(&gate);
+    pthread_join(first_thread, NULL);
+    pthread_join(second_thread, NULL);
+    YVEX_TEST_ASSERT(first.rc == YVEX_OK && second.rc == YVEX_OK &&
+                         first.result.committed && second.result.committed,
+                     "same-range positioned reads commit concurrently");
+    pthread_cond_destroy(&gate.condition);
+    pthread_mutex_destroy(&gate.mutex);
+    yvex_source_payload_plan_close(gamma_plan);
+    yvex_source_payload_plan_close(alpha_plan);
+    payload_fixture_close(&fixture);
+    return 0;
+}
+
+static int test_payload_drift_and_lifecycle(void)
+{
+    payload_fixture fixture;
+    yvex_source_payload_failure failure;
+    yvex_source_payload_plan *plan = NULL;
+    yvex_source_payload_sink sink;
+    payload_sink_state state;
+    yvex_source_payload_stream_result result;
+    yvex_source_payload_session_facts facts;
+    yvex_error err;
+    char shard[768];
+    char prior[800];
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(payload_fixture_create(
+                         &fixture, "drift", 1, 0, 1u, NULL,
+                         &failure, &err) == YVEX_OK,
+                     "drift fixture opens");
+    YVEX_TEST_ASSERT(yvex_source_payload_plan_build_all(
+                         &plan, fixture.session, 4096u, 4096u,
+                         &failure, &err) == YVEX_OK,
+                     "drift fixture plan");
+    memset(&state, 0, sizeof(state));
+    payload_sink_make(&sink, &state);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_verify(
+                         fixture.session, plan, &sink, &result,
+                         &failure, &err) == YVEX_OK,
+                     "drift fixture trusts initial snapshot");
+    snprintf(shard, sizeof(shard), "%s/model-00001-of-00002.safetensors",
+             fixture.root);
+    snprintf(prior, sizeof(prior), "%s.replaced", shard);
+    YVEX_TEST_ASSERT(rename(shard, prior) == 0 &&
+                         payload_test_write_bytes(shard, 16u, 16384u, 1u),
+                     "replace shard path with same-size file");
+    memset(&state, 0, sizeof(state));
+    payload_sink_make(&sink, &state);
+    YVEX_TEST_ASSERT(yvex_source_payload_session_stream(
+                         fixture.session, plan, &sink, &result,
+                         &failure, &err) != YVEX_OK &&
+                         failure.code == YVEX_SOURCE_PAYLOAD_FAILURE_SHARD_DRIFT &&
+                         !result.committed,
+                     "same-size shard replacement poisons cached reader");
+    yvex_source_payload_plan_close(plan);
+    plan = NULL;
+    YVEX_TEST_ASSERT(yvex_source_payload_session_close(
+                         fixture.session, &failure, &err) == YVEX_OK &&
+                         yvex_source_payload_session_facts_get(
+                             fixture.session, &facts, &err) == YVEX_OK &&
+                         facts.buffer_allocations != 0u &&
+                         facts.buffer_releases == facts.buffer_allocations,
+                     "payload close releases every retained bounded buffer");
+    YVEX_TEST_ASSERT(yvex_source_payload_session_release(
+                         &fixture.session, &failure, &err) == YVEX_OK &&
+                         fixture.session == NULL &&
+                         yvex_source_payload_session_release(
+                             &fixture.session, &failure, &err) == YVEX_OK,
+                     "payload session release is pointer-idempotent");
+    payload_fixture_close(&fixture);
+    return 0;
+}
+
+int yvex_test_source_payload(void)
+{
+    if (test_storage_shard_index_foundation() != 0) return 1;
+    if (test_sha256_primitive() != 0) return 1;
+    if (test_payload_happy_path() != 0) return 1;
+    if (test_payload_local_seal_and_digest_failure() != 0) return 1;
+    if (test_payload_exact_read_faults() != 0) return 1;
+    if (test_payload_consumer_cancel_and_publication_failure() != 0) return 1;
+    if (test_payload_drift_and_lifecycle() != 0) return 1;
+    if (test_payload_construction_faults() != 0) return 1;
+    if (test_payload_path_admission() != 0) return 1;
+    if (test_payload_concurrency_and_contention() != 0) return 1;
+    return 0;
+}

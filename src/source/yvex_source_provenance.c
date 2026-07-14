@@ -15,10 +15,13 @@
 #include "yvex_source_verify_internal.h"
 
 #include <ctype.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "yvex_sha256.h"
 
 #define SOURCE_MANIFEST_CAP (32u * 1024u * 1024u)
 
@@ -388,7 +391,262 @@ static int source_manifest_parse_verification(yvex_source_json *json,
     }
 }
 
-/* Parses one v1 or v2 manifest and rejects duplicate or incomplete known facts. */
+/* Accepts only one root-relative canonical shard basename without allocation. */
+static int source_manifest_payload_name_valid(const char *name)
+{
+    const char *cursor;
+
+    if (!name || !name[0] || name[0] == '/' || strcmp(name, ".") == 0 ||
+        strcmp(name, "..") == 0) return 0;
+    for (cursor = name; *cursor; ++cursor) {
+        if (*cursor == '/' || *cursor == '\\' || *cursor == '\n' ||
+            *cursor == '\r') return 0;
+    }
+    return 1;
+}
+
+/* Validates one published payload shard and returns stable aggregate facts. */
+static int source_manifest_parse_payload_shard(
+    yvex_source_json *json,
+    unsigned long long expected_id,
+    char previous_name[YVEX_PATH_CAP],
+    unsigned long long *file_bytes_out,
+    int *upstream_trust_out)
+{
+    char key[YVEX_SOURCE_JSON_KEY_CAP];
+    char text[YVEX_PATH_CAP] = "";
+    char expected[65] = "";
+    char observed[65] = "";
+    char algorithm[24] = "";
+    char authority[40] = "";
+    char trust[40] = "";
+    unsigned long long id = ULLONG_MAX;
+    unsigned long long file_bytes = 0u;
+    unsigned long long data_region_offset = 0u;
+    unsigned long long payload_bytes = 0u;
+    unsigned int seen = 0u;
+
+    yvex_source_json_space(json);
+    if (json->cursor >= json->end || *json->cursor++ != '{') return 0;
+    for (;;) {
+        yvex_source_json_space(json);
+        if (json->cursor < json->end && *json->cursor == '}') {
+            json->cursor++;
+            if (seen != 1023u || id != expected_id ||
+                !source_manifest_payload_name_valid(text) ||
+                (previous_name[0] && strcmp(previous_name, text) >= 0) ||
+                file_bytes == 0u || data_region_offset > file_bytes ||
+                payload_bytes != file_bytes - data_region_offset ||
+                strcmp(algorithm, "sha256") != 0 || !authority[0] ||
+                !yvex_sha256_hex_valid(observed) ||
+                (expected[0] && (!yvex_sha256_hex_valid(expected) ||
+                                 strcmp(expected, observed) != 0)) ||
+                ((expected[0] &&
+                  strcmp(trust, "upstream_payload_verified") != 0) ||
+                 (!expected[0] &&
+                  (strcmp(trust, "local_payload_snapshot_sealed") != 0 ||
+                   strcmp(authority, "local-snapshot-seal") != 0))))
+                return 0;
+            if (snprintf(previous_name, YVEX_PATH_CAP, "%s", text) < 0)
+                return 0;
+            *file_bytes_out = file_bytes;
+            *upstream_trust_out = expected[0] != '\0';
+            return 1;
+        }
+        if (!yvex_source_json_string(json, key, sizeof(key))) return 0;
+        yvex_source_json_space(json);
+        if (json->cursor >= json->end || *json->cursor++ != ':') return 0;
+        if (strcmp(key, "id") == 0) {
+            if ((seen & 1u) || !yvex_source_json_u64(json, &id)) return 0;
+            seen |= 1u;
+        } else if (strcmp(key, "name") == 0) {
+            if ((seen & 2u) || !yvex_source_json_string(
+                    json, text, sizeof(text))) return 0;
+            seen |= 2u;
+        } else if (strcmp(key, "file_bytes") == 0) {
+            if ((seen & 4u) || !yvex_source_json_u64(json, &file_bytes)) return 0;
+            seen |= 4u;
+        } else if (strcmp(key, "data_region_offset") == 0) {
+            if ((seen & 8u) || !yvex_source_json_u64(
+                    json, &data_region_offset)) return 0;
+            seen |= 8u;
+        } else if (strcmp(key, "payload_bytes") == 0) {
+            if ((seen & 16u) || !yvex_source_json_u64(
+                    json, &payload_bytes)) return 0;
+            seen |= 16u;
+        } else if (strcmp(key, "digest_algorithm") == 0) {
+            if ((seen & 32u) || !yvex_source_json_string(
+                    json, algorithm, sizeof(algorithm))) return 0;
+            seen |= 32u;
+        } else if (strcmp(key, "digest_authority") == 0) {
+            if ((seen & 64u) || !yvex_source_json_string(
+                    json, authority, sizeof(authority))) return 0;
+            seen |= 64u;
+        } else if (strcmp(key, "expected_digest") == 0) {
+            if (seen & 128u) return 0;
+            yvex_source_json_space(json);
+            if (json->cursor < json->end && *json->cursor == '"') {
+                if (!yvex_source_json_string(json, expected,
+                                             sizeof(expected))) return 0;
+            } else {
+                static const char null_value[] = "null";
+                if ((size_t)(json->end - json->cursor) <
+                        sizeof(null_value) - 1u ||
+                    memcmp(json->cursor, null_value,
+                           sizeof(null_value) - 1u) != 0) return 0;
+                json->cursor += sizeof(null_value) - 1u;
+            }
+            seen |= 128u;
+        } else if (strcmp(key, "observed_digest") == 0) {
+            if ((seen & 256u) || !yvex_source_json_string(
+                    json, observed, sizeof(observed))) return 0;
+            seen |= 256u;
+        } else if (strcmp(key, "trust_class") == 0) {
+            if ((seen & 512u) || !yvex_source_json_string(
+                    json, trust, sizeof(trust))) return 0;
+            seen |= 512u;
+        } else if (!yvex_source_json_skip_value(json)) {
+            return 0;
+        }
+        yvex_source_json_space(json);
+        if (json->cursor >= json->end) return 0;
+        if (*json->cursor == '}') continue;
+        if (*json->cursor++ != ',') return 0;
+    }
+}
+
+/* Parses deterministic canonical-order shard rows and returns their exact count. */
+static int source_manifest_parse_payload_shards(
+    yvex_source_json *json,
+    unsigned long long *count,
+    unsigned long long *total_file_bytes)
+{
+    unsigned long long index = 0u;
+    unsigned long long total = 0u;
+    char previous_name[YVEX_PATH_CAP] = "";
+    int all_upstream_trust = 1;
+
+    yvex_source_json_space(json);
+    if (json->cursor >= json->end || *json->cursor++ != '[') return 0;
+    yvex_source_json_space(json);
+    if (json->cursor < json->end && *json->cursor == ']') return 0;
+    for (;;) {
+        unsigned long long file_bytes;
+        int upstream_trust;
+
+        if (!source_manifest_parse_payload_shard(
+                json, index, previous_name, &file_bytes, &upstream_trust) ||
+            ULLONG_MAX - total < file_bytes) return 0;
+        if (!upstream_trust) all_upstream_trust = 0;
+        total += file_bytes;
+        index++;
+        yvex_source_json_space(json);
+        if (json->cursor >= json->end) return 0;
+        if (*json->cursor == ']') {
+            json->cursor++;
+            *count = index;
+            *total_file_bytes = total;
+            return all_upstream_trust ? 2 : 1;
+        }
+        if (*json->cursor++ != ',') return 0;
+    }
+}
+
+/* Parses v3 aggregate payload identity and validates all published shard rows. */
+static int source_manifest_parse_payload(yvex_source_json *json,
+                                         yvex_source_verification *out)
+{
+    char key[YVEX_SOURCE_JSON_KEY_CAP];
+    unsigned long long source_identity = 0u;
+    unsigned long long tensor_count = 0u;
+    unsigned long long logical_bytes = 0u;
+    unsigned long long parsed_shards = 0u;
+    unsigned long long parsed_file_bytes = 0u;
+    int parsed_trust_class = 0;
+    unsigned int seen = 0u;
+
+    yvex_source_json_space(json);
+    if (json->cursor >= json->end || *json->cursor++ != '{') return 0;
+    for (;;) {
+        yvex_source_json_space(json);
+        if (json->cursor < json->end && *json->cursor == '}') {
+            json->cursor++;
+            out->manifest_payload_source_snapshot_identity = source_identity;
+            out->manifest_payload_tensor_count = tensor_count;
+            out->manifest_payload_logical_tensor_bytes = logical_bytes;
+            return seen == 511u &&
+                   yvex_sha256_hex_valid(out->manifest_payload_identity) &&
+                   strcmp(out->manifest_payload_digest_algorithm,
+                          "sha256") == 0 &&
+                   (strcmp(out->manifest_payload_trust_class,
+                           "upstream_payload_verified") == 0 ||
+                    strcmp(out->manifest_payload_trust_class,
+                           "local_payload_snapshot_sealed") == 0) &&
+                   source_identity != 0u &&
+                   out->manifest_payload_shard_count == parsed_shards &&
+                   out->manifest_payload_bytes == parsed_file_bytes &&
+                   ((parsed_trust_class == 2 &&
+                     strcmp(out->manifest_payload_trust_class,
+                            "upstream_payload_verified") == 0) ||
+                    (parsed_trust_class == 1 &&
+                     strcmp(out->manifest_payload_trust_class,
+                            "local_payload_snapshot_sealed") == 0));
+        }
+        if (!yvex_source_json_string(json, key, sizeof(key))) return 0;
+        yvex_source_json_space(json);
+        if (json->cursor >= json->end || *json->cursor++ != ':') return 0;
+        if (strcmp(key, "identity") == 0) {
+            if ((seen & 1u) || !yvex_source_json_string(
+                    json, out->manifest_payload_identity,
+                    sizeof(out->manifest_payload_identity))) return 0;
+            seen |= 1u;
+        } else if (strcmp(key, "trust_class") == 0) {
+            if ((seen & 2u) || !yvex_source_json_string(
+                    json, out->manifest_payload_trust_class,
+                    sizeof(out->manifest_payload_trust_class))) return 0;
+            seen |= 2u;
+        } else if (strcmp(key, "digest_algorithm") == 0) {
+            if ((seen & 4u) || !yvex_source_json_string(
+                    json, out->manifest_payload_digest_algorithm,
+                    sizeof(out->manifest_payload_digest_algorithm))) return 0;
+            seen |= 4u;
+        } else if (strcmp(key, "source_snapshot_identity") == 0) {
+            if ((seen & 8u) || !yvex_source_json_u64(
+                    json, &source_identity)) return 0;
+            seen |= 8u;
+        } else if (strcmp(key, "shard_count") == 0) {
+            if ((seen & 16u) || !yvex_source_json_u64(
+                    json, &out->manifest_payload_shard_count)) return 0;
+            seen |= 16u;
+        } else if (strcmp(key, "shard_file_bytes") == 0) {
+            if ((seen & 32u) || !yvex_source_json_u64(
+                    json, &out->manifest_payload_bytes)) return 0;
+            seen |= 32u;
+        } else if (strcmp(key, "tensor_count") == 0) {
+            if ((seen & 64u) || !yvex_source_json_u64(
+                    json, &tensor_count)) return 0;
+            seen |= 64u;
+        } else if (strcmp(key, "logical_tensor_bytes") == 0) {
+            if ((seen & 128u) || !yvex_source_json_u64(
+                    json, &logical_bytes)) return 0;
+            seen |= 128u;
+        } else if (strcmp(key, "shards") == 0) {
+            if (seen & 256u) return 0;
+            parsed_trust_class = source_manifest_parse_payload_shards(
+                json, &parsed_shards, &parsed_file_bytes);
+            if (!parsed_trust_class) return 0;
+            seen |= 256u;
+        } else if (!yvex_source_json_skip_value(json)) {
+            return 0;
+        }
+        yvex_source_json_space(json);
+        if (json->cursor >= json->end) return 0;
+        if (*json->cursor == '}') continue;
+        if (*json->cursor++ != ',') return 0;
+    }
+}
+
+/* Parses one supported manifest and distinguishes unsupported schema versions. */
 static int source_manifest_parse(const char *data,
                                  size_t length,
                                  yvex_source_verification *out,
@@ -435,6 +693,10 @@ static int source_manifest_parse(const char *data,
             if ((seen & 32u) || !source_manifest_parse_verification(
                     &json, out)) return 0;
             seen |= 32u;
+        } else if (strcmp(key, "payload") == 0) {
+            if ((seen & 64u) || !source_manifest_parse_payload(
+                    &json, out)) return 0;
+            seen |= 64u;
         } else if (!yvex_source_json_skip_value(&json)) {
             return 0;
         }
@@ -445,10 +707,13 @@ static int source_manifest_parse(const char *data,
     }
     if (!yvex_source_json_complete(&json) || (seen & 15u) != 15u) return 0;
     if (strcmp(out->manifest_schema, "yvex.source_manifest.v1") == 0) {
-        return (seen & 48u) == 0u;
+        return seen == 15u;
     }
-    return strcmp(out->manifest_schema, "yvex.source_manifest.v2") == 0 &&
-           (seen & 48u) == 48u;
+    if (strcmp(out->manifest_schema, "yvex.source_manifest.v2") == 0)
+        return seen == 63u;
+    if (strcmp(out->manifest_schema, "yvex.source_manifest.v3") == 0)
+        return seen == 127u;
+    return -1;
 }
 
 /* Resolves explicit or canonical external manifest placement without source mutation. */
@@ -512,11 +777,16 @@ int yvex_source_provenance_manifest_read(
         yvex_error_clear(err);
         return YVEX_OK;
     }
-    if (!source_manifest_parse(data, length, out, manifest_local,
-                               sizeof(manifest_local))) {
-        free(data);
-        yvex_source_verification_add_blocker(out, "malformed-source-manifest");
-        return YVEX_OK;
+    {
+        int parse_status = source_manifest_parse(
+            data, length, out, manifest_local, sizeof(manifest_local));
+        if (parse_status <= 0) {
+            free(data);
+            yvex_source_verification_add_blocker(
+                out, parse_status < 0 ? "unsupported-source-manifest-version"
+                                      : "malformed-source-manifest");
+            return YVEX_OK;
+        }
     }
     free(data);
     if (strcmp(out->source_kind, "huggingface") != 0) {
@@ -579,6 +849,60 @@ static int source_metadata_read(const char *source_path,
         return 0;
     }
     return fclose(fp) == 0;
+}
+
+/* Projects an authoritative Hugging Face LFS SHA-256 bound to the pinned revision. */
+int yvex_source_provenance_payload_digest(
+    const yvex_source_verification *verification,
+    const char *canonical_name,
+    yvex_source_payload_digest_fact *out,
+    yvex_error *err)
+{
+    char revision[128];
+    char oid[128];
+    size_t index;
+
+    if (!verification || !canonical_name || !out ||
+        !verification->resolved_source_path[0] || !verification->revision[0]) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG,
+                       "source_payload_digest_provenance",
+                       "verified source, canonical shard name, and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(out, 0, sizeof(*out));
+    if (!source_metadata_read(verification->resolved_source_path,
+                              canonical_name, revision, sizeof(revision),
+                              oid, sizeof(oid))) {
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+    out->revision_matches = strcmp(revision, verification->revision) == 0;
+    if (!out->revision_matches) {
+        yvex_error_set(err, YVEX_ERR_FORMAT,
+                       "source_payload_digest_provenance",
+                       "payload provider metadata revision does not match verified source");
+        return YVEX_ERR_FORMAT;
+    }
+    if (strlen(oid) != 64u) {
+        yvex_error_clear(err);
+        return YVEX_OK;
+    }
+    if (!yvex_sha256_hex_valid(oid)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT,
+                       "source_payload_digest_provenance",
+                       "64-byte provider digest is not valid SHA-256 hexadecimal");
+        return YVEX_ERR_FORMAT;
+    }
+    for (index = 0u; index < 64u; ++index)
+        out->expected_digest[index] =
+            (char)tolower((unsigned char)oid[index]);
+    out->expected_digest[64] = '\0';
+    snprintf(out->algorithm, sizeof(out->algorithm), "%s", "sha256");
+    snprintf(out->authority, sizeof(out->authority), "%s",
+             "huggingface-git-lfs-etag");
+    out->available = 1;
+    yvex_error_clear(err);
+    return YVEX_OK;
 }
 
 static int source_oid_is_sha1(const char *oid)
@@ -701,19 +1025,22 @@ int yvex_source_provenance_manifest_matches(
     const yvex_source_verify_options *options,
     const yvex_source_verification *out)
 {
-    return options && out &&
-           strcmp(out->manifest_schema, "yvex.source_manifest.v2") == 0 &&
+    int schema_v2;
+    int schema_v3;
+    int common;
+
+    if (!options || !out) return 0;
+    schema_v2 = strcmp(out->manifest_schema, "yvex.source_manifest.v2") == 0;
+    schema_v3 = strcmp(out->manifest_schema, "yvex.source_manifest.v3") == 0;
+    common = (schema_v2 || schema_v3) &&
            strcmp(out->manifest_status, "complete") == 0 &&
            strcmp(out->manifest_target_id, options->identity->target_id) == 0 &&
            strcmp(out->repository_id, options->identity->upstream_repo_id) == 0 &&
            strcmp(out->manifest_revision, out->revision) == 0 &&
-           strcmp(out->verification_stage,
-                  "exact-source-metadata-header-verified") == 0 &&
            strcmp(out->inventory_authority,
                   options->identity->upstream_inventory_authority) == 0 &&
            strcmp(out->manifest_config_status, "verified") == 0 &&
            strcmp(out->manifest_tokenizer_status, "verified") == 0 &&
-           strcmp(out->manifest_payload_digest_status, "not-verified") == 0 &&
            strcmp(out->upstream_index_oid,
                   options->identity->upstream_index_oid
                       ? options->identity->upstream_index_oid
@@ -723,4 +1050,22 @@ int yvex_source_provenance_manifest_matches(
            out->manifest_shard_count == out->shard_count &&
            out->manifest_shard_bytes == out->shard_bytes &&
            out->manifest_header_tensor_count == out->header_tensor_count;
+    if (!common) return 0;
+    if (schema_v2) {
+        return strcmp(out->verification_stage,
+                      "exact-source-metadata-header-verified") == 0 &&
+               strcmp(out->manifest_payload_digest_status,
+                      "not-verified") == 0;
+    }
+    return strcmp(out->verification_stage,
+                  "exact-source-payload-verified") == 0 &&
+           strcmp(out->manifest_payload_digest_status,
+                  out->manifest_payload_trust_class) == 0 &&
+           out->manifest_payload_shard_count == out->shard_count &&
+           out->manifest_payload_bytes == out->shard_bytes &&
+           out->manifest_payload_source_snapshot_identity ==
+               out->source_snapshot_identity &&
+           out->manifest_payload_tensor_count == out->header_tensor_count &&
+           out->manifest_payload_logical_tensor_bytes ==
+               out->declared_tensor_bytes;
 }

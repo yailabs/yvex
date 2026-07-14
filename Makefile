@@ -24,7 +24,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -36,15 +36,18 @@ YVEX_CUDA_ARCH ?= auto
 NVCC_AVAILABLE := $(shell command -v $(NVCC) >/dev/null 2>&1 && echo yes || echo no)
 
 CPPFLAGS ?= -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L -Iinclude -I. -Isrc/core -Isrc/cli -Isrc/cli/input -Isrc/cli/io -Isrc/cli/model_artifacts -Isrc/cli/render -Isrc/source -Isrc/io -Isrc/backend -Isrc/backend/cuda -Isrc/runtime -Isrc/server -Isrc/gguf -Isrc/generation -Isrc/graph -Isrc/model/artifacts -Isrc/model/target
-CFLAGS ?= -std=c11 -Wall -Wextra -pedantic
+CFLAGS ?= -std=c11 -Wall -Wextra -pedantic -pthread
 LDFLAGS ?=
-LDLIBS ?= -ldl
+LDLIBS ?= -ldl -pthread
 TEST_CPPFLAGS := $(CPPFLAGS) -Itests
 
 BUILD_DIR ?= build
 OBJ_DIR ?= $(BUILD_DIR)/obj
 LIB_DIR ?= $(BUILD_DIR)/lib
 TEST_DIR ?= $(BUILD_DIR)/tests
+DEEPSEEK_SOURCE ?= $(HOME)/lab/models/hf/deepseek/DeepSeek-V4-Flash
+DEEPSEEK_MODELS_ROOT ?= $(HOME)/lab/models/gguf
+DEEPSEEK_SOURCE_MANIFEST ?= $(DEEPSEEK_MODELS_ROOT)/deepseek/deepseek-source-manifest.json
 
 LIBYVEX ?= $(LIB_DIR)/libyvex.a
 YVEX_BIN ?= ./yvex
@@ -78,6 +81,8 @@ CLI_IO_SRCS := $(sort $(wildcard src/cli/io/*.c))
 CORE_SRCS := \
 	src/core/yvex_core.c \
 	src/core/yvex_fs.c \
+	src/core/yvex_sha256.c \
+	src/core/yvex_shard_index.c \
 	src/accounts/yvex_accounts.c \
 	src/artifact/yvex_artifact.c \
 	src/artifact/yvex_artifact_descriptor.c \
@@ -144,6 +149,7 @@ CORE_SRCS := \
 	src/model/artifacts/yvex_model_artifact_status_report.c \
 	src/model/artifacts/yvex_model_artifact_write.c \
 	src/model/target/yvex_mapping_gate_report.c \
+	src/model/target/yvex_deepseek_payload_handoff.c \
 	src/model/target/yvex_deepseek_gguf_map.c \
 	src/model/target/yvex_deepseek_tensor_coverage.c \
 	src/model/target/yvex_missing_role_report.c \
@@ -168,6 +174,10 @@ CORE_SRCS := \
 	src/source/yvex_source_inventory.c \
 	src/source/yvex_source_json.c \
 	src/source/yvex_source_manifest.c \
+	src/source/yvex_source_payload.c \
+	src/source/yvex_source_payload_identity.c \
+	src/source/yvex_source_payload_plan.c \
+	src/source/yvex_source_payload_stream.c \
 	src/source/yvex_source_provenance.c \
 	src/source/yvex_source_report.c \
 	src/source/yvex_source_scan.c \
@@ -213,6 +223,7 @@ CORE_OBJS += $(CUDA_PTX_OBJ)
 endif
 
 TEST_RUNNER := $(TEST_DIR)/test
+SOURCE_PAYLOAD_LIVE_RUNNER := $(TEST_DIR)/source_payload_deepseek
 CUDA_TEST_RUNNER := $(TEST_DIR)/test_cuda
 
 TEST_UNIT_SRCS := $(sort $(wildcard tests/unit/*.c))
@@ -322,6 +333,12 @@ test-core: $(TEST_RUNNER)
 test-cli: $(YVEX_BIN) $(YVEXD_BIN) $(CLI_TEST)
 	YVEX_BIN=$(YVEX_BIN) YVEXD_BIN=$(YVEXD_BIN) sh $(CLI_TEST)
 
+test-source-payload-live-plan: $(SOURCE_PAYLOAD_LIVE_RUNNER)
+	$(SOURCE_PAYLOAD_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
+
+test-source-payload-live: $(SOURCE_PAYLOAD_LIVE_RUNNER)
+	$(SOURCE_PAYLOAD_LIVE_RUNNER) "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
+
 test: test-core test-cli
 
 test-gguf-artifact-abi: $(TEST_RUNNER) tests/test_gguf_artifact_abi.sh
@@ -397,6 +414,10 @@ $(YVEXD_BIN): src/daemon/yvexd.c $(LIBYVEX)
 $(TEST_RUNNER): tests/test.c $(TEST_UNIT_OBJS) $(LIBYVEX) tests/test.h
 	@mkdir -p $(@D)
 	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) tests/test.c $(TEST_UNIT_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
+$(SOURCE_PAYLOAD_LIVE_RUNNER): tests/live/source_payload_deepseek.c $(LIBYVEX)
+	@mkdir -p $(@D)
+	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
 $(CUDA_TEST_RUNNER): tests/test_cuda.c $(CUDA_TEST_UNIT_OBJS) $(LIBYVEX) tests/test.h
 	@mkdir -p $(@D)
