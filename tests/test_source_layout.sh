@@ -100,6 +100,15 @@ test -f src/model/target/yvex_model_class_profile.c
 test -f src/model/target/yvex_model_class_profile.h
 test -f src/model/architecture/yvex_deepseek_v4_ir.c
 test -f src/model/architecture/yvex_deepseek_v4_ir.h
+test -f src/model/compilation/yvex_transform_ir.c
+test -f src/model/compilation/yvex_transform_ir.h
+test -f src/model/compilation/yvex_transform_ir_internal.h
+test -f src/model/compilation/yvex_transform_ir_validate.c
+test -f src/model/compilation/yvex_transform_ir_identity.c
+test -f src/model/compilation/yvex_deepseek_transform_ir.c
+test -f src/model/compilation/yvex_deepseek_transform_ir.h
+test -f src/model/compilation/yvex_transform_binding.c
+test -f src/model/compilation/yvex_transform_binding.h
 test -f src/model/target/yvex_deepseek_tensor_coverage.c
 test -f src/model/target/yvex_deepseek_tensor_coverage.h
 test -f src/model/target/yvex_deepseek_gguf_map.c
@@ -972,22 +981,70 @@ do
   }
 done
 
-grep -nF 'yvex_deepseek_gguf_map_open_verified_source' \
-  src/model/target/yvex_mapping_gate_report.c >/dev/null || {
-  echo "DeepSeek mapping gate does not consume the canonical logical GGUF plan"
-  exit 1
-}
-for map_owner_call in \
+for mapping_plan_owner_call in \
+  yvex_source_verify_with_snapshot \
+  yvex_deepseek_v4_ir_build \
   yvex_deepseek_tensor_coverage_build \
-  yvex_deepseek_tensor_coverage_find \
-  yvex_deepseek_tensor_coverage_find_index
+  yvex_deepseek_transform_ir_build \
+  yvex_deepseek_gguf_map_build
 do
-  grep -nF "$map_owner_call" \
-    src/model/target/yvex_deepseek_gguf_map.c >/dev/null || {
-    echo "DeepSeek GGUF map does not consume $map_owner_call"
+  grep -nF "$mapping_plan_owner_call" \
+    src/model/target/yvex_mapping_gate_report.c >/dev/null || {
+    echo "DeepSeek mapping report does not coordinate $mapping_plan_owner_call"
     exit 1
   }
 done
+for transform_owner_call in \
+  yvex_deepseek_tensor_coverage_find \
+  yvex_deepseek_tensor_coverage_find_index \
+  yvex_deepseek_tensor_coverage_find_source_index
+do
+  grep -nF "$transform_owner_call" \
+    src/model/compilation/yvex_deepseek_transform_ir.c >/dev/null || {
+    echo "DeepSeek Transformation IR does not consume $transform_owner_call"
+    exit 1
+  }
+done
+
+for lowering_owner_call in \
+  yvex_transform_ir_terminal_at \
+  yvex_transform_ir_node_at \
+  yvex_transform_ir_node_input_at
+do
+  grep -nF "$lowering_owner_call" \
+    src/model/target/yvex_deepseek_gguf_map.c >/dev/null || {
+    echo "DeepSeek GGUF lowering does not consume $lowering_owner_call"
+    exit 1
+  }
+done
+
+if grep -nE 'yvex_deepseek_tensor_coverage_(build|find|find_index)' \
+    src/model/target/yvex_deepseek_gguf_map.c; then
+  echo "DeepSeek GGUF lowering must not reconstruct transformation truth from coverage"
+  exit 1
+fi
+
+if grep -nE 'yvex_gguf|emitted_name|forced_qtype|metadata_key|artifact_path' \
+    src/model/compilation/yvex_transform_ir.c \
+    src/model/compilation/yvex_transform_ir.h \
+    src/model/compilation/yvex_transform_ir_identity.c \
+    src/model/compilation/yvex_transform_ir_validate.c; then
+  echo "generic Transformation IR contains physical-lowering identity"
+  exit 1
+fi
+
+if grep -nE '\b(fopen|fread|pread|open|opendir|readdir|stat|lstat|realpath)\s*\(' \
+    src/model/compilation/*.c; then
+  echo "Transformation IR planning must not perform source or payload IO"
+  exit 1
+fi
+
+grep -nF 'yvex_deepseek_transform_ir_build' \
+  src/model/target/yvex_deepseek_payload_handoff.c >/dev/null
+grep -nF 'yvex_transform_binding_create' \
+  src/model/target/yvex_deepseek_payload_handoff.c >/dev/null
+grep -nF 'payload_bytes_read = 0u' \
+  src/model/compilation/yvex_transform_ir_validate.c >/dev/null
 
 grep -nF 'V010.SOURCE.PAYLOAD.STREAM.0' \
   src/model/target/yvex_model_class_profile.c >/dev/null

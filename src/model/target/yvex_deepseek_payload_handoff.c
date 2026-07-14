@@ -11,6 +11,7 @@
 
 #include <limits.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -21,8 +22,10 @@ struct yvex_deepseek_payload_handoff {
     yvex_source_verify_options source_options;
     yvex_source_verification verification;
     yvex_deepseek_tensor_coverage *coverage;
+    yvex_transform_ir *transform_ir;
     yvex_deepseek_gguf_map *map;
     yvex_source_payload_session *session;
+    yvex_transform_binding *binding;
     yvex_source_payload_plan *plan;
     yvex_deepseek_payload_handoff_summary summary;
 };
@@ -97,6 +100,10 @@ static int handoff_resolve(yvex_deepseek_payload_handoff *handoff,
             "mapping contribution index allocation failed");
     }
     handoff->summary.mapping_identity = map_summary->mapping_identity;
+    (void)snprintf(handoff->summary.transform_identity,
+                   sizeof(handoff->summary.transform_identity), "%s",
+                   yvex_transform_ir_summary_get(
+                       handoff->transform_ir)->transform_identity);
     handoff->summary.source_snapshot_identity = map_summary->source_identity;
     handoff->summary.descriptor_count = map_summary->descriptor_count;
     handoff->summary.contribution_count = map_summary->source_contribution_count;
@@ -258,6 +265,7 @@ int yvex_deepseek_payload_handoff_open(
     yvex_deepseek_v4_ir_failure ir_failure;
     yvex_deepseek_tensor_coverage_failure coverage_failure;
     yvex_deepseek_gguf_map_failure map_failure;
+    yvex_transform_failure transform_failure;
     yvex_source_payload_open_options payload_options;
     int rc;
 
@@ -315,13 +323,19 @@ int yvex_deepseek_payload_handoff_open(
         &handoff->coverage, &handoff->verification, ir, snapshot, NULL,
         &coverage_failure, err);
     if (rc == YVEX_OK)
+        rc = yvex_deepseek_transform_ir_build(
+            &handoff->transform_ir, &handoff->verification, ir,
+            handoff->coverage, NULL, &transform_failure, err);
+    if (rc == YVEX_OK)
         rc = yvex_deepseek_gguf_map_build(
-            &handoff->map, ir, handoff->coverage, &map_failure, err);
+            &handoff->map, ir, handoff->transform_ir, &map_failure, err);
     yvex_deepseek_v4_ir_close(ir);
     if (rc != YVEX_OK) {
-        yvex_deepseek_payload_failure_code code = handoff->coverage
-            ? YVEX_DEEPSEEK_PAYLOAD_FAILURE_MAPPING
-            : YVEX_DEEPSEEK_PAYLOAD_FAILURE_COVERAGE;
+        yvex_deepseek_payload_failure_code code = !handoff->coverage
+            ? YVEX_DEEPSEEK_PAYLOAD_FAILURE_COVERAGE
+            : (!handoff->transform_ir
+                ? YVEX_DEEPSEEK_PAYLOAD_FAILURE_TRANSFORM_IR
+                : YVEX_DEEPSEEK_PAYLOAD_FAILURE_MAPPING);
         yvex_source_tensor_snapshot_release(snapshot);
         yvex_deepseek_payload_handoff_close(handoff);
         if (failure) failure->code = code;
@@ -342,6 +356,14 @@ int yvex_deepseek_payload_handoff_open(
         yvex_deepseek_payload_handoff_close(handoff);
         return rc;
     }
+    rc = yvex_transform_binding_create(
+        &handoff->binding, handoff->transform_ir, handoff->session, NULL,
+        &transform_failure, err);
+    if (rc != YVEX_OK) {
+        if (failure) failure->code = YVEX_DEEPSEEK_PAYLOAD_FAILURE_BINDING;
+        yvex_deepseek_payload_handoff_close(handoff);
+        return rc;
+    }
     rc = handoff_resolve(handoff, options, failure, err);
     if (rc != YVEX_OK) {
         yvex_deepseek_payload_handoff_close(handoff);
@@ -359,8 +381,10 @@ void yvex_deepseek_payload_handoff_close(
 {
     if (!handoff) return;
     yvex_source_payload_plan_close(handoff->plan);
+    yvex_transform_binding_release(&handoff->binding);
     (void)yvex_source_payload_session_release(&handoff->session, NULL, NULL);
     yvex_deepseek_gguf_map_close(handoff->map);
+    yvex_transform_ir_release(&handoff->transform_ir);
     yvex_deepseek_tensor_coverage_close(handoff->coverage);
     free(handoff->manifest_path);
     free(handoff->models_root);
@@ -387,6 +411,18 @@ const yvex_deepseek_gguf_map *yvex_deepseek_payload_handoff_map(
     return handoff ? handoff->map : NULL;
 }
 
+const yvex_transform_ir *yvex_deepseek_payload_handoff_transform_ir(
+    const yvex_deepseek_payload_handoff *handoff)
+{
+    return handoff ? handoff->transform_ir : NULL;
+}
+
+const yvex_transform_binding *yvex_deepseek_payload_handoff_binding(
+    const yvex_deepseek_payload_handoff *handoff)
+{
+    return handoff ? handoff->binding : NULL;
+}
+
 yvex_source_payload_session *yvex_deepseek_payload_handoff_session(
     yvex_deepseek_payload_handoff *handoff)
 {
@@ -404,9 +440,10 @@ const char *yvex_deepseek_payload_failure_name(
 {
     static const char *const names[] = {
         "none", "invalid-argument", "source-verification",
-        "architecture-ir", "tensor-coverage", "gguf-mapping",
+        "architecture-ir", "tensor-coverage", "transform-ir", "gguf-mapping",
         "mapping-identity-mismatch", "mapping-contribution",
-        "payload-range", "payload-plan", "allocation-failure"
+        "payload-range", "transform-binding", "payload-plan",
+        "allocation-failure"
     };
     size_t count = sizeof(names) / sizeof(names[0]);
 

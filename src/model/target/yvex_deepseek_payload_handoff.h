@@ -11,9 +11,12 @@
 #define YVEX_DEEPSEEK_PAYLOAD_HANDOFF_H
 
 #include "yvex_deepseek_gguf_map.h"
+#include "../compilation/yvex_deepseek_transform_ir.h"
+#include "../compilation/yvex_transform_binding.h"
 #include "../../source/yvex_source_payload.h"
 
-#define YVEX_DEEPSEEK_PAYLOAD_MAPPING_IDENTITY 0x1aecbbe25b04de0dull
+#define YVEX_DEEPSEEK_PAYLOAD_MAPPING_IDENTITY \
+    YVEX_DEEPSEEK_GGUF_MAPPING_IDENTITY
 
 typedef enum {
     YVEX_DEEPSEEK_PAYLOAD_FAILURE_NONE = 0,
@@ -21,10 +24,12 @@ typedef enum {
     YVEX_DEEPSEEK_PAYLOAD_FAILURE_SOURCE,
     YVEX_DEEPSEEK_PAYLOAD_FAILURE_ARCHITECTURE,
     YVEX_DEEPSEEK_PAYLOAD_FAILURE_COVERAGE,
+    YVEX_DEEPSEEK_PAYLOAD_FAILURE_TRANSFORM_IR,
     YVEX_DEEPSEEK_PAYLOAD_FAILURE_MAPPING,
     YVEX_DEEPSEEK_PAYLOAD_FAILURE_MAPPING_IDENTITY,
     YVEX_DEEPSEEK_PAYLOAD_FAILURE_CONTRIBUTION,
     YVEX_DEEPSEEK_PAYLOAD_FAILURE_RANGE,
+    YVEX_DEEPSEEK_PAYLOAD_FAILURE_BINDING,
     YVEX_DEEPSEEK_PAYLOAD_FAILURE_PLAN,
     YVEX_DEEPSEEK_PAYLOAD_FAILURE_ALLOCATION
 } yvex_deepseek_payload_failure_code;
@@ -38,6 +43,7 @@ typedef struct {
 
 typedef struct {
     unsigned long long mapping_identity;
+    char transform_identity[YVEX_TRANSFORM_IR_IDENTITY_CAP];
     unsigned long long source_snapshot_identity;
     unsigned long long descriptor_count;
     unsigned long long descriptors_covered;
@@ -83,6 +89,10 @@ yvex_deepseek_payload_handoff_summary_get(
 const yvex_source_verification *yvex_deepseek_payload_handoff_verification(
     const yvex_deepseek_payload_handoff *handoff);
 const yvex_deepseek_gguf_map *yvex_deepseek_payload_handoff_map(
+    const yvex_deepseek_payload_handoff *handoff);
+const yvex_transform_ir *yvex_deepseek_payload_handoff_transform_ir(
+    const yvex_deepseek_payload_handoff *handoff);
+const yvex_transform_binding *yvex_deepseek_payload_handoff_binding(
     const yvex_deepseek_payload_handoff *handoff);
 yvex_source_payload_session *yvex_deepseek_payload_handoff_session(
     yvex_deepseek_payload_handoff *handoff);

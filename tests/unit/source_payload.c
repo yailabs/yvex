@@ -15,6 +15,8 @@
 #include "src/source/yvex_source_payload_internal.h"
 #include "src/source/yvex_source_provenance.h"
 #include "src/source/yvex_source_private.h"
+#include "src/model/compilation/yvex_transform_binding.h"
+#include "src/model/compilation/yvex_transform_ir.h"
 #include "src/model/target/yvex_model_target_catalog.h"
 
 #include <yvex/artifact_identity.h>
@@ -90,7 +92,37 @@ typedef struct {
     int verify;
 } payload_stream_thread;
 
+typedef struct {
+    unsigned int calls;
+    unsigned int fail_at;
+    unsigned int live;
+} payload_binding_allocator;
+
 static payload_fault_state payload_fault;
+
+/* Injects deterministic quantizer-binding allocation failures. */
+static void *payload_binding_allocate(size_t size, void *context)
+{
+    payload_binding_allocator *state =
+        (payload_binding_allocator *)context;
+    void *allocation;
+
+    if (state->calls++ == state->fail_at) return NULL;
+    allocation = malloc(size);
+    if (allocation) state->live++;
+    return allocation;
+}
+
+/* Accounts every binding allocation released after success or refusal. */
+static void payload_binding_release(void *allocation, void *context)
+{
+    payload_binding_allocator *state =
+        (payload_binding_allocator *)context;
+
+    if (!allocation) return;
+    free(allocation);
+    state->live--;
+}
 
 /* Proves the allocation-free common source/artifact shard-index foundation. */
 static int test_storage_shard_index_foundation(void)
@@ -348,6 +380,239 @@ static void payload_fixture_close(payload_fixture *fixture)
     fixture->snapshot = NULL;
     snprintf(command, sizeof(command), "rm -rf %s", fixture->root);
     (void)system(command);
+}
+
+/* Builds one sealed artifact-neutral plan bound to the fixture alpha range. */
+static int payload_fixture_transform_ir(
+    yvex_transform_ir **out,
+    yvex_source_payload_session *session,
+    unsigned long long source_snapshot_identity,
+    const char *required_payload_identity,
+    const char *shard_name_override,
+    yvex_transform_failure *failure,
+    yvex_error *err)
+{
+    static const char logical_identity[] =
+        "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+    const yvex_source_payload_range *range =
+        yvex_source_payload_range_find(session, "alpha.weight");
+    const yvex_source_payload_shard *shard = range
+        ? yvex_source_payload_shard_at(session, range->shard_index) : NULL;
+    yvex_transform_header header;
+    yvex_transform_builder *builder = NULL;
+    yvex_transform_source_spec source;
+    yvex_transform_value_spec terminal;
+    yvex_transform_node_spec node;
+    unsigned long long input_value;
+    unsigned long long output_value;
+    unsigned long long node_id;
+    unsigned int dimension;
+    int rc;
+
+    if (out) *out = NULL;
+    if (!out || !range || !shard || !required_payload_identity) return 1;
+    memset(&header, 0, sizeof(header));
+    header.schema_version = YVEX_TRANSFORM_IR_SCHEMA_VERSION;
+    header.logical_model_identity = logical_identity;
+    header.source_snapshot_identity = source_snapshot_identity;
+    header.coverage_identity = 0x1122334455667788ull;
+    header.required_payload_identity = required_payload_identity;
+    header.payload_trust_class = "upstream_payload_verified";
+    header.expected_source_count = 1u;
+    header.expected_terminal_count = 1u;
+    rc = yvex_transform_builder_create(
+        &builder, &header, NULL, failure, err);
+    memset(&source, 0, sizeof(source));
+    source.source_name = range->source_tensor_name;
+    source.shard_name = shard_name_override
+        ? shard_name_override : shard->canonical_name;
+    source.source_tensor_index = range->source_tensor_index;
+    source.requirement_index = 0u;
+    source.source_snapshot_identity = source_snapshot_identity;
+    source.source_dtype = range->dtype;
+    source.value_dtype = YVEX_TRANSFORM_DTYPE_BF16;
+    source.shape.rank = range->rank;
+    for (dimension = 0u; dimension < range->rank; ++dimension)
+        source.shape.dims[dimension] = range->dims[dimension];
+    source.relative_begin = range->relative_begin;
+    source.relative_end = range->relative_end;
+    source.requirement_identity = 0x99u;
+    source.scope = YVEX_TRANSFORM_SCOPE_MAIN_LAYER;
+    source.subsystem = YVEX_TRANSFORM_SUBSYSTEM_ATTENTION;
+    source.role_hint = YVEX_TENSOR_ROLE_ATTENTION_Q_A;
+    source.layer_index = 0u;
+    source.auxiliary_index = YVEX_TRANSFORM_IR_NO_ID;
+    source.expert_index = YVEX_TRANSFORM_IR_NO_ID;
+    source.required_uses = 1u;
+    if (rc == YVEX_OK)
+        rc = yvex_transform_builder_add_source(
+            builder, &source, &input_value, failure, err);
+    memset(&terminal, 0, sizeof(terminal));
+    terminal.kind = YVEX_TRANSFORM_VALUE_TERMINAL;
+    terminal.semantic_id = 0x101u;
+    terminal.canonical_ordinal = 0u;
+    terminal.shape = source.shape;
+    terminal.dtype = YVEX_TRANSFORM_DTYPE_BF16;
+    terminal.precision.flags = YVEX_TRANSFORM_PRECISION_EXACT;
+    terminal.precision.allowed_physical_classes =
+        YVEX_TRANSFORM_PHYSICAL_BF16;
+    terminal.logical_key.scope = YVEX_TRANSFORM_SCOPE_MAIN_LAYER;
+    terminal.logical_key.subsystem = YVEX_TRANSFORM_SUBSYSTEM_ATTENTION;
+    terminal.logical_key.role = YVEX_TENSOR_ROLE_ATTENTION_Q_A;
+    terminal.logical_key.layer_index = 0u;
+    terminal.logical_key.auxiliary_index = YVEX_TRANSFORM_IR_NO_ID;
+    if (rc == YVEX_OK)
+        rc = yvex_transform_builder_declare_value(
+            builder, &terminal, &output_value, failure, err);
+    memset(&node, 0, sizeof(node));
+    node.kind = YVEX_TRANSFORM_OP_IDENTITY;
+    node.output_value_id = output_value;
+    node.input_value_ids = &input_value;
+    node.input_count = 1u;
+    node.numeric = YVEX_TRANSFORM_NUMERIC_EXACT;
+    node.ordering = YVEX_TRANSFORM_ORDER_INPUT;
+    node.payload_execution_required = 1;
+    if (rc == YVEX_OK)
+        rc = yvex_transform_builder_add_node(
+            builder, &node, &node_id, failure, err);
+    if (rc == YVEX_OK)
+        rc = yvex_transform_builder_seal(builder, out, failure, err);
+    yvex_transform_builder_release(&builder);
+    return rc;
+}
+
+/* Proves fail-closed payload binding and a non-mutating physical sidecar. */
+static int test_payload_transform_binding(
+    payload_fixture *fixture,
+    const yvex_source_payload_session_facts *facts)
+{
+    static const char wrong_payload[] =
+        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    yvex_transform_ir *ir = NULL;
+    yvex_transform_ir *mismatch = NULL;
+    yvex_transform_binding *binding = NULL;
+    yvex_transform_binding_summary const *summary;
+    yvex_transform_physical_decision decision;
+    yvex_transform_failure failure;
+    yvex_transform_allocator allocator;
+    payload_binding_allocator allocation_state;
+    yvex_error err;
+    unsigned int fail_at;
+
+    YVEX_TEST_ASSERT(payload_fixture_transform_ir(
+                         &ir, fixture->session,
+                         facts->source_snapshot_identity,
+                         facts->payload_identity, NULL, &failure, &err) ==
+                         YVEX_OK &&
+                         ir,
+                     "trusted fixture Transformation IR seals");
+    YVEX_TEST_ASSERT(yvex_transform_binding_create(
+                         &binding, ir, fixture->session, NULL,
+                         &failure, &err) == YVEX_OK && binding,
+                     "sealed IR binds every trusted source range");
+    summary = yvex_transform_binding_summary_get(binding);
+    YVEX_TEST_ASSERT(summary && summary->complete &&
+                         summary->source_count == 1u &&
+                         summary->resolved_range_count == 1u &&
+                         summary->range_lookup_count == 1u &&
+                         summary->payload_bytes_read == 0u &&
+                         summary->payload_readable_at_bind &&
+                         yvex_transform_binding_terminal_at(binding, 0u) &&
+                         yvex_transform_binding_terminal_operation(binding, 0u) &&
+                         yvex_transform_binding_source_at(binding, 0u) &&
+                         yvex_transform_binding_range_at(binding, 0u),
+                     "quantizer boundary exposes immutable terminal dependencies");
+    YVEX_TEST_ASSERT(yvex_transform_binding_readable_validate(
+                         binding, &failure, &err) == YVEX_OK,
+                     "ready session passes execution-time identity revalidation");
+    memset(&decision, 0, sizeof(decision));
+    decision.physical_class = YVEX_TRANSFORM_PHYSICAL_BF16;
+    decision.encoding_id = 7u;
+    YVEX_TEST_ASSERT(yvex_transform_binding_decision_validate(
+                         binding, 0u, &decision, &failure, &err) == YVEX_OK,
+                     "allowed exact physical decision attaches externally");
+    decision.physical_class = YVEX_TRANSFORM_PHYSICAL_QUANTIZED;
+    YVEX_TEST_ASSERT(yvex_transform_binding_decision_validate(
+                         binding, 0u, &decision, &failure, &err) != YVEX_OK &&
+                         failure.code == YVEX_TRANSFORM_FAILURE_INVALID_DTYPE,
+                     "disallowed physical class refuses without mutating IR");
+    yvex_transform_binding_release(&binding);
+
+    YVEX_TEST_ASSERT(payload_fixture_transform_ir(
+                         &mismatch, fixture->session,
+                         facts->source_snapshot_identity, wrong_payload,
+                         NULL, &failure, &err) == YVEX_OK && mismatch &&
+                         yvex_transform_binding_create(
+                             &binding, mismatch, fixture->session, NULL,
+                             &failure, &err) != YVEX_OK && !binding &&
+                         failure.code ==
+                             YVEX_TRANSFORM_FAILURE_PAYLOAD_IDENTITY_MISMATCH,
+                     "required payload identity mismatch refuses before execution");
+    yvex_transform_ir_release(&mismatch);
+
+    YVEX_TEST_ASSERT(payload_fixture_transform_ir(
+                         &mismatch, fixture->session,
+                         facts->source_snapshot_identity,
+                         facts->payload_identity, "wrong.safetensors",
+                         &failure, &err) == YVEX_OK && mismatch &&
+                         yvex_transform_binding_create(
+                             &binding, mismatch, fixture->session, NULL,
+                             &failure, &err) != YVEX_OK && !binding &&
+                         failure.code ==
+                             YVEX_TRANSFORM_FAILURE_SOURCE_IDENTITY_MISMATCH,
+                     "source shard identity mismatch refuses binding");
+    yvex_transform_ir_release(&mismatch);
+
+    memset(&allocator, 0, sizeof(allocator));
+    allocator.allocate = payload_binding_allocate;
+    allocator.release = payload_binding_release;
+    for (fail_at = 0u; fail_at < 3u; ++fail_at) {
+        memset(&allocation_state, 0, sizeof(allocation_state));
+        allocation_state.fail_at = fail_at;
+        allocator.context = &allocation_state;
+        if (yvex_transform_binding_create(
+                &binding, ir, fixture->session, &allocator,
+                &failure, &err) == YVEX_OK) {
+            yvex_transform_binding_release(&binding);
+        } else {
+            YVEX_TEST_ASSERT(!binding &&
+                                 failure.code ==
+                                     YVEX_TRANSFORM_FAILURE_ALLOCATION,
+                             "binding allocation seam returns typed refusal");
+        }
+        YVEX_TEST_ASSERT(allocation_state.live == 0u,
+                         "binding allocation seam unwinds completely");
+    }
+    yvex_transform_binding_release(&binding);
+    yvex_transform_binding_release(&binding);
+    yvex_transform_ir_release(&ir);
+    return 0;
+}
+
+/* Proves an untrusted source session cannot become an executable binding. */
+static int test_payload_transform_binding_untrusted(payload_fixture *fixture)
+{
+    static const char pending_payload[] =
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+    yvex_transform_ir *ir = NULL;
+    yvex_transform_binding *binding = NULL;
+    yvex_transform_failure failure;
+    yvex_error err;
+
+    YVEX_TEST_ASSERT(payload_fixture_transform_ir(
+                         &ir, fixture->session,
+                         fixture->verification.source_snapshot_identity,
+                         pending_payload, NULL, &failure, &err) == YVEX_OK &&
+                         ir,
+                     "untrusted-session plan remains valid planning state");
+    YVEX_TEST_ASSERT(yvex_transform_binding_create(
+                         &binding, ir, fixture->session, NULL,
+                         &failure, &err) != YVEX_OK && !binding &&
+                         failure.code ==
+                             YVEX_TRANSFORM_FAILURE_PAYLOAD_IDENTITY_MISMATCH,
+                     "untrusted session without admitted identity refuses binding");
+    yvex_transform_ir_release(&ir);
+    return 0;
 }
 
 /* Reopens a fixture through the production admission boundary after path mutation. */
@@ -849,6 +1114,7 @@ static int test_payload_happy_path(void)
                              YVEX_SOURCE_PAYLOAD_FAILURE_PAYLOAD_NOT_TRUSTED &&
                          !result.committed && !result.aborted,
                      "ordinary stream refuses an untrusted payload session");
+    if (test_payload_transform_binding_untrusted(&fixture) != 0) return 1;
     memset(&sink_state, 0, sizeof(sink_state));
     rc = yvex_source_payload_session_verify(
         fixture.session, plan, &sink, &result, &failure, &err);
@@ -872,6 +1138,7 @@ static int test_payload_happy_path(void)
                          facts.peak_open_handles == 1u &&
                          facts.handle_evictions != 0u,
                      "payload session publishes trust and enforced resource facts");
+    if (test_payload_transform_binding(&fixture, &facts) != 0) return 1;
     YVEX_TEST_ASSERT(yvex_source_payload_plan_range_at(plan, 0u) &&
                          yvex_source_payload_plan_range_at(plan, 0u)->trust_class ==
                              YVEX_SOURCE_PAYLOAD_TRUST_UPSTREAM_VERIFIED &&

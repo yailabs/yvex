@@ -163,6 +163,10 @@ int yvex_deepseek_tensor_coverage_find_index(
     const yvex_deepseek_tensor_coverage *coverage,
     const char *source_name,
     unsigned long long *row_index);
+int yvex_deepseek_tensor_coverage_find_source_index(
+    const yvex_deepseek_tensor_coverage *coverage,
+    const char *source_name,
+    unsigned long long *source_index);
 const char *yvex_deepseek_tensor_collection_name(
     yvex_deepseek_tensor_collection collection);
 const char *yvex_deepseek_tensor_coverage_failure_name(

@@ -24,7 +24,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -35,7 +35,7 @@ CUDA_LDFLAGS ?=
 YVEX_CUDA_ARCH ?= auto
 NVCC_AVAILABLE := $(shell command -v $(NVCC) >/dev/null 2>&1 && echo yes || echo no)
 
-CPPFLAGS ?= -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L -Iinclude -I. -Isrc/core -Isrc/cli -Isrc/cli/input -Isrc/cli/io -Isrc/cli/model_artifacts -Isrc/cli/render -Isrc/source -Isrc/io -Isrc/backend -Isrc/backend/cuda -Isrc/runtime -Isrc/server -Isrc/gguf -Isrc/generation -Isrc/graph -Isrc/model/artifacts -Isrc/model/target
+CPPFLAGS ?= -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L -Iinclude -I. -Isrc/core -Isrc/cli -Isrc/cli/input -Isrc/cli/io -Isrc/cli/model_artifacts -Isrc/cli/render -Isrc/source -Isrc/io -Isrc/backend -Isrc/backend/cuda -Isrc/runtime -Isrc/server -Isrc/gguf -Isrc/generation -Isrc/graph -Isrc/model/artifacts -Isrc/model/compilation -Isrc/model/target
 CFLAGS ?= -std=c11 -Wall -Wextra -pedantic -pthread
 LDFLAGS ?=
 LDLIBS ?= -ldl -pthread
@@ -138,6 +138,11 @@ CORE_SRCS := \
 	src/model/yvex_model.c \
 	src/model/yvex_model_artifacts.c \
 	src/model/architecture/yvex_deepseek_v4_ir.c \
+	src/model/compilation/yvex_transform_ir.c \
+	src/model/compilation/yvex_transform_ir_identity.c \
+	src/model/compilation/yvex_transform_ir_validate.c \
+	src/model/compilation/yvex_deepseek_transform_ir.c \
+	src/model/compilation/yvex_transform_binding.c \
 	src/model/yvex_runtime_descriptor.c \
 	src/model/yvex_runtime_descriptor_report.c \
 	src/model/artifacts/yvex_model_artifact_check_report.c \
@@ -334,6 +339,9 @@ test-cli: $(YVEX_BIN) $(YVEXD_BIN) $(CLI_TEST)
 	YVEX_BIN=$(YVEX_BIN) YVEXD_BIN=$(YVEXD_BIN) sh $(CLI_TEST)
 
 test-source-payload-live-plan: $(SOURCE_PAYLOAD_LIVE_RUNNER)
+	$(SOURCE_PAYLOAD_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
+
+test-transform-ir-live-plan: $(SOURCE_PAYLOAD_LIVE_RUNNER)
 	$(SOURCE_PAYLOAD_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
 
 test-source-payload-live: $(SOURCE_PAYLOAD_LIVE_RUNNER)

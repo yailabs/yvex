@@ -11,6 +11,7 @@
 #define _GNU_SOURCE
 #include "yvex_source_payload_internal.h"
 
+#include "yvex_sha256.h"
 #include "yvex_source_provenance.h"
 
 #include <errno.h>
@@ -747,6 +748,15 @@ int yvex_source_payload_session_open_with_ops(
     session->tensor_count = snapshot_facts.tensor_count;
     session->facts.source_snapshot_identity = snapshot_facts.identity;
     session->facts.header_scan_count = snapshot_facts.header_scan_count;
+    if (options->verification->manifest_payload_trusted &&
+        options->verification->manifest_payload_source_snapshot_identity ==
+            snapshot_facts.identity &&
+        yvex_sha256_hex_valid(
+            options->verification->manifest_payload_identity)) {
+        (void)snprintf(session->facts.admitted_payload_identity,
+                       sizeof(session->facts.admitted_payload_identity), "%s",
+                       options->verification->manifest_payload_identity);
+    }
     if (pthread_mutex_init(&session->mutex, NULL) != 0) {
         ops->free_fn(session);
         yvex_source_payload_fail(

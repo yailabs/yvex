@@ -2,13 +2,13 @@
  * yvex_deepseek_gguf_map.h - canonical DeepSeek source-to-GGUF plan.
  *
  * Owner: src/model/target.
- * Owns: typed source contributions, logical emitted descriptors, transforms,
- *   metadata prerequisites, deterministic identity, indexes, and refusal.
+ * Owns: GGUF names, qtype/layout projection, typed source contributions,
+ *   metadata prerequisites, deterministic mapping identity, indexes, and refusal.
  * Does not own: source IO, payload conversion, qtype policy, physical offsets,
  *   writer emission, materialization, runtime, rendering, or generation.
- * Invariants: every verified source row is consumed exactly once; descriptors
- *   are immutable and independent from the source/coverage object lifetime.
- * Boundary: the plan is a logical writer blueprint, not an emitted artifact.
+ * Invariants: every sealed Transformation IR terminal is lowered once and all
+ *   source inputs are projected without rediscovering transformation semantics.
+ * Boundary: this is a physical-format projection, not an emitted artifact.
  */
 #ifndef YVEX_DEEPSEEK_GGUF_MAP_H
 #define YVEX_DEEPSEEK_GGUF_MAP_H
@@ -20,6 +20,7 @@
 
 #include "yvex_deepseek_tensor_coverage.h"
 #include "../architecture/yvex_deepseek_v4_ir.h"
+#include "../compilation/yvex_transform_ir.h"
 #include "../../gguf/yvex_gguf_map.h"
 
 #define YVEX_DEEPSEEK_GGUF_NO_INDEX (~0ull)
@@ -28,6 +29,7 @@
 #define YVEX_DEEPSEEK_GGUF_TRUNK_DESCRIPTOR_COUNT 1328ull
 #define YVEX_DEEPSEEK_GGUF_MTP_DESCRIPTOR_COUNT 32ull
 #define YVEX_DEEPSEEK_GGUF_SOURCE_COUNT 69187ull
+#define YVEX_DEEPSEEK_GGUF_MAPPING_IDENTITY 0x1aecbbe25b04de0dull
 
 typedef enum {
     YVEX_DEEPSEEK_GGUF_TRANSFORM_DIRECT = 0,
@@ -56,9 +58,7 @@ typedef enum {
 typedef enum {
     YVEX_DEEPSEEK_GGUF_MAP_FAILURE_NONE = 0,
     YVEX_DEEPSEEK_GGUF_MAP_FAILURE_INVALID_ARGUMENT,
-    YVEX_DEEPSEEK_GGUF_MAP_FAILURE_SOURCE_VERIFICATION,
     YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ARCHITECTURE,
-    YVEX_DEEPSEEK_GGUF_MAP_FAILURE_COVERAGE,
     YVEX_DEEPSEEK_GGUF_MAP_FAILURE_COVERAGE_ROW,
     YVEX_DEEPSEEK_GGUF_MAP_FAILURE_MISSING_SOURCE,
     YVEX_DEEPSEEK_GGUF_MAP_FAILURE_DUPLICATE_SOURCE,
@@ -70,7 +70,10 @@ typedef enum {
     YVEX_DEEPSEEK_GGUF_MAP_FAILURE_METADATA,
     YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ACCOUNTING,
     YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ARITHMETIC_OVERFLOW,
-    YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ALLOCATION
+    YVEX_DEEPSEEK_GGUF_MAP_FAILURE_ALLOCATION,
+    YVEX_DEEPSEEK_GGUF_MAP_FAILURE_TRANSFORM_IR,
+    YVEX_DEEPSEEK_GGUF_MAP_FAILURE_LOWERING_DIVERGENCE,
+    YVEX_DEEPSEEK_GGUF_MAP_FAILURE_MAPPING_IDENTITY
 } yvex_deepseek_gguf_map_failure_code;
 
 typedef struct {
@@ -160,21 +163,13 @@ typedef struct yvex_deepseek_gguf_map yvex_deepseek_gguf_map;
 int yvex_deepseek_gguf_map_build(
     yvex_deepseek_gguf_map **out,
     const yvex_deepseek_v4_ir *ir,
-    const yvex_deepseek_tensor_coverage *coverage,
-    yvex_deepseek_gguf_map_failure *failure,
-    yvex_error *err);
-int yvex_deepseek_gguf_map_open_verified_source(
-    yvex_deepseek_gguf_map **out,
-    yvex_deepseek_tensor_coverage **coverage_out,
-    yvex_source_verification *verification,
-    const char *source_path,
-    const char *models_root,
+    const yvex_transform_ir *transform_ir,
     yvex_deepseek_gguf_map_failure *failure,
     yvex_error *err);
 int yvex_deepseek_gguf_map_build_with_allocator(
     yvex_deepseek_gguf_map **out,
     const yvex_deepseek_v4_ir *ir,
-    const yvex_deepseek_tensor_coverage *coverage,
+    const yvex_transform_ir *transform_ir,
     const yvex_deepseek_gguf_map_allocator *allocator,
     yvex_deepseek_gguf_map_failure *failure,
     yvex_error *err);

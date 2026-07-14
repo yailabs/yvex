@@ -107,10 +107,14 @@ int main(int argc, char **argv)
     yvex_deepseek_payload_failure handoff_failure;
     const yvex_deepseek_payload_handoff_summary *summary;
     const yvex_source_payload_plan_summary *plan_summary;
+    const yvex_transform_ir_summary *transform_summary;
+    const yvex_transform_binding_summary *binding_summary;
+    const yvex_deepseek_gguf_map_summary *map_summary;
     const yvex_source_verification *verification;
     yvex_source_payload_session *session;
     yvex_source_payload_session_facts facts;
     yvex_source_payload_failure failure;
+    yvex_transform_failure transform_failure;
     yvex_source_payload_stream_result result;
     yvex_source_payload_sink sink;
     live_sink sink_state;
@@ -118,6 +122,7 @@ int main(int argc, char **argv)
     struct timespec begin;
     struct timespec end;
     unsigned long long elapsed = 0u;
+    int binding_readable = 0;
     int plan_only = 0;
     int argument = 1;
     int rc;
@@ -153,10 +158,44 @@ int main(int argc, char **argv)
     summary = yvex_deepseek_payload_handoff_summary_get(handoff);
     plan_summary = yvex_source_payload_plan_summary_get(
         yvex_deepseek_payload_handoff_plan(handoff));
+    transform_summary = yvex_transform_ir_summary_get(
+        yvex_deepseek_payload_handoff_transform_ir(handoff));
+    binding_summary = yvex_transform_binding_summary_get(
+        yvex_deepseek_payload_handoff_binding(handoff));
+    map_summary = yvex_deepseek_gguf_map_summary_get(
+        yvex_deepseek_payload_handoff_map(handoff));
     verification = yvex_deepseek_payload_handoff_verification(handoff);
     session = yvex_deepseek_payload_handoff_session(handoff);
-    if (!summary || !summary->complete || !plan_summary || !verification ||
+    if (!summary || !summary->complete || !plan_summary || !transform_summary ||
+        !transform_summary->complete || !binding_summary ||
+        !binding_summary->complete || !map_summary || !map_summary->complete ||
+        !verification ||
         summary->mapping_identity != YVEX_DEEPSEEK_PAYLOAD_MAPPING_IDENTITY ||
+        map_summary->mapping_identity != YVEX_DEEPSEEK_GGUF_MAPPING_IDENTITY ||
+        strcmp(summary->transform_identity,
+               transform_summary->transform_identity) != 0 ||
+        transform_summary->schema_version !=
+            YVEX_TRANSFORM_IR_SCHEMA_VERSION ||
+        transform_summary->source_value_count != 69187u ||
+        transform_summary->intermediate_value_count != 0u ||
+        transform_summary->value_count != 70547u ||
+        transform_summary->node_count != 1360u ||
+        transform_summary->edge_count != 69187u ||
+        transform_summary->terminal_count != 1360u ||
+        transform_summary->maximum_fan_in != 512u ||
+        transform_summary->maximum_depth != 1u ||
+        transform_summary->operation_counts[YVEX_TRANSFORM_OP_IDENTITY] !=
+            850u ||
+        transform_summary->operation_counts[
+            YVEX_TRANSFORM_OP_DECODE_SCALE_PAIR] != 375u ||
+        transform_summary->operation_counts[
+            YVEX_TRANSFORM_OP_CHECKED_CAST] != 3u ||
+        transform_summary->operation_counts[
+            YVEX_TRANSFORM_OP_EXPERT_AGGREGATE] != 132u ||
+        transform_summary->payload_bytes_read != 0u ||
+        binding_summary->resolved_range_count != 69187u ||
+        binding_summary->source_count != 69187u ||
+        binding_summary->payload_bytes_read != 0u ||
         summary->descriptors_covered != 1360u ||
         summary->contributions_resolved != 69187u ||
         plan_summary->range_count != 69187u ||
@@ -198,6 +237,18 @@ int main(int argc, char **argv)
         yvex_deepseek_payload_handoff_close(handoff);
         return 1;
     }
+    rc = yvex_transform_binding_readable_validate(
+        yvex_deepseek_payload_handoff_binding(handoff), &transform_failure,
+        &error);
+    binding_readable = rc == YVEX_OK;
+    if ((!plan_only && !binding_readable) ||
+        (plan_only &&
+         (binding_readable ||
+          transform_failure.code != YVEX_TRANSFORM_FAILURE_INVALID_STATE))) {
+        fprintf(stderr, "transform_binding_readability=failed\n");
+        yvex_deepseek_payload_handoff_close(handoff);
+        return 1;
+    }
     if (!plan_only &&
         (!result.complete || !result.committed || result.aborted ||
          sink_state.commits != 1u || sink_state.aborts != 0u ||
@@ -217,12 +268,72 @@ int main(int argc, char **argv)
            verification->source_snapshot_identity);
     printf("payload_identity=%s\n",
            facts.payload_identity[0] ? facts.payload_identity : "not-sealed");
+    printf("admitted_payload_identity=%s\n",
+           facts.admitted_payload_identity[0]
+               ? facts.admitted_payload_identity
+               : "not-admitted");
+    printf("architecture_identity=%s\n",
+           transform_summary->logical_model_identity);
+    printf("transform_ir_schema_version=%u\n",
+           transform_summary->schema_version);
+    printf("transform_ir_identity=%s\n",
+           transform_summary->transform_identity);
+    printf("required_payload_identity=%s\n",
+           transform_summary->required_payload_identity);
     printf("mapping_identity=%016llx\n", summary->mapping_identity);
     printf("trust_class=%s\n",
            yvex_source_payload_trust_class_name(facts.trust_class));
     printf("shards_admitted=%llu\n", facts.shard_count);
     printf("shards_trusted=%llu\n", facts.trusted_shard_count);
     printf("source_tensors_indexed=%llu\n", facts.tensor_count);
+    printf("transform_source_inputs=%llu\n",
+           transform_summary->source_value_count);
+    printf("transform_intermediate_values=%llu\n",
+           transform_summary->intermediate_value_count);
+    printf("transform_value_count=%llu\n", transform_summary->value_count);
+    printf("transform_node_count=%llu\n", transform_summary->node_count);
+    printf("transform_edge_count=%llu\n", transform_summary->edge_count);
+    printf("transform_terminal_outputs=%llu\n",
+           transform_summary->terminal_count);
+    printf("transform_identity_operations=%llu\n",
+           transform_summary->operation_counts[YVEX_TRANSFORM_OP_IDENTITY]);
+    printf("transform_scale_pair_operations=%llu\n",
+           transform_summary->operation_counts[
+               YVEX_TRANSFORM_OP_DECODE_SCALE_PAIR]);
+    printf("transform_checked_cast_operations=%llu\n",
+           transform_summary->operation_counts[
+               YVEX_TRANSFORM_OP_CHECKED_CAST]);
+    printf("transform_expert_aggregate_operations=%llu\n",
+           transform_summary->operation_counts[
+               YVEX_TRANSFORM_OP_EXPERT_AGGREGATE]);
+    printf("transform_maximum_fan_in=%llu\n",
+           transform_summary->maximum_fan_in);
+    printf("transform_maximum_depth=%llu\n",
+           transform_summary->maximum_depth);
+    printf("transform_builder_peak_bytes=%zu\n",
+           transform_summary->builder_peak_bytes);
+    printf("transform_sealed_ir_bytes=%zu\n",
+           transform_summary->sealed_ir_bytes);
+    printf("transform_temporary_validation_bytes=%zu\n",
+           transform_summary->temporary_validation_bytes);
+    printf("transform_index_capacity=%llu\n",
+           transform_summary->index_capacity);
+    printf("transform_validation_steps=%llu\n",
+           transform_summary->validation_steps);
+    printf("transform_binding_ranges=%llu\n",
+           binding_summary->resolved_range_count);
+    printf("transform_binding_lookups=%llu\n",
+           binding_summary->range_lookup_count);
+    printf("transform_binding_readable=%d\n", binding_readable);
+    printf("transform_unconsumed_inputs=0\n");
+    printf("transform_duplicate_outputs=0\n");
+    printf("transform_cycles=0\n");
+    printf("transform_unresolved_nodes=0\n");
+    printf("transform_unsupported_operations=0\n");
+    printf("transform_payload_bytes_read=%llu\n",
+           transform_summary->payload_bytes_read +
+               binding_summary->payload_bytes_read);
+    printf("gguf_lowering_equivalence=complete\n");
     printf("mapping_contributions_resolved=%llu\n",
            summary->contributions_resolved);
     printf("logical_descriptors_covered=%llu\n",

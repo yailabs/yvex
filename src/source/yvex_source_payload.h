@@ -190,6 +190,7 @@ typedef struct {
     yvex_source_payload_state state;
     yvex_source_payload_trust_class trust_class;
     unsigned long long source_snapshot_identity;
+    char admitted_payload_identity[YVEX_SOURCE_PAYLOAD_IDENTITY_CAP];
     char payload_identity[YVEX_SOURCE_PAYLOAD_IDENTITY_CAP];
     unsigned long long shard_count;
     unsigned long long trusted_shard_count;

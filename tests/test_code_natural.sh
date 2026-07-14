@@ -94,7 +94,7 @@ fi
 
 grep -nF 'yvex_model_target_render_help' src/cli/render/yvex_model_target_render.c >/dev/null
 
-DOMAIN_FILES='src/accounts src/artifact src/backend src/core src/daemon src/gguf src/graph src/metrics src/model/architecture src/model/yvex_model.c src/model/yvex_model_artifacts.c src/runtime src/source src/tokenizer src/generation'
+DOMAIN_FILES='src/accounts src/artifact src/backend src/core src/daemon src/gguf src/graph src/metrics src/model/architecture src/model/compilation src/model/yvex_model.c src/model/yvex_model_artifacts.c src/runtime src/source src/tokenizer src/generation'
 
 PRINT_HITS="$(
   grep -RInE '\b(printf|vprintf|puts|putchar|perror)\s*\(' $DOMAIN_FILES || true

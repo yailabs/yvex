@@ -1283,6 +1283,19 @@ int yvex_deepseek_tensor_coverage_find_index(
     return 1;
 }
 
+/* Resolves one covered name to its retained snapshot tensor index. */
+int yvex_deepseek_tensor_coverage_find_source_index(
+    const yvex_deepseek_tensor_coverage *coverage,
+    const char *source_name,
+    unsigned long long *source_index)
+{
+    if (!coverage || !source_name || !source_index ||
+        !yvex_source_tensor_snapshot_find_index(coverage->snapshot,
+                                                source_name, source_index))
+        return 0;
+    return coverage->row_by_source[*source_index] != NULL;
+}
+
 const char *yvex_deepseek_tensor_collection_name(
     yvex_deepseek_tensor_collection collection)
 {

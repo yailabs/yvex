@@ -328,10 +328,10 @@ grep -F '### 9.4 TRACK.COMPILATION' "$project" >/dev/null ||
   fail "compilation track is missing"
 grep -F '| `V010.DOCS.README.COMPILATION.0` | project | `complete` |' "$project" >/dev/null ||
   fail "README compilation milestone is not complete"
-grep -F '| `V010.MODEL.TRANSFORM.IR.0` | DeepSeek + common plan | `active` |' "$project" >/dev/null ||
-  fail "transformation IR milestone is not active"
-grep -F '| `V010.QUANT.2` | common + DeepSeek roles | `blocked` |' "$project" >/dev/null ||
-  fail "quantization is not blocked"
+grep -F '| `V010.MODEL.TRANSFORM.IR.0` | DeepSeek + common plan | `complete` |' "$project" >/dev/null ||
+  fail "transformation IR milestone is not complete"
+grep -F '| `V010.QUANT.2` | common + DeepSeek roles | `active` |' "$project" >/dev/null ||
+  fail "quantization is not active"
 grep -F '| V010.MODEL.TRANSFORM.IR.0 | recovered/promoted |' "$project" >/dev/null ||
   fail "quantization does not depend on the transformation IR"
 
