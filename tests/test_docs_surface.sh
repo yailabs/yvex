@@ -111,6 +111,9 @@ require_text AGENTS.md 'Permanent technical documents may link to'
 require_text AGENTS.md 'but may not repeat its current state.'
 require_text AGENTS.md 'DeepSeek-V4-Flash is the sole v0.1.0 release target.'
 require_text AGENTS.md 'Existing Qwen, Gemma, dense/common, MoE, fixture, topology,'
+require_text AGENTS.md 'The logical model is not identified by GGUF or another physical container.'
+require_text AGENTS.md '`TRACK.COMPILATION` owns immutable artifact-neutral transformation plans,'
+require_text AGENTS.md 'The quantizer consumes canonical transformation truth and may not'
 require_text AGENTS.md 'docs/reference-architecture.md'
 require_text AGENTS.md 'tensor proof artifact'
 require_text AGENTS.md 'complete model artifact'
@@ -152,15 +155,25 @@ require_text "$project" 'deepseek4-v4-flash'
 require_text "$project" 'Qwen, Gemma, and dense/common work already implemented remains active'
 require_text "$project" 'The exact DeepSeek-V4-Flash source now projects to one immutable typed IR'
 require_text "$project" 'One immutable IR-derived requirement set reconciles exactly against all 69,187 tensors'
-require_text "$project" 'The exact 69,187-entry DeepSeek source inventory projects to 1,360 immutable logical GGUF descriptors'
+require_text "$project" 'The exact 69,187-entry DeepSeek source inventory projects to 1,360 immutable GGUF lowering descriptors'
 require_text "$project" 'Manifest v3 binds every shard to its authoritative Hugging Face Git LFS SHA-256'
 require_text "$project" 'Every one of the 69,187 mapped contributions now resolves to an identity-bound shard range'
 require_text "$project" 'Production C contains no fallback PTX.'
 require_text "$project" 'A no-`nvcc` build refuses every kernel before dispatch'
 require_text "$project" 'The DeepSeek/v0.1 required-operation gate remains unsupported.'
 require_text "$project" '| Recovered IDs | 631 |'
-require_text "$project" '| Canonical IDs | 665 |'
-require_text "$project" '| First-class milestones | 37 |'
+require_text "$project" '| Explicit new IDs | 48 |'
+require_text "$project" '| Canonical IDs | 679 |'
+require_text "$project" '| First-class milestones | 40 |'
+require_text "$project" '### 3.5 Model Compilation Boundaries'
+require_text "$project" '| `TRACK.COMPILATION` | Artifact-neutral transformation IR'
+require_text "$project" 'verified source facts'
+require_text "$project" 'verified payload session'
+require_text "$project" 'V010.MODEL.TRANSFORM.IR.0'
+require_text "$project" 'family roles or transformation semantics. Quantization consumes canonical'
+require_text "$project" 'transformation truth and may not rediscover source names, roles, aggregation'
+require_text "$project" 'memory, persistent KV, and temporary scratch. Completed source payload'
+require_text "$project" 'streaming is build-time source access; it is not inference-time SSD expert'
 
 for category in \
   "Selected embedding and segment commands" \
@@ -211,7 +224,15 @@ for source in \
   'execution control' \
   'DeepSeek [V4 technical report v1]' \
   '60d8d70770c6776ff598c94bb586a859a38244f1' \
-  'deepseek-ai/FlashMLA'
+  'deepseek-ai/FlashMLA' \
+  'a2bcc5c86678b72a86b7aadc29b643a5ce63c747' \
+  '0893eac771d532b7110f1f7581d3f4cd0b9172bf' \
+  '02cedf6e4e421ac48d271452bf3836cb57caf297' \
+  '1e7394829291360bdcf07036cbe5411631d2d33b' \
+  'ae754e9ed8b650e78b921906b2ba8af65ea408ab' \
+  '80ebbc396aee40eedc1d829222f3362d10fa4c6c' \
+  'SSD expert streaming' \
+  'quality validation'
 do
   require_text "$reference" "$source"
 done
@@ -234,6 +255,8 @@ require_text MODEL_ARTIFACTS.md 'Complete model artifact'
 require_text MODEL_ARTIFACTS.md 'Supported model artifact'
 require_text MODEL_ARTIFACTS.md 'No such complete model artifact currently exists.'
 require_text MODEL_ARTIFACTS.md 'decommission obligations and consuming milestones are recorded in'
+require_text MODEL_ARTIFACTS.md 'GGUF is the'
+require_text MODEL_ARTIFACTS.md 'v0.1.0 release lowering, not the identity of the logical model.'
 
 deepseek_lines=$(wc -l < docs/runbooks/deepseek.md | tr -d ' ')
 test "$deepseek_lines" -le 100 || fail "DeepSeek runbook is not short: $deepseek_lines"
@@ -248,13 +271,16 @@ fi
 require_text docs/system-target.md 'Authority: filesystem and module topology; current project state belongs only'
 require_text docs/system-target.md '## GGUF Structural Reader Boundary'
 require_text docs/system-target.md '## GGUF Qtype ABI Boundary'
+require_text docs/system-target.md '| Transformation plan | no artifact-neutral transformation IR exists |'
 require_text docs/topology-closure-audit.md 'point-in-time inventory'
 require_text docs/topology-closure-audit.md '`PROJECT.md` owns when each finding is removed or'
 require_text docs/cli-output-architecture.md '## Project State Ownership'
 require_text docs/model-families.md 'exact v0.1.0 target'
-require_text docs/model-families.md 'typed architecture, exact 69,187-entry source coverage, and canonical logical GGUF mapping exist; no payload conversion, complete model artifact, or runtime path'
+require_text docs/model-families.md 'typed architecture, exact 69,187-entry source coverage, and a concrete GGUF lowering map exist; no artifact-neutral transformation plan, payload conversion, complete model artifact, or runtime path'
 require_text docs/contract.md 'These are implementation facts, not a runtime progress ladder.'
 require_text docs/contract.md 'defined only by `PROJECT.md`.'
+require_text docs/contract.md '### Model Compilation Contract'
+require_text docs/contract.md 'Source payload streaming remains build-time access and does'
 require_text docs/api.md 'decommission obligations in `PROJECT.md`'
 
 repair_path=$(printf 'docs/%s' repair)

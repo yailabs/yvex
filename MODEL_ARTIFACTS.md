@@ -24,6 +24,12 @@ flattened element-count alignment and partial-row padding are not admitted.
 Known storage geometry does not imply a decoder, quantizer, emitter, compute
 kernel, complete artifact, or supported artifact.
 
+The logical model is independent of this artifact contract. An immutable
+transformation plan derives a physical model variant from exact logical source
+contributions under explicit format, precision, hardware, memory, quality, and
+workload constraints. An artifact serializes one such variant; GGUF is the
+v0.1.0 release lowering, not the identity of the logical model.
+
 ## v0.1.0 Target
 
 Exact source:
@@ -64,10 +70,10 @@ snapshot but may not claim upstream verification. The ordered aggregate
 payload identity and per-shard trust facts are published atomically in the
 canonical source manifest outside the repository.
 
-This handoff makes exact source bytes available to later quantization. It does
-not perform datatype conversion, expert aggregation, qtype selection,
-quantization, GGUF encoding, complete-artifact emission, materialization, or
-runtime execution.
+This handoff makes exact source bytes available to a later transformation
+executor. It does not define transformation semantics, perform datatype
+conversion or expert aggregation, select qtypes, quantize, encode GGUF, emit a
+complete artifact, materialize tensors, or execute a runtime.
 
 ## Native Structural Reader
 

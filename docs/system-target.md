@@ -33,6 +33,8 @@ src/generation/          legacy proof cells and future runtime implementation ow
 input -> command -> surface router -> report/domain -> render -> cli/io
 
 file writer -> explicit local files only
+source facts -> architecture IR -> coverage -> contribution map -> transformation IR
+payload session -> bounded chunks -> transformation execution -> quantization
 GGUF ABI -> artifact descriptor -> materialization -> runtime descriptor
 runtime descriptor -> backend tensor binding -> graph bind -> graph execute
 graph execute -> prefill -> KV -> decode -> logits -> sampling -> generation
@@ -51,9 +53,10 @@ domain algorithms. No writer owns command output.
 | CUDA truth | context, bundle, functions, and exact variants are typed; no-bundle builds refuse kernels and generated-bundle variants have GB10 reference proof | preserve fail-closed admission while later architecture/runtime rows define and prove the DeepSeek operation set | see `PROJECT.md` |
 | Architecture IR | immutable typed DeepSeek-V4-Flash model, 43 main-layer, and MTP topology consumed by release-target profiling | preserve the source-to-IR boundary and feed complete tensor-role derivation without source reparsing | see `PROJECT.md` |
 | Tensor coverage | the IR-derived 69,187-slot DeepSeek requirement set reconciles exactly against one retained verified header snapshot | preserve one-to-one source coverage as the admission input to GGUF mapping | see `PROJECT.md` |
-| GGUF names/layout | immutable 69,187-contribution to 1,360-descriptor DeepSeek logical emission plan | preserve the plan as payload-streaming and writer input without physical offsets or emission claims | see `PROJECT.md` |
-| Source payload | verified snapshot-bound shard/range indexes, payload trust, and bounded transactional streaming | preserve as exact quantizer input without decoding or transformation | see `PROJECT.md` |
-| Quantization | policy and geometry facts | role-correct quantization or explicit refusal | V010.QUANT.2 |
+| GGUF names/layout | immutable 69,187-contribution to 1,360-descriptor concrete DeepSeek GGUF lowering plan | preserve the format projection while moving artifact-neutral transformation semantics to the compilation owner | see `PROJECT.md` |
+| Source payload | verified snapshot-bound shard/range indexes, payload trust, and bounded transactional streaming | preserve as artifact-neutral byte input to transformation execution without decoding or reinterpretation | see `PROJECT.md` |
+| Transformation plan | no artifact-neutral transformation IR exists | bind every logical output to exact source contributions and payload-range identity before physical lowering | see `PROJECT.md` |
+| Quantization | policy and geometry facts | consume the canonical transformation plan for role-correct quantization or explicit refusal | see `PROJECT.md` |
 | GGUF writer | explicit refusal | complete deterministic emitted bytes | V010.GGUF.WRITER.1 |
 | Artifact emission | tensor proof files only | complete YVEX-produced DeepSeek GGUF | V010.ARTIFACT.EMIT.DEEPSEEK.0 |
 | GGUF roundtrip | explicit refusal/bounded fixtures | complete artifact writer-reader equivalence | V010.GGUF.ROUNDTRIP.1 |
@@ -87,13 +90,22 @@ domain algorithms. No writer owns command output.
   reconciliation; it does not own source IO, GGUF naming, transforms, or
   payload access.
 - The DeepSeek mapping owner composes IR and complete coverage into indexed
-  source contributions, typed transforms, canonical GGUF names, logical GGML
-  shapes, metadata prerequisites, and deterministic identity. GGUF name/layout
-  primitives remain their format owners; neither side reads payloads or emits
-  physical file bytes.
+  source contributions and projects them into typed transforms, canonical GGUF
+  names, logical GGML shapes, metadata prerequisites, and deterministic
+  identity. This is a concrete GGUF lowering, not the artifact-neutral
+  transformation owner. GGUF name/layout primitives remain their format
+  owners; neither side reads payloads or emits physical file bytes.
 - The DeepSeek payload handoff owner binds every canonical mapping contribution
   to the common source payload index and plan. It proves coverage and pressure
   facts but performs no source transform, quantization, or artifact emission.
+- The future compilation owner consumes architecture, coverage, source
+  contribution, payload-range, physical-format, quantization, residency, and
+  backend requirements to construct immutable plans and variant identities. It
+  does not perform source IO, quantization, writing, allocation, kernel
+  execution, evaluation, or benchmarking.
+- Transformation-plan construction is metadata-only. Transformation execution
+  consumes exact payload chunks later, and quantization may not rediscover
+  source names, roles, aggregation axes, or scaling companions.
 - Source verification coordinates those owners and decides blockers; it does
   not parse JSON, rescan headers, render, serialize, or independently read
   tensor payloads.
@@ -128,6 +140,10 @@ domain algorithms. No writer owns command output.
 - GGUF parsing language that implies materialization.
 - Materialization language that implies backend execution.
 - Backend language that implies graph or generation support.
+- Payload, quantizer, or writer logic that becomes the transformation-semantics
+  authority.
+- Compilation coordination that reimplements source IO, quantization, writing,
+  residency, backend execution, evaluation, or benchmark measurement.
 
 ## GGUF Target Map
 

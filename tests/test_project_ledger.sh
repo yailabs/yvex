@@ -80,7 +80,7 @@ function uncode(value) {
 ' "$project" > "$rows"
 
 row_count=$(wc -l < "$rows" | tr -d ' ')
-test "$row_count" -eq 665 || fail "expected 665 canonical IDs, found $row_count"
+test "$row_count" -eq 679 || fail "expected 679 canonical IDs, found $row_count"
 
 cut -f 2 "$rows" | LC_ALL=C sort > "$all_ids"
 unique_count=$(uniq "$all_ids" | wc -l | tr -d ' ')
@@ -91,7 +91,7 @@ duplicate=$(uniq -d "$all_ids" | head -n 1 || true)
 test -z "$duplicate" || fail "duplicate canonical ID: $duplicate"
 
 id_hash=$(sha256sum "$all_ids" | awk '{ print $1 }')
-expected_id_hash=2bfe65bb296ca7d02e276a427ddee765c917a2601d31310758d5dbcb49b623a8
+expected_id_hash=0b930d0fc87512489c500e57e667829dda6300bc4c8840fa75644e768e82084d
 test "$id_hash" = "$expected_id_hash" ||
   fail "canonical ID set changed without an explicit migration: $id_hash"
 
@@ -100,9 +100,12 @@ V010.DOCS.REFOUNDATION.0
 V010.PROJECT.RECOVERY.0
 V010.PROJECT.RECOVERY.1
 V010.DOCS.ARCHITECTURE.0
+V010.PROJECT.COMPILATION.0
+V010.DOCS.README.COMPILATION.0
 V010.REBASE.DEEPSEEK.0
 V010.SOURCE.PAYLOAD.STREAM.0
 V010.MAP.GGUF.DEEPSEEK.0
+V010.MODEL.TRANSFORM.IR.0
 V010.GGUF.QTYPE.ABI.1
 V010.GGUF.ARTIFACT.ABI.1
 V010.GGUF.WRITER.1
@@ -130,11 +133,22 @@ V010.EVAL.DEEPSEEK.0
 V010.BENCH.DEEPSEEK.0
 V010.RUNTIME.DEEPSEEK.ATTENTION.KV.0
 V010.RUNTIME.DEEPSEEK.LOGITS.SAMPLING.0
+POST010.COMPILATION.DAG.0
+POST010.COMPILATION.REUSE.0
+POST010.COMPILATION.VARIANTS.0
+POST010.COMPILATION.HARDWARE.PROFILE.0
+POST010.COMPILATION.WORKLOAD.PROFILE.0
+POST010.COMPILATION.PRECISION.0
+POST010.COMPILATION.PLACEMENT.0
+POST010.COMPILATION.FEEDBACK.0
+POST010.COMPILATION.PARETO.0
+POST010.COMPILATION.RUNTIME.BINDING.0
+POST010.COMPILATION.EXECUTION.STATE.0
 EOF
 
 LC_ALL=C sort -u "$new_ids" -o "$new_ids"
 new_count=$(wc -l < "$new_ids" | tr -d ' ')
-test "$new_count" -eq 34 || fail "expected 34 explicit new IDs, found $new_count"
+test "$new_count" -eq 48 || fail "expected 48 explicit new IDs, found $new_count"
 
 missing_new=$(comm -23 "$new_ids" "$all_ids" | head -n 1 || true)
 test -z "$missing_new" || fail "explicit new ID is absent: $missing_new"
@@ -259,6 +273,7 @@ cat > "$expected_tracks" <<'EOF'
 TRACK.SCOPE
 TRACK.SOURCE
 TRACK.MAP
+TRACK.COMPILATION
 TRACK.QUANT
 TRACK.ARTIFACT
 TRACK.INTEGRITY
@@ -282,7 +297,7 @@ TRACK.RELEASE
 TRACK.POST010
 EOF
 
-cmp -s "$tracks" "$expected_tracks" || fail "stable 24-track order changed"
+cmp -s "$tracks" "$expected_tracks" || fail "stable 25-track order changed"
 
 for required_id in \
   MODEL.CLASS.QWEN.0 \
@@ -294,7 +309,11 @@ for required_id in \
   MODELS.SOURCE.MAP.HANDOFF.0 \
   V010.GGUF.QTYPE.ABI.0 \
   V010.GGUF.ARTIFACT.ABI.0 \
-  V010.PROJECT.RECOVERY.1
+  V010.PROJECT.RECOVERY.1 \
+  V010.PROJECT.COMPILATION.0 \
+  V010.DOCS.README.COMPILATION.0 \
+  V010.MODEL.TRANSFORM.IR.0 \
+  POST010.COMPILATION.RUNTIME.BINDING.0
 do
   grep -F "$(printf '\t%s\t' "$required_id")" "$rows" >/dev/null ||
     fail "missing required recovered ID: $required_id"
@@ -305,4 +324,34 @@ grep -F 'Qwen, Gemma, and dense/common work already implemented remains active' 
 grep -F 'DeepSeek-V4-Flash is the only model whose complete source-to-text chain closes' "$project" >/dev/null ||
   fail "exclusive v0.1 release target is missing"
 
-echo "project ledger: ok (tracks=24 recovered=$recovered_count ids=$row_count milestones=$milestone_count active=$active_id)"
+grep -F '### 9.4 TRACK.COMPILATION' "$project" >/dev/null ||
+  fail "compilation track is missing"
+grep -F '| `V010.MODEL.TRANSFORM.IR.0` | DeepSeek + common plan | `planned` |' "$project" >/dev/null ||
+  fail "transformation IR milestone is not planned"
+grep -F '| `V010.QUANT.2` | common + DeepSeek roles | `blocked` |' "$project" >/dev/null ||
+  fail "quantization is not blocked"
+grep -F '| V010.MODEL.TRANSFORM.IR.0 | recovered/promoted |' "$project" >/dev/null ||
+  fail "quantization does not depend on the transformation IR"
+
+sequence=$(awk '
+/^```text$/ { block = ""; in_block = 1; next }
+in_block && /^```$/ {
+  if (block ~ /V010\.DOCS\.README\.COMPILATION\.0/ && block ~ /V010\.MODEL\.TRANSFORM\.IR\.0/) {
+    print block
+    exit
+  }
+  in_block = 0
+  next
+}
+in_block { block = block $0 "\n" }
+' "$project")
+test -n "$sequence" || fail "compilation critical-path block is missing"
+printf '%s' "$sequence" | awk '
+BEGIN { expected = 1 }
+/V010\.DOCS\.README\.COMPILATION\.0/ { if (expected != 1) exit 1; expected = 2 }
+/V010\.MODEL\.TRANSFORM\.IR\.0/ { if (expected != 2) exit 1; expected = 3 }
+/V010\.QUANT\.2/ { if (expected != 3) exit 1; expected = 4 }
+END { exit expected == 4 ? 0 : 1 }
+' || fail "compilation/transform/quant critical-path order is invalid"
+
+echo "project ledger: ok (tracks=25 recovered=$recovered_count ids=$row_count milestones=$milestone_count active=$active_id)"

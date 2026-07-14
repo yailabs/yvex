@@ -1112,7 +1112,7 @@ This table records architectural scope, not delivery progress.
 
 | Family | v0.1.0 relation | Runtime class | Current support truth |
 | --- | --- | --- | --- |
-| DeepSeek-V4-Flash | exact release target at `$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash`; canonical target id `deepseek4-v4-flash` | hybrid SWA/CSA/HCA decoder with mHC and MoE | typed architecture, exact 69,187-entry source coverage, and canonical logical GGUF mapping exist; no payload conversion, complete model artifact, or runtime path |
+| DeepSeek-V4-Flash | exact release target at `$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash`; canonical target id `deepseek4-v4-flash` | hybrid SWA/CSA/HCA decoder with mHC and MoE | typed architecture, exact 69,187-entry source coverage, and a concrete GGUF lowering map exist; no artifact-neutral transformation plan, payload conversion, complete model artifact, or runtime path |
 | Qwen | outside v0.1.0 | target-dependent dense or sparse/MoE | unsupported; existing source/report facts do not enter the release path |
 | Gemma | outside v0.1.0 | dense | unsupported; existing source/report facts do not enter the release path |
 | GLM | outside v0.1.0 source-pressure work | sparse/MoE | unsupported; source evidence is not runtime support |

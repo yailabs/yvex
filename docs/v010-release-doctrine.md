@@ -1,6 +1,6 @@
 # v0.1.0 Release Doctrine
 
-Date: 2026-07-10
+Date: 2026-07-14
 Status: normative release contract
 
 ## Authority
@@ -86,6 +86,7 @@ artifact identity, backend, and operator path.
 | Source | Verified local identity, revision, config, tokenizer, shard inventory, and payload-readable tensor index | path presence, download receipt, header list alone |
 | Architecture | Typed attention, position, KV, MoE, norm, output-head, tokenizer, and validation facts | model name, report text, lexical tensor patterns |
 | Mapping | Complete unique role map and GGUF name/layout map with required shape constraints | partial inventory, missing-role report, selected subset |
+| Transformation | Immutable artifact-neutral plan binds every logical output to exact source contributions, typed operations, output geometry, and payload-range identity | GGUF names alone, quantizer rediscovery, payload reads during planning |
 | Qtype and quantization | Exact storage geometry, role policy, arithmetic/refusal truth, reference quantization, and error bounds | qtype names, policy report, storage sizing alone |
 | Artifact | Complete YVEX-produced GGUF, identity, global range integrity, deterministic writer, and writer-reader equivalence | tensor proof artifact, external GGUF, file discovery |
 | Materialization | All required tensors admitted, placed, transferred, and cleaned up under the DGX Spark residency plan | allocation, estimate, or selected tensor transfer |

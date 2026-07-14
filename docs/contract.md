@@ -192,10 +192,43 @@ accounting and deterministic handle/buffer cleanup. Immutable indexes support
 concurrent offset-independent reads; close refuses while plans or streams are
 active, and release is idempotent after a successful close.
 
-This source boundary supplies exact bytes to later conversion and
-quantization. It does not decode BF16, FP8, E8M0, MXFP4, or I64 data; aggregate
-experts; choose qtypes; encode GGUF; emit a complete artifact; materialize a
-model; upload CUDA data; execute a graph; or establish generation support.
+This source boundary supplies exact bytes to a later transformation executor.
+It does not decode BF16, FP8, E8M0, MXFP4, or I64 data; aggregate experts;
+choose qtypes; encode GGUF; emit a complete artifact; materialize a model;
+upload CUDA data; execute a graph; or establish generation support.
+
+### Model Compilation Contract
+
+The logical model is the combination of exact source identity, typed
+architecture semantics, and complete tensor roles. It is independent of GGUF,
+qtype, physical placement, backend, and runtime state. A container identifies
+one physical representation; it does not replace logical model identity.
+
+The artifact-neutral transformation plan is a separate immutable boundary
+between source contribution mapping and physical lowering. Plan construction
+may describe direct copy, cast, reshape, transpose, slice, concatenation,
+stacking or expert aggregation, scaling-tensor association, integer
+conversion, quantization intent, output geometry, and layout constraints. It
+binds every input to canonical source contribution and payload-range identity,
+but it performs no payload IO.
+
+Transformation execution consumes exact bounded chunks from the verified
+payload session. Quantization and writers consume the canonical plan; they may
+not infer source names, roles, aggregation structure, axes, or scaling
+companions independently. A GGUF mapping is a physical lowering projection,
+not the artifact-neutral transformation authority.
+
+A physical model variant binds one transformation plan to explicit artifact,
+precision, hardware, memory, quality, and workload constraints. Artifact
+materialization serializes that variant. Runtime binding separately admits the
+artifact, residency, backend requirements, execution descriptor, and
+persistent state. Evaluation and benchmark facts must retain those identities
+and cannot promote support automatically.
+
+No artifact-neutral transformation plan, automatic planner, incremental build,
+multi-variant compiler, Pareto selector, or feedback-driven runtime binding is
+implemented yet. Source payload streaming remains build-time access and does
+not imply inference-time SSD tensor streaming.
 
 ## Model Registry Contract
 
