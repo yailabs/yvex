@@ -119,8 +119,57 @@ require_text AGENTS.md 'tensor proof artifact'
 require_text AGENTS.md 'complete model artifact'
 require_text AGENTS.md 'supported model artifact'
 
-require_text README.md 'native C inference engine'
-require_text README.md 'local open-weight models'
+require_text README.md 'native C model-compilation and execution system'
+require_text README.md 'A finalized GGUF is one possible compiler output, not the'
+require_text README.md '[`PROJECT.md`](PROJECT.md) is the sole authority for current'
+require_text README.md '## The Controlled Model Lifecycle'
+require_text README.md '## Planning Semantics and Byte Execution'
+require_text README.md '## Variant Admission as a Constraint System'
+require_text README.md '## Current Implementation Boundary'
+require_text README.md 'Logical model'
+require_text README.md 'Transformation IR'
+require_text README.md 'Physical variant'
+require_text README.md 'Runtime binding'
+require_text README.md 'Execution evidence'
+require_text README.md 'admit(S, H, W, p) ='
+require_text README.md 'Pareto(S, H, W) = nondominated p in Admitted(S, H, W) over'
+require_text README.md 'These equations define compiler objectives and evidence identity. No value in'
+require_text README.md 'build-time compilation capability; it is not'
+require_text README.md 'inference-time SSD expert streaming.'
+require_text README.md 'DeepSeek-V4-Flash is the sole v0.1.0 release target'
+require_text README.md 'Common owners also retain Qwen, Gemma, dense and MoE evidence'
+require_text README.md 'The artifact-neutral Transformation IR, quantization execution,'
+require_text README.md 'transformer execution and autoregressive generation are unsupported.'
+require_text README.md 'benchmark results are not measured.'
+reject_text README.md '**YVEX is a native C inference engine'
+reject_text README.md 'Active Next:'
+
+mermaid_count=$(grep -c '^```mermaid$' README.md)
+test "$mermaid_count" -ge 2 ||
+  fail "README must contain at least two Mermaid diagrams: $mermaid_count"
+awk '
+/^```mermaid$/ {
+  if (in_mermaid) exit 1
+  in_mermaid = 1
+  opened++
+  next
+}
+in_mermaid && /^```$/ {
+  in_mermaid = 0
+  closed++
+}
+END {
+  if (in_mermaid || opened != closed) exit 1
+}
+' README.md || fail "README Mermaid fences are unbalanced"
+
+for target in $(grep -oE '\]\([^)]+\)' README.md |
+  sed 's/^](//; s/)$//' |
+  grep -Ev '^(https?://|mailto:|#)' || true)
+do
+  target=${target%%#*}
+  test -e "$target" || fail "README local link does not resolve: $target"
+done
 
 sh tests/test_project_ledger.sh
 

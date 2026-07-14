@@ -326,8 +326,10 @@ grep -F 'DeepSeek-V4-Flash is the only model whose complete source-to-text chain
 
 grep -F '### 9.4 TRACK.COMPILATION' "$project" >/dev/null ||
   fail "compilation track is missing"
-grep -F '| `V010.MODEL.TRANSFORM.IR.0` | DeepSeek + common plan | `planned` |' "$project" >/dev/null ||
-  fail "transformation IR milestone is not planned"
+grep -F '| `V010.DOCS.README.COMPILATION.0` | project | `complete` |' "$project" >/dev/null ||
+  fail "README compilation milestone is not complete"
+grep -F '| `V010.MODEL.TRANSFORM.IR.0` | DeepSeek + common plan | `active` |' "$project" >/dev/null ||
+  fail "transformation IR milestone is not active"
 grep -F '| `V010.QUANT.2` | common + DeepSeek roles | `blocked` |' "$project" >/dev/null ||
   fail "quantization is not blocked"
 grep -F '| V010.MODEL.TRANSFORM.IR.0 | recovered/promoted |' "$project" >/dev/null ||
@@ -336,7 +338,9 @@ grep -F '| V010.MODEL.TRANSFORM.IR.0 | recovered/promoted |' "$project" >/dev/nu
 sequence=$(awk '
 /^```text$/ { block = ""; in_block = 1; next }
 in_block && /^```$/ {
-  if (block ~ /V010\.DOCS\.README\.COMPILATION\.0/ && block ~ /V010\.MODEL\.TRANSFORM\.IR\.0/) {
+  if (block ~ /V010\.DOCS\.README\.COMPILATION\.0/ &&
+      block ~ /V010\.MODEL\.TRANSFORM\.IR\.0/ &&
+      block ~ /V010\.QUANT\.2/) {
     print block
     exit
   }

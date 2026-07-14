@@ -5,7 +5,7 @@ Status: living engineering control
 Authority: product target, architecture tracks, complete wave ledger, milestone
 state, dependencies, evidence rank, family scope, release gates, and Active Next
 Recovery baseline: pre-refoundation `docs/spine.md` at commit `10ad6c3`
-Current proof stage: verified source payload capability and compilation-architecture contract
+Current proof stage: verified source payload capability, compilation-architecture contract, and public compiler/execution identity
 
 ## 1. Authority And Update Contract
 
@@ -235,7 +235,7 @@ streaming.
 
 | Boundary | Current truth |
 | --- | --- |
-| Project control | The 25-track, 631-ID historical ledger is recovered and ranked here; project recovery and compilation-architecture rebasing are complete. |
+| Project control | The 25-track, 631-ID historical ledger is recovered and ranked here; project recovery, compilation-architecture rebasing, and the public README cutover are complete. |
 | Source | The canonical DeepSeek target is verified against `deepseek-ai/DeepSeek-V4-Flash` at commit `60d8d70770c6776ff598c94bb586a859a38244f1`. The pinned upstream index, structured configs, tokenizer assets, 46/46 safetensors headers, 69,187 unique tensor records, and verifier-owned manifest agree. Manifest v3 binds every shard to its authoritative Hugging Face Git LFS SHA-256 and atomically publishes aggregate payload identity `e22b3678d131d334f154a93214bdddfafc172c9869f4c52db28fea198eaa9165` only after all 159,617,149,040 shard-file bytes pass digest and drift checks. |
 | Family profiles | The exact DeepSeek-V4-Flash source now projects to one immutable typed IR with 43 main layers, one MTP layer, explicit SWA/CSA/HCA, mHC, MoE, position/KV, output, tokenizer, and source constraints. Qwen, Gemma, and dense/MoE evidence remains at its prior rank. |
 | Tensor coverage | One immutable IR-derived requirement set reconciles exactly against all 69,187 tensors in the verified DeepSeek snapshot: every entry is assigned once, with zero missing, duplicate, ambiguous, unsupported, or unexpected tensors and zero payload reads. Qwen/Gemma evidence remains at its prior rank. |
@@ -271,7 +271,8 @@ V010.TENSOR.COVERAGE.DEEPSEEK.0: complete (exact source tensor coverage)
 V010.MAP.GGUF.DEEPSEEK.0: complete (canonical concrete GGUF lowering plan)
 V010.SOURCE.PAYLOAD.STREAM.0: complete (trusted bounded source payload handoff)
 V010.PROJECT.COMPILATION.0: complete (compilation ownership and planning contract only)
-Active Next: V010.DOCS.README.COMPILATION.0
+V010.DOCS.README.COMPILATION.0: complete (public compilation/execution identity only)
+Active Next: V010.MODEL.TRANSFORM.IR.0
 ```
 
 Strict source proof consumes the pinned upstream index with Git OID
@@ -426,11 +427,11 @@ calculated from rows rather than protected by a summary hash.
 | Explicit new IDs | 48 |
 | Canonical IDs | 679 |
 | First-class milestones | 40 |
-| State: complete | 221 |
+| State: complete | 222 |
 | State: active | 1 |
 | State: partial | 1 |
 | State: blocked | 22 |
-| State: planned | 398 |
+| State: planned | 397 |
 | State: reopened | 2 |
 | State: deferred | 22 |
 | State: superseded | 11 |
@@ -438,10 +439,10 @@ calculated from rows rather than protected by a summary hash.
 
 | Track | Owns | Current truth | Conclusive handoff |
 | --- | --- | --- | --- |
-| `TRACK.SCOPE` | Project control, release scope, family/release distinction, claim boundary, version policy, and documentation-control transitions. | ledger recovery, documentation ownership, and compilation rebasing are complete; the README compilation rewrite is active | One truthful project map and one explicit release contract. |
+| `TRACK.SCOPE` | Project control, release scope, family/release distinction, claim boundary, version policy, and documentation-control transitions. | ledger recovery, documentation ownership, compilation rebasing, and the public compiler/execution identity are complete | One truthful project map and one explicit release contract. |
 | `TRACK.SOURCE` | Source identity, revision, provider intake, manifests, shards, sidecars, header inventory, payload trust, and bounded payload access. | exact metadata/header verification and trusted bounded payload access are complete | Verified source facts and readable payload ranges. |
 | `TRACK.MAP` | Family source names, canonical runtime roles, GGUF names, physical-lowering projections, layouts, ambiguity refusal, and complete mapping coverage. | canonical DeepSeek GGUF lowering evidence is complete | Every required source tensor maps exactly once to a runtime role and emitted layout. |
-| `TRACK.COMPILATION` | Artifact-neutral transformation IR, derivation identity/DAGs, physical variant identity, constraint profiles, requirement composition, variant selection, and evaluation/benchmark feedback intake. | ownership is defined; the transformation IR and all automatic/multi-variant planning remain unimplemented or deferred | One immutable transformation plan binds logical outputs to verified source contributions before physical lowering. |
+| `TRACK.COMPILATION` | Artifact-neutral transformation IR, derivation identity/DAGs, physical variant identity, constraint profiles, requirement composition, variant selection, and evaluation/benchmark feedback intake. | the artifact-neutral Transformation IR is active; automatic and multi-variant planning remain deferred | One immutable transformation plan binds logical outputs to verified source contributions before physical lowering. |
 | `TRACK.QUANT` | Dtype/qtype ABI, storage geometry, role policy, conversion, quantization, reference dequantization, compute truth, and refusal. | canonical row-aware storage ABI and source payload handoff are complete; quantization is blocked by the transformation IR | Every emitted role has truthful storage and compute behavior. |
 | `TRACK.ARTIFACT` | GGUF container ABI, native writer, conversion coordination, complete emission, identity, registration, and writer-reader roundtrip. | scalable file-backed structural reader ABI is complete; writer and complete emission remain blocked | A complete YVEX-produced GGUF reopens identically through YVEX. |
 | `TRACK.INTEGRITY` | Container, metadata, tensor directory, offsets, alignment, qtype-sized ranges, corruption, drift, and artifact admission. | canonical common global layout admission is complete; complete-artifact support admission remains blocked | A complete artifact passes every pre-payload and pre-runtime integrity gate. |
@@ -472,10 +473,10 @@ closure.
 
 | Track | Recovered IDs | Canonical IDs | First-class C/A/Pa/P/B/NM | Complete support | Open support | Superseded/deferred |
 | --- | ---: | ---: | --- | ---: | ---: | ---: |
-| `TRACK.SCOPE` | 25 | 31 | 4/1/1/0/0/0 | 9 | 9 | 7 |
+| `TRACK.SCOPE` | 25 | 31 | 5/0/1/0/0/0 | 9 | 9 | 7 |
 | `TRACK.SOURCE` | 24 | 26 | 2/0/0/0/0/0 | 23 | 1 | 0 |
 | `TRACK.MAP` | 12 | 13 | 1/0/0/0/0/0 | 11 | 1 | 0 |
-| `TRACK.COMPILATION` | 0 | 12 | 0/0/0/1/0/0 | 0 | 0 | 11 |
+| `TRACK.COMPILATION` | 0 | 12 | 0/1/0/0/0/0 | 0 | 0 | 11 |
 | `TRACK.QUANT` | 5 | 6 | 1/0/0/0/1/0 | 2 | 2 | 0 |
 | `TRACK.ARTIFACT` | 11 | 16 | 1/0/0/0/4/0 | 3 | 6 | 2 |
 | `TRACK.INTEGRITY` | 14 | 15 | 1/0/0/0/0/0 | 10 | 4 | 0 |
@@ -538,8 +539,8 @@ written after inspection of owner code, consumers, tests, and current contracts.
 | 12 | `V010.MAP.GGUF.DEEPSEEK.0` | `TRACK.MAP` | DeepSeek | `complete` | Map every required DeepSeek source tensor to one role, GGUF name, transform, shape, expert index, and emitted layout. | V010.TENSOR.COVERAGE.DEEPSEEK.0 |
 | 13 | `V010.SOURCE.PAYLOAD.STREAM.0` | `TRACK.SOURCE` | common | `complete` | Bind verified source snapshots to explicit payload trust, indexed checked ranges, bounded exact reads, and transactional consumer delivery. | V010.MAP.GGUF.DEEPSEEK.0 |
 | 14 | `V010.PROJECT.COMPILATION.0` | `TRACK.SCOPE` | project | `complete` | Established model-compilation terminology, ownership, planning/byte-execution planes, future constraints, and the transformation-before-quantization dependency without changing code capability. | V010.SOURCE.PAYLOAD.STREAM.0 |
-| 15 | `V010.DOCS.README.COMPILATION.0` | `TRACK.SCOPE` | project | `active` | Rewrite the public README around the owned compilation/execution architecture without duplicating project state or promoting support. | V010.PROJECT.COMPILATION.0 |
-| 16 | `V010.MODEL.TRANSFORM.IR.0` | `TRACK.COMPILATION` | DeepSeek + common plan | `planned` | Create one immutable artifact-neutral transformation plan for every required DeepSeek logical output over exact source contributions and payload-range identity, without payload IO during construction. | V010.DOCS.README.COMPILATION.0 |
+| 15 | `V010.DOCS.README.COMPILATION.0` | `TRACK.SCOPE` | project | `complete` | Rebuilt the public README around the owned compilation/execution architecture, logical/physical identity, planning/byte-execution split, constraint system, and one truthful implementation boundary. | V010.PROJECT.COMPILATION.0 |
+| 16 | `V010.MODEL.TRANSFORM.IR.0` | `TRACK.COMPILATION` | DeepSeek + common plan | `active` | Create one immutable artifact-neutral transformation plan for every required DeepSeek logical output over exact source contributions and payload-range identity, without payload IO during construction. | V010.DOCS.README.COMPILATION.0 |
 | 17 | `V010.QUANT.2` | `TRACK.QUANT` | common + DeepSeek roles | `blocked` | Implement the role/qtype quantization, compute, reference-dequantization, numeric-bound, and refusal matrix required by the release artifact. | V010.MODEL.TRANSFORM.IR.0 |
 | 18 | `V010.GGUF.WRITER.1` | `TRACK.ARTIFACT` | common | `blocked` | Emit concrete GGUF bytes from canonical metadata and tensor descriptors with checked offsets, alignment, atomic publication, failure cleanup, and deterministic order. | V010.QUANT.2 |
 | 19 | `V010.ARTIFACT.EMIT.DEEPSEEK.0` | `TRACK.ARTIFACT` | DeepSeek | `blocked` | Produce complete reference and selected-release-qtype DeepSeek-V4-Flash GGUF artifacts from verified sources without promoting runtime support. | V010.GGUF.WRITER.1 |
@@ -576,7 +577,7 @@ the row's use.
 
 **Owner:** Project control, release scope, family/release distinction, claim boundary, version policy, architecture-control transitions, and public-document transitions.
 
-**Current truth:** ledger recovery, documentation ownership, and compilation rebasing are complete; the README compilation rewrite is active
+**Current truth:** ledger recovery, documentation ownership, compilation rebasing, and the public compiler/execution identity are complete
 
 **Ledger summary:** 25 recovered IDs; 6 first-class milestones; 7 complete support rows; 12 open support rows; 6 superseded/deferred rows.
 
@@ -589,7 +590,7 @@ the row's use.
 | `V010.PROJECT.RECOVERY.1` | project | `complete` | Installed PROJECT.md as the sole authority, recovered every old wave at a truthful rank, restored counts, and preserved Qwen/Gemma/common work. | V010.PROJECT.RECOVERY.0 | current |
 | `V010.DOCS.ARCHITECTURE.0` | project | `complete` | Established non-overlapping documentation owners, absorbed repair obligations, removed duplicate project state, and installed dynamic ledger guards. | V010.PROJECT.RECOVERY.1 | current |
 | `V010.PROJECT.COMPILATION.0` | project | `complete` | Established payload/transformation separation, model-compilation ownership, planning constraints, future obligations, and the Transformation IR dependency without changing executable capability. | V010.SOURCE.PAYLOAD.STREAM.0 | current |
-| `V010.DOCS.README.COMPILATION.0` | project | `active` | Rewrite README.md around the owned compilation/execution architecture while preserving implemented truth, project-state ownership, and unsupported boundaries. | V010.PROJECT.COMPILATION.0 | current |
+| `V010.DOCS.README.COMPILATION.0` | project | `complete` | Rebuilt README.md around the owned compilation/execution architecture while preserving project-state ownership, exact implemented truth, and unsupported boundaries. | V010.PROJECT.COMPILATION.0 | current |
 
 #### Recovered And Subordinate Rows
 
@@ -703,7 +704,7 @@ the row's use.
 
 **Owner:** Artifact-neutral transformation IR, immutable derivation identity and DAGs, physical model variant identity, compilation constraints, downstream requirement composition, admitted variant selection, and evaluation/benchmark feedback intake.
 
-**Current truth:** the ownership boundary and future obligations are defined; no transformation IR, automatic planner, multi-variant compiler, or runtime binding is implemented
+**Current truth:** the artifact-neutral Transformation IR is active; no automatic planner, multi-variant compiler, or runtime binding is implemented
 
 **Ledger summary:** 0 recovered IDs; 1 first-class milestone; 0 complete support rows; 0 open support rows; 11 deferred rows.
 
@@ -711,7 +712,7 @@ the row's use.
 
 | Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
 | --- | --- | --- | --- | --- | --- |
-| `V010.MODEL.TRANSFORM.IR.0` | DeepSeek + common plan | `planned` | Represent every required DeepSeek logical output as immutable artifact-neutral typed operations over exact source contributions, bind every input to canonical payload-range identity without plan-time IO, and make physical GGUF lowering and quantization consume that truth. | V010.DOCS.README.COMPILATION.0 | current |
+| `V010.MODEL.TRANSFORM.IR.0` | DeepSeek + common plan | `active` | Represent every required DeepSeek logical output as immutable artifact-neutral typed operations over exact source contributions, bind every input to canonical payload-range identity without plan-time IO, and make physical GGUF lowering and quantization consume that truth. | V010.DOCS.README.COMPILATION.0 | current |
 
 #### Recovered And Subordinate Rows
 

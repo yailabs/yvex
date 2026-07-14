@@ -454,7 +454,7 @@ check-docs:
 	@grep -F "## 7. Track Registry And Dashboard" PROJECT.md >/dev/null
 	@grep -F "## 8. First-Class Milestone Roadmap" PROJECT.md >/dev/null
 	@grep -F "## 9. Complete Track/Wave Ledger" PROJECT.md >/dev/null
-	@grep -F "native C inference engine for local open-weight models" README.md >/dev/null
+	@grep -F "native C model-compilation and execution system" README.md >/dev/null
 	@sh tests/test_project_ledger.sh >/dev/null
 	@grep -F "YVEX System Target" docs/system-target.md >/dev/null
 	@grep -F "YVEX Reference Architecture Map" docs/reference-architecture.md >/dev/null
@@ -524,7 +524,7 @@ check-guardrails:
 	@test ! -d desktop
 	@! grep -RIn -E "N[E]T\\.SPINE|N[E]T moves streams|C[L]ORI|c[l]ori-codename|docs/arc[h]ive|c[l]ori_|libc[l]ori|c[l]orid|include/c[l]ori|~/\\.config/c[l]ori|github\\.com/yailabs/c[l]ori|yailabs/c[l]ori" --exclude-dir=.git --exclude-dir=build . >/dev/null
 	@! grep -Ei "production-read[y]|implemented infer[e]nce|implemented ser[v]er|supports C[U]DA|supports M[e]tal|supports M[L]X|supports llama\\.cpp|O[p]enAI-compatible ser[v]er" README.md >/dev/null
-	@! grep -Ei "benchmark results" README.md | grep -vi "benchmark results: none" >/dev/null
+	@! grep -Ei "benchmark results" README.md | grep -vi "benchmark results are not measured" >/dev/null
 
 clean:
 	@rm -rf $(BUILD_DIR) ./yvex ./yvexd ./*.o
