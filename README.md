@@ -1,66 +1,148 @@
 # YVEX
 
 **YVEX is a native C model-compilation and execution system for local
-open-weight models.** It begins with verified upstream weights and retains
-ownership through logical model semantics, transformation planning, physical
-variant construction, artifact encoding, runtime binding and identity-bound
-execution evidence. A finalized GGUF is one possible compiler output, not the
-point at which the system begins.
+open-weight models, with CUDA as its first accelerated backend.** Its
+architecture treats a model as a verified logical structure that can be
+compiled into explicit physical variants, lowered into concrete artifacts,
+bound to hardware backends and accepted only through execution evidence.
 
-The v0.1.0 release direction is end-to-end
-[DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash)
-generation on the 128 GB NVIDIA GB10 in DGX Spark from a complete GGUF produced
-by YVEX. [`PROJECT.md`](PROJECT.md) is the sole authority for current
-implementation state, dependency order and release gates.
+YVEX does not identify a model with a GGUF file, and it is not yet a complete
+text-generation runtime. GGUF is the v0.1.0 physical lowering target. The
+release target is a complete YVEX-produced DeepSeek-V4-Flash GGUF executing real
+autoregressive text generation on the 128 GB NVIDIA GB10 in DGX Spark. It is
+**not release-ready or currently supported**.
 
-YVEX is usable as a native library and operator tool. Its ownership boundaries
-also make it suitable as an embeddable model-compilation and execution
-substrate, without assuming that a parent packaging or orchestration system
-already exists.
+The current implementation verifies the exact DeepSeek source, reconstructs
+its logical architecture and tensor requirements, maps every source
+contribution, and streams trusted payload ranges. Transformation execution,
+quantization, complete artifact emission, full runtime binding and generation
+remain unimplemented, blocked or unsupported as specified below.
+[`PROJECT.md`](PROJECT.md) is the sole authority for current state, tracks,
+milestones, dependencies, release gates and the Active Next milestone.
 
-## The Controlled Model Lifecycle
+## What YVEX Builds
 
-A conventional artifact runner inherits the decisive choices made before the
-artifact reached it: tensor interpretation, layout transforms, precision,
-placement assumptions and the identity of the source bytes. YVEX makes those
-choices explicit and carries their provenance into execution. The same logical
-model may therefore admit different physical variants without conflating any
-variant with the model itself.
+The system target preserves ownership and identity across a controlled model
+lifecycle. Status labels in the diagram describe the current release path; an
+arrow is an architectural dependency, not a claim that the whole chain runs.
 
 ```mermaid
-flowchart LR
-    S[Verified source] --> L[Logical model]
-    L --> T[Transformation IR]
-    T --> V[Physical variant]
-    V --> A[Artifact]
-    A --> R[Runtime binding]
-    R --> X[Execution]
-    X --> E[Evaluation and benchmark evidence]
-    E -.-> V
+flowchart TD
+    S["Verified source<br/>implemented"] --> M["Logical model<br/>implemented for DeepSeek"]
+    M --> T["Transformation IR<br/>active; not implemented"]
+    T --> V["Physical variant<br/>planned"]
+    V --> L["Physical lowering<br/>GGUF mapping exists; emission blocked"]
+    L --> A["Artifact<br/>complete artifact blocked"]
+    A --> R["Runtime binding<br/>unsupported"]
+    R --> E["Execution evidence<br/>release path unavailable"]
 ```
 
-The feedback edge is an architectural contract: measurements must remain bound
-to the exact source, plan, variant, machine and workload that produced them.
-It does not imply that an automatic selector or multi-variant compiler is
-implemented today.
+### Verified source
 
-Each boundary has a distinct identity and failure domain:
+The source boundary owns repository identity, pinned revision, provider
+provenance, structured configuration, tokenizer facts, shard and tensor-header
+inventory, payload identity, upstream payload trust and immutable source
+references. A verified source is therefore more than a directory that happens
+to contain files. The DeepSeek snapshot is admitted through one canonical
+inventory and one trusted payload session; later consumers do not reopen
+headers or invent paths and offsets.
 
-| Boundary | Identity carried forward |
-| --- | --- |
-| Logical model | Verified source revision, family semantics, layer topology and canonical tensor requirements, independent of container and precision. |
-| Transformation IR | Immutable operations that derive logical outputs from exact source contributions and payload ranges. |
-| Physical variant | One lowering under explicit format, precision, hardware, memory, quality and workload constraints. |
-| Artifact | A serialized representation of one physical variant; GGUF v3 is the v0.1.0 release format. |
-| Runtime binding | The admitted association among artifact identity, residency, backend capabilities, execution descriptor and persistent state. |
-| Execution evidence | Correctness, quality, memory, IO and performance observations bound to all preceding identities. |
+### Logical model
 
-These identities are deliberately non-equivalent. A valid container does not
-establish tensor-role completeness; a complete artifact does not establish
-backend capability; an isolated CUDA primitive does not establish a
-family-correct transformer path.
+The logical model reconstructs model meaning independently from any physical
+container. It owns architecture topology, canonical tensor roles and shapes,
+layer structure, attention and position behavior, MoE and residual structure,
+tokenizer requirements, output semantics and execution requirements.
 
-## Planning Semantics and Byte Execution
+It does not own GGUF qtype IDs, offsets or alignment; artifact paths or file
+descriptors; CUDA addresses; runtime buffers; or measured execution evidence.
+Those facts belong to later identities and owners.
+
+## Model Identity Is Not Artifact Identity
+
+```text
+logical_model_id != physical_variant_id != artifact_id
+```
+
+One logical model may admit several physical variants by changing role-specific
+precision, storage representation, tensor layout, expert aggregation layout,
+placement, hardware profile, workload profile or numeric acceptance bounds.
+Conceptually:
+
+```text
+one logical model
+  -> reference physical variant
+  -> memory-constrained physical variant
+  -> hardware-specific physical variant
+```
+
+These are architectural possibilities, not complete variants that YVEX emits
+today. Changing a physical choice does not by itself change the logical model.
+
+An artifact is the concrete serialized output of lowering and emission. Its
+existence does not prove complete tensor coverage, runtime compatibility,
+generation support, numerical correctness, backend correctness, evaluation or
+benchmark readiness. YVEX therefore distinguishes:
+
+- a **tensor proof artifact**, containing one tensor or a bounded subset;
+- a **complete model artifact**, containing every tensor and metadata item
+  required to execute one exact model;
+- a **supported model artifact**, which additionally passes integrity,
+  materialization, runtime, generation, evaluation, benchmark and release
+  gates.
+
+Runtime binding is a separate admission identity associating an artifact with
+materialized tensor views, memory placement, backend operations, graph and
+runtime descriptors, persistent state, ownership and cleanup. Execution
+evidence is separate again: it records what actually ran, under which exact
+source, variant, artifact, machine and workload. A plan cannot substitute for
+an artifact; an artifact cannot substitute for runtime execution; and a
+primitive test cannot substitute for transformer execution.
+
+Execution evidence may include independent reference comparisons, numeric
+bounds, typed failure and lifecycle behavior, backend parity, transformer and
+prefill/decode correctness, throughput, memory use and evaluation results. Each
+observation remains bound to the identities and inputs that produced it.
+
+## Compilation Architecture
+
+### Transformation IR
+
+The Transformation IR is the active implementation boundary and is **not yet
+implemented**. It will be the typed, artifact-neutral owner of transformations
+between verified source representation and a selected physical variant.
+Representative operation classes include `source reference`, `decode`, `cast`,
+`reshape`, `transpose`, `concatenate`, `stack`, `aggregate`, `requantize` and
+`validate`.
+
+Each transformation must eventually record exact source dependencies, the
+logical destination tensor, operation kind, input and output dtype and shape,
+axis and layout semantics, precision policy, numeric acceptance requirements,
+deterministic ordering and derivation identity. GGUF names, qtype IDs, offsets
+and alignment remain outside this layer.
+
+### Physical variant and physical lowering
+
+A physical variant is one identified selection of precision by tensor role,
+storage representation, tensor and expert layout, placement constraints,
+hardware profile, workload profile and numeric bounds. Physical lowering then
+projects an accepted variant into a concrete artifact-format contract.
+
+For v0.1.0 that contract is:
+
+```text
+release model target: DeepSeek-V4-Flash
+artifact format target: GGUF
+hardware target: NVIDIA DGX Spark / CUDA
+```
+
+The GGUF lowering owns format-specific tensor names, qtype IDs, metadata keys,
+directory order, byte geometry, alignment, encoded payload sizes and container
+layout. Those facts do not flow backward into logical model identity. The
+existing 69,187-to-1,360 DeepSeek map is concrete GGUF lowering evidence; it is
+not the missing artifact-neutral Transformation IR and emits no payload bytes.
+
+### Planning plane and byte-execution plane
 
 Compilation separates metadata reasoning from movement of model bytes. The
 planning plane decides what each output means and how it is derived. The
@@ -68,211 +150,243 @@ byte-execution plane later realizes that immutable plan through bounded source
 reads, conversion, quantization and serialization.
 
 ```mermaid
-flowchart TB
-    subgraph P[Planning plane - metadata only]
-        direction LR
-        SF[Source facts] --> AI[Architecture IR]
-        AI --> TC[Tensor coverage]
-        TC --> CM[Contribution map]
-        CM --> TI[Transformation IR]
-        TI --> PL[Physical lowering]
+flowchart TD
+    subgraph P["Planning plane — immutable facts"]
+        direction TB
+        LM["Logical model"] --> TR["Transformation requirements"]
+        TR --> PV["Physical variant"]
+        PV --> LP["Lowering plan"]
     end
 
-    subgraph B[Byte-execution plane]
-        direction LR
-        PS[Payload session] --> BC[Bounded chunks]
-        BC --> TX[Transform execution]
-        TX --> QC[Quantize or convert]
-        QC --> AW[Artifact writer]
+    subgraph B["Byte-execution plane — owned mutable resources"]
+        direction TB
+        PS["Trusted source payload"] --> BC["Bounded reads"]
+        BC --> TX["Transformation execution"]
+        TX --> PE["Physical payload production"]
+        PE --> AW["Atomic artifact emission"]
     end
 
-    TI -.-> TX
-    CM -.-> PS
+    TR -.-> TX
+    LP -.-> AW
 ```
 
-Planning never reads tensor payload bytes. Source readers never reinterpret
-family roles, aggregation axes or scaling companions. Quantization consumes the
-transformation plan rather than rediscovering semantic mapping from filenames.
-This separation keeps cancellation, resource limits and byte ownership in the
-IO path while making transformation identity inspectable before a 160 GB source
-is traversed.
+Planning is deterministic, inspectable, hashable and independent from mutable
+byte-processing state. Byte execution owns buffers, streaming, numeric
+conversion, encoding, cancellation, cleanup and atomic publication. Planning
+never reads tensor payload bytes; source readers never reinterpret family roles,
+aggregation axes or scaling companions; and quantization must consume the
+canonical transformation plan rather than rediscover semantics.
 
-## Variant Admission as a Constraint System
+Only trusted source payload streaming is implemented in the byte-execution
+plane today. It is a build-time compilation input, not transformation execution
+and not inference-time SSD expert streaming.
 
-For a verified source `S`, hardware profile `H`, workload profile `W` and
-candidate plan `p`, architectural admission requires the conjunction
+### Compact model
+
+```math
+P = \operatorname{Plan}(M, C_p, C_h, C_w)
+V = \operatorname{Transform}(S, P)
+A_F = \operatorname{Emit}_F(V)
+B_H = \operatorname{Bind}_H(A_F)
+E = \operatorname{Observe}(\operatorname{Run}(B_H, X))
+```
+
+Here `S` is the verified source payload; `M` is the logical model; `C_p`,
+`C_h` and `C_w` are precision, hardware and workload constraints; `P` is the
+Transformation IR or transformation plan; `V` is the physical model variant;
+`F` is the artifact format; `A_F` is the emitted artifact; `H` is the backend
+target; `B_H` is the runtime binding; `X` is runtime input; and `E` is execution
+evidence. These are ownership equations, not claims that each operation is
+currently executable.
+
+The derivation chain is explicit:
 
 ```text
-admit(S, H, W, p) =
-    coverage(p)
-  & payload_binding(S, p)
-  & capability(H, p)
-  & [memory_peak(p, H) <= memory_capacity(H)]
-  & [quality_drift(p, W) <= epsilon(W)]
+logical_model_id
+  -> transformation_ir_id
+  -> physical_variant_id
+  -> artifact_id
+  -> runtime_binding_id
+  -> execution_evidence_id
 ```
 
-No term can be inferred from another. A qtype may have known byte geometry
-without a quantizer or kernel; a plan may fit device memory while violating a
-quality bound; a numerically accepted variant may still exceed host staging or
-KV capacity under the target workload.
+Changing precision, layout, placement or artifact format may change the plan,
+variant and downstream identities without changing logical model identity.
 
-Variant choice is consequently a Pareto problem rather than a universal scalar
-ranking:
+Future selection may be expressed as a multi-objective problem:
+
+```math
+V^* \in \operatorname{Pareto}
+\left\{
+\varepsilon(V),
+\operatorname{memory}(V),
+\operatorname{latency}(V),
+\operatorname{energy}(V)
+\right\}
+```
+
+Constraint solving, measurement feedback, hardware/workload-aware selection,
+Pareto-front selection and adaptive recompilation are future compilation lanes.
+No optimizer, automatic selector or measured objective is implemented by the
+current architecture contract.
+
+Memory remains part of variant admission. Source storage, emitted artifacts,
+host staging, unified or device residency, persistent KV and temporary scratch
+have different owners and lifetimes. Checkpoint size alone is not a residency
+plan, and a qtype with known byte geometry does not imply that a quantizer or
+backend kernel exists.
+
+## End-to-End Target and Current State
+
+The complete architecture target is:
 
 ```text
-Pareto(S, H, W) = nondominated p in Admitted(S, H, W) over
-  { TTFT, -prefill_tokens_per_second, -decode_tokens_per_second,
-    host_peak, device_or_unified_peak, KV_peak, scratch_peak,
-    artifact_bytes, SSD_bytes, SSD_stall_time, quality_drift, energy }
+verified source
+  -> logical model
+  -> Transformation IR
+  -> physical variant
+  -> GGUF lowering
+  -> artifact
+  -> materialization
+  -> runtime descriptor
+  -> transformer execution
+  -> KV / prefill / decode
+  -> logits / sampling / tokenizer
+  -> text
 ```
 
-These equations define compiler objectives and evidence identity. No value in
-the objective set is a measured result; predictions remain distinct from
-measurements.
+The target chain does not currently execute. This public status surface is a
+compact snapshot, not a second roadmap; [`PROJECT.md`](PROJECT.md) remains the
+live authority.
 
-## Memory Is Part of the Lowering
-
-Checkpoint size is not a residency model. A dense 70B checkpoint contains
-about 140 GB of FP16 weights, while an ideal four-bit payload approaches 35 GB;
-prefill and decode additionally require persistent KV state, transient
-dequantization buffers, backend scratch and allocator headroom. The admissible
-variant is constrained by peak live bytes and memory traffic, not by whether
-the source files can be opened.
-
-Sparse and hybrid models make this distinction sharper. Total parameter bytes,
-active expert bytes per token, attention-state bytes and transformation scratch
-follow different schedules. YVEX therefore treats SSD source storage, emitted
-artifact storage, host staging, unified or device residency, persistent KV and
-temporary scratch as separate tiers with separate lifetimes. Completed source
-payload streaming is a build-time compilation capability; it is not
-inference-time SSD expert streaming.
-
-The accelerated release lane uses CUDA through the Driver API on GB10. Metal
-unified memory and ROCm device memory remain independent backend programs
-because allocator, placement and synchronization semantics cannot be inherited
-from a generic backend label.
-
-## Release Workload and Family Pressure
-
-The pinned DeepSeek-V4-Flash source occupies **159,629,046,930 bytes** across
-**46 safetensors shards** and contains **69,187 tensor records**. Its 43 main
-layers and one MTP layer combine SWA, CSA and HCA attention with four-stream
-manifold-constrained hyper-connections. The model declares **284B total
-parameters**, activates **13B per token**, routes six of 256 experts alongside
-one shared expert and supports a **1,048,576-token** context. Mixed FP4, FP8 and
-BF16 source constraints make transformation, quality, memory and backend
-capability inseparable compiler inputs.
-
-DeepSeek-V4-Flash is the sole v0.1.0 release target, not the architecture of the
-engine. Common owners also retain Qwen, Gemma, dense and MoE evidence so that
-family semantics enter through typed adapters rather than target-name branches.
-
-| Engineering pressure | What it forces the common system to represent | Current role |
-| --- | --- | --- |
-| Dense Qwen GQA | Grouped KV geometry, rotary subspaces, SwiGLU and output-head policy. | Source and tensor-profile evidence. |
-| Gemma hybrid attention | Sliding/global attention schedules, distinct position rules and tied output embeddings. | Dense/common mapping evidence. |
-| Qwen hybrid MoE | Recurrent linear-attention state beside conventional KV and routed expert state. | Header, naming and role-coverage evidence. |
-| DeepSeek-V4-Flash | Compressed attention, mHC residual topology, hash and learned routing, MTP and low-precision source companions. | Sole v0.1.0 release workload. |
-
-No row promotes Qwen or Gemma to release support. It prevents the common engine
-from being reduced to a DeepSeek-specific implementation.
-
-## Current Implementation Boundary
-
-The architecture above is the system contract. The table below is a compact
-snapshot, not a roadmap; [`PROJECT.md`](PROJECT.md) remains the live authority.
-
-| Boundary | Implemented truth |
+| Boundary | Current state |
 | --- | --- |
-| Source | Exact DeepSeek repository/revision verification, tokenizer and index admission, 46/46 header reconciliation, manifest-bound payload digests and bounded trusted payload reads are implemented. |
-| Logical model | The immutable DeepSeek architecture IR and complete 69,187-entry tensor coverage are implemented without a second source scan. |
-| Concrete lowering | All source contributions map to 1,360 deterministic DeepSeek GGUF descriptors with identity-bound payload ranges. This is format-specific evidence, not the artifact-neutral Transformation IR. |
-| Container foundation | Canonical qtype row geometry, a file-backed GGUF v3 reader and global ordered/padded layout admission are implemented. |
-| Backend foundation | CUDA bundle and exact primitive admission fail closed; bounded GB10 variants are reference-compared, while full DeepSeek operation coverage is not established. |
-| Compilation gap | The artifact-neutral Transformation IR, quantization execution, complete writer and complete DeepSeek GGUF are not implemented. |
-| Execution gap | Complete materialization, runtime binding, transformer execution and autoregressive generation are unsupported. Evaluation is unavailable and benchmark results are not measured. |
+| Exact DeepSeek source identity | complete |
+| 46-shard header and payload trust | complete |
+| Typed DeepSeek architecture IR | complete |
+| 69,187-tensor requirement coverage | complete |
+| 69,187-to-1,360 logical GGUF mapping | complete |
+| Bounded trusted payload streaming | complete |
+| Model-compilation architecture | complete — contract defined |
+| Transformation IR | active — not implemented |
+| Quantization and reference dequantization | blocked |
+| GGUF writer and complete artifact | blocked |
+| Full materialization | unsupported |
+| DeepSeek runtime descriptor and binding | unsupported |
+| Full transformer execution | unsupported |
+| Autoregressive text generation | unsupported |
+| Evaluation | unavailable |
+| Benchmark | not-measured; benchmark results are not measured |
 
-Tensor proof artifacts and bounded fixtures remain regression evidence only. A
-complete model artifact contains every tensor and metadata item required by one
-logical model. A supported model artifact additionally passes materialization,
-execution, generation, evaluation, benchmark and release admission. See
-[`MODEL_ARTIFACTS.md`](MODEL_ARTIFACTS.md) for the complete contract.
+## Current Release Target and Verified Evidence
 
-## Build and Inspect the Implemented Boundaries
+The v0.1.0 target is:
 
-The repository builds the native library, CLI and daemon:
-
-```sh
-make
+```text
+DeepSeek-V4-Flash
+  -> complete YVEX-produced GGUF
+  -> NVIDIA DGX Spark / CUDA
+  -> real autoregressive text generation
 ```
 
-Structural GGUF and bounded primitive paths require no external model:
+[DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash) is the
+sole v0.1.0 release target, not a currently supported generation target and not
+the architecture of the common engine. Qwen and Gemma remain engineering
+evidence at their recorded source, profile, mapping or bounded-proof stages;
+neither is a supported generation target. GLM remains planned with no canonical
+implemented target contract.
+
+The current exact DeepSeek evidence is:
+
+| Fact | Verified value |
+| --- | ---: |
+| Pinned source revision | `60d8d70770c6776ff598c94bb586a859a38244f1` |
+| Source shards admitted | 46 / 46 |
+| Source tensors indexed | 69,187 |
+| Upstream-verified shard bytes | 159,617,149,040 |
+| Mapped source contributions | 69,187 |
+| Logical GGUF descriptors | 1,360 |
+| Pinned-standard descriptors | 1,328 |
+| YVEX MTP extension descriptors | 32 |
+| Complete payload passes | 1 |
+| Short reads | 0 |
+| Digest mismatches | 0 |
+| Identity drift | 0 |
+
+The shard-byte count is the payload covered by authoritative upstream Git LFS
+SHA-256 values. It is not a local-directory footprint or a claim about emitted
+artifact size. The payload pass executed the trusted source reader; it performed
+no decoding, conversion, quantization or GGUF emission.
+
+## Engineering Method
+
+YVEX closes capabilities as owned, typed and consumed boundaries:
+
+- every capability has one canonical owner and every completed milestone has a
+  real downstream consumer;
+- planning and byte execution remain separate, while stage identities and
+  typed failure states are propagated rather than inferred;
+- higher layers re-admit the exact facts they own; reports do not promote
+  capabilities and a lower-layer success flag cannot stand in for them;
+- fixtures and selected tensors prove only their named boundary; an artifact
+  does not prove runtime support and a working kernel does not prove transformer
+  execution;
+- support requires end-to-end executable evidence, including failure and
+  lifecycle behavior, while unsupported higher stages remain explicit.
+
+This method keeps source truth, logical semantics, physical representation and
+execution evidence independently reviewable. It also keeps family-specific
+semantics behind typed adapters instead of target-name branches in common
+owners.
+
+## Build and Validation
+
+The repository builds the native library, CLI and daemon. These commands are
+current at this baseline:
 
 ```sh
-./yvex inspect tests/fixtures/gguf/valid-metadata-tensors.gguf
-./yvex integrity check \
-  --model tests/fixtures/gguf/valid-metadata-tensors.gguf
-./yvex backend cpu
-./yvex graph check --suite primitives --backend cpu
-```
-
-The pinned release source can be verified read-only when it is installed at the
-canonical local path:
-
-```sh
-SOURCE="$HOME/lab/models/hf/deepseek/DeepSeek-V4-Flash"
-
-./yvex source-manifest report \
-  --family deepseek \
-  --release v0.1.0 \
-  --target deepseek4-v4-flash \
-  --source "$SOURCE" \
-  --strict \
-  --include-config \
-  --include-blockers
-
-./yvex native-weights --source "$SOURCE" --limit 20
-./yvex backend cuda
-```
-
-Strict verification binds the source to
-`deepseek-ai/DeepSeek-V4-Flash@60d8d70770c6776ff598c94bb586a859a38244f1`.
-The source and GGUF commands expose admitted metadata and bounded payload
-capabilities; they do not execute the release model.
-
-## Validation
-
-```sh
-make smoke
+make -j4
 make check
+make smoke
 make check-docs
 make check-cuda
 ```
 
-`make check-cuda` requires a CUDA-capable host and compiles the canonical
-`cuda_kernels.cu` bundle before checking module admission, exact primitive
-variants, reference parity and rollback. Validation rules and repository
-ownership are defined in [`AGENTS.md`](AGENTS.md).
+`make check-cuda` requires a CUDA-capable host. It validates the bounded CUDA
+capabilities that exist; it does not execute the DeepSeek transformer. Operator
+procedures for implemented source, artifact and diagnostic boundaries live in
+[`docs/operator-runbook.md`](docs/operator-runbook.md).
 
-## Engineering References and Documentation
+## Repository Orientation
 
-YVEX pins external specifications and implementations at the behavior being
-studied. GGUF and qtype semantics are compared with pinned ggml/llama.cpp;
-vLLM and SGLang inform model-runner, attention, KV and MoE decomposition;
-TensorRT-LLM, CUTLASS, MLC, IREE and ExecuTorch provide independent compiler,
-lowering and NVIDIA execution references. None of their process models,
-formats, support matrices or performance claims is inherited. Exact revisions
-and YVEX owners are recorded in
-[`docs/reference-architecture.md`](docs/reference-architecture.md).
+| Area | Canonical owner | Responsibility |
+| --- | --- | --- |
+| Verified source | `src/source/` | Provenance, manifests, inventories, payload trust, immutable ranges and bounded delivery. |
+| Logical model | `src/model/architecture/`, `src/model/target/` | Typed family architecture, exact tensor requirements and target-specific mapping evidence. |
+| Compilation | Compilation track in [`PROJECT.md`](PROJECT.md) | Planned Transformation IR and physical-variant identity; executable owner code is not installed yet. |
+| Physical lowering and artifacts | `src/gguf/`, `src/artifact/`, `src/model/artifacts/` | GGUF ABI and geometry, concrete lowering, read-only artifact admission and artifact lifecycle. |
+| Materialization and runtime | `src/model/`, `src/runtime/`, `src/generation/` | Tensor ownership, runtime coordination and later model-backed state transitions. |
+| Graph and backend | `src/graph/`, `src/backend/` | Graph facts, memory/execution plans, backend admission and bounded primitives. |
+| Tests | `tests/` | Unit, fixture, CLI, live-source, refusal, lifecycle and guard evidence. |
+| Documentation | `PROJECT.md`, `MODEL_ARTIFACTS.md`, `docs/` | Project control and non-overlapping technical contracts. |
+
+[`docs/system-target.md`](docs/system-target.md) is the complete filesystem and
+module ownership map.
+
+## Project and Technical Documentation
 
 | Document | Authority |
 | --- | --- |
-| [`PROJECT.md`](PROJECT.md) | Current state, dependencies, release gates and complete ledger. |
-| [`docs/system-target.md`](docs/system-target.md) | Filesystem and module ownership. |
+| [`PROJECT.md`](PROJECT.md) | Current state, tracks, milestones, dependencies, release gates and Active Next. |
+| [`MODEL_ARTIFACTS.md`](MODEL_ARTIFACTS.md) | Artifact terminology, identity, admission and support boundaries. |
+| [`docs/contract.md`](docs/contract.md) | Lifecycle, ownership, failure and implemented behavior contracts. |
+| [`docs/api.md`](docs/api.md) | Public C APIs, typed results and lifetime boundaries. |
+| [`docs/reference-architecture.md`](docs/reference-architecture.md) | Pinned external research, specifications, implementations and YVEX owner mapping. |
 | [`docs/model-families.md`](docs/model-families.md) | Family integration and architecture semantics. |
-| [`docs/contract.md`](docs/contract.md) and [`docs/api.md`](docs/api.md) | Implemented behavior, lifetime and public C boundaries. |
-| [`MODEL_ARTIFACTS.md`](MODEL_ARTIFACTS.md) | Artifact identity, admission and lifecycle. |
-| [`docs/operator-runbook.md`](docs/operator-runbook.md) | Executable operator procedures. |
+| [`docs/operator-runbook.md`](docs/operator-runbook.md) | Executable procedures for currently implemented operator boundaries. |
+
+External references inform implementation and independent comparison; they do
+not confer compatibility, model support, backend support or performance claims.
 
 ## License
 

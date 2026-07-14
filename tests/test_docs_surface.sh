@@ -120,33 +120,103 @@ require_text AGENTS.md 'complete model artifact'
 require_text AGENTS.md 'supported model artifact'
 
 require_text README.md 'native C model-compilation and execution system'
-require_text README.md 'A finalized GGUF is one possible compiler output, not the'
-require_text README.md '[`PROJECT.md`](PROJECT.md) is the sole authority for current'
-require_text README.md '## The Controlled Model Lifecycle'
-require_text README.md '## Planning Semantics and Byte Execution'
-require_text README.md '## Variant Admission as a Constraint System'
-require_text README.md '## Current Implementation Boundary'
-require_text README.md 'Logical model'
-require_text README.md 'Transformation IR'
-require_text README.md 'Physical variant'
-require_text README.md 'Runtime binding'
-require_text README.md 'Execution evidence'
-require_text README.md 'admit(S, H, W, p) ='
-require_text README.md 'Pareto(S, H, W) = nondominated p in Admitted(S, H, W) over'
-require_text README.md 'These equations define compiler objectives and evidence identity. No value in'
-require_text README.md 'build-time compilation capability; it is not'
-require_text README.md 'inference-time SSD expert streaming.'
-require_text README.md 'DeepSeek-V4-Flash is the sole v0.1.0 release target'
-require_text README.md 'Common owners also retain Qwen, Gemma, dense and MoE evidence'
-require_text README.md 'The artifact-neutral Transformation IR, quantization execution,'
-require_text README.md 'transformer execution and autoregressive generation are unsupported.'
-require_text README.md 'benchmark results are not measured.'
+require_text README.md 'not release-ready or'
+require_text README.md 'currently supported**.'
+require_text README.md '[`PROJECT.md`](PROJECT.md) is the sole authority for current state'
+require_text README.md '## What YVEX Builds'
+require_text README.md '## Model Identity Is Not Artifact Identity'
+require_text README.md '## Compilation Architecture'
+require_text README.md '## End-to-End Target and Current State'
+require_text README.md '## Engineering Method'
+require_text README.md '## Repository Orientation'
+
+for boundary in \
+  'Verified source' \
+  'Logical model' \
+  'Transformation IR' \
+  'Physical variant' \
+  'Physical lowering' \
+  'Artifact' \
+  'Runtime binding' \
+  'Execution evidence'
+do
+  require_text README.md "$boundary"
+done
+
+require_text README.md 'logical_model_id != physical_variant_id != artifact_id'
+require_text README.md 'M --> T['
+require_text README.md 'T --> V['
+require_text README.md 'V --> L['
+require_text README.md 'L --> A['
+require_text README.md 'A --> R['
+require_text README.md 'R --> E['
+require_text README.md 'Planning plane — immutable facts'
+require_text README.md 'Byte-execution plane — owned mutable resources'
+require_text README.md 'Only trusted source payload streaming is implemented'
+require_text README.md 'P = \operatorname{Plan}(M, C_p, C_h, C_w)'
+require_text README.md 'V = \operatorname{Transform}(S, P)'
+require_text README.md 'A_F = \operatorname{Emit}_F(V)'
+require_text README.md 'B_H = \operatorname{Bind}_H(A_F)'
+require_text README.md 'E = \operatorname{Observe}(\operatorname{Run}(B_H, X))'
+require_text README.md 'Constraint solving, measurement feedback, hardware/workload-aware selection,'
+require_text README.md 'future compilation lanes.'
+
+require_text README.md '| Transformation IR | active — not implemented |'
+require_text README.md '| Quantization and reference dequantization | blocked |'
+require_text README.md '| GGUF writer and complete artifact | blocked |'
+require_text README.md '| Autoregressive text generation | unsupported |'
+require_text README.md '| Benchmark | not-measured; benchmark results are not measured |'
+require_text README.md '[DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash)'
+require_text README.md 'sole v0.1.0 release target, not a currently supported generation target'
+require_text README.md 'Qwen and Gemma'
+require_text README.md 'GLM remains'
+
+for evidence in \
+  '| Source shards admitted | 46 / 46 |' \
+  '| Source tensors indexed | 69,187 |' \
+  '| Upstream-verified shard bytes | 159,617,149,040 |' \
+  '| Mapped source contributions | 69,187 |' \
+  '| Logical GGUF descriptors | 1,360 |' \
+  '| Pinned-standard descriptors | 1,328 |' \
+  '| YVEX MTP extension descriptors | 32 |' \
+  '| Complete payload passes | 1 |' \
+  '| Short reads | 0 |' \
+  '| Digest mismatches | 0 |' \
+  '| Identity drift | 0 |'
+do
+  require_text README.md "$evidence"
+done
+
 reject_text README.md '**YVEX is a native C inference engine'
 reject_text README.md 'Active Next:'
+reject_text README.md 'YVEX currently generates DeepSeek text'
+reject_text README.md 'YVEX supports DeepSeek-V4-Flash'
+reject_text README.md 'YVEX compiles arbitrary models'
+reject_text README.md 'YVEX selects Pareto-optimal variants'
+reject_text README.md 'YVEX performs complete full-model quantization'
+reject_text README.md 'YVEX produces complete DeepSeek GGUF artifacts'
+reject_text README.md 'YVEX executes the complete transformer'
+reject_text README.md 'YVEX is release-ready'
+reject_text README.md 'production-ready'
+reject_text README.md 'blazing fast'
+reject_text README.md 'state of the art'
+
+if grep -nE 'V010\.|POST010\.' README.md; then
+  fail 'README exposes internal project-control IDs'
+fi
+if grep -nE '(/home/|/Users/|\$HOME/)' README.md; then
+  fail 'README exposes a local filesystem path'
+fi
+if grep -nF 'flowchart LR' README.md; then
+  fail 'README architecture diagrams must remain top-down'
+fi
 
 mermaid_count=$(grep -c '^```mermaid$' README.md)
 test "$mermaid_count" -ge 2 ||
   fail "README must contain at least two Mermaid diagrams: $mermaid_count"
+flowchart_td_count=$(grep -c '^flowchart TD$' README.md)
+test "$flowchart_td_count" -eq "$mermaid_count" ||
+  fail "README Mermaid diagrams must be top-down: $flowchart_td_count/$mermaid_count"
 awk '
 /^```mermaid$/ {
   if (in_mermaid) exit 1
@@ -162,6 +232,25 @@ END {
   if (in_mermaid || opened != closed) exit 1
 }
 ' README.md || fail "README Mermaid fences are unbalanced"
+
+math_count=$(grep -c '^```math$' README.md)
+test "$math_count" -eq 2 ||
+  fail "README must contain the pipeline and Pareto formulations: $math_count"
+awk '
+/^```math$/ {
+  if (in_math) exit 1
+  in_math = 1
+  opened++
+  next
+}
+in_math && /^```$/ {
+  in_math = 0
+  closed++
+}
+END {
+  if (in_math || opened != closed) exit 1
+}
+' README.md || fail "README math fences are unbalanced"
 
 for target in $(grep -oE '\]\([^)]+\)' README.md |
   sed 's/^](//; s/)$//' |
