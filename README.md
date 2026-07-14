@@ -20,6 +20,80 @@ remain unimplemented, blocked or unsupported as specified below.
 [`PROJECT.md`](PROJECT.md) is the sole authority for current state, tracks,
 milestones, dependencies, release gates and the Active Next milestone.
 
+Development is human-directed, repository-grounded and evidence-gated. A
+reasoning LLM expands and compresses the design space; a repository coding
+agent implements bounded candidates; an independent audit decides whether the
+candidate may become accepted project state. Agent activity is never treated
+as project progress by itself.
+
+## Engineering Method
+
+YVEX uses LLMs and coding agents as engineering instruments, not project
+authorities. The human authority chooses the outcome, scope, priority and
+trade-offs, interprets evidence and accepts or rejects results. The reasoning
+LLM studies the repository, papers, specifications and upstream
+implementations; distinguishes verified facts from inferences and proposals;
+and compiles architectural intent into ownership and acceptance criteria. The
+coding agent reads the actual implementation, chooses coherent internal APIs
+inside the prescribed boundary, implements one delta and exercises its
+success, refusal, failure and cleanup paths.
+
+The implementation is still a candidate. Its commit and closure report are
+audited independently against the remote diff, owner placement, real consumers,
+duplicate state, tests, failure behavior and claim boundaries. A pass advances
+the accepted repository; a rejection leaves the accepted state unchanged and
+returns a repair delta.
+
+```mermaid
+flowchart TD
+    I["Papers, specifications,<br/>upstream code and repository"] --> D["Human / reasoning-LLM<br/>design dialogue"]
+    D --> C["Persistent repository<br/>contract"]
+    C --> R["Bounded delivery"]
+    R --> P["Coding-agent<br/>candidate patch"]
+    P --> E["Executable evidence<br/>and closure assertion"]
+    E --> A["Independent remote diff<br/>and implementation audit"]
+    A -->|pass| S["Accepted repository state"]
+    A -->|reject| F["Repair delta"]
+    F --> P
+    S --> N["Next design decision"]
+```
+
+Conversations are exploratory working memory; the repository is durable
+project memory. A conclusion that changes later implementation must become a
+contract, owner boundary, type, test, guard, reference decision or explicit
+project transition. Prompts and closure reports can describe a candidate but
+cannot replace the current repository.
+
+A delivery is the intermediate representation between intent and a patch. It
+combines the persistent contracts already in the repository with one bounded
+delta, mandatory ownership, implementation freedom within that ownership, hard
+acceptance and proportionate validation. It specifies the required after-state
+without inventing a false internal API before the coding agent has inspected
+the code.
+
+The process can be written compactly as:
+
+```text
+D_n = compile(I_n, S_n, C_n, R_n)
+P_n = implement(D_n, S_n)
+A_n = audit(P_n, E_n, S_n)
+
+S_(n+1) = merge(S_n, P_n)  if A_n = pass
+S_(n+1) = S_n              if A_n = reject
+D_(n+1) = repair(P_n, A_n) if A_n = reject
+```
+
+`I_n` is human intent, `S_n` the accepted repository state, `C_n` its
+persistent contracts, `R_n` the admitted reference evidence, `D_n` the
+delivery, `P_n` the candidate patch, `E_n` its executable evidence and `A_n`
+the independent audit. This models the engineering process; it is not an
+implemented YVEX runtime subsystem.
+
+Progress is the accepted transition from `S_n` to `S_(n+1)` and the behavior a
+real consumer can use. Token volume, session duration, diff size, file count,
+generated-code volume, report length, renaming, relocation and diagnostic
+output alone do not establish completion.
+
 ## What YVEX Builds
 
 The system target preserves ownership and identity across a controlled model
@@ -67,17 +141,8 @@ logical_model_id != physical_variant_id != artifact_id
 One logical model may admit several physical variants by changing role-specific
 precision, storage representation, tensor layout, expert aggregation layout,
 placement, hardware profile, workload profile or numeric acceptance bounds.
-Conceptually:
-
-```text
-one logical model
-  -> reference physical variant
-  -> memory-constrained physical variant
-  -> hardware-specific physical variant
-```
-
 These are architectural possibilities, not complete variants that YVEX emits
-today. Changing a physical choice does not by itself change the logical model.
+today; changing a physical choice does not by itself change the logical model.
 
 An artifact is the concrete serialized output of lowering and emission. Its
 existence does not prove complete tensor coverage, runtime compatibility,
@@ -91,18 +156,12 @@ benchmark readiness. YVEX therefore distinguishes:
   materialization, runtime, generation, evaluation, benchmark and release
   gates.
 
-Runtime binding is a separate admission identity associating an artifact with
-materialized tensor views, memory placement, backend operations, graph and
-runtime descriptors, persistent state, ownership and cleanup. Execution
-evidence is separate again: it records what actually ran, under which exact
-source, variant, artifact, machine and workload. A plan cannot substitute for
-an artifact; an artifact cannot substitute for runtime execution; and a
-primitive test cannot substitute for transformer execution.
-
-Execution evidence may include independent reference comparisons, numeric
-bounds, typed failure and lifecycle behavior, backend parity, transformer and
-prefill/decode correctness, throughput, memory use and evaluation results. Each
-observation remains bound to the identities and inputs that produced it.
+Runtime binding separately associates an artifact with materialized views,
+placement, backend operations, descriptors, persistent state and cleanup.
+Execution evidence records what actually ran under an exact source, variant,
+artifact, machine and workload. A plan cannot substitute for an artifact, an
+artifact cannot substitute for runtime execution, and a primitive comparison
+cannot substitute for transformer execution.
 
 ## Compilation Architecture
 
@@ -191,27 +250,13 @@ B_H = \operatorname{Bind}_H(A_F)
 E = \operatorname{Observe}(\operatorname{Run}(B_H, X))
 ```
 
-Here `S` is the verified source payload; `M` is the logical model; `C_p`,
-`C_h` and `C_w` are precision, hardware and workload constraints; `P` is the
-Transformation IR or transformation plan; `V` is the physical model variant;
-`F` is the artifact format; `A_F` is the emitted artifact; `H` is the backend
-target; `B_H` is the runtime binding; `X` is runtime input; and `E` is execution
-evidence. These are ownership equations, not claims that each operation is
-currently executable.
-
-The derivation chain is explicit:
-
-```text
-logical_model_id
-  -> transformation_ir_id
-  -> physical_variant_id
-  -> artifact_id
-  -> runtime_binding_id
-  -> execution_evidence_id
-```
-
-Changing precision, layout, placement or artifact format may change the plan,
-variant and downstream identities without changing logical model identity.
+Here `S` is verified source payload, `M` the logical model, `C_p`, `C_h` and
+`C_w` the precision, hardware and workload constraints, `P` the Transformation
+IR, `V` the physical variant, `A_F` the artifact in format `F`, `B_H` its
+runtime binding to hardware `H`, `X` runtime input and `E` execution evidence.
+These are ownership equations, not claims that each operation is executable.
+Precision, layout, placement or format may change every identity after `M`
+without changing logical model identity.
 
 Future selection may be expressed as a multi-objective problem:
 
@@ -318,26 +363,59 @@ SHA-256 values. It is not a local-directory footprint or a claim about emitted
 artifact size. The payload pass executed the trusted source reader; it performed
 no decoding, conversion, quantization or GGUF emission.
 
-## Engineering Method
+## Vertical-First Generalization
 
-YVEX closes capabilities as owned, typed and consumed boundaries:
+YVEX does not begin with a speculative universal model framework. It closes one
+exact vertical, observes which constraints survive implementation, extracts
+only those invariants into common owners and then subjects them to another
+family:
 
-- every capability has one canonical owner and every completed milestone has a
-  real downstream consumer;
-- planning and byte execution remain separate, while stage identities and
-  typed failure states are propagated rather than inferred;
-- higher layers re-admit the exact facts they own; reports do not promote
-  capabilities and a lower-layer success flag cannot stand in for them;
-- fixtures and selected tensors prove only their named boundary; an artifact
-  does not prove runtime support and a working kernel does not prove transformer
-  execution;
-- support requires end-to-end executable evidence, including failure and
-  lifecycle behavior, while unsupported higher stages remain explicit.
+```text
+exact vertical
+  -> implementation pressure
+  -> observed invariant
+  -> common owner
+  -> second-family pressure
+  -> harden or split
+  -> preserved working verticals
+```
 
-This method keeps source truth, logical semantics, physical representation and
-execution evidence independently reviewable. It also keeps family-specific
-semantics behind typed adapters instead of target-name branches in common
-owners.
+DeepSeek-V4-Flash is the release vertical. Its compressed attention, mHC
+residual topology, hash and learned routing, low-precision companions, 256-way
+expert layout and memory pressure force concrete architecture decisions. They
+do not authorize DeepSeek-name branches inside common source, qtype, GGUF,
+artifact, residency or backend owners. Qwen and Gemma act as falsifiers of
+assumptions about attention state, output tying, dense versus routed FFNs and
+common tensor semantics even though neither is a v0.1.0 generation target.
+
+A mechanism may be common from its first consumer when its contract is
+intrinsically format-, storage-, arithmetic-, lifecycle- or backend-general.
+Model semantics remain family-specific until repeated evidence establishes an
+invariant. When another family contradicts the abstraction, YVEX strengthens
+the contract or splits ownership at the semantic boundary; it does not hide the
+contradiction behind a target-name conditional or break an accepted vertical.
+
+The operating method is visible in the current architecture:
+
+| Method rule | Concrete YVEX consequence |
+| --- | --- |
+| Repository identity before interpretation | The DeepSeek repository, revision, index, tokenizer, 46 shards, 69,187 tensor records and payload digests are admitted before model semantics consume them. |
+| Semantics before representation | Architecture IR and exact tensor coverage define the logical model before the concrete GGUF lowering assigns format names and storage facts. |
+| Evidence before capability | Row-aware qtype geometry, the file-backed GGUF reader and global layout validator close container properties without claiming a complete model artifact. |
+| Fail closed at the physical boundary | CUDA context, memory, generated bundle, resolved function and exact primitive variant are separate states; absent evidence refuses rather than projecting generic readiness. |
+| Second-family pressure | Qwen and Gemma evidence remains active so common owners cannot silently collapse into the DeepSeek release path. |
+| Implementation as architectural learning | Payload streaming showed that byte delivery and transformation semantics require distinct owners, which introduced the artifact-neutral Transformation IR boundary before quantization. |
+
+Primary model sources and papers define semantics; specifications define
+formats and ABIs; mature repositories provide comparative implementation
+evidence; hardware documentation defines physical constraints. None transfers
+its API, runtime topology, support matrix, benchmark or claims to YVEX. Only
+YVEX tests and identity-bound measurements determine YVEX capability.
+
+When implementation exposes a false assumption, missing constraint, misplaced
+owner or invalid abstraction, the result must return to a persistent contract,
+test, guard or project decision. A lesson left only in design dialogue or an
+agent closure report is not durable architecture.
 
 ## Build and Validation
 

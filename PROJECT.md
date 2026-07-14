@@ -231,6 +231,114 @@ memory, persistent KV, and temporary scratch. Completed source payload
 streaming is build-time source access; it is not inference-time SSD expert
 streaming.
 
+### 3.6 Engineering Construction Method
+
+YVEX is constructed through human-directed, repository-grounded, independently
+verified state transitions. The method separates architectural authority,
+reasoning assistance, repository implementation, and acceptance so that no
+conversation, prompt, agent, or report can promote itself into project truth.
+
+#### Authority And Roles
+
+The human project authority owns the product outcome, scope, priority,
+trade-offs, architectural judgment, interpretation of evidence, and final
+acceptance or rejection. Reasoning LLMs and repository coding agents assist
+that authority; neither replaces it.
+
+| Role | Owned contribution | Explicit non-ownership |
+| --- | --- | --- |
+| Human project authority | Chooses product direction, scopes work, resolves trade-offs, judges architecture, interprets evidence, and accepts or rejects results. | Does not delegate project authority merely by requesting analysis or implementation. |
+| Reasoning LLM | Compresses large repository contexts, studies primary sources and mature implementations, compares alternatives, exposes hidden assumptions, separates facts from inferences and proposals, and compiles intent into ownership and acceptance criteria. | Does not own repository truth, capability state, or capability promotion. |
+| Repository coding agent | Reads the actual owners and contracts, implements one bounded delta, chooses coherent internal APIs after inspection, tests success/refusal/failure/cleanup, and produces a candidate patch, commit, and closure assertion. | Does not redefine the product outcome or certify its own candidate as accepted truth. |
+| Independent verifier | Reconstructs the accepted baseline, reads the complete remote diff, checks ownership and consumers, executes proportionate validation, audits claims and project-state changes, and returns pass or repair. | Does not infer acceptance from the implementation agent's report or activity volume. |
+| Repository | Stores the accepted implementation, contracts, tests, guards, evidence boundaries, and project decisions used by later work. | Does not treat chat history, prompts, or unmerged candidates as durable state. |
+
+Conversations are exploratory working memory. The repository is durable project
+memory. Any conclusion that changes later implementation must become an owned
+contract, type boundary, test, guard, acceptance criterion, reference decision,
+or explicit project-control update. Chat transcripts, delivery prompts, and
+closure reports may explain a candidate; they never substitute for the current
+repository.
+
+#### Delivery And Candidate Implementation
+
+A delivery is the intermediate representation between architectural intent and
+a repository patch. A technical delivery combines:
+
+```text
+persistent repository contracts
++ one row-specific delta
++ mandatory ownership
++ implementation freedom inside that ownership
++ hard acceptance criteria
++ focused and complete validation
+```
+
+The delivery defines the required after-state and forbidden shortcuts. It does
+not invent a final internal API before the coding agent has inspected current
+types, owners, consumers, failure conventions, and tests. Implementation freedom
+never overrides the mandatory boundary or acceptance criteria.
+
+The coding agent's closure report is an assertion requiring independent
+verification. The verifier checks the remote commit and baseline, complete
+diff, owner placement, real consumers, duplicate state, focused tests, full
+validation where applicable, refusal/failure/cleanup behavior, claim limits,
+and any proposed project transition. An implementation candidate may contain
+an atomic ledger transition, but no successor implementation proceeds until
+that closure is accepted. Rejection preserves the previously accepted state
+and produces a repair delta or reopens the same outcome before progression.
+
+Progress is the sequence of accepted state transitions and behavior consumed
+by a real downstream owner. Token use, session duration, diff size, file count,
+report length, generated-code volume, relocation, renaming, and diagnostic
+output alone are not completion evidence.
+
+#### Vertical-First Generalization
+
+YVEX develops common architecture under pressure from exact working verticals:
+
+```text
+exact vertical
+-> implementation pressure
+-> observed invariant
+-> common owner
+-> second-family pressure
+-> harden or split
+-> preserved working verticals
+```
+
+DeepSeek-V4-Flash is the current release vertical and supplies concrete
+attention, mHC, MoE, low-precision, payload, and memory constraints. It is not
+permission to put DeepSeek names or semantics into common source, qtype, GGUF,
+artifact, residency, backend, or runtime owners. Qwen, Gemma, and later exact
+models act as falsifiers of common assumptions even when they are not release
+targets.
+
+A mechanism may be common from its first consumer when its contract is
+intrinsically format-, storage-, arithmetic-, lifecycle-, or backend-general.
+Model semantics remain family-specific until repeated evidence establishes a
+stable invariant. When another family contradicts an abstraction, strengthen
+the common contract or split ownership at the real semantic boundary. Never
+add a target-name conditional to conceal the contradiction, and never weaken a
+working vertical to preserve a false abstraction.
+
+#### References, Audit, And Learning Feedback
+
+Primary model sources and papers define model semantics. Specifications define
+formats and ABIs. Mature repositories provide comparative implementation
+evidence. Hardware documentation defines physical constraints. Only YVEX tests
+and identity-bound measurements determine YVEX capability. Reusing an external
+design transfers none of its API, process topology, support matrix, benchmark,
+or claim.
+
+Implementation is also an architectural experiment. A false assumption,
+missing constraint, misplaced owner, invalid abstraction, or inadequate test
+revealed by a wave must return to persistent contracts before later work
+depends on it. The source-payload/Transformation-IR separation is one such
+feedback transition: implementation evidence showed that byte delivery and
+transformation semantics require distinct owners. Knowledge that remains only
+in a conversation or closure report is not part of the architecture.
+
 ## 4. Current Hard Truth
 
 | Boundary | Current truth |
