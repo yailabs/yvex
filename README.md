@@ -243,11 +243,13 @@ and not inference-time SSD expert streaming.
 ### Compact model
 
 ```math
-P = \operatorname{Plan}(M, C_p, C_h, C_w)
-V = \operatorname{Transform}(S, P)
-A_F = \operatorname{Emit}_F(V)
-B_H = \operatorname{Bind}_H(A_F)
-E = \operatorname{Observe}(\operatorname{Run}(B_H, X))
+\begin{aligned}
+P   &= \Pi(M; C_p, C_h, C_w) \\
+V   &= \mathcal{T}(S, P) \\
+A_F &= \mathcal{E}_F(V) \\
+B_H &= \mathcal{B}_H(A_F) \\
+E   &= \mathcal{O}\left(\mathcal{R}(B_H, X)\right)
+\end{aligned}
 ```
 
 Here `S` is verified source payload, `M` the logical model, `C_p`, `C_h` and
@@ -258,18 +260,17 @@ These are ownership equations, not claims that each operation is executable.
 Precision, layout, placement or format may change every identity after `M`
 without changing logical model identity.
 
+The operators denote planning, transformation, format-specific emission,
+hardware binding, execution and observation, respectively.
+
 Future selection may be expressed as a multi-objective problem:
 
 ```math
-V^* \in \operatorname{Pareto}
-\left\{
-\varepsilon(V),
-\operatorname{memory}(V),
-\operatorname{latency}(V),
-\operatorname{energy}(V)
-\right\}
+V^{*} \in \mathcal{F}\left(\varepsilon(V), m(V), \ell(V), e(V)\right)
 ```
 
+Here `F` is the admitted Pareto front; `epsilon`, `m`, `l` and `e` denote
+numeric error, peak memory, latency and energy.
 Constraint solving, measurement feedback, hardware/workload-aware selection,
 Pareto-front selection and adaptive recompilation are future compilation lanes.
 No optimizer, automatic selector or measured objective is implemented by the
