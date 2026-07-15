@@ -60,9 +60,10 @@ function safeStaticPath(staticRoot: string, pathname: string): string | null {
     return null;
   }
   if (decoded.includes("\0")) return null;
-  const candidate = resolve(staticRoot, `.${decoded}`);
-  const prefix = staticRoot.endsWith(sep) ? staticRoot : `${staticRoot}${sep}`;
-  return candidate === staticRoot || candidate.startsWith(prefix) ? candidate : null;
+  const normalizedRoot = resolve(staticRoot);
+  const candidate = resolve(normalizedRoot, `.${decoded}`);
+  const prefix = `${normalizedRoot}${sep}`;
+  return candidate === normalizedRoot || candidate.startsWith(prefix) ? candidate : null;
 }
 
 async function serveStatic(

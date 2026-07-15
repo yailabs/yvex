@@ -5,7 +5,7 @@
  * Invariants: the server listens on an ephemeral loopback port and closes after each assertion.
  * Boundary: HTTP contract success is not YVEX runtime evidence.
  */
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,6 +20,7 @@ const directories: string[] = [];
 async function withServer(run: (baseUrl: string) => Promise<void>): Promise<void> {
   const staticRoot = await mkdtemp(join(tmpdir(), "yvex-operator-static-"));
   directories.push(staticRoot);
+  await writeFile(join(staticRoot, "index.html"), "<!doctype html><title>YVEX operator</title>");
   const server = createOperatorHttpServer(new OperatorAdapter(testConfig()), staticRoot);
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -42,6 +43,14 @@ afterEach(async () => {
 });
 
 describe("read-only HTTP boundary", () => {
+  it("serves the SPA entrypoint for the canonical root path", async () => {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/`);
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain("YVEX operator");
+    });
+  });
+
   it("rejects mutation methods and arbitrary producer selectors", async () => {
     await withServer(async (baseUrl) => {
       const mutation = await fetch(`${baseUrl}/api/v1/views/overview`, { method: "POST" });
