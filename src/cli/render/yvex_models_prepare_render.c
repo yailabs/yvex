@@ -377,7 +377,8 @@ static void prepare_source_report_build(
     } else if (!tokenizer_map_present) {
         report->next = "V010.MAP.7";
     } else {
-        report->next = "V010.QUANT.2";
+        report->next = target && strcmp(target->family, "deepseek") == 0
+            ? "V010.GGUF.WRITER.1" : "not-scheduled";
     }
     report->final_status = "model-prepare-unsupported";
     report->downloaded_target_resolved = 1;
@@ -391,7 +392,10 @@ static void prepare_source_report_build(
     } else if (!tokenizer_map_present) {
         report->top_blocker = "missing-tokenizer-map";
     } else {
-        report->top_blocker = "qtype-compute-refusal-matrix-missing";
+        report->top_blocker =
+            target && strcmp(target->family, "deepseek") == 0
+                ? "gguf-writer-missing"
+                : "family-quantization-plan-unimplemented";
     }
 
     report->reason =
@@ -411,7 +415,11 @@ static void prepare_source_report_build(
                                      : "output head mapping missing / artifact path missing")
                               : !tokenizer_map_present
                                     ? "tokenizer metadata mapping / artifact path missing"
-                                    : "qtype compute/refusal matrix missing";
+                                    : target &&
+                                              strcmp(target->family,
+                                                     "deepseek") == 0
+                                          ? "GGUF writer missing"
+                                          : "family quantization plan unimplemented";
 }
 
 static void prepare_source_report_render_porcelain(

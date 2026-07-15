@@ -62,7 +62,8 @@ static int test_open_validate_write(void)
     YVEX_TEST_ASSERT(summary.requires_imatrix_count == 1, "requires imatrix count");
     YVEX_TEST_ASSERT(summary.storage_supported_count == 2,
                      "Q8_0 and Q2_K have storage geometry");
-    YVEX_TEST_ASSERT(summary.compute_supported_count == 0, "quant compute unsupported");
+    YVEX_TEST_ASSERT(summary.compute_supported_count == 2,
+                     "quant policy projects canonical CPU compute truth");
     rule = yvex_quant_policy_rule_at(policy, 0);
     YVEX_TEST_ASSERT(rule && rule->role == YVEX_TENSOR_ROLE_TOKEN_EMBEDDING, "role parsed");
     YVEX_TEST_ASSERT(rule->qtype == YVEX_QUANT_QTYPE_Q8_0, "qtype parsed");

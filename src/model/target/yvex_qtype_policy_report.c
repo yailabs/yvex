@@ -22,6 +22,7 @@
 #include "yvex_qtype_policy_report.h"
 
 #include "yvex_model_target_private.h"
+#include "../../gguf/yvex_quant_numeric.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -222,8 +223,8 @@ static void qtype_policy_build_state(const yvex_model_target_request *request,
 
     memset(state, 0, sizeof(*state));
     state->mapping_gate_status = "passed-for-artifact-planning";
-    state->top_blocker = "missing-per-role-qtype-support";
-    state->next_row = "V010.QUANT.1";
+    state->top_blocker = "family-quantization-plan-unimplemented";
+    state->next_row = "not-scheduled";
     state->status = "policy-reported";
     state->bracket = "reported";
 
@@ -341,7 +342,7 @@ static void qtype_policy_prepare(const yvex_model_target_request *request,
     snprintf(report->family, sizeof(report->family), "%s", family);
     snprintf(report->stage, sizeof(report->stage), "report-only");
     snprintf(report->qtype_policy_status, sizeof(report->qtype_policy_status),
-             state->status);
+             "%s", state->status);
     snprintf(report->artifact_status, sizeof(report->artifact_status), "missing");
     snprintf(report->runtime_status, sizeof(report->runtime_status), "unsupported");
     snprintf(report->generation_status, sizeof(report->generation_status),
@@ -467,23 +468,65 @@ static void qtype_policy_add_contract(const yvex_model_target_request *request,
         report, "qtype-policy", request->output_contract);
 }
 
+/* Projects policy candidates through the canonical numeric registry. */
+static void qtype_policy_numeric_lists(char candidates[96],
+                                       char refused[96])
+{
+    static const unsigned int policy_qtypes[] = {
+        YVEX_GGUF_QTYPE_F16, YVEX_GGUF_QTYPE_BF16,
+        YVEX_GGUF_QTYPE_F32, YVEX_GGUF_QTYPE_Q8_0,
+        YVEX_GGUF_QTYPE_Q2_K, YVEX_GGUF_QTYPE_Q4_K,
+        YVEX_GGUF_QTYPE_IQ2_XXS
+    };
+    unsigned int index;
+
+    candidates[0] = '\0';
+    refused[0] = '\0';
+    for (index = 0u; index < sizeof(policy_qtypes) /
+                              sizeof(policy_qtypes[0]); ++index) {
+        const yvex_quant_numeric_capability *capability =
+            yvex_quant_numeric_capability_at(policy_qtypes[index]);
+        const char *name = yvex_gguf_qtype_name(policy_qtypes[index]);
+        char *target = capability && capability->encoder_available &&
+                capability->reference_decoder_available &&
+                capability->dedicated_cpu_compute_available &&
+                capability->dedicated_cuda_compute_available
+            ? candidates : refused;
+        size_t capacity = 96u;
+        size_t used = strlen(target);
+
+        if (used < capacity)
+            (void)snprintf(target + used, capacity - used, "%s%s",
+                           used ? "," : "", name);
+    }
+}
+
 static void qtype_policy_add_table(const qtype_policy_state *state,
                                    yvex_model_target_report *report)
 {
+    char candidates[96];
+    char refused[96];
+
+    qtype_policy_numeric_lists(candidates, refused);
     yvex_model_target_report_add_row(report, "QTYPE POLICY");
     yvex_model_target_report_add_row(
         report,
         "TARGET  FAMILY  SOURCE_DTYPE  POLICY  PREFERRED  CANDIDATES  REFUSED  STATUS  NEXT");
     yvex_model_target_report_add_row(
         report,
-        "%s  %s  F32=%lu F16=%lu BF16=%lu other=%lu  artifact-planning-storage-policy  F16  F16,BF16,F32  Q8_0,Q4_K,Q2_K,IQ2_XXS  %s  %s",
+        "%s  %s  F32=%lu F16=%lu BF16=%lu other=%lu  artifact-planning-storage-policy  F16  %s  %s  %s  %s",
         report->target_id, report->family, state->f32_count, state->f16_count,
-        state->bf16_count, state->other_count, state->status, state->next_row);
+        state->bf16_count, state->other_count, candidates, refused,
+        state->status, state->next_row);
 }
 
 static void qtype_policy_add_audit(const qtype_policy_state *state,
                                    yvex_model_target_report *report)
 {
+    const yvex_quant_numeric_capability *q8 =
+        yvex_quant_numeric_capability_at(YVEX_GGUF_QTYPE_Q8_0);
+    const yvex_quant_numeric_capability *q2 =
+        yvex_quant_numeric_capability_at(YVEX_GGUF_QTYPE_Q2_K);
     yvex_model_target_report_add_row(report, "source_dtype_profile_status: %s",
                                      state->header_exists ? "profiled" : "missing");
     yvex_model_target_report_add_row(report, "source_dtype_counts: F32=%lu,F16=%lu,BF16=%lu",
@@ -502,18 +545,34 @@ static void qtype_policy_add_audit(const qtype_policy_state *state,
                                      "missing_role_report_status: missing-role-report-blocked");
     yvex_model_target_report_add_row(
         report,
-        "qtype_policy_basis: header-only-source-metadata+existing-yvex-policy-table");
+        "qtype_policy_basis: header-only-source-metadata+canonical-numeric-registry");
     yvex_model_target_report_add_row(report, "qtype_policy_status: reported");
     yvex_model_target_report_add_row(
         report,
-        "refusal_reasons: Q8_0:emit-quantize-compute-deferred Q4_K:calibration-deferred Q2_K:calibration-deferred IQ2_XXS:imatrix-deferred");
+        "numeric_capability.Q8_0: encoder=%s decoder=%s cpu=%s cuda=%s calibration=%s",
+        q8 && q8->encoder_available ? "available" : "unavailable",
+        q8 && q8->reference_decoder_available ? "available" : "unavailable",
+        q8 && q8->dedicated_cpu_compute_available ? "available" : "unavailable",
+        q8 && q8->dedicated_cuda_compute_available ? "available" : "unavailable",
+        q8 ? yvex_quant_calibration_name(q8->calibration) : "unknown");
+    yvex_model_target_report_add_row(
+        report,
+        "numeric_capability.Q2_K: encoder=%s decoder=%s cpu=%s cuda=%s calibration=%s",
+        q2 && q2->encoder_available ? "available" : "unavailable",
+        q2 && q2->reference_decoder_available ? "available" : "unavailable",
+        q2 && q2->dedicated_cpu_compute_available ? "available" : "unavailable",
+        q2 && q2->dedicated_cuda_compute_available ? "available" : "unavailable",
+        q2 ? yvex_quant_calibration_name(q2->calibration) : "unknown");
+    yvex_model_target_report_add_row(
+        report,
+        "refusal_reasons: Q4_K:encoder-unavailable IQ2_XXS:encoder-unavailable");
     yvex_model_target_report_add_row(report, "artifact_identity_status: missing");
     yvex_model_target_report_add_row(report, "runtime_descriptor_status: missing");
     yvex_model_target_report_add_row(report, "graph_consumer_status: missing");
     yvex_model_target_report_add_row(report, "backend_residency_status: missing");
     yvex_model_target_report_add_row(
         report,
-        "downstream_blockers: per_role_qtype=deferred compute_refusal_matrix=deferred calibration_imatrix=deferred artifact_emit=missing artifact_identity=missing runtime_descriptor=missing graph_consumer=missing backend_residency=missing generation_runtime=missing eval_benchmark=missing");
+        "downstream_blockers: family_quantization_plan=missing artifact_emit=missing artifact_identity=missing runtime_descriptor=missing graph_consumer=missing backend_residency=missing generation_runtime=missing eval_benchmark=missing");
     yvex_model_target_report_add_row(report, "next_required_rows: %s",
                                      state->next_row);
     yvex_model_target_report_common_tail(report);
@@ -545,6 +604,8 @@ int yvex_qtype_policy_report_build(const yvex_model_target_request *request,
                                    yvex_error *err)
 {
     qtype_policy_state state;
+    char candidates[96];
+    char refused[96];
     const char *family;
 
     if (!request || !report) {
@@ -579,12 +640,13 @@ int yvex_qtype_policy_report_build(const yvex_model_target_request *request,
         report, "source_dtype: F32=%lu F16=%lu BF16=%lu other=%lu",
         state.f32_count, state.f16_count, state.bf16_count, state.other_count);
     if (strcmp(state.status, "policy-reported") == 0) {
+        qtype_policy_numeric_lists(candidates, refused);
         yvex_model_target_report_add_row(report,
                                          "policy: artifact-planning-storage-policy");
         yvex_model_target_report_add_row(report, "preferred: F16");
-        yvex_model_target_report_add_row(report, "candidates: F16,BF16,F32");
-        yvex_model_target_report_add_row(report,
-                                         "refused: Q8_0,Q4_K,Q2_K,IQ2_XXS");
+        yvex_model_target_report_add_row(report, "candidates: %s",
+                                         candidates);
+        yvex_model_target_report_add_row(report, "refused: %s", refused);
     }
     yvex_model_target_report_add_row(report, "top_blocker: %s",
                                      state.top_blocker);

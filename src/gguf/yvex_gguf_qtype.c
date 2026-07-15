@@ -20,6 +20,7 @@
  *   this owner reads tensor geometry only and never reads tensor payload bytes.
  */
 #include "yvex_gguf_private.h"
+#include "yvex_quant_numeric.h"
 
 #include <limits.h>
 #include <stddef.h>
@@ -338,9 +339,10 @@ int yvex_gguf_qtype_supported_for_storage(unsigned int qtype, const char **reaso
 /* Contract: reports YVEX decoder availability independently from geometry. */
 int yvex_gguf_qtype_reference_dequantization_supported(unsigned int qtype)
 {
-    const yvex_gguf_qtype_geometry *geometry = yvex_gguf_qtype_geometry_find(qtype);
+    const yvex_quant_numeric_capability *capability =
+        yvex_quant_numeric_capability_at(qtype);
 
-    return geometry && geometry->reference_dequantization_supported;
+    return capability && capability->reference_decoder_available;
 }
 
 /* Contract: returns a stable identity/admission refusal without calculation. */
@@ -466,7 +468,8 @@ void yvex_gguf_qtype_report_row_from_geometry(const yvex_gguf_qtype_geometry *ge
     row->block_size = geometry ? geometry->block_size : 0u;
     row->bytes_per_block = geometry ? geometry->bytes_per_block : 0u;
     row->scalar_width = geometry ? geometry->scalar_width : 0u;
-    row->reference_dequantization = geometry && geometry->reference_dequantization_supported
+    row->reference_dequantization = geometry &&
+        yvex_gguf_qtype_reference_dequantization_supported(geometry->qtype)
         ? "available"
         : "unavailable";
     if (!geometry) {

@@ -311,8 +311,14 @@ static void artifacts_classify_dynamic_row(const yvex_operator_paths *operator_p
         snprintf(row->top_blocker, sizeof(row->top_blocker), "missing-tokenizer-map");
         snprintf(row->detail, sizeof(row->detail), "tokenizer metadata mapping missing; full GGUF emission not performed");
     } else if (strcmp(row->artifact_status, "missing") == 0) {
-        snprintf(row->top_blocker, sizeof(row->top_blocker), "qtype-compute-refusal-matrix-missing");
-        snprintf(row->detail, sizeof(row->detail), "qtype compute/refusal matrix is missing before full GGUF artifact emission");
+        snprintf(row->top_blocker, sizeof(row->top_blocker), "%s",
+                 strcmp(row->family, "deepseek") == 0
+                     ? "gguf-writer-missing"
+                     : "family-quantization-plan-unimplemented");
+        snprintf(row->detail, sizeof(row->detail), "%s",
+                 strcmp(row->family, "deepseek") == 0
+                     ? "verified DeepSeek quantized bytes have no GGUF writer"
+                     : "this engineering family has no complete quantization plan");
     } else {
         snprintf(row->top_blocker, sizeof(row->top_blocker), "missing-artifact-identity");
         snprintf(row->detail, sizeof(row->detail), "artifact exists but identity/admission is not checked by this discovery command");
@@ -325,8 +331,12 @@ static const char *artifacts_row_next(const yvex_models_artifact_row *row)
     if (strcmp(row->top_blocker, "missing-tokenizer-map") == 0) {
         return "V010.MAP.7";
     }
-    if (strcmp(row->top_blocker, "qtype-compute-refusal-matrix-missing") == 0) {
-        return "V010.QUANT.2";
+    if (strcmp(row->top_blocker, "gguf-writer-missing") == 0) {
+        return "V010.GGUF.WRITER.1";
+    }
+    if (strcmp(row->top_blocker,
+               "family-quantization-plan-unimplemented") == 0) {
+        return "not-scheduled";
     }
     return "V010.MAP.8";
 }

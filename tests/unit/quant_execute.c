@@ -1,0 +1,961 @@
+#define _XOPEN_SOURCE 700
+/*
+ * quant_execute.c - trusted Transformation IR byte-executor integration tests.
+ *
+ * Owner: tests/unit.
+ * Owns: bounded multi-operation payload fixtures, chunk/worker determinism,
+ *   maximum DeepSeek fan-in, and transactional numeric refusal evidence.
+ * Does not own: production source policy, model files, artifacts, or claims.
+ * Invariants: generated payloads stay under build/tests and are removed; no
+ *   fixture retains or prints tensor bytes.
+ * Boundary: target-shaped operation proof is not a complete-model artifact.
+ */
+#include "test.h"
+
+#include "src/gguf/yvex_quant_execute.h"
+#include "src/gguf/yvex_quant_plan.h"
+#include "src/gguf/yvex_quant_sink.h"
+#include "src/model/compilation/yvex_transform_binding.h"
+#include "src/model/compilation/yvex_transform_ir.h"
+#include "src/model/target/yvex_model_target_catalog.h"
+#include "src/source/yvex_source_private.h"
+
+#include <errno.h>
+#include <limits.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#define QUANT_EXEC_EXPERTS 256u
+#define QUANT_EXEC_EXPERT_PACKED_COLUMNS 4224u
+#define QUANT_EXEC_EXPERT_LOGICAL_COLUMNS 8448u
+#define QUANT_EXEC_EXPERT_SCALE_COLUMNS 264u
+#define QUANT_EXEC_SOURCE_COUNT (4u + QUANT_EXEC_EXPERTS * 2u)
+#define QUANT_EXEC_TERMINAL_COUNT 4u
+
+typedef struct {
+    char root[512];
+    char shard_path[640];
+    char manifest_path[640];
+    yvex_source_tensor_snapshot *snapshot;
+    yvex_source_payload_session *session;
+    yvex_transform_ir *ir;
+    yvex_transform_binding *binding;
+    yvex_quant_plan *plan;
+    unsigned long long payload_bytes;
+} quant_execute_fixture;
+
+typedef struct {
+    unsigned long long bytes;
+} quant_verify_sink;
+
+typedef struct {
+    unsigned long long calls;
+    unsigned long long fail_at;
+    unsigned long long live;
+} quant_execute_allocator;
+
+/* Injects one deterministic executor allocation failure without retaining bytes. */
+static void *quant_execute_allocate(size_t size, void *context)
+{
+    quant_execute_allocator *state = (quant_execute_allocator *)context;
+    void *allocation;
+
+    if (!state || state->calls++ == state->fail_at) return NULL;
+    allocation = malloc(size);
+    if (allocation) state->live++;
+    return allocation;
+}
+
+/* Releases one injected executor allocation and maintains exact ownership count. */
+static void quant_execute_release(void *allocation, void *context)
+{
+    quant_execute_allocator *state = (quant_execute_allocator *)context;
+
+    if (!allocation) return;
+    if (state && state->live) state->live--;
+    free(allocation);
+}
+
+/* Accepts trust-scan delivery while retaining only an exact byte count. */
+static int quant_verify_begin(
+    void *context, const yvex_source_payload_plan_summary *summary)
+{
+    quant_verify_sink *sink = (quant_verify_sink *)context;
+    if (!sink || !summary) return 1;
+    sink->bytes = 0u;
+    return 0;
+}
+
+/* Counts trusted fixture bytes without retaining their contents. */
+static int quant_verify_chunk(
+    void *context,
+    const yvex_source_payload_chunk *chunk,
+    const unsigned char *bytes)
+{
+    quant_verify_sink *sink = (quant_verify_sink *)context;
+    if (!sink || !chunk || !bytes ||
+        ULLONG_MAX - sink->bytes < chunk->byte_length) return 1;
+    sink->bytes += chunk->byte_length;
+    return 0;
+}
+
+/* Admits the trust transaction only after exact delivery. */
+static int quant_verify_commit(
+    void *context, const yvex_source_payload_stream_result *result)
+{
+    quant_verify_sink *sink = (quant_verify_sink *)context;
+    return !sink || !result || !result->complete || result->aborted ||
+           sink->bytes != result->delivered_logical_bytes;
+}
+
+/* Leaves the fixture count defined after an aborted trust transaction. */
+static void quant_verify_abort(
+    void *context,
+    const yvex_source_payload_failure *failure,
+    const yvex_source_payload_stream_result *result)
+{
+    (void)failure;
+    (void)result;
+    if (context) ((quant_verify_sink *)context)->bytes = 0u;
+}
+
+static int quant_mkdir(const char *path)
+{
+    return mkdir(path, 0777) == 0 || errno == EEXIST;
+}
+
+static int quant_write_u16(FILE *file, unsigned short value)
+{
+    unsigned char bytes[2];
+    bytes[0] = (unsigned char)(value & 0xffu);
+    bytes[1] = (unsigned char)((value >> 8u) & 0xffu);
+    return fwrite(bytes, 1u, sizeof(bytes), file) == sizeof(bytes);
+}
+
+static int quant_write_i64(FILE *file, int64_t value)
+{
+    unsigned char bytes[8];
+    uint64_t bits = (uint64_t)value;
+    unsigned int index;
+    for (index = 0u; index < sizeof(bytes); ++index)
+        bytes[index] = (unsigned char)((bits >> (index * 8u)) & 0xffu);
+    return fwrite(bytes, 1u, sizeof(bytes), file) == sizeof(bytes);
+}
+
+/* Writes one deterministic multi-operation source shard under bounded size. */
+static int quant_fixture_write_payload(
+    quant_execute_fixture *fixture,
+    int bad_cast,
+    int bad_scale,
+    yvex_error *err)
+{
+    static const char shard_name[] = "quant-execute-00001.safetensors";
+    yvex_native_weight_table *table = NULL;
+    yvex_source_shard_snapshot shard;
+    yvex_source_tensor_snapshot_facts snapshot_facts;
+    unsigned long long offset = 0u;
+    unsigned long long dims[2];
+    unsigned int expert;
+    unsigned int index;
+    FILE *file;
+
+    file = fopen(fixture->shard_path, "wb");
+    if (!file) return 0;
+    for (index = 0u; index < 16u; ++index) {
+        unsigned char prefix = (unsigned char)(0xa0u + index);
+        if (fwrite(&prefix, 1u, 1u, file) != 1u) goto fail;
+    }
+    table = (yvex_native_weight_table *)calloc(1u, sizeof(*table));
+    if (!table) goto fail;
+
+    dims[0] = 4096u;
+    if (yvex_native_weight_table_add(
+            table, "identity.weight", shard_name, "BF16", 1u, dims,
+            offset, offset + 8192u, err) != YVEX_OK) goto fail;
+    for (index = 0u; index < 4096u; ++index) {
+        float value = ((int)(index % 257u) - 128) / 64.0f;
+        if (!quant_write_u16(file, yvex_quant_bf16_encode(value))) goto fail;
+    }
+    offset += 8192u;
+
+    dims[0] = 64u;
+    dims[1] = 128u;
+    if (yvex_native_weight_table_add(
+            table, "pair.weight", shard_name, "F8_E4M3", 2u, dims,
+            offset, offset + 8192u, err) != YVEX_OK) goto fail;
+    for (index = 0u; index < 8192u; ++index) {
+        unsigned char value = (unsigned char)(0x20u + index % 0x4fu);
+        if ((value & 0x7fu) == 0x7fu) value = 0x3fu;
+        if (fwrite(&value, 1u, 1u, file) != 1u) goto fail;
+    }
+    offset += 8192u;
+    dims[0] = 2u;
+    dims[1] = 4u;
+    if (yvex_native_weight_table_add(
+            table, "pair.scale", shard_name, "F8_E8M0", 2u, dims,
+            offset, offset + 8u, err) != YVEX_OK) goto fail;
+    for (index = 0u; index < 8u; ++index) {
+        unsigned char scale = bad_scale && index == 0u ? 0xffu : 127u;
+        if (fwrite(&scale, 1u, 1u, file) != 1u) goto fail;
+    }
+    offset += 8u;
+
+    dims[0] = 4u;
+    if (yvex_native_weight_table_add(
+            table, "cast.table", shard_name, "I64", 1u, dims,
+            offset, offset + 32u, err) != YVEX_OK) goto fail;
+    if (!quant_write_i64(file, INT32_MIN) || !quant_write_i64(file, -1) ||
+        !quant_write_i64(file, 0) ||
+        !quant_write_i64(file, bad_cast == 1
+            ? (int64_t)INT32_MAX + 1
+            : bad_cast == 2
+                ? (int64_t)INT32_MIN - 1 : INT32_MAX)) goto fail;
+    offset += 32u;
+
+    for (expert = 0u; expert < QUANT_EXEC_EXPERTS; ++expert) {
+        char name[80];
+        dims[0] = 1u;
+        dims[1] = QUANT_EXEC_EXPERT_PACKED_COLUMNS;
+        (void)snprintf(name, sizeof(name), "expert.%03u.weight", expert);
+        if (yvex_native_weight_table_add(
+                table, name, shard_name, "I8", 2u, dims, offset,
+                offset + QUANT_EXEC_EXPERT_PACKED_COLUMNS, err) != YVEX_OK)
+            goto fail;
+        for (index = 0u; index < QUANT_EXEC_EXPERT_PACKED_COLUMNS; ++index) {
+            unsigned char packed = (unsigned char)(
+                ((expert + index) & 0x0fu) |
+                (((expert * 3u + index * 5u) & 0x0fu) << 4u));
+            if (fwrite(&packed, 1u, 1u, file) != 1u) goto fail;
+        }
+        offset += QUANT_EXEC_EXPERT_PACKED_COLUMNS;
+        dims[1] = QUANT_EXEC_EXPERT_SCALE_COLUMNS;
+        (void)snprintf(name, sizeof(name), "expert.%03u.scale", expert);
+        if (yvex_native_weight_table_add(
+                table, name, shard_name, "F8_E8M0", 2u, dims, offset,
+                offset + QUANT_EXEC_EXPERT_SCALE_COLUMNS, err) != YVEX_OK)
+            goto fail;
+        for (index = 0u; index < QUANT_EXEC_EXPERT_SCALE_COLUMNS; ++index) {
+            unsigned char scale = (unsigned char)(125u + (index % 5u));
+            if (fwrite(&scale, 1u, 1u, file) != 1u) goto fail;
+        }
+        offset += QUANT_EXEC_EXPERT_SCALE_COLUMNS;
+    }
+    if (fclose(file) != 0) {
+        file = NULL;
+        goto fail_after_close;
+    }
+    file = NULL;
+    memset(&shard, 0, sizeof(shard));
+    shard.canonical_id = 0u;
+    shard.canonical_name = shard_name;
+    shard.file_bytes = offset + 16u;
+    shard.data_region_offset = 16u;
+    shard.payload_bytes = offset;
+    if (yvex_source_tensor_snapshot_take_table_with_shards(
+            &fixture->snapshot, &table, &shard, 1u, 1u, err) != YVEX_OK)
+        goto fail_after_close;
+    if (yvex_source_tensor_snapshot_facts_get(
+            fixture->snapshot, &snapshot_facts, err) != YVEX_OK)
+        goto fail_after_close;
+    fixture->payload_bytes = offset;
+    return snapshot_facts.tensor_count == QUANT_EXEC_SOURCE_COUNT;
+
+fail:
+    (void)fclose(file);
+fail_after_close:
+    free(table);
+    return 0;
+}
+
+/* Opens and locally seals one immutable tiny source snapshot. */
+static int quant_fixture_open_session(
+    quant_execute_fixture *fixture,
+    yvex_error *err)
+{
+    yvex_source_tensor_snapshot_facts snapshot_facts;
+    yvex_source_verification verification;
+    yvex_source_verify_options verify_options;
+    yvex_source_payload_open_options open_options;
+    yvex_source_payload_budget budget;
+    yvex_source_payload_failure failure;
+    yvex_source_payload_plan *trust_plan = NULL;
+    yvex_source_payload_sink sink;
+    yvex_source_payload_stream_result result;
+    quant_verify_sink sink_state;
+    int rc;
+
+    if (yvex_source_tensor_snapshot_facts_get(
+            fixture->snapshot, &snapshot_facts, err) != YVEX_OK) return 0;
+    memset(&verification, 0, sizeof(verification));
+    verification.verified = 1;
+    verification.manifest_verified = 1;
+    verification.path_verified = 1;
+    verification.repository_verified = 1;
+    verification.revision_verified = 1;
+    verification.shard_index_headers_match = 1;
+    verification.header_scan_count = 1u;
+    verification.header_shard_count = 1u;
+    verification.header_tensor_count = QUANT_EXEC_SOURCE_COUNT;
+    verification.shard_count = 1u;
+    verification.source_file_count = 1u;
+    verification.shard_bytes = fixture->payload_bytes + 16u;
+    verification.source_total_bytes = fixture->payload_bytes + 16u;
+    verification.declared_tensor_bytes = fixture->payload_bytes;
+    verification.source_snapshot_identity = snapshot_facts.identity;
+    (void)snprintf(verification.revision, sizeof(verification.revision), "%s",
+                   "60d8d70770c6776ff598c94bb586a859a38244f1");
+    (void)snprintf(verification.repository_id,
+                   sizeof(verification.repository_id), "%s",
+                   "deepseek-ai/DeepSeek-V4-Flash");
+    (void)snprintf(verification.inventory_authority,
+                   sizeof(verification.inventory_authority), "%s",
+                   "fixture-retained-snapshot");
+    if (!realpath(fixture->root, verification.resolved_source_path)) return 0;
+    (void)snprintf(verification.manifest_path,
+                   sizeof(verification.manifest_path), "%s",
+                   fixture->manifest_path);
+    memset(&verify_options, 0, sizeof(verify_options));
+    verify_options.identity = yvex_model_target_release_identity();
+    verify_options.source_path = fixture->root;
+    verify_options.models_root = "build/tests";
+    verify_options.manifest_path = fixture->manifest_path;
+    yvex_source_payload_budget_default(&budget);
+    budget.maximum_open_handles = 1u;
+    budget.maximum_streams = 4u;
+    budget.chunk_bytes = 8192u;
+    budget.maximum_inflight_host_bytes = 64u * 1024u;
+    budget.allow_local_snapshot_seal = 1;
+    memset(&open_options, 0, sizeof(open_options));
+    open_options.verification_options = &verify_options;
+    open_options.verification = &verification;
+    open_options.snapshot = fixture->snapshot;
+    open_options.budget = budget;
+    open_options.manifest_path = fixture->manifest_path;
+    rc = yvex_source_payload_session_open(
+        &fixture->session, &open_options, &failure, err);
+    if (rc != YVEX_OK) return 0;
+    rc = yvex_source_payload_plan_build_all(
+        &trust_plan, fixture->session, 4096u, 4096u, &failure, err);
+    if (rc != YVEX_OK) return 0;
+    memset(&sink_state, 0, sizeof(sink_state));
+    memset(&sink, 0, sizeof(sink));
+    sink.begin = quant_verify_begin;
+    sink.chunk = quant_verify_chunk;
+    sink.commit = quant_verify_commit;
+    sink.abort = quant_verify_abort;
+    sink.context = &sink_state;
+    rc = yvex_source_payload_session_verify(
+        fixture->session, trust_plan, &sink, &result, &failure, err);
+    yvex_source_payload_plan_close(trust_plan);
+    return rc == YVEX_OK && result.complete && result.committed &&
+           sink_state.bytes == fixture->payload_bytes;
+}
+
+/* Adds one source value by consuming only the retained payload-range truth. */
+static int quant_fixture_add_source(
+    yvex_transform_builder *builder,
+    yvex_source_payload_session *session,
+    unsigned long long snapshot_identity,
+    const char *name,
+    yvex_transform_dtype value_dtype,
+    yvex_transform_subsystem subsystem,
+    yvex_tensor_role role,
+    unsigned long long expert_index,
+    unsigned long long requirement_index,
+    unsigned long long *value_id,
+    yvex_transform_failure *failure,
+    yvex_error *err)
+{
+    const yvex_source_payload_range *range =
+        yvex_source_payload_range_find(session, name);
+    const yvex_source_payload_shard *shard = range
+        ? yvex_source_payload_shard_at(session, range->shard_index) : NULL;
+    yvex_transform_source_spec source;
+    unsigned int dimension;
+
+    if (!range || !shard) return YVEX_ERR_FORMAT;
+    memset(&source, 0, sizeof(source));
+    source.source_name = range->source_tensor_name;
+    source.shard_name = shard->canonical_name;
+    source.source_tensor_index = range->source_tensor_index;
+    source.requirement_index = requirement_index;
+    source.source_snapshot_identity = snapshot_identity;
+    source.source_dtype = range->dtype;
+    source.value_dtype = value_dtype;
+    source.shape.rank = range->rank;
+    for (dimension = 0u; dimension < range->rank; ++dimension)
+        source.shape.dims[dimension] = range->dims[dimension];
+    source.relative_begin = range->relative_begin;
+    source.relative_end = range->relative_end;
+    source.requirement_identity = requirement_index + 0x1000u;
+    source.scope = YVEX_TRANSFORM_SCOPE_MAIN_LAYER;
+    source.subsystem = subsystem;
+    source.role_hint = role;
+    source.layer_index = 0u;
+    source.auxiliary_index = YVEX_TRANSFORM_IR_NO_ID;
+    source.expert_index = expert_index;
+    source.required_uses = 1u;
+    return yvex_transform_builder_add_source(
+        builder, &source, value_id, failure, err);
+}
+
+/* Declares and produces one typed terminal without physical-format facts. */
+static int quant_fixture_add_terminal(
+    yvex_transform_builder *builder,
+    unsigned long long ordinal,
+    yvex_transform_subsystem subsystem,
+    yvex_tensor_role role,
+    const yvex_transform_shape *shape,
+    yvex_transform_dtype dtype,
+    const yvex_transform_precision_constraint *precision,
+    yvex_transform_node_spec *node,
+    yvex_transform_failure *failure,
+    yvex_error *err)
+{
+    yvex_transform_value_spec terminal;
+    unsigned long long output_value;
+    unsigned long long node_id;
+    int rc;
+
+    memset(&terminal, 0, sizeof(terminal));
+    terminal.kind = YVEX_TRANSFORM_VALUE_TERMINAL;
+    terminal.semantic_id = 0x2000u + ordinal;
+    terminal.canonical_ordinal = ordinal;
+    terminal.shape = *shape;
+    terminal.dtype = dtype;
+    terminal.precision = *precision;
+    terminal.logical_key.scope = YVEX_TRANSFORM_SCOPE_MAIN_LAYER;
+    terminal.logical_key.subsystem = subsystem;
+    terminal.logical_key.role = role;
+    terminal.logical_key.layer_index = 0u;
+    terminal.logical_key.auxiliary_index = YVEX_TRANSFORM_IR_NO_ID;
+    terminal.logical_key.group_index = ordinal;
+    rc = yvex_transform_builder_declare_value(
+        builder, &terminal, &output_value, failure, err);
+    if (rc != YVEX_OK) return rc;
+    node->output_value_id = output_value;
+    return yvex_transform_builder_add_node(
+        builder, node, &node_id, failure, err);
+}
+
+/* Builds all four production operation kinds including 512 ordered edges. */
+static int quant_fixture_build_ir(
+    quant_execute_fixture *fixture,
+    yvex_error *err)
+{
+    static const char logical_identity[] =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    yvex_source_payload_session_facts session_facts;
+    yvex_transform_header header;
+    yvex_transform_builder *builder = NULL;
+    yvex_transform_failure failure;
+    yvex_transform_precision_constraint precision;
+    yvex_transform_node_spec node;
+    yvex_transform_shape shape;
+    unsigned long long identity_input;
+    unsigned long long pair_inputs[2];
+    unsigned long long cast_input;
+    unsigned long long *expert_inputs = NULL;
+    unsigned long long requirement = 0u;
+    unsigned int expert;
+    int rc;
+
+    if (yvex_source_payload_session_facts_get(
+            fixture->session, &session_facts, err) != YVEX_OK ||
+        session_facts.state != YVEX_SOURCE_PAYLOAD_STATE_READY) return 0;
+    memset(&header, 0, sizeof(header));
+    header.schema_version = YVEX_TRANSFORM_IR_SCHEMA_VERSION;
+    header.logical_model_identity = logical_identity;
+    header.source_snapshot_identity = session_facts.source_snapshot_identity;
+    header.coverage_identity = 0x8899aabbccddeeffull;
+    header.required_payload_identity = session_facts.payload_identity;
+    header.payload_trust_class =
+        yvex_source_payload_trust_class_name(session_facts.trust_class);
+    header.expected_source_count = QUANT_EXEC_SOURCE_COUNT;
+    header.expected_terminal_count = QUANT_EXEC_TERMINAL_COUNT;
+    header.header_scan_count = 1u;
+    rc = yvex_transform_builder_create(
+        &builder, &header, NULL, &failure, err);
+    if (rc != YVEX_OK) goto cleanup;
+
+    rc = quant_fixture_add_source(
+        builder, fixture->session, session_facts.source_snapshot_identity,
+        "identity.weight", YVEX_TRANSFORM_DTYPE_BF16,
+        YVEX_TRANSFORM_SUBSYSTEM_GLOBAL, YVEX_TENSOR_ROLE_TOKEN_EMBEDDING,
+        YVEX_TRANSFORM_IR_NO_ID, requirement++, &identity_input,
+        &failure, err);
+    memset(&shape, 0, sizeof(shape));
+    shape.rank = 1u;
+    shape.dims[0] = 4096u;
+    memset(&precision, 0, sizeof(precision));
+    precision.flags = YVEX_TRANSFORM_PRECISION_EXACT;
+    precision.allowed_physical_classes = YVEX_TRANSFORM_PHYSICAL_BF16;
+    memset(&node, 0, sizeof(node));
+    node.kind = YVEX_TRANSFORM_OP_IDENTITY;
+    node.input_value_ids = &identity_input;
+    node.input_count = 1u;
+    node.numeric = YVEX_TRANSFORM_NUMERIC_EXACT;
+    node.ordering = YVEX_TRANSFORM_ORDER_INPUT;
+    node.payload_execution_required = 1;
+    if (rc == YVEX_OK) rc = quant_fixture_add_terminal(
+        builder, 0u, YVEX_TRANSFORM_SUBSYSTEM_GLOBAL,
+        YVEX_TENSOR_ROLE_TOKEN_EMBEDDING, &shape,
+        YVEX_TRANSFORM_DTYPE_BF16, &precision, &node, &failure, err);
+
+    if (rc == YVEX_OK) rc = quant_fixture_add_source(
+        builder, fixture->session, session_facts.source_snapshot_identity,
+        "pair.weight", YVEX_TRANSFORM_DTYPE_FP8_E4M3,
+        YVEX_TRANSFORM_SUBSYSTEM_ATTENTION, YVEX_TENSOR_ROLE_ATTENTION_Q,
+        YVEX_TRANSFORM_IR_NO_ID, requirement++, &pair_inputs[0],
+        &failure, err);
+    if (rc == YVEX_OK) rc = quant_fixture_add_source(
+        builder, fixture->session, session_facts.source_snapshot_identity,
+        "pair.scale", YVEX_TRANSFORM_DTYPE_E8M0_SCALE,
+        YVEX_TRANSFORM_SUBSYSTEM_ATTENTION, YVEX_TENSOR_ROLE_ATTENTION_Q,
+        YVEX_TRANSFORM_IR_NO_ID, requirement++, &pair_inputs[1],
+        &failure, err);
+    memset(&shape, 0, sizeof(shape));
+    shape.rank = 2u;
+    shape.dims[0] = 64u;
+    shape.dims[1] = 128u;
+    memset(&precision, 0, sizeof(precision));
+    precision.flags = YVEX_TRANSFORM_PRECISION_SCALE_PAIRED |
+                      YVEX_TRANSFORM_PRECISION_QUANTIZABLE_WEIGHT |
+                      YVEX_TRANSFORM_PRECISION_REFERENCE_COMPUTE;
+    precision.allowed_physical_classes = YVEX_TRANSFORM_PHYSICAL_QUANTIZED;
+    precision.approximation_allowed = 1;
+    precision.reference_compute_required = 1;
+    memset(&node, 0, sizeof(node));
+    node.kind = YVEX_TRANSFORM_OP_DECODE_SCALE_PAIR;
+    node.input_value_ids = pair_inputs;
+    node.input_count = 2u;
+    node.scale_block_rows = 32u;
+    node.scale_block_columns = 32u;
+    node.numeric = YVEX_TRANSFORM_NUMERIC_LOSSLESS;
+    node.ordering = YVEX_TRANSFORM_ORDER_INPUT;
+    node.payload_execution_required = 1;
+    if (rc == YVEX_OK) rc = quant_fixture_add_terminal(
+        builder, 1u, YVEX_TRANSFORM_SUBSYSTEM_ATTENTION,
+        YVEX_TENSOR_ROLE_ATTENTION_Q, &shape, YVEX_TRANSFORM_DTYPE_REAL,
+        &precision, &node, &failure, err);
+
+    if (rc == YVEX_OK) rc = quant_fixture_add_source(
+        builder, fixture->session, session_facts.source_snapshot_identity,
+        "cast.table", YVEX_TRANSFORM_DTYPE_I64,
+        YVEX_TRANSFORM_SUBSYSTEM_ROUTER, YVEX_TENSOR_ROLE_MOE_ROUTER_TABLE,
+        YVEX_TRANSFORM_IR_NO_ID, requirement++, &cast_input, &failure, err);
+    memset(&shape, 0, sizeof(shape));
+    shape.rank = 1u;
+    shape.dims[0] = 4u;
+    memset(&precision, 0, sizeof(precision));
+    precision.flags = YVEX_TRANSFORM_PRECISION_LOSSLESS |
+                      YVEX_TRANSFORM_PRECISION_RANGE_PROOF |
+                      YVEX_TRANSFORM_PRECISION_INTEGER_ONLY;
+    precision.allowed_physical_classes = YVEX_TRANSFORM_PHYSICAL_I32;
+    precision.range_proof_required = 1;
+    memset(&node, 0, sizeof(node));
+    node.kind = YVEX_TRANSFORM_OP_CHECKED_CAST;
+    node.input_value_ids = &cast_input;
+    node.input_count = 1u;
+    node.numeric = YVEX_TRANSFORM_NUMERIC_RANGE_PROOF;
+    node.ordering = YVEX_TRANSFORM_ORDER_INPUT;
+    node.payload_execution_required = 1;
+    if (rc == YVEX_OK) rc = quant_fixture_add_terminal(
+        builder, 2u, YVEX_TRANSFORM_SUBSYSTEM_ROUTER,
+        YVEX_TENSOR_ROLE_MOE_ROUTER_TABLE, &shape,
+        YVEX_TRANSFORM_DTYPE_I32, &precision, &node, &failure, err);
+
+    expert_inputs = (unsigned long long *)calloc(
+        QUANT_EXEC_EXPERTS * 2u, sizeof(*expert_inputs));
+    if (rc == YVEX_OK && !expert_inputs) rc = YVEX_ERR_NOMEM;
+    for (expert = 0u; rc == YVEX_OK && expert < QUANT_EXEC_EXPERTS; ++expert) {
+        char weight[80];
+        char scale[80];
+        (void)snprintf(weight, sizeof(weight),
+                       "expert.%03u.weight", expert);
+        (void)snprintf(scale, sizeof(scale),
+                       "expert.%03u.scale", expert);
+        rc = quant_fixture_add_source(
+            builder, fixture->session, session_facts.source_snapshot_identity,
+            weight, YVEX_TRANSFORM_DTYPE_PACKED_FP4,
+            YVEX_TRANSFORM_SUBSYSTEM_ROUTED_EXPERT,
+            YVEX_TENSOR_ROLE_MOE_EXPERT_GATE, expert, requirement++,
+            &expert_inputs[expert * 2u], &failure, err);
+        if (rc == YVEX_OK) rc = quant_fixture_add_source(
+            builder, fixture->session, session_facts.source_snapshot_identity,
+            scale, YVEX_TRANSFORM_DTYPE_E8M0_SCALE,
+            YVEX_TRANSFORM_SUBSYSTEM_ROUTED_EXPERT,
+            YVEX_TENSOR_ROLE_MOE_EXPERT_GATE, expert, requirement++,
+            &expert_inputs[expert * 2u + 1u], &failure, err);
+    }
+    memset(&shape, 0, sizeof(shape));
+    shape.rank = 3u;
+    shape.dims[0] = QUANT_EXEC_EXPERTS;
+    shape.dims[1] = 1u;
+    shape.dims[2] = QUANT_EXEC_EXPERT_LOGICAL_COLUMNS;
+    memset(&precision, 0, sizeof(precision));
+    precision.flags = YVEX_TRANSFORM_PRECISION_SCALE_PAIRED |
+                      YVEX_TRANSFORM_PRECISION_QUANTIZABLE_WEIGHT |
+                      YVEX_TRANSFORM_PRECISION_REFERENCE_COMPUTE;
+    precision.allowed_physical_classes = YVEX_TRANSFORM_PHYSICAL_QUANTIZED;
+    precision.approximation_allowed = 1;
+    precision.reference_compute_required = 1;
+    memset(&node, 0, sizeof(node));
+    node.kind = YVEX_TRANSFORM_OP_EXPERT_AGGREGATE;
+    node.input_value_ids = expert_inputs;
+    node.input_count = QUANT_EXEC_EXPERTS * 2u;
+    node.axis = 0u;
+    node.expert_count = QUANT_EXEC_EXPERTS;
+    node.packing_factor = 2u;
+    node.scale_group_width = 32u;
+    node.numeric = YVEX_TRANSFORM_NUMERIC_LOSSLESS;
+    node.ordering = YVEX_TRANSFORM_ORDER_EXPERT_INDEX;
+    node.payload_execution_required = 1;
+    if (rc == YVEX_OK) rc = quant_fixture_add_terminal(
+        builder, 3u, YVEX_TRANSFORM_SUBSYSTEM_ROUTED_EXPERT,
+        YVEX_TENSOR_ROLE_MOE_EXPERT_GATE, &shape,
+        YVEX_TRANSFORM_DTYPE_REAL, &precision, &node, &failure, err);
+    if (rc == YVEX_OK && requirement != QUANT_EXEC_SOURCE_COUNT)
+        rc = YVEX_ERR_FORMAT;
+    if (rc == YVEX_OK) rc = yvex_transform_builder_seal(
+        builder, &fixture->ir, &failure, err);
+
+cleanup:
+    free(expert_inputs);
+    yvex_transform_builder_release(&builder);
+    return rc == YVEX_OK && fixture->ir;
+}
+
+/* Binds the trusted graph and seals exact physical decisions for each op. */
+static int quant_fixture_build_plan(
+    quant_execute_fixture *fixture,
+    yvex_error *err)
+{
+    yvex_transform_failure transform_failure;
+    yvex_quant_failure quant_failure;
+    yvex_quant_explicit_decision decisions[QUANT_EXEC_TERMINAL_COUNT];
+    const yvex_quant_plan_summary *summary;
+    int rc;
+
+    rc = yvex_transform_binding_create(
+        &fixture->binding, fixture->ir, fixture->session, NULL,
+        &transform_failure, err);
+    if (rc != YVEX_OK) return 0;
+    memset(decisions, 0, sizeof(decisions));
+    decisions[0].qtype = YVEX_GGUF_QTYPE_BF16;
+    decisions[0].rank = 1u;
+    decisions[0].dims[0] = 4096u;
+    decisions[1].qtype = YVEX_GGUF_QTYPE_Q8_0;
+    decisions[1].approximation = 1;
+    decisions[1].rank = 2u;
+    decisions[1].dims[0] = 128u;
+    decisions[1].dims[1] = 64u;
+    decisions[2].qtype = YVEX_GGUF_QTYPE_I32;
+    decisions[2].rank = 1u;
+    decisions[2].dims[0] = 4u;
+    decisions[3].qtype = YVEX_GGUF_QTYPE_Q2_K;
+    decisions[3].approximation = 1;
+    decisions[3].rank = 3u;
+    decisions[3].dims[0] = QUANT_EXEC_EXPERT_LOGICAL_COLUMNS;
+    decisions[3].dims[1] = 1u;
+    decisions[3].dims[2] = QUANT_EXEC_EXPERTS;
+    rc = yvex_quant_plan_build_explicit(
+        &fixture->plan, fixture->ir, fixture->binding,
+        "quant-executor-four-ops-v1", 0xf00dcafeu, decisions,
+        QUANT_EXEC_TERMINAL_COUNT, NULL, &quant_failure, err);
+    summary = yvex_quant_plan_summary_get(fixture->plan);
+    return rc == YVEX_OK && summary && summary->complete &&
+           summary->source_value_count == QUANT_EXEC_SOURCE_COUNT &&
+           summary->decision_count == QUANT_EXEC_TERMINAL_COUNT &&
+           summary->encoded_bytes == 726544u;
+}
+
+/* Constructs a completely trusted four-operation fixture. */
+static int quant_fixture_create(
+    quant_execute_fixture *fixture,
+    const char *suffix,
+    int bad_cast,
+    int bad_scale,
+    yvex_error *err)
+{
+    char command[768];
+
+    memset(fixture, 0, sizeof(*fixture));
+    (void)snprintf(fixture->root, sizeof(fixture->root),
+                   "build/tests/quant-execute-%s", suffix);
+    (void)snprintf(fixture->shard_path, sizeof(fixture->shard_path),
+                   "%s/quant-execute-00001.safetensors", fixture->root);
+    (void)snprintf(fixture->manifest_path, sizeof(fixture->manifest_path),
+                   "%s/manifest.json", fixture->root);
+    (void)snprintf(command, sizeof(command), "rm -rf %s", fixture->root);
+    (void)system(command);
+    if (!quant_mkdir("build") || !quant_mkdir("build/tests") ||
+        !quant_mkdir(fixture->root) ||
+        !quant_fixture_write_payload(fixture, bad_cast, bad_scale, err) ||
+        !quant_fixture_open_session(fixture, err) ||
+        !quant_fixture_build_ir(fixture, err) ||
+        !quant_fixture_build_plan(fixture, err)) return 0;
+    return 1;
+}
+
+/* Releases every owner and removes all generated payload bytes. */
+static void quant_fixture_release(quant_execute_fixture *fixture)
+{
+    char command[768];
+
+    if (!fixture) return;
+    yvex_quant_plan_release(&fixture->plan);
+    yvex_transform_binding_release(&fixture->binding);
+    yvex_transform_ir_release(&fixture->ir);
+    (void)yvex_source_payload_session_release(&fixture->session, NULL, NULL);
+    yvex_source_tensor_snapshot_release(fixture->snapshot);
+    fixture->snapshot = NULL;
+    (void)snprintf(command, sizeof(command), "rm -rf %s", fixture->root);
+    (void)system(command);
+}
+
+/* Executes one plan through the digest sink with a selected bounded schedule. */
+static int quant_fixture_execute(
+    quant_execute_fixture *fixture,
+    size_t source_chunk,
+    size_t output_chunk,
+    unsigned int workers,
+    yvex_quant_digest_summary *digest,
+    yvex_quant_execution_summary *execution,
+    yvex_quant_failure *failure,
+    yvex_error *err)
+{
+    yvex_source_payload_session_facts session_facts;
+    yvex_quant_digest_sink *digest_sink = NULL;
+    yvex_quant_output_sink sink;
+    yvex_quant_executor_options options;
+    int rc;
+
+    if (yvex_source_payload_session_facts_get(
+            fixture->session, &session_facts, err) != YVEX_OK) return 0;
+    rc = yvex_quant_digest_sink_create(
+        &digest_sink, fixture->plan, session_facts.payload_identity,
+        failure, err);
+    if (rc != YVEX_OK) return 0;
+    yvex_quant_digest_sink_adapter(digest_sink, &sink);
+    yvex_quant_executor_options_default(&options);
+    options.worker_count = workers;
+    options.source_chunk_bytes = source_chunk;
+    options.output_chunk_bytes = output_chunk;
+    options.maximum_owned_bytes = 8u * 1024u * 1024u;
+    rc = yvex_quant_execute(
+        fixture->plan, &sink, &options, execution, failure, err);
+    if (rc == YVEX_OK)
+        rc = yvex_quant_digest_sink_finalize(
+            digest_sink, digest, failure, err);
+    yvex_quant_digest_sink_release(&digest_sink);
+    return rc == YVEX_OK;
+}
+
+/* Proves all operations, max fan-in, physical-axis bridge, and determinism. */
+static int quant_test_executor_success(void)
+{
+    quant_execute_fixture fixture;
+    yvex_quant_digest_summary first_digest;
+    yvex_quant_digest_summary second_digest;
+    yvex_quant_execution_summary first;
+    yvex_quant_execution_summary second;
+    yvex_quant_failure failure;
+    yvex_error err;
+    int second_ok;
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(quant_fixture_create(
+                         &fixture, "success", 0, 0, &err),
+                     "four-operation trusted fixture must construct");
+    YVEX_TEST_ASSERT(quant_fixture_execute(
+                         &fixture, 4096u, 4096u, 1u, &first_digest,
+                         &first, &failure, &err),
+                     "single-worker four-operation execution must commit");
+    YVEX_TEST_ASSERT(first.complete &&
+                         first.terminals_executed == 4u &&
+                         first.committed_terminals == 4u &&
+                         first.aborted_terminals == 0u &&
+                         first.source_values_consumed ==
+                             QUANT_EXEC_SOURCE_COUNT &&
+                         first.source_ranges_read ==
+                             QUANT_EXEC_SOURCE_COUNT &&
+                         first.payload_bytes_read == 1165352u &&
+                         first.encoded_output_bytes == 726544u &&
+                         first.qtype_tensor_counts[YVEX_GGUF_QTYPE_BF16] == 1u &&
+                         first.qtype_tensor_counts[YVEX_GGUF_QTYPE_Q8_0] == 1u &&
+                         first.qtype_tensor_counts[YVEX_GGUF_QTYPE_I32] == 1u &&
+                         first.qtype_tensor_counts[YVEX_GGUF_QTYPE_Q2_K] == 1u &&
+                         first.numeric_bound_violations == 0u &&
+                         first.peak_owned_bytes <= first.configured_memory_budget &&
+                         first_digest.complete &&
+                         first_digest.committed_terminals == 4u,
+                     "execution accounting must cover every operation exactly");
+    second_ok = quant_fixture_execute(
+        &fixture, 8192u, 8192u, 4u, &second_digest,
+        &second, &failure, &err);
+    if (!second_ok || !second.complete ||
+        strcmp(first_digest.execution_identity,
+               second_digest.execution_identity) != 0)
+        fprintf(stderr,
+                "quant executor repeat ok=%d complete=%d failure=%u "
+                "terminal=%llu source=%llu expected=%llu actual=%llu "
+                "committed=%llu aborted=%llu workers=%u error=%s first=%s second=%s\n",
+                second_ok, second.complete, failure.code,
+                failure.terminal_ordinal, failure.source_index,
+                failure.expected, failure.actual,
+                second.committed_terminals, second.aborted_terminals,
+                second.workers_started, err.message,
+                first_digest.execution_identity,
+                second_ok ? second_digest.execution_identity : "unavailable");
+    YVEX_TEST_ASSERT(second_ok && second.complete &&
+                         second.workers_started == 4u &&
+                         strcmp(first_digest.execution_identity,
+                                second_digest.execution_identity) == 0,
+                     "chunk boundaries and worker scheduling preserve identity");
+    YVEX_TEST_ASSERT(first.source_chunks != second.source_chunks,
+                     "different source chunks must exercise distinct plans");
+    quant_fixture_release(&fixture);
+    return 0;
+}
+
+/* Proves range-checked I64 narrowing aborts before tensor publication. */
+static int quant_test_cast_refusal(void)
+{
+    quant_execute_fixture fixture;
+    yvex_quant_digest_summary digest;
+    yvex_quant_execution_summary execution;
+    yvex_quant_failure failure;
+    yvex_error err;
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(quant_fixture_create(
+                         &fixture, "cast-refusal", 1, 0, &err),
+                     "out-of-range cast fixture must construct");
+    YVEX_TEST_ASSERT(!quant_fixture_execute(
+                         &fixture, 4096u, 4096u, 1u, &digest,
+                         &execution, &failure, &err) &&
+                         failure.code == YVEX_QUANT_FAILURE_CAST_RANGE &&
+                         failure.terminal_ordinal == 2u &&
+                         execution.aborted_terminals == 1u &&
+                         execution.committed_terminals == 2u &&
+                         !execution.complete,
+                     "I64 overflow must abort only the uncommitted cast tensor");
+    quant_fixture_release(&fixture);
+    return 0;
+}
+
+/* Proves the lower I32 boundary refuses as transactionally as the upper one. */
+static int quant_test_negative_cast_refusal(void)
+{
+    quant_execute_fixture fixture;
+    yvex_quant_digest_summary digest;
+    yvex_quant_execution_summary execution;
+    yvex_quant_failure failure;
+    yvex_error err;
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(quant_fixture_create(
+                         &fixture, "negative-cast-refusal", 2, 0, &err),
+                     "negative out-of-range cast fixture must construct");
+    YVEX_TEST_ASSERT(!quant_fixture_execute(
+                         &fixture, 4096u, 4096u, 1u, &digest,
+                         &execution, &failure, &err) &&
+                         failure.code == YVEX_QUANT_FAILURE_CAST_RANGE &&
+                         failure.terminal_ordinal == 2u &&
+                         execution.aborted_terminals == 1u &&
+                         execution.committed_terminals == 2u &&
+                         !execution.complete,
+                     "I64 underflow must abort the uncommitted cast tensor");
+    quant_fixture_release(&fixture);
+    return 0;
+}
+
+/* Proves non-finite E8M0 scale input aborts scale-pair publication. */
+static int quant_test_scale_refusal(void)
+{
+    quant_execute_fixture fixture;
+    yvex_quant_digest_summary digest;
+    yvex_quant_execution_summary execution;
+    yvex_quant_failure failure;
+    yvex_error err;
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(quant_fixture_create(
+                         &fixture, "scale-refusal", 0, 1, &err),
+                     "malformed scale fixture must construct");
+    YVEX_TEST_ASSERT(!quant_fixture_execute(
+                         &fixture, 8192u, 4096u, 1u, &digest,
+                         &execution, &failure, &err) &&
+                         failure.code == YVEX_QUANT_FAILURE_NONFINITE &&
+                         failure.terminal_ordinal == 1u &&
+                         failure.source_index != ULLONG_MAX &&
+                         execution.aborted_terminals == 1u &&
+                         execution.committed_terminals == 1u &&
+                         !execution.complete,
+                     "non-finite scale must abort before paired output commit");
+    quant_fixture_release(&fixture);
+    return 0;
+}
+
+/* Sweeps each distinct executor ownership transition across all four operations. */
+static int quant_test_executor_allocation_sweep(void)
+{
+    quant_execute_fixture fixture;
+    yvex_quant_digest_sink *digest_sink = NULL;
+    yvex_quant_output_sink sink;
+    yvex_quant_execution_summary execution;
+    yvex_quant_executor_options options;
+    yvex_quant_failure failure;
+    yvex_error err;
+    unsigned long long fail_at;
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(quant_fixture_create(
+                         &fixture, "allocation-sweep", 0, 0, &err),
+                     "allocation-sweep fixture must construct");
+    for (fail_at = 0u; fail_at < 8u; ++fail_at) {
+        quant_execute_allocator allocator;
+        const yvex_quant_plan_summary *summary =
+            yvex_quant_plan_summary_get(fixture.plan);
+
+        memset(&allocator, 0, sizeof(allocator));
+        allocator.fail_at = fail_at;
+        YVEX_TEST_ASSERT(yvex_quant_digest_sink_create(
+                             &digest_sink, fixture.plan,
+                             summary->required_payload_identity,
+                             &failure, &err) == YVEX_OK,
+                         "allocation-sweep digest sink must open");
+        yvex_quant_digest_sink_adapter(digest_sink, &sink);
+        yvex_quant_executor_options_default(&options);
+        options.source_chunk_bytes = 4096u;
+        options.output_chunk_bytes = 4096u;
+        options.maximum_owned_bytes = 8u * 1024u * 1024u;
+        options.allocate = quant_execute_allocate;
+        options.release = quant_execute_release;
+        options.context = &allocator;
+        YVEX_TEST_ASSERT(yvex_quant_execute(
+                             fixture.plan, &sink, &options, &execution,
+                             &failure, &err) != YVEX_OK &&
+                             failure.code == YVEX_QUANT_FAILURE_ALLOCATION &&
+                             allocator.live == 0u && !execution.complete,
+                         "executor allocation refusal must unwind all ownership");
+        yvex_quant_digest_sink_release(&digest_sink);
+    }
+    quant_fixture_release(&fixture);
+    return 0;
+}
+
+int yvex_test_quant_execute(void)
+{
+    if (quant_test_executor_success() != 0) return 1;
+    if (quant_test_cast_refusal() != 0) return 1;
+    if (quant_test_negative_cast_refusal() != 0) return 1;
+    if (quant_test_scale_refusal() != 0) return 1;
+    if (quant_test_executor_allocation_sweep() != 0) return 1;
+    return 0;
+}

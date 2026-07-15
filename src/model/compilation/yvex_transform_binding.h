@@ -61,6 +61,8 @@ const yvex_transform_binding_summary *yvex_transform_binding_summary_get(
     const yvex_transform_binding *binding);
 const yvex_transform_ir *yvex_transform_binding_ir(
     const yvex_transform_binding *binding);
+yvex_source_payload_session *yvex_transform_binding_payload_session(
+    const yvex_transform_binding *binding);
 const yvex_transform_value *yvex_transform_binding_terminal_at(
     const yvex_transform_binding *binding,
     unsigned long long ordinal);

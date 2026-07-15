@@ -14,6 +14,8 @@
 #include <yvex/quant_policy.h>
 #include <yvex/tensor.h>
 
+#include "yvex_quant_numeric.h"
+
 #include <ctype.h>
 #include <errno.h>
 #include <stddef.h>
@@ -1520,12 +1522,16 @@ yvex_dtype yvex_quant_qtype_to_dtype(yvex_quant_qtype qtype)
 
 int yvex_quant_qtype_storage_supported(yvex_quant_qtype qtype)
 {
-    return yvex_dtype_storage_supported(yvex_quant_qtype_to_dtype(qtype));
+    const yvex_quant_numeric_capability *capability =
+        yvex_quant_numeric_capability_by_name(yvex_quant_qtype_name(qtype));
+    return capability && capability->storage_admitted;
 }
 
 int yvex_quant_qtype_compute_supported(yvex_quant_qtype qtype)
 {
-    return qtype == YVEX_QUANT_QTYPE_F32;
+    const yvex_quant_numeric_capability *capability =
+        yvex_quant_numeric_capability_by_name(yvex_quant_qtype_name(qtype));
+    return capability && capability->dedicated_cpu_compute_available;
 }
 
 yvex_tensor_role yvex_quant_role_from_name(const char *name)

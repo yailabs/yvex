@@ -126,7 +126,7 @@ typedef struct {
     unsigned int block_size;
     unsigned int bytes_per_block;
     unsigned int scalar_width;
-    int reference_dequantization_supported;
+    unsigned int numeric_capability_reserved;
     const char *reason;
 } yvex_gguf_qtype_geometry;
 

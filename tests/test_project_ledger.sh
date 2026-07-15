@@ -330,8 +330,10 @@ grep -F '| `V010.DOCS.README.COMPILATION.0` | project | `complete` |' "$project"
   fail "README compilation milestone is not complete"
 grep -F '| `V010.MODEL.TRANSFORM.IR.0` | DeepSeek + common plan | `complete` |' "$project" >/dev/null ||
   fail "transformation IR milestone is not complete"
-grep -F '| `V010.QUANT.2` | common + DeepSeek roles | `active` |' "$project" >/dev/null ||
-  fail "quantization is not active"
+grep -F '| `V010.QUANT.2` | common + DeepSeek roles | `complete` |' "$project" >/dev/null ||
+  fail "quantization is not complete"
+grep -F '| `V010.GGUF.WRITER.1` | common | `active` |' "$project" >/dev/null ||
+  fail "GGUF writer is not active"
 grep -F '| V010.MODEL.TRANSFORM.IR.0 | recovered/promoted |' "$project" >/dev/null ||
   fail "quantization does not depend on the transformation IR"
 
@@ -340,7 +342,8 @@ sequence=$(awk '
 in_block && /^```$/ {
   if (block ~ /V010\.DOCS\.README\.COMPILATION\.0/ &&
       block ~ /V010\.MODEL\.TRANSFORM\.IR\.0/ &&
-      block ~ /V010\.QUANT\.2/) {
+      block ~ /V010\.QUANT\.2/ &&
+      block ~ /V010\.GGUF\.WRITER\.1/) {
     print block
     exit
   }
@@ -355,7 +358,8 @@ BEGIN { expected = 1 }
 /V010\.DOCS\.README\.COMPILATION\.0/ { if (expected != 1) exit 1; expected = 2 }
 /V010\.MODEL\.TRANSFORM\.IR\.0/ { if (expected != 2) exit 1; expected = 3 }
 /V010\.QUANT\.2/ { if (expected != 3) exit 1; expected = 4 }
-END { exit expected == 4 ? 0 : 1 }
+/V010\.GGUF\.WRITER\.1/ { if (expected != 4) exit 1; expected = 5 }
+END { exit expected == 5 ? 0 : 1 }
 ' || fail "compilation/transform/quant critical-path order is invalid"
 
 echo "project ledger: ok (tracks=25 recovered=$recovered_count ids=$row_count milestones=$milestone_count active=$active_id)"

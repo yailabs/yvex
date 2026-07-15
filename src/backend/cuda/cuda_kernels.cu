@@ -1,9 +1,16 @@
 /*
  * cuda/cuda_kernels.cu - CUDA device kernels.
  *
- * This file owns CUDA device code. Host-side validation and Driver API launch
- * remain in cuda_ops.c.
+ * Owner: src/backend/cuda.
+ * Owns: bounded device arithmetic for admitted backend operation variants.
+ * Does not own: host validation, Driver API launches, qtype capability truth,
+ *   quantization policy, model graphs, runtime, or generation.
+ * Invariants: every exported kernel is resolved through the generated PTX
+ *   bundle and its matching host owner validates byte/rank geometry first.
+ * Boundary: a qtype row dot is primitive compute proof, not model execution.
  */
+
+#include <yvex/gguf_qtype.h>
 
 extern "C" __global__ void yvex_embed_f32(const float *embedding,
                                           const unsigned int *token_ids,
@@ -53,13 +60,13 @@ static __device__ float yvex_f16_bits_to_float(unsigned int h)
         if (mant == 0u) {
             raw = sign;
         } else {
-            exp = 1u;
+            unsigned int shift = 0u;
             while ((mant & 0x0400u) == 0u) {
                 mant <<= 1;
-                exp -= 1u;
+                shift++;
             }
             mant &= 0x03ffu;
-            raw = sign | ((exp + (127u - 15u)) << 23) | (mant << 13);
+            raw = sign | ((113u - shift) << 23) | (mant << 13);
         }
     } else if (exp == 31u) {
         raw = sign | 0x7f800000u | (mant << 13);
@@ -67,6 +74,130 @@ static __device__ float yvex_f16_bits_to_float(unsigned int h)
         raw = sign | ((exp + (127u - 15u)) << 23) | (mant << 13);
     }
     return __uint_as_float(raw);
+}
+
+static __device__ unsigned int yvex_qtype_load_u16(
+    const unsigned char *bytes)
+{
+    return (unsigned int)bytes[0] | ((unsigned int)bytes[1] << 8);
+}
+
+static __device__ unsigned int yvex_qtype_load_u32(
+    const unsigned char *bytes)
+{
+    return (unsigned int)bytes[0] |
+           ((unsigned int)bytes[1] << 8) |
+           ((unsigned int)bytes[2] << 16) |
+           ((unsigned int)bytes[3] << 24);
+}
+
+static __device__ float yvex_bf16_bits_to_float(unsigned int bits)
+{
+    return __uint_as_float(bits << 16);
+}
+
+static __device__ float yvex_e8m0_bits_to_float(unsigned int bits)
+{
+    if (bits == 0xffu) return __uint_as_float(0x7fc00000u);
+    return __uint_as_float(bits == 0u ? 0x00400000u : bits << 23);
+}
+
+static __device__ float yvex_mxfp4_code_to_float(unsigned int code)
+{
+    float magnitude;
+    switch (code & 7u) {
+    case 0u: magnitude = 0.0f; break;
+    case 1u: magnitude = 1.0f; break;
+    case 2u: magnitude = 2.0f; break;
+    case 3u: magnitude = 3.0f; break;
+    case 4u: magnitude = 4.0f; break;
+    case 5u: magnitude = 6.0f; break;
+    case 6u: magnitude = 8.0f; break;
+    default: magnitude = 12.0f; break;
+    }
+    return code & 8u ? -magnitude : magnitude;
+}
+
+/* Directly reconstructs one element without materializing an F32 tensor. */
+static __device__ float yvex_qtype_value(const unsigned char *encoded,
+                                         unsigned long long index,
+                                         unsigned int qtype)
+{
+    if (qtype == YVEX_GGUF_QTYPE_F32) {
+        return __uint_as_float(yvex_qtype_load_u32(encoded + index * 4ull));
+    }
+    if (qtype == YVEX_GGUF_QTYPE_F16) {
+        return yvex_f16_bits_to_float(
+            yvex_qtype_load_u16(encoded + index * 2ull));
+    }
+    if (qtype == YVEX_GGUF_QTYPE_BF16) {
+        return yvex_bf16_bits_to_float(
+            yvex_qtype_load_u16(encoded + index * 2ull));
+    }
+    if (qtype == YVEX_GGUF_QTYPE_I32) {
+        unsigned int raw = yvex_qtype_load_u32(encoded + index * 4ull);
+        int value = raw <= 0x7fffffffu
+            ? (int)raw : -1 - (int)(0xffffffffu - raw);
+        return (float)value;
+    }
+    if (qtype == YVEX_GGUF_QTYPE_Q8_0) {
+        unsigned long long block = index / 32ull;
+        unsigned int lane = (unsigned int)(index % 32ull);
+        const unsigned char *bytes = encoded + block * 34ull;
+        float scale = yvex_f16_bits_to_float(yvex_qtype_load_u16(bytes));
+        int quantized = bytes[2u + lane] <= 127u
+            ? (int)bytes[2u + lane] : (int)bytes[2u + lane] - 256;
+        return scale * (float)quantized;
+    }
+    if (qtype == YVEX_GGUF_QTYPE_MXFP4) {
+        unsigned long long block = index / 32ull;
+        unsigned int lane = (unsigned int)(index % 32ull);
+        const unsigned char *bytes = encoded + block * 17ull;
+        unsigned int packed = bytes[1u + (lane & 15u)];
+        unsigned int code = lane < 16u ? packed & 15u : packed >> 4;
+        return yvex_mxfp4_code_to_float(code) *
+               yvex_e8m0_bits_to_float(bytes[0]) * 0.5f;
+    }
+    if (qtype == YVEX_GGUF_QTYPE_Q2_K) {
+        unsigned long long block = index / 256ull;
+        unsigned int lane = (unsigned int)(index % 256ull);
+        const unsigned char *bytes = encoded + block * 84ull;
+        unsigned int subblock = lane / 16u;
+        unsigned int half = lane / 128u;
+        unsigned int local_subblock = subblock & 7u;
+        unsigned int pair = local_subblock & 1u;
+        unsigned int group = local_subblock / 2u;
+        unsigned int packed = bytes[16u + half * 32u + pair * 16u +
+                                    (lane & 15u)];
+        unsigned int code = (packed >> (group * 2u)) & 3u;
+        unsigned int scale_byte = bytes[subblock];
+        float scale = yvex_f16_bits_to_float(
+            yvex_qtype_load_u16(bytes + 80u));
+        float minimum = yvex_f16_bits_to_float(
+            yvex_qtype_load_u16(bytes + 82u));
+        return scale * (float)(scale_byte & 15u) * (float)code -
+               minimum * (float)(scale_byte >> 4);
+    }
+    return __uint_as_float(0x7fc00000u);
+}
+
+/* Bounded qtype arithmetic proof: encoded row times one F32 vector. */
+extern "C" __global__ void yvex_qtype_row_dot(
+    const unsigned char *encoded,
+    const float *vector,
+    unsigned long long elements,
+    unsigned int qtype,
+    float *out)
+{
+    unsigned long long index;
+    double sum = 0.0;
+
+    if (blockIdx.x != 0u || threadIdx.x != 0u || !encoded || !vector ||
+        !out || elements == 0ull) return;
+    for (index = 0ull; index < elements; ++index)
+        sum += (double)yvex_qtype_value(encoded, index, qtype) *
+               (double)vector[index];
+    out[0] = (float)sum;
 }
 
 extern "C" __global__ void yvex_embed_f16_to_f32(const unsigned short *embedding,

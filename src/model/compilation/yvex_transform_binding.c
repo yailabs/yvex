@@ -292,6 +292,13 @@ const yvex_transform_ir *yvex_transform_binding_ir(
     return binding ? binding->ir : NULL;
 }
 
+/* Exposes the borrowed, identity-bound session to the byte executor only. */
+yvex_source_payload_session *yvex_transform_binding_payload_session(
+    const yvex_transform_binding *binding)
+{
+    return binding ? binding->session : NULL;
+}
+
 const yvex_transform_value *yvex_transform_binding_terminal_at(
     const yvex_transform_binding *binding,
     unsigned long long ordinal)

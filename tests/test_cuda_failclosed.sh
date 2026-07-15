@@ -48,6 +48,7 @@ contains "$OUT_DIR/backend.out" "kernel_bundle: absent"
 contains "$OUT_DIR/backend.out" "kernel_bundle_reason: kernel-bundle-absent"
 contains "$OUT_DIR/backend.out" "embed-f32-to-f32: unsupported (kernel-bundle-absent)"
 contains "$OUT_DIR/backend.out" "attention-noncausal-f32: unsupported (kernel-bundle-absent)"
+contains "$OUT_DIR/backend.out" "qtype-row-dot: unsupported (kernel-bundle-absent)"
 contains "$OUT_DIR/backend.out" "status: backend-capabilities"
 
 set +e

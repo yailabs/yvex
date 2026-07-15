@@ -613,6 +613,72 @@ cleanup:
     return rc;
 }
 
+/*
+ * Rehydrates an upstream-verified v3 payload seal from verifier-owned facts.
+ * This performs no payload IO: the manifest parser already proved each
+ * published observed digest equals its authoritative provider digest, while
+ * payload_build_indexes independently resolved the current provider digests.
+ * Recomputing and matching the aggregate identity therefore binds the newly
+ * admitted file identities to the exact published payload set.  Local-only
+ * seals cannot be reconstructed without their per-shard observed digests and
+ * deliberately remain untrusted until an explicit verification pass.
+ */
+static int payload_restore_published_upstream_trust(
+    yvex_source_payload_session *session,
+    yvex_source_payload_failure *failure,
+    yvex_error *err)
+{
+    unsigned long long index;
+    int rc;
+
+    if (!session->verification.manifest_payload_trusted)
+        return YVEX_OK;
+    if (strcmp(session->verification.manifest_payload_trust_class,
+               "upstream_payload_verified") != 0)
+        return YVEX_OK;
+    if (session->verification.manifest_payload_shard_count !=
+            session->shard_count ||
+        session->verification.manifest_payload_tensor_count !=
+            session->tensor_count ||
+        session->verification.manifest_payload_logical_tensor_bytes !=
+            session->logical_tensor_bytes ||
+        !yvex_sha256_hex_valid(
+            session->verification.manifest_payload_identity)) {
+        yvex_source_payload_fail(
+            failure, YVEX_SOURCE_PAYLOAD_FAILURE_PAYLOAD_IDENTITY_MISMATCH,
+            ULLONG_MAX, ULLONG_MAX, session->tensor_count,
+            session->verification.manifest_payload_tensor_count, 0, err,
+            YVEX_ERR_FORMAT, "source_payload_restore_trust",
+            "published payload aggregate facts do not match the admitted snapshot");
+        return YVEX_ERR_FORMAT;
+    }
+    for (index = 0u; index < session->shard_count; ++index) {
+        yvex_source_payload_owned_shard *shard = &session->shards[index];
+
+        if (!yvex_sha256_hex_valid(shard->expected_digest) ||
+            strcmp(shard->digest_algorithm, "sha256") != 0 ||
+            strcmp(shard->digest_authority,
+                   "huggingface-git-lfs-etag") != 0) {
+            yvex_source_payload_fail(
+                failure,
+                YVEX_SOURCE_PAYLOAD_FAILURE_EXPECTED_DIGEST_UNAVAILABLE,
+                index, ULLONG_MAX, 1u, 0u, 0, err, YVEX_ERR_UNSUPPORTED,
+                "source_payload_restore_trust",
+                "published upstream trust requires an authoritative shard digest");
+            return YVEX_ERR_UNSUPPORTED;
+        }
+        memcpy(shard->observed_digest, shard->expected_digest,
+               sizeof(shard->observed_digest));
+        shard->public_fact.trust_class =
+            YVEX_SOURCE_PAYLOAD_TRUST_UPSTREAM_VERIFIED;
+    }
+    rc = yvex_source_payload_identity_compute(session, failure, err);
+    if (rc != YVEX_OK) return rc;
+    session->state = YVEX_SOURCE_PAYLOAD_STATE_READY;
+    session->facts.state = session->state;
+    return YVEX_OK;
+}
+
 /* Constructs a fail-closed session only from matching exact verification facts. */
 int yvex_source_payload_session_open_with_ops(
     yvex_source_payload_session **out,
@@ -797,6 +863,8 @@ int yvex_source_payload_session_open_with_ops(
     session->facts.shard_count = session->shard_count;
     session->facts.tensor_count = session->tensor_count;
     session->facts.logical_tensor_bytes = session->logical_tensor_bytes;
+    rc = payload_restore_published_upstream_trust(session, failure, err);
+    if (rc != YVEX_OK) goto fail;
     *out = session;
     yvex_error_clear(err);
     if (failure) memset(failure, 0, sizeof(*failure));

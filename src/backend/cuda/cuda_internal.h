@@ -85,6 +85,7 @@ typedef struct {
     CUfunction rms_norm_f16_function;
     CUfunction rope_function;
     CUfunction matmul_function;
+    CUfunction qtype_row_dot_function;
     CUfunction mlp_function;
     CUfunction attention_function;
     int module_loaded;

@@ -44,6 +44,7 @@ static void cuda_bundle_clear_handles(yvex_cuda_backend_state *state)
     state->rms_norm_f16_function = NULL;
     state->rope_function = NULL;
     state->matmul_function = NULL;
+    state->qtype_row_dot_function = NULL;
     state->mlp_function = NULL;
     state->attention_function = NULL;
     state->module_loaded = 0;
@@ -74,6 +75,8 @@ static CUfunction cuda_variant_function(const yvex_cuda_backend_state *state,
     case YVEX_BACKEND_VARIANT_RMS_NORM_F32_WEIGHT_F16: return state->rms_norm_f16_function;
     case YVEX_BACKEND_VARIANT_ROPE_F32: return state->rope_function;
     case YVEX_BACKEND_VARIANT_MATMUL_F32: return state->matmul_function;
+    case YVEX_BACKEND_VARIANT_QTYPE_ROW_DOT:
+        return state->qtype_row_dot_function;
     case YVEX_BACKEND_VARIANT_MLP_DENSE_F32:
     case YVEX_BACKEND_VARIANT_MLP_ROUTED_F32: return state->mlp_function;
     case YVEX_BACKEND_VARIANT_ATTENTION_CAUSAL_F32:
@@ -179,6 +182,7 @@ int yvex_cuda_kernel_bundle_admit(yvex_backend *backend, yvex_error *err)
         CUfunction rms_f16 = NULL;
         CUfunction rope = NULL;
         CUfunction matmul = NULL;
+        CUfunction qtype_row_dot = NULL;
         CUfunction mlp = NULL;
         CUfunction attention = NULL;
         const char *injected = getenv("YVEX_TEST_CUDA_BUNDLE_FAILURE");
@@ -229,6 +233,9 @@ int yvex_cuda_kernel_bundle_admit(yvex_backend *backend, yvex_error *err)
                               YVEX_BACKEND_VARIANT_RMS_NORM_F32_WEIGHT_F16, rms_f16);
         YVEX_RESOLVE_REQUIRED("yvex_rope_f32", YVEX_BACKEND_VARIANT_ROPE_F32, rope);
         YVEX_RESOLVE_REQUIRED("yvex_matmul_f32", YVEX_BACKEND_VARIANT_MATMUL_F32, matmul);
+        YVEX_RESOLVE_REQUIRED("yvex_qtype_row_dot",
+                              YVEX_BACKEND_VARIANT_QTYPE_ROW_DOT,
+                              qtype_row_dot);
         YVEX_RESOLVE_REQUIRED("yvex_mlp_f32", YVEX_BACKEND_VARIANT_MLP_DENSE_F32, mlp);
         YVEX_RESOLVE_REQUIRED("yvex_attention_f32",
                               YVEX_BACKEND_VARIANT_ATTENTION_CAUSAL_F32, attention);
@@ -241,6 +248,7 @@ int yvex_cuda_kernel_bundle_admit(yvex_backend *backend, yvex_error *err)
         state->rms_norm_f16_function = rms_f16;
         state->rope_function = rope;
         state->matmul_function = matmul;
+        state->qtype_row_dot_function = qtype_row_dot;
         state->mlp_function = mlp;
         state->attention_function = attention;
         state->module_loaded = 1;

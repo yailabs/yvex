@@ -18,6 +18,9 @@
 #include "src/model/compilation/yvex_transform_binding.h"
 #include "src/model/compilation/yvex_transform_ir.h"
 #include "src/model/target/yvex_model_target_catalog.h"
+#include "src/gguf/yvex_quant_execute.h"
+#include "src/gguf/yvex_quant_plan.h"
+#include "src/gguf/yvex_quant_sink.h"
 
 #include <yvex/artifact_identity.h>
 
@@ -98,6 +101,17 @@ typedef struct {
     unsigned int live;
 } payload_binding_allocator;
 
+typedef struct {
+    unsigned int begins;
+    unsigned int chunks;
+    unsigned int commits;
+    unsigned int aborts;
+    unsigned int fail_chunk;
+    unsigned int cancel_chunk;
+    unsigned long long abort_delivered_bytes;
+    yvex_quant_cancellation *cancellation;
+} payload_quant_sink_state;
+
 static payload_fault_state payload_fault;
 
 /* Injects deterministic quantizer-binding allocation failures. */
@@ -122,6 +136,73 @@ static void payload_binding_release(void *allocation, void *context)
     if (!allocation) return;
     free(allocation);
     state->live--;
+}
+
+/* Records fixture transactions and injects one deterministic chunk refusal. */
+static int payload_quant_sink_begin(
+    void *context, const yvex_quant_decision *decision)
+{
+    payload_quant_sink_state *state = (payload_quant_sink_state *)context;
+    if (!state || !decision) return 1;
+    state->begins++;
+    return 0;
+}
+
+static int payload_quant_sink_chunk(
+    void *context,
+    const yvex_quant_decision *decision,
+    unsigned long long output_offset,
+    const unsigned char *bytes,
+    size_t byte_count)
+{
+    payload_quant_sink_state *state = (payload_quant_sink_state *)context;
+    (void)output_offset;
+    if (!state || !decision || !bytes || !byte_count) return 1;
+    state->chunks++;
+    if (state->cancellation && state->cancel_chunk == state->chunks)
+        yvex_quant_cancellation_request(state->cancellation);
+    return state->fail_chunk && state->chunks == state->fail_chunk;
+}
+
+static int payload_quant_sink_commit(
+    void *context,
+    const yvex_quant_decision *decision,
+    unsigned long long delivered_bytes)
+{
+    payload_quant_sink_state *state = (payload_quant_sink_state *)context;
+    if (!state || !decision || delivered_bytes != decision->encoded_bytes)
+        return 1;
+    state->commits++;
+    return 0;
+}
+
+static void payload_quant_sink_abort(
+    void *context,
+    const yvex_quant_decision *decision,
+    const yvex_quant_failure *failure,
+    unsigned long long delivered_bytes)
+{
+    payload_quant_sink_state *state = (payload_quant_sink_state *)context;
+    (void)decision;
+    (void)failure;
+    if (state) {
+        state->aborts++;
+        state->abort_delivered_bytes = delivered_bytes;
+    }
+}
+
+/* Injects failure before a worker becomes runnable. */
+static int payload_quant_thread_fail(
+    pthread_t *thread,
+    void *(*entry)(void *),
+    void *argument,
+    void *context)
+{
+    (void)thread;
+    (void)entry;
+    (void)argument;
+    (void)context;
+    return 1;
 }
 
 /* Proves the allocation-free common source/artifact shard-index foundation. */
@@ -178,7 +259,7 @@ static int payload_test_write_bytes(const char *path,
     for (index = 0u; index < prefix + payload; ++index) {
         unsigned char byte = index < prefix
             ? (unsigned char)(0xa0u + (index & 15u))
-            : (unsigned char)((index + seed * 17u) & 0xffu);
+            : (unsigned char)((index + seed * 17u) & 0x3fu);
         if (fwrite(&byte, 1u, 1u, file) != 1u) {
             fclose(file);
             return 0;
@@ -355,8 +436,8 @@ static int payload_fixture_create(payload_fixture *fixture,
     fixture->verify_options.manifest_path = fixture->manifest;
     yvex_source_payload_budget_default(&budget);
     budget.maximum_open_handles = handles;
-    budget.chunk_bytes = 4096u;
-    budget.maximum_inflight_host_bytes = 4096u * 4u;
+    budget.chunk_bytes = 8193u;
+    budget.maximum_inflight_host_bytes = 8193u * 4u;
     budget.allow_local_snapshot_seal = 1;
     memset(&open_options, 0, sizeof(open_options));
     open_options.verification_options = &fixture->verify_options;
@@ -488,6 +569,8 @@ static int test_payload_transform_binding(
 {
     static const char wrong_payload[] =
         "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    static const char wrong_execution[] =
+        "0000000000000000000000000000000000000000000000000000000000000000";
     yvex_transform_ir *ir = NULL;
     yvex_transform_ir *mismatch = NULL;
     yvex_transform_binding *binding = NULL;
@@ -496,8 +579,27 @@ static int test_payload_transform_binding(
     yvex_transform_failure failure;
     yvex_transform_allocator allocator;
     payload_binding_allocator allocation_state;
+    yvex_quant_plan *quant_plan = NULL;
+    yvex_quant_plan *second_plan = NULL;
+    yvex_quant_explicit_decision quant_spec;
+    yvex_quant_plan_options quant_plan_options;
+    yvex_quant_sink_allocator sink_allocator;
+    const yvex_quant_plan_summary *quant_summary;
+    const yvex_quant_plan_summary *second_summary;
+    yvex_quant_digest_sink *digest_sink = NULL;
+    yvex_quant_output_sink output_sink;
+    yvex_quant_digest_summary digest_first;
+    yvex_quant_digest_summary digest_second;
+    yvex_quant_execution_summary execution;
+    yvex_quant_executor_options executor_options;
+    yvex_quant_cancellation cancellation;
+    yvex_quant_failure quant_failure;
+    payload_quant_sink_state refusal_state;
+    const yvex_transform_value *terminal;
+    unsigned char protocol_byte = 0u;
     yvex_error err;
     unsigned int fail_at;
+    int quant_rc;
 
     YVEX_TEST_ASSERT(payload_fixture_transform_ir(
                          &ir, fixture->session,
@@ -536,6 +638,388 @@ static int test_payload_transform_binding(
                          binding, 0u, &decision, &failure, &err) != YVEX_OK &&
                          failure.code == YVEX_TRANSFORM_FAILURE_INVALID_DTYPE,
                      "disallowed physical class refuses without mutating IR");
+
+    terminal = yvex_transform_binding_terminal_at(binding, 0u);
+    memset(&quant_spec, 0, sizeof(quant_spec));
+    quant_spec.qtype = YVEX_GGUF_QTYPE_BF16;
+    quant_spec.rank = terminal->shape.rank;
+    memcpy(quant_spec.dims, terminal->shape.dims,
+           sizeof(quant_spec.dims));
+    YVEX_TEST_ASSERT(yvex_quant_plan_build_explicit(
+                         &quant_plan, ir, binding, "fixture-bf16-exact-v1",
+                         0xfaceb00cull, &quant_spec, 1u, NULL,
+                         &quant_failure, &err) == YVEX_OK && quant_plan,
+                     "fixture physical plan seals from the immutable IR");
+    YVEX_TEST_ASSERT(yvex_quant_plan_build_explicit(
+                         &second_plan, ir, binding,
+                         "fixture-bf16-exact-v1", 0xfaceb00cull,
+                         &quant_spec, 1u, NULL, &quant_failure, &err) ==
+                         YVEX_OK && second_plan,
+                     "repeated fixture physical plan seals");
+    quant_summary = yvex_quant_plan_summary_get(quant_plan);
+    second_summary = yvex_quant_plan_summary_get(second_plan);
+    YVEX_TEST_ASSERT(quant_summary && second_summary &&
+                         quant_summary->complete &&
+                         quant_summary->decision_count == 1u &&
+                         quant_summary->source_value_count == 1u &&
+                         quant_summary->encoded_bytes == 8192u &&
+                         quant_summary->payload_bytes_read == 0u &&
+                         strcmp(quant_summary->profile_identity,
+                                second_summary->profile_identity) == 0 &&
+                         yvex_quant_plan_find(
+                             quant_plan, &terminal->logical_key) ==
+                             yvex_quant_plan_decision_at(quant_plan, 0u),
+                     "sealed plan identity, accounting, and index are deterministic");
+    yvex_quant_plan_release(&second_plan);
+
+    memset(&sink_allocator, 0, sizeof(sink_allocator));
+    sink_allocator.allocate = payload_binding_allocate;
+    sink_allocator.release = payload_binding_release;
+    for (fail_at = 0u; fail_at < 3u; ++fail_at) {
+        memset(&allocation_state, 0, sizeof(allocation_state));
+        allocation_state.fail_at = fail_at;
+        sink_allocator.context = &allocation_state;
+        quant_rc = yvex_quant_digest_sink_create_with_allocator(
+            &digest_sink, quant_plan, facts->payload_identity,
+            &sink_allocator, &quant_failure, &err);
+        if (fail_at < 2u) {
+            YVEX_TEST_ASSERT(quant_rc != YVEX_OK && !digest_sink &&
+                                 quant_failure.code ==
+                                     YVEX_QUANT_FAILURE_ALLOCATION &&
+                                 allocation_state.live == 0u,
+                             "digest sink allocation failure unwinds all ownership");
+        } else {
+            YVEX_TEST_ASSERT(quant_rc == YVEX_OK && digest_sink &&
+                                 allocation_state.live == 2u,
+                             "digest sink allocator seam reaches complete construction");
+            yvex_quant_digest_sink_release(&digest_sink);
+            YVEX_TEST_ASSERT(allocation_state.live == 0u,
+                             "digest sink allocator seam releases all ownership");
+        }
+    }
+
+    YVEX_TEST_ASSERT(yvex_quant_digest_sink_create(
+                         &digest_sink, quant_plan, facts->payload_identity,
+                         &quant_failure, &err) == YVEX_OK,
+                     "digest/discard sink binds the trusted payload identity");
+    yvex_quant_digest_sink_adapter(digest_sink, &output_sink);
+    yvex_quant_executor_options_default(&executor_options);
+    executor_options.source_chunk_bytes = 4096u;
+    executor_options.output_chunk_bytes = 4096u;
+    executor_options.maximum_owned_bytes = 1024u * 1024u;
+    YVEX_TEST_ASSERT(yvex_quant_execute(
+                         quant_plan, &output_sink, &executor_options,
+                         &execution, &quant_failure, &err) == YVEX_OK &&
+                         execution.complete &&
+                         execution.terminals_executed == 1u &&
+                         execution.source_values_consumed == 1u &&
+                         execution.payload_bytes_read == 8192u &&
+                         execution.encoded_output_bytes == 8192u &&
+                         execution.peak_owned_bytes <=
+                             executor_options.maximum_owned_bytes,
+                     "trusted exact execution streams and commits bounded bytes");
+    YVEX_TEST_ASSERT(yvex_quant_digest_sink_finalize(
+                         digest_sink, &digest_first, &quant_failure, &err) ==
+                         YVEX_OK && digest_first.complete &&
+                         digest_first.committed_terminals == 1u &&
+                         digest_first.encoded_bytes == 8192u,
+                     "digest sink seals exact terminal output identity");
+    YVEX_TEST_ASSERT(yvex_quant_digest_summary_validate(
+                         &digest_first, digest_first.execution_identity,
+                         &quant_failure, &err) == YVEX_OK,
+                     "matching execution digest validates");
+    YVEX_TEST_ASSERT(yvex_quant_digest_summary_validate(
+                         &digest_first, wrong_execution,
+                         &quant_failure, &err) != YVEX_OK &&
+                         quant_failure.code ==
+                             YVEX_QUANT_FAILURE_DIGEST_MISMATCH,
+                     "mismatched execution digest has a typed refusal");
+    yvex_quant_digest_sink_release(&digest_sink);
+
+    YVEX_TEST_ASSERT(yvex_quant_digest_sink_create(
+                         &digest_sink, quant_plan, wrong_payload,
+                         &quant_failure, &err) != YVEX_OK && !digest_sink &&
+                         quant_failure.code ==
+                             YVEX_QUANT_FAILURE_PAYLOAD_IDENTITY,
+                     "digest sink refuses a mismatched payload identity");
+
+    YVEX_TEST_ASSERT(yvex_quant_digest_sink_create(
+                         &digest_sink, quant_plan, facts->payload_identity,
+                         &quant_failure, &err) == YVEX_OK,
+                     "second digest sink opens");
+    yvex_quant_digest_sink_adapter(digest_sink, &output_sink);
+    executor_options.source_chunk_bytes = 8193u;
+    executor_options.output_chunk_bytes = 4099u;
+    quant_rc = yvex_quant_execute(
+        quant_plan, &output_sink, &executor_options,
+        &execution, &quant_failure, &err);
+    if (quant_rc != YVEX_OK)
+        fprintf(stderr,
+                "odd-chunk execution failure=%s expected=%llu actual=%llu status=%s\n",
+                yvex_quant_failure_name(quant_failure.code),
+                quant_failure.expected, quant_failure.actual,
+                yvex_status_name(yvex_error_code(&err)));
+    YVEX_TEST_ASSERT(quant_rc == YVEX_OK &&
+                         yvex_quant_digest_sink_finalize(
+                             digest_sink, &digest_second,
+                             &quant_failure, &err) == YVEX_OK &&
+                         strcmp(digest_first.execution_identity,
+                                digest_second.execution_identity) == 0,
+                     "output chunk size does not change encoded identity");
+    yvex_quant_digest_sink_release(&digest_sink);
+
+    YVEX_TEST_ASSERT(yvex_quant_digest_sink_create(
+                         &digest_sink, quant_plan, facts->payload_identity,
+                         &quant_failure, &err) == YVEX_OK,
+                     "protocol-refusal digest sink opens");
+    yvex_quant_digest_sink_adapter(digest_sink, &output_sink);
+    YVEX_TEST_ASSERT(output_sink.begin_terminal(
+                         output_sink.context,
+                         yvex_quant_plan_decision_at(quant_plan, 0u)) == 0 &&
+                         output_sink.deliver_chunk(
+                             output_sink.context,
+                             yvex_quant_plan_decision_at(quant_plan, 0u),
+                             1u, &protocol_byte, 1u) != 0,
+                     "digest sink refuses non-monotonic output offsets");
+    output_sink.abort_terminal(
+        output_sink.context, yvex_quant_plan_decision_at(quant_plan, 0u),
+        &quant_failure, 0u);
+    YVEX_TEST_ASSERT(output_sink.commit_terminal(
+                         output_sink.context,
+                         yvex_quant_plan_decision_at(quant_plan, 0u), 0u) != 0,
+                     "digest sink forbids commit after abort");
+    yvex_quant_digest_sink_release(&digest_sink);
+
+    memset(&refusal_state, 0, sizeof(refusal_state));
+    refusal_state.fail_chunk = 1u;
+    memset(&output_sink, 0, sizeof(output_sink));
+    output_sink.begin_terminal = payload_quant_sink_begin;
+    output_sink.deliver_chunk = payload_quant_sink_chunk;
+    output_sink.commit_terminal = payload_quant_sink_commit;
+    output_sink.abort_terminal = payload_quant_sink_abort;
+    output_sink.context = &refusal_state;
+    yvex_quant_executor_options_default(&executor_options);
+    executor_options.source_chunk_bytes = 4096u;
+    executor_options.output_chunk_bytes = 4096u;
+    executor_options.maximum_owned_bytes = 1024u * 1024u;
+    YVEX_TEST_ASSERT(yvex_quant_execute(
+                         quant_plan, &output_sink, &executor_options,
+                         &execution, &quant_failure, &err) != YVEX_OK &&
+                         quant_failure.code ==
+                             YVEX_QUANT_FAILURE_SINK_SHORT_WRITE &&
+                         refusal_state.begins == 1u &&
+                         refusal_state.chunks == 1u &&
+                         refusal_state.commits == 0u &&
+                         refusal_state.aborts == 1u &&
+                         refusal_state.abort_delivered_bytes == 0u &&
+                         !execution.complete,
+                     "sink refusal aborts without publishing partial output");
+
+    memset(&refusal_state, 0, sizeof(refusal_state));
+    yvex_quant_cancellation_init(&cancellation);
+    refusal_state.cancel_chunk = 1u;
+    refusal_state.cancellation = &cancellation;
+    memset(&output_sink, 0, sizeof(output_sink));
+    output_sink.begin_terminal = payload_quant_sink_begin;
+    output_sink.deliver_chunk = payload_quant_sink_chunk;
+    output_sink.commit_terminal = payload_quant_sink_commit;
+    output_sink.abort_terminal = payload_quant_sink_abort;
+    output_sink.context = &refusal_state;
+    executor_options.cancellation = &cancellation;
+    YVEX_TEST_ASSERT(yvex_quant_execute(
+                         quant_plan, &output_sink, &executor_options,
+                         &execution, &quant_failure, &err) != YVEX_OK &&
+                         quant_failure.code == YVEX_QUANT_FAILURE_CANCELLED &&
+                         refusal_state.chunks == 1u &&
+                         refusal_state.commits == 0u &&
+                         refusal_state.aborts == 1u &&
+                         refusal_state.abort_delivered_bytes == 4096u &&
+                         execution.committed_terminals == 0u &&
+                         !execution.complete,
+                     "mid-stream cancellation aborts between source chunks");
+
+    YVEX_TEST_ASSERT(yvex_quant_digest_sink_create(
+                         &digest_sink, quant_plan, facts->payload_identity,
+                         &quant_failure, &err) == YVEX_OK,
+                     "cancellation digest sink opens");
+    yvex_quant_digest_sink_adapter(digest_sink, &output_sink);
+    yvex_quant_cancellation_init(&cancellation);
+    yvex_quant_cancellation_request(&cancellation);
+    yvex_quant_executor_options_default(&executor_options);
+    executor_options.source_chunk_bytes = 4096u;
+    executor_options.output_chunk_bytes = 4096u;
+    executor_options.maximum_owned_bytes = 1024u * 1024u;
+    executor_options.cancellation = &cancellation;
+    YVEX_TEST_ASSERT(yvex_quant_execute(
+                         quant_plan, &output_sink, &executor_options,
+                         &execution, &quant_failure, &err) != YVEX_OK &&
+                         quant_failure.code == YVEX_QUANT_FAILURE_CANCELLED &&
+                         execution.committed_terminals == 0u &&
+                         !execution.complete,
+                     "pre-execution cancellation publishes no terminal");
+    yvex_quant_digest_sink_release(&digest_sink);
+
+    YVEX_TEST_ASSERT(yvex_quant_digest_sink_create(
+                         &digest_sink, quant_plan, facts->payload_identity,
+                         &quant_failure, &err) == YVEX_OK,
+                     "worker-failure digest sink opens");
+    yvex_quant_digest_sink_adapter(digest_sink, &output_sink);
+    yvex_quant_executor_options_default(&executor_options);
+    executor_options.worker_count = 2u;
+    executor_options.source_chunk_bytes = 4096u;
+    executor_options.output_chunk_bytes = 4096u;
+    executor_options.maximum_owned_bytes = 1024u * 1024u;
+    executor_options.thread_create = payload_quant_thread_fail;
+    YVEX_TEST_ASSERT(yvex_quant_execute(
+                         quant_plan, &output_sink, &executor_options,
+                         &execution, &quant_failure, &err) != YVEX_OK &&
+                         quant_failure.code == YVEX_QUANT_FAILURE_WORKER &&
+                         execution.terminals_attempted == 0u &&
+                         execution.worker_failures == 1u,
+                     "worker startup failure occurs before any transaction");
+    yvex_quant_digest_sink_release(&digest_sink);
+
+    for (fail_at = 0u; fail_at < 2u; ++fail_at) {
+        memset(&allocation_state, 0, sizeof(allocation_state));
+        allocation_state.fail_at = fail_at;
+        YVEX_TEST_ASSERT(yvex_quant_digest_sink_create(
+                             &digest_sink, quant_plan,
+                             facts->payload_identity, &quant_failure,
+                             &err) == YVEX_OK,
+                         "allocation-fault digest sink opens");
+        yvex_quant_digest_sink_adapter(digest_sink, &output_sink);
+        yvex_quant_executor_options_default(&executor_options);
+        executor_options.source_chunk_bytes = 4096u;
+        executor_options.output_chunk_bytes = 4096u;
+        executor_options.maximum_owned_bytes = 1024u * 1024u;
+        executor_options.allocate = payload_binding_allocate;
+        executor_options.release = payload_binding_release;
+        executor_options.context = &allocation_state;
+        YVEX_TEST_ASSERT(yvex_quant_execute(
+                             quant_plan, &output_sink, &executor_options,
+                             &execution, &quant_failure, &err) != YVEX_OK &&
+                             quant_failure.code ==
+                                 YVEX_QUANT_FAILURE_ALLOCATION &&
+                             allocation_state.live == 0u,
+                         "executor allocation failure unwinds every buffer");
+        yvex_quant_digest_sink_release(&digest_sink);
+    }
+
+    YVEX_TEST_ASSERT(yvex_quant_digest_sink_create(
+                         &digest_sink, quant_plan, facts->payload_identity,
+                         &quant_failure, &err) == YVEX_OK,
+                     "resource-budget digest sink opens");
+    yvex_quant_digest_sink_adapter(digest_sink, &output_sink);
+    yvex_quant_executor_options_default(&executor_options);
+    executor_options.source_chunk_bytes = 4096u;
+    executor_options.output_chunk_bytes = 4096u;
+    executor_options.maximum_owned_bytes = 4096u;
+    YVEX_TEST_ASSERT(yvex_quant_execute(
+                         quant_plan, &output_sink, &executor_options,
+                         &execution, &quant_failure, &err) != YVEX_OK &&
+                         quant_failure.code ==
+                             YVEX_QUANT_FAILURE_RESOURCE_BUDGET &&
+                         !execution.complete,
+                     "executor distinguishes exhausted budget from allocator refusal");
+    yvex_quant_digest_sink_release(&digest_sink);
+
+    memset(&quant_plan_options, 0, sizeof(quant_plan_options));
+    quant_plan_options.allocate = payload_binding_allocate;
+    quant_plan_options.release = payload_binding_release;
+    quant_plan_options.maximum_owned_bytes = 1024u * 1024u;
+    for (fail_at = 0u; fail_at < 3u; ++fail_at) {
+        memset(&allocation_state, 0, sizeof(allocation_state));
+        allocation_state.fail_at = fail_at;
+        quant_plan_options.context = &allocation_state;
+        YVEX_TEST_ASSERT(yvex_quant_plan_build_explicit(
+                             &second_plan, ir, binding,
+                             "fixture-bf16-exact-v1", 0xfaceb00cull,
+                             &quant_spec, 1u, &quant_plan_options,
+                             &quant_failure, &err) != YVEX_OK &&
+                             !second_plan &&
+                             quant_failure.code ==
+                                 YVEX_QUANT_FAILURE_ALLOCATION &&
+                             allocation_state.live == 0u,
+                         "plan allocation failure unwinds every owner");
+    }
+    YVEX_TEST_ASSERT(yvex_quant_plan_build_explicit(
+                         &second_plan, ir, binding,
+                         "fixture-bf16-exact-v1", 0xfaceb00cull,
+                         &quant_spec, 0u, NULL, &quant_failure, &err) !=
+                         YVEX_OK && !second_plan &&
+                         quant_failure.code ==
+                             YVEX_QUANT_FAILURE_MISSING_DECISION,
+                     "missing explicit terminal decision refuses sealing");
+    quant_spec.row_axis = 1u;
+    YVEX_TEST_ASSERT(yvex_quant_plan_build_explicit(
+                         &second_plan, ir, binding,
+                         "fixture-bf16-exact-v1", 0xfaceb00cull,
+                         &quant_spec, 1u, NULL, &quant_failure, &err) !=
+                         YVEX_OK && !second_plan &&
+                         quant_failure.code ==
+                             YVEX_QUANT_FAILURE_INVALID_ROW_AXIS,
+                     "invalid physical row axis refuses sealing");
+    quant_spec.row_axis = 0u;
+    quant_spec.dims[0] /= 2u;
+    YVEX_TEST_ASSERT(yvex_quant_plan_build_explicit(
+                         &second_plan, ir, binding,
+                         "fixture-bf16-exact-v1", 0xfaceb00cull,
+                         &quant_spec, 1u, NULL, &quant_failure, &err) !=
+                         YVEX_OK && !second_plan &&
+                         quant_failure.code ==
+                             YVEX_QUANT_FAILURE_INVALID_DIMENSION,
+                     "physical element-count mismatch refuses sealing");
+    quant_spec.dims[0] *= 2u;
+    quant_spec.qtype = YVEX_GGUF_QTYPE_Q4_2_REMOVED;
+    YVEX_TEST_ASSERT(yvex_quant_plan_build_explicit(
+                         &second_plan, ir, binding,
+                         "fixture-refusal-v1", 0xfaceb00cull,
+                         &quant_spec, 1u, NULL, &quant_failure, &err) !=
+                         YVEX_OK && !second_plan &&
+                         quant_failure.code ==
+                             YVEX_QUANT_FAILURE_REMOVED_QTYPE,
+                     "removed qtype identity has a stable plan refusal");
+    quant_spec.qtype = YVEX_GGUF_QTYPE_NVFP4_OUTSIDE_BASELINE;
+    YVEX_TEST_ASSERT(yvex_quant_plan_build_explicit(
+                         &second_plan, ir, binding,
+                         "fixture-refusal-v1", 0xfaceb00cull,
+                         &quant_spec, 1u, NULL, &quant_failure, &err) !=
+                         YVEX_OK && !second_plan &&
+                         quant_failure.code ==
+                             YVEX_QUANT_FAILURE_QTYPE_OUTSIDE_BASELINE,
+                     "post-baseline qtype identity has a stable plan refusal");
+    quant_spec.qtype = YVEX_GGUF_QTYPE_Q4_0;
+    YVEX_TEST_ASSERT(yvex_quant_plan_build_explicit(
+                         &second_plan, ir, binding,
+                         "fixture-refusal-v1", 0xfaceb00cull,
+                         &quant_spec, 1u, NULL, &quant_failure, &err) !=
+                         YVEX_OK && !second_plan &&
+                         quant_failure.code ==
+                             YVEX_QUANT_FAILURE_ENCODER_UNAVAILABLE,
+                     "admitted storage without codec refuses encoding");
+    quant_spec.qtype = YVEX_GGUF_QTYPE_BF16;
+    quant_spec.rank = 0u;
+    YVEX_TEST_ASSERT(yvex_quant_plan_build_explicit(
+                         &second_plan, ir, binding,
+                         "fixture-refusal-v1", 0xfaceb00cull,
+                         &quant_spec, 1u, NULL, &quant_failure, &err) !=
+                         YVEX_OK && !second_plan &&
+                         quant_failure.code ==
+                             YVEX_QUANT_FAILURE_INVALID_RANK,
+                     "invalid physical rank retains its typed geometry refusal");
+    quant_spec.rank = terminal->shape.rank;
+    quant_spec.dims[0] = 0u;
+    YVEX_TEST_ASSERT(yvex_quant_plan_build_explicit(
+                         &second_plan, ir, binding,
+                         "fixture-refusal-v1", 0xfaceb00cull,
+                         &quant_spec, 1u, NULL, &quant_failure, &err) !=
+                         YVEX_OK && !second_plan &&
+                         quant_failure.code ==
+                             YVEX_QUANT_FAILURE_INVALID_DIMENSION,
+                     "zero physical dimension retains its typed geometry refusal");
+    memcpy(quant_spec.dims, terminal->shape.dims,
+           sizeof(quant_spec.dims));
+    yvex_quant_plan_release(&quant_plan);
     yvex_transform_binding_release(&binding);
 
     YVEX_TEST_ASSERT(payload_fixture_transform_ir(

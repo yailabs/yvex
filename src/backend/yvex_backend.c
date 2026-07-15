@@ -72,6 +72,7 @@ const char *yvex_backend_operation_variant_name(yvex_backend_operation_variant v
     case YVEX_BACKEND_VARIANT_RMS_NORM_F32_WEIGHT_F16: return "rms-norm-f32-weight-f16";
     case YVEX_BACKEND_VARIANT_ROPE_F32: return "rope-f32";
     case YVEX_BACKEND_VARIANT_MATMUL_F32: return "matmul-f32";
+    case YVEX_BACKEND_VARIANT_QTYPE_ROW_DOT: return "qtype-row-dot";
     case YVEX_BACKEND_VARIANT_MLP_DENSE_F32: return "mlp-dense-f32";
     case YVEX_BACKEND_VARIANT_MLP_ROUTED_F32: return "mlp-routed-f32";
     case YVEX_BACKEND_VARIANT_ATTENTION_CAUSAL_F32: return "attention-causal-f32";
@@ -418,6 +419,11 @@ static void backend_variant_dtypes(yvex_backend_capability_result *out)
     case YVEX_BACKEND_VARIANT_ATTENTION_NONCAUSAL_F32:
         out->input_dtype = YVEX_DTYPE_F32;
         out->weight_dtype = YVEX_DTYPE_F32;
+        out->output_dtype = YVEX_DTYPE_F32;
+        break;
+    case YVEX_BACKEND_VARIANT_QTYPE_ROW_DOT:
+        out->input_dtype = YVEX_DTYPE_UNKNOWN;
+        out->weight_dtype = YVEX_DTYPE_UNKNOWN;
         out->output_dtype = YVEX_DTYPE_F32;
         break;
     case YVEX_BACKEND_VARIANT_EMBED_F16_TO_F32:

@@ -241,10 +241,7 @@ int main(int argc, char **argv)
         yvex_deepseek_payload_handoff_binding(handoff), &transform_failure,
         &error);
     binding_readable = rc == YVEX_OK;
-    if ((!plan_only && !binding_readable) ||
-        (plan_only &&
-         (binding_readable ||
-          transform_failure.code != YVEX_TRANSFORM_FAILURE_INVALID_STATE))) {
+    if (!binding_readable) {
         fprintf(stderr, "transform_binding_readability=failed\n");
         yvex_deepseek_payload_handoff_close(handoff);
         return 1;

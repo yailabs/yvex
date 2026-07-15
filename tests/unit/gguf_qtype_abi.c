@@ -142,6 +142,8 @@ static int test_pinned_registry_parity(void)
         const yvex_gguf_qtype_geometry *geometry =
             yvex_gguf_qtype_geometry_at(i);
         YVEX_TEST_ASSERT(geometry != NULL, "pinned qtype row exists");
+        YVEX_TEST_ASSERT(geometry->numeric_capability_reserved == 0u,
+                         "storage geometry must not own numeric capability");
         YVEX_TEST_ASSERT(geometry->qtype == i, "pinned qtype numeric identity");
         YVEX_TEST_ASSERT_STREQ(geometry->name, pinned[i].name,
                                "pinned qtype canonical name");
@@ -177,6 +179,11 @@ static int test_identity_admission(void)
     YVEX_TEST_ASSERT(yvex_gguf_qtype_reference_dequantization_supported(
                          YVEX_GGUF_QTYPE_Q4_0) == 0,
                      "known geometry does not imply reference decoder");
+    YVEX_TEST_ASSERT(yvex_gguf_qtype_reference_dequantization_supported(
+                         YVEX_GGUF_QTYPE_Q8_0) == 1 &&
+                         yvex_gguf_qtype_reference_dequantization_supported(
+                             YVEX_GGUF_QTYPE_Q2_K) == 1,
+                     "implemented codecs project canonical reference decoders");
     return 0;
 }
 

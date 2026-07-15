@@ -24,7 +24,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-quant test-quant-live-plan test-quant-live test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -37,8 +37,9 @@ NVCC_AVAILABLE := $(shell command -v $(NVCC) >/dev/null 2>&1 && echo yes || echo
 
 CPPFLAGS ?= -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L -Iinclude -I. -Isrc/core -Isrc/cli -Isrc/cli/input -Isrc/cli/io -Isrc/cli/model_artifacts -Isrc/cli/render -Isrc/source -Isrc/io -Isrc/backend -Isrc/backend/cuda -Isrc/runtime -Isrc/server -Isrc/gguf -Isrc/generation -Isrc/graph -Isrc/model/artifacts -Isrc/model/compilation -Isrc/model/target
 CFLAGS ?= -std=c11 -Wall -Wextra -pedantic -pthread
+DEPFLAGS ?= -MMD -MP
 LDFLAGS ?=
-LDLIBS ?= -ldl -pthread
+LDLIBS ?= -ldl -pthread -lm
 TEST_CPPFLAGS := $(CPPFLAGS) -Itests
 
 BUILD_DIR ?= build
@@ -124,6 +125,13 @@ CORE_SRCS := \
 	src/gguf/yvex_gguf_roundtrip.c \
 	src/gguf/yvex_gguf_tensor_info.c \
 	src/gguf/yvex_gguf_writer.c \
+	src/gguf/yvex_quant_registry.c \
+	src/gguf/yvex_quant_scalar.c \
+	src/gguf/yvex_quant_block.c \
+	src/gguf/yvex_quant_compute.c \
+	src/gguf/yvex_quant_plan.c \
+	src/gguf/yvex_quant_sink.c \
+	src/gguf/yvex_quant_execute.c \
 	src/graph/yvex_graph_bind.c \
 	src/graph/yvex_graph.c \
 	src/graph/yvex_graph_execute.c \
@@ -228,14 +236,29 @@ CORE_OBJS += $(CUDA_PTX_OBJ)
 endif
 
 TEST_RUNNER := $(TEST_DIR)/test
+QUANT_TEST_RUNNER := $(TEST_DIR)/test_quant
 SOURCE_PAYLOAD_LIVE_RUNNER := $(TEST_DIR)/source_payload_deepseek
+QUANT_LIVE_RUNNER := $(TEST_DIR)/quant_deepseek
 CUDA_TEST_RUNNER := $(TEST_DIR)/test_cuda
 
-TEST_UNIT_SRCS := $(sort $(wildcard tests/unit/*.c))
+TEST_UNIT_SRCS := $(sort $(filter-out tests/unit/quant_runner.c,$(wildcard tests/unit/*.c)))
 TEST_UNIT_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(TEST_UNIT_SRCS))
+
+QUANT_TEST_UNIT_SRCS := \
+	tests/unit/gguf_qtype_abi.c \
+	tests/unit/source_payload.c \
+	tests/unit/transform_ir.c \
+	tests/unit/deepseek_tensor_coverage.c \
+	tests/unit/quant_numeric.c \
+	tests/unit/quant_execute.c \
+	tests/unit/qtype_support.c \
+	tests/unit/quant_policy.c
+QUANT_TEST_UNIT_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(QUANT_TEST_UNIT_SRCS))
 
 CUDA_TEST_UNIT_SRCS := $(sort $(wildcard tests/unit/cuda/*.c))
 CUDA_TEST_UNIT_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(CUDA_TEST_UNIT_SRCS))
+DEPENDENCY_FILES := $(CORE_OBJS:.o=.d) $(TEST_UNIT_OBJS:.o=.d) \
+	$(CUDA_TEST_UNIT_OBJS:.o=.d)
 
 CLI_TEST := tests/cli.sh
 
@@ -344,6 +367,15 @@ test-source-payload-live-plan: $(SOURCE_PAYLOAD_LIVE_RUNNER)
 test-transform-ir-live-plan: $(SOURCE_PAYLOAD_LIVE_RUNNER)
 	$(SOURCE_PAYLOAD_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
 
+test-quant: $(QUANT_TEST_RUNNER)
+	$(QUANT_TEST_RUNNER)
+
+test-quant-live-plan: $(QUANT_LIVE_RUNNER)
+	$(QUANT_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
+
+test-quant-live: $(QUANT_LIVE_RUNNER)
+	$(QUANT_LIVE_RUNNER) "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
+
 test-source-payload-live: $(SOURCE_PAYLOAD_LIVE_RUNNER)
 	$(SOURCE_PAYLOAD_LIVE_RUNNER) "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
 
@@ -384,19 +416,19 @@ $(LIBYVEX): $(CORE_OBJS)
 
 $(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/tests/unit/%.o: tests/unit/%.c tests/test.h
 	@mkdir -p $(@D)
-	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) -c $< -o $@
+	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/tests/unit/cuda/%.o: tests/unit/cuda/%.c tests/test.h
 	@mkdir -p $(@D)
-	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) -c $< -o $@
+	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/%.ptx: %.cu
+$(OBJ_DIR)/%.ptx: %.cu include/yvex/gguf_qtype.h
 	@mkdir -p $(@D)
-	$(NVCC) $(NVCCFLAGS) $(CUDA_ARCH_FLAG) -ptx $< -o $@
+	$(NVCC) $(CPPFLAGS) $(NVCCFLAGS) $(CUDA_ARCH_FLAG) -ptx $< -o $@
 
 $(CUDA_PTX_C): $(CUDA_PTX) src/backend/cuda/cuda_kernels.h
 	@mkdir -p $(@D)
@@ -409,7 +441,7 @@ $(CUDA_PTX_C): $(CUDA_PTX) src/backend/cuda/cuda_kernels.h
 
 $(CUDA_PTX_OBJ): $(CUDA_PTX_C)
 	@mkdir -p $(@D)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
 
 $(YVEX_BIN): $(CLI_SRCS) $(LIBYVEX)
 	@mkdir -p $(@D)
@@ -423,7 +455,15 @@ $(TEST_RUNNER): tests/test.c $(TEST_UNIT_OBJS) $(LIBYVEX) tests/test.h
 	@mkdir -p $(@D)
 	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) tests/test.c $(TEST_UNIT_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
+$(QUANT_TEST_RUNNER): tests/unit/quant_runner.c $(QUANT_TEST_UNIT_OBJS) $(LIBYVEX) tests/test.h
+	@mkdir -p $(@D)
+	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) tests/unit/quant_runner.c $(QUANT_TEST_UNIT_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
 $(SOURCE_PAYLOAD_LIVE_RUNNER): tests/live/source_payload_deepseek.c $(LIBYVEX)
+	@mkdir -p $(@D)
+	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
+$(QUANT_LIVE_RUNNER): tests/live/quant_deepseek.c $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
@@ -533,6 +573,7 @@ check-guardrails:
 	@! grep -RIn -E "N[E]T\\.SPINE|N[E]T moves streams|C[L]ORI|c[l]ori-codename|docs/arc[h]ive|c[l]ori_|libc[l]ori|c[l]orid|include/c[l]ori|~/\\.config/c[l]ori|github\\.com/yailabs/c[l]ori|yailabs/c[l]ori" --exclude-dir=.git --exclude-dir=build . >/dev/null
 	@! grep -Ei "production-read[y]|implemented infer[e]nce|implemented ser[v]er|supports C[U]DA|supports M[e]tal|supports M[L]X|supports llama\\.cpp|O[p]enAI-compatible ser[v]er" README.md >/dev/null
 	@! grep -Ei "benchmark results" README.md | grep -vi "benchmark results are not measured" >/dev/null
+-include $(DEPENDENCY_FILES)
 
 clean:
 	@rm -rf $(BUILD_DIR) ./yvex ./yvexd ./*.o

@@ -28,6 +28,8 @@ int yvex_test_tensor_table(void);
 int yvex_test_model_descriptor(void);
 int yvex_test_deepseek_arch_ir(void);
 int yvex_test_transform_ir(void);
+int yvex_test_quant_numeric(void);
+int yvex_test_quant_execute(void);
 int yvex_test_deepseek_tensor_coverage(void);
 int yvex_test_weights(void);
 int yvex_test_materialize_cpu(void);
@@ -118,6 +120,8 @@ static int run_model_weights(void)
     if (run_test("model_descriptor", yvex_test_model_descriptor) != 0) return 1;
     if (run_test("deepseek_arch_ir", yvex_test_deepseek_arch_ir) != 0) return 1;
     if (run_test("transform_ir", yvex_test_transform_ir) != 0) return 1;
+    if (run_test("quant_numeric", yvex_test_quant_numeric) != 0) return 1;
+    if (run_test("quant_execute", yvex_test_quant_execute) != 0) return 1;
     if (run_test("deepseek_tensor_coverage", yvex_test_deepseek_tensor_coverage) != 0) return 1;
     if (run_test("weights", yvex_test_weights) != 0) return 1;
     if (run_test("materialize_cpu", yvex_test_materialize_cpu) != 0) return 1;

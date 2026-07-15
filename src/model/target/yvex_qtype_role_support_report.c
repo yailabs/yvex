@@ -24,6 +24,7 @@
 #include "yvex_qtype_role_support_report.h"
 
 #include "yvex_model_target_private.h"
+#include "../../gguf/yvex_quant_numeric.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -32,7 +33,6 @@ typedef struct {
     const char *role_name;
     const char *source_dtype;
     const char *storage_status;
-    const char *compute_status;
     const char *blocker;
 } qtype_role_fact;
 
@@ -45,36 +45,58 @@ typedef struct {
 } qtype_gate_family_fact;
 
 static const qtype_role_fact qwen_role_facts[] = {
-    {"token_embedding", "BF16", "source-native", "unknown", "qtype-compute-refusal-matrix-missing"},
-    {"attention_q", "BF16", "source-native", "unknown", "qtype-compute-refusal-matrix-missing"},
-    {"attention_k", "BF16", "source-native", "unknown", "qtype-compute-refusal-matrix-missing"},
-    {"attention_v", "BF16", "source-native", "unknown", "qtype-compute-refusal-matrix-missing"},
-    {"attention_o", "BF16", "source-native", "unknown", "qtype-compute-refusal-matrix-missing"},
-    {"qwen_linear_attn_A_log", "BF16", "source-native", "unknown", "qtype-compute-refusal-matrix-missing"},
-    {"moe_expert_gate_up", "BF16", "source-native", "unknown", "calibration-missing"},
-    {"output_head", "BF16", "source-native", "unknown", "artifact-emitter-missing"},
-    {"tokenizer_metadata", "BF16", "metadata-sidecar", "unknown", "qtype-compute-refusal-matrix-missing"},
+    {"token_embedding", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"attention_q", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"attention_k", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"attention_v", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"attention_o", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"qwen_linear_attn_A_log", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"moe_expert_gate_up", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"output_head", "BF16", "source-native", "artifact-emitter-missing"},
+    {"tokenizer_metadata", "metadata", "metadata-sidecar", "artifact-emitter-missing"},
 };
 
 static const qtype_role_fact gemma_role_facts[] = {
-    {"token_embedding", "BF16", "source-native", "unknown", "qtype-compute-refusal-matrix-missing"},
-    {"attention_q_norm", "BF16", "source-native", "unknown", "qtype-compute-refusal-matrix-missing"},
-    {"attention_k_norm", "BF16", "source-native", "unknown", "qtype-compute-refusal-matrix-missing"},
-    {"attention_q", "BF16", "source-native", "unknown", "qtype-compute-refusal-matrix-missing"},
-    {"attention_k", "BF16", "source-native", "unknown", "qtype-compute-refusal-matrix-missing"},
-    {"attention_v", "BF16", "source-native", "unknown", "qtype-compute-refusal-matrix-missing"},
-    {"attention_o", "BF16", "source-native", "unknown", "qtype-compute-refusal-matrix-missing"},
-    {"pre_feedforward_layernorm", "BF16", "source-native", "unknown", "qtype-compute-refusal-matrix-missing"},
-    {"layer_scalar", "BF16", "source-native", "unknown", "qtype-compute-refusal-matrix-missing"},
-    {"output_head_tied_embedding", "BF16", "source-native", "unknown", "artifact-emitter-missing"},
-    {"tokenizer_metadata", "BF16", "metadata-sidecar", "unknown", "qtype-compute-refusal-matrix-missing"},
+    {"token_embedding", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"attention_q_norm", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"attention_k_norm", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"attention_q", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"attention_k", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"attention_v", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"attention_o", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"pre_feedforward_layernorm", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"layer_scalar", "BF16", "source-native", "family-quantization-plan-unimplemented"},
+    {"output_head_tied_embedding", "BF16", "source-native", "artifact-emitter-missing"},
+    {"tokenizer_metadata", "metadata", "metadata-sidecar", "artifact-emitter-missing"},
 };
 
 static const qtype_gate_family_fact qtype_gate_rows[] = {
-    {"deepseek", "selected-slice", "blocked", "full-family-artifact-missing", "V010.QUANT.2"},
-    {"qwen", "qwen3-6-35b-a3b", "blocked", "qtype-compute-refusal-matrix-missing", "V010.QUANT.2"},
-    {"gemma", "gemma-4-31b-it", "blocked", "qtype-compute-refusal-matrix-missing", "V010.QUANT.2"},
+    {"deepseek", "deepseek4-v4-flash", "blocked", "gguf-writer-missing", "V010.GGUF.WRITER.1"},
+    {"qwen", "qwen3-6-35b-a3b", "blocked", "family-quantization-plan-unimplemented", "not-scheduled"},
+    {"gemma", "gemma-4-31b-it", "blocked", "family-quantization-plan-unimplemented", "not-scheduled"},
 };
+
+/* Projects current arithmetic truth exclusively from TRACK.QUANT registry. */
+static const char *qtype_role_compute_status(const char *source_dtype)
+{
+    const yvex_quant_numeric_capability *capability;
+    unsigned int qtype;
+
+    if (source_dtype && strcmp(source_dtype, "metadata") == 0)
+        return "not-applicable";
+    if (source_dtype && strcmp(source_dtype, "F32") == 0)
+        qtype = YVEX_GGUF_QTYPE_F32;
+    else if (source_dtype && strcmp(source_dtype, "F16") == 0)
+        qtype = YVEX_GGUF_QTYPE_F16;
+    else if (source_dtype && strcmp(source_dtype, "BF16") == 0)
+        qtype = YVEX_GGUF_QTYPE_BF16;
+    else
+        return "unresolved-source-dtype";
+    capability = yvex_quant_numeric_capability_at(qtype);
+    return capability && capability->dedicated_cpu_compute_available &&
+           capability->dedicated_cuda_compute_available
+        ? "cpu-cuda-available" : "unavailable";
+}
 
 /*
  * qtype_role_rows()
@@ -149,9 +171,13 @@ static void qtype_role_prepare(const yvex_model_target_request *request,
              "unsupported-full-model");
     snprintf(report->benchmark_status, sizeof(report->benchmark_status),
              "not-measured");
-    snprintf(report->next_row, sizeof(report->next_row), "V010.QUANT.2");
-    snprintf(report->reason, sizeof(report->reason),
-             "qtype-compute-refusal-matrix-missing");
+    snprintf(report->next_row, sizeof(report->next_row), "%s",
+             strcmp(family, "deepseek") == 0
+                 ? "V010.GGUF.WRITER.1" : "not-scheduled");
+    snprintf(report->reason, sizeof(report->reason), "%s",
+             strcmp(family, "deepseek") == 0
+                 ? "gguf-writer-missing"
+                 : "family-quantization-plan-unimplemented");
     snprintf(report->boundary, sizeof(report->boundary),
              "qtype role-support report only; no quantization or artifact emission");
 }
@@ -314,7 +340,8 @@ static void qtype_role_add_table(const char *family,
                                          "%s  %s  unresolved  header-storage-profiled  %s  deferred  present",
                                          rows[i].role_name,
                                          rows[i].source_dtype,
-                                         rows[i].compute_status);
+                                         qtype_role_compute_status(
+                                             rows[i].source_dtype));
     }
 }
 
@@ -370,13 +397,14 @@ static void qtype_role_add_audit(const char *family,
         }
         yvex_model_target_report_add_row(report,
                                          "role.%lu.compute_support_status: %s", i,
-                                         rows[i].compute_status);
+                                         qtype_role_compute_status(
+                                             rows[i].source_dtype));
         yvex_model_target_report_add_row(report,
                                          "role.%lu.artifact_emission_allowed: false", i);
         yvex_model_target_report_add_row(report,
                                          "role.%lu.artifact_emission_blocker: %s", i,
                                          selected_slice
-                                             ? "full-family-artifact-missing"
+                                             ? "gguf-writer-missing"
                                              : rows[i].blocker);
     }
     yvex_model_target_report_add_row(report, "payload_bytes_read: false");
@@ -434,8 +462,8 @@ int yvex_qtype_role_support_report_build(const yvex_model_target_request *reques
             yvex_model_target_report_add_row(report, "status: qtype-role-support-gate-blocked");
             yvex_model_target_report_add_row(report, "family_count: 3");
             yvex_model_target_report_add_row(report,
-                                             "top_blocker: qtype-compute-refusal-matrix-missing");
-            yvex_model_target_report_add_row(report, "next: V010.QUANT.2");
+                                             "top_blocker: gguf-writer-missing");
+            yvex_model_target_report_add_row(report, "next: V010.GGUF.WRITER.1");
             yvex_model_target_report_common_tail(report);
         }
         return YVEX_OK;
@@ -462,9 +490,11 @@ int yvex_qtype_role_support_report_build(const yvex_model_target_request *reques
         report,
         "top_blocker: %s",
         strcmp(family, "deepseek") == 0
-            ? "full-family-artifact-missing"
-            : "qtype-compute-refusal-matrix-missing");
-    yvex_model_target_report_add_row(report, "next: V010.QUANT.2");
+            ? "gguf-writer-missing"
+            : "family-quantization-plan-unimplemented");
+    yvex_model_target_report_add_row(
+        report, "next: %s", strcmp(family, "deepseek") == 0
+            ? "V010.GGUF.WRITER.1" : "not-scheduled");
     yvex_model_target_report_add_row(report,
                                      "boundary: qtype role report only; no quantization/GGUF/runtime/generation");
     return YVEX_OK;
