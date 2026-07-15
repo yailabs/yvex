@@ -1,7 +1,7 @@
 /*
  * Owner: apps/operator server entrypoint.
- * Owns: startup configuration, adapter assembly, static-root selection, and loopback listen lifecycle.
- * Does not own: frontend content, YVEX rebuilding, command policy, model files, or external binding.
+ * Owns: startup configuration, adapter assembly, static-root selection, and configured listen lifecycle.
+ * Does not own: frontend content, YVEX rebuilding, command policy, model files, or network access policy.
  * Invariants: startup refuses invalid configuration before accepting traffic.
  * Boundary: a listening operator is not evidence that the YVEX binary or runtime is available.
  */
@@ -11,7 +11,7 @@ import { OperatorAdapter } from "./adapter.ts";
 import { loadOperatorConfig } from "./config.ts";
 import { createOperatorHttpServer } from "./http.ts";
 
-/** Starts the production local operator and returns only after the loopback listener is active. */
+/** Starts the production operator and returns only after its configured listener is active. */
 export async function startOperator(): Promise<void> {
   const config = loadOperatorConfig();
   const adapter = new OperatorAdapter(config);

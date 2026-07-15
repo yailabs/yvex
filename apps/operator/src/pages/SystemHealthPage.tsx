@@ -68,7 +68,7 @@ export function SystemHealthPage() {
         <div id="connectivity" className="grid grid-two">
           <Card
             title="Local adapter"
-            eyebrow="Loopback service"
+            eyebrow="Configured listener"
             action={health ? <StatusBadge value={health.state} /> : null}
           >
             {health ? (

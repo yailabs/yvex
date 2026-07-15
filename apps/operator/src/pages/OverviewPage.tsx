@@ -183,7 +183,7 @@ export function OverviewPage() {
               <li>No quantization start or progress simulation</li>
               <li>No artifact write, publish, registry, or model mutation</li>
               <li>No generation, arbitrary shell, or tensor payload access</li>
-              <li>Fixed loopback API and immutable command allowlist</li>
+              <li>Loopback default, explicit IP bind, and immutable command allowlist</li>
             </ul>
           </Card>
         </div>

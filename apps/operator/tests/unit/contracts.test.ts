@@ -1,6 +1,6 @@
 /*
  * Owner: apps/operator unit validation.
- * Owns: route/producer guards, command allowlist, redaction, config refusal, and status-tone assertions.
+ * Owns: route/producer guards, command allowlist, redaction, bind validation, and status-tone assertions.
  * Does not own: process integration, browser smoke, YVEX facts, or production configuration.
  * Invariants: tests execute no native YVEX command and use no model files.
  * Boundary: unit success validates operator contracts only.
@@ -57,10 +57,19 @@ describe("operator guard contracts", () => {
     ).toEqual({ repository: "deepseek-ai/DeepSeek-V4-Flash", secret: "[redacted]" });
   });
 
-  it("refuses external bind configuration and strips secret child environment", () => {
-    expect(() => loadOperatorConfig({ YVEX_OPERATOR_HOST: "0.0.0.0" })).toThrow(
-      "refuses non-loopback",
+  it("defaults to loopback, accepts explicit IP binds, and rejects host expressions", () => {
+    expect(loadOperatorConfig({}).host).toBe("127.0.0.1");
+    expect(loadOperatorConfig({ YVEX_OPERATOR_HOST: "0.0.0.0" }).host).toBe("0.0.0.0");
+    expect(loadOperatorConfig({ YVEX_OPERATOR_HOST: "192.168.10.25" }).host).toBe("192.168.10.25");
+    expect(() => loadOperatorConfig({ YVEX_OPERATOR_HOST: "dgx.local" })).toThrow(
+      "must be a literal IPv4 or IPv6 address",
     );
+    expect(() => loadOperatorConfig({ YVEX_OPERATOR_HOST: "0.0.0.0; touch /tmp/no" })).toThrow(
+      "must be a literal IPv4 or IPv6 address",
+    );
+  });
+
+  it("strips secret child environment", () => {
     expect(
       constrainedChildEnvironment({
         PATH: "/bin",

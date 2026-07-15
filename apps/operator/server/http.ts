@@ -1,5 +1,5 @@
 /*
- * Owner: apps/operator loopback HTTP boundary.
+ * Owner: apps/operator read-only HTTP boundary.
  * Owns: fixed read-only API routes, security headers, static asset serving, and SPA fallback.
  * Does not own: command selection, adapter facts, arbitrary file access, CORS, or mutation endpoints.
  * Invariants: only GET/HEAD are accepted and resolved static paths remain inside dist/client.

@@ -164,7 +164,7 @@ export interface AdapterHealth {
   adapterVersion: string;
   apiVersion: "v1";
   state: "available" | "degraded";
-  bindAddress: "127.0.0.1" | "::1";
+  bindAddress: string;
   binaryLabel: string;
   binaryResolution: "configured-path" | "path-search" | "not-found";
   binaryExecutable: boolean;

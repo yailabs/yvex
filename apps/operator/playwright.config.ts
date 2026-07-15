@@ -7,6 +7,9 @@
  */
 import { defineConfig, devices } from "@playwright/test";
 
+const browserTestPort = 14_317;
+const browserTestOrigin = `http://127.0.0.1:${browserTestPort}`;
+
 export default defineConfig({
   testDir: "./tests/browser",
   fullyParallel: false,
@@ -16,15 +19,14 @@ export default defineConfig({
   expect: { timeout: 5_000 },
   reporter: [["line"]],
   use: {
-    baseURL: "http://127.0.0.1:4317",
+    baseURL: browserTestOrigin,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     ...devices["Desktop Chrome"],
   },
   webServer: {
-    command:
-      "YVEX_BIN=./tests/fixtures/fake-yvex.mjs YVEX_OPERATOR_PORT=4317 node dist/operator-server.js",
-    url: "http://127.0.0.1:4317/api/v1/health",
+    command: `YVEX_BIN=./tests/fixtures/fake-yvex.mjs YVEX_OPERATOR_PORT=${browserTestPort} node dist/operator-server.js`,
+    url: `${browserTestOrigin}/api/v1/health`,
     reuseExistingServer: false,
     timeout: 20_000,
   },

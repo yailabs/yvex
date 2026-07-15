@@ -42,7 +42,7 @@ export function SettingsPage() {
             {
               label: "Bind policy",
               value: health?.bindAddress ?? "Unavailable",
-              detail: "Loopback only",
+              detail: "Loopback default · explicit IP opt-in",
               tone: health ? "green" : "amber",
             },
             { label: "API mode", value: "Read-only", detail: "GET / HEAD only", tone: "cyan" },

@@ -1,12 +1,13 @@
 /*
  * Owner: apps/operator local server configuration.
- * Owns: loopback binding, bounded resource settings, trusted startup paths, and child environment.
+ * Owns: default-loopback binding, explicit IP binding, bounded resource settings, trusted startup paths, and child environment.
  * Does not own: frontend values, command selection, model discovery, rebuilding, or registry mutation.
- * Invariants: non-loopback binds and invalid limits are refused before server startup.
+ * Invariants: the default is loopback and configured listeners must be literal IPv4 or IPv6 addresses.
  * Boundary: configuration locates an existing executable and never builds YVEX.
  */
 import { constants } from "node:fs";
 import { access } from "node:fs/promises";
+import { isIP } from "node:net";
 import { basename, delimiter, isAbsolute, resolve } from "node:path";
 
 import type { ProducerRuntimeConfig } from "./producers.ts";
@@ -14,7 +15,7 @@ import type { ProducerRuntimeConfig } from "./producers.ts";
 export const ADAPTER_VERSION = "0.1.0";
 
 export interface OperatorConfig extends ProducerRuntimeConfig {
-  host: "127.0.0.1" | "::1";
+  host: string;
   port: number;
   binaryRequest: string;
   binarySearchPath: string;
@@ -42,10 +43,11 @@ function boundedInteger(
   return parsed;
 }
 
-function loopbackHost(value: string | undefined): "127.0.0.1" | "::1" {
-  const host = value || "127.0.0.1";
-  if (host !== "127.0.0.1" && host !== "::1") {
-    throw new Error("YVEX operator refuses non-loopback bind addresses");
+/** Selects loopback by default and admits only an explicit literal address for network exposure. */
+function bindHost(value: string | undefined): string {
+  const host = value?.trim() || "127.0.0.1";
+  if (isIP(host) === 0) {
+    throw new Error("YVEX operator bind address must be a literal IPv4 or IPv6 address");
   }
   return host;
 }
@@ -73,7 +75,7 @@ export function constrainedChildEnvironment(env: NodeJS.ProcessEnv): NodeJS.Proc
 /** Parses trusted startup configuration and performs no filesystem or process IO. */
 export function loadOperatorConfig(env: NodeJS.ProcessEnv = process.env): OperatorConfig {
   return {
-    host: loopbackHost(env.YVEX_OPERATOR_HOST),
+    host: bindHost(env.YVEX_OPERATOR_HOST),
     port: boundedInteger(env.YVEX_OPERATOR_PORT, 4317, 1, 65_535),
     binaryRequest: env.YVEX_BIN || "yvex",
     binarySearchPath: env.PATH || "",

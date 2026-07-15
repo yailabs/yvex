@@ -240,7 +240,7 @@ export class OperatorAdapter {
       id: "adapterHealth",
       label: "Adapter health",
       evidenceClass: "local-probe",
-      description: "Loopback adapter version and configured YVEX executable availability.",
+      description: "Configured adapter listener and YVEX executable availability.",
       command: [],
       displayCommand: "Local typed probe",
       cachePolicy: "short-ttl",
