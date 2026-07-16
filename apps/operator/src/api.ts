@@ -10,6 +10,8 @@ import { z, type ZodType } from "zod";
 import {
   apiErrorResponseSchema,
   binaryResolutionSchema,
+  buildResponseSchema,
+  buildStagesResponseSchema,
   capabilityManifestSchema,
   chatSessionSchema,
   chatSessionsResponseSchema,
@@ -17,6 +19,7 @@ import {
   domainProjectionSchema,
   eventsResponseSchema,
   jobsResponseSchema,
+  operatorWorkspaceSchema,
   producerDescriptorSchema,
   producerListResponseSchema,
   producerRunSchema,
@@ -26,10 +29,12 @@ import {
   providerTestResponseSchema,
   settingsResponseSchema,
   systemHealthSchema,
+  targetsResponseSchema,
+  workspaceArtifactsResponseSchema,
   type ChatStreamEvent,
   type DomainId,
   type InterfaceSettingsPatch,
-  type ReferenceProviderPatch,
+  type ComparisonEndpointPatch,
   type SendChatMessage,
   type YvexSettingsPatch,
 } from "../shared/contracts.ts";
@@ -127,12 +132,33 @@ export const operatorApi = {
     requestJson("/api/v1/system/binary-resolution", binaryResolutionSchema, { signal }),
   capabilities: (signal?: AbortSignal) =>
     requestJson("/api/v1/capabilities", capabilityManifestSchema, { signal }),
+  workspace: (signal?: AbortSignal) =>
+    requestJson("/api/v1/workspace", operatorWorkspaceSchema, { signal }),
+  targets: (signal?: AbortSignal) =>
+    requestJson("/api/v1/targets", targetsResponseSchema, { signal }),
+  workspaceArtifacts: (signal?: AbortSignal) =>
+    requestJson("/api/v1/workspace/artifacts", workspaceArtifactsResponseSchema, { signal }),
+  selectTarget: (targetId: string, signal?: AbortSignal) =>
+    requestJson("/api/v1/workspace/target", operatorWorkspaceSchema, {
+      method: "POST",
+      body: { targetId },
+      signal,
+    }),
+  selectArtifact: (artifactId: string | null, signal?: AbortSignal) =>
+    requestJson("/api/v1/workspace/artifact", operatorWorkspaceSchema, {
+      method: "POST",
+      body: { artifactId },
+      signal,
+    }),
+  build: (signal?: AbortSignal) => requestJson("/api/v1/build", buildResponseSchema, { signal }),
+  buildStages: (signal?: AbortSignal) =>
+    requestJson("/api/v1/build/stages", buildStagesResponseSchema, { signal }),
   settings: (signal?: AbortSignal) =>
     requestJson("/api/v1/settings", settingsResponseSchema, { signal }),
-  providerStatus: (signal?: AbortSignal) =>
-    requestJson("/api/v1/reference-provider/status", providerStatusSchema, { signal }),
-  providerModels: (signal?: AbortSignal) =>
-    requestJson("/api/v1/reference-provider/models", providerModelsResponseSchema, { signal }),
+  comparisonStatus: (signal?: AbortSignal) =>
+    requestJson("/api/v1/comparison/reference/status", providerStatusSchema, { signal }),
+  comparisonModels: (signal?: AbortSignal) =>
+    requestJson("/api/v1/comparison/reference/models", providerModelsResponseSchema, { signal }),
   domain: (domain: DomainId, signal?: AbortSignal) =>
     requestJson(`/api/v1/${domain}`, domainProjectionSchema, { signal }),
   producers: (signal?: AbortSignal) =>
@@ -160,37 +186,49 @@ export const operatorApi = {
     }),
   events: (signal?: AbortSignal) =>
     requestJson("/api/v1/events?limit=50", eventsResponseSchema, { signal }),
-  sessions: (signal?: AbortSignal) =>
-    requestJson("/api/v1/chat/sessions", chatSessionsResponseSchema, { signal }),
-  session: (id: string, signal?: AbortSignal) =>
-    requestJson(`/api/v1/chat/sessions/${encodeURIComponent(id)}`, chatSessionSchema, { signal }),
-  createSession: (
-    input: { lane: "native-yvex" | "reference-provider"; title?: string; model?: string },
-    signal?: AbortSignal,
-  ) =>
-    requestJson("/api/v1/chat/sessions", chatSessionSchema, {
+  comparisonSessions: (signal?: AbortSignal) =>
+    requestJson("/api/v1/comparison/reference/sessions", chatSessionsResponseSchema, { signal }),
+  comparisonSession: (id: string, signal?: AbortSignal) =>
+    requestJson(
+      `/api/v1/comparison/reference/sessions/${encodeURIComponent(id)}`,
+      chatSessionSchema,
+      { signal },
+    ),
+  createComparisonSession: (input: { title?: string; model?: string }, signal?: AbortSignal) =>
+    requestJson("/api/v1/comparison/reference/sessions", chatSessionSchema, {
       method: "POST",
       body: input,
       signal,
     }),
-  renameSession: (id: string, title: string, signal?: AbortSignal) =>
-    requestJson(`/api/v1/chat/sessions/${encodeURIComponent(id)}`, chatSessionSchema, {
-      method: "PATCH",
-      body: { title },
-      signal,
-    }),
-  clearSession: (id: string, signal?: AbortSignal) =>
-    requestJson(`/api/v1/chat/sessions/${encodeURIComponent(id)}/clear`, chatSessionSchema, {
-      method: "POST",
-      body: {},
-      signal,
-    }),
-  deleteSession: async (id: string, signal?: AbortSignal): Promise<void> => {
-    const response = await fetch(`/api/v1/chat/sessions/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-      credentials: "same-origin",
-      signal,
-    });
+  renameComparisonSession: (id: string, title: string, signal?: AbortSignal) =>
+    requestJson(
+      `/api/v1/comparison/reference/sessions/${encodeURIComponent(id)}`,
+      chatSessionSchema,
+      {
+        method: "PATCH",
+        body: { title },
+        signal,
+      },
+    ),
+  clearComparisonSession: (id: string, signal?: AbortSignal) =>
+    requestJson(
+      `/api/v1/comparison/reference/sessions/${encodeURIComponent(id)}/clear`,
+      chatSessionSchema,
+      {
+        method: "POST",
+        body: {},
+        signal,
+      },
+    ),
+  deleteComparisonSession: async (id: string, signal?: AbortSignal): Promise<void> => {
+    const response = await fetch(
+      `/api/v1/comparison/reference/sessions/${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        credentials: "same-origin",
+        signal,
+      },
+    );
     if (!response.ok) throw await responseError(response);
   },
   updateOperator: (patch: InterfaceSettingsPatch, signal?: AbortSignal) =>
@@ -205,14 +243,14 @@ export const operatorApi = {
       body: patch,
       signal,
     }),
-  updateProvider: (patch: ReferenceProviderPatch, signal?: AbortSignal) =>
-    requestJson("/api/v1/settings/reference-provider", settingsResponseSchema, {
+  updateComparisonEndpoint: (patch: ComparisonEndpointPatch, signal?: AbortSignal) =>
+    requestJson("/api/v1/settings/comparison-endpoint", settingsResponseSchema, {
       method: "PATCH",
       body: patch,
       signal,
     }),
-  testProvider: (signal?: AbortSignal) =>
-    requestJson("/api/v1/settings/reference-provider/test", providerTestResponseSchema, {
+  testComparisonEndpoint: (signal?: AbortSignal) =>
+    requestJson("/api/v1/settings/comparison-endpoint/test", providerTestResponseSchema, {
       method: "POST",
       body: {},
       signal,
@@ -229,16 +267,16 @@ export const operatorApi = {
       z.object({ cleared: z.boolean(), observedAt: z.string() }),
       { method: "POST", body: {}, signal },
     ),
-  cancelChat: (requestId: string, signal?: AbortSignal) =>
+  cancelComparison: (requestId: string, signal?: AbortSignal) =>
     requestJson(
-      `/api/v1/chat/requests/${encodeURIComponent(requestId)}/cancel`,
+      `/api/v1/comparison/reference/requests/${encodeURIComponent(requestId)}/cancel`,
       z.object({ requestId: z.string(), jobId: z.string() }),
       { method: "POST", body: {}, signal },
     ),
 };
 
 /** Streams normalized chat events from one fixed session endpoint and renders deltas before completion. */
-export async function streamChatMessage(
+export async function streamReferenceComparison(
   sessionId: string,
   input: SendChatMessage,
   onEvent: (event: ChatStreamEvent) => void,
@@ -246,13 +284,16 @@ export async function streamChatMessage(
 ): Promise<void> {
   let response: Response;
   try {
-    response = await fetch(`/api/v1/chat/sessions/${encodeURIComponent(sessionId)}/messages`, {
-      method: "POST",
-      headers: { Accept: "text/event-stream", "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-      credentials: "same-origin",
-      signal,
-    });
+    response = await fetch(
+      `/api/v1/comparison/reference/sessions/${encodeURIComponent(sessionId)}/messages`,
+      {
+        method: "POST",
+        headers: { Accept: "text/event-stream", "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+        credentials: "same-origin",
+        signal,
+      },
+    );
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") throw error;
     throw new OperatorApiError("adapter-unreachable", "Local Operator adapter is unreachable.");

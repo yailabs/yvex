@@ -10,6 +10,7 @@ import { Children, useCallback, useRef, type KeyboardEvent, type ReactNode } fro
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import type { Availability, Capability } from "../../shared/contracts.ts";
+import { capabilityDisplayLabel } from "../capability-labels.ts";
 import type { ResourceState } from "../resource.ts";
 import { StatusBadge } from "./Status.tsx";
 
@@ -297,8 +298,9 @@ export function CapabilityRows({ capabilities }: { capabilities: readonly Capabi
       {capabilities.map((capability) => (
         <article key={capability.id}>
           <div>
-            <strong>{capability.id}</strong>
+            <strong>{capabilityDisplayLabel(capability)}</strong>
             <p>{capability.reason}</p>
+            <code>{capability.id}</code>
           </div>
           <StatusBadge status={capability.status} />
         </article>

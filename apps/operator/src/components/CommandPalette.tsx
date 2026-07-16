@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 
 import type { Capability, ProducerDescriptor } from "../../shared/contracts.ts";
 import { operatorApi } from "../api.ts";
+import { capabilityDisplayLabel } from "../capability-labels.ts";
 import { pageMetadata, routeIds } from "../navigation.ts";
 import { useOperatorState } from "../state/operator-state.tsx";
 import type { InspectorItem } from "./Inspector.tsx";
@@ -25,20 +26,25 @@ interface PaletteAction {
 }
 
 const tabActions: readonly { id: string; label: string; href: string }[] = [
-  { id: "sources-trust", label: "Sources · Trust", href: "/sources?tab=trust" },
-  {
-    id: "compilation-accounting",
-    label: "Compilation · Accounting",
-    href: "/compilation?tab=accounting",
-  },
+  { id: "workspace-jobs", label: "Workspace · Jobs", href: "/workspace?panel=jobs" },
+  { id: "workspace-events", label: "Workspace · Events", href: "/workspace?panel=events" },
+  { id: "build-source", label: "Build · Source", href: "/build?stage=source" },
+  { id: "build-architecture", label: "Build · Architecture", href: "/build?stage=architecture" },
+  { id: "build-ir", label: "Build · Transformation IR", href: "/build?stage=transformation-ir" },
+  { id: "build-lowering", label: "Build · Lowering", href: "/build?stage=physical-lowering" },
+  { id: "build-quantization", label: "Build · Quantization", href: "/build?stage=quantization" },
+  { id: "build-writer", label: "Build · GGUF Writer", href: "/build?stage=gguf-writer" },
+  { id: "runtime-readiness", label: "Runtime · Readiness", href: "/runtime?tab=readiness" },
   { id: "runtime-backend", label: "Runtime · Backend", href: "/runtime?tab=backend" },
-  { id: "runtime-controls", label: "Runtime · Controls", href: "/runtime?tab=controls" },
-  { id: "settings-yvex", label: "Settings · YVEX", href: "/settings?section=yvex" },
+  { id: "runtime-sessions", label: "Runtime · Sessions", href: "/runtime?tab=sessions" },
+  { id: "runtime-generation", label: "Runtime · Generation", href: "/runtime?tab=generation" },
+  { id: "evidence-runs", label: "Evidence · Recent runs", href: "/evidence?tab=runs" },
   {
-    id: "settings-provider",
-    label: "Settings · Reference provider",
-    href: "/settings?section=reference-provider",
+    id: "environment-binary",
+    label: "Environment · Binary resolution",
+    href: "/environment?tab=binary",
   },
+  { id: "settings-yvex", label: "Settings · YVEX", href: "/settings?section=yvex" },
 ];
 
 /** Converts one stable capability into a global inspection action. */
@@ -46,20 +52,22 @@ function capabilityAction(
   capability: Capability,
   inspect: (item: InspectorItem) => void,
 ): PaletteAction {
+  const label = capabilityDisplayLabel(capability);
   return {
     id: `capability:${capability.id}`,
-    label: capability.id,
+    label,
     category: "Capabilities",
-    detail: capability.reason,
+    detail: `${capability.reason} (${capability.id})`,
     disabledReason: null,
     run: () =>
       inspect({
         kind: "capability",
-        title: capability.id,
+        title: label,
         subtitle: capability.domain,
         status: capability.status,
         detail: capability.reason,
         rows: [
+          { label: "Capability ID", value: capability.id },
           { label: "Source", value: capability.source },
           { label: "Refusal", value: capability.refusalCode ?? "none" },
           { label: "Dependencies", value: capability.requiredDependencies.join(", ") || "none" },
@@ -82,15 +90,13 @@ export function CommandPalette({
   open,
   onClose,
   returnFocus,
-  onOpenChat,
-  onNewChat,
+  onOpenConsole,
   onInspect,
 }: {
   open: boolean;
   onClose: () => void;
   returnFocus: RefObject<HTMLElement | null>;
-  onOpenChat: () => void;
-  onNewChat: () => void;
+  onOpenConsole: () => void;
   onInspect: (item: InspectorItem) => void;
 }) {
   const navigate = useNavigate();
@@ -165,24 +171,13 @@ export function CommandPalette({
     );
     base.push(
       {
-        id: "chat:open",
-        label: "Open chat dock",
-        category: "Chat",
-        detail: "Open the global model interaction surface.",
+        id: "generation-console:open",
+        label: "Open Generation Console",
+        category: "YVEX runtime",
+        detail: `Inspect generation for ${state.workspace.data?.activeTarget?.id ?? "the active target"}.`,
         disabledReason: null,
         run: () => {
-          onOpenChat();
-          onClose();
-        },
-      },
-      {
-        id: "chat:new",
-        label: "Create new chat session",
-        category: "Chat",
-        detail: `Create a ${state.selectedLane === "reference-provider" ? "reference-provider" : "native YVEX"} session.`,
-        disabledReason: null,
-        run: () => {
-          onNewChat();
+          onOpenConsole();
           onClose();
         },
       },
@@ -199,7 +194,9 @@ export function CommandPalette({
         },
       },
     );
-    for (const capability of state.capabilities.data?.capabilities ?? [])
+    for (const capability of state.workspace.data?.capabilities ??
+      state.capabilities.data?.capabilities ??
+      [])
       base.push(capabilityAction(capability, onInspect));
     for (const producer of producers) {
       base.push({
@@ -242,7 +239,7 @@ export function CommandPalette({
       });
     }
     return base;
-  }, [navigate, onClose, onInspect, onNewChat, onOpenChat, producers, state]);
+  }, [navigate, onClose, onInspect, onOpenConsole, producers, state]);
 
   const queryTokens = query
     .toLowerCase()

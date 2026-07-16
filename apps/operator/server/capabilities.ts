@@ -1,8 +1,8 @@
 /*
  * Owner: apps/operator normalized capability manifest.
- * Owns: stable capability IDs, exact dependency graph, source/refusal projection, native/reference separation, and recovery actions.
- * Does not own: producer execution, provider transport, native implementation, UI gating behavior, or capability fabrication.
- * Invariants: native generation remains gated by every required native dependency and never inherits provider readiness.
+ * Owns: stable YVEX capability IDs, exact dependency graph, source/refusal projection, and recovery actions.
+ * Does not own: producer execution, external comparison transport, native implementation, UI gating behavior, or capability fabrication.
+ * Invariants: YVEX generation remains gated by every required YVEX dependency; comparison state is never part of this manifest.
  * Boundary: this manifest normalizes observed reports; it cannot create a lower native capability.
  */
 import {
@@ -17,11 +17,10 @@ import {
   type ProducerEnvelope,
 } from "../shared/contracts.ts";
 import type { OperatorAdapter } from "./adapter.ts";
-import type { ReferenceProviderService } from "./provider.ts";
 import type { BinaryResolver } from "./resolver.ts";
 
 /** Maps only exact machine-readable YVEX status values and leaves unknown values degraded. */
-function nativeStatus(value: string | null | undefined): AvailabilityStatus {
+export function nativeStatus(value: string | null | undefined): AvailabilityStatus {
   if (!value) return "unavailable";
   if (
     [
@@ -32,10 +31,10 @@ function nativeStatus(value: string | null | undefined): AvailabilityStatus {
       "available",
       "admitted",
       "mapping-specified",
-      "source-intake",
     ].includes(value)
   )
     return "ready";
+  if (value === "source-intake") return "degraded";
   if (["unsupported"].includes(value)) return "unsupported";
   if (["blocked", "not-produced", "unselected", "verification-required"].includes(value))
     return "blocked";
@@ -65,7 +64,11 @@ function capability(
     source,
     requiredDependencies: [...requiredDependencies],
     refusalCode:
-      optional.refusalCode ?? (status === "ready" ? null : `${id.replaceAll(".", "-")}-${status}`),
+      optional.refusalCode !== undefined
+        ? optional.refusalCode
+        : status === "ready"
+          ? null
+          : `${id.replaceAll(".", "-")}-${status}`,
     reason,
     recoveryAction: optional.recovery ?? null,
     lastObservedAt: observedAt,
@@ -79,12 +82,11 @@ function dataOf<T>(envelope: ProducerEnvelope<T>): T | null {
     : null;
 }
 
-/** Builds one complete capability graph from resolver, typed producers, and independent provider state. */
+/** Builds one complete YVEX capability graph from resolver and typed producers only. */
 export class CapabilityService {
   constructor(
     private readonly resolver: BinaryResolver,
     private readonly adapter: OperatorAdapter,
-    private readonly provider: ReferenceProviderService,
     private readonly clock: () => number = Date.now,
   ) {}
 
@@ -92,10 +94,9 @@ export class CapabilityService {
   async manifest(): Promise<CapabilityManifest> {
     const observedAt = new Date(this.clock()).toISOString();
     const resolved = await this.resolver.resolve();
-    const [decisionEnvelope, artifactEnvelope, providerStatus] = await Promise.all([
+    const [decisionEnvelope, artifactEnvelope] = await Promise.all([
       this.adapter.get("release-decision"),
       this.adapter.get("artifact-inventory"),
-      this.provider.status(),
     ]);
     const decision = dataOf(decisionEnvelope);
     const inventory = dataOf(artifactEnvelope);
@@ -106,11 +107,6 @@ export class CapabilityService {
       id: "configure-yvex",
       label: "Configure YVEX",
       href: "/settings?section=yvex",
-    };
-    const providerRecovery = {
-      id: "configure-provider",
-      label: "Configure provider",
-      href: "/settings?section=reference-provider",
     };
     const runtime = nativeStatus(decision?.runtime);
     const generation = nativeStatus(decision?.generation);
@@ -155,14 +151,14 @@ export class CapabilityService {
       capability(
         "system.yvex-configured",
         "system",
-        resolved.resolution.configured ? "ready" : "empty",
+        resolved.resolution.explicitOverrideConfigured ? "ready" : "empty",
         "binary-resolver",
         ["system.adapter-api-compatible"],
-        resolved.resolution.configured
-          ? "A trusted explicit YVEX candidate is configured."
-          : "No persisted or environment YVEX candidate is configured; repository and PATH candidates are still inspected.",
+        resolved.resolution.explicitOverrideConfigured
+          ? "A trusted explicit YVEX binary override is configured."
+          : "No explicit binary override is configured; deterministic auto-discovery remains active.",
         observedAt,
-        { recovery: producerRecovery },
+        { refusalCode: null },
       ),
       capability(
         "system.yvex-resolved",
@@ -317,11 +313,11 @@ export class CapabilityService {
         "artifact.admitted",
         "artifact",
         "blocked",
-        "artifact-inventory",
+        "producer-registry",
         ["artifact.inventory", "quantization.reference-evidence"],
         hasArtifact
-          ? "Only bounded proof-class artifacts are reported; no complete supported artifact is admitted."
-          : "No present artifact is reported.",
+          ? "Artifact presence is reported, but no stable complete/supported artifact-admission producer is admitted."
+          : "No present artifact or stable complete/supported artifact-admission producer is reported.",
         observedAt,
       ),
       capability(
@@ -355,7 +351,7 @@ export class CapabilityService {
         "runtime.materialization",
         "runtime",
         "unsupported",
-        "native-contract",
+        "yvex-runtime-contract",
         ["artifact.admitted"],
         "Complete-model materialization is unsupported.",
         observedAt,
@@ -367,71 +363,71 @@ export class CapabilityService {
         "release-decision",
         ["runtime.materialization", "backend.selected"],
         decision
-          ? `Native runtime binding is ${decision.runtime}.`
-          : "Native runtime binding report is unavailable.",
+          ? `YVEX runtime binding is ${decision.runtime}.`
+          : "YVEX runtime binding report is unavailable.",
         observedAt,
       ),
       capability(
         "runtime.model-load",
         "runtime",
         "unsupported",
-        "native-contract",
+        "yvex-runtime-contract",
         ["runtime.binding"],
-        "No native full-model load endpoint exists.",
+        "No YVEX full-model load endpoint exists.",
         observedAt,
       ),
       capability(
         "runtime.prefill",
         "runtime",
         "unsupported",
-        "native-contract",
+        "yvex-runtime-contract",
         ["runtime.model-load"],
-        "Native model-backed prefill is unsupported.",
+        "YVEX model-backed prefill is unsupported.",
         observedAt,
       ),
       capability(
         "runtime.kv",
         "runtime",
         "unsupported",
-        "native-contract",
+        "yvex-runtime-contract",
         ["runtime.prefill"],
-        "Native model-backed KV state is unsupported.",
+        "YVEX model-backed KV state is unsupported.",
         observedAt,
       ),
       capability(
         "runtime.decode",
         "runtime",
         "unsupported",
-        "native-contract",
+        "yvex-runtime-contract",
         ["runtime.kv"],
-        "Native model-backed decode is unsupported.",
+        "YVEX model-backed decode is unsupported.",
         observedAt,
       ),
       capability(
         "runtime.logits",
         "runtime",
         "unsupported",
-        "native-contract",
+        "yvex-runtime-contract",
         ["runtime.decode"],
-        "Native model-backed logits are unsupported.",
+        "YVEX model-backed logits are unsupported.",
         observedAt,
       ),
       capability(
         "runtime.sampling",
         "runtime",
         "unsupported",
-        "native-contract",
+        "yvex-runtime-contract",
         ["runtime.logits"],
-        "Native sampling over real model logits is unsupported.",
+        "YVEX sampling over real model logits is unsupported.",
         observedAt,
       ),
       capability(
         "generation.tokenizer",
         "generation",
         "unsupported",
-        "native-contract",
+        "yvex-runtime-contract",
         ["runtime.model-load"],
-        "Exact native tokenizer loading is unsupported.",
+        "Exact YVEX tokenizer loading is unsupported.",
         observedAt,
       ),
       capability(
@@ -441,26 +437,26 @@ export class CapabilityService {
         "release-decision",
         ["runtime.sampling", "generation.tokenizer"],
         decision
-          ? `Native generation is ${decision.generation}.`
-          : "Native generation report is unavailable.",
+          ? `YVEX generation is ${decision.generation}.`
+          : "YVEX generation report is unavailable.",
         observedAt,
       ),
       capability(
         "generation.streaming",
         "generation",
         "unsupported",
-        "native-contract",
+        "yvex-runtime-contract",
         ["generation.native"],
-        "Native streamed generation is unsupported.",
+        "YVEX streamed generation is unsupported.",
         observedAt,
       ),
       capability(
         "generation.cancellation",
         "generation",
         "unsupported",
-        "native-contract",
+        "yvex-runtime-contract",
         ["generation.streaming"],
-        "Native generation cancellation is unsupported.",
+        "YVEX generation cancellation is unsupported.",
         observedAt,
       ),
       capability(
@@ -480,68 +476,6 @@ export class CapabilityService {
         ["evaluation.available"],
         decision ? `Benchmark is ${decision.benchmark}.` : "Benchmark report is unavailable.",
         observedAt,
-      ),
-      capability(
-        "provider.configured",
-        "provider",
-        providerStatus.configured ? "ready" : "unavailable",
-        "reference-provider-settings",
-        [],
-        providerStatus.configured
-          ? "Reference provider configuration is complete."
-          : "Reference provider configuration is incomplete.",
-        observedAt,
-        { recovery: providerStatus.configured ? null : providerRecovery },
-      ),
-      capability(
-        "provider.reachable",
-        "provider",
-        providerStatus.reachable ? "ready" : providerStatus.availability.status,
-        "reference-provider-test",
-        ["provider.configured"],
-        providerStatus.availability.message,
-        observedAt,
-        { recovery: providerStatus.reachable ? null : providerRecovery },
-      ),
-      capability(
-        "provider.models",
-        "provider",
-        providerStatus.models.length
-          ? "ready"
-          : providerStatus.configured
-            ? "stale"
-            : "unavailable",
-        "reference-provider-models",
-        ["provider.reachable"],
-        providerStatus.models.length
-          ? `${providerStatus.models.length} reference model(s) reported.`
-          : "Reference provider models have not been observed.",
-        observedAt,
-        { recovery: providerStatus.models.length ? null : providerRecovery },
-      ),
-      capability(
-        "provider.chat",
-        "provider",
-        providerStatus.streamingCompatible ? "ready" : providerStatus.availability.status,
-        "reference-provider-test",
-        ["provider.reachable", "provider.models"],
-        providerStatus.streamingCompatible
-          ? "Reference chat completion is compatible."
-          : "Reference chat compatibility has not passed testing.",
-        observedAt,
-        { recovery: providerStatus.streamingCompatible ? null : providerRecovery },
-      ),
-      capability(
-        "provider.streaming",
-        "provider",
-        providerStatus.streamingCompatible ? "ready" : providerStatus.availability.status,
-        "reference-provider-test",
-        ["provider.chat"],
-        providerStatus.streamingCompatible
-          ? "Reference SSE token streaming is compatible."
-          : "Reference token streaming has not passed testing.",
-        observedAt,
-        { recovery: providerStatus.streamingCompatible ? null : providerRecovery },
       ),
       capability(
         "operator.producer-run",

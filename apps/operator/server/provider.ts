@@ -1,9 +1,9 @@
 /*
- * Owner: apps/operator OpenAI-compatible reference-provider transport.
+ * Owner: apps/operator optional OpenAI-compatible comparison transport.
  * Owns: endpoint validation, secret-bearing requests, model discovery, compatibility tests, SSE parsing, usage, and timings.
- * Does not own: browser secrets, session persistence, chat UI, native YVEX execution, arbitrary URL fetches, or silent fallback.
- * Invariants: every request targets the single validated server-side base URL and only supported OpenAI parameters are sent.
- * Boundary: provider readiness is always reference-provider capability and never native YVEX capability.
+ * Does not own: browser secrets, primary workspace state, YVEX execution, arbitrary URL fetches, or fallback.
+ * Invariants: every request targets the explicitly enabled comparison URL and only supported OpenAI parameters are sent.
+ * Boundary: comparison readiness never enters YVEX capability, health, workspace, runtime, or generation state.
  */
 import { performance } from "node:perf_hooks";
 
@@ -81,8 +81,8 @@ async function readBoundedText(response: Response, maxBytes: number): Promise<st
   const declared = Number(response.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > maxBytes) {
     throw new ProviderTransportError(
-      "provider-response-oversized",
-      "Reference provider response exceeded the Operator limit.",
+      "comparison-response-oversized",
+      "External comparison response exceeded the Operator limit.",
       false,
       response.status,
     );
@@ -99,8 +99,8 @@ async function readBoundedText(response: Response, maxBytes: number): Promise<st
       if (bytes > maxBytes) {
         await reader.cancel();
         throw new ProviderTransportError(
-          "provider-response-oversized",
-          "Reference provider response exceeded the Operator limit.",
+          "comparison-response-oversized",
+          "External comparison response exceeded the Operator limit.",
           false,
           response.status,
         );
@@ -129,37 +129,37 @@ export function validateProviderBaseUrl(value: string, allowRemote: boolean): UR
     parsed = new URL(value);
   } catch {
     throw new ProviderTransportError(
-      "provider-invalid-url",
-      "Reference provider URL is invalid.",
+      "comparison-invalid-url",
+      "External comparison URL is invalid.",
       false,
     );
   }
   if (!["http:", "https:"].includes(parsed.protocol)) {
     throw new ProviderTransportError(
-      "provider-invalid-protocol",
-      "Reference provider URL must use HTTP or HTTPS.",
+      "comparison-invalid-protocol",
+      "External comparison URL must use HTTP or HTTPS.",
       false,
     );
   }
   if (parsed.username || parsed.password || parsed.search || parsed.hash) {
     throw new ProviderTransportError(
-      "provider-unsafe-url",
-      "Provider URL cannot contain credentials, query, or fragment.",
+      "comparison-unsafe-url",
+      "External comparison URL cannot contain credentials, query, or fragment.",
       false,
     );
   }
   const localHosts = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
   if (!localHosts.has(parsed.hostname) && !allowRemote) {
     throw new ProviderTransportError(
-      "provider-remote-disabled",
-      "Remote provider URLs are disabled by Operator safety policy.",
+      "comparison-remote-disabled",
+      "Remote comparison URLs are disabled by Operator safety policy.",
       false,
     );
   }
   if (!localHosts.has(parsed.hostname) && parsed.protocol !== "https:") {
     throw new ProviderTransportError(
-      "provider-remote-requires-tls",
-      "Remote provider URLs require HTTPS.",
+      "comparison-remote-requires-tls",
+      "Remote comparison URLs require HTTPS.",
       false,
     );
   }
@@ -175,8 +175,8 @@ async function readSse(
 ): Promise<void> {
   if (!response.body)
     throw new ProviderTransportError(
-      "provider-stream-missing",
-      "Provider response has no streaming body.",
+      "comparison-stream-missing",
+      "External comparison response has no streaming body.",
       true,
       response.status,
     );
@@ -192,15 +192,15 @@ async function readSse(
       receivedBytes += chunk.value.byteLength;
       if (receivedBytes > maxProviderStreamBytes)
         throw new ProviderTransportError(
-          "provider-stream-oversized",
-          "Provider SSE response exceeded the Operator limit.",
+          "comparison-stream-oversized",
+          "External comparison SSE response exceeded the Operator limit.",
           false,
         );
       buffer += decoder.decode(chunk.value, { stream: true });
       if (buffer.length > 1_048_576)
         throw new ProviderTransportError(
-          "provider-stream-oversized",
-          "Provider SSE frame exceeded the Operator limit.",
+          "comparison-stream-oversized",
+          "External comparison SSE frame exceeded the Operator limit.",
           false,
         );
       let boundary = sseBoundary(buffer);
@@ -239,15 +239,15 @@ export class ReferenceProviderService {
     const settings = await this.settings.publicSnapshot();
     if (
       this.tested &&
-      this.tested.baseUrl === settings.referenceProvider.baseUrl &&
-      settings.referenceProvider.enabled
+      this.tested.baseUrl === settings.comparisonEndpoint.baseUrl &&
+      settings.comparisonEndpoint.enabled
     ) {
       return structuredClone(this.tested);
     }
     const observedAt = new Date(this.clock()).toISOString();
     const configured =
-      settings.referenceProvider.enabled &&
-      Boolean(settings.referenceProvider.baseUrl && settings.referenceProvider.defaultModel);
+      settings.comparisonEndpoint.enabled &&
+      Boolean(settings.comparisonEndpoint.baseUrl && settings.comparisonEndpoint.defaultModel);
     return {
       apiVersion: API_VERSION,
       schemaVersion: SCHEMA_VERSION,
@@ -255,48 +255,48 @@ export class ReferenceProviderService {
       availability: configured
         ? availability(
             "stale",
-            "provider-not-tested",
-            "Reference provider is configured but has not passed a current connection test.",
+            "comparison-not-tested",
+            "The external comparison endpoint is configured but has not passed a current test.",
             observedAt,
             {
               recovery: {
-                id: "test-provider",
-                label: "Test provider",
-                href: "/settings?section=reference-provider",
+                id: "test-comparison-endpoint",
+                label: "Test comparison endpoint",
+                href: "/settings?section=comparison-endpoint",
               },
-              source: "reference-provider",
+              source: "external-comparison",
             },
           )
         : availability(
             "unavailable",
-            "provider-not-configured",
-            "Reference provider configuration is incomplete.",
+            "comparison-not-configured",
+            "The optional external comparison endpoint is not configured.",
             observedAt,
             {
               recovery: {
-                id: "configure-provider",
-                label: "Configure provider",
-                href: "/settings?section=reference-provider",
+                id: "configure-comparison-endpoint",
+                label: "Configure comparison endpoint",
+                href: "/settings?section=comparison-endpoint",
               },
-              source: "reference-provider",
+              source: "external-comparison",
             },
           ),
       configured,
       reachable: false,
       streamingCompatible: false,
-      displayName: settings.referenceProvider.displayName,
-      baseUrl: settings.referenceProvider.baseUrl,
-      defaultModel: settings.referenceProvider.defaultModel,
+      displayName: settings.comparisonEndpoint.displayName,
+      baseUrl: settings.comparisonEndpoint.baseUrl,
+      defaultModel: settings.comparisonEndpoint.defaultModel,
       lastTestedAt: null,
       models: [],
     };
   }
 
-  /** Tests model discovery and a bounded visible-token stream through a cancellable provider-test job. */
+  /** Tests model discovery and a bounded visible-token stream through a cancellable comparison job. */
   async testConnection(): Promise<{ status: ProviderStatus; jobId: string }> {
     const job = this.jobs.create(
-      "provider-test",
-      "Reference provider",
+      "comparison-test",
+      "External comparison endpoint",
       "validating-configuration",
       true,
     );
@@ -310,8 +310,8 @@ export class ReferenceProviderService {
       const model = context.settings.defaultModel || models[0];
       if (!model)
         throw new ProviderTransportError(
-          "provider-model-missing",
-          "Provider returned no model and no default model is configured.",
+          "comparison-model-missing",
+          "External comparison returned no model and no default model is configured.",
           false,
         );
       let streamed = false;
@@ -338,8 +338,8 @@ export class ReferenceProviderService {
       );
       if (!streamed)
         throw new ProviderTransportError(
-          "provider-stream-empty",
-          "Provider stream completed without a token delta.",
+          "comparison-stream-empty",
+          "External comparison stream completed without a token delta.",
           true,
         );
       const observedAt = new Date(this.clock()).toISOString();
@@ -349,10 +349,10 @@ export class ReferenceProviderService {
         observedAt,
         availability: availability(
           "ready",
-          "provider-ready",
-          "Reference provider model and streaming APIs are compatible.",
+          "comparison-ready",
+          "External comparison model and streaming APIs are compatible.",
           observedAt,
-          { source: "reference-provider-test" },
+          { source: "external-comparison-test" },
         ),
         configured: true,
         reachable: true,
@@ -364,12 +364,12 @@ export class ReferenceProviderService {
         models,
       };
       this.jobs.transition(job.id, "completed", "completed", {
-        resultReference: "reference-provider-status",
+        resultReference: "external-comparison-status",
       });
       this.history.record(
-        "provider-test",
+        "comparison-test",
         "info",
-        "Reference provider connection and streaming test passed.",
+        "External comparison connection and streaming test passed.",
         job.id,
       );
       return { status: structuredClone(this.tested), jobId: job.id };
@@ -378,8 +378,8 @@ export class ReferenceProviderService {
         error instanceof ProviderTransportError
           ? error
           : new ProviderTransportError(
-              "provider-test-failed",
-              "Reference provider test failed.",
+              "comparison-test-failed",
+              "External comparison test failed.",
               true,
             );
       if (controller.signal.aborted) {
@@ -390,9 +390,9 @@ export class ReferenceProviderService {
         });
       }
       this.history.record(
-        "provider-test",
+        "comparison-test",
         controller.signal.aborted ? "warning" : "error",
-        controller.signal.aborted ? "Reference provider test cancelled." : failure.message,
+        controller.signal.aborted ? "External comparison test cancelled." : failure.message,
         job.id,
       );
       throw failure;
@@ -404,7 +404,7 @@ export class ReferenceProviderService {
     return this.fetchModels(await this.context(), signal);
   }
 
-  /** Streams one reference-provider generation with normalized deltas, optional usage, and measurable timings. */
+  /** Streams one external comparison with normalized deltas, optional usage, and measurable timings. */
   async stream(
     messages: readonly { role: "system" | "user" | "assistant"; content: string }[],
     parameters: GenerationParameters,
@@ -432,22 +432,22 @@ export class ReferenceProviderService {
     };
   }> {
     const internal = await this.settings.internal();
-    const settings = internal.persisted.referenceProvider;
+    const settings = internal.persisted.comparisonEndpoint;
     if (!settings.enabled)
       throw new ProviderTransportError(
-        "provider-disabled",
-        "Reference provider is disabled.",
+        "comparison-disabled",
+        "The external comparison endpoint is disabled.",
         false,
       );
     if (!settings.defaultModel)
       throw new ProviderTransportError(
-        "provider-model-missing",
+        "comparison-model-missing",
         "A default reference model is required.",
         false,
       );
     return {
       base: validateProviderBaseUrl(settings.baseUrl, this.config.allowRemoteProviders),
-      apiKey: internal.referenceProviderApiKey,
+      apiKey: internal.comparisonEndpointApiKey,
       settings,
     };
   }
@@ -476,17 +476,17 @@ export class ReferenceProviderService {
     } catch {
       if (outerSignal.aborted) throw new DOMException("cancelled", "AbortError");
       throw new ProviderTransportError(
-        "provider-unreachable",
-        "Reference provider is unreachable.",
+        "comparison-unreachable",
+        "External comparison endpoint is unreachable.",
         true,
       );
     }
     if (!response.ok)
       throw new ProviderTransportError(
         response.status === 401 || response.status === 403
-          ? "provider-authentication"
-          : "provider-models-failed",
-        `Reference provider model endpoint returned HTTP ${response.status}.`,
+          ? "comparison-authentication"
+          : "comparison-models-failed",
+        `External comparison model endpoint returned HTTP ${response.status}.`,
         response.status >= 500,
         response.status,
       );
@@ -496,24 +496,24 @@ export class ReferenceProviderService {
     } catch (error) {
       if (error instanceof ProviderTransportError) throw error;
       throw new ProviderTransportError(
-        "provider-models-malformed",
-        "Reference provider model endpoint returned malformed JSON.",
+        "comparison-models-malformed",
+        "External comparison model endpoint returned malformed JSON.",
         true,
         response.status,
       );
     }
     if (!isRecord(payload) || !Array.isArray(payload.data)) {
       throw new ProviderTransportError(
-        "provider-models-contract",
-        "Reference provider model response is incompatible.",
+        "comparison-models-contract",
+        "External comparison model response is incompatible.",
         false,
         response.status,
       );
     }
     if (payload.data.length > maxProviderModels) {
       throw new ProviderTransportError(
-        "provider-models-oversized",
-        "Reference provider returned too many model records.",
+        "comparison-models-oversized",
+        "External comparison endpoint returned too many model records.",
         false,
         response.status,
       );
@@ -559,17 +559,17 @@ export class ReferenceProviderService {
     } catch {
       if (outerSignal.aborted) throw new DOMException("cancelled", "AbortError");
       throw new ProviderTransportError(
-        "provider-unreachable",
-        "Reference provider is unreachable.",
+        "comparison-unreachable",
+        "External comparison endpoint is unreachable.",
         true,
       );
     }
     if (!response.ok) {
       throw new ProviderTransportError(
         response.status === 401 || response.status === 403
-          ? "provider-authentication"
-          : "provider-chat-failed",
-        `Reference provider chat endpoint returned HTTP ${response.status}.`,
+          ? "comparison-authentication"
+          : "comparison-generation-failed",
+        `External comparison chat endpoint returned HTTP ${response.status}.`,
         response.status >= 500,
         response.status,
       );
@@ -577,8 +577,8 @@ export class ReferenceProviderService {
     const contentType = response.headers.get("content-type") ?? "";
     if (!contentType.includes("text/event-stream")) {
       throw new ProviderTransportError(
-        "provider-stream-incompatible",
-        "Reference provider did not return an SSE stream.",
+        "comparison-stream-incompatible",
+        "External comparison endpoint did not return an SSE stream.",
         false,
         response.status,
       );
@@ -593,8 +593,8 @@ export class ReferenceProviderService {
         chunk = JSON.parse(frame) as OpenAiChunk;
       } catch {
         throw new ProviderTransportError(
-          "provider-stream-malformed",
-          "Reference provider returned malformed SSE JSON.",
+          "comparison-stream-malformed",
+          "External comparison endpoint returned malformed SSE JSON.",
           true,
           response.status,
         );

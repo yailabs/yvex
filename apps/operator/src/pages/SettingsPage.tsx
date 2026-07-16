@@ -1,14 +1,15 @@
 /*
  * Owner: apps/operator functional Settings workbench.
- * Owns: validated YVEX/provider/interface forms, redacted values, provider test, cache reset, connection and safety disclosure.
- * Does not own: secret return, arbitrary paths, arbitrary URLs, listener restart, shell/environment mutation, or native capability.
- * Invariants: API keys remain write-only and a YVEX path is persisted only after server-side identity validation.
- * Boundary: saved settings do not establish binary/provider readiness until their respective probes pass.
+ * Owns: validated YVEX, interface, cache, safety, and optional external-comparison forms with redacted values.
+ * Does not own: secret return, arbitrary paths/URLs, listener restart, shell/environment mutation, YVEX capability, or primary generation.
+ * Invariants: comparison keys remain write-only, YVEX paths require server identity validation, and comparison is disabled by default.
+ * Boundary: saved settings do not establish YVEX or comparison readiness until their respective typed probes pass.
  */
 import { Check, EyeOff, LockKeyhole, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 
-import type { ReferenceProviderSettings, SettingsResponse } from "../../shared/contracts.ts";
+import type { ComparisonEndpointSettings, SettingsResponse } from "../../shared/contracts.ts";
 import { operatorApi } from "../api.ts";
 import {
   Fact,
@@ -26,13 +27,13 @@ import { useOperatorState } from "../state/operator-state.tsx";
 const sections = [
   { id: "connection", label: "Connection" },
   { id: "yvex", label: "YVEX" },
-  { id: "reference-provider", label: "Reference provider" },
   { id: "cache", label: "Cache" },
   { id: "safety", label: "Safety" },
   { id: "interface", label: "Interface" },
+  { id: "comparison-endpoint", label: "Comparison endpoint" },
 ] as const;
 
-/** Renders one local save/test result without exposing raw stack or secret detail. */
+/** Renders one local save/test result without exposing stack traces or secret detail. */
 function FormNotice({ state }: { state: { type: "success" | "error"; message: string } | null }) {
   if (!state) return null;
   return (
@@ -43,11 +44,13 @@ function FormNotice({ state }: { state: { type: "success" | "error"; message: st
   );
 }
 
-/** Persists one prospective binary only after the adapter validates regular file, execute bit, identity, and protocol. */
+/** Persists one binary candidate only after regular-file, execute-bit, identity, and protocol validation. */
 function YvexForm({ settings, onSaved }: { settings: SettingsResponse; onSaved: () => void }) {
   const [path, setPath] = useState("");
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  /** Validates and persists the candidate through the fixed server-side identity probe. */
   const save = async (event: FormEvent): Promise<void> => {
     event.preventDefault();
     setSaving(true);
@@ -57,7 +60,7 @@ function YvexForm({ settings, onSaved }: { settings: SettingsResponse; onSaved: 
       setPath("");
       setNotice({
         type: "success",
-        message: "Compatible YVEX binary saved and observations invalidated.",
+        message: "Compatible YVEX binary saved; observations invalidated.",
       });
       onSaved();
     } catch (error) {
@@ -69,24 +72,27 @@ function YvexForm({ settings, onSaved }: { settings: SettingsResponse; onSaved: 
       setSaving(false);
     }
   };
+
+  /** Clears only the explicit override so deterministic fallback candidates can be re-evaluated. */
   const clear = async (): Promise<void> => {
     setSaving(true);
     try {
       await operatorApi.updateYvex({ binaryPath: null });
       setNotice({
         type: "success",
-        message: "Persisted binary path cleared; fallback candidates will be retried.",
+        message: "Explicit override cleared; auto-discovery will be retried.",
       });
       onSaved();
     } catch (error) {
       setNotice({
         type: "error",
-        message: error instanceof Error ? error.message : "Could not clear binary setting.",
+        message: error instanceof Error ? error.message : "Could not clear the binary override.",
       });
     } finally {
       setSaving(false);
     }
   };
+
   return (
     <form className="settings-form" onSubmit={(event) => void save(event)}>
       <div className="field-row">
@@ -101,13 +107,12 @@ function YvexForm({ settings, onSaved }: { settings: SettingsResponse; onSaved: 
           />
         </label>
         <div className="field-help">
-          Relative paths and traversal are rejected. The adapter executes only the fixed identity
-          probe before persistence.
+          Relative paths and traversal are rejected. No browser value can become argv.
         </div>
       </div>
       <FactGrid>
         <Fact
-          label="Persisted candidate"
+          label="Explicit binary override"
           value={settings.yvex.binaryPathLabel ?? "Not configured"}
           mono
         />
@@ -127,7 +132,7 @@ function YvexForm({ settings, onSaved }: { settings: SettingsResponse; onSaved: 
           disabled={saving || !settings.yvex.binaryConfigured}
           onClick={() => void clear()}
         >
-          <Trash2 aria-hidden="true" size={14} /> Clear persisted path
+          <Trash2 aria-hidden="true" size={14} /> Clear override
         </button>
         <button
           type="button"
@@ -141,28 +146,30 @@ function YvexForm({ settings, onSaved }: { settings: SettingsResponse; onSaved: 
   );
 }
 
-/** Persists only the admitted OpenAI-compatible provider fields and keeps the API key write-only. */
-function ProviderForm({
-  provider,
+/** Persists an explicitly optional OpenAI-compatible comparison endpoint with a write-only key. */
+function ComparisonEndpointForm({
+  endpoint,
   onSaved,
 }: {
-  provider: ReferenceProviderSettings;
+  endpoint: ComparisonEndpointSettings;
   onSaved: () => void;
 }) {
-  const [enabled, setEnabled] = useState(provider.enabled);
-  const [displayName, setDisplayName] = useState(provider.displayName);
-  const [baseUrl, setBaseUrl] = useState(provider.baseUrl);
+  const [enabled, setEnabled] = useState(endpoint.enabled);
+  const [displayName, setDisplayName] = useState(endpoint.displayName);
+  const [baseUrl, setBaseUrl] = useState(endpoint.baseUrl);
   const [apiKey, setApiKey] = useState("");
-  const [defaultModel, setDefaultModel] = useState(provider.defaultModel);
-  const [timeout, setTimeoutValue] = useState(provider.requestTimeoutMs);
+  const [defaultModel, setDefaultModel] = useState(endpoint.defaultModel);
+  const [timeout, setTimeoutValue] = useState(endpoint.requestTimeoutMs);
   const [busy, setBusy] = useState<"save" | "test" | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  /** Saves only the admitted comparison fields and never round-trips the secret. */
   const save = async (event?: FormEvent): Promise<boolean> => {
     event?.preventDefault();
     setBusy("save");
     setNotice(null);
     try {
-      await operatorApi.updateProvider({
+      await operatorApi.updateComparisonEndpoint({
         enabled,
         displayName,
         baseUrl,
@@ -173,41 +180,52 @@ function ProviderForm({
       setApiKey("");
       setNotice({
         type: "success",
-        message: "Reference provider settings saved. Secret value remains server-side.",
+        message: "External comparison configuration saved. The key remains server-side.",
       });
       onSaved();
       return true;
     } catch (error) {
       setNotice({
         type: "error",
-        message: error instanceof Error ? error.message : "Provider settings failed validation.",
+        message:
+          error instanceof Error ? error.message : "Comparison configuration failed validation.",
       });
       return false;
     } finally {
       setBusy(null);
     }
   };
+
+  /** Runs model discovery and a bounded streaming compatibility probe only after explicit enablement. */
   const test = async (): Promise<void> => {
     if (!(await save())) return;
     setBusy("test");
     try {
-      const result = await operatorApi.testProvider();
+      const result = await operatorApi.testComparisonEndpoint();
       setNotice({
         type: "success",
-        message: `${result.status.displayName} passed model and streaming compatibility checks.`,
+        message: `${result.status.displayName} passed comparison model and streaming checks.`,
       });
       onSaved();
     } catch (error) {
       setNotice({
         type: "error",
-        message: error instanceof Error ? error.message : "Provider test failed.",
+        message: error instanceof Error ? error.message : "Comparison endpoint test failed.",
       });
     } finally {
       setBusy(null);
     }
   };
+
   return (
     <form className="settings-form provider-form" onSubmit={(event) => void save(event)}>
+      <div className="comparison-boundary">
+        <strong>Diagnostics only</strong>
+        <p>
+          This endpoint may support differential comparison. It is never a YVEX runtime lane,
+          fallback, or global readiness dependency.
+        </p>
+      </div>
       <label className="toggle-field">
         <input
           type="checkbox"
@@ -215,8 +233,8 @@ function ProviderForm({
           onChange={(event) => setEnabled(event.target.checked)}
         />
         <span>
-          <strong>Enable reference provider</strong>
-          <small>Execution owner is always shown as Reference provider.</small>
+          <strong>Enable external comparison endpoint</strong>
+          <small>Disabled is the normal default and does not block YVEX.</small>
         </span>
       </label>
       <div className="form-grid">
@@ -229,7 +247,7 @@ function ProviderForm({
           />
         </label>
         <label>
-          <span>Base URL</span>
+          <span>OpenAI-compatible base URL</span>
           <input
             type="url"
             value={baseUrl}
@@ -245,9 +263,9 @@ function ProviderForm({
             value={apiKey}
             onChange={(event) => setApiKey(event.target.value)}
             placeholder={
-              provider.apiKeyConfigured
+              endpoint.apiKeyConfigured
                 ? "Configured — enter to replace"
-                : "Optional for local provider"
+                : "Optional for a local endpoint"
             }
             autoComplete="new-password"
           />
@@ -256,11 +274,11 @@ function ProviderForm({
           </small>
         </label>
         <label>
-          <span>Default model</span>
+          <span>Comparison model</span>
           <input
             value={defaultModel}
             onChange={(event) => setDefaultModel(event.target.value)}
-            required
+            required={enabled}
           />
         </label>
         <label>
@@ -277,8 +295,9 @@ function ProviderForm({
       </div>
       <FormNotice state={notice} />
       <div className="form-actions">
-        <button type="submit" className="button primary" disabled={busy !== null}>
-          <Save aria-hidden="true" size={14} /> {busy === "save" ? "Saving…" : "Save provider"}
+        <button type="submit" className="button secondary" disabled={busy !== null}>
+          <Save aria-hidden="true" size={14} />{" "}
+          {busy === "save" ? "Saving…" : "Save comparison configuration"}
         </button>
         <button
           type="button"
@@ -287,23 +306,29 @@ function ProviderForm({
           onClick={() => void test()}
         >
           <RefreshCw aria-hidden="true" size={14} />{" "}
-          {busy === "test" ? "Testing stream…" : "Save and test"}
+          {busy === "test" ? "Testing stream…" : "Save and test comparison"}
         </button>
+        {endpoint.enabled ? (
+          <Link className="button secondary" to="/settings/reference-comparison">
+            Open reference comparison
+          </Link>
+        ) : null}
       </div>
     </form>
   );
 }
 
-/** Persists server-backed default lane and dock mode while sizing remains browser-local. */
+/** Persists only the default Generation Console presentation; no execution lane exists. */
 function InterfaceForm({ settings, onSaved }: { settings: SettingsResponse; onSaved: () => void }) {
-  const [lane, setLane] = useState(settings.interface.defaultLane);
-  const [mode, setMode] = useState(settings.interface.chatDefaultMode);
+  const [mode, setMode] = useState(settings.interface.generationConsoleDefaultMode);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  /** Saves the server-backed console presentation default without mutating workspace truth. */
   const save = async (event: FormEvent): Promise<void> => {
     event.preventDefault();
     try {
-      await operatorApi.updateOperator({ defaultLane: lane, chatDefaultMode: mode });
-      setNotice({ type: "success", message: "Interface defaults saved." });
+      await operatorApi.updateOperator({ generationConsoleDefaultMode: mode });
+      setNotice({ type: "success", message: "Generation Console default saved." });
       onSaved();
     } catch (error) {
       setNotice({
@@ -312,30 +337,26 @@ function InterfaceForm({ settings, onSaved }: { settings: SettingsResponse; onSa
       });
     }
   };
+
   return (
     <form className="settings-form" onSubmit={(event) => void save(event)}>
-      <div className="form-grid">
-        <label>
-          <span>Default execution lane</span>
-          <select value={lane} onChange={(event) => setLane(event.target.value as typeof lane)}>
-            <option value="reference-provider">Reference provider</option>
-            <option value="native-yvex">Native YVEX (capability-gated)</option>
-          </select>
-        </label>
-        <label>
-          <span>Default chat mode</span>
-          <select value={mode} onChange={(event) => setMode(event.target.value as typeof mode)}>
-            <option value="closed">Closed</option>
-            <option value="compact">Compact</option>
-            <option value="docked">Docked</option>
-            <option value="expanded">Expanded</option>
-            <option value="fullscreen">Full screen</option>
-          </select>
-        </label>
-      </div>
+      <label>
+        <span>Default Generation Console mode</span>
+        <select value={mode} onChange={(event) => setMode(event.target.value as typeof mode)}>
+          <option value="closed">Closed</option>
+          <option value="compact">Compact</option>
+          <option value="docked">Docked</option>
+          <option value="expanded">Expanded</option>
+          <option value="fullscreen">Full screen</option>
+        </select>
+        <small>
+          The console always inherits the active YVEX target, artifact, backend, and runtime
+          session.
+        </small>
+      </label>
       <FormNotice state={notice} />
       <button type="submit" className="button primary">
-        <Save aria-hidden="true" size={14} /> Save interface defaults
+        <Save aria-hidden="true" size={14} /> Save interface default
       </button>
     </form>
   );
@@ -347,6 +368,7 @@ export function SettingsPage() {
   const section = useRouteTab(sections, "connection", "section");
   const page = pageMetadata.settings;
   const refresh = (): void => app.refreshAll();
+
   return (
     <div className="page">
       <PageHeader eyebrow={page.eyebrow} title={page.label} summary={page.summary} />
@@ -391,7 +413,6 @@ export function SettingsPage() {
                   <p className="body-copy">
                     Remote binding is configured outside the browser with explicit mode, a strong
                     authentication token, and allowed Origins. Tokens are never returned or logged.
-                    Tailscale/LAN guidance is documented in the Operator runbook.
                   </p>
                 </Panel>
               </div>
@@ -410,16 +431,6 @@ export function SettingsPage() {
                 </Panel>
               </div>
             ) : null}
-            {section === "reference-provider" ? (
-              <div role="tabpanel">
-                <Panel
-                  title="OpenAI-compatible reference provider"
-                  description="llama.cpp server, compatible local servers, and explicitly allowed HTTPS providers."
-                >
-                  <ProviderForm provider={settings.referenceProvider} onSaved={refresh} />
-                </Panel>
-              </div>
-            ) : null}
             {section === "cache" ? (
               <div role="tabpanel" className="detail-layout">
                 <Panel
@@ -430,7 +441,7 @@ export function SettingsPage() {
                     <Fact label="Mutable TTL" value={`${settings.cache.mutableTtlMs} ms`} />
                     <Fact label="Binary TTL" value={`${settings.cache.binaryTtlMs} ms`} />
                     <Fact label="Failures" value="Never success-cached" />
-                    <Fact label="Provider success" value="Invalidated after settings change" />
+                    <Fact label="Comparison success" value="Invalidated after settings change" />
                   </FactGrid>
                   <button
                     type="button"
@@ -442,10 +453,10 @@ export function SettingsPage() {
                 </Panel>
                 <Panel title="Persistence boundary" description="What the reset does not touch.">
                   <ul className="plain-list">
-                    <li>Does not delete chat sessions.</li>
+                    <li>Does not delete workspace selection.</li>
                     <li>Does not delete model or artifact files.</li>
                     <li>Does not mutate YVEX registries.</li>
-                    <li>Does not clear provider credentials.</li>
+                    <li>Does not clear comparison credentials.</li>
                   </ul>
                 </Panel>
               </div>
@@ -460,8 +471,8 @@ export function SettingsPage() {
                     {[
                       ["Shell execution", settings.safety.shellEnabled],
                       ["Arbitrary argv", settings.safety.arbitraryArgvEnabled],
-                      ["Provider secrets returned", settings.safety.providerSecretsReturned],
-                      ["Remote provider URLs", settings.safety.remoteProvidersAllowed],
+                      ["Comparison secrets returned", settings.safety.providerSecretsReturned],
+                      ["Remote comparison URLs", settings.safety.remoteProvidersAllowed],
                     ].map(([label, enabled]) => (
                       <article key={String(label)}>
                         <LockKeyhole aria-hidden="true" size={17} />
@@ -474,9 +485,8 @@ export function SettingsPage() {
                     ))}
                   </div>
                   <p className="boundary-copy">
-                    YVEX paths are the only browser-configurable executable paths, validated through
-                    the fixed identity handshake. Model paths, environment maps, commands, pipes,
-                    and redirection are not accepted.
+                    YVEX paths are the only browser-configurable executable paths. Model paths,
+                    environment maps, commands, pipes, and redirection are never accepted.
                   </p>
                 </Panel>
               </div>
@@ -485,9 +495,22 @@ export function SettingsPage() {
               <div role="tabpanel">
                 <Panel
                   title="Interface defaults"
-                  description="Non-secret presentation and lane preferences."
+                  description="Presentation only; the active workspace remains server-owned."
                 >
                   <InterfaceForm settings={settings} onSaved={refresh} />
+                </Panel>
+              </div>
+            ) : null}
+            {section === "comparison-endpoint" ? (
+              <div role="tabpanel">
+                <Panel
+                  title="External comparison endpoint"
+                  description="Optional differential diagnostics for an explicitly configured OpenAI-compatible endpoint."
+                >
+                  <ComparisonEndpointForm
+                    endpoint={settings.comparisonEndpoint}
+                    onSaved={refresh}
+                  />
                 </Panel>
               </div>
             ) : null}

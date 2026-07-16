@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /*
  * Owner: apps/operator manual browser acceptance evidence.
- * Owns: deterministic local server startup, reference-provider configuration, viewport matrix, and named screenshots.
- * Does not own: production secrets, native runtime claims, external providers, test assertions, or application behavior.
- * Invariants: fixtures bind loopback, configuration is isolated, and every captured generation uses real BFF/provider SSE.
- * Boundary: screenshots demonstrate Operator interaction and presentation only; fixture output is not native inference evidence.
+ * Owns: deterministic local server startup, explicit comparison diagnostics, viewport matrix, and named screenshots.
+ * Does not own: production secrets, YVEX runtime claims, external providers, test assertions, or application behavior.
+ * Invariants: fixtures bind loopback, configuration is isolated, and comparison output stays outside the primary YVEX workspace.
+ * Boundary: screenshots demonstrate Operator interaction and presentation only; fixture output is not YVEX inference evidence.
  */
 import { spawn } from "node:child_process";
 import { access, mkdir, rm } from "node:fs/promises";
@@ -19,9 +19,9 @@ const repositoryRoot = resolve(operatorRoot, "../..");
 const outputDirectory = resolve(repositoryRoot, "docs/screenshots/operator-e2e");
 const configDirectory = resolve(operatorRoot, "test-results/manual/operator-config");
 const adapterPort = 15_317;
-const providerPort = 15_318;
+const comparisonPort = 15_318;
 const adapterOrigin = `http://127.0.0.1:${adapterPort}`;
-const providerBaseUrl = `http://127.0.0.1:${providerPort}/v1`;
+const comparisonBaseUrl = `http://127.0.0.1:${comparisonPort}/v1`;
 const fakeYvex = resolve(operatorRoot, "tests/fixtures/fake-yvex.mjs");
 const serverBundle = resolve(operatorRoot, "dist/operator-server.js");
 
@@ -85,7 +85,8 @@ async function stopChild(child) {
 async function captureRoute(page, route, title, filename) {
   await page.goto(`${adapterOrigin}${route}`);
   await page.getByRole("heading", { name: title, level: 1 }).waitFor();
-  await page.waitForTimeout(250);
+  await page.evaluate(() => window.scrollTo({ top: 0, left: 0 }));
+  await page.waitForTimeout(300);
   await page.screenshot({ path: resolve(outputDirectory, filename), fullPage: true });
 }
 
@@ -96,113 +97,120 @@ await rm(configDirectory, { recursive: true, force: true });
 await rm(outputDirectory, { recursive: true, force: true });
 await mkdir(outputDirectory, { recursive: true });
 
-const provider = startChild(process.execPath, ["tests/fixtures/fake-provider.mjs"], {
-  YVEX_FAKE_PROVIDER_PORT: String(providerPort),
+const comparison = startChild(process.execPath, ["tests/fixtures/fake-provider.mjs"], {
+  YVEX_FAKE_PROVIDER_PORT: String(comparisonPort),
 });
 const adapter = startChild(process.execPath, ["dist/operator-server.js"], {
   YVEX_OPERATOR_CONFIG_DIR: configDirectory,
   YVEX_OPERATOR_PORT: String(adapterPort),
+  YVEX_OPERATOR_REPOSITORY_ROOT: resolve(configDirectory, "missing-repository"),
+  YVEX_OPERATOR_REPOSITORY_BIN: resolve(configDirectory, "missing-repository", "yvex"),
 });
 let browser;
 
 try {
   await Promise.all([
-    waitForUrl(`${providerBaseUrl}/models`),
+    waitForUrl(`${comparisonBaseUrl}/models`),
     waitForUrl(`${adapterOrigin}/api/v1/system/health`),
   ]);
   await api("PATCH", "/api/v1/settings/yvex", { binaryPath: fakeYvex });
-  await api("PATCH", "/api/v1/settings/reference-provider", {
+  await api("PATCH", "/api/v1/settings/comparison-endpoint", {
     enabled: true,
     displayName: "Fixture reference",
-    baseUrl: providerBaseUrl,
+    baseUrl: comparisonBaseUrl,
     apiKey: "manual-fixture-secret",
     defaultModel: "fixture-reference-model",
     requestTimeoutMs: 30_000,
   });
-  await api("POST", "/api/v1/settings/reference-provider/test", {});
+  await api("POST", "/api/v1/settings/comparison-endpoint/test", {});
 
   browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
   const page = await context.newPage();
 
-  await captureRoute(page, "/overview", "Overview", "01-overview.png");
-  await captureRoute(page, "/models", "Models", "02-models.png");
-  await captureRoute(page, "/runtime?tab=stages", "Runtime", "03-runtime-stages.png");
-  await captureRoute(page, "/runtime?tab=backend", "Runtime", "04-runtime-backend.png");
-  await captureRoute(page, "/runtime?tab=controls", "Runtime", "05-runtime-controls.png");
-  await captureRoute(page, "/evidence?tab=producers", "Evidence", "06-evidence.png");
-  await captureRoute(page, "/system-health?tab=topology", "System Health", "07-system-health.png");
-  await captureRoute(page, "/settings?section=yvex", "Settings", "08-settings-yvex.png");
+  await captureRoute(page, "/workspace", "Workspace", "01-workspace.png");
   await captureRoute(
     page,
-    "/settings?section=reference-provider",
+    "/build?stage=transformation-ir",
+    "Build",
+    "02-build-transformation-ir.png",
+  );
+  await captureRoute(page, "/artifacts", "Artifacts", "03-artifacts.png");
+  await captureRoute(page, "/runtime?tab=readiness", "Runtime", "04-runtime-readiness.png");
+  await captureRoute(page, "/runtime?tab=backend", "Runtime", "05-runtime-backend.png");
+  await captureRoute(page, "/runtime?tab=sessions", "Runtime", "06-runtime-sessions.png");
+  await captureRoute(page, "/runtime?tab=generation", "Runtime", "07-runtime-generation.png");
+  await captureRoute(page, "/evidence?tab=producers", "Evidence", "08-evidence.png");
+  await captureRoute(page, "/environment?tab=topology", "Environment", "09-environment.png");
+  await captureRoute(page, "/settings?section=yvex", "Settings", "10-settings-yvex.png");
+  await captureRoute(
+    page,
+    "/settings?section=comparison-endpoint",
     "Settings",
-    "09-settings-reference-provider.png",
+    "11-settings-comparison-endpoint.png",
   );
 
-  await page.goto(`${adapterOrigin}/overview`);
-  await page.getByRole("heading", { name: "Overview", level: 1 }).waitFor();
+  await page.goto(`${adapterOrigin}/workspace`);
+  await page.getByRole("heading", { name: "Workspace", level: 1 }).waitFor();
   await page.getByRole("button", { name: "Open command palette" }).click();
   await page.getByRole("dialog", { name: "Command palette" }).waitFor();
-  await page.screenshot({ path: resolve(outputDirectory, "10-command-palette.png") });
+  await page.screenshot({ path: resolve(outputDirectory, "12-command-palette.png") });
   await page.keyboard.press("Escape");
 
-  await page.getByRole("button", { name: "Toggle chat dock" }).click();
-  const dock = page.getByRole("complementary", { name: "YVEX model chat" });
-  await dock.waitFor();
-  const composer = dock.getByLabel("Chat message");
-  await composer.fill("slow streaming acceptance response");
-  await dock.getByRole("button", { name: "Send" }).click();
-  const streamingMessage = dock.locator('.chat-message.role-assistant[data-state="streaming"]');
-  await streamingMessage.filter({ hasText: "Partial" }).waitFor();
-  await page.screenshot({ path: resolve(outputDirectory, "11-chat-streaming.png") });
-  await dock.locator('.chat-message.role-assistant[data-state="complete"]').waitFor();
-  await page.screenshot({ path: resolve(outputDirectory, "12-chat-completed.png") });
+  await page.getByRole("button", { name: "Toggle Generation Console" }).click();
+  const console = page.getByRole("complementary", { name: "YVEX Generation Console" });
+  await console.waitFor();
+  await console.getByText("YVEX generation capability").waitFor();
+  await page.screenshot({ path: resolve(outputDirectory, "13-generation-console-blocked.png") });
+  await console.getByRole("button", { name: "Close Generation Console" }).click();
 
-  await composer.fill("cancel this slow acceptance response");
-  await dock.getByRole("button", { name: "Send" }).click();
-  await dock
-    .locator('.chat-message.role-assistant[data-state="streaming"]')
-    .filter({ hasText: "Partial" })
-    .waitFor();
-  await dock.getByRole("button", { name: "Cancel" }).click();
-  await dock.locator('.chat-message.role-assistant[data-state="cancelled"]').waitFor();
-  await page.screenshot({ path: resolve(outputDirectory, "13-chat-cancelled.png") });
-
-  await dock.getByRole("button", { name: "Native YVEX" }).click();
-  await dock.getByText("Native YVEX generation is unavailable").waitFor();
-  await page.screenshot({ path: resolve(outputDirectory, "14-native-lane-blocked.png") });
-  await dock.getByRole("button", { name: "Close chat" }).click();
+  await page.goto(`${adapterOrigin}/settings/reference-comparison`);
+  await page.getByRole("heading", { name: "Reference comparison", level: 1 }).waitFor();
+  const prompt = page.getByLabel("External comparison prompt");
+  await prompt.fill("slow streaming acceptance response");
+  await page.getByRole("button", { name: "Run comparison" }).click();
+  await page.getByText("Partial", { exact: true }).waitFor();
+  await page.evaluate(() => window.scrollTo({ top: 0, left: 0 }));
+  await page.screenshot({
+    path: resolve(outputDirectory, "14-reference-comparison-streaming.png"),
+  });
+  await page.getByText("Partial reference response continues.").waitFor();
+  await page.evaluate(() => window.scrollTo({ top: 0, left: 0 }));
+  await page.screenshot({
+    path: resolve(outputDirectory, "15-reference-comparison-completed.png"),
+  });
 
   await page.setViewportSize({ width: 1280, height: 800 });
-  await captureRoute(page, "/runtime?tab=controls", "Runtime", "15-laptop-runtime-controls.png");
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await captureRoute(page, "/runtime?tab=readiness", "Runtime", "16-laptop-runtime.png");
+  await page.setViewportSize({ width: 1600, height: 1000 });
 
   await api("PATCH", "/api/v1/settings/yvex", { binaryPath: null });
   await api("POST", "/api/v1/system/reload", {});
   await captureRoute(
     page,
-    "/system-health?tab=binary",
-    "System Health",
-    "16-system-health-missing-binary.png",
+    "/environment?tab=binary",
+    "Environment",
+    "17-environment-missing-binary.png",
   );
 
+  await api("PATCH", "/api/v1/settings/yvex", { binaryPath: fakeYvex });
   await page.setViewportSize({ width: 768, height: 900 });
-  await captureRoute(page, "/overview", "Overview", "17-narrow-overview.png");
+  await captureRoute(page, "/workspace", "Workspace", "18-narrow-workspace.png");
   if (await page.getByRole("button", { name: "Open navigation" }).isVisible()) {
     await page.getByRole("button", { name: "Open navigation" }).click();
     await page.locator(".sidebar.mobile-open").waitFor();
     await page.waitForTimeout(200);
-    await page.screenshot({ path: resolve(outputDirectory, "18-narrow-navigation.png") });
+    await page.screenshot({ path: resolve(outputDirectory, "19-narrow-navigation.png") });
   }
   await context.close();
 } catch (error) {
-  const detail = [provider.diagnostics(), adapter.diagnostics()].filter(Boolean).join("\n");
+  const detail = [comparison.diagnostics(), adapter.diagnostics()].filter(Boolean).join("\n");
   if (detail) process.stderr.write(`${detail}\n`);
   throw error;
 } finally {
   if (browser) await browser.close();
-  await Promise.all([stopChild(adapter), stopChild(provider)]);
+  await Promise.all([stopChild(adapter), stopChild(comparison)]);
+  await rm(configDirectory, { recursive: true, force: true });
 }
 
 process.stdout.write(`${outputDirectory}\n`);

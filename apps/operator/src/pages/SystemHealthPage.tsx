@@ -1,12 +1,13 @@
 /*
  * Owner: apps/operator System Health workbench.
- * Owns: full topology, binary resolution trace, adapter/version/bind security, host facts, and recovery links.
- * Does not own: binary resolution policy, backend discovery, provider tests, authentication secrets, or health mutation.
- * Invariants: browser, adapter, native YVEX, and reference provider are distinct nodes and branches.
+ * Owns: full YVEX topology, binary resolution trace, adapter/version/bind security, host facts, and recovery links.
+ * Does not own: binary resolution policy, backend discovery, comparison tests, authentication secrets, or health mutation.
+ * Invariants: browser, adapter, active YVEX binary, backend, runtime, and generation remain distinct nodes.
  * Boundary: adapter/process health and host architecture are not backend or runtime evidence.
  */
 import { AlertTriangle, ArrowDown, LockKeyhole, Network } from "lucide-react";
 
+import type { BinaryCandidate } from "../../shared/contracts.ts";
 import { operatorApi } from "../api.ts";
 import {
   Fact,
@@ -29,12 +30,76 @@ const tabs = [
   { id: "security", label: "Host & security" },
 ] as const;
 
-/** Renders each connectivity layer and independent reference branch from typed health/resolution data. */
+/** Renders one bounded candidate slice while retaining the original resolver order. */
+function CandidateTable({
+  candidates,
+  offset = 0,
+  label,
+}: {
+  candidates: readonly BinaryCandidate[];
+  offset?: number;
+  label: string;
+}) {
+  return (
+    <DataTable label={label}>
+      <thead>
+        <tr>
+          <th>Order / source</th>
+          <th>Safe path</th>
+          <th>File</th>
+          <th>Executable</th>
+          <th>Identity</th>
+          <th>Version</th>
+          <th>Disposition</th>
+        </tr>
+      </thead>
+      <tbody>
+        {candidates.map((candidate, index) => (
+          <tr key={candidate.id}>
+            <td>
+              <strong>{offset + index + 1}</strong>
+              <small>{candidate.source}</small>
+            </td>
+            <td>
+              <code>{candidate.displayPath}</code>
+            </td>
+            <td>
+              {candidate.exists && candidate.regularFile
+                ? "regular"
+                : candidate.exists
+                  ? "invalid"
+                  : "missing"}
+            </td>
+            <td>{candidate.executable ? "yes" : "no"}</td>
+            <td>
+              <StatusBadge
+                status={
+                  candidate.identityStatus === "ready"
+                    ? "ready"
+                    : candidate.identityStatus === "not-probed"
+                      ? "empty"
+                      : candidate.identityStatus === "incompatible"
+                        ? "blocked"
+                        : "failed"
+                }
+                value={candidate.identityStatus}
+              />
+            </td>
+            <td>{candidate.version ?? "—"}</td>
+            <td>{candidate.rejectionReason ?? "selected"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </DataTable>
+  );
+}
+
+/** Renders each primary connectivity and YVEX execution layer from typed health/resolution data. */
 export function SystemHealthPage() {
   const app = useOperatorState();
   const resolution = useApiResource("binary-resolution", operatorApi.binaryResolution);
   const tab = useRouteTab(tabs, "topology");
-  const page = pageMetadata["system-health"];
+  const page = pageMetadata.environment;
   return (
     <div className="page">
       <PageHeader
@@ -62,21 +127,25 @@ export function SystemHealthPage() {
           <ResourceBoundary resource={app.health}>
             {(health) => {
               const operatorNodes = health.topology.filter((node) => node.branch === "operator");
-              const nativeNodes = health.topology.filter((node) => node.branch === "native");
-              const referenceNodes = health.topology.filter((node) => node.branch === "reference");
-              const branch = (nodes: typeof health.topology) => (
-                <div className="topology-branch">
+              const yvexNodes = health.topology.filter((node) => node.branch === "yvex");
+              const branch = (nodes: typeof health.topology, layout: "horizontal" | "dense") => (
+                <div className={`topology-branch ${layout}`}>
                   {nodes.map((node, index) => (
                     <div key={node.id}>
                       <article>
                         <div>
+                          <span className="topology-index">
+                            {String(index + 1).padStart(2, "0")}
+                          </span>
                           <strong>{node.label}</strong>
                           <code>{node.reasonCode}</code>
                         </div>
                         <StatusBadge status={node.status} />
                         <p>{node.message}</p>
                       </article>
-                      {index < nodes.length - 1 ? <ArrowDown aria-hidden="true" size={15} /> : null}
+                      {layout === "horizontal" && index < nodes.length - 1 ? (
+                        <ArrowDown aria-hidden="true" size={15} />
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -85,20 +154,17 @@ export function SystemHealthPage() {
                 <>
                   <Panel
                     title="Control-plane topology"
-                    description="A healthy adapter does not collapse downstream native or provider states."
+                    description="A healthy adapter does not collapse downstream YVEX runtime states."
                   >
                     <div className="topology-root">
-                      {branch(operatorNodes)}
-                      <div className="topology-fork">
-                        <section>
-                          <h3>Native YVEX branch</h3>
-                          {branch(nativeNodes)}
-                        </section>
-                        <section>
-                          <h3>Reference provider branch</h3>
-                          {branch(referenceNodes)}
-                        </section>
-                      </div>
+                      <section>
+                        <h3>Operator control plane</h3>
+                        {branch(operatorNodes, "horizontal")}
+                      </section>
+                      <section>
+                        <h3>YVEX build and execution topology</h3>
+                        {branch(yvexNodes, "dense")}
+                      </section>
                     </div>
                   </Panel>
                 </>
@@ -120,56 +186,22 @@ export function SystemHealthPage() {
                   <strong>{data.selectedLabel ?? "No compatible binary selected"}</strong>
                   <p>{data.availability.message}</p>
                 </div>
-                <DataTable label="YVEX binary candidates">
-                  <thead>
-                    <tr>
-                      <th>Order / source</th>
-                      <th>Safe path</th>
-                      <th>File</th>
-                      <th>Executable</th>
-                      <th>Identity</th>
-                      <th>Version</th>
-                      <th>Disposition</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.candidates.map((candidate, index) => (
-                      <tr key={candidate.id}>
-                        <td>
-                          <strong>{index + 1}</strong>
-                          <small>{candidate.source}</small>
-                        </td>
-                        <td>
-                          <code>{candidate.displayPath}</code>
-                        </td>
-                        <td>
-                          {candidate.exists && candidate.regularFile
-                            ? "regular"
-                            : candidate.exists
-                              ? "invalid"
-                              : "missing"}
-                        </td>
-                        <td>{candidate.executable ? "yes" : "no"}</td>
-                        <td>
-                          <StatusBadge
-                            status={
-                              candidate.identityStatus === "ready"
-                                ? "ready"
-                                : candidate.identityStatus === "not-probed"
-                                  ? "empty"
-                                  : candidate.identityStatus === "incompatible"
-                                    ? "blocked"
-                                    : "failed"
-                            }
-                            value={candidate.identityStatus}
-                          />
-                        </td>
-                        <td>{candidate.version ?? "—"}</td>
-                        <td>{candidate.rejectionReason ?? "selected"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </DataTable>
+                <CandidateTable
+                  candidates={data.candidates.slice(0, 10)}
+                  label="Primary YVEX binary candidates"
+                />
+                {data.candidates.length > 10 ? (
+                  <details className="resolution-overflow">
+                    <summary>
+                      Inspect {data.candidates.length - 10} additional controlled PATH candidates
+                    </summary>
+                    <CandidateTable
+                      candidates={data.candidates.slice(10)}
+                      offset={10}
+                      label="Additional controlled PATH candidates"
+                    />
+                  </details>
+                ) : null}
               </Panel>
             )}
           </ResourceBoundary>

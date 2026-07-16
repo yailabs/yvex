@@ -1,14 +1,15 @@
 /*
  * Owner: apps/operator versioned API integration validation.
- * Owns: health, capabilities, settings, allowlisted producers, remote authorization, provider testing, chat SSE, cancellation, and structured failures.
+ * Owns: health, workspace, capabilities, settings, allowlisted producers, remote authorization, comparison testing/SSE/cancellation, and structured failures.
  * Does not own: browser layout, external network traffic, native runtime execution, or production credentials.
- * Invariants: all listeners are ephemeral loopback servers and every provider response is a deterministic stream double.
+ * Invariants: all listeners are ephemeral loopback servers and every comparison response is a deterministic stream double.
  * Boundary: API success proves control-plane integration, not native inference.
  */
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
   chatStreamEventSchema,
+  operatorWorkspaceSchema,
   type ChatSession,
   type ChatStreamEvent,
 } from "../../shared/contracts.ts";
@@ -17,7 +18,7 @@ import {
   fakeProviderModel,
   fakeYvexPath,
   providerFetcher,
-  readyReferenceProvider,
+  readyComparisonEndpoint,
   type TestHarness,
 } from "../helpers.ts";
 
@@ -75,13 +76,17 @@ async function readChatEvents(
   return events;
 }
 
-/** Creates one reference session through the public API after configuring the private provider service. */
+/** Creates one reference-comparison session through the isolated diagnostics API. */
 async function createReferenceSession(harness: TestHarness): Promise<ChatSession> {
-  await readyReferenceProvider(harness.services);
-  const response = await jsonRequest(harness.baseUrl, "/api/v1/chat/sessions", "POST", {
-    lane: "reference-provider",
-    model: fakeProviderModel,
-  });
+  await readyComparisonEndpoint(harness.services);
+  const response = await jsonRequest(
+    harness.baseUrl,
+    "/api/v1/comparison/reference/sessions",
+    "POST",
+    {
+      model: fakeProviderModel,
+    },
+  );
   expect(response.status).toBe(201);
   return response.json() as Promise<ChatSession>;
 }
@@ -110,21 +115,85 @@ describe("system, settings, and producer API", () => {
     };
     expect(health.adapter.bindMode).toBe("loopback");
     expect(health.topology.find((node) => node.id === "adapter-process")?.status).toBe("ready");
-    expect(health.topology.find((node) => node.id === "native-generation")?.status).toBe(
+    expect(health.topology.find((node) => node.id === "yvex-generation")?.status).toBe(
       "unsupported",
     );
-    expect(health.topology.find((node) => node.id === "reference-reachable")?.status).toBe(
-      "unavailable",
-    );
+    expect(health.topology.find((node) => node.id === "reference-reachable")).toBeUndefined();
     const manifest = (await (await fetch(`${harness.baseUrl}/api/v1/capabilities`)).json()) as {
       capabilities: Array<{ id: string }>;
     };
     expect(new Set(manifest.capabilities.map((capability) => capability.id)).size).toBe(
       manifest.capabilities.length,
     );
-    expect(manifest.capabilities.map((capability) => capability.id)).toContain(
+    expect(manifest.capabilities.map((capability) => capability.id)).not.toContain(
       "provider.streaming",
     );
+  });
+
+  it("serves one authoritative workspace and validates typed target selection", async () => {
+    const harness = await createTestHarness();
+    harnesses.push(harness);
+    const initial = await fetch(`${harness.baseUrl}/api/v1/workspace`);
+    expect(initial.status).toBe(200);
+    expect(await initial.json()).toMatchObject({
+      workspaceIdentity: { id: "local-default", authority: "operator-workspace" },
+      activeTarget: { id: "deepseek4-v4-flash", kind: "release-target" },
+      targetSelectionSource: "release-default",
+      activeBuild: {
+        targetId: "deepseek4-v4-flash",
+        currentStage: "architecture",
+      },
+      activeArtifact: null,
+      activeBackend: null,
+      activeRuntimeSession: null,
+    });
+    const targets = (await (await fetch(`${harness.baseUrl}/api/v1/targets`)).json()) as {
+      targets: Array<{ id: string; kind: string }>;
+    };
+    expect(targets.targets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "deepseek4-v4-flash", kind: "release-target" }),
+        expect.objectContaining({ id: "qwen3-8b", kind: "source-candidate" }),
+      ]),
+    );
+    const artifactInventory = (await (
+      await fetch(`${harness.baseUrl}/api/v1/workspace/artifacts`)
+    ).json()) as {
+      artifacts: Array<{ id: string; classification: string }>;
+    };
+    expect(artifactInventory.artifacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ classification: "proof" }),
+        expect.objectContaining({ classification: "unclassified" }),
+      ]),
+    );
+    expect(JSON.stringify(artifactInventory)).not.toContain("/private/model");
+    const inadmissibleArtifact = await jsonRequest(
+      harness.baseUrl,
+      "/api/v1/workspace/artifact",
+      "POST",
+      { artifactId: "artifact:deepseek4-v4-flash:planned-full-gguf" },
+    );
+    expect(inadmissibleArtifact.status).toBe(409);
+    expect(await inadmissibleArtifact.json()).toMatchObject({ code: "artifact-not-admissible" });
+    const selected = await jsonRequest(harness.baseUrl, "/api/v1/workspace/target", "POST", {
+      targetId: "qwen3-8b",
+    });
+    expect(selected.status).toBe(200);
+    expect(await selected.json()).toMatchObject({
+      activeTarget: { id: "qwen3-8b", kind: "source-candidate" },
+      targetSelectionSource: "operator-selection",
+      activeBuild: null,
+    });
+    const persisted = operatorWorkspaceSchema.parse(
+      await (await fetch(`${harness.baseUrl}/api/v1/workspace`)).json(),
+    );
+    expect(persisted).toMatchObject({ activeTarget: { id: "qwen3-8b" } });
+    const rejected = await jsonRequest(harness.baseUrl, "/api/v1/workspace/target", "POST", {
+      targetId: "deepseek4-v4-flash --output json",
+    });
+    expect(rejected.status).toBe(409);
+    expect(await rejected.json()).toMatchObject({ code: "target-not-catalogued" });
   });
 
   it("validates YVEX settings server-side and never returns absolute paths", async () => {
@@ -161,7 +230,7 @@ describe("system, settings, and producer API", () => {
     harnesses.push(harness);
     const saved = await jsonRequest(
       harness.baseUrl,
-      "/api/v1/settings/reference-provider",
+      "/api/v1/settings/comparison-endpoint",
       "PATCH",
       {
         enabled: true,
@@ -178,7 +247,7 @@ describe("system, settings, and producer API", () => {
     expect(savedBody).not.toContain("private-provider-key");
     const tested = await jsonRequest(
       harness.baseUrl,
-      "/api/v1/settings/reference-provider/test",
+      "/api/v1/settings/comparison-endpoint/test",
       "POST",
       {},
     );
@@ -192,7 +261,7 @@ describe("system, settings, and producer API", () => {
       stream: true,
     });
     expect(
-      await (await fetch(`${harness.baseUrl}/api/v1/reference-provider/models`)).json(),
+      await (await fetch(`${harness.baseUrl}/api/v1/comparison/reference/models`)).json(),
     ).toEqual({ models: [fakeProviderModel] });
   });
 
@@ -206,7 +275,7 @@ describe("system, settings, and producer API", () => {
       );
     const harness = await createTestHarness({ dependencies: { fetcher: oversizedFetcher } });
     harnesses.push(harness);
-    await harness.services.settings.updateReferenceProvider({
+    await harness.services.settings.updateComparisonEndpoint({
       enabled: true,
       displayName: "Bounded fixture",
       baseUrl: "http://127.0.0.1:14318/v1",
@@ -214,9 +283,9 @@ describe("system, settings, and producer API", () => {
       requestTimeoutMs: 5_000,
     });
 
-    const response = await fetch(`${harness.baseUrl}/api/v1/reference-provider/models`);
+    const response = await fetch(`${harness.baseUrl}/api/v1/comparison/reference/models`);
     expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({ code: "provider-response-oversized" });
+    expect(await response.json()).toMatchObject({ code: "comparison-response-oversized" });
   });
 
   it("runs only registry-owned producers and records typed jobs/runs", async () => {
@@ -286,14 +355,14 @@ describe("system, settings, and producer API", () => {
   });
 });
 
-describe("reference-provider chat API", () => {
+describe("isolated external reference-comparison API", () => {
   it("streams deltas, usage, timings, completion metadata, and a completed job", async () => {
     const harness = await createTestHarness();
     harnesses.push(harness);
     const session = await createReferenceSession(harness);
     const response = await jsonRequest(
       harness.baseUrl,
-      `/api/v1/chat/sessions/${session.id}/messages`,
+      `/api/v1/comparison/reference/sessions/${session.id}/messages`,
       "POST",
       {
         content: "hello reference",
@@ -316,14 +385,14 @@ describe("reference-provider chat API", () => {
         event.type === "completion",
     );
     expect(completed?.session.messages.at(-1)?.metadata).toMatchObject({
-      executionOwner: "Reference provider",
+      executionOwner: "External comparison endpoint",
       provider: "Fixture reference",
       model: fakeProviderModel,
       usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
     });
     expect(completed?.session.timings.totalDurationMs).not.toBeNull();
     const jobs = harness.services.jobs.list();
-    expect(jobs.find((job) => job.type === "provider-chat")).toMatchObject({
+    expect(jobs.find((job) => job.type === "reference-comparison")).toMatchObject({
       state: "completed",
       progress: null,
     });
@@ -339,7 +408,7 @@ describe("reference-provider chat API", () => {
     let cancellationSent = false;
     const response = await jsonRequest(
       harness.baseUrl,
-      `/api/v1/chat/sessions/${session.id}/messages`,
+      `/api/v1/comparison/reference/sessions/${session.id}/messages`,
       "POST",
       {
         content: "slow cancel request",
@@ -352,7 +421,7 @@ describe("reference-provider chat API", () => {
         cancellationSent = true;
         const cancelled = await jsonRequest(
           harness.baseUrl,
-          `/api/v1/chat/requests/${requestId}/cancel`,
+          `/api/v1/comparison/reference/requests/${requestId}/cancel`,
           "POST",
           {},
         );
@@ -366,9 +435,9 @@ describe("reference-provider chat API", () => {
     const assistant = cancelled?.session.messages.at(-1);
     expect(assistant?.state).toBe("cancelled");
     expect(assistant?.content).toBe("Partial ");
-    expect(harness.services.jobs.list().find((job) => job.type === "provider-chat")?.state).toBe(
-      "cancelled",
-    );
+    expect(
+      harness.services.jobs.list().find((job) => job.type === "reference-comparison")?.state,
+    ).toBe("cancelled");
   });
 
   it("returns structured provider failure events and never relabels them native", async () => {
@@ -376,33 +445,35 @@ describe("reference-provider chat API", () => {
       dependencies: { fetcher: providerFetcher({ failChat: true }) },
     });
     harnesses.push(harness);
-    await harness.services.settings.updateReferenceProvider({
+    await harness.services.settings.updateComparisonEndpoint({
       enabled: true,
       displayName: "Fixture reference",
       baseUrl: "http://127.0.0.1:14318/v1",
       defaultModel: fakeProviderModel,
       requestTimeoutMs: 5_000,
     });
-    const sessionResponse = await jsonRequest(harness.baseUrl, "/api/v1/chat/sessions", "POST", {
-      lane: "reference-provider",
-      model: fakeProviderModel,
-    });
+    const sessionResponse = await jsonRequest(
+      harness.baseUrl,
+      "/api/v1/comparison/reference/sessions",
+      "POST",
+      { model: fakeProviderModel },
+    );
     const session = (await sessionResponse.json()) as ChatSession;
     const response = await jsonRequest(
       harness.baseUrl,
-      `/api/v1/chat/sessions/${session.id}/messages`,
+      `/api/v1/comparison/reference/sessions/${session.id}/messages`,
       "POST",
       { content: "fail", parameters },
     );
     const events = await readChatEvents(response);
     expect(events.at(-1)).toMatchObject({
       type: "structured-error",
-      error: { code: "provider-chat-failed" },
+      error: { code: "comparison-generation-failed" },
     });
-    expect(JSON.stringify(events)).not.toContain("Native YVEX");
+    expect(JSON.stringify(events)).not.toContain('"executionOwner":"YVEX"');
   });
 
-  it("refuses the native lane before the provider transport is called", async () => {
+  it("has no primary chat route or selectable YVEX/provider lane", async () => {
     let providerCalls = 0;
     const harness = await createTestHarness({
       dependencies: {
@@ -414,18 +485,16 @@ describe("reference-provider chat API", () => {
       },
     });
     harnesses.push(harness);
-    const sessionResponse = await jsonRequest(harness.baseUrl, "/api/v1/chat/sessions", "POST", {
-      lane: "native-yvex",
-    });
-    const session = (await sessionResponse.json()) as ChatSession;
-    const response = await jsonRequest(
+    const primaryRoute = await jsonRequest(harness.baseUrl, "/api/v1/chat/sessions", "POST", {});
+    expect(primaryRoute.status).toBe(404);
+    const injectedLane = await jsonRequest(
       harness.baseUrl,
-      `/api/v1/chat/sessions/${session.id}/messages`,
+      "/api/v1/comparison/reference/sessions",
       "POST",
-      { content: "must not fall back", parameters },
+      { lane: "native-yvex", model: fakeProviderModel },
     );
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ code: "native-generation-unavailable" });
+    expect(injectedLane.status).toBe(400);
+    expect(await injectedLane.json()).toMatchObject({ code: "invalid-request" });
     expect(providerCalls).toBe(0);
   });
 });

@@ -17,9 +17,11 @@ import {
   SCHEMA_VERSION,
   isCliProducerId,
   isDomainId,
-  referenceProviderPatchSchema,
+  comparisonEndpointPatchSchema,
   sendChatMessageSchema,
   interfaceSettingsPatchSchema,
+  workspaceArtifactSelectionSchema,
+  workspaceTargetSelectionSchema,
   yvexSettingsPatchSchema,
   type ApiErrorResponse,
   type ChatStreamEvent,
@@ -32,6 +34,7 @@ import { sanitizeText } from "./redaction.ts";
 import type { OperatorServices } from "./services.ts";
 import { validateTrustedBinaryPath } from "./settings.ts";
 import { buildSystemHealth } from "./system.ts";
+import { WorkspaceSelectionError } from "./workspace.ts";
 import { ADAPTER_VERSION, isLoopbackAddress } from "./config.ts";
 
 const contentTypes: Readonly<Record<string, string>> = {
@@ -366,6 +369,36 @@ async function routeApi(
     json(response, 200, await services.capabilities.manifest());
     return true;
   }
+  if (url.pathname === "/api/v1/workspace" && method === "GET") {
+    json(response, 200, await services.workspace.snapshot());
+    return true;
+  }
+  if (url.pathname === "/api/v1/targets" && method === "GET") {
+    json(response, 200, await services.workspace.targets());
+    return true;
+  }
+  if (url.pathname === "/api/v1/workspace/artifacts" && method === "GET") {
+    json(response, 200, await services.workspace.artifacts());
+    return true;
+  }
+  if (url.pathname === "/api/v1/workspace/target" && method === "POST") {
+    const input = workspaceTargetSelectionSchema.parse(await readJson(request));
+    json(response, 200, await services.workspace.selectTarget(input.targetId));
+    return true;
+  }
+  if (url.pathname === "/api/v1/workspace/artifact" && method === "POST") {
+    const input = workspaceArtifactSelectionSchema.parse(await readJson(request));
+    json(response, 200, await services.workspace.selectArtifact(input.artifactId));
+    return true;
+  }
+  if (url.pathname === "/api/v1/build" && method === "GET") {
+    json(response, 200, await services.workspace.build());
+    return true;
+  }
+  if (url.pathname === "/api/v1/build/stages" && method === "GET") {
+    json(response, 200, await services.workspace.stages());
+    return true;
+  }
   if (url.pathname === "/api/v1/settings" && method === "GET") {
     json(response, 200, await services.settings.publicSnapshot());
     return true;
@@ -405,24 +438,24 @@ async function routeApi(
     json(response, 200, snapshot);
     return true;
   }
-  if (url.pathname === "/api/v1/settings/reference-provider" && method === "PATCH") {
-    const patch = referenceProviderPatchSchema.parse(await readJson(request));
+  if (url.pathname === "/api/v1/settings/comparison-endpoint" && method === "PATCH") {
+    const patch = comparisonEndpointPatchSchema.parse(await readJson(request));
     if (patch.baseUrl !== undefined) {
       const { validateProviderBaseUrl } = await import("./provider.ts");
       validateProviderBaseUrl(patch.baseUrl, services.config.allowRemoteProviders);
     }
-    const snapshot = await services.settings.updateReferenceProvider(patch);
+    const snapshot = await services.settings.updateComparisonEndpoint(patch);
     services.provider.clearStatus();
     services.events.record(
       "configuration-reload",
       "info",
-      "Reference provider settings saved; prior reachability invalidated.",
+      "External comparison settings saved; prior observation invalidated.",
       requestId,
     );
     json(response, 200, snapshot);
     return true;
   }
-  if (url.pathname === "/api/v1/settings/reference-provider/test" && method === "POST") {
+  if (url.pathname === "/api/v1/settings/comparison-endpoint/test" && method === "POST") {
     json(response, 200, await services.provider.testConnection());
     return true;
   }
@@ -540,66 +573,64 @@ async function routeApi(
     });
     return true;
   }
-  if (url.pathname === "/api/v1/reference-provider/status" && method === "GET") {
+  if (url.pathname === "/api/v1/comparison/reference/status" && method === "GET") {
     json(response, 200, await services.provider.status());
     return true;
   }
-  if (url.pathname === "/api/v1/reference-provider/models" && method === "GET") {
+  if (url.pathname === "/api/v1/comparison/reference/models" && method === "GET") {
     const controller = new AbortController();
     request.once("aborted", () => controller.abort());
     json(response, 200, { models: await services.provider.models(controller.signal) });
     return true;
   }
-  if (url.pathname === "/api/v1/chat/sessions" && method === "GET") {
-    json(response, 200, { sessions: await services.chat.list() });
+  if (url.pathname === "/api/v1/comparison/reference/sessions" && method === "GET") {
+    json(response, 200, { sessions: await services.comparison.list() });
     return true;
   }
-  if (url.pathname === "/api/v1/chat/sessions" && method === "POST") {
-    json(response, 201, await services.chat.create(await readJson(request)));
+  if (url.pathname === "/api/v1/comparison/reference/sessions" && method === "POST") {
+    json(response, 201, await services.comparison.create(await readJson(request)));
     return true;
   }
-  const sessionMatch = /^\/api\/v1\/chat\/sessions\/([^/]+)$/.exec(url.pathname);
+  const sessionMatch = /^\/api\/v1\/comparison\/reference\/sessions\/([^/]+)$/.exec(url.pathname);
   if (sessionMatch?.[1] && method === "GET") {
-    const session = await services.chat.get(sessionMatch[1]);
+    const session = await services.comparison.get(sessionMatch[1]);
     if (!session)
       throw new HttpBoundaryError(404, "chat-session-not-found", "Chat session does not exist.");
     json(response, 200, session);
     return true;
   }
   if (sessionMatch?.[1] && method === "PATCH") {
-    json(response, 200, await services.chat.rename(sessionMatch[1], await readJson(request)));
+    json(response, 200, await services.comparison.rename(sessionMatch[1], await readJson(request)));
     return true;
   }
   if (sessionMatch?.[1] && method === "DELETE") {
-    if (!(await services.chat.delete(sessionMatch[1])))
+    if (!(await services.comparison.delete(sessionMatch[1])))
       throw new HttpBoundaryError(404, "chat-session-not-found", "Chat session does not exist.");
     response.statusCode = 204;
     response.end();
     return true;
   }
-  const sessionClearMatch = /^\/api\/v1\/chat\/sessions\/([^/]+)\/clear$/.exec(url.pathname);
+  const sessionClearMatch = /^\/api\/v1\/comparison\/reference\/sessions\/([^/]+)\/clear$/.exec(
+    url.pathname,
+  );
   if (sessionClearMatch?.[1] && method === "POST") {
-    json(response, 200, await services.chat.clear(sessionClearMatch[1]));
+    json(response, 200, await services.comparison.clear(sessionClearMatch[1]));
     return true;
   }
-  const messageMatch = /^\/api\/v1\/chat\/sessions\/([^/]+)\/messages$/.exec(url.pathname);
+  const messageMatch = /^\/api\/v1\/comparison\/reference\/sessions\/([^/]+)\/messages$/.exec(
+    url.pathname,
+  );
   if (messageMatch?.[1] && method === "POST") {
-    const session = await services.chat.get(messageMatch[1]);
+    const session = await services.comparison.get(messageMatch[1]);
     if (!session)
       throw new HttpBoundaryError(404, "chat-session-not-found", "Chat session does not exist.");
-    if (session.lane === "native-yvex")
-      throw new HttpBoundaryError(
-        409,
-        "native-generation-unavailable",
-        "Native YVEX generation is unavailable: runtime binding, tokenizer, streaming generation, and cancellation are not ready.",
-      );
     const input = sendChatMessageSchema.parse(await readJson(request));
     startSse(response);
     let activeRequestId: string | null = null;
     request.once("aborted", () => {
       if (activeRequestId) {
         try {
-          services.chat.cancel(activeRequestId);
+          services.comparison.cancel(activeRequestId);
         } catch {
           /* Request may have already completed. */
         }
@@ -608,22 +639,24 @@ async function routeApi(
     response.once("close", () => {
       if (!response.writableEnded && activeRequestId) {
         try {
-          services.chat.cancel(activeRequestId);
+          services.comparison.cancel(activeRequestId);
         } catch {
           /* Request may have already completed. */
         }
       }
     });
-    await services.chat.streamMessage(messageMatch[1], input, (event: ChatStreamEvent) => {
+    await services.comparison.streamMessage(messageMatch[1], input, (event: ChatStreamEvent) => {
       if (event.type === "request-started") activeRequestId = event.requestId;
       sendSse(response, event);
     });
     if (!response.writableEnded) response.end();
     return true;
   }
-  const requestCancelMatch = /^\/api\/v1\/chat\/requests\/([^/]+)\/cancel$/.exec(url.pathname);
+  const requestCancelMatch = /^\/api\/v1\/comparison\/reference\/requests\/([^/]+)\/cancel$/.exec(
+    url.pathname,
+  );
   if (requestCancelMatch?.[1] && method === "POST") {
-    json(response, 202, services.chat.cancel(requestCancelMatch[1]));
+    json(response, 202, services.comparison.cancel(requestCancelMatch[1]));
     return true;
   }
   throw new HttpBoundaryError(404, "api-route-not-found", "Unknown Operator API route.");
@@ -666,6 +699,8 @@ export function createOperatorHttpServer(services: OperatorServices, staticRoot:
         );
       } else if (error instanceof ForbiddenProducerError) {
         apiError(response, 404, "producer-not-found", "Producer is not allowlisted.", requestId);
+      } else if (error instanceof WorkspaceSelectionError) {
+        apiError(response, 409, error.code, error.message, requestId);
       } else if (error instanceof ProviderTransportError) {
         apiError(
           response,

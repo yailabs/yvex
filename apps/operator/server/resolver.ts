@@ -123,9 +123,7 @@ export class BinaryResolver {
     }
 
     const observedAt = new Date(this.clock()).toISOString();
-    const configured =
-      internal.persisted.yvex.binaryPath !== null ||
-      this.config.binaryEnvironmentCandidate !== null;
+    const explicitOverrideConfigured = internal.persisted.yvex.binaryPath !== null;
     const incompatible = candidates.some(
       (candidate) => candidate.identityStatus === "incompatible",
     );
@@ -158,8 +156,10 @@ export class BinaryResolver {
       schemaVersion: SCHEMA_VERSION,
       observedAt,
       availability: state,
-      configured,
+      explicitOverrideConfigured,
+      environmentCandidateConfigured: this.config.binaryEnvironmentCandidate !== null,
       selectedCandidateId: selectedId,
+      selectedSource: candidates.find((candidate) => candidate.id === selectedId)?.source ?? null,
       selectedLabel: selectedPath ? basename(selectedPath) : null,
       identity: selectedIdentity,
       candidates,

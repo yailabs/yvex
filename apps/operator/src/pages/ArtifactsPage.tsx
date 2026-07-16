@@ -1,14 +1,15 @@
 /*
- * Owner: apps/operator Artifacts workbench.
- * Owns: unified inventory, class filters, durable selection, detail inspection, admission boundary, empty state, and provenance.
- * Does not own: filesystem discovery, integrity, materialization, writes, publication, or support admission.
- * Invariants: exact CLI artifact classes map to explicit terminology and local paths remain adapter-redacted.
- * Boundary: a present tensor proof artifact is not a complete or supported model artifact.
+ * Owner: apps/operator artifact inventory workbench.
+ * Owns: typed inventory, canonical class filters, active-workspace selection, detail inspection, admission boundary, and safe provenance.
+ * Does not own: filesystem discovery, path disclosure, integrity, materialization, writes, publication, or support admission.
+ * Invariants: only a present artifact for the active target can be selected and proof artifacts remain distinct from complete/supported artifacts.
+ * Boundary: inventory presence and Operator selection do not establish runtime or generation support.
  */
 import { Filter, ShieldQuestion } from "lucide-react";
 import { useState } from "react";
 
-import type { ArtifactInventory } from "../../shared/contracts.ts";
+import type { WorkspaceArtifact } from "../../shared/contracts.ts";
+import { operatorApi, OperatorApiError } from "../api.ts";
 import {
   Fact,
   FactGrid,
@@ -20,81 +21,95 @@ import {
 } from "../components/Primitives.tsx";
 import { StatusBadge } from "../components/Status.tsx";
 import { pageMetadata } from "../navigation.ts";
+import { useApiResource } from "../resource.ts";
 import { useOperatorState } from "../state/operator-state.tsx";
-import {
-  DataTable,
-  EmptyState,
-  Provenance,
-  RefreshButton,
-  reportOf,
-  useDomainProjection,
-} from "./PageSupport.tsx";
+import { DataTable, EmptyState } from "./PageSupport.tsx";
 
-type ArtifactRow = ArtifactInventory["artifacts"][number];
-type ArtifactClass = "all" | "proof" | "complete" | "supported";
+type ArtifactClass = "all" | WorkspaceArtifact["classification"];
 
-/** Maps only known physical inventory classes into canonical Operator terminology. */
-function artifactClass(row: ArtifactRow): Exclude<ArtifactClass, "all"> {
-  if (row.artifact_class === "yvex-selected-gguf") return "proof";
-  if (row.artifact_class === "supported-model-gguf") return "supported";
-  return "complete";
-}
-
-/** Renders one inventory rather than separate empty dashboards for each artifact class. */
+/** Renders one coherent artifact inventory against the authoritative workspace selection. */
 export function ArtifactsPage() {
-  const projection = useDomainProjection("artifacts");
   const app = useOperatorState();
+  const inventory = useApiResource("workspace-artifacts", operatorApi.workspaceArtifacts);
   const [filter, setFilter] = useState<ArtifactClass>("all");
+  const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [selecting, setSelecting] = useState<string | null>(null);
   const page = pageMetadata.artifacts;
+  const activeTarget = app.workspace.data?.activeTarget?.id ?? null;
+  const selectedId = app.workspace.data?.activeArtifact?.id ?? null;
+
+  /** Commits one present same-target artifact through the server workspace authority. */
+  const selectArtifact = async (artifactId: string): Promise<void> => {
+    setSelecting(artifactId);
+    setSelectionError(null);
+    try {
+      await operatorApi.selectArtifact(artifactId);
+      app.refreshAll();
+      inventory.refresh();
+    } catch (error) {
+      setSelectionError(
+        error instanceof OperatorApiError
+          ? `${error.code}: ${error.message}`
+          : "Artifact selection failed.",
+      );
+    } finally {
+      setSelecting(null);
+    }
+  };
+
   return (
     <div className="page">
       <PageHeader
         eyebrow={page.eyebrow}
         title={page.label}
         summary={page.summary}
-        actions={<RefreshButton refresh={projection.refresh} refreshing={projection.refreshing} />}
+        actions={
+          <button type="button" className="button secondary" onClick={inventory.refresh}>
+            Refresh inventory
+          </button>
+        }
       />
-      <ResourceBoundary resource={projection}>
+      <ResourceBoundary resource={inventory}>
         {(data) => {
-          const envelope = reportOf(data, "artifact-inventory");
-          if (!envelope || !envelope.data)
-            return (
-              <RecoveryState
-                state={envelope?.availability ?? data.availability}
-                retry={projection.refresh}
-              />
-            );
-          const rows = envelope.data.artifacts;
-          const visible = rows.filter((row) => filter === "all" || artifactClass(row) === filter);
-          const selectedKey = app.selectedArtifact;
-          const selected =
-            rows.find((row) => `${row.target_id}:${row.artifact_class}` === selectedKey) ?? null;
+          if (!data.artifacts.length && data.availability.status !== "empty")
+            return <RecoveryState state={data.availability} retry={inventory.refresh} />;
+          const visible = data.artifacts.filter(
+            (row) => filter === "all" || row.classification === filter,
+          );
+          const selected = data.artifacts.find((row) => row.id === selectedId) ?? null;
           return (
             <>
               <MetricStrip
                 items={[
                   {
                     label: "Inventory",
-                    value: rows.length,
-                    detail: "Typed rows",
-                    status: envelope.availability.status,
+                    value: data.artifacts.length,
+                    detail: data.producerId,
+                    status: data.availability.status,
+                  },
+                  {
+                    label: "Active target",
+                    value: activeTarget ?? "None",
+                    detail: "Workspace authority",
+                    status: activeTarget ? "ready" : "blocked",
                   },
                   {
                     label: "Proof",
-                    value: rows.filter((row) => artifactClass(row) === "proof").length,
-                    detail: "Bounded tensor subsets",
+                    value: data.artifacts.filter((row) => row.classification === "proof").length,
+                    detail: "Bounded subsets",
                   },
                   {
-                    label: "Complete",
-                    value: rows.filter(
+                    label: "Complete present",
+                    value: data.artifacts.filter(
                       (row) =>
-                        artifactClass(row) === "complete" && row.artifact_status === "present",
+                        row.classification === "complete" && row.artifactStatus === "present",
                     ).length,
-                    detail: "Present complete rows",
+                    detail: "Not necessarily supported",
                   },
                   {
                     label: "Supported",
-                    value: rows.filter((row) => artifactClass(row) === "supported").length,
+                    value: data.artifacts.filter((row) => row.classification === "supported")
+                      .length,
                     detail: "All release gates",
                   },
                 ]}
@@ -102,7 +117,7 @@ export function ArtifactsPage() {
               <div className="inventory-layout">
                 <Panel
                   title="Artifact inventory"
-                  description="Filter and inspect one machine-reported inventory."
+                  description="Local paths are not exposed; select only present artifacts bound to the active target."
                   actions={
                     <div
                       className="segmented-control"
@@ -110,16 +125,18 @@ export function ArtifactsPage() {
                       aria-label="Artifact class filter"
                     >
                       <Filter aria-hidden="true" size={15} />
-                      {(["all", "proof", "complete", "supported"] as const).map((value) => (
-                        <button
-                          type="button"
-                          className={filter === value ? "active" : ""}
-                          onClick={() => setFilter(value)}
-                          key={value}
-                        >
-                          {value}
-                        </button>
-                      ))}
+                      {(["all", "proof", "complete", "supported", "unclassified"] as const).map(
+                        (value) => (
+                          <button
+                            type="button"
+                            className={filter === value ? "active" : ""}
+                            onClick={() => setFilter(value)}
+                            key={value}
+                          >
+                            {value}
+                          </button>
+                        ),
+                      )}
                     </div>
                   }
                 >
@@ -128,43 +145,58 @@ export function ArtifactsPage() {
                       <thead>
                         <tr>
                           <th>Target</th>
-                          <th>Class</th>
+                          <th>Physical class</th>
                           <th>Classification</th>
-                          <th>Status</th>
+                          <th>Artifact</th>
                           <th>Prepare</th>
-                          <th>Path</th>
+                          <th>Workspace</th>
                         </tr>
                       </thead>
                       <tbody>
                         {visible.map((row) => {
-                          const key = `${row.target_id}:${row.artifact_class}`;
+                          const sameTarget = row.targetId === activeTarget;
+                          const selectable = sameTarget && row.artifactStatus === "present";
                           return (
                             <tr
-                              className={selectedKey === key ? "selected-row" : ""}
-                              onClick={() => app.setSelectedArtifact(key)}
-                              key={key}
+                              className={selectedId === row.id ? "selected-row" : ""}
+                              key={row.id}
                             >
+                              <td>
+                                <strong>{row.targetId}</strong>
+                                <small>{row.family}</small>
+                              </td>
+                              <td>
+                                <code>{row.artifactClass}</code>
+                              </td>
+                              <td>
+                                <span className="class-label">{row.classification}</span>
+                              </td>
+                              <td>
+                                <StatusBadge value={row.artifactStatus} />
+                              </td>
+                              <td>
+                                <StatusBadge value={row.prepareStatus} />
+                              </td>
                               <td>
                                 <button
                                   type="button"
-                                  className="table-link"
-                                  onClick={() => app.setSelectedArtifact(key)}
+                                  className="button secondary"
+                                  disabled={!selectable || selecting !== null}
+                                  title={
+                                    !sameTarget
+                                      ? "Artifact belongs to a different target"
+                                      : row.artifactStatus !== "present"
+                                        ? "Artifact is not present"
+                                        : undefined
+                                  }
+                                  onClick={() => void selectArtifact(row.id)}
                                 >
-                                  {row.target_id}
+                                  {selectedId === row.id
+                                    ? "Active"
+                                    : selecting === row.id
+                                      ? "Selecting…"
+                                      : "Select"}
                                 </button>
-                              </td>
-                              <td>{row.artifact_class}</td>
-                              <td>
-                                <span className="class-label">{artifactClass(row)}</span>
-                              </td>
-                              <td>
-                                <StatusBadge value={row.artifact_status} />
-                              </td>
-                              <td>
-                                <StatusBadge value={row.prepare_status} />
-                              </td>
-                              <td>
-                                <code>{row.path || "Not disclosed"}</code>
                               </td>
                             </tr>
                           );
@@ -172,40 +204,55 @@ export function ArtifactsPage() {
                       </tbody>
                     </DataTable>
                   ) : (
-                    <EmptyState detail="No artifact row matches this classification. Absence is expected until its owner reports one." />
+                    <EmptyState detail="No artifact row matches this classification." />
                   )}
-                  <Provenance envelope={envelope} />
+                  {selectionError ? (
+                    <p className="inline-error" role="alert">
+                      {selectionError}
+                    </p>
+                  ) : null}
+                  <div className="provenance-strip">
+                    <span>Producer</span>
+                    <code>{data.producerId}</code>
+                    <span>Observed</span>
+                    <time dateTime={data.observedAt}>
+                      {new Date(data.observedAt).toLocaleString()}
+                    </time>
+                  </div>
                 </Panel>
                 <aside className="detail-inspector" aria-label="Artifact detail">
                   {selected ? (
                     <>
                       <header>
-                        <span>{artifactClass(selected)} artifact</span>
-                        <h2>{selected.target_id}</h2>
-                        <StatusBadge value={selected.artifact_status} />
+                        <span>{selected.classification} artifact</span>
+                        <h2>{selected.targetId}</h2>
+                        <StatusBadge value={selected.artifactStatus} />
                       </header>
                       <FactGrid>
+                        <Fact label="Workspace ID" value={selected.id} mono />
                         <Fact label="Family" value={selected.family} />
-                        <Fact label="Physical class" value={selected.artifact_class} mono />
-                        <Fact label="Prepare" value={selected.prepare_status} />
-                        <Fact label="Path" value={selected.path || "Not disclosed"} mono />
-                        <Fact label="Top blocker" value={selected.top_blocker || "None reported"} />
+                        <Fact label="Physical class" value={selected.artifactClass} mono />
+                        <Fact label="Prepare" value={selected.prepareStatus} />
+                        <Fact label="Local path" value="Not exposed" />
+                        <Fact label="Top blocker" value={selected.topBlocker || "None reported"} />
                       </FactGrid>
                       <div className="admission-note">
                         <ShieldQuestion aria-hidden="true" size={18} />
                         <p>
-                          {artifactClass(selected) === "proof"
-                            ? "This bounded tensor proof cannot enter complete-model support gates."
-                            : artifactClass(selected) === "complete"
+                          {selected.classification === "proof"
+                            ? "This bounded tensor proof cannot enter complete-model runtime gates."
+                            : selected.classification === "complete"
                               ? "Completeness does not establish integrity, runtime, generation, evaluation, benchmark, or release admission."
-                              : "Supported classification requires every downstream gate."}
+                              : selected.classification === "supported"
+                                ? "Supported classification requires every downstream gate."
+                                : "This physical class has no admitted canonical artifact classification."}
                         </p>
                       </div>
                     </>
                   ) : (
                     <EmptyState
-                      title="Select an artifact"
-                      detail="Choose one inventory row to inspect its exact class, status, blocker, and redacted provenance."
+                      title="No active artifact"
+                      detail="A present artifact for the active target is required before runtime binding."
                     />
                   )}
                 </aside>

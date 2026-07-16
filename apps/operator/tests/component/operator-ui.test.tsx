@@ -1,9 +1,9 @@
 /*
  * Owner: apps/operator browser-component integration validation.
- * Owns: route/tab history, capability recovery, settings validation, command keyboard behavior, chat streaming/cancellation, provider failure, and native refusal assertions.
- * Does not own: CSS pixel baselines, external network traffic, native inference, or production credentials.
+ * Owns: authoritative workspace state, lifecycle routes, recovery, command keyboard behavior, YVEX console gating, and explicit comparison diagnostics assertions.
+ * Does not own: CSS pixel baselines, external network traffic, YVEX inference, or production credentials.
  * Invariants: components use the real BFF contract through an ephemeral same-origin fetch bridge.
- * Boundary: rendered provider output remains explicitly reference-provider evidence.
+ * Boundary: external comparison output remains isolated diagnostics and never becomes YVEX execution evidence.
  */
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -16,7 +16,7 @@ import {
   browserFetch,
   createTestHarness,
   providerFetcher,
-  readyReferenceProvider,
+  readyComparisonEndpoint,
   type TestHarness,
 } from "../helpers.ts";
 
@@ -58,29 +58,80 @@ function mount(
   );
 }
 
-describe("functional routes and recovery", () => {
-  it("persists a deep-linked tab and restores prior tab through browser history", async () => {
+describe("authoritative YVEX workspace", () => {
+  it("keeps shell, target taxonomy, pipeline, and inspector on one server-owned target", async () => {
     const harness = await createTestHarness();
     harnesses.push(harness);
     const user = userEvent.setup();
-    mount(harness, "/runtime?tab=backend");
-    expect(await screen.findByRole("heading", { name: "Runtime", level: 1 })).toBeVisible();
-    expect(screen.getByRole("tab", { name: "Backend" })).toHaveAttribute("aria-selected", "true");
-    await user.click(screen.getByRole("tab", { name: "Controls" }));
-    expect(window.location.search).toBe("?tab=controls");
-    expect(screen.getByRole("tab", { name: "Controls" })).toHaveAttribute("aria-selected", "true");
-    act(() => window.history.back());
-    await waitFor(() =>
-      expect(screen.getByRole("tab", { name: "Backend" })).toHaveAttribute("aria-selected", "true"),
+    mount(harness, "/workspace");
+
+    expect(await screen.findByRole("heading", { name: "Workspace", level: 1 })).toBeVisible();
+    const context = screen.getByLabelText("Active YVEX workspace context");
+    await waitFor(() => expect(within(context).getByText("deepseek4-v4-flash")).toBeVisible());
+    const navigator = screen.getByRole("complementary", { name: "Target navigator" });
+    expect(
+      await within(navigator).findByRole("heading", { name: /Release target/ }, { timeout: 5_000 }),
+    ).toBeVisible();
+    expect(within(navigator).getByRole("heading", { name: /Source candidate/ })).toBeVisible();
+    expect(within(navigator).getByRole("button", { name: /deepseek4-v4-flash/ })).toHaveClass(
+      "active",
     );
-    expect(window.location.search).toBe("?tab=backend");
+    expect(screen.getByRole("list", { name: "YVEX lifecycle stages" })).toBeVisible();
+
+    await user.click(within(navigator).getByRole("button", { name: /qwen3-8b/ }));
+    await waitFor(() => expect(within(context).getByText("qwen3-8b")).toBeVisible());
+    await waitFor(() =>
+      expect(within(navigator).getByRole("button", { name: /qwen3-8b/ })).toHaveClass("active"),
+    );
+    expect(screen.getAllByText("No projection").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Target not selected")).not.toBeInTheDocument();
+    expect(screen.queryByText("Select provider")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reference provider")).not.toBeInTheDocument();
   });
 
-  it("shows one missing-binary recovery surface and rejects an unsafe Settings candidate", async () => {
+  it("persists a deep-linked build stage and restores it through browser history", async () => {
+    const harness = await createTestHarness();
+    harnesses.push(harness);
+    const user = userEvent.setup();
+    mount(harness, "/build?stage=transformation-ir");
+
+    expect(await screen.findByRole("heading", { name: "Build", level: 1 })).toBeVisible();
+    expect(screen.getByRole("tab", { name: "Transformation IR" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Transformation IR inspector" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("tab", { name: "GGUF Writer" }));
+    expect(window.location.search).toBe("?stage=gguf-writer");
+    expect(screen.getByRole("tab", { name: "GGUF Writer" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    act(() => window.history.back());
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "Transformation IR" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      ),
+    );
+    expect(window.location.search).toBe("?stage=transformation-ir");
+  });
+});
+
+describe("recovery and global engineering controls", () => {
+  it("shows deterministic missing-binary truth and rejects an unsafe Settings candidate", async () => {
     const harness = await createTestHarness({ config: { binaryEnvironmentCandidate: null } });
     harnesses.push(harness);
     const user = userEvent.setup();
-    mount(harness, "/overview");
+    mount(harness, "/environment?tab=binary");
+
+    expect(await screen.findByRole("heading", { name: "Environment", level: 1 })).toBeVisible();
+    expect(screen.getByRole("tab", { name: "Binary resolution" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(
       (
         await screen.findAllByText(
@@ -88,10 +139,8 @@ describe("functional routes and recovery", () => {
         )
       )[0],
     ).toBeVisible();
-    const recovery = screen.getByRole("link", { name: /Configure YVEX/ });
-    await user.click(recovery);
-    expect(window.location.pathname).toBe("/settings");
-    expect(window.location.search).toBe("?section=yvex");
+    await user.click(screen.getByRole("link", { name: "Settings" }));
+    await user.click(await screen.findByRole("tab", { name: "YVEX" }));
     const input = await screen.findByLabelText("Trusted absolute binary path");
     await user.type(input, "../../bin/sh");
     await user.click(screen.getByRole("button", { name: "Validate and save" }));
@@ -100,15 +149,14 @@ describe("functional routes and recovery", () => {
     );
   });
 
-  it("opens a searchable keyboard command palette and navigates fixed tab actions", async () => {
+  it("opens the keyboard command palette and navigates lifecycle actions", async () => {
     const harness = await createTestHarness();
     harnesses.push(harness);
     const user = userEvent.setup();
-    mount(harness, "/overview");
-    await screen.findByRole("heading", { name: "Overview", level: 1 });
+    mount(harness, "/workspace");
+    await screen.findByRole("heading", { name: "Workspace", level: 1 });
     await user.keyboard("{Control>}k{/Control}");
     const palette = screen.getByRole("dialog", { name: "Command palette" });
-    expect(palette).toBeVisible();
     const search = within(palette).getByRole("textbox", { name: "Search Operator actions" });
     await waitFor(() => expect(search).toHaveFocus());
     await user.type(search, "Runtime Backend");
@@ -118,102 +166,107 @@ describe("functional routes and recovery", () => {
   });
 });
 
-describe("global chat dock", () => {
-  it("streams real reference deltas and renders owner, model, usage, and timing metadata", async () => {
+describe("YVEX Generation Console", () => {
+  it("inherits workspace context, exposes exact blockers, and never selects a provider", async () => {
+    let comparisonMessageRequests = 0;
     const harness = await createTestHarness();
     harnesses.push(harness);
-    await readyReferenceProvider(harness.services);
     const user = userEvent.setup();
-    mount(harness, "/models");
-    await screen.findByRole("heading", { name: "Models", level: 1 });
+    mount(harness, "/runtime?tab=generation", (path) => {
+      if (path.includes("/comparison/reference") && path.includes("/messages"))
+        comparisonMessageRequests += 1;
+    });
+
+    expect(await screen.findByRole("heading", { name: "Runtime", level: 1 })).toBeVisible();
     await user.keyboard("{Control>}j{/Control}");
-    const dock = await screen.findByRole("complementary", { name: "YVEX model chat" });
-    const composer = within(dock).getByRole("textbox", { name: "Chat message" });
-    await waitFor(() => expect(composer).toBeEnabled());
-    await user.type(composer, "hello reference");
-    await user.click(within(dock).getByRole("button", { name: "Send" }));
-    expect(await within(dock).findByText("Reference response.")).toBeVisible();
+    const console = await screen.findByRole("complementary", {
+      name: "YVEX Generation Console",
+    });
     await waitFor(() =>
-      expect(
-        dock.querySelector('.chat-message.role-assistant[data-state="complete"]'),
-      ).not.toBeNull(),
+      expect(within(console).getAllByText("deepseek4-v4-flash").length).toBeGreaterThan(0),
     );
-    expect(within(dock).getAllByText("Reference provider").length).toBeGreaterThan(0);
-    expect(within(dock).getByText(/Fixture reference · fixture-reference-model/)).toBeVisible();
-    expect(within(dock).getByText(/4 in · 2 out · 6 total/)).toBeVisible();
-    expect(within(dock).getByText(/TTFT \d+ ms/)).toBeVisible();
+    expect(within(console).getByText("Artifact admission")).toBeVisible();
+    expect(within(console).getByText("Runtime binding")).toBeVisible();
+    expect(within(console).getByText("Tokenizer")).toBeVisible();
+    expect(within(console).getByText("Streaming")).toBeVisible();
+    expect(within(console).getByText(/No external endpoint is selected or used/)).toBeVisible();
+    expect(within(console).getByRole("textbox", { name: "YVEX generation prompt" })).toBeDisabled();
+    expect(within(console).queryByText("Select provider")).not.toBeInTheDocument();
+    expect(within(console).queryByText("Reference provider")).not.toBeInTheDocument();
+    expect(comparisonMessageRequests).toBe(0);
   });
 
-  it("cancels streaming and preserves partial output", async () => {
+  it("opens from the command palette as the sole primary generation surface", async () => {
+    const harness = await createTestHarness();
+    harnesses.push(harness);
+    const user = userEvent.setup();
+    mount(harness, "/workspace");
+    await screen.findByRole("heading", { name: "Workspace", level: 1 });
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = screen.getByRole("dialog", { name: "Command palette" });
+    await user.type(
+      within(palette).getByRole("textbox", { name: "Search Operator actions" }),
+      "Generation Console",
+    );
+    await user.keyboard("{Enter}");
+    expect(
+      await screen.findByRole("complementary", { name: "YVEX Generation Console" }),
+    ).toBeVisible();
+  });
+});
+
+describe("optional reference comparison diagnostics", () => {
+  it("keeps comparison disabled by default and out of global YVEX readiness", async () => {
+    const harness = await createTestHarness();
+    harnesses.push(harness);
+    const user = userEvent.setup();
+    mount(harness, "/settings");
+
+    expect(await screen.findByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
+    expect(screen.queryByText("provider not configured", { exact: false })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Comparison endpoint" }));
+    expect(await screen.findByText(/Disabled is the normal default/)).toBeVisible();
+    expect(screen.getByText(/never a YVEX runtime lane, fallback/)).toBeVisible();
+  });
+
+  it("streams real deltas only inside the explicitly enabled comparison namespace", async () => {
+    const requestedPaths: string[] = [];
+    const harness = await createTestHarness();
+    harnesses.push(harness);
+    await readyComparisonEndpoint(harness.services);
+    const user = userEvent.setup();
+    mount(harness, "/settings/reference-comparison", (path) => requestedPaths.push(path));
+
+    expect(
+      await screen.findByRole("heading", { name: "Reference comparison", level: 1 }),
+    ).toBeVisible();
+    expect(await screen.findByText("Execution owner: External comparison endpoint")).toBeVisible();
+    const prompt = await screen.findByRole("textbox", { name: "External comparison prompt" });
+    await waitFor(() => expect(prompt).toBeEnabled());
+    await user.type(prompt, "hello reference");
+    await user.click(screen.getByRole("button", { name: "Run comparison" }));
+    expect(await screen.findByText("Reference response.")).toBeVisible();
+    expect(await screen.findByText(/4 in · 2 out/)).toBeVisible();
+    expect(requestedPaths.some((path) => path.includes("/comparison/reference/"))).toBe(true);
+    expect(requestedPaths.some((path) => path.startsWith("/api/v1/chat/"))).toBe(false);
+  });
+
+  it("cancels a comparison and preserves partial external output", async () => {
     const harness = await createTestHarness({
       dependencies: { fetcher: providerFetcher({ delayMs: 80 }) },
     });
     harnesses.push(harness);
-    await readyReferenceProvider(harness.services);
+    await readyComparisonEndpoint(harness.services);
     const user = userEvent.setup();
-    mount(harness, "/overview");
-    await screen.findByRole("heading", { name: "Overview", level: 1 });
-    await user.keyboard("{Control>}j{/Control}");
-    const dock = await screen.findByRole("complementary", { name: "YVEX model chat" });
-    const composer = within(dock).getByRole("textbox", { name: "Chat message" });
-    await waitFor(() => expect(composer).toBeEnabled());
-    await user.type(composer, "slow cancel request");
-    await user.click(within(dock).getByRole("button", { name: "Send" }));
-    await within(dock).findByText("Partial");
-    await user.click(within(dock).getByRole("button", { name: "Cancel" }));
-    await waitFor(() =>
-      expect(
-        dock.querySelector('.chat-message.role-assistant[data-state="cancelled"]'),
-      ).not.toBeNull(),
-    );
-    expect(within(dock).getByText("Partial")).toBeVisible();
-    expect(within(dock).getByText(/partial output preserved/i)).toBeInTheDocument();
-  });
+    mount(harness, "/settings/reference-comparison");
 
-  it("gates native composition with exact dependencies and sends no provider request", async () => {
-    let messageRequests = 0;
-    const harness = await createTestHarness();
-    harnesses.push(harness);
-    const user = userEvent.setup();
-    mount(harness, "/runtime?tab=controls", (path) => {
-      if (path.includes("/messages")) messageRequests += 1;
-    });
-    await screen.findByRole("heading", { name: "Runtime", level: 1 });
-    await user.keyboard("{Control>}j{/Control}");
-    const dock = await screen.findByRole("complementary", { name: "YVEX model chat" });
-    await user.click(within(dock).getByRole("button", { name: "Native YVEX" }));
-    expect(await within(dock).findByText("Native YVEX generation is unavailable")).toBeVisible();
-    expect(within(dock).getByText("runtime.binding")).toBeVisible();
-    expect(within(dock).getByText("generation.tokenizer")).toBeVisible();
-    expect(within(dock).getByText("generation.streaming")).toBeVisible();
-    expect(within(dock).getByText(/No request will be redirected/)).toBeVisible();
-    expect(within(dock).getByRole("textbox", { name: "Chat message" })).toBeDisabled();
-    expect(messageRequests).toBe(0);
-  });
-
-  it("renders a structured provider failure without replacing the lane", async () => {
-    let fail = false;
-    const readyFetcher = providerFetcher();
-    const failedFetcher = providerFetcher({ failChat: true });
-    const mutableFetcher: typeof fetch = (input, init) =>
-      fail ? failedFetcher(input, init) : readyFetcher(input, init);
-    const harness = await createTestHarness({ dependencies: { fetcher: mutableFetcher } });
-    harnesses.push(harness);
-    await readyReferenceProvider(harness.services);
-    fail = true;
-    const user = userEvent.setup();
-    mount(harness, "/overview");
-    await screen.findByRole("heading", { name: "Overview", level: 1 });
-    await user.keyboard("{Control>}j{/Control}");
-    const dock = await screen.findByRole("complementary", { name: "YVEX model chat" });
-    const composer = within(dock).getByRole("textbox", { name: "Chat message" });
-    await waitFor(() => expect(composer).toBeEnabled());
-    await user.type(composer, "provider should fail");
-    await user.click(within(dock).getByRole("button", { name: "Send" }));
-    expect(await within(dock).findByRole("alert")).toHaveTextContent("provider-chat-failed");
-    expect(within(dock).getAllByText("Reference provider").length).toBeGreaterThan(0);
-    expect(
-      within(dock).queryByText("Native YVEX", { selector: ".chat-message *" }),
-    ).not.toBeInTheDocument();
+    const prompt = await screen.findByRole("textbox", { name: "External comparison prompt" });
+    await waitFor(() => expect(prompt).toBeEnabled());
+    await user.type(prompt, "slow cancel request");
+    await user.click(screen.getByRole("button", { name: "Run comparison" }));
+    expect(await screen.findByText("Partial")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Cancel comparison" }));
+    expect(await screen.findByText("cancelled")).toBeVisible();
+    expect(screen.getByText("Partial")).toBeVisible();
   });
 });

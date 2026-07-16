@@ -194,8 +194,8 @@ export async function createTestHarness(
 }
 
 /** Configures and verifies the deterministic reference provider through the same service APIs as HTTP. */
-export async function readyReferenceProvider(services: OperatorServices): Promise<void> {
-  await services.settings.updateReferenceProvider({
+export async function readyComparisonEndpoint(services: OperatorServices): Promise<void> {
+  await services.settings.updateComparisonEndpoint({
     enabled: true,
     displayName: "Fixture reference",
     baseUrl: "http://127.0.0.1:14318/v1",

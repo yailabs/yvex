@@ -10,6 +10,7 @@ import { useState } from "react";
 
 import type { ProducerDescriptor, ProducerRun } from "../../shared/contracts.ts";
 import { operatorApi } from "../api.ts";
+import { capabilityDisplayLabel } from "../capability-labels.ts";
 import {
   PageHeader,
   Panel,
@@ -127,6 +128,9 @@ export function EvidencePage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [running, setRunning] = useState<string | null>(null);
   const page = pageMetadata.evidence;
+  const evidenceJobs = (app.jobs.data?.jobs ?? []).filter(
+    (job) => job.type !== "reference-comparison" && job.type !== "comparison-test",
+  );
   const run = async (id: string): Promise<void> => {
     setRunning(id);
     try {
@@ -280,9 +284,9 @@ export function EvidencePage() {
             title="Jobs"
             description="Queued, running, cancellation, and terminal control-plane state."
           >
-            {app.jobs.data?.jobs.length ? (
+            {evidenceJobs.length ? (
               <div className="job-list">
-                {app.jobs.data.jobs.map((job) => (
+                {evidenceJobs.map((job) => (
                   <article key={job.id}>
                     <div>
                       <strong>{job.type}</strong>
@@ -345,7 +349,7 @@ export function EvidencePage() {
             description="Grouped by stable capability rather than repeated empty cards."
           >
             <div className="missing-contracts">
-              {(app.capabilities.data?.capabilities ?? [])
+              {(app.workspace.data?.capabilities ?? app.capabilities.data?.capabilities ?? [])
                 .filter(
                   (item) =>
                     ["unavailable", "unsupported"].includes(item.status) &&
@@ -355,8 +359,9 @@ export function EvidencePage() {
                 .map((item) => (
                   <article key={item.id}>
                     <div>
-                      <strong>{item.id}</strong>
+                      <strong>{capabilityDisplayLabel(item)}</strong>
                       <p>{item.reason}</p>
+                      <code>{item.id}</code>
                     </div>
                     <StatusBadge status={item.status} />
                   </article>

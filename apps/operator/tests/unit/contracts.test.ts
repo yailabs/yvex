@@ -9,12 +9,15 @@ import { readFile, stat } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { isCliProducerId, isDomainId } from "../../shared/contracts.ts";
+import { nativeStatus } from "../../server/capabilities.ts";
 import { loadOperatorConfig } from "../../server/config.ts";
 import { EventHistory } from "../../server/events.ts";
 import { JobManager } from "../../server/jobs.ts";
 import { producerDefinition } from "../../server/producers.ts";
 import { validateProviderBaseUrl } from "../../server/provider.ts";
 import { validateTrustedBinaryPath } from "../../server/settings.ts";
+import { classifyArtifactClass, classifyTarget } from "../../server/workspace.ts";
+import { capabilityDisplayLabel } from "../../src/capability-labels.ts";
 import { availabilityTone, machineTone } from "../../src/components/Status.tsx";
 import { createTestHarness, type TestHarness } from "../helpers.ts";
 
@@ -47,6 +50,42 @@ describe("closed shared contracts", () => {
     expect(availabilityTone("failed")).toBe("danger");
     expect(machineTone("unsupported")).toBe("neutral");
     expect(machineTone("complete")).toBe("ready");
+  });
+
+  it("classifies only audited target classes and keeps unknown classes explicit", () => {
+    expect(classifyTarget("release-source-target")).toEqual({
+      kind: "release-target",
+      kindLabel: "Release target",
+    });
+    expect(classifyTarget("selected-runtime-slice").kind).toBe("engineering-slice");
+    expect(classifyTarget("source-model-candidate").kind).toBe("source-candidate");
+    expect(classifyTarget("future-unreviewed-class").kind).toBe("unclassified");
+  });
+
+  it("never promotes an unknown or merely planned artifact class to complete", () => {
+    expect(classifyArtifactClass("yvex-selected-gguf")).toBe("proof");
+    expect(classifyArtifactClass("complete-model-gguf")).toBe("complete");
+    expect(classifyArtifactClass("supported-model-gguf")).toBe("supported");
+    expect(classifyArtifactClass("planned-full-gguf")).toBe("unclassified");
+    expect(classifyArtifactClass("future-unreviewed-class")).toBe("unclassified");
+  });
+
+  it("keeps source intake below verified capability readiness", () => {
+    expect(nativeStatus("complete")).toBe("ready");
+    expect(nativeStatus("source-intake")).toBe("degraded");
+    expect(nativeStatus("future-unreviewed-stage")).toBe("degraded");
+  });
+
+  it("uses human capability labels while preserving technical acronyms", () => {
+    expect(capabilityDisplayLabel({ id: "backend.cuda", domain: "backend" })).toBe(
+      "Backend · CUDA",
+    );
+    expect(capabilityDisplayLabel({ id: "system.yvex-version-compatible", domain: "system" })).toBe(
+      "System · YVEX version compatible",
+    );
+    expect(capabilityDisplayLabel({ id: "generation.native", domain: "generation" })).toBe(
+      "YVEX generation",
+    );
   });
 });
 
@@ -103,7 +142,7 @@ describe("configuration safety", () => {
   it("persists provider secrets mode-0600 and returns presence only", async () => {
     const harness = await createTestHarness();
     harnesses.push(harness);
-    await harness.services.settings.updateReferenceProvider({
+    await harness.services.settings.updateComparisonEndpoint({
       enabled: true,
       displayName: "Local fixture",
       baseUrl: "http://127.0.0.1:14318/v1",
@@ -111,7 +150,7 @@ describe("configuration safety", () => {
       defaultModel: "fixture-reference-model",
     });
     const snapshot = await harness.services.settings.publicSnapshot();
-    expect(snapshot.referenceProvider.apiKeyConfigured).toBe(true);
+    expect(snapshot.comparisonEndpoint.apiKeyConfigured).toBe(true);
     expect(JSON.stringify(snapshot)).not.toContain("provider-secret-value");
     const secretPath = `${harness.config.configDirectory}/secrets.json`;
     expect((await stat(secretPath)).mode & 0o777).toBe(0o600);
@@ -144,7 +183,7 @@ describe("job and event foundations", () => {
     const history = new EventHistory(2, () => Date.parse("2026-07-16T00:00:00.000Z"));
     history.record("configuration-reload", "info", "token=secret-one");
     history.record("binary-resolution", "info", "candidate /private/build/yvex");
-    history.record("provider-test", "warning", "provider unavailable");
+    history.record("comparison-test", "warning", "comparison unavailable");
     const events = history.recent(10);
     expect(events).toHaveLength(2);
     expect(JSON.stringify(events)).not.toContain("secret-one");

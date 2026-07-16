@@ -1,9 +1,9 @@
 /*
  * Owner: apps/operator persisted local settings.
- * Owns: non-secret configuration, restrictive secret persistence, redacted snapshots, validation, and reload.
- * Does not own: HTTP authorization, binary execution, provider requests, browser persistence, or runtime capability.
- * Invariants: API keys are written only to a mode-0600 secret file and are never returned by public snapshots.
- * Boundary: persisting a candidate does not admit a binary or establish provider reachability.
+ * Owns: non-secret configuration, restrictive comparison-secret persistence, redacted snapshots, migration, validation, and reload.
+ * Does not own: HTTP authorization, binary execution, comparison requests, browser persistence, or runtime capability.
+ * Invariants: comparison API keys are written only to a mode-0600 secret file and are never returned by public snapshots.
+ * Boundary: persisting a candidate does not admit a binary or establish comparison reachability.
  */
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, normalize, sep } from "node:path";
@@ -12,9 +12,9 @@ import {
   API_VERSION,
   SCHEMA_VERSION,
   interfaceSettingsPatchSchema,
-  referenceProviderPatchSchema,
+  comparisonEndpointPatchSchema,
   type InterfaceSettingsPatch,
-  type ReferenceProviderPatch,
+  type ComparisonEndpointPatch,
   type SettingsResponse,
   type YvexSettingsPatch,
   yvexSettingsPatchSchema,
@@ -22,9 +22,9 @@ import {
 import type { OperatorConfig } from "./config.ts";
 
 interface PersistedSettings {
-  schemaVersion: "1";
+  schemaVersion: "2";
   yvex: { binaryPath: string | null };
-  referenceProvider: {
+  comparisonEndpoint: {
     enabled: boolean;
     displayName: string;
     baseUrl: string;
@@ -32,32 +32,31 @@ interface PersistedSettings {
     requestTimeoutMs: number;
   };
   interface: {
-    defaultLane: "native-yvex" | "reference-provider";
-    chatDefaultMode: "closed" | "compact" | "docked" | "expanded" | "fullscreen";
+    generationConsoleDefaultMode: "closed" | "compact" | "docked" | "expanded" | "fullscreen";
   };
 }
 
 interface PersistedSecrets {
-  schemaVersion: "1";
-  referenceProviderApiKey: string | null;
+  schemaVersion: "2";
+  comparisonEndpointApiKey: string | null;
 }
 
 export interface InternalSettings {
   persisted: PersistedSettings;
-  referenceProviderApiKey: string | null;
+  comparisonEndpointApiKey: string | null;
 }
 
 const defaultSettings: PersistedSettings = {
-  schemaVersion: "1",
+  schemaVersion: "2",
   yvex: { binaryPath: null },
-  referenceProvider: {
+  comparisonEndpoint: {
     enabled: false,
     displayName: "Local reference",
     baseUrl: "http://127.0.0.1:8080/v1",
     defaultModel: "",
     requestTimeoutMs: 120_000,
   },
-  interface: { defaultLane: "reference-provider", chatDefaultMode: "closed" },
+  interface: { generationConsoleDefaultMode: "closed" },
 };
 
 /** Rejects relative traversal and returns a normalized absolute binary candidate. */
@@ -80,37 +79,50 @@ export function safePathLabel(path: string | null): string | null {
 /** Parses persisted JSON defensively and falls back only to explicit defaults, never partial unvalidated values. */
 function parsePersistedSettings(value: unknown): PersistedSettings {
   if (!value || typeof value !== "object") return structuredClone(defaultSettings);
-  const record = value as Partial<PersistedSettings>;
-  const provider = record.referenceProvider;
+  const record = value as {
+    yvex?: { binaryPath?: unknown };
+    comparisonEndpoint?: Partial<PersistedSettings["comparisonEndpoint"]>;
+    referenceProvider?: Partial<PersistedSettings["comparisonEndpoint"]>;
+    interface?: {
+      generationConsoleDefaultMode?: unknown;
+      chatDefaultMode?: unknown;
+      defaultLane?: unknown;
+    };
+  };
+  const comparison = record.comparisonEndpoint ?? record.referenceProvider;
   const ui = record.interface;
   const binaryPath = record.yvex?.binaryPath;
+  const legacyMode = ui?.generationConsoleDefaultMode ?? ui?.chatDefaultMode;
   return {
-    schemaVersion: "1",
+    schemaVersion: "2",
     yvex: {
       binaryPath: typeof binaryPath === "string" ? validateTrustedBinaryPath(binaryPath) : null,
     },
-    referenceProvider: {
-      enabled: typeof provider?.enabled === "boolean" ? provider.enabled : false,
+    comparisonEndpoint: {
+      enabled: typeof comparison?.enabled === "boolean" ? comparison.enabled : false,
       displayName:
-        typeof provider?.displayName === "string" && provider.displayName
-          ? provider.displayName
-          : defaultSettings.referenceProvider.displayName,
+        typeof comparison?.displayName === "string" && comparison.displayName
+          ? comparison.displayName
+          : defaultSettings.comparisonEndpoint.displayName,
       baseUrl:
-        typeof provider?.baseUrl === "string"
-          ? provider.baseUrl
-          : defaultSettings.referenceProvider.baseUrl,
-      defaultModel: typeof provider?.defaultModel === "string" ? provider.defaultModel : "",
+        typeof comparison?.baseUrl === "string"
+          ? comparison.baseUrl
+          : defaultSettings.comparisonEndpoint.baseUrl,
+      defaultModel: typeof comparison?.defaultModel === "string" ? comparison.defaultModel : "",
       requestTimeoutMs:
-        typeof provider?.requestTimeoutMs === "number"
-          ? provider.requestTimeoutMs
-          : defaultSettings.referenceProvider.requestTimeoutMs,
+        typeof comparison?.requestTimeoutMs === "number"
+          ? comparison.requestTimeoutMs
+          : defaultSettings.comparisonEndpoint.requestTimeoutMs,
     },
     interface: {
-      defaultLane: ui?.defaultLane === "native-yvex" ? "native-yvex" : "reference-provider",
-      chatDefaultMode: ["closed", "compact", "docked", "expanded", "fullscreen"].includes(
-        ui?.chatDefaultMode ?? "",
-      )
-        ? (ui?.chatDefaultMode as PersistedSettings["interface"]["chatDefaultMode"])
+      generationConsoleDefaultMode: [
+        "closed",
+        "compact",
+        "docked",
+        "expanded",
+        "fullscreen",
+      ].includes(typeof legacyMode === "string" ? legacyMode : "")
+        ? (legacyMode as PersistedSettings["interface"]["generationConsoleDefaultMode"])
         : "closed",
     },
   };
@@ -145,23 +157,22 @@ export class OperatorSettingsStore {
     }
     if (!this.secrets) {
       try {
-        const parsed = JSON.parse(
-          await readFile(this.secretPath, "utf8"),
-        ) as Partial<PersistedSecrets>;
+        const parsed = JSON.parse(await readFile(this.secretPath, "utf8")) as {
+          comparisonEndpointApiKey?: unknown;
+          referenceProviderApiKey?: unknown;
+        };
+        const migratedKey = parsed.comparisonEndpointApiKey ?? parsed.referenceProviderApiKey;
         this.secrets = {
-          schemaVersion: "1",
-          referenceProviderApiKey:
-            typeof parsed.referenceProviderApiKey === "string"
-              ? parsed.referenceProviderApiKey
-              : null,
+          schemaVersion: "2",
+          comparisonEndpointApiKey: typeof migratedKey === "string" ? migratedKey : null,
         };
       } catch {
-        this.secrets = { schemaVersion: "1", referenceProviderApiKey: null };
+        this.secrets = { schemaVersion: "2", comparisonEndpointApiKey: null };
       }
     }
     return {
       persisted: structuredClone(this.settings),
-      referenceProviderApiKey: this.secrets.referenceProviderApiKey,
+      comparisonEndpointApiKey: this.secrets.comparisonEndpointApiKey,
     };
   }
 
@@ -184,9 +195,9 @@ export class OperatorSettingsStore {
         binaryPathLabel: safePathLabel(internal.persisted.yvex.binaryPath),
         environmentCandidateConfigured: this.config.binaryEnvironmentCandidate !== null,
       },
-      referenceProvider: {
-        ...internal.persisted.referenceProvider,
-        apiKeyConfigured: internal.referenceProviderApiKey !== null,
+      comparisonEndpoint: {
+        ...internal.persisted.comparisonEndpoint,
+        apiKeyConfigured: internal.comparisonEndpointApiKey !== null,
       },
       cache: { mutableTtlMs: this.config.mutableTtlMs, binaryTtlMs: this.config.binaryLookupTtlMs },
       safety: {
@@ -209,13 +220,16 @@ export class OperatorSettingsStore {
     return this.publicSnapshot();
   }
 
-  /** Validates provider configuration, persists its secret separately, and never returns the secret value. */
-  async updateReferenceProvider(patch: ReferenceProviderPatch): Promise<SettingsResponse> {
-    const value = referenceProviderPatchSchema.parse(patch);
+  /** Validates comparison configuration, persists its secret separately, and never returns the secret value. */
+  async updateComparisonEndpoint(patch: ComparisonEndpointPatch): Promise<SettingsResponse> {
+    const value = comparisonEndpointPatchSchema.parse(patch);
     const internal = await this.internal();
-    internal.persisted.referenceProvider = { ...internal.persisted.referenceProvider, ...value };
-    if ("apiKey" in value) internal.referenceProviderApiKey = value.apiKey?.trim() || null;
-    delete (internal.persisted.referenceProvider as Record<string, unknown>).apiKey;
+    internal.persisted.comparisonEndpoint = {
+      ...internal.persisted.comparisonEndpoint,
+      ...value,
+    };
+    if ("apiKey" in value) internal.comparisonEndpointApiKey = value.apiKey?.trim() || null;
+    delete (internal.persisted.comparisonEndpoint as Record<string, unknown>).apiKey;
     await this.persist(internal);
     return this.publicSnapshot();
   }
@@ -248,7 +262,7 @@ export class OperatorSettingsStore {
       });
       await writeFile(
         secretTemporary,
-        `${JSON.stringify({ schemaVersion: "1", referenceProviderApiKey: internal.referenceProviderApiKey }, null, 2)}\n`,
+        `${JSON.stringify({ schemaVersion: "2", comparisonEndpointApiKey: internal.comparisonEndpointApiKey }, null, 2)}\n`,
         { mode: 0o600 },
       );
       await rename(configTemporary, this.configPath);
@@ -257,8 +271,8 @@ export class OperatorSettingsStore {
       await chmod(this.secretPath, 0o600);
       this.settings = structuredClone(internal.persisted);
       this.secrets = {
-        schemaVersion: "1",
-        referenceProviderApiKey: internal.referenceProviderApiKey,
+        schemaVersion: "2",
+        comparisonEndpointApiKey: internal.comparisonEndpointApiKey,
       };
     });
     await this.mutation;

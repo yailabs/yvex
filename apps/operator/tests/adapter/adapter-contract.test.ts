@@ -44,6 +44,11 @@ describe("deterministic YVEX resolution", () => {
       identityStatus: "ready",
       version: "0.1.0",
     });
+    expect(resolved.resolution).toMatchObject({
+      explicitOverrideConfigured: true,
+      environmentCandidateConfigured: true,
+      selectedSource: "persisted-setting",
+    });
     expect(JSON.stringify(resolved.resolution)).not.toContain(root);
   });
 
@@ -57,6 +62,11 @@ describe("deterministic YVEX resolution", () => {
     expect(resolved.resolution.availability).toMatchObject({
       status: "unavailable",
       reasonCode: "yvex-binary-unresolved",
+    });
+    expect(resolved.resolution).toMatchObject({
+      explicitOverrideConfigured: false,
+      environmentCandidateConfigured: false,
+      selectedSource: null,
     });
     expect(resolved.resolution.candidates.every((candidate) => candidate.exists === false)).toBe(
       true,
@@ -104,6 +114,11 @@ describe("deterministic YVEX resolution", () => {
       protocolVersion: "1",
       yvexVersion: "0.1.0",
       product: "yvex",
+    });
+    expect(resolved.resolution).toMatchObject({
+      explicitOverrideConfigured: false,
+      environmentCandidateConfigured: true,
+      selectedSource: "environment",
     });
   });
 });

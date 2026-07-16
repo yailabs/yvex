@@ -1,28 +1,25 @@
 /*
- * Owner: apps/operator responsive global shell.
- * Owns: navigation rail, context bar, global mode indicator, keyboard shortcuts, command palette, inspector, and chat-dock integration.
- * Does not own: page facts, producer policy, capability calculation, provider secrets, or native execution.
- * Invariants: route selection follows the URL and global surfaces remain keyboard reachable at every breakpoint.
- * Boundary: shell connectivity indicators distinguish adapter, YVEX, and provider layers.
+ * Owner: apps/operator responsive lifecycle shell.
+ * Owns: workbench navigation, authoritative context bar, global mode indicator, shortcuts, command palette, inspector, and Generation Console integration.
+ * Does not own: workspace facts, producer policy, capability calculation, comparison secrets, or native execution.
+ * Invariants: every context field derives from OperatorWorkspaceState and YVEX is the sole primary execution owner.
+ * Boundary: shell connectivity and selection indicators do not promote backend, runtime, or generation readiness.
  */
 import {
   Activity,
   Archive,
-  Boxes,
   Braces,
   Command,
   Cpu,
-  Database,
-  Gauge,
   Menu,
-  MessageSquare,
   Microscope,
   Settings,
-  SlidersHorizontal,
+  TerminalSquare,
+  Workflow,
   X,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import type { CapabilityId } from "../../shared/contracts.ts";
@@ -34,40 +31,54 @@ import {
   type RouteId,
 } from "../navigation.ts";
 import { useOperatorState } from "../state/operator-state.tsx";
-import { ChatDock, type ChatDockMode } from "./ChatDock.tsx";
 import { CommandPalette } from "./CommandPalette.tsx";
+import { GenerationConsole, type GenerationConsoleMode } from "./GenerationConsole.tsx";
 import { InspectorDrawer, type InspectorItem } from "./Inspector.tsx";
 import { StatusDot } from "./Status.tsx";
 
 const navIcons: Readonly<Record<RouteId, LucideIcon>> = {
-  overview: Gauge,
-  models: Boxes,
-  sources: Database,
-  compilation: Braces,
-  quantization: SlidersHorizontal,
+  workspace: Workflow,
+  build: Braces,
   artifacts: Archive,
   runtime: Cpu,
   evidence: Microscope,
-  "system-health": Activity,
+  environment: Activity,
   settings: Settings,
 };
 
-/** Reads one validated local chat layout preference and defaults to closed. */
-function initialChatMode(): ChatDockMode {
-  const value = window.localStorage.getItem("yvex.operator.chat-mode");
-  return ["closed", "compact", "docked", "expanded", "fullscreen"].includes(value ?? "")
-    ? (value as ChatDockMode)
-    : "closed";
+/** Reads one validated local Generation Console layout preference or reports that no override exists. */
+function storedConsoleMode(): GenerationConsoleMode | null {
+  try {
+    const value = window.localStorage.getItem("yvex.operator.generation-console-mode");
+    return ["closed", "compact", "docked", "expanded", "fullscreen"].includes(value ?? "")
+      ? (value as GenerationConsoleMode)
+      : null;
+  } catch {
+    return null;
+  }
 }
 
-/** Returns one stable capability status for a global indicator without parsing reason text. */
+/** Reads and bounds the stored dock width before it can influence global shell geometry. */
+function initialConsoleWidth(): number {
+  try {
+    const stored = window.localStorage.getItem("yvex.operator.generation-console-width");
+    const value = Number(stored);
+    return stored !== null && Number.isFinite(value) ? Math.min(820, Math.max(400, value)) : 520;
+  } catch {
+    return 520;
+  }
+}
+
+/** Returns one stable capability status for a shell indicator without parsing reason text. */
 function capabilityStatus(state: ReturnType<typeof useOperatorState>, id: CapabilityId) {
   return (
-    state.capabilities.data?.capabilities.find((item) => item.id === id)?.status ?? "unavailable"
+    state.workspace.data?.capabilities.find((item) => item.id === id)?.status ??
+    state.capabilities.data?.capabilities.find((item) => item.id === id)?.status ??
+    "unavailable"
   );
 }
 
-/** Renders one borrowed navigation group and closes only transient mobile state after navigation. */
+/** Renders one fixed navigation group and closes only transient mobile state after navigation. */
 function NavigationGroup({
   label,
   items,
@@ -98,7 +109,7 @@ function NavigationGroup({
   );
 }
 
-/** Owns all route-independent Operator interaction surfaces and global keyboard bindings. */
+/** Owns route-independent YVEX workbench interaction surfaces and global keyboard bindings. */
 export function OperatorShell() {
   const location = useLocation();
   const app = useOperatorState();
@@ -107,8 +118,19 @@ export function OperatorShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [inspector, setInspector] = useState<InspectorItem | null>(null);
-  const [chatMode, setChatMode] = useState<ChatDockMode>(initialChatMode);
-  const [newSessionSignal, setNewSessionSignal] = useState(0);
+  const [consoleModeOverride, setConsoleModeOverride] = useState<GenerationConsoleMode | null>(
+    storedConsoleMode,
+  );
+  const consoleDefault = app.settings.data?.interface.generationConsoleDefaultMode ?? "closed";
+  const consoleMode = consoleModeOverride ?? consoleDefault;
+  const setConsoleMode = useCallback(
+    (next: SetStateAction<GenerationConsoleMode>) =>
+      setConsoleModeOverride((current) => {
+        const effective = current ?? consoleDefault;
+        return typeof next === "function" ? next(effective) : next;
+      }),
+    [consoleDefault],
+  );
   const mobileTrigger = useRef<HTMLButtonElement>(null);
   const mobileClose = useRef<HTMLButtonElement>(null);
   const paletteTrigger = useRef<HTMLButtonElement>(null);
@@ -135,38 +157,36 @@ export function OperatorShell() {
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j") {
         event.preventDefault();
-        setChatMode((value) => (value === "closed" ? "docked" : "closed"));
+        setConsoleMode((value) => (value === "closed" ? "docked" : "closed"));
       }
     };
     document.addEventListener("keydown", shortcut);
     return () => document.removeEventListener("keydown", shortcut);
-  }, []);
+  }, [setConsoleMode]);
 
   useEffect(() => {
-    const openChat = (): void => setChatMode("docked");
-    window.addEventListener("yvex:open-chat", openChat);
-    return () => window.removeEventListener("yvex:open-chat", openChat);
-  }, []);
+    const openConsole = (): void => setConsoleMode("docked");
+    window.addEventListener("yvex:open-generation-console", openConsole);
+    return () => window.removeEventListener("yvex:open-generation-console", openConsole);
+  }, [setConsoleMode]);
 
-  const activeJobs =
-    app.jobs.data?.jobs.filter((job) => !["cancelled", "completed", "failed"].includes(job.state))
-      .length ?? 0;
+  const workspace = app.workspace.data;
   const adapterStatus = app.health.error
     ? "failed"
     : app.health.initialLoading
       ? "loading"
       : "ready";
   const yvexStatus = capabilityStatus(app, "system.yvex-version-compatible");
-  const providerStatus = capabilityStatus(app, "provider.streaming");
+  const runtimeStatus = capabilityStatus(app, "runtime.binding");
 
   return (
     <div
       className="operator-shell"
-      data-chat-mode={chatMode}
+      data-console-mode={consoleMode}
       style={
-        chatMode === "docked"
+        consoleMode === "docked"
           ? ({
-              "--chat-dock-width": `${Number(window.localStorage.getItem("yvex.operator.chat-width")) || 480}px`,
+              "--generation-console-width": `${initialConsoleWidth()}px`,
             } as React.CSSProperties)
           : undefined
       }
@@ -193,7 +213,7 @@ export function OperatorShell() {
           </div>
           <div>
             <strong>YVEX</strong>
-            <span>Operator</span>
+            <span>Engineering Operator</span>
           </div>
           <button
             ref={mobileClose}
@@ -209,7 +229,7 @@ export function OperatorShell() {
         </div>
         <nav className="sidebar-nav" aria-label="Primary">
           <NavigationGroup
-            label="Engineering"
+            label="Workspace"
             items={primaryNavigation}
             onNavigate={() => setMobileOpen(false)}
           />
@@ -221,9 +241,9 @@ export function OperatorShell() {
         </nav>
         <div className="sidebar-footer">
           <div className="global-mode">
-            <span>Mode</span>
-            <strong>Local control plane</strong>
-            <small>Native actions capability-gated</small>
+            <span>Execution authority</span>
+            <strong>YVEX</strong>
+            <small>Build and runtime capability-gated</small>
           </div>
           <div className="layer-statuses">
             <span>
@@ -233,7 +253,7 @@ export function OperatorShell() {
               <StatusDot status={yvexStatus} label="YVEX" /> YVEX
             </span>
             <span>
-              <StatusDot status={providerStatus} label="Reference" /> Reference
+              <StatusDot status={runtimeStatus} label="Runtime" /> Runtime
             </span>
           </div>
           <code>adapter {app.health.data?.adapter.version ?? "0.2.0"}</code>
@@ -253,16 +273,25 @@ export function OperatorShell() {
           <span className="sr-only">Open navigation</span>
         </button>
         <div className="context-path">
-          <span>Operator</span>
+          <span>YVEX</span>
           <span aria-hidden="true">/</span>
           <strong>{page.label}</strong>
         </div>
-        <div className="context-entities">
+        <div className="context-entities" aria-label="Active YVEX workspace context">
           <span>
-            Target <strong>{app.selectedTarget ?? "not selected"}</strong>
+            Target <strong>{workspace?.activeTarget?.id ?? "not selected"}</strong>
           </span>
           <span>
-            Jobs <strong>{activeJobs}</strong>
+            Build <strong>{workspace?.activeBuild?.currentStage ?? "none"}</strong>
+          </span>
+          <span>
+            Artifact <strong>{workspace?.activeArtifact?.artifactClass ?? "none"}</strong>
+          </span>
+          <span>
+            Backend <strong>{workspace?.activeBackend?.label ?? "none"}</strong>
+          </span>
+          <span>
+            Session <strong>{workspace?.activeRuntimeSession?.state ?? "unloaded"}</strong>
           </span>
         </div>
         <button
@@ -281,12 +310,12 @@ export function OperatorShell() {
         <button
           type="button"
           className="context-chat"
-          aria-label="Toggle chat dock"
-          aria-expanded={chatMode !== "closed"}
-          onClick={() => setChatMode((value) => (value === "closed" ? "docked" : "closed"))}
+          aria-label="Toggle Generation Console"
+          aria-expanded={consoleMode !== "closed"}
+          onClick={() => setConsoleMode((value) => (value === "closed" ? "docked" : "closed"))}
         >
-          <MessageSquare aria-hidden="true" size={16} />
-          <span>Chat</span>
+          <TerminalSquare aria-hidden="true" size={16} />
+          <span>Generate</span>
           <kbd>Ctrl J</kbd>
         </button>
       </header>
@@ -299,11 +328,7 @@ export function OperatorShell() {
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         returnFocus={paletteTrigger}
-        onOpenChat={() => setChatMode("docked")}
-        onNewChat={() => {
-          setChatMode("docked");
-          setNewSessionSignal((value) => value + 1);
-        }}
+        onOpenConsole={() => setConsoleMode("docked")}
         onInspect={(item) => {
           inspectorReturn.current = document.activeElement as HTMLElement | null;
           setInspector(item);
@@ -315,7 +340,7 @@ export function OperatorShell() {
         onClose={() => setInspector(null)}
         returnFocus={inspectorReturn}
       />
-      <ChatDock mode={chatMode} setMode={setChatMode} newSessionSignal={newSessionSignal} />
+      <GenerationConsole mode={consoleMode} setMode={setConsoleMode} />
     </div>
   );
 }

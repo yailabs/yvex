@@ -66,7 +66,6 @@ export const capabilityDomains = [
   "generation",
   "evaluation",
   "benchmark",
-  "provider",
   "operator",
 ] as const;
 export type CapabilityDomain = (typeof capabilityDomains)[number];
@@ -109,11 +108,6 @@ export const capabilityIds = [
   "generation.tokenizer",
   "evaluation.available",
   "benchmark.available",
-  "provider.configured",
-  "provider.reachable",
-  "provider.models",
-  "provider.chat",
-  "provider.streaming",
   "operator.producer-run",
   "operator.jobs",
   "operator.events",
@@ -316,6 +310,168 @@ export const artifactInventorySchema = z.object({
 });
 export type ArtifactInventory = z.infer<typeof artifactInventorySchema>;
 
+export const workspaceTargetKinds = [
+  "release-target",
+  "engineering-slice",
+  "source-candidate",
+  "proof-target",
+  "runtime-target",
+  "unclassified",
+] as const;
+export type WorkspaceTargetKind = (typeof workspaceTargetKinds)[number];
+
+export const workspaceTargetSchema = z.object({
+  id: z.string().min(1),
+  family: z.string().min(1),
+  producerClass: z.string().min(1),
+  kind: z.enum(workspaceTargetKinds),
+  kindLabel: z.string().min(1),
+  releaseSelected: z.boolean(),
+  runtimeStatus: z.string().min(1),
+  generationStatus: z.string().min(1),
+  provenance: z.literal("target-catalog"),
+});
+export type WorkspaceTarget = z.infer<typeof workspaceTargetSchema>;
+
+export const targetsResponseSchema = z.object({
+  apiVersion: z.literal(API_VERSION),
+  schemaVersion: z.literal(SCHEMA_VERSION),
+  observedAt: z.string(),
+  availability: availabilitySchema,
+  targets: z.array(workspaceTargetSchema),
+});
+export type TargetsResponse = z.infer<typeof targetsResponseSchema>;
+
+export const buildStageIds = [
+  "source",
+  "architecture",
+  "transformation-ir",
+  "physical-lowering",
+  "quantization",
+  "gguf-writer",
+] as const;
+export type BuildStageId = (typeof buildStageIds)[number];
+
+export const buildStageSchema = z.object({
+  id: z.enum(buildStageIds),
+  label: z.string().min(1),
+  availability: availabilitySchema,
+  producerId: z.enum(cliProducerIds).nullable(),
+  requiredCapability: z.enum(capabilityIds).nullable(),
+  inputIdentity: z.string().nullable(),
+  outputIdentity: z.string().nullable(),
+  descriptorCount: z.number().int().nonnegative().nullable(),
+  tensorCoverage: z.string().nullable(),
+  refusal: z
+    .object({
+      code: z.string().min(1),
+      message: z.string().min(1),
+    })
+    .nullable(),
+  dependencies: z.array(z.enum(buildStageIds)),
+  evidence: z.array(z.string()),
+});
+export type BuildStage = z.infer<typeof buildStageSchema>;
+
+export const buildProjectionSchema = z.object({
+  id: z.string().min(1),
+  targetId: z.string().min(1),
+  release: z.string().nullable(),
+  status: z.enum(availabilityStatusValues),
+  currentStage: z.enum(buildStageIds).nullable(),
+  source: z.literal("release-decision"),
+  stages: z.array(buildStageSchema),
+});
+export type BuildProjection = z.infer<typeof buildProjectionSchema>;
+
+export const buildResponseSchema = z.object({
+  apiVersion: z.literal(API_VERSION),
+  schemaVersion: z.literal(SCHEMA_VERSION),
+  observedAt: z.string(),
+  availability: availabilitySchema,
+  build: buildProjectionSchema.nullable(),
+});
+export type BuildResponse = z.infer<typeof buildResponseSchema>;
+
+export const buildStagesResponseSchema = z.object({
+  apiVersion: z.literal(API_VERSION),
+  schemaVersion: z.literal(SCHEMA_VERSION),
+  observedAt: z.string(),
+  availability: availabilitySchema,
+  targetId: z.string().nullable(),
+  stages: z.array(buildStageSchema),
+});
+export type BuildStagesResponse = z.infer<typeof buildStagesResponseSchema>;
+
+export const workspaceArtifactSchema = z.object({
+  id: z.string().min(1),
+  targetId: z.string().min(1),
+  family: z.string().min(1),
+  artifactClass: z.string().min(1),
+  classification: z.enum(["proof", "complete", "supported", "unclassified"]),
+  artifactStatus: z.string().min(1),
+  prepareStatus: z.string().min(1),
+  topBlocker: z.string(),
+  provenance: z.literal("artifact-inventory"),
+});
+export type WorkspaceArtifact = z.infer<typeof workspaceArtifactSchema>;
+
+export const workspaceArtifactsResponseSchema = z.object({
+  apiVersion: z.literal(API_VERSION),
+  schemaVersion: z.literal(SCHEMA_VERSION),
+  observedAt: z.string(),
+  availability: availabilitySchema,
+  producerId: z.literal("artifact-inventory"),
+  artifacts: z.array(workspaceArtifactSchema),
+});
+export type WorkspaceArtifactsResponse = z.infer<typeof workspaceArtifactsResponseSchema>;
+
+export const workspaceBackendSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  status: z.enum(availabilityStatusValues),
+  provenance: z.string().min(1),
+});
+export type WorkspaceBackend = z.infer<typeof workspaceBackendSchema>;
+
+export const workspaceRuntimeSessionSchema = z.object({
+  id: z.string().min(1),
+  targetId: z.string().min(1),
+  artifactId: z.string().min(1),
+  backendId: z.string().min(1),
+  state: z.enum(["unloaded", "loading", "ready", "generating", "failed"]),
+  jobId: z.string().nullable(),
+});
+export type WorkspaceRuntimeSession = z.infer<typeof workspaceRuntimeSessionSchema>;
+
+export const operatorWorkspaceSchema = z.object({
+  apiVersion: z.literal(API_VERSION),
+  schemaVersion: z.literal(SCHEMA_VERSION),
+  observedAt: z.string(),
+  availability: availabilitySchema,
+  workspaceIdentity: z.object({
+    id: z.literal("local-default"),
+    authority: z.literal("operator-workspace"),
+  }),
+  activeTarget: workspaceTargetSchema.nullable(),
+  targetSelectionSource: z.enum(["operator-selection", "release-default", "none"]),
+  activeBuild: buildProjectionSchema.nullable(),
+  activeArtifact: workspaceArtifactSchema.nullable(),
+  activeBackend: workspaceBackendSchema.nullable(),
+  activeRuntimeSession: workspaceRuntimeSessionSchema.nullable(),
+  capabilities: z.array(capabilitySchema),
+  activeJobs: z.array(z.lazy(() => jobSchema)),
+  recentEvidence: z.array(producerRunSchema),
+});
+export type OperatorWorkspace = z.infer<typeof operatorWorkspaceSchema>;
+
+export const workspaceTargetSelectionSchema = z.object({
+  targetId: z.string().trim().min(1).max(256),
+});
+export const workspaceArtifactSelectionSchema = z.object({
+  artifactId: z.string().trim().min(1).max(512).nullable(),
+});
+
 export interface ProducerDataMap {
   "target-catalog": TargetCatalog;
   "release-decision": ReleaseDecision;
@@ -360,8 +516,10 @@ export const binaryResolutionSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   observedAt: z.string(),
   availability: availabilitySchema,
-  configured: z.boolean(),
+  explicitOverrideConfigured: z.boolean(),
+  environmentCandidateConfigured: z.boolean(),
   selectedCandidateId: z.string().nullable(),
+  selectedSource: z.enum(binaryCandidateSources).nullable(),
   selectedLabel: z.string().nullable(),
   identity: binaryIdentitySchema.nullable(),
   candidates: z.array(binaryCandidateSchema),
@@ -383,16 +541,14 @@ export const topologyNodeIds = [
   "target",
   "artifact",
   "runtime",
-  "native-generation",
-  "reference-configured",
-  "reference-reachable",
+  "yvex-generation",
 ] as const;
 export type TopologyNodeId = (typeof topologyNodeIds)[number];
 
 export const topologyNodeSchema = z.object({
   id: z.enum(topologyNodeIds),
   label: z.string(),
-  branch: z.enum(["operator", "native", "reference"]),
+  branch: z.enum(["operator", "yvex"]),
   status: z.enum(availabilityStatusValues),
   reasonCode: z.string(),
   message: z.string(),
@@ -426,7 +582,7 @@ export const systemHealthSchema = z.object({
 });
 export type SystemHealth = z.infer<typeof systemHealthSchema>;
 
-export const referenceProviderSettingsSchema = z.object({
+export const comparisonEndpointSettingsSchema = z.object({
   enabled: z.boolean(),
   displayName: z.string().min(1).max(80),
   baseUrl: z.string().max(2_048),
@@ -434,7 +590,7 @@ export const referenceProviderSettingsSchema = z.object({
   defaultModel: z.string().max(256),
   requestTimeoutMs: z.number().int().min(1_000).max(300_000),
 });
-export type ReferenceProviderSettings = z.infer<typeof referenceProviderSettingsSchema>;
+export type ComparisonEndpointSettings = z.infer<typeof comparisonEndpointSettingsSchema>;
 
 export const settingsResponseSchema = z.object({
   apiVersion: z.literal(API_VERSION),
@@ -452,7 +608,7 @@ export const settingsResponseSchema = z.object({
     binaryPathLabel: z.string().nullable(),
     environmentCandidateConfigured: z.boolean(),
   }),
-  referenceProvider: referenceProviderSettingsSchema,
+  comparisonEndpoint: comparisonEndpointSettingsSchema,
   cache: z.object({ mutableTtlMs: z.number().int(), binaryTtlMs: z.number().int() }),
   safety: z.object({
     shellEnabled: z.literal(false),
@@ -461,8 +617,7 @@ export const settingsResponseSchema = z.object({
     providerSecretsReturned: z.literal(false),
   }),
   interface: z.object({
-    defaultLane: z.enum(["native-yvex", "reference-provider"]),
-    chatDefaultMode: z.enum(["closed", "compact", "docked", "expanded", "fullscreen"]),
+    generationConsoleDefaultMode: z.enum(["closed", "compact", "docked", "expanded", "fullscreen"]),
   }),
 });
 export type SettingsResponse = z.infer<typeof settingsResponseSchema>;
@@ -472,7 +627,7 @@ export const yvexSettingsPatchSchema = z.object({
 });
 export type YvexSettingsPatch = z.infer<typeof yvexSettingsPatchSchema>;
 
-export const referenceProviderPatchSchema = z.object({
+export const comparisonEndpointPatchSchema = z.object({
   enabled: z.boolean().optional(),
   displayName: z.string().trim().min(1).max(80).optional(),
   baseUrl: z.string().trim().max(2_048).optional(),
@@ -480,15 +635,20 @@ export const referenceProviderPatchSchema = z.object({
   defaultModel: z.string().trim().max(256).optional(),
   requestTimeoutMs: z.number().int().min(1_000).max(300_000).optional(),
 });
-export type ReferenceProviderPatch = z.infer<typeof referenceProviderPatchSchema>;
+export type ComparisonEndpointPatch = z.infer<typeof comparisonEndpointPatchSchema>;
 
 export const interfaceSettingsPatchSchema = z.object({
-  defaultLane: z.enum(["native-yvex", "reference-provider"]).optional(),
-  chatDefaultMode: z.enum(["closed", "compact", "docked", "expanded", "fullscreen"]).optional(),
+  generationConsoleDefaultMode: z
+    .enum(["closed", "compact", "docked", "expanded", "fullscreen"])
+    .optional(),
 });
 export type InterfaceSettingsPatch = z.infer<typeof interfaceSettingsPatchSchema>;
 
-export const executionOwners = ["Operator adapter", "Native YVEX", "Reference provider"] as const;
+export const executionOwners = [
+  "Operator adapter",
+  "YVEX",
+  "External comparison endpoint",
+] as const;
 export type ExecutionOwner = (typeof executionOwners)[number];
 export const jobStateValues = [
   "queued",
@@ -522,7 +682,7 @@ export type JobEvent = z.infer<typeof jobEventSchema>;
 
 export const jobSchema = z.object({
   id: z.string(),
-  type: z.enum(["producer-run", "provider-chat", "provider-test", "configuration-reload"]),
+  type: z.enum(["producer-run", "reference-comparison", "comparison-test", "configuration-reload"]),
   executionOwner: z.enum(executionOwners),
   state: z.enum(jobStateValues),
   createdAt: z.string(),
@@ -545,8 +705,9 @@ export const operatorEventSchema = z.object({
   type: z.enum([
     "binary-resolution",
     "producer-run",
-    "provider-test",
-    "chat-generation",
+    "comparison-test",
+    "comparison-generation",
+    "comparison-cancellation",
     "cancellation",
     "job-transition",
     "configuration-reload",
@@ -557,7 +718,7 @@ export const operatorEventSchema = z.object({
 export type OperatorEvent = z.infer<typeof operatorEventSchema>;
 export const eventsResponseSchema = z.object({ events: z.array(operatorEventSchema) });
 
-export const chatLanes = ["native-yvex", "reference-provider"] as const;
+export const chatLanes = ["reference-comparison"] as const;
 export type ChatLane = (typeof chatLanes)[number];
 export const chatSessionStates = ["idle", "streaming", "cancelling", "failed"] as const;
 export type ChatSessionState = (typeof chatSessionStates)[number];
@@ -629,11 +790,12 @@ export const chatSessionSchema = z.object({
 export type ChatSession = z.infer<typeof chatSessionSchema>;
 export const chatSessionsResponseSchema = z.object({ sessions: z.array(chatSessionSchema) });
 
-export const createChatSessionSchema = z.object({
-  title: z.string().trim().min(1).max(120).optional(),
-  lane: z.enum(chatLanes),
-  model: z.string().trim().max(256).optional(),
-});
+export const createChatSessionSchema = z
+  .object({
+    title: z.string().trim().min(1).max(120).optional(),
+    model: z.string().trim().max(256).optional(),
+  })
+  .strict();
 
 export const sendChatMessageSchema = z.object({
   content: z.string().trim().min(1).max(131_072),

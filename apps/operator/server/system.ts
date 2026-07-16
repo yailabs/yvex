@@ -1,8 +1,8 @@
 /*
  * Owner: apps/operator system-health projection.
- * Owns: adapter/host facts, topology graph, bind/auth disclosure, and capability-to-node mapping.
- * Does not own: binary resolution, provider IO, backend discovery, browser rendering, or security mutation.
- * Invariants: host architecture never becomes backend evidence and reference provider remains an independent branch.
+ * Owns: adapter/host facts, YVEX topology graph, bind/auth disclosure, and capability-to-node mapping.
+ * Does not own: binary resolution, comparison endpoint IO, backend discovery, browser rendering, or security mutation.
+ * Invariants: host architecture never becomes backend evidence and optional comparison state never enters primary health.
  * Boundary: adapter health is connectivity evidence, not native runtime readiness.
  */
 import { arch, cpus, platform, totalmem } from "node:os";
@@ -24,19 +24,17 @@ const topology: readonly [TopologyNodeId, string, TopologyNode["branch"], Capabi
   ["adapter-transport", "Adapter transport", "operator", "system.adapter-transport"],
   ["adapter-process", "Adapter process", "operator", "system.adapter-process"],
   ["adapter-api", "Adapter API", "operator", "system.adapter-api-compatible"],
-  ["yvex-configured", "YVEX configured", "native", "system.yvex-configured"],
-  ["yvex-resolved", "YVEX resolved", "native", "system.yvex-resolved"],
-  ["yvex-executable", "YVEX executable", "native", "system.yvex-executable"],
-  ["yvex-identity", "YVEX identity", "native", "system.yvex-identity"],
-  ["yvex-version", "YVEX compatibility", "native", "system.yvex-version-compatible"],
-  ["cpu-backend", "CPU backend", "native", "backend.cpu"],
-  ["cuda-backend", "CUDA backend", "native", "backend.cuda"],
-  ["target", "Release target", "native", "source.identity"],
-  ["artifact", "Admitted artifact", "native", "artifact.admitted"],
-  ["runtime", "Runtime binding", "native", "runtime.binding"],
-  ["native-generation", "Native generation", "native", "generation.native"],
-  ["reference-configured", "Reference configured", "reference", "provider.configured"],
-  ["reference-reachable", "Reference reachable", "reference", "provider.reachable"],
+  ["yvex-configured", "Explicit binary override", "yvex", "system.yvex-configured"],
+  ["yvex-resolved", "Active binary", "yvex", "system.yvex-resolved"],
+  ["yvex-executable", "YVEX executable", "yvex", "system.yvex-executable"],
+  ["yvex-identity", "YVEX identity", "yvex", "system.yvex-identity"],
+  ["yvex-version", "YVEX compatibility", "yvex", "system.yvex-version-compatible"],
+  ["cpu-backend", "CPU backend", "yvex", "backend.cpu"],
+  ["cuda-backend", "CUDA backend", "yvex", "backend.cuda"],
+  ["target", "Release target", "yvex", "source.identity"],
+  ["artifact", "Admitted artifact", "yvex", "artifact.admitted"],
+  ["runtime", "Runtime binding", "yvex", "runtime.binding"],
+  ["yvex-generation", "YVEX generation", "yvex", "generation.native"],
 ];
 
 /** Projects stable capability records into one topology node without changing status semantics. */
@@ -48,14 +46,16 @@ function topologyNodes(manifest: CapabilityManifest): TopologyNode[] {
       label,
       branch,
       status: item?.status ?? "unavailable",
-      reasonCode: item?.refusalCode ?? `${capabilityId}-ready`,
+      reasonCode:
+        item?.refusalCode ??
+        (item?.status === "empty" ? "explicit-override-not-configured" : `${capabilityId}-ready`),
       message: item?.reason ?? "Capability observation is unavailable.",
       observedAt: item?.lastObservedAt ?? manifest.observedAt,
     };
   });
 }
 
-/** Builds the complete browser/adapter/native/reference health topology from a normalized manifest. */
+/** Builds the complete browser/adapter/YVEX health topology from a normalized manifest. */
 export function buildSystemHealth(
   config: OperatorConfig,
   manifest: CapabilityManifest,

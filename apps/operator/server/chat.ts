@@ -1,9 +1,9 @@
 /*
- * Owner: apps/operator chat sessions and generation orchestration.
- * Owns: private local session persistence, reference streaming lifecycle, partial output, cancellation, metadata, and native-lane refusal.
- * Does not own: provider HTTP details, browser dock state, native generation, tokenizer behavior, or execution fallback.
- * Invariants: native sessions never call the reference provider; active assistant output survives cancellation and failure.
- * Boundary: completed reference messages remain explicitly owned by the Reference provider.
+ * Owner: apps/operator external reference-comparison sessions.
+ * Owns: private comparison-session persistence, external streaming lifecycle, partial output, cancellation, and metadata.
+ * Does not own: comparison HTTP details, primary workspace state, YVEX generation, tokenizer behavior, or fallback.
+ * Invariants: every session is explicitly reference-comparison; active output survives cancellation and failure.
+ * Boundary: completed messages remain owned by the External comparison endpoint and never become YVEX evidence.
  */
 import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
@@ -49,7 +49,7 @@ class ChatSessionStore {
     private readonly config: OperatorConfig,
     private readonly clock: () => number,
   ) {
-    this.path = join(config.configDirectory, "sessions.json");
+    this.path = join(config.configDirectory, "comparison-sessions.json");
   }
 
   /** Loads schema-valid session records defensively; corrupt local state fails empty. */
@@ -133,7 +133,7 @@ class ChatSessionStore {
   }
 }
 
-/** Coordinates explicit chat lanes and keeps provider execution ownership visible in every message. */
+/** Coordinates explicitly requested external comparisons and keeps execution ownership visible. */
 export class ChatService {
   private readonly store: ChatSessionStore;
   private readonly active = new Map<string, ActiveRequest>();
@@ -149,20 +149,19 @@ export class ChatService {
     this.store = new ChatSessionStore(config, clock);
   }
 
-  /** Creates one local session in the selected lane without probing or silently changing execution owner. */
+  /** Creates one local comparison session without probing or touching YVEX workspace state. */
   async create(input: unknown): Promise<ChatSession> {
     const value = createChatSessionSchema.parse(input);
     const publicSettings = await this.settings.publicSnapshot();
-    const model = value.model || publicSettings.referenceProvider.defaultModel || "unconfigured";
+    const model = value.model || publicSettings.comparisonEndpoint.defaultModel || "unconfigured";
     const now = new Date(this.clock()).toISOString();
     const session: ChatSession = {
       id: randomUUID(),
-      title: value.title ?? "New session",
-      lane: value.lane,
-      provider:
-        value.lane === "reference-provider" ? publicSettings.referenceProvider.displayName : null,
-      remoteModel: value.lane === "reference-provider" ? model : null,
-      nativeTarget: value.lane === "native-yvex" ? "deepseek4-v4-flash" : null,
+      title: value.title ?? "New comparison",
+      lane: "reference-comparison",
+      provider: publicSettings.comparisonEndpoint.displayName,
+      remoteModel: model,
+      nativeTarget: null,
       state: "idle",
       messages: [],
       generationParameters: {
@@ -189,7 +188,7 @@ export class ChatService {
     return this.store.list();
   }
 
-  /** Returns one session without starting provider or native work. */
+  /** Returns one session without starting comparison or YVEX work. */
   get(id: string): Promise<ChatSession | null> {
     return this.store.get(id);
   }
@@ -218,23 +217,21 @@ export class ChatService {
     return this.store.delete(id);
   }
 
-  /** Streams one reference request or returns an exact native-lane refusal without provider IO. */
+  /** Streams one explicitly requested external comparison and never touches YVEX execution. */
   async streamMessage(sessionId: string, input: unknown, emit: StreamEmitter): Promise<void> {
     const value = sendChatMessageSchema.parse(input);
     const existing = await this.store.get(sessionId);
     if (!existing) throw new Error("chat session not found");
     if (existing.activeRequestId) throw new Error("chat session already has an active request");
-    if (existing.lane === "native-yvex") {
-      throw new ProviderTransportError(
-        "native-generation-unavailable",
-        "Native YVEX generation is unavailable: runtime binding, tokenizer, streaming generation, and cancellation are not ready.",
-        false,
-      );
-    }
     const requestId = randomUUID();
     const assistantId = randomUUID();
     const userId = randomUUID();
-    const job = this.jobs.create("provider-chat", "Reference provider", "request-start", true);
+    const job = this.jobs.create(
+      "reference-comparison",
+      "External comparison endpoint",
+      "request-start",
+      true,
+    );
     const controller = new AbortController();
     this.jobs.registerCancellation(job.id, () => controller.abort());
     this.active.set(requestId, { controller, jobId: job.id, sessionId });
@@ -261,8 +258,8 @@ export class ChatService {
         createdAt: startedAt,
         completedAt: null,
         metadata: {
-          lane: "reference-provider",
-          executionOwner: "Reference provider",
+          lane: "reference-comparison",
+          executionOwner: "External comparison endpoint",
           provider: current.provider,
           model: value.parameters.model,
           requestId,
@@ -271,10 +268,10 @@ export class ChatService {
           evidence: [],
         },
       });
-      if (current.title === "New session") current.title = value.content.slice(0, 60);
+      if (current.title === "New comparison") current.title = value.content.slice(0, 60);
     });
     await emit({ type: "request-started", requestId, jobId: job.id });
-    this.jobs.transition(job.id, "starting", "provider-connect");
+    this.jobs.transition(job.id, "starting", "external-comparison-connect");
     try {
       this.jobs.transition(job.id, "running", "streaming");
       const providerMessages = session.messages
@@ -330,9 +327,9 @@ export class ChatService {
       });
       this.jobs.transition(job.id, "completed", "completed", { resultReference: sessionId });
       this.history.record(
-        "chat-generation",
+        "comparison-generation",
         "info",
-        "Reference provider generation completed.",
+        "External reference comparison completed.",
         requestId,
       );
       await emit({ type: "completion", requestId, session: completed });
@@ -350,9 +347,9 @@ export class ChatService {
         if (this.jobs.get(job.id)?.state === "cancelling")
           this.jobs.transition(job.id, "cancelled", "cancelled", { resultReference: sessionId });
         this.history.record(
-          "cancellation",
+          "comparison-cancellation",
           "warning",
-          "Reference provider generation cancelled; partial output preserved.",
+          "External reference comparison cancelled; partial output preserved.",
           requestId,
         );
         await emit({ type: "cancellation", requestId, session: cancelled });
@@ -361,8 +358,8 @@ export class ChatService {
           error instanceof ProviderTransportError
             ? error
             : new ProviderTransportError(
-                "provider-stream-failed",
-                "Reference provider stream failed.",
+                "comparison-stream-failed",
+                "External comparison stream failed.",
                 true,
               );
         await this.finishInterrupted(sessionId, assistantId, requestId, "failed");
@@ -370,7 +367,7 @@ export class ChatService {
           resultReference: sessionId,
           error: { code: failure.code, message: failure.message, retryable: failure.retryable },
         });
-        this.history.record("chat-generation", "error", failure.message, requestId);
+        this.history.record("comparison-generation", "error", failure.message, requestId);
         await emit({
           type: "structured-error",
           requestId,
@@ -383,7 +380,7 @@ export class ChatService {
     }
   }
 
-  /** Requests cancellation of one active provider request and never touches another session or lane. */
+  /** Requests cancellation of one active comparison and never touches YVEX or another session. */
   cancel(requestId: string): { requestId: string; jobId: string } {
     const active = this.active.get(requestId);
     if (!active) throw new Error("chat request not found");

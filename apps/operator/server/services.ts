@@ -1,6 +1,6 @@
 /*
  * Owner: apps/operator backend-for-frontend service assembly.
- * Owns: dependency composition for settings, resolver, producer adapter, jobs, events, provider, chat, and capabilities.
+ * Owns: dependency composition for settings, resolver, producer adapter, workspace, jobs, events, external comparison, and capabilities.
  * Does not own: HTTP routing, listener lifecycle, source facts, browser state, or native YVEX implementation.
  * Invariants: production and tests use the same service graph with only explicit transport/process doubles.
  * Boundary: assembling services does not make any downstream capability ready.
@@ -15,6 +15,7 @@ import { ReferenceProviderService } from "./provider.ts";
 import { BinaryResolver } from "./resolver.ts";
 import type { RunRequest, RunResult } from "./runner.ts";
 import { OperatorSettingsStore } from "./settings.ts";
+import { WorkspaceService } from "./workspace.ts";
 
 export interface OperatorServices {
   config: OperatorConfig;
@@ -22,10 +23,11 @@ export interface OperatorServices {
   resolver: BinaryResolver;
   adapter: OperatorAdapter;
   capabilities: CapabilityService;
+  workspace: WorkspaceService;
   events: EventHistory;
   jobs: JobManager;
   provider: ReferenceProviderService;
-  chat: ChatService;
+  comparison: ChatService;
 }
 
 export interface ServiceDependencies {
@@ -59,7 +61,19 @@ export function createOperatorServices(
     dependencies.fetcher ?? fetch,
     clock,
   );
-  const capabilities = new CapabilityService(resolver, adapter, provider, clock);
-  const chat = new ChatService(config, settings, provider, jobs, events, clock);
-  return { config, settings, resolver, adapter, capabilities, events, jobs, provider, chat };
+  const capabilities = new CapabilityService(resolver, adapter, clock);
+  const workspace = new WorkspaceService(config, adapter, capabilities, jobs, clock);
+  const comparison = new ChatService(config, settings, provider, jobs, events, clock);
+  return {
+    config,
+    settings,
+    resolver,
+    adapter,
+    capabilities,
+    workspace,
+    events,
+    jobs,
+    provider,
+    comparison,
+  };
 }
