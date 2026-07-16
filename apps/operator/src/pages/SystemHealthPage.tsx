@@ -1,147 +1,243 @@
 /*
- * Owner: apps/operator System health surface.
- * Owns: adapter connectivity, executable availability, and typed host topology projection.
- * Does not own: build identity, backend/CUDA facts, health mutation, process control, or model inspection.
- * Invariants: resolved absolute binary paths and secret-bearing environment values never render.
- * Boundary: executable availability and host architecture are not backend or runtime capability.
+ * Owner: apps/operator System Health workbench.
+ * Owns: full topology, binary resolution trace, adapter/version/bind security, host facts, and recovery links.
+ * Does not own: binary resolution policy, backend discovery, provider tests, authentication secrets, or health mutation.
+ * Invariants: browser, adapter, native YVEX, and reference provider are distinct nodes and branches.
+ * Boundary: adapter/process health and host architecture are not backend or runtime evidence.
  */
-import { Binary, Cpu, HeartPulse, MemoryStick, ServerCog } from "lucide-react";
+import { AlertTriangle, ArrowDown, LockKeyhole, Network } from "lucide-react";
 
-import { Card, KeyValue, MetricStrip, PageContent, PageHeader } from "../components/Primitives.tsx";
-import { EnvelopeFailure, StatusBadge, statusTone } from "../components/Status.tsx";
+import { operatorApi } from "../api.ts";
+import {
+  Fact,
+  FactGrid,
+  PageHeader,
+  Panel,
+  ResourceBoundary,
+  RouteTabs,
+  useRouteTab,
+} from "../components/Primitives.tsx";
+import { StatusBadge } from "../components/Status.tsx";
 import { pageMetadata } from "../navigation.ts";
-import { reportEnvelope, useOperatorView } from "../view-context.tsx";
-import { FactList, formatBytes, MissingEvidence } from "./PageSupport.tsx";
+import { useApiResource } from "../resource.ts";
+import { useOperatorState } from "../state/operator-state.tsx";
+import { DataTable, formatBytes } from "./PageSupport.tsx";
 
-/** Projects bounded local probes without exposing paths, environment secrets, or backend capability claims. */
+const tabs = [
+  { id: "topology", label: "Topology" },
+  { id: "binary", label: "Binary resolution" },
+  { id: "security", label: "Host & security" },
+] as const;
+
+/** Renders each connectivity layer and independent reference branch from typed health/resolution data. */
 export function SystemHealthPage() {
-  const { response } = useOperatorView();
-  const healthEnvelope = reportEnvelope(response, "adapterHealth");
-  const hostEnvelope = reportEnvelope(response, "hostProbe");
-  const health = healthEnvelope?.data;
-  const host = hostEnvelope?.data;
+  const app = useOperatorState();
+  const resolution = useApiResource("binary-resolution", operatorApi.binaryResolution);
+  const tab = useRouteTab(tabs, "topology");
   const page = pageMetadata["system-health"];
-
   return (
-    <>
+    <div className="page">
       <PageHeader
         eyebrow={page.eyebrow}
         title={page.label}
         summary={page.summary}
-        state={health?.state ?? "Unavailable"}
-        tabs={["Connectivity", "Host", "Backend"]}
+        actions={
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() =>
+              void operatorApi.reload().then(() => {
+                app.refreshAll();
+                resolution.refresh();
+              })
+            }
+          >
+            Reload configuration
+          </button>
+        }
       />
-      <PageContent>
-        <MetricStrip
-          items={[
-            {
-              label: "Adapter",
-              value: health?.state ?? "Unavailable",
-              detail: health ? `API ${health.apiVersion}` : "No typed health",
-              tone: statusTone(health?.state),
-            },
-            {
-              label: "YVEX binary",
-              value: health
-                ? health.binaryExecutable
-                  ? "Available"
-                  : "Unavailable"
-                : "Unavailable",
-              detail: health?.binaryLabel ?? "Redacted label",
-              tone: health?.binaryExecutable ? "green" : "amber",
-            },
-            {
-              label: "Host architecture",
-              value: host?.architecture ?? "Unavailable",
-              detail: host?.platform ?? "No local probe",
-              tone: host ? "neutral" : "amber",
-            },
-            {
-              label: "Backend evidence",
-              value: "Unavailable",
-              detail: "No stable JSON",
-              tone: "amber",
-            },
-          ]}
-        />
-
-        <div id="connectivity" className="grid grid-two">
-          <Card
-            title="Local adapter"
-            eyebrow="Configured listener"
-            action={health ? <StatusBadge value={health.state} /> : null}
-          >
-            {health ? (
-              <FactList>
-                <KeyValue label="Adapter version" value={health.adapterVersion} mono />
-                <KeyValue label="API" value={health.apiVersion} mono />
-                <KeyValue label="Bind" value={health.bindAddress} mono />
-                <KeyValue label="Uptime" value={`${health.uptimeSeconds}s`} mono />
-              </FactList>
-            ) : (
-              <EnvelopeFailure envelope={healthEnvelope} />
-            )}
-          </Card>
-          <Card
-            title="YVEX executable"
-            eyebrow="Existing binary only"
-            action={<Binary aria-hidden="true" size={19} />}
-          >
-            {health ? (
-              <FactList>
-                <KeyValue label="Label" value={health.binaryLabel} mono />
-                <KeyValue label="Resolution" value={health.binaryResolution} />
-                <KeyValue
-                  label="Executable"
-                  value={health.binaryExecutable ? "true" : "false"}
-                  mono
-                />
-                <KeyValue label="Absolute path" value="Redacted" />
-              </FactList>
-            ) : (
-              <EnvelopeFailure envelope={healthEnvelope} />
-            )}
-          </Card>
+      <RouteTabs tabs={tabs} defaultTab="topology" label="System health sections" />
+      {tab === "topology" ? (
+        <div role="tabpanel">
+          <ResourceBoundary resource={app.health}>
+            {(health) => {
+              const operatorNodes = health.topology.filter((node) => node.branch === "operator");
+              const nativeNodes = health.topology.filter((node) => node.branch === "native");
+              const referenceNodes = health.topology.filter((node) => node.branch === "reference");
+              const branch = (nodes: typeof health.topology) => (
+                <div className="topology-branch">
+                  {nodes.map((node, index) => (
+                    <div key={node.id}>
+                      <article>
+                        <div>
+                          <strong>{node.label}</strong>
+                          <code>{node.reasonCode}</code>
+                        </div>
+                        <StatusBadge status={node.status} />
+                        <p>{node.message}</p>
+                      </article>
+                      {index < nodes.length - 1 ? <ArrowDown aria-hidden="true" size={15} /> : null}
+                    </div>
+                  ))}
+                </div>
+              );
+              return (
+                <>
+                  <Panel
+                    title="Control-plane topology"
+                    description="A healthy adapter does not collapse downstream native or provider states."
+                  >
+                    <div className="topology-root">
+                      {branch(operatorNodes)}
+                      <div className="topology-fork">
+                        <section>
+                          <h3>Native YVEX branch</h3>
+                          {branch(nativeNodes)}
+                        </section>
+                        <section>
+                          <h3>Reference provider branch</h3>
+                          {branch(referenceNodes)}
+                        </section>
+                      </div>
+                    </div>
+                  </Panel>
+                </>
+              );
+            }}
+          </ResourceBoundary>
         </div>
-
-        <Card id="host" title="Host topology" eyebrow="Typed local-system probe">
-          {host ? (
-            <div className="host-metrics">
-              <div>
-                <ServerCog aria-hidden="true" size={19} />
-                <span>Platform</span>
-                <strong>{host.platform}</strong>
-              </div>
-              <div>
-                <Cpu aria-hidden="true" size={19} />
-                <span>Architecture</span>
-                <strong>{host.architecture}</strong>
-              </div>
-              <div>
-                <HeartPulse aria-hidden="true" size={19} />
-                <span>Logical processors</span>
-                <strong>{host.logicalProcessors}</strong>
-              </div>
-              <div>
-                <MemoryStick aria-hidden="true" size={19} />
-                <span>Physical memory</span>
-                <strong>{formatBytes(host.totalMemoryBytes)}</strong>
-              </div>
-            </div>
-          ) : (
-            <EnvelopeFailure envelope={hostEnvelope} />
-          )}
-        </Card>
-
-        <div id="backend" className="grid grid-two">
-          <Card title="Build identity" eyebrow="Machine-readable gap">
-            <MissingEvidence id="buildIdentityJson" />
-          </Card>
-          <Card title="Backend and CUDA" eyebrow="Machine-readable gap">
-            <MissingEvidence id="backendCapabilityJson" />
-          </Card>
+      ) : null}
+      {tab === "binary" ? (
+        <div role="tabpanel">
+          <ResourceBoundary resource={resolution}>
+            {(data) => (
+              <Panel
+                title="Deterministic resolution trace"
+                description="Persisted setting → environment → repository candidate → known build outputs → controlled PATH."
+              >
+                <div className="resolution-summary">
+                  <StatusBadge status={data.availability.status} />
+                  <strong>{data.selectedLabel ?? "No compatible binary selected"}</strong>
+                  <p>{data.availability.message}</p>
+                </div>
+                <DataTable label="YVEX binary candidates">
+                  <thead>
+                    <tr>
+                      <th>Order / source</th>
+                      <th>Safe path</th>
+                      <th>File</th>
+                      <th>Executable</th>
+                      <th>Identity</th>
+                      <th>Version</th>
+                      <th>Disposition</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.candidates.map((candidate, index) => (
+                      <tr key={candidate.id}>
+                        <td>
+                          <strong>{index + 1}</strong>
+                          <small>{candidate.source}</small>
+                        </td>
+                        <td>
+                          <code>{candidate.displayPath}</code>
+                        </td>
+                        <td>
+                          {candidate.exists && candidate.regularFile
+                            ? "regular"
+                            : candidate.exists
+                              ? "invalid"
+                              : "missing"}
+                        </td>
+                        <td>{candidate.executable ? "yes" : "no"}</td>
+                        <td>
+                          <StatusBadge
+                            status={
+                              candidate.identityStatus === "ready"
+                                ? "ready"
+                                : candidate.identityStatus === "not-probed"
+                                  ? "empty"
+                                  : candidate.identityStatus === "incompatible"
+                                    ? "blocked"
+                                    : "failed"
+                            }
+                            value={candidate.identityStatus}
+                          />
+                        </td>
+                        <td>{candidate.version ?? "—"}</td>
+                        <td>{candidate.rejectionReason ?? "selected"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </DataTable>
+              </Panel>
+            )}
+          </ResourceBoundary>
         </div>
-      </PageContent>
-    </>
+      ) : null}
+      {tab === "security" ? (
+        <div role="tabpanel">
+          <ResourceBoundary resource={app.health}>
+            {(health) => (
+              <div className="detail-layout">
+                <Panel
+                  title="Adapter exposure"
+                  description="Loopback is the default; remote mode fails closed."
+                >
+                  <FactGrid>
+                    <Fact label="Bind address" value={health.adapter.bindAddress} mono />
+                    <Fact label="Mode" value={health.adapter.bindMode} />
+                    <Fact
+                      label="Remote exposure"
+                      value={health.adapter.remoteExposure ? "enabled" : "disabled"}
+                    />
+                    <Fact
+                      label="Authentication required"
+                      value={health.adapter.authenticationRequired ? "yes" : "no"}
+                    />
+                    <Fact
+                      label="Authentication configured"
+                      value={health.adapter.authenticationConfigured ? "yes" : "no"}
+                    />
+                    <Fact
+                      label="API / adapter"
+                      value={`${health.adapter.apiVersion} / ${health.adapter.version}`}
+                    />
+                  </FactGrid>
+                  {health.adapter.remoteExposure ? (
+                    <div className="security-warning">
+                      <AlertTriangle aria-hidden="true" size={18} />
+                      Remote exposure is active. Origin allowlisting and bearer authentication are
+                      enforced.
+                    </div>
+                  ) : (
+                    <div className="security-ok">
+                      <LockKeyhole aria-hidden="true" size={18} />
+                      The adapter is local-only.
+                    </div>
+                  )}
+                </Panel>
+                <Panel title="Host topology" description="Local process facts only; no CUDA claim.">
+                  <FactGrid>
+                    <Fact label="Platform" value={health.host.platform} />
+                    <Fact label="Architecture" value={health.host.architecture} />
+                    <Fact label="Logical processors" value={health.host.logicalProcessors} />
+                    <Fact
+                      label="Physical memory"
+                      value={formatBytes(health.host.totalMemoryBytes)}
+                    />
+                    <Fact label="Node runtime" value={health.host.nodeRuntime} />
+                  </FactGrid>
+                  <div className="boundary-copy">
+                    <Network aria-hidden="true" size={15} /> Host architecture is never presented as
+                    CPU/CUDA backend evidence.
+                  </div>
+                </Panel>
+              </div>
+            )}
+          </ResourceBoundary>
+        </div>
+      ) : null}
+    </div>
   );
 }

@@ -1,145 +1,370 @@
 /*
- * Owner: apps/operator Evidence surface.
- * Owns: producer inventory, cache/exit observations, and missing machine-readable contract audit.
- * Does not own: CLI output, test execution, validation aggregation, source facts, or claims.
- * Invariants: producer commands are redacted fixed vectors and missing contracts remain visible.
- * Boundary: producer availability is provenance evidence, not model/runtime readiness.
+ * Owner: apps/operator Evidence workbench.
+ * Owns: producer registry, explicit safe runs, run/job history, cache state, command provenance, missing contracts, and detail inspection.
+ * Does not own: producer definitions, arbitrary command entry, native facts, validation execution, or capability promotion.
+ * Invariants: labels lead the UI while stable IDs remain secondary provenance; run actions submit only producer IDs.
+ * Boundary: producer availability and successful adaptation are not runtime readiness.
  */
-import { CheckCircle2, CircleSlash2, Clock3, TerminalSquare } from "lucide-react";
+import { Check, Clipboard, Play, TerminalSquare } from "lucide-react";
+import { useState } from "react";
 
-import type { EvidenceEnvelope } from "../../shared/contracts.ts";
-import { Card, MetricStrip, PageContent, PageHeader } from "../components/Primitives.tsx";
-import { AvailabilityBadge, StatusBadge } from "../components/Status.tsx";
+import type { ProducerDescriptor, ProducerRun } from "../../shared/contracts.ts";
+import { operatorApi } from "../api.ts";
+import {
+  PageHeader,
+  Panel,
+  ResourceBoundary,
+  RouteTabs,
+  useRouteTab,
+} from "../components/Primitives.tsx";
+import { StatusBadge } from "../components/Status.tsx";
 import { pageMetadata } from "../navigation.ts";
-import { useOperatorView } from "../view-context.tsx";
+import { useApiResource } from "../resource.ts";
+import { useOperatorState } from "../state/operator-state.tsx";
+import { DataTable, EmptyState } from "./PageSupport.tsx";
 
-/** Lists attached/missing producer contracts without executing validation or changing adapter cache state. */
-export function EvidencePage() {
-  const { response } = useOperatorView();
-  const reports = Object.values(response?.reports ?? {}) as EvidenceEnvelope<unknown>[];
-  const available = reports.filter((report) => report.availability === "available").length;
-  const missing = response?.missingProducers ?? [];
-  const page = pageMetadata.evidence;
+const tabs = [
+  { id: "producers", label: "Producers" },
+  { id: "runs", label: "Recent runs" },
+  { id: "cache", label: "Cache & gaps" },
+] as const;
 
+/** Renders one local producer detail inspector with copy and controlled run actions. */
+function ProducerInspector({
+  producer,
+  latest,
+  onRun,
+}: {
+  producer: ProducerDescriptor | null;
+  latest: ProducerRun | null;
+  onRun: (id: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  if (!producer)
+    return (
+      <aside className="detail-inspector">
+        <EmptyState
+          title="Select a producer"
+          detail="Inspect its command provenance, cache policy, dependencies, and latest structured result."
+        />
+      </aside>
+    );
   return (
-    <>
+    <aside className="detail-inspector producer-detail">
+      <header>
+        <span>{producer.domain}</span>
+        <h2>{producer.displayName}</h2>
+        <StatusBadge status={producer.availability.status} />
+      </header>
+      <p>{producer.description}</p>
+      <dl>
+        <div>
+          <dt>Stable ID</dt>
+          <dd>
+            <code>{producer.id}</code>
+          </dd>
+        </div>
+        <div>
+          <dt>Cache</dt>
+          <dd>
+            {producer.cachePolicy}
+            {producer.ttlMs === null ? "" : ` · ${producer.ttlMs} ms`}
+          </dd>
+        </div>
+        <div>
+          <dt>Timeout</dt>
+          <dd>{producer.timeoutMs} ms</dd>
+        </div>
+        <div>
+          <dt>Output ceiling</dt>
+          <dd>{producer.maxOutputBytes.toLocaleString()} bytes</dd>
+        </div>
+        <div>
+          <dt>Latest exit</dt>
+          <dd>{latest?.envelope?.exit.state ?? producer.lastExit.state}</dd>
+        </div>
+      </dl>
+      <div className="command-box">
+        <TerminalSquare aria-hidden="true" size={15} />
+        <code>{producer.displayCommand}</code>
+        <button
+          type="button"
+          aria-label={`Copy ${producer.displayName} command`}
+          onClick={() =>
+            void navigator.clipboard.writeText(producer.displayCommand).then(() => setCopied(true))
+          }
+        >
+          {copied ? (
+            <Check aria-hidden="true" size={15} />
+          ) : (
+            <Clipboard aria-hidden="true" size={15} />
+          )}
+        </button>
+      </div>
+      {latest?.envelope?.refusal ? (
+        <div className="structured-refusal">
+          <strong>{latest.envelope.refusal.code}</strong>
+          <p>{latest.envelope.refusal.message}</p>
+        </div>
+      ) : null}
+      <button
+        type="button"
+        className="button primary"
+        disabled={producer.availability.status !== "ready"}
+        onClick={() => onRun(producer.id)}
+      >
+        <Play aria-hidden="true" size={14} /> Run safe producer
+      </button>
+    </aside>
+  );
+}
+
+/** Operates the allowlisted producer evidence lane and exposes bounded recent history. */
+export function EvidencePage() {
+  const producers = useApiResource("producer-registry", operatorApi.producers);
+  const app = useOperatorState();
+  const tab = useRouteTab(tabs, "producers");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [running, setRunning] = useState<string | null>(null);
+  const page = pageMetadata.evidence;
+  const run = async (id: string): Promise<void> => {
+    setRunning(id);
+    try {
+      await operatorApi.runProducer(id);
+      app.refreshAll();
+    } finally {
+      setRunning(null);
+    }
+  };
+  return (
+    <div className="page">
       <PageHeader
         eyebrow={page.eyebrow}
         title={page.label}
         summary={page.summary}
-        state={response ? "report-only" : "Unavailable"}
-        tabs={["Producers", "Missing contracts", "Cache"]}
+        actions={
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => {
+              producers.refresh();
+              app.refreshAll();
+            }}
+          >
+            Refresh evidence
+          </button>
+        }
       />
-      <PageContent>
-        <MetricStrip
-          items={[
-            {
-              label: "Attached producers",
-              value: response ? String(reports.length) : "Unavailable",
-              detail: "Current evidence route",
-              tone: response ? "neutral" : "amber",
-            },
-            {
-              label: "Available",
-              value: response ? String(available) : "Unavailable",
-              detail: "Validated envelopes",
-              tone: available ? "green" : "amber",
-            },
-            {
-              label: "Missing contracts",
-              value: response ? String(missing.length) : "Unavailable",
-              detail: "Explicit audit records",
-              tone: missing.length ? "amber" : "neutral",
-            },
-            { label: "Arbitrary commands", value: "0", detail: "No API route", tone: "cyan" },
-          ]}
-        />
-
-        <Card
-          id="producers"
-          title="Audited evidence producers"
-          eyebrow="Allowlist and typed envelopes"
-        >
-          <div className="evidence-table" role="table" aria-label="Audited evidence producers">
-            <div className="evidence-table-head" role="row">
-              <span role="columnheader">Producer</span>
-              <span role="columnheader">Availability</span>
-              <span role="columnheader">Last exit</span>
-              <span role="columnheader">Cache</span>
-              <span role="columnheader">Command</span>
-            </div>
-            {reports.map((report) => (
-              <div className="evidence-table-row" role="row" key={report.producer.id}>
-                <div role="cell">
-                  <strong>{report.producer.label}</strong>
-                  <small>{report.producer.evidenceClass}</small>
+      <RouteTabs tabs={tabs} defaultTab="producers" label="Evidence sections" />
+      {tab === "producers" ? (
+        <div role="tabpanel">
+          <ResourceBoundary resource={producers}>
+            {(response) => {
+              const selected =
+                response.producers.find((producer) => producer.id === selectedId) ?? null;
+              const latest =
+                app.runs.data?.runs.find((item) => item.producerId === selected?.id) ?? null;
+              return (
+                <div className="inventory-layout">
+                  <Panel
+                    title="Producer registry"
+                    description="Only adapter-owned machine-readable commands can run."
+                  >
+                    {response.producers.length ? (
+                      <DataTable label="Allowlisted producers">
+                        <thead>
+                          <tr>
+                            <th>Producer</th>
+                            <th>Domain</th>
+                            <th>Availability</th>
+                            <th>Last run</th>
+                            <th>Exit</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {response.producers.map((producer) => (
+                            <tr
+                              className={selected?.id === producer.id ? "selected-row" : ""}
+                              key={producer.id}
+                            >
+                              <td>
+                                <button
+                                  type="button"
+                                  className="table-link"
+                                  onClick={() => setSelectedId(producer.id)}
+                                >
+                                  {producer.displayName}
+                                </button>
+                                <small>{producer.description}</small>
+                              </td>
+                              <td>{producer.domain}</td>
+                              <td>
+                                <StatusBadge status={producer.availability.status} />
+                              </td>
+                              <td>
+                                {producer.lastExecutionAt
+                                  ? new Date(producer.lastExecutionAt).toLocaleTimeString()
+                                  : "Never"}
+                              </td>
+                              <td>{producer.lastExit.state}</td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="button secondary"
+                                  disabled={
+                                    producer.availability.status !== "ready" || running !== null
+                                  }
+                                  onClick={() => void run(producer.id)}
+                                >
+                                  {running === producer.id ? "Running…" : "Run"}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </DataTable>
+                    ) : (
+                      <EmptyState detail="No producer definition is registered." />
+                    )}
+                  </Panel>
+                  <ProducerInspector
+                    producer={selected}
+                    latest={latest}
+                    onRun={(id) => void run(id)}
+                  />
                 </div>
-                <div role="cell">
-                  <AvailabilityBadge value={report.availability} />
-                </div>
-                <div role="cell" className="exit-cell">
-                  {report.lastExit.state === "ok" ? (
-                    <CheckCircle2 aria-hidden="true" size={15} />
-                  ) : (
-                    <CircleSlash2 aria-hidden="true" size={15} />
-                  )}
-                  <span>
-                    {report.lastExit.code ?? "—"} / {report.lastExit.state}
-                  </span>
-                </div>
-                <div role="cell">
-                  <Clock3 aria-hidden="true" size={14} /> {report.producer.cachePolicy}
-                </div>
-                <code role="cell">{report.producer.displayCommand}</code>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card
-          id="missing-contracts"
-          title="Missing machine-readable contracts"
-          eyebrow="Audited, not inferred"
-        >
-          <div className="missing-contract-list">
-            {missing.map((producer) => (
-              <article key={producer.id}>
-                <div>
-                  <span className="micro-label">{producer.surface}</span>
-                  <strong>{producer.label}</strong>
-                </div>
-                <AvailabilityBadge value={producer.availability} />
-                <p>{producer.reason}</p>
-                <code>{producer.auditedCommand ?? "No stable JSON command"}</code>
-              </article>
-            ))}
-          </div>
-        </Card>
-
-        <div id="cache" className="grid grid-two">
-          <Card title="Cache contract" eyebrow="Evidence freshness">
-            <ul className="check-list">
-              <li>Static target reports: immutable for the adapter process</li>
-              <li>Artifact and host state: short bounded TTL</li>
-              <li>Failures and unavailable binaries: never cached as success</li>
-              <li>Browser requests: no fixture or invented fallback</li>
-            </ul>
-          </Card>
-          <Card title="Execution boundary" eyebrow="Process adapter">
-            <div className="icon-copy">
-              <TerminalSquare aria-hidden="true" size={24} />
-              <div>
-                <strong>Argument arrays only</strong>
-                <p>
-                  Shell execution is disabled; timeouts, output ceilings, cancellation, status
-                  validation, and schema checks apply to every CLI producer.
-                </p>
-              </div>
-            </div>
-            <StatusBadge value="read-only" tone="cyan" />
-          </Card>
+              );
+            }}
+          </ResourceBoundary>
         </div>
-      </PageContent>
-    </>
+      ) : null}
+      {tab === "runs" ? (
+        <div role="tabpanel" className="split-grid">
+          <Panel title="Producer runs" description="Explicit runs with job and result references.">
+            {app.runs.data?.runs.length ? (
+              <DataTable label="Recent producer runs">
+                <thead>
+                  <tr>
+                    <th>Producer</th>
+                    <th>Started</th>
+                    <th>Duration</th>
+                    <th>Availability</th>
+                    <th>Job</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {app.runs.data.runs.map((record) => (
+                    <tr key={record.runId}>
+                      <td>
+                        {producers.data?.producers.find((item) => item.id === record.producerId)
+                          ?.displayName ?? record.producerId}
+                      </td>
+                      <td>{new Date(record.startedAt).toLocaleString()}</td>
+                      <td>{record.envelope?.durationMs ?? "—"} ms</td>
+                      <td>
+                        <StatusBadge status={record.envelope?.availability.status ?? "loading"} />
+                      </td>
+                      <td>
+                        <code>{record.jobId.slice(0, 8)}</code>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </DataTable>
+            ) : (
+              <EmptyState detail="No explicit producer run has been requested." />
+            )}
+          </Panel>
+          <Panel
+            title="Jobs"
+            description="Queued, running, cancellation, and terminal control-plane state."
+          >
+            {app.jobs.data?.jobs.length ? (
+              <div className="job-list">
+                {app.jobs.data.jobs.map((job) => (
+                  <article key={job.id}>
+                    <div>
+                      <strong>{job.type}</strong>
+                      <span>
+                        {job.executionOwner} · {job.phase ?? "—"}
+                      </span>
+                    </div>
+                    <StatusBadge
+                      value={job.state}
+                      status={
+                        ["queued", "starting", "running", "cancelling"].includes(job.state)
+                          ? "loading"
+                          : job.state === "completed"
+                            ? "ready"
+                            : job.state === "failed"
+                              ? "failed"
+                              : "degraded"
+                      }
+                    />
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <EmptyState detail="No bounded Operator job exists." />
+            )}
+          </Panel>
+        </div>
+      ) : null}
+      {tab === "cache" ? (
+        <div role="tabpanel" className="detail-layout">
+          <Panel
+            title="Cache observations"
+            description="Success caching never conceals missing binaries or malformed producer output."
+          >
+            <ul className="plain-list">
+              <li>
+                Immutable: target catalog, release decision, and target detail for this adapter
+                process.
+              </li>
+              <li>Short TTL: artifact inventory and binary resolution.</li>
+              <li>
+                Never success-cache: timeout, malformed JSON, schema mismatch, refusal, or missing
+                binary.
+              </li>
+              <li>
+                Settings mutations invalidate affected resolver, provider, and producer
+                observations.
+              </li>
+            </ul>
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => void operatorApi.clearCache().then(app.refreshAll)}
+            >
+              Clear safe Operator caches
+            </button>
+          </Panel>
+          <Panel
+            title="Missing machine-readable contracts"
+            description="Grouped by stable capability rather than repeated empty cards."
+          >
+            <div className="missing-contracts">
+              {(app.capabilities.data?.capabilities ?? [])
+                .filter(
+                  (item) =>
+                    ["unavailable", "unsupported"].includes(item.status) &&
+                    !item.id.startsWith("runtime.") &&
+                    !item.id.startsWith("generation."),
+                )
+                .map((item) => (
+                  <article key={item.id}>
+                    <div>
+                      <strong>{item.id}</strong>
+                      <p>{item.reason}</p>
+                    </div>
+                    <StatusBadge status={item.status} />
+                  </article>
+                ))}
+            </div>
+          </Panel>
+        </div>
+      ) : null}
+    </div>
   );
 }

@@ -361,6 +361,7 @@ in a conversation or closure report is not part of the architecture.
 | CUDA | Production C contains no fallback PTX. Context, Driver API memory operations, generated-bundle admission, resolved functions, and exact primitive variants are distinct typed facts. A no-`nvcc` build refuses every kernel before dispatch; the admitted generated bundle passes bounded GB10 reference proofs. Direct encoded F32, F16, BF16, I32, Q8_0, Q2_K, and MXFP4 row-dot paths match CPU reference exactly. The DeepSeek/v0.1 required-operation gate remains unsupported. |
 | Transformer | Family-correct DeepSeek attention, positions, KV, MoE, repeated layers, and final norm are unsupported. |
 | Text path | Exact tokenizer-backed autoregressive DeepSeek text generation is unsupported. |
+| Operator | The loopback-first web control plane now has deterministic machine-readable YVEX resolution, typed capability and producer contracts, redacted local settings, bounded jobs/events, functional route and inspection surfaces, and a real cancellable OpenAI-compatible reference-provider chat lane. Native YVEX generation remains capability-gated and unsupported. |
 | Evaluation | No release-path generation evaluation exists. |
 | Benchmark | Not measured. |
 | Release | Blocked. |
@@ -550,8 +551,8 @@ another supported model.
 
 The recovery baseline contained 629 table entries across 24 tracks. Two source
 rows held paired IDs; those are expanded into 631 unique recovered IDs. The
-canonical architecture now contains 25 tracks. Forty-six new milestone/future
-IDs and two explicit migration markers produce 679 unique canonical IDs.
+canonical architecture now contains 25 tracks. Forty-seven new milestone/future
+IDs and two explicit migration markers produce 680 unique canonical IDs.
 
 ### 7.1 Global Counts
 
@@ -561,10 +562,10 @@ calculated from rows rather than protected by a summary hash.
 | Metric | Count |
 | --- | ---: |
 | Recovered IDs | 631 |
-| Explicit new IDs | 48 |
-| Canonical IDs | 679 |
+| Explicit new IDs | 49 |
+| Canonical IDs | 680 |
 | First-class milestones | 40 |
-| State: complete | 224 |
+| State: complete | 225 |
 | State: active | 1 |
 | State: partial | 1 |
 | State: blocked | 20 |
@@ -595,7 +596,7 @@ calculated from rows rather than protected by a summary hash.
 | `TRACK.SAMPLING` | Deterministic and stochastic token selection over real vocabulary logits, seeding, reproducibility, validation, and refusal. | bounded fixture sampling only | Selected token IDs derive from real output-head logits. |
 | `TRACK.TOKENIZER` | Exact tokenizer loading, prompt encoding, templates, special/EOS/stop policy, append boundary, detokenization, and failure behavior. | metadata and token-ID contract evidence only | Prompt text and generated IDs traverse the exact tokenizer contract. |
 | `TRACK.GENERATION` | Tokenizer/prefill/KV/decode/logits/sampling composition, append, stop, cancellation, partial output, trace, cleanup, and autoregression. | bounded diagnostic control flow only | Multiple real autoregressive tokens become detokenized text. |
-| `TRACK.OPERATOR` | CLI grammar, command adaptation, typed input, dispatch, rendering, refusal, control-plane integration, topology guards, and operator acceptance. | substantial control-plane/topology work exists; release command is unsupported | One truthful command invokes the accepted runtime path without owning domain behavior. |
+| `TRACK.OPERATOR` | CLI grammar, command adaptation, typed input, dispatch, rendering, refusal, control-plane integration, topology guards, and operator acceptance. | the loopback-first web control plane and reference-provider lane are operational; the native release command remains unsupported | One truthful native command invokes the accepted runtime path without owning domain behavior. |
 | `TRACK.SERVE` | Runtime-backed daemon generation, streaming, cancellation, observability, and protocol compatibility. | deferred outside v0.1.0 | Defined only after real local generation is stable and separately scoped. |
 | `TRACK.EVAL` | Release-path correctness, regression, failure, tokenizer, context, and capability evaluation. | blocked by real generation | Repeatable evaluation passes over the release path. |
 | `TRACK.BENCH` | Reproducible machine, artifact, qtype, context, prefill, decode, generation, timing, throughput, and memory measurements. | not measured | Accepted DGX Spark benchmark evidence over the release path. |
@@ -629,7 +630,7 @@ closure.
 | `TRACK.SAMPLING` | 15 | 16 | 0/0/0/0/1/0 | 4 | 11 | 0 |
 | `TRACK.TOKENIZER` | 13 | 14 | 0/0/0/0/1/0 | 2 | 11 | 0 |
 | `TRACK.GENERATION` | 53 | 54 | 0/0/0/0/1/0 | 22 | 31 | 0 |
-| `TRACK.OPERATOR` | 81 | 82 | 0/0/0/1/1/0 | 37 | 43 | 0 |
+| `TRACK.OPERATOR` | 81 | 83 | 0/0/0/1/1/0 | 38 | 43 | 0 |
 | `TRACK.SERVE` | 12 | 12 | 0/0/0/0/0/0 | 0 | 12 | 0 |
 | `TRACK.EVAL` | 15 | 16 | 0/0/0/0/1/0 | 0 | 15 | 0 |
 | `TRACK.BENCH` | 16 | 17 | 0/0/0/0/0/1 | 0 | 16 | 0 |
@@ -1570,9 +1571,9 @@ target or payload snapshot exists.
 
 **Owner:** CLI grammar, command adaptation, typed input, dispatch, rendering, refusal, control-plane integration, topology guards, and operator acceptance.
 
-**Current truth:** substantial control-plane/topology work exists; release command is unsupported
+**Current truth:** the loopback-first web control plane and reference-provider lane are operational; the native release command remains unsupported
 
-**Ledger summary:** 81 recovered IDs; 2 first-class milestones; 37 complete support rows; 43 open support rows; 0 superseded/deferred rows.
+**Ledger summary:** 81 recovered IDs; 2 first-class milestones; 38 complete support rows; 43 open support rows; 0 superseded/deferred rows.
 
 #### First-Class Milestones
 
@@ -1585,6 +1586,7 @@ target or payload snapshot exists.
 
 | Wave | Rank | Scope | State | Exact retained outcome or requirement | Consumer or enclosing milestone |
 | --- | --- | --- | --- | --- | --- |
+| `YVEX.OPERATOR.E2E.0` | `capability` | common | `complete` | Deliver the loopback-first Operator BFF, deterministic binary handshake and resolution, typed capability and producer contracts, redacted settings, bounded jobs/events, functional routes, command palette, and real cancellable OpenAI-compatible reference-provider chat while native generation remains gated. | V010.CLI.DEEPSEEK.GENERATE.0 |
 | `SPINE.OUTPUT.UX.CONTRACT.0` | `evidence` | common | `complete` | Define CLI output UX contract and diagnostic demotion plan. | V010.PROJECT.RECOVERY.1 |
 | `CLI.ARCH.AUDIT.0` | `evidence` | common | `complete` | Inventory print/output pressure and porcelain/plumbing doctrine. | V010.CLI.DEEPSEEK.GENERATE.0 |
 | `SPINE.CLI.REBASE.1` | `capability` | common | `complete` | Rebase Operator CLI track after V010.CLI.26 grammar work. | V010.PROJECT.RECOVERY.1 |

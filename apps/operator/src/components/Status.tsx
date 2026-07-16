@@ -1,89 +1,71 @@
 /*
  * Owner: apps/operator semantic status presentation.
- * Owns: compact status badges, availability labels, and evidence-empty states.
- * Does not own: status calculation, producer execution, capability promotion, or page layout.
- * Invariants: raw YVEX values remain visible and semantic colors are used consistently.
- * Boundary: color and labels never turn missing evidence into success.
+ * Owns: exact status labels, tones, dots, and compact state badges.
+ * Does not own: capability calculation, producer execution, retries, layout, or readiness promotion.
+ * Invariants: semantic color follows closed status values and raw machine values remain visible.
+ * Boundary: presentation cannot convert missing evidence into success.
  */
-import { AlertTriangle, Ban, CircleDashed, CircleOff, Info } from "lucide-react";
+import type { AvailabilityStatus } from "../../shared/contracts.ts";
 
-import type { Availability, EvidenceEnvelope } from "../../shared/contracts.ts";
+export type StatusTone = "ready" | "info" | "warning" | "danger" | "neutral" | "running";
 
-export type StatusTone = "cyan" | "green" | "amber" | "red" | "neutral";
+const statusToneMap: Readonly<Record<AvailabilityStatus, StatusTone>> = {
+  loading: "running",
+  ready: "ready",
+  empty: "neutral",
+  degraded: "warning",
+  blocked: "warning",
+  unsupported: "neutral",
+  unavailable: "neutral",
+  failed: "danger",
+  stale: "warning",
+};
 
-/** Maps exact status vocabulary to visual tone without changing the displayed value. */
-export function statusTone(value: string | null | undefined): StatusTone {
-  const status = (value ?? "").toLowerCase();
-  if (/unsupported|refused|invalid|corrupt/.test(status)) return "red";
-  if (/blocked|unavailable|missing|unselected|not-produced/.test(status)) return "amber";
-  if (/complete|verified|available|present|pass|admitted/.test(status)) return "green";
-  if (/selected|mapping-specified|source-intake/.test(status)) return "cyan";
+/** Maps exact availability vocabulary to one restrained visual tone. */
+export function availabilityTone(status: AvailabilityStatus): StatusTone {
+  return statusToneMap[status];
+}
+
+/** Maps exact machine status values for visual contrast only, without changing their text or semantics. */
+export function machineTone(value: string | null | undefined): StatusTone {
+  if (!value) return "neutral";
+  if (["complete", "verified", "present", "ready", "available", "admitted", "pass"].includes(value))
+    return "ready";
+  if (["selected", "mapping-specified", "source-intake", "report-only"].includes(value))
+    return "info";
+  if (["blocked", "not-produced", "unselected", "degraded", "stale"].includes(value))
+    return "warning";
+  if (["failed", "invalid", "corrupt", "refused"].includes(value)) return "danger";
   return "neutral";
 }
 
-/** Purely renders an exact borrowed status string; it performs no state or capability mutation. */
-export function StatusBadge({ value, tone }: { value: string; tone?: StatusTone }) {
-  return <span className={`status-badge status-${tone ?? statusTone(value)}`}>{value}</span>;
-}
-
-/** Converts the closed availability vocabulary to a visible badge without changing its semantics. */
-export function AvailabilityBadge({ value }: { value: Availability }) {
-  const label: Record<Availability, string> = {
-    available: "Available",
-    unavailable: "Unavailable",
-    blocked: "Blocked",
-    unsupported: "Unsupported",
-    "not-measured": "Not measured",
-  };
-  return <StatusBadge value={label[value]} />;
-}
-
-const availabilityIcon = {
-  available: Info,
-  unavailable: CircleOff,
-  blocked: AlertTriangle,
-  unsupported: Ban,
-  "not-measured": CircleDashed,
-} as const;
-
-/** Renders an explicit empty/refusal state and performs no IO or fallback data allocation. */
-export function EvidenceState({
-  availability,
-  title,
-  detail,
-  compact = false,
+/** Renders one exact borrowed label with either an explicit or availability-derived tone. */
+export function StatusBadge({
+  value,
+  status,
+  tone,
 }: {
-  availability: Availability;
-  title?: string;
-  detail: string;
-  compact?: boolean;
+  value?: string;
+  status?: AvailabilityStatus;
+  tone?: StatusTone;
 }) {
-  const Icon = availabilityIcon[availability];
+  const label = value ?? status ?? "unavailable";
+  const resolvedTone = tone ?? (status ? availabilityTone(status) : machineTone(value));
   return (
-    <div
-      className={`evidence-state${compact ? " evidence-state-compact" : ""}`}
-      data-availability={availability}
-    >
-      <Icon aria-hidden="true" size={compact ? 16 : 19} />
-      <div>
-        <div className="evidence-state-heading">
-          <strong>{title ?? availability.replace("-", " ")}</strong>
-          <AvailabilityBadge value={availability} />
-        </div>
-        <p>{detail}</p>
-      </div>
-    </div>
+    <span className={`status-badge tone-${resolvedTone}`} data-status={status ?? value}>
+      <span className="status-dot" aria-hidden="true" />
+      {label}
+    </span>
   );
 }
 
-/** Projects an unavailable envelope issue without parsing or reclassifying its producer failure. */
-export function EnvelopeFailure({ envelope }: { envelope: EvidenceEnvelope<unknown> | null }) {
-  const availability = envelope?.availability ?? "unavailable";
+/** Renders a compact status dot with an accessible borrowed label. */
+export function StatusDot({ status, label }: { status: AvailabilityStatus; label: string }) {
   return (
-    <EvidenceState
-      availability={availability}
-      title={envelope?.producer.label ?? "Producer unavailable"}
-      detail={envelope?.issue?.summary ?? "No validated machine-readable evidence is available."}
+    <span
+      className={`semantic-dot tone-${availabilityTone(status)}`}
+      aria-label={`${label}: ${status}`}
+      title={`${label}: ${status}`}
     />
   );
 }

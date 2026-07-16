@@ -1,219 +1,219 @@
 /*
- * Owner: apps/operator automated tests.
- * Owns: test-only adapter configuration and typed browser response factories.
- * Does not own: production fallback, runtime configuration, source facts, or model IO.
- * Invariants: every fixture is explicitly selected by a test and remains below tests/.
- * Boundary: fixture data validates operator behavior only.
+ * Owner: apps/operator automated test harness.
+ * Owns: isolated configuration, deterministic YVEX/provider doubles, ephemeral BFF listeners, and cleanup.
+ * Does not own: production fallback, native runtime facts, external network traffic, or browser fixtures outside tests.
+ * Invariants: every harness uses a private temporary configuration directory and loopback-only listener.
+ * Boundary: fixture readiness validates Operator behavior only and never promotes native YVEX capability.
  */
-import { resolve } from "node:path";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
-import type {
-  AdapterHealth,
-  ArtifactInventory,
-  EvidenceEnvelope,
-  HostProbe,
-  MissingProducerDescriptor,
-  OperatorViewResponse,
-  ProducerDataMap,
-  ProducerId,
-  ReleaseDecision,
-  ReportMap,
-  TargetCatalog,
-  TargetDetail,
-  ViewId,
-} from "../shared/contracts.ts";
 import type { OperatorConfig } from "../server/config.ts";
+import { createOperatorHttpServer } from "../server/http.ts";
+import {
+  createOperatorServices,
+  type OperatorServices,
+  type ServiceDependencies,
+} from "../server/services.ts";
 
 export const fakeYvexPath = resolve(process.cwd(), "tests/fixtures/fake-yvex.mjs");
+export const fakeProviderModel = "fixture-reference-model";
 
+/** Builds one fully explicit loopback test configuration with only the selected fake YVEX candidate. */
 export function testConfig(
   scenario = "default",
   overrides: Partial<OperatorConfig> = {},
 ): OperatorConfig {
+  const unavailableRoot = resolve(tmpdir(), "yvex-operator-no-repository-binary");
   return {
     host: "127.0.0.1",
     port: 4317,
-    binaryRequest: fakeYvexPath,
-    binarySearchPath: process.env.PATH ?? "",
-    modelsRoot: undefined,
-    immutableTimeoutMs: 500,
-    mutableTimeoutMs: 500,
-    maxOutputBytes: 32_768,
-    mutableTtlMs: 250,
+    bindMode: "loopback",
+    remoteExposure: false,
+    authToken: null,
+    allowedOrigins: [],
+    binaryEnvironmentCandidate: fakeYvexPath,
+    binarySearchPath: "",
     binaryLookupTtlMs: 250,
+    repositoryRoot: unavailableRoot,
+    repositoryBuildCandidate: resolve(unavailableRoot, "yvex"),
+    knownBuildCandidates: [],
+    configDirectory: resolve(tmpdir(), "yvex-operator-test-config"),
     childEnvironment: {
       PATH: process.env.PATH,
       LC_ALL: "C",
       YVEX_FAKE_SCENARIO: scenario,
     },
+    allowRemoteProviders: false,
+    eventRetention: 100,
+    sessionRetention: 20,
+    modelsRoot: undefined,
+    immutableTimeoutMs: 500,
+    mutableTimeoutMs: 500,
+    maxOutputBytes: 32_768,
+    mutableTtlMs: 250,
     ...overrides,
   };
 }
 
-export const decisionFixture: ReleaseDecision = {
-  status: "target-selected-mapping-specified",
-  release: "v0.1.0",
-  selected_target_id: "deepseek4-v4-flash",
-  upstream_repository: "deepseek-ai/DeepSeek-V4-Flash",
-  source_verification: "complete",
-  architecture_ir: "complete",
-  tensor_coverage: "complete",
-  gguf_mapping: "complete",
-  release_qtype: null,
-  artifact_status: "not-produced",
-  runtime: "unsupported",
-  generation: "unsupported",
-  evaluation: "not-run",
-  benchmark: "not-measured",
-  next: "V010.SOURCE.PAYLOAD.STREAM.0",
-};
+export interface ProviderDoubleOptions {
+  delayMs?: number;
+  failModels?: boolean;
+  failChat?: boolean;
+  lineEnding?: "\n" | "\r\n";
+  onRequest?: (url: URL, init: RequestInit | undefined) => void;
+}
 
-export const detailFixture: TargetDetail = {
-  status: "model-target",
-  target_id: "deepseek4-v4-flash",
-  family: "DeepSeek",
-  class: "release-source-target",
-  release_selected: true,
-  upstream_repository: "deepseek-ai/DeepSeek-V4-Flash",
-  source_status: "verification-required",
-  artifact_status: "not-produced",
-  runtime: "unsupported",
-  generation: "unsupported",
-  next: "V010.SOURCE.PAYLOAD.STREAM.0",
-};
+/** Creates a deterministic OpenAI-compatible fetch double with real incremental ReadableStream frames. */
+export function providerFetcher(options: ProviderDoubleOptions = {}): typeof fetch {
+  const fetcher: typeof fetch = (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : input.toString());
+    options.onRequest?.(url, init);
+    if (url.pathname.endsWith("/models")) {
+      if (options.failModels)
+        return Promise.resolve(new Response("provider unavailable", { status: 503 }));
+      return Promise.resolve(
+        Response.json({ object: "list", data: [{ id: fakeProviderModel, object: "model" }] }),
+      );
+    }
+    if (!url.pathname.endsWith("/chat/completions"))
+      return Promise.resolve(new Response(null, { status: 404 }));
+    if (options.failChat) return Promise.resolve(new Response("provider refused", { status: 503 }));
+    const body =
+      typeof init?.body === "string"
+        ? (JSON.parse(init.body) as { messages?: Array<{ content?: string }> })
+        : {};
+    const prompt = body.messages?.at(-1)?.content ?? "";
+    const pieces =
+      prompt === "Reply with OK."
+        ? ["OK"]
+        : /slow|cancel/i.test(prompt)
+          ? ["Partial ", "reference ", "response ", "continues."]
+          : ["Reference ", "response."];
+    const encoder = new TextEncoder();
+    const lineEnding = options.lineEnding ?? "\n";
+    const separator = `${lineEnding}${lineEnding}`;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let index = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const closeForAbort = (): void => {
+          if (timer) clearTimeout(timer);
+          try {
+            controller.error(new DOMException("cancelled", "AbortError"));
+          } catch {
+            /* Stream is already closed. */
+          }
+        };
+        init?.signal?.addEventListener("abort", closeForAbort, { once: true });
+        const push = (): void => {
+          if (init?.signal?.aborted) return closeForAbort();
+          if (index < pieces.length) {
+            const chunk = { choices: [{ delta: { content: pieces[index] }, finish_reason: null }] };
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}${separator}`));
+            index += 1;
+            timer = setTimeout(push, options.delayMs ?? 5);
+            return;
+          }
+          const usage = {
+            choices: [{ delta: {}, finish_reason: "stop" }],
+            usage: {
+              prompt_tokens: 4,
+              completion_tokens: pieces.length,
+              total_tokens: 4 + pieces.length,
+            },
+          };
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(usage)}${separator}data: [DONE]${separator}`),
+          );
+          controller.close();
+        };
+        timer = setTimeout(push, options.delayMs ?? 5);
+      },
+      cancel() {
+        if (timer) clearTimeout(timer);
+      },
+    });
+    return Promise.resolve(
+      new Response(stream, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+      }),
+    );
+  };
+  return fetcher;
+}
 
-export const catalogFixture: TargetCatalog = {
-  status: "model-target-list",
-  targets: [
-    {
-      target_id: "deepseek4-v4-flash",
-      family: "DeepSeek",
-      class: "release-source-target",
-      release_selected: true,
-      runtime: "unsupported",
-      generation: "unsupported",
-    },
-  ],
-};
+export interface TestHarness {
+  config: OperatorConfig;
+  services: OperatorServices;
+  baseUrl: string;
+  close: () => Promise<void>;
+}
 
-export const artifactsFixture: ArtifactInventory = {
-  status: "artifacts-list",
-  artifacts: [
-    {
-      target_id: "deepseek4-v4-flash-selected-embed",
-      family: "deepseek",
-      artifact_class: "yvex-selected-gguf",
-      artifact_status: "present",
-      prepare_status: "ready",
-      top_blocker: "none",
-      path: "[local]/deepseek-selected.gguf",
-    },
-  ],
-};
-
-export const healthFixture: AdapterHealth = {
-  adapterVersion: "0.1.0",
-  apiVersion: "v1",
-  state: "available",
-  bindAddress: "127.0.0.1",
-  binaryLabel: "yvex",
-  binaryResolution: "configured-path",
-  binaryExecutable: true,
-  uptimeSeconds: 12,
-};
-
-export const hostFixture: HostProbe = {
-  platform: "linux",
-  architecture: "arm64",
-  logicalProcessors: 8,
-  totalMemoryBytes: 17_179_869_184,
-  nodeRuntime: "v24.18.0",
-};
-
-const producerCommands: Record<ProducerId, string[]> = {
-  targetCatalog: ["yvex", "model-target", "list", "--output", "json"],
-  releaseDecision: ["yvex", "model-target", "decision", "--release", "v0.1.0", "--output", "json"],
-  targetDetail: ["yvex", "model-target", "inspect", "deepseek4-v4-flash", "--output", "json"],
-  artifactInventory: ["yvex", "models", "artifacts", "list", "--output", "json"],
-  adapterHealth: [],
-  hostProbe: [],
-};
-
-export function testEnvelope<K extends ProducerId>(
-  id: K,
-  data: ProducerDataMap[K],
-): EvidenceEnvelope<ProducerDataMap[K]> {
-  const command = producerCommands[id];
+/** Starts the production BFF graph on an ephemeral loopback port with isolated local persistence. */
+export async function createTestHarness(
+  options: {
+    scenario?: string;
+    config?: Partial<OperatorConfig>;
+    dependencies?: ServiceDependencies;
+  } = {},
+): Promise<TestHarness> {
+  const root = await mkdtemp(join(tmpdir(), "yvex-operator-test-"));
+  const staticRoot = join(root, "client");
+  const configDirectory = join(root, "config");
+  await mkdir(staticRoot, { recursive: true });
+  await writeFile(
+    join(staticRoot, "index.html"),
+    "<!doctype html><title>YVEX Operator test</title>",
+  );
+  const config = testConfig(options.scenario, { configDirectory, ...options.config });
+  const services = createOperatorServices(config, {
+    fetcher: providerFetcher(),
+    ...options.dependencies,
+  });
+  const server = createOperatorHttpServer(services, staticRoot);
+  await new Promise<void>((resolveListen, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolveListen);
+  });
+  const address = server.address() as AddressInfo;
   return {
-    availability: "available",
-    data,
-    producer: {
-      id,
-      label: id,
-      evidenceClass: command.length ? "cli-json" : "local-probe",
-      description: `${id} test producer`,
-      command,
-      displayCommand: command.length ? command.join(" ") : "Local typed probe",
-      cachePolicy:
-        id === "artifactInventory" || id === "adapterHealth" || id === "hostProbe"
-          ? "short-ttl"
-          : "immutable",
-      ttlMs:
-        id === "artifactInventory" || id === "adapterHealth" || id === "hostProbe" ? 5_000 : null,
-    },
-    observedAt: "2026-07-15T00:00:00.000Z",
-    fromCache: false,
-    lastExit: {
-      code: command.length ? 0 : null,
-      state: command.length ? "ok" : "not-run",
-      durationMs: command.length ? 3 : null,
+    config,
+    services,
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    close: async () => {
+      await new Promise<void>((resolveClose, reject) =>
+        server.close((error) => (error ? reject(error) : resolveClose())),
+      );
+      await rm(root, { recursive: true, force: true });
     },
   };
 }
 
-const allReports: ReportMap = {
-  targetCatalog: testEnvelope("targetCatalog", catalogFixture),
-  releaseDecision: testEnvelope("releaseDecision", decisionFixture),
-  targetDetail: testEnvelope("targetDetail", detailFixture),
-  artifactInventory: testEnvelope("artifactInventory", artifactsFixture),
-  adapterHealth: testEnvelope("adapterHealth", healthFixture),
-  hostProbe: testEnvelope("hostProbe", hostFixture),
-};
+/** Configures and verifies the deterministic reference provider through the same service APIs as HTTP. */
+export async function readyReferenceProvider(services: OperatorServices): Promise<void> {
+  await services.settings.updateReferenceProvider({
+    enabled: true,
+    displayName: "Fixture reference",
+    baseUrl: "http://127.0.0.1:14318/v1",
+    apiKey: "fixture-secret-never-returned",
+    defaultModel: fakeProviderModel,
+    requestTimeoutMs: 5_000,
+  });
+  await services.provider.testConnection();
+}
 
-export const missingFixtures: MissingProducerDescriptor[] = [
-  {
-    id: "qtypePolicyJson",
-    label: "Release qtype policy",
-    surface: "Quantization",
-    availability: "unsupported",
-    auditedCommand: "yvex model-target quant-policy ... --output json",
-    reason: "The baseline CLI explicitly refuses JSON for this report.",
-  },
-  {
-    id: "qtypeRoleSupportJson",
-    label: "Role/qtype support matrix",
-    surface: "Quantization",
-    availability: "unsupported",
-    auditedCommand: "yvex model-target quant-policy ... --role-support --output json",
-    reason: "The baseline CLI explicitly returns a JSON-output refusal.",
-  },
-  {
-    id: "referenceDequantJson",
-    label: "Reference dequantization evidence",
-    surface: "Quantization",
-    availability: "unavailable",
-    auditedCommand: null,
-    reason: "No stable machine-readable producer is present.",
-  },
-];
-
-export function viewFixture(view: ViewId): OperatorViewResponse {
-  return {
-    apiVersion: "v1",
-    adapterVersion: "0.1.0",
-    view,
-    observedAt: "2026-07-15T00:00:00.000Z",
-    reports: allReports,
-    missingProducers: missingFixtures,
+/** Prefixes same-origin browser API requests with an ephemeral test server while retaining stream semantics. */
+export function browserFetch(baseUrl: string, nativeFetch: typeof fetch): typeof fetch {
+  const fetcher: typeof fetch = (input, init) => {
+    if (typeof input === "string" && input.startsWith("/"))
+      return nativeFetch(`${baseUrl}${input}`, init);
+    if (input instanceof URL && input.origin === "null")
+      return nativeFetch(`${baseUrl}${input.pathname}${input.search}`, init);
+    return nativeFetch(input, init);
   };
+  return fetcher;
 }

@@ -1,115 +1,129 @@
 /*
  * Owner: apps/operator information architecture.
- * Owns: YVEX-native route labels, grouped navigation, page summaries, and direct URL mapping.
- * Does not own: CLI catalog labels, evidence status, fetching, layout behavior, or business semantics.
- * Invariants: every required operator surface has exactly one canonical direct route.
- * Boundary: navigation presence is not evidence of implemented downstream capability.
+ * Owns: canonical routes, labels, summaries, grouped navigation, and command-palette navigation metadata.
+ * Does not own: route rendering, capability status, fetching, layout, or native claims.
+ * Invariants: every retained workbench surface has one canonical direct route.
+ * Boundary: navigation presence never implies downstream readiness.
  */
-import type { ViewId } from "../shared/contracts.ts";
+export const routeIds = [
+  "overview",
+  "models",
+  "sources",
+  "compilation",
+  "quantization",
+  "artifacts",
+  "runtime",
+  "evidence",
+  "system-health",
+  "settings",
+] as const;
+export type RouteId = (typeof routeIds)[number];
 
-export interface NavigationItem {
-  id: ViewId;
+export interface PageMetadata {
+  id: RouteId;
   label: string;
   path: string;
-}
-
-export interface PageMetadata extends NavigationItem {
+  group: "Engineering" | "System";
   eyebrow: string;
   summary: string;
 }
 
-export const pageMetadata: Readonly<Record<ViewId, PageMetadata>> = {
+export const pageMetadata: Readonly<Record<RouteId, PageMetadata>> = {
   overview: {
     id: "overview",
     label: "Overview",
     path: "/overview",
-    eyebrow: "Operator / Lifecycle",
-    summary: "Current evidence across source, compilation, artifact, and execution boundaries.",
+    group: "Engineering",
+    eyebrow: "Operator / Control plane",
+    summary: "System readiness, execution lanes, active work, and actionable blockers.",
   },
   models: {
     id: "models",
     label: "Models",
     path: "/models",
-    eyebrow: "Operator / Target catalog",
-    summary: "Release selection and engineering-scope targets at their lowest truthful stage.",
+    group: "Engineering",
+    eyebrow: "Targets / Catalog",
+    summary: "Machine-reported targets, release identity, selection, and exact runtime boundaries.",
   },
   sources: {
     id: "sources",
     label: "Sources",
     path: "/sources",
-    eyebrow: "Compilation / Source trust",
-    summary: "Verified identity evidence without browser file access or weight-payload reads.",
+    group: "Engineering",
+    eyebrow: "Source / Trust",
+    summary:
+      "Identity, verification, and accounting as separate machine-readable evidence surfaces.",
   },
   compilation: {
     id: "compilation",
     label: "Compilation",
     path: "/compilation",
-    eyebrow: "Compilation / Transformation",
-    summary: "Logical-model, Transformation IR, coverage, and physical-lowering gate evidence.",
+    group: "Engineering",
+    eyebrow: "Compilation / Plan",
+    summary:
+      "Logical model, Transformation IR, coverage, and physical lowering without artifact claims.",
   },
   quantization: {
     id: "quantization",
     label: "Quantization",
     path: "/quantization",
-    eyebrow: "Compilation / Qtype boundary",
-    summary: "Baseline qtype policy and refusal evidence with no synthetic execution progress.",
+    group: "Engineering",
+    eyebrow: "Compilation / Qtype",
+    summary: "Policy, role support, reference evidence, and exact execution blockers.",
   },
   artifacts: {
     id: "artifacts",
     label: "Artifacts",
     path: "/artifacts",
-    eyebrow: "Artifact / Inventory",
-    summary: "Proof, complete, and supported artifact classes kept explicitly distinct.",
+    group: "Engineering",
+    eyebrow: "Artifacts / Inventory",
+    summary: "One coherent proof, complete, and supported artifact inventory with provenance.",
   },
   runtime: {
     id: "runtime",
     label: "Runtime",
     path: "/runtime",
-    eyebrow: "Execution / Runtime boundary",
-    summary: "Runtime, generation, evaluation, and benchmark states exactly as reported.",
+    group: "Engineering",
+    eyebrow: "Execution / Native lane",
+    summary: "Capability stages, backend evidence, and controls gated by real native endpoints.",
   },
   evidence: {
     id: "evidence",
     label: "Evidence",
     path: "/evidence",
-    eyebrow: "Operator / Provenance",
-    summary: "Audited JSON producers, cache behavior, exit status, and missing contracts.",
+    group: "Engineering",
+    eyebrow: "Operator / Producers",
+    summary:
+      "Allowlisted producers, runs, cache policy, command provenance, and structured refusals.",
   },
   "system-health": {
     id: "system-health",
     label: "System health",
     path: "/system-health",
-    eyebrow: "System / Connectivity",
-    summary: "Adapter, binary, and host topology separated from backend capability evidence.",
+    group: "System",
+    eyebrow: "System / Topology",
+    summary: "Browser, adapter, YVEX, native execution, and reference provider as distinct layers.",
   },
   settings: {
     id: "settings",
     label: "Settings",
     path: "/settings",
-    eyebrow: "System / Read-only configuration",
-    summary: "Redacted startup configuration and immutable safety controls; no mutation surface.",
+    group: "System",
+    eyebrow: "System / Configuration",
+    summary:
+      "Validated local configuration, binary recovery, provider secrets, cache, and interface defaults.",
   },
 };
 
-export const primaryNavigation: readonly NavigationItem[] = [
-  pageMetadata.overview,
-  pageMetadata.models,
-  pageMetadata.sources,
-  pageMetadata.compilation,
-  pageMetadata.quantization,
-  pageMetadata.artifacts,
-  pageMetadata.runtime,
-  pageMetadata.evidence,
-];
+export const primaryNavigation = routeIds
+  .map((id) => pageMetadata[id])
+  .filter((item) => item.group === "Engineering");
+export const systemNavigation = routeIds
+  .map((id) => pageMetadata[id])
+  .filter((item) => item.group === "System");
 
-export const systemNavigation: readonly NavigationItem[] = [
-  pageMetadata["system-health"],
-  pageMetadata.settings,
-];
-
-/** Resolves only canonical single-segment paths and defaults the root to Overview. */
-export function viewFromPath(pathname: string): ViewId {
-  if (pathname === "/" || pathname === "") return "overview";
-  const match = Object.values(pageMetadata).find((page) => page.path === pathname);
-  return match?.id ?? "overview";
+/** Resolves a canonical top-level route and defaults unknown paths to Overview metadata only. */
+export function routeFromPath(pathname: string): RouteId {
+  const segment = pathname.split("/").filter(Boolean)[0];
+  return routeIds.includes(segment as RouteId) ? (segment as RouteId) : "overview";
 }

@@ -1,151 +1,155 @@
 /*
- * Owner: apps/operator Quantization surface.
- * Owns: baseline qtype selection state and explicit policy/role/dequant producer refusals.
- * Does not own: quantization jobs, live progress, qtype policy, reference dequantization, or artifact writes.
- * Invariants: null release qtype remains unselected and no worktree/process telemetry is synthesized.
- * Boundary: qtype policy is not quantization and reference proof is not backend arithmetic support.
+ * Owner: apps/operator Quantization workbench.
+ * Owns: policy, role-support, reference-evidence panels and capability-gated action explanation.
+ * Does not own: qtype selection policy, quantization jobs, dequantization, artifact emission, backend compute, or fake progress.
+ * Invariants: no Start action appears without a real endpoint and null release qtype remains visibly unselected.
+ * Boundary: qtype policy, reference evidence, emission, and backend arithmetic remain separate gates.
  */
-import { Ban, CircleSlash2, GaugeCircle, ShieldAlert } from "lucide-react";
+import { Ban, FunctionSquare, Rows3 } from "lucide-react";
 
+import { capabilityById } from "../../shared/contracts.ts";
 import {
-  BoundaryNote,
-  Card,
-  KeyValue,
-  MetricStrip,
-  PageContent,
+  Fact,
+  FactGrid,
   PageHeader,
+  Panel,
+  RecoveryState,
+  ResourceBoundary,
+  RouteTabs,
+  useRouteTab,
 } from "../components/Primitives.tsx";
-import { EnvelopeFailure, StatusBadge, statusTone } from "../components/Status.tsx";
+import { StatusBadge } from "../components/Status.tsx";
 import { pageMetadata } from "../navigation.ts";
-import { reportEnvelope, useOperatorView } from "../view-context.tsx";
-import { FactList, MissingEvidence, ProducerStamp } from "./PageSupport.tsx";
+import { useOperatorState } from "../state/operator-state.tsx";
+import { Provenance, RefreshButton, reportOf, useDomainProjection } from "./PageSupport.tsx";
 
-/** Renders exact qtype/refusal evidence and performs no job launch, progress polling, or file mutation. */
+const tabs = [
+  { id: "policy", label: "Policy" },
+  { id: "role-support", label: "Role support" },
+  { id: "reference-evidence", label: "Reference evidence" },
+] as const;
+
+/** Renders exact quantization contracts and explicit missing execution owners. */
 export function QuantizationPage() {
-  const { response } = useOperatorView();
-  const decisionEnvelope = reportEnvelope(response, "releaseDecision");
-  const decision = decisionEnvelope?.data;
-  const qtype = decision ? (decision.release_qtype ?? "Unselected") : "Unavailable";
+  const projection = useDomainProjection("quantization");
+  const app = useOperatorState();
+  const tab = useRouteTab(tabs, "policy");
   const page = pageMetadata.quantization;
-
   return (
-    <>
+    <div className="page">
       <PageHeader
         eyebrow={page.eyebrow}
         title={page.label}
         summary={page.summary}
-        state={qtype}
-        tabs={["Policy", "Role support", "Reference evidence"]}
+        actions={<RefreshButton refresh={projection.refresh} refreshing={projection.refreshing} />}
       />
-      <PageContent>
-        <MetricStrip
-          items={[
-            {
-              label: "Release qtype",
-              value: qtype,
-              detail: "Null in target decision",
-              tone: decision?.release_qtype ? "cyan" : "amber",
-            },
-            {
-              label: "Artifact",
-              value: decision?.artifact_status ?? "Unavailable",
-              detail: "No quantization inference",
-              tone: statusTone(decision?.artifact_status),
-            },
-            {
-              label: "Runtime",
-              value: decision?.runtime ?? "Unavailable",
-              detail: "Independent gate",
-              tone: statusTone(decision?.runtime),
-            },
-            {
-              label: "Benchmark",
-              value: decision?.benchmark ?? "Unavailable",
-              detail: "No measurements",
-              tone: statusTone(decision?.benchmark),
-            },
-          ]}
-        />
-
-        <div id="policy" className="grid grid-two">
-          <Card
-            title="Baseline qtype decision"
-            eyebrow="Exact JSON field"
-            action={<StatusBadge value={qtype} />}
-          >
-            {decision ? (
-              <>
-                <FactList>
-                  <KeyValue label="Release" value={decision.release} mono />
-                  <KeyValue label="Target" value={decision.selected_target_id} mono />
-                  <KeyValue
-                    label="release_qtype"
-                    value={decision.release_qtype === null ? "null" : decision.release_qtype}
-                    mono
-                  />
-                  <KeyValue label="Next row" value={decision.next} mono />
-                </FactList>
-                {decisionEnvelope ? (
-                  <ProducerStamp
-                    command={decisionEnvelope.producer.displayCommand}
-                    exit={decisionEnvelope.lastExit.code}
-                  />
-                ) : null}
-              </>
-            ) : (
-              <EnvelopeFailure envelope={decisionEnvelope} />
-            )}
-          </Card>
-          <Card title="Qtype policy producer" eyebrow="CLI contract refusal">
-            <MissingEvidence id="qtypePolicyJson" />
-          </Card>
-        </div>
-
-        <div id="role-support" className="grid grid-two">
-          <Card title="Role / qtype combinations" eyebrow="Support matrix">
-            <MissingEvidence id="qtypeRoleSupportJson" />
-          </Card>
-          <Card
-            title="No live progress surface"
-            eyebrow="Parallel-lane isolation"
-            action={<StatusBadge value="enforced" tone="cyan" />}
-          >
-            <div className="no-progress-state">
-              <GaugeCircle aria-hidden="true" size={28} />
-              <div>
-                <strong>Progress is intentionally absent</strong>
-                <p>
-                  The operator does not inspect the primary worktree, running quantizer, output
-                  files, or process state.
-                </p>
+      <RouteTabs tabs={tabs} defaultTab="policy" label="Quantization sections" />
+      <ResourceBoundary resource={projection}>
+        {(data) => {
+          const envelope = reportOf(data, "release-decision");
+          const decision = envelope?.data;
+          if (!decision)
+            return (
+              <RecoveryState
+                state={envelope?.availability ?? data.availability}
+                retry={projection.refresh}
+              />
+            );
+          if (tab === "policy") {
+            const policy = capabilityById(app.capabilities.data, "quantization.policy");
+            return (
+              <div role="tabpanel" className="detail-layout">
+                <Panel
+                  title="Release qtype policy"
+                  description="Exact selected field from the release decision."
+                  actions={<StatusBadge status={policy?.status ?? "loading"} />}
+                >
+                  <FactGrid>
+                    <Fact label="Release" value={decision.release} />
+                    <Fact label="Target" value={decision.selected_target_id} mono />
+                    <Fact label="Selected qtype" value={decision.release_qtype ?? "Unselected"} />
+                    <Fact label="Artifact state" value={decision.artifact_status} />
+                    <Fact label="Next dependency" value={decision.next} mono />
+                  </FactGrid>
+                  {envelope ? <Provenance envelope={envelope} /> : null}
+                </Panel>
+                <Panel
+                  title="Execution action"
+                  description="Quantization starts only through a real typed endpoint."
+                >
+                  <div className="disabled-control">
+                    <Ban aria-hidden="true" size={20} />
+                    <div>
+                      <strong>No quantization execution endpoint is admitted</strong>
+                      <p>{policy?.reason}</p>
+                    </div>
+                    <button type="button" className="button primary" disabled>
+                      Start quantization
+                    </button>
+                  </div>
+                </Panel>
               </div>
+            );
+          }
+          if (tab === "role-support") {
+            const support = capabilityById(app.capabilities.data, "quantization.role-support");
+            return (
+              <div role="tabpanel">
+                <Panel
+                  title="Role / qtype support"
+                  description="A matrix is shown only from a stable machine-readable producer."
+                >
+                  <div className="icon-state">
+                    <Rows3 aria-hidden="true" size={22} />
+                    <RecoveryState
+                      state={{
+                        status: support?.status ?? "unavailable",
+                        reasonCode: support?.refusalCode ?? "qtype-role-support-missing",
+                        message: support?.reason ?? "Role support is unavailable.",
+                        observedAt: support?.lastObservedAt ?? data.observedAt,
+                        source: support?.source ?? "capability-manifest",
+                      }}
+                    />
+                  </div>
+                </Panel>
+              </div>
+            );
+          }
+          const reference = capabilityById(
+            app.capabilities.data,
+            "quantization.reference-evidence",
+          );
+          return (
+            <div role="tabpanel" className="detail-layout">
+              <Panel
+                title="Reference dequantization"
+                description="Numeric comparison evidence below backend compute."
+              >
+                <div className="icon-state">
+                  <FunctionSquare aria-hidden="true" size={22} />
+                  <RecoveryState
+                    state={{
+                      status: reference?.status ?? "unavailable",
+                      reasonCode: reference?.refusalCode ?? "reference-dequant-missing",
+                      message: reference?.reason ?? "Reference evidence is unavailable.",
+                      observedAt: reference?.lastObservedAt ?? data.observedAt,
+                      source: reference?.source ?? "capability-manifest",
+                    }}
+                  />
+                </div>
+              </Panel>
+              <Panel title="Evidence boundary" description="No progress is synthesized.">
+                <ul className="plain-list">
+                  <li>Policy does not execute quantization.</li>
+                  <li>Reference decoding does not prove backend arithmetic.</li>
+                  <li>Tensor proof output would not be a complete artifact.</li>
+                  <li>No percentage exists until an execution owner reports one.</li>
+                </ul>
+              </Panel>
             </div>
-          </Card>
-        </div>
-
-        <div id="reference-evidence" className="grid grid-three">
-          <Card title="Reference dequantization" eyebrow="Evidence producer">
-            <MissingEvidence id="referenceDequantJson" compact />
-          </Card>
-          <Card title="Write control" eyebrow="Safety">
-            <div className="compact-boundary">
-              <Ban aria-hidden="true" size={18} />
-              <span>No GGUF emission or registry publication</span>
-            </div>
-          </Card>
-          <Card title="Execution claim" eyebrow="Safety">
-            <div className="compact-boundary">
-              <CircleSlash2 aria-hidden="true" size={18} />
-              <span>{decision?.runtime ?? "Unsupported evidence unavailable"}</span>
-            </div>
-          </Card>
-        </div>
-        <BoundaryNote>
-          <ShieldAlert aria-hidden="true" size={14} /> Qtype selection, quantization execution,
-          reference decoding, artifact emission, and backend compute support remain separate
-          evidence gates.
-        </BoundaryNote>
-      </PageContent>
-    </>
+          );
+        }}
+      </ResourceBoundary>
+    </div>
   );
 }

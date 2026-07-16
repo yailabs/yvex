@@ -1,146 +1,202 @@
 /*
- * Owner: apps/operator adapter contract validation.
- * Owns: malformed JSON, exit, timeout, output cap, binary, injection, cache, cancellation, and refusal tests.
- * Does not own: real YVEX execution, source scans, model files, frontend rendering, or production fixtures.
- * Invariants: every child process is the explicit tests/fixtures/fake-yvex.mjs executable.
- * Boundary: passing tests proves constrained adaptation only.
+ * Owner: apps/operator adapter and resolver integration validation.
+ * Owns: candidate ordering, filesystem admission, identity compatibility, process limits, typed producer parsing, cache, refusal, and allowlist assertions.
+ * Does not own: HTTP routing, browser behavior, external providers, or native runtime claims.
+ * Invariants: every child process is the explicit test fixture and every temporary path is removed.
+ * Boundary: fixture producer success proves adapter behavior only.
  */
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { chmod, copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { ForbiddenProducerError, OperatorAdapter } from "../../server/adapter.ts";
-import { testConfig } from "../helpers.ts";
+import { ForbiddenProducerError } from "../../server/adapter.ts";
+import { createOperatorServices } from "../../server/services.ts";
+import { createTestHarness, fakeYvexPath, testConfig, type TestHarness } from "../helpers.ts";
 
-const temporaryDirectories: string[] = [];
-
-async function temporaryDirectory(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "yvex-operator-test-"));
-  temporaryDirectories.push(directory);
-  return directory;
-}
-
-async function exists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
+const harnesses: TestHarness[] = [];
+const directories: string[] = [];
 
 afterEach(async () => {
+  await Promise.all(harnesses.splice(0).map((harness) => harness.close()));
   await Promise.all(
-    temporaryDirectories
-      .splice(0)
-      .map((directory) => rm(directory, { recursive: true, force: true })),
+    directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
   );
 });
 
-describe("constrained adapter", () => {
-  it("returns schema-validated JSON with exit provenance", async () => {
-    const result = await new OperatorAdapter(testConfig()).get("releaseDecision");
-    expect(result.availability).toBe("available");
-    expect(result.lastExit).toMatchObject({ code: 0, state: "ok" });
-    expect(result.data?.selected_target_id).toBe("deepseek4-v4-flash");
-  });
-
-  it("blocks malformed JSON", async () => {
-    const result = await new OperatorAdapter(testConfig("malformed")).get("releaseDecision");
-    expect(result.availability).toBe("blocked");
-    expect(result.data).toBeNull();
-    expect(result.lastExit.state).toBe("malformed-json");
-  });
-
-  it("preserves non-zero CLI exit codes", async () => {
-    const result = await new OperatorAdapter(testConfig("nonzero")).get("releaseDecision");
-    expect(result.availability).toBe("unavailable");
-    expect(result.lastExit).toMatchObject({ code: 3, state: "failed" });
-    expect(result.issue?.summary).toContain("typed producer refusal");
-  });
-
-  it("terminates a timed-out producer", async () => {
-    const result = await new OperatorAdapter(testConfig("timeout", { immutableTimeoutMs: 50 })).get(
-      "releaseDecision",
+describe("deterministic YVEX resolution", () => {
+  it("selects persisted settings before environment and exposes only redacted paths", async () => {
+    const root = await mkdtemp(join(tmpdir(), "yvex-resolver-order-"));
+    directories.push(root);
+    const persisted = join(root, "persisted-yvex");
+    await copyFile(fakeYvexPath, persisted);
+    await chmod(persisted, 0o755);
+    const services = createOperatorServices(
+      testConfig("default", { configDirectory: join(root, "config") }),
     );
-    expect(result.availability).toBe("blocked");
-    expect(result.lastExit.state).toBe("timeout");
+    await services.settings.updateYvex({ binaryPath: persisted });
+    const resolved = await services.resolver.resolve(true);
+    expect(resolved.executablePath).toBe(persisted);
+    expect(resolved.resolution.candidates.slice(0, 2).map((candidate) => candidate.source)).toEqual(
+      ["persisted-setting", "environment"],
+    );
+    expect(resolved.resolution.candidates[0]).toMatchObject({
+      identityStatus: "ready",
+      version: "0.1.0",
+    });
+    expect(JSON.stringify(resolved.resolution)).not.toContain(root);
   });
 
-  it("terminates oversized output", async () => {
-    const result = await new OperatorAdapter(
-      testConfig("oversized", { maxOutputBytes: 1_024 }),
-    ).get("releaseDecision");
-    expect(result.availability).toBe("blocked");
-    expect(result.lastExit.state).toBe("oversized-output");
-  });
-
-  it("reports an unavailable configured binary without fallback", async () => {
-    const directory = await temporaryDirectory();
-    const result = await new OperatorAdapter(
-      testConfig("default", { binaryRequest: join(directory, "missing-yvex") }),
-    ).get("targetCatalog");
-    expect(result.availability).toBe("unavailable");
-    expect(result.lastExit).toEqual({ code: null, state: "unavailable-binary", durationMs: null });
-  });
-
-  it("rejects forbidden command selection", async () => {
-    const adapter = new OperatorAdapter(testConfig());
-    await expect(adapter.get("releaseDecision --help")).rejects.toBeInstanceOf(
-      ForbiddenProducerError,
+  it("reports an exact unresolved state when every trusted candidate is missing", async () => {
+    const harness = await createTestHarness({
+      config: { binaryEnvironmentCandidate: null, binarySearchPath: "", knownBuildCandidates: [] },
+    });
+    harnesses.push(harness);
+    const resolved = await harness.services.resolver.resolve(true);
+    expect(resolved.executablePath).toBeNull();
+    expect(resolved.resolution.availability).toMatchObject({
+      status: "unavailable",
+      reasonCode: "yvex-binary-unresolved",
+    });
+    expect(resolved.resolution.candidates.every((candidate) => candidate.exists === false)).toBe(
+      true,
     );
   });
 
-  it("passes trusted path configuration as a literal argument with shell disabled", async () => {
-    const directory = await temporaryDirectory();
-    const marker = join(directory, "injected-marker");
-    const adapter = new OperatorAdapter(
-      testConfig("default", { modelsRoot: `unused; touch ${marker}` }),
+  it("refuses a present non-executable file before identity probing", async () => {
+    const root = await mkdtemp(join(tmpdir(), "yvex-resolver-mode-"));
+    directories.push(root);
+    const candidate = join(root, "yvex");
+    await writeFile(candidate, "not executable", { mode: 0o600 });
+    const services = createOperatorServices(
+      testConfig("default", {
+        configDirectory: join(root, "config"),
+        binaryEnvironmentCandidate: candidate,
+      }),
     );
-    const result = await adapter.get("artifactInventory");
-    expect(result.availability).toBe("available");
-    expect(await exists(marker)).toBe(false);
-    expect(result.data?.artifacts[0]?.path).toBe("[local]/deepseek-selected.gguf");
+    const resolved = await services.resolver.resolve(true);
+    expect(resolved.executablePath).toBeNull();
+    expect(resolved.resolution.candidates[0]).toMatchObject({
+      exists: true,
+      regularFile: true,
+      executable: false,
+      identityStatus: "not-probed",
+      rejectionReason: "candidate is not executable",
+    });
   });
 
-  it("caches immutable evidence and expires mutable evidence", async () => {
-    const directory = await temporaryDirectory();
-    const counter = join(directory, "count");
-    let now = 1_000;
+  it("blocks an executable with an incompatible identity protocol", async () => {
+    const harness = await createTestHarness({ scenario: "incompatible-identity" });
+    harnesses.push(harness);
+    const resolved = await harness.services.resolver.resolve(true);
+    expect(resolved.executablePath).toBeNull();
+    expect(resolved.resolution.availability.status).toBe("blocked");
+    expect(resolved.resolution.candidates[0]?.identityStatus).toBe("incompatible");
+  });
+
+  it("admits the exact versioned machine-readable identity fixture", async () => {
+    const harness = await createTestHarness();
+    harnesses.push(harness);
+    const resolved = await harness.services.resolver.resolve(true);
+    expect(resolved.resolution.availability.status).toBe("ready");
+    expect(resolved.resolution.identity).toEqual({
+      schemaVersion: "1",
+      protocolVersion: "1",
+      yvexVersion: "0.1.0",
+      product: "yvex",
+    });
+  });
+});
+
+describe("typed producer execution", () => {
+  it("returns typed data and redacts local artifact paths", async () => {
+    const harness = await createTestHarness();
+    harnesses.push(harness);
+    const catalog = await harness.services.adapter.get("target-catalog");
+    const artifacts = await harness.services.adapter.get("artifact-inventory");
+    expect(catalog.availability.status).toBe("ready");
+    expect(catalog.data?.targets[0]?.target_id).toBe("deepseek4-v4-flash");
+    expect(artifacts.data?.artifacts[0]?.path).toBe("[local]/deepseek-selected.gguf");
+    expect(JSON.stringify(artifacts)).not.toContain("/private/model");
+  });
+
+  it("classifies timeout, malformed JSON, oversized output, and typed refusal", async () => {
+    const timeout = await createTestHarness({
+      scenario: "timeout",
+      config: { immutableTimeoutMs: 40 },
+    });
+    const malformed = await createTestHarness({ scenario: "malformed" });
+    const oversized = await createTestHarness({
+      scenario: "oversized",
+      config: { maxOutputBytes: 1_024 },
+    });
+    const refusal = await createTestHarness({ scenario: "refusal" });
+    harnesses.push(timeout, malformed, oversized, refusal);
+    expect((await timeout.services.adapter.get("release-decision")).exit.state).toBe("timeout");
+    expect((await malformed.services.adapter.get("release-decision")).exit.state).toBe(
+      "malformed-json",
+    );
+    expect((await oversized.services.adapter.get("release-decision")).exit.state).toBe(
+      "oversized-output",
+    );
+    const refused = await refusal.services.adapter.get("release-decision");
+    expect(refused).toMatchObject({
+      availability: { status: "blocked" },
+      exit: { code: 5, state: "refused" },
+      refusal: { code: "yvex-cli-refusal", state: "source-verification-blocked" },
+    });
+  });
+
+  it("success-caches immutable results and never converts malformed output into success", async () => {
+    const root = await mkdtemp(join(tmpdir(), "yvex-adapter-cache-"));
+    directories.push(root);
+    const count = join(root, "count");
     const config = testConfig("default", {
-      mutableTtlMs: 100,
+      configDirectory: join(root, "config"),
       childEnvironment: {
         PATH: process.env.PATH,
         LC_ALL: "C",
-        YVEX_FAKE_COUNT_FILE: counter,
+        YVEX_FAKE_SCENARIO: "default",
+        YVEX_FAKE_COUNT_FILE: count,
       },
     });
-    const adapter = new OperatorAdapter(config, { clock: () => now });
-    await adapter.get("artifactInventory");
-    const cached = await adapter.get("artifactInventory");
-    expect(cached.fromCache).toBe(true);
-    expect(await readFile(counter, "utf8")).toBe("1");
-    now += 101;
-    const refreshed = await adapter.get("artifactInventory");
-    expect(refreshed.fromCache).toBe(false);
-    expect(await readFile(counter, "utf8")).toBe("2");
+    const services = createOperatorServices(config);
+    const first = await services.adapter.get("target-catalog");
+    const second = await services.adapter.get("target-catalog");
+    expect(first.cache.hit).toBe(false);
+    expect(second.cache.hit).toBe(true);
+    expect(await readFile(count, "utf8")).toBe("1");
+
+    const malformed = await createTestHarness({ scenario: "malformed" });
+    harnesses.push(malformed);
+    expect((await malformed.services.adapter.get("target-catalog")).availability.status).toBe(
+      "failed",
+    );
+    expect((await malformed.services.adapter.get("target-catalog")).cache.hit).toBe(false);
   });
 
-  it("propagates typed refusal state and exit five", async () => {
-    const result = await new OperatorAdapter(testConfig("refusal")).get("releaseDecision");
-    expect(result.availability).toBe("blocked");
-    expect(result.lastExit).toMatchObject({ code: 5, state: "refused" });
-    expect(result.issue?.refusalState).toBe("source-verification-blocked");
-    expect(result.data?.source_verification).toBe("blocked");
+  it("rejects arbitrary producer selectors before a process can run", async () => {
+    const harness = await createTestHarness();
+    harnesses.push(harness);
+    await expect(
+      harness.services.adapter.runExplicit("release-decision; uname -a"),
+    ).rejects.toBeInstanceOf(ForbiddenProducerError);
+    await expect(harness.services.adapter.get("../../bin/sh")).rejects.toBeInstanceOf(
+      ForbiddenProducerError,
+    );
+    expect(harness.services.adapter.producerRuns()).toEqual([]);
   });
 
-  it("cancels a producer when the client request is abandoned", async () => {
-    const adapter = new OperatorAdapter(testConfig("timeout", { immutableTimeoutMs: 1_000 }));
-    const controller = new AbortController();
-    const pending = adapter.get("releaseDecision", controller.signal);
-    setTimeout(() => controller.abort(), 20);
-    const result = await pending;
-    expect(result.lastExit.state).toBe("cancelled");
+  it("records explicit producer work as a completed indeterminate job", async () => {
+    const harness = await createTestHarness();
+    harnesses.push(harness);
+    const run = await harness.services.adapter.runExplicit("release-decision");
+    const job = harness.services.jobs.get(run.jobId);
+    expect(run.envelope?.availability.status).toBe("ready");
+    expect(job).toMatchObject({
+      state: "completed",
+      progress: null,
+      executionOwner: "Operator adapter",
+    });
   });
 });

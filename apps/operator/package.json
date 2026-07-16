@@ -21,6 +21,7 @@
     "test:adapter": "vitest run tests/adapter --maxWorkers=2",
     "test:component": "vitest run tests/component --maxWorkers=2",
     "test:browser": "nice -n 10 playwright test --workers=1",
+    "screenshots": "node scripts/capture-operator-screenshots.mjs",
     "lock:verify": "node scripts/verify-lock.mjs",
     "scan": "node scripts/scan-worktree.mjs",
     "validate": "npm run lock:verify && npm run format && npm run lint && npm run typecheck && npm test && npm run build && npm run test:browser && npm run scan"

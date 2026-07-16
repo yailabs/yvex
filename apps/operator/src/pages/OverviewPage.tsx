@@ -1,205 +1,299 @@
 /*
- * Owner: apps/operator Overview surface.
- * Owns: lifecycle projection across source, logical model, IR, lowering, artifact, runtime, and evidence stages.
- * Does not own: stage decisions, execution, model files, quantization progress, or capability promotion.
- * Invariants: every lifecycle value comes from the target decision/detail envelopes or is explicitly unavailable.
- * Boundary: complete mapping evidence is not artifact production or runtime generation.
+ * Owner: apps/operator operational Overview surface.
+ * Owns: current system mode, lane readiness, lifecycle pipeline, active work, recent failures, blockers, and quick actions.
+ * Does not own: capability calculation, jobs, producer execution, binary settings, provider transport, or native controls.
+ * Invariants: lifecycle stages borrow stable capabilities and no repeated fallback cards fabricate missing facts.
+ * Boundary: provider readiness remains independent from native YVEX readiness.
  */
-import {
-  ArrowRight,
-  Box,
-  Braces,
-  Database,
-  FileOutput,
-  Gauge,
-  Network,
-  PlayCircle,
-} from "lucide-react";
+import { ArrowRight, Command, MessageSquare, RefreshCw, Settings2 } from "lucide-react";
+import { Link } from "react-router-dom";
 
-import { pageMetadata } from "../navigation.ts";
-import { reportEnvelope, useOperatorView } from "../view-context.tsx";
+import { capabilityById, type CapabilityId } from "../../shared/contracts.ts";
 import {
-  BoundaryNote,
-  Card,
-  KeyValue,
   MetricStrip,
-  PageContent,
   PageHeader,
+  Panel,
+  RecoveryState,
+  ResourceBoundary,
 } from "../components/Primitives.tsx";
-import { EnvelopeFailure, StatusBadge, statusTone } from "../components/Status.tsx";
-import { FactList, MissingEvidence, ProducerStamp } from "./PageSupport.tsx";
+import { StatusBadge } from "../components/Status.tsx";
+import { pageMetadata } from "../navigation.ts";
+import { useOperatorState } from "../state/operator-state.tsx";
+import { reportOf, useDomainProjection } from "./PageSupport.tsx";
 
-const lifecycleIcons = [Database, Box, Braces, Network, FileOutput, Gauge, PlayCircle] as const;
+const lifecycle: readonly { id: CapabilityId; label: string; route: string }[] = [
+  { id: "source.trust", label: "Source trust", route: "/sources?tab=trust" },
+  {
+    id: "compilation.transformation-ir",
+    label: "Transformation IR",
+    route: "/compilation?tab=pipeline",
+  },
+  {
+    id: "compilation.physical-lowering",
+    label: "Physical lowering",
+    route: "/compilation?tab=pipeline",
+  },
+  { id: "quantization.policy", label: "Quantization", route: "/quantization?tab=policy" },
+  { id: "artifact.admitted", label: "Artifact admission", route: "/artifacts" },
+  { id: "runtime.binding", label: "Runtime binding", route: "/runtime?tab=stages" },
+  { id: "generation.native", label: "Native generation", route: "/runtime?tab=controls" },
+];
 
-/** Projects borrowed report envelopes into lifecycle UI without IO, mutation, or inferred success state. */
+/** Projects global server truth into one compact operational landing page. */
 export function OverviewPage() {
-  const { response } = useOperatorView();
-  const decisionEnvelope = reportEnvelope(response, "releaseDecision");
-  const detailEnvelope = reportEnvelope(response, "targetDetail");
-  const decision = decisionEnvelope?.data;
-  const detail = detailEnvelope?.data;
+  const app = useOperatorState();
+  const models = useDomainProjection("models");
   const page = pageMetadata.overview;
-  const state =
-    decisionEnvelope?.availability === "available"
-      ? (decision?.status ?? "Available")
-      : "Unavailable";
-  const lifecycle = [
-    {
-      label: "Source",
-      value: decision?.source_verification ?? "Unavailable",
-      detail: "release verification",
-    },
-    {
-      label: "Logical model",
-      value: detail?.release_selected ? "selected" : "Unavailable",
-      detail: detail?.target_id ?? "no target fact",
-    },
-    {
-      label: "Transformation IR",
-      value: decision?.architecture_ir ?? "Unavailable",
-      detail: "artifact-neutral",
-    },
-    {
-      label: "Physical lowering",
-      value: decision?.gguf_mapping ?? "Unavailable",
-      detail: "GGUF mapping gate",
-    },
-    {
-      label: "Artifact",
-      value: decision?.artifact_status ?? "Unavailable",
-      detail: "container state",
-    },
-    {
-      label: "Runtime binding",
-      value: decision?.runtime ?? "Unavailable",
-      detail: "execution boundary",
-    },
-    {
-      label: "Execution evidence",
-      value: decision?.benchmark ?? "Unavailable",
-      detail: "benchmark state",
-    },
-  ];
+  const manifest = app.capabilities.data;
+  const binary = capabilityById(manifest, "system.yvex-version-compatible");
+  const runtime = capabilityById(manifest, "runtime.binding");
+  const provider = capabilityById(manifest, "provider.streaming");
+  const activeJobs =
+    app.jobs.data?.jobs.filter(
+      (job) => !["cancelled", "completed", "failed"].includes(job.state),
+    ) ?? [];
+  const recentFailures = [
+    ...(app.jobs.data?.jobs
+      .filter((job) => job.state === "failed")
+      .map((job) => ({
+        id: job.id,
+        label: job.error?.message ?? `${job.type} failed`,
+        time: job.endedAt ?? job.createdAt,
+      })) ?? []),
+    ...(app.events.data?.events
+      .filter((event) => event.severity === "error")
+      .map((event) => ({ id: event.id, label: event.message, time: event.observedAt })) ?? []),
+  ].slice(0, 4);
+  const blockers = (manifest?.capabilities ?? [])
+    .filter(
+      (item) =>
+        ["blocked", "failed"].includes(item.status) &&
+        ["system", "artifact", "runtime", "generation", "provider"].includes(item.domain),
+    )
+    .slice(0, 5);
 
   return (
-    <>
+    <div className="page">
       <PageHeader
         eyebrow={page.eyebrow}
         title={page.label}
         summary={page.summary}
-        state={state}
-        tabs={["Lifecycle", "Boundaries", "Provenance"]}
+        actions={
+          <button type="button" className="button secondary" onClick={app.refreshAll}>
+            <RefreshCw aria-hidden="true" size={14} /> Refresh system
+          </button>
+        }
       />
-      <PageContent>
-        <MetricStrip
-          items={[
-            {
-              label: "Release target",
-              value: decision?.selected_target_id ?? "Unavailable",
-              detail: decision?.release ?? "No validated decision",
-              tone: decision ? "cyan" : "amber",
-            },
-            {
-              label: "Source verification",
-              value: decision?.source_verification ?? "Unavailable",
-              detail: "Target decision",
-              tone: statusTone(decision?.source_verification),
-            },
-            {
-              label: "Transformation IR",
-              value: decision?.architecture_ir ?? "Unavailable",
-              detail: "Artifact-neutral",
-              tone: statusTone(decision?.architecture_ir),
-            },
-            {
-              label: "Artifact state",
-              value: decision?.artifact_status ?? "Unavailable",
-              detail: "No readiness inference",
-              tone: statusTone(decision?.artifact_status),
-            },
-          ]}
-        />
+      <ResourceBoundary resource={models}>
+        {(projection) => {
+          const decision = reportOf(projection, "release-decision")?.data;
+          return (
+            <>
+              {!binary || binary.status !== "ready" ? (
+                <RecoveryState
+                  state={{
+                    status: binary?.status ?? "unavailable",
+                    reasonCode: binary?.refusalCode ?? "yvex-binary-unresolved",
+                    message: binary?.reason ?? "YVEX binary is unresolved.",
+                    observedAt: binary?.lastObservedAt ?? projection.observedAt,
+                    recovery: {
+                      id: "configure-yvex",
+                      label: "Configure YVEX",
+                      href: "/settings?section=yvex",
+                    },
+                    source: "capability-manifest",
+                  }}
+                />
+              ) : null}
+              <MetricStrip
+                items={[
+                  {
+                    label: "System mode",
+                    value:
+                      app.health.data?.adapter.bindMode === "remote"
+                        ? "Remote secured"
+                        : "Local only",
+                    detail: app.health.data?.adapter.bindAddress,
+                    status: app.health.data?.availability.status ?? "loading",
+                  },
+                  {
+                    label: "YVEX",
+                    value: binary?.status ?? "loading",
+                    detail: binary?.reason,
+                    status: binary?.status ?? "loading",
+                  },
+                  {
+                    label: "Native runtime",
+                    value: runtime?.status ?? "loading",
+                    detail: decision?.runtime ?? "No decision",
+                    status: runtime?.status ?? "loading",
+                  },
+                  {
+                    label: "Reference lane",
+                    value: provider?.status ?? "loading",
+                    detail: app.provider.data?.displayName ?? "Not configured",
+                    status: provider?.status ?? "loading",
+                  },
+                ]}
+              />
 
-        <Card title="YVEX evidence lifecycle" eyebrow="Lifecycle" className="lifecycle-card">
-          <div id="lifecycle" className="lifecycle-rail">
-            {lifecycle.map((stage, index) => {
-              const Icon = lifecycleIcons[index];
-              return (
-                <div className="lifecycle-stage" key={stage.label}>
-                  <div className={`lifecycle-icon status-${statusTone(stage.value)}`}>
-                    {Icon ? <Icon aria-hidden="true" size={17} /> : null}
-                  </div>
-                  <span className="micro-label">{stage.label}</span>
-                  <strong>{stage.value}</strong>
-                  <small>{stage.detail}</small>
-                  {index < lifecycle.length - 1 ? (
-                    <ArrowRight className="lifecycle-arrow" aria-hidden="true" size={15} />
-                  ) : null}
+              <Panel
+                title="Release lifecycle"
+                description="Each stage is a separate typed capability; selection or proof does not skip downstream gates."
+              >
+                <div className="lifecycle-line">
+                  {lifecycle.map((stage, index) => {
+                    const capability = capabilityById(manifest, stage.id);
+                    return (
+                      <Link to={stage.route} className="lifecycle-node" key={stage.id}>
+                        <span>{String(index + 1).padStart(2, "0")}</span>
+                        <strong>{stage.label}</strong>
+                        <StatusBadge status={capability?.status ?? "loading"} />
+                        <small>{capability?.reason ?? "Loading capability…"}</small>
+                        {index < lifecycle.length - 1 ? (
+                          <ArrowRight
+                            aria-hidden="true"
+                            className="lifecycle-connector"
+                            size={15}
+                          />
+                        ) : null}
+                      </Link>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
-          <BoundaryNote>
-            Source verification, logical compilation, physical lowering, artifact presence, and
-            execution remain separate gates.
-          </BoundaryNote>
-        </Card>
+              </Panel>
 
-        <div id="boundaries" className="grid grid-two">
-          <Card
-            title="Release target"
-            eyebrow="Selection"
-            action={detail ? <StatusBadge value={detail.class} tone="cyan" /> : null}
-          >
-            {detail ? (
-              <>
-                <FactList>
-                  <KeyValue label="Target" value={detail.target_id} mono />
-                  <KeyValue label="Family" value={detail.family} />
-                  <KeyValue
-                    label="Upstream"
-                    value={detail.upstream_repository ?? "Unavailable"}
-                    mono
-                  />
-                  <KeyValue label="Next required row" value={decision?.next ?? detail.next} mono />
-                </FactList>
-                {detailEnvelope ? (
-                  <ProducerStamp
-                    command={detailEnvelope.producer.displayCommand}
-                    exit={detailEnvelope.lastExit.code}
-                  />
-                ) : null}
-              </>
-            ) : (
-              <EnvelopeFailure envelope={detailEnvelope} />
-            )}
-          </Card>
-          <Card
-            title="Persistent safety boundary"
-            eyebrow="Operator control"
-            action={<StatusBadge value="read-only" tone="cyan" />}
-          >
-            <ul className="check-list">
-              <li>No quantization start or progress simulation</li>
-              <li>No artifact write, publish, registry, or model mutation</li>
-              <li>No generation, arbitrary shell, or tensor payload access</li>
-              <li>Loopback default, explicit IP bind, and immutable command allowlist</li>
-            </ul>
-          </Card>
-        </div>
+              <div className="split-grid overview-grid">
+                <Panel
+                  title="Current context"
+                  description="Durable selections never override server capability truth."
+                >
+                  <dl className="context-list">
+                    <div>
+                      <dt>Release target</dt>
+                      <dd>{decision?.selected_target_id ?? "Not reported"}</dd>
+                    </div>
+                    <div>
+                      <dt>Selected target</dt>
+                      <dd>{app.selectedTarget ?? "Not selected"}</dd>
+                    </div>
+                    <div>
+                      <dt>Selected artifact</dt>
+                      <dd>{app.selectedArtifact ?? "Not selected"}</dd>
+                    </div>
+                    <div>
+                      <dt>Selected backend</dt>
+                      <dd>{app.selectedBackend ?? "Not selected"}</dd>
+                    </div>
+                    <div>
+                      <dt>Execution lane</dt>
+                      <dd>
+                        {app.selectedLane === "reference-provider"
+                          ? "Reference provider"
+                          : "Native YVEX"}
+                      </dd>
+                    </div>
+                  </dl>
+                </Panel>
+                <Panel
+                  title="Actionable blockers"
+                  description="Highest-impact control-plane and native dependencies."
+                >
+                  <div className="blocker-list">
+                    {blockers.length ? (
+                      blockers.map((blocker) => (
+                        <Link
+                          to={blocker.recoveryAction?.href ?? "/system-health"}
+                          key={blocker.id}
+                        >
+                          <div>
+                            <strong>{blocker.id}</strong>
+                            <p>{blocker.reason}</p>
+                          </div>
+                          <StatusBadge status={blocker.status} />
+                        </Link>
+                      ))
+                    ) : (
+                      <p className="quiet-copy">
+                        No blocked or failed capability is currently observed.
+                      </p>
+                    )}
+                  </div>
+                </Panel>
+              </div>
 
-        <div id="provenance" className="grid grid-three">
-          <Card title="Source trust" eyebrow="Evidence gap">
-            <MissingEvidence id="sourceManifestSnapshotJson" compact />
-          </Card>
-          <Card title="Quantization policy" eyebrow="Evidence gap">
-            <MissingEvidence id="qtypePolicyJson" compact />
-          </Card>
-          <Card title="Backend capability" eyebrow="Evidence gap">
-            <MissingEvidence id="backendCapabilityJson" compact />
-          </Card>
-        </div>
-      </PageContent>
-    </>
+              <div className="split-grid overview-grid">
+                <Panel
+                  title="Active work"
+                  description="Progress remains indeterminate unless an owner reports an exact measure."
+                >
+                  {activeJobs.length ? (
+                    <div className="job-list">
+                      {activeJobs.map((job) => (
+                        <article key={job.id}>
+                          <div>
+                            <strong>{job.type}</strong>
+                            <span>
+                              {job.executionOwner} · {job.phase ?? "starting"}
+                            </span>
+                          </div>
+                          <StatusBadge status="loading" value={job.state} />
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="quiet-copy">
+                      No active jobs. Recent work remains available in Evidence.
+                    </p>
+                  )}
+                </Panel>
+                <Panel
+                  title="Recent failures"
+                  description="Structured local failures; no raw stack traces."
+                >
+                  {recentFailures.length ? (
+                    <div className="failure-list">
+                      {recentFailures.map((failure) => (
+                        <article key={failure.id}>
+                          <strong>{failure.label}</strong>
+                          <time dateTime={failure.time}>
+                            {new Date(failure.time).toLocaleString()}
+                          </time>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="quiet-copy">No recent structured failures.</p>
+                  )}
+                </Panel>
+              </div>
+
+              <Panel
+                title="Quick actions"
+                description="Only fixed control-plane actions are available."
+              >
+                <div className="quick-actions">
+                  <Link className="quick-action" to="/settings?section=yvex">
+                    <Settings2 aria-hidden="true" size={19} />
+                    <strong>Resolve YVEX</strong>
+                    <span>Configure or retry the trusted binary.</span>
+                  </Link>
+                  <Link className="quick-action" to="/settings?section=reference-provider">
+                    <MessageSquare aria-hidden="true" size={19} />
+                    <strong>Reference provider</strong>
+                    <span>Configure, test, and open the chat lane.</span>
+                  </Link>
+                  <Link className="quick-action" to="/evidence?tab=producers">
+                    <Command aria-hidden="true" size={19} />
+                    <strong>Inspect producers</strong>
+                    <span>Run allowlisted machine-readable reports.</span>
+                  </Link>
+                </div>
+              </Panel>
+            </>
+          );
+        }}
+      </ResourceBoundary>
+    </div>
   );
 }

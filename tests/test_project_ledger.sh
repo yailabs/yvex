@@ -80,7 +80,7 @@ function uncode(value) {
 ' "$project" > "$rows"
 
 row_count=$(wc -l < "$rows" | tr -d ' ')
-test "$row_count" -eq 679 || fail "expected 679 canonical IDs, found $row_count"
+test "$row_count" -eq 680 || fail "expected 680 canonical IDs, found $row_count"
 
 cut -f 2 "$rows" | LC_ALL=C sort > "$all_ids"
 unique_count=$(uniq "$all_ids" | wc -l | tr -d ' ')
@@ -91,7 +91,7 @@ duplicate=$(uniq -d "$all_ids" | head -n 1 || true)
 test -z "$duplicate" || fail "duplicate canonical ID: $duplicate"
 
 id_hash=$(sha256sum "$all_ids" | awk '{ print $1 }')
-expected_id_hash=0b930d0fc87512489c500e57e667829dda6300bc4c8840fa75644e768e82084d
+expected_id_hash=f7e2ad7eb38028e474469ee3cb2cb06081259f6a785be83602757dfdf09dea74
 test "$id_hash" = "$expected_id_hash" ||
   fail "canonical ID set changed without an explicit migration: $id_hash"
 
@@ -129,6 +129,7 @@ V010.RUNTIME.SAMPLING.0
 V010.RUNTIME.DEEPSEEK.TOKENIZER.0
 V010.RUNTIME.DEEPSEEK.GENERATION.0
 V010.CLI.DEEPSEEK.GENERATE.0
+YVEX.OPERATOR.E2E.0
 V010.EVAL.DEEPSEEK.0
 V010.BENCH.DEEPSEEK.0
 V010.RUNTIME.DEEPSEEK.ATTENTION.KV.0
@@ -148,7 +149,7 @@ EOF
 
 LC_ALL=C sort -u "$new_ids" -o "$new_ids"
 new_count=$(wc -l < "$new_ids" | tr -d ' ')
-test "$new_count" -eq 48 || fail "expected 48 explicit new IDs, found $new_count"
+test "$new_count" -eq 49 || fail "expected 49 explicit new IDs, found $new_count"
 
 missing_new=$(comm -23 "$new_ids" "$all_ids" | head -n 1 || true)
 test -z "$missing_new" || fail "explicit new ID is absent: $missing_new"

@@ -11,6 +11,19 @@ import { readFile, writeFile } from "node:fs/promises";
 const args = process.argv.slice(2);
 const scenario = process.env.YVEX_FAKE_SCENARIO ?? "default";
 
+if (args[0] === "operator-contract" && args[1] === "--output" && args[2] === "json") {
+  if (scenario === "incompatible-identity") {
+    process.stdout.write(
+      `${JSON.stringify({ schemaVersion: "2", protocolVersion: "99", yvexVersion: "9.0.0", product: "yvex" })}\n`,
+    );
+    process.exit(0);
+  }
+  process.stdout.write(
+    `${JSON.stringify({ schemaVersion: "1", protocolVersion: "1", yvexVersion: "0.1.0", product: "yvex" })}\n`,
+  );
+  process.exit(0);
+}
+
 if (process.env.YVEX_FAKE_COUNT_FILE) {
   let count = 0;
   try {

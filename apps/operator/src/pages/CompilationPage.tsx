@@ -1,158 +1,183 @@
 /*
- * Owner: apps/operator Compilation surface.
- * Owns: safe logical model, architecture IR, tensor coverage, and lowering-gate projection.
- * Does not own: transformation construction, source rescans, contribution accounting, quantization, or artifact emission.
- * Invariants: completion fields are copied from the release decision and missing identities remain unavailable.
- * Boundary: logical/physical planning evidence does not imply payload conversion or a complete artifact.
+ * Owner: apps/operator Compilation workbench.
+ * Owns: distinct pipeline, artifact-neutral identity, and contribution-accounting panels.
+ * Does not own: IR construction, source rescans, mapping, quantization, payload conversion, or artifact emission.
+ * Invariants: pipeline stages use exact release-decision fields and missing identities/accounting remain unavailable.
+ * Boundary: complete planning evidence is not byte transformation or a complete artifact.
  */
 import { ArrowRight, Boxes, Braces, GitMerge, Workflow } from "lucide-react";
 
+import { capabilityById } from "../../shared/contracts.ts";
 import {
-  BoundaryNote,
-  Card,
-  KeyValue,
-  MetricStrip,
-  PageContent,
+  Fact,
+  FactGrid,
   PageHeader,
+  Panel,
+  RecoveryState,
+  ResourceBoundary,
+  RouteTabs,
+  useRouteTab,
 } from "../components/Primitives.tsx";
-import { EnvelopeFailure, StatusBadge, statusTone } from "../components/Status.tsx";
+import { StatusBadge, machineTone } from "../components/Status.tsx";
 import { pageMetadata } from "../navigation.ts";
-import { reportEnvelope, useOperatorView } from "../view-context.tsx";
-import { FactList, MissingEvidence, ProducerStamp } from "./PageSupport.tsx";
+import { useOperatorState } from "../state/operator-state.tsx";
+import { Provenance, RefreshButton, reportOf, useDomainProjection } from "./PageSupport.tsx";
 
-/** Renders existing compilation gates without rebuilding IR, rescanning sources, or emitting artifacts. */
+const tabs = [
+  { id: "pipeline", label: "Pipeline" },
+  { id: "identity", label: "Identity" },
+  { id: "accounting", label: "Accounting" },
+] as const;
+
+/** Renders compilation planning surfaces without executing or rescanning lower owners. */
 export function CompilationPage() {
-  const { response } = useOperatorView();
-  const decisionEnvelope = reportEnvelope(response, "releaseDecision");
-  const detailEnvelope = reportEnvelope(response, "targetDetail");
-  const decision = decisionEnvelope?.data;
-  const detail = detailEnvelope?.data;
+  const projection = useDomainProjection("compilation");
+  const app = useOperatorState();
+  const tab = useRouteTab(tabs, "pipeline");
   const page = pageMetadata.compilation;
-  const gates = [
-    { label: "Logical model", value: detail?.target_id ?? "Unavailable", icon: Boxes },
-    { label: "Transformation IR", value: decision?.architecture_ir ?? "Unavailable", icon: Braces },
-    { label: "Tensor coverage", value: decision?.tensor_coverage ?? "Unavailable", icon: GitMerge },
-    { label: "GGUF lowering", value: decision?.gguf_mapping ?? "Unavailable", icon: Workflow },
-  ];
-
   return (
-    <>
+    <div className="page">
       <PageHeader
         eyebrow={page.eyebrow}
         title={page.label}
         summary={page.summary}
-        state={decision?.status ?? "Unavailable"}
-        tabs={["Pipeline", "Identity", "Accounting"]}
+        actions={<RefreshButton refresh={projection.refresh} refreshing={projection.refreshing} />}
       />
-      <PageContent>
-        <MetricStrip
-          items={[
-            {
-              label: "Logical target",
-              value: decision?.selected_target_id ?? "Unavailable",
-              detail: detail?.class ?? "No validated class",
-              tone: decision ? "cyan" : "amber",
-            },
-            {
-              label: "Architecture IR",
-              value: decision?.architecture_ir ?? "Unavailable",
-              detail: "Artifact-neutral",
-              tone: statusTone(decision?.architecture_ir),
-            },
-            {
-              label: "Tensor coverage",
-              value: decision?.tensor_coverage ?? "Unavailable",
-              detail: "Decision gate",
-              tone: statusTone(decision?.tensor_coverage),
-            },
-            {
-              label: "Physical lowering",
-              value: decision?.gguf_mapping ?? "Unavailable",
-              detail: "GGUF mapping",
-              tone: statusTone(decision?.gguf_mapping),
-            },
-          ]}
-        />
-
-        <Card id="pipeline" title="Compilation gate pipeline" eyebrow="Typed decision evidence">
-          {decision ? (
-            <>
-              <div className="compilation-pipeline">
-                {gates.map((gate, index) => {
-                  const Icon = gate.icon;
-                  return (
-                    <div className="pipeline-gate" key={gate.label}>
-                      <Icon aria-hidden="true" size={19} />
-                      <span className="micro-label">{gate.label}</span>
-                      <strong>{gate.value}</strong>
-                      <StatusBadge value={index === 0 ? "selected" : gate.value} />
-                      {index < gates.length - 1 ? (
-                        <ArrowRight aria-hidden="true" className="pipeline-arrow" size={15} />
-                      ) : null}
-                    </div>
-                  );
-                })}
+      <RouteTabs tabs={tabs} defaultTab="pipeline" label="Compilation sections" />
+      <ResourceBoundary resource={projection}>
+        {(data) => {
+          const decisionEnvelope = reportOf(data, "release-decision");
+          const detailEnvelope = reportOf(data, "target-detail");
+          const decision = decisionEnvelope?.data;
+          if (!decision)
+            return (
+              <RecoveryState
+                state={decisionEnvelope?.availability ?? data.availability}
+                retry={projection.refresh}
+              />
+            );
+          if (tab === "pipeline") {
+            const stages = [
+              {
+                label: "Logical model",
+                value: detailEnvelope?.data?.target_id ?? "Unavailable",
+                icon: Boxes,
+                status: detailEnvelope?.data ? "selected" : "unavailable",
+              },
+              {
+                label: "Transformation IR",
+                value: decision.architecture_ir,
+                icon: Braces,
+                status: decision.architecture_ir,
+              },
+              {
+                label: "Tensor coverage",
+                value: decision.tensor_coverage,
+                icon: GitMerge,
+                status: decision.tensor_coverage,
+              },
+              {
+                label: "Physical lowering",
+                value: decision.gguf_mapping,
+                icon: Workflow,
+                status: decision.gguf_mapping,
+              },
+            ];
+            return (
+              <div role="tabpanel">
+                <Panel
+                  title="Compilation pipeline"
+                  description="Artifact-neutral planning followed by format-specific physical lowering."
+                >
+                  <div className="pipeline-line">
+                    {stages.map((stage, index) => {
+                      const Icon = stage.icon;
+                      return (
+                        <article key={stage.label}>
+                          <Icon aria-hidden="true" size={19} />
+                          <span>{String(index + 1).padStart(2, "0")}</span>
+                          <strong>{stage.label}</strong>
+                          <code>{stage.value}</code>
+                          <StatusBadge value={stage.status} tone={machineTone(stage.status)} />
+                          {index < stages.length - 1 ? (
+                            <ArrowRight className="pipeline-arrow" aria-hidden="true" size={15} />
+                          ) : null}
+                        </article>
+                      );
+                    })}
+                  </div>
+                  <p className="boundary-copy">
+                    The pipeline stops at immutable planning evidence. It does not read payloads,
+                    choose a release qtype, quantize tensors, or emit GGUF bytes.
+                  </p>
+                  {decisionEnvelope ? <Provenance envelope={decisionEnvelope} /> : null}
+                </Panel>
               </div>
-              <BoundaryNote>
-                These gates establish compilation evidence only. Payload transformation,
-                quantization, and GGUF byte emission remain separate owners.
-              </BoundaryNote>
-            </>
-          ) : (
-            <EnvelopeFailure envelope={decisionEnvelope} />
-          )}
-        </Card>
-
-        <div id="identity" className="grid grid-two">
-          <Card
-            title="Logical model"
-            eyebrow="Artifact-neutral identity"
-            action={detail ? <StatusBadge value={detail.class} tone="cyan" /> : null}
-          >
-            {detail ? (
-              <FactList>
-                <KeyValue label="Target" value={detail.target_id} mono />
-                <KeyValue label="Family" value={detail.family} />
-                <KeyValue
-                  label="Release selected"
-                  value={detail.release_selected ? "true" : "false"}
-                  mono
+            );
+          }
+          if (tab === "identity")
+            return (
+              <div role="tabpanel" className="detail-layout">
+                <Panel
+                  title="Logical model identity"
+                  description="Independent from a physical container."
+                >
+                  <FactGrid>
+                    <Fact label="Target" value={decision.selected_target_id} mono />
+                    <Fact label="Family" value={detailEnvelope?.data?.family ?? "Not reported"} />
+                    <Fact label="Class" value={detailEnvelope?.data?.class ?? "Not reported"} />
+                    <Fact label="Container" value="Not part of logical identity" />
+                  </FactGrid>
+                </Panel>
+                <Panel
+                  title="Transformation identity"
+                  description="Stable artifact-neutral identifier."
+                >
+                  <RecoveryState
+                    state={{
+                      status: "unavailable",
+                      reasonCode: "transformation-identity-contract-missing",
+                      message:
+                        "The admitted target decision exposes completion but no stable transformation identity field.",
+                      observedAt: data.observedAt,
+                      source: "producer-registry",
+                    }}
+                  />
+                </Panel>
+              </div>
+            );
+          const coverage = capabilityById(app.capabilities.data, "compilation.tensor-coverage");
+          return (
+            <div role="tabpanel" className="detail-layout">
+              <Panel
+                title="Coverage gate"
+                description="Typed completion status from the release decision."
+              >
+                <FactGrid>
+                  <Fact label="Tensor coverage" value={decision.tensor_coverage} />
+                  <Fact label="Capability" value={coverage?.status ?? "loading"} />
+                  <Fact label="Source" value={coverage?.source ?? "capability manifest"} />
+                </FactGrid>
+              </Panel>
+              <Panel
+                title="Contribution accounting"
+                description="Exact contribution and descriptor totals require a dedicated producer."
+              >
+                <RecoveryState
+                  state={{
+                    status: "blocked",
+                    reasonCode: "tensor-accounting-contract-missing",
+                    message:
+                      "Contribution accounting is blocked because the current detailed command re-verifies source headers.",
+                    observedAt: data.observedAt,
+                    source: "producer-registry",
+                  }}
                 />
-                <KeyValue label="Container" value="Not part of logical identity" />
-              </FactList>
-            ) : (
-              <EnvelopeFailure envelope={detailEnvelope} />
-            )}
-          </Card>
-          <Card title="Transformation identity" eyebrow="Missing safe field">
-            <MissingEvidence id="transformationIdentityJson" />
-          </Card>
-        </div>
-
-        <div id="accounting" className="grid grid-two">
-          <Card title="Contribution accounting" eyebrow="No source rescan">
-            <MissingEvidence id="tensorAccountingJson" />
-          </Card>
-          <Card title="Decision provenance" eyebrow="Audited command">
-            {decisionEnvelope ? (
-              <>
-                <FactList>
-                  <KeyValue label="Status" value={decisionEnvelope.data?.status ?? "Unavailable"} />
-                  <KeyValue label="Last exit" value={decisionEnvelope.lastExit.code ?? "—"} mono />
-                  <KeyValue label="Cache" value={decisionEnvelope.producer.cachePolicy} />
-                  <KeyValue label="Observed" value={decisionEnvelope.observedAt} mono />
-                </FactList>
-                <ProducerStamp
-                  command={decisionEnvelope.producer.displayCommand}
-                  exit={decisionEnvelope.lastExit.code}
-                />
-              </>
-            ) : (
-              <EnvelopeFailure envelope={decisionEnvelope} />
-            )}
-          </Card>
-        </div>
-      </PageContent>
-    </>
+              </Panel>
+            </div>
+          );
+        }}
+      </ResourceBoundary>
+    </div>
   );
 }

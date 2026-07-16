@@ -1,22 +1,22 @@
 /*
  * Owner: apps/operator server entrypoint.
- * Owns: startup configuration, adapter assembly, static-root selection, and configured listen lifecycle.
- * Does not own: frontend content, YVEX rebuilding, command policy, model files, or network access policy.
- * Invariants: startup refuses invalid configuration before accepting traffic.
- * Boundary: a listening operator is not evidence that the YVEX binary or runtime is available.
+ * Owns: startup validation, service assembly, static-root selection, listener lifecycle, and bounded startup logging.
+ * Does not own: frontend content, command policy, provider secrets, native YVEX building, or capability promotion.
+ * Invariants: insecure remote configuration refuses before accepting traffic and startup logs contain no credentials.
+ * Boundary: a listening Operator proves adapter availability only.
  */
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { OperatorAdapter } from "./adapter.ts";
 import { loadOperatorConfig } from "./config.ts";
 import { createOperatorHttpServer } from "./http.ts";
+import { createOperatorServices } from "./services.ts";
 
-/** Starts the production operator and returns only after its configured listener is active. */
+/** Starts the production Operator only after configuration and security policy validate. */
 export async function startOperator(): Promise<void> {
   const config = loadOperatorConfig();
-  const adapter = new OperatorAdapter(config);
+  const services = createOperatorServices(config);
   const staticRoot = fileURLToPath(new URL("./client/", import.meta.url));
-  const server = createOperatorHttpServer(adapter, staticRoot);
+  const server = createOperatorHttpServer(services, staticRoot);
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, config.host, () => {
@@ -24,14 +24,14 @@ export async function startOperator(): Promise<void> {
       resolve();
     });
   });
-  process.stdout.write(`YVEX operator ${config.host}:${config.port} read-only\n`);
+  process.stdout.write(`YVEX Operator ${config.host}:${config.port} ${config.bindMode} API v1\n`);
 }
 
 const entry = process.argv[1] ? pathToFileURL(process.argv[1]).href : "";
 if (import.meta.url === entry) {
   void startOperator().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : "unknown startup refusal";
-    process.stderr.write(`YVEX operator refused startup: ${message}\n`);
+    process.stderr.write(`YVEX Operator refused startup: ${message}\n`);
     process.exitCode = 1;
   });
 }

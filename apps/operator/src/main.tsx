@@ -10,6 +10,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 
 import { App } from "./App.tsx";
+import { OperatorStateProvider } from "./state/operator-state.tsx";
 import "./styles.css";
 
 const root = document.getElementById("root");
@@ -18,7 +19,9 @@ if (!root) throw new Error("YVEX operator root element is unavailable");
 createRoot(root).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
+      <OperatorStateProvider>
+        <App />
+      </OperatorStateProvider>
     </BrowserRouter>
   </StrictMode>,
 );
