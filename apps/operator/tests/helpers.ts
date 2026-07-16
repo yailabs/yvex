@@ -87,7 +87,7 @@ export function providerFetcher(options: ProviderDoubleOptions = {}): typeof fet
         : {};
     const prompt = body.messages?.at(-1)?.content ?? "";
     const pieces =
-      prompt === "Reply with OK."
+      prompt === "Reply with OK only. Do not reason or explain."
         ? ["OK"]
         : /slow|cancel/i.test(prompt)
           ? ["Partial ", "reference ", "response ", "continues."]

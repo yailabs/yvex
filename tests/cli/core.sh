@@ -17,6 +17,7 @@
 #   - yvex -h
 #   - yvex --version
 #   - yvex version
+#   - yvex operator-contract --output json
 #   - yvex info
 #   - yvex convert
 #   - yvex qtype-support
@@ -157,6 +158,21 @@ contains "$OUT_DIR/version_option.out" "yvex 0.1.0"
 
 run_ok version_command "$YVEX_BIN" version
 contains "$OUT_DIR/version_command.out" "yvex 0.1.0"
+
+run_ok operator_contract "$YVEX_BIN" operator-contract --output json
+jq -e '.schemaVersion == "1" and .protocolVersion == "1" and .yvexVersion == "0.1.0" and .product == "yvex"' "$OUT_DIR/operator_contract.out" >/dev/null
+run_ok operator_contract_help "$YVEX_BIN" operator-contract --help
+contains "$OUT_DIR/operator_contract_help.out" "usage: yvex operator-contract --output json"
+contains "$OUT_DIR/operator_contract_help.out" "does not report backend, runtime, or generation support"
+run_ok help_operator_contract "$YVEX_BIN" help operator-contract
+contains "$OUT_DIR/help_operator_contract.out" "command: operator-contract [plumbing]"
+contains "$OUT_DIR/help_operator_contract.out" "protocol identity only; no backend/runtime capability"
+run_fail_code operator_contract_missing_output 2 "$YVEX_BIN" operator-contract
+contains "$OUT_DIR/operator_contract_missing_output.err" "usage: yvex operator-contract --output json"
+run_fail_code operator_contract_bad_output 2 "$YVEX_BIN" operator-contract --output table
+contains "$OUT_DIR/operator_contract_bad_output.err" "unsupported output mode: table"
+run_fail_code operator_contract_bad_option 2 "$YVEX_BIN" operator-contract --json value
+contains "$OUT_DIR/operator_contract_bad_option.err" "unsupported option: --json"
 
 run_ok info "$YVEX_BIN" info
 contains "$OUT_DIR/info.out" "info: YVEX"

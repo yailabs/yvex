@@ -1,7 +1,15 @@
 /*
  * yvex_core.c - Errors, status names, logging, and version reporting.
  *
- * This file owns the small core utilities used by every other YVEX module.
+ * Owner: src/core.
+ * Owns: small error/status/logging utilities, immutable version facts, and the
+ * typed no-allocation Operator protocol identity report.
+ * Does not own: CLI parsing/rendering, process execution, capability probing,
+ * runtime state, backend state, or configuration.
+ * Invariants: version and protocol identity are compile-time facts and report
+ * construction performs no allocation, mutation outside its output, or IO.
+ * Boundary: protocol compatibility identifies the CLI transport only; it does
+ * not claim model, artifact, backend, runtime, or generation support.
  */
 
 #include <yvex/error.h>
@@ -201,4 +209,20 @@ int yvex_version_minor(void)
 int yvex_version_patch(void)
 {
     return YVEX_VERSION_PATCH;
+}
+
+/*
+ * Contract: fills one borrowed report with immutable product, version, schema,
+ * and protocol identity. It performs no allocation or IO, mutates only report,
+ * and returns invalid-argument for a null output.
+ */
+yvex_status yvex_operator_contract_report_build(
+    yvex_operator_contract_report *report)
+{
+    if (!report) return YVEX_ERR_INVALID_ARG;
+    report->schema_version = YVEX_OPERATOR_CONTRACT_SCHEMA_VERSION;
+    report->protocol_version = YVEX_OPERATOR_PROTOCOL_VERSION;
+    report->yvex_version = yvex_version_string();
+    report->product = "yvex";
+    return YVEX_OK;
 }

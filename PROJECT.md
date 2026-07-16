@@ -1571,7 +1571,7 @@ target or payload snapshot exists.
 
 **Owner:** CLI grammar, command adaptation, typed input, dispatch, rendering, refusal, control-plane integration, topology guards, and operator acceptance.
 
-**Current truth:** the loopback-first web control plane and reference-provider lane are operational; the native release command remains unsupported
+**Current truth:** the loopback-first web control plane admits the repository binary through a typed machine-readable Operator handshake and the reference-provider lane is operational; the native release command remains unsupported
 
 **Ledger summary:** 81 recovered IDs; 2 first-class milestones; 38 complete support rows; 43 open support rows; 0 superseded/deferred rows.
 

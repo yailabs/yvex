@@ -292,7 +292,7 @@ export class ReferenceProviderService {
     };
   }
 
-  /** Tests model discovery and one-token streaming through a cancellable provider-test job. */
+  /** Tests model discovery and a bounded visible-token stream through a cancellable provider-test job. */
   async testConnection(): Promise<{ status: ProviderStatus; jobId: string }> {
     const job = this.jobs.create(
       "provider-test",
@@ -317,8 +317,16 @@ export class ReferenceProviderService {
       let streamed = false;
       await this.streamRequest(
         context,
-        [{ role: "user", content: "Reply with OK." }],
-        { model, maxOutputTokens: 1, temperature: 0, topP: 1, seed: null, stop: [], stream: true },
+        [{ role: "user", content: "Reply with OK only. Do not reason or explain." }],
+        {
+          model,
+          maxOutputTokens: 16,
+          temperature: 0,
+          topP: 1,
+          seed: null,
+          stop: [],
+          stream: true,
+        },
         controller.signal,
         {
           delta: (delta) => {

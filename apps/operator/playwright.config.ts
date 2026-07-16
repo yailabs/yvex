@@ -6,10 +6,15 @@
  * Boundary: browser fixture success validates Operator vertical slices only.
  */
 import { defineConfig, devices } from "@playwright/test";
+import { resolve } from "node:path";
 
 const browserTestPort = 14_317;
 const providerTestPort = 14_318;
 const browserTestOrigin = `http://127.0.0.1:${browserTestPort}`;
+const missingRepositoryBinary = resolve(
+  process.cwd(),
+  "test-results/playwright/missing-repository-yvex",
+);
 
 export default defineConfig({
   testDir: "./tests/browser",
@@ -34,7 +39,7 @@ export default defineConfig({
       timeout: 20_000,
     },
     {
-      command: `YVEX_OPERATOR_CONFIG_DIR=./test-results/playwright/operator-config YVEX_OPERATOR_PORT=${browserTestPort} node dist/operator-server.js`,
+      command: `YVEX_BIN= YVEX_OPERATOR_REPOSITORY_BIN=${missingRepositoryBinary} YVEX_OPERATOR_CONFIG_DIR=./test-results/playwright/operator-config YVEX_OPERATOR_PORT=${browserTestPort} node dist/operator-server.js`,
       url: `${browserTestOrigin}/api/v1/system/health`,
       reuseExistingServer: false,
       timeout: 20_000,

@@ -145,8 +145,18 @@ describe("system, settings, and producer API", () => {
   });
 
   it("persists write-only provider credentials, tests models and streaming, and returns redacted state", async () => {
+    let compatibilityRequest: Record<string, unknown> | null = null;
     const harness = await createTestHarness({
-      dependencies: { fetcher: providerFetcher({ lineEnding: "\r\n" }) },
+      dependencies: {
+        fetcher: providerFetcher({
+          lineEnding: "\r\n",
+          onRequest: (url, init) => {
+            if (url.pathname.endsWith("/chat/completions") && typeof init?.body === "string") {
+              compatibilityRequest = JSON.parse(init.body) as Record<string, unknown>;
+            }
+          },
+        }),
+      },
     });
     harnesses.push(harness);
     const saved = await jsonRequest(
@@ -175,6 +185,11 @@ describe("system, settings, and producer API", () => {
     expect(tested.status).toBe(200);
     expect(await tested.json()).toMatchObject({
       status: { reachable: true, streamingCompatible: true, models: [fakeProviderModel] },
+    });
+    expect(compatibilityRequest).toMatchObject({
+      max_tokens: 16,
+      messages: [{ content: "Reply with OK only. Do not reason or explain." }],
+      stream: true,
     });
     expect(
       await (await fetch(`${harness.baseUrl}/api/v1/reference-provider/models`)).json(),

@@ -201,6 +201,8 @@ int yvex_moe_command(int arg_count, char **args);
 void yvex_moe_help(FILE *fp);
 int yvex_models_command(int arg_count, char **args);
 void yvex_models_help(FILE *fp);
+int yvex_operator_contract_command(int arg_count, char **args);
+void yvex_operator_contract_help(FILE *fp);
 int yvex_native_weights_command(int arg_count, char **args);
 void yvex_native_weights_help(FILE *fp);
 int yvex_paths_command(int arg_count, char **args);
