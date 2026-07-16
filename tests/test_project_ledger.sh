@@ -332,8 +332,16 @@ grep -F '| `V010.MODEL.TRANSFORM.IR.0` | DeepSeek + common plan | `complete` |' 
   fail "transformation IR milestone is not complete"
 grep -F '| `V010.QUANT.2` | common + DeepSeek roles | `complete` |' "$project" >/dev/null ||
   fail "quantization is not complete"
-grep -F '| `V010.GGUF.WRITER.1` | common | `active` |' "$project" >/dev/null ||
-  fail "GGUF writer is not active"
+grep -F '| `V010.GGUF.WRITER.1` | common | `complete` |' "$project" >/dev/null ||
+  fail "GGUF writer is not complete"
+grep -F '| `V010.ARTIFACT.EMIT.DEEPSEEK.0` | DeepSeek | `complete` |' "$project" >/dev/null ||
+  fail "complete DeepSeek artifact emission is not complete"
+grep -F '| `V010.GGUF.ROUNDTRIP.1` | common + DeepSeek artifact | `complete` |' "$project" >/dev/null ||
+  fail "GGUF roundtrip is not complete"
+grep -F '| `V010.ARTIFACT.SUPPORT.CUTOVER.0` | common | `complete` |' "$project" >/dev/null ||
+  fail "complete-artifact support cutover is not complete"
+grep -F '| `V010.ARTIFACT.MATERIALIZE.0` | common | `active` |' "$project" >/dev/null ||
+  fail "artifact materialization is not active"
 grep -F '| V010.MODEL.TRANSFORM.IR.0 | recovered/promoted |' "$project" >/dev/null ||
   fail "quantization does not depend on the transformation IR"
 

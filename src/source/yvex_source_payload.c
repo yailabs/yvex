@@ -495,7 +495,7 @@ static int payload_build_indexes(yvex_source_payload_session *session,
             yvex_source_tensor_snapshot_at(session->snapshot, index);
         const yvex_source_shard_snapshot *source_shard;
         yvex_source_payload_range *range = &session->ranges[index];
-        unsigned long long expected_bytes;
+        unsigned long long expected_bytes = 0u;
         unsigned long long absolute_begin;
         unsigned long long absolute_end;
         unsigned int dimension;

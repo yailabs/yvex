@@ -828,10 +828,12 @@ static int test_future_owned_boundaries(void)
 {
     const char *reason = NULL;
 
-    YVEX_TEST_ASSERT(yvex_gguf_writer_supported(&reason) == 0, "writer remains refused");
-    YVEX_TEST_ASSERT(reason != NULL, "writer refusal reason");
-    YVEX_TEST_ASSERT(yvex_gguf_roundtrip_supported(&reason) == 0, "roundtrip remains refused");
-    YVEX_TEST_ASSERT(reason != NULL, "roundtrip refusal reason");
+    YVEX_TEST_ASSERT(yvex_gguf_writer_supported(&reason) == 1,
+                     "writer plan capability is implemented");
+    YVEX_TEST_ASSERT(reason != NULL, "writer boundary reason");
+    YVEX_TEST_ASSERT(yvex_gguf_roundtrip_supported(&reason) == 1,
+                     "full native roundtrip capability is implemented");
+    YVEX_TEST_ASSERT(reason != NULL, "roundtrip boundary reason");
     YVEX_TEST_ASSERT(yvex_gguf_qtype_geometry_count() > 0u, "qtype geometry table exists");
     return 0;
 }

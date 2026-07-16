@@ -1,11 +1,11 @@
 # YVEX Project Control
 
-Date: 2026-07-15
+Date: 2026-07-16
 Status: living engineering control
 Authority: product target, architecture tracks, complete wave ledger, milestone
 state, dependencies, evidence rank, family scope, release gates, and Active Next
 Recovery baseline: pre-refoundation `docs/spine.md` at commit `10ad6c3`
-Current proof stage: sealed Transformation IR, selected DeepSeek physical quantization profile, and complete trusted digest/discard numeric execution
+Current proof stage: complete admitted DeepSeek GGUF artifacts with exact physical identity, native full-byte roundtrip, pinned official-reader acceptance, and deterministic serialization
 
 ## 1. Authority And Update Contract
 
@@ -353,10 +353,10 @@ in a conversation or closure report is not part of the architecture.
 | Mapping | The sealed artifact-neutral Transformation IR now projects to 1,360 immutable GGUF lowering descriptors: 1,328 pinned-standard trunk descriptors and 32 explicit YVEX MTP extension descriptors. The GGUF adapter adds names, qtypes, metadata, and emitted layout without reconstructing transformation semantics; all 69,187 contributions and mapping identity `1aecbbe25b04de0d` remain exact. |
 | Compilation | Schema-v1 immutable Transformation IR owns 69,187 source values, 1,360 typed operations and terminal logical outputs, 69,187 edges, deterministic topology, checked shapes/dtypes/axes, canonical identity `1c5ceab43fa9f9bf437aacc3b4b3c246ff26446ab0d7abd22ea642ce726017f5`, and an exhaustive payload-range/quantizer binding. Planning reads zero payload bytes. One fixed versioned DeepSeek physical profile now consumes this truth; automatic optimization, multi-variant compilation, placement selection, and feedback-driven selection remain deferred. |
 | GGUF foundations | The canonical row-aware qtype storage ABI, scalable native GGUF v3 structural reader ABI, and global directory-order layout admission are closed. `V010.GGUF.ARTIFACT.ABI.0` remains reopened as bounded historical evidence. |
-| Qtype | Pinned GGUF identities, removed/outside-baseline refusal, exact scalar/block geometry, and shape-aware storage accounting are canonical. One numeric capability registry now owns deterministic codec and CPU/CUDA compute truth. F32, F16, BF16, I32, Q8_0, Q2_K, and MXFP4 codecs and direct encoded row-dot proofs are complete; unsupported identities refuse explicitly. The selected DeepSeek profile and bounded four-operation byte executor are complete, while GGUF emission remains unimplemented. |
-| Artifact | File-backed structural inspection and global layout admission own typed container, metadata, tensor-directory, qtype, ordered range, padding, budget, and lifetime facts without reading tensor payload bytes. Controlled proof emission exists; YVEX has not produced a complete DeepSeek-V4-Flash GGUF. |
-| Integrity | Canonical power-of-two alignment, directory order, exact padded continuation, zero padding, aggregate span, truncation, tail, and snapshot drift admission are closed. Source payload trust is closed independently; complete-artifact identity, emitted tensor-role coverage, and artifact support remain blocked. |
-| Materialization | Selected proof behavior exists. Family-neutral complete materialization and full DeepSeek DGX Spark residency are unsupported. |
+| Qtype | Pinned GGUF identities, removed/outside-baseline refusal, exact scalar/block geometry, and shape-aware storage accounting are canonical. One numeric capability registry owns deterministic codec and CPU/CUDA compute truth. F32, F16, BF16, I32, Q8_0, Q2_K, and MXFP4 codecs, direct encoded row-dot proofs, the selected DeepSeek profile, and the bounded four-operation byte executor are complete; unsupported identities refuse explicitly. |
+| Artifact | One immutable GGUF v3 writer plan consumes canonical lowering, quantization, tokenizer, and provenance owners. It emitted the complete source-faithful and selected DeepSeek artifacts outside the repository: `deepseek-v4-flash-source-faithful-v1.gguf` is 177,680,573,600 bytes with identity `f16e800c0d7383ee76cb2e2fa8bdd674bab29c017cba64eaba85c39016e257ca`; `deepseek-v4-flash-q8_0-q2_k-v1.gguf` is 102,408,545,440 bytes with identity `01b2bed4f070d0a3fdb02e546764b3a49cb69886eebe17b4877d20294725682c`. Each contains 68 metadata entries, exact tokenizer material, and all 1,360 tensors. This is complete-artifact evidence ready for materialization, not supported runtime evidence. |
+| Integrity | Canonical layout admission, full-file SHA-256 identity, exact payload-range verification, native writer-reader equivalence, pinned official ggml reader acceptance, deterministic second serialization, and complete-artifact support admission are closed for both DeepSeek artifacts. Tensor proofs and external or structurally incomplete GGUF files remain outside the complete-artifact path. |
+| Materialization | The family-neutral materialization milestone is active against the admitted selected artifact. Complete materialization, DGX Spark placement, and runtime residency are not yet implemented. |
 | Runtime descriptor | Header/report facts exist. No execution-complete common or DeepSeek runtime descriptor exists. |
 | CUDA | Production C contains no fallback PTX. Context, Driver API memory operations, generated-bundle admission, resolved functions, and exact primitive variants are distinct typed facts. A no-`nvcc` build refuses every kernel before dispatch; the admitted generated bundle passes bounded GB10 reference proofs. Direct encoded F32, F16, BF16, I32, Q8_0, Q2_K, and MXFP4 row-dot paths match CPU reference exactly. The DeepSeek/v0.1 required-operation gate remains unsupported. |
 | Transformer | Family-correct DeepSeek attention, positions, KV, MoE, repeated layers, and final norm are unsupported. |
@@ -385,7 +385,11 @@ V010.PROJECT.COMPILATION.0: complete (compilation ownership and planning contrac
 V010.DOCS.README.COMPILATION.0: complete (public compilation/execution identity only)
 V010.MODEL.TRANSFORM.IR.0: complete (artifact-neutral immutable plan, GGUF projection, and quantizer binding)
 V010.QUANT.2: complete (selected physical profile, numeric codecs, bounded execution, and CPU/CUDA qtype truth)
-Active Next: V010.GGUF.WRITER.1
+V010.GGUF.WRITER.1: complete (immutable writer plan, transactional file sink, exact physical identity, and atomic publication)
+V010.ARTIFACT.EMIT.DEEPSEEK.0: complete (complete source-faithful and selected DeepSeek GGUF emission)
+V010.GGUF.ROUNDTRIP.1: complete (native full-byte, pinned official-reader, and deterministic serialization equivalence)
+V010.ARTIFACT.SUPPORT.CUTOVER.0: complete (canonical complete-artifact admission separated from tensor proofs)
+Active Next: V010.ARTIFACT.MATERIALIZE.0
 ```
 
 Strict source proof consumes the pinned upstream index with Git OID
@@ -447,7 +451,7 @@ standard trunk descriptors and 32 namespaced MTP extension descriptors. The
 adapter adds GGUF names, forced source-format qtypes, metadata, emitted layout,
 and deterministic source/emitted/role indexes. Descriptor-by-descriptor tests
 preserve mapping identity `1aecbbe25b04de0d`; payload conversion, writer bytes,
-artifact support, and runtime remain blocked.
+and runtime behavior remain outside the mapping owner.
 
 The payload handoff consumes the same retained snapshot and map. It builds
 immutable O(1)-expected shard and tensor indexes, checked absolute ranges, and
@@ -491,9 +495,28 @@ role-grouped metrics, independent reference decoding, and direct CPU/CUDA
 encoded-row compute passed with zero numeric-bound violations, short reads,
 payload drift, sink failures, aborted terminals, or incomplete terminals. The
 profile explicitly requires no calibration; `V010.QUANT.3` remains planned for
-future profiles that require calibration evidence. No GGUF file was emitted,
-and artifact, residency, runtime, transformer, and generation support remain
-unpromoted.
+future profiles that require calibration evidence. Materialization, residency,
+runtime, transformer, and generation support remain unpromoted.
+
+The artifact owner now consumes the lowering and quantization owners through
+immutable GGUF v3 writer plans. The source-faithful plan identity
+`3bcd8e5bd58fc05684121a05ee87c13c14dcf09f379ca37f06e0361591d06eb0`
+produced 177,668,871,752 tensor payload bytes in a 177,680,573,600-byte file;
+the selected plan identity
+`4b47814e06c43b3426efcaab72b836596c42358a7c59ea5619ddd70c0eefe9fd`
+produced 102,396,843,592 tensor payload bytes in a 102,408,545,440-byte file.
+Both artifacts contain 47 lowering metadata entries plus 21 exact
+artifact/tokenizer/provenance entries, 129,280 tokenizer tokens, 127,741
+merges, and all 1,360 tensors. Native YVEX full-byte roundtrip, the pinned
+official ggml reader at
+`af97976c7810cdabb1863172f31c432dab767de7`, and a second complete selected
+serialization accepted identical structure and bytes. Artifact identities
+`f16e800c0d7383ee76cb2e2fa8bdd674bab29c017cba64eaba85c39016e257ca`
+and `01b2bed4f070d0a3fdb02e546764b3a49cb69886eebe17b4877d20294725682c`
+bind the exact physical files independently from their quantization execution
+identities. The complete-artifact gate admits those immutable snapshots for
+materialization; it does not claim residency, runtime execution, transformer
+execution, or generation.
 
 Recovered `V010.BACKEND.0`, `.6`, `.7`, `.8`, and `.9` are promoted from
 planned subtasks to completed bounded capabilities because the exact matrix,
@@ -539,10 +562,10 @@ another supported model.
 
 | Family/scope | Source/profile truth | Tensor/map truth | Artifact/materialization truth | Runtime truth | Project role |
 | --- | --- | --- | --- | --- | --- |
-| DeepSeek-V4-Flash | Exact source metadata/header verification, upstream payload trust, bounded streaming handoff, and typed architecture IR complete | Exact 69,187-entry coverage, artifact-neutral Transformation IR, 1,360-descriptor GGUF lowering, and selected quantization plan complete | No complete artifact; full materialization unsupported | generation unsupported | sole v0.1.0 release target |
+| DeepSeek-V4-Flash | Exact source metadata/header verification, upstream payload trust, bounded streaming handoff, and typed architecture IR complete | Exact 69,187-entry coverage, artifact-neutral Transformation IR, 1,360-descriptor GGUF lowering, and selected quantization plan complete | Source-faithful and selected complete GGUF artifacts emitted, roundtrip-verified, and admitted; full materialization not implemented | generation unsupported | sole v0.1.0 release target |
 | Qwen | Source target/profile, header inventory, naming-map, and role-coverage work exists | Implemented at bounded source/header/report stages | No complete supported artifact or full materialization claim | generation unsupported | active multi-family/common architecture evidence |
 | Gemma | Source target/profile and header tensor-collection work exists | Dense/common mapping can be reused; exact complete family gate not claimed | No complete supported artifact or full materialization claim | generation unsupported | active dense/common architecture evidence |
-| Dense/common | Common naming, collections, proof artifacts, validators, and primitive evidence exist | Partial reusable capability | Family-neutral materialization is a real planned milestone | no supported full-model runtime | common engine architecture and regression surface |
+| Dense/common | Common naming, collections, proof artifacts, validators, and primitive evidence exist | Partial reusable capability | Family-neutral materialization is the active milestone; behavior is not yet implemented | no supported full-model runtime | common engine architecture and regression surface |
 | GLM | No canonical implemented target contract | planned only | unsupported | unsupported | parked pending an implementation milestone |
 | Other families/backends | uncommitted | uncommitted | unsupported | unsupported | require an explicit future scope decision |
 
@@ -564,10 +587,10 @@ calculated from rows rather than protected by a summary hash.
 | Explicit new IDs | 48 |
 | Canonical IDs | 679 |
 | First-class milestones | 40 |
-| State: complete | 224 |
+| State: complete | 228 |
 | State: active | 1 |
 | State: partial | 1 |
-| State: blocked | 20 |
+| State: blocked | 16 |
 | State: planned | 397 |
 | State: reopened | 2 |
 | State: deferred | 22 |
@@ -581,11 +604,11 @@ calculated from rows rather than protected by a summary hash.
 | `TRACK.MAP` | Family source names, canonical runtime roles, GGUF names, physical-lowering projections, layouts, ambiguity refusal, and complete mapping coverage. | canonical DeepSeek GGUF lowering evidence is complete | Every required source tensor maps exactly once to a runtime role and emitted layout. |
 | `TRACK.COMPILATION` | Artifact-neutral transformation IR, derivation identity/DAGs, physical variant identity, constraint profiles, requirement composition, variant selection, and evaluation/benchmark feedback intake. | the immutable artifact-neutral Transformation IR and exact GGUF/quantizer handoffs are complete; automatic and multi-variant planning remain deferred | One immutable transformation plan binds logical outputs to verified source contributions before physical lowering. |
 | `TRACK.QUANT` | Dtype/qtype ABI, storage geometry, role policy, conversion, quantization, reference dequantization, compute truth, and refusal. | canonical numeric registry, fixed DeepSeek profile, bounded transformation execution, reference decoding, numeric bounds, and CPU/CUDA selected-qtype compute are complete | Every emitted role has truthful storage and compute behavior. |
-| `TRACK.ARTIFACT` | GGUF container ABI, native writer, conversion coordination, complete emission, identity, registration, and writer-reader roundtrip. | scalable file-backed structural reader ABI is complete; native writer is active and complete emission remains blocked | A complete YVEX-produced GGUF reopens identically through YVEX. |
-| `TRACK.INTEGRITY` | Container, metadata, tensor directory, offsets, alignment, qtype-sized ranges, corruption, drift, and artifact admission. | canonical common global layout admission is complete; complete-artifact support admission remains blocked | A complete artifact passes every pre-payload and pre-runtime integrity gate. |
+| `TRACK.ARTIFACT` | GGUF container ABI, native writer, conversion coordination, complete emission, identity, registration, and writer-reader roundtrip. | scalable native writer, complete DeepSeek emission, exact physical identities, native/pinned-official roundtrip, and deterministic serialization are complete | A complete YVEX-produced GGUF reopens identically through YVEX. |
+| `TRACK.INTEGRITY` | Container, metadata, tensor directory, offsets, alignment, qtype-sized ranges, corruption, drift, and artifact admission. | canonical global layout and complete-artifact support admission are complete; tensor proofs remain explicitly separate | A complete artifact passes every pre-payload and pre-runtime integrity gate. |
 | `TRACK.MODEL` | Family architecture profiles, typed architecture IR, layer topology, attention/position/KV/MoE rules, and runtime descriptor projection. | canonical DeepSeek architecture IR is complete; common and executable DeepSeek runtime descriptors remain blocked | A family-correct typed model specification and executable runtime descriptor. |
 | `TRACK.TENSOR` | Canonical tensor collections, role requirements, global/layer/attention/MoE/norm/output/tokenizer coverage, and missing-role truth. | exact DeepSeek source coverage is complete; multi-family evidence remains at its prior rank | No unresolved required tensor collection or runtime role. |
-| `TRACK.RESIDENCY` | Payload streaming, materialization, placement, memory planning, CUDA residency, movement, ownership, cleanup, and release. | bounded source streaming, handle eviction, and storage-pressure evidence are complete; materialization and runtime residency remain blocked | Any admitted tensor map can materialize; the complete DeepSeek artifact has an accepted DGX Spark residency plan. |
+| `TRACK.RESIDENCY` | Payload streaming, materialization, placement, memory planning, CUDA residency, movement, ownership, cleanup, and release. | bounded source streaming, handle eviction, and storage-pressure evidence are complete; family-neutral materialization is active against the admitted selected artifact | Any admitted tensor map can materialize; the complete DeepSeek artifact has an accepted DGX Spark residency plan. |
 | `TRACK.BACKEND` | Hardware/build profiles, CPU/CUDA capability, qtype operations, reference parity, scratch, fallback, synchronization, refusal, and cleanup. | CUDA context/bundle/variant truth is fail-closed with bounded GB10 proof; required DeepSeek operations remain undefined | Every required DGX Spark CUDA operation is real, reference-compared, and fail-closed. |
 | `TRACK.GRAPH` | Primitive contracts, graph construction/planning, attention, position handling, MoE routing/experts, residuals, layers, scratch, and transformer execution. | selected graph and primitive evidence only | The complete transformer stack consumes the full runtime descriptor. |
 | `TRACK.PREFILL` | Prompt token execution, chunking, transformer prefill, state ownership, position progression, KV write integration, and cleanup. | planner and diagnostic evidence only | Full prefill executes every required layer and writes model-derived state. |
@@ -615,11 +638,11 @@ closure.
 | `TRACK.MAP` | 12 | 13 | 1/0/0/0/0/0 | 11 | 1 | 0 |
 | `TRACK.COMPILATION` | 0 | 12 | 1/0/0/0/0/0 | 0 | 0 | 11 |
 | `TRACK.QUANT` | 5 | 6 | 2/0/0/0/0/0 | 2 | 2 | 0 |
-| `TRACK.ARTIFACT` | 11 | 16 | 1/1/0/0/3/0 | 3 | 6 | 2 |
+| `TRACK.ARTIFACT` | 11 | 16 | 5/0/0/0/0/0 | 3 | 6 | 2 |
 | `TRACK.INTEGRITY` | 14 | 15 | 1/0/0/0/0/0 | 10 | 4 | 0 |
 | `TRACK.MODEL` | 21 | 23 | 1/0/0/0/2/0 | 9 | 11 | 0 |
 | `TRACK.TENSOR` | 27 | 28 | 1/0/0/0/0/0 | 18 | 9 | 0 |
-| `TRACK.RESIDENCY` | 42 | 43 | 0/0/0/0/2/0 | 20 | 21 | 0 |
+| `TRACK.RESIDENCY` | 42 | 43 | 0/1/0/0/1/0 | 20 | 21 | 0 |
 | `TRACK.BACKEND` | 29 | 30 | 1/0/0/0/0/0 | 11 | 16 | 2 |
 | `TRACK.GRAPH` | 71 | 75 | 0/0/0/0/3/0 | 1 | 70 | 1 |
 | `TRACK.PREFILL` | 27 | 28 | 0/0/0/0/1/0 | 9 | 18 | 0 |
@@ -679,11 +702,11 @@ written after inspection of owner code, consumers, tests, and current contracts.
 | 15 | `V010.DOCS.README.COMPILATION.0` | `TRACK.SCOPE` | project | `complete` | Rebuilt the public README around the owned compilation/execution architecture, logical/physical identity, planning/byte-execution split, constraint system, and one truthful implementation boundary. | V010.PROJECT.COMPILATION.0 |
 | 16 | `V010.MODEL.TRANSFORM.IR.0` | `TRACK.COMPILATION` | DeepSeek + common plan | `complete` | Sealed one immutable artifact-neutral transformation plan for every required DeepSeek logical output over exact source contributions and payload-range identity, without payload IO during construction. | V010.DOCS.README.COMPILATION.0 |
 | 17 | `V010.QUANT.2` | `TRACK.QUANT` | common + DeepSeek roles | `complete` | Implemented the selected physical profile, canonical codecs/capabilities, bounded numeric executor, transactional sink, reference metrics, and direct CPU/CUDA qtype compute without artifact emission. | V010.MODEL.TRANSFORM.IR.0 |
-| 18 | `V010.GGUF.WRITER.1` | `TRACK.ARTIFACT` | common | `active` | Emit concrete GGUF bytes from canonical metadata and tensor descriptors with checked offsets, alignment, atomic publication, failure cleanup, and deterministic order. | V010.QUANT.2 |
-| 19 | `V010.ARTIFACT.EMIT.DEEPSEEK.0` | `TRACK.ARTIFACT` | DeepSeek | `blocked` | Produce complete reference and selected-release-qtype DeepSeek-V4-Flash GGUF artifacts from verified sources without promoting runtime support. | V010.GGUF.WRITER.1 |
-| 20 | `V010.GGUF.ROUNDTRIP.1` | `TRACK.ARTIFACT` | common + DeepSeek artifact | `blocked` | Prove writer-reader equivalence through YVEX and an official GGUF reader for metadata, tensor inventory, layout, payload facts, determinism, and cleanup. | V010.ARTIFACT.EMIT.DEEPSEEK.0 |
-| 21 | `V010.ARTIFACT.SUPPORT.CUTOVER.0` | `TRACK.ARTIFACT` | common | `blocked` | Admit only complete artifacts into model-support gates and retain bounded files explicitly as tensor proof artifacts. | V010.GGUF.ROUNDTRIP.1 |
-| 22 | `V010.ARTIFACT.MATERIALIZE.0` | `TRACK.RESIDENCY` | common | `blocked` | Materialize tensors from any admitted tensor map through a family-neutral descriptor with layout/qtype checks, ownership, failure cleanup, and release. | V010.ARTIFACT.SUPPORT.CUTOVER.0 |
+| 18 | `V010.GGUF.WRITER.1` | `TRACK.ARTIFACT` | common | `complete` | Emit concrete GGUF bytes from canonical metadata and tensor descriptors with checked offsets, alignment, atomic publication, failure cleanup, and deterministic order. | V010.QUANT.2 |
+| 19 | `V010.ARTIFACT.EMIT.DEEPSEEK.0` | `TRACK.ARTIFACT` | DeepSeek | `complete` | Produce complete reference and selected-release-qtype DeepSeek-V4-Flash GGUF artifacts from verified sources without promoting runtime support. | V010.GGUF.WRITER.1 |
+| 20 | `V010.GGUF.ROUNDTRIP.1` | `TRACK.ARTIFACT` | common + DeepSeek artifact | `complete` | Prove writer-reader equivalence through YVEX and an official GGUF reader for metadata, tensor inventory, layout, payload facts, determinism, and cleanup. | V010.ARTIFACT.EMIT.DEEPSEEK.0 |
+| 21 | `V010.ARTIFACT.SUPPORT.CUTOVER.0` | `TRACK.ARTIFACT` | common | `complete` | Admit only complete artifacts into model-support gates and retain bounded files explicitly as tensor proof artifacts. | V010.GGUF.ROUNDTRIP.1 |
+| 22 | `V010.ARTIFACT.MATERIALIZE.0` | `TRACK.RESIDENCY` | common | `active` | Materialize tensors from any admitted tensor map through a family-neutral descriptor with layout/qtype checks, ownership, failure cleanup, and release. | V010.ARTIFACT.SUPPORT.CUTOVER.0 |
 | 23 | `V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0` | `TRACK.RESIDENCY` | DeepSeek / DGX Spark | `blocked` | Stream, materialize, place, own, and release every required DeepSeek tensor under an explicit DGX Spark memory plan. | V010.ARTIFACT.MATERIALIZE.0 |
 | 24 | `V010.RUNTIME.DESCRIPTOR.GGUF.0` | `TRACK.MODEL` | common | `blocked` | Project admitted artifact and materialization facts into one canonical family-neutral runtime descriptor. | V010.ARTIFACT.MATERIALIZE.0 |
 | 25 | `V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0` | `TRACK.MODEL` | DeepSeek | `blocked` | Specialize the canonical descriptor into one execution-complete, family-correct DeepSeek descriptor. | V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0 + V010.RUNTIME.DESCRIPTOR.GGUF.0 |
@@ -897,7 +920,7 @@ the row's use.
 
 **Owner:** GGUF container ABI, native writer, conversion coordination, complete emission, identity, registration, and writer-reader roundtrip.
 
-**Current truth:** scalable file-backed structural reader ABI and quantized-byte producer boundary are complete; native writer is active, while complete emission and roundtrip remain blocked
+**Current truth:** scalable native writer, complete DeepSeek reference and selected emission, exact physical identity, native/pinned-official roundtrip, deterministic serialization, and complete-artifact admission are complete
 
 **Ledger summary:** 11 recovered IDs; 5 first-class milestones; 3 complete support rows; 6 open support rows; 2 superseded/deferred rows.
 
@@ -906,10 +929,10 @@ the row's use.
 | Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
 | --- | --- | --- | --- | --- | --- |
 | `V010.GGUF.ARTIFACT.ABI.1` | common | `complete` | Closed file-backed GGUF v3 structural parsing with target-scale budgets, typed failures, indexed duplicate detection, immutable owned views, canonical qtype/range projection, and zero payload reads. | V010.GGUF.QTYPE.ABI.1 | current |
-| `V010.GGUF.WRITER.1` | common | `active` | Emit concrete GGUF bytes from canonical metadata and tensor descriptors with checked offsets, alignment, atomic publication, failure cleanup, and deterministic order. | V010.QUANT.2 | current |
-| `V010.ARTIFACT.EMIT.DEEPSEEK.0` | DeepSeek | `blocked` | Produce complete reference and selected-release-qtype DeepSeek-V4-Flash GGUF artifacts from verified sources without promoting runtime support. | V010.GGUF.WRITER.1 | current |
-| `V010.GGUF.ROUNDTRIP.1` | common + DeepSeek artifact | `blocked` | Prove writer-reader equivalence through YVEX and an official GGUF reader for metadata, tensor inventory, layout, payload facts, determinism, and cleanup. | V010.ARTIFACT.EMIT.DEEPSEEK.0 | current |
-| `V010.ARTIFACT.SUPPORT.CUTOVER.0` | common | `blocked` | Admit only complete artifacts into model-support gates and retain bounded files explicitly as tensor proof artifacts. | V010.GGUF.ROUNDTRIP.1 | current |
+| `V010.GGUF.WRITER.1` | common | `complete` | Emit concrete GGUF bytes from canonical metadata and tensor descriptors with checked offsets, alignment, atomic publication, failure cleanup, and deterministic order. | V010.QUANT.2 | current |
+| `V010.ARTIFACT.EMIT.DEEPSEEK.0` | DeepSeek | `complete` | Produce complete reference and selected-release-qtype DeepSeek-V4-Flash GGUF artifacts from verified sources without promoting runtime support. | V010.GGUF.WRITER.1 | current |
+| `V010.GGUF.ROUNDTRIP.1` | common + DeepSeek artifact | `complete` | Prove writer-reader equivalence through YVEX and an official GGUF reader for metadata, tensor inventory, layout, payload facts, determinism, and cleanup. | V010.ARTIFACT.EMIT.DEEPSEEK.0 | current |
+| `V010.ARTIFACT.SUPPORT.CUTOVER.0` | common | `complete` | Admit only complete artifacts into model-support gates and retain bounded files explicitly as tensor proof artifacts. | V010.GGUF.ROUNDTRIP.1 | current |
 
 #### Recovered And Subordinate Rows
 
@@ -932,7 +955,7 @@ the row's use.
 
 **Owner:** Container, metadata, tensor directory, offsets, alignment, qtype-sized ranges, corruption, drift, and artifact admission.
 
-**Current truth:** canonical common global layout admission is complete; complete v0.1.0 artifact support admission remains blocked
+**Current truth:** canonical common global layout and complete v0.1.0 artifact support admission are complete; runtime support remains outside this track
 
 **Ledger summary:** 14 recovered IDs; 1 first-class milestones; 10 complete support rows; 4 open support rows; 0 superseded/deferred rows.
 
@@ -1055,7 +1078,7 @@ the row's use.
 
 **Owner:** Payload streaming, materialization, placement, memory planning, CUDA residency, movement, ownership, cleanup, and release.
 
-**Current truth:** common source-side shard/range/chunk streaming, bounded buffers, pinned-handle eviction, and DeepSeek storage-pressure evidence are complete; artifact materialization and runtime residency remain blocked
+**Current truth:** common source-side streaming and storage-pressure evidence are complete; family-neutral materialization is active against the admitted selected DeepSeek artifact, while materialization behavior and runtime residency remain unimplemented
 
 **Ledger summary:** 42 recovered IDs; 2 first-class milestones; 20 complete support rows; 21 open support rows; 0 superseded/deferred rows.
 
@@ -1063,7 +1086,7 @@ the row's use.
 
 | Milestone | Scope | State | Conclusive after-state | Depends on | Origin |
 | --- | --- | --- | --- | --- | --- |
-| `V010.ARTIFACT.MATERIALIZE.0` | common | `blocked` | Materialize tensors from any admitted tensor map through a family-neutral descriptor with layout/qtype checks, ownership, failure cleanup, and release. | V010.ARTIFACT.SUPPORT.CUTOVER.0 | recovered/promoted |
+| `V010.ARTIFACT.MATERIALIZE.0` | common | `active` | Materialize tensors from any admitted tensor map through a family-neutral descriptor with layout/qtype checks, ownership, failure cleanup, and release. | V010.ARTIFACT.SUPPORT.CUTOVER.0 | recovered/promoted |
 | `V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0` | DeepSeek / DGX Spark | `blocked` | Stream, materialize, place, own, and release every required DeepSeek tensor under an explicit DGX Spark memory plan. | V010.ARTIFACT.MATERIALIZE.0 | current |
 
 #### Recovered And Subordinate Rows
@@ -1881,6 +1904,7 @@ Its rank limits the claim it may support.
 | Source payload fixtures/live proof | Exercise digest authority, manifest publication, indexed ranges, exact bounded reads, budgets, cancellation, drift, transactional delivery, and complete DeepSeek mapping handoff | not conversion, quantization, artifact emission, materialization, runtime residency, or generation |
 | Transformation IR fixtures/live plan | Exercise immutable DAG construction, operation/shape/dtype refusal, canonical identity, large fan-in, allocation rollback, exhaustive payload-range binding, and GGUF lowering equivalence | not byte transformation, precision selection, quantization, artifact emission, materialization, runtime execution, or generation |
 | Quantization codecs/live execution | Exercise the fixed profile, canonical codecs and refusal matrix, four current IR operations, trusted bounded reads, transactional digest output, role/qtype numeric metrics, allocation and sink faults, and direct CPU/CUDA qtype compute | not GGUF emission, artifact admission, materialization, residency, transformer execution, generation, or arbitrary-family quantization support |
+| Complete GGUF emission/roundtrip | Exercise immutable writer planning, exact tokenizer metadata, transactional terminal delivery, atomic publication, physical SHA-256 identity, native full-byte verification, pinned official-reader parsing, deterministic reserialization, and complete-artifact admission | not materialization, residency, runtime binding, transformer execution, generation, evaluation, benchmark, or a supported model artifact |
 | GGUF fixtures/tensor proofs | Parser, geometry, range, writer-fragment, materialization, and primitive regression | not a complete or supported model artifact |
 | Primitive/selected graph proofs | One operation, transfer, cleanup, tolerance, or bounded composition | not full attention, transformer execution, or generation |
 | Diagnostic runtime state | Lifecycle, refusal, cancellation, ownership, transition, and cleanup regression | not model-backed prefill, KV, decode, logits, sampling, or generation |
@@ -1905,7 +1929,7 @@ acceptance boundary.
 | Diagnostic decode | Command/help and summary advancement in `src/generation/yvex_decode.c`, plus CLI tests | Replace with model-backed decode, then remove summary-only command behavior. | `V010.RUNTIME.DEEPSEEK.DECODE.0`: decode consumes the executable descriptor and attention-backed KV. |
 | Fixture logits and sampling | `src/generation/yvex_logits.c`, `src/generation/yvex_sampling.c`, `src/generation/yvex_sampling_report.c`, logits/sampling CLI surfaces and tests | Retain numeric cases only as internal fixtures; replace public behavior with final-norm/output-head logits and real sampling. | `V010.RUNTIME.DEEPSEEK.LOGITS.0`, `V010.RUNTIME.SAMPLING.0`: sampled IDs derive from full-vocabulary model logits. |
 | Bounded diagnostic generation | `src/generation/yvex_generation*.c`, `src/cli/commands/yvex_generate_cli.c`, generation input/render/catalog owners, `tests/cli/generation.sh` | Replace with the tokenizer/prefill/KV/decode/logits/sample/append/stop chain; remove diagnostic token printing. | `V010.RUNTIME.DEEPSEEK.GENERATION.0`: multiple detokenized autoregressive tokens pass release-path tests. |
-| Selected-artifact support levels | `include/yvex/model_gate.h`, `src/model/artifacts/yvex_model_artifact_gate.c`, registry/report owners, prepare renderers, model gate/registry tests | Remove selected states from model support; any retained subset becomes a tensor proof artifact with a named proof gate. | `V010.ARTIFACT.SUPPORT.CUTOVER.0`: only complete artifacts enter supported model-artifact gates. |
+| Selected-artifact support levels | `include/yvex/model_gate.h`, `src/model/artifacts/yvex_model_artifact_gate.c`, registry/report owners, prepare renderers, model gate/registry tests | Complete-artifact admission now consumes one canonical typed result; retained bounded subsets remain tensor proof artifacts and cannot enter that path. | `V010.ARTIFACT.SUPPORT.CUTOVER.0`: complete; runtime support still requires materialization and every higher gate. |
 | Report-only fullmodel surfaces | `src/cli/model_artifacts/yvex_fullmodel_surface.c`, `src/cli/render/yvex_fullmodel*.c`, `tests/cli/fullmodel.sh` | Replace useful descriptor/materialization facts with typed full-target APIs; remove reports that only restate missing runtime behavior. | `V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0`: one typed executable descriptor boundary remains and obsolete report commands are gone. |
 | Stale target, help, and claim tests | `src/model/target/yvex_model_target_{catalog,decision,candidates}.c`, `src/cli/yvex_cli.c`, generation examples/help, `tests/cli/core.sh`, `tests/cli/models.sh`, `tests/cli/generation.sh` | Remove multi-family/selected release choices and stale examples; first expose exact full-target refusal, then the real generation command. | `V010.REBASE.DEEPSEEK.0` owns target truth; `V010.CLI.DEEPSEEK.GENERATE.0` owns final command/help proof. |
 
@@ -1921,9 +1945,9 @@ acceptance boundary.
 | Mapping | Complete source-role-GGUF map with transforms/layouts and ambiguity refusal | complete | `V010.MAP.GGUF.DEEPSEEK.0` |
 | Transformation | Artifact-neutral plan binds every logical output to exact source contributions and payload-range identity before physical lowering | complete | `V010.MODEL.TRANSFORM.IR.0` |
 | Qtype/quantization | Selected profile, canonical codecs/refusals, reference decoding, numeric bounds, trusted bounded execution, and direct CPU/CUDA selected-qtype compute | complete | `V010.QUANT.2` |
-| Artifact | Complete YVEX-produced GGUF with native and official reader equivalence | active | `V010.GGUF.WRITER.1` through `V010.GGUF.ROUNDTRIP.1` |
-| Integrity/admission | Canonical global layout and source payload trust are complete; emitted complete-model identity, role coverage, payload integrity, and support admission remain | blocked | `V010.GGUF.LAYOUT.INTEGRITY.1` and `V010.ARTIFACT.SUPPORT.CUTOVER.0` |
-| Materialization | Family-neutral materializer plus full DeepSeek DGX Spark placement/cleanup | unsupported | materialization milestones |
+| Artifact | Complete YVEX-produced GGUF with native and pinned official-reader equivalence | complete | `V010.GGUF.WRITER.1` through `V010.GGUF.ROUNDTRIP.1` |
+| Integrity/admission | Canonical global layout, complete physical identity, payload integrity, role coverage, and complete-artifact admission | complete | `V010.GGUF.LAYOUT.INTEGRITY.1` and `V010.ARTIFACT.SUPPORT.CUTOVER.0` |
+| Materialization | Family-neutral materializer plus full DeepSeek DGX Spark placement/cleanup | active; behavior not implemented | materialization milestones |
 | Descriptor | Canonical common descriptor and execution-complete DeepSeek specialization | unsupported | descriptor milestones |
 | CUDA | Capability admission is fail-closed and selected qtypes have direct encoded GB10 row-dot proof; every remaining architecture-required DeepSeek op must still be lowered, executed, reference-compared, synchronized, and cleaned up | unsupported | later exact runtime-operation proofs consuming the Architecture IR |
 | Transformer | Attention, positions, KV, MoE, experts, repeated layers, residuals, and final norm | unsupported | attention/KV/prefill/MoE/transformer milestones |

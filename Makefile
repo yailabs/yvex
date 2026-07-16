@@ -24,7 +24,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-quant test-quant-live-plan test-quant-live test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-quant test-quant-live-plan test-quant-live test-artifact-writer test-artifact-writer-fault test-artifact-live-plan test-artifact-live-structure test-artifact-live test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -49,6 +49,8 @@ TEST_DIR ?= $(BUILD_DIR)/tests
 DEEPSEEK_SOURCE ?= $(HOME)/lab/models/hf/deepseek/DeepSeek-V4-Flash
 DEEPSEEK_MODELS_ROOT ?= $(HOME)/lab/models/gguf
 DEEPSEEK_SOURCE_MANIFEST ?= $(DEEPSEEK_MODELS_ROOT)/deepseek/deepseek-source-manifest.json
+PINNED_GGML_ROOT ?= /tmp/yvex-ggml-af97976
+PINNED_GGML_BUILD ?= $(PINNED_GGML_ROOT)/build-yvex
 
 LIBYVEX ?= $(LIB_DIR)/libyvex.a
 YVEX_BIN ?= ./yvex
@@ -114,6 +116,7 @@ CORE_SRCS := \
 	src/gguf/tools.c \
 	src/gguf/yvex_gguf_container.c \
 	src/gguf/yvex_gguf_descriptor.c \
+	src/gguf/yvex_gguf_file_sink.c \
 	src/gguf/yvex_gguf_layout_integrity.c \
 	src/gguf/yvex_gguf_layout_map.c \
 	src/gguf/yvex_gguf_metadata.c \
@@ -124,6 +127,7 @@ CORE_SRCS := \
 	src/gguf/yvex_gguf_report.c \
 	src/gguf/yvex_gguf_roundtrip.c \
 	src/gguf/yvex_gguf_tensor_info.c \
+	src/gguf/yvex_gguf_tokenizer_metadata.c \
 	src/gguf/yvex_gguf_writer.c \
 	src/gguf/yvex_quant_registry.c \
 	src/gguf/yvex_quant_scalar.c \
@@ -237,11 +241,14 @@ endif
 
 TEST_RUNNER := $(TEST_DIR)/test
 QUANT_TEST_RUNNER := $(TEST_DIR)/test_quant
+ARTIFACT_TEST_RUNNER := $(TEST_DIR)/test_artifact_writer
 SOURCE_PAYLOAD_LIVE_RUNNER := $(TEST_DIR)/source_payload_deepseek
 QUANT_LIVE_RUNNER := $(TEST_DIR)/quant_deepseek
+ARTIFACT_LIVE_RUNNER := $(TEST_DIR)/artifact_deepseek
+OFFICIAL_GGUF_CHECKER := $(TEST_DIR)/ggml_gguf_check
 CUDA_TEST_RUNNER := $(TEST_DIR)/test_cuda
 
-TEST_UNIT_SRCS := $(sort $(filter-out tests/unit/quant_runner.c,$(wildcard tests/unit/*.c)))
+TEST_UNIT_SRCS := $(sort $(filter-out tests/unit/quant_runner.c tests/unit/artifact_writer_runner.c,$(wildcard tests/unit/*.c)))
 TEST_UNIT_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(TEST_UNIT_SRCS))
 
 QUANT_TEST_UNIT_SRCS := \
@@ -370,11 +377,27 @@ test-transform-ir-live-plan: $(SOURCE_PAYLOAD_LIVE_RUNNER)
 test-quant: $(QUANT_TEST_RUNNER)
 	$(QUANT_TEST_RUNNER)
 
+test-artifact-writer: $(ARTIFACT_TEST_RUNNER)
+	$(ARTIFACT_TEST_RUNNER)
+
+# Replays the writer suite as the explicit preallocation/IO/protocol fault lane.
+test-artifact-writer-fault: $(ARTIFACT_TEST_RUNNER)
+	$(ARTIFACT_TEST_RUNNER)
+
 test-quant-live-plan: $(QUANT_LIVE_RUNNER)
 	$(QUANT_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
 
 test-quant-live: $(QUANT_LIVE_RUNNER)
 	$(QUANT_LIVE_RUNNER) "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
+
+test-artifact-live-plan: $(ARTIFACT_LIVE_RUNNER)
+	$(ARTIFACT_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
+
+test-artifact-live-structure: $(ARTIFACT_LIVE_RUNNER) $(OFFICIAL_GGUF_CHECKER)
+	YVEX_GGML_CHECKER="$(OFFICIAL_GGUF_CHECKER)" $(ARTIFACT_LIVE_RUNNER) --structure-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
+
+test-artifact-live: $(ARTIFACT_LIVE_RUNNER) $(OFFICIAL_GGUF_CHECKER)
+	YVEX_GGML_CHECKER="$(OFFICIAL_GGUF_CHECKER)" $(ARTIFACT_LIVE_RUNNER) "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
 
 test-source-payload-live: $(SOURCE_PAYLOAD_LIVE_RUNNER)
 	$(SOURCE_PAYLOAD_LIVE_RUNNER) "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
@@ -459,6 +482,10 @@ $(QUANT_TEST_RUNNER): tests/unit/quant_runner.c $(QUANT_TEST_UNIT_OBJS) $(LIBYVE
 	@mkdir -p $(@D)
 	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) tests/unit/quant_runner.c $(QUANT_TEST_UNIT_OBJS) $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
+$(ARTIFACT_TEST_RUNNER): tests/unit/artifact_writer_runner.c $(OBJ_DIR)/tests/unit/quant_execute.o $(LIBYVEX) tests/test.h
+	@mkdir -p $(@D)
+	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) tests/unit/artifact_writer_runner.c $(OBJ_DIR)/tests/unit/quant_execute.o $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
 $(SOURCE_PAYLOAD_LIVE_RUNNER): tests/live/source_payload_deepseek.c $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
@@ -466,6 +493,23 @@ $(SOURCE_PAYLOAD_LIVE_RUNNER): tests/live/source_payload_deepseek.c $(LIBYVEX)
 $(QUANT_LIVE_RUNNER): tests/live/quant_deepseek.c $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
+$(ARTIFACT_LIVE_RUNNER): tests/live/artifact_deepseek.c $(LIBYVEX)
+	@mkdir -p $(@D)
+	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
+$(OFFICIAL_GGUF_CHECKER): tests/external/ggml_gguf_check.cpp
+	@test "$$(git -C "$(PINNED_GGML_ROOT)" rev-parse HEAD)" = af97976c7810cdabb1863172f31c432dab767de7
+	@test -z "$$(git -C "$(PINNED_GGML_ROOT)" status --porcelain --untracked-files=no)"
+	cmake -S "$(PINNED_GGML_ROOT)" -B "$(PINNED_GGML_BUILD)" \
+		-DGGML_BUILD_TESTS=OFF -DGGML_BUILD_EXAMPLES=OFF \
+		-DGGML_BUILD_TOOLS=OFF -DGGML_BUILD_SERVER=OFF \
+		-DGGML_CUDA=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
+	cmake --build "$(PINNED_GGML_BUILD)" -j4
+	c++ -std=c++17 -Wall -Wextra -pedantic \
+		-I"$(PINNED_GGML_ROOT)/include" $< \
+		"$(PINNED_GGML_BUILD)/src/libggml-base.a" \
+		-fopenmp -ldl -pthread -lm -o $@
 
 $(CUDA_TEST_RUNNER): tests/test_cuda.c $(CUDA_TEST_UNIT_OBJS) $(LIBYVEX) tests/test.h
 	@mkdir -p $(@D)

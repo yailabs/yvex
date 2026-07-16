@@ -24,6 +24,8 @@
 
 #include <yvex/yvex.h>
 
+#include "src/artifact/yvex_artifact_roundtrip_gate.h"
+
 typedef enum {
     YVEX_MODEL_ARTIFACT_REPORT_STATUS = 0,
     YVEX_MODEL_ARTIFACT_REPORT_LIST,
@@ -91,5 +93,9 @@ typedef struct {
 int yvex_model_artifact_report_build(const yvex_model_artifact_report_request *request,
                                      yvex_model_artifact_report *report,
                                      yvex_error *err);
+int yvex_model_artifact_report_from_admission(
+    const yvex_complete_artifact_admission *admission,
+    yvex_model_artifact_report *report,
+    yvex_error *err);
 
 #endif

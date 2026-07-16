@@ -560,7 +560,7 @@ static int parse_value(yvex_file_cursor *cur,
                                   "truncated GGUF metadata string");
     case YVEX_GGUF_VALUE_ARRAY: {
         unsigned int raw_type;
-        yvex_gguf_value_type element_type;
+        yvex_gguf_value_type element_type = YVEX_GGUF_VALUE_UINT8;
         unsigned long long count;
         unsigned long long i;
         unsigned long long bytes;
@@ -699,7 +699,7 @@ static int parse_metadata(yvex_gguf *gguf, yvex_file_cursor *cur)
 
     for (i = 0ull; i < count; ++i) {
         unsigned int raw_type;
-        yvex_gguf_value_type type;
+        yvex_gguf_value_type type = YVEX_GGUF_VALUE_INVALID;
         cur->record_index = i;
         rc = cursor_read_string(cur, &gguf->metadata[i].key,
                                 &gguf->metadata[i].key_len,

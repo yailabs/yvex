@@ -419,3 +419,60 @@ int yvex_quant_digest_summary_validate(
     yvex_error_clear(err);
     return YVEX_OK;
 }
+
+/*
+ * Copies one committed per-terminal digest under the sink lock. The returned
+ * value owns no pointers and remains valid after sink release; no byte payload
+ * is exposed or retained by this accessor.
+ */
+int yvex_quant_digest_sink_terminal_at(
+    yvex_quant_digest_sink *sink,
+    unsigned long long ordinal,
+    yvex_quant_terminal_digest *out,
+    yvex_quant_failure *failure,
+    yvex_error *err)
+{
+    quant_digest_record *record;
+
+    if (out) memset(out, 0, sizeof(*out));
+    if (!sink || !out || ordinal >= sink->summary.terminal_count)
+        return quant_sink_fail(
+            failure, YVEX_QUANT_FAILURE_INVALID_ARGUMENT, ordinal,
+            sink ? sink->summary.terminal_count : 0u, ordinal, err,
+            YVEX_ERR_INVALID_ARG,
+            "digest terminal ordinal and output must be valid");
+    pthread_mutex_lock(&sink->mutex);
+    record = &sink->records[ordinal];
+    if (record->state != QUANT_DIGEST_COMMITTED) {
+        pthread_mutex_unlock(&sink->mutex);
+        return quant_sink_fail(
+            failure, YVEX_QUANT_FAILURE_INCOMPLETE, ordinal, 1u,
+            record->state, err, YVEX_ERR_STATE,
+            "terminal digest is unavailable before exact commit");
+    }
+    out->terminal_ordinal = ordinal;
+    out->qtype = record->qtype;
+    out->delivered_bytes = record->delivered_bytes;
+    out->chunks = record->chunks;
+    memcpy(out->sha256, record->digest, sizeof(out->sha256));
+    out->committed = 1;
+    pthread_mutex_unlock(&sink->mutex);
+    if (failure) memset(failure, 0, sizeof(*failure));
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+/* Reports exact retained sink and terminal-record memory without mutation. */
+size_t yvex_quant_digest_sink_owned_bytes(
+    const yvex_quant_digest_sink *sink)
+{
+    const yvex_quant_plan_summary *summary;
+    size_t records;
+
+    if (!sink || !sink->plan) return 0u;
+    summary = yvex_quant_plan_summary_get(sink->plan);
+    if (!summary || summary->terminal_count >
+            SIZE_MAX / sizeof(*sink->records)) return 0u;
+    records = (size_t)summary->terminal_count * sizeof(*sink->records);
+    return records > SIZE_MAX - sizeof(*sink) ? 0u : sizeof(*sink) + records;
+}

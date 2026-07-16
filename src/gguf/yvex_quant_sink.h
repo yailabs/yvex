@@ -46,6 +46,15 @@ typedef struct {
     int complete;
 } yvex_quant_digest_summary;
 
+typedef struct {
+    unsigned long long terminal_ordinal;
+    unsigned int qtype;
+    unsigned long long delivered_bytes;
+    unsigned long long chunks;
+    char sha256[YVEX_QUANT_PLAN_IDENTITY_CAP];
+    int committed;
+} yvex_quant_terminal_digest;
+
 typedef struct yvex_quant_digest_sink yvex_quant_digest_sink;
 
 typedef struct {
@@ -80,5 +89,13 @@ int yvex_quant_digest_summary_validate(
     const char *expected_execution_identity,
     yvex_quant_failure *failure,
     yvex_error *err);
+int yvex_quant_digest_sink_terminal_at(
+    yvex_quant_digest_sink *sink,
+    unsigned long long ordinal,
+    yvex_quant_terminal_digest *out,
+    yvex_quant_failure *failure,
+    yvex_error *err);
+size_t yvex_quant_digest_sink_owned_bytes(
+    const yvex_quant_digest_sink *sink);
 
 #endif

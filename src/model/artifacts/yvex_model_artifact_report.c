@@ -33,6 +33,8 @@
 #include <yvex/model_ref.h>
 #include <yvex/yvex.h>
 
+#include "yvex_model_artifact_gate.h"
+
 typedef struct {
     yvex_artifact *artifact;
     yvex_gguf *gguf;
@@ -257,6 +259,60 @@ static void artifact_report_clear(yvex_model_artifact_report *report)
 {
     if (!report) return;
     memset(report, 0, sizeof(*report));
+}
+
+/*
+ * Builds a typed machine-readable inventory view from canonical admission.
+ * The result borrows admission strings and performs no parsing, IO, or support
+ * inference from paths, names, or independent booleans.
+ */
+int yvex_model_artifact_report_from_admission(
+    const yvex_complete_artifact_admission *admission,
+    yvex_model_artifact_report *report,
+    yvex_error *err)
+{
+    yvex_model_complete_artifact_gate_fact gate;
+    int rc;
+
+    if (!report) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "model_artifact.report",
+                       "report output is required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    artifact_report_clear(report);
+    rc = yvex_model_artifact_gate_from_admission(admission, &gate, err);
+    if (rc != YVEX_OK) {
+        report->kind = YVEX_MODEL_ARTIFACT_REPORT_STATUS;
+        report->status = "blocked";
+        report->exit_code = 2;
+        report->support_level = "none";
+        report->execution_ready = 0;
+        report->reason = "canonical complete-artifact admission is absent";
+        report->boundary = "tensor proofs and structural GGUF files are not complete artifacts";
+        report->next_row = "V010.ARTIFACT.MATERIALIZE.0";
+        return rc;
+    }
+    report->kind = YVEX_MODEL_ARTIFACT_REPORT_STATUS;
+    report->status = "complete-artifact-admitted";
+    report->exit_code = 0;
+    report->artifact_class = yvex_artifact_class_name(
+        admission->artifact_class);
+    report->qprofile = gate.profile_name;
+    report->path = gate.artifact_path;
+    report->sha256 = gate.artifact_identity;
+    report->file_size = gate.file_bytes;
+    report->format = "gguf";
+    report->tensor_count = gate.tensor_count;
+    report->support_level = "descriptor-only";
+    report->execution_ready = 0;
+    report->integrity_status = "pass";
+    report->materialization_status = "not-started";
+    report->backend_status = "not-tested";
+    report->reason = "canonical complete-artifact admission passed";
+    report->boundary = "complete artifact ready for materialization; runtime unsupported";
+    report->next_row = "V010.ARTIFACT.MATERIALIZE.0";
+    yvex_error_clear(err);
+    return YVEX_OK;
 }
 
 int yvex_model_artifact_report_build(const yvex_model_artifact_report_request *request,

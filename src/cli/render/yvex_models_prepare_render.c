@@ -378,7 +378,7 @@ static void prepare_source_report_build(
         report->next = "V010.MAP.7";
     } else {
         report->next = target && strcmp(target->family, "deepseek") == 0
-            ? "V010.GGUF.WRITER.1" : "not-scheduled";
+            ? "V010.ARTIFACT.MATERIALIZE.0" : "not-scheduled";
     }
     report->final_status = "model-prepare-unsupported";
     report->downloaded_target_resolved = 1;
@@ -394,7 +394,7 @@ static void prepare_source_report_build(
     } else {
         report->top_blocker =
             target && strcmp(target->family, "deepseek") == 0
-                ? "gguf-writer-missing"
+                ? "complete-artifact-admission-required"
                 : "family-quantization-plan-unimplemented";
     }
 
@@ -418,7 +418,7 @@ static void prepare_source_report_build(
                                     : target &&
                                               strcmp(target->family,
                                                      "deepseek") == 0
-                                          ? "GGUF writer missing"
+                                          ? "complete artifact admission not bound to this request"
                                           : "family quantization plan unimplemented";
 }
 

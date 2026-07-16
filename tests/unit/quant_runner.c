@@ -20,6 +20,7 @@ int yvex_test_transform_ir(void);
 int yvex_test_deepseek_tensor_coverage(void);
 int yvex_test_quant_numeric(void);
 int yvex_test_quant_execute(void);
+int yvex_test_gguf_writer_artifact(void);
 int yvex_test_qtype_support(void);
 int yvex_test_quant_policy(void);
 
@@ -54,6 +55,8 @@ int main(void)
                  yvex_test_deepseek_tensor_coverage) != 0) return 1;
     if (run_test("quant_numeric", yvex_test_quant_numeric) != 0) return 1;
     if (run_test("quant_execute", yvex_test_quant_execute) != 0) return 1;
+    if (run_test("gguf_writer_artifact",
+                 yvex_test_gguf_writer_artifact) != 0) return 1;
     if (run_test("qtype_support", yvex_test_qtype_support) != 0) return 1;
     if (run_test("quant_policy", yvex_test_quant_policy) != 0) return 1;
     return 0;

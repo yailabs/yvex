@@ -142,6 +142,15 @@ int yvex_deepseek_quant_plan_build(
     const yvex_quant_plan_options *options,
     yvex_quant_failure *failure,
     yvex_error *err);
+int yvex_deepseek_quant_plan_build_profile(
+    yvex_quant_plan **out,
+    const yvex_transform_ir *ir,
+    const yvex_transform_binding *binding,
+    const yvex_deepseek_gguf_map *map,
+    yvex_quant_profile_kind profile,
+    const yvex_quant_plan_options *options,
+    yvex_quant_failure *failure,
+    yvex_error *err);
 int yvex_quant_plan_build_explicit(
     yvex_quant_plan **out,
     const yvex_transform_ir *ir,

@@ -40,10 +40,38 @@ typedef struct {
     char expected_digest[65];
 } yvex_source_payload_digest_fact;
 
+typedef struct {
+    char canonical_name[YVEX_PATH_CAP];
+    char revision[65];
+    char expected_git_blob_oid[41];
+    char observed_git_blob_oid[41];
+    unsigned long long file_bytes;
+    int revision_matches;
+    int identity_verified;
+} yvex_source_metadata_identity_fact;
+
+typedef struct {
+    yvex_source_metadata_identity_fact identity;
+    unsigned char *bytes;
+    size_t byte_count;
+} yvex_source_metadata_blob;
+
 int yvex_source_provenance_payload_digest(
     const yvex_source_verification *verification,
     const char *canonical_name,
     yvex_source_payload_digest_fact *out,
     yvex_error *err);
+int yvex_source_provenance_metadata_identity(
+    const yvex_source_verification *verification,
+    const char *canonical_name,
+    yvex_source_metadata_identity_fact *out,
+    yvex_error *err);
+int yvex_source_provenance_metadata_read(
+    const yvex_source_verification *verification,
+    const char *canonical_name,
+    size_t maximum_bytes,
+    yvex_source_metadata_blob *out,
+    yvex_error *err);
+void yvex_source_metadata_blob_release(yvex_source_metadata_blob *blob);
 
 #endif

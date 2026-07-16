@@ -313,11 +313,11 @@ static void artifacts_classify_dynamic_row(const yvex_operator_paths *operator_p
     } else if (strcmp(row->artifact_status, "missing") == 0) {
         snprintf(row->top_blocker, sizeof(row->top_blocker), "%s",
                  strcmp(row->family, "deepseek") == 0
-                     ? "gguf-writer-missing"
+                     ? "complete-artifact-admission-required"
                      : "family-quantization-plan-unimplemented");
         snprintf(row->detail, sizeof(row->detail), "%s",
                  strcmp(row->family, "deepseek") == 0
-                     ? "verified DeepSeek quantized bytes have no GGUF writer"
+                     ? "artifact discovery did not bind canonical complete-artifact admission"
                      : "this engineering family has no complete quantization plan");
     } else {
         snprintf(row->top_blocker, sizeof(row->top_blocker), "missing-artifact-identity");
@@ -331,8 +331,9 @@ static const char *artifacts_row_next(const yvex_models_artifact_row *row)
     if (strcmp(row->top_blocker, "missing-tokenizer-map") == 0) {
         return "V010.MAP.7";
     }
-    if (strcmp(row->top_blocker, "gguf-writer-missing") == 0) {
-        return "V010.GGUF.WRITER.1";
+    if (strcmp(row->top_blocker,
+               "complete-artifact-admission-required") == 0) {
+        return "V010.ARTIFACT.MATERIALIZE.0";
     }
     if (strcmp(row->top_blocker,
                "family-quantization-plan-unimplemented") == 0) {

@@ -71,7 +71,7 @@ static const qtype_role_fact gemma_role_facts[] = {
 };
 
 static const qtype_gate_family_fact qtype_gate_rows[] = {
-    {"deepseek", "deepseek4-v4-flash", "blocked", "gguf-writer-missing", "V010.GGUF.WRITER.1"},
+    {"deepseek", "deepseek4-v4-flash", "blocked", "artifact-materialization-unimplemented", "V010.ARTIFACT.MATERIALIZE.0"},
     {"qwen", "qwen3-6-35b-a3b", "blocked", "family-quantization-plan-unimplemented", "not-scheduled"},
     {"gemma", "gemma-4-31b-it", "blocked", "family-quantization-plan-unimplemented", "not-scheduled"},
 };
@@ -173,10 +173,10 @@ static void qtype_role_prepare(const yvex_model_target_request *request,
              "not-measured");
     snprintf(report->next_row, sizeof(report->next_row), "%s",
              strcmp(family, "deepseek") == 0
-                 ? "V010.GGUF.WRITER.1" : "not-scheduled");
+                 ? "V010.ARTIFACT.MATERIALIZE.0" : "not-scheduled");
     snprintf(report->reason, sizeof(report->reason), "%s",
              strcmp(family, "deepseek") == 0
-                 ? "gguf-writer-missing"
+                 ? "complete-artifact-admission-required"
                  : "family-quantization-plan-unimplemented");
     snprintf(report->boundary, sizeof(report->boundary),
              "qtype role-support report only; no quantization or artifact emission");
@@ -404,7 +404,7 @@ static void qtype_role_add_audit(const char *family,
         yvex_model_target_report_add_row(report,
                                          "role.%lu.artifact_emission_blocker: %s", i,
                                          selected_slice
-                                             ? "gguf-writer-missing"
+                                             ? "complete-artifact-admission-required"
                                              : rows[i].blocker);
     }
     yvex_model_target_report_add_row(report, "payload_bytes_read: false");
@@ -462,8 +462,8 @@ int yvex_qtype_role_support_report_build(const yvex_model_target_request *reques
             yvex_model_target_report_add_row(report, "status: qtype-role-support-gate-blocked");
             yvex_model_target_report_add_row(report, "family_count: 3");
             yvex_model_target_report_add_row(report,
-                                             "top_blocker: gguf-writer-missing");
-            yvex_model_target_report_add_row(report, "next: V010.GGUF.WRITER.1");
+                                             "top_blocker: artifact-materialization-unimplemented");
+            yvex_model_target_report_add_row(report, "next: V010.ARTIFACT.MATERIALIZE.0");
             yvex_model_target_report_common_tail(report);
         }
         return YVEX_OK;
@@ -490,11 +490,11 @@ int yvex_qtype_role_support_report_build(const yvex_model_target_request *reques
         report,
         "top_blocker: %s",
         strcmp(family, "deepseek") == 0
-            ? "gguf-writer-missing"
+            ? "complete-artifact-admission-required"
             : "family-quantization-plan-unimplemented");
     yvex_model_target_report_add_row(
         report, "next: %s", strcmp(family, "deepseek") == 0
-            ? "V010.GGUF.WRITER.1" : "not-scheduled");
+            ? "V010.ARTIFACT.MATERIALIZE.0" : "not-scheduled");
     yvex_model_target_report_add_row(report,
                                      "boundary: qtype role report only; no quantization/GGUF/runtime/generation");
     return YVEX_OK;

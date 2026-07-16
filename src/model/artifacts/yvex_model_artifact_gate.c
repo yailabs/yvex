@@ -31,6 +31,50 @@
 #include <yvex/artifact_integrity.h>
 #include <yvex/yvex.h>
 
+/*
+ * Projects the canonical complete-artifact admission into the model gate.
+ * It borrows admission strings, allocates nothing, performs no IO, and never
+ * promotes materialization, execution, runtime, or generation support.
+ */
+int yvex_model_artifact_gate_from_admission(
+    const yvex_complete_artifact_admission *admission,
+    yvex_model_complete_artifact_gate_fact *fact,
+    yvex_error *err)
+{
+    if (fact) memset(fact, 0, sizeof(*fact));
+    if (!admission || !fact) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG,
+                       "model_artifact.complete_gate",
+                       "admission and gate fact are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    if (!admission->complete ||
+        admission->artifact_class != YVEX_ARTIFACT_CLASS_COMPLETE_YVEX ||
+        !admission->materialization_input_ready ||
+        admission->runtime_supported || !admission->artifact_identity[0] ||
+        !admission->artifact_path[0] || !admission->profile_name[0] ||
+        admission->tensor_count == 0u || admission->file_bytes == 0u) {
+        fact->status = YVEX_MODEL_GATE_BLOCKED;
+        fact->support_level = YVEX_MODEL_SUPPORT_NONE;
+        yvex_error_set(err, YVEX_ERR_STATE,
+                       "model_artifact.complete_gate",
+                       "canonical complete-artifact admission is required");
+        return YVEX_ERR_STATE;
+    }
+    fact->status = YVEX_MODEL_GATE_PASS;
+    fact->support_level = YVEX_MODEL_SUPPORT_DESCRIPTOR_ONLY;
+    fact->artifact_identity = admission->artifact_identity;
+    fact->artifact_path = admission->artifact_path;
+    fact->profile_name = admission->profile_name;
+    fact->tensor_count = admission->tensor_count;
+    fact->file_bytes = admission->file_bytes;
+    fact->complete_artifact_admitted = 1;
+    fact->materialization_input_ready = 1;
+    fact->execution_ready = 0;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 static int yvex_model_gate_dtype_matches(const char *expected, yvex_dtype actual)
 {
     const char *actual_name = yvex_dtype_name(actual);

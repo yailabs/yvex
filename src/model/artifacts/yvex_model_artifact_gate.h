@@ -5,7 +5,8 @@
  *   src/model/artifacts
  *
  * Owns:
- *   model gate and materialization gate public API backing.
+ *   model gate and materialization gate public API backing, plus the internal
+ *   complete-artifact admission projection.
  *
  * Does not own:
  *   CLI parsing, command dispatch, rendering, stdout/stderr, artifact emission,
@@ -23,5 +24,25 @@
 
 #include <yvex/model_gate.h>
 #include <yvex/materialize_gate.h>
+
+#include "src/artifact/yvex_artifact_roundtrip_gate.h"
+
+typedef struct {
+    yvex_model_gate_status status;
+    yvex_model_support_level support_level;
+    const char *artifact_identity;
+    const char *artifact_path;
+    const char *profile_name;
+    unsigned long long tensor_count;
+    unsigned long long file_bytes;
+    int complete_artifact_admitted;
+    int materialization_input_ready;
+    int execution_ready;
+} yvex_model_complete_artifact_gate_fact;
+
+int yvex_model_artifact_gate_from_admission(
+    const yvex_complete_artifact_admission *admission,
+    yvex_model_complete_artifact_gate_fact *fact,
+    yvex_error *err);
 
 #endif

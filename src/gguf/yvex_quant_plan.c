@@ -923,12 +923,17 @@ int yvex_quant_plan_build_explicit(
     return YVEX_OK;
 }
 
-/* Accounts both candidates and seals the fixed asymmetric v0.1 plan. */
-int yvex_deepseek_quant_plan_build(
+/*
+ * Accounts both admitted candidates and seals the caller-selected canonical
+ * profile. The selected decisions are independently owned; no source IO or
+ * payload mutation occurs, and every construction failure releases the plan.
+ */
+int yvex_deepseek_quant_plan_build_profile(
     yvex_quant_plan **out,
     const yvex_transform_ir *ir,
     const yvex_transform_binding *binding,
     const yvex_deepseek_gguf_map *map,
+    yvex_quant_profile_kind profile,
     const yvex_quant_plan_options *options,
     yvex_quant_failure *failure,
     yvex_error *err)
@@ -948,6 +953,8 @@ int yvex_deepseek_quant_plan_build(
 
     if (out) *out = NULL;
     if (!out || !ir || !binding || !map ||
+        (profile != YVEX_QUANT_PROFILE_SOURCE_FAITHFUL &&
+         profile != YVEX_QUANT_PROFILE_RELEASE_Q8_Q2) ||
         yvex_transform_binding_ir(binding) != ir || !ir_summary ||
         !binding_summary || !map_summary || !ir_summary->complete ||
         !binding_summary->complete || !map_summary->complete) {
@@ -1025,7 +1032,9 @@ int yvex_deepseek_quant_plan_build(
     plan->summary.mapping_identity = map_summary->mapping_identity;
     (void)snprintf(plan->summary.profile_name,
                    sizeof(plan->summary.profile_name), "%s",
-                   YVEX_QUANT_RELEASE_PROFILE_NAME);
+                   profile == YVEX_QUANT_PROFILE_SOURCE_FAITHFUL
+                       ? YVEX_QUANT_REFERENCE_PROFILE_NAME
+                       : YVEX_QUANT_RELEASE_PROFILE_NAME);
     (void)snprintf(plan->summary.transform_identity,
                    sizeof(plan->summary.transform_identity), "%s",
                    ir_summary->transform_identity);
@@ -1094,6 +1103,7 @@ int yvex_deepseek_quant_plan_build(
         const yvex_deepseek_gguf_descriptor *descriptor =
             yvex_deepseek_gguf_map_at(map, ordinal);
         yvex_quant_decision reference_decision;
+        yvex_quant_decision release_decision;
         yvex_quant_decision *decision = &plan->decisions[ordinal];
         unsigned long long hash;
         unsigned long long slot;
@@ -1138,12 +1148,13 @@ int yvex_deepseek_quant_plan_build(
         }
         rc = quant_build_candidate_decision(
             YVEX_QUANT_PROFILE_RELEASE_Q8_Q2, binding, terminal, node,
-            descriptor, ordinal, decision, failure, err);
+            descriptor, ordinal, &release_decision, failure, err);
         if (rc != YVEX_OK) {
             yvex_quant_plan_release(&plan);
             return rc;
         }
-        if (!quant_summary_add(&plan->summary.candidates[1], decision)) {
+        if (!quant_summary_add(&plan->summary.candidates[1],
+                               &release_decision)) {
             rc = quant_plan_fail(
                 failure, YVEX_QUANT_FAILURE_BYTE_OVERFLOW, ordinal,
                 ULLONG_MAX, ULLONG_MAX,
@@ -1153,6 +1164,8 @@ int yvex_deepseek_quant_plan_build(
             yvex_quant_plan_release(&plan);
             return rc;
         }
+        *decision = profile == YVEX_QUANT_PROFILE_SOURCE_FAITHFUL
+            ? reference_decision : release_decision;
         hash = quant_key_hash(&decision->logical_key);
         slot = hash & (plan->summary.index_capacity - 1u);
         for (probe = 0u; probe < plan->summary.index_capacity; ++probe) {
@@ -1190,17 +1203,17 @@ int yvex_deepseek_quant_plan_build(
     }
     plan->summary.candidates[0].numerically_admissible = 1;
     plan->summary.candidates[1].numerically_admissible = 1;
-    plan->summary.encoded_bytes = plan->summary.candidates[1].encoded_bytes;
+    plan->summary.encoded_bytes = plan->summary.candidates[profile].encoded_bytes;
     plan->summary.exact_scalar_bytes =
-        plan->summary.candidates[1].exact_scalar_bytes;
-    plan->summary.q8_0_bytes = plan->summary.candidates[1].q8_0_bytes;
-    plan->summary.q2_k_bytes = plan->summary.candidates[1].q2_k_bytes;
-    plan->summary.mxfp4_bytes = plan->summary.candidates[1].mxfp4_bytes;
+        plan->summary.candidates[profile].exact_scalar_bytes;
+    plan->summary.q8_0_bytes = plan->summary.candidates[profile].q8_0_bytes;
+    plan->summary.q2_k_bytes = plan->summary.candidates[profile].q2_k_bytes;
+    plan->summary.mxfp4_bytes = plan->summary.candidates[profile].mxfp4_bytes;
     plan->summary.calibration_required =
-        plan->summary.candidates[1].calibration_required;
+        plan->summary.candidates[profile].calibration_required;
     if (plan->summary.decision_count != ir_summary->terminal_count ||
         plan->summary.calibration_required ||
-        !plan->summary.candidates[1].compute_admissible ||
+        !plan->summary.candidates[profile].compute_admissible ||
         !quant_plan_identity(plan)) {
         yvex_quant_plan_release(&plan);
         return quant_plan_fail(
@@ -1216,6 +1229,21 @@ int yvex_deepseek_quant_plan_build(
     if (failure) memset(failure, 0, sizeof(*failure));
     yvex_error_clear(err);
     return YVEX_OK;
+}
+
+/* Seals the fixed selected v0.1 release profile for existing consumers. */
+int yvex_deepseek_quant_plan_build(
+    yvex_quant_plan **out,
+    const yvex_transform_ir *ir,
+    const yvex_transform_binding *binding,
+    const yvex_deepseek_gguf_map *map,
+    const yvex_quant_plan_options *options,
+    yvex_quant_failure *failure,
+    yvex_error *err)
+{
+    return yvex_deepseek_quant_plan_build_profile(
+        out, ir, binding, map, YVEX_QUANT_PROFILE_RELEASE_Q8_Q2,
+        options, failure, err);
 }
 
 /* Releases all independently owned plan memory and nulls the caller handle. */

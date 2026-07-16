@@ -12,11 +12,18 @@
  */
 #include "test.h"
 
+#include "src/artifact/yvex_artifact_descriptor.h"
+#include "src/artifact/yvex_artifact_roundtrip_gate.h"
+#include "src/gguf/yvex_gguf_file_sink.h"
+#include "src/gguf/yvex_gguf_roundtrip.h"
+#include "src/gguf/yvex_gguf_writer.h"
 #include "src/gguf/yvex_quant_execute.h"
 #include "src/gguf/yvex_quant_plan.h"
 #include "src/gguf/yvex_quant_sink.h"
 #include "src/model/compilation/yvex_transform_binding.h"
 #include "src/model/compilation/yvex_transform_ir.h"
+#include "src/model/artifacts/yvex_model_artifact_gate.h"
+#include "src/model/artifacts/yvex_model_artifact_report.h"
 #include "src/model/target/yvex_model_target_catalog.h"
 #include "src/source/yvex_source_private.h"
 
@@ -78,6 +85,41 @@ static void quant_execute_release(void *allocation, void *context)
     if (!allocation) return;
     if (state && state->live) state->live--;
     free(allocation);
+}
+
+/* Copies one bounded fixture artifact and removes an incomplete destination. */
+static int quant_fixture_file_copy(const char *source, const char *destination)
+{
+    unsigned char bytes[8192];
+    FILE *input = NULL;
+    FILE *output = NULL;
+    size_t count;
+    int ok = 0;
+
+    if (!source || !destination) return 0;
+    input = fopen(source, "rb");
+    output = fopen(destination, "wb");
+    if (!input || !output) goto cleanup;
+    while ((count = fread(bytes, 1u, sizeof(bytes), input)) != 0u) {
+        if (fwrite(bytes, 1u, count, output) != count) goto cleanup;
+    }
+    if (ferror(input) || fflush(output) != 0) goto cleanup;
+    if (fclose(output) != 0) {
+        output = NULL;
+        goto cleanup;
+    }
+    output = NULL;
+    if (fclose(input) != 0) {
+        input = NULL;
+        goto cleanup;
+    }
+    input = NULL;
+    ok = 1;
+cleanup:
+    if (input) (void)fclose(input);
+    if (output) (void)fclose(output);
+    if (!ok) (void)unlink(destination);
+    return ok;
 }
 
 /* Accepts trust-scan delivery while retaining only an exact byte count. */
@@ -686,7 +728,8 @@ static int quant_fixture_create(
 
     memset(fixture, 0, sizeof(*fixture));
     (void)snprintf(fixture->root, sizeof(fixture->root),
-                   "build/tests/quant-execute-%s", suffix);
+                   "build/tests/quant-execute-%s-%ld", suffix,
+                   (long)getpid());
     (void)snprintf(fixture->shard_path, sizeof(fixture->shard_path),
                    "%s/quant-execute-00001.safetensors", fixture->root);
     (void)snprintf(fixture->manifest_path, sizeof(fixture->manifest_path),
@@ -946,6 +989,720 @@ static int quant_test_executor_allocation_sweep(void)
                          "executor allocation refusal must unwind all ownership");
         yvex_quant_digest_sink_release(&digest_sink);
     }
+    quant_fixture_release(&fixture);
+    return 0;
+}
+
+typedef struct {
+    unsigned long long calls;
+    unsigned long long last_bytes;
+    unsigned long long planned_bytes;
+} quant_roundtrip_progress_fixture;
+
+/* Captures synchronous roundtrip progress without retaining borrowed views. */
+static void quant_roundtrip_progress_capture(
+    void *opaque,
+    const yvex_gguf_roundtrip_summary *summary,
+    unsigned long long planned_file_bytes)
+{
+    quant_roundtrip_progress_fixture *fixture =
+        (quant_roundtrip_progress_fixture *)opaque;
+    if (!fixture || !summary) return;
+    fixture->calls++;
+    fixture->last_bytes = summary->bytes_hashed;
+    fixture->planned_bytes = planned_file_bytes;
+}
+
+/*
+ * Exercises structural planning, transactional file delivery, native
+ * roundtrip, physical corruption refusal, support refusal without tokenizer,
+ * and deterministic cleanup on preallocation/write/incomplete faults.
+ */
+int yvex_test_gguf_writer_artifact(void)
+{
+    static const yvex_gguf_writer_fixture_tensor names[] = {
+        {"fixture.direct"}, {"fixture.scale-pair"},
+        {"fixture.cast"}, {"fixture.experts"}
+    };
+    static const yvex_gguf_writer_fixture_tensor duplicate_names[] = {
+        {"fixture.duplicate"}, {"fixture.duplicate"},
+        {"fixture.cast"}, {"fixture.experts"}
+    };
+    quant_execute_fixture fixture;
+    yvex_gguf_writer_plan *writer = NULL;
+    yvex_gguf_writer_plan *duplicate_writer = NULL;
+    yvex_gguf_file_sink *file_sink = NULL;
+    yvex_quant_output_sink output_sink;
+    yvex_quant_executor_options executor_options;
+    yvex_quant_execution_summary execution;
+    yvex_gguf_file_sink_options file_options;
+    yvex_gguf_file_sink_summary emission;
+    yvex_gguf_roundtrip_options roundtrip_options;
+    yvex_gguf_roundtrip_summary roundtrip;
+    yvex_gguf_writer_failure writer_failure;
+    yvex_gguf_file_failure file_failure;
+    yvex_gguf_roundtrip_failure roundtrip_failure;
+    yvex_artifact_official_reader_fact official;
+    yvex_artifact_admission_request admission_request;
+    yvex_complete_artifact_admission admission;
+    yvex_complete_artifact_admission admitted_fixture;
+    yvex_artifact_admission_failure admission_failure;
+    yvex_artifact_file_identity independent_identity;
+    yvex_artifact_descriptor_fact descriptor;
+    yvex_model_complete_artifact_gate_fact complete_gate;
+    yvex_model_artifact_report admitted_report;
+    yvex_quant_failure quant_failure;
+    yvex_quant_failure protocol_failure;
+    yvex_error err;
+    quant_roundtrip_progress_fixture progress_fixture;
+    const yvex_gguf_writer_plan_summary *summary;
+    const yvex_gguf_writer_tensor *first_tensor;
+    const yvex_quant_decision *first_decision;
+    char artifact_path[640];
+    char corrupt_path[640];
+    char truncated_path[640];
+    char tail_path[640];
+    char drift_path[640];
+    char partial_path[640];
+    char symlink_directory[640];
+    char symlink_path[700];
+    char traversal_path[700];
+    char fault_path[640];
+    char temp_path[YVEX_ARTIFACT_PATH_CAP];
+    FILE *fp;
+    int byte;
+    unsigned char protocol_byte = 0u;
+
+    yvex_error_clear(&err);
+    YVEX_TEST_ASSERT(quant_fixture_create(
+                         &fixture, "gguf-writer", 0, 0, &err),
+                     "writer fixture must construct trusted quant inputs");
+    YVEX_TEST_ASSERT(yvex_gguf_writer_plan_build_fixture(
+                         &writer, fixture.plan, names,
+                         QUANT_EXEC_TERMINAL_COUNT, NULL,
+                         &writer_failure, &err) == YVEX_OK,
+                     "explicit fixture writer plan must seal");
+    summary = yvex_gguf_writer_plan_summary_get(writer);
+    YVEX_TEST_ASSERT(summary && summary->complete &&
+                         summary->tensor_count == QUANT_EXEC_TERMINAL_COUNT &&
+                         summary->tensor_payload_bytes == 726544u &&
+                         summary->final_file_bytes >
+                             summary->tensor_payload_bytes &&
+                         summary->tokenizer_token_count == 0u,
+                     "fixture writer plan must account exact physical bytes");
+    YVEX_TEST_ASSERT(yvex_gguf_writer_plan_build_fixture(
+                         &duplicate_writer, fixture.plan,
+                         duplicate_names, QUANT_EXEC_TERMINAL_COUNT, NULL,
+                         &writer_failure, &err) != YVEX_OK &&
+                         writer_failure.code ==
+                             YVEX_GGUF_WRITER_DUPLICATE_TENSOR &&
+                         !duplicate_writer,
+                     "duplicate tensor names must refuse during planning");
+
+    (void)snprintf(symlink_directory, sizeof(symlink_directory),
+                   "%s/linkdir", fixture.root);
+    (void)snprintf(symlink_path, sizeof(symlink_path), "%s/output.gguf",
+                   symlink_directory);
+    YVEX_TEST_ASSERT(symlink(".", symlink_directory) == 0,
+                     "path-admission fixture symlink must construct");
+    yvex_gguf_file_sink_options_default(&file_options);
+    file_options.destination_path = symlink_path;
+    file_options.safety_margin_bytes = 0u;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) != YVEX_OK && !file_sink &&
+                         file_failure.code ==
+                             YVEX_GGUF_FILE_DIRECTORY_OPEN,
+                     "destination directory symlink must refuse");
+    YVEX_TEST_ASSERT(unlink(symlink_directory) == 0,
+                     "path-admission symlink must clean up");
+
+    (void)snprintf(traversal_path, sizeof(traversal_path),
+                   "%s/../escaped.gguf", fixture.root);
+    yvex_gguf_file_sink_options_default(&file_options);
+    file_options.destination_path = traversal_path;
+    file_options.safety_margin_bytes = 0u;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) != YVEX_OK && !file_sink &&
+                         file_failure.code ==
+                             YVEX_GGUF_FILE_UNSAFE_DESTINATION,
+                     "destination traversal must refuse before file creation");
+
+    (void)snprintf(artifact_path, sizeof(artifact_path), "%s/output.gguf",
+                   fixture.root);
+    yvex_gguf_file_sink_options_default(&file_options);
+    file_options.destination_path = artifact_path;
+    file_options.safety_margin_bytes = 0u;
+    file_options.inject_temp_create_failure = 1;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) != YVEX_OK && !file_sink &&
+                         file_failure.code == YVEX_GGUF_FILE_TEMP_CREATE,
+                     "temporary-file creation failure must publish no sink");
+
+    yvex_gguf_file_sink_options_default(&file_options);
+    file_options.destination_path = artifact_path;
+    file_options.safety_margin_bytes = 0u;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) == YVEX_OK,
+                     "transactional fixture file sink must preallocate");
+    (void)snprintf(temp_path, sizeof(temp_path), "%s",
+                   yvex_gguf_file_sink_temporary_path(file_sink));
+    yvex_gguf_file_sink_adapter(file_sink, &output_sink);
+    yvex_quant_executor_options_default(&executor_options);
+    executor_options.worker_count = 4u;
+    executor_options.source_chunk_bytes = 4096u;
+    executor_options.output_chunk_bytes = 4096u;
+    executor_options.maximum_owned_bytes = 8u * 1024u * 1024u;
+    YVEX_TEST_ASSERT(yvex_quant_execute(
+                         fixture.plan, &output_sink, &executor_options,
+                         &execution, &quant_failure, &err) == YVEX_OK &&
+                         execution.complete,
+                     "quant executor must deliver every fixture terminal");
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_finalize(
+                         file_sink, &emission, &file_failure, &err) ==
+                         YVEX_OK && emission.finalized &&
+                         emission.committed_terminals == 4u &&
+                         emission.encoded_bytes_written == 726544u &&
+                         emission.source_ranges_committed ==
+                             execution.source_ranges_read &&
+                         emission.source_bytes_committed ==
+                             execution.payload_bytes_read,
+                     "exact fixture file must finalize transactionally");
+    yvex_gguf_roundtrip_options_default(&roundtrip_options);
+    roundtrip_options.verification_chunk_bytes = 4096u;
+    memset(&progress_fixture, 0, sizeof(progress_fixture));
+    roundtrip_options.progress = quant_roundtrip_progress_capture;
+    roundtrip_options.progress_context = &progress_fixture;
+    YVEX_TEST_ASSERT(yvex_gguf_roundtrip_validate(
+                         temp_path, writer,
+                         yvex_gguf_file_sink_digest(file_sink),
+                         &roundtrip_options, &roundtrip,
+                         &roundtrip_failure, &err) == YVEX_OK &&
+                         roundtrip.complete && roundtrip.payload_accepted &&
+                         !roundtrip.tokenizer_complete &&
+                         roundtrip.bytes_hashed == summary->final_file_bytes &&
+                         progress_fixture.calls > 0u &&
+                         progress_fixture.last_bytes ==
+                             summary->final_file_bytes &&
+                         progress_fixture.planned_bytes ==
+                             summary->final_file_bytes,
+                     "native roundtrip must verify every fixture byte");
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_publish(
+                         file_sink, &roundtrip, &emission,
+                         &file_failure, &err) ==
+                         YVEX_OK && emission.published,
+                     "validated fixture must publish without replacement");
+    YVEX_TEST_ASSERT(yvex_artifact_identity_read(
+                         artifact_path, &independent_identity, &err) ==
+                         YVEX_OK &&
+                         independent_identity.file_size ==
+                             roundtrip.file_bytes &&
+                         strcmp(independent_identity.sha256,
+                                roundtrip.artifact_identity) == 0,
+                     "streaming artifact identity must match independent exact-file identity");
+    memset(&official, 0, sizeof(official));
+    (void)snprintf(official.revision, sizeof(official.revision), "%s",
+                   YVEX_GGUF_OFFICIAL_READER_REVISION);
+    official.metadata_count = summary->metadata_count;
+    official.tensor_count = summary->tensor_count;
+    official.file_bytes = summary->final_file_bytes;
+    official.file_device = emission.file_device;
+    official.file_inode = emission.file_inode;
+    official.file_mtime_seconds = emission.validated_mtime_seconds;
+    official.file_mtime_nanoseconds = emission.validated_mtime_nanoseconds;
+    official.file_ctime_seconds = emission.validated_ctime_seconds;
+    official.file_ctime_nanoseconds = emission.validated_ctime_nanoseconds;
+    official.accepted = 1;
+    memset(&admission_request, 0, sizeof(admission_request));
+    admission_request.artifact_path = artifact_path;
+    admission_request.writer_plan = writer;
+    admission_request.emission = &emission;
+    admission_request.native_roundtrip = &roundtrip;
+    admission_request.official_reader = &official;
+    YVEX_TEST_ASSERT(yvex_complete_artifact_admit(
+                         &admission_request, &admission,
+                         &admission_failure, &err) != YVEX_OK &&
+                         admission_failure.code ==
+                             YVEX_ARTIFACT_ADMISSION_TOKENIZER_INCOMPLETE &&
+                         !admission.complete,
+                     "tensor proof without tokenizer must not enter complete path");
+    (void)snprintf(official.revision, sizeof(official.revision), "%s",
+                   "0000000000000000000000000000000000000000");
+    YVEX_TEST_ASSERT(yvex_complete_artifact_admit(
+                         &admission_request, &admission,
+                         &admission_failure, &err) != YVEX_OK &&
+                         admission_failure.code ==
+                             YVEX_ARTIFACT_ADMISSION_OFFICIAL_READER &&
+                         !admission.complete,
+                     "mismatched official-reader revision must refuse admission");
+
+    memset(&admitted_fixture, 0, sizeof(admitted_fixture));
+    admitted_fixture.artifact_class = YVEX_ARTIFACT_CLASS_COMPLETE_YVEX;
+    admitted_fixture.tensor_count = 1360u;
+    admitted_fixture.file_bytes = 102408545440ull;
+    admitted_fixture.materialization_input_ready = 1;
+    admitted_fixture.runtime_supported = 0;
+    admitted_fixture.complete = 1;
+    (void)snprintf(admitted_fixture.artifact_path,
+                   sizeof(admitted_fixture.artifact_path), "%s",
+                   artifact_path);
+    (void)snprintf(admitted_fixture.artifact_identity,
+                   sizeof(admitted_fixture.artifact_identity), "%064x", 1);
+    (void)snprintf(admitted_fixture.profile_name,
+                   sizeof(admitted_fixture.profile_name), "%s",
+                   "deepseek-v4-flash-q8_0-q2_k-v1");
+    YVEX_TEST_ASSERT(yvex_artifact_descriptor_from_admission(
+                         &admitted_fixture, &descriptor) &&
+                         descriptor.materialization_input_ready &&
+                         !descriptor.runtime_supported &&
+                         descriptor.tensor_count == 1360u,
+                     "artifact inventory must project canonical admission");
+    YVEX_TEST_ASSERT(yvex_model_artifact_gate_from_admission(
+                         &admitted_fixture, &complete_gate, &err) == YVEX_OK &&
+                         complete_gate.status == YVEX_MODEL_GATE_PASS &&
+                         complete_gate.support_level ==
+                             YVEX_MODEL_SUPPORT_DESCRIPTOR_ONLY &&
+                         complete_gate.complete_artifact_admitted &&
+                         complete_gate.materialization_input_ready &&
+                         !complete_gate.execution_ready,
+                     "model gate must consume admission without runtime promotion");
+    YVEX_TEST_ASSERT(yvex_model_artifact_report_from_admission(
+                         &admitted_fixture, &admitted_report, &err) ==
+                         YVEX_OK &&
+                         strcmp(admitted_report.status,
+                                "complete-artifact-admitted") == 0 &&
+                         strcmp(admitted_report.qprofile,
+                                "deepseek-v4-flash-q8_0-q2_k-v1") == 0 &&
+                         admitted_report.tensor_count == 1360u &&
+                         !admitted_report.execution_ready,
+                     "typed report must project the same canonical admission");
+    admitted_fixture.complete = 0;
+    YVEX_TEST_ASSERT(yvex_model_artifact_report_from_admission(
+                         &admitted_fixture, &admitted_report, &err) !=
+                         YVEX_OK &&
+                         strcmp(admitted_report.status, "blocked") == 0,
+                     "incomplete artifact must refuse every complete report path");
+
+    (void)snprintf(corrupt_path, sizeof(corrupt_path), "%s/corrupt.gguf",
+                   fixture.root);
+    YVEX_TEST_ASSERT(quant_fixture_file_copy(artifact_path, corrupt_path),
+                     "corruption proof must use an independent fixture copy");
+    first_tensor = yvex_gguf_writer_plan_tensor_at(writer, 0u);
+    fp = fopen(corrupt_path, "r+b");
+    YVEX_TEST_ASSERT(fp && first_tensor &&
+                         fseeko(fp, (off_t)first_tensor->absolute_offset,
+                                SEEK_SET) == 0,
+                     "published fixture payload must be addressable for corruption");
+    byte = fgetc(fp);
+    YVEX_TEST_ASSERT(byte != EOF &&
+                         fseeko(fp, (off_t)first_tensor->absolute_offset,
+                                SEEK_SET) == 0 &&
+                         fputc(byte ^ 0x5a, fp) != EOF && fclose(fp) == 0,
+                     "bounded corruption fixture must mutate one payload byte");
+    fp = NULL;
+    YVEX_TEST_ASSERT(yvex_gguf_roundtrip_validate(
+                         corrupt_path, writer,
+                         yvex_gguf_file_sink_digest(file_sink),
+                         &roundtrip_options, &roundtrip,
+                         &roundtrip_failure, &err) != YVEX_OK &&
+                         roundtrip_failure.code ==
+                             YVEX_GGUF_ROUNDTRIP_PAYLOAD_DIGEST,
+                     "one corrupted payload byte must fail terminal digest");
+    YVEX_TEST_ASSERT(unlink(corrupt_path) == 0,
+                     "corruption fixture copy must clean up deterministically");
+
+    (void)snprintf(truncated_path, sizeof(truncated_path),
+                   "%s/truncated.gguf", fixture.root);
+    YVEX_TEST_ASSERT(quant_fixture_file_copy(artifact_path, truncated_path),
+                     "truncation proof must use an independent fixture copy");
+    fp = fopen(truncated_path, "r+b");
+    YVEX_TEST_ASSERT(fp && summary->final_file_bytes > 0u &&
+                         ftruncate(fileno(fp),
+                                   (off_t)(summary->final_file_bytes - 1u)) == 0 &&
+                         fclose(fp) == 0,
+                     "truncation fixture must remove one physical byte");
+    fp = NULL;
+    YVEX_TEST_ASSERT(yvex_gguf_roundtrip_validate(
+                         truncated_path, writer,
+                         yvex_gguf_file_sink_digest(file_sink),
+                         &roundtrip_options, &roundtrip,
+                         &roundtrip_failure, &err) != YVEX_OK &&
+                         roundtrip_failure.code ==
+                             YVEX_GGUF_ROUNDTRIP_HEADER_DIVERGENCE,
+                     "one-byte truncation must refuse before payload acceptance");
+    YVEX_TEST_ASSERT(unlink(truncated_path) == 0,
+                     "truncation fixture must clean up deterministically");
+
+    (void)snprintf(tail_path, sizeof(tail_path), "%s/extra-tail.gguf",
+                   fixture.root);
+    YVEX_TEST_ASSERT(quant_fixture_file_copy(artifact_path, tail_path),
+                     "extra-tail proof must use an independent fixture copy");
+    fp = fopen(tail_path, "ab");
+    YVEX_TEST_ASSERT(fp && fputc(0, fp) != EOF && fclose(fp) == 0,
+                     "extra-tail fixture must append one physical byte");
+    fp = NULL;
+    YVEX_TEST_ASSERT(yvex_gguf_roundtrip_validate(
+                         tail_path, writer,
+                         yvex_gguf_file_sink_digest(file_sink),
+                         &roundtrip_options, &roundtrip,
+                         &roundtrip_failure, &err) != YVEX_OK &&
+                         roundtrip_failure.code ==
+                             YVEX_GGUF_ROUNDTRIP_HEADER_DIVERGENCE,
+                     "one-byte trailing data must refuse before payload acceptance");
+    YVEX_TEST_ASSERT(unlink(tail_path) == 0,
+                     "extra-tail fixture must clean up deterministically");
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_withdraw(
+                         file_sink, &file_failure, &err) == YVEX_OK &&
+                         access(artifact_path, F_OK) != 0,
+                     "owned refused artifact must withdraw and fsync cleanup");
+    yvex_gguf_file_sink_release(&file_sink);
+
+    (void)snprintf(drift_path, sizeof(drift_path), "%s/drift.gguf",
+                   fixture.root);
+    yvex_gguf_file_sink_options_default(&file_options);
+    file_options.destination_path = drift_path;
+    file_options.safety_margin_bytes = 0u;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) == YVEX_OK,
+                     "snapshot drift fixture must preallocate");
+    (void)snprintf(temp_path, sizeof(temp_path), "%s",
+                   yvex_gguf_file_sink_temporary_path(file_sink));
+    yvex_gguf_file_sink_adapter(file_sink, &output_sink);
+    YVEX_TEST_ASSERT(yvex_quant_execute(
+                         fixture.plan, &output_sink, &executor_options,
+                         &execution, &quant_failure, &err) == YVEX_OK &&
+                         yvex_gguf_file_sink_finalize(
+                             file_sink, &emission, &file_failure, &err) ==
+                             YVEX_OK,
+                     "snapshot drift fixture must reach finalized state");
+    fp = fopen(temp_path, "r+b");
+    YVEX_TEST_ASSERT(fp && first_tensor &&
+                         fseeko(fp, (off_t)first_tensor->absolute_offset,
+                                SEEK_SET) == 0,
+                     "finalized temporary artifact must be mutable by drift test");
+    byte = fgetc(fp);
+    YVEX_TEST_ASSERT(byte != EOF &&
+                         fseeko(fp, (off_t)first_tensor->absolute_offset,
+                                SEEK_SET) == 0 &&
+                         fputc(byte ^ 0x33, fp) != EOF && fclose(fp) == 0,
+                     "drift fixture must change the finalized inode");
+    fp = NULL;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_publish(
+                         file_sink, &roundtrip, &emission,
+                         &file_failure, &err) !=
+                         YVEX_OK &&
+                         file_failure.code == YVEX_GGUF_FILE_SNAPSHOT_DRIFT &&
+                         access(drift_path, F_OK) != 0,
+                     "changed finalized inode must refuse before publication");
+    yvex_gguf_file_sink_release(&file_sink);
+    YVEX_TEST_ASSERT(access(temp_path, F_OK) != 0,
+                     "snapshot drift refusal must remove its owned temp");
+
+    (void)snprintf(partial_path, sizeof(partial_path), "%s/partial.gguf",
+                   fixture.root);
+    yvex_gguf_file_sink_options_default(&file_options);
+    file_options.destination_path = partial_path;
+    file_options.safety_margin_bytes = 0u;
+    file_options.injected_write_eintr_call = 1u;
+    file_options.injected_write_max_bytes = 1024u;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) == YVEX_OK,
+                     "EINTR retry and bounded partial writes must admit");
+    (void)snprintf(temp_path, sizeof(temp_path), "%s",
+                   yvex_gguf_file_sink_temporary_path(file_sink));
+    yvex_gguf_file_sink_adapter(file_sink, &output_sink);
+    YVEX_TEST_ASSERT(yvex_quant_execute(
+                         fixture.plan, &output_sink, &executor_options,
+                         &execution, &quant_failure, &err) == YVEX_OK &&
+                         yvex_gguf_file_sink_finalize(
+                             file_sink, &emission, &file_failure, &err) ==
+                             YVEX_OK && emission.write_calls >
+                                 emission.output_chunks &&
+                         yvex_gguf_roundtrip_validate(
+                             temp_path, writer,
+                             yvex_gguf_file_sink_digest(file_sink),
+                             &roundtrip_options, &roundtrip,
+                             &roundtrip_failure, &err) == YVEX_OK,
+                     "partial/EINTR path must produce exact roundtrip bytes");
+    yvex_gguf_file_sink_release(&file_sink);
+    YVEX_TEST_ASSERT(access(temp_path, F_OK) != 0 &&
+                         access(partial_path, F_OK) != 0,
+                     "unpublished retry fixture must clean up exactly");
+
+    (void)snprintf(fault_path, sizeof(fault_path), "%s/fault.gguf",
+                   fixture.root);
+    fp = fopen(fault_path, "wb");
+    YVEX_TEST_ASSERT(fp && fputc(0x5a, fp) != EOF && fclose(fp) == 0,
+                     "destination-conflict fixture must create one owned sentinel");
+    fp = NULL;
+    yvex_gguf_file_sink_options_default(&file_options);
+    file_options.destination_path = fault_path;
+    file_options.safety_margin_bytes = 0u;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) != YVEX_OK && !file_sink &&
+                         file_failure.code ==
+                             YVEX_GGUF_FILE_DESTINATION_EXISTS,
+                     "pre-existing destination must refuse without replacement");
+    fp = fopen(fault_path, "rb");
+    YVEX_TEST_ASSERT(fp && fgetc(fp) == 0x5a && fclose(fp) == 0 &&
+                         unlink(fault_path) == 0,
+                     "destination refusal must preserve the pre-existing file");
+    fp = NULL;
+
+    yvex_gguf_file_sink_options_default(&file_options);
+    file_options.destination_path = fault_path;
+    file_options.safety_margin_bytes = ULLONG_MAX;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) != YVEX_OK && !file_sink &&
+                         file_failure.code ==
+                             YVEX_GGUF_FILE_INSUFFICIENT_SPACE &&
+                         access(fault_path, F_OK) != 0,
+                     "capacity arithmetic overflow must refuse before temp creation");
+
+    first_decision = yvex_quant_plan_decision_at(fixture.plan, 0u);
+    yvex_gguf_file_sink_options_default(&file_options);
+    file_options.destination_path = fault_path;
+    file_options.safety_margin_bytes = 0u;
+    YVEX_TEST_ASSERT(first_decision && yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) == YVEX_OK,
+                     "terminal-protocol fixture must construct");
+    (void)snprintf(temp_path, sizeof(temp_path), "%s",
+                   yvex_gguf_file_sink_temporary_path(file_sink));
+    yvex_gguf_file_sink_adapter(file_sink, &output_sink);
+    memset(&protocol_failure, 0, sizeof(protocol_failure));
+    YVEX_TEST_ASSERT(output_sink.begin_terminal(
+                         output_sink.context, first_decision) == 0 &&
+                         output_sink.begin_terminal(
+                             output_sink.context, first_decision) != 0 &&
+                         output_sink.deliver_chunk(
+                             output_sink.context, first_decision, 0u,
+                             &protocol_byte, 1u) != 0,
+                     "duplicate begin must poison subsequent terminal delivery");
+    output_sink.abort_terminal(output_sink.context, first_decision,
+                               &protocol_failure, 0u);
+    yvex_gguf_file_sink_release(&file_sink);
+    YVEX_TEST_ASSERT(access(temp_path, F_OK) != 0 &&
+                         access(fault_path, F_OK) != 0,
+                     "terminal protocol abort must remove its unpublished temp");
+
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) == YVEX_OK,
+                     "overlapping-chunk fixture must construct independently");
+    (void)snprintf(temp_path, sizeof(temp_path), "%s",
+                   yvex_gguf_file_sink_temporary_path(file_sink));
+    yvex_gguf_file_sink_adapter(file_sink, &output_sink);
+    YVEX_TEST_ASSERT(output_sink.begin_terminal(
+                         output_sink.context, first_decision) == 0 &&
+                         output_sink.deliver_chunk(
+                             output_sink.context, first_decision, 0u,
+                             &protocol_byte, 1u) == 0 &&
+                         output_sink.deliver_chunk(
+                             output_sink.context, first_decision, 0u,
+                             &protocol_byte, 1u) != 0,
+                     "overlapping terminal chunks must poison the session");
+    output_sink.abort_terminal(output_sink.context, first_decision,
+                               &protocol_failure, 1u);
+    yvex_gguf_file_sink_release(&file_sink);
+    YVEX_TEST_ASSERT(access(temp_path, F_OK) != 0 &&
+                         access(fault_path, F_OK) != 0,
+                     "overlapping chunk refusal must remove its owned temp");
+
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) == YVEX_OK,
+                     "out-of-range terminal fixture must construct");
+    (void)snprintf(temp_path, sizeof(temp_path), "%s",
+                   yvex_gguf_file_sink_temporary_path(file_sink));
+    yvex_gguf_file_sink_adapter(file_sink, &output_sink);
+    YVEX_TEST_ASSERT(output_sink.begin_terminal(
+                         output_sink.context, first_decision) == 0 &&
+                         output_sink.deliver_chunk(
+                             output_sink.context, first_decision,
+                             first_decision->encoded_bytes,
+                             &protocol_byte, 1u) != 0,
+                     "terminal delivery beyond its planned range must refuse");
+    output_sink.abort_terminal(output_sink.context, first_decision,
+                               &protocol_failure, 0u);
+    yvex_gguf_file_sink_release(&file_sink);
+    YVEX_TEST_ASSERT(access(temp_path, F_OK) != 0 &&
+                         access(fault_path, F_OK) != 0,
+                     "out-of-range refusal must clean its owned temporary file");
+
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) == YVEX_OK,
+                     "duplicate-commit fixture must construct");
+    (void)snprintf(temp_path, sizeof(temp_path), "%s",
+                   yvex_gguf_file_sink_temporary_path(file_sink));
+    yvex_gguf_file_sink_adapter(file_sink, &output_sink);
+    YVEX_TEST_ASSERT(yvex_quant_execute(
+                         fixture.plan, &output_sink, &executor_options,
+                         &execution, &quant_failure, &err) == YVEX_OK &&
+                         output_sink.commit_terminal(
+                             output_sink.context, first_decision,
+                             first_decision->encoded_bytes) != 0 &&
+                         yvex_gguf_file_sink_finalize(
+                             file_sink, &emission, &file_failure, &err) !=
+                             YVEX_OK,
+                     "duplicate terminal commit must poison publication");
+    yvex_gguf_file_sink_release(&file_sink);
+    YVEX_TEST_ASSERT(access(temp_path, F_OK) != 0 &&
+                         access(fault_path, F_OK) != 0,
+                     "duplicate commit refusal must clean its owned temp");
+
+    yvex_gguf_file_sink_options_default(&file_options);
+    file_options.destination_path = fault_path;
+    file_options.safety_margin_bytes = 0u;
+    file_options.inject_preallocate_failure = 1;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) != YVEX_OK &&
+                         file_failure.code == YVEX_GGUF_FILE_PREALLOCATE &&
+                         !file_sink && access(fault_path, F_OK) != 0,
+                     "preallocation failure must leave no output or sink");
+    file_options.inject_preallocate_failure = 0;
+    file_options.injected_write_failure_call = 1u;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) != YVEX_OK &&
+                         file_failure.code == YVEX_GGUF_FILE_WRITE &&
+                         !file_sink && access(fault_path, F_OK) != 0,
+                     "prefix write failure must remove its owned temp");
+    file_options.injected_write_failure_call = 2u;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) == YVEX_OK,
+                     "payload-write-failure sink must pass structural prefix");
+    (void)snprintf(temp_path, sizeof(temp_path), "%s",
+                   yvex_gguf_file_sink_temporary_path(file_sink));
+    yvex_gguf_file_sink_adapter(file_sink, &output_sink);
+    YVEX_TEST_ASSERT(yvex_quant_execute(
+                         fixture.plan, &output_sink, &executor_options,
+                         &execution, &quant_failure, &err) != YVEX_OK &&
+                         quant_failure.code ==
+                             YVEX_QUANT_FAILURE_SINK_SHORT_WRITE &&
+                         !execution.complete,
+                     "hard positioned payload write failure must abort execution");
+    yvex_gguf_file_sink_release(&file_sink);
+    YVEX_TEST_ASSERT(access(temp_path, F_OK) != 0 &&
+                         access(fault_path, F_OK) != 0,
+                     "payload write failure must remove its owned temporary file");
+    file_options.injected_write_failure_call = 0u;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) == YVEX_OK &&
+                         yvex_gguf_file_sink_finalize(
+                             file_sink, &emission, &file_failure, &err) !=
+                             YVEX_OK &&
+                         file_failure.code == YVEX_GGUF_FILE_INCOMPLETE,
+                     "missing terminal commits must refuse finalization");
+    yvex_gguf_file_sink_release(&file_sink);
+    YVEX_TEST_ASSERT(access(fault_path, F_OK) != 0,
+                     "incomplete sink release must remove its owned temp");
+
+    yvex_gguf_file_sink_options_default(&file_options);
+    file_options.destination_path = fault_path;
+    file_options.safety_margin_bytes = 0u;
+    file_options.inject_fsync_failure = 1;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) == YVEX_OK,
+                     "flush-failure sink must construct");
+    (void)snprintf(temp_path, sizeof(temp_path), "%s",
+                   yvex_gguf_file_sink_temporary_path(file_sink));
+    yvex_gguf_file_sink_adapter(file_sink, &output_sink);
+    YVEX_TEST_ASSERT(yvex_quant_execute(
+                         fixture.plan, &output_sink, &executor_options,
+                         &execution, &quant_failure, &err) == YVEX_OK &&
+                         yvex_gguf_file_sink_finalize(
+                             file_sink, &emission, &file_failure, &err) !=
+                             YVEX_OK &&
+                         file_failure.code == YVEX_GGUF_FILE_FLUSH,
+                     "injected file flush must refuse finalization");
+    yvex_gguf_file_sink_release(&file_sink);
+    YVEX_TEST_ASSERT(access(temp_path, F_OK) != 0 &&
+                         access(fault_path, F_OK) != 0,
+                     "flush failure must remove only its owned temporary file");
+
+    yvex_gguf_file_sink_options_default(&file_options);
+    file_options.destination_path = fault_path;
+    file_options.safety_margin_bytes = 0u;
+    file_options.inject_publish_failure = 1;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) == YVEX_OK,
+                     "publication-failure sink must construct");
+    (void)snprintf(temp_path, sizeof(temp_path), "%s",
+                   yvex_gguf_file_sink_temporary_path(file_sink));
+    yvex_gguf_file_sink_adapter(file_sink, &output_sink);
+    YVEX_TEST_ASSERT(yvex_quant_execute(
+                         fixture.plan, &output_sink, &executor_options,
+                         &execution, &quant_failure, &err) == YVEX_OK &&
+                         yvex_gguf_file_sink_finalize(
+                             file_sink, &emission, &file_failure, &err) ==
+                             YVEX_OK &&
+                         yvex_gguf_file_sink_publish(
+                             file_sink, NULL, &emission,
+                             &file_failure, &err) != YVEX_OK &&
+                         file_failure.code ==
+                             YVEX_GGUF_FILE_VALIDATION_REQUIRED &&
+                         yvex_gguf_roundtrip_validate(
+                             temp_path, writer,
+                             yvex_gguf_file_sink_digest(file_sink),
+                             &roundtrip_options, &roundtrip,
+                             &roundtrip_failure, &err) == YVEX_OK &&
+                         yvex_gguf_file_sink_publish(
+                             file_sink, &roundtrip, &emission,
+                             &file_failure, &err) !=
+                             YVEX_OK &&
+                         file_failure.code == YVEX_GGUF_FILE_PUBLICATION,
+                     "injected no-replace publication must refuse");
+    yvex_gguf_file_sink_release(&file_sink);
+    YVEX_TEST_ASSERT(access(temp_path, F_OK) != 0 &&
+                         access(fault_path, F_OK) != 0,
+                     "publication failure must clean its unpublished temp");
+
+    yvex_gguf_file_sink_options_default(&file_options);
+    file_options.destination_path = fault_path;
+    file_options.safety_margin_bytes = 0u;
+    file_options.inject_directory_fsync_failure = 1;
+    YVEX_TEST_ASSERT(yvex_gguf_file_sink_create(
+                         &file_sink, writer, fixture.plan, &file_options,
+                         &file_failure, &err) == YVEX_OK,
+                     "directory-flush-failure sink must construct");
+    (void)snprintf(temp_path, sizeof(temp_path), "%s",
+                   yvex_gguf_file_sink_temporary_path(file_sink));
+    yvex_gguf_file_sink_adapter(file_sink, &output_sink);
+    YVEX_TEST_ASSERT(yvex_quant_execute(
+                         fixture.plan, &output_sink, &executor_options,
+                         &execution, &quant_failure, &err) == YVEX_OK &&
+                         yvex_gguf_file_sink_finalize(
+                             file_sink, &emission, &file_failure, &err) ==
+                             YVEX_OK &&
+                         yvex_gguf_roundtrip_validate(
+                             temp_path, writer,
+                             yvex_gguf_file_sink_digest(file_sink),
+                             &roundtrip_options, &roundtrip,
+                             &roundtrip_failure, &err) == YVEX_OK &&
+                         yvex_gguf_file_sink_publish(
+                             file_sink, &roundtrip, &emission,
+                             &file_failure, &err) !=
+                             YVEX_OK &&
+                         file_failure.code ==
+                             YVEX_GGUF_FILE_DIRECTORY_FLUSH &&
+                         access(fault_path, F_OK) != 0,
+                     "directory flush failure must roll publication back");
+    yvex_gguf_file_sink_release(&file_sink);
+    yvex_gguf_writer_plan_release(&writer);
     quant_fixture_release(&fixture);
     return 0;
 }

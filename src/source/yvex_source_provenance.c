@@ -167,6 +167,7 @@ int yvex_source_git_blob_oid_file(const char *path,
     source_sha1 ctx;
     size_t got;
     unsigned int i;
+    int read_failed;
     static const char hex[] = "0123456789abcdef";
 
     if (!path || !out_hex || !yvex_source_regular_file(path, &size)) {
@@ -192,7 +193,9 @@ int yvex_source_git_blob_oid_file(const char *path,
     while ((got = fread(buffer, 1u, sizeof(buffer), fp)) > 0u) {
         source_sha1_update(&ctx, buffer, got);
     }
-    if (ferror(fp) || fclose(fp) != 0) {
+    read_failed = ferror(fp);
+    if (fclose(fp) != 0) read_failed = 1;
+    if (read_failed) {
         yvex_error_setf(err, YVEX_ERR_IO, "source_git_blob_oid",
                         "cannot read metadata file: %s", path);
         return YVEX_ERR_IO;
@@ -204,6 +207,36 @@ int yvex_source_git_blob_oid_file(const char *path,
     }
     out_hex[40] = '\0';
     return YVEX_OK;
+}
+
+/* Computes Git's blob identity over the exact bytes retained by a caller. */
+static int source_git_blob_oid_bytes(const unsigned char *bytes,
+                                     size_t byte_count,
+                                     char out_hex[41])
+{
+    char header[64];
+    int header_length;
+    unsigned char digest[20];
+    source_sha1 ctx;
+    unsigned int index;
+    static const char hex[] = "0123456789abcdef";
+
+    if ((!bytes && byte_count) || !out_hex) return 0;
+    header_length = snprintf(header, sizeof(header), "blob %llu",
+                             (unsigned long long)byte_count);
+    if (header_length < 0 || (size_t)header_length + 1u > sizeof(header))
+        return 0;
+    source_sha1_init(&ctx);
+    source_sha1_update(&ctx, (const unsigned char *)header,
+                       (size_t)header_length + 1u);
+    source_sha1_update(&ctx, bytes, byte_count);
+    source_sha1_final(&ctx, digest);
+    for (index = 0u; index < sizeof(digest); ++index) {
+        out_hex[index * 2u] = hex[digest[index] >> 4u];
+        out_hex[index * 2u + 1u] = hex[digest[index] & 0x0fu];
+    }
+    out_hex[40] = '\0';
+    return 1;
 }
 
 /* Parses exact repository and revision declarations from a manifest source. */
@@ -914,6 +947,193 @@ static int source_oid_is_sha1(const char *oid)
         if (!isxdigit((unsigned char)oid[i])) return 0;
     }
     return 1;
+}
+
+/* Accepts a single canonical source-root file name without path traversal. */
+static int source_metadata_name_valid(const char *name)
+{
+    const char *cursor;
+
+    if (!name || !name[0] || name[0] == '/' ||
+        strcmp(name, ".") == 0 || strcmp(name, "..") == 0) return 0;
+    for (cursor = name; *cursor; ++cursor)
+        if (*cursor == '/' || *cursor == '\\' ||
+            *cursor == '\n' || *cursor == '\r') return 0;
+    return 1;
+}
+
+/*
+ * Binds one small source sidecar to its pinned provider revision and Git blob
+ * identity. It reads only the named metadata file, never tensor payload, and
+ * publishes no partial identity fact on failure.
+ */
+int yvex_source_provenance_metadata_identity(
+    const yvex_source_verification *verification,
+    const char *canonical_name,
+    yvex_source_metadata_identity_fact *out,
+    yvex_error *err)
+{
+    yvex_source_metadata_identity_fact fact;
+    char provider_revision[128];
+    char provider_oid[128];
+    char path[YVEX_PATH_CAP];
+    unsigned long long file_bytes;
+    int rc;
+
+    if (out) memset(out, 0, sizeof(*out));
+    if (!verification || !out ||
+        !verification->resolved_source_path[0] ||
+        !verification->revision[0] ||
+        !source_metadata_name_valid(canonical_name)) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG,
+                       "source_metadata_identity",
+                       "verified source and canonical metadata name are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(&fact, 0, sizeof(fact));
+    if (!source_metadata_read(verification->resolved_source_path,
+                              canonical_name,
+                              provider_revision, sizeof(provider_revision),
+                              provider_oid, sizeof(provider_oid)) ||
+        !source_oid_is_sha1(provider_oid)) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "source_metadata_identity",
+                       "provider metadata lacks a pinned Git blob identity");
+        return YVEX_ERR_FORMAT;
+    }
+    fact.revision_matches =
+        strcmp(provider_revision, verification->revision) == 0;
+    if (!fact.revision_matches) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "source_metadata_identity",
+                       "metadata provider revision differs from source snapshot");
+        return YVEX_ERR_FORMAT;
+    }
+    if (!yvex_source_path_join(path, sizeof(path),
+                               verification->resolved_source_path,
+                               canonical_name) ||
+        !yvex_source_regular_file(path, &file_bytes)) {
+        yvex_error_set(err, YVEX_ERR_IO, "source_metadata_identity",
+                       "metadata sidecar is missing or not a regular file");
+        return YVEX_ERR_IO;
+    }
+    rc = yvex_source_git_blob_oid_file(
+        path, fact.observed_git_blob_oid, err);
+    if (rc != YVEX_OK) return rc;
+    if (strcmp(provider_oid, fact.observed_git_blob_oid) != 0) {
+        yvex_error_set(err, YVEX_ERR_FORMAT, "source_metadata_identity",
+                       "metadata sidecar Git blob identity mismatch");
+        return YVEX_ERR_FORMAT;
+    }
+    (void)snprintf(fact.canonical_name, sizeof(fact.canonical_name), "%s",
+                   canonical_name);
+    memcpy(fact.revision, provider_revision, 41u);
+    memcpy(fact.expected_git_blob_oid, provider_oid, 41u);
+    fact.file_bytes = file_bytes;
+    fact.identity_verified = 1;
+    *out = fact;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+/*
+ * Reads one already identity-verified metadata sidecar into bounded owned
+ * memory. The caller releases the blob; short reads and post-read identity
+ * changes fail closed without publishing bytes.
+ */
+int yvex_source_provenance_metadata_read(
+    const yvex_source_verification *verification,
+    const char *canonical_name,
+    size_t maximum_bytes,
+    yvex_source_metadata_blob *out,
+    yvex_error *err)
+{
+    yvex_source_metadata_blob blob;
+    yvex_source_metadata_identity_fact after;
+    char path[YVEX_PATH_CAP];
+    char retained_oid[41];
+    FILE *fp;
+    size_t got;
+    int read_failed;
+    int rc;
+
+    if (out) memset(out, 0, sizeof(*out));
+    if (!verification || !out || !maximum_bytes) {
+        yvex_error_set(err, YVEX_ERR_INVALID_ARG, "source_metadata_read",
+                       "verified source, byte budget, and output are required");
+        return YVEX_ERR_INVALID_ARG;
+    }
+    memset(&blob, 0, sizeof(blob));
+    rc = yvex_source_provenance_metadata_identity(
+        verification, canonical_name, &blob.identity, err);
+    if (rc != YVEX_OK) return rc;
+    if (blob.identity.file_bytes > maximum_bytes ||
+        blob.identity.file_bytes > SIZE_MAX) {
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "source_metadata_read",
+                       "metadata sidecar exceeds its configured byte budget");
+        return YVEX_ERR_BOUNDS;
+    }
+    blob.byte_count = (size_t)blob.identity.file_bytes;
+    blob.bytes = (unsigned char *)malloc(blob.byte_count ? blob.byte_count : 1u);
+    if (!blob.bytes) {
+        yvex_error_set(err, YVEX_ERR_NOMEM, "source_metadata_read",
+                       "metadata sidecar buffer allocation failed");
+        return YVEX_ERR_NOMEM;
+    }
+    if (!yvex_source_path_join(path, sizeof(path),
+                               verification->resolved_source_path,
+                               canonical_name)) {
+        yvex_source_metadata_blob_release(&blob);
+        yvex_error_set(err, YVEX_ERR_BOUNDS, "source_metadata_read",
+                       "metadata sidecar path construction overflowed");
+        return YVEX_ERR_BOUNDS;
+    }
+    fp = fopen(path, "rb");
+    if (!fp) {
+        yvex_source_metadata_blob_release(&blob);
+        yvex_error_set(err, YVEX_ERR_IO, "source_metadata_read",
+                       "metadata sidecar open failed");
+        return YVEX_ERR_IO;
+    }
+    got = blob.byte_count ? fread(blob.bytes, 1u, blob.byte_count, fp) : 0u;
+    read_failed = got != blob.byte_count || ferror(fp);
+    if (fclose(fp) != 0) read_failed = 1;
+    if (read_failed) {
+        yvex_source_metadata_blob_release(&blob);
+        yvex_error_set(err, YVEX_ERR_IO, "source_metadata_read",
+                       "metadata sidecar exact read failed");
+        return YVEX_ERR_IO;
+    }
+    if (!source_git_blob_oid_bytes(blob.bytes, blob.byte_count,
+                                   retained_oid) ||
+        strcmp(retained_oid, blob.identity.expected_git_blob_oid) != 0) {
+        yvex_source_metadata_blob_release(&blob);
+        yvex_error_set(err, YVEX_ERR_FORMAT, "source_metadata_read",
+                       "retained metadata bytes differ from provider identity");
+        return YVEX_ERR_FORMAT;
+    }
+    memset(&after, 0, sizeof(after));
+    rc = yvex_source_provenance_metadata_identity(
+        verification, canonical_name, &after, err);
+    if (rc != YVEX_OK ||
+        after.file_bytes != blob.identity.file_bytes ||
+        strcmp(after.observed_git_blob_oid,
+               blob.identity.observed_git_blob_oid) != 0) {
+        yvex_source_metadata_blob_release(&blob);
+        if (rc == YVEX_OK)
+            yvex_error_set(err, YVEX_ERR_FORMAT, "source_metadata_read",
+                           "metadata sidecar identity drifted during read");
+        return rc == YVEX_OK ? YVEX_ERR_FORMAT : rc;
+    }
+    *out = blob;
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
+/* Releases one metadata blob and resets every observable fact. */
+void yvex_source_metadata_blob_release(yvex_source_metadata_blob *blob)
+{
+    if (!blob) return;
+    free(blob->bytes);
+    memset(blob, 0, sizeof(*blob));
 }
 
 /* Verifies one sidecar revision and, when requested, its pinned Git blob OID. */
