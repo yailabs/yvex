@@ -21,6 +21,28 @@
 
 #define YVEX_GGUF_OFFICIAL_READER_REVISION \
     "af97976c7810cdabb1863172f31c432dab767de7"
+#define YVEX_SELECTED_DEEPSEEK_ARTIFACT_FILENAME \
+    "deepseek-v4-flash-q8_0-q2_k-v1.gguf"
+#define YVEX_SELECTED_DEEPSEEK_ARTIFACT_IDENTITY \
+    "01b2bed4f070d0a3fdb02e546764b3a49cb69886eebe17b4877d20294725682c"
+#define YVEX_SELECTED_DEEPSEEK_PROFILE_NAME \
+    "deepseek-v4-flash-q8_0-q2_k-v1"
+#define YVEX_SELECTED_DEEPSEEK_PROFILE_IDENTITY \
+    "04be09e124fd997ae3b785d0d3018f9d571cb6b96df5488d0ab21de3345bce25"
+#define YVEX_SELECTED_DEEPSEEK_EXECUTION_IDENTITY \
+    "b81f3c5d670737bf20c938e635a1bffdbb0d60f885f994225a02225bb7ba51db"
+#define YVEX_SELECTED_DEEPSEEK_PAYLOAD_IDENTITY \
+    "e22b3678d131d334f154a93214bdddfafc172c9869f4c52db28fea198eaa9165"
+#define YVEX_SELECTED_DEEPSEEK_TRANSFORM_IDENTITY \
+    "1c5ceab43fa9f9bf437aacc3b4b3c246ff26446ab0d7abd22ea642ce726017f5"
+#define YVEX_SELECTED_DEEPSEEK_WRITER_PLAN_IDENTITY \
+    "4b47814e06c43b3426efcaab72b836596c42358a7c59ea5619ddd70c0eefe9fd"
+#define YVEX_SELECTED_DEEPSEEK_FILE_BYTES 102408545440ull
+#define YVEX_SELECTED_DEEPSEEK_PAYLOAD_BYTES 102396843592ull
+#define YVEX_SELECTED_DEEPSEEK_TENSOR_COUNT 1360ull
+#define YVEX_SELECTED_DEEPSEEK_METADATA_COUNT 68ull
+#define YVEX_SELECTED_DEEPSEEK_SOURCE_IDENTITY 0x818f3e5c5eaf9ffcull
+#define YVEX_SELECTED_DEEPSEEK_MAPPING_IDENTITY 0x1aecbbe25b04de0dull
 
 typedef enum {
     YVEX_ARTIFACT_CLASS_REFUSED = 0,
@@ -101,6 +123,11 @@ typedef struct {
 
 int yvex_complete_artifact_admit(
     const yvex_artifact_admission_request *request,
+    yvex_complete_artifact_admission *out,
+    yvex_artifact_admission_failure *failure,
+    yvex_error *err);
+int yvex_complete_artifact_admit_selected_deepseek(
+    const yvex_artifact *artifact,
     yvex_complete_artifact_admission *out,
     yvex_artifact_admission_failure *failure,
     yvex_error *err);

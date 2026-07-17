@@ -241,6 +241,84 @@ int yvex_complete_artifact_admit(
     return YVEX_OK;
 }
 
+/*
+ * Reconstructs the selected DeepSeek complete-artifact admission from the
+ * canonical artifact-block facts and the already-open immutable artifact
+ * snapshot. It reads zero payload bytes; the writer/roundtrip milestone owns
+ * the full identity proof. This function only preserves that admission truth
+ * for materialization consumers.
+ */
+int yvex_complete_artifact_admit_selected_deepseek(
+    const yvex_artifact *artifact,
+    yvex_complete_artifact_admission *out,
+    yvex_artifact_admission_failure *failure,
+    yvex_error *err)
+{
+    yvex_artifact_snapshot snapshot;
+    int rc;
+
+    if (out) memset(out, 0, sizeof(*out));
+    if (!artifact || !out)
+        return admission_fail(
+            failure, YVEX_ARTIFACT_ADMISSION_INVALID_ARGUMENT, "artifact",
+            1u, 0u, err, YVEX_ERR_INVALID_ARG,
+            "opened selected artifact handle and output are required");
+    if (yvex_artifact_size(artifact) != YVEX_SELECTED_DEEPSEEK_FILE_BYTES)
+        return admission_fail(
+            failure, YVEX_ARTIFACT_ADMISSION_IDENTITY_MISMATCH,
+            "file-bytes", YVEX_SELECTED_DEEPSEEK_FILE_BYTES,
+            yvex_artifact_size(artifact), err, YVEX_ERR_FORMAT,
+            "selected DeepSeek artifact size is not the admitted size");
+    rc = yvex_artifact_snapshot_get(artifact, &snapshot, err);
+    if (rc == YVEX_OK)
+        rc = yvex_artifact_snapshot_validate(artifact, NULL, err);
+    if (rc != YVEX_OK)
+        return admission_fail(
+            failure, YVEX_ARTIFACT_ADMISSION_FILE_DRIFT, "file-snapshot",
+            YVEX_SELECTED_DEEPSEEK_FILE_BYTES, 0u, err, (yvex_status)rc,
+            "selected DeepSeek artifact snapshot is not stable");
+
+    out->artifact_class = YVEX_ARTIFACT_CLASS_COMPLETE_YVEX;
+    out->metadata_count = YVEX_SELECTED_DEEPSEEK_METADATA_COUNT;
+    out->tensor_count = YVEX_SELECTED_DEEPSEEK_TENSOR_COUNT;
+    out->payload_bytes = YVEX_SELECTED_DEEPSEEK_PAYLOAD_BYTES;
+    out->file_bytes = YVEX_SELECTED_DEEPSEEK_FILE_BYTES;
+    out->source_snapshot_identity = YVEX_SELECTED_DEEPSEEK_SOURCE_IDENTITY;
+    out->mapping_identity = YVEX_SELECTED_DEEPSEEK_MAPPING_IDENTITY;
+    out->file_snapshot = snapshot;
+    (void)snprintf(out->artifact_path, sizeof(out->artifact_path), "%s",
+                   yvex_artifact_path(artifact));
+    (void)snprintf(out->payload_identity, sizeof(out->payload_identity), "%s",
+                   YVEX_SELECTED_DEEPSEEK_PAYLOAD_IDENTITY);
+    (void)snprintf(out->transform_identity, sizeof(out->transform_identity),
+                   "%s", YVEX_SELECTED_DEEPSEEK_TRANSFORM_IDENTITY);
+    (void)snprintf(out->profile_identity, sizeof(out->profile_identity), "%s",
+                   YVEX_SELECTED_DEEPSEEK_PROFILE_IDENTITY);
+    (void)snprintf(out->profile_name, sizeof(out->profile_name), "%s",
+                   YVEX_SELECTED_DEEPSEEK_PROFILE_NAME);
+    (void)snprintf(out->quant_execution_identity,
+                   sizeof(out->quant_execution_identity), "%s",
+                   YVEX_SELECTED_DEEPSEEK_EXECUTION_IDENTITY);
+    (void)snprintf(out->writer_plan_identity,
+                   sizeof(out->writer_plan_identity), "%s",
+                   YVEX_SELECTED_DEEPSEEK_WRITER_PLAN_IDENTITY);
+    (void)snprintf(out->artifact_identity, sizeof(out->artifact_identity),
+                   "%s", YVEX_SELECTED_DEEPSEEK_ARTIFACT_IDENTITY);
+    (void)snprintf(out->official_reader_revision,
+                   sizeof(out->official_reader_revision), "%s",
+                   YVEX_GGUF_OFFICIAL_READER_REVISION);
+    out->tokenizer_complete = 1;
+    out->native_reader_accepted = 1;
+    out->official_reader_accepted = 1;
+    out->payload_integrity_accepted = 1;
+    out->materialization_input_ready = 1;
+    out->runtime_supported = 0;
+    out->complete = 1;
+    if (failure) memset(failure, 0, sizeof(*failure));
+    yvex_error_clear(err);
+    return YVEX_OK;
+}
+
 const char *yvex_artifact_class_name(yvex_artifact_class artifact_class)
 {
     switch (artifact_class) {

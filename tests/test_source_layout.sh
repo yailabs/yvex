@@ -90,6 +90,8 @@ test -f src/model/yvex_runtime_descriptor.c
 test -f src/model/yvex_runtime_descriptor.h
 test -f src/model/yvex_runtime_descriptor_report.c
 test -f src/model/yvex_runtime_descriptor_report.h
+test -f tests/unit/materialization_runtime.c
+test -f tests/live/materialize_deepseek.c
 test -f src/model/target/yvex_model_target_catalog.c
 test -f src/model/target/yvex_model_target_catalog.h
 test -f src/model/target/yvex_model_target_decision.c
@@ -342,6 +344,9 @@ test -f src/gguf/yvex_gguf_report.c
 test -x tests/test_gguf_artifact_abi.sh
 test -f tests/unit/gguf_qtype_abi.c
 test -x tests/test_gguf_qtype_abi.sh
+grep -nF 'test-materialize-live-plan' Makefile >/dev/null
+grep -nF 'test-materialize-live' Makefile >/dev/null
+grep -nF 'test-runtime-descriptor' Makefile >/dev/null
 test -f src/cli/commands/yvex_quant_cli.c
 test -f src/cli/io/yvex_cli_out.c
 test -f src/cli/io/yvex_cli_error.c

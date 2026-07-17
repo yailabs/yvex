@@ -1193,6 +1193,12 @@ grep -nF 'yvex_gguf_qtype_refusal_reason' src/gguf/yvex_gguf_qtype.c >/dev/null
 grep -nF 'yvex_gguf_qtype_abi_from_gguf' src/gguf/yvex_gguf_qtype.c >/dev/null
 grep -nF 'yvex_gguf_writer_supported' src/gguf/yvex_gguf_writer.c >/dev/null
 grep -nF 'yvex_gguf_roundtrip_supported' src/gguf/yvex_gguf_roundtrip.c >/dev/null
+grep -nF 'yvex_materialization_plan_build' src/artifact/yvex_artifact_materialize.c >/dev/null
+grep -nF 'yvex_materialization_session_walk_payload' src/artifact/yvex_artifact_materialize.c >/dev/null
+grep -nF 'yvex_materialization_session_expert_subview' src/artifact/yvex_artifact_materialize.c >/dev/null
+grep -nF 'yvex_runtime_descriptor_build' src/model/yvex_runtime_descriptor.c >/dev/null
+grep -nF 'yvex_runtime_descriptor_build_deepseek' src/model/yvex_runtime_descriptor.c >/dev/null
+grep -nF 'descriptor_summary->generation_ready' tests/live/materialize_deepseek.c >/dev/null
 
 if git grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fwrite)\s*\(|stdout|stderr' -- \
     src/gguf/yvex_gguf_*.c \
@@ -1215,6 +1221,16 @@ fi
 gguf_qtype_claim_pattern='compute supp''ort|backend supp''ort|CUDA supp''ort|matmul supp''ort|qtype policy selection com''plete|quantization implementation|writer com''plete|roundtrip com''plete|materialization com''plete'
 if git grep -nE "$gguf_qtype_claim_pattern" -- src/gguf/yvex_gguf_qtype.c src/gguf/yvex_gguf_private.h; then
   echo "GGUF qtype ABI owner must stay byte-geometry-only"
+  exit 1
+fi
+
+runtime_descriptor_claim_pattern='graph_execution_ready = 1|generation_ready = 1|execution_ready = 1|runtime generation|generation support|inference ready'
+if git grep -nE "$runtime_descriptor_claim_pattern" -- \
+    src/artifact/yvex_artifact_materialize.c \
+    src/artifact/yvex_artifact_materialize.h \
+    src/model/yvex_runtime_descriptor.c \
+    src/model/yvex_runtime_descriptor.h; then
+  echo "materialization/runtime descriptor owners must not claim execution or generation"
   exit 1
 fi
 

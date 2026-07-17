@@ -340,8 +340,16 @@ grep -F '| `V010.GGUF.ROUNDTRIP.1` | common + DeepSeek artifact | `complete` |' 
   fail "GGUF roundtrip is not complete"
 grep -F '| `V010.ARTIFACT.SUPPORT.CUTOVER.0` | common | `complete` |' "$project" >/dev/null ||
   fail "complete-artifact support cutover is not complete"
-grep -F '| `V010.ARTIFACT.MATERIALIZE.0` | common | `active` |' "$project" >/dev/null ||
-  fail "artifact materialization is not active"
+grep -F '| `V010.ARTIFACT.MATERIALIZE.0` | common | `complete` |' "$project" >/dev/null ||
+  fail "artifact materialization is not complete"
+grep -F '| `V010.ARTIFACT.MATERIALIZE.DEEPSEEK.0` | DeepSeek / DGX Spark | `complete` |' "$project" >/dev/null ||
+  fail "DeepSeek materialization is not complete"
+grep -F '| `V010.RUNTIME.DESCRIPTOR.GGUF.0` | common | `complete` |' "$project" >/dev/null ||
+  fail "common runtime descriptor is not complete"
+grep -F '| `V010.RUNTIME.DESCRIPTOR.DEEPSEEK.0` | DeepSeek | `complete` |' "$project" >/dev/null ||
+  fail "DeepSeek runtime descriptor is not complete"
+grep -F '| `V010.GRAPH.DEEPSEEK.ATTENTION.0` | DeepSeek | `active` |' "$project" >/dev/null ||
+  fail "DeepSeek attention is not active"
 grep -F '| V010.MODEL.TRANSFORM.IR.0 | recovered/promoted |' "$project" >/dev/null ||
   fail "quantization does not depend on the transformation IR"
 

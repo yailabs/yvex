@@ -24,7 +24,7 @@
 
 .DEFAULT_GOAL := all
 
-.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-quant test-quant-live-plan test-quant-live test-artifact-writer test-artifact-writer-fault test-artifact-live-plan test-artifact-live-structure test-artifact-live test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
+.PHONY: all info lib cli server cuda-info cuda-kernels cuda test-cuda test-cuda-no-nvcc smoke-cuda check-cuda test test-core test-cli test-materialize test-runtime-descriptor test-materialize-live-plan test-materialize-live test-quant test-quant-live-plan test-quant-live test-artifact-writer test-artifact-writer-fault test-artifact-live-plan test-artifact-live-structure test-artifact-live test-transform-ir-live-plan test-source-payload-live-plan test-source-payload-live test-gguf-artifact-abi test-gguf-layout-integrity test-gguf-qtype-abi test-layout test-code-natural test-project-ledger test-docs-surface test-surface smoke check check-docs check-guardrails clean
 
 CC ?= cc
 AR ?= ar
@@ -245,6 +245,7 @@ ARTIFACT_TEST_RUNNER := $(TEST_DIR)/test_artifact_writer
 SOURCE_PAYLOAD_LIVE_RUNNER := $(TEST_DIR)/source_payload_deepseek
 QUANT_LIVE_RUNNER := $(TEST_DIR)/quant_deepseek
 ARTIFACT_LIVE_RUNNER := $(TEST_DIR)/artifact_deepseek
+MATERIALIZE_LIVE_RUNNER := $(TEST_DIR)/materialize_deepseek
 OFFICIAL_GGUF_CHECKER := $(TEST_DIR)/ggml_gguf_check
 CUDA_TEST_RUNNER := $(TEST_DIR)/test_cuda
 
@@ -367,6 +368,18 @@ test-core: $(TEST_RUNNER)
 
 test-cli: $(YVEX_BIN) $(YVEXD_BIN) $(CLI_TEST)
 	YVEX_BIN=$(YVEX_BIN) YVEXD_BIN=$(YVEXD_BIN) sh $(CLI_TEST)
+
+test-materialize: $(TEST_RUNNER)
+	$(TEST_RUNNER)
+
+test-runtime-descriptor: $(TEST_RUNNER)
+	$(TEST_RUNNER)
+
+test-materialize-live-plan: $(MATERIALIZE_LIVE_RUNNER)
+	$(MATERIALIZE_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
+
+test-materialize-live: $(MATERIALIZE_LIVE_RUNNER)
+	$(MATERIALIZE_LIVE_RUNNER) "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
 
 test-source-payload-live-plan: $(SOURCE_PAYLOAD_LIVE_RUNNER)
 	$(SOURCE_PAYLOAD_LIVE_RUNNER) --plan-only "$(DEEPSEEK_SOURCE)" "$(DEEPSEEK_MODELS_ROOT)" "$(DEEPSEEK_SOURCE_MANIFEST)"
@@ -495,6 +508,10 @@ $(QUANT_LIVE_RUNNER): tests/live/quant_deepseek.c $(LIBYVEX)
 	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 
 $(ARTIFACT_LIVE_RUNNER): tests/live/artifact_deepseek.c $(LIBYVEX)
+	@mkdir -p $(@D)
+	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
+
+$(MATERIALIZE_LIVE_RUNNER): tests/live/materialize_deepseek.c $(LIBYVEX)
 	@mkdir -p $(@D)
 	$(CC) $(TEST_CPPFLAGS) $(CFLAGS) $< $(LIBYVEX) $(LDFLAGS) $(LDLIBS) -o $@
 

@@ -354,6 +354,9 @@ fi
 
 test -x tests/test_gguf_artifact_abi.sh
 test -x tests/test_gguf_qtype_abi.sh
+test -f tests/unit/materialization_runtime.c
+test -f tests/live/materialize_deepseek.c
+grep -nF 'test-materialize-live-plan' Makefile >/dev/null
 grep -nF 'yvex_gguf_artifact_abi_report_build' src/gguf/yvex_gguf_report.c >/dev/null
 grep -nF 'yvex_gguf_metadata_abi_from_gguf' src/gguf/yvex_gguf_metadata.c >/dev/null
 grep -nF 'yvex_gguf_tensor_info_abi_from_gguf' src/gguf/yvex_gguf_tensor_info.c >/dev/null
@@ -384,6 +387,18 @@ fi
 if git grep -nE '#include "yvex_(cli|operator|console)|#include <.*cli.*>|#include <.*backend.*>|yvex_backend' -- \
     src/gguf/yvex_gguf_qtype.c src/gguf/yvex_gguf_private.h; then
   echo "GGUF qtype ABI owner must not include CLI/backend owners"
+  exit 1
+fi
+
+grep -nF 'yvex_materialization_plan_build' src/artifact/yvex_artifact_materialize.c >/dev/null
+grep -nF 'yvex_runtime_descriptor_build_deepseek' src/model/yvex_runtime_descriptor.c >/dev/null
+
+if git grep -nE '\b(printf|fprintf|vprintf|vfprintf|puts|fputs|fwrite)\s*\(|stdout|stderr|yvex_cli' -- \
+    src/artifact/yvex_artifact_materialize.c \
+    src/artifact/yvex_artifact_materialize.h \
+    src/model/yvex_runtime_descriptor.c \
+    src/model/yvex_runtime_descriptor.h; then
+  echo "materialization/runtime descriptor domain owners must not write operator output or include CLI"
   exit 1
 fi
 

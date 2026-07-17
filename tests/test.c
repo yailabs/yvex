@@ -34,6 +34,7 @@ int yvex_test_gguf_writer_artifact(void);
 int yvex_test_deepseek_tensor_coverage(void);
 int yvex_test_weights(void);
 int yvex_test_materialize_cpu(void);
+int yvex_test_materialization_runtime(void);
 int yvex_test_model_gate(void);
 int yvex_test_model_ref(void);
 int yvex_test_model_registry(void);
@@ -128,6 +129,7 @@ static int run_model_weights(void)
     if (run_test("deepseek_tensor_coverage", yvex_test_deepseek_tensor_coverage) != 0) return 1;
     if (run_test("weights", yvex_test_weights) != 0) return 1;
     if (run_test("materialize_cpu", yvex_test_materialize_cpu) != 0) return 1;
+    if (run_test("materialization_runtime", yvex_test_materialization_runtime) != 0) return 1;
     if (run_test("model_gate", yvex_test_model_gate) != 0) return 1;
     if (run_test("model_ref", yvex_test_model_ref) != 0) return 1;
     if (run_test("model_registry", yvex_test_model_registry) != 0) return 1;

@@ -307,6 +307,17 @@ recalculate, or infer global layout from local ranges. Layout validation reads
 padding only and zero tensor payload bytes. Layout admission is not complete
 model-artifact support, payload trust, materialization, or runtime support.
 
+V010.MATERIALIZATION.RUNTIME-DESCRIPTOR.0 makes
+`src/artifact/yvex_artifact_materialize.[ch]` the canonical admitted-artifact
+materialization owner and `src/model/yvex_runtime_descriptor.[ch]` the
+canonical runtime descriptor projection owner. Materialization consumes a
+complete-artifact admission and immutable snapshot, builds deterministic
+file-backed/staged tensor bindings, exposes bounded payload access and expert
+subviews, and owns lifecycle cleanup. Runtime descriptors consume committed
+materialization sessions and canonical model facts. Live tests may exercise the
+external selected artifact, but they may not own admission truth, placement
+policy, descriptor semantics, graph execution, or generation claims.
+
 src/artifact/yvex_artifact.c
   read-only file handles, explicit mapping, positioned artifact IO, inspect,
   metadata, and tensor command surfaces
